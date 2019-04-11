@@ -1,0 +1,24 @@
+{
+  "name": "hathor-wallet-utils",
+  "version": "1.0.3",
+  "main": "index.js",
+  "author": "Hathor Labs",
+  "files": [
+    "/lib"
+  ],
+  "dependencies": {
+    "bitcore-mnemonic": "^1.7.0",
+    "crypto-js": "^3.1.9-1",
+    "lodash": "^4.17.11",
+    "long": "^4.0.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "babel --presets es2015 -d lib/ src"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "babel-cli": "^6.26.0",
+    "babel-preset-es2015": "^6.24.1"
+  }
+}
