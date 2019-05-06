@@ -5,13 +5,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, NETWORK, TOKEN_AUTHORITY_MASK, VERSION, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, MAX_OUTPUT_VALUE } from './constants';
+import { GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, NETWORK, TOKEN_AUTHORITY_MASK, VERSION, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, DEBUG_LOCAL_DATA_KEYS, MAX_OUTPUT_VALUE } from './constants';
 import Mnemonic from 'bitcore-mnemonic';
 import { HDPublicKey, Address } from 'bitcore-lib';
 import CryptoJS from 'crypto-js';
+import walletApi from './api/wallet';
 import tokens from './tokens';
 import helpers from './helpers';
 import { OutputValueError } from './errors';
+import version from './version';
 import WebSocketHandler from './WebSocketHandler';
 import dateFormatter from './date';
 import _ from 'lodash';
@@ -39,6 +41,8 @@ import _ from 'lodash';
  * - txMinWeight: minimum weight of a transaction (variable got from the backend)
  * - txWeightCoefficient: minimum weight coefficient of a transaction (variable got from the backend)
  * - tokens: array with tokens information {'name', 'symbol', 'uid'}
+ * - sentry: if user allowed to send errors to sentry
+ * - notification: if user allowed to send notifications
  *
  * @namespace Wallet
  */
@@ -113,7 +117,7 @@ const wallet = {
    * @param {string} password
    * @param {boolean} loadHistory if should load the history from the generated addresses
    *
-   * @return {string} words generated
+   * @return {Promise} Promise that resolves when finishes loading address history, in case loadHistory = true, else returns null
    * @memberof Wallet
    * @inner
    */
@@ -139,14 +143,18 @@ const wallet = {
       xpubkey: privkey.xpubkey,
     }
 
-    localStorage.setItem('wallet:accessData', JSON.stringify(access));
-    localStorage.setItem('wallet:data', JSON.stringify(walletData));
+    access = localStorage.memory ? access : JSON.stringify(access);
+    walletData = localStorage.memory ? walletData : JSON.stringify(walletData);
 
+    localStorage.setItem('wallet:accessData', access);
+    localStorage.setItem('wallet:data', walletData);
+
+    let promise = null;
     if (loadHistory) {
       // Load history from address
-      this.loadAddressHistory(0, GAP_LIMIT);
+      promise = this.loadAddressHistory(0, GAP_LIMIT);
     }
-    return code.phrase;
+    return promise;
   },
 
   /**
@@ -178,7 +186,7 @@ const wallet = {
     if (!data) {
       return null;
     }
-    return JSON.parse(data);
+    return localStorage.memory ? data : JSON.parse(data);
   },
 
   /**
@@ -190,39 +198,60 @@ const wallet = {
    * @param {number} startIndex Address index to start to load history
    * @param {number} count How many addresses I will load
    *
+   * @return {Promise} Promise that resolves when addresses history is finished loading from server
+   *
    * @memberof Wallet
    * @inner
    */
   loadAddressHistory(startIndex, count) {
-    // First generate all private keys and its addresses, then get history
-    let addresses = [];
-    let dataJson = this.getWalletData();
+    const promise = new Promise((resolve, reject) => {
+      // First generate all private keys and its addresses, then get history
+      let addresses = [];
+      let dataJson = this.getWalletData();
 
-    const xpub = HDPublicKey(dataJson.xpubkey);
-    const stopIndex = startIndex + count;
-    for (var i=startIndex; i<stopIndex; i++) {
-      // Generate each key from index, encrypt and save
-      let key = xpub.derive(i);
-      var address = Address(key.publicKey, NETWORK);
-      dataJson.keys[address.toString()] = {privkey: null, index: i};
-      addresses.push(address.toString());
+      const xpub = HDPublicKey(dataJson.xpubkey);
+      const stopIndex = startIndex + count;
+      for (var i=startIndex; i<stopIndex; i++) {
+        // Generate each key from index, encrypt and save
+        let key = xpub.derive(i);
+        var address = Address(key.publicKey, NETWORK);
+        dataJson.keys[address.toString()] = {privkey: null, index: i};
+        addresses.push(address.toString());
 
-      // Subscribe in websocket to this address updates
-      this.subscribeAddress(address.toString());
+        // Subscribe in websocket to this address updates
+        this.subscribeAddress(address.toString());
 
-      if (localStorage.getItem('wallet:address') === null) {
-        // If still don't have an address to show on the screen
-        this.updateAddress(address.toString(), i, true);
+        if (localStorage.getItem('wallet:address') === null) {
+          // If still don't have an address to show on the screen
+          this.updateAddress(address.toString(), i);
+        }
       }
-    }
 
-    let lastGeneratedIndex = this.getLastGeneratedIndex();
-    if (lastGeneratedIndex < stopIndex - 1) {
-      localStorage.setItem('wallet:lastGeneratedIndex', stopIndex - 1);
-    }
-    localStorage.setItem('wallet:data', JSON.stringify(dataJson));
+      let lastGeneratedIndex = this.getLastGeneratedIndex();
+      if (lastGeneratedIndex < stopIndex - 1) {
+        localStorage.setItem('wallet:lastGeneratedIndex', stopIndex - 1);
+      }
+
+      dataJson = localStorage.memory ? dataJson : JSON.stringify(dataJson);
+      localStorage.setItem('wallet:data', dataJson);
+
+      walletApi.getAddressHistory(addresses, (response) => {
+        const data = this.getWalletData();
+        // Update historyTransactions with new one
+        const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
+        const allTokens = 'allTokens' in data ? data['allTokens'] : [];
+        this.updateHistoryData(historyTransactions, allTokens, response.history, resolve, data);
+      }, (e) => {
+        // Error in request
+        console.log(e);
+        reject(e);
+      });
+    });
     // Update the version of the wallet that the data was loaded
     localStorage.setItem('wallet:version', VERSION);
+    // Check api version everytime we load address history
+    version.checkApiVersion();
+    return promise;
   },
 
   /**
@@ -313,8 +342,9 @@ const wallet = {
    * @inner
    */
   isPinCorrect(pin) {
-    let data = JSON.parse(localStorage.getItem('wallet:accessData'));
-    let pinHash = this.hashPassword(pin).toString();
+    const accessData = localStorage.getItem('wallet:accessData');
+    const data = localStorage.memory ? accessData : JSON.parse(accessData);
+    const pinHash = this.hashPassword(pin).toString();
     return pinHash === data.hash;
   },
 
@@ -329,8 +359,9 @@ const wallet = {
    * @inner
    */
   isPasswordCorrect(password) {
-    let data = JSON.parse(localStorage.getItem('wallet:accessData'));
-    let passwordHash = this.hashPassword(password).toString();
+    const accessData = localStorage.getItem('wallet:accessData');
+    const data = localStorage.memory ? accessData : JSON.parse(accessData);
+    const passwordHash = this.hashPassword(password).toString();
     return passwordHash === data.hashPasswd;
   },
 
@@ -357,13 +388,14 @@ const wallet = {
    */
   getNextAddress() {
     const lastSharedIndex = this.getLastSharedIndex();
-    let data = this.getWalletData();
-    for (let address in data.keys) {
+    const data = this.getWalletData();
+    for (const address in data.keys) {
       if (data.keys[address].index === lastSharedIndex + 1) {
-        this.updateAddress(address, lastSharedIndex + 1, true);
-        break;
+        this.updateAddress(address, lastSharedIndex + 1);
+        return {address, index: lastSharedIndex + 1}
       }
     }
+    return null;
   },
 
   /**
@@ -396,6 +428,8 @@ const wallet = {
    * Generate a new address
    * We update the wallet data and new address shared
    *
+   * @return {Object} {newAddress, newIndex}
+   *
    * @memberof Wallet
    * @inner
    */
@@ -411,7 +445,7 @@ const wallet = {
     const newAddress = Address(newKey.publicKey, NETWORK);
 
     // Update address data and last generated indexes
-    this.updateAddress(newAddress.toString(), newIndex, true);
+    this.updateAddress(newAddress.toString(), newIndex);
     let lastGeneratedIndex = this.getLastGeneratedIndex();
     if (newIndex > lastGeneratedIndex) {
       localStorage.setItem('wallet:lastGeneratedIndex', newIndex);
@@ -420,10 +454,13 @@ const wallet = {
     // Save new keys to local storage
     let data = this.getWalletData();
     data.keys[newAddress.toString()] = {privkey: null, index: newIndex};
-    localStorage.setItem('wallet:data', JSON.stringify(data));
+    data = localStorage.memory ? data : JSON.stringify(data);
+    localStorage.setItem('wallet:data', data);
 
     // Subscribe in ws to new address updates
     this.subscribeAddress(newAddress.toString());
+
+    return {newAddress, newIndex};
   },
 
   /**
@@ -451,28 +488,40 @@ const wallet = {
    *
    * @param {Object} tx Transaction object
    * @param {string} selectedToken Token uid
+   * @param {Object} walletData Wallet data in localStorage already loaded. This parameter is optional and if nothing is passed, the data will be loaded again. We expect this field to be the return of the method wallet.getWalletData()
    *
    * @return {boolean}
    *
    * @memberof Wallet
    * @inner
    */
-  hasTokenAndAddress(tx, selectedToken) {
-    const walletData = this.getWalletData();
+  hasTokenAndAddress(tx, selectedToken, walletData) {
+    if (walletData === undefined) {
+      walletData = this.getWalletData();
+    }
+
     if (walletData === null) {
       return false;
     }
 
     for (let txin of tx.inputs) {
+      if (this.isAuthorityOutput(txin)) {
+        continue;
+      }
+
       if (txin.token === selectedToken) {
-        if (this.isAddressMine(txin.decoded.address)) {
+        if (this.isAddressMine(txin.decoded.address, walletData)) {
           return true;
         }
       }
     }
     for (let txout of tx.outputs) {
+      if (this.isAuthorityOutput(txout)) {
+        continue;
+      }
+
       if (txout.token === selectedToken) {
-        if (this.isAddressMine(txout.decoded.address)) {
+        if (this.isAddressMine(txout.decoded.address, walletData)) {
           return true;
         }
       }
@@ -492,10 +541,11 @@ const wallet = {
    * @inner
    */
   filterHistoryTransactions(historyTransactions, selectedToken) {
+    const walletData = this.getWalletData();
     const data = [];
     for (const tx_id in historyTransactions) {
       const tx = historyTransactions[tx_id];
-      if (this.hasTokenAndAddress(tx, selectedToken)) {
+      if (this.hasTokenAndAddress(tx, selectedToken, walletData)) {
         data.push(tx);
       }
     }
@@ -532,7 +582,7 @@ const wallet = {
           // Ignore authority outputs.
           continue;
         }
-        if (txout.spent_by === null && txout.token === selectedToken && this.isAddressMine(txout.decoded.address)) {
+        if (txout.spent_by === null && txout.token === selectedToken && this.isAddressMine(txout.decoded.address, data)) {
           if (this.canUseUnspentTx(txout)) {
             balance.available += txout.value;
           } else {
@@ -576,7 +626,8 @@ const wallet = {
     let data = this.getWalletData();
     data['historyTransactions'] = historyTransactions;
     data['allTokens'] = [...allTokens];
-    localStorage.setItem('wallet:data', JSON.stringify(data));
+    data = localStorage.memory ? data : JSON.stringify(data);
+    localStorage.setItem('wallet:data', data);
   },
 
   /**
@@ -760,12 +811,14 @@ const wallet = {
     if (data === null) {
       return ret;
     }
+
     for (const tx_id in historyTransactions) {
       const tx = historyTransactions[tx_id];
       if (tx.is_voided) {
         // Ignore voided transactions.
         continue;
       }
+
       for (const [index, txout] of tx.outputs.entries()) {
         if (this.isAuthorityOutput(txout)) {
           // Ignore authority outputs.
@@ -774,7 +827,7 @@ const wallet = {
         if (ret.inputsAmount >= amount) {
           return ret;
         }
-        if (txout.spent_by === null && txout.token === selectedToken && this.isAddressMine(txout.decoded.address)) {
+        if (txout.spent_by === null && txout.token === selectedToken && this.isAddressMine(txout.decoded.address, data)) {
           if (this.canUseUnspentTx(txout)) {
             ret.inputsAmount += txout.value;
             ret.inputs.push({ tx_id: tx.tx_id, index, token: selectedToken, address: txout.decoded.address });
@@ -839,7 +892,7 @@ const wallet = {
         return {exists: false, message: `Output [${index}] of transaction [${txId}] is an authority output`};
       }
 
-      if (!(this.isAddressMine(txout.decoded.address))) {
+      if (!(this.isAddressMine(txout.decoded.address, data))) {
         return {exists: false, message: `Output [${index}] of transaction [${txId}] is not yours`};
       }
 
@@ -870,7 +923,7 @@ const wallet = {
   checkAuthorityExists(key, tokenUID) {
     const data = this.getWalletData();
     if (data) {
-      const jsonData = JSON.parse(data);
+      const jsonData = localStorage.memory ? data : JSON.parse(data);
       const authorityOutputs = jsonData.authorityOutputs;
       if (tokenUID in authorityOutputs && key in authorityOutputs[tokenUID]) {
         return true;
@@ -945,7 +998,8 @@ const wallet = {
    * @inner
    */
   getWalletWords(password) {
-    const data = JSON.parse(localStorage.getItem('wallet:accessData'));
+    const accessData = localStorage.getItem('wallet:accessData');
+    const data = localStorage.memory ? accessData : JSON.parse(accessData);
     return this.decryptData(data.words, password);
   },
 
@@ -989,28 +1043,29 @@ const wallet = {
    */
   reloadData() {
     // Get old access data
-    const accessData = JSON.parse(localStorage.getItem('wallet:accessData'));
+    const accessDataStorage = localStorage.getItem('wallet:accessData');
+    let accessData = localStorage.memory ? accessDataStorage : JSON.parse(accessDataStorage);
     const walletData = this.getWalletData();
 
-    // Clean all data in the wallet from the old server
     this.cleanWallet();
     // Restart websocket connection
     WebSocketHandler.setup();
 
-    // Cleaning redux and leaving only tokens data
-    const dataToken = tokens.getTokens();
-
-    const newWalletData = {
+    let newWalletData = {
       keys: {},
       xpubkey: walletData.xpubkey,
     }
 
     // Prepare to save new data
-    localStorage.setItem('wallet:accessData', JSON.stringify(accessData));
-    localStorage.setItem('wallet:data', JSON.stringify(newWalletData));
+    accessData = localStorage.memory ? accessData : JSON.stringify(accessData);
+    newWalletData = localStorage.memory ? newWalletData : JSON.stringify(newWalletData);
+
+    localStorage.setItem('wallet:accessData', accessData);
+    localStorage.setItem('wallet:data', newWalletData);
 
     // Load history from new server
-    return this.loadAddressHistory(0, GAP_LIMIT);
+    const promise = this.loadAddressHistory(0, GAP_LIMIT);
+    return promise;
   },
 
   /*
@@ -1164,15 +1219,18 @@ const wallet = {
    * @param {Set} allTokens Set of all tokens (uid) already added
    * @param {Array} newHistory Array of new data that arrived from the server to be added to local data
    * @param {function} resolve Resolve method from promise to be called after finishing handling the new history
+   * @param {Object} dataJson Wallet data in localStorage already loaded. This parameter is optional and if nothing is passed, the data will be loaded again. We expect this field to be the return of the method wallet.getWalletData()
    *
    * @throws {OutputValueError} Will throw an error if one of the output value is invalid
    *
-   * @return {Object} Return an object with {newSharedAddress, newSharedIndex}
+   * @return {Object} Return an object with {historyTransactions, allTokens, newSharedAddress, newSharedIndex, addressesFound}
    * @memberof Wallet
    * @inner
    */
-  updateHistoryData(oldHistoryTransactions, oldAllTokens, newHistory, resolve) {
-    const dataJson = this.getWalletData();
+  updateHistoryData(oldHistoryTransactions, oldAllTokens, newHistory, resolve, dataJson) {
+    if (dataJson === undefined) {
+      dataJson = this.getWalletData();
+    }
     const historyTransactions = Object.assign({}, oldHistoryTransactions);
     const allTokens = new Set(oldAllTokens);
 
@@ -1234,9 +1292,12 @@ const wallet = {
         const address = Address(key.publicKey, NETWORK).toString();
         newSharedIndex = candidateIndex;
         newSharedAddress = address;
-        this.updateAddress(address, candidateIndex, false);
+        this.updateAddress(address, candidateIndex);
       }
     }
+
+    // Saving to localStorage before resolving the promise
+    this.saveAddressHistory(historyTransactions, allTokens);
 
     const lastGeneratedIndex = this.getLastGeneratedIndex();
     // Just in the case where there is no element in all data
@@ -1251,27 +1312,31 @@ const wallet = {
         }
       })
     } else {
+      // When it gets here, it means that already loaded all transactions
+      // so no need to load more
       if (resolve) {
         resolve();
       }
     }
 
-    this.saveAddressHistory(historyTransactions, allTokens);
-
-    return {historyTransactions, allTokens, newSharedAddress, newSharedIndex};
+    return {historyTransactions, allTokens, newSharedAddress, newSharedIndex, addressesFound: lastGeneratedIndex + 1};
   },
 
   /**
    * Check if address is from the loaded wallet
    *
    * @param {string} address Address to check
+   * @param {Object} data Wallet data in localStorage already loaded. This parameter is optional and if nothing is passed, the data will be loaded again. We expect this field to be the return of the method wallet.getWalletData()
    *
    * @return {boolean}
    * @memberof Wallet
    * @inner
    */
-  isAddressMine(address) {
-    const data = this.getWalletData();
+  isAddressMine(address, data) {
+    if (data === undefined) {
+      data = this.getWalletData();
+    }
+
     if (data && address in data.keys) {
       return true;
     }
@@ -1329,6 +1394,46 @@ const wallet = {
       }
     }
     return balance;
+  },
+
+  /**
+   * Checks if the transaction was already added to the history data of the wallet
+   *
+   * @param {Object} txData Transaction data with a key 'tx_id'
+   *
+   * @return {boolean} If the transaction is in the wallet or not
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  txExists(txData) {
+    const data = this.getWalletData();
+    return txData.tx_id in data['historyTransactions'];
+  },
+
+  /**
+   * Check if all inputs from the txData are from this wallet
+   *
+   * @param {Object} txData Transaction data with a key 'inputs'
+   *
+   * @return {boolean} If all the inputs are from this wallet or not
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  areInputsMine(txData) {
+    // If is a block, the inputs are never from this wallet
+    if (helpers.isBlock(txData)) return false;
+
+    const data = this.getWalletData();
+    let mine = true;
+    for (const input of txData.inputs) {
+      if (!this.isAddressMine(input.decoded.address, data)) {
+        mine = false;
+        break;
+      }
+    }
+    return mine;
   },
 }
 

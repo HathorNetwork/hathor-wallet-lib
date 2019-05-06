@@ -7,6 +7,8 @@
 
 import transaction from './transaction';
 import { crypto, util } from 'bitcore-lib';
+import walletApi from './api/wallet';
+import { AddressError, OutputValueError } from './errors';
 import buffer from 'buffer';
 import { HATHOR_TOKEN_CONFIG, TOKEN_CREATION_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK } from './constants';
 
@@ -43,6 +45,8 @@ const tokens = {
    * @param {string} name Token name
    * @param {string} symbol Token synbol
    *
+   * @return {Array} array of token configs with new added one
+   *
    * @memberof Tokens
    * @inner
    */
@@ -51,6 +55,7 @@ const tokens = {
     let tokens = this.getTokens();
     tokens.push(newConfig);
     this.saveToStorage(tokens);
+    return tokens;
   },
 
   /**
@@ -59,6 +64,8 @@ const tokens = {
    * @param {string} uid Token uid to be edited
    * @param {string} name New token name
    * @param {string} synbol New token symbol
+   *
+   * @return {Array} array of token configs with edited one
    *
    * @memberof Tokens
    * @inner
@@ -69,12 +76,15 @@ const tokens = {
     const newConfig = {uid, name, symbol};
     const editedTokens = [...filteredTokens, newConfig];
     this.saveToStorage(editedTokens);
+    return editedTokens;
   },
 
   /**
    * Unregister token from localStorage and redux
    *
    * @param {string} uid Token uid to be unregistered
+   *
+   * @return {Array} array of token configs without the unregister one
    *
    * @memberof Tokens
    * @inner
@@ -83,6 +93,7 @@ const tokens = {
     const tokens = this.getTokens();
     const filteredTokens = tokens.filter((token) => token.uid !== uid);
     this.saveToStorage(filteredTokens);
+    return filteredTokens;
   },
 
   /**
@@ -144,7 +155,7 @@ const tokens = {
   getTokens() {
     let dataToken = localStorage.getItem('wallet:tokens');
     if (dataToken) {
-      dataToken = JSON.parse(dataToken);
+      dataToken = localStorage.memory ? dataToken : JSON.parse(dataToken);
     } else {
       dataToken = [HATHOR_TOKEN_CONFIG];
     }
@@ -161,7 +172,8 @@ const tokens = {
    *
    */
   saveToStorage(newTokens) {
-    localStorage.setItem('wallet:tokens', JSON.stringify(newTokens));
+    const dataTokens = localStorage.memory ? newTokens : JSON.stringify(newTokens);
+    localStorage.setItem('wallet:tokens', dataTokens);
   },
 
   /**
@@ -252,7 +264,7 @@ const tokens = {
    * @param {number} mintAmount Amount of the new token that will be minted
    * @param {string} pin Pin to generate new addresses, if necessary
    *
-   * @return {string} Transaction in hexadecimal
+   * @return {Promise} Promise that resolves when token is created or an error from the backend arrives
    *
    * @memberof Tokens
    * @inner
@@ -276,7 +288,27 @@ const tokens = {
     transaction.completeTx(txData);
     const txBytes = transaction.txToBytes(txData);
     const txHex = util.buffer.bufferToHex(txBytes);
-    return txHex;
+    const promise = new Promise((resolve, reject) => {
+      walletApi.sendTokens(txHex, (response) => {
+        if (response.success) {
+          // Save in localStorage and redux new token configuration
+          this.addToken(response.tx.tokens[0], name, symbol);
+          const mintPromise = this.mintTokens(response.tx.hash, response.tx.tokens[0], address, mintAmount, pin)
+          mintPromise.then(() => {
+            resolve({uid: response.tx.tokens[0], name, symbol});
+          }, (message) => {
+            reject(message);
+          });
+        } else {
+          reject(response.message);
+        }
+      }, (e) => {
+        // Error in request
+        console.log(e);
+        reject(e.message);
+      });
+    });
+    return promise;
   },
 
   /**
@@ -288,36 +320,54 @@ const tokens = {
    * @param {number} amount Amount of the new token that will be minted
    * @param {string} pin Pin to generate new addresses, if necessary
    *
-   * @throws {OutputValueError} Will throw an error if the amount is invalid
-   * @throws {AddressError} Will throw an error if address is invalid
-   *
-   * @return {string} Transaction in hexadecimal
+   * @return {Promise} Promise that resolves when token is minted or an error from the backend arrives
    *
    * @memberof Tokens
    * @inner
    */
   mintTokens(txId, token, address, amount, pin) {
-    // Authority output token data
-    const tokenData = 0b10000001;
-    // Now we will mint the tokens
-    const newInput = {'tx_id': txId, 'index': 0, 'token': token, 'address': address};
-    // Output1: Mint token amount
-    const tokenOutput1 = {'address': address, 'value': amount, 'tokenData': 1};
-    // Output2: new mint authority
-    const tokenOutput2 = {'address': address, 'value': TOKEN_MINT_MASK, 'tokenData': tokenData};
-    // Output3: new melt authority
-    const tokenOutput3 = {'address': address, 'value': TOKEN_MELT_MASK, 'tokenData': tokenData};
-    // Create new data
-    let newTxData = {'inputs': [newInput], 'outputs': [tokenOutput1, tokenOutput2, tokenOutput3], 'tokens': [token]};
-    // Get new data to sign
-    const newDataToSign = transaction.dataToSign(newTxData);
-    // Sign mint tx
-    newTxData = transaction.signTx(newTxData, newDataToSign, pin);
-    // Assemble tx and send to backend
-    transaction.completeTx(newTxData);
-    const newTxBytes = transaction.txToBytes(newTxData);
-    const newTxHex = util.buffer.bufferToHex(newTxBytes);
-    return newTxHex;
+    const promise = new Promise((resolve, reject) => {
+      // Authority output token data
+      const tokenData = 0b10000001;
+      // Now we will mint the tokens
+      const newInput = {'tx_id': txId, 'index': 0, 'token': token, 'address': address};
+      // Output1: Mint token amount
+      const tokenOutput1 = {'address': address, 'value': amount, 'tokenData': 1};
+      // Output2: new mint authority
+      const tokenOutput2 = {'address': address, 'value': TOKEN_MINT_MASK, 'tokenData': tokenData};
+      // Output3: new melt authority
+      const tokenOutput3 = {'address': address, 'value': TOKEN_MELT_MASK, 'tokenData': tokenData};
+      // Create new data
+      let newTxData = {'inputs': [newInput], 'outputs': [tokenOutput1, tokenOutput2, tokenOutput3], 'tokens': [token]};
+      try {
+        // Get new data to sign
+        const newDataToSign = transaction.dataToSign(newTxData);
+        // Sign mint tx
+        newTxData = transaction.signTx(newTxData, newDataToSign, pin);
+        // Assemble tx and send to backend
+        transaction.completeTx(newTxData);
+        const newTxBytes = transaction.txToBytes(newTxData);
+        const newTxHex = util.buffer.bufferToHex(newTxBytes);
+        walletApi.sendTokens(newTxHex, (response) => {
+          if (response.success) {
+            resolve();
+          } else {
+            reject(response.message);
+          }
+        }, (e) => {
+          // Error in request
+          reject(e.message);
+        });
+      } catch (e) {
+        if (e instanceof AddressError || e instanceof OutputValueError) {
+          reject(e.message);
+        } else {
+          // Unhandled error
+          throw e;
+        }
+      }
+    });
+    return promise;
   },
 
   /**
