@@ -6,7 +6,6 @@
  */
 
 import versionApi from './api/version';
-import helpers from './helpers';
 import transaction from './transaction';
 
 /**
