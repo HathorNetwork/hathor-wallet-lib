@@ -227,8 +227,6 @@ const wallet = {
         reject(e);
       });
     });
-    // Check api version everytime we load address history
-    version.checkApiVersion();
     return promise;
   },
 
