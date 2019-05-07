@@ -48,10 +48,18 @@ class WS extends EventEmitter {
     }
     this.ws = new WebSocket(wsURL);
 
-    this.ws.onopen = this.onOpen;
-    this.ws.onmessage = this.onMessage;
-    this.ws.onerror = this.onError;
-    this.ws.onclose = this.onClose;
+    this.ws.onopen = () => {
+      this.onOpen();
+    }
+    this.ws.onmessage = (evt) => {
+      this.onMessage(evt);
+    }
+    this.ws.onerror = (evt) => {
+      this.onError(evt);
+    }
+    this.ws.onclose = () => {
+      this.onClose();
+    }
   }
 
   /**
@@ -71,12 +79,15 @@ class WS extends EventEmitter {
   onOpen() {
     if (this.connected === false) {
       // If was not connected  we need to reload data
-      wallet.reloadData();
+      // Emits event to reload data
+      this.emit('reload_data');
     }
     this.connected = true;
     this.started = true;
     this.setIsOnline(true);
-    this.heartbeat = setInterval(this.sendPing, HEARTBEAT_TMO);
+    this.heartbeat = setInterval(() => {
+      this.sendPing();
+    }, HEARTBEAT_TMO);
     wallet.subscribeAllAddresses();
   }
 
@@ -155,6 +166,8 @@ class WS extends EventEmitter {
     // from inside a reducer and was getting error
     if (this.isOnline !== value) {
       this.isOnline = value;
+      // Emits event of online state change
+      this.emit('is_online', value);
     }
   }
 }

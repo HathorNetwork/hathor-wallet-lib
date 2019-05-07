@@ -240,7 +240,8 @@ const wallet = {
         // Update historyTransactions with new one
         const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
         const allTokens = 'allTokens' in data ? data['allTokens'] : [];
-        this.updateHistoryData(historyTransactions, allTokens, response.history, resolve, data);
+        const result = this.updateHistoryData(historyTransactions, allTokens, response.history, resolve, data);
+        WebSocketHandler.emit('addresses_loaded', result);
       }, (e) => {
         // Error in request
         console.log(e);
