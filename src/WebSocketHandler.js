@@ -98,7 +98,9 @@ class WS extends EventEmitter {
     this.started = false;
     this.connected = false;
     this.setIsOnline(false);
-    setTimeout(this.setup, 500);
+    setTimeout(() => {
+      this.setup()
+    }, 500);
     clearInterval(this.heartbeat);
   }
 

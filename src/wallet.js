@@ -48,27 +48,6 @@ import _ from 'lodash';
  */
 const wallet = {
   /**
-   * Validate if can generate the wallet with those parameters and then, call to generate it
-   *
-   * @param {string} words Words to generate the HD Wallet seed,
-   * @param {string} passphrase
-   * @param {string} pin
-   * @param {string} password
-   * @param {boolean} loadHistory if should load history from generated addresses
-   *
-   * @return {string} words generated (null if words are not valid)
-   * @memberof Wallet
-   * @inner
-   */
-  generateWallet(words, passphrase, pin, password, loadHistory) {
-    if (this.wordsValid(words).valid) {
-      return this.executeGenerateWallet(words, passphrase, pin, password, loadHistory);
-    } else {
-      return null;
-    }
-  },
-
-  /**
    * Verify if words passed to generate wallet are valid. In case of invalid, returns message
    *
    * @param {string} words Words (separated by space) to generate the HD Wallet seed
@@ -254,23 +233,6 @@ const wallet = {
   },
 
   /**
-   * Add passphrase to the wallet
-   *
-   * @param {string} passphrase Passphrase to be added
-   * @param {string} pin
-   * @param {string} password
-   *
-   * @return {string} words generated (null if words are not valid)
-   * @memberof Wallet
-   * @inner
-   */
-  addPassphrase(passphrase, pin, password) {
-    const words = this.getWalletWords(password);
-    this.cleanWallet()
-    return this.generateWallet(words, passphrase, pin, password, true);
-  },
-
-  /**
    * Update address shared in localStorage and redux
    *
    * @param {string} lastSharedAddress
@@ -409,7 +371,7 @@ const wallet = {
    */
   canGenerateNewAddress() {
     const lastUsedIndex = this.getLastUsedIndex();
-    let lastGeneratedIndex = this.getLastGeneratedIndex();
+    const lastGeneratedIndex = this.getLastGeneratedIndex();
     if (LIMIT_ADDRESS_GENERATION) {
       if (lastUsedIndex + GAP_LIMIT > lastGeneratedIndex) {
         // Still haven't reached the limit
