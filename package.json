@@ -1,5 +1,7 @@
 {
-  "name": "hathor-wallet-utils",
+  "name": "@hathor/wallet-lib",
+  "version": "0.1.0",
+  "description": "Library used by Hathor Wallet",
   "jest": {
     "setupFilesAfterEnv": ["<rootDir>/setupTests.js"],
     "collectCoverageFrom": [
@@ -19,9 +21,10 @@
       "text"
     ]
   },
-  "version": "1.0.11",
   "main": "index.js",
-  "author": "Hathor Labs",
+  "directories": {
+    "lib": "lib"
+  },
   "files": [
     "/lib"
   ],
@@ -47,5 +50,18 @@
     "jest-html-reporter": "^2.4.4",
     "jest-localstorage-mock": "^2.4.0",
     "mock-socket": "^8.0.5"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/HathorNetwork/hathor-wallet-lib.git"
+  },
+  "keywords": [
+    "hathor",
+    "wallet"
+  ],
+  "author": "Hathor Labs",
+  "bugs": {
+    "url": "https://github.com/HathorNetwork/hathor-wallet-lib/issues"
+  },
+  "homepage": "https://github.com/HathorNetwork/hathor-wallet-lib#readme"
 }
