@@ -110,7 +110,7 @@ class WS extends EventEmitter {
    * @param {Object} evt Event that contains the error
    */
   onError(evt) {
-    console.log('ws error', evt);
+    //console.log('ws error', evt);
   }
 
   /**
