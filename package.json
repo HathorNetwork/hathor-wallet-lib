@@ -1,5 +1,24 @@
 {
   "name": "hathor-wallet-utils",
+  "jest": {
+    "setupFilesAfterEnv": ["<rootDir>/setupTests.js"],
+    "collectCoverageFrom": [
+      "src/**/*.{js}",
+      "!<rootDir>/node_modules/"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "branches": 15,
+        "functions": 5,
+        "lines": 25,
+        "statements": 25
+      }
+    },
+    "coverageReporters": [
+      "html",
+      "text"
+    ]
+  },
   "version": "1.0.11",
   "main": "index.js",
   "author": "Hathor Labs",
@@ -14,12 +33,19 @@
     "long": "^4.0.0"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "babel --presets es2015 -d lib/ src"
+    "test": "jest --env=node",
+    "build": "babel --presets @babel/preset-react -d lib/ src"
   },
   "license": "MIT",
   "devDependencies": {
-    "babel-cli": "^6.26.0",
-    "babel-preset-es2015": "^6.24.1"
+    "@babel/cli": "^7.4.4",
+    "@babel/core": "^7.4.4",
+    "@babel/preset-env": "^7.4.4",
+    "@babel/preset-react": "^7.0.0",
+    "axios-mock-adapter": "^1.16.0",
+    "jest": "^24.8.0",
+    "jest-html-reporter": "^2.4.4",
+    "jest-localstorage-mock": "^2.4.0",
+    "mock-socket": "^8.0.5"
   }
 }
