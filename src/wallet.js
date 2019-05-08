@@ -231,6 +231,23 @@ const wallet = {
   },
 
   /**
+   * Add passphrase to the wallet
+   *
+   * @param {string} passphrase Passphrase to be added
+   * @param {string} pin
+   * @param {string} password
+   *
+   * @return {string} words generated (null if words are not valid)
+   * @memberof Wallet
+   * @inner
+   */
+  addPassphrase(passphrase, pin, password) {
+    const words = this.getWalletWords(password);
+    this.cleanWallet()
+    return this.executeGenerateWallet(words, passphrase, pin, password, true);
+  },
+
+  /**
    * Update address shared in localStorage and redux
    *
    * @param {string} lastSharedAddress
