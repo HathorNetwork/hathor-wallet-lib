@@ -7,7 +7,7 @@
 
 import transaction from '../src/transaction';
 import wallet from '../src/wallet';
-import { AddressError } from '../src/errors';
+import { AddressError, OutputValueError } from '../src/errors';
 import buffer from 'buffer';
 import { OP_PUSHDATA1 } from '../src/opcodes';
 import { DEFAULT_TX_VERSION } from '../src/constants';
@@ -78,6 +78,11 @@ test('Output value to bytes', () => {
   let bytes4 = transaction.outputValueToBytes(2**33);
   expect(bytes4.length).toBe(8);
   expect(bytes4.readIntBE(0, 8)).toBe(-(2**33));
+
+  const outputValueLarge = () => {
+    transaction.outputValueToBytes(2**60);
+  }
+  expect(outputValueLarge).toThrowError(OutputValueError);
 });
 
 test('Decode address', () => {
@@ -85,6 +90,12 @@ test('Decode address', () => {
   let expectedHex = '000ad2c15b8afe6598da1d327951043cf7ad057bcfc03c8936';
   let decoded = transaction.decodeAddress(addressB58);
   expect(expectedHex).toBe(decoded.toString('hex'));
+
+  const decodeAddressWrong = () => {
+    let wrongAddressB58 = 'asfli';
+    transaction.decodeAddress(wrongAddressB58);
+  }
+  expect(decodeAddressWrong).toThrowError(AddressError);
 });
 
 test('Validate address', () => {
@@ -153,7 +164,7 @@ test('Create input data', () => {
   expect(transaction.createInputData(signature, pubkeyBytes2).length).toBe(123);
 });
 
-test('Prepare data to send tokens', () => {
+test('Prepare data to send tokens', (done) => {
   // Now we will update the data in the inputs
   let words = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
   // Generate new wallet and save data in localStorage
@@ -201,6 +212,7 @@ test('Prepare data to send tokens', () => {
     ],
     'tokens': ['123'],
   }
+  let txDataClone = Object.assign({}, txData);
   let expectedDataToSignHex = '00010102011200034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e000000000003e800001976a91419a8eb751eab5a13027e8cae215f6a5dafc1a8dd88ac000003e800001f045c66ef4b6f76a914c2f29cfdb73822200a07ab51d261b425af811fed88ac';
   let dataToSign = transaction.dataToSign(txData);
   expect(dataToSign.toString('hex')).toBe(expectedDataToSignHex);
@@ -219,4 +231,23 @@ test('Prepare data to send tokens', () => {
   txData['timestamp'] = 1550249810;
   let expectedTxHex = '00010101021200034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e00006a473045022100b314f00e18199a8b58acb7e379f6276e40118910319d86d7b0bc0d7cb00c1ea0022069a1450312d8c0fa2c7d0cf169655daa386d00333a72f529f85dea2b9510584c210346cddff43dffab8e13398633ab7a7caf0d634551e89ae6fd563e282f6744b983000003e800001976a91419a8eb751eab5a13027e8cae215f6a5dafc1a8dd88ac000003e800001f045c66ef4b6f76a914c2f29cfdb73822200a07ab51d261b425af811fed88ac40308798722c78a05c66ef520000000000';
   expect(transaction.txToBytes(txData).toString('hex')).toBe(expectedTxHex);
-});
+
+  // Mock any POST request to /thin_wallet/send_tokens
+  // arguments for reply are (status, data, headers)
+  mock.onPost('thin_wallet/send_tokens').reply((config) => {
+    const ret = {
+      'success': true,
+      'tx': {
+        'hash': '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295d',
+      }
+    }
+    return [200, ret];
+  });
+
+  const promise = transaction.sendTransaction(txDataClone, '123456');
+  promise.then(() => {
+    done();
+  }, () => {
+    done.fail('Error sending transaction');
+  });
+}, 10000);

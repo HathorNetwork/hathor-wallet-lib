@@ -25,6 +25,8 @@ mockServer.on('connection', socket => {
     if (jsonData.type === 'subscribe_address') {
       // Only for testing purposes
       socket.send(JSON.stringify({'type': 'subscribe_success', 'address': jsonData.address}));
+    } else if (jsonData.type === 'ping') {
+      socket.send(JSON.stringify({'type': 'pong'}));
     }
   });
 });

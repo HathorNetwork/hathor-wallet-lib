@@ -3,15 +3,15 @@
   "jest": {
     "setupFilesAfterEnv": ["<rootDir>/setupTests.js"],
     "collectCoverageFrom": [
-      "src/**/*.{js}",
+      "<rootDir>/src/*.js",
       "!<rootDir>/node_modules/"
     ],
     "coverageThreshold": {
       "global": {
-        "branches": 15,
-        "functions": 5,
-        "lines": 25,
-        "statements": 25
+        "branches": 70,
+        "functions": 90,
+        "lines": 90,
+        "statements": 90
       }
     },
     "coverageReporters": [

@@ -17,6 +17,7 @@ const createdToken = util.buffer.bufferToHex(tokens.getTokenUID(createdTxHash, 0
 
 beforeEach(() => {
   WebSocketHandler.started = true;
+  wallet.resetAllData();
 });
 
 // Mock any POST request to /thin_wallet/send_tokens
@@ -104,8 +105,8 @@ test('New token', (done) => {
 }, 15000);
 
 test('Tokens handling', () => {
-  const token1 = {'name': '1234', 'uid': '1234'};
-  const token2 = {'name': 'abcd', 'uid': 'abcd'};
+  const token1 = {'name': '1234', 'uid': '1234', 'symbol': '1234'};
+  const token2 = {'name': 'abcd', 'uid': 'abcd', 'symbol': 'abcd'};
   const token3 = {'name': HATHOR_TOKEN_CONFIG.name, 'uid': HATHOR_TOKEN_CONFIG.uid};
   const myTokens = [token1, token2, token3];
   const filteredTokens = tokens.filterTokens(myTokens, HATHOR_TOKEN_CONFIG);
@@ -117,4 +118,44 @@ test('Tokens handling', () => {
   expect(tokens.getTokenIndex(myTokens, HATHOR_TOKEN_CONFIG.uid)).toBe(0);
   expect(tokens.getTokenIndex(myTokens, '1234')).toBe(1);
   expect(tokens.getTokenIndex(myTokens, 'abcd')).toBe(2);
+
+  // So far we don't have any token added (only hathor)
+  const tokens1 = tokens.getTokens();
+  const filteredTokens1 = tokens.filterTokens(tokens1, HATHOR_TOKEN_CONFIG);
+  expect(filteredTokens1.length).toBe(0);
+
+  // Adding a new one
+  tokens.addToken(token1.uid, token1.name, token1.symbol)
+  const tokens2 = tokens.getTokens();
+  const filteredTokens2 = tokens.filterTokens(tokens2, HATHOR_TOKEN_CONFIG);
+  expect(filteredTokens2.length).toBe(1);
+  expect(filteredTokens2[0].uid).toBe(token1.uid);
+  expect(filteredTokens2[0].name).toBe(token1.name);
+  expect(filteredTokens2[0].symbol).toBe(token1.symbol);
+
+  // Editting added token
+  tokens.editToken(token1.uid, token1.name, token2.symbol)
+  const tokens3 = tokens.getTokens();
+  const filteredTokens3 = tokens.filterTokens(tokens3, HATHOR_TOKEN_CONFIG);
+  expect(filteredTokens3.length).toBe(1);
+  expect(filteredTokens3[0].uid).toBe(token1.uid);
+  expect(filteredTokens3[0].name).toBe(token1.name);
+  expect(filteredTokens3[0].symbol).toBe(token2.symbol);
+
+  // Unregister the added token
+  tokens.unregisterToken(token1.uid);
+  const tokens4 = tokens.getTokens();
+  const filteredTokens4 = tokens.filterTokens(tokens4, HATHOR_TOKEN_CONFIG);
+  expect(filteredTokens4.length).toBe(0);
+
+  // Validates configuration string before add
+  const config = tokens.getConfigurationString(token1.uid, token1.name, token1.symbol);
+  expect(tokens.validateTokenToAddByConfigurationString(config).success).toBe(true);
+  expect(tokens.validateTokenToAddByConfigurationString(config, token2.uid).success).toBe(false);
+  expect(tokens.validateTokenToAddByConfigurationString(config+'a').success).toBe(false);
+  expect(tokens.validateTokenToAddByConfigurationString('').success).toBe(false);
+
+  // Cant add the same token twice
+  tokens.addToken(token1.uid, token1.name, token1.symbol)
+  expect(tokens.validateTokenToAddByConfigurationString(config).success).toBe(false);
 });
