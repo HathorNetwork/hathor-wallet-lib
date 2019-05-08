@@ -886,30 +886,6 @@ const wallet = {
   },
 
   /*
-   * Verify if has authority output available from tx_id, index and tokenUID
-   *
-   * @param {Array} key [tx_id, index]
-   * @param {string} tokenUID UID of the token to check existence
-   *
-   * @return {boolean}
-   *
-   * @memberof Wallet
-   * @inner
-   */
-  checkAuthorityExists(key, tokenUID) {
-    const data = this.getWalletData();
-    if (data) {
-      const jsonData = localStorage.memory ? data : JSON.parse(data);
-      const authorityOutputs = jsonData.authorityOutputs;
-      if (tokenUID in authorityOutputs && key in authorityOutputs[tokenUID]) {
-        return true;
-      } else {
-        return false;
-      }
-    }
-  },
-
-  /*
    * Lock wallet
    *
    * @memberof Wallet

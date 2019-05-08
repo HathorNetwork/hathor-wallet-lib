@@ -13,6 +13,7 @@
 const dateFormatter = {
   /**
    * Get locale date from timestamp
+   * en-US date format (m/d/yyyy hh:mm:ss AM/PM)
    *
    * @param {number} timestamp Timestamp to be parsed
    *
@@ -24,20 +25,6 @@ const dateFormatter = {
   parseTimestamp(timestamp) {
     const d = new Date(timestamp*1000); // new Date in js expect milliseconds
     return `${d.toLocaleDateString('en-US')} ${d.toLocaleTimeString('en-US')}`;
-  },
-
-  /**
-   * Get date from timestamp
-   *
-   * @param {number} timestamp Timestamp to be parsed
-   *
-   * @return {string} Date string
-   *
-   * @memberof Date
-   * @inner
-   */
-  timestampToString(timestamp) {
-    return new Date(timestamp * 1000).toString();
   },
 
   /**
