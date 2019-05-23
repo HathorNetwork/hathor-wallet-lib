@@ -219,11 +219,10 @@ const wallet = {
         // Update historyTransactions with new one
         const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
         const allTokens = 'allTokens' in data ? data['allTokens'] : [];
-        const result = this.updateHistoryData(historyTransactions, allTokens, response.history, resolve, data);
+        const result = this.updateHistoryData(historyTransactions, allTokens, response.history, resolve, data, reject);
         WebSocketHandler.emit('addresses_loaded', result);
-      }, (e) => {
+      }).catch((e) => {
         // Error in request
-        console.log(e);
         reject(e);
       });
     });
@@ -1172,6 +1171,7 @@ const wallet = {
    * @param {Array} newHistory Array of new data that arrived from the server to be added to local data
    * @param {function} resolve Resolve method from promise to be called after finishing handling the new history
    * @param {Object} dataJson Wallet data in localStorage already loaded. This parameter is optional and if nothing is passed, the data will be loaded again. We expect this field to be the return of the method wallet.getWalletData()
+   * @param {function} reject Reject method from promise to be called if an error happens
    *
    * @throws {OutputValueError} Will throw an error if one of the output value is invalid
    *
@@ -1179,7 +1179,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  updateHistoryData(oldHistoryTransactions, oldAllTokens, newHistory, resolve, dataJson) {
+  updateHistoryData(oldHistoryTransactions, oldAllTokens, newHistory, resolve, dataJson, reject) {
     if (dataJson === undefined) {
       dataJson = this.getWalletData();
     }
@@ -1261,6 +1261,10 @@ const wallet = {
       promise.then(() => {
         if (resolve) {
           resolve();
+        }
+      }, (e) => {
+        if (reject) {
+          reject(e);
         }
       })
     } else {

@@ -29,8 +29,8 @@ const version = {
         // Update transaction weight constants
         transaction.updateTransactionWeightConstants(data.min_tx_weight, data.min_tx_weight_coefficient, data.min_tx_weight_k);
         resolve(data);
-      }, (error) => {
-        reject();
+      }).catch((error) => {
+        reject(error);
       });
     });
     return promise

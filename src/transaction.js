@@ -532,7 +532,7 @@ const transaction = {
         } else {
           reject(response.message);
         }
-      }, (e) => {
+      }).catch((e) => {
         // Error in request
         reject(e);
       });

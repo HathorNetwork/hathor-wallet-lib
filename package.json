@@ -3,7 +3,9 @@
   "version": "0.1.1",
   "description": "Library used by Hathor Wallet",
   "jest": {
-    "setupFilesAfterEnv": ["<rootDir>/setupTests.js"],
+    "setupFilesAfterEnv": [
+      "<rootDir>/setupTests.js"
+    ],
     "collectCoverageFrom": [
       "<rootDir>/src/*.js",
       "!<rootDir>/node_modules/"
