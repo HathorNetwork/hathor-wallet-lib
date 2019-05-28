@@ -29,7 +29,6 @@ class WS extends EventEmitter {
       this.connected = undefined;
       // Store variable that is passed to Redux if ws is online
       this.isOnline = undefined;
-      this.setup();
     }
 
     return WS.instance;
