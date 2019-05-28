@@ -12,6 +12,8 @@ import { AddressError, OutputValueError } from './errors';
 import buffer from 'buffer';
 import { HATHOR_TOKEN_CONFIG, TOKEN_CREATION_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK } from './constants';
 
+const storage = require('./storage').default;
+
 
 /**
  * Methods to create and handle tokens
@@ -39,7 +41,7 @@ const tokens = {
   },
 
   /**
-   * Add a new token to the localStorage and redux
+   * Add a new token to the storage and redux
    *
    * @param {string} uid Token uid
    * @param {string} name Token name
@@ -59,7 +61,7 @@ const tokens = {
   },
 
   /**
-   * Edit token name and symbol. Save in localStorage and redux
+   * Edit token name and symbol. Save in storage and redux
    *
    * @param {string} uid Token uid to be edited
    * @param {string} name New token name
@@ -80,7 +82,7 @@ const tokens = {
   },
 
   /**
-   * Unregister token from localStorage and redux
+   * Unregister token from storage and redux
    *
    * @param {string} uid Token uid to be unregistered
    *
@@ -145,7 +147,7 @@ const tokens = {
   },
 
   /**
-   * Returns the saved tokens in localStorage
+   * Returns the saved tokens in storage
    *
    * @return {Object} Array of objects ({'name', 'symbol', 'uid'}) of saved tokens
    *
@@ -153,17 +155,15 @@ const tokens = {
    * @inner
    */
   getTokens() {
-    let dataToken = localStorage.getItem('wallet:tokens');
-    if (dataToken) {
-      dataToken = localStorage.memory ? dataToken : JSON.parse(dataToken);
-    } else {
+    let dataToken = storage.getItem('wallet:tokens');
+    if (!dataToken) {
       dataToken = [HATHOR_TOKEN_CONFIG];
     }
     return dataToken;
   },
 
   /**
-   * Updates the saved tokens in localStorage
+   * Updates the saved tokens in storage
    *
    * @param {Object} Array of objects ({'name', 'symbol', 'uid'}) with new tokens
    *
@@ -172,8 +172,7 @@ const tokens = {
    *
    */
   saveToStorage(newTokens) {
-    const dataTokens = localStorage.memory ? newTokens : JSON.stringify(newTokens);
-    localStorage.setItem('wallet:tokens', dataTokens);
+    storage.setItem('wallet:tokens', newTokens);
   },
 
   /**
@@ -291,7 +290,7 @@ const tokens = {
     const promise = new Promise((resolve, reject) => {
       walletApi.sendTokens(txHex, (response) => {
         if (response.success) {
-          // Save in localStorage and redux new token configuration
+          // Save in storage and redux new token configuration
           this.addToken(response.tx.tokens[0], name, symbol);
           const mintPromise = this.mintTokens(response.tx.hash, response.tx.tokens[0], address, mintAmount, pin)
           mintPromise.then(() => {

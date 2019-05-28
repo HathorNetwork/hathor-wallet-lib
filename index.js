@@ -11,6 +11,7 @@ var walletApi = require('./lib/api/wallet');
 var txApi = require('./lib/api/txApi');
 var versionApi = require('./lib/api/version');
 var axios = require('./lib/api/axiosInstance');
+var storage = require('./lib/storage');
 
 module.exports = {
   helpers: helpers.default,
@@ -26,4 +27,5 @@ module.exports = {
   errors: errors,
   constants: constants,
   axios: axios,
+  storage: storage.default,
 }
