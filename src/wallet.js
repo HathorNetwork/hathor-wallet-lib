@@ -213,11 +213,10 @@ const wallet = {
         // Update historyTransactions with new one
         const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
         const allTokens = 'allTokens' in data ? data['allTokens'] : [];
-        const result = this.updateHistoryData(historyTransactions, allTokens, response.history, resolve, data);
+        const result = this.updateHistoryData(historyTransactions, allTokens, response.history, resolve, data, reject);
         WebSocketHandler.emit('addresses_loaded', result);
-      }, (e) => {
+      }).catch((e) => {
         // Error in request
-        console.log(e);
         reject(e);
       });
     });
@@ -1164,7 +1163,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  updateHistoryData(oldHistoryTransactions, oldAllTokens, newHistory, resolve, dataJson) {
+  updateHistoryData(oldHistoryTransactions, oldAllTokens, newHistory, resolve, dataJson, reject) {
     if (dataJson === undefined) {
       dataJson = this.getWalletData();
     }
@@ -1246,6 +1245,10 @@ const wallet = {
       promise.then(() => {
         if (resolve) {
           resolve();
+        }
+      }, (e) => {
+        if (reject) {
+          reject(e);
         }
       })
     } else {
