@@ -7,6 +7,8 @@
 
 import wallet from '../src/wallet';
 
+const storage = require('../src/storage').default;
+
 test('Private key encryption/decryption', () => {
   const pin = '123456';
   const password = 'password';
@@ -20,7 +22,7 @@ test('Private key encryption/decryption', () => {
   expect(wallet.isPasswordCorrect(password)).toBeTruthy();
   expect(wallet.isPasswordCorrect(pin)).toBeFalsy();
 
-  let accessData = JSON.parse(localStorage.getItem('wallet:accessData'));
+  let accessData = storage.getItem('wallet:accessData');
   let decrypted = wallet.decryptData(accessData.mainKey, pin);
   let decryptedWords = wallet.decryptData(accessData.words, password);
 

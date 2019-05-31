@@ -12,16 +12,18 @@ import buffer from 'buffer';
 import { OP_PUSHDATA1 } from '../src/opcodes';
 import { DEFAULT_TX_VERSION } from '../src/constants';
 
+const storage = require('../src/storage').default;
+
 test('Tx weight constants', () => {
   transaction.updateTransactionWeightConstants(10, 1.5, 8);
-  expect(parseFloat(localStorage.getItem('wallet:txMinWeight'))).toBe(10);
-  expect(parseFloat(localStorage.getItem('wallet:txWeightCoefficient'))).toBe(1.5);
-  expect(parseFloat(localStorage.getItem('wallet:txMinWeightK'))).toBe(8);
+  expect(parseFloat(storage.getItem('wallet:txMinWeight'))).toBe(10);
+  expect(parseFloat(storage.getItem('wallet:txWeightCoefficient'))).toBe(1.5);
+  expect(parseFloat(storage.getItem('wallet:txMinWeightK'))).toBe(8);
 
   transaction.updateTransactionWeightConstants(15, 1.2, 10);
-  expect(parseFloat(localStorage.getItem('wallet:txMinWeight'))).toBe(15);
-  expect(parseFloat(localStorage.getItem('wallet:txWeightCoefficient'))).toBe(1.2);
-  expect(parseFloat(localStorage.getItem('wallet:txMinWeightK'))).toBe(10);
+  expect(parseFloat(storage.getItem('wallet:txMinWeight'))).toBe(15);
+  expect(parseFloat(storage.getItem('wallet:txWeightCoefficient'))).toBe(1.2);
+  expect(parseFloat(storage.getItem('wallet:txMinWeightK'))).toBe(10);
 });
 
 test('Unsigned int to bytes', () => {
@@ -164,14 +166,14 @@ test('Create input data', () => {
   expect(transaction.createInputData(signature, pubkeyBytes2).length).toBe(123);
 });
 
-test('Prepare data to send tokens', (done) => {
+test('Prepare data to send tokens', async (done) => {
   // Now we will update the data in the inputs
   let words = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
-  // Generate new wallet and save data in localStorage
-  wallet.executeGenerateWallet(words, '', '123456', 'password', true);
-  // Adding data to localStorage to be used in the signing process
-  let savedData = JSON.parse(localStorage.getItem('wallet:data'));
-  let addr = localStorage.getItem('wallet:address');
+  // Generate new wallet and save data in storage
+  await wallet.executeGenerateWallet(words, '', '123456', 'password', true);
+  // Adding data to storage to be used in the signing process
+  let savedData = storage.getItem('wallet:data');
+  let addr = storage.getItem('wallet:address');
   savedData['historyTransactions'] = {
     '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e': {
       'tx_id': '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e',
@@ -185,7 +187,7 @@ test('Prepare data to send tokens', (done) => {
       ]
     }
   };
-  localStorage.setItem('wallet:data', JSON.stringify(savedData));
+  storage.setItem('wallet:data', savedData);
 
   // First get data to sign
   let tx_id = '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e';
