@@ -6,9 +6,9 @@ Library used by [Hathor Wallet](https://github.com/HathorNetwork/hathor-wallet).
 
 `npm install @hathor/wallet-lib`
 
-# Setting storage
+## Setting storage
 
-The lib requires a storage to be passed to it. Take a look at `src/storage.js` for the methods this storage object should implement.
+This lib requires a storage to be set so it can persist data. Take a look at `src/storage.js` for the methods this storage object should implement.
 ```
 const hathorLib = require('@hathor/wallet-lib');
 hathorLib.storage.setStorage(storageFactory);
