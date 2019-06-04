@@ -18,7 +18,6 @@ class Storage {
   constructor() {
     if (!Storage.instance) {
       this.store = null;
-      this.memory = false;
     }
     return Storage.instance;
   }
