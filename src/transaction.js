@@ -11,12 +11,12 @@ import { HDPrivateKey, crypto, encoding, util } from 'bitcore-lib';
 import { AddressError, OutputValueError } from './errors';
 import dateFormatter from './date';
 import helpers from './helpers';
+import storage from './storage';
 import wallet from './wallet';
 import buffer from 'buffer';
 import Long from 'long';
 import walletApi from './api/wallet';
 
-const storage = require('./storage').default;
 
 /**
  * Transaction utils with methods to serialize, create and handle transactions

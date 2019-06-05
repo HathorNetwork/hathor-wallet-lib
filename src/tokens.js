@@ -6,13 +6,12 @@
  */
 
 import transaction from './transaction';
+import storage from './storage';
 import { crypto, util } from 'bitcore-lib';
 import walletApi from './api/wallet';
 import { AddressError, OutputValueError } from './errors';
 import buffer from 'buffer';
 import { HATHOR_TOKEN_CONFIG, TOKEN_CREATION_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK } from './constants';
-
-const storage = require('./storage').default;
 
 
 /**

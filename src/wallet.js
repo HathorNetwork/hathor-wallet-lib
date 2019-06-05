@@ -14,11 +14,10 @@ import tokens from './tokens';
 import helpers from './helpers';
 import { OutputValueError } from './errors';
 import version from './version';
+import storage from './storage';
 import WebSocketHandler from './WebSocketHandler';
 import dateFormatter from './date';
 import _ from 'lodash';
-
-const storage = require('./storage').default;
 
 /**
  * We use storage and Redux to save data.

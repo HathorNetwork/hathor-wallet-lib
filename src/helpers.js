@@ -8,7 +8,7 @@
 import { GENESIS_BLOCK, DECIMAL_PLACES, DEFAULT_SERVER } from './constants';
 import path from 'path';
 
-const storage = require('./storage').default;
+import storage from './storage';
 
 /**
  * Helper methods
