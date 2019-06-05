@@ -40,7 +40,7 @@ const storageFactory = {
 // Mocking localStorage for tests
 import 'jest-localstorage-mock';
 const storage = require('./src/storage').default;
-storage.setStorage(storageFactory);
+storage.setStore(storageFactory);
 
 // Mocking WebSocket for tests
 import { Server, WebSocket } from 'mock-socket';

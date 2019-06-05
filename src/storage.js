@@ -23,11 +23,11 @@ class Storage {
   }
 
   /**
-   * Set the underlying storage object
+   * Set the underlying store object
    *
-   * @param {Object} myStorage The storage to be used
+   * @param {Object} myStorage The store to be used
    */
-  setStorage(myStorage) {
+  setStore(myStorage) {
     this.store = myStorage;
   }
 
@@ -66,17 +66,6 @@ class Storage {
    */
   clear() {
     return this.store.clear();
-  }
-
-  /**
-   * Return the name of the nth key in storage
-   *
-   * @param {string} n
-   *
-   * @return {Object} Object associated with nth key
-   */
-  key(n) {
-    return this.store.key(n);
   }
 
   /**
