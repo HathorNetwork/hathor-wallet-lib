@@ -16,10 +16,7 @@
  */
 class Storage {
   constructor() {
-    if (!Storage.instance) {
-      this.store = null;
-    }
-    return Storage.instance;
+    this.store = null;
   }
 
   /**
