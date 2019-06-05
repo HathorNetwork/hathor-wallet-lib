@@ -8,6 +8,8 @@
 import { GENESIS_BLOCK, DECIMAL_PLACES, DEFAULT_SERVER } from './constants';
 import path from 'path';
 
+import storage from './storage';
+
 /**
  * Helper methods
  *
@@ -170,7 +172,7 @@ const helpers = {
    * @inner
    */
   getServerURL() {
-    let server = localStorage.getItem('wallet:server');
+    let server = storage.getItem('wallet:server');
     if (server === null) {
       server = DEFAULT_SERVER;
     }

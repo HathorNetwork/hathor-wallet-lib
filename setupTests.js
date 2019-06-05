@@ -5,8 +5,37 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+// Creating memory storage to be used in the place of localStorage
+class MemoryOnlyStore {
+  constructor() {
+    this.hathorMemoryStorage = {};
+  }
+
+  getItem(key) {
+    const ret = this.hathorMemoryStorage[key];
+    if (ret === undefined) {
+      return null
+    }
+    return ret;
+  }
+
+  setItem(key, value) {
+    this.hathorMemoryStorage[key] = value;
+  }
+
+  removeItem(key) {
+    delete this.hathorMemoryStorage[key];
+  }
+
+  clear() {
+    this.hathorMemoryStorage = {};
+  }
+}
+
 // Mocking localStorage for tests
 import 'jest-localstorage-mock';
+const storage = require('./src/storage').default;
+storage.setStore(new MemoryOnlyStore());
 
 // Mocking WebSocket for tests
 import { Server, WebSocket } from 'mock-socket';
@@ -14,7 +43,7 @@ global.WebSocket = WebSocket;
 
 import helpers from './src/helpers';
 
-localStorage.setItem('wallet:server', 'http://localhost:8080/');
+storage.setItem('wallet:server', 'http://localhost:8080/');
 let wsURL = helpers.getWSServerURL();
 
 // Creating a ws mock server
@@ -69,5 +98,8 @@ mock.onGet('version').reply((config) => {
   }
   return [200, data];
 });
+
+import WS from './src/WebSocketHandler';
+WS.setup();
 
 global.window = {};

@@ -9,6 +9,8 @@ import wallet from '../src/wallet';
 import { GAP_LIMIT } from '../src/constants';
 import WebSocketHandler from '../src/WebSocketHandler';
 
+const storage = require('../src/storage').default;
+
 beforeEach(() => {
   WebSocketHandler.started = false;
   wallet.cleanLocalStorage();
@@ -18,107 +20,106 @@ test('Update address', () => {
   let address1 = '1zEETJWa3U6fBm8eUXbG7ddj6k4KjoR7j';
   let index1 = 10;
   wallet.updateAddress(address1, index1, false);
-  expect(localStorage.getItem('wallet:address')).toBe(address1);
-  expect(parseInt(localStorage.getItem('wallet:lastSharedIndex'), 10)).toBe(index1);
+  expect(storage.getItem('wallet:address')).toBe(address1);
+  expect(parseInt(storage.getItem('wallet:lastSharedIndex'), 10)).toBe(index1);
 
   let address2 = '171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r';
   let index2 = 20;
   wallet.updateAddress(address2, index2, false);
-  expect(localStorage.getItem('wallet:address')).toBe(address2);
-  expect(parseInt(localStorage.getItem('wallet:lastSharedIndex'), 10)).toBe(index2);
+  expect(storage.getItem('wallet:address')).toBe(address2);
+  expect(parseInt(storage.getItem('wallet:lastSharedIndex'), 10)).toBe(index2);
 })
 
 test('Has a new address already generated', () => {
-  localStorage.setItem('wallet:lastGeneratedIndex', 10);
-  localStorage.setItem('wallet:lastSharedIndex', 9);
+  storage.setItem('wallet:lastGeneratedIndex', 10);
+  storage.setItem('wallet:lastSharedIndex', 9);
 
   expect(wallet.hasNewAddress()).toBe(true);
 
-  localStorage.setItem('wallet:lastSharedIndex', 10);
+  storage.setItem('wallet:lastSharedIndex', 10);
   expect(wallet.hasNewAddress()).toBe(false);
 
-  localStorage.setItem('wallet:lastSharedIndex', 11);
+  storage.setItem('wallet:lastSharedIndex', 11);
   expect(wallet.hasNewAddress()).toBe(false);
 });
 
 test('Get next address already generated', () => {
-  localStorage.setItem('wallet:lastSharedIndex', 9);
-  localStorage.setItem('wallet:data', JSON.stringify({keys: {'1zEETJWa3U6fBm8eUXbG7ddj6k4KjoR7j': {index: 9}, '171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r': {index: 10}}}));
+  storage.setItem('wallet:lastSharedIndex', 9);
+  storage.setItem('wallet:data', {keys: {'1zEETJWa3U6fBm8eUXbG7ddj6k4KjoR7j': {index: 9}, '171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r': {index: 10}}});
 
   wallet.getNextAddress()
 
-  expect(localStorage.getItem('wallet:address')).toBe('171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r');
-  expect(parseInt(localStorage.getItem('wallet:lastSharedIndex'), 10)).toBe(10);
+  expect(storage.getItem('wallet:address')).toBe('171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r');
+  expect(parseInt(storage.getItem('wallet:lastSharedIndex'), 10)).toBe(10);
 });
 
 test('Can generate new address', () => {
-  localStorage.setItem('wallet:lastUsedIndex', 2);
-  localStorage.setItem('wallet:lastGeneratedIndex', 30);
+  storage.setItem('wallet:lastUsedIndex', 2);
+  storage.setItem('wallet:lastGeneratedIndex', 30);
 
   expect(wallet.canGenerateNewAddress()).toBe(false);
 
-  localStorage.setItem('wallet:lastUsedIndex', 10);
+  storage.setItem('wallet:lastUsedIndex', 10);
   expect(wallet.canGenerateNewAddress()).toBe(false);
 
-  localStorage.setItem('wallet:lastUsedIndex', 11);
+  storage.setItem('wallet:lastUsedIndex', 11);
   expect(wallet.canGenerateNewAddress()).toBe(true);
 
-  localStorage.setItem('wallet:lastUsedIndex', 17);
+  storage.setItem('wallet:lastUsedIndex', 17);
   expect(wallet.canGenerateNewAddress()).toBe(true);
 });
 
-test('Generate new address', () => {
+test('Generate new address', async () => {
   WebSocketHandler.started = true;
   let words = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
   let pin = '123456';
-  wallet.executeGenerateWallet(words, '', pin, 'password', true);
-
-  let data = JSON.parse(localStorage.getItem('wallet:data'));
-  expect(Object.keys(data.keys).length).toBe(GAP_LIMIT);
-  expect(parseInt(localStorage.getItem('wallet:lastGeneratedIndex'), 10)).toBe(GAP_LIMIT - 1);
-  expect(parseInt(localStorage.getItem('wallet:lastSharedIndex'), 10)).toBe(0);
+  await wallet.executeGenerateWallet(words, '', pin, 'password', true);
+  let data = storage.getItem('wallet:data');
+  expect(Object.keys(data.keys).length).toBe(GAP_LIMIT + 1);
+  expect(parseInt(storage.getItem('wallet:lastGeneratedIndex'), 10)).toBe(GAP_LIMIT);
+  expect(storage.store.getItem('wallet:lastSharedIndex')).toBe(0);
 
   for (let address in data.keys) {
     if (data.keys[address].index === 0) {
-      expect(localStorage.getItem('wallet:address')).toBe(address);
+      expect(storage.getItem('wallet:address')).toBe(address);
       break;
     }
   }
 
   // Set last shared index as last generated also
-  localStorage.setItem('wallet:lastSharedIndex', GAP_LIMIT - 1);
+  storage.setItem('wallet:lastSharedIndex', GAP_LIMIT - 1);
 
   wallet.generateNewAddress();
   
-  let newData = JSON.parse(localStorage.getItem('wallet:data'));
+  let newData = storage.getItem('wallet:data');
   expect(Object.keys(newData.keys).length).toBe(GAP_LIMIT + 1);
-  expect(parseInt(localStorage.getItem('wallet:lastSharedIndex'), 10)).toBe(GAP_LIMIT);
+  expect(parseInt(storage.getItem('wallet:lastSharedIndex'), 10)).toBe(GAP_LIMIT);
   for (let address in newData.keys) {
     if (newData.keys[address].index === GAP_LIMIT) {
-      expect(localStorage.getItem('wallet:address')).toBe(address);
+      expect(storage.getItem('wallet:address')).toBe(address);
       break;
     }
   }
 });
 
-test('Last used index', () => {
+test('Last used index', async () => {
   WebSocketHandler.started = true;
   let words = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
   let pin = '123456';
-  wallet.executeGenerateWallet(words, '', pin, 'password', true);
+  await wallet.executeGenerateWallet(words, '', pin, 'password', true);
 
-  let data = JSON.parse(localStorage.getItem('wallet:data'));
+  let data = storage.getItem('wallet:data');
   for (let address in data.keys) {
     if (data.keys[address].index === 12) {
       wallet.setLastUsedIndex(address);
-      expect(parseInt(localStorage.getItem('wallet:lastUsedIndex'), 10)).toBe(12);
-      expect(localStorage.getItem('wallet:lastUsedAddress')).toBe(address);
+      expect(parseInt(storage.getItem('wallet:lastUsedIndex'), 10)).toBe(12);
+      expect(storage.getItem('wallet:lastUsedAddress')).toBe(address);
       break;
     }
   }
 });
 
-test('Subscribe address to websocket', (done) => {
+test('Subscribe address to websocket', done => {
   let address = '171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r';
   WebSocketHandler.started = true;
   WebSocketHandler.on('subscribe_success', (wsData) => {
@@ -147,9 +148,9 @@ test('Subscribe all addresses to websocket', (done) => {
   for (let address of addresses) {
     keys[address] = {};
   }
-  localStorage.setItem('wallet:data', JSON.stringify({keys: keys}));
+  storage.setItem('wallet:data', {keys: keys});
   WebSocketHandler.started = true;
-  WebSocketHandler.on('subscribe_success', (wsData) => {
+  WebSocketHandler.on('subscribe_success', function handler(wsData) {
     let foundIndex = -1;
     for (let [idx, address] of addresses.entries()) {
       if (address === wsData.address) {
@@ -164,6 +165,7 @@ test('Subscribe all addresses to websocket', (done) => {
 
     if (addresses.length === 0) {
       // If got here test was successful, so ending it
+      WebSocketHandler.removeListener('subscribe_success', handler);
       done();
     }
   });

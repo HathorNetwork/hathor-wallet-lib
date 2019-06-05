@@ -9,6 +9,8 @@ import wallet from '../src/wallet';
 import dateFormatter from '../src/date';
 import { HATHOR_TOKEN_CONFIG } from '../src/constants';
 
+const storage = require('../src/storage').default;
+
 test('Wallet operations for transaction', () => {
   const words = wallet.generateWalletWords(256);
   wallet.executeGenerateWallet(words, '', '123456', 'password', false);
@@ -129,9 +131,9 @@ test('Wallet operations for transaction', () => {
     '171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r': {},
   }
 
-  const xpubkey = JSON.parse(localStorage.getItem('wallet:data')).xpubkey;
+  const xpubkey = storage.getItem('wallet:data').xpubkey;
 
-  localStorage.setItem('wallet:data', JSON.stringify({keys, historyTransactions, xpubkey}));
+  storage.setItem('wallet:data', {keys, historyTransactions, xpubkey});
 
   const expectedBalance = {
     '00': {

@@ -11,10 +11,12 @@ import { HDPrivateKey, crypto, encoding, util } from 'bitcore-lib';
 import { AddressError, OutputValueError } from './errors';
 import dateFormatter from './date';
 import helpers from './helpers';
+import storage from './storage';
 import wallet from './wallet';
 import buffer from 'buffer';
 import Long from 'long';
 import walletApi from './api/wallet';
+
 
 /**
  * Transaction utils with methods to serialize, create and handle transactions
@@ -320,8 +322,8 @@ const transaction = {
    * @inner
    */
   getSignature(index, hash, pin) {
-    const accessData = localStorage.getItem('wallet:accessData');
-    const encryptedPrivateKey = localStorage.memory ? accessData.mainKey : JSON.parse(accessData).mainKey;
+    const accessData = storage.getItem('wallet:accessData');
+    const encryptedPrivateKey = accessData.mainKey;
     const privateKeyStr = wallet.decryptData(encryptedPrivateKey, pin);
     const key = HDPrivateKey(privateKeyStr)
     const derivedKey = key.derive(index);
@@ -541,7 +543,7 @@ const transaction = {
   },
 
   /**
-   * Save txMinWeight and txWeightCoefficient to localStorage
+   * Save txMinWeight and txWeightCoefficient to storage
    *
    * @param {number} txMinWeight Minimum allowed weight for a tx (float)
    * @param {number} txWeightCoefficient Coefficient to be used when calculating tx weight (float)
@@ -550,9 +552,9 @@ const transaction = {
    * @inner
    */
   updateTransactionWeightConstants(txMinWeight, txWeightCoefficient, txMinWeightK) {
-    localStorage.setItem('wallet:txMinWeight', txMinWeight);
-    localStorage.setItem('wallet:txWeightCoefficient', txWeightCoefficient);
-    localStorage.setItem('wallet:txMinWeightK', txMinWeightK);
+    storage.setItem('wallet:txMinWeight', txMinWeight);
+    storage.setItem('wallet:txWeightCoefficient', txWeightCoefficient);
+    storage.setItem('wallet:txMinWeightK', txMinWeightK);
   },
 
   /**
@@ -564,9 +566,9 @@ const transaction = {
    * @inner
    */
   getTransactionWeightConstants() {
-    return {'txMinWeight': parseFloat(localStorage.getItem('wallet:txMinWeight')),
-            'txWeightCoefficient': parseFloat(localStorage.getItem('wallet:txWeightCoefficient')),
-            'txMinWeightK': parseFloat(localStorage.getItem('wallet:txMinWeightK'))}
+    return {'txMinWeight': parseFloat(storage.getItem('wallet:txMinWeight')),
+            'txWeightCoefficient': parseFloat(storage.getItem('wallet:txWeightCoefficient')),
+            'txMinWeightK': parseFloat(storage.getItem('wallet:txMinWeightK'))}
   }
 }
 

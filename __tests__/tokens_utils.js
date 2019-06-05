@@ -12,6 +12,8 @@ import wallet from '../src/wallet';
 import { util } from 'bitcore-lib';
 import WebSocketHandler from '../src/WebSocketHandler';
 
+const storage = require('../src/storage').default;
+
 const createdTxHash = '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e';
 const createdToken = util.buffer.bufferToHex(tokens.getTokenUID(createdTxHash, 0));
 
@@ -46,7 +48,7 @@ test('Token UID', () => {
 });
 
 const readyLoadHistory = (pin) => {
-  const encrypted = JSON.parse(localStorage.getItem('wallet:accessData')).mainKey;
+  const encrypted = storage.getItem('wallet:accessData').mainKey;
   const privKeyStr = wallet.decryptData(encrypted, pin);
   const privKey = HDPrivateKey(privKeyStr)
   return wallet.loadAddressHistory(0, GAP_LIMIT, privKey, pin);
@@ -55,13 +57,13 @@ const readyLoadHistory = (pin) => {
 test('New token', (done) => {
   const words = 'connect sunny silent cabin leopard start turtle tortoise dial timber woman genre pave tuna rice indicate gown draft palm collect retreat meadow assume spray';
   const pin = '123456';
-  // Generate new wallet and save data in localStorage
+  // Generate new wallet and save data in storage
   wallet.executeGenerateWallet(words, '', pin, 'password', false);
   const promise = readyLoadHistory(pin);
-  const address = localStorage.getItem('wallet:address');
+  const address = storage.getItem('wallet:address');
   promise.then(() => {
-    // Adding data to localStorage to be used in the signing process
-    const savedData = JSON.parse(localStorage.getItem('wallet:data'));
+    // Adding data to storage to be used in the signing process
+    const savedData = storage.getItem('wallet:data');
     const createdKey = `${createdTxHash},0`;
     savedData['historyTransactions'] = {
       '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e': {
@@ -76,7 +78,7 @@ test('New token', (done) => {
         ]
       }
     };
-    localStorage.setItem('wallet:data', JSON.stringify(savedData));
+    storage.setItem('wallet:data', savedData);
     const input = {'tx_id': '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e', 'index': '0', 'token': '00', 'address': address};
     const output = {'address': address, 'value': 100, 'tokenData': 0};
     const tokenName = 'TestCoin';

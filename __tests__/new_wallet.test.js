@@ -11,6 +11,8 @@ import { HDPrivateKey } from 'bitcore-lib';
 import CryptoJS from 'crypto-js';
 import WebSocketHandler from '../src/WebSocketHandler';
 
+const storage = require('../src/storage').default;
+
 var addressUsed = '';
 var addressShared = '';
 var txId = '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e';
@@ -53,22 +55,22 @@ mock.onGet('thin_wallet/address_history').reply((config) => {
 });
 
 const checkData = () => {
-  check(localStorage.getItem('wallet:address'), addressShared, doneCb);
-  check(localStorage.getItem('wallet:lastUsedAddress'), addressUsed, doneCb);
-  check(parseInt(localStorage.getItem('wallet:lastSharedIndex'), 10), 1, doneCb);
-  check(parseInt(localStorage.getItem('wallet:lastUsedIndex'), 10), 0, doneCb);
-  check(parseInt(localStorage.getItem('wallet:lastGeneratedIndex'), 10), 20, doneCb);
-  let accessData = localStorage.getItem('wallet:accessData');
+  check(storage.getItem('wallet:address'), addressShared, doneCb);
+  check(storage.getItem('wallet:lastUsedAddress'), addressUsed, doneCb);
+  check(parseInt(storage.getItem('wallet:lastSharedIndex'), 10), 1, doneCb);
+  check(parseInt(storage.getItem('wallet:lastUsedIndex'), 10), 0, doneCb);
+  check(parseInt(storage.getItem('wallet:lastGeneratedIndex'), 10), 20, doneCb);
+  let accessData = storage.getItem('wallet:accessData');
   checkNot(accessData, null, doneCb);
-  let accessDataJson = JSON.parse(accessData);
+  let accessDataJson = accessData;
   check('mainKey' in accessDataJson, true, doneCb);
   check(typeof accessDataJson['mainKey'], 'string', doneCb);
   check('hash' in accessDataJson, true, doneCb);
   check(accessDataJson['hash'], CryptoJS.SHA256(CryptoJS.SHA256(pin)).toString(), doneCb);
 
-  let walletData = localStorage.getItem('wallet:data');
+  let walletData = storage.getItem('wallet:data');
   checkNot(walletData, null, doneCb);
-  let walletDataJson = JSON.parse(walletData);
+  let walletDataJson = walletData;
   check('historyTransactions' in walletDataJson, true, doneCb);
   check(typeof walletDataJson['historyTransactions'], 'object', doneCb);
   check('00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e' in walletDataJson['historyTransactions'], true, doneCb);
@@ -86,7 +88,7 @@ beforeEach(() => {
 test('Generate new HD wallet', (done) => {
   doneCb = done;
 
-  // Generate new wallet and save data in localStorage
+  // Generate new wallet and save data in storage
   const words = wallet.generateWalletWords(256);
   check(wallet.wordsValid(words).valid, true, done);
   const promise = wallet.executeGenerateWallet(words, '', pin, 'password', true);
@@ -105,7 +107,7 @@ test('Generate HD wallet from predefined words', (done) => {
   addressShared = 'WgSpcCwYAbtt31S2cqU7hHJkUHdac2EPWG';
 
 
-  // Generate new wallet and save data in localStorage
+  // Generate new wallet and save data in storage
   const promise = wallet.executeGenerateWallet(words, '', pin, 'password', true);
 
   promise.then(() => {

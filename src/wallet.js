@@ -14,13 +14,14 @@ import tokens from './tokens';
 import helpers from './helpers';
 import { OutputValueError } from './errors';
 import version from './version';
+import storage from './storage';
 import WebSocketHandler from './WebSocketHandler';
 import dateFormatter from './date';
 import _ from 'lodash';
 
 /**
- * We use localStorage and Redux to save data.
- * In localStorage we have the following keys (prefixed by wallet:)
+ * We use storage and Redux to save data.
+ * In storage we have the following keys (prefixed by wallet:)
  * - data: object with data from the wallet including (all have full description in the reducers file)
  *   . historyTransactions: Object of transactions indexed by tx_id
  * - accessData: object with data to access the wallet
@@ -88,7 +89,7 @@ const wallet = {
 
   /**
    * Start a new HD wallet with new private key
-   * Encrypt this private key and save data in localStorage
+   * Encrypt this private key and save data in storage
    *
    * @param {string} words Words to generate the HD Wallet seed
    * @param {string} passphrase
@@ -109,7 +110,7 @@ const wallet = {
     let encryptedData = this.encryptData(privkey.xprivkey, pin)
     let encryptedDataWords = this.encryptData(words, password)
 
-    // Save in localStorage the encrypted private key and the hash of the pin and password
+    // Save in storage the encrypted private key and the hash of the pin and password
     let access = {
       mainKey: encryptedData.encrypted.toString(),
       hash: encryptedData.hash.toString(),
@@ -122,11 +123,8 @@ const wallet = {
       xpubkey: privkey.xpubkey,
     }
 
-    access = localStorage.memory ? access : JSON.stringify(access);
-    walletData = localStorage.memory ? walletData : JSON.stringify(walletData);
-
-    localStorage.setItem('wallet:accessData', access);
-    localStorage.setItem('wallet:data', walletData);
+    storage.setItem('wallet:accessData', access);
+    storage.setItem('wallet:data', walletData);
 
     let promise = null;
     if (loadHistory) {
@@ -145,7 +143,7 @@ const wallet = {
    * @inner
    */
   getLastGeneratedIndex() {
-    const raw = localStorage.getItem('wallet:lastGeneratedIndex');
+    const raw = storage.getItem('wallet:lastGeneratedIndex');
     if (!raw) {
       return 0;
     }
@@ -161,18 +159,14 @@ const wallet = {
    * @inner
    */
   getWalletData() {
-    const data = localStorage.getItem('wallet:data');
-    if (!data) {
-      return null;
-    }
-    return localStorage.memory ? data : JSON.parse(data);
+    return storage.getItem('wallet:data');
   },
 
   /**
    * Load the history for each of the addresses of a new generated wallet
    * We always search until the GAP_LIMIT. If we have any history in the middle of the searched addresses
    * we search again until we have the GAP_LIMIT of addresses without any transactions
-   * The loaded history is added to localStorage and Redux
+   * The loaded history is added to storage and Redux
    *
    * @param {number} startIndex Address index to start to load history
    * @param {number} count How many addresses I will load
@@ -200,7 +194,7 @@ const wallet = {
         // Subscribe in websocket to this address updates
         this.subscribeAddress(address.toString());
 
-        if (localStorage.getItem('wallet:address') === null) {
+        if (storage.getItem('wallet:address') === null) {
           // If still don't have an address to show on the screen
           this.updateAddress(address.toString(), i);
         }
@@ -208,11 +202,10 @@ const wallet = {
 
       let lastGeneratedIndex = this.getLastGeneratedIndex();
       if (lastGeneratedIndex < stopIndex - 1) {
-        localStorage.setItem('wallet:lastGeneratedIndex', stopIndex - 1);
+        storage.setItem('wallet:lastGeneratedIndex', stopIndex - 1);
       }
 
-      dataJson = localStorage.memory ? dataJson : JSON.stringify(dataJson);
-      localStorage.setItem('wallet:data', dataJson);
+      storage.setItem('wallet:data', dataJson);
 
       walletApi.getAddressHistory(addresses, (response) => {
         const data = this.getWalletData();
@@ -247,7 +240,7 @@ const wallet = {
   },
 
   /**
-   * Update address shared in localStorage and redux
+   * Update address shared in storage and redux
    *
    * @param {string} lastSharedAddress
    * @param {number} lastSharedIndex
@@ -255,8 +248,8 @@ const wallet = {
    * @inner
    */
   updateAddress(lastSharedAddress, lastSharedIndex) {
-    localStorage.setItem('wallet:address', lastSharedAddress);
-    localStorage.setItem('wallet:lastSharedIndex', lastSharedIndex);
+    storage.setItem('wallet:address', lastSharedAddress);
+    storage.setItem('wallet:lastSharedIndex', lastSharedIndex);
   },
 
   /**
@@ -317,10 +310,9 @@ const wallet = {
    * @inner
    */
   isPinCorrect(pin) {
-    const accessData = localStorage.getItem('wallet:accessData');
-    const data = localStorage.memory ? accessData : JSON.parse(accessData);
+    const accessData = storage.getItem('wallet:accessData');
     const pinHash = this.hashPassword(pin).toString();
-    return pinHash === data.hash;
+    return pinHash === accessData.hash;
   },
 
   /**
@@ -334,10 +326,9 @@ const wallet = {
    * @inner
    */
   isPasswordCorrect(password) {
-    const accessData = localStorage.getItem('wallet:accessData');
-    const data = localStorage.memory ? accessData : JSON.parse(accessData);
+    const accessData = storage.getItem('wallet:accessData');
     const passwordHash = this.hashPassword(password).toString();
-    return passwordHash === data.hashPasswd;
+    return passwordHash === accessData.hashPasswd;
   },
 
   /**
@@ -356,7 +347,7 @@ const wallet = {
 
   /**
    * Get next address after the last shared one (only if it's already generated)
-   * Update the data in localStorage and Redux
+   * Update the data in storage and Redux
    *
    * @memberof Wallet
    * @inner
@@ -423,14 +414,13 @@ const wallet = {
     this.updateAddress(newAddress.toString(), newIndex);
     let lastGeneratedIndex = this.getLastGeneratedIndex();
     if (newIndex > lastGeneratedIndex) {
-      localStorage.setItem('wallet:lastGeneratedIndex', newIndex);
+      storage.setItem('wallet:lastGeneratedIndex', newIndex);
     }
 
     // Save new keys to local storage
     let data = this.getWalletData();
     data.keys[newAddress.toString()] = {privkey: null, index: newIndex};
-    data = localStorage.memory ? data : JSON.stringify(data);
-    localStorage.setItem('wallet:data', data);
+    storage.setItem('wallet:data', data);
 
     // Subscribe in ws to new address updates
     this.subscribeAddress(newAddress.toString());
@@ -447,7 +437,7 @@ const wallet = {
    * @inner
    */
   getAddressToUse() {
-    const address = localStorage.getItem('wallet:address');
+    const address = storage.getItem('wallet:address');
     // Updating address because the last one was used
     if (this.hasNewAddress()) {
       this.getNextAddress();
@@ -463,7 +453,7 @@ const wallet = {
    *
    * @param {Object} tx Transaction object
    * @param {string} selectedToken Token uid
-   * @param {Object} walletData Wallet data in localStorage already loaded. This parameter is optional and if nothing is passed, the data will be loaded again. We expect this field to be the return of the method wallet.getWalletData()
+   * @param {Object} walletData Wallet data in storage already loaded. This parameter is optional and if nothing is passed, the data will be loaded again. We expect this field to be the return of the method wallet.getWalletData()
    *
    * @return {boolean}
    *
@@ -589,7 +579,7 @@ const wallet = {
   },
 
   /**
-   * Save wallet data from redux to localStorage
+   * Save wallet data from redux to storage
    *
    * @param {Object} historyTransactions
    * @param {Object} allTokens Set of all tokens added to the wallet
@@ -601,8 +591,7 @@ const wallet = {
     let data = this.getWalletData();
     data['historyTransactions'] = historyTransactions;
     data['allTokens'] = [...allTokens];
-    data = localStorage.memory ? data : JSON.stringify(data);
-    localStorage.setItem('wallet:data', data);
+    storage.setItem('wallet:data', data);
   },
 
   /**
@@ -614,7 +603,7 @@ const wallet = {
    * @inner
    */
   loaded() {
-    return localStorage.getItem('wallet:accessData') !== null;
+    return storage.getItem('wallet:accessData') !== null;
   },
 
   /**
@@ -626,7 +615,7 @@ const wallet = {
    * @inner
    */
   started() {
-    return localStorage.getItem('wallet:started') !== null;
+    return storage.getItem('wallet:started') !== null;
   },
 
   /**
@@ -638,7 +627,7 @@ const wallet = {
    * @inner
    */
   markWalletAsStarted() {
-    return localStorage.setItem('wallet:started', true);
+    return storage.setItem('wallet:started', true);
   },
 
   /**
@@ -693,7 +682,7 @@ const wallet = {
   },
 
   /**
-   * Get an address, find its index and set as last used in localStorage
+   * Get an address, find its index and set as last used in storage
    *
    * @param {string} address
    * @memberof Wallet
@@ -705,8 +694,8 @@ const wallet = {
       let index = data.keys[address].index;
       const lastUsedIndex = this.getLastUsedIndex();
       if (lastUsedIndex === null || index > parseInt(lastUsedIndex, 10)) {
-        localStorage.setItem('wallet:lastUsedAddress', address);
-        localStorage.setItem('wallet:lastUsedIndex', index);
+        storage.setItem('wallet:lastUsedAddress', address);
+        storage.setItem('wallet:lastUsedIndex', index);
       }
     }
   },
@@ -733,7 +722,7 @@ const wallet = {
    * @inner
    */
   cleanServer() {
-    localStorage.removeItem('wallet:server');
+    storage.removeItem('wallet:server');
   },
 
   /*
@@ -745,27 +734,27 @@ const wallet = {
   resetAllData() {
     this.cleanWallet();
     this.cleanServer();
-    localStorage.removeItem('wallet:started');
-    localStorage.removeItem('wallet:backup');
-    localStorage.removeItem('wallet:locked');
-    localStorage.removeItem('wallet:tokens');
-    localStorage.removeItem('wallet:sentry');
+    storage.removeItem('wallet:started');
+    storage.removeItem('wallet:backup');
+    storage.removeItem('wallet:locked');
+    storage.removeItem('wallet:tokens');
+    storage.removeItem('wallet:sentry');
   },
 
   /**
-   * Remove all localStorages saved items
+   * Remove all storage saved items
    * @memberof Wallet
    * @inner
    */
   cleanLocalStorage() {
-    localStorage.removeItem('wallet:accessData');
-    localStorage.removeItem('wallet:data');
-    localStorage.removeItem('wallet:address');
-    localStorage.removeItem('wallet:lastSharedIndex');
-    localStorage.removeItem('wallet:lastGeneratedIndex');
-    localStorage.removeItem('wallet:lastUsedIndex');
-    localStorage.removeItem('wallet:lastUsedAddress');
-    localStorage.removeItem('wallet:closed');
+    storage.removeItem('wallet:accessData');
+    storage.removeItem('wallet:data');
+    storage.removeItem('wallet:address');
+    storage.removeItem('wallet:lastSharedIndex');
+    storage.removeItem('wallet:lastGeneratedIndex');
+    storage.removeItem('wallet:lastUsedIndex');
+    storage.removeItem('wallet:lastUsedAddress');
+    storage.removeItem('wallet:closed');
   },
 
   /*
@@ -891,7 +880,7 @@ const wallet = {
    * @inner
    */
   lock() {
-    localStorage.setItem('wallet:locked', true);
+    storage.setItem('wallet:locked', true);
   },
 
   /*
@@ -901,7 +890,7 @@ const wallet = {
    * @inner
    */
   unlock() {
-    localStorage.removeItem('wallet:locked');
+    storage.removeItem('wallet:locked');
   },
 
   /*
@@ -913,7 +902,7 @@ const wallet = {
    * @inner
    */
   isLocked() {
-    return localStorage.getItem('wallet:locked') !== null;
+    return storage.getItem('wallet:locked') !== null;
   },
 
   /*
@@ -925,17 +914,17 @@ const wallet = {
    * @inner
    */
   wasClosed() {
-    return localStorage.getItem('wallet:closed') !== null;
+    return storage.getItem('wallet:closed') !== null;
   },
 
   /*
-   * Set in localStorage as closed
+   * Set in storage as closed
    *
    * @memberof Wallet
    * @inner
    */
   close() {
-    localStorage.setItem('wallet:closed', true);
+    storage.setItem('wallet:closed', true);
   },
 
   /**
@@ -949,29 +938,28 @@ const wallet = {
    * @inner
    */
   getWalletWords(password) {
-    const accessData = localStorage.getItem('wallet:accessData');
-    const data = localStorage.memory ? accessData : JSON.parse(accessData);
-    return this.decryptData(data.words, password);
+    const accessData = storage.getItem('wallet:accessData');
+    return this.decryptData(accessData.words, password);
   },
 
   /*
-   * Save backup done in localStorage
+   * Save backup done in storage
    *
    * @memberof Wallet
    * @inner
    */
   markBackupAsDone() {
-    localStorage.setItem('wallet:backup', true);
+    storage.setItem('wallet:backup', true);
   },
 
   /*
-   * Save backup not done in localStorage
+   * Save backup not done in storage
    *
    * @memberof Wallet
    * @inner
    */
   markBackupAsNotDone() {
-    localStorage.removeItem('wallet:backup');
+    storage.removeItem('wallet:backup');
   },
 
   /*
@@ -983,19 +971,18 @@ const wallet = {
    * @inner
    */
   isBackupDone() {
-    return localStorage.getItem('wallet:backup') !== null;
+    return storage.getItem('wallet:backup') !== null;
   },
 
   /*
-   * Reload data in the localStorage
+   * Reload data in the storage
    *
    * @memberof Wallet
    * @inner
    */
   reloadData() {
     // Get old access data
-    const accessDataStorage = localStorage.getItem('wallet:accessData');
-    let accessData = localStorage.memory ? accessDataStorage : JSON.parse(accessDataStorage);
+    const accessData = storage.getItem('wallet:accessData');
     const walletData = this.getWalletData();
 
     this.cleanWallet();
@@ -1007,12 +994,8 @@ const wallet = {
       xpubkey: walletData.xpubkey,
     }
 
-    // Prepare to save new data
-    accessData = localStorage.memory ? accessData : JSON.stringify(accessData);
-    newWalletData = localStorage.memory ? newWalletData : JSON.stringify(newWalletData);
-
-    localStorage.setItem('wallet:accessData', accessData);
-    localStorage.setItem('wallet:data', newWalletData);
+    storage.setItem('wallet:accessData', accessData);
+    storage.setItem('wallet:data', newWalletData);
 
     // Load history from new server
     const promise = this.loadAddressHistory(0, GAP_LIMIT);
@@ -1034,7 +1017,7 @@ const wallet = {
   },
 
   /*
-   * Change server in localStorage
+   * Change server in storage
    *
    * @param {string} newServer New server to connect
    *
@@ -1042,7 +1025,7 @@ const wallet = {
    * @inner
    */
   changeServer(newServer) {
-    localStorage.setItem('wallet:server', newServer);
+    storage.setItem('wallet:server', newServer);
   },
 
   /*
@@ -1123,16 +1106,16 @@ const wallet = {
   },
 
   /**
-   * Get localStorage index and, in case is not null, parse to int
+   * Get storage index and, in case is not null, parse to int
    *
-   * @param {string} key Index key to get in the localStorage
+   * @param {string} key Index key to get in the storage
    *
    * @return {number} Index parsed to integer or null
    * @memberof Wallet
    * @inner
    */
   getLocalStorageIndex(key) {
-    let index = localStorage.getItem(`wallet:${key}`);
+    let index = storage.getItem(`wallet:${key}`);
     if (index !== null) {
       index = parseInt(index, 10);
     }
@@ -1140,7 +1123,7 @@ const wallet = {
   },
 
   /**
-   * Get localStorage last used index (in case is not set return null)
+   * Get storage last used index (in case is not set return null)
    *
    * @return {number} Last used index parsed to integer or null
    * @memberof Wallet
@@ -1151,7 +1134,7 @@ const wallet = {
   },
 
   /**
-   * Get localStorage last shared index (in case is not set return null)
+   * Get storage last shared index (in case is not set return null)
    *
    * @return {number} Last shared index parsed to integer or null
    * @memberof Wallet
@@ -1170,7 +1153,7 @@ const wallet = {
    * @param {Set} allTokens Set of all tokens (uid) already added
    * @param {Array} newHistory Array of new data that arrived from the server to be added to local data
    * @param {function} resolve Resolve method from promise to be called after finishing handling the new history
-   * @param {Object} dataJson Wallet data in localStorage already loaded. This parameter is optional and if nothing is passed, the data will be loaded again. We expect this field to be the return of the method wallet.getWalletData()
+   * @param {Object} dataJson Wallet data in storage already loaded. This parameter is optional and if nothing is passed, the data will be loaded again. We expect this field to be the return of the method wallet.getWalletData()
    * @param {function} reject Reject method from promise to be called if an error happens
    *
    * @throws {OutputValueError} Will throw an error if one of the output value is invalid
@@ -1248,7 +1231,7 @@ const wallet = {
       }
     }
 
-    // Saving to localStorage before resolving the promise
+    // Saving to storage before resolving the promise
     this.saveAddressHistory(historyTransactions, allTokens);
 
     const lastGeneratedIndex = this.getLastGeneratedIndex();
@@ -1282,7 +1265,7 @@ const wallet = {
    * Check if address is from the loaded wallet
    *
    * @param {string} address Address to check
-   * @param {Object} data Wallet data in localStorage already loaded. This parameter is optional and if nothing is passed, the data will be loaded again. We expect this field to be the return of the method wallet.getWalletData()
+   * @param {Object} data Wallet data in storage already loaded. This parameter is optional and if nothing is passed, the data will be loaded again. We expect this field to be the return of the method wallet.getWalletData()
    *
    * @return {boolean}
    * @memberof Wallet

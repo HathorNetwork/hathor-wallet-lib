@@ -8,9 +8,12 @@
 import wallet from '../src/wallet';
 import dateFormatter from '../src/date';
 
+const storage = require('../src/storage').default;
+
 beforeEach(() => {
   wallet.cleanLocalStorage();
 });
+
 
 test('Loaded', () => {
   expect(wallet.loaded()).toBeFalsy();
@@ -20,33 +23,33 @@ test('Loaded', () => {
 });
 
 test('Clean local storage', () => {
-  localStorage.setItem('wallet:accessData', '{}');
-  localStorage.setItem('wallet:data', '{}');
-  localStorage.setItem('wallet:address', '171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r');
-  localStorage.setItem('wallet:lastSharedIndex', 1);
-  localStorage.setItem('wallet:lastGeneratedIndex', 19);
-  localStorage.setItem('wallet:lastUsedIndex', 0);
-  localStorage.setItem('wallet:lastUsedAddress', '1knH3y5dZuC8DQBaLhgJP33fGBr6vstr8');
+  storage.setItem('wallet:accessData', {});
+  storage.setItem('wallet:data', {});
+  storage.setItem('wallet:address', '171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r');
+  storage.setItem('wallet:lastSharedIndex', 1);
+  storage.setItem('wallet:lastGeneratedIndex', 19);
+  storage.setItem('wallet:lastUsedIndex', 0);
+  storage.setItem('wallet:lastUsedAddress', '1knH3y5dZuC8DQBaLhgJP33fGBr6vstr8');
 
   wallet.cleanLocalStorage();
 
-  expect(localStorage.getItem('wallet:accessData')).toBeNull();
-  expect(localStorage.getItem('wallet:data')).toBeNull();
-  expect(localStorage.getItem('wallet:address')).toBeNull();
-  expect(localStorage.getItem('wallet:lastSharedIndex')).toBeNull();
-  expect(localStorage.getItem('wallet:lastGeneratedIndex')).toBeNull();
-  expect(localStorage.getItem('wallet:lastUsedIndex')).toBeNull();
-  expect(localStorage.getItem('wallet:lastUsedAddress')).toBeNull();
+  expect(storage.getItem('wallet:accessData')).toBeNull();
+  expect(storage.getItem('wallet:data')).toBeNull();
+  expect(storage.getItem('wallet:address')).toBeNull();
+  expect(storage.getItem('wallet:lastSharedIndex')).toBeNull();
+  expect(storage.getItem('wallet:lastGeneratedIndex')).toBeNull();
+  expect(storage.getItem('wallet:lastUsedIndex')).toBeNull();
+  expect(storage.getItem('wallet:lastUsedAddress')).toBeNull();
 });
 
-test('Save address history to localStorage', () => {
-  expect(localStorage.getItem('wallet:data')).toBeNull();
-  localStorage.setItem('wallet:data', '{}');
+test('Save address history to storage', () => {
+  expect(storage.getItem('wallet:data')).toBeNull();
+  storage.setItem('wallet:data', {});
   const historyTransactions = {'id': {'tx_id': 'id'}}
   const allTokens = new Set(['00']);
   wallet.saveAddressHistory(historyTransactions, allTokens);
 
-  let data = JSON.parse(localStorage.getItem('wallet:data'));
+  let data = storage.getItem('wallet:data');
   expect(data.historyTransactions).toEqual(expect.objectContaining(historyTransactions));
   expect(data.allTokens).toEqual(expect.objectContaining(allTokens));
 });
@@ -86,7 +89,7 @@ test('Inputs from amount', () => {
       'inputs': [],
     },
   }
-  localStorage.setItem('wallet:data', JSON.stringify({'keys': {'171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r': {}}}));
+  storage.setItem('wallet:data', {'keys': {'171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r': {}}});
 
   const ret1 = wallet.getInputsFromAmount(historyTransactionts, 10, '01');
   expect(ret1.inputs.length).toBe(0);
@@ -129,21 +132,21 @@ test('Can use unspent txs', () => {
   expect(wallet.canUseUnspentTx(unspentTx3)).toBe(false);
 });
 
-test('Output change', () => {
+test('Output change', async () => {
   const words = wallet.generateWalletWords(256);
-  wallet.executeGenerateWallet(words, '', '123456', 'password', true);
-  let lastSharedIndex = parseInt(localStorage.getItem('wallet:lastSharedIndex'), 10);
-  let address = localStorage.getItem('wallet:address');
+  await wallet.executeGenerateWallet(words, '', '123456', 'password', true);
+  let lastSharedIndex = storage.getItem('wallet:lastSharedIndex');
+  let address = storage.getItem('wallet:address');
   let change = wallet.getOutputChange(1000, '00');
 
-  expect(parseInt(localStorage.getItem('wallet:lastSharedIndex'), 10)).toBe(lastSharedIndex+1);
+  expect(parseInt(storage.getItem('wallet:lastSharedIndex'), 10)).toBe(lastSharedIndex+1);
   expect(change.address).toBe(address);
   expect(change.value).toBe(1000);
-  expect(localStorage.getItem('wallet:address')).not.toBe(address);
+  expect(storage.getItem('wallet:address')).not.toBe(address);
 
-  localStorage.setItem('wallet:lastSharedIndex', localStorage.getItem('wallet:lastGeneratedIndex'));
+  storage.setItem('wallet:lastSharedIndex', storage.getItem('wallet:lastGeneratedIndex'));
   wallet.getOutputChange(1000, '00');
-  expect(parseInt(localStorage.getItem('wallet:lastSharedIndex'), 10)).toBe(parseInt(localStorage.getItem('wallet:lastGeneratedIndex'), 10));
+  expect(parseInt(storage.getItem('wallet:lastSharedIndex'), 10)).toBe(parseInt(storage.getItem('wallet:lastGeneratedIndex'), 10));
 });
 
 test('Unspent txs exist', () => {
@@ -172,7 +175,7 @@ test('Unspent txs exist', () => {
     },
   }
 
-  localStorage.setItem('wallet:data', JSON.stringify({'keys': {'171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r': {}}}));
+  storage.setItem('wallet:data', {'keys': {'171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r': {}}});
 
   expect(wallet.checkUnspentTxExists(historyTransactionts, '0', '0', '00').exists).toBe(false);
   expect(wallet.checkUnspentTxExists(historyTransactionts, '0', '0', '01').exists).toBe(false);
@@ -197,33 +200,31 @@ test('Wallet backup', () => {
   expect(wallet.isBackupDone()).toBe(false);
 });
 
-test('Get wallet words', () => {
+test('Get wallet words', async () => {
   const words = wallet.generateWalletWords(256);
-  wallet.executeGenerateWallet(words, '', '123456', 'password', true);
-  expect(parseInt(localStorage.getItem('wallet:lastSharedIndex'), 10)).toBe(0)
+  await wallet.executeGenerateWallet(words, '', '123456', 'password', true);
+  expect(parseInt(storage.getItem('wallet:lastSharedIndex'), 10)).toBe(0)
 
-  const sharedAddress = localStorage.getItem('wallet:address');
-  const key = JSON.parse(localStorage.getItem('wallet:data')).keys[sharedAddress];
+  const sharedAddress = storage.getItem('wallet:address');
+  const key = storage.getItem('wallet:data').keys[sharedAddress];
   expect(wallet.getWalletWords('password')).toBe(words);
 
   wallet.addPassphrase('passphrase', '123456', 'password');
   expect(wallet.getWalletWords('password')).toBe(words);
-  expect(parseInt(localStorage.getItem('wallet:lastSharedIndex'), 10)).toBe(0)
+  expect(parseInt(storage.getItem('wallet:lastSharedIndex'), 10)).toBe(0)
 
-  const newSharedAddress = localStorage.getItem('wallet:address');
+  const newSharedAddress = storage.getItem('wallet:address');
   expect(sharedAddress).not.toBe(newSharedAddress);
-  expect(key.index).toBe(JSON.parse(localStorage.getItem('wallet:data')).keys[newSharedAddress].index);
+  expect(key.index).toBe(storage.getItem('wallet:data').keys[newSharedAddress].index);
 });
 
-test('Change server', () => {
+test('Change server', async () => {
   const words = wallet.generateWalletWords(256);
-  wallet.executeGenerateWallet(words, '', '123456', 'password', true);
-  const accessData = JSON.parse(localStorage.getItem('wallet:accessData'));
-  const keys = JSON.parse(localStorage.getItem('wallet:data')).keys;
-
+  await wallet.executeGenerateWallet(words, '', '123456', 'password', true);
+  const accessData = storage.getItem('wallet:accessData');
+  const keys = storage.getItem('wallet:data').keys;
   wallet.reloadData();
-
-  expect(JSON.parse(localStorage.getItem('wallet:accessData'))).toEqual(accessData);
+  expect(storage.getItem('wallet:accessData')).toEqual(accessData);
 });
 
 test('Started', () => {
@@ -232,22 +233,22 @@ test('Started', () => {
   expect(wallet.started()).toBe(true);
 });
 
-test('Reset all data', () => {
+test('Reset all data', async () => {
   const words = wallet.generateWalletWords(256);
-  wallet.executeGenerateWallet(words, '', '123456', 'password', true);
+  await wallet.executeGenerateWallet(words, '', '123456', 'password', true);
   wallet.markWalletAsStarted();
   const server = 'http://server';
   wallet.changeServer(server);
-  expect(localStorage.getItem('wallet:server')).toBe(server);
+  expect(storage.getItem('wallet:server')).toBe(server);
   wallet.lock();
 
   wallet.resetAllData();
 
-  expect(localStorage.getItem('wallet:started')).toBeNull();
-  expect(localStorage.getItem('wallet:server')).toBeNull();
-  expect(localStorage.getItem('wallet:locked')).toBeNull();
-  expect(localStorage.getItem('wallet:accessData')).toBeNull();
-  expect(localStorage.getItem('wallet:data')).toBeNull();
+  expect(storage.getItem('wallet:started')).toBeNull();
+  expect(storage.getItem('wallet:server')).toBeNull();
+  expect(storage.getItem('wallet:locked')).toBeNull();
+  expect(storage.getItem('wallet:accessData')).toBeNull();
+  expect(storage.getItem('wallet:data')).toBeNull();
 });
 
 test('Closed', () => {
