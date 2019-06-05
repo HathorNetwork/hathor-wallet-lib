@@ -5,42 +5,37 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-let hathorMemoryStorage = {};
 // Creating memory storage to be used in the place of localStorage
-const storageFactory = {
+class MemoryOnlyStore {
+  constructor() {
+    this.hathorMemoryStorage = {};
+  }
+
   getItem(key) {
-    const ret = hathorMemoryStorage[key];
+    const ret = this.hathorMemoryStorage[key];
     if (ret === undefined) {
       return null
     }
     return ret;
-  },
+  }
 
   setItem(key, value) {
-    hathorMemoryStorage[key] = value;
-  },
+    this.hathorMemoryStorage[key] = value;
+  }
 
   removeItem(key) {
-    delete hathorMemoryStorage[key];
-  },
+    delete this.hathorMemoryStorage[key];
+  }
 
   clear() {
-    hathorMemoryStorage = {};
-  },
-
-  key(n) {
-    return Object.keys(hathorMemoryStorage)[n] || null;
-  },
-
-  getAll() {
-    return hathorMemoryStorage;
-  },
+    this.hathorMemoryStorage = {};
+  }
 }
 
 // Mocking localStorage for tests
 import 'jest-localstorage-mock';
 const storage = require('./src/storage').default;
-storage.setStore(storageFactory);
+storage.setStore(new MemoryOnlyStore());
 
 // Mocking WebSocket for tests
 import { Server, WebSocket } from 'mock-socket';
