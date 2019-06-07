@@ -511,7 +511,7 @@ const transaction = {
    *
    * @param {Object} data Object with inputs and outputs
    * {
-   *  'inputs': [{'tx_id', 'index', 'token'}],
+   *  'inputs': [{'tx_id', 'index', 'token', 'address'}],
    *  'outputs': ['address', 'value', 'timelock', 'tokenData'],
    * }
    * @param {string} pin Pin to decrypt data
@@ -521,23 +521,32 @@ const transaction = {
    * @inner
    */
   sendTransaction(data, pin) {
-    const dataToSign = transaction.dataToSign(data);
-    data = transaction.signTx(data, dataToSign, pin);
-    // Completing data in the same object
-    transaction.completeTx(data);
-    const txBytes = transaction.txToBytes(data);
-    const txHex = util.buffer.bufferToHex(txBytes);
     const promise = new Promise((resolve, reject) => {
-      walletApi.sendTokens(txHex, (response) => {
-        if (response.success) {
-          resolve();
+      try {
+        const dataToSign = transaction.dataToSign(data);
+        data = transaction.signTx(data, dataToSign, pin);
+        // Completing data in the same object
+        transaction.completeTx(data);
+        const txBytes = transaction.txToBytes(data);
+        const txHex = util.buffer.bufferToHex(txBytes);
+        walletApi.sendTokens(txHex, (response) => {
+          if (response.success) {
+            resolve(response);
+          } else {
+            reject(response.message);
+          }
+        }).catch((e) => {
+          // Error in request
+          reject(e.message);
+        });
+      } catch (e) {
+        if (e instanceof AddressError || e instanceof OutputValueError) {
+          reject(e.message);
         } else {
-          reject(response.message);
+          // Unhandled error
+          throw e;
         }
-      }).catch((e) => {
-        // Error in request
-        reject(e);
-      });
+      }
     });
     return promise;
   },
