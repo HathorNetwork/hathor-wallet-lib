@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, NETWORK, TOKEN_AUTHORITY_MASK, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, MAX_OUTPUT_VALUE } from './constants';
+import { GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, NETWORK, TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, MAX_OUTPUT_VALUE } from './constants';
 import Mnemonic from 'bitcore-mnemonic';
 import { HDPublicKey, Address } from 'bitcore-lib';
 import CryptoJS from 'crypto-js';
@@ -460,7 +460,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  hasTokenAndAddress(tx, selectedToken, walletData) {
+  hasTokenAndAddress(tx, selectedToken, walletData, acceptAuthority) {
     if (walletData === undefined) {
       walletData = this.getWalletData();
     }
@@ -470,7 +470,7 @@ const wallet = {
     }
 
     for (let txin of tx.inputs) {
-      if (this.isAuthorityOutput(txin)) {
+      if (this.isAuthorityOutput(txin) && !acceptAuthority) {
         continue;
       }
 
@@ -481,7 +481,7 @@ const wallet = {
       }
     }
     for (let txout of tx.outputs) {
-      if (this.isAuthorityOutput(txout)) {
+      if (this.isAuthorityOutput(txout) && !acceptAuthority) {
         continue;
       }
 
@@ -505,12 +505,12 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  filterHistoryTransactions(historyTransactions, selectedToken) {
+  filterHistoryTransactions(historyTransactions, selectedToken, acceptAuthority) {
     const walletData = this.getWalletData();
     const data = [];
     for (const tx_id in historyTransactions) {
       const tx = historyTransactions[tx_id];
-      if (this.hasTokenAndAddress(tx, selectedToken, walletData)) {
+      if (this.hasTokenAndAddress(tx, selectedToken, walletData, acceptAuthority)) {
         data.push(tx);
       }
     }
@@ -1014,6 +1014,34 @@ const wallet = {
    */
   isAuthorityOutput(output) {
     return (output.token_data & TOKEN_AUTHORITY_MASK) > 0
+  },
+
+  /*
+   * Verifies if output is of mint
+   *
+   * @param {Object} output Output object with 'token_data' and 'value' key
+   *
+   * @return {boolean} if output is mint
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  isMintOutput(output) {
+    return this.isAuthorityOutput(output) && ((output.value & TOKEN_MINT_MASK) > 0);
+  },
+
+  /*
+   * Verifies if output is of melt
+   *
+   * @param {Object} output Output object with 'token_data' and 'value' key
+   *
+   * @return {boolean} if output is melt
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  isMeltOutput(output) {
+    return this.isAuthorityOutput(output) && ((output.value & TOKEN_MELT_MASK) > 0);
   },
 
   /*
