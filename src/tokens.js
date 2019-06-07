@@ -6,12 +6,13 @@
  */
 
 import transaction from './transaction';
+import wallet from './wallet';
 import storage from './storage';
 import { crypto, util } from 'bitcore-lib';
 import walletApi from './api/wallet';
 import { AddressError, OutputValueError } from './errors';
 import buffer from 'buffer';
-import { HATHOR_TOKEN_CONFIG, TOKEN_CREATION_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK } from './constants';
+import { HATHOR_TOKEN_CONFIG, TOKEN_CREATION_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, AUTHORITY_TOKEN_DATA } from './constants';
 
 
 /**
@@ -271,38 +272,25 @@ const tokens = {
     // Create authority output
     // First the tokens masks that will be the value for the authority output
     const tokenMasks = TOKEN_CREATION_MASK | TOKEN_MINT_MASK | TOKEN_MELT_MASK;
-    // Authority output token data
-    const tokenData = 0b10000001;
     // Create token uid
     const tokenUID = this.getTokenUID(input.tx_id, input.index);
-    const authorityOutput = {'address': address, 'value': tokenMasks, 'tokenData': tokenData};
+    const authorityOutput = {'address': address, 'value': tokenMasks, 'tokenData': AUTHORITY_TOKEN_DATA};
+
     // Create tx data
     let txData = {'inputs': [input], 'outputs': [authorityOutput, output], 'tokens': [tokenUID]};
-    // Get data to sign
-    const dataToSign = transaction.dataToSign(txData);
-    // Sign tx
-    txData = transaction.signTx(txData, dataToSign, pin);
-    // Assemble tx and send to backend
-    transaction.completeTx(txData);
-    const txBytes = transaction.txToBytes(txData);
-    const txHex = util.buffer.bufferToHex(txBytes);
     const promise = new Promise((resolve, reject) => {
-      walletApi.sendTokens(txHex, (response) => {
-        if (response.success) {
-          // Save in storage and redux new token configuration
-          this.addToken(response.tx.tokens[0], name, symbol);
-          const mintPromise = this.mintTokens(response.tx.hash, response.tx.tokens[0], address, mintAmount, pin)
-          mintPromise.then(() => {
-            resolve({uid: response.tx.tokens[0], name, symbol});
-          }, (message) => {
-            reject(message);
-          });
-        } else {
-          reject(response.message);
-        }
+      const txPromise = transaction.sendTransaction(txData, pin);
+      txPromise.then((response) => {
+        // Save in storage and redux new token configuration
+        this.addToken(response.tx.tokens[0], name, symbol);
+        console.log('VAI MINTAR, CARALHo', response);
+        const mintPromise = this.mintTokens(response.tx.hash, 0, address, response.tx.tokens[0], address, mintAmount, pin, true, true);
+        mintPromise.then(() => {
+          resolve({uid: response.tx.tokens[0], name, symbol});
+        }, (message) => {
+          reject(message);
+        });
       }, (e) => {
-        // Error in request
-        console.log(e);
         reject(e.message);
       });
     });
@@ -313,59 +301,128 @@ const tokens = {
    * Mint new tokens
    *
    * @param {string} txId Hash of the transaction to be used to mint tokens
+   * @param {number} index Index of the output being spent
+   * @param {string} addressSpent Address of the output being spent
    * @param {string} token Token uid to be minted
    * @param {string} address Address to receive the amount of the generated token
    * @param {number} amount Amount of the new token that will be minted
    * @param {string} pin Pin to generate new addresses, if necessary
+   * @param {boolean} createAnotherMint If should create another mint output after spending this one
    *
    * @return {Promise} Promise that resolves when token is minted or an error from the backend arrives
    *
    * @memberof Tokens
    * @inner
    */
-  mintTokens(txId, token, address, amount, pin) {
-    const promise = new Promise((resolve, reject) => {
-      // Authority output token data
-      const tokenData = 0b10000001;
-      // Now we will mint the tokens
-      const newInput = {'tx_id': txId, 'index': 0, 'token': token, 'address': address};
-      // Output1: Mint token amount
-      const tokenOutput1 = {'address': address, 'value': amount, 'tokenData': 1};
+  mintTokens(txID, index, addressSpent, token, address, amount, pin, createAnotherMint, createMelt) {
+    const input = {'tx_id': txID, 'index': index, 'token': token, 'address': addressSpent};
+    // Output1: Mint token amount
+    const outputs = [{'address': address, 'value': amount, 'tokenData': 1}];
+
+    if (createAnotherMint) {
       // Output2: new mint authority
-      const tokenOutput2 = {'address': address, 'value': TOKEN_MINT_MASK, 'tokenData': tokenData};
-      // Output3: new melt authority
-      const tokenOutput3 = {'address': address, 'value': TOKEN_MELT_MASK, 'tokenData': tokenData};
-      // Create new data
-      let newTxData = {'inputs': [newInput], 'outputs': [tokenOutput1, tokenOutput2, tokenOutput3], 'tokens': [token]};
-      try {
-        // Get new data to sign
-        const newDataToSign = transaction.dataToSign(newTxData);
-        // Sign mint tx
-        newTxData = transaction.signTx(newTxData, newDataToSign, pin);
-        // Assemble tx and send to backend
-        transaction.completeTx(newTxData);
-        const newTxBytes = transaction.txToBytes(newTxData);
-        const newTxHex = util.buffer.bufferToHex(newTxBytes);
-        walletApi.sendTokens(newTxHex, (response) => {
-          if (response.success) {
-            resolve();
-          } else {
-            reject(response.message);
+      outputs.push({'address': address, 'value': TOKEN_MINT_MASK, 'tokenData': AUTHORITY_TOKEN_DATA});
+    }
+
+    if (createMelt) {
+      // We create a melt output when creating the token
+      outputs.push({'address': address, 'value': TOKEN_MELT_MASK, 'tokenData': AUTHORITY_TOKEN_DATA});
+    }
+
+    // Create new data
+    let newTxData = {'inputs': [input], 'outputs': outputs, 'tokens': [token]};
+    return transaction.sendTransaction(newTxData, pin);
+  },
+
+  meltTokens(txId, index, addressSpent, token, amount, pin, createAnotherMelt) {
+    const result = this.getMeltInputs(amount, token);
+    // Can't find inputs to this amount
+    if (result === null) return null;
+
+    // First adding authority input with MELT capability
+    const authorityInput = {'tx_id': txId, 'index': index, 'token': token, 'address': addressSpent};
+    const inputs = [authorityInput, ...result.inputs];
+    const outputs = [];
+    const tokens = [token];
+
+    if (result.inputsAmount > amount) {
+      // Need to create change output
+      const newAddress = wallet.getAddressToUse();
+      outputs.push({'address': newAddress, 'value': result.inputsAmount - amount, 'tokenData': 1});
+    }
+
+    if (createAnotherMelt) {
+      // New melt authority
+      const newAddress = wallet.getAddressToUse();
+      outputs.push({'address': newAddress, 'value': TOKEN_MELT_MASK, 'tokenData': AUTHORITY_TOKEN_DATA});
+    }
+
+    // Create new data
+    let newTxData = {inputs, outputs, tokens};
+    console.log('Melt tokens', newTxData);
+    return transaction.sendTransaction(newTxData, pin);
+  },
+
+  getMeltInputs(amount, token) {
+    const data = wallet.getWalletData();
+    if (data === null) {
+      return null;
+    }
+
+    const inputs = [];
+    let inputsAmount = 0;
+    const filteredHistory = wallet.filterHistoryTransactions(data.historyTransactions, token);
+
+    for (const tx of filteredHistory) {
+      if (tx.is_voided) {
+        // Ignore voided transactions.
+        continue;
+      }
+      for (const [index, txout] of tx.outputs.entries()) {
+        if (wallet.isAuthorityOutput(txout)) {
+          // Ignore authority outputs.
+          continue;
+        }
+        if (txout.spent_by === null && txout.token === token && wallet.isAddressMine(txout.decoded.address, data)) {
+          inputs.push({'tx_id': tx.tx_id, 'index': index, 'token': token, 'address': txout.decoded.address});
+          inputsAmount += txout.value;
+
+          if (inputsAmount >= amount) {
+            return {inputs, inputsAmount};
           }
-        }, (e) => {
-          // Error in request
-          reject(e.message);
-        });
-      } catch (e) {
-        if (e instanceof AddressError || e instanceof OutputValueError) {
-          reject(e.message);
-        } else {
-          // Unhandled error
-          throw e;
         }
       }
-    });
-    return promise;
+    }
+
+    return null;
+  },
+
+  delegateAuthority(txID, index, addressSpent, token, address, createAnother, type, pin) {
+    const input = {'tx_id': txID, 'index': index, 'token': token, 'address': addressSpent};
+
+    console.log('Delegate 1 ', type);
+    const outputValue = type === 'mint' ? TOKEN_MINT_MASK : TOKEN_MELT_MASK;
+
+    // Output1: Delegated output
+    const outputs = [{'address': address, 'value': outputValue, 'tokenData': AUTHORITY_TOKEN_DATA}];
+
+    if (createAnother) {
+      // Output2: new authority for this wallet
+      const newAddress = wallet.getAddressToUse();
+      outputs.push({'address': newAddress, 'value': outputValue, 'tokenData': AUTHORITY_TOKEN_DATA});
+    }
+
+    // Create new data
+    let newTxData = {'inputs': [input], 'outputs': outputs, 'tokens': [token]};
+    console.log('Delegate ', newTxData);
+    return transaction.sendTransaction(newTxData, pin);
+  },
+
+  destroyAuthority(data, pin) {
+    console.log('Destroy authority', data);
+    // Create new data
+    let newTxData = {'inputs': data, 'outputs': [], 'tokens': []};
+    return transaction.sendTransaction(newTxData, pin);
   },
 
   /**
