@@ -116,6 +116,11 @@ export const TOKEN_MINT_MASK = 0b00000010
 export const TOKEN_MELT_MASK = 0b00000100
 
 /**
+ * Token data for an authority output
+ */
+export const AUTHORITY_TOKEN_DATA = 0b10000001
+
+/**
  * Hathor token config
  */
 export const HATHOR_TOKEN_CONFIG = {'name': 'Hathor', 'symbol': 'HTR', 'uid': '00'};
