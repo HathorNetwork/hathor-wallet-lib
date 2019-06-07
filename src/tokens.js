@@ -290,8 +290,8 @@ const tokens = {
         }, (message) => {
           reject(message);
         });
-      }, (e) => {
-        reject(e.message);
+      }, (message) => {
+        reject(message);
       });
     });
     return promise;
@@ -321,12 +321,14 @@ const tokens = {
 
     if (createAnotherMint) {
       // Output2: new mint authority
-      outputs.push({'address': address, 'value': TOKEN_MINT_MASK, 'tokenData': AUTHORITY_TOKEN_DATA});
+      const newAddress = wallet.getAddressToUse();
+      outputs.push({'address': newAddress, 'value': TOKEN_MINT_MASK, 'tokenData': AUTHORITY_TOKEN_DATA});
     }
 
     if (createMelt) {
       // We create a melt output when creating the token
-      outputs.push({'address': address, 'value': TOKEN_MELT_MASK, 'tokenData': AUTHORITY_TOKEN_DATA});
+      const newAddress2 = wallet.getAddressToUse();
+      outputs.push({'address': newAddress2, 'value': TOKEN_MELT_MASK, 'tokenData': AUTHORITY_TOKEN_DATA});
     }
 
     // Create new data
