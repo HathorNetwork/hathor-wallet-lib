@@ -379,6 +379,8 @@ const transaction = {
       sumOutputs += output.value;
     }
 
+    sumOutputs = Math.max(1, sumOutputs); // Preventing division by 0 when handling authority methods that have no outputs
+
     // We need to take into consideration the decimal places because it is inside the amount.
     // For instance, if one wants to transfer 20 HTRs, the amount will be 2000.
     const amount = sumOutputs / (10 ** DECIMAL_PLACES);
