@@ -297,7 +297,7 @@ const tokens = {
   },
 
   /**
-   * Mint new tokens
+   * Generate mint data
    *
    * @param {string} txID Hash of the transaction to be used to mint tokens
    * @param {number} index Index of the output being spent
@@ -305,16 +305,15 @@ const tokens = {
    * @param {string} token Token uid to be minted
    * @param {string} address Address to receive the amount of the generated token
    * @param {number} amount Amount of the token that will be minted
-   * @param {string} pin Pin to generate new addresses, if necessary
    * @param {boolean} createAnotherMint If should create another mint output after spending this one
    * @param {boolean} createMelt If should create a melt output (useful when creating a new token)
    *
-   * @return {Promise} Promise that resolves when token is minted or an error from the backend arrives
+   * @return {Object} Mint data {'inputs', 'outputs', 'tokens'}
    *
    * @memberof Tokens
    * @inner
    */
-  mintTokens(txID, index, addressSpent, token, address, amount, pin, createAnotherMint, createMelt) {
+  getMintData(txID, index, addressSpent, token, address, amount, createAnotherMint, createMelt) {
     // Input targeting the output that contains the mint authority output
     const input = {'tx_id': txID, 'index': index, 'token': token, 'address': addressSpent};
 
@@ -334,27 +333,51 @@ const tokens = {
     }
 
     // Create new data
-    let newTxData = {'inputs': [input], 'outputs': outputs, 'tokens': [token]};
+    const newTxData = {'inputs': [input], 'outputs': outputs, 'tokens': [token]};
+    return newTxData;
+  },
+
+  /**
+   * Mint new tokens
+   *
+   * @param {string} txID Hash of the transaction to be used to mint tokens
+   * @param {number} index Index of the output being spent
+   * @param {string} addressSpent Address of the output being spent
+   * @param {string} token Token uid to be minted
+   * @param {string} address Address to receive the amount of the generated token
+   * @param {number} amount Amount of the token that will be minted
+   * @param {string} pin Pin to generate new addresses, if necessary
+   * @param {boolean} createAnotherMint If should create another mint output after spending this one
+   * @param {boolean} createMelt If should create a melt output (useful when creating a new token)
+   *
+   * @return {Promise} Promise that resolves when token is minted or an error from the backend arrives
+   *
+   * @memberof Tokens
+   * @inner
+   */
+  mintTokens(txID, index, addressSpent, token, address, amount, pin, createAnotherMint, createMelt) {
+    // Get mint data
+    let newTxData = this.getMintData(txID, index, addressSpent, token, address, amount, createAnotherMint, createMelt);
     return transaction.sendTransaction(newTxData, pin);
   },
 
   /**
-   * Melt tokens
+   * Generate melt data
    *
    * @param {string} txID Hash of the transaction to be used to melt tokens
    * @param {number} index Index of the output being spent
    * @param {string} addressSpent Address of the output being spent
    * @param {string} token Token uid to be melted
    * @param {number} amount Amount of the token to be melted
-   * @param {string} pin Pin to generate new addresses, if necessary
    * @param {boolean} createAnotherMelt If should create another melt output after spending this one
    *
-   * @return {Promise} Promise that resolves when tokens are melted or an error from the backend arrives. If can't find outputs that sum the total amount, returns null
+   * @return {Object} Melt data {'inputs', 'outputs', 'tokens'}
    *
    * @memberof Tokens
    * @inner
    */
-  meltTokens(txID, index, addressSpent, token, amount, pin, createAnotherMelt) {
+  getMeltData(txID, index, addressSpent, token, amount, createAnotherMelt) {
+    console.log('GET MELT DATA', createAnotherMelt);
     // Get inputs that sum at least the amount requested to melt
     const result = this.getMeltInputs(amount, token);
 
@@ -381,7 +404,29 @@ const tokens = {
     }
 
     // Create new data
-    let newTxData = {inputs, outputs, tokens};
+    const newTxData = {inputs, outputs, tokens};
+    return newTxData;
+  },
+
+  /**
+   * Melt tokens
+   *
+   * @param {string} txID Hash of the transaction to be used to melt tokens
+   * @param {number} index Index of the output being spent
+   * @param {string} addressSpent Address of the output being spent
+   * @param {string} token Token uid to be melted
+   * @param {number} amount Amount of the token to be melted
+   * @param {string} pin Pin to generate new addresses, if necessary
+   * @param {boolean} createAnotherMelt If should create another melt output after spending this one
+   *
+   * @return {Promise} Promise that resolves when tokens are melted or an error from the backend arrives. If can't find outputs that sum the total amount, returns null
+   *
+   * @memberof Tokens
+   * @inner
+   */
+  meltTokens(txID, index, addressSpent, token, amount, pin, createAnotherMelt) {
+    // Get melt data
+    let newTxData = this.getMeltData(txID, index, addressSpent, token, amount, createAnotherMelt);
     return transaction.sendTransaction(newTxData, pin);
   },
 
@@ -435,6 +480,43 @@ const tokens = {
   },
 
   /**
+   * Create delegate authority data
+   *
+   * @param {string} txID Hash of the transaction to be spent
+   * @param {number} index Index of the output being spent
+   * @param {string} addressSpent Address of the output being spent
+   * @param {string} token Token uid to be delegated the authority
+   * @param {string} address Destination address of the delegated authority output
+   * @param {boolean} createAnother If should create another authority output for this wallet, after delegating this one
+   * @param {string} type Authority type to be delegated ('mint' or 'melt')
+   *
+   * @return {Object} Delegate authority data {'inputs', 'outputs', 'tokens'}
+   *
+   * @memberof Tokens
+   * @inner
+   */
+  getDelegateAuthorityData(txID, index, addressSpent, token, address, createAnother, type) {
+    // First create the input with the authority that will be spent
+    const input = {'tx_id': txID, 'index': index, 'token': token, 'address': addressSpent};
+
+    // Setting the output value delegated, depending on the authority type
+    const outputValue = type === 'mint' ? TOKEN_MINT_MASK : TOKEN_MELT_MASK;
+
+    // Output1: Delegated output
+    const outputs = [{'address': address, 'value': outputValue, 'tokenData': AUTHORITY_TOKEN_DATA}];
+
+    if (createAnother) {
+      // Output2: new authority for this wallet
+      const newAddress = wallet.getAddressToUse();
+      outputs.push({'address': newAddress, 'value': outputValue, 'tokenData': AUTHORITY_TOKEN_DATA});
+    }
+
+    // Create new data
+    const newTxData = {'inputs': [input], 'outputs': outputs, 'tokens': [token]};
+    return newTxData;
+  },
+
+  /**
    * Delegate authority outputs for and address (mint or melt authority)
    *
    * @param {string} txID Hash of the transaction to be spent
@@ -452,23 +534,8 @@ const tokens = {
    * @inner
    */
   delegateAuthority(txID, index, addressSpent, token, address, createAnother, type, pin) {
-    // First create the input with the authority that will be spent
-    const input = {'tx_id': txID, 'index': index, 'token': token, 'address': addressSpent};
-
-    // Setting the output value delegated, depending on the authority type
-    const outputValue = type === 'mint' ? TOKEN_MINT_MASK : TOKEN_MELT_MASK;
-
-    // Output1: Delegated output
-    const outputs = [{'address': address, 'value': outputValue, 'tokenData': AUTHORITY_TOKEN_DATA}];
-
-    if (createAnother) {
-      // Output2: new authority for this wallet
-      const newAddress = wallet.getAddressToUse();
-      outputs.push({'address': newAddress, 'value': outputValue, 'tokenData': AUTHORITY_TOKEN_DATA});
-    }
-
-    // Create new data
-    let newTxData = {'inputs': [input], 'outputs': outputs, 'tokens': [token]};
+    // Get delegate authority output data
+    let newTxData = this.getDelegateAuthorityData(txID, index, addressSpent, token, address, createAnother, type);
     return transaction.sendTransaction(newTxData, pin);
   },
 
