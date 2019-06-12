@@ -313,7 +313,7 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  getMintData(txID, index, addressSpent, token, address, amount, createAnotherMint, createMelt) {
+  createMintData(txID, index, addressSpent, token, address, amount, createAnotherMint, createMelt) {
     // Input targeting the output that contains the mint authority output
     const input = {'tx_id': txID, 'index': index, 'token': token, 'address': addressSpent};
 
@@ -357,7 +357,7 @@ const tokens = {
    */
   mintTokens(txID, index, addressSpent, token, address, amount, pin, createAnotherMint, createMelt) {
     // Get mint data
-    let newTxData = this.getMintData(txID, index, addressSpent, token, address, amount, createAnotherMint, createMelt);
+    let newTxData = this.createMintData(txID, index, addressSpent, token, address, amount, createAnotherMint, createMelt);
     return transaction.sendTransaction(newTxData, pin);
   },
 
@@ -376,8 +376,7 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  getMeltData(txID, index, addressSpent, token, amount, createAnotherMelt) {
-    console.log('GET MELT DATA', createAnotherMelt);
+  createMeltData(txID, index, addressSpent, token, amount, createAnotherMelt) {
     // Get inputs that sum at least the amount requested to melt
     const result = this.getMeltInputs(amount, token);
 
@@ -426,7 +425,7 @@ const tokens = {
    */
   meltTokens(txID, index, addressSpent, token, amount, pin, createAnotherMelt) {
     // Get melt data
-    let newTxData = this.getMeltData(txID, index, addressSpent, token, amount, createAnotherMelt);
+    let newTxData = this.createMeltData(txID, index, addressSpent, token, amount, createAnotherMelt);
     return transaction.sendTransaction(newTxData, pin);
   },
 
@@ -495,7 +494,7 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  getDelegateAuthorityData(txID, index, addressSpent, token, address, createAnother, type) {
+  createDelegateAuthorityData(txID, index, addressSpent, token, address, createAnother, type) {
     // First create the input with the authority that will be spent
     const input = {'tx_id': txID, 'index': index, 'token': token, 'address': addressSpent};
 
@@ -535,7 +534,7 @@ const tokens = {
    */
   delegateAuthority(txID, index, addressSpent, token, address, createAnother, type, pin) {
     // Get delegate authority output data
-    let newTxData = this.getDelegateAuthorityData(txID, index, addressSpent, token, address, createAnother, type);
+    let newTxData = this.createDelegateAuthorityData(txID, index, addressSpent, token, address, createAnother, type);
     return transaction.sendTransaction(newTxData, pin);
   },
 
