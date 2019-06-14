@@ -454,6 +454,7 @@ const wallet = {
    * @param {Object} tx Transaction object
    * @param {string} selectedToken Token uid
    * @param {Object} walletData Wallet data in storage already loaded. This parameter is optional and if nothing is passed, the data will be loaded again. We expect this field to be the return of the method wallet.getWalletData()
+   * @param {boolean} acceptAuthority If should accept authority outputs/inputs in the method
    *
    * @return {boolean}
    *
@@ -499,6 +500,7 @@ const wallet = {
    *
    * @param {Object} historyTransactions Object of transactions indexed by tx_id
    * @param {string} selectedToken Token uid
+   * @param {boolean} acceptAuthority If should accept authority outputs/inputs in the method
    *
    * @return {Object} array of the filtered transactions
    *

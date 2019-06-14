@@ -281,7 +281,7 @@ const tokens = {
     const promise = new Promise((resolve, reject) => {
       const txPromise = transaction.sendTransaction(txData, pin);
       txPromise.then((response) => {
-        // Save in storage and redux new token configuration
+        // Save in storage new token configuration
         this.addToken(response.tx.tokens[0], name, symbol);
         const mintPromise = this.mintTokens(response.tx.hash, 0, address, response.tx.tokens[0], address, mintAmount, pin, true, true);
         mintPromise.then(() => {
@@ -432,7 +432,7 @@ const tokens = {
   /**
    * Get inputs from the amount to be melted
    *
-   * @param {number} amount Amount of the token to get the inputs
+   * @param {number} amount Amount of the token to be melted and to get the inputs
    * @param {string} token Token uid that will be melted
    *
    * @return {Object} Object with {'inputsAmount': the total amount in the returned inputs, 'inputs': Array of inputs ({'tx_id', 'index', 'address', 'token'})} or null, if does not have this amount
@@ -516,7 +516,7 @@ const tokens = {
   },
 
   /**
-   * Delegate authority outputs for and address (mint or melt authority)
+   * Delegate authority outputs for an address (mint or melt authority)
    *
    * @param {string} txID Hash of the transaction to be spent
    * @param {number} index Index of the output being spent
