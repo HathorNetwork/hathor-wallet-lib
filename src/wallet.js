@@ -441,7 +441,7 @@ const wallet = {
     // Updating address because the last one was used
     if (this.hasNewAddress()) {
       this.getNextAddress();
-    } else {
+    } else if (this.canGenerateNewAddress()) {
       this.generateNewAddress();
     }
     return address;
