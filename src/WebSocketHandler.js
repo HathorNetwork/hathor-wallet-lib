@@ -9,7 +9,7 @@ import EventEmitter from 'events';
 import helpers from './helpers';
 import wallet from './wallet';
 
-const HEARTBEAT_TMO = 30000;     // 30s
+const HEARTBEAT_TMO = 3000;     // 3s
 const WS_READYSTATE_READY = 1;
 
 
@@ -21,17 +21,34 @@ const WS_READYSTATE_READY = 1;
  */
 class WS extends EventEmitter {
   constructor(){
-    if (!WS.instance) {
-      super();
-      // Boolean to show when there is a websocket started with the server
-      this.started = false;
-      // Boolean to show when the websocket connection is working
-      this.connected = undefined;
-      // Store variable that is passed to Redux if ws is online
-      this.isOnline = undefined;
-    }
+    super();
 
-    return WS.instance;
+    // Boolean to show when there is a websocket started with the server
+    this.started = false;
+
+    // Boolean to show when the websocket connection is working
+    this.connected = undefined;
+
+    // Store variable that is passed to Redux if ws is online
+    this.isOnline = undefined;
+
+    // Heartbeat interval in milliseconds.
+    this.heartbeatInterval = HEARTBEAT_TMO;
+
+    // Connection timeout.
+    this.connectionTimeout = 5000;
+
+    // Retry connection interval in milliseconds.
+    this.retryConnectionInterval = 3000;
+
+    // Date of latest ping.
+    this.latestPingDate = null;
+
+    // Latest round trip time measured by PING/PONG.
+    this.latestRTT = null;
+
+    // Timer used to detected when connection is down.
+    this.timeoutTimer = null;
   }
 
   /**
@@ -44,6 +61,10 @@ class WS extends EventEmitter {
     let wsURL = helpers.getWSServerURL();
     if (wsURL === null) {
       return;
+    }
+
+    if (this.ws) {
+      this.ws.close();
     }
     this.ws = new WebSocket(wsURL);
 
@@ -61,6 +82,18 @@ class WS extends EventEmitter {
     }
   }
 
+  onPong() {
+    if (this.latestPingDate) {
+      const dt = (new Date() - this.latestPingDate) / 1000;
+      this.latestRTT = dt;
+      this.latestPingDate = null;
+    }
+    if (this.timeoutTimer) {
+      clearTimeout(this.timeoutTimer);
+      this.timeoutTimer = null;
+    }
+  }
+
   /**
    * Handle message receiving from websocket
    *
@@ -69,7 +102,11 @@ class WS extends EventEmitter {
   onMessage(evt) {
     const message = JSON.parse(evt.data)
     const _type = message.type.split(':')[0]
-    this.emit(_type, message)
+    if (_type === 'pong') {
+      this.onPong();
+    } else {
+      this.emit(_type, message)
+    }
   }
 
   /**
@@ -86,7 +123,7 @@ class WS extends EventEmitter {
     this.setIsOnline(true);
     this.heartbeat = setInterval(() => {
       this.sendPing();
-    }, HEARTBEAT_TMO);
+    }, this.heartbeatInterval);
     wallet.subscribeAllAddresses();
   }
 
@@ -97,9 +134,13 @@ class WS extends EventEmitter {
     this.started = false;
     this.connected = false;
     this.setIsOnline(false);
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
+    }
     setTimeout(() => {
       this.setup()
-    }, 500);
+    }, this.retryConnectionInterval);
     clearInterval(this.heartbeat);
   }
 
@@ -109,7 +150,7 @@ class WS extends EventEmitter {
    * @param {Object} evt Event that contains the error
    */
   onError(evt) {
-    //console.log('ws error', evt);
+    // console.log('ws error', window.navigator.onLine, evt);
   }
 
   /**
@@ -138,9 +179,19 @@ class WS extends EventEmitter {
    *
    */
   sendPing() {
+    if (this.latestPingDate) {
+      // Skipping sendPing. Still waiting for pong...
+      return;
+    }
     const msg = JSON.stringify({'type': 'ping'})
+    this.latestPingDate = new Date();
+    this.timeoutTimer = setTimeout(() => this.onConnectionDown(), this.connectionTimeout);
     this.sendMessage(msg)
   }
+
+  onConnectionDown() {
+    this.onClose();
+  };
 
   /**
    * Method called to end a websocket connection
