@@ -1,6 +1,6 @@
 {
   "name": "@hathor/wallet-lib",
-  "version": "0.2.0",
+  "version": "0.3.1",
   "description": "Library used by Hathor Wallet",
   "jest": {
     "setupFilesAfterEnv": [
@@ -13,9 +13,9 @@
     "coverageThreshold": {
       "global": {
         "branches": 70,
-        "functions": 90,
-        "lines": 90,
-        "statements": 90
+        "functions": 85,
+        "lines": 85,
+        "statements": 85
       }
     },
     "coverageReporters": [

@@ -116,6 +116,12 @@ export const TOKEN_MINT_MASK = 0b00000010
 export const TOKEN_MELT_MASK = 0b00000100
 
 /**
+ * Token data for an authority output of the first token in a transaction.
+ * As most transactions with authority outputs have only one token, it may be directly used, as a shortcut.
+ */
+export const AUTHORITY_TOKEN_DATA = TOKEN_AUTHORITY_MASK | 1
+
+/**
  * Hathor token config
  */
 export const HATHOR_TOKEN_CONFIG = {'name': 'Hathor', 'symbol': 'HTR', 'uid': '00'};
