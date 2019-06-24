@@ -535,18 +535,23 @@ const transaction = {
    * @memberof Transaction
    * @inner
    */
-  sendTransaction(data, pin, { minimumTimestamp = 0 }) {
+  sendTransaction(data, pin, options) {
+    const fnOptions = Object.assign({
+      minimumTimestamp: 0,
+    }, options);
+
+    const { minimumTimestamp } = fnOptions;
     const promise = new Promise((resolve, reject) => {
       try {
         const dataToSign = transaction.dataToSign(data);
         data = transaction.signTx(data, dataToSign, pin);
 
-        if (tx.timestamp < minimumTimestamp) {
-          tx.timestamp = minimumTimestamp;
-        }
-
         // Completing data in the same object
         transaction.completeTx(data);
+
+        if (data.timestamp < minimumTimestamp) {
+          data.timestamp = minimumTimestamp;
+        }
 
         const txBytes = transaction.txToBytes(data);
         const txHex = util.buffer.bufferToHex(txBytes);

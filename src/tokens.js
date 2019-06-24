@@ -319,7 +319,13 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  createMintData(txID, index, addressSpent, token, address, amount, { createAnotherMint = true, createMelt = false }) {
+  createMintData(txID, index, addressSpent, token, address, amount, options) {
+    const fnOptions = Object.assign({
+      createAnotherMint: true,
+      createMelt: false,
+    }, options);
+
+    const { createAnotherMint, createMelt } = fnOptions;
     // Input targeting the output that contains the mint authority output
     const input = {'tx_id': txID, 'index': index, 'token': token, 'address': addressSpent};
 
@@ -364,10 +370,15 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  mintTokens(txID, index, addressSpent, token, address, amount, pin, { createAnotherMint = true, createMelt = false, minimumTimestamp = 0 }) {
+  mintTokens(txID, index, addressSpent, token, address, amount, pin, options) {
+    const fnOptions = Object.assign({
+      createAnotherMint: true,
+      createMelt: false,
+      minimumTimestamp: 0,
+    }, options);
     // Get mint data
-    let newTxData = this.createMintData(txID, index, addressSpent, token, address, amount, { createAnotherMint, createMelt });
-    return transaction.sendTransaction(newTxData, pin, { minimumTimestamp });
+    let newTxData = this.createMintData(txID, index, addressSpent, token, address, amount, fnOptions);
+    return transaction.sendTransaction(newTxData, pin, options);
   },
 
   /**
