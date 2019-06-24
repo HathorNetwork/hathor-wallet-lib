@@ -410,12 +410,22 @@ const transaction = {
    * @inner
    */
   completeTx(incompleteTxData) {
-    incompleteTxData['weight'] = 0;
-    incompleteTxData['nonce'] = 0;
-    incompleteTxData['version'] = DEFAULT_TX_VERSION;
-    incompleteTxData['timestamp'] = dateFormatter.dateToTimestamp(new Date());
-    let minimumWeight = this.calculateTxWeight(incompleteTxData);
-    incompleteTxData['weight'] = minimumWeight;
+    // Generate new tx data.
+    const newData = Object.assign({
+      weight: 0,
+      nonce: 0,
+      version: DEFAULT_TX_VERSION,
+      timestamp: dateFormatter.dateToTimestamp(new Date()),
+    }, incompleteTxData);
+
+    // Update incompleteTxData.
+    Object.assign(incompleteTxData, newData);
+
+    // Calculate tx weight if needed.
+    if (incompleteTxData.weight == 0) {
+      let minimumWeight = this.calculateTxWeight(incompleteTxData);
+      incompleteTxData['weight'] = minimumWeight;
+    }
   },
 
   /**
@@ -517,18 +527,32 @@ const transaction = {
    *  'outputs': ['address', 'value', 'timelock', 'tokenData'],
    * }
    * @param {string} pin Pin to decrypt data
+   * @param {Object} {
+   *   {number} minimumTimestamp Default is 0.
+   * }
    *
    * @return {Promise}
    * @memberof Transaction
    * @inner
    */
-  sendTransaction(data, pin) {
+  sendTransaction(data, pin, options) {
+    const fnOptions = Object.assign({
+      minimumTimestamp: 0,
+    }, options);
+
+    const { minimumTimestamp } = fnOptions;
     const promise = new Promise((resolve, reject) => {
       try {
         const dataToSign = transaction.dataToSign(data);
         data = transaction.signTx(data, dataToSign, pin);
+
         // Completing data in the same object
         transaction.completeTx(data);
+
+        if (data.timestamp < minimumTimestamp) {
+          data.timestamp = minimumTimestamp;
+        }
+
         const txBytes = transaction.txToBytes(data);
         const txHex = util.buffer.bufferToHex(txBytes);
         walletApi.sendTokens(txHex, (response) => {

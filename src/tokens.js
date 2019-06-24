@@ -283,7 +283,11 @@ const tokens = {
       txPromise.then((response) => {
         // Save in storage new token configuration
         this.addToken(response.tx.tokens[0], name, symbol);
-        const mintPromise = this.mintTokens(response.tx.hash, 0, address, response.tx.tokens[0], address, mintAmount, pin, true, true);
+        const mintPromise = this.mintTokens(response.tx.hash, 0, address, response.tx.tokens[0], address, mintAmount, pin, {
+          createAnotherMint: true,
+          createMelt: true,
+          minimumTimestamp: response.tx.timestamp + 1,
+        });
         mintPromise.then(() => {
           resolve({uid: response.tx.tokens[0], name, symbol});
         }, (message) => {
@@ -305,15 +309,23 @@ const tokens = {
    * @param {string} token Token uid to be minted
    * @param {string} address Address to receive the amount of the generated token
    * @param {number} amount Amount of the token that will be minted
-   * @param {boolean} createAnotherMint If should create another mint output after spending this one
-   * @param {boolean} createMelt If should create a melt output (useful when creating a new token)
+   * @param {Object} options {
+   *   {boolean} createAnotherMint If should create another mint output after spending this one
+   *   {boolean} createMelt If should create a melt output (useful when creating a new token)
+   * }
    *
    * @return {Object} Mint data {'inputs', 'outputs', 'tokens'}
    *
    * @memberof Tokens
    * @inner
    */
-  createMintData(txID, index, addressSpent, token, address, amount, createAnotherMint, createMelt) {
+  createMintData(txID, index, addressSpent, token, address, amount, options) {
+    const fnOptions = Object.assign({
+      createAnotherMint: true,
+      createMelt: false,
+    }, options);
+
+    const { createAnotherMint, createMelt } = fnOptions;
     // Input targeting the output that contains the mint authority output
     const input = {'tx_id': txID, 'index': index, 'token': token, 'address': addressSpent};
 
@@ -347,18 +359,26 @@ const tokens = {
    * @param {string} address Address to receive the amount of the generated token
    * @param {number} amount Amount of the token that will be minted
    * @param {string} pin Pin to generate new addresses, if necessary
-   * @param {boolean} createAnotherMint If should create another mint output after spending this one
-   * @param {boolean} createMelt If should create a melt output (useful when creating a new token)
+   * @param {Object} {
+   *   {number} minimumTimestamp Tx minimum timestamp (default = 0)
+   *   {boolean} createAnotherMint If should create another mint output after spending this one
+   *   {boolean} createMelt If should create a melt output (useful when creating a new token)
+   * }
    *
    * @return {Promise} Promise that resolves when token is minted or an error from the backend arrives
    *
    * @memberof Tokens
    * @inner
    */
-  mintTokens(txID, index, addressSpent, token, address, amount, pin, createAnotherMint, createMelt) {
+  mintTokens(txID, index, addressSpent, token, address, amount, pin, options) {
+    const fnOptions = Object.assign({
+      createAnotherMint: true,
+      createMelt: false,
+      minimumTimestamp: 0,
+    }, options);
     // Get mint data
-    let newTxData = this.createMintData(txID, index, addressSpent, token, address, amount, createAnotherMint, createMelt);
-    return transaction.sendTransaction(newTxData, pin);
+    let newTxData = this.createMintData(txID, index, addressSpent, token, address, amount, fnOptions);
+    return transaction.sendTransaction(newTxData, pin, fnOptions);
   },
 
   /**
