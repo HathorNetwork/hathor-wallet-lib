@@ -378,7 +378,7 @@ const tokens = {
     }, options);
     // Get mint data
     let newTxData = this.createMintData(txID, index, addressSpent, token, address, amount, fnOptions);
-    return transaction.sendTransaction(newTxData, pin, options);
+    return transaction.sendTransaction(newTxData, pin, fnOptions);
   },
 
   /**
