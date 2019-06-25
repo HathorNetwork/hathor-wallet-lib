@@ -39,7 +39,7 @@ class WS extends EventEmitter {
     this.connectionTimeout = 5000;
 
     // Retry connection interval in milliseconds.
-    this.retryConnectionInterval = 500;
+    this.retryConnectionInterval = 1000;
 
     // Open connection timeout.
     this.openConnectionTimeout = 20000;
