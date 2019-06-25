@@ -42,7 +42,7 @@ class WS extends EventEmitter {
     this.retryConnectionInterval = 500;
 
     // Open connection timeout.
-    this.openConnectionTimeout = 10000;
+    this.openConnectionTimeout = 20000;
 
     // Date of latest setup call. The setup is the way to open a new connection.
     this.latestSetupDate = null;
