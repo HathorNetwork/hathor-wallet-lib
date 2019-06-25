@@ -39,7 +39,13 @@ class WS extends EventEmitter {
     this.connectionTimeout = 5000;
 
     // Retry connection interval in milliseconds.
-    this.retryConnectionInterval = 3000;
+    this.retryConnectionInterval = 500;
+
+    // Open connection timeout.
+    this.openConnectionTimeout = 10000;
+
+    // Date of latest setup call. The setup is the way to open a new connection.
+    this.latestSetupDate = null;
 
     // Date of latest ping.
     this.latestPingDate = null;
@@ -64,9 +70,14 @@ class WS extends EventEmitter {
     }
 
     if (this.ws) {
+      const dt = (new Date() - this.latestSetupDate) / 1000;
+      if (dt < this.openConnectionTimeout) {
+        return;
+      }
       this.ws.close();
     }
     this.ws = new WebSocket(wsURL);
+    this.latestSetupDate = new Date();
 
     this.ws.onopen = () => {
       this.onOpen();
@@ -150,6 +161,7 @@ class WS extends EventEmitter {
    * @param {Object} evt Event that contains the error
    */
   onError(evt) {
+    this.onClose();
     // console.log('ws error', window.navigator.onLine, evt);
   }
 
