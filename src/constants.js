@@ -216,3 +216,13 @@ export const TIMEOUT = 10000;
  * Default timeout for send tokens request in milliseconds
  */
 export const SEND_TOKENS_TIMEOUT = 300000;
+
+/**
+ * Number of iterations to execute when hashing the password
+ */
+export const HASH_ITERATIONS = 1000;
+
+/**
+ * Size of the key to hash the password
+ */
+export const HASH_KEY_SIZE = 256;
