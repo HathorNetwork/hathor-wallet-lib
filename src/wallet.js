@@ -332,6 +332,30 @@ const wallet = {
   },
 
   /**
+   * Validates old PIN and change it for the new one
+   *
+   * @param {string} oldPin
+   * @param {string} newPin
+   *
+   * @return {boolean} if PIN was changed
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  changePin(oldPin, newPin) {
+    const isCorrect = this.isPinCorrect(oldPin);
+    if (!isCorrect) {
+      return false;
+    }
+
+    const hash = this.hashPassword(newPin).toString();
+    const accessData = storage.getItem('wallet:accessData');
+    accessData['hash'] = hash;
+    storage.setItem('wallet:accessData', accessData);
+    return true;
+  },
+
+  /**
    * Checks if has more generated addresses after the last shared one
    *
    * @return {boolean}
