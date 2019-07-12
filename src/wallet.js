@@ -376,9 +376,11 @@ const wallet = {
       const newHash = this.hashPassword(password);
       accessData[hashKey] = newHash.key.toString();
       accessData[saltKey] = newHash.salt;
+      // Updating access data with new hash data
       storage.setItem('wallet:accessData', accessData);
       return true;
     } else {
+      // Already a wallet with new hash algorithm, so only validate
       hash = this.hashPassword(password, accessData[saltKey]);
       return hash.key.toString() === accessData[hashKey];
     }
