@@ -369,13 +369,14 @@ const wallet = {
     let hash;
     if (!(saltKey in accessData)) {
       // Old wallet, we need to validate with old method and update it to the new method
-      hash = this.hashPassword(password).toString();
+      hash = this.oldHashPassword(password).toString();
       if (hash !== accessData[hashKey]) {
         return false;
       }
       const newHash = this.hashPassword(password);
       accessData[hashKey] = newHash.key.toString();
       accessData[saltKey] = newHash.salt;
+      storage.setItem('wallet:accessData', accessData);
       return true;
     } else {
       hash = this.hashPassword(password, accessData[saltKey]);
