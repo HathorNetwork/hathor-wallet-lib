@@ -118,6 +118,8 @@ const wallet = {
       words: encryptedDataWords.encrypted.toString(),
       hashPasswd: encryptedDataWords.hash.key.toString(),
       saltPasswd: encryptedDataWords.hash.salt,
+      hashIterations: HASH_ITERATIONS,
+      pbkdf2Hasher: 'sha1', // For now we are only using SHA1
     }
 
     let walletData = {
@@ -301,6 +303,10 @@ const wallet = {
     if (salt === undefined) {
       salt = CryptoJS.lib.WordArray.random(128 / 8).toString();
     }
+    // NIST has issued Special Publication SP 800-132 recommending PBKDF2
+    // For further information, see https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-132.pdf
+    // The default hash algorithm used by CryptoJS.PBKDF2 is SHA1
+    // https://github.com/brix/crypto-js/blob/develop/src/pbkdf2.js#L24
     const key = CryptoJS.PBKDF2(password, salt, {
       keySize: HASH_KEY_SIZE / 32,
       iterations: HASH_ITERATIONS
@@ -376,6 +382,8 @@ const wallet = {
       const newHash = this.hashPassword(password);
       accessData[hashKey] = newHash.key.toString();
       accessData[saltKey] = newHash.salt;
+      accessData['hashIterations'] = HASH_ITERATIONS;
+      accessData['pbkdf2Hasher'] = 'sha1'; // For now we are only using SHA1
       // Updating access data with new hash data
       storage.setItem('wallet:accessData', accessData);
       return true;
