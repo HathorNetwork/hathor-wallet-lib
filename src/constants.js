@@ -219,6 +219,10 @@ export const SEND_TOKENS_TIMEOUT = 300000;
 
 /**
  * Number of iterations to execute when hashing the password
+ *
+ * Even though NIST recommeds at least 10,000 iterations (https://pages.nist.gov/800-63-3/sp800-63b.html#sec5),
+ * some tests show that it takes ~3s in iPhone 7 and ~1,5s in Galaxy S8.
+ * That's why we have decided to keep the default as 1,000 for now.
  */
 export const HASH_ITERATIONS = 1000;
 
