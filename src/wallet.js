@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, NETWORK, TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, MAX_OUTPUT_VALUE } from './constants';
+import { GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, NETWORK, TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, MAX_OUTPUT_VALUE, HASH_KEY_SIZE, HASH_ITERATIONS } from './constants';
 import Mnemonic from 'bitcore-mnemonic';
 import { HDPublicKey, Address } from 'bitcore-lib';
 import CryptoJS from 'crypto-js';
@@ -113,9 +113,13 @@ const wallet = {
     // Save in storage the encrypted private key and the hash of the pin and password
     let access = {
       mainKey: encryptedData.encrypted.toString(),
-      hash: encryptedData.hash.toString(),
+      hash: encryptedData.hash.key.toString(),
+      salt: encryptedData.hash.salt,
       words: encryptedDataWords.encrypted.toString(),
-      hashPasswd: encryptedDataWords.hash.toString(),
+      hashPasswd: encryptedDataWords.hash.key.toString(),
+      saltPasswd: encryptedDataWords.hash.salt,
+      hashIterations: HASH_ITERATIONS,
+      pbkdf2Hasher: 'sha1', // For now we are only using SHA1
     }
 
     let walletData = {
@@ -271,6 +275,7 @@ const wallet = {
 
   /**
    * Get the hash (sha256) of a password
+   * Old method, used only for compatibility with old wallets
    *
    * @param {string} password Password to be hashes
    *
@@ -279,8 +284,34 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  hashPassword(password) {
+  oldHashPassword(password) {
     return CryptoJS.SHA256(CryptoJS.SHA256(password));
+  },
+
+  /**
+   * Get the hash of a password (hmac + salt)
+   *
+   * @param {string} password Password to be hashes
+   * @param {string} salt Salt to be used when hashing the password. If not passed, we generate one
+   *
+   * @return {Object} Object with {key, salt}
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  hashPassword(password, salt) {
+    if (salt === undefined) {
+      salt = CryptoJS.lib.WordArray.random(128 / 8).toString();
+    }
+    // NIST has issued Special Publication SP 800-132 recommending PBKDF2
+    // For further information, see https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-132.pdf
+    // The default hash algorithm used by CryptoJS.PBKDF2 is SHA1
+    // https://github.com/brix/crypto-js/blob/develop/src/pbkdf2.js#L24
+    const key = CryptoJS.PBKDF2(password, salt, {
+      keySize: HASH_KEY_SIZE / 32,
+      iterations: HASH_ITERATIONS
+    });
+    return { key, salt };
   },
 
   /**
@@ -310,9 +341,7 @@ const wallet = {
    * @inner
    */
   isPinCorrect(pin) {
-    const accessData = storage.getItem('wallet:accessData');
-    const pinHash = this.hashPassword(pin).toString();
-    return pinHash === accessData.hash;
+    return this.hashValidation(pin, 'hash', 'salt');
   },
 
   /**
@@ -326,9 +355,43 @@ const wallet = {
    * @inner
    */
   isPasswordCorrect(password) {
+    return this.hashValidation(password, 'hashPasswd', 'saltPasswd');
+  },
+
+  /**
+   * Validate if password matches the corresponding hash in the storage
+   *
+   * @param {string} password
+   * @param {string} hashKey key of the hash saved in storage
+   * @param {string} saltKey key of the salt saved in storage
+   *
+   * @return {boolean}
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  hashValidation(password, hashKey, saltKey) {
     const accessData = storage.getItem('wallet:accessData');
-    const passwordHash = this.hashPassword(password).toString();
-    return passwordHash === accessData.hashPasswd;
+    let hash;
+    if (!(saltKey in accessData)) {
+      // Old wallet, we need to validate with old method and update it to the new method
+      hash = this.oldHashPassword(password).toString();
+      if (hash !== accessData[hashKey]) {
+        return false;
+      }
+      const newHash = this.hashPassword(password);
+      accessData[hashKey] = newHash.key.toString();
+      accessData[saltKey] = newHash.salt;
+      accessData['hashIterations'] = HASH_ITERATIONS;
+      accessData['pbkdf2Hasher'] = 'sha1'; // For now we are only using SHA1
+      // Updating access data with new hash data
+      storage.setItem('wallet:accessData', accessData);
+      return true;
+    } else {
+      // Already a wallet with new hash algorithm, so only validate
+      hash = this.hashPassword(password, accessData[saltKey]);
+      return hash.key.toString() === accessData[hashKey];
+    }
   },
 
   /**
