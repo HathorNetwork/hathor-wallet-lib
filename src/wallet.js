@@ -411,9 +411,10 @@ const wallet = {
       return false;
     }
 
-    const hash = this.hashPassword(newPin).toString();
     const accessData = storage.getItem('wallet:accessData');
-    accessData['hash'] = hash;
+    const newHash = this.hashPassword(newPin);
+    accessData['hash'] = newHash.key.toString();
+    accessData['salt'] = newHash.salt;
     storage.setItem('wallet:accessData', accessData);
     return true;
   },
