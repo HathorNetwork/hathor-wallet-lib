@@ -395,6 +395,41 @@ const wallet = {
   },
 
   /**
+   * Validate old PIN and change it for the new one
+   *
+   * @param {string} oldPin
+   * @param {string} newPin
+   *
+   * @return {boolean} true if the PIN was successfully changed
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  changePin(oldPin, newPin) {
+    const isCorrect = this.isPinCorrect(oldPin);
+    if (!isCorrect) {
+      return false;
+    }
+
+    const accessData = storage.getItem('wallet:accessData');
+
+    // Get new PIN hash
+    const newHash = this.hashPassword(newPin);
+    // Update new PIN data in storage
+    accessData['hash'] = newHash.key.toString();
+    accessData['salt'] = newHash.salt;
+
+    // Get and update data encrypted with PIN
+    const decryptedData = this.decryptData(accessData.mainKey, oldPin);
+    const encryptedData = this.encryptData(decryptedData, newPin);
+    accessData['mainKey'] = encryptedData.encrypted.toString();
+
+    storage.setItem('wallet:accessData', accessData);
+
+    return true;
+  },
+
+  /**
    * Checks if has more generated addresses after the last shared one
    *
    * @return {boolean}
