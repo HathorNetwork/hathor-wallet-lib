@@ -412,10 +412,18 @@ const wallet = {
     }
 
     const accessData = storage.getItem('wallet:accessData');
+
+    // Get new PIN hash
     const newHash = this.hashPassword(newPin);
+    // Update new PIN data in storage
     accessData['hash'] = newHash.key.toString();
     accessData['salt'] = newHash.salt;
     storage.setItem('wallet:accessData', accessData);
+
+    // Get and update data encrypted with PIN
+    const decryptedData = this.decryptData(accessData.mainKey, oldPin);
+    const encryptedData = this.encryptData(decryptedData, newPin);
+    accessData['mainKey'] = encryptedData.encrypted.toString();
     return true;
   },
 
