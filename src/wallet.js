@@ -502,7 +502,7 @@ const wallet = {
   getAddressToUse() {
     const address = this.getCurrentAddress();
     // Updating address because the last one was used
-    this.updateCurrentAddress();
+    this.nextAddress();
     return address;
   },
 
@@ -519,17 +519,23 @@ const wallet = {
   },
 
   /**
-   * Update current address, if has not yet reached the GAP_LIMIT
+   * Move to the next address in the derivation chain and return it.
+   *
+   * It may not move to the next address if the number of unused addresses has reached the GAP_LIMIT.
+   * In this case, it returns the same as getCurrentAddress.
+   *
+   * @return {string} address
    *
    * @memberof Wallet
    * @inner
    */
-  updateCurrentAddress() {
+  nextAddress() {
     if (this.hasNewAddress()) {
       this.getNextAddress();
     } else if (this.canGenerateNewAddress()) {
       this.generateNewAddress();
     }
+    return this.getCurrentAddress();
   },
 
   /**
