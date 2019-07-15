@@ -395,12 +395,12 @@ const wallet = {
   },
 
   /**
-   * Validates old PIN and change it for the new one
+   * Validate old PIN and change it for the new one
    *
    * @param {string} oldPin
    * @param {string} newPin
    *
-   * @return {boolean} if PIN was changed
+   * @return {boolean} true if the PIN was successfully changed
    *
    * @memberof Wallet
    * @inner
@@ -418,12 +418,14 @@ const wallet = {
     // Update new PIN data in storage
     accessData['hash'] = newHash.key.toString();
     accessData['salt'] = newHash.salt;
-    storage.setItem('wallet:accessData', accessData);
 
     // Get and update data encrypted with PIN
     const decryptedData = this.decryptData(accessData.mainKey, oldPin);
     const encryptedData = this.encryptData(decryptedData, newPin);
     accessData['mainKey'] = encryptedData.encrypted.toString();
+
+    storage.setItem('wallet:accessData', accessData);
+
     return true;
   },
 
