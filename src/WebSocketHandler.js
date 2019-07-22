@@ -216,7 +216,9 @@ class WS extends EventEmitter {
     if (this.ws) {
       this.ws.onclose = () => {};
       this.ws.close();
+      this.ws = null;
     }
+    clearInterval(this.heartbeat);
   }
 
   /**
