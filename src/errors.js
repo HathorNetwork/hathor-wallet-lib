@@ -26,3 +26,11 @@ export class AddressError extends Error {}
  * @inner
  */
 export class OutputValueError extends Error {}
+
+/**
+ * Error thrown when a transaction is invalid
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class InvalidTransaction extends Error {}

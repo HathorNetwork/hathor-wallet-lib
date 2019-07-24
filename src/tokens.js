@@ -277,7 +277,7 @@ const tokens = {
     const authorityOutput = {'address': address, 'value': tokenMasks, 'tokenData': AUTHORITY_TOKEN_DATA};
 
     // Create tx data
-    let txData = {'inputs': [input], 'outputs': [authorityOutput, output], 'tokens': [tokenUID]};
+    let txData = {'inputs': [input], 'outputs': [authorityOutput, output], 'tokens': [tokenUID], 'tokenName': name, 'tokenSymbol': symbol};
     const promise = new Promise((resolve, reject) => {
       const txPromise = transaction.sendTransaction(txData, pin);
       txPromise.then((response) => {

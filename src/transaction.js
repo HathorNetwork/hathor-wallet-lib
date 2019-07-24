@@ -6,9 +6,9 @@
  */
 
 import { OP_GREATERTHAN_TIMESTAMP, OP_DUP, OP_HASH160, OP_EQUALVERIFY, OP_CHECKSIG, OP_PUSHDATA1 } from './opcodes';
-import { DECIMAL_PLACES, DEFAULT_TX_VERSION, MAX_OUTPUT_VALUE_32, MAX_OUTPUT_VALUE, P2PKH_BYTE, P2SH_BYTE } from './constants';
+import { DECIMAL_PLACES, DEFAULT_TX_VERSION, MAX_OUTPUT_VALUE_32, MAX_OUTPUT_VALUE, P2PKH_BYTE, P2SH_BYTE, TOKEN_CREATION_MASK } from './constants';
 import { HDPrivateKey, crypto, encoding, util } from 'bitcore-lib';
-import { AddressError, OutputValueError } from './errors';
+import { AddressError, InvalidTransaction, OutputValueError } from './errors';
 import dateFormatter from './date';
 import helpers from './helpers';
 import storage from './storage';
@@ -489,10 +489,52 @@ const transaction = {
     // Len parents (parents will be calculated in the backend)
     arr.push(this.intToBytes(0, 1))
 
+    // Tx data - Token name/symbol if it's a creation token tx
+    if (this.isCreateTokenTx(txData)) {
+      const nameBytes = buffer.Buffer.from(txData.tokenName, 'utf8');
+      const symbolBytes = buffer.Buffer.from(txData.tokenSymbol, 'utf8');
+      // Data size
+      arr.push(this.intToBytes(nameBytes.length + symbolBytes.length + 2, 1));
+      // Token name size
+      arr.push(this.intToBytes(nameBytes.length, 1));
+      // Token name
+      arr.push(nameBytes);
+      // Token symbol size
+      arr.push(this.intToBytes(symbolBytes.length, 1));
+      // Token symbol
+      arr.push(symbolBytes);
+    } else {
+      arr.push(this.intToBytes(0, 1));
+    }
+
     // Add nonce in the end
     arr.push(this.intToBytes(txData.nonce, 4));
     return util.buffer.concat(arr);
   },
+
+  isCreateTokenTx(data) {
+    let createToken = false;
+
+    // Verifying if is create token tx
+    if (data.outputs.length === 1 && data.outputs[0].value === TOKEN_CREATION_MASK) {
+      createToken = true;
+    }
+
+    // Validating tx
+    if (createToken) {
+      if (!('tokenName' in data) || !('tokenSymbol' in data)) {
+        throw InvalidTransaction('Token name and symbol are required when creating a new token');
+      }
+
+      if (data.tokenName.length > 20) {
+        throw InvalidTransaction('Token name must have at most 20 characters');
+      }
+
+      if (data.tokenSymbol.length > 5) {
+        throw InvalidTransaction('Token symbol must have at most 5 characters');
+      }
+    }
+  }
 
   /**
    * Get the bytes from the output value
@@ -546,14 +588,23 @@ const transaction = {
         const dataToSign = transaction.dataToSign(data);
         data = transaction.signTx(data, dataToSign, pin);
 
-        // Completing data in the same object
-        transaction.completeTx(data);
+        try {
+          // Completing data in the same object
+          transaction.completeTx(data);
 
-        if (data.timestamp < minimumTimestamp) {
-          data.timestamp = minimumTimestamp;
+          if (data.timestamp < minimumTimestamp) {
+            data.timestamp = minimumTimestamp;
+          }
+
+          const txBytes = transaction.txToBytes(data);
+        } catch (e) {
+          if (e instanceof InvalidTransaction) {
+            reject(e.message);
+          } else {
+            // Unhandled error
+            throw e;
+          }
         }
-
-        const txBytes = transaction.txToBytes(data);
         const txHex = util.buffer.bufferToHex(txBytes);
         walletApi.sendTokens(txHex, (response) => {
           if (response.success) {
