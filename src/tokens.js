@@ -255,8 +255,6 @@ const tokens = {
   /**
    * Create the tx for the new token in the backend and creates a new mint and melt outputs to be used in the future
    *
-   * @param {Object} input {'tx_id', 'index', 'token'} Hathor input to be spent to generate the token
-   * @param {Object} output {'address', 'value', 'tokenData'} Hathor output to get the change of the input that generated the token
    * @param {string} address Address to receive the amount of the generated token
    * @param {string} name Name of the new token
    * @param {string} symbol Symbol of the new token
@@ -268,7 +266,7 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  createToken(input, output, address, name, symbol, mintAmount, pin) {
+  createToken(address, name, symbol, mintAmount, pin) {
     // Create authority output
     // First the tokens masks that will be the value for the authority output
     const tokenMasks = TOKEN_CREATION_MASK;
