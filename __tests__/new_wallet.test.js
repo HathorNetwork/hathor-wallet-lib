@@ -8,7 +8,7 @@
 import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../src/constants';
 import wallet from '../src/wallet';
 import { HDPrivateKey } from 'bitcore-lib';
-import CryptoJS from 'crypto-js';
+import Mnemonic from 'bitcore-mnemonic';
 import WebSocketHandler from '../src/WebSocketHandler';
 
 const storage = require('../src/storage').default;
@@ -62,11 +62,15 @@ const checkData = () => {
   check(parseInt(storage.getItem('wallet:lastGeneratedIndex'), 10), 20, doneCb);
   let accessData = storage.getItem('wallet:accessData');
   checkNot(accessData, null, doneCb);
-  let accessDataJson = accessData;
-  check('mainKey' in accessDataJson, true, doneCb);
-  check(typeof accessDataJson['mainKey'], 'string', doneCb);
-  check('hash' in accessDataJson, true, doneCb);
-  check(accessDataJson['hash'], CryptoJS.SHA256(CryptoJS.SHA256(pin)).toString(), doneCb);
+
+  check('mainKey' in accessData, true, doneCb);
+  check(typeof accessData['mainKey'], 'string', doneCb);
+  check('hash' in accessData, true, doneCb);
+  check('hashPasswd' in accessData, true, doneCb);
+  check('salt' in accessData, true, doneCb);
+  check('saltPasswd' in accessData, true, doneCb);
+  check(accessData['hash'], wallet.hashPassword(pin, accessData['salt']).key.toString());
+  check(accessData['hashPasswd'], wallet.hashPassword('password', accessData['saltPasswd']).key.toString());
 
   let walletData = storage.getItem('wallet:data');
   checkNot(walletData, null, doneCb);
@@ -102,10 +106,9 @@ test('Generate new HD wallet', (done) => {
 
 test('Generate HD wallet from predefined words', (done) => {
   doneCb = done;
-  let words = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const words = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
   addressUsed = 'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX';
   addressShared = 'WgSpcCwYAbtt31S2cqU7hHJkUHdac2EPWG';
-
 
   // Generate new wallet and save data in storage
   const promise = wallet.executeGenerateWallet(words, '', pin, 'password', true);
