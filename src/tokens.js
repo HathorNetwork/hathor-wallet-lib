@@ -12,7 +12,7 @@ import { crypto, util } from 'bitcore-lib';
 import walletApi from './api/wallet';
 import { AddressError, OutputValueError } from './errors';
 import buffer from 'buffer';
-import { HATHOR_TOKEN_CONFIG, TOKEN_CREATION_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, AUTHORITY_TOKEN_DATA } from './constants';
+import { HATHOR_TOKEN_CONFIG, TOKEN_CREATION_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, TOKEN_AUTHORITY_MASK, AUTHORITY_TOKEN_DATA } from './constants';
 
 
 /**
@@ -271,25 +271,23 @@ const tokens = {
   createToken(input, output, address, name, symbol, mintAmount, pin) {
     // Create authority output
     // First the tokens masks that will be the value for the authority output
-    const tokenMasks = TOKEN_CREATION_MASK | TOKEN_MINT_MASK | TOKEN_MELT_MASK;
-    // Create token uid
-    const tokenUID = this.getTokenUID(input.tx_id, input.index);
-    const authorityOutput = {'address': address, 'value': tokenMasks, 'tokenData': AUTHORITY_TOKEN_DATA};
+    const tokenMasks = TOKEN_CREATION_MASK;
+    const authorityOutput = {'address': address, 'value': tokenMasks, 'tokenData': TOKEN_AUTHORITY_MASK};
 
     // Create tx data
-    let txData = {'inputs': [input], 'outputs': [authorityOutput, output], 'tokens': [tokenUID], 'tokenName': name, 'tokenSymbol': symbol};
+    let txData = {'inputs': [], 'outputs': [authorityOutput], 'tokens': [], 'tokenName': name, 'tokenSymbol': symbol};
     const promise = new Promise((resolve, reject) => {
       const txPromise = transaction.sendTransaction(txData, pin);
       txPromise.then((response) => {
         // Save in storage new token configuration
-        this.addToken(response.tx.tokens[0], name, symbol);
-        const mintPromise = this.mintTokens(response.tx.hash, 0, address, response.tx.tokens[0], address, mintAmount, pin, {
+        this.addToken(response.tx.hash, name, symbol);
+        const mintPromise = this.mintTokens(response.tx.hash, 0, address, response.tx.hash, address, mintAmount, pin, {
           createAnotherMint: true,
           createMelt: true,
           minimumTimestamp: response.tx.timestamp + 1,
         });
         mintPromise.then(() => {
-          resolve({uid: response.tx.tokens[0], name, symbol});
+          resolve({uid: response.tx.hash, name, symbol});
         }, (message) => {
           reject(message);
         });
