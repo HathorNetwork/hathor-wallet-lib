@@ -523,15 +523,15 @@ const transaction = {
     // Validating tx
     if (createToken) {
       if (!('tokenName' in data) || !('tokenSymbol' in data)) {
-        throw InvalidTransaction('Token name and symbol are required when creating a new token');
+        throw new InvalidTransaction('Token name and symbol are required when creating a new token');
       }
 
       if (data.tokenName.length > 20) {
-        throw InvalidTransaction('Token name must have at most 20 characters');
+        throw new InvalidTransaction('Token name must have at most 20 characters');
       }
 
       if (data.tokenSymbol.length > 5) {
-        throw InvalidTransaction('Token symbol must have at most 5 characters');
+        throw new InvalidTransaction('Token symbol must have at most 5 characters');
       }
     }
 
@@ -590,24 +590,14 @@ const transaction = {
         const dataToSign = transaction.dataToSign(data);
         data = transaction.signTx(data, dataToSign, pin);
 
-        let txBytes;
-        try {
-          // Completing data in the same object
-          transaction.completeTx(data);
+        // Completing data in the same object
+        transaction.completeTx(data);
 
-          if (data.timestamp < minimumTimestamp) {
-            data.timestamp = minimumTimestamp;
-          }
-
-          txBytes = transaction.txToBytes(data);
-        } catch (e) {
-          if (e instanceof InvalidTransaction) {
-            reject(e.message);
-          } else {
-            // Unhandled error
-            throw e;
-          }
+        if (data.timestamp < minimumTimestamp) {
+          data.timestamp = minimumTimestamp;
         }
+
+        const txBytes = transaction.txToBytes(data);
         const txHex = util.buffer.bufferToHex(txBytes);
         walletApi.sendTokens(txHex, (response) => {
           if (response.success) {
@@ -620,7 +610,7 @@ const transaction = {
           reject(e.message);
         });
       } catch (e) {
-        if (e instanceof AddressError || e instanceof OutputValueError) {
+        if (e instanceof AddressError || e instanceof OutputValueError || e instanceof InvalidTransaction) {
           reject(e.message);
         } else {
           // Unhandled error
