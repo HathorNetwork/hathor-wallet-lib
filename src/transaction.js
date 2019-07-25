@@ -534,7 +534,9 @@ const transaction = {
         throw InvalidTransaction('Token symbol must have at most 5 characters');
       }
     }
-  }
+
+    return createToken;
+  },
 
   /**
    * Get the bytes from the output value
@@ -588,6 +590,7 @@ const transaction = {
         const dataToSign = transaction.dataToSign(data);
         data = transaction.signTx(data, dataToSign, pin);
 
+        let txBytes;
         try {
           // Completing data in the same object
           transaction.completeTx(data);
@@ -596,7 +599,7 @@ const transaction = {
             data.timestamp = minimumTimestamp;
           }
 
-          const txBytes = transaction.txToBytes(data);
+          txBytes = transaction.txToBytes(data);
         } catch (e) {
           if (e instanceof InvalidTransaction) {
             reject(e.message);
