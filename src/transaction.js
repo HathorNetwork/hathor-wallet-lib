@@ -512,6 +512,26 @@ const transaction = {
     return util.buffer.concat(arr);
   },
 
+  /**
+   * Checks if the tx data is from a tx that creates a new token
+   *
+   * @param {Object} data Object with inputs and outputs
+   * {
+   *  'inputs': [{'tx_id', 'index', 'token'}],
+   *  'outputs': ['address', 'value', 'timelock', 'tokenData'],
+   *  'tokens': [uid, uid2],
+   *  'version': 1,
+   *  'weight': 0,
+   *  'nonce': 0,
+   *  'timestamp': 1,
+   *  'tokenName': 'name',
+   *  'tokenSymbol': 'symbol',
+   * }
+   *
+   * @return {boolean} If tx is a create token tx
+   * @memberof Transaction
+   * @inner
+   */
   isCreateTokenTx(data) {
     let createToken = false;
 
