@@ -38,7 +38,7 @@
     "long": "^4.0.0"
   },
   "scripts": {
-    "test": "jest --env=node",
+    "test": "jest --env=node --forceExit",
     "build": "babel --presets @babel/preset-react -d lib/ src"
   },
   "license": "MIT",
