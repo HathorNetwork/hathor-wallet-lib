@@ -5,10 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../src/constants';
+import { GAP_LIMIT } from '../src/constants';
 import wallet from '../src/wallet';
-import { HDPrivateKey } from 'bitcore-lib';
-import Mnemonic from 'bitcore-mnemonic';
 import WebSocketHandler from '../src/WebSocketHandler';
 
 const storage = require('../src/storage').default;
