@@ -22,9 +22,10 @@ const dateFormatter = {
    * @memberof Date
    * @inner
    */
-  parseTimestamp(timestamp) {
+  parseTimestamp(timestamp, timezone = null) {
     const d = new Date(timestamp*1000); // new Date in js expect milliseconds
-    return `${d.toLocaleDateString('en-US')} ${d.toLocaleTimeString('en-US')}`;
+    const options = (timezone ? { timeZone: timezone } : {})
+    return `${d.toLocaleDateString('en-US', options)} ${d.toLocaleTimeString('en-US', options)}`;
   },
 
   /**
