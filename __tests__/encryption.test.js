@@ -26,15 +26,15 @@ test('Private key encryption/decryption', () => {
   let decrypted = wallet.decryptData(accessData.mainKey, pin);
   let decryptedWords = wallet.decryptData(accessData.words, password);
 
-  let encryptedData = wallet.encryptData(decrypted, pin);
+  let encryptedData = wallet.encryptData(decrypted, pin, accessData.salt);
   let decrypted2 = wallet.decryptData(encryptedData.encrypted.toString(), pin);
 
-  let encryptedWordsData = wallet.encryptData(decryptedWords, password);
+  let encryptedWordsData = wallet.encryptData(decryptedWords, password, accessData.saltPasswd);
   let decryptedWords2 = wallet.decryptData(encryptedWordsData.encrypted.toString(), password);
 
-  expect(accessData.hash).toBe(encryptedData.hash.toString())
+  expect(accessData.hash).toBe(encryptedData.hash.key.toString())
   expect(decrypted).toBe(decrypted2)
 
-  expect(accessData.hashPasswd).toBe(encryptedWordsData.hash.toString())
+  expect(accessData.hashPasswd).toBe(encryptedWordsData.hash.key.toString())
   expect(decryptedWords).toBe(decryptedWords2)
 });
