@@ -267,9 +267,9 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  encryptData(privateKey, pin) {
+  encryptData(privateKey, pin, salt) {
     const encrypted = CryptoJS.AES.encrypt(privateKey, pin);
-    const hash = this.hashPassword(pin);
+    const hash = this.hashPassword(pin, salt);
     return {'encrypted': encrypted, 'hash': hash}
   },
 
