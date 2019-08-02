@@ -115,9 +115,8 @@ class WS extends EventEmitter {
     const _type = message.type.split(':')[0]
     if (_type === 'pong') {
       this.onPong();
-    } else {
-      this.emit(_type, message)
     }
+    this.emit(_type, message)
   }
 
   /**
