@@ -8,7 +8,7 @@
 import dateFormatter from '../src/date';
 
 test('Parse timestamp', () => {
-  // 2019-05-08 11:43:49
+  // 2019-05-08 10:43:49 UTC
   const timestamp = 1557312229;
   const formatted = dateFormatter.parseTimestamp(timestamp, 'UTC');
   expect(formatted).toBe('5/8/2019 10:43:49 AM');
