@@ -1185,6 +1185,18 @@ const wallet = {
   },
 
   /*
+   * Set default server in storage
+   *
+   * @param {string} server Default server to be used
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  setDefaultServer(server) {
+    storage.setItem('wallet:defaultServer', server);
+  },
+
+  /*
    * Prepare data (inputs and outputs) to be used in the send tokens
    *
    * @param {Object} data Object with array of inputs and outputs
