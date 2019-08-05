@@ -81,7 +81,7 @@ const checkData = () => {
 }
 
 beforeEach(() => {
-  wallet.cleanLocalStorage();
+  wallet.cleanLoadedData();
   addressShared = '';
   WebSocketHandler.started = true;
   doneCb = null;

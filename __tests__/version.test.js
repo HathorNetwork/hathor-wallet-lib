@@ -10,7 +10,7 @@ import wallet from '../src/wallet';
 import transaction from '../src/transaction';
 
 beforeEach(() => {
-  wallet.cleanLocalStorage();
+  wallet.cleanLoadedData();
 });
 
 test('Get version', (done) => {
