@@ -508,6 +508,9 @@ const transaction = {
    * @inner
    */
   outputValueToBytes(value) {
+    if (value <= 0) {
+      throw new OutputValueError('Output value must be positive');
+    }
     if (value > MAX_OUTPUT_VALUE) {
       throw new OutputValueError(`Maximum value is ${helpers.prettyValue(MAX_OUTPUT_VALUE)}`);
     }
