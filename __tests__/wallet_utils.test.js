@@ -14,7 +14,6 @@ const storage = require('../src/storage').default;
 
 beforeEach(() => {
   wallet.resetAllData();
-  wallet.clearDefaultServer();
 });
 
 
@@ -34,7 +33,7 @@ test('Clean local storage', () => {
   storage.setItem('wallet:lastUsedIndex', 0);
   storage.setItem('wallet:lastUsedAddress', '1knH3y5dZuC8DQBaLhgJP33fGBr6vstr8');
 
-  wallet.cleanLocalStorage();
+  wallet.cleanLoadedData();
 
   expect(storage.getItem('wallet:accessData')).toBeNull();
   expect(storage.getItem('wallet:data')).toBeNull();
@@ -248,7 +247,7 @@ test('Reset all data', async () => {
   expect(storage.getItem('wallet:defaultServer')).toBe(defaultServer);
   wallet.lock();
 
-  wallet.resetAllData();
+  wallet.resetWalletData();
 
   expect(storage.getItem('wallet:started')).toBeNull();
   expect(storage.getItem('wallet:server')).toBeNull();
@@ -278,6 +277,6 @@ test('Default server', () => {
   expect(helpers.getServerURL()).toBe(server);
 
   // reset wallet. Should still use the default set
-  wallet.resetAllData();
+  wallet.resetWalletData();
   expect(helpers.getServerURL()).toBe(defaultServer);
 });

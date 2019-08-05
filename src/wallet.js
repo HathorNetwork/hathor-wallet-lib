@@ -839,7 +839,7 @@ const wallet = {
    */
   cleanWallet() {
     this.unsubscribeAllAddresses();
-    this.cleanLocalStorage();
+    this.cleanLoadedData();
     WebSocketHandler.endConnection();
   },
 
@@ -853,14 +853,30 @@ const wallet = {
     storage.removeItem('wallet:server');
   },
 
+  /**
+   * Remove all storage saved items
+   * @memberof Wallet
+   * @inner
+   */
+  cleanLoadedData() {
+    storage.removeItem('wallet:accessData');
+    storage.removeItem('wallet:data');
+    storage.removeItem('wallet:address');
+    storage.removeItem('wallet:lastSharedIndex');
+    storage.removeItem('wallet:lastGeneratedIndex');
+    storage.removeItem('wallet:lastUsedIndex');
+    storage.removeItem('wallet:lastUsedAddress');
+    storage.removeItem('wallet:closed');
+  },
+
   /*
-   * Clean all data from everything. This does not remove wallet:defaultServer.
-   * That can be done manually with clearDefaultServer
+   * Clean all data, except for wallet:defaultServer.
+   * That can be done manually with clearDefaultServer()
    *
    * @memberof Wallet
    * @inner
    */
-  resetAllData() {
+  resetWalletData() {
     this.cleanWallet();
     this.cleanServer();
     storage.removeItem('wallet:started');
@@ -870,20 +886,15 @@ const wallet = {
     storage.removeItem('wallet:sentry');
   },
 
-  /**
-   * Remove all storage saved items
+  /*
+   * Clean all data
+   *
    * @memberof Wallet
    * @inner
    */
-  cleanLocalStorage() {
-    storage.removeItem('wallet:accessData');
-    storage.removeItem('wallet:data');
-    storage.removeItem('wallet:address');
-    storage.removeItem('wallet:lastSharedIndex');
-    storage.removeItem('wallet:lastGeneratedIndex');
-    storage.removeItem('wallet:lastUsedIndex');
-    storage.removeItem('wallet:lastUsedAddress');
-    storage.removeItem('wallet:closed');
+  resetAllData() {
+    this.resetWalletData();
+    this.clearDefaultServer();
   },
 
   /*
