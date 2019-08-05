@@ -172,11 +172,15 @@ const helpers = {
    * @inner
    */
   getServerURL() {
-    let server = storage.getItem('wallet:server');
-    if (server === null) {
-      server = DEFAULT_SERVER;
+    const server = storage.getItem('wallet:server');
+    const defaultServer = storage.getItem('wallet:defaultServer');
+    if (server !== null) {
+      return server;
+    } else if (defaultServer !== null) {
+      return defaultServer
+    } else {
+      return DEFAULT_SERVER;
     }
-    return server;
   },
 
   /**

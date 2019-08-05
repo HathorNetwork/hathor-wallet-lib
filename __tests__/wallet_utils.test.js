@@ -6,12 +6,14 @@
  */
 
 import wallet from '../src/wallet';
+import helpers from '../src/helpers';
 import dateFormatter from '../src/date';
+import { DEFAULT_SERVER } from '../src/constants';
 
 const storage = require('../src/storage').default;
 
 beforeEach(() => {
-  wallet.cleanLocalStorage();
+  wallet.resetAllData();
 });
 
 
@@ -31,7 +33,7 @@ test('Clean local storage', () => {
   storage.setItem('wallet:lastUsedIndex', 0);
   storage.setItem('wallet:lastUsedAddress', '1knH3y5dZuC8DQBaLhgJP33fGBr6vstr8');
 
-  wallet.cleanLocalStorage();
+  wallet.cleanLoadedData();
 
   expect(storage.getItem('wallet:accessData')).toBeNull();
   expect(storage.getItem('wallet:data')).toBeNull();
@@ -218,7 +220,7 @@ test('Get wallet words', async () => {
   expect(key.index).toBe(storage.getItem('wallet:data').keys[newSharedAddress].index);
 });
 
-test('Change server', async () => {
+test('Reload data', async () => {
   const words = wallet.generateWalletWords(256);
   await wallet.executeGenerateWallet(words, '', '123456', 'password', true);
   const accessData = storage.getItem('wallet:accessData');
@@ -238,21 +240,43 @@ test('Reset all data', async () => {
   await wallet.executeGenerateWallet(words, '', '123456', 'password', true);
   wallet.markWalletAsStarted();
   const server = 'http://server';
+  const defaultServer = 'http://defaultServer';
   wallet.changeServer(server);
+  wallet.setDefaultServer(defaultServer);
   expect(storage.getItem('wallet:server')).toBe(server);
+  expect(storage.getItem('wallet:defaultServer')).toBe(defaultServer);
   wallet.lock();
 
-  wallet.resetAllData();
+  wallet.resetWalletData();
 
   expect(storage.getItem('wallet:started')).toBeNull();
   expect(storage.getItem('wallet:server')).toBeNull();
   expect(storage.getItem('wallet:locked')).toBeNull();
   expect(storage.getItem('wallet:accessData')).toBeNull();
   expect(storage.getItem('wallet:data')).toBeNull();
+  expect(storage.getItem('wallet:defaultServer')).toBe(defaultServer);
 });
 
 test('Closed', () => {
   expect(wallet.wasClosed()).toBe(false);
   wallet.close()
   expect(wallet.wasClosed()).toBe(true);
+});
+
+test('Default server', () => {
+  expect(helpers.getServerURL()).toBe(DEFAULT_SERVER);
+
+  // set default server
+  const defaultServer = 'http://defaultServer';
+  wallet.setDefaultServer(defaultServer);
+  expect(helpers.getServerURL()).toBe(defaultServer);
+
+  // user set server
+  const server = 'http://server';
+  wallet.changeServer(server);
+  expect(helpers.getServerURL()).toBe(server);
+
+  // reset wallet. Should still use the default set
+  wallet.resetWalletData();
+  expect(helpers.getServerURL()).toBe(defaultServer);
 });

@@ -13,7 +13,7 @@ const storage = require('../src/storage').default;
 
 beforeEach(() => {
   WebSocketHandler.started = false;
-  wallet.cleanLocalStorage();
+  wallet.cleanLoadedData();
 });
 
 test('Update address', () => {
