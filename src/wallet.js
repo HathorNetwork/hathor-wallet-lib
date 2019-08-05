@@ -854,7 +854,8 @@ const wallet = {
   },
 
   /*
-   * Clean all data from everything
+   * Clean all data from everything. This does not remove wallet:defaultServer.
+   * That can be done manually with clearDefaultServer
    *
    * @memberof Wallet
    * @inner
