@@ -14,7 +14,7 @@ const storage = require('../src/storage').default;
 
 beforeEach(() => {
   wallet.resetAllData();
-  storage.removeItem('wallet:defaultServer');
+  wallet.clearDefaultServer();
 });
 
 

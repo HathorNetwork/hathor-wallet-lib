@@ -1197,6 +1197,16 @@ const wallet = {
   },
 
   /*
+   * Remove the default server from storage
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  clearDefaultServer() {
+    storage.removeItem('wallet:defaultServer');
+  },
+
+  /*
    * Prepare data (inputs and outputs) to be used in the send tokens
    *
    * @param {Object} data Object with array of inputs and outputs
