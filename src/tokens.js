@@ -5,13 +5,14 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import buffer from 'buffer';
+import { crypto, util } from 'bitcore-lib';
 import transaction from './transaction';
 import wallet from './wallet';
 import storage from './storage';
-import { crypto, util } from 'bitcore-lib';
+import helpers from './helpers';
 import walletApi from './api/wallet';
-import { AddressError, OutputValueError } from './errors';
-import buffer from 'buffer';
+import { InsufficientTokensError } from './errors';
 import { HATHOR_TOKEN_CONFIG, TOKEN_CREATION_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, AUTHORITY_TOKEN_DATA } from './constants';
 
 
@@ -268,17 +269,31 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  createToken(input, output, address, name, symbol, mintAmount, pin) {
-    // Create authority output
-    // First the tokens masks that will be the value for the authority output
-    const tokenMasks = TOKEN_CREATION_MASK | TOKEN_MINT_MASK | TOKEN_MELT_MASK;
-    // Create token uid
-    const tokenUID = this.getTokenUID(input.tx_id, input.index);
-    const authorityOutput = {'address': address, 'value': tokenMasks, 'tokenData': AUTHORITY_TOKEN_DATA};
-
-    // Create tx data
-    let txData = {'inputs': [input], 'outputs': [authorityOutput, output], 'tokens': [tokenUID]};
+  createToken(address, name, symbol, mintAmount, pin) {
     const promise = new Promise((resolve, reject) => {
+      // get the input used to create token UID. We use getMintDepositInfo here as it'll raise an error
+      // if we don't have enough HTR tokens for minting the requested amount and the token uid creation
+      // tx will not be executed
+      let inputs, outputs, outputChange;
+      try {
+        ({inputs, outputs} = this.getMintDepositInfo(mintAmount));
+        const inputSum = outputs[0].value + mintAmount;
+        outputChange = wallet.getOutputChange(inputSum, 0);
+      } catch (e) {
+        reject(e.message);
+      }
+
+      // Create authority output
+      // First the tokens masks that will be the value for the authority output
+      const tokenMasks = TOKEN_CREATION_MASK | TOKEN_MINT_MASK | TOKEN_MELT_MASK;
+      // Create token uid
+      const tokenUID = this.getTokenUID(inputs[0].tx_id, inputs[0].index);
+      const authorityOutput = {'address': address, 'value': tokenMasks, 'tokenData': AUTHORITY_TOKEN_DATA};
+
+      // Create tx data
+      let txData = {'inputs': [inputs[0]], 'outputs': [authorityOutput, outputChange], 'tokens': [tokenUID]};
+
+      // send initial tx
       const txPromise = transaction.sendTransaction(txData, pin);
       txPromise.then((response) => {
         // Save in storage new token configuration
@@ -314,6 +329,8 @@ const tokens = {
    *   {boolean} createMelt If should create a melt output (useful when creating a new token)
    * }
    *
+   * @throws {InsufficientTokensError} If not enough tokens for deposit
+   *
    * @return {Object} Mint data {'inputs', 'outputs', 'tokens'}
    *
    * @memberof Tokens
@@ -326,11 +343,15 @@ const tokens = {
     }, options);
 
     const { createAnotherMint, createMelt } = fnOptions;
+
+    // get hathor deposit
+    const {inputs, outputs} = this.getMintDepositInfo(amount);
+
     // Input targeting the output that contains the mint authority output
-    const input = {'tx_id': txID, 'index': index, 'token': token, 'address': addressSpent};
+    inputs.push({'tx_id': txID, 'index': index, 'token': token, 'address': addressSpent});
 
     // Output1: Mint token amount
-    const outputs = [{'address': address, 'value': amount, 'tokenData': 1}];
+    outputs.push({'address': address, 'value': amount, 'tokenData': 1});
 
     if (createAnotherMint) {
       // Output2: new mint authority for this wallet
@@ -345,7 +366,7 @@ const tokens = {
     }
 
     // Create new data
-    const newTxData = {'inputs': [input], 'outputs': outputs, 'tokens': [token]};
+    const newTxData = {'inputs': inputs, 'outputs': outputs, 'tokens': [token]};
     return newTxData;
   },
 
@@ -364,6 +385,8 @@ const tokens = {
    *   {boolean} createAnotherMint If should create another mint output after spending this one
    *   {boolean} createMelt If should create a melt output (useful when creating a new token)
    * }
+   *
+   * @throws {InsufficientTokensError} If not enough tokens for deposit
    *
    * @return {Promise} Promise that resolves when token is minted or an error from the backend arrives
    *
@@ -611,7 +634,36 @@ const tokens = {
       const myIndex = tokensWithoutHathor.findIndex((token) => token.uid === uid);
       return myIndex + 1;
     }
-  }
+  },
+
+  /**
+   * Get inputs and outputs for token mint deposit. The output will be the difference
+   * between our inputs and the deposit amount.
+   *
+   * @param {int} mintAmount Amount of tokens to mint
+   *
+   * @throws {InsufficientTokensError} If not enough tokens for deposit
+   *
+   * @return {Object} Mint inputs/outputs data {'inputs', 'outputs'}
+   *
+   * @memberof Tokens
+   * @inner
+   */
+  getMintDepositInfo(mintAmount) {
+    const outputs = [];
+    const data = wallet.getWalletData();
+    const depositAmount = helpers.getDepositAmount(mintAmount);
+    const htrInputs = wallet.getInputsFromAmount(data.historyTransactions, depositAmount, HATHOR_TOKEN_CONFIG.uid);
+    if (htrInputs.inputsAmount < depositAmount) {
+      throw new InsufficientTokensError(`Not enough tokens for deposit: ${depositAmount} required, ${htrInputs.inputsAmount} available`);
+    }
+    if (htrInputs.inputsAmount > depositAmount) {
+      // Need to create change output
+      const outputChange = wallet.getOutputChange(htrInputs.inputsAmount - depositAmount, 0);
+      outputs.push(outputChange);
+    }
+    return {'inputs': htrInputs.inputs, 'outputs': outputs};
+  },
 }
 
 export default tokens;

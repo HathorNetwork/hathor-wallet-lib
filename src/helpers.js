@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { GENESIS_BLOCK, DECIMAL_PLACES, DEFAULT_SERVER } from './constants';
+import { GENESIS_BLOCK, DECIMAL_PLACES, DEFAULT_SERVER, TOKEN_DEPOSIT_PERCENTAGE } from './constants';
 import path from 'path';
 
 import storage from './storage';
@@ -295,6 +295,20 @@ const helpers = {
   getShortHash(hash) {
     return `${hash.substring(0,12)}...${hash.substring(52,64)}`;
   },
+
+  /**
+   * Calculate deposit value for the given token mint amount
+   *
+   * @param {mint} mintAmount Amount of tokens being minted
+   *
+   * @return {number}
+   * @memberof Helpers
+   * @inner
+   *
+   */
+  getDepositAmount(mintAmount) {
+    return Math.ceil(TOKEN_DEPOSIT_PERCENTAGE * mintAmount);
+  }
 }
 
 export default helpers;

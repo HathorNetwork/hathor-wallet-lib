@@ -151,3 +151,11 @@ test('Axios config', () => {
   helpers.fixAxiosConfig(axios, config);
   expect(config.agent).toBe(undefined);
 });
+
+test('Token deposit', () => {
+  expect(helpers.getDepositAmount(100)).toBe(1);
+  expect(helpers.getDepositAmount(1)).toBe(1);
+  expect(helpers.getDepositAmount(0.1)).toBe(1);
+  expect(helpers.getDepositAmount(500)).toBe(5);
+  expect(helpers.getDepositAmount(550)).toBe(6);
+});

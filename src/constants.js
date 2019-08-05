@@ -131,6 +131,12 @@ export const HATHOR_TOKEN_CONFIG = {'name': 'Hathor', 'symbol': 'HTR', 'uid': '0
  */
 export const HATHOR_TOKEN_INDEX = 0;
 
+/**
+ * Percentage of HTR tokens that need to be deposited when minting new tokens. Also used
+ * when melting tokens, for the withdraw amount
+ */
+export const TOKEN_DEPOSIT_PERCENTAGE = 0.01;
+
 // Version bytes for address generation
 // Mainnet: P2PKH will start with H and P2SH will start with h
 // Testnet: P2PKH will start with W and P2SH will start with w

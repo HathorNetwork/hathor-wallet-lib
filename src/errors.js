@@ -26,3 +26,11 @@ export class AddressError extends Error {}
  * @inner
  */
 export class OutputValueError extends Error {}
+
+/**
+ * Error thrown when we have insufficient tokens
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class InsufficientTokensError extends Error {}
