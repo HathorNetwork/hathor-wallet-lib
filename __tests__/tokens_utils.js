@@ -96,7 +96,7 @@ test('New token', async (done) => {
     expect(receivedToken.symbol).toBe(tokenSymbol);
     done();
   }, (e) => {
-    console.log(e.message)
+    console.log(e)
     done.fail('Error creating token');
   });
 }, 15000);

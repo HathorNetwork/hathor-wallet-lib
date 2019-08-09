@@ -459,9 +459,11 @@ const tokens = {
   /**
    * Generate melt data
    *
-   * @param {string} txID Hash of the transaction to be used to melt tokens
-   * @param {number} index Index of the output being spent
-   * @param {string} addressSpent Address of the output being spent
+   * @param {Object} meltInput tx containing melt authority {
+   *   {string} tx_id Hash of the tx
+   *   {number} index Index of the output being spent
+   *   {string} address The address associated with (tx_id, index)
+   * }
    * @param {string} token Token uid to be melted
    * @param {number} amount Amount of the token to be melted
    * @param {boolean} createAnotherMelt If should create another melt output after spending this one
@@ -471,7 +473,7 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  createMeltData(txID, index, addressSpent, token, amount, createAnotherMelt) {
+  createMeltData(meltInput, token, amount, createAnotherMelt) {
     // Get inputs that sum at least the amount requested to melt
     const result = this.getMeltInputs(amount, token);
 
@@ -479,16 +481,15 @@ const tokens = {
     if (result === null) return null;
 
     // First adding authority input with MELT capability that will be spent
-    const authorityInput = {'tx_id': txID, 'index': index, 'token': token, 'address': addressSpent};
+    const authorityInput = {'tx_id': meltInput.tx_id, 'index': meltInput.index, 'token': token, 'address': meltInput.address};
     // Then adding the inputs with the amounts
     const inputs = [authorityInput, ...result.inputs];
     const outputs = [];
     const tokens = [token];
 
     if (result.inputsAmount > amount) {
-      // Need to create change output
-      const newAddress = wallet.getAddressToUse();
-      outputs.push({'address': newAddress, 'value': result.inputsAmount - amount, 'tokenData': 1});
+      // Need to create change output for token
+      outputs.push(wallet.getOutputChange(result.inputsAmount - amount, 1));
     }
 
     if (createAnotherMelt) {
@@ -496,6 +497,10 @@ const tokens = {
       const newAddress = wallet.getAddressToUse();
       outputs.push({'address': newAddress, 'value': TOKEN_MELT_MASK, 'tokenData': AUTHORITY_TOKEN_DATA});
     }
+
+    // withdraw HTR tokens
+    const withdrawAmount = helpers.getDepositAmount(amount);
+    outputs.push(wallet.getOutputChange(withdrawAmount, 0));
 
     // Create new data
     const newTxData = {inputs, outputs, tokens};
@@ -505,9 +510,11 @@ const tokens = {
   /**
    * Melt tokens
    *
-   * @param {string} txID Hash of the transaction to be used to melt tokens
-   * @param {number} index Index of the output being spent
-   * @param {string} addressSpent Address of the output being spent
+   * @param {Object} meltInput tx containing melt authority {
+   *   {string} tx_id Hash of the tx
+   *   {number} index Index of the output being spent
+   *   {string} address The address associated with (tx_id, index)
+   * }
    * @param {string} token Token uid to be melted
    * @param {number} amount Amount of the token to be melted
    * @param {string} pin Pin to generate new addresses, if necessary
@@ -518,9 +525,9 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  meltTokens(txID, index, addressSpent, token, amount, pin, createAnotherMelt) {
+  meltTokens(meltInput, token, amount, pin, createAnotherMelt) {
     // Get melt data
-    let newTxData = this.createMeltData(txID, index, addressSpent, token, amount, createAnotherMelt);
+    let newTxData = this.createMeltData(meltInput, token, amount, createAnotherMelt);
     return transaction.sendTransaction(newTxData, pin);
   },
 

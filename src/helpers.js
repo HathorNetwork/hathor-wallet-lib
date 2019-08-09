@@ -303,7 +303,7 @@ const helpers = {
   /**
    * Calculate deposit value for the given token mint amount
    *
-   * @param {mint} mintAmount Amount of tokens being minted
+   * @param {number} mintAmount Amount of tokens being minted
    *
    * @return {number}
    * @memberof Helpers
@@ -312,7 +312,21 @@ const helpers = {
    */
   getDepositAmount(mintAmount) {
     return Math.ceil(TOKEN_DEPOSIT_PERCENTAGE * mintAmount);
-  }
+  },
+
+  /**
+   * Calculate withdraw value for the given token melt amount
+   *
+   * @param {number} meltAmount Amount of tokens being melted
+   *
+   * @return {number}
+   * @memberof Helpers
+   * @inner
+   *
+   */
+  getWithdrawAmount(meltAmount) {
+    return Math.floor(TOKEN_DEPOSIT_PERCENTAGE * meltAmount);
+  },
 }
 
 export default helpers;
