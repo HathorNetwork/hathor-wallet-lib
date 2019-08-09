@@ -159,3 +159,10 @@ test('Token deposit', () => {
   expect(helpers.getDepositAmount(500)).toBe(5);
   expect(helpers.getDepositAmount(550)).toBe(6);
 });
+
+test('Token withdraw', () => {
+  expect(helpers.getWithdrawAmount(100)).toBe(1);
+  expect(helpers.getWithdrawAmount(99)).toBe(0);
+  expect(helpers.getWithdrawAmount(500)).toBe(5);
+  expect(helpers.getWithdrawAmount(550)).toBe(5);
+});
