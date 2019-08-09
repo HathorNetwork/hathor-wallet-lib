@@ -443,8 +443,17 @@ const tokens = {
       minimumTimestamp: 0,
     }, options);
     // Get mint data
-    const newTxData = this.createMintData(mintInput, token, address, amount, depositInputs, fnOptions);
-    return transaction.sendTransaction(newTxData, pin, fnOptions);
+    const promise = new Promise((resolve, reject) => {
+      let newTxData;
+      try {
+        newTxData = this.createMintData(mintInput, token, address, amount, depositInputs, fnOptions);
+      } catch (e) {
+        reject(e.message);
+      }
+      const sendPromise = transaction.sendTransaction(newTxData, pin, fnOptions);
+      sendPromise.then((result) => resolve(result), (error) => reject(error));
+    });
+    return promise;
   },
 
   /**
@@ -698,7 +707,7 @@ const tokens = {
     const depositAmount = helpers.getDepositAmount(mintAmount);
     const htrInputs = wallet.getInputsFromAmount(data.historyTransactions, depositAmount, HATHOR_TOKEN_CONFIG.uid);
     if (htrInputs.inputsAmount < depositAmount) {
-      throw new InsufficientTokensError(`Not enough tokens for deposit: ${depositAmount} required, ${htrInputs.inputsAmount} available`);
+      throw new InsufficientTokensError(`Not enough HTR tokens for deposit: ${depositAmount} required, ${htrInputs.inputsAmount} available`);
     }
     if (htrInputs.inputsAmount > depositAmount) {
       // Need to create change output
