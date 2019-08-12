@@ -8,6 +8,7 @@
 import version from '../src/version';
 import wallet from '../src/wallet';
 import transaction from '../src/transaction';
+import tokens from '../src/tokens';
 
 beforeEach(() => {
   wallet.cleanLoadedData();
@@ -21,6 +22,9 @@ test('Get version', (done) => {
 
   const promise = version.checkApiVersion();
 
+  // set to wrong value and check it updates on version API
+  tokens.depositPercentage = 0.5;
+
   promise.then((data) => {
     const newWeightConstants = transaction.getTransactionWeightConstants();
     check(newWeightConstants.txMinWeight, 14, done);
@@ -29,6 +33,8 @@ test('Get version', (done) => {
 
     check(data.version, '1.0.0', done);
     check(data.network, 'mainnet', done);
+
+    expect(tokens.depositPercentage).toBe(0.01);
 
     done();
   }, (e) => {

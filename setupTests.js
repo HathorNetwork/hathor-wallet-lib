@@ -95,6 +95,7 @@ mock.onGet('version').reply((config) => {
     min_tx_weight: 14,
     min_tx_weight_coefficient: 1.6,
     min_tx_weight_k: 100,
+    token_deposit_percentage: 0.01,
   }
   return [200, data];
 });

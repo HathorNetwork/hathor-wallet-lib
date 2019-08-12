@@ -5,10 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { GENESIS_BLOCK, DECIMAL_PLACES, DEFAULT_SERVER, TOKEN_DEPOSIT_PERCENTAGE } from './constants';
 import path from 'path';
 
 import storage from './storage';
+import tokens from './tokens';
+import { GENESIS_BLOCK, DECIMAL_PLACES, DEFAULT_SERVER } from './constants';
 
 /**
  * Helper methods
@@ -311,7 +312,7 @@ const helpers = {
    *
    */
   getDepositAmount(mintAmount) {
-    return Math.ceil(TOKEN_DEPOSIT_PERCENTAGE * mintAmount);
+    return Math.ceil(tokens.depositPercentage * mintAmount);
   },
 
   /**
@@ -325,7 +326,7 @@ const helpers = {
    *
    */
   getWithdrawAmount(meltAmount) {
-    return Math.floor(TOKEN_DEPOSIT_PERCENTAGE * meltAmount);
+    return Math.floor(tokens.depositPercentage * meltAmount);
   },
 }
 

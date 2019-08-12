@@ -23,6 +23,13 @@ import { HATHOR_TOKEN_CONFIG, TOKEN_CREATION_MASK, TOKEN_MINT_MASK, TOKEN_MELT_M
  */
 
 const tokens = {
+
+  /*
+   * This is a default value for the token deposit percentage. We should update
+   * using the version API
+   */
+  depositPercentage: 0.01,
+
   /**
    * Create a token UID from the tx_id and index that the tx is spending to create the token
    *
