@@ -153,6 +153,7 @@ test('Axios config', () => {
 });
 
 test('Token deposit', () => {
+  // considering HTR deposit is 1%
   expect(helpers.getDepositAmount(100)).toBe(1);
   expect(helpers.getDepositAmount(1)).toBe(1);
   expect(helpers.getDepositAmount(0.1)).toBe(1);
@@ -161,6 +162,7 @@ test('Token deposit', () => {
 });
 
 test('Token withdraw', () => {
+  // considering HTR deposit is 1%
   expect(helpers.getWithdrawAmount(100)).toBe(1);
   expect(helpers.getWithdrawAmount(99)).toBe(0);
   expect(helpers.getWithdrawAmount(500)).toBe(5);
