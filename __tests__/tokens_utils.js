@@ -105,9 +105,10 @@ test('Insufficient funds', async (done) => {
   await loadWallet();
   const tokenName = 'TestCoin';
   const tokenSymbol = 'TTC';
+  const address = storage.getItem('wallet:address');
   try {
     // we only have 100 tokens on wallet, so minting 2000000 should fail (deposit = 20000)
-    tokens.createToken(address, tokenName, tokenSymbol, 2000000, pin);
+    await tokens.createToken(address, tokenName, tokenSymbol, 2000000, pin);
     done.fail('Should have rejected');
   } catch (e) {
     // this is the successful case
