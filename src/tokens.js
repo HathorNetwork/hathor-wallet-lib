@@ -389,6 +389,8 @@ const tokens = {
       if (depositInputs.amount - depositAmount > 0) {
         const outputChange = wallet.getOutputChange(depositInputs.amount - depositAmount, 0);
         outputs.push(outputChange);
+      } else if (depositInputs.amount - depositAmount < 0) {
+        throw new InsufficientFundsError(`Not enough HTR tokens for deposit: ${depositAmount} required, ${htrInputs.inputsAmount} available`);
       }
     }
 
