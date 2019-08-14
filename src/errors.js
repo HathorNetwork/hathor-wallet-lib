@@ -28,9 +28,9 @@ export class AddressError extends Error {}
 export class OutputValueError extends Error {}
 
 /**
- * Error thrown when we have insufficient tokens
+ * Error thrown when we have insufficient funds
  *
  * @memberof Errors
  * @inner
  */
-export class InsufficientTokensError extends Error {}
+export class InsufficientFundsError extends Error {}

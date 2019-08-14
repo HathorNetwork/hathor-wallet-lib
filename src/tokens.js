@@ -12,7 +12,7 @@ import wallet from './wallet';
 import storage from './storage';
 import helpers from './helpers';
 import walletApi from './api/wallet';
-import { InsufficientTokensError } from './errors';
+import { InsufficientFundsError } from './errors';
 import { HATHOR_TOKEN_CONFIG, TOKEN_CREATION_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, AUTHORITY_TOKEN_DATA } from './constants';
 
 
@@ -354,7 +354,7 @@ const tokens = {
    *   {boolean} createMelt If should create a melt output (useful when creating a new token)
    * }
    *
-   * @throws {InsufficientTokensError} If not enough tokens for deposit
+   * @throws {InsufficientFundsError} If not enough tokens for deposit
    *
    * @return {Object} Mint data {'inputs', 'outputs', 'tokens'}
    *
@@ -436,7 +436,7 @@ const tokens = {
    *   {boolean} createMelt If should create a melt output (useful when creating a new token)
    * }
    *
-   * @throws {InsufficientTokensError} If not enough tokens for deposit
+   * @throws {InsufficientFundsError} If not enough tokens for deposit
    *
    * @return {Promise} Promise that resolves when token is minted or an error from the backend arrives
    *
@@ -708,7 +708,7 @@ const tokens = {
    *
    * @param {int} mintAmount Amount of tokens to mint
    *
-   * @throws {InsufficientTokensError} If not enough tokens for deposit
+   * @throws {InsufficientFundsError} If not enough tokens for deposit
    *
    * @return {Object} Mint inputs/outputs data {'inputs', 'outputs'}
    *
@@ -721,7 +721,7 @@ const tokens = {
     const depositAmount = helpers.getDepositAmount(mintAmount);
     const htrInputs = wallet.getInputsFromAmount(data.historyTransactions, depositAmount, HATHOR_TOKEN_CONFIG.uid);
     if (htrInputs.inputsAmount < depositAmount) {
-      throw new InsufficientTokensError(`Not enough HTR tokens for deposit: ${depositAmount} required, ${htrInputs.inputsAmount} available`);
+      throw new InsufficientFundsError(`Not enough HTR tokens for deposit: ${depositAmount} required, ${htrInputs.inputsAmount} available`);
     }
     if (htrInputs.inputsAmount > depositAmount) {
       // Need to create change output

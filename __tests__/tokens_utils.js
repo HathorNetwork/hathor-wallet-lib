@@ -11,7 +11,7 @@ import { HDPrivateKey } from 'bitcore-lib';
 import wallet from '../src/wallet';
 import { util } from 'bitcore-lib';
 import WebSocketHandler from '../src/WebSocketHandler';
-import { InsufficientTokensError } from '../src/errors';
+import { InsufficientFundsError } from '../src/errors';
 
 const storage = require('../src/storage').default;
 
