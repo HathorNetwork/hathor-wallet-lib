@@ -284,7 +284,12 @@ const tokens = {
         ({inputs, inputsAmount, outputs} = this.getMintDepositInfo(mintAmount));
         outputChange = wallet.getOutputChange(inputsAmount, 0);
       } catch (e) {
-        reject(e.message);
+        if (e instanceof InsufficientFundsError) {
+          reject(e.message);
+        } else {
+          // Unhandled error
+          throw e;
+        }
       }
 
       // Create authority output
@@ -455,7 +460,12 @@ const tokens = {
       try {
         newTxData = this.createMintData(mintInput, token, address, amount, depositInputs, fnOptions);
       } catch (e) {
-        reject(e.message);
+        if (e instanceof InsufficientFundsError) {
+          reject(e.message);
+        } else {
+          // Unhandled error
+          throw e;
+        }
       }
       const sendPromise = transaction.sendTransaction(newTxData, pin, fnOptions);
       sendPromise.then((result) => resolve(result), (error) => reject(error));
@@ -506,7 +516,7 @@ const tokens = {
     }
 
     // withdraw HTR tokens
-    const withdrawAmount = helpers.getDepositAmount(amount);
+    const withdrawAmount = helpers.getWithdrawAmount(amount);
     outputs.push(wallet.getOutputChange(withdrawAmount, 0));
 
     // Create new data
@@ -706,7 +716,7 @@ const tokens = {
    * Get inputs and outputs for token mint deposit. The output will be the difference
    * between our inputs and the deposit amount.
    *
-   * @param {int} mintAmount Amount of tokens to mint
+   * @param {number} mintAmount Amount of tokens to mint
    *
    * @throws {InsufficientFundsError} If not enough tokens for deposit
    *
