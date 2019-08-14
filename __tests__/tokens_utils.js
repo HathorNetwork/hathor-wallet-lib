@@ -112,7 +112,11 @@ test('Insufficient funds', async (done) => {
     done.fail('Should have rejected');
   } catch (e) {
     // this is the successful case
-    done();
+    if (e instanceof InsufficientFundsError) {
+      done();
+    } else {
+      done.fail();
+    }
   }
 });
 

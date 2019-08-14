@@ -285,7 +285,7 @@ const tokens = {
         outputChange = wallet.getOutputChange(inputsAmount, 0);
       } catch (e) {
         if (e instanceof InsufficientFundsError) {
-          reject(e.message);
+          reject(e);
         } else {
           // Unhandled error
           throw e;
@@ -324,11 +324,11 @@ const tokens = {
         });
         mintPromise.then(() => {
           resolve({uid: tokenUid, name, symbol});
-        }, (message) => {
-          reject(message);
+        }, (error) => {
+          reject(error);
         });
-      }, (message) => {
-        reject(message);
+      }, (error) => {
+        reject(error);
       });
     });
     return promise;
@@ -461,7 +461,7 @@ const tokens = {
         newTxData = this.createMintData(mintInput, token, address, amount, depositInputs, fnOptions);
       } catch (e) {
         if (e instanceof InsufficientFundsError) {
-          reject(e.message);
+          reject(e);
         } else {
           // Unhandled error
           throw e;
