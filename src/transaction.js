@@ -26,6 +26,17 @@ import walletApi from './api/wallet';
 
 const transaction = {
   /**
+   * Should never be accessed directly, only through updateTransactionWeightConstants or getTransactionWeightConstants
+   *
+   * _weightConstants {Object} Holds the constants used to calculate a transaction's weight {
+   *   txMinWeight {number} Minimum allowed weight for a tx (float)
+   *   txWeightCoefficient {number} Coefficient to be used when calculating tx weight (float)
+   *   txMinWeightK {number} TODO
+   * }
+   */
+  _weightConstants: null,
+
+  /**
    * Transform int to bytes
    *
    * @param {number} number Integer to be transformed to bytes
@@ -585,18 +596,18 @@ const transaction = {
   },
 
   /**
-   * Save txMinWeight and txWeightCoefficient to storage
+   * Save txMinWeight, txWeightCoefficient and txMinWeightK
    *
    * @param {number} txMinWeight Minimum allowed weight for a tx (float)
    * @param {number} txWeightCoefficient Coefficient to be used when calculating tx weight (float)
+   * @param {number} txMinWeightK TODO
    *
    * @memberof Transaction
    * @inner
    */
   updateTransactionWeightConstants(txMinWeight, txWeightCoefficient, txMinWeightK) {
-    storage.setItem('wallet:txMinWeight', txMinWeight);
-    storage.setItem('wallet:txWeightCoefficient', txWeightCoefficient);
-    storage.setItem('wallet:txMinWeightK', txMinWeightK);
+    const constants = { txMinWeight, txWeightCoefficient, txMinWeightK };
+    this._weightConstants = constants;
   },
 
   /**
@@ -610,18 +621,21 @@ const transaction = {
    * @inner
    */
   getTransactionWeightConstants() {
-    const txMinWeight = storage.getItem('wallet:txMinWeight');
-    const txWeightCoefficient = storage.getItem('wallet:txWeightCoefficient');
-    const txMinWeightK = storage.getItem('wallet:txMinWeightK');
-    if (!txMinWeight || !txWeightCoefficient || !txMinWeightK) {
+    if (this._weightConstants === null) {
       throw new ConstantNotSet('Transaction weight constants are not set');
     }
-    return {
-      'txMinWeight': parseFloat(txMinWeight),
-      'txWeightCoefficient': parseFloat(txWeightCoefficient),
-      'txMinWeightK': parseFloat(txMinWeightK)
-    };
-  }
+    return this._weightConstants;
+  },
+
+  /**
+   * Clear weight constants
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  clearTransactionWeightConstants() {
+    this._weightConstants = null;
+  },
 }
 
 export default transaction;

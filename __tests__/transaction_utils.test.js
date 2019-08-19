@@ -16,14 +16,16 @@ const storage = require('../src/storage').default;
 
 test('Tx weight constants', () => {
   transaction.updateTransactionWeightConstants(10, 1.5, 8);
-  expect(parseFloat(storage.getItem('wallet:txMinWeight'))).toBe(10);
-  expect(parseFloat(storage.getItem('wallet:txWeightCoefficient'))).toBe(1.5);
-  expect(parseFloat(storage.getItem('wallet:txMinWeightK'))).toBe(8);
+  let constants = transaction.getTransactionWeightConstants();
+  expect(constants.txMinWeight).toBe(10);
+  expect(constants.txWeightCoefficient).toBe(1.5);
+  expect(constants.txMinWeightK).toBe(8);
 
   transaction.updateTransactionWeightConstants(15, 1.2, 10);
-  expect(parseFloat(storage.getItem('wallet:txMinWeight'))).toBe(15);
-  expect(parseFloat(storage.getItem('wallet:txWeightCoefficient'))).toBe(1.2);
-  expect(parseFloat(storage.getItem('wallet:txMinWeightK'))).toBe(10);
+  constants = transaction.getTransactionWeightConstants();
+  expect(constants.txMinWeight).toBe(15);
+  expect(constants.txWeightCoefficient).toBe(1.2);
+  expect(constants.txMinWeightK).toBe(10);
 });
 
 test('Unsigned int to bytes', () => {
