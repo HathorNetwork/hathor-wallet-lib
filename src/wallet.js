@@ -881,6 +881,7 @@ const wallet = {
     this.cleanWallet();
     this.cleanServer();
     transaction.clearTransactionWeightConstants();
+    tokens.clearDepositPercentage();
     storage.removeItem('wallet:started');
     storage.removeItem('wallet:backup');
     storage.removeItem('wallet:locked');

@@ -29,7 +29,7 @@ const version = {
       versionApi.getVersion((data) => {
         // Update transaction weight constants
         transaction.updateTransactionWeightConstants(data.min_tx_weight, data.min_tx_weight_coefficient, data.min_tx_weight_k);
-        tokens.depositPercentage = data.token_deposit_percentage;
+        tokens.updateDepositPercentage(data.token_deposit_percentage);
         resolve(data);
       }).catch((error) => {
         reject(error);

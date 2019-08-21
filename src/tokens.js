@@ -12,7 +12,7 @@ import wallet from './wallet';
 import storage from './storage';
 import helpers from './helpers';
 import walletApi from './api/wallet';
-import { InsufficientFundsError } from './errors';
+import { InsufficientFundsError, ConstantNotSet } from './errors';
 import { HATHOR_TOKEN_CONFIG, TOKEN_CREATION_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, AUTHORITY_TOKEN_DATA } from './constants';
 
 
@@ -25,10 +25,9 @@ import { HATHOR_TOKEN_CONFIG, TOKEN_CREATION_MASK, TOKEN_MINT_MASK, TOKEN_MELT_M
 const tokens = {
 
   /*
-   * This is a default value for the token deposit percentage. We should update
-   * using the version API
+   * Should never be accessed directly, only through
    */
-  depositPercentage: 0.01,
+  _depositPercentage: null,
 
   /**
    * Create a token UID from the tx_id and index that the tx is spending to create the token
@@ -741,6 +740,45 @@ const tokens = {
       outputs.push(outputChange);
     }
     return {'inputs': htrInputs.inputs, 'inputsAmount': htrInputs.inputsAmount, 'outputs': outputs};
+  },
+
+  /**
+   * Save the deposit percentage for creating tokens
+   *
+   * @param {number} value New deposit percentage
+   *
+   * @memberof Tokens
+   * @inner
+   */
+  updateDepositPercentage(value) {
+    this._depositPercentage = value;
+  },
+
+  /**
+   * Return the deposit percentage for creating tokens
+   *
+   * @return {number} Deposit percentage
+   *
+   * @throws {ConstantNotSet} If the deposit percentage constant is not set yet
+   *
+   * @memberof Tokens
+   * @inner
+   */
+  getDepositPercentage() {
+    if (this._depositPercentage === null) {
+      throw new ConstantNotSet('Token deposit percentage constant not set');
+    }
+    return this._depositPercentage;
+  },
+
+  /**
+   * Clear deposit percentage
+   *
+   * @memberof Tokens
+   * @inner
+   */
+  clearDepositPercentage() {
+    this._depositPercentage = null;
   },
 }
 

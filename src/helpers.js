@@ -312,7 +312,7 @@ const helpers = {
    *
    */
   getDepositAmount(mintAmount) {
-    return Math.ceil(tokens.depositPercentage * mintAmount);
+    return Math.ceil(tokens.getDepositPercentage() * mintAmount);
   },
 
   /**
@@ -326,7 +326,7 @@ const helpers = {
    *
    */
   getWithdrawAmount(meltAmount) {
-    return Math.floor(tokens.depositPercentage * meltAmount);
+    return Math.floor(tokens.getDepositPercentage() * meltAmount);
   },
 }
 
