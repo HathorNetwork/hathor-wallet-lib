@@ -9,6 +9,7 @@ import tokens from '../src/tokens';
 import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../src/constants';
 import { HDPrivateKey } from 'bitcore-lib';
 import wallet from '../src/wallet';
+import version from '../src/version';
 import { util } from 'bitcore-lib';
 import WebSocketHandler from '../src/WebSocketHandler';
 import { InsufficientFundsError } from '../src/errors';
@@ -51,6 +52,7 @@ test('Token UID', () => {
 
 const loadWallet = async () => {
   const words = 'connect sunny silent cabin leopard start turtle tortoise dial timber woman genre pave tuna rice indicate gown draft palm collect retreat meadow assume spray';
+  await version.checkApiVersion();
   // Generate new wallet and save data in storage
   await wallet.executeGenerateWallet(words, '', pin, 'password', true);
   // Adding funds to wallet

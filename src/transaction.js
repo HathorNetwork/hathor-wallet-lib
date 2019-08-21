@@ -8,7 +8,7 @@
 import { OP_GREATERTHAN_TIMESTAMP, OP_DUP, OP_HASH160, OP_EQUALVERIFY, OP_CHECKSIG, OP_PUSHDATA1 } from './opcodes';
 import { DECIMAL_PLACES, DEFAULT_TX_VERSION, MAX_OUTPUT_VALUE_32, MAX_OUTPUT_VALUE, P2PKH_BYTE, P2SH_BYTE } from './constants';
 import { HDPrivateKey, crypto, encoding, util } from 'bitcore-lib';
-import { AddressError, OutputValueError } from './errors';
+import { AddressError, OutputValueError, ConstantNotSet } from './errors';
 import dateFormatter from './date';
 import helpers from './helpers';
 import storage from './storage';
@@ -25,6 +25,17 @@ import walletApi from './api/wallet';
  */
 
 const transaction = {
+  /**
+   * Should never be accessed directly, only through updateTransactionWeightConstants or getTransactionWeightConstants
+   *
+   * _weightConstants {Object} Holds the constants used to calculate a transaction's weight {
+   *   txMinWeight {number} Minimum allowed weight for a tx (float)
+   *   txWeightCoefficient {number} Coefficient to be used when calculating tx weight (float)
+   *   txMinWeightK {number} TODO
+   * }
+   */
+  _weightConstants: null,
+
   /**
    * Transform int to bytes
    *
@@ -363,6 +374,8 @@ const transaction = {
    *  'timestamp': 1,
    * }
    *
+   * @throws {ConstantNotSet} If the weight constants are not set yet
+   *
    * @return {number} Minimum weight calculated (float)
    * @memberof Transaction
    * @inner
@@ -405,6 +418,8 @@ const transaction = {
    *  'inputs': [{'tx_id', 'index'}],
    *  'outputs': ['address', 'value', 'timelock'],
    * }
+   *
+   * @throws {ConstantNotSet} If the weight constants are not set yet
    *
    * @memberof Transaction
    * @inner
@@ -569,7 +584,7 @@ const transaction = {
           reject(e.message);
         });
       } catch (e) {
-        if (e instanceof AddressError || e instanceof OutputValueError) {
+        if (e instanceof AddressError || e instanceof OutputValueError || e instanceof ConstantNotSet) {
           reject(e.message);
         } else {
           // Unhandled error
@@ -581,18 +596,18 @@ const transaction = {
   },
 
   /**
-   * Save txMinWeight and txWeightCoefficient to storage
+   * Save txMinWeight, txWeightCoefficient and txMinWeightK
    *
    * @param {number} txMinWeight Minimum allowed weight for a tx (float)
    * @param {number} txWeightCoefficient Coefficient to be used when calculating tx weight (float)
+   * @param {number} txMinWeightK TODO
    *
    * @memberof Transaction
    * @inner
    */
   updateTransactionWeightConstants(txMinWeight, txWeightCoefficient, txMinWeightK) {
-    storage.setItem('wallet:txMinWeight', txMinWeight);
-    storage.setItem('wallet:txWeightCoefficient', txWeightCoefficient);
-    storage.setItem('wallet:txMinWeightK', txMinWeightK);
+    const constants = { txMinWeight, txWeightCoefficient, txMinWeightK };
+    this._weightConstants = constants;
   },
 
   /**
@@ -600,14 +615,27 @@ const transaction = {
    *
    * @return {Object} Object with the parameters {'txMinWeight', 'txWeightCoefficient', 'txMinWeightK'}
    *
+   * @throws {ConstantNotSet} If the weight constants are not set yet
+   *
    * @memberof Transaction
    * @inner
    */
   getTransactionWeightConstants() {
-    return {'txMinWeight': parseFloat(storage.getItem('wallet:txMinWeight')),
-            'txWeightCoefficient': parseFloat(storage.getItem('wallet:txWeightCoefficient')),
-            'txMinWeightK': parseFloat(storage.getItem('wallet:txMinWeightK'))}
-  }
+    if (this._weightConstants === null) {
+      throw new ConstantNotSet('Transaction weight constants are not set');
+    }
+    return this._weightConstants;
+  },
+
+  /**
+   * Clear weight constants
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  clearTransactionWeightConstants() {
+    this._weightConstants = null;
+  },
 }
 
 export default transaction;

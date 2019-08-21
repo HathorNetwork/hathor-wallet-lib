@@ -15,6 +15,7 @@ import helpers from './helpers';
 import { OutputValueError } from './errors';
 import version from './version';
 import storage from './storage';
+import transaction from './transaction';
 import WebSocketHandler from './WebSocketHandler';
 import dateFormatter from './date';
 import _ from 'lodash';
@@ -879,6 +880,7 @@ const wallet = {
   resetWalletData() {
     this.cleanWallet();
     this.cleanServer();
+    transaction.clearTransactionWeightConstants();
     storage.removeItem('wallet:started');
     storage.removeItem('wallet:backup');
     storage.removeItem('wallet:locked');

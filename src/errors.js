@@ -34,3 +34,11 @@ export class OutputValueError extends Error {}
  * @inner
  */
 export class InsufficientFundsError extends Error {}
+
+/**
+ * Error thrown when a constant that we get from the server is not set
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class ConstantNotSet extends Error {}

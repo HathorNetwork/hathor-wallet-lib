@@ -9,16 +9,22 @@ import version from '../src/version';
 import wallet from '../src/wallet';
 import transaction from '../src/transaction';
 import tokens from '../src/tokens';
+import { ConstantNotSet } from '../src/errors';
 
 beforeEach(() => {
   wallet.cleanLoadedData();
 });
 
 test('Get version', (done) => {
-  const weightConstants = transaction.getTransactionWeightConstants();
-  check(isNaN(weightConstants.txMinWeight), true, done);
-  check(isNaN(weightConstants.txWeightCoefficient), true, done);
-  check(isNaN(weightConstants.txMinWeightK), true, done);
+  try {
+    // weight constants are not set for now, so should throw error
+    transaction.getTransactionWeightConstants();
+    done.fail();
+  } catch (e) {
+    if (!(e instanceof ConstantNotSet)) {
+      done.fail();
+    }
+  }
 
   const promise = version.checkApiVersion();
 
