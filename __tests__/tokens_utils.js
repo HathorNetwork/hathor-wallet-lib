@@ -9,6 +9,7 @@ import tokens from '../src/tokens';
 import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../src/constants';
 import { HDPrivateKey } from 'bitcore-lib';
 import wallet from '../src/wallet';
+import version from '../src/version';
 import { util } from 'bitcore-lib';
 import WebSocketHandler from '../src/WebSocketHandler';
 
@@ -61,49 +62,53 @@ test('New token', (done) => {
   wallet.executeGenerateWallet(words, '', pin, 'password', false);
   const promise = readyLoadHistory(pin);
   const address = storage.getItem('wallet:address');
-  promise.then(() => {
-    // Adding data to storage to be used in the signing process
-    const savedData = storage.getItem('wallet:data');
-    const createdKey = `${createdTxHash},0`;
-    savedData['historyTransactions'] = {
-      '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e': {
-        'tx_id': '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e',
-        'outputs': [
-          {
-            'decoded': {
-              'address': address
+  version.checkApiVersion().then(() => {
+    promise.then(() => {
+      // Adding data to storage to be used in the signing process
+      const savedData = storage.getItem('wallet:data');
+      const createdKey = `${createdTxHash},0`;
+      savedData['historyTransactions'] = {
+        '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e': {
+          'tx_id': '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e',
+          'outputs': [
+            {
+              'decoded': {
+                'address': address
+              },
+              'value': 1000,
             },
-            'value': 1000,
-          },
-        ]
-      }
-    };
-    storage.setItem('wallet:data', savedData);
-    const input = {'tx_id': '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e', 'index': '0', 'token': '00', 'address': address};
-    const output = {'address': address, 'value': 100, 'tokenData': 0};
-    const tokenName = 'TestCoin';
-    const tokenSymbol = 'TTC';
-    const promise2 = tokens.createToken(input, output, address, tokenName, tokenSymbol, 200, pin, null, null);
-    promise2.then(() => {
-      const savedTokens = tokens.getTokens();
-      expect(savedTokens.length).toBe(2);
-      expect(savedTokens[1].uid).toBe(createdToken);
-      expect(savedTokens[1].name).toBe(tokenName);
-      expect(savedTokens[1].symbol).toBe(tokenSymbol);
-      expect(tokens.tokenExists(createdToken)).toEqual({'uid': createdToken, 'name': tokenName, 'symbol': tokenSymbol});
-      expect(tokens.tokenExists(createdTxHash)).toBe(null);
-      const config = tokens.getConfigurationString(createdToken, tokenName, tokenSymbol);
-      const receivedToken = tokens.getTokenFromConfigurationString(config);
-      expect(receivedToken.uid).toBe(createdToken);
-      expect(receivedToken.name).toBe(tokenName);
-      expect(receivedToken.symbol).toBe(tokenSymbol);
-      done();
+          ]
+        }
+      };
+      storage.setItem('wallet:data', savedData);
+      const input = {'tx_id': '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e', 'index': '0', 'token': '00', 'address': address};
+      const output = {'address': address, 'value': 100, 'tokenData': 0};
+      const tokenName = 'TestCoin';
+      const tokenSymbol = 'TTC';
+      const promise2 = tokens.createToken(input, output, address, tokenName, tokenSymbol, 200, pin, null, null);
+      promise2.then(() => {
+        const savedTokens = tokens.getTokens();
+        expect(savedTokens.length).toBe(2);
+        expect(savedTokens[1].uid).toBe(createdToken);
+        expect(savedTokens[1].name).toBe(tokenName);
+        expect(savedTokens[1].symbol).toBe(tokenSymbol);
+        expect(tokens.tokenExists(createdToken)).toEqual({'uid': createdToken, 'name': tokenName, 'symbol': tokenSymbol});
+        expect(tokens.tokenExists(createdTxHash)).toBe(null);
+        const config = tokens.getConfigurationString(createdToken, tokenName, tokenSymbol);
+        const receivedToken = tokens.getTokenFromConfigurationString(config);
+        expect(receivedToken.uid).toBe(createdToken);
+        expect(receivedToken.name).toBe(tokenName);
+        expect(receivedToken.symbol).toBe(tokenSymbol);
+        done();
+      }, (e) => {
+        done.fail('Error creating token');
+      });
     }, (e) => {
       done.fail('Error creating token');
-    });
+    })
   }, (e) => {
     done.fail('Error creating token');
-  })
+  });
 }, 15000);
 
 test('Tokens handling', () => {

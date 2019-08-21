@@ -26,3 +26,11 @@ export class AddressError extends Error {}
  * @inner
  */
 export class OutputValueError extends Error {}
+
+/**
+ * Error thrown when a constant that we get from the server is not set
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class ConstantNotSet extends Error {}
