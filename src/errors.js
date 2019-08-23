@@ -28,6 +28,14 @@ export class AddressError extends Error {}
 export class OutputValueError extends Error {}
 
 /**
+ * Error thrown when we have insufficient funds
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class InsufficientFundsError extends Error {}
+
+/**
  * Error thrown when a constant that we get from the server is not set
  *
  * @memberof Errors

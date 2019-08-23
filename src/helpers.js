@@ -5,10 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { GENESIS_BLOCK, DECIMAL_PLACES, DEFAULT_SERVER } from './constants';
 import path from 'path';
 
 import storage from './storage';
+import tokens from './tokens';
+import { GENESIS_BLOCK, DECIMAL_PLACES, DEFAULT_SERVER } from './constants';
 
 /**
  * Helper methods
@@ -298,6 +299,34 @@ const helpers = {
    */
   getShortHash(hash) {
     return `${hash.substring(0,12)}...${hash.substring(52,64)}`;
+  },
+
+  /**
+   * Calculate deposit value for the given token mint amount
+   *
+   * @param {number} mintAmount Amount of tokens being minted
+   *
+   * @return {number}
+   * @memberof Helpers
+   * @inner
+   *
+   */
+  getDepositAmount(mintAmount) {
+    return Math.ceil(tokens.getDepositPercentage() * mintAmount);
+  },
+
+  /**
+   * Calculate withdraw value for the given token melt amount
+   *
+   * @param {number} meltAmount Amount of tokens being melted
+   *
+   * @return {number}
+   * @memberof Helpers
+   * @inner
+   *
+   */
+  getWithdrawAmount(meltAmount) {
+    return Math.floor(tokens.getDepositPercentage() * meltAmount);
   },
 }
 

@@ -6,6 +6,7 @@
  */
 
 import helpers from '../src/helpers';
+import tokens from '../src/tokens';
 import { createRequestInstance } from '../src/api/axiosInstance';
 
 
@@ -150,4 +151,23 @@ test('Axios config', () => {
   expect(config.agent).toBe('a');
   helpers.fixAxiosConfig(axios, config);
   expect(config.agent).toBe(undefined);
+});
+
+test('Token deposit', () => {
+  tokens.updateDepositPercentage(0.01);
+  // considering HTR deposit is 1%
+  expect(helpers.getDepositAmount(100)).toBe(1);
+  expect(helpers.getDepositAmount(1)).toBe(1);
+  expect(helpers.getDepositAmount(0.1)).toBe(1);
+  expect(helpers.getDepositAmount(500)).toBe(5);
+  expect(helpers.getDepositAmount(550)).toBe(6);
+});
+
+test('Token withdraw', () => {
+  tokens.updateDepositPercentage(0.01);
+  // considering HTR deposit is 1%
+  expect(helpers.getWithdrawAmount(100)).toBe(1);
+  expect(helpers.getWithdrawAmount(99)).toBe(0);
+  expect(helpers.getWithdrawAmount(500)).toBe(5);
+  expect(helpers.getWithdrawAmount(550)).toBe(5);
 });

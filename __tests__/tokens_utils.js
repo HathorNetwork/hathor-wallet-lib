@@ -12,11 +12,13 @@ import wallet from '../src/wallet';
 import version from '../src/version';
 import { util } from 'bitcore-lib';
 import WebSocketHandler from '../src/WebSocketHandler';
+import { InsufficientFundsError } from '../src/errors';
 
 const storage = require('../src/storage').default;
 
 const createdTxHash = '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e';
 const createdToken = util.buffer.bufferToHex(tokens.getTokenUID(createdTxHash, 0));
+const pin = '123456';
 
 beforeEach(() => {
   WebSocketHandler.started = true;
@@ -48,68 +50,77 @@ test('Token UID', () => {
   expect(uid1).not.toBe(uid3);
 });
 
-const readyLoadHistory = (pin) => {
-  const encrypted = storage.getItem('wallet:accessData').mainKey;
-  const privKeyStr = wallet.decryptData(encrypted, pin);
-  const privKey = HDPrivateKey(privKeyStr)
-  return wallet.loadAddressHistory(0, GAP_LIMIT, privKey, pin);
+const loadWallet = async () => {
+  const words = 'connect sunny silent cabin leopard start turtle tortoise dial timber woman genre pave tuna rice indicate gown draft palm collect retreat meadow assume spray';
+  await version.checkApiVersion();
+  // Generate new wallet and save data in storage
+  await wallet.executeGenerateWallet(words, '', pin, 'password', true);
+  // Adding funds to wallet
+  const address = storage.getItem('wallet:address');
+  const savedData = storage.getItem('wallet:data');
+  savedData['historyTransactions'] = {
+    '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e': {
+      'tx_id': '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e',
+      'outputs': [
+        {
+          'decoded': {
+            'address': address,
+            'token_data': 0
+          },
+          'value': 100,
+          'spent_by': null,
+          'token': '00',
+        },
+      ]
+    }
+  };
+  storage.setItem('wallet:data', savedData);
 }
 
-test('New token', (done) => {
-  const words = 'connect sunny silent cabin leopard start turtle tortoise dial timber woman genre pave tuna rice indicate gown draft palm collect retreat meadow assume spray';
-  const pin = '123456';
-  // Generate new wallet and save data in storage
-  wallet.executeGenerateWallet(words, '', pin, 'password', false);
-  const promise = readyLoadHistory(pin);
+test('New token', async (done) => {
+  await loadWallet();
   const address = storage.getItem('wallet:address');
-  version.checkApiVersion().then(() => {
-    promise.then(() => {
-      // Adding data to storage to be used in the signing process
-      const savedData = storage.getItem('wallet:data');
-      const createdKey = `${createdTxHash},0`;
-      savedData['historyTransactions'] = {
-        '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e': {
-          'tx_id': '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e',
-          'outputs': [
-            {
-              'decoded': {
-                'address': address
-              },
-              'value': 1000,
-            },
-          ]
-        }
-      };
-      storage.setItem('wallet:data', savedData);
-      const input = {'tx_id': '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e', 'index': '0', 'token': '00', 'address': address};
-      const output = {'address': address, 'value': 100, 'tokenData': 0};
-      const tokenName = 'TestCoin';
-      const tokenSymbol = 'TTC';
-      const promise2 = tokens.createToken(input, output, address, tokenName, tokenSymbol, 200, pin, null, null);
-      promise2.then(() => {
-        const savedTokens = tokens.getTokens();
-        expect(savedTokens.length).toBe(2);
-        expect(savedTokens[1].uid).toBe(createdToken);
-        expect(savedTokens[1].name).toBe(tokenName);
-        expect(savedTokens[1].symbol).toBe(tokenSymbol);
-        expect(tokens.tokenExists(createdToken)).toEqual({'uid': createdToken, 'name': tokenName, 'symbol': tokenSymbol});
-        expect(tokens.tokenExists(createdTxHash)).toBe(null);
-        const config = tokens.getConfigurationString(createdToken, tokenName, tokenSymbol);
-        const receivedToken = tokens.getTokenFromConfigurationString(config);
-        expect(receivedToken.uid).toBe(createdToken);
-        expect(receivedToken.name).toBe(tokenName);
-        expect(receivedToken.symbol).toBe(tokenSymbol);
-        done();
-      }, (e) => {
-        done.fail('Error creating token');
-      });
-    }, (e) => {
-      done.fail('Error creating token');
-    })
+  const tokenName = 'TestCoin';
+  const tokenSymbol = 'TTC';
+  const promise2 = tokens.createToken(address, tokenName, tokenSymbol, 200, pin);
+  promise2.then(() => {
+    const savedTokens = tokens.getTokens();
+    expect(savedTokens.length).toBe(2);
+    expect(savedTokens[1].uid).toBe(createdToken);
+    expect(savedTokens[1].name).toBe(tokenName);
+    expect(savedTokens[1].symbol).toBe(tokenSymbol);
+    expect(tokens.tokenExists(createdToken)).toEqual({'uid': createdToken, 'name': tokenName, 'symbol': tokenSymbol});
+    expect(tokens.tokenExists(createdTxHash)).toBe(null);
+    const config = tokens.getConfigurationString(createdToken, tokenName, tokenSymbol);
+    const receivedToken = tokens.getTokenFromConfigurationString(config);
+    expect(receivedToken.uid).toBe(createdToken);
+    expect(receivedToken.name).toBe(tokenName);
+    expect(receivedToken.symbol).toBe(tokenSymbol);
+    done();
   }, (e) => {
+    console.log(e)
     done.fail('Error creating token');
   });
 }, 15000);
+
+test('Insufficient funds', async (done) => {
+  await loadWallet();
+  const tokenName = 'TestCoin';
+  const tokenSymbol = 'TTC';
+  const address = storage.getItem('wallet:address');
+  try {
+    // we only have 100 tokens on wallet, so minting 2000000 should fail (deposit = 20000)
+    await tokens.createToken(address, tokenName, tokenSymbol, 2000000, pin);
+    done.fail('Should have rejected');
+  } catch (e) {
+    // this is the successful case
+    if (e instanceof InsufficientFundsError) {
+      done();
+    } else {
+      done.fail();
+    }
+  }
+});
 
 test('Tokens handling', () => {
   const token1 = {'name': '1234', 'uid': '1234', 'symbol': '1234'};
