@@ -42,3 +42,11 @@ export class InsufficientFundsError extends Error {}
  * @inner
  */
 export class ConstantNotSet extends Error {}
+
+/**
+ * Error thrown when a create token tx has invalid info
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class CreateTokenTxInvalid extends Error {}

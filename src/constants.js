@@ -71,8 +71,18 @@ export const DEFAULT_SERVER = DEFAULT_SERVERS[0];
 /**
  * Transaction version field
  */
-// FIXME tx version should not be hardcoded
-export const DEFAULT_TX_VERSION  = 1;
+export const DEFAULT_TX_VERSION = 1;
+
+/**
+ * Create token transaction version field
+ */
+export const CREATE_TOKEN_TX_VERSION = 2;
+
+/**
+ * Create token information version
+ * so far we expect name and symbol
+ */
+export const TOKEN_INFO_VERSION = 1;
 
 /**
  * Max value (inclusive) before having to use 8 bytes: 2147483648 ~= 2.14748e+09
@@ -101,19 +111,14 @@ export const TOKEN_INDEX_MASK = 0b01111111
 export const TOKEN_AUTHORITY_MASK = 0b10000000
 
 /**
- * Mask to check if it's token id creation UTXO (last bit indicates it)
- */
-export const TOKEN_CREATION_MASK = 0b00000001
-
-/**
  * Mask to check if it's mint UTXO (second to last bit indicates it)
  */
-export const TOKEN_MINT_MASK = 0b00000010
+export const TOKEN_MINT_MASK = 0b00000001
 
 /**
  * Mask to check if it's melt UTXO (third bit from right to left indicates it)
  */
-export const TOKEN_MELT_MASK = 0b00000100
+export const TOKEN_MELT_MASK = 0b00000010
 
 /**
  * Token data for an authority output of the first token in a transaction.
