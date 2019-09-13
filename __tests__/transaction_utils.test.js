@@ -217,7 +217,7 @@ test('Prepare data to send tokens', async (done) => {
     'tokens': ['123'],
   }
   let txDataClone = Object.assign({}, txData);
-  let expectedDataToSignHex = '00010102011200034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e000000000003e800001976a91419a8eb751eab5a13027e8cae215f6a5dafc1a8dd88ac000003e800001f045c66ef4b6f76a914c2f29cfdb73822200a07ab51d261b425af811fed88ac';
+  let expectedDataToSignHex = '00000101021200034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e000000000003e800001976a91419a8eb751eab5a13027e8cae215f6a5dafc1a8dd88ac000003e800001f045c66ef4b6f76a914c2f29cfdb73822200a07ab51d261b425af811fed88ac';
   let dataToSign = transaction.dataToSign(txData);
   expect(dataToSign.toString('hex')).toBe(expectedDataToSignHex);
 
@@ -226,6 +226,7 @@ test('Prepare data to send tokens', async (done) => {
   expect(txData['inputs'][0].data.length > 0).toBeTruthy();
 
   transaction.completeTx(txData);
+  transaction.setWeight(txData);
   expect(txData['nonce']).toBe(0);
   expect(txData['version']).toBe(DEFAULT_TX_VERSION);
   expect(txData['timestamp'] > 0).toBeTruthy();
@@ -233,7 +234,7 @@ test('Prepare data to send tokens', async (done) => {
 
   // Fixing timestamp to compare the serialization
   txData['timestamp'] = 1550249810;
-  let expectedTxHex = '00010101021200034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e00006a473045022100b314f00e18199a8b58acb7e379f6276e40118910319d86d7b0bc0d7cb00c1ea0022069a1450312d8c0fa2c7d0cf169655daa386d00333a72f529f85dea2b9510584c210346cddff43dffab8e13398633ab7a7caf0d634551e89ae6fd563e282f6744b983000003e800001976a91419a8eb751eab5a13027e8cae215f6a5dafc1a8dd88ac000003e800001f045c66ef4b6f76a914c2f29cfdb73822200a07ab51d261b425af811fed88ac40308798722c78a05c66ef520000000000';
+  let expectedTxHex = '00010101021200034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e0000694630440220317cd233801c1986c2de900bf8d344c6335d3c385e69d19d65e1fae7a0afd0af02207acddb824debf855798d79c45701cbe3a19aea00baad94bff5290c6f0b0acf8e210346cddff43dffab8e13398633ab7a7caf0d634551e89ae6fd563e282f6744b983000003e800001976a91419a8eb751eab5a13027e8cae215f6a5dafc1a8dd88ac000003e800001f045c66ef4b6f76a914c2f29cfdb73822200a07ab51d261b425af811fed88ac4030861b12dcee1a5c66ef520000000000';
   expect(transaction.txToBytes(txData).toString('hex')).toBe(expectedTxHex);
 
   // Mock any POST request to /thin_wallet/send_tokens
