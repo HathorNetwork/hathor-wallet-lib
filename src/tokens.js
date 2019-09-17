@@ -292,7 +292,7 @@ const tokens = {
       const txPromise = transaction.sendTransaction(createTokenTxData, pin);
       txPromise.then((response) => {
         // Save in storage new token configuration
-        const tokenUid = response.tx.tokens[0];
+        const tokenUid = response.tx.hash;
         this.addToken(tokenUid, name, symbol);
         resolve({uid: tokenUid, name, symbol});
       }, (error) => {
