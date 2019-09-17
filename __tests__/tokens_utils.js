@@ -86,14 +86,13 @@ test('New token', async (done) => {
   promise2.then(() => {
     const savedTokens = tokens.getTokens();
     expect(savedTokens.length).toBe(2);
-    expect(savedTokens[1].uid).toBe(createdToken);
+    expect(savedTokens[1].uid).toBe(createdTxHash);
     expect(savedTokens[1].name).toBe(tokenName);
     expect(savedTokens[1].symbol).toBe(tokenSymbol);
-    expect(tokens.tokenExists(createdToken)).toEqual({'uid': createdToken, 'name': tokenName, 'symbol': tokenSymbol});
-    expect(tokens.tokenExists(createdTxHash)).toBe(null);
-    const config = tokens.getConfigurationString(createdToken, tokenName, tokenSymbol);
+    expect(tokens.tokenExists(createdTxHash)).toEqual({'uid': createdTxHash, 'name': tokenName, 'symbol': tokenSymbol});
+    const config = tokens.getConfigurationString(createdTxHash, tokenName, tokenSymbol);
     const receivedToken = tokens.getTokenFromConfigurationString(config);
-    expect(receivedToken.uid).toBe(createdToken);
+    expect(receivedToken.uid).toBe(createdTxHash);
     expect(receivedToken.name).toBe(tokenName);
     expect(receivedToken.symbol).toBe(tokenSymbol);
     done();
