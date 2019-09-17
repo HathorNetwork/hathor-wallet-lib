@@ -53,6 +53,24 @@ const walletApi = {
     });
   },
 
+  /**
+   * Call get token info API
+   *
+   * @param {string} uid Token uid to get the info
+   * @param {function} resolve Method to be called after response arrives
+   *
+   * @return {Promise}
+   * @memberof ApiWallet
+   * @inner
+   */
+  getTokenInfo(uid, resolve) {
+    const data = {id: uid};
+    return createRequestInstance(resolve).get('thin_wallet/token', {'params': data}).then((res) => {
+      resolve(res.data)
+    }, (res) => {
+      return Promise.reject(res);
+    });
+  },
 };
 
 export default walletApi;

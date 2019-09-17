@@ -112,45 +112,72 @@ const tokens = {
    * @param {string} config Token configuration string
    * @param {string} uid Uid to check if matches with uid from config (optional)
    *
-   * @return {Object} {success: boolean, message: in case of failure, tokenData: object with token data in case of success}
+   * @return {Promise} Promise that resolves when validation finishes. Resolves with tokenData {uid, name, symbol} and reject with error message
    *
    * @memberof Tokens
    * @inner
    */
   validateTokenToAddByConfigurationString(config, uid) {
-    const tokenData = this.getTokenFromConfigurationString(config);
-    if (tokenData === null) {
-      return {success: false, message: 'Invalid configuration string'};
-    }
-    if (uid && uid !== tokenData.uid) {
-      return {success: false, message: `Configuration string uid does not match: ${uid} != ${tokenData.uid}`};
-    }
+    const promise = new Promise((resolve, reject) => {
+      const tokenData = this.getTokenFromConfigurationString(config);
+      if (tokenData === null) {
+        reject('Invalid configuration string');
+      }
+      if (uid && uid !== tokenData.uid) {
+        reject(`Configuration string uid does not match: ${uid} != ${tokenData.uid}`);
+      }
 
-    const validation = this.validateTokenToAddByUid(tokenData.uid);
-    if (validation.success) {
-      return {success: true, tokenData: tokenData};
-    } else {
-      return validation;
-    }
+      const promiseValidation = this.validateTokenToAddByUid(tokenData.uid, tokenData.name, tokenData.symbol);
+      promiseValidation.then(() => {
+        resolve(tokenData);
+      }, (message) => {
+        reject(message);
+      });
+    });
+    return promise;
   },
 
   /**
-   * Validation token by uid. Check if already exist
+   * Validation token by uid.
+   * Check if this uid was already added, if name and symbol match with the information in the DAG,
+   * and if already have another token with this name or symbol already added
    *
    * @param {string} uid Uid to check for existence
+   * @param {string} name Token name to execute validation
+   * @param {string} symbol Token symbol to execute validation
    *
-   * @return {Object} {success: boolean, message: in case of failure}
+   * @return {Promise} Promise that will be resolved when validation finishes. Resolve with no data and reject with error message
    *
    * @memberof Tokens
    * @inner
    */
-  validateTokenToAddByUid(uid) {
-    const existedToken = this.tokenExists(uid);
-    if (existedToken) {
-      return {success: false, message: `You already have this token: ${uid} (${existedToken.name})`};
-    }
+  validateTokenToAddByUid(uid, name, symbol) {
+    const promise = new Promise((resolve, reject) => {
+      // Validate if token uid was already added
+      const existedToken = this.tokenExists(uid);
+      if (existedToken) {
+        reject(`You already have this token: ${uid} (${existedToken.name})`);
+      }
 
-    return {success: true};
+
+      // Validate if already have another token with this same name and symbol added
+      const tokenInfoExists = this.tokenInfoExists(name, symbol);
+      if (tokenInfoExists) {
+        reject(`You already have a token with this ${tokenInfoExists.key}: ${tokenInfoExists.token.uid} - ${tokenInfoExists.token.name} (${tokenInfoExists.token.symbol})`);
+      }
+
+      // Validate if name and symbol match with the token info in the DAG
+      walletApi.getTokenInfo(uid, (response) => {
+        if (response.name !== name) {
+          reject(`Token name does not match with the real one. Added: ${name}. Real: ${response.name}`);
+        } else if (response.symbol !== symbol) {
+          reject(`Token symbol does not match with the real one. Added: ${symbol}. Real: ${response.symbol}`);
+        } else {
+          resolve();
+        }
+      });
+    });
+    return promise;
   },
 
   /**
@@ -254,6 +281,30 @@ const tokens = {
     for (const token of tokens) {
       if (token.uid === uid) {
         return token;
+      }
+    }
+    return null;
+  },
+
+  /**
+   * Validates if already has a token with same name or symbol added in the wallet
+   *
+   * @param {string} name Token name to search
+   * @param {string} symbol Token symbol to search
+   *
+   * @return {Object|null} Token if name or symbol already exists, else null
+   *
+   * @memberof Tokens
+   * @inner
+   */
+  tokenInfoExists(name, symbol) {
+    const tokens = this.getTokens();
+    for (const token of tokens) {
+      if (token.name === name) {
+        return {token, key: 'name'};
+      }
+      if (token.symbol === symbol) {
+        return {token, key: 'symbol'};
       }
     }
     return null;
