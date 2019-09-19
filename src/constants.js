@@ -69,6 +69,11 @@ export const DEFAULT_SERVERS = [
 export const DEFAULT_SERVER = DEFAULT_SERVERS[0];
 
 /**
+ * Block version field
+ */
+export const BLOCK_VERSION = 0;
+
+/**
  * Transaction version field
  */
 export const DEFAULT_TX_VERSION = 1;

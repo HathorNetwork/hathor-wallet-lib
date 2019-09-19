@@ -9,7 +9,7 @@ import path from 'path';
 
 import storage from './storage';
 import tokens from './tokens';
-import { GENESIS_BLOCK, DECIMAL_PLACES, DEFAULT_SERVER } from './constants';
+import { BLOCK_VERSION, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, GENESIS_BLOCK, DECIMAL_PLACES, DEFAULT_SERVER } from './constants';
 
 /**
  * Helper methods
@@ -56,7 +56,11 @@ const helpers = {
     if (this.isBlock(tx)) {
       return 'Block';
     } else {
-      return 'Transaction';
+      if (tx.version === DEFAULT_TX_VERSION) {
+        return 'Transaction';
+      } else if (tx.version === CREATE_TOKEN_TX_VERSION) {
+        return 'Create token transaction';
+      }
     }
   },
 
@@ -71,13 +75,7 @@ const helpers = {
    * @inner
    */
   isBlock(tx) {
-    if (GENESIS_BLOCK.indexOf(tx.tx_id) > -1) {
-      return true;
-    }
-    if (tx.inputs.length === 0) {
-      return true;
-    }
-    return false;
+    return tx.version === BLOCK_VERSION;
   },
 
 
