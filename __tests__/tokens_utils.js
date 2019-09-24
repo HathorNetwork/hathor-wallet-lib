@@ -12,7 +12,7 @@ import wallet from '../src/wallet';
 import version from '../src/version';
 import { util } from 'bitcore-lib';
 import WebSocketHandler from '../src/WebSocketHandler';
-import { InsufficientFundsError } from '../src/errors';
+import { InsufficientFundsError, TokenValidationError } from '../src/errors';
 
 const storage = require('../src/storage').default;
 
@@ -180,11 +180,11 @@ test('Tokens handling', async () => {
   // Validates configuration string before add
   const config = tokens.getConfigurationString(token1.uid, token1.name, token1.symbol);
   await expect(tokens.validateTokenToAddByConfigurationString(config)).resolves.toBeInstanceOf(Object);
-  await expect(tokens.validateTokenToAddByConfigurationString(config, token2.uid)).rejects.toEqual(expect.any(String));
-  await expect(tokens.validateTokenToAddByConfigurationString(config+'a')).rejects.toEqual(expect.any(String));
-  await expect(tokens.validateTokenToAddByConfigurationString('')).rejects.toEqual(expect.any(String));
+  await expect(tokens.validateTokenToAddByConfigurationString(config, token2.uid)).rejects.toThrow(TokenValidationError);
+  await expect(tokens.validateTokenToAddByConfigurationString(config+'a')).rejects.toThrow(TokenValidationError);
+  await expect(tokens.validateTokenToAddByConfigurationString('')).rejects.toThrow(TokenValidationError);
 
   // Cant add the same token twice
   tokens.addToken(token1.uid, token1.name, token1.symbol)
-  await expect(tokens.validateTokenToAddByConfigurationString(config)).rejects.toEqual(expect.any(String));
+  await expect(tokens.validateTokenToAddByConfigurationString(config)).rejects.toThrow(TokenValidationError);
 });

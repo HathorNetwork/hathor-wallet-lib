@@ -12,7 +12,7 @@ import wallet from './wallet';
 import storage from './storage';
 import helpers from './helpers';
 import walletApi from './api/wallet';
-import { InsufficientFundsError, ConstantNotSet } from './errors';
+import { InsufficientFundsError, ConstantNotSet, TokenValidationError } from './errors';
 import { CREATE_TOKEN_TX_VERSION, HATHOR_TOKEN_CONFIG, TOKEN_MINT_MASK, TOKEN_MELT_MASK, AUTHORITY_TOKEN_DATA } from './constants';
 
 
@@ -112,7 +112,7 @@ const tokens = {
    * @param {string} config Token configuration string
    * @param {string} uid Uid to check if matches with uid from config (optional)
    *
-   * @return {Promise} Promise that resolves when validation finishes. Resolves with tokenData {uid, name, symbol} and reject with error message
+   * @return {Promise} Promise that resolves when validation finishes. Resolves with tokenData {uid, name, symbol} and reject with TokenValidationError
    *
    * @memberof Tokens
    * @inner
@@ -121,17 +121,17 @@ const tokens = {
     const promise = new Promise((resolve, reject) => {
       const tokenData = this.getTokenFromConfigurationString(config);
       if (tokenData === null) {
-        reject('Invalid configuration string');
+        reject(new TokenValidationError('Invalid configuration string'));
       }
       if (uid && uid !== tokenData.uid) {
-        reject(`Configuration string uid does not match: ${uid} != ${tokenData.uid}`);
+        reject(new TokenValidationError(`Configuration string uid does not match: ${uid} != ${tokenData.uid}`));
       }
 
       const promiseValidation = this.validateTokenToAddByUid(tokenData.uid, tokenData.name, tokenData.symbol);
       promiseValidation.then(() => {
         resolve(tokenData);
-      }, (message) => {
-        reject(message);
+      }, (error) => {
+        reject(error);
       });
     });
     return promise;
@@ -146,7 +146,7 @@ const tokens = {
    * @param {string} name Token name to execute validation
    * @param {string} symbol Token symbol to execute validation
    *
-   * @return {Promise} Promise that will be resolved when validation finishes. Resolve with no data and reject with error message
+   * @return {Promise} Promise that will be resolved when validation finishes. Resolve with no data and reject with TokenValidationError
    *
    * @memberof Tokens
    * @inner
@@ -154,24 +154,24 @@ const tokens = {
   validateTokenToAddByUid(uid, name, symbol) {
     const promise = new Promise((resolve, reject) => {
       // Validate if token uid was already added
-      const existedToken = this.tokenExists(uid);
-      if (existedToken) {
-        reject(`You already have this token: ${uid} (${existedToken.name})`);
+      const token = this.tokenExists(uid);
+      if (token) {
+        reject(new TokenValidationError(`You already have this token: ${uid} (${token.name})`));
       }
 
 
       // Validate if already have another token with this same name and symbol added
-      const tokenInfoExists = this.tokenInfoExists(name, symbol);
-      if (tokenInfoExists) {
-        reject(`You already have a token with this ${tokenInfoExists.key}: ${tokenInfoExists.token.uid} - ${tokenInfoExists.token.name} (${tokenInfoExists.token.symbol})`);
+      const tokenInfo = this.tokenInfoExists(name, symbol);
+      if (tokenInfo) {
+        reject(new TokenValidationError(`You already have a token with this ${tokenInfo.key}: ${tokenInfo.token.uid} - ${tokenInfo.token.name} (${tokenInfo.token.symbol})`));
       }
 
       // Validate if name and symbol match with the token info in the DAG
       walletApi.getTokenInfo(uid, (response) => {
         if (response.name !== name) {
-          reject(`Token name does not match with the real one. Added: ${name}. Real: ${response.name}`);
+          reject(new TokenValidationError(`Token name does not match with the real one. Added: ${name}. Real: ${response.name}`));
         } else if (response.symbol !== symbol) {
-          reject(`Token symbol does not match with the real one. Added: ${symbol}. Real: ${response.symbol}`);
+          reject(new TokenValidationError(`Token symbol does not match with the real one. Added: ${symbol}. Real: ${response.symbol}`));
         } else {
           resolve();
         }
