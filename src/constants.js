@@ -111,12 +111,12 @@ export const TOKEN_INDEX_MASK = 0b01111111
 export const TOKEN_AUTHORITY_MASK = 0b10000000
 
 /**
- * Mask to check if it's mint UTXO (second to last bit indicates it)
+ * Mask to check if it's mint UTXO (last bit indicates it)
  */
 export const TOKEN_MINT_MASK = 0b00000001
 
 /**
- * Mask to check if it's melt UTXO (third bit from right to left indicates it)
+ * Mask to check if it's melt UTXO (second to last bit indicates it)
  */
 export const TOKEN_MELT_MASK = 0b00000010
 

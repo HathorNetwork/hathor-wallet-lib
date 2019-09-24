@@ -302,7 +302,7 @@ const transaction = {
 
     if (txData.version === CREATE_TOKEN_TX_VERSION) {
       // Create token tx need to add extra information
-      arr = [...arr, ...this.createTokenTxInfo(txData)];
+      arr = [...arr, ...this.serializeTokenInfo(txData)];
     }
 
     return util.buffer.concat(arr);
@@ -533,7 +533,7 @@ const transaction = {
 
     if (txData.version === CREATE_TOKEN_TX_VERSION) {
       // Add create token tx serialization
-      arr = [...arr, ...this.createTokenTxInfo(txData)];
+      arr = [...arr, ...this.serializeTokenInfo(txData)];
     }
 
     // Now serialize the graph part
@@ -694,7 +694,7 @@ const transaction = {
    * @memberof Transaction
    * @inner
    */
-  createTokenTxInfo(txData) {
+  serializeTokenInfo(txData) {
     if (!('name' in txData) || !('symbol' in txData)) {
       throw new CreateTokenTxInvalid('Token name and symbol are required when creating a new token');
     }
