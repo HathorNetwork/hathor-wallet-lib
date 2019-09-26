@@ -40,7 +40,7 @@ test('Wallet operations for transaction', () => {
           'token': '01',
         }
       ],
-      'tokens': ['01']
+      'tokens': [{uid: '01', name: '01', symbol: '01'}]
     },
     '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295f': {
       'version': 1,
@@ -68,7 +68,7 @@ test('Wallet operations for transaction', () => {
           'token': '01',
         },
       ],
-      'tokens': ['01']
+      'tokens': [{uid: '01', name: '01', symbol: '01'}]
     },
     '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295d': {
       'version': 1,
@@ -107,7 +107,7 @@ test('Wallet operations for transaction', () => {
           'spent_by': null,
         },
       ],
-      'tokens': ['01']
+      'tokens': [{uid: '01', name: '01', symbol: '01'}]
     },
     '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295c': {
       'version': 0,
@@ -125,7 +125,7 @@ test('Wallet operations for transaction', () => {
           'spent_by': null,
         },
       ],
-      'tokens': ['01']
+      'tokens': [{uid: '01', name: '01', symbol: '01'}]
     }
   }
 
@@ -188,7 +188,7 @@ test('Wallet operations for transaction', () => {
         'spent_by': null,
       },
     ],
-    'tokens': ['01']
+    'tokens': [{uid: '01', name: '01', symbol: '01'}]
   };
 
 
