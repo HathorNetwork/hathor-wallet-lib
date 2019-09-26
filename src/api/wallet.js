@@ -71,6 +71,36 @@ const walletApi = {
       return Promise.reject(res);
     });
   },
+
+  /**
+   * Call get token transaction history API
+   *
+   * @param {string} uid Token uid to get the info
+   * @param {number} count Quantity of elements to be returned
+   * @param {string} hash Hash of transaction as reference in pagination
+   * @param {number} timestamp Timestamp of transaction as reference in pagination
+   * @param {string} page The button clicked in the pagination ('previous' or 'next')
+   * @param {function} resolve Method to be called after response arrives
+   *
+   * @return {Promise}
+   * @memberof ApiWallet
+   * @inner
+   */
+  getTokenHistory(uid, count, hash, timestamp, page, resolve) {
+    const data = {id: uid, count};
+
+    if (hash) {
+      data['hash'] = hash
+      data['timestamp'] = timestamp
+      data['page'] = page
+    }
+
+    return createRequestInstance(resolve).get('thin_wallet/token_history', {'params': data}).then((res) => {
+      resolve(res.data)
+    }, (res) => {
+      return Promise.reject(res);
+    });
+  },
 };
 
 export default walletApi;
