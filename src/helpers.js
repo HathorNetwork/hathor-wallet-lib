@@ -62,6 +62,9 @@ const helpers = {
         return 'Create token transaction';
       }
     }
+
+    // If there is no match
+    return 'Unknown';
   },
 
   /**

@@ -167,7 +167,7 @@ const tokens = {
       }
 
       // Validate if name and symbol match with the token info in the DAG
-      walletApi.getTokenInfo(uid, (response) => {
+      walletApi.getGeneralTokenInfo(uid, (response) => {
         if (response.name !== name) {
           reject(new TokenValidationError(`Token name does not match with the real one. Added: ${name}. Real: ${response.name}`));
         } else if (response.symbol !== symbol) {
@@ -300,10 +300,10 @@ const tokens = {
   tokenInfoExists(name, symbol) {
     const tokens = this.getTokens();
     for (const token of tokens) {
-      if (token.name === name) {
+      if (token.name.trim() === name.trim()) {
         return {token, key: 'name'};
       }
-      if (token.symbol === symbol) {
+      if (token.symbol.trim() === symbol.trim()) {
         return {token, key: 'symbol'};
       }
     }
