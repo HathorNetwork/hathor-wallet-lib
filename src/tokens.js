@@ -346,8 +346,11 @@ const tokens = {
         const tokenUid = response.tx.hash;
         this.addToken(tokenUid, name, symbol);
         resolve({uid: tokenUid, name, symbol});
-      }, (error) => {
-        reject(error);
+      }, (message) => {
+        // I need to reject an error because we've changed the createMintData to reject an error
+        // Changing sendTransaction method to reject an error also would require refactor in other methods
+        // We already have an issue to always reject an error but while we don't do it, we need this
+        reject(new Error(message));
       });
     });
     return promise;
