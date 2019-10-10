@@ -1497,7 +1497,7 @@ const wallet = {
         if (txin.decoded.token_data === HATHOR_TOKEN_INDEX) {
           tokenUID = HATHOR_TOKEN_CONFIG.uid;
         } else {
-          tokenUID = tx.tokens[txin.decoded.token_data - 1].uid;
+          tokenUID = tx.tokens[this.getTokenIndex(txin.decoded.token_data) - 1].uid;
         }
         if (tokenUID in balance) {
           balance[tokenUID] -= txin.value;
@@ -1516,7 +1516,7 @@ const wallet = {
         if (txout.decoded.token_data === HATHOR_TOKEN_INDEX) {
           tokenUID = HATHOR_TOKEN_CONFIG.uid;
         } else {
-          tokenUID = tx.tokens[txout.decoded.token_data - 1].uid;
+          tokenUID = tx.tokens[this.getTokenIndex(txout.decoded.token_data) - 1].uid;
         }
         if (tokenUID in balance) {
           balance[tokenUID] += txout.value;
