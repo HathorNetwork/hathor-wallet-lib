@@ -329,6 +329,20 @@ const helpers = {
   getWithdrawAmount(meltAmount) {
     return Math.floor(tokens.getDepositPercentage() * meltAmount);
   },
+
+  /**
+   * Cleans a string for comparison. Remove multiple spaces, and spaces at the beginning and end, and transform to lowercase.
+   *
+   * @param {string} string String to be cleaned
+   *
+   * @return {string} String after clean
+   * @memberof Helpers
+   * @inner
+   *
+   */
+  cleanupString(string) {
+    return string.replace(/\s\s+/g, ' ').trim().toLowerCase();
+  }
 }
 
 export default helpers;

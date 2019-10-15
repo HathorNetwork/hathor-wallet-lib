@@ -300,10 +300,10 @@ const tokens = {
   tokenInfoExists(name, symbol) {
     const tokens = this.getTokens();
     for (const token of tokens) {
-      if (token.name.trim() === name.trim()) {
+      if (helpers.cleanupString(token.name) === helpers.cleanupString(name)) {
         return {token, key: 'name'};
       }
-      if (token.symbol.trim() === symbol.trim()) {
+      if (helpers.cleanupString(token.symbol) === helpers.cleanupString(symbol)) {
         return {token, key: 'symbol'};
       }
     }
