@@ -811,6 +811,20 @@ const tokens = {
   clearDepositPercentage() {
     this._depositPercentage = null;
   },
+
+  /**
+   * Checks if the uid passed is from Hathor token
+   *
+   * @param {string} uid UID to check if is Hathor's
+   *
+   * @return {boolean} true if is Hathor uid, false otherwise
+   *
+   * @memberof Tokens
+   * @inner
+   */
+  isHathorToken(uid) {
+    return uid === HATHOR_TOKEN_CONFIG.uid;
+  },
 }
 
 export default tokens;
