@@ -467,9 +467,9 @@ const transaction = {
    * @memberof Transaction
    * @inner
    */
-  setWeight(data) {
+  setWeightIfNeeded(data) {
     // Calculate tx weight if needed.
-    if (data.weight === 0) {
+    if (!('weight' in data) || data.weight === 0) {
       let minimumWeight = this.calculateTxWeight(data);
       data['weight'] = minimumWeight;
     }
@@ -613,7 +613,7 @@ const transaction = {
         }
 
         // Set weight only after completing all the fields
-        transaction.setWeight(data);
+        transaction.setWeightIfNeeded(data);
 
         const txBytes = transaction.txToBytes(data);
         const txHex = util.buffer.bufferToHex(txBytes);
