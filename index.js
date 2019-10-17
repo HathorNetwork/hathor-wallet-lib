@@ -12,6 +12,7 @@ var txApi = require('./lib/api/txApi');
 var versionApi = require('./lib/api/version');
 var axios = require('./lib/api/axiosInstance');
 var storage = require('./lib/storage');
+var MemoryStore = require('./lib/memory_store');
 
 module.exports = {
   helpers: helpers.default,
@@ -28,4 +29,5 @@ module.exports = {
   constants: constants,
   axios: axios,
   storage: storage.default,
+  MemoryStore: MemoryStore.default,
 }
