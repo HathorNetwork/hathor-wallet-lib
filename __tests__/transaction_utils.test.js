@@ -226,7 +226,7 @@ test('Prepare data to send tokens', async (done) => {
   expect(txData['inputs'][0].data.length > 0).toBeTruthy();
 
   transaction.completeTx(txData);
-  transaction.setWeight(txData);
+  transaction.setWeightIfNeeded(txData);
   expect(txData['nonce']).toBe(0);
   expect(txData['version']).toBe(DEFAULT_TX_VERSION);
   expect(txData['timestamp'] > 0).toBeTruthy();

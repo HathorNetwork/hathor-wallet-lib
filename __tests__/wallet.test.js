@@ -17,6 +17,7 @@ test('Wallet operations for transaction', () => {
 
   let historyTransactions = {
     '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e': {
+      'version': 1,
       'tx_id': '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e',
       'inputs': [],
       'outputs': [
@@ -39,9 +40,10 @@ test('Wallet operations for transaction', () => {
           'token': '01',
         }
       ],
-      'tokens': ['01']
+      'tokens': [{uid: '01', name: '01', symbol: '01'}]
     },
     '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295f': {
+      'version': 1,
       'tx_id': '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295f',
       'inputs': [],
       'outputs': [
@@ -66,9 +68,10 @@ test('Wallet operations for transaction', () => {
           'token': '01',
         },
       ],
-      'tokens': ['01']
+      'tokens': [{uid: '01', name: '01', symbol: '01'}]
     },
     '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295d': {
+      'version': 1,
       'tx_id': '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295d',
       'inputs': [
         {
@@ -104,9 +107,10 @@ test('Wallet operations for transaction', () => {
           'spent_by': null,
         },
       ],
-      'tokens': ['01']
+      'tokens': [{uid: '01', name: '01', symbol: '01'}]
     },
     '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295c': {
+      'version': 0,
       'tx_id': '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295c',
       'inputs': [],
       'outputs': [
@@ -121,7 +125,7 @@ test('Wallet operations for transaction', () => {
           'spent_by': null,
         },
       ],
-      'tokens': ['01']
+      'tokens': [{uid: '01', name: '01', symbol: '01'}]
     }
   }
 
@@ -184,7 +188,7 @@ test('Wallet operations for transaction', () => {
         'spent_by': null,
       },
     ],
-    'tokens': ['01']
+    'tokens': [{uid: '01', name: '01', symbol: '01'}]
   };
 
 

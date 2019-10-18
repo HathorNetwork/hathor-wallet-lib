@@ -12,7 +12,7 @@ import wallet from './wallet';
 import storage from './storage';
 import helpers from './helpers';
 import walletApi from './api/wallet';
-import { InsufficientFundsError, ConstantNotSet } from './errors';
+import { InsufficientFundsError, ConstantNotSet, TokenValidationError } from './errors';
 import { CREATE_TOKEN_TX_VERSION, HATHOR_TOKEN_CONFIG, TOKEN_MINT_MASK, TOKEN_MELT_MASK, AUTHORITY_TOKEN_DATA } from './constants';
 
 
@@ -112,45 +112,72 @@ const tokens = {
    * @param {string} config Token configuration string
    * @param {string} uid Uid to check if matches with uid from config (optional)
    *
-   * @return {Object} {success: boolean, message: in case of failure, tokenData: object with token data in case of success}
+   * @return {Promise} Promise that resolves when validation finishes. Resolves with tokenData {uid, name, symbol} and reject with TokenValidationError
    *
    * @memberof Tokens
    * @inner
    */
   validateTokenToAddByConfigurationString(config, uid) {
-    const tokenData = this.getTokenFromConfigurationString(config);
-    if (tokenData === null) {
-      return {success: false, message: 'Invalid configuration string'};
-    }
-    if (uid && uid !== tokenData.uid) {
-      return {success: false, message: `Configuration string uid does not match: ${uid} != ${tokenData.uid}`};
-    }
+    const promise = new Promise((resolve, reject) => {
+      const tokenData = this.getTokenFromConfigurationString(config);
+      if (tokenData === null) {
+        reject(new TokenValidationError('Invalid configuration string'));
+      }
+      if (uid && uid !== tokenData.uid) {
+        reject(new TokenValidationError(`Configuration string uid does not match: ${uid} != ${tokenData.uid}`));
+      }
 
-    const validation = this.validateTokenToAddByUid(tokenData.uid);
-    if (validation.success) {
-      return {success: true, tokenData: tokenData};
-    } else {
-      return validation;
-    }
+      const promiseValidation = this.validateTokenToAddByUid(tokenData.uid, tokenData.name, tokenData.symbol);
+      promiseValidation.then(() => {
+        resolve(tokenData);
+      }, (error) => {
+        reject(error);
+      });
+    });
+    return promise;
   },
 
   /**
-   * Validation token by uid. Check if already exist
+   * Validation token by uid.
+   * Check if this uid was already added, if name and symbol match with the information in the DAG,
+   * and if already have another token with this name or symbol already added
    *
    * @param {string} uid Uid to check for existence
+   * @param {string} name Token name to execute validation
+   * @param {string} symbol Token symbol to execute validation
    *
-   * @return {Object} {success: boolean, message: in case of failure}
+   * @return {Promise} Promise that will be resolved when validation finishes. Resolve with no data and reject with TokenValidationError
    *
    * @memberof Tokens
    * @inner
    */
-  validateTokenToAddByUid(uid) {
-    const existedToken = this.tokenExists(uid);
-    if (existedToken) {
-      return {success: false, message: `You already have this token: ${uid} (${existedToken.name})`};
-    }
+  validateTokenToAddByUid(uid, name, symbol) {
+    const promise = new Promise((resolve, reject) => {
+      // Validate if token uid was already added
+      const token = this.tokenExists(uid);
+      if (token) {
+        reject(new TokenValidationError(`You already have this token: ${uid} (${token.name})`));
+      }
 
-    return {success: true};
+
+      // Validate if already have another token with this same name and symbol added
+      const tokenInfo = this.tokenInfoExists(name, symbol);
+      if (tokenInfo) {
+        reject(new TokenValidationError(`You already have a token with this ${tokenInfo.key}: ${tokenInfo.token.uid} - ${tokenInfo.token.name} (${tokenInfo.token.symbol})`));
+      }
+
+      // Validate if name and symbol match with the token info in the DAG
+      walletApi.getGeneralTokenInfo(uid, (response) => {
+        if (response.name !== name) {
+          reject(new TokenValidationError(`Token name does not match with the real one. Added: ${name}. Real: ${response.name}`));
+        } else if (response.symbol !== symbol) {
+          reject(new TokenValidationError(`Token symbol does not match with the real one. Added: ${symbol}. Real: ${response.symbol}`));
+        } else {
+          resolve();
+        }
+      });
+    });
+    return promise;
   },
 
   /**
@@ -260,6 +287,30 @@ const tokens = {
   },
 
   /**
+   * Validates if already has a token with same name or symbol added in the wallet
+   *
+   * @param {string} name Token name to search
+   * @param {string} symbol Token symbol to search
+   *
+   * @return {Object|null} Token if name or symbol already exists, else null
+   *
+   * @memberof Tokens
+   * @inner
+   */
+  tokenInfoExists(name, symbol) {
+    const tokens = this.getTokens();
+    for (const token of tokens) {
+      if (helpers.cleanupString(token.name) === helpers.cleanupString(name)) {
+        return {token, key: 'name'};
+      }
+      if (helpers.cleanupString(token.symbol) === helpers.cleanupString(symbol)) {
+        return {token, key: 'symbol'};
+      }
+    }
+    return null;
+  },
+
+  /**
    * Create the tx for the new token in the backend and creates a new mint and melt outputs to be used in the future
    *
    * @param {string} address Address to receive the amount of the generated token
@@ -295,8 +346,11 @@ const tokens = {
         const tokenUid = response.tx.hash;
         this.addToken(tokenUid, name, symbol);
         resolve({uid: tokenUid, name, symbol});
-      }, (error) => {
-        reject(error);
+      }, (message) => {
+        // I need to reject an error because we've changed the createMintData to reject an error
+        // Changing sendTransaction method to reject an error also would require refactor in other methods
+        // We already have an issue to always reject an error but while we don't do it, we need this
+        reject(new Error(message));
       });
     });
     return promise;
@@ -756,6 +810,20 @@ const tokens = {
    */
   clearDepositPercentage() {
     this._depositPercentage = null;
+  },
+
+  /**
+   * Checks if the uid passed is from Hathor token
+   *
+   * @param {string} uid UID to check if is Hathor's
+   *
+   * @return {boolean} true if is Hathor uid, false otherwise
+   *
+   * @memberof Tokens
+   * @inner
+   */
+  isHathorToken(uid) {
+    return uid === HATHOR_TOKEN_CONFIG.uid;
   },
 }
 

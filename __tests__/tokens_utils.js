@@ -12,13 +12,14 @@ import wallet from '../src/wallet';
 import version from '../src/version';
 import { util } from 'bitcore-lib';
 import WebSocketHandler from '../src/WebSocketHandler';
-import { InsufficientFundsError } from '../src/errors';
+import { InsufficientFundsError, TokenValidationError } from '../src/errors';
 
 const storage = require('../src/storage').default;
 
 const createdTxHash = '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e';
 const createdToken = util.buffer.bufferToHex(tokens.getTokenUID(createdTxHash, 0));
 const pin = '123456';
+const token1 = {'name': '1234', 'uid': '1234', 'symbol': '1234'};
 
 beforeEach(() => {
   WebSocketHandler.started = true;
@@ -37,6 +38,18 @@ mock.onPost('thin_wallet/send_tokens').reply((config) => {
   }
   return [200, ret];
 });
+
+mock.onGet('thin_wallet/token').reply((config) => {
+  const ret = {
+    'mint': [],
+    'melt': [],
+    'name': token1.name,
+    'symbol': token1.symbol,
+    'total': 100
+  }
+  return [200, ret];
+});
+
 
 test('Token UID', () => {
   const txID = '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e';
@@ -121,8 +134,7 @@ test('Insufficient funds', async (done) => {
   }
 });
 
-test('Tokens handling', () => {
-  const token1 = {'name': '1234', 'uid': '1234', 'symbol': '1234'};
+test('Tokens handling', async () => {
   const token2 = {'name': 'abcd', 'uid': 'abcd', 'symbol': 'abcd'};
   const token3 = {'name': HATHOR_TOKEN_CONFIG.name, 'uid': HATHOR_TOKEN_CONFIG.uid};
   const myTokens = [token1, token2, token3];
@@ -167,12 +179,12 @@ test('Tokens handling', () => {
 
   // Validates configuration string before add
   const config = tokens.getConfigurationString(token1.uid, token1.name, token1.symbol);
-  expect(tokens.validateTokenToAddByConfigurationString(config).success).toBe(true);
-  expect(tokens.validateTokenToAddByConfigurationString(config, token2.uid).success).toBe(false);
-  expect(tokens.validateTokenToAddByConfigurationString(config+'a').success).toBe(false);
-  expect(tokens.validateTokenToAddByConfigurationString('').success).toBe(false);
+  await expect(tokens.validateTokenToAddByConfigurationString(config)).resolves.toBeInstanceOf(Object);
+  await expect(tokens.validateTokenToAddByConfigurationString(config, token2.uid)).rejects.toThrow(TokenValidationError);
+  await expect(tokens.validateTokenToAddByConfigurationString(config+'a')).rejects.toThrow(TokenValidationError);
+  await expect(tokens.validateTokenToAddByConfigurationString('')).rejects.toThrow(TokenValidationError);
 
   // Cant add the same token twice
   tokens.addToken(token1.uid, token1.name, token1.symbol)
-  expect(tokens.validateTokenToAddByConfigurationString(config).success).toBe(false);
+  await expect(tokens.validateTokenToAddByConfigurationString(config)).rejects.toThrow(TokenValidationError);
 });
