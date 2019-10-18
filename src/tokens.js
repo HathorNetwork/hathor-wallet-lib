@@ -93,16 +93,19 @@ const tokens = {
    *
    * @param {string} uid Token uid to be unregistered
    *
-   * @return {Array} array of token configs without the unregister one
+   * @return {Promise} promise that will be resolved with an array of tokens (after unregister) if succeds and the error in case of failure
    *
    * @memberof Tokens
    * @inner
    */
   unregisterToken(uid) {
-    const tokens = this.getTokens();
-    const filteredTokens = tokens.filter((token) => token.uid !== uid);
-    this.saveToStorage(filteredTokens);
-    return filteredTokens;
+    const promise = new Promise((resolve, _) => {
+      const tokens = this.getTokens();
+      const filteredTokens = tokens.filter((token) => token.uid !== uid);
+      this.saveToStorage(filteredTokens);
+      resolve(filteredTokens);
+    });
+    return promise;
   },
 
   /**
