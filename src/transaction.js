@@ -422,11 +422,7 @@ const transaction = {
   getOutputsSum(outputs) {
     let sumOutputs = 0;
     for (let output of outputs) {
-      // XXX wallet.js has method isAuthorityOutput, but it expects an output
-      // with key 'token_data', not 'tokenData' like we have here. The difference
-      // happens because sendTransaction() expects the tx data using key
-      // 'tokenData', while tx information on storage uses 'token_data'
-      if (output.tokenData & TOKEN_AUTHORITY_MASK) {
+      if (this.isTokenDataAuthority(output.tokenData)) {
         continue
       }
       sumOutputs += output.value;
@@ -661,6 +657,20 @@ const transaction = {
    */
   clearTransactionWeightConstants() {
     this._weightConstants = null;
+  },
+
+  /*
+   * Verifies if output is an authority one checking with authority mask
+   *
+   * @param {Object} output Output object with 'token_data' key
+   *
+   * @return {boolean} if output is authority
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  isTokenDataAuthority(tokenData) {
+    return (tokenData & TOKEN_AUTHORITY_MASK) > 0
   },
 }
 
