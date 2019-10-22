@@ -660,13 +660,13 @@ const transaction = {
   },
 
   /*
-   * Verifies if output is an authority one checking with authority mask
+   * Returns if token data indicates an authority output or not
    *
-   * @param {Object} output Output object with 'token_data' key
+   * @param {number} tokenData The token data
    *
-   * @return {boolean} if output is authority
+   * @return {boolean} if token data indicates authority output
    *
-   * @memberof Wallet
+   * @memberof Transaction
    * @inner
    */
   isTokenDataAuthority(tokenData) {
