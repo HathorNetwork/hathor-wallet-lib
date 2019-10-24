@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, NETWORK, TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, MAX_OUTPUT_VALUE, HASH_KEY_SIZE, HASH_ITERATIONS } from './constants';
+import { GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, NETWORK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, MAX_OUTPUT_VALUE, HASH_KEY_SIZE, HASH_ITERATIONS } from './constants';
 import Mnemonic from 'bitcore-mnemonic';
 import { HDPublicKey, Address } from 'bitcore-lib';
 import CryptoJS from 'crypto-js';
@@ -1156,7 +1156,7 @@ const wallet = {
    * @inner
    */
   isAuthorityOutput(output) {
-    return (output.token_data & TOKEN_AUTHORITY_MASK) > 0
+    return transaction.isTokenDataAuthority(output.token_data);
   },
 
   /*
