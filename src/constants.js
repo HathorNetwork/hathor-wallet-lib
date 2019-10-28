@@ -112,16 +112,19 @@ export const TOKEN_INDEX_MASK = 0b01111111
 
 /**
  * Mask to check if it's authority output (first bit indicates it)
+ * For further information: https://gitlab.com/HathorNetwork/rfcs/blob/master/text/0004-tokens.md
  */
 export const TOKEN_AUTHORITY_MASK = 0b10000000
 
 /**
  * Mask to check if it's mint UTXO (last bit indicates it)
+ * For further information: https://gitlab.com/HathorNetwork/rfcs/blob/master/text/0004-tokens.md
  */
 export const TOKEN_MINT_MASK = 0b00000001
 
 /**
  * Mask to check if it's melt UTXO (second to last bit indicates it)
+ * For further information: https://gitlab.com/HathorNetwork/rfcs/blob/master/text/0004-tokens.md
  */
 export const TOKEN_MELT_MASK = 0b00000010
 
