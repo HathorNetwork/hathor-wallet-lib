@@ -168,6 +168,14 @@ test('Create input data', () => {
   expect(transaction.createInputData(signature, pubkeyBytes2).length).toBe(123);
 });
 
+test('Calculate outputs sum', () => {
+  let outputs = [];
+  outputs.push({'address': 'a', value: 5, tokenData: 0}); // regular htr transfer
+  outputs.push({'address': 'a', value: 4, tokenData: 1}); // regular token transfer
+  outputs.push({'address': 'a', value: 3, tokenData: 0b10000001});  // token authority transfer
+  expect(transaction.getOutputsSum(outputs)).toBe(9);
+});
+
 test('Prepare data to send tokens', async (done) => {
   // Now we will update the data in the inputs
   let words = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';

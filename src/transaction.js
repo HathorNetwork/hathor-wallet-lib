@@ -6,7 +6,7 @@
  */
 
 import { OP_GREATERTHAN_TIMESTAMP, OP_DUP, OP_HASH160, OP_EQUALVERIFY, OP_CHECKSIG, OP_PUSHDATA1 } from './opcodes';
-import { DECIMAL_PLACES, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, TOKEN_INFO_VERSION, MAX_OUTPUT_VALUE_32, MAX_OUTPUT_VALUE, P2PKH_BYTE, P2SH_BYTE } from './constants';
+import { DECIMAL_PLACES, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, TOKEN_INFO_VERSION, MAX_OUTPUT_VALUE_32, MAX_OUTPUT_VALUE, P2PKH_BYTE, P2SH_BYTE, TOKEN_AUTHORITY_MASK } from './constants';
 import { HDPrivateKey, crypto, encoding, util } from 'bitcore-lib';
 import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid } from './errors';
 import dateFormatter from './date';
@@ -382,7 +382,7 @@ const transaction = {
    * @param {Object} txData Object with inputs and outputs
    * {
    *  'inputs': [{'tx_id', 'index'}],
-   *  'outputs': ['address', 'value', 'timelock'],
+   *  'outputs': [{'address', 'value', 'tokenData'}],
    *  'version': 1,
    *  'weight': 0,
    *  'nonce': 0,
@@ -402,12 +402,9 @@ const transaction = {
     // Parents are always two and have 32 bytes each
     txSize += 64
 
-    let sumOutputs = 0;
-    for (let output of txData.outputs) {
-      sumOutputs += output.value;
-    }
-
-    sumOutputs = Math.max(1, sumOutputs); // Preventing division by 0 when handling authority methods that have no outputs
+    let sumOutputs = this.getOutputsSum(txData.outputs);
+    // Preventing division by 0 when handling authority methods that have no outputs
+    sumOutputs = Math.max(1, sumOutputs);
 
     // We need to take into consideration the decimal places because it is inside the amount.
     // For instance, if one wants to transfer 20 HTRs, the amount will be 2000.
@@ -424,6 +421,31 @@ const transaction = {
   },
 
   /**
+   * Calculate the sum of outputs. Authority outputs are ignored.
+   * 
+   * @param {Array} outputs
+   * [{
+   *  'address': str,
+   *  'value': int,
+   *  'tokenData': int,
+   * }]
+   *
+   * @return {number} Sum of outputs
+   * @memberof Transaction
+   * @inner
+   */
+  getOutputsSum(outputs) {
+    let sumOutputs = 0;
+    for (let output of outputs) {
+      if (this.isTokenDataAuthority(output.tokenData)) {
+        continue
+      }
+      sumOutputs += output.value;
+    }
+    return sumOutputs;
+  },
+
+  /**
    * Complete the txData
    *
    * Add weight, nonce, version, and timestamp to the txData
@@ -431,7 +453,7 @@ const transaction = {
    * @param {Object} txData Object with inputs and outputs
    * {
    *  'inputs': [{'tx_id', 'index'}],
-   *  'outputs': ['address', 'value', 'timelock'],
+   *  'outputs': [{'address', 'value', 'tokenData'}],
    * }
    *
    * @throws {ConstantNotSet} If the weight constants are not set yet
@@ -713,6 +735,20 @@ const transaction = {
     // Token symbol
     arr.push(symbolBytes);
     return arr;
+  },
+
+  /*
+   * Returns if token data indicates an authority output or not
+   *
+   * @param {number} tokenData The token data
+   *
+   * @return {boolean} if token data indicates authority output
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  isTokenDataAuthority(tokenData) {
+    return (tokenData & TOKEN_AUTHORITY_MASK) > 0
   },
 }
 
