@@ -6,9 +6,9 @@
  */
 
 import { OP_GREATERTHAN_TIMESTAMP, OP_DUP, OP_HASH160, OP_EQUALVERIFY, OP_CHECKSIG, OP_PUSHDATA1 } from './opcodes';
-import { DECIMAL_PLACES, DEFAULT_TX_VERSION, MAX_OUTPUT_VALUE_32, MAX_OUTPUT_VALUE, TOKEN_AUTHORITY_MASK, P2PKH_BYTE, P2SH_BYTE } from './constants';
+import { DECIMAL_PLACES, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, TOKEN_INFO_VERSION, MAX_OUTPUT_VALUE_32, MAX_OUTPUT_VALUE, P2PKH_BYTE, P2SH_BYTE, TOKEN_AUTHORITY_MASK } from './constants';
 import { HDPrivateKey, crypto, encoding, util } from 'bitcore-lib';
-import { AddressError, OutputValueError, ConstantNotSet } from './errors';
+import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid } from './errors';
 import dateFormatter from './date';
 import helpers from './helpers';
 import storage from './storage';
@@ -262,16 +262,25 @@ const transaction = {
   dataToSign(txData) {
     let arr = []
     // Tx version
-    arr.push(this.intToBytes(DEFAULT_TX_VERSION, 2))
+    arr.push(this.intToBytes(txData.version, 2))
+
+    // Len tokens
+    if ('tokens' in txData) {
+      // Create token tx does not have tokens array
+      arr.push(this.intToBytes(txData.tokens.length, 1))
+    }
+
     // Len inputs
     arr.push(this.intToBytes(txData.inputs.length, 1))
     // Len outputs
     arr.push(this.intToBytes(txData.outputs.length, 1))
-    // Len tokens
-    arr.push(this.intToBytes(txData.tokens.length, 1))
 
-    for (const token of txData.tokens) {
-      arr.push(new encoding.BufferReader(token).buf);
+    // Tokens data
+    if ('tokens' in txData) {
+      // Create token tx does not have tokens array
+      for (const token of txData.tokens) {
+        arr.push(new encoding.BufferReader(token).buf);
+      }
     }
 
     for (let inputTx of txData.inputs) {
@@ -290,6 +299,12 @@ const transaction = {
       arr.push(this.intToBytes(outputScript.length, 2));
       arr.push(outputScript);
     }
+
+    if (txData.version === CREATE_TOKEN_TX_VERSION) {
+      // Create token tx need to add extra information
+      arr = [...arr, ...this.serializeTokenInfo(txData)];
+    }
+
     return util.buffer.concat(arr);
   },
 
@@ -457,11 +472,28 @@ const transaction = {
 
     // Update incompleteTxData.
     Object.assign(incompleteTxData, newData);
+  },
 
+  /**
+   * Update weight from tx data (if not set yet)
+   *
+   * @param {Object} data Object with complete tx data
+   * {
+   *  'inputs': [{'tx_id', 'index'}],
+   *  'outputs': ['address', 'value', 'timelock'],
+   *  'nonce': 0,
+   *  'version': 1,
+   *  'timestamp': 123,
+   * }
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  setWeightIfNeeded(data) {
     // Calculate tx weight if needed.
-    if (incompleteTxData.weight == 0) {
-      let minimumWeight = this.calculateTxWeight(incompleteTxData);
-      incompleteTxData['weight'] = minimumWeight;
+    if (!('weight' in data) || data.weight === 0) {
+      let minimumWeight = this.calculateTxWeight(data);
+      data['weight'] = minimumWeight;
     }
   },
 
@@ -488,16 +520,20 @@ const transaction = {
     // Serialize first the funds part
     //
     // Tx version
-    arr.push(this.intToBytes(DEFAULT_TX_VERSION, 2))
-    // Len tokens
-    arr.push(this.intToBytes(txData.tokens.length, 1))
+    arr.push(this.intToBytes(txData.version, 2))
+    if ('tokens' in txData) {
+      // Len tokens
+      arr.push(this.intToBytes(txData.tokens.length, 1))
+    }
     // Len inputs
     arr.push(this.intToBytes(txData.inputs.length, 1))
     // Len outputs
     arr.push(this.intToBytes(txData.outputs.length, 1))
 
-    for (const token of txData.tokens) {
-      arr.push(new encoding.BufferReader(token).buf);
+    if ('tokens' in txData) {
+      for (const token of txData.tokens) {
+        arr.push(new encoding.BufferReader(token).buf);
+      }
     }
 
     for (let inputTx of txData.inputs) {
@@ -515,6 +551,11 @@ const transaction = {
       let outputScript = this.createOutputScript(outputTx.address, outputTx.timelock);
       arr.push(this.intToBytes(outputScript.length, 2));
       arr.push(outputScript);
+    }
+
+    if (txData.version === CREATE_TOKEN_TX_VERSION) {
+      // Add create token tx serialization
+      arr = [...arr, ...this.serializeTokenInfo(txData)];
     }
 
     // Now serialize the graph part
@@ -583,15 +624,18 @@ const transaction = {
     const { minimumTimestamp } = fnOptions;
     const promise = new Promise((resolve, reject) => {
       try {
-        const dataToSign = transaction.dataToSign(data);
-        data = transaction.signTx(data, dataToSign, pin);
-
         // Completing data in the same object
         transaction.completeTx(data);
+
+        const dataToSign = transaction.dataToSign(data);
+        data = transaction.signTx(data, dataToSign, pin);
 
         if (data.timestamp < minimumTimestamp) {
           data.timestamp = minimumTimestamp;
         }
+
+        // Set weight only after completing all the fields
+        transaction.setWeightIfNeeded(data);
 
         const txBytes = transaction.txToBytes(data);
         const txHex = util.buffer.bufferToHex(txBytes);
@@ -606,7 +650,7 @@ const transaction = {
           reject(e.message);
         });
       } catch (e) {
-        if (e instanceof AddressError || e instanceof OutputValueError || e instanceof ConstantNotSet) {
+        if (e instanceof AddressError || e instanceof OutputValueError || e instanceof ConstantNotSet || e instanceof CreateTokenTxInvalid) {
           reject(e.message);
         } else {
           // Unhandled error
@@ -657,6 +701,40 @@ const transaction = {
    */
   clearTransactionWeightConstants() {
     this._weightConstants = null;
+  },
+
+  /**
+   * Serialize create token tx info to bytes
+   *
+   * @param {Object} txData Object with name and symbol of token
+   * {
+   *  'name': 'TokenName',
+   *  'symbol': 'TKN',
+   * }
+   *
+   * @return {Array} array of bytes
+   * @memberof Transaction
+   * @inner
+   */
+  serializeTokenInfo(txData) {
+    if (!('name' in txData) || !('symbol' in txData)) {
+      throw new CreateTokenTxInvalid('Token name and symbol are required when creating a new token');
+    }
+
+    const nameBytes = buffer.Buffer.from(txData.name, 'utf8');
+    const symbolBytes = buffer.Buffer.from(txData.symbol, 'utf8');
+    const arr = [];
+    // Token info version
+    arr.push(this.intToBytes(TOKEN_INFO_VERSION, 1));
+    // Token name size
+    arr.push(this.intToBytes(nameBytes.length, 1));
+    // Token name
+    arr.push(nameBytes);
+    // Token symbol size
+    arr.push(this.intToBytes(symbolBytes.length, 1));
+    // Token symbol
+    arr.push(symbolBytes);
+    return arr;
   },
 
   /*

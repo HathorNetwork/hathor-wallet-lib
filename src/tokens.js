@@ -12,8 +12,8 @@ import wallet from './wallet';
 import storage from './storage';
 import helpers from './helpers';
 import walletApi from './api/wallet';
-import { InsufficientFundsError, ConstantNotSet } from './errors';
-import { HATHOR_TOKEN_CONFIG, TOKEN_CREATION_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, AUTHORITY_TOKEN_DATA } from './constants';
+import { InsufficientFundsError, ConstantNotSet, TokenValidationError } from './errors';
+import { CREATE_TOKEN_TX_VERSION, HATHOR_TOKEN_CONFIG, TOKEN_MINT_MASK, TOKEN_MELT_MASK, AUTHORITY_TOKEN_DATA } from './constants';
 
 
 /**
@@ -93,16 +93,19 @@ const tokens = {
    *
    * @param {string} uid Token uid to be unregistered
    *
-   * @return {Array} array of token configs without the unregister one
+   * @return {Promise} promise that will be resolved with an array of tokens (after unregister) if succeds and the error in case of failure
    *
    * @memberof Tokens
    * @inner
    */
   unregisterToken(uid) {
-    const tokens = this.getTokens();
-    const filteredTokens = tokens.filter((token) => token.uid !== uid);
-    this.saveToStorage(filteredTokens);
-    return filteredTokens;
+    const promise = new Promise((resolve, _) => {
+      const tokens = this.getTokens();
+      const filteredTokens = tokens.filter((token) => token.uid !== uid);
+      this.saveToStorage(filteredTokens);
+      resolve(filteredTokens);
+    });
+    return promise;
   },
 
   /**
@@ -112,45 +115,72 @@ const tokens = {
    * @param {string} config Token configuration string
    * @param {string} uid Uid to check if matches with uid from config (optional)
    *
-   * @return {Object} {success: boolean, message: in case of failure, tokenData: object with token data in case of success}
+   * @return {Promise} Promise that resolves when validation finishes. Resolves with tokenData {uid, name, symbol} and reject with TokenValidationError
    *
    * @memberof Tokens
    * @inner
    */
   validateTokenToAddByConfigurationString(config, uid) {
-    const tokenData = this.getTokenFromConfigurationString(config);
-    if (tokenData === null) {
-      return {success: false, message: 'Invalid configuration string'};
-    }
-    if (uid && uid !== tokenData.uid) {
-      return {success: false, message: `Configuration string uid does not match: ${uid} != ${tokenData.uid}`};
-    }
+    const promise = new Promise((resolve, reject) => {
+      const tokenData = this.getTokenFromConfigurationString(config);
+      if (tokenData === null) {
+        reject(new TokenValidationError('Invalid configuration string'));
+      }
+      if (uid && uid !== tokenData.uid) {
+        reject(new TokenValidationError(`Configuration string uid does not match: ${uid} != ${tokenData.uid}`));
+      }
 
-    const validation = this.validateTokenToAddByUid(tokenData.uid);
-    if (validation.success) {
-      return {success: true, tokenData: tokenData};
-    } else {
-      return validation;
-    }
+      const promiseValidation = this.validateTokenToAddByUid(tokenData.uid, tokenData.name, tokenData.symbol);
+      promiseValidation.then(() => {
+        resolve(tokenData);
+      }, (error) => {
+        reject(error);
+      });
+    });
+    return promise;
   },
 
   /**
-   * Validation token by uid. Check if already exist
+   * Validation token by uid.
+   * Check if this uid was already added, if name and symbol match with the information in the DAG,
+   * and if already have another token with this name or symbol already added
    *
    * @param {string} uid Uid to check for existence
+   * @param {string} name Token name to execute validation
+   * @param {string} symbol Token symbol to execute validation
    *
-   * @return {Object} {success: boolean, message: in case of failure}
+   * @return {Promise} Promise that will be resolved when validation finishes. Resolve with no data and reject with TokenValidationError
    *
    * @memberof Tokens
    * @inner
    */
-  validateTokenToAddByUid(uid) {
-    const existedToken = this.tokenExists(uid);
-    if (existedToken) {
-      return {success: false, message: `You already have this token: ${uid} (${existedToken.name})`};
-    }
+  validateTokenToAddByUid(uid, name, symbol) {
+    const promise = new Promise((resolve, reject) => {
+      // Validate if token uid was already added
+      const token = this.tokenExists(uid);
+      if (token) {
+        reject(new TokenValidationError(`You already have this token: ${uid} (${token.name})`));
+      }
 
-    return {success: true};
+
+      // Validate if already have another token with this same name and symbol added
+      const tokenInfo = this.tokenInfoExists(name, symbol);
+      if (tokenInfo) {
+        reject(new TokenValidationError(`You already have a token with this ${tokenInfo.key}: ${tokenInfo.token.uid} - ${tokenInfo.token.name} (${tokenInfo.token.symbol})`));
+      }
+
+      // Validate if name and symbol match with the token info in the DAG
+      walletApi.getGeneralTokenInfo(uid, (response) => {
+        if (response.name !== name) {
+          reject(new TokenValidationError(`Token name does not match with the real one. Added: ${name}. Real: ${response.name}`));
+        } else if (response.symbol !== symbol) {
+          reject(new TokenValidationError(`Token symbol does not match with the real one. Added: ${symbol}. Real: ${response.symbol}`));
+        } else {
+          resolve();
+        }
+      });
+    });
+    return promise;
   },
 
   /**
@@ -260,6 +290,30 @@ const tokens = {
   },
 
   /**
+   * Validates if already has a token with same name or symbol added in the wallet
+   *
+   * @param {string} name Token name to search
+   * @param {string} symbol Token symbol to search
+   *
+   * @return {Object|null} Token if name or symbol already exists, else null
+   *
+   * @memberof Tokens
+   * @inner
+   */
+  tokenInfoExists(name, symbol) {
+    const tokens = this.getTokens();
+    for (const token of tokens) {
+      if (helpers.cleanupString(token.name) === helpers.cleanupString(name)) {
+        return {token, key: 'name'};
+      }
+      if (helpers.cleanupString(token.symbol) === helpers.cleanupString(symbol)) {
+        return {token, key: 'symbol'};
+      }
+    }
+    return null;
+  },
+
+  /**
    * Create the tx for the new token in the backend and creates a new mint and melt outputs to be used in the future
    *
    * @param {string} address Address to receive the amount of the generated token
@@ -275,59 +329,31 @@ const tokens = {
    */
   createToken(address, name, symbol, mintAmount, pin) {
     const promise = new Promise((resolve, reject) => {
-      // get the input used to create token UID.
-      // We use getMintDepositInfo here as it'll raise an error if we don't have enough HTR tokens
-      // for minting the requested amount, before the token uid creation tx happens
-      let inputs, inputsAmount, outputs, outputChange;
-      try {
-        ({inputs, inputsAmount, outputs} = this.getMintDepositInfo(mintAmount));
-        outputChange = wallet.getOutputChange(inputsAmount, 0);
-      } catch (e) {
-        if (e instanceof InsufficientFundsError) {
-          reject(e);
-        } else {
-          // Unhandled error
-          throw e;
-        }
-      }
+      const mintOptions = {
+        createAnotherMint: true,
+        createMelt: true,
+      };
 
-      // Create authority output
-      // First the tokens masks that will be the value for the authority output
-      const tokenMasks = TOKEN_CREATION_MASK | TOKEN_MINT_MASK | TOKEN_MELT_MASK;
-      // Create token uid
-      const tokenUidBytes = this.getTokenUID(inputs[0].tx_id, inputs[0].index);
-      const authorityOutput = {address: address, value: tokenMasks, tokenData: AUTHORITY_TOKEN_DATA};
+      const txData = this.createMintData(null, null, address, mintAmount, null, mintOptions);
 
-      // Create tx data
-      // on this tx, we aggregate all inputs that will later be used for token deposit, meaning we may
-      // have one or more HTR inputs and only one HTR output, with the sum of HTR tokens. This output
-      // will be used on the next tx for the deposit.
-      const txData = {inputs: inputs, outputs: [authorityOutput, outputChange], tokens: [tokenUidBytes]};
+      // Set create token tx version value
+      const createTokenTxData = Object.assign(txData, {
+        version: CREATE_TOKEN_TX_VERSION,
+        name,
+        symbol,
+      });
 
-      // send initial tx
-      const txPromise = transaction.sendTransaction(txData, pin);
+      const txPromise = transaction.sendTransaction(createTokenTxData, pin);
       txPromise.then((response) => {
         // Save in storage new token configuration
-        const tokenUid = response.tx.tokens[0];
+        const tokenUid = response.tx.hash;
         this.addToken(tokenUid, name, symbol);
-        // create mint tx
-        const mintInput = {tx_id: response.tx.hash, index: 0, address: address};
-        const depositInputs = {
-          inputs: [{tx_id: response.tx.hash, index: 1, address: outputChange.address, token: 0}],
-          amount: outputChange.value,
-        };
-        const mintPromise = this.mintTokens(mintInput, tokenUid, address, mintAmount, depositInputs, pin, {
-          createAnotherMint: true,
-          createMelt: true,
-          minimumTimestamp: response.tx.timestamp + 1,
-        });
-        mintPromise.then(() => {
-          resolve({uid: tokenUid, name, symbol});
-        }, (error) => {
-          reject(error);
-        });
-      }, (error) => {
-        reject(error);
+        resolve({uid: tokenUid, name, symbol});
+      }, (message) => {
+        // I need to reject an error because we've changed the createMintData to reject an error
+        // Changing sendTransaction method to reject an error also would require refactor in other methods
+        // We already have an issue to always reject an error but while we don't do it, we need this
+        reject(new Error(message));
       });
     });
     return promise;
@@ -394,7 +420,10 @@ const tokens = {
     }
 
     // Input targeting the output that contains the mint authority output
-    inputs.push({'tx_id': mintInput.tx_id, 'index': mintInput.index, 'token': token, 'address': mintInput.address});
+    if (mintInput) {
+      // Create token tx does not spend a mint input
+      inputs.push({'tx_id': mintInput.tx_id, 'index': mintInput.index, 'token': token, 'address': mintInput.address});
+    }
 
     // Output1: Mint token amount
     outputs.push({'address': address, 'value': amount, 'tokenData': 1});
@@ -412,7 +441,12 @@ const tokens = {
     }
 
     // Create new data
-    const newTxData = {'inputs': inputs, 'outputs': outputs, 'tokens': [token]};
+    const newTxData = {'inputs': inputs, 'outputs': outputs};
+
+    if (token) {
+      // Create token tx does not have tokens array
+      newTxData['tokens'] = [token];
+    }
     return newTxData;
   },
 
@@ -732,7 +766,7 @@ const tokens = {
     const depositAmount = helpers.getDepositAmount(mintAmount);
     const htrInputs = wallet.getInputsFromAmount(data.historyTransactions, depositAmount, HATHOR_TOKEN_CONFIG.uid);
     if (htrInputs.inputsAmount < depositAmount) {
-      throw new InsufficientFundsError(`Not enough HTR tokens for deposit: ${depositAmount} required, ${htrInputs.inputsAmount} available`);
+      throw new InsufficientFundsError(`Not enough HTR tokens for deposit: ${helpers.prettyValue(depositAmount)} required, ${helpers.prettyValue(htrInputs.inputsAmount)} available`);
     }
     if (htrInputs.inputsAmount > depositAmount) {
       // Need to create change output
@@ -779,6 +813,20 @@ const tokens = {
    */
   clearDepositPercentage() {
     this._depositPercentage = null;
+  },
+
+  /**
+   * Checks if the uid passed is from Hathor token
+   *
+   * @param {string} uid UID to check if is Hathor's
+   *
+   * @return {boolean} true if is Hathor uid, false otherwise
+   *
+   * @memberof Tokens
+   * @inner
+   */
+  isHathorToken(uid) {
+    return uid === HATHOR_TOKEN_CONFIG.uid;
   },
 }
 

@@ -9,7 +9,7 @@ import path from 'path';
 
 import storage from './storage';
 import tokens from './tokens';
-import { GENESIS_BLOCK, DECIMAL_PLACES, DEFAULT_SERVER } from './constants';
+import { BLOCK_VERSION, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, GENESIS_BLOCK, DECIMAL_PLACES, DEFAULT_SERVER } from './constants';
 
 /**
  * Helper methods
@@ -56,8 +56,15 @@ const helpers = {
     if (this.isBlock(tx)) {
       return 'Block';
     } else {
-      return 'Transaction';
+      if (tx.version === DEFAULT_TX_VERSION) {
+        return 'Transaction';
+      } else if (tx.version === CREATE_TOKEN_TX_VERSION) {
+        return 'Create token transaction';
+      }
     }
+
+    // If there is no match
+    return 'Unknown';
   },
 
   /**
@@ -71,13 +78,7 @@ const helpers = {
    * @inner
    */
   isBlock(tx) {
-    if (GENESIS_BLOCK.indexOf(tx.tx_id) > -1) {
-      return true;
-    }
-    if (tx.inputs.length === 0) {
-      return true;
-    }
-    return false;
+    return tx.version === BLOCK_VERSION;
   },
 
 
@@ -328,6 +329,20 @@ const helpers = {
   getWithdrawAmount(meltAmount) {
     return Math.floor(tokens.getDepositPercentage() * meltAmount);
   },
+
+  /**
+   * Cleans a string for comparison. Remove multiple spaces, and spaces at the beginning and end, and transform to lowercase.
+   *
+   * @param {string} string String to be cleaned
+   *
+   * @return {string} String after clean
+   * @memberof Helpers
+   * @inner
+   *
+   */
+  cleanupString(string) {
+    return string.replace(/\s\s+/g, ' ').trim().toLowerCase();
+  }
 }
 
 export default helpers;

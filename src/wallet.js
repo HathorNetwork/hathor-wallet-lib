@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, NETWORK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, MAX_OUTPUT_VALUE, HASH_KEY_SIZE, HASH_ITERATIONS } from './constants';
+import { GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, NETWORK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, TOKEN_INDEX_MASK, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, MAX_OUTPUT_VALUE, HASH_KEY_SIZE, HASH_ITERATIONS } from './constants';
 import Mnemonic from 'bitcore-mnemonic';
 import { HDPublicKey, Address } from 'bitcore-lib';
 import CryptoJS from 'crypto-js';
@@ -1497,7 +1497,7 @@ const wallet = {
         if (txin.decoded.token_data === HATHOR_TOKEN_INDEX) {
           tokenUID = HATHOR_TOKEN_CONFIG.uid;
         } else {
-          tokenUID = tx.tokens[txin.decoded.token_data - 1];
+          tokenUID = tx.tokens[this.getTokenIndex(txin.decoded.token_data) - 1].uid;
         }
         if (tokenUID in balance) {
           balance[tokenUID] -= txin.value;
@@ -1516,7 +1516,7 @@ const wallet = {
         if (txout.decoded.token_data === HATHOR_TOKEN_INDEX) {
           tokenUID = HATHOR_TOKEN_CONFIG.uid;
         } else {
-          tokenUID = tx.tokens[txout.decoded.token_data - 1];
+          tokenUID = tx.tokens[this.getTokenIndex(txout.decoded.token_data) - 1].uid;
         }
         if (tokenUID in balance) {
           balance[tokenUID] += txout.value;
@@ -1566,6 +1566,20 @@ const wallet = {
       }
     }
     return mine;
+  },
+
+  /**
+   * Get index of token list of the output
+   *
+   * @param {number} token_data Token data of the output
+   *
+   * @return {number} Index of the token of this output
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  getTokenIndex(token_data) {
+    return token_data & TOKEN_INDEX_MASK;
   },
 }
 

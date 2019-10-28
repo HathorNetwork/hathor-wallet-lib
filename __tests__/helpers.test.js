@@ -28,6 +28,7 @@ test('Update list', () => {
 
 test('Transaction type', () => {
   const transaction1 = {
+    'version': 1,
     'tx_id': '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e',
     'inputs': [],
     'outputs': [
@@ -53,6 +54,7 @@ test('Transaction type', () => {
   };
 
   const transaction2 = {
+    'version': 1,
     'tx_id': '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295d',
     'inputs': [
       {
@@ -83,6 +85,7 @@ test('Transaction type', () => {
   };
 
   const genesisBlock = {
+    'version': 0,
     'tx_id': '000164e1e7ec7700a18750f9f50a1a9b63f6c7268637c072ae9ee181e58eb01b',
     'inputs': [],
     'outputs': [
@@ -98,7 +101,7 @@ test('Transaction type', () => {
     ]
   };
 
-  expect(helpers.getTxType(transaction1).toLowerCase()).toBe('block');
+  expect(helpers.getTxType(transaction1).toLowerCase()).toBe('transaction');
   expect(helpers.getTxType(transaction2).toLowerCase()).toBe('transaction');
   expect(helpers.getTxType(genesisBlock).toLowerCase()).toBe('block');
 });
