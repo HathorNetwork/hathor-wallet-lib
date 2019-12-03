@@ -7,7 +7,7 @@
 
 import { GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, NETWORK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, TOKEN_INDEX_MASK, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, MAX_OUTPUT_VALUE, HASH_KEY_SIZE, HASH_ITERATIONS } from './constants';
 import Mnemonic from 'bitcore-mnemonic';
-import { HDPublicKey, Address } from 'bitcore-lib';
+import { HDPublicKey, Address, crypto } from 'bitcore-lib';
 import CryptoJS from 'crypto-js';
 import walletApi from './api/wallet';
 import tokens from './tokens';
@@ -103,7 +103,6 @@ const wallet = {
    * @inner
    */
   executeGenerateWallet(words, passphrase, pin, password, loadHistory) {
-    WebSocketHandler.setup();
     let code = new Mnemonic(words);
     let xpriv = code.toHDPrivateKey(passphrase, NETWORK);
     let privkey = xpriv.derive(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
@@ -123,12 +122,30 @@ const wallet = {
       pbkdf2Hasher: 'sha1', // For now we are only using SHA1
     }
 
+    return this.startWallet(access, privkey.xpubkey, loadHistory);
+  },
+
+  /**
+   * Set wallet data on storage and start it
+   *
+   * @param {Object} accessData Object of data to be saved on storage. Will be empty for hardware wallet and for software will have the keys
+   *                    (mainKey, hash, salt, words, hashPasswd, saltPasswd, hashIterations, pbkdf2Hasher) as set on executeGenerateWallet method
+   * @param {string} xpub Xpub string of the wallet being started
+   * @param {boolean} loadHistory if should load the history from the generated addresses
+   *
+   * @return {Promise} Promise that resolves when finishes loading address history, in case loadHistory = true, else returns null
+   * @memberof Wallet
+   * @inner
+   */
+  startWallet(accessData, xpub, loadHistory) {
+    WebSocketHandler.setup();
+    this.afterOpen();
     let walletData = {
       keys: {},
-      xpubkey: privkey.xpubkey,
+      xpubkey: xpub,
     }
 
-    storage.setItem('wallet:accessData', access);
+    storage.setItem('wallet:accessData', accessData);
     storage.setItem('wallet:data', walletData);
 
     let promise = null;
@@ -867,7 +884,7 @@ const wallet = {
     storage.removeItem('wallet:lastGeneratedIndex');
     storage.removeItem('wallet:lastUsedIndex');
     storage.removeItem('wallet:lastUsedAddress');
-    storage.removeItem('wallet:closed');
+    this.afterOpen();
   },
 
   /*
@@ -887,6 +904,7 @@ const wallet = {
     storage.removeItem('wallet:locked');
     storage.removeItem('wallet:tokens');
     storage.removeItem('wallet:sentry');
+    storage.removeItem('wallet:type');
   },
 
   /*
@@ -1057,7 +1075,7 @@ const wallet = {
    * @inner
    */
   wasClosed() {
-    return storage.getItem('wallet:closed') !== null;
+    return storage.getItem('wallet:closed') === true;
   },
 
   /*
@@ -1068,6 +1086,16 @@ const wallet = {
    */
   close() {
     storage.setItem('wallet:closed', true);
+  },
+
+  /*
+   * Set in storage as not closed
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  afterOpen() {
+    storage.setItem('wallet:closed', false);
   },
 
   /**
@@ -1580,6 +1608,96 @@ const wallet = {
    */
   getTokenIndex(token_data) {
     return token_data & TOKEN_INDEX_MASK;
+  },
+
+  /**
+   * Update wallet type (hardware or software) on storage
+   *
+   * @param {string} type Wallet type
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  setWalletType(type) {
+    storage.setItem('wallet:type', type);
+  },
+
+  /**
+   * Return if wallet is software
+   *
+   * @return {boolean} True if wallet is software and false otherwise
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  isSoftwareWallet() {
+    return storage.getItem('wallet:type') === 'software';
+  },
+
+  /**
+   * Return if wallet is hardware
+   *
+   * @return {boolean} True if wallet is hardware and false otherwise
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  isHardwareWallet() {
+    return storage.getItem('wallet:type') === 'hardware';
+  },
+
+  /**
+   * Return wallet type beautified as string
+   *
+   * @return {string} Wallet type as a pretty string
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  getWalletTypePretty() {
+    return this.isSoftwareWallet() ? 'Software Wallet' : 'Hardware Wallet';
+  },
+
+  /**
+   * Get xpub from data
+   *
+   * @param {Buffer} pubkey Compressed public key
+   * @param {Buffer} chainCode HDPublic key chaincode
+   * @param {Buffer} fingerprint parent fingerprint
+   *
+   * @return {String} Xpub
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  xpubFromData(pubkey, chainCode, fingerprint) {
+    const hdpubkey = new HDPublicKey({
+      network: NETWORK,
+      depth: 4,
+      parentFingerPrint: fingerprint,
+      childIndex: 0,
+      chainCode: chainCode,
+      publicKey: pubkey
+    });
+
+    return hdpubkey.xpubkey;
+  },
+
+  /**
+   * Get compressed public key from uncompressed
+   *
+   * @param {Buffer} pubkey Uncompressed public key
+   *
+   * @return {Buffer} Compressed public key
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  toPubkeyCompressed(pubkey) {
+    const x = pubkey.slice(1, 33);
+    const y = pubkey.slice(33, 65);
+    const point = new crypto.Point(x, y);
+    return crypto.Point.pointToCompressed(point);
   },
 }
 
