@@ -969,14 +969,14 @@ const wallet = {
    * @param {number} value Amount of the change output
    * @param {number} tokenData Token index of the output
    *
-   * @return {Object} {'address': string, 'value': number, 'tokenData': number}
+   * @return {Object} {'address': string, 'value': number, 'tokenData': number, 'isChange': true}
    *
    * @memberof Wallet
    * @inner
    */
   getOutputChange(value, tokenData) {
     const address = this.getAddressToUse();
-    return {'address': address, 'value': value, 'tokenData': tokenData};
+    return {'address': address, 'value': value, 'tokenData': tokenData, 'isChange': true};
   },
 
   /*
@@ -1321,6 +1321,8 @@ const wallet = {
         // Need to create change output
         let outputChange = wallet.getOutputChange(inputsAmount - outputsAmount, tokens.getTokenIndex(allTokens, token.uid));
         data['outputs'].push(outputChange);
+        // Shuffle outputs, so we don't have change output always in the same index
+        data['outputs'] = _.shuffle(data['outputs']);
       }
     }
     return {success: true, data};
