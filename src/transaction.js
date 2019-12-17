@@ -619,16 +619,22 @@ const transaction = {
   sendTransaction(data, pin, options) {
     const fnOptions = Object.assign({
       minimumTimestamp: 0,
+      getSignature: true,
+      completeTx: true,
     }, options);
 
-    const { minimumTimestamp } = fnOptions;
+    const { minimumTimestamp, getSignature, completeTx } = fnOptions;
     const promise = new Promise((resolve, reject) => {
       try {
-        // Completing data in the same object
-        transaction.completeTx(data);
+        if (completeTx) {
+          // Completing data in the same object
+          transaction.completeTx(data);
+        }
 
-        const dataToSign = transaction.dataToSign(data);
-        data = transaction.signTx(data, dataToSign, pin);
+        if (getSignature) {
+          const dataToSign = transaction.dataToSign(data);
+          data = transaction.signTx(data, dataToSign, pin);
+        }
 
         if (data.timestamp < minimumTimestamp) {
           data.timestamp = minimumTimestamp;
