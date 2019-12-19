@@ -1701,6 +1701,23 @@ const wallet = {
     const point = new crypto.Point(x, y);
     return crypto.Point.pointToCompressed(point);
   },
+
+  /**
+   * Get public key for specific key index derivation
+   *
+   * @param {number} index Index of the key to derive
+   *
+   * @return {Buffer} Public key
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  getPublicKey(index) {
+    const data = this.getWalletData();
+    const hdpubkey = HDPublicKey(data.xpubkey);
+    const key = hdpubkey.derive(index);
+    return key.publicKey.toBuffer();
+  },
 }
 
 export default wallet;
