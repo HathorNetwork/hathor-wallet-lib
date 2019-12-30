@@ -1129,11 +1129,8 @@ const wallet = {
     const accessData = storage.getItem('wallet:accessData');
     const walletData = this.getWalletData();
 
-    console.log('RELOAD DATAAA ', walletData);
-
     if (walletData === null) {
-      console.log('Wallet data null');
-      return new Promise.reject();
+      return Promise.reject();
     }
 
     this.cleanWallet();
