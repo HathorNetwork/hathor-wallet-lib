@@ -55,10 +55,10 @@ export const HATHOR_BIP44_CODE = 280;
  * Server options for the user to choose which one to connect
  */
 export const DEFAULT_SERVERS = [
-  'https://node1.alpha.testnet.hathor.network/v1a/',
-  'https://node2.alpha.testnet.hathor.network/v1a/',
-  'https://node3.alpha.testnet.hathor.network/v1a/',
-  'https://node4.alpha.testnet.hathor.network/v1a/',
+  'https://node1.mainnet.hathor.network/v1a/',
+  'https://node2.mainnet.hathor.network/v1a/',
+  'https://node3.mainnet.hathor.network/v1a/',
+  'https://node4.mainnet.hathor.network/v1a/',
 ];
 
 /**
