@@ -12,6 +12,7 @@ var txApi = require('./lib/api/txApi');
 var versionApi = require('./lib/api/version');
 var axios = require('./lib/api/axiosInstance');
 var storage = require('./lib/storage');
+var network = require('./lib/network');
 var MemoryStore = require('./lib/memory_store');
 
 module.exports = {
@@ -30,4 +31,5 @@ module.exports = {
   axios: axios,
   storage: storage.default,
   MemoryStore: MemoryStore.default,
+  network: network.default,
 }
