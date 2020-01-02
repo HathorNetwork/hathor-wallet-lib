@@ -6,12 +6,13 @@
  */
 
 import { OP_GREATERTHAN_TIMESTAMP, OP_DUP, OP_HASH160, OP_EQUALVERIFY, OP_CHECKSIG, OP_PUSHDATA1 } from './opcodes';
-import { DECIMAL_PLACES, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, TOKEN_INFO_VERSION, MAX_OUTPUT_VALUE_32, MAX_OUTPUT_VALUE, P2PKH_BYTE, P2SH_BYTE, TOKEN_AUTHORITY_MASK } from './constants';
+import { DECIMAL_PLACES, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, TOKEN_INFO_VERSION, MAX_OUTPUT_VALUE_32, MAX_OUTPUT_VALUE, TOKEN_AUTHORITY_MASK } from './constants';
 import { HDPrivateKey, crypto, encoding, util } from 'bitcore-lib';
 import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid } from './errors';
 import dateFormatter from './date';
 import helpers from './helpers';
 import storage from './storage';
+import network from './network';
 import wallet from './wallet';
 import buffer from 'buffer';
 import Long from 'long';
@@ -160,7 +161,7 @@ const transaction = {
 
     // Validate version byte. Should be the p2pkh or p2sh
     const firstByte = addressBytes[0];
-    if (firstByte !== P2PKH_BYTE && firstByte !== P2SH_BYTE) {
+    if (firstByte !== network.getVersionBytes().p2pkh && firstByte !== network.getVersionBytes().p2sh) {
       throw new AddressError(errorMessage);
     }
     return true;

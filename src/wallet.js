@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, NETWORK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, TOKEN_INDEX_MASK, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, MAX_OUTPUT_VALUE, HASH_KEY_SIZE, HASH_ITERATIONS } from './constants';
+import { GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, TOKEN_MINT_MASK, TOKEN_MELT_MASK, TOKEN_INDEX_MASK, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, MAX_OUTPUT_VALUE, HASH_KEY_SIZE, HASH_ITERATIONS } from './constants';
 import Mnemonic from 'bitcore-mnemonic';
 import { HDPublicKey, Address, crypto } from 'bitcore-lib';
 import CryptoJS from 'crypto-js';
@@ -15,6 +15,7 @@ import helpers from './helpers';
 import { OutputValueError } from './errors';
 import version from './version';
 import storage from './storage';
+import network from './network';
 import transaction from './transaction';
 import WebSocketHandler from './WebSocketHandler';
 import dateFormatter from './date';
@@ -104,7 +105,7 @@ const wallet = {
    */
   executeGenerateWallet(words, passphrase, pin, password, loadHistory) {
     let code = new Mnemonic(words);
-    let xpriv = code.toHDPrivateKey(passphrase, NETWORK);
+    let xpriv = code.toHDPrivateKey(passphrase, network.getNetwork());
     let privkey = xpriv.derive(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
 
     let encryptedData = this.encryptData(privkey.xprivkey, pin)
@@ -209,7 +210,7 @@ const wallet = {
       for (var i=startIndex; i<stopIndex; i++) {
         // Generate each key from index, encrypt and save
         let key = xpub.derive(i);
-        var address = Address(key.publicKey, NETWORK);
+        var address = Address(key.publicKey, network.getNetwork());
         dataJson.keys[address.toString()] = {privkey: null, index: i};
         addresses.push(address.toString());
 
@@ -524,7 +525,7 @@ const wallet = {
     let newIndex = lastSharedIndex + 1;
 
     const newKey = xpub.derive(newIndex);
-    const newAddress = Address(newKey.publicKey, NETWORK);
+    const newAddress = Address(newKey.publicKey, network.getNetwork());
 
     // Update address data and last generated indexes
     this.updateAddress(newAddress.toString(), newIndex);
@@ -1156,6 +1157,10 @@ const wallet = {
     const accessData = storage.getItem('wallet:accessData');
     const walletData = this.getWalletData();
 
+    if (walletData === null) {
+      return Promise.reject();
+    }
+
     this.cleanWallet();
     // Restart websocket connection
     WebSocketHandler.setup();
@@ -1447,7 +1452,7 @@ const wallet = {
       if (candidateIndex > lastSharedIndex) {
         const xpub = HDPublicKey(dataJson.xpubkey);
         const key = xpub.derive(candidateIndex);
-        const address = Address(key.publicKey, NETWORK).toString();
+        const address = Address(key.publicKey, network.getNetwork()).toString();
         newSharedIndex = candidateIndex;
         newSharedAddress = address;
         this.updateAddress(address, candidateIndex);
