@@ -1679,7 +1679,7 @@ const wallet = {
    */
   xpubFromData(pubkey, chainCode, fingerprint) {
     const hdpubkey = new HDPublicKey({
-      network: NETWORK,
+      network: network.getNetwork(),
       depth: 4,
       parentFingerPrint: fingerprint,
       childIndex: 0,
