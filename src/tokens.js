@@ -334,26 +334,30 @@ const tokens = {
         createMelt: true,
       };
 
-      const txData = this.createMintData(null, null, address, mintAmount, null, mintOptions);
+      const dataPromise = this.createMintData(null, null, address, mintAmount, null, mintOptions);
 
-      // Set create token tx version value
-      const createTokenTxData = Object.assign(txData, {
-        version: CREATE_TOKEN_TX_VERSION,
-        name,
-        symbol,
-      });
+      dataPromise.then((txData) => {
+        // Set create token tx version value
+        const createTokenTxData = Object.assign(txData, {
+          version: CREATE_TOKEN_TX_VERSION,
+          name,
+          symbol,
+        });
 
-      const txPromise = transaction.sendTransaction(createTokenTxData, pin);
-      txPromise.then((response) => {
-        // Save in storage new token configuration
-        const tokenUid = response.tx.hash;
-        this.addToken(tokenUid, name, symbol);
-        resolve({uid: tokenUid, name, symbol});
-      }, (message) => {
-        // I need to reject an error because we've changed the createMintData to reject an error
-        // Changing sendTransaction method to reject an error also would require refactor in other methods
-        // We already have an issue to always reject an error but while we don't do it, we need this
-        reject(new Error(message));
+        const txPromise = transaction.sendTransaction(createTokenTxData, pin);
+        txPromise.then((response) => {
+          // Save in storage new token configuration
+          const tokenUid = response.tx.hash;
+          this.addToken(tokenUid, name, symbol);
+          resolve({uid: tokenUid, name, symbol});
+        }, (message) => {
+          // I need to reject an error because we've changed the createMintData to reject an error
+          // Changing sendTransaction method to reject an error also would require refactor in other methods
+          // We already have an issue to always reject an error but while we don't do it, we need this
+          reject(new Error(message));
+        });
+      }, (e) => {
+        reject(e);
       });
     });
     return promise;
@@ -386,12 +390,12 @@ const tokens = {
    *
    * @throws {InsufficientFundsError} If not enough tokens for deposit
    *
-   * @return {Object} Mint data {'inputs', 'outputs', 'tokens'}
+   * @return {Promise} Promise resolved with object containing mint data {'inputs', 'outputs', 'tokens'}
    *
    * @memberof Tokens
    * @inner
    */
-  createMintData(mintInput, token, address, amount, depositInputs, options) {
+  async createMintData(mintInput, token, address, amount, depositInputs, options) {
     const fnOptions = Object.assign({
       createAnotherMint: true,
       createMelt: false,
@@ -403,7 +407,7 @@ const tokens = {
 
     if (!depositInputs) {
       // select HTR deposit inputs
-      const depositInfo = this.getMintDepositInfo(amount);
+      const depositInfo = await this.getMintDepositInfo(amount);
       inputs.push(...depositInfo.inputs);
       outputs.push(...depositInfo.outputs);
     } else {
@@ -493,7 +497,13 @@ const tokens = {
     const promise = new Promise((resolve, reject) => {
       let newTxData;
       try {
-        newTxData = this.createMintData(mintInput, token, address, amount, depositInputs, fnOptions);
+        const dataPromise = this.createMintData(mintInput, token, address, amount, depositInputs, fnOptions);
+        dataPromise.then((newTxData) => {
+          const sendPromise = transaction.sendTransaction(newTxData, pin, fnOptions);
+          sendPromise.then((result) => resolve(result), (error) => reject(error));
+        }, (e) => {
+          reject(e);
+        });
       } catch (e) {
         if (e instanceof InsufficientFundsError) {
           reject(e);
@@ -502,8 +512,6 @@ const tokens = {
           throw e;
         }
       }
-      const sendPromise = transaction.sendTransaction(newTxData, pin, fnOptions);
-      sendPromise.then((result) => resolve(result), (error) => reject(error));
     });
     return promise;
   },
@@ -755,16 +763,16 @@ const tokens = {
    *
    * @throws {InsufficientFundsError} If not enough tokens for deposit
    *
-   * @return {Object} Mint inputs/outputs data {'inputs', 'outputs'}
+   * @return {Promise} Promise resolved with object containing mint inputs/outputs data {'inputs', 'outputs'}
    *
    * @memberof Tokens
    * @inner
    */
-  getMintDepositInfo(mintAmount) {
+  async getMintDepositInfo(mintAmount) {
     const outputs = [];
     const data = wallet.getWalletData();
     const depositAmount = helpers.getDepositAmount(mintAmount);
-    const htrInputs = wallet.getInputsFromAmount(data.historyTransactions, depositAmount, HATHOR_TOKEN_CONFIG.uid);
+    const htrInputs = await wallet.getInputsFromAmount(data.historyTransactions, depositAmount, HATHOR_TOKEN_CONFIG.uid);
     if (htrInputs.inputsAmount < depositAmount) {
       throw new InsufficientFundsError(`Not enough HTR tokens for deposit: ${helpers.prettyValue(depositAmount)} required, ${helpers.prettyValue(htrInputs.inputsAmount)} available`);
     }

@@ -12,7 +12,7 @@ import CryptoJS from 'crypto-js';
 import walletApi from './api/wallet';
 import tokens from './tokens';
 import helpers from './helpers';
-import { OutputValueError } from './errors';
+import { ConstantNotSet, OutputValueError } from './errors';
 import version from './version';
 import storage from './storage';
 import network from './network';
@@ -50,6 +50,12 @@ import _ from 'lodash';
  * @namespace Wallet
  */
 const wallet = {
+
+  /*
+   * Should never be accessed directly, only through get method
+   */
+  _rewardSpendMinBlocks: null,
+
   /**
    * Verify if words passed to generate wallet are valid. In case of invalid, returns message
    *
@@ -678,7 +684,7 @@ const wallet = {
           continue;
         }
         if (txout.spent_by === null && txout.token === selectedToken && this.isAddressMine(txout.decoded.address, data)) {
-          if (this.canUseUnspentTx(txout)) {
+          if (this.canUseUnspentTxSync(txout, null, null)) {
             balance.available += txout.value;
           } else {
             balance.locked += txout.value;
@@ -690,22 +696,47 @@ const wallet = {
   },
 
   /**
-   * Check if unspentTx is locked or can be used
+   * Check if unspentTx is locked or can be used (only the part of the method that can be syncronous)
    *
    * @param {Object} unspentTx (needs to have decoded.timelock key)
+   * @param {number} blockHeight If unspentTx is a block reward, it's the height of the block. It's optional, for the case of transaction.
+   * @param {number} currentHeight Height of the last block of the network. It's optional, only in case we want to validate the block reward lock (not used in balance method)
    *
    * @return {boolean}
    *
    * @memberof Wallet
    * @inner
    */
-  canUseUnspentTx(unspentTx) {
+  canUseUnspentTxSync(unspentTx, blockHeight, currentHeight) {
     if (unspentTx.decoded.timelock) {
       let currentTimestamp = dateFormatter.dateToTimestamp(new Date());
       return currentTimestamp > unspentTx.decoded.timelock;
+    } else if (blockHeight) {
+      return (currentHeight - blockHeight) >= this.getRewardLockConstant();
     } else {
       return true;
     }
+  },
+
+  /**
+   * Check if unspentTx is locked or can be used
+   *
+   * @param {Object} unspentTx (needs to have decoded.timelock key)
+   * @param {number} blockHeight If unspentTx is a block reward, it's the height of the block. It's optional, for the case of transaction.
+   * @param {number} currentHeight Height of the last block of the network. If not passed, we get it from the API.
+   *
+   * @return {Promise} Promise resolving a boolean if the utxo can be spent
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  async canUseUnspentTx(unspentTx, blockHeight, currentHeight) {
+    if (currentHeight === undefined && blockHeight) {
+      const response = await walletApi.getMiningInfoRequest();
+      currentHeight = response.blocks;
+    }
+
+    return this.canUseUnspentTxSync(unspentTx, blockHeight, currentHeight);
   },
 
   /**
@@ -883,6 +914,7 @@ const wallet = {
     this.cleanServer();
     transaction.clearTransactionWeightConstants();
     tokens.clearDepositPercentage();
+    wallet.clearRewardLockConstant();
     storage.removeItem('wallet:started');
     storage.removeItem('wallet:backup');
     storage.removeItem('wallet:locked');
@@ -908,16 +940,21 @@ const wallet = {
    * @param {number} amount Amount required to send transaction
    * @param {string} selectedToken UID of token that is being sent
    *
-   * @return {Object} {'inputs': Array of objects {'tx_id', 'index', 'token', 'address'}, 'inputsAmount': number}
+   * @return {Promise} Promise resolving an object {'inputs': Array of objects {'tx_id', 'index', 'token', 'address'}, 'inputsAmount': number}
    *
    * @memberof Wallet
    * @inner
    */
-  getInputsFromAmount(historyTransactions, amount, selectedToken) {
+  async getInputsFromAmount(historyTransactions, amount, selectedToken, currentHeight) {
     const ret = {'inputs': [], 'inputsAmount': 0};
     const data = this.getWalletData();
     if (data === null) {
       return ret;
+    }
+
+    if (currentHeight === undefined) {
+      const response = await walletApi.getMiningInfoRequest();
+      currentHeight = response.blocks;
     }
 
     for (const tx_id in historyTransactions) {
@@ -936,7 +973,7 @@ const wallet = {
           return ret;
         }
         if (txout.spent_by === null && txout.token === selectedToken && this.isAddressMine(txout.decoded.address, data)) {
-          if (this.canUseUnspentTx(txout)) {
+          if (await this.canUseUnspentTx(txout, tx.height, currentHeight)) {
             ret.inputsAmount += txout.value;
             ret.inputs.push({ tx_id: tx.tx_id, index, token: selectedToken, address: txout.decoded.address });
           }
@@ -1011,7 +1048,9 @@ const wallet = {
       if (txout.spent_by !== null) {
         return {exists: false, message: `Output [${index}] of transaction [${txId}] is already spent`};
       }
-      return {exists: true, 'output': txout};
+
+      // Set txout height as block height (if it's tx it will be undefined and the lib will handle it)
+      return {exists: true, 'output': txout.height};
     }
     // Requests txId does not exist in historyTransactions
     return {exists: false, message: `Transaction [${txId}] does not exist in the wallet`};
@@ -1235,14 +1274,16 @@ const wallet = {
    * @param {Object} historyTransactions Object of transactions indexed by tx_id
    * @param {Object} Array with all tokens already selected in the send tokens
    *
-   * @return {Object} {success: boolean, message: error message in case of failure, data: prepared data in case of success}
+   * @return {Promise} Promise resolving an object {success: boolean, message: error message in case of failure, data: prepared data in case of success}
    *
    * @memberof Wallet
    * @inner
    */
-  prepareSendTokensData(data, token, chooseInputs, historyTransactions, allTokens) {
+  async prepareSendTokensData(data, token, chooseInputs, historyTransactions, allTokens) {
     // Get the data and verify if we need to select the inputs or add a change output
-
+    // Need to use a async/await because we get the current height of the blockchain
+    // from api so we can check if a block reward can be spent
+    const response = await walletApi.getMiningInfoRequest();
     // First get the amount of outputs
     let outputsAmount = 0;
     for (let output of data.outputs) {
@@ -1255,7 +1296,7 @@ const wallet = {
 
     if (chooseInputs) {
       // If no inputs selected we select our inputs and, maybe add also a change output
-      let newData = this.getInputsFromAmount(historyTransactions, outputsAmount, token.uid);
+      let newData = await this.getInputsFromAmount(historyTransactions, outputsAmount, token.uid, response.data.blocks);
 
       data['inputs'] = newData['inputs'];
 
@@ -1282,7 +1323,7 @@ const wallet = {
         }
 
         const output = utxo.output;
-        if (this.canUseUnspentTx(output)) {
+        if (await this.canUseUnspentTx(output, utxo.height, response.data.blocks)) {
           inputsAmount += output.value;
           input.address = output.decoded.address;
         } else {
@@ -1585,6 +1626,45 @@ const wallet = {
    */
   getTokenIndex(token_data) {
     return token_data & TOKEN_INDEX_MASK;
+  },
+
+  /**
+   * Save rewardSpendMinBlocks variable from server
+   *
+   * @param {number} rewardSpendMinBlocks
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  updateRewardLockConstant(rewardSpendMinBlocks) {
+    this._rewardSpendMinBlocks = rewardSpendMinBlocks;
+  },
+
+  /**
+   * Return the minimum blocks required to unlock reward
+   *
+   * @return {number} Minimum blocks required to unlock reward
+   *
+   * @throws {ConstantNotSet} If the weight constants are not set yet
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  getRewardLockConstant() {
+    if (this._rewardSpendMinBlocks === null) {
+      throw new ConstantNotSet('Reward block minimum blocks constant not set');
+    }
+    return this._rewardSpendMinBlocks;
+  },
+
+  /**
+   * Clear rewardSpendMinBlocks constants
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  clearRewardLockConstant() {
+    this._rewardSpendMinBlocks = null;
   },
 }
 
