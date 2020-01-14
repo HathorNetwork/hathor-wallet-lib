@@ -30,6 +30,8 @@ const version = {
         // Update transaction weight constants
         transaction.updateTransactionWeightConstants(data.min_tx_weight, data.min_tx_weight_coefficient, data.min_tx_weight_k);
         tokens.updateDepositPercentage(data.token_deposit_percentage);
+        transaction.updateMaxInputsConstant(data.max_number_inputs);
+        transaction.updateMaxOutputsConstant(data.max_number_outputs);
         resolve(data);
       }).catch((error) => {
         reject(error);

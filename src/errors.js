@@ -58,3 +58,19 @@ export class CreateTokenTxInvalid extends Error {}
  * @inner
  */
 export class TokenValidationError extends Error {}
+
+/**
+ * Error thrown when transaction has more inputs than the maximum allowed
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class MaximumNumberInputsError extends Error {}
+
+/**
+ * Error thrown when transaction has more outputs than the maximum allowed
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class MaximumNumberOutputsError extends Error {}
