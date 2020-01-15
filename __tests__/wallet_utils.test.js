@@ -12,6 +12,13 @@ import { DEFAULT_SERVER } from '../src/constants';
 
 const storage = require('../src/storage').default;
 
+mock.onGet('getmininginfo').reply((config) => {
+  const ret = {
+    'blocks': 1000,
+  }
+  return [200, ret];
+});
+
 beforeEach(() => {
   wallet.resetAllData();
 });
@@ -66,7 +73,7 @@ test('Valid words', () => {
   expect(wallet.wordsValid(words).valid).toBe(true);
 });
 
-test('Inputs from amount', () => {
+test('Inputs from amount', async () => {
   const historyTransactionts = {
     '1': {
       'tx_id': '1',
@@ -93,16 +100,16 @@ test('Inputs from amount', () => {
   }
   storage.setItem('wallet:data', {'keys': {'171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r': {}}});
 
-  const ret1 = wallet.getInputsFromAmount(historyTransactionts, 10, '01');
+  const ret1 = await wallet.getInputsFromAmount(historyTransactionts, 10, '01');
   expect(ret1.inputs.length).toBe(0);
   expect(ret1.inputsAmount).toBe(0);
 
-  const ret2 = wallet.getInputsFromAmount(historyTransactionts, 200, '00');
+  const ret2 = await wallet.getInputsFromAmount(historyTransactionts, 200, '00');
   expect(ret2.inputs.length).toBe(1);
   expect(ret2.inputsAmount).toBe(2000);
 });
 
-test('Can use unspent txs', () => {
+test('Can use unspent txs', async () => {
   const unspentTx1 = {
     'decoded': {
       'address': '171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r',
@@ -129,9 +136,9 @@ test('Can use unspent txs', () => {
     'spent_by': null,
   };
 
-  expect(wallet.canUseUnspentTx(unspentTx1)).toBe(true);
-  expect(wallet.canUseUnspentTx(unspentTx2)).toBe(true);
-  expect(wallet.canUseUnspentTx(unspentTx3)).toBe(false);
+  expect(await wallet.canUseUnspentTx(unspentTx1)).toBe(true);
+  expect(await wallet.canUseUnspentTx(unspentTx2)).toBe(true);
+  expect(await wallet.canUseUnspentTx(unspentTx3)).toBe(false);
 });
 
 test('Output change', async () => {

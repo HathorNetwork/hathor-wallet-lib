@@ -11,7 +11,14 @@ import { HATHOR_TOKEN_CONFIG } from '../src/constants';
 
 const storage = require('../src/storage').default;
 
-test('Wallet operations for transaction', () => {
+mock.onGet('getmininginfo').reply((config) => {
+  const ret = {
+    'blocks': 1000,
+  }
+  return [200, ret];
+});
+
+test('Wallet operations for transaction', async () => {
   const words = wallet.generateWalletWords(256);
   wallet.executeGenerateWallet(words, '', '123456', 'password', false);
 
@@ -150,11 +157,11 @@ test('Wallet operations for transaction', () => {
     }
   }
   const filteredHistoryTransactions1 = wallet.filterHistoryTransactions(historyTransactions, '00');
-  const balance1 = wallet.calculateBalance(filteredHistoryTransactions1, '00');
+  const balance1 = wallet.calculateBalance(filteredHistoryTransactions1, '00', 300);
   expect(balance1).toEqual(expect.objectContaining(expectedBalance['00']));
 
   const filteredHistoryTransactions2 = wallet.filterHistoryTransactions(historyTransactions, '01');
-  const balance2 = wallet.calculateBalance(filteredHistoryTransactions2, '01');
+  const balance2 = wallet.calculateBalance(filteredHistoryTransactions2, '01', 300);
   expect(balance2).toEqual(expect.objectContaining(expectedBalance['01']));
 
   // Calculating balance of one tx
@@ -206,22 +213,22 @@ test('Wallet operations for transaction', () => {
   const address = 'W71hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r';
 
   // No outputs
-  const result1 = wallet.prepareSendTokensData({'outputs': []}, HATHOR_TOKEN_CONFIG, true, historyTransactions, new Set());
+  const result1 = await wallet.prepareSendTokensData({'outputs': []}, HATHOR_TOKEN_CONFIG, true, historyTransactions, new Set());
   expect(result1.success).toBe(false);
 
   const data2 = {'outputs': [{ 'address': address, 'value': 50}]};
-  const result2 = wallet.prepareSendTokensData(data2, HATHOR_TOKEN_CONFIG, true, historyTransactions, new Set());
+  const result2 = await wallet.prepareSendTokensData(data2, HATHOR_TOKEN_CONFIG, true, historyTransactions, new Set());
   expect(result2.success).toBe(true);
   expect(result2.data.outputs.length).toBe(2);
 
   const data3 = {'outputs': [{ 'address': address, 'value': 100}]};
-  const result3 = wallet.prepareSendTokensData(data3, HATHOR_TOKEN_CONFIG, true, historyTransactions, new Set());
+  const result3 = await wallet.prepareSendTokensData(data3, HATHOR_TOKEN_CONFIG, true, historyTransactions, new Set());
   expect(result3.success).toBe(true);
   expect(result3.data.outputs.length).toBe(1);
 
   const data4 = {'outputs': [{ 'address': address, 'value': 999999999}]};
   // No amount
-  const result4 = wallet.prepareSendTokensData(data4, HATHOR_TOKEN_CONFIG, true, historyTransactions, new Set());
+  const result4 = await wallet.prepareSendTokensData(data4, HATHOR_TOKEN_CONFIG, true, historyTransactions, new Set());
   expect(result4.success).toBe(false);
 
   // Selecting inputs
@@ -234,7 +241,7 @@ test('Wallet operations for transaction', () => {
     ],
   };
   // Unspent tx does not exist
-  const result5 = wallet.prepareSendTokensData(data5, HATHOR_TOKEN_CONFIG, false, historyTransactions, new Set());
+  const result5 = await wallet.prepareSendTokensData(data5, HATHOR_TOKEN_CONFIG, false, historyTransactions, new Set());
   expect(result5.success).toBe(false);
 
   const data6 = {
@@ -246,7 +253,7 @@ test('Wallet operations for transaction', () => {
     ],
   };
   // Unspent tx locked
-  const result6 = wallet.prepareSendTokensData(data6, HATHOR_TOKEN_CONFIG, false, historyTransactions, new Set());
+  const result6 = await wallet.prepareSendTokensData(data6, HATHOR_TOKEN_CONFIG, false, historyTransactions, new Set());
   expect(result6.success).toBe(false);
 
   const data7 = {
@@ -258,7 +265,7 @@ test('Wallet operations for transaction', () => {
     ],
   };
   // Not enough amount in the unspent tx
-  const result7 = wallet.prepareSendTokensData(data7, HATHOR_TOKEN_CONFIG, false, historyTransactions, new Set());
+  const result7 = await wallet.prepareSendTokensData(data7, HATHOR_TOKEN_CONFIG, false, historyTransactions, new Set());
   expect(result7.success).toBe(false);
 
   const data8 = {
@@ -270,7 +277,7 @@ test('Wallet operations for transaction', () => {
     ],
   };
   // Success
-  const result8 = wallet.prepareSendTokensData(data8, HATHOR_TOKEN_CONFIG, false, historyTransactions, new Set());
+  const result8 = await wallet.prepareSendTokensData(data8, HATHOR_TOKEN_CONFIG, false, historyTransactions, new Set());
   expect(result8.success).toBe(true);
   expect(result8.data.outputs.length).toBe(1);
 
@@ -283,7 +290,7 @@ test('Wallet operations for transaction', () => {
     ],
   };
   // Success 2
-  const result9 = wallet.prepareSendTokensData(data9, HATHOR_TOKEN_CONFIG, false, historyTransactions, new Set());
+  const result9 = await wallet.prepareSendTokensData(data9, HATHOR_TOKEN_CONFIG, false, historyTransactions, new Set());
   expect(result9.success).toBe(true);
   expect(result9.data.outputs.length).toBe(2);
 });

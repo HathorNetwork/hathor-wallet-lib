@@ -50,6 +50,13 @@ mock.onGet('thin_wallet/token').reply((config) => {
   return [200, ret];
 });
 
+mock.onGet('getmininginfo').reply((config) => {
+  const ret = {
+    'blocks': 1000,
+  }
+  return [200, ret];
+});
+
 
 test('Token UID', () => {
   const txID = '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e';
