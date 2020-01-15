@@ -615,8 +615,8 @@ const transaction = {
   },
 
   /**
-   * Execute some verifications if this data can become a transaction
-   * Validates maximum number of inputs and outputs
+   * Validate transaction information.
+   * For now, we only verify the maximum number of inputs and outputs.
    *
    * @param {Object} data Object with inputs and outputs
    * {
