@@ -1052,7 +1052,8 @@ const wallet = {
       }
 
       // Set txout height as block height (if it's tx it will be undefined and the lib will handle it)
-      return {exists: true, 'output': txout.height};
+      txout.height = tx.height;
+      return {exists: true, 'output': txout};
     }
     // Requests txId does not exist in historyTransactions
     return {exists: false, message: `Transaction [${txId}] does not exist in the wallet`};
