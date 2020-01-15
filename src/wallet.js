@@ -658,16 +658,18 @@ const wallet = {
 
   /**
    * Calculate the balance for each token (available and locked) from the historyTransactions
+   * This method is syncronous and, if currentHeight is not passed it won't get it from the API
    *
    * @param {Object} historyTransactions Array of transactions
    * @param {string} selectedToken token uid to get the balance
+   * @param {number} currentHeight Height of the last block of the network
    *
    * @return {Object} Object with {available: number, locked: number}
    *
    * @memberof Wallet
    * @inner
    */
-  calculateBalance(historyTransactions, selectedToken) {
+  calculateBalance(historyTransactions, selectedToken, currentHeight) {
     let balance = {available: 0, locked: 0};
     const data = this.getWalletData();
     if (data === null) {
@@ -684,7 +686,7 @@ const wallet = {
           continue;
         }
         if (txout.spent_by === null && txout.token === selectedToken && this.isAddressMine(txout.decoded.address, data)) {
-          if (this.canUseUnspentTxSync(txout, null, null)) {
+          if (this.canUseUnspentTxSync(txout, tx.height, currentHeight)) {
             balance.available += txout.value;
           } else {
             balance.locked += txout.value;
