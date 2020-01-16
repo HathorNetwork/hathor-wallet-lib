@@ -12,7 +12,7 @@ import CryptoJS from 'crypto-js';
 import walletApi from './api/wallet';
 import tokens from './tokens';
 import helpers from './helpers';
-import { OutputValueError } from './errors';
+import { ConstantNotSet, OutputValueError } from './errors';
 import version from './version';
 import storage from './storage';
 import network from './network';
@@ -58,7 +58,7 @@ const wallet = {
   /*
    * Should never be accessed directly, only through get method
    */
-  _networkHeight: null,
+  _networkHeight: 0,
 
   /**
    * Verify if words passed to generate wallet are valid. In case of invalid, returns message
@@ -1024,6 +1024,8 @@ const wallet = {
       if (txout.spent_by !== null) {
         return {exists: false, message: `Output [${index}] of transaction [${txId}] is already spent`};
       }
+      // Set txout height as block height (if it's tx it will be undefined and the lib will handle it)
+      txout.height = tx.height;
       return {exists: true, 'output': txout};
     }
     // Requests txId does not exist in historyTransactions
@@ -1691,7 +1693,7 @@ const wallet = {
    */
   handleWebsocketDashboard(data) {
     // So far we just use the height of the network and update in the variable
-    this.updateNetworkHeight(data.height);
+    wallet.updateNetworkHeight(data.height);
   },
 
   /**
@@ -1704,8 +1706,8 @@ const wallet = {
    */
   updateNetworkHeight(networkHeight) {
     if (networkHeight !== this._networkHeight) {
-      WebSocketHandler.emit('height_updated', networkHeight);
       this._networkHeight = networkHeight;
+      WebSocketHandler.emit('height_updated', networkHeight);
     }
   },
 
