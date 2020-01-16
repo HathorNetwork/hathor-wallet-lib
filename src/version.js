@@ -8,6 +8,7 @@
 import versionApi from './api/version';
 import transaction from './transaction';
 import tokens from './tokens';
+import wallet from './wallet';
 
 /**
  * Methods to validate version
@@ -30,6 +31,7 @@ const version = {
         // Update transaction weight constants
         transaction.updateTransactionWeightConstants(data.min_tx_weight, data.min_tx_weight_coefficient, data.min_tx_weight_k);
         tokens.updateDepositPercentage(data.token_deposit_percentage);
+        wallet.updateRewardLockConstant(data.reward_spend_min_blocks);
         resolve(data);
       }).catch((error) => {
         reject(error);
