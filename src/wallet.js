@@ -1703,7 +1703,7 @@ const wallet = {
    * @inner
    */
   updateNetworkHeight(networkHeight) {
-    if networkHeight !== this._networkHeight {
+    if (networkHeight !== this._networkHeight) {
       WebSocketHandler.emit('height_updated', networkHeight);
       this._networkHeight = networkHeight;
     }
