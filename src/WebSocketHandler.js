@@ -134,7 +134,7 @@ class WS extends EventEmitter {
     this.heartbeat = setInterval(() => {
       this.sendPing();
     }, this.heartbeatInterval);
-    wallet.subscribeAllAddresses();
+    wallet.websocketOpened();
   }
 
   /**
@@ -152,6 +152,7 @@ class WS extends EventEmitter {
       this.setup()
     }, this.retryConnectionInterval);
     clearInterval(this.heartbeat);
+    wallet.websocketOpened();
   }
 
   /**
