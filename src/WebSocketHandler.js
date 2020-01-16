@@ -152,7 +152,7 @@ class WS extends EventEmitter {
       this.setup()
     }, this.retryConnectionInterval);
     clearInterval(this.heartbeat);
-    wallet.websocketOpened();
+    wallet.websocketClosed();
   }
 
   /**
