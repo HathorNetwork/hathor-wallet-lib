@@ -1696,7 +1696,7 @@ const wallet = {
    */
   handleWebsocketDashboard(data) {
     // So far we just use the height of the network and update in the variable
-    wallet.updateNetworkHeight(data.height);
+    wallet.updateNetworkHeight(data.best_block_height);
   },
 
   /**
