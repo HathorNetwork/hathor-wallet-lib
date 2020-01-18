@@ -57,8 +57,9 @@ const wallet = {
 
   /*
    * Should never be accessed directly, only through get method
+   * Stores the height of the best chain updated from ws
    */
-  _networkHeight: 0,
+  _networkBestChainHeight: 0,
 
   /**
    * Verify if words passed to generate wallet are valid. In case of invalid, returns message
@@ -896,6 +897,8 @@ const wallet = {
     this.cleanServer();
     transaction.clearTransactionWeightConstants();
     tokens.clearDepositPercentage();
+    this.clearRewardLockConstant();
+    this.clearNetowokrBestChainHeight();
     storage.removeItem('wallet:started');
     storage.removeItem('wallet:backup');
     storage.removeItem('wallet:locked');
@@ -1647,7 +1650,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  websocketOpened() {
+  onWebsocketOpened() {
     this.subscribeAllAddresses();
     this.addMetricsListener();
   },
@@ -1658,7 +1661,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  websocketClosed() {
+  onWebsocketBeforeClose() {
     this.removeMetricsListener();
   },
 
@@ -1705,8 +1708,8 @@ const wallet = {
    * @inner
    */
   updateNetworkHeight(networkHeight) {
-    if (networkHeight !== this._networkHeight) {
-      this._networkHeight = networkHeight;
+    if (networkHeight !== this._networkBestChainHeight) {
+      this._networkBestChainHeight = networkHeight;
       WebSocketHandler.emit('height_updated', networkHeight);
     }
   },
@@ -1720,7 +1723,17 @@ const wallet = {
    * @inner
    */
   getNetworkHeight() {
-    return this._networkHeight;
+    return this._networkBestChainHeight;
+  },
+
+  /**
+   * Clear _networkBestChainHeight resetting to 0
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  clearNetowokrBestChainHeight() {
+    this._networkBestChainHeight = 0;
   },
 }
 
