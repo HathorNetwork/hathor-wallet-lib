@@ -45,7 +45,8 @@ mock.onGet('thin_wallet/token').reply((config) => {
     'melt': [],
     'name': token1.name,
     'symbol': token1.symbol,
-    'total': 100
+    'total': 100,
+    'success': true,
   }
   return [200, ret];
 });
