@@ -986,7 +986,13 @@ const wallet = {
    * @param {number} index Output index to search
    * @param {string} selectedToken UID of the token to check existence
    *
-   * @return {Object} {success: boolean, message: Error message in case of failure, output: output object in case of success}
+   * @return {Object}
+   *
+   *  {
+   *    exists: boolean,
+   *    message: Error message in case of failure,
+   *    output: output object with 'height' key as the height of the tx of this output (in case of success only)
+   *  }
    *
    * @memberof Wallet
    * @inner
