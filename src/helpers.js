@@ -57,13 +57,13 @@ const helpers = {
       if (tx.version === BLOCK_VERSION) {
         return 'Block';
       } else if (tx.version === MERGED_MINED_BLOCK_VERSION) {
-        return 'Merged mined block';
+        return 'Merged Mining Block';
       }
     } else {
       if (tx.version === DEFAULT_TX_VERSION) {
         return 'Transaction';
       } else if (tx.version === CREATE_TOKEN_TX_VERSION) {
-        return 'Create token transaction';
+        return 'Create Token Transaction';
       }
     }
 
