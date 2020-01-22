@@ -40,13 +40,21 @@ mock.onPost('thin_wallet/send_tokens').reply((config) => {
 });
 
 mock.onGet('thin_wallet/token').reply((config) => {
-  const ret = {
-    'mint': [],
-    'melt': [],
-    'name': token1.name,
-    'symbol': token1.symbol,
-    'total': 100,
-    'success': true,
+  let ret = {};
+  if (config.params.id === token1.uid) {
+    ret = {
+      'mint': [],
+      'melt': [],
+      'name': token1.name,
+      'symbol': token1.symbol,
+      'total': 100,
+      'success': true,
+    }
+  } else {
+    ret = {
+      'success': false,
+      'message': 'Unknown token',
+    }
   }
   return [200, ret];
 });
@@ -188,4 +196,8 @@ test('Tokens handling', async () => {
   // Cant add the same token twice
   tokens.addToken(token1.uid, token1.name, token1.symbol)
   await expect(tokens.validateTokenToAddByConfigurationString(config)).rejects.toThrow(TokenValidationError);
+
+  // New config string that will return false because the token is unknown
+  const unknownConfig = tokens.getConfigurationString('1', 'Unknown Token', 'UTK');
+  await expect(tokens.validateTokenToAddByConfigurationString(unknownConfig)).rejects.toThrow(TokenValidationError);
 });
