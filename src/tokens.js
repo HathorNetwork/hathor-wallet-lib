@@ -171,12 +171,16 @@ const tokens = {
 
       // Validate if name and symbol match with the token info in the DAG
       walletApi.getGeneralTokenInfo(uid, (response) => {
-        if (response.name !== name) {
-          reject(new TokenValidationError(`Token name does not match with the real one. Added: ${name}. Real: ${response.name}`));
-        } else if (response.symbol !== symbol) {
-          reject(new TokenValidationError(`Token symbol does not match with the real one. Added: ${symbol}. Real: ${response.symbol}`));
+        if (response.success) {
+          if (response.name !== name) {
+            reject(new TokenValidationError(`Token name does not match with the real one. Added: ${name}. Real: ${response.name}`));
+          } else if (response.symbol !== symbol) {
+            reject(new TokenValidationError(`Token symbol does not match with the real one. Added: ${symbol}. Real: ${response.symbol}`));
+          } else {
+            resolve();
+          }
         } else {
-          resolve();
+          reject(new TokenValidationError(response.message));
         }
       });
     });
