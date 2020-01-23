@@ -115,7 +115,6 @@ const wallet = {
    * @inner
    */
   executeGenerateWallet(words, passphrase, pin, password, loadHistory) {
-    WebSocketHandler.setup();
     let code = new Mnemonic(words);
     let xpriv = code.toHDPrivateKey(passphrase, network.getNetwork());
     let privkey = xpriv.derive(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
@@ -146,6 +145,7 @@ const wallet = {
     let promise = null;
     if (loadHistory) {
       // Load history from address
+      WebSocketHandler.setup();
       promise = this.loadAddressHistory(0, GAP_LIMIT);
     }
     return promise;
