@@ -82,6 +82,11 @@ export const DEFAULT_TX_VERSION = 1;
 export const CREATE_TOKEN_TX_VERSION = 2;
 
 /**
+ * Merged mined block version field
+ */
+export const MERGED_MINED_BLOCK_VERSION = 3;
+
+/**
  * Create token information version
  * so far we expect name and symbol
  */
