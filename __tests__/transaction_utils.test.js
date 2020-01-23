@@ -28,6 +28,16 @@ test('Tx weight constants', () => {
   expect(constants.txMinWeightK).toBe(10);
 });
 
+test('Tx max inputs and outputs constant', () => {
+  transaction.updateMaxInputsConstant(255);
+  const maxInputs = transaction.getMaxInputsConstant();
+  expect(maxInputs).toBe(255);
+
+  transaction.updateMaxOutputsConstant(255);
+  const maxOutputs = transaction.getMaxOutputsConstant();
+  expect(maxOutputs).toBe(255);
+});
+
 test('Unsigned int to bytes', () => {
   let number1 = 10;
   let buf1 = transaction.intToBytes(number1, 1);

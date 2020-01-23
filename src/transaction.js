@@ -8,7 +8,7 @@
 import { OP_GREATERTHAN_TIMESTAMP, OP_DUP, OP_HASH160, OP_EQUALVERIFY, OP_CHECKSIG, OP_PUSHDATA1 } from './opcodes';
 import { DECIMAL_PLACES, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, TOKEN_INFO_VERSION, MAX_OUTPUT_VALUE_32, MAX_OUTPUT_VALUE, TOKEN_AUTHORITY_MASK } from './constants';
 import { HDPrivateKey, crypto, encoding, util } from 'bitcore-lib';
-import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid } from './errors';
+import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError } from './errors';
 import dateFormatter from './date';
 import helpers from './helpers';
 import storage from './storage';
@@ -36,6 +36,20 @@ const transaction = {
    * }
    */
   _weightConstants: null,
+
+  /**
+   * Should never be accessed directly, only through updateMaxInputsConstant or getMaxInputsConstant
+   *
+   * _maxInputsConstant {number} Maximum number of inputs allowed in a transaction
+   */
+  _maxInputsConstant: null,
+
+  /**
+   * Should never be accessed directly, only through updateMaxOutputsConstant or getMaxOutputsConstant
+   *
+   * _maxOutputsConstant {number} Maximum number of outputs allowed in a transaction
+   */
+  _maxOutputsConstant: null,
 
   /**
    * Transform int to bytes
@@ -601,6 +615,35 @@ const transaction = {
   },
 
   /**
+   * Validate transaction information.
+   * For now, we only verify the maximum number of inputs and outputs.
+   *
+   * @param {Object} data Object with inputs and outputs
+   * {
+   *  'inputs': [{'tx_id', 'index', 'token', 'address'}],
+   *  'outputs': ['address', 'value', 'timelock', 'tokenData'],
+   * }
+   *
+   * @throws {MaximumNumberInputsError} If the tx has more inputs than the maximum allowed
+   * @throws {MaximumNumberOutputsError} If the tx has more outputs than the maximum allowed
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  verifyTxData(data) {
+    const maxNumberInputs = transaction.getMaxInputsConstant();
+    const maxNumberOutputs = transaction.getMaxOutputsConstant();
+
+    if (data.inputs.length > maxNumberInputs) {
+      throw new MaximumNumberInputsError(`Transaction has ${data.inputs.length} inputs and can have at most ${maxNumberInputs}.`);
+    }
+
+    if (data.outputs.length > maxNumberOutputs) {
+      throw new MaximumNumberOutputsError(`Transaction has ${data.outputs.length} outputs and can have at most ${maxNumberOutputs}.`);
+    }
+  },
+
+  /**
    * Complete and send a transaction to the full node
    *
    * @param {Object} data Object with inputs and outputs
@@ -625,6 +668,8 @@ const transaction = {
     const { minimumTimestamp } = fnOptions;
     const promise = new Promise((resolve, reject) => {
       try {
+        transaction.verifyTxData(data);
+
         // Completing data in the same object
         transaction.completeTx(data);
 
@@ -651,7 +696,7 @@ const transaction = {
           reject(e.message);
         });
       } catch (e) {
-        if (e instanceof AddressError || e instanceof OutputValueError || e instanceof ConstantNotSet || e instanceof CreateTokenTxInvalid) {
+        if (e instanceof AddressError || e instanceof OutputValueError || e instanceof ConstantNotSet || e instanceof CreateTokenTxInvalid || e instanceof MaximumNumberOutputsError || e instanceof MaximumNumberInputsError) {
           reject(e.message);
         } else {
           // Unhandled error
@@ -750,6 +795,84 @@ const transaction = {
    */
   isTokenDataAuthority(tokenData) {
     return (tokenData & TOKEN_AUTHORITY_MASK) > 0
+  },
+
+  /**
+   * Save max inputs constant
+   *
+   * @param {number} maxInputs Maximum number of inputs allowed in a transaction
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  updateMaxInputsConstant(maxInputs) {
+    this._maxInputsConstant = maxInputs;
+  },
+
+  /**
+   * Return the maximum number of inputs
+   *
+   * @return {number}
+   *
+   * @throws {ConstantNotSet} If the constant was not set yet
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  getMaxInputsConstant() {
+    if (this._maxInputsConstant === null) {
+      throw new ConstantNotSet('Maximum number of inputs constants is not set yet');
+    }
+    return this._maxInputsConstant;
+  },
+
+  /**
+   * Clear max number of inputs constant
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  clearMaxInputsConstant() {
+    this._maxInputsConstant = null;
+  },
+
+  /**
+   * Save max outputs constant
+   *
+   * @param {number} maxOutputs Maximum number of outputs allowed in a transaction
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  updateMaxOutputsConstant(maxOutputs) {
+    this._maxOutputsConstant = maxOutputs;
+  },
+
+  /**
+   * Return the maximum number of outputs
+   *
+   * @return {number}
+   *
+   * @throws {ConstantNotSet} If the constant was not set yet
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  getMaxOutputsConstant() {
+    if (this._maxOutputsConstant === null) {
+      throw new ConstantNotSet('Maximum number of outputs constants is not set yet');
+    }
+    return this._maxOutputsConstant;
+  },
+
+  /**
+   * Clear max number of outputs constant
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  clearMaxOutputsConstant() {
+    this._maxOutputsConstant = null;
   },
 }
 

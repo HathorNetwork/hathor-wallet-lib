@@ -896,6 +896,8 @@ const wallet = {
     this.cleanWallet();
     this.cleanServer();
     transaction.clearTransactionWeightConstants();
+    transaction.clearMaxInputsConstant();
+    transaction.clearMaxOutputsConstant();
     tokens.clearDepositPercentage();
     this.clearRewardLockConstant();
     this.clearNetworkBestChainHeight();
