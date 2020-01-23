@@ -898,7 +898,7 @@ const wallet = {
     transaction.clearTransactionWeightConstants();
     tokens.clearDepositPercentage();
     this.clearRewardLockConstant();
-    this.clearNetowokrBestChainHeight();
+    this.clearNetworkBestChainHeight();
     storage.removeItem('wallet:started');
     storage.removeItem('wallet:backup');
     storage.removeItem('wallet:locked');
@@ -1738,7 +1738,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  clearNetowokrBestChainHeight() {
+  clearNetworkBestChainHeight() {
     this._networkBestChainHeight = 0;
   },
 }
