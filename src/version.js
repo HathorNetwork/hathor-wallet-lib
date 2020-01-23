@@ -8,6 +8,7 @@
 import versionApi from './api/version';
 import transaction from './transaction';
 import tokens from './tokens';
+import wallet from './wallet';
 
 /**
  * Methods to validate version
@@ -32,6 +33,7 @@ const version = {
         tokens.updateDepositPercentage(data.token_deposit_percentage);
         transaction.updateMaxInputsConstant(data.max_number_inputs);
         transaction.updateMaxOutputsConstant(data.max_number_outputs);
+        wallet.updateRewardLockConstant(data.reward_spend_min_blocks);
         resolve(data);
       }).catch((error) => {
         reject(error);

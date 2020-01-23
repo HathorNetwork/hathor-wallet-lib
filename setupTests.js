@@ -101,6 +101,7 @@ mock.onGet('version').reply((config) => {
 });
 
 import WS from './src/WebSocketHandler';
+WS.WebSocket = WebSocket;
 WS.setup();
 
 global.window = {};

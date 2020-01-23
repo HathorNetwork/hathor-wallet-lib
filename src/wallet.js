@@ -12,7 +12,7 @@ import CryptoJS from 'crypto-js';
 import walletApi from './api/wallet';
 import tokens from './tokens';
 import helpers from './helpers';
-import { OutputValueError } from './errors';
+import { ConstantNotSet, OutputValueError } from './errors';
 import version from './version';
 import storage from './storage';
 import network from './network';
@@ -50,6 +50,17 @@ import _ from 'lodash';
  * @namespace Wallet
  */
 const wallet = {
+  /*
+   * Should never be accessed directly, only through get method
+   */
+  _rewardSpendMinBlocks: null,
+
+  /*
+   * Should never be accessed directly, only through get method
+   * Stores the height of the best chain updated from ws
+   */
+  _networkBestChainHeight: 0,
+
   /**
    * Verify if words passed to generate wallet are valid. In case of invalid, returns message
    *
@@ -104,7 +115,6 @@ const wallet = {
    * @inner
    */
   executeGenerateWallet(words, passphrase, pin, password, loadHistory) {
-    WebSocketHandler.setup();
     let code = new Mnemonic(words);
     let xpriv = code.toHDPrivateKey(passphrase, network.getNetwork());
     let privkey = xpriv.derive(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
@@ -135,6 +145,7 @@ const wallet = {
     let promise = null;
     if (loadHistory) {
       // Load history from address
+      WebSocketHandler.setup();
       promise = this.loadAddressHistory(0, GAP_LIMIT);
     }
     return promise;
@@ -678,7 +689,7 @@ const wallet = {
           continue;
         }
         if (txout.spent_by === null && txout.token === selectedToken && this.isAddressMine(txout.decoded.address, data)) {
-          if (this.canUseUnspentTx(txout)) {
+          if (this.canUseUnspentTx(txout, tx.height)) {
             balance.available += txout.value;
           } else {
             balance.locked += txout.value;
@@ -693,16 +704,19 @@ const wallet = {
    * Check if unspentTx is locked or can be used
    *
    * @param {Object} unspentTx (needs to have decoded.timelock key)
+   * @param {number} blockHeight If unspentTx is a block reward, it's the height of the block. It's optional, for the case of transaction.
    *
    * @return {boolean}
    *
    * @memberof Wallet
    * @inner
    */
-  canUseUnspentTx(unspentTx) {
+  canUseUnspentTx(unspentTx, blockHeight) {
     if (unspentTx.decoded.timelock) {
       let currentTimestamp = dateFormatter.dateToTimestamp(new Date());
       return currentTimestamp > unspentTx.decoded.timelock;
+    } else if (blockHeight) {
+      return (this.getNetworkHeight() - blockHeight) >= this.getRewardLockConstant();
     } else {
       return true;
     }
@@ -885,6 +899,8 @@ const wallet = {
     transaction.clearMaxInputsConstant();
     transaction.clearMaxOutputsConstant();
     tokens.clearDepositPercentage();
+    this.clearRewardLockConstant();
+    this.clearNetworkBestChainHeight();
     storage.removeItem('wallet:started');
     storage.removeItem('wallet:backup');
     storage.removeItem('wallet:locked');
@@ -938,7 +954,7 @@ const wallet = {
           return ret;
         }
         if (txout.spent_by === null && txout.token === selectedToken && this.isAddressMine(txout.decoded.address, data)) {
-          if (this.canUseUnspentTx(txout)) {
+          if (this.canUseUnspentTx(txout, tx.height)) {
             ret.inputsAmount += txout.value;
             ret.inputs.push({ tx_id: tx.tx_id, index, token: selectedToken, address: txout.decoded.address });
           }
@@ -972,7 +988,13 @@ const wallet = {
    * @param {number} index Output index to search
    * @param {string} selectedToken UID of the token to check existence
    *
-   * @return {Object} {success: boolean, message: Error message in case of failure, output: output object in case of success}
+   * @return {Object}
+   *
+   *  {
+   *    exists: boolean,
+   *    message: Error message in case of failure,
+   *    output: output object with 'height' key as the height of the tx of this output (in case of success only)
+   *  }
    *
    * @memberof Wallet
    * @inner
@@ -1013,6 +1035,8 @@ const wallet = {
       if (txout.spent_by !== null) {
         return {exists: false, message: `Output [${index}] of transaction [${txId}] is already spent`};
       }
+      // Set txout height as block height (if it's tx it will be undefined and the lib will handle it)
+      txout.height = tx.height;
       return {exists: true, 'output': txout};
     }
     // Requests txId does not exist in historyTransactions
@@ -1284,7 +1308,7 @@ const wallet = {
         }
 
         const output = utxo.output;
-        if (this.canUseUnspentTx(output)) {
+        if (this.canUseUnspentTx(output, utxo.height)) {
           inputsAmount += output.value;
           input.address = output.decoded.address;
         } else {
@@ -1587,6 +1611,137 @@ const wallet = {
    */
   getTokenIndex(token_data) {
     return token_data & TOKEN_INDEX_MASK;
+  },
+
+  /**
+   * Save rewardSpendMinBlocks variable from server
+   *
+   * @param {number} rewardSpendMinBlocks
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  updateRewardLockConstant(rewardSpendMinBlocks) {
+    this._rewardSpendMinBlocks = rewardSpendMinBlocks;
+  },
+
+  /**
+   * Return the minimum blocks required to unlock reward
+   *
+   * @return {number} Minimum blocks required to unlock reward
+   *
+   * @throws {ConstantNotSet} If the weight constants are not set yet
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  getRewardLockConstant() {
+    if (this._rewardSpendMinBlocks === null) {
+      throw new ConstantNotSet('Reward block minimum blocks constant not set');
+    }
+    return this._rewardSpendMinBlocks;
+  },
+
+  /**
+   * Clear rewardSpendMinBlocks constants
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  clearRewardLockConstant() {
+    this._rewardSpendMinBlocks = null;
+  },
+
+  /**
+   * Method called when websocket connection is opened
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  onWebsocketOpened() {
+    this.subscribeAllAddresses();
+    this.addMetricsListener();
+  },
+
+  /**
+   * Method called when websocket connection is closed
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  onWebsocketBeforeClose() {
+    this.removeMetricsListener();
+  },
+
+  /**
+   * Start listening dashboard ws messages from full node
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  addMetricsListener() {
+    WebSocketHandler.on('dashboard', this.handleWebsocketDashboard);
+  },
+
+  /**
+   * Stop listening dashboard ws messages from full node
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  removeMetricsListener() {
+    WebSocketHandler.removeListener('dashboard', this.handleWebsocketDashboard);
+  },
+
+  /**
+   * Method called when received dashboard ws message from full node
+   * Right now we just update the network height
+   *
+   * @param {Object} data Metrics object ws data with 'height' key
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  handleWebsocketDashboard(data) {
+    // So far we just use the height of the network and update in the variable
+    wallet.updateNetworkHeight(data.best_block_height);
+  },
+
+  /**
+   * Update network height variable
+   *
+   * @param {number} networkHeight
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  updateNetworkHeight(networkHeight) {
+    if (networkHeight !== this._networkBestChainHeight) {
+      this._networkBestChainHeight = networkHeight;
+      WebSocketHandler.emit('height_updated', networkHeight);
+    }
+  },
+
+  /**
+   * Return the network height
+   *
+   * @return {number} Network height
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  getNetworkHeight() {
+    return this._networkBestChainHeight;
+  },
+
+  /**
+   * Clear _networkBestChainHeight resetting to 0
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  clearNetworkBestChainHeight() {
+    this._networkBestChainHeight = 0;
   },
 }
 
