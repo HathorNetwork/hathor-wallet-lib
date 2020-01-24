@@ -35,6 +35,35 @@ const walletApi = {
   },
 
   /**
+   * Call API to get address history
+   *
+   * XXX Our current method to allow retry a request demands that we create an axios
+   * instance with a resolve callback, which will be used in case of failure and the
+   * user decides to retry. Because of that, it's impossible to use the old method (getAddressHistory)
+   * to get data with async/await, only with promises. Because of the pagination,
+   * we are in a looping getting data while not finished, so the code with async/await is
+   * much cleaner.
+   *
+   * So, right now to use async/await we must use this method and it's not possible to
+   * retry a request executed here. We must redesign the retry structure, so we can
+   * support calling API methods with async/await.
+   *
+   * @param {Array} addresses Array of addresses to search for the history
+   * @param {String} hash String of the hash to start the search in the first address (optional)
+   *
+   * @return {Promise}
+   * @memberof ApiWallet
+   * @inner
+   */
+  getAddressHistoryForAwait(addresses, hash) {
+    const data = {addresses};
+    if (hash) {
+      data['hash'] = hash;
+    }
+    return createRequestInstance().get('thin_wallet/address_history', {'params': data})
+  },
+
+  /**
    * Execute method to send tokens
    *
    * @param {string} txHex Complete transaction serialized in hexadecimal
