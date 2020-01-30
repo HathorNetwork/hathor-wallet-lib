@@ -25,11 +25,8 @@ const walletApi = {
    * @memberof ApiWallet
    * @inner
    */
-  getAddressHistory(addresses, hash, resolve) {
+  getAddressHistory(addresses, resolve) {
     const data = {addresses};
-    if (hash) {
-      data['hash'] = hash;
-    }
     return createRequestInstance(resolve).get('thin_wallet/address_history', {'params': data}).then((res) => {
       resolve(res.data)
     }, (res) => {
