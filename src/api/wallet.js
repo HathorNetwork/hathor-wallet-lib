@@ -25,8 +25,11 @@ const walletApi = {
    * @memberof ApiWallet
    * @inner
    */
-  getAddressHistory(addresses, resolve) {
+  getAddressHistory(addresses, hash, resolve) {
     const data = {addresses};
+    if (hash) {
+      data['hash'] = hash;
+    }
     return createRequestInstance(resolve).get('thin_wallet/address_history', {'params': data}).then((res) => {
       resolve(res.data)
     }, (res) => {
@@ -130,6 +133,24 @@ const walletApi = {
    */
   getTokensList(resolve) {
     return createRequestInstance(resolve).get('thin_wallet/token').then((res) => {
+      resolve(res.data)
+    }, (res) => {
+      return Promise.reject(res);
+    });
+  },
+
+  /**
+   * Get address balance summary
+   *
+   * @param {String} addresse Address to get the balance summary
+   *
+   * @return {Promise}
+   * @memberof ApiWallet
+   * @inner
+   */
+  getAddressBalance(address, resolve) {
+    const data = {address};
+    return createRequestInstance(resolve).get('thin_wallet/address_balance', {'params': data}).then((res) => {
       resolve(res.data)
     }, (res) => {
       return Promise.reject(res);
