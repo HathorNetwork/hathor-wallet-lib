@@ -6,7 +6,7 @@
  */
 
 import EventEmitter from 'events';
-import network from '../network';
+import networkInstance from '../network';
 import wallet from '../wallet';
 import { GAP_LIMIT, HATHOR_TOKEN_CONFIG, DEFAULT_SERVER } from '../constants';
 import transaction from '../transaction';
@@ -14,7 +14,8 @@ import tokens from '../tokens';
 import version from '../version';
 import ws from '../WebSocketHandler';
 import storage from '../storage';
-import MemoryStore from '../memory_storage';
+import MemoryStore from '../memory_store';
+import walletApi from '../api/wallet';
 
 /**
  * This is a Wallet that is supposed to be simple to be used by a third-party app.
@@ -39,7 +40,7 @@ class Wallet extends EventEmitter {
   constructor({ network, server, seed, tokenUid }) {
     super();
 
-    network.setNetwork(network);
+    networkInstance.setNetwork(network);
     this.network = network;
 
     this.state = Wallet.CLOSED;
@@ -56,22 +57,11 @@ class Wallet extends EventEmitter {
       this.server = DEFAULT_SERVER;
 
     }
-    // tokenUid is optional
+
+    // tokenUid is optional so we can get the token of the wallet
     this.token = null;
-    if (tokenUid) {
-      // Get token info from full node
-      hathorLib.walletApi.getGeneralTokenInfo(tokenUid, (response) => {
-        if (response.success) {
-          this.token = {
-            uid: tokenUid,
-            name: response.name,
-            symbol: response.symbol,
-          }
-        } else {
-          throw Error(response.message);
-        }
-      });
-    }
+    this.tokenUid = tokenUid;
+
 
     this.passphrase = '';
     // XXX Update it so we don't have fixed pin/password
@@ -133,6 +123,9 @@ class Wallet extends EventEmitter {
   }
 
   getBalance(tokenUid) {
+    if (!tokenUid && !this.token) {
+      throw Error('Token must be set in the class instance or passed as parameter in the method.')
+    }
     const uid = tokenUid || this.token.uid;
     const historyTransactions = this.getTxHistory();
     return wallet.calculateBalance(Object.values(historyTransactions), uid);
@@ -277,6 +270,9 @@ class Wallet extends EventEmitter {
    **/
   sendTransaction(address, value, token) {
     const txToken = token || this.token;
+    if (!txToken) {
+      throw Error('Token must be set in the class instance or passed as parameter in the method.')
+    }
     const isHathorToken = txToken.uid === HATHOR_TOKEN_CONFIG.uid;
     // XXX This allow only one token to be sent
     // XXX This method allow only one output
@@ -315,6 +311,7 @@ class Wallet extends EventEmitter {
 
     wallet.executeGenerateWallet(this.seed, this.passphrase, this.pinCode, this.password, false);
 
+    this.getTokenData();
     this.serverInfo = null;
     this.setState(Wallet.CONNECTING);
 
@@ -387,6 +384,37 @@ class Wallet extends EventEmitter {
 
     return balance;
   }
+
+  getTokenData() {
+    if (this.tokenUid) {
+      if (this.tokenUid === HATHOR_TOKEN_CONFIG.uid) {
+        // Hathor token we don't get from the full node
+        this.token = HATHOR_TOKEN_CONFIG;
+      } else {
+        // Get token info from full node
+        // XXX This request might take longer than the ws connection to start
+        // so it's possible (but hard to happen) that the wallet will change to
+        // READY state with token still null.
+        // I will keep it like that for now but to protect from this
+        // we should change to READY only after both things finish
+        walletApi.getGeneralTokenInfo(this.tokenUid, (response) => {
+          if (response.success) {
+            this.token = {
+              uid: this.tokenUid,
+              name: response.name,
+              symbol: response.symbol,
+            }
+          } else {
+            throw Error(response.message);
+          }
+        });
+      }
+    }
+  }
+
+  isReady() {
+    return this.state === Wallet.READY;
+  }
 }
 
 // State constants.
@@ -394,5 +422,20 @@ Wallet.CLOSED =  0;
 Wallet.CONNECTING = 1;
 Wallet.SYNCING = 2;
 Wallet.READY = 3;
+
+Wallet.getHumanState = (state) => {
+  const map = {
+    [Wallet.CLOSED]: 'Closed',
+    [Wallet.CONNECTING]: 'Connecting',
+    [Wallet.SYNCING]: 'Syncing',
+    [Wallet.READY]: 'Ready',
+  }
+
+  if (state in map) {
+    return map[state];
+  } else {
+    return 'Unknown';
+  }
+}
 
 export default Wallet;

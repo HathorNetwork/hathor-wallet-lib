@@ -14,6 +14,7 @@ var axios = require('./lib/api/axiosInstance');
 var storage = require('./lib/storage');
 var network = require('./lib/network');
 var MemoryStore = require('./lib/memory_store');
+var Wallet = require('./lib/new/wallet');
 
 module.exports = {
   helpers: helpers.default,
@@ -32,4 +33,5 @@ module.exports = {
   storage: storage.default,
   MemoryStore: MemoryStore.default,
   network: network.default,
+  Wallet: Wallet.default,
 }
