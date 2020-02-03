@@ -101,6 +101,40 @@ const walletApi = {
       return Promise.reject(res);
     });
   },
+
+  /**
+   * Call get mining info data
+   *
+   * @param {function} resolve Method to be called after response arrives
+   *
+   * @return {Promise}
+   * @memberof ApiWallet
+   * @inner
+   */
+  getMiningInfo(resolve) {
+    return createRequestInstance(resolve).get('getmininginfo').then((res) => {
+      resolve(res.data)
+    }, (res) => {
+      return Promise.reject(res);
+    });
+  },
+
+  /**
+   * Call get tokens list API
+   *
+   * @param {function} resolve Method to be called after response arrives
+   *
+   * @return {Promise}
+   * @memberof ApiWallet
+   * @inner
+   */
+  getTokensList(resolve) {
+    return createRequestInstance(resolve).get('thin_wallet/token').then((res) => {
+      resolve(res.data)
+    }, (res) => {
+      return Promise.reject(res);
+    });
+  },
 };
 
 export default walletApi;

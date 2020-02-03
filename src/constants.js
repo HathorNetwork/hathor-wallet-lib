@@ -38,7 +38,7 @@ export const GAP_LIMIT = 20;
 /**
  * Minimum expected API version
  */
-export const MIN_API_VERSION = '0.24.0-beta';
+export const MIN_API_VERSION = '0.30.0';
 
 /**
  * If we should forbid to generate a quantity of unused addresses more than the GAP_LIMIT
@@ -80,6 +80,11 @@ export const DEFAULT_TX_VERSION = 1;
  * Create token transaction version field
  */
 export const CREATE_TOKEN_TX_VERSION = 2;
+
+/**
+ * Merged mined block version field
+ */
+export const MERGED_MINED_BLOCK_VERSION = 3;
 
 /**
  * Create token information version

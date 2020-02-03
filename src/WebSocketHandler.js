@@ -6,6 +6,8 @@
  */
 
 import EventEmitter from 'events';
+import _WebSocket from 'isomorphic-ws';
+
 import helpers from './helpers';
 import wallet from './wallet';
 
@@ -22,6 +24,11 @@ const WS_READYSTATE_READY = 1;
 class WS extends EventEmitter {
   constructor(){
     super();
+
+    // This is the class of the Websocket. It is used to open new WebSocket
+    // connections. We don't directly use it from import, so the unittests
+    // can replace it by a mock.
+    this.WebSocket = _WebSocket;
 
     // Boolean to show when there is a websocket started with the server
     this.started = false;
@@ -76,7 +83,7 @@ class WS extends EventEmitter {
       }
       this.ws.close();
     }
-    this.ws = new WebSocket(wsURL);
+    this.ws = new this.WebSocket(wsURL);
     this.latestSetupDate = new Date();
 
     this.ws.onopen = () => {
@@ -134,7 +141,7 @@ class WS extends EventEmitter {
     this.heartbeat = setInterval(() => {
       this.sendPing();
     }, this.heartbeatInterval);
-    wallet.subscribeAllAddresses();
+    wallet.onWebsocketOpened();
   }
 
   /**
@@ -144,6 +151,7 @@ class WS extends EventEmitter {
     this.started = false;
     this.connected = false;
     this.setIsOnline(false);
+    wallet.onWebsocketBeforeClose();
     if (this.ws) {
       this.ws.close();
       this.ws = null;

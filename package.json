@@ -1,6 +1,6 @@
 {
   "name": "@hathor/wallet-lib",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Library used by Hathor Wallet",
   "jest": {
     "setupFilesAfterEnv": [
@@ -34,8 +34,10 @@
     "axios": "^0.18.0",
     "bitcore-mnemonic": "^1.7.0",
     "crypto-js": "^3.1.9-1",
+    "isomorphic-ws": "^4.0.1",
     "lodash": "^4.17.11",
-    "long": "^4.0.0"
+    "long": "^4.0.0",
+    "ws": "^7.2.1"
   },
   "scripts": {
     "test": "jest --env=node --forceExit",
