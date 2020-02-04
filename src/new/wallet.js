@@ -36,7 +36,16 @@ import walletApi from '../api/wallet';
  * - more-addresses-loaded: Fired when loading the history of transactions. It is fired multiple times,
  *                          one for each request sent to the server.
  **/
-class Wallet extends EventEmitter {
+class HathorWallet extends EventEmitter {
+  /*
+   * network {String} 'testnet' or 'mainnet'
+   * server {String} Server for the wallet to connect to, e.g. http://localhost:8080/v1a/
+   * seed {String} 24 words separated by space
+   * passphrase {String} Wallet passphrase
+   * tokenUid {String} UID of the token to handle on this wallet
+   * password {String} Password to encrypt the seed
+   * pin {String} PIN to execute wallet actions
+   */
   constructor({
     network,
     server = DEFAULT_SERVER,
@@ -44,7 +53,7 @@ class Wallet extends EventEmitter {
     seed,
     passphrase = '',
 
-    tokenUid,
+    tokenUid = HATHOR_TOKEN_CONFIG.uid,
 
     // XXX Update it so we don't have fixed pin/password
     password = '123',
@@ -56,10 +65,14 @@ class Wallet extends EventEmitter {
       throw Error('You must explicitly provide the network.');
     }
 
+    if (!seed) {
+      throw Error('You must explicitly provide the seed.');
+    }
+
     networkInstance.setNetwork(network);
     this.network = network;
 
-    this.state = Wallet.CLOSED;
+    this.state = HathorWallet.CLOSED;
     this.serverInfo = null;
 
     this.onConnectionChange = this.onConnectionChange.bind(this);
@@ -96,16 +109,16 @@ class Wallet extends EventEmitter {
    **/
   onConnectionChange(value) {
     if (value) {
-      this.setState(Wallet.SYNCING);
+      this.setState(HathorWallet.SYNCING);
       wallet.loadAddressHistory(0, GAP_LIMIT).then(() => {
-        this.setState(Wallet.READY);
+        this.setState(HathorWallet.READY);
       }).catch((error) => {
         throw error;
       })
     } else {
       // CONNECTING or CLOSED?
       this.serverInfo = null;
-      this.setState(Wallet.CONNECTING);
+      this.setState(HathorWallet.CONNECTING);
     }
   }
 
@@ -131,9 +144,6 @@ class Wallet extends EventEmitter {
   }
 
   getBalance(tokenUid) {
-    if (!tokenUid && !this.token) {
-      throw Error('Token must be set in the class instance or passed as parameter in the method.')
-    }
     const uid = tokenUid || this.token.uid;
     const historyTransactions = this.getTxHistory();
     return wallet.calculateBalance(Object.values(historyTransactions), uid);
@@ -229,7 +239,7 @@ class Wallet extends EventEmitter {
 
       if (!result.success) {
         console.log('Error sending tx:', result.message);
-        return;
+        return Promise.reject(new Error(result.message));
       }
 
       const dataToken = result.data;
@@ -278,9 +288,6 @@ class Wallet extends EventEmitter {
    **/
   sendTransaction(address, value, token) {
     const txToken = token || this.token;
-    if (!txToken) {
-      throw Error('Token must be set in the class instance or passed as parameter in the method.')
-    }
     const isHathorToken = txToken.uid === HATHOR_TOKEN_CONFIG.uid;
     // XXX This allow only one token to be sent
     // XXX This method allow only one output
@@ -321,7 +328,7 @@ class Wallet extends EventEmitter {
 
     this.getTokenData();
     this.serverInfo = null;
-    this.setState(Wallet.CONNECTING);
+    this.setState(HathorWallet.CONNECTING);
 
     const promise = new Promise((resolve, reject) => {
       version.checkApiVersion().then((info) => {
@@ -331,12 +338,12 @@ class Wallet extends EventEmitter {
           this.serverInfo = info;
           resolve(info);
         } else {
-          this.setState(Wallet.CLOSED);
+          this.setState(HathorWallet.CLOSED);
           reject(`Wrong network. server=${info.network} expected=${this.network}`);
         }
       }, (error) => {
         console.log('Version error:', error);
-        this.setState(Wallet.CLOSED);
+        this.setState(HathorWallet.CLOSED);
         reject(error);
       });
     });
@@ -355,7 +362,7 @@ class Wallet extends EventEmitter {
     ws.removeListener('addresses_loaded', this.onAddressesLoaded);
     ws.removeListener('wallet', this.handleWebsocketMsg);
     this.serverInfo = null;
-    this.setState(Wallet.CLOSED);
+    this.setState(HathorWallet.CLOSED);
   }
 
   /**
@@ -394,41 +401,39 @@ class Wallet extends EventEmitter {
   }
 
   getTokenData() {
-    if (this.tokenUid) {
-      if (this.tokenUid === HATHOR_TOKEN_CONFIG.uid) {
-        // Hathor token we don't get from the full node
-        this.token = HATHOR_TOKEN_CONFIG;
-      } else {
-        // Get token info from full node
-        // XXX This request might take longer than the ws connection to start
-        // so it's possible (but hard to happen) that the wallet will change to
-        // READY state with token still null.
-        // I will keep it like that for now but to protect from this
-        // we should change to READY only after both things finish
-        walletApi.getGeneralTokenInfo(this.tokenUid, (response) => {
-          if (response.success) {
-            this.token = {
-              uid: this.tokenUid,
-              name: response.name,
-              symbol: response.symbol,
-            }
-          } else {
-            throw Error(response.message);
+    if (this.tokenUid === HATHOR_TOKEN_CONFIG.uid) {
+      // Hathor token we don't get from the full node
+      this.token = HATHOR_TOKEN_CONFIG;
+    } else {
+      // Get token info from full node
+      // XXX This request might take longer than the ws connection to start
+      // so it's possible (but hard to happen) that the wallet will change to
+      // READY state with token still null.
+      // I will keep it like that for now but to protect from this
+      // we should change to READY only after both things finish
+      walletApi.getGeneralTokenInfo(this.tokenUid, (response) => {
+        if (response.success) {
+          this.token = {
+            uid: this.tokenUid,
+            name: response.name,
+            symbol: response.symbol,
           }
-        });
-      }
+        } else {
+          throw Error(response.message);
+        }
+      });
     }
   }
 
   isReady() {
-    return this.state === Wallet.READY;
+    return this.state === HathorWallet.READY;
   }
 }
 
 // State constants.
-Wallet.CLOSED =  0;
-Wallet.CONNECTING = 1;
-Wallet.SYNCING = 2;
-Wallet.READY = 3;
+HathorWallet.CLOSED =  0;
+HathorWallet.CONNECTING = 1;
+HathorWallet.SYNCING = 2;
+HathorWallet.READY = 3;
 
-export default Wallet;
+export default HathorWallet;
