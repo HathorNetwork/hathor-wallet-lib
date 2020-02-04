@@ -431,19 +431,4 @@ Wallet.CONNECTING = 1;
 Wallet.SYNCING = 2;
 Wallet.READY = 3;
 
-Wallet.getHumanState = (state) => {
-  const map = {
-    [Wallet.CLOSED]: 'Closed',
-    [Wallet.CONNECTING]: 'Connecting',
-    [Wallet.SYNCING]: 'Syncing',
-    [Wallet.READY]: 'Ready',
-  }
-
-  if (state in map) {
-    return map[state];
-  } else {
-    return 'Unknown';
-  }
-}
-
 export default Wallet;
