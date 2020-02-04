@@ -37,8 +37,24 @@ import walletApi from '../api/wallet';
  *                          one for each request sent to the server.
  **/
 class Wallet extends EventEmitter {
-  constructor({ network, server, seed, tokenUid }) {
+  constructor({
+    network,
+    server = DEFAULT_SERVER,
+
+    seed,
+    passphrase = '',
+
+    tokenUid,
+
+    // XXX Update it so we don't have fixed pin/password
+    password = '123',
+    pinCode = '123',
+  } = {}) {
     super();
+
+    if (!network) {
+      throw Error('You must explicitly provide the network.');
+    }
 
     networkInstance.setNetwork(network);
     this.network = network;
@@ -52,21 +68,14 @@ class Wallet extends EventEmitter {
 
     this.seed = seed;
     this.server = server;
-    if (!this.server) {
-      // We set the default server of the lib
-      this.server = DEFAULT_SERVER;
-
-    }
 
     // tokenUid is optional so we can get the token of the wallet
     this.token = null;
     this.tokenUid = tokenUid;
 
-
-    this.passphrase = '';
-    // XXX Update it so we don't have fixed pin/password
-    this.pinCode = '123';
-    this.password = '123';
+    this.passphrase = passphrase;
+    this.pinCode = pinCode;
+    this.password = password;
   }
 
   /**
@@ -100,11 +109,10 @@ class Wallet extends EventEmitter {
     }
   }
 
-  getAddressToUse() {
-    return wallet.getAddressToUse();
-  }
-
-  getCurrentAddress() {
+  getCurrentAddress({ markAsUsed = false } = {}) {
+    if (markAsUsed) {
+      return wallet.getAddressToUse();
+    }
     return wallet.getCurrentAddress();
   }
 
