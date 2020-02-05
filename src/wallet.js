@@ -137,6 +137,7 @@ const wallet = {
     let walletData = {
       keys: {},
       xpubkey: privkey.xpubkey,
+      historyTransactions: {},
     }
 
     storage.setItem('wallet:accessData', access);
@@ -1166,6 +1167,7 @@ const wallet = {
     let newWalletData = {
       keys: {},
       xpubkey: walletData.xpubkey,
+      historyTransactions: {},
     }
 
     storage.setItem('wallet:accessData', accessData);
@@ -1571,7 +1573,10 @@ const wallet = {
    */
   txExists(txData) {
     const data = this.getWalletData();
-    return txData.tx_id in data['historyTransactions'];
+    if (data && data['historyTransactions']) {
+      return txData.tx_id in data['historyTransactions'];
+    }
+    return false;
   },
 
   /**
