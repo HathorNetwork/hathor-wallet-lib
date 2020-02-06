@@ -14,7 +14,7 @@ import tokens from './tokens';
 import helpers from './helpers';
 import { ConstantNotSet, OutputValueError, WalletTypeError } from './errors';
 import version from './version';
-import storage from './storage';
+import defaultStorage from './storage';
 import network from './network';
 import transaction from './transaction';
 import WebSocketHandler from './WebSocketHandler';
@@ -61,6 +61,29 @@ const wallet = {
    * Stores the height of the best chain updated from ws
    */
   _networkBestChainHeight: 0,
+
+  /*
+   * Should never be accessed directly, only through get method
+   */
+  _storage: defaultStorage,
+
+  /*
+   * Set storage to be used in the methods. If it is null, the default
+   * storage is used.
+   */
+  setStorage(storage) {
+    if (storage === null) {
+      storage = defaultStorage;
+    }
+    this._storage = storage;
+  }
+
+  /*
+   * Return the storage used in the methods.
+   */
+  getStorage() {
+    return this._storage;
+  }
 
   /**
    * Verify if words passed to generate wallet are valid. In case of invalid, returns message
@@ -177,7 +200,7 @@ const wallet = {
    * @inner
    */
   getLastGeneratedIndex() {
-    const raw = storage.getItem('wallet:lastGeneratedIndex');
+    const raw = this._storage.getItem('wallet:lastGeneratedIndex');
     if (!raw) {
       return 0;
     }
@@ -193,7 +216,7 @@ const wallet = {
    * @inner
    */
   getWalletData() {
-    return storage.getItem('wallet:data');
+    return this._storage.getItem('wallet:data');
   },
 
   /**
@@ -205,7 +228,7 @@ const wallet = {
    * @inner
    */
   setWalletData(data) {
-    storage.setItem('wallet:data', data);
+    this._storage.setItem('wallet:data', data);
   },
 
   /**
@@ -217,7 +240,7 @@ const wallet = {
    * @inner
    */
   getWalletAccessData() {
-    return storage.getItem('wallet:accessData');
+    return this._storage.getItem('wallet:accessData');
   },
 
   /**
@@ -229,7 +252,7 @@ const wallet = {
    * @inner
    */
   setWalletAccessData(data) {
-    storage.setItem('wallet:accessData', data);
+    this._storage.setItem('wallet:accessData', data);
   },
 
   /**
@@ -265,7 +288,7 @@ const wallet = {
         // Subscribe in websocket to this address updates
         this.subscribeAddress(address.toString());
 
-        if (storage.getItem('wallet:address') === null) {
+        if (this._storage.getItem('wallet:address') === null) {
           // If still don't have an address to show on the screen
           this.updateAddress(address.toString(), i);
         }
@@ -273,7 +296,7 @@ const wallet = {
 
       let lastGeneratedIndex = this.getLastGeneratedIndex();
       if (lastGeneratedIndex < stopIndex - 1) {
-        storage.setItem('wallet:lastGeneratedIndex', stopIndex - 1);
+        this._storage.setItem('wallet:lastGeneratedIndex', stopIndex - 1);
       }
 
       this.setWalletData(dataJson);
@@ -363,8 +386,8 @@ const wallet = {
    * @inner
    */
   updateAddress(lastSharedAddress, lastSharedIndex) {
-    storage.setItem('wallet:address', lastSharedAddress);
-    storage.setItem('wallet:lastSharedIndex', lastSharedIndex);
+    this._storage.setItem('wallet:address', lastSharedAddress);
+    this._storage.setItem('wallet:lastSharedIndex', lastSharedIndex);
   },
 
   /**
@@ -623,7 +646,7 @@ const wallet = {
     this.updateAddress(newAddress.toString(), newIndex);
     let lastGeneratedIndex = this.getLastGeneratedIndex();
     if (newIndex > lastGeneratedIndex) {
-      storage.setItem('wallet:lastGeneratedIndex', newIndex);
+      this._storage.setItem('wallet:lastGeneratedIndex', newIndex);
     }
 
     // Save new keys to local storage
@@ -661,7 +684,7 @@ const wallet = {
    * @inner
    */
   getCurrentAddress() {
-    return storage.getItem('wallet:address');
+    return this._storage.getItem('wallet:address');
   },
 
   /**
@@ -845,7 +868,7 @@ const wallet = {
    * @inner
    */
   loaded() {
-    return storage.getItem('wallet:accessData') !== null;
+    return this._storage.getItem('wallet:accessData') !== null;
   },
 
   /**
@@ -857,7 +880,7 @@ const wallet = {
    * @inner
    */
   started() {
-    return storage.getItem('wallet:started') !== null;
+    return this._storage.getItem('wallet:started') !== null;
   },
 
   /**
@@ -869,7 +892,7 @@ const wallet = {
    * @inner
    */
   markWalletAsStarted() {
-    return storage.setItem('wallet:started', true);
+    return this._storage.setItem('wallet:started', true);
   },
 
   /**
@@ -936,8 +959,8 @@ const wallet = {
       let index = data.keys[address].index;
       const lastUsedIndex = this.getLastUsedIndex();
       if (lastUsedIndex === null || index > parseInt(lastUsedIndex, 10)) {
-        storage.setItem('wallet:lastUsedAddress', address);
-        storage.setItem('wallet:lastUsedIndex', index);
+        this._storage.setItem('wallet:lastUsedAddress', address);
+        this._storage.setItem('wallet:lastUsedIndex', index);
       }
     }
   },
@@ -964,7 +987,7 @@ const wallet = {
    * @inner
    */
   cleanServer() {
-    storage.removeItem('wallet:server');
+    this._storage.removeItem('wallet:server');
   },
 
   /**
@@ -973,13 +996,13 @@ const wallet = {
    * @inner
    */
   cleanLoadedData() {
-    storage.removeItem('wallet:accessData');
-    storage.removeItem('wallet:data');
-    storage.removeItem('wallet:address');
-    storage.removeItem('wallet:lastSharedIndex');
-    storage.removeItem('wallet:lastGeneratedIndex');
-    storage.removeItem('wallet:lastUsedIndex');
-    storage.removeItem('wallet:lastUsedAddress');
+    this._storage.removeItem('wallet:accessData');
+    this._storage.removeItem('wallet:data');
+    this._storage.removeItem('wallet:address');
+    this._storage.removeItem('wallet:lastSharedIndex');
+    this._storage.removeItem('wallet:lastGeneratedIndex');
+    this._storage.removeItem('wallet:lastUsedIndex');
+    this._storage.removeItem('wallet:lastUsedAddress');
     // we clean storage, but wallet is still open
     this.setWalletAsOpen();
   },
@@ -1000,12 +1023,12 @@ const wallet = {
     tokens.clearDepositPercentage();
     this.clearRewardLockConstant();
     this.clearNetworkBestChainHeight();
-    storage.removeItem('wallet:started');
-    storage.removeItem('wallet:backup');
-    storage.removeItem('wallet:locked');
-    storage.removeItem('wallet:tokens');
-    storage.removeItem('wallet:sentry');
-    storage.removeItem('wallet:type');
+    this._storage.removeItem('wallet:started');
+    this._storage.removeItem('wallet:backup');
+    this._storage.removeItem('wallet:locked');
+    this._storage.removeItem('wallet:tokens');
+    this._storage.removeItem('wallet:sentry');
+    this._storage.removeItem('wallet:type');
   },
 
   /*
@@ -1150,7 +1173,7 @@ const wallet = {
    * @inner
    */
   lock() {
-    storage.setItem('wallet:locked', true);
+    this._storage.setItem('wallet:locked', true);
   },
 
   /*
@@ -1160,7 +1183,7 @@ const wallet = {
    * @inner
    */
   unlock() {
-    storage.removeItem('wallet:locked');
+    this._storage.removeItem('wallet:locked');
   },
 
   /*
@@ -1172,7 +1195,7 @@ const wallet = {
    * @inner
    */
   isLocked() {
-    return storage.getItem('wallet:locked') !== null;
+    return this._storage.getItem('wallet:locked') !== null;
   },
 
   /*
@@ -1184,7 +1207,7 @@ const wallet = {
    * @inner
    */
   wasClosed() {
-    return storage.getItem('wallet:closed') === true;
+    return this._storage.getItem('wallet:closed') === true;
   },
 
   /*
@@ -1194,7 +1217,7 @@ const wallet = {
    * @inner
    */
   close() {
-    storage.setItem('wallet:closed', true);
+    this._storage.setItem('wallet:closed', true);
   },
 
   /*
@@ -1204,7 +1227,7 @@ const wallet = {
    * @inner
    */
   setWalletAsOpen() {
-    storage.setItem('wallet:closed', false);
+    this._storage.setItem('wallet:closed', false);
   },
 
   /**
@@ -1229,7 +1252,7 @@ const wallet = {
    * @inner
    */
   markBackupAsDone() {
-    storage.setItem('wallet:backup', true);
+    this._storage.setItem('wallet:backup', true);
   },
 
   /*
@@ -1239,7 +1262,7 @@ const wallet = {
    * @inner
    */
   markBackupAsNotDone() {
-    storage.removeItem('wallet:backup');
+    this._storage.removeItem('wallet:backup');
   },
 
   /*
@@ -1251,7 +1274,7 @@ const wallet = {
    * @inner
    */
   isBackupDone() {
-    return storage.getItem('wallet:backup') !== null;
+    return this._storage.getItem('wallet:backup') !== null;
   },
 
   /*
@@ -1333,7 +1356,7 @@ const wallet = {
    * @inner
    */
   changeServer(newServer) {
-    storage.setItem('wallet:server', newServer);
+    this._storage.setItem('wallet:server', newServer);
   },
 
   /*
@@ -1345,7 +1368,7 @@ const wallet = {
    * @inner
    */
   setDefaultServer(server) {
-    storage.setItem('wallet:defaultServer', server);
+    this._storage.setItem('wallet:defaultServer', server);
   },
 
   /*
@@ -1355,7 +1378,7 @@ const wallet = {
    * @inner
    */
   clearDefaultServer() {
-    storage.removeItem('wallet:defaultServer');
+    this._storage.removeItem('wallet:defaultServer');
   },
 
   /*
@@ -1447,7 +1470,7 @@ const wallet = {
    * @inner
    */
   getLocalStorageIndex(key) {
-    let index = storage.getItem(`wallet:${key}`);
+    let index = this._storage.getItem(`wallet:${key}`);
     if (index !== null) {
       index = parseInt(index, 10);
     }
@@ -1870,7 +1893,7 @@ const wallet = {
     if (!walletTypes.includes(type)) {
       throw new WalletTypeError('Invalid wallet type');
     }
-    storage.setItem('wallet:type', type);
+    this._storage.setItem('wallet:type', type);
   },
 
   /**
@@ -1882,7 +1905,7 @@ const wallet = {
    * @inner
    */
   isSoftwareWallet() {
-    return storage.getItem('wallet:type') === 'software';
+    return this._storage.getItem('wallet:type') === 'software';
   },
 
   /**
@@ -1894,7 +1917,7 @@ const wallet = {
    * @inner
    */
   isHardwareWallet() {
-    return storage.getItem('wallet:type') === 'hardware';
+    return this._storage.getItem('wallet:type') === 'hardware';
   },
 
   /**

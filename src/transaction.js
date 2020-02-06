@@ -11,7 +11,7 @@ import { HDPrivateKey, crypto, encoding, util } from 'bitcore-lib';
 import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError } from './errors';
 import dateFormatter from './date';
 import helpers from './helpers';
-import storage from './storage';
+import defaultStorage from './storage';
 import network from './network';
 import wallet from './wallet';
 import buffer from 'buffer';
@@ -383,7 +383,7 @@ const transaction = {
    * @memberof Transaction
    * @inner
    */
-  getSignature(index, hash, pin) {
+  getSignature(index, hash, pin, { storage = defaultStorage }) {
     const accessData = storage.getItem('wallet:accessData');
     const encryptedPrivateKey = accessData.mainKey;
     const privateKeyStr = wallet.decryptData(encryptedPrivateKey, pin);

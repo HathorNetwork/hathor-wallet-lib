@@ -6,15 +6,11 @@
  */
 
 import EventEmitter from 'events';
-import networkInstance from '../network';
 import wallet from '../wallet';
-import { GAP_LIMIT, HATHOR_TOKEN_CONFIG, DEFAULT_SERVER } from '../constants';
+import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
 import transaction from '../transaction';
 import tokens from '../tokens';
 import version from '../version';
-import ws from '../WebSocketHandler';
-import storage from '../storage';
-import MemoryStore from '../memory_store';
 import walletApi from '../api/wallet';
 
 /**
@@ -38,8 +34,7 @@ import walletApi from '../api/wallet';
  **/
 class HathorWallet extends EventEmitter {
   /*
-   * network {String} 'testnet' or 'mainnet'
-   * server {String} Server for the wallet to connect to, e.g. http://localhost:8080/v1a/
+   * conn {Connection} A connection to the server
    * seed {String} 24 words separated by space
    * passphrase {String} Wallet passphrase
    * tokenUid {String} UID of the token to handle on this wallet
@@ -47,8 +42,7 @@ class HathorWallet extends EventEmitter {
    * pin {String} PIN to execute wallet actions
    */
   constructor({
-    network,
-    server = DEFAULT_SERVER,
+    conn,
 
     seed,
     passphrase = '',
@@ -61,17 +55,15 @@ class HathorWallet extends EventEmitter {
   } = {}) {
     super();
 
-    if (!network) {
-      throw Error('You must explicitly provide the network.');
+    if (!conn) {
+      throw Error('You must provide a connection.');
     }
 
     if (!seed) {
       throw Error('You must explicitly provide the seed.');
     }
 
-    networkInstance.setNetwork(network);
-    this.network = network;
-
+    this.conn = conn;
     this.state = HathorWallet.CLOSED;
     this.serverInfo = null;
 
@@ -349,10 +341,6 @@ class HathorWallet extends EventEmitter {
    * Connect to the server and start emitting events.
    **/
   start() {
-    const store = new MemoryStore();
-    storage.setStore(store);
-    storage.setItem('wallet:server', this.server);
-
     ws.on('is_online', this.onConnectionChange);
     ws.on('reload_data', this.reloadData);
     ws.on('addresses_loaded', this.onAddressesLoaded);
