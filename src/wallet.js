@@ -137,10 +137,11 @@ const wallet = {
     let walletData = {
       keys: {},
       xpubkey: privkey.xpubkey,
+      historyTransactions: {},
     }
 
     storage.setItem('wallet:accessData', access);
-    storage.setItem('wallet:data', walletData);
+    this.setWalletData(walletData);
 
     let promise = null;
     if (loadHistory) {
@@ -177,6 +178,18 @@ const wallet = {
    */
   getWalletData() {
     return storage.getItem('wallet:data');
+  },
+
+  /**
+   * Set wallet data
+   *
+   * @param {Object} wallet data
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  setWalletData(data) {
+    storage.setItem('wallet:data', data);
   },
 
   /**
@@ -222,7 +235,7 @@ const wallet = {
         storage.setItem('wallet:lastGeneratedIndex', stopIndex - 1);
       }
 
-      storage.setItem('wallet:data', dataJson);
+      this.setWalletData(dataJson);
 
       walletApi.getAddressHistory(addresses, (response) => {
         const data = this.getWalletData();
@@ -531,7 +544,7 @@ const wallet = {
     // Save new keys to local storage
     let data = this.getWalletData();
     data.keys[newAddress.toString()] = {privkey: null, index: newIndex};
-    storage.setItem('wallet:data', data);
+    this.setWalletData(data);
 
     // Subscribe in ws to new address updates
     this.subscribeAddress(newAddress.toString());
@@ -735,7 +748,7 @@ const wallet = {
     let data = this.getWalletData();
     data['historyTransactions'] = historyTransactions;
     data['allTokens'] = [...allTokens];
-    storage.setItem('wallet:data', data);
+    this.setWalletData(data);
   },
 
   /**
@@ -1166,10 +1179,11 @@ const wallet = {
     let newWalletData = {
       keys: {},
       xpubkey: walletData.xpubkey,
+      historyTransactions: {},
     }
 
     storage.setItem('wallet:accessData', accessData);
-    storage.setItem('wallet:data', newWalletData);
+    this.setWalletData(newWalletData);
 
     // Load history from new server
     const promise = this.loadAddressHistory(0, GAP_LIMIT);
@@ -1571,7 +1585,10 @@ const wallet = {
    */
   txExists(txData) {
     const data = this.getWalletData();
-    return txData.tx_id in data['historyTransactions'];
+    if (data && data['historyTransactions']) {
+      return txData.tx_id in data['historyTransactions'];
+    }
+    return false;
   },
 
   /**
