@@ -12,7 +12,7 @@ import CryptoJS from 'crypto-js';
 import walletApi from './api/wallet';
 import tokens from './tokens';
 import helpers from './helpers';
-import { ConstantNotSet, OutputValueError } from './errors';
+import { ConstantNotSet, OutputValueError, WalletTypeError } from './errors';
 import version from './version';
 import storage from './storage';
 import network from './network';
@@ -1780,10 +1780,16 @@ const wallet = {
    *
    * @param {string} type Wallet type
    *
+   * @throws {Error} Will throw an error if type is not one of ['software', 'hardware']
+   *
    * @memberof Wallet
    * @inner
    */
   setWalletType(type) {
+    const walletTypes = ['software', 'hardware'];
+    if (!walletTypes.includes(type)) {
+      throw new WalletTypeError('Invalid wallet type');
+    }
     storage.setItem('wallet:type', type);
   },
 
