@@ -25,8 +25,8 @@ test('Loaded', () => {
 });
 
 test('Clean local storage', () => {
-  storage.setItem('wallet:accessData', {});
-  storage.setItem('wallet:data', {});
+  wallet.setWalletAccessData({});
+  wallet.setWalletData({});
   storage.setItem('wallet:address', '171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r');
   storage.setItem('wallet:lastSharedIndex', 1);
   storage.setItem('wallet:lastGeneratedIndex', 19);
@@ -35,8 +35,8 @@ test('Clean local storage', () => {
 
   wallet.cleanLoadedData();
 
-  expect(storage.getItem('wallet:accessData')).toBeNull();
-  expect(storage.getItem('wallet:data')).toBeNull();
+  expect(wallet.getWalletAccessData()).toBeNull();
+  expect(wallet.getWalletData()).toBeNull();
   expect(storage.getItem('wallet:address')).toBeNull();
   expect(storage.getItem('wallet:lastSharedIndex')).toBeNull();
   expect(storage.getItem('wallet:lastGeneratedIndex')).toBeNull();
@@ -223,10 +223,10 @@ test('Get wallet words', async () => {
 test('Reload data', async () => {
   const words = wallet.generateWalletWords(256);
   await wallet.executeGenerateWallet(words, '', '123456', 'password', true);
-  const accessData = storage.getItem('wallet:accessData');
-  const keys = storage.getItem('wallet:data').keys;
+  const accessData = wallet.getWalletAccessData();
+  const keys = wallet.getWalletData().keys;
   wallet.reloadData();
-  expect(storage.getItem('wallet:accessData')).toEqual(accessData);
+  expect(wallet.getWalletAccessData()).toEqual(accessData);
 });
 
 test('Started', () => {
@@ -252,8 +252,8 @@ test('Reset all data', async () => {
   expect(storage.getItem('wallet:started')).toBeNull();
   expect(storage.getItem('wallet:server')).toBeNull();
   expect(storage.getItem('wallet:locked')).toBeNull();
-  expect(storage.getItem('wallet:accessData')).toBeNull();
-  expect(storage.getItem('wallet:data')).toBeNull();
+  expect(wallet.getWalletAccessData()).toBeNull();
+  expect(wallet.getWalletData()).toBeNull();
   expect(storage.getItem('wallet:defaultServer')).toBe(defaultServer);
 });
 

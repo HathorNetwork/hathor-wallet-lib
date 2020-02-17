@@ -27,7 +27,7 @@ const walletApi = {
    */
   getAddressHistory(addresses, resolve) {
     const data = {addresses};
-    return createRequestInstance(resolve).get('thin_wallet/address_history', {'params': data}).then((res) => {
+    return createRequestInstance(resolve, 40000).get('thin_wallet/address_history', {'params': data}).then((res) => {
       resolve(res.data)
     }, (res) => {
       return Promise.reject(res);
