@@ -27,7 +27,7 @@ const walletApi = {
    */
   getAddressHistory(addresses, resolve) {
     const data = {addresses};
-    return createRequestInstance(resolve, 40000).get('thin_wallet/address_history', {'params': data}).then((res) => {
+    return createRequestInstance(resolve).get('thin_wallet/address_history', {'params': data}).then((res) => {
       resolve(res.data)
     }, (res) => {
       return Promise.reject(res);
@@ -41,7 +41,7 @@ const walletApi = {
    * instance with a resolve callback, which will be used in case of failure and the
    * user decides to retry. Because of that, it's impossible to use the old method (getAddressHistory)
    * to get data with async/await, only with promises. Because of the pagination,
-   * we are in a looping getting data while not finished, so the code with async/await is
+   * we are in a loop getting data while not finished, so the code with async/await is
    * much cleaner.
    *
    * So, right now to use async/await we must use this method and it's not possible to

@@ -263,7 +263,7 @@ const wallet = {
 
       this.setWalletData(dataJson);
 
-      this.getHistory(addresses).then((history) => {
+      this.getTxHistory(addresses).then((history) => {
         const data = this.getWalletData();
         // Update historyTransactions with new one
         const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
@@ -289,7 +289,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  async getHistory(addresses) {
+  async getTxHistory(addresses) {
     let hasMore = true;
     let firstHash = null;
     let addressesToSearch = addresses;
