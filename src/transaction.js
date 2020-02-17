@@ -644,6 +644,52 @@ const transaction = {
   },
 
   /**
+   * Prepare a transaction without propagating to the network.
+   *
+   * @param {Object} data Object with inputs and outputs
+   * {
+   *  'inputs': [{'tx_id', 'index', 'token', 'address'}],
+   *  'outputs': ['address', 'value', 'timelock', 'tokenData'],
+   * }
+   * @param {string} pin Pin to decrypt data
+   * @param {Object} {
+   *   {number} minimumTimestamp Default is 0.
+   * }
+   *
+   * @return {Object} data
+   * @memberof Transaction
+   **/
+  prepareData(data, pin, options) {
+    const fnOptions = Object.assign({
+      minimumTimestamp: 0,
+      getSignature: true,
+      completeTx: true,
+    }, options);
+
+    const { minimumTimestamp, getSignature, completeTx } = fnOptions;
+    if (completeTx) {
+      // Completing data in the same object
+      transaction.completeTx(data);
+    }
+
+    if (getSignature) {
+      const dataToSign = transaction.dataToSign(data);
+      data = transaction.signTx(data, dataToSign, pin);
+    }
+
+    transaction.verifyTxData(data);
+
+    if (data.timestamp < minimumTimestamp) {
+      data.timestamp = minimumTimestamp;
+    }
+
+    // Set weight only after completing all the fields
+    transaction.setWeightIfNeeded(data);
+
+    return data;
+  },
+
+  /**
    * Complete and send a transaction to the full node
    *
    * @param {Object} data Object with inputs and outputs
@@ -661,53 +707,52 @@ const transaction = {
    * @inner
    */
   sendTransaction(data, pin, options) {
-    const fnOptions = Object.assign({
-      minimumTimestamp: 0,
-      getSignature: true,
-      completeTx: true,
-    }, options);
-
-    const { minimumTimestamp, getSignature, completeTx } = fnOptions;
-    const promise = new Promise((resolve, reject) => {
-      try {
-        if (completeTx) {
-          // Completing data in the same object
-          transaction.completeTx(data);
-        }
-        transaction.verifyTxData(data);
-
-        if (getSignature) {
-          const dataToSign = transaction.dataToSign(data);
-          data = transaction.signTx(data, dataToSign, pin);
-        }
-
-        if (data.timestamp < minimumTimestamp) {
-          data.timestamp = minimumTimestamp;
-        }
-
-        // Set weight only after completing all the fields
-        transaction.setWeightIfNeeded(data);
-
-        const txBytes = transaction.txToBytes(data);
-        const txHex = util.buffer.bufferToHex(txBytes);
-        walletApi.sendTokens(txHex, (response) => {
-          if (response.success) {
-            resolve(response);
-          } else {
-            reject(response.message);
-          }
-        }).catch((e) => {
-          // Error in request
-          reject(e.message);
-        });
-      } catch (e) {
-        if (e instanceof AddressError || e instanceof OutputValueError || e instanceof ConstantNotSet || e instanceof CreateTokenTxInvalid || e instanceof MaximumNumberOutputsError || e instanceof MaximumNumberInputsError) {
-          reject(e.message);
-        } else {
-          // Unhandled error
-          throw e;
-        }
+    try {
+      data = transaction.prepareData(data, pin, options);
+    } catch (e) {
+      if (e instanceof AddressError ||
+          e instanceof OutputValueError ||
+          e instanceof ConstantNotSet ||
+          e instanceof CreateTokenTxInvalid ||
+          e instanceof MaximumNumberOutputsError ||
+          e instanceof MaximumNumberInputsError) {
+        return Promise.reject(e.message);
+      } else {
+        // Unhandled error
+        throw e;
       }
+    }
+    return transaction.sendPreparedTransaction(data);
+  },
+
+  /**
+   * Send a transaction to the full node. This transaction must have
+   * already been prepared, i.e., it must be complete.
+   *
+   * @param {Object} data Object with inputs and outputs
+   * {
+   *  'inputs': [{'tx_id', 'index', 'token', 'address'}],
+   *  'outputs': ['address', 'value', 'timelock', 'tokenData'],
+   * }
+   *
+   * @return {Promise}
+   * @memberof Transaction
+   * @inner
+   */
+  sendPreparedTransaction(data) {
+    const promise = new Promise((resolve, reject) => {
+      const txBytes = transaction.txToBytes(data);
+      const txHex = util.buffer.bufferToHex(txBytes);
+      walletApi.sendTokens(txHex, (response) => {
+        if (response.success) {
+          resolve(response);
+        } else {
+          reject(response.message);
+        }
+      }).catch((e) => {
+        // Error in request
+        reject(e.message);
+      });
     });
     return promise;
   },

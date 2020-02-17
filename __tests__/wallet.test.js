@@ -287,3 +287,11 @@ test('Wallet operations for transaction', () => {
   expect(result9.success).toBe(true);
   expect(result9.data.outputs.length).toBe(2);
 });
+
+test('Try to check tx before wallet has loaded', () => {
+  const words = wallet.generateWalletWords(256);
+  wallet.executeGenerateWallet(words, '', '123456', 'password', false);
+  // this should return false, not fail
+  expect(wallet.txExists({'tx_id': 'aaa'})).toBe(false);
+});
+
