@@ -136,30 +136,27 @@ const wallet = {
       xpubkey: privkey.xpubkey,
     }
 
-    return this.startWallet(access, privkey.xpubkey, loadHistory);
+    return this.startWallet(access, loadHistory);
   },
 
   /**
    * Set wallet data on storage and start it
    *
-   * @param {Object} accessData Object of data to be saved on storage. Will be empty for hardware wallet and for software will have the keys
-   *                    (mainKey, hash, salt, words, hashPasswd, saltPasswd, hashIterations, pbkdf2Hasher) as set on executeGenerateWallet method
-   * @param {string} xpub Xpub string of the wallet being started
+   * @param {Object} accessData Object of data to be saved on storage. Will only have cpubkey for hardware wallet and for software will have the keys (mainKey, hash, salt, words, hashPasswd, saltPasswd, hashIterations, pbkdf2Hasher) as set on executeGenerateWallet method
    * @param {boolean} loadHistory if should load the history from the generated addresses
    *
    * @return {Promise} Promise that resolves when finishes loading address history, in case loadHistory = true, else returns null
    * @memberof Wallet
    * @inner
    */
-  startWallet(accessData, xpub, loadHistory) {
-    WebSocketHandler.setup();
-    this.afterOpen();
+  startWallet(accessData, loadHistory) {
+    this.setWalletAsOpen();
     let walletData = {
       keys: {},
       historyTransactions: {},
     }
 
-    this.setWalletAccessData(access);
+    this.setWalletAccessData(accessData);
     this.setWalletData(walletData);
 
     let promise = null;
@@ -939,7 +936,8 @@ const wallet = {
     storage.removeItem('wallet:lastGeneratedIndex');
     storage.removeItem('wallet:lastUsedIndex');
     storage.removeItem('wallet:lastUsedAddress');
-    this.afterOpen();
+    // we clean storage, but wallet is still open
+    this.setWalletAsOpen();
   },
 
   /*
@@ -1161,7 +1159,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  afterOpen() {
+  setWalletAsOpen() {
     storage.setItem('wallet:closed', false);
   },
 
@@ -1920,8 +1918,8 @@ const wallet = {
    * @inner
    */
   getPublicKey(index) {
-    const data = this.getWalletData();
-    const hdpubkey = HDPublicKey(data.xpubkey);
+    const accessData = this.getWalletAccessData();
+    const hdpubkey = HDPublicKey(accessData.xpubkey);
     const key = hdpubkey.derive(index);
     return key.publicKey.toBuffer();
   },
