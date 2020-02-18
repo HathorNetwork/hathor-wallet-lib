@@ -213,7 +213,10 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Send a transaction with multi tokens
+   *
    * @param {Object} data Array of {'address', 'value', 'token'}
+   *
+   * @return {Promise} Promise resolved when transaction is sent.
    */
   sendMultiTokenTransaction(data) {
     const txData = {
