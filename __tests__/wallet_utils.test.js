@@ -315,7 +315,8 @@ test('get public key from index', () => {
     50: '0331e2f0a357538971146820f54f6deb794fbb0d7610bfa978562929e2bba8a67e',
     100: '02dd435e564faf9b7b4b421413fca2f3d46830d80e90c3c8ace5945b8da35f2e8e',
   };
-  storage.setItem('wallet:data', {
+
+  wallet.setWalletAccessData({
     xpubkey: 'xpub6F7hrAA4jGmePP7Yw82SFysRBaKDSKWH2dQngjWGKinHSJZfHKRCCo98fAUCam8erAYBjdf8DVn7VoJWpSDR7zFZSoVuv3XV631GVyGty6X'
   });
 
