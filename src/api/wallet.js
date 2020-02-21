@@ -167,13 +167,18 @@ const walletApi = {
    * @memberof ApiWallet
    * @inner
    */
-  getSearchAddress(address, count, hash, page, resolve) {
+  getSearchAddress(address, count, hash, page, token, resolve) {
     const data = {address, count};
 
     if (hash) {
       data['hash'] = hash;
       data['page'] = page;
     }
+
+    if (token) {
+      data['token'] = token;
+    }
+
     return createRequestInstance(resolve).get('thin_wallet/address_search', {'params': data}).then((res) => {
       resolve(res.data)
     }, (res) => {
