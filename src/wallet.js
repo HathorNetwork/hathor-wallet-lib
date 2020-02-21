@@ -31,6 +31,7 @@ import _ from 'lodash';
  *   . hash: string with hash of pin
  *   . words: string with encrypted words
  *   . hashPasswd: string with hash of password
+ *   . xpubkey: string with wallet xpubkey
  * - address: string with last shared address to show on screen
  * - lastSharedIndex: number with the index of the last shared address
  * - lastGeneratedIndex: number with the index of the last generated address
@@ -132,15 +133,16 @@ const wallet = {
       saltPasswd: encryptedDataWords.hash.salt,
       hashIterations: HASH_ITERATIONS,
       pbkdf2Hasher: 'sha1', // For now we are only using SHA1
+      xpubkey: privkey.xpubkey,
     }
 
     let walletData = {
       keys: {},
-      xpubkey: privkey.xpubkey,
+      historyTransactions: {},
     }
 
-    storage.setItem('wallet:accessData', access);
-    storage.setItem('wallet:data', walletData);
+    this.setWalletAccessData(access);
+    this.setWalletData(walletData);
 
     let promise = null;
     if (loadHistory) {
@@ -180,6 +182,42 @@ const wallet = {
   },
 
   /**
+   * Set wallet data
+   *
+   * @param {Object} wallet data
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  setWalletData(data) {
+    storage.setItem('wallet:data', data);
+  },
+
+  /**
+   * Get wallet access data already parsed from JSON
+   *
+   * @return {Object} wallet access data
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  getWalletAccessData() {
+    return storage.getItem('wallet:accessData');
+  },
+
+  /**
+   * Set wallet access data
+   *
+   * @param {Object} wallet access data
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  setWalletAccessData(data) {
+    storage.setItem('wallet:accessData', data);
+  },
+
+  /**
    * Load the history for each of the addresses of a new generated wallet
    * We always search until the GAP_LIMIT. If we have any history in the middle of the searched addresses
    * we search again until we have the GAP_LIMIT of addresses without any transactions
@@ -198,8 +236,9 @@ const wallet = {
       // First generate all private keys and its addresses, then get history
       let addresses = [];
       let dataJson = this.getWalletData();
+      let accessData = this.getWalletAccessData();
 
-      const xpub = HDPublicKey(dataJson.xpubkey);
+      const xpub = HDPublicKey(accessData.xpubkey);
       const stopIndex = startIndex + count;
       for (var i=startIndex; i<stopIndex; i++) {
         // Generate each key from index, encrypt and save
@@ -222,7 +261,7 @@ const wallet = {
         storage.setItem('wallet:lastGeneratedIndex', stopIndex - 1);
       }
 
-      storage.setItem('wallet:data', dataJson);
+      this.setWalletData(dataJson);
 
       walletApi.getAddressHistory(addresses, (response) => {
         const data = this.getWalletData();
@@ -384,7 +423,7 @@ const wallet = {
    * @inner
    */
   hashValidation(password, hashKey, saltKey) {
-    const accessData = storage.getItem('wallet:accessData');
+    const accessData = this.getWalletAccessData();
     let hash;
     if (!(saltKey in accessData)) {
       // Old wallet, we need to validate with old method and update it to the new method
@@ -398,7 +437,7 @@ const wallet = {
       accessData['hashIterations'] = HASH_ITERATIONS;
       accessData['pbkdf2Hasher'] = 'sha1'; // For now we are only using SHA1
       // Updating access data with new hash data
-      storage.setItem('wallet:accessData', accessData);
+      this.setWalletAccessData(accessData);
       return true;
     } else {
       // Already a wallet with new hash algorithm, so only validate
@@ -424,7 +463,7 @@ const wallet = {
       return false;
     }
 
-    const accessData = storage.getItem('wallet:accessData');
+    const accessData = this.getWalletAccessData();
 
     // Get new PIN hash
     const newHash = this.hashPassword(newPin);
@@ -437,7 +476,7 @@ const wallet = {
     const encryptedData = this.encryptData(decryptedData, newPin);
     accessData['mainKey'] = encryptedData.encrypted.toString();
 
-    storage.setItem('wallet:accessData', accessData);
+    this.setWalletAccessData(accessData);
 
     return true;
   },
@@ -511,8 +550,8 @@ const wallet = {
    * @inner
    */
   generateNewAddress() {
-    const dataJson = this.getWalletData();
-    const xpub = HDPublicKey(dataJson.xpubkey);
+    const accessData = this.getWalletAccessData();
+    const xpub = HDPublicKey(accessData.xpubkey);
 
     // Get last shared index to discover new index
     const lastSharedIndex = this.getLastSharedIndex();
@@ -531,7 +570,7 @@ const wallet = {
     // Save new keys to local storage
     let data = this.getWalletData();
     data.keys[newAddress.toString()] = {privkey: null, index: newIndex};
-    storage.setItem('wallet:data', data);
+    this.setWalletData(data);
 
     // Subscribe in ws to new address updates
     this.subscribeAddress(newAddress.toString());
@@ -735,7 +774,7 @@ const wallet = {
     let data = this.getWalletData();
     data['historyTransactions'] = historyTransactions;
     data['allTokens'] = [...allTokens];
-    storage.setItem('wallet:data', data);
+    this.setWalletData(data);
   },
 
   /**
@@ -1108,7 +1147,7 @@ const wallet = {
    * @inner
    */
   getWalletWords(password) {
-    const accessData = storage.getItem('wallet:accessData');
+    const accessData = this.getWalletAccessData();
     return this.decryptData(accessData.words, password);
   },
 
@@ -1152,12 +1191,8 @@ const wallet = {
    */
   reloadData() {
     // Get old access data
-    const accessData = storage.getItem('wallet:accessData');
+    const accessData = this.getWalletAccessData();
     const walletData = this.getWalletData();
-
-    if (walletData === null) {
-      return Promise.reject();
-    }
 
     this.cleanWallet();
     // Restart websocket connection
@@ -1165,11 +1200,11 @@ const wallet = {
 
     let newWalletData = {
       keys: {},
-      xpubkey: walletData.xpubkey,
+      historyTransactions: {},
     }
 
-    storage.setItem('wallet:accessData', accessData);
-    storage.setItem('wallet:data', newWalletData);
+    this.setWalletAccessData(accessData);
+    this.setWalletData(newWalletData);
 
     // Load history from new server
     const promise = this.loadAddressHistory(0, GAP_LIMIT);
@@ -1446,7 +1481,7 @@ const wallet = {
       // Setting last shared address, if necessary
       const candidateIndex = maxIndex + 1;
       if (candidateIndex > lastSharedIndex) {
-        const xpub = HDPublicKey(dataJson.xpubkey);
+        const xpub = HDPublicKey(this.getWalletAccessData().xpubkey);
         const key = xpub.derive(candidateIndex);
         const address = Address(key.publicKey, network.getNetwork()).toString();
         newSharedIndex = candidateIndex;
@@ -1571,7 +1606,10 @@ const wallet = {
    */
   txExists(txData) {
     const data = this.getWalletData();
-    return txData.tx_id in data['historyTransactions'];
+    if (data && data['historyTransactions']) {
+      return txData.tx_id in data['historyTransactions'];
+    }
+    return false;
   },
 
   /**
