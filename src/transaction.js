@@ -662,17 +662,22 @@ const transaction = {
   prepareData(data, pin, options) {
     const fnOptions = Object.assign({
       minimumTimestamp: 0,
+      getSignature: true,
+      completeTx: true,
     }, options);
 
-    const { minimumTimestamp } = fnOptions;
+    const { minimumTimestamp, getSignature, completeTx } = fnOptions;
+    if (completeTx) {
+      // Completing data in the same object
+      transaction.completeTx(data);
+    }
+
+    if (getSignature) {
+      const dataToSign = transaction.dataToSign(data);
+      data = transaction.signTx(data, dataToSign, pin);
+    }
 
     transaction.verifyTxData(data);
-
-    // Completing data in the same object
-    transaction.completeTx(data);
-
-    const dataToSign = transaction.dataToSign(data);
-    data = transaction.signTx(data, dataToSign, pin);
 
     if (data.timestamp < minimumTimestamp) {
       data.timestamp = minimumTimestamp;

@@ -135,9 +135,7 @@ test('Wallet operations for transaction', () => {
     '171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r': {},
   }
 
-  const xpubkey = storage.getItem('wallet:data').xpubkey;
-
-  storage.setItem('wallet:data', {keys, historyTransactions, xpubkey});
+  storage.setItem('wallet:data', {keys, historyTransactions});
 
   const expectedBalance = {
     '00': {

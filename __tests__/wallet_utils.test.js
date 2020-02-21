@@ -9,6 +9,7 @@ import wallet from '../src/wallet';
 import helpers from '../src/helpers';
 import dateFormatter from '../src/date';
 import { DEFAULT_SERVER } from '../src/constants';
+import { WalletTypeError } from '../src/errors';
 
 const storage = require('../src/storage').default;
 
@@ -279,4 +280,49 @@ test('Default server', () => {
   // reset wallet. Should still use the default set
   wallet.resetWalletData();
   expect(helpers.getServerURL()).toBe(defaultServer);
+});
+
+test('Wallet type', () => {
+  // invalid wallet type
+  expect(() => {wallet.setWalletType('soft')}).toThrow(WalletTypeError);
+  // set software wallet
+  wallet.setWalletType('software');
+  expect(wallet.isSoftwareWallet()).toBe(true);
+  // set hardware wallet
+  wallet.setWalletType('hardware');
+  expect(wallet.isHardwareWallet()).toBe(true);
+});
+
+test('xpub from data', () => {
+  const xpub = 'xpub6EkEDTu2Ya2bQrgRSs6QGh5tbNtntrTmEK4ueofBYDoeET2Pj6UkbMgfu7KarBGqbED591aY3LFj2jP9tZ24FnPhUQuk1SrUiwZ3SgHAgEt';
+  const pubkey = Buffer.from('02b8f9f08dcc76a28190c64faae77975c997622800597a6bffbc45ecd221d6b678', 'hex');
+  const chainCode = Buffer.from('676e546dab43fd1603c5b1f059da144608ac833cc0ea73d6798b19144bf25b1e', 'hex');
+  const fingerprint = Buffer.from('a4f5d5bf', 'hex');
+  expect(wallet.xpubFromData(pubkey, chainCode, fingerprint)).toBe(xpub);
+});
+
+test('compress pubkey', () => {
+  const uncompressed = Buffer.from('044f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa385b6b1b8ead809ca67454d9683fcf2ba03456d6fe2c4abe2b07f0fbdbb2f1c1', 'hex');
+  const compressed = Buffer.from('034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa', 'hex');
+  expect(wallet.toPubkeyCompressed(uncompressed)).toEqual(compressed);
+});
+
+test('get public key from index', () => {
+  // we get some keys from a previously know xpub
+  const pubkeys = {
+    0: '03e87885d9d400672f27f05c3f42fe881b4ca940c6413400bb02e0779d62b725cc',
+    10: '024682a4b52ae527a1ad6b527b50d4c4767931b6bf17b09399af447f2e350f0b8d',
+    50: '0331e2f0a357538971146820f54f6deb794fbb0d7610bfa978562929e2bba8a67e',
+    100: '02dd435e564faf9b7b4b421413fca2f3d46830d80e90c3c8ace5945b8da35f2e8e',
+  };
+
+  wallet.setWalletAccessData({
+    xpubkey: 'xpub6F7hrAA4jGmePP7Yw82SFysRBaKDSKWH2dQngjWGKinHSJZfHKRCCo98fAUCam8erAYBjdf8DVn7VoJWpSDR7zFZSoVuv3XV631GVyGty6X'
+  });
+
+  for (const entry of Object.entries(pubkeys)) {
+    const index = entry[0];
+    const pubkey = entry[1];
+    expect(wallet.getPublicKey(parseInt(index)).toString('hex')).toBe(pubkey);
+  }
 });
