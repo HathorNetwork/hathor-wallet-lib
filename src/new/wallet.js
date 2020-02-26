@@ -290,6 +290,25 @@ class HathorWallet extends EventEmitter {
    * @return {Promise} Promise that resolves when transaction is sent
    **/
   sendTransaction(address, value, token) {
+    const ret = this.prepareTransaction(address, value, token);
+
+    if (ret.success) {
+      return transaction.sendTransaction(ret.data, this.pinCode);
+    } else {
+      return Promise.reject(ret.message);
+    }
+  }
+
+  /**
+   * Prepare transaction data to be sent
+   *
+   * @param {String} address Address to send the tokens
+   * @param {number} value Amount of tokens to be sent
+   * @param {Object} token Token object {'uid', 'name', 'symbol'}. Optional parameter if user already set on the class
+   *
+   * @return {Object} Object with {success: false, message} in case of an error, or {success: true, data}, otherwise
+   **/
+  prepareTransaction(address, value, token) {
     const txToken = token || this.token;
     const isHathorToken = txToken.uid === HATHOR_TOKEN_CONFIG.uid;
     // XXX This allow only one token to be sent
@@ -308,10 +327,22 @@ class HathorWallet extends EventEmitter {
     const ret = wallet.prepareSendTokensData(data, txToken, true, historyTxs, [txToken]);
 
     if (!ret.success) {
-      return Promise.reject(ret.message);
+      return ret;
     }
 
-    return transaction.sendTransaction(ret.data, this.pinCode);
+    return {success: true, data: transaction.prepareData(data, this.pinCode)};
+  }
+
+  /**
+   * Send a full prepared transaction
+   * Just transform data object to bytes, then hexadecimal and send it to full node.
+   *
+   * @param {Object} data Full transaction data
+   *
+   * @return {Promise} Promise that resolves when transaction is sent
+   **/
+  sendPreparedTransaction(data) {
+    return transaction.sendPreparedTransaction(data);
   }
 
   /**
