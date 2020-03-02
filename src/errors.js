@@ -74,3 +74,11 @@ export class MaximumNumberInputsError extends Error {}
  * @inner
  */
 export class MaximumNumberOutputsError extends Error {}
+
+/**
+ * Error thrown when the wallet type is invalid
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class WalletTypeError extends Error {}
