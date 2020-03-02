@@ -19,14 +19,18 @@ const walletApi = {
    * Get address history from passed addresses
    *
    * @param {Array} addresses Array of addresses to search for the history
+   * @param {String} hash String of the hash to start the search in the first address (optional)
    * @param {function} resolve Method to be called after response arrives
    *
    * @return {Promise}
    * @memberof ApiWallet
    * @inner
    */
-  getAddressHistory(addresses, resolve) {
-    const data = {addresses};
+  getAddressHistory(addresses, hash, resolve) {
+    const data = {addresses, paginate: true};
+    if (hash) {
+      data['hash'] = hash;
+    }
     return createRequestInstance(resolve).get('thin_wallet/address_history', {'params': data}).then((res) => {
       resolve(res.data)
     }, (res) => {
@@ -56,7 +60,7 @@ const walletApi = {
    * @inner
    */
   getAddressHistoryForAwait(addresses, hash) {
-    const data = {addresses};
+    const data = {addresses, paginate: true};
     if (hash) {
       data['hash'] = hash;
     }
