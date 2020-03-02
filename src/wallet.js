@@ -295,7 +295,7 @@ const wallet = {
 
   /**
    * Asynchronous method to get history of an array of transactions
-   * Since this API is paginated, we enter a loop getting all data and return only after all requests are finished
+   * Since this API is paginated, we enter a loop getting all data and return only after all requests have finished
    *
    * @param {Array} addresses Array of addresses (string) to get history
    *
