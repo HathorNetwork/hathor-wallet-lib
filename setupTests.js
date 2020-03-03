@@ -85,7 +85,7 @@ global.mock = new MockAdapter(axios);
 
 // Default mock for /thin_wallet/address_history
 mock.onGet('thin_wallet/address_history').reply((config) => {
-  return [200, {'history': []}];
+  return [200, {'success': true, 'has_more': false, 'history': []}];
 });
 
 mock.onGet('version').reply((config) => {

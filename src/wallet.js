@@ -278,19 +278,63 @@ const wallet = {
 
       this.setWalletData(dataJson);
 
-      walletApi.getAddressHistory(addresses, (response) => {
+      this.getTxHistory(addresses).then((history) => {
         const data = this.getWalletData();
         // Update historyTransactions with new one
         const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
         const allTokens = 'allTokens' in data ? data['allTokens'] : [];
-        const result = this.updateHistoryData(historyTransactions, allTokens, response.history, resolve, data, reject);
+        const result = this.updateHistoryData(historyTransactions, allTokens, history, resolve, data, reject);
         WebSocketHandler.emit('addresses_loaded', result);
-      }).catch((e) => {
-        // Error in request
+      }, (e) => {
         reject(e);
       });
+
     });
     return promise;
+  },
+
+  /**
+   * Asynchronous method to get history of an array of transactions
+   * Since this API is paginated, we enter a loop getting all data and return only after all requests have finished
+   *
+   * @param {Array} addresses Array of addresses (string) to get history
+   *
+   * @return {Promise} Promise that resolves when all addresses history requests finish
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  async getTxHistory(addresses) {
+    let hasMore = true;
+    let firstHash = null;
+    let addressesToSearch = addresses;
+    let history = [];
+
+    while (hasMore === true) {
+      const response = await walletApi.getAddressHistoryForAwait(addressesToSearch, firstHash);
+      const result = response.data;
+
+      if (result.success) {
+        history = [...history, ...result.history];
+        hasMore = result.has_more;
+
+        if (hasMore) {
+          // If has more data we set the first_hash of the next search
+          // and update the addresses array with only the missing addresses
+          firstHash = result.first_hash;
+          const addrIndex = addressesToSearch.indexOf(result.first_address);
+          if (addrIndex === -1) {
+            throw Error("Invalid address returned from the server.");
+          }
+
+          addressesToSearch = addressesToSearch.slice(addrIndex);
+        }
+      } else {
+        throw Error(result.message);
+      }
+    }
+
+    return history;
   },
 
   /**
