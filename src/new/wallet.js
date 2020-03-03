@@ -293,7 +293,7 @@ class HathorWallet extends EventEmitter {
     const ret = this.prepareTransaction(address, value, token);
 
     if (ret.success) {
-      return transaction.sendTransaction(ret.data, this.pinCode);
+      return this.sendPreparedTransaction(ret.data);
     } else {
       return Promise.reject(ret.message);
     }
