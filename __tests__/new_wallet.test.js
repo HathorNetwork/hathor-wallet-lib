@@ -26,6 +26,8 @@ mock.onGet('thin_wallet/address_history').reply((config) => {
       addressShared = config.params.addresses[1];
     }
     let ret = {
+      'success': true,
+      'has_more': false,
       'history': [
         {
           'tx_id': '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e',
@@ -48,7 +50,7 @@ mock.onGet('thin_wallet/address_history').reply((config) => {
     }
     return [200, ret];
   } else {
-    return [200, {'history': []}];
+    return [200, {'success': true, 'has_more': false, 'history': []}];
   }
 });
 
