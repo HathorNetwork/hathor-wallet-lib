@@ -390,7 +390,7 @@ class HathorWallet extends EventEmitter {
   stop() {
     // TODO Double check that we are properly cleaning things up.
     // See: https://github.com/HathorNetwork/hathor-wallet-headless/pull/1#discussion_r369859701
-    ws.stop()
+    ws.endConnection()
     ws.removeListener('is_online', this.onConnectionChange);
     ws.removeListener('reload_data', this.reloadData);
     ws.removeListener('addresses_loaded', this.onAddressesLoaded);
