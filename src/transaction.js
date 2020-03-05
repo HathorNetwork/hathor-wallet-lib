@@ -126,6 +126,27 @@ const transaction = {
   },
 
   /**
+   * Check if address is a valid string
+   *
+   * @param {string} address Address in base58
+   *
+   * @return {boolean} If address is valid
+   * @memberof Transaction
+   * @inner
+   */
+  isAddressValid(address) {
+    try {
+      const addressBytes = this.decodeAddress(address);
+      return this.validateAddress(address, addressBytes);
+    } catch (e) {
+      if (e instanceof AddressError) {
+        return false;
+      }
+      throw e;
+    }
+  },
+
+  /**
    * Decode address in base58 to bytes
    *
    * @param {string} address Address in base58

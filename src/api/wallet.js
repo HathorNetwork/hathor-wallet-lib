@@ -168,6 +168,57 @@ const walletApi = {
       return Promise.reject(res);
     });
   },
+
+  /**
+   * Get address balance summary
+   *
+   * @param {String} addresse Address to get the balance summary
+   *
+   * @return {Promise}
+   * @memberof ApiWallet
+   * @inner
+   */
+  getAddressBalance(address, resolve) {
+    const data = {address};
+    return createRequestInstance(resolve).get('thin_wallet/address_balance', {'params': data}).then((res) => {
+      resolve(res.data)
+    }, (res) => {
+      return Promise.reject(res);
+    });
+  },
+
+  /**
+   * Search address
+   *
+   * @param {String} address Address to search history
+   * @param {Number} count Quantity of elements to return
+   * @param {String} hash Optional pagination parameter to reference the search
+   * @param {String} page Optional pagination parameter to indicate which page button was clicked
+   * @param {function} resolve Method to be called after response arrives
+   *
+   * @return {Promise}
+   * @memberof ApiWallet
+   * @inner
+   */
+  getSearchAddress(address, count, hash, page, token, resolve) {
+    const data = {address, count};
+
+    if (hash) {
+      data['hash'] = hash;
+      data['page'] = page;
+    }
+
+    if (token) {
+      data['token'] = token;
+    }
+
+    return createRequestInstance(resolve).get('thin_wallet/address_search', {'params': data}).then((res) => {
+      resolve(res.data)
+    }, (res) => {
+      return Promise.reject(res);
+    });
+  },
+
 };
 
 export default walletApi;
