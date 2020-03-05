@@ -135,9 +135,7 @@ test('Wallet operations for transaction', () => {
     '171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r': {},
   }
 
-  const xpubkey = storage.getItem('wallet:data').xpubkey;
-
-  storage.setItem('wallet:data', {keys, historyTransactions, xpubkey});
+  storage.setItem('wallet:data', {keys, historyTransactions});
 
   const expectedBalance = {
     '00': {
@@ -287,3 +285,11 @@ test('Wallet operations for transaction', () => {
   expect(result9.success).toBe(true);
   expect(result9.data.outputs.length).toBe(2);
 });
+
+test('Try to check tx before wallet has loaded', () => {
+  const words = wallet.generateWalletWords(256);
+  wallet.executeGenerateWallet(words, '', '123456', 'password', false);
+  // this should return false, not fail
+  expect(wallet.txExists({'tx_id': 'aaa'})).toBe(false);
+});
+
