@@ -9,7 +9,7 @@ import buffer from 'buffer';
 import { crypto, util } from 'bitcore-lib';
 import transaction from './transaction';
 import wallet from './wallet';
-import defaultStorage from './storage';
+import storage from './storage';
 import helpers from './helpers';
 import walletApi from './api/wallet';
 import { InsufficientFundsError, ConstantNotSet, TokenValidationError } from './errors';
@@ -195,7 +195,7 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  getTokens({ storage = defaultStorage }) {
+  getTokens() {
     let dataToken = storage.getItem('wallet:tokens');
     if (!dataToken) {
       dataToken = [HATHOR_TOKEN_CONFIG];
@@ -212,7 +212,7 @@ const tokens = {
    * @inner
    *
    */
-  saveToStorage(newTokens, { storage = defaultStorage }) {
+  saveToStorage(newTokens) {
     storage.setItem('wallet:tokens', newTokens);
   },
 
