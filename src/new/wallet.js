@@ -12,6 +12,8 @@ import transaction from '../transaction';
 import tokens from '../tokens';
 import version from '../version';
 import walletApi from '../api/wallet';
+import storage from '../storage';
+import MemoryStore from '../memory_store';
 
 /**
  * This is a Wallet that is supposed to be simple to be used by a third-party app.
@@ -43,6 +45,8 @@ class HathorWallet extends EventEmitter {
    */
   constructor({
     conn,
+
+    storage,
 
     seed,
     passphrase = '',
@@ -81,6 +85,17 @@ class HathorWallet extends EventEmitter {
     this.passphrase = passphrase;
     this.pinCode = pinCode;
     this.password = password;
+
+    this.storage = null;
+    if (storage) {
+      this.storage = storage;
+    } else {
+      // Settings storage data
+      const store = new MemoryStore();
+      this.storage = new Storage()
+      this.storage.setStore(store);
+    }
+    this.storage.setItem('wallet:server', conn.currentServer);
   }
 
   /**
