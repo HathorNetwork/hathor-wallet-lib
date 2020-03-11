@@ -74,6 +74,4 @@ class Storage {
   }
 }
 
-const instance = new Storage();
-
-export default instance;
+export default Storage;
