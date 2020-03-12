@@ -67,10 +67,10 @@ class Connection extends EventEmitter {
   }
 
   /**
-   * Called when a new message arrives from websocket.
+   * Called when a new wallet message arrives from websocket.
    **/
-  handleWebsocketMsg(wsData) {
-    this.emit('websocket-msg', wsData);
+  handleWalletMessage(wsData) {
+    this.emit('wallet-update', wsData);
   }
 
   setState(state) {
@@ -83,7 +83,7 @@ class Connection extends EventEmitter {
    **/
   start() {
     this.websocket.on('is_online', this.onConnectionChange);
-    this.websocket.on('wallet', this.handleWebsocketMsg);
+    this.websocket.on('wallet', this.handleWalletMessage);
 
     this.serverInfo = null;
     this.setState(HathorWallet.CONNECTING);
@@ -114,9 +114,9 @@ class Connection extends EventEmitter {
   stop() {
     // TODO Double check that we are properly cleaning things up.
     // See: https://github.com/HathorNetwork/hathor-wallet-headless/pull/1#discussion_r369859701
-    this.websocket.stop()
+    this.websocket.endConnection()
     this.websocket.removeListener('is_online', this.onConnectionChange);
-    this.websocket.removeListener('wallet', this.handleWebsocketMsg);
+    this.websocket.removeListener('wallet', this.handleWalletMessage);
     this.serverInfo = null;
     this.setState(HathorWallet.CLOSED);
   }

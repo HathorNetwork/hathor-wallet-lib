@@ -8,8 +8,6 @@
 import EventEmitter from 'events';
 import _WebSocket from 'isomorphic-ws';
 
-import helpers from './helpers';
-
 const WS_READYSTATE_READY = 1;
 
 

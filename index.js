@@ -5,7 +5,6 @@ var tokens = require('./lib/tokens');
 var transaction = require('./lib/transaction');
 var version = require('./lib/version');
 var wallet = require('./lib/wallet');
-var WebSocketHandler = require('./lib/WebSocketHandler');
 var errors = require('./lib/errors');
 var walletApi = require('./lib/api/wallet');
 var txApi = require('./lib/api/txApi');
@@ -23,7 +22,6 @@ module.exports = {
   transaction: transaction.default,
   version: version.default,
   wallet: wallet.default,
-  WebSocketHandler: WebSocketHandler.default,
   walletApi: walletApi.default,
   txApi: txApi.default,
   versionApi: versionApi.default,

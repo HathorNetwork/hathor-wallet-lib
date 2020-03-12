@@ -14,12 +14,14 @@ import tokens from './tokens';
 import helpers from './helpers';
 import { ConstantNotSet, OutputValueError, WalletTypeError } from './errors';
 import version from './version';
-import storage from './storage';
+import StorageProxy from './storage_proxy';
 import network from './network';
 import transaction from './transaction';
-import WebSocketHandler from './WebSocketHandler';
+import WS from './websocket';
 import dateFormatter from './date';
 import _ from 'lodash';
+
+const WebSocketHandler = new WS({ wsURL: helpers.getWSServerURL });
 
 /**
  * We use storage and Redux to save data.
@@ -177,7 +179,7 @@ const wallet = {
    * @inner
    */
   getLastGeneratedIndex() {
-    const raw = storage.getItem('wallet:lastGeneratedIndex');
+    const raw = StorageProxy.getStorage().getItem('wallet:lastGeneratedIndex');
     if (!raw) {
       return 0;
     }
@@ -193,7 +195,7 @@ const wallet = {
    * @inner
    */
   getWalletData() {
-    return storage.getItem('wallet:data');
+    return StorageProxy.getStorage().getItem('wallet:data');
   },
 
   /**
@@ -205,7 +207,7 @@ const wallet = {
    * @inner
    */
   setWalletData(data) {
-    storage.setItem('wallet:data', data);
+    StorageProxy.getStorage().setItem('wallet:data', data);
   },
 
   /**
@@ -217,7 +219,7 @@ const wallet = {
    * @inner
    */
   getWalletAccessData() {
-    return storage.getItem('wallet:accessData');
+    return StorageProxy.getStorage().getItem('wallet:accessData');
   },
 
   /**
@@ -229,7 +231,7 @@ const wallet = {
    * @inner
    */
   setWalletAccessData(data) {
-    storage.setItem('wallet:accessData', data);
+    StorageProxy.getStorage().setItem('wallet:accessData', data);
   },
 
   /**
@@ -265,7 +267,7 @@ const wallet = {
         // Subscribe in websocket to this address updates
         this.subscribeAddress(address.toString());
 
-        if (storage.getItem('wallet:address') === null) {
+        if (StorageProxy.getStorage().getItem('wallet:address') === null) {
           // If still don't have an address to show on the screen
           this.updateAddress(address.toString(), i);
         }
@@ -273,7 +275,7 @@ const wallet = {
 
       let lastGeneratedIndex = this.getLastGeneratedIndex();
       if (lastGeneratedIndex < stopIndex - 1) {
-        storage.setItem('wallet:lastGeneratedIndex', stopIndex - 1);
+        StorageProxy.getStorage().setItem('wallet:lastGeneratedIndex', stopIndex - 1);
       }
 
       this.setWalletData(dataJson);
@@ -363,8 +365,8 @@ const wallet = {
    * @inner
    */
   updateAddress(lastSharedAddress, lastSharedIndex) {
-    storage.setItem('wallet:address', lastSharedAddress);
-    storage.setItem('wallet:lastSharedIndex', lastSharedIndex);
+    StorageProxy.getStorage().setItem('wallet:address', lastSharedAddress);
+    StorageProxy.getStorage().setItem('wallet:lastSharedIndex', lastSharedIndex);
   },
 
   /**
@@ -623,7 +625,7 @@ const wallet = {
     this.updateAddress(newAddress.toString(), newIndex);
     let lastGeneratedIndex = this.getLastGeneratedIndex();
     if (newIndex > lastGeneratedIndex) {
-      storage.setItem('wallet:lastGeneratedIndex', newIndex);
+      StorageProxy.getStorage().setItem('wallet:lastGeneratedIndex', newIndex);
     }
 
     // Save new keys to local storage
@@ -661,7 +663,7 @@ const wallet = {
    * @inner
    */
   getCurrentAddress() {
-    return storage.getItem('wallet:address');
+    return StorageProxy.getStorage().getItem('wallet:address');
   },
 
   /**
@@ -845,7 +847,7 @@ const wallet = {
    * @inner
    */
   loaded() {
-    return storage.getItem('wallet:accessData') !== null;
+    return StorageProxy.getStorage().getItem('wallet:accessData') !== null;
   },
 
   /**
@@ -857,7 +859,7 @@ const wallet = {
    * @inner
    */
   started() {
-    return storage.getItem('wallet:started') !== null;
+    return StorageProxy.getStorage().getItem('wallet:started') !== null;
   },
 
   /**
@@ -869,7 +871,7 @@ const wallet = {
    * @inner
    */
   markWalletAsStarted() {
-    return storage.setItem('wallet:started', true);
+    return StorageProxy.getStorage().setItem('wallet:started', true);
   },
 
   /**
@@ -936,8 +938,8 @@ const wallet = {
       let index = data.keys[address].index;
       const lastUsedIndex = this.getLastUsedIndex();
       if (lastUsedIndex === null || index > parseInt(lastUsedIndex, 10)) {
-        storage.setItem('wallet:lastUsedAddress', address);
-        storage.setItem('wallet:lastUsedIndex', index);
+        StorageProxy.getStorage().setItem('wallet:lastUsedAddress', address);
+        StorageProxy.getStorage().setItem('wallet:lastUsedIndex', index);
       }
     }
   },
@@ -964,7 +966,7 @@ const wallet = {
    * @inner
    */
   cleanServer() {
-    storage.removeItem('wallet:server');
+    StorageProxy.getStorage().removeItem('wallet:server');
   },
 
   /**
@@ -973,13 +975,13 @@ const wallet = {
    * @inner
    */
   cleanLoadedData() {
-    storage.removeItem('wallet:accessData');
-    storage.removeItem('wallet:data');
-    storage.removeItem('wallet:address');
-    storage.removeItem('wallet:lastSharedIndex');
-    storage.removeItem('wallet:lastGeneratedIndex');
-    storage.removeItem('wallet:lastUsedIndex');
-    storage.removeItem('wallet:lastUsedAddress');
+    StorageProxy.getStorage().removeItem('wallet:accessData');
+    StorageProxy.getStorage().removeItem('wallet:data');
+    StorageProxy.getStorage().removeItem('wallet:address');
+    StorageProxy.getStorage().removeItem('wallet:lastSharedIndex');
+    StorageProxy.getStorage().removeItem('wallet:lastGeneratedIndex');
+    StorageProxy.getStorage().removeItem('wallet:lastUsedIndex');
+    StorageProxy.getStorage().removeItem('wallet:lastUsedAddress');
     // we clean storage, but wallet is still open
     this.setWalletAsOpen();
   },
@@ -1000,12 +1002,12 @@ const wallet = {
     tokens.clearDepositPercentage();
     this.clearRewardLockConstant();
     this.clearNetworkBestChainHeight();
-    storage.removeItem('wallet:started');
-    storage.removeItem('wallet:backup');
-    storage.removeItem('wallet:locked');
-    storage.removeItem('wallet:tokens');
-    storage.removeItem('wallet:sentry');
-    storage.removeItem('wallet:type');
+    StorageProxy.getStorage().removeItem('wallet:started');
+    StorageProxy.getStorage().removeItem('wallet:backup');
+    StorageProxy.getStorage().removeItem('wallet:locked');
+    StorageProxy.getStorage().removeItem('wallet:tokens');
+    StorageProxy.getStorage().removeItem('wallet:sentry');
+    StorageProxy.getStorage().removeItem('wallet:type');
   },
 
   /*
@@ -1150,7 +1152,7 @@ const wallet = {
    * @inner
    */
   lock() {
-    storage.setItem('wallet:locked', true);
+    StorageProxy.getStorage().setItem('wallet:locked', true);
   },
 
   /*
@@ -1160,7 +1162,7 @@ const wallet = {
    * @inner
    */
   unlock() {
-    storage.removeItem('wallet:locked');
+    StorageProxy.getStorage().removeItem('wallet:locked');
   },
 
   /*
@@ -1172,7 +1174,7 @@ const wallet = {
    * @inner
    */
   isLocked() {
-    return storage.getItem('wallet:locked') !== null;
+    return StorageProxy.getStorage().getItem('wallet:locked') !== null;
   },
 
   /*
@@ -1184,7 +1186,7 @@ const wallet = {
    * @inner
    */
   wasClosed() {
-    return storage.getItem('wallet:closed') === true;
+    return StorageProxy.getStorage().getItem('wallet:closed') === true;
   },
 
   /*
@@ -1194,7 +1196,7 @@ const wallet = {
    * @inner
    */
   close() {
-    storage.setItem('wallet:closed', true);
+    StorageProxy.getStorage().setItem('wallet:closed', true);
   },
 
   /*
@@ -1204,7 +1206,7 @@ const wallet = {
    * @inner
    */
   setWalletAsOpen() {
-    storage.setItem('wallet:closed', false);
+    StorageProxy.getStorage().setItem('wallet:closed', false);
   },
 
   /**
@@ -1229,7 +1231,7 @@ const wallet = {
    * @inner
    */
   markBackupAsDone() {
-    storage.setItem('wallet:backup', true);
+    StorageProxy.getStorage().setItem('wallet:backup', true);
   },
 
   /*
@@ -1239,7 +1241,7 @@ const wallet = {
    * @inner
    */
   markBackupAsNotDone() {
-    storage.removeItem('wallet:backup');
+    StorageProxy.getStorage().removeItem('wallet:backup');
   },
 
   /*
@@ -1251,7 +1253,7 @@ const wallet = {
    * @inner
    */
   isBackupDone() {
-    return storage.getItem('wallet:backup') !== null;
+    return StorageProxy.getStorage().getItem('wallet:backup') !== null;
   },
 
   /*
@@ -1333,7 +1335,7 @@ const wallet = {
    * @inner
    */
   changeServer(newServer) {
-    storage.setItem('wallet:server', newServer);
+    StorageProxy.getStorage().setItem('wallet:server', newServer);
   },
 
   /*
@@ -1345,7 +1347,7 @@ const wallet = {
    * @inner
    */
   setDefaultServer(server) {
-    storage.setItem('wallet:defaultServer', server);
+    StorageProxy.getStorage().setItem('wallet:defaultServer', server);
   },
 
   /*
@@ -1355,7 +1357,7 @@ const wallet = {
    * @inner
    */
   clearDefaultServer() {
-    storage.removeItem('wallet:defaultServer');
+    StorageProxy.getStorage().removeItem('wallet:defaultServer');
   },
 
   /*
@@ -1447,7 +1449,7 @@ const wallet = {
    * @inner
    */
   getLocalStorageIndex(key) {
-    let index = storage.getItem(`wallet:${key}`);
+    let index = StorageProxy.getStorage().getItem(`wallet:${key}`);
     if (index !== null) {
       index = parseInt(index, 10);
     }
@@ -1870,7 +1872,7 @@ const wallet = {
     if (!walletTypes.includes(type)) {
       throw new WalletTypeError('Invalid wallet type');
     }
-    storage.setItem('wallet:type', type);
+    StorageProxy.getStorage().setItem('wallet:type', type);
   },
 
   /**
@@ -1882,7 +1884,7 @@ const wallet = {
    * @inner
    */
   isSoftwareWallet() {
-    return storage.getItem('wallet:type') === 'software';
+    return StorageProxy.getStorage().getItem('wallet:type') === 'software';
   },
 
   /**
@@ -1894,7 +1896,7 @@ const wallet = {
    * @inner
    */
   isHardwareWallet() {
-    return storage.getItem('wallet:type') === 'hardware';
+    return StorageProxy.getStorage().getItem('wallet:type') === 'hardware';
   },
 
   /**
@@ -1968,5 +1970,14 @@ const wallet = {
     return key.publicKey.toBuffer();
   },
 }
+
+WebSocketHandler.on('is_online', (value) => {
+  if (value) {
+    wallet.onWebsocketOpened();
+    WebSocketHandler.emit('reload_data');
+  } else {
+    wallet.onWebsocketBeforeClose();
+  }
+});
 
 export default wallet;
