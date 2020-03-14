@@ -7,7 +7,7 @@
 
 import path from 'path';
 
-import storage from './storage';
+import StorageProxy from './storage_proxy';
 import tokens from './tokens';
 import { BLOCK_VERSION, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, MERGED_MINED_BLOCK_VERSION, GENESIS_BLOCK, DECIMAL_PLACES, DEFAULT_SERVER } from './constants';
 
@@ -178,8 +178,8 @@ const helpers = {
    * @inner
    */
   getServerURL() {
-    const server = storage.getItem('wallet:server');
-    const defaultServer = storage.getItem('wallet:defaultServer');
+    const server = StorageProxy.getStorage().getItem('wallet:server');
+    const defaultServer = StorageProxy.getStorage().getItem('wallet:defaultServer');
     if (server !== null) {
       return server;
     } else if (defaultServer !== null) {
@@ -197,8 +197,14 @@ const helpers = {
    * @memberof Helpers
    * @inner
    */
-  getWSServerURL() {
-    let serverURL = this.getServerURL();
+  getWSServerURL(url = null) {
+    let serverURL;
+    if (url === null) {
+      serverURL = this.getServerURL();
+    } else {
+      serverURL = url;
+    }
+
     const pieces = serverURL.split(':');
     const firstPiece = pieces.splice(0, 1);
     let protocol = '';
