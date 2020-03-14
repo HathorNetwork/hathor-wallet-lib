@@ -9,6 +9,7 @@ import EventEmitter from 'events';
 import networkInstance from '../network';
 import { DEFAULT_SERVERS } from '../constants';
 import version from '../version';
+import helpers from '../helpers';
 import WS from '../websocket';
 
 /**
@@ -45,12 +46,12 @@ class Connection extends EventEmitter {
     this.serverInfo = null;
 
     this.onConnectionChange = this.onConnectionChange.bind(this);
-    this.handleWebsocketMsg = this.handleWebsocketMsg.bind(this);
+    this.handleWebsocketMsg = this.handleWalletMessage.bind(this);
 
     this.servers = servers || [...DEFAULT_SERVERS];
     this.currentServer = this.servers[0];
 
-    this.websocket = WS({ wsURL: this.currentServer });
+    this.websocket = new WS({ wsURL: helpers.getWSServerURL(this.currentServer) });
   }
 
   /**
@@ -62,7 +63,7 @@ class Connection extends EventEmitter {
       this.setState(Connection.CONNECTED);
     } else {
       this.serverInfo = null;
-      this.setState(HathorWallet.CONNECTING);
+      this.setState(Connection.CONNECTING);
     }
   }
 
@@ -86,7 +87,7 @@ class Connection extends EventEmitter {
     this.websocket.on('wallet', this.handleWalletMessage);
 
     this.serverInfo = null;
-    this.setState(HathorWallet.CONNECTING);
+    this.setState(Connection.CONNECTING);
 
     const promise = new Promise((resolve, reject) => {
       version.checkApiVersion().then((info) => {
@@ -96,12 +97,11 @@ class Connection extends EventEmitter {
           this.serverInfo = info;
           resolve(info);
         } else {
-          this.setState(HathorWallet.CLOSED);
+          this.setState(Connection.CLOSED);
           reject(`Wrong network. server=${info.network} expected=${this.network}`);
         }
       }, (error) => {
-        console.log('Version error:', error);
-        this.setState(HathorWallet.CLOSED);
+        this.setState(Connection.CLOSED);
         reject(error);
       });
     });
@@ -118,7 +118,7 @@ class Connection extends EventEmitter {
     this.websocket.removeListener('is_online', this.onConnectionChange);
     this.websocket.removeListener('wallet', this.handleWalletMessage);
     this.serverInfo = null;
-    this.setState(HathorWallet.CLOSED);
+    this.setState(Connection.CLOSED);
   }
 }
 
