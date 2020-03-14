@@ -1882,7 +1882,7 @@ const wallet = {
    * @inner
    */
   isSoftwareWallet() {
-    return storage.getItem('wallet:type') === 'software';
+    return !this.isHardwareWallet();
   },
 
   /**
