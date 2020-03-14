@@ -12,7 +12,7 @@ import transaction from '../transaction';
 import tokens from '../tokens';
 import version from '../version';
 import walletApi from '../api/wallet';
-import storage from '../storage';
+import Storage from '../storage';
 import MemoryStore from '../memory_store';
 import StorageProxy from '../storage_proxy';
 import Connection from './connection';
@@ -61,7 +61,7 @@ class HathorWallet extends EventEmitter {
   } = {}) {
     super();
 
-    if (!conn) {
+    if (!connection) {
       throw Error('You must provide a connection.');
     }
 
@@ -74,7 +74,6 @@ class HathorWallet extends EventEmitter {
     this.serverInfo = null;
 
     this.seed = seed;
-    this.server = server;
 
     // tokenUid is optional so we can get the token of the wallet
     this.token = null;
@@ -93,7 +92,7 @@ class HathorWallet extends EventEmitter {
       this.storage = new Storage()
       this.storage.setStore(store);
     }
-    this.storage.setItem('wallet:server', conn.currentServer);
+    this.storage.setItem('wallet:server', this.conn.currentServer);
 
     this.onConnectionChangedState = this.onConnectionChangedState.bind(this);
     this.handleWebsocketMsg = this.handleWebsocketMsg.bind(this);
@@ -352,6 +351,7 @@ class HathorWallet extends EventEmitter {
    **/
   start() {
     StorageProxy.setStorage(this.storage);
+    this.conn.start();
     this.conn.on('state', this.onConnectionChangedState);
     this.conn.on('wallet-update', this.handleWebsocketMsg);
 
@@ -364,13 +364,12 @@ class HathorWallet extends EventEmitter {
     const promise = new Promise((resolve, reject) => {
       version.checkApiVersion().then((info) => {
         // Check network version to avoid blunders.
-        if (info.network.indexOf(this.network) >= 0) {
-          ws.setup();
+        if (info.network.indexOf(this.conn.network) >= 0) {
           this.serverInfo = info;
           resolve(info);
         } else {
           this.setState(HathorWallet.CLOSED);
-          reject(`Wrong network. server=${info.network} expected=${this.network}`);
+          reject(`Wrong network. server=${info.network} expected=${this.conn.network}`);
         }
       }, (error) => {
         console.log('Version error:', error);
