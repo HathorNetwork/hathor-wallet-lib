@@ -17,11 +17,9 @@ import version from './version';
 import StorageProxy from './storage_proxy';
 import network from './network';
 import transaction from './transaction';
-import WS from './websocket';
 import dateFormatter from './date';
 import _ from 'lodash';
-
-const WebSocketHandler = new WS({ wsURL: helpers.getWSServerURL });
+import WebSocketHandler from './WebSocketHandler';
 
 /**
  * We use storage and Redux to save data.
@@ -164,7 +162,7 @@ const wallet = {
     let promise = null;
     if (loadHistory) {
       // Load history from address
-      WebSocketHandler.setup();
+      WebSocketHandler.ws.setup();
       promise = this.loadAddressHistory(0, GAP_LIMIT);
     }
     return promise;
@@ -286,7 +284,7 @@ const wallet = {
         const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
         const allTokens = 'allTokens' in data ? data['allTokens'] : [];
         const result = this.updateHistoryData(historyTransactions, allTokens, history, resolve, data, reject);
-        WebSocketHandler.emit('addresses_loaded', result);
+        WebSocketHandler.ws.emit('addresses_loaded', result);
       }, (e) => {
         reject(e);
       });
@@ -881,7 +879,7 @@ const wallet = {
    */
   subscribeAddress(address) {
     const msg = JSON.stringify({'type': 'subscribe_address', 'address': address});
-    WebSocketHandler.sendMessage(msg);
+    WebSocketHandler.ws.sendMessage(msg);
   },
 
   /**
@@ -908,7 +906,7 @@ const wallet = {
    */
   unsubscribeAddress(address) {
     const msg = JSON.stringify({'type': 'unsubscribe_address', 'address': address});
-    WebSocketHandler.sendMessage(msg);
+    WebSocketHandler.ws.sendMessage(msg);
   },
 
   /**
@@ -956,7 +954,7 @@ const wallet = {
   cleanWallet() {
     this.unsubscribeAllAddresses();
     this.cleanLoadedData();
-    WebSocketHandler.endConnection();
+    WebSocketHandler.ws.endConnection();
   },
 
   /*
@@ -1269,7 +1267,7 @@ const wallet = {
 
     this.cleanWallet();
     // Restart websocket connection
-    WebSocketHandler.setup();
+    WebSocketHandler.ws.setup();
 
     let newWalletData = {
       keys: {},
@@ -1793,7 +1791,7 @@ const wallet = {
    * @inner
    */
   addMetricsListener() {
-    WebSocketHandler.on('dashboard', this.handleWebsocketDashboard);
+    WebSocketHandler.ws.on('dashboard', this.handleWebsocketDashboard);
   },
 
   /**
@@ -1803,7 +1801,7 @@ const wallet = {
    * @inner
    */
   removeMetricsListener() {
-    WebSocketHandler.removeListener('dashboard', this.handleWebsocketDashboard);
+    WebSocketHandler.ws.removeListener('dashboard', this.handleWebsocketDashboard);
   },
 
   /**
@@ -1831,7 +1829,7 @@ const wallet = {
   updateNetworkHeight(networkHeight) {
     if (networkHeight !== this._networkBestChainHeight) {
       this._networkBestChainHeight = networkHeight;
-      WebSocketHandler.emit('height_updated', networkHeight);
+      WebSocketHandler.ws.emit('height_updated', networkHeight);
     }
   },
 
@@ -1970,14 +1968,5 @@ const wallet = {
     return key.publicKey.toBuffer();
   },
 }
-
-WebSocketHandler.on('is_online', (value) => {
-  if (value) {
-    wallet.onWebsocketOpened();
-    WebSocketHandler.emit('reload_data');
-  } else {
-    wallet.onWebsocketBeforeClose();
-  }
-});
 
 export default wallet;
