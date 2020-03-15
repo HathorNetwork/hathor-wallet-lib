@@ -159,10 +159,11 @@ const wallet = {
     this.setWalletAccessData(accessData);
     this.setWalletData(walletData);
 
+    WebSocketHandler.ws.setup();
+
     let promise = null;
     if (loadHistory) {
       // Load history from address
-      WebSocketHandler.ws.setup();
       promise = this.loadAddressHistory(0, GAP_LIMIT);
     }
     return promise;

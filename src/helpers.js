@@ -200,7 +200,7 @@ const helpers = {
   getWSServerURL(url = null) {
     let serverURL;
     if (url === null) {
-      serverURL = this.getServerURL();
+      serverURL = helpers.getServerURL();
     } else {
       serverURL = url;
     }
