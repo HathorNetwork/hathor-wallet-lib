@@ -108,7 +108,7 @@ class HathorWallet extends EventEmitter {
     if (newState === Connection.CONNECTED) {
       StorageProxy.setStorage(this.storage);
       this.setState(HathorWallet.SYNCING);
-      wallet.loadAddressHistory(0, GAP_LIMIT).then(() => {
+      wallet.loadAddressHistory(0, GAP_LIMIT, this.conn).then(() => {
         this.setState(HathorWallet.READY);
       }).catch((error) => {
         throw error;
@@ -123,7 +123,7 @@ class HathorWallet extends EventEmitter {
   getCurrentAddress({ markAsUsed = false } = {}) {
     StorageProxy.setStorage(this.storage);
     if (markAsUsed) {
-      return wallet.getAddressToUse();
+      return wallet.getAddressToUse(this.conn);
     }
     return wallet.getCurrentAddress();
   }
@@ -170,7 +170,7 @@ class HathorWallet extends EventEmitter {
       isNewTx = false;
     }
 
-    wallet.updateHistoryData(historyTransactions, allTokens, [newTx], null, walletData);
+    wallet.updateHistoryData(historyTransactions, allTokens, [newTx], null, walletData, null, this.conn);
 
     if (isNewTx) {
       this.emit('new-tx', newTx);

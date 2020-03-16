@@ -247,7 +247,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  loadAddressHistory(startIndex, count) {
+  loadAddressHistory(startIndex, count, connection = null) {
     const promise = new Promise((resolve, reject) => {
       // First generate all private keys and its addresses, then get history
       let addresses = [];
@@ -264,7 +264,7 @@ const wallet = {
         addresses.push(address.toString());
 
         // Subscribe in websocket to this address updates
-        this.subscribeAddress(address.toString());
+        this.subscribeAddress(address.toString(), connection);
 
         if (StorageProxy.getStorage().getItem('wallet:address') === null) {
           // If still don't have an address to show on the screen
@@ -284,7 +284,7 @@ const wallet = {
         // Update historyTransactions with new one
         const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
         const allTokens = 'allTokens' in data ? data['allTokens'] : [];
-        const result = this.updateHistoryData(historyTransactions, allTokens, history, resolve, data, reject);
+        const result = this.updateHistoryData(historyTransactions, allTokens, history, resolve, data, reject, connection);
         WebSocketHandler.ws.emit('addresses_loaded', result);
       }, (e) => {
         reject(e);
@@ -609,7 +609,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  generateNewAddress() {
+  generateNewAddress(connection = null) {
     const accessData = this.getWalletAccessData();
     const xpub = HDPublicKey(accessData.xpubkey);
 
@@ -633,7 +633,7 @@ const wallet = {
     this.setWalletData(data);
 
     // Subscribe in ws to new address updates
-    this.subscribeAddress(newAddress.toString());
+    this.subscribeAddress(newAddress.toString(), connection);
 
     return {newAddress, newIndex};
   },
@@ -646,10 +646,10 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  getAddressToUse() {
+  getAddressToUse(connection = null) {
     const address = this.getCurrentAddress();
     // Updating address because the last one was used
-    this.nextAddress();
+    this.nextAddress(connection);
     return address;
   },
 
@@ -676,11 +676,11 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  nextAddress() {
+  nextAddress(connection = null) {
     if (this.hasNewAddress()) {
       this.getNextAddress();
     } else if (this.canGenerateNewAddress()) {
-      this.generateNewAddress();
+      this.generateNewAddress(connection);
     }
     return this.getCurrentAddress();
   },
@@ -878,9 +878,13 @@ const wallet = {
    *
    * @param {string} address
    */
-  subscribeAddress(address) {
+  subscribeAddress(address, connection = null) {
     const msg = JSON.stringify({'type': 'subscribe_address', 'address': address});
     WebSocketHandler.ws.sendMessage(msg);
+
+    if (connection) {
+      connection.websocket.sendMessage(msg);
+    }
   },
 
   /**
@@ -1495,7 +1499,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  updateHistoryData(oldHistoryTransactions, oldAllTokens, newHistory, resolve, dataJson, reject) {
+  updateHistoryData(oldHistoryTransactions, oldAllTokens, newHistory, resolve, dataJson, reject, connection) {
     if (dataJson === undefined) {
       dataJson = this.getWalletData();
     }
@@ -1573,7 +1577,7 @@ const wallet = {
     if (maxIndex + GAP_LIMIT > lastGeneratedIndex) {
       const startIndex = lastGeneratedIndex + 1;
       const count = maxIndex + GAP_LIMIT - lastGeneratedIndex;
-      const promise = this.loadAddressHistory(startIndex, count);
+      const promise = this.loadAddressHistory(startIndex, count, connection);
       promise.then(() => {
         if (resolve) {
           resolve();
