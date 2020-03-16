@@ -13,6 +13,12 @@ import WS from './websocket';
 class WebSocketHandler {
   constructor() {
     this.ws = null;
+    /* Right after importing the modules helpers and wallet, they are
+     * not available and are still undefined.
+     * This is probably caused by a cyclic import (wallet -> helpers -> tokens -> wallet)
+     * but still need more study.
+     * For now the setTimeout is used, so we can use the helpers module properly.
+     */
     setTimeout(() => {
       this.ws = new WS({ wsURL: helpers.getWSServerURL });
 

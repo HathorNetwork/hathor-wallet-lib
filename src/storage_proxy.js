@@ -8,6 +8,12 @@
 /**
  * Class to define the current storage instance to be used at the moment
  *
+ * Any storage access will be done by StorageProxy.getStorage().method
+ * and this allow many storage instances to exist.
+ *
+ * Anytime you want to change the current storage instance to be used,
+ * just need to call StorageProxy.setStorage(storage)
+ *
  * @class
  * @name StorageProxy
  */
