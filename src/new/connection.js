@@ -84,7 +84,11 @@ class Connection extends EventEmitter {
    **/
   start() {
     this.websocket.on('is_online', this.onConnectionChange);
-    this.websocket.on('wallet', this.handleWalletMessage);
+    this.websocket.on('wallet', (data) => {
+      // For some reason inside handleWalletMessage 'this' was not Connection instance,
+      // it was a WS instance. That's why we need to call it like that
+      this.handleWalletMessage(data);
+    });
 
     this.serverInfo = null;
     this.setState(Connection.CONNECTING);
