@@ -21,8 +21,8 @@ import WS from '../websocket';
  * - CONNECTED: When it is connected.
  *
  * You can subscribe for the following events:
- * - update-state: Fired when the state of the Wallet changes.
- * - websocket-msg: Fired when a new message arrive from the websocket.
+ * - state: Fired when the state of the Wallet changes.
+ * - wallet-update: Fired when a new wallet message arrive from the websocket.
  **/
 class Connection extends EventEmitter {
   /*
@@ -46,7 +46,7 @@ class Connection extends EventEmitter {
     this.serverInfo = null;
 
     this.onConnectionChange = this.onConnectionChange.bind(this);
-    this.handleWebsocketMsg = this.handleWalletMessage.bind(this);
+    this.handleWalletMessage = this.handleWalletMessage.bind(this);
 
     this.servers = servers || [...DEFAULT_SERVERS];
     this.currentServer = this.servers[0];
@@ -69,11 +69,18 @@ class Connection extends EventEmitter {
 
   /**
    * Called when a new wallet message arrives from websocket.
+   *
+   * @param {Object} wsData Websocket message data
    **/
   handleWalletMessage(wsData) {
     this.emit('wallet-update', wsData);
   }
 
+  /**
+   * Update class state
+   *
+   * @param {Number} state New state
+   */
   setState(state) {
     this.state = state;
     this.emit('state', state);
@@ -84,11 +91,7 @@ class Connection extends EventEmitter {
    **/
   start() {
     this.websocket.on('is_online', this.onConnectionChange);
-    this.websocket.on('wallet', (data) => {
-      // For some reason inside handleWalletMessage 'this' was not Connection instance,
-      // it was a WS instance. That's why we need to call it like that
-      this.handleWalletMessage(data);
-    });
+    this.websocket.on('wallet', this.handleWalletMessage);
 
     this.serverInfo = null;
     this.setState(Connection.CONNECTING);
