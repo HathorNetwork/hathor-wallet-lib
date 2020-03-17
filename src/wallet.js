@@ -1887,7 +1887,7 @@ const wallet = {
    * @inner
    */
   isSoftwareWallet() {
-    return StorageProxy.getStorage().getItem('wallet:type') === 'software';
+    return !this.isHardwareWallet();
   },
 
   /**
