@@ -9,20 +9,21 @@ import WebSocketHandler from '../src/WebSocketHandler';
 
 
 test('Ping', (done) => {
-  WebSocketHandler.started = true;
-  WebSocketHandler.on('pong', (wsData) => {
+  WebSocketHandler.ws.started = true;
+  WebSocketHandler.ws.on('pong', (wsData) => {
     done();
   });
-  WebSocketHandler.sendPing();
+  WebSocketHandler.ws.sendPing();
 }, 10000)
 
 test('Close', () => {
-  expect(WebSocketHandler.started).toBe(true);
-  expect(WebSocketHandler.connected).toBe(true);
-  expect(WebSocketHandler.isOnline).toBe(true);
+  WebSocketHandler.ws.setup();
+  expect(WebSocketHandler.ws.started).toBe(true);
+  expect(WebSocketHandler.ws.connected).toBe(true);
+  expect(WebSocketHandler.ws.isOnline).toBe(true);
 
-  WebSocketHandler.onClose();
-  expect(WebSocketHandler.started).toBe(false);
-  expect(WebSocketHandler.connected).toBe(false);
-  expect(WebSocketHandler.isOnline).toBe(false);
+  WebSocketHandler.ws.onClose();
+  expect(WebSocketHandler.ws.started).toBe(false);
+  expect(WebSocketHandler.ws.connected).toBe(false);
+  expect(WebSocketHandler.ws.isOnline).toBe(false);
 })

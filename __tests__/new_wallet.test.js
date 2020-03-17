@@ -9,7 +9,8 @@ import { GAP_LIMIT } from '../src/constants';
 import wallet from '../src/wallet';
 import WebSocketHandler from '../src/WebSocketHandler';
 
-const storage = require('../src/storage').default;
+const StorageProxy = require('../src/storage_proxy').default;
+const storage = StorageProxy.getStorage();
 
 var addressUsed = '';
 var addressShared = '';

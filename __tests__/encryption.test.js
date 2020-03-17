@@ -7,7 +7,8 @@
 
 import wallet from '../src/wallet';
 
-const storage = require('../src/storage').default;
+const StorageProxy = require('../src/storage_proxy').default;
+const storage = StorageProxy.getStorage();
 
 test('Private key encryption/decryption', () => {
   const pin = '123456';
