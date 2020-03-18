@@ -46,10 +46,11 @@ import StorageProxy from './src/storage_proxy';
 const storage = new Storage();
 storage.setStore(new MemoryOnlyStore());
 StorageProxy.setStorage(storage);
+storage.setItem('wallet:server', 'http://localhost:8080/');
 let wsURL = helpers.getWSServerURL();
 
 // Creating a ws mock server
-const mockServer = new Server('ws://localhost:8080/ws/');
+const mockServer = new Server(wsURL);
 mockServer.on('connection', socket => {
   socket.on('message', data => {
     let jsonData = JSON.parse(data);

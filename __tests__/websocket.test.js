@@ -6,18 +6,29 @@
  */
 
 import WebSocketHandler from '../src/WebSocketHandler';
+import WS from '../src/websocket';
+import helpers from '../src/helpers';
 
+beforeEach(() => {
+  jest.useFakeTimers();
+  WebSocketHandler.ws = new WS({ wsURL: helpers.getWSServerURL() });
+  WebSocketHandler.ws.WebSocket = WebSocket;
+  WebSocketHandler.ws.setup();
+
+  setTimeout(() => {}, 0);
+  jest.runOnlyPendingTimers();
+});
 
 test('Ping', (done) => {
-  WebSocketHandler.ws.started = true;
   WebSocketHandler.ws.on('pong', (wsData) => {
     done();
   });
   WebSocketHandler.ws.sendPing();
+  jest.runOnlyPendingTimers();
 }, 10000)
 
 test('Close', () => {
-  WebSocketHandler.ws.setup();
+
   expect(WebSocketHandler.ws.started).toBe(true);
   expect(WebSocketHandler.ws.connected).toBe(true);
   expect(WebSocketHandler.ws.isOnline).toBe(true);
