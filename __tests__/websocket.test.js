@@ -10,12 +10,12 @@ import WS from '../src/websocket';
 import helpers from '../src/helpers';
 
 beforeEach(() => {
+  // This useFakeTimers allow to handle setTimeout calls
+  // With it we can run all pending calls
   jest.useFakeTimers();
   WebSocketHandler.ws = new WS({ wsURL: helpers.getWSServerURL() });
   WebSocketHandler.ws.WebSocket = WebSocket;
   WebSocketHandler.ws.setup();
-
-  setTimeout(() => {}, 0);
   jest.runOnlyPendingTimers();
 });
 
