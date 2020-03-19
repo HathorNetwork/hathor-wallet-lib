@@ -14,7 +14,7 @@ import version from '../version';
 import walletApi from '../api/wallet';
 import Storage from '../storage';
 import MemoryStore from '../memory_store';
-import StorageProxy from '../storage_proxy';
+import storageProxy from '../storage_proxy';
 import Connection from './connection';
 
 /**
@@ -106,7 +106,7 @@ class HathorWallet extends EventEmitter {
    **/
   onConnectionChangedState(newState) {
     if (newState === Connection.CONNECTED) {
-      StorageProxy.setStorage(this.storage);
+      storageProxy.setStorage(this.storage);
       this.setState(HathorWallet.SYNCING);
       wallet.loadAddressHistory(0, GAP_LIMIT, this.conn).then(() => {
         this.setState(HathorWallet.READY);
@@ -121,7 +121,7 @@ class HathorWallet extends EventEmitter {
   }
 
   getCurrentAddress({ markAsUsed = false } = {}) {
-    StorageProxy.setStorage(this.storage);
+    storageProxy.setStorage(this.storage);
     if (markAsUsed) {
       return wallet.getAddressToUse(this.conn);
     }
@@ -138,14 +138,14 @@ class HathorWallet extends EventEmitter {
   }
 
   getBalance(tokenUid) {
-    StorageProxy.setStorage(this.storage);
+    storageProxy.setStorage(this.storage);
     const uid = tokenUid || this.token.uid;
     const historyTransactions = this.getTxHistory();
     return wallet.calculateBalance(Object.values(historyTransactions), uid);
   }
 
   getTxHistory() {
-    StorageProxy.setStorage(this.storage);
+    storageProxy.setStorage(this.storage);
     const data = wallet.getWalletData();
     const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
     return historyTransactions;
@@ -157,7 +157,7 @@ class HathorWallet extends EventEmitter {
   }
 
   onNewTx(wsData) {
-    StorageProxy.setStorage(this.storage);
+    storageProxy.setStorage(this.storage);
     const newTx = wsData.history;
 
     // TODO we also have to update some wallet lib data? Lib should do it by itself
@@ -216,7 +216,7 @@ class HathorWallet extends EventEmitter {
    * @return {Promise} Promise resolved when transaction is sent.
    */
   sendMultiTokenTransaction(data) {
-    StorageProxy.setStorage(this.storage);
+    storageProxy.setStorage(this.storage);
     const txData = {
       inputs: [],
       outputs: []
@@ -288,7 +288,7 @@ class HathorWallet extends EventEmitter {
    * @return {Promise} Promise that resolves when transaction is sent
    **/
   sendTransaction(address, value, token) {
-    StorageProxy.setStorage(this.storage);
+    storageProxy.setStorage(this.storage);
     const ret = this.prepareTransaction(address, value, token);
 
     if (ret.success) {
@@ -308,7 +308,7 @@ class HathorWallet extends EventEmitter {
    * @return {Object} Object with {success: false, message} in case of an error, or {success: true, data}, otherwise
    **/
   prepareTransaction(address, value, token) {
-    StorageProxy.setStorage(this.storage);
+    storageProxy.setStorage(this.storage);
     const txToken = token || this.token;
     const isHathorToken = txToken.uid === HATHOR_TOKEN_CONFIG.uid;
     // XXX This allow only one token to be sent
@@ -342,7 +342,7 @@ class HathorWallet extends EventEmitter {
    * @return {Promise} Promise that resolves when transaction is sent
    **/
   sendPreparedTransaction(data) {
-    StorageProxy.setStorage(this.storage);
+    storageProxy.setStorage(this.storage);
     return transaction.sendPreparedTransaction(data);
   }
 
@@ -350,7 +350,7 @@ class HathorWallet extends EventEmitter {
    * Connect to the server and start emitting events.
    **/
   start() {
-    StorageProxy.setStorage(this.storage);
+    storageProxy.setStorage(this.storage);
     this.conn.start();
     this.conn.on('state', this.onConnectionChangedState);
     this.conn.on('wallet-update', this.handleWebsocketMsg);
@@ -384,7 +384,7 @@ class HathorWallet extends EventEmitter {
    * Close the connections and stop emitting events.
    **/
   stop() {
-    StorageProxy.setStorage(this.storage);
+    storageProxy.setStorage(this.storage);
     // TODO Double check that we are properly cleaning things up.
     // See: https://github.com/HathorNetwork/hathor-wallet-headless/pull/1#discussion_r369859701
     this.conn.stop()
@@ -399,7 +399,7 @@ class HathorWallet extends EventEmitter {
    * Returns the balance for each token in tx, if the input/output belongs to this wallet
    */
   getTxBalance(tx) {
-    StorageProxy.setStorage(this.storage);
+    storageProxy.setStorage(this.storage);
     const myKeys = []; // TODO
     const balance = {};
     for (const txout of tx.outputs) {
@@ -432,7 +432,7 @@ class HathorWallet extends EventEmitter {
   }
 
   getTokenData() {
-    StorageProxy.setStorage(this.storage);
+    storageProxy.setStorage(this.storage);
     if (this.tokenUid === HATHOR_TOKEN_CONFIG.uid) {
       // Hathor token we don't get from the full node
       this.token = HATHOR_TOKEN_CONFIG;

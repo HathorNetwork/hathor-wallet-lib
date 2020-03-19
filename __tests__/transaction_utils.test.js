@@ -12,8 +12,8 @@ import buffer from 'buffer';
 import { OP_PUSHDATA1 } from '../src/opcodes';
 import { DEFAULT_TX_VERSION } from '../src/constants';
 
-const StorageProxy = require('../src/storage_proxy').default;
-const storage = StorageProxy.getStorage();
+const storageProxy = require('../src/storage_proxy').default;
+const storage = storageProxy.getStorage();
 
 test('Tx weight constants', () => {
   transaction.updateTransactionWeightConstants(10, 1.5, 8);

@@ -11,8 +11,8 @@ import dateFormatter from '../src/date';
 import { DEFAULT_SERVER } from '../src/constants';
 import { WalletTypeError } from '../src/errors';
 
-const StorageProxy = require('../src/storage_proxy').default;
-const storage = StorageProxy.getStorage();
+const storageProxy = require('../src/storage_proxy').default;
+const storage = storageProxy.getStorage();
 
 beforeEach(() => {
   wallet.resetAllData();

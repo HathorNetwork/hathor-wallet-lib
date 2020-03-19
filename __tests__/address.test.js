@@ -11,8 +11,8 @@ import helpers from '../src/helpers';
 import WebSocketHandler from '../src/WebSocketHandler';
 import WS from '../src/websocket';
 
-const StorageProxy = require('../src/storage_proxy').default;
-const storage = StorageProxy.getStorage();
+const storageProxy = require('../src/storage_proxy').default;
+const storage = storageProxy.getStorage();
 
 beforeEach(() => {
   wallet.cleanLoadedData();

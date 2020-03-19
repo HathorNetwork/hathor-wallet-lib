@@ -9,8 +9,8 @@ import wallet from '../src/wallet';
 import dateFormatter from '../src/date';
 import { HATHOR_TOKEN_CONFIG } from '../src/constants';
 
-const StorageProxy = require('../src/storage_proxy').default;
-const storage = StorageProxy.getStorage();
+const storageProxy = require('../src/storage_proxy').default;
+const storage = storageProxy.getStorage();
 
 test('Wallet operations for transaction', () => {
   const words = wallet.generateWalletWords(256);

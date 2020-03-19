@@ -240,14 +240,11 @@ class WS extends EventEmitter {
   }
 
   /**
-   * Set in redux if websocket is online
+   * Set if websocket is online
    *
    * @param {*} value Can be true|false|undefined
    */
   setIsOnline(value) {
-    // Save in redux
-    // Need also to keep the value in 'this' because I was accessing redux store
-    // from inside a reducer and was getting error
     if (this.isOnline !== value) {
       this.isOnline = value;
       // Emits event of online state change

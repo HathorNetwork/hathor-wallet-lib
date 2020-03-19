@@ -14,7 +14,7 @@ import tokens from './tokens';
 import helpers from './helpers';
 import { ConstantNotSet, OutputValueError, WalletTypeError } from './errors';
 import version from './version';
-import StorageProxy from './storage_proxy';
+import storageProxy from './storage_proxy';
 import network from './network';
 import transaction from './transaction';
 import dateFormatter from './date';
@@ -178,7 +178,7 @@ const wallet = {
    * @inner
    */
   getLastGeneratedIndex() {
-    const raw = StorageProxy.getStorage().getItem('wallet:lastGeneratedIndex');
+    const raw = storageProxy.getStorage().getItem('wallet:lastGeneratedIndex');
     if (!raw) {
       return 0;
     }
@@ -194,7 +194,7 @@ const wallet = {
    * @inner
    */
   getWalletData() {
-    return StorageProxy.getStorage().getItem('wallet:data');
+    return storageProxy.getStorage().getItem('wallet:data');
   },
 
   /**
@@ -206,7 +206,7 @@ const wallet = {
    * @inner
    */
   setWalletData(data) {
-    StorageProxy.getStorage().setItem('wallet:data', data);
+    storageProxy.getStorage().setItem('wallet:data', data);
   },
 
   /**
@@ -218,7 +218,7 @@ const wallet = {
    * @inner
    */
   getWalletAccessData() {
-    return StorageProxy.getStorage().getItem('wallet:accessData');
+    return storageProxy.getStorage().getItem('wallet:accessData');
   },
 
   /**
@@ -230,7 +230,7 @@ const wallet = {
    * @inner
    */
   setWalletAccessData(data) {
-    StorageProxy.getStorage().setItem('wallet:accessData', data);
+    storageProxy.getStorage().setItem('wallet:accessData', data);
   },
 
   /**
@@ -253,6 +253,7 @@ const wallet = {
       let addresses = [];
       let dataJson = this.getWalletData();
       let accessData = this.getWalletAccessData();
+      const storage = storageProxy.getStorage();
 
       const xpub = HDPublicKey(accessData.xpubkey);
       const stopIndex = startIndex + count;
@@ -266,7 +267,7 @@ const wallet = {
         // Subscribe in websocket to this address updates
         this.subscribeAddress(address.toString(), connection);
 
-        if (StorageProxy.getStorage().getItem('wallet:address') === null) {
+        if (storage.getItem('wallet:address') === null) {
           // If still don't have an address to show on the screen
           this.updateAddress(address.toString(), i);
         }
@@ -274,7 +275,7 @@ const wallet = {
 
       let lastGeneratedIndex = this.getLastGeneratedIndex();
       if (lastGeneratedIndex < stopIndex - 1) {
-        StorageProxy.getStorage().setItem('wallet:lastGeneratedIndex', stopIndex - 1);
+        storage.setItem('wallet:lastGeneratedIndex', stopIndex - 1);
       }
 
       this.setWalletData(dataJson);
@@ -364,8 +365,9 @@ const wallet = {
    * @inner
    */
   updateAddress(lastSharedAddress, lastSharedIndex) {
-    StorageProxy.getStorage().setItem('wallet:address', lastSharedAddress);
-    StorageProxy.getStorage().setItem('wallet:lastSharedIndex', lastSharedIndex);
+    const storage = storageProxy.getStorage();
+    storage.setItem('wallet:address', lastSharedAddress);
+    storage.setItem('wallet:lastSharedIndex', lastSharedIndex);
   },
 
   /**
@@ -624,7 +626,7 @@ const wallet = {
     this.updateAddress(newAddress.toString(), newIndex);
     let lastGeneratedIndex = this.getLastGeneratedIndex();
     if (newIndex > lastGeneratedIndex) {
-      StorageProxy.getStorage().setItem('wallet:lastGeneratedIndex', newIndex);
+      storageProxy.getStorage().setItem('wallet:lastGeneratedIndex', newIndex);
     }
 
     // Save new keys to local storage
@@ -662,7 +664,7 @@ const wallet = {
    * @inner
    */
   getCurrentAddress() {
-    return StorageProxy.getStorage().getItem('wallet:address');
+    return storageProxy.getStorage().getItem('wallet:address');
   },
 
   /**
@@ -846,7 +848,7 @@ const wallet = {
    * @inner
    */
   loaded() {
-    return StorageProxy.getStorage().getItem('wallet:accessData') !== null;
+    return storageProxy.getStorage().getItem('wallet:accessData') !== null;
   },
 
   /**
@@ -858,7 +860,7 @@ const wallet = {
    * @inner
    */
   started() {
-    return StorageProxy.getStorage().getItem('wallet:started') !== null;
+    return storageProxy.getStorage().getItem('wallet:started') !== null;
   },
 
   /**
@@ -870,7 +872,7 @@ const wallet = {
    * @inner
    */
   markWalletAsStarted() {
-    return StorageProxy.getStorage().setItem('wallet:started', true);
+    return storageProxy.getStorage().setItem('wallet:started', true);
   },
 
   /**
@@ -941,8 +943,9 @@ const wallet = {
       let index = data.keys[address].index;
       const lastUsedIndex = this.getLastUsedIndex();
       if (lastUsedIndex === null || index > parseInt(lastUsedIndex, 10)) {
-        StorageProxy.getStorage().setItem('wallet:lastUsedAddress', address);
-        StorageProxy.getStorage().setItem('wallet:lastUsedIndex', index);
+        const storage = storageProxy.getStorage();
+        storage.setItem('wallet:lastUsedAddress', address);
+        storage.setItem('wallet:lastUsedIndex', index);
       }
     }
   },
@@ -969,7 +972,7 @@ const wallet = {
    * @inner
    */
   cleanServer() {
-    StorageProxy.getStorage().removeItem('wallet:server');
+    storageProxy.getStorage().removeItem('wallet:server');
   },
 
   /**
@@ -978,13 +981,14 @@ const wallet = {
    * @inner
    */
   cleanLoadedData() {
-    StorageProxy.getStorage().removeItem('wallet:accessData');
-    StorageProxy.getStorage().removeItem('wallet:data');
-    StorageProxy.getStorage().removeItem('wallet:address');
-    StorageProxy.getStorage().removeItem('wallet:lastSharedIndex');
-    StorageProxy.getStorage().removeItem('wallet:lastGeneratedIndex');
-    StorageProxy.getStorage().removeItem('wallet:lastUsedIndex');
-    StorageProxy.getStorage().removeItem('wallet:lastUsedAddress');
+    const storage = storageProxy.getStorage();
+    storage.removeItem('wallet:accessData');
+    storage.removeItem('wallet:data');
+    storage.removeItem('wallet:address');
+    storage.removeItem('wallet:lastSharedIndex');
+    storage.removeItem('wallet:lastGeneratedIndex');
+    storage.removeItem('wallet:lastUsedIndex');
+    storage.removeItem('wallet:lastUsedAddress');
     // we clean storage, but wallet is still open
     this.setWalletAsOpen();
   },
@@ -1005,12 +1009,13 @@ const wallet = {
     tokens.clearDepositPercentage();
     this.clearRewardLockConstant();
     this.clearNetworkBestChainHeight();
-    StorageProxy.getStorage().removeItem('wallet:started');
-    StorageProxy.getStorage().removeItem('wallet:backup');
-    StorageProxy.getStorage().removeItem('wallet:locked');
-    StorageProxy.getStorage().removeItem('wallet:tokens');
-    StorageProxy.getStorage().removeItem('wallet:sentry');
-    StorageProxy.getStorage().removeItem('wallet:type');
+    const storage = storageProxy.getStorage();
+    storage.removeItem('wallet:started');
+    storage.removeItem('wallet:backup');
+    storage.removeItem('wallet:locked');
+    storage.removeItem('wallet:tokens');
+    storage.removeItem('wallet:sentry');
+    storage.removeItem('wallet:type');
   },
 
   /*
@@ -1155,7 +1160,7 @@ const wallet = {
    * @inner
    */
   lock() {
-    StorageProxy.getStorage().setItem('wallet:locked', true);
+    storageProxy.getStorage().setItem('wallet:locked', true);
   },
 
   /*
@@ -1165,7 +1170,7 @@ const wallet = {
    * @inner
    */
   unlock() {
-    StorageProxy.getStorage().removeItem('wallet:locked');
+    storageProxy.getStorage().removeItem('wallet:locked');
   },
 
   /*
@@ -1177,7 +1182,7 @@ const wallet = {
    * @inner
    */
   isLocked() {
-    return StorageProxy.getStorage().getItem('wallet:locked') !== null;
+    return storageProxy.getStorage().getItem('wallet:locked') !== null;
   },
 
   /*
@@ -1189,7 +1194,7 @@ const wallet = {
    * @inner
    */
   wasClosed() {
-    return StorageProxy.getStorage().getItem('wallet:closed') === true;
+    return storageProxy.getStorage().getItem('wallet:closed') === true;
   },
 
   /*
@@ -1199,7 +1204,7 @@ const wallet = {
    * @inner
    */
   close() {
-    StorageProxy.getStorage().setItem('wallet:closed', true);
+    storageProxy.getStorage().setItem('wallet:closed', true);
   },
 
   /*
@@ -1209,7 +1214,7 @@ const wallet = {
    * @inner
    */
   setWalletAsOpen() {
-    StorageProxy.getStorage().setItem('wallet:closed', false);
+    storageProxy.getStorage().setItem('wallet:closed', false);
   },
 
   /**
@@ -1234,7 +1239,7 @@ const wallet = {
    * @inner
    */
   markBackupAsDone() {
-    StorageProxy.getStorage().setItem('wallet:backup', true);
+    storageProxy.getStorage().setItem('wallet:backup', true);
   },
 
   /*
@@ -1244,7 +1249,7 @@ const wallet = {
    * @inner
    */
   markBackupAsNotDone() {
-    StorageProxy.getStorage().removeItem('wallet:backup');
+    storageProxy.getStorage().removeItem('wallet:backup');
   },
 
   /*
@@ -1256,7 +1261,7 @@ const wallet = {
    * @inner
    */
   isBackupDone() {
-    return StorageProxy.getStorage().getItem('wallet:backup') !== null;
+    return storageProxy.getStorage().getItem('wallet:backup') !== null;
   },
 
   /*
@@ -1338,7 +1343,7 @@ const wallet = {
    * @inner
    */
   changeServer(newServer) {
-    StorageProxy.getStorage().setItem('wallet:server', newServer);
+    storageProxy.getStorage().setItem('wallet:server', newServer);
   },
 
   /*
@@ -1350,7 +1355,7 @@ const wallet = {
    * @inner
    */
   setDefaultServer(server) {
-    StorageProxy.getStorage().setItem('wallet:defaultServer', server);
+    storageProxy.getStorage().setItem('wallet:defaultServer', server);
   },
 
   /*
@@ -1360,7 +1365,7 @@ const wallet = {
    * @inner
    */
   clearDefaultServer() {
-    StorageProxy.getStorage().removeItem('wallet:defaultServer');
+    storageProxy.getStorage().removeItem('wallet:defaultServer');
   },
 
   /*
@@ -1452,7 +1457,7 @@ const wallet = {
    * @inner
    */
   getLocalStorageIndex(key) {
-    let index = StorageProxy.getStorage().getItem(`wallet:${key}`);
+    let index = storageProxy.getStorage().getItem(`wallet:${key}`);
     if (index !== null) {
       index = parseInt(index, 10);
     }
@@ -1875,7 +1880,7 @@ const wallet = {
     if (!walletTypes.includes(type)) {
       throw new WalletTypeError('Invalid wallet type');
     }
-    StorageProxy.getStorage().setItem('wallet:type', type);
+    storageProxy.getStorage().setItem('wallet:type', type);
   },
 
   /**
@@ -1899,7 +1904,7 @@ const wallet = {
    * @inner
    */
   isHardwareWallet() {
-    return StorageProxy.getStorage().getItem('wallet:type') === 'hardware';
+    return storageProxy.getStorage().getItem('wallet:type') === 'hardware';
   },
 
   /**
