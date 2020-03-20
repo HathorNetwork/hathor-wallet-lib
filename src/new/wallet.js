@@ -168,7 +168,7 @@ class HathorWallet extends EventEmitter {
       isNewTx = false;
     }
 
-    wallet.updateHistoryData(historyTransactions, allTokens, [newTx], null, walletData, null, this.conn);
+    wallet.updateHistoryData(historyTransactions, allTokens, [newTx], null, walletData, null, this.conn, this.store);
 
     if (isNewTx) {
       this.emit('new-tx', newTx);
