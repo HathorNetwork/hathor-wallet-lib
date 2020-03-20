@@ -9,9 +9,11 @@
 import wallet from './wallet';
 import helpers from './helpers';
 import WS from './websocket';
+import EventEmitter from 'events';
 
-class WebSocketHandler {
+class WebSocketHandler extends EventEmitter {
   constructor() {
+    super();
     this.ws = null;
     /* Right after importing the modules helpers and wallet, they are
      * not available and are still undefined.
@@ -30,6 +32,19 @@ class WebSocketHandler {
           wallet.onWebsocketBeforeClose();
         }
       });
+
+      /*
+       * This class still exists for compatibility reasons
+       * it is used in some wallets and in our old lib code
+       * In the wallets we capture some events from it, so
+       * this following code is to emit all events emitted from this.ws
+       */
+      this.oldEmit = this.ws.emit;
+      this.ws.emit = (type, ...args) => {
+        this.emit(type, ...args);
+        return this.oldEmit(type, ...args);
+      }
+
     }, 0);
   }
 }
