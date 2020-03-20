@@ -241,14 +241,21 @@ const wallet = {
    *
    * @param {number} startIndex Address index to start to load history
    * @param {number} count How many addresses I will load
+   * @param {Connection} connection Connection object to subscribe for the addresses
+   * @param {Store} store Store object to save the data
    *
    * @return {Promise} Promise that resolves when addresses history is finished loading from server
    *
    * @memberof Wallet
    * @inner
    */
-  loadAddressHistory(startIndex, count, connection = null) {
+  loadAddressHistory(startIndex, count, connection = null, store = null) {
     const promise = new Promise((resolve, reject) => {
+      let oldStore = storage.store;
+      if (store) {
+        storage.setStore(store);
+      }
+
       // First generate all private keys and its addresses, then get history
       let addresses = [];
       let dataJson = this.getWalletData();
@@ -278,13 +285,14 @@ const wallet = {
       }
 
       this.setWalletData(dataJson);
+      storage.setStore(oldStore);
 
       this.getTxHistory(addresses).then((history) => {
         const data = this.getWalletData();
         // Update historyTransactions with new one
         const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
         const allTokens = 'allTokens' in data ? data['allTokens'] : [];
-        const result = this.updateHistoryData(historyTransactions, allTokens, history, resolve, data, reject, connection);
+        const result = this.updateHistoryData(historyTransactions, allTokens, history, resolve, data, reject, connection, store);
         WebSocketHandler.ws.emit('addresses_loaded', result);
       }, (e) => {
         reject(e);
@@ -1492,6 +1500,8 @@ const wallet = {
    * @param {function} resolve Resolve method from promise to be called after finishing handling the new history
    * @param {Object} dataJson Wallet data in storage already loaded. This parameter is optional and if nothing is passed, the data will be loaded again. We expect this field to be the return of the method wallet.getWalletData()
    * @param {function} reject Reject method from promise to be called if an error happens
+   * @param {Connection} connection Connection object to subscribe for the addresses
+   * @param {Store} store Store object to save the data
    *
    * @throws {OutputValueError} Will throw an error if one of the output value is invalid
    *
@@ -1499,7 +1509,12 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  updateHistoryData(oldHistoryTransactions, oldAllTokens, newHistory, resolve, dataJson, reject, connection) {
+  updateHistoryData(oldHistoryTransactions, oldAllTokens, newHistory, resolve, dataJson, reject, connection = null, store = null) {
+    let oldStore = storage.store;
+    if (store) {
+      storage.setStore(store);
+    }
+
     if (dataJson === undefined) {
       dataJson = this.getWalletData();
     }
@@ -1577,7 +1592,7 @@ const wallet = {
     if (maxIndex + GAP_LIMIT > lastGeneratedIndex) {
       const startIndex = lastGeneratedIndex + 1;
       const count = maxIndex + GAP_LIMIT - lastGeneratedIndex;
-      const promise = this.loadAddressHistory(startIndex, count, connection);
+      const promise = this.loadAddressHistory(startIndex, count, connection, store);
       promise.then(() => {
         if (resolve) {
           resolve();
@@ -1595,6 +1610,7 @@ const wallet = {
       }
     }
 
+    storage.setStore(oldStore);
     return {historyTransactions, allTokens, newSharedAddress, newSharedIndex, addressesFound: lastGeneratedIndex + 1};
   },
 

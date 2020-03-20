@@ -106,7 +106,7 @@ class HathorWallet extends EventEmitter {
     if (newState === Connection.CONNECTED) {
       storage.setStore(this.store);
       this.setState(HathorWallet.SYNCING);
-      wallet.loadAddressHistory(0, GAP_LIMIT, this.conn).then(() => {
+      wallet.loadAddressHistory(0, GAP_LIMIT, this.conn, this.store).then(() => {
         this.setState(HathorWallet.READY);
       }).catch((error) => {
         throw error;
