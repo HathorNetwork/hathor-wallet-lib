@@ -15,7 +15,7 @@ const WS_READYSTATE_READY = 1;
  * Handles websocket connections and message transmission
  *
  * @class
- * @name WebSocketHandler
+ * @name WS
  */
 class WS extends EventEmitter {
   constructor({

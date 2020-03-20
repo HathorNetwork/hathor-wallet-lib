@@ -47,6 +47,16 @@ class WebSocketHandler extends EventEmitter {
 
     }, 0);
   }
+
+  setup() {
+    // To keep compatibility with methods previously used in this singleton
+    return this.ws.setup();
+  }
+
+  endConnection() {
+    // To keep compatibility with methods previously used in this singleton
+    return this.ws.endConnection();
+  }
 }
 
 const instance = new WebSocketHandler();

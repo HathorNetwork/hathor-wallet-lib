@@ -43,7 +43,6 @@ class Connection extends EventEmitter {
     this.network = network;
 
     this.state = Connection.CLOSED;
-    this.serverInfo = null;
 
     this.onConnectionChange = this.onConnectionChange.bind(this);
     this.handleWalletMessage = this.handleWalletMessage.bind(this);
@@ -62,7 +61,6 @@ class Connection extends EventEmitter {
     if (value) {
       this.setState(Connection.CONNECTED);
     } else {
-      this.serverInfo = null;
       this.setState(Connection.CONNECTING);
     }
   }
@@ -93,26 +91,8 @@ class Connection extends EventEmitter {
     this.websocket.on('is_online', this.onConnectionChange);
     this.websocket.on('wallet', this.handleWalletMessage);
 
-    this.serverInfo = null;
     this.setState(Connection.CONNECTING);
-
-    const promise = new Promise((resolve, reject) => {
-      version.checkApiVersion().then((info) => {
-        // Check network version to avoid blunders.
-        if (info.network.indexOf(this.network) >= 0) {
-          this.websocket.setup();
-          this.serverInfo = info;
-          resolve(info);
-        } else {
-          this.setState(Connection.CLOSED);
-          reject(`Wrong network. server=${info.network} expected=${this.network}`);
-        }
-      }, (error) => {
-        this.setState(Connection.CLOSED);
-        reject(error);
-      });
-    });
-    return promise;
+    this.websocket.setup();
   }
 
   /**
@@ -124,7 +104,6 @@ class Connection extends EventEmitter {
     this.websocket.endConnection()
     this.websocket.removeListener('is_online', this.onConnectionChange);
     this.websocket.removeListener('wallet', this.handleWalletMessage);
-    this.serverInfo = null;
     this.setState(Connection.CLOSED);
   }
 }

@@ -349,7 +349,6 @@ class HathorWallet extends EventEmitter {
    **/
   start() {
     storage.setStore(this.store);
-    this.conn.start();
     this.conn.on('state', this.onConnectionChangedState);
     this.conn.on('wallet-update', this.handleWebsocketMsg);
 
@@ -364,6 +363,7 @@ class HathorWallet extends EventEmitter {
         // Check network version to avoid blunders.
         if (info.network.indexOf(this.conn.network) >= 0) {
           this.serverInfo = info;
+          this.conn.start();
           resolve(info);
         } else {
           this.setState(HathorWallet.CLOSED);
