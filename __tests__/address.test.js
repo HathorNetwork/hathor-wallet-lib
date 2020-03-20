@@ -10,9 +10,8 @@ import { GAP_LIMIT } from '../src/constants';
 import helpers from '../src/helpers';
 import WebSocketHandler from '../src/WebSocketHandler';
 import WS from '../src/websocket';
+import storage from '../src/storage';
 
-const storageProxy = require('../src/storage_proxy').default;
-const storage = storageProxy.getStorage();
 
 beforeEach(() => {
   wallet.cleanLoadedData();

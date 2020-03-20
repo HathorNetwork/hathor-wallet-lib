@@ -13,9 +13,8 @@ import version from '../src/version';
 import { util } from 'bitcore-lib';
 import WebSocketHandler from '../src/WebSocketHandler';
 import { InsufficientFundsError, TokenValidationError } from '../src/errors';
+import storage from '../src/storage';
 
-const storageProxy = require('../src/storage_proxy').default;
-const storage = storageProxy.getStorage();
 
 const createdTxHash = '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e';
 const createdToken = util.buffer.bufferToHex(tokens.getTokenUID(createdTxHash, 0));

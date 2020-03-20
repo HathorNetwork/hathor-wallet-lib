@@ -34,18 +34,15 @@ class MemoryOnlyStore {
 
 // Mocking localStorage for tests
 import 'jest-localstorage-mock';
-const Storage = require('./src/storage').default;
+const storage = require('./src/storage').default;
 
 // Mocking WebSocket for tests
 import { Server, WebSocket } from 'mock-socket';
 global.WebSocket = WebSocket;
 
 import helpers from './src/helpers';
-import StorageProxy from './src/storage_proxy';
 
-const storage = new Storage();
 storage.setStore(new MemoryOnlyStore());
-StorageProxy.setStorage(storage);
 storage.setItem('wallet:server', 'http://localhost:8080/');
 let wsURL = helpers.getWSServerURL();
 

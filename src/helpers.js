@@ -7,7 +7,7 @@
 
 import path from 'path';
 
-import storageProxy from './storage_proxy';
+import storage from './storage';
 import tokens from './tokens';
 import { BLOCK_VERSION, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, MERGED_MINED_BLOCK_VERSION, GENESIS_BLOCK, DECIMAL_PLACES, DEFAULT_SERVER } from './constants';
 
@@ -178,7 +178,6 @@ const helpers = {
    * @inner
    */
   getServerURL() {
-    const storage = storageProxy.getStorage();
     const server = storage.getItem('wallet:server');
     const defaultServer = storage.getItem('wallet:defaultServer');
     if (server !== null) {
