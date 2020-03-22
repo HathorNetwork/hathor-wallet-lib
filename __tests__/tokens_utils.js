@@ -201,3 +201,22 @@ test('Tokens handling', async () => {
   const unknownConfig = tokens.getConfigurationString('1', 'Unknown Token', 'UTK');
   await expect(tokens.validateTokenToAddByConfigurationString(unknownConfig)).rejects.toThrow(TokenValidationError);
 });
+
+test('Token deposit', () => {
+  tokens.updateDepositPercentage(0.01);
+  // considering HTR deposit is 1%
+  expect(tokens.getDepositAmount(100)).toBe(1);
+  expect(tokens.getDepositAmount(1)).toBe(1);
+  expect(tokens.getDepositAmount(0.1)).toBe(1);
+  expect(tokens.getDepositAmount(500)).toBe(5);
+  expect(tokens.getDepositAmount(550)).toBe(6);
+});
+
+test('Token withdraw', () => {
+  tokens.updateDepositPercentage(0.01);
+  // considering HTR deposit is 1%
+  expect(tokens.getWithdrawAmount(100)).toBe(1);
+  expect(tokens.getWithdrawAmount(99)).toBe(0);
+  expect(tokens.getWithdrawAmount(500)).toBe(5);
+  expect(tokens.getWithdrawAmount(550)).toBe(5);
+});

@@ -159,7 +159,7 @@ const wallet = {
     this.setWalletAccessData(accessData);
     this.setWalletData(walletData);
 
-    WebSocketHandler.ws.setup();
+    WebSocketHandler.setup();
 
     let promise = null;
     if (loadHistory) {
@@ -251,7 +251,7 @@ const wallet = {
    */
   loadAddressHistory(startIndex, count, connection = null, store = null) {
     const promise = new Promise((resolve, reject) => {
-      let oldStore = storage.store;
+      let oldStore = _.clone(storage.store);
       if (store) {
         storage.setStore(store);
       }
@@ -288,12 +288,17 @@ const wallet = {
       storage.setStore(oldStore);
 
       this.getTxHistory(addresses).then((history) => {
+        let oldStore = _.clone(storage.store);
+        if (store) {
+          storage.setStore(store);
+        }
         const data = this.getWalletData();
         // Update historyTransactions with new one
         const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
         const allTokens = 'allTokens' in data ? data['allTokens'] : [];
         const result = this.updateHistoryData(historyTransactions, allTokens, history, resolve, data, reject, connection, store);
         WebSocketHandler.ws.emit('addresses_loaded', result);
+        storage.setStore(oldStore);
       }, (e) => {
         reject(e);
       });
@@ -967,7 +972,7 @@ const wallet = {
   cleanWallet() {
     this.unsubscribeAllAddresses();
     this.cleanLoadedData();
-    WebSocketHandler.ws.endConnection();
+    WebSocketHandler.endConnection();
   },
 
   /*
@@ -1280,7 +1285,7 @@ const wallet = {
 
     this.cleanWallet();
     // Restart websocket connection
-    WebSocketHandler.ws.setup();
+    WebSocketHandler.setup();
 
     let newWalletData = {
       keys: {},
@@ -1510,7 +1515,7 @@ const wallet = {
    * @inner
    */
   updateHistoryData(oldHistoryTransactions, oldAllTokens, newHistory, resolve, dataJson, reject, connection = null, store = null) {
-    let oldStore = storage.store;
+    let oldStore = _.clone(storage.store);
     if (store) {
       storage.setStore(store);
     }
@@ -1812,7 +1817,7 @@ const wallet = {
    * @inner
    */
   addMetricsListener() {
-    WebSocketHandler.ws.on('dashboard', this.handleWebsocketDashboard);
+    WebSocketHandler.on('dashboard', this.handleWebsocketDashboard);
   },
 
   /**
@@ -1822,7 +1827,7 @@ const wallet = {
    * @inner
    */
   removeMetricsListener() {
-    WebSocketHandler.ws.removeListener('dashboard', this.handleWebsocketDashboard);
+    WebSocketHandler.removeListener('dashboard', this.handleWebsocketDashboard);
   },
 
   /**

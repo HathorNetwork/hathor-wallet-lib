@@ -414,7 +414,7 @@ const tokens = {
       // user chose HTR deposit inputs
       inputs.push(...depositInputs.inputs);
       // create change output, if needed
-      const depositAmount = helpers.getDepositAmount(amount);
+      const depositAmount = tokens.getDepositAmount(amount);
       if (depositInputs.amount - depositAmount > 0) {
         const outputChange = wallet.getOutputChange(depositInputs.amount - depositAmount, 0);
         outputs.push(outputChange);
@@ -555,7 +555,7 @@ const tokens = {
     }
 
     // withdraw HTR tokens
-    const withdrawAmount = helpers.getWithdrawAmount(amount);
+    const withdrawAmount = tokens.getWithdrawAmount(amount);
     outputs.push(wallet.getOutputChange(withdrawAmount, 0));
 
     // Create new data
@@ -767,7 +767,7 @@ const tokens = {
   getMintDepositInfo(mintAmount) {
     const outputs = [];
     const data = wallet.getWalletData();
-    const depositAmount = helpers.getDepositAmount(mintAmount);
+    const depositAmount = tokens.getDepositAmount(mintAmount);
     const htrInputs = wallet.getInputsFromAmount(data.historyTransactions, depositAmount, HATHOR_TOKEN_CONFIG.uid);
     if (htrInputs.inputsAmount < depositAmount) {
       throw new InsufficientFundsError(`Not enough HTR tokens for deposit: ${helpers.prettyValue(depositAmount)} required, ${helpers.prettyValue(htrInputs.inputsAmount)} available`);
@@ -831,6 +831,34 @@ const tokens = {
    */
   isHathorToken(uid) {
     return uid === HATHOR_TOKEN_CONFIG.uid;
+  },
+
+  /**
+   * Calculate deposit value for the given token mint amount
+   *
+   * @param {number} mintAmount Amount of tokens being minted
+   *
+   * @return {number}
+   * @memberof Tokens
+   * @inner
+   *
+   */
+  getDepositAmount(mintAmount) {
+    return Math.ceil(tokens.getDepositPercentage() * mintAmount);
+  },
+
+  /**
+   * Calculate withdraw value for the given token melt amount
+   *
+   * @param {number} meltAmount Amount of tokens being melted
+   *
+   * @return {number}
+   * @memberof Tokens
+   * @inner
+   *
+   */
+  getWithdrawAmount(meltAmount) {
+    return Math.floor(tokens.getDepositPercentage() * meltAmount);
   },
 }
 
