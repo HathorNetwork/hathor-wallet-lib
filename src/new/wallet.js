@@ -68,6 +68,10 @@ class HathorWallet extends EventEmitter {
       throw Error('You must explicitly provide the seed.');
     }
 
+    if (connection.state !== Connection.CLOSED) {
+      throw Error('You can\'t share connections.');
+    }
+
     this.conn = connection;
     this.state = HathorWallet.CLOSED;
     this.serverInfo = null;
