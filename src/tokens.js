@@ -414,7 +414,7 @@ const tokens = {
       // user chose HTR deposit inputs
       inputs.push(...depositInputs.inputs);
       // create change output, if needed
-      const depositAmount = tokens.getDepositAmount(amount);
+      const depositAmount = this.getDepositAmount(amount);
       if (depositInputs.amount - depositAmount > 0) {
         const outputChange = wallet.getOutputChange(depositInputs.amount - depositAmount, 0);
         outputs.push(outputChange);
@@ -555,7 +555,7 @@ const tokens = {
     }
 
     // withdraw HTR tokens
-    const withdrawAmount = tokens.getWithdrawAmount(amount);
+    const withdrawAmount = this.getWithdrawAmount(amount);
     outputs.push(wallet.getOutputChange(withdrawAmount, 0));
 
     // Create new data
@@ -767,7 +767,7 @@ const tokens = {
   getMintDepositInfo(mintAmount) {
     const outputs = [];
     const data = wallet.getWalletData();
-    const depositAmount = tokens.getDepositAmount(mintAmount);
+    const depositAmount = this.getDepositAmount(mintAmount);
     const htrInputs = wallet.getInputsFromAmount(data.historyTransactions, depositAmount, HATHOR_TOKEN_CONFIG.uid);
     if (htrInputs.inputsAmount < depositAmount) {
       throw new InsufficientFundsError(`Not enough HTR tokens for deposit: ${helpers.prettyValue(depositAmount)} required, ${helpers.prettyValue(htrInputs.inputsAmount)} available`);

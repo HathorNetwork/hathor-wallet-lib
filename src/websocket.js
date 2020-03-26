@@ -95,6 +95,8 @@ class WS extends EventEmitter {
     }
 
     if (this.ws) {
+      // This check is just to prevent trying to open
+      // a connection more than once within the open timeout
       const dt = (new Date() - this.latestSetupDate) / 1000;
       if (dt < this.openConnectionTimeout) {
         return;

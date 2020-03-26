@@ -159,11 +159,10 @@ const wallet = {
     this.setWalletAccessData(accessData);
     this.setWalletData(walletData);
 
-    WebSocketHandler.setup();
-
     let promise = null;
     if (loadHistory) {
       // Load history from address
+      WebSocketHandler.setup();
       promise = this.loadAddressHistory(0, GAP_LIMIT);
     }
     return promise;
@@ -896,6 +895,10 @@ const wallet = {
     WebSocketHandler.ws.sendMessage(msg);
 
     if (connection) {
+      // For now the WebSocketHandler is still needed because it's used in
+      // the whole old library code
+      // As soon as we refactor everything, we will have only one ws connection
+      // for each wallet
       connection.websocket.sendMessage(msg);
     }
   },

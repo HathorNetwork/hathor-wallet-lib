@@ -15,6 +15,7 @@ import walletApi from '../api/wallet';
 import storage from '../storage';
 import MemoryStore from '../memory_store';
 import Connection from './connection';
+import WebSocketHandler from '../WebSocketHandler';
 
 /**
  * This is a Wallet that is supposed to be simple to be used by a third-party app.
@@ -94,7 +95,6 @@ class HathorWallet extends EventEmitter {
       this.store = new MemoryStore();
     }
     storage.setStore(this.store);
-    storage.setItem('wallet:server', this.conn.currentServer);
 
     this.onConnectionChangedState = this.onConnectionChangedState.bind(this);
     this.handleWebsocketMsg = this.handleWebsocketMsg.bind(this);
@@ -110,6 +110,7 @@ class HathorWallet extends EventEmitter {
     if (newState === Connection.CONNECTED) {
       storage.setStore(this.store);
       this.setState(HathorWallet.SYNCING);
+      WebSocketHandler.setup();
       wallet.loadAddressHistory(0, GAP_LIMIT, this.conn, this.store).then(() => {
         this.setState(HathorWallet.READY);
       }).catch((error) => {
@@ -353,6 +354,8 @@ class HathorWallet extends EventEmitter {
    **/
   start() {
     storage.setStore(this.store);
+    storage.setItem('wallet:server', this.conn.currentServer);
+
     this.conn.on('state', this.onConnectionChangedState);
     this.conn.on('wallet-update', this.handleWebsocketMsg);
 
