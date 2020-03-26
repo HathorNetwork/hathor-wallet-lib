@@ -101,7 +101,9 @@ class WS extends EventEmitter {
       if (dt < this.openConnectionTimeout) {
         return;
       }
+      this.ws.onclose = () => {};
       this.ws.close();
+      this.ws = null;
     }
     this.ws = new this.WebSocket(wsURL);
     this.latestSetupDate = new Date();
