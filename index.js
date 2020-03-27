@@ -15,6 +15,7 @@ var storage = require('./lib/storage');
 var network = require('./lib/network');
 var MemoryStore = require('./lib/memory_store');
 var HathorWallet = require('./lib/new/wallet');
+var Connection = require('./lib/new/connection');
 
 module.exports = {
   helpers: helpers.default,
@@ -34,4 +35,5 @@ module.exports = {
   MemoryStore: MemoryStore.default,
   network: network.default,
   HathorWallet: HathorWallet.default,
+  Connection: Connection.default,
 }

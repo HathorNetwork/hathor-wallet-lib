@@ -22,15 +22,19 @@ The wallet automatically reconnects when the connection is down.
 ### Initializing your wallet
 
 To initialize your wallet, you will need to know your seed. A seed is a string of 24 word, e.g., `'range wonder roof trumpet soon urge unaware satisfy confirm kidney critic rookie wild used merry teach smooth puzzle salute desk pepper jeans creek valve'`.
+Besides the seed, a Connection instance is also required. This connection has a backend server and it's how the wallet receives real time updates from the websocket.
 
 ### Example
 
 ```js
 const seed = 'range wonder roof trumpet soon urge unaware satisfy confirm kidney critic rookie wild used merry teach smooth puzzle salute desk pepper jeans creek valve';
+const connection = new Connection({
+  network: 'mainnet',
+  servers: ['https://node1.mainnet.hathor.network/v1a/'],
+});
 
 const wallet = new Wallet({
-  network: 'mainnet',
-  server: 'https://node1.mainnet.hathor.network/v1a/',
+  connection: connection,
   seed: seed,
   tokenUid: '0000035f21f454686b3a01b59ae1345011501d0fcd8973d25d3d6ebe6f1c00bb',
 });
@@ -52,14 +56,15 @@ wallet.start(); // This will start the wallet and load its data from the server
 
 ### Constructor
 
-`Wallet({ network, server, seed, tokenUid }`
+`Wallet({ connection, store, seed, tokenUid, passphrase }`
 
 *Parameters:*
 
-- `network`: Network you want the wallet connected to. E.g., 'testnet' or 'mainnet'.
-- `server`: Server you want to connect to. E.g., 'https://node1.mainnet.hathor.network/v1a/'.
+- `connection`: Connection instance which connects to the backend with a websocket. A connection can't be shared between wallets.
+- `store`: It's an optional parameter with a data store for the wallet information. If not set we create a new MemoryStore instance.
 - `seed`: 24 words of this wallet in a string separated by space.
 - `tokenUid`: Optional parameter if you want this wallet to work with an specific token only. E.g., '0000035f21f454686b3a01b59ae1345011501d0fcd8973d25d3d6ebe6f1c00bb'.
+- `passphrase`: Optional parameter to add a passphrase in the HD Wallet private key generation.
 
 ### Constants
 
@@ -72,8 +77,8 @@ wallet.start(); // This will start the wallet and load its data from the server
 
 ### Properties
 
-- `network`: The network it is connected to. E.g., `'mainnet'` or `'testnet'`.
-- `server`: The backend server it is connected to.
+- `conn`: The wallet connection.
+- `store`: The wallet store.
 - `state`: The current state of the connection.
 - `serverInfo`: An object with the information received by the server.
 - `tokenUid`: The default token used by this wallet.

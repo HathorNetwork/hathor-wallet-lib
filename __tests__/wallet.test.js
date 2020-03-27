@@ -8,8 +8,8 @@
 import wallet from '../src/wallet';
 import dateFormatter from '../src/date';
 import { HATHOR_TOKEN_CONFIG } from '../src/constants';
+import storage from '../src/storage';
 
-const storage = require('../src/storage').default;
 
 test('Wallet operations for transaction', () => {
   const words = wallet.generateWalletWords(256);

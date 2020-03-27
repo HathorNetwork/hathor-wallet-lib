@@ -10,8 +10,8 @@ import helpers from '../src/helpers';
 import dateFormatter from '../src/date';
 import { DEFAULT_SERVER } from '../src/constants';
 import { WalletTypeError } from '../src/errors';
+import storage from '../src/storage';
 
-const storage = require('../src/storage').default;
 
 beforeEach(() => {
   wallet.resetAllData();

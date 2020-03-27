@@ -8,8 +8,8 @@
 import { GAP_LIMIT } from '../src/constants';
 import wallet from '../src/wallet';
 import WebSocketHandler from '../src/WebSocketHandler';
+import storage from '../src/storage';
 
-const storage = require('../src/storage').default;
 
 var addressUsed = '';
 var addressShared = '';

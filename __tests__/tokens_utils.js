@@ -13,8 +13,8 @@ import version from '../src/version';
 import { util } from 'bitcore-lib';
 import WebSocketHandler from '../src/WebSocketHandler';
 import { InsufficientFundsError, TokenValidationError } from '../src/errors';
+import storage from '../src/storage';
 
-const storage = require('../src/storage').default;
 
 const createdTxHash = '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e';
 const createdToken = util.buffer.bufferToHex(tokens.getTokenUID(createdTxHash, 0));
@@ -200,4 +200,23 @@ test('Tokens handling', async () => {
   // New config string that will return false because the token is unknown
   const unknownConfig = tokens.getConfigurationString('1', 'Unknown Token', 'UTK');
   await expect(tokens.validateTokenToAddByConfigurationString(unknownConfig)).rejects.toThrow(TokenValidationError);
+});
+
+test('Token deposit', () => {
+  tokens.updateDepositPercentage(0.01);
+  // considering HTR deposit is 1%
+  expect(tokens.getDepositAmount(100)).toBe(1);
+  expect(tokens.getDepositAmount(1)).toBe(1);
+  expect(tokens.getDepositAmount(0.1)).toBe(1);
+  expect(tokens.getDepositAmount(500)).toBe(5);
+  expect(tokens.getDepositAmount(550)).toBe(6);
+});
+
+test('Token withdraw', () => {
+  tokens.updateDepositPercentage(0.01);
+  // considering HTR deposit is 1%
+  expect(tokens.getWithdrawAmount(100)).toBe(1);
+  expect(tokens.getWithdrawAmount(99)).toBe(0);
+  expect(tokens.getWithdrawAmount(500)).toBe(5);
+  expect(tokens.getWithdrawAmount(550)).toBe(5);
 });

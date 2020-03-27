@@ -11,8 +11,8 @@ import { AddressError, OutputValueError } from '../src/errors';
 import buffer from 'buffer';
 import { OP_PUSHDATA1 } from '../src/opcodes';
 import { DEFAULT_TX_VERSION } from '../src/constants';
+import storage from '../src/storage';
 
-const storage = require('../src/storage').default;
 
 test('Tx weight constants', () => {
   transaction.updateTransactionWeightConstants(10, 1.5, 8);

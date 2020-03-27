@@ -8,7 +8,6 @@
 import path from 'path';
 
 import storage from './storage';
-import tokens from './tokens';
 import { BLOCK_VERSION, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, MERGED_MINED_BLOCK_VERSION, GENESIS_BLOCK, DECIMAL_PLACES, DEFAULT_SERVER } from './constants';
 
 /**
@@ -197,8 +196,14 @@ const helpers = {
    * @memberof Helpers
    * @inner
    */
-  getWSServerURL() {
-    let serverURL = this.getServerURL();
+  getWSServerURL(url = null) {
+    let serverURL;
+    if (url === null) {
+      serverURL = helpers.getServerURL();
+    } else {
+      serverURL = url;
+    }
+
     const pieces = serverURL.split(':');
     const firstPiece = pieces.splice(0, 1);
     let protocol = '';
@@ -304,34 +309,6 @@ const helpers = {
    */
   getShortHash(hash) {
     return `${hash.substring(0,12)}...${hash.substring(52,64)}`;
-  },
-
-  /**
-   * Calculate deposit value for the given token mint amount
-   *
-   * @param {number} mintAmount Amount of tokens being minted
-   *
-   * @return {number}
-   * @memberof Helpers
-   * @inner
-   *
-   */
-  getDepositAmount(mintAmount) {
-    return Math.ceil(tokens.getDepositPercentage() * mintAmount);
-  },
-
-  /**
-   * Calculate withdraw value for the given token melt amount
-   *
-   * @param {number} meltAmount Amount of tokens being melted
-   *
-   * @return {number}
-   * @memberof Helpers
-   * @inner
-   *
-   */
-  getWithdrawAmount(meltAmount) {
-    return Math.floor(tokens.getDepositPercentage() * meltAmount);
   },
 
   /**

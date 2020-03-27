@@ -6,16 +6,16 @@
  */
 
 import EventEmitter from 'events';
-import networkInstance from '../network';
 import wallet from '../wallet';
-import { GAP_LIMIT, HATHOR_TOKEN_CONFIG, DEFAULT_SERVER } from '../constants';
+import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
 import transaction from '../transaction';
 import tokens from '../tokens';
 import version from '../version';
-import ws from '../WebSocketHandler';
+import walletApi from '../api/wallet';
 import storage from '../storage';
 import MemoryStore from '../memory_store';
-import walletApi from '../api/wallet';
+import Connection from './connection';
+import WebSocketHandler from '../WebSocketHandler';
 
 /**
  * This is a Wallet that is supposed to be simple to be used by a third-party app.
@@ -38,8 +38,7 @@ import walletApi from '../api/wallet';
  **/
 class HathorWallet extends EventEmitter {
   /*
-   * network {String} 'testnet' or 'mainnet'
-   * server {String} Server for the wallet to connect to, e.g. http://localhost:8080/v1a/
+   * connection {Connection} A connection to the server
    * seed {String} 24 words separated by space
    * passphrase {String} Wallet passphrase
    * tokenUid {String} UID of the token to handle on this wallet
@@ -47,8 +46,9 @@ class HathorWallet extends EventEmitter {
    * pin {String} PIN to execute wallet actions
    */
   constructor({
-    network,
-    server = DEFAULT_SERVER,
+    connection,
+
+    store,
 
     seed,
     passphrase = '',
@@ -61,26 +61,23 @@ class HathorWallet extends EventEmitter {
   } = {}) {
     super();
 
-    if (!network) {
-      throw Error('You must explicitly provide the network.');
+    if (!connection) {
+      throw Error('You must provide a connection.');
     }
 
     if (!seed) {
       throw Error('You must explicitly provide the seed.');
     }
 
-    networkInstance.setNetwork(network);
-    this.network = network;
+    if (connection.state !== Connection.CLOSED) {
+      throw Error('You can\'t share connections.');
+    }
 
+    this.conn = connection;
     this.state = HathorWallet.CLOSED;
     this.serverInfo = null;
 
-    this.onConnectionChange = this.onConnectionChange.bind(this);
-    this.handleWebsocketMsg = this.handleWebsocketMsg.bind(this);
-    this.onAddressesLoaded = this.onAddressesLoaded.bind(this);
-
     this.seed = seed;
-    this.server = server;
 
     // tokenUid is optional so we can get the token of the wallet
     this.token = null;
@@ -89,28 +86,32 @@ class HathorWallet extends EventEmitter {
     this.passphrase = passphrase;
     this.pinCode = pinCode;
     this.password = password;
-  }
 
-  /**
-   * Called when loading the history of transactions.
-   * It is called every HTTP Request to get the history of a set of addresses.
-   * Usually, this is called multiple times.
-   * The `historyTransactions` contains all transactions, including the ones from a previous call to this method.
-   *
-   * @param {Object} result {historyTransactions, allTokens, newSharedAddress, newSharedIndex, addressesFound}
-   **/
-  onAddressesLoaded(result) {
-    this.emit('more-addresses-loaded', result);
+    this.store = null;
+    if (store) {
+      this.store = store;
+    } else {
+      // Creating default store
+      this.store = new MemoryStore();
+    }
+    storage.setStore(this.store);
+
+    this.onConnectionChangedState = this.onConnectionChangedState.bind(this);
+    this.handleWebsocketMsg = this.handleWebsocketMsg.bind(this);
   }
 
   /**
    * Called when the connection to the websocket changes.
    * It is also called if the network is down.
+   *
+   * @param {Number} newState Enum of new state after change
    **/
-  onConnectionChange(value) {
-    if (value) {
+  onConnectionChangedState(newState) {
+    if (newState === Connection.CONNECTED) {
+      storage.setStore(this.store);
       this.setState(HathorWallet.SYNCING);
-      wallet.loadAddressHistory(0, GAP_LIMIT).then(() => {
+      WebSocketHandler.setup();
+      wallet.loadAddressHistory(0, GAP_LIMIT, this.conn, this.store).then(() => {
         this.setState(HathorWallet.READY);
       }).catch((error) => {
         throw error;
@@ -123,8 +124,9 @@ class HathorWallet extends EventEmitter {
   }
 
   getCurrentAddress({ markAsUsed = false } = {}) {
+    storage.setStore(this.store);
     if (markAsUsed) {
-      return wallet.getAddressToUse();
+      return wallet.getAddressToUse(this.conn);
     }
     return wallet.getCurrentAddress();
   }
@@ -138,18 +140,15 @@ class HathorWallet extends EventEmitter {
     }
   }
 
-  reloadData() {
-    // TODO Reload data?
-    console.log('reloadData');
-  }
-
   getBalance(tokenUid) {
+    storage.setStore(this.store);
     const uid = tokenUid || this.token.uid;
     const historyTransactions = this.getTxHistory();
     return wallet.calculateBalance(Object.values(historyTransactions), uid);
   }
 
   getTxHistory() {
+    storage.setStore(this.store);
     const data = wallet.getWalletData();
     const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
     return historyTransactions;
@@ -161,6 +160,7 @@ class HathorWallet extends EventEmitter {
   }
 
   onNewTx(wsData) {
+    storage.setStore(this.store);
     const newTx = wsData.history;
 
     // TODO we also have to update some wallet lib data? Lib should do it by itself
@@ -173,7 +173,7 @@ class HathorWallet extends EventEmitter {
       isNewTx = false;
     }
 
-    wallet.updateHistoryData(historyTransactions, allTokens, [newTx], null, walletData);
+    wallet.updateHistoryData(historyTransactions, allTokens, [newTx], null, walletData, null, this.conn, this.store);
 
     if (isNewTx) {
       this.emit('new-tx', newTx);
@@ -219,6 +219,7 @@ class HathorWallet extends EventEmitter {
    * @return {Promise} Promise resolved when transaction is sent.
    */
   sendMultiTokenTransaction(data) {
+    storage.setStore(this.store);
     const txData = {
       inputs: [],
       outputs: []
@@ -290,6 +291,7 @@ class HathorWallet extends EventEmitter {
    * @return {Promise} Promise that resolves when transaction is sent
    **/
   sendTransaction(address, value, token) {
+    storage.setStore(this.store);
     const ret = this.prepareTransaction(address, value, token);
 
     if (ret.success) {
@@ -309,6 +311,7 @@ class HathorWallet extends EventEmitter {
    * @return {Object} Object with {success: false, message} in case of an error, or {success: true, data}, otherwise
    **/
   prepareTransaction(address, value, token) {
+    storage.setStore(this.store);
     const txToken = token || this.token;
     const isHathorToken = txToken.uid === HATHOR_TOKEN_CONFIG.uid;
     // XXX This allow only one token to be sent
@@ -342,6 +345,7 @@ class HathorWallet extends EventEmitter {
    * @return {Promise} Promise that resolves when transaction is sent
    **/
   sendPreparedTransaction(data) {
+    storage.setStore(this.store);
     return transaction.sendPreparedTransaction(data);
   }
 
@@ -349,14 +353,11 @@ class HathorWallet extends EventEmitter {
    * Connect to the server and start emitting events.
    **/
   start() {
-    const store = new MemoryStore();
-    storage.setStore(store);
-    storage.setItem('wallet:server', this.server);
+    storage.setStore(this.store);
+    storage.setItem('wallet:server', this.conn.currentServer);
 
-    ws.on('is_online', this.onConnectionChange);
-    ws.on('reload_data', this.reloadData);
-    ws.on('addresses_loaded', this.onAddressesLoaded);
-    ws.on('wallet', this.handleWebsocketMsg);
+    this.conn.on('state', this.onConnectionChangedState);
+    this.conn.on('wallet-update', this.handleWebsocketMsg);
 
     wallet.executeGenerateWallet(this.seed, this.passphrase, this.pinCode, this.password, false);
 
@@ -367,13 +368,13 @@ class HathorWallet extends EventEmitter {
     const promise = new Promise((resolve, reject) => {
       version.checkApiVersion().then((info) => {
         // Check network version to avoid blunders.
-        if (info.network.indexOf(this.network) >= 0) {
-          ws.setup();
+        if (info.network.indexOf(this.conn.network) >= 0) {
           this.serverInfo = info;
+          this.conn.start();
           resolve(info);
         } else {
           this.setState(HathorWallet.CLOSED);
-          reject(`Wrong network. server=${info.network} expected=${this.network}`);
+          reject(`Wrong network. server=${info.network} expected=${this.conn.network}`);
         }
       }, (error) => {
         console.log('Version error:', error);
@@ -388,13 +389,13 @@ class HathorWallet extends EventEmitter {
    * Close the connections and stop emitting events.
    **/
   stop() {
+    storage.setStore(this.store);
     // TODO Double check that we are properly cleaning things up.
     // See: https://github.com/HathorNetwork/hathor-wallet-headless/pull/1#discussion_r369859701
-    ws.stop()
-    ws.removeListener('is_online', this.onConnectionChange);
-    ws.removeListener('reload_data', this.reloadData);
-    ws.removeListener('addresses_loaded', this.onAddressesLoaded);
-    ws.removeListener('wallet', this.handleWebsocketMsg);
+    this.conn.stop()
+    this.conn.removeListener('is_online', this.onConnectionChangedState);
+    this.conn.removeListener('wallet-update', this.handleWebsocketMsg);
+
     this.serverInfo = null;
     this.setState(HathorWallet.CLOSED);
   }
@@ -403,6 +404,7 @@ class HathorWallet extends EventEmitter {
    * Returns the balance for each token in tx, if the input/output belongs to this wallet
    */
   getTxBalance(tx) {
+    storage.setStore(this.store);
     const myKeys = []; // TODO
     const balance = {};
     for (const txout of tx.outputs) {
@@ -435,6 +437,7 @@ class HathorWallet extends EventEmitter {
   }
 
   getTokenData() {
+    storage.setStore(this.store);
     if (this.tokenUid === HATHOR_TOKEN_CONFIG.uid) {
       // Hathor token we don't get from the full node
       this.token = HATHOR_TOKEN_CONFIG;
