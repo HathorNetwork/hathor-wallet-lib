@@ -57,8 +57,6 @@ export const HATHOR_BIP44_CODE = 280;
 export const DEFAULT_SERVERS = [
   'https://node1.mainnet.hathor.network/v1a/',
   'https://node2.mainnet.hathor.network/v1a/',
-  'https://node3.mainnet.hathor.network/v1a/',
-  'https://node4.mainnet.hathor.network/v1a/',
 ];
 
 /**
