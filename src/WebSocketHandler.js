@@ -40,7 +40,6 @@ class WebSocketHandler extends EventEmitter {
       this.oldEmit = this.ws.emit;
       this.ws.emit = (type, data) => {
         this.emit(type, data);
-        console.log('Web Socket Handler', type, data);
         return this.oldEmit(type, data);
       }
     }
@@ -52,7 +51,8 @@ class WebSocketHandler extends EventEmitter {
   endConnection() {
     // To keep compatibility with methods previously used in this singleton
     if (this.ws !== null) {
-      return this.ws.endConnection();
+      this.ws.endConnection();
+      this.ws = null;
     }
   }
 }
