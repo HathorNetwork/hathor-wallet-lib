@@ -11,10 +11,12 @@ import dateFormatter from '../src/date';
 import { DEFAULT_SERVER } from '../src/constants';
 import { WalletTypeError } from '../src/errors';
 import storage from '../src/storage';
+import WebSocketHandler from '../src/WebSocketHandler';
 
 
 beforeEach(() => {
   wallet.resetAllData();
+  WebSocketHandler.setup();
 });
 
 

@@ -22,14 +22,7 @@ class WebSocketHandler extends EventEmitter {
     if (this.ws === null) {
       this.ws = new WS({ wsURL: helpers.getWSServerURL });
 
-      this.on('is_online', (value) => {
-        if (value) {
-          wallet.onWebsocketOpened();
-          this.ws.emit('reload_data');
-        } else {
-          wallet.onWebsocketBeforeClose();
-        }
-      });
+      this.on('is_online', this.handleIsOnline);
 
       /*
        * This class still exists for compatibility reasons
@@ -48,11 +41,22 @@ class WebSocketHandler extends EventEmitter {
     return this.ws.setup();
   }
 
+  handleIsOnline(value) {
+    if (value) {
+      wallet.onWebsocketOpened();
+      this.ws.emit('reload_data');
+    } else {
+      wallet.onWebsocketBeforeClose();
+    }
+  }
+
   endConnection() {
     // To keep compatibility with methods previously used in this singleton
     if (this.ws !== null) {
       this.ws.endConnection();
+      this.ws.emit = () => {};
       this.ws = null;
+      this.removeListener('is_online', this.handleIsOnline);
     }
   }
 }
