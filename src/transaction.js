@@ -768,7 +768,13 @@ const transaction = {
         if (response.success) {
           resolve(response);
         } else {
-          reject(response.message);
+          let message = '';
+          if (response.return_code === 'stratum_timeout') {
+            message = 'All transactions need to resolve proof-of-work as an anti spam mechanism. Currently Hathor Network provides their full nodes to execute this task for free. However they may be fully loaded right now.\n\nThe bigger the transactions, the harder it is to resolve the proof of work.\n\nPlease, wait a few moments and try again soon and, if you can split in more transactions it will be easier to send them.';
+          } else {
+            message = response.message;
+          }
+          reject(message);
         }
       }).catch((e) => {
         // Error in request
