@@ -168,3 +168,8 @@ export const HASH_ITERATIONS = 1000;
  * Size of the key to hash the password
  */
 export const HASH_KEY_SIZE = 256;
+
+/**
+ * Return code of the send_tokens response when there is a stratum timeout
+ */
+export const STRATUM_TIMEOUT_RETURN_CODE = 'stratum_timeout';
