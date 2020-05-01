@@ -286,21 +286,7 @@ const wallet = {
       this.setWalletData(dataJson);
       storage.setStore(oldStore);
 
-      this.getTxHistory(addresses, connection, store).then((history) => {
-        let oldStore = _.clone(storage.store);
-        if (store) {
-          storage.setStore(store);
-        }
-        const data = this.getWalletData();
-        // Update historyTransactions with new one
-        const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
-        const allTokens = 'allTokens' in data ? data['allTokens'] : [];
-        const result = this.updateHistoryData(historyTransactions, allTokens, history, resolve, data, reject, connection, store);
-        WebSocketHandler.ws.emit('addresses_loaded', result);
-        storage.setStore(oldStore);
-      }, (e) => {
-        reject(e);
-      });
+      this.getTxHistory(addresses, resolve, reject, connection, store);
 
     });
     return promise;
@@ -311,6 +297,8 @@ const wallet = {
    * Since this API is paginated, we enter a loop getting all data and return only after all requests have finished
    *
    * @param {Array} addresses Array of addresses (string) to get history
+   * @param {function} resolve Resolve method from promise to be called after finishing handling the new history
+   * @param {function} reject Reject method from promise to be called if an error happens
    * @param {Connection} connection Connection object to subscribe for the addresses
    * @param {Store} store Store object to save the data
    *
@@ -319,7 +307,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  async getTxHistory(addresses, connection = null, store = null) {
+  async getTxHistory(addresses, resolve, reject, connection = null, store = null) {
     let hasMore = true;
     let firstHash = null;
     let addressesToSearch = addresses;
@@ -328,6 +316,7 @@ const wallet = {
     while (hasMore === true) {
       const response = await walletApi.getAddressHistoryForAwait(addressesToSearch, firstHash);
       const result = response.data;
+      let ret = null;
 
       if (result.success) {
         hasMore = result.has_more;
@@ -343,15 +332,19 @@ const wallet = {
 
           addressesToSearch = addressesToSearch.slice(addrIndex);
 
-          // Update lib data so we can get the partial transaction count while the pagination doesn't finish
+          // Update storage data with new history
+          ret = this.saveNewHistoryOnStorage(null, null, result.history, undefined, connection, store);
+        } else {
+          // If it's the last page, we update the storage and call the next loadAddress (if needed)
+          // This is all done on updateHistoryData
           const data = this.getWalletData();
           const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
           const allTokens = 'allTokens' in data ? data['allTokens'] : [];
-          const ret = this.updateHistoryData(historyTransactions, allTokens, result.history, null, data, null, connection, store);
-          WebSocketHandler.ws.emit('addresses_loaded', ret);
-        } else {
-          history = result.history;
+          ret = this.updateHistoryData(historyTransactions, allTokens, result.history, resolve, data, reject, connection, store);
         }
+
+        // Propagate new loaded data
+        WebSocketHandler.ws.emit('addresses_loaded', ret);
       } else {
         throw Error(result.message);
       }
@@ -1515,19 +1508,17 @@ const wallet = {
    * @param {Object} historyTransactions Object of transactions indexed by tx_id to be added the new txs
    * @param {Set} allTokens Set of all tokens (uid) already added
    * @param {Array} newHistory Array of new data that arrived from the server to be added to local data
-   * @param {function} resolve Resolve method from promise to be called after finishing handling the new history
    * @param {Object} dataJson Wallet data in storage already loaded. This parameter is optional and if nothing is passed, the data will be loaded again. We expect this field to be the return of the method wallet.getWalletData()
-   * @param {function} reject Reject method from promise to be called if an error happens
    * @param {Connection} connection Connection object to subscribe for the addresses
    * @param {Store} store Store object to save the data
    *
    * @throws {OutputValueError} Will throw an error if one of the output value is invalid
    *
-   * @return {Object} Return an object with {historyTransactions, allTokens, newSharedAddress, newSharedIndex, addressesFound}
+   * @return {Object} Return an object with {historyTransactions, allTokens, newSharedAddress, newSharedIndex, addressesFound, maxIndex}
    * @memberof Wallet
    * @inner
    */
-  updateHistoryData(oldHistoryTransactions, oldAllTokens, newHistory, resolve, dataJson, reject, connection = null, store = null) {
+  saveNewHistoryOnStorage(oldHistoryTransactions, oldAllTokens, newHistory, dataJson, connection = null, store = null) {
     let oldStore = _.clone(storage.store);
     if (store) {
       storage.setStore(store);
@@ -1535,6 +1526,8 @@ const wallet = {
 
     if (dataJson === undefined) {
       dataJson = this.getWalletData();
+      oldHistoryTransactions = 'historyTransactions' in dataJson ? dataJson['historyTransactions'] : {};
+      oldAllTokens = 'allTokens' in dataJson ? dataJson['allTokens'] : [];
     }
     const historyTransactions = Object.assign({}, oldHistoryTransactions);
     const allTokens = new Set(oldAllTokens);
@@ -1605,30 +1598,62 @@ const wallet = {
     this.saveAddressHistory(historyTransactions, allTokens);
 
     const lastGeneratedIndex = this.getLastGeneratedIndex();
-    // This method without resolve and reject is just to update
-    // storage data, so we can get the updated number of transactions downloaded
-    if (resolve && reject) {
-      // Just in the case where there is no element in all data
-      maxIndex = Math.max(maxIndex, 0);
-      if (maxIndex + GAP_LIMIT > lastGeneratedIndex) {
-        const startIndex = lastGeneratedIndex + 1;
-        const count = maxIndex + GAP_LIMIT - lastGeneratedIndex;
-        const promise = this.loadAddressHistory(startIndex, count, connection, store);
-        promise.then(() => {
-          if (resolve) {
-            resolve();
-          }
-        }, (e) => {
-          if (reject) {
-            reject(e);
-          }
-        })
-      } else {
-        // When it gets here, it means that already loaded all transactions
-        // so no need to load more
+
+    storage.setStore(oldStore);
+    return {historyTransactions, allTokens, newSharedAddress, newSharedIndex, addressesFound: lastGeneratedIndex + 1, maxIndex};
+  },
+
+  /**
+   * Update the historyTransactions and allTokens from a new array of history that arrived
+   *
+   * Check if need to call loadHistory again to get more addresses data
+   *
+   * @param {Object} historyTransactions Object of transactions indexed by tx_id to be added the new txs
+   * @param {Set} allTokens Set of all tokens (uid) already added
+   * @param {Array} newHistory Array of new data that arrived from the server to be added to local data
+   * @param {function} resolve Resolve method from promise to be called after finishing handling the new history
+   * @param {Object} dataJson Wallet data in storage already loaded. This parameter is optional and if nothing is passed, the data will be loaded again. We expect this field to be the return of the method wallet.getWalletData()
+   * @param {function} reject Reject method from promise to be called if an error happens
+   * @param {Connection} connection Connection object to subscribe for the addresses
+   * @param {Store} store Store object to save the data
+   *
+   * @throws {OutputValueError} Will throw an error if one of the output value is invalid
+   *
+   * @return {Object} Return an object with {historyTransactions, allTokens, newSharedAddress, newSharedIndex, addressesFound}
+   * @memberof Wallet
+   * @inner
+   */
+  updateHistoryData(oldHistoryTransactions, oldAllTokens, newHistory, resolve, dataJson, reject, connection = null, store = null) {
+    let oldStore = _.clone(storage.store);
+    if (store) {
+      storage.setStore(store);
+    }
+
+    const ret = this.saveNewHistoryOnStorage(oldHistoryTransactions, oldAllTokens, newHistory, dataJson, connection, store);
+    const {historyTransactions, allTokens, newSharedAddress, newSharedIndex, addressesFound} = ret;
+    let {maxIndex} = ret;
+
+    const lastGeneratedIndex = this.getLastGeneratedIndex();
+    // Just in the case where there is no element in all data
+    maxIndex = Math.max(maxIndex, 0);
+    if (maxIndex + GAP_LIMIT > lastGeneratedIndex) {
+      const startIndex = lastGeneratedIndex + 1;
+      const count = maxIndex + GAP_LIMIT - lastGeneratedIndex;
+      const promise = this.loadAddressHistory(startIndex, count, connection, store);
+      promise.then(() => {
         if (resolve) {
           resolve();
         }
+      }, (e) => {
+        if (reject) {
+          reject(e);
+        }
+      })
+    } else {
+      // When it gets here, it means that already loaded all transactions
+      // so no need to load more
+      if (resolve) {
+        resolve();
       }
     }
 
