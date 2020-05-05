@@ -6,7 +6,7 @@
  */
 
 import { OP_GREATERTHAN_TIMESTAMP, OP_DUP, OP_HASH160, OP_EQUALVERIFY, OP_CHECKSIG, OP_PUSHDATA1 } from './opcodes';
-import { DECIMAL_PLACES, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, TOKEN_INFO_VERSION, MAX_OUTPUT_VALUE_32, MAX_OUTPUT_VALUE, TOKEN_AUTHORITY_MASK } from './constants';
+import { DECIMAL_PLACES, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, TOKEN_INFO_VERSION, MAX_OUTPUT_VALUE_32, MAX_OUTPUT_VALUE, TOKEN_AUTHORITY_MASK, STRATUM_TIMEOUT_RETURN_CODE } from './constants';
 import { HDPrivateKey, crypto, encoding, util } from 'bitcore-lib';
 import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError } from './errors';
 import dateFormatter from './date';
@@ -768,7 +768,13 @@ const transaction = {
         if (response.success) {
           resolve(response);
         } else {
-          reject(response.message);
+          let message = '';
+          if (response.return_code === STRATUM_TIMEOUT_RETURN_CODE) {
+            message = 'Timeout solving transaction\'s proof-of-work.\n\nAll transactions need to solve a proof-of-work as an anti spam mechanism. Currently, Hathor Labs provides this service for free, but their servers may be fully loaded right now.\n\nThe bigger the transactions, the harder it is to solve the proof-of-work. Please, wait a few moments and try again soon. If you can split your transaction into smaller ones it might be easier to send them.';
+          } else {
+            message = response.message;
+          }
+          reject(message);
         }
       }).catch((e) => {
         // Error in request
