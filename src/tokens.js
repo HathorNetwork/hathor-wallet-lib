@@ -12,6 +12,7 @@ import wallet from './wallet';
 import storage from './storage';
 import helpers from './helpers';
 import walletApi from './api/wallet';
+import SendTransaction from './new/sendTransaction';
 import { InsufficientFundsError, ConstantNotSet, TokenValidationError } from './errors';
 import { CREATE_TOKEN_TX_VERSION, HATHOR_TOKEN_CONFIG, TOKEN_MINT_MASK, TOKEN_MELT_MASK, AUTHORITY_TOKEN_DATA } from './constants';
 
@@ -332,35 +333,33 @@ const tokens = {
    * @inner
    */
   createToken(address, name, symbol, mintAmount, pin) {
-    const promise = new Promise((resolve, reject) => {
-      const mintOptions = {
-        createAnotherMint: true,
-        createMelt: true,
-      };
+    const mintOptions = {
+      createAnotherMint: true,
+      createMelt: true,
+    };
 
-      const txData = this.createMintData(null, null, address, mintAmount, null, mintOptions);
+    const txData = this.createMintData(null, null, address, mintAmount, null, mintOptions);
 
-      // Set create token tx version value
-      const createTokenTxData = Object.assign(txData, {
-        version: CREATE_TOKEN_TX_VERSION,
-        name,
-        symbol,
-      });
+    // Set create token tx version value
+    const createTokenTxData = Object.assign(txData, {
+      version: CREATE_TOKEN_TX_VERSION,
+      name,
+      symbol,
+    });
 
-      const txPromise = transaction.sendTransaction(createTokenTxData, pin);
-      txPromise.then((response) => {
-        // Save in storage new token configuration
+    // TODO add prepareData error handler
+    const preparedData = transaction.prepareData(createTokenTxData, pin);
+
+    const sendTransaction = new SendTransaction({data: preparedData});
+
+    sendTransaction.on('tx-sent', (response) => {
+      if (response.success) {
         const tokenUid = response.tx.hash;
         this.addToken(tokenUid, name, symbol);
-        resolve({uid: tokenUid, name, symbol});
-      }, (message) => {
-        // I need to reject an error because we've changed the createMintData to reject an error
-        // Changing sendTransaction method to reject an error also would require refactor in other methods
-        // We already have an issue to always reject an error but while we don't do it, we need this
-        reject(new Error(message));
-      });
+      }
     });
-    return promise;
+
+    return sendTransaction;
   },
 
   /**
@@ -494,22 +493,22 @@ const tokens = {
       minimumTimestamp: 0,
     }, options);
     // Get mint data
-    const promise = new Promise((resolve, reject) => {
-      let newTxData;
-      try {
-        newTxData = this.createMintData(mintInput, token, address, amount, depositInputs, fnOptions);
-      } catch (e) {
-        if (e instanceof InsufficientFundsError) {
-          reject(e);
-        } else {
-          // Unhandled error
-          throw e;
-        }
+    let newTxData;
+    try {
+      newTxData = this.createMintData(mintInput, token, address, amount, depositInputs, fnOptions);
+    } catch (e) {
+      if (e instanceof InsufficientFundsError) {
+        // TODO Handle error
+        return null;
+      } else {
+        // Unhandled error
+        throw e;
       }
-      const sendPromise = transaction.sendTransaction(newTxData, pin, fnOptions);
-      sendPromise.then((result) => resolve(result), (error) => reject(error));
-    });
-    return promise;
+    }
+    // TODO add prepareData error handler
+    const preparedData = transaction.prepareData(newTxData, pin, fnOptions);
+    const sendTransaction = new SendTransaction({data: preparedData});
+    return sendTransaction;
   },
 
   /**
@@ -584,7 +583,11 @@ const tokens = {
   meltTokens(meltInput, token, amount, pin, createAnotherMelt) {
     // Get melt data
     let newTxData = this.createMeltData(meltInput, token, amount, createAnotherMelt);
-    return transaction.sendTransaction(newTxData, pin);
+    // TODO if newTxData is null, don't have inputs to melt, so show error
+    // TODO add prepareData error handler
+    const preparedData = transaction.prepareData(newTxData, pin);
+    const sendTransaction = new SendTransaction({data: preparedData});
+    return sendTransaction;
   },
 
   /**
@@ -693,7 +696,10 @@ const tokens = {
   delegateAuthority(txID, index, addressSpent, token, address, createAnother, type, pin) {
     // Get delegate authority output data
     let newTxData = this.createDelegateAuthorityData(txID, index, addressSpent, token, address, createAnother, type);
-    return transaction.sendTransaction(newTxData, pin);
+    // TODO add prepareData error handler
+    const preparedData = transaction.prepareData(newTxData, pin);
+    const sendTransaction = new SendTransaction({data: preparedData});
+    return sendTransaction;
   },
 
   /**
@@ -710,7 +716,10 @@ const tokens = {
   destroyAuthority(data, pin) {
     // Create new data without any output
     let newTxData = {'inputs': data, 'outputs': [], 'tokens': []};
-    return transaction.sendTransaction(newTxData, pin);
+    // TODO add prepareData error handler
+    const preparedData = transaction.prepareData(newTxData, pin);
+    const sendTransaction = new SendTransaction({data: preparedData});
+    return sendTransaction;
   },
 
   /**
