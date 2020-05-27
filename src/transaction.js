@@ -600,8 +600,15 @@ const transaction = {
     arr.push(this.floatToBytes(txData.weight, 8));
     // Timestamp
     arr.push(this.intToBytes(txData.timestamp, 4))
-    // Len parents (parents will be calculated in the backend)
-    arr.push(this.intToBytes(0, 1))
+    if (txData.parents) {
+      arr.push(this.intToBytes(txData.parents.length, 1))
+      for (const parent of txData.parents) {
+        arr.push(util.buffer.hexToBuffer(parent));
+      }
+    } else {
+      // Len parents (parents will be calculated in the backend)
+      arr.push(this.intToBytes(0, 1))
+    }
 
     // Add nonce in the end
     arr.push(this.intToBytes(txData.nonce, 4));
@@ -746,6 +753,11 @@ const transaction = {
     return transaction.sendPreparedTransaction(data);
   },
 
+  getTxHexFromData(data) {
+    const txBytes = transaction.txToBytes(data);
+    return util.buffer.bufferToHex(txBytes);
+  },
+
   /**
    * Send a transaction to the full node. This transaction must have
    * already been prepared, i.e., it must be complete.
@@ -762,8 +774,7 @@ const transaction = {
    */
   sendPreparedTransaction(data) {
     const promise = new Promise((resolve, reject) => {
-      const txBytes = transaction.txToBytes(data);
-      const txHex = util.buffer.bufferToHex(txBytes);
+      const txHex = this.getTxHexFromData(data);
       walletApi.sendTokens(txHex, (response) => {
         if (response.success) {
           resolve(response);
