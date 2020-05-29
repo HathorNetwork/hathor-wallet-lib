@@ -77,7 +77,7 @@ class SendTransaction extends EventEmitter {
           this.handlePushTx();
         } else {
           this.estimation = response.expected_total_time;
-          this.emit('estimation-updated', {estimation: response.expected_total_time});
+          this.emit('estimation-updated', {jobID: this.jobID, estimation: response.expected_total_time});
           this.handleJobStatus();
         }
       });
