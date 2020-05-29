@@ -738,17 +738,8 @@ const transaction = {
     try {
       data = transaction.prepareData(data, pin, options);
     } catch (e) {
-      if (e instanceof AddressError ||
-          e instanceof OutputValueError ||
-          e instanceof ConstantNotSet ||
-          e instanceof CreateTokenTxInvalid ||
-          e instanceof MaximumNumberOutputsError ||
-          e instanceof MaximumNumberInputsError) {
-        return Promise.reject(e.message);
-      } else {
-        // Unhandled error
-        throw e;
-      }
+      const message = helpers.handlePrepareDataError(e);
+      return Promise.reject(e.message);
     }
     return transaction.sendPreparedTransaction(data);
   },

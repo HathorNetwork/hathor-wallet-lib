@@ -347,19 +347,29 @@ const tokens = {
       symbol,
     });
 
-    // TODO add prepareData error handler
-    const preparedData = transaction.prepareData(createTokenTxData, pin);
+    let preparedData = null;
+    try {
+      preparedData = transaction.prepareData(createTokenTxData, pin);
+    } catch (e) {
+      const message = helpers.handlePrepareDataError(e);
+      return {success: false, message: e.message};
+    }
 
     const sendTransaction = new SendTransaction({data: preparedData});
 
-    sendTransaction.on('tx-sent', (response) => {
-      if (response.success) {
-        const tokenUid = response.tx.hash;
+    const promise = new Promise((resolve, reject) => {
+      sendTransaction.on('send-success', (tx) => {
+        const tokenUid = tx.hash;
         this.addToken(tokenUid, name, symbol);
-      }
+        resolve(tx);
+      });
+
+      sendTransaction.on('send-error', (message) => {
+        reject(message);
+      });
     });
 
-    return sendTransaction;
+    return {success: true, sendTransaction, promise};
   },
 
   /**
@@ -498,17 +508,14 @@ const tokens = {
       newTxData = this.createMintData(mintInput, token, address, amount, depositInputs, fnOptions);
     } catch (e) {
       if (e instanceof InsufficientFundsError) {
-        // TODO Handle error
-        return null;
+        return {success: false, message: 'Don\'t have enough HTR funds to mint this amount.'};
       } else {
         // Unhandled error
         throw e;
       }
     }
-    // TODO add prepareData error handler
-    const preparedData = transaction.prepareData(newTxData, pin, fnOptions);
-    const sendTransaction = new SendTransaction({data: preparedData});
-    return sendTransaction;
+
+    return this.handleSendTransaction(newTxData, pin, fnOptions);
   },
 
   /**
@@ -583,11 +590,11 @@ const tokens = {
   meltTokens(meltInput, token, amount, pin, createAnotherMelt) {
     // Get melt data
     let newTxData = this.createMeltData(meltInput, token, amount, createAnotherMelt);
-    // TODO if newTxData is null, don't have inputs to melt, so show error
-    // TODO add prepareData error handler
-    const preparedData = transaction.prepareData(newTxData, pin);
-    const sendTransaction = new SendTransaction({data: preparedData});
-    return sendTransaction;
+    if (!newTxData) {
+      return {success: false, message: 'There aren\'t enough inputs to melt.'};
+    }
+
+    return this.handleSendTransaction(newTxData, pin);
   },
 
   /**
@@ -696,10 +703,7 @@ const tokens = {
   delegateAuthority(txID, index, addressSpent, token, address, createAnother, type, pin) {
     // Get delegate authority output data
     let newTxData = this.createDelegateAuthorityData(txID, index, addressSpent, token, address, createAnother, type);
-    // TODO add prepareData error handler
-    const preparedData = transaction.prepareData(newTxData, pin);
-    const sendTransaction = new SendTransaction({data: preparedData});
-    return sendTransaction;
+    return this.handleSendTransaction(newTxData, pin);
   },
 
   /**
@@ -716,10 +720,30 @@ const tokens = {
   destroyAuthority(data, pin) {
     // Create new data without any output
     let newTxData = {'inputs': data, 'outputs': [], 'tokens': []};
-    // TODO add prepareData error handler
-    const preparedData = transaction.prepareData(newTxData, pin);
+    return this.handleSendTransaction(newTxData, pin);
+  },
+
+  handleSendTransaction(data, pin, options) {
+    let preparedData = null;
+    try {
+      preparedData = transaction.prepareData(data, pin, options);
+    } catch (e) {
+      const message = helpers.handlePrepareDataError(e);
+      return {success: false, message: e.message};
+    }
+
     const sendTransaction = new SendTransaction({data: preparedData});
-    return sendTransaction;
+    const promise = new Promise((resolve, reject) => {
+      sendTransaction.on('send-success', (tx) => {
+        resolve(tx);
+      });
+
+      sendTransaction.on('send-error', (message) => {
+        reject(message);
+      });
+    });
+
+    return {success: true, sendTransaction, promise};
   },
 
   /**
