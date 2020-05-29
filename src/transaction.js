@@ -744,6 +744,19 @@ const transaction = {
     return transaction.sendPreparedTransaction(data);
   },
 
+  /**
+   * Get tx data and return it in hexadecimal
+   *
+   * @param {Object} data Object with inputs and outputs
+   * {
+   *  'inputs': [{'tx_id', 'index', 'token', 'address'}],
+   *  'outputs': ['address', 'value', 'timelock', 'tokenData'],
+   * }
+   *
+   * @return {String} Hexadecimal of a serialized tx
+   * @memberof Transaction
+   * @inner
+   */
   getTxHexFromData(data) {
     const txBytes = transaction.txToBytes(data);
     return util.buffer.bufferToHex(txBytes);

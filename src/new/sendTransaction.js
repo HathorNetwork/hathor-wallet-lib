@@ -19,10 +19,17 @@ import { AddressError, OutputValueError, ConstantNotSet, MaximumNumberOutputsErr
  * - Update mining time estimation from time to time;
  * - Get back mining response;
  * - Push tx to the network;
+ *
+ * It emits the following events:
+ * 'job-submitted': after job was submitted;
+ * 'estimation-updated': after getting the job status;
+ * 'job-done': after job is finished;
+ * 'send-success': after push tx succeeds;
+ * 'send-error': if an error happens;
  **/
 class SendTransaction extends EventEmitter {
   /*
-   * data {Object} Tx data
+   * data {Object} Prepared tx data
    */
   constructor({
     data=null,
@@ -30,10 +37,16 @@ class SendTransaction extends EventEmitter {
     super();
 
     this.data = data;
+    // Job estimation
     this.estimation = null;
+    // Job ID
     this.jobID = null;
   }
 
+  /**
+   * Submit job to be mined, update object variables of jobID and estimation, and start method to get job status
+   * Emits 'job-submitted' after submit.
+   */
   submitJob() {
     // Get tx hex without parents and nonce
     const txHex = transaction.getTxHexFromData(this.data);
@@ -46,6 +59,11 @@ class SendTransaction extends EventEmitter {
     });
   }
 
+  /**
+   * Schedule job status request
+   * If the job is done, emits 'job-done' event, complete and send the tx
+   * Otherwise, schedule again the job status request and emits 'estimation-updated' event.
+   */
   handleJobStatus() {
     // this.estimation and MIN_POLL are in seconds
     const poll_time = Math.max(this.estimation / 2, MIN_POLL)*1000;
@@ -66,6 +84,10 @@ class SendTransaction extends EventEmitter {
     }, poll_time);
   }
 
+  /**
+   * Push tx to the network
+   * If success, emits 'send-success' event, otherwise emits 'send-error' event.
+   */
   handlePushTx() {
     const txHex = transaction.getTxHexFromData(this.data);
     txApi.pushTx(txHex, false, (response) => {
@@ -79,6 +101,9 @@ class SendTransaction extends EventEmitter {
     });;
   }
 
+  /**
+   * Start object (submit job)
+   */
   start() {
     this.submitJob();
   }

@@ -17,7 +17,9 @@ const txMiningApi = {
   /**
    * Submit tx to be mined
    *
-   * @param {String} tx data in hexadecimal
+   * @param {String} tx Data in hexadecimal
+   * @param {boolean} propagate If should propagate tx after the job is completed
+   * @param {boolean} add_parents If should return the parents
    *
    * @return {Promise}
    * @memberof txMiningApi

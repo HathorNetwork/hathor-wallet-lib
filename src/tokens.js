@@ -491,7 +491,9 @@ const tokens = {
    *
    * @throws {InsufficientFundsError} If not enough tokens for deposit
    *
-   * @return {Promise} Promise that resolves when token is minted or an error from the backend arrives
+   * @return {Object} In case of success, an object with {success: true, sendTransaction, promise}, where sendTransaction is a
+   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
+   * In case of error, an object with {success: false, message}
    *
    * @memberof Tokens
    * @inner
@@ -582,7 +584,9 @@ const tokens = {
    * @param {string} pin Pin to generate new addresses, if necessary
    * @param {boolean} createAnotherMelt If should create another melt output after spending this one
    *
-   * @return {Promise} Promise that resolves when tokens are melted or an error from the backend arrives. If can't find outputs that sum the total amount, returns null
+   * @return {Object} In case of success, an object with {success: true, sendTransaction, promise}, where sendTransaction is a
+   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
+   * In case of error, an object with {success: false, message}
    *
    * @memberof Tokens
    * @inner
@@ -695,7 +699,9 @@ const tokens = {
    * @param {string} type Authority type to be delegated ('mint' or 'melt')
    * @param {string} pin Pin to generate new addresses, if necessary
    *
-   * @return {Promise} Promise that resolves when transaction executing the delegate is completed
+   * @return {Object} In case of success, an object with {success: true, sendTransaction, promise}, where sendTransaction is a
+   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
+   * In case of error, an object with {success: false, message}
    *
    * @memberof Tokens
    * @inner
@@ -712,7 +718,9 @@ const tokens = {
    * @param {Object} data Array of objects each one containing the input with the authority being destroyed ({'tx_id', 'index', 'address', 'token'})
    * @param {string} pin Pin to generate new addresses, if necessary
    *
-   * @return {Promise} Promise that resolves when transaction destroying the authority is completed
+   * @return {Object} In case of success, an object with {success: true, sendTransaction, promise}, where sendTransaction is a
+   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
+   * In case of error, an object with {success: false, message}
    *
    * @memberof Tokens
    * @inner
@@ -723,6 +731,24 @@ const tokens = {
     return this.handleSendTransaction(newTxData, pin);
   },
 
+  /**
+   * Get transaction data, prepare it, create a SendTransaction object and a promise that succeeds and fails depending on the object events
+   *
+   * @param {Object} data Array of objects each one containing the input with the authority being destroyed ({'tx_id', 'index', 'address', 'token'})
+   * @param {string} pin Pin to generate new addresses, if necessary
+   * @param {Object} options {
+   *   {number} minimumTimestamp Tx minimum timestamp (default = 0)
+   *   {boolean} createAnotherMint If should create another mint output after spending this one
+   *   {boolean} createMelt If should create a melt output (useful when creating a new token)
+   * }
+   *
+   * @return {Object} In case of success, an object with {success: true, sendTransaction, promise}, where sendTransaction is a
+   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
+   * In case of error, an object with {success: false, message}
+   *
+   * @memberof Tokens
+   * @inner
+   */
   handleSendTransaction(data, pin, options) {
     let preparedData = null;
     try {

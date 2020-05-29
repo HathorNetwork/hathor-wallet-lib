@@ -289,7 +289,10 @@ class HathorWallet extends EventEmitter {
    * @param {number} value Amount of tokens to be sent
    * @param {Object} token Token object {'uid', 'name', 'symbol'}. Optional parameter if user already set on the class
    *
-   * @return {Promise} Promise that resolves when transaction is sent
+   * @return {Object} In case of success, an object with {success: true, sendTransaction, promise}, where sendTransaction is a
+   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
+   * In case of error, an object with {success: false, message}
+   *
    **/
   sendTransaction(address, value, token) {
     storage.setStore(this.store);
@@ -298,7 +301,7 @@ class HathorWallet extends EventEmitter {
     if (ret.success) {
       return this.sendPreparedTransaction(ret.data);
     } else {
-      return Promise.reject(ret.message);
+      return ret;
     }
   }
 
@@ -350,7 +353,8 @@ class HathorWallet extends EventEmitter {
    *
    * @param {Object} data Full transaction data
    *
-   * @return {Promise} Promise that resolves when transaction is sent
+   * @return {Object} bject with {success: true, sendTransaction, promise}, where sendTransaction is a
+   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    **/
   sendPreparedTransaction(data) {
     storage.setStore(this.store);
@@ -364,7 +368,7 @@ class HathorWallet extends EventEmitter {
         reject(message);
       });
     });
-    return {promise, sendTransaction};
+    return {success: true, promise, sendTransaction};
   }
 
   /**
