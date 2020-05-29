@@ -16,6 +16,7 @@ import storage from '../storage';
 import helpers from '../helpers';
 import MemoryStore from '../memory_store';
 import Connection from './connection';
+import SendTransaction from './sendTransaction';
 import WebSocketHandler from '../WebSocketHandler';
 
 /**
@@ -243,7 +244,6 @@ class HathorWallet extends EventEmitter {
       const result = wallet.prepareSendTokensData(partialData, d.token, true, historyTxs, allTokens);
 
       if (!result.success) {
-        console.log('Error sending tx:', result.message);
         return Promise.reject(new Error(result.message));
       }
 
@@ -337,8 +337,9 @@ class HathorWallet extends EventEmitter {
       return ret;
     }
 
+    let preparedData = null;
     try {
-      const preparedData = transaction.prepareData(data, this.pinCode);
+      preparedData = transaction.prepareData(data, this.pinCode);
     } catch(e) {
       const message = helpers.handlePrepareDataError(e);
       return {success: false, message};
@@ -358,7 +359,7 @@ class HathorWallet extends EventEmitter {
    **/
   sendPreparedTransaction(data) {
     storage.setStore(this.store);
-    const sendTransaction = new hathorLib.SendTransaction({data});
+    const sendTransaction = new SendTransaction({data});
     const promise = new Promise((resolve, reject) => {
       sendTransaction.on('send-success', (tx) => {
         resolve(tx);
@@ -368,6 +369,7 @@ class HathorWallet extends EventEmitter {
         reject(message);
       });
     });
+    sendTransaction.start();
     return {success: true, promise, sendTransaction};
   }
 
@@ -399,7 +401,6 @@ class HathorWallet extends EventEmitter {
           reject(`Wrong network. server=${info.network} expected=${this.conn.network}`);
         }
       }, (error) => {
-        console.log('Version error:', error);
         this.setState(HathorWallet.CLOSED);
         reject(error);
       });
