@@ -26,9 +26,9 @@ beforeEach(() => {
   wallet.resetAllData();
 });
 
-// Mock any POST request to /thin_wallet/send_tokens
+// Mock any POST request to push_tx
 // arguments for reply are (status, data, headers)
-mock.onPost('thin_wallet/send_tokens').reply((config) => {
+mock.onGet('push_tx').reply((config) => {
   const ret = {
     'success': true,
     'tx': {
@@ -37,6 +37,31 @@ mock.onPost('thin_wallet/send_tokens').reply((config) => {
     }
   }
   return [200, ret];
+});
+
+mock.onPost('submit-job').reply((config) => {
+  const data = {
+    success: true,
+    job_id: '123',
+    expected_total_time: 1,
+    status: 'mining',
+  };
+  return [200, data];
+});
+
+mock.onGet('job-status').reply((config) => {
+  const data = {
+    success: true,
+    expected_total_time: 0,
+    job_id: '123',
+    status: 'done',
+    parents: [
+      '00000257054251161adff5899a451ae974ac62ca44a7a31179eec5750b0ea406',
+      '00000b8792cb13e8adb51cc7d866541fc29b532e8dec95ae4661cf3da4d42cb4'
+    ],
+    nonce: 1234,
+  };
+  return [200, data];
 });
 
 mock.onGet('thin_wallet/token').reply((config) => {
@@ -104,8 +129,10 @@ test('New token', async (done) => {
   const address = storage.getItem('wallet:address');
   const tokenName = 'TestCoin';
   const tokenSymbol = 'TTC';
-  const promise2 = tokens.createToken(address, tokenName, tokenSymbol, 200, pin);
-  promise2.then(() => {
+  const ret = tokens.createToken(address, tokenName, tokenSymbol, 200, pin);
+  const sendTransaction = ret.sendTransaction;
+  sendTransaction.start();
+  ret.promise.then(() => {
     const savedTokens = tokens.getTokens();
     expect(savedTokens.length).toBe(2);
     expect(savedTokens[1].uid).toBe(createdTxHash);
@@ -131,7 +158,7 @@ test('Insufficient funds', async (done) => {
   const address = storage.getItem('wallet:address');
   try {
     // we only have 100 tokens on wallet, so minting 2000000 should fail (deposit = 20000)
-    await tokens.createToken(address, tokenName, tokenSymbol, 2000000, pin);
+    const ret = tokens.createToken(address, tokenName, tokenSymbol, 2000000, pin);
     done.fail('Should have rejected');
   } catch (e) {
     // this is the successful case
