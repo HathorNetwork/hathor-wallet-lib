@@ -69,21 +69,14 @@ class SendTransaction extends EventEmitter {
   handlePushTx() {
     const txHex = transaction.getTxHexFromData(this.data);
     txApi.pushTx(txHex, false, (response) => {
-      this.emit('tx-sent', response);
-    });
-  }
-
-  handleSendError(e) {
-    if (e instanceof AddressError ||
-        e instanceof OutputValueError ||
-        e instanceof ConstantNotSet ||
-        e instanceof MaximumNumberOutputsError ||
-        e instanceof MaximumNumberInputsError) {
-      this.emit('prepare-error', e);
-    } else {
-      // Unhandled error
-      throw e;
-    }
+      if (response.success) {
+        this.emit('send-success', response.tx);
+      } else {
+        this.emit('send-error', response.message);
+      }
+    }).catch((e) => {
+      this.emit('send-error', e.message);
+    });;
   }
 
   start() {

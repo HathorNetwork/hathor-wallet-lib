@@ -13,6 +13,7 @@ import tokens from '../tokens';
 import version from '../version';
 import walletApi from '../api/wallet';
 import storage from '../storage';
+import helpers from '../helpers';
 import MemoryStore from '../memory_store';
 import Connection from './connection';
 import WebSocketHandler from '../WebSocketHandler';
@@ -333,7 +334,14 @@ class HathorWallet extends EventEmitter {
       return ret;
     }
 
-    return {success: true, data: transaction.prepareData(data, this.pinCode)};
+    try {
+      const preparedData = transaction.prepareData(data, this.pinCode);
+    } catch(e) {
+      const message = helpers.handlePrepareDataError(e);
+      return {success: false, message};
+    }
+
+    return {success: true, data: preparedData};
   }
 
   /**
@@ -346,7 +354,17 @@ class HathorWallet extends EventEmitter {
    **/
   sendPreparedTransaction(data) {
     storage.setStore(this.store);
-    return transaction.sendPreparedTransaction(data);
+    const sendTransaction = new hathorLib.SendTransaction({data});
+    const promise = new Promise((resolve, reject) => {
+      sendTransaction.on('send-success', (tx) => {
+        resolve(tx);
+      });
+
+      sendTransaction.on('send-error', (message) => {
+        reject(message);
+      });
+    });
+    return {promise, sendTransaction};
   }
 
   /**
