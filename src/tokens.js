@@ -759,17 +759,7 @@ const tokens = {
     }
 
     const sendTransaction = new SendTransaction({data: preparedData});
-    const promise = new Promise((resolve, reject) => {
-      sendTransaction.on('send-success', (tx) => {
-        resolve(tx);
-      });
-
-      sendTransaction.on('send-error', (message) => {
-        reject(message);
-      });
-    });
-
-    return {success: true, sendTransaction, promise};
+    return {success: true, sendTransaction, promise: sendTransaction.promise};
   },
 
   /**
