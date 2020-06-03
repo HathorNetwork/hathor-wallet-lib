@@ -360,17 +360,8 @@ class HathorWallet extends EventEmitter {
   sendPreparedTransaction(data) {
     storage.setStore(this.store);
     const sendTransaction = new SendTransaction({data});
-    const promise = new Promise((resolve, reject) => {
-      sendTransaction.on('send-success', (tx) => {
-        resolve(tx);
-      });
-
-      sendTransaction.on('send-error', (message) => {
-        reject(message);
-      });
-    });
     sendTransaction.start();
-    return {success: true, promise, sendTransaction};
+    return {success: true, promise: sendTransaction.promise, sendTransaction};
   }
 
   /**

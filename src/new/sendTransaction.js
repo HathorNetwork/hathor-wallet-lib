@@ -6,7 +6,7 @@
  */
 
 import EventEmitter from 'events';
-import { MIN_POLL } from '../constants';
+import { MIN_POLLING_INTERVAL } from '../constants';
 import transaction from '../transaction';
 import txApi from '../api/txApi';
 import txMiningApi from '../api/txMining';
@@ -26,6 +26,7 @@ import { AddressError, OutputValueError, ConstantNotSet, MaximumNumberOutputsErr
  * 'job-done': after job is finished;
  * 'send-success': after push tx succeeds;
  * 'send-error': if an error happens;
+ * 'unexpected-error': if an unexpected error happens;
  **/
 class SendTransaction extends EventEmitter {
   /*
@@ -41,6 +42,22 @@ class SendTransaction extends EventEmitter {
     this.estimation = null;
     // Job ID
     this.jobID = null;
+
+    // Promise that resolves when push tx finishes with success
+    // or rejects in case of an error
+    this.promise = new Promise((resolve, reject) => {
+      this.on('send-success', (tx) => {
+        resolve(tx);
+      });
+
+      this.on('send-error', (message) => {
+        reject(message);
+      });
+
+      this.on('unexpected-error', (message) => {
+        reject(message);
+      });
+    });
   }
 
   /**
@@ -56,6 +73,8 @@ class SendTransaction extends EventEmitter {
       this.jobID = response.job_id;
       this.emit('job-submitted', {estimation: this.estimation, jobID: this.jobID});
       this.handleJobStatus();
+    }).catch((e) => {
+      this.emit('unexpected-error', e.message);
     });
   }
 
@@ -65,8 +84,8 @@ class SendTransaction extends EventEmitter {
    * Otherwise, schedule again the job status request and emits 'estimation-updated' event.
    */
   handleJobStatus() {
-    // this.estimation and MIN_POLL are in seconds
-    const poll_time = Math.max(this.estimation / 2, MIN_POLL)*1000;
+    // this.estimation and MIN_POLLING_INTERVAL are in seconds
+    const poll_time = Math.max(this.estimation / 2, MIN_POLLING_INTERVAL)*1000;
 
     setTimeout(() => {
       txMiningApi.getJobStatus(this.jobID, (response) => {
@@ -80,6 +99,8 @@ class SendTransaction extends EventEmitter {
           this.emit('estimation-updated', {jobID: this.jobID, estimation: response.expected_total_time});
           this.handleJobStatus();
         }
+      }).catch((e) => {
+        this.emit('unexpected-error', e.message);
       });
     }, poll_time);
   }

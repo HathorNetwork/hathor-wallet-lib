@@ -177,7 +177,7 @@ export const STRATUM_TIMEOUT_RETURN_CODE = 'stratum_timeout';
 /**
  * Minimum job status poll to update job data when mining a tx
  */
-export const MIN_POLL = 0.5;
+export const MIN_POLLING_INTERVAL = 0.5;
 
 /**
  * Base URL for the tx mining api
