@@ -2041,9 +2041,9 @@ const wallet = {
    *
    * @param {String} pin User PIN used to encrypt xpriv on storage
    *
-   * @return {String} Wallt xpubkey
+   * @return {String} Wallet xpubkey
    */
-  getXPubFromPin(pin) {
+  getXPubKeyFromXPrivKey(pin) {
     const accessData = this.getWalletAccessData();
     const encryptedXPriv = accessData.mainKey;
     const privateKeyStr = wallet.decryptData(encryptedXPriv, pin);
