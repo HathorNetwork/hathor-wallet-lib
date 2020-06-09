@@ -7,7 +7,7 @@
 
 import { GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, TOKEN_MINT_MASK, TOKEN_MELT_MASK, TOKEN_INDEX_MASK, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, MAX_OUTPUT_VALUE, HASH_KEY_SIZE, HASH_ITERATIONS, HD_WALLET_ENTROPY } from './constants';
 import Mnemonic from 'bitcore-mnemonic';
-import { HDPublicKey, Address, crypto } from 'bitcore-lib';
+import { HDPrivateKey, HDPublicKey, Address, crypto } from 'bitcore-lib';
 import CryptoJS from 'crypto-js';
 import walletApi from './api/wallet';
 import tokens from './tokens';
@@ -2034,6 +2034,21 @@ const wallet = {
     const hdpubkey = HDPublicKey(accessData.xpubkey);
     const key = hdpubkey.derive(index);
     return key.publicKey.toBuffer();
+  },
+
+  /**
+   * Get xpubkey from storage xpriv (assumes PIN is correct)
+   *
+   * @param {String} pin User PIN used to encrypt xpriv on storage
+   *
+   * @return {String} Wallt xpubkey
+   */
+  getXPubFromPin(pin) {
+    const accessData = this.getWalletAccessData();
+    const encryptedXPriv = accessData.mainKey;
+    const privateKeyStr = wallet.decryptData(encryptedXPriv, pin);
+    const privateKey = HDPrivateKey(privateKeyStr)
+    return privateKey.xpubkey;
   },
 }
 
