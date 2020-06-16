@@ -43,6 +43,9 @@ class SendTransaction extends EventEmitter {
     // Job ID
     this.jobID = null;
 
+    // Error to be shown in case of no miners connected
+    this.noMinersError = 'There are no miners to resolve the proof of work of this transaction.';
+
     // Promise that resolves when push tx finishes with success
     // or rejects in case of an error
     this.promise = new Promise((resolve, reject) => {
@@ -69,10 +72,15 @@ class SendTransaction extends EventEmitter {
     const txHex = transaction.getTxHexFromData(this.data);
     // Send to be mined in tx mining API
     txMiningApi.submitJob(txHex, false, true, (response) => {
-      this.estimation = response.expected_total_time;
-      this.jobID = response.job_id;
-      this.emit('job-submitted', {estimation: this.estimation, jobID: this.jobID});
-      this.handleJobStatus();
+      if (response.expected_total_time === -1) {
+        // Error: there are no miners online
+        this.emit('unexpected-error', this.noMinersError);
+      } else {
+        this.estimation = response.expected_total_time;
+        this.jobID = response.job_id;
+        this.emit('job-submitted', {estimation: this.estimation, jobID: this.jobID});
+        this.handleJobStatus();
+      }
     }).catch((e) => {
       this.emit('unexpected-error', e.message);
     });
@@ -90,14 +98,20 @@ class SendTransaction extends EventEmitter {
     setTimeout(() => {
       txMiningApi.getJobStatus(this.jobID, (response) => {
         if (response.status === 'done') {
-          this.data.nonce = response.nonce;
-          this.data.parents = response.parents;
+          this.data.nonce = parseInt(response.tx.nonce, 16);
+          this.data.parents = response.tx.parents;
+          this.data.timestamp = response.tx.timestamp;
           this.emit('job-done', {jobID: this.jobID});
           this.handlePushTx();
         } else {
-          this.estimation = response.expected_total_time;
-          this.emit('estimation-updated', {jobID: this.jobID, estimation: response.expected_total_time});
-          this.handleJobStatus();
+          if (response.expected_total_time === -1) {
+            // Error: there are no miners online
+            this.emit('unexpected-error', this.noMinersError);
+          } else {
+            this.estimation = response.expected_total_time;
+            this.emit('estimation-updated', {jobID: this.jobID, estimation: response.expected_total_time});
+            this.handleJobStatus();
+          }
         }
       }).catch((e) => {
         this.emit('unexpected-error', e.message);
