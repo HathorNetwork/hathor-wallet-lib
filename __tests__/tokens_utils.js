@@ -55,11 +55,14 @@ mock.onGet('job-status').reply((config) => {
     expected_total_time: 0,
     job_id: '123',
     status: 'done',
-    parents: [
-      '00000257054251161adff5899a451ae974ac62ca44a7a31179eec5750b0ea406',
-      '00000b8792cb13e8adb51cc7d866541fc29b532e8dec95ae4661cf3da4d42cb4'
-    ],
-    nonce: 1234,
+    tx: {
+      parents: [
+        '00000257054251161adff5899a451ae974ac62ca44a7a31179eec5750b0ea406',
+        '00000b8792cb13e8adb51cc7d866541fc29b532e8dec95ae4661cf3da4d42cb4'
+      ],
+      nonce: '0x4D2',
+      timestamp: 123456,
+    }
   };
   return [200, data];
 });
