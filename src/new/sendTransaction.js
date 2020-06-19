@@ -46,6 +46,9 @@ class SendTransaction extends EventEmitter {
     // Error to be shown in case of no miners connected
     this.noMinersError = 'There are no miners to resolve the proof of work of this transaction.';
 
+    // Error to be shown in case of an unexpected error
+    this.unexpectedError = 'An unexpected error happened. Check if the transaction has been sent looking into the history and try again if it hasn\'t.';
+
     // Promise that resolves when push tx finishes with success
     // or rejects in case of an error
     this.promise = new Promise((resolve, reject) => {
@@ -82,7 +85,7 @@ class SendTransaction extends EventEmitter {
         this.handleJobStatus();
       }
     }).catch((e) => {
-      this.emit('unexpected-error', e.message);
+      this.emit('unexpected-error', this.unexpectedError);
     });
   }
 
@@ -114,7 +117,7 @@ class SendTransaction extends EventEmitter {
           }
         }
       }).catch((e) => {
-        this.emit('unexpected-error', e.message);
+        this.emit('unexpected-error', this.unexpectedError);
       });
     }, poll_time);
   }

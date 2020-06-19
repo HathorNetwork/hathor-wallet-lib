@@ -352,7 +352,7 @@ const tokens = {
       preparedData = transaction.prepareData(createTokenTxData, pin);
     } catch (e) {
       const message = helpers.handlePrepareDataError(e);
-      return {success: false, message: e.message};
+      return {success: false, message};
     }
 
     const sendTransaction = new SendTransaction({data: preparedData});
@@ -755,7 +755,7 @@ const tokens = {
       preparedData = transaction.prepareData(data, pin, options);
     } catch (e) {
       const message = helpers.handlePrepareDataError(e);
-      return {success: false, message: e.message};
+      return {success: false, message};
     }
 
     const sendTransaction = new SendTransaction({data: preparedData});

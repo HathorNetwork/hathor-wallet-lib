@@ -739,7 +739,7 @@ const transaction = {
       data = transaction.prepareData(data, pin, options);
     } catch (e) {
       const message = helpers.handlePrepareDataError(e);
-      return Promise.reject(e.message);
+      return Promise.reject(message);
     }
     return transaction.sendPreparedTransaction(data);
   },
