@@ -47,7 +47,13 @@ class SendTransaction extends EventEmitter {
     this.noMinersError = 'There are no miners to resolve the proof of work of this transaction.';
 
     // Error to be shown in case of an unexpected error
-    this.unexpectedError = 'An unexpected error happened. Check if the transaction has been sent looking into the history and try again if it hasn\'t.';
+    this.unexpectedError = 'An unexpected error happened. Please try to send your transaction again.';
+
+    // Error to be shown in case of an unexpected error when executing push tx
+    this.unexpectedPushTxError = 'An unexpected error happened. Check if the transaction has been sent looking into the history and try again if it hasn\'t.';
+
+    // Error to be shown in case of a timeout
+    this.timeoutError = 'Timeout solving transaction\'s proof-of-work.\n\nAll transactions need to solve a proof-of-work as an anti spam mechanism. Currently, Hathor Labs provides this service for free, but their servers may be fully loaded right now.';
 
     // Promise that resolves when push tx finishes with success
     // or rejects in case of an error
@@ -74,10 +80,10 @@ class SendTransaction extends EventEmitter {
     // Get tx hex without parents and nonce
     const txHex = transaction.getTxHexFromData(this.data);
     // Send to be mined in tx mining API
-    txMiningApi.submitJob(txHex, false, true, (response) => {
+    txMiningApi.submitJob(txHex, false, true, null, (response) => {
       if (response.expected_total_time === -1) {
         // Error: there are no miners online
-        this.emit('unexpected-error', this.noMinersError);
+        this.emit('send-error', this.noMinersError);
       } else {
         this.estimation = response.expected_total_time;
         this.jobID = response.job_id;
@@ -106,10 +112,13 @@ class SendTransaction extends EventEmitter {
           this.data.timestamp = response.tx.timestamp;
           this.emit('job-done', {jobID: this.jobID});
           this.handlePushTx();
+        } else if (response.status === 'timeout') {
+          // Error: Timeout resolving pow
+          this.emit('send-error', this.timeoutError);
         } else {
           if (response.expected_total_time === -1) {
             // Error: there are no miners online
-            this.emit('unexpected-error', this.noMinersError);
+            this.emit('send-error', this.noMinersError);
           } else {
             this.estimation = response.expected_total_time;
             this.emit('estimation-updated', {jobID: this.jobID, estimation: response.expected_total_time});
@@ -134,8 +143,8 @@ class SendTransaction extends EventEmitter {
       } else {
         this.emit('send-error', response.message);
       }
-    }).catch((e) => {
-      this.emit('send-error', e.message);
+    }).catch(() => {
+      this.emit('send-error', this.unexpectedPushTxError);
     });;
   }
 

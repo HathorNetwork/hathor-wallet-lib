@@ -20,13 +20,17 @@ const txMiningApi = {
    * @param {String} tx Data in hexadecimal
    * @param {boolean} propagate If should propagate tx after the job is completed
    * @param {boolean} add_parents If should return the parents
+   * @param {Number} timeout Optional parameter to define the timeout of the submit job in seconds
    *
    * @return {Promise}
    * @memberof txMiningApi
    * @inner
    */
-  submitJob(tx, propagate, add_parents, resolve) {
-    const postData = {tx, propagate, add_parents};
+  submitJob(tx, propagate, add_parents, timeout, resolve) {
+    let postData = {tx, propagate, add_parents};
+    if (timeout) {
+      postData.timeout = timeout;
+    }
     return txMiningRequestClient(resolve).post('submit-job', postData).then((res) => {
       resolve(res.data)
     }, (res) => {
