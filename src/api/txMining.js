@@ -55,6 +55,24 @@ const txMiningApi = {
       return Promise.reject(res);
     });
   },
+
+  /**
+   * Cancel a job
+   *
+   * @param {String} job Job id
+   *
+   * @return {Promise}
+   * @memberof txMiningApi
+   * @inner
+   */
+  cancelJob(job, resolve) {
+    const data = {'job-id': job};
+    return txMiningRequestClient(resolve).post('cancel-job', data).then((res) => {
+      resolve(res.data)
+    }, (res) => {
+      return Promise.reject(res);
+    });
+  },
 };
 
 export default txMiningApi;
