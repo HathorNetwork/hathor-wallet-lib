@@ -347,6 +347,7 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Send a transaction from its outputs
+   * Currently does not have support to send custom tokens, only HTR
    *
    * @param {Array} outputs Array of outputs with each element as an object with {'address', 'value'}
    *
