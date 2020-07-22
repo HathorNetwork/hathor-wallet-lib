@@ -1281,13 +1281,12 @@ const wallet = {
   /*
    * Reload data in the storage
    *
-   * @param {Connection} connection Connection object to subscribe for the addresses (optional)
-   * @param {Store} store Store object to save the data (optional)
+   * @param {Object} Options object with {'connection': Connection, 'store': Store}
    *
    * @memberof Wallet
    * @inner
    */
-  reloadData(connection = null, store = null) {
+  reloadData({connection = null, store = null} = {}) {
     // Get old access data
     const accessData = this.getWalletAccessData();
     const walletData = this.getWalletData();

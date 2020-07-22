@@ -118,7 +118,7 @@ class HathorWallet extends EventEmitter {
       // but the reload method only adds a clean up on storage and that is not a problem on the
       // first connection (because everything is already empty).
       // So I just call the reload method every time I connect to the websocket
-      wallet.reloadData(this.conn, this.store).then(() => {
+      wallet.reloadData({connection: this.conn, store: this.store}).then(() => {
         this.setState(HathorWallet.READY);
       }).catch((error) => {
         throw error;
