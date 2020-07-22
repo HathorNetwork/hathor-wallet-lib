@@ -110,8 +110,12 @@ class HathorWallet extends EventEmitter {
     if (newState === Connection.CONNECTED) {
       storage.setStore(this.store);
       this.setState(HathorWallet.SYNCING);
-      WebSocketHandler.setup();
-      wallet.loadAddressHistory(0, GAP_LIMIT, this.conn, this.store).then(() => {
+
+      // We can't really know if this is the first load or a reload
+      // so we have to execute the full reload method
+      // The only difference is that we clean all information address/index information
+      // before loading the data again, otherwise it won't load all addresses, only the first request
+      wallet.reloadData(this.conn, this.store).then(() => {
         this.setState(HathorWallet.READY);
       }).catch((error) => {
         throw error;
