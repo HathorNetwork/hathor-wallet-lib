@@ -1281,10 +1281,12 @@ const wallet = {
   /*
    * Reload data in the storage
    *
+   * @param {Object} Options object with {'connection': Connection, 'store': Store}
+   *
    * @memberof Wallet
    * @inner
    */
-  reloadData() {
+  reloadData({connection = null, store = null} = {}) {
     // Get old access data
     const accessData = this.getWalletAccessData();
     const walletData = this.getWalletData();
@@ -1302,7 +1304,7 @@ const wallet = {
     this.setWalletData(newWalletData);
 
     // Load history from new server
-    const promise = this.loadAddressHistory(0, GAP_LIMIT);
+    const promise = this.loadAddressHistory(0, GAP_LIMIT, connection, store);
     return promise;
   },
 
