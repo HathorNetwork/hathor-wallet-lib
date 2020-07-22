@@ -110,8 +110,15 @@ class HathorWallet extends EventEmitter {
     if (newState === Connection.CONNECTED) {
       storage.setStore(this.store);
       this.setState(HathorWallet.SYNCING);
-      WebSocketHandler.setup();
-      wallet.loadAddressHistory(0, GAP_LIMIT, this.conn, this.store).then(() => {
+
+      // After the websocket connection is lost, we must reload the wallet data.
+      // Before that we must clean the storage (last generated address index), so we
+      // start loading again from the first index.
+      // I could create a variable to know if this is the first connection or a reload
+      // but the reload method only adds a clean up on storage and that is not a problem on the
+      // first connection (because everything is already empty).
+      // So I just call the reload method every time I connect to the websocket
+      wallet.reloadData({connection: this.conn, store: this.store}).then(() => {
         this.setState(HathorWallet.READY);
       }).catch((error) => {
         throw error;

@@ -168,6 +168,7 @@ class WS extends EventEmitter {
     this.connected = false;
     this.setIsOnline(false);
     if (this.ws) {
+      this.ws.onclose = () => {};
       this.ws.close();
       this.ws = null;
     }
