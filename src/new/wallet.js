@@ -112,8 +112,15 @@ class HathorWallet extends EventEmitter {
     if (newState === Connection.CONNECTED) {
       storage.setStore(this.store);
       this.setState(HathorWallet.SYNCING);
-      WebSocketHandler.setup();
-      wallet.loadAddressHistory(0, GAP_LIMIT, this.conn, this.store).then(() => {
+
+      // After the websocket connection is lost, we must reload the wallet data.
+      // Before that we must clean the storage (last generated address index), so we
+      // start loading again from the first index.
+      // I could create a variable to know if this is the first connection or a reload
+      // but the reload method only adds a clean up on storage and that is not a problem on the
+      // first connection (because everything is already empty).
+      // So I just call the reload method every time I connect to the websocket
+      wallet.reloadData({connection: this.conn, store: this.store}).then(() => {
         this.setState(HathorWallet.READY);
       }).catch((error) => {
         throw error;
@@ -299,7 +306,7 @@ class HathorWallet extends EventEmitter {
     const ret = this.prepareTransaction(address, value, token);
 
     if (ret.success) {
-      return this.sendPreparedTransaction(ret.data);
+      return transaction.sendTransaction(ret.data, this.pinCode);
     } else {
       return ret;
     }
@@ -329,23 +336,53 @@ class HathorWallet extends EventEmitter {
       }],
     };
 
+    return this.completeTxData(data, txToken);
+  }
+
+  /**
+   * Complete transaction data with inputs
+   *
+   * @param {Object} data Partial data that will be completed with inputs
+   * @param {Object} token Token object {'uid', 'name', 'symbol'}. Optional parameter if user already set on the class
+   *
+   * @return {Object} Object with 'success' and completed 'data' in case of success, and 'message' in case of error
+   **/
+  completeTxData(partialData, token) {
+    const txToken = token || this.token;
     const walletData = wallet.getWalletData();
     const historyTxs = 'historyTransactions' in walletData ? walletData.historyTransactions : {};
-    const ret = wallet.prepareSendTokensData(data, txToken, true, historyTxs, [txToken]);
+    const ret = wallet.prepareSendTokensData(partialData, txToken, true, historyTxs, [txToken]);
 
-    if (!ret.success) {
-      return ret;
+    return ret
+  }
+
+  /**
+   * Send a transaction from its outputs
+   * Currently does not have support to send custom tokens, only HTR
+   *
+   * @param {Array} outputs Array of outputs with each element as an object with {'address', 'value'}
+   *
+   * @return {Promise} Promise that resolves when transaction is sent
+   **/
+  sendManyOutputsTransaction(outputs) {
+    storage.setStore(this.store);
+    const data = {
+      tokens: [], // For now does not support custom tokens
+      inputs: [],
+      outputs: [],
+    };
+
+    for (const output of outputs) {
+      data.outputs.push({address: output.address, value: output.value, tokenData: 0})
     }
 
-    let preparedData = null;
-    try {
-      preparedData = transaction.prepareData(data, this.pinCode);
-    } catch(e) {
-      const message = helpers.handlePrepareDataError(e);
-      return {success: false, message};
-    }
+    const ret = this.completeTxData(data);
 
-    return {success: true, data: preparedData};
+    if (ret.success) {
+      return transaction.sendTransaction(ret.data, this.pinCode);
+    } else {
+      return Promise.reject(ret.message);
+    }
   }
 
   /**
