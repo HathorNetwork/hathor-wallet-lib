@@ -306,7 +306,7 @@ class HathorWallet extends EventEmitter {
     const ret = this.prepareTransaction(address, value, token);
 
     if (ret.success) {
-      return transaction.sendTransaction(ret.data, this.pinCode);
+      return this.sendPreparedTransaction(ret.data);
     } else {
       return ret;
     }
@@ -353,7 +353,19 @@ class HathorWallet extends EventEmitter {
     const historyTxs = 'historyTransactions' in walletData ? walletData.historyTransactions : {};
     const ret = wallet.prepareSendTokensData(partialData, txToken, true, historyTxs, [txToken]);
 
-    return ret
+    if (!ret.success) {
+      return ret;
+    }
+
+    let preparedData = null;
+    try {
+      preparedData = transaction.prepareData(ret.data, this.pinCode);
+    } catch(e) {
+      const message = helpers.handlePrepareDataError(e);
+      return {success: false, message};
+    }
+
+    return {success: true, data: preparedData};
   }
 
   /**
@@ -379,9 +391,9 @@ class HathorWallet extends EventEmitter {
     const ret = this.completeTxData(data);
 
     if (ret.success) {
-      return transaction.sendTransaction(ret.data, this.pinCode);
+      return this.sendPreparedTransaction(ret.data);
     } else {
-      return Promise.reject(ret.message);
+      return ret;
     }
   }
 
