@@ -13,8 +13,10 @@ import tokens from '../tokens';
 import version from '../version';
 import walletApi from '../api/wallet';
 import storage from '../storage';
+import helpers from '../helpers';
 import MemoryStore from '../memory_store';
 import Connection from './connection';
+import SendTransaction from './sendTransaction';
 import WebSocketHandler from '../WebSocketHandler';
 
 /**
@@ -249,7 +251,6 @@ class HathorWallet extends EventEmitter {
       const result = wallet.prepareSendTokensData(partialData, d.token, true, historyTxs, allTokens);
 
       if (!result.success) {
-        console.log('Error sending tx:', result.message);
         return Promise.reject(new Error(result.message));
       }
 
@@ -295,16 +296,19 @@ class HathorWallet extends EventEmitter {
    * @param {number} value Amount of tokens to be sent
    * @param {Object} token Token object {'uid', 'name', 'symbol'}. Optional parameter if user already set on the class
    *
-   * @return {Promise} Promise that resolves when transaction is sent
+   * @return {Object} In case of success, an object with {success: true, sendTransaction, promise}, where sendTransaction is a
+   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
+   * In case of error, an object with {success: false, message}
+   *
    **/
   sendTransaction(address, value, token) {
     storage.setStore(this.store);
     const ret = this.prepareTransaction(address, value, token);
 
     if (ret.success) {
-      return transaction.sendTransaction(ret.data, this.pinCode);
+      return this.sendPreparedTransaction(ret.data);
     } else {
-      return Promise.reject(ret.message);
+      return ret;
     }
   }
 
@@ -349,7 +353,19 @@ class HathorWallet extends EventEmitter {
     const historyTxs = 'historyTransactions' in walletData ? walletData.historyTransactions : {};
     const ret = wallet.prepareSendTokensData(partialData, txToken, true, historyTxs, [txToken]);
 
-    return ret
+    if (!ret.success) {
+      return ret;
+    }
+
+    let preparedData = null;
+    try {
+      preparedData = transaction.prepareData(ret.data, this.pinCode);
+    } catch(e) {
+      const message = helpers.handlePrepareDataError(e);
+      return {success: false, message};
+    }
+
+    return {success: true, data: preparedData};
   }
 
   /**
@@ -375,9 +391,9 @@ class HathorWallet extends EventEmitter {
     const ret = this.completeTxData(data);
 
     if (ret.success) {
-      return transaction.sendTransaction(ret.data, this.pinCode);
+      return this.sendPreparedTransaction(ret.data);
     } else {
-      return Promise.reject(ret.message);
+      return ret;
     }
   }
 
@@ -387,11 +403,14 @@ class HathorWallet extends EventEmitter {
    *
    * @param {Object} data Full transaction data
    *
-   * @return {Promise} Promise that resolves when transaction is sent
+   * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
+   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    **/
   sendPreparedTransaction(data) {
     storage.setStore(this.store);
-    return transaction.sendPreparedTransaction(data);
+    const sendTransaction = new SendTransaction({data});
+    sendTransaction.start();
+    return {success: true, promise: sendTransaction.promise, sendTransaction};
   }
 
   /**
@@ -422,7 +441,6 @@ class HathorWallet extends EventEmitter {
           reject(`Wrong network. server=${info.network} expected=${this.conn.network}`);
         }
       }, (error) => {
-        console.log('Version error:', error);
         this.setState(HathorWallet.CLOSED);
         reject(error);
       });
