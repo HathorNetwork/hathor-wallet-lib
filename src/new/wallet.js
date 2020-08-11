@@ -403,7 +403,7 @@ class HathorWallet extends EventEmitter {
    *
    * @param {Object} data Full transaction data
    *
-   * @return {Object} bject with {success: true, sendTransaction, promise}, where sendTransaction is a
+   * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    **/
   sendPreparedTransaction(data) {
