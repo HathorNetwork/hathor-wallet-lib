@@ -12,7 +12,7 @@ import wallet from '../src/wallet';
 import version from '../src/version';
 import { util } from 'bitcore-lib';
 import WebSocketHandler from '../src/WebSocketHandler';
-import { InsufficientFundsError, TokenValidationError } from '../src/errors';
+import { TokenValidationError } from '../src/errors';
 import storage from '../src/storage';
 
 
@@ -159,17 +159,13 @@ test('Insufficient funds', async (done) => {
   const tokenName = 'TestCoin';
   const tokenSymbol = 'TTC';
   const address = storage.getItem('wallet:address');
-  try {
-    // we only have 100 tokens on wallet, so minting 2000000 should fail (deposit = 20000)
-    const ret = tokens.createToken(address, tokenName, tokenSymbol, 2000000, pin);
-    done.fail('Should have rejected');
-  } catch (e) {
-    // this is the successful case
-    if (e instanceof InsufficientFundsError) {
-      done();
-    } else {
-      done.fail();
-    }
+
+  // we only have 100 tokens on wallet, so minting 2000000 should fail (deposit = 20000)
+  const ret = tokens.createToken(address, tokenName, tokenSymbol, 2000000, pin);
+  if (ret.success) {
+    done.fail('Should be success false');
+  } else {
+    done();
   }
 });
 
