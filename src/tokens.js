@@ -338,7 +338,18 @@ const tokens = {
       createMelt: true,
     };
 
-    const txData = this.createMintData(null, null, address, mintAmount, null, mintOptions);
+    let txData;
+
+    try {
+      txData = this.createMintData(null, null, address, mintAmount, null, mintOptions);
+    } catch (e) {
+      if (e instanceof InsufficientFundsError) {
+        return {success: false, message: 'Don\'t have enough HTR funds to mint this amount.'};
+      } else {
+        // Unhandled error
+        throw e;
+      }
+    }
 
     // Set create token tx version value
     const createTokenTxData = Object.assign(txData, {
