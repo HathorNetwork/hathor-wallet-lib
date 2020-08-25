@@ -62,6 +62,8 @@ const wallet = {
    */
   _networkBestChainHeight: 0,
 
+  _connection: WebSocketHandler,
+
   /**
    * Verify if words passed to generate wallet are valid. In case of invalid, returns message
    *
@@ -162,7 +164,7 @@ const wallet = {
     let promise = null;
     if (loadHistory) {
       // Load history from address
-      WebSocketHandler.setup();
+      this._connection.setup();
       promise = this.loadAddressHistory(0, GAP_LIMIT);
     }
     return promise;
@@ -344,7 +346,7 @@ const wallet = {
         }
 
         // Propagate new loaded data
-        WebSocketHandler.ws.emit('addresses_loaded', ret);
+        this._connection.websocket.emit('addresses_loaded', ret);
       } else {
         throw Error(result.message);
       }
@@ -895,15 +897,7 @@ const wallet = {
    */
   subscribeAddress(address, connection = null) {
     const msg = JSON.stringify({'type': 'subscribe_address', 'address': address});
-    WebSocketHandler.ws.sendMessage(msg);
-
-    if (connection) {
-      // For now the WebSocketHandler is still needed because it's used in
-      // the whole old library code
-      // As soon as we refactor everything, we will have only one ws connection
-      // for each wallet
-      connection.websocket.sendMessage(msg);
-    }
+    this._connection.websocket.sendMessage(msg);
   },
 
   /**
@@ -930,7 +924,7 @@ const wallet = {
    */
   unsubscribeAddress(address) {
     const msg = JSON.stringify({'type': 'unsubscribe_address', 'address': address});
-    WebSocketHandler.ws.sendMessage(msg);
+    this._connection.websocket.sendMessage(msg);
   },
 
   /**
@@ -975,10 +969,12 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  cleanWallet() {
+  cleanWallet({endConnection = true} = {}) {
     this.unsubscribeAllAddresses();
     this.cleanLoadedData();
-    WebSocketHandler.endConnection();
+    if (endConnection) {
+      this._connection.endConnection();
+    }
   },
 
   /*
@@ -1286,14 +1282,14 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  reloadData({connection = null, store = null} = {}) {
+  reloadData({connection = null, store = null, endConnection = false} = {}) {
     // Get old access data
     const accessData = this.getWalletAccessData();
     const walletData = this.getWalletData();
 
-    this.cleanWallet();
+    this.cleanWallet({endConnection});
     // Restart websocket connection
-    WebSocketHandler.setup();
+    this._connection.setup();
 
     let newWalletData = {
       keys: {},
@@ -1861,7 +1857,7 @@ const wallet = {
    * @inner
    */
   addMetricsListener() {
-    WebSocketHandler.on('dashboard', this.handleWebsocketDashboard);
+    this._connection.websocket.on('dashboard', this.handleWebsocketDashboard);
   },
 
   /**
@@ -1871,7 +1867,7 @@ const wallet = {
    * @inner
    */
   removeMetricsListener() {
-    WebSocketHandler.removeListener('dashboard', this.handleWebsocketDashboard);
+    this._connection.websocket.removeListener('dashboard', this.handleWebsocketDashboard);
   },
 
   /**
@@ -1899,7 +1895,7 @@ const wallet = {
   updateNetworkHeight(networkHeight) {
     if (networkHeight !== this._networkBestChainHeight) {
       this._networkBestChainHeight = networkHeight;
-      WebSocketHandler.ws.emit('height_updated', networkHeight);
+      this._connection.websocket.emit('height_updated', networkHeight);
     }
   },
 
@@ -2051,6 +2047,18 @@ const wallet = {
     const privateKeyStr = wallet.decryptData(encryptedXPriv, pin);
     const privateKey = HDPrivateKey(privateKeyStr)
     return privateKey.xpubkey;
+  },
+
+  /**
+   * Set the connection used in the wallet
+   *
+   * @param {Connection} connection
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  setConnection(connection) {
+    this._connection = connection;
   },
 }
 

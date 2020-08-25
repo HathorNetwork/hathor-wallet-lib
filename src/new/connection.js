@@ -10,6 +10,7 @@ import networkInstance from '../network';
 import { DEFAULT_SERVERS } from '../constants';
 import version from '../version';
 import helpers from '../helpers';
+import wallet from '../wallet';
 import WS from '../websocket';
 
 /**
@@ -51,6 +52,7 @@ class Connection extends EventEmitter {
     this.currentServer = this.servers[0];
 
     this.websocket = new WS({ wsURL: helpers.getWSServerURL(this.currentServer) });
+    wallet.setConnection(this);
   }
 
   /**
@@ -105,6 +107,22 @@ class Connection extends EventEmitter {
     this.websocket.removeListener('is_online', this.onConnectionChange);
     this.websocket.removeListener('wallet', this.handleWalletMessage);
     this.setState(Connection.CLOSED);
+  }
+
+  /**
+   * Call websocket endConnection
+   * Needed for compatibility with old src/wallet code
+   **/
+  endConnection() {
+    this.websocket.endConnection();
+  }
+
+  /**
+   * Call websocket setup
+   * Needed for compatibility with old src/wallet code
+   **/
+  setup() {
+    this.websocket.setup();
   }
 }
 
