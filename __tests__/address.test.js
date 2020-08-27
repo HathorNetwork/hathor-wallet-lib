@@ -19,9 +19,10 @@ beforeEach(() => {
   // This useFakeTimers allow to handle setTimeout calls
   // With it we can run all pending calls
   jest.useFakeTimers();
-  WebSocketHandler.ws = new WS({ wsURL: helpers.getWSServerURL() });
-  WebSocketHandler.ws.WebSocket = WebSocket;
-  WebSocketHandler.ws.setup();
+  wallet.setConnection(WebSocketHandler);
+  WebSocketHandler.websocket = new WS({ wsURL: helpers.getWSServerURL() });
+  WebSocketHandler.websocket.WebSocket = WebSocket;
+  WebSocketHandler.websocket.setup();
   jest.runOnlyPendingTimers();
 });
 
@@ -128,7 +129,7 @@ test('Last used index', async () => {
 
 test('Subscribe address to websocket', (done) => {
   let address = '171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r';
-  WebSocketHandler.ws.on('subscribe_success', (wsData) => {
+  WebSocketHandler.websocket.on('subscribe_success', (wsData) => {
     if (wsData.address === address) {
       // If got here test was successful, so ending it
       done();
@@ -156,7 +157,7 @@ test('Subscribe all addresses to websocket', (done) => {
     keys[address] = {};
   }
   storage.setItem('wallet:data', {keys: keys});
-  WebSocketHandler.ws.on('subscribe_success', function handler(wsData) {
+  WebSocketHandler.websocket.on('subscribe_success', function handler(wsData) {
     let foundIndex = -1;
     for (let [idx, address] of addresses.entries()) {
       if (address === wsData.address) {
@@ -171,7 +172,7 @@ test('Subscribe all addresses to websocket', (done) => {
 
     if (addresses.length === 0) {
       // If got here test was successful, so ending it
-      WebSocketHandler.ws.removeListener('subscribe_success', handler);
+      WebSocketHandler.websocket.removeListener('subscribe_success', handler);
       done();
     }
   });
