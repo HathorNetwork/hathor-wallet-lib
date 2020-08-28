@@ -67,16 +67,20 @@ const wallet = {
    *
    * @param {string} words Words (separated by space) to generate the HD Wallet seed
    *
-   * @return {Object} {'valid': boolean, 'message': string}
+   * @return {Object} {'valid': boolean, 'message': string, 'words': cleanWords}
    * @memberof Wallet
    * @inner
    */
   wordsValid(words) {
+    let newWordsString = '';
     if (_.isString(words)) {
-      if (words.split(' ').length !== 24) {
+      // 1. Remove one or more spaces (or line breaks) before and after the 24 words
+      // 2. Substitute more then one space (or line break) for a single space
+      newWordsString = words.trim(/\s+/).replace(/\s+/g, ' ');
+      if (newWordsString.split(' ').length !== 24) {
         // Must have 24 words
         return {'valid': false, 'message': 'Must have 24 words'};
-      } else if (!Mnemonic.isValid(words)) {
+      } else if (!Mnemonic.isValid(newWordsString)) {
         // Invalid sequence of words
         return {'valid': false, 'message': 'Invalid sequence of words'};
       }
@@ -84,7 +88,7 @@ const wallet = {
       // Must be string
       return {'valid': false, 'message': 'Must be a string'};
     }
-    return {'valid': true, 'message': ''};
+    return {'valid': true, 'message': '', 'words': newWordsString};
   },
 
   /**
