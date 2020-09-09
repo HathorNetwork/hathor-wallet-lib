@@ -52,7 +52,6 @@ class Connection extends EventEmitter {
     this.currentServer = this.servers[0];
 
     this.websocket = new WS({ wsURL: helpers.getWSServerURL(this.currentServer) });
-    wallet.setConnection(this);
   }
 
   /**

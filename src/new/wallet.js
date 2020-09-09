@@ -75,6 +75,8 @@ class HathorWallet extends EventEmitter {
     }
 
     this.conn = connection;
+    wallet.setConnection(connection);
+
     this.state = HathorWallet.CLOSED;
     this.serverInfo = null;
 

@@ -339,14 +339,23 @@ const wallet = {
         } else {
           // If it's the last page, we update the storage and call the next loadAddress (if needed)
           // This is all done on updateHistoryData
+          let oldStore = _.clone(storage.store);
+          if (store) {
+            storage.setStore(store);
+          }
           const data = this.getWalletData();
           const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
           const allTokens = 'allTokens' in data ? data['allTokens'] : [];
+          storage.setStore(oldStore);
           ret = this.updateHistoryData(historyTransactions, allTokens, result.history, resolve, data, reject, connection, store);
         }
 
         // Propagate new loaded data
-        this._connection.websocket.emit('addresses_loaded', ret);
+        if (connection === null) {
+          this._connection.websocket.emit('addresses_loaded', ret);
+        } else {
+          connection.websocket.emit('addresses_loaded', ret);
+        }
       } else {
         throw Error(result.message);
       }
@@ -897,7 +906,11 @@ const wallet = {
    */
   subscribeAddress(address, connection = null) {
     const msg = JSON.stringify({'type': 'subscribe_address', 'address': address});
-    this._connection.websocket.sendMessage(msg);
+    if (connection === null) {
+      this._connection.websocket.sendMessage(msg);
+    } else {
+      connection.websocket.sendMessage(msg);
+    }
   },
 
   /**
@@ -922,9 +935,13 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  unsubscribeAddress(address) {
+  unsubscribeAddress(address, connection = null) {
     const msg = JSON.stringify({'type': 'unsubscribe_address', 'address': address});
-    this._connection.websocket.sendMessage(msg);
+    if (connection === null) {
+      this._connection.websocket.sendMessage(msg);
+    } else {
+      connection.websocket.sendMessage(msg);
+    }
   },
 
   /**
@@ -932,7 +949,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  unsubscribeAllAddresses() {
+  unsubscribeAllAddresses({connection = null} = {}) {
     let data = this.getWalletData();
     if (data) {
       for (let address in data.keys) {
@@ -969,11 +986,15 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  cleanWallet({endConnection = true} = {}) {
-    this.unsubscribeAllAddresses();
+  cleanWallet({endConnection = true, connection = null} = {}) {
+    this.unsubscribeAllAddresses({connection});
     this.cleanLoadedData();
     if (endConnection) {
-      this._connection.endConnection();
+      if (connection === null) {
+        this._connection.endConnection();
+      } else {
+        connection.endConnection();
+      }
     }
   },
 
@@ -1287,9 +1308,13 @@ const wallet = {
     const accessData = this.getWalletAccessData();
     const walletData = this.getWalletData();
 
-    this.cleanWallet({endConnection});
+    this.cleanWallet({endConnection, connection});
     // Restart websocket connection
-    this._connection.setup();
+    if (connection === null) {
+      this._connection.setup();
+    } else {
+      connection.setup();
+    }
 
     let newWalletData = {
       keys: {},
