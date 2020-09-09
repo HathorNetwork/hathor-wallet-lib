@@ -932,6 +932,8 @@ const wallet = {
    * Unsubscribe to receive updates from an address in the websocket
    *
    * @param {string} address
+   * @param {Connection} connection Connection object to subscribe for the addresses
+   *
    * @memberof Wallet
    * @inner
    */
@@ -946,6 +948,9 @@ const wallet = {
 
   /**
    * Unsubscribe to receive updates from all generated addresses
+   *
+   * @param {Object} Optional object with {connection: Connection}
+   *
    * @memberof Wallet
    * @inner
    */
@@ -982,6 +987,8 @@ const wallet = {
    * - Clean local storage
    * - Clean redux
    * - Unsubscribe websocket connections
+   *
+   * @param {Object} Optional object with {endConnection: boolean, connection: Connection}
    *
    * @memberof Wallet
    * @inner
@@ -1298,7 +1305,7 @@ const wallet = {
   /*
    * Reload data in the storage
    *
-   * @param {Object} Options object with {'connection': Connection, 'store': Store}
+   * @param {Object} Options object with {'connection': Connection, 'store': Store, endConnection: boolean}
    *
    * @memberof Wallet
    * @inner
