@@ -6,6 +6,7 @@
  */
 
 import helpers from '../helpers';
+import { TX_MINING_URL } from '../constants';
 import axiosWrapperCreateRequestInstance from './axiosWrapper';
 
 /**
@@ -21,16 +22,8 @@ import axiosWrapperCreateRequestInstance from './axiosWrapper';
  * @param {callback} resolve Callback to be stored and used in case of a retry after a fail
  * @param {number} timeout Timeout in milliseconds for the request
  */
-export const defaultCreateRequestInstance = (resolve, timeout) => {
-  return axiosWrapperCreateRequestInstance(helpers.getServerURL(), resolve, timeout);
+const txMiningRequestClient = (resolve, timeout) => {
+  return axiosWrapperCreateRequestInstance(TX_MINING_URL, resolve, timeout);
 }
 
-let _createRequestInstance = defaultCreateRequestInstance;
-
-export const registerNewCreateRequestInstance = (fn) => {
-  _createRequestInstance = fn;
-}
-
-export const createRequestInstance = (resolve, timeout) => {
-    return _createRequestInstance(resolve, timeout);
-}
+export default txMiningRequestClient;

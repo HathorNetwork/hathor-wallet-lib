@@ -600,8 +600,15 @@ const transaction = {
     arr.push(this.floatToBytes(txData.weight, 8));
     // Timestamp
     arr.push(this.intToBytes(txData.timestamp, 4))
-    // Len parents (parents will be calculated in the backend)
-    arr.push(this.intToBytes(0, 1))
+    if (txData.parents) {
+      arr.push(this.intToBytes(txData.parents.length, 1))
+      for (const parent of txData.parents) {
+        arr.push(util.buffer.hexToBuffer(parent));
+      }
+    } else {
+      // Len parents (parents will be calculated in the backend)
+      arr.push(this.intToBytes(0, 1))
+    }
 
     // Add nonce in the end
     arr.push(this.intToBytes(txData.nonce, 4));
@@ -731,19 +738,28 @@ const transaction = {
     try {
       data = transaction.prepareData(data, pin, options);
     } catch (e) {
-      if (e instanceof AddressError ||
-          e instanceof OutputValueError ||
-          e instanceof ConstantNotSet ||
-          e instanceof CreateTokenTxInvalid ||
-          e instanceof MaximumNumberOutputsError ||
-          e instanceof MaximumNumberInputsError) {
-        return Promise.reject(e.message);
-      } else {
-        // Unhandled error
-        throw e;
-      }
+      const message = helpers.handlePrepareDataError(e);
+      return Promise.reject(message);
     }
     return transaction.sendPreparedTransaction(data);
+  },
+
+  /**
+   * Get tx data and return it in hexadecimal
+   *
+   * @param {Object} data Object with inputs and outputs
+   * {
+   *  'inputs': [{'tx_id', 'index', 'token', 'address'}],
+   *  'outputs': ['address', 'value', 'timelock', 'tokenData'],
+   * }
+   *
+   * @return {String} Hexadecimal of a serialized tx
+   * @memberof Transaction
+   * @inner
+   */
+  getTxHexFromData(data) {
+    const txBytes = transaction.txToBytes(data);
+    return util.buffer.bufferToHex(txBytes);
   },
 
   /**
@@ -762,8 +778,7 @@ const transaction = {
    */
   sendPreparedTransaction(data) {
     const promise = new Promise((resolve, reject) => {
-      const txBytes = transaction.txToBytes(data);
-      const txHex = util.buffer.bufferToHex(txBytes);
+      const txHex = this.getTxHexFromData(data);
       walletApi.sendTokens(txHex, (response) => {
         if (response.success) {
           resolve(response);

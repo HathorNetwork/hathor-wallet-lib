@@ -9,6 +9,7 @@ import path from 'path';
 
 import storage from './storage';
 import { BLOCK_VERSION, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, MERGED_MINED_BLOCK_VERSION, GENESIS_BLOCK, DECIMAL_PLACES, DEFAULT_SERVER } from './constants';
+import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError } from './errors';
 
 /**
  * Helper methods
@@ -323,7 +324,32 @@ const helpers = {
    */
   cleanupString(string) {
     return string.replace(/\s\s+/g, ' ').trim().toLowerCase();
-  }
+  },
+
+  /**
+   * Handle error for method transaction.prepareData
+   * Check if error is one of the expected and return the message
+   * Otherwise, throws the unexpected error
+   *
+   * @param {Error} e Error thrown
+   *
+   * @return {string} Error message
+   * @memberof Helpers
+   * @inner
+   */
+  handlePrepareDataError(e) {
+    if (e instanceof AddressError ||
+        e instanceof OutputValueError ||
+        e instanceof ConstantNotSet ||
+        e instanceof CreateTokenTxInvalid ||
+        e instanceof MaximumNumberOutputsError ||
+        e instanceof MaximumNumberInputsError) {
+      return e.message;
+    } else {
+      // Unhandled error
+      throw e;
+    }
+  },
 }
 
 export default helpers;

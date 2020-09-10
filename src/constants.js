@@ -38,7 +38,7 @@ export const GAP_LIMIT = 20;
 /**
  * Minimum expected API version
  */
-export const MIN_API_VERSION = '0.34.0';
+export const MIN_API_VERSION = '0.37.2';
 
 /**
  * If we should forbid to generate a quantity of unused addresses more than the GAP_LIMIT
@@ -173,3 +173,13 @@ export const HASH_KEY_SIZE = 256;
  * Return code of the send_tokens response when there is a stratum timeout
  */
 export const STRATUM_TIMEOUT_RETURN_CODE = 'stratum_timeout';
+
+/**
+ * Minimum job status poll to update job data when mining a tx
+ */
+export const MIN_POLLING_INTERVAL = 0.5;
+
+/**
+ * Base URL for the tx mining api
+ */
+export const TX_MINING_URL = 'http://txmining.mainnet.hathor.network/';
