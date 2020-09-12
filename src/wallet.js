@@ -67,7 +67,9 @@ const wallet = {
    *
    * @param {string} words Words (separated by space) to generate the HD Wallet seed
    *
-   * @return {Object} {'valid': boolean, 'message': string, 'words': cleanWords}
+   * @return {Object} {'valid': boolean, 'message': string, 'words': string} where 'words' is a cleaned
+   * string with the words separated by a single space
+   *
    * @memberof Wallet
    * @inner
    */
