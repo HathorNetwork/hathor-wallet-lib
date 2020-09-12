@@ -182,4 +182,4 @@ export const MIN_POLLING_INTERVAL = 0.5;
 /**
  * Base URL for the tx mining api
  */
-export const TX_MINING_URL = 'http://txmining.mainnet.hathor.network/';
+export const TX_MINING_URL = 'https://txmining.mainnet.hathor.network/';
