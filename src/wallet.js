@@ -79,12 +79,31 @@ const wallet = {
       // 1. Remove one or more spaces (or line breaks) before and after the 24 words
       // 2. Substitute more then one space (or line break) for a single space
       newWordsString = words.trim(/\s+/).replace(/\s+/g, ' ');
-      if (newWordsString.split(' ').length !== 24) {
+      const wordsArray = newWordsString.split(' ');
+      if (wordsArray.length !== 24) {
         // Must have 24 words
         return {'valid': false, 'message': 'Must have 24 words'};
       } else if (!Mnemonic.isValid(newWordsString)) {
-        // Invalid sequence of words
-        return {'valid': false, 'message': 'Invalid sequence of words'};
+        // Check if there is a word that does not belong to the list of possible words
+        const wordlist = Mnemonic.Words.ENGLISH;
+        const wordsLowerCase = wordsArray.map((value) => value.toLowerCase());
+        const errorList = [];
+
+        for (let i = 0; i < wordsLowerCase.length; i += 1) {
+          const w = wordsLowerCase[i];
+          if (wordlist.indexOf(w.toLowerCase()) < 0) {
+            errorList.push(w);
+          }
+        }
+
+        let errorMessage = '';
+        if (errorList.length > 0) {
+          errorMessage = `Invalid words: ${errorList.join(' ')}`;
+        } else {
+          // Invalid sequence of words
+          errorMessage = 'Invalid sequence of words';
+        }
+        return {'valid': false, 'message': errorMessage};
       }
     } else {
       // Must be string
