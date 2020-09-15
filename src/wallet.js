@@ -62,6 +62,10 @@ const wallet = {
    */
   _networkBestChainHeight: 0,
 
+  /*
+   * Default websocket handler that will be used in this file
+   * If it's using the new wallet class should set a Connection using setConnection
+   */
   _connection: WebSocketHandler,
 
   /**
@@ -254,6 +258,7 @@ const wallet = {
     const promise = new Promise((resolve, reject) => {
       let oldStore = _.clone(storage.store);
       if (store) {
+        // Using method store because we will call getWalletData and getWalletAccessData, then need to get from correct store
         storage.setStore(store);
       }
 
@@ -286,6 +291,7 @@ const wallet = {
       }
 
       this.setWalletData(dataJson);
+      // Set back to old store because won't use storage in this method anymore
       storage.setStore(oldStore);
 
       this.getTxHistory(addresses, resolve, reject, connection, store);
@@ -341,21 +347,20 @@ const wallet = {
           // This is all done on updateHistoryData
           let oldStore = _.clone(storage.store);
           if (store) {
+            // Using method store because we will call getWalletData, then need to get from correct store
             storage.setStore(store);
           }
           const data = this.getWalletData();
           const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
           const allTokens = 'allTokens' in data ? data['allTokens'] : [];
+          // Set back to old store because won't use storage in this method anymore
           storage.setStore(oldStore);
           ret = this.updateHistoryData(historyTransactions, allTokens, result.history, resolve, data, reject, connection, store);
         }
 
         // Propagate new loaded data
-        if (connection === null) {
-          this._connection.websocket.emit('addresses_loaded', ret);
-        } else {
-          connection.websocket.emit('addresses_loaded', ret);
-        }
+        const conn = this._getConnection(connection);
+        conn.websocket.emit('addresses_loaded', ret);
       } else {
         throw Error(result.message);
       }
@@ -906,11 +911,8 @@ const wallet = {
    */
   subscribeAddress(address, connection = null) {
     const msg = JSON.stringify({'type': 'subscribe_address', 'address': address});
-    if (connection === null) {
-      this._connection.websocket.sendMessage(msg);
-    } else {
-      connection.websocket.sendMessage(msg);
-    }
+    const conn = this._getConnection(connection);
+    conn.websocket.sendMessage(msg);
   },
 
   /**
@@ -939,11 +941,8 @@ const wallet = {
    */
   unsubscribeAddress(address, connection = null) {
     const msg = JSON.stringify({'type': 'unsubscribe_address', 'address': address});
-    if (connection === null) {
-      this._connection.websocket.sendMessage(msg);
-    } else {
-      connection.websocket.sendMessage(msg);
-    }
+    const conn = this._getConnection(connection);
+    conn.websocket.sendMessage(msg);
   },
 
   /**
@@ -997,11 +996,8 @@ const wallet = {
     this.unsubscribeAllAddresses({connection});
     this.cleanLoadedData();
     if (endConnection) {
-      if (connection === null) {
-        this._connection.endConnection();
-      } else {
-        connection.endConnection();
-      }
+      const conn = this._getConnection(connection);
+      conn.endConnection();
     }
   },
 
@@ -1317,11 +1313,8 @@ const wallet = {
 
     this.cleanWallet({endConnection, connection});
     // Restart websocket connection
-    if (connection === null) {
-      this._connection.setup();
-    } else {
-      connection.setup();
-    }
+    const conn = this._getConnection(connection);
+    conn.setup();
 
     let newWalletData = {
       keys: {},
@@ -1551,6 +1544,7 @@ const wallet = {
   saveNewHistoryOnStorage(oldHistoryTransactions, oldAllTokens, newHistory, dataJson, connection = null, store = null) {
     let oldStore = _.clone(storage.store);
     if (store) {
+      // Using method store because we will call getWalletData, then need to get from correct store
       storage.setStore(store);
     }
 
@@ -1629,6 +1623,7 @@ const wallet = {
 
     const lastGeneratedIndex = this.getLastGeneratedIndex();
 
+    // Set back to old store because won't use storage in this method anymore
     storage.setStore(oldStore);
     return {historyTransactions, allTokens, newSharedAddress, newSharedIndex, addressesFound: lastGeneratedIndex + 1, maxIndex};
   },
@@ -1656,6 +1651,7 @@ const wallet = {
   updateHistoryData(oldHistoryTransactions, oldAllTokens, newHistory, resolve, dataJson, reject, connection = null, store = null) {
     let oldStore = _.clone(storage.store);
     if (store) {
+      // Using method store because we will call getLastGeneratedIndex, then need to get from correct store
       storage.setStore(store);
     }
 
@@ -1687,6 +1683,7 @@ const wallet = {
       }
     }
 
+    // Set back to old store because won't use storage in this method anymore
     storage.setStore(oldStore);
     return {historyTransactions, allTokens, newSharedAddress, newSharedIndex, addressesFound: lastGeneratedIndex + 1};
   },
@@ -2091,6 +2088,20 @@ const wallet = {
    */
   setConnection(connection) {
     this._connection = connection;
+  },
+
+  /**
+   * Return the default file connection if parameter is null,
+   * otherwise return the connection in the parameter
+   *
+   * @param {Connection} Optional connection
+   * @return {Connection} connection
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  _getConnection(connection) {
+    return connection ? connection : this._connection;
   },
 }
 
