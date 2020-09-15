@@ -6,10 +6,12 @@
  */
 
 import path from 'path';
+import { HDPublicKey, Address } from 'bitcore-lib';
 
 import storage from './storage';
+import network from './network';
 import { BLOCK_VERSION, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, MERGED_MINED_BLOCK_VERSION, GENESIS_BLOCK, DECIMAL_PLACES, DEFAULT_SERVER } from './constants';
-import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError } from './errors';
+import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError, XPubError } from './errors';
 
 /**
  * Helper methods
@@ -350,6 +352,67 @@ const helpers = {
       throw e;
     }
   },
+
+  /**
+   * Validate an xpubkey.
+   *
+   * @param {string} xpubkey The xpubkey
+   *
+   * @return {boolean} true if it's a valid xpubkey, false otherwise
+   * @memberof Helpers
+   * @inner
+   */
+  isXpubKeyValid(xpubkey) {
+    try {
+      HDPublicKey(xpubkey);
+      return true
+    } catch (error) {
+      return false;
+    }
+  },
+
+  /**
+   * Get Hathor addresses in bulk, passing the start index and quantity of addresses to be generated
+   *
+   * @example
+   * ```
+   * getAddresses('myxpub', 2, 3, 'mainnet') => {
+   *   'address2': 2,
+   *   'address3': 3,
+   *   'address4': 4,
+   * }
+   * ```
+   *
+   * @param {string} xpubkey The xpubkey
+   * @param {number} startIndex Generate addresses starting from this index
+   * @param {number} quantity Amount of addresses to generate
+   * @param {string} networkName 'mainnet' or 'testnet'
+   *
+   * @return {Object} An object with the generated addresses and corresponding index (string => number)
+   * @throws {XPubError} In case the given xpub key is invalid
+   * @memberof Helpers
+   * @inner
+   */
+  getAddresses(xpubkey, startIndex, quantity, networkName) {
+    let xpub = null;
+    try {
+      xpub = HDPublicKey(xpubkey);
+    } catch (error) {
+      throw new XPubError(error.message);
+    }
+
+    if (networkName) {
+      network.setNetwork(networkName);
+    }
+
+    const addrMap = {};
+    for (let index = startIndex; index < startIndex + quantity; index++) {
+      const key = xpub.derive(index);
+      const address = Address(key.publicKey, network.getNetwork());
+      addrMap[address.toString()] = index;
+    }
+    return addrMap;
+  }
 }
 
 export default helpers;
