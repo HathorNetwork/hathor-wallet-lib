@@ -9,6 +9,11 @@ import wallet from '../src/wallet';
 import dateFormatter from '../src/date';
 import { HATHOR_TOKEN_CONFIG } from '../src/constants';
 import storage from '../src/storage';
+import WebSocketHandler from '../src/WebSocketHandler';
+
+beforeEach(() => {
+  wallet.setConnection(WebSocketHandler);
+});
 
 
 test('Wallet operations for transaction', () => {
