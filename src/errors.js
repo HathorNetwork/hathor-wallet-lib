@@ -82,3 +82,11 @@ export class MaximumNumberOutputsError extends Error {}
  * @inner
  */
 export class WalletTypeError extends Error {}
+
+/**
+ * Error thrown when we are given an invalid xpubkey
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class XPubError extends Error {}
