@@ -76,10 +76,10 @@ const wallet = {
   wordsValid(words) {
     let newWordsString = '';
     if (_.isString(words)) {
-      // 1. Remove one or more spaces (or line breaks) before and after the 24 words
-      // 2. Substitute more then one space (or line break) for a single space
+      // 1. Replace all non ascii chars by a single space
+      // 2. Remove one or more spaces (or line breaks) before and after the 24 words
       // 3. Set text to lower case
-      newWordsString = words.trim(/\s+/).replace(/\s+/g, ' ').toLowerCase();
+      newWordsString = words.replace(/[^A-Za-z0-9]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
       const wordsArray = newWordsString.split(' ');
       if (wordsArray.length !== 24) {
         // Must have 24 words
