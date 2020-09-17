@@ -256,7 +256,7 @@ const wallet = {
    */
   loadAddressHistory(startIndex, count, connection = null, store = null) {
     const promise = new Promise((resolve, reject) => {
-      let oldStore = _.clone(storage.store);
+      let oldStore = storage.store;
       if (store) {
         // Using method store because we will call getWalletData and getWalletAccessData, then need to get from correct store
         storage.setStore(store);
@@ -345,7 +345,7 @@ const wallet = {
         } else {
           // If it's the last page, we update the storage and call the next loadAddress (if needed)
           // This is all done on updateHistoryData
-          let oldStore = _.clone(storage.store);
+          let oldStore = storage.store;
           if (store) {
             // Using method store because we will call getWalletData, then need to get from correct store
             storage.setStore(store);
@@ -1542,7 +1542,7 @@ const wallet = {
    * @inner
    */
   saveNewHistoryOnStorage(oldHistoryTransactions, oldAllTokens, newHistory, dataJson, connection = null, store = null) {
-    let oldStore = _.clone(storage.store);
+    let oldStore = storage.store;
     if (store) {
       // Using method store because we will call getWalletData, then need to get from correct store
       storage.setStore(store);
@@ -1649,7 +1649,7 @@ const wallet = {
    * @inner
    */
   updateHistoryData(oldHistoryTransactions, oldAllTokens, newHistory, resolve, dataJson, reject, connection = null, store = null) {
-    let oldStore = _.clone(storage.store);
+    let oldStore = storage.store;
     if (store) {
       // Using method store because we will call getLastGeneratedIndex, then need to get from correct store
       storage.setStore(store);
