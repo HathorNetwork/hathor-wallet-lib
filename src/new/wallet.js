@@ -102,6 +102,10 @@ class HathorWallet extends EventEmitter {
     this.onConnectionChangedState = this.onConnectionChangedState.bind(this);
     this.handleWebsocketMsg = this.handleWebsocketMsg.bind(this);
 
+    // Used to know if the wallet is loading data for the first time
+    // or if it's reloading it (e.g. after a ws reconnection).
+    // The reload must execute some cleanups, that's why it's important
+    // to differentiate both actions
     this.firstConnection = true;
   }
 
