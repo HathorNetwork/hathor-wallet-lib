@@ -8,6 +8,7 @@
 import helpers from '../src/helpers';
 import tokens from '../src/tokens';
 import { createRequestInstance } from '../src/api/axiosInstance';
+import { XPubError } from '../src/errors';
 
 
 test('Update list', () => {
@@ -154,4 +155,46 @@ test('Axios config', () => {
   expect(config.agent).toBe('a');
   helpers.fixAxiosConfig(axios, config);
   expect(config.agent).toBe(undefined);
+});
+
+test('isXpubKeyValid', () => {
+  const XPUBKEY = 'xpub6EcBoi2vDFcCW5sPAiQpXDYYtXd1mKhUJD64tUi8CPRG1VQFDkAbL8G5gqTmSZD6oq4Yhr5PZ8pKf3Xmb3W3pGcgqzUdFNaCRKL7TZa3res';
+  expect(helpers.isXpubKeyValid(XPUBKEY)).toBe(true);
+  expect(helpers.isXpubKeyValid(`${XPUBKEY}aa`)).toBe(false);
+});
+
+test('getHathorAddresses', () => {
+  const XPUBKEY = 'xpub6EcBoi2vDFcCW5sPAiQpXDYYtXd1mKhUJD64tUi8CPRG1VQFDkAbL8G5gqTmSZD6oq4Yhr5PZ8pKf3Xmb3W3pGcgqzUdFNaCRKL7TZa3res';
+  const ADDRESSES = [
+    'H7GtjbWcpd8fcE4KV1QJAiLPsXN4KRMasA',
+    'H9QwruQByN4qiprTAWAjBR9fDXBadFtou4',
+    'HGXziPZxoTK27FuabRQbHMsav2ZBKdNBZK',
+    'HQ2PjhE8ocyGgA17mGn8ny913iVpR6FBAm',
+    'HKghT5LSxtZHa4Z2VYYBW4WDMnQHSVEBHA',
+    'HGx6zgR96ubefHcAGgEv48NJp6ccVxMYJo',
+    'HKobFkfTBqRSCHpbL6cydS6geVg44CHrRL',
+    'HMmFLoWSagfvSUiEbE2mVDY7BYx1HPdXGf',
+    'HQcnzbpCHKqhDm8Hd8mikVyb4oK2qoadPJ',
+    'HEfqUBf4Rd4A35uhdtv7fuUtthGtjptYQC',
+    'HLUjnbbgxzgDTLAU7TjsTHzuZpeYY2xezw',
+    'HBYRWYMpDQzkBPCdAJMix4dGNVi81CC855',
+    'HJVq5DKPTeJ73UpuivJURdhfWnTLG7WAjo',
+    'HGJFqxUw6ntRxLjcEbvFz9GHsLxHzR9hQs',
+    'HPapaHpBZArxt2EK9WUy9HT9H3PgfidBgN',
+    'HJdAEBVMKygzntrw7Q3Qr8osLXLGUe8M65',
+    'HGgSipJMLrHxGHambXtVc9Y9Lf9hxLxRVk',
+    'HGgatY7US4cSPDppzrKUYdp2V1r7LWGyVf',
+  ];
+  let calculatedAddresses = helpers.getAddresses(XPUBKEY, 0, ADDRESSES.length, 'mainnet');
+  let addrList = Object.keys(calculatedAddresses);
+  expect(addrList).toHaveLength(ADDRESSES.length);
+  expect(addrList).toStrictEqual(ADDRESSES);
+
+  // start not from 0
+  calculatedAddresses = helpers.getAddresses(XPUBKEY, 5, ADDRESSES.length - 5, 'mainnet');
+  addrList = Object.keys(calculatedAddresses);
+  expect(addrList).toHaveLength(ADDRESSES.length - 5);
+  expect(addrList).toStrictEqual(ADDRESSES.slice(5));
+
+  expect(() => helpers.getAddresses(`${XPUBKEY}aa`, 5, ADDRESSES.length - 5, 'mainnet')).toThrowError(XPubError);
 });

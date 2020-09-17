@@ -103,8 +103,9 @@ mock.onGet('version').reply((config) => {
 import WebSocketHandler from './src/WebSocketHandler';
 import WS from './src/websocket';
 
-WebSocketHandler.ws = new WS({ wsURL });
-WebSocketHandler.ws.WebSocket = WebSocket;
-WebSocketHandler.ws.setup();
+WebSocketHandler.websocket = new WS({ wsURL });
+WebSocketHandler.websocket.WebSocket = WebSocket;
+WebSocketHandler.websocket.setup();
+
 
 global.window = {};

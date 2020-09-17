@@ -121,7 +121,7 @@ const txApi = {
    */
   pushTx(hex_tx, force, resolve) {
     const data = {hex_tx, force}
-    return createRequestInstance(resolve).get(`push_tx`, {params: data}).then((res) => {
+    return createRequestInstance(resolve).post(`push_tx`, data).then((res) => {
       resolve(res.data);
     }, (res) => {
       return Promise.reject(res);

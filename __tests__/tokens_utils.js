@@ -23,12 +23,13 @@ const token1 = {'name': '1234', 'uid': '1234', 'symbol': '1234'};
 
 beforeEach(() => {
   WebSocketHandler.started = true;
+  wallet.setConnection(WebSocketHandler);
   wallet.resetAllData();
 });
 
 // Mock any POST request to push_tx
 // arguments for reply are (status, data, headers)
-mock.onGet('push_tx').reply((config) => {
+mock.onPost('push_tx').reply((config) => {
   const ret = {
     'success': true,
     'tx': {

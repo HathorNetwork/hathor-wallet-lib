@@ -62,6 +62,12 @@ const wallet = {
    */
   _networkBestChainHeight: 0,
 
+  /*
+   * Default websocket handler that will be used in this file
+   * If it's using the new wallet class should set a Connection using setConnection
+   */
+  _connection: WebSocketHandler,
+
   /**
    * Verify if words passed to generate wallet are valid. In case of invalid, returns message
    *
@@ -186,7 +192,7 @@ const wallet = {
     let promise = null;
     if (loadHistory) {
       // Load history from address
-      WebSocketHandler.setup();
+      this._connection.setup();
       promise = this.loadAddressHistory(0, GAP_LIMIT);
     }
     return promise;
@@ -276,6 +282,7 @@ const wallet = {
     const promise = new Promise((resolve, reject) => {
       let oldStore = _.clone(storage.store);
       if (store) {
+        // Using method store because we will call getWalletData and getWalletAccessData, then need to get from correct store
         storage.setStore(store);
       }
 
@@ -308,6 +315,7 @@ const wallet = {
       }
 
       this.setWalletData(dataJson);
+      // Set back to old store because won't use storage in this method anymore
       storage.setStore(oldStore);
 
       this.getTxHistory(addresses, resolve, reject, connection, store);
@@ -361,14 +369,22 @@ const wallet = {
         } else {
           // If it's the last page, we update the storage and call the next loadAddress (if needed)
           // This is all done on updateHistoryData
+          let oldStore = _.clone(storage.store);
+          if (store) {
+            // Using method store because we will call getWalletData, then need to get from correct store
+            storage.setStore(store);
+          }
           const data = this.getWalletData();
           const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
           const allTokens = 'allTokens' in data ? data['allTokens'] : [];
+          // Set back to old store because won't use storage in this method anymore
+          storage.setStore(oldStore);
           ret = this.updateHistoryData(historyTransactions, allTokens, result.history, resolve, data, reject, connection, store);
         }
 
         // Propagate new loaded data
-        WebSocketHandler.ws.emit('addresses_loaded', ret);
+        const conn = this._getConnection(connection);
+        conn.websocket.emit('addresses_loaded', ret);
       } else {
         throw Error(result.message);
       }
@@ -919,15 +935,8 @@ const wallet = {
    */
   subscribeAddress(address, connection = null) {
     const msg = JSON.stringify({'type': 'subscribe_address', 'address': address});
-    WebSocketHandler.ws.sendMessage(msg);
-
-    if (connection) {
-      // For now the WebSocketHandler is still needed because it's used in
-      // the whole old library code
-      // As soon as we refactor everything, we will have only one ws connection
-      // for each wallet
-      connection.websocket.sendMessage(msg);
-    }
+    const conn = this._getConnection(connection);
+    conn.websocket.sendMessage(msg);
   },
 
   /**
@@ -949,20 +958,26 @@ const wallet = {
    * Unsubscribe to receive updates from an address in the websocket
    *
    * @param {string} address
+   * @param {Connection} connection Connection object to subscribe for the addresses
+   *
    * @memberof Wallet
    * @inner
    */
-  unsubscribeAddress(address) {
+  unsubscribeAddress(address, connection = null) {
     const msg = JSON.stringify({'type': 'unsubscribe_address', 'address': address});
-    WebSocketHandler.ws.sendMessage(msg);
+    const conn = this._getConnection(connection);
+    conn.websocket.sendMessage(msg);
   },
 
   /**
    * Unsubscribe to receive updates from all generated addresses
+   *
+   * @param {Object} Optional object with {connection: Connection}
+   *
    * @memberof Wallet
    * @inner
    */
-  unsubscribeAllAddresses() {
+  unsubscribeAllAddresses({connection = null} = {}) {
     let data = this.getWalletData();
     if (data) {
       for (let address in data.keys) {
@@ -996,13 +1011,18 @@ const wallet = {
    * - Clean redux
    * - Unsubscribe websocket connections
    *
+   * @param {Object} Optional object with {endConnection: boolean, connection: Connection}
+   *
    * @memberof Wallet
    * @inner
    */
-  cleanWallet() {
-    this.unsubscribeAllAddresses();
+  cleanWallet({endConnection = true, connection = null} = {}) {
+    this.unsubscribeAllAddresses({connection});
     this.cleanLoadedData();
-    WebSocketHandler.endConnection();
+    if (endConnection) {
+      const conn = this._getConnection(connection);
+      conn.endConnection();
+    }
   },
 
   /*
@@ -1305,19 +1325,20 @@ const wallet = {
   /*
    * Reload data in the storage
    *
-   * @param {Object} Options object with {'connection': Connection, 'store': Store}
+   * @param {Object} Options object with {'connection': Connection, 'store': Store, endConnection: boolean}
    *
    * @memberof Wallet
    * @inner
    */
-  reloadData({connection = null, store = null} = {}) {
+  reloadData({connection = null, store = null, endConnection = false} = {}) {
     // Get old access data
     const accessData = this.getWalletAccessData();
     const walletData = this.getWalletData();
 
-    this.cleanWallet();
+    this.cleanWallet({endConnection, connection});
     // Restart websocket connection
-    WebSocketHandler.setup();
+    const conn = this._getConnection(connection);
+    conn.setup();
 
     let newWalletData = {
       keys: {},
@@ -1547,6 +1568,7 @@ const wallet = {
   saveNewHistoryOnStorage(oldHistoryTransactions, oldAllTokens, newHistory, dataJson, connection = null, store = null) {
     let oldStore = _.clone(storage.store);
     if (store) {
+      // Using method store because we will call getWalletData, then need to get from correct store
       storage.setStore(store);
     }
 
@@ -1625,6 +1647,7 @@ const wallet = {
 
     const lastGeneratedIndex = this.getLastGeneratedIndex();
 
+    // Set back to old store because won't use storage in this method anymore
     storage.setStore(oldStore);
     return {historyTransactions, allTokens, newSharedAddress, newSharedIndex, addressesFound: lastGeneratedIndex + 1, maxIndex};
   },
@@ -1652,6 +1675,7 @@ const wallet = {
   updateHistoryData(oldHistoryTransactions, oldAllTokens, newHistory, resolve, dataJson, reject, connection = null, store = null) {
     let oldStore = _.clone(storage.store);
     if (store) {
+      // Using method store because we will call getLastGeneratedIndex, then need to get from correct store
       storage.setStore(store);
     }
 
@@ -1683,6 +1707,7 @@ const wallet = {
       }
     }
 
+    // Set back to old store because won't use storage in this method anymore
     storage.setStore(oldStore);
     return {historyTransactions, allTokens, newSharedAddress, newSharedIndex, addressesFound: lastGeneratedIndex + 1};
   },
@@ -1885,7 +1910,7 @@ const wallet = {
    * @inner
    */
   addMetricsListener() {
-    WebSocketHandler.on('dashboard', this.handleWebsocketDashboard);
+    this._connection.websocket.on('dashboard', this.handleWebsocketDashboard);
   },
 
   /**
@@ -1895,7 +1920,7 @@ const wallet = {
    * @inner
    */
   removeMetricsListener() {
-    WebSocketHandler.removeListener('dashboard', this.handleWebsocketDashboard);
+    this._connection.websocket.removeListener('dashboard', this.handleWebsocketDashboard);
   },
 
   /**
@@ -1923,7 +1948,7 @@ const wallet = {
   updateNetworkHeight(networkHeight) {
     if (networkHeight !== this._networkBestChainHeight) {
       this._networkBestChainHeight = networkHeight;
-      WebSocketHandler.ws.emit('height_updated', networkHeight);
+      this._connection.websocket.emit('height_updated', networkHeight);
     }
   },
 
@@ -2075,6 +2100,32 @@ const wallet = {
     const privateKeyStr = wallet.decryptData(encryptedXPriv, pin);
     const privateKey = HDPrivateKey(privateKeyStr)
     return privateKey.xpubkey;
+  },
+
+  /**
+   * Set the connection used in the wallet
+   *
+   * @param {Connection} connection
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  setConnection(connection) {
+    this._connection = connection;
+  },
+
+  /**
+   * Return the default file connection if parameter is null,
+   * otherwise return the connection in the parameter
+   *
+   * @param {Connection} Optional connection
+   * @return {Connection} connection
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  _getConnection(connection) {
+    return connection ? connection : this._connection;
   },
 }
 
