@@ -73,24 +73,48 @@ const wallet = {
    *
    * @param {string} words Words (separated by space) to generate the HD Wallet seed
    *
-   * @return {Object} {'valid': boolean, 'message': string}
+   * @return {Object} {'valid': boolean, 'message': string, 'words': string} where 'words' is a cleaned
+   * string with the words separated by a single space
+   *
    * @memberof Wallet
    * @inner
    */
   wordsValid(words) {
+    let newWordsString = '';
     if (_.isString(words)) {
-      if (words.split(' ').length !== 24) {
+      // 1. Replace all non ascii chars by a single space
+      // 2. Remove one or more spaces (or line breaks) before and after the 24 words
+      // 3. Set text to lower case
+      newWordsString = words.replace(/[^A-Za-z0-9]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+      const wordsArray = newWordsString.split(' ');
+      if (wordsArray.length !== 24) {
         // Must have 24 words
         return {'valid': false, 'message': 'Must have 24 words'};
-      } else if (!Mnemonic.isValid(words)) {
-        // Invalid sequence of words
-        return {'valid': false, 'message': 'Invalid sequence of words'};
+      } else if (!Mnemonic.isValid(newWordsString)) {
+        // Check if there is a word that does not belong to the list of possible words
+        const wordlist = Mnemonic.Words.ENGLISH;
+        const errorList = [];
+
+        for (const word of wordsArray) {
+          if (wordlist.indexOf(word) < 0) {
+            errorList.push(word);
+          }
+        }
+
+        let errorMessage = '';
+        if (errorList.length > 0) {
+          errorMessage = `Invalid words: ${errorList.join(' ')}`;
+        } else {
+          // Invalid sequence of words
+          errorMessage = 'Invalid sequence of words';
+        }
+        return {'valid': false, 'message': errorMessage};
       }
     } else {
       // Must be string
       return {'valid': false, 'message': 'Must be a string'};
     }
-    return {'valid': true, 'message': ''};
+    return {'valid': true, 'message': '', 'words': newWordsString};
   },
 
   /**
