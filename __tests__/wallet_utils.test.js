@@ -15,6 +15,7 @@ import WebSocketHandler from '../src/WebSocketHandler';
 
 
 beforeEach(() => {
+  wallet.setConnection(WebSocketHandler);
   wallet.resetAllData();
   WebSocketHandler.setup();
 });

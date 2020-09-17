@@ -23,6 +23,7 @@ const token1 = {'name': '1234', 'uid': '1234', 'symbol': '1234'};
 
 beforeEach(() => {
   WebSocketHandler.started = true;
+  wallet.setConnection(WebSocketHandler);
   wallet.resetAllData();
 });
 

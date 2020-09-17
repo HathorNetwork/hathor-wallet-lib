@@ -17,7 +17,6 @@ import helpers from '../helpers';
 import MemoryStore from '../memory_store';
 import Connection from './connection';
 import SendTransaction from './sendTransaction';
-import WebSocketHandler from '../WebSocketHandler';
 
 /**
  * This is a Wallet that is supposed to be simple to be used by a third-party app.
@@ -76,6 +75,8 @@ class HathorWallet extends EventEmitter {
     }
 
     this.conn = connection;
+    wallet.setConnection(connection);
+
     this.state = HathorWallet.CLOSED;
     this.serverInfo = null;
 
@@ -100,6 +101,12 @@ class HathorWallet extends EventEmitter {
 
     this.onConnectionChangedState = this.onConnectionChangedState.bind(this);
     this.handleWebsocketMsg = this.handleWebsocketMsg.bind(this);
+
+    // Used to know if the wallet is loading data for the first time
+    // or if it's reloading it (e.g. after a ws reconnection).
+    // The reload must execute some cleanups, that's why it's important
+    // to differentiate both actions
+    this.firstConnection = true;
   }
 
   /**
@@ -113,14 +120,18 @@ class HathorWallet extends EventEmitter {
       storage.setStore(this.store);
       this.setState(HathorWallet.SYNCING);
 
-      // After the websocket connection is lost, we must reload the wallet data.
-      // Before that we must clean the storage (last generated address index), so we
-      // start loading again from the first index.
-      // I could create a variable to know if this is the first connection or a reload
-      // but the reload method only adds a clean up on storage and that is not a problem on the
-      // first connection (because everything is already empty).
-      // So I just call the reload method every time I connect to the websocket
-      wallet.reloadData({connection: this.conn, store: this.store}).then(() => {
+      // If it's the first connection we just load the history
+      // otherwise we are reloading data, so we must execute some cleans
+      // before loading the full data again
+      let promise;
+      if (this.firstConnection) {
+        this.firstConnection = false;
+        promise = wallet.loadAddressHistory(0, GAP_LIMIT, this.conn, this.store);
+      } else {
+        promise = wallet.reloadData({connection: this.conn, store: this.store});
+      }
+
+      promise.then(() => {
         this.setState(HathorWallet.READY);
       }).catch((error) => {
         throw error;
@@ -461,6 +472,7 @@ class HathorWallet extends EventEmitter {
 
     this.serverInfo = null;
     this.setState(HathorWallet.CLOSED);
+    this.firstConnection = true;
   }
 
   /**
