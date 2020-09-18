@@ -15,12 +15,12 @@ class WebSocketHandler extends EventEmitter {
   constructor() {
     super();
 
-    this.ws = null;
+    this.websocket = null;
   }
 
   setup() {
-    if (this.ws === null) {
-      this.ws = new WS({ wsURL: helpers.getWSServerURL });
+    if (this.websocket === null) {
+      this.websocket = new WS({ wsURL: helpers.getWSServerURL });
 
       this.on('is_online', this.handleIsOnline);
 
@@ -28,23 +28,23 @@ class WebSocketHandler extends EventEmitter {
        * This class still exists for compatibility reasons
        * it is used in some wallets and in our old lib code
        * In the wallets we capture some events from it, so
-       * this following code is to emit all events emitted from this.ws
+       * this following code is to emit all events emitted from this.websocket
        */
-      this.oldEmit = this.ws.emit;
-      this.ws.emit = (type, data) => {
+      this.oldEmit = this.websocket.emit;
+      this.websocket.emit = (type, data) => {
         this.emit(type, data);
         return this.oldEmit(type, data);
       }
     }
 
     // To keep compatibility with methods previously used in this singleton
-    return this.ws.setup();
+    return this.websocket.setup();
   }
 
   handleIsOnline(value) {
     if (value) {
       wallet.onWebsocketOpened();
-      this.ws.emit('reload_data');
+      this.websocket.emit('reload_data');
     } else {
       wallet.onWebsocketBeforeClose();
     }
@@ -52,10 +52,10 @@ class WebSocketHandler extends EventEmitter {
 
   endConnection() {
     // To keep compatibility with methods previously used in this singleton
-    if (this.ws !== null) {
-      this.ws.endConnection();
-      this.ws.emit = () => {};
-      this.ws = null;
+    if (this.websocket !== null) {
+      this.websocket.endConnection();
+      this.websocket.emit = () => {};
+      this.websocket = null;
       this.removeListener('is_online', this.handleIsOnline);
     }
   }

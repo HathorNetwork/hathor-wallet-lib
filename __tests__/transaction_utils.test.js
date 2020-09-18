@@ -12,6 +12,11 @@ import buffer from 'buffer';
 import { OP_PUSHDATA1 } from '../src/opcodes';
 import { DEFAULT_TX_VERSION } from '../src/constants';
 import storage from '../src/storage';
+import WebSocketHandler from '../src/WebSocketHandler';
+
+beforeEach(() => {
+  wallet.setConnection(WebSocketHandler);
+});
 
 
 test('Tx weight constants', () => {

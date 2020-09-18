@@ -10,6 +10,10 @@ import wallet from '../src/wallet';
 import WebSocketHandler from '../src/WebSocketHandler';
 import storage from '../src/storage';
 
+beforeEach(() => {
+  wallet.setConnection(WebSocketHandler);
+});
+
 
 var addressUsed = '';
 var addressShared = '';
