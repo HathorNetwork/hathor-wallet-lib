@@ -1910,7 +1910,7 @@ const wallet = {
    * @inner
    */
   addMetricsListener() {
-    this._connection.websocket.on('dashboard', this.handleWebsocketDashboard);
+    this._connection.websocket && this._connection.websocket.on('dashboard', this.handleWebsocketDashboard);
   },
 
   /**
@@ -1920,7 +1920,7 @@ const wallet = {
    * @inner
    */
   removeMetricsListener() {
-    this._connection.websocket.removeListener('dashboard', this.handleWebsocketDashboard);
+    this._connection.websocket && this._connection.websocket.removeListener('dashboard', this.handleWebsocketDashboard);
   },
 
   /**
@@ -2111,7 +2111,9 @@ const wallet = {
    * @inner
    */
   setConnection(connection) {
+    this.removeMetricsListener();
     this._connection = connection;
+    this.addMetricsListener();
   },
 
   /**
