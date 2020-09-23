@@ -2115,6 +2115,10 @@ const wallet = {
    * @inner
    */
   setConnection(connection) {
+    // The metrics listener receives messages from full node every 5 seconds
+    // so even though it's possible that we might lose some of those messages
+    // while we are changing the listener, it won't cause any bugs because
+    // there will be a new message with updated data in at most 5 seconds.
     this.removeMetricsListener();
     this._connection = connection;
     this.addMetricsListener();
