@@ -36,7 +36,6 @@ test('Authorities', () => {
   expect(o1.isAuthority()).toBe(false);
 
   const o2 = new Output(1000, new Address('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo'), {tokenData: AUTHORITY_TOKEN_DATA});
-  console.log('### ', o2)
   expect(o2.isAuthority()).toBe(true);
   expect(o2.getTokenIndex()).toBe(1);
   expect(o2.isMint()).toBe(false);

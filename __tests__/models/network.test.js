@@ -9,22 +9,28 @@ import Network from '../../src/models/network';
 
 
 test('Get and set network', () => {
+  const versionBytes = {
+    'mainnet': {
+      'p2pkh': 0x28,
+      'p2sh': 0x64,
+    },
+    'testnet': {
+      'p2pkh': 0x49,
+      'p2sh': 0x87,
+    },
+  }
+
   // Default network is testnet
   const network = new Network('testnet');
-  expect(network.getNetwork()).toBe(network.networkOptions['testnet']);
-  expect(network.getNetwork()['name']).toBe('testnet');
-  expect(network.getVersionBytes()).toBe(network.versionBytes['testnet']);
+  expect(network.bitcoreNetwork['name']).toBe('testnet');
+  // Must use toEqual and not toBe
+  // https://jestjs.io/docs/en/expect#toequalvalue
+  // Use .toEqual to compare recursively all properties of object instances (also known as "deep" equality).
+  expect(network.versionBytes).toEqual(versionBytes['testnet']);
 
-  // Test setNetwork
-  expect(() => {
-    // Invalid network
-    network.setNetwork('abc');
-  }).toThrowError();
-
-  network.setNetwork('mainnet');
-  expect(network.getNetwork()).toBe(network.networkOptions['mainnet']);
-  expect(network.getNetwork()['name']).toBe('mainnet');
-  expect(network.getVersionBytes()).toBe(network.versionBytes['mainnet']);
+  const mainnet = new Network('mainnet');
+  expect(mainnet.bitcoreNetwork['name']).toBe('mainnet');
+  expect(mainnet.versionBytes).toEqual(versionBytes['mainnet']);
 
   // Test constructor parameter
   expect(() => {
