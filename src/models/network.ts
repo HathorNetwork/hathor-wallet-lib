@@ -64,13 +64,18 @@ const networkOptions = {
   mainnet
 }
 
+type versionBytesType = {
+  p2pkh: number,
+  p2sh: number,
+}
+
 
 class Network {
   // Network name (currently supports only 'testnet' and 'mainnet')
   name: string;
 
   // Version bytes of the network for the p2pkh and p2sh addresses
-  versionBytes: {p2pkh: number, p2sh: number};
+  versionBytes: versionBytesType;
 
   // bitcore-lib Networks object with all network options
   bitcoreNetwork: Networks;
@@ -89,6 +94,30 @@ class Network {
     if (this.name !== 'testnet' && this.name !== 'mainnet') {
       throw Error('We currently support only mainnet and testnet as network.');
     }
+  }
+
+  /**
+   * Method created to keep compatibility with old Network class
+   */
+  getNetwork(): Networks {
+    return this.bitcoreNetwork;
+  }
+
+  /**
+   * Method created to keep compatibility with old Network class
+   */
+  getVersionBytes(): versionBytesType {
+    return this.versionBytes;
+  }
+
+  /**
+   * Method created to keep compatibility with old Network class
+   */
+  setNetwork(name: string) {
+    this.name = name;
+    this.validateNetwork();
+    this.versionBytes = versionBytes[name];
+    this.bitcoreNetwork = networkOptions[name];
   }
 }
 

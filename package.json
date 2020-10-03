@@ -40,7 +40,7 @@
     "ws": "^7.2.1"
   },
   "scripts": {
-    "test": "jest --no-cache --env=node --forceExit",
+    "test": "jest --env=node --forceExit",
     "build": "babel --presets @babel/preset-react -d lib/ src && tsc",
     "tsc": "tsc"
   },
