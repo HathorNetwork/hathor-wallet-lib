@@ -41,7 +41,7 @@
   },
   "scripts": {
     "test": "jest --no-cache --env=node --forceExit",
-    "build": "babel --presets @babel/preset-react -d lib/ src",
+    "build": "babel --presets @babel/preset-react -d lib/ src && tsc",
     "tsc": "tsc"
   },
   "license": "MIT",
