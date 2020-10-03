@@ -6,10 +6,13 @@
  */
 
 
-import { HDPublicKey, Address } from 'bitcore-lib';
+import { crypto, HDPublicKey, HDPrivateKey, Address } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
 import { HD_WALLET_ENTROPY } from '../constants';
 import { XPubError } from '../errors';
+import Network from '../models/network';
+import _ from 'lodash';
+
 
 const wallet = {
   /**
@@ -23,7 +26,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  wordsValid(words) {
+  wordsValid(words: string): {valid: boolean, message: string, words?: string} {
     let newWordsString = '';
     if (_.isString(words)) {
       // 1. Replace all non ascii chars by a single space
@@ -37,7 +40,7 @@ const wallet = {
       } else if (!Mnemonic.isValid(newWordsString)) {
         // Check if there is a word that does not belong to the list of possible words
         const wordlist = Mnemonic.Words.ENGLISH;
-        const errorList = [];
+        const errorList: string[] = [];
 
         for (const word of wordsArray) {
           if (wordlist.indexOf(word) < 0) {
@@ -64,13 +67,13 @@ const wallet = {
   /**
    * Generate HD wallet words
    *
-   * @param {string|number} entropy Data to generate the HD Wallet seed - entropy (256 - to generate 24 words)
+   * @param {number} entropy Data to generate the HD Wallet seed - entropy (256 - to generate 24 words)
    *
    * @return {string} words generated
    * @memberof Wallet
    * @inner
    */
-  generateWalletWords(entropy = HD_WALLET_ENTROPY) {
+  generateWalletWords(entropy: number = HD_WALLET_ENTROPY): string {
     const code = new Mnemonic(entropy);
     return code.phrase;
   },
@@ -81,15 +84,17 @@ const wallet = {
    * @param {Buffer} pubkey Compressed public key
    * @param {Buffer} chainCode HDPublic key chaincode
    * @param {Buffer} fingerprint parent fingerprint
+   * @param {string} networkName Optional parameter to select the used network (default is mainnet)
    *
    * @return {String} Xpub
    *
    * @memberof Wallet
    * @inner
    */
-  xpubFromData(pubkey, chainCode, fingerprint) {
+  xpubFromData(pubkey: Buffer, chainCode: Buffer, fingerprint: Buffer, networkName: string = 'mainnet'): string {
+    const network = new Network(networkName);
     const hdpubkey = new HDPublicKey({
-      network: network.getNetwork(),
+      network: network.bitcoreNetwork,
       depth: 4,
       parentFingerPrint: fingerprint,
       childIndex: 0,
@@ -110,7 +115,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  toPubkeyCompressed(pubkey) {
+  toPubkeyCompressed(pubkey: Buffer): Buffer {
     const x = pubkey.slice(1, 33);
     const y = pubkey.slice(33, 65);
     const point = new crypto.Point(x, y);
@@ -127,8 +132,8 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  getPublicKeyFromXpub(xpubkey, index) {
-    let xpub = null;
+  getPublicKeyFromXpub(xpubkey: string, index: number): Buffer {
+    let xpub;
     try {
       xpub = HDPublicKey(xpubkey);
     } catch (error) {
@@ -147,7 +152,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  getXPubKeyFromXPrivKey(xpriv) {
+  getXPubKeyFromXPrivKey(xpriv: string): string {
     const privateKey = HDPrivateKey(xpriv)
     return privateKey.xpubkey;
   },
@@ -161,7 +166,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  isXpubKeyValid(xpubkey) {
+  isXpubKeyValid(xpubkey: string): boolean {
     try {
       HDPublicKey(xpubkey);
       return true
@@ -192,22 +197,20 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  getAddresses(xpubkey, startIndex, quantity, networkName) {
-    let xpub = null;
+  getAddresses(xpubkey: string, startIndex: number, quantity: number, networkName: string = 'mainnet'): Object {
+    let xpub;
     try {
       xpub = HDPublicKey(xpubkey);
     } catch (error) {
       throw new XPubError(error.message);
     }
 
-    if (networkName) {
-      network.setNetwork(networkName);
-    }
+    const network = new Network(networkName);
 
     const addrMap = {};
     for (let index = startIndex; index < startIndex + quantity; index++) {
       const key = xpub.derive(index);
-      const address = Address(key.publicKey, network.getNetwork());
+      const address = Address(key.publicKey, network.bitcoreNetwork);
       addrMap[address.toString()] = index;
     }
     return addrMap;

@@ -202,3 +202,8 @@ export const MAX_INPUTS = 255;
  * Maximum number of outputs
  */
 export const MAX_OUTPUTS = 255;
+
+/**
+ * Percentage of Hathor to deposit when creating a token
+ */
+export const TOKEN_DEPOSIT_PERCENTAGE = 0.01

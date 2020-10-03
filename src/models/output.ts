@@ -12,7 +12,15 @@ import { util } from 'bitcore-lib';
 import helpers from '../utils/helpers';
 import Address from './address';
 
-type optionsType = {tokenData?: number, timelock?: number};
+type optionsType = {
+  tokenData?: number,
+  timelock?: number | null,
+};
+
+const defaultOptions = {
+  tokenData: 0,
+  timelock: null,
+};
 
 
 class Output {
@@ -20,11 +28,14 @@ class Output {
   value: number;
   // Address object of the value destination
   address: Address;
-  // Optional object with tokenData and timelock (a timestamp) of the output
-  options?: optionsType
+  // tokenData of the output
+  tokenData: number;
+  // Timestamp of the timelock of the output
+  timelock: number | null;
 
-  constructor(value: number, address: Address, options: optionsType = {tokenData: 0, timelock: null}) {
-    const {tokenData, timelock} = options;
+  constructor(value: number, address: Address, options: optionsType = defaultOptions) {
+    const newOptions = Object.assign(defaultOptions, options);
+    const { tokenData, timelock} = newOptions;
 
     if (!value) {
       throw Error('You must provide a value.');
@@ -122,7 +133,7 @@ class Output {
    * @inner
    */
   createScript(): Buffer {
-    const arr = [];
+    const arr: Buffer[] = [];
     const addressBytes = this.address.decode();
     const addressHash = addressBytes.slice(1, -4);
     if (this.timelock) {

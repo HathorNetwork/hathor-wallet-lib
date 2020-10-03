@@ -5,17 +5,26 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+type optionsType = {
+  data?: Buffer | null,
+};
+
+const defaultOptions = {
+  data: null
+}
 
 class Input {
   // Hash of the transaction is being spent
   hash: string;
   // Index of the outputs array from the output being spent
   index: number;
-  // Optional object with input signed data
-  options?: {data: Buffer}
+  // Input signed data
+  data: Buffer | null;
 
-  constructor( hash, index, options = {data = null}) {
-    const { data } = options;
+  constructor(hash: string, index: number, options: optionsType = defaultOptions) {
+    const newOptions = Object.assign(defaultOptions, options);
+    const { data } = newOptions;
+
     if (!hash) {
       throw Error('You must provide a hash.');
     }

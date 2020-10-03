@@ -6,20 +6,22 @@
  */
 
 import { AddressError } from '../errors';
-import { crypto, encoding, util } from 'bitcore-lib';
+import { encoding, util } from 'bitcore-lib';
 import defaultNetwork from '../network';
 import Network from './network';
 import _ from 'lodash';
+import helpers from '../utils/helpers';
 
 
 class Address {
   // String with address as base58
   base58: string;
-  // Optional object with network to validate the address
-  options?: {network: Network};
+  // Network to validate the address
+  network: Network;
 
   constructor(base58: string, options = {network: defaultNetwork}) {
-    const {network} = options;
+    const { network } = options;
+
     if (!_.isString(base58)) {
       throw Error('Parameter should be a string.');
     }
@@ -86,31 +88,17 @@ class Address {
     // Validate address checksum
     const checksum = addressBytes.slice(-4);
     const addressSlice = addressBytes.slice(0, -4);
-    const correctChecksum = this.getChecksum(addressSlice);
+    const correctChecksum = helpers.getChecksum(addressSlice);
     if (!util.buffer.equals(checksum, correctChecksum)) {
       throw new AddressError(errorMessage);
     }
 
     // Validate version byte. Should be the p2pkh or p2sh
     const firstByte = addressBytes[0];
-    if (firstByte !== this.network.getVersionBytes().p2pkh && firstByte !== this.network.getVersionBytes().p2sh) {
+    if (firstByte !== this.network.versionBytes.p2pkh && firstByte !== this.network.versionBytes.p2sh) {
       throw new AddressError(errorMessage);
     }
     return true;
-  }
-  
-  /**
-   * Return the checksum of the bytes passed
-   * Checksum is calculated as the 4 first bytes of the double sha256
-   * 
-   * @param {Buffer} bytes Data from where the checksum is calculated
-   *
-   * @return {Buffer}
-   * @memberof Address
-   * @inner
-   */
-  getChecksum(bytes: Buffer): Buffer {
-    return crypto.Hash.sha256sha256(bytes).slice(0, 4);
   }
 }
 

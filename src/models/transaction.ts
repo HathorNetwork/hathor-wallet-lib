@@ -5,23 +5,27 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { DEFAULT_TX_VERSION, TOKEN_INFO_VERSION, TX_WEIGHT_CONSTANTS, MAX_INPUTS, MAX_OUTPUTS } from '../constants';
-import { util } from 'bitcore-lib';
+import { CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, DECIMAL_PLACES, TOKEN_INFO_VERSION, TX_WEIGHT_CONSTANTS, MAX_INPUTS, MAX_OUTPUTS } from '../constants';
+import { crypto, encoding, util } from 'bitcore-lib';
 import helpers from '../utils/helpers';
 import Input from './input';
 import Output from './output';
+import { CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError } from '../errors';
+import buffer from 'buffer';
 
 type optionsType = {
   version?: number,
   weight?: number,
   nonce?: number,
-  timestamp?: number,
+  timestamp?: number | null,
   parents?: string[],
   tokens?: string[],
-  hash?: string,
+  hash?: string | null,
+  name?: string | null,
+  symbol?: string | null,
 };
 
-const defaultOptions = {
+const defaultOptions: optionsType = {
   version: DEFAULT_TX_VERSION,
   weight: 0,
   nonce: 0,
@@ -29,26 +33,38 @@ const defaultOptions = {
   parents: [],
   tokens: [],
   hash: null,
+  name: null,
+  symbol: null,
 }
 
 class Transaction {
   inputs: Input[];
   outputs: Output[];
-  options?: optionsType
+  version: number;
+  weight: number;
+  nonce: number;
+  timestamp: number | null;
+  parents: string[];
+  tokens: string[];
+  hash: string | null;
+  name: string | null;
+  symbol: string | null;
 
   constructor(inputs: Input[], outputs: Output[], options: optionsType = defaultOptions) {
     const newOptions = Object.assign(defaultOptions, options);
-    const {version, weight, nonce, timestamp, parents, tokens, hash} = newOptions;
+    const { version, weight, nonce, timestamp, parents, tokens, hash, name, symbol } = newOptions;
 
     this.inputs = inputs;
     this.outputs = outputs;
-    this.version = version;
-    this.weight = weight;
-    this.nonce = nonce;
-    this.timestamp = timestamp;
-    this.parents = parents;
-    this.tokens = tokens;
-    this.hash = hash;
+    this.version = version!;
+    this.weight = weight!;
+    this.nonce = nonce!;
+    this.timestamp = timestamp!;
+    this.parents = parents!;
+    this.tokens = tokens!;
+    this.hash = hash!;
+    this.name = name!;
+    this.symbol = symbol!;
   }
 
   /**
@@ -61,7 +77,7 @@ class Transaction {
    *
    */
   getShortHash(): string {
-    return `${this.hash.substring(0,12)}...${this.hash.substring(52,64)}`;
+    return this.hash === null ? '' : `${this.hash.substring(0,12)}...${this.hash.substring(52,64)}`;
   }
 
   /**
@@ -72,7 +88,7 @@ class Transaction {
    * @inner
    */
   getDataToSign(): Buffer {
-    let arr = []
+    let arr: any[] = []
     // Tx version
     arr.push(helpers.intToBytes(this.version, 2))
 
@@ -141,7 +157,7 @@ class Transaction {
    * @inner
    */
   calculateWeight(): number {
-    let txSize = this.txToBytes().length;
+    let txSize = this.toBytes().length;
 
     // XXX Parents are calculated only in the server but we need to consider them here
     // Parents are always two and have 32 bytes each
@@ -189,11 +205,11 @@ class Transaction {
    * @inner
    */
   toBytes(): Buffer {
-    let arr = []
+    let arr: any = []
     // Serialize first the funds part
     //
     // Tx version
-    arr.push(helpers.intToBytes(txData.version, 2))
+    arr.push(helpers.intToBytes(this.version, 2))
     if (this.tokens.length) {
       // Len tokens
       arr.push(helpers.intToBytes(this.tokens.length, 1))
@@ -208,10 +224,14 @@ class Transaction {
     }
 
     for (const inputTx of this.inputs) {
-      arr.push(util.buffer.hexToBuffer(inputTx.tx_id));
+      arr.push(util.buffer.hexToBuffer(inputTx.hash));
       arr.push(helpers.intToBytes(inputTx.index, 1));
-      arr.push(helpers.intToBytes(inputTx.data.length, 2));
-      arr.push(inputTx.data);
+      if (inputTx.data) {
+        arr.push(helpers.intToBytes(inputTx.data.length, 2));
+        arr.push(inputTx.data);
+      } else {
+        arr.push(helpers.intToBytes(0, 2));
+      }
     }
 
     for (const outputTx of this.outputs) {
@@ -234,7 +254,9 @@ class Transaction {
     // Weight is a float with 8 bytes
     arr.push(helpers.floatToBytes(this.weight, 8));
     // Timestamp
-    arr.push(helpers.intToBytes(this.timestamp, 4))
+    if (this.timestamp) {
+      arr.push(helpers.intToBytes(this.timestamp, 4))
+    }
     if (this.parents) {
       arr.push(helpers.intToBytes(this.parents.length, 1))
       for (const parent of this.parents) {
@@ -296,15 +318,15 @@ class Transaction {
 
     const nameBytes = buffer.Buffer.from(this.name, 'utf8');
     const symbolBytes = buffer.Buffer.from(this.symbol, 'utf8');
-    const arr = [];
+    const arr: any[] = [];
     // Token info version
-    arr.push(this.intToBytes(TOKEN_INFO_VERSION, 1));
+    arr.push(helpers.intToBytes(TOKEN_INFO_VERSION, 1));
     // Token name size
-    arr.push(this.intToBytes(nameBytes.length, 1));
+    arr.push(helpers.intToBytes(nameBytes.length, 1));
     // Token name
     arr.push(nameBytes);
     // Token symbol size
-    arr.push(this.intToBytes(symbolBytes.length, 1));
+    arr.push(helpers.intToBytes(symbolBytes.length, 1));
     // Token symbol
     arr.push(symbolBytes);
     return arr;
@@ -318,7 +340,7 @@ class Transaction {
    * @inner
    */
   static createUnsignedTx(inputs: Input[], outputs: Output[]): Transaction {
-    return new Transaction({inputs, outputs});
+    return new Transaction(inputs, outputs);
   }
 }
 

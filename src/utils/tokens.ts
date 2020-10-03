@@ -8,8 +8,13 @@
 
 import { HDPublicKey, Address } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
-import { HD_WALLET_ENTROPY } from '../constants';
+import { HD_WALLET_ENTROPY, HATHOR_TOKEN_CONFIG, TOKEN_DEPOSIT_PERCENTAGE } from '../constants';
 import { XPubError } from '../errors';
+import helpers from './helpers';
+import buffer from 'buffer';
+
+type configStringType = {uid: string, name: string, symbol: string}
+
 
 const tokens = {
   /**
@@ -22,7 +27,7 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  isConfigurationStringValid(config) {
+  isConfigurationStringValid(config: string): boolean {
     const tokenData = this.getTokenFromConfigurationString(config);
     if (tokenData === null) {
       return false;
@@ -43,9 +48,9 @@ const tokens = {
    * @inner
    *
    */
-  getConfigurationString(uid, name, symbol) {
+  getConfigurationString(uid: string, name: string, symbol: string): string {
     const partialConfig = `${name}:${symbol}:${uid}`;
-    const checksum = transaction.getChecksum(buffer.Buffer.from(partialConfig));
+    const checksum = helpers.getChecksum(buffer.Buffer.from(partialConfig));
     return `[${partialConfig}:${checksum.toString('hex')}]`;
   },
 
@@ -62,7 +67,7 @@ const tokens = {
    * @inner
    *
    */
-  getTokenFromConfigurationString(config) {
+  getTokenFromConfigurationString(config: string): configStringType | null {
     // First we validate that first char is [ and last one is ]
     if (!config || config[0] !== '[' || config[config.length - 1] !== ']') {
       return null;
@@ -76,12 +81,12 @@ const tokens = {
     // Last element is the checksum
     const checksum = configArr.splice(-1);
     const configWithoutChecksum = configArr.join(':');
-    const correctChecksum = transaction.getChecksum(buffer.Buffer.from(configWithoutChecksum));
+    const correctChecksum = helpers.getChecksum(buffer.Buffer.from(configWithoutChecksum));
     if (correctChecksum.toString('hex') !== checksum[0]) {
       return null;
     }
-    const uid = configArr.pop();
-    const symbol = configArr.pop();
+    const uid = configArr.pop()!;
+    const symbol = configArr.pop()!;
     // Assuming that the name might have : on it
     const name = configArr.join(':');
     return {uid, name, symbol};
@@ -98,13 +103,13 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  getTokenIndex(tokens, uid) {
+  getTokenIndex(tokens: configStringType[], uid: string): number {
     // If token is Hathor, index is always 0
     // Otherwise, it is always the array index + 1
     if (uid === HATHOR_TOKEN_CONFIG.uid) {
       return 0;
     } else {
-      const tokensWithoutHathor = this.filterTokens(tokens, HATHOR_TOKEN_CONFIG);
+      const tokensWithoutHathor = tokens.filter((token) => token.uid !== HATHOR_TOKEN_CONFIG.uid);
       const myIndex = tokensWithoutHathor.findIndex((token) => token.uid === uid);
       return myIndex + 1;
     }
@@ -120,7 +125,7 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  isHathorToken(uid) {
+  isHathorToken(uid: string): boolean {
     return uid === HATHOR_TOKEN_CONFIG.uid;
   },
 
@@ -134,8 +139,8 @@ const tokens = {
    * @inner
    *
    */
-  getDepositAmount(mintAmount) {
-    return Math.ceil(tokens.getDepositPercentage() * mintAmount);
+  getDepositAmount(mintAmount: number): number {
+    return Math.ceil(TOKEN_DEPOSIT_PERCENTAGE * mintAmount);
   },
 
   /**
@@ -148,8 +153,8 @@ const tokens = {
    * @inner
    *
    */
-  getWithdrawAmount(meltAmount) {
-    return Math.floor(tokens.getDepositPercentage() * meltAmount);
+  getWithdrawAmount(meltAmount: number): number {
+    return Math.floor(TOKEN_DEPOSIT_PERCENTAGE * meltAmount);
   },
 }
 

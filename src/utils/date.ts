@@ -22,7 +22,7 @@ const dateFormatter = {
    * @memberof Date
    * @inner
    */
-  parseTimestamp(timestamp, timezone = null) {
+  parseTimestamp(timestamp: number, timezone: string|null = null): string {
     const d = new Date(timestamp*1000); // new Date in js expect milliseconds
     const options = (timezone ? { timeZone: timezone } : {})
     return `${d.toLocaleDateString('en-US', options)} ${d.toLocaleTimeString('en-US', options)}`;
@@ -39,7 +39,7 @@ const dateFormatter = {
    * @memberof Date
    * @inner
    */
-  uptimeFormat(uptime) {
+  uptimeFormat(uptime: number): string {
     uptime = Math.floor(uptime);
     const days = Math.floor(uptime / 3600 / 24);
     uptime = uptime % (3600 * 24);
@@ -63,7 +63,7 @@ const dateFormatter = {
    * @memberof Date
    * @inner
    */
-  dateToTimestamp(date) {
+  dateToTimestamp(date: Date): number {
     return Math.floor(date.getTime() / 1000);
   }
 };

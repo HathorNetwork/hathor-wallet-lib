@@ -9,6 +9,8 @@ import { OP_PUSHDATA1 } from '../opcodes';
 import { BLOCK_VERSION, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, MERGED_MINED_BLOCK_VERSION, DECIMAL_PLACES } from '../constants';
 import buffer from 'buffer';
 import Long from 'long';
+import Transaction from '../models/transaction';
+import { crypto } from 'bitcore-lib';
 
 /**
  * Helper methods
@@ -20,14 +22,14 @@ const helpers = {
   /**
    * Get object type (Transaction or Block)
    *
-   * @param {Object} tx Object to get the type
+   * @param {Transaction} tx Object to get the type
    *
    * @return {string} Type of the object
    *
    * @memberof Helpers
    * @inner
    */
-  getTxType(tx) {
+  getTxType(tx: Transaction): string {
     if (this.isBlock(tx)) {
       if (tx.version === BLOCK_VERSION) {
         return 'Block';
@@ -49,14 +51,14 @@ const helpers = {
   /**
    * Check if object is a block or a transaction
    *
-   * @param {Object} tx Transaction to be checked
+   * @param {Transaction} tx Transaction to be checked
    *
    * @return {boolean} true if object is a block, false otherwise
    *
    * @memberof Helpers
    * @inner
    */
-  isBlock(tx) {
+  isBlock(tx: Transaction): boolean {
     return tx.version === BLOCK_VERSION || tx.version === MERGED_MINED_BLOCK_VERSION;
   },
 
@@ -71,7 +73,7 @@ const helpers = {
    * @memberof Helpers
    * @inner
    */
-  roundFloat(n) {
+  roundFloat(n: number): number {
     return Math.round(n*100)/100
   },
 
@@ -85,11 +87,11 @@ const helpers = {
    * @memberof Helpers
    * @inner
    */
-  prettyValue(value) {
+  prettyValue(value: number): string {
     const fixedPlaces = (value/10**DECIMAL_PLACES).toFixed(DECIMAL_PLACES);
     const integerPart = fixedPlaces.split('.')[0];
     const decimalPart = fixedPlaces.split('.')[1];
-    const integerFormated = new Intl.NumberFormat('en-US').format(Math.abs(integerPart));
+    const integerFormated = new Intl.NumberFormat('en-US').format(Math.abs(parseInt(integerPart)));
     const signal = value < 0 ? '-' : '';
     return `${signal}${integerFormated}.${decimalPart}`;
   },
@@ -105,7 +107,7 @@ const helpers = {
    * @memberof Helpers
    * @inner
    */
-  isVersionAllowed(version, minVersion) {
+  isVersionAllowed(version: string, minVersion: string): boolean {
     // Verifies if the version in parameter is allowed to make requests to other min version
     if (version.includes('beta') !== minVersion.includes('beta')) {
       // If one version is beta and the other is not, it's not allowed to use it
@@ -138,31 +140,32 @@ const helpers = {
    * @memberof Helpers
    * @inner
    */
-  getCleanVersionArray(version) {
+  getCleanVersionArray(version: string): string[] {
     return version.replace(/[^\d.]/g, '').split('.');
   },
 
   /**
    * Transform int to bytes
    *
-   * @param {number} number Integer to be transformed to bytes
+   * @param {number} value Integer to be transformed to bytes
    * @param {number} bytes How many bytes this number uses
    *
    * @return {Buffer} number in bytes
    * @memberof Transaction
    * @inner
    */
-  intToBytes(number, bytes) {
+  intToBytes(value: number, bytes: number): Buffer {
     let arr = new ArrayBuffer(bytes);
     let view = new DataView(arr);
     if (bytes === 1) {
-      // byteOffset = 0; isLittleEndian = false
-      view.setUint8(0, number, false);
+      // byteOffset = 0;
+      view.setUint8(0, value);
     } else if (bytes === 2) {
       // byteOffset = 0; isLittleEndian = false
-      view.setUint16(0, number, false);
+      view.setUint16(0, value, false);
     } else if (bytes === 4) {
-      view.setUint32(0, number, false);
+      // byteOffset = 0; isLittleEndian = false
+      view.setUint32(0, value, false);
     }
     return buffer.Buffer.from(arr);
   },
@@ -170,27 +173,27 @@ const helpers = {
   /**
    * Transform signed int to bytes (1, 2, or 4 bytes)
    *
-   * @param {number} number Integer to be transformed to bytes
+   * @param {number} value Integer to be transformed to bytes
    * @param {number} bytes How many bytes this number uses
    *
    * @return {Buffer} number in bytes
    * @memberof Transaction
    * @inner
    */
-  signedIntToBytes(number, bytes) {
+  signedIntToBytes(value: number, bytes: number): Buffer {
     let arr = new ArrayBuffer(bytes);
     let view = new DataView(arr);
     if (bytes === 1) {
-      // byteOffset = 0; isLittleEndian = false
-      view.setInt8(0, number, false);
+      // byteOffset = 0
+      view.setInt8(0, value);
     } else if (bytes === 2) {
       // byteOffset = 0; isLittleEndian = false
-      view.setInt16(0, number, false);
+      view.setInt16(0, value, false);
     } else if (bytes === 4) {
-      view.setInt32(0, number, false);
+      view.setInt32(0, value, false);
     } else if (bytes === 8) {
       // In case of 8 bytes I need to handle the int with a Long lib
-      let long = Long.fromNumber(number, false);
+      let long = Long.fromNumber(value, false);
       arr = long.toBytesBE();
     }
     return buffer.Buffer.from(arr);
@@ -199,19 +202,19 @@ const helpers = {
   /**
    * Transform float to bytes
    *
-   * @param {number} number Integer to be transformed to bytes
+   * @param {number} value Integer to be transformed to bytes
    * @param {number} bytes How many bytes this number uses
    *
    * @return {Buffer} number in bytes
    * @memberof Transaction
    * @inner
    */
-  floatToBytes(number, bytes) {
+  floatToBytes(value: number, bytes: number): Buffer {
     let arr = new ArrayBuffer(bytes);
     let view = new DataView(arr);
     if (bytes === 8) {
       // byteOffset = 0; isLitteEndian = false
-      view.setFloat64(0, number, false);
+      view.setFloat64(0, value, false);
     }
     return buffer.Buffer.from(arr);
   },
@@ -222,20 +225,35 @@ const helpers = {
    * In case the data has length > 75, we need to push the OP_PUSHDATA1 before the length
    * We always push bytes
    * 
+   * We update the array of Buffer sent as parameter, so we don't return a new one
+   * 
    * @param {Array} stack Stack of bytes from the script
    * @param {Buffer} data Data to be pushed to stack
    *
-   * @return {Buffer}
    * @memberof Transaction
    * @inner
    */
-  pushDataToStack(stack, data) {
+  pushDataToStack(stack: Buffer[], data: Buffer) {
     // In case data has length bigger than 75, we need to add a pushdata opcode
     if (data.length > 75) {
       stack.push(OP_PUSHDATA1);
     }
     stack.push(this.intToBytes(data.length, 1));
     stack.push(data);
+  },
+  
+  /**
+   * Return the checksum of the bytes passed
+   * Checksum is calculated as the 4 first bytes of the double sha256
+   * 
+   * @param {Buffer} bytes Data from where the checksum is calculated
+   *
+   * @return {Buffer}
+   * @memberof Address
+   * @inner
+   */
+  getChecksum(bytes: Buffer): Buffer {
+    return crypto.Hash.sha256sha256(bytes).slice(0, 4);
   },
 }
 
