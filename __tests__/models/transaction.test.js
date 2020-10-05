@@ -39,6 +39,9 @@ test('New tx', () => {
   expect(tx.weight).toBe(17.809578259947894);
 
   expect(tx.getOutputsSum()).toBe(2000);
+
+  tx.hash = '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e';
+  expect(tx.getShortHash()).toBe('00034a159731...3cd6686b295e');
 })
 
 test('Token tx', () => {
@@ -49,7 +52,6 @@ test('Token tx', () => {
   expect(info.length).toBe(5);
   expect(info[2].toString('hex')).toBe('54657374');
   expect(info[4].toString('hex')).toBe('545354');
-  //expect(tx.serializeTokenInfo().toString('hex')).toEqual(',,Test,,TST');
 });
 
 test('Tx validation', () => {

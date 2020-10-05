@@ -6,10 +6,7 @@
  */
 
 
-import { HDPublicKey, Address } from 'bitcore-lib';
-import Mnemonic from 'bitcore-mnemonic';
-import { HD_WALLET_ENTROPY, HATHOR_TOKEN_CONFIG, TOKEN_DEPOSIT_PERCENTAGE } from '../constants';
-import { XPubError } from '../errors';
+import { HATHOR_TOKEN_CONFIG, TOKEN_DEPOSIT_PERCENTAGE } from '../constants';
 import helpers from './helpers';
 import buffer from 'buffer';
 
