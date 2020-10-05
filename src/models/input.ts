@@ -29,7 +29,7 @@ class Input {
       throw Error('You must provide a hash.');
     }
 
-    if (!index) {
+    if (isNaN(index)) {
       throw Error('You must provide an index.');
     }
 

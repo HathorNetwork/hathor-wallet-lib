@@ -57,14 +57,14 @@ class Transaction {
     this.inputs = inputs;
     this.outputs = outputs;
     this.version = version!;
-    this.weight = weight!;
-    this.nonce = nonce!;
-    this.timestamp = timestamp!;
-    this.parents = parents!;
-    this.tokens = tokens!;
-    this.hash = hash!;
-    this.name = name!;
-    this.symbol = symbol!;
+    this.weight = weight;
+    this.nonce = nonce;
+    this.timestamp = timestamp;
+    this.parents = parents;
+    this.tokens = tokens;
+    this.hash = hash;
+    this.name = name;
+    this.symbol = symbol;
   }
 
   /**
@@ -257,6 +257,7 @@ class Transaction {
     if (this.timestamp) {
       arr.push(helpers.intToBytes(this.timestamp, 4))
     }
+
     if (this.parents) {
       arr.push(helpers.intToBytes(this.parents.length, 1))
       for (const parent of this.parents) {
