@@ -56,7 +56,7 @@ class Transaction {
 
     this.inputs = inputs;
     this.outputs = outputs;
-    this.version = version!;
+    this.version = version;
     this.weight = weight;
     this.nonce = nonce;
     this.timestamp = timestamp;
