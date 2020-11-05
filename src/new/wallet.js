@@ -574,9 +574,7 @@ class HathorWallet extends EventEmitter {
     }
   }
 
-  meltTokens(tokenUid, amount, address) {
-    const ret = tokens.meltTokens(meltInput, tokenUid, amount, this.pin, true);
-
+  meltTokens(tokenUid, amount) {
     let meltInput = null;
     for (const tx_id in walletData.historyTransactions) {
       const tx = historyTransactions[tx_id];
@@ -612,6 +610,8 @@ class HathorWallet extends EventEmitter {
       return {success: false, message: 'Don\'t have melt authority output available.'}
     }
 
+    // Always create another melt authority output
+    const ret = tokens.meltTokens(meltInput, tokenUid, amount, this.pin, true);
     if (ret.success) {
       const sendTransaction = ret.sendTransaction;
       sendTransaction.start();
