@@ -511,6 +511,117 @@ class HathorWallet extends EventEmitter {
     return balance;
   }
 
+  createNewToken(name, symbol, amount, address) {
+    const mintAddress = address || this.getCurrentAddress();
+    const ret = tokens.createToken(mintAddress, name, symbol, amount, this.pin);
+
+    if (ret.success) {
+      const sendTransaction = ret.sendTransaction;
+      sendTransaction.start();
+      return {success: true, promise: sendTransaction.promise, sendTransaction};
+    } else {
+      return ret;
+    }
+
+  }
+
+  mintTokens(tokenUid, amount, address) {
+    const mintAddress = address || this.getCurrentAddress();
+    const walletData = wallet.getWalletData();
+    let mintInput = null;
+    for (const tx_id in walletData.historyTransactions) {
+      const tx = historyTransactions[tx_id];
+      if (tx.is_voided) {
+        // Ignore voided transactions.
+        continue;
+      }
+
+      for (const [index, output] of tx.outputs.entries()) {
+        // This output is not mine
+        if (!hathorLib.wallet.isAddressMine(output.decoded.address, walletData)) {
+          continue;
+        }
+
+        // This token is not the one of this screen
+        if (output.token !== tokenUid) {
+          continue;
+        }
+
+        // If output was already used, we can't use it
+        if (output.spent_by) {
+          continue;
+        }
+
+        if (hathorLib.wallet.isMintOutput(output)) {
+          mintInput = {tx_id, index, address: output.decoded.address};
+          break
+        }
+      }
+    }
+
+    if (mintInput === null) {
+      return {success: false, message: 'Don\'t have mint authority output available.'}
+    }
+
+    const ret = tokens.mintTokens(mintInput, tokenUid, mintAddress, amount, null, this.pin);
+
+    if (ret.success) {
+      const sendTransaction = ret.sendTransaction;
+      sendTransaction.start();
+      return {success: true, promise: sendTransaction.promise, sendTransaction};
+    } else {
+      return ret;
+    }
+  }
+
+  meltTokens(tokenUid, amount, address) {
+    const ret = tokens.meltTokens(meltInput, tokenUid, amount, this.pin, true);
+
+    let meltInput = null;
+    for (const tx_id in walletData.historyTransactions) {
+      const tx = historyTransactions[tx_id];
+      if (tx.is_voided) {
+        // Ignore voided transactions.
+        continue;
+      }
+
+      for (const [index, output] of tx.outputs.entries()) {
+        // This output is not mine
+        if (!hathorLib.wallet.isAddressMine(output.decoded.address, walletData)) {
+          continue;
+        }
+
+        // This token is not the one of this screen
+        if (output.token !== tokenUid) {
+          continue;
+        }
+
+        // If output was already used, we can't use it
+        if (output.spent_by) {
+          continue;
+        }
+
+        if (hathorLib.wallet.isMeltOutput(output)) {
+          meltInput = {tx_id, index, address: output.decoded.address};
+          break
+        }
+      }
+    }
+
+    if (meltInput === null) {
+      return {success: false, message: 'Don\'t have melt authority output available.'}
+    }
+
+    if (ret.success) {
+      const sendTransaction = ret.sendTransaction;
+      sendTransaction.start();
+      return {success: true, promise: sendTransaction.promise, sendTransaction};
+    } else {
+      return ret;
+    }
+  }
+
+
   getTokenData() {
     storage.setStore(this.store);
     if (this.tokenUid === HATHOR_TOKEN_CONFIG.uid) {
