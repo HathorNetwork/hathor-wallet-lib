@@ -512,8 +512,9 @@ class HathorWallet extends EventEmitter {
   }
 
   createNewToken(name, symbol, amount, address) {
+    storage.setStore(this.store);
     const mintAddress = address || this.getCurrentAddress();
-    const ret = tokens.createToken(mintAddress, name, symbol, amount, this.pin);
+    const ret = tokens.createToken(mintAddress, name, symbol, amount, this.pinCode);
 
     if (ret.success) {
       const sendTransaction = ret.sendTransaction;
@@ -526,11 +527,12 @@ class HathorWallet extends EventEmitter {
   }
 
   mintTokens(tokenUid, amount, address) {
+    storage.setStore(this.store);
     const mintAddress = address || this.getCurrentAddress();
     const walletData = wallet.getWalletData();
     let mintInput = null;
     for (const tx_id in walletData.historyTransactions) {
-      const tx = historyTransactions[tx_id];
+      const tx = walletData.historyTransactions[tx_id];
       if (tx.is_voided) {
         // Ignore voided transactions.
         continue;
@@ -538,7 +540,7 @@ class HathorWallet extends EventEmitter {
 
       for (const [index, output] of tx.outputs.entries()) {
         // This output is not mine
-        if (!hathorLib.wallet.isAddressMine(output.decoded.address, walletData)) {
+        if (!wallet.isAddressMine(output.decoded.address, walletData)) {
           continue;
         }
 
@@ -552,7 +554,7 @@ class HathorWallet extends EventEmitter {
           continue;
         }
 
-        if (hathorLib.wallet.isMintOutput(output)) {
+        if (wallet.isMintOutput(output)) {
           mintInput = {tx_id, index, address: output.decoded.address};
           break
         }
@@ -563,7 +565,7 @@ class HathorWallet extends EventEmitter {
       return {success: false, message: 'Don\'t have mint authority output available.'}
     }
 
-    const ret = tokens.mintTokens(mintInput, tokenUid, mintAddress, amount, null, this.pin);
+    const ret = tokens.mintTokens(mintInput, tokenUid, mintAddress, amount, null, this.pinCode);
 
     if (ret.success) {
       const sendTransaction = ret.sendTransaction;
@@ -575,9 +577,11 @@ class HathorWallet extends EventEmitter {
   }
 
   meltTokens(tokenUid, amount) {
+    storage.setStore(this.store);
     let meltInput = null;
+    const walletData = wallet.getWalletData();
     for (const tx_id in walletData.historyTransactions) {
-      const tx = historyTransactions[tx_id];
+      const tx = walletData.historyTransactions[tx_id];
       if (tx.is_voided) {
         // Ignore voided transactions.
         continue;
@@ -585,7 +589,7 @@ class HathorWallet extends EventEmitter {
 
       for (const [index, output] of tx.outputs.entries()) {
         // This output is not mine
-        if (!hathorLib.wallet.isAddressMine(output.decoded.address, walletData)) {
+        if (!wallet.isAddressMine(output.decoded.address, walletData)) {
           continue;
         }
 
@@ -599,7 +603,7 @@ class HathorWallet extends EventEmitter {
           continue;
         }
 
-        if (hathorLib.wallet.isMeltOutput(output)) {
+        if (wallet.isMeltOutput(output)) {
           meltInput = {tx_id, index, address: output.decoded.address};
           break
         }
@@ -611,7 +615,7 @@ class HathorWallet extends EventEmitter {
     }
 
     // Always create another melt authority output
-    const ret = tokens.meltTokens(meltInput, tokenUid, amount, this.pin, true);
+    const ret = tokens.meltTokens(meltInput, tokenUid, amount, this.pinCode, true);
     if (ret.success) {
       const sendTransaction = ret.sendTransaction;
       sendTransaction.start();
