@@ -511,6 +511,17 @@ class HathorWallet extends EventEmitter {
     return balance;
   }
 
+  /**
+   * Create a new token for this wallet
+   *
+   * @param {String} name Name of the token
+   * @param {String} symbol Symbol of the token
+   * @param {number} amount Quantity of the token to be minted
+   * @param {String} address Optional parameter for the destination of the created token
+   *
+   * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
+   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
+   **/
   createNewToken(name, symbol, amount, address) {
     storage.setStore(this.store);
     const mintAddress = address || this.getCurrentAddress();
@@ -526,6 +537,16 @@ class HathorWallet extends EventEmitter {
 
   }
 
+  /**
+   * Mint tokens
+   *
+   * @param {String} tokenUid UID of the token to mint
+   * @param {number} amount Quantity to mint
+   * @param {String} address Optional parameter for the destination of the minted tokens
+   *
+   * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
+   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
+   **/
   mintTokens(tokenUid, amount, address) {
     storage.setStore(this.store);
     const mintAddress = address || this.getCurrentAddress();
@@ -576,6 +597,15 @@ class HathorWallet extends EventEmitter {
     }
   }
 
+  /**
+   * Melt tokens
+   *
+   * @param {String} tokenUid UID of the token to melt
+   * @param {number} amount Quantity to melt
+   *
+   * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
+   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
+   **/
   meltTokens(tokenUid, amount) {
     storage.setStore(this.store);
     let meltInput = null;
