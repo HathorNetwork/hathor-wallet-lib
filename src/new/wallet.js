@@ -384,22 +384,29 @@ class HathorWallet extends EventEmitter {
    * Currently does not have support to send custom tokens, only HTR
    *
    * @param {Array} outputs Array of outputs with each element as an object with {'address', 'value'}
+   * @param {Object} token Token object {'uid', 'name', 'symbol'}. Optional parameter if user already set on the class
    *
    * @return {Promise} Promise that resolves when transaction is sent
    **/
-  sendManyOutputsTransaction(outputs) {
+  sendManyOutputsTransaction(outputs, token) {
+    // XXX To accept here multi tokens in the same tx would be a bit more complicated because
+    // the method prepareSendTokensData would need a bigger refactor.
+    // I believe we should refactor all of that code (and it will be done on wallet-service)
+    // so I decided to change this method to accept only one token, which is enough for our needs right now
     storage.setStore(this.store);
+    const txToken = token || this.token;
+    const isHathorToken = txToken.uid === HATHOR_TOKEN_CONFIG.uid;
     const data = {
-      tokens: [], // For now does not support custom tokens
+      tokens: isHathorToken ? [] : [txToken.uid],
       inputs: [],
       outputs: [],
     };
 
     for (const output of outputs) {
-      data.outputs.push({address: output.address, value: output.value, tokenData: 0})
+      data.outputs.push({address: output.address, value: output.value, tokenData: isHathorToken ? 0 : 1})
     }
 
-    const ret = this.completeTxData(data);
+    const ret = this.completeTxData(data, txToken);
 
     if (ret.success) {
       return this.sendPreparedTransaction(ret.data);
