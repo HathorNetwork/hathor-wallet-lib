@@ -545,20 +545,15 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Mint tokens
+   * Select authority utxo for mint or melt. Depends on the callback received as parameter
    *
-   * @param {String} tokenUid UID of the token to mint
-   * @param {number} amount Quantity to mint
-   * @param {String} address Optional parameter for the destination of the minted tokens
+   * @param {String} tokenUid UID of the token to select the authority utxo
+   * @param {function} isUtxoCallback Callback to check if the output is the authority I wanet (isMeltOutput or isMintOutput)
    *
-   * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
-   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
+   * @return {Object} Object with {tx_id, index, address} of the authority output. Returns null in case there are no utxos for this type
    **/
-  mintTokens(tokenUid, amount, address) {
-    storage.setStore(this.store);
-    const mintAddress = address || this.getCurrentAddress();
+  selectAuthorityUtxo(tokenUid, isUtxoCallback) {
     const walletData = wallet.getWalletData();
-    let mintInput = null;
     for (const tx_id in walletData.historyTransactions) {
       const tx = walletData.historyTransactions[tx_id];
       if (tx.is_voided) {
@@ -572,7 +567,7 @@ class HathorWallet extends EventEmitter {
           continue;
         }
 
-        // This token is not the one of this screen
+        // This token is not the one we are looking
         if (output.token !== tokenUid) {
           continue;
         }
@@ -582,12 +577,27 @@ class HathorWallet extends EventEmitter {
           continue;
         }
 
-        if (wallet.isMintOutput(output)) {
-          mintInput = {tx_id, index, address: output.decoded.address};
-          break
+        if (isUtxoCallback(output)) {
+          return {tx_id, index, address: output.decoded.address};
         }
       }
     }
+  }
+
+  /**
+   * Mint tokens
+   *
+   * @param {String} tokenUid UID of the token to mint
+   * @param {number} amount Quantity to mint
+   * @param {String} address Optional parameter for the destination of the minted tokens
+   *
+   * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
+   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
+   **/
+  mintTokens(tokenUid, amount, address) {
+    storage.setStore(this.store);
+    const mintAddress = address || this.getCurrentAddress();
+    const mintInput = this.selectAuthorityUtxo(tokenUid, wallet.isMintOutput.bind(wallet));
 
     if (mintInput === null) {
       return {success: false, message: 'Don\'t have mint authority output available.'}
@@ -615,37 +625,7 @@ class HathorWallet extends EventEmitter {
    **/
   meltTokens(tokenUid, amount) {
     storage.setStore(this.store);
-    let meltInput = null;
-    const walletData = wallet.getWalletData();
-    for (const tx_id in walletData.historyTransactions) {
-      const tx = walletData.historyTransactions[tx_id];
-      if (tx.is_voided) {
-        // Ignore voided transactions.
-        continue;
-      }
-
-      for (const [index, output] of tx.outputs.entries()) {
-        // This output is not mine
-        if (!wallet.isAddressMine(output.decoded.address, walletData)) {
-          continue;
-        }
-
-        // This token is not the one of this screen
-        if (output.token !== tokenUid) {
-          continue;
-        }
-
-        // If output was already used, we can't use it
-        if (output.spent_by) {
-          continue;
-        }
-
-        if (wallet.isMeltOutput(output)) {
-          meltInput = {tx_id, index, address: output.decoded.address};
-          break
-        }
-      }
-    }
+    const meltInput = this.selectAuthorityUtxo(tokenUid, wallet.isMeltOutput.bind(wallet));
 
     if (meltInput === null) {
       return {success: false, message: 'Don\'t have melt authority output available.'}
