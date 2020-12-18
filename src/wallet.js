@@ -694,6 +694,33 @@ const wallet = {
   },
 
   /**
+   * Return all addresses already generated for this wallet
+   * From index 0 to lastSharedIndex
+   *
+   * @return {Array} Array of addresses (string)
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  getAllAddresses() {
+    const addresses = [];
+
+    const accessData = this.getWalletAccessData();
+    const xpub = HDPublicKey(accessData.xpubkey);
+
+    // Get last shared index (the last one of the array)
+    const lastSharedIndex = this.getLastSharedIndex();
+
+    for (let index=0; index<=lastSharedIndex; index++) {
+      const newKey = xpub.derive(index);
+      const address = Address(newKey.publicKey, network.getNetwork());
+      addresses.push(address.toString());
+    }
+
+    return addresses;
+  },
+
+  /**
    * Get the address to be used and generate a new one
    *
    * @return {string} address
