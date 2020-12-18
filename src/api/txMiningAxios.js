@@ -6,8 +6,9 @@
  */
 
 import helpers from '../helpers';
-import { TX_MINING_URL } from '../constants';
+import { TX_MINING_URL, TX_MINING_TESTNET_URL } from '../constants';
 import axiosWrapperCreateRequestInstance from './axiosWrapper';
+import networkInstance from '../network';
 
 /**
  * Create axios instance settings base URL and content type  
@@ -23,7 +24,13 @@ import axiosWrapperCreateRequestInstance from './axiosWrapper';
  * @param {number} timeout Timeout in milliseconds for the request
  */
 const txMiningRequestClient = (resolve, timeout) => {
-  return axiosWrapperCreateRequestInstance(TX_MINING_URL, resolve, timeout);
+  let txMiningURL;
+  if (networkInstance.network === 'mainnet') {
+    txMiningURL = TX_MINING_URL;
+  } else {
+    txMiningURL = TX_MINING_TESTNET_URL;
+  }
+  return axiosWrapperCreateRequestInstance(txMiningURL, resolve, timeout);
 }
 
 export default txMiningRequestClient;
