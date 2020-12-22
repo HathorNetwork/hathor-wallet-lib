@@ -7,7 +7,7 @@
 
 import EventEmitter from 'events';
 import wallet from '../wallet';
-import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
+import { HATHOR_TOKEN_CONFIG } from '../constants';
 import transaction from '../transaction';
 import tokens from '../tokens';
 import version from '../version';
@@ -126,7 +126,7 @@ class HathorWallet extends EventEmitter {
       let promise;
       if (this.firstConnection) {
         this.firstConnection = false;
-        promise = wallet.loadAddressHistory(0, GAP_LIMIT, this.conn, this.store);
+        promise = wallet.loadAddressHistory(0, wallet.getGapLimit(), this.conn, this.store);
       } else {
         promise = wallet.reloadData({connection: this.conn, store: this.store});
       }
