@@ -403,7 +403,7 @@ class HathorWallet extends EventEmitter {
    *
    * @return {Promise} Promise that resolves when transaction is sent
    **/
-  sendManyOutputsTransaction(outputs, inputs) {
+  sendManyOutputsTransaction(outputs, inputs = []) {
     storage.setStore(this.store);
     const data = {
       tokens: [], // For now does not support custom tokens
