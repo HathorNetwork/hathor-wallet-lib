@@ -148,6 +148,11 @@ class HathorWallet extends EventEmitter {
     return wallet.getAllAddresses();
   }
 
+  getAddressAtIndex(index) {
+    storage.setStore(this.store);
+    return wallet.getAddressAtIndex(index);
+  }
+
   getCurrentAddress({ markAsUsed = false } = {}) {
     storage.setStore(this.store);
     if (markAsUsed) {

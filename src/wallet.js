@@ -721,6 +721,22 @@ const wallet = {
   },
 
   /**
+   * Return the address derived from the path at index
+   *
+   * @return {String} Address at derivation path ending at {index}
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  getAddressAtIndex(index) {
+    const accessData = this.getWalletAccessData();
+    const xpub = HDPublicKey(accessData.xpubkey);
+    const newKey = xpub.derive(index);
+    const address = Address(newKey.publicKey, network.getNetwork());
+    return address.toString();
+  },
+
+  /**
    * Get the address to be used and generate a new one
    *
    * @return {string} address
