@@ -723,6 +723,8 @@ const wallet = {
   /**
    * Return the address derived from the path at index
    *
+   * @param {Number} index Derivation path index to get the address
+   *
    * @return {String} Address at derivation path ending at {index}
    *
    * @memberof Wallet
