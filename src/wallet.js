@@ -68,6 +68,11 @@ const wallet = {
    */
   _connection: WebSocketHandler,
 
+  /*
+   * Customizable gap limit value
+   */
+  _gapLimit: GAP_LIMIT,
+
   /**
    * Verify if words passed to generate wallet are valid. In case of invalid, returns message
    *
@@ -193,7 +198,7 @@ const wallet = {
     if (loadHistory) {
       // Load history from address
       this._connection.setup();
-      promise = this.loadAddressHistory(0, GAP_LIMIT);
+      promise = this.loadAddressHistory(0, this.getGapLimit());
     }
     return promise;
   },
@@ -643,7 +648,7 @@ const wallet = {
     const lastUsedIndex = this.getLastUsedIndex();
     const lastGeneratedIndex = this.getLastGeneratedIndex();
     if (LIMIT_ADDRESS_GENERATION) {
-      if (lastUsedIndex + GAP_LIMIT > lastGeneratedIndex) {
+      if (lastUsedIndex + this.getGapLimit() > lastGeneratedIndex) {
         // Still haven't reached the limit
         return true;
       } else {
@@ -718,6 +723,24 @@ const wallet = {
     }
 
     return addresses;
+  },
+
+  /**
+   * Return the address derived from the path at index
+   *
+   * @param {Number} index Derivation path index to get the address
+   *
+   * @return {String} Address at derivation path ending at {index}
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  getAddressAtIndex(index) {
+    const accessData = this.getWalletAccessData();
+    const xpub = HDPublicKey(accessData.xpubkey);
+    const newKey = xpub.derive(index);
+    const address = Address(newKey.publicKey, network.getNetwork());
+    return address.toString();
   },
 
   /**
@@ -1376,7 +1399,7 @@ const wallet = {
     this.setWalletData(newWalletData);
 
     // Load history from new server
-    const promise = this.loadAddressHistory(0, GAP_LIMIT, connection, store);
+    const promise = this.loadAddressHistory(0, this.getGapLimit(), connection, store);
     return promise;
   },
 
@@ -1713,9 +1736,9 @@ const wallet = {
     const lastGeneratedIndex = this.getLastGeneratedIndex();
     // Just in the case where there is no element in all data
     maxIndex = Math.max(maxIndex, 0);
-    if (maxIndex + GAP_LIMIT > lastGeneratedIndex) {
+    if (maxIndex + this.getGapLimit() > lastGeneratedIndex) {
       const startIndex = lastGeneratedIndex + 1;
-      const count = maxIndex + GAP_LIMIT - lastGeneratedIndex;
+      const count = maxIndex + this.getGapLimit() - lastGeneratedIndex;
       const promise = this.loadAddressHistory(startIndex, count, connection, store);
       promise.then(() => {
         if (resolve) {
@@ -2163,6 +2186,30 @@ const wallet = {
    */
   _getConnection(connection) {
     return connection ? connection : this._connection;
+  },
+
+  /**
+   * Set a new GAP LIMIT to be used when loading wallets
+   *
+   * @param {gapLimit} Number
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  setGapLimit(gapLimit) {
+    this._gapLimit = gapLimit;
+  },
+
+  /**
+   * Return the gap limit to be used
+   *
+   * @return {Number} Gap limit
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  getGapLimit() {
+    return this._gapLimit;
   },
 }
 
