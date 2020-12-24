@@ -36,6 +36,11 @@ export const GENESIS_TX = [
 export const GAP_LIMIT = 20;
 
 /**
+ * The maximum number of addresses to add in the address_history GET request
+ */
+export const MAX_ADDRESSES_GET = 20;
+
+/**
  * Minimum expected API version
  */
 export const MIN_API_VERSION = '0.37.2';

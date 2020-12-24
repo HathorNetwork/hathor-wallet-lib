@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, TOKEN_MINT_MASK, TOKEN_MELT_MASK, TOKEN_INDEX_MASK, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, MAX_OUTPUT_VALUE, HASH_KEY_SIZE, HASH_ITERATIONS, HD_WALLET_ENTROPY } from './constants';
+import { MAX_ADDRESSES_GET, GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, TOKEN_MINT_MASK, TOKEN_MELT_MASK, TOKEN_INDEX_MASK, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, MAX_OUTPUT_VALUE, HASH_KEY_SIZE, HASH_ITERATIONS, HD_WALLET_ENTROPY } from './constants';
 import Mnemonic from 'bitcore-mnemonic';
 import { HDPrivateKey, HDPublicKey, Address, crypto } from 'bitcore-lib';
 import CryptoJS from 'crypto-js';
@@ -355,7 +355,7 @@ const wallet = {
       // Using the GET request we end up getting a 414 (URI too large) if we customize the gap limit to a
       // huge number. I am using the POST API because only new full node versions will have this API, so
       // it's good to keep compatibility with older behaviour
-      if (addressesToSearch.length > GAP_LIMIT) {
+      if (addressesToSearch.length > MAX_ADDRESSES_GET) {
         response = await walletApi.getAddressHistoryForAwaitPOST(addressesToSearch, firstHash);
       } else {
         response = await walletApi.getAddressHistoryForAwait(addressesToSearch, firstHash);
