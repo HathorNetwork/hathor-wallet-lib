@@ -351,7 +351,15 @@ const wallet = {
     let history = null;
 
     while (hasMore === true) {
-      const response = await walletApi.getAddressHistoryForAwait(addressesToSearch, firstHash);
+      let response;
+      // Using the GET request we end up getting a 414 (URI too large) if we customize the gap limit to a
+      // huge number. I am using the POST API because only new full node versions will have this API, so
+      // it's good to keep compatibility with older behaviour
+      if (addressesToSearch.length > GAP_LIMIT) {
+        response = await walletApi.getAddressHistoryForAwaitPOST(addressesToSearch, firstHash);
+      } else {
+        response = await walletApi.getAddressHistoryForAwait(addressesToSearch, firstHash);
+      }
       const result = response.data;
       let ret = null;
 
