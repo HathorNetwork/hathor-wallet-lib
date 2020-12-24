@@ -68,6 +68,25 @@ const walletApi = {
   },
 
   /**
+   * Same as the GET API but as a POST, in order to support requests with many addresses
+   * in the GET we are getting 414, which is URI too large
+   *
+   * @param {Array} addresses Array of addresses to search for the history
+   * @param {String} hash String of the hash to start the search in the first address (optional)
+   *
+   * @return {Promise}
+   * @memberof ApiWallet
+   * @inner
+   */
+  getAddressHistoryForAwaitPOST(addresses, hash) {
+    const data = {addresses, paginate: true};
+    if (hash) {
+      data['hash'] = hash;
+    }
+    return createRequestInstance().post('thin_wallet/address_history', data)
+  },
+
+  /**
    * Execute method to send tokens
    *
    * @param {string} txHex Complete transaction serialized in hexadecimal
