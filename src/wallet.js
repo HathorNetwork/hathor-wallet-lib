@@ -345,65 +345,64 @@ const wallet = {
    * @inner
    */
   async getTxHistory(addresses, resolve, reject, connection = null, store = null) {
-    let hasMore = true;
-    let firstHash = null;
-    let addressesToSearch = addresses;
-    let history = null;
+    // Split addresses array into chunks of at most MAX_ADDRESSES_GET size
+    // this is good when a use case customizes the GAP_LIMIT (e.g. 4000) then we don't
+    // request /address_history with 4000 addresses
+    const addressesChunks = _.chunk(addresses, MAX_ADDRESSES_GET);
+    const lastChunkIndex = addressesChunks.length - 1;
 
-    while (hasMore === true) {
-      let response;
-      // Using the GET request we end up getting a 414 (URI too large) if we customize the gap limit to a
-      // huge number. I am using the POST API because only new full node versions will have this API, so
-      // it's good to keep compatibility with older behaviour
-      if (addressesToSearch.length > MAX_ADDRESSES_GET) {
-        response = await walletApi.getAddressHistoryForAwaitPOST(addressesToSearch, firstHash);
-      } else {
+    for (let i=0; i<=lastChunkIndex; i++) {
+      let hasMore = true;
+      let firstHash = null;
+      let addressesToSearch = addressesChunks[i];
+      while (hasMore === true) {
+        let response;
         response = await walletApi.getAddressHistoryForAwait(addressesToSearch, firstHash);
-      }
-      const result = response.data;
-      let ret = null;
+        const result = response.data;
+        let ret = null;
 
-      if (result.success) {
-        hasMore = result.has_more;
+        if (result.success) {
+          hasMore = result.has_more;
 
-        if (hasMore) {
-          // If has more data we set the first_hash of the next search
-          // and update the addresses array with only the missing addresses
-          firstHash = result.first_hash;
-          const addrIndex = addressesToSearch.indexOf(result.first_address);
-          if (addrIndex === -1) {
-            throw Error("Invalid address returned from the server.");
+          if (hasMore || i !== lastChunkIndex) {
+            // Update storage data with new history
+            ret = this.saveNewHistoryOnStorage(null, null, result.history, undefined, connection, store);
+
+            if (hasMore) {
+              // If has more data we set the first_hash of the next search
+              // and update the addresses array with only the missing addresses
+              firstHash = result.first_hash;
+              const addrIndex = addressesToSearch.indexOf(result.first_address);
+              if (addrIndex === -1) {
+                throw Error("Invalid address returned from the server.");
+              }
+
+              addressesToSearch = addressesToSearch.slice(addrIndex);
+            }
+          } else {
+            // If it's the last page, we update the storage and call the next loadAddress (if needed)
+            // This is all done on updateHistoryData
+            let oldStore = storage.store;
+            if (store) {
+              // Using method store because we will call getWalletData, then need to get from correct store
+              storage.setStore(store);
+            }
+            const data = this.getWalletData();
+            const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
+            const allTokens = 'allTokens' in data ? data['allTokens'] : [];
+            // Set back to old store because won't use storage in this method anymore
+            storage.setStore(oldStore);
+            ret = this.updateHistoryData(historyTransactions, allTokens, result.history, resolve, data, reject, connection, store);
           }
 
-          addressesToSearch = addressesToSearch.slice(addrIndex);
-
-          // Update storage data with new history
-          ret = this.saveNewHistoryOnStorage(null, null, result.history, undefined, connection, store);
+          // Propagate new loaded data
+          const conn = this._getConnection(connection);
+          conn.websocket.emit('addresses_loaded', ret);
         } else {
-          // If it's the last page, we update the storage and call the next loadAddress (if needed)
-          // This is all done on updateHistoryData
-          let oldStore = storage.store;
-          if (store) {
-            // Using method store because we will call getWalletData, then need to get from correct store
-            storage.setStore(store);
-          }
-          const data = this.getWalletData();
-          const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
-          const allTokens = 'allTokens' in data ? data['allTokens'] : [];
-          // Set back to old store because won't use storage in this method anymore
-          storage.setStore(oldStore);
-          ret = this.updateHistoryData(historyTransactions, allTokens, result.history, resolve, data, reject, connection, store);
+          throw Error(result.message);
         }
-
-        // Propagate new loaded data
-        const conn = this._getConnection(connection);
-        conn.websocket.emit('addresses_loaded', ret);
-      } else {
-        throw Error(result.message);
       }
     }
-
-    return history;
   },
 
   /**
@@ -1741,9 +1740,14 @@ const wallet = {
     const {historyTransactions, allTokens, newSharedAddress, newSharedIndex, addressesFound} = ret;
     let {maxIndex} = ret;
 
+    let lastUsedIndex = this.getLastUsedIndex();
+    if (lastUsedIndex === null) {
+      lastUsedIndex = -1;
+    }
+
     const lastGeneratedIndex = this.getLastGeneratedIndex();
     // Just in the case where there is no element in all data
-    maxIndex = Math.max(maxIndex, 0);
+    maxIndex = Math.max(maxIndex, lastUsedIndex, 0);
     if (maxIndex + this.getGapLimit() > lastGeneratedIndex) {
       const startIndex = lastGeneratedIndex + 1;
       const count = maxIndex + this.getGapLimit() - lastGeneratedIndex;
