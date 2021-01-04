@@ -366,6 +366,8 @@ const wallet = {
 
           if (hasMore || i !== lastChunkIndex) {
             // Update storage data with new history
+            // XXX Instead of updating the storage in every response we could save the history in another
+            // variable and update the storage only in the last response (as done in updateHistoryData method)
             ret = this.saveNewHistoryOnStorage(null, null, result.history, undefined, connection, store);
 
             if (hasMore) {
