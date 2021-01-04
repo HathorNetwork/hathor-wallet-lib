@@ -11,6 +11,7 @@ import helpers from './helpers';
 import WS from './websocket';
 import EventEmitter from 'events';
 
+
 class WebSocketHandler extends EventEmitter {
   constructor() {
     super();
@@ -33,7 +34,7 @@ class WebSocketHandler extends EventEmitter {
       this.oldEmit = this.websocket.emit;
       this.websocket.emit = (type, data) => {
         this.emit(type, data);
-        return this.oldEmit(type, data);
+        return this.oldEmit.apply(this.websocket, [type, data]);
       }
     }
 
