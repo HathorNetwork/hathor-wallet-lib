@@ -8,7 +8,7 @@
 import wallet from '../src/wallet';
 import helpers from '../src/helpers';
 import dateFormatter from '../src/date';
-import { DEFAULT_SERVER } from '../src/constants';
+import { DEFAULT_SERVER, GAP_LIMIT } from '../src/constants';
 import { WalletTypeError } from '../src/errors';
 import storage from '../src/storage';
 import WebSocketHandler from '../src/WebSocketHandler';
@@ -16,8 +16,42 @@ import WebSocketHandler from '../src/WebSocketHandler';
 
 beforeEach(() => {
   wallet.setConnection(WebSocketHandler);
+  wallet.setGapLimit(GAP_LIMIT);
   wallet.resetAllData();
   WebSocketHandler.setup();
+});
+
+// Mock any GET request to /thin_wallet/address_history
+// arguments for reply are (status, data, headers)
+mock.onGet('thin_wallet/address_history').reply((config) => {
+  if (config.params.addresses.indexOf('WgPiMqEcT2vMpQEy2arDkEcfEtGJhofyGd') > -1) {
+    const ret = {
+      'success': true,
+      'has_more': false,
+      'history': [
+        {
+          'tx_id': '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e',
+          'timestamp': 1548892556,
+          'is_voided': false,
+          'inputs': [],
+          'outputs': [
+            {
+              'decoded': {
+                'timelock': null,
+                'address': 'WgPiMqEcT2vMpQEy2arDkEcfEtGJhofyGd',
+              },
+              'token': '00',
+              'value': 2000,
+              'voided': false
+            }
+          ],
+        }
+      ]
+    }
+    return [200, ret];
+  } else {
+    return [200, {'success': true, 'has_more': false, 'history': []}];
+  }
 });
 
 
@@ -328,4 +362,47 @@ test('get public key from index', () => {
     const pubkey = entry[1];
     expect(wallet.getPublicKey(parseInt(index)).toString('hex')).toBe(pubkey);
   }
+});
+
+test('Load gap limit', async () => {
+  expect(wallet.getGapLimit()).toBe(GAP_LIMIT);
+  const words = 'ask staff rival gesture inject wealth theory receive assault purpose luxury exile swim neglect recipe tree opinion salmon ladder express sheriff circle metal game';
+  await wallet.executeGenerateWallet(words, '', '123456', 'password', true);
+  const walletData = wallet.getWalletData();
+  const addresses = walletData.keys;
+  expect(Object.keys(addresses).length).toBe(GAP_LIMIT + 1);
+  expect(wallet.getLastUsedIndex()).toBe(null);
+  expect(Object.keys(walletData.historyTransactions).length).toBe(0);
+});
+
+test('Load different gap limit with history', async () => {
+  expect(wallet.getGapLimit()).toBe(GAP_LIMIT);
+  wallet.setGapLimit(GAP_LIMIT * 2);
+  expect(wallet.getGapLimit()).toBe(GAP_LIMIT * 2);
+  const words = 'ask staff rival gesture inject wealth theory receive assault purpose luxury exile swim neglect recipe tree opinion salmon ladder express sheriff circle metal game';
+  await wallet.executeGenerateWallet(words, '', '123456', 'password', true);
+  const walletData = wallet.getWalletData()
+  const addresses = walletData.keys;
+
+  // The API mock will return a tx for an address that is in the index 35
+  // with this GAP_LIMIT of 40, we will be able to get this history
+
+  // addressAtIndex35 = 'WgPiMqEcT2vMpQEy2arDkEcfEtGJhofyGd'
+  expect(wallet.getLastUsedIndex()).toBe(35);
+  // If I have a tx for an address at index 35, it must have GAP_LIMIT * 2 empty addresses
+  expect(Object.keys(addresses).length).toBe(35 + (GAP_LIMIT * 2) + 1);
+
+  const historyTransactionsKeys = Object.keys(walletData.historyTransactions);
+  expect(historyTransactionsKeys.length).toBe(1);
+  expect(historyTransactionsKeys[0]).toBe('00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e');
+});
+
+test('Load different gap limit', async () => {
+  expect(wallet.getGapLimit()).toBe(GAP_LIMIT);
+  wallet.setGapLimit(GAP_LIMIT * 2);
+  expect(wallet.getGapLimit()).toBe(GAP_LIMIT * 2);
+  const words = wallet.generateWalletWords(256);
+  await wallet.executeGenerateWallet(words, '', '123456', 'password', true);
+  const addresses = wallet.getWalletData().keys;
+  expect(Object.keys(addresses).length).toBe(GAP_LIMIT * 2 + 1);
 });

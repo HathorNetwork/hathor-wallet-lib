@@ -7,7 +7,7 @@
 
 import EventEmitter from 'events';
 import wallet from '../wallet';
-import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
+import { HATHOR_TOKEN_CONFIG } from '../constants';
 import transaction from '../transaction';
 import tokens from '../tokens';
 import version from '../version';
@@ -126,7 +126,7 @@ class HathorWallet extends EventEmitter {
       let promise;
       if (this.firstConnection) {
         this.firstConnection = false;
-        promise = wallet.loadAddressHistory(0, GAP_LIMIT, this.conn, this.store);
+        promise = wallet.loadAddressHistory(0, wallet.getGapLimit(), this.conn, this.store);
       } else {
         promise = wallet.reloadData({connection: this.conn, store: this.store});
       }
@@ -146,6 +146,11 @@ class HathorWallet extends EventEmitter {
   getAllAddresses() {
     storage.setStore(this.store);
     return wallet.getAllAddresses();
+  }
+
+  getAddressAtIndex(index) {
+    storage.setStore(this.store);
+    return wallet.getAddressAtIndex(index);
   }
 
   getCurrentAddress({ markAsUsed = false } = {}) {
@@ -367,7 +372,12 @@ class HathorWallet extends EventEmitter {
     const txToken = token || this.token;
     const walletData = wallet.getWalletData();
     const historyTxs = 'historyTransactions' in walletData ? walletData.historyTransactions : {};
-    const ret = wallet.prepareSendTokensData(partialData, txToken, true, historyTxs, [txToken]);
+
+    let chooseInputs = true;
+    if (partialData.inputs.length > 0) {
+      chooseInputs = false;
+    }
+    const ret = wallet.prepareSendTokensData(partialData, txToken, chooseInputs, historyTxs, [txToken]);
 
     if (!ret.success) {
       return ret;
@@ -389,10 +399,11 @@ class HathorWallet extends EventEmitter {
    * Currently does not have support to send custom tokens, only HTR
    *
    * @param {Array} outputs Array of outputs with each element as an object with {'address', 'value'}
+   * @param {Array} inputs Array of inputs with each element as an object with {'hash', 'index'}
    *
    * @return {Promise} Promise that resolves when transaction is sent
    **/
-  sendManyOutputsTransaction(outputs) {
+  sendManyOutputsTransaction(outputs, inputs = []) {
     storage.setStore(this.store);
     const data = {
       tokens: [], // For now does not support custom tokens
@@ -402,6 +413,10 @@ class HathorWallet extends EventEmitter {
 
     for (const output of outputs) {
       data.outputs.push({address: output.address, value: output.value, tokenData: 0})
+    }
+
+    for (const input of inputs) {
+      data.inputs.push({tx_id: input.hash, index: input.index, token: HATHOR_TOKEN_CONFIG.uid });
     }
 
     const ret = this.completeTxData(data);
