@@ -144,6 +144,14 @@ class WS extends EventEmitter {
     const _type = message.type.split(':')[0]
     if (_type === 'pong') {
       this.onPong();
+    } else {
+      // The websoket might be exchanging many messages and end up getting the pong from the full node too late
+      // in that case the websocket would be closed but we know the connection is not down because we are receiving
+      // other messages. Because of that we just reset the timeoutTimer when we receive a message that is not a pong
+      if (this.timeoutTimer) {
+        clearTimeout(this.timeoutTimer);
+        this.timeoutTimer = setTimeout(() => this.onConnectionDown(), this.connectionTimeout);
+      }
     }
     this.emit(_type, message)
   }
