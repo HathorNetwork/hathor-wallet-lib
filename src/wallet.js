@@ -381,7 +381,6 @@ const wallet = {
               if (addrIndex === -1) {
                 throw Error("Invalid address returned from the server.");
               }
-
               addressesToSearch = addressesToSearch.slice(addrIndex);
             }
           } else {
@@ -1992,6 +1991,7 @@ const wallet = {
   removeMetricsListener() {
     if (this._connection && this._connection.websocket) {
       this._connection.websocket.removeListener('dashboard', this.handleWebsocketDashboard);
+      this._connection.websocket.removeListener('subscribe_address', this.onSubscribeAddress);
     }
   },
 
