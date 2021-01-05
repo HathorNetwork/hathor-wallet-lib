@@ -144,6 +144,11 @@ class WS extends EventEmitter {
     const _type = message.type.split(':')[0]
     if (_type === 'pong') {
       this.onPong();
+    } else {
+      if (this.timeoutTimer) {
+        clearTimeout(this.timeoutTimer);
+        this.timeoutTimer = setTimeout(() => this.onConnectionDown(), this.connectionTimeout);
+      }
     }
     this.emit(_type, message)
   }

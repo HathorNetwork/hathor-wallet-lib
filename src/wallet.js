@@ -305,9 +305,6 @@ const wallet = {
         dataJson.keys[address.toString()] = {privkey: null, index: i};
         addresses.push(address.toString());
 
-        // Subscribe in websocket to this address updates
-        this.subscribeAddress(address.toString(), connection);
-
         if (storage.getItem('wallet:address') === null) {
           // If still don't have an address to show on the screen
           this.updateAddress(address.toString(), i);
@@ -355,6 +352,12 @@ const wallet = {
       let hasMore = true;
       let firstHash = null;
       let addressesToSearch = addressesChunks[i];
+
+      // Subscribe in websocket to the addresses
+      for (let address of addressesToSearch) {
+        this.subscribeAddress(address, connection);
+      }
+
       while (hasMore === true) {
         let response;
         response = await walletApi.getAddressHistoryForAwait(addressesToSearch, firstHash);
@@ -1976,6 +1979,7 @@ const wallet = {
   addMetricsListener() {
     if (this._connection && this._connection.websocket) {
       this._connection.websocket.on('dashboard', this.handleWebsocketDashboard);
+      this._connection.websocket.on('subscribe_address', this.onSubscribeAddress);
     }
   },
 
@@ -1988,6 +1992,21 @@ const wallet = {
   removeMetricsListener() {
     if (this._connection && this._connection.websocket) {
       this._connection.websocket.removeListener('dashboard', this.handleWebsocketDashboard);
+    }
+  },
+
+  /**
+   * Method called when received subscribe_address ws message from full node
+   *
+   * @param {Object} data {success, type, message}
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  onSubscribeAddress(data) {
+    // If an address subscription fails, we stop the service
+    if (data.success === false) {
+      throw new Error(data.message)
     }
   },
 
