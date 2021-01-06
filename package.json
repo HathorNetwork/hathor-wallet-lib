@@ -1,6 +1,6 @@
 {
   "name": "@hathor/wallet-lib",
-  "version": "0.16.8",
+  "version": "0.16.9",
   "description": "Library used by Hathor Wallet",
   "jest": {
     "setupFilesAfterEnv": [
