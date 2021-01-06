@@ -25,6 +25,8 @@ beforeEach(() => {
   WebSocketHandler.started = true;
   wallet.setConnection(WebSocketHandler);
   wallet.resetAllData();
+  // Because we call resetAllData we must set the localhost as server again here
+  storage.setItem('wallet:server', 'http://localhost:8080/');
 });
 
 // Mock any POST request to push_tx
