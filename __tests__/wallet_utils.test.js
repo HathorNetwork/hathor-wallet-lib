@@ -18,9 +18,9 @@ beforeEach(() => {
   wallet.setConnection(WebSocketHandler);
   wallet.setGapLimit(GAP_LIMIT);
   wallet.resetAllData();
-  WebSocketHandler.setup();
   // Because we call resetAllData we must set the localhost as server again here
   storage.setItem('wallet:server', 'http://localhost:8080/');
+  WebSocketHandler.setup();
 });
 
 // Mock any GET request to /thin_wallet/address_history
