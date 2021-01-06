@@ -43,6 +43,7 @@ global.WebSocket = WebSocket;
 import helpers from './src/helpers';
 
 storage.setStore(new MemoryOnlyStore());
+console.log('SET WALLET SERVER');
 storage.setItem('wallet:server', 'http://localhost:8080/');
 let wsURL = helpers.getWSServerURL();
 
