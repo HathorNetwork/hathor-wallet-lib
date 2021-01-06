@@ -2006,6 +2006,7 @@ const wallet = {
   onSubscribeAddress(data) {
     // If an address subscription fails, we stop the service
     if (data.success === false) {
+      console.log('WAAAAT', helpers.getWSServerURL());
       throw new Error(data.message)
     }
   },
