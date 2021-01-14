@@ -399,12 +399,12 @@ class HathorWallet extends EventEmitter {
    * Currently does not have support to send custom tokens, only HTR
    *
    * @param {Array} outputs Array of outputs with each element as an object with {'address', 'value'}
-   * @param {Object} token Token object {'uid', 'name', 'symbol'}. Optional parameter if user already set on the class
    * @param {Array} inputs Array of inputs with each element as an object with {'hash', 'index'}
+   * @param {Object} token Token object {'uid', 'name', 'symbol'}. Optional parameter if user already set on the class
    *
    * @return {Promise} Promise that resolves when transaction is sent
    **/
-  sendManyOutputsTransaction(outputs, token = null, inputs = []) {
+  sendManyOutputsTransaction(outputs, inputs = [], token = null) {
     // XXX To accept here multi tokens in the same tx would be a bit more complicated because
     // the method prepareSendTokensData would need a bigger refactor.
     // I believe we should refactor all of that code (and it will be done on wallet-service)
