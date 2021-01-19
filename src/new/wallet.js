@@ -566,13 +566,14 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Select authority utxo for mint or melt. Depends on the callback received as parameter
+   * We could add an {options} parameter to allow common filters (e.g. mint authority, melt authority, p2pkh) to improve this method later.
    *
    * @param {String} tokenUid UID of the token to select the authority utxo
-   * @param {function} isUtxoCallback Callback to check if the output is the authority I wanet (isMeltOutput or isMintOutput)
+   * @param {function} filterUTXOs Callback to check if the output is the authority I want (isMeltOutput or isMintOutput)
    *
    * @return {Object} Object with {tx_id, index, address} of the authority output. Returns null in case there are no utxos for this type
    **/
-  selectAuthorityUtxo(tokenUid, isUtxoCallback) {
+  selectAuthorityUtxo(tokenUid, filterUTXOs) {
     const walletData = wallet.getWalletData();
     for (const tx_id in walletData.historyTransactions) {
       const tx = walletData.historyTransactions[tx_id];
@@ -597,7 +598,7 @@ class HathorWallet extends EventEmitter {
           continue;
         }
 
-        if (isUtxoCallback(output)) {
+        if (filterUTXOs(output)) {
           return {tx_id, index, address: output.decoded.address};
         }
       }
