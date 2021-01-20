@@ -18,6 +18,8 @@ beforeEach(() => {
   wallet.setConnection(WebSocketHandler);
   wallet.setGapLimit(GAP_LIMIT);
   wallet.resetAllData();
+  // Because we call resetAllData we must set the localhost as server again here
+  storage.setItem('wallet:server', 'http://localhost:8080/');
   WebSocketHandler.setup();
 });
 
@@ -302,6 +304,7 @@ test('Closed', () => {
 });
 
 test('Default server', () => {
+  wallet.resetAllData();
   expect(helpers.getServerURL()).toBe(DEFAULT_SERVER);
 
   // set default server
