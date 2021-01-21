@@ -159,9 +159,11 @@ class Transaction {
   calculateWeight(): number {
     let txSize = this.toBytes().length;
 
-    // XXX Parents are calculated only in the server but we need to consider them here
-    // Parents are always two and have 32 bytes each
-    txSize += 64
+    // If parents are not in txData, we need to consider them here
+    if (!this.parents || !this.parents.length || this.parents.length === 0) {
+      // Parents are always two and have 32 bytes each
+      txSize += 64;
+    }
 
     let sumOutputs = this.getOutputsSum();
     // Preventing division by 0 when handling authority methods that have no outputs
