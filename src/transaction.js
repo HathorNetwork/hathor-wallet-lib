@@ -434,9 +434,11 @@ const transaction = {
   calculateTxWeight(txData) {
     let txSize = this.txToBytes(txData).length;
 
-    // XXX Parents are calculated only in the server but we need to consider them here
-    // Parents are always two and have 32 bytes each
-    txSize += 64
+    // If parents are not in txData, we need to consider them here
+    if (!txData.parents || !txData.parents.length || txData.parents.length === 0) {
+      // Parents are always two and have 32 bytes each
+      txSize += 64;
+    }
 
     let sumOutputs = this.getOutputsSum(txData.outputs);
     // Preventing division by 0 when handling authority methods that have no outputs
