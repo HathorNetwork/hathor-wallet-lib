@@ -7,7 +7,7 @@
 
 import transaction from '../src/transaction';
 import wallet from '../src/wallet';
-import { AddressError, OutputValueError } from '../src/errors';
+import { AddressError, OutputValueError, MaximumNumberParentsError } from '../src/errors';
 import buffer from 'buffer';
 import { OP_PUSHDATA1 } from '../src/opcodes';
 import { DEFAULT_TX_VERSION } from '../src/constants';
@@ -18,6 +18,40 @@ beforeEach(() => {
   wallet.setConnection(WebSocketHandler);
 });
 
+
+test('calculate tx weight should fail with > 2 parents', () => {
+  const txData = {
+    "inputs": [{
+      "tx_id": "0000000e340d38d7a5616e3dfb8ac46184b07d59b8e7e61f9ce6e629d7abe8d6",
+      "index": 0,
+      "token": "00",
+      "address": "WR1i8USJWQuaU423fwuFQbezfevmT4vFWX",
+      "data": Buffer.from([71, 48])
+    }],
+    "outputs": [{
+      "address": "WR1i8USJWQuaU423fwuFQbezfevmT4vFWX",
+      "value": 5400,
+      "tokenData": 0,
+      "isChange": true
+    }, {
+      "address": "WR1i8USJWQuaU423fwuFQbezfevmT4vFWX",
+      "value": 1000,
+      "tokenData": 0
+    }],
+    "parents": [
+      "0002d4d2a15def7604688e1878ab681142a7b155cbe52a6b4e031250ae96db0a",
+      "0002ad8d1519daaddc8e1a37b14aac0b045129c01832281fb1c02d873c7abbf9",
+      "0002ad8d1519daaddc8e1a37b14aac0b045129c01832281fb1c02d873c7abbf9"
+    ],
+    "tokens": [],
+    "weight": 18.65677715840935,
+    "nonce": 0,
+    "version": 1,
+    "timestamp": 1610639352
+  };
+
+  expect(() => transaction.calculateTxWeight(txData)).toThrowError(MaximumNumberParentsError);
+});
 
 test('Tx weight constants', () => {
   transaction.updateTransactionWeightConstants(10, 1.5, 8);

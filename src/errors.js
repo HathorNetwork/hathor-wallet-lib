@@ -76,6 +76,14 @@ export class MaximumNumberInputsError extends Error {}
 export class MaximumNumberOutputsError extends Error {}
 
 /**
+ * Error thrown when transaction has more parents than the maximum allowed
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class MaximumNumberParentsError extends Error {}
+
+/**
  * Error thrown when the wallet type is invalid
  *
  * @memberof Errors
