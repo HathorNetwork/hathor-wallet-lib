@@ -207,6 +207,7 @@ test('Wallet operations for transaction', () => {
 
   // Preparing a new transaction
   const address = 'W71hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r';
+  const futureChangeAddress = 'WgPiMqEcT2vMpQEy2arDkEcfEtGJhofyGd';
 
   // No outputs
   const result1 = wallet.prepareSendTokensData({'outputs': []}, HATHOR_TOKEN_CONFIG, true, historyTransactions, new Set());
@@ -286,9 +287,15 @@ test('Wallet operations for transaction', () => {
     ],
   };
   // Success 2
-  const result9 = wallet.prepareSendTokensData(data9, HATHOR_TOKEN_CONFIG, false, historyTransactions, new Set());
+  const result9 = wallet.prepareSendTokensData(data9, HATHOR_TOKEN_CONFIG, false, historyTransactions, new Set(), futureChangeAddress);
   expect(result9.success).toBe(true);
   expect(result9.data.outputs.length).toBe(2);
+
+  for (const output of result9.data.outputs) {
+    if (output.isChange === true) {
+      expect(output.address).toBe(futureChangeAddress);
+    }
+  }
 });
 
 test('Try to check tx before wallet has loaded', () => {
