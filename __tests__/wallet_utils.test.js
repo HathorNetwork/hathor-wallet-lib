@@ -316,7 +316,11 @@ test('Default server', () => {
   wallet.changeServer(server);
   expect(helpers.getServerURL()).toBe(server);
 
-  // reset wallet. Should still use the default set
+  // Reset wallet data does not clean server.
+  wallet.resetWalletData();
+  expect(helpers.getServerURL()).toBe(server);
+
+  // Now clean server will erase the server
   wallet.cleanServer();
   expect(helpers.getServerURL()).toBe(defaultServer);
 });
