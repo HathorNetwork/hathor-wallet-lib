@@ -290,7 +290,6 @@ test('Reset all data', async () => {
   wallet.resetWalletData();
 
   expect(storage.getItem('wallet:started')).toBeNull();
-  expect(storage.getItem('wallet:server')).toBeNull();
   expect(storage.getItem('wallet:locked')).toBeNull();
   expect(wallet.getWalletAccessData()).toBeNull();
   expect(wallet.getWalletData()).toBeNull();
@@ -304,7 +303,7 @@ test('Closed', () => {
 });
 
 test('Default server', () => {
-  wallet.resetAllData();
+  wallet.cleanServer();
   expect(helpers.getServerURL()).toBe(DEFAULT_SERVER);
 
   // set default server
@@ -317,8 +316,12 @@ test('Default server', () => {
   wallet.changeServer(server);
   expect(helpers.getServerURL()).toBe(server);
 
-  // reset wallet. Should still use the default set
+  // Reset wallet data does not clean server.
   wallet.resetWalletData();
+  expect(helpers.getServerURL()).toBe(server);
+
+  // Now clean server will erase the server
+  wallet.cleanServer();
   expect(helpers.getServerURL()).toBe(defaultServer);
 });
 

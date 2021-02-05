@@ -1122,7 +1122,6 @@ const wallet = {
    */
   resetWalletData() {
     this.cleanWallet();
-    this.cleanServer();
     transaction.clearTransactionWeightConstants();
     transaction.clearMaxInputsConstant();
     transaction.clearMaxOutputsConstant();

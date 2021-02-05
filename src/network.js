@@ -84,6 +84,9 @@ class Network {
    * @param {string} network The new network
    */
   setNetwork(network) {
+    if (!(network in this.networkOptions)) {
+      throw new Error(`${network} is an invalid option for network.`);
+    }
     this.network = network;
   }
 
