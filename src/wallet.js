@@ -1199,15 +1199,20 @@ const wallet = {
    * @param {number} value Amount of the change output
    * @param {number} tokenData Token index of the output
    * @param {String} changeAddress Optional parameter with address for the change output
+   * @param {Object} options Options parameters
+   *  {
+   *   'address': address of the change output
+   *  }
    *
    * @return {Object} {'address': string, 'value': number, 'tokenData': number, 'isChange': true}
    *
    * @memberof Wallet
    * @inner
    */
-  getOutputChange(value, tokenData, changeAddress = null) {
-    const address = changeAddress ? changeAddress : this.getAddressToUse();
-    return {'address': address, 'value': value, 'tokenData': tokenData, 'isChange': true};
+  getOutputChange(value, tokenData, options = { address: null }) {
+    const { address } = options;
+    const changeAddress = address ? address : this.getAddressToUse();
+    return {'address': changeAddress, 'value': value, 'tokenData': tokenData, 'isChange': true};
   },
 
   /*
@@ -1499,15 +1504,19 @@ const wallet = {
    * @param {boolean} chooseInputs If should choose inputs automatically
    * @param {Object} historyTransactions Object of transactions indexed by tx_id
    * @param {Object} Array with all tokens already selected in the send tokens
-   * @param {String} changeAddress Optional parameter with address for the change output
+   * @param {Object} options Options parameters
+   *  {
+   *   'changeAddress': address of the change output
+   *  }
    *
    * @return {Object} {success: boolean, message: error message in case of failure, data: prepared data in case of success}
    *
    * @memberof Wallet
    * @inner
    */
-  prepareSendTokensData(data, token, chooseInputs, historyTransactions, allTokens, changeAddress = null) {
+  prepareSendTokensData(data, token, chooseInputs, historyTransactions, allTokens, options = { changeAddress: null }) {
     // Get the data and verify if we need to select the inputs or add a change output
+    const { changeAddress } = options;
 
     // First get the amount of outputs
     let outputsAmount = 0;
@@ -1532,7 +1541,7 @@ const wallet = {
 
       if (newData.inputsAmount > outputsAmount) {
         // Need to create change output
-        let outputChange = this.getOutputChange(newData.inputsAmount - outputsAmount, tokens.getTokenIndex(allTokens, token.uid), changeAddress);
+        let outputChange = this.getOutputChange(newData.inputsAmount - outputsAmount, tokens.getTokenIndex(allTokens, token.uid), { address: changeAddress });
         data['outputs'].push(outputChange);
         // Shuffle outputs, so we don't have change output always in the same index
         data['outputs'] = _.shuffle(data['outputs']);
@@ -1562,7 +1571,7 @@ const wallet = {
 
       if (inputsAmount > outputsAmount) {
         // Need to create change output
-        let outputChange = wallet.getOutputChange(inputsAmount - outputsAmount, tokens.getTokenIndex(allTokens, token.uid), changeAddress);
+        let outputChange = wallet.getOutputChange(inputsAmount - outputsAmount, tokens.getTokenIndex(allTokens, token.uid), { address: changeAddress });
         data['outputs'].push(outputChange);
         // Shuffle outputs, so we don't have change output always in the same index
         data['outputs'] = _.shuffle(data['outputs']);
