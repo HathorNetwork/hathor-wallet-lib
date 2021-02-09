@@ -1211,11 +1211,13 @@ const wallet = {
    */
   getOutputChange(value, tokenData, options = { address: null }) {
     const { address } = options;
-    if (!transaction.isAddressValid(address)) {
-      throw new AddressError('Change address is invalid.');
-    }
-    if (!this.isAddressMine(address)) {
-      throw new AddressError('Change address is not from loaded wallet.');
+    if (address) {
+      if (!transaction.isAddressValid(address)) {
+        throw new AddressError('Change address is invalid.');
+      }
+      if (!this.isAddressMine(address)) {
+        throw new AddressError('Change address is not from loaded wallet.');
+      }
     }
 
     const changeAddress = address ? address : this.getAddressToUse();
