@@ -709,6 +709,17 @@ class HathorWallet extends EventEmitter {
   isReady() {
     return this.state === HathorWallet.READY;
   }
+
+  /**
+   * Check if address is from the loaded wallet
+   *
+   * @param {string} address Address to check
+   *
+   * @return {boolean}
+   **/
+  isAddressMine(address) {
+    return wallet.isAddressMine(address);
+  }
 }
 
 // State constants.

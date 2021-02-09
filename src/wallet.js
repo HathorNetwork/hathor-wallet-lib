@@ -12,7 +12,7 @@ import CryptoJS from 'crypto-js';
 import walletApi from './api/wallet';
 import tokens from './tokens';
 import helpers from './helpers';
-import { ConstantNotSet, OutputValueError, WalletTypeError } from './errors';
+import { AddressError, ConstantNotSet, OutputValueError, WalletTypeError } from './errors';
 import version from './version';
 import storage from './storage';
 import network from './network';
@@ -1211,6 +1211,13 @@ const wallet = {
    */
   getOutputChange(value, tokenData, options = { address: null }) {
     const { address } = options;
+    if (!transaction.isAddressValid(address)) {
+      throw new AddressError('Change address is invalid.');
+    }
+    if (!this.isAddressMine(address)) {
+      throw new AddressError('Change address is not from loaded wallet.');
+    }
+
     const changeAddress = address ? address : this.getAddressToUse();
     return {'address': changeAddress, 'value': value, 'tokenData': tokenData, 'isChange': true};
   },
@@ -1528,6 +1535,8 @@ const wallet = {
       return {success: false, message:  `Token: ${token.symbol}. Total value can't be 0`};
     }
 
+    let outputChange;
+
     if (chooseInputs) {
       // If no inputs selected we select our inputs and, maybe add also a change output
       let newData = this.getInputsFromAmount(historyTransactions, outputsAmount, token.uid);
@@ -1541,7 +1550,16 @@ const wallet = {
 
       if (newData.inputsAmount > outputsAmount) {
         // Need to create change output
-        let outputChange = this.getOutputChange(newData.inputsAmount - outputsAmount, tokens.getTokenIndex(allTokens, token.uid), { address: changeAddress });
+        try {
+          outputChange = this.getOutputChange(newData.inputsAmount - outputsAmount, tokens.getTokenIndex(allTokens, token.uid), { address: changeAddress });
+        } catch (e) {
+          if (e instanceof AddressError) {
+            return {success: false, message: e.message};
+          } else {
+            // Unhandled error
+            throw e;
+          }
+        }
         data['outputs'].push(outputChange);
         // Shuffle outputs, so we don't have change output always in the same index
         data['outputs'] = _.shuffle(data['outputs']);
@@ -1571,7 +1589,16 @@ const wallet = {
 
       if (inputsAmount > outputsAmount) {
         // Need to create change output
-        let outputChange = wallet.getOutputChange(inputsAmount - outputsAmount, tokens.getTokenIndex(allTokens, token.uid), { address: changeAddress });
+        try {
+          outputChange = wallet.getOutputChange(inputsAmount - outputsAmount, tokens.getTokenIndex(allTokens, token.uid), { address: changeAddress });
+        } catch (e) {
+          if (e instanceof AddressError) {
+            return {success: false, message: e.message};
+          } else {
+            // Unhandled error
+            throw e;
+          }
+        }
         data['outputs'].push(outputChange);
         // Shuffle outputs, so we don't have change output always in the same index
         data['outputs'] = _.shuffle(data['outputs']);
