@@ -561,14 +561,18 @@ class HathorWallet extends EventEmitter {
    * @param {String} symbol Symbol of the token
    * @param {number} amount Quantity of the token to be minted
    * @param {String} address Optional parameter for the destination of the created token
+   * @param {Object} options Options parameters
+   *  {
+   *   'changeAddress': address of the change output
+   *  }
    *
    * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    **/
-  createNewToken(name, symbol, amount, address) {
+  createNewToken(name, symbol, amount, address, options = { changeAddress: null }) {
     storage.setStore(this.store);
     const mintAddress = address || this.getCurrentAddress();
-    const ret = tokens.createToken(mintAddress, name, symbol, amount, this.pinCode);
+    const ret = tokens.createToken(mintAddress, name, symbol, amount, this.pinCode, options);
 
     if (ret.success) {
       const sendTransaction = ret.sendTransaction;
@@ -627,11 +631,15 @@ class HathorWallet extends EventEmitter {
    * @param {String} tokenUid UID of the token to mint
    * @param {number} amount Quantity to mint
    * @param {String} address Optional parameter for the destination of the minted tokens
+   * @param {Object} options Options parameters
+   *  {
+   *   'changeAddress': address of the change output
+   *  }
    *
    * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    **/
-  mintTokens(tokenUid, amount, address) {
+  mintTokens(tokenUid, amount, address, options = { changeAddress: null }) {
     storage.setStore(this.store);
     const mintAddress = address || this.getCurrentAddress();
     const mintInput = this.selectAuthorityUtxo(tokenUid, wallet.isMintOutput.bind(wallet));
@@ -640,7 +648,7 @@ class HathorWallet extends EventEmitter {
       return {success: false, message: 'Don\'t have mint authority output available.'}
     }
 
-    const ret = tokens.mintTokens(mintInput, tokenUid, mintAddress, amount, null, this.pinCode);
+    const ret = tokens.mintTokens(mintInput, tokenUid, mintAddress, amount, null, this.pinCode, options);
 
     if (ret.success) {
       const sendTransaction = ret.sendTransaction;
@@ -656,11 +664,16 @@ class HathorWallet extends EventEmitter {
    *
    * @param {String} tokenUid UID of the token to melt
    * @param {number} amount Quantity to melt
+   * @param {Object} options Options parameters
+   *  {
+   *   'depositAddress': address of the HTR deposit back
+   *   'changeAddress': address of the change output
+   *  }
    *
    * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    **/
-  meltTokens(tokenUid, amount) {
+  meltTokens(tokenUid, amount, options = { depositAddress: null, changeAddress: null }) {
     storage.setStore(this.store);
     const meltInput = this.selectAuthorityUtxo(tokenUid, wallet.isMeltOutput.bind(wallet));
 
@@ -669,7 +682,7 @@ class HathorWallet extends EventEmitter {
     }
 
     // Always create another melt authority output
-    const ret = tokens.meltTokens(meltInput, tokenUid, amount, this.pinCode, true);
+    const ret = tokens.meltTokens(meltInput, tokenUid, amount, this.pinCode, true, options);
     if (ret.success) {
       const sendTransaction = ret.sendTransaction;
       sendTransaction.start();
