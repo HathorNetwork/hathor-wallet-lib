@@ -1216,7 +1216,7 @@ const wallet = {
         throw new AddressError('Change address is invalid.');
       }
       if (!this.isAddressMine(address)) {
-        throw new AddressError('Change address is not from loaded wallet.');
+        throw new AddressError('Change address is not from this wallet.');
       }
     }
 
