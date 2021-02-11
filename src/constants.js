@@ -36,6 +36,11 @@ export const GENESIS_TX = [
 export const GAP_LIMIT = 20;
 
 /**
+ * The maximum number of addresses to add in the address_history GET request
+ */
+export const MAX_ADDRESSES_GET = 20;
+
+/**
  * Minimum expected API version
  */
 export const MIN_API_VERSION = '0.37.2';
@@ -185,6 +190,7 @@ export const MIN_POLLING_INTERVAL = 0.5;
 export const TX_MINING_URL = 'https://txmining.mainnet.hathor.network/';
 
 /**
+<<<<<<< HEAD
  * Constants to calculate weight
  */
 export const TX_WEIGHT_CONSTANTS = {
@@ -207,3 +213,8 @@ export const MAX_OUTPUTS = 255;
  * Percentage of Hathor to deposit when creating a token
  */
 export const TOKEN_DEPOSIT_PERCENTAGE = 0.01
+
+/**
+ * Base URL for the tx mining api in the testnet
+ */
+export const TX_MINING_TESTNET_URL = 'https://txmining.testnet.hathor.network/';

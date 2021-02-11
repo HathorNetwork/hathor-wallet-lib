@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, TOKEN_MINT_MASK, TOKEN_MELT_MASK, TOKEN_INDEX_MASK, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, MAX_OUTPUT_VALUE, HASH_KEY_SIZE, HASH_ITERATIONS, HD_WALLET_ENTROPY } from './constants';
+import { MAX_ADDRESSES_GET, GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, TOKEN_MINT_MASK, TOKEN_MELT_MASK, TOKEN_INDEX_MASK, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, MAX_OUTPUT_VALUE, HASH_KEY_SIZE, HASH_ITERATIONS, HD_WALLET_ENTROPY } from './constants';
 import Mnemonic from 'bitcore-mnemonic';
 import { HDPrivateKey, HDPublicKey, Address, crypto } from 'bitcore-lib';
 import CryptoJS from 'crypto-js';
@@ -67,6 +67,11 @@ const wallet = {
    * If it's using the new wallet class should set a Connection using setConnection
    */
   _connection: WebSocketHandler,
+
+  /*
+   * Customizable gap limit value
+   */
+  _gapLimit: GAP_LIMIT,
 
   /**
    * Verify if words passed to generate wallet are valid. In case of invalid, returns message
@@ -193,7 +198,7 @@ const wallet = {
     if (loadHistory) {
       // Load history from address
       this._connection.setup();
-      promise = this.loadAddressHistory(0, GAP_LIMIT);
+      promise = this.loadAddressHistory(0, this.getGapLimit());
     }
     return promise;
   },
@@ -300,9 +305,6 @@ const wallet = {
         dataJson.keys[address.toString()] = {privkey: null, index: i};
         addresses.push(address.toString());
 
-        // Subscribe in websocket to this address updates
-        this.subscribeAddress(address.toString(), connection);
-
         if (storage.getItem('wallet:address') === null) {
           // If still don't have an address to show on the screen
           this.updateAddress(address.toString(), i);
@@ -340,57 +342,71 @@ const wallet = {
    * @inner
    */
   async getTxHistory(addresses, resolve, reject, connection = null, store = null) {
-    let hasMore = true;
-    let firstHash = null;
-    let addressesToSearch = addresses;
-    let history = null;
+    // Split addresses array into chunks of at most MAX_ADDRESSES_GET size
+    // this is good when a use case customizes the GAP_LIMIT (e.g. 4000) then we don't
+    // request /address_history with 4000 addresses
+    const addressesChunks = _.chunk(addresses, MAX_ADDRESSES_GET);
+    const lastChunkIndex = addressesChunks.length - 1;
 
-    while (hasMore === true) {
-      const response = await walletApi.getAddressHistoryForAwait(addressesToSearch, firstHash);
-      const result = response.data;
-      let ret = null;
+    for (let i=0; i<=lastChunkIndex; i++) {
+      let hasMore = true;
+      let firstHash = null;
+      let addressesToSearch = addressesChunks[i];
 
-      if (result.success) {
-        hasMore = result.has_more;
+      // Subscribe in websocket to the addresses
+      for (let address of addressesToSearch) {
+        this.subscribeAddress(address, connection);
+      }
 
-        if (hasMore) {
-          // If has more data we set the first_hash of the next search
-          // and update the addresses array with only the missing addresses
-          firstHash = result.first_hash;
-          const addrIndex = addressesToSearch.indexOf(result.first_address);
-          if (addrIndex === -1) {
-            throw Error("Invalid address returned from the server.");
+      while (hasMore === true) {
+        let response;
+        response = await walletApi.getAddressHistoryForAwait(addressesToSearch, firstHash);
+        const result = response.data;
+        let ret = null;
+
+        if (result.success) {
+          hasMore = result.has_more;
+
+          if (hasMore || i !== lastChunkIndex) {
+            // Update storage data with new history
+            // XXX Instead of updating the storage in every response we could save the history in another
+            // variable and update the storage only in the last response (as done in updateHistoryData method)
+            ret = this.saveNewHistoryOnStorage(null, null, result.history, undefined, connection, store);
+
+            if (hasMore) {
+              // If has more data we set the first_hash of the next search
+              // and update the addresses array with only the missing addresses
+              firstHash = result.first_hash;
+              const addrIndex = addressesToSearch.indexOf(result.first_address);
+              if (addrIndex === -1) {
+                throw Error("Invalid address returned from the server.");
+              }
+              addressesToSearch = addressesToSearch.slice(addrIndex);
+            }
+          } else {
+            // If it's the last page, we update the storage and call the next loadAddress (if needed)
+            // This is all done on updateHistoryData
+            let oldStore = storage.store;
+            if (store) {
+              // Using method store because we will call getWalletData, then need to get from correct store
+              storage.setStore(store);
+            }
+            const data = this.getWalletData();
+            const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
+            const allTokens = 'allTokens' in data ? data['allTokens'] : [];
+            // Set back to old store because won't use storage in this method anymore
+            storage.setStore(oldStore);
+            ret = this.updateHistoryData(historyTransactions, allTokens, result.history, resolve, data, reject, connection, store);
           }
 
-          addressesToSearch = addressesToSearch.slice(addrIndex);
-
-          // Update storage data with new history
-          ret = this.saveNewHistoryOnStorage(null, null, result.history, undefined, connection, store);
+          // Propagate new loaded data
+          const conn = this._getConnection(connection);
+          conn.websocket.emit('addresses_loaded', ret);
         } else {
-          // If it's the last page, we update the storage and call the next loadAddress (if needed)
-          // This is all done on updateHistoryData
-          let oldStore = storage.store;
-          if (store) {
-            // Using method store because we will call getWalletData, then need to get from correct store
-            storage.setStore(store);
-          }
-          const data = this.getWalletData();
-          const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
-          const allTokens = 'allTokens' in data ? data['allTokens'] : [];
-          // Set back to old store because won't use storage in this method anymore
-          storage.setStore(oldStore);
-          ret = this.updateHistoryData(historyTransactions, allTokens, result.history, resolve, data, reject, connection, store);
+          throw Error(result.message);
         }
-
-        // Propagate new loaded data
-        const conn = this._getConnection(connection);
-        conn.websocket.emit('addresses_loaded', ret);
-      } else {
-        throw Error(result.message);
       }
     }
-
-    return history;
   },
 
   /**
@@ -643,7 +659,7 @@ const wallet = {
     const lastUsedIndex = this.getLastUsedIndex();
     const lastGeneratedIndex = this.getLastGeneratedIndex();
     if (LIMIT_ADDRESS_GENERATION) {
-      if (lastUsedIndex + GAP_LIMIT > lastGeneratedIndex) {
+      if (lastUsedIndex + this.getGapLimit() > lastGeneratedIndex) {
         // Still haven't reached the limit
         return true;
       } else {
@@ -691,6 +707,51 @@ const wallet = {
     this.subscribeAddress(newAddress.toString(), connection);
 
     return {newAddress, newIndex};
+  },
+
+  /**
+   * Return all addresses already generated for this wallet
+   * From index 0 to lastSharedIndex
+   *
+   * @return {Array} Array of addresses (string)
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  getAllAddresses() {
+    const addresses = [];
+
+    const accessData = this.getWalletAccessData();
+    const xpub = HDPublicKey(accessData.xpubkey);
+
+    // Get last shared index (the last one of the array)
+    const lastSharedIndex = this.getLastSharedIndex();
+
+    for (let index=0; index<=lastSharedIndex; index++) {
+      const newKey = xpub.derive(index);
+      const address = Address(newKey.publicKey, network.getNetwork());
+      addresses.push(address.toString());
+    }
+
+    return addresses;
+  },
+
+  /**
+   * Return the address derived from the path at index
+   *
+   * @param {Number} index Derivation path index to get the address
+   *
+   * @return {String} Address at derivation path ending at {index}
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  getAddressAtIndex(index) {
+    const accessData = this.getWalletAccessData();
+    const xpub = HDPublicKey(accessData.xpubkey);
+    const newKey = xpub.derive(index);
+    const address = Address(newKey.publicKey, network.getNetwork());
+    return address.toString();
   },
 
   /**
@@ -1061,7 +1122,6 @@ const wallet = {
    */
   resetWalletData() {
     this.cleanWallet();
-    this.cleanServer();
     transaction.clearTransactionWeightConstants();
     transaction.clearMaxInputsConstant();
     transaction.clearMaxOutputsConstant();
@@ -1349,7 +1409,7 @@ const wallet = {
     this.setWalletData(newWalletData);
 
     // Load history from new server
-    const promise = this.loadAddressHistory(0, GAP_LIMIT, connection, store);
+    const promise = this.loadAddressHistory(0, this.getGapLimit(), connection, store);
     return promise;
   },
 
@@ -1683,12 +1743,17 @@ const wallet = {
     const {historyTransactions, allTokens, newSharedAddress, newSharedIndex, addressesFound} = ret;
     let {maxIndex} = ret;
 
+    let lastUsedIndex = this.getLastUsedIndex();
+    if (lastUsedIndex === null) {
+      lastUsedIndex = -1;
+    }
+
     const lastGeneratedIndex = this.getLastGeneratedIndex();
     // Just in the case where there is no element in all data
-    maxIndex = Math.max(maxIndex, 0);
-    if (maxIndex + GAP_LIMIT > lastGeneratedIndex) {
+    maxIndex = Math.max(maxIndex, lastUsedIndex, 0);
+    if (maxIndex + this.getGapLimit() > lastGeneratedIndex) {
       const startIndex = lastGeneratedIndex + 1;
-      const count = maxIndex + GAP_LIMIT - lastGeneratedIndex;
+      const count = maxIndex + this.getGapLimit() - lastGeneratedIndex;
       const promise = this.loadAddressHistory(startIndex, count, connection, store);
       promise.then(() => {
         if (resolve) {
@@ -1912,6 +1977,7 @@ const wallet = {
   addMetricsListener() {
     if (this._connection && this._connection.websocket) {
       this._connection.websocket.on('dashboard', this.handleWebsocketDashboard);
+      this._connection.websocket.on('subscribe_address', this.onSubscribeAddress);
     }
   },
 
@@ -1924,6 +1990,22 @@ const wallet = {
   removeMetricsListener() {
     if (this._connection && this._connection.websocket) {
       this._connection.websocket.removeListener('dashboard', this.handleWebsocketDashboard);
+      this._connection.websocket.removeListener('subscribe_address', this.onSubscribeAddress);
+    }
+  },
+
+  /**
+   * Method called when received subscribe_address ws message from full node
+   *
+   * @param {Object} data {success, type, message}
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  onSubscribeAddress(data) {
+    // If an address subscription fails, we stop the service
+    if (data.success === false) {
+      throw new Error(data.message)
     }
   },
 
@@ -2136,6 +2218,30 @@ const wallet = {
    */
   _getConnection(connection) {
     return connection ? connection : this._connection;
+  },
+
+  /**
+   * Set a new GAP LIMIT to be used when loading wallets
+   *
+   * @param {gapLimit} Number
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  setGapLimit(gapLimit) {
+    this._gapLimit = gapLimit;
+  },
+
+  /**
+   * Return the gap limit to be used
+   *
+   * @return {Number} Gap limit
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  getGapLimit() {
+    return this._gapLimit;
   },
 }
 

@@ -8,7 +8,7 @@
 import { OP_GREATERTHAN_TIMESTAMP, OP_DUP, OP_HASH160, OP_EQUALVERIFY, OP_CHECKSIG, OP_PUSHDATA1 } from './opcodes';
 import { DECIMAL_PLACES, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, TOKEN_INFO_VERSION, MAX_OUTPUT_VALUE_32, MAX_OUTPUT_VALUE, TOKEN_AUTHORITY_MASK, STRATUM_TIMEOUT_RETURN_CODE } from './constants';
 import { HDPrivateKey, crypto, encoding, util } from 'bitcore-lib';
-import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError } from './errors';
+import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError, MaximumNumberParentsError } from './errors';
 import dateFormatter from './date';
 import helpers from './helpers';
 import network from './network';
@@ -17,6 +17,7 @@ import storage from './storage';
 import buffer from 'buffer';
 import Long from 'long';
 import walletApi from './api/wallet';
+import { get } from 'lodash';
 
 
 /**
@@ -165,7 +166,7 @@ const transaction = {
 
   /**
    * Validate if the address is valid
-   * 
+   *
    * 1. Address must have 25 bytes
    * 2. Address checksum must be valid
    * 3. Address first byte must match one of the options for P2PKH or P2SH
@@ -201,11 +202,11 @@ const transaction = {
     }
     return true;
   },
-  
+
   /**
    * Return the checksum of the bytes passed
    * Checksum is calculated as the 4 first bytes of the double sha256
-   * 
+   *
    * @param {Buffer} bytes Data from where the checksum is calculated
    *
    * @return {Buffer}
@@ -221,7 +222,7 @@ const transaction = {
    * We push the length of data and the data
    * In case the data has length > 75, we need to push the OP_PUSHDATA1 before the length
    * We always push bytes
-   * 
+   *
    * @param {Array} stack Stack of bytes from the script
    * @param {Buffer} data Data to be pushed to stack
    *
@@ -240,7 +241,7 @@ const transaction = {
 
   /**
    * Create output script
-   * 
+   *
    * @param {string} address Address in base58
    * @param {number} [timelock] Timelock in timestamp
    *
@@ -271,7 +272,7 @@ const transaction = {
 
   /**
    * Create input data
-   * 
+   *
    * @param {Buffer} signature Input signature
    * @param {Buffer} publicKey Input public key
    *
@@ -288,7 +289,7 @@ const transaction = {
 
   /**
    * Return transaction data to sign in inputs
-   * 
+   *
    * @param {Object} txData Object with inputs and outputs {'inputs': [{'tx_id', 'index', 'token'}], 'outputs': ['address', 'value', 'timelock', 'tokenData'], 'tokens': [uid, uid2]}
    *
    * @return {Buffer}
@@ -414,7 +415,7 @@ const transaction = {
 
   /**
    * Calculate the minimum tx weight
-   * 
+   *
    * @param {Object} txData Object with inputs and outputs
    * {
    *  'inputs': [{'tx_id', 'index'}],
@@ -426,6 +427,7 @@ const transaction = {
    * }
    *
    * @throws {ConstantNotSet} If the weight constants are not set yet
+   * @throws {MaximumNumberParentsError} If the tx has more parents than the maximum allowed
    *
    * @return {number} Minimum weight calculated (float)
    * @memberof Transaction
@@ -434,9 +436,11 @@ const transaction = {
   calculateTxWeight(txData) {
     let txSize = this.txToBytes(txData).length;
 
-    // XXX Parents are calculated only in the server but we need to consider them here
-    // Parents are always two and have 32 bytes each
-    txSize += 64
+    if (txData.parents && txData.parents.length > 2) {
+      throw new MaximumNumberParentsError(`Transaction has ${txData.parents.length} parents and can have at most 2.`);
+    }
+
+    txSize += 64 - (32 * (get(txData, 'parents') || 0));
 
     let sumOutputs = this.getOutputsSum(txData.outputs);
     // Preventing division by 0 when handling authority methods that have no outputs
@@ -458,7 +462,7 @@ const transaction = {
 
   /**
    * Calculate the sum of outputs. Authority outputs are ignored.
-   * 
+   *
    * @param {Array} outputs
    * [{
    *  'address': str,
@@ -485,7 +489,7 @@ const transaction = {
    * Complete the txData
    *
    * Add weight, nonce, version, and timestamp to the txData
-   * 
+   *
    * @param {Object} txData Object with inputs and outputs
    * {
    *  'inputs': [{'tx_id', 'index'}],

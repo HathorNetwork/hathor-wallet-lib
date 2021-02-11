@@ -7,7 +7,7 @@
 
 import EventEmitter from 'events';
 import wallet from '../wallet';
-import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
+import { HATHOR_TOKEN_CONFIG } from '../constants';
 import transaction from '../transaction';
 import tokens from '../tokens';
 import version from '../version';
@@ -126,7 +126,7 @@ class HathorWallet extends EventEmitter {
       let promise;
       if (this.firstConnection) {
         this.firstConnection = false;
-        promise = wallet.loadAddressHistory(0, GAP_LIMIT, this.conn, this.store);
+        promise = wallet.loadAddressHistory(0, wallet.getGapLimit(), this.conn, this.store);
       } else {
         promise = wallet.reloadData({connection: this.conn, store: this.store});
       }
@@ -141,6 +141,16 @@ class HathorWallet extends EventEmitter {
       this.serverInfo = null;
       this.setState(HathorWallet.CONNECTING);
     }
+  }
+
+  getAllAddresses() {
+    storage.setStore(this.store);
+    return wallet.getAllAddresses();
+  }
+
+  getAddressAtIndex(index) {
+    storage.setStore(this.store);
+    return wallet.getAddressAtIndex(index);
   }
 
   getCurrentAddress({ markAsUsed = false } = {}) {
@@ -362,7 +372,12 @@ class HathorWallet extends EventEmitter {
     const txToken = token || this.token;
     const walletData = wallet.getWalletData();
     const historyTxs = 'historyTransactions' in walletData ? walletData.historyTransactions : {};
-    const ret = wallet.prepareSendTokensData(partialData, txToken, true, historyTxs, [txToken]);
+
+    let chooseInputs = true;
+    if (partialData.inputs.length > 0) {
+      chooseInputs = false;
+    }
+    const ret = wallet.prepareSendTokensData(partialData, txToken, chooseInputs, historyTxs, [txToken]);
 
     if (!ret.success) {
       return ret;
@@ -384,22 +399,34 @@ class HathorWallet extends EventEmitter {
    * Currently does not have support to send custom tokens, only HTR
    *
    * @param {Array} outputs Array of outputs with each element as an object with {'address', 'value'}
+   * @param {Array} inputs Array of inputs with each element as an object with {'hash', 'index'}
+   * @param {Object} token Token object {'uid', 'name', 'symbol'}. Optional parameter if user already set on the class
    *
    * @return {Promise} Promise that resolves when transaction is sent
    **/
-  sendManyOutputsTransaction(outputs) {
+  sendManyOutputsTransaction(outputs, inputs = [], token = null) {
+    // XXX To accept here multi tokens in the same tx would be a bit more complicated because
+    // the method prepareSendTokensData would need a bigger refactor.
+    // I believe we should refactor all of that code (and it will be done on wallet-service)
+    // so I decided to change this method to accept only one token, which is enough for our needs right now
     storage.setStore(this.store);
+    const txToken = token || this.token;
+    const isHathorToken = txToken.uid === HATHOR_TOKEN_CONFIG.uid;
     const data = {
-      tokens: [], // For now does not support custom tokens
+      tokens: isHathorToken ? [] : [txToken.uid],
       inputs: [],
       outputs: [],
     };
 
     for (const output of outputs) {
-      data.outputs.push({address: output.address, value: output.value, tokenData: 0})
+      data.outputs.push({address: output.address, value: output.value, tokenData: isHathorToken ? 0 : 1})
     }
 
-    const ret = this.completeTxData(data);
+    for (const input of inputs) {
+      data.inputs.push({tx_id: input.hash, index: input.index, token: HATHOR_TOKEN_CONFIG.uid });
+    }
+
+    const ret = this.completeTxData(data, txToken);
 
     if (ret.success) {
       return this.sendPreparedTransaction(ret.data);
@@ -510,6 +537,132 @@ class HathorWallet extends EventEmitter {
 
     return balance;
   }
+
+  /**
+   * Create a new token for this wallet
+   *
+   * @param {String} name Name of the token
+   * @param {String} symbol Symbol of the token
+   * @param {number} amount Quantity of the token to be minted
+   * @param {String} address Optional parameter for the destination of the created token
+   *
+   * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
+   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
+   **/
+  createNewToken(name, symbol, amount, address) {
+    storage.setStore(this.store);
+    const mintAddress = address || this.getCurrentAddress();
+    const ret = tokens.createToken(mintAddress, name, symbol, amount, this.pinCode);
+
+    if (ret.success) {
+      const sendTransaction = ret.sendTransaction;
+      sendTransaction.start();
+      return {success: true, promise: sendTransaction.promise, sendTransaction};
+    } else {
+      return ret;
+    }
+
+  }
+
+  /**
+   * Select authority utxo for mint or melt. Depends on the callback received as parameter
+   * We could add an {options} parameter to allow common filters (e.g. mint authority, melt authority, p2pkh) to improve this method later.
+   *
+   * @param {String} tokenUid UID of the token to select the authority utxo
+   * @param {function} filterUTXOs Callback to check if the output is the authority I want (isMeltOutput or isMintOutput)
+   *
+   * @return {Object} Object with {tx_id, index, address} of the authority output. Returns null in case there are no utxos for this type
+   **/
+  selectAuthorityUtxo(tokenUid, filterUTXOs) {
+    const walletData = wallet.getWalletData();
+    for (const tx_id in walletData.historyTransactions) {
+      const tx = walletData.historyTransactions[tx_id];
+      if (tx.is_voided) {
+        // Ignore voided transactions.
+        continue;
+      }
+
+      for (const [index, output] of tx.outputs.entries()) {
+        // This output is not mine
+        if (!wallet.isAddressMine(output.decoded.address, walletData)) {
+          continue;
+        }
+
+        // This token is not the one we are looking
+        if (output.token !== tokenUid) {
+          continue;
+        }
+
+        // If output was already used, we can't use it
+        if (output.spent_by) {
+          continue;
+        }
+
+        if (filterUTXOs(output)) {
+          return {tx_id, index, address: output.decoded.address};
+        }
+      }
+    }
+  }
+
+  /**
+   * Mint tokens
+   *
+   * @param {String} tokenUid UID of the token to mint
+   * @param {number} amount Quantity to mint
+   * @param {String} address Optional parameter for the destination of the minted tokens
+   *
+   * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
+   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
+   **/
+  mintTokens(tokenUid, amount, address) {
+    storage.setStore(this.store);
+    const mintAddress = address || this.getCurrentAddress();
+    const mintInput = this.selectAuthorityUtxo(tokenUid, wallet.isMintOutput.bind(wallet));
+
+    if (mintInput === null) {
+      return {success: false, message: 'Don\'t have mint authority output available.'}
+    }
+
+    const ret = tokens.mintTokens(mintInput, tokenUid, mintAddress, amount, null, this.pinCode);
+
+    if (ret.success) {
+      const sendTransaction = ret.sendTransaction;
+      sendTransaction.start();
+      return {success: true, promise: sendTransaction.promise, sendTransaction};
+    } else {
+      return ret;
+    }
+  }
+
+  /**
+   * Melt tokens
+   *
+   * @param {String} tokenUid UID of the token to melt
+   * @param {number} amount Quantity to melt
+   *
+   * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
+   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
+   **/
+  meltTokens(tokenUid, amount) {
+    storage.setStore(this.store);
+    const meltInput = this.selectAuthorityUtxo(tokenUid, wallet.isMeltOutput.bind(wallet));
+
+    if (meltInput === null) {
+      return {success: false, message: 'Don\'t have melt authority output available.'}
+    }
+
+    // Always create another melt authority output
+    const ret = tokens.meltTokens(meltInput, tokenUid, amount, this.pinCode, true);
+    if (ret.success) {
+      const sendTransaction = ret.sendTransaction;
+      sendTransaction.start();
+      return {success: true, promise: sendTransaction.promise, sendTransaction};
+    } else {
+      return ret;
+    }
+  }
+
 
   getTokenData() {
     storage.setStore(this.store);
