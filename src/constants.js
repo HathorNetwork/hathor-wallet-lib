@@ -190,7 +190,6 @@ export const MIN_POLLING_INTERVAL = 0.5;
 export const TX_MINING_URL = 'https://txmining.mainnet.hathor.network/';
 
 /**
-<<<<<<< HEAD
  * Constants to calculate weight
  */
 export const TX_WEIGHT_CONSTANTS = {
