@@ -56,15 +56,15 @@ class Transaction {
 
     this.inputs = inputs;
     this.outputs = outputs;
-    this.version = version;
-    this.weight = weight;
-    this.nonce = nonce;
-    this.timestamp = timestamp;
-    this.parents = parents;
-    this.tokens = tokens;
-    this.hash = hash;
-    this.name = name;
-    this.symbol = symbol;
+    this.version = version!;
+    this.weight = weight!;
+    this.nonce = nonce!;
+    this.timestamp = timestamp!;
+    this.parents = parents!;
+    this.tokens = tokens!;
+    this.hash = hash!;
+    this.name = name!;
+    this.symbol = symbol!;
   }
 
   /**
