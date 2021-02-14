@@ -932,6 +932,8 @@ const wallet = {
       return currentTimestamp > unspentTx.decoded.timelock;
     } else if (blockHeight) {
       return (this.getNetworkHeight() - blockHeight) >= this.getRewardLockConstant();
+    } else if ('selected' in unspentTx && unspentTx.selected === true) {
+      return false;
     } else {
       return true;
     }
@@ -1647,6 +1649,21 @@ const wallet = {
       for (const output of tx.outputs) {
         if (output.value > MAX_OUTPUT_VALUE) {
           throw new OutputValueError(`Transaction with id ${tx.tx_id} has output value of ${helpers.prettyValue(output.value)}. Maximum value is ${helpers.prettyValue(MAX_OUTPUT_VALUE)}`);
+        }
+      }
+
+      // We add a custom field to each utxo if it was already selected to be used in a tx, in case it's a new tx
+      // if the tx is already in the localStorage, we keep the custom field
+      if (tx.tx_id in historyTransactions) {
+        // It's not a new tx
+        const storageTx = historyTransactions[tx.tx_id];
+        for (const [index, output] of tx.outputs.entries()) {
+          output['selected'] = storageTx.outputs[index].selected;
+        }
+      } else {
+        // It's a new tx
+        for (const output of tx.outputs) {
+          output['selected'] = false;
         }
       }
 

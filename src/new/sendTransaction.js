@@ -11,6 +11,8 @@ import transaction from '../transaction';
 import txApi from '../api/txApi';
 import txMiningApi from '../api/txMining';
 import { AddressError, OutputValueError, ConstantNotSet, MaximumNumberOutputsError, MaximumNumberInputsError } from '../errors';
+import wallet from '../wallet';
+import storage from '../storage';
 
 /**
  * This is transaction mining class responsible for:
@@ -91,6 +93,7 @@ class SendTransaction extends EventEmitter {
         this.handleJobStatus();
       }
     }).catch((e) => {
+      this.updateOutputSelected(false);
       this.emit('unexpected-error', this.unexpectedError);
     });
   }
@@ -114,10 +117,12 @@ class SendTransaction extends EventEmitter {
           this.handlePushTx();
         } else if (response.status === 'timeout') {
           // Error: Timeout resolving pow
+          this.updateOutputSelected(false);
           this.emit('send-error', this.timeoutError);
         } else {
           if (response.expected_total_time === -1) {
             // Error: there are no miners online
+            this.updateOutputSelected(false);
             this.emit('send-error', this.noMinersError);
           } else {
             this.estimation = response.expected_total_time;
@@ -126,6 +131,7 @@ class SendTransaction extends EventEmitter {
           }
         }
       }).catch((e) => {
+        this.updateOutputSelected(false);
         this.emit('unexpected-error', this.unexpectedError);
       });
     }, poll_time);
@@ -141,9 +147,11 @@ class SendTransaction extends EventEmitter {
       if (response.success) {
         this.emit('send-success', response.tx);
       } else {
+        this.updateOutputSelected(false);
         this.emit('send-error', response.message);
       }
     }).catch(() => {
+      this.updateOutputSelected(false);
       this.emit('send-error', this.unexpectedPushTxError);
     });;
   }
@@ -152,7 +160,39 @@ class SendTransaction extends EventEmitter {
    * Start object (submit job)
    */
   start() {
+    this.updateOutputSelected(true);
     this.submitJob();
+  }
+
+  /**
+   * Update the outputs of the tx data in localStorage to set 'selected': true
+   * This will prevent the input selection algorithm to select the same input before the
+   * tx arrives from the websocket and set the 'spent_by' key
+   *
+   * @param {boolean} selected If should set the selected parameter as true or false
+   * @param {Object} store Optional store to use to select the localStorage
+   *
+   **/
+  updateOutputSelected(selected, store = null) {
+    if (store !== null) {
+      storage.setStore(store);
+    }
+
+    const walletData = wallet.getWalletData();
+    const historyTransactions = 'historyTransactions' in walletData ? walletData.historyTransactions : {};
+    const allTokens = 'allTokens' in walletData ? walletData.allTokens : [];
+
+    // Now that success is true, we iterate through the inputs and set selected as true
+    for (const input of this.data.inputs) {
+      historyTransactions[input.tx_id].outputs[input.index].selected = selected;
+    }
+    wallet.saveAddressHistory(historyTransactions, allTokens);
+
+    const myStore = storage.store;
+    // Schedule to set all those outputs as not selected 1 minute later
+    setTimeout(() => {
+      this.updateOutputSelected(false, myStore);
+    }, 1000 * 60);
   }
 }
 
