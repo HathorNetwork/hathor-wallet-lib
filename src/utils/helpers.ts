@@ -6,7 +6,7 @@
  */
 
 import { OP_PUSHDATA1 } from '../opcodes';
-import { BLOCK_VERSION, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, MERGED_MINED_BLOCK_VERSION, DECIMAL_PLACES } from '../constants';
+import { DECIMAL_PLACES } from '../constants';
 import buffer from 'buffer';
 import Long from 'long';
 import Transaction from '../models/transaction';
@@ -19,49 +19,6 @@ import { crypto } from 'bitcore-lib';
  */
 
 const helpers = {
-  /**
-   * Get object type (Transaction or Block)
-   *
-   * @param {Transaction} tx Object to get the type
-   *
-   * @return {string} Type of the object
-   *
-   * @memberof Helpers
-   * @inner
-   */
-  getTxType(tx: Transaction): string {
-    if (this.isBlock(tx)) {
-      if (tx.version === BLOCK_VERSION) {
-        return 'Block';
-      } else if (tx.version === MERGED_MINED_BLOCK_VERSION) {
-        return 'Merged Mining Block';
-      }
-    } else {
-      if (tx.version === DEFAULT_TX_VERSION) {
-        return 'Transaction';
-      } else if (tx.version === CREATE_TOKEN_TX_VERSION) {
-        return 'Create Token Transaction';
-      }
-    }
-
-    // If there is no match
-    return 'Unknown';
-  },
-
-  /**
-   * Check if object is a block or a transaction
-   *
-   * @param {Transaction} tx Transaction to be checked
-   *
-   * @return {boolean} true if object is a block, false otherwise
-   *
-   * @memberof Helpers
-   * @inner
-   */
-  isBlock(tx: Transaction): boolean {
-    return tx.version === BLOCK_VERSION || tx.version === MERGED_MINED_BLOCK_VERSION;
-  },
-
 
   /**
    * Round float to closest int
@@ -151,7 +108,7 @@ const helpers = {
    * @param {number} bytes How many bytes this number uses
    *
    * @return {Buffer} number in bytes
-   * @memberof Transaction
+   * @memberof Helpers
    * @inner
    */
   intToBytes(value: number, bytes: number): Buffer {
@@ -177,7 +134,7 @@ const helpers = {
    * @param {number} bytes How many bytes this number uses
    *
    * @return {Buffer} number in bytes
-   * @memberof Transaction
+   * @memberof Helpers
    * @inner
    */
   signedIntToBytes(value: number, bytes: number): Buffer {
@@ -206,7 +163,7 @@ const helpers = {
    * @param {number} bytes How many bytes this number uses
    *
    * @return {Buffer} number in bytes
-   * @memberof Transaction
+   * @memberof Helpers
    * @inner
    */
   floatToBytes(value: number, bytes: number): Buffer {
@@ -230,7 +187,7 @@ const helpers = {
    * @param {Array} stack Stack of bytes from the script
    * @param {Buffer} data Data to be pushed to stack
    *
-   * @memberof Transaction
+   * @memberof Helpers
    * @inner
    */
   pushDataToStack(stack: Buffer[], data: Buffer) {
@@ -249,7 +206,7 @@ const helpers = {
    * @param {Buffer} bytes Data from where the checksum is calculated
    *
    * @return {Buffer}
-   * @memberof Address
+   * @memberof Helpers
    * @inner
    */
   getChecksum(bytes: Buffer): Buffer {

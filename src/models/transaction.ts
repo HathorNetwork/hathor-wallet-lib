@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, DECIMAL_PLACES, TOKEN_INFO_VERSION, TX_WEIGHT_CONSTANTS, MAX_INPUTS, MAX_OUTPUTS } from '../constants';
+import { MERGED_MINED_BLOCK_VERSION, BLOCK_VERSION, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, DECIMAL_PLACES, TOKEN_INFO_VERSION, TX_WEIGHT_CONSTANTS, MAX_INPUTS, MAX_OUTPUTS } from '../constants';
 import { crypto, encoding, util } from 'bitcore-lib';
 import helpers from '../utils/helpers';
 import Input from './input';
@@ -109,20 +109,11 @@ class Transaction {
     }
 
     for (const inputTx of this.inputs) {
-      arr.push(util.buffer.hexToBuffer(inputTx.hash));
-      arr.push(helpers.intToBytes(inputTx.index, 1));
-      // Input data will be fixed to 0 for now
-      arr.push(helpers.intToBytes(0, 2));
+      arr.push(...inputTx.serialize(false));
     }
 
     for (const outputTx of this.outputs) {
-      arr.push(outputTx.valueToBytes());
-      // Token data
-      arr.push(helpers.intToBytes(outputTx.tokenData, 1));
-
-      const outputScript = outputTx.createScript();
-      arr.push(helpers.intToBytes(outputScript.length, 2));
-      arr.push(outputScript);
+      arr.push(...outputTx.serialize());
     }
 
     if (this.version === CREATE_TOKEN_TX_VERSION) {
@@ -226,24 +217,11 @@ class Transaction {
     }
 
     for (const inputTx of this.inputs) {
-      arr.push(util.buffer.hexToBuffer(inputTx.hash));
-      arr.push(helpers.intToBytes(inputTx.index, 1));
-      if (inputTx.data) {
-        arr.push(helpers.intToBytes(inputTx.data.length, 2));
-        arr.push(inputTx.data);
-      } else {
-        arr.push(helpers.intToBytes(0, 2));
-      }
+      arr.push(...inputTx.serialize());
     }
 
     for (const outputTx of this.outputs) {
-      arr.push(outputTx.valueToBytes());
-      // Token data
-      arr.push(helpers.intToBytes(outputTx.tokenData, 1));
-
-      const outputScript = outputTx.createScript();
-      arr.push(helpers.intToBytes(outputScript.length, 2));
-      arr.push(outputScript);
+      arr.push(...outputTx.serialize());
     }
 
     if (this.version === CREATE_TOKEN_TX_VERSION) {
@@ -336,15 +314,43 @@ class Transaction {
   }
 
   /**
-   * Create Transaction object from inputs and outputs
+   * Get object type (Transaction or Block)
    *
-   * @return {Transaction} Transaction object
+   * @return {string} Type of the object
+   *
    * @memberof Transaction
    * @inner
    */
-  static createUnsignedTx(inputs: Input[], outputs: Output[]): Transaction {
-    return new Transaction(inputs, outputs);
-  }
+  getType(): string {
+    if (this.isBlock(tx)) {
+      if (tx.version === BLOCK_VERSION) {
+        return 'Block';
+      } else if (tx.version === MERGED_MINED_BLOCK_VERSION) {
+        return 'Merged Mining Block';
+      }
+    } else {
+      if (tx.version === DEFAULT_TX_VERSION) {
+        return 'Transaction';
+      } else if (tx.version === CREATE_TOKEN_TX_VERSION) {
+        return 'Create Token Transaction';
+      }
+    }
+
+    // If there is no match
+    return 'Unknown';
+  },
+
+  /**
+   * Check if object is a block or a transaction
+   *
+   * @return {boolean} true if object is a block, false otherwise
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  isBlock(): boolean {
+    return this.version === BLOCK_VERSION || this.version === MERGED_MINED_BLOCK_VERSION;
+  },
 }
 
 export default Transaction;

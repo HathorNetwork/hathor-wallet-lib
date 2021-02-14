@@ -5,6 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { util } from 'bitcore-lib';
+import helpers from '../utils/helpers';
+
 type optionsType = {
   data?: Buffer | null,
 };
@@ -36,6 +39,26 @@ class Input {
     this.hash = hash;
     this.index = index;
     this.data = data;
+  }
+
+  /**
+   * Serialize an input to bytes
+   *
+   * @return {Buffer[]}
+   * @memberof Input
+   * @inner
+   */
+  serialize(addData: boolean = true): Buffer[] {
+    const arr: Buffer[] = [];
+    arr.push(util.buffer.hexToBuffer(this.hash));
+    arr.push(helpers.intToBytes(this.index, 1));
+    if (this.data && addData) {
+      arr.push(helpers.intToBytes(this.data.length, 2));
+      arr.push(this.data);
+    } else {
+      arr.push(helpers.intToBytes(0, 2));
+    }
+    return arr;
   }
 }
 

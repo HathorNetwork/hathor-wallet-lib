@@ -7,7 +7,6 @@
 
 import { AddressError } from '../errors';
 import { encoding, util } from 'bitcore-lib';
-import defaultNetwork from '../network';
 import Network from './network';
 import _ from 'lodash';
 import helpers from '../utils/helpers';
@@ -19,7 +18,7 @@ class Address {
   // Network to validate the address
   network: Network;
 
-  constructor(base58: string, options = {network: defaultNetwork}) {
+  constructor(base58: string, options = {network: new Network('testnet')}) {
     const { network } = options;
 
     if (!_.isString(base58)) {
@@ -64,7 +63,7 @@ class Address {
   }
 
   /**
-   * Validate if the address is valid
+   * Validate address
    *
    * 1. Address must have 25 bytes
    * 2. Address checksum must be valid
@@ -76,7 +75,7 @@ class Address {
    * @memberof Address
    * @inner
    */
-  validateAddress(): boolean {
+  private validateAddress(): boolean {
     const addressBytes = this.decode();
     const errorMessage = `Invalid address: ${this.base58}`;
 

@@ -9,7 +9,7 @@
 import { crypto, HDPublicKey, HDPrivateKey, Address } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
 import { HD_WALLET_ENTROPY } from '../constants';
-import { XPubError } from '../errors';
+import { XPubError, InvalidWords } from '../errors';
 import Network from '../models/network';
 import _ from 'lodash';
 
@@ -20,8 +20,9 @@ const wallet = {
    *
    * @param {string} words Words (separated by space) to generate the HD Wallet seed
    *
-   * @return {Object} {'valid': boolean, 'message': string, 'words': string} where 'words' is a cleaned
-   * string with the words separated by a single space
+   * @return {Object} {'valid': boolean, 'invalidWords': Array[string], 'words': string} where 'words' is a cleaned
+   * string with the words separated by a single space and invalidWords is an array of invalid words
+   * @throws {InvalidWords} In case the words string is invalid
    *
    * @memberof Wallet
    * @inner
@@ -36,7 +37,7 @@ const wallet = {
       const wordsArray = newWordsString.split(' ');
       if (wordsArray.length !== 24) {
         // Must have 24 words
-        return {'valid': false, 'message': 'Must have 24 words'};
+        throw new InvalidWords('Must have 24 words.')
       } else if (!Mnemonic.isValid(newWordsString)) {
         // Check if there is a word that does not belong to the list of possible words
         const wordlist = Mnemonic.Words.ENGLISH;
@@ -50,18 +51,17 @@ const wallet = {
 
         let errorMessage = '';
         if (errorList.length > 0) {
-          errorMessage = `Invalid words: ${errorList.join(' ')}`;
+          return {'valid': false, 'invalidWords': errorList};
         } else {
           // Invalid sequence of words
-          errorMessage = 'Invalid sequence of words';
+          throw new InvalidWords('Invalid sequence of words.')
         }
-        return {'valid': false, 'message': errorMessage};
       }
     } else {
       // Must be string
-      return {'valid': false, 'message': 'Must be a string'};
+      throw new InvalidWords('Words must be a string.')
     }
-    return {'valid': true, 'message': '', 'words': newWordsString};
+    return {'valid': true, 'words': newWordsString};
   },
 
   /**
@@ -116,6 +116,7 @@ const wallet = {
    * @inner
    */
   toPubkeyCompressed(pubkey: Buffer): Buffer {
+    assert(pubkey.length === 65)
     const x = pubkey.slice(1, 33);
     const y = pubkey.slice(33, 65);
     const point = new crypto.Point(x, y);

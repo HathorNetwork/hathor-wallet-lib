@@ -98,3 +98,11 @@ export class WalletTypeError extends Error {}
  * @inner
  */
 export class XPubError extends Error {}
+
+/**
+ * Error thrown when the user tries to create a wallet with an invalid sequence of words
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class InvalidWords extends Error {}

@@ -38,7 +38,7 @@ class Output {
     const { tokenData, timelock} = newOptions;
 
     if (!value) {
-      throw Error('You must provide a value.');
+      throw new OutputValueError('Value must be a positive number.');
     }
 
     if (!address) {
@@ -47,7 +47,6 @@ class Output {
 
     this.value = value;
     this.address = address;
-
     this.tokenData = tokenData;
     this.timelock = timelock;
   }
@@ -86,7 +85,7 @@ class Output {
    * @inner
    */
   isAuthority(): boolean {
-    return (this.tokenData & TOKEN_AUTHORITY_MASK) > 0
+    return (this.tokenData & TOKEN_AUTHORITY_MASK) > 0;
   }
 
   /*
@@ -114,7 +113,11 @@ class Output {
   }
 
   /**
-   * Get index of token list of the output
+   * Get index of token list of the output.
+   * It already subtracts 1 from the final result,
+   * so if this returns 0, it's the first token, i.e.
+   * tokenData = 1, then getTokenIndex = 0.
+   * For HTR output (tokenData = 0) it will return -1.
    *
    * @return {number} Index of the token of this output
    *
@@ -122,11 +125,11 @@ class Output {
    * @inner
    */
   getTokenIndex(): number {
-    return this.tokenData & TOKEN_INDEX_MASK;
+    return (this.tokenData & TOKEN_INDEX_MASK) - 1;
   }
   
   /**
-   * Create script
+   * Create a P2PKH script
    * 
    * @return {Buffer}
    * @memberof Output
@@ -149,6 +152,24 @@ class Output {
     arr.push(OP_EQUALVERIFY);
     arr.push(OP_CHECKSIG);
     return util.buffer.concat(arr);
+  }
+
+  /**
+   * Serialize an output to bytes
+   *
+   * @return {Buffer[]}
+   * @memberof Output
+   * @inner
+   */
+  serialize(): Buffer[] {
+    const arr: Buffer[] = [];
+    arr.push(this.valueToBytes());
+    // Token data
+    arr.push(helpers.intToBytes(this.tokenData, 1));
+    const outputScript = this.createScript();
+    arr.push(helpers.intToBytes(outputScript.length, 2));
+    arr.push(outputScript);
+    return arr;
   }
 }
 

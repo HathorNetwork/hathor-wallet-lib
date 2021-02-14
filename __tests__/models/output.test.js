@@ -22,10 +22,16 @@ test('Validate value', () => {
     o2.valueToBytes();
   }).toThrowError(OutputValueError);
 
-  // Value bigger than the max is invalid
-  const o3 = new Output(MAX_OUTPUT_VALUE + 1, new Address('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo'));
+  // 0 value is invalid
   expect(() => {
+    const o3 = new Output(0, new Address('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo'));
     o3.valueToBytes();
+  }).toThrowError(OutputValueError);
+
+  // Value bigger than the max is invalid
+  const o4 = new Output(MAX_OUTPUT_VALUE + 1, new Address('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo'));
+  expect(() => {
+    o4.valueToBytes();
   }).toThrowError(OutputValueError);
 })
 
@@ -37,21 +43,21 @@ test('Authorities', () => {
 
   const o2 = new Output(1000, new Address('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo'), {tokenData: AUTHORITY_TOKEN_DATA});
   expect(o2.isAuthority()).toBe(true);
-  expect(o2.getTokenIndex()).toBe(1);
+  expect(o2.getTokenIndex()).toBe(0);
   expect(o2.isMint()).toBe(false);
   expect(o2.isMelt()).toBe(false);
 
   // Mint authority output
   const o3 = new Output(TOKEN_MINT_MASK, new Address('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo'), {tokenData: AUTHORITY_TOKEN_DATA + 1});
   expect(o3.isAuthority()).toBe(true);
-  expect(o3.getTokenIndex()).toBe(2);
+  expect(o3.getTokenIndex()).toBe(1);
   expect(o3.isMint()).toBe(true);
   expect(o3.isMelt()).toBe(false);
 
   // Melt authority output
   const o4 = new Output(TOKEN_MELT_MASK, new Address('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo'), {tokenData: AUTHORITY_TOKEN_DATA + 2});
   expect(o4.isAuthority()).toBe(true);
-  expect(o4.getTokenIndex()).toBe(3);
+  expect(o4.getTokenIndex()).toBe(2);
   expect(o4.isMint()).toBe(false);
   expect(o4.isMelt()).toBe(true);
 });

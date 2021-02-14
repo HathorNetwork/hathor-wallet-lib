@@ -45,7 +45,7 @@ test('New tx', () => {
 })
 
 test('Token tx', () => {
-  const tx = Transaction.createUnsignedTx([], []);
+  const tx = new Transaction([], []);
   tx.name = 'Test';
   tx.symbol = 'TST';
   const info = tx.serializeTokenInfo();
@@ -55,7 +55,7 @@ test('Token tx', () => {
 });
 
 test('Tx validation', () => {
-  const tx = Transaction.createUnsignedTx([], []);
+  const tx = new Transaction([], []);
   tx.validate();
 
   const address1 = new Address('WR1i8USJWQuaU423fwuFQbezfevmT4vFWX');
