@@ -188,11 +188,13 @@ class SendTransaction extends EventEmitter {
     }
     wallet.saveAddressHistory(historyTransactions, allTokens);
 
-    const myStore = storage.store;
-    // Schedule to set all those outputs as not selected 1 minute later
-    setTimeout(() => {
-      this.updateOutputSelected(false, myStore);
-    }, 1000 * 60);
+    if (selected) {
+      // Schedule to set all those outputs as not selected 1 minute later
+      const myStore = storage.store;
+      setTimeout(() => {
+        this.updateOutputSelected(false, myStore);
+      }, 1000 * 60);
+    }
   }
 }
 
