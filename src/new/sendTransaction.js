@@ -191,15 +191,16 @@ class SendTransaction extends EventEmitter {
     }
     wallet.saveAddressHistory(historyTransactions, allTokens);
 
-    if (selected) {
+    if (selected && this._unmark_as_selected_timer === null) {
       // Schedule to set all those outputs as not selected later
       const myStore = storage.store;
       this._unmark_as_selected_timer = setTimeout(() => {
         this.updateOutputSelected(false, myStore);
       }, SELECT_OUTPUTS_TIMEOUT);
-    } else if (this._unmark_as_selected_timer) {
+    } else if (!selected && this._unmark_as_selected_timer !== null) {
       // If we unmark the outputs as selected we can already clear the timeout
       clearTimeout(this._unmark_as_selected_timer);
+      this._unmark_as_selected_timer = null;
     }
   }
 }

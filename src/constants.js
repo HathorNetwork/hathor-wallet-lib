@@ -195,6 +195,6 @@ export const TX_MINING_URL = 'https://txmining.mainnet.hathor.network/';
 export const TX_MINING_TESTNET_URL = 'https://txmining.testnet.hathor.network/';
 
 /**
- * Timeout to call the method to set all selected outputs of a tx as 'selected': false
+ * Timeout in milliseconds to call the method to set all selected outputs of a tx as 'selected': false
  */
 export const SELECT_OUTPUTS_TIMEOUT = 1000 * 60;
