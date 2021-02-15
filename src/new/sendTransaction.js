@@ -6,11 +6,13 @@
  */
 
 import EventEmitter from 'events';
-import { MIN_POLLING_INTERVAL } from '../constants';
+import { MIN_POLLING_INTERVAL, SELECT_OUTPUTS_TIMEOUT } from '../constants';
 import transaction from '../transaction';
 import txApi from '../api/txApi';
 import txMiningApi from '../api/txMining';
 import { AddressError, OutputValueError, ConstantNotSet, MaximumNumberOutputsError, MaximumNumberInputsError } from '../errors';
+import wallet from '../wallet';
+import storage from '../storage';
 
 /**
  * This is transaction mining class responsible for:
@@ -70,6 +72,9 @@ class SendTransaction extends EventEmitter {
         reject(message);
       });
     });
+
+    // Stores the setTimeout object to set selected outputs as false
+    this._unmark_as_selected_timer = null;
   }
 
   /**
@@ -91,6 +96,7 @@ class SendTransaction extends EventEmitter {
         this.handleJobStatus();
       }
     }).catch((e) => {
+      this.updateOutputSelected(false);
       this.emit('unexpected-error', this.unexpectedError);
     });
   }
@@ -114,10 +120,12 @@ class SendTransaction extends EventEmitter {
           this.handlePushTx();
         } else if (response.status === 'timeout') {
           // Error: Timeout resolving pow
+          this.updateOutputSelected(false);
           this.emit('send-error', this.timeoutError);
         } else {
           if (response.expected_total_time === -1) {
             // Error: there are no miners online
+            this.updateOutputSelected(false);
             this.emit('send-error', this.noMinersError);
           } else {
             this.estimation = response.expected_total_time;
@@ -126,6 +134,7 @@ class SendTransaction extends EventEmitter {
           }
         }
       }).catch((e) => {
+        this.updateOutputSelected(false);
         this.emit('unexpected-error', this.unexpectedError);
       });
     }, poll_time);
@@ -141,9 +150,11 @@ class SendTransaction extends EventEmitter {
       if (response.success) {
         this.emit('send-success', response.tx);
       } else {
+        this.updateOutputSelected(false);
         this.emit('send-error', response.message);
       }
     }).catch(() => {
+      this.updateOutputSelected(false);
       this.emit('send-error', this.unexpectedPushTxError);
     });;
   }
@@ -152,7 +163,45 @@ class SendTransaction extends EventEmitter {
    * Start object (submit job)
    */
   start() {
+    this.updateOutputSelected(true);
     this.submitJob();
+  }
+
+  /**
+   * Update the outputs of the tx data in localStorage to set 'selected_as_input'
+   * This will prevent the input selection algorithm to select the same input before the
+   * tx arrives from the websocket and set the 'spent_by' key
+   *
+   * @param {boolean} selected If should set the selected parameter as true or false
+   * @param {Object} store Optional store to use to select the localStorage
+   *
+   **/
+  updateOutputSelected(selected, store = null) {
+    if (store !== null) {
+      storage.setStore(store);
+    }
+
+    const walletData = wallet.getWalletData();
+    const historyTransactions = 'historyTransactions' in walletData ? walletData.historyTransactions : {};
+    const allTokens = 'allTokens' in walletData ? walletData.allTokens : [];
+
+    // Before sending the tx to be mined, we iterate through the inputs and set selected_as_input
+    for (const input of this.data.inputs) {
+      historyTransactions[input.tx_id].outputs[input.index]['selected_as_input'] = selected;
+    }
+    wallet.saveAddressHistory(historyTransactions, allTokens);
+
+    if (selected && this._unmark_as_selected_timer === null) {
+      // Schedule to set all those outputs as not selected later
+      const myStore = storage.store;
+      this._unmark_as_selected_timer = setTimeout(() => {
+        this.updateOutputSelected(false, myStore);
+      }, SELECT_OUTPUTS_TIMEOUT);
+    } else if (!selected && this._unmark_as_selected_timer !== null) {
+      // If we unmark the outputs as selected we can already clear the timeout
+      clearTimeout(this._unmark_as_selected_timer);
+      this._unmark_as_selected_timer = null;
+    }
   }
 }
 
