@@ -6,7 +6,7 @@
  */
 
 import EventEmitter from 'events';
-import { MIN_POLLING_INTERVAL } from '../constants';
+import { MIN_POLLING_INTERVAL, SELECT_OUTPUTS_TIMEOUT } from '../constants';
 import transaction from '../transaction';
 import txApi from '../api/txApi';
 import txMiningApi from '../api/txMining';
@@ -72,6 +72,9 @@ class SendTransaction extends EventEmitter {
         reject(message);
       });
     });
+
+    // Stores the setTimeout object to set selected outputs as false
+    this._unmark_as_selected_timer = null;
   }
 
   /**
@@ -165,7 +168,7 @@ class SendTransaction extends EventEmitter {
   }
 
   /**
-   * Update the outputs of the tx data in localStorage to set 'selected': true
+   * Update the outputs of the tx data in localStorage to set 'selected_as_input'
    * This will prevent the input selection algorithm to select the same input before the
    * tx arrives from the websocket and set the 'spent_by' key
    *
@@ -182,18 +185,21 @@ class SendTransaction extends EventEmitter {
     const historyTransactions = 'historyTransactions' in walletData ? walletData.historyTransactions : {};
     const allTokens = 'allTokens' in walletData ? walletData.allTokens : [];
 
-    // Now that success is true, we iterate through the inputs and set selected as true
+    // Before sending the tx to be mined, we iterate through the inputs and set selected_as_input
     for (const input of this.data.inputs) {
-      historyTransactions[input.tx_id].outputs[input.index].selected = selected;
+      historyTransactions[input.tx_id].outputs[input.index]['selected_as_input'] = selected;
     }
     wallet.saveAddressHistory(historyTransactions, allTokens);
 
     if (selected) {
-      // Schedule to set all those outputs as not selected 1 minute later
+      // Schedule to set all those outputs as not selected later
       const myStore = storage.store;
-      setTimeout(() => {
+      this._unmark_as_selected_timer = setTimeout(() => {
         this.updateOutputSelected(false, myStore);
-      }, 1000 * 60);
+      }, SELECT_OUTPUTS_TIMEOUT);
+    } else if (this._unmark_as_selected_timer) {
+      // If we unmark the outputs as selected we can already clear the timeout
+      clearTimeout(this._unmark_as_selected_timer);
     }
   }
 }
