@@ -7,7 +7,7 @@
 
 import EventEmitter from 'events';
 import wallet from '../wallet';
-import { HATHOR_TOKEN_CONFIG } from '../constants';
+import { HATHOR_TOKEN_CONFIG, MAX_INPUTS } from '../constants';
 import transaction from '../transaction';
 import tokens from '../tokens';
 import version from '../version';
@@ -182,6 +182,102 @@ class HathorWallet extends EventEmitter {
     const data = wallet.getWalletData();
     const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
     return historyTransactions;
+  }
+
+  /**
+   * Get utxos of the wallet addresses
+   *
+   * @param {object} options Consolidation options shared with filterUtxos and consolidateUtxos (https://github.com/HathorNetwork/hathor-wallet-headless/issues/44)
+   *
+   * @return {object} { total_amount_available: number, total_utxos_available: number, total_amount_locked: number, total_utxos_locked: number, utxos: Array[] } utxos and meta information about it
+   */
+  getUtxos(options) {
+    const historyTransactions = Object.values(this.getTxHistory());
+    const utxoDetails = {
+      total_amount_available: 0,
+      total_utxos_available: 0,
+      total_amount_locked: 0,
+      total_utxos_locked: 0,
+      utxos: [],
+    };
+
+    // Iterate through transactions
+    for (let i = 0; i < historyTransactions.length; i++) {
+      const transaction = historyTransactions[i];
+
+      // Orphan transactions should be ignored
+      if (transaction.is_voided) {
+        continue;
+      }
+
+      // Iterate through outputs
+      for (let j = 0; j < transaction.outputs.length; j++) {
+        const output = transaction.outputs[j];
+
+        const is_unspent = output.spent_by === null;
+        const filters = wallet.filterUtxos(output, utxoDetails, options);
+        const is_authority = wallet.isAuthorityOutput(output);
+
+        // Max amount reached or max utxos.length, no more utxo should be added
+        if (!filters.is_max_amount_valid || !filters.is_max_utxos_valid) {
+          return utxoDetails;
+        }
+
+        if (is_unspent && filters.is_all_filters_valid && !is_authority) {
+          const locked = !wallet.canUseUnspentTx(output, j);
+          utxoDetails.utxos.push({
+            address: output.decoded.address,
+            amount: output.value,
+            tx_id: transaction.tx_id,
+            locked,
+            index: j,
+          });
+          if (!locked) {
+            utxoDetails.total_utxos_available++;
+            utxoDetails.total_amount_available += output.value;
+          } else {
+            utxoDetails.total_utxos_locked++;
+            utxoDetails.total_amount_locked += output.value;
+          }
+        }
+      }
+    }
+
+    return utxoDetails;
+  }
+
+  /**
+   * Consolidates many utxos into a single one
+   *
+   * @param {string} destinationAddress Address of the consolidated utxos
+   * @param {object} options Consolidation options (https://github.com/HathorNetwork/hathor-wallet-headless/issues/44)
+   *
+   * @return {object} { success: boolean, promise: Promise } indicates that the transaction is sent or not
+   */
+  consolidateUtxos(destinationAddress, options) {
+    const utxoDetails = this.getUtxos(options);
+    const inputs = [];
+    let value = 0;
+    for (let i = 0; i < utxoDetails.utxos.length; i++) {
+      if (inputs.length === MAX_INPUTS) {
+        break;
+      }
+      const utxo = utxoDetails.utxos[i];
+      inputs.push({
+        hash: utxo.tx_id,
+        index: utxo.index,
+      })
+      value += utxo.amount;
+    }
+    const outputs = [{
+      address: destinationAddress,
+      value,
+    }];
+    const token = {
+      uid: options.token || HATHOR_TOKEN_CONFIG.uid,
+    };
+
+    return this.sendManyOutputsTransaction(outputs, inputs, token);
   }
 
   setState(state) {
