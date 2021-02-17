@@ -13,6 +13,9 @@ import { XPubError, InvalidWords } from '../errors';
 import Network from '../models/network';
 import _ from 'lodash';
 
+// TODO Declare this elsewhere in order to be used in all classes
+declare function assert(value: unknown): asserts value;
+
 
 const wallet = {
   /**
@@ -27,7 +30,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  wordsValid(words: string): {valid: boolean, message: string, words?: string} {
+  wordsValid(words: string): {valid: boolean, invalidWords?: string[], words?: string} {
     let newWordsString = '';
     if (_.isString(words)) {
       // 1. Replace all non ascii chars by a single space
@@ -116,7 +119,7 @@ const wallet = {
    * @inner
    */
   toPubkeyCompressed(pubkey: Buffer): Buffer {
-    assert(pubkey.length === 65)
+    assert(pubkey.length === 65);
     const x = pubkey.slice(1, 33);
     const y = pubkey.slice(33, 65);
     const point = new crypto.Point(x, y);

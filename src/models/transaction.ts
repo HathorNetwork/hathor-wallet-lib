@@ -322,23 +322,23 @@ class Transaction {
    * @inner
    */
   getType(): string {
-    if (this.isBlock(tx)) {
-      if (tx.version === BLOCK_VERSION) {
+    if (this.isBlock()) {
+      if (this.version === BLOCK_VERSION) {
         return 'Block';
-      } else if (tx.version === MERGED_MINED_BLOCK_VERSION) {
+      } else if (this.version === MERGED_MINED_BLOCK_VERSION) {
         return 'Merged Mining Block';
       }
     } else {
-      if (tx.version === DEFAULT_TX_VERSION) {
+      if (this.version === DEFAULT_TX_VERSION) {
         return 'Transaction';
-      } else if (tx.version === CREATE_TOKEN_TX_VERSION) {
+      } else if (this.version === CREATE_TOKEN_TX_VERSION) {
         return 'Create Token Transaction';
       }
     }
 
     // If there is no match
     return 'Unknown';
-  },
+  }
 
   /**
    * Check if object is a block or a transaction
@@ -350,7 +350,7 @@ class Transaction {
    */
   isBlock(): boolean {
     return this.version === BLOCK_VERSION || this.version === MERGED_MINED_BLOCK_VERSION;
-  },
+  }
 }
 
 export default Transaction;

@@ -14,36 +14,6 @@ import buffer from 'buffer';
 import { OP_PUSHDATA1 } from '../../src/opcodes';
 
 
-test('Transaction type', () => {
-  const outputs1 = [
-    new Output(100, new Address('1PtH3rBmiYDiUuomQyoxMREicrxjg3LA5q')),
-    new Output(300, new Address('1PtH3rBmiYDiUuomQyoxMREicrxjg3LA5q'))
-  ];
-  const tx1 = new Transaction([], outputs1, {version: 1, hash: '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e'});
-
-  const outputs2 = [
-    new Output(100, new Address('1PtH3rBmiYDiUuomQyoxMREicrxjg3LA5q')),
-    new Output(300, new Address('1PtH3rBmiYDiUuomQyoxMREicrxjg3LA5q'))
-  ];
-  const inputs2 = [
-    new Input('00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e', 0)
-  ];
-  const tx2 = new Transaction(inputs2, outputs2, {version: 1, hash: '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295d'});
-
-  const outputs3 = [
-    new Output(2000, new Address('1PtH3rBmiYDiUuomQyoxMREicrxjg3LA5q'))
-  ];
-  const tx3 = new Transaction([], outputs3, {version: 0, hash: '000164e1e7ec7700a18750f9f50a1a9b63f6c7268637c072ae9ee181e58eb01b'});
-
-  expect(helpers.getTxType(tx1).toLowerCase()).toBe('transaction');
-  expect(helpers.getTxType(tx2).toLowerCase()).toBe('transaction');
-  expect(helpers.getTxType(tx3).toLowerCase()).toBe('block');
-
-  expect(helpers.isBlock(tx1)).toBe(false);
-  expect(helpers.isBlock(tx2)).toBe(false);
-  expect(helpers.isBlock(tx3)).toBe(true);
-});
-
 test('Round float', () => {
   expect(helpers.roundFloat(1.23)).toBe(1.23);
   expect(helpers.roundFloat(1.2345)).toBe(1.23);

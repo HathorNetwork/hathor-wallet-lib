@@ -6,7 +6,7 @@
  */
 
 import wallet from '../../src/utils/wallet';
-import { XPubError } from '../../src/errors';
+import { XPubError, InvalidWords } from '../../src/errors';
 import Network from '../../src/models/network';
 import Mnemonic from 'bitcore-mnemonic';
 import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE } from '../../src/constants';
@@ -22,10 +22,18 @@ test('Words', () => {
 
   // With 23 words become invalid
   const invalidArr = wordsArr.slice(0, 23)
-  expect(wallet.wordsValid(invalidArr.join(' ')).valid).toBe(false);
+  expect(() => wallet.wordsValid(invalidArr.join(' '))).toThrowError(InvalidWords);
+
   // Wrong 24th word
   invalidArr.push('word');
-  expect(wallet.wordsValid(invalidArr.join(' ')).valid).toBe(false);
+  expect(() => wallet.wordsValid(invalidArr.join(' '))).toThrowError(InvalidWords);
+
+  // If the wrong word does not belong to the mnemonic dictionary we return it in the list of invalidWords
+  const invalidArr2 = invalidArr.slice(0, 23);
+  invalidArr2.push('abc');
+  const ret = wallet.wordsValid(invalidArr2.join(' '));
+  expect(ret.valid).toBe(false);
+  expect(ret.invalidWords).toStrictEqual(['abc']);
 
   // The separator may have breakline and multiples spaces
   const testWords = wordsArr.join('  \n');
