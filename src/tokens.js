@@ -326,16 +326,23 @@ const tokens = {
    * @param {string} symbol Symbol of the new token
    * @param {number} mintAmount Amount of the new token that will be minted
    * @param {string} pin Pin to generate new addresses, if necessary
+   * @param {Object} options Options parameters
+   *  {
+   *   'changeAddress': address of the change output
+   *  }
    *
    * @return {Promise} Promise that resolves when token is created or an error from the backend arrives
    *
    * @memberof Tokens
    * @inner
    */
-  createToken(address, name, symbol, mintAmount, pin) {
+  createToken(address, name, symbol, mintAmount, pin, options = { changeAddress: null }) {
+    const { changeAddress } = options;
+
     const mintOptions = {
       createAnotherMint: true,
       createMelt: true,
+      changeAddress,
     };
 
     let txData;
@@ -406,6 +413,7 @@ const tokens = {
    * @param {Object} options {
    *   {boolean} createAnotherMint If should create another mint output after spending this one
    *   {boolean} createMelt If should create a melt output (useful when creating a new token)
+   *   {string} changeAddress Address to send the change of HTR after mint deposit
    * }
    *
    * @throws {InsufficientFundsError} If not enough tokens for deposit
@@ -419,15 +427,16 @@ const tokens = {
     const fnOptions = Object.assign({
       createAnotherMint: true,
       createMelt: false,
+      changeAddress: null,
     }, options);
 
-    const { createAnotherMint, createMelt } = fnOptions;
+    const { createAnotherMint, createMelt, changeAddress } = fnOptions;
     const inputs = [];
     const outputs = [];
 
     if (!depositInputs) {
       // select HTR deposit inputs
-      const depositInfo = this.getMintDepositInfo(amount);
+      const depositInfo = this.getMintDepositInfo(amount, { changeAddress });
       inputs.push(...depositInfo.inputs);
       outputs.push(...depositInfo.outputs);
     } else {
@@ -436,7 +445,7 @@ const tokens = {
       // create change output, if needed
       const depositAmount = this.getDepositAmount(amount);
       if (depositInputs.amount - depositAmount > 0) {
-        const outputChange = wallet.getOutputChange(depositInputs.amount - depositAmount, 0);
+        const outputChange = wallet.getOutputChange(depositInputs.amount - depositAmount, 0, { address: changeAddress });
         outputs.push(outputChange);
       } else if (depositInputs.amount - depositAmount < 0) {
         throw new InsufficientFundsError(`Not enough HTR tokens for deposit: ${depositAmount} required, ${htrInputs.inputsAmount} available`);
@@ -498,6 +507,7 @@ const tokens = {
    *   {number} minimumTimestamp Tx minimum timestamp (default = 0)
    *   {boolean} createAnotherMint If should create another mint output after spending this one
    *   {boolean} createMelt If should create a melt output (useful when creating a new token)
+   *   {string} changeAddress Address to send the change of HTR after mint deposit
    * }
    *
    * @throws {InsufficientFundsError} If not enough tokens for deposit
@@ -514,6 +524,7 @@ const tokens = {
       createAnotherMint: true,
       createMelt: false,
       minimumTimestamp: 0,
+      changeAddress: null,
     }, options);
     // Get mint data
     let newTxData;
@@ -542,13 +553,19 @@ const tokens = {
    * @param {string} token Token uid to be melted
    * @param {number} amount Amount of the token to be melted
    * @param {boolean} createAnotherMelt If should create another melt output after spending this one
+   * @param {Object} options Options parameters
+   *  {
+   *   'depositAddress': address of the HTR deposit back
+   *   'changeAddress': address of the change output
+   *  }
    *
    * @return {Object} Melt data {'inputs', 'outputs', 'tokens'}
    *
    * @memberof Tokens
    * @inner
    */
-  createMeltData(meltInput, token, amount, createAnotherMelt) {
+  createMeltData(meltInput, token, amount, createAnotherMelt, options = { depositAddress: null, changeAddress: null }) {
+    const { depositAddress, changeAddress } = options;
     // Get inputs that sum at least the amount requested to melt
     const result = this.getMeltInputs(amount, token);
 
@@ -564,7 +581,7 @@ const tokens = {
 
     if (result.inputsAmount > amount) {
       // Need to create change output for token
-      outputs.push(wallet.getOutputChange(result.inputsAmount - amount, 1));
+      outputs.push(wallet.getOutputChange(result.inputsAmount - amount, 1, { address: changeAddress }));
     }
 
     if (createAnotherMelt) {
@@ -575,7 +592,7 @@ const tokens = {
 
     // withdraw HTR tokens
     const withdrawAmount = this.getWithdrawAmount(amount);
-    outputs.push(wallet.getOutputChange(withdrawAmount, 0));
+    outputs.push(wallet.getOutputChange(withdrawAmount, 0, { address: depositAddress }));
 
     // Create new data
     const newTxData = {inputs, outputs, tokens};
@@ -594,6 +611,11 @@ const tokens = {
    * @param {number} amount Amount of the token to be melted
    * @param {string} pin Pin to generate new addresses, if necessary
    * @param {boolean} createAnotherMelt If should create another melt output after spending this one
+   * @param {Object} options Options parameters
+   *  {
+   *   'depositAddress': address of the HTR deposit back
+   *   'changeAddress': address of the change output for the custom token melt
+   *  }
    *
    * @return {Object} In case of success, an object with {success: true, sendTransaction, promise}, where sendTransaction is a
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
@@ -602,9 +624,9 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  meltTokens(meltInput, token, amount, pin, createAnotherMelt) {
+  meltTokens(meltInput, token, amount, pin, createAnotherMelt, options = { depositAddress: null, changeAddress: null }) {
     // Get melt data
-    let newTxData = this.createMeltData(meltInput, token, amount, createAnotherMelt);
+    let newTxData = this.createMeltData(meltInput, token, amount, createAnotherMelt, options);
     if (!newTxData) {
       return {success: false, message: 'There aren\'t enough inputs to melt.'};
     }
@@ -816,6 +838,10 @@ const tokens = {
    * between our inputs and the deposit amount.
    *
    * @param {number} mintAmount Amount of tokens to mint
+   * @param {Object} options Options parameters
+   *  {
+   *   'changeAddress': address of the change output
+   *  }
    *
    * @throws {InsufficientFundsError} If not enough tokens for deposit
    *
@@ -824,7 +850,8 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  getMintDepositInfo(mintAmount) {
+  getMintDepositInfo(mintAmount, options = { changeAddress: null }) {
+    const { changeAddress } = options;
     const outputs = [];
     const data = wallet.getWalletData();
     const depositAmount = this.getDepositAmount(mintAmount);
@@ -834,7 +861,7 @@ const tokens = {
     }
     if (htrInputs.inputsAmount > depositAmount) {
       // Need to create change output
-      const outputChange = wallet.getOutputChange(htrInputs.inputsAmount - depositAmount, 0);
+      const outputChange = wallet.getOutputChange(htrInputs.inputsAmount - depositAmount, 0, { address: changeAddress });
       outputs.push(outputChange);
     }
     return {'inputs': htrInputs.inputs, 'inputsAmount': htrInputs.inputsAmount, 'outputs': outputs};

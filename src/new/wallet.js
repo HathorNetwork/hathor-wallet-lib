@@ -316,15 +316,19 @@ class HathorWallet extends EventEmitter {
    * @param {String} address Address to send the tokens
    * @param {number} value Amount of tokens to be sent
    * @param {Object} token Token object {'uid', 'name', 'symbol'}. Optional parameter if user already set on the class
+   * @param {Object} options Options parameters
+   *  {
+   *   'changeAddress': address of the change output
+   *  }
    *
    * @return {Object} In case of success, an object with {success: true, sendTransaction, promise}, where sendTransaction is a
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    * In case of error, an object with {success: false, message}
    *
    **/
-  sendTransaction(address, value, token) {
+  sendTransaction(address, value, token, options = { changeAddress: null }) {
     storage.setStore(this.store);
-    const ret = this.prepareTransaction(address, value, token);
+    const ret = this.prepareTransaction(address, value, token, options);
 
     if (ret.success) {
       return this.sendPreparedTransaction(ret.data);
@@ -339,10 +343,14 @@ class HathorWallet extends EventEmitter {
    * @param {String} address Address to send the tokens
    * @param {number} value Amount of tokens to be sent
    * @param {Object} token Token object {'uid', 'name', 'symbol'}. Optional parameter if user already set on the class
+   * @param {Object} options Options parameters
+   *  {
+   *   'changeAddress': address of the change output
+   *  }
    *
    * @return {Object} Object with {success: false, message} in case of an error, or {success: true, data}, otherwise
    **/
-  prepareTransaction(address, value, token) {
+  prepareTransaction(address, value, token, options = { changeAddress: null }) {
     storage.setStore(this.store);
     const txToken = token || this.token;
     const isHathorToken = txToken.uid === HATHOR_TOKEN_CONFIG.uid;
@@ -357,7 +365,7 @@ class HathorWallet extends EventEmitter {
       }],
     };
 
-    return this.completeTxData(data, txToken);
+    return this.completeTxData(data, txToken, options);
   }
 
   /**
@@ -365,10 +373,14 @@ class HathorWallet extends EventEmitter {
    *
    * @param {Object} data Partial data that will be completed with inputs
    * @param {Object} token Token object {'uid', 'name', 'symbol'}. Optional parameter if user already set on the class
+   * @param {Object} options Options parameters
+   *  {
+   *   'changeAddress': address of the change output
+   *  }
    *
    * @return {Object} Object with 'success' and completed 'data' in case of success, and 'message' in case of error
    **/
-  completeTxData(partialData, token) {
+  completeTxData(partialData, token, options = { changeAddress: null }) {
     const txToken = token || this.token;
     const walletData = wallet.getWalletData();
     const historyTxs = 'historyTransactions' in walletData ? walletData.historyTransactions : {};
@@ -377,7 +389,7 @@ class HathorWallet extends EventEmitter {
     if (partialData.inputs.length > 0) {
       chooseInputs = false;
     }
-    const ret = wallet.prepareSendTokensData(partialData, txToken, chooseInputs, historyTxs, [txToken]);
+    const ret = wallet.prepareSendTokensData(partialData, txToken, chooseInputs, historyTxs, [txToken], options);
 
     if (!ret.success) {
       return ret;
@@ -401,10 +413,14 @@ class HathorWallet extends EventEmitter {
    * @param {Array} outputs Array of outputs with each element as an object with {'address', 'value'}
    * @param {Array} inputs Array of inputs with each element as an object with {'hash', 'index'}
    * @param {Object} token Token object {'uid', 'name', 'symbol'}. Optional parameter if user already set on the class
+   * @param {Object} options Options parameters
+   *  {
+   *   'changeAddress': address of the change output
+   *  }
    *
    * @return {Promise} Promise that resolves when transaction is sent
    **/
-  sendManyOutputsTransaction(outputs, inputs = [], token = null) {
+  sendManyOutputsTransaction(outputs, inputs = [], token = null, options = { changeAddress: null }) {
     // XXX To accept here multi tokens in the same tx would be a bit more complicated because
     // the method prepareSendTokensData would need a bigger refactor.
     // I believe we should refactor all of that code (and it will be done on wallet-service)
@@ -426,7 +442,7 @@ class HathorWallet extends EventEmitter {
       data.inputs.push({tx_id: input.hash, index: input.index, token: HATHOR_TOKEN_CONFIG.uid });
     }
 
-    const ret = this.completeTxData(data, txToken);
+    const ret = this.completeTxData(data, txToken, options);
 
     if (ret.success) {
       return this.sendPreparedTransaction(ret.data);
@@ -545,14 +561,18 @@ class HathorWallet extends EventEmitter {
    * @param {String} symbol Symbol of the token
    * @param {number} amount Quantity of the token to be minted
    * @param {String} address Optional parameter for the destination of the created token
+   * @param {Object} options Options parameters
+   *  {
+   *   'changeAddress': address of the change output
+   *  }
    *
    * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    **/
-  createNewToken(name, symbol, amount, address) {
+  createNewToken(name, symbol, amount, address, options = { changeAddress: null }) {
     storage.setStore(this.store);
     const mintAddress = address || this.getCurrentAddress();
-    const ret = tokens.createToken(mintAddress, name, symbol, amount, this.pinCode);
+    const ret = tokens.createToken(mintAddress, name, symbol, amount, this.pinCode, options);
 
     if (ret.success) {
       const sendTransaction = ret.sendTransaction;
@@ -611,11 +631,15 @@ class HathorWallet extends EventEmitter {
    * @param {String} tokenUid UID of the token to mint
    * @param {number} amount Quantity to mint
    * @param {String} address Optional parameter for the destination of the minted tokens
+   * @param {Object} options Options parameters
+   *  {
+   *   'changeAddress': address of the change output
+   *  }
    *
    * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    **/
-  mintTokens(tokenUid, amount, address) {
+  mintTokens(tokenUid, amount, address, options = { changeAddress: null }) {
     storage.setStore(this.store);
     const mintAddress = address || this.getCurrentAddress();
     const mintInput = this.selectAuthorityUtxo(tokenUid, wallet.isMintOutput.bind(wallet));
@@ -624,7 +648,7 @@ class HathorWallet extends EventEmitter {
       return {success: false, message: 'Don\'t have mint authority output available.'}
     }
 
-    const ret = tokens.mintTokens(mintInput, tokenUid, mintAddress, amount, null, this.pinCode);
+    const ret = tokens.mintTokens(mintInput, tokenUid, mintAddress, amount, null, this.pinCode, options);
 
     if (ret.success) {
       const sendTransaction = ret.sendTransaction;
@@ -640,11 +664,16 @@ class HathorWallet extends EventEmitter {
    *
    * @param {String} tokenUid UID of the token to melt
    * @param {number} amount Quantity to melt
+   * @param {Object} options Options parameters
+   *  {
+   *   'depositAddress': address of the HTR deposit back
+   *   'changeAddress': address of the change output
+   *  }
    *
    * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    **/
-  meltTokens(tokenUid, amount) {
+  meltTokens(tokenUid, amount, options = { depositAddress: null, changeAddress: null }) {
     storage.setStore(this.store);
     const meltInput = this.selectAuthorityUtxo(tokenUid, wallet.isMeltOutput.bind(wallet));
 
@@ -653,7 +682,7 @@ class HathorWallet extends EventEmitter {
     }
 
     // Always create another melt authority output
-    const ret = tokens.meltTokens(meltInput, tokenUid, amount, this.pinCode, true);
+    const ret = tokens.meltTokens(meltInput, tokenUid, amount, this.pinCode, true, options);
     if (ret.success) {
       const sendTransaction = ret.sendTransaction;
       sendTransaction.start();
@@ -692,6 +721,17 @@ class HathorWallet extends EventEmitter {
 
   isReady() {
     return this.state === HathorWallet.READY;
+  }
+
+  /**
+   * Check if address is from the loaded wallet
+   *
+   * @param {string} address Address to check
+   *
+   * @return {boolean}
+   **/
+  isAddressMine(address) {
+    return wallet.isAddressMine(address);
   }
 }
 

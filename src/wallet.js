@@ -12,7 +12,7 @@ import CryptoJS from 'crypto-js';
 import walletApi from './api/wallet';
 import tokens from './tokens';
 import helpers from './helpers';
-import { ConstantNotSet, OutputValueError, WalletTypeError } from './errors';
+import { AddressError, ConstantNotSet, OutputValueError, WalletTypeError } from './errors';
 import version from './version';
 import storage from './storage';
 import network from './network';
@@ -1201,18 +1201,34 @@ const wallet = {
 
   /*
    * Get output of a change of a transaction
+   * If changeAddress is not passed we get the next address from the wallet to use
    *
    * @param {number} value Amount of the change output
    * @param {number} tokenData Token index of the output
+   * @param {String} changeAddress Optional parameter with address for the change output
+   * @param {Object} options Options parameters
+   *  {
+   *   'address': address of the change output
+   *  }
    *
    * @return {Object} {'address': string, 'value': number, 'tokenData': number, 'isChange': true}
    *
    * @memberof Wallet
    * @inner
    */
-  getOutputChange(value, tokenData) {
-    const address = this.getAddressToUse();
-    return {'address': address, 'value': value, 'tokenData': tokenData, 'isChange': true};
+  getOutputChange(value, tokenData, options = { address: null }) {
+    const { address } = options;
+    if (address) {
+      if (!transaction.isAddressValid(address)) {
+        throw new AddressError('Change address is invalid.');
+      }
+      if (!this.isAddressMine(address)) {
+        throw new AddressError('Change address is not from this wallet.');
+      }
+    }
+
+    const changeAddress = address ? address : this.getAddressToUse();
+    return {'address': changeAddress, 'value': value, 'tokenData': tokenData, 'isChange': true};
   },
 
   /*
@@ -1504,14 +1520,19 @@ const wallet = {
    * @param {boolean} chooseInputs If should choose inputs automatically
    * @param {Object} historyTransactions Object of transactions indexed by tx_id
    * @param {Object} Array with all tokens already selected in the send tokens
+   * @param {Object} options Options parameters
+   *  {
+   *   'changeAddress': address of the change output
+   *  }
    *
    * @return {Object} {success: boolean, message: error message in case of failure, data: prepared data in case of success}
    *
    * @memberof Wallet
    * @inner
    */
-  prepareSendTokensData(data, token, chooseInputs, historyTransactions, allTokens) {
+  prepareSendTokensData(data, token, chooseInputs, historyTransactions, allTokens, options = { changeAddress: null }) {
     // Get the data and verify if we need to select the inputs or add a change output
+    const { changeAddress } = options;
 
     // First get the amount of outputs
     let outputsAmount = 0;
@@ -1522,6 +1543,8 @@ const wallet = {
     if (outputsAmount === 0) {
       return {success: false, message:  `Token: ${token.symbol}. Total value can't be 0`};
     }
+
+    let outputChange;
 
     if (chooseInputs) {
       // If no inputs selected we select our inputs and, maybe add also a change output
@@ -1536,7 +1559,16 @@ const wallet = {
 
       if (newData.inputsAmount > outputsAmount) {
         // Need to create change output
-        let outputChange = this.getOutputChange(newData.inputsAmount - outputsAmount, tokens.getTokenIndex(allTokens, token.uid));
+        try {
+          outputChange = this.getOutputChange(newData.inputsAmount - outputsAmount, tokens.getTokenIndex(allTokens, token.uid), { address: changeAddress });
+        } catch (e) {
+          if (e instanceof AddressError) {
+            return {success: false, message: e.message};
+          } else {
+            // Unhandled error
+            throw e;
+          }
+        }
         data['outputs'].push(outputChange);
         // Shuffle outputs, so we don't have change output always in the same index
         data['outputs'] = _.shuffle(data['outputs']);
@@ -1566,7 +1598,16 @@ const wallet = {
 
       if (inputsAmount > outputsAmount) {
         // Need to create change output
-        let outputChange = wallet.getOutputChange(inputsAmount - outputsAmount, tokens.getTokenIndex(allTokens, token.uid));
+        try {
+          outputChange = wallet.getOutputChange(inputsAmount - outputsAmount, tokens.getTokenIndex(allTokens, token.uid), { address: changeAddress });
+        } catch (e) {
+          if (e instanceof AddressError) {
+            return {success: false, message: e.message};
+          } else {
+            // Unhandled error
+            throw e;
+          }
+        }
         data['outputs'].push(outputChange);
         // Shuffle outputs, so we don't have change output always in the same index
         data['outputs'] = _.shuffle(data['outputs']);
