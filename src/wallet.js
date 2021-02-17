@@ -932,6 +932,13 @@ const wallet = {
       return currentTimestamp > unspentTx.decoded.timelock;
     } else if (blockHeight) {
       return (this.getNetworkHeight() - blockHeight) >= this.getRewardLockConstant();
+    } else if ('selected_as_input' in unspentTx && unspentTx['selected_as_input'] === true) {
+      // 'selected_as_input' is an attribute of the output in localStorage to determine if this output
+      // was already selected to be used in a transaction.
+      // Even though we have the 'spent_by' attribute, this is filled only after we receive the tx that spends the outputs
+      // in the websocket, then between the tx creation and the websocket message the input selection algorithm could choose
+      // an utxo that had already been chosen. This attribute was created to prevent this situation
+      return false;
     } else {
       return true;
     }
@@ -1688,6 +1695,23 @@ const wallet = {
       for (const output of tx.outputs) {
         if (output.value > MAX_OUTPUT_VALUE) {
           throw new OutputValueError(`Transaction with id ${tx.tx_id} has output value of ${helpers.prettyValue(output.value)}. Maximum value is ${helpers.prettyValue(MAX_OUTPUT_VALUE)}`);
+        }
+      }
+
+      // We have an output field 'spent_by' that is filled everytime we receive a tx from the websocket that spends the output
+      // Between the tx creation and the websocket message being received we might select an utxo that had already been selected before
+      // To prevent this from happening we've created a custom field ('selected_as_input') that we set when we select the utxo to be used in a tx
+      // The if...else below if to keep this custom attribute correct even after receiving new data from an old tx
+      if (tx.tx_id in historyTransactions) {
+        // It's not a new tx
+        const storageTx = historyTransactions[tx.tx_id];
+        for (const [index, output] of tx.outputs.entries()) {
+          output['selected_as_input'] = storageTx.outputs[index]['selected_as_input'];
+        }
+      } else {
+        // It's a new tx
+        for (const output of tx.outputs) {
+          output['selected_as_input'] = false;
         }
       }
 
