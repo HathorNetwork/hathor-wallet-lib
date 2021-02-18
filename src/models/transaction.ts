@@ -100,7 +100,7 @@ class Transaction {
    */
   getDataToSign(): Buffer {
     if (this._dataToSignCache !== null) {
-      return this._dataToSignCache;
+      return this._dataToSignCache!;
     }
 
     let arr: any[] = []
@@ -137,7 +137,7 @@ class Transaction {
     }
 
     this._dataToSignCache = util.buffer.concat(arr);
-    return this._dataToSignCache;
+    return this._dataToSignCache!;
   }
 
   /*
