@@ -13,6 +13,13 @@ import Output from './output';
 import { CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError } from '../errors';
 import buffer from 'buffer';
 
+enum txType {
+  BLOCK = 'Block',
+  TRANSACTION = 'Transaction',
+  CREATE_TOKEN_TRANSACTION = 'Create Token Transaction',
+  MERGED_MINING_BLOCK = 'Merged Mining Block',
+}
+
 type optionsType = {
   version?: number,
   weight?: number,
@@ -49,6 +56,7 @@ class Transaction {
   hash: string | null;
   name: string | null;
   symbol: string | null;
+  private _dataToSignCache: Buffer | null;
 
   constructor(inputs: Input[], outputs: Output[], options: optionsType = defaultOptions) {
     const newOptions = Object.assign(defaultOptions, options);
@@ -65,6 +73,9 @@ class Transaction {
     this.hash = hash!;
     this.name = name!;
     this.symbol = symbol!;
+
+    // All inputs sign the same data, so we cache it in the first getDataToSign method call
+    this._dataToSignCache = null;
   }
 
   /**
@@ -88,6 +99,10 @@ class Transaction {
    * @inner
    */
   getDataToSign(): Buffer {
+    if (this._dataToSignCache !== null) {
+      return this._dataToSignCache;
+    }
+
     let arr: any[] = []
     // Tx version
     arr.push(helpers.intToBytes(this.version, 2))
@@ -121,7 +136,8 @@ class Transaction {
       arr = [...arr, ...this.serializeTokenInfo()];
     }
 
-    return util.buffer.concat(arr);
+    this._dataToSignCache = util.buffer.concat(arr);
+    return this._dataToSignCache;
   }
 
   /*
@@ -169,6 +185,7 @@ class Transaction {
     // Make sure the calculated weight is at least the minimum
     weight = Math.max(weight, TX_WEIGHT_CONSTANTS.txMinWeight)
     // FIXME precision difference between backend and frontend (weight (17.76246721531992) is smaller than the minimum weight (17.762467215319923))
+    // Even though it must be fixed, there is no practical effect when mining the transaction
     return weight + 1e-6;
   }
 
@@ -324,15 +341,15 @@ class Transaction {
   getType(): string {
     if (this.isBlock()) {
       if (this.version === BLOCK_VERSION) {
-        return 'Block';
+        return txType.BLOCK;
       } else if (this.version === MERGED_MINED_BLOCK_VERSION) {
-        return 'Merged Mining Block';
+        return txType.MERGED_MINING_BLOCK;
       }
     } else {
       if (this.version === DEFAULT_TX_VERSION) {
-        return 'Transaction';
+        return txType.TRANSACTION;
       } else if (this.version === CREATE_TOKEN_TX_VERSION) {
-        return 'Create Token Transaction';
+        return txType.CREATE_TOKEN_TRANSACTION;
       }
     }
 

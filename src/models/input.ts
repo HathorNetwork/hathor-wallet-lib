@@ -21,7 +21,7 @@ class Input {
   hash: string;
   // Index of the outputs array from the output being spent
   index: number;
-  // Input signed data
+  // Input signed data for P2PKH and redeemScript for P2SH
   data: Buffer | null;
 
   constructor(hash: string, index: number, options: optionsType = defaultOptions) {
@@ -43,6 +43,10 @@ class Input {
 
   /**
    * Serialize an input to bytes
+   *
+   * @param {boolean} addData If should add the input data to the serialization
+   * The data is not used to sign/verify the transaction (see https://github.com/HathorNetwork/rfcs/blob/master/text/0015-anatomy-of-tx.md)
+   * thus it's important to have this parameter and not add the data to serialization when getting the transaction data to sign
    *
    * @return {Buffer[]}
    * @memberof Input
