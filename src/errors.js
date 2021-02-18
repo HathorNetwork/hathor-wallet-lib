@@ -100,6 +100,14 @@ export class WalletTypeError extends Error {}
 export class XPubError extends Error {}
 
 /**
+ * Error thrown when we are given an invalid uncompressed public key
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class UncompressedPubKeyError extends Error {}
+
+/**
  * Error thrown when the user tries to create a wallet with an invalid sequence of words
  *
  * @memberof Errors

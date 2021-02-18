@@ -9,12 +9,9 @@
 import { crypto, HDPublicKey, HDPrivateKey, Address } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
 import { HD_WALLET_ENTROPY } from '../constants';
-import { XPubError, InvalidWords } from '../errors';
+import { XPubError, InvalidWords, UncompressedPubKeyError } from '../errors';
 import Network from '../models/network';
 import _ from 'lodash';
-
-// TODO Declare this elsewhere in order to be used in all classes
-declare function assert(value: unknown): asserts value;
 
 
 const wallet = {
@@ -114,12 +111,15 @@ const wallet = {
    * @param {Buffer} pubkey Uncompressed public key
    *
    * @return {Buffer} Compressed public key
+   * @throws {UncompressedPubKeyError} In case the given public key is invalid
    *
    * @memberof Wallet
    * @inner
    */
   toPubkeyCompressed(pubkey: Buffer): Buffer {
-    assert(pubkey.length === 65);
+    if (pubkey.length !== 65) {
+      throw new UncompressedPubKeyError('Invalid uncompressed public key size.');
+    }
     const x = pubkey.slice(1, 33);
     const y = pubkey.slice(33, 65);
     const point = new crypto.Point(x, y);
@@ -131,7 +131,8 @@ const wallet = {
    *
    * @param {number} index Index of the key to derive
    *
-   * @return {Buffer} Public key
+   * @return {Object} Public key object
+   * @throws {XPubError} In case the given xpub key is invalid
    *
    * @memberof Wallet
    * @inner
@@ -144,11 +145,11 @@ const wallet = {
       throw new XPubError(error.message);
     }
     const key = xpub.derive(index);
-    return key.publicKey.toBuffer();
+    return key.publicKey;
   },
 
   /**
-   * Get xpubkey from storage xpriv (assumes PIN is correct)
+   * Get xpubkey from xpriv
    *
    * @param {String} xpriv Private key
    *

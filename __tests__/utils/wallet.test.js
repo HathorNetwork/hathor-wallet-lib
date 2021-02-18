@@ -6,10 +6,11 @@
  */
 
 import wallet from '../../src/utils/wallet';
-import { XPubError, InvalidWords } from '../../src/errors';
+import { XPubError, InvalidWords, UncompressedPubKeyError } from '../../src/errors';
 import Network from '../../src/models/network';
 import Mnemonic from 'bitcore-mnemonic';
 import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE } from '../../src/constants';
+import { util, Address } from 'bitcore-lib';
 
 
 test('Words', () => {
@@ -57,7 +58,19 @@ test('Xpriv and xpub', () => {
   const derivedXpub = wallet.xpubFromData(derivedXpriv.publicKey.toBuffer(), chainCode, fingerprint, 'testnet');
   expect(derivedXpub).toBe(derivedXpriv.xpubkey);
 
-  // TODO test toPubkeyCompressed and getPublicKeyFromXpub
+  const pubKey = wallet.getPublicKeyFromXpub(derivedXpub, 10);
+  const expectedRet = {};
+  expectedRet[Address(pubKey, network.bitcoreNetwork).toString()] = 10;
+  expect(expectedRet).toStrictEqual(wallet.getAddresses(derivedXpub, 10, 1, 'testnet'));
+
+  // To pubkey compressed
+  const uncompressedPubKeyHex = '044f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa385b6b1b8ead809ca67454d9683fcf2ba03456d6fe2c4abe2b07f0fbdbb2f1c1';
+  const compressedPubKey = wallet.toPubkeyCompressed(util.buffer.hexToBuffer(uncompressedPubKeyHex));
+  const expectedCompressedPubKeyHex = '034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa';
+  expect(util.buffer.bufferToHex(compressedPubKey)).toBe(expectedCompressedPubKeyHex);
+
+  // Invalid uncompressed public key must throw error
+  expect(() => wallet.toPubkeyCompressed(util.buffer.hexToBuffer(uncompressedPubKeyHex + 'ab'))).toThrowError(UncompressedPubKeyError);
 });
 
 test('isXpubKeyValid', () => {
