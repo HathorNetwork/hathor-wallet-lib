@@ -7,7 +7,7 @@
 
 import EventEmitter from 'events';
 import wallet from '../wallet';
-import { HATHOR_TOKEN_CONFIG, MAX_INPUTS } from '../constants';
+import { HATHOR_TOKEN_CONFIG } from '../constants';
 import transaction from '../transaction';
 import tokens from '../tokens';
 import version from '../version';
@@ -192,6 +192,7 @@ class HathorWallet extends EventEmitter {
    * @return {object} { total_amount_available: number, total_utxos_available: number, total_amount_locked: number, total_utxos_locked: number, utxos: Array[] } utxos and meta information about it
    */
   getUtxos(options) {
+    storage.setStore(this.store);
     const historyTransactions = Object.values(this.getTxHistory());
     const utxoDetails = {
       total_amount_available: 0,
@@ -206,15 +207,16 @@ class HathorWallet extends EventEmitter {
       const transaction = historyTransactions[i];
 
       // Orphan transactions should be ignored
-      if (transaction.is_voided) {
-        continue;
-      }
+      if (transaction.is_voided) continue;
 
       // Iterate through outputs
       for (let j = 0; j < transaction.outputs.length; j++) {
         const output = transaction.outputs[j];
 
         const is_unspent = output.spent_by === null;
+        // No other checks required
+        if (!is_unspent) continue
+
         const filters = wallet.filterUtxos(output, utxoDetails, options);
         const is_authority = wallet.isAuthorityOutput(output);
 
@@ -254,30 +256,48 @@ class HathorWallet extends EventEmitter {
    *
    * @return {object} { success: boolean, promise: Promise } indicates that the transaction is sent or not
    */
-  consolidateUtxos(destinationAddress, options) {
+  async consolidateUtxos(destinationAddress, options = {}) {
+    storage.setStore(this.store);
     const utxoDetails = this.getUtxos(options);
     const inputs = [];
-    let value = 0;
+    const utxos = [];
+    let total_amount = 0;
     for (let i = 0; i < utxoDetails.utxos.length; i++) {
-      if (inputs.length === MAX_INPUTS) {
+      if (inputs.length === transaction.getMaxInputsConstant()) {
         break;
       }
       const utxo = utxoDetails.utxos[i];
       inputs.push({
         hash: utxo.tx_id,
         index: utxo.index,
-      })
-      value += utxo.amount;
+      });
+      utxos.push(utxo);
+      total_amount += utxo.amount;
     }
     const outputs = [{
       address: destinationAddress,
-      value,
+      value: total_amount,
     }];
     const token = {
       uid: options.token || HATHOR_TOKEN_CONFIG.uid,
+      name: '',
+      symbol: ''
     };
 
-    return this.sendManyOutputsTransaction(outputs, inputs, token);
+    const result = this.sendManyOutputsTransaction(outputs, inputs, token);
+
+    if (!result.success) {
+      throw new Error(result.message);
+    }
+
+    const tx = await Promise.resolve(result.promise);
+
+    return {
+      total_utxos_consolidated: utxos.length,
+      total_amount,
+      tx_id: tx.tx_id,
+      utxos,
+    }
   }
 
   setState(state) {

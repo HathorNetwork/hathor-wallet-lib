@@ -107,11 +107,6 @@ export const MAX_OUTPUT_VALUE_32 = 2 ** 31 - 1;
 export const MAX_OUTPUT_VALUE = 2 ** 43;
 
 /**
- * Max number of inputs in a transaction
- */
-export const MAX_INPUTS = 255;
-
-/**
  * Entropy for the new HD wallet words
  */
 export const HD_WALLET_ENTROPY = 256

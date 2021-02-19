@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { MAX_ADDRESSES_GET, GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, TOKEN_MINT_MASK, TOKEN_MELT_MASK, TOKEN_INDEX_MASK, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, MAX_OUTPUT_VALUE, HASH_KEY_SIZE, HASH_ITERATIONS, HD_WALLET_ENTROPY, MAX_INPUTS } from './constants';
+import { MAX_ADDRESSES_GET, GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, TOKEN_MINT_MASK, TOKEN_MELT_MASK, TOKEN_INDEX_MASK, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, MAX_OUTPUT_VALUE, HASH_KEY_SIZE, HASH_ITERATIONS, HD_WALLET_ENTROPY } from './constants';
 import Mnemonic from 'bitcore-mnemonic';
 import { HDPrivateKey, HDPublicKey, Address, crypto } from 'bitcore-lib';
 import CryptoJS from 'crypto-js';
@@ -887,7 +887,7 @@ const wallet = {
    */
   filterUtxos(output, utxoDetails, options) {
     const filterOptions = Object.assign({
-      max_utxos: MAX_INPUTS,
+      max_utxos: transaction.getMaxInputsConstant(),
       token: HATHOR_TOKEN_CONFIG.uid,
       filter_address: null,
       amount_smaller_than: Infinity,
@@ -898,9 +898,9 @@ const wallet = {
     // Filter by address, if options.filter_address is specified
     const is_address_valid = filterOptions.filter_address === null || filterOptions.filter_address === output.decoded.address;
     // Filter by maximum_amount (sum of utxos amounts), if options.maximum_amount is specified
-    const is_max_amount_valid = filterOptions.maximum_amount >= utxoDetails.total_amount_available;
-    // Filter more utxos than options.max_utxos (default: MAX_INPUTS)
-    const is_max_utxos_valid = filterOptions.max_utxos >= utxoDetails.utxos.length;
+    const is_max_amount_valid = filterOptions.maximum_amount >= utxoDetails.total_amount_available + output.value;
+    // Filter more utxos than options.max_utxos (default: transaction.getMaxInputsConstant())
+    const is_max_utxos_valid = filterOptions.max_utxos > utxoDetails.utxos.length;
     // Filter other tokens, if options.token is specified
     const is_token_valid = filterOptions.token === output.token;
     // Filter by options.amount_smaller_than, if it is specified
