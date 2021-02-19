@@ -102,9 +102,10 @@ describe("UTXO Consolidation", () => {
   test("correctly execute consolidateUtxos", async () => {
     const result = await hathorWallet.consolidateUtxos(destinationAddress);
     expect(hathorWallet.sendManyOutputsTransaction).toBeCalled();
-    expect(result.total_utxos_consolidated).toBe(3);
-    expect(result.total_amount).toBe(3);
+    expect(result.total_utxos_consolidated).toBe(2);
+    expect(result.total_amount).toBe(2);
     expect(result.tx_id).toBe("123");
-    expect(result.utxos).toHaveLength(3);
+    expect(result.utxos).toHaveLength(2);
+    expect(result.utxos.some(utxo => utxo.locked)).toBeFalsy();
   });
 });

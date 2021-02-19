@@ -214,8 +214,10 @@ class HathorWallet extends EventEmitter {
         const output = transaction.outputs[j];
 
         const is_unspent = output.spent_by === null;
-        // No other checks required
-        if (!is_unspent) continue
+        if (!is_unspent) {
+          // No other checks required
+          continue;
+        }
 
         const filters = wallet.filterUtxos(output, utxoDetails, options);
         const is_authority = wallet.isAuthorityOutput(output);
@@ -225,7 +227,7 @@ class HathorWallet extends EventEmitter {
           return utxoDetails;
         }
 
-        if (is_unspent && filters.is_all_filters_valid && !is_authority) {
+        if (filters.is_all_filters_valid && !is_authority) {
           const locked = !wallet.canUseUnspentTx(output, j);
           utxoDetails.utxos.push({
             address: output.decoded.address,
@@ -264,9 +266,14 @@ class HathorWallet extends EventEmitter {
     let total_amount = 0;
     for (let i = 0; i < utxoDetails.utxos.length; i++) {
       if (inputs.length === transaction.getMaxInputsConstant()) {
+        // Max number of inputs reached
         break;
       }
       const utxo = utxoDetails.utxos[i];
+      if (utxo.locked) {
+        // Ignore locked utxo
+        continue
+      }
       inputs.push({
         hash: utxo.tx_id,
         index: utxo.index,
