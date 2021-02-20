@@ -3,11 +3,14 @@ import HathorWallet from "../src/new/wallet";
 import txHistoryFixture from "./__fixtures__/tx_history";
 import transaction from "../src/transaction";
 
+const MAX_INPUTS = 255;
+
 class FakeHathorWallet {
   constructor() {
     this.wallet = wallet;
     this.getUtxos = HathorWallet.prototype.getUtxos.bind(this);
     this.consolidateUtxos = HathorWallet.prototype.consolidateUtxos.bind(this);
+    this.prepareConsolidateUtxosData = HathorWallet.prototype.prepareConsolidateUtxosData.bind(this);
     this.sendManyOutputsTransaction = jest.fn(() => ({
       success: true,
       promise: Promise.resolve({ tx_id: "123" }),
@@ -22,7 +25,7 @@ describe("UTXO Consolidation", () => {
   let hathorWallet;
   const destinationAddress = "WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi";
   beforeAll(() => {
-    transaction.updateMaxInputsConstant(255);
+    transaction.updateMaxInputsConstant(MAX_INPUTS);
     hathorWallet = new FakeHathorWallet();
   });
 
@@ -99,6 +102,11 @@ describe("UTXO Consolidation", () => {
     expect(utxoDetails.total_utxos_locked).toBe(0);
   });
 
+  test("filter only_available utxos", () => {
+    const utxoDetails = hathorWallet.getUtxos({ only_available_utxos: true });
+    expect(utxoDetails.utxos).toHaveLength(2);
+  });
+
   test("correctly execute consolidateUtxos", async () => {
     const result = await hathorWallet.consolidateUtxos(destinationAddress);
     expect(hathorWallet.sendManyOutputsTransaction).toBeCalled();
@@ -107,5 +115,13 @@ describe("UTXO Consolidation", () => {
     expect(result.tx_id).toBe("123");
     expect(result.utxos).toHaveLength(2);
     expect(result.utxos.some(utxo => utxo.locked)).toBeFalsy();
+    // assert single output
+    expect(hathorWallet.sendManyOutputsTransaction.mock.calls[0][0]).toEqual([{"address": destinationAddress, "value": 2}]);
+    // assert 2 inputs only
+    expect(hathorWallet.sendManyOutputsTransaction.mock.calls[0][1]).toHaveLength(2);
+  });
+
+  test("throw error when there is no utxo to consolidade", async () => {
+    await expect(hathorWallet.consolidateUtxos(destinationAddress, { token: '05' })).rejects.toEqual(new Error("No available utxo to consolidate."));
   });
 });

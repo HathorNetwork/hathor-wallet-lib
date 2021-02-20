@@ -187,11 +187,28 @@ class HathorWallet extends EventEmitter {
   /**
    * Get utxos of the wallet addresses
    *
-   * @param {object} options Consolidation options shared with filterUtxos and consolidateUtxos (https://github.com/HathorNetwork/hathor-wallet-headless/issues/44)
+   * @typedef {Object} UtxoOptions
+   * @property {number} max_utxos - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
+   * @property {string} token - Token to filter the utxos. If not sent, we select only HTR utxos.
+   * @property {string} filter_address - Address to filter the utxos.
+   * @property {number} amount_smaller_than - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than this value. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {number} amount_bigger_than - Minimum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount bigger than this value. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {number} maximum_amount - Limit the maximum total amount to consolidate summing all utxos. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {boolean} only_available_utxos - Use only available utxos (not locked)
    *
-   * @return {object} { total_amount_available: number, total_utxos_available: number, total_amount_locked: number, total_utxos_locked: number, utxos: Array[] } utxos and meta information about it
+   * @typedef {Object} UtxoDetails
+   * @property {number} total_amount_available - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
+   * @property {number} total_utxos_available - Token to filter the utxos. If not sent, we select only HTR utxos.
+   * @property {number} total_amount_locked - Address to filter the utxos.
+   * @property {number} total_utxos_locked - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than this value. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {{ address: string, amount: number, tx_id: string, locked: boolean, index: number }[]} utxos - Array of utxos
+   *
+   * @param {UtxoOptions} options Utxo filtering options
+   *
+   * @return {UtxoDetails} Utxos and meta information about it
+   *
    */
-  getUtxos(options) {
+  getUtxos(options = {}) {
     storage.setStore(this.store);
     const historyTransactions = Object.values(this.getTxHistory());
     const utxoDetails = {
@@ -206,7 +223,7 @@ class HathorWallet extends EventEmitter {
     for (let i = 0; i < historyTransactions.length; i++) {
       const transaction = historyTransactions[i];
 
-      // Orphan transactions should be ignored
+      // Voided transactions should be ignored
       if (transaction.is_voided) continue;
 
       // Iterate through outputs
@@ -214,8 +231,9 @@ class HathorWallet extends EventEmitter {
         const output = transaction.outputs[j];
 
         const is_unspent = output.spent_by === null;
-        if (!is_unspent) {
-          // No other checks required
+        const locked = !wallet.canUseUnspentTx(output, j);
+        if (!is_unspent || (locked && options.only_available_utxos)) {
+          // No other filtering required
           continue;
         }
 
@@ -228,7 +246,6 @@ class HathorWallet extends EventEmitter {
         }
 
         if (filters.is_all_filters_valid && !is_authority) {
-          const locked = !wallet.canUseUnspentTx(output, j);
           utxoDetails.utxos.push({
             address: output.decoded.address,
             amount: output.value,
@@ -251,16 +268,24 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Consolidates many utxos into a single one
+   * Prepare all required data to consolidate utxos.
    *
+   * @typedef {Object} PrepareConsolidateUtxosDataResult
+   * @property {{ address: string, value: number }[]} outputs - Destiny of the consolidated utxos
+   * @property {{ hash: string, index: number }[]} inputs - Inputs for the consolidation transaction
+   * @property {{ uid: string, name: string, symbol: string }} token - HTR or custom token
+   * @property {{ address: string, amount: number, tx_id: string, locked: boolean, index: number }[]} utxos - Array of utxos that will be consolidated
+   * @property {number} total_amount - Amount to be consolidated
+   * 
    * @param {string} destinationAddress Address of the consolidated utxos
-   * @param {object} options Consolidation options (https://github.com/HathorNetwork/hathor-wallet-headless/issues/44)
+   * @param {UtxoOptions} options Utxo filtering options
    *
-   * @return {object} { success: boolean, promise: Promise } indicates that the transaction is sent or not
+   * @return {PrepareConsolidateUtxosDataResult} Required data to consolidate utxos
+   *
    */
-  async consolidateUtxos(destinationAddress, options = {}) {
+  prepareConsolidateUtxosData(destinationAddress, options = {}) {
     storage.setStore(this.store);
-    const utxoDetails = this.getUtxos(options);
+    const utxoDetails = this.getUtxos({ ...options, only_available_utxos: true });
     const inputs = [];
     const utxos = [];
     let total_amount = 0;
@@ -270,10 +295,6 @@ class HathorWallet extends EventEmitter {
         break;
       }
       const utxo = utxoDetails.utxos[i];
-      if (utxo.locked) {
-        // Ignore locked utxo
-        continue
-      }
       inputs.push({
         hash: utxo.tx_id,
         index: utxo.index,
@@ -291,6 +312,32 @@ class HathorWallet extends EventEmitter {
       symbol: ''
     };
 
+    return { outputs, inputs, token, utxos, total_amount };
+  }
+
+  /**
+   * Consolidates many utxos into a single one for either HTR or exactly one custom token.
+   *
+   * @typedef {Object} ConsolidationResult
+   * @property {number} total_utxos_consolidated - Number of utxos consolidated
+   * @property {number} total_amount - Consolidated amount
+   * @property {number} tx_id - Consolidated transaction id
+   * @property {{ address: string, amount: number, tx_id: string, locked: boolean, index: number }[]} utxos - Array of utxos
+   *
+   * @param {string} destinationAddress Address of the consolidated utxos
+   * @param {UtxoOptions} options Utxo filtering options
+   *
+   * @return {Promise<ConsolidationResult>} Indicates that the transaction is sent or not
+   *
+   */
+  async consolidateUtxos(destinationAddress, options = {}) {
+    storage.setStore(this.store);
+    const { outputs, inputs, token, utxos, total_amount } = this.prepareConsolidateUtxosData(destinationAddress, options);
+
+    if (inputs.length === 0) {
+      throw new Error("No available utxo to consolidate.");
+    }
+
     const result = this.sendManyOutputsTransaction(outputs, inputs, token);
 
     if (!result.success) {
@@ -304,7 +351,7 @@ class HathorWallet extends EventEmitter {
       total_amount,
       tx_id: tx.tx_id,
       utxos,
-    }
+    };
   }
 
   setState(state) {
