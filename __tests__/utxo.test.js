@@ -10,7 +10,12 @@ class FakeHathorWallet {
     this.wallet = wallet;
     this.getUtxos = HathorWallet.prototype.getUtxos.bind(this);
     this.consolidateUtxos = HathorWallet.prototype.consolidateUtxos.bind(this);
-    this.prepareConsolidateUtxosData = HathorWallet.prototype.prepareConsolidateUtxosData.bind(this);
+    this.prepareConsolidateUtxosData = HathorWallet.prototype.prepareConsolidateUtxosData.bind(
+      this
+    );
+    this.isAddressMine = (address) =>
+      address === "WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ" ||
+      address === "WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp";
     this.sendManyOutputsTransaction = jest.fn(() => ({
       success: true,
       promise: Promise.resolve({ tx_id: "123" }),
@@ -114,14 +119,20 @@ describe("UTXO Consolidation", () => {
     expect(result.total_amount).toBe(2);
     expect(result.tx_id).toBe("123");
     expect(result.utxos).toHaveLength(2);
-    expect(result.utxos.some(utxo => utxo.locked)).toBeFalsy();
+    expect(result.utxos.some((utxo) => utxo.locked)).toBeFalsy();
     // assert single output
-    expect(hathorWallet.sendManyOutputsTransaction.mock.calls[0][0]).toEqual([{"address": destinationAddress, "value": 2}]);
+    expect(hathorWallet.sendManyOutputsTransaction.mock.calls[0][0]).toEqual([
+      { address: destinationAddress, value: 2 },
+    ]);
     // assert 2 inputs only
-    expect(hathorWallet.sendManyOutputsTransaction.mock.calls[0][1]).toHaveLength(2);
+    expect(
+      hathorWallet.sendManyOutputsTransaction.mock.calls[0][1]
+    ).toHaveLength(2);
   });
 
   test("throw error when there is no utxo to consolidade", async () => {
-    await expect(hathorWallet.consolidateUtxos(destinationAddress, { token: '05' })).rejects.toEqual(new Error("No available utxo to consolidate."));
+    await expect(
+      hathorWallet.consolidateUtxos(destinationAddress, { token: "05" })
+    ).rejects.toEqual(new Error("No available utxo to consolidate."));
   });
 });
