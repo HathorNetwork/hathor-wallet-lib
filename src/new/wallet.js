@@ -240,8 +240,13 @@ class HathorWallet extends EventEmitter {
         const filters = wallet.filterUtxos(output, utxoDetails, options);
         const is_authority = wallet.isAuthorityOutput(output);
 
-        // Max amount reached or max utxos.length, no more utxo should be added
-        if (!filters.is_max_amount_valid || !filters.is_max_utxos_valid) {
+        // Max amount reached, continue to find a smaller amount
+        if (!filters.is_max_amount_valid) {
+          continue;
+        }
+
+        // Max utxos.length reached, no more utxo should be added
+        if (!filters.is_max_utxos_valid) {
           return utxoDetails;
         }
 
