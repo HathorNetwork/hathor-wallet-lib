@@ -26,7 +26,7 @@ export default [
       "0002ad8d1519daaddc8e1a37b14aac0b045129c01832281fb1c02d873c7abbf9",
       "0002d4d2a15def7604688e1878ab681142a7b155cbe52a6b4e031250ae96db0a",
     ],
-    height: 810,
+    height: 1,
   },
   {
     tx_id: "0000000211673128a49ea700c7b3efbbbc4b3bfe5bf289bc5a1967f12d3c30b5",
@@ -55,7 +55,7 @@ export default [
       "0002ad8d1519daaddc8e1a37b14aac0b045129c01832281fb1c02d873c7abbf9",
       "0002d4d2a15def7604688e1878ab681142a7b155cbe52a6b4e031250ae96db0a",
     ],
-    height: 158,
+    height: 2,
   },
   {
     tx_id: "0000000292236abbb41a2201409b85084631389950f76f7da0d8734b51b31758",
@@ -84,7 +84,7 @@ export default [
       "0002ad8d1519daaddc8e1a37b14aac0b045129c01832281fb1c02d873c7abbf9",
       "0002d4d2a15def7604688e1878ab681142a7b155cbe52a6b4e031250ae96db0a",
     ],
-    height: 330,
+    height: 3,
   },
   {
     tx_id: "00000003508b2c24066365cffe23cd77896dad01a665c64cd4797654c6acab92",
@@ -113,7 +113,7 @@ export default [
       "0002ad8d1519daaddc8e1a37b14aac0b045129c01832281fb1c02d873c7abbf9",
       "0002d4d2a15def7604688e1878ab681142a7b155cbe52a6b4e031250ae96db0a",
     ],
-    height: 474,
+    height: 4,
   },
   {
     tx_id: "0000000419625e2587c225fb49f36278c9da681ec05e039125307b8aef3d3d30",
@@ -142,7 +142,7 @@ export default [
       "0002ad8d1519daaddc8e1a37b14aac0b045129c01832281fb1c02d873c7abbf9",
       "0002d4d2a15def7604688e1878ab681142a7b155cbe52a6b4e031250ae96db0a",
     ],
-    height: 267,
+    height: 5,
   },
   {
     tx_id: "0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1052",
@@ -171,7 +171,7 @@ export default [
       "00e4f60c6dad0d8050b56d67727382fd6461c71ccdf0d4c1b58df5c845cc92c7",
       "00166f71162e983a4ba732259a8f768f9a3ef59fea67701cd62c5096d2a35395",
     ],
-    height: 239,
+    height: 6,
   },
   {
     tx_id: "0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1052",
@@ -200,7 +200,7 @@ export default [
       "00e4f60c6dad0d8050b56d67727382fd6461c71ccdf0d4c1b58df5c845cc92c7",
       "00166f71162e983a4ba732259a8f768f9a3ef59fea67701cd62c5096d2a35395",
     ],
-    height: 239,
+    height: 7,
   },
   {
     tx_id: "0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1052",
@@ -229,7 +229,7 @@ export default [
       "00e4f60c6dad0d8050b56d67727382fd6461c71ccdf0d4c1b58df5c845cc92c7",
       "00166f71162e983a4ba732259a8f768f9a3ef59fea67701cd62c5096d2a35395",
     ],
-    height: 239,
+    height: 8,
   },
   {
     tx_id: "0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1052",
@@ -258,7 +258,7 @@ export default [
       "00e4f60c6dad0d8050b56d67727382fd6461c71ccdf0d4c1b58df5c845cc92c7",
       "00166f71162e983a4ba732259a8f768f9a3ef59fea67701cd62c5096d2a35395",
     ],
-    height: 239,
+    height: 9,
   },
   {
     tx_id: "0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1053",
@@ -287,6 +287,6 @@ export default [
       "00e4f60c6dad0d8050b56d67727382fd6461c71ccdf0d4c1b58df5c845cc92c7",
       "00166f71162e983a4ba732259a8f768f9a3ef59fea67701cd62c5096d2a35395",
     ],
-    height: 239,
+    height: 10,
   }
 ];

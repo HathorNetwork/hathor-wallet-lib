@@ -8,6 +8,8 @@ const MAX_INPUTS = 255;
 class FakeHathorWallet {
   constructor() {
     this.wallet = wallet;
+    wallet._rewardSpendMinBlocks = 0;
+    wallet._networkBestChainHeight = 10;
     this.getUtxos = HathorWallet.prototype.getUtxos.bind(this);
     this.consolidateUtxos = HathorWallet.prototype.consolidateUtxos.bind(this);
     this.prepareConsolidateUtxosData = HathorWallet.prototype.prepareConsolidateUtxosData.bind(
@@ -128,6 +130,14 @@ describe("UTXO Consolidation", () => {
     expect(
       hathorWallet.sendManyOutputsTransaction.mock.calls[0][1]
     ).toHaveLength(2);
+  });
+
+  test("all HTR utxos locked by height", () => {
+    wallet._rewardSpendMinBlocks = 10;
+    const utxoDetails = hathorWallet.getUtxos();
+    expect(utxoDetails.utxos).toHaveLength(3);
+    expect(utxoDetails.total_utxos_locked).toBe(3);
+    wallet._rewardSpendMinBlocks = 0;
   });
 
   test("throw error when there is no utxo to consolidade", async () => {

@@ -231,7 +231,7 @@ class HathorWallet extends EventEmitter {
         const output = transaction.outputs[j];
 
         const is_unspent = output.spent_by === null;
-        const locked = !wallet.canUseUnspentTx(output, j);
+        const locked = !wallet.canUseUnspentTx(output, transaction.height);
         const is_mine = this.isAddressMine(output.decoded.address);
         if (!is_unspent || (locked && options.only_available_utxos) || !is_mine) {
           // No other filtering required
