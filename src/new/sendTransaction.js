@@ -190,7 +190,8 @@ class SendTransaction extends EventEmitter {
       if (input.tx_id in historyTransactions) {
         historyTransactions[input.tx_id].outputs[input.index]['selected_as_input'] = selected;
       } else {
-        console.log(`This should never happen but it's definitely happening in a race condition. Error updating output as selected=${selected}. ${input.tx_id} is not in the storage data. Transactions history length: ${Object.values(historyTransactions).length}`);
+        // This isn't supposed to happen but it's definitely happening in a race condition.
+        console.log(`updateOutputSelected: Error updating output as selected=${selected}. ${input.tx_id} is not in the storage data. Transactions history length: ${Object.values(historyTransactions).length}`);
       }
     }
     wallet.saveAddressHistory(historyTransactions, allTokens);
