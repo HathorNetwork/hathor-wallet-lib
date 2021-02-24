@@ -59,6 +59,9 @@ class HathorWallet extends EventEmitter {
     // XXX Update it so we don't have fixed pin/password
     password = '123',
     pinCode = '123',
+
+    // debug mode
+    debug = false,
   } = {}) {
     super();
 
@@ -107,6 +110,24 @@ class HathorWallet extends EventEmitter {
     // The reload must execute some cleanups, that's why it's important
     // to differentiate both actions
     this.firstConnection = true;
+
+    // Debug mode. It is used to include debugging information
+    // when a problem occurs.
+    this.debug = debug;
+  }
+
+  /**
+   * Enable debug mode.
+   **/
+  enableDebugMode() {
+    this.debug = true;
+  }
+
+  /**
+   * Disable debug mode.
+   **/
+  disableDebugMode() {
+    this.debug = false;
   }
 
   /**
@@ -389,9 +410,17 @@ class HathorWallet extends EventEmitter {
     if (partialData.inputs.length > 0) {
       chooseInputs = false;
     }
+
+    // Warning: prepareSendTokensData(...) might modify `partialData`.
     const ret = wallet.prepareSendTokensData(partialData, txToken, chooseInputs, historyTxs, [txToken], options);
 
     if (!ret.success) {
+      ret.debug = {
+        balance: this.getBalance(txToken.uid),
+        partialData: partialData, // this might not be the original `partialData`
+        txToken: txToken,
+        ...ret.debug
+      };
       return ret;
     }
 
@@ -464,7 +493,14 @@ class HathorWallet extends EventEmitter {
     storage.setStore(this.store);
     const sendTransaction = new SendTransaction({data});
     sendTransaction.start();
-    return {success: true, promise: sendTransaction.promise, sendTransaction};
+    const ret = {success: true, promise: sendTransaction.promise, sendTransaction};
+    if (this.debug) {
+      ret.debug = {
+        balanceHTR: this.getBalance(),
+        data: data,
+      };
+    }
+    return ret;
   }
 
   /**
