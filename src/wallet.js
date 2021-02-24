@@ -1554,7 +1554,7 @@ const wallet = {
 
       if (newData.inputsAmount < outputsAmount) {
         // Don't have this amount of token
-        return {success: false, message:  `Token ${token.symbol}: Insufficient amount of tokens`};
+        return {success: false, message:  `Token ${token.symbol}: Insufficient amount of tokens. You have a total amount of ${newData.inputsAmount} distributed in ${newData.inputs.length} utxos and you need a total amount of ${outputsAmount}.`};
       }
 
       if (newData.inputsAmount > outputsAmount) {

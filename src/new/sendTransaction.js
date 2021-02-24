@@ -187,7 +187,11 @@ class SendTransaction extends EventEmitter {
 
     // Before sending the tx to be mined, we iterate through the inputs and set selected_as_input
     for (const input of this.data.inputs) {
-      historyTransactions[input.tx_id].outputs[input.index]['selected_as_input'] = selected;
+      if (input.tx_id in historyTransactions) {
+        historyTransactions[input.tx_id].outputs[input.index]['selected_as_input'] = selected;
+      } else {
+        console.log(`updateOutputSelected: Error updating output as selected=${selected}. ${input.tx_id} is not in the storage data. Transactions history length: ${Object.values(historyTransactions).length}`);
+      }
     }
     wallet.saveAddressHistory(historyTransactions, allTokens);
 
