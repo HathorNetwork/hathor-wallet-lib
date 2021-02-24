@@ -36,6 +36,7 @@ class SendTransaction extends EventEmitter {
    */
   constructor({
     data=null,
+    maxTxMiningRetries=3,
   } = {}) {
     super();
 
@@ -44,6 +45,11 @@ class SendTransaction extends EventEmitter {
     this.estimation = null;
     // Job ID
     this.jobID = null;
+
+    // Counter of number of attempts to mine the transaction.
+    this.countTxMiningAttempts = 0;
+    // Maximum number of retries if mining timeouts.
+    this.maxTxMiningRetries = maxTxMiningRetries;
 
     // Error to be shown in case of no miners connected
     this.noMinersError = 'There are no miners to resolve the proof of work of this transaction.';
@@ -84,6 +90,7 @@ class SendTransaction extends EventEmitter {
   submitJob() {
     // Get tx hex without parents and nonce
     const txHex = transaction.getTxHexFromData(this.data);
+    this.countTxMiningAttempts++;
     // Send to be mined in tx mining API
     txMiningApi.submitJob(txHex, false, true, null, (response) => {
       if (response.expected_total_time === -1) {
@@ -120,8 +127,12 @@ class SendTransaction extends EventEmitter {
           this.handlePushTx();
         } else if (response.status === 'timeout') {
           // Error: Timeout resolving pow
-          this.updateOutputSelected(false);
-          this.emit('send-error', this.timeoutError);
+          if (this.countTxMiningAttempts < this.maxTxMiningRetries) {
+            this.submitJob()
+          } else {
+            this.updateOutputSelected(false);
+            this.emit('send-error', this.timeoutError);
+          }
         } else {
           if (response.expected_total_time === -1) {
             // Error: there are no miners online
