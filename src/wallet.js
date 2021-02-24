@@ -877,6 +877,68 @@ const wallet = {
   },
 
   /**
+   * Filter an utxo based on the specified utxo filtering options.
+   * Called directly by HathorWallet.getUtxos and indirectly by HathorWallet.consolidateUtxos to filter utxos before the consolidation.
+   *
+   * @typedef {Object} UtxoOptions
+   * @property {number} max_utxos - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
+   * @property {string} token - Token to filter the utxos. If not sent, we select only HTR utxos.
+   * @property {string} filter_address - Address to filter the utxos.
+   * @property {number} amount_smaller_than - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than this value. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {number} amount_bigger_than - Minimum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount bigger than this value. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {number} maximum_amount - Limit the maximum total amount to consolidate summing all utxos. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {boolean} only_available_utxos - Use only available utxos (not locked)
+   *
+   * @typedef {Object} UtxoDetails
+   * @property {number} total_amount_available - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
+   * @property {number} total_utxos_available - Token to filter the utxos. If not sent, we select only HTR utxos.
+   * @property {number} total_amount_locked - Address to filter the utxos.
+   * @property {number} total_utxos_locked - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than this value. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {{ address: string, amount: number, tx_id: string, locked: boolean, index: number }[]} utxos - Array of utxos
+   *
+   * @param {object} output Transaction output to be filtered/validated
+   * @param {UtxoDetails} utxoDetails utxos and meta information
+   * @param {UtxoOptions} options Utxo filtering options
+   *
+   * @return {object} { ..[rule]: boolen.. } object with each validation rule as property
+   */
+  filterUtxos(output, utxoDetails, options) {
+    const filterOptions = Object.assign({
+      max_utxos: transaction.getMaxInputsConstant(),
+      token: HATHOR_TOKEN_CONFIG.uid,
+      filter_address: null,
+      amount_smaller_than: Infinity,
+      amount_bigger_than: 0,
+      maximum_amount: Infinity
+    }, options);
+
+    // Filter by address, if options.filter_address is specified
+    const is_address_valid = filterOptions.filter_address === null || filterOptions.filter_address === output.decoded.address;
+    // Filter by maximum_amount (sum of utxos amounts), if options.maximum_amount is specified
+    const is_max_amount_valid = filterOptions.maximum_amount >= utxoDetails.total_amount_available + output.value;
+    // Filter more utxos than options.max_utxos (default: transaction.getMaxInputsConstant())
+    const is_max_utxos_valid = filterOptions.max_utxos > utxoDetails.utxos.length;
+    // Filter other tokens, if options.token is specified
+    const is_token_valid = filterOptions.token === output.token;
+    // Filter by options.amount_smaller_than, if it is specified
+    const is_amount_smaller_than_valid = filterOptions.amount_smaller_than >= output.value;
+    // Filter by options.amount_bigger_than, if it is specified
+    const is_amount_bigger_than_valid = filterOptions.amount_bigger_than <= output.value;
+
+    const is_all_filters_valid = is_address_valid && is_max_amount_valid && is_max_utxos_valid && is_token_valid && is_amount_smaller_than_valid && is_amount_bigger_than_valid;
+
+    return {
+      is_address_valid,
+      is_max_amount_valid,
+      is_max_utxos_valid,
+      is_token_valid,
+      is_amount_smaller_than_valid,
+      is_amount_bigger_than_valid,
+      is_all_filters_valid
+    };
+  },
+
+  /**
    * Calculate the balance for each token (available and locked) from the historyTransactions
    *
    * @param {Object} historyTransactions Array of transactions

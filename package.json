@@ -10,6 +10,9 @@
       "<rootDir>/src/*.js",
       "!<rootDir>/node_modules/"
     ],
+    "modulePathIgnorePatterns": [
+      "__fixtures__/*"
+    ],
     "coverageThreshold": {
       "global": {
         "branches": 70,

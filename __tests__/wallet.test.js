@@ -15,7 +15,6 @@ beforeEach(() => {
   wallet.setConnection(WebSocketHandler);
 });
 
-
 test('Wallet operations for transaction', () => {
   const words = wallet.generateWalletWords(256);
   wallet.executeGenerateWallet(words, '', '123456', 'password', false);
@@ -305,4 +304,3 @@ test('Try to check tx before wallet has loaded', () => {
   // this should return false, not fail
   expect(wallet.txExists({'tx_id': 'aaa'})).toBe(false);
 });
-
