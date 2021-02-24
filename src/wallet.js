@@ -1616,7 +1616,15 @@ const wallet = {
 
       if (newData.inputsAmount < outputsAmount) {
         // Don't have this amount of token
-        return {success: false, message:  `Token ${token.symbol}: Insufficient amount of tokens`};
+        return {
+          success: false,
+          message:  `Token ${token.symbol}: Insufficient amount of tokens`,
+          debug: {
+            inputsAmount: newData.inputsAmount,
+            inputsLength: newData.inputs.length,
+            outputsAmount: outputsAmount,
+          },
+        };
       }
 
       if (newData.inputsAmount > outputsAmount) {
