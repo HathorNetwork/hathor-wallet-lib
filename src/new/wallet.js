@@ -341,6 +341,10 @@ class HathorWallet extends EventEmitter {
     storage.setStore(this.store);
     const { outputs, inputs, token, utxos, total_amount } = this.prepareConsolidateUtxosData(destinationAddress, options);
 
+    if (!this.isAddressMine(destinationAddress)) {
+      throw new Error('Utxo consolidation to an address not owned by this wallet isn\'t allowed.');
+    }
+
     if (inputs.length === 0) {
       throw new Error("No available utxo to consolidate.");
     }

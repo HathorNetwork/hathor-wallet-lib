@@ -30,7 +30,8 @@ class FakeHathorWallet {
 
 describe("UTXO Consolidation", () => {
   let hathorWallet;
-  const destinationAddress = "WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi";
+  const destinationAddress = "WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ";
+  const invalidDestinationAddress = "WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi";
   beforeAll(() => {
     transaction.updateMaxInputsConstant(MAX_INPUTS);
     hathorWallet = new FakeHathorWallet();
@@ -144,5 +145,11 @@ describe("UTXO Consolidation", () => {
     await expect(
       hathorWallet.consolidateUtxos(destinationAddress, { token: "05" })
     ).rejects.toEqual(new Error("No available utxo to consolidate."));
+  });
+
+  test("throw error for invalid destinationAddress", async () => {
+    await expect(
+      hathorWallet.consolidateUtxos(invalidDestinationAddress)
+    ).rejects.toEqual(new Error("Utxo consolidation to an address not owned by this wallet isn\'t allowed."));
   });
 });
