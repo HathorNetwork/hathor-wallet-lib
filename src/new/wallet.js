@@ -59,6 +59,9 @@ class HathorWallet extends EventEmitter {
     // XXX Update it so we don't have fixed pin/password
     password = '123',
     pinCode = '123',
+
+    // debug mode
+    debug = false,
   } = {}) {
     super();
 
@@ -107,6 +110,24 @@ class HathorWallet extends EventEmitter {
     // The reload must execute some cleanups, that's why it's important
     // to differentiate both actions
     this.firstConnection = true;
+
+    // Debug mode. It is used to include debugging information
+    // when a problem occurs.
+    this.debug = debug;
+  }
+
+  /**
+   * Enable debug mode.
+   **/
+  enableDebugMode() {
+    this.debug = true;
+  }
+
+  /**
+   * Disable debug mode.
+   **/
+  disableDebugMode() {
+    this.debug = false;
   }
 
   /**
@@ -182,6 +203,187 @@ class HathorWallet extends EventEmitter {
     const data = wallet.getWalletData();
     const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
     return historyTransactions;
+  }
+
+  /**
+   * Get utxos of the wallet addresses
+   *
+   * @typedef {Object} UtxoOptions
+   * @property {number} max_utxos - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
+   * @property {string} token - Token to filter the utxos. If not sent, we select only HTR utxos.
+   * @property {string} filter_address - Address to filter the utxos.
+   * @property {number} amount_smaller_than - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than this value. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {number} amount_bigger_than - Minimum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount bigger than this value. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {number} maximum_amount - Limit the maximum total amount to consolidate summing all utxos. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {boolean} only_available_utxos - Use only available utxos (not locked)
+   *
+   * @typedef {Object} UtxoDetails
+   * @property {number} total_amount_available - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
+   * @property {number} total_utxos_available - Token to filter the utxos. If not sent, we select only HTR utxos.
+   * @property {number} total_amount_locked - Address to filter the utxos.
+   * @property {number} total_utxos_locked - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than this value. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {{ address: string, amount: number, tx_id: string, locked: boolean, index: number }[]} utxos - Array of utxos
+   *
+   * @param {UtxoOptions} options Utxo filtering options
+   *
+   * @return {UtxoDetails} Utxos and meta information about it
+   *
+   */
+  getUtxos(options = {}) {
+    storage.setStore(this.store);
+    const historyTransactions = Object.values(this.getTxHistory());
+    const utxoDetails = {
+      total_amount_available: 0,
+      total_utxos_available: 0,
+      total_amount_locked: 0,
+      total_utxos_locked: 0,
+      utxos: [],
+    };
+
+    // Iterate through transactions
+    for (let i = 0; i < historyTransactions.length; i++) {
+      const transaction = historyTransactions[i];
+
+      // Voided transactions should be ignored
+      if (transaction.is_voided) continue;
+
+      // Iterate through outputs
+      for (let j = 0; j < transaction.outputs.length; j++) {
+        const output = transaction.outputs[j];
+
+        const is_unspent = output.spent_by === null;
+        // wallet.canUseUnspentTx handles locking by timelock, by blockHeight and by utxos already being used by this wallet.
+        const locked = !wallet.canUseUnspentTx(output, transaction.height);
+        const is_mine = this.isAddressMine(output.decoded.address);
+        if (!is_unspent || (locked && options.only_available_utxos) || !is_mine) {
+          // No other filtering required
+          continue;
+        }
+
+        const filters = wallet.filterUtxos(output, utxoDetails, options);
+        const is_authority = wallet.isAuthorityOutput(output);
+
+        // Max amount reached, continue to find a smaller amount
+        if (!filters.is_max_amount_valid) {
+          continue;
+        }
+
+        // Max utxos.length reached, no more utxo should be added
+        if (!filters.is_max_utxos_valid) {
+          return utxoDetails;
+        }
+
+        if (filters.is_all_filters_valid && !is_authority) {
+          utxoDetails.utxos.push({
+            address: output.decoded.address,
+            amount: output.value,
+            tx_id: transaction.tx_id,
+            locked,
+            index: j,
+          });
+          if (!locked) {
+            utxoDetails.total_utxos_available++;
+            utxoDetails.total_amount_available += output.value;
+          } else {
+            utxoDetails.total_utxos_locked++;
+            utxoDetails.total_amount_locked += output.value;
+          }
+        }
+      }
+    }
+
+    return utxoDetails;
+  }
+
+  /**
+   * Prepare all required data to consolidate utxos.
+   *
+   * @typedef {Object} PrepareConsolidateUtxosDataResult
+   * @property {{ address: string, value: number }[]} outputs - Destiny of the consolidated utxos
+   * @property {{ hash: string, index: number }[]} inputs - Inputs for the consolidation transaction
+   * @property {{ uid: string, name: string, symbol: string }} token - HTR or custom token
+   * @property {{ address: string, amount: number, tx_id: string, locked: boolean, index: number }[]} utxos - Array of utxos that will be consolidated
+   * @property {number} total_amount - Amount to be consolidated
+   * 
+   * @param {string} destinationAddress Address of the consolidated utxos
+   * @param {UtxoOptions} options Utxo filtering options
+   *
+   * @return {PrepareConsolidateUtxosDataResult} Required data to consolidate utxos
+   *
+   */
+  prepareConsolidateUtxosData(destinationAddress, options = {}) {
+    storage.setStore(this.store);
+    const utxoDetails = this.getUtxos({ ...options, only_available_utxos: true });
+    const inputs = [];
+    const utxos = [];
+    let total_amount = 0;
+    for (let i = 0; i < utxoDetails.utxos.length; i++) {
+      if (inputs.length === transaction.getMaxInputsConstant()) {
+        // Max number of inputs reached
+        break;
+      }
+      const utxo = utxoDetails.utxos[i];
+      inputs.push({
+        hash: utxo.tx_id,
+        index: utxo.index,
+      });
+      utxos.push(utxo);
+      total_amount += utxo.amount;
+    }
+    const outputs = [{
+      address: destinationAddress,
+      value: total_amount,
+    }];
+    const token = {
+      uid: options.token || HATHOR_TOKEN_CONFIG.uid,
+      name: '',
+      symbol: ''
+    };
+
+    return { outputs, inputs, token, utxos, total_amount };
+  }
+
+  /**
+   * Consolidates many utxos into a single one for either HTR or exactly one custom token.
+   *
+   * @typedef {Object} ConsolidationResult
+   * @property {number} total_utxos_consolidated - Number of utxos consolidated
+   * @property {number} total_amount - Consolidated amount
+   * @property {number} tx_id - Consolidated transaction id
+   * @property {{ address: string, amount: number, tx_id: string, locked: boolean, index: number }[]} utxos - Array of consolidated utxos
+   *
+   * @param {string} destinationAddress Address of the consolidated utxos
+   * @param {UtxoOptions} options Utxo filtering options
+   *
+   * @return {Promise<ConsolidationResult>} Indicates that the transaction is sent or not
+   *
+   */
+  async consolidateUtxos(destinationAddress, options = {}) {
+    storage.setStore(this.store);
+    const { outputs, inputs, token, utxos, total_amount } = this.prepareConsolidateUtxosData(destinationAddress, options);
+
+    if (!this.isAddressMine(destinationAddress)) {
+      throw new Error('Utxo consolidation to an address not owned by this wallet isn\'t allowed.');
+    }
+
+    if (inputs.length === 0) {
+      throw new Error("No available utxo to consolidate.");
+    }
+
+    const result = this.sendManyOutputsTransaction(outputs, inputs, token);
+
+    if (!result.success) {
+      throw new Error(result.message);
+    }
+
+    const tx = await Promise.resolve(result.promise);
+
+    return {
+      total_utxos_consolidated: utxos.length,
+      total_amount,
+      tx_id: tx.tx_id,
+      utxos,
+    };
   }
 
   setState(state) {
@@ -316,15 +518,19 @@ class HathorWallet extends EventEmitter {
    * @param {String} address Address to send the tokens
    * @param {number} value Amount of tokens to be sent
    * @param {Object} token Token object {'uid', 'name', 'symbol'}. Optional parameter if user already set on the class
+   * @param {Object} options Options parameters
+   *  {
+   *   'changeAddress': address of the change output
+   *  }
    *
    * @return {Object} In case of success, an object with {success: true, sendTransaction, promise}, where sendTransaction is a
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    * In case of error, an object with {success: false, message}
    *
    **/
-  sendTransaction(address, value, token) {
+  sendTransaction(address, value, token, options = { changeAddress: null }) {
     storage.setStore(this.store);
-    const ret = this.prepareTransaction(address, value, token);
+    const ret = this.prepareTransaction(address, value, token, options);
 
     if (ret.success) {
       return this.sendPreparedTransaction(ret.data);
@@ -339,10 +545,14 @@ class HathorWallet extends EventEmitter {
    * @param {String} address Address to send the tokens
    * @param {number} value Amount of tokens to be sent
    * @param {Object} token Token object {'uid', 'name', 'symbol'}. Optional parameter if user already set on the class
+   * @param {Object} options Options parameters
+   *  {
+   *   'changeAddress': address of the change output
+   *  }
    *
    * @return {Object} Object with {success: false, message} in case of an error, or {success: true, data}, otherwise
    **/
-  prepareTransaction(address, value, token) {
+  prepareTransaction(address, value, token, options = { changeAddress: null }) {
     storage.setStore(this.store);
     const txToken = token || this.token;
     const isHathorToken = txToken.uid === HATHOR_TOKEN_CONFIG.uid;
@@ -357,7 +567,7 @@ class HathorWallet extends EventEmitter {
       }],
     };
 
-    return this.completeTxData(data, txToken);
+    return this.completeTxData(data, txToken, options);
   }
 
   /**
@@ -365,10 +575,14 @@ class HathorWallet extends EventEmitter {
    *
    * @param {Object} data Partial data that will be completed with inputs
    * @param {Object} token Token object {'uid', 'name', 'symbol'}. Optional parameter if user already set on the class
+   * @param {Object} options Options parameters
+   *  {
+   *   'changeAddress': address of the change output
+   *  }
    *
    * @return {Object} Object with 'success' and completed 'data' in case of success, and 'message' in case of error
    **/
-  completeTxData(partialData, token) {
+  completeTxData(partialData, token, options = { changeAddress: null }) {
     const txToken = token || this.token;
     const walletData = wallet.getWalletData();
     const historyTxs = 'historyTransactions' in walletData ? walletData.historyTransactions : {};
@@ -377,9 +591,17 @@ class HathorWallet extends EventEmitter {
     if (partialData.inputs.length > 0) {
       chooseInputs = false;
     }
-    const ret = wallet.prepareSendTokensData(partialData, txToken, chooseInputs, historyTxs, [txToken]);
+
+    // Warning: prepareSendTokensData(...) might modify `partialData`.
+    const ret = wallet.prepareSendTokensData(partialData, txToken, chooseInputs, historyTxs, [txToken], options);
 
     if (!ret.success) {
+      ret.debug = {
+        balance: this.getBalance(txToken.uid),
+        partialData: partialData, // this might not be the original `partialData`
+        txToken: txToken,
+        ...ret.debug
+      };
       return ret;
     }
 
@@ -401,10 +623,14 @@ class HathorWallet extends EventEmitter {
    * @param {Array} outputs Array of outputs with each element as an object with {'address', 'value'}
    * @param {Array} inputs Array of inputs with each element as an object with {'hash', 'index'}
    * @param {Object} token Token object {'uid', 'name', 'symbol'}. Optional parameter if user already set on the class
+   * @param {Object} options Options parameters
+   *  {
+   *   'changeAddress': address of the change output
+   *  }
    *
    * @return {Promise} Promise that resolves when transaction is sent
    **/
-  sendManyOutputsTransaction(outputs, inputs = [], token = null) {
+  sendManyOutputsTransaction(outputs, inputs = [], token = null, options = { changeAddress: null }) {
     // XXX To accept here multi tokens in the same tx would be a bit more complicated because
     // the method prepareSendTokensData would need a bigger refactor.
     // I believe we should refactor all of that code (and it will be done on wallet-service)
@@ -426,7 +652,7 @@ class HathorWallet extends EventEmitter {
       data.inputs.push({tx_id: input.hash, index: input.index, token: HATHOR_TOKEN_CONFIG.uid });
     }
 
-    const ret = this.completeTxData(data, txToken);
+    const ret = this.completeTxData(data, txToken, options);
 
     if (ret.success) {
       return this.sendPreparedTransaction(ret.data);
@@ -448,7 +674,14 @@ class HathorWallet extends EventEmitter {
     storage.setStore(this.store);
     const sendTransaction = new SendTransaction({data});
     sendTransaction.start();
-    return {success: true, promise: sendTransaction.promise, sendTransaction};
+    const ret = {success: true, promise: sendTransaction.promise, sendTransaction};
+    if (this.debug) {
+      ret.debug = {
+        balanceHTR: this.getBalance(),
+        data: data,
+      };
+    }
+    return ret;
   }
 
   /**
@@ -545,14 +778,18 @@ class HathorWallet extends EventEmitter {
    * @param {String} symbol Symbol of the token
    * @param {number} amount Quantity of the token to be minted
    * @param {String} address Optional parameter for the destination of the created token
+   * @param {Object} options Options parameters
+   *  {
+   *   'changeAddress': address of the change output
+   *  }
    *
    * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    **/
-  createNewToken(name, symbol, amount, address) {
+  createNewToken(name, symbol, amount, address, options = { changeAddress: null }) {
     storage.setStore(this.store);
     const mintAddress = address || this.getCurrentAddress();
-    const ret = tokens.createToken(mintAddress, name, symbol, amount, this.pinCode);
+    const ret = tokens.createToken(mintAddress, name, symbol, amount, this.pinCode, options);
 
     if (ret.success) {
       const sendTransaction = ret.sendTransaction;
@@ -611,11 +848,15 @@ class HathorWallet extends EventEmitter {
    * @param {String} tokenUid UID of the token to mint
    * @param {number} amount Quantity to mint
    * @param {String} address Optional parameter for the destination of the minted tokens
+   * @param {Object} options Options parameters
+   *  {
+   *   'changeAddress': address of the change output
+   *  }
    *
    * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    **/
-  mintTokens(tokenUid, amount, address) {
+  mintTokens(tokenUid, amount, address, options = { changeAddress: null }) {
     storage.setStore(this.store);
     const mintAddress = address || this.getCurrentAddress();
     const mintInput = this.selectAuthorityUtxo(tokenUid, wallet.isMintOutput.bind(wallet));
@@ -624,7 +865,7 @@ class HathorWallet extends EventEmitter {
       return {success: false, message: 'Don\'t have mint authority output available.'}
     }
 
-    const ret = tokens.mintTokens(mintInput, tokenUid, mintAddress, amount, null, this.pinCode);
+    const ret = tokens.mintTokens(mintInput, tokenUid, mintAddress, amount, null, this.pinCode, options);
 
     if (ret.success) {
       const sendTransaction = ret.sendTransaction;
@@ -640,11 +881,16 @@ class HathorWallet extends EventEmitter {
    *
    * @param {String} tokenUid UID of the token to melt
    * @param {number} amount Quantity to melt
+   * @param {Object} options Options parameters
+   *  {
+   *   'depositAddress': address of the HTR deposit back
+   *   'changeAddress': address of the change output
+   *  }
    *
    * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    **/
-  meltTokens(tokenUid, amount) {
+  meltTokens(tokenUid, amount, options = { depositAddress: null, changeAddress: null }) {
     storage.setStore(this.store);
     const meltInput = this.selectAuthorityUtxo(tokenUid, wallet.isMeltOutput.bind(wallet));
 
@@ -653,7 +899,7 @@ class HathorWallet extends EventEmitter {
     }
 
     // Always create another melt authority output
-    const ret = tokens.meltTokens(meltInput, tokenUid, amount, this.pinCode, true);
+    const ret = tokens.meltTokens(meltInput, tokenUid, amount, this.pinCode, true, options);
     if (ret.success) {
       const sendTransaction = ret.sendTransaction;
       sendTransaction.start();
@@ -692,6 +938,17 @@ class HathorWallet extends EventEmitter {
 
   isReady() {
     return this.state === HathorWallet.READY;
+  }
+
+  /**
+   * Check if address is from the loaded wallet
+   *
+   * @param {string} address Address to check
+   *
+   * @return {boolean}
+   **/
+  isAddressMine(address) {
+    return wallet.isAddressMine(address);
   }
 }
 

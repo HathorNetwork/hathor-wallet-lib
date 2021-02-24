@@ -33,6 +33,7 @@ class Connection extends EventEmitter {
   constructor({
     network,
     servers = [],
+    connectionTimeout = null,
   } = {}) {
     super();
 
@@ -51,7 +52,11 @@ class Connection extends EventEmitter {
     this.servers = servers || [...DEFAULT_SERVERS];
     this.currentServer = this.servers[0];
 
-    this.websocket = new WS({ wsURL: helpers.getWSServerURL(this.currentServer) });
+    const wsOptions = { wsURL: helpers.getWSServerURL(this.currentServer) };
+    if (connectionTimeout) {
+      wsOptions['connectionTimeout'] = connectionTimeout;
+    }
+    this.websocket = new WS(wsOptions);
   }
 
   /**
