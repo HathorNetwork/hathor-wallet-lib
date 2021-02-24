@@ -416,7 +416,7 @@ class HathorWallet extends EventEmitter {
 
     if (!ret.success) {
       ret.debug = {
-        balance: this.getBalance(txToken),
+        balance: this.getBalance(txToken.uid),
         partialData: partialData, // this might not be the original `partialData`
         txToken: txToken,
         ...ret.debug
