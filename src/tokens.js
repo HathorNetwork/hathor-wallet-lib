@@ -592,7 +592,10 @@ const tokens = {
 
     // withdraw HTR tokens
     const withdrawAmount = this.getWithdrawAmount(amount);
-    outputs.push(wallet.getOutputChange(withdrawAmount, 0, { address: depositAddress }));
+    if (withdrawAmount > 0) {
+      // When melting an amount smaller than 100 (1.00), the withdraw value will be 0, then we don't need to add output for that
+      outputs.push(wallet.getOutputChange(withdrawAmount, 0, { address: depositAddress }));
+    }
 
     // Create new data
     const newTxData = {inputs, outputs, tokens};

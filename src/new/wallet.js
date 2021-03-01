@@ -206,6 +206,30 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Get a transaction data from the wallet
+   *
+   * @param {String} id Hash of the transaction to get data from
+   *
+   * @return {Object} Data from the transaction to get. Can be null if the wallet does not contain the tx.
+   *  'tx_id': String
+   *  'version': Number
+   *  'weight': Number
+   *  'timestamp': Number
+   *  'is_voided': boolean
+   *  'inputs': Array(Object)
+   *  'outputs': Array(Object)
+   *  'parents': Array(String)
+   */
+  getTx(id) {
+    const history = this.getTxHistory();
+    if (id in history) {
+      return history[id];
+    } else {
+      return null;
+    }
+  }
+
+  /**
    * Get utxos of the wallet addresses
    *
    * @typedef {Object} UtxoOptions
