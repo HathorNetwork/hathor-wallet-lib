@@ -1235,6 +1235,9 @@ const wallet = {
       return ret;
     }
 
+    const utxos = [];
+    let selectedUtxo = null;
+
     for (const tx_id in historyTransactions) {
       const tx = historyTransactions[tx_id];
       if (tx.is_voided) {
@@ -1247,17 +1250,48 @@ const wallet = {
           // Ignore authority outputs.
           continue;
         }
-        if (ret.inputsAmount >= amount) {
-          return ret;
-        }
+
         if (txout.spent_by === null && txout.token === selectedToken && this.isAddressMine(txout.decoded.address, data)) {
           if (this.canUseUnspentTx(txout, tx.height)) {
-            ret.inputsAmount += txout.value;
-            ret.inputs.push({ tx_id: tx.tx_id, index, token: selectedToken, address: txout.decoded.address });
+            if (txout.value === amount) {
+              // If the value of the utxo is the same as the full amount requested, we return this utxo to be used
+              ret.inputsAmount = txout.value;
+              ret.inputs.push({ tx_id: tx.tx_id, index, token: selectedToken, address: txout.decoded.address })
+              return ret;
+            }
+
+            const utxo = Object.assign({}, txout, {tx_id: tx.tx_id, index});
+            utxos.push(utxo);
+
+            if (utxo.value > amount) {
+              // We want to select the fewer number of utxos possible and with the smaller amount
+              // If the value of the utxo covers the full amount requested we save this utxo
+              // in a variable to be used, in case it's the smaller amount possible that covers the full amount
+              if (selectedUtxo === null || utxo.value < selectedUtxo.value) {
+                selectedUtxo = utxo;
+              }
+            }
           }
         }
       }
     }
+
+    if (selectedUtxo) {
+      ret.inputsAmount = selectedUtxo.value;
+      ret.inputs.push({ tx_id: selectedUtxo.tx_id, index: selectedUtxo.index, token: selectedToken, address: selectedUtxo.decoded.address })
+    } else {
+      // Reverse sort by value and get the utxos until the amount is fulfilled
+      const sortedUtxos = _.orderBy(utxos, ['value'], ['desc']);
+      for (const utxo of sortedUtxos) {
+        ret.inputsAmount += utxo.value;
+        ret.inputs.push({ tx_id: utxo.tx_id, index: utxo.index, token: selectedToken, address: utxo.decoded.address })
+
+        if (ret.inputsAmount >= amount) {
+          break;
+        }
+      }
+    }
+
     return ret;
   },
 
