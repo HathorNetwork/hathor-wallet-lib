@@ -56,6 +56,9 @@ class WS extends EventEmitter {
     // Open connection timeout.
     this.openConnectionTimeout = openConnectionTimeout;
 
+    // Date of connection.
+    this.connectedDate = null;
+
     // Date of latest setup call. The setup is the way to open a new connection.
     this.latestSetupDate = null;
 
@@ -122,6 +125,17 @@ class WS extends EventEmitter {
     }
   }
 
+  /**
+   * Return connection uptime in seconds (or null if not connected).
+   **/
+  uptime() {
+    if (!this.connectedDate) {
+      return null;
+    }
+    const now = new Date();
+    return (now - this.connectedDate) / 1000;
+  }
+
   onPong() {
     if (this.latestPingDate) {
       const dt = (new Date() - this.latestPingDate) / 1000;
@@ -161,6 +175,7 @@ class WS extends EventEmitter {
    */
   onOpen() {
     this.connected = true;
+    this.connectedDate = new Date();
     this.started = true;
     this.setIsOnline(true);
     this.heartbeat = setInterval(() => {
@@ -174,6 +189,7 @@ class WS extends EventEmitter {
   onClose() {
     this.started = false;
     this.connected = false;
+    this.connectedDate = null;
     this.setIsOnline(false);
     if (this.ws) {
       this.ws.onclose = () => {};
@@ -233,6 +249,10 @@ class WS extends EventEmitter {
   }
 
   onConnectionDown() {
+    console.warn('Ping timeout. Connection is down...', {
+      uptime: this.uptime(),
+      connectionTimeout: this.connectionTimeout,
+    });
     this.onClose();
   };
 

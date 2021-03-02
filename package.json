@@ -1,6 +1,6 @@
 {
   "name": "@hathor/wallet-lib",
-  "version": "0.16.12",
+  "version": "0.16.14",
   "description": "Library used by Hathor Wallet",
   "jest": {
     "setupFilesAfterEnv": [
@@ -9,6 +9,9 @@
     "collectCoverageFrom": [
       "<rootDir>/src/*.js",
       "!<rootDir>/node_modules/"
+    ],
+    "modulePathIgnorePatterns": [
+      "__fixtures__/*"
     ],
     "coverageThreshold": {
       "global": {
