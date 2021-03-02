@@ -1219,6 +1219,12 @@ const wallet = {
   /*
    * Get inputs to be used in transaction from amount required and selectedToken
    *
+   * The algorithm to select the inputs is simple:
+   *
+   * 1. If we have a single utxo capable of handle the full amount requested,
+   * we return the utxo with smaller amount among the ones that have an amount bigger than the requested
+   * 2. Otherwise we reverse sort the utxos by amount and select the utxos in order until the full amount is fulfilled.
+   *
    * @param {Object} historyTransactions Object of transactions indexed by tx_id
    * @param {number} amount Amount required to send transaction
    * @param {string} selectedToken UID of token that is being sent
@@ -1253,7 +1259,7 @@ const wallet = {
 
         if (txout.spent_by === null && txout.token === selectedToken && this.isAddressMine(txout.decoded.address, data)) {
           if (this.canUseUnspentTx(txout, tx.height)) {
-            if (txout.value === amount) {
+            if (txout.value == amount) {
               // If the value of the utxo is the same as the full amount requested, we return this utxo to be used
               ret.inputsAmount = txout.value;
               ret.inputs.push({ tx_id: tx.tx_id, index, token: selectedToken, address: txout.decoded.address })

@@ -10,6 +10,7 @@ import dateFormatter from '../src/date';
 import { HATHOR_TOKEN_CONFIG } from '../src/constants';
 import storage from '../src/storage';
 import WebSocketHandler from '../src/WebSocketHandler';
+import txHistoryFixture from "./__fixtures__/tx_history";
 
 beforeEach(() => {
   wallet.setConnection(WebSocketHandler);
@@ -303,4 +304,77 @@ test('Try to check tx before wallet has loaded', () => {
   wallet.executeGenerateWallet(words, '', '123456', 'password', false);
   // this should return false, not fail
   expect(wallet.txExists({'tx_id': 'aaa'})).toBe(false);
+});
+
+test('Utxo selection', () => {
+  wallet._rewardSpendMinBlocks = 0;
+  wallet._networkBestChainHeight = 11;
+  // First we need to parse the history in the fixture to the expected format in the localStorage
+  const history = {}
+
+  for (const h of txHistoryFixture) {
+    history[h.tx_id] = h;
+  }
+
+  const keys = {
+    'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ': {},
+    'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp': {},
+  }
+
+  storage.setItem('wallet:data', {keys, historyTransactions: history});
+
+  const ret1 = wallet.getInputsFromAmount(history, 1, "00")
+  // It will get the first utxo
+  expect(ret1.inputsAmount).toBe(1);
+  expect(ret1.inputs.length).toBe(1);
+  expect(ret1.inputs[0].tx_id).toBe("0000000419625e2587c225fb49f36278c9da681ec05e039125307b8aef3d3d30");
+
+  const ret2 = wallet.getInputsFromAmount(history, 2, "00")
+  // It will use all HTR utxos
+  expect(ret2.inputsAmount).toBe(2);
+  expect(ret2.inputs.length).toBe(2);
+
+  const ret3 = wallet.getInputsFromAmount(history, 3, "00")
+  // It won't have 3 HTR
+  expect(ret3.inputsAmount).toBe(2);
+  expect(ret3.inputs.length).toBe(2);
+
+  const ret4 = wallet.getInputsFromAmount(history, 1, "02")
+  // It will get the first utxo for token "02"
+  expect(ret4.inputsAmount).toBe(1);
+  expect(ret4.inputs.length).toBe(1);
+  expect(ret4.inputs[0].tx_id).toBe("0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1053");
+
+  const ret5 = wallet.getInputsFromAmount(history, 3, "02")
+  // It will get the last utxo for token "02"
+  expect(ret5.inputsAmount).toBe(3);
+  expect(ret5.inputs.length).toBe(1);
+  expect(ret5.inputs[0].tx_id).toBe("0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1055");
+
+  const ret6 = wallet.getInputsFromAmount(history, 4, "02")
+  // It will get the last two utxo for token "02", the ones with bigger amount
+  expect(ret6.inputsAmount).toBe(5);
+  expect(ret6.inputs.length).toBe(2);
+  expect(ret6.inputs[0].tx_id).toBe("0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1055");
+  expect(ret6.inputs[1].tx_id).toBe("0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1054");
+
+  const ret7 = wallet.getInputsFromAmount(history, 5, "02")
+  // It will get the last two utxo for token "02", the ones with bigger amount
+  expect(ret7.inputsAmount).toBe(5);
+  expect(ret7.inputs.length).toBe(2);
+  expect(ret7.inputs[0].tx_id).toBe("0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1055");
+  expect(ret7.inputs[1].tx_id).toBe("0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1054");
+
+  const ret8 = wallet.getInputsFromAmount(history, 6, "02")
+  // It will get all utxos for token "02"
+  expect(ret8.inputsAmount).toBe(6);
+  expect(ret8.inputs.length).toBe(3);
+  expect(ret8.inputs[0].tx_id).toBe("0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1055");
+  expect(ret8.inputs[1].tx_id).toBe("0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1054");
+  expect(ret8.inputs[2].tx_id).toBe("0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1053");
+
+  const ret9 = wallet.getInputsFromAmount(history, 7, "02")
+  // Won't have enough tokens
+  expect(ret9.inputsAmount).toBe(6);
+  expect(ret9.inputs.length).toBe(3);
 });
