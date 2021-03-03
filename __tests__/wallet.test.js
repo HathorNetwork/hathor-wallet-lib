@@ -336,8 +336,8 @@ test('Utxo selection', () => {
 
   const ret3 = wallet.getInputsFromAmount(history, 3, "00")
   // It won't have 3 HTR
-  expect(ret3.inputsAmount).toBe(2);
-  expect(ret3.inputs.length).toBe(2);
+  expect(ret3.inputsAmount).toBe(0);
+  expect(ret3.inputs.length).toBe(0);
 
   const ret4 = wallet.getInputsFromAmount(history, 1, "02")
   // It will get the first utxo for token "02"
@@ -375,6 +375,6 @@ test('Utxo selection', () => {
 
   const ret9 = wallet.getInputsFromAmount(history, 7, "02")
   // Won't have enough tokens
-  expect(ret9.inputsAmount).toBe(6);
-  expect(ret9.inputs.length).toBe(3);
+  expect(ret9.inputsAmount).toBe(0);
+  expect(ret9.inputs.length).toBe(0);
 });

@@ -1242,6 +1242,7 @@ const wallet = {
     }
 
     const utxos = [];
+    let utxosAmount = 0;
     let selectedUtxo = null;
 
     for (const tx_id in historyTransactions) {
@@ -1268,6 +1269,7 @@ const wallet = {
 
             const utxo = Object.assign({}, txout, {tx_id: tx.tx_id, index});
             utxos.push(utxo);
+            utxosAmount += utxo.value;
 
             if (utxo.value > amount) {
               // We want to select the fewer number of utxos possible and with the smaller amount
@@ -1283,8 +1285,12 @@ const wallet = {
     }
 
     if (selectedUtxo) {
+      // We have a single utxo to be used that covers the full amount requested
       ret.inputsAmount = selectedUtxo.value;
       ret.inputs.push({ tx_id: selectedUtxo.tx_id, index: selectedUtxo.index, token: selectedToken, address: selectedUtxo.decoded.address })
+    } else if (utxosAmount < amount) {
+      // We don't have enough utxos to fulfill the requested amount
+      return ret;
     } else {
       // Reverse sort by value and get the utxos until the amount is fulfilled
       const sortedUtxos = _.orderBy(utxos, ['value'], ['desc']);
