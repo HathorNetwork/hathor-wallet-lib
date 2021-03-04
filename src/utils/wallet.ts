@@ -162,6 +162,16 @@ const wallet = {
     return privateKey.xpubkey;
   },
 
+  getXPubKeyFromSeed(seed: string, options: { passphrase?: string, networkName?: string } = {}): string {
+    const methodOptions = Object.assign({passphrase: '', networkName: 'mainnet'}, options);
+    const { passphrase, networkName } = methodOptions;
+
+    const network = new Network(networkName);
+    const code = new Mnemonic(seed);
+    const xpriv = code.toHDPrivateKey(passphrase, network.bitcoreNetwork);
+    return this.getXPubKeyFromXPrivKey(xpriv);
+  },
+
   /**
    * Validate an xpubkey.
    *
