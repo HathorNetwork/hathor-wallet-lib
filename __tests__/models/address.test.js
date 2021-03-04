@@ -27,4 +27,8 @@ test('Validate address', () => {
   const mainnetNetwork = new Network('mainnet')
   const addr4 = new Address('HNBUHhzkVuSFUNW21HrajUFNUiX8JrznSb', {network: mainnetNetwork});
   expect(addr4.isValid()).toBe(true);
+
+  // Invalid checksum
+  const addr5 = new Address('HNBUHhzkVuSFUNW21HrajUFNUiX8JrznSc', {network: mainnetNetwork});
+  expect(addr5.isValid()).toBe(false);
 })
