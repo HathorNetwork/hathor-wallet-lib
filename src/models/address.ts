@@ -41,7 +41,6 @@ class Address {
       return this.validateAddress()
     } catch (e) {
       if (e instanceof AddressError) {
-        console.log('Is valid false', e)
         return false;
       }
       throw e;
