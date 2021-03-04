@@ -127,8 +127,12 @@ const wallet = {
   },
 
   /**
-   * Get public key for specific key index derivation
+   * Get public key for specific key index derivation.
+   * We expect to receive the xpub after the derivation and the index to get the public key
+   * Example: to get the public key of the path m/44'/280/0'/0/{index}
+   * you must send in this method the xpubkey from m/44'/280/0'/0 and the index you want to derive
    *
+   * @param {String} xpubkey Xpub of the path before the last derivation
    * @param {number} index Index of the key to derive
    *
    * @return {Object} Public key object
