@@ -20,46 +20,56 @@ const wallet = {
    *
    * @param {string} words Words (separated by space) to generate the HD Wallet seed
    *
-   * @return {Object} {'valid': boolean, 'invalidWords': Array[string], 'words': string} where 'words' is a cleaned
-   * string with the words separated by a single space and invalidWords is an array of invalid words
-   * @throws {InvalidWords} In case the words string is invalid
+   * @return {Object} {'valid': boolean, 'words': string} where 'words' is a cleaned
+   * string with the words separated by a single space
+   * @throws {InvalidWords} In case the words string is invalid. The error object will have
+   * an invalidWords attribute with an array of words that are not valid.
    *
    * @memberof Wallet
    * @inner
    */
   wordsValid(words: string): {valid: boolean, invalidWords?: string[], words?: string} {
-    let newWordsString = '';
-    if (_.isString(words)) {
-      // 1. Replace all non ascii chars by a single space
-      // 2. Remove one or more spaces (or line breaks) before and after the 24 words
-      // 3. Set text to lower case
-      newWordsString = words.replace(/[^A-Za-z0-9]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
-      const wordsArray = newWordsString.split(' ');
-      if (wordsArray.length !== 24) {
-        // Must have 24 words
-        throw new InvalidWords('Must have 24 words.')
-      } else if (!Mnemonic.isValid(newWordsString)) {
-        // Check if there is a word that does not belong to the list of possible words
-        const wordlist = Mnemonic.Words.ENGLISH;
-        const errorList: string[] = [];
-
-        for (const word of wordsArray) {
-          if (wordlist.indexOf(word) < 0) {
-            errorList.push(word);
-          }
-        }
-
-        let errorMessage = '';
-        if (errorList.length > 0) {
-          return {'valid': false, 'invalidWords': errorList};
-        } else {
-          // Invalid sequence of words
-          throw new InvalidWords('Invalid sequence of words.')
-        }
-      }
-    } else {
+    if (!_.isString(words)) {
       // Must be string
       throw new InvalidWords('Words must be a string.')
+    }
+
+    let newWordsString = '';
+    // 1. Replace all non ascii chars by a single space
+    // 2. Remove one or more spaces (or line breaks) before and after the 24 words
+    // 3. Set text to lower case
+    newWordsString = words.replace(/[^A-Za-z0-9]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+    const wordsArray = newWordsString.split(' ');
+
+    const getInvalidWords = (words: string[]): string[] => {
+      const wordlist = Mnemonic.Words.ENGLISH;
+      const errorList: string[] = [];
+
+      for (const word of words) {
+        if (wordlist.indexOf(word) < 0) {
+          errorList.push(word);
+        }
+      }
+      return errorList;
+    }
+
+    if (wordsArray.length !== 24) {
+      // Must have 24 words
+      const err = new InvalidWords('Must have 24 words.')
+      err.invalidWords = getInvalidWords(wordsArray);
+      throw err;
+    } else if (!Mnemonic.isValid(newWordsString)) {
+      // Check if there is a word that does not belong to the list of possible words
+      const errorList = getInvalidWords(wordsArray);
+      let errorMessage = '';
+      if (errorList.length > 0) {
+        const err = new InvalidWords('Invalid words.');
+        err.invalidWords = errorList;
+        throw err
+      } else {
+        // Invalid sequence of words
+        throw new InvalidWords('Invalid sequence of words.')
+      }
     }
     return {'valid': true, 'words': newWordsString};
   },
