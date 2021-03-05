@@ -138,6 +138,8 @@ test('New token', async (done) => {
   const ret = tokens.createToken(address, tokenName, tokenSymbol, 200, pin);
   const sendTransaction = ret.sendTransaction;
   sendTransaction.start();
+  // We must do this, otherwise the setTimeout method will be called with a null localStorage
+  sendTransaction.updateOutputSelected(false);
   ret.promise.then(() => {
     const savedTokens = tokens.getTokens();
     expect(savedTokens.length).toBe(2);
