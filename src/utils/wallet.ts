@@ -186,12 +186,7 @@ const wallet = {
    * @inner
    */
   isXpubKeyValid(xpubkey: string): boolean {
-    try {
-      HDPublicKey(xpubkey);
-      return true
-    } catch (error) {
-      return false;
-    }
+    return HDPublicKey.isValidSerialized(xpubkey);
   },
 
   /**
