@@ -14,6 +14,8 @@ import { DEFAULT_TX_VERSION } from '../src/constants';
 import storage from '../src/storage';
 import WebSocketHandler from '../src/WebSocketHandler';
 
+const nodeMajorVersion = process.versions.node.split('.')[0];
+
 beforeEach(() => {
   wallet.setConnection(WebSocketHandler);
 });
@@ -106,7 +108,11 @@ test('Signed int to bytes', () => {
 
   let number4 = 2**33;
   let buf4 = transaction.signedIntToBytes(number4, 8);
-  expect(buf4.readBigInt64BE(0)).toBe(BigInt(number4));
+  if (nodeMajorVersion > 8) {
+    expect(buf4.readBigInt64BE(0)).toBe(BigInt(number4));
+  } else {
+    expect(buf4.readIntBE(0, 8)).toBe(number4);
+  }
 });
 
 test('Float to bytes', () => {
@@ -126,11 +132,21 @@ test('Output value to bytes', () => {
 
   let bytes3 = transaction.outputValueToBytes(2**31);
   expect(bytes3.length).toBe(8);
-  expect(bytes3.readBigInt64BE(0)).toBe(BigInt(-(2**31)));
+  const expectedNumber3 = -(2**31);
+  if (nodeMajorVersion > 8) {
+    expect(bytes3.readBigInt64BE(0)).toBe(BigInt(expectedNumber3));
+  } else {
+    expect(bytes3.readIntBE(0, 8)).toBe(expectedNumber3);
+  }
 
   let bytes4 = transaction.outputValueToBytes(2**33);
+  const expectedNumber4 = -(2**33);
   expect(bytes4.length).toBe(8);
-  expect(bytes4.readBigInt64BE(0)).toBe(BigInt(-(2**33)));
+  if (nodeMajorVersion > 8) {
+    expect(bytes4.readBigInt64BE(0)).toBe(BigInt(expectedNumber4));
+  } else {
+    expect(bytes4.readIntBE(0, 8)).toBe(expectedNumber4);
+  }
 
   const outputValueLarge = () => {
     transaction.outputValueToBytes(2**60);
