@@ -190,6 +190,30 @@ export const MIN_POLLING_INTERVAL = 0.5;
 export const TX_MINING_URL = 'https://txmining.mainnet.hathor.network/';
 
 /**
+ * Constants to calculate weight
+ */
+export const TX_WEIGHT_CONSTANTS = {
+  txMinWeight: 14,
+  txWeightCoefficient: 1.6,
+  txMinWeightK: 100
+};
+
+/**
+ * Maximum number of inputs
+ */
+export const MAX_INPUTS = 255;
+
+/**
+ * Maximum number of outputs
+ */
+export const MAX_OUTPUTS = 255;
+
+/**
+ * Percentage of Hathor to deposit when creating a token
+ */
+export const TOKEN_DEPOSIT_PERCENTAGE = 0.01
+
+/**
  * Base URL for the tx mining api in the testnet
  */
 export const TX_MINING_TESTNET_URL = 'https://txmining.testnet.hathor.network/';

@@ -1,23 +1,32 @@
-var constants = require('./lib/constants');
-var helpers = require('./lib/helpers');
-var dateFormatter = require('./lib/date');
-var tokens = require('./lib/tokens');
-var transaction = require('./lib/transaction');
-var version = require('./lib/version');
-var wallet = require('./lib/wallet');
-var WebSocketHandler = require('./lib/WebSocketHandler');
-var errors = require('./lib/errors');
-var walletApi = require('./lib/api/wallet');
-var txApi = require('./lib/api/txApi');
-var txMiningApi = require('./lib/api/txMining');
-var versionApi = require('./lib/api/version');
-var axios = require('./lib/api/axiosInstance');
-var storage = require('./lib/storage');
-var network = require('./lib/network');
-var MemoryStore = require('./lib/memory_store');
-var HathorWallet = require('./lib/new/wallet');
-var Connection = require('./lib/new/connection');
-var SendTransaction = require('./lib/new/sendTransaction');
+const constants = require('./lib/constants');
+const helpers = require('./lib/helpers');
+const dateFormatter = require('./lib/date');
+const tokens = require('./lib/tokens');
+const transaction = require('./lib/transaction');
+const version = require('./lib/version');
+const wallet = require('./lib/wallet');
+const WebSocketHandler = require('./lib/WebSocketHandler');
+const errors = require('./lib/errors');
+const walletApi = require('./lib/api/wallet');
+const txApi = require('./lib/api/txApi');
+const txMiningApi = require('./lib/api/txMining');
+const versionApi = require('./lib/api/version');
+const axios = require('./lib/api/axiosInstance');
+const storage = require('./lib/storage');
+const network = require('./lib/network');
+const MemoryStore = require('./lib/memory_store');
+const HathorWallet = require('./lib/new/wallet');
+const Connection = require('./lib/new/connection');
+const SendTransaction = require('./lib/new/sendTransaction');
+const Address = require('./lib/models/address');
+const Output = require('./lib/models/output');
+const Input = require('./lib/models/input');
+const Transaction = require('./lib/models/transaction');
+const Network = require('./lib/models/network');
+const dateUtils = require('./lib/utils/date');
+const tokensUtils = require('./lib/utils/tokens');
+const walletUtils = require('./lib/utils/wallet');
+const helpersUtils = require('./lib/utils/helpers');
 
 module.exports = {
   helpers: helpers.default,
@@ -40,4 +49,13 @@ module.exports = {
   HathorWallet: HathorWallet.default,
   Connection: Connection.default,
   SendTransaction: SendTransaction.default,
+  Address: Address.default,
+  Output: Output.default,
+  Input: Input.default,
+  Transaction: Transaction.default,
+  Network: Network.default,
+  dateUtils: dateUtils.default,
+  tokensUtils: tokensUtils.default,
+  walletUtils: walletUtils.default,
+  helpersUtils: helpersUtils.default,
 }
