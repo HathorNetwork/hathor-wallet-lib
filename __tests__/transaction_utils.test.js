@@ -15,7 +15,6 @@ import storage from '../src/storage';
 import WebSocketHandler from '../src/WebSocketHandler';
 
 const nodeMajorVersion = process.versions.node.split('.')[0];
-console.log('#### ', nodeMajorVersion);
 
 beforeEach(() => {
   wallet.setConnection(WebSocketHandler);
