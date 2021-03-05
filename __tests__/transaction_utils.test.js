@@ -106,7 +106,7 @@ test('Signed int to bytes', () => {
 
   let number4 = 2**33;
   let buf4 = transaction.signedIntToBytes(number4, 8);
-  expect(buf4.readIntBE(0, 8)).toBe(number4);
+  expect(buf4.readBigInt64BE(0)).toBe(BigInt(number4));
 });
 
 test('Float to bytes', () => {
@@ -126,11 +126,11 @@ test('Output value to bytes', () => {
 
   let bytes3 = transaction.outputValueToBytes(2**31);
   expect(bytes3.length).toBe(8);
-  expect(bytes3.readIntBE(0, 8)).toBe(-(2**31));
+  expect(bytes3.readBigInt64BE(0)).toBe(BigInt(-(2**31)));
 
   let bytes4 = transaction.outputValueToBytes(2**33);
   expect(bytes4.length).toBe(8);
-  expect(bytes4.readIntBE(0, 8)).toBe(-(2**33));
+  expect(bytes4.readBigInt64BE(0)).toBe(BigInt(-(2**33)));
 
   const outputValueLarge = () => {
     transaction.outputValueToBytes(2**60);
@@ -182,14 +182,14 @@ test('Validate address', () => {
 
 test('Push data', () => {
   let stack = [];
-  let buf = buffer.Buffer(5);
+  let buf = buffer.Buffer.alloc(5);
   transaction.pushDataToStack(stack, buf);
   expect(stack.length).toBe(2);
   expect(stack[0].readUInt8(0)).toBe(5);
   expect(stack[1]).toBe(buf);
 
   let newStack = [];
-  let newBuf = buffer.Buffer(100);
+  let newBuf = buffer.Buffer.alloc(100);
   transaction.pushDataToStack(newStack, newBuf);
   expect(newStack.length).toBe(3);
   expect(newStack[0]).toBe(OP_PUSHDATA1);
@@ -208,12 +208,12 @@ test('Create output script', () => {
 });
 
 test('Create input data', () => {
-  let signature = buffer.Buffer(20);
-  let pubkeyBytes = buffer.Buffer(30);
+  let signature = buffer.Buffer.alloc(20);
+  let pubkeyBytes = buffer.Buffer.alloc(30);
   expect(transaction.createInputData(signature, pubkeyBytes).length).toBe(52);
 
   // Pubkey bytes now needs the OP_PUSHDATA1 to be pushed
-  let pubkeyBytes2 = buffer.Buffer(100);
+  let pubkeyBytes2 = buffer.Buffer.alloc(100);
   expect(transaction.createInputData(signature, pubkeyBytes2).length).toBe(123);
 });
 
