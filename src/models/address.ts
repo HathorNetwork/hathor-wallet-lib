@@ -75,13 +75,13 @@ class Address {
    * @memberof Address
    * @inner
    */
-  private validateAddress(): boolean {
+  validateAddress(): boolean {
     const addressBytes = this.decode();
-    const errorMessage = `Invalid address: ${this.base58}`;
+    const errorMessage = `Invalid address: ${this.base58}.`;
 
     // Validate address length
     if (addressBytes.length !== 25) {
-      throw new AddressError(errorMessage);
+      throw new AddressError(`${errorMessage} Address has ${addressBytes.length} bytes and should have 25.`);
     }
 
     // Validate address checksum
@@ -89,13 +89,13 @@ class Address {
     const addressSlice = addressBytes.slice(0, -4);
     const correctChecksum = helpers.getChecksum(addressSlice);
     if (!util.buffer.equals(checksum, correctChecksum)) {
-      throw new AddressError(errorMessage);
+      throw new AddressError(`${errorMessage} Invalid checksum. Expected: ${correctChecksum} != Received: ${checksum}.`);
     }
 
     // Validate version byte. Should be the p2pkh or p2sh
     const firstByte = addressBytes[0];
     if (firstByte !== this.network.versionBytes.p2pkh && firstByte !== this.network.versionBytes.p2sh) {
-      throw new AddressError(errorMessage);
+      throw new AddressError(`${errorMessage} Invalid network byte. Expected: ${this.network.versionBytes.p2pkh} or ${this.network.versionBytes.p2sh} and received ${firstByte}.`);
     }
     return true;
   }

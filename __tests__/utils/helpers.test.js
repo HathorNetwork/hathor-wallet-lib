@@ -13,6 +13,7 @@ import Address from '../../src/models/address';
 import buffer from 'buffer';
 import { OP_PUSHDATA1 } from '../../src/opcodes';
 
+const nodeMajorVersion = process.versions.node.split('.')[0];
 
 test('Round float', () => {
   expect(helpers.roundFloat(1.23)).toBe(1.23);
@@ -71,7 +72,11 @@ test('Signed int to bytes', () => {
 
   let number4 = 2**33;
   let buf4 = helpers.signedIntToBytes(number4, 8);
-  expect(buf4.readIntBE(0, 8)).toBe(number4);
+  if (nodeMajorVersion > 8) {
+    expect(buf4.readBigInt64BE(0)).toBe(BigInt(number4));
+  } else {
+    expect(buf4.readIntBE(0, 8)).toBe(number4);
+  }
 });
 
 test('Float to bytes', () => {
@@ -82,14 +87,14 @@ test('Float to bytes', () => {
 
 test('Push data', () => {
   let stack = [];
-  let buf = buffer.Buffer(5);
+  let buf = buffer.Buffer.alloc(5);
   helpers.pushDataToStack(stack, buf);
   expect(stack.length).toBe(2);
   expect(stack[0].readUInt8(0)).toBe(5);
   expect(stack[1]).toBe(buf);
 
   let newStack = [];
-  let newBuf = buffer.Buffer(100);
+  let newBuf = buffer.Buffer.alloc(100);
   helpers.pushDataToStack(newStack, newBuf);
   expect(newStack.length).toBe(3);
   expect(newStack[0]).toBe(OP_PUSHDATA1);

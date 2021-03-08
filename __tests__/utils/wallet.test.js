@@ -25,16 +25,30 @@ test('Words', () => {
   const invalidArr = wordsArr.slice(0, 23)
   expect(() => wallet.wordsValid(invalidArr.join(' '))).toThrowError(InvalidWords);
 
+  // With 22 words and an invalid word, it's invalid and the invalid word will be on the error object
+  const invalidArr2 = wordsArr.slice(0, 21)
+  invalidArr2.push('i');
+  invalidArr2.push('x');
+  try {
+    wallet.wordsValid(invalidArr2.join(' '));
+  } catch(error) {
+    expect(error).toBeInstanceOf(InvalidWords);
+    expect(error.invalidWords).toStrictEqual(['i', 'x']);
+  }
+
   // Wrong 24th word
   invalidArr.push('word');
   expect(() => wallet.wordsValid(invalidArr.join(' '))).toThrowError(InvalidWords);
 
   // If the wrong word does not belong to the mnemonic dictionary we return it in the list of invalidWords
-  const invalidArr2 = invalidArr.slice(0, 23);
-  invalidArr2.push('abc');
-  const ret = wallet.wordsValid(invalidArr2.join(' '));
-  expect(ret.valid).toBe(false);
-  expect(ret.invalidWords).toStrictEqual(['abc']);
+  const invalidArr3 = invalidArr.slice(0, 23);
+  invalidArr3.push('abc');
+  try {
+    wallet.wordsValid(invalidArr3.join(' '));
+  } catch(error) {
+    expect(error).toBeInstanceOf(InvalidWords);
+    expect(error.invalidWords).toStrictEqual(['abc']);
+  }
 
   // The separator may have breakline and multiples spaces
   const testWords = wordsArr.join('  \n');

@@ -30,9 +30,9 @@ const versionBytes = {
 // privatekey: prefix for private key WIF (Wallet Import Format)
 // xpubkey: prefix for xpubkeys (we will use 'xpub' for both mainnet and testnet)
 // xprivkey: prefix for xprivkeys (we will use 'xprv' for both mainnet and testnet)
-// networkMagic: used to send messages through the network (not used by us)
-// port: used to connect to the network (not used by us)
-// dnsSeed: list of dns to connect (not used by us)
+// networkMagic: used to send messages through the network (not used by us but it's important to set for bitcore-lib, so we use the same as bitcoin)
+// port: used to connect to the network (not used by us but it's important to set for bitcore-lib, so we use the same as bitcoin)
+// dnsSeed: list of dns to connect (not used by us but it's important to set for bitcore-lib, so we use the same as bitcoin)
 const mainnet = Networks.add({
   name: 'mainnet',
   alias: 'production',
