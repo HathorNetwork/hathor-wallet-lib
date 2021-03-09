@@ -15,12 +15,43 @@ import { axiosInstance } from './walletServiceAxios';
 
 const walletApi = {
   getWalletStatus(id) {
-    return axiosInstance().get('wallet', {'params': {id}});
+    const data = { params: { id } }
+    return axiosInstance().get('wallet', data);
   },
 
   createWallet(xpubkey) {
-    return axiosInstance().post('wallet', {xpubkey});
-  }
+    const data = { xpubkey };
+    return axiosInstance().post('wallet', data);
+  },
+
+  getAddresses(id) {
+    const data = { params: { id } }
+    return axiosInstance().get('addresses', data);
+  },
+
+  getBalances(id, tokenId = null) {
+    const data = { params: { id } }
+    if (tokenId) {
+      data['params']['tokenId'] = tokenId;
+    }
+    return axiosInstance().get('balances', data);
+  },
+
+  getHistory(id, tokenId = null) {
+    // TODO add pagination parameters
+    const data = { params: { id } }
+    return axiosInstance().get('txhistory', data);
+  },
+
+  createTxProposal(id, outputs, inputs) {
+    const data = { id, outputs, inputs };
+    return axiosInstance().post('txproposals', data);
+  },
+
+  updateTxProposal(id, timestamp, nonce, weight, parents, inputsData) {
+    const data = { timestamp, nonce, weight, parents, inputsSignatures: inputsData };
+    return axiosInstance().put(`txproposals/${id}`, data);
+  },
 };
 
 export default walletApi;
