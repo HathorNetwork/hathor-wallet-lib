@@ -155,7 +155,8 @@ class HathorWallet extends EventEmitter {
       promise.then(() => {
         this.setState(HathorWallet.READY);
       }).catch((error) => {
-        throw error;
+        this.setState(HathorWallet.ERROR);
+        console.error('Error loading wallet', {error});
       })
     } else {
       // CONNECTING or CLOSED?
@@ -718,7 +719,10 @@ class HathorWallet extends EventEmitter {
     this.conn.on('state', this.onConnectionChangedState);
     this.conn.on('wallet-update', this.handleWebsocketMsg);
 
-    wallet.executeGenerateWallet(this.seed, this.passphrase, this.pinCode, this.password, false);
+    const ret = wallet.executeGenerateWallet(this.seed, this.passphrase, this.pinCode, this.password, false);
+    if (ret !== null) {
+      throw "This should never happen";
+    }
 
     this.getTokenData();
     this.serverInfo = null;
@@ -981,5 +985,6 @@ HathorWallet.CLOSED =  0;
 HathorWallet.CONNECTING = 1;
 HathorWallet.SYNCING = 2;
 HathorWallet.READY = 3;
+HathorWallet.ERROR = 4;
 
 export default HathorWallet;

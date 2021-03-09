@@ -320,7 +320,10 @@ const wallet = {
       // Set back to old store because won't use storage in this method anymore
       storage.setStore(oldStore);
 
-      this.getTxHistory(addresses, resolve, reject, connection, store);
+      this.getTxHistory(addresses, resolve, reject, connection, store)
+        .catch((e) => {
+          reject(e);
+        });
 
     });
     return promise;
