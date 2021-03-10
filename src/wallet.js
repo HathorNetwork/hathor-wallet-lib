@@ -320,7 +320,10 @@ const wallet = {
       // Set back to old store because won't use storage in this method anymore
       storage.setStore(oldStore);
 
-      this.getTxHistory(addresses, resolve, reject, connection, store);
+      this.getTxHistory(addresses, resolve, reject, connection, store)
+        .catch((e) => {
+          reject(e);
+        });
 
     });
     return promise;
@@ -711,7 +714,6 @@ const wallet = {
 
   /**
    * Return all addresses already generated for this wallet
-   * From index 0 to lastSharedIndex
    *
    * @return {Array} Array of addresses (string)
    *
@@ -719,21 +721,12 @@ const wallet = {
    * @inner
    */
   getAllAddresses() {
-    const addresses = [];
-
-    const accessData = this.getWalletAccessData();
-    const xpub = HDPublicKey(accessData.xpubkey);
-
-    // Get last shared index (the last one of the array)
-    const lastSharedIndex = this.getLastSharedIndex();
-
-    for (let index=0; index<=lastSharedIndex; index++) {
-      const newKey = xpub.derive(index);
-      const address = Address(newKey.publicKey, network.getNetwork());
-      addresses.push(address.toString());
+    const data = this.getWalletData();
+    if (data && data.keys) {
+      return Object.keys(data.keys);
+    } else {
+      return [];
     }
-
-    return addresses;
   },
 
   /**
