@@ -320,7 +320,10 @@ const wallet = {
       // Set back to old store because won't use storage in this method anymore
       storage.setStore(oldStore);
 
-      this.getTxHistory(addresses, resolve, reject, connection, store);
+      this.getTxHistory(addresses, resolve, reject, connection, store)
+        .catch((e) => {
+          reject(e);
+        });
 
     });
     return promise;
@@ -711,7 +714,6 @@ const wallet = {
 
   /**
    * Return all addresses already generated for this wallet
-   * From index 0 to lastSharedIndex
    *
    * @return {Array} Array of addresses (string)
    *
@@ -719,21 +721,12 @@ const wallet = {
    * @inner
    */
   getAllAddresses() {
-    const addresses = [];
-
-    const accessData = this.getWalletAccessData();
-    const xpub = HDPublicKey(accessData.xpubkey);
-
-    // Get last shared index (the last one of the array)
-    const lastSharedIndex = this.getLastSharedIndex();
-
-    for (let index=0; index<=lastSharedIndex; index++) {
-      const newKey = xpub.derive(index);
-      const address = Address(newKey.publicKey, network.getNetwork());
-      addresses.push(address.toString());
+    const data = this.getWalletData();
+    if (data && data.keys) {
+      return Object.keys(data.keys);
+    } else {
+      return [];
     }
-
-    return addresses;
   },
 
   /**
@@ -1219,6 +1212,12 @@ const wallet = {
   /*
    * Get inputs to be used in transaction from amount required and selectedToken
    *
+   * The algorithm to select the inputs is simple:
+   *
+   * 1. If we have a single utxo capable of handle the full amount requested,
+   * we return the utxo with smaller amount among the ones that have an amount bigger than the requested
+   * 2. Otherwise we reverse sort the utxos by amount and select the utxos in order until the full amount is fulfilled.
+   *
    * @param {Object} historyTransactions Object of transactions indexed by tx_id
    * @param {number} amount Amount required to send transaction
    * @param {string} selectedToken UID of token that is being sent
@@ -1235,6 +1234,10 @@ const wallet = {
       return ret;
     }
 
+    const utxos = [];
+    let utxosAmount = 0;
+    let selectedUtxo = null;
+
     for (const tx_id in historyTransactions) {
       const tx = historyTransactions[tx_id];
       if (tx.is_voided) {
@@ -1247,17 +1250,53 @@ const wallet = {
           // Ignore authority outputs.
           continue;
         }
-        if (ret.inputsAmount >= amount) {
-          return ret;
-        }
+
         if (txout.spent_by === null && txout.token === selectedToken && this.isAddressMine(txout.decoded.address, data)) {
           if (this.canUseUnspentTx(txout, tx.height)) {
-            ret.inputsAmount += txout.value;
-            ret.inputs.push({ tx_id: tx.tx_id, index, token: selectedToken, address: txout.decoded.address });
+            if (txout.value == amount) {
+              // If the value of the utxo is the same as the full amount requested, we return this utxo to be used
+              ret.inputsAmount = txout.value;
+              ret.inputs.push({ tx_id: tx.tx_id, index, token: selectedToken, address: txout.decoded.address })
+              return ret;
+            }
+
+            const utxo = Object.assign({}, txout, {tx_id: tx.tx_id, index});
+            utxos.push(utxo);
+            utxosAmount += utxo.value;
+
+            if (utxo.value > amount) {
+              // We want to select the fewer number of utxos possible and with the smaller amount
+              // If the value of the utxo covers the full amount requested we save this utxo
+              // in a variable to be used, in case it's the smaller amount possible that covers the full amount
+              if (selectedUtxo === null || utxo.value < selectedUtxo.value) {
+                selectedUtxo = utxo;
+              }
+            }
           }
         }
       }
     }
+
+    if (selectedUtxo) {
+      // We have a single utxo to be used that covers the full amount requested
+      ret.inputsAmount = selectedUtxo.value;
+      ret.inputs.push({ tx_id: selectedUtxo.tx_id, index: selectedUtxo.index, token: selectedToken, address: selectedUtxo.decoded.address })
+    } else if (utxosAmount < amount) {
+      // We don't have enough utxos to fulfill the requested amount
+      return ret;
+    } else {
+      // Reverse sort by value and get the utxos until the amount is fulfilled
+      const sortedUtxos = _.orderBy(utxos, ['value'], ['desc']);
+      for (const utxo of sortedUtxos) {
+        ret.inputsAmount += utxo.value;
+        ret.inputs.push({ tx_id: utxo.tx_id, index: utxo.index, token: selectedToken, address: utxo.decoded.address })
+
+        if (ret.inputsAmount >= amount) {
+          break;
+        }
+      }
+    }
+
     return ret;
   },
 
