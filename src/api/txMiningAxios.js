@@ -25,7 +25,7 @@ import networkInstance from '../network';
  */
 const txMiningRequestClient = (resolve, timeout) => {
   let txMiningURL;
-  if (networkInstance.network === 'mainnet') {
+  if (networkInstance.name === 'mainnet') {
     txMiningURL = TX_MINING_URL;
   } else {
     txMiningURL = TX_MINING_TESTNET_URL;
