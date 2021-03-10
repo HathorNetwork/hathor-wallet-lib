@@ -719,7 +719,11 @@ const wallet = {
    */
   getAllAddresses() {
     const data = this.getWalletData();
-    return Object.keys(data.keys);
+    if (data && data.keys) {
+      return Object.keys(data.keys);
+    } else {
+      return [];
+    }
   },
 
   /**
