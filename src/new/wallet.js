@@ -978,6 +978,18 @@ class HathorWallet extends EventEmitter {
   isAddressMine(address) {
     return wallet.isAddressMine(address);
   }
+
+  /**
+   * Get index of address
+   * Returns null if address does not belong to the wallet
+   *
+   * @param {string} address Address to get the index
+   *
+   * @return {Number}
+   **/
+  getAddressIndex(address) {
+    return wallet.getAddressIndex(address);
+  }
 }
 
 // State constants.
