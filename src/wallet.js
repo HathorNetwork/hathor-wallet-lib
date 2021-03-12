@@ -1973,6 +1973,26 @@ const wallet = {
   },
 
   /**
+   * Get index of address.
+   * If address does not belong to the wallet (or was not generated yet) we return null, otherwise we return the index.
+   *
+   * @param {string} address Address to check
+   *
+   * @return {Number | null}
+   * @memberof Wallet
+   * @inner
+   */
+  getAddressIndex(address) {
+    const data = this.getWalletData();
+
+    if (this.isAddressMine(address, data)) {
+      return data.keys[address].index;
+    }
+
+    return null;
+  },
+
+  /**
    * Get balance of a transaction for the loaded wallet
    * For each token if the wallet sent or received amount
    *
