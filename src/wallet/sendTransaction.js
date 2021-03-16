@@ -32,7 +32,7 @@ import storage from '../storage';
  **/
 class SendTransaction extends EventEmitter {
   // TODO Convert to TS
-  constructor(transaction, options = { maxTxMiningRetries=3 }) {
+  constructor(transaction, options = { maxTxMiningRetries: 3 }) {
     super();
 
     this.transaction = transaction;
@@ -44,7 +44,7 @@ class SendTransaction extends EventEmitter {
     // Counter of number of attempts to mine the transaction.
     this.countTxMiningAttempts = 0;
     // Maximum number of retries if mining timeouts.
-    this.maxTxMiningRetries = maxTxMiningRetries;
+    this.maxTxMiningRetries = options.maxTxMiningRetries;
 
     // Error to be shown in case of no miners connected
     this.noMinersError = 'There are no miners to resolve the proof of work of this transaction.';

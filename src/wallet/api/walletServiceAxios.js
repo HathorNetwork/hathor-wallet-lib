@@ -6,7 +6,7 @@
  */
 
 import axios from 'axios';
-import { TIMEOUT } from '../constants';
+import { TIMEOUT } from '../../constants';
 
 /**
  * Method that creates an axios instance
@@ -26,7 +26,7 @@ export const axiosInstance = (timeout) => {
     timeout = TIMEOUT;
   }
   const defaultOptions = {
-    baseURL: 'https://ot51ga8oh6.execute-api.us-east-1.amazonaws.com/local/',
+    baseURL: 'https://dol32y58xi.execute-api.us-east-1.amazonaws.com/production/',
     timeout: timeout,
     headers: {
       'Content-Type': 'application/json',

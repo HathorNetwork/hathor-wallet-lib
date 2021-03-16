@@ -29,10 +29,10 @@ const walletApi = {
     return axiosInstance().get('addresses', data);
   },
 
-  getBalances(id, tokenId = null) {
+  getBalances(id, tokenUid = null) {
     const data = { params: { id } }
-    if (tokenId) {
-      data['params']['tokenId'] = tokenId;
+    if (tokenUid) {
+      data['params']['token_id'] = tokenUid;
     }
     return axiosInstance().get('balances', data);
   },
