@@ -767,6 +767,7 @@ class HathorWallet extends EventEmitter {
   stop() {
     storage.setStore(this.store);
     this.setState(HathorWallet.CLOSED);
+    this.removeAllListeners();
 
     wallet.cleanWallet({ endConnection: false, connection: this.conn });
 
@@ -776,8 +777,6 @@ class HathorWallet extends EventEmitter {
     // TODO Double check that we are properly cleaning things up.
     // See: https://github.com/HathorNetwork/hathor-wallet-headless/pull/1#discussion_r369859701
     this.conn.stop()
-    this.conn.removeListener('is_online', this.onConnectionChangedState);
-    this.conn.removeListener('wallet-update', this.handleWebsocketMsg);
   }
 
   /**

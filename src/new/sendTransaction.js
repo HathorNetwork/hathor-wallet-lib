@@ -193,6 +193,11 @@ class SendTransaction extends EventEmitter {
     }
 
     const walletData = wallet.getWalletData();
+    if (walletData === null) {
+      // If the user resets the wallet right after sending the transaction, walletData might be null
+      return;
+    }
+
     const historyTransactions = 'historyTransactions' in walletData ? walletData.historyTransactions : {};
     const allTokens = 'allTokens' in walletData ? walletData.allTokens : [];
 
