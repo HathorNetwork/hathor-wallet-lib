@@ -48,6 +48,9 @@ class Connection extends EventEmitter {
 
     this.onConnectionChange = this.onConnectionChange.bind(this);
     this.handleWalletMessage = this.handleWalletMessage.bind(this);
+    this.onReloadData = this.onReloadData.bind(this);
+    this.onHeightUpdated = this.onHeightUpdated.bind(this);
+    this.onAddressesLoaded = this.onAddressesLoaded.bind(this);
 
     this.servers = servers || [...DEFAULT_SERVERS];
     this.currentServer = this.servers[0];
@@ -69,6 +72,7 @@ class Connection extends EventEmitter {
     } else {
       this.setState(Connection.CONNECTING);
     }
+    this.emit('is-online', value);
   }
 
   /**
@@ -97,6 +101,10 @@ class Connection extends EventEmitter {
     this.websocket.on('is_online', this.onConnectionChange);
     this.websocket.on('wallet', this.handleWalletMessage);
 
+    this.websocket.on('reload_data', this.onReloadData);
+    this.websocket.on('height_updated', this.onHeightUpdated);
+    this.websocket.on('addresses_loaded', this.onAddressesLoaded);
+
     this.setState(Connection.CONNECTING);
     this.websocket.setup();
   }
@@ -110,7 +118,31 @@ class Connection extends EventEmitter {
     this.websocket.endConnection()
     this.websocket.removeListener('is_online', this.onConnectionChange);
     this.websocket.removeListener('wallet', this.handleWalletMessage);
+    this.websocket.removeListener('reload_data', this.onReloadData);
+    this.websocket.removeListener('height_updated', this.onHeightUpdated);
+    this.websocket.removeListener('addresses_loaded', this.onAddressesLoaded);
     this.setState(Connection.CLOSED);
+  }
+
+  /**
+   * Captures reload_data event in websocket and emits it
+   **/
+  onReloadData() {
+    this.emit('reload-data');
+  }
+
+  /**
+   * Captures height_updated event in websocket and emits it
+   **/
+  onHeightUpdated(height) {
+    this.emit('height-updated', height);
+  }
+
+  /**
+   * Captures addresses_loaded event in websocket and emits it
+   **/
+  onAddressesLoaded(data) {
+    this.emit('addresses-loaded', data);
   }
 
   /**

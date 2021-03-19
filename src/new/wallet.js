@@ -62,6 +62,8 @@ class HathorWallet extends EventEmitter {
 
     // debug mode
     debug = false,
+    // Callback to be executed before reload data
+    beforeReloadCallback = null,
   } = {}) {
     super();
 
@@ -114,6 +116,10 @@ class HathorWallet extends EventEmitter {
     // Debug mode. It is used to include debugging information
     // when a problem occurs.
     this.debug = debug;
+
+    // The reload is called automatically in the lib when the ws reconnects
+    // this callback gives a chance to the apps to run a method before reloading data in the lib
+    this.beforeReloadCallback = beforeReloadCallback;
   }
 
   /**
@@ -149,6 +155,9 @@ class HathorWallet extends EventEmitter {
         this.firstConnection = false;
         promise = wallet.loadAddressHistory(0, wallet.getGapLimit(), this.conn, this.store);
       } else {
+        if (this.beforeReloadCallback) {
+          this.beforeReloadCallback();
+        }
         promise = wallet.reloadData({connection: this.conn, store: this.store});
       }
 
@@ -159,9 +168,14 @@ class HathorWallet extends EventEmitter {
         console.error('Error loading wallet', {error});
       })
     } else {
-      // CONNECTING or CLOSED?
       this.serverInfo = null;
-      this.setState(HathorWallet.CONNECTING);
+      if (this.firstConnection) {
+        // If firstConnection = true, then a stop() was executed
+        this.setState(HathorWallet.CLOSED);
+      } else {
+        // Otherwise we just lost websocket connection
+        this.setState(HathorWallet.CONNECTING);
+      }
     }
   }
 
@@ -752,15 +766,18 @@ class HathorWallet extends EventEmitter {
    **/
   stop() {
     storage.setStore(this.store);
+    this.setState(HathorWallet.CLOSED);
+
+    wallet.cleanWallet({ endConnection: false, connection: this.conn });
+
+    this.serverInfo = null;
+    this.firstConnection = true;
+
     // TODO Double check that we are properly cleaning things up.
     // See: https://github.com/HathorNetwork/hathor-wallet-headless/pull/1#discussion_r369859701
     this.conn.stop()
     this.conn.removeListener('is_online', this.onConnectionChangedState);
     this.conn.removeListener('wallet-update', this.handleWebsocketMsg);
-
-    this.serverInfo = null;
-    this.setState(HathorWallet.CLOSED);
-    this.firstConnection = true;
   }
 
   /**
