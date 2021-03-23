@@ -61,6 +61,8 @@ class HathorWallet extends EventEmitter {
     this.walletId = null;
     this.isSendingTx = false;
     this.txProposalId = null;
+
+    // TODO set network
   }
 
   /**

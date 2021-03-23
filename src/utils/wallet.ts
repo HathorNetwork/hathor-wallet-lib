@@ -8,7 +8,7 @@
 
 import { crypto, HDPublicKey, HDPrivateKey, Address } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
-import { HD_WALLET_ENTROPY } from '../constants';
+import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE } from '../constants';
 import { XPubError, InvalidWords, UncompressedPubKeyError } from '../errors';
 import Network from '../models/network';
 import _ from 'lodash';
@@ -176,14 +176,17 @@ const wallet = {
     return privateKey.xpubkey;
   },
 
-  getXPubKeyFromSeed(seed: string, options: { passphrase?: string, networkName?: string } = {}): string {
-    const methodOptions = Object.assign({passphrase: '', networkName: 'mainnet'}, options);
-    const { passphrase, networkName } = methodOptions;
+  getXPubKeyFromSeed(seed: string, options: { passphrase?: string, networkName?: string, accountDerivationIndex?: string } = {}): string {
+    const methodOptions = Object.assign({passphrase: '', networkName: 'mainnet', accountDerivationIndex: '0\''}, options);
+    const { passphrase, networkName, accountDerivationIndex } = methodOptions;
 
     const network = new Network(networkName);
     const code = new Mnemonic(seed);
     const xpriv = code.toHDPrivateKey(passphrase, network.bitcoreNetwork);
-    return this.getXPubKeyFromXPrivKey(xpriv);
+    // We have a fixed derivation until the coin index
+    // after that we can receive a different account index, which the default is 0'
+    const privkey = xpriv.derive(`m/44'/${HATHOR_BIP44_CODE}'/${accountDerivationIndex}`);
+    return privkey.xpubkey;
   },
 
   /**
@@ -204,14 +207,15 @@ const wallet = {
    *
    * @example
    * ```
-   * getAddresses('myxpub', 2, 3, 'mainnet') => {
+   * getAddresses('myxpub', 0, 2, 3, 'mainnet') => {
    *   'address2': 2,
    *   'address3': 3,
    *   'address4': 4,
    * }
    * ```
    *
-   * @param {string} xpubkey The xpubkey
+   * @param {string} xpubkey The xpubkey. We expect the xpub in the last hardened path (m/44'/280'/0'). Xpub can't derive hardened path, so we must receive until the last hardened step.
+   * @param {number} changeDerivation The change derivation index.
    * @param {number} startIndex Generate addresses starting from this index
    * @param {number} quantity Amount of addresses to generate
    * @param {string} networkName 'mainnet' or 'testnet'
@@ -221,7 +225,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  getAddresses(xpubkey: string, startIndex: number, quantity: number, networkName: string = 'mainnet'): Object {
+  getAddresses(xpubkey: string, changeDerivation: number, startIndex: number, quantity: number, networkName: string = 'mainnet'): Object {
     let xpub;
     try {
       xpub = HDPublicKey(xpubkey);
@@ -231,9 +235,12 @@ const wallet = {
 
     const network = new Network(networkName);
 
+    // The xpub is in the account derivation step, we must derive until the change path
+    const derivedXpub = xpub.derive(changeDerivation);
+
     const addrMap = {};
     for (let index = startIndex; index < startIndex + quantity; index++) {
-      const key = xpub.derive(index);
+      const key = derivedXpub.derive(index);
       const address = Address(key.publicKey, network.bitcoreNetwork);
       addrMap[address.toString()] = index;
     }
