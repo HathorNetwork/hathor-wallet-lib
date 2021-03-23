@@ -66,7 +66,8 @@ test('Xpriv and xpub', () => {
 
   expect(wallet.getXPubKeyFromXPrivKey(xpriv.xprivkey)).toBe(xpriv.xpubkey);
 
-  const derivedXpriv = xpriv.derive(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
+  const derivedXprivAccount = xpriv.derive(`m/44'/${HATHOR_BIP44_CODE}'/0'`);
+  const derivedXpriv = derivedXprivAccount.derive(0);
   const chainCode = derivedXpriv._buffers.chainCode;
   const fingerprint = derivedXpriv._buffers.parentFingerPrint;
   const derivedXpub = wallet.xpubFromData(derivedXpriv.publicKey.toBuffer(), chainCode, fingerprint, 'testnet');
@@ -75,7 +76,7 @@ test('Xpriv and xpub', () => {
   const pubKey = wallet.getPublicKeyFromXpub(derivedXpub, 10);
   const expectedRet = {};
   expectedRet[Address(pubKey, network.bitcoreNetwork).toString()] = 10;
-  expect(expectedRet).toStrictEqual(wallet.getAddresses(derivedXpub, 10, 1, 'testnet'));
+  expect(expectedRet).toStrictEqual(wallet.getAddresses(derivedXprivAccount.xpubkey, 0, 10, 1, 'testnet'));
 
   // To pubkey compressed
   const uncompressedPubKeyHex = '044f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa385b6b1b8ead809ca67454d9683fcf2ba03456d6fe2c4abe2b07f0fbdbb2f1c1';
@@ -95,36 +96,62 @@ test('isXpubKeyValid', () => {
 
 test('getHathorAddresses', () => {
   const XPUBKEY = 'xpub6EcBoi2vDFcCW5sPAiQpXDYYtXd1mKhUJD64tUi8CPRG1VQFDkAbL8G5gqTmSZD6oq4Yhr5PZ8pKf3Xmb3W3pGcgqzUdFNaCRKL7TZa3res';
-  const ADDRESSES = [
-    'H7GtjbWcpd8fcE4KV1QJAiLPsXN4KRMasA',
-    'H9QwruQByN4qiprTAWAjBR9fDXBadFtou4',
-    'HGXziPZxoTK27FuabRQbHMsav2ZBKdNBZK',
-    'HQ2PjhE8ocyGgA17mGn8ny913iVpR6FBAm',
-    'HKghT5LSxtZHa4Z2VYYBW4WDMnQHSVEBHA',
-    'HGx6zgR96ubefHcAGgEv48NJp6ccVxMYJo',
-    'HKobFkfTBqRSCHpbL6cydS6geVg44CHrRL',
-    'HMmFLoWSagfvSUiEbE2mVDY7BYx1HPdXGf',
-    'HQcnzbpCHKqhDm8Hd8mikVyb4oK2qoadPJ',
-    'HEfqUBf4Rd4A35uhdtv7fuUtthGtjptYQC',
-    'HLUjnbbgxzgDTLAU7TjsTHzuZpeYY2xezw',
-    'HBYRWYMpDQzkBPCdAJMix4dGNVi81CC855',
-    'HJVq5DKPTeJ73UpuivJURdhfWnTLG7WAjo',
-    'HGJFqxUw6ntRxLjcEbvFz9GHsLxHzR9hQs',
-    'HPapaHpBZArxt2EK9WUy9HT9H3PgfidBgN',
-    'HJdAEBVMKygzntrw7Q3Qr8osLXLGUe8M65',
-    'HGgSipJMLrHxGHambXtVc9Y9Lf9hxLxRVk',
-    'HGgatY7US4cSPDppzrKUYdp2V1r7LWGyVf',
+  const ADDRESSES_0 = [
+    'HNwiHGHKBNbeJPo9ToWvFWeNQkJrpicYci',
+    'HUxu47MwBYNHG8jWebvzQ2jymV6PcEfWB4',
+    'H7ehmrWPqEQWJUqSKAxtQJX99gTPzW3aag',
+    'HNgJXBgj8UtZK4GD97yvDZhyjCLFoLBdDf',
+    'HGfwgmn86RSQ1gNG6ceiKeiALwL84FuBf8',
+    'HPmbgeKJu9DjNsrSHRZe6VEJC9YiLZ8WLx',
+    'HGTfVrFshpTD6Dapuq6z9hrRaiwDYxwLcr',
+    'H9ke3eZPPWBXCPHemz6ftZHvEHX1KHLTTg',
+    'HSrfhXXAz7FxKzbG3VeqLCeUjVcLx3BpFD',
+    'HQio5xMencxwWuCnPGEYGfwVunz7BDQoFf',
+    'HHVZwDvm7sMXc75foXEceQra1Zbqzp2nHn',
+    'HEibGHSs6tFcUbDKLnnY9nSsaaDFsjSg1t',
+    'HK2eexidww2LvTF7cbBJZVHQghKc9UXUST',
+    'HBh6y1ejjHqfMFxt6VKg8HuE3YGXttWwGh',
+    'HHRUPc7H7wSbwwRpsoPP1m3bnBmjc5DNNq',
+    'HTYFyEtzE9z4oW42k7DXFVPA6wqwBhKPQZ',
+    'HKxw4Am1ecoTbKoVaJNL1xnNxY8dLpPggN',
+    'HSUwYnnRYVnm4bLzV5dsBdqoSvZhunxPKr'
   ];
-  let calculatedAddresses = wallet.getAddresses(XPUBKEY, 0, ADDRESSES.length, 'mainnet');
+  const ADDRESSES_1 = [
+    'HCYz5bUFNZjrUSPPP4Ro1KvtAuUuHnTnSE',
+    'HRgvgpsRPy4b31iuFsjrskgLbmGXmxnoii',
+    'H8nwsBA1vtHqkTEgpxDSkrhKzREamWqWdz',
+    'H9ve5SiBcbNXgmPZz72NEDjv8ohMHyywuo',
+    'HUD2a9Pht3bmDrtgM1tx5Kbgp1asCDbCk5',
+    'HG6hXaVDhw4MqnUPhuWFVAWNJbATRtv1Wf',
+    'HKzFyMyMHTgcwKbAhCxfNo96Ug6wkdHJtT',
+    'HCG87oUSd2AWAoUsAP5np8PfLSACzmZtGe',
+    'HGUdQNC7a7GT8GxkY1UGXARNuVjQ7Nf5qG',
+    'HUNFrgqdt5ncpYeE4wSFPbFjPVzorxS7io',
+    'HKsKUHVjJXagxyWmEWWaoL864GatGgeQsG',
+    'HSssJwTT4VKKHASecAL81AwyKzG4xdXptm',
+    'HNY6YyuqSKsX3zgW7XVsKehpcK4tkyTot9',
+    'HJ4ztZeZjVwofoEwoNg9DYFF6AYBNB2hRJ',
+    'HCzQph3TxoXF6V6S4TSKBa28rwLDqnzS6R',
+    'HBuUUbyGQt7aFiGjhSXgQKVr2yP9JMfB6L',
+    'HNtQbba3DJTfUzQWoeMxQHJ1m2sGW8AFQK',
+    'HBa6H55oxGMDHc5PBFqrSv93puwWvnwcFy'
+  ];
+  let calculatedAddresses = wallet.getAddresses(XPUBKEY, 0, 0, ADDRESSES_0.length, 'mainnet');
   let addrList = Object.keys(calculatedAddresses);
-  expect(addrList).toHaveLength(ADDRESSES.length);
-  expect(addrList).toStrictEqual(ADDRESSES);
+  expect(addrList).toHaveLength(ADDRESSES_0.length);
+  expect(addrList).toStrictEqual(ADDRESSES_0);
 
   // start not from 0
-  calculatedAddresses = wallet.getAddresses(XPUBKEY, 5, ADDRESSES.length - 5, 'mainnet');
+  calculatedAddresses = wallet.getAddresses(XPUBKEY, 0, 5, ADDRESSES_0.length - 5, 'mainnet');
   addrList = Object.keys(calculatedAddresses);
-  expect(addrList).toHaveLength(ADDRESSES.length - 5);
-  expect(addrList).toStrictEqual(ADDRESSES.slice(5));
+  expect(addrList).toHaveLength(ADDRESSES_0.length - 5);
+  expect(addrList).toStrictEqual(ADDRESSES_0.slice(5));
 
-  expect(() => wallet.getAddresses(`${XPUBKEY}aa`, 5, ADDRESSES.length - 5, 'mainnet')).toThrowError(XPubError);
+  expect(() => wallet.getAddresses(`${XPUBKEY}aa`, 5, ADDRESSES_0.length - 5, 'mainnet')).toThrowError(XPubError);
+
+  // With change derivation as 1, the addresses are different
+  const calculatedAddresses1 = wallet.getAddresses(XPUBKEY, 1, 0, ADDRESSES_1.length, 'mainnet');
+  const addrList1 = Object.keys(calculatedAddresses1);
+  expect(addrList1).toHaveLength(ADDRESSES_1.length);
+  expect(addrList1).toStrictEqual(ADDRESSES_1);
 });
