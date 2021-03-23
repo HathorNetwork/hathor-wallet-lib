@@ -109,13 +109,15 @@ class HathorWallet extends EventEmitter {
     console.log('Start polling status')
     try {
       const res = await walletApi.getWalletStatus(this.walletId);
-      console.log('Polling', res);
-      if (res.sucess) {
-        if (res.status.status === 'creating') {
+      const data = res.data;
+      if (res.status === 200 && data.success) {
+        if (data.status.status === 'creating') {
+          console.log('Status creating');
           setTimeout(async () => {
+            console.log('Inside setTimeout');
             await this.startPollingStatus();
           }, WALLET_STATUS_POLLING_TIMEOUT);
-        } else if (res.status.status === 'ready') {
+        } else if (data.status.status === 'ready') {
           console.log('Status READY');
           this.setState(walletState.READY);
         } else {
