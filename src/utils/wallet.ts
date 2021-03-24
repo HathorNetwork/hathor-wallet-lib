@@ -228,6 +228,37 @@ const wallet = {
       addrMap[address.toString()] = index;
     }
     return addrMap;
+  },
+
+  /**
+   * Get Hathor address at specific index
+   *
+   * @param {string} xpubkey The xpubkey. We expect the xpub in the last hardened path (m/44'/280'/0'). Xpub can't derive hardened path, so we must receive until the last hardened step.
+   * @param {number} changeDerivationIndex Change derivation index
+   * @param {number} addressIndex Index of address to generate
+   * @param {string} networkName 'mainnet' or 'testnet'
+   *
+   * @return {string} Address at the requested index
+   * @throws {XPubError} In case the given xpub key is invalid
+   * @memberof Wallet
+   * @inner
+   */
+  getAddressAtIndex(xpubkey: string, changeDerivationIndex: number, addressIndex: number, networkName: string = 'mainnet'): Object {
+    let xpub;
+    try {
+      xpub = HDPublicKey(xpubkey);
+    } catch (error) {
+      throw new XPubError(error.message);
+    }
+
+    const network = new Network(networkName);
+
+    // We can't derive directly two derivations in one method call
+    const xpubChange = xpub.derive(changeDerivationIndex);
+    const key = xpubChange.derive(addressIndex);
+    const address = Address(key.publicKey, network.bitcoreNetwork);
+
+    return address.toString();
   }
 }
 
