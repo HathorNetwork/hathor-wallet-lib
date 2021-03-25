@@ -17,6 +17,7 @@ import helpers from '../helpers';
 import MemoryStore from '../memory_store';
 import Connection from './connection';
 import SendTransaction from './sendTransaction';
+import { AddressError } from '../../lib/errors';
 
 /**
  * This is a Wallet that is supposed to be simple to be used by a third-party app.
@@ -228,6 +229,89 @@ class HathorWallet extends EventEmitter {
     } else {
       return null;
     }
+  }
+
+  /**
+   * Get information of a given address
+   *
+   * @typedef {Object} AddressInfoOptions
+   * @property {string} token Optionally filter transactions by this token uid (Default: HTR)
+   *
+   * @typedef {Object} AddressInfo
+   * @property {number} total_amount_received Sum of the amounts received
+   * @property {number} total_amount_sent Sum of the amounts sent
+   * @property {number} total_amount_available Amount available to transfer
+   * @property {number} total_amount_locked Amount locked and thus no available to transfer
+   * @property {number} token Token used to calculate the amounts received, sent, available and locked
+   * @property {number} index Derivation path for the given address
+   *
+   * @param {string} address Address to get information of 
+   * @param {AddressInfoOptions} options Optional parameters to filter the results
+   *
+   * @return {AddressInfo} Aggregated information about the given address
+   *
+   */
+  getAddressInfo(address, options = {}) {
+    storage.setStore(this.store);
+    const { token = HATHOR_TOKEN_CONFIG.uid } = options;
+
+    // Throws an error if the address does not belong to this wallet
+    if (!this.isAddressMine(address)) {
+      throw new AddressError('Address does not belong to this wallet.');
+    }
+
+    // Derivation path index
+    const index = this.getAddressIndex(address);
+
+    // All transactions for this address
+    const historyTransactions = Object.values(this.getTxHistory());
+
+    // Address information that will be calculated below
+    const addressInfo = {
+      total_amount_received: 0,
+      total_amount_sent: 0,
+      total_amount_available: 0,
+      total_amount_locked: 0,
+      token,
+      index
+    };
+
+    // Iterate through transactions
+    historyTransactions.forEach(transaction => {
+      // Voided transactions should be ignored
+      if (transaction.is_voided) {
+        return;
+      };
+
+      // Iterate through outputs
+      transaction.outputs.forEach(output => {
+        const is_address_valid = output.decoded && output.decoded.address === address;
+        const is_token_valid = token === output.token;
+        const is_authority = wallet.isAuthorityOutput(output);
+        if (!is_address_valid || !is_token_valid || is_authority) {
+          return;
+        }
+
+        const is_spent = output.spent_by !== null;
+        // wallet.canUseUnspentTx handles locking by timelock, by blockHeight and by utxos already being used by this wallet.
+        const is_locked = !wallet.canUseUnspentTx(output, transaction.height);
+
+        addressInfo.total_amount_received += output.value;
+
+        if (is_spent) {
+          addressInfo.total_amount_sent += output.value;
+          return;
+        }
+
+        if (is_locked) {
+          addressInfo.total_amount_locked += output.value;
+        } else {
+          addressInfo.total_amount_available += output.value;
+        }
+      });
+    });
+
+    return addressInfo;
   }
 
   /**
