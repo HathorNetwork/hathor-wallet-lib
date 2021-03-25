@@ -441,8 +441,8 @@ const transaction = {
     }
 
     // Parents may not be sent in txData
-    const parents = get(txData, 'parents');
-    txSize += 64 - (32 * (parents ? parents.length : 0));
+    const parents = get(txData, 'parents') || [];
+    txSize += 64 - (32 * parents.length);
 
     let sumOutputs = this.getOutputsSum(txData.outputs);
     // Preventing division by 0 when handling authority methods that have no outputs
