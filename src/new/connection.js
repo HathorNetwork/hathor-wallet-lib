@@ -69,7 +69,6 @@ class Connection extends EventEmitter {
     } else {
       this.setState(Connection.CONNECTING);
     }
-    this.emit('is-online', value);
   }
 
   /**
@@ -98,12 +97,8 @@ class Connection extends EventEmitter {
     this.websocket.on('is_online', this.onConnectionChange);
     this.websocket.on('wallet', this.handleWalletMessage);
 
-    this.websocket.on('reload_data', () => {
-      this.emit('reload-data');
-    });
-
     this.websocket.on('height_updated', (height) => {
-      this.emit('height-updated', height);
+      this.emit('best-block-update', height);
     });
 
     this.websocket.on('addresses_loaded', (data) => {
