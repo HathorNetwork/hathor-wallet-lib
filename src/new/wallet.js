@@ -198,6 +198,15 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Get the next address after the current available
+   */
+  getNextAddress() {
+    // First we mark the current address as used, then return the next
+    this.getCurrentAddress({ markAsUsed: true });
+    return this.getCurrentAddress();
+  }
+
+  /**
    * Called when a new message arrives from websocket.
    **/
   handleWebsocketMsg(wsData) {
