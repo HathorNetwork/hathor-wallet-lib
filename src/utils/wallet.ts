@@ -233,7 +233,7 @@ const wallet = {
   /**
    * Get Hathor address at specific index
    *
-   * @param {string} xpubkey The xpubkey. We expect the xpub in the last derivation path (change).
+   * @param {string} xpubkey The xpubkey in the last derivation path (change level according to BIP0044)
    * @param {number} addressIndex Index of address to generate
    * @param {string} networkName 'mainnet' or 'testnet'
    *
