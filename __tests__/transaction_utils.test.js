@@ -21,7 +21,7 @@ beforeEach(() => {
 });
 
 
-test('calculate tx weight should fail with > 2 parents', () => {
+test('calculate tx weight with different parents size', () => {
   const txData = {
     "inputs": [{
       "tx_id": "0000000e340d38d7a5616e3dfb8ac46184b07d59b8e7e61f9ce6e629d7abe8d6",
@@ -40,11 +40,7 @@ test('calculate tx weight should fail with > 2 parents', () => {
       "value": 1000,
       "tokenData": 0
     }],
-    "parents": [
-      "0002d4d2a15def7604688e1878ab681142a7b155cbe52a6b4e031250ae96db0a",
-      "0002ad8d1519daaddc8e1a37b14aac0b045129c01832281fb1c02d873c7abbf9",
-      "0002ad8d1519daaddc8e1a37b14aac0b045129c01832281fb1c02d873c7abbf9"
-    ],
+    "parents": [],
     "tokens": [],
     "weight": 18.65677715840935,
     "nonce": 0,
@@ -52,6 +48,23 @@ test('calculate tx weight should fail with > 2 parents', () => {
     "timestamp": 1610639352
   };
 
+  transaction.updateTransactionWeightConstants(10, 1.5, 8);
+
+  const expectedWeight = 18.87589824538701;
+
+  // Empty parents array
+  expect(transaction.calculateTxWeight(txData)).toBe(expectedWeight);
+
+  // Parents array with one element
+  txData.parents.push("0002d4d2a15def7604688e1878ab681142a7b155cbe52a6b4e031250ae96db0a")
+  expect(transaction.calculateTxWeight(txData)).toBe(expectedWeight);
+
+  // Parents array with two elements
+  txData.parents.push("0002ad8d1519daaddc8e1a37b14aac0b045129c01832281fb1c02d873c7abbf9")
+  expect(transaction.calculateTxWeight(txData)).toBe(expectedWeight);
+
+  // Parents array with three elements
+  txData.parents.push("0002ad8d1519daaddc8e1a37b14aac0b045129c01832281fb1c02d873c7abbf9")
   expect(() => transaction.calculateTxWeight(txData)).toThrowError(MaximumNumberParentsError);
 });
 

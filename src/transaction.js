@@ -440,7 +440,9 @@ const transaction = {
       throw new MaximumNumberParentsError(`Transaction has ${txData.parents.length} parents and can have at most 2.`);
     }
 
-    txSize += 64 - (32 * (get(txData, 'parents') || 0));
+    // Parents may not be sent in txData
+    const parents = get(txData, 'parents') || [];
+    txSize += 64 - (32 * parents.length);
 
     let sumOutputs = this.getOutputsSum(txData.outputs);
     // Preventing division by 0 when handling authority methods that have no outputs

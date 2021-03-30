@@ -66,7 +66,12 @@ test('Xpriv and xpub', () => {
 
   expect(wallet.getXPubKeyFromXPrivKey(xpriv.xprivkey)).toBe(xpriv.xpubkey);
 
-  const derivedXpriv = xpriv.derive(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
+  const xprivAccount = xpriv.derive(`m/44'/${HATHOR_BIP44_CODE}'/0'`);
+  const xpubAccount = xprivAccount.xpubkey;
+  const derivedXpriv = xprivAccount.derive(0);
+
+  expect(wallet.xpubDeriveChild(xpubAccount, 0)).toBe(derivedXpriv.xpubkey);
+
   const chainCode = derivedXpriv._buffers.chainCode;
   const fingerprint = derivedXpriv._buffers.parentFingerPrint;
   const derivedXpub = wallet.xpubFromData(derivedXpriv.publicKey.toBuffer(), chainCode, fingerprint, 'testnet');
@@ -74,8 +79,11 @@ test('Xpriv and xpub', () => {
 
   const pubKey = wallet.getPublicKeyFromXpub(derivedXpub, 10);
   const expectedRet = {};
-  expectedRet[Address(pubKey, network.bitcoreNetwork).toString()] = 10;
+  const address10 = Address(pubKey, network.bitcoreNetwork).toString();
+  expectedRet[address10] = 10;
   expect(expectedRet).toStrictEqual(wallet.getAddresses(derivedXpub, 10, 1, 'testnet'));
+
+  expect(wallet.getAddressAtIndex(derivedXpub, 10, 'testnet')).toBe(address10);
 
   // To pubkey compressed
   const uncompressedPubKeyHex = '044f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa385b6b1b8ead809ca67454d9683fcf2ba03456d6fe2c4abe2b07f0fbdbb2f1c1';
