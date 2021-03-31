@@ -72,15 +72,11 @@ class HathorWallet extends EventEmitter {
    * @inner
    */
   async start() {
-    console.log('Start')
     this.setState(walletState.LOADING);
     const xpub = wallet.getXPubKeyFromSeed(this.seed, {passphrase: this.passphrase});
     const handleCreate = async (data) => {
-      console.log('Handle create', data)
-      console.log(data);
       this.walletId = data.walletId;
       if (data.status === 'creating') {
-        console.log('Status creating');
         await this.startPollingStatus();
       } else {
         this.setState(walletState.READY);
@@ -108,19 +104,15 @@ class HathorWallet extends EventEmitter {
   }
 
   async startPollingStatus() {
-    console.log('Start polling status')
     try {
       const res = await walletApi.getWalletStatus(this.walletId);
       const data = res.data;
       if (res.status === 200 && data.success) {
         if (data.status.status === 'creating') {
-          console.log('Status creating');
           setTimeout(async () => {
-            console.log('Inside setTimeout');
             await this.startPollingStatus();
           }, WALLET_STATUS_POLLING_TIMEOUT);
         } else if (data.status.status === 'ready') {
-          console.log('Status READY');
           this.setState(walletState.READY);
         } else {
           // TODO What other status might have?
@@ -156,7 +148,6 @@ class HathorWallet extends EventEmitter {
 
   async getBalance(tokenUid: string | null = null) {
     const response = await walletApi.getBalances(this.walletId, tokenUid);
-    console.log('Wat', response);
     let balance = null;
     if (response.status === 200 && response.data.success === true) {
       balance = response.data.balances;
@@ -195,9 +186,9 @@ class HathorWallet extends EventEmitter {
     return await this.sendTxProposal(outputs, options);
   }
 
-  async sendTransaction(address, value, options: { token: string | null, changeAddress: string | null } = { token: null, changeAddress: null }) {
+  async sendTransaction(address, value, options: { token: string | null, changeAddress: string | null } = { token: '00', changeAddress: null }) {
     const newOptions = Object.assign({
-      token: null,
+      token: '00',
       changeAddress: null
     }, options);
     const { token, changeAddress } = newOptions;
@@ -212,25 +203,27 @@ class HathorWallet extends EventEmitter {
     }, options);
     const { inputs, changeAddress } = newOptions;
     const response = await walletApi.createTxProposal(this.walletId, outputs, inputs);
-    if (response.success) {
-      this.txProposalId = response.txProposalId;
+    if (response.status === 201) {
+      const responseData = response.data;
+      this.txProposalId = responseData.txProposalId;
 
       const inputsObj: Input[] = [];
-      for (const i of response.inputs) {
+      for (const i of responseData.inputs) {
         inputsObj.push(new Input(i.txId, i.index));
       }
 
       const outputsObj: Output[] = [];
-      for (const o of response.outputs) {
+      for (const o of responseData.outputs) {
         // TODO handle custom tokens
-        outputsObj.push(new Output(o.value, o.address));
+        outputsObj.push(new Output(o.value, new Address(o.address)));
       }
 
       const tx = new Transaction(inputsObj, outputsObj);
+      tx.prepareToSend();
       const dataToSignHash = tx.getDataToSignHash();
 
       for (const [idx, inputObj] of tx.inputs.entries()) {
-        const inputData = this.getInputData(dataToSignHash, response.inputs[idx].addressIndex);
+        const inputData = this.getInputData(dataToSignHash, responseData.inputs[idx].addressPath);
         inputObj.setData(inputData);
       }
 
@@ -238,12 +231,12 @@ class HathorWallet extends EventEmitter {
     }
   }
 
-  getInputData(dataToSignHash, addressIndex) {
+  getInputData(dataToSignHash, addressPath) {
     const code = new Mnemonic(this.seed);
     // It does not matter the network name to generate the xpriv
     const network = new Network('mainnet');
     const xpriv = code.toHDPrivateKey(this.passphrase, network.bitcoreNetwork);
-    const derivedKey = xpriv.derive(`m/44'/${HATHOR_BIP44_CODE}'/0'/0/${addressIndex}`);
+    const derivedKey = xpriv.derive(addressPath);
     const privateKey = derivedKey.privateKey;
 
     const sig = crypto.ECDSA.sign(dataToSignHash, privateKey, 'little').set({

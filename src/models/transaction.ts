@@ -108,7 +108,7 @@ class Transaction {
     arr.push(helpers.intToBytes(this.version, 2))
 
     // Len tokens
-    if (this.tokens.length) {
+    if (this.version !== CREATE_TOKEN_TX_VERSION) {
       // Create token tx does not have tokens array
       arr.push(helpers.intToBytes(this.tokens.length, 1))
     }
@@ -220,8 +220,8 @@ class Transaction {
     //
     // Tx version
     arr.push(helpers.intToBytes(this.version, 2))
-    if (this.tokens.length) {
-      // Len tokens
+    if (this.version !== CREATE_TOKEN_TX_VERSION) {
+      // Create token tx does not have tokens array
       arr.push(helpers.intToBytes(this.tokens.length, 1))
     }
     // Len inputs
@@ -251,9 +251,7 @@ class Transaction {
     // Weight is a float with 8 bytes
     arr.push(helpers.floatToBytes(this.weight, 8));
     // Timestamp
-    if (this.timestamp) {
-      arr.push(helpers.intToBytes(this.timestamp, 4))
-    }
+    arr.push(helpers.intToBytes(this.timestamp!, 4))
 
     if (this.parents) {
       arr.push(helpers.intToBytes(this.parents.length, 1))
@@ -367,6 +365,17 @@ class Transaction {
    */
   isBlock(): boolean {
     return this.version === BLOCK_VERSION || this.version === MERGED_MINED_BLOCK_VERSION;
+  }
+
+  /**
+   * Set tx timestamp and weight
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  prepareToSend() {
+    this.timestamp = Math.floor(Date.now() / 1000);
+    this.weight = this.calculateWeight();
   }
 }
 
