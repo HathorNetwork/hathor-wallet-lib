@@ -121,6 +121,9 @@ class HathorWallet extends EventEmitter {
     // The reload is called automatically in the lib when the ws reconnects
     // this callback gives a chance to the apps to run a method before reloading data in the lib
     this.beforeReloadCallback = beforeReloadCallback;
+
+    // Set to true when stop() method is called
+    this.walletStopped = false;
   }
 
   /**
@@ -170,8 +173,7 @@ class HathorWallet extends EventEmitter {
       })
     } else {
       this.serverInfo = null;
-      if (this.firstConnection) {
-        // If firstConnection = true, then a stop() was executed
+      if (this.walletStopped) {
         this.setState(HathorWallet.CLOSED);
       } else {
         // Otherwise we just lost websocket connection
@@ -833,6 +835,7 @@ class HathorWallet extends EventEmitter {
 
     this.getTokenData();
     this.serverInfo = null;
+    this.walletStopped = false;
     this.setState(HathorWallet.CONNECTING);
 
     const promise = new Promise((resolve, reject) => {
@@ -866,6 +869,7 @@ class HathorWallet extends EventEmitter {
 
     this.serverInfo = null;
     this.firstConnection = true;
+    this.walletStopped = true;
 
     // TODO Double check that we are properly cleaning things up.
     // See: https://github.com/HathorNetwork/hathor-wallet-headless/pull/1#discussion_r369859701

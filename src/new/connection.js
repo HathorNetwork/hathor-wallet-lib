@@ -102,7 +102,7 @@ class Connection extends EventEmitter {
     });
 
     this.websocket.on('addresses_loaded', (data) => {
-      this.emit('addresses-loaded', data);
+      this.emit('wallet-load-partial-update', data);
     });
 
     this.setState(Connection.CONNECTING);
