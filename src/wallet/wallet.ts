@@ -8,7 +8,7 @@
 import { EventEmitter } from 'events';
 import { HATHOR_BIP44_CODE } from '../constants';
 import Mnemonic from 'bitcore-mnemonic';
-import { crypto, util } from 'bitcore-lib';
+import { crypto, util, Address as bitcoreAddress } from 'bitcore-lib';
 import walletApi from './api/walletApi';
 import wallet from '../utils/wallet';
 import helpers from '../utils/helpers';
@@ -36,6 +36,8 @@ class HathorWallet extends EventEmitter {
   passphrase: string;
   // Wallet id from the wallet service
   walletId: string | null;
+  // Network in which the wallet is connected ('mainnet' or 'testnet')
+  network: Network
   // State of the wallet. One of the walletState enum options
   private state: string
   // Variable to prevent start sending more than one tx concurrently
@@ -43,7 +45,7 @@ class HathorWallet extends EventEmitter {
   // ID of tx proposal
   private txProposalId: string | null
 
-  constructor(seed: string, options = { passphrase: '' }) {
+  constructor(seed: string, network: Network, options = { passphrase: '' }) {
     super();
 
     const { passphrase } = options;
@@ -53,7 +55,9 @@ class HathorWallet extends EventEmitter {
     }
 
     this.state = walletState.NOT_STARTED;
-    // TODO Validate seed
+
+    // It will throw InvalidWords error in case is not valid
+    wallet.wordsValid(seed);
     this.seed = seed;
     this.passphrase = passphrase
 
@@ -62,7 +66,8 @@ class HathorWallet extends EventEmitter {
     this.isSendingTx = false;
     this.txProposalId = null;
 
-    // TODO set network
+    this.network = network;
+    // TODO should we have a debug mode?
   }
 
   /**
@@ -139,14 +144,6 @@ class HathorWallet extends EventEmitter {
     return addresses;
   }
 
-  getAddressAtIndex(index: number) {
-    // TODO we don't have this API implemented
-  }
-
-  getCurrentAddress() {
-    // TODO we don't have this API implemented
-  }
-
   async getBalance(tokenUid: string | null = null) {
     const response = await walletApi.getBalances(this.walletId!, tokenUid);
     let balance = null;
@@ -169,18 +166,6 @@ class HathorWallet extends EventEmitter {
       // TODO What error should be handled here?
     }
     return history
-  }
-
-  getTx(id) {
-    // TODO we don't have this API implemented
-  }
-
-  getUtxos(options = {}) {
-    // TODO we don't have this API implemented
-  }
-
-  isAddressMine(address) {
-    // TODO we don't have this API implemented
   }
 
   async sendManyOutputsTransaction(outputs, options = { inputs: [], changeAddress: null }) {
@@ -234,9 +219,7 @@ class HathorWallet extends EventEmitter {
 
   getInputData(dataToSignHash, addressPath) {
     const code = new Mnemonic(this.seed);
-    // It does not matter the network name to generate the xpriv
-    const network = new Network('mainnet');
-    const xpriv = code.toHDPrivateKey(this.passphrase, network.bitcoreNetwork);
+    const xpriv = code.toHDPrivateKey(this.passphrase, this.network.bitcoreNetwork);
     const derivedKey = xpriv.derive(addressPath);
     const privateKey = derivedKey.privateKey;
 
@@ -279,6 +262,60 @@ class HathorWallet extends EventEmitter {
   setState(state: string) {
     this.state = state;
     this.emit('state', state);
+  }
+
+  stop() {
+    this.walletId = null;
+    this.state = walletState.NOT_STARTED;
+  }
+
+  getAddressAtIndex(index: number): string {
+    const code = new Mnemonic(this.seed);
+    const xpriv = code.toHDPrivateKey(this.passphrase, this.network.bitcoreNetwork);
+    const privkey = xpriv.derive(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
+    const key = privkey.derive(index);
+    const address = bitcoreAddress(key.publicKey, this.network.getNetwork());
+    return address.toString();
+  }
+
+  getCurrentAddress() {
+    throw new Error('Not implemented.');
+  }
+
+  getAddressIndex(address: string) {
+    throw new Error('Not implemented.');
+  }
+
+  isAddressMine(address: string) {
+    throw new Error('Not implemented.');
+  }
+
+  getTx(id: string) {
+    throw new Error('Not implemented.');
+  }
+
+  getAddressInfo(address: string, options = {}) {
+    throw new Error('Not implemented.');
+  }
+
+  getUtxos(options = {}) {
+    throw new Error('Not implemented.');
+  }
+
+  consolidateUtxos(destinationAddress: string, options = {}) {
+    throw new Error('Not implemented.');
+  }
+
+  createNewToken(name: string, symbol: string, amount: number, options = { address: null, changeAddress: null }) {
+    throw new Error('Not implemented.');
+  }
+
+  mintTokens(token: string, amount: number, options = { address: null, changeAddress: null }) {
+    throw new Error('Not implemented.');
+  }
+
+  meltTokens(token: string, amount: number, options = { depositAddress: null, changeAddress: null }) {
+    throw new Error('Not implemented.');
   }
 }
 

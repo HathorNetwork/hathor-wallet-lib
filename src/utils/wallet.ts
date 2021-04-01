@@ -28,7 +28,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  wordsValid(words: string): {valid: boolean, invalidWords?: string[], words?: string} {
+  wordsValid(words: string): {valid: boolean, words: string} {
     if (!_.isString(words)) {
       // Must be string
       throw new InvalidWords('Words must be a string.')
