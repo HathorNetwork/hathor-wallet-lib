@@ -31,22 +31,25 @@ const walletApi = {
     return axiosInstance().get('addresses', data);
   },
 
-  getBalances(id: string, tokenUid: string | null = null) {
+  getBalances(id: string, token: string | null = null) {
     const data = { params: { id } }
-    if (tokenUid) {
-      data['params']['token_id'] = tokenUid;
+    if (token) {
+      data['params']['token_id'] = token;
     }
     return axiosInstance().get('balances', data);
   },
 
-  getHistory(id: string, tokenId: string | null = null) {
+  getHistory(id: string, token: string | null = null) {
     // TODO add pagination parameters
     const data = { params: { id } }
+    if (token) {
+      data['params']['token_id'] = token;
+    }
     return axiosInstance().get('txhistory', data);
   },
 
   createTxProposal(id: string, outputs: Output[], inputs: Input[]) {
-    const data = { id, outputs, inputs };
+    const data = { id, outputs };
     return axiosInstance().post('txproposals', data);
   },
 

@@ -144,8 +144,8 @@ class HathorWallet extends EventEmitter {
     return addresses;
   }
 
-  async getBalance(tokenUid: string | null = null) {
-    const response = await walletApi.getBalances(this.walletId!, tokenUid);
+  async getBalance(token: string | null = null) {
+    const response = await walletApi.getBalances(this.walletId!, token);
     let balance = null;
     if (response.status === 200 && response.data.success === true) {
       balance = response.data.balances;
@@ -155,10 +155,11 @@ class HathorWallet extends EventEmitter {
     return balance;
   }
 
-  async getTxHistory(options: { tokenUid?: string } = {}) {
-    const requestOptions = Object.assign({ tokenUid: null }, options);
-    const { tokenUid } = requestOptions;
-    const response = await walletApi.getHistory(this.walletId!, tokenUid);
+  async getTxHistory(options: { token?: string } = {}) {
+    // TODO Add pagination parameters
+    const requestOptions = Object.assign({ token: null }, options);
+    const { token } = requestOptions;
+    const response = await walletApi.getHistory(this.walletId!, token);
     let history = []
     if (response.status === 200 && response.data.success === true) {
       history = response.data.history;
