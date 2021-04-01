@@ -49,7 +49,7 @@ const walletApi = {
   },
 
   createTxProposal(id: string, outputs: Output[], inputs: Input[]) {
-    const data = { id, outputs };
+    const data = { id, outputs, inputs };
     return axiosInstance().post('txproposals', data);
   },
 
