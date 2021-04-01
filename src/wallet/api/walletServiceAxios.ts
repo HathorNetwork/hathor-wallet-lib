@@ -19,12 +19,9 @@ import { TIMEOUT } from '../../constants';
  *
  * @param {number} timeout Timeout in milliseconds for the request
  */
-export const axiosInstance = (timeout) => {
+export const axiosInstance = (timeout: number = TIMEOUT) => {
   // TODO make base URL customizable
   // TODO How to allow 'Retry' request?
-  if (timeout === undefined) {
-    timeout = TIMEOUT;
-  }
   const defaultOptions = {
     baseURL: 'https://dol32y58xi.execute-api.us-east-1.amazonaws.com/production/',
     timeout: timeout,

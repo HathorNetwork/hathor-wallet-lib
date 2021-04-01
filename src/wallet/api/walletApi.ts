@@ -6,6 +6,8 @@
  */
 
 import { axiosInstance } from './walletServiceAxios';
+import Output from '../../models/output';
+import Input from '../../models/input';
 
 /**
  * Api calls for wallet
@@ -14,22 +16,22 @@ import { axiosInstance } from './walletServiceAxios';
  */
 
 const walletApi = {
-  getWalletStatus(id) {
+  getWalletStatus(id: string) {
     const data = { params: { id } }
     return axiosInstance().get('wallet', data);
   },
 
-  createWallet(xpubkey) {
+  createWallet(xpubkey: string) {
     const data = { xpubkey };
     return axiosInstance().post('wallet', data);
   },
 
-  getAddresses(id) {
+  getAddresses(id: string) {
     const data = { params: { id } }
     return axiosInstance().get('addresses', data);
   },
 
-  getBalances(id, tokenUid = null) {
+  getBalances(id: string, tokenUid: string | null = null) {
     const data = { params: { id } }
     if (tokenUid) {
       data['params']['token_id'] = tokenUid;
@@ -37,18 +39,18 @@ const walletApi = {
     return axiosInstance().get('balances', data);
   },
 
-  getHistory(id, tokenId = null) {
+  getHistory(id: string, tokenId: string | null = null) {
     // TODO add pagination parameters
     const data = { params: { id } }
     return axiosInstance().get('txhistory', data);
   },
 
-  createTxProposal(id, outputs, inputs) {
+  createTxProposal(id: string, outputs: Output[], inputs: Input[]) {
     const data = { id, outputs, inputs };
     return axiosInstance().post('txproposals', data);
   },
 
-  updateTxProposal(id, timestamp, nonce, weight, parents, inputsData) {
+  updateTxProposal(id: string, timestamp: number, nonce: number, weight: number, parents: string[], inputsData: string[]) {
     const data = { timestamp, nonce, weight, parents, inputsSignatures: inputsData };
     return axiosInstance().put(`txproposals/${id}`, data);
   },

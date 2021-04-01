@@ -17,7 +17,7 @@ import Output from '../models/output';
 import Input from '../models/input';
 import Address from '../models/address';
 import Network from '../models/network';
-import SendTransaction from './sendTransaction';
+import MineTransaction from './mineTransaction';
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
@@ -84,8 +84,9 @@ class HathorWallet extends EventEmitter {
     }
     try {
       const res = await walletApi.createWallet(xpub);
-      if (res.sucess) {
-        await handleCreate(res.status);
+      const data = res.data;
+      if (res.status === 200 && data.success) {
+        await handleCreate(data.status);
       } else {
         // TODO is there any other possible error to handle here?
       }
@@ -105,7 +106,7 @@ class HathorWallet extends EventEmitter {
 
   async startPollingStatus() {
     try {
-      const res = await walletApi.getWalletStatus(this.walletId);
+      const res = await walletApi.getWalletStatus(this.walletId!);
       const data = res.data;
       if (res.status === 200 && data.success) {
         if (data.status.status === 'creating') {
@@ -128,7 +129,7 @@ class HathorWallet extends EventEmitter {
   }
 
   async getAllAddresses(): Promise<string[]> {
-    const response = await walletApi.getAddresses(this.walletId);
+    const response = await walletApi.getAddresses(this.walletId!);
     let addresses = [];
     if (response.status === 200 && response.data.success === true) {
       addresses = response.data.addresses;
@@ -147,7 +148,7 @@ class HathorWallet extends EventEmitter {
   }
 
   async getBalance(tokenUid: string | null = null) {
-    const response = await walletApi.getBalances(this.walletId, tokenUid);
+    const response = await walletApi.getBalances(this.walletId!, tokenUid);
     let balance = null;
     if (response.status === 200 && response.data.success === true) {
       balance = response.data.balances;
@@ -160,7 +161,7 @@ class HathorWallet extends EventEmitter {
   async getTxHistory(options: { tokenUid?: string } = {}) {
     const requestOptions = Object.assign({ tokenUid: null }, options);
     const { tokenUid } = requestOptions;
-    const response = await walletApi.getHistory(this.walletId, tokenUid);
+    const response = await walletApi.getHistory(this.walletId!, tokenUid);
     let history = []
     if (response.status === 200 && response.data.success === true) {
       history = response.data.history;
@@ -202,7 +203,7 @@ class HathorWallet extends EventEmitter {
       changeAddress: null
     }, options);
     const { inputs, changeAddress } = newOptions;
-    const response = await walletApi.createTxProposal(this.walletId, outputs, inputs);
+    const response = await walletApi.createTxProposal(this.walletId!, outputs, inputs);
     if (response.status === 201) {
       const responseData = response.data;
       this.txProposalId = responseData.txProposalId;
@@ -250,17 +251,17 @@ class HathorWallet extends EventEmitter {
   }
 
   async executeSendTransaction(transaction: Transaction) {
-    const sendTransaction = new SendTransaction(transaction);
-    sendTransaction.start();
+    const mineTransaction = new MineTransaction(transaction);
+    mineTransaction.start();
 
-    const data = await Promise.resolve(sendTransaction.promise);
+    const data = await Promise.resolve(mineTransaction.promise);
 
     const inputsData: string[] = []
     for (const input of transaction.inputs) {
       inputsData.push(input.data!.toString('base64'));
     }
 
-    return await walletApi.updateTxProposal(this.txProposalId, data.timestamp, data.nonce, data.weight, data.parents, inputsData);
+    return await walletApi.updateTxProposal(this.txProposalId!, data.timestamp, data.nonce, data.weight, data.parents, inputsData);
   }
 
   isReady(): boolean {
