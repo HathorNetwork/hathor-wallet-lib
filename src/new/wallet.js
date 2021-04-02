@@ -877,42 +877,6 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Returns the balance for each token in tx, if the input/output belongs to this wallet
-   */
-  getTxBalance(tx) {
-    storage.setStore(this.store);
-    const myKeys = []; // TODO
-    const balance = {};
-    for (const txout of tx.outputs) {
-      if (wallet.isAuthorityOutput(txout)) {
-        continue;
-      }
-      if (txout.decoded && txout.decoded.address
-          && txout.decoded.address in myKeys) {
-        if (!balance[txout.token]) {
-          balance[txout.token] = 0;
-        }
-        balance[txout.token] += txout.value;
-      }
-    }
-
-    for (const txin of tx.inputs) {
-      if (wallet.isAuthorityOutput(txin)) {
-        continue;
-      }
-      if (txin.decoded && txin.decoded.address
-          && txin.decoded.address in myKeys) {
-        if (!balance[txin.token]) {
-          balance[txin.token] = 0;
-        }
-        balance[txin.token] -= txin.value;
-      }
-    }
-
-    return balance;
-  }
-
-  /**
    * Create a new token for this wallet
    *
    * @param {String} name Name of the token
@@ -1102,6 +1066,46 @@ class HathorWallet extends EventEmitter {
    **/
   getAddressIndex(address) {
     return wallet.getAddressIndex(address);
+  }
+
+  /**
+   * Returns the balance for each token in tx, if the input/output belongs to this wallet
+   *
+   * @param {Object} tx Transaction data with array of inputs and outputs
+   *
+   * @return {Object} Object with each token and it's balance in this tx for this wallet
+   **/
+  getTxBalance(tx) {
+    storage.setStore(this.store);
+    const addresses = this.getAllAddresses();
+    const balance = {};
+    for (const txout of tx.outputs) {
+      if (wallet.isAuthorityOutput(txout)) {
+        continue;
+      }
+      if (txout.decoded && txout.decoded.address
+          && addresses.includes(txout.decoded.address)) {
+        if (!balance[txout.token]) {
+          balance[txout.token] = 0;
+        }
+        balance[txout.token] += txout.value;
+      }
+    }
+
+    for (const txin of tx.inputs) {
+      if (wallet.isAuthorityOutput(txin)) {
+        continue;
+      }
+      if (txin.decoded && txin.decoded.address
+          && addresses.includes(txin.decoded.address)) {
+        if (!balance[txin.token]) {
+          balance[txin.token] = 0;
+        }
+        balance[txin.token] -= txin.value;
+      }
+    }
+
+    return balance;
   }
 }
 
