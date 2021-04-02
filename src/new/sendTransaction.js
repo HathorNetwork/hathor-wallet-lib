@@ -160,6 +160,11 @@ class SendTransaction extends EventEmitter {
     txApi.pushTx(txHex, false, (response) => {
       if (response.success) {
         this.emit('send-success', response.tx);
+        if (this._unmark_as_selected_timer !== null) {
+          // After finishing the push_tx we can clearTimeout to unmark
+          clearTimeout(this._unmark_as_selected_timer);
+          this._unmark_as_selected_timer = null;
+        }
       } else {
         this.updateOutputSelected(false);
         this.emit('send-error', response.message);
