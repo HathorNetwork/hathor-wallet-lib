@@ -97,6 +97,14 @@ class Connection extends EventEmitter {
     this.websocket.on('is_online', this.onConnectionChange);
     this.websocket.on('wallet', this.handleWalletMessage);
 
+    this.websocket.on('height_updated', (height) => {
+      this.emit('best-block-update', height);
+    });
+
+    this.websocket.on('addresses_loaded', (data) => {
+      this.emit('wallet-load-partial-update', data);
+    });
+
     this.setState(Connection.CONNECTING);
     this.websocket.setup();
   }
@@ -107,9 +115,9 @@ class Connection extends EventEmitter {
   stop() {
     // TODO Double check that we are properly cleaning things up.
     // See: https://github.com/HathorNetwork/hathor-wallet-headless/pull/1#discussion_r369859701
+    this.websocket.removeAllListeners();
+    this.removeAllListeners();
     this.websocket.endConnection()
-    this.websocket.removeListener('is_online', this.onConnectionChange);
-    this.websocket.removeListener('wallet', this.handleWalletMessage);
     this.setState(Connection.CLOSED);
   }
 
