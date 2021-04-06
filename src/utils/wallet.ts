@@ -176,6 +176,16 @@ const wallet = {
     return privateKey.xpubkey;
   },
 
+  /**
+   * Get xpubkey in account derivation path from seed
+   *
+   * @param {String} seed 24 words
+   * @param {Object} options Options with passphrase, networkName and accountDerivationIndex
+   *
+   * @return {String} Wallet xpubkey
+   * @memberof Wallet
+   * @inner
+   */
   getXPubKeyFromSeed(seed: string, options: { passphrase?: string, networkName?: string, accountDerivationIndex?: string } = {}): string {
     const methodOptions = Object.assign({passphrase: '', networkName: 'mainnet', accountDerivationIndex: '0\''}, options);
     const { passphrase, networkName, accountDerivationIndex } = methodOptions;

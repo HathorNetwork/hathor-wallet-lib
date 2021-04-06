@@ -109,6 +109,13 @@ class HathorWallet extends EventEmitter {
     }
   }
 
+  /**
+   * When the wallet starts, it might take some seconds for the wallet service to completely load all addresses
+   * This method is responsible for polling the wallet status until it's ready
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
   async startPollingStatus() {
     try {
       const res = await walletApi.getWalletStatus(this.walletId!);
@@ -133,6 +140,12 @@ class HathorWallet extends EventEmitter {
     }
   }
 
+  /**
+   * Get all addresses of the wallet
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
   async getAllAddresses(): Promise<string[]> {
     const response = await walletApi.getAddresses(this.walletId!);
     let addresses = [];
@@ -144,6 +157,12 @@ class HathorWallet extends EventEmitter {
     return addresses;
   }
 
+  /**
+   * Get the balance of the wallet for a specific token
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
   async getBalance(token: string | null = null) {
     const response = await walletApi.getBalances(this.walletId!, token);
     let balance = null;
@@ -155,6 +174,12 @@ class HathorWallet extends EventEmitter {
     return balance;
   }
 
+  /**
+   * Get the history of the wallet for a specific token
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
   async getTxHistory(options: { token?: string } = {}) {
     // TODO Add pagination parameters
     const requestOptions = Object.assign({ token: null }, options);
@@ -169,10 +194,22 @@ class HathorWallet extends EventEmitter {
     return history
   }
 
+  /**
+   * Send a transaction from an array of outputs and inputs
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
   async sendManyOutputsTransaction(outputs, options = { inputs: [], changeAddress: null }) {
     return await this.sendTxProposal(outputs, options);
   }
 
+  /**
+   * Send a transaction to a single output
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
   async sendTransaction(address, value, options: { token: string | null, changeAddress: string | null } = { token: '00', changeAddress: null }) {
     const newOptions = Object.assign({
       token: '00',
@@ -183,6 +220,12 @@ class HathorWallet extends EventEmitter {
     return await this.sendTxProposal(outputs, { inputs: [], changeAddress });
   }
 
+  /**
+   * Send a transaction proposal
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
   async sendTxProposal(outputs, options = { inputs: [], changeAddress: null }) {
     const newOptions = Object.assign({
       inputs: [],
@@ -218,7 +261,15 @@ class HathorWallet extends EventEmitter {
     }
   }
 
-  getInputData(dataToSignHash, addressPath) {
+  /**
+   * Calculate input data from dataToSign and addressPath
+   * Get the private key corresponding to the addressPath,
+   * calculate the signature and add the public key
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
+  getInputData(dataToSignHash: Buffer, addressPath: string): Buffer {
     const code = new Mnemonic(this.seed);
     const xpriv = code.toHDPrivateKey(this.passphrase, this.network.bitcoreNetwork);
     const derivedKey = xpriv.derive(addressPath);
@@ -234,6 +285,12 @@ class HathorWallet extends EventEmitter {
     return util.buffer.concat(arr);
   }
 
+  /**
+   * Mine transaction and update tx proposal
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
   async executeSendTransaction(transaction: Transaction) {
     const mineTransaction = new MineTransaction(transaction);
     mineTransaction.start();
@@ -248,6 +305,12 @@ class HathorWallet extends EventEmitter {
     return await walletApi.updateTxProposal(this.txProposalId!, data.timestamp, data.nonce, data.weight, data.parents, inputsData);
   }
 
+  /**
+   * Return if wallet is ready to be used
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
   isReady(): boolean {
     return this.state === walletState.READY;
   }
@@ -265,11 +328,23 @@ class HathorWallet extends EventEmitter {
     this.emit('state', state);
   }
 
+  /**
+   * Stop the wallet
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
   stop() {
     this.walletId = null;
     this.state = walletState.NOT_STARTED;
   }
 
+  /**
+   * Get address at specific index
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
   getAddressAtIndex(index: number): string {
     const code = new Mnemonic(this.seed);
     const xpriv = code.toHDPrivateKey(this.passphrase, this.network.bitcoreNetwork);
