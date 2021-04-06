@@ -207,15 +207,14 @@ const wallet = {
    *
    * @example
    * ```
-   * getAddresses('myxpub', 0, 2, 3, 'mainnet') => {
+   * getAddresses('myxpub', 2, 3, 'mainnet') => {
    *   'address2': 2,
    *   'address3': 3,
    *   'address4': 4,
    * }
    * ```
    *
-   * @param {string} xpubkey The xpubkey. We expect the xpub in the last hardened path (m/44'/280'/0'). Xpub can't derive hardened path, so we must receive until the last hardened step.
-   * @param {number} changeDerivation The change derivation index.
+   * @param {string} xpubkey The xpubkey
    * @param {number} startIndex Generate addresses starting from this index
    * @param {number} quantity Amount of addresses to generate
    * @param {string} networkName 'mainnet' or 'testnet'
@@ -225,7 +224,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  getAddresses(xpubkey: string, changeDerivation: number, startIndex: number, quantity: number, networkName: string = 'mainnet'): Object {
+  getAddresses(xpubkey: string, startIndex: number, quantity: number, networkName: string = 'mainnet'): Object {
     let xpub;
     try {
       xpub = HDPublicKey(xpubkey);
@@ -235,12 +234,9 @@ const wallet = {
 
     const network = new Network(networkName);
 
-    // The xpub is in the account derivation step, we must derive until the change path
-    const derivedXpub = xpub.derive(changeDerivation);
-
     const addrMap = {};
     for (let index = startIndex; index < startIndex + quantity; index++) {
-      const key = derivedXpub.derive(index);
+      const key = xpub.derive(index);
       const address = Address(key.publicKey, network.bitcoreNetwork);
       addrMap[address.toString()] = index;
     }
