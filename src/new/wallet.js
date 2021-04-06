@@ -63,6 +63,8 @@ class HathorWallet extends EventEmitter {
 
     // debug mode
     debug = false,
+    // Callback to be executed before reload data
+    beforeReloadCallback = null,
   } = {}) {
     super();
 
@@ -115,6 +117,13 @@ class HathorWallet extends EventEmitter {
     // Debug mode. It is used to include debugging information
     // when a problem occurs.
     this.debug = debug;
+
+    // The reload is called automatically in the lib when the ws reconnects
+    // this callback gives a chance to the apps to run a method before reloading data in the lib
+    this.beforeReloadCallback = beforeReloadCallback;
+
+    // Set to true when stop() method is called
+    this.walletStopped = false;
   }
 
   /**
@@ -150,6 +159,9 @@ class HathorWallet extends EventEmitter {
         this.firstConnection = false;
         promise = wallet.loadAddressHistory(0, wallet.getGapLimit(), this.conn, this.store);
       } else {
+        if (this.beforeReloadCallback) {
+          this.beforeReloadCallback();
+        }
         promise = wallet.reloadData({connection: this.conn, store: this.store});
       }
 
@@ -160,9 +172,13 @@ class HathorWallet extends EventEmitter {
         console.error('Error loading wallet', {error});
       })
     } else {
-      // CONNECTING or CLOSED?
       this.serverInfo = null;
-      this.setState(HathorWallet.CONNECTING);
+      if (this.walletStopped) {
+        this.setState(HathorWallet.CLOSED);
+      } else {
+        // Otherwise we just lost websocket connection
+        this.setState(HathorWallet.CONNECTING);
+      }
     }
   }
 
@@ -182,6 +198,15 @@ class HathorWallet extends EventEmitter {
       return wallet.getAddressToUse(this.conn);
     }
     return wallet.getCurrentAddress();
+  }
+
+  /**
+   * Get the next address after the current available
+   */
+  getNextAddress() {
+    // First we mark the current address as used, then return the next
+    this.getCurrentAddress({ markAsUsed: true });
+    return this.getCurrentAddress();
   }
 
   /**
@@ -810,6 +835,7 @@ class HathorWallet extends EventEmitter {
 
     this.getTokenData();
     this.serverInfo = null;
+    this.walletStopped = false;
     this.setState(HathorWallet.CONNECTING);
 
     const promise = new Promise((resolve, reject) => {
@@ -836,51 +862,18 @@ class HathorWallet extends EventEmitter {
    **/
   stop() {
     storage.setStore(this.store);
+    this.setState(HathorWallet.CLOSED);
+    this.removeAllListeners();
+
+    wallet.cleanWallet({ endConnection: false, connection: this.conn });
+
+    this.serverInfo = null;
+    this.firstConnection = true;
+    this.walletStopped = true;
+
     // TODO Double check that we are properly cleaning things up.
     // See: https://github.com/HathorNetwork/hathor-wallet-headless/pull/1#discussion_r369859701
     this.conn.stop()
-    this.conn.removeListener('is_online', this.onConnectionChangedState);
-    this.conn.removeListener('wallet-update', this.handleWebsocketMsg);
-
-    this.serverInfo = null;
-    this.setState(HathorWallet.CLOSED);
-    this.firstConnection = true;
-  }
-
-  /**
-   * Returns the balance for each token in tx, if the input/output belongs to this wallet
-   */
-  getTxBalance(tx) {
-    storage.setStore(this.store);
-    const myKeys = []; // TODO
-    const balance = {};
-    for (const txout of tx.outputs) {
-      if (wallet.isAuthorityOutput(txout)) {
-        continue;
-      }
-      if (txout.decoded && txout.decoded.address
-          && txout.decoded.address in myKeys) {
-        if (!balance[txout.token]) {
-          balance[txout.token] = 0;
-        }
-        balance[txout.token] += txout.value;
-      }
-    }
-
-    for (const txin of tx.inputs) {
-      if (wallet.isAuthorityOutput(txin)) {
-        continue;
-      }
-      if (txin.decoded && txin.decoded.address
-          && txin.decoded.address in myKeys) {
-        if (!balance[txin.token]) {
-          balance[txin.token] = 0;
-        }
-        balance[txin.token] -= txin.value;
-      }
-    }
-
-    return balance;
   }
 
   /**
@@ -1073,6 +1066,46 @@ class HathorWallet extends EventEmitter {
    **/
   getAddressIndex(address) {
     return wallet.getAddressIndex(address);
+  }
+
+  /**
+   * Returns the balance for each token in tx, if the input/output belongs to this wallet
+   *
+   * @param {Object} tx Transaction data with array of inputs and outputs
+   *
+   * @return {Object} Object with each token and it's balance in this tx for this wallet
+   **/
+  getTxBalance(tx) {
+    storage.setStore(this.store);
+    const addresses = this.getAllAddresses();
+    const balance = {};
+    for (const txout of tx.outputs) {
+      if (wallet.isAuthorityOutput(txout)) {
+        continue;
+      }
+      if (txout.decoded && txout.decoded.address
+          && addresses.includes(txout.decoded.address)) {
+        if (!balance[txout.token]) {
+          balance[txout.token] = 0;
+        }
+        balance[txout.token] += txout.value;
+      }
+    }
+
+    for (const txin of tx.inputs) {
+      if (wallet.isAuthorityOutput(txin)) {
+        continue;
+      }
+      if (txin.decoded && txin.decoded.address
+          && addresses.includes(txin.decoded.address)) {
+        if (!balance[txin.token]) {
+          balance[txin.token] = 0;
+        }
+        balance[txin.token] -= txin.value;
+      }
+    }
+
+    return balance;
   }
 }
 
