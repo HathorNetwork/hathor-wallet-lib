@@ -137,6 +137,35 @@ const wallet = {
   },
 
   /**
+   * Start a new HD wallet from an xpriv.
+   * Encrypt this private key and save data in storage
+   *
+   * @param {string} xpriv_root Root of the extended private-key
+   * @param {string} pin
+   * @param {boolean} loadHistory if should load the history from the generated addresses
+   *
+   * @return {Promise} Promise that resolves when finishes loading address history, in case loadHistory = true, else returns null
+   * @memberof Wallet
+   * @inner
+   */
+  executeGenerateWalletFromXPriv(xpriv_root, pin, loadHistory) {
+    let xpriv = HDPrivateKey(xpriv_root);
+    let privkey = xpriv.derive(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
+
+    let encryptedData = this.encryptData(privkey.xprivkey, pin)
+
+    // Save in storage the encrypted private key and the hash of the pin and password
+    let access = {
+      mainKey: encryptedData.encrypted.toString(),
+      hash: encryptedData.hash.key.toString(),
+      salt: encryptedData.hash.salt,
+      xpubkey: privkey.xpubkey,
+    }
+
+    return this.startWallet(access, loadHistory);
+  },
+
+  /**
    * Start a new HD wallet with new private key
    * Encrypt this private key and save data in storage
    *

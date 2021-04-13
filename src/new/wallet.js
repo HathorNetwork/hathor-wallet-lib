@@ -55,6 +55,8 @@ class HathorWallet extends EventEmitter {
     seed,
     passphrase = '',
 
+    xpriv,
+
     tokenUid = HATHOR_TOKEN_CONFIG.uid,
 
     // XXX Update it so we don't have fixed pin/password
@@ -72,8 +74,16 @@ class HathorWallet extends EventEmitter {
       throw Error('You must provide a connection.');
     }
 
-    if (!seed) {
-      throw Error('You must explicitly provide the seed.');
+    if (!seed && !xpriv) {
+      throw Error('You must explicitly provide the seed or the xpriv.');
+    }
+
+    if (seed && xpriv) {
+      throw Error('You cannot provide both a seed and an xpriv.');
+    }
+
+    if (xpriv && passphrase !== '') {
+      throw Error('You can\'t use xpriv with passphrase.');
     }
 
     if (connection.state !== Connection.CLOSED) {
@@ -86,6 +96,7 @@ class HathorWallet extends EventEmitter {
     this.state = HathorWallet.CLOSED;
     this.serverInfo = null;
 
+    this.xpriv = xpriv;
     this.seed = seed;
 
     // tokenUid is optional so we can get the token of the wallet
@@ -828,7 +839,14 @@ class HathorWallet extends EventEmitter {
     this.conn.on('state', this.onConnectionChangedState);
     this.conn.on('wallet-update', this.handleWebsocketMsg);
 
-    const ret = wallet.executeGenerateWallet(this.seed, this.passphrase, this.pinCode, this.password, false);
+    let ret;
+    if (this.seed) {
+      ret = wallet.executeGenerateWallet(this.seed, this.passphrase, this.pinCode, this.password, false);
+    } else if (this.xpriv) {
+      ret = wallet.executeGenerateWalletFromXPriv(this.xpriv, this.pinCode, false);
+    } else {
+      throw "This should never happen";
+    }
     if (ret !== null) {
       throw "This should never happen";
     }
