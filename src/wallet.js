@@ -140,7 +140,7 @@ const wallet = {
    * Start a new HD wallet from an xpriv.
    * Encrypt this private key and save data in storage
    *
-   * @param {string} xpriv_root Root of the extended private-key
+   * @param {string} xpriv Extended private-key to start wallet
    * @param {string} pin
    * @param {boolean} loadHistory if should load the history from the generated addresses
    *
@@ -148,19 +148,29 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  executeGenerateWalletFromXPriv(xpriv_root, pin, loadHistory) {
-    let xpriv = HDPrivateKey(xpriv_root);
-    let privkey = xpriv.derive(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
+  executeGenerateWalletFromXPriv(xprivkey, pin, loadHistory) {
+    const xpriv = HDPrivateKey(xprivkey);
+    let initialAccessData;
+    let privkey;
+    if (xpriv.depth === 0) {
+      // TODO test if it's working for root xpriv
+      privkey = xpriv.derive(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
+      initialAccessData = {};
+    } else {
+      // Already derived
+      privkey = xpriv;
+      initialAccessData = this.getWalletAccessData() || {};
+    }
 
-    let encryptedData = this.encryptData(privkey.xprivkey, pin)
+    const encryptedData = this.encryptData(privkey.xprivkey, pin)
 
     // Save in storage the encrypted private key and the hash of the pin and password
-    let access = {
+    const access = Object.assign(initialAccessData, {
       mainKey: encryptedData.encrypted.toString(),
       hash: encryptedData.hash.key.toString(),
       salt: encryptedData.hash.salt,
       xpubkey: privkey.xpubkey,
-    }
+    });
 
     return this.startWallet(access, loadHistory);
   },
@@ -1192,8 +1202,11 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  cleanLoadedData() {
-    storage.removeItem('wallet:accessData');
+  cleanLoadedData({ cleanAccessData = true } = {}) {
+    // TODO Test with and without sending
+    if (cleanAccessData) {
+      storage.removeItem('wallet:accessData');
+    }
     storage.removeItem('wallet:data');
     storage.removeItem('wallet:address');
     storage.removeItem('wallet:lastSharedIndex');
@@ -2404,11 +2417,23 @@ const wallet = {
    * @return {String} Wallet xpubkey
    */
   getXPubKeyFromXPrivKey(pin) {
+    const privateKeyStr = this.getXprivKey(pin);
+    const privateKey = HDPrivateKey(privateKeyStr)
+    return privateKey.xpubkey;
+  },
+
+  /**
+   * Get xprivkey from storage
+   *
+   * @param {String} pin User PIN used to encrypt xpriv on storage
+   *
+   * @return {String} Wallet xprivkey
+   */
+  getXprivKey(pin) {
     const accessData = this.getWalletAccessData();
     const encryptedXPriv = accessData.mainKey;
     const privateKeyStr = wallet.decryptData(encryptedXPriv, pin);
-    const privateKey = HDPrivateKey(privateKeyStr)
-    return privateKey.xpubkey;
+    return privateKeyStr;
   },
 
   /**
