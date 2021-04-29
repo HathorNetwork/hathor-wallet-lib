@@ -18,6 +18,8 @@ import Input from '../models/input';
 import Address from '../models/address';
 import Network from '../models/network';
 import MineTransaction from './mineTransaction';
+import HathorWalletInterface from './interface';
+import { getBalanceObject, getAddressesObject, getHistoryObject } from './types';
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
@@ -29,7 +31,7 @@ enum walletState {
   READY = 'Ready',
 }
 
-class HathorWallet extends EventEmitter {
+class HathorWallet extends EventEmitter implements HathorWalletInterface {
   // String with 24 words separated by space
   seed: string;
   // String with wallet passphrase
@@ -146,7 +148,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async getAllAddresses(): Promise<string[]> {
+  async getAllAddresses(): Promise<getAddressesObject []> {
     const response = await walletApi.getAddresses(this.walletId!);
     let addresses = [];
     if (response.status === 200 && response.data.success === true) {
@@ -163,9 +165,10 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async getBalance(token: string | null = null) {
+  async getBalance(token: string | null = null): Promise<getBalanceObject []> {
+    // If token is null we get the balance for all tokens
     const response = await walletApi.getBalances(this.walletId!, token);
-    let balance = null;
+    let balance = [];
     if (response.status === 200 && response.data.success === true) {
       balance = response.data.balances;
     } else {
@@ -180,7 +183,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async getTxHistory(options: { token?: string } = {}) {
+  async getTxHistory(options: { token?: string } = {}): Promise<getHistoryObject []> {
     // TODO Add pagination parameters
     const requestOptions = Object.assign({ token: null }, options);
     const { token } = requestOptions;
