@@ -385,7 +385,7 @@ class Transaction {
    * @memberof Transaction
    * @inner
    */
-  updateTimestamp(timestamp: number = null) {
+  updateTimestamp(timestamp: number | null = null) {
     let timestampToSet = timestamp;
     if (!timestamp) {
       timestampToSet = Math.floor(Date.now() / 1000);

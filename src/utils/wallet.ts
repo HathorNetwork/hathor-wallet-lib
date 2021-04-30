@@ -207,7 +207,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  getXPrivKeyFromSeed(seed: string, options: { passphrase?: string, networkName?: string} = {}): string {
+  getXPrivKeyFromSeed(seed: string, options: { passphrase?: string, networkName?: string} = {}): HDPrivateKey {
     const methodOptions = Object.assign({passphrase: '', networkName: 'mainnet'}, options);
     const { passphrase, networkName } = methodOptions;
 
