@@ -65,23 +65,52 @@ test('Loaded', () => {
 });
 
 test('Clean local storage', () => {
-  wallet.setWalletAccessData({});
-  wallet.setWalletData({});
-  storage.setItem('wallet:address', '171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r');
-  storage.setItem('wallet:lastSharedIndex', 1);
-  storage.setItem('wallet:lastGeneratedIndex', 19);
-  storage.setItem('wallet:lastUsedIndex', 0);
-  storage.setItem('wallet:lastUsedAddress', '1knH3y5dZuC8DQBaLhgJP33fGBr6vstr8');
+  const setMockData = () => {
+    wallet.setWalletAccessData({});
+    wallet.setWalletData({});
+    storage.setItem('wallet:address', '171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r');
+    storage.setItem('wallet:lastSharedIndex', 1);
+    storage.setItem('wallet:lastGeneratedIndex', 19);
+    storage.setItem('wallet:lastUsedIndex', 0);
+    storage.setItem('wallet:lastUsedAddress', '1knH3y5dZuC8DQBaLhgJP33fGBr6vstr8');
+  }
+
+  setMockData();
+
+  expect(wallet.getWalletAccessData()).not.toBeNull();
+  expect(wallet.getWalletData()).not.toBeNull();
+  expect(storage.getItem('wallet:address')).not.toBeNull();
+  expect(storage.getItem('wallet:lastSharedIndex')).not.toBeNull();
+  expect(storage.getItem('wallet:lastGeneratedIndex')).not.toBeNull();
+  expect(storage.getItem('wallet:lastUsedIndex')).not.toBeNull();
+  expect(storage.getItem('wallet:lastUsedAddress')).not.toBeNull();
 
   wallet.cleanLoadedData();
 
-  expect(wallet.getWalletAccessData()).toBeNull();
-  expect(wallet.getWalletData()).toBeNull();
-  expect(storage.getItem('wallet:address')).toBeNull();
-  expect(storage.getItem('wallet:lastSharedIndex')).toBeNull();
-  expect(storage.getItem('wallet:lastGeneratedIndex')).toBeNull();
-  expect(storage.getItem('wallet:lastUsedIndex')).toBeNull();
-  expect(storage.getItem('wallet:lastUsedAddress')).toBeNull();
+  const testStorageCleaned = (cleanAccessData) => {
+    if (cleanAccessData) {
+      expect(wallet.getWalletAccessData()).toBeNull();
+    } else {
+      expect(wallet.getWalletAccessData()).not.toBeNull();
+    }
+    expect(wallet.getWalletData()).toBeNull();
+    expect(storage.getItem('wallet:address')).toBeNull();
+    expect(storage.getItem('wallet:lastSharedIndex')).toBeNull();
+    expect(storage.getItem('wallet:lastGeneratedIndex')).toBeNull();
+    expect(storage.getItem('wallet:lastUsedIndex')).toBeNull();
+    expect(storage.getItem('wallet:lastUsedAddress')).toBeNull();
+  }
+
+  testStorageCleaned(true);
+
+  setMockData();
+  wallet.cleanLoadedData({ cleanAccessData: true });
+  testStorageCleaned(true);
+
+
+  setMockData();
+  wallet.cleanLoadedData({ cleanAccessData: false });
+  testStorageCleaned(false);
 });
 
 test('Save address history to storage', () => {

@@ -1203,7 +1203,6 @@ const wallet = {
    * @inner
    */
   cleanLoadedData({ cleanAccessData = true } = {}) {
-    // TODO Test with and without sending
     if (cleanAccessData) {
       storage.removeItem('wallet:accessData');
     }
