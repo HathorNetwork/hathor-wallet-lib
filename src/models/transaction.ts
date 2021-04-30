@@ -374,8 +374,23 @@ class Transaction {
    * @inner
    */
   prepareToSend() {
-    this.timestamp = Math.floor(Date.now() / 1000);
+    this.updateTimestamp();
     this.weight = this.calculateWeight();
+  }
+
+  /**
+   * Update transaction timestamp
+   * If timestamp parameter is not sent, we use now
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  updateTimestamp(timestamp: number = null) {
+    let timestampToSet = timestamp;
+    if (!timestamp) {
+      timestampToSet = Math.floor(Date.now() / 1000);
+    }
+    this.timestamp = timestampToSet;
   }
 }
 

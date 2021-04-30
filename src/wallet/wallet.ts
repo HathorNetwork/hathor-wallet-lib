@@ -29,7 +29,7 @@ enum walletState {
   READY = 'Ready',
 }
 
-class HathorWallet extends EventEmitter {
+class HathorWalletServiceWallet extends EventEmitter {
   // String with 24 words separated by space
   seed: string;
   // String with wallet passphrase
@@ -395,4 +395,4 @@ class HathorWallet extends EventEmitter {
   }
 }
 
-export default HathorWallet;
+export default HathorWalletServiceWallet;

@@ -6,7 +6,7 @@
  */
 
 import axios from 'axios';
-import { TIMEOUT } from '../../constants';
+import { WALLET_SERVICE_BASE_URL, TIMEOUT } from '../../constants';
 
 /**
  * Method that creates an axios instance
@@ -23,7 +23,7 @@ export const axiosInstance = (timeout: number = TIMEOUT) => {
   // TODO make base URL customizable
   // TODO How to allow 'Retry' request?
   const defaultOptions = {
-    baseURL: 'https://dol32y58xi.execute-api.us-east-1.amazonaws.com/production/',
+    baseURL: WALLET_SERVICE_BASE_URL,
     timeout: timeout,
     headers: {
       'Content-Type': 'application/json',
