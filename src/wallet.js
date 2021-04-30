@@ -153,7 +153,6 @@ const wallet = {
     let initialAccessData;
     let privkey;
     if (xpriv.depth === 0) {
-      // TODO test if it's working for root xpriv
       privkey = xpriv.derive(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
       initialAccessData = {};
     } else {
