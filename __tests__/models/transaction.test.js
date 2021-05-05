@@ -6,6 +6,7 @@
  */
 
 import Transaction from '../../src/models/transaction';
+import CreateTokenTransaction from '../../src/models/create_token_transaction';
 import Output from '../../src/models/output';
 import Input from '../../src/models/input';
 import Address from '../../src/models/address';
@@ -45,7 +46,7 @@ test('New tx', () => {
 })
 
 test('Token tx', () => {
-  const tx = new Transaction([], []);
+  const tx = new CreateTokenTransaction([], []);
   tx.name = 'Test';
   tx.symbol = 'TST';
   const info = tx.serializeTokenInfo();
