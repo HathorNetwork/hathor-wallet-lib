@@ -28,8 +28,6 @@ type optionsType = {
   parents?: string[],
   tokens?: string[],
   hash?: string | null,
-  name?: string | null,
-  symbol?: string | null,
 };
 
 const defaultOptions: optionsType = {
@@ -40,8 +38,6 @@ const defaultOptions: optionsType = {
   parents: [],
   tokens: [],
   hash: null,
-  name: null,
-  symbol: null,
 }
 
 class Transaction {
@@ -54,13 +50,11 @@ class Transaction {
   parents: string[];
   tokens: string[];
   hash: string | null;
-  name: string | null;
-  symbol: string | null;
-  private _dataToSignCache: Buffer | null;
+  protected _dataToSignCache: Buffer | null;
 
   constructor(inputs: Input[], outputs: Output[], options: optionsType = defaultOptions) {
     const newOptions = Object.assign(defaultOptions, options);
-    const { version, weight, nonce, timestamp, parents, tokens, hash, name, symbol } = newOptions;
+    const { version, weight, nonce, timestamp, parents, tokens, hash } = newOptions;
 
     this.inputs = inputs;
     this.outputs = outputs;
@@ -71,8 +65,6 @@ class Transaction {
     this.parents = parents!;
     this.tokens = tokens!;
     this.hash = hash!;
-    this.name = name!;
-    this.symbol = symbol!;
 
     // All inputs sign the same data, so we cache it in the first getDataToSign method call
     this._dataToSignCache = null;
@@ -104,40 +96,95 @@ class Transaction {
     }
 
     let arr: any[] = []
+
     // Tx version
     arr.push(helpers.intToBytes(this.version, 2))
 
     // Len tokens
-    if (this.tokens.length) {
-      // Create token tx does not have tokens array
-      arr.push(helpers.intToBytes(this.tokens.length, 1))
-    }
+    arr.push(helpers.intToBytes(this.tokens.length, 1))
 
-    // Len inputs
-    arr.push(helpers.intToBytes(this.inputs.length, 1))
-    // Len outputs
-    arr.push(helpers.intToBytes(this.outputs.length, 1))
+    // Len of inputs and outputs
+    this.serializeFundsFieldsLen(arr);
 
-    // Tokens data
-    for (const token of this.tokens) {
-      arr.push(new encoding.BufferReader(token).buf);
-    }
+    // Tokens array
+    this.serializeTokensArray(arr);
 
-    for (const inputTx of this.inputs) {
-      arr.push(...inputTx.serialize(false));
-    }
-
-    for (const outputTx of this.outputs) {
-      arr.push(...outputTx.serialize());
-    }
-
-    if (this.version === CREATE_TOKEN_TX_VERSION) {
-      // Create token tx need to add extra information
-      arr = [...arr, ...this.serializeTokenInfo()];
-    }
+    // Inputs and outputs
+    this.serializeFundsFields(arr, false);
 
     this._dataToSignCache = util.buffer.concat(arr);
     return this._dataToSignCache!;
+  }
+
+  /**
+   * Add to buffer array the serialization of the tokens array
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  serializeTokensArray(array: Buffer[]) {
+    // Tokens data
+    for (const token of this.tokens) {
+      array.push(new encoding.BufferReader(token).buf);
+    }
+  }
+
+  /**
+   * Add to buffer array the serialization of funds fields len (len of inputs and outputs)
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  serializeFundsFieldsLen(array: Buffer[]) {
+    // Len inputs
+    array.push(helpers.intToBytes(this.inputs.length, 1))
+
+    // Len outputs
+    array.push(helpers.intToBytes(this.outputs.length, 1))
+  }
+
+  /**
+   * Add to buffer array the serialization of funds fields (inputs and outputs)
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  serializeFundsFields(array: Buffer[], addInputData: boolean) {
+    for (const inputTx of this.inputs) {
+      array.push(...inputTx.serialize(addInputData));
+    }
+
+    for (const outputTx of this.outputs) {
+      array.push(...outputTx.serialize());
+    }
+  }
+
+  /**
+   * Add to buffer array the serialization of graph fields and other serialization fields (weight, timestamp, parents and nonce)
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  serializeGraphFields(array: Buffer[]) {
+    // Now serialize the graph part
+    //
+    // Weight is a float with 8 bytes
+    array.push(helpers.floatToBytes(this.weight, 8));
+    // Timestamp
+    array.push(helpers.intToBytes(this.timestamp!, 4))
+
+    if (this.parents) {
+      array.push(helpers.intToBytes(this.parents.length, 1))
+      for (const parent of this.parents) {
+        array.push(util.buffer.hexToBuffer(parent));
+      }
+    } else {
+      // Len parents (parents will be calculated in the backend)
+      array.push(helpers.intToBytes(0, 1))
+    }
+
+    // Add nonce in the end
+    array.push(helpers.intToBytes(this.nonce, 4));
   }
 
   /*
@@ -220,53 +267,22 @@ class Transaction {
     //
     // Tx version
     arr.push(helpers.intToBytes(this.version, 2))
-    if (this.tokens.length) {
-      // Len tokens
-      arr.push(helpers.intToBytes(this.tokens.length, 1))
-    }
-    // Len inputs
-    arr.push(helpers.intToBytes(this.inputs.length, 1))
-    // Len outputs
-    arr.push(helpers.intToBytes(this.outputs.length, 1))
 
-    for (const token of this.tokens) {
-      arr.push(new encoding.BufferReader(token).buf);
-    }
+    // Len tokens
+    arr.push(helpers.intToBytes(this.tokens.length, 1))
 
-    for (const inputTx of this.inputs) {
-      arr.push(...inputTx.serialize());
-    }
+    // Len of inputs and outputs
+    this.serializeFundsFieldsLen(arr);
 
-    for (const outputTx of this.outputs) {
-      arr.push(...outputTx.serialize());
-    }
+    // Tokens array
+    this.serializeTokensArray(arr);
 
-    if (this.version === CREATE_TOKEN_TX_VERSION) {
-      // Create token tx need to add extra information
-      arr = [...arr, ...this.serializeTokenInfo()];
-    }
+    // Outputs and inputs
+    this.serializeFundsFields(arr, true);
 
-    // Now serialize the graph part
-    //
-    // Weight is a float with 8 bytes
-    arr.push(helpers.floatToBytes(this.weight, 8));
-    // Timestamp
-    if (this.timestamp) {
-      arr.push(helpers.intToBytes(this.timestamp, 4))
-    }
+    // Weight, timestamp, parents and nonce
+    this.serializeGraphFields(arr);
 
-    if (this.parents) {
-      arr.push(helpers.intToBytes(this.parents.length, 1))
-      for (const parent of this.parents) {
-        arr.push(util.buffer.hexToBuffer(parent));
-      }
-    } else {
-      // Len parents (parents will be calculated in the backend)
-      arr.push(helpers.intToBytes(0, 1))
-    }
-
-    // Add nonce in the end
-    arr.push(helpers.intToBytes(this.nonce, 4));
     return util.buffer.concat(arr);
   }
 
@@ -300,34 +316,6 @@ class Transaction {
   toHex(): string {
     const txBytes = this.toBytes();
     return util.buffer.bufferToHex(txBytes);
-  }
-
-  /**
-   * Serialize create token tx info to bytes
-   *
-   * @return {Array} array of bytes
-   * @memberof Transaction
-   * @inner
-   */
-  serializeTokenInfo(): Buffer[] {
-    if (!(this.name) || !(this.symbol)) {
-      throw new CreateTokenTxInvalid('Token name and symbol are required when creating a new token');
-    }
-
-    const nameBytes = buffer.Buffer.from(this.name, 'utf8');
-    const symbolBytes = buffer.Buffer.from(this.symbol, 'utf8');
-    const arr: any[] = [];
-    // Token info version
-    arr.push(helpers.intToBytes(TOKEN_INFO_VERSION, 1));
-    // Token name size
-    arr.push(helpers.intToBytes(nameBytes.length, 1));
-    // Token name
-    arr.push(nameBytes);
-    // Token symbol size
-    arr.push(helpers.intToBytes(symbolBytes.length, 1));
-    // Token symbol
-    arr.push(symbolBytes);
-    return arr;
   }
 
   /**
@@ -367,6 +355,32 @@ class Transaction {
    */
   isBlock(): boolean {
     return this.version === BLOCK_VERSION || this.version === MERGED_MINED_BLOCK_VERSION;
+  }
+
+  /**
+   * Set tx timestamp and weight
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  prepareToSend() {
+    this.updateTimestamp();
+    this.weight = this.calculateWeight();
+  }
+
+  /**
+   * Update transaction timestamp
+   * If timestamp parameter is not sent, we use now
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  updateTimestamp(timestamp: number | null = null) {
+    let timestampToSet = timestamp;
+    if (!timestamp) {
+      timestampToSet = Math.floor(Date.now() / 1000);
+    }
+    this.timestamp = timestampToSet;
   }
 }
 
