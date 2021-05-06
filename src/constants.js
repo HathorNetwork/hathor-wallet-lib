@@ -226,5 +226,4 @@ export const SELECT_OUTPUTS_TIMEOUT = 1000 * 60;
 /**
  * Wallet service URL
  */
-// TODO Add a DNS for this domain (we should have one DNS for the testnet and another one for the mainnet)
-export const WALLET_SERVICE_BASE_URL  = 'https://dol32y58xi.execute-api.us-east-1.amazonaws.com/production/';
+export const WALLET_SERVICE_BASE_URL  = 'https://wallet-service.testnet.hathor.network/';
