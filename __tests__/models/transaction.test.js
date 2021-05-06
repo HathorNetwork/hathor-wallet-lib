@@ -46,9 +46,7 @@ test('New tx', () => {
 })
 
 test('Token tx', () => {
-  const tx = new CreateTokenTransaction([], []);
-  tx.name = 'Test';
-  tx.symbol = 'TST';
+  const tx = new CreateTokenTransaction('Test', 'TST', [], []);
   const info = tx.serializeTokenInfo();
   expect(info.length).toBe(5);
   expect(info[2].toString('hex')).toBe('54657374');

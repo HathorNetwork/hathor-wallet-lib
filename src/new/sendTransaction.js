@@ -6,7 +6,7 @@
  */
 
 import EventEmitter from 'events';
-import { MIN_POLLING_INTERVAL, SELECT_OUTPUTS_TIMEOUT } from '../constants';
+import { CREATE_TOKEN_TX_VERSION, MIN_POLLING_INTERVAL, SELECT_OUTPUTS_TIMEOUT } from '../constants';
 import transaction from '../transaction';
 import txApi from '../api/txApi';
 import txMiningApi from '../api/txMining';
@@ -16,6 +16,7 @@ import storage from '../storage';
 import Input from '../models/input';
 import Output from '../models/output';
 import Transaction from '../models/transaction';
+import CreateTokenTransaction from '../models/create_token_transaction';
 import Address from '../models/address';
 import MineTransaction from '../wallet/mineTransaction';
 
@@ -72,16 +73,29 @@ class SendTransaction extends EventEmitter {
       outputs.push(outputObj);
     }
 
-    const transaction = new Transaction(
-      inputs,
-      outputs,
-      {
-        version: data.version,
-        weight: data.weight,
-        timestamp: data.timestamp,
-        tokens: data.tokens
-      }
-    );
+    const options = {
+      version: data.version,
+      weight: data.weight,
+      timestamp: data.timestamp,
+      tokens: data.tokens
+    }
+
+    let transaction = null;
+    if (data.version === CREATE_TOKEN_TX_VERSION) {
+      transaction = new CreateTokenTransaction(
+        data.name,
+        data.symbol,
+        inputs,
+        outputs,
+        options
+      );
+    } else {
+      transaction = new Transaction(
+        inputs,
+        outputs,
+        options
+      );
+    }
 
     this.mineTransaction = new MineTransaction(transaction, { maxTxMiningRetries });
 
