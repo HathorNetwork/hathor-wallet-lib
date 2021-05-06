@@ -962,20 +962,6 @@ class HathorWallet extends EventEmitter {
     return promise;
   }
 
-  changeConnection(connection) {
-    this.conn.stop();
-
-    this.conn = connection;
-    wallet.setConnection(connection);
-
-    storage.setItem('wallet:server', this.conn.currentServer);
-
-    this.conn.on('state', this.onConnectionChangedState);
-    this.conn.on('wallet-update', this.handleWebsocketMsg);
-
-    this.conn.start();
-  }
-
   /**
    * Close the connections and stop emitting events.
    **/
