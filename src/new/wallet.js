@@ -965,12 +965,14 @@ class HathorWallet extends EventEmitter {
   /**
    * Close the connections and stop emitting events.
    **/
-  stop() {
+  stop({ cleanStorage = true } = {}) {
     storage.setStore(this.store);
     this.setState(HathorWallet.CLOSED);
     this.removeAllListeners();
 
-    wallet.cleanWallet({ endConnection: false, connection: this.conn });
+    if (cleanStorage) {
+      wallet.cleanWallet({ endConnection: false, connection: this.conn });
+    }
 
     this.serverInfo = null;
     this.firstConnection = true;
