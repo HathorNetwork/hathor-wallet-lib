@@ -64,6 +64,10 @@ class Input {
     }
     return arr;
   }
+
+  setData(data: Buffer) {
+    this.data = data;
+  }
 }
 
 export default Input;

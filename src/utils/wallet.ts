@@ -8,7 +8,7 @@
 
 import { crypto, HDPublicKey, HDPrivateKey, Address } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
-import { HD_WALLET_ENTROPY } from '../constants';
+import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE } from '../constants';
 import { XPubError, InvalidWords, UncompressedPubKeyError } from '../errors';
 import Network from '../models/network';
 import _ from 'lodash';
@@ -28,7 +28,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  wordsValid(words: string): {valid: boolean, invalidWords?: string[], words?: string} {
+  wordsValid(words: string): {valid: boolean, words: string} {
     if (!_.isString(words)) {
       // Must be string
       throw new InvalidWords('Words must be a string.')
@@ -174,6 +174,46 @@ const wallet = {
   getXPubKeyFromXPrivKey(xpriv: string): string {
     const privateKey = HDPrivateKey(xpriv)
     return privateKey.xpubkey;
+  },
+
+  /**
+   * Get xpubkey in account derivation path from seed
+   *
+   * @param {String} seed 24 words
+   * @param {Object} options Options with passphrase, networkName and accountDerivationIndex
+   *
+   * @return {String} Wallet xpubkey
+   * @memberof Wallet
+   * @inner
+   */
+  getXPubKeyFromSeed(seed: string, options: { passphrase?: string, networkName?: string, accountDerivationIndex?: string } = {}): string {
+    const methodOptions = Object.assign({passphrase: '', networkName: 'mainnet', accountDerivationIndex: '0\''}, options);
+    const { accountDerivationIndex } = methodOptions;
+
+    const xpriv = this.getXPrivKeyFromSeed(seed, methodOptions);
+    // We have a fixed derivation until the coin index
+    // after that we can receive a different account index, which the default is 0'
+    const privkey = xpriv.derive(`m/44'/${HATHOR_BIP44_CODE}'/${accountDerivationIndex}`);
+    return privkey.xpubkey;
+  },
+
+  /**
+   * Get root xpriv from seed
+   *
+   * @param {String} seed 24 words
+   * @param {Object} options Options with passphrase, networkName
+   *
+   * @return {HDPrivateKey} Root HDPrivateKey
+   * @memberof Wallet
+   * @inner
+   */
+  getXPrivKeyFromSeed(seed: string, options: { passphrase?: string, networkName?: string} = {}): HDPrivateKey {
+    const methodOptions = Object.assign({passphrase: '', networkName: 'mainnet'}, options);
+    const { passphrase, networkName } = methodOptions;
+
+    const network = new Network(networkName);
+    const code = new Mnemonic(seed);
+    return code.toHDPrivateKey(passphrase, network.bitcoreNetwork);
   },
 
   /**

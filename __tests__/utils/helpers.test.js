@@ -15,7 +15,6 @@ import { OP_PUSHDATA1 } from '../../src/opcodes';
 
 const nodeMajorVersion = process.versions.node.split('.')[0];
 
-
 test('Round float', () => {
   expect(helpers.roundFloat(1.23)).toBe(1.23);
   expect(helpers.roundFloat(1.2345)).toBe(1.23);
