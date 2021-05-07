@@ -18,6 +18,7 @@ import MemoryStore from '../memory_store';
 import Connection from './connection';
 import SendTransaction from './sendTransaction';
 import { AddressError } from '../../lib/errors';
+import { cloneDeep } from 'lodash';
 
 /**
  * This is a Wallet that is supposed to be simple to be used by a third-party app.
@@ -781,77 +782,76 @@ class HathorWallet extends EventEmitter {
     const newOptions = Object.assign({ changeAddress: null, startMiningTx: true }, options);
     const txToken = token || this.token;
     const tokensData = {};
-    const tokens = [];
+    const HTR_UID = HATHOR_TOKEN_CONFIG.uid;
 
     // PrepareSendTokensData method expects all inputs/outputs for each token
     // then the first step is to separate the inputs/outputs for each token
     const defaultData = { outputs: [], inputs: [] };
-    if (txToken && txToken.uid !== HATHOR_TOKEN_CONFIG.uid) {
-      tokensData[txToken.uid] = Object.assign({}, defaultData);
-      tokens.push(txToken.uid);
+    if (txToken && txToken.uid !== HTR_UID) {
+      tokensData[txToken.uid] = cloneDeep(defaultData);
     } else {
       for (const output of outputs) {
-        if (output.token && output.token !== HATHOR_TOKEN_CONFIG.uid) {
-          if (!(output.token in tokensData)) {
-            tokens.push(output.token);
-            tokensData[output.token] = Object.assign({}, defaultData);
-          }
+        if (output.token && !(output.token in tokensData)) {
+          tokensData[output.token] = cloneDeep(defaultData);
         }
       }
 
-      if (tokens.length === 0) {
-        // So it's HTR
-        tokensData[HATHOR_TOKEN_CONFIG.uid] = Object.assign({}, defaultData);
+      if (Object.keys(tokensData).length === 0) {
+        // It's HTR and the outputs don't contain the token key
+        tokensData[HTR_UID] = cloneDeep(defaultData);
       }
     }
 
+    const tokens = Object.keys(tokensData).filter((token) => {
+      return token !== HTR_UID;
+    });
+
     for (const output of outputs) {
       let tokenData;
-      if (txToken && txToken.uid !== HATHOR_TOKEN_CONFIG.uid) {
-        // A single token with third method parameter of class default
-        tokenData = 1;
-      } else {
-        if (tokens.length === 0) {
+      if (output.token) {
+        if (output.token === HTR_UID) {
           // HTR
           tokenData = 0;
         } else {
           tokenData = tokens.indexOf(output.token) + 1;
         }
+      } else {
+        if (txToken.uid === HTR_UID) {
+          tokenData = 0;
+        } else {
+          // A single token with third method parameter of class default
+          tokenData = 1;
+        }
       }
 
-      tokensData[output.token].outputs = [...tokensData[output.token].outputs, {
+      tokensData[output.token].outputs.push({
         address: output.address,
         value: output.value,
         timelock: output.timelock ? output.timelock : null,
         tokenData,
-      }];
+      });
     }
 
     for (const input of inputs) {
       let token;
-      if (txToken && txToken.uid !== HATHOR_TOKEN_CONFIG.uid) {
-        // A single token with third method parameter of class default
-        token = txToken.uid;
+      if (input.token) {
+        token = input.token;
       } else {
-        if (tokens.length === 0) {
-          // HTR
-          token = HATHOR_TOKEN_CONFIG.uid;
-        } else {
-          token = input.token;
-        }
+        token = txToken.uid;
       }
 
-      tokensData[input.token].inputs = [...tokensData[input.token].inputs, {
+      tokensData[input.token].inputs.push({
         tx_id: input.hash,
         index: input.index,
         token,
-      }];
+      });
     }
 
-    const fullTxData = Object.assign({tokens}, defaultData);
+    const fullTxData = Object.assign({tokens}, cloneDeep(defaultData));
 
     const walletData = wallet.getWalletData();
     const historyTxs = 'historyTransactions' in walletData ? walletData.historyTransactions : {};
+    const tokensUids = tokens.map((token) => { return {uid: token} });
     for (const tokenUid in tokensData) {
       // For each token key in tokensData we prepare the data
       const partialData = tokensData[tokenUid];
@@ -864,7 +864,7 @@ class HathorWallet extends EventEmitter {
       // it's not a problem to send the token without the symbol/name. This is used only for error message but
       // it will increase the complexity of the parameters a lot to add the full token in each output/input.
       // With the wallet service this won't be needed anymore, so I think it's fine [pedroferreira 04-19-2021]
-      const ret = wallet.prepareSendTokensData(partialData, {uid: tokenUid}, chooseInputs, historyTxs, tokens, newOptions);
+      const ret = wallet.prepareSendTokensData(partialData, {uid: tokenUid}, chooseInputs, historyTxs, tokensUids, newOptions);
 
       if (!ret.success) {
         ret.debug = {
@@ -1023,7 +1023,11 @@ class HathorWallet extends EventEmitter {
    *
    * @param {String} tokenUid UID of the token to select the authority utxo
    * @param {function} filterUTXOs Callback to check if the output is the authority I want (isMeltOutput or isMintOutput)
-   * @param {Object} options Object with custom options. 'many' if should return many utxos or just one (default false) and 'skipSpent' if should not include spent utxos (default true)
+   * @param {Object} options Object with custom options.
+   *  {
+   *    'many': if should return many utxos or just one (default false),
+   *    'skipSpent': if should not include spent utxos (default true)
+   *  }
    *
    * @return {Array} Array of objects with {tx_id, index, address} of the authority output. Returns null in case there are no utxos for this type
    **/
@@ -1055,13 +1059,13 @@ class HathorWallet extends EventEmitter {
         if (output.spent_by) {
           if (skipSpent) {
             continue;
+          }
+
+          if (many) {
+            // If many we push to the array to be returned later
+            utxos.push(ret);
           } else {
-            if (many) {
-              // If many we push to the array to be returned later
-              utxos.push(ret);
-            } else {
-              return [ret];
-            }
+            return [ret];
           }
         }
 
@@ -1081,12 +1085,40 @@ class HathorWallet extends EventEmitter {
     }
   }
 
-  getMintAuthority(tokenUid, options = { many: false, skipSpent: true }) {
-    return this.selectAuthorityUtxo(tokenUid, wallet.isMintOutput.bind(wallet), options);
+  /**
+   * Get mint authorities
+   * This is a helper method to call selectAuthorityUtxo without knowledge of the isMintOutput
+   *
+   * @param {String} tokenUid UID of the token to select the authority utxo
+   * @param {Object} options Object with custom options.
+   *  {
+   *    'many': if should return many utxos or just one (default false),
+   *    'skipSpent': if should not include spent utxos (default true)
+   *  }
+   *
+   * @return {Array} Array of objects with {tx_id, index, address} of the authority output. Returns null in case there are no utxos for this type
+   **/
+  getMintAuthority(tokenUid, options = {}) {
+    const newOptions = Object.assign({many: false, skipSpent: true}, options);
+    return this.selectAuthorityUtxo(tokenUid, wallet.isMintOutput.bind(wallet), newOptions);
   }
 
-  getMeltAuthority(tokenUid, options = { many: false, skipSpent: true }) {
-    return this.selectAuthorityUtxo(tokenUid, wallet.isMeltOutput.bind(wallet), options);
+  /**
+   * Get melt authorities
+   * This is a helper method to call selectAuthorityUtxo without knowledge of the isMeltOutput
+   *
+   * @param {String} tokenUid UID of the token to select the authority utxo
+   * @param {Object} options Object with custom options.
+   *  {
+   *    'many': if should return many utxos or just one (default false),
+   *    'skipSpent': if should not include spent utxos (default true)
+   *  }
+   *
+   * @return {Array} Array of objects with {tx_id, index, address} of the authority output. Returns null in case there are no utxos for this type
+   **/
+  getMeltAuthority(tokenUid, options = {}) {
+    const newOptions = Object.assign({many: false, skipSpent: true}, options);
+    return this.selectAuthorityUtxo(tokenUid, wallet.isMeltOutput.bind(wallet), newOptions);
   }
 
   /**
@@ -1262,7 +1294,7 @@ class HathorWallet extends EventEmitter {
       data.push({ tx_id, address, index, token: tokenUid });
       // Even though count is expected as a number, I am using ==
       // in case someone sends a string in the future
-      if (data.length == count) {
+      if (data.length >= count) {
         break;
       }
     }
@@ -1362,7 +1394,8 @@ class HathorWallet extends EventEmitter {
    *
    * @return {Object} Object with each token and it's balance in this tx for this wallet
    **/
-  getTxBalance(tx, options = { includeAuthorities: false }) {
+  getTxBalance(tx, optionsParam = {}) {
+    const options = Object.assign({ includeAuthorities: false }, optionsParam)
     storage.setStore(this.store);
     const addresses = this.getAllAddresses();
     const balance = {};
@@ -1416,16 +1449,15 @@ class HathorWallet extends EventEmitter {
    **/
   getTxAddresses(tx) {
     storage.setStore(this.store);
-    const walletAddresses = this.getAllAddresses();
     const addresses = new Set();
     for (const txout of tx.outputs) {
-      if (txout.decoded && txout.decoded.address && walletAddresses.includes(txout.decoded.address)) {
+      if (txout.decoded && txout.decoded.address && this.isAddressMine(txout.decoded.address)) {
         addresses.add(txout.decoded.address);
       }
     }
 
     for (const txin of tx.inputs) {
-      if (txin.decoded && txin.decoded.address && walletAddresses.includes(txin.decoded.address)) {
+      if (txin.decoded && txin.decoded.address && this.isAddressMine(txin.decoded.address)) {
         addresses.add(txin.decoded.address);
       }
     }
