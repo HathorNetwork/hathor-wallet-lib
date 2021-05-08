@@ -841,7 +841,7 @@ class HathorWallet extends EventEmitter {
       }
 
       tokensData[input.token].inputs.push({
-        tx_id: input.hash,
+        tx_id: input.tx_id,
         index: input.index,
         token,
       });
