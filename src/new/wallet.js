@@ -18,7 +18,6 @@ import MemoryStore from '../memory_store';
 import Connection from './connection';
 import SendTransaction from './sendTransaction';
 import { AddressError } from '../../lib/errors';
-import { cloneDeep } from 'lodash';
 
 /**
  * This is a Wallet that is supposed to be simple to be used by a third-party app.
@@ -787,19 +786,22 @@ class HathorWallet extends EventEmitter {
 
     // PrepareSendTokensData method expects all inputs/outputs for each token
     // then the first step is to separate the inputs/outputs for each token
-    const defaultData = { outputs: [], inputs: [] };
+    const getDefaultData = () => {
+      return { outputs: [], inputs: [] };
+    };
+
     if (txToken && txToken.uid !== HTR_UID) {
-      tokensData[txToken.uid] = cloneDeep(defaultData);
+      tokensData[txToken.uid] = getDefaultData();
     } else {
       for (const output of outputs) {
         if (output.token && !(output.token in tokensData)) {
-          tokensData[output.token] = cloneDeep(defaultData);
+          tokensData[output.token] = getDefaultData();
         }
       }
 
       if (Object.keys(tokensData).length === 0) {
         // It's HTR and the outputs don't contain the token key
-        tokensData[HTR_UID] = cloneDeep(defaultData);
+        tokensData[HTR_UID] = getDefaultData();
       }
     }
 
@@ -848,7 +850,7 @@ class HathorWallet extends EventEmitter {
       });
     }
 
-    const fullTxData = Object.assign({tokens}, cloneDeep(defaultData));
+    const fullTxData = Object.assign({tokens}, getDefaultData());
 
     const walletData = wallet.getWalletData();
     const historyTxs = 'historyTransactions' in walletData ? walletData.historyTransactions : {};
