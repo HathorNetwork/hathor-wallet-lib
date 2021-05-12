@@ -738,7 +738,8 @@ class HathorWallet extends EventEmitter {
       chooseInputs = false;
     }
 
-    // Warning: prepareSendTokensData(...) might modify `partialData`.
+    // Warning: prepareSendTokensData(...) might modify `partialData`. It might add inputs in the inputs array
+    // if chooseInputs = true and also the change output to the outputs array, if needed.
     const ret = wallet.prepareSendTokensData(partialData, txToken, chooseInputs, historyTxs, [txToken], options);
 
     if (!ret.success) {
@@ -860,7 +861,8 @@ class HathorWallet extends EventEmitter {
         chooseInputs = false;
       }
 
-      // Warning: prepareSendTokensData(...) might modify `partialData`.
+      // Warning: prepareSendTokensData(...) might modify `partialData`. It might add inputs in the inputs array
+      // if chooseInputs = true and also the change output to the outputs array, if needed.
       // it's not a problem to send the token without the symbol/name. This is used only for error message but
       // it will increase the complexity of the parameters a lot to add the full token in each output/input.
       // With the wallet service this won't be needed anymore, so I think it's fine [pedroferreira 04-19-2021]
