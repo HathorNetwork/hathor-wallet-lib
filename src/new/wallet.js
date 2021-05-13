@@ -737,7 +737,8 @@ class HathorWallet extends EventEmitter {
       chooseInputs = false;
     }
 
-    // Warning: prepareSendTokensData(...) might modify `partialData`.
+    // Warning: prepareSendTokensData(...) might modify `partialData`. It might add inputs in the inputs array
+    // if chooseInputs = true and also the change output to the outputs array, if needed.
     const ret = wallet.prepareSendTokensData(partialData, txToken, chooseInputs, historyTxs, [txToken], options);
 
     if (!ret.success) {
@@ -765,44 +766,131 @@ class HathorWallet extends EventEmitter {
    * Send a transaction from its outputs
    * Currently does not have support to send custom tokens, only HTR
    *
-   * @param {Array} outputs Array of outputs with each element as an object with {'address', 'value'}
-   * @param {Array} inputs Array of inputs with each element as an object with {'hash', 'index'}
+   * @param {Array} outputs Array of outputs with each element as an object with {'address', 'value', 'timelock', 'token'}
+   * @param {Array} inputs Array of inputs with each element as an object with {'hash', 'index', 'token'}
    * @param {Object} token Token object {'uid', 'name', 'symbol'}. Optional parameter if user already set on the class
    * @param {Object} options Options parameters
    *  {
    *   'changeAddress': address of the change output
+   *   'startMiningTx': boolean to trigger start mining (default true)
    *  }
    *
    * @return {Promise} Promise that resolves when transaction is sent
    **/
-  sendManyOutputsTransaction(outputs, inputs = [], token = null, options = { changeAddress: null }) {
-    // XXX To accept here multi tokens in the same tx would be a bit more complicated because
-    // the method prepareSendTokensData would need a bigger refactor.
-    // I believe we should refactor all of that code (and it will be done on wallet-service)
-    // so I decided to change this method to accept only one token, which is enough for our needs right now
+  sendManyOutputsTransaction(outputs, inputs = [], token = null, options = {}) {
     storage.setStore(this.store);
+    const newOptions = Object.assign({ changeAddress: null, startMiningTx: true }, options);
     const txToken = token || this.token;
-    const isHathorToken = txToken.uid === HATHOR_TOKEN_CONFIG.uid;
-    const data = {
-      tokens: isHathorToken ? [] : [txToken.uid],
-      inputs: [],
-      outputs: [],
+    const tokensData = {};
+    const HTR_UID = HATHOR_TOKEN_CONFIG.uid;
+
+    // PrepareSendTokensData method expects all inputs/outputs for each token
+    // then the first step is to separate the inputs/outputs for each token
+    const getDefaultData = () => {
+      return { outputs: [], inputs: [] };
     };
 
+    if (txToken && txToken.uid !== HTR_UID) {
+      tokensData[txToken.uid] = getDefaultData();
+    } else {
+      for (const output of outputs) {
+        if (output.token && !(output.token in tokensData)) {
+          tokensData[output.token] = getDefaultData();
+        }
+      }
+
+      if (Object.keys(tokensData).length === 0) {
+        // It's HTR and the outputs don't contain the token key
+        tokensData[HTR_UID] = getDefaultData();
+      }
+    }
+
+    const tokens = Object.keys(tokensData).filter((token) => {
+      return token !== HTR_UID;
+    });
+
     for (const output of outputs) {
-      data.outputs.push({address: output.address, value: output.value, tokenData: isHathorToken ? 0 : 1})
+      let tokenData;
+      if (output.token) {
+        if (output.token === HTR_UID) {
+          // HTR
+          tokenData = 0;
+        } else {
+          tokenData = tokens.indexOf(output.token) + 1;
+        }
+      } else {
+        if (txToken.uid === HTR_UID) {
+          tokenData = 0;
+        } else {
+          // A single token with third method parameter of class default
+          tokenData = 1;
+        }
+      }
+
+      tokensData[output.token].outputs.push({
+        address: output.address,
+        value: output.value,
+        timelock: output.timelock ? output.timelock : null,
+        tokenData,
+      });
     }
 
     for (const input of inputs) {
-      data.inputs.push({tx_id: input.hash, index: input.index, token: HATHOR_TOKEN_CONFIG.uid });
+      let token;
+      if (input.token) {
+        token = input.token;
+      } else {
+        token = txToken.uid;
+      }
+
+      tokensData[input.token].inputs.push({
+        tx_id: input.tx_id,
+        index: input.index,
+        token,
+      });
     }
 
-    const ret = this.completeTxData(data, txToken, options);
+    const fullTxData = Object.assign({tokens}, getDefaultData());
 
-    if (ret.success) {
-      return this.sendPreparedTransaction(ret.data);
-    } else {
-      return ret;
+    const walletData = wallet.getWalletData();
+    const historyTxs = 'historyTransactions' in walletData ? walletData.historyTransactions : {};
+    const tokensUids = tokens.map((token) => { return {uid: token} });
+    for (const tokenUid in tokensData) {
+      // For each token key in tokensData we prepare the data
+      const partialData = tokensData[tokenUid];
+      let chooseInputs = true;
+      if (partialData.inputs.length > 0) {
+        chooseInputs = false;
+      }
+
+      // Warning: prepareSendTokensData(...) might modify `partialData`. It might add inputs in the inputs array
+      // if chooseInputs = true and also the change output to the outputs array, if needed.
+      // it's not a problem to send the token without the symbol/name. This is used only for error message but
+      // it will increase the complexity of the parameters a lot to add the full token in each output/input.
+      // With the wallet service this won't be needed anymore, so I think it's fine [pedroferreira 04-19-2021]
+      const ret = wallet.prepareSendTokensData(partialData, {uid: tokenUid}, chooseInputs, historyTxs, tokensUids, newOptions);
+
+      if (!ret.success) {
+        ret.debug = {
+          balance: this.getBalance(tokenUid),
+          partialData: partialData, // this might not be the original `partialData`
+          tokenUid,
+          ...ret.debug
+        };
+        return ret;
+      }
+
+      fullTxData.inputs = [...fullTxData.inputs, ...ret.data.inputs];
+      fullTxData.outputs = [...fullTxData.outputs, ...ret.data.outputs];
+    }
+
+    let preparedData = null;
+    try {
+      preparedData = transaction.prepareData(fullTxData, this.pinCode);
+      return this.sendPreparedTransaction(preparedData, newOptions);
+    } catch(e) {
+      const message = helpers.handlePrepareDataError(e);
+      return {success: false, message};
     }
   }
 
@@ -815,10 +903,13 @@ class HathorWallet extends EventEmitter {
    * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    **/
-  sendPreparedTransaction(data) {
+  sendPreparedTransaction(data, options = { startMiningTx: true }) {
     storage.setStore(this.store);
+    const { startMiningTx } = options;
     const sendTransaction = new SendTransaction({data});
-    sendTransaction.start();
+    if (startMiningTx) {
+      sendTransaction.start();
+    }
     const ret = {success: true, promise: sendTransaction.promise, sendTransaction};
     if (this.debug) {
       ret.debug = {
@@ -878,12 +969,14 @@ class HathorWallet extends EventEmitter {
   /**
    * Close the connections and stop emitting events.
    **/
-  stop() {
+  stop({ cleanStorage = true } = {}) {
     storage.setStore(this.store);
     this.setState(HathorWallet.CLOSED);
     this.removeAllListeners();
 
-    wallet.cleanWallet({ endConnection: false, connection: this.conn });
+    if (cleanStorage) {
+      wallet.cleanWallet({ endConnection: false, connection: this.conn });
+    }
 
     this.serverInfo = null;
     this.firstConnection = true;
@@ -903,20 +996,24 @@ class HathorWallet extends EventEmitter {
    * @param {String} address Optional parameter for the destination of the created token
    * @param {Object} options Options parameters
    *  {
-   *   'changeAddress': address of the change output
+   *   'changeAddress': address of the change output,
+   *   'startMiningTx': boolean to trigger start mining (default true)
    *  }
    *
    * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    **/
-  createNewToken(name, symbol, amount, address, options = { changeAddress: null }) {
+  createNewToken(name, symbol, amount, address, options = {}) {
     storage.setStore(this.store);
+    const newOptions = Object.assign({ changeAddress: null, startMiningTx: true }, options);
     const mintAddress = address || this.getCurrentAddress();
-    const ret = tokens.createToken(mintAddress, name, symbol, amount, this.pinCode, options);
+    const ret = tokens.createToken(mintAddress, name, symbol, amount, this.pinCode, newOptions);
 
     if (ret.success) {
       const sendTransaction = ret.sendTransaction;
-      sendTransaction.start();
+      if (newOptions.startMiningTx) {
+        sendTransaction.start();
+      }
       return {success: true, promise: sendTransaction.promise, sendTransaction};
     } else {
       return ret;
@@ -930,10 +1027,18 @@ class HathorWallet extends EventEmitter {
    *
    * @param {String} tokenUid UID of the token to select the authority utxo
    * @param {function} filterUTXOs Callback to check if the output is the authority I want (isMeltOutput or isMintOutput)
+   * @param {Object} options Object with custom options.
+   *  {
+   *    'many': if should return many utxos or just one (default false),
+   *    'skipSpent': if should not include spent utxos (default true)
+   *  }
    *
-   * @return {Object} Object with {tx_id, index, address} of the authority output. Returns null in case there are no utxos for this type
+   * @return {Array} Array of objects with {tx_id, index, address} of the authority output. Returns null in case there are no utxos for this type
    **/
-  selectAuthorityUtxo(tokenUid, filterUTXOs) {
+  selectAuthorityUtxo(tokenUid, filterUTXOs, options = {}) {
+    const newOptions = Object.assign({many: false, skipSpent: true}, options);
+    const { many, skipSpent } = newOptions;
+    const utxos = [];
     const walletData = wallet.getWalletData();
     for (const tx_id in walletData.historyTransactions) {
       const tx = walletData.historyTransactions[tx_id];
@@ -953,16 +1058,71 @@ class HathorWallet extends EventEmitter {
           continue;
         }
 
-        // If output was already used, we can't use it
+        const ret = {tx_id, index, address: output.decoded.address};
+        // If output was already used, we can't use it, unless requested in options
         if (output.spent_by) {
-          continue;
+          if (skipSpent) {
+            continue;
+          }
+
+          if (many) {
+            // If many we push to the array to be returned later
+            utxos.push(ret);
+          } else {
+            return [ret];
+          }
         }
 
         if (filterUTXOs(output)) {
-          return {tx_id, index, address: output.decoded.address};
+          if (many) {
+            // If many we push to the array to be returned later
+            utxos.push(ret);
+          } else {
+            return [ret];
+          }
         }
       }
     }
+
+    if (many) {
+      return utxos;
+    }
+  }
+
+  /**
+   * Get mint authorities
+   * This is a helper method to call selectAuthorityUtxo without knowledge of the isMintOutput
+   *
+   * @param {String} tokenUid UID of the token to select the authority utxo
+   * @param {Object} options Object with custom options.
+   *  {
+   *    'many': if should return many utxos or just one (default false),
+   *    'skipSpent': if should not include spent utxos (default true)
+   *  }
+   *
+   * @return {Array} Array of objects with {tx_id, index, address} of the authority output. Returns null in case there are no utxos for this type
+   **/
+  getMintAuthority(tokenUid, options = {}) {
+    const newOptions = Object.assign({many: false, skipSpent: true}, options);
+    return this.selectAuthorityUtxo(tokenUid, wallet.isMintOutput.bind(wallet), newOptions);
+  }
+
+  /**
+   * Get melt authorities
+   * This is a helper method to call selectAuthorityUtxo without knowledge of the isMeltOutput
+   *
+   * @param {String} tokenUid UID of the token to select the authority utxo
+   * @param {Object} options Object with custom options.
+   *  {
+   *    'many': if should return many utxos or just one (default false),
+   *    'skipSpent': if should not include spent utxos (default true)
+   *  }
+   *
+   * @return {Array} Array of objects with {tx_id, index, address} of the authority output. Returns null in case there are no utxos for this type
+   **/
+  getMeltAuthority(tokenUid, options = {}) {
+    const newOptions = Object.assign({many: false, skipSpent: true}, options);
+    return this.selectAuthorityUtxo(tokenUid, wallet.isMeltOutput.bind(wallet), newOptions);
   }
 
   /**
@@ -974,25 +1134,35 @@ class HathorWallet extends EventEmitter {
    * @param {Object} options Options parameters
    *  {
    *   'changeAddress': address of the change output
+   *   'startMiningTx': boolean to trigger start mining (default true)
+   *   'createAnotherMint': boolean to create another mint authority or not for the wallet
    *  }
    *
    * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    **/
-  mintTokens(tokenUid, amount, address, options = { changeAddress: null }) {
+  mintTokens(tokenUid, amount, address, options = {}) {
     storage.setStore(this.store);
+    const newOptions = Object.assign({
+      changeAddress: null,
+      createAnotherMint: true,
+      startMiningTx: true
+    }, options);
+
     const mintAddress = address || this.getCurrentAddress();
     const mintInput = this.selectAuthorityUtxo(tokenUid, wallet.isMintOutput.bind(wallet));
 
-    if (mintInput === null) {
+    if (mintInput.length === 0) {
       return {success: false, message: 'Don\'t have mint authority output available.'}
     }
 
-    const ret = tokens.mintTokens(mintInput, tokenUid, mintAddress, amount, null, this.pinCode, options);
+    const ret = tokens.mintTokens(mintInput[0], tokenUid, mintAddress, amount, null, this.pinCode, newOptions);
 
     if (ret.success) {
       const sendTransaction = ret.sendTransaction;
-      sendTransaction.start();
+      if (newOptions.startMiningTx) {
+        sendTransaction.start();
+      }
       return {success: true, promise: sendTransaction.promise, sendTransaction};
     } else {
       return ret;
@@ -1008,30 +1178,165 @@ class HathorWallet extends EventEmitter {
    *  {
    *   'depositAddress': address of the HTR deposit back
    *   'changeAddress': address of the change output
+   *   'createAnotherMelt': boolean to create another melt authority or not for the wallet
+   *   'startMiningTx': boolean to trigger start mining (default true)
    *  }
    *
    * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    **/
-  meltTokens(tokenUid, amount, options = { depositAddress: null, changeAddress: null }) {
+  meltTokens(tokenUid, amount, options = {}) {
     storage.setStore(this.store);
+    const newOptions = Object.assign({
+      depositAddress: null,
+      changeAddress: null,
+      createAnotherMelt: true,
+      startMiningTx: true,
+    }, options);
     const meltInput = this.selectAuthorityUtxo(tokenUid, wallet.isMeltOutput.bind(wallet));
 
-    if (meltInput === null) {
+    if (meltInput.length === 0) {
       return {success: false, message: 'Don\'t have melt authority output available.'}
     }
 
     // Always create another melt authority output
-    const ret = tokens.meltTokens(meltInput, tokenUid, amount, this.pinCode, true, options);
+    const ret = tokens.meltTokens(meltInput[0], tokenUid, amount, this.pinCode, newOptions.createAnotherMelt, newOptions);
     if (ret.success) {
       const sendTransaction = ret.sendTransaction;
-      sendTransaction.start();
+      if (newOptions.startMiningTx) {
+        sendTransaction.start();
+      }
       return {success: true, promise: sendTransaction.promise, sendTransaction};
     } else {
       return ret;
     }
   }
 
+  /**
+   * Delegate authority
+   *
+   * @param {String} tokenUid UID of the token to delegate the authority
+   * @param {String} type Type of the authority to delegate 'mint' or 'melt'
+   * @param {String} destinationAddress Destination address of the delegated authority
+   * @param {Object} options Options parameters
+   *  {
+   *   'createAnother': if should create another authority for the wallet. Default to true
+   *   'startMiningTx': boolean to trigger start mining (default true)
+   *  }
+   *
+   * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
+   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
+   **/
+  delegateAuthority(tokenUid, type, destinationAddress, options = {}) {
+    storage.setStore(this.store);
+    const newOptions = Object.assign({ createAnother: true, startMiningTx: true }, options);
+    const { createAnother, startMiningTx } = newOptions;
+    let filterUtxos;
+    if (type === 'mint') {
+      filterUtxos = wallet.isMintOutput.bind(wallet);
+    } else if (type === 'melt') {
+      filterUtxos = wallet.isMeltOutput.bind(wallet);
+    } else {
+      throw new Error('This should never happen.')
+    }
+
+    const delegateInput = this.selectAuthorityUtxo(tokenUid, filterUtxos);
+
+    if (delegateInput.length === 0) {
+      return {success: false, message: 'Don\'t have authority output available.'}
+    }
+
+    const { tx_id, index, address } = delegateInput[0];
+
+    const ret = tokens.delegateAuthority(tx_id, index, address, tokenUid, destinationAddress, createAnother, type, this.pinCode);
+
+    if (ret.success) {
+      const sendTransaction = ret.sendTransaction;
+      if (startMiningTx) {
+        sendTransaction.start();
+      }
+      return {success: true, promise: sendTransaction.promise, sendTransaction};
+    } else {
+      return ret;
+    }
+  }
+
+  /**
+   * Destroy authority
+   *
+   * @param {String} tokenUid UID of the token to delegate the authority
+   * @param {String} type Type of the authority to delegate 'mint' or 'melt'
+   * @param {number} count How many authority outputs to destroy
+   * @param {Object} options Options parameters
+   *  {
+   *   'startMiningTx': boolean to trigger start mining (default true)
+   *  }
+   *
+   * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
+   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
+   **/
+  destroyAuthority(tokenUid, type, count, options = { startMiningTx: true }) {
+    storage.setStore(this.store);
+    let filterUtxos;
+    if (type === 'mint') {
+      filterUtxos = wallet.isMintOutput.bind(wallet);
+    } else if (type === 'melt') {
+      filterUtxos = wallet.isMeltOutput.bind(wallet);
+    } else {
+      throw new Error('This should never happen.')
+    }
+
+    const destroyInputs = this.selectAuthorityUtxo(tokenUid, filterUtxos, { many: true });
+
+    if (destroyInputs.length < count) {
+      return {success: false, message: `Don't have enough authority output available to destroy. Have ${destroyInputs.length} and requested ${count}.`}
+    }
+
+    const data = [];
+    for (const utxo of destroyInputs) {
+      const { tx_id, address, index } = utxo;
+      data.push({ tx_id, address, index, token: tokenUid });
+      // Even though count is expected as a number, I am using ==
+      // in case someone sends a string in the future
+      if (data.length >= count) {
+        break;
+      }
+    }
+
+    const ret = tokens.destroyAuthority(data, this.pinCode);
+
+    if (ret.success) {
+      const sendTransaction = ret.sendTransaction;
+      if (options.startMiningTx) {
+        sendTransaction.start();
+      }
+      return {success: true, promise: sendTransaction.promise, sendTransaction};
+    } else {
+      return ret;
+    }
+  }
+
+  /**
+   * Get all authorities utxos for specific token
+   *
+   * @param {String} tokenUid UID of the token to delegate the authority
+   * @param {String} type Type of the authority to delegate 'mint' or 'melt'
+   *
+   * @return {Array} Array of objects with {tx_id, index, address} of the authority output.
+   **/
+  getAuthorityUtxos(tokenUid, type) {
+    storage.setStore(this.store);
+    let filterUtxos;
+    if (type === 'mint') {
+      filterUtxos = wallet.isMintOutput.bind(wallet);
+    } else if (type === 'melt') {
+      filterUtxos = wallet.isMeltOutput.bind(wallet);
+    } else {
+      throw new Error('This should never happen.')
+    }
+
+    return this.selectAuthorityUtxo(tokenUid, filterUtxos, { many: true });
+  }
 
   getTokenData() {
     storage.setStore(this.store);
@@ -1093,12 +1398,18 @@ class HathorWallet extends EventEmitter {
    *
    * @return {Object} Object with each token and it's balance in this tx for this wallet
    **/
-  getTxBalance(tx) {
+  getTxBalance(tx, optionsParam = {}) {
+    const options = Object.assign({ includeAuthorities: false }, optionsParam)
     storage.setStore(this.store);
     const addresses = this.getAllAddresses();
     const balance = {};
     for (const txout of tx.outputs) {
       if (wallet.isAuthorityOutput(txout)) {
+        if (options.includeAuthorities) {
+          if (!balance[txout.token]) {
+            balance[txout.token] = 0;
+          }
+        }
         continue;
       }
       if (txout.decoded && txout.decoded.address
@@ -1112,6 +1423,11 @@ class HathorWallet extends EventEmitter {
 
     for (const txin of tx.inputs) {
       if (wallet.isAuthorityOutput(txin)) {
+        if (options.includeAuthorities) {
+          if (!balance[txin.token]) {
+            balance[txin.token] = 0;
+          }
+        }
         continue;
       }
       if (txin.decoded && txin.decoded.address
@@ -1124,6 +1440,33 @@ class HathorWallet extends EventEmitter {
     }
 
     return balance;
+  }
+
+  /**
+   * Return the addresses of the tx that belongs to this wallet
+   * The address might be in the input or output
+   * Removes duplicates
+   *
+   * @param {Object} tx Transaction data with array of inputs and outputs
+   *
+   * @return {Set} Set of strings with addresses
+   **/
+  getTxAddresses(tx) {
+    storage.setStore(this.store);
+    const addresses = new Set();
+    for (const txout of tx.outputs) {
+      if (txout.decoded && txout.decoded.address && this.isAddressMine(txout.decoded.address)) {
+        addresses.add(txout.decoded.address);
+      }
+    }
+
+    for (const txin of tx.inputs) {
+      if (txin.decoded && txin.decoded.address && this.isAddressMine(txin.decoded.address)) {
+        addresses.add(txin.decoded.address);
+      }
+    }
+
+    return addresses;
   }
 }
 
