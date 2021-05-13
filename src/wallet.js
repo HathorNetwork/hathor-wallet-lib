@@ -1655,6 +1655,12 @@ const wallet = {
 
   /*
    * Prepare data (inputs and outputs) to be used in the send tokens
+   * This method may change the inputs and outputs array in data parameter
+   * XXX This is not the best approach we could have, we should refactor
+   * this method as soon as possible in order to return a new object and
+   * stop modifying the old one. The only problem is that this method is used
+   * in many places and wallets (even might be used by some use cases),
+   * then we must be careful
    *
    * @param {Object} data Object with array of inputs and outputs
    * @param {Object} token Corresponding token
