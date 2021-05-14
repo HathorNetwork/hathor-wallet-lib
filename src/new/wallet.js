@@ -20,6 +20,7 @@ import SendTransaction from './sendTransaction';
 import { AddressError } from '../../lib/errors';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
+const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';
 
 /**
  * This is a Wallet that is supposed to be simple to be used by a third-party app.
@@ -61,15 +62,13 @@ class HathorWallet extends EventEmitter {
 
     tokenUid = HATHOR_TOKEN_CONFIG.uid,
 
-    password = '',
-    pinCode = '',
+    password = null,
+    pinCode = null,
 
     // debug mode
     debug = false,
     // Callback to be executed before reload data
     beforeReloadCallback = null,
-    // If should store pin/password in memory after starting the wallet
-    storeSensitiveData = false,
   } = {}) {
     super();
 
@@ -138,11 +137,6 @@ class HathorWallet extends EventEmitter {
 
     // Set to true when stop() method is called
     this.walletStopped = false;
-
-    // If we should store the PIN/password used to start the wallet or request it in every needed call
-    // For the headless wallet is important to store the PIN and it's safe because it's
-    // a controlled environmet but for normal wallets it's not safe, thus the default to be false
-    this.storeSensitiveData = storeSensitiveData;
   }
 
   /**
@@ -577,7 +571,7 @@ class HathorWallet extends EventEmitter {
    * @param {Object} options Options parameters
    *  {
    *   'changeAddress': address of the change output
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if HathorWallet object storeSensitiveData=false
+   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
    *  }
    *
    * @return {Object} In case of success, an object with {success: true, sendTransaction, promise}, where sendTransaction is a
@@ -606,7 +600,7 @@ class HathorWallet extends EventEmitter {
    * @param {Object} options Options parameters
    *  {
    *   'changeAddress': address of the change output
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if HathorWallet object storeSensitiveData=false
+   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
    *  }
    *
    * @return {Object} Object with {success: false, message} in case of an error, or {success: true, data}, otherwise
@@ -638,18 +632,17 @@ class HathorWallet extends EventEmitter {
    * @param {Object} options Options parameters
    *  {
    *   'changeAddress': address of the change output
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if HathorWallet object storeSensitiveData=false
+   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
    *  }
    *
    * @return {Object} Object with 'success' and completed 'data' in case of success, and 'message' in case of error
    **/
   completeTxData(partialData, token, optionsParams = {}) {
     const options = Object.assign({ changeAddress: null, pinCode: null }, optionsParams);
-    if (!this.storeSensitiveData && !options.pinCode) {
-      return {success: false, message: ERROR_MESSAGE_PIN_REQUIRED};
+    const pin = options.pinCode || this.pinCode;
+    if (!pin) {
+      return {success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED};
     }
-
-    const pin = this.storeSensitiveData ? this.pinCode : options.pinCode;
 
     const txToken = token || this.token;
     const walletData = wallet.getWalletData();
@@ -696,7 +689,7 @@ class HathorWallet extends EventEmitter {
    *  {
    *   'changeAddress': address of the change output
    *   'startMiningTx': boolean to trigger start mining (default true)
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if HathorWallet object storeSensitiveData=false
+   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
    *  }
    *
    * @return {Promise} Promise that resolves when transaction is sent
@@ -704,10 +697,10 @@ class HathorWallet extends EventEmitter {
   sendManyOutputsTransaction(outputs, inputs = [], token = null, options = {}) {
     storage.setStore(this.store);
     const newOptions = Object.assign({ changeAddress: null, startMiningTx: true, pinCode: null }, options);
-    if (!this.storeSensitiveData && !options.pinCode) {
-      return {success: false, message: ERROR_MESSAGE_PIN_REQUIRED};
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      return {success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED};
     }
-    const pin = this.storeSensitiveData ? this.pinCode : newOptions.pinCode;
     const txToken = token || this.token;
     const tokensData = {};
     const HTR_UID = HATHOR_TOKEN_CONFIG.uid;
@@ -850,8 +843,20 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Connect to the server and start emitting events.
+   *
+   * @param {Object} optionsParams Options parameters
+   *  {
+   *   'pinCode': pin to decrypt xpriv information. Required if not set in object.
+   *   'password': password to decrypt xpriv information. Required if not set in object.
+   *  }
    **/
-  start() {
+  start(optionsParams = {}) {
+    const options = Object.assign({ pinCode: null, password: null }, optionsParams);
+    const pinCode = options.pinCode || this.pinCode;
+    const password = options.password || this.password;
+    if (!pinCode) {
+      return Promise.reject({success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED});
+    }
     storage.setStore(this.store);
     storage.setItem('wallet:server', this.conn.currentServer);
 
@@ -860,9 +865,9 @@ class HathorWallet extends EventEmitter {
 
     let ret;
     if (this.seed) {
-      ret = wallet.executeGenerateWallet(this.seed, this.passphrase, this.pinCode, this.password, false);
+      ret = wallet.executeGenerateWallet(this.seed, this.passphrase, pinCode, password, false);
     } else if (this.xpriv) {
-      ret = wallet.executeGenerateWalletFromXPriv(this.xpriv, this.pinCode, false);
+      ret = wallet.executeGenerateWalletFromXPriv(this.xpriv, pinCode, false);
     } else {
       throw "This should never happen";
     }
@@ -881,10 +886,6 @@ class HathorWallet extends EventEmitter {
         if (info.network.indexOf(this.conn.network) >= 0) {
           this.serverInfo = info;
           this.conn.start();
-          if (!this.storeSensitiveData) {
-            this.pinCode = null;
-            this.password = null;
-          }
           resolve(info);
         } else {
           this.setState(HathorWallet.CLOSED);
@@ -930,7 +931,7 @@ class HathorWallet extends EventEmitter {
    *  {
    *   'changeAddress': address of the change output,
    *   'startMiningTx': boolean to trigger start mining (default true)
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if HathorWallet object storeSensitiveData=false
+   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
    *  }
    *
    * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
@@ -939,10 +940,10 @@ class HathorWallet extends EventEmitter {
   createNewToken(name, symbol, amount, address, options = {}) {
     storage.setStore(this.store);
     const newOptions = Object.assign({ changeAddress: null, startMiningTx: true, pinCode: null }, options);
-    if (!this.storeSensitiveData && !newOptions.pinCode) {
-      return {success: false, message: ERROR_MESSAGE_PIN_REQUIRED};
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      return {success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED};
     }
-    const pin = this.storeSensitiveData ? this.pinCode : newOptions.pinCode;
     const mintAddress = address || this.getCurrentAddress();
     const ret = tokens.createToken(mintAddress, name, symbol, amount, pin, newOptions);
 
@@ -1073,7 +1074,7 @@ class HathorWallet extends EventEmitter {
    *   'changeAddress': address of the change output
    *   'startMiningTx': boolean to trigger start mining (default true)
    *   'createAnotherMint': boolean to create another mint authority or not for the wallet
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if HathorWallet object storeSensitiveData=false
+   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
    *  }
    *
    * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
@@ -1087,10 +1088,11 @@ class HathorWallet extends EventEmitter {
       startMiningTx: true,
       pinCode: null,
     }, options);
-    if (!this.storeSensitiveData && !newOptions.pinCode) {
-      return {success: false, message: ERROR_MESSAGE_PIN_REQUIRED};
+
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      return {success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED};
     }
-    const pin = this.storeSensitiveData ? this.pinCode : newOptions.pinCode;
 
     const mintAddress = address || this.getCurrentAddress();
     const mintInput = this.selectAuthorityUtxo(tokenUid, wallet.isMintOutput.bind(wallet));
@@ -1123,7 +1125,7 @@ class HathorWallet extends EventEmitter {
    *   'changeAddress': address of the change output
    *   'createAnotherMelt': boolean to create another melt authority or not for the wallet
    *   'startMiningTx': boolean to trigger start mining (default true)
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if HathorWallet object storeSensitiveData=false
+   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
    *  }
    *
    * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
@@ -1138,10 +1140,12 @@ class HathorWallet extends EventEmitter {
       startMiningTx: true,
       pinCode: null,
     }, options);
-    if (!this.storeSensitiveData && !newOptions.pinCode) {
-      return {success: false, message: ERROR_MESSAGE_PIN_REQUIRED};
+
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      return {success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED};
     }
-    const pin = this.storeSensitiveData ? this.pinCode : newOptions.pinCode;
+
     const meltInput = this.selectAuthorityUtxo(tokenUid, wallet.isMeltOutput.bind(wallet));
 
     if (meltInput.length === 0) {
@@ -1171,7 +1175,7 @@ class HathorWallet extends EventEmitter {
    *  {
    *   'createAnother': if should create another authority for the wallet. Default to true
    *   'startMiningTx': boolean to trigger start mining (default true)
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if HathorWallet object storeSensitiveData=false
+   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
    *  }
    *
    * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
@@ -1180,10 +1184,10 @@ class HathorWallet extends EventEmitter {
   delegateAuthority(tokenUid, type, destinationAddress, options = {}) {
     storage.setStore(this.store);
     const newOptions = Object.assign({ createAnother: true, startMiningTx: true, pinCode: null }, options);
-    if (!this.storeSensitiveData && !newOptions.pinCode) {
-      return {success: false, message: ERROR_MESSAGE_PIN_REQUIRED};
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      return {success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED};
     }
-    const pin = this.storeSensitiveData ? this.pinCode : newOptions.pinCode;
     const { createAnother, startMiningTx } = newOptions;
     let filterUtxos;
     if (type === 'mint') {
@@ -1224,7 +1228,7 @@ class HathorWallet extends EventEmitter {
    * @param {Object} options Options parameters
    *  {
    *   'startMiningTx': boolean to trigger start mining (default true)
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if HathorWallet object storeSensitiveData=false
+   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
    *  }
    *
    * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
@@ -1233,10 +1237,10 @@ class HathorWallet extends EventEmitter {
   destroyAuthority(tokenUid, type, count, options = {}) {
     storage.setStore(this.store);
     const newOptions = Object.assign({ startMiningTx: true, pinCode: null }, options);
-    if (!this.storeSensitiveData && !newOptions.pinCode) {
-      return {success: false, message: ERROR_MESSAGE_PIN_REQUIRED};
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      return {success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED};
     }
-    const pin = this.storeSensitiveData ? this.pinCode : newOptions.pinCode;
     let filterUtxos;
     if (type === 'mint') {
       filterUtxos = wallet.isMintOutput.bind(wallet);
