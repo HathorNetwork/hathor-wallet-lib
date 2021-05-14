@@ -857,6 +857,10 @@ class HathorWallet extends EventEmitter {
     if (!pinCode) {
       return Promise.reject({success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED});
     }
+
+    if (this.seed && !password) {
+      return Promise.reject({success: false, message: 'Password is required.', error: 'PASSWORD_REQUIRED'});
+    }
     storage.setStore(this.store);
     storage.setItem('wallet:server', this.conn.currentServer);
 
