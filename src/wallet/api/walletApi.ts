@@ -16,22 +16,22 @@ import Input from '../../models/input';
  */
 
 const walletApi = {
-  getWalletStatus(id: string) {
+  getWalletStatus(id: string): Promise<any> {
     const data = { params: { id } }
     return axiosInstance().get('wallet', data);
   },
 
-  createWallet(xpubkey: string) {
+  createWallet(xpubkey: string): Promise<any> {
     const data = { xpubkey };
     return axiosInstance().post('wallet', data);
   },
 
-  getAddresses(id: string) {
+  getAddresses(id: string): Promise<any> {
     const data = { params: { id } }
     return axiosInstance().get('addresses', data);
   },
 
-  getBalances(id: string, token: string | null = null) {
+  getBalances(id: string, token: string | null = null): Promise<any> {
     const data = { params: { id } }
     if (token) {
       data['params']['token_id'] = token;
@@ -39,7 +39,7 @@ const walletApi = {
     return axiosInstance().get('balances', data);
   },
 
-  getHistory(id: string, token: string | null = null) {
+  getHistory(id: string, token: string | null = null): Promise<any> {
     // TODO add pagination parameters
     const data = { params: { id } }
     if (token) {
@@ -48,12 +48,12 @@ const walletApi = {
     return axiosInstance().get('txhistory', data);
   },
 
-  createTxProposal(id: string, outputs: Output[], inputs: Input[]) {
+  createTxProposal(id: string, outputs: Output[], inputs: Input[]): Promise<any> {
     const data = { id, outputs, inputs };
     return axiosInstance().post('txproposals', data);
   },
 
-  updateTxProposal(id: string, timestamp: number, nonce: number, weight: number, parents: string[], inputsData: string[]) {
+  updateTxProposal(id: string, timestamp: number, nonce: number, weight: number, parents: string[], inputsData: string[]): Promise<any> {
     const data = { timestamp, nonce, weight, parents, inputsSignatures: inputsData };
     return axiosInstance().put(`txproposals/${id}`, data);
   },

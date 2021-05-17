@@ -188,15 +188,32 @@ const wallet = {
    */
   getXPubKeyFromSeed(seed: string, options: { passphrase?: string, networkName?: string, accountDerivationIndex?: string } = {}): string {
     const methodOptions = Object.assign({passphrase: '', networkName: 'mainnet', accountDerivationIndex: '0\''}, options);
-    const { passphrase, networkName, accountDerivationIndex } = methodOptions;
+    const { accountDerivationIndex } = methodOptions;
 
-    const network = new Network(networkName);
-    const code = new Mnemonic(seed);
-    const xpriv = code.toHDPrivateKey(passphrase, network.bitcoreNetwork);
+    const xpriv = this.getXPrivKeyFromSeed(seed, methodOptions);
     // We have a fixed derivation until the coin index
     // after that we can receive a different account index, which the default is 0'
     const privkey = xpriv.derive(`m/44'/${HATHOR_BIP44_CODE}'/${accountDerivationIndex}`);
     return privkey.xpubkey;
+  },
+
+  /**
+   * Get root xpriv from seed
+   *
+   * @param {String} seed 24 words
+   * @param {Object} options Options with passphrase, networkName
+   *
+   * @return {HDPrivateKey} Root HDPrivateKey
+   * @memberof Wallet
+   * @inner
+   */
+  getXPrivKeyFromSeed(seed: string, options: { passphrase?: string, networkName?: string} = {}): HDPrivateKey {
+    const methodOptions = Object.assign({passphrase: '', networkName: 'mainnet'}, options);
+    const { passphrase, networkName } = methodOptions;
+
+    const network = new Network(networkName);
+    const code = new Mnemonic(seed);
+    return code.toHDPrivateKey(passphrase, network.bitcoreNetwork);
   },
 
   /**

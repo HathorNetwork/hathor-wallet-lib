@@ -137,6 +137,44 @@ const wallet = {
   },
 
   /**
+   * Start a new HD wallet from an xpriv.
+   * Encrypt this private key and save data in storage
+   *
+   * @param {string} xpriv Extended private-key to start wallet
+   * @param {string} pin
+   * @param {boolean} loadHistory if should load the history from the generated addresses
+   *
+   * @return {Promise} Promise that resolves when finishes loading address history, in case loadHistory = true, else returns null
+   * @memberof Wallet
+   * @inner
+   */
+  executeGenerateWalletFromXPriv(xprivkey, pin, loadHistory) {
+    const xpriv = HDPrivateKey(xprivkey);
+    let initialAccessData;
+    let privkey;
+    if (xpriv.depth === 0) {
+      privkey = xpriv.derive(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
+      initialAccessData = {};
+    } else {
+      // Already derived
+      privkey = xpriv;
+      initialAccessData = this.getWalletAccessData() || {};
+    }
+
+    const encryptedData = this.encryptData(privkey.xprivkey, pin)
+
+    // Save in storage the encrypted private key and the hash of the pin and password
+    const access = Object.assign(initialAccessData, {
+      mainKey: encryptedData.encrypted.toString(),
+      hash: encryptedData.hash.key.toString(),
+      salt: encryptedData.hash.salt,
+      xpubkey: privkey.xpubkey,
+    });
+
+    return this.startWallet(access, loadHistory);
+  },
+
+  /**
    * Start a new HD wallet with new private key
    * Encrypt this private key and save data in storage
    *
@@ -1163,8 +1201,10 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  cleanLoadedData() {
-    storage.removeItem('wallet:accessData');
+  cleanLoadedData({ cleanAccessData = true } = {}) {
+    if (cleanAccessData) {
+      storage.removeItem('wallet:accessData');
+    }
     storage.removeItem('wallet:data');
     storage.removeItem('wallet:address');
     storage.removeItem('wallet:lastSharedIndex');
@@ -1615,6 +1655,12 @@ const wallet = {
 
   /*
    * Prepare data (inputs and outputs) to be used in the send tokens
+   * This method may change the inputs and outputs array in data parameter
+   * XXX This is not the best approach we could have, we should refactor
+   * this method as soon as possible in order to return a new object and
+   * stop modifying the old one. The only problem is that this method is used
+   * in many places and wallets (even might be used by some use cases),
+   * then we must be careful
    *
    * @param {Object} data Object with array of inputs and outputs
    * @param {Object} token Corresponding token
@@ -2375,11 +2421,23 @@ const wallet = {
    * @return {String} Wallet xpubkey
    */
   getXPubKeyFromXPrivKey(pin) {
+    const privateKeyStr = this.getXprivKey(pin);
+    const privateKey = HDPrivateKey(privateKeyStr)
+    return privateKey.xpubkey;
+  },
+
+  /**
+   * Get xprivkey from storage
+   *
+   * @param {String} pin User PIN used to encrypt xpriv on storage
+   *
+   * @return {String} Wallet xprivkey
+   */
+  getXprivKey(pin) {
     const accessData = this.getWalletAccessData();
     const encryptedXPriv = accessData.mainKey;
     const privateKeyStr = wallet.decryptData(encryptedXPriv, pin);
-    const privateKey = HDPrivateKey(privateKeyStr)
-    return privateKey.xpubkey;
+    return privateKeyStr;
   },
 
   /**

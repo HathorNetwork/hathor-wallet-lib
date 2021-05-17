@@ -5,6 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+// THIS FILE WAS COPIED AND ADAPTED FROM ./wallet_utils.test.js.
+// WE NEED TO REFACTOR TO RUN THE SAME TESTS FOR MULTIPLE TYPES OF WALLET INITIALIZATION.
+// [msbrogli April 16, 2021]
+
 import wallet from '../src/wallet';
 import helpers from '../src/helpers';
 import dateFormatter from '../src/date';
@@ -13,6 +17,8 @@ import { WalletTypeError } from '../src/errors';
 import storage from '../src/storage';
 import WebSocketHandler from '../src/WebSocketHandler';
 
+
+const XPRIV_STR = 'xprv9s21ZrQH143K4AogY8b3CTzko6B8WGz8GrvbF5AxaLY8Wm5BMzJkWweCVrrEZXEydpkGoCPRYG7aYBnUZRt5aGcHGzsHQEBfPJ2YLx3zppH';
 
 beforeEach(() => {
   wallet.setConnection(WebSocketHandler);
@@ -59,58 +65,28 @@ mock.onGet('thin_wallet/address_history').reply((config) => {
 
 test('Loaded', () => {
   expect(wallet.loaded()).toBeFalsy();
-  const words = wallet.generateWalletWords(256);
-  wallet.executeGenerateWallet(words, '', '123456', 'password', false);
+  wallet.executeGenerateWalletFromXPriv(XPRIV_STR, '123456', false);
   expect(wallet.loaded()).toBeTruthy();
 });
 
 test('Clean local storage', () => {
-  const setMockData = () => {
-    wallet.setWalletAccessData({});
-    wallet.setWalletData({});
-    storage.setItem('wallet:address', '171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r');
-    storage.setItem('wallet:lastSharedIndex', 1);
-    storage.setItem('wallet:lastGeneratedIndex', 19);
-    storage.setItem('wallet:lastUsedIndex', 0);
-    storage.setItem('wallet:lastUsedAddress', '1knH3y5dZuC8DQBaLhgJP33fGBr6vstr8');
-  }
-
-  setMockData();
-
-  expect(wallet.getWalletAccessData()).not.toBeNull();
-  expect(wallet.getWalletData()).not.toBeNull();
-  expect(storage.getItem('wallet:address')).not.toBeNull();
-  expect(storage.getItem('wallet:lastSharedIndex')).not.toBeNull();
-  expect(storage.getItem('wallet:lastGeneratedIndex')).not.toBeNull();
-  expect(storage.getItem('wallet:lastUsedIndex')).not.toBeNull();
-  expect(storage.getItem('wallet:lastUsedAddress')).not.toBeNull();
+  wallet.setWalletAccessData({});
+  wallet.setWalletData({});
+  storage.setItem('wallet:address', '171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r');
+  storage.setItem('wallet:lastSharedIndex', 1);
+  storage.setItem('wallet:lastGeneratedIndex', 19);
+  storage.setItem('wallet:lastUsedIndex', 0);
+  storage.setItem('wallet:lastUsedAddress', '1knH3y5dZuC8DQBaLhgJP33fGBr6vstr8');
 
   wallet.cleanLoadedData();
 
-  const testStorageCleaned = (cleanAccessData) => {
-    if (cleanAccessData) {
-      expect(wallet.getWalletAccessData()).toBeNull();
-    } else {
-      expect(wallet.getWalletAccessData()).not.toBeNull();
-    }
-    expect(wallet.getWalletData()).toBeNull();
-    expect(storage.getItem('wallet:address')).toBeNull();
-    expect(storage.getItem('wallet:lastSharedIndex')).toBeNull();
-    expect(storage.getItem('wallet:lastGeneratedIndex')).toBeNull();
-    expect(storage.getItem('wallet:lastUsedIndex')).toBeNull();
-    expect(storage.getItem('wallet:lastUsedAddress')).toBeNull();
-  }
-
-  testStorageCleaned(true);
-
-  setMockData();
-  wallet.cleanLoadedData({ cleanAccessData: true });
-  testStorageCleaned(true);
-
-
-  setMockData();
-  wallet.cleanLoadedData({ cleanAccessData: false });
-  testStorageCleaned(false);
+  expect(wallet.getWalletAccessData()).toBeNull();
+  expect(wallet.getWalletData()).toBeNull();
+  expect(storage.getItem('wallet:address')).toBeNull();
+  expect(storage.getItem('wallet:lastSharedIndex')).toBeNull();
+  expect(storage.getItem('wallet:lastGeneratedIndex')).toBeNull();
+  expect(storage.getItem('wallet:lastUsedIndex')).toBeNull();
+  expect(storage.getItem('wallet:lastUsedAddress')).toBeNull();
 });
 
 test('Save address history to storage', () => {
@@ -204,8 +180,7 @@ test('Can use unspent txs', () => {
 });
 
 test('Output change', async () => {
-  const words = wallet.generateWalletWords(256);
-  await wallet.executeGenerateWallet(words, '', '123456', 'password', true);
+  await wallet.executeGenerateWalletFromXPriv(XPRIV_STR, '123456', true);
   let lastSharedIndex = storage.getItem('wallet:lastSharedIndex');
   let address = storage.getItem('wallet:address');
   let change = wallet.getOutputChange(1000, '00');
@@ -220,78 +195,8 @@ test('Output change', async () => {
   expect(parseInt(storage.getItem('wallet:lastSharedIndex'), 10)).toBe(parseInt(storage.getItem('wallet:lastGeneratedIndex'), 10));
 });
 
-test('Unspent txs exist', () => {
-  const historyTransactionts = {
-    '1': {
-      'tx_id': '1',
-      'outputs': [
-        {
-          'decoded': {
-            'address': '171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r',
-          },
-          'value': 2000,
-          'token': '00',
-          'spent_by': null
-        },
-        {
-          'decoded': {
-            'address': '171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r',
-          },
-          'value': 2000,
-          'token': '00',
-          'spent_by': null
-        },
-      ],
-      'inputs': [],
-    },
-  }
-
-  storage.setItem('wallet:data', {'keys': {'171hK8MaRpG2SqQMMQ34EdTharUmP1Qk4r': {}}});
-
-  expect(wallet.checkUnspentTxExists(historyTransactionts, '0', '0', '00').exists).toBe(false);
-  expect(wallet.checkUnspentTxExists(historyTransactionts, '0', '0', '01').exists).toBe(false);
-  expect(wallet.checkUnspentTxExists(historyTransactionts, '1', '0', '00').exists).toBe(true);
-  expect(wallet.checkUnspentTxExists(historyTransactionts, '1', '1', '00').exists).toBe(true);
-  expect(wallet.checkUnspentTxExists(historyTransactionts, '0', '1', '00').exists).toBe(false);
-});
-
-test('Wallet locked', () => {
-  expect(wallet.isLocked()).toBe(false);
-  wallet.lock();
-  expect(wallet.isLocked()).toBe(true);
-  wallet.unlock();
-  expect(wallet.isLocked()).toBe(false);
-});
-
-test('Wallet backup', () => {
-  expect(wallet.isBackupDone()).toBe(false);
-  wallet.markBackupAsDone();
-  expect(wallet.isBackupDone()).toBe(true);
-  wallet.markBackupAsNotDone();
-  expect(wallet.isBackupDone()).toBe(false);
-});
-
-test('Get wallet words', async () => {
-  const words = wallet.generateWalletWords(256);
-  await wallet.executeGenerateWallet(words, '', '123456', 'password', true);
-  expect(parseInt(storage.getItem('wallet:lastSharedIndex'), 10)).toBe(0)
-
-  const sharedAddress = storage.getItem('wallet:address');
-  const key = storage.getItem('wallet:data').keys[sharedAddress];
-  expect(wallet.getWalletWords('password')).toBe(words);
-
-  wallet.addPassphrase('passphrase', '123456', 'password');
-  expect(wallet.getWalletWords('password')).toBe(words);
-  expect(parseInt(storage.getItem('wallet:lastSharedIndex'), 10)).toBe(0)
-
-  const newSharedAddress = storage.getItem('wallet:address');
-  expect(sharedAddress).not.toBe(newSharedAddress);
-  expect(key.index).toBe(storage.getItem('wallet:data').keys[newSharedAddress].index);
-});
-
 test('Reload data', async () => {
-  const words = wallet.generateWalletWords(256);
-  await wallet.executeGenerateWallet(words, '', '123456', 'password', true);
+  await wallet.executeGenerateWalletFromXPriv(XPRIV_STR, '123456', true);
   const accessData = wallet.getWalletAccessData();
   const keys = wallet.getWalletData().keys;
   wallet.reloadData();
@@ -305,8 +210,7 @@ test('Started', () => {
 });
 
 test('Reset all data', async () => {
-  const words = wallet.generateWalletWords(256);
-  await wallet.executeGenerateWallet(words, '', '123456', 'password', true);
+  await wallet.executeGenerateWalletFromXPriv(XPRIV_STR, '123456', true);
   wallet.markWalletAsStarted();
   const server = 'http://server';
   const defaultServer = 'http://defaultServer';
@@ -401,8 +305,7 @@ test('get public key from index', () => {
 
 test('Load gap limit', async () => {
   expect(wallet.getGapLimit()).toBe(GAP_LIMIT);
-  const words = 'ask staff rival gesture inject wealth theory receive assault purpose luxury exile swim neglect recipe tree opinion salmon ladder express sheriff circle metal game';
-  await wallet.executeGenerateWallet(words, '', '123456', 'password', true);
+  await wallet.executeGenerateWalletFromXPriv(XPRIV_STR, '123456', true);
   const walletData = wallet.getWalletData();
   const addresses = walletData.keys;
   expect(Object.keys(addresses).length).toBe(GAP_LIMIT + 1);
@@ -414,8 +317,7 @@ test('Load different gap limit with history', async () => {
   expect(wallet.getGapLimit()).toBe(GAP_LIMIT);
   wallet.setGapLimit(GAP_LIMIT * 2);
   expect(wallet.getGapLimit()).toBe(GAP_LIMIT * 2);
-  const words = 'ask staff rival gesture inject wealth theory receive assault purpose luxury exile swim neglect recipe tree opinion salmon ladder express sheriff circle metal game';
-  await wallet.executeGenerateWallet(words, '', '123456', 'password', true);
+  await wallet.executeGenerateWalletFromXPriv('xprv9s21ZrQH143K3cYDbQyJx3Qnd7jSecNQcEvgtXiWD4E7P37Q8pR3rJHrx6WHnkJTpdvck8ZxNS1WgJfhCJhgmQCsYiBcoVEe8YXNBZQ8Yzm', '123456', true);
   const walletData = wallet.getWalletData()
   const addresses = walletData.keys;
 
@@ -436,8 +338,7 @@ test('Load different gap limit', async () => {
   expect(wallet.getGapLimit()).toBe(GAP_LIMIT);
   wallet.setGapLimit(GAP_LIMIT * 2);
   expect(wallet.getGapLimit()).toBe(GAP_LIMIT * 2);
-  const words = wallet.generateWalletWords(256);
-  await wallet.executeGenerateWallet(words, '', '123456', 'password', true);
+  await wallet.executeGenerateWalletFromXPriv(XPRIV_STR, '123456', true);
   const addresses = wallet.getWalletData().keys;
   expect(Object.keys(addresses).length).toBe(GAP_LIMIT * 2 + 1);
 });
