@@ -253,7 +253,7 @@ class HathorWallet extends EventEmitter {
     if (markAsUsed) {
       return wallet.getAddressToUse(this.conn);
     }
-    return wallet.getCurrentAddress();
+    return {address: wallet.getCurrentAddress()};
   }
 
   /**
@@ -262,7 +262,7 @@ class HathorWallet extends EventEmitter {
   getNextAddress() {
     // First we mark the current address as used, then return the next
     this.getCurrentAddress({ markAsUsed: true });
-    return this.getCurrentAddress();
+    return {address: this.getCurrentAddress()};
   }
 
   /**
@@ -920,15 +920,24 @@ class HathorWallet extends EventEmitter {
     const sendTransaction = new SendTransaction({data});
     if (startMiningTx) {
       sendTransaction.start();
+      const promise = new Promise((resolve, reject) => {
+        sendTransaction.promise.then((tx) => {
+          resolve(tx);
+        }, (err) => {
+          reject(err);
+        });
+      });
+      return promise;
+    } else {
+      const ret = {success: true, promise: sendTransaction.promise, sendTransaction};
+      if (this.debug) {
+        ret.debug = {
+          balanceHTR: this.getBalance(),
+          data: data,
+        };
+      }
+      return ret;
     }
-    const ret = {success: true, promise: sendTransaction.promise, sendTransaction};
-    if (this.debug) {
-      ret.debug = {
-        balanceHTR: this.getBalance(),
-        data: data,
-      };
-    }
-    return ret;
   }
 
   /**

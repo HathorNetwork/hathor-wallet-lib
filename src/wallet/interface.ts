@@ -5,17 +5,19 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { getBalanceObject, getAddressesObject, getHistoryObject } from './types';
+import { AddressInfoObject, GetBalanceObject, GetAddressesObject, GetHistoryObject, TxProposalUpdateResponseData, SendManyTxOptionsParam, SendTxOptionsParam } from './types';
 
 interface HathorWalletInterface {
   start(): Promise<void | Object>; // The old facade resolves the promise with some server info
   stop(): void;
-  getAllAddresses(): Promise<getAddressesObject []>;
-  getBalance(token: string | null): Promise<getBalanceObject []>;
-  getTxHistory(options: { token?: string }): Promise<getHistoryObject []>;
-  //sendManyOutputsTransaction(outputs, options: { inputs?: <Object []>, changeAddress?: string }): Promise<null>;
-  //sendTransaction(address, value, options: { token?: string, changeAddress?: string }): Promise<null>;
+  getAllAddresses(): Promise<GetAddressesObject []>;
+  getBalance(token: string | null): Promise<GetBalanceObject []>;
+  getTxHistory(options: { token?: string }): Promise<GetHistoryObject []>;
+  sendManyOutputsTransaction(outputs, options: SendManyTxOptionsParam): Promise<TxProposalUpdateResponseData>;
+  sendTransaction(address, value, options: SendTxOptionsParam): Promise<TxProposalUpdateResponseData>;
   getAddressAtIndex(index: number): string;
+  getCurrentAddress(): AddressInfoObject;
+  getNextAddress(): AddressInfoObject;
 }
 
 export default HathorWalletInterface;
