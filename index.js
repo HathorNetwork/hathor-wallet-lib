@@ -15,6 +15,7 @@ const axios = require('./lib/api/axiosInstance');
 const storage = require('./lib/storage');
 const network = require('./lib/network');
 const MemoryStore = require('./lib/memory_store');
+const Message = require('./lib/message');
 const HathorWallet = require('./lib/new/wallet');
 const Connection = require('./lib/new/connection');
 const SendTransaction = require('./lib/new/sendTransaction');
@@ -46,6 +47,7 @@ module.exports = {
   axios: axios,
   storage: storage.default,
   MemoryStore: MemoryStore.default,
+  Message: Message,
   network: network.default,
   HathorWallet: HathorWallet.default,
   Connection: Connection.default,
