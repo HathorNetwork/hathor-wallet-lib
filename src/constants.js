@@ -222,3 +222,8 @@ export const TX_MINING_TESTNET_URL = 'https://txmining.testnet.hathor.network/';
  * Timeout in milliseconds to call the method to set all selected outputs of a tx as 'selected': false
  */
 export const SELECT_OUTPUTS_TIMEOUT = 1000 * 60;
+
+/**
+ * Wallet service URL
+ */
+export const WALLET_SERVICE_BASE_URL  = 'https://wallet-service.testnet.hathor.network/';

@@ -6,13 +6,19 @@
  */
 
 import EventEmitter from 'events';
-import { MIN_POLLING_INTERVAL, SELECT_OUTPUTS_TIMEOUT } from '../constants';
+import { CREATE_TOKEN_TX_VERSION, MIN_POLLING_INTERVAL, SELECT_OUTPUTS_TIMEOUT } from '../constants';
 import transaction from '../transaction';
 import txApi from '../api/txApi';
 import txMiningApi from '../api/txMining';
 import { AddressError, OutputValueError, ConstantNotSet, MaximumNumberOutputsError, MaximumNumberInputsError } from '../errors';
 import wallet from '../wallet';
 import storage from '../storage';
+import Input from '../models/input';
+import Output from '../models/output';
+import Transaction from '../models/transaction';
+import CreateTokenTransaction from '../models/create_token_transaction';
+import Address from '../models/address';
+import MineTransaction from '../wallet/mineTransaction';
 
 /**
  * This is transaction mining class responsible for:
@@ -41,27 +47,86 @@ class SendTransaction extends EventEmitter {
     super();
 
     this.data = data;
-    // Job estimation
-    this.estimation = null;
-    // Job ID
-    this.jobID = null;
 
-    // Counter of number of attempts to mine the transaction.
-    this.countTxMiningAttempts = 0;
-    // Maximum number of retries if mining timeouts.
-    this.maxTxMiningRetries = maxTxMiningRetries;
+    const inputs = [];
+    for (const input of data.inputs) {
+      const inputObj = new Input(
+        input.tx_id,
+        input.index,
+        {
+          data: input.data
+        }
+      );
+      inputs.push(inputObj);
+    }
 
-    // Error to be shown in case of no miners connected
-    this.noMinersError = 'There are no miners to resolve the proof of work of this transaction.';
+    const outputs = [];
+    for (const output of data.outputs) {
+      const outputObj = new Output(
+        output.value,
+        new Address(output.address),
+        {
+          tokenData: output.tokenData,
+          timelock: output.timelock
+        }
+      );
+      outputs.push(outputObj);
+    }
 
-    // Error to be shown in case of an unexpected error
-    this.unexpectedError = 'An unexpected error happened. Please try to send your transaction again.';
+    const options = {
+      version: data.version,
+      weight: data.weight,
+      timestamp: data.timestamp,
+      tokens: data.tokens
+    }
 
-    // Error to be shown in case of an unexpected error when executing push tx
-    this.unexpectedPushTxError = 'An unexpected error happened. Check if the transaction has been sent looking into the history and try again if it hasn\'t.';
+    let transaction = null;
+    if (data.version === CREATE_TOKEN_TX_VERSION) {
+      transaction = new CreateTokenTransaction(
+        data.name,
+        data.symbol,
+        inputs,
+        outputs,
+        options
+      );
+    } else {
+      transaction = new Transaction(
+        inputs,
+        outputs,
+        options
+      );
+    }
 
-    // Error to be shown in case of a timeout
-    this.timeoutError = 'Timeout solving transaction\'s proof-of-work.\n\nAll transactions need to solve a proof-of-work as an anti spam mechanism. Currently, Hathor Labs provides this service for free, but their servers may be fully loaded right now.';
+    this.mineTransaction = new MineTransaction(transaction, { maxTxMiningRetries });
+
+    this.mineTransaction.on('estimation-updated', (data) => {
+      this.emit('estimation-updated', data);
+    })
+
+    this.mineTransaction.on('job-submitted', (data) => {
+      this.emit('job-submitted', data);
+    })
+
+    this.mineTransaction.on('job-done', (data) => {
+      this.emit('job-done', data);
+    })
+
+    this.mineTransaction.on('error', (message) => {
+      this.updateOutputSelected(false);
+      this.emit('send-error', message);
+    })
+
+    this.mineTransaction.on('unexpected-error', (message) => {
+      this.updateOutputSelected(false);
+      this.emit('unexpected-error', message);
+    })
+
+    this.mineTransaction.on('success', (data) => {
+      this.data.nonce = data.nonce;
+      this.data.parents = data.parents;
+      this.data.timestamp = data.timestamp;
+      this.handlePushTx();
+    })
 
     // Promise that resolves when push tx finishes with success
     // or rejects in case of an error
@@ -79,76 +144,11 @@ class SendTransaction extends EventEmitter {
       });
     });
 
+    // Error to be shown in case of an unexpected error when executing push tx
+    this.unexpectedPushTxError = 'An unexpected error happened. Check if the transaction has been sent looking into the history and try again if it hasn\'t.';
+
     // Stores the setTimeout object to set selected outputs as false
     this._unmark_as_selected_timer = null;
-  }
-
-  /**
-   * Submit job to be mined, update object variables of jobID and estimation, and start method to get job status
-   * Emits 'job-submitted' after submit.
-   */
-  submitJob() {
-    // Get tx hex without parents and nonce
-    const txHex = transaction.getTxHexFromData(this.data);
-    this.countTxMiningAttempts++;
-    // Send to be mined in tx mining API
-    txMiningApi.submitJob(txHex, false, true, null, (response) => {
-      if (response.expected_total_time === -1) {
-        // Error: there are no miners online
-        this.emit('send-error', this.noMinersError);
-      } else {
-        this.estimation = response.expected_total_time;
-        this.jobID = response.job_id;
-        this.emit('job-submitted', {estimation: this.estimation, jobID: this.jobID});
-        this.handleJobStatus();
-      }
-    }).catch((e) => {
-      this.updateOutputSelected(false);
-      this.emit('unexpected-error', this.unexpectedError);
-    });
-  }
-
-  /**
-   * Schedule job status request
-   * If the job is done, emits 'job-done' event, complete and send the tx
-   * Otherwise, schedule again the job status request and emits 'estimation-updated' event.
-   */
-  handleJobStatus() {
-    // this.estimation and MIN_POLLING_INTERVAL are in seconds
-    const poll_time = Math.max(this.estimation / 2, MIN_POLLING_INTERVAL)*1000;
-
-    setTimeout(() => {
-      txMiningApi.getJobStatus(this.jobID, (response) => {
-        if (response.status === 'done') {
-          this.data.nonce = parseInt(response.tx.nonce, 16);
-          this.data.parents = response.tx.parents;
-          this.data.timestamp = response.tx.timestamp;
-          this.emit('job-done', {jobID: this.jobID});
-          this.handlePushTx();
-        } else if (response.status === 'timeout') {
-          // Error: Timeout resolving pow
-          if (this.countTxMiningAttempts < this.maxTxMiningRetries) {
-            this.submitJob()
-          } else {
-            this.updateOutputSelected(false);
-            this.emit('send-error', this.timeoutError);
-          }
-        } else {
-          if (response.expected_total_time === -1) {
-            // Error: there are no miners online
-            this.updateOutputSelected(false);
-            this.emit('send-error', this.noMinersError);
-          } else {
-            this.estimation = response.expected_total_time;
-            this.emit('estimation-updated', {jobID: this.jobID, estimation: response.expected_total_time});
-            this.handleJobStatus();
-          }
-        }
-      }).catch((e) => {
-        this.updateOutputSelected(false);
-        this.emit('unexpected-error', this.unexpectedError);
-      });
-    }, poll_time);
   }
 
   /**
@@ -180,7 +180,7 @@ class SendTransaction extends EventEmitter {
    */
   start() {
     this.updateOutputSelected(true);
-    this.submitJob();
+    this.mineTransaction.start();
   }
 
   /**

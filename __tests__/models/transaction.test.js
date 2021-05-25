@@ -6,6 +6,7 @@
  */
 
 import Transaction from '../../src/models/transaction';
+import CreateTokenTransaction from '../../src/models/create_token_transaction';
 import Output from '../../src/models/output';
 import Input from '../../src/models/input';
 import Address from '../../src/models/address';
@@ -45,9 +46,7 @@ test('New tx', () => {
 })
 
 test('Token tx', () => {
-  const tx = new Transaction([], []);
-  tx.name = 'Test';
-  tx.symbol = 'TST';
+  const tx = new CreateTokenTransaction('Test', 'TST', [], []);
   const info = tx.serializeTokenInfo();
   expect(info.length).toBe(5);
   expect(info[2].toString('hex')).toBe('54657374');
