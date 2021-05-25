@@ -15,7 +15,6 @@ const axios = require('./lib/api/axiosInstance');
 const storage = require('./lib/storage');
 const network = require('./lib/network');
 const MemoryStore = require('./lib/memory_store');
-const Message = require('./lib/message');
 const HathorWallet = require('./lib/new/wallet');
 const Connection = require('./lib/new/connection');
 const SendTransaction = require('./lib/new/sendTransaction');
@@ -28,6 +27,7 @@ const dateUtils = require('./lib/utils/date');
 const tokensUtils = require('./lib/utils/tokens');
 const walletUtils = require('./lib/utils/wallet');
 const helpersUtils = require('./lib/utils/helpers');
+const Message = require('./lib/utils/message');
 const HathorWalletServiceWallet = require('./lib/wallet/wallet');
 
 module.exports = {
@@ -47,7 +47,6 @@ module.exports = {
   axios: axios,
   storage: storage.default,
   MemoryStore: MemoryStore.default,
-  Message: Message,
   network: network.default,
   HathorWallet: HathorWallet.default,
   Connection: Connection.default,
@@ -61,5 +60,6 @@ module.exports = {
   tokensUtils: tokensUtils.default,
   walletUtils: walletUtils.default,
   helpersUtils: helpersUtils.default,
+  Message: Message.default,
   HathorWalletServiceWallet: HathorWalletServiceWallet.default,
 }
