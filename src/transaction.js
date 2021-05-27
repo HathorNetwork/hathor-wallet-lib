@@ -390,7 +390,7 @@ const transaction = {
     const encryptedPrivateKey = accessData.mainKey;
     const privateKeyStr = wallet.decryptData(encryptedPrivateKey, pin);
     const key = HDPrivateKey(privateKeyStr)
-    const derivedKey = key.derive(index);
+    const derivedKey = key.deriveChild(index);
     const privateKey = derivedKey.privateKey;
 
     const sig = crypto.ECDSA.sign(hash, privateKey, 'little').set({

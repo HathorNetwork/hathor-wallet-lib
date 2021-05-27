@@ -7,12 +7,6 @@
 
 import { Networks } from 'bitcore-lib';
 
-// Clean bitcoin networks from bitcore-lib
-// XXX: this makes bitcore-lib unable to recognize bitcoin addresses
-Networks.remove(Networks.livenet)
-Networks.remove(Networks.testnet)
-Networks.remove(Networks.regtest)
-
 // Version bytes for address generation
 // Mainnet: P2PKH will start with H and P2SH will start with h
 // Testnet: P2PKH will start with W and P2SH will start with w
