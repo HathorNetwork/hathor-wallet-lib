@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { util } from 'bitcore-lib';
+import { hexToBuffer } from '../utils/buffer';
 import helpers from '../utils/helpers';
 
 type optionsType = {
@@ -54,7 +54,7 @@ class Input {
    */
   serialize(addData: boolean = true): Buffer[] {
     const arr: Buffer[] = [];
-    arr.push(util.buffer.hexToBuffer(this.hash));
+    arr.push(hexToBuffer(this.hash));
     arr.push(helpers.intToBytes(this.index, 1));
     if (this.data && addData) {
       arr.push(helpers.intToBytes(this.data.length, 2));

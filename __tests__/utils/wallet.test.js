@@ -87,12 +87,12 @@ test('Xpriv and xpub', () => {
 
   // To pubkey compressed
   const uncompressedPubKeyHex = '044f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa385b6b1b8ead809ca67454d9683fcf2ba03456d6fe2c4abe2b07f0fbdbb2f1c1';
-  const compressedPubKey = wallet.toPubkeyCompressed(util.buffer.hexToBuffer(uncompressedPubKeyHex));
+  const compressedPubKey = wallet.toPubkeyCompressed(Buffer.from(uncompressedPubKeyHex, 'hex'));
   const expectedCompressedPubKeyHex = '034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa';
   expect(util.buffer.bufferToHex(compressedPubKey)).toBe(expectedCompressedPubKeyHex);
 
   // Invalid uncompressed public key must throw error
-  expect(() => wallet.toPubkeyCompressed(util.buffer.hexToBuffer(uncompressedPubKeyHex + 'ab'))).toThrowError(UncompressedPubKeyError);
+  expect(() => wallet.toPubkeyCompressed(Buffer.from(uncompressedPubKeyHex + 'ab', 'hex'))).toThrowError(UncompressedPubKeyError);
 });
 
 test('isXpubKeyValid', () => {
