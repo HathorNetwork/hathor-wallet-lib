@@ -7,6 +7,12 @@
 
 import { Networks } from 'bitcore-lib';
 
+// Clean bitcoin networks from bitcore-lib
+// XXX: this makes bitcore-lib unable to recognize bitcoin addresses
+Networks.remove(Networks.livenet)
+Networks.remove(Networks.testnet)
+Networks.remove(Networks.regtest)
+
 // Version bytes for address generation
 // Mainnet: P2PKH will start with H and P2SH will start with h
 // Testnet: P2PKH will start with W and P2SH will start with w
@@ -28,6 +34,7 @@ const versionBytes = {
 // pubkeyhash: prefix for p2pkh addresses
 // scripthash: prefix for p2sh addresses
 // privatekey: prefix for private key WIF (Wallet Import Format)
+// bech32prefix: prefix for bech32 addresses (we will use 'bc' for both mainnet and testnet)
 // xpubkey: prefix for xpubkeys (we will use 'xpub' for both mainnet and testnet)
 // xprivkey: prefix for xprivkeys (we will use 'xprv' for both mainnet and testnet)
 // networkMagic: used to send messages through the network (not used by us but it's important to set for bitcore-lib, so we use the same as bitcoin)
@@ -39,6 +46,7 @@ const mainnet = Networks.add({
   pubkeyhash: versionBytes['mainnet']['p2pkh'],
   privatekey: 0x80,
   scripthash: versionBytes['mainnet']['p2sh'],
+  bech32prefix: 'bc',
   xpubkey: 0x0488b21e,
   xprivkey: 0x0488ade4,
   networkMagic: 0xf9beb4d9,
@@ -46,12 +54,16 @@ const mainnet = Networks.add({
   dnsSeeds: []
 });
 
+// XXX: set bitcore-lib defaultNetwork to hathor's mainnet
+Networks.defaultNetwork = mainnet;
+
 const testnet = Networks.add({
   name: 'testnet',
   alias: 'test',
   pubkeyhash: versionBytes['testnet']['p2pkh'],
   privatekey: 0x80,
   scripthash: versionBytes['testnet']['p2sh'],
+  bech32prefix: 'bc',
   xpubkey: 0x0488b21e,
   xprivkey: 0x0488ade4,
   networkMagic: 0xf9beb4d9,
