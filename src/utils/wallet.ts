@@ -158,7 +158,7 @@ const wallet = {
     } catch (error) {
       throw new XPubError(error.message);
     }
-    const key = xpub.deriveNonCompliantChild(index);
+    const key = xpub.deriveChild(index);
     return key.publicKey;
   },
 
@@ -263,7 +263,7 @@ const wallet = {
 
     const addrMap = {};
     for (let index = startIndex; index < startIndex + quantity; index++) {
-      const key = xpub.deriveNonCompliantChild(index);
+      const key = xpub.deriveChild(index);
       const address = Address(key.publicKey, network.bitcoreNetwork);
       addrMap[address.toString()] = index;
     }
@@ -292,7 +292,7 @@ const wallet = {
 
     const network = new Network(networkName);
 
-    const key = xpub.deriveNonCompliantChild(addressIndex);
+    const key = xpub.deriveChild(addressIndex);
     const address = Address(key.publicKey, network.bitcoreNetwork);
 
     return address.toString();
@@ -317,7 +317,7 @@ const wallet = {
       throw new XPubError(error.message);
     }
 
-    const derivedXpub = xpub.deriveNonCompliantChild(derivationIndex);
+    const derivedXpub = xpub.deriveChild(derivationIndex);
     return derivedXpub.xpubkey;
   }
 }

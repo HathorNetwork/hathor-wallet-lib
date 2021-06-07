@@ -338,7 +338,7 @@ const wallet = {
       const stopIndex = startIndex + count;
       for (var i=startIndex; i<stopIndex; i++) {
         // Generate each key from index, encrypt and save
-        let key = xpub.deriveNonCompliantChild(i);
+        let key = xpub.deriveChild(i);
         var address = Address(key.publicKey, network.getNetwork());
         dataJson.keys[address.toString()] = {privkey: null, index: i};
         addresses.push(address.toString());
@@ -729,7 +729,7 @@ const wallet = {
     const lastSharedIndex = this.getLastSharedIndex();
     let newIndex = lastSharedIndex + 1;
 
-    const newKey = xpub.deriveNonCompliantChild(newIndex);
+    const newKey = xpub.deriveChild(newIndex);
     const newAddress = Address(newKey.publicKey, network.getNetwork());
 
     // Update address data and last generated indexes
@@ -780,7 +780,7 @@ const wallet = {
   getAddressAtIndex(index) {
     const accessData = this.getWalletAccessData();
     const xpub = HDPublicKey(accessData.xpubkey);
-    const newKey = xpub.deriveNonCompliantChild(index);
+    const newKey = xpub.deriveChild(index);
     const address = Address(newKey.publicKey, network.getNetwork());
     return address.toString();
   },
@@ -1914,7 +1914,7 @@ const wallet = {
       const candidateIndex = maxIndex + 1;
       if (candidateIndex > lastSharedIndex) {
         const xpub = HDPublicKey(this.getWalletAccessData().xpubkey);
-        const key = xpub.deriveNonCompliantChild(candidateIndex);
+        const key = xpub.deriveChild(candidateIndex);
         const address = Address(key.publicKey, network.getNetwork()).toString();
         newSharedIndex = candidateIndex;
         newSharedAddress = address;
@@ -2409,7 +2409,7 @@ const wallet = {
   getPublicKey(index) {
     const accessData = this.getWalletAccessData();
     const hdpubkey = HDPublicKey(accessData.xpubkey);
-    const key = hdpubkey.deriveNonCompliantChild(index);
+    const key = hdpubkey.deriveChild(index);
     return key.publicKey.toBuffer();
   },
 
