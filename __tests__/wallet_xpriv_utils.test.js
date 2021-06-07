@@ -16,6 +16,7 @@ import { DEFAULT_SERVER, GAP_LIMIT } from '../src/constants';
 import { WalletTypeError } from '../src/errors';
 import storage from '../src/storage';
 import WebSocketHandler from '../src/WebSocketHandler';
+import { hexToBuffer } from '../src/utils/buffer';
 
 
 const XPRIV_STR = 'xprv9s21ZrQH143K4AogY8b3CTzko6B8WGz8GrvbF5AxaLY8Wm5BMzJkWweCVrrEZXEydpkGoCPRYG7aYBnUZRt5aGcHGzsHQEBfPJ2YLx3zppH';
@@ -271,15 +272,15 @@ test('Wallet type', () => {
 
 test('xpub from data', () => {
   const xpub = 'xpub6EkEDTu2Ya2bQrgRSs6QGh5tbNtntrTmEK4ueofBYDoeET2Pj6UkbMgfu7KarBGqbED591aY3LFj2jP9tZ24FnPhUQuk1SrUiwZ3SgHAgEt';
-  const pubkey = Buffer.from('02b8f9f08dcc76a28190c64faae77975c997622800597a6bffbc45ecd221d6b678', 'hex');
-  const chainCode = Buffer.from('676e546dab43fd1603c5b1f059da144608ac833cc0ea73d6798b19144bf25b1e', 'hex');
-  const fingerprint = Buffer.from('a4f5d5bf', 'hex');
+  const pubkey = hexToBuffer('02b8f9f08dcc76a28190c64faae77975c997622800597a6bffbc45ecd221d6b678');
+  const chainCode = hexToBuffer('676e546dab43fd1603c5b1f059da144608ac833cc0ea73d6798b19144bf25b1e');
+  const fingerprint = hexToBuffer('a4f5d5bf');
   expect(wallet.xpubFromData(pubkey, chainCode, fingerprint)).toBe(xpub);
 });
 
 test('compress pubkey', () => {
-  const uncompressed = Buffer.from('044f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa385b6b1b8ead809ca67454d9683fcf2ba03456d6fe2c4abe2b07f0fbdbb2f1c1', 'hex');
-  const compressed = Buffer.from('034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa', 'hex');
+  const uncompressed = hexToBuffer('044f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa385b6b1b8ead809ca67454d9683fcf2ba03456d6fe2c4abe2b07f0fbdbb2f1c1')
+  const compressed = hexToBuffer('034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa');
   expect(wallet.toPubkeyCompressed(uncompressed)).toEqual(compressed);
 });
 

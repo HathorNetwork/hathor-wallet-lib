@@ -11,6 +11,7 @@ import Network from '../../src/models/network';
 import Mnemonic from 'bitcore-mnemonic';
 import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE } from '../../src/constants';
 import { util, Address } from 'bitcore-lib';
+import { hexToBuffer } from '../../src/utils/buffer';
 
 
 test('Words', () => {
@@ -87,12 +88,12 @@ test('Xpriv and xpub', () => {
 
   // To pubkey compressed
   const uncompressedPubKeyHex = '044f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa385b6b1b8ead809ca67454d9683fcf2ba03456d6fe2c4abe2b07f0fbdbb2f1c1';
-  const compressedPubKey = wallet.toPubkeyCompressed(Buffer.from(uncompressedPubKeyHex, 'hex'));
+  const compressedPubKey = wallet.toPubkeyCompressed(hexToBuffer(uncompressedPubKeyHex));
   const expectedCompressedPubKeyHex = '034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa';
   expect(util.buffer.bufferToHex(compressedPubKey)).toBe(expectedCompressedPubKeyHex);
 
   // Invalid uncompressed public key must throw error
-  expect(() => wallet.toPubkeyCompressed(Buffer.from(uncompressedPubKeyHex + 'ab', 'hex'))).toThrowError(UncompressedPubKeyError);
+  expect(() => wallet.toPubkeyCompressed(hexToBuffer(uncompressedPubKeyHex + 'ab'))).toThrowError(UncompressedPubKeyError);
 });
 
 test('isXpubKeyValid', () => {
