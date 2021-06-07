@@ -407,7 +407,7 @@ const helpers = {
 
     const addrMap = {};
     for (let index = startIndex; index < startIndex + quantity; index++) {
-      const key = xpub.deriveChild(index);
+      const key = xpub.deriveNonCompliantChild(index);
       const address = Address(key.publicKey, network.getNetwork());
       addrMap[address.toString()] = index;
     }

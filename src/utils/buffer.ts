@@ -7,6 +7,8 @@ const isHexa = (value: string): boolean => {
 };
 
 export const hexToBuffer = (value: string): Buffer => {
-  assert(isHexa(value));
+  if (!isHexa(value)) {
+    throw new Error("hexToBuffer: argument must be a strict hex string.");
+  }
   return Buffer.from(value, 'hex');
 };

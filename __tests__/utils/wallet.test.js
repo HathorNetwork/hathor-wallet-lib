@@ -67,9 +67,9 @@ test('Xpriv and xpub', () => {
 
   expect(wallet.getXPubKeyFromXPrivKey(xpriv.xprivkey)).toBe(xpriv.xpubkey);
 
-  const xprivAccount = xpriv.derive(`m/44'/${HATHOR_BIP44_CODE}'/0'`);
+  const xprivAccount = xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/0'`);
   const xpubAccount = xprivAccount.xpubkey;
-  const derivedXpriv = xprivAccount.derive(0);
+  const derivedXpriv = xprivAccount.deriveNonCompliantChild(0);
 
   expect(wallet.xpubDeriveChild(xpubAccount, 0)).toBe(derivedXpriv.xpubkey);
 

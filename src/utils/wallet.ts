@@ -143,7 +143,7 @@ const wallet = {
    * you must send in this method the xpubkey from m/44'/280/0'/0 and the index you want to derive
    *
    * @param {String} xpubkey Xpub of the path before the last derivation
-   * @param {number} index Index of the key to deriveChild
+   * @param {number} index Index of the key to derive
    *
    * @return {Object} Public key object
    * @throws {XPubError} In case the given xpub key is invalid
@@ -158,7 +158,7 @@ const wallet = {
     } catch (error) {
       throw new XPubError(error.message);
     }
-    const key = xpub.deriveChild(index);
+    const key = xpub.deriveNonCompliantChild(index);
     return key.publicKey;
   },
 
@@ -193,7 +193,7 @@ const wallet = {
     const xpriv = this.getXPrivKeyFromSeed(seed, methodOptions);
     // We have a fixed derivation until the coin index
     // after that we can receive a different account index, which the default is 0'
-    const privkey = xpriv.deriveChild(`m/44'/${HATHOR_BIP44_CODE}'/${accountDerivationIndex}`);
+    const privkey = xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/${accountDerivationIndex}`);
     return privkey.xpubkey;
   },
 
@@ -263,7 +263,7 @@ const wallet = {
 
     const addrMap = {};
     for (let index = startIndex; index < startIndex + quantity; index++) {
-      const key = xpub.deriveChild(index);
+      const key = xpub.deriveNonCompliantChild(index);
       const address = Address(key.publicKey, network.bitcoreNetwork);
       addrMap[address.toString()] = index;
     }
@@ -292,7 +292,7 @@ const wallet = {
 
     const network = new Network(networkName);
 
-    const key = xpub.deriveChild(addressIndex);
+    const key = xpub.deriveNonCompliantChild(addressIndex);
     const address = Address(key.publicKey, network.bitcoreNetwork);
 
     return address.toString();
@@ -317,7 +317,7 @@ const wallet = {
       throw new XPubError(error.message);
     }
 
-    const derivedXpub = xpub.deriveChild(derivationIndex);
+    const derivedXpub = xpub.deriveNonCompliantChild(derivationIndex);
     return derivedXpub.xpubkey;
   }
 }
