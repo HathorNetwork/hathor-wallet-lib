@@ -136,3 +136,81 @@ test('getHathorAddresses', () => {
 
   expect(() => wallet.getAddresses(`${XPUBKEY}aa`, 5, ADDRESSES.length - 5, 'mainnet')).toThrowError(XPubError);
 });
+
+test('hd derivation', () => {
+  // Seed that generate 31 byte private keys (through xpriv.privateKey.bn.toBuffer())
+  const Words31B = 'few hint winner dignity where paper glare manual erupt school iron panther sign whisper egg buzz opera joy cable minor slot skull zoo system';
+
+  // 10 first addresses derived from the seed above on the paths m/44'/280'/0'/0/0-9
+  const Addr31B = [
+    'WZmfUEAzZkCcUWG2XFsLRXvErswmfm6kXE',
+    'WkXzzbKenz72uThsSGp93UeyFJqkpEV5cg',
+    'WVBoPads4aWMBCNrGfLnj5zfTvqoqiJFAf',
+    'WaKXxYh1H7kRV7i8wV29YgwVy6RygDxuEq',
+    'WZtSQHGYBtu72QrRYN3giWVMZ9y61jsnie',
+    'WUkz8Qib368ssTDMQoBXXMnWJAxGKJWDPX',
+    'WhxHrL1cyQ8qHR5eaYdi2pJ1MQuMycZv8q',
+    'WcywrinkAiyVSv9kB8UchNBMLRPt5q6uF3',
+    'WQUAM7ynWeeyZAEEoBu9FyrybRmYxHQrQR',
+    'WavSG5HpmG6Nq3faEAdzsCxYRbRrzFQWRB',
+  ]
+
+  // Seed that generate 32 byte private keys (through xpriv.privateKey.bn.toBuffer())
+  const Words32B = 'employ name misery bring pepper drive deal journey young prefer pluck rough entire tag mouse rough belt history arm shove crouch crater lobster remember';
+
+  // 10 first addresses derived from the seed above on the paths m/44'/280'/0'/0/0-9
+  const Addr32B = [
+    'WVEp3HoztTxmaBGawkyLKcvsNNV4Nd6Z7n',
+    'WgGCFzgPE6RAwkGNBJZGTAJ9irV9vV5MjE',
+    'Wk1bJ2C886MfzjE9hVeSBoeF4T2bUpk48Y',
+    'WfeBrfT2beJB2Vq2PaMuiTiBedDhW8NSgC',
+    'Wd483JsLQN7G5MjikwXBm6bQCAagyvf4m4',
+    'WiZG9r8CKoNd7vTTnoAp86bPxQ5N6qM3no',
+    'WP6GLZPkXZh9A9ZD9n7MaJCxHX1fRE7LvP',
+    'WaUjcZ7UThBxH5wrJfb5GNnQZCzWJ3kMGH',
+    'WZgiheyfEresupQuyZvKsKdym3y755HSnT',
+    'WednacQNGATvx1S2FTTCRbi2Sjs6mzS9f6',
+  ]
+
+  // These tests will determine bitcore has not changed the implementations of derive and deriveNonCompliantChild
+  // For 31 bytes private keys
+  const xpriv31B = wallet.getXPrivKeyFromSeed(Words31B);
+  expect(xpriv31B.privateKey.bn.toBuffer().length).toBe(31);
+  const dpriv31Bd = xpriv31B.derive('m/44\'/280\'/0\'/0');
+  const dpriv31B = xpriv31B.deriveNonCompliantChild('m/44\'/280\'/0\'/0');
+  for (let i = 0; i < 10; i++) {
+    const addrd = dpriv31Bd.derive(i).publicKey.toAddress().toString();
+    const addr = dpriv31B.deriveNonCompliantChild(i).publicKey.toAddress().toString();
+    expect(addr).toStrictEqual(addrd); // derive and deriveNonCompliant should be the same
+    expect(addr).toStrictEqual(Addr31B[i]); // and both should generate the expected address
+  }
+
+  // For 32 bytes private keys
+  const xpriv32B = wallet.getXPrivKeyFromSeed(Words32B);
+  expect(xpriv32B.privateKey.bn.toBuffer().length).toBe(32);
+  const dpriv32Bd = xpriv32B.derive('m/44\'/280\'/0\'/0');
+  const dpriv32B = xpriv32B.deriveNonCompliantChild('m/44\'/280\'/0\'/0');
+  for (let i = 0; i < 10; i++) {
+    const addrd = dpriv32Bd.derive(i).publicKey.toAddress().toString();
+    const addr = dpriv32B.deriveNonCompliantChild(i).publicKey.toAddress().toString();
+    expect(addr).toStrictEqual(addrd);
+    expect(addr).toStrictEqual(Addr32B[i]);
+  }
+
+  // test our address generation
+  // XXX: the accountDerivationIndex being 0'/0 is a temporary fix
+  // getXPubKeyFromSeed does not derive for 'change' (https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki#change)
+  const xpub31B = wallet.getXPubKeyFromSeed(Words31B, {accountDerivationIndex: '0\'/0'});
+  const addressObj31B = wallet.getAddresses(xpub31B, 0, 10, 'testnet');
+  const address31B = Object.keys(addressObj31B);
+  for (let i = 0; i < 10; i++) {
+    expect(address31B[i]).toStrictEqual(Addr31B[i]);
+  }
+
+  const xpub32B = wallet.getXPubKeyFromSeed(Words32B, {accountDerivationIndex: '0\'/0'});
+  const addressObj32B = wallet.getAddresses(xpub32B, 0, 10, 'testnet');
+  const address32B = Object.keys(addressObj32B);
+  for (let i = 0; i < 10; i++) {
+    expect(address32B[i]).toStrictEqual(Addr32B[i]);
+  }
+});
