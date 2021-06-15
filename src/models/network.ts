@@ -41,15 +41,12 @@ const mainnet = Networks.add({
   privatekey: 0x80,
   scripthash: versionBytes['mainnet']['p2sh'],
   bech32prefix: 'ht',
-  xpubkey: 0x0488b21e,
-  xprivkey: 0x0488ade4,
+  xpubkey: 0x0488b21f,
+  xprivkey: 0x0488ade5,
   networkMagic: 0xf9beb4d9,
   port: 8333,
   dnsSeeds: []
 });
-
-// XXX: set bitcore-lib defaultNetwork to hathor's mainnet
-Networks.defaultNetwork = mainnet;
 
 const testnet = Networks.add({
   name: 'testnet',
@@ -58,8 +55,8 @@ const testnet = Networks.add({
   privatekey: 0x80,
   scripthash: versionBytes['testnet']['p2sh'],
   bech32prefix: 'tn',
-  xpubkey: 0x0488b21e,
-  xprivkey: 0x0488ade4,
+  xpubkey: 0x0488b220,
+  xprivkey: 0x0488ade6,
   networkMagic: 0xf9beb4d9,
   port: 8333,
   dnsSeeds: []

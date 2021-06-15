@@ -175,7 +175,7 @@ test('hd derivation', () => {
 
   // These tests will determine bitcore has not changed the implementations of derive and deriveNonCompliantChild
   // For 31 bytes private keys
-  const xpriv31B = wallet.getXPrivKeyFromSeed(Words31B);
+  const xpriv31B = wallet.getXPrivKeyFromSeed(Words31B, {networkName: 'testnet'});
   expect(xpriv31B.privateKey.bn.toBuffer().length).toBe(31);
   const dpriv31Bd = xpriv31B.derive('m/44\'/280\'/0\'/0');
   const dpriv31B = xpriv31B.deriveNonCompliantChild('m/44\'/280\'/0\'/0');
@@ -187,7 +187,7 @@ test('hd derivation', () => {
   }
 
   // For 32 bytes private keys
-  const xpriv32B = wallet.getXPrivKeyFromSeed(Words32B);
+  const xpriv32B = wallet.getXPrivKeyFromSeed(Words32B, {networkName: 'testnet'});
   expect(xpriv32B.privateKey.bn.toBuffer().length).toBe(32);
   const dpriv32Bd = xpriv32B.derive('m/44\'/280\'/0\'/0');
   const dpriv32B = xpriv32B.deriveNonCompliantChild('m/44\'/280\'/0\'/0');
@@ -201,14 +201,14 @@ test('hd derivation', () => {
   // test our address generation
   // XXX: the accountDerivationIndex being 0'/0 is a temporary fix
   // getXPubKeyFromSeed does not derive for 'change' (https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki#change)
-  const xpub31B = wallet.getXPubKeyFromSeed(Words31B, {accountDerivationIndex: '0\'/0'});
+  const xpub31B = wallet.getXPubKeyFromSeed(Words31B, {accountDerivationIndex: '0\'/0', networkName: 'testnet'});
   const addressObj31B = wallet.getAddresses(xpub31B, 0, 10, 'testnet');
   const address31B = Object.keys(addressObj31B);
   for (let i = 0; i < 10; i++) {
     expect(address31B[i]).toStrictEqual(Addr31B[i]);
   }
 
-  const xpub32B = wallet.getXPubKeyFromSeed(Words32B, {accountDerivationIndex: '0\'/0'});
+  const xpub32B = wallet.getXPubKeyFromSeed(Words32B, {accountDerivationIndex: '0\'/0', networkName: 'testnet'});
   const addressObj32B = wallet.getAddresses(xpub32B, 0, 10, 'testnet');
   const address32B = Object.keys(addressObj32B);
   for (let i = 0; i < 10; i++) {
