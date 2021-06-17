@@ -13,10 +13,14 @@ test('Get and set network', () => {
     'mainnet': {
       'p2pkh': 0x28,
       'p2sh': 0x64,
+      'xpriv': 0x03523b05,
+      'xpub': 0x0488b21e,
     },
     'testnet': {
       'p2pkh': 0x49,
       'p2sh': 0x87,
+      'xpriv': 0x0434c8c4,
+      'xpub': 0x0488b21e,
     },
   }
 
