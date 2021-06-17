@@ -217,7 +217,7 @@ test('testnet: hd derivation', () => {
   }
 });
 
-test('testnet: hd derivation with password', () => {
+test('testnet: hd derivation with passphrase', () => {
   const testnet = new Network('testnet');
   // simple passphrase
   const passw = 'Hathor@Network';
@@ -346,5 +346,58 @@ test('mainnet: hd derivation', () => {
   const address32B = Object.keys(addressObj32B);
   for (let i = 0; i < 10; i++) {
     expect(address32B[i]).toStrictEqual(Addr32B[i]);
+  }
+});
+
+test('mainnet: hd derivation with passphrase', () => {
+  const mainnet = new Network('mainnet');
+  // simple passphrase
+  const passw = 'Hathor@Network';
+
+  const Words = 'employ name misery bring pepper drive deal journey young prefer pluck rough entire tag mouse rough belt history arm shove crouch crater lobster remember';
+
+  const Addr = [
+    'HMMePc5mruv97oBo7FZEwPQXdxkP7CkyrV',
+    'H6p4e7pnLwVfNbczZVMEJLStwxm6uEKXm8',
+    'HHmzpxV2Zvwqfv3v9apB8hCryrydsk6Xmz',
+    'HFVbDLHJbuVNr4RpfmJfZ1Aj4AHcQd3Zrh',
+    'H9SmnwVnjepuLseofECqRaFjPg188ykCHY',
+    'H6jXzjh2EJ95arKmFVcKwH64kVsAERFFWd',
+    'HUUKKe9VR5h1mgD9RrH8eBvEQKuaghP11Q',
+    'HRmuPpaKZpDfRavj3YxDnoktvGMP2FmJGh',
+    'HPnUojm5ZUNSEYmonbg8Lwzdt8udu1Y2eK',
+    'HJbxaf7kFvT4xq5ixabymZaxCgx3E758ZJ'
+  ]
+
+  // For 32 bytes private keys
+  const xpriv = wallet.getXPrivKeyFromSeed(
+      Words,
+      {
+        passphrase: passw,
+        networkName: 'mainnet',
+      }
+  );
+  const dprivd = xpriv.derive('m/44\'/280\'/0\'/0');
+  const dpriv = xpriv.deriveNonCompliantChild('m/44\'/280\'/0\'/0');
+  for (let i = 0; i < 10; i++) {
+    const addrd = dprivd.derive(i).publicKey.toAddress(mainnet.bitcoreNetwork).toString();
+    const addr = dpriv.deriveNonCompliantChild(i).publicKey.toAddress(mainnet.bitcoreNetwork).toString();
+
+    expect(addr).toStrictEqual(addrd);
+    expect(addr).toStrictEqual(Addr[i]);
+  }
+
+  const xpub = wallet.getXPubKeyFromSeed(
+      Words,
+      {
+        passphrase: passw,
+        networkName: 'mainnet',
+        accountDerivationIndex: '0\'/0',
+      },
+  );
+  const addressObj = wallet.getAddresses(xpub, 0, 10, 'mainnet');
+  const address = Object.keys(addressObj);
+  for (let i = 0; i < 10; i++) {
+    expect(address[i]).toStrictEqual(Addr[i]);
   }
 });

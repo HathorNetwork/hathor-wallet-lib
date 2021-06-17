@@ -35,7 +35,7 @@ const versionBytes = {
 // port: used to connect to the network (not used by us but it's important to set for bitcore-lib, so we use the same as bitcoin)
 // dnsSeed: list of dns to connect (not used by us but it's important to set for bitcore-lib, so we use the same as bitcoin)
 const mainnet = Networks.add({
-  name: 'mainnet',
+  name: 'htr-mainnet',
   alias: 'production',
   pubkeyhash: versionBytes['mainnet']['p2pkh'],
   privatekey: 0x80,
@@ -49,7 +49,7 @@ const mainnet = Networks.add({
 });
 
 const testnet = Networks.add({
-  name: 'testnet',
+  name: 'htr-testnet',
   alias: 'test',
   pubkeyhash: versionBytes['testnet']['p2pkh'],
   privatekey: 0x80,

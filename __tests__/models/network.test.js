@@ -22,14 +22,14 @@ test('Get and set network', () => {
 
   // Default network is testnet
   const network = new Network('testnet');
-  expect(network.bitcoreNetwork['name']).toBe('testnet');
+  expect(network.bitcoreNetwork['name']).toBe('htr-testnet');
   // Must use toEqual and not toBe
   // https://jestjs.io/docs/en/expect#toequalvalue
   // Use .toEqual to compare recursively all properties of object instances (also known as "deep" equality).
   expect(network.versionBytes).toEqual(versionBytes['testnet']);
 
   const mainnet = new Network('mainnet');
-  expect(mainnet.bitcoreNetwork['name']).toBe('mainnet');
+  expect(mainnet.bitcoreNetwork['name']).toBe('htr-mainnet');
   expect(mainnet.versionBytes).toEqual(versionBytes['mainnet']);
 
   // Test constructor parameter
