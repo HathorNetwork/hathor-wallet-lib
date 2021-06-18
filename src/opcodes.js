@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { util } from 'bitcore-lib';
+import { hexToBuffer } from './utils/buffer';
 
 /**
  * Opcodes used to generate output script
@@ -15,29 +15,29 @@ import { util } from 'bitcore-lib';
 /**
  * Checks if timestamp is greater than a value
  */
-export const OP_GREATERTHAN_TIMESTAMP = util.buffer.hexToBuffer('6f');
+export const OP_GREATERTHAN_TIMESTAMP = hexToBuffer('6f');
 
 /**
  * Duplicates value
  */
-export const OP_DUP = util.buffer.hexToBuffer('76');
+export const OP_DUP = hexToBuffer('76');
 
 /**
  * Calculates hash160 of value
  */
-export const OP_HASH160 = util.buffer.hexToBuffer('a9');
+export const OP_HASH160 = hexToBuffer('a9');
 
 /**
  * Verifies if values are equal
  */
-export const OP_EQUALVERIFY = util.buffer.hexToBuffer('88');
+export const OP_EQUALVERIFY = hexToBuffer('88');
 
 /**
  * Verifies signature
  */
-export const OP_CHECKSIG = util.buffer.hexToBuffer('ac');
+export const OP_CHECKSIG = hexToBuffer('ac');
 
 /**
  * Shows that pushdata will need length value
  */
-export const OP_PUSHDATA1 = util.buffer.hexToBuffer('4c');
+export const OP_PUSHDATA1 = hexToBuffer('4c');

@@ -7,6 +7,7 @@
 
 import { MERGED_MINED_BLOCK_VERSION, BLOCK_VERSION, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, DECIMAL_PLACES, TOKEN_INFO_VERSION, TX_WEIGHT_CONSTANTS, MAX_INPUTS, MAX_OUTPUTS } from '../constants';
 import { crypto, encoding, util } from 'bitcore-lib';
+import { hexToBuffer } from '../utils/buffer';
 import helpers from '../utils/helpers';
 import Input from './input';
 import Output from './output';
@@ -176,7 +177,7 @@ class Transaction {
     if (this.parents) {
       array.push(helpers.intToBytes(this.parents.length, 1))
       for (const parent of this.parents) {
-        array.push(util.buffer.hexToBuffer(parent));
+        array.push(hexToBuffer(parent));
       }
     } else {
       // Len parents (parents will be calculated in the backend)

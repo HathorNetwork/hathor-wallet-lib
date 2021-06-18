@@ -272,7 +272,7 @@ class HathorWalletServiceWallet extends EventEmitter {
   getInputData(dataToSignHash: Buffer, addressPath: string): Buffer {
     const code = new Mnemonic(this.seed);
     const xpriv = code.toHDPrivateKey(this.passphrase, this.network.bitcoreNetwork);
-    const derivedKey = xpriv.derive(addressPath);
+    const derivedKey = xpriv.deriveNonCompliantChild(addressPath);
     const privateKey = derivedKey.privateKey;
 
     const sig = crypto.ECDSA.sign(dataToSignHash, privateKey, 'little').set({
@@ -348,8 +348,8 @@ class HathorWalletServiceWallet extends EventEmitter {
   getAddressAtIndex(index: number): string {
     const code = new Mnemonic(this.seed);
     const xpriv = code.toHDPrivateKey(this.passphrase, this.network.bitcoreNetwork);
-    const privkey = xpriv.derive(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
-    const key = privkey.derive(index);
+    const privkey = xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
+    const key = privkey.deriveNonCompliantChild(index);
     const address = bitcoreAddress(key.publicKey, this.network.getNetwork());
     return address.toString();
   }

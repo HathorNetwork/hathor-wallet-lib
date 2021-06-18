@@ -7,6 +7,7 @@
 
 import buffer from 'buffer';
 import { crypto, util } from 'bitcore-lib';
+import { hexToBuffer } from './utils/buffer';
 import transaction from './transaction';
 import wallet from './wallet';
 import storage from './storage';
@@ -43,7 +44,7 @@ const tokens = {
    */
   getTokenUID(txID, index) {
     let arr = [];
-    arr.push(util.buffer.hexToBuffer(txID));
+    arr.push(hexToBuffer(txID));
     arr.push(transaction.intToBytes(index, 1));
     return crypto.Hash.sha256(util.buffer.concat(arr));
   },

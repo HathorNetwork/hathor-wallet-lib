@@ -11,6 +11,7 @@ import Network from '../../src/models/network';
 import Mnemonic from 'bitcore-mnemonic';
 import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE } from '../../src/constants';
 import { util, Address } from 'bitcore-lib';
+import { hexToBuffer } from '../../src/utils/buffer';
 
 
 test('Words', () => {
@@ -66,9 +67,9 @@ test('Xpriv and xpub', () => {
 
   expect(wallet.getXPubKeyFromXPrivKey(xpriv.xprivkey)).toBe(xpriv.xpubkey);
 
-  const xprivAccount = xpriv.derive(`m/44'/${HATHOR_BIP44_CODE}'/0'`);
+  const xprivAccount = xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/0'`);
   const xpubAccount = xprivAccount.xpubkey;
-  const derivedXpriv = xprivAccount.derive(0);
+  const derivedXpriv = xprivAccount.deriveNonCompliantChild(0);
 
   expect(wallet.xpubDeriveChild(xpubAccount, 0)).toBe(derivedXpriv.xpubkey);
 
@@ -87,12 +88,12 @@ test('Xpriv and xpub', () => {
 
   // To pubkey compressed
   const uncompressedPubKeyHex = '044f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa385b6b1b8ead809ca67454d9683fcf2ba03456d6fe2c4abe2b07f0fbdbb2f1c1';
-  const compressedPubKey = wallet.toPubkeyCompressed(util.buffer.hexToBuffer(uncompressedPubKeyHex));
+  const compressedPubKey = wallet.toPubkeyCompressed(hexToBuffer(uncompressedPubKeyHex));
   const expectedCompressedPubKeyHex = '034f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa';
   expect(util.buffer.bufferToHex(compressedPubKey)).toBe(expectedCompressedPubKeyHex);
 
   // Invalid uncompressed public key must throw error
-  expect(() => wallet.toPubkeyCompressed(util.buffer.hexToBuffer(uncompressedPubKeyHex + 'ab'))).toThrowError(UncompressedPubKeyError);
+  expect(() => wallet.toPubkeyCompressed(hexToBuffer(uncompressedPubKeyHex + 'ab'))).toThrowError(UncompressedPubKeyError);
 });
 
 test('isXpubKeyValid', () => {
@@ -137,7 +138,8 @@ test('getHathorAddresses', () => {
   expect(() => wallet.getAddresses(`${XPUBKEY}aa`, 5, ADDRESSES.length - 5, 'mainnet')).toThrowError(XPubError);
 });
 
-test('hd derivation', () => {
+test('testnet: hd derivation', () => {
+  const testnet = new Network('testnet');
   // Seed that generate 31 byte private keys (through xpriv.privateKey.bn.toBuffer())
   const Words31B = 'few hint winner dignity where paper glare manual erupt school iron panther sign whisper egg buzz opera joy cable minor slot skull zoo system';
 
@@ -174,25 +176,25 @@ test('hd derivation', () => {
 
   // These tests will determine bitcore has not changed the implementations of derive and deriveNonCompliantChild
   // For 31 bytes private keys
-  const xpriv31B = wallet.getXPrivKeyFromSeed(Words31B);
+  const xpriv31B = wallet.getXPrivKeyFromSeed(Words31B, {networkName: 'testnet'});
   expect(xpriv31B.privateKey.bn.toBuffer().length).toBe(31);
   const dpriv31Bd = xpriv31B.derive('m/44\'/280\'/0\'/0');
   const dpriv31B = xpriv31B.deriveNonCompliantChild('m/44\'/280\'/0\'/0');
   for (let i = 0; i < 10; i++) {
-    const addrd = dpriv31Bd.derive(i).publicKey.toAddress().toString();
-    const addr = dpriv31B.deriveNonCompliantChild(i).publicKey.toAddress().toString();
+    const addrd = dpriv31Bd.derive(i).publicKey.toAddress(testnet.bitcoreNetwork).toString();
+    const addr = dpriv31B.deriveNonCompliantChild(i).publicKey.toAddress(testnet.bitcoreNetwork).toString();
     expect(addr).toStrictEqual(addrd); // derive and deriveNonCompliant should be the same
     expect(addr).toStrictEqual(Addr31B[i]); // and both should generate the expected address
   }
 
   // For 32 bytes private keys
-  const xpriv32B = wallet.getXPrivKeyFromSeed(Words32B);
+  const xpriv32B = wallet.getXPrivKeyFromSeed(Words32B, {networkName: 'testnet'});
   expect(xpriv32B.privateKey.bn.toBuffer().length).toBe(32);
   const dpriv32Bd = xpriv32B.derive('m/44\'/280\'/0\'/0');
   const dpriv32B = xpriv32B.deriveNonCompliantChild('m/44\'/280\'/0\'/0');
   for (let i = 0; i < 10; i++) {
-    const addrd = dpriv32Bd.derive(i).publicKey.toAddress().toString();
-    const addr = dpriv32B.deriveNonCompliantChild(i).publicKey.toAddress().toString();
+    const addrd = dpriv32Bd.derive(i).publicKey.toAddress(testnet.bitcoreNetwork).toString();
+    const addr = dpriv32B.deriveNonCompliantChild(i).publicKey.toAddress(testnet.bitcoreNetwork).toString();
     expect(addr).toStrictEqual(addrd);
     expect(addr).toStrictEqual(Addr32B[i]);
   }
@@ -200,17 +202,202 @@ test('hd derivation', () => {
   // test our address generation
   // XXX: the accountDerivationIndex being 0'/0 is a temporary fix
   // getXPubKeyFromSeed does not derive for 'change' (https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki#change)
-  const xpub31B = wallet.getXPubKeyFromSeed(Words31B, {accountDerivationIndex: '0\'/0'});
+  const xpub31B = wallet.getXPubKeyFromSeed(Words31B, {networkName: 'testnet', accountDerivationIndex: '0\'/0'});
   const addressObj31B = wallet.getAddresses(xpub31B, 0, 10, 'testnet');
   const address31B = Object.keys(addressObj31B);
   for (let i = 0; i < 10; i++) {
     expect(address31B[i]).toStrictEqual(Addr31B[i]);
   }
 
-  const xpub32B = wallet.getXPubKeyFromSeed(Words32B, {accountDerivationIndex: '0\'/0'});
+  const xpub32B = wallet.getXPubKeyFromSeed(Words32B, {networkName: 'testnet', accountDerivationIndex: '0\'/0'});
   const addressObj32B = wallet.getAddresses(xpub32B, 0, 10, 'testnet');
   const address32B = Object.keys(addressObj32B);
   for (let i = 0; i < 10; i++) {
     expect(address32B[i]).toStrictEqual(Addr32B[i]);
+  }
+});
+
+test('testnet: hd derivation with passphrase', () => {
+  const testnet = new Network('testnet');
+  // simple passphrase
+  const passw = 'Hathor@Network';
+
+  const Words = 'employ name misery bring pepper drive deal journey young prefer pluck rough entire tag mouse rough belt history arm shove crouch crater lobster remember';
+
+  const Addr = [
+    'WdWYtBvHHsD476nev6YkwXPVQcFWaPVHoX',
+    'WNxy8hfHmtnaMuDrNLLkJURricGEJBtw1H',
+    'WZvuKYKXztEkfDemxRoh8qBpkWUmFN1dkw',
+    'WXeVhv7p2rnHqN2gUcJBZ99gponjw6Rq2G',
+    'WRbgHXLJAc7pLBFfU5CMRiEhAKWFYQQWYW',
+    'WNtSVKXXfFRza9vd4LbqwR52X9NHcp7RHK',
+    'WkdDpDyzr2yvkyp1EhGeeKuCAyQiDRDo1E',
+    'WhvotQQpzmWaQtXarPwjnwjrgurWW4v4YY',
+    'WfwPJKbazRfMDrNfbSfeM5ybenQmKpHrNh',
+    'Waks5ExFgsjyx8gamRbVmhZuyLTAhELkgh'
+  ]
+
+  // For 32 bytes private keys
+  const xpriv = wallet.getXPrivKeyFromSeed(
+      Words,
+      {
+        passphrase: passw,
+        networkName: 'testnet',
+      }
+  );
+  const dprivd = xpriv.derive('m/44\'/280\'/0\'/0');
+  const dpriv = xpriv.deriveNonCompliantChild('m/44\'/280\'/0\'/0');
+  for (let i = 0; i < 10; i++) {
+    const addrd = dprivd.derive(i).publicKey.toAddress(testnet.bitcoreNetwork).toString();
+    const addr = dpriv.deriveNonCompliantChild(i).publicKey.toAddress(testnet.bitcoreNetwork).toString();
+
+    expect(addr).toStrictEqual(addrd);
+    expect(addr).toStrictEqual(Addr[i]);
+  }
+
+  const xpub = wallet.getXPubKeyFromSeed(
+      Words,
+      {
+        passphrase: passw,
+        networkName: 'testnet',
+        accountDerivationIndex: '0\'/0',
+      },
+  );
+  const addressObj = wallet.getAddresses(xpub, 0, 10, 'testnet');
+  const address = Object.keys(addressObj);
+  for (let i = 0; i < 10; i++) {
+    expect(address[i]).toStrictEqual(Addr[i]);
+  }
+});
+
+test('mainnet: hd derivation', () => {
+  const mainnet = new Network('mainnet');
+  // Seed that generate 31 byte private keys (through xpriv.privateKey.bn.toBuffer())
+  const Words31B = 'few hint winner dignity where paper glare manual erupt school iron panther sign whisper egg buzz opera joy cable minor slot skull zoo system';
+
+  // 10 first addresses derived from the seed above on the paths m/44'/280'/0'/0/0-9
+  const Addr31B = [
+    'HHckyeLV8nuhVCfAiQspRPwH6ESe8cVuyo',
+    'HUP6W1V9N2p7vA71dRpd3Lg1UfLdJu7afi',
+    'HD2ttzoMddDSBtmzTpMGix1hhHLgRTLcuS',
+    'HJAdTxrVrATWVp7H8e2dYYxYCSvrA3uHvs',
+    'HHjXuhS2kwcC37FZjX4AiNWPnWTxVJk2Ag',
+    'HCc5dpt5c8qxt9cVbxC1XDoYXXT8v3FhjM',
+    'HRoPMkB7YSqvJ7UnmheC2gK3amQEUuZeZC',
+    'HLq3N8xEjmgaTcYtNHV6hECPZmtkhEA9r2',
+    'H8KFrY9H5hN4ZrdNzLudFqt1pnGRXUZr71',
+    'HJmXmVTKLJoTqk4iRKeUs4yaewvjUvJZiv'
+  ]
+
+  // Seed that generate 32 byte private keys (through xpriv.privateKey.bn.toBuffer())
+  const Words32B = 'employ name misery bring pepper drive deal journey young prefer pluck rough entire tag mouse rough belt history arm shove crouch crater lobster remember';
+
+  // 10 first addresses derived from the seed above on the paths m/44'/280'/0'/0/0-9
+  const Addr32B = [
+    'HD5uYhyVTWfrasfj8uypKUwubiyvsFp6UZ',
+    'HQ7HmQqso98FxSfWNTZkT2KBxCz2SHhSg4',
+    'HTrgoSMch94m1RdHteevBffHHoXU393C45',
+    'HPVHN5cXAh1G3CEAajNPiKjDsyiZzpeoU1',
+    'HLuDYj2pyQpM648rx6XfkxcSRX5ZaqQYfD',
+    'HSQMfGHgtr5i8crbyxBJ7xcSBkaEb7YyjU',
+    'H6wMqyZF6cQEAqxMLw7qaADzWsWY1YVYs7',
+    'HJKq7yGy2ju3HnLzVpbZGEoSnZVNoS6oUH',
+    'HHXpD599ouMxvWp4AivosBf1zQTyb2LETZ',
+    'HNUt62ZrqDB1xhqAScTgRTj4g6MyEwrWDM'
+  ]
+
+  // These tests will determine bitcore has not changed the implementations of derive and deriveNonCompliantChild
+  // For 31 bytes private keys
+  const xpriv31B = wallet.getXPrivKeyFromSeed(Words31B, {networkName: 'mainnet'});
+  expect(xpriv31B.privateKey.bn.toBuffer().length).toBe(31);
+  const dpriv31Bd = xpriv31B.derive('m/44\'/280\'/0\'/0');
+  const dpriv31B = xpriv31B.deriveNonCompliantChild('m/44\'/280\'/0\'/0');
+  for (let i = 0; i < 10; i++) {
+    const addrd = dpriv31Bd.derive(i).publicKey.toAddress(mainnet.bitcoreNetwork).toString();
+    const addr = dpriv31B.deriveNonCompliantChild(i).publicKey.toAddress(mainnet.bitcoreNetwork).toString();
+    expect(addr).toStrictEqual(addrd); // derive and deriveNonCompliant should be the same
+    expect(addr).toStrictEqual(Addr31B[i]); // and both should generate the expected address
+  }
+
+  // For 32 bytes private keys
+  const xpriv32B = wallet.getXPrivKeyFromSeed(Words32B, {networkName: 'mainnet'});
+  expect(xpriv32B.privateKey.bn.toBuffer().length).toBe(32);
+  const dpriv32Bd = xpriv32B.derive('m/44\'/280\'/0\'/0');
+  const dpriv32B = xpriv32B.deriveNonCompliantChild('m/44\'/280\'/0\'/0');
+  for (let i = 0; i < 10; i++) {
+    const addrd = dpriv32Bd.derive(i).publicKey.toAddress(mainnet.bitcoreNetwork).toString();
+    const addr = dpriv32B.deriveNonCompliantChild(i).publicKey.toAddress(mainnet.bitcoreNetwork).toString();
+    expect(addr).toStrictEqual(addrd);
+    expect(addr).toStrictEqual(Addr32B[i]);
+  }
+
+  // test our address generation
+  // XXX: the accountDerivationIndex being 0'/0 is a temporary fix
+  // getXPubKeyFromSeed does not derive for 'change' (https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki#change)
+  const xpub31B = wallet.getXPubKeyFromSeed(Words31B, {networkName: 'mainnet', accountDerivationIndex: '0\'/0'});
+  const addressObj31B = wallet.getAddresses(xpub31B, 0, 10, 'mainnet');
+  const address31B = Object.keys(addressObj31B);
+  for (let i = 0; i < 10; i++) {
+    expect(address31B[i]).toStrictEqual(Addr31B[i]);
+  }
+
+  const xpub32B = wallet.getXPubKeyFromSeed(Words32B, {networkName: 'mainnet', accountDerivationIndex: '0\'/0'});
+  const addressObj32B = wallet.getAddresses(xpub32B, 0, 10, 'mainnet');
+  const address32B = Object.keys(addressObj32B);
+  for (let i = 0; i < 10; i++) {
+    expect(address32B[i]).toStrictEqual(Addr32B[i]);
+  }
+});
+
+test('mainnet: hd derivation with passphrase', () => {
+  const mainnet = new Network('mainnet');
+  // simple passphrase
+  const passw = 'Hathor@Network';
+
+  const Words = 'employ name misery bring pepper drive deal journey young prefer pluck rough entire tag mouse rough belt history arm shove crouch crater lobster remember';
+
+  const Addr = [
+    'HMMePc5mruv97oBo7FZEwPQXdxkP7CkyrV',
+    'H6p4e7pnLwVfNbczZVMEJLStwxm6uEKXm8',
+    'HHmzpxV2Zvwqfv3v9apB8hCryrydsk6Xmz',
+    'HFVbDLHJbuVNr4RpfmJfZ1Aj4AHcQd3Zrh',
+    'H9SmnwVnjepuLseofECqRaFjPg188ykCHY',
+    'H6jXzjh2EJ95arKmFVcKwH64kVsAERFFWd',
+    'HUUKKe9VR5h1mgD9RrH8eBvEQKuaghP11Q',
+    'HRmuPpaKZpDfRavj3YxDnoktvGMP2FmJGh',
+    'HPnUojm5ZUNSEYmonbg8Lwzdt8udu1Y2eK',
+    'HJbxaf7kFvT4xq5ixabymZaxCgx3E758ZJ'
+  ]
+
+  // For 32 bytes private keys
+  const xpriv = wallet.getXPrivKeyFromSeed(
+      Words,
+      {
+        passphrase: passw,
+        networkName: 'mainnet',
+      }
+  );
+  const dprivd = xpriv.derive('m/44\'/280\'/0\'/0');
+  const dpriv = xpriv.deriveNonCompliantChild('m/44\'/280\'/0\'/0');
+  for (let i = 0; i < 10; i++) {
+    const addrd = dprivd.derive(i).publicKey.toAddress(mainnet.bitcoreNetwork).toString();
+    const addr = dpriv.deriveNonCompliantChild(i).publicKey.toAddress(mainnet.bitcoreNetwork).toString();
+
+    expect(addr).toStrictEqual(addrd);
+    expect(addr).toStrictEqual(Addr[i]);
+  }
+
+  const xpub = wallet.getXPubKeyFromSeed(
+      Words,
+      {
+        passphrase: passw,
+        networkName: 'mainnet',
+        accountDerivationIndex: '0\'/0',
+      },
+  );
+  const addressObj = wallet.getAddresses(xpub, 0, 10, 'mainnet');
+  const address = Object.keys(addressObj);
+  for (let i = 0; i < 10; i++) {
+    expect(address[i]).toStrictEqual(Addr[i]);
   }
 });
