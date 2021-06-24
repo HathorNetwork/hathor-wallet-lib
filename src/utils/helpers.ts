@@ -6,11 +6,16 @@
  */
 
 import { OP_PUSHDATA1 } from '../opcodes';
-import { DECIMAL_PLACES } from '../constants';
+import { DECIMAL_PLACES, DEFAULT_TX_VERSION, CREATE_TOKEN_TX_VERSION } from '../constants';
 import buffer from 'buffer';
 import Long from 'long';
 import Transaction from '../models/transaction';
-import { crypto } from 'bitcore-lib';
+import CreateTokenTransaction from '../models/create_token_transaction';
+import Network from '../models/network';
+import Address from '../models/address';
+import { hexToBuffer, unpackToInt } from '../utils/buffer';
+import { crypto, encoding } from 'bitcore-lib';
+import _ from 'lodash';
 
 /**
  * Helper methods
@@ -211,6 +216,75 @@ const helpers = {
    */
   getChecksum(bytes: Buffer): Buffer {
     return crypto.Hash.sha256sha256(bytes).slice(0, 4);
+  },
+
+  /**
+   * Get encoded address object from address hash (20 bytes) and network
+   * We complete the address bytes with the network byte and checksum
+   * then we encode to base 58 and create the address object
+   * 
+   * @param {Buffer} addressHash 20 bytes of the address hash in the output script
+   * @param {Network} network Network to get the address first byte parameter
+   *
+   * @return {Address}
+   * @memberof Helpers
+   * @inner
+   */
+  encodeAddress(addressHash: Buffer, network: Network): Address {
+    if (addressHash.length !== 20) {
+      throw new Error('Expect address hash that must have 20 bytes.');
+    }
+
+    const addressVersionBytes = buffer.Buffer.from([network.versionBytes.p2pkh]);
+
+    // With this sliced address we can calculate the checksum
+    const slicedAddress = buffer.Buffer.concat([addressVersionBytes, addressHash]);
+    const checksum = this.getChecksum(slicedAddress);
+    const addressBytes = buffer.Buffer.concat([slicedAddress, checksum]);
+    return new Address(encoding.Base58.encode(addressBytes), {network});
+  },
+
+  /**
+   * Create a transaction from bytes
+   * First we get the version value from the bytes to discover the
+   * transaction type. We currently support only regular transactions and
+   * create token transactions.
+   * 
+   * @param {Buffer} bytes Transaction in bytes
+   * @param {Network} network Network to get the address first byte parameter
+   *
+   * @return {Transaction | CreateTokenTransaction}
+   * @memberof Helpers
+   * @inner
+   */
+  createTxFromBytes(bytes: Buffer, network: Network): Transaction | CreateTokenTransaction {
+    const cloneBuffer = _.clone(bytes);
+
+    // Get version
+    const [version, ] = unpackToInt(2, false, cloneBuffer);
+
+    if (version === DEFAULT_TX_VERSION) {
+      return Transaction.createFromBytes(bytes, network);
+    } else if (version === CREATE_TOKEN_TX_VERSION) {
+      return CreateTokenTransaction.createFromBytes(bytes, network);
+    } else {
+      throw new Error('We currently create from bytes only transactions and create token transactions.');
+    }
+  },
+
+  /**
+   * Create a transaction from hex
+   * We transform the hex in bytes and call the function to get transaction from bytes
+   * 
+   * @param {string} hex Transaction in hexadecimal
+   * @param {Network} network Network to get the address first byte parameter
+   *
+   * @return {Transaction | CreateTokenTransaction}
+   * @memberof Helpers
+   * @inner
+   */
+  createTxFromHex(hex: string, network: Network): Transaction | CreateTokenTransaction {
+    return this.createTxFromBytes(hexToBuffer(hex), network);
   },
 }
 

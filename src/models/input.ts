@@ -7,6 +7,9 @@
 
 import { hexToBuffer } from '../utils/buffer';
 import helpers from '../utils/helpers';
+import { TX_HASH_SIZE_BYTES } from '../constants';
+import { unpackToInt, unpackToHex, unpackLen } from '../utils/buffer';
+import _ from 'lodash';
 
 type optionsType = {
   data?: Buffer | null,
@@ -67,6 +70,38 @@ class Input {
 
   setData(data: Buffer) {
     this.data = data;
+  }
+
+  /**
+   * Create input object from bytes
+   *
+   * @param {Buffer} buf Buffer with bytes to get input fields
+   *
+   * @return {[Input, Buffer]} Created input and rest of buffer bytes
+   * @memberof Input
+   * @static
+   * @inner
+   */
+  static createFromBytes(buf: Buffer): [Input, Buffer] {
+    // Cloning buffer so we don't mutate anything sent by the user
+    let inputBuffer = _.clone(buf);
+    let hash, index, dataLen, data;
+
+    // Hash
+    [hash, inputBuffer] = unpackToHex(TX_HASH_SIZE_BYTES, inputBuffer);
+
+    // Index
+    [index, inputBuffer] = unpackToInt(1, false, inputBuffer);
+
+    // Data
+    [dataLen, inputBuffer] = unpackToInt(2, false, inputBuffer);
+    if (dataLen) {
+      [data, inputBuffer] = unpackLen(dataLen, inputBuffer);
+    }
+
+    const input = new Input(hash, index, {data});
+
+    return [input, inputBuffer];
   }
 }
 

@@ -10,9 +10,45 @@ import CreateTokenTransaction from '../../src/models/create_token_transaction';
 import Output from '../../src/models/output';
 import Input from '../../src/models/input';
 import Address from '../../src/models/address';
+import Network from '../../src/models/network';
 import { hexToBuffer } from '../../src/utils/buffer';
+import helpers from '../../src/utils/helpers';
 import { DEFAULT_TX_VERSION } from '../../src/constants';
 import { MaximumNumberInputsError, MaximumNumberOutputsError } from '../../src/errors';
+
+const validateTxs = (tx, tx2) => {
+  expect(tx2.version).toBe(tx.version);
+  expect(tx2.tokens.length).toBe(tx.tokens.length);
+  expect(tx2.inputs.length).toBe(tx.inputs.length);
+  expect(tx2.outputs.length).toBe(tx.outputs.length);
+
+  for (let i=0; i<tx.tokens.length; i++) {
+    expect(tx2.tokens[i]).toBe(tx.tokens[i]);
+  }
+
+  for (let i=0; i<tx.inputs.length; i++) {
+    expect(tx2.inputs[i].hash).toBe(tx.inputs[i].hash);
+    expect(tx2.inputs[i].index).toBe(tx.inputs[i].index);
+    expect(tx2.inputs[i].data).toEqual(tx.inputs[i].data);
+  }
+
+  for (let i=0; i<tx.outputs.length; i++) {
+    expect(tx2.outputs[i].value).toBe(tx.outputs[i].value);
+    expect(tx2.outputs[i].tokenData).toBe(tx.outputs[i].tokenData);
+    expect(tx2.outputs[i].timelock).toBe(tx.outputs[i].timelock);
+    expect(tx2.outputs[i].address.base58).toBe(tx.outputs[i].address.base58);
+    expect(tx2.outputs[i].address.network.name).toBe(tx.outputs[i].address.network.name);
+  }
+
+  expect(tx2.parents.length).toBe(tx.parents.length);
+  for (let i=0; i<tx.parents.length; i++) {
+    expect(tx2.parents[i]).toBe(tx.parents[i]);
+  }
+
+  expect(tx2.weight).toBe(tx.weight);
+  expect(tx2.nonce).toBe(tx.nonce);
+  expect(tx2.timestamp).toBe(tx.timestamp);
+}
 
 
 test('New tx', () => {
@@ -23,8 +59,9 @@ test('New tx', () => {
   const output2 = new Output(1000, address2, {timelock: 1550249803});
   const inputDataHex = '4630440220317cd233801c1986c2de900bf8d344c6335d3c385e69d19d65e1fae7a0afd0af02207acddb824debf855798d79c45701cbe3a19aea00baad94bff5290c6f0b0acf8e210346cddff43dffab8e13398633ab7a7caf0d634551e89ae6fd563e282f6744b983';
   const input1 = new Input('00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e', 0, {data: hexToBuffer(inputDataHex)})
-  const tx = new Transaction([input1], [output1, output2], {tokens: ['123']});
-  const expectedDataToSignHex = '00010101021200034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e000000000003e800001976a91419a8eb751eab5a13027e8cae215f6a5dafc1a8dd88ac000003e800001f045c66ef4b6f76a914c2f29cfdb73822200a07ab51d261b425af811fed88ac';
+  const tokenUid = '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295d';
+  const tx = new Transaction([input1], [output1, output2], {tokens: [tokenUid]});
+  const expectedDataToSignHex = '000101010200034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295d00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e000000000003e800001976a91419a8eb751eab5a13027e8cae215f6a5dafc1a8dd88ac000003e800001f045c66ef4b6f76a914c2f29cfdb73822200a07ab51d261b425af811fed88ac';
   const dataToSign = tx.getDataToSign();
   expect(dataToSign.toString('hex')).toBe(expectedDataToSignHex);
 
@@ -32,17 +69,22 @@ test('New tx', () => {
   // Fixing timestamp to compare the serialization
   tx.timestamp = 1550249810;
   tx.weight = tx.calculateWeight();
-  const expectedTxHex = '00010101021200034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e0000694630440220317cd233801c1986c2de900bf8d344c6335d3c385e69d19d65e1fae7a0afd0af02207acddb824debf855798d79c45701cbe3a19aea00baad94bff5290c6f0b0acf8e210346cddff43dffab8e13398633ab7a7caf0d634551e89ae6fd563e282f6744b983000003e800001976a91419a8eb751eab5a13027e8cae215f6a5dafc1a8dd88ac000003e800001f045c66ef4b6f76a914c2f29cfdb73822200a07ab51d261b425af811fed88ac4031cf408556075f5c66ef520000000000';
+  const expectedTxHex = '000101010200034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295d00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e0000694630440220317cd233801c1986c2de900bf8d344c6335d3c385e69d19d65e1fae7a0afd0af02207acddb824debf855798d79c45701cbe3a19aea00baad94bff5290c6f0b0acf8e210346cddff43dffab8e13398633ab7a7caf0d634551e89ae6fd563e282f6744b983000003e800001976a91419a8eb751eab5a13027e8cae215f6a5dafc1a8dd88ac000003e800001f045c66ef4b6f76a914c2f29cfdb73822200a07ab51d261b425af811fed88ac403209eb93c8c29e5c66ef520000000000';
   expect(tx.toHex()).toBe(expectedTxHex);
 
   expect(tx.nonce).toBe(0);
   expect(tx.version).toBe(DEFAULT_TX_VERSION);
-  expect(tx.weight).toBe(17.809578259947894);
+  expect(tx.weight).toBe(18.0387508740556);
 
   expect(tx.getOutputsSum()).toBe(2000);
 
   tx.hash = '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e';
   expect(tx.getShortHash()).toBe('00034a159731...3cd6686b295e');
+
+  const network = new Network('testnet');
+  const tx2 = helpers.createTxFromHex(tx.toHex(), network);
+
+  validateTxs(tx, tx2);
 })
 
 test('Token tx', () => {
@@ -51,6 +93,27 @@ test('Token tx', () => {
   expect(info.length).toBe(5);
   expect(info[2].toString('hex')).toBe('54657374');
   expect(info[4].toString('hex')).toBe('545354');
+
+  const address1 = new Address('WR1i8USJWQuaU423fwuFQbezfevmT4vFWX');
+  const output1 = new Output(1000, address1);
+  const inputDataHex = '4630440220317cd233801c1986c2de900bf8d344c6335d3c385e69d19d65e1fae7a0afd0af02207acddb824debf855798d79c45701cbe3a19aea00baad94bff5290c6f0b0acf8e210346cddff43dffab8e13398633ab7a7caf0d634551e89ae6fd563e282f6744b983';
+  const input1 = new Input('00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e', 0, {data: hexToBuffer(inputDataHex)})
+  tx.inputs = [input1];
+  tx.outputs = [output1];
+  tx.timestamp = 1550249810;
+  tx.weight = tx.calculateWeight();
+  tx.nonce = 12345;
+  tx.parents = ['00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e', '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295c'];
+
+  const network = new Network('testnet');
+  const tx2 = helpers.createTxFromHex(tx.toHex(), network);
+  validateTxs(tx, tx2);
+
+  expect(tx2.name).toBe('Test');
+  expect(tx2.symbol).toBe('TST');
+  expect(tx2.name).toBe(tx.name);
+  expect(tx2.symbol).toBe(tx.symbol);
+
 });
 
 test('Tx validation', () => {
