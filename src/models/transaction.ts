@@ -5,13 +5,16 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { MERGED_MINED_BLOCK_VERSION, BLOCK_VERSION, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, DECIMAL_PLACES, TOKEN_INFO_VERSION, TX_WEIGHT_CONSTANTS, MAX_INPUTS, MAX_OUTPUTS } from '../constants';
+import { TX_HASH_SIZE_BYTES, MERGED_MINED_BLOCK_VERSION, BLOCK_VERSION, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, DECIMAL_PLACES, TOKEN_INFO_VERSION, TX_WEIGHT_CONSTANTS, MAX_INPUTS, MAX_OUTPUTS } from '../constants';
 import { crypto, encoding, util } from 'bitcore-lib';
+import { hexToBuffer, unpackToInt, unpackToHex, unpackToFloat } from '../utils/buffer';
 import helpers from '../utils/helpers';
 import Input from './input';
 import Output from './output';
+import Network from './network';
 import { CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError } from '../errors';
 import buffer from 'buffer';
+import { clone } from 'lodash';
 
 enum txType {
   BLOCK = 'Block',
@@ -125,7 +128,7 @@ class Transaction {
   serializeTokensArray(array: Buffer[]) {
     // Tokens data
     for (const token of this.tokens) {
-      array.push(new encoding.BufferReader(token).buf);
+      array.push(hexToBuffer(token));
     }
   }
 
@@ -176,7 +179,7 @@ class Transaction {
     if (this.parents) {
       array.push(helpers.intToBytes(this.parents.length, 1))
       for (const parent of this.parents) {
-        array.push(util.buffer.hexToBuffer(parent));
+        array.push(hexToBuffer(parent));
       }
     } else {
       // Len parents (parents will be calculated in the backend)
@@ -381,6 +384,113 @@ class Transaction {
       timestampToSet = Math.floor(Date.now() / 1000);
     }
     this.timestamp = timestampToSet;
+  }
+
+  /**
+   * Gets funds fields (version, tokens, inputs, outputs) from bytes
+   * and saves them in `this`
+   *
+   * @param {Buffer} buf Buffer with bytes to get fields
+   * @param {Network} network Network to get output addresses first byte
+   *
+   * @return {Buffer} Rest of buffer after getting the fields
+   * @memberof Transaction
+   * @inner
+   */
+  getFundsFieldsFromBytes(buf: Buffer, network: Network): Buffer {
+    // Tx version
+    [this.version, buf] = unpackToInt(2, false, buf);
+
+    let lenTokens, lenInputs, lenOutputs;
+
+    // Len tokens
+    [lenTokens, buf] = unpackToInt(1, false, buf);
+
+    // Len inputs
+    [lenInputs, buf] = unpackToInt(1, false, buf);
+
+    // Len outputs
+    [lenOutputs, buf] = unpackToInt(1, false, buf);
+
+    // Tokens array
+    for (let i=0; i<lenTokens; i++) {
+      let tokenUid;
+      [tokenUid, buf] = unpackToHex(TX_HASH_SIZE_BYTES, buf);
+      this.tokens.push(tokenUid);
+    }
+
+    // Inputs array
+    for (let i=0; i<lenInputs; i++) {
+      let input;
+      [input, buf] = Input.createFromBytes(buf);
+      this.inputs.push(input);
+    }
+
+    // Outputs array
+    for (let i=0; i<lenOutputs; i++) {
+      let output;
+      [output, buf] = Output.createFromBytes(buf, network);
+      this.outputs.push(output);
+    }
+
+    return buf;
+  }
+
+  /**
+   * Gets graph fields (weight, timestamp, parents, nonce) from bytes
+   * and saves them in `this`
+   *
+   * @param {Buffer} buf Buffer with bytes to get fields
+   *
+   * @return {Buffer} Rest of buffer after getting the fields
+   * @memberof Transaction
+   * @inner
+   */
+  getGraphFieldsFromBytes(buf: Buffer): Buffer {
+    // Weight
+    [this.weight, buf] = unpackToFloat(buf);
+
+    // Timestamp
+    [this.timestamp, buf] = unpackToInt(4, false, buf);
+
+    // Parents
+    let parentsLen;
+    [parentsLen, buf] = unpackToInt(1, false, buf);
+
+    for (let i=0; i<parentsLen; i++) {
+      let p;
+      [p, buf] = unpackToHex(TX_HASH_SIZE_BYTES, buf);
+      this.parents.push(p);
+    }
+
+    // Nonce
+    [this.nonce, buf] = unpackToInt(4, false, buf);
+
+    return buf;
+  }
+
+  /**
+   * Create transaction object from bytes
+   *
+   * @param {Buffer} buf Buffer with bytes to get transaction fields
+   * @param {Network} network Network to get output addresses first byte
+   *
+   * @return {Transaction} Transaction object
+   * @memberof Transaction
+   * @static
+   * @inner
+   */
+  static createFromBytes(buf: Buffer, network: Network): Transaction {
+    const tx = new Transaction([], []);
+
+    // Cloning buffer so we don't mutate anything sent by the user
+    // as soon as it's available natively we should use an immutable buffer
+    let txBuffer = clone(buf);
+
+    txBuffer = tx.getFundsFieldsFromBytes(txBuffer, network);
+    tx.getGraphFieldsFromBytes(txBuffer);
+
+    return tx;
   }
 }
 

@@ -17,7 +17,7 @@ import helpers from '../helpers';
 import MemoryStore from '../memory_store';
 import Connection from './connection';
 import SendTransaction from './sendTransaction';
-import { AddressError } from '../../lib/errors';
+import { AddressError } from '../errors';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';

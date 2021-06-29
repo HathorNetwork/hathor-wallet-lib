@@ -9,6 +9,7 @@ import { OP_GREATERTHAN_TIMESTAMP, OP_DUP, OP_HASH160, OP_EQUALVERIFY, OP_CHECKS
 import { DECIMAL_PLACES, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, TOKEN_INFO_VERSION, MAX_OUTPUT_VALUE_32, MAX_OUTPUT_VALUE, TOKEN_AUTHORITY_MASK, STRATUM_TIMEOUT_RETURN_CODE } from './constants';
 import { HDPrivateKey, crypto, encoding, util } from 'bitcore-lib';
 import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError, MaximumNumberParentsError } from './errors';
+import { hexToBuffer } from './utils/buffer';
 import dateFormatter from './date';
 import helpers from './helpers';
 import network from './network';
@@ -321,7 +322,7 @@ const transaction = {
     }
 
     for (let inputTx of txData.inputs) {
-      arr.push(util.buffer.hexToBuffer(inputTx.tx_id));
+      arr.push(hexToBuffer(inputTx.tx_id));
       arr.push(this.intToBytes(inputTx.index, 1));
       // Input data will be fixed to 0 for now
       arr.push(this.intToBytes(0, 2));
@@ -389,7 +390,7 @@ const transaction = {
     const encryptedPrivateKey = accessData.mainKey;
     const privateKeyStr = wallet.decryptData(encryptedPrivateKey, pin);
     const key = HDPrivateKey(privateKeyStr)
-    const derivedKey = key.derive(index);
+    const derivedKey = key.deriveNonCompliantChild(index);
     const privateKey = derivedKey.privateKey;
 
     const sig = crypto.ECDSA.sign(hash, privateKey, 'little').set({
@@ -579,7 +580,7 @@ const transaction = {
     }
 
     for (let inputTx of txData.inputs) {
-      arr.push(util.buffer.hexToBuffer(inputTx.tx_id));
+      arr.push(hexToBuffer(inputTx.tx_id));
       arr.push(this.intToBytes(inputTx.index, 1));
       arr.push(this.intToBytes(inputTx.data.length, 2));
       arr.push(inputTx.data);
@@ -609,7 +610,7 @@ const transaction = {
     if (txData.parents) {
       arr.push(this.intToBytes(txData.parents.length, 1))
       for (const parent of txData.parents) {
-        arr.push(util.buffer.hexToBuffer(parent));
+        arr.push(hexToBuffer(parent));
       }
     } else {
       // Len parents (parents will be calculated in the backend)

@@ -114,3 +114,19 @@ export class UncompressedPubKeyError extends Error {}
  * @inner
  */
 export class InvalidWords extends Error {}
+
+/**
+ * Error thrown when parsing bytes to an object
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class ParseError extends Error {}
+
+/**
+ * Error thrown when parsing a script bytes
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class ParseScriptError extends ParseError {}
