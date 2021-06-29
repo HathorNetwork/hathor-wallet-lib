@@ -16,7 +16,7 @@ import helpers from '../../src/utils/helpers';
 import { DEFAULT_TX_VERSION } from '../../src/constants';
 import { MaximumNumberInputsError, MaximumNumberOutputsError, ParseError } from '../../src/errors';
 
-const validateTxs = (tx, tx2) => {
+const compareTxs = (tx, tx2) => {
   expect(tx2.version).toBe(tx.version);
   expect(tx2.tokens.length).toBe(tx.tokens.length);
   expect(tx2.inputs.length).toBe(tx.inputs.length);
@@ -84,7 +84,7 @@ test('New tx', () => {
   const network = new Network('testnet');
   const tx2 = helpers.createTxFromHex(tx.toHex(), network);
 
-  validateTxs(tx, tx2);
+  compareTxs(tx, tx2);
 
   // Test invalid hex
 
@@ -119,7 +119,7 @@ test('Token tx', () => {
 
   const network = new Network('testnet');
   const tx2 = helpers.createTxFromHex(tx.toHex(), network);
-  validateTxs(tx, tx2);
+  compareTxs(tx, tx2);
 
   expect(tx2.name).toBe('Test');
   expect(tx2.symbol).toBe('TST');

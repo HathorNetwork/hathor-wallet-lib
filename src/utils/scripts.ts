@@ -55,6 +55,11 @@ export const parseOutputScript = (buff: Buffer, network: Network): {timelock: nu
   // We should do something similar to what we have in the full node with
   // Scripts regex verification match
 
+  // It's still unsure how expensive it is to throw an exception in JavaScript. Some languages are really
+  // inefficient when it comes to exceptions while others are totally efficient. If it is efficient,
+  // we can keep throwing the error. Otherwise, we should just return null
+  // because this method will be used together with others when we are trying to parse a given script.
+
   try {
     return parseP2PKH(buff, network);
   } catch (error) {

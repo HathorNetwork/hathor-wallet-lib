@@ -15,7 +15,7 @@ import Network from '../models/network';
 import Address from '../models/address';
 import { hexToBuffer, unpackToInt } from '../utils/buffer';
 import { crypto, encoding } from 'bitcore-lib';
-import _ from 'lodash';
+import { clone } from 'lodash';
 import { ParseError } from '../errors';
 
 /**
@@ -267,7 +267,8 @@ const helpers = {
 
     // We should clone the buffer being sent in order to never mutate
     // what comes from outside the library
-    const cloneBuffer = _.clone(bytes);
+    // as soon as it's available natively we should use an immutable buffer
+    const cloneBuffer = clone(bytes);
 
     // Get version
     const [version, ] = unpackToInt(2, false, cloneBuffer);

@@ -15,7 +15,7 @@ import Transaction from './transaction';
 import Network from './network';
 import { CreateTokenTxInvalid } from '../errors';
 import buffer from 'buffer';
-import _ from 'lodash';
+import { clone } from 'lodash';
 
 type optionsType = {
   weight?: number,
@@ -206,7 +206,8 @@ class CreateTokenTransaction extends Transaction {
     const tx = new CreateTokenTransaction('', '', [], []);
 
     // Cloning buffer so we don't mutate anything sent by the user
-    let txBuffer = _.clone(buf);
+    // as soon as it's available natively we should use an immutable buffer
+    let txBuffer = clone(buf);
 
     txBuffer = tx.getFundsFieldsFromBytes(txBuffer, network);
     txBuffer = tx.getTokenInfoFromBytes(txBuffer);

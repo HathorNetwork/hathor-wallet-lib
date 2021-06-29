@@ -14,7 +14,7 @@ import Output from './output';
 import Network from './network';
 import { CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError } from '../errors';
 import buffer from 'buffer';
-import _ from 'lodash';
+import { clone } from 'lodash';
 
 enum txType {
   BLOCK = 'Block',
@@ -484,7 +484,8 @@ class Transaction {
     const tx = new Transaction([], []);
 
     // Cloning buffer so we don't mutate anything sent by the user
-    let txBuffer = _.clone(buf);
+    // as soon as it's available natively we should use an immutable buffer
+    let txBuffer = clone(buf);
 
     txBuffer = tx.getFundsFieldsFromBytes(txBuffer, network);
     tx.getGraphFieldsFromBytes(txBuffer);
