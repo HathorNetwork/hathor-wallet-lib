@@ -227,3 +227,8 @@ export const SELECT_OUTPUTS_TIMEOUT = 1000 * 60;
  * Wallet service URL
  */
 export const WALLET_SERVICE_BASE_URL  = 'https://wallet-service.testnet.hathor.network/';
+
+/**
+ * Size in bytes of a transaction hash (32 bytes)
+ */
+export const TX_HASH_SIZE_BYTES = 32;

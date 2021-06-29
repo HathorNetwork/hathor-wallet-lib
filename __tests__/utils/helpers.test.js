@@ -6,6 +6,7 @@
  */
 
 import helpers from '../../src/utils/helpers';
+import { unpackToInt, unpackToFloat, hexToBuffer, bufferToHex } from '../../src/utils/buffer';
 import Transaction from '../../src/models/transaction';
 import Output from '../../src/models/output';
 import Input from '../../src/models/input';
@@ -46,43 +47,39 @@ test('Version check', () => {
 test('Unsigned int to bytes', () => {
   let number1 = 10;
   let buf1 = helpers.intToBytes(number1, 1);
-  expect(buf1.readUInt8(0)).toBe(number1);
+  expect(unpackToInt(1, false, buf1)[0]).toBe(number1);
 
   let number2 = 300;
   let buf2 = helpers.intToBytes(number2, 2);
-  expect(buf2.readUInt16BE(0)).toBe(number2);
+  expect(unpackToInt(2, false, buf2)[0]).toBe(number2);
 
   let number3 = 70000;
   let buf3 = helpers.intToBytes(number3, 4);
-  expect(buf3.readUInt32BE(0)).toBe(number3);
+  expect(unpackToInt(4, false, buf3)[0]).toBe(number3);
 });
 
 test('Signed int to bytes', () => {
   let number1 = 10;
   let buf1 = helpers.signedIntToBytes(number1, 1);
-  expect(buf1.readInt8(0)).toBe(number1);
+  expect(unpackToInt(1, true, buf1)[0]).toBe(number1);
 
   let number2 = 300;
   let buf2 = helpers.signedIntToBytes(number2, 2);
-  expect(buf2.readInt16BE(0)).toBe(number2);
+  expect(unpackToInt(2, true, buf2)[0]).toBe(number2);
 
   let number3 = 70000;
   let buf3 = helpers.signedIntToBytes(number3, 4);
-  expect(buf3.readInt32BE(0)).toBe(number3);
+  expect(unpackToInt(4, true, buf3)[0]).toBe(number3);
 
   let number4 = 2**33;
   let buf4 = helpers.signedIntToBytes(number4, 8);
-  if (nodeMajorVersion > 8) {
-    expect(buf4.readBigInt64BE(0)).toBe(BigInt(number4));
-  } else {
-    expect(buf4.readIntBE(0, 8)).toBe(number4);
-  }
+  expect(unpackToInt(8, true, buf4)[0]).toBe(number4);
 });
 
 test('Float to bytes', () => {
   let number = 10.5;
   let buffer = helpers.floatToBytes(number, 8);
-  expect(buffer.readDoubleBE(0)).toBe(number);
+  expect(unpackToFloat(buffer)[0]).toBe(number);
 });
 
 test('Push data', () => {
@@ -105,4 +102,10 @@ test('Push data', () => {
 test('Checksum', () => {
   const data = Buffer.from([0x28, 0xab, 0xca, 0x4e, 0xad, 0xc0, 0x59, 0xd3, 0x24, 0xce, 0x46, 0x99, 0x5c, 0x41, 0x06, 0x5d, 0x71, 0x86, 0x0a, 0xd7, 0xb0]);
   expect(helpers.getChecksum(data)).toEqual(Buffer.from([0x6b, 0x13, 0xb9, 0x78]));
+});
+
+test('Buffer to hex', () => {
+  const hexString = '044f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa385b6b1b8ead809ca67454d9683fcf2ba03456d6fe2c4abe2b07f0fbdbb2f1c1';
+  const buff = hexToBuffer(hexString);
+  expect(bufferToHex(buff)).toBe(hexString);
 });

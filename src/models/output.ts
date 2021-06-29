@@ -11,6 +11,10 @@ import { OutputValueError } from '../errors';
 import { util } from 'bitcore-lib';
 import helpers from '../utils/helpers';
 import Address from './address';
+import Network from './network';
+import { unpackToInt, unpackLen, bytesToOutputValue } from '../utils/buffer';
+import { parseOutputScript } from '../utils/scripts';
+import _ from 'lodash';
 
 type optionsType = {
   tokenData?: number,
@@ -170,6 +174,40 @@ class Output {
     arr.push(helpers.intToBytes(outputScript.length, 2));
     arr.push(outputScript);
     return arr;
+  }
+
+  /**
+   * Create output object from bytes
+   *
+   * @param {Buffer} buf Buffer with bytes to get output fields
+   * @param {Network} network Network to get output addresses first byte
+   *
+   * @return {[Output, Buffer]} Created output and rest of buffer bytes
+   * @memberof Output
+   * @static
+   * @inner
+   */
+  static createFromBytes(buf: Buffer, network: Network): [Output, Buffer] {
+    // Cloning buffer so we don't mutate anything sent by the user
+    let outputBuffer = _.clone(buf);
+    let value, tokenData, scriptLen, script;
+
+    // Value
+    [value, outputBuffer] = bytesToOutputValue(outputBuffer);
+
+    // Token data
+    [tokenData, outputBuffer] = unpackToInt(1, false, outputBuffer);
+
+    // Script
+    [scriptLen, outputBuffer] = unpackToInt(2, false, outputBuffer);
+
+    [script, outputBuffer] = unpackLen(scriptLen, outputBuffer);
+
+    const {timelock, address} = parseOutputScript(script, network);
+
+    const output = new Output(value, address, {tokenData, timelock});
+
+    return [output, outputBuffer];
   }
 }
 
