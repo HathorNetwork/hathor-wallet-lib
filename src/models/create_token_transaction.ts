@@ -7,12 +7,15 @@
 
 import { CREATE_TOKEN_TX_VERSION, TOKEN_INFO_VERSION } from '../constants';
 import { encoding, util } from 'bitcore-lib';
+import { unpackToInt, unpackLen } from '../utils/buffer';
 import helpers from '../utils/helpers';
 import Input from './input';
 import Output from './output';
 import Transaction from './transaction';
+import Network from './network';
 import { CreateTokenTxInvalid } from '../errors';
 import buffer from 'buffer';
+import { clone } from 'lodash';
 
 type optionsType = {
   weight?: number,
@@ -40,6 +43,7 @@ class CreateTokenTransaction extends Transaction {
     const newOptions = Object.assign(defaultOptions, options);
 
     super(inputs, outputs, newOptions);
+    this.version = CREATE_TOKEN_TX_VERSION;
     this.name = name;
     this.symbol = symbol;
   }
@@ -124,6 +128,92 @@ class CreateTokenTransaction extends Transaction {
     // Token symbol
     arr.push(symbolBytes);
     return arr;
+  }
+
+  getTokenInfoFromBytes(buf: Buffer): Buffer {
+    let tokenInfoVersion, lenName, lenSymbol, bufName, bufSymbol;
+
+    [tokenInfoVersion, buf] = unpackToInt(1, false, buf);
+
+    if (tokenInfoVersion !== TOKEN_INFO_VERSION) {
+      throw new Error(`Unknown token info version: ${tokenInfoVersion}`);
+    }
+
+    [lenName, buf] = unpackToInt(1, false, buf);
+    [bufName, buf] = unpackLen(lenName, buf);
+    this.name = bufName.toString('utf-8');
+
+
+    [lenSymbol, buf] = unpackToInt(1, false, buf);
+    [bufSymbol, buf] = unpackLen(lenSymbol, buf);
+    this.symbol = bufSymbol.toString('utf-8');
+
+    return buf;
+  }
+
+  /**
+   * Gets funds fields (version, inputs, outputs) from bytes
+   * and saves them in `this`
+   *
+   * @param {Buffer} buf Buffer with bytes to get fields
+   * @param {Network} network Network to get output addresses first byte
+   *
+   * @return {Buffer} Rest of buffer after getting the fields
+   * @memberof CreateTokenTransaction
+   * @inner
+   */
+  getFundsFieldsFromBytes(buf: Buffer, network: Network): Buffer {
+    // Tx version
+    [this.version, buf] = unpackToInt(2, false, buf);
+
+    let lenInputs, lenOutputs;
+
+    // Len inputs
+    [lenInputs, buf] = unpackToInt(1, false, buf);
+
+    // Len outputs
+    [lenOutputs, buf] = unpackToInt(1, false, buf);
+
+    // Inputs array
+    for (let i=0; i<lenInputs; i++) {
+      let input;
+      [input, buf] = Input.createFromBytes(buf);
+      this.inputs.push(input);
+    }
+
+    // Outputs array
+    for (let i=0; i<lenOutputs; i++) {
+      let output;
+      [output, buf] = Output.createFromBytes(buf, network);
+      this.outputs.push(output);
+    }
+
+    return buf;
+  }
+
+  /**
+   * Create transaction object from bytes
+   *
+   * @param {Buffer} buf Buffer with bytes to get transaction fields
+   * @param {Network} network Network to get output addresses first byte
+   *
+   * @return {CreateTokenTransaction} Transaction object
+   * @memberof CreateTokenTransaction
+   * @static
+   * @inner
+   */
+  static createFromBytes(buf: Buffer, network: Network): CreateTokenTransaction {
+    const tx = new CreateTokenTransaction('', '', [], []);
+
+    // Cloning buffer so we don't mutate anything sent by the user
+    // as soon as it's available natively we should use an immutable buffer
+    let txBuffer = clone(buf);
+
+    txBuffer = tx.getFundsFieldsFromBytes(txBuffer, network);
+    txBuffer = tx.getTokenInfoFromBytes(txBuffer);
+    tx.getGraphFieldsFromBytes(txBuffer);
+
+    return tx;
   }
 }
 
