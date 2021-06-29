@@ -7,8 +7,10 @@
 
 import Output from '../../src/models/output';
 import Address from '../../src/models/address';
-import { OutputValueError } from '../../src/errors';
+import Network from '../../src/models/network';
+import { OutputValueError, ParseScriptError } from '../../src/errors';
 import buffer from 'buffer';
+import { parseOutputScript } from '../../src/utils/scripts';
 import { AUTHORITY_TOKEN_DATA, TOKEN_MINT_MASK, TOKEN_MELT_MASK, MAX_OUTPUT_VALUE } from '../../src/constants';
 
 
@@ -63,14 +65,33 @@ test('Authorities', () => {
 });
 
 test('Script', () => {
-  const o1 = new Output(1000, new Address('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo'));
+  const network = new Network('testnet');
+  const addr = 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo';
+  const o1 = new Output(1000, new Address(addr, {network}));
   const script1 = o1.createScript();
   expect(script1).toBeInstanceOf(buffer.Buffer);
   expect(script1.length).toBe(25);
 
+  const parsedScript = parseOutputScript(script1, network);
+  expect(parsedScript.timelock).toBeNull();
+  expect(parsedScript.address.base58).toBe(addr);
+
   // With timelock we have 6 more bytes
-  const o2 = new Output(1000, new Address('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo'), {timelock: 1601421717});
+  const timelock = 1601421717;
+  const o2 = new Output(1000, new Address(addr, {network}), {timelock});
   const script2 = o2.createScript();
   expect(script2).toBeInstanceOf(buffer.Buffer);
   expect(script2.length).toBe(31);
+
+  const parsedScript2 = parseOutputScript(script2, network);
+  expect(parsedScript2.timelock).toBe(timelock);
+  expect(parsedScript2.address.base58).toBe(addr);
+
+  expect(() => {
+    parseOutputScript(script1.slice(1), network);
+  }).toThrowError(ParseScriptError);
+
+  expect(() => {
+    parseOutputScript(script1.slice(10), network);
+  }).toThrowError(ParseScriptError);
 });

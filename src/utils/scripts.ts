@@ -25,6 +25,11 @@ export const parseP2PKH = (buff: Buffer, network: Network): {timelock: number | 
     // First byte is len, which is always 4 bytes
     [timelock, scriptBuf] = unpackToInt(4, false, scriptBuf.slice(1));
     offset = 1;
+  } else {
+    if (scriptBuf.length !== 25) {
+      // It's not a P2PKH
+      throw new ParseScriptError('Invalid output script.');
+    }
   }
 
   let addressHash;
