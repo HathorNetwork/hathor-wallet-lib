@@ -1,5 +1,6 @@
 import assert from 'assert';
 import buffer from 'buffer';
+import { ParseError } from '../errors';
 
 const nodeMajorVersion = process.versions.node.split('.')[0];
 
@@ -16,6 +17,20 @@ export const hexToBuffer = (value: string): Buffer => {
 };
 
 /**
+ * Validates if buffer has enough bytes to unpack
+ *
+ * @param {number} n The size to unpack
+ * @param {Buffer} buff The buffer to unpack
+ *
+ * @throws ParseError when requests to unpack more bytes than the buffer size
+ */
+const validateLenToUnpack = (n: number, buff: Buffer) => {
+  if (buff.length < n) {
+    throw new ParseError(`Don't have enough bytes to unpack. Requested ${n} and buffer has ${buff.length}`);
+  }
+};
+
+/**
  * Unpacks a buffer size
  *
  * @param {number} n The size of the buffer to unpack
@@ -24,6 +39,8 @@ export const hexToBuffer = (value: string): Buffer => {
  * @return {[Buffer, Buffer]} The unpacked buffer followed by the rest of the buffer
  */
 export const unpackLen = (n: number, buff: Buffer): [Buffer, Buffer] => {
+  validateLenToUnpack(n, buff);
+
   return [
     buff.slice(0, n),
     buff.slice(n)
@@ -40,6 +57,8 @@ export const unpackLen = (n: number, buff: Buffer): [Buffer, Buffer] => {
  * @return {[number, Buffer]} The unpacked number followed by the rest of the buffer
  */
 export const unpackToInt = (n: number, signed: boolean, buff: Buffer): [number, Buffer] => {
+  validateLenToUnpack(n, buff);
+
   let retInt;
   const slicedBuff = buff.slice(0, n);
   if (n === 1) {
@@ -67,7 +86,8 @@ export const unpackToInt = (n: number, signed: boolean, buff: Buffer): [number, 
     } else {
       retInt = slicedBuff.readIntBE(0, 8);
     }
-
+  } else {
+    throw new ParseError('Invalid value for n.');
   }
 
   return [
@@ -85,6 +105,8 @@ export const unpackToInt = (n: number, signed: boolean, buff: Buffer): [number, 
  */
 export const unpackToFloat = (buff: Buffer): [number, Buffer] => {
   const n = 8;
+  validateLenToUnpack(n, buff);
+
   const retFloat = buff.slice(0, n).readDoubleBE();
   return [
     retFloat,

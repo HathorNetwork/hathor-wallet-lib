@@ -16,6 +16,7 @@ import Address from '../models/address';
 import { hexToBuffer, unpackToInt } from '../utils/buffer';
 import { crypto, encoding } from 'bitcore-lib';
 import _ from 'lodash';
+import { ParseError } from '../errors';
 
 /**
  * Helper methods
@@ -253,11 +254,19 @@ const helpers = {
    * @param {Buffer} bytes Transaction in bytes
    * @param {Network} network Network to get the address first byte parameter
    *
+   * @throws ParseError if sequence of bytes is invalid or network is undefined/null
+   *
    * @return {Transaction | CreateTokenTransaction}
    * @memberof Helpers
    * @inner
    */
   createTxFromBytes(bytes: Buffer, network: Network): Transaction | CreateTokenTransaction {
+    if (!network) {
+      throw new ParseError('Invalid network parameter.');
+    }
+
+    // We should clone the buffer being sent in order to never mutate
+    // what comes from outside the library
     const cloneBuffer = _.clone(bytes);
 
     // Get version
@@ -268,7 +277,7 @@ const helpers = {
     } else if (version === CREATE_TOKEN_TX_VERSION) {
       return CreateTokenTransaction.createFromBytes(bytes, network);
     } else {
-      throw new Error('We currently create from bytes only transactions and create token transactions.');
+      throw new ParseError('We currently support only the Transaction and CreateTokenTransaction types. Other types will be supported in the future.');
     }
   },
 

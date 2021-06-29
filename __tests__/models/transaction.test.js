@@ -14,7 +14,7 @@ import Network from '../../src/models/network';
 import { hexToBuffer } from '../../src/utils/buffer';
 import helpers from '../../src/utils/helpers';
 import { DEFAULT_TX_VERSION } from '../../src/constants';
-import { MaximumNumberInputsError, MaximumNumberOutputsError } from '../../src/errors';
+import { MaximumNumberInputsError, MaximumNumberOutputsError, ParseError } from '../../src/errors';
 
 const validateTxs = (tx, tx2) => {
   expect(tx2.version).toBe(tx.version);
@@ -85,6 +85,18 @@ test('New tx', () => {
   const tx2 = helpers.createTxFromHex(tx.toHex(), network);
 
   validateTxs(tx, tx2);
+
+  // Test invalid hex
+
+  // Invalid version
+  expect(() => {
+    helpers.createTxFromHex(tx.toHex().slice(20), network);
+  }).toThrowError(ParseError);
+
+  // Invalid end part
+  expect(() => {
+    helpers.createTxFromHex(tx.toHex().slice(0, -20), network);
+  }).toThrowError(ParseError);
 })
 
 test('Token tx', () => {

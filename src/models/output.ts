@@ -190,7 +190,7 @@ class Output {
   static createFromBytes(buf: Buffer, network: Network): [Output, Buffer] {
     // Cloning buffer so we don't mutate anything sent by the user
     let outputBuffer = _.clone(buf);
-    let value, tokenData, timelock, address, scriptLen, script;
+    let value, tokenData, scriptLen, script;
 
     // Value
     [value, outputBuffer] = bytesToOutputValue(outputBuffer);
@@ -203,7 +203,7 @@ class Output {
 
     [script, outputBuffer] = unpackLen(scriptLen, outputBuffer);
 
-    [timelock, address] = parseOutputScript(script, network);
+    const {timelock, address} = parseOutputScript(script, network);
 
     const output = new Output(value, address, {tokenData, timelock});
 
