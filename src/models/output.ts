@@ -21,11 +21,6 @@ type optionsType = {
   timelock?: number | null,
 };
 
-const defaultOptions = {
-  tokenData: 0,
-  timelock: null,
-};
-
 
 class Output {
   // Output value as an integer
@@ -37,9 +32,14 @@ class Output {
   // Timestamp of the timelock of the output
   timelock: number | null;
 
-  constructor(value: number, address: Address, options: optionsType = defaultOptions) {
+  constructor(value: number, address: Address, options: optionsType = {}) {
+    const defaultOptions: optionsType = {
+      tokenData: 0,
+      timelock: null,
+    };
+
     const newOptions = Object.assign(defaultOptions, options);
-    const { tokenData, timelock} = newOptions;
+    const { tokenData, timelock } = newOptions;
 
     if (!value) {
       throw new OutputValueError('Value must be a positive number.');

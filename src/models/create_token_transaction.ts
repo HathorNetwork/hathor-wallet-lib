@@ -26,20 +26,20 @@ type optionsType = {
   hash?: string | null,
 };
 
-const defaultOptions: optionsType = {
-  weight: 0,
-  nonce: 0,
-  timestamp: null,
-  parents: [],
-  tokens: [],
-  hash: null,
-}
 
 class CreateTokenTransaction extends Transaction {
   name: string;
   symbol: string;
 
-  constructor(name: string, symbol: string, inputs: Input[], outputs: Output[], options: optionsType = defaultOptions) {
+  constructor(name: string, symbol: string, inputs: Input[], outputs: Output[], options: optionsType = {}) {
+    const defaultOptions: optionsType = {
+      weight: 0,
+      nonce: 0,
+      timestamp: null,
+      parents: [],
+      tokens: [],
+      hash: null,
+    }
     const newOptions = Object.assign(defaultOptions, options);
 
     super(inputs, outputs, newOptions);
