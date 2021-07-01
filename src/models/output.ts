@@ -17,8 +17,8 @@ import { parseOutputScript } from '../utils/scripts';
 import _ from 'lodash';
 
 type optionsType = {
-  tokenData?: number,
-  timelock?: number | null,
+  tokenData?: number | undefined,
+  timelock?: number | null | undefined,
 };
 
 
@@ -33,7 +33,7 @@ class Output {
   timelock: number | null;
 
   constructor(value: number, address: Address, options: optionsType = {}) {
-    const defaultOptions: optionsType = {
+    const defaultOptions = {
       tokenData: 0,
       timelock: null,
     };

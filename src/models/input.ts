@@ -12,7 +12,7 @@ import { unpackToInt, unpackToHex, unpackLen } from '../utils/buffer';
 import _ from 'lodash';
 
 type optionsType = {
-  data?: Buffer | null,
+  data?: Buffer | null | undefined,
 };
 
 class Input {
@@ -24,7 +24,7 @@ class Input {
   data: Buffer | null;
 
   constructor(hash: string, index: number, options: optionsType = {}) {
-    const defaultOptions: optionsType = {
+    const defaultOptions = {
       data: null
     }
     const newOptions = Object.assign(defaultOptions, options);
