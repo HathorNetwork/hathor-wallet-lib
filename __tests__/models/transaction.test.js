@@ -84,6 +84,9 @@ test('New tx', () => {
   const network = new Network('testnet');
   const tx2 = helpers.createTxFromHex(tx.toHex(), network);
 
+  expect(tx.tokens.length).toBe(1);
+  expect(tx2.tokens.length).toBe(1);
+
   compareTxs(tx, tx2);
 
   // Test invalid hex
