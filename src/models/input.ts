@@ -26,7 +26,7 @@ class Input {
   constructor(hash: string, index: number, options: optionsType = {}) {
     const defaultOptions = {
       data: null
-    }
+    };
     const newOptions = Object.assign(defaultOptions, options);
     const { data } = newOptions;
 

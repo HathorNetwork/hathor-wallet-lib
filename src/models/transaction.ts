@@ -54,7 +54,7 @@ class Transaction {
       parents: [],
       tokens: [],
       hash: null,
-    }
+    };
     const newOptions = Object.assign(defaultOptions, options);
     const { version, weight, nonce, timestamp, parents, tokens, hash } = newOptions;
 

@@ -39,7 +39,7 @@ class CreateTokenTransaction extends Transaction {
       parents: [],
       tokens: [],
       hash: null,
-    }
+    };
     const newOptions = Object.assign(defaultOptions, options);
 
     super(inputs, outputs, newOptions);
