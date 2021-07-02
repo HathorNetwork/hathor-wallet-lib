@@ -118,7 +118,7 @@ class CreateTokenTransaction extends Transaction {
    * @memberof Transaction
    * @inner
    */
-  serializeTokenInfo(array: Buffer[]): Buffer[] {
+  serializeTokenInfo(array: Buffer[]) {
     if (!(this.name) || !(this.symbol)) {
       throw new CreateTokenTxInvalid('Token name and symbol are required when creating a new token');
     }

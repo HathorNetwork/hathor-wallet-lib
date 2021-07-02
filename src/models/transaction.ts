@@ -517,7 +517,7 @@ class Transaction {
    * @memberof Transaction
    * @inner
    */
-  calculateHashPart1(): object {
+  calculateHashPart1(): crypto.Hash {
     const arrFunds = [];
     this.serializeFundsFields(arrFunds, true);
     const fundsHash = crypto.createHash('sha256');
@@ -546,7 +546,7 @@ class Transaction {
    * @memberof Transaction
    * @inner
    */
-  calculateHashPart2(part1: object): Buffer {
+  calculateHashPart2(part1: crypto.Hash): Buffer {
     const arrNonce = [];
     this.serializeNonce(arrNonce);
 
