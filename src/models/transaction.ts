@@ -6,8 +6,8 @@
  */
 
 import { TX_HASH_SIZE_BYTES, MERGED_MINED_BLOCK_VERSION, BLOCK_VERSION, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, DECIMAL_PLACES, TOKEN_INFO_VERSION, TX_WEIGHT_CONSTANTS, MAX_INPUTS, MAX_OUTPUTS } from '../constants';
-import { crypto, encoding, util } from 'bitcore-lib';
-import { hexToBuffer, unpackToInt, unpackToHex, unpackToFloat } from '../utils/buffer';
+import { cryptoBL, encoding, util } from 'bitcore-lib';
+import { bufferToHex, hexToBuffer, unpackToInt, unpackToHex, unpackToFloat } from '../utils/buffer';
 import helpers from '../utils/helpers';
 import Input from './input';
 import Output from './output';
@@ -15,6 +15,7 @@ import Network from './network';
 import { CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError } from '../errors';
 import buffer from 'buffer';
 import { clone } from 'lodash';
+import crypto from 'crypto';
 
 enum txType {
   BLOCK = 'Block',
@@ -99,23 +100,37 @@ class Transaction {
 
     let arr: any[] = []
 
-    // Tx version
-    arr.push(helpers.intToBytes(this.version, 2))
-
-    // Len tokens
-    arr.push(helpers.intToBytes(this.tokens.length, 1))
-
-    // Len of inputs and outputs
-    this.serializeFundsFieldsLen(arr);
-
-    // Tokens array
-    this.serializeTokensArray(arr);
-
-    // Inputs and outputs
     this.serializeFundsFields(arr, false);
 
     this._dataToSignCache = util.buffer.concat(arr);
     return this._dataToSignCache!;
+  }
+
+  /**
+   * Serialize funds fields
+   * version, len tokens, len inputs, len outputs, tokens array, inputs and outputs
+   *
+   * @param {Buffer[]} array Array of buffer to push the serialized fields
+   * @param {boolean} addInputData If should add input data when serializing it
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  serializeFundsFields(array: Buffer[], addInputData: boolean) {
+    // Tx version
+    array.push(helpers.intToBytes(this.version, 2))
+
+    // Len tokens
+    array.push(helpers.intToBytes(this.tokens.length, 1))
+
+    // Len of inputs and outputs
+    this.serializeFundsFieldsLen(array);
+
+    // Tokens array
+    this.serializeTokensArray(array);
+
+    // Inputs and outputs
+    this.serializeInputsOutputs(array, addInputData);
   }
 
   /**
@@ -151,7 +166,7 @@ class Transaction {
    * @memberof Transaction
    * @inner
    */
-  serializeFundsFields(array: Buffer[], addInputData: boolean) {
+  serializeInputsOutputs(array: Buffer[], addInputData: boolean) {
     for (const inputTx of this.inputs) {
       array.push(...inputTx.serialize(addInputData));
     }
@@ -184,7 +199,17 @@ class Transaction {
       // Len parents (parents will be calculated in the backend)
       array.push(helpers.intToBytes(0, 1))
     }
+  }
 
+  /**
+   * Serializes nonce
+   *
+   * @param {Buffer[]} array Array of buffer to push serialized nonce
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  serializeNonce(array: Buffer[]) {
     // Add nonce in the end
     array.push(helpers.intToBytes(this.nonce, 4));
   }
@@ -199,7 +224,7 @@ class Transaction {
    */
   getDataToSignHash(): Buffer {
     const dataToSign = this.getDataToSign();
-    const hashbuf = crypto.Hash.sha256sha256(dataToSign);
+    const hashbuf = cryptoBL.Hash.sha256sha256(dataToSign);
     return new encoding.BufferReader(hashbuf).readReverse();
   }
 
@@ -267,23 +292,13 @@ class Transaction {
     let arr: any = []
     // Serialize first the funds part
     //
-    // Tx version
-    arr.push(helpers.intToBytes(this.version, 2))
-
-    // Len tokens
-    arr.push(helpers.intToBytes(this.tokens.length, 1))
-
-    // Len of inputs and outputs
-    this.serializeFundsFieldsLen(arr);
-
-    // Tokens array
-    this.serializeTokensArray(arr);
-
-    // Outputs and inputs
     this.serializeFundsFields(arr, true);
 
-    // Weight, timestamp, parents and nonce
+    // Weight, timestamp, parents
     this.serializeGraphFields(arr);
+
+    // Nonce
+    this.serializeNonce(arr);
 
     return util.buffer.concat(arr);
   }
@@ -489,7 +504,86 @@ class Transaction {
     txBuffer = tx.getFundsFieldsFromBytes(txBuffer, network);
     tx.getGraphFieldsFromBytes(txBuffer);
 
+    tx.updateHash();
+
     return tx;
+  }
+
+  /**
+   * Calculate first part of transaction hash
+   *
+   * @return {object} Sha256 hash object of part1
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  calculateHashPart1(): object {
+    const arrFunds = [];
+    this.serializeFundsFields(arrFunds, true);
+    const fundsHash = crypto.createHash('sha256');
+    fundsHash.update(buffer.Buffer.concat(arrFunds));
+    const digestedFunds = fundsHash.digest();
+
+    const arrGraph = [];
+    this.serializeGraphFields(arrGraph);
+    const graphHash = crypto.createHash('sha256');
+    graphHash.update(buffer.Buffer.concat(arrGraph));
+    const digestedGraph = graphHash.digest();
+
+    const bufferPart1 = buffer.Buffer.concat([digestedFunds, digestedGraph]);
+
+    const part1 = crypto.createHash('sha256');
+    part1.update(bufferPart1);
+
+    return part1;
+  }
+
+  /**
+   * Calculate transaction hash from part1
+   *
+   * @return {Buffer} Transaction hash in bytes
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  calculateHashPart2(part1: object): Buffer {
+    const arrNonce = [];
+    this.serializeNonce(arrNonce);
+
+    const bufferFill = buffer.Buffer.alloc(12);
+    const fullNonceBytes = buffer.Buffer.concat([bufferFill, buffer.Buffer.concat(arrNonce)]);
+
+    part1.update(fullNonceBytes);
+
+    const part2 = crypto.createHash('sha256');
+    part2.update(part1.digest())
+
+    return part2.digest().reverse();
+  }
+
+  /**
+   * Calculate transaction hash and return it
+   *
+   * @return {string} Transaction hash in hexadecimal
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  calculateHash(): string {
+    const hashPart1 = this.calculateHashPart1();
+    const hashPart2 = this.calculateHashPart2(hashPart1);
+
+    return bufferToHex(hashPart2);
+  }
+
+  /**
+   * Update transaction hash
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  updateHash() {
+    this.hash = this.calculateHash();
   }
 }
 
