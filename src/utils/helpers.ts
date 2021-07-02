@@ -274,9 +274,9 @@ const helpers = {
     const [version, ] = unpackToInt(2, false, cloneBuffer);
 
     if (version === DEFAULT_TX_VERSION) {
-      return Transaction.createFromBytes(bytes, network);
+      return Transaction.createFromBytes(cloneBuffer, network);
     } else if (version === CREATE_TOKEN_TX_VERSION) {
-      return CreateTokenTransaction.createFromBytes(bytes, network);
+      return CreateTokenTransaction.createFromBytes(cloneBuffer, network);
     } else {
       throw new ParseError('We currently support only the Transaction and CreateTokenTransaction types. Other types will be supported in the future.');
     }
