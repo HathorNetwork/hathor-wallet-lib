@@ -12,12 +12,8 @@ import { unpackToInt, unpackToHex, unpackLen } from '../utils/buffer';
 import _ from 'lodash';
 
 type optionsType = {
-  data?: Buffer | null,
+  data?: Buffer | null | undefined,
 };
-
-const defaultOptions = {
-  data: null
-}
 
 class Input {
   // Hash of the transaction is being spent
@@ -27,7 +23,10 @@ class Input {
   // Input signed data for P2PKH and redeemScript for P2SH
   data: Buffer | null;
 
-  constructor(hash: string, index: number, options: optionsType = defaultOptions) {
+  constructor(hash: string, index: number, options: optionsType = {}) {
+    const defaultOptions = {
+      data: null
+    };
     const newOptions = Object.assign(defaultOptions, options);
     const { data } = newOptions;
 

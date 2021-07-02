@@ -33,16 +33,6 @@ type optionsType = {
   hash?: string | null,
 };
 
-const defaultOptions: optionsType = {
-  version: DEFAULT_TX_VERSION,
-  weight: 0,
-  nonce: 0,
-  timestamp: null,
-  parents: [],
-  tokens: [],
-  hash: null,
-}
-
 class Transaction {
   inputs: Input[];
   outputs: Output[];
@@ -55,7 +45,16 @@ class Transaction {
   hash: string | null;
   protected _dataToSignCache: Buffer | null;
 
-  constructor(inputs: Input[], outputs: Output[], options: optionsType = defaultOptions) {
+  constructor(inputs: Input[], outputs: Output[], options: optionsType = {}) {
+    const defaultOptions: optionsType = {
+      version: DEFAULT_TX_VERSION,
+      weight: 0,
+      nonce: 0,
+      timestamp: null,
+      parents: [],
+      tokens: [],
+      hash: null,
+    };
     const newOptions = Object.assign(defaultOptions, options);
     const { version, weight, nonce, timestamp, parents, tokens, hash } = newOptions;
 
