@@ -61,15 +61,7 @@ class CreateTokenTransaction extends Transaction {
     }
 
     let arr: any[] = []
-    // Tx version
-    arr.push(helpers.intToBytes(this.version, 2))
-
-    // Funds len and fields
-    this.serializeFundsFieldsLen(arr);
     this.serializeFundsFields(arr, false);
-
-    // Create token tx need to add extra information
-    arr = [...arr, ...this.serializeTokenInfo()];
 
     this._dataToSignCache = util.buffer.concat(arr);
     return this._dataToSignCache!;
@@ -86,20 +78,37 @@ class CreateTokenTransaction extends Transaction {
     let arr: any = []
     // Serialize first the funds part
     //
-    // Tx version
-    arr.push(helpers.intToBytes(this.version, 2))
-
-    // Funds len and fields
-    this.serializeFundsFieldsLen(arr);
     this.serializeFundsFields(arr, true);
-
-    // Create token tx need to add extra information
-    arr = [...arr, ...this.serializeTokenInfo()];
 
     // Graph fields
     this.serializeGraphFields(arr);
 
+    // Nonce
+    this.serializeNonce(arr);
+
     return util.buffer.concat(arr);
+  }
+
+  /**
+   * Serialize funds fields
+   * version, len inputs, len outputs, inputs, outputs and token info
+   *
+   * @param {Buffer[]} array Array of buffer to push the serialized fields
+   * @param {boolean} addInputData If should add input data when serializing it
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  serializeFundsFields(array: Buffer[], addInputData: boolean) {
+    // Tx version
+    array.push(helpers.intToBytes(this.version, 2))
+
+    // Funds len and fields
+    this.serializeFundsFieldsLen(array);
+    this.serializeInputsOutputs(array, addInputData);
+
+    // Create token tx need to add extra information
+    this.serializeTokenInfo(array);
   }
 
   /**
@@ -109,25 +118,23 @@ class CreateTokenTransaction extends Transaction {
    * @memberof Transaction
    * @inner
    */
-  serializeTokenInfo(): Buffer[] {
+  serializeTokenInfo(array: Buffer[]) {
     if (!(this.name) || !(this.symbol)) {
       throw new CreateTokenTxInvalid('Token name and symbol are required when creating a new token');
     }
 
     const nameBytes = buffer.Buffer.from(this.name, 'utf8');
     const symbolBytes = buffer.Buffer.from(this.symbol, 'utf8');
-    const arr: any[] = [];
     // Token info version
-    arr.push(helpers.intToBytes(TOKEN_INFO_VERSION, 1));
+    array.push(helpers.intToBytes(TOKEN_INFO_VERSION, 1));
     // Token name size
-    arr.push(helpers.intToBytes(nameBytes.length, 1));
+    array.push(helpers.intToBytes(nameBytes.length, 1));
     // Token name
-    arr.push(nameBytes);
+    array.push(nameBytes);
     // Token symbol size
-    arr.push(helpers.intToBytes(symbolBytes.length, 1));
+    array.push(helpers.intToBytes(symbolBytes.length, 1));
     // Token symbol
-    arr.push(symbolBytes);
-    return arr;
+    array.push(symbolBytes);
   }
 
   getTokenInfoFromBytes(buf: Buffer): Buffer {
@@ -212,6 +219,8 @@ class CreateTokenTransaction extends Transaction {
     txBuffer = tx.getFundsFieldsFromBytes(txBuffer, network);
     txBuffer = tx.getTokenInfoFromBytes(txBuffer);
     tx.getGraphFieldsFromBytes(txBuffer);
+
+    tx.updateHash();
 
     return tx;
   }
