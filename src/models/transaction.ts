@@ -6,7 +6,7 @@
  */
 
 import { TX_HASH_SIZE_BYTES, MERGED_MINED_BLOCK_VERSION, BLOCK_VERSION, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, DECIMAL_PLACES, TOKEN_INFO_VERSION, TX_WEIGHT_CONSTANTS, MAX_INPUTS, MAX_OUTPUTS } from '../constants';
-import { cryptoBL, encoding, util } from 'bitcore-lib';
+import { crypto as cryptoBL, encoding, util } from 'bitcore-lib';
 import { bufferToHex, hexToBuffer, unpackToInt, unpackToHex, unpackToFloat } from '../utils/buffer';
 import helpers from '../utils/helpers';
 import Input from './input';
