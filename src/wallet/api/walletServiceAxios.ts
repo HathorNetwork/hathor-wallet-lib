@@ -19,7 +19,7 @@ import { WALLET_SERVICE_BASE_URL, TIMEOUT } from '../../constants';
  *
  * @param {number} timeout Timeout in milliseconds for the request
  */
-export const axiosInstance = (timeout: number = TIMEOUT) => {
+export const axiosInstance = (authToken: string = '', timeout: number = TIMEOUT) => {
   // TODO make base URL customizable
   // TODO How to allow 'Retry' request?
   const defaultOptions = {
@@ -28,6 +28,10 @@ export const axiosInstance = (timeout: number = TIMEOUT) => {
     headers: {
       'Content-Type': 'application/json',
     },
+  }
+
+  if (authToken) {
+    defaultOptions['headers']['Authorization'] = `Bearer ${authToken}`;
   }
 
   return axios.create(defaultOptions);

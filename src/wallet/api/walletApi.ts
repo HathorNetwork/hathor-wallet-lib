@@ -16,9 +16,8 @@ import Input from '../../models/input';
  */
 
 const walletApi = {
-  getWalletStatus(id: string): Promise<any> {
-    const data = { params: { id } }
-    return axiosInstance().get('wallet', data);
+  getWalletStatus(authToken: string): Promise<any> {
+    return axiosInstance(authToken).get('wallet');
   },
 
   createWallet(xpubkey: string): Promise<any> {
@@ -26,36 +25,45 @@ const walletApi = {
     return axiosInstance().post('wallet', data);
   },
 
-  getAddresses(id: string): Promise<any> {
-    const data = { params: { id } }
-    return axiosInstance().get('addresses', data);
+  getAddresses(authToken: string): Promise<any> {
+    return axiosInstance(authToken).get('addresses');
   },
 
-  getBalances(id: string, token: string | null = null): Promise<any> {
-    const data = { params: { id } }
+  getBalances(authToken: string, token: string | null = null): Promise<any> {
+    const data = { params: {} };
     if (token) {
       data['params']['token_id'] = token;
     }
-    return axiosInstance().get('balances', data);
+    return axiosInstance(authToken).get('balances', data);
   },
 
-  getHistory(id: string, token: string | null = null): Promise<any> {
+  getHistory(authToken: string, token: string | null = null): Promise<any> {
     // TODO add pagination parameters
-    const data = { params: { id } }
+    const data = { params: {} };
     if (token) {
       data['params']['token_id'] = token;
     }
-    return axiosInstance().get('txhistory', data);
+    return axiosInstance(authToken).get('txxhistory', data);
   },
 
-  createTxProposal(id: string, outputs: Output[], inputs: Input[]): Promise<any> {
-    const data = { id, outputs, inputs };
-    return axiosInstance().post('txproposals', data);
+  getUtxos(authToken: string, options = {}): Promise<any> {
+    const data = { params: options }
+    return axiosInstance(authToken).get('utxos', data);
   },
 
-  updateTxProposal(id: string, timestamp: number, nonce: number, weight: number, parents: string[], inputsData: string[]): Promise<any> {
-    const data = { timestamp, nonce, weight, parents, inputsSignatures: inputsData };
-    return axiosInstance().put(`txproposals/${id}`, data);
+  createTxProposal(authToken: string, txHex: string): Promise<any> {
+    const data = { txHex };
+    return axiosInstance(authToken).post('txproposals', data);
+  },
+
+  updateTxProposal(authToken: string, id: string, txHex: string): Promise<any> {
+    const data = { txHex };
+    return axiosInstance(authToken).put(`txproposals/${id}`, data);
+  },
+
+  createAuthToken(timestamp: number, xpub: string, sign: string): Promise<any> {
+    const data = { ts: timestamp, xpub, sign };
+    return axiosInstance().post('auth/token', data);
   },
 };
 
