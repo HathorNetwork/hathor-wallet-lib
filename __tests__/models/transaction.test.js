@@ -48,6 +48,8 @@ const compareTxs = (tx, tx2) => {
   expect(tx2.weight).toBe(tx.weight);
   expect(tx2.nonce).toBe(tx.nonce);
   expect(tx2.timestamp).toBe(tx.timestamp);
+
+  expect(tx.hash).toBe(tx2.hash);
 }
 
 
@@ -65,6 +67,10 @@ test('New tx', () => {
   const dataToSign = tx.getDataToSign();
   expect(dataToSign.toString('hex')).toBe(expectedDataToSignHex);
 
+  const expectedDataToSignHashHex = 'df1a5572fa6b4750832c7fc2206a1ca53dbc4872c2a8738116f1801257ee647f';
+  const dataToSignHash = tx.getDataToSignHash();
+  expect(dataToSignHash.toString('hex')).toBe(expectedDataToSignHashHex);
+
 
   // Fixing timestamp to compare the serialization
   tx.timestamp = 1550249810;
@@ -78,8 +84,8 @@ test('New tx', () => {
 
   expect(tx.getOutputsSum()).toBe(2000);
 
-  tx.hash = '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e';
-  expect(tx.getShortHash()).toBe('00034a159731...3cd6686b295e');
+  tx.hash = '4a46671dd6e638023335c6a2d35b8cc65a84db43566066dbaa1f329df3e56f0c';
+  expect(tx.getShortHash()).toBe('4a46671dd6e6...329df3e56f0c');
 
   const network = new Network('testnet');
   const tx2 = helpers.createTxFromHex(tx.toHex(), network);
@@ -104,7 +110,8 @@ test('New tx', () => {
 
 test('Token tx', () => {
   const tx = new CreateTokenTransaction('Test', 'TST', [], []);
-  const info = tx.serializeTokenInfo();
+  const info = [];
+  tx.serializeTokenInfo(info);
   expect(info.length).toBe(5);
   expect(info[2].toString('hex')).toBe('54657374');
   expect(info[4].toString('hex')).toBe('545354');
@@ -119,6 +126,7 @@ test('Token tx', () => {
   tx.weight = tx.calculateWeight();
   tx.nonce = 12345;
   tx.parents = ['00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e', '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295c'];
+  tx.hash = '723ca83484495bcbb4cf849a835800a28cfac5440a8f517fffb095c52c461858';
 
   const network = new Network('testnet');
   const tx2 = helpers.createTxFromHex(tx.toHex(), network);
@@ -200,4 +208,115 @@ test('Transaction type', () => {
   expect(tx1.isBlock()).toBe(false);
   expect(tx2.isBlock()).toBe(false);
   expect(tx3.isBlock()).toBe(true);
+});
+
+test('Known transactions hash', () => {
+  // Token creation tx from explorer
+  // https://explorer.testnet.hathor.network/transaction/00b584c970b3597d59f3d3b8bf52c4928c6ce25604fe3488467d3f2c0f4dd6e2
+  const rawTx = '00010001020082c7dd1f0ceb8867219dcca68540abe77222d11bb2dc67a7af1f04640ea1f701006a473045022100e41968f863dc3372c96a944641f2361ed86849249822b5988804adba1683b3ec02201877dd97d0c85d3754f3378828a4484de407ed2985fcf87782d90cce8f72ec9c2103168e0d873a5bbd75c90c24a68071ea05b9c10996d0cadb543ca650aa76607a260000006400001976a9143f207b6b6fdc624f6c4aff52daf5b80f7f15caf988ac0000001700001976a9143f207b6b6fdc624f6c4aff52daf5b80f7f15caf988ac40200000218def4160dcc22702006f1ebedd590bb5db5c71adbdeaa9b15f7f75c6257c26b11781dc1a5b20f83300b96fdd7a445e063326bbba979919be3b76add5b9cac9ff3330aa2bb804fb0e000000f4';
+
+  const network = new Network('testnet');
+  const tx = helpers.createTxFromHex(rawTx, network);
+
+  expect(tx.version).toBe(1);
+  expect(tx.tokens.length).toBe(0);
+  expect(tx.inputs.length).toBe(1);
+  expect(tx.outputs.length).toBe(2);
+  expect(tx.inputs[0].hash).toBe('0082c7dd1f0ceb8867219dcca68540abe77222d11bb2dc67a7af1f04640ea1f7');
+  expect(tx.inputs[0].index).toBe(1);
+  expect(tx.outputs[0].value).toBe(100);
+  expect(tx.outputs[0].timelock).toBeNull();
+  expect(tx.outputs[0].tokenData).toBe(0);
+  expect(tx.outputs[0].address.base58).toBe('WURpMuhenPHPC7yLWk2LX9Hsuwr5r5JvdR');
+  expect(tx.outputs[1].value).toBe(23);
+  expect(tx.outputs[1].timelock).toBeNull();
+  expect(tx.outputs[1].tokenData).toBe(0);
+  expect(tx.outputs[1].address.base58).toBe('WURpMuhenPHPC7yLWk2LX9Hsuwr5r5JvdR');
+  expect(tx.weight).toBe(8.000001);
+  expect(tx.timestamp).toBe(1625080359);
+  expect(tx.parents.length).toBe(2);
+  expect(tx.parents[0]).toBe('006f1ebedd590bb5db5c71adbdeaa9b15f7f75c6257c26b11781dc1a5b20f833');
+  expect(tx.parents[1]).toBe('00b96fdd7a445e063326bbba979919be3b76add5b9cac9ff3330aa2bb804fb0e');
+  expect(tx.nonce).toBe(244);
+  expect(tx.hash).toBe('00b584c970b3597d59f3d3b8bf52c4928c6ce25604fe3488467d3f2c0f4dd6e2');
+
+  // Token creation tx from explorer
+  // https://explorer.testnet.hathor.network/transaction/0095835ce7b784301dbfaec88e4faf16872a0ad72f596f8a61c2d8c9caaf4ce5
+  const rawTxCreation = '000201040026c04e94574161e0d01e883507fe7615982a70fe07fd484371878738f4fc310100694630440220598f51e6ba1d3ae47c0702f6ed5c27b2fa9bd102d24ad0e4b7079ca17e00b33802201aaba60b46d96dcbea2420885e06fbdbee77d0e8b227f349c53c27f4cca7ca9021021fbb66741977bd12987d6bfe1599fcdebd5620a4e3884b98cab4fa2f8f656bbe000003e000001976a914f057aac531d3b197c62ab187f60ce16ad3474caf88ac0000032001001976a9146b6f1af9950364c48a26bc471a8c24e99e9e0bd788ac0000000181001976a91428424d584c561afb351df28af7b3294eb976272c88ac0000000281001976a9149aec9c0e2fb850887964d2d8c1efb2c88965ba8388ac0108576174436f696e39045741543940200000218def41606278e5020026c04e94574161e0d01e883507fe7615982a70fe07fd484371878738f4fc3100edf5d5b03011d1d4d26b2612296227de2c84033950eb0ed0cbe0201efcd6f900000050'
+
+  const tx2 = helpers.createTxFromHex(rawTxCreation, network);
+  expect(tx2.version).toBe(2);
+  expect(tx2.name).toBe('WatCoin9');
+  expect(tx2.symbol).toBe('WAT9');
+  expect(tx2.tokens.length).toBe(0);
+  expect(tx2.inputs.length).toBe(1);
+  expect(tx2.outputs.length).toBe(4);
+  expect(tx2.inputs[0].hash).toBe('0026c04e94574161e0d01e883507fe7615982a70fe07fd484371878738f4fc31');
+  expect(tx2.inputs[0].index).toBe(1);
+  expect(tx2.outputs[0].value).toBe(992);
+  expect(tx2.outputs[0].timelock).toBeNull();
+  expect(tx2.outputs[0].tokenData).toBe(0);
+  expect(tx2.outputs[0].address.base58).toBe('Wkar5BWCWbi4KsNm2HHgN64wdEPbKQccG5');
+  expect(tx2.outputs[1].value).toBe(800);
+  expect(tx2.outputs[1].timelock).toBeNull();
+  expect(tx2.outputs[1].tokenData).toBe(1);
+  expect(tx2.outputs[1].address.base58).toBe('WYU6HBybYwmjA82CEsL8WRmpQXTtPsVegU');
+  expect(tx2.outputs[2].value).toBe(1);
+  expect(tx2.outputs[2].timelock).toBeNull();
+  expect(tx2.outputs[2].tokenData).toBe(129);
+  expect(tx2.outputs[2].address.base58).toBe('WSLuLMTfYT59YrS7VnGjkAYEpC4Kj8D29N');
+  expect(tx2.outputs[3].value).toBe(2);
+  expect(tx2.outputs[3].timelock).toBeNull();
+  expect(tx2.outputs[3].tokenData).toBe(129);
+  expect(tx2.outputs[3].address.base58).toBe('WcoCPPheVqDeehqnp6o4eCxEdRaYiKCMrw');
+  expect(tx2.weight).toBe(8.000001);
+  expect(tx2.timestamp).toBe(1617066213);
+  expect(tx2.parents.length).toBe(2);
+  expect(tx2.parents[0]).toBe('0026c04e94574161e0d01e883507fe7615982a70fe07fd484371878738f4fc31');
+  expect(tx2.parents[1]).toBe('00edf5d5b03011d1d4d26b2612296227de2c84033950eb0ed0cbe0201efcd6f9');
+  expect(tx2.nonce).toBe(80);
+  expect(tx2.hash).toBe('0095835ce7b784301dbfaec88e4faf16872a0ad72f596f8a61c2d8c9caaf4ce5');
+
+  // Tx with 3 tokens (one is HTR) and one output is locked
+  // https://explorer.testnet.hathor.network/transaction/0000e39fa77e4146b4487a9b7352a05aa07a0da8e8f793280640cae5a7c6e8e3
+
+  const rawBigTx = '00010203040028660612661c0592bb9b6cb8e77124caefbb0d68a119ea558c4947a68f9eef00efbc2e64ea93768c29823882185b633bf6380a15f7b621c68dc777558f06ae0044185239e750d0d7befd7758b377d8f682194fca1614b4ef6e31acbbca563600006a4730450221008b263d587b2fcd596c4c5ba9ffc488b8faa65f35b4820e150b45285f8831e6e0022061b4ce657190bb507da11a5bfcc8135333e857d87dc28662c246e8c9b1460fba2103e740109dca8142f9c3efcff130fb180deb563d7de2dde2af5c6e8dc3e5934cb00028660612661c0592bb9b6cb8e77124caefbb0d68a119ea558c4947a68f9eef01006946304402200487b46e1c48eb71eee0d780579b2e21acd8a28292081ddfc000eb0e2663de9f022061f0c12847326b9dfd3b85b60adcce799738e2b973b1e41ec67c7cf5ea010c64210360eedfa3b9e2bdb6a19954528f06ca9a970f4c07490c016bdb6a170061dda84500efbc2e64ea93768c29823882185b633bf6380a15f7b621c68dc777558f06ae01006a47304502210083e7ab1e6a82c43a5126dde9530d1e1534fc8d75e7319d66916f8e75f19de318022027c99fd9342a0c4838c928cf2f862c6237ba8c12394b0ff04301675e55c24fa321037e2975f85bb6a9bbedfd9d16850cf5d838c3751b7903aeb128a3a4ea45feed5a0000004d00001976a91427943c5862d743e1989f9191ec1fd3d48e92e70888ac0000007b00001976a91427943c5862d743e1989f9191ec1fd3d48e92e70888ac0000006401001f0461cfb59f6f76a914679e2c0291a8f7a7a05b82c98ca284526c23f68588ac000000c802001976a9149c3218e4f0f2266783a62f7f4233a44d9549c2b388ac40200000218def4160df2a4302004d75c1edd4294379e7e5b7ab6c118c53c8b07a506728feb5688c8d26a97e5000e585e04ad770cfcc06c0976fe9089b4bf57570c96981e3ecd992ccafd2f2df00000016'
+
+  const tx3 = helpers.createTxFromHex(rawBigTx, network);
+  expect(tx3.version).toBe(1);
+  expect(tx3.tokens.length).toBe(2);
+  expect(tx3.tokens[0]).toBe('0028660612661c0592bb9b6cb8e77124caefbb0d68a119ea558c4947a68f9eef');
+  expect(tx3.tokens[1]).toBe('00efbc2e64ea93768c29823882185b633bf6380a15f7b621c68dc777558f06ae');
+  expect(tx3.inputs.length).toBe(3);
+  expect(tx3.outputs.length).toBe(4);
+  expect(tx3.inputs[0].hash).toBe('0044185239e750d0d7befd7758b377d8f682194fca1614b4ef6e31acbbca5636');
+  expect(tx3.inputs[0].index).toBe(0);
+  expect(tx3.inputs[1].hash).toBe('0028660612661c0592bb9b6cb8e77124caefbb0d68a119ea558c4947a68f9eef');
+  expect(tx3.inputs[1].index).toBe(1);
+  expect(tx3.inputs[2].hash).toBe('00efbc2e64ea93768c29823882185b633bf6380a15f7b621c68dc777558f06ae');
+  expect(tx3.inputs[2].index).toBe(1);
+  expect(tx3.outputs[0].value).toBe(77);
+  expect(tx3.outputs[0].timelock).toBeNull();
+  expect(tx3.outputs[0].tokenData).toBe(0);
+  expect(tx3.outputs[0].address.base58).toBe('WSHJp1QFnA8gBntU7Rjn3zSEzxX8hYu5wE');
+  expect(tx3.outputs[1].value).toBe(123);
+  expect(tx3.outputs[1].timelock).toBeNull();
+  expect(tx3.outputs[1].tokenData).toBe(0);
+  expect(tx3.outputs[1].address.base58).toBe('WSHJp1QFnA8gBntU7Rjn3zSEzxX8hYu5wE');
+  expect(tx3.outputs[2].value).toBe(100);
+  expect(tx3.outputs[2].timelock).toBe(1641002399);
+  expect(tx3.outputs[2].tokenData).toBe(1);
+  expect(tx3.outputs[2].address.base58).toBe('WY7uxfSG4DhMVR3NVoX7rXwNr6FHJ7FWgX');
+  expect(tx3.outputs[3].value).toBe(200);
+  expect(tx3.outputs[3].timelock).toBeNull();
+  expect(tx3.outputs[3].tokenData).toBe(2);
+  expect(tx3.outputs[3].address.base58).toBe('WcuvJfrcL3LqCsYnBnZLLcTyvsSM3HnBed');
+  expect(tx3.weight).toBe(8.000001);
+  expect(tx3.timestamp).toBe(1625238083);
+  expect(tx3.parents.length).toBe(2);
+  expect(tx3.parents[0]).toBe('004d75c1edd4294379e7e5b7ab6c118c53c8b07a506728feb5688c8d26a97e50');
+  expect(tx3.parents[1]).toBe('00e585e04ad770cfcc06c0976fe9089b4bf57570c96981e3ecd992ccafd2f2df');
+  expect(tx3.nonce).toBe(22);
+  expect(tx3.hash).toBe('0000e39fa77e4146b4487a9b7352a05aa07a0da8e8f793280640cae5a7c6e8e3');
+
 });
