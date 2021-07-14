@@ -8,7 +8,7 @@
 import { EventEmitter } from 'events';
 import { HATHOR_BIP44_CODE, HATHOR_TOKEN_CONFIG, TOKEN_MINT_MASK, AUTHORITY_TOKEN_DATA, TOKEN_MELT_MASK } from '../constants';
 import Mnemonic from 'bitcore-mnemonic';
-import { crypto as cryptoBL, util, Address as bitcoreAddress } from 'bitcore-lib';
+import { crypto, util, Address as bitcoreAddress } from 'bitcore-lib';
 import walletApi from './api/walletApi';
 import wallet from '../utils/wallet';
 import helpers from '../utils/helpers';
@@ -23,7 +23,6 @@ import Network from '../models/network';
 import MineTransaction from './mineTransaction';
 import { shuffle } from 'lodash';
 import bitcore from 'bitcore-lib';
-import crypto from 'crypto';
 import {
   AddressInfoObject,
   GetBalanceObject,
@@ -149,6 +148,16 @@ class HathorWalletServiceWallet extends EventEmitter {
   }
 
   /**
+   * Return wallet auth token
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  getAuthToken(): string | null {
+    return this.authToken;
+  }
+
+  /**
    * When the wallet starts, it might take some seconds for the wallet service to completely load all addresses
    * This method is responsible for polling the wallet status until it's ready
    *
@@ -157,8 +166,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    */
   async startPollingStatus() {
     try {
-      await this.validateAndRenewAuthToken();
-      const res = await walletApi.getWalletStatus(this.authToken!);
+      const res = await walletApi.getWalletStatus(this);
       const data = res.data;
       if (res.status === 200 && data.success) {
         if (data.status.status === 'creating') {
@@ -210,8 +218,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    */
   async getAllAddresses(): Promise<GetAddressesObject[]> {
     this.checkWalletReady();
-    await this.validateAndRenewAuthToken();
-    const response = await walletApi.getAddresses(this.authToken!);
+    const response = await walletApi.getAddresses(this);
     let addresses: GetAddressesObject[] = [];
     if (response.status === 200 && response.data.success === true) {
       addresses = response.data.addresses;
@@ -223,7 +230,7 @@ class HathorWalletServiceWallet extends EventEmitter {
 
   private async getAddressesToUse() {
     this.checkWalletReady();
-    const response = await walletApi.getAddressesToUse(this.walletId!);
+    const response = await walletApi.getAddressesToUse(this);
     let addresses: AddressInfoObject[] = [];
     if (response.status === 200 && response.data.success === true) {
       addresses = response.data.addresses;
@@ -242,8 +249,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    */
   async getBalance(token: string | null = null): Promise<GetBalanceObject[]> {
     this.checkWalletReady();
-    await this.validateAndRenewAuthToken();
-    const response = await walletApi.getBalances(this.authToken!, token);
+    const response = await walletApi.getBalances(this, token);
     let balance: GetBalanceObject[] = [];
     if (response.status === 200 && response.data.success === true) {
       balance = response.data.balances;
@@ -264,8 +270,7 @@ class HathorWalletServiceWallet extends EventEmitter {
     this.checkWalletReady();
     const requestOptions = Object.assign({ token: null }, options);
     const { token } = requestOptions;
-    await this.validateAndRenewAuthToken();
-    const response = await walletApi.getHistory(this.authToken!, token);
+    const response = await walletApi.getHistory(this, token);
     let history: GetHistoryObject[] = []
     if (response.status === 200 && response.data.success === true) {
       history = response.data.history;
@@ -304,8 +309,7 @@ class HathorWalletServiceWallet extends EventEmitter {
 
     newOptions['ignoreLocked'] = true;
 
-    await this.validateAndRenewAuthToken();
-    const response = await walletApi.getUtxos(this.authToken!, newOptions);
+    const response = await walletApi.getUtxos(this, newOptions);
     let changeAmount = 0;
     let utxos: Utxo[] = []
     if (response.status === 200 && response.data.success === true) {
@@ -339,14 +343,8 @@ class HathorWalletServiceWallet extends EventEmitter {
     const xpriv = wallet.getXPrivKeyFromSeed(this.seed, {passphrase: this.passphrase, networkName: this.network.name});
     const derivedPrivKey = wallet.deriveXpriv(xpriv, '0\'');
     const address = derivedPrivKey.publicKey.toAddress(this.network.getNetwork()).toString();
-    // walletId == sha256sha256 of xpubkey as hex
-    const hash1 = crypto.createHash('sha256');
-    hash1.update(this.xpub!);
-    const hash2 = crypto.createHash('sha256');
-    hash2.update(hash1.digest());
-    const walletId = hash2.digest('hex');
 
-    const message = new bitcore.Message(String(timestamp).concat(walletId).concat(address));
+    const message = new bitcore.Message(String(timestamp).concat(this.walletId!).concat(address));
 
     return message.sign(derivedPrivKey.privateKey);
   }
@@ -521,8 +519,8 @@ class HathorWalletServiceWallet extends EventEmitter {
     const derivedKey = xpriv.deriveNonCompliantChild(addressPath);
     const privateKey = derivedKey.privateKey;
 
-    const sig = cryptoBL.ECDSA.sign(dataToSignHash, privateKey, 'little').set({
-      nhashtype: cryptoBL.Signature.SIGHASH_ALL
+    const sig = crypto.ECDSA.sign(dataToSignHash, privateKey, 'little').set({
+      nhashtype: crypto.Signature.SIGHASH_ALL
     });
 
     const arr = [];
@@ -550,13 +548,11 @@ class HathorWalletServiceWallet extends EventEmitter {
 
     const txHex = transaction.toHex();
 
-    await this.validateAndRenewAuthToken();
-    const response = await walletApi.createTxProposal(this.authToken!, txHex);
+    const response = await walletApi.createTxProposal(this, txHex);
     if (response.status === 201) {
       const responseData = response.data;
       this.txProposalId = responseData.txProposalId;
-      await this.validateAndRenewAuthToken();
-      const sendResponse = await walletApi.updateTxProposal(this.authToken!, this.txProposalId!, txHex);
+      const sendResponse = await walletApi.updateTxProposal(this, this.txProposalId!, txHex);
       if (sendResponse.status === 200) {
         return sendResponse.data;
       } else {

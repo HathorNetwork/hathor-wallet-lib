@@ -7,6 +7,7 @@
 
 import axios from 'axios';
 import { WALLET_SERVICE_BASE_URL, TIMEOUT } from '../../constants';
+import HathorWalletServiceWallet from '../wallet';
 
 /**
  * Method that creates an axios instance
@@ -19,7 +20,7 @@ import { WALLET_SERVICE_BASE_URL, TIMEOUT } from '../../constants';
  *
  * @param {number} timeout Timeout in milliseconds for the request
  */
-export const axiosInstance = (authToken: string = '', timeout: number = TIMEOUT) => {
+export const axiosInstance = async (wallet: HathorWalletServiceWallet | null = null, timeout: number = TIMEOUT) => {
   // TODO make base URL customizable
   // TODO How to allow 'Retry' request?
   const defaultOptions = {
@@ -30,8 +31,10 @@ export const axiosInstance = (authToken: string = '', timeout: number = TIMEOUT)
     },
   }
 
-  if (authToken) {
-    defaultOptions['headers']['Authorization'] = `Bearer ${authToken}`;
+  if (wallet) {
+    // Then we need the auth token
+    await wallet.validateAndRenewAuthToken();
+    defaultOptions['headers']['Authorization'] = `Bearer ${wallet.getAuthToken()}`;
   }
 
   return axios.create(defaultOptions);

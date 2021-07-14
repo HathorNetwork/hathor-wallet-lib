@@ -19,6 +19,7 @@ import {
   UtxoResponse,
   AuthTokenResponse
 } from '../types';
+import HathorWalletServiceWallet from '../wallet';
 
 /**
  * Api calls for wallet
@@ -27,58 +28,68 @@ import {
  */
 
 const walletApi = {
-  getWalletStatus(authToken: string): Promise<WalletStatusResponse> {
-    return axiosInstance(authToken).get('wallet');
+  async getWalletStatus(wallet: HathorWalletServiceWallet): Promise<WalletStatusResponse> {
+    const axios = await axiosInstance(wallet);
+    return axios.get('wallet');
   },
 
-  createWallet(xpubkey: string): Promise<WalletStatusResponse> {
+  async createWallet(xpubkey: string): Promise<WalletStatusResponse> {
     const data = { xpubkey };
-    return axiosInstance().post('wallet', data);
+    const axios = await axiosInstance();
+    return axios.post('wallet', data);
   },
 
-  getAddresses(authToken: string): Promise<AddressesResponse> {
-    return axiosInstance(authToken).get('addresses');
+  async getAddresses(wallet: HathorWalletServiceWallet): Promise<AddressesResponse> {
+    const axios = await axiosInstance(wallet);
+    return axios.get('addresses');
   },
 
-  getAddressesToUse(authToken: string): Promise<AddressesToUseResponse> {
-    return axiosInstance(authToken).get('addressestouse');
+  async getAddressesToUse(wallet: HathorWalletServiceWallet): Promise<AddressesToUseResponse> {
+    const axios = await axiosInstance(wallet);
+    return axios.get('addressestouse');
   },
 
-  getBalances(authToken: string, token: string | null = null): Promise<BalanceResponse> {
+  async getBalances(wallet: HathorWalletServiceWallet, token: string | null = null): Promise<BalanceResponse> {
     const data = { params: {} };
     if (token) {
       data['params']['token_id'] = token;
     }
-    return axiosInstance(authToken).get('balances', data);
+    const axios = await axiosInstance(wallet);
+    return axios.get('balances', data);
   },
 
-  getHistory(authToken: string, token: string | null = null): Promise<HistoryResponse> {
+  async getHistory(wallet: HathorWalletServiceWallet, token: string | null = null): Promise<HistoryResponse> {
     // TODO add pagination parameters
     const data = { params: {} };
     if (token) {
       data['params']['token_id'] = token;
     }
-    return axiosInstance(authToken).get('txxhistory', data);
+    const axios = await axiosInstance(wallet);
+    return axios.get('txxhistory', data);
   },
 
-  getUtxos(authToken: string, options = {}): Promise<UtxoResponse> {
+  async getUtxos(wallet: HathorWalletServiceWallet, options = {}): Promise<UtxoResponse> {
     const data = { params: options }
-    return axiosInstance(authToken).get('utxos', data);
+    const axios = await axiosInstance(wallet);
+    return axios.get('utxos', data);
   },
 
-  createTxProposal(authToken: string, txHex: string): Promise<TxProposalCreateResponse> {
+  async createTxProposal(wallet: HathorWalletServiceWallet, txHex: string): Promise<TxProposalCreateResponse> {
     const data = { txHex };
-    return axiosInstance(authToken).post('txproposals', data);
+    const axios = await axiosInstance(wallet);
+    return axios.post('txproposals', data);
   },
 
-  updateTxProposal(authToken: string, id: string, txHex: string): Promise<TxProposalUpdateResponse> {
+  async updateTxProposal(wallet: HathorWalletServiceWallet, id: string, txHex: string): Promise<TxProposalUpdateResponse> {
     const data = { txHex };
-    return axiosInstance(authToken).put(`txproposals/${id}`, data);
+    const axios = await axiosInstance(wallet);
+    return axios.put(`txproposals/${id}`, data);
   },
 
-  createAuthToken(timestamp: number, xpub: string, sign: string): Promise<AuthTokenResponse> {
+  async createAuthToken(timestamp: number, xpub: string, sign: string): Promise<AuthTokenResponse> {
     const data = { ts: timestamp, xpub, sign };
-    return axiosInstance().post('auth/token', data);
+    const axios = await axiosInstance();
+    return axios.post('auth/token', data);
   },
 };
 
