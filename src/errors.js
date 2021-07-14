@@ -130,3 +130,27 @@ export class ParseError extends Error {}
  * @inner
  */
 export class ParseScriptError extends ParseError {}
+
+/**
+ * Error thrown when executing wallet operations
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class WalletError extends Error {}
+
+/**
+ * Error thrown when executing wallet requests
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class WalletRequestError extends WalletError {}
+
+/**
+ * Error thrown when get utxo fails
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class UtxoError extends WalletError {}

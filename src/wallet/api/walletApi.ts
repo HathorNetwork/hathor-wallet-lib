@@ -8,6 +8,17 @@
 import { axiosInstance } from './walletServiceAxios';
 import Output from '../../models/output';
 import Input from '../../models/input';
+import {
+  WalletStatusResponse,
+  AddressesResponse,
+  AddressesToUseResponse,
+  BalanceResponse,
+  HistoryResponse,
+  TxProposalCreateResponse,
+  TxProposalUpdateResponse,
+  UtxoResponse,
+  AuthTokenResponse
+} from '../types';
 
 /**
  * Api calls for wallet
@@ -16,20 +27,24 @@ import Input from '../../models/input';
  */
 
 const walletApi = {
-  getWalletStatus(authToken: string): Promise<any> {
+  getWalletStatus(authToken: string): Promise<WalletStatusResponse> {
     return axiosInstance(authToken).get('wallet');
   },
 
-  createWallet(xpubkey: string): Promise<any> {
+  createWallet(xpubkey: string): Promise<WalletStatusResponse> {
     const data = { xpubkey };
     return axiosInstance().post('wallet', data);
   },
 
-  getAddresses(authToken: string): Promise<any> {
+  getAddresses(authToken: string): Promise<AddressesResponse> {
     return axiosInstance(authToken).get('addresses');
   },
 
-  getBalances(authToken: string, token: string | null = null): Promise<any> {
+  getAddressesToUse(authToken: string): Promise<AddressesToUseResponse> {
+    return axiosInstance(authToken).get('addressestouse');
+  },
+
+  getBalances(authToken: string, token: string | null = null): Promise<BalanceResponse> {
     const data = { params: {} };
     if (token) {
       data['params']['token_id'] = token;
@@ -37,7 +52,7 @@ const walletApi = {
     return axiosInstance(authToken).get('balances', data);
   },
 
-  getHistory(authToken: string, token: string | null = null): Promise<any> {
+  getHistory(authToken: string, token: string | null = null): Promise<HistoryResponse> {
     // TODO add pagination parameters
     const data = { params: {} };
     if (token) {
@@ -46,22 +61,22 @@ const walletApi = {
     return axiosInstance(authToken).get('txxhistory', data);
   },
 
-  getUtxos(authToken: string, options = {}): Promise<any> {
+  getUtxos(authToken: string, options = {}): Promise<UtxoResponse> {
     const data = { params: options }
     return axiosInstance(authToken).get('utxos', data);
   },
 
-  createTxProposal(authToken: string, txHex: string): Promise<any> {
+  createTxProposal(authToken: string, txHex: string): Promise<TxProposalCreateResponse> {
     const data = { txHex };
     return axiosInstance(authToken).post('txproposals', data);
   },
 
-  updateTxProposal(authToken: string, id: string, txHex: string): Promise<any> {
+  updateTxProposal(authToken: string, id: string, txHex: string): Promise<TxProposalUpdateResponse> {
     const data = { txHex };
     return axiosInstance(authToken).put(`txproposals/${id}`, data);
   },
 
-  createAuthToken(timestamp: number, xpub: string, sign: string): Promise<any> {
+  createAuthToken(timestamp: number, xpub: string, sign: string): Promise<AuthTokenResponse> {
     const data = { ts: timestamp, xpub, sign };
     return axiosInstance().post('auth/token', data);
   },

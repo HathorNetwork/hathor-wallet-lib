@@ -6,6 +6,8 @@
  */
 
 
+import { Utxo } from '../wallet/types';
+import { UtxoError } from '../errors';
 
 const transaction = {
   /**
@@ -20,13 +22,13 @@ const transaction = {
    * @memberof transaction
    * @inner
    */
-  selectUtxos(utxos, totalAmount: number): {utxos, changeAmount: number} {
+  selectUtxos(utxos: Utxo[], totalAmount: number): {utxos: Utxo[], changeAmount: number} {
     if (totalAmount <= 0) {
-      throw new Error('Total amount must be a positive integer.');
+      throw new UtxoError('Total amount must be a positive integer.');
     }
 
     if (utxos.length === 0) {
-      throw new Error('Don\'t have enough utxos to fill total amount.');
+      throw new UtxoError('Don\'t have enough utxos to fill total amount.');
     }
 
     if (utxos[0].value < totalAmount) {
@@ -42,14 +44,20 @@ const transaction = {
           break;
         }
       }
+
+      if (filledAmount < totalAmount) {
+        // It means that all utxos combined are not enough to fill the requested amount
+        throw new UtxoError('Don\'t have enough utxos to fill total amount.');
+      }
+
       return {
         utxos: utxosToUse,
         changeAmount: filledAmount - totalAmount
       };
     } else {
       // We can fill the total amount with a single utxo
-      // we will find the smaller utxo that can fill the total amount
-      let lastUtxo = null;
+      // we will find the smallest utxo that can fill the total amount
+      let lastUtxo: Utxo | null = null;
 
       for (const utxo of utxos) {
         if (utxo.value === totalAmount) {
@@ -64,15 +72,15 @@ const transaction = {
           // it's safe to use lastUtxo because it will never be null
           // this is inside the else that checked that at least one utxo fills the total amount
           return {
-            utxos: [lastUtxo],
-            // @ts-ignore
+            utxos: [lastUtxo!],
             changeAmount: lastUtxo!.value - totalAmount
           };
         }
 
         lastUtxo = utxo;
       }
-      // If I get here, it means that all utxos in the array are bigger than the expected amount
+
+      // If I got here, it means that all utxos in the array are bigger than the expected amount
       // then I must use the last utxo, which has the smallest value
       const smallestUtxo = utxos[utxos.length - 1];
       return {
