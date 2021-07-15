@@ -36,7 +36,7 @@ import {
   OutputRequestObj,
   InputRequestObj
 } from './types';
-import { UtxoError, WalletRequestError } from '../errors';
+import { SendTxError, UtxoError, WalletRequestError } from '../errors';
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
@@ -206,8 +206,8 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   private async onWalletReady() {
-    await this.getAddressesToUse();
     this.setState(walletState.READY);
+    //await this.getAddressesToUse();
   }
 
   /**
@@ -278,6 +278,27 @@ class HathorWalletServiceWallet extends EventEmitter {
       throw new WalletRequestError('Error getting wallet history.');
     }
     return history
+  }
+
+  /**
+   * Get utxo from tx id and index
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async getUtxoFromId(txId: string, index: number): Promise<Utxo | null> {
+    const response = await walletApi.getUtxos(this, { txId, index });
+    if (response.status === 200 && response.data.success === true) {
+      const utxos = response.data.utxos;
+      if (utxos.length === 0) {
+        // No utxo for this txId/index or is not from the requested wallet
+        return null;
+      } else {
+        return utxos[0];
+      }
+    } else {
+      throw new WalletRequestError('Error requesting utxo.');
+    }
   }
 
   /**
@@ -434,28 +455,29 @@ class HathorWalletServiceWallet extends EventEmitter {
     const { inputs, changeAddress } = newOptions;
 
 
-    // We get the full amount for each token
+    // We get the full outputs amount for each token
     // This is useful for (i) getting the utxos for each one
     // in case it's not sent and (ii) create the token array of the tx
-    const amountTokenMap = {};
+    const amountOutputMap = {};
     for (const output of outputs) {
-      if (output.token in amountTokenMap) {
-        amountTokenMap[output.token] += output.value;
+      if (output.token in amountOutputMap) {
+        amountOutputMap[output.token] += output.value;
       } else {
-        amountTokenMap[output.token] = output.value;
+        amountOutputMap[output.token] = output.value;
       }
     }
 
     // We need this array to get the addressPath for each input used and be able to sign the input data
     const utxosAddressPath: string[] = [];
+    let changeOutputAdded = false;
     if (inputs.length === 0) {
       // Need to get utxos
       // We already know the full amount for each token
       // Now we can get the utxos and (if needed) change amount for each token
-      for (const token in amountTokenMap) {
-        const { utxos, changeAmount } = await this.getUtxos({ tokenId: token, totalAmount: amountTokenMap[token] });
+      for (const token in amountOutputMap) {
+        const { utxos, changeAmount } = await this.getUtxos({ tokenId: token, totalAmount: amountOutputMap[token] });
         if (utxos.length === 0) {
-          throw new UtxoError(`No utxos available to fill the request. Token: ${token} - Amount: ${amountTokenMap[token]}.`);
+          throw new UtxoError(`No utxos available to fill the request. Token: ${token} - Amount: ${amountOutputMap[token]}.`);
         }
 
         for (const utxo of utxos) {
@@ -464,16 +486,55 @@ class HathorWalletServiceWallet extends EventEmitter {
         }
 
         if (changeAmount) {
+          changeOutputAdded = true;
           // TODO Get change address from wallet service if null
           outputs.push({ address: changeAddress!, value: changeAmount, token });
         }
       }
-
-      outputs = shuffle(outputs);
     } else {
+      const amountInputMap = {};
+      for (const input of inputs) {
+        const utxo = await this.getUtxoFromId(input.txId, input.index);
+        if (utxo === null) {
+          throw new UtxoError(`Invalid input selection. Input ${input.txId} at index ${input.index}.`);
+        }
+
+        if (!(utxo.tokenId in amountOutputMap)) {
+          throw new SendTxError(`Invalid input selection. Input ${input.txId} at index ${input.index} has token ${utxo.tokenId} that is not on the outputs.`);
+        }
+
+        utxosAddressPath.push(utxo.addressPath);
+
+        if (utxo.tokenId in amountInputMap) {
+          amountInputMap[utxo.tokenId] += utxo.value;
+        } else {
+          amountInputMap[utxo.tokenId] = utxo.value;
+        }
+      }
+
+      for (const t in amountOutputMap) {
+        if (!(t in amountInputMap)) {
+          throw new SendTxError(`Invalid input selection. Token ${t} is in the outputs but there are no inputs for it.`);
+        }
+
+        if (amountInputMap[t] < amountOutputMap[t]) {
+          throw new SendTxError(`Invalid input selection. Sum of inputs for token ${t} is smaller than the sum of outputs.`);
+        }
+
+        if (amountInputMap[t] > amountOutputMap[t]) {
+          changeOutputAdded = true;
+          const changeAmount = amountInputMap[t] - amountOutputMap[t];
+          // TODO Get change address from wallet service if null
+          outputs.push({ address: changeAddress!, value: changeAmount, token: t });
+        }
+      }
     }
 
-    const tokens = Object.keys(amountTokenMap);
+    if (changeOutputAdded) {
+      outputs = shuffle(outputs);
+    }
+
+    const tokens = Object.keys(amountOutputMap);
     const htrIndex = tokens.indexOf(HATHOR_TOKEN_CONFIG.uid);
     if (htrIndex > -1) {
       tokens.splice(htrIndex, 1);
@@ -487,6 +548,9 @@ class HathorWalletServiceWallet extends EventEmitter {
     const outputsObj: Output[] = [];
     for (const o of outputs) {
       const address = new Address(o.address, { network: this.network });
+      if (!address.isValid()) {
+        throw new SendTxError(`Address ${o.address} is not valid.`);
+      }
       const tokenData = (o.token in tokens) ? tokens.indexOf(o.token) + 1 : 0;
       const outputOptions = { tokenData, timelock: o.timelock || null };
       outputsObj.push(new Output(o.value, address, outputOptions));
@@ -705,6 +769,9 @@ class HathorWalletServiceWallet extends EventEmitter {
     // a. Token amount
     // TODO get address to use from wallet service if it's null
     const address = new Address(newOptions.address!, {network: this.network});
+    if (!address.isValid()) {
+      throw new SendTxError(`Address ${newOptions.address} is not valid.`);
+    }
     outputsObj.push(new Output(amount, address, {tokenData: 1}));
 
     if (newOptions.createMintAuthority) {
@@ -721,6 +788,9 @@ class HathorWalletServiceWallet extends EventEmitter {
       // d. HTR change output
       // TODO get address to use from wallet service if it's null
       const changeAddress = new Address(newOptions.changeAddress!, {network: this.network});
+      if (!changeAddress.isValid()) {
+        throw new SendTxError(`Address ${newOptions.changeAddress} is not valid.`);
+      }
       outputsObj.push(new Output(changeAmount, changeAddress));
     }
 
@@ -789,6 +859,9 @@ class HathorWalletServiceWallet extends EventEmitter {
     // a. Token amount
     // TODO get address to use from wallet service if it's null
     const address = new Address(newOptions.address!, {network: this.network});
+    if (!address.isValid()) {
+      throw new SendTxError(`Address ${newOptions.address} is not valid.`);
+    }
     outputsObj.push(new Output(amount, address, {tokenData: 1}));
 
     if (newOptions.createAnotherMint) {
@@ -800,6 +873,9 @@ class HathorWalletServiceWallet extends EventEmitter {
       // c. HTR change output
       // TODO get address to use from wallet service if it's null
       const changeAddress = new Address(newOptions.changeAddress!, {network: this.network});
+      if (!changeAddress.isValid()) {
+        throw new SendTxError(`Address ${newOptions.changeAddress} is not valid.`);
+      }
       outputsObj.push(new Output(changeAmount, changeAddress));
     }
 
@@ -871,6 +947,9 @@ class HathorWalletServiceWallet extends EventEmitter {
     // a. Deposit back
     // TODO get address to use from wallet service if it's null
     const address = new Address(newOptions.address!, {network: this.network});
+    if (!address.isValid()) {
+      throw new SendTxError(`Address ${newOptions.address} is not valid.`);
+    }
     if (withdraw) {
       // We may have nothing to get back
       outputsObj.push(new Output(withdraw, address, {tokenData: 0}));
@@ -885,6 +964,9 @@ class HathorWalletServiceWallet extends EventEmitter {
       // c. Token change output
       // TODO get address to use from wallet service if it's null
       const changeAddress = new Address(newOptions.changeAddress!, {network: this.network});
+      if (!changeAddress.isValid()) {
+        throw new SendTxError(`Address ${newOptions.changeAddress} is not valid.`);
+      }
       outputsObj.push(new Output(changeAmount, changeAddress, {tokenData: 1}));
     }
 
@@ -947,12 +1029,18 @@ class HathorWalletServiceWallet extends EventEmitter {
     // Create outputs
     const outputsObj: Output[] = [];
     const addressObj = new Address(address, {network: this.network});
+    if (!addressObj.isValid()) {
+      throw new SendTxError(`Address ${address} is not valid.`);
+    }
 
     outputsObj.push(new Output(mask, addressObj, {tokenData: AUTHORITY_TOKEN_DATA}));
 
     if (newOptions.createAnotherAuthority) {
       // TODO get anotherAddress to use from wallet service if it's null
       const anotherAddress = new Address(newOptions.anotherAuthorityAddress!, {network: this.network});
+      if (!anotherAddress.isValid()) {
+        throw new SendTxError(`Address ${newOptions.anotherAuthorityAddress} is not valid.`);
+      }
       outputsObj.push(new Output(mask, anotherAddress, {tokenData: AUTHORITY_TOKEN_DATA}));
     }
 

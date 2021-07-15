@@ -154,3 +154,11 @@ export class WalletRequestError extends WalletError {}
  * @inner
  */
 export class UtxoError extends WalletError {}
+
+/**
+ * Error thrown when sending tx
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class SendTxError extends WalletError {}
