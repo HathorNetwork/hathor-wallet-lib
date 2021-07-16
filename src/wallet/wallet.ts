@@ -36,7 +36,7 @@ import {
   OutputRequestObj,
   InputRequestObj
 } from './types';
-import { SendTxError, UtxoError, WalletRequestError } from '../errors';
+import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../errors';
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
@@ -199,7 +199,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    */
   private checkWalletReady() {
     if (!this.isReady()) {
-      throw new Error('Wallet not ready');
+      throw new WalletError('Wallet not ready');
     }
   }
 
@@ -712,23 +712,23 @@ class HathorWalletServiceWallet extends EventEmitter {
   }
 
   getAddressIndex(address: string) {
-    throw new Error('Not implemented.');
+    throw new WalletError('Not implemented.');
   }
 
   isAddressMine(address: string) {
-    throw new Error('Not implemented.');
+    throw new WalletError('Not implemented.');
   }
 
   getTx(id: string) {
-    throw new Error('Not implemented.');
+    throw new WalletError('Not implemented.');
   }
 
   getAddressInfo(address: string, options = {}) {
-    throw new Error('Not implemented.');
+    throw new WalletError('Not implemented.');
   }
 
   consolidateUtxos(destinationAddress: string, options = {}) {
-    throw new Error('Not implemented.');
+    throw new WalletError('Not implemented.');
   }
 
   /**
@@ -1014,7 +1014,7 @@ class HathorWalletServiceWallet extends EventEmitter {
       authority = 2;
       mask = TOKEN_MELT_MASK;
     } else {
-      throw new Error('This should never happen.')
+      throw new WalletError('Type options are mint and melt for delegate authority method.')
     }
 
     // 1. Get authority utxo to spend
@@ -1076,7 +1076,7 @@ class HathorWalletServiceWallet extends EventEmitter {
       authority = 2;
       mask = TOKEN_MELT_MASK;
     } else {
-      throw new Error('This should never happen.')
+      throw new WalletError('Type options are mint and melt for destroy authority method.')
     }
 
     // 1. Get authority utxo to spend
