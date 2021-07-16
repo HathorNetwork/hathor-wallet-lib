@@ -17,8 +17,6 @@ const transaction = {
    * we return the utxo with smaller amount among the ones that have an amount bigger than the requested
    * 2. Otherwise we reverse sort the utxos by amount and select the utxos in order until the full amount is fulfilled.
    *
-   * // TODO Add params/returns docstring and create Utxos typedef
-   *
    * @memberof transaction
    * @inner
    */
