@@ -67,6 +67,10 @@ test('New tx', () => {
   const dataToSign = tx.getDataToSign();
   expect(dataToSign.toString('hex')).toBe(expectedDataToSignHex);
 
+  const expectedDataToSignHashHex = 'df1a5572fa6b4750832c7fc2206a1ca53dbc4872c2a8738116f1801257ee647f';
+  const dataToSignHash = tx.getDataToSignHash();
+  expect(dataToSignHash.toString('hex')).toBe(expectedDataToSignHashHex);
+
 
   // Fixing timestamp to compare the serialization
   tx.timestamp = 1550249810;
