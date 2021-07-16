@@ -49,6 +49,7 @@ export interface GetHistoryObject {
 export interface AddressInfoObject {
   address: string; // Address in base58
   index: number; // derivation index of the address
+  addressPath: string; // Path of the address
   error: string | undefined; // Optional error code when getting address info
 }
 
@@ -81,12 +82,12 @@ export interface AddressesResponseData {
   addresses: GetAddressesObject[];
 }
 
-export interface AddressesToUseResponse {
+export interface NewAddressesResponse {
   status: number; // Response status code
-  data: AddressesToUseResponseData;
+  data: NewAddressesResponseData;
 }
 
-export interface AddressesToUseResponseData {
+export interface NewAddressesResponseData {
   success: boolean;
   addresses: AddressInfoObject[];
 }

@@ -68,7 +68,7 @@ class HathorWalletServiceWallet extends EventEmitter {
   // Auth token to be used in the wallet API requests to wallet service
   private authToken: string | null
   // Variable to store the possible addresses to use that are after the last used address
-  private addressesToUse: AddressInfoObject[]
+  private newAddresses: AddressInfoObject[]
   // Index of the address to be used by the wallet
   private indexToUse: number
 
@@ -98,7 +98,11 @@ class HathorWalletServiceWallet extends EventEmitter {
 
     this.authToken = null;
 
-    this.addressesToUse = [];
+    // TODO When we integrate the real time events from the wallet service
+    // we will need to have a trigger to update this array every new transaction
+    // because the new tx might have used one of those addresses
+    // so we just need to call await this.getNewAddresses(); on the new tx event
+    this.newAddresses = [];
     this.indexToUse = -1;
     // TODO should we have a debug mode?
   }
@@ -207,7 +211,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    */
   private async onWalletReady() {
     this.setState(walletState.READY);
-    //await this.getAddressesToUse();
+    await this.getNewAddresses();
   }
 
   /**
@@ -228,13 +232,13 @@ class HathorWalletServiceWallet extends EventEmitter {
     return addresses;
   }
 
-  private async getAddressesToUse() {
+  private async getNewAddresses() {
     this.checkWalletReady();
-    const response = await walletApi.getAddressesToUse(this);
+    const response = await walletApi.getNewAddresses(this);
     let addresses: AddressInfoObject[] = [];
     if (response.status === 200 && response.data.success === true) {
       addresses = response.data.addresses;
-      this.addressesToUse = addresses;
+      this.newAddresses = addresses;
       this.indexToUse = 0;
     } else {
       throw new WalletRequestError('Error getting wallet addresses to use.');
@@ -382,7 +386,6 @@ class HathorWalletServiceWallet extends EventEmitter {
     const timestampNow = Math.floor(now.getTime() / 1000);
 
     const validateJWTExpireDate = (token) => {
-      // TODO Try catch errors in token parse
       const base64Url = token.split('.')[1];
       const base64 = base64Url.replace('-', '+').replace('_', '/');
       const decodedData = JSON.parse(Buffer.from(base64, 'base64').toString('binary'));
@@ -452,7 +455,7 @@ class HathorWalletServiceWallet extends EventEmitter {
       inputs: [],
       changeAddress: null
     }, options);
-    const { inputs, changeAddress } = newOptions;
+    const { inputs } = newOptions;
 
 
     // We get the full outputs amount for each token
@@ -487,8 +490,8 @@ class HathorWalletServiceWallet extends EventEmitter {
 
         if (changeAmount) {
           changeOutputAdded = true;
-          // TODO Get change address from wallet service if null
-          outputs.push({ address: changeAddress!, value: changeAmount, token });
+          const changeAddress = newOptions.changeAddress || this.getCurrentAddress({ markAsUsed: true }).address;
+          outputs.push({ address: changeAddress, value: changeAmount, token });
         }
       }
     } else {
@@ -524,8 +527,8 @@ class HathorWalletServiceWallet extends EventEmitter {
         if (amountInputMap[t] > amountOutputMap[t]) {
           changeOutputAdded = true;
           const changeAmount = amountInputMap[t] - amountOutputMap[t];
-          // TODO Get change address from wallet service if null
-          outputs.push({ address: changeAddress!, value: changeAmount, token: t });
+          const changeAddress = newOptions.changeAddress || this.getCurrentAddress({ markAsUsed: true }).address;
+          outputs.push({ address: changeAddress, value: changeAmount, token: t });
         }
       }
     }
@@ -683,13 +686,13 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   getCurrentAddress({ markAsUsed = false } = {}): AddressInfoObject {
-    const addressesToUseLen = this.addressesToUse.length;
-    if (this.indexToUse > addressesToUseLen - 1) {
-      const addressInfo = this.addressesToUse[addressesToUseLen - 1];
-      return {address: addressInfo.address, index: addressInfo.index, error: 'GAP_LIMIT_REACHED'};
+    const newAddressesLen = this.newAddresses.length;
+    if (this.indexToUse > newAddressesLen - 1) {
+      const addressInfo = this.newAddresses[newAddressesLen - 1];
+      return {...addressInfo, error: 'GAP_LIMIT_REACHED'};
     }
 
-    const addressInfo = this.addressesToUse[this.indexToUse];
+    const addressInfo = this.newAddresses[this.indexToUse];
     if (markAsUsed) {
       this.indexToUse += 1;
     }
@@ -767,8 +770,8 @@ class HathorWalletServiceWallet extends EventEmitter {
     // Create outputs
     const outputsObj: Output[] = [];
     // a. Token amount
-    // TODO get address to use from wallet service if it's null
-    const address = new Address(newOptions.address!, {network: this.network});
+    const addressToUse = newOptions.address || this.getCurrentAddress({ markAsUsed: true }).address;
+    const address = new Address(addressToUse, {network: this.network});
     if (!address.isValid()) {
       throw new SendTxError(`Address ${newOptions.address} is not valid.`);
     }
@@ -786,8 +789,8 @@ class HathorWalletServiceWallet extends EventEmitter {
 
     if (changeAmount) {
       // d. HTR change output
-      // TODO get address to use from wallet service if it's null
-      const changeAddress = new Address(newOptions.changeAddress!, {network: this.network});
+      const changeAddressStr = newOptions.changeAddress || this.getCurrentAddress({ markAsUsed: true }).address;
+      const changeAddress = new Address(changeAddressStr, {network: this.network});
       if (!changeAddress.isValid()) {
         throw new SendTxError(`Address ${newOptions.changeAddress} is not valid.`);
       }
@@ -857,8 +860,8 @@ class HathorWalletServiceWallet extends EventEmitter {
     // Create outputs
     const outputsObj: Output[] = [];
     // a. Token amount
-    // TODO get address to use from wallet service if it's null
-    const address = new Address(newOptions.address!, {network: this.network});
+    const addressToUse = newOptions.address || this.getCurrentAddress({ markAsUsed: true }).address;
+    const address = new Address(addressToUse, {network: this.network});
     if (!address.isValid()) {
       throw new SendTxError(`Address ${newOptions.address} is not valid.`);
     }
@@ -871,8 +874,8 @@ class HathorWalletServiceWallet extends EventEmitter {
 
     if (changeAmount) {
       // c. HTR change output
-      // TODO get address to use from wallet service if it's null
-      const changeAddress = new Address(newOptions.changeAddress!, {network: this.network});
+      const changeAddressStr = newOptions.changeAddress || this.getCurrentAddress({ markAsUsed: true }).address;
+      const changeAddress = new Address(changeAddressStr, {network: this.network});
       if (!changeAddress.isValid()) {
         throw new SendTxError(`Address ${newOptions.changeAddress} is not valid.`);
       }
@@ -945,8 +948,8 @@ class HathorWalletServiceWallet extends EventEmitter {
     // Create outputs
     const outputsObj: Output[] = [];
     // a. Deposit back
-    // TODO get address to use from wallet service if it's null
-    const address = new Address(newOptions.address!, {network: this.network});
+    const addressToUse = newOptions.address || this.getCurrentAddress({ markAsUsed: true }).address;
+    const address = new Address(addressToUse, {network: this.network});
     if (!address.isValid()) {
       throw new SendTxError(`Address ${newOptions.address} is not valid.`);
     }
@@ -962,8 +965,8 @@ class HathorWalletServiceWallet extends EventEmitter {
 
     if (changeAmount) {
       // c. Token change output
-      // TODO get address to use from wallet service if it's null
-      const changeAddress = new Address(newOptions.changeAddress!, {network: this.network});
+      const changeAddressStr = newOptions.changeAddress || this.getCurrentAddress({ markAsUsed: true }).address;
+      const changeAddress = new Address(changeAddressStr, {network: this.network});
       if (!changeAddress.isValid()) {
         throw new SendTxError(`Address ${newOptions.changeAddress} is not valid.`);
       }
@@ -1036,8 +1039,8 @@ class HathorWalletServiceWallet extends EventEmitter {
     outputsObj.push(new Output(mask, addressObj, {tokenData: AUTHORITY_TOKEN_DATA}));
 
     if (newOptions.createAnotherAuthority) {
-      // TODO get anotherAddress to use from wallet service if it's null
-      const anotherAddress = new Address(newOptions.anotherAuthorityAddress!, {network: this.network});
+      const anotherAddressStr = newOptions.anotherAuthorityAddress || this.getCurrentAddress({ markAsUsed: true }).address;
+      const anotherAddress = new Address(anotherAddressStr, {network: this.network});
       if (!anotherAddress.isValid()) {
         throw new SendTxError(`Address ${newOptions.anotherAuthorityAddress} is not valid.`);
       }
