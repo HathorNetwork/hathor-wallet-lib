@@ -1,7 +1,6 @@
 import assert from 'assert';
 import buffer from 'buffer';
 import { ParseError } from '../errors';
-import { get } from 'lodash';
 
 const isHexa = (value: string): boolean => {
   // test if value is string?
