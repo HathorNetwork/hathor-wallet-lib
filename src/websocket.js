@@ -208,6 +208,7 @@ class WS extends EventEmitter {
    * @param {Object} evt Event that contains the error
    */
   onError(evt) {
+    this.emit('connection_error', evt);
     this.onClose();
     // console.log('ws error', window.navigator.onLine, evt);
   }
