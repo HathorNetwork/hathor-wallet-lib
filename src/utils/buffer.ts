@@ -1,8 +1,7 @@
 import assert from 'assert';
 import buffer from 'buffer';
 import { ParseError } from '../errors';
-
-const nodeMajorVersion = process.versions.node.split('.')[0];
+import { get } from 'lodash';
 
 const isHexa = (value: string): boolean => {
   // test if value is string?
@@ -81,7 +80,8 @@ export const unpackToInt = (n: number, signed: boolean, buff: Buffer): [number, 
     }
   } else if (n === 8) {
     // We have only signed ints here
-    if (parseInt(nodeMajorVersion) > 8) {
+    const nodeMajorVersion = get(process, 'versions.node');
+    if (nodeMajorVersion && parseInt(nodeMajorVersion.split('.')[0]) > 8) {
       retInt = Number(slicedBuff.readBigInt64BE());
     } else {
       retInt = slicedBuff.readIntBE(0, 8);
