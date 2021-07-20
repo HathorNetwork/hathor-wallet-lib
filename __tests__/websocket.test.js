@@ -28,7 +28,6 @@ test('Ping', (done) => {
 }, 10000)
 
 test('Close', () => {
-
   expect(WebSocketHandler.ws.started).toBe(true);
   expect(WebSocketHandler.ws.connected).toBe(true);
   expect(WebSocketHandler.ws.isOnline).toBe(true);
@@ -37,4 +36,14 @@ test('Close', () => {
   expect(WebSocketHandler.ws.started).toBe(false);
   expect(WebSocketHandler.ws.connected).toBe(false);
   expect(WebSocketHandler.ws.isOnline).toBe(false);
+})
+
+test('Error on ws should emit connection_error event', () => {
+  expect.hasAssertions();
+
+  WebSocketHandler.ws.on('connection_error', (evt) => {
+    expect(evt.message).toStrictEqual('expect-me');
+  });
+
+  WebSocketHandler.ws.onError(new Error('expect-me'));
 })
