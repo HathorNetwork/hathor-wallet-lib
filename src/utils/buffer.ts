@@ -81,6 +81,8 @@ export const unpackToInt = (n: number, signed: boolean, buff: Buffer): [number, 
   } else if (n === 8) {
     // We have only signed ints here
     const nodeMajorVersion = get(process, 'versions.node');
+    // Browsers don't have access to versions.node and they don't have readBigInt64BE method
+    // slicedBuff.readIntBE(0, 8) worked fine testing on electron and react native (desktop and mobile wallets)
     if (nodeMajorVersion && parseInt(nodeMajorVersion.split('.')[0]) > 8) {
       retInt = Number(slicedBuff.readBigInt64BE());
     } else {
