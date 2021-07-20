@@ -263,18 +263,25 @@ class HathorWalletServiceWallet extends EventEmitter {
     return balance;
   }
 
+  async getTokens(): Promise<string[]> {
+    this.checkWalletReady();
+    const response = await walletApi.getTokens(this);
+    if (response.status === 200 && response.data.success === true) {
+      return response.data.tokens;
+    } else {
+      throw new WalletRequestError('Error getting list of tokens.');
+    }
+  }
+
   /**
    * Get the history of the wallet for a specific token
    *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async getTxHistory(options: { token?: string } = {}): Promise<GetHistoryObject[]> {
-    // TODO Add pagination parameters
+  async getTxHistory(options: { token_id?: string, count?: number, skip?: number } = {}): Promise<GetHistoryObject[]> {
     this.checkWalletReady();
-    const requestOptions = Object.assign({ token: null }, options);
-    const { token } = requestOptions;
-    const response = await walletApi.getHistory(this, token);
+    const response = await walletApi.getHistory(this, options);
     let history: GetHistoryObject[] = []
     if (response.status === 200 && response.data.success === true) {
       history = response.data.history;

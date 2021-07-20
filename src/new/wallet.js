@@ -7,7 +7,7 @@
 
 import EventEmitter from 'events';
 import wallet from '../wallet';
-import { HATHOR_TOKEN_CONFIG } from '../constants';
+import { HATHOR_TOKEN_CONFIG, HATHOR_BIP44_CODE } from "../constants";
 import transaction from '../transaction';
 import tokens from '../tokens';
 import version from '../version';
@@ -195,9 +195,52 @@ class HathorWallet extends EventEmitter {
     }
   }
 
-  getAllAddresses() {
+  async getAllAddresses() {
     storage.setStore(this.store);
-    return wallet.getAllAddresses();
+    // This algorithm is bad at performance
+    // but we must add the count of transactions
+    // in order to replicate the same return as the new
+    // wallet service facade
+    // This is really fast for a normal quantity of addresses in a wallet
+    const transactionsByAddress = this.getTransactionsCountByAddress();
+    const addresses = wallet.getAllAddresses();
+    const ret = [];
+    for (const address of addresses) {
+      ret.push({
+        address,
+        index: transactionsByAddress[address].index,
+        transactions: transactionsByAddress[address].transactions,
+      });
+    }
+    return Promise.resolve(ret);
+  }
+
+  getTransactionsCountByAddress() {
+    storage.setStore(this.store);
+    const walletData = hathorLib.wallet.getWalletData();
+    const addressKeys = walletData.keys;
+    const transactionsByAddress = {};
+    for (const key in addressKeys) {
+      transactionsByAddress[key] = {
+        index: addressKeys[key].index,
+        transactions: 0,
+      };
+    }
+
+    const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
+    for (const tx_id in historyTransactions) {
+      const tx = historyTransactions[tx_id];
+      const foundAddresses = [];
+      for (const el of [...tx.outputs, ...tx.inputs]) {
+        const address = el.decoded.address;
+        if (address in transactionsByAddress && foundAddresses.indexOf(address) === -1) {
+          transactionsByAddress[address].transactions += 1;
+          foundAddresses.push(address);
+        }
+      }
+    }
+
+    return transactionsByAddress;
   }
 
   getAddressAtIndex(index) {
@@ -207,10 +250,15 @@ class HathorWallet extends EventEmitter {
 
   getCurrentAddress({ markAsUsed = false } = {}) {
     storage.setStore(this.store);
+    let address;
     if (markAsUsed) {
-      return wallet.getAddressToUse(this.conn);
+      address = wallet.getAddressToUse(this.conn);
+    } else {
+      address = wallet.getCurrentAddress();
     }
-    return wallet.getCurrentAddress();
+    const index = this.getAddressIndex(address);
+    const addressPath = `m/44'/${HATHOR_BIP44_CODE}'/0'/0/${index}`;
+    return { address, index, addressPath };
   }
 
   /**
@@ -231,18 +279,74 @@ class HathorWallet extends EventEmitter {
     }
   }
 
-  getBalance(tokenUid) {
+  getBalance(token = null) {
     storage.setStore(this.store);
-    const uid = tokenUid || this.token.uid;
-    const historyTransactions = this.getTxHistory();
-    return wallet.calculateBalance(Object.values(historyTransactions), uid);
+    // TODO if token is null we should get the balance for each token I have
+    // but we don't use it in the wallets, so I won't implement it
+    const uid = token || this.token.uid;
+    const balanceByToken = storage.getItem('old-facade:balanceByToken');
+    const balance = uid in balanceByToken ? balanceByToken[uid] : { available: 0, locked: 0 };
+    const history = this.getOldHistory();
+    const transactions = 0;
+    for (const tx of Object.values(history)) {
+      for (const el of [...tx.outputs, ...tx.inputs]) {
+        if (el.token === uid && this.isAddressMine(el.decoded.address)) {
+          transactions += 1;
+          break;
+        }
+      }
+    }
+    return Promise.resolve([{
+      token: { // Getting token name and symbol is not easy, so we return empty strings
+        id: uid,
+        name: '',
+        symbol: ''
+      },
+      balance: {
+        unlocked: balance.available,
+        locked: balance.locked,
+      },
+      transactions,
+      lockExpires: null,
+      tokenAuthorities : {
+        unlocked: {
+          mint: this.selectAuthorityUtxo(uid, wallet.isMintOutput.bind(wallet)) !== null,
+          melt: this.selectAuthorityUtxo(uid, wallet.isMeltOutput.bind(wallet)) !== null,
+        },
+        locked: {
+          mint: false,
+          melt: false
+        }
+      },
+    }]);
   }
 
-  getTxHistory() {
+  getTxHistory(options = {}) {
     storage.setStore(this.store);
-    const data = wallet.getWalletData();
-    const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
-    return historyTransactions;
+    const newOptions = Object.assign({ token_id: HATHOR_TOKEN_CONFIG.uid, count: 15, skip: 0 }, options);
+    const uid = newOptions.token_id || this.token.uid;
+    const historyByToken = storage.getItem('old-facade:historyByToken');
+    const historyArray = uid in historyByToken ? historyByToken[uid] : [];
+    const ret = [];
+    for (const tx of historyArray) {
+      const balances = this.getTxBalance(tx);
+      ret.push({
+        txId: tx.tx_id,
+        timestamp: tx.timestamp,
+        balance: balances[uid],
+        voided: tx.voided,
+      });
+    }
+    return Promise.resolve(ret);
+  }
+
+  getTokens() {
+    storage.setStore(this.store);
+    return Promise.resolve(storage.getItem('old-facade:tokens'));
+  }
+
+  getFullHistory(options = {}) {
+    return this.getTxHistory(options);
   }
 
   /**
@@ -533,7 +637,65 @@ class HathorWallet extends EventEmitter {
     };
   }
 
+  getOldBalance(tokenUid) {
+    storage.setStore(this.store);
+    const uid = tokenUid || this.token.uid;
+    const historyTransactions = this.getOldHistory();
+    return wallet.calculateBalance(Object.values(historyTransactions), uid);
+  }
+
+  getOldHistory() {
+    storage.setStore(this.store);
+    const data = wallet.getWalletData();
+    const history = 'historyTransactions' in data ? data['historyTransactions'] : {};
+    return history;
+  }
+
+  prepareHistoryAndBalanceByToken() {
+    storage.setStore(this.store);
+    const history = this.getOldHistory();
+    const tokensHistory = {};
+    // iterate through all txs received and map all tokens this wallet has, with
+    // its history and balance
+    for (const tx of Object.values(history)) {
+      // we first get all tokens present in this tx (that belong to the user) and
+      // the corresponding balances
+      const balances = this.getTxBalance(tx);
+      for (const [tokenUid, tokenTxBalance] of Object.entries(balances)) {
+        let tokenHistory = tokensHistory[tokenUid];
+        if (tokenHistory === undefined) {
+          tokenHistory = [];
+          tokensHistory[tokenUid] = tokenHistory;
+        }
+        // add this tx to the history of the corresponding token
+        tokenHistory.push(getTxHistoryFromTx(tx, tokenUid, tokenTxBalance));
+      }
+    }
+
+    const tokensBalance = {};
+    for (const tokenUid of Object.keys(tokensHistory)) {
+      const totalBalance = this.getOldBalance(tokenUid);
+      // update token total balance
+      tokensBalance[tokenUid] = totalBalance;
+    }
+
+    // in the end, sort (in place) all tx lists in descending order by timestamp
+    for (const txList of Object.values(tokensHistory)) {
+      txList.sort((elem1, elem2) => elem2.timestamp - elem1.timestamp);
+    }
+
+    storage.setItem('old-facade:tokens', Object.keys(tokenHistory));
+    storage.setItem('old-facade:historyByToken', tokenHistory);
+    storage.setItem('old-facade:balanceByToken', tokensBalance);
+  }
+
   setState(state) {
+    if (state === HathorWallet.READY && state !== this.state) {
+      // Became ready now, so we prepare new localStorage data
+      // to support using this facade interchangable with wallet service
+      // facade in both wallets
+      this.prepareHistoryAndBalanceByToken();
+    }
     this.state = state;
     this.emit('state', state);
   }
@@ -830,15 +992,24 @@ class HathorWallet extends EventEmitter {
     const sendTransaction = new SendTransaction({data});
     if (startMiningTx) {
       sendTransaction.start();
+      const promise = new Promise((resolve, reject) => {
+        sendTransaction.promise.then((tx) => {
+          resolve(tx);
+        }, (err) => {
+          reject(err);
+        });
+      });
+      return promise;
+    } else {
+      const ret = {success: true, promise: sendTransaction.promise, sendTransaction};
+      if (this.debug) {
+        ret.debug = {
+          balanceHTR: this.getBalance(),
+          data: data,
+        };
+      }
+      return Promise.resolve(ret);
     }
-    const ret = {success: true, promise: sendTransaction.promise, sendTransaction};
-    if (this.debug) {
-      ret.debug = {
-        balanceHTR: this.getBalance(),
-        data: data,
-      };
-    }
-    return ret;
   }
 
   /**
@@ -930,9 +1101,9 @@ class HathorWallet extends EventEmitter {
    * @param {String} name Name of the token
    * @param {String} symbol Symbol of the token
    * @param {number} amount Quantity of the token to be minted
-   * @param {String} address Optional parameter for the destination of the created token
    * @param {Object} options Options parameters
    *  {
+   *   'address': address of the minted token,
    *   'changeAddress': address of the change output,
    *   'startMiningTx': boolean to trigger start mining (default true)
    *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
@@ -941,24 +1112,28 @@ class HathorWallet extends EventEmitter {
    * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    **/
-  createNewToken(name, symbol, amount, address, options = {}) {
+  async createNewToken(name, symbol, amount, options = {}) {
     storage.setStore(this.store);
-    const newOptions = Object.assign({ changeAddress: null, startMiningTx: true, pinCode: null }, options);
+    const newOptions = Object.assign({ address: null, changeAddress: null, startMiningTx: true, pinCode: null }, options);
     const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       return {success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED};
     }
-    const mintAddress = address || this.getCurrentAddress();
+    const mintAddress = newOptions.address || this.getCurrentAddress();
     const ret = tokens.createToken(mintAddress, name, symbol, amount, pin, newOptions);
 
     if (ret.success) {
       const sendTransaction = ret.sendTransaction;
       if (newOptions.startMiningTx) {
         sendTransaction.start();
+
+        await Promise.resolve(sendTransaction.promise);
+        const txHex = transaction.getTxHexFromData(sendTransaction.data);
+        return Promise.resolve({success: true, txHex });
       }
       return {success: true, promise: sendTransaction.promise, sendTransaction};
     } else {
-      return ret;
+      return Promise.reject(ret);
     }
 
   }

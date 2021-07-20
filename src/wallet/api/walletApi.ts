@@ -17,6 +17,7 @@ import {
   TxProposalCreateResponse,
   TxProposalUpdateResponse,
   UtxoResponse,
+  TokensResponse,
   AuthTokenResponse
 } from '../types';
 import HathorWalletServiceWallet from '../wallet';
@@ -58,12 +59,13 @@ const walletApi = {
     return axios.get('wallet/balances', data);
   },
 
-  async getHistory(wallet: HathorWalletServiceWallet, token: string | null = null): Promise<HistoryResponse> {
-    // TODO add pagination parameters
-    const data = { params: {} };
-    if (token) {
-      data['params']['token_id'] = token;
-    }
+  async getTokens(wallet: HathorWalletServiceWallet): Promise<TokensResponse> {
+    const axios = await axiosInstance(wallet);
+    return axios.get('wallet/tokens');
+  },
+
+  async getHistory(wallet: HathorWalletServiceWallet, options = {}): Promise<HistoryResponse> {
+    const data = { params: options };
     const axios = await axiosInstance(wallet);
     return axios.get('wallet/history', data);
   },

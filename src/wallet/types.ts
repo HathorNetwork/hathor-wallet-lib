@@ -44,6 +44,7 @@ export interface GetHistoryObject {
   txId: string; // Transaction ID
   balance: number; // Balance of this tx in this wallet (can be negative)
   timestamp: number; // Transaction timestamp
+  voided: boolean; // If transaction is voided
 }
 
 export interface AddressInfoObject {
@@ -212,4 +213,14 @@ export interface OutputRequestObj {
 export interface InputRequestObj {
   txId: string; // transaction id of the output being spent
   index: number; // index of the output being spent using this input
+}
+
+export interface TokensResponse {
+  status: number; // Response status code
+  data: TokensResponseData;
+}
+
+export interface TokensResponseData {
+  success: boolean;
+  tokens: string[];
 }
