@@ -195,6 +195,10 @@ class HathorWallet extends EventEmitter {
     }
   }
 
+  getAllAddressesSimple() {
+    return wallet.getAllAddresses();
+  }
+
   async getAllAddresses() {
     storage.setStore(this.store);
     // This algorithm is bad at performance
@@ -217,7 +221,7 @@ class HathorWallet extends EventEmitter {
 
   getTransactionsCountByAddress() {
     storage.setStore(this.store);
-    const walletData = hathorLib.wallet.getWalletData();
+    const walletData = wallet.getWalletData();
     const addressKeys = walletData.keys;
     const transactionsByAddress = {};
     for (const key in addressKeys) {
@@ -227,7 +231,7 @@ class HathorWallet extends EventEmitter {
       };
     }
 
-    const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
+    const historyTransactions = 'historyTransactions' in walletData ? walletData['historyTransactions'] : {};
     for (const tx_id in historyTransactions) {
       const tx = historyTransactions[tx_id];
       const foundAddresses = [];
@@ -287,7 +291,7 @@ class HathorWallet extends EventEmitter {
     const balanceByToken = storage.getItem('old-facade:balanceByToken');
     const balance = uid in balanceByToken ? balanceByToken[uid] : { available: 0, locked: 0 };
     const history = this.getOldHistory();
-    const transactions = 0;
+    let transactions = 0;
     for (const tx of Object.values(history)) {
       for (const el of [...tx.outputs, ...tx.inputs]) {
         if (el.token === uid && this.isAddressMine(el.decoded.address)) {
@@ -324,20 +328,12 @@ class HathorWallet extends EventEmitter {
   getTxHistory(options = {}) {
     storage.setStore(this.store);
     const newOptions = Object.assign({ token_id: HATHOR_TOKEN_CONFIG.uid, count: 15, skip: 0 }, options);
+    const { skip, count } = newOptions;
     const uid = newOptions.token_id || this.token.uid;
     const historyByToken = storage.getItem('old-facade:historyByToken');
     const historyArray = uid in historyByToken ? historyByToken[uid] : [];
-    const ret = [];
-    for (const tx of historyArray) {
-      const balances = this.getTxBalance(tx);
-      ret.push({
-        txId: tx.tx_id,
-        timestamp: tx.timestamp,
-        balance: balances[uid],
-        voided: tx.voided,
-      });
-    }
-    return Promise.resolve(ret);
+    const slicedHistory = historyArray.slice(skip, skip+count);
+    return Promise.resolve(slicedHistory);
   }
 
   getTokens() {
@@ -668,7 +664,13 @@ class HathorWallet extends EventEmitter {
           tokensHistory[tokenUid] = tokenHistory;
         }
         // add this tx to the history of the corresponding token
-        tokenHistory.push(getTxHistoryFromTx(tx, tokenUid, tokenTxBalance));
+        tokenHistory.push({
+          txId: tx.tx_id,
+          timestamp: tx.timestamp,
+          tokenUid,
+          balance: tokenTxBalance,
+          isVoided: tx.is_voided,
+        });
       }
     }
 
@@ -684,8 +686,8 @@ class HathorWallet extends EventEmitter {
       txList.sort((elem1, elem2) => elem2.timestamp - elem1.timestamp);
     }
 
-    storage.setItem('old-facade:tokens', Object.keys(tokenHistory));
-    storage.setItem('old-facade:historyByToken', tokenHistory);
+    storage.setItem('old-facade:tokens', Object.keys(tokensHistory));
+    storage.setItem('old-facade:historyByToken', tokensHistory);
     storage.setItem('old-facade:balanceByToken', tokensBalance);
   }
 
@@ -1544,7 +1546,7 @@ class HathorWallet extends EventEmitter {
   getTxBalance(tx, optionsParam = {}) {
     const options = Object.assign({ includeAuthorities: false }, optionsParam)
     storage.setStore(this.store);
-    const addresses = this.getAllAddresses();
+    const addresses = this.getAllAddressesSimple();
     const balance = {};
     for (const txout of tx.outputs) {
       if (wallet.isAuthorityOutput(txout)) {
