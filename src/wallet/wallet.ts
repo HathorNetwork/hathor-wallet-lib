@@ -21,6 +21,7 @@ import Input from '../models/input';
 import Address from '../models/address';
 import Network from '../models/network';
 import MineTransaction from './mineTransaction';
+import SendTransaction from './sendTransaction';
 import { shuffle } from 'lodash';
 import bitcore from 'bitcore-lib';
 import {
@@ -28,13 +29,14 @@ import {
   GetBalanceObject,
   GetAddressesObject,
   GetHistoryObject,
-  TxProposalUpdateResponseData,
   SendManyTxOptionsParam,
   SendTxOptionsParam,
   WalletStatus,
   Utxo,
   OutputRequestObj,
-  InputRequestObj
+  InputRequestObj,
+  SendTransactionEvents,
+  SendTransactionResponse
 } from './types';
 import { SendTxError, UtxoError, WalletRequestError } from '../errors';
 
@@ -415,19 +417,40 @@ class HathorWalletServiceWallet extends EventEmitter {
     }
   }
 
+  async sendManyOutputsTransaction(outputs: OutputRequestObj[], options: { inputs?: InputRequestObj[], changeAddress?: string } = {}): Promise<SendTransactionResponse> {
+    const response = await this.sendManyOutputsTransactionEvents(outputs, options);
+    if (response.success) {
+      const transaction = await response.sendTransaction.promise;
+      return { success: true, transaction };
+    } else {
+      throw new SendTxError('Error sending transaction.');
+    }
+  }
+
   /**
    * Send a transaction from an array of outputs and inputs
    *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async sendManyOutputsTransaction(outputs: OutputRequestObj[], options: { inputs?: InputRequestObj[], changeAddress?: string } = {}): Promise<TxProposalUpdateResponseData> {
+  async sendManyOutputsTransactionEvents(outputs: OutputRequestObj[], options: { inputs?: InputRequestObj[], changeAddress?: string } = {}): Promise<SendTransactionEvents> {
     this.checkWalletReady();
     const newOptions = Object.assign({
       inputs: [],
       changeAddress: null
     }, options);
-    return await this.createAndSendTx(outputs, newOptions);
+    const sendTransaction = await this.createAndSendTx(outputs, newOptions);
+    return { success: true, sendTransaction };
+  }
+
+  async sendTransaction(address: string, value: number, options: { token?: string, changeAddress?: string } = {}): Promise<SendTransactionResponse> {
+    const response = await this.sendTransactionEvents(address, value, options);
+    if (response.success) {
+      const transaction = await response.sendTransaction.promise;
+      return { success: true, transaction };
+    } else {
+      throw new SendTxError('Error sending transaction.');
+    }
   }
 
   /**
@@ -436,7 +459,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async sendTransaction(address: string, value: number, options: { token?: string, changeAddress?: string } = {}): Promise<TxProposalUpdateResponseData> {
+  async sendTransactionEvents(address: string, value: number, options: { token?: string, changeAddress?: string } = {}): Promise<SendTransactionEvents> {
     this.checkWalletReady();
     const newOptions = Object.assign({
       token: '00',
@@ -444,7 +467,8 @@ class HathorWalletServiceWallet extends EventEmitter {
     }, options);
     const { token, changeAddress } = newOptions;
     const outputs = [{ address, value, token }];
-    return await this.createAndSendTx(outputs, { inputs: [], changeAddress });
+    const sendTransaction = await this.createAndSendTx(outputs, { inputs: [], changeAddress });
+    return { success: true, sendTransaction };
   }
 
   /**
@@ -453,7 +477,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async createAndSendTx(outputs: OutputRequestObj[], options: { inputs?: InputRequestObj[], changeAddress?: string } = {}): Promise<TxProposalUpdateResponseData> {
+  async createAndSendTx(outputs: OutputRequestObj[], options: { inputs?: InputRequestObj[], changeAddress?: string } = {}): Promise<SendTransaction> {
     type optionsType = {
       inputs: InputRequestObj[],
       changeAddress: string | null,
@@ -576,7 +600,7 @@ class HathorWalletServiceWallet extends EventEmitter {
       inputObj.setData(inputData);
     }
 
-    return await this.executeSendTransaction(tx);
+    return this.createSendTransaction(tx);
   }
 
   /**
@@ -609,32 +633,20 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async executeSendTransaction(transaction: Transaction): Promise<TxProposalUpdateResponseData> {
-    const mineTransaction = new MineTransaction(transaction);
-    mineTransaction.start();
+  createSendTransaction(transaction: Transaction, options = {}): SendTransaction {
+    type optionsType = {
+      startMiningTx: boolean,
+    };
+    const newOptions: optionsType = Object.assign({
+      startMiningTx: true,
+    }, options);
+    const sendTransaction = new SendTransaction(transaction, this);
 
-    const data = await Promise.resolve(mineTransaction.promise);
-
-    transaction.parents = data.parents;
-    transaction.timestamp = data.timestamp;
-    transaction.nonce = data.nonce;
-    transaction.weight = data.weight;
-
-    const txHex = transaction.toHex();
-
-    const response = await walletApi.createTxProposal(this, txHex);
-    if (response.status === 201) {
-      const responseData = response.data;
-      this.txProposalId = responseData.txProposalId;
-      const sendResponse = await walletApi.updateTxProposal(this, this.txProposalId!, txHex);
-      if (sendResponse.status === 200) {
-        return sendResponse.data;
-      } else {
-        throw new WalletRequestError('Error sending tx proposal.');
-      }
-    } else {
-      throw new WalletRequestError('Error creating tx proposal.');
+    if (newOptions.startMiningTx) {
+      sendTransaction.start();
     }
+
+    return sendTransaction;
   }
 
   /**
@@ -744,7 +756,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async createNewToken(name: string, symbol: string, amount: number, options = {}): Promise<TxProposalUpdateResponseData>  {
+  async createNewToken(name: string, symbol: string, amount: number, options = {}): Promise<SendTransaction>  {
     this.checkWalletReady();
     type optionsType = {
       address: string | null,
@@ -815,7 +827,7 @@ class HathorWalletServiceWallet extends EventEmitter {
     }
 
     // 4. Send tx proposal with create and send
-    return await this.executeSendTransaction(tx);
+    return this.createSendTransaction(tx);
   }
 
   /**
@@ -824,7 +836,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async mintTokens(token: string, amount: number, options = {}): Promise<TxProposalUpdateResponseData> {
+  async mintTokens(token: string, amount: number, options = {}): Promise<SendTransaction> {
     this.checkWalletReady();
     type optionsType = {
       address: string | null,
@@ -903,7 +915,7 @@ class HathorWalletServiceWallet extends EventEmitter {
     }
 
     // 4. Send tx proposal with create and send
-    return await this.executeSendTransaction(tx);
+    return this.createSendTransaction(tx);
   }
 
   /**
@@ -912,7 +924,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async meltTokens(token: string, amount: number, options = {}): Promise<TxProposalUpdateResponseData> {
+  async meltTokens(token: string, amount: number, options = {}): Promise<SendTransaction> {
     this.checkWalletReady();
     type optionsType = {
       address: string | null,
@@ -993,7 +1005,7 @@ class HathorWalletServiceWallet extends EventEmitter {
     }
 
     // 4. Send tx proposal with create and send
-    return await this.executeSendTransaction(tx);
+    return this.createSendTransaction(tx);
   }
 
   /**
@@ -1002,7 +1014,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async delegateAuthority(token: string, type: string, address: string, options = {}): Promise<TxProposalUpdateResponseData> {
+  async delegateAuthority(token: string, type: string, address: string, options = {}): Promise<SendTransaction> {
     this.checkWalletReady();
     type optionsType = {
       anotherAuthorityAddress: string | null,
@@ -1064,7 +1076,7 @@ class HathorWalletServiceWallet extends EventEmitter {
     inputsObj[0].setData(inputData);
 
     // 4. Send tx proposal with create and send
-    return await this.executeSendTransaction(tx);
+    return this.createSendTransaction(tx);
   }
 
   /**
@@ -1073,7 +1085,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async destroyAuthority(token: string, type: string, count: number): Promise<TxProposalUpdateResponseData> {
+  async destroyAuthority(token: string, type: string, count: number): Promise<SendTransaction> {
     this.checkWalletReady();
     let authority, mask;
     if (type === 'mint') {
@@ -1113,7 +1125,7 @@ class HathorWalletServiceWallet extends EventEmitter {
     }
 
     // 4. Send tx proposal with create and send
-    return await this.executeSendTransaction(tx);
+    return this.createSendTransaction(tx);
   }
 }
 

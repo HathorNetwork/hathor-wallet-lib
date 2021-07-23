@@ -5,6 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import Transaction from '../models/transaction';
+import SendTransaction from './sendTransaction';
+
 export interface GetAddressesObject {
   address: string; // Address in base58
   index: number; // derivation index of the address
@@ -223,4 +226,14 @@ export interface TokensResponse {
 export interface TokensResponseData {
   success: boolean;
   tokens: string[];
+}
+
+export interface SendTransactionEvents {
+  success: boolean;
+  sendTransaction: SendTransaction;
+}
+
+export interface SendTransactionResponse {
+  success: boolean;
+  transaction: Transaction;
 }

@@ -726,6 +726,17 @@ class HathorWallet extends EventEmitter {
     return;
   };
 
+  async sendTransaction(address, value, token, optionsParams = {}) {
+    const ret = await this.sendTransactionEvents(address, value, token, optionsParams);
+    if (ret.success) {
+      const tx = await ret.sendTransaction.promise;
+      return { success: true, transaction: tx };
+    } else {
+      return ret;
+    }
+  }
+
+
   /**
    * Send tokens to only one address.
    *
@@ -743,15 +754,15 @@ class HathorWallet extends EventEmitter {
    * In case of error, an object with {success: false, message}
    *
    **/
-  sendTransaction(address, value, token, optionsParams = {}) {
-    const options = Object.assign({ changeAddress: null, pinCode: null }, optionsParams);
+  sendTransactionEvents(address, value, token, optionsParams = {}) {
+    const options = Object.assign({ changeAddress: null, pinCode: null, startMiningTx: true }, optionsParams);
     storage.setStore(this.store);
     const ret = this.prepareTransaction(address, value, token, options);
 
     if (ret.success) {
-      return this.sendPreparedTransaction(ret.data);
+      return Promise.resolve({success: true, sendTransaction: this.createSendTransaction(ret.data, options)});
     } else {
-      return ret;
+      return Promise.resolve(ret);
     }
   }
 
@@ -842,6 +853,16 @@ class HathorWallet extends EventEmitter {
     return {success: true, data: preparedData};
   }
 
+  async sendManyOutputsTransaction(outputs, inputs = [], token = null, options = {}) {
+    const ret = await this.sendManyOutputsTransactionEvents(outputs, inputs, token, options);
+    if (ret.success) {
+      const tx = await ret.sendTransaction.promise;
+      return { success: true, transaction: tx };
+    } else {
+      return ret;
+    }
+  }
+
   /**
    * Send a transaction from its outputs
    * Currently does not have support to send custom tokens, only HTR
@@ -858,7 +879,7 @@ class HathorWallet extends EventEmitter {
    *
    * @return {Promise} Promise that resolves when transaction is sent
    **/
-  sendManyOutputsTransaction(outputs, inputs = [], token = null, options = {}) {
+  sendManyOutputsTransactionEvents(outputs, inputs = [], token = null, options = {}) {
     storage.setStore(this.store);
     const newOptions = Object.assign({ changeAddress: null, startMiningTx: true, pinCode: null }, options);
     const pin = newOptions.pinCode || this.pinCode;
@@ -972,10 +993,10 @@ class HathorWallet extends EventEmitter {
     let preparedData = null;
     try {
       preparedData = transaction.prepareData(fullTxData, pin);
-      return this.sendPreparedTransaction(preparedData, newOptions);
+      return Promise.resolve({success: true, sendTransaction: this.createSendTransaction(preparedData, newOptions)});
     } catch(e) {
       const message = helpers.handlePrepareDataError(e);
-      return {success: false, message};
+      return Promise.resolve({success: false, message});
     }
   }
 
@@ -988,30 +1009,15 @@ class HathorWallet extends EventEmitter {
    * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    **/
-  sendPreparedTransaction(data, options = { startMiningTx: true }) {
+  createSendTransaction(data, options = { startMiningTx: true }) {
     storage.setStore(this.store);
     const { startMiningTx } = options;
     const sendTransaction = new SendTransaction({data});
     if (startMiningTx) {
       sendTransaction.start();
-      const promise = new Promise((resolve, reject) => {
-        sendTransaction.promise.then((tx) => {
-          resolve(tx);
-        }, (err) => {
-          reject(err);
-        });
-      });
-      return promise;
-    } else {
-      const ret = {success: true, promise: sendTransaction.promise, sendTransaction};
-      if (this.debug) {
-        ret.debug = {
-          balanceHTR: this.getBalance(),
-          data: data,
-        };
-      }
-      return Promise.resolve(ret);
     }
+
+    return sendTransaction;
   }
 
   /**
