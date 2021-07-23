@@ -212,6 +212,27 @@ const wallet = {
     return this.startWallet(access, loadHistory);
   },
 
+  storeEncryptedWords(words, password) {
+    const initialAccessData = this.getWalletAccessData() || {};
+
+    const encryptedDataWords = this.encryptData(words, password);
+    initialAccessData['words'] = encryptedDataWords.encrypted.toString(),
+
+    this.setWalletAccessData(initialAccessData);
+  },
+
+  storePasswordHash(password, suffix='') {
+    const initialAccessData = this.getWalletAccessData() || {};
+    const hashed = this.hashPassword(password);
+    const hashKey = `hash${suffix}`;
+    const saltKey = `salt${suffix}`;
+
+    initialAccessData[hashKey] = hashed.key.toString();
+    initialAccessData[saltKey] = hashed.salt;
+
+    this.setWalletAccessData(initialAccessData);
+  },
+
   /**
    * Set wallet data on storage and start it
    *
