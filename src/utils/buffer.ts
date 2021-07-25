@@ -2,8 +2,6 @@ import assert from 'assert';
 import buffer from 'buffer';
 import { ParseError } from '../errors';
 
-const nodeMajorVersion = process.versions.node.split('.')[0];
-
 const isHexa = (value: string): boolean => {
   // test if value is string?
   return /^[0-9a-fA-F]*$/.test(value);
@@ -81,7 +79,9 @@ export const unpackToInt = (n: number, signed: boolean, buff: Buffer): [number, 
     }
   } else if (n === 8) {
     // We have only signed ints here
-    if (parseInt(nodeMajorVersion) > 8) {
+    // readBigInt64BE exists only in node versions > 8
+    // the else block is used for versions <= 8 and usage in web browsers
+    if (slicedBuff.readBigInt64BE) {
       retInt = Number(slicedBuff.readBigInt64BE());
     } else {
       retInt = slicedBuff.readIntBE(0, 8);
