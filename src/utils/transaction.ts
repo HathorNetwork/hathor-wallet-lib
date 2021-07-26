@@ -29,62 +29,27 @@ const transaction = {
       throw new UtxoError('Don\'t have enough utxos to fill total amount.');
     }
 
-    if (utxos[0].value < totalAmount) {
-      // We can't fill the total amount with a single utxo
-      // so we start pushing utxos to an array until we fill the total amount
-      const utxosToUse: any[] = [];
-      let filledAmount = 0;
-      for (const utxo of utxos) {
-        utxosToUse.push(utxo);
-        filledAmount += utxo.value;
-
+    let utxosToUse: Utxo[] = [];
+    let filledAmount = 0;
+    for (const utxo of utxos) {
+      if (utxo.value >= totalAmount) {
+        utxosToUse = [utxo];
+        filledAmount = utxo.value;
+      } else {
         if (filledAmount >= totalAmount) {
-          break;
+          break
         }
-      }
+        filledAmount += utxo.value;
+        utxosToUse.push(utxo);
+     }
+    }
+    if (filledAmount < totalAmount) {
+      throw new UtxoError('Don\'t have enough utxos to fill total amount.');
+    }
 
-      if (filledAmount < totalAmount) {
-        // It means that all utxos combined are not enough to fill the requested amount
-        throw new UtxoError('Don\'t have enough utxos to fill total amount.');
-      }
-
-      return {
-        utxos: utxosToUse,
-        changeAmount: filledAmount - totalAmount
-      };
-    } else {
-      // We can fill the total amount with a single utxo
-      // we will find the smallest utxo that can fill the total amount
-      let lastUtxo: Utxo | null = null;
-
-      for (const utxo of utxos) {
-        if (utxo.value === totalAmount) {
-          return {
-            utxos: [utxo],
-            changeAmount: 0
-          };
-        }
-
-        if (utxo.value < totalAmount) {
-          // The last one is the smallest single utxo that can fill the amount
-          // it's safe to use lastUtxo because it will never be null
-          // this is inside the else that checked that at least one utxo fills the total amount
-          return {
-            utxos: [lastUtxo!],
-            changeAmount: lastUtxo!.value - totalAmount
-          };
-        }
-
-        lastUtxo = utxo;
-      }
-
-      // If I got here, it means that all utxos in the array are bigger than the expected amount
-      // then I must use the last utxo, which has the smallest value
-      const smallestUtxo = utxos[utxos.length - 1];
-      return {
-        utxos: [smallestUtxo],
-        changeAmount: smallestUtxo.value - totalAmount
-      };
+    return {
+      utxos: utxosToUse,
+      changeAmount: filledAmount - totalAmount,
     }
   },
 }
