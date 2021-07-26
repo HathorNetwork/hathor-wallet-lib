@@ -68,7 +68,7 @@ class HathorWalletServiceWallet extends EventEmitter {
   // Auth token to be used in the wallet API requests to wallet service
   private authToken: string | null
   // Wallet status interval
-  private walletStatusInterval: number | null
+  private walletStatusInterval: ReturnType<typeof setInterval> | null
   // Variable to store the possible addresses to use that are after the last used address
   private newAddresses: AddressInfoObject[]
   // Index of the address to be used by the wallet
@@ -123,7 +123,7 @@ class HathorWalletServiceWallet extends EventEmitter {
     const handleCreate = async (data: WalletStatus) => {
       this.walletId = data.walletId;
       if (data.status === 'creating') {
-        this.walletStatusInterval = setInterval(() => {
+        this.walletStatusInterval = setInterval(async () => {
           await this.startPollingStatus();
         }, WALLET_STATUS_POLLING_INTERVAL);
       } else {
@@ -131,29 +131,8 @@ class HathorWalletServiceWallet extends EventEmitter {
       }
     }
 
-    try {
-      const res = await walletApi.createWallet(this.xpub);
-      const data = res.data;
-      if (res.status === 200 && data.success) {
-        await handleCreate(data.status);
-      } else {
-        throw new WalletRequestError('Error creating wallet.');
-      }
-    } catch(error) {
-      if (error.response.status === 400) {
-        // Bad request
-        // Check if error is 'wallet-already-loaded'
-        const data = error.response.data;
-        if (data && data.error === 'wallet-already-loaded') {
-          // If it was already loaded, we have to check if it's ready
-          await handleCreate(data.status);
-        } else {
-          throw new WalletRequestError('Error creating wallet.');
-        }
-      } else {
-        throw new WalletRequestError('Error creating wallet.');
-      }
-    }
+    const data = await walletApi.createWallet(this.xpub);
+    await handleCreate(data.status);
   }
 
   /**
@@ -174,23 +153,13 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async startPollingStatus() {
-    try {
-      const res = await walletApi.getWalletStatus(this);
-      const data = res.data;
-      if (res.status === 200 && data.success) {
-        if (data.status.status === 'ready') {
-          clearInterval(this.walletStatusInterval);
-          await this.onWalletReady();
-        } else if (data.status.status !== 'creating') {
-          // If it's still creating, then the setInterval must run again
-          throw new WalletRequestError('Error getting wallet status.');
-        }
-      } else {
-        throw new WalletRequestError('Error getting wallet status.');
-      }
-    } catch(err) {
-      // Should we handle any error?
-      throw err;
+    const data = await walletApi.getWalletStatus(this);
+    if (data.status.status === 'ready') {
+      clearInterval(this.walletStatusInterval!);
+      await this.onWalletReady();
+    } else if (data.status.status !== 'creating') {
+      // If it's still creating, then the setInterval must run again
+      throw new WalletRequestError('Error getting wallet status.');
     }
   }
 
@@ -225,13 +194,9 @@ class HathorWalletServiceWallet extends EventEmitter {
    */
   async getAllAddresses(): Promise<GetAddressesObject[]> {
     this.checkWalletReady();
-    const response = await walletApi.getAddresses(this);
+    const data = await walletApi.getAddresses(this);
+    return data.addresses;
     let addresses: GetAddressesObject[] = [];
-    if (response.status === 200 && response.data.success === true) {
-      addresses = response.data.addresses;
-    } else {
-      throw new WalletRequestError('Error getting wallet addresses.');
-    }
     return addresses;
   }
 
@@ -244,15 +209,9 @@ class HathorWalletServiceWallet extends EventEmitter {
    */
   private async getNewAddresses() {
     this.checkWalletReady();
-    const response = await walletApi.getNewAddresses(this);
-    let addresses: AddressInfoObject[] = [];
-    if (response.status === 200 && response.data.success === true) {
-      addresses = response.data.addresses;
-      this.newAddresses = addresses;
-      this.indexToUse = 0;
-    } else {
-      throw new WalletRequestError('Error getting wallet addresses to use.');
-    }
+    const data = await walletApi.getNewAddresses(this);
+    this.newAddresses = data.addresses;
+    this.indexToUse = 0;
   }
 
   /**
@@ -263,14 +222,8 @@ class HathorWalletServiceWallet extends EventEmitter {
    */
   async getBalance(token: string | null = null): Promise<GetBalanceObject[]> {
     this.checkWalletReady();
-    const response = await walletApi.getBalances(this, token);
-    let balance: GetBalanceObject[] = [];
-    if (response.status === 200 && response.data.success === true) {
-      balance = response.data.balances;
-    } else {
-      throw new WalletRequestError('Error getting wallet balance.');
-    }
-    return balance;
+    const data = await walletApi.getBalances(this, token);
+    return data.balances;
   }
 
   /**
@@ -284,14 +237,8 @@ class HathorWalletServiceWallet extends EventEmitter {
     this.checkWalletReady();
     const requestOptions = Object.assign({ token: null }, options);
     const { token } = requestOptions;
-    const response = await walletApi.getHistory(this, token);
-    let history: GetHistoryObject[] = []
-    if (response.status === 200 && response.data.success === true) {
-      history = response.data.history;
-    } else {
-      throw new WalletRequestError('Error getting wallet history.');
-    }
-    return history
+    const data = await walletApi.getHistory(this, token);
+    return data.history;
   }
 
   /**
@@ -301,17 +248,13 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async getUtxoFromId(txId: string, index: number): Promise<Utxo | null> {
-    const response = await walletApi.getUtxos(this, { txId, index });
-    if (response.status === 200 && response.data.success === true) {
-      const utxos = response.data.utxos;
-      if (utxos.length === 0) {
-        // No utxo for this txId/index or is not from the requested wallet
-        return null;
-      } else {
-        return utxos[0];
-      }
+    const data = await walletApi.getUtxos(this, { txId, index });
+    const utxos = data.utxos;
+    if (utxos.length === 0) {
+      // No utxo for this txId/index or is not from the requested wallet
+      return null;
     } else {
-      throw new WalletRequestError('Error requesting utxo.');
+      return utxos[0];
     }
   }
 
@@ -344,26 +287,21 @@ class HathorWalletServiceWallet extends EventEmitter {
 
     newOptions['ignoreLocked'] = true;
 
-    const response = await walletApi.getUtxos(this, newOptions);
+    const data = await walletApi.getUtxos(this, newOptions);
     let changeAmount = 0;
     let utxos: Utxo[] = []
-    if (response.status === 200 && response.data.success === true) {
-      const retUtxos = response.data.utxos;
-      if (retUtxos.length === 0) {
-        // No utxos available for the requested filter
-        utxos = retUtxos;
-      } else if (newOptions.authority) {
-        // Requests an authority utxo, then I return the count of requested authority utxos
-        utxos = retUtxos.slice(0, newOptions.count);
-      } else {
-        // We got an array of utxos, then we must check if there is enough amount to fill the totalAmount
-        // and slice the least possible utxos
-        const ret = transaction.selectUtxos(retUtxos, newOptions.totalAmount!);
-        changeAmount = ret.changeAmount;
-        utxos = ret.utxos;
-      }
+    if (data.utxos.length === 0) {
+      // No utxos available for the requested filter
+      utxos = data.utxos;
+    } else if (newOptions.authority) {
+      // Requests an authority utxo, then I return the count of requested authority utxos
+      utxos = data.utxos.slice(0, newOptions.count);
     } else {
-      throw new WalletRequestError('Error requesting utxo.');
+      // We got an array of utxos, then we must check if there is enough amount to fill the totalAmount
+      // and slice the least possible utxos
+      const ret = transaction.selectUtxos(data.utxos, newOptions.totalAmount!);
+      changeAmount = ret.changeAmount;
+      utxos = ret.utxos;
     }
     return { utxos, changeAmount };
   }
@@ -411,10 +349,8 @@ class HathorWalletServiceWallet extends EventEmitter {
 
     if (!this.authToken || !validateJWTExpireDate(this.authToken)) {
       const sign = this.signMessage(timestampNow);
-      const response = await walletApi.createAuthToken(timestampNow, this.xpub!, sign);
-      if (response.status === 200 && response.data.success === true) {
-        this.authToken = response.data.token;
-      }
+      const data = await walletApi.createAuthToken(timestampNow, this.xpub!, sign);
+      this.authToken = data.token;
     }
   }
 
@@ -624,19 +560,9 @@ class HathorWalletServiceWallet extends EventEmitter {
 
     const txHex = transaction.toHex();
 
-    const response = await walletApi.createTxProposal(this, txHex);
-    if (response.status === 201) {
-      const responseData = response.data;
-      this.txProposalId = responseData.txProposalId;
-      const sendResponse = await walletApi.updateTxProposal(this, this.txProposalId!, txHex);
-      if (sendResponse.status === 200) {
-        return sendResponse.data;
-      } else {
-        throw new WalletRequestError('Error sending tx proposal.');
-      }
-    } else {
-      throw new WalletRequestError('Error creating tx proposal.');
-    }
+    const responseData = await walletApi.createTxProposal(this, txHex);
+    this.txProposalId = responseData.txProposalId;
+    return await walletApi.updateTxProposal(this, this.txProposalId!, txHex);
   }
 
   /**
