@@ -40,7 +40,7 @@ import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../erro
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
-const WALLET_STATUS_POLLING_TIMEOUT = 3000;
+const WALLET_STATUS_POLLING_INTERVAL = 3000;
 
 enum walletState {
   NOT_STARTED = 'Not started',
@@ -67,6 +67,8 @@ class HathorWalletServiceWallet extends EventEmitter {
   private txProposalId: string | null
   // Auth token to be used in the wallet API requests to wallet service
   private authToken: string | null
+  // Wallet status interval
+  private walletStatusInterval: number | null
   // Variable to store the possible addresses to use that are after the last used address
   private newAddresses: AddressInfoObject[]
   // Index of the address to be used by the wallet
@@ -97,6 +99,7 @@ class HathorWalletServiceWallet extends EventEmitter {
     this.network = network;
 
     this.authToken = null;
+    this.walletStatusInterval = null;
 
     // TODO When we integrate the real time events from the wallet service
     // we will need to have a trigger to update this array every new transaction
@@ -120,7 +123,9 @@ class HathorWalletServiceWallet extends EventEmitter {
     const handleCreate = async (data: WalletStatus) => {
       this.walletId = data.walletId;
       if (data.status === 'creating') {
-        await this.startPollingStatus();
+        this.walletStatusInterval = setInterval(() => {
+          await this.startPollingStatus();
+        }, WALLET_STATUS_POLLING_INTERVAL);
       } else {
         await this.onWalletReady();
       }
@@ -173,13 +178,11 @@ class HathorWalletServiceWallet extends EventEmitter {
       const res = await walletApi.getWalletStatus(this);
       const data = res.data;
       if (res.status === 200 && data.success) {
-        if (data.status.status === 'creating') {
-          setTimeout(async () => {
-            await this.startPollingStatus();
-          }, WALLET_STATUS_POLLING_TIMEOUT);
-        } else if (data.status.status === 'ready') {
+        if (data.status.status === 'ready') {
+          clearInterval(this.walletStatusInterval);
           await this.onWalletReady();
-        } else {
+        } else if (data.status.status !== 'creating') {
+          // If it's still creating, then the setInterval must run again
           throw new WalletRequestError('Error getting wallet status.');
         }
       } else {
@@ -232,6 +235,13 @@ class HathorWalletServiceWallet extends EventEmitter {
     return addresses;
   }
 
+  /**
+   * Get the new addresses to be used by this wallet, i.e. the last GAP LIMIT unused addresses
+   * Then it updates this.newAddresses and this.indexToUse that handle the addresses to use
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
   private async getNewAddresses() {
     this.checkWalletReady();
     const response = await walletApi.getNewAddresses(this);
@@ -359,12 +369,12 @@ class HathorWalletServiceWallet extends EventEmitter {
   }
 
   /**
-   * Calculate sign message for auth token
+   * Signs a message using xpriv derivation path m/44'/280'/0'
    *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  getAuthSign(timestamp: number): string {
+  signMessage(timestamp: number): string {
     const xpriv = wallet.getXPrivKeyFromSeed(this.seed, {passphrase: this.passphrase, networkName: this.network.name});
     const derivedPrivKey = wallet.deriveXpriv(xpriv, '0\'');
     const address = derivedPrivKey.publicKey.toAddress(this.network.getNetwork()).toString();
@@ -400,7 +410,7 @@ class HathorWalletServiceWallet extends EventEmitter {
     }
 
     if (!this.authToken || !validateJWTExpireDate(this.authToken)) {
-      const sign = this.getAuthSign(timestampNow);
+      const sign = this.signMessage(timestampNow);
       const response = await walletApi.createAuthToken(timestampNow, this.xpub!, sign);
       if (response.status === 200 && response.data.success === true) {
         this.authToken = response.data.token;
@@ -456,7 +466,6 @@ class HathorWalletServiceWallet extends EventEmitter {
       changeAddress: null
     }, options);
     const { inputs } = newOptions;
-
 
     // We get the full outputs amount for each token
     // This is useful for (i) getting the utxos for each one
@@ -515,20 +524,20 @@ class HathorWalletServiceWallet extends EventEmitter {
         }
       }
 
-      for (const t in amountOutputMap) {
-        if (!(t in amountInputMap)) {
-          throw new SendTxError(`Invalid input selection. Token ${t} is in the outputs but there are no inputs for it.`);
+      for (const tokenId in amountOutputMap) {
+        if (!(tokenId in amountInputMap)) {
+          throw new SendTxError(`Invalid input selection. Token ${tokenId} is in the outputs but there are no inputs for it.`);
         }
 
-        if (amountInputMap[t] < amountOutputMap[t]) {
-          throw new SendTxError(`Invalid input selection. Sum of inputs for token ${t} is smaller than the sum of outputs.`);
+        if (amountInputMap[tokenId] < amountOutputMap[tokenId]) {
+          throw new SendTxError(`Invalid input selection. Sum of inputs for token ${tokenId} is smaller than the sum of outputs.`);
         }
 
-        if (amountInputMap[t] > amountOutputMap[t]) {
+        if (amountInputMap[tokenId] > amountOutputMap[tokenId]) {
           changeOutputAdded = true;
-          const changeAmount = amountInputMap[t] - amountOutputMap[t];
+          const changeAmount = amountInputMap[tokenId] - amountOutputMap[tokenId];
           const changeAddress = newOptions.changeAddress || this.getCurrentAddress({ markAsUsed: true }).address;
-          outputs.push({ address: changeAddress, value: changeAmount, token: t });
+          outputs.push({ address: changeAddress, value: changeAmount, token: tokenId });
         }
       }
     }
@@ -797,7 +806,6 @@ class HathorWalletServiceWallet extends EventEmitter {
       outputsObj.push(new Output(changeAmount, changeAddress));
     }
 
-
     const tx = new CreateTokenTransaction(name, symbol, inputsObj, outputsObj);
     tx.prepareToSend();
     const dataToSignHash = tx.getDataToSignHash();
@@ -840,7 +848,7 @@ class HathorWalletServiceWallet extends EventEmitter {
     }
 
     // 3. Get mint authority
-    const ret = await this.getUtxos({ tokenId: token, authority: 1 });
+    const ret = await this.getUtxos({ tokenId: token, authority: TOKEN_MINT_MASK });
     if (ret.utxos.length === 0) {
       throw new UtxoError(`No authority utxo available for minting tokens. Token: ${token}.`);
     }
@@ -881,7 +889,6 @@ class HathorWalletServiceWallet extends EventEmitter {
       }
       outputsObj.push(new Output(changeAmount, changeAddress));
     }
-
 
     const tx = new Transaction(inputsObj, outputsObj);
     tx.tokens = [token];
@@ -928,7 +935,7 @@ class HathorWalletServiceWallet extends EventEmitter {
     }
 
     // 3. Get mint authority
-    const ret = await this.getUtxos({ tokenId: token, authority: 2 });
+    const ret = await this.getUtxos({ tokenId: token, authority: TOKEN_MELT_MASK });
     if (ret.utxos.length === 0) {
       throw new UtxoError(`No authority utxo available for melting tokens. Token: ${token}.`);
     }
