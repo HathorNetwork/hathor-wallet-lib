@@ -154,6 +154,7 @@ class MineTransaction extends EventEmitter {
    * Start object (submit job)
    */
   start() {
+    this.emit('mining-started');
     this.submitJob();
   }
 }

@@ -21,7 +21,7 @@ import Input from '../models/input';
 import Address from '../models/address';
 import Network from '../models/network';
 import MineTransaction from './mineTransaction';
-import SendTransaction from './sendTransaction';
+import SendTransactionWalletService from './sendTransaction';
 import { shuffle } from 'lodash';
 import bitcore from 'bitcore-lib';
 import {
@@ -417,190 +417,35 @@ class HathorWalletServiceWallet extends EventEmitter {
     }
   }
 
-  async sendManyOutputsTransaction(outputs: OutputRequestObj[], options: { inputs?: InputRequestObj[], changeAddress?: string } = {}): Promise<SendTransactionResponse> {
-    const response = await this.sendManyOutputsTransactionEvents(outputs, options);
-    if (response.success) {
-      const transaction = await response.sendTransaction.promise;
-      return { success: true, transaction };
-    } else {
-      throw new SendTxError('Error sending transaction.');
-    }
-  }
-
-  /**
-   * Send a transaction from an array of outputs and inputs
-   *
-   * @memberof HathorWalletServiceWallet
-   * @inner
-   */
-  async sendManyOutputsTransactionEvents(outputs: OutputRequestObj[], options: { inputs?: InputRequestObj[], changeAddress?: string } = {}): Promise<SendTransactionEvents> {
-    this.checkWalletReady();
+  sendManyOutputsTransaction(outputs: OutputRequestObj[], options: { inputs?: InputRequestObj[], changeAddress?: string } = {}): Promise<Transaction | string> {
     const newOptions = Object.assign({
       inputs: [],
       changeAddress: null
     }, options);
-    const sendTransaction = await this.createAndSendTx(outputs, newOptions);
-    return { success: true, sendTransaction };
+    const { inputs, changeAddress } = newOptions;
+    const sendTransaction = new SendTransactionWalletService(this, { outputs, inputs, changeAddress });
+    const promise: Promise<Transaction | string> = new Promise((resolve, reject) => {
+      sendTransaction.on('send-tx-success', (transaction) => {
+        resolve(transaction);
+      });
+
+      sendTransaction.on('send-error', (err) => {
+        reject(err);
+      });
+    });
+
+    sendTransaction.run();
+    return promise;
   }
 
-  async sendTransaction(address: string, value: number, options: { token?: string, changeAddress?: string } = {}): Promise<SendTransactionResponse> {
-    const response = await this.sendTransactionEvents(address, value, options);
-    if (response.success) {
-      const transaction = await response.sendTransaction.promise;
-      return { success: true, transaction };
-    } else {
-      throw new SendTxError('Error sending transaction.');
-    }
-  }
-
-  /**
-   * Send a transaction to a single output
-   *
-   * @memberof HathorWalletServiceWallet
-   * @inner
-   */
-  async sendTransactionEvents(address: string, value: number, options: { token?: string, changeAddress?: string } = {}): Promise<SendTransactionEvents> {
-    this.checkWalletReady();
+  sendTransaction(address: string, value: number, options: { token?: string, changeAddress?: string } = {}): Promise<Transaction | string> {
     const newOptions = Object.assign({
       token: '00',
       changeAddress: null
     }, options);
     const { token, changeAddress } = newOptions;
     const outputs = [{ address, value, token }];
-    const sendTransaction = await this.createAndSendTx(outputs, { inputs: [], changeAddress });
-    return { success: true, sendTransaction };
-  }
-
-  /**
-   * Send transaction
-   *
-   * @memberof HathorWalletServiceWallet
-   * @inner
-   */
-  async createAndSendTx(outputs: OutputRequestObj[], options: { inputs?: InputRequestObj[], changeAddress?: string } = {}): Promise<SendTransaction> {
-    type optionsType = {
-      inputs: InputRequestObj[],
-      changeAddress: string | null,
-    };
-    const newOptions: optionsType = Object.assign({
-      inputs: [],
-      changeAddress: null
-    }, options);
-    const { inputs } = newOptions;
-
-
-    // We get the full outputs amount for each token
-    // This is useful for (i) getting the utxos for each one
-    // in case it's not sent and (ii) create the token array of the tx
-    const amountOutputMap = {};
-    for (const output of outputs) {
-      if (output.token in amountOutputMap) {
-        amountOutputMap[output.token] += output.value;
-      } else {
-        amountOutputMap[output.token] = output.value;
-      }
-    }
-
-    // We need this array to get the addressPath for each input used and be able to sign the input data
-    const utxosAddressPath: string[] = [];
-    let changeOutputAdded = false;
-    if (inputs.length === 0) {
-      // Need to get utxos
-      // We already know the full amount for each token
-      // Now we can get the utxos and (if needed) change amount for each token
-      for (const token in amountOutputMap) {
-        const { utxos, changeAmount } = await this.getUtxos({ tokenId: token, totalAmount: amountOutputMap[token] });
-        if (utxos.length === 0) {
-          throw new UtxoError(`No utxos available to fill the request. Token: ${token} - Amount: ${amountOutputMap[token]}.`);
-        }
-
-        for (const utxo of utxos) {
-          inputs.push({ txId: utxo.txId, index: utxo.index });
-          utxosAddressPath.push(utxo.addressPath);
-        }
-
-        if (changeAmount) {
-          changeOutputAdded = true;
-          const changeAddress = newOptions.changeAddress || this.getCurrentAddress({ markAsUsed: true }).address;
-          outputs.push({ address: changeAddress, value: changeAmount, token });
-        }
-      }
-    } else {
-      const amountInputMap = {};
-      for (const input of inputs) {
-        const utxo = await this.getUtxoFromId(input.txId, input.index);
-        if (utxo === null) {
-          throw new UtxoError(`Invalid input selection. Input ${input.txId} at index ${input.index}.`);
-        }
-
-        if (!(utxo.tokenId in amountOutputMap)) {
-          throw new SendTxError(`Invalid input selection. Input ${input.txId} at index ${input.index} has token ${utxo.tokenId} that is not on the outputs.`);
-        }
-
-        utxosAddressPath.push(utxo.addressPath);
-
-        if (utxo.tokenId in amountInputMap) {
-          amountInputMap[utxo.tokenId] += utxo.value;
-        } else {
-          amountInputMap[utxo.tokenId] = utxo.value;
-        }
-      }
-
-      for (const t in amountOutputMap) {
-        if (!(t in amountInputMap)) {
-          throw new SendTxError(`Invalid input selection. Token ${t} is in the outputs but there are no inputs for it.`);
-        }
-
-        if (amountInputMap[t] < amountOutputMap[t]) {
-          throw new SendTxError(`Invalid input selection. Sum of inputs for token ${t} is smaller than the sum of outputs.`);
-        }
-
-        if (amountInputMap[t] > amountOutputMap[t]) {
-          changeOutputAdded = true;
-          const changeAmount = amountInputMap[t] - amountOutputMap[t];
-          const changeAddress = newOptions.changeAddress || this.getCurrentAddress({ markAsUsed: true }).address;
-          outputs.push({ address: changeAddress, value: changeAmount, token: t });
-        }
-      }
-    }
-
-    if (changeOutputAdded) {
-      outputs = shuffle(outputs);
-    }
-
-    const tokens = Object.keys(amountOutputMap);
-    const htrIndex = tokens.indexOf(HATHOR_TOKEN_CONFIG.uid);
-    if (htrIndex > -1) {
-      tokens.splice(htrIndex, 1);
-    }
-
-    const inputsObj: Input[] = [];
-    for (const i of inputs) {
-      inputsObj.push(new Input(i.txId, i.index));
-    }
-
-    const outputsObj: Output[] = [];
-    for (const o of outputs) {
-      const address = new Address(o.address, { network: this.network });
-      if (!address.isValid()) {
-        throw new SendTxError(`Address ${o.address} is not valid.`);
-      }
-      const tokenData = (o.token in tokens) ? tokens.indexOf(o.token) + 1 : 0;
-      const outputOptions = { tokenData, timelock: o.timelock || null };
-      outputsObj.push(new Output(o.value, address, outputOptions));
-    }
-
-    const tx = new Transaction(inputsObj, outputsObj);
-    tx.tokens = tokens;
-    tx.prepareToSend();
-    const dataToSignHash = tx.getDataToSignHash();
-
-    for (const [idx, inputObj] of tx.inputs.entries()) {
-      const inputData = this.getInputData(dataToSignHash, utxosAddressPath[idx]);
-      inputObj.setData(inputData);
-    }
-
-    return this.createSendTransaction(tx);
+    return this.sendManyOutputsTransaction(outputs, { inputs: [], changeAddress });
   }
 
   /**
@@ -625,28 +470,6 @@ class HathorWalletServiceWallet extends EventEmitter {
     helpers.pushDataToStack(arr, sig.toDER());
     helpers.pushDataToStack(arr, derivedKey.publicKey.toBuffer());
     return util.buffer.concat(arr);
-  }
-
-  /**
-   * Mine transaction and update tx proposal
-   *
-   * @memberof HathorWalletServiceWallet
-   * @inner
-   */
-  createSendTransaction(transaction: Transaction, options = {}): SendTransaction {
-    type optionsType = {
-      startMiningTx: boolean,
-    };
-    const newOptions: optionsType = Object.assign({
-      startMiningTx: true,
-    }, options);
-    const sendTransaction = new SendTransaction(transaction, this);
-
-    if (newOptions.startMiningTx) {
-      sendTransaction.start();
-    }
-
-    return sendTransaction;
   }
 
   /**
@@ -750,13 +573,7 @@ class HathorWalletServiceWallet extends EventEmitter {
     throw new Error('Not implemented.');
   }
 
-  /**
-   * Create a new custom token in the network
-   *
-   * @memberof HathorWalletServiceWallet
-   * @inner
-   */
-  async createNewToken(name: string, symbol: string, amount: number, options = {}): Promise<SendTransaction>  {
+  async prepareCreateNewToken(name: string, symbol: string, amount: number, options = {}): Promise<CreateTokenTransaction>  {
     this.checkWalletReady();
     type optionsType = {
       address: string | null,
@@ -819,15 +636,31 @@ class HathorWalletServiceWallet extends EventEmitter {
 
     const tx = new CreateTokenTransaction(name, symbol, inputsObj, outputsObj);
     tx.prepareToSend();
-    const dataToSignHash = tx.getDataToSignHash();
+    return tx;
+  }
 
-    for (const [idx, inputObj] of tx.inputs.entries()) {
-      const inputData = this.getInputData(dataToSignHash, utxos[idx].addressPath);
-      inputObj.setData(inputData);
-    }
+  /**
+   * Create a new custom token in the network
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async createNewToken(name: string, symbol: string, amount: number, options = {}): Promise<CreateTokenTransaction | string>  {
+    this.checkWalletReady();
+    const tx = await this.prepareCreateNewToken(name, symbol, amount, options);
+    const sendTransaction = new SendTransactionWalletService(this, { transaction: tx });
+    const promise: Promise<CreateTokenTransaction | string> = new Promise((resolve, reject) => {
+      sendTransaction.on('send-tx-success', (transaction) => {
+        resolve(transaction);
+      });
 
-    // 4. Send tx proposal with create and send
-    return this.createSendTransaction(tx);
+      sendTransaction.on('send-error', (err) => {
+        reject(err);
+      });
+    });
+
+    sendTransaction.run();
+    return promise;
   }
 
   /**
@@ -836,7 +669,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async mintTokens(token: string, amount: number, options = {}): Promise<SendTransaction> {
+  /*async mintTokens(token: string, amount: number, options = {}): Promise<SendTransaction> {
     this.checkWalletReady();
     type optionsType = {
       address: string | null,
@@ -916,7 +749,7 @@ class HathorWalletServiceWallet extends EventEmitter {
 
     // 4. Send tx proposal with create and send
     return this.createSendTransaction(tx);
-  }
+  }*/
 
   /**
    * Melt custom token units
@@ -924,7 +757,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async meltTokens(token: string, amount: number, options = {}): Promise<SendTransaction> {
+  /*async meltTokens(token: string, amount: number, options = {}): Promise<SendTransaction> {
     this.checkWalletReady();
     type optionsType = {
       address: string | null,
@@ -1006,7 +839,7 @@ class HathorWalletServiceWallet extends EventEmitter {
 
     // 4. Send tx proposal with create and send
     return this.createSendTransaction(tx);
-  }
+  }*/
 
   /**
    * Transfer (delegate) authority outputs to another address
@@ -1014,7 +847,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async delegateAuthority(token: string, type: string, address: string, options = {}): Promise<SendTransaction> {
+  /*async delegateAuthority(token: string, type: string, address: string, options = {}): Promise<SendTransaction> {
     this.checkWalletReady();
     type optionsType = {
       anotherAuthorityAddress: string | null,
@@ -1077,7 +910,7 @@ class HathorWalletServiceWallet extends EventEmitter {
 
     // 4. Send tx proposal with create and send
     return this.createSendTransaction(tx);
-  }
+  }*/
 
   /**
    * Destroy authority outputs
@@ -1085,7 +918,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async destroyAuthority(token: string, type: string, count: number): Promise<SendTransaction> {
+  /*async destroyAuthority(token: string, type: string, count: number): Promise<SendTransaction> {
     this.checkWalletReady();
     let authority, mask;
     if (type === 'mint') {
@@ -1126,7 +959,7 @@ class HathorWalletServiceWallet extends EventEmitter {
 
     // 4. Send tx proposal with create and send
     return this.createSendTransaction(tx);
-  }
+  }*/
 }
 
 export default HathorWalletServiceWallet;
