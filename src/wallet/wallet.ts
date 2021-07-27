@@ -119,6 +119,8 @@ class HathorWalletServiceWallet extends EventEmitter {
   async start() {
     this.setState(walletState.LOADING);
     const xpub = wallet.getXPubKeyFromSeed(this.seed, {passphrase: this.passphrase, networkName: this.network.name});
+    const xpubChangeDerivation = wallet.xpubDeriveChild(xpub, 0);
+    const firstAddress = wallet.getAddressAtIndex(xpubChangeDerivation, 0, this.network.name);
     this.xpub = xpub;
     const handleCreate = async (data: WalletStatus) => {
       this.walletId = data.walletId;
@@ -131,7 +133,7 @@ class HathorWalletServiceWallet extends EventEmitter {
       }
     }
 
-    const data = await walletApi.createWallet(this.xpub);
+    const data = await walletApi.createWallet(this.xpub, firstAddress);
     await handleCreate(data.status);
   }
 

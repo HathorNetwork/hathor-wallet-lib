@@ -40,8 +40,11 @@ const walletApi = {
     }
   },
 
-  async createWallet(xpubkey: string): Promise<WalletStatusResponseData> {
+  async createWallet(xpubkey: string, firstAddress: string | null = null): Promise<WalletStatusResponseData> {
     const data = { xpubkey };
+    if (firstAddress) {
+      data['firstAddress'] = firstAddress;
+    }
     const axios = await axiosInstance();
     try {
       const response = await axios.post('wallet/init', data);
