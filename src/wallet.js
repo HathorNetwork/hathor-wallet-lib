@@ -149,15 +149,12 @@ const wallet = {
    * @inner
    */
    executeGenerateWalletFromXPub(xpubkey, loadHistory) {
-    // const xpub = HDPublicKey(xpub);
-    let initialAccessData = this.getWalletAccessData() || {};
-
-    const access = Object.assign(initialAccessData, {
+    const accessData = {
       xpubkey: xpubkey,
       from_xpub: true,
-    });
+    };
 
-    return this.startWallet(access, loadHistory);
+    return this.startWallet(accessData, loadHistory);
   },
 
   /**

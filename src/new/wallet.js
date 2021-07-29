@@ -60,6 +60,8 @@ class HathorWallet extends EventEmitter {
 
     xpriv,
 
+    xpub,
+
     tokenUid = HATHOR_TOKEN_CONFIG.uid,
 
     password = null,
@@ -76,8 +78,8 @@ class HathorWallet extends EventEmitter {
       throw Error('You must provide a connection.');
     }
 
-    if (!seed && !xpriv) {
-      throw Error('You must explicitly provide the seed or the xpriv.');
+    if (!seed && !xpriv && !xpub) {
+      throw Error('You must explicitly provide the seed, xpriv or the xpub.');
     }
 
     if (seed && xpriv) {
@@ -100,6 +102,7 @@ class HathorWallet extends EventEmitter {
 
     this.xpriv = xpriv;
     this.seed = seed;
+    this.xpub = xpub;
 
     // tokenUid is optional so we can get the token of the wallet
     this.token = null;
@@ -854,7 +857,7 @@ class HathorWallet extends EventEmitter {
     const options = Object.assign({ pinCode: null, password: null }, optionsParams);
     const pinCode = options.pinCode || this.pinCode;
     const password = options.password || this.password;
-    if (!pinCode) {
+    if (!this.xpub && !pinCode) {
       return Promise.reject({success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED});
     }
 
@@ -872,6 +875,8 @@ class HathorWallet extends EventEmitter {
       ret = wallet.executeGenerateWallet(this.seed, this.passphrase, pinCode, password, false);
     } else if (this.xpriv) {
       ret = wallet.executeGenerateWalletFromXPriv(this.xpriv, pinCode, false);
+    } else if (this.xpub) {
+      ret = wallet.executeGenerateWalletFromXPub(this.xpub, false);
     } else {
       throw "This should never happen";
     }
