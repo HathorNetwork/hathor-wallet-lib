@@ -137,6 +137,30 @@ const wallet = {
   },
 
   /**
+   * Start a new HD wallet from an xpub.
+   * Used with hardware wallets.
+   * Encrypt this private key and save data in storage
+   *
+   * @param {string} xpub Extended public-key to start wallet
+   * @param {boolean} loadHistory if should load the history from the generated addresses
+   *
+   * @return {Promise} Promise that resolves when finishes loading address history, in case loadHistory = true, else returns null
+   * @memberof Wallet
+   * @inner
+   */
+   executeGenerateWalletFromXPub(xpubkey, loadHistory) {
+    // const xpub = HDPublicKey(xpub);
+    let initialAccessData = this.getWalletAccessData() || {};
+
+    const access = Object.assign(initialAccessData, {
+      xpubkey: xpubkey,
+      from_xpub: true,
+    });
+
+    return this.startWallet(access, loadHistory);
+  },
+
+  /**
    * Start a new HD wallet from an xpriv.
    * Encrypt this private key and save data in storage
    *
@@ -630,12 +654,16 @@ const wallet = {
    * @inner
    */
   changePin(oldPin, newPin) {
+    const accessData = this.getWalletAccessData();
+
+    if (accessData['from_xpub']) {
+        throw WalletFromXPubGuard('changePin');
+    }
+
     const isCorrect = this.isPinCorrect(oldPin);
     if (!isCorrect) {
       return false;
     }
-
-    const accessData = this.getWalletAccessData();
 
     // Get new PIN hash
     const newHash = this.hashPassword(newPin);
@@ -1511,6 +1539,9 @@ const wallet = {
    */
   getWalletWords(password) {
     const accessData = this.getWalletAccessData();
+    if (accessData['from_xpub']) {
+        throw WalletFromXPubGuard('getWalletWords');
+    }
     return this.decryptData(accessData.words, password);
   },
 
@@ -2435,6 +2466,11 @@ const wallet = {
    */
   getXprivKey(pin) {
     const accessData = this.getWalletAccessData();
+
+    if (accessData['from_xpub']) {
+        throw WalletFromXPubGuard('getXprivKey');
+    }
+
     const encryptedXPriv = accessData.mainKey;
     const privateKeyStr = wallet.decryptData(encryptedXPriv, pin);
     return privateKeyStr;
