@@ -319,25 +319,7 @@ const tokens = {
     return null;
   },
 
-  /**
-   * Create the tx for the new token in the backend and creates a new mint and melt outputs to be used in the future
-   *
-   * @param {string} address Address to receive the amount of the generated token
-   * @param {string} name Name of the new token
-   * @param {string} symbol Symbol of the new token
-   * @param {number} mintAmount Amount of the new token that will be minted
-   * @param {string} pin Pin to generate new addresses, if necessary
-   * @param {Object} options Options parameters
-   *  {
-   *   'changeAddress': address of the change output
-   *  }
-   *
-   * @return {Promise} Promise that resolves when token is created or an error from the backend arrives
-   *
-   * @memberof Tokens
-   * @inner
-   */
-  createToken(address, name, symbol, mintAmount, pin, options = { changeAddress: null }) {
+  getCreateTokenData(address, name, symbol, mintAmount, pin, options = { changeAddress: null }) {
     const { changeAddress } = options;
 
     const mintOptions = {
@@ -366,15 +348,41 @@ const tokens = {
       symbol,
     });
 
-    let preparedData = null;
     try {
-      preparedData = transaction.prepareData(createTokenTxData, pin);
+      const preparedData = transaction.prepareData(createTokenTxData, pin);
+      return {success: true, preparedData };
     } catch (e) {
       const message = helpers.handlePrepareDataError(e);
       return {success: false, message};
     }
+  },
 
-    const sendTransaction = new SendTransaction({data: preparedData});
+  /**
+   * Create the tx for the new token in the backend and creates a new mint and melt outputs to be used in the future
+   *
+   * @param {string} address Address to receive the amount of the generated token
+   * @param {string} name Name of the new token
+   * @param {string} symbol Symbol of the new token
+   * @param {number} mintAmount Amount of the new token that will be minted
+   * @param {string} pin Pin to generate new addresses, if necessary
+   * @param {Object} options Options parameters
+   *  {
+   *   'changeAddress': address of the change output
+   *  }
+   *
+   * @return {Promise} Promise that resolves when token is created or an error from the backend arrives
+   *
+   * @memberof Tokens
+   * @inner
+   */
+  createToken(address, name, symbol, mintAmount, pin, options = { changeAddress: null }) {
+    const ret = this.getCreateTokenData(address, name, symbol, mintAmount, pin, options);
+
+    if (!ret.success) {
+      return ret;
+    }
+
+    const sendTransaction = new SendTransaction({data: ret.preparedData});
 
     const promise = new Promise((resolve, reject) => {
       sendTransaction.on('send-success', (tx) => {
