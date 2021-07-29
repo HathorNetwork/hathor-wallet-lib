@@ -264,6 +264,25 @@ class SendTransactionWalletService extends EventEmitter {
     }
   }
 
+  runFromMining(until = null) {
+    try {
+      this.mineTx();
+      if (until === 'mine-tx') {
+        return;
+      }
+
+      this.on('mine-tx-ended', (data) => {
+        this.handleSendTxProposal();
+      });
+    } catch (err) {
+      if (err instanceof WalletError) {
+        this.emit('send-error', err);
+      } else {
+        throw err;
+      }
+    }
+  }
+
   /**
    * 
    */
@@ -279,14 +298,7 @@ class SendTransactionWalletService extends EventEmitter {
         return;
       }
 
-      this.mineTx();
-      if (until === 'mine-tx') {
-        return;
-      }
-
-      this.on('mine-tx-ended', (data) => {
-        this.handleSendTxProposal();
-      });
+      this.runFromMining(until);
     } catch (err) {
       if (err instanceof WalletError) {
         this.emit('send-error', err);

@@ -659,7 +659,7 @@ class HathorWalletServiceWallet extends EventEmitter {
       });
     });
 
-    sendTransaction.run();
+    sendTransaction.runFromMining();
     return promise;
   }
 
