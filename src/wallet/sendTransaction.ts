@@ -284,7 +284,7 @@ class SendTransactionWalletService extends EventEmitter {
         return;
       }
 
-      this.on('mining-ended', (data) => {
+      this.on('mine-tx-ended', (data) => {
         this.handleSendTxProposal();
       });
     } catch (err) {

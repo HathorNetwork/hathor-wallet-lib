@@ -726,141 +726,14 @@ class HathorWallet extends EventEmitter {
     return;
   };
 
-  async sendTransaction(address, value, token, optionsParams = {}) {
-    const ret = await this.sendTransactionEvents(address, value, token, optionsParams);
-    if (ret.success) {
-      const tx = await ret.sendTransaction.promise;
-      return { success: true, transaction: tx };
-    } else {
-      return ret;
-    }
-  }
-
-
-  /**
-   * Send tokens to only one address.
-   *
-   * @param {String} address Address to send the tokens
-   * @param {number} value Amount of tokens to be sent
-   * @param {Object} token Token object {'uid', 'name', 'symbol'}. Optional parameter if user already set on the class
-   * @param {Object} options Options parameters
-   *  {
-   *   'changeAddress': address of the change output
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
-   *  }
-   *
-   * @return {Object} In case of success, an object with {success: true, sendTransaction, promise}, where sendTransaction is a
-   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
-   * In case of error, an object with {success: false, message}
-   *
-   **/
-  sendTransactionEvents(address, value, token, optionsParams = {}) {
-    const options = Object.assign({ changeAddress: null, pinCode: null, startMiningTx: true }, optionsParams);
-    storage.setStore(this.store);
-    const ret = this.prepareTransaction(address, value, token, options);
-
-    if (ret.success) {
-      return Promise.resolve({success: true, sendTransaction: this.createSendTransaction(ret.data, options)});
-    } else {
-      return Promise.resolve(ret);
-    }
-  }
-
-  /**
-   * Prepare transaction data to be sent
-   *
-   * @param {String} address Address to send the tokens
-   * @param {number} value Amount of tokens to be sent
-   * @param {Object} token Token object {'uid', 'name', 'symbol'}. Optional parameter if user already set on the class
-   * @param {Object} options Options parameters
-   *  {
-   *   'changeAddress': address of the change output
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
-   *  }
-   *
-   * @return {Object} Object with {success: false, message} in case of an error, or {success: true, data}, otherwise
-   **/
-  prepareTransaction(address, value, token, optionsParams = {}) {
-    const options = Object.assign({ changeAddress: null, pinCode: null }, optionsParams);
-    storage.setStore(this.store);
-    const txToken = token || this.token;
-    const isHathorToken = txToken.uid === HATHOR_TOKEN_CONFIG.uid;
-    // XXX This allow only one token to be sent
-    // XXX This method allow only one output
-    const tokenData = (isHathorToken ? 0 : 1);
-    const data = {
-      tokens: isHathorToken ? [] : [txToken.uid],
-      inputs: [],
-      outputs: [{
-        address, value, tokenData
-      }],
-    };
-
-    return this.completeTxData(data, txToken, options);
-  }
-
-  /**
-   * Complete transaction data with inputs
-   *
-   * @param {Object} data Partial data that will be completed with inputs
-   * @param {Object} token Token object {'uid', 'name', 'symbol'}. Optional parameter if user already set on the class
-   * @param {Object} options Options parameters
-   *  {
-   *   'changeAddress': address of the change output
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
-   *  }
-   *
-   * @return {Object} Object with 'success' and completed 'data' in case of success, and 'message' in case of error
-   **/
-  completeTxData(partialData, token, optionsParams = {}) {
-    const options = Object.assign({ changeAddress: null, pinCode: null }, optionsParams);
-    const pin = options.pinCode || this.pinCode;
-    if (!pin) {
-      return {success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED};
-    }
-
-    const txToken = token || this.token;
-    const walletData = wallet.getWalletData();
-    const historyTxs = 'historyTransactions' in walletData ? walletData.historyTransactions : {};
-
-    let chooseInputs = true;
-    if (partialData.inputs.length > 0) {
-      chooseInputs = false;
-    }
-
-    // Warning: prepareSendTokensData(...) might modify `partialData`. It might add inputs in the inputs array
-    // if chooseInputs = true and also the change output to the outputs array, if needed.
-    const ret = wallet.prepareSendTokensData(partialData, txToken, chooseInputs, historyTxs, [txToken], options);
-
-    if (!ret.success) {
-      ret.debug = {
-        balance: this.getBalance(txToken.uid),
-        partialData: partialData, // this might not be the original `partialData`
-        txToken: txToken,
-        ...ret.debug
-      };
-      return ret;
-    }
-
-    let preparedData = null;
-    try {
-      preparedData = transaction.prepareData(ret.data, pin);
-    } catch(e) {
-      const message = helpers.handlePrepareDataError(e);
-      return {success: false, message};
-    }
-
-    return {success: true, data: preparedData};
-  }
-
-  async sendManyOutputsTransaction(outputs, inputs = [], token = null, options = {}) {
-    const ret = await this.sendManyOutputsTransactionEvents(outputs, inputs, token, options);
-    if (ret.success) {
-      const tx = await ret.sendTransaction.promise;
-      return { success: true, transaction: tx };
-    } else {
-      return ret;
-    }
+  sendTransaction(address, value, options = {}) {
+    const newOptions = Object.assign({
+      token: '00',
+      changeAddress: null
+    }, options);
+    const { token, changeAddress } = newOptions;
+    const outputs = [{ address, value, token }];
+    return this.sendManyOutputsTransaction(outputs, { inputs: [], changeAddress });
   }
 
   /**
@@ -868,7 +741,7 @@ class HathorWallet extends EventEmitter {
    * Currently does not have support to send custom tokens, only HTR
    *
    * @param {Array} outputs Array of outputs with each element as an object with {'address', 'value', 'timelock', 'token'}
-   * @param {Array} inputs Array of inputs with each element as an object with {'hash', 'index', 'token'}
+   * @param {Array} inputs Array of inputs with each element as an object with {'txId', 'index', 'token'}
    * @param {Object} token Token object {'uid', 'name', 'symbol'}. Optional parameter if user already set on the class
    * @param {Object} options Options parameters
    *  {
@@ -879,145 +752,27 @@ class HathorWallet extends EventEmitter {
    *
    * @return {Promise} Promise that resolves when transaction is sent
    **/
-  sendManyOutputsTransactionEvents(outputs, inputs = [], token = null, options = {}) {
+  sendManyOutputsTransaction(outputs, options = {}) {
     storage.setStore(this.store);
-    const newOptions = Object.assign({ changeAddress: null, startMiningTx: true, pinCode: null }, options);
+    const newOptions = Object.assign({ inputs: [], changeAddress: null, startMiningTx: true, pinCode: null }, options);
     const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       return {success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED};
     }
-    const txToken = token || this.token;
-    const tokensData = {};
-    const HTR_UID = HATHOR_TOKEN_CONFIG.uid;
+    const { inputs, changeAddress } = newOptions;
+    const sendTransaction = new SendTransaction({ outputs, inputs, changeAddress, pin });
+    const promise = new Promise((resolve, reject) => {
+      sendTransaction.on('send-tx-success', (transaction) => {
+        resolve(transaction);
+      });
 
-    // PrepareSendTokensData method expects all inputs/outputs for each token
-    // then the first step is to separate the inputs/outputs for each token
-    const getDefaultData = () => {
-      return { outputs: [], inputs: [] };
-    };
-
-    if (txToken && txToken.uid !== HTR_UID) {
-      tokensData[txToken.uid] = getDefaultData();
-    } else {
-      for (const output of outputs) {
-        if (output.token && !(output.token in tokensData)) {
-          tokensData[output.token] = getDefaultData();
-        }
-      }
-
-      if (Object.keys(tokensData).length === 0) {
-        // It's HTR and the outputs don't contain the token key
-        tokensData[HTR_UID] = getDefaultData();
-      }
-    }
-
-    const tokens = Object.keys(tokensData).filter((token) => {
-      return token !== HTR_UID;
+      sendTransaction.on('send-error', (err) => {
+        reject(err);
+      });
     });
 
-    for (const output of outputs) {
-      let tokenData;
-      if (output.token) {
-        if (output.token === HTR_UID) {
-          // HTR
-          tokenData = 0;
-        } else {
-          tokenData = tokens.indexOf(output.token) + 1;
-        }
-      } else {
-        if (txToken.uid === HTR_UID) {
-          tokenData = 0;
-        } else {
-          // A single token with third method parameter of class default
-          tokenData = 1;
-        }
-      }
-
-      tokensData[output.token].outputs.push({
-        address: output.address,
-        value: output.value,
-        timelock: output.timelock ? output.timelock : null,
-        tokenData,
-      });
-    }
-
-    for (const input of inputs) {
-      let token;
-      if (input.token) {
-        token = input.token;
-      } else {
-        token = txToken.uid;
-      }
-
-      tokensData[input.token].inputs.push({
-        tx_id: input.tx_id,
-        index: input.index,
-        token,
-      });
-    }
-
-    const fullTxData = Object.assign({tokens}, getDefaultData());
-
-    const walletData = wallet.getWalletData();
-    const historyTxs = 'historyTransactions' in walletData ? walletData.historyTransactions : {};
-    const tokensUids = tokens.map((token) => { return {uid: token} });
-    for (const tokenUid in tokensData) {
-      // For each token key in tokensData we prepare the data
-      const partialData = tokensData[tokenUid];
-      let chooseInputs = true;
-      if (partialData.inputs.length > 0) {
-        chooseInputs = false;
-      }
-
-      // Warning: prepareSendTokensData(...) might modify `partialData`. It might add inputs in the inputs array
-      // if chooseInputs = true and also the change output to the outputs array, if needed.
-      // it's not a problem to send the token without the symbol/name. This is used only for error message but
-      // it will increase the complexity of the parameters a lot to add the full token in each output/input.
-      // With the wallet service this won't be needed anymore, so I think it's fine [pedroferreira 04-19-2021]
-      const ret = wallet.prepareSendTokensData(partialData, {uid: tokenUid}, chooseInputs, historyTxs, tokensUids, newOptions);
-
-      if (!ret.success) {
-        ret.debug = {
-          balance: this.getBalance(tokenUid),
-          partialData: partialData, // this might not be the original `partialData`
-          tokenUid,
-          ...ret.debug
-        };
-        return ret;
-      }
-
-      fullTxData.inputs = [...fullTxData.inputs, ...ret.data.inputs];
-      fullTxData.outputs = [...fullTxData.outputs, ...ret.data.outputs];
-    }
-
-    let preparedData = null;
-    try {
-      preparedData = transaction.prepareData(fullTxData, pin);
-      return Promise.resolve({success: true, sendTransaction: this.createSendTransaction(preparedData, newOptions)});
-    } catch(e) {
-      const message = helpers.handlePrepareDataError(e);
-      return Promise.resolve({success: false, message});
-    }
-  }
-
-  /**
-   * Send a full prepared transaction
-   * Just transform data object to bytes, then hexadecimal and send it to full node.
-   *
-   * @param {Object} data Full transaction data
-   *
-   * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
-   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
-   **/
-  createSendTransaction(data, options = { startMiningTx: true }) {
-    storage.setStore(this.store);
-    const { startMiningTx } = options;
-    const sendTransaction = new SendTransaction({data});
-    if (startMiningTx) {
-      sendTransaction.start();
-    }
-
-    return sendTransaction;
+    sendTransaction.run();
+    return promise;
   }
 
   /**

@@ -6,12 +6,13 @@
  */
 
 import EventEmitter from 'events';
-import { CREATE_TOKEN_TX_VERSION, MIN_POLLING_INTERVAL, SELECT_OUTPUTS_TIMEOUT } from '../constants';
+import { CREATE_TOKEN_TX_VERSION, MIN_POLLING_INTERVAL, SELECT_OUTPUTS_TIMEOUT, HATHOR_TOKEN_CONFIG } from '../constants';
 import transaction from '../transaction';
 import txApi from '../api/txApi';
 import txMiningApi from '../api/txMining';
-import { AddressError, OutputValueError, ConstantNotSet, MaximumNumberOutputsError, MaximumNumberInputsError } from '../errors';
+import { WalletError, SendTxError, OutputValueError, ConstantNotSet, MaximumNumberOutputsError, MaximumNumberInputsError } from '../errors';
 import wallet from '../wallet';
+import helpers from '../helpers';
 import storage from '../storage';
 import Input from '../models/input';
 import Output from '../models/output';
@@ -41,13 +42,141 @@ class SendTransaction extends EventEmitter {
    * data {Object} Prepared tx data
    */
   constructor({
-    data=null,
-    maxTxMiningRetries=3,
+    transaction=null,
+    outputs=[],
+    inputs=[],
+    changeAddress=null,
+    pin=null
   } = {}) {
     super();
 
-    this.data = data;
+    this.transaction = transaction;
+    this.outputs = outputs;
+    this.inputs = inputs;
+    this.changeAddress = changeAddress;
+    this.pin = pin;
 
+    // Promise that resolves when push tx finishes with success
+    // or rejects in case of an error
+    this.promise = new Promise((resolve, reject) => {
+      this.on('send-success', (tx) => {
+        resolve(tx);
+      });
+
+      this.on('send-error', (message) => {
+        reject(message);
+      });
+
+      this.on('unexpected-error', (message) => {
+        reject(message);
+      });
+    });
+
+    // Error to be shown in case of an unexpected error when executing push tx
+    this.unexpectedPushTxError = 'An unexpected error happened. Check if the transaction has been sent looking into the history and try again if it hasn\'t.';
+
+    // Stores the setTimeout object to set selected outputs as false
+    this._unmark_as_selected_timer = null;
+  }
+
+  prepareTx() {
+    const tokensData = {};
+    const HTR_UID = HATHOR_TOKEN_CONFIG.uid;
+
+    // PrepareSendTokensData method expects all inputs/outputs for each token
+    // then the first step is to separate the inputs/outputs for each token
+    const getDefaultData = () => {
+      return { outputs: [], inputs: [] };
+    };
+
+    for (const output of this.outputs) {
+      if (!(output.token in tokensData)) {
+        tokensData[output.token] = getDefaultData();
+      }
+    }
+
+    // Get tokens array (HTR is not included)
+    const tokens = Object.keys(tokensData).filter((token) => {
+      return token !== HTR_UID;
+    });
+
+    for (const output of this.outputs) {
+      let tokenData;
+      if (output.token === HTR_UID) {
+        // HTR
+        tokenData = 0;
+      } else {
+        tokenData = tokens.indexOf(output.token) + 1;
+      }
+
+      tokensData[output.token].outputs.push({
+        address: output.address,
+        value: output.value,
+        timelock: output.timelock ? output.timelock : null,
+        tokenData,
+      });
+    }
+
+    const walletData = wallet.getWalletData();
+    const historyTxs = 'historyTransactions' in walletData ? walletData.historyTransactions : {};
+    for (const input of this.inputs) {
+      const inputTx = historyTxs[input.txId];
+      if (!inputTx || inputTx.outputs.length < input.index + 1) {
+        throw new SendTxError(`Input is invalid. Tx id ${input.txId} and index ${input.index}.`);
+      }
+      const token = inputTx.outputs[input.index].token;
+
+      tokensData[input.token].inputs.push({
+        tx_id: input.txId,
+        index: input.index,
+        token,
+      });
+    }
+
+    const fullTxData = Object.assign({tokens}, getDefaultData());
+
+    const tokensUids = tokens.map((token) => { return {uid: token} });
+    for (const tokenUid in tokensData) {
+      // For each token key in tokensData we prepare the data
+      const partialData = tokensData[tokenUid];
+      let chooseInputs = true;
+      if (partialData.inputs.length > 0) {
+        chooseInputs = false;
+      }
+
+      // Warning: prepareSendTokensData(...) might modify `partialData`. It might add inputs in the inputs array
+      // if chooseInputs = true and also the change output to the outputs array, if needed.
+      // it's not a problem to send the token without the symbol/name. This is used only for error message but
+      // it will increase the complexity of the parameters a lot to add the full token in each output/input.
+      // With the wallet service this won't be needed anymore, so I think it's fine [pedroferreira 04-19-2021]
+      const ret = wallet.prepareSendTokensData(partialData, {uid: tokenUid}, chooseInputs, historyTxs, tokensUids, { changeAddress: this.changeAddress });
+
+      if (!ret.success) {
+        ret.debug = {
+          balance: wallet.calculateBalance(Object.values(historyTxs), tokenUid),
+          partialData: partialData, // this might not be the original `partialData`
+          tokenUid,
+          ...ret.debug
+        };
+        throw new SendTxError(ret.message);
+      }
+
+      fullTxData.inputs = [...fullTxData.inputs, ...ret.data.inputs];
+      fullTxData.outputs = [...fullTxData.outputs, ...ret.data.outputs];
+    }
+
+    let preparedData = null;
+    try {
+      preparedData = transaction.prepareData(fullTxData, this.pin);
+      this.transaction = this.createTransactionFromData(preparedData);
+      return this.transaction;
+    } catch(e) {
+      const message = helpers.handlePrepareDataError(e);
+      throw new SendTxError(message);
+    }
+  }
+
+  createTransactionFromData(data) {
     const inputs = [];
     for (const input of data.inputs) {
       const inputObj = new Input(
@@ -97,7 +226,25 @@ class SendTransaction extends EventEmitter {
       );
     }
 
-    this.mineTransaction = new MineTransaction(transaction, { maxTxMiningRetries });
+    return transaction;
+  }
+
+  mineTx(options = {}) {
+    if (this.transaction === null) {
+      throw new WalletError('Can\'t mine transaction if it\'s null.');
+    }
+      this.updateOutputSelected(true);
+
+    const newOptions = Object.assign({
+      startMiningTx: true,
+      maxTxMiningRetries: 3,
+    }, options);
+
+    this.mineTransaction = new MineTransaction(this.transaction, { maxTxMiningRetries: newOptions.maxTxMiningRetries });
+
+    this.mineTransaction.on('mining-started', () => {
+      this.emit('mine-tx-started');
+    });
 
     this.mineTransaction.on('estimation-updated', (data) => {
       this.emit('estimation-updated', data);
@@ -122,33 +269,18 @@ class SendTransaction extends EventEmitter {
     })
 
     this.mineTransaction.on('success', (data) => {
-      this.data.nonce = data.nonce;
-      this.data.parents = data.parents;
-      this.data.timestamp = data.timestamp;
-      this.handlePushTx();
+      this.transaction.parents = data.parents;
+      this.transaction.timestamp = data.timestamp;
+      this.transaction.nonce = data.nonce;
+      this.transaction.weight = data.weight;
+      this.emit('mine-tx-ended', data);
     })
 
-    // Promise that resolves when push tx finishes with success
-    // or rejects in case of an error
-    this.promise = new Promise((resolve, reject) => {
-      this.on('send-success', (tx) => {
-        resolve(tx);
-      });
+    if (newOptions.startMiningTx) {
+      this.mineTransaction.start();
+    }
 
-      this.on('send-error', (message) => {
-        reject(message);
-      });
-
-      this.on('unexpected-error', (message) => {
-        reject(message);
-      });
-    });
-
-    // Error to be shown in case of an unexpected error when executing push tx
-    this.unexpectedPushTxError = 'An unexpected error happened. Check if the transaction has been sent looking into the history and try again if it hasn\'t.';
-
-    // Stores the setTimeout object to set selected outputs as false
-    this._unmark_as_selected_timer = null;
+    return this.mineTransaction;
   }
 
   /**
@@ -156,10 +288,11 @@ class SendTransaction extends EventEmitter {
    * If success, emits 'send-success' event, otherwise emits 'send-error' event.
    */
   handlePushTx() {
-    const txHex = transaction.getTxHexFromData(this.data);
+    this.emit('send-tx-start', this.transaction);
+    const txHex = this.transaction.toHex();
     txApi.pushTx(txHex, false, (response) => {
       if (response.success) {
-        this.emit('send-success', response.tx);
+        this.emit('send-tx-success', this.transaction);
         if (this._unmark_as_selected_timer !== null) {
           // After finishing the push_tx we can clearTimeout to unmark
           clearTimeout(this._unmark_as_selected_timer);
@@ -172,15 +305,34 @@ class SendTransaction extends EventEmitter {
     }).catch(() => {
       this.updateOutputSelected(false);
       this.emit('send-error', this.unexpectedPushTxError);
-    });;
+    });
   }
 
   /**
-   * Start object (submit job)
+   * 
    */
-  start() {
-    this.updateOutputSelected(true);
-    this.mineTransaction.start();
+  run(until = null) {
+    try {
+      this.prepareTx();
+      if (until === 'prepare-tx') {
+        return;
+      }
+
+      this.mineTx();
+      if (until === 'mine-tx') {
+        return;
+      }
+
+      this.on('mine-tx-ended', (data) => {
+        this.handlePushTx();
+      });
+    } catch (err) {
+      if (err instanceof WalletError) {
+        this.emit('send-error', err);
+      } else {
+        throw err;
+      }
+    }
   }
 
   /**
@@ -207,12 +359,12 @@ class SendTransaction extends EventEmitter {
     const allTokens = 'allTokens' in walletData ? walletData.allTokens : [];
 
     // Before sending the tx to be mined, we iterate through the inputs and set selected_as_input
-    for (const input of this.data.inputs) {
-      if (input.tx_id in historyTransactions) {
-        historyTransactions[input.tx_id].outputs[input.index]['selected_as_input'] = selected;
+    for (const input of this.transaction.inputs) {
+      if (input.hash in historyTransactions) {
+        historyTransactions[input.hash].outputs[input.index]['selected_as_input'] = selected;
       } else {
         // This isn't supposed to happen but it's definitely happening in a race condition.
-        console.log(`updateOutputSelected: Error updating output as selected=${selected}. ${input.tx_id} is not in the storage data. Transactions history length: ${Object.values(historyTransactions).length}`);
+        console.log(`updateOutputSelected: Error updating output as selected=${selected}. ${input.hash} is not in the storage data. Transactions history length: ${Object.values(historyTransactions).length}`);
       }
     }
     wallet.saveAddressHistory(historyTransactions, allTokens);
