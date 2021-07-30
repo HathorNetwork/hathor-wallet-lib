@@ -295,7 +295,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  getAddressAtIndex(xpubkey: string, addressIndex: number, networkName: string = 'mainnet'): Object {
+  getAddressAtIndex(xpubkey: string, addressIndex: number, networkName: string = 'mainnet'): string {
     let xpub;
     try {
       xpub = HDPublicKey(xpubkey);
