@@ -122,6 +122,19 @@ const wallet = {
     return {'valid': true, 'message': '', 'words': newWordsString};
   },
 
+
+  /**
+   * Test if wallet was created from xpub
+   *
+   * @return {Boolean} If the wallet was created from xpub
+   * @memberof Wallet
+   * @inner
+   * */
+  isFromXPub() {
+    const accessData = this.getWalletAccessData();
+    return Boolean(accessData['from_xpub']);
+  },
+
   /**
    * Generate HD wallet words
    *
@@ -651,9 +664,7 @@ const wallet = {
    * @inner
    */
   changePin(oldPin, newPin) {
-    const accessData = this.getWalletAccessData();
-
-    if (accessData['from_xpub']) {
+    if (this.isFromXPub()) {
         throw WalletFromXPubGuard('changePin');
     }
 
@@ -665,6 +676,7 @@ const wallet = {
     // Get new PIN hash
     const newHash = this.hashPassword(newPin);
     // Update new PIN data in storage
+    const accessData = this.getWalletAccessData();
     accessData['hash'] = newHash.key.toString();
     accessData['salt'] = newHash.salt;
 
@@ -1535,10 +1547,10 @@ const wallet = {
    * @inner
    */
   getWalletWords(password) {
-    const accessData = this.getWalletAccessData();
-    if (accessData['from_xpub']) {
+    if (this.isFromXPub()) {
         throw WalletFromXPubGuard('getWalletWords');
     }
+    const accessData = this.getWalletAccessData();
     return this.decryptData(accessData.words, password);
   },
 
@@ -2462,11 +2474,11 @@ const wallet = {
    * @return {String} Wallet xprivkey
    */
   getXprivKey(pin) {
-    const accessData = this.getWalletAccessData();
-
-    if (accessData['from_xpub']) {
+    if (this.isFromXPub()) {
         throw WalletFromXPubGuard('getXprivKey');
     }
+
+    const accessData = this.getWalletAccessData();
 
     const encryptedXPriv = accessData.mainKey;
     const privateKeyStr = wallet.decryptData(encryptedXPriv, pin);

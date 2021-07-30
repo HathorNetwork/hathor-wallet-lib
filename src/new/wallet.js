@@ -157,6 +157,13 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Test if this wallet started only with an xpub
+   */
+  isFromXPub() {
+    return Boolean(this.xpub);
+  }
+
+  /**
    * Called when the connection to the websocket changes.
    * It is also called if the network is down.
    *
@@ -509,6 +516,9 @@ class HathorWallet extends EventEmitter {
    *
    */
   async consolidateUtxos(destinationAddress, options = {}) {
+    if (this.isFromXPub()) {
+      throw new WalletFromXPubGuard('consolidateUtxos');
+    }
     storage.setStore(this.store);
     const { outputs, inputs, token, utxos, total_amount } = this.prepareConsolidateUtxosData(destinationAddress, options);
 
@@ -583,6 +593,9 @@ class HathorWallet extends EventEmitter {
    *
    **/
   sendTransaction(address, value, token, optionsParams = {}) {
+    if (this.isFromXPub()) {
+      throw new WalletFromXPubGuard('sendTransaction');
+    }
     const options = Object.assign({ changeAddress: null, pinCode: null }, optionsParams);
     storage.setStore(this.store);
     const ret = this.prepareTransaction(address, value, token, options);
@@ -698,6 +711,9 @@ class HathorWallet extends EventEmitter {
    * @return {Promise} Promise that resolves when transaction is sent
    **/
   sendManyOutputsTransaction(outputs, inputs = [], token = null, options = {}) {
+    if (this.isFromXPub()) {
+      throw new WalletFromXPubGuard('sendManyOutputsTransaction');
+    }
     storage.setStore(this.store);
     const newOptions = Object.assign({ changeAddress: null, startMiningTx: true, pinCode: null }, options);
     const pin = newOptions.pinCode || this.pinCode;
@@ -828,6 +844,9 @@ class HathorWallet extends EventEmitter {
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    **/
   sendPreparedTransaction(data, options = { startMiningTx: true }) {
+    if (this.isFromXPub()) {
+      throw new WalletFromXPubGuard('sendPreparedTransaction');
+    }
     storage.setStore(this.store);
     const { startMiningTx } = options;
     const sendTransaction = new SendTransaction({data});
@@ -947,6 +966,9 @@ class HathorWallet extends EventEmitter {
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    **/
   createNewToken(name, symbol, amount, address, options = {}) {
+    if (this.isFromXPub()) {
+      throw new WalletFromXPubGuard('createNewToken');
+    }
     storage.setStore(this.store);
     const newOptions = Object.assign({ changeAddress: null, startMiningTx: true, pinCode: null }, options);
     const pin = newOptions.pinCode || this.pinCode;
@@ -1090,6 +1112,9 @@ class HathorWallet extends EventEmitter {
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    **/
   mintTokens(tokenUid, amount, address, options = {}) {
+    if (this.isFromXPub()) {
+      throw new WalletFromXPubGuard('mintTokens');
+    }
     storage.setStore(this.store);
     const newOptions = Object.assign({
       changeAddress: null,
@@ -1141,6 +1166,9 @@ class HathorWallet extends EventEmitter {
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    **/
   meltTokens(tokenUid, amount, options = {}) {
+    if (this.isFromXPub()) {
+      throw new WalletFromXPubGuard('meltTokens');
+    }
     storage.setStore(this.store);
     const newOptions = Object.assign({
       depositAddress: null,
@@ -1191,6 +1219,9 @@ class HathorWallet extends EventEmitter {
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    **/
   delegateAuthority(tokenUid, type, destinationAddress, options = {}) {
+    if (this.isFromXPub()) {
+      throw new WalletFromXPubGuard('delegateAuthority');
+    }
     storage.setStore(this.store);
     const newOptions = Object.assign({ createAnother: true, startMiningTx: true, pinCode: null }, options);
     const pin = newOptions.pinCode || this.pinCode;
@@ -1244,6 +1275,9 @@ class HathorWallet extends EventEmitter {
    * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
    **/
   destroyAuthority(tokenUid, type, count, options = {}) {
+    if (this.isFromXPub()) {
+      throw new WalletFromXPubGuard('destroyAuthority');
+    }
     storage.setStore(this.store);
     const newOptions = Object.assign({ startMiningTx: true, pinCode: null }, options);
     const pin = newOptions.pinCode || this.pinCode;
