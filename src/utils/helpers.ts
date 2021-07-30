@@ -299,6 +299,18 @@ const helpers = {
     return this.createTxFromBytes(hexToBuffer(hex), network);
   },
 
+  /**
+   * Create a transaction from object data
+   * We used to work only with data object to handle transactions in the past inside the lib
+   * This method was created to transaform those objects into Transaction class instances
+   *
+   * 'data': {'version', 'weight', 'timestamp', 'tokens', 'inputs': [{'tx_id', 'index'}], 'outputs': [{'address', 'value', 'tokenData', 'timelock'}]}
+   *
+   * if it's a create token transaction, then it expects 'name' and 'symbol' as well.
+   *
+   * @memberof Helpers
+   * @inner
+   */
   createTxFromData(data): Transaction | CreateTokenTransaction {
     const inputs: Input[] = [];
     for (const input of data.inputs) {

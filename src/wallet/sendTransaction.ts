@@ -15,7 +15,7 @@ import Input from '../models/input';
 import Address from '../models/address';
 import { HATHOR_TOKEN_CONFIG } from '../constants';
 import { shuffle } from 'lodash';
-import { SendTxError, UtxoError, WalletError } from '../errors';
+import { SendTxError, UtxoError, WalletError, WalletRequestError } from '../errors';
 import { OutputRequestObj, InputRequestObj } from './types';
 
 type optionsType = {
@@ -57,6 +57,13 @@ class SendTransactionWalletService extends EventEmitter {
     this.mineTransaction = null;
   }
 
+  /**
+   * Prepare transaction data to send
+   * Get utxos from wallet service, creates change outpus and returns a Transaction object
+   *
+   * @memberof SendTransactionWalletService
+   * @inner
+   */
   async prepareTx(): Promise<{ transaction: Transaction, utxosAddressPath: string[] }> {
     if (this.outputs.length === 0) {
       throw new WalletError('Can\'t prepare transactions with no outputs.');
@@ -171,6 +178,12 @@ class SendTransactionWalletService extends EventEmitter {
     return { transaction: this.transaction, utxosAddressPath };
   }
 
+  /**
+   * Signs the inputs of a transaction
+   *
+   * @memberof SendTransactionWalletService
+   * @inner
+   */
   signTx(utxosAddressPath: string[]) {
     if (this.transaction === null) {
       throw new WalletError('Can\'t sign transaction if it\'s null.');
@@ -186,6 +199,14 @@ class SendTransactionWalletService extends EventEmitter {
     this.emit('sign-tx-end', this.transaction);
   }
 
+  /**
+   * Mine the transaction
+   * Expects this.transaction to be prepared and signed
+   * Emits MineTransaction events while the process is ongoing
+   *
+   * @memberof SendTransactionWalletService
+   * @inner
+   */
   mineTx(options = {}): MineTransaction {
     if (this.transaction === null) {
       throw new WalletError('Can\'t mine transaction if it\'s null.');
@@ -241,6 +262,11 @@ class SendTransactionWalletService extends EventEmitter {
   }
 
   /**
+   * Create and send a tx proposal to wallet service
+   * Expects this.transaction to be prepared, signed and mined
+   *
+   * @memberof SendTransactionWalletService
+   * @inner
    */
   async handleSendTxProposal() {
     if (this.transaction === null) {
@@ -249,22 +275,30 @@ class SendTransactionWalletService extends EventEmitter {
     this.emit('send-tx-start', this.transaction);
     const txHex = this.transaction.toHex();
 
-    const response = await walletApi.createTxProposal(this.wallet, txHex);
-    if (response.status === 201) {
-      const responseData = response.data;
+    try {
+      const responseData = await walletApi.createTxProposal(this.wallet, txHex);
       const txProposalId = responseData.txProposalId;
-      const sendResponse = await walletApi.updateTxProposal(this.wallet, txProposalId, txHex);
-      if (sendResponse.status === 200 && sendResponse.data.success) {
-        this.transaction.updateHash();
-        this.emit('send-tx-success', this.transaction);
-      } else {
+      const sendData = await walletApi.updateTxProposal(this.wallet, txProposalId, txHex);
+      this.transaction.updateHash();
+      this.emit('send-tx-success', this.transaction);
+    } catch (err) {
+      if (err instanceof WalletRequestError) {
         this.emit('send-error', 'Error sending tx proposal.');
+      } else {
+        throw err;
       }
-    } else {
-      this.emit('send-error', 'Error sending tx proposal.');
     }
   }
 
+  /**
+   * Run sendTransaction from mining, i.e. expects this.transaction to be prepared and signed
+   * then it will mine and handle tx proposal
+   *
+   * 'until' parameter can be 'mine-tx', in order to only mine the transaction without propagating
+   *
+   * @memberof SendTransactionWalletService
+   * @inner
+   */
   runFromMining(until = null) {
     try {
       this.mineTx();
@@ -285,7 +319,13 @@ class SendTransactionWalletService extends EventEmitter {
   }
 
   /**
-   * 
+   * Run sendTransaction from preparing, i.e. prepare, sign, mine and send the tx
+   *
+   * 'until' parameter can be 'prepare-tx' (it will stop before signing the tx), 'sign-tx' (it will stop before mining the tx),
+   * or 'mine-tx' (it will stop before send tx proposal, i.e. propagating the tx)
+   *
+   * @memberof SendTransactionWalletService
+   * @inner
    */
   async run(until = null) {
     try {

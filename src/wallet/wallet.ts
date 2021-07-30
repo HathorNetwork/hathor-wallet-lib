@@ -359,6 +359,12 @@ class HathorWalletServiceWallet extends EventEmitter {
     }
   }
 
+  /**
+   * Creates and send a transaction from an array of inputs and outputs
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
   sendManyOutputsTransaction(outputs: OutputRequestObj[], options: { inputs?: InputRequestObj[], changeAddress?: string } = {}): Promise<Transaction | string> {
     const newOptions = Object.assign({
       inputs: [],
@@ -380,6 +386,12 @@ class HathorWalletServiceWallet extends EventEmitter {
     return promise;
   }
 
+  /**
+   * Creates and send a simple transaction with one output
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
   sendTransaction(address: string, value: number, options: { token?: string, changeAddress?: string } = {}): Promise<Transaction | string> {
     const newOptions = Object.assign({
       token: '00',
@@ -515,6 +527,12 @@ class HathorWalletServiceWallet extends EventEmitter {
     throw new WalletError('Not implemented.');
   }
 
+  /**
+   * Prepare create new token data, sign the inputs and returns an object ready to be mined
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
   async prepareCreateNewToken(name: string, symbol: string, amount: number, options = {}): Promise<CreateTokenTransaction>  {
     this.checkWalletReady();
     type optionsType = {
