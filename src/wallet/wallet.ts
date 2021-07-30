@@ -198,8 +198,6 @@ class HathorWalletServiceWallet extends EventEmitter {
     this.checkWalletReady();
     const data = await walletApi.getAddresses(this);
     return data.addresses;
-    let addresses: GetAddressesObject[] = [];
-    return addresses;
   }
 
   /**
