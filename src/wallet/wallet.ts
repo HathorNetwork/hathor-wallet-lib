@@ -133,23 +133,14 @@ class HathorWalletServiceWallet extends EventEmitter {
       const data = res.data;
       if (res.status === 200 && data.success) {
         await handleCreate(data.status);
+      } else if (res.status === 400 && data.error === 'wallet-already-loaded') {
+        // If it was already loaded, we have to check if it's ready
+        await handleCreate(data.status);
       } else {
         throw new WalletRequestError('Error creating wallet.');
       }
     } catch(error) {
-      if (error.response.status === 400) {
-        // Bad request
-        // Check if error is 'wallet-already-loaded'
-        const data = error.response.data;
-        if (data && data.error === 'wallet-already-loaded') {
-          // If it was already loaded, we have to check if it's ready
-          await handleCreate(data.status);
-        } else {
-          throw new WalletRequestError('Error creating wallet.');
-        }
-      } else {
-        throw new WalletRequestError('Error creating wallet.');
-      }
+      throw new WalletRequestError('Error creating wallet.');
     }
   }
 
@@ -597,10 +588,12 @@ class HathorWalletServiceWallet extends EventEmitter {
       throw new UtxoError(`No utxos available to fill the request. Token: HTR - Amount: ${deposit}.`);
     }
 
+    const utxosAddressPath: string[] = [];
     // 3. Create the transaction object with the inputs and outputs (new token amount, change address with HTR, mint/melt authorities - depending on parameters)
     const inputsObj: Input[] = [];
     for (const utxo of utxos) {
       inputsObj.push(new Input(utxo.txId, utxo.index));
+      utxosAddressPath.push(utxo.addressPath);
     }
 
     // Create outputs
@@ -636,6 +629,13 @@ class HathorWalletServiceWallet extends EventEmitter {
 
     const tx = new CreateTokenTransaction(name, symbol, inputsObj, outputsObj);
     tx.prepareToSend();
+
+    const dataToSignHash = tx.getDataToSignHash();
+
+    for (const [idx, inputObj] of tx.inputs.entries()) {
+      const inputData = this.getInputData(dataToSignHash, utxosAddressPath[idx]);
+      inputObj.setData(inputData);
+    }
     return tx;
   }
 
