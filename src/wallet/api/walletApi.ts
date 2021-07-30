@@ -50,7 +50,7 @@ const walletApi = {
     const response = await axios.post('wallet/init', data);
     if (response.status === 200 && response.data.success) {
       return response.data;
-    } else if (res.status === 400 && data.error === 'wallet-already-loaded') {
+    } else if (response.status === 400 && response.data.error === 'wallet-already-loaded') {
       // If it was already loaded, we have to check if it's ready
       return response.data;
     } else {
@@ -102,7 +102,7 @@ const walletApi = {
     }
   },
 
-  async getHistory(wallet: HathorWalletServiceWallet, options = {}): Promise<HistoryResponse> {
+  async getHistory(wallet: HathorWalletServiceWallet, options = {}): Promise<HistoryResponseData> {
     const data = { params: options };
     const axios = await axiosInstance(wallet);
     const response = await axios.get('wallet/history', data);
