@@ -624,7 +624,7 @@ class HathorWalletServiceWallet extends EventEmitter {
     const newAddressesLen = this.newAddresses.length;
     if (this.indexToUse > newAddressesLen - 1) {
       const addressInfo = this.newAddresses[newAddressesLen - 1];
-      return {...addressInfo, error: 'GAP_LIMIT_REACHED'};
+      return {...addressInfo, info: 'GAP_LIMIT_REACHED'};
     }
 
     const addressInfo = this.newAddresses[this.indexToUse];
