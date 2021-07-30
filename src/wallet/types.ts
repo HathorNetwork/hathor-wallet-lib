@@ -54,7 +54,7 @@ export interface AddressInfoObject {
   address: string; // Address in base58
   index: number; // derivation index of the address
   addressPath: string; // Path of the address
-  error: string | undefined; // Optional error code when getting address info
+  info: string | undefined; // Optional extra info when getting address info
 }
 
 export interface WalletStatusResponseData {
