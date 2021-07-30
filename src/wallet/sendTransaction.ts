@@ -255,6 +255,7 @@ class SendTransactionWalletService extends EventEmitter {
       const txProposalId = responseData.txProposalId;
       const sendResponse = await walletApi.updateTxProposal(this.wallet, txProposalId, txHex);
       if (sendResponse.status === 200 && sendResponse.data.success) {
+        this.transaction.updateHash();
         this.emit('send-tx-success', this.transaction);
       } else {
         this.emit('send-error', 'Error sending tx proposal.');
@@ -271,7 +272,7 @@ class SendTransactionWalletService extends EventEmitter {
         return;
       }
 
-      this.on('mine-tx-ended', (data) => {
+      this.once('mine-tx-ended', (data) => {
         this.handleSendTxProposal();
       });
     } catch (err) {
