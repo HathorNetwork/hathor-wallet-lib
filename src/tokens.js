@@ -15,7 +15,7 @@ import helpers from './helpers';
 import walletApi from './api/wallet';
 import SendTransaction from './new/sendTransaction';
 import { InsufficientFundsError, ConstantNotSet, TokenValidationError } from './errors';
-import { CREATE_TOKEN_TX_VERSION, HATHOR_TOKEN_CONFIG, TOKEN_MINT_MASK, TOKEN_MELT_MASK, AUTHORITY_TOKEN_DATA } from './constants';
+import { TOKEN_DEPOSIT_PERCENTAGE, CREATE_TOKEN_TX_VERSION, HATHOR_TOKEN_CONFIG, TOKEN_MINT_MASK, TOKEN_MELT_MASK, AUTHORITY_TOKEN_DATA } from './constants';
 
 
 /**
@@ -903,7 +903,11 @@ const tokens = {
    */
   getDepositPercentage() {
     if (this._depositPercentage === null) {
-      throw new ConstantNotSet('Token deposit percentage constant not set');
+      // When we are using the wallet service facade we don't update the old constants
+      // some wallets require this constants to be set in order to show useful information
+      // on the screen. In the future we should change how we get this info in the client
+      // but for now I think it's safe to just return the deposit percentage as a constant
+      return TOKEN_DEPOSIT_PERCENTAGE;
     }
     return this._depositPercentage;
   },

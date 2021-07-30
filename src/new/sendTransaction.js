@@ -6,19 +6,15 @@
  */
 
 import EventEmitter from 'events';
-import { CREATE_TOKEN_TX_VERSION, MIN_POLLING_INTERVAL, SELECT_OUTPUTS_TIMEOUT, HATHOR_TOKEN_CONFIG } from '../constants';
+import { MIN_POLLING_INTERVAL, SELECT_OUTPUTS_TIMEOUT, HATHOR_TOKEN_CONFIG } from '../constants';
 import transaction from '../transaction';
+import helpers from '../utils/helpers';
 import txApi from '../api/txApi';
 import txMiningApi from '../api/txMining';
 import { WalletError, SendTxError, OutputValueError, ConstantNotSet, MaximumNumberOutputsError, MaximumNumberInputsError } from '../errors';
 import wallet from '../wallet';
-import helpers from '../helpers';
+import oldHelpers from '../helpers';
 import storage from '../storage';
-import Input from '../models/input';
-import Output from '../models/output';
-import Transaction from '../models/transaction';
-import CreateTokenTransaction from '../models/create_token_transaction';
-import Address from '../models/address';
 import MineTransaction from '../wallet/mineTransaction';
 
 /**
@@ -168,65 +164,12 @@ class SendTransaction extends EventEmitter {
     let preparedData = null;
     try {
       preparedData = transaction.prepareData(fullTxData, this.pin);
-      this.transaction = this.createTransactionFromData(preparedData);
+      this.transaction = helpers.createTxFromData(preparedData);
       return this.transaction;
     } catch(e) {
-      const message = helpers.handlePrepareDataError(e);
+      const message = oldHelpers.handlePrepareDataError(e);
       throw new SendTxError(message);
     }
-  }
-
-  createTransactionFromData(data) {
-    const inputs = [];
-    for (const input of data.inputs) {
-      const inputObj = new Input(
-        input.tx_id,
-        input.index,
-        {
-          data: input.data
-        }
-      );
-      inputs.push(inputObj);
-    }
-
-    const outputs = [];
-    for (const output of data.outputs) {
-      const outputObj = new Output(
-        output.value,
-        new Address(output.address),
-        {
-          tokenData: output.tokenData,
-          timelock: output.timelock
-        }
-      );
-      outputs.push(outputObj);
-    }
-
-    const options = {
-      version: data.version,
-      weight: data.weight,
-      timestamp: data.timestamp,
-      tokens: data.tokens
-    }
-
-    let transaction = null;
-    if (data.version === CREATE_TOKEN_TX_VERSION) {
-      transaction = new CreateTokenTransaction(
-        data.name,
-        data.symbol,
-        inputs,
-        outputs,
-        options
-      );
-    } else {
-      transaction = new Transaction(
-        inputs,
-        outputs,
-        options
-      );
-    }
-
-    return transaction;
   }
 
   mineTx(options = {}) {
@@ -292,6 +235,7 @@ class SendTransaction extends EventEmitter {
     const txHex = this.transaction.toHex();
     txApi.pushTx(txHex, false, (response) => {
       if (response.success) {
+        this.transaction.updateHash();
         this.emit('send-tx-success', this.transaction);
         if (this._unmark_as_selected_timer !== null) {
           // After finishing the push_tx we can clearTimeout to unmark
@@ -308,6 +252,25 @@ class SendTransaction extends EventEmitter {
     });
   }
 
+  runFromMining(until = null) {
+    try {
+      this.mineTx();
+      if (until === 'mine-tx') {
+        return;
+      }
+
+      this.on('mine-tx-ended', (data) => {
+        this.handlePushTx();
+      });
+    } catch (err) {
+      if (err instanceof WalletError) {
+        this.emit('send-error', err);
+      } else {
+        throw err;
+      }
+    }
+  }
+
   /**
    * 
    */
@@ -318,14 +281,7 @@ class SendTransaction extends EventEmitter {
         return;
       }
 
-      this.mineTx();
-      if (until === 'mine-tx') {
-        return;
-      }
-
-      this.on('mine-tx-ended', (data) => {
-        this.handlePushTx();
-      });
+      this.runFromMining(until);
     } catch (err) {
       if (err instanceof WalletError) {
         this.emit('send-error', err);

@@ -11,6 +11,8 @@ import buffer from 'buffer';
 import Long from 'long';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
+import Input from '../models/input';
+import Output from '../models/output';
 import Network from '../models/network';
 import Address from '../models/address';
 import { hexToBuffer, unpackToInt } from '../utils/buffer';
@@ -296,6 +298,58 @@ const helpers = {
   createTxFromHex(hex: string, network: Network): Transaction | CreateTokenTransaction {
     return this.createTxFromBytes(hexToBuffer(hex), network);
   },
+
+  createTxFromData(data): Transaction | CreateTokenTransaction {
+    const inputs: Input[] = [];
+    for (const input of data.inputs) {
+      const inputObj = new Input(
+        input.tx_id,
+        input.index,
+        {
+          data: input.data
+        }
+      );
+      inputs.push(inputObj);
+    }
+
+    const outputs: Output[] = [];
+    for (const output of data.outputs) {
+      const outputObj = new Output(
+        output.value,
+        new Address(output.address),
+        {
+          tokenData: output.tokenData,
+          timelock: output.timelock
+        }
+      );
+      outputs.push(outputObj);
+    }
+
+    const options = {
+      version: data.version,
+      weight: data.weight,
+      timestamp: data.timestamp,
+      tokens: data.tokens
+    }
+
+    if (data.version === CREATE_TOKEN_TX_VERSION) {
+      return new CreateTokenTransaction(
+        data.name,
+        data.symbol,
+        inputs,
+        outputs,
+        options
+      );
+    } else if (data.version === DEFAULT_TX_VERSION) {
+      return new Transaction(
+        inputs,
+        outputs,
+        options
+      );
+    } else {
+        throw new ParseError('We currently support only the Transaction and CreateTokenTransaction types. Other types will be supported in the future.');
+    }
+  }
 }
 
 export default helpers;

@@ -8,12 +8,11 @@
 import EventEmitter from 'events';
 import wallet from '../wallet';
 import { HATHOR_TOKEN_CONFIG, HATHOR_BIP44_CODE } from "../constants";
-import transaction from '../transaction';
 import tokens from '../tokens';
 import version from '../version';
 import walletApi from '../api/wallet';
 import storage from '../storage';
-import helpers from '../helpers';
+import helpers from '../utils/helpers';
 import MemoryStore from '../memory_store';
 import Connection from './connection';
 import SendTransaction from './sendTransaction';
@@ -858,6 +857,24 @@ class HathorWallet extends EventEmitter {
     this.conn.stop()
   }
 
+  prepareCreateNewToken(name, symbol, amount, options = {}) {
+    storage.setStore(this.store)
+    const newOptions = Object.assign({ address: null, changeAddress: null, startMiningTx: true, pinCode: null }, options);
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      return {success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED};
+    }
+    const mintAddress = newOptions.address || this.getCurrentAddress();
+
+    const ret = tokens.getCreateTokenData(mintAddress, name, symbol, amount, pin, newOptions);
+
+    if (!ret.success) {
+      return Promise.reject(ret);
+    }
+
+    return Promise.resolve(helpers.createTxFromData(ret.preparedData));
+  }
+
   /**
    * Create a new token for this wallet
    *
@@ -883,22 +900,22 @@ class HathorWallet extends EventEmitter {
       return {success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED};
     }
     const mintAddress = newOptions.address || this.getCurrentAddress();
-    const ret = tokens.createToken(mintAddress, name, symbol, amount, pin, newOptions);
 
-    if (ret.success) {
-      const sendTransaction = ret.sendTransaction;
-      if (newOptions.startMiningTx) {
-        sendTransaction.start();
+    const tx = await this.prepareCreateNewToken(name, symbol, amount, newOptions);
 
-        await Promise.resolve(sendTransaction.promise);
-        const txHex = transaction.getTxHexFromData(sendTransaction.data);
-        return Promise.resolve({success: true, txHex });
-      }
-      return {success: true, promise: sendTransaction.promise, sendTransaction};
-    } else {
-      return Promise.reject(ret);
-    }
+    const sendTransaction = new SendTransaction({ transaction: tx });
+    const promise = new Promise((resolve, reject) => {
+      sendTransaction.on('send-tx-success', (transaction) => {
+        resolve(transaction);
+      });
 
+      sendTransaction.on('send-error', (err) => {
+        reject(err);
+      });
+    });
+
+    sendTransaction.runFromMining();
+    return promise;
   }
 
   /**
