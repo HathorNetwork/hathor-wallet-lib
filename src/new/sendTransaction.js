@@ -75,6 +75,17 @@ class SendTransaction extends EventEmitter {
     this._unmark_as_selected_timer = null;
   }
 
+  /**
+   * Prepare transaction data from inputs and outputs
+   * Fill the inputs if needed, create output change if needed and sign inputs
+   *
+   * @throws SendTxError
+   *
+   * @return {Transaction} Transaction object prepared to be mined
+   *
+   * @memberof SendTransaction
+   * @inner
+   */
   prepareTx() {
     const tokensData = {};
     const HTR_UID = HATHOR_TOKEN_CONFIG.uid;
@@ -172,6 +183,18 @@ class SendTransaction extends EventEmitter {
     }
   }
 
+  /**
+   * Mine the transaction
+   * Expects this.transaction to be prepared and signed
+   * Emits MineTransaction events while the process is ongoing
+   *
+   * @params {Object} options Optional object with {'startMiningTx', 'maxTxMiningRetries'}
+   *
+   * @throws WalletError
+   *
+   * @memberof SendTransaction
+   * @inner
+   */
   mineTx(options = {}) {
     if (this.transaction === null) {
       throw new WalletError('Can\'t mine transaction if it\'s null.');
@@ -228,7 +251,10 @@ class SendTransaction extends EventEmitter {
 
   /**
    * Push tx to the network
-   * If success, emits 'send-success' event, otherwise emits 'send-error' event.
+   * If success, emits 'send-tx-success' event, otherwise emits 'send-error' event.
+   *
+   * @memberof SendTransaction
+   * @inner
    */
   handlePushTx() {
     this.emit('send-tx-start', this.transaction);
@@ -252,6 +278,15 @@ class SendTransaction extends EventEmitter {
     });
   }
 
+  /**
+   * Run sendTransaction from mining, i.e. expects this.transaction to be prepared and signed
+   * then it will mine and push tx
+   *
+   * 'until' parameter can be 'mine-tx', in order to only mine the transaction without propagating
+   *
+   * @memberof SendTransaction
+   * @inner
+   */
   runFromMining(until = null) {
     try {
       this.mineTx();
@@ -272,7 +307,13 @@ class SendTransaction extends EventEmitter {
   }
 
   /**
-   * 
+   * Run sendTransaction from preparing, i.e. prepare, sign, mine and push the tx
+   *
+   * 'until' parameter can be 'prepare-tx' (it will stop before signing the tx),
+   * or 'mine-tx' (it will stop before send tx proposal, i.e. propagating the tx)
+   *
+   * @memberof SendTransaction
+   * @inner
    */
   run(until = null) {
     try {

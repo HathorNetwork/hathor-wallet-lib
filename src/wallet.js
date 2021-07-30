@@ -212,6 +212,15 @@ const wallet = {
     return this.startWallet(access, loadHistory);
   },
 
+  /**
+   * Encrypt words with password and save it on localStorage
+   *
+   * @param {string} words Words to be encrypted
+   * @param {string} password Password to encrypt
+   *
+   * @memberof Wallet
+   * @inner
+   */
   storeEncryptedWords(words, password) {
     const initialAccessData = this.getWalletAccessData() || {};
 
@@ -221,6 +230,15 @@ const wallet = {
     this.setWalletAccessData(initialAccessData);
   },
 
+  /**
+   * Stores hash of password/PIN on localStorage
+   *
+   * @param {string} password Password to store hash
+   * @param {string} suffix Optional suffix for the localStorage key name
+   *
+   * @memberof Wallet
+   * @inner
+   */
   storePasswordHash(password, suffix='') {
     const initialAccessData = this.getWalletAccessData() || {};
     const hashed = this.hashPassword(password);

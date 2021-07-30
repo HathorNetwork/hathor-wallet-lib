@@ -194,10 +194,28 @@ class HathorWallet extends EventEmitter {
     }
   }
 
+  /**
+   * Old getAllAddresses method used to keep compatibility
+   * with some methods that used to need it
+   *
+   * @return {Array} Array of addresses (string)
+   *
+   * @memberof HathorWallet
+   * @inner
+   **/
   getAllAddressesSimple() {
+    storage.setStore(this.store);
     return wallet.getAllAddresses();
   }
 
+  /**
+   * Return all addresses of the wallet with info of each of them
+   *
+   * @return {Promise<Array>} Array of objects { address, index, transactions } where transactions is the count of txs for this address
+   *
+   * @memberof HathorWallet
+   * @inner
+   **/
   async getAllAddresses() {
     storage.setStore(this.store);
     // This algorithm is bad at performance
@@ -218,6 +236,14 @@ class HathorWallet extends EventEmitter {
     return Promise.resolve(ret);
   }
 
+  /**
+   * Auxiliar method to get the quantity of transactions by each address of the wallet
+   *
+   * @return {Object} {address: {index, transactions}}
+   *
+   * @memberof HathorWallet
+   * @inner
+   **/
   getTransactionsCountByAddress() {
     storage.setStore(this.store);
     const walletData = wallet.getWalletData();
@@ -246,11 +272,29 @@ class HathorWallet extends EventEmitter {
     return transactionsByAddress;
   }
 
+  /**
+   * Get address from specific derivation index
+   *
+   * @return {string} Address
+   *
+   * @memberof HathorWallet
+   * @inner
+   **/
   getAddressAtIndex(index) {
     storage.setStore(this.store);
     return wallet.getAddressAtIndex(index);
   }
 
+  /**
+   * Get address to be used in the wallet
+   *
+   * @params {Object} { markAsUsed } if true, we will locally mark this address as used and won't return it again to be used
+   *
+   * @return {Object} { address, index, addressPath }
+   *
+   * @memberof HathorWallet
+   * @inner
+   **/
   getCurrentAddress({ markAsUsed = false } = {}) {
     storage.setStore(this.store);
     let address;
@@ -282,6 +326,23 @@ class HathorWallet extends EventEmitter {
     }
   }
 
+  /**
+   * Get balance for a token
+   *
+   * @params {string} token
+   *
+   * @return {Promise<Array>} Array of balance for each token
+   * {
+   *   token: {id, name, symbol},
+   *   balance: {unlocked. locked},
+   *   transactions: number,
+   *   lockExpires: number | null,
+   *   tokenAuthorities: {unlocked: {mint, melt}. locked: {mint, melt}}
+   * }
+   *
+   * @memberof HathorWallet
+   * @inner
+   **/
   getBalance(token = null) {
     storage.setStore(this.store);
     // TODO if token is null we should get the balance for each token I have
@@ -324,6 +385,23 @@ class HathorWallet extends EventEmitter {
     }]);
   }
 
+  /**
+   * Get transaction history
+   *
+   * @params {Object} options {token_id, count, skip}
+   *
+   * @return {Promise<Array>} Array of balance for each token
+   * {
+   *   token: {id, name, symbol},
+   *   balance: {unlocked. locked},
+   *   transactions: number,
+   *   lockExpires: number | null,
+   *   tokenAuthorities: {unlocked: {mint, melt}. locked: {mint, melt}}
+   * }
+   *
+   * @memberof HathorWallet
+   * @inner
+   **/
   getTxHistory(options = {}) {
     storage.setStore(this.store);
     const newOptions = Object.assign({ token_id: HATHOR_TOKEN_CONFIG.uid, count: 15, skip: 0 }, options);
@@ -335,13 +413,17 @@ class HathorWallet extends EventEmitter {
     return Promise.resolve(slicedHistory);
   }
 
+  /**
+   * Get tokens that this wallet has transactions
+   *
+   * @return {Promise<Array>} Array of strings (token uid)
+   *
+   * @memberof HathorWallet
+   * @inner
+   **/
   getTokens() {
     storage.setStore(this.store);
     return Promise.resolve(storage.getItem('old-facade:tokens'));
-  }
-
-  getFullHistory(options = {}) {
-    return this.getTxHistory(options);
   }
 
   /**
@@ -632,6 +714,16 @@ class HathorWallet extends EventEmitter {
     };
   }
 
+  /**
+   * Get balance for a token (same as old method to be used for compatibility)
+   *
+   * @params {string} tokenUid Token uid
+   *
+   * @return {Object} Object with balance { available, locked }
+   *
+   * @memberof HathorWallet
+   * @inner
+   **/
   getOldBalance(tokenUid) {
     storage.setStore(this.store);
     const uid = tokenUid || this.token.uid;
@@ -639,6 +731,14 @@ class HathorWallet extends EventEmitter {
     return wallet.calculateBalance(Object.values(historyTransactions), uid);
   }
 
+  /**
+   * Get full wallet history (same as old method to be used for compatibility)
+   *
+   * @return {Object} Object with transaction data { tx_id: { full_transaction_data }}
+   *
+   * @memberof HathorWallet
+   * @inner
+   **/
   getOldHistory() {
     storage.setStore(this.store);
     const data = wallet.getWalletData();
@@ -646,6 +746,13 @@ class HathorWallet extends EventEmitter {
     return history;
   }
 
+  /**
+   * Prepare history and balance and save on storage
+   * to prepare for the new signatures
+   *
+   * @memberof HathorWallet
+   * @inner
+   **/
   prepareHistoryAndBalanceByToken() {
     storage.setStore(this.store);
     const history = this.getOldHistory();
@@ -725,6 +832,19 @@ class HathorWallet extends EventEmitter {
     return;
   };
 
+  /**
+   * Send a transaction with a single output
+   *
+   * @param {String} address Output address
+   * @param {Number} value Output value
+   * @param {Object} options Options parameters
+   *  {
+   *   'changeAddress': address of the change output
+   *   'token': token uid
+   *  }
+   *
+   * @return {Promise<Transaction>} Promise that resolves when transaction is sent
+   **/
   sendTransaction(address, value, options = {}) {
     const newOptions = Object.assign({
       token: '00',
@@ -737,7 +857,6 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Send a transaction from its outputs
-   * Currently does not have support to send custom tokens, only HTR
    *
    * @param {Array} outputs Array of outputs with each element as an object with {'address', 'value', 'timelock', 'token'}
    * @param {Array} inputs Array of inputs with each element as an object with {'txId', 'index', 'token'}
@@ -749,7 +868,7 @@ class HathorWallet extends EventEmitter {
    *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
    *  }
    *
-   * @return {Promise} Promise that resolves when transaction is sent
+   * @return {Promise<Transaction>} Promise that resolves when transaction is sent
    **/
   sendManyOutputsTransaction(outputs, options = {}) {
     storage.setStore(this.store);

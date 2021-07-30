@@ -319,6 +319,24 @@ const tokens = {
     return null;
   },
 
+  /**
+   * Prepare create token data for creating this transaction
+   *
+   * @param {string} address Address to receive the amount of the generated token
+   * @param {string} name Name of the new token
+   * @param {string} symbol Symbol of the new token
+   * @param {number} mintAmount Amount of the new token that will be minted
+   * @param {string} pin Pin to generate new addresses, if necessary
+   * @param {Object} options Options parameters
+   *  {
+   *   'changeAddress': address of the change output
+   *  }
+   *
+   * @return {Object} { success, preparedData, message } - message in case of success: false
+   *
+   * @memberof Tokens
+   * @inner
+   */
   getCreateTokenData(address, name, symbol, mintAmount, pin, options = { changeAddress: null }) {
     const { changeAddress } = options;
 
