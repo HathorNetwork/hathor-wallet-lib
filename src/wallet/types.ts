@@ -57,11 +57,6 @@ export interface AddressInfoObject {
   error: string | undefined; // Optional error code when getting address info
 }
 
-export interface WalletStatusResponse {
-  status: number; // Response status code
-  data: WalletStatusResponseData;
-}
-
 export interface WalletStatusResponseData {
   success: boolean;
   status: WalletStatus;
@@ -77,19 +72,9 @@ export interface WalletStatus {
   readyAt: number | null; // wallet timestamp when it got ready
 }
 
-export interface AddressesResponse {
-  status: number; // Response status code
-  data: AddressesResponseData;
-}
-
 export interface AddressesResponseData {
   success: boolean;
   addresses: GetAddressesObject[];
-}
-
-export interface NewAddressesResponse {
-  status: number; // Response status code
-  data: NewAddressesResponseData;
 }
 
 export interface NewAddressesResponseData {
@@ -97,29 +82,14 @@ export interface NewAddressesResponseData {
   addresses: AddressInfoObject[];
 }
 
-export interface BalanceResponse {
-  status: number; // Response status code
-  data: BalanceResponseData;
-}
-
 export interface BalanceResponseData {
   success: boolean;
   balances: GetBalanceObject[];
 }
 
-export interface HistoryResponse {
-  status: number; // Response status code
-  data: HistoryResponseData;
-}
-
 export interface HistoryResponseData {
   success: boolean;
   history: GetHistoryObject[];
-}
-
-export interface TxProposalCreateResponse {
-  status: number; // Response status code
-  data: TxProposalCreateResponseData;
 }
 
 export interface TxProposalCreateResponseData {
@@ -141,11 +111,6 @@ export interface TxProposalOutputs {
   value: number; // output value
   token: string; // output token
   timelock: number | null; // output timelock
-}
-
-export interface TxProposalUpdateResponse {
-  status: number; // Response status code
-  data: TxProposalUpdateResponseData;
 }
 
 export interface TxProposalUpdateResponseData {
@@ -174,11 +139,6 @@ export interface SendTxOptionsParam {
   changeAddress: string | undefined;
 }
 
-export interface UtxoResponse {
-  status: number; // Response status code
-  data: UtxoResponseData;
-}
-
 export interface UtxoResponseData {
   success: boolean;
   utxos: Utxo[];
@@ -197,11 +157,6 @@ export interface Utxo {
   addressPath: string; // path to generate output address
 }
 
-export interface AuthTokenResponse {
-  status: number; // Response status code
-  data: AuthTokenResponseData;
-}
-
 export interface AuthTokenResponseData {
   success: boolean;
   token: string; // jwt token
@@ -217,11 +172,6 @@ export interface OutputRequestObj {
 export interface InputRequestObj {
   txId: string; // transaction id of the output being spent
   index: number; // index of the output being spent using this input
-}
-
-export interface TokensResponse {
-  status: number; // Response status code
-  data: TokensResponseData;
 }
 
 export interface TokensResponseData {
