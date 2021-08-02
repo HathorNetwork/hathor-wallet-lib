@@ -122,6 +122,19 @@ const wallet = {
     return {'valid': true, 'message': '', 'words': newWordsString};
   },
 
+
+  /**
+   * Test if wallet was created from xpub
+   *
+   * @return {Boolean} If the wallet was created from xpub
+   * @memberof Wallet
+   * @inner
+   * */
+  isFromXPub() {
+    const accessData = this.getWalletAccessData();
+    return Boolean(accessData['from_xpub']);
+  },
+
   /**
    * Generate HD wallet words
    *
@@ -134,6 +147,27 @@ const wallet = {
   generateWalletWords(entropy = HD_WALLET_ENTROPY) {
     const code = new Mnemonic(entropy);
     return code.phrase;
+  },
+
+  /**
+   * Start a new HD wallet from an xpub.
+   * Used with hardware wallets.
+   * Encrypt this private key and save data in storage
+   *
+   * @param {string} xpub Extended public-key to start wallet
+   * @param {boolean} loadHistory if should load the history from the generated addresses
+   *
+   * @return {Promise} Promise that resolves when finishes loading address history, in case loadHistory = true, else returns null
+   * @memberof Wallet
+   * @inner
+   */
+   executeGenerateWalletFromXPub(xpubkey, loadHistory) {
+    const accessData = {
+      xpubkey: xpubkey,
+      from_xpub: true,
+    };
+
+    return this.startWallet(accessData, loadHistory);
   },
 
   /**
@@ -630,16 +664,19 @@ const wallet = {
    * @inner
    */
   changePin(oldPin, newPin) {
+    if (this.isFromXPub()) {
+        throw WalletFromXPubGuard('changePin');
+    }
+
     const isCorrect = this.isPinCorrect(oldPin);
     if (!isCorrect) {
       return false;
     }
 
-    const accessData = this.getWalletAccessData();
-
     // Get new PIN hash
     const newHash = this.hashPassword(newPin);
     // Update new PIN data in storage
+    const accessData = this.getWalletAccessData();
     accessData['hash'] = newHash.key.toString();
     accessData['salt'] = newHash.salt;
 
@@ -1510,6 +1547,9 @@ const wallet = {
    * @inner
    */
   getWalletWords(password) {
+    if (this.isFromXPub()) {
+        throw WalletFromXPubGuard('getWalletWords');
+    }
     const accessData = this.getWalletAccessData();
     return this.decryptData(accessData.words, password);
   },
@@ -2434,7 +2474,12 @@ const wallet = {
    * @return {String} Wallet xprivkey
    */
   getXprivKey(pin) {
+    if (this.isFromXPub()) {
+        throw WalletFromXPubGuard('getXprivKey');
+    }
+
     const accessData = this.getWalletAccessData();
+
     const encryptedXPriv = accessData.mainKey;
     const privateKeyStr = wallet.decryptData(encryptedXPriv, pin);
     return privateKeyStr;

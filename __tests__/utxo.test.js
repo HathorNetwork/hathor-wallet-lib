@@ -10,6 +10,7 @@ class FakeHathorWallet {
     this.wallet = wallet;
     wallet._rewardSpendMinBlocks = 0;
     wallet._networkBestChainHeight = 10;
+    this.isFromXPub = HathorWallet.prototype.isFromXPub.bind(this);
     this.getUtxos = HathorWallet.prototype.getUtxos.bind(this);
     this.consolidateUtxos = HathorWallet.prototype.consolidateUtxos.bind(this);
     this.prepareConsolidateUtxosData = HathorWallet.prototype.prepareConsolidateUtxosData.bind(
