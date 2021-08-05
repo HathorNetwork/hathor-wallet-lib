@@ -171,7 +171,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  private checkWalletReady() {
+  private failIfWalletNotReady() {
     if (!this.isReady()) {
       throw new WalletError('Wallet not ready');
     }
@@ -195,7 +195,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async getAllAddresses(): Promise<GetAddressesObject[]> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     const data = await walletApi.getAddresses(this);
     return data.addresses;
   }
@@ -208,7 +208,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   private async getNewAddresses() {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     const data = await walletApi.getNewAddresses(this);
     this.newAddresses = data.addresses;
     this.indexToUse = 0;
@@ -221,7 +221,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async getBalance(token: string | null = null): Promise<GetBalanceObject[]> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     const data = await walletApi.getBalances(this, token);
     return data.balances;
   }
@@ -234,7 +234,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    */
   async getTxHistory(options: { token?: string } = {}): Promise<GetHistoryObject[]> {
     // TODO Add pagination parameters
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     const requestOptions = Object.assign({ token: null }, options);
     const { token } = requestOptions;
     const data = await walletApi.getHistory(this, token);
@@ -361,7 +361,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async sendManyOutputsTransaction(outputs: OutputRequestObj[], options: { inputs?: InputRequestObj[], changeAddress?: string } = {}): Promise<TxProposalUpdateResponseData> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     const newOptions = Object.assign({
       inputs: [],
       changeAddress: null
@@ -376,7 +376,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async sendTransaction(address: string, value: number, options: { token?: string, changeAddress?: string } = {}): Promise<TxProposalUpdateResponseData> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     const newOptions = Object.assign({
       token: '00',
       changeAddress: null
@@ -673,7 +673,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async createNewToken(name: string, symbol: string, amount: number, options = {}): Promise<TxProposalUpdateResponseData>  {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     type optionsType = {
       address: string | null,
       changeAddress: string | null,
@@ -752,7 +752,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async mintTokens(token: string, amount: number, options = {}): Promise<TxProposalUpdateResponseData> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     type optionsType = {
       address: string | null,
       changeAddress: string | null,
@@ -839,7 +839,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async meltTokens(token: string, amount: number, options = {}): Promise<TxProposalUpdateResponseData> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     type optionsType = {
       address: string | null,
       changeAddress: string | null,
@@ -929,7 +929,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async delegateAuthority(token: string, type: string, address: string, options = {}): Promise<TxProposalUpdateResponseData> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     type optionsType = {
       anotherAuthorityAddress: string | null,
       createAnotherAuthority: boolean
@@ -1000,7 +1000,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async destroyAuthority(token: string, type: string, count: number): Promise<TxProposalUpdateResponseData> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     let authority, mask;
     if (type === 'mint') {
       authority = 1;
