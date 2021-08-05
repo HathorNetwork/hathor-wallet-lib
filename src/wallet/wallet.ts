@@ -254,6 +254,10 @@ class HathorWalletServiceWallet extends EventEmitter {
       // No utxo for this txId/index or is not from the requested wallet
       return null;
     } else {
+      if (utxos.length > 1) {
+        throw new UtxoError(`Expected to receive only one utxo for txId ${txId} and index ${index} but received ${utxos.length}.`);
+      }
+
       return utxos[0];
     }
   }
