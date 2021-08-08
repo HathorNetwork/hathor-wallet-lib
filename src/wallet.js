@@ -401,7 +401,19 @@ const wallet = {
 
       while (hasMore === true) {
         let response;
-        response = await walletApi.getAddressHistoryForAwait(addressesToSearch, firstHash);
+        try {
+          response = await walletApi.getAddressHistoryForAwait(addressesToSearch, firstHash);
+        } catch (e) {
+          // We will retry the request that fails with client timeout
+          // in this request error we don't have the response because
+          // the client closed the connection
+          if (e.code === 'ECONNABORTED' && e.response === undefined && e.message.toLowerCase().includes('timeout')) {
+            // in this case we retry
+            continue;
+          }
+          // Throw any error we don't want to handle here
+          throw e;
+        }
         const result = response.data;
         let ret = null;
 
