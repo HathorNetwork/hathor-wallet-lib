@@ -732,7 +732,9 @@ class HathorWallet extends EventEmitter {
 
     for (const output of outputs) {
       let tokenData;
+      let token;
       if (output.token) {
+        token = output.token;
         if (output.token === HTR_UID) {
           // HTR
           tokenData = 0;
@@ -740,6 +742,7 @@ class HathorWallet extends EventEmitter {
           tokenData = tokens.indexOf(output.token) + 1;
         }
       } else {
+        token = txToken.uid;
         if (txToken.uid === HTR_UID) {
           tokenData = 0;
         } else {
@@ -748,7 +751,7 @@ class HathorWallet extends EventEmitter {
         }
       }
 
-      tokensData[output.token].outputs.push({
+      tokensData[token].outputs.push({
         address: output.address,
         value: output.value,
         timelock: output.timelock ? output.timelock : null,
@@ -764,7 +767,7 @@ class HathorWallet extends EventEmitter {
         token = txToken.uid;
       }
 
-      tokensData[input.token].inputs.push({
+      tokensData[token].inputs.push({
         tx_id: input.tx_id,
         index: input.index,
         token,
