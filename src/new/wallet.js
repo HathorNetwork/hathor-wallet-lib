@@ -9,6 +9,7 @@ import EventEmitter from 'events';
 import wallet from '../wallet';
 import { HATHOR_TOKEN_CONFIG, HATHOR_BIP44_CODE } from "../constants";
 import tokens from '../tokens';
+import transaction from '../transaction';
 import version from '../version';
 import walletApi from '../api/wallet';
 import storage from '../storage';

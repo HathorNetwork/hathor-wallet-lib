@@ -174,7 +174,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  private checkWalletReady() {
+  private failIfWalletNotReady() {
     if (!this.isReady()) {
       throw new WalletError('Wallet not ready');
     }
@@ -198,7 +198,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async getAllAddresses(): Promise<GetAddressesObject[]> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     const data = await walletApi.getAddresses(this);
     return data.addresses;
   }
@@ -211,7 +211,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   private async getNewAddresses() {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     const data = await walletApi.getNewAddresses(this);
     this.newAddresses = data.addresses;
     this.indexToUse = 0;
@@ -224,13 +224,13 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async getBalance(token: string | null = null): Promise<GetBalanceObject[]> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     const data = await walletApi.getBalances(this, token);
     return data.balances;
   }
 
   async getTokens(): Promise<string[]> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     const data = await walletApi.getTokens(this);
     return data.tokens;
   }
@@ -242,7 +242,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async getTxHistory(options: { token_id?: string, count?: number, skip?: number } = {}): Promise<GetHistoryObject[]> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     const data = await walletApi.getHistory(this, options);
     return data.history;
   }
@@ -260,6 +260,10 @@ class HathorWalletServiceWallet extends EventEmitter {
       // No utxo for this txId/index or is not from the requested wallet
       return null;
     } else {
+      if (utxos.length > 1) {
+        throw new UtxoError(`Expected to receive only one utxo for txId ${txId} and index ${index} but received ${utxos.length}.`);
+      }
+
       return utxos[0];
     }
   }
@@ -367,6 +371,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   sendManyOutputsTransaction(outputs: OutputRequestObj[], options: { inputs?: InputRequestObj[], changeAddress?: string } = {}): Promise<Transaction | string> {
+    this.failIfWalletNotReady();
     const newOptions = Object.assign({
       inputs: [],
       changeAddress: null
@@ -394,6 +399,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   sendTransaction(address: string, value: number, options: { token?: string, changeAddress?: string } = {}): Promise<Transaction | string> {
+    this.failIfWalletNotReady();
     const newOptions = Object.assign({
       token: '00',
       changeAddress: null
@@ -558,7 +564,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async prepareCreateNewToken(name: string, symbol: string, amount: number, options = {}): Promise<CreateTokenTransaction>  {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     type optionsType = {
       address: string | null,
       changeAddress: string | null,
@@ -642,7 +648,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async createNewToken(name: string, symbol: string, amount: number, options = {}): Promise<Transaction | string>  {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     const tx = await this.prepareCreateNewToken(name, symbol, amount, options);
     return this.handleSendPreparedTransaction(tx);
   }
@@ -654,7 +660,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async prepareMintTokensData(token: string, amount: number, options = {}): Promise<Transaction> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     type optionsType = {
       address: string | null,
       changeAddress: string | null,
@@ -744,7 +750,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async mintTokens(token: string, amount: number, options = {}): Promise<Transaction | string> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     const tx = await this.prepareMintTokensData(token, amount, options);
     return this.handleSendPreparedTransaction(tx);
   }
@@ -756,7 +762,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async prepareMeltTokensData(token: string, amount: number, options = {}): Promise<Transaction> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     type optionsType = {
       address: string | null,
       changeAddress: string | null,
@@ -849,7 +855,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async meltTokens(token: string, amount: number, options = {}): Promise<Transaction | string> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     const tx = await this.prepareMeltTokensData(token, amount, options);
     return this.handleSendPreparedTransaction(tx);
   }
@@ -861,7 +867,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async prepareDelegateAuthorityData(token: string, type: string, address: string, options = {}): Promise<Transaction> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     type optionsType = {
       anotherAuthorityAddress: string | null,
       createAnotherAuthority: boolean
@@ -935,7 +941,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async delegateAuthority(token: string, type: string, address: string, options = {}): Promise<Transaction | string> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     const tx = await this.prepareDelegateAuthorityData(token, type, address, options);
     return this.handleSendPreparedTransaction(tx);
   }
@@ -947,7 +953,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async prepareDestroyAuthorityData(token: string, type: string, count: number): Promise<Transaction> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     let authority, mask;
     if (type === 'mint') {
       authority = 1;
@@ -995,7 +1001,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async destroyAuthority(token: string, type: string, count: number): Promise<Transaction | string> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     const tx = await this.prepareDestroyAuthorityData(token, type, count);
     return this.handleSendPreparedTransaction(tx);
   }

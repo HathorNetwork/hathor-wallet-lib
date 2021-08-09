@@ -16,7 +16,7 @@ import { TokenValidationError } from '../src/errors';
 import storage from '../src/storage';
 
 
-const createdTxHash = '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e';
+const createdTxHash = '5ecac1124aada88c750acdccede58d0308b593923c3034f373403b63ba4edbac';
 const createdToken = util.buffer.bufferToHex(tokens.getTokenUID(createdTxHash, 0));
 const pin = '123456';
 const token1 = {'name': '1234', 'uid': '1234', 'symbol': '1234'};
