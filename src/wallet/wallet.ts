@@ -14,6 +14,7 @@ import wallet from '../utils/wallet';
 import helpers from '../utils/helpers';
 import transaction from '../utils/transaction';
 import tokens from '../utils/tokens';
+import P2PKH from '../models/p2pkh';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import Output from '../models/output';
@@ -596,16 +597,18 @@ class HathorWalletServiceWallet extends EventEmitter {
     if (!address.isValid()) {
       throw new SendTxError(`Address ${newOptions.address} is not valid.`);
     }
-    outputsObj.push(new Output(amount, address, {tokenData: 1}));
+    const p2pkh = new P2PKH(address);
+    const p2pkhScript = p2pkh.createScript()
+    outputsObj.push(new Output(amount, p2pkhScript, {tokenData: 1}));
 
     if (newOptions.createMintAuthority) {
       // b. Mint authority
-      outputsObj.push(new Output(TOKEN_MINT_MASK, address, {tokenData: AUTHORITY_TOKEN_DATA}));
+      outputsObj.push(new Output(TOKEN_MINT_MASK, p2pkhScript, {tokenData: AUTHORITY_TOKEN_DATA}));
     }
 
     if (newOptions.createMeltAuthority) {
       // c. Melt authority
-      outputsObj.push(new Output(TOKEN_MELT_MASK, address, {tokenData: AUTHORITY_TOKEN_DATA}));
+      outputsObj.push(new Output(TOKEN_MELT_MASK, p2pkhScript, {tokenData: AUTHORITY_TOKEN_DATA}));
     }
 
     if (changeAmount) {
@@ -615,7 +618,9 @@ class HathorWalletServiceWallet extends EventEmitter {
       if (!changeAddress.isValid()) {
         throw new SendTxError(`Address ${newOptions.changeAddress} is not valid.`);
       }
-      outputsObj.push(new Output(changeAmount, changeAddress));
+      const p2pkhChange = new P2PKH(changeAddress);
+      const p2pkhChangeScript = p2pkhChange.createScript()
+      outputsObj.push(new Output(changeAmount, p2pkhChangeScript));
     }
 
     const tx = new CreateTokenTransaction(name, symbol, inputsObj, outputsObj);
@@ -696,11 +701,13 @@ class HathorWalletServiceWallet extends EventEmitter {
     if (!address.isValid()) {
       throw new SendTxError(`Address ${newOptions.address} is not valid.`);
     }
-    outputsObj.push(new Output(amount, address, {tokenData: 1}));
+    const p2pkh = new P2PKH(address);
+    const p2pkhScript = p2pkh.createScript()
+    outputsObj.push(new Output(amount, p2pkhScript, {tokenData: 1}));
 
     if (newOptions.createAnotherMint) {
       // b. Mint authority
-      outputsObj.push(new Output(TOKEN_MINT_MASK, address, {tokenData: AUTHORITY_TOKEN_DATA}));
+      outputsObj.push(new Output(TOKEN_MINT_MASK, p2pkhScript, {tokenData: AUTHORITY_TOKEN_DATA}));
     }
 
     if (changeAmount) {
@@ -710,7 +717,9 @@ class HathorWalletServiceWallet extends EventEmitter {
       if (!changeAddress.isValid()) {
         throw new SendTxError(`Address ${newOptions.changeAddress} is not valid.`);
       }
-      outputsObj.push(new Output(changeAmount, changeAddress));
+      const p2pkhChange = new P2PKH(changeAddress);
+      const p2pkhChangeScript = p2pkhChange.createScript()
+      outputsObj.push(new Output(changeAmount, p2pkhChangeScript));
     }
 
     const tx = new Transaction(inputsObj, outputsObj);
@@ -794,14 +803,16 @@ class HathorWalletServiceWallet extends EventEmitter {
     if (!address.isValid()) {
       throw new SendTxError(`Address ${newOptions.address} is not valid.`);
     }
+    const p2pkh = new P2PKH(address);
+    const p2pkhScript = p2pkh.createScript()
     if (withdraw) {
       // We may have nothing to get back
-      outputsObj.push(new Output(withdraw, address, {tokenData: 0}));
+      outputsObj.push(new Output(withdraw, p2pkhScript, {tokenData: 0}));
     }
 
     if (newOptions.createAnotherMelt) {
       // b. Mint authority
-      outputsObj.push(new Output(TOKEN_MELT_MASK, address, {tokenData: AUTHORITY_TOKEN_DATA}));
+      outputsObj.push(new Output(TOKEN_MELT_MASK, p2pkhScript, {tokenData: AUTHORITY_TOKEN_DATA}));
     }
 
     if (changeAmount) {
@@ -811,7 +822,9 @@ class HathorWalletServiceWallet extends EventEmitter {
       if (!changeAddress.isValid()) {
         throw new SendTxError(`Address ${newOptions.changeAddress} is not valid.`);
       }
-      outputsObj.push(new Output(changeAmount, changeAddress, {tokenData: 1}));
+      const p2pkhChange = new P2PKH(changeAddress);
+      const p2pkhChangeScript = p2pkhChange.createScript()
+      outputsObj.push(new Output(changeAmount, p2pkhChangeScript, {tokenData: 1}));
     }
 
     const tx = new Transaction(inputsObj, outputsObj);
@@ -888,7 +901,9 @@ class HathorWalletServiceWallet extends EventEmitter {
       throw new SendTxError(`Address ${address} is not valid.`);
     }
 
-    outputsObj.push(new Output(mask, addressObj, {tokenData: AUTHORITY_TOKEN_DATA}));
+    const p2pkh = new P2PKH(addressObj);
+    const p2pkhScript = p2pkh.createScript()
+    outputsObj.push(new Output(mask, p2pkhScript, {tokenData: AUTHORITY_TOKEN_DATA}));
 
     if (newOptions.createAnotherAuthority) {
       const anotherAddressStr = newOptions.anotherAuthorityAddress || this.getCurrentAddress({ markAsUsed: true }).address;
@@ -896,7 +911,9 @@ class HathorWalletServiceWallet extends EventEmitter {
       if (!anotherAddress.isValid()) {
         throw new SendTxError(`Address ${newOptions.anotherAuthorityAddress} is not valid.`);
       }
-      outputsObj.push(new Output(mask, anotherAddress, {tokenData: AUTHORITY_TOKEN_DATA}));
+      const p2pkhAnotherAddress = new P2PKH(anotherAddress);
+      const p2pkhAnotherAddressScript = p2pkhAnotherAddress.createScript()
+      outputsObj.push(new Output(mask, p2pkhAnotherAddressScript, {tokenData: AUTHORITY_TOKEN_DATA}));
     }
 
     const tx = new Transaction(inputsObj, outputsObj);
