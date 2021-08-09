@@ -229,7 +229,7 @@ class HathorWalletServiceWallet extends EventEmitter {
   }
 
   async getTokens(): Promise<string[]> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     const data = await walletApi.getTokens(this);
     return data.tokens;
   }
@@ -643,7 +643,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async createNewToken(name: string, symbol: string, amount: number, options = {}): Promise<Transaction | string>  {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     const tx = await this.prepareCreateNewToken(name, symbol, amount, options);
     return this.handleSendPreparedTransaction(tx);
   }
@@ -741,7 +741,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async mintTokens(token: string, amount: number, options = {}): Promise<Transaction | string> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     const tx = await this.prepareMintTokensData(token, amount, options);
     return this.handleSendPreparedTransaction(tx);
   }
@@ -842,7 +842,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async meltTokens(token: string, amount: number, options = {}): Promise<Transaction | string> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     const tx = await this.prepareMeltTokensData(token, amount, options);
     return this.handleSendPreparedTransaction(tx);
   }
@@ -924,7 +924,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async delegateAuthority(token: string, type: string, address: string, options = {}): Promise<Transaction | string> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     const tx = await this.prepareDelegateAuthorityData(token, type, address, options);
     return this.handleSendPreparedTransaction(tx);
   }
@@ -984,7 +984,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async destroyAuthority(token: string, type: string, count: number): Promise<Transaction | string> {
-    this.checkWalletReady();
+    this.failIfWalletNotReady();
     const tx = await this.prepareDestroyAuthorityData(token, type, count);
     return this.handleSendPreparedTransaction(tx);
   }
