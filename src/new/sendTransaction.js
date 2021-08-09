@@ -55,7 +55,7 @@ class SendTransaction extends EventEmitter {
     // Promise that resolves when push tx finishes with success
     // or rejects in case of an error
     this.promise = new Promise((resolve, reject) => {
-      this.on('send-success', (tx) => {
+      this.on('send-tx-success', (tx) => {
         resolve(tx);
       });
 
@@ -199,7 +199,8 @@ class SendTransaction extends EventEmitter {
     if (this.transaction === null) {
       throw new WalletError('Can\'t mine transaction if it\'s null.');
     }
-      this.updateOutputSelected(true);
+
+    this.updateOutputSelected(true);
 
     const newOptions = Object.assign({
       startMiningTx: true,
@@ -304,6 +305,17 @@ class SendTransaction extends EventEmitter {
         throw err;
       }
     }
+  }
+
+  /**
+   * Method created for compatibility reasons
+   * some people might be using the old facade and this start method just calls runFromMining
+   *
+   * @memberof SendTransaction
+   * @inner
+   */
+  start() {
+    this.runFromMining();
   }
 
   /**

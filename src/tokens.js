@@ -12,6 +12,7 @@ import transaction from './transaction';
 import wallet from './wallet';
 import storage from './storage';
 import helpers from './helpers';
+import helpersUtils from './utils/helpers';
 import walletApi from './api/wallet';
 import SendTransaction from './new/sendTransaction';
 import { InsufficientFundsError, ConstantNotSet, TokenValidationError } from './errors';
@@ -394,10 +395,10 @@ const tokens = {
       return ret;
     }
 
-    const sendTransaction = new SendTransaction({data: ret.preparedData});
+    const sendTransaction = new SendTransaction({ transaction: helpersUtils.createTxFromData(ret.preparedData) });
 
     const promise = new Promise((resolve, reject) => {
-      sendTransaction.on('send-success', (tx) => {
+      sendTransaction.on('send-tx-success', (tx) => {
         const tokenUid = tx.hash;
         this.addToken(tokenUid, name, symbol);
         resolve(tx);
@@ -949,7 +950,7 @@ const tokens = {
    * @inner
    */
   handleSendTransaction(data) {
-    const sendTransaction = new SendTransaction({data});
+    const sendTransaction = new SendTransaction({ transaction: helpersUtils.createTxFromData(data) });
     return {success: true, sendTransaction, promise: sendTransaction.promise};
   },
 
