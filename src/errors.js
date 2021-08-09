@@ -130,3 +130,12 @@ export class ParseError extends Error {}
  * @inner
  */
 export class ParseScriptError extends ParseError {}
+
+/**
+ * Error thrown when calling a protected method on an xpub inited wallet
+ * Some methods require access to the words or private key
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class WalletFromXPubGuard extends Error {}
