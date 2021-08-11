@@ -188,3 +188,7 @@ export interface SendTransactionResponse {
   success: boolean;
   transaction: Transaction;
 }
+
+export interface TokenAmountMap {
+  [token: string]: number; // For each token we have the amount
+}

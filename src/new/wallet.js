@@ -331,6 +331,9 @@ class HathorWallet extends EventEmitter {
   /**
    * Get balance for a token
    *
+   * @remarks
+   * Getting token name and symbol is not easy, so we return empty strings
+   *
    * @params {string} token
    *
    * @return {Promise<Array>} Array of balance for each token
