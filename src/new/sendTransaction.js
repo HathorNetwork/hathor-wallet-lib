@@ -73,7 +73,7 @@ class SendTransaction extends EventEmitter {
     this.unexpectedPushTxError = ErrorMessages.UNEXPECTED_PUSH_TX_ERROR;
 
     // Stores the setTimeout object to set selected outputs as false
-    this._unmark_as_selected_timer = null;
+    this._unmarkAsSelectedTimer = null;
   }
 
   /**
@@ -271,10 +271,10 @@ class SendTransaction extends EventEmitter {
       if (response.success) {
         this.transaction.updateHash();
         this.emit('send-tx-success', this.transaction);
-        if (this._unmark_as_selected_timer !== null) {
+        if (this._unmarkAsSelectedTimer !== null) {
           // After finishing the push_tx we can clearTimeout to unmark
-          clearTimeout(this._unmark_as_selected_timer);
-          this._unmark_as_selected_timer = null;
+          clearTimeout(this._unmarkAsSelectedTimer);
+          this._unmarkAsSelectedTimer = null;
         }
       } else {
         this.updateOutputSelected(false);
@@ -385,16 +385,16 @@ class SendTransaction extends EventEmitter {
     }
     wallet.saveAddressHistory(historyTransactions, allTokens);
 
-    if (selected && this._unmark_as_selected_timer === null) {
+    if (selected && this._unmarkAsSelectedTimer === null) {
       // Schedule to set all those outputs as not selected later
       const myStore = storage.store;
-      this._unmark_as_selected_timer = setTimeout(() => {
+      this._unmarkAsSelectedTimer = setTimeout(() => {
         this.updateOutputSelected(false, myStore);
       }, SELECT_OUTPUTS_TIMEOUT);
-    } else if (!selected && this._unmark_as_selected_timer !== null) {
+    } else if (!selected && this._unmarkAsSelectedTimer !== null) {
       // If we unmark the outputs as selected we can already clear the timeout
-      clearTimeout(this._unmark_as_selected_timer);
-      this._unmark_as_selected_timer = null;
+      clearTimeout(this._unmarkAsSelectedTimer);
+      this._unmarkAsSelectedTimer = null;
     }
   }
 }
