@@ -235,7 +235,7 @@ class HathorWallet extends EventEmitter {
         transactions: transactionsByAddress[address].transactions,
       });
     }
-    return Promise.resolve(ret);
+    return ret;
   }
 
   /**
@@ -345,7 +345,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    **/
-  getBalance(token = null) {
+  async getBalance(token = null) {
     storage.setStore(this.store);
     // TODO if token is null we should get the balance for each token I have
     // but we don't use it in the wallets, so I won't implement it
@@ -365,7 +365,7 @@ class HathorWallet extends EventEmitter {
         }
       }
     }
-    return Promise.resolve([{
+    return [{
       token: { // Getting token name and symbol is not easy, so we return empty strings
         id: uid,
         name: '',
@@ -387,7 +387,7 @@ class HathorWallet extends EventEmitter {
           melt: false
         }
       },
-    }]);
+    }];
   }
 
   /**
@@ -407,7 +407,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    **/
-  getTxHistory(options = {}) {
+  async getTxHistory(options = {}) {
     storage.setStore(this.store);
     const newOptions = Object.assign({ token_id: HATHOR_TOKEN_CONFIG.uid, count: 15, skip: 0 }, options);
     const { skip, count } = newOptions;
@@ -415,7 +415,7 @@ class HathorWallet extends EventEmitter {
     const historyByToken = storage.getItem('old-facade:historyByToken');
     const historyArray = uid in historyByToken ? historyByToken[uid] : [];
     const slicedHistory = historyArray.slice(skip, skip+count);
-    return Promise.resolve(slicedHistory);
+    return slicedHistory;
   }
 
   /**
@@ -426,9 +426,9 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    **/
-  getTokens() {
+  async getTokens() {
     storage.setStore(this.store);
-    return Promise.resolve(storage.getItem('old-facade:tokens'));
+    return storage.getItem('old-facade:tokens');
   }
 
   /**
@@ -1031,7 +1031,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  prepareCreateNewToken(name, symbol, amount, options = {}) {
+  async prepareCreateNewToken(name, symbol, amount, options = {}) {
     storage.setStore(this.store);
     const newOptions = Object.assign({ address: null, changeAddress: null, startMiningTx: true, pinCode: null }, options);
     const pin = newOptions.pinCode || this.pinCode;
@@ -1046,7 +1046,7 @@ class HathorWallet extends EventEmitter {
       return Promise.reject(ret);
     }
 
-    return Promise.resolve(helpers.createTxFromData(ret.preparedData));
+    return helpers.createTxFromData(ret.preparedData);
   }
 
   /**
@@ -1198,7 +1198,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    **/
-  prepareMintTokensData(tokenUid, amount, options = {}) {
+  async prepareMintTokensData(tokenUid, amount, options = {}) {
     storage.setStore(this.store);
     const newOptions = Object.assign({
       address: null,
@@ -1225,7 +1225,7 @@ class HathorWallet extends EventEmitter {
       return Promise.reject(ret);
     }
 
-    return Promise.resolve(helpers.createTxFromData(ret.preparedData));
+    return helpers.createTxFromData(ret.preparedData);
   }
 
   /**
@@ -1273,7 +1273,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    **/
-  prepareMeltTokensData(tokenUid, amount, options = {}) {
+  async prepareMeltTokensData(tokenUid, amount, options = {}) {
     storage.setStore(this.store);
     const newOptions = Object.assign({
       address: null,
@@ -1300,7 +1300,7 @@ class HathorWallet extends EventEmitter {
       return Promise.reject(ret);
     }
 
-    return Promise.resolve(helpers.createTxFromData(ret.preparedData));
+    return helpers.createTxFromData(ret.preparedData);
   }
 
   /**
@@ -1347,7 +1347,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    **/
-  prepareDelegateAuthorityData(tokenUid, type, destinationAddress, options = {}) {
+  async prepareDelegateAuthorityData(tokenUid, type, destinationAddress, options = {}) {
     storage.setStore(this.store);
     const newOptions = Object.assign({ createAnother: true, startMiningTx: true, pinCode: null }, options);
     const pin = newOptions.pinCode || this.pinCode;
@@ -1378,7 +1378,7 @@ class HathorWallet extends EventEmitter {
       return Promise.reject(ret);
     }
 
-    return Promise.resolve(helpers.createTxFromData(ret.preparedData));
+    return helpers.createTxFromData(ret.preparedData);
   }
 
   /**
@@ -1423,7 +1423,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    **/
-  prepareDestroyAuthorityData(tokenUid, type, count, options = {}) {
+  async prepareDestroyAuthorityData(tokenUid, type, count, options = {}) {
     storage.setStore(this.store);
     const newOptions = Object.assign({ startMiningTx: true, pinCode: null }, options);
     const pin = newOptions.pinCode || this.pinCode;
@@ -1461,7 +1461,7 @@ class HathorWallet extends EventEmitter {
       return Promise.reject(ret);
     }
 
-    return Promise.resolve(helpers.createTxFromData(ret.preparedData));
+    return helpers.createTxFromData(ret.preparedData);
   }
 
   /**
