@@ -17,7 +17,7 @@ import helpers from '../utils/helpers';
 import MemoryStore from '../memory_store';
 import Connection from './connection';
 import SendTransaction from './sendTransaction';
-import { AddressError } from '../errors';
+import { AddressError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
@@ -349,6 +349,9 @@ class HathorWallet extends EventEmitter {
     storage.setStore(this.store);
     // TODO if token is null we should get the balance for each token I have
     // but we don't use it in the wallets, so I won't implement it
+    if (token === null) {
+      throw new WalletError('Not implemented.');
+    }
     const uid = token || this.token.uid;
     const balanceByToken = storage.getItem('old-facade:balanceByToken');
     const balance = uid in balanceByToken ? balanceByToken[uid] : { available: 0, locked: 0 };
