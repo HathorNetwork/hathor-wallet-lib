@@ -875,7 +875,7 @@ class HathorWallet extends EventEmitter {
    *
    * @return {Promise<Transaction>} Promise that resolves when transaction is sent
    **/
-  sendManyOutputsTransaction(outputs, options = {}) {
+  async sendManyOutputsTransaction(outputs, options = {}) {
     storage.setStore(this.store);
     const newOptions = Object.assign({ inputs: [], changeAddress: null, startMiningTx: true, pinCode: null }, options);
     const pin = newOptions.pinCode || this.pinCode;
@@ -993,7 +993,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  handleSendPreparedTransaction(transaction) {
+  async handleSendPreparedTransaction(transaction) {
     const sendTransaction = new SendTransaction({ transaction });
     const promise = new Promise((resolve, reject) => {
       sendTransaction.on('send-tx-success', (transaction) => {
