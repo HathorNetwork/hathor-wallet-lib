@@ -19,6 +19,7 @@ import { hexToBuffer, unpackToInt } from '../utils/buffer';
 import { crypto, encoding } from 'bitcore-lib';
 import { clone } from 'lodash';
 import { ParseError } from '../errors';
+import { ErrorMessages } from '../errorMessages';
 
 /**
  * Helper methods
@@ -359,7 +360,7 @@ const helpers = {
         options
       );
     } else {
-        throw new ParseError('We currently support only the Transaction and CreateTokenTransaction types. Other types will be supported in the future.');
+        throw new ParseError(ErrorMessages.UNSUPPORTED_TX_TYPE);
     }
   }
 }

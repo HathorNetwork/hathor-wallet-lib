@@ -18,6 +18,7 @@ import MemoryStore from '../memory_store';
 import Connection from './connection';
 import SendTransaction from './sendTransaction';
 import { AddressError } from '../errors';
+import { ErrorMessages } from '../errorMessages';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';
@@ -1363,7 +1364,7 @@ class HathorWallet extends EventEmitter {
     const delegateInput = this.selectAuthorityUtxo(tokenUid, filterUtxos);
 
     if (delegateInput.length === 0) {
-      return Promise.reject({success: false, message: 'Don\'t have authority output available.'});
+      return Promise.reject({success: false, message: ErrorMessages.NO_UTXOS_AVAILABLE});
     }
 
     const { tx_id, index, address } = delegateInput[0];
@@ -1438,7 +1439,7 @@ class HathorWallet extends EventEmitter {
     const destroyInputs = this.selectAuthorityUtxo(tokenUid, filterUtxos, { many: true });
 
     if (destroyInputs.length < count) {
-      return Promise.reject({success: false, message: `Don't have enough authority output available to destroy. Have ${destroyInputs.length} and requested ${count}.`});
+      return Promise.reject({ success: false, message: ErrorMessages.NO_UTXOS_AVAILABLE, errorData: { requestedQuantity: count, availableQuantity: destroyInputs.length } });
     }
 
     const data = [];
