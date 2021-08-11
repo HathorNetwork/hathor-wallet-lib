@@ -306,9 +306,7 @@ class SendTransactionWalletService extends EventEmitter {
         return;
       }
 
-      this.once('mine-tx-ended', (data) => {
-        this.handleSendTxProposal();
-      });
+      this.once('mine-tx-ended', () => this.handleSendTxProposal());
     } catch (err) {
       if (err instanceof WalletError) {
         this.emit('send-error', err);

@@ -303,7 +303,7 @@ const helpers = {
   /**
    * Create a transaction from object data
    * We used to work only with data object to handle transactions in the past inside the lib
-   * This method was created to transaform those objects into Transaction class instances
+   * This method was created to transform those objects into Transaction class instances
    *
    * 'data': {'version', 'weight', 'timestamp', 'tokens', 'inputs': [{'tx_id', 'index'}], 'outputs': [{'address', 'value', 'tokenData', 'timelock'}]}
    *

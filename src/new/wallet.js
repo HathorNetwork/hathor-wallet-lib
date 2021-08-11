@@ -1037,7 +1037,7 @@ class HathorWallet extends EventEmitter {
     }
     const mintAddress = newOptions.address || this.getCurrentAddress().address;
 
-    const ret = tokens.getCreateTokenData(mintAddress, name, symbol, amount, pin, newOptions);
+    const ret = tokens.generateCreateTokenData(mintAddress, name, symbol, amount, pin, newOptions);
 
     if (!ret.success) {
       return Promise.reject(ret);
@@ -1217,7 +1217,7 @@ class HathorWallet extends EventEmitter {
       return {success: false, message: 'Don\'t have mint authority output available.'}
     }
 
-    const ret = tokens.getMintData(mintInput[0], tokenUid, mintAddress, amount, null, pin, newOptions);
+    const ret = tokens.generateMintData(mintInput[0], tokenUid, mintAddress, amount, null, pin, newOptions);
     if (!ret.success) {
       return Promise.reject(ret);
     }
@@ -1292,7 +1292,7 @@ class HathorWallet extends EventEmitter {
     }
 
     // Always create another melt authority output
-    const ret = tokens.getMeltData(meltInput[0], tokenUid, amount, pin, newOptions.createAnotherMelt, newOptions);
+    const ret = tokens.generateMeltData(meltInput[0], tokenUid, amount, pin, newOptions.createAnotherMelt, newOptions);
     if (!ret.success) {
       return Promise.reject(ret);
     }
@@ -1369,7 +1369,7 @@ class HathorWallet extends EventEmitter {
 
     const { tx_id, index, address } = delegateInput[0];
 
-    const ret = tokens.getDelegateAuthorityData(tx_id, index, address, tokenUid, destinationAddress, createAnother, type, pin);
+    const ret = tokens.generateDelegateAuthorityData(tx_id, index, address, tokenUid, destinationAddress, createAnother, type, pin);
 
     if (!ret.success) {
       return Promise.reject(ret);
@@ -1453,7 +1453,7 @@ class HathorWallet extends EventEmitter {
       }
     }
 
-    const ret = tokens.getDestroyAuthorityData(data, pin);
+    const ret = tokens.generateDestroyAuthorityData(data, pin);
     if (!ret.success) {
       return Promise.reject(ret);
     }
