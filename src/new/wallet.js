@@ -138,6 +138,9 @@ class HathorWallet extends EventEmitter {
 
     // Set to true when stop() method is called
     this.walletStopped = false;
+
+    // This object stores pre-processed data that helps speed up the return of getBalance and getTxHistory
+    this.preProcessedData = {};
   }
 
   /**
@@ -356,18 +359,8 @@ class HathorWallet extends EventEmitter {
       throw new WalletError('Not implemented.');
     }
     const uid = token || this.token.uid;
-    const balanceByToken = storage.getItem('old-facade:balanceByToken');
-    const balance = uid in balanceByToken ? balanceByToken[uid] : { available: 0, locked: 0 };
-    const history = this.getOldHistory();
-    let transactions = 0;
-    for (const tx of Object.values(history)) {
-      for (const el of [...tx.outputs, ...tx.inputs]) {
-        if (el.token === uid && this.isAddressMine(el.decoded.address)) {
-          transactions += 1;
-          break;
-        }
-      }
-    }
+    const balanceByToken = this.getPreProcessedData('balanceByToken');
+    const balance = uid in balanceByToken ? balanceByToken[uid] : { available: 0, locked: 0, transactions: 0 };
     return [{
       token: { // Getting token name and symbol is not easy, so we return empty strings
         id: uid,
@@ -378,7 +371,7 @@ class HathorWallet extends EventEmitter {
         unlocked: balance.available,
         locked: balance.locked,
       },
-      transactions,
+      transactions: balance.transactions,
       lockExpires: null,
       tokenAuthorities : {
         unlocked: {
@@ -415,7 +408,7 @@ class HathorWallet extends EventEmitter {
     const newOptions = Object.assign({ token_id: HATHOR_TOKEN_CONFIG.uid, count: 15, skip: 0 }, options);
     const { skip, count } = newOptions;
     const uid = newOptions.token_id || this.token.uid;
-    const historyByToken = storage.getItem('old-facade:historyByToken');
+    const historyByToken = this.getPreProcessedData('historyByToken');
     const historyArray = uid in historyByToken ? historyByToken[uid] : [];
     const slicedHistory = historyArray.slice(skip, skip+count);
     return slicedHistory;
@@ -431,7 +424,7 @@ class HathorWallet extends EventEmitter {
    **/
   async getTokens() {
     storage.setStore(this.store);
-    return storage.getItem('old-facade:tokens');
+    return this.getPreProcessedData('tokens');
   }
 
   /**
@@ -755,14 +748,15 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Prepare history and balance and save on storage
-   * to prepare for the new signatures
+   * Prepare history and balance and save on a cache object
+   * to be used as pre processed data
    *
    * @memberof HathorWallet
    * @inner
    **/
-  prepareHistoryAndBalanceByToken() {
+  preProcessWalletData() {
     storage.setStore(this.store);
+    const transactionCountByToken = {};
     const history = this.getOldHistory();
     const tokensHistory = {};
     // iterate through all txs received and map all tokens this wallet has, with
@@ -786,11 +780,23 @@ class HathorWallet extends EventEmitter {
           isVoided: tx.is_voided,
         });
       }
+
+      const tokensSeen = [];
+      for (const el of [...tx.outputs, ...tx.inputs]) {
+        if (this.isAddressMine(el.decoded.address) && !(el.token in tokensSeen)) {
+          if (!(el.token in transactionCountByToken)) {
+            transactionCountByToken[el.token] = 0;
+          }
+          tokensSeen.push(el.token);
+          transactionCountByToken[el.token] += 1;
+        }
+      }
     }
 
     const tokensBalance = {};
     for (const tokenUid of Object.keys(tokensHistory)) {
       const totalBalance = this.getOldBalance(tokenUid);
+      totalBalance['transactions'] = transactionCountByToken[tokenUid];
       // update token total balance
       tokensBalance[tokenUid] = totalBalance;
     }
@@ -800,9 +806,40 @@ class HathorWallet extends EventEmitter {
       txList.sort((elem1, elem2) => elem2.timestamp - elem1.timestamp);
     }
 
-    storage.setItem('old-facade:tokens', Object.keys(tokensHistory));
-    storage.setItem('old-facade:historyByToken', tokensHistory);
-    storage.setItem('old-facade:balanceByToken', tokensBalance);
+    this.setPreProcessedData('tokens', Object.keys(tokensHistory));
+    this.setPreProcessedData('historyByToken', tokensHistory);
+    this.setPreProcessedData('balanceByToken', tokensBalance);
+  }
+
+  /**
+   * Set data in the pre processed object
+   *
+   * @param {String} key Key of the pre processed object to be added
+   * @param {Any} value Value of the pre processed object to be added
+   *
+   * @memberof HathorWallet
+   * @inner
+   **/
+  setPreProcessedData(key, value) {
+    this.preProcessedData[key] = value;
+  }
+
+  /**
+   * Get data in the pre processed object
+   * If pre processed data is empty, we generate it and return
+   *
+   * @param {String} key Key of the pre processed object to get the value
+   *
+   * @return {Any} Value of the pre processed object
+   *
+   * @memberof HathorWallet
+   * @inner
+   **/
+  getPreProcessedData(key) {
+    if (Object.keys(this.preProcessedData).length === 0) {
+      this.preProcessWalletData();
+    }
+    return this.preProcessedData[key];
   }
 
   setState(state) {
@@ -810,7 +847,7 @@ class HathorWallet extends EventEmitter {
       // Became ready now, so we prepare new localStorage data
       // to support using this facade interchangable with wallet service
       // facade in both wallets
-      this.prepareHistoryAndBalanceByToken();
+      this.preProcessWalletData();
     }
     this.state = state;
     this.emit('state', state);
