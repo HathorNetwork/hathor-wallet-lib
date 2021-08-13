@@ -443,6 +443,13 @@ const wallet = {
           // We will retry the request that fails with client timeout
           // in this request error we don't have the response because
           // the client closed the connection
+          //
+          // I've tried to set a custom timeout error message in the axios config using timeoutErrorMessage parameter
+          // however the custom message is never used
+          // There are some error reports about it (https://github.com/axios/axios/issues/2716)
+          // Besides that, there are some problems happening in newer axios versions (https://github.com/axios/axios/issues/2710)
+          // One user that opened a PR for axios said he is checking the timeout error with the message includes condition
+          // https://github.com/axios/axios/pull/2874#discussion_r403753852
           if (e.code === 'ECONNABORTED' && e.response === undefined && e.message.toLowerCase().includes('timeout')) {
             // in this case we retry
             continue;
