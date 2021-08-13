@@ -296,6 +296,25 @@ const helpers = {
   createTxFromHex(hex: string, network: Network): Transaction | CreateTokenTransaction {
     return this.createTxFromBytes(hexToBuffer(hex), network);
   },
+
+  /**
+   * Asyncronous sleep
+   * Creates a promise that will be resolved after sleep time
+   *
+   * @param {number} milliseconds Sleep time in milliseconds
+   *
+   * @return {Promise}
+   * @memberof Helpers
+   * @inner
+   */
+  async sleep(milliseconds: number): Promise<void> {
+    const promise: Promise<void> = new Promise((resolve, reject) => {
+      setTimeout(() => {
+        resolve();
+      }, milliseconds);
+    });
+    return promise;
+  },
 }
 
 export default helpers;

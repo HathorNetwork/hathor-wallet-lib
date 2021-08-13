@@ -5,13 +5,14 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { MAX_ADDRESSES_GET, GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, TOKEN_MINT_MASK, TOKEN_MELT_MASK, TOKEN_INDEX_MASK, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, MAX_OUTPUT_VALUE, HASH_KEY_SIZE, HASH_ITERATIONS, HD_WALLET_ENTROPY } from './constants';
+import { MAX_ADDRESSES_GET, GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, TOKEN_MINT_MASK, TOKEN_MELT_MASK, TOKEN_INDEX_MASK, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, MAX_OUTPUT_VALUE, HASH_KEY_SIZE, HASH_ITERATIONS, HD_WALLET_ENTROPY, LOAD_WALLET_MAX_RETRY, LOAD_WALLET_RETRY_SLEEP } from './constants';
 import Mnemonic from 'bitcore-mnemonic';
 import { HDPrivateKey, HDPublicKey, Address, crypto } from 'bitcore-lib';
 import CryptoJS from 'crypto-js';
 import walletApi from './api/wallet';
 import tokens from './tokens';
 import helpers from './helpers';
+import helperUtils from './utils/helpers';
 import { AddressError, ConstantNotSet, OutputValueError, WalletTypeError } from './errors';
 import version from './version';
 import storage from './storage';
@@ -422,6 +423,7 @@ const wallet = {
     // request /address_history with 4000 addresses
     const addressesChunks = _.chunk(addresses, MAX_ADDRESSES_GET);
     const lastChunkIndex = addressesChunks.length - 1;
+    let retryCount = 0;
 
     for (let i=0; i<=lastChunkIndex; i++) {
       let hasMore = true;
@@ -445,9 +447,20 @@ const wallet = {
             // in this case we retry
             continue;
           }
-          // Throw any error we don't want to handle here
-          throw e;
+
+          // If the load wallet request fails with client timeout, we retry indefinitely
+          // however if we have another error, we have a limit number of retries
+          if (retryCount > LOAD_WALLET_MAX_RETRY) {
+            // Throw any error we don't want to handle here after retry limit is reached
+            throw e;
+          }
+
+          retryCount += 1;
+          await helperUtils.sleep(LOAD_WALLET_RETRY_SLEEP);
+          continue;
         }
+        // Reset retry count because the request succeeded
+        retryCount = 0;
         const result = response.data;
         let ret = null;
 
