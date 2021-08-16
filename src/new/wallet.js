@@ -442,7 +442,7 @@ class HathorWallet extends EventEmitter {
    *  'parents': Array(String)
    */
   getTx(id) {
-    const history = this.getTxHistory();
+    const history = this._getHistoryRaw();
     if (id in history) {
       return history[id];
     } else {
@@ -483,7 +483,7 @@ class HathorWallet extends EventEmitter {
     const index = this.getAddressIndex(address);
 
     // All transactions for this address
-    const historyTransactions = Object.values(this.getTxHistory());
+    const historyTransactions = Object.values(this._getHistoryRaw());
 
     // Address information that will be calculated below
     const addressInfo = {
@@ -559,7 +559,7 @@ class HathorWallet extends EventEmitter {
    */
   getUtxos(options = {}) {
     storage.setStore(this.store);
-    const historyTransactions = Object.values(this.getTxHistory());
+    const historyTransactions = Object.values(this._getHistoryRaw());
     const utxoDetails = {
       total_amount_available: 0,
       total_utxos_available: 0,

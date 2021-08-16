@@ -16,7 +16,7 @@ import Address from '../models/address';
 import { HATHOR_TOKEN_CONFIG } from '../constants';
 import { shuffle } from 'lodash';
 import { SendTxError, UtxoError, WalletError, WalletRequestError } from '../errors';
-import { OutputRequestObj, InputRequestObj, TokenAmountMap } from './types';
+import { OutputRequestObj, InputRequestObj, TokenAmountMap, ISendTransaction } from './types';
 
 type optionsType = {
   outputs?: OutputRequestObj[],
@@ -25,7 +25,7 @@ type optionsType = {
   transaction?: Transaction | null,
 };
 
-class SendTransactionWalletService extends EventEmitter {
+class SendTransactionWalletService extends EventEmitter implements ISendTransaction {
   // Wallet that is sending the transaction
   private wallet: HathorWalletServiceWallet;
   // Outputs to prepare the transaction
@@ -352,7 +352,7 @@ class SendTransactionWalletService extends EventEmitter {
    * @memberof SendTransactionWalletService
    * @inner
    */
-  async runFromMining(until = null): Promise<Transaction> {
+  async runFromMining(until: string | null = null): Promise<Transaction> {
     const promise: Promise<Transaction> = new Promise(async (resolve, reject) => {
       try {
         this.mineTx();
@@ -387,7 +387,7 @@ class SendTransactionWalletService extends EventEmitter {
    * @memberof SendTransactionWalletService
    * @inner
    */
-  async run(until = null): Promise<Transaction> {
+  async run(until: string | null = null): Promise<Transaction> {
     const promise: Promise<Transaction> = new Promise(async (resolve, reject) => {
       try {
         const preparedData = await this.prepareTx();

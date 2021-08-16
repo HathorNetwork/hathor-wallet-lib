@@ -6,6 +6,7 @@
  */
 
 import Transaction from '../models/transaction';
+import CreateTokenTransaction from '../models/create_token_transaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
 
 export interface GetAddressesObject {
@@ -191,4 +192,33 @@ export interface SendTransactionResponse {
 
 export interface TokenAmountMap {
   [token: string]: number; // For each token we have the amount
+}
+
+export interface IHathorWallet {
+  start();
+  getAllAddresses(): AsyncGenerator<GetAddressesObject>;
+  getBalance(token: string | null): Promise<GetBalanceObject[]>;
+  getTokens(): Promise<string[]>;
+  getTxHistory(options: { token_id?: string, count?: number, skip?: number }): Promise<GetHistoryObject[]>;
+  sendManyOutputsTransaction(outputs: OutputRequestObj[], options: { inputs?: InputRequestObj[], changeAddress?: string }): Promise<Transaction>;
+  sendTransaction(address: string, value: number, options: { token?: string, changeAddress?: string }): Promise<Transaction>;
+  stop();
+  getAddressAtIndex(index: number): string;
+  getCurrentAddress({ markAsUsed: boolean }): AddressInfoObject;
+  getNextAddress(): AddressInfoObject;
+  prepareCreateNewToken(name: string, symbol: string, amount: number, options): Promise<CreateTokenTransaction>;
+  createNewToken(name: string, symbol: string, amount: number, options): Promise<Transaction>;
+  prepareMintTokensData(token: string, amount: number, options): Promise<Transaction>;
+  mintTokens(token: string, amount: number, options): Promise<Transaction>;
+  prepareMeltTokensData(token: string, amount: number, options): Promise<Transaction>;
+  meltTokens(token: string, amount: number, options): Promise<Transaction>;
+  prepareDelegateAuthorityData(token: string, type: string, address: string, options): Promise<Transaction>;
+  delegateAuthority(token: string, type: string, address: string, options): Promise<Transaction>;
+  prepareDestroyAuthorityData(token: string, type: string, count: number): Promise<Transaction>;
+  destroyAuthority(token: string, type: string, count: number): Promise<Transaction>;
+}
+
+export interface ISendTransaction {
+  run(until: string | null): Promise<Transaction>;
+  runFromMining(until: string | null): Promise<Transaction>;
 }
