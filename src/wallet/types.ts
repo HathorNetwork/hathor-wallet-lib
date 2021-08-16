@@ -6,7 +6,7 @@
  */
 
 import Transaction from '../models/transaction';
-import SendTransaction from './sendTransaction';
+import SendTransactionWalletService from './sendTransactionWalletService';
 
 export interface GetAddressesObject {
   address: string; // Address in base58
@@ -181,7 +181,7 @@ export interface TokensResponseData {
 
 export interface SendTransactionEvents {
   success: boolean;
-  sendTransaction: SendTransaction;
+  sendTransaction: SendTransactionWalletService;
 }
 
 export interface SendTransactionResponse {

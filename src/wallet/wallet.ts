@@ -21,7 +21,7 @@ import Input from '../models/input';
 import Address from '../models/address';
 import Network from '../models/network';
 import MineTransaction from './mineTransaction';
-import SendTransactionWalletService from './sendTransaction';
+import SendTransactionWalletService from './sendTransactionWalletService';
 import { shuffle } from 'lodash';
 import bitcore from 'bitcore-lib';
 import {
