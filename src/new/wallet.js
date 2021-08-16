@@ -221,7 +221,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    **/
-  async getAllAddresses() {
+  async * getAllAddresses() {
     storage.setStore(this.store);
     // This algorithm is bad at performance
     // but we must add the count of transactions
@@ -230,15 +230,14 @@ class HathorWallet extends EventEmitter {
     // This is really fast for a normal quantity of addresses in a wallet
     const transactionsByAddress = this.getTransactionsCountByAddress();
     const addresses = wallet.getAllAddresses();
-    const ret = [];
     for (const address of addresses) {
-      ret.push({
+      const ret = {
         address,
         index: transactionsByAddress[address].index,
         transactions: transactionsByAddress[address].transactions,
-      });
+      };
+      yield ret;
     }
-    return ret;
   }
 
   /**

@@ -196,10 +196,12 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async getAllAddresses(): Promise<GetAddressesObject[]> {
+  async * getAllAddresses(): AsyncGenerator<GetAddressesObject> {
     this.failIfWalletNotReady();
     const data = await walletApi.getAddresses(this);
-    return data.addresses;
+    for (const address of data.addresses) {
+      yield address;
+    }
   }
 
   /**
