@@ -208,7 +208,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    **/
-  getAllAddressesSimple() {
+  _getAllAddressesRaw() {
     storage.setStore(this.store);
     return wallet.getAllAddresses();
   }
@@ -725,10 +725,10 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    **/
-  getOldBalance(tokenUid) {
+  _getBalanceRaw(tokenUid) {
     storage.setStore(this.store);
     const uid = tokenUid || this.token.uid;
-    const historyTransactions = this.getOldHistory();
+    const historyTransactions = this._getHistoryRaw();
     return wallet.calculateBalance(Object.values(historyTransactions), uid);
   }
 
@@ -740,7 +740,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    **/
-  getOldHistory() {
+  _getHistoryRaw() {
     storage.setStore(this.store);
     const data = wallet.getWalletData();
     const history = 'historyTransactions' in data ? data['historyTransactions'] : {};
@@ -757,7 +757,7 @@ class HathorWallet extends EventEmitter {
   preProcessWalletData() {
     storage.setStore(this.store);
     const transactionCountByToken = {};
-    const history = this.getOldHistory();
+    const history = this._getHistoryRaw();
     const tokensHistory = {};
     // iterate through all txs received and map all tokens this wallet has, with
     // its history and balance
@@ -795,7 +795,7 @@ class HathorWallet extends EventEmitter {
 
     const tokensBalance = {};
     for (const tokenUid of Object.keys(tokensHistory)) {
-      const totalBalance = this.getOldBalance(tokenUid);
+      const totalBalance = this._getBalanceRaw(tokenUid);
       totalBalance['transactions'] = transactionCountByToken[tokenUid];
       // update token total balance
       tokensBalance[tokenUid] = totalBalance;
@@ -924,18 +924,7 @@ class HathorWallet extends EventEmitter {
     }
     const { inputs, changeAddress } = newOptions;
     const sendTransaction = new SendTransaction({ outputs, inputs, changeAddress, pin });
-    const promise = new Promise((resolve, reject) => {
-      sendTransaction.on('send-tx-success', (transaction) => {
-        resolve(transaction);
-      });
-
-      sendTransaction.on('send-error', (err) => {
-        reject(err);
-      });
-    });
-
-    sendTransaction.run();
-    return promise;
+    return sendTransaction.run();
   }
 
   /**
@@ -1035,18 +1024,7 @@ class HathorWallet extends EventEmitter {
    */
   async handleSendPreparedTransaction(transaction) {
     const sendTransaction = new SendTransaction({ transaction });
-    const promise = new Promise((resolve, reject) => {
-      sendTransaction.on('send-tx-success', (transaction) => {
-        resolve(transaction);
-      });
-
-      sendTransaction.on('send-error', (err) => {
-        reject(err);
-      });
-    });
-
-    sendTransaction.runFromMining();
-    return promise;
+    return sendTransaction.runFromMining();
   }
 
   /**
@@ -1612,7 +1590,7 @@ class HathorWallet extends EventEmitter {
   getTxBalance(tx, optionsParam = {}) {
     const options = Object.assign({ includeAuthorities: false }, optionsParam)
     storage.setStore(this.store);
-    const addresses = this.getAllAddressesSimple();
+    const addresses = this._getAllAddressesRaw();
     const balance = {};
     for (const txout of tx.outputs) {
       if (wallet.isAuthorityOutput(txout)) {

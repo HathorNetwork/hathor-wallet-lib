@@ -295,23 +295,29 @@ class SendTransaction extends EventEmitter {
    * @memberof SendTransaction
    * @inner
    */
-  runFromMining(until = null) {
-    try {
-      this.mineTx();
-      if (until === 'mine-tx') {
-        return;
-      }
+  async runFromMining(until = null) {
+    const promise = new Promise((resolve, reject) => {
+      try {
+        this.mineTx();
+        if (until === 'mine-tx') {
+          resolve(this.transaction);
+          return;
+        }
 
-      this.on('mine-tx-ended', (data) => {
-        this.handlePushTx();
-      });
-    } catch (err) {
-      if (err instanceof WalletError) {
-        this.emit('send-error', err);
-      } else {
-        throw err;
+        this.on('mine-tx-ended', (data) => {
+          resolve(this.transaction);
+          this.handlePushTx();
+        });
+      } catch (err) {
+        reject(err);
+        if (err instanceof WalletError) {
+          this.emit('send-error', err);
+        } else {
+          throw err;
+        }
       }
-    }
+    });
+    return promise;
   }
 
   /**
@@ -334,21 +340,31 @@ class SendTransaction extends EventEmitter {
    * @memberof SendTransaction
    * @inner
    */
-  run(until = null) {
-    try {
-      this.prepareTx();
-      if (until === 'prepare-tx') {
-        return;
-      }
+  async run(until = null) {
+    const promise = new Promise((resolve, reject) => {
+      try {
+        this.prepareTx();
+        if (until === 'prepare-tx') {
+          resolve(this.transaction);
+          return;
+        }
 
-      this.runFromMining(until);
-    } catch (err) {
-      if (err instanceof WalletError) {
-        this.emit('send-error', err);
-      } else {
-        throw err;
+        const miningPromise = this.runFromMining(until);
+        miningPromise.then((data) => {
+          resolve(data);
+        }, (err) => {
+          reject(err);
+        });
+      } catch (err) {
+        reject(err);
+        if (err instanceof WalletError) {
+          this.emit('send-error', err);
+        } else {
+          throw err;
+        }
       }
-    }
+    });
+    return promise;
   }
 
   /**

@@ -369,7 +369,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async sendManyOutputsTransaction(outputs: OutputRequestObj[], options: { inputs?: InputRequestObj[], changeAddress?: string } = {}): Promise<Transaction | string> {
+  async sendManyOutputsTransaction(outputs: OutputRequestObj[], options: { inputs?: InputRequestObj[], changeAddress?: string } = {}): Promise<Transaction> {
     this.failIfWalletNotReady();
     const newOptions = Object.assign({
       inputs: [],
@@ -377,18 +377,7 @@ class HathorWalletServiceWallet extends EventEmitter {
     }, options);
     const { inputs, changeAddress } = newOptions;
     const sendTransaction = new SendTransactionWalletService(this, { outputs, inputs, changeAddress });
-    const promise: Promise<Transaction | string> = new Promise((resolve, reject) => {
-      sendTransaction.on('send-tx-success', (transaction) => {
-        resolve(transaction);
-      });
-
-      sendTransaction.on('send-error', (err) => {
-        reject(err);
-      });
-    });
-
-    sendTransaction.run();
-    return promise;
+    return sendTransaction.run();
   }
 
   /**
@@ -540,20 +529,9 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async handleSendPreparedTransaction(transaction: Transaction): Promise<Transaction | string> {
+  async handleSendPreparedTransaction(transaction: Transaction): Promise<Transaction> {
     const sendTransaction = new SendTransactionWalletService(this, { transaction });
-    const promise: Promise<Transaction | string> = new Promise((resolve, reject) => {
-      sendTransaction.on('send-tx-success', (tx) => {
-        resolve(tx);
-      });
-
-      sendTransaction.on('send-error', (err) => {
-        reject(err);
-      });
-    });
-
-    sendTransaction.runFromMining();
-    return promise;
+    return sendTransaction.runFromMining();
   }
 
   /**
