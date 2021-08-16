@@ -369,7 +369,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       } catch (err) {
         reject(err);
         if (err instanceof WalletError) {
-          this.emit('send-error', err);
+          this.emit('send-error', err.message);
         } else {
           throw err;
         }
@@ -411,7 +411,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       } catch (err) {
         reject(err);
         if (err instanceof WalletError) {
-          this.emit('send-error', err);
+          this.emit('send-error', err.message);
         } else {
           throw err;
         }

@@ -305,13 +305,16 @@ class SendTransaction extends EventEmitter {
         }
 
         this.on('mine-tx-ended', (data) => {
-          resolve(this.transaction);
           this.handlePushTx();
+        });
+
+        this.once('send-tx-success', (data) => {
+          resolve(this.transaction);
         });
       } catch (err) {
         reject(err);
         if (err instanceof WalletError) {
-          this.emit('send-error', err);
+          this.emit('send-error', err.message);
         } else {
           throw err;
         }
@@ -358,7 +361,7 @@ class SendTransaction extends EventEmitter {
       } catch (err) {
         reject(err);
         if (err instanceof WalletError) {
-          this.emit('send-error', err);
+          this.emit('send-error', err.message);
         } else {
           throw err;
         }
