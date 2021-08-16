@@ -205,9 +205,52 @@ class HathorWallet extends EventEmitter {
     }
   }
 
-  getAllAddresses() {
+  async getAllAddresses() {
     storage.setStore(this.store);
-    return wallet.getAllAddresses();
+    // This algorithm is bad at performance
+    // but we must add the count of transactions
+    // in order to replicate the same return as the new
+    // wallet service facade
+    // This is really fast for a normal quantity of addresses in a wallet
+    const transactionsByAddress = this.getTransactionsCountByAddress();
+    const addresses = wallet.getAllAddresses();
+    const ret = [];
+    for (const address of addresses) {
+      ret.push({
+        address,
+        index: transactionsByAddress[address].index,
+        transactions: transactionsByAddress[address].transactions,
+      });
+    }
+    return Promise.resolve(ret);
+  }
+
+  getTransactionsCountByAddress() {
+    storage.setStore(this.store);
+    const walletData = hathorLib.wallet.getWalletData();
+    const addressKeys = walletData.keys;
+    const transactionsByAddress = {};
+    for (const key in addressKeys) {
+      transactionsByAddress[key] = {
+        index: addressKeys[key].index,
+        transactions: 0,
+      };
+    }
+
+    const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
+    for (const tx_id in historyTransactions) {
+      const tx = historyTransactions[tx_id];
+      const foundAddresses = [];
+      for (const el of [...tx.outputs, ...tx.inputs]) {
+        const address = el.decoded.address;
+        if (address in transactionsByAddress && foundAddresses.indexOf(address) === -1) {
+          transactionsByAddress[address].transactions += 1;
+          foundAddresses.push(address);
+        }
+      }
+    }
+
+    return transactionsByAddress;
   }
 
   getAddressAtIndex(index) {
@@ -220,7 +263,7 @@ class HathorWallet extends EventEmitter {
     if (markAsUsed) {
       return wallet.getAddressToUse(this.conn);
     }
-    return wallet.getCurrentAddress();
+    return {address: wallet.getCurrentAddress()};
   }
 
   /**
@@ -229,7 +272,7 @@ class HathorWallet extends EventEmitter {
   getNextAddress() {
     // First we mark the current address as used, then return the next
     this.getCurrentAddress({ markAsUsed: true });
-    return this.getCurrentAddress();
+    return {address: this.getCurrentAddress()};
   }
 
   /**
@@ -241,18 +284,65 @@ class HathorWallet extends EventEmitter {
     }
   }
 
-  getBalance(tokenUid) {
+  async getBalance(token = null) {
     storage.setStore(this.store);
-    const uid = tokenUid || this.token.uid;
-    const historyTransactions = this.getTxHistory();
-    return wallet.calculateBalance(Object.values(historyTransactions), uid);
+    // TODO if token is null we should get the balance for each token I have
+    const uid = token || this.token.uid;
+    const historyTransactions = await this.getTxHistory();
+    const historyTransactionsArray = Object.values(historyTransactions);
+    const balance = wallet.calculateBalance(historyTransactionsArray, uid);
+    const transactions = 0;
+    for (const tx of historyTransactionsArray) {
+      for (const el of [...tx.outputs, ...tx.inputs]) {
+        if (el.token === uid && this.isAddressMine(el.decoded.address)) {
+          transactions += 1;
+          break;
+        }
+      }
+    }
+    return Promise.resolve([{
+      token: { // Getting token name and symbol is not easy, so we return empty strings
+        id: uid,
+        name: '',
+        symbol: ''
+      },
+      balance: {
+        unlocked: balance.available,
+        locked: balance.locked,
+      },
+      transactions,
+      lockExpires: null,
+      tokenAuthorities : {
+        unlocked: {
+          mint: this.selectAuthorityUtxo(uid, wallet.isMintOutput.bind(wallet)) !== null,
+          melt: this.selectAuthorityUtxo(uid, wallet.isMeltOutput.bind(wallet)) !== null,
+        },
+        locked: {
+          mint: false,
+          melt: false
+        }
+      },
+    }]);
   }
 
-  getTxHistory() {
+  getTxHistory(token = null) {
     storage.setStore(this.store);
+    const uid = token || this.token.uid;
     const data = wallet.getWalletData();
     const historyTransactions = 'historyTransactions' in data ? data['historyTransactions'] : {};
-    return historyTransactions;
+    const historyTransactionsArray = Object.values(historyTransactions);
+    const ret = [];
+    for (const tx of historyTransactionsArray) {
+      const balances = this.getTxBalance(tx);
+      if (uid in balances) {
+        ret.push({
+          txId: tx.tx_id,
+          timestamp: tx.timestamp,
+          balance: balances[uid],
+        });
+      }
+    }
+    return Promise.resolve(ret);
   }
 
   /**
@@ -855,15 +945,24 @@ class HathorWallet extends EventEmitter {
     const sendTransaction = new SendTransaction({data});
     if (startMiningTx) {
       sendTransaction.start();
+      const promise = new Promise((resolve, reject) => {
+        sendTransaction.promise.then((tx) => {
+          resolve(tx);
+        }, (err) => {
+          reject(err);
+        });
+      });
+      return promise;
+    } else {
+      const ret = {success: true, promise: sendTransaction.promise, sendTransaction};
+      if (this.debug) {
+        ret.debug = {
+          balanceHTR: this.getBalance(),
+          data: data,
+        };
+      }
+      return ret;
     }
-    const ret = {success: true, promise: sendTransaction.promise, sendTransaction};
-    if (this.debug) {
-      ret.debug = {
-        balanceHTR: this.getBalance(),
-        data: data,
-      };
-    }
-    return ret;
   }
 
   /**

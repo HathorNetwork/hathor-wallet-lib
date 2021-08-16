@@ -18,10 +18,14 @@ import Input from '../models/input';
 import Address from '../models/address';
 import Network from '../models/network';
 import MineTransaction from './mineTransaction';
+import HathorWalletInterface from './interface';
+import { AddressInfoObject, GetBalanceObject, GetAddressesObject, GetHistoryObject, TxProposalUpdateResponseData, SendManyTxOptionsParam, SendTxOptionsParam } from './types';
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
 const WALLET_STATUS_POLLING_TIMEOUT = 3000;
+
+const WALLET_NOT_READY_ERROR = 'WALLET_NOT_READY';
 
 enum walletState {
   NOT_STARTED = 'Not started',
@@ -29,7 +33,7 @@ enum walletState {
   READY = 'Ready',
 }
 
-class HathorWalletServiceWallet extends EventEmitter {
+class HathorWalletServiceWallet extends EventEmitter implements HathorWalletInterface {
   // String with 24 words separated by space
   seed: string;
   // String with wallet passphrase
@@ -42,8 +46,10 @@ class HathorWalletServiceWallet extends EventEmitter {
   private state: string
   // Variable to prevent start sending more than one tx concurrently
   private isSendingTx: boolean
-  // ID of tx proposal
-  private txProposalId: string | null
+  // Variable to store the possible addresses to use that are after the last used address
+  private addressesToUse: AddressInfoObject[]
+  // Index of the address to be used by the wallet
+  private indexToUse: number
 
   constructor(seed: string, network: Network, options = { passphrase: '' }) {
     super();
@@ -64,9 +70,11 @@ class HathorWalletServiceWallet extends EventEmitter {
     // ID of wallet after created on wallet service
     this.walletId = null;
     this.isSendingTx = false;
-    this.txProposalId = null;
 
     this.network = network;
+
+    this.addressesToUse = [];
+    this.indexToUse = -1;
     // TODO should we have a debug mode?
   }
 
@@ -84,7 +92,7 @@ class HathorWalletServiceWallet extends EventEmitter {
       if (data.status === 'creating') {
         await this.startPollingStatus();
       } else {
-        this.setState(walletState.READY);
+        await this.onWalletReady();
       }
     }
     try {
@@ -116,7 +124,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async startPollingStatus() {
+  private async startPollingStatus() {
     try {
       const res = await walletApi.getWalletStatus(this.walletId!);
       const data = res.data;
@@ -126,7 +134,7 @@ class HathorWalletServiceWallet extends EventEmitter {
             await this.startPollingStatus();
           }, WALLET_STATUS_POLLING_TIMEOUT);
         } else if (data.status.status === 'ready') {
-          this.setState(walletState.READY);
+          await this.onWalletReady();
         } else {
           // TODO What other status might have?
           // throw error?
@@ -140,15 +148,39 @@ class HathorWalletServiceWallet extends EventEmitter {
     }
   }
 
+  private checkWalletReady() {
+    if (!this.isReady()) {
+      throw new Error('Wallet not ready');
+    }
+  }
+
+  private async onWalletReady() {
+    await this.getAddressesToUse();
+    this.setState(walletState.READY);
+  }
+
+  private async getAddressesToUse() {
+    const response = await walletApi.getAddressesToUse(this.walletId!);
+    let addresses: AddressInfoObject[] = [];
+    if (response.status === 200 && response.data.success === true) {
+      addresses = response.data.addresses;
+      this.addressesToUse = addresses;
+      this.indexToUse = 0;
+    } else {
+      // TODO What error should be handled here?
+    }
+  }
+
   /**
    * Get all addresses of the wallet
    *
    * @memberof HathorWallet
    * @inner
    */
-  async getAllAddresses(): Promise<string[]> {
+  async getAllAddresses(): Promise<GetAddressesObject[]> {
+    this.checkWalletReady();
     const response = await walletApi.getAddresses(this.walletId!);
-    let addresses = [];
+    let addresses: GetAddressesObject[] = [];
     if (response.status === 200 && response.data.success === true) {
       addresses = response.data.addresses;
     } else {
@@ -163,9 +195,11 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async getBalance(token: string | null = null) {
+  async getBalance(token: string | null = null): Promise<GetBalanceObject[]> {
+    this.checkWalletReady();
+    // If token is null we get the balance for all tokens
     const response = await walletApi.getBalances(this.walletId!, token);
-    let balance = null;
+    let balance: GetBalanceObject[] = [];
     if (response.status === 200 && response.data.success === true) {
       balance = response.data.balances;
     } else {
@@ -180,12 +214,13 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async getTxHistory(options: { token?: string } = {}) {
+  async getTxHistory(options: { token?: string } = {}): Promise<GetHistoryObject[]> {
+    this.checkWalletReady();
     // TODO Add pagination parameters
     const requestOptions = Object.assign({ token: null }, options);
     const { token } = requestOptions;
     const response = await walletApi.getHistory(this.walletId!, token);
-    let history = []
+    let history: GetHistoryObject[] = []
     if (response.status === 200 && response.data.success === true) {
       history = response.data.history;
     } else {
@@ -200,7 +235,8 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async sendManyOutputsTransaction(outputs, options = { inputs: [], changeAddress: null }) {
+  async sendManyOutputsTransaction(outputs, options: SendManyTxOptionsParam): Promise<TxProposalUpdateResponseData> {
+    this.checkWalletReady();
     return await this.sendTxProposal(outputs, options);
   }
 
@@ -210,10 +246,11 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async sendTransaction(address, value, options: { token: string | null, changeAddress: string | null } = { token: '00', changeAddress: null }) {
+  async sendTransaction(address, value, options: SendTxOptionsParam = { token: '00', changeAddress: undefined }): Promise<TxProposalUpdateResponseData> {
+    this.checkWalletReady();
     const newOptions = Object.assign({
       token: '00',
-      changeAddress: null
+      changeAddress: undefined
     }, options);
     const { token, changeAddress } = newOptions;
     const outputs = [{ address, value, token }];
@@ -226,16 +263,15 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async sendTxProposal(outputs, options = { inputs: [], changeAddress: null }) {
+  private async sendTxProposal(outputs, options: SendManyTxOptionsParam): Promise<TxProposalUpdateResponseData> {
     const newOptions = Object.assign({
       inputs: [],
-      changeAddress: null
+      changeAddress: undefined
     }, options);
     const { inputs, changeAddress } = newOptions;
     const response = await walletApi.createTxProposal(this.walletId!, outputs, inputs);
     if (response.status === 201) {
       const responseData = response.data;
-      this.txProposalId = responseData.txProposalId;
 
       const inputsObj: Input[] = [];
       for (const i of responseData.inputs) {
@@ -257,7 +293,9 @@ class HathorWalletServiceWallet extends EventEmitter {
         inputObj.setData(inputData);
       }
 
-      await this.executeSendTransaction(tx);
+      return await this.executeSendTransaction(tx, responseData.txProposalId);
+    } else {
+      throw new Error('Error creating tx proposal.')
     }
   }
 
@@ -269,7 +307,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  getInputData(dataToSignHash: Buffer, addressPath: string): Buffer {
+  private getInputData(dataToSignHash: Buffer, addressPath: string): Buffer {
     const code = new Mnemonic(this.seed);
     const xpriv = code.toHDPrivateKey(this.passphrase, this.network.bitcoreNetwork);
     const derivedKey = xpriv.deriveNonCompliantChild(addressPath);
@@ -291,7 +329,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  async executeSendTransaction(transaction: Transaction) {
+  private async executeSendTransaction(transaction: Transaction, txProposalId: string): Promise<TxProposalUpdateResponseData> {
     const mineTransaction = new MineTransaction(transaction);
     mineTransaction.start();
 
@@ -302,7 +340,14 @@ class HathorWalletServiceWallet extends EventEmitter {
       inputsData.push(input.data!.toString('base64'));
     }
 
-    return await walletApi.updateTxProposal(this.txProposalId!, data.timestamp, data.nonce, data.weight, data.parents, inputsData);
+    let ret: TxProposalUpdateResponseData;
+    const response = await walletApi.updateTxProposal(txProposalId, data.timestamp, data.nonce, data.weight, data.parents, inputsData);
+    if (response.status === 200 && response.data.success === true) {
+      ret = response.data;
+    } else {
+      throw new Error('Error updating tx proposal.')
+    }
+    return ret;
   }
 
   /**
@@ -323,7 +368,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    */
-  setState(state: string) {
+  private setState(state: string) {
     this.state = state;
     this.emit('state', state);
   }
@@ -354,8 +399,30 @@ class HathorWalletServiceWallet extends EventEmitter {
     return address.toString();
   }
 
-  getCurrentAddress() {
-    throw new Error('Not implemented.');
+  /**
+   * Get the current address to be used
+   */
+  getCurrentAddress({ markAsUsed = false } = {}): AddressInfoObject {
+    const addressesToUseLen = this.addressesToUse.length;
+    if (this.indexToUse > addressesToUseLen - 1) {
+      const addressInfo = this.addressesToUse[addressesToUseLen - 1];
+      return {address: addressInfo.address, index: addressInfo.index, error: 'GAP_LIMIT_REACHED'};
+    }
+
+    const addressInfo = this.addressesToUse[this.indexToUse];
+    if (markAsUsed) {
+      this.indexToUse += 1;
+    }
+    return addressInfo;
+  }
+
+  /**
+   * Get the next address after the current available
+   */
+  getNextAddress(): AddressInfoObject {
+    // First we mark the current address as used, then return the next
+    this.getCurrentAddress({ markAsUsed: true });
+    return this.getCurrentAddress();
   }
 
   getAddressIndex(address: string) {
