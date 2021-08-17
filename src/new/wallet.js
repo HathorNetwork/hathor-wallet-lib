@@ -481,7 +481,7 @@ class HathorWallet extends EventEmitter {
       }
       const utxo = utxoDetails.utxos[i];
       inputs.push({
-        hash: utxo.tx_id,
+        tx_id: utxo.tx_id,
         index: utxo.index,
       });
       utxos.push(utxo);
