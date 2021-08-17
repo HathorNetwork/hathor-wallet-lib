@@ -145,7 +145,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     if (!address.isValid()) {
       throw new SendTxError(`Address ${output.address} is not valid.`);
     }
-    const tokenData = (output.token in tokens) ? tokens.indexOf(output.token) + 1 : 0;
+    const tokenData = (tokens.indexOf(output.token) > -1) ? tokens.indexOf(output.token) + 1 : 0;
     const outputOptions = { tokenData, timelock: output.timelock || null };
     return new Output(output.value, address, outputOptions);
   }
