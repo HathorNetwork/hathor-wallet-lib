@@ -47,14 +47,7 @@ const walletApi = {
       data['firstAddress'] = firstAddress;
     }
     const axios = await axiosInstance();
-    const response = await axios.post('wallet/init', data, {
-      // `validateStatus` defines whether to resolve or reject the promise for a given
-      // HTTP response status code. If `validateStatus` returns `true` (or is set to `null`
-      // or `undefined`), the promise will be resolved; otherwise, the promise will be
-      // rejected. The default behaviour of axios is to reject anything different than 2xx
-      // We need to handle some 400 manually (e.g. create wallet might already be loaded)
-      validateStatus: (status) => status >= 200 && status < 500,
-    });
+    const response = await axios.post('wallet/init', data);
     if (response.status === 200 && response.data.success) {
       return response.data;
     } else if (response.status === 400 && response.data.error === 'wallet-already-loaded') {

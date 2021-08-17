@@ -26,6 +26,12 @@ export const axiosInstance = async (wallet: HathorWalletServiceWallet | null = n
   const defaultOptions = {
     baseURL: WALLET_SERVICE_BASE_URL,
     timeout: timeout,
+    // `validateStatus` defines whether to resolve or reject the promise for a given
+    // HTTP response status code. If `validateStatus` returns `true` (or is set to `null`
+    // or `undefined`), the promise will be resolved; otherwise, the promise will be
+    // rejected. The default behaviour of axios is to reject anything different than 2xx
+    // We need to handle some 400 manually (e.g. create wallet might already be loaded)
+    validateStatus: (status) => status >= 200 && status < 500,
     headers: {
       'Content-Type': 'application/json',
     },
