@@ -232,3 +232,14 @@ export const WALLET_SERVICE_BASE_URL  = 'https://wallet-service.testnet.hathor.n
  * Size in bytes of a transaction hash (32 bytes)
  */
 export const TX_HASH_SIZE_BYTES = 32;
+
+/**
+ * Maximum number of retries allowed when an error different
+ * from client timeout happens when loading wallet history
+ */
+export const LOAD_WALLET_MAX_RETRY = 5;
+
+/**
+ * Time in milliseconds between each load wallet retry
+ */
+export const LOAD_WALLET_RETRY_SLEEP = 5000;
