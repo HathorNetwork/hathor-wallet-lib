@@ -149,8 +149,8 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     const tokenData = (tokens.indexOf(output.token) > -1) ? tokens.indexOf(output.token) + 1 : 0;
     const outputOptions = { tokenData };
     const p2pkh = new P2PKH(address, { timelock: output.timelock || null });
-    const p2pkhScript = p2pkh.createScript()
-    return new Output(output.value, p2pkhScript, outputOptions));
+    const p2pkhScript = p2pkh.createScript();
+    return new Output(output.value, p2pkhScript, outputOptions);
   }
 
   /**
