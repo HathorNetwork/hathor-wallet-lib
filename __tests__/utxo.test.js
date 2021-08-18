@@ -24,7 +24,7 @@ class FakeHathorWallet {
       promise: Promise.resolve({ tx_id: "123" }),
     }));
   }
-  getTxHistory() {
+  _getHistoryRaw() {
     return txHistoryFixture;
   }
 }
