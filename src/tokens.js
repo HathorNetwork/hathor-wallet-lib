@@ -338,7 +338,7 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  getCreateTokenData(address, name, symbol, mintAmount, pin, options = { changeAddress: null }) {
+  generateCreateTokenData(address, name, symbol, mintAmount, pin, options = { changeAddress: null }) {
     const { changeAddress } = options;
 
     const mintOptions = {
@@ -389,7 +389,7 @@ const tokens = {
    * @inner
    */
   createToken(address, name, symbol, mintAmount, pin, options = { changeAddress: null }) {
-    const ret = this.getCreateTokenData(address, name, symbol, mintAmount, pin, options);
+    const ret = this.generateCreateTokenData(address, name, symbol, mintAmount, pin, options);
 
     if (!ret.success) {
       return ret;
@@ -539,7 +539,7 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  getMintData(mintInput, token, address, amount, depositInputs, pin, options) {
+  generateMintData(mintInput, token, address, amount, depositInputs, pin, options) {
     const fnOptions = Object.assign({
       createAnotherMint: true,
       createMelt: false,
@@ -598,7 +598,7 @@ const tokens = {
    * @inner
    */
   mintTokens(mintInput, token, address, amount, depositInputs, pin, options) {
-    const ret = this.getMinttData(mintInput, token, address, amount, depositInputs, pin, options);
+    const ret = this.generateMintData(mintInput, token, address, amount, depositInputs, pin, options);
     if (!ret.success) {
       return ret;
     }
@@ -688,7 +688,7 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  getMeltData(meltInput, token, amount, pin, createAnotherMelt, options = { depositAddress: null, changeAddress: null }) {
+  generateMeltData(meltInput, token, amount, pin, createAnotherMelt, options = { depositAddress: null, changeAddress: null }) {
     // Get melt data
     const newTxData = this.createMeltData(meltInput, token, amount, createAnotherMelt, options);
     if (!newTxData) {
@@ -724,7 +724,7 @@ const tokens = {
    * @inner
    */
   meltTokens(meltInput, token, amount, pin, createAnotherMelt, options = { depositAddress: null, changeAddress: null }) {
-    const ret = this.getMeltData(meltInput, token, amount, pin, createAnotherMelt, options);
+    const ret = this.generateMeltData(meltInput, token, amount, pin, createAnotherMelt, options);
     if (!ret.success) {
       return ret;
     }
@@ -834,7 +834,7 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  getDelegateAuthorityData(txID, index, addressSpent, token, address, createAnother, type, pin) {
+  generateDelegateAuthorityData(txID, index, addressSpent, token, address, createAnother, type, pin) {
     // Get delegate authority output data
     const newTxData = this.createDelegateAuthorityData(txID, index, addressSpent, token, address, createAnother, type);
     return this.handlePrepareData(newTxData, pin, {});
@@ -860,7 +860,7 @@ const tokens = {
    * @inner
    */
   delegateAuthority(txID, index, addressSpent, token, address, createAnother, type, pin) {
-    const ret = this.getDelegateAuthorityData(txID, index, addressSpent, token, address, createAnother, type, pin);
+    const ret = this.generateDelegateAuthorityData(txID, index, addressSpent, token, address, createAnother, type, pin);
     if (!ret.success) {
       return ret;
     }
@@ -878,7 +878,7 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  getDestroyAuthorityData(data, pin) {
+  generateDestroyAuthorityData(data, pin) {
     // Create new data without any output
     const newTxData = {'inputs': data, 'outputs': [], 'tokens': []};
     return this.handlePrepareData(newTxData, pin, {});
@@ -898,7 +898,7 @@ const tokens = {
    * @inner
    */
   destroyAuthority(data, pin) {
-    const ret = this.getDestroyAuthorityData(data, pin);
+    const ret = this.generateDestroyAuthorityData(data, pin);
     if (!ret.success) {
       return ret;
     }

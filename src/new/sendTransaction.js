@@ -12,6 +12,7 @@ import helpers from '../utils/helpers';
 import txApi from '../api/txApi';
 import txMiningApi from '../api/txMining';
 import { WalletError, SendTxError, OutputValueError, ConstantNotSet, MaximumNumberOutputsError, MaximumNumberInputsError } from '../errors';
+import { ErrorMessages } from '../errorMessages';
 import wallet from '../wallet';
 import oldHelpers from '../helpers';
 import storage from '../storage';
@@ -69,10 +70,10 @@ class SendTransaction extends EventEmitter {
     });
 
     // Error to be shown in case of an unexpected error when executing push tx
-    this.unexpectedPushTxError = 'An unexpected error happened. Check if the transaction has been sent looking into the history and try again if it hasn\'t.';
+    this.unexpectedPushTxError = ErrorMessages.UNEXPECTED_PUSH_TX_ERROR;
 
     // Stores the setTimeout object to set selected outputs as false
-    this._unmark_as_selected_timer = null;
+    this._unmarkAsSelectedTimer = null;
   }
 
   /**
@@ -129,7 +130,9 @@ class SendTransaction extends EventEmitter {
     for (const input of this.inputs) {
       const inputTx = historyTxs[input.txId];
       if (!inputTx || inputTx.outputs.length < input.index + 1) {
-        throw new SendTxError(`Input is invalid. Tx id ${input.txId} and index ${input.index}.`);
+        const err = new SendTxError(ErrorMessages.INVALID_INPUT);
+        err.errorData = { txId: input.txId, index: input.index };
+        throw err;
       }
       const token = inputTx.outputs[input.index].token;
 
@@ -197,7 +200,7 @@ class SendTransaction extends EventEmitter {
    */
   mineTx(options = {}) {
     if (this.transaction === null) {
-      throw new WalletError('Can\'t mine transaction if it\'s null.');
+      throw new WalletError(ErrorMessages.TRANSACTION_IS_NULL);
     }
 
     this.updateOutputSelected(true);
@@ -258,16 +261,20 @@ class SendTransaction extends EventEmitter {
    * @inner
    */
   handlePushTx() {
+    if (this.transaction === null) {
+      throw new WalletError(ErrorMessages.TRANSACTION_IS_NULL);
+    }
+
     this.emit('send-tx-start', this.transaction);
     const txHex = this.transaction.toHex();
     txApi.pushTx(txHex, false, (response) => {
       if (response.success) {
         this.transaction.updateHash();
         this.emit('send-tx-success', this.transaction);
-        if (this._unmark_as_selected_timer !== null) {
+        if (this._unmarkAsSelectedTimer !== null) {
           // After finishing the push_tx we can clearTimeout to unmark
-          clearTimeout(this._unmark_as_selected_timer);
-          this._unmark_as_selected_timer = null;
+          clearTimeout(this._unmarkAsSelectedTimer);
+          this._unmarkAsSelectedTimer = null;
         }
       } else {
         this.updateOutputSelected(false);
@@ -288,23 +295,32 @@ class SendTransaction extends EventEmitter {
    * @memberof SendTransaction
    * @inner
    */
-  runFromMining(until = null) {
-    try {
-      this.mineTx();
-      if (until === 'mine-tx') {
-        return;
-      }
+  async runFromMining(until = null) {
+    const promise = new Promise((resolve, reject) => {
+      try {
+        this.mineTx();
+        if (until === 'mine-tx') {
+          resolve(this.transaction);
+          return;
+        }
 
-      this.on('mine-tx-ended', (data) => {
-        this.handlePushTx();
-      });
-    } catch (err) {
-      if (err instanceof WalletError) {
-        this.emit('send-error', err);
-      } else {
-        throw err;
+        this.on('mine-tx-ended', (data) => {
+          this.handlePushTx();
+        });
+
+        this.once('send-tx-success', (data) => {
+          resolve(this.transaction);
+        });
+      } catch (err) {
+        reject(err);
+        if (err instanceof WalletError) {
+          this.emit('send-error', err.message);
+        } else {
+          throw err;
+        }
       }
-    }
+    });
+    return promise;
   }
 
   /**
@@ -327,21 +343,31 @@ class SendTransaction extends EventEmitter {
    * @memberof SendTransaction
    * @inner
    */
-  run(until = null) {
-    try {
-      this.prepareTx();
-      if (until === 'prepare-tx') {
-        return;
-      }
+  async run(until = null) {
+    const promise = new Promise((resolve, reject) => {
+      try {
+        this.prepareTx();
+        if (until === 'prepare-tx') {
+          resolve(this.transaction);
+          return;
+        }
 
-      this.runFromMining(until);
-    } catch (err) {
-      if (err instanceof WalletError) {
-        this.emit('send-error', err);
-      } else {
-        throw err;
+        const miningPromise = this.runFromMining(until);
+        miningPromise.then((data) => {
+          resolve(data);
+        }, (err) => {
+          reject(err);
+        });
+      } catch (err) {
+        reject(err);
+        if (err instanceof WalletError) {
+          this.emit('send-error', err.message);
+        } else {
+          throw err;
+        }
       }
-    }
+    });
+    return promise;
   }
 
   /**
@@ -378,16 +404,16 @@ class SendTransaction extends EventEmitter {
     }
     wallet.saveAddressHistory(historyTransactions, allTokens);
 
-    if (selected && this._unmark_as_selected_timer === null) {
+    if (selected && this._unmarkAsSelectedTimer === null) {
       // Schedule to set all those outputs as not selected later
       const myStore = storage.store;
-      this._unmark_as_selected_timer = setTimeout(() => {
+      this._unmarkAsSelectedTimer = setTimeout(() => {
         this.updateOutputSelected(false, myStore);
       }, SELECT_OUTPUTS_TIMEOUT);
-    } else if (!selected && this._unmark_as_selected_timer !== null) {
+    } else if (!selected && this._unmarkAsSelectedTimer !== null) {
       // If we unmark the outputs as selected we can already clear the timeout
-      clearTimeout(this._unmark_as_selected_timer);
-      this._unmark_as_selected_timer = null;
+      clearTimeout(this._unmarkAsSelectedTimer);
+      this._unmarkAsSelectedTimer = null;
     }
   }
 }

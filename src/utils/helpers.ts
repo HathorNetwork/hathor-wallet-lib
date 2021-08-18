@@ -20,6 +20,7 @@ import { hexToBuffer, unpackToInt } from '../utils/buffer';
 import { crypto, encoding } from 'bitcore-lib';
 import { clone } from 'lodash';
 import { ParseError } from '../errors';
+import { ErrorMessages } from '../errorMessages';
 
 /**
  * Helper methods
@@ -303,7 +304,7 @@ const helpers = {
   /**
    * Create a transaction from object data
    * We used to work only with data object to handle transactions in the past inside the lib
-   * This method was created to transaform those objects into Transaction class instances
+   * This method was created to transform those objects into Transaction class instances
    *
    * 'data': {'version', 'weight', 'timestamp', 'tokens', 'inputs': [{'tx_id', 'index'}], 'outputs': [{'address', 'value', 'tokenData', 'timelock'}]}
    *
@@ -360,7 +361,7 @@ const helpers = {
         options
       );
     } else {
-        throw new ParseError('We currently support only the Transaction and CreateTokenTransaction types. Other types will be supported in the future.');
+        throw new ParseError(ErrorMessages.UNSUPPORTED_TX_TYPE);
     }
   }
 }
