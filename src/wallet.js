@@ -5,13 +5,14 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { MAX_ADDRESSES_GET, GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, TOKEN_MINT_MASK, TOKEN_MELT_MASK, TOKEN_INDEX_MASK, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, MAX_OUTPUT_VALUE, HASH_KEY_SIZE, HASH_ITERATIONS, HD_WALLET_ENTROPY } from './constants';
+import { MAX_ADDRESSES_GET, GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, TOKEN_MINT_MASK, TOKEN_MELT_MASK, TOKEN_INDEX_MASK, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, MAX_OUTPUT_VALUE, HASH_KEY_SIZE, HASH_ITERATIONS, HD_WALLET_ENTROPY, LOAD_WALLET_MAX_RETRY, LOAD_WALLET_RETRY_SLEEP } from './constants';
 import Mnemonic from 'bitcore-mnemonic';
 import { HDPrivateKey, HDPublicKey, Address, crypto } from 'bitcore-lib';
 import CryptoJS from 'crypto-js';
 import walletApi from './api/wallet';
 import tokens from './tokens';
 import helpers from './helpers';
+import helperUtils from './utils/helpers';
 import { AddressError, ConstantNotSet, OutputValueError, WalletTypeError } from './errors';
 import version from './version';
 import storage from './storage';
@@ -122,6 +123,19 @@ const wallet = {
     return {'valid': true, 'message': '', 'words': newWordsString};
   },
 
+
+  /**
+   * Test if wallet was created from xpub
+   *
+   * @return {Boolean} If the wallet was created from xpub
+   * @memberof Wallet
+   * @inner
+   * */
+  isFromXPub() {
+    const accessData = this.getWalletAccessData();
+    return Boolean(accessData['from_xpub']);
+  },
+
   /**
    * Generate HD wallet words
    *
@@ -134,6 +148,27 @@ const wallet = {
   generateWalletWords(entropy = HD_WALLET_ENTROPY) {
     const code = new Mnemonic(entropy);
     return code.phrase;
+  },
+
+  /**
+   * Start a new HD wallet from an xpub.
+   * Used with hardware wallets.
+   * Encrypt this private key and save data in storage
+   *
+   * @param {string} xpub Extended public-key to start wallet
+   * @param {boolean} loadHistory if should load the history from the generated addresses
+   *
+   * @return {Promise} Promise that resolves when finishes loading address history, in case loadHistory = true, else returns null
+   * @memberof Wallet
+   * @inner
+   */
+   executeGenerateWalletFromXPub(xpubkey, loadHistory) {
+    const accessData = {
+      xpubkey: xpubkey,
+      from_xpub: true,
+    };
+
+    return this.startWallet(accessData, loadHistory);
   },
 
   /**
@@ -388,6 +423,7 @@ const wallet = {
     // request /address_history with 4000 addresses
     const addressesChunks = _.chunk(addresses, MAX_ADDRESSES_GET);
     const lastChunkIndex = addressesChunks.length - 1;
+    let retryCount = 0;
 
     for (let i=0; i<=lastChunkIndex; i++) {
       let hasMore = true;
@@ -401,7 +437,37 @@ const wallet = {
 
       while (hasMore === true) {
         let response;
-        response = await walletApi.getAddressHistoryForAwait(addressesToSearch, firstHash);
+        try {
+          response = await walletApi.getAddressHistoryForAwait(addressesToSearch, firstHash);
+        } catch (e) {
+          // We will retry the request that fails with client timeout
+          // in this request error we don't have the response because
+          // the client closed the connection
+          //
+          // I've tried to set a custom timeout error message in the axios config using timeoutErrorMessage parameter
+          // however the custom message is never used
+          // There are some error reports about it (https://github.com/axios/axios/issues/2716)
+          // Besides that, there are some problems happening in newer axios versions (https://github.com/axios/axios/issues/2710)
+          // One user that opened a PR for axios said he is checking the timeout error with the message includes condition
+          // https://github.com/axios/axios/pull/2874#discussion_r403753852
+          if (e.code === 'ECONNABORTED' && e.response === undefined && e.message.toLowerCase().includes('timeout')) {
+            // in this case we retry
+            continue;
+          }
+
+          // If the load wallet request fails with client timeout, we retry indefinitely
+          // however if we have another error, we have a limit number of retries
+          if (retryCount > LOAD_WALLET_MAX_RETRY) {
+            // Throw any error we don't want to handle here after retry limit is reached
+            throw e;
+          }
+
+          retryCount += 1;
+          await helperUtils.sleep(LOAD_WALLET_RETRY_SLEEP);
+          continue;
+        }
+        // Reset retry count because the request succeeded
+        retryCount = 0;
         const result = response.data;
         let ret = null;
 
@@ -630,16 +696,19 @@ const wallet = {
    * @inner
    */
   changePin(oldPin, newPin) {
+    if (this.isFromXPub()) {
+        throw WalletFromXPubGuard('changePin');
+    }
+
     const isCorrect = this.isPinCorrect(oldPin);
     if (!isCorrect) {
       return false;
     }
 
-    const accessData = this.getWalletAccessData();
-
     // Get new PIN hash
     const newHash = this.hashPassword(newPin);
     // Update new PIN data in storage
+    const accessData = this.getWalletAccessData();
     accessData['hash'] = newHash.key.toString();
     accessData['salt'] = newHash.salt;
 
@@ -1510,6 +1579,9 @@ const wallet = {
    * @inner
    */
   getWalletWords(password) {
+    if (this.isFromXPub()) {
+        throw WalletFromXPubGuard('getWalletWords');
+    }
     const accessData = this.getWalletAccessData();
     return this.decryptData(accessData.words, password);
   },
@@ -2434,7 +2506,12 @@ const wallet = {
    * @return {String} Wallet xprivkey
    */
   getXprivKey(pin) {
+    if (this.isFromXPub()) {
+        throw WalletFromXPubGuard('getXprivKey');
+    }
+
     const accessData = this.getWalletAccessData();
+
     const encryptedXPriv = accessData.mainKey;
     const privateKeyStr = wallet.decryptData(encryptedXPriv, pin);
     return privateKeyStr;
