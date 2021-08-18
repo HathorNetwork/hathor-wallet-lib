@@ -9,9 +9,10 @@ import Transaction from '../../src/models/transaction';
 import CreateTokenTransaction from '../../src/models/create_token_transaction';
 import Output from '../../src/models/output';
 import Input from '../../src/models/input';
+import P2PKH from '../../src/models/p2pkh';
 import Address from '../../src/models/address';
 import Network from '../../src/models/network';
-import { hexToBuffer } from '../../src/utils/buffer';
+import { hexToBuffer, bufferToHex } from '../../src/utils/buffer';
 import helpers from '../../src/utils/helpers';
 import { DEFAULT_TX_VERSION } from '../../src/constants';
 import { MaximumNumberInputsError, MaximumNumberOutputsError, ParseError } from '../../src/errors';
@@ -35,9 +36,11 @@ const compareTxs = (tx, tx2) => {
   for (let i=0; i<tx.outputs.length; i++) {
     expect(tx2.outputs[i].value).toBe(tx.outputs[i].value);
     expect(tx2.outputs[i].tokenData).toBe(tx.outputs[i].tokenData);
-    expect(tx2.outputs[i].timelock).toBe(tx.outputs[i].timelock);
-    expect(tx2.outputs[i].address.base58).toBe(tx.outputs[i].address.base58);
-    expect(tx2.outputs[i].address.network.name).toBe(tx.outputs[i].address.network.name);
+    expect(bufferToHex(tx2.outputs[i].script)).toBe(bufferToHex(tx.outputs[i].script));
+    if (tx2.outputs[i].decodedScript) {
+      expect(tx2.outputs[i].decodedScript.address.base58).toBe(tx.outputs[i].decodedScript.address.base58);
+      expect(tx2.outputs[i].decodedScript.address.network.name).toBe(tx.outputs[i].decodedScript.address.network.name);
+    }
   }
 
   expect(tx2.parents.length).toBe(tx.parents.length);
@@ -55,10 +58,17 @@ const compareTxs = (tx, tx2) => {
 
 test('New tx', () => {
   
+  const network = new Network('testnet');
   const address1 = new Address('WR1i8USJWQuaU423fwuFQbezfevmT4vFWX');
+  const p2pkh1 = new P2PKH(address1);
+  const p2pkhScript1 = p2pkh1.createScript();
   const address2 = new Address('WgSpcCwYAbtt31S2cqU7hHJkUHdac2EPWG');
-  const output1 = new Output(1000, address1);
-  const output2 = new Output(1000, address2, {timelock: 1550249803});
+  const p2pkh2 = new P2PKH(address2, {timelock: 1550249803});
+  const p2pkhScript2 = p2pkh2.createScript();
+  const output1 = new Output(1000, p2pkhScript1);
+  output1.parseScript(network);
+  const output2 = new Output(1000, p2pkhScript2);
+  output2.parseScript(network);
   const inputDataHex = '4630440220317cd233801c1986c2de900bf8d344c6335d3c385e69d19d65e1fae7a0afd0af02207acddb824debf855798d79c45701cbe3a19aea00baad94bff5290c6f0b0acf8e210346cddff43dffab8e13398633ab7a7caf0d634551e89ae6fd563e282f6744b983';
   const input1 = new Input('00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e', 0, {data: hexToBuffer(inputDataHex)})
   const tokenUid = '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295d';
@@ -87,7 +97,6 @@ test('New tx', () => {
   tx.hash = '4a46671dd6e638023335c6a2d35b8cc65a84db43566066dbaa1f329df3e56f0c';
   expect(tx.getShortHash()).toBe('4a46671dd6e6...329df3e56f0c');
 
-  const network = new Network('testnet');
   const tx2 = helpers.createTxFromHex(tx.toHex(), network);
 
   expect(tx.tokens.length).toBe(1);
@@ -109,6 +118,7 @@ test('New tx', () => {
 })
 
 test('Token tx', () => {
+  const network = new Network('testnet');
   const tx = new CreateTokenTransaction('Test', 'TST', [], []);
   const info = [];
   tx.serializeTokenInfo(info);
@@ -117,7 +127,10 @@ test('Token tx', () => {
   expect(info[4].toString('hex')).toBe('545354');
 
   const address1 = new Address('WR1i8USJWQuaU423fwuFQbezfevmT4vFWX');
-  const output1 = new Output(1000, address1);
+  const p2pkh1 = new P2PKH(address1);
+  const p2pkhScript1 = p2pkh1.createScript();
+  const output1 = new Output(1000, p2pkhScript1);
+  output1.parseScript(network);
   const inputDataHex = '4630440220317cd233801c1986c2de900bf8d344c6335d3c385e69d19d65e1fae7a0afd0af02207acddb824debf855798d79c45701cbe3a19aea00baad94bff5290c6f0b0acf8e210346cddff43dffab8e13398633ab7a7caf0d634551e89ae6fd563e282f6744b983';
   const input1 = new Input('00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e', 0, {data: hexToBuffer(inputDataHex)})
   tx.inputs = [input1];
@@ -128,7 +141,6 @@ test('Token tx', () => {
   tx.parents = ['00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e', '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295c'];
   tx.hash = '723ca83484495bcbb4cf849a835800a28cfac5440a8f517fffb095c52c461858';
 
-  const network = new Network('testnet');
   const tx2 = helpers.createTxFromHex(tx.toHex(), network);
   compareTxs(tx, tx2);
 
@@ -144,7 +156,9 @@ test('Tx validation', () => {
   tx.validate();
 
   const address1 = new Address('WR1i8USJWQuaU423fwuFQbezfevmT4vFWX');
-  const output1 = new Output(1000, address1);
+  const p2pkh1 = new P2PKH(address1);
+  const p2pkhScript1 = p2pkh1.createScript();
+  const output1 = new Output(1000, p2pkhScript1);
   const outputs = [];
   for (let i=0; i<255; i++) {
     outputs.push(output1);
@@ -181,15 +195,18 @@ test('Tx validation', () => {
 });
 
 test('Transaction type', () => {
+  const address1 = new Address('1PtH3rBmiYDiUuomQyoxMREicrxjg3LA5q')
+  const p2pkh1 = new P2PKH(address1);
+  const p2pkhScript1 = p2pkh1.createScript();
   const outputs1 = [
-    new Output(100, new Address('1PtH3rBmiYDiUuomQyoxMREicrxjg3LA5q')),
-    new Output(300, new Address('1PtH3rBmiYDiUuomQyoxMREicrxjg3LA5q'))
+    new Output(100, p2pkhScript1),
+    new Output(300, p2pkhScript1)
   ];
   const tx1 = new Transaction([], outputs1, {version: 1, hash: '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e'});
 
   const outputs2 = [
-    new Output(100, new Address('1PtH3rBmiYDiUuomQyoxMREicrxjg3LA5q')),
-    new Output(300, new Address('1PtH3rBmiYDiUuomQyoxMREicrxjg3LA5q'))
+    new Output(100, p2pkhScript1),
+    new Output(300, p2pkhScript1)
   ];
   const inputs2 = [
     new Input('00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e', 0)
@@ -197,7 +214,7 @@ test('Transaction type', () => {
   const tx2 = new Transaction(inputs2, outputs2, {version: 1, hash: '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295d'});
 
   const outputs3 = [
-    new Output(2000, new Address('1PtH3rBmiYDiUuomQyoxMREicrxjg3LA5q'))
+    new Output(2000, p2pkhScript1)
   ];
   const tx3 = new Transaction([], outputs3, {version: 0, hash: '000164e1e7ec7700a18750f9f50a1a9b63f6c7268637c072ae9ee181e58eb01b'});
 
@@ -225,13 +242,13 @@ test('Known transactions hash', () => {
   expect(tx.inputs[0].hash).toBe('0082c7dd1f0ceb8867219dcca68540abe77222d11bb2dc67a7af1f04640ea1f7');
   expect(tx.inputs[0].index).toBe(1);
   expect(tx.outputs[0].value).toBe(100);
-  expect(tx.outputs[0].timelock).toBeNull();
+  expect(tx.outputs[0].decodedScript.timelock).toBeNull();
   expect(tx.outputs[0].tokenData).toBe(0);
-  expect(tx.outputs[0].address.base58).toBe('WURpMuhenPHPC7yLWk2LX9Hsuwr5r5JvdR');
+  expect(tx.outputs[0].decodedScript.address.base58).toBe('WURpMuhenPHPC7yLWk2LX9Hsuwr5r5JvdR');
   expect(tx.outputs[1].value).toBe(23);
-  expect(tx.outputs[1].timelock).toBeNull();
+  expect(tx.outputs[1].decodedScript.timelock).toBeNull();
   expect(tx.outputs[1].tokenData).toBe(0);
-  expect(tx.outputs[1].address.base58).toBe('WURpMuhenPHPC7yLWk2LX9Hsuwr5r5JvdR');
+  expect(tx.outputs[1].decodedScript.address.base58).toBe('WURpMuhenPHPC7yLWk2LX9Hsuwr5r5JvdR');
   expect(tx.weight).toBe(8.000001);
   expect(tx.timestamp).toBe(1625080359);
   expect(tx.parents.length).toBe(2);
@@ -254,21 +271,21 @@ test('Known transactions hash', () => {
   expect(tx2.inputs[0].hash).toBe('0026c04e94574161e0d01e883507fe7615982a70fe07fd484371878738f4fc31');
   expect(tx2.inputs[0].index).toBe(1);
   expect(tx2.outputs[0].value).toBe(992);
-  expect(tx2.outputs[0].timelock).toBeNull();
+  expect(tx2.outputs[0].decodedScript.timelock).toBeNull();
   expect(tx2.outputs[0].tokenData).toBe(0);
-  expect(tx2.outputs[0].address.base58).toBe('Wkar5BWCWbi4KsNm2HHgN64wdEPbKQccG5');
+  expect(tx2.outputs[0].decodedScript.address.base58).toBe('Wkar5BWCWbi4KsNm2HHgN64wdEPbKQccG5');
   expect(tx2.outputs[1].value).toBe(800);
-  expect(tx2.outputs[1].timelock).toBeNull();
+  expect(tx2.outputs[1].decodedScript.timelock).toBeNull();
   expect(tx2.outputs[1].tokenData).toBe(1);
-  expect(tx2.outputs[1].address.base58).toBe('WYU6HBybYwmjA82CEsL8WRmpQXTtPsVegU');
+  expect(tx2.outputs[1].decodedScript.address.base58).toBe('WYU6HBybYwmjA82CEsL8WRmpQXTtPsVegU');
   expect(tx2.outputs[2].value).toBe(1);
-  expect(tx2.outputs[2].timelock).toBeNull();
+  expect(tx2.outputs[2].decodedScript.timelock).toBeNull();
   expect(tx2.outputs[2].tokenData).toBe(129);
-  expect(tx2.outputs[2].address.base58).toBe('WSLuLMTfYT59YrS7VnGjkAYEpC4Kj8D29N');
+  expect(tx2.outputs[2].decodedScript.address.base58).toBe('WSLuLMTfYT59YrS7VnGjkAYEpC4Kj8D29N');
   expect(tx2.outputs[3].value).toBe(2);
-  expect(tx2.outputs[3].timelock).toBeNull();
+  expect(tx2.outputs[3].decodedScript.timelock).toBeNull();
   expect(tx2.outputs[3].tokenData).toBe(129);
-  expect(tx2.outputs[3].address.base58).toBe('WcoCPPheVqDeehqnp6o4eCxEdRaYiKCMrw');
+  expect(tx2.outputs[3].decodedScript.address.base58).toBe('WcoCPPheVqDeehqnp6o4eCxEdRaYiKCMrw');
   expect(tx2.weight).toBe(8.000001);
   expect(tx2.timestamp).toBe(1617066213);
   expect(tx2.parents.length).toBe(2);
@@ -296,21 +313,21 @@ test('Known transactions hash', () => {
   expect(tx3.inputs[2].hash).toBe('00efbc2e64ea93768c29823882185b633bf6380a15f7b621c68dc777558f06ae');
   expect(tx3.inputs[2].index).toBe(1);
   expect(tx3.outputs[0].value).toBe(77);
-  expect(tx3.outputs[0].timelock).toBeNull();
+  expect(tx3.outputs[0].decodedScript.timelock).toBeNull();
   expect(tx3.outputs[0].tokenData).toBe(0);
-  expect(tx3.outputs[0].address.base58).toBe('WSHJp1QFnA8gBntU7Rjn3zSEzxX8hYu5wE');
+  expect(tx3.outputs[0].decodedScript.address.base58).toBe('WSHJp1QFnA8gBntU7Rjn3zSEzxX8hYu5wE');
   expect(tx3.outputs[1].value).toBe(123);
-  expect(tx3.outputs[1].timelock).toBeNull();
+  expect(tx3.outputs[1].decodedScript.timelock).toBeNull();
   expect(tx3.outputs[1].tokenData).toBe(0);
-  expect(tx3.outputs[1].address.base58).toBe('WSHJp1QFnA8gBntU7Rjn3zSEzxX8hYu5wE');
+  expect(tx3.outputs[1].decodedScript.address.base58).toBe('WSHJp1QFnA8gBntU7Rjn3zSEzxX8hYu5wE');
   expect(tx3.outputs[2].value).toBe(100);
-  expect(tx3.outputs[2].timelock).toBe(1641002399);
+  expect(tx3.outputs[2].decodedScript.timelock).toBe(1641002399);
   expect(tx3.outputs[2].tokenData).toBe(1);
-  expect(tx3.outputs[2].address.base58).toBe('WY7uxfSG4DhMVR3NVoX7rXwNr6FHJ7FWgX');
+  expect(tx3.outputs[2].decodedScript.address.base58).toBe('WY7uxfSG4DhMVR3NVoX7rXwNr6FHJ7FWgX');
   expect(tx3.outputs[3].value).toBe(200);
-  expect(tx3.outputs[3].timelock).toBeNull();
+  expect(tx3.outputs[3].decodedScript.timelock).toBeNull();
   expect(tx3.outputs[3].tokenData).toBe(2);
-  expect(tx3.outputs[3].address.base58).toBe('WcuvJfrcL3LqCsYnBnZLLcTyvsSM3HnBed');
+  expect(tx3.outputs[3].decodedScript.address.base58).toBe('WcuvJfrcL3LqCsYnBnZLLcTyvsSM3HnBed');
   expect(tx3.weight).toBe(8.000001);
   expect(tx3.timestamp).toBe(1625238083);
   expect(tx3.parents.length).toBe(2);

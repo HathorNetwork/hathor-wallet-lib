@@ -9,6 +9,7 @@ import { EventEmitter } from 'events';
 import walletApi from './api/walletApi';
 import MineTransaction from './mineTransaction';
 import HathorWalletServiceWallet from './wallet';
+import P2PKH from '../models/p2pkh';
 import Transaction from '../models/transaction';
 import Output from '../models/output';
 import Input from '../models/input';
@@ -146,8 +147,10 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       throw new SendTxError(`Address ${output.address} is not valid.`);
     }
     const tokenData = (tokens.indexOf(output.token) > -1) ? tokens.indexOf(output.token) + 1 : 0;
-    const outputOptions = { tokenData, timelock: output.timelock || null };
-    return new Output(output.value, address, outputOptions);
+    const outputOptions = { tokenData };
+    const p2pkh = new P2PKH(address, { timelock: output.timelock || null });
+    const p2pkhScript = p2pkh.createScript()
+    return new Output(output.value, p2pkhScript, outputOptions));
   }
 
   /**

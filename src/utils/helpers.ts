@@ -10,6 +10,7 @@ import { DECIMAL_PLACES, DEFAULT_TX_VERSION, CREATE_TOKEN_TX_VERSION } from '../
 import buffer from 'buffer';
 import Long from 'long';
 import Transaction from '../models/transaction';
+import P2PKH from '../models/p2pkh';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import Input from '../models/input';
 import Output from '../models/output';
@@ -327,13 +328,13 @@ const helpers = {
 
     const outputs: Output[] = [];
     for (const output of data.outputs) {
+      const address = new Address(output.address);
+      const p2pkh = new P2PKH(address, { timelock: output.timelock || null });
+      const p2pkhScript = p2pkh.createScript()
       const outputObj = new Output(
         output.value,
-        new Address(output.address),
-        {
-          tokenData: output.tokenData,
-          timelock: output.timelock
-        }
+        p2pkhScript,
+        { tokenData: output.tokenData }
       );
       outputs.push(outputObj);
     }

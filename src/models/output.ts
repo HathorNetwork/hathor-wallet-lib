@@ -5,15 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { OP_GREATERTHAN_TIMESTAMP, OP_DUP, OP_HASH160, OP_EQUALVERIFY, OP_CHECKSIG } from '../opcodes';
 import { MAX_OUTPUT_VALUE_32, MAX_OUTPUT_VALUE, TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, TOKEN_INDEX_MASK } from '../constants';
-import { OutputValueError } from '../errors';
-import { util } from 'bitcore-lib';
+import { OutputValueError, ParseError } from '../errors';
 import helpers from '../utils/helpers';
-import Address from './address';
+import P2PKH from './p2pkh';
 import Network from './network';
 import { unpackToInt, unpackLen, bytesToOutputValue } from '../utils/buffer';
-import { parseOutputScript } from '../utils/scripts';
+import { parseP2PKH } from '../utils/scripts';
 import _ from 'lodash';
 
 type optionsType = {
@@ -25,34 +23,33 @@ type optionsType = {
 class Output {
   // Output value as an integer
   value: number;
-  // Address object of the value destination
-  address: Address;
   // tokenData of the output
   tokenData: number;
-  // Timestamp of the timelock of the output
-  timelock: number | null;
+  // Output script
+  script: Buffer;
+  // Decoded output script
+  decodedScript: P2PKH | null;
 
-  constructor(value: number, address: Address, options: optionsType = {}) {
+  constructor(value: number, script: Buffer, options: optionsType = {}) {
     const defaultOptions = {
       tokenData: 0,
-      timelock: null,
     };
 
     const newOptions = Object.assign(defaultOptions, options);
-    const { tokenData, timelock } = newOptions;
+    const { tokenData } = newOptions;
 
     if (!value) {
       throw new OutputValueError('Value must be a positive number.');
     }
 
-    if (!address) {
-      throw Error('You must provide an address.');
+    if (!script) {
+      throw Error('You must provide a script.');
     }
 
     this.value = value;
-    this.address = address;
+    this.script = script;
     this.tokenData = tokenData;
-    this.timelock = timelock;
+    this.decodedScript = null;
   }
 
   /**
@@ -133,32 +130,6 @@ class Output {
   }
   
   /**
-   * Create a P2PKH script
-   * 
-   * @return {Buffer}
-   * @memberof Output
-   * @inner
-   */
-  createScript(): Buffer {
-    const arr: Buffer[] = [];
-    const addressBytes = this.address.decode();
-    const addressHash = addressBytes.slice(1, -4);
-    if (this.timelock) {
-      let timelockBytes = helpers.intToBytes(this.timelock, 4);
-      helpers.pushDataToStack(arr, timelockBytes);
-      arr.push(OP_GREATERTHAN_TIMESTAMP);
-    }
-    arr.push(OP_DUP);
-    arr.push(OP_HASH160);
-    // addressHash has a fixed size of 20 bytes, so no need to push OP_PUSHDATA1
-    arr.push(helpers.intToBytes(addressHash.length, 1));
-    arr.push(addressHash);
-    arr.push(OP_EQUALVERIFY);
-    arr.push(OP_CHECKSIG);
-    return util.buffer.concat(arr);
-  }
-
-  /**
    * Serialize an output to bytes
    *
    * @return {Buffer[]}
@@ -170,10 +141,34 @@ class Output {
     arr.push(this.valueToBytes());
     // Token data
     arr.push(helpers.intToBytes(this.tokenData, 1));
-    const outputScript = this.createScript();
-    arr.push(helpers.intToBytes(outputScript.length, 2));
-    arr.push(outputScript);
+    arr.push(helpers.intToBytes(this.script.length, 2));
+    arr.push(this.script);
     return arr;
+  }
+
+  parseScript(network: Network): P2PKH | null {
+    // This method will work only for P2PKH scripts for now
+    // The whole lib works only for this type of output script
+    // We should do something similar to what we have in the full node with
+    // Scripts regex verification match in the future
+
+    // It's still unsure how expensive it is to throw an exception in JavaScript. Some languages are really
+    // inefficient when it comes to exceptions while others are totally efficient. If it is efficient,
+    // we can keep throwing the error. Otherwise, we should just return null
+    // because this method will be used together with others when we are trying to parse a given script.
+
+    try {
+      const parsedScript = parseP2PKH(this.script, network);
+      this.decodedScript = parsedScript;
+      return parsedScript;
+    } catch (error) {
+      if (error instanceof ParseError) {
+        // We don't know how to parse this script
+        return null;
+      } else {
+        throw error;
+      }
+    }
   }
 
   /**
@@ -203,9 +198,8 @@ class Output {
 
     [script, outputBuffer] = unpackLen(scriptLen, outputBuffer);
 
-    const {timelock, address} = parseOutputScript(script, network);
-
-    const output = new Output(value, address, {tokenData, timelock});
+    const output = new Output(value, script, {tokenData});
+    output.parseScript(network);
 
     return [output, outputBuffer];
   }
