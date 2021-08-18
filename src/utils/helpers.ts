@@ -11,6 +11,7 @@ import buffer from 'buffer';
 import Long from 'long';
 import Transaction from '../models/transaction';
 import P2PKH from '../models/p2pkh';
+import ScriptData from '../models/script_data';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import Input from '../models/input';
 import Output from '../models/output';
@@ -347,14 +348,20 @@ const helpers = {
 
     const outputs: Output[] = [];
     for (const output of data.outputs) {
-      const address = new Address(output.address);
-      const p2pkh = new P2PKH(address, { timelock: output.timelock || null });
-      const p2pkhScript = p2pkh.createScript()
-      const outputObj = new Output(
-        output.value,
-        p2pkhScript,
-        { tokenData: output.tokenData }
-      );
+      let outputObj;
+      if (output.data) {
+        // Is NFT output
+        outputObj = this.createNFTOutput(output.data);
+      } else {
+        const address = new Address(output.address);
+        const p2pkh = new P2PKH(address, { timelock: output.timelock || null });
+        const p2pkhScript = p2pkh.createScript()
+        outputObj = new Output(
+          output.value,
+          p2pkhScript,
+          { tokenData: output.tokenData }
+        );
+      }
       outputs.push(outputObj);
     }
 
@@ -382,7 +389,19 @@ const helpers = {
     } else {
         throw new ParseError(ErrorMessages.UNSUPPORTED_TX_TYPE);
     }
-  }
+  },
+
+  /**
+   * Create NFT output from data string
+   *
+   * @memberof Helpers
+   * @inner
+   */
+  createNFTOutput(data: string): Output {
+    const scriptData = new ScriptData(data);
+    // Value 1 and token HTR
+    return new Output(1, scriptData.createScript());
+  },
 }
 
 export default helpers;
