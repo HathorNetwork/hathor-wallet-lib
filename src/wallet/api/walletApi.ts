@@ -14,6 +14,7 @@ import {
   NewAddressesResponseData,
   BalanceResponseData,
   HistoryResponseData,
+  TokensResponseData,
   TxProposalCreateResponseData,
   TxProposalUpdateResponseData,
   UtxoResponseData,
@@ -46,27 +47,14 @@ const walletApi = {
       data['firstAddress'] = firstAddress;
     }
     const axios = await axiosInstance();
-    try {
-      const response = await axios.post('wallet/init', data);
-      if (response.status === 200 && response.data.success) {
-        return response.data;
-      } else {
-        throw new WalletRequestError('Error creating wallet.');
-      }
-    } catch(error) {
-      if (error.response.status === 400) {
-        // Bad request
-        // Check if error is 'wallet-already-loaded'
-        const errorData = error.response.data;
-        if (errorData && errorData.error === 'wallet-already-loaded') {
-          // If it was already loaded, we have to check if it's ready
-          return errorData;
-        } else {
-          throw new WalletRequestError('Error creating wallet.');
-        }
-      } else {
-        throw new WalletRequestError('Error creating wallet.');
-      }
+    const response = await axios.post('wallet/init', data);
+    if (response.status === 200 && response.data.success) {
+      return response.data;
+    } else if (response.status === 400 && response.data.error === 'wallet-already-loaded') {
+      // If it was already loaded, we have to check if it's ready
+      return response.data;
+    } else {
+      throw new WalletRequestError('Error creating wallet.');
     }
   },
 
@@ -104,12 +92,18 @@ const walletApi = {
     }
   },
 
-  async getHistory(wallet: HathorWalletServiceWallet, token: string | null = null): Promise<HistoryResponseData> {
-    // TODO add pagination parameters
-    const data = { params: {} };
-    if (token) {
-      data['params']['token_id'] = token;
+  async getTokens(wallet: HathorWalletServiceWallet): Promise<TokensResponseData> {
+    const axios = await axiosInstance(wallet);
+    const response = await axios.get('wallet/tokens');
+    if (response.status === 200 && response.data.success === true) {
+      return response.data;
+    } else {
+      throw new WalletRequestError('Error getting list of tokens.');
     }
+  },
+
+  async getHistory(wallet: HathorWalletServiceWallet, options = {}): Promise<HistoryResponseData> {
+    const data = { params: options };
     const axios = await axiosInstance(wallet);
     const response = await axios.get('wallet/history', data);
     if (response.status === 200 && response.data.success === true) {

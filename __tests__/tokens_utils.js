@@ -16,8 +16,8 @@ import { TokenValidationError } from '../src/errors';
 import storage from '../src/storage';
 
 
-const createdTxHash = '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e';
-const createdToken = util.buffer.bufferToHex(tokens.getTokenUID(createdTxHash, 0));
+const createdTxHashBeforeMining = '5ecac1124aada88c750acdccede58d0308b593923c3034f373403b63ba4edbac';
+const createdToken = util.buffer.bufferToHex(tokens.getTokenUID(createdTxHashBeforeMining, 0));
 const pin = '123456';
 const token1 = {'name': '1234', 'uid': '1234', 'symbol': '1234'};
 
@@ -35,7 +35,7 @@ mock.onPost('push_tx').reply((config) => {
   const ret = {
     'success': true,
     'tx': {
-      'hash': createdTxHash,
+      'hash': createdTxHashBeforeMining,
       'tokens': [createdToken],
     }
   }
@@ -143,13 +143,13 @@ test('New token', async (done) => {
   ret.promise.then(() => {
     const savedTokens = tokens.getTokens();
     expect(savedTokens.length).toBe(2);
-    expect(savedTokens[1].uid).toBe(createdTxHash);
+    expect(savedTokens[1].uid).toBe(createdTxHashBeforeMining);
     expect(savedTokens[1].name).toBe(tokenName);
     expect(savedTokens[1].symbol).toBe(tokenSymbol);
-    expect(tokens.tokenExists(createdTxHash)).toEqual({'uid': createdTxHash, 'name': tokenName, 'symbol': tokenSymbol});
-    const config = tokens.getConfigurationString(createdTxHash, tokenName, tokenSymbol);
+    expect(tokens.tokenExists(createdTxHashBeforeMining)).toEqual({'uid': createdTxHashBeforeMining, 'name': tokenName, 'symbol': tokenSymbol});
+    const config = tokens.getConfigurationString(createdTxHashBeforeMining, tokenName, tokenSymbol);
     const receivedToken = tokens.getTokenFromConfigurationString(config);
-    expect(receivedToken.uid).toBe(createdTxHash);
+    expect(receivedToken.uid).toBe(createdTxHashBeforeMining);
     expect(receivedToken.name).toBe(tokenName);
     expect(receivedToken.symbol).toBe(tokenSymbol);
     done();
