@@ -14,6 +14,7 @@ import wallet from '../utils/wallet';
 import helpers from '../utils/helpers';
 import transaction from '../utils/transaction';
 import tokens from '../utils/tokens';
+import P2PKH from '../models/p2pkh';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import Output from '../models/output';
@@ -21,6 +22,7 @@ import Input from '../models/input';
 import Address from '../models/address';
 import Network from '../models/network';
 import MineTransaction from './mineTransaction';
+import SendTransactionWalletService from './sendTransactionWalletService';
 import { shuffle } from 'lodash';
 import bitcore from 'bitcore-lib';
 import {
@@ -28,13 +30,15 @@ import {
   GetBalanceObject,
   GetAddressesObject,
   GetHistoryObject,
-  TxProposalUpdateResponseData,
   SendManyTxOptionsParam,
   SendTxOptionsParam,
   WalletStatus,
   Utxo,
   OutputRequestObj,
-  InputRequestObj
+  InputRequestObj,
+  SendTransactionEvents,
+  SendTransactionResponse,
+  IHathorWallet
 } from './types';
 import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../errors';
 
@@ -48,7 +52,7 @@ enum walletState {
   READY = 'Ready',
 }
 
-class HathorWalletServiceWallet extends EventEmitter {
+class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // String with 24 words separated by space
   seed: string;
   // String with wallet passphrase
@@ -194,10 +198,12 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async getAllAddresses(): Promise<GetAddressesObject[]> {
+  async * getAllAddresses(): AsyncGenerator<GetAddressesObject> {
     this.failIfWalletNotReady();
     const data = await walletApi.getAddresses(this);
-    return data.addresses;
+    for (const address of data.addresses) {
+      yield address;
+    }
   }
 
   /**
@@ -226,18 +232,21 @@ class HathorWalletServiceWallet extends EventEmitter {
     return data.balances;
   }
 
+  async getTokens(): Promise<string[]> {
+    this.failIfWalletNotReady();
+    const data = await walletApi.getTokens(this);
+    return data.tokens;
+  }
+
   /**
    * Get the history of the wallet for a specific token
    *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async getTxHistory(options: { token?: string } = {}): Promise<GetHistoryObject[]> {
-    // TODO Add pagination parameters
+  async getTxHistory(options: { token_id?: string, count?: number, skip?: number } = {}): Promise<GetHistoryObject[]> {
     this.failIfWalletNotReady();
-    const requestOptions = Object.assign({ token: null }, options);
-    const { token } = requestOptions;
-    const data = await walletApi.getHistory(this, token);
+    const data = await walletApi.getHistory(this, options);
     return data.history;
   }
 
@@ -359,27 +368,29 @@ class HathorWalletServiceWallet extends EventEmitter {
   }
 
   /**
-   * Send a transaction from an array of outputs and inputs
+   * Creates and send a transaction from an array of inputs and outputs
    *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async sendManyOutputsTransaction(outputs: OutputRequestObj[], options: { inputs?: InputRequestObj[], changeAddress?: string } = {}): Promise<TxProposalUpdateResponseData> {
+  async sendManyOutputsTransaction(outputs: OutputRequestObj[], options: { inputs?: InputRequestObj[], changeAddress?: string } = {}): Promise<Transaction> {
     this.failIfWalletNotReady();
     const newOptions = Object.assign({
       inputs: [],
       changeAddress: null
     }, options);
-    return await this.createAndSendTx(outputs, newOptions);
+    const { inputs, changeAddress } = newOptions;
+    const sendTransaction = new SendTransactionWalletService(this, { outputs, inputs, changeAddress });
+    return sendTransaction.run();
   }
 
   /**
-   * Send a transaction to a single output
+   * Creates and send a simple transaction with one output
    *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async sendTransaction(address: string, value: number, options: { token?: string, changeAddress?: string } = {}): Promise<TxProposalUpdateResponseData> {
+  async sendTransaction(address: string, value: number, options: { token?: string, changeAddress?: string } = {}): Promise<Transaction> {
     this.failIfWalletNotReady();
     const newOptions = Object.assign({
       token: '00',
@@ -387,138 +398,7 @@ class HathorWalletServiceWallet extends EventEmitter {
     }, options);
     const { token, changeAddress } = newOptions;
     const outputs = [{ address, value, token }];
-    return await this.createAndSendTx(outputs, { inputs: [], changeAddress });
-  }
-
-  /**
-   * Send transaction
-   *
-   * @memberof HathorWalletServiceWallet
-   * @inner
-   */
-  async createAndSendTx(outputs: OutputRequestObj[], options: { inputs?: InputRequestObj[], changeAddress?: string } = {}): Promise<TxProposalUpdateResponseData> {
-    type optionsType = {
-      inputs: InputRequestObj[],
-      changeAddress: string | null,
-    };
-    const newOptions: optionsType = Object.assign({
-      inputs: [],
-      changeAddress: null
-    }, options);
-    const { inputs } = newOptions;
-
-    // We get the full outputs amount for each token
-    // This is useful for (i) getting the utxos for each one
-    // in case it's not sent and (ii) create the token array of the tx
-    const amountOutputMap = {};
-    for (const output of outputs) {
-      if (output.token in amountOutputMap) {
-        amountOutputMap[output.token] += output.value;
-      } else {
-        amountOutputMap[output.token] = output.value;
-      }
-    }
-
-    // We need this array to get the addressPath for each input used and be able to sign the input data
-    const utxosAddressPath: string[] = [];
-    let changeOutputAdded = false;
-    if (inputs.length === 0) {
-      // Need to get utxos
-      // We already know the full amount for each token
-      // Now we can get the utxos and (if needed) change amount for each token
-      for (const token in amountOutputMap) {
-        const { utxos, changeAmount } = await this.getUtxos({ tokenId: token, totalAmount: amountOutputMap[token] });
-        if (utxos.length === 0) {
-          throw new UtxoError(`No utxos available to fill the request. Token: ${token} - Amount: ${amountOutputMap[token]}.`);
-        }
-
-        for (const utxo of utxos) {
-          inputs.push({ txId: utxo.txId, index: utxo.index });
-          utxosAddressPath.push(utxo.addressPath);
-        }
-
-        if (changeAmount) {
-          changeOutputAdded = true;
-          const changeAddress = newOptions.changeAddress || this.getCurrentAddress({ markAsUsed: true }).address;
-          outputs.push({ address: changeAddress, value: changeAmount, token });
-        }
-      }
-    } else {
-      const amountInputMap = {};
-      for (const input of inputs) {
-        const utxo = await this.getUtxoFromId(input.txId, input.index);
-        if (utxo === null) {
-          throw new UtxoError(`Invalid input selection. Input ${input.txId} at index ${input.index}.`);
-        }
-
-        if (!(utxo.tokenId in amountOutputMap)) {
-          throw new SendTxError(`Invalid input selection. Input ${input.txId} at index ${input.index} has token ${utxo.tokenId} that is not on the outputs.`);
-        }
-
-        utxosAddressPath.push(utxo.addressPath);
-
-        if (utxo.tokenId in amountInputMap) {
-          amountInputMap[utxo.tokenId] += utxo.value;
-        } else {
-          amountInputMap[utxo.tokenId] = utxo.value;
-        }
-      }
-
-      for (const tokenId in amountOutputMap) {
-        if (!(tokenId in amountInputMap)) {
-          throw new SendTxError(`Invalid input selection. Token ${tokenId} is in the outputs but there are no inputs for it.`);
-        }
-
-        if (amountInputMap[tokenId] < amountOutputMap[tokenId]) {
-          throw new SendTxError(`Invalid input selection. Sum of inputs for token ${tokenId} is smaller than the sum of outputs.`);
-        }
-
-        if (amountInputMap[tokenId] > amountOutputMap[tokenId]) {
-          changeOutputAdded = true;
-          const changeAmount = amountInputMap[tokenId] - amountOutputMap[tokenId];
-          const changeAddress = newOptions.changeAddress || this.getCurrentAddress({ markAsUsed: true }).address;
-          outputs.push({ address: changeAddress, value: changeAmount, token: tokenId });
-        }
-      }
-    }
-
-    if (changeOutputAdded) {
-      outputs = shuffle(outputs);
-    }
-
-    const tokens = Object.keys(amountOutputMap);
-    const htrIndex = tokens.indexOf(HATHOR_TOKEN_CONFIG.uid);
-    if (htrIndex > -1) {
-      tokens.splice(htrIndex, 1);
-    }
-
-    const inputsObj: Input[] = [];
-    for (const i of inputs) {
-      inputsObj.push(new Input(i.txId, i.index));
-    }
-
-    const outputsObj: Output[] = [];
-    for (const o of outputs) {
-      const address = new Address(o.address, { network: this.network });
-      if (!address.isValid()) {
-        throw new SendTxError(`Address ${o.address} is not valid.`);
-      }
-      const tokenData = (o.token in tokens) ? tokens.indexOf(o.token) + 1 : 0;
-      const outputOptions = { tokenData, timelock: o.timelock || null };
-      outputsObj.push(new Output(o.value, address, outputOptions));
-    }
-
-    const tx = new Transaction(inputsObj, outputsObj);
-    tx.tokens = tokens;
-    tx.prepareToSend();
-    const dataToSignHash = tx.getDataToSignHash();
-
-    for (const [idx, inputObj] of tx.inputs.entries()) {
-      const inputData = this.getInputData(dataToSignHash, utxosAddressPath[idx]);
-      inputObj.setData(inputData);
-    }
-
-    return await this.executeSendTransaction(tx);
+    return this.sendManyOutputsTransaction(outputs, { inputs: [], changeAddress });
   }
 
   /**
@@ -543,30 +423,6 @@ class HathorWalletServiceWallet extends EventEmitter {
     helpers.pushDataToStack(arr, sig.toDER());
     helpers.pushDataToStack(arr, derivedKey.publicKey.toBuffer());
     return util.buffer.concat(arr);
-  }
-
-  /**
-   * Mine transaction and update tx proposal
-   *
-   * @memberof HathorWalletServiceWallet
-   * @inner
-   */
-  async executeSendTransaction(transaction: Transaction): Promise<TxProposalUpdateResponseData> {
-    const mineTransaction = new MineTransaction(transaction);
-    mineTransaction.start();
-
-    const data = await Promise.resolve(mineTransaction.promise);
-
-    transaction.parents = data.parents;
-    transaction.timestamp = data.timestamp;
-    transaction.nonce = data.nonce;
-    transaction.weight = data.weight;
-
-    const txHex = transaction.toHex();
-
-    const responseData = await walletApi.createTxProposal(this, txHex);
-    this.txProposalId = responseData.txProposalId;
-    return await walletApi.updateTxProposal(this, this.txProposalId!, txHex);
   }
 
   /**
@@ -671,12 +527,24 @@ class HathorWalletServiceWallet extends EventEmitter {
   }
 
   /**
-   * Create a new custom token in the network
+   * Create SendTransaction object and run from mining
+   * Returns a promise that resolves when the send succeeds
    *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async createNewToken(name: string, symbol: string, amount: number, options = {}): Promise<TxProposalUpdateResponseData>  {
+  async handleSendPreparedTransaction(transaction: Transaction): Promise<Transaction> {
+    const sendTransaction = new SendTransactionWalletService(this, { transaction });
+    return sendTransaction.runFromMining();
+  }
+
+  /**
+   * Prepare create new token data, sign the inputs and returns an object ready to be mined
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async prepareCreateNewToken(name: string, symbol: string, amount: number, options = {}): Promise<CreateTokenTransaction>  {
     this.failIfWalletNotReady();
     type optionsType = {
       address: string | null,
@@ -700,10 +568,12 @@ class HathorWalletServiceWallet extends EventEmitter {
       throw new UtxoError(`No utxos available to fill the request. Token: HTR - Amount: ${deposit}.`);
     }
 
+    const utxosAddressPath: string[] = [];
     // 3. Create the transaction object with the inputs and outputs (new token amount, change address with HTR, mint/melt authorities - depending on parameters)
     const inputsObj: Input[] = [];
     for (const utxo of utxos) {
       inputsObj.push(new Input(utxo.txId, utxo.index));
+      utxosAddressPath.push(utxo.addressPath);
     }
 
     // Create outputs
@@ -714,16 +584,18 @@ class HathorWalletServiceWallet extends EventEmitter {
     if (!address.isValid()) {
       throw new SendTxError(`Address ${newOptions.address} is not valid.`);
     }
-    outputsObj.push(new Output(amount, address, {tokenData: 1}));
+    const p2pkh = new P2PKH(address);
+    const p2pkhScript = p2pkh.createScript()
+    outputsObj.push(new Output(amount, p2pkhScript, {tokenData: 1}));
 
     if (newOptions.createMintAuthority) {
       // b. Mint authority
-      outputsObj.push(new Output(TOKEN_MINT_MASK, address, {tokenData: AUTHORITY_TOKEN_DATA}));
+      outputsObj.push(new Output(TOKEN_MINT_MASK, p2pkhScript, {tokenData: AUTHORITY_TOKEN_DATA}));
     }
 
     if (newOptions.createMeltAuthority) {
       // c. Melt authority
-      outputsObj.push(new Output(TOKEN_MELT_MASK, address, {tokenData: AUTHORITY_TOKEN_DATA}));
+      outputsObj.push(new Output(TOKEN_MELT_MASK, p2pkhScript, {tokenData: AUTHORITY_TOKEN_DATA}));
     }
 
     if (changeAmount) {
@@ -733,29 +605,42 @@ class HathorWalletServiceWallet extends EventEmitter {
       if (!changeAddress.isValid()) {
         throw new SendTxError(`Address ${newOptions.changeAddress} is not valid.`);
       }
-      outputsObj.push(new Output(changeAmount, changeAddress));
+      const p2pkhChange = new P2PKH(changeAddress);
+      const p2pkhChangeScript = p2pkhChange.createScript()
+      outputsObj.push(new Output(changeAmount, p2pkhChangeScript));
     }
 
     const tx = new CreateTokenTransaction(name, symbol, inputsObj, outputsObj);
     tx.prepareToSend();
+
     const dataToSignHash = tx.getDataToSignHash();
 
     for (const [idx, inputObj] of tx.inputs.entries()) {
-      const inputData = this.getInputData(dataToSignHash, utxos[idx].addressPath);
+      const inputData = this.getInputData(dataToSignHash, utxosAddressPath[idx]);
       inputObj.setData(inputData);
     }
-
-    // 4. Send tx proposal with create and send
-    return await this.executeSendTransaction(tx);
+    return tx;
   }
 
   /**
-   * Mint new token units
+   * Create a new custom token in the network
    *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async mintTokens(token: string, amount: number, options = {}): Promise<TxProposalUpdateResponseData> {
+  async createNewToken(name: string, symbol: string, amount: number, options = {}): Promise<Transaction>  {
+    this.failIfWalletNotReady();
+    const tx = await this.prepareCreateNewToken(name, symbol, amount, options);
+    return this.handleSendPreparedTransaction(tx);
+  }
+
+  /**
+   * Prepare mint token data, sign the inputs and returns an object ready to be mined
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async prepareMintTokensData(token: string, amount: number, options = {}): Promise<Transaction> {
     this.failIfWalletNotReady();
     type optionsType = {
       address: string | null,
@@ -803,11 +688,13 @@ class HathorWalletServiceWallet extends EventEmitter {
     if (!address.isValid()) {
       throw new SendTxError(`Address ${newOptions.address} is not valid.`);
     }
-    outputsObj.push(new Output(amount, address, {tokenData: 1}));
+    const p2pkh = new P2PKH(address);
+    const p2pkhScript = p2pkh.createScript()
+    outputsObj.push(new Output(amount, p2pkhScript, {tokenData: 1}));
 
     if (newOptions.createAnotherMint) {
       // b. Mint authority
-      outputsObj.push(new Output(TOKEN_MINT_MASK, address, {tokenData: AUTHORITY_TOKEN_DATA}));
+      outputsObj.push(new Output(TOKEN_MINT_MASK, p2pkhScript, {tokenData: AUTHORITY_TOKEN_DATA}));
     }
 
     if (changeAmount) {
@@ -817,7 +704,9 @@ class HathorWalletServiceWallet extends EventEmitter {
       if (!changeAddress.isValid()) {
         throw new SendTxError(`Address ${newOptions.changeAddress} is not valid.`);
       }
-      outputsObj.push(new Output(changeAmount, changeAddress));
+      const p2pkhChange = new P2PKH(changeAddress);
+      const p2pkhChangeScript = p2pkhChange.createScript()
+      outputsObj.push(new Output(changeAmount, p2pkhChangeScript));
     }
 
     const tx = new Transaction(inputsObj, outputsObj);
@@ -832,17 +721,28 @@ class HathorWalletServiceWallet extends EventEmitter {
       inputObj.setData(inputData);
     }
 
-    // 4. Send tx proposal with create and send
-    return await this.executeSendTransaction(tx);
+    return tx;
   }
 
   /**
-   * Melt custom token units
+   * Mint new token units
    *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async meltTokens(token: string, amount: number, options = {}): Promise<TxProposalUpdateResponseData> {
+  async mintTokens(token: string, amount: number, options = {}): Promise<Transaction> {
+    this.failIfWalletNotReady();
+    const tx = await this.prepareMintTokensData(token, amount, options);
+    return this.handleSendPreparedTransaction(tx);
+  }
+
+  /**
+   * Prepare melt token data, sign the inputs and returns an object ready to be mined
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async prepareMeltTokensData(token: string, amount: number, options = {}): Promise<Transaction> {
     this.failIfWalletNotReady();
     type optionsType = {
       address: string | null,
@@ -890,14 +790,16 @@ class HathorWalletServiceWallet extends EventEmitter {
     if (!address.isValid()) {
       throw new SendTxError(`Address ${newOptions.address} is not valid.`);
     }
+    const p2pkh = new P2PKH(address);
+    const p2pkhScript = p2pkh.createScript()
     if (withdraw) {
       // We may have nothing to get back
-      outputsObj.push(new Output(withdraw, address, {tokenData: 0}));
+      outputsObj.push(new Output(withdraw, p2pkhScript, {tokenData: 0}));
     }
 
     if (newOptions.createAnotherMelt) {
       // b. Mint authority
-      outputsObj.push(new Output(TOKEN_MELT_MASK, address, {tokenData: AUTHORITY_TOKEN_DATA}));
+      outputsObj.push(new Output(TOKEN_MELT_MASK, p2pkhScript, {tokenData: AUTHORITY_TOKEN_DATA}));
     }
 
     if (changeAmount) {
@@ -907,7 +809,9 @@ class HathorWalletServiceWallet extends EventEmitter {
       if (!changeAddress.isValid()) {
         throw new SendTxError(`Address ${newOptions.changeAddress} is not valid.`);
       }
-      outputsObj.push(new Output(changeAmount, changeAddress, {tokenData: 1}));
+      const p2pkhChange = new P2PKH(changeAddress);
+      const p2pkhChangeScript = p2pkhChange.createScript()
+      outputsObj.push(new Output(changeAmount, p2pkhChangeScript, {tokenData: 1}));
     }
 
     const tx = new Transaction(inputsObj, outputsObj);
@@ -922,17 +826,28 @@ class HathorWalletServiceWallet extends EventEmitter {
       inputObj.setData(inputData);
     }
 
-    // 4. Send tx proposal with create and send
-    return await this.executeSendTransaction(tx);
+    return tx;
   }
 
   /**
-   * Transfer (delegate) authority outputs to another address
+   * Melt custom token units
    *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async delegateAuthority(token: string, type: string, address: string, options = {}): Promise<TxProposalUpdateResponseData> {
+  async meltTokens(token: string, amount: number, options = {}): Promise<Transaction> {
+    this.failIfWalletNotReady();
+    const tx = await this.prepareMeltTokensData(token, amount, options);
+    return this.handleSendPreparedTransaction(tx);
+  }
+
+  /**
+   * Prepare delegate authority data, sign the inputs and returns an object ready to be mined
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async prepareDelegateAuthorityData(token: string, type: string, address: string, options = {}): Promise<Transaction> {
     this.failIfWalletNotReady();
     type optionsType = {
       anotherAuthorityAddress: string | null,
@@ -973,7 +888,9 @@ class HathorWalletServiceWallet extends EventEmitter {
       throw new SendTxError(`Address ${address} is not valid.`);
     }
 
-    outputsObj.push(new Output(mask, addressObj, {tokenData: AUTHORITY_TOKEN_DATA}));
+    const p2pkh = new P2PKH(addressObj);
+    const p2pkhScript = p2pkh.createScript()
+    outputsObj.push(new Output(mask, p2pkhScript, {tokenData: AUTHORITY_TOKEN_DATA}));
 
     if (newOptions.createAnotherAuthority) {
       const anotherAddressStr = newOptions.anotherAuthorityAddress || this.getCurrentAddress({ markAsUsed: true }).address;
@@ -981,7 +898,9 @@ class HathorWalletServiceWallet extends EventEmitter {
       if (!anotherAddress.isValid()) {
         throw new SendTxError(`Address ${newOptions.anotherAuthorityAddress} is not valid.`);
       }
-      outputsObj.push(new Output(mask, anotherAddress, {tokenData: AUTHORITY_TOKEN_DATA}));
+      const p2pkhAnotherAddress = new P2PKH(anotherAddress);
+      const p2pkhAnotherAddressScript = p2pkhAnotherAddress.createScript()
+      outputsObj.push(new Output(mask, p2pkhAnotherAddressScript, {tokenData: AUTHORITY_TOKEN_DATA}));
     }
 
     const tx = new Transaction(inputsObj, outputsObj);
@@ -993,8 +912,19 @@ class HathorWalletServiceWallet extends EventEmitter {
     const inputData = this.getInputData(dataToSignHash, utxo.addressPath);
     inputsObj[0].setData(inputData);
 
-    // 4. Send tx proposal with create and send
-    return await this.executeSendTransaction(tx);
+    return tx;
+  }
+
+  /**
+   * Transfer (delegate) authority outputs to another address
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async delegateAuthority(token: string, type: string, address: string, options = {}): Promise<Transaction> {
+    this.failIfWalletNotReady();
+    const tx = await this.prepareDelegateAuthorityData(token, type, address, options);
+    return this.handleSendPreparedTransaction(tx);
   }
 
   /**
@@ -1003,7 +933,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async destroyAuthority(token: string, type: string, count: number): Promise<TxProposalUpdateResponseData> {
+  async prepareDestroyAuthorityData(token: string, type: string, count: number): Promise<Transaction> {
     this.failIfWalletNotReady();
     let authority, mask;
     if (type === 'mint') {
@@ -1042,8 +972,19 @@ class HathorWalletServiceWallet extends EventEmitter {
       inputObj.setData(inputData);
     }
 
-    // 4. Send tx proposal with create and send
-    return await this.executeSendTransaction(tx);
+    return tx;
+  }
+
+  /**
+   * Destroy authority outputs
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async destroyAuthority(token: string, type: string, count: number): Promise<Transaction> {
+    this.failIfWalletNotReady();
+    const tx = await this.prepareDestroyAuthorityData(token, type, count);
+    return this.handleSendPreparedTransaction(tx);
   }
 }
 

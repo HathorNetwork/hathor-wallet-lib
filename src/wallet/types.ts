@@ -5,6 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import Transaction from '../models/transaction';
+import CreateTokenTransaction from '../models/create_token_transaction';
+import SendTransactionWalletService from './sendTransactionWalletService';
+
 export interface GetAddressesObject {
   address: string; // Address in base58
   index: number; // derivation index of the address
@@ -44,6 +48,7 @@ export interface GetHistoryObject {
   txId: string; // Transaction ID
   balance: number; // Balance of this tx in this wallet (can be negative)
   timestamp: number; // Transaction timestamp
+  voided: boolean; // If transaction is voided
 }
 
 export interface AddressInfoObject {
@@ -53,14 +58,10 @@ export interface AddressInfoObject {
   info: string | undefined; // Optional extra info when getting address info
 }
 
-export interface WalletStatusResponse {
-  status: number; // Response status code
-  data: WalletStatusResponseData;
-}
-
 export interface WalletStatusResponseData {
   success: boolean;
   status: WalletStatus;
+  error: string | undefined; // Optional error code when there is a problem creating the wallet
 }
 
 export interface WalletStatus {
@@ -72,19 +73,9 @@ export interface WalletStatus {
   readyAt: number | null; // wallet timestamp when it got ready
 }
 
-export interface AddressesResponse {
-  status: number; // Response status code
-  data: AddressesResponseData;
-}
-
 export interface AddressesResponseData {
   success: boolean;
   addresses: GetAddressesObject[];
-}
-
-export interface NewAddressesResponse {
-  status: number; // Response status code
-  data: NewAddressesResponseData;
 }
 
 export interface NewAddressesResponseData {
@@ -92,29 +83,14 @@ export interface NewAddressesResponseData {
   addresses: AddressInfoObject[];
 }
 
-export interface BalanceResponse {
-  status: number; // Response status code
-  data: BalanceResponseData;
-}
-
 export interface BalanceResponseData {
   success: boolean;
   balances: GetBalanceObject[];
 }
 
-export interface HistoryResponse {
-  status: number; // Response status code
-  data: HistoryResponseData;
-}
-
 export interface HistoryResponseData {
   success: boolean;
   history: GetHistoryObject[];
-}
-
-export interface TxProposalCreateResponse {
-  status: number; // Response status code
-  data: TxProposalCreateResponseData;
 }
 
 export interface TxProposalCreateResponseData {
@@ -136,11 +112,6 @@ export interface TxProposalOutputs {
   value: number; // output value
   token: string; // output token
   timelock: number | null; // output timelock
-}
-
-export interface TxProposalUpdateResponse {
-  status: number; // Response status code
-  data: TxProposalUpdateResponseData;
 }
 
 export interface TxProposalUpdateResponseData {
@@ -169,11 +140,6 @@ export interface SendTxOptionsParam {
   changeAddress: string | undefined;
 }
 
-export interface UtxoResponse {
-  status: number; // Response status code
-  data: UtxoResponseData;
-}
-
 export interface UtxoResponseData {
   success: boolean;
   utxos: Utxo[];
@@ -192,11 +158,6 @@ export interface Utxo {
   addressPath: string; // path to generate output address
 }
 
-export interface AuthTokenResponse {
-  status: number; // Response status code
-  data: AuthTokenResponseData;
-}
-
 export interface AuthTokenResponseData {
   success: boolean;
   token: string; // jwt token
@@ -212,4 +173,52 @@ export interface OutputRequestObj {
 export interface InputRequestObj {
   txId: string; // transaction id of the output being spent
   index: number; // index of the output being spent using this input
+}
+
+export interface TokensResponseData {
+  success: boolean;
+  tokens: string[];
+}
+
+export interface SendTransactionEvents {
+  success: boolean;
+  sendTransaction: SendTransactionWalletService;
+}
+
+export interface SendTransactionResponse {
+  success: boolean;
+  transaction: Transaction;
+}
+
+export interface TokenAmountMap {
+  [token: string]: number; // For each token we have the amount
+}
+
+export interface IHathorWallet {
+  start();
+  getAllAddresses(): AsyncGenerator<GetAddressesObject>;
+  getBalance(token: string | null): Promise<GetBalanceObject[]>;
+  getTokens(): Promise<string[]>;
+  getTxHistory(options: { token_id?: string, count?: number, skip?: number }): Promise<GetHistoryObject[]>;
+  sendManyOutputsTransaction(outputs: OutputRequestObj[], options: { inputs?: InputRequestObj[], changeAddress?: string }): Promise<Transaction>;
+  sendTransaction(address: string, value: number, options: { token?: string, changeAddress?: string }): Promise<Transaction>;
+  stop();
+  getAddressAtIndex(index: number): string;
+  getCurrentAddress({ markAsUsed: boolean }): AddressInfoObject;
+  getNextAddress(): AddressInfoObject;
+  prepareCreateNewToken(name: string, symbol: string, amount: number, options): Promise<CreateTokenTransaction>;
+  createNewToken(name: string, symbol: string, amount: number, options): Promise<Transaction>;
+  prepareMintTokensData(token: string, amount: number, options): Promise<Transaction>;
+  mintTokens(token: string, amount: number, options): Promise<Transaction>;
+  prepareMeltTokensData(token: string, amount: number, options): Promise<Transaction>;
+  meltTokens(token: string, amount: number, options): Promise<Transaction>;
+  prepareDelegateAuthorityData(token: string, type: string, address: string, options): Promise<Transaction>;
+  delegateAuthority(token: string, type: string, address: string, options): Promise<Transaction>;
+  prepareDestroyAuthorityData(token: string, type: string, count: number): Promise<Transaction>;
+  destroyAuthority(token: string, type: string, count: number): Promise<Transaction>;
+}
+
+export interface ISendTransaction {
+  run(until: string | null): Promise<Transaction>;
+  runFromMining(until: string | null): Promise<Transaction>;
 }
