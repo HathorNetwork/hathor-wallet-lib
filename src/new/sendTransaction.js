@@ -136,7 +136,14 @@ class SendTransaction extends EventEmitter {
       }
       const token = inputTx.outputs[input.index].token;
 
-      tokensData[input.token].inputs.push({
+      if (!(token in tokensData)) {
+        // The input select is from a token that is not in the outputs
+        const err = new SendTxError(ErrorMessages.INVALID_INPUT);
+        err.errorData = { txId: input.txId, index: input.index };
+        throw err;
+      }
+
+      tokensData[token].inputs.push({
         tx_id: input.txId,
         index: input.index,
         token,

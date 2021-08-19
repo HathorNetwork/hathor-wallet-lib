@@ -662,7 +662,7 @@ class HathorWallet extends EventEmitter {
       }
       const utxo = utxoDetails.utxos[i];
       inputs.push({
-        tx_id: utxo.tx_id,
+        txId: utxo.tx_id,
         index: utxo.index,
       });
       utxos.push(utxo);
@@ -671,14 +671,10 @@ class HathorWallet extends EventEmitter {
     const outputs = [{
       address: destinationAddress,
       value: total_amount,
+      token: options.token || HATHOR_TOKEN_CONFIG.uid
     }];
-    const token = {
-      uid: options.token || HATHOR_TOKEN_CONFIG.uid,
-      name: '',
-      symbol: ''
-    };
 
-    return { outputs, inputs, token, utxos, total_amount };
+    return { outputs, inputs, utxos, total_amount };
   }
 
   /**
@@ -701,7 +697,7 @@ class HathorWallet extends EventEmitter {
       throw new WalletFromXPubGuard('consolidateUtxos');
     }
     storage.setStore(this.store);
-    const { outputs, inputs, token, utxos, total_amount } = this.prepareConsolidateUtxosData(destinationAddress, options);
+    const { outputs, inputs, utxos, total_amount } = this.prepareConsolidateUtxosData(destinationAddress, options);
 
     if (!this.isAddressMine(destinationAddress)) {
       throw new Error('Utxo consolidation to an address not owned by this wallet isn\'t allowed.');
@@ -711,18 +707,12 @@ class HathorWallet extends EventEmitter {
       throw new Error("No available utxo to consolidate.");
     }
 
-    const result = this.sendManyOutputsTransaction(outputs, inputs, token);
-
-    if (!result.success) {
-      throw new Error(result.message);
-    }
-
-    const tx = await Promise.resolve(result.promise);
+    const tx = await this.sendManyOutputsTransaction(outputs, { inputs });
 
     return {
       total_utxos_consolidated: utxos.length,
       total_amount,
-      tx_id: tx.tx_id,
+      tx_id: tx.hash,
       utxos,
     };
   }
@@ -1224,9 +1214,9 @@ class HathorWallet extends EventEmitter {
    *
    * @param {String} tokenUid UID of the token to mint
    * @param {number} amount Quantity to mint
-   * @param {String} address Optional parameter for the destination of the minted tokens
    * @param {Object} options Options parameters
    *  {
+   *   'address': destination address of the minted token
    *   'changeAddress': address of the change output
    *   'startMiningTx': boolean to trigger start mining (default true)
    *   'createAnotherMint': boolean to create another mint authority or not for the wallet
@@ -1277,9 +1267,9 @@ class HathorWallet extends EventEmitter {
    *
    * @param {String} tokenUid UID of the token to mint
    * @param {number} amount Quantity to mint
-   * @param {String} address Optional parameter for the destination of the minted tokens
    * @param {Object} options Options parameters
    *  {
+   *   'address': destination address of the minted token
    *   'changeAddress': address of the change output
    *   'startMiningTx': boolean to trigger start mining (default true)
    *   'createAnotherMint': boolean to create another mint authority or not for the wallet
@@ -1292,8 +1282,8 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    **/
-  async mintTokens(tokenUid, amount, address, options = {}) {
-    const tx = await this.prepareMintTokensData(tokenUid, amount, address, options);
+  async mintTokens(tokenUid, amount, options = {}) {
+    const tx = await this.prepareMintTokensData(tokenUid, amount, options);
     return this.handleSendPreparedTransaction(tx);
   }
 
@@ -1342,7 +1332,7 @@ class HathorWallet extends EventEmitter {
     }
 
     // Always create another melt authority output
-    const ret = tokens.generateMeltData(meltInput[0], tokenUid, amount, pin, newOptions.createAnotherMelt, newOptions);
+    const ret = tokens.generateMeltData(meltInput[0], tokenUid, amount, pin, newOptions.createAnotherMelt, { depositAddress: newOptions.address, changeAddress: newOptions.changeAddress });
     if (!ret.success) {
       return Promise.reject(ret);
     }
