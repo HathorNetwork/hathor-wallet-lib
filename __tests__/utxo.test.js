@@ -19,10 +19,9 @@ class FakeHathorWallet {
     this.isAddressMine = (address) =>
       address === "WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ" ||
       address === "WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp";
-    this.sendManyOutputsTransaction = jest.fn(() => ({
-      success: true,
-      promise: Promise.resolve({ tx_id: "123" }),
-    }));
+    this.sendManyOutputsTransaction = jest.fn(() => {
+      return Promise.resolve({ hash: "123" });
+    });
   }
   _getHistoryRaw() {
     return txHistoryFixture;
@@ -126,11 +125,11 @@ describe("UTXO Consolidation", () => {
     expect(result.utxos.some((utxo) => utxo.locked)).toBeFalsy();
     // assert single output
     expect(hathorWallet.sendManyOutputsTransaction.mock.calls[0][0]).toEqual([
-      { address: destinationAddress, value: 2 },
+      { address: destinationAddress, value: 2, token: "00" },
     ]);
     // assert 2 inputs only
     expect(
-      hathorWallet.sendManyOutputsTransaction.mock.calls[0][1]
+      hathorWallet.sendManyOutputsTransaction.mock.calls[0][1].inputs
     ).toHaveLength(2);
   });
 
