@@ -19,6 +19,9 @@ import buffer from 'buffer';
 import Long from 'long';
 import walletApi from './api/wallet';
 import { get } from 'lodash';
+import Address from './models/address';
+import P2PKH from './models/p2pkh';
+import ScriptData from './models/script_data';
 
 
 /**
@@ -243,31 +246,24 @@ const transaction = {
   /**
    * Create output script
    *
-   * @param {string} address Address in base58
-   * @param {number} [timelock] Timelock in timestamp
+   * @param {Object} output Output object with {address, timelock} or {data}
    *
    * @return {Buffer}
    * @memberof Transaction
    * @inner
    */
-  createOutputScript(address, timelock) {
-    let arr = [];
-    let addressBytes = this.decodeAddress(address);
-    if (this.validateAddress(address, addressBytes)) {
-      let addressHash = addressBytes.slice(1, -4);
-      if (timelock) {
-        let timelockBytes = this.intToBytes(timelock, 4);
-        this.pushDataToStack(arr, timelockBytes);
-        arr.push(OP_GREATERTHAN_TIMESTAMP);
-      }
-      arr.push(OP_DUP);
-      arr.push(OP_HASH160);
-      // addressHash has a fixed size of 20 bytes, so no need to push OP_PUSHDATA1
-      arr.push(this.intToBytes(addressHash.length, 1));
-      arr.push(addressHash);
-      arr.push(OP_EQUALVERIFY);
-      arr.push(OP_CHECKSIG);
-      return util.buffer.concat(arr);
+  createOutputScript(output) {
+    if (output.data) {
+      // Data script for NFT
+      const scriptData = new ScriptData(output.data);
+      return scriptData.createScript();
+    } else if (output.address) {
+      // P2PKH
+      const address = new Address(output.address);
+      const p2pkh = new P2PKH(address, { timelock: output.timelock });
+      return p2pkh.createScript();
+    } else {
+      throw new Error('Invalid output for creating script.');
     }
   },
 
@@ -333,7 +329,7 @@ const transaction = {
       // Token data
       arr.push(this.intToBytes(outputTx.tokenData, 1));
 
-      let outputScript = this.createOutputScript(outputTx.address, outputTx.timelock);
+      let outputScript = this.createOutputScript(outputTx);
       arr.push(this.intToBytes(outputScript.length, 2));
       arr.push(outputScript);
     }
@@ -591,7 +587,7 @@ const transaction = {
       // Token data
       arr.push(this.intToBytes(outputTx.tokenData, 1));
 
-      let outputScript = this.createOutputScript(outputTx.address, outputTx.timelock);
+      let outputScript = this.createOutputScript(outputTx);
       arr.push(this.intToBytes(outputScript.length, 2));
       arr.push(outputScript);
     }
