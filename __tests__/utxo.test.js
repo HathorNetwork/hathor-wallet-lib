@@ -120,7 +120,7 @@ describe("UTXO Consolidation", () => {
     expect(hathorWallet.sendManyOutputsTransaction).toBeCalled();
     expect(result.total_utxos_consolidated).toBe(2);
     expect(result.total_amount).toBe(2);
-    expect(result.tx_id).toBe("123");
+    expect(result.txId).toBe("123");
     expect(result.utxos).toHaveLength(2);
     expect(result.utxos.some((utxo) => utxo.locked)).toBeFalsy();
     // assert single output
