@@ -370,12 +370,10 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
           resolve(this.transaction!);
         });
       } catch (err) {
-        reject(err);
         if (err instanceof WalletError) {
           this.emit('send-error', err.message);
-        } else {
-          throw err;
         }
+        reject(err);
       }
     });
     return promise;
@@ -412,12 +410,10 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
           reject(err);
         });
       } catch (err) {
-        reject(err);
         if (err instanceof WalletError) {
           this.emit('send-error', err.message);
-        } else {
-          throw err;
         }
+        reject(err);
       }
     });
     return promise;

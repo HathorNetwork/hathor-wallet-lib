@@ -712,7 +712,7 @@ class HathorWallet extends EventEmitter {
     return {
       total_utxos_consolidated: utxos.length,
       total_amount,
-      tx_id: tx.hash,
+      txId: tx.hash,
       utxos,
     };
   }
@@ -892,7 +892,7 @@ class HathorWallet extends EventEmitter {
    *
    * @return {Promise<Transaction>} Promise that resolves when transaction is sent
    **/
-  sendTransaction(address, value, options = {}) {
+  async sendTransaction(address, value, options = {}) {
     if (this.isFromXPub()) {
       throw new WalletFromXPubGuard('sendTransaction');
     }
