@@ -23,7 +23,7 @@ class FakeHathorWallet {
       return Promise.resolve({ hash: "123" });
     });
   }
-  _getHistoryRaw() {
+  getFullHistory() {
     return txHistoryFixture;
   }
 }
