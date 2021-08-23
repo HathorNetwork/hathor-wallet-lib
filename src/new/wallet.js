@@ -452,7 +452,7 @@ class HathorWallet extends EventEmitter {
    *  'parents': Array(String)
    */
   getTx(id) {
-    const history = this._getHistoryRaw();
+    const history = this.getFullHistory();
     if (id in history) {
       return history[id];
     } else {
@@ -493,7 +493,7 @@ class HathorWallet extends EventEmitter {
     const index = this.getAddressIndex(address);
 
     // All transactions for this address
-    const historyTransactions = Object.values(this._getHistoryRaw());
+    const historyTransactions = Object.values(this.getFullHistory());
 
     // Address information that will be calculated below
     const addressInfo = {
@@ -569,7 +569,7 @@ class HathorWallet extends EventEmitter {
    */
   getUtxos(options = {}) {
     storage.setStore(this.store);
-    const historyTransactions = Object.values(this._getHistoryRaw());
+    const historyTransactions = Object.values(this.getFullHistory());
     const utxoDetails = {
       total_amount_available: 0,
       total_utxos_available: 0,
@@ -730,7 +730,7 @@ class HathorWallet extends EventEmitter {
   _getBalanceRaw(tokenUid) {
     storage.setStore(this.store);
     const uid = tokenUid || this.token.uid;
-    const historyTransactions = this._getHistoryRaw();
+    const historyTransactions = this.getFullHistory();
     return wallet.calculateBalance(Object.values(historyTransactions), uid);
   }
 
@@ -742,7 +742,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    **/
-  _getHistoryRaw() {
+  getFullHistory() {
     storage.setStore(this.store);
     const data = wallet.getWalletData();
     const history = 'historyTransactions' in data ? data['historyTransactions'] : {};
@@ -759,7 +759,7 @@ class HathorWallet extends EventEmitter {
   preProcessWalletData() {
     storage.setStore(this.store);
     const transactionCountByToken = {};
-    const history = this._getHistoryRaw();
+    const history = this.getFullHistory();
     const tokensHistory = {};
     // iterate through all txs received and map all tokens this wallet has, with
     // its history and balance
