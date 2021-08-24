@@ -814,6 +814,74 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * When a new tx arrives in the websocket we must update the
+   * pre processed data to reflects in the methods using it
+   * So we calculate the new token balance and update the history
+   *
+   * @param {Object} tx Full transaction object from websocket data
+   * @param {boolean} isNew If the transaction is new or an update
+   *
+   * @memberof HathorWallet
+   * @inner
+   **/
+  onTxArrived(tx, isNew) {
+    const tokensHistory = this.getPreProcessedData('historyByToken');
+    const tokensBalance = this.getPreProcessedData('balanceByToken');
+    // we first get all tokens present in this tx (that belong to the user) and
+    // the corresponding balances
+    const balances = this.getTxBalance(tx);
+    for (const [tokenUid, tokenTxBalance] of Object.entries(balances)) {
+      if (isNew) {
+        let tokenHistory = tokensHistory[tokenUid];
+        if (tokenHistory === undefined) {
+          // If it's a new token
+          tokenHistory = [];
+          tokensHistory[tokenUid] = tokenHistory;
+        }
+
+        // add this tx to the history of the corresponding token
+        tokenHistory.push({
+          txId: tx.tx_id,
+          timestamp: tx.timestamp,
+          tokenUid,
+          balance: tokenTxBalance,
+          isVoided: tx.is_voided,
+        });
+
+        // in the end, sort (in place) all tx lists in descending order by timestamp
+        tokenHistory.sort((elem1, elem2) => elem2.timestamp - elem1.timestamp);
+      } else {
+        const currentHistory = tokensHistory[tokenUid];
+        const txIndex = currentHistory.findIndex((el) => el.tx_id === tx.tx_id);
+
+        const newHistory = [...currentHistory];
+        newHistory[txIndex] = {
+          txId: tx.tx_id,
+          timestamp: tx.timestamp,
+          tokenUid,
+          balance: tokenTxBalance,
+          isVoided: tx.is_voided,
+        };
+        tokensHistory[tokenUid] = newHistory;
+      }
+
+      // Update token balance
+      const totalBalance = this._getBalanceRaw(tokenUid);
+      if (tokenUid in tokensBalance) {
+        totalBalance['transactions'] = tokensBalance[tokenUid].transactions + 1;
+      } else {
+        totalBalance['transactions'] = 1;
+      }
+      // update token total balance
+      tokensBalance[tokenUid] = totalBalance;
+    }
+
+    this.setPreProcessedData('tokens', Object.keys(tokensHistory));
+    this.setPreProcessedData('historyByToken', tokensHistory);
+    this.setPreProcessedData('balanceByToken', tokensBalance);
+  }
+
+  /**
    * Set data in the pre processed object
    *
    * @param {String} key Key of the pre processed object to be added
@@ -870,6 +938,8 @@ class HathorWallet extends EventEmitter {
     }
 
     wallet.updateHistoryData(historyTransactions, allTokens, [newTx], null, walletData, null, this.conn, this.store);
+
+    this.onTxArrived(newTx, isNewTx);
 
     if (isNewTx) {
       this.emit('new-tx', newTx);
