@@ -88,7 +88,7 @@ class HathorWalletServiceWallet extends EventEmitter {
       }
     }
     try {
-      const res = await walletApi.createWallet(xpub);
+      const res = await walletApi.createWallet(xpub, this.network.name);
       const data = res.data;
       if (res.status === 200 && data.success) {
         await handleCreate(data.status);
