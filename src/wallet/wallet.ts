@@ -88,7 +88,7 @@ class HathorWalletServiceWallet extends EventEmitter {
       }
     }
     try {
-      const res = await walletApi.createWallet(xpub);
+      const res = await walletApi.createWallet(xpub, this.network.name);
       const data = res.data;
       if (res.status === 200 && data.success) {
         await handleCreate(data.status);
@@ -118,7 +118,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    */
   async startPollingStatus() {
     try {
-      const res = await walletApi.getWalletStatus(this.walletId!);
+      const res = await walletApi.getWalletStatus(this.walletId!, this.network.name);
       const data = res.data;
       if (res.status === 200 && data.success) {
         if (data.status.status === 'creating') {
@@ -147,7 +147,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async getAllAddresses(): Promise<string[]> {
-    const response = await walletApi.getAddresses(this.walletId!);
+    const response = await walletApi.getAddresses(this.walletId!, this.network.name);
     let addresses = [];
     if (response.status === 200 && response.data.success === true) {
       addresses = response.data.addresses;
@@ -164,7 +164,7 @@ class HathorWalletServiceWallet extends EventEmitter {
    * @inner
    */
   async getBalance(token: string | null = null) {
-    const response = await walletApi.getBalances(this.walletId!, token);
+    const response = await walletApi.getBalances(this.walletId!, token, this.network.name);
     let balance = null;
     if (response.status === 200 && response.data.success === true) {
       balance = response.data.balances;
@@ -184,7 +184,7 @@ class HathorWalletServiceWallet extends EventEmitter {
     // TODO Add pagination parameters
     const requestOptions = Object.assign({ token: null }, options);
     const { token } = requestOptions;
-    const response = await walletApi.getHistory(this.walletId!, token);
+    const response = await walletApi.getHistory(this.walletId!, token, this.network.name);
     let history = []
     if (response.status === 200 && response.data.success === true) {
       history = response.data.history;
@@ -232,7 +232,7 @@ class HathorWalletServiceWallet extends EventEmitter {
       changeAddress: null
     }, options);
     const { inputs, changeAddress } = newOptions;
-    const response = await walletApi.createTxProposal(this.walletId!, outputs, inputs);
+    const response = await walletApi.createTxProposal(this.walletId!, outputs, inputs, this.network.name);
     if (response.status === 201) {
       const responseData = response.data;
       this.txProposalId = responseData.txProposalId;
@@ -302,7 +302,7 @@ class HathorWalletServiceWallet extends EventEmitter {
       inputsData.push(input.data!.toString('base64'));
     }
 
-    return await walletApi.updateTxProposal(this.txProposalId!, data.timestamp, data.nonce, data.weight, data.parents, inputsData);
+    return await walletApi.updateTxProposal(this.txProposalId!, data.timestamp, data.nonce, data.weight, data.parents, inputsData, this.network.name);
   }
 
   /**
