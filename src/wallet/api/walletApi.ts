@@ -16,46 +16,46 @@ import Input from '../../models/input';
  */
 
 const walletApi = {
-  getWalletStatus(id: string): Promise<any> {
+  getWalletStatus(id: string, network = 'mainnet'): Promise<any> {
     const data = { params: { id } }
-    return axiosInstance().get('wallet', data);
+    return axiosInstance(network).get('wallet', data);
   },
 
-  createWallet(xpubkey: string): Promise<any> {
+  createWallet(xpubkey: string, network = 'mainnet'): Promise<any> {
     const data = { xpubkey };
-    return axiosInstance().post('wallet', data);
+    return axiosInstance(network).post('wallet', data);
   },
 
-  getAddresses(id: string): Promise<any> {
+  getAddresses(id: string, network = 'mainnet'): Promise<any> {
     const data = { params: { id } }
-    return axiosInstance().get('addresses', data);
+    return axiosInstance(network).get('addresses', data);
   },
 
-  getBalances(id: string, token: string | null = null): Promise<any> {
+  getBalances(id: string, token: string | null = null, network = 'mainnet'): Promise<any> {
     const data = { params: { id } }
     if (token) {
       data['params']['token_id'] = token;
     }
-    return axiosInstance().get('balances', data);
+    return axiosInstance(network).get('balances', data);
   },
 
-  getHistory(id: string, token: string | null = null): Promise<any> {
+  getHistory(id: string, token: string | null = null, network = 'mainnet'): Promise<any> {
     // TODO add pagination parameters
     const data = { params: { id } }
     if (token) {
       data['params']['token_id'] = token;
     }
-    return axiosInstance().get('txhistory', data);
+    return axiosInstance(network).get('txhistory', data);
   },
 
-  createTxProposal(id: string, outputs: Output[], inputs: Input[]): Promise<any> {
+  createTxProposal(id: string, outputs: Output[], inputs: Input[], network = 'mainnet'): Promise<any> {
     const data = { id, outputs, inputs };
-    return axiosInstance().post('txproposals', data);
+    return axiosInstance(network).post('txproposals', data);
   },
 
-  updateTxProposal(id: string, timestamp: number, nonce: number, weight: number, parents: string[], inputsData: string[]): Promise<any> {
+  updateTxProposal(id: string, timestamp: number, nonce: number, weight: number, parents: string[], inputsData: string[], network = 'mainnet'): Promise<any> {
     const data = { timestamp, nonce, weight, parents, inputsSignatures: inputsData };
-    return axiosInstance().put(`txproposals/${id}`, data);
+    return axiosInstance(network).put(`txproposals/${id}`, data);
   },
 };
 
