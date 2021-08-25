@@ -7,6 +7,7 @@ const version = require('./lib/version');
 const wallet = require('./lib/wallet');
 const WebSocketHandler = require('./lib/WebSocketHandler');
 const errors = require('./lib/errors');
+const ErrorMessages = require('./lib/errorMessages');
 const walletApi = require('./lib/api/wallet');
 const txApi = require('./lib/api/txApi');
 const txMiningApi = require('./lib/api/txMining');
@@ -45,6 +46,7 @@ module.exports = {
   txMiningApi: txMiningApi.default,
   versionApi: versionApi.default,
   errors: errors,
+  ErrorMessages: ErrorMessages,
   constants: constants,
   axios: axios,
   storage: storage.default,
