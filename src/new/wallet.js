@@ -766,7 +766,7 @@ class HathorWallet extends EventEmitter {
     for (const tx of Object.values(history)) {
       // we first get all tokens present in this tx (that belong to the user) and
       // the corresponding balances
-      const balances = this.getTxBalance(tx);
+      const balances = this.getTxBalance(tx, { includeAuthorities: true });
       for (const [tokenUid, tokenTxBalance] of Object.entries(balances)) {
         let tokenHistory = tokensHistory[tokenUid];
         if (tokenHistory === undefined) {
@@ -829,7 +829,7 @@ class HathorWallet extends EventEmitter {
     const tokensBalance = this.getPreProcessedData('balanceByToken');
     // we first get all tokens present in this tx (that belong to the user) and
     // the corresponding balances
-    const balances = this.getTxBalance(tx);
+    const balances = this.getTxBalance(tx, { includeAuthorities: true });
     for (const [tokenUid, tokenTxBalance] of Object.entries(balances)) {
       if (isNew) {
         let tokenHistory = tokensHistory[tokenUid];
