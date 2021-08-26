@@ -53,22 +53,6 @@ class SendTransaction extends EventEmitter {
     this.changeAddress = changeAddress;
     this.pin = pin;
 
-    // Promise that resolves when push tx finishes with success
-    // or rejects in case of an error
-    this.promise = new Promise((resolve, reject) => {
-      this.on('send-tx-success', (tx) => {
-        resolve(tx);
-      });
-
-      this.on('send-error', (message) => {
-        reject(message);
-      });
-
-      this.on('unexpected-error', (message) => {
-        reject(message);
-      });
-    });
-
     // Error to be shown in case of an unexpected error when executing push tx
     this.unexpectedPushTxError = ErrorMessages.UNEXPECTED_PUSH_TX_ERROR;
 
@@ -136,7 +120,14 @@ class SendTransaction extends EventEmitter {
       }
       const token = inputTx.outputs[input.index].token;
 
-      tokensData[input.token].inputs.push({
+      if (!(token in tokensData)) {
+        // The input select is from a token that is not in the outputs
+        const err = new SendTxError(ErrorMessages.INVALID_INPUT);
+        err.errorData = { txId: input.txId, index: input.index };
+        throw err;
+      }
+
+      tokensData[token].inputs.push({
         tx_id: input.txId,
         index: input.index,
         token,
@@ -312,12 +303,10 @@ class SendTransaction extends EventEmitter {
           resolve(this.transaction);
         });
       } catch (err) {
-        reject(err);
         if (err instanceof WalletError) {
           this.emit('send-error', err.message);
-        } else {
-          throw err;
         }
+        reject(err);
       }
     });
     return promise;
@@ -359,12 +348,10 @@ class SendTransaction extends EventEmitter {
           reject(err);
         });
       } catch (err) {
-        reject(err);
         if (err instanceof WalletError) {
           this.emit('send-error', err.message);
-        } else {
-          throw err;
         }
+        reject(err);
       }
     });
     return promise;

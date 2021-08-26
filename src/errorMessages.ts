@@ -11,4 +11,5 @@ export enum ErrorMessages {
   INVALID_INPUT = 'invalid-input',
   NO_UTXOS_AVAILABLE = 'no-utxos-available',
   UNSUPPORTED_TX_TYPE = 'unsupported-tx-type',
+  WALLET_STATUS_ERROR = 'wallet-status-error',
 }
