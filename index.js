@@ -7,6 +7,7 @@ const version = require('./lib/version');
 const wallet = require('./lib/wallet');
 const WebSocketHandler = require('./lib/WebSocketHandler');
 const errors = require('./lib/errors');
+const ErrorMessages = require('./lib/errorMessages');
 const walletApi = require('./lib/api/wallet');
 const txApi = require('./lib/api/txApi');
 const txMiningApi = require('./lib/api/txMining');
@@ -20,6 +21,7 @@ const Connection = require('./lib/new/connection');
 const SendTransaction = require('./lib/new/sendTransaction');
 const Address = require('./lib/models/address');
 const Output = require('./lib/models/output');
+const P2PKH = require('./lib/models/p2pkh');
 const Input = require('./lib/models/input');
 const Transaction = require('./lib/models/transaction');
 const CreateTokenTransaction = require('./lib/models/create_token_transaction');
@@ -29,6 +31,7 @@ const tokensUtils = require('./lib/utils/tokens');
 const walletUtils = require('./lib/utils/wallet');
 const helpersUtils = require('./lib/utils/helpers');
 const HathorWalletServiceWallet = require('./lib/wallet/wallet');
+const SendTransactionWalletService = require('./lib/wallet/sendTransactionWalletService');
 
 module.exports = {
   helpers: helpers.default,
@@ -43,6 +46,7 @@ module.exports = {
   txMiningApi: txMiningApi.default,
   versionApi: versionApi.default,
   errors: errors,
+  ErrorMessages: ErrorMessages,
   constants: constants,
   axios: axios,
   storage: storage.default,
@@ -53,6 +57,7 @@ module.exports = {
   SendTransaction: SendTransaction.default,
   Address: Address.default,
   Output: Output.default,
+  P2PKH: P2PKH.default,
   Input: Input.default,
   Transaction: Transaction.default,
   CreateTokenTransaction: CreateTokenTransaction.default,
@@ -62,4 +67,5 @@ module.exports = {
   walletUtils: walletUtils.default,
   helpersUtils: helpersUtils.default,
   HathorWalletServiceWallet: HathorWalletServiceWallet.default,
+  SendTransactionWalletService: SendTransactionWalletService.default,
 }

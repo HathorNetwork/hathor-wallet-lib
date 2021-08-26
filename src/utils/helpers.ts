@@ -10,13 +10,17 @@ import { DECIMAL_PLACES, DEFAULT_TX_VERSION, CREATE_TOKEN_TX_VERSION } from '../
 import buffer from 'buffer';
 import Long from 'long';
 import Transaction from '../models/transaction';
+import P2PKH from '../models/p2pkh';
 import CreateTokenTransaction from '../models/create_token_transaction';
+import Input from '../models/input';
+import Output from '../models/output';
 import Network from '../models/network';
 import Address from '../models/address';
 import { hexToBuffer, unpackToInt } from '../utils/buffer';
 import { crypto, encoding } from 'bitcore-lib';
 import { clone } from 'lodash';
 import { ParseError } from '../errors';
+import { ErrorMessages } from '../errorMessages';
 
 /**
  * Helper methods
@@ -315,6 +319,70 @@ const helpers = {
     });
     return promise;
   },
+
+  /**
+   * Create a transaction from object data
+   * We used to work only with data object to handle transactions in the past inside the lib
+   * This method was created to transform those objects into Transaction class instances
+   *
+   * 'data': {'version', 'weight', 'timestamp', 'tokens', 'inputs': [{'tx_id', 'index'}], 'outputs': [{'address', 'value', 'tokenData', 'timelock'}]}
+   *
+   * if it's a create token transaction, then it expects 'name' and 'symbol' as well.
+   *
+   * @memberof Helpers
+   * @inner
+   */
+  createTxFromData(data): Transaction | CreateTokenTransaction {
+    const inputs: Input[] = [];
+    for (const input of data.inputs) {
+      const inputObj = new Input(
+        input.tx_id,
+        input.index,
+        {
+          data: input.data
+        }
+      );
+      inputs.push(inputObj);
+    }
+
+    const outputs: Output[] = [];
+    for (const output of data.outputs) {
+      const address = new Address(output.address);
+      const p2pkh = new P2PKH(address, { timelock: output.timelock || null });
+      const p2pkhScript = p2pkh.createScript()
+      const outputObj = new Output(
+        output.value,
+        p2pkhScript,
+        { tokenData: output.tokenData }
+      );
+      outputs.push(outputObj);
+    }
+
+    const options = {
+      version: data.version,
+      weight: data.weight,
+      timestamp: data.timestamp,
+      tokens: data.tokens
+    }
+
+    if (data.version === CREATE_TOKEN_TX_VERSION) {
+      return new CreateTokenTransaction(
+        data.name,
+        data.symbol,
+        inputs,
+        outputs,
+        options
+      );
+    } else if (data.version === DEFAULT_TX_VERSION) {
+      return new Transaction(
+        inputs,
+        outputs,
+        options
+      );
+    } else {
+        throw new ParseError(ErrorMessages.UNSUPPORTED_TX_TYPE);
+    }
+  }
 }
 
 export default helpers;

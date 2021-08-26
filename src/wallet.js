@@ -248,6 +248,45 @@ const wallet = {
   },
 
   /**
+   * Encrypt words with password and save it on localStorage
+   *
+   * @param {string} words Words to be encrypted
+   * @param {string} password Password to encrypt
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  storeEncryptedWords(words, password) {
+    const initialAccessData = this.getWalletAccessData() || {};
+
+    const encryptedDataWords = this.encryptData(words, password);
+    initialAccessData['words'] = encryptedDataWords.encrypted.toString(),
+
+    this.setWalletAccessData(initialAccessData);
+  },
+
+  /**
+   * Stores hash of password/PIN on localStorage
+   *
+   * @param {string} password Password to store hash
+   * @param {string} suffix Optional suffix for the localStorage key name
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  storePasswordHash(password, suffix='') {
+    const initialAccessData = this.getWalletAccessData() || {};
+    const hashed = this.hashPassword(password);
+    const hashKey = `hash${suffix}`;
+    const saltKey = `salt${suffix}`;
+
+    initialAccessData[hashKey] = hashed.key.toString();
+    initialAccessData[saltKey] = hashed.salt;
+
+    this.setWalletAccessData(initialAccessData);
+  },
+
+  /**
    * Set wallet data on storage and start it
    *
    * @param {Object} accessData Object of data to be saved on storage. Will only have cpubkey for hardware wallet and for software will have the keys (mainKey, hash, salt, words, hashPasswd, saltPasswd, hashIterations, pbkdf2Hasher) as set on executeGenerateWallet method

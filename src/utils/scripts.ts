@@ -1,9 +1,9 @@
-import Address from '../models/address';
+import P2PKH from '../models/p2pkh';
 import Network from '../models/network';
 import helpers from '../utils/helpers';
 import { unpackLen, unpackToInt } from '../utils/buffer';
 import _ from 'lodash';
-import { ParseError, ParseScriptError } from '../errors';
+import { ParseScriptError } from '../errors';
 
 /**
 * Parse P2PKH output script
@@ -11,9 +11,9 @@ import { ParseError, ParseScriptError } from '../errors';
 * @param {Buffer} buff Output script
 * @param {Network} network Network to get the address first byte parameter
 *
-* @return {{timelock: number | null, address: Address{} Timelock and address from output script
+* @return {P2PKH} P2PKH object
 */
-export const parseP2PKH = (buff: Buffer, network: Network): {timelock: number | null, address: Address} => {
+export const parseP2PKH = (buff: Buffer, network: Network): P2PKH => {
   let timelock: number | null = null;
   let offset = 0;
 
@@ -35,38 +35,5 @@ export const parseP2PKH = (buff: Buffer, network: Network): {timelock: number | 
   let addressHash;
   [addressHash, scriptBuf] = unpackLen(20, scriptBuf.slice(3 + offset));
 
-  return {timelock, address: helpers.encodeAddress(addressHash, network)};
-};
-
-/**
-* Parse output script
-* We currently support only P2PKH
-* 
-* @param {Buffer} buff Output script
-* @param {Network} network Network to get the address first byte parameter
-*
-* @throws ParseScriptError when buffer is not a P2PKH script
-*
-* @return {{timelock: number | null, address: Address{} Timelock and address from output script
-*/
-export const parseOutputScript = (buff: Buffer, network: Network): {timelock: number | null, address: Address} => {
-  // This method will work only for P2PKH scripts for now
-  // The whole lib works only for this type of output script
-  // We should do something similar to what we have in the full node with
-  // Scripts regex verification match
-
-  // It's still unsure how expensive it is to throw an exception in JavaScript. Some languages are really
-  // inefficient when it comes to exceptions while others are totally efficient. If it is efficient,
-  // we can keep throwing the error. Otherwise, we should just return null
-  // because this method will be used together with others when we are trying to parse a given script.
-
-  try {
-    return parseP2PKH(buff, network);
-  } catch (error) {
-    if (error instanceof ParseError) {
-      throw new ParseScriptError('Invalid output script. We currently support only P2PKH output script for parsing.');
-    } else {
-      throw error;
-    }
-  }
+  return new P2PKH(helpers.encodeAddress(addressHash, network), { timelock });
 };

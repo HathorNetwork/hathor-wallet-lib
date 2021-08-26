@@ -12,10 +12,11 @@ import transaction from './transaction';
 import wallet from './wallet';
 import storage from './storage';
 import helpers from './helpers';
+import helpersUtils from './utils/helpers';
 import walletApi from './api/wallet';
 import SendTransaction from './new/sendTransaction';
 import { InsufficientFundsError, ConstantNotSet, TokenValidationError } from './errors';
-import { CREATE_TOKEN_TX_VERSION, HATHOR_TOKEN_CONFIG, TOKEN_MINT_MASK, TOKEN_MELT_MASK, AUTHORITY_TOKEN_DATA } from './constants';
+import { TOKEN_DEPOSIT_PERCENTAGE, CREATE_TOKEN_TX_VERSION, HATHOR_TOKEN_CONFIG, TOKEN_MINT_MASK, TOKEN_MELT_MASK, AUTHORITY_TOKEN_DATA } from './constants';
 
 
 /**
@@ -320,7 +321,7 @@ const tokens = {
   },
 
   /**
-   * Create the tx for the new token in the backend and creates a new mint and melt outputs to be used in the future
+   * Prepare create token data for creating this transaction
    *
    * @param {string} address Address to receive the amount of the generated token
    * @param {string} name Name of the new token
@@ -332,12 +333,12 @@ const tokens = {
    *   'changeAddress': address of the change output
    *  }
    *
-   * @return {Promise} Promise that resolves when token is created or an error from the backend arrives
+   * @return {Object} { success, preparedData, message } - message in case of success: false
    *
    * @memberof Tokens
    * @inner
    */
-  createToken(address, name, symbol, mintAmount, pin, options = { changeAddress: null }) {
+  generateCreateTokenData(address, name, symbol, mintAmount, pin, options = { changeAddress: null }) {
     const { changeAddress } = options;
 
     const mintOptions = {
@@ -366,18 +367,38 @@ const tokens = {
       symbol,
     });
 
-    let preparedData = null;
-    try {
-      preparedData = transaction.prepareData(createTokenTxData, pin);
-    } catch (e) {
-      const message = helpers.handlePrepareDataError(e);
-      return {success: false, message};
+    return this.handlePrepareData(createTokenTxData, pin, {});
+  },
+
+  /**
+   * Create the tx for the new token in the backend and creates a new mint and melt outputs to be used in the future
+   *
+   * @param {string} address Address to receive the amount of the generated token
+   * @param {string} name Name of the new token
+   * @param {string} symbol Symbol of the new token
+   * @param {number} mintAmount Amount of the new token that will be minted
+   * @param {string} pin Pin to generate new addresses, if necessary
+   * @param {Object} options Options parameters
+   *  {
+   *   'changeAddress': address of the change output
+   *  }
+   *
+   * @return {Promise} Promise that resolves when token is created or an error from the backend arrives
+   *
+   * @memberof Tokens
+   * @inner
+   */
+  createToken(address, name, symbol, mintAmount, pin, options = { changeAddress: null }) {
+    const ret = this.generateCreateTokenData(address, name, symbol, mintAmount, pin, options);
+
+    if (!ret.success) {
+      return ret;
     }
 
-    const sendTransaction = new SendTransaction({data: preparedData});
+    const sendTransaction = new SendTransaction({ transaction: helpersUtils.createTxFromData(ret.preparedData) });
 
     const promise = new Promise((resolve, reject) => {
-      sendTransaction.on('send-success', (tx) => {
+      sendTransaction.on('send-tx-success', (tx) => {
         const tokenUid = tx.hash;
         this.addToken(tokenUid, name, symbol);
         resolve(tx);
@@ -485,6 +506,62 @@ const tokens = {
   },
 
   /**
+   * Get transaction data to mint tokens
+   *
+   * @param {Object} mintInput tx containing mint authority {
+   *   {string} tx_id Hash of the tx
+   *   {number} index Index of the output being spent
+   *   {string} address The address associated with (tx_id, index)
+   * }
+   * @param {string} token Token uid to be minted
+   * @param {string} address Address to receive the amount of the generated token
+   * @param {number} amount Amount of the token that will be minted
+   * @param {Object} depositInputs Inputs used for the HTR deposit (optional) {
+   *   {Object} inputs List of the inputs [{
+   *     {string} tx_id Hash of the tx
+   *     {number} index Index of the output
+   *     {string} address The address associated with (tx_id, index)
+   *     {number} token Token info, which should always be 0 in this case
+   *   }]
+   *   {number} amount Sum of the inputs. It might be more than the required deposit, so a change output will be created
+   * }
+   * @param {Object} options {
+   *   {number} minimumTimestamp Tx minimum timestamp (default = 0)
+   *   {boolean} createAnotherMint If should create another mint output after spending this one
+   *   {boolean} createMelt If should create a melt output (useful when creating a new token)
+   *   {string} changeAddress Address to send the change of HTR after mint deposit
+   * }
+   *
+   * @throws {InsufficientFundsError} If not enough tokens for deposit
+   *
+   * @return {Object} Prepared transaction data with signed inputs, weight, timestamp
+   *
+   * @memberof Tokens
+   * @inner
+   */
+  generateMintData(mintInput, token, address, amount, depositInputs, pin, options) {
+    const fnOptions = Object.assign({
+      createAnotherMint: true,
+      createMelt: false,
+      minimumTimestamp: 0,
+      changeAddress: null,
+    }, options);
+    // Get mint data
+    let newTxData;
+    try {
+      newTxData = this.createMintData(mintInput, token, address, amount, depositInputs, fnOptions);
+    } catch (e) {
+      if (e instanceof InsufficientFundsError) {
+        return {success: false, message: 'Don\'t have enough HTR funds to mint this amount.'};
+      } else {
+        // Unhandled error
+        throw e;
+      }
+    }
+    return this.handlePrepareData(newTxData, pin, fnOptions);
+  },
+
+  /**
    * Mint new tokens
    *
    * @param {Object} mintInput tx containing mint authority {
@@ -521,26 +598,11 @@ const tokens = {
    * @inner
    */
   mintTokens(mintInput, token, address, amount, depositInputs, pin, options) {
-    const fnOptions = Object.assign({
-      createAnotherMint: true,
-      createMelt: false,
-      minimumTimestamp: 0,
-      changeAddress: null,
-    }, options);
-    // Get mint data
-    let newTxData;
-    try {
-      newTxData = this.createMintData(mintInput, token, address, amount, depositInputs, fnOptions);
-    } catch (e) {
-      if (e instanceof InsufficientFundsError) {
-        return {success: false, message: 'Don\'t have enough HTR funds to mint this amount.'};
-      } else {
-        // Unhandled error
-        throw e;
-      }
+    const ret = this.generateMintData(mintInput, token, address, amount, depositInputs, pin, options);
+    if (!ret.success) {
+      return ret;
     }
-
-    return this.handleSendTransaction(newTxData, pin, fnOptions);
+    return this.handleSendTransaction(ret.preparedData);
   },
 
   /**
@@ -604,6 +666,39 @@ const tokens = {
   },
 
   /**
+   * Get transaction data to melt tokens
+   *
+   * @param {Object} meltInput tx containing melt authority {
+   *   {string} tx_id Hash of the tx
+   *   {number} index Index of the output being spent
+   *   {string} address The address associated with (tx_id, index)
+   * }
+   * @param {string} token Token uid to be melted
+   * @param {number} amount Amount of the token to be melted
+   * @param {string} pin Pin to generate new addresses, if necessary
+   * @param {boolean} createAnotherMelt If should create another melt output after spending this one
+   * @param {Object} options Options parameters
+   *  {
+   *   'depositAddress': address of the HTR deposit back
+   *   'changeAddress': address of the change output for the custom token melt
+   *  }
+   *
+   * @return {Object} Prepared transaction data with signed inputs, weight, timestamp
+   *
+   * @memberof Tokens
+   * @inner
+   */
+  generateMeltData(meltInput, token, amount, pin, createAnotherMelt, options = { depositAddress: null, changeAddress: null }) {
+    // Get melt data
+    const newTxData = this.createMeltData(meltInput, token, amount, createAnotherMelt, options);
+    if (!newTxData) {
+      return {success: false, message: 'There aren\'t enough inputs to melt.'};
+    }
+    return this.handlePrepareData(newTxData, pin, {});
+  },
+
+
+  /**
    * Melt tokens
    *
    * @param {Object} meltInput tx containing melt authority {
@@ -629,13 +724,11 @@ const tokens = {
    * @inner
    */
   meltTokens(meltInput, token, amount, pin, createAnotherMelt, options = { depositAddress: null, changeAddress: null }) {
-    // Get melt data
-    let newTxData = this.createMeltData(meltInput, token, amount, createAnotherMelt, options);
-    if (!newTxData) {
-      return {success: false, message: 'There aren\'t enough inputs to melt.'};
+    const ret = this.generateMeltData(meltInput, token, amount, pin, createAnotherMelt, options);
+    if (!ret.success) {
+      return ret;
     }
-
-    return this.handleSendTransaction(newTxData, pin);
+    return this.handleSendTransaction(ret.preparedData);
   },
 
   /**
@@ -725,6 +818,29 @@ const tokens = {
   },
 
   /**
+   * Get transaction data to delegate authority
+   *
+   * @param {string} txID Hash of the transaction to be spent
+   * @param {number} index Index of the output being spent
+   * @param {string} addressSpent Address of the output being spent
+   * @param {string} token Token uid to be delegated the authority
+   * @param {string} address Destination address of the delegated authority output
+   * @param {boolean} createAnother If should create another authority output for this wallet, after delegating this one
+   * @param {string} type Authority type to be delegated ('mint' or 'melt')
+   * @param {string} pin Pin to generate new addresses, if necessary
+   *
+   * @return {Object} Prepared transaction data with signed inputs, weight, timestamp
+   *
+   * @memberof Tokens
+   * @inner
+   */
+  generateDelegateAuthorityData(txID, index, addressSpent, token, address, createAnother, type, pin) {
+    // Get delegate authority output data
+    const newTxData = this.createDelegateAuthorityData(txID, index, addressSpent, token, address, createAnother, type);
+    return this.handlePrepareData(newTxData, pin, {});
+  },
+
+  /**
    * Delegate authority outputs for an address (mint or melt authority)
    *
    * @param {string} txID Hash of the transaction to be spent
@@ -744,9 +860,28 @@ const tokens = {
    * @inner
    */
   delegateAuthority(txID, index, addressSpent, token, address, createAnother, type, pin) {
-    // Get delegate authority output data
-    let newTxData = this.createDelegateAuthorityData(txID, index, addressSpent, token, address, createAnother, type);
-    return this.handleSendTransaction(newTxData, pin);
+    const ret = this.generateDelegateAuthorityData(txID, index, addressSpent, token, address, createAnother, type, pin);
+    if (!ret.success) {
+      return ret;
+    }
+    return this.handleSendTransaction(ret.preparedData);
+  },
+
+  /**
+   * Get transaction data to destroy authority
+   *
+   * @param {Object} data Array of objects each one containing the input with the authority being destroyed ({'tx_id', 'index', 'address', 'token'})
+   * @param {string} pin Pin to generate new addresses, if necessary
+   *
+   * @return {Object} Prepared transaction data with signed inputs, weight, timestamp
+   *
+   * @memberof Tokens
+   * @inner
+   */
+  generateDestroyAuthorityData(data, pin) {
+    // Create new data without any output
+    const newTxData = {'inputs': data, 'outputs': [], 'tokens': []};
+    return this.handlePrepareData(newTxData, pin, {});
   },
 
   /**
@@ -763,9 +898,37 @@ const tokens = {
    * @inner
    */
   destroyAuthority(data, pin) {
-    // Create new data without any output
-    let newTxData = {'inputs': data, 'outputs': [], 'tokens': []};
-    return this.handleSendTransaction(newTxData, pin);
+    const ret = this.generateDestroyAuthorityData(data, pin);
+    if (!ret.success) {
+      return ret;
+    }
+    return this.handleSendTransaction(ret.preparedData);
+  },
+
+  /**
+   * Get transaction data, and prepare it with weight, timestamp and input signatures
+   *
+   * @param {Object} data Array of objects each one containing the input with the authority being destroyed ({'tx_id', 'index', 'address', 'token'})
+   * @param {string} pin Pin to generate new addresses, if necessary
+   * @param {Object} options {
+   *   {number} minimumTimestamp Tx minimum timestamp (default = 0)
+   *   {boolean} createAnotherMint If should create another mint output after spending this one
+   *   {boolean} createMelt If should create a melt output (useful when creating a new token)
+   * }
+   *
+   * @return {Object} {success, message (in case of error), preparedData (transaction data prepared in case of success)}
+   *
+   * @memberof Tokens
+   * @inner
+   */
+  handlePrepareData(data, pin, options) {
+    try {
+      const preparedData = transaction.prepareData(data, pin, options);
+      return {success: true, preparedData};
+    } catch (e) {
+      const message = helpers.handlePrepareDataError(e);
+      return {success: false, message};
+    }
   },
 
   /**
@@ -786,17 +949,27 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  handleSendTransaction(data, pin, options) {
-    let preparedData = null;
-    try {
-      preparedData = transaction.prepareData(data, pin, options);
-    } catch (e) {
-      const message = helpers.handlePrepareDataError(e);
-      return {success: false, message};
-    }
+  handleSendTransaction(data) {
+    const sendTransaction = new SendTransaction({ transaction: helpersUtils.createTxFromData(data) });
+    // Promise that resolves when push tx finishes with success
+    // or rejects in case of an error
+    // we need this promise and this method to keep compatibility in case
+    // someone is still using directly the methods to handle tokens
+    // from this tokens file
+    const promise = new Promise((resolve, reject) => {
+      sendTransaction.on('send-tx-success', (tx) => {
+        resolve(tx);
+      });
 
-    const sendTransaction = new SendTransaction({data: preparedData});
-    return {success: true, sendTransaction, promise: sendTransaction.promise};
+      sendTransaction.on('send-error', (message) => {
+        reject(message);
+      });
+
+      sendTransaction.on('unexpected-error', (message) => {
+        reject(message);
+      });
+    });
+    return {success: true, sendTransaction, promise };
   },
 
   /**
@@ -895,7 +1068,11 @@ const tokens = {
    */
   getDepositPercentage() {
     if (this._depositPercentage === null) {
-      throw new ConstantNotSet('Token deposit percentage constant not set');
+      // When we are using the wallet service facade we don't update the old constants
+      // some wallets require this constants to be set in order to show useful information
+      // on the screen. In the future we should change how we get this info in the client
+      // but for now I think it's safe to just return the deposit percentage as a constant
+      return TOKEN_DEPOSIT_PERCENTAGE;
     }
     return this._depositPercentage;
   },

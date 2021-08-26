@@ -193,7 +193,7 @@ const wallet = {
     const xpriv = this.getXPrivKeyFromSeed(seed, methodOptions);
     // We have a fixed derivation until the coin index
     // after that we can receive a different account index, which the default is 0'
-    const privkey = xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/${accountDerivationIndex}`);
+    const privkey = this.deriveXpriv(xpriv, accountDerivationIndex);
     return privkey.xpubkey;
   },
 
@@ -214,6 +214,19 @@ const wallet = {
     const network = new Network(networkName);
     const code = new Mnemonic(seed);
     return code.toHDPrivateKey(passphrase, network.bitcoreNetwork);
+  },
+
+  /**
+   * Derive xpriv from root to account derivation path
+   *
+   * @param {string} accountDerivationIndex String with derivation index of account (can be hardened)
+   *
+   * @return {HDPrivateKey} Derived private key
+   * @memberof Wallet
+   * @inner
+   */
+  deriveXpriv(xpriv: HDPrivateKey, accountDerivationIndex: string): HDPrivateKey {
+    return xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/${accountDerivationIndex}`);
   },
 
   /**
@@ -282,7 +295,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  getAddressAtIndex(xpubkey: string, addressIndex: number, networkName: string = 'mainnet'): Object {
+  getAddressAtIndex(xpubkey: string, addressIndex: number, networkName: string = 'mainnet'): string {
     let xpub;
     try {
       xpub = HDPublicKey(xpubkey);
