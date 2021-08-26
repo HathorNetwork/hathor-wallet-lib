@@ -8,6 +8,8 @@
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
+import Input from '../models/input';
+import Output from '../models/output';
 
 export interface GetAddressesObject {
   address: string; // Address in base58
@@ -194,6 +196,16 @@ export interface TokenAmountMap {
   [token: string]: number; // For each token we have the amount
 }
 
+export interface TransactionFullObject {
+  tx_id: string;
+  version: number;
+  timestamp: number;
+  is_voided: boolean;
+  inputs: Input[];
+  outputs: Output[];
+  parents: string[];
+}
+
 export interface IHathorWallet {
   start();
   getAllAddresses(): AsyncGenerator<GetAddressesObject>;
@@ -216,6 +228,7 @@ export interface IHathorWallet {
   delegateAuthority(token: string, type: string, address: string, options): Promise<Transaction>;
   prepareDestroyAuthorityData(token: string, type: string, count: number): Promise<Transaction>;
   destroyAuthority(token: string, type: string, count: number): Promise<Transaction>;
+  getFullHistory(): TransactionFullObject[];
 }
 
 export interface ISendTransaction {

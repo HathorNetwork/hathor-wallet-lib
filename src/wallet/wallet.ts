@@ -38,6 +38,7 @@ import {
   InputRequestObj,
   SendTransactionEvents,
   SendTransactionResponse,
+  TransactionFullObject,
   IHathorWallet
 } from './types';
 import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../errors';
@@ -526,6 +527,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   consolidateUtxos(destinationAddress: string, options = {}) {
+    throw new WalletError('Not implemented.');
+  }
+
+  getFullHistory(): TransactionFullObject[] {
     throw new WalletError('Not implemented.');
   }
 
