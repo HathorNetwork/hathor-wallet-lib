@@ -1339,8 +1339,8 @@ class HathorWallet extends EventEmitter {
    * @param {number} amount Quantity to mint
    * @param {Object} options Options parameters
    *  {
-   *   'address': destination address of the minted token
-   *   'changeAddress': address of the change output
+   *   'address': destination address of the minted token (if not sent we choose the next available address to use)
+   *   'changeAddress': address of the change output (if not sent we choose the next available address to use)
    *   'startMiningTx': boolean to trigger start mining (default true)
    *   'createAnotherMint': boolean to create another mint authority or not for the wallet
    *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
