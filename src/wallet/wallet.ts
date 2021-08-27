@@ -38,9 +38,11 @@ import {
   InputRequestObj,
   SendTransactionEvents,
   SendTransactionResponse,
+  TransactionFullObject,
   IHathorWallet
 } from './types';
 import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../errors';
+import { ErrorMessages } from '../errorMessages';
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
@@ -132,8 +134,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         this.walletStatusInterval = setInterval(async () => {
           await this.startPollingStatus();
         }, WALLET_STATUS_POLLING_INTERVAL);
-      } else {
+      } else if (data.status === 'ready') {
         await this.onWalletReady();
+      } else {
+        throw new WalletRequestError(ErrorMessages.WALLET_STATUS_ERROR);
       }
     }
 
@@ -523,6 +527,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   consolidateUtxos(destinationAddress: string, options = {}) {
+    throw new WalletError('Not implemented.');
+  }
+
+  getFullHistory(): TransactionFullObject[] {
     throw new WalletError('Not implemented.');
   }
 

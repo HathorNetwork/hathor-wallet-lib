@@ -28,7 +28,7 @@ class FakeHathorWallet {
   isAddressMine(...args) {
     return HathorWallet.prototype.isAddressMine.call(this, ...args);
   }
-  _getHistoryRaw() {
+  getFullHistory() {
     return txHistoryFixture;
   }
 }

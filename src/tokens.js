@@ -972,7 +972,25 @@ const tokens = {
    */
   handleSendTransaction(data) {
     const sendTransaction = new SendTransaction({ transaction: helpersUtils.createTxFromData(data) });
-    return {success: true, sendTransaction, promise: sendTransaction.promise};
+    // Promise that resolves when push tx finishes with success
+    // or rejects in case of an error
+    // we need this promise and this method to keep compatibility in case
+    // someone is still using directly the methods to handle tokens
+    // from this tokens file
+    const promise = new Promise((resolve, reject) => {
+      sendTransaction.on('send-tx-success', (tx) => {
+        resolve(tx);
+      });
+
+      sendTransaction.on('send-error', (message) => {
+        reject(message);
+      });
+
+      sendTransaction.on('unexpected-error', (message) => {
+        reject(message);
+      });
+    });
+    return {success: true, sendTransaction, promise };
   },
 
   /**
