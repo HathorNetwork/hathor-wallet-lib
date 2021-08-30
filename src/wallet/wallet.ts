@@ -143,7 +143,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
     }
 
-    const data = await walletApi.createWallet(this.xpub, firstAddress);
+    const data = await walletApi.createWallet(this.xpub, firstAddress, this.network);
     await handleCreate(data.status);
   }
 
@@ -368,7 +368,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     if (!this.authToken || !validateJWTExpireDate(this.authToken)) {
       const sign = this.signMessage(timestampNow);
-      const data = await walletApi.createAuthToken(timestampNow, this.xpub!, sign);
+      const data = await walletApi.createAuthToken(timestampNow, this.xpub!, sign, this.network);
       this.authToken = data.token;
     }
   }
