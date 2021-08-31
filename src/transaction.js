@@ -253,12 +253,13 @@ const transaction = {
    * @inner
    */
   createOutputScript(output) {
-    if (output.data) {
+    if (output.type === 'data') {
       // Data script for NFT
       const scriptData = new ScriptData(output.data);
       return scriptData.createScript();
-    } else if (output.address) {
+    } else if (output.type === 'p2pkh' || output.type === undefined) {
       // P2PKH
+      // for compatibility reasons we will accept an output without type as p2pkh as fallback
       const address = new Address(output.address);
       const p2pkh = new P2PKH(address, { timelock: output.timelock });
       return p2pkh.createScript();
@@ -329,7 +330,7 @@ const transaction = {
       // Token data
       arr.push(this.intToBytes(outputTx.tokenData, 1));
 
-      let outputScript = this.createOutputScript(outputTx);
+      const outputScript = this.createOutputScript(outputTx);
       arr.push(this.intToBytes(outputScript.length, 2));
       arr.push(outputScript);
     }
@@ -587,7 +588,7 @@ const transaction = {
       // Token data
       arr.push(this.intToBytes(outputTx.tokenData, 1));
 
-      let outputScript = this.createOutputScript(outputTx);
+      const outputScript = this.createOutputScript(outputTx);
       arr.push(this.intToBytes(outputScript.length, 2));
       arr.push(outputScript);
     }

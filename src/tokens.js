@@ -376,7 +376,7 @@ const tokens = {
       // After the transaction data is completed
       // if it's an NFT I must add the first output as the data script
       // For NFT data the value is always 1 HTR
-      txData.outputs.unshift({ data: nftData, value: 1, tokenData: 0 });
+      txData.outputs.unshift({ type: 'data', data: nftData, value: 1, tokenData: 0 });
     }
 
     // Set create token tx version value

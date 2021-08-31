@@ -349,10 +349,12 @@ const helpers = {
     const outputs: Output[] = [];
     for (const output of data.outputs) {
       let outputObj;
-      if (output.data) {
+      if (output.type === 'data') {
         // Is NFT output
         outputObj = this.createNFTOutput(output.data);
-      } else {
+      } else if (output.type === 'p2pkh' || output.type === undefined) {
+        // P2PKH
+        // for compatibility reasons we will accept an output without type as p2pkh as fallback
         const address = new Address(output.address);
         const p2pkh = new P2PKH(address, { timelock: output.timelock || null });
         const p2pkhScript = p2pkh.createScript()
@@ -361,6 +363,8 @@ const helpers = {
           p2pkhScript,
           { tokenData: output.tokenData }
         );
+      } else {
+        throw new Error('Invalid output type.');
       }
       outputs.push(outputObj);
     }
