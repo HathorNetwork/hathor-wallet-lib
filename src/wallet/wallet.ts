@@ -597,7 +597,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const outputsObj: Output[] = [];
     // NFT transactions must have the first output as the script data
     if (isNFT) {
-      outputsObj.push(helpers.createNFTOutput(newOptions.nftData));
+      outputsObj.push(helpers.createNFTOutput(newOptions.nftData!));
     }
     // a. Token amount
     const addressToUse = newOptions.address || this.getCurrentAddress({ markAsUsed: true }).address;
