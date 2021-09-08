@@ -25,8 +25,7 @@ import Network from '../../models/network';
  *
  * @param {number} timeout Timeout in milliseconds for the request
  */
-export const axiosInstance = async (wallet: HathorWalletServiceWallet | null = null, network: Network, timeout: number = TIMEOUT) => {
-  // TODO make base URL customizable
+export const axiosInstance = async (network: Network, wallet: HathorWalletServiceWallet | null = null, timeout: number = TIMEOUT) => {
   // TODO How to allow 'Retry' request?
   const defaultOptions = {
     baseURL: getBaseUrl(network),
