@@ -559,16 +559,25 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       changeAddress: string | null,
       createMintAuthority: boolean,
       createMeltAuthority: boolean,
+      nftData: string | null,
     };
     const newOptions: optionsType = Object.assign({
       address: null,
       changeAddress: null,
       createMintAuthority: true,
       createMeltAuthority: true,
+      nftData: null,
     }, options);
 
+    const isNFT = newOptions.nftData !== null;
+
     // 1. Calculate HTR deposit needed
-    const deposit = tokens.getDepositAmount(amount);
+    let deposit = tokens.getDepositAmount(amount);
+
+    if (isNFT) {
+      // For NFT we have a fee of 0.01 HTR, then the deposit utxo query must get an additional 1
+      deposit += 1;
+    }
 
     // 2. Get utxos for HTR
     const { utxos, changeAmount } = await this.getUtxos({ tokenId: HATHOR_TOKEN_CONFIG.uid, totalAmount: deposit });
@@ -586,6 +595,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // Create outputs
     const outputsObj: Output[] = [];
+    // NFT transactions must have the first output as the script data
+    if (isNFT) {
+      outputsObj.push(helpers.createNFTOutput(newOptions.nftData!));
+    }
     // a. Token amount
     const addressToUse = newOptions.address || this.getCurrentAddress({ markAsUsed: true }).address;
     const address = new Address(addressToUse, {network: this.network});
@@ -992,6 +1005,31 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async destroyAuthority(token: string, type: string, count: number): Promise<Transaction> {
     this.failIfWalletNotReady();
     const tx = await this.prepareDestroyAuthorityData(token, type, count);
+    return this.handleSendPreparedTransaction(tx);
+  }
+
+  /**
+   * Create an NFT in the network
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async createNFT(name: string, symbol: string, amount: number, data: string, options = {}): Promise<Transaction>  {
+    this.failIfWalletNotReady();
+    type optionsType = {
+      address: string | null,
+      changeAddress: string | null,
+      createMintAuthority: boolean,
+      createMeltAuthority: boolean,
+    };
+    const newOptions: optionsType = Object.assign({
+      address: null,
+      changeAddress: null,
+      createMintAuthority: false,
+      createMeltAuthority: false,
+    }, options);
+    newOptions['nftData'] = data;
+    const tx = await this.prepareCreateNewToken(name, symbol, amount, newOptions);
     return this.handleSendPreparedTransaction(tx);
   }
 }

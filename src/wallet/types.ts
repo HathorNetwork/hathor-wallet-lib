@@ -220,6 +220,7 @@ export interface IHathorWallet {
   getNextAddress(): AddressInfoObject;
   prepareCreateNewToken(name: string, symbol: string, amount: number, options): Promise<CreateTokenTransaction>;
   createNewToken(name: string, symbol: string, amount: number, options): Promise<Transaction>;
+  createNFT(name: string, symbol: string, amount: number, data: string, options): Promise<Transaction>;
   prepareMintTokensData(token: string, amount: number, options): Promise<Transaction>;
   mintTokens(token: string, amount: number, options): Promise<Transaction>;
   prepareMeltTokensData(token: string, amount: number, options): Promise<Transaction>;

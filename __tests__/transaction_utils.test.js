@@ -229,11 +229,11 @@ test('Push data', () => {
 test('Create output script', () => {
   let address = 'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX';
   let expectedHex = '76a91419a8eb751eab5a13027e8cae215f6a5dafc1a8dd88ac';
-  expect(transaction.createOutputScript(address).toString('hex')).toBe(expectedHex);
+  expect(transaction.createOutputScript({ address }).toString('hex')).toBe(expectedHex);
 
   let timestamp = 1550249803;
   let expectedHex2 = '045c66ef4b6f76a91419a8eb751eab5a13027e8cae215f6a5dafc1a8dd88ac';
-  expect(transaction.createOutputScript(address, timestamp).toString('hex')).toBe(expectedHex2);
+  expect(transaction.createOutputScript({ address, timelock: timestamp }).toString('hex')).toBe(expectedHex2);
 });
 
 test('Create input data', () => {
