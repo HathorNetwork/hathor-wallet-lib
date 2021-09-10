@@ -21,6 +21,7 @@ import Output from '../models/output';
 import Input from '../models/input';
 import Address from '../models/address';
 import Network from '../models/network';
+import networkInstance from '../network';
 import MineTransaction from './mineTransaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
 import { shuffle } from 'lodash';
@@ -103,6 +104,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.xpub = null;
 
     this.network = network;
+    networkInstance.setNetwork(this.network.name);
 
     this.authToken = null;
     this.walletStatusInterval = null;
