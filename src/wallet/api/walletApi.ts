@@ -8,7 +8,6 @@
 import { axiosInstance } from './walletServiceAxios';
 import Output from '../../models/output';
 import Input from '../../models/input';
-import Network from '../../models/network';
 import {
   WalletStatusResponseData,
   AddressesResponseData,
