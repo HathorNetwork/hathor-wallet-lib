@@ -119,7 +119,6 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     // Create the transaction object, add weight and timestamp
     this.transaction = new Transaction(inputsObj, outputsObj);
     this.transaction.tokens = tokens;
-    this.transaction.prepareToSend();
 
     this.emit('prepare-tx-end', this.transaction);
     return { transaction: this.transaction, utxosAddressPath };
@@ -251,6 +250,10 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       const inputData = this.wallet.getInputData(dataToSignHash, utxosAddressPath[idx]);
       inputObj.setData(inputData);
     }
+
+    // Now that the tx is completed with the data of the input
+    // we can add the timestamp and calculate the weight
+    this.transaction.prepareToSend();
 
     this.emit('sign-tx-end', this.transaction);
   }
