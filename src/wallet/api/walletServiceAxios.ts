@@ -25,10 +25,10 @@ import Network from '../../models/network';
  *
  * @param {number} timeout Timeout in milliseconds for the request
  */
-export const axiosInstance = async (network: Network, wallet: HathorWalletServiceWallet | null = null, timeout: number = TIMEOUT) => {
+export const axiosInstance = async (wallet: HathorWalletServiceWallet, needsAuth: boolean, timeout: number = TIMEOUT) => {
   // TODO How to allow 'Retry' request?
   const defaultOptions = {
-    baseURL: getBaseUrl(network),
+    baseURL: getBaseUrl(wallet.network),
     timeout: timeout,
     // `validateStatus` defines whether to resolve or reject the promise for a given
     // HTTP response status code. If `validateStatus` returns `true` (or is set to `null`
@@ -41,7 +41,7 @@ export const axiosInstance = async (network: Network, wallet: HathorWalletServic
     },
   }
 
-  if (wallet) {
+  if (needsAuth) {
     // Then we need the auth token
     await wallet.validateAndRenewAuthToken();
     defaultOptions['headers']['Authorization'] = `Bearer ${wallet.getAuthToken()}`;
