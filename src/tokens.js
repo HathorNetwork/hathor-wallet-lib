@@ -375,7 +375,7 @@ const tokens = {
     if (isNFT) {
       // After the transaction data is completed
       // if it's an NFT I must add the first output as the data script
-      // For NFT data the value is always 1 HTR
+      // For NFT data the value is always 0.01 HTR (i.e. 1 integer)
       txData.outputs.unshift({ type: 'data', data: nftData, value: 1, tokenData: 0 });
     }
 
