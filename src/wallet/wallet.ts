@@ -634,7 +634,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     const tx = new CreateTokenTransaction(name, symbol, inputsObj, outputsObj);
-    tx.prepareToSend();
 
     const dataToSignHash = tx.getDataToSignHash();
 
@@ -642,6 +641,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       const inputData = this.getInputData(dataToSignHash, utxosAddressPath[idx]);
       inputObj.setData(inputData);
     }
+
+    tx.prepareToSend();
     return tx;
   }
 
@@ -734,7 +735,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const tx = new Transaction(inputsObj, outputsObj);
     tx.tokens = [token];
-    tx.prepareToSend();
     const dataToSignHash = tx.getDataToSignHash();
 
     for (const [idx, inputObj] of tx.inputs.entries()) {
@@ -744,6 +744,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       inputObj.setData(inputData);
     }
 
+    tx.prepareToSend();
     return tx;
   }
 
@@ -839,7 +840,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const tx = new Transaction(inputsObj, outputsObj);
     tx.tokens = [token];
-    tx.prepareToSend();
     const dataToSignHash = tx.getDataToSignHash();
 
     for (const [idx, inputObj] of tx.inputs.entries()) {
@@ -849,6 +849,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       inputObj.setData(inputData);
     }
 
+    tx.prepareToSend();
     return tx;
   }
 
@@ -928,13 +929,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const tx = new Transaction(inputsObj, outputsObj);
     tx.tokens = [token];
-    tx.prepareToSend();
 
     // Set input data
     const dataToSignHash = tx.getDataToSignHash();
     const inputData = this.getInputData(dataToSignHash, utxo.addressPath);
     inputsObj[0].setData(inputData);
 
+    tx.prepareToSend();
     return tx;
   }
 
@@ -985,7 +986,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const tx = new Transaction(inputsObj, []);
     tx.tokens = [token];
-    tx.prepareToSend();
 
     // Set input data
     const dataToSignHash = tx.getDataToSignHash();
@@ -995,6 +995,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       inputObj.setData(inputData);
     }
 
+    tx.prepareToSend();
     return tx;
   }
 
