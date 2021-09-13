@@ -1121,6 +1121,9 @@ class HathorWallet extends EventEmitter {
    *   'changeAddress': address of the change output,
    *   'startMiningTx': boolean to trigger start mining (default true)
    *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
+   *   'createMint': if should create mint authority when creating the token
+   *   'createMelt': if should create melt authority when creating the token
+   *   'nftData': data string for NFT
    *  }
    *
    * @return {Promise} Promise that resolves with transaction object if succeeds
@@ -1134,7 +1137,15 @@ class HathorWallet extends EventEmitter {
       throw new WalletFromXPubGuard('createNewToken');
     }
     storage.setStore(this.store);
-    const newOptions = Object.assign({ address: null, changeAddress: null, startMiningTx: true, pinCode: null }, options);
+    const newOptions = Object.assign({
+      address: null,
+      changeAddress: null,
+      startMiningTx: true,
+      pinCode: null,
+      createMint: true,
+      createMelt: true,
+      nftData: null
+    }, options);
     const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       return Promise.reject({success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED});
@@ -1751,6 +1762,43 @@ class HathorWallet extends EventEmitter {
     }
 
     return addresses;
+  }
+
+  /**
+   * Create an NFT for this wallet
+   *
+   * @param {String} name Name of the token
+   * @param {String} symbol Symbol of the token
+   * @param {number} amount Quantity of the token to be minted
+   * @param {String} data NFT data string
+   * @param {Object} options Options parameters
+   *  {
+   *   'address': address of the minted token,
+   *   'changeAddress': address of the change output,
+   *   'startMiningTx': boolean to trigger start mining (default true)
+   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
+   *   'createMint': if should create mint authority when creating the token
+   *   'createMelt': if should create melt authority when creating the token
+   *  }
+   *
+   * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
+   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
+   *
+   * @memberof HathorWallet
+   * @inner
+   **/
+  async createNFT(name, symbol, amount, data, options = {}) {
+    const newOptions = Object.assign({
+      address: null,
+      changeAddress: null,
+      startMiningTx: true,
+      pinCode: null,
+      createMint: false,
+      createMelt: false,
+    }, options);
+    newOptions['nftData'] = data;
+    const tx = await this.prepareCreateNewToken(name, symbol, amount, newOptions);
+    return this.handleSendPreparedTransaction(tx);
   }
 }
 

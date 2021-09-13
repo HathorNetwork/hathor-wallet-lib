@@ -31,7 +31,7 @@ import { WalletRequestError } from '../../errors';
 
 const walletApi = {
   async getWalletStatus(wallet: HathorWalletServiceWallet): Promise<WalletStatusResponseData> {
-    const axios = await axiosInstance(wallet);
+    const axios = await axiosInstance(wallet, true);
     const response = await axios.get('wallet/status');
     const data = response.data;
     if (response.status === 200 && data.success) {
@@ -41,12 +41,12 @@ const walletApi = {
     }
   },
 
-  async createWallet(xpubkey: string, firstAddress: string | null = null): Promise<WalletStatusResponseData> {
+  async createWallet(wallet: HathorWalletServiceWallet, xpubkey: string, firstAddress: string | null = null): Promise<WalletStatusResponseData> {
     const data = { xpubkey };
     if (firstAddress) {
       data['firstAddress'] = firstAddress;
     }
-    const axios = await axiosInstance();
+    const axios = await axiosInstance(wallet, false);
     const response = await axios.post('wallet/init', data);
     if (response.status === 200 && response.data.success) {
       return response.data;
@@ -59,7 +59,7 @@ const walletApi = {
   },
 
   async getAddresses(wallet: HathorWalletServiceWallet): Promise<AddressesResponseData> {
-    const axios = await axiosInstance(wallet);
+    const axios = await axiosInstance(wallet, true);
     const response = await axios.get('wallet/addresses');
     if (response.status === 200 && response.data.success === true) {
       return response.data;
@@ -69,7 +69,7 @@ const walletApi = {
   },
 
   async getNewAddresses(wallet: HathorWalletServiceWallet): Promise<NewAddressesResponseData> {
-    const axios = await axiosInstance(wallet);
+    const axios = await axiosInstance(wallet, true);
     const response = await axios.get('wallet/addresses/new');
     if (response.status === 200 && response.data.success === true) {
       return response.data;
@@ -83,7 +83,7 @@ const walletApi = {
     if (token) {
       data['params']['token_id'] = token;
     }
-    const axios = await axiosInstance(wallet);
+    const axios = await axiosInstance(wallet, true);
     const response = await axios.get('wallet/balances', data);
     if (response.status === 200 && response.data.success === true) {
       return response.data;
@@ -93,7 +93,7 @@ const walletApi = {
   },
 
   async getTokens(wallet: HathorWalletServiceWallet): Promise<TokensResponseData> {
-    const axios = await axiosInstance(wallet);
+    const axios = await axiosInstance(wallet, true);
     const response = await axios.get('wallet/tokens');
     if (response.status === 200 && response.data.success === true) {
       return response.data;
@@ -104,7 +104,7 @@ const walletApi = {
 
   async getHistory(wallet: HathorWalletServiceWallet, options = {}): Promise<HistoryResponseData> {
     const data = { params: options };
-    const axios = await axiosInstance(wallet);
+    const axios = await axiosInstance(wallet, true);
     const response = await axios.get('wallet/history', data);
     if (response.status === 200 && response.data.success === true) {
       return response.data;
@@ -115,7 +115,7 @@ const walletApi = {
 
   async getUtxos(wallet: HathorWalletServiceWallet, options = {}): Promise<UtxoResponseData> {
     const data = { params: options }
-    const axios = await axiosInstance(wallet);
+    const axios = await axiosInstance(wallet, true);
     const response = await axios.get('wallet/utxos', data);
     if (response.status === 200 && response.data.success === true) {
       return response.data;
@@ -126,7 +126,7 @@ const walletApi = {
 
   async createTxProposal(wallet: HathorWalletServiceWallet, txHex: string): Promise<TxProposalCreateResponseData> {
     const data = { txHex };
-    const axios = await axiosInstance(wallet);
+    const axios = await axiosInstance(wallet, true);
     const response = await axios.post('tx/proposal', data);
     if (response.status === 201) {
       return response.data;
@@ -137,7 +137,7 @@ const walletApi = {
 
   async updateTxProposal(wallet: HathorWalletServiceWallet, id: string, txHex: string): Promise<TxProposalUpdateResponseData> {
     const data = { txHex };
-    const axios = await axiosInstance(wallet);
+    const axios = await axiosInstance(wallet, true);
     const response = await axios.put(`tx/proposal/${id}`, data);
     if (response.status === 200) {
       return response.data;
@@ -146,9 +146,14 @@ const walletApi = {
     }
   },
 
-  async createAuthToken(timestamp: number, xpub: string, sign: string): Promise<AuthTokenResponseData> {
+  async createAuthToken(
+      wallet: HathorWalletServiceWallet,
+      timestamp: number,
+      xpub: string,
+      sign: string,
+  ): Promise<AuthTokenResponseData> {
     const data = { ts: timestamp, xpub, sign };
-    const axios = await axiosInstance();
+    const axios = await axiosInstance(wallet, false);
     const response = await axios.post('auth/token', data);
     if (response.status === 200 && response.data.success === true) {
       return response.data;

@@ -330,7 +330,10 @@ const tokens = {
    * @param {string} pin Pin to generate new addresses, if necessary
    * @param {Object} options Options parameters
    *  {
-   *   'changeAddress': address of the change output
+   *   'changeAddress': address of the change output,
+   *   'createMint': if should create another mint authority
+   *   'createMelt': if should create melt authority
+   *   'nftData': Data for NFT first output,
    *  }
    *
    * @return {Object} { success, preparedData, message } - message in case of success: false
@@ -338,13 +341,22 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  generateCreateTokenData(address, name, symbol, mintAmount, pin, options = { changeAddress: null }) {
-    const { changeAddress } = options;
+  generateCreateTokenData(address, name, symbol, mintAmount, pin, options = {}) {
+    const newOptions = Object.assign({
+      changeAddress: null,
+      createMint: true,
+      createMelt: true,
+      nftData: null
+    }, options);
+    const { changeAddress, createMint, createMelt, nftData } = newOptions;
+
+    const isNFT = nftData !== null;
 
     const mintOptions = {
-      createAnotherMint: true,
-      createMelt: true,
+      createAnotherMint: createMint,
+      createMelt,
       changeAddress,
+      isNFT,
     };
 
     let txData;
@@ -358,6 +370,13 @@ const tokens = {
         // Unhandled error
         throw e;
       }
+    }
+
+    if (isNFT) {
+      // After the transaction data is completed
+      // if it's an NFT I must add the first output as the data script
+      // For NFT data the value is always 0.01 HTR (i.e. 1 integer)
+      txData.outputs.unshift({ type: 'data', data: nftData, value: 1, tokenData: 0 });
     }
 
     // Set create token tx version value
@@ -436,6 +455,7 @@ const tokens = {
    *   {boolean} createAnotherMint If should create another mint output after spending this one
    *   {boolean} createMelt If should create a melt output (useful when creating a new token)
    *   {string} changeAddress Address to send the change of HTR after mint deposit
+   *   {boolean} isNFT If it's getting mint data for an NFT
    * }
    *
    * @throws {InsufficientFundsError} If not enough tokens for deposit
@@ -450,15 +470,16 @@ const tokens = {
       createAnotherMint: true,
       createMelt: false,
       changeAddress: null,
+      isNFT: false,
     }, options);
 
-    const { createAnotherMint, createMelt, changeAddress } = fnOptions;
+    const { createAnotherMint, createMelt, changeAddress, isNFT } = fnOptions;
     const inputs = [];
     const outputs = [];
 
     if (!depositInputs) {
       // select HTR deposit inputs
-      const depositInfo = this.getMintDepositInfo(amount, { changeAddress });
+      const depositInfo = this.getMintDepositInfo(amount, { changeAddress, isNFT });
       inputs.push(...depositInfo.inputs);
       outputs.push(...depositInfo.outputs);
     } else {
@@ -1018,6 +1039,7 @@ const tokens = {
    * @param {Object} options Options parameters
    *  {
    *   'changeAddress': address of the change output
+   *   'isNFT': boolean to say if this mint is for an NFT (in this case, the deposit must increase by 1 because of the NFT 0.01 HTR fee)
    *  }
    *
    * @throws {InsufficientFundsError} If not enough tokens for deposit
@@ -1027,11 +1049,19 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  getMintDepositInfo(mintAmount, options = { changeAddress: null }) {
-    const { changeAddress } = options;
+  getMintDepositInfo(mintAmount, options = {}) {
+    const newOptions = Object.assign({
+      changeAddress: null,
+      isNFT: false,
+    }, options);
+    const { changeAddress, isNFT } = newOptions;
     const outputs = [];
     const data = wallet.getWalletData();
-    const depositAmount = this.getDepositAmount(mintAmount);
+    let depositAmount = this.getDepositAmount(mintAmount);
+    if (isNFT) {
+      // The NFT has the normal deposit + 0.01 HTR fee
+      depositAmount += 1;
+    }
     const htrInputs = wallet.getInputsFromAmount(data.historyTransactions, depositAmount, HATHOR_TOKEN_CONFIG.uid);
     if (htrInputs.inputsAmount < depositAmount) {
       throw new InsufficientFundsError(`Not enough HTR tokens for deposit: ${helpers.prettyValue(depositAmount)} required, ${helpers.prettyValue(htrInputs.inputsAmount)} available`);
