@@ -59,9 +59,23 @@ const helpers = {
     const fixedPlaces = (value/10**DECIMAL_PLACES).toFixed(DECIMAL_PLACES);
     const integerPart = fixedPlaces.split('.')[0];
     const decimalPart = fixedPlaces.split('.')[1];
-    const integerFormated = new Intl.NumberFormat('en-US').format(Math.abs(parseInt(integerPart)));
+    return `${this.prettyIntegerValue(parseInt(integerPart))}.${decimalPart}`;
+  },
+
+  /**
+   * Get the formatted value for an integer number
+   *
+   * @param {number} value Amount to be formatted
+   *
+   * @return {string} Formatted value
+   *
+   * @memberof Helpers
+   * @inner
+   */
+  prettyIntegerValue(value: number): string {
+    const integerFormated = new Intl.NumberFormat('en-US').format(Math.abs(value));
     const signal = value < 0 ? '-' : '';
-    return `${signal}${integerFormated}.${decimalPart}`;
+    return `${signal}${integerFormated}`;
   },
 
   /**
