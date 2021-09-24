@@ -19,8 +19,6 @@ import Connection from './connection';
 import SendTransaction from './sendTransaction';
 import { AddressError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
-import { difference } from 'lodash';
-import metadataApi from '../api/metadataApi';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';
@@ -810,43 +808,9 @@ class HathorWallet extends EventEmitter {
       txList.sort((elem1, elem2) => elem2.timestamp - elem1.timestamp);
     }
 
-    const tokens = Object.keys(tokensHistory);
-
-    this.setPreProcessedData('tokens', tokens);
+    this.setPreProcessedData('tokens', Object.keys(tokensHistory));
     this.setPreProcessedData('historyByToken', tokensHistory);
     this.setPreProcessedData('balanceByToken', tokensBalance);
-
-    this.fetchTokensMetadata(tokens);
-  }
-
-  /**
-   * The wallet needs each token metadata to show information correctly
-   * So we fetch the tokens metadata and emit an event with it
-   *
-   * @param {Array} tokens Array of token uids to fetch metadata
-   *
-   * @memberof HathorWallet
-   * @inner
-   **/
-  async fetchTokensMetadata(tokens) {
-    const metadatas = {};
-
-    for (const token of tokens) {
-      try {
-        const response = await metadataApi.getDag(token, this.conn.network.name);
-        if (response.data && token in response.data) {
-          const tokenMeta = response.data[token];
-          metadatas[token] = tokenMeta;
-        }
-      } catch (e) {
-        // No need to do anything, the metadata for this token was not found
-      }
-    }
-
-    const oldMeta = this.getPreProcessedData('tokenMetadatas') || {};
-    const newMeta = Object.assign(oldMeta, metadatas);
-    this.setPreProcessedData('tokenMetadatas', newMeta);
-    this.emit('token-metadata-updated', newMeta);
   }
 
   /**
@@ -912,11 +876,7 @@ class HathorWallet extends EventEmitter {
       tokensBalance[tokenUid] = totalBalance;
     }
 
-    const oldTokens = this.getPreProcessedData('tokens') || [];
-    const newTokens = Object.keys(tokensHistory);
-    this.fetchTokensMetadata(difference(newTokens, oldTokens));
-
-    this.setPreProcessedData('tokens', newTokens);
+    this.setPreProcessedData('tokens', Object.keys(tokensHistory));
     this.setPreProcessedData('historyByToken', tokensHistory);
     this.setPreProcessedData('balanceByToken', tokensBalance);
   }
