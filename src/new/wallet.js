@@ -1045,6 +1045,7 @@ class HathorWallet extends EventEmitter {
       throw "This should never happen";
     }
 
+    this.clearSensitiveData();
     this.getTokenData();
     this.serverInfo = null;
     this.walletStopped = false;
@@ -1609,6 +1610,14 @@ class HathorWallet extends EventEmitter {
   async destroyAuthority(tokenUid, type, count, options = {}) {
     const tx = await this.prepareDestroyAuthorityData(tokenUid, type, count, options);
     return this.handleSendPreparedTransaction(tx);
+  }
+
+  /**
+   * Remove sensitive data from memory
+   **/
+  clearSensitiveData() {
+    this.xpriv = undefined;
+    this.seed = undefined;
   }
 
   /**
