@@ -147,6 +147,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     await handleCreate(data.status);
   }
 
+  onNewTx(wsData) {
+
+  }
+
   /**
    * Return wallet auth token
    *
