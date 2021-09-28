@@ -8,7 +8,7 @@
 import explorerServiceAxios from './explorerServiceAxios';
 
 const metadataApi = {
-  async getDag(id: string, network: string) {
+  async getDagMetadata(id: string, network: string) {
     const axios = await explorerServiceAxios(network);
     return axios.get(`metadata/dag`, { params: { id }});
   }
