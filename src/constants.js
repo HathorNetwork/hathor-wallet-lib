@@ -230,6 +230,12 @@ export const WALLET_SERVICE_BASE_URL  = 'https://wallet-service.hathor.network/'
 export const WALLET_SERVICE_TESTNET_BASE_URL  = 'https://wallet-service.testnet.hathor.network/';
 
 /**
+ * Explorer service URL
+ */
+export const EXPLORER_SERVICE_BASE_URL  = 'https://explorer-service.hathor.network/';
+export const EXPLORER_SERVICE_TESTNET_BASE_URL  = 'https://explorer-service.testnet.hathor.network/';
+
+/**
  * Size in bytes of a transaction hash (32 bytes)
  */
 export const TX_HASH_SIZE_BYTES = 32;
