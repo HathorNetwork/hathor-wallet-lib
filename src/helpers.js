@@ -10,7 +10,7 @@ import { HDPublicKey, Address } from 'bitcore-lib';
 
 import storage from './storage';
 import network from './network';
-import { BLOCK_VERSION, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, MERGED_MINED_BLOCK_VERSION, GENESIS_BLOCK, DECIMAL_PLACES, DEFAULT_SERVER } from './constants';
+import { BLOCK_VERSION, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, MERGED_MINED_BLOCK_VERSION, DECIMAL_PLACES, DEFAULT_SERVER } from './constants';
 import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError, XPubError } from './errors';
 
 /**

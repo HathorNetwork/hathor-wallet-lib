@@ -16,21 +16,6 @@
 export const DECIMAL_PLACES = 2;
 
 /**
- * ID of the genesis block
- */
-export const GENESIS_BLOCK = [
-  '000164e1e7ec7700a18750f9f50a1a9b63f6c7268637c072ae9ee181e58eb01b'
-]
-
-/**
- * ID of the genesis transactions
- */
-export const GENESIS_TX = [
-  '00029b7f8051f6ebdc0338d02d4a8cfbd662500ee03224bbee75a6f2da0350b0',
-  '0001e887c7b5ec3b4e57033d849a80d8bccbe3a749abfa87cc31c663530f3f4e'
-]
-
-/**
  * How many addresses we can have without being used
  */
 export const GAP_LIMIT = 20;
