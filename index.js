@@ -13,6 +13,7 @@ const txApi = require('./lib/api/txApi');
 const txMiningApi = require('./lib/api/txMining');
 const versionApi = require('./lib/api/version');
 const axios = require('./lib/api/axiosInstance');
+const metadataApi = require('./lib/api/metadataApi');
 const storage = require('./lib/storage');
 const network = require('./lib/network');
 const MemoryStore = require('./lib/memory_store');
@@ -45,6 +46,7 @@ module.exports = {
   txApi: txApi.default,
   txMiningApi: txMiningApi.default,
   versionApi: versionApi.default,
+  metadataApi: metadataApi.default,
   errors: errors,
   ErrorMessages: ErrorMessages,
   constants: constants,
