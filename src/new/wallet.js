@@ -1614,6 +1614,10 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Remove sensitive data from memory
+   *
+   * NOTICE: This won't remove data from memory immediately, we have to wait until javascript
+   * garbage collect it. JavaScript currently does not provide a standard way to trigger
+   * garbage collection
    **/
   clearSensitiveData() {
     this.xpriv = undefined;
