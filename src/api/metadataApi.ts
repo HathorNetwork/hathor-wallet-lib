@@ -20,30 +20,31 @@ const metadataApi = {
       retryInterval: DOWNLOAD_METADATA_RETRY_INTERVAL,
     }, options);
 
-    const { retries, retryInterval } = newOptions;
-    const axios = await explorerServiceAxios(network);
-    try {
-      const response = await axios.get(`metadata/dag`, { params: { id }});
-      if (response.data) {
-        return response.data;
-      } else {
-        // Error downloading metadata
-        // throw Error and the catch will handle it
-        throw Error;
-      }
-    } catch (e) {
-      if (e.response && e.response.status === 404) {
-        // No need to do anything, the metadata for this token was not found
-        // There is no error here, we just return null
-        return null;
-      } else {
-        // Error downloading metadata, then we should wait a few seconds and retry if still didn't reached retry limit
-        if (retries === 0) {
-          throw e;
+    let { retries, retryInterval } = newOptions;
+    while (retries >= 0) {
+      const axios = await explorerServiceAxios(network);
+      try {
+        const response = await axios.get(`metadata/dag`, { params: { id }});
+        if (response.data) {
+          return response.data;
         } else {
-          await helpers.sleep(retryInterval);
-          const newRetries = retries - 1;
-          return this.getDagMetadata(id, network, { retries: newRetries, retryInterval });
+          // Error downloading metadata
+          // throw Error and the catch will handle it
+          throw Error;
+        }
+      } catch (e) {
+        if (e.response && e.response.status === 404) {
+          // No need to do anything, the metadata for this token was not found
+          // There is no error here, we just return null
+          return null;
+        } else {
+          // Error downloading metadata, then we should wait a few seconds and retry if still didn't reached retry limit
+          if (retries === 0) {
+            throw e;
+          } else {
+            await helpers.sleep(retryInterval);
+            retries--;
+          }
         }
       }
     }
