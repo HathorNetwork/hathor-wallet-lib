@@ -250,3 +250,13 @@ export const LOAD_WALLET_MAX_RETRY = 5;
  * Time in milliseconds between each load wallet retry
  */
 export const LOAD_WALLET_RETRY_SLEEP = 5000;
+
+/**
+ * Limit of retries when downloading token metadata
+ */
+export const METADATA_RETRY_LIMIT = 3;
+
+/**
+ * Interval between metadata download retries in milliseconds
+ */
+export const DOWNLOAD_METADATA_RETRY_INTERVAL = 5000;
