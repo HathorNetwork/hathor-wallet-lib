@@ -4,12 +4,13 @@ import config from "../../src/config";
 
 let previousNetwork;
 
-beforeEach(() => {
+beforeAll(() => {
     previousNetwork = networkIntance.name;
 });
 
 afterEach(() => {
     networkIntance.setNetwork(previousNetwork);
+    config.setTxMiningUrl(undefined);
 });
 
 test('use testnet tx mining by default', () => {

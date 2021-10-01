@@ -1,0 +1,44 @@
+import { axiosInstance } from '../../../src/wallet/api/walletServiceAxios';
+import networkIntance from "../../../src/network";
+import Network from '../../../src/models/network';
+import HathorWalletServiceWallet from '../../../src/wallet/wallet';
+import config from '../../../src/config';
+
+let previousNetwork;
+const words = 'connect sunny silent cabin leopard start turtle tortoise dial timber woman genre pave tuna rice indicate gown draft palm collect retreat meadow assume spray';
+
+beforeAll(() => {
+  previousNetwork = networkIntance.name;
+});
+
+afterEach(() => {
+  networkIntance.setNetwork(previousNetwork);
+});
+
+test('use testnet tx mining when network is testnet', async () => {
+  const network = new Network('testnet');
+  const wallet = new HathorWalletServiceWallet(words, network);
+
+  const client = await axiosInstance(wallet, false);
+
+  expect(client.defaults.baseURL).toEqual("https://wallet-service.testnet.hathor.network/");
+});
+
+test('use mainnet tx mining when network is mainnet', async () => {
+  const network = new Network('mainnet');
+  const wallet = new HathorWalletServiceWallet(words, network);
+
+  const client = await axiosInstance(wallet, false);
+
+  expect(client.defaults.baseURL).toEqual("https://wallet-service.hathor.network/");
+});
+
+test('use explicitly configured tx mining', async () => {
+  config.setWalletServiceBaseUrl("wallet.service.url");
+  const network = new Network('mainnet');
+  const wallet = new HathorWalletServiceWallet(words, network);
+
+  const client = await axiosInstance(wallet, false);
+
+  expect(client.defaults.baseURL).toEqual("wallet.service.url");
+});

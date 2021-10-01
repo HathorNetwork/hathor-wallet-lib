@@ -1,8 +1,18 @@
 import networkInstance from './network';
-import { TX_MINING_URL, TX_MINING_TESTNET_URL } from './constants';
+import Network from './models/network';
+
+
+// Base URL for the tx mining api
+const TX_MINING_MAINNET_URL = 'https://txmining.mainnet.hathor.network/';
+const TX_MINING_TESTNET_URL = 'https://txmining.testnet.hathor.network/';
+
+// Wallet service URL
+const WALLET_SERVICE_MAINNET_BASE_URL  = 'https://wallet-service.hathor.network/';
+const WALLET_SERVICE_TESTNET_BASE_URL  = 'https://wallet-service.testnet.hathor.network/';
 
 class Config {
     TX_MINING_URL?: string;
+    WALLET_SERVICE_BASE_URL?: string;
 
     setTxMiningUrl(url) {
         this.TX_MINING_URL = url;
@@ -15,9 +25,41 @@ class Config {
 
         // Keeps the old behavior for cases that don't explicitly set a TX_MINING_URL
         if (networkInstance.name == 'mainnet') {
-            return TX_MINING_URL;
-        } else {
+            return TX_MINING_MAINNET_URL;
+        } else if (networkInstance.name == 'testnet') {
             return TX_MINING_TESTNET_URL;
+        } else {
+            throw new Error(`Network ${networkInstance.name} doesn't have a correspondent tx mining service url. You should set it explicitly.`);
+        }
+    }
+
+    setWalletServiceBaseUrl(url) {
+        this.WALLET_SERVICE_BASE_URL = url;
+    }
+
+    /**
+     * Returns the correct base url constant for wallet service.
+     * If the url was explicitly set, it is always returned as set.
+     * Otherwise, we return it based on the provided network object.
+     *
+     * @param {Network} network The network, can be either mainnet or testnet
+     */
+    getWalletServiceBaseUrl(network?: Network) {
+        if (this.WALLET_SERVICE_BASE_URL) {
+            return this.WALLET_SERVICE_BASE_URL;
+        }
+
+        if (!network) {
+            throw new Error("You should either provide a network or call setWalletServiceBaseUrl before calling this.")
+        }
+
+        // Keeps the old behavior for cases that don't explicitly set a WALLET_SERVICE_BASE_URL
+        if (network.name == 'mainnet') {
+            return WALLET_SERVICE_MAINNET_BASE_URL;
+        } else if (network.name == 'testnet'){
+            return WALLET_SERVICE_TESTNET_BASE_URL;
+        } else {
+            throw new Error(`Network ${network.name} doesn't have a correspondent wallet service url. You should set it explicitly.`);
         }
     }
 }

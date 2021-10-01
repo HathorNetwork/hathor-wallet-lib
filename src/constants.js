@@ -170,11 +170,6 @@ export const STRATUM_TIMEOUT_RETURN_CODE = 'stratum_timeout';
 export const MIN_POLLING_INTERVAL = 0.5;
 
 /**
- * Base URL for the tx mining api
- */
-export const TX_MINING_URL = 'https://txmining.mainnet.hathor.network/';
-
-/**
  * Constants to calculate weight
  */
 export const TX_WEIGHT_CONSTANTS = {
@@ -199,26 +194,9 @@ export const MAX_OUTPUTS = 255;
 export const TOKEN_DEPOSIT_PERCENTAGE = 0.01
 
 /**
- * Base URL for the tx mining api in the testnet
- */
-export const TX_MINING_TESTNET_URL = 'https://txmining.testnet.hathor.network/';
-
-/**
  * Timeout in milliseconds to call the method to set all selected outputs of a tx as 'selected': false
  */
 export const SELECT_OUTPUTS_TIMEOUT = 1000 * 60;
-
-/**
- * Wallet service URL
- */
-export const WALLET_SERVICE_BASE_URL  = 'https://wallet-service.hathor.network/';
-export const WALLET_SERVICE_TESTNET_BASE_URL  = 'https://wallet-service.testnet.hathor.network/';
-
-/**
- * Explorer service URL
- */
-export const EXPLORER_SERVICE_BASE_URL  = 'https://explorer-service.hathor.network/';
-export const EXPLORER_SERVICE_TESTNET_BASE_URL  = 'https://explorer-service.testnet.hathor.network/';
 
 /**
  * Size in bytes of a transaction hash (32 bytes)
