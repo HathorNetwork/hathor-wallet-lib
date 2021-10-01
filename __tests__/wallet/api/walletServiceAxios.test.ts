@@ -1,19 +1,9 @@
 import { axiosInstance } from '../../../src/wallet/api/walletServiceAxios';
-import networkIntance from "../../../src/network";
 import Network from '../../../src/models/network';
 import HathorWalletServiceWallet from '../../../src/wallet/wallet';
 import config from '../../../src/config';
 
-let previousNetwork;
 const words = 'connect sunny silent cabin leopard start turtle tortoise dial timber woman genre pave tuna rice indicate gown draft palm collect retreat meadow assume spray';
-
-beforeAll(() => {
-  previousNetwork = networkIntance.name;
-});
-
-afterEach(() => {
-  networkIntance.setNetwork(previousNetwork);
-});
 
 test('use testnet tx mining when network is testnet', async () => {
   const network = new Network('testnet');

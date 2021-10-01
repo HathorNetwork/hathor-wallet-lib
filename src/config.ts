@@ -10,11 +10,16 @@ const TX_MINING_TESTNET_URL = 'https://txmining.testnet.hathor.network/';
 const WALLET_SERVICE_MAINNET_BASE_URL  = 'https://wallet-service.hathor.network/';
 const WALLET_SERVICE_TESTNET_BASE_URL  = 'https://wallet-service.testnet.hathor.network/';
 
+// Explorer service URL
+const EXPLORER_SERVICE_MAINNET_BASE_URL  = 'https://explorer-service.hathor.network/';
+const EXPLORER_SERVICE_TESTNET_BASE_URL  = 'https://explorer-service.testnet.hathor.network/';
+
 class Config {
     TX_MINING_URL?: string;
     WALLET_SERVICE_BASE_URL?: string;
+    EXPLORER_SERVICE_BASE_URL?: string;
 
-    setTxMiningUrl(url) {
+    setTxMiningUrl(url: string) {
         this.TX_MINING_URL = url;
     }
 
@@ -33,7 +38,7 @@ class Config {
         }
     }
 
-    setWalletServiceBaseUrl(url) {
+    setWalletServiceBaseUrl(url: string) {
         this.WALLET_SERVICE_BASE_URL = url;
     }
 
@@ -60,6 +65,29 @@ class Config {
             return WALLET_SERVICE_TESTNET_BASE_URL;
         } else {
             throw new Error(`Network ${network.name} doesn't have a correspondent wallet service url. You should set it explicitly.`);
+        }
+    }
+
+    setExplorerServiceBaseUrl(url: string) {
+        this.EXPLORER_SERVICE_BASE_URL = url;
+    }
+
+    getExplorerServiceBaseUrl(network: string) {
+        if (this.EXPLORER_SERVICE_BASE_URL) {
+            return this.EXPLORER_SERVICE_BASE_URL;
+        }
+
+        if (!network) {
+            throw new Error("You should either provide a network or call setExplorerServiceBaseUrl before calling this.")
+        }
+
+        // Keeps the old behavior for cases that don't explicitly set a WALLET_SERVICE_BASE_URL
+        if (network == 'mainnet') {
+            return EXPLORER_SERVICE_MAINNET_BASE_URL;
+        } else if (network == 'testnet'){
+            return EXPLORER_SERVICE_TESTNET_BASE_URL;
+        } else {
+            throw new Error(`Network ${network} doesn't have a correspondent explorer service url. You should set it explicitly.`);
         }
     }
 }
