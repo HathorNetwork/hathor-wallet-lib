@@ -43,7 +43,7 @@ const metadataApi = {
         } else {
           await helpers.sleep(retryInterval);
           const newRetries = retries - 1;
-          return this.getDagMetadata(id, network, { retries: newRetries });
+          return this.getDagMetadata(id, network, { retries: newRetries, retryInterval });
         }
       }
     }
