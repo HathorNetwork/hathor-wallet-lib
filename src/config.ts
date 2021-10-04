@@ -107,7 +107,6 @@ class Config {
     *
     * If the url was not set in the config, and no network is provided, we throw an Error.
     *
-    * @summary If the description is long, write your summary here. Otherwise, feel free to remove this.
     * @param {string} network - The name of the network to be used to select the url.
     * @return {string} The explorer service url
     */

@@ -155,7 +155,7 @@ const helpers = {
   },
 
   /**
-   * Get the version numbers separated by dot  
+   * Get the version numbers separated by dot
    * For example: if you haver version 0.3.1-beta you will get ['0', '3', '1']
    *
    * @param {string} version
@@ -168,6 +168,16 @@ const helpers = {
   getCleanVersionArray(version) {
     return version.replace(/[^\d.]/g, '').split('.');
   },
+
+  /**
+   * @deprecated since version 0.24.0.
+   * Will be deleted in version 1.0.0.
+   *
+   * You should use the methods in src/config.ts instead.
+   */
+  getServerUrl() {
+    return config.getServerUrl();
+  }
 
   /**
    * Get the URL to connect to the websocket from the server URL of the wallet

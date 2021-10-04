@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+
 /**
  * Constants defined for the Hathor Wallet
  * @module Constants
@@ -14,6 +15,27 @@
  * Quantity of decimal places of tokens amount
  */
 export const DECIMAL_PLACES = 2;
+
+/**
+ * ID of the genesis block
+ *
+ * @deprecated since version 0.24.0.
+ * Will be deleted in version 1.0.0
+ */
+export const GENESIS_BLOCK = [
+  '000164e1e7ec7700a18750f9f50a1a9b63f6c7268637c072ae9ee181e58eb01b'
+]
+
+/**
+ * ID of the genesis transactions
+ *
+ * @deprecated since version 0.24.0.
+ * Will be deleted in version 1.0.0
+ */
+export const GENESIS_TX = [
+  '00029b7f8051f6ebdc0338d02d4a8cfbd662500ee03224bbee75a6f2da0350b0',
+  '0001e887c7b5ec3b4e57033d849a80d8bccbe3a749abfa87cc31c663530f3f4e'
+]
 
 /**
  * How many addresses we can have without being used
@@ -36,10 +58,33 @@ export const MIN_API_VERSION = '0.37.2';
 export const LIMIT_ADDRESS_GENERATION = true;
 
 /**
- * Hathor address BIP44 code  
+ * Hathor address BIP44 code
  * (listed here: https://github.com/satoshilabs/slips/blob/master/slip-0044.md)
  */
 export const HATHOR_BIP44_CODE = 280;
+
+/**
+ * Server options for the user to choose which one to connect
+ *
+ * @deprecated since version 0.24.0.
+ * Will be deleted in version 1.0.0.
+ *
+ * You should use the methods in src/config.ts instead.
+ */
+export const DEFAULT_SERVERS = [
+  'https://node1.mainnet.hathor.network/v1a/',
+  'https://node2.mainnet.hathor.network/v1a/',
+];
+
+/**
+ * Default server user will connect when none have been chosen
+ *
+ * @deprecated since version 0.24.0.
+ * Will be deleted in version 1.0.0
+ *
+ * You should use the methods in src/config.ts instead.
+ */
+export const DEFAULT_SERVER = DEFAULT_SERVERS[0];
 
 /**
  * Block version field
@@ -157,6 +202,27 @@ export const STRATUM_TIMEOUT_RETURN_CODE = 'stratum_timeout';
 export const MIN_POLLING_INTERVAL = 0.5;
 
 /**
+ * Base URL for the tx mining api
+ *
+ * @deprecated since version 0.24.0.
+ * Will be deleted in version 1.0.0.
+ *
+ * You should use the methods in src/config.ts instead.
+ */
+export const TX_MINING_URL = 'https://txmining.mainnet.hathor.network/';
+
+/**
+ * Base URL for the tx mining api in the testnet
+ *
+ * @deprecated since version 0.24.0.
+ * Will be deleted in version 1.0.0.
+ *
+ * You should use the methods in src/config.ts instead.
+ */
+export const TX_MINING_TESTNET_URL = 'https://txmining.testnet.hathor.network/';
+
+
+/**
  * Constants to calculate weight
  */
 export const TX_WEIGHT_CONSTANTS = {
@@ -184,6 +250,28 @@ export const TOKEN_DEPOSIT_PERCENTAGE = 0.01
  * Timeout in milliseconds to call the method to set all selected outputs of a tx as 'selected': false
  */
 export const SELECT_OUTPUTS_TIMEOUT = 1000 * 60;
+
+/**
+ * Wallet service URL
+ *
+ * @deprecated since version 0.24.0.
+ * Will be deleted in version 1.0.0.
+ *
+ * You should use the methods in src/config.ts instead.
+ */
+export const WALLET_SERVICE_BASE_URL  = 'https://wallet-service.hathor.network/';
+export const WALLET_SERVICE_TESTNET_BASE_URL  = 'https://wallet-service.testnet.hathor.network/';
+
+/**
+ * Explorer service URL
+ *
+ * @deprecated since version 0.24.0.
+ * Will be deleted in version 1.0.0.
+ *
+ * You should use the methods in src/config.ts instead.
+ */
+export const EXPLORER_SERVICE_BASE_URL  = 'https://explorer-service.hathor.network/';
+export const EXPLORER_SERVICE_TESTNET_BASE_URL  = 'https://explorer-service.testnet.hathor.network/';
 
 /**
  * Size in bytes of a transaction hash (32 bytes)
