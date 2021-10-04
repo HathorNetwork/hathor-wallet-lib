@@ -177,7 +177,7 @@ const helpers = {
    */
   getServerUrl() {
     return config.getServerUrl();
-  }
+  },
 
   /**
    * Get the URL to connect to the websocket from the server URL of the wallet
