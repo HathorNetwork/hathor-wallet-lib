@@ -24,10 +24,22 @@ class Config {
     EXPLORER_SERVICE_BASE_URL?: string;
     SERVER_URL?: string;
 
+    /**
+    * Sets the tx mining service url that will be returned by the config object.
+    *
+    * @param {string} url - The url to be set
+    */
     setTxMiningUrl(url: string) {
         this.TX_MINING_URL = url;
     }
 
+    /**
+     * Returns the correct base url constant for tx mining.
+     * If the url was explicitly set using the config object, it is always returned.
+     * Otherwise, we return it based on the network set with networkInstance.
+     *
+     * @return {string} The tx mining service url
+     */
     getTxMiningUrl() {
         if (this.TX_MINING_URL) {
             return this.TX_MINING_URL;
@@ -43,16 +55,22 @@ class Config {
         }
     }
 
+    /**
+    * Sets the wallet service url that will be returned by the config object.
+    *
+    * @param {string} url - The url to be set
+    */
     setWalletServiceBaseUrl(url: string) {
         this.WALLET_SERVICE_BASE_URL = url;
     }
 
     /**
      * Returns the correct base url constant for wallet service.
-     * If the url was explicitly set, it is always returned as set.
+     * If the url was explicitly set using the config object, it is always returned.
      * Otherwise, we return it based on the provided network object.
      *
      * @param {Network} network The network, can be either mainnet or testnet
+     * @return {string} The wallet service url
      */
     getWalletServiceBaseUrl(network?: Network) {
         if (this.WALLET_SERVICE_BASE_URL) {
@@ -73,10 +91,26 @@ class Config {
         }
     }
 
+    /**
+    * Sets the explorer service url that will be returned by the config object.
+    *
+    * @param {string} url - The url to be set
+    */
     setExplorerServiceBaseUrl(url: string) {
         this.EXPLORER_SERVICE_BASE_URL = url;
     }
 
+    /**
+    * Returns the correct base url constant for explorer service.
+    * If the url was explicitly set using the config object, it is always returned.
+    * Otherwise, we return it based on the provided network object.
+    *
+    * If the url was not set in the config, and no network is provided, we throw an Error.
+    *
+    * @summary If the description is long, write your summary here. Otherwise, feel free to remove this.
+    * @param {string} network - The name of the network to be used to select the url.
+    * @return {string} The explorer service url
+    */
     getExplorerServiceBaseUrl(network: string) {
         if (this.EXPLORER_SERVICE_BASE_URL) {
             return this.EXPLORER_SERVICE_BASE_URL;
@@ -96,19 +130,24 @@ class Config {
         }
     }
 
+    /**
+    * Sets the fullnode server url that will be returned by the config object.
+    *
+    * @param {string} url - The url to be set
+    */
     setServerUrl(url: string) {
         this.SERVER_URL = url;
     }
 
     /**
-     * Get the server URL that the wallet is connected
+     * Get the server URL that the wallet is connected.
      *
-     * If a server was not selected, returns the default one
+     * There is more than one method of setting this.
+     * The priority will be given to the url set using the config object.
+     * If not set, we look next into the storage object keys.
+     * If still not set, the default url is returned
      *
-     * @return {string} Server URL
-     *
-     * @memberof Helpers
-     * @inner
+     * @return {string} Server URL according to the priority described above
      */
     getServerUrl() {
         if (this.SERVER_URL) {
@@ -131,4 +170,4 @@ class Config {
 
 const instance = new Config();
 
-export default instance; 
+export default instance;
