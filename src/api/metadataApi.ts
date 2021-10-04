@@ -8,6 +8,7 @@
 import explorerServiceAxios from './explorerServiceAxios';
 import helpers from '../utils/helpers';
 import { METADATA_RETRY_LIMIT, DOWNLOAD_METADATA_RETRY_INTERVAL } from '../constants';
+import { GetDagMetadataApiError } from '../errors';
 
 const metadataApi = {
   async getDagMetadata(id: string, network: string, options = {}) {
@@ -30,7 +31,7 @@ const metadataApi = {
         } else {
           // Error downloading metadata
           // throw Error and the catch will handle it
-          throw Error;
+          throw new GetDagMetadataApiError('Invalid metadata API response.');
         }
       } catch (e) {
         if (e.response && e.response.status === 404) {
@@ -41,7 +42,7 @@ const metadataApi = {
           // Error downloading metadata
           if (retries === 0) {
             // If we have no more retries left, then we propagate the error
-            throw e;
+            throw new GetDagMetadataApiError(e.message);
           } else {
             // If we still have retry attempts, then we wait a few seconds and retry
             await helpers.sleep(retryInterval);
