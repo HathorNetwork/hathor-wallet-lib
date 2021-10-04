@@ -118,7 +118,6 @@ class Network {
    * Validate the network name is valid
    */
   validateNetwork() {
-    // TODO Should we remove this?
     if (this.name !== 'testnet' && this.name !== 'mainnet') {
       throw Error('We currently support only mainnet and testnet as network.');
     }
