@@ -42,19 +42,6 @@ export const LIMIT_ADDRESS_GENERATION = true;
 export const HATHOR_BIP44_CODE = 280;
 
 /**
- * Server options for the user to choose which one to connect
- */
-export const DEFAULT_SERVERS = [
-  'https://node1.mainnet.hathor.network/v1a/',
-  'https://node2.mainnet.hathor.network/v1a/',
-];
-
-/**
- * Default server user will connect when none have been chosen
- */
-export const DEFAULT_SERVER = DEFAULT_SERVERS[0];
-
-/**
  * Block version field
  */
 export const BLOCK_VERSION = 0;

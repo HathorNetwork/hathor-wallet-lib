@@ -7,7 +7,7 @@
 
 import EventEmitter from 'events';
 import networkInstance from '../network';
-import { DEFAULT_SERVER } from '../constants';
+import { DEFAULT_SERVER } from '../config';
 import version from '../version';
 import helpers from '../helpers';
 import wallet from '../wallet';
@@ -49,6 +49,8 @@ class Connection extends EventEmitter {
     this.onConnectionChange = this.onConnectionChange.bind(this);
     this.handleWalletMessage = this.handleWalletMessage.bind(this);
 
+    // TODO Should we use `config.getServerUrl` here, instead of DEFAULT_SERVER?
+    //  By using DEFAULT_SERVER, we are ignoring anything set in storage in the 'wallet:server' key
     this.currentServer = servers[0] || DEFAULT_SERVER;
 
     const wsOptions = { wsURL: helpers.getWSServerURL(this.currentServer) };

@@ -2,10 +2,9 @@ import networkInstance from './network';
 import Network from './models/network';
 import storage from './storage';
 
-import { DEFAULT_SERVER } from './constants';
 
-
-// TODO: Check if those variables need to stay in constants.js (Are they imported from some project?)
+// Default server user will connect when none have been chosen
+export const DEFAULT_SERVER = 'https://node1.mainnet.hathor.network/v1a/';
 
 // Base URL for the tx mining api
 const TX_MINING_MAINNET_URL = 'https://txmining.mainnet.hathor.network/';
