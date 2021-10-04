@@ -1,6 +1,11 @@
 import networkInstance from './network';
 import Network from './models/network';
+import storage from './storage';
 
+import { DEFAULT_SERVER } from './constants';
+
+
+// TODO: Check if those variables need to stay in constants.js (Are they imported from some project?)
 
 // Base URL for the tx mining api
 const TX_MINING_MAINNET_URL = 'https://txmining.mainnet.hathor.network/';
@@ -18,6 +23,7 @@ class Config {
     TX_MINING_URL?: string;
     WALLET_SERVICE_BASE_URL?: string;
     EXPLORER_SERVICE_BASE_URL?: string;
+    SERVER_URL?: string;
 
     setTxMiningUrl(url: string) {
         this.TX_MINING_URL = url;
@@ -90,6 +96,38 @@ class Config {
             throw new Error(`Network ${network} doesn't have a correspondent explorer service url. You should set it explicitly.`);
         }
     }
+
+    setServerUrl(url: string) {
+        this.SERVER_URL = url;
+    }
+
+    /**
+     * Get the server URL that the wallet is connected
+     *
+     * If a server was not selected, returns the default one
+     *
+     * @return {string} Server URL
+     *
+     * @memberof Helpers
+     * @inner
+     */
+    getServerUrl() {
+        if (this.SERVER_URL) {
+            return this.SERVER_URL;
+        }
+
+        const server = storage.getItem('wallet:server');
+        const defaultServer = storage.getItem('wallet:defaultServer');
+
+        if (server !== null) {
+            return server;
+        } else if (defaultServer !== null) {
+            return defaultServer
+        } else {
+            return DEFAULT_SERVER;
+        }
+    }
+
 }
 
 const instance = new Config();

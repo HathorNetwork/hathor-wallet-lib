@@ -8,7 +8,7 @@
 import path from 'path';
 import { HDPublicKey, Address } from 'bitcore-lib';
 
-import storage from './storage';
+import config from './config';
 import network from './network';
 import { BLOCK_VERSION, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, MERGED_MINED_BLOCK_VERSION, DECIMAL_PLACES, DEFAULT_SERVER } from './constants';
 import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError, XPubError } from './errors';
@@ -170,28 +170,6 @@ const helpers = {
   },
 
   /**
-   * Get the server URL that the wallet is connected
-   *
-   * If a server was not selected, returns the default one
-   *
-   * @return {string} Server URL
-   *
-   * @memberof Helpers
-   * @inner
-   */
-  getServerURL() {
-    const server = storage.getItem('wallet:server');
-    const defaultServer = storage.getItem('wallet:defaultServer');
-    if (server !== null) {
-      return server;
-    } else if (defaultServer !== null) {
-      return defaultServer
-    } else {
-      return DEFAULT_SERVER;
-    }
-  },
-
-  /**
    * Get the URL to connect to the websocket from the server URL of the wallet
    *
    * @return {string} Websocket URL
@@ -202,7 +180,7 @@ const helpers = {
   getWSServerURL(url = null) {
     let serverURL;
     if (url === null) {
-      serverURL = helpers.getServerURL();
+      serverURL = config.getServerUrl();
     } else {
       serverURL = url;
     }
