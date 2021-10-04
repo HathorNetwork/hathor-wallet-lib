@@ -171,3 +171,11 @@ export class SendTxError extends WalletError {}
  * @inner
  */
 export class WalletFromXPubGuard extends Error {}
+
+/**
+ * Error thrown when there is an error getting dag metadata using wallet service
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class GetDagMetadataApiError extends Error {}
