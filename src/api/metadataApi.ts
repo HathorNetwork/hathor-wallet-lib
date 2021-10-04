@@ -38,10 +38,12 @@ const metadataApi = {
           // There is no error here, we just return null
           return null;
         } else {
-          // Error downloading metadata, then we should wait a few seconds and retry if still didn't reached retry limit
+          // Error downloading metadata
           if (retries === 0) {
+            // If we have no more retries left, then we propagate the error
             throw e;
           } else {
+            // If we still have retry attempts, then we wait a few seconds and retry
             await helpers.sleep(retryInterval);
             retries--;
           }
