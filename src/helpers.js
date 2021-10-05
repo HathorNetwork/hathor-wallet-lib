@@ -170,7 +170,7 @@ const helpers = {
   },
 
   /**
-   * @deprecated since version 0.24.0.
+   * @deprecated since version 0.25.0.
    * Will be deleted in version 1.0.0.
    *
    * You should use the methods in src/config.ts instead.

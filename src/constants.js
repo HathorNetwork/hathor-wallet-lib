@@ -19,7 +19,7 @@ export const DECIMAL_PLACES = 2;
 /**
  * ID of the genesis block
  *
- * @deprecated since version 0.24.0.
+ * @deprecated since version 0.25.0.
  * Will be deleted in version 1.0.0
  */
 export const GENESIS_BLOCK = [
@@ -29,7 +29,7 @@ export const GENESIS_BLOCK = [
 /**
  * ID of the genesis transactions
  *
- * @deprecated since version 0.24.0.
+ * @deprecated since version 0.25.0.
  * Will be deleted in version 1.0.0
  */
 export const GENESIS_TX = [
@@ -66,7 +66,7 @@ export const HATHOR_BIP44_CODE = 280;
 /**
  * Server options for the user to choose which one to connect
  *
- * @deprecated since version 0.24.0.
+ * @deprecated since version 0.25.0.
  * Will be deleted in version 1.0.0.
  *
  * You should use the methods in src/config.ts instead.
@@ -79,7 +79,7 @@ export const DEFAULT_SERVERS = [
 /**
  * Default server user will connect when none have been chosen
  *
- * @deprecated since version 0.24.0.
+ * @deprecated since version 0.25.0.
  * Will be deleted in version 1.0.0
  *
  * You should use the methods in src/config.ts instead.
@@ -204,7 +204,7 @@ export const MIN_POLLING_INTERVAL = 0.5;
 /**
  * Base URL for the tx mining api
  *
- * @deprecated since version 0.24.0.
+ * @deprecated since version 0.25.0.
  * Will be deleted in version 1.0.0.
  *
  * You should use the methods in src/config.ts instead.
@@ -214,7 +214,7 @@ export const TX_MINING_URL = 'https://txmining.mainnet.hathor.network/';
 /**
  * Base URL for the tx mining api in the testnet
  *
- * @deprecated since version 0.24.0.
+ * @deprecated since version 0.25.0.
  * Will be deleted in version 1.0.0.
  *
  * You should use the methods in src/config.ts instead.
@@ -254,7 +254,7 @@ export const SELECT_OUTPUTS_TIMEOUT = 1000 * 60;
 /**
  * Wallet service URL
  *
- * @deprecated since version 0.24.0.
+ * @deprecated since version 0.25.0.
  * Will be deleted in version 1.0.0.
  *
  * You should use the methods in src/config.ts instead.
@@ -265,7 +265,7 @@ export const WALLET_SERVICE_TESTNET_BASE_URL  = 'https://wallet-service.testnet.
 /**
  * Explorer service URL
  *
- * @deprecated since version 0.24.0.
+ * @deprecated since version 0.25.0.
  * Will be deleted in version 1.0.0.
  *
  * You should use the methods in src/config.ts instead.
