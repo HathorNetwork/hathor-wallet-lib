@@ -153,16 +153,18 @@ class Config {
             return this.SERVER_URL;
         }
 
-        const server = storage.getItem('wallet:server');
-        const defaultServer = storage.getItem('wallet:defaultServer');
+        if (storage.isInitialized()) {
+            const server = storage.getItem('wallet:server');
+            const defaultServer = storage.getItem('wallet:defaultServer');
 
-        if (server !== null) {
-            return server;
-        } else if (defaultServer !== null) {
-            return defaultServer
-        } else {
-            return DEFAULT_SERVER;
+            if (server !== null) {
+                return server;
+            } else if (defaultServer !== null) {
+                return defaultServer
+            }
         }
+
+        return DEFAULT_SERVER;
     }
 
 }
