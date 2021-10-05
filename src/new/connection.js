@@ -135,6 +135,20 @@ class Connection extends EventEmitter {
   setup() {
     this.websocket.setup();
   }
+
+  /**
+   * Gets current server
+   */
+  getCurrentServer() {
+    return this.currentServer;
+  }
+
+  /**
+   * Gets current network
+   */
+  getCurrentNetwork() {
+    return this.network;
+  }
 }
 
 // State constants.
