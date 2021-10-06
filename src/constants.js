@@ -20,7 +20,6 @@ export const DECIMAL_PLACES = 2;
  * ID of the genesis block
  *
  * @deprecated since version 0.25.0.
- * Will be deleted in version 1.0.0
  */
 export const GENESIS_BLOCK = [
   '000164e1e7ec7700a18750f9f50a1a9b63f6c7268637c072ae9ee181e58eb01b'
@@ -30,7 +29,6 @@ export const GENESIS_BLOCK = [
  * ID of the genesis transactions
  *
  * @deprecated since version 0.25.0.
- * Will be deleted in version 1.0.0
  */
 export const GENESIS_TX = [
   '00029b7f8051f6ebdc0338d02d4a8cfbd662500ee03224bbee75a6f2da0350b0',
@@ -67,7 +65,6 @@ export const HATHOR_BIP44_CODE = 280;
  * Server options for the user to choose which one to connect
  *
  * @deprecated since version 0.25.0.
- * Will be deleted in version 1.0.0.
  *
  * You should use the methods in src/config.ts instead.
  */
@@ -80,7 +77,6 @@ export const DEFAULT_SERVERS = [
  * Default server user will connect when none have been chosen
  *
  * @deprecated since version 0.25.0.
- * Will be deleted in version 1.0.0
  *
  * You should use the methods in src/config.ts instead.
  */
@@ -205,7 +201,6 @@ export const MIN_POLLING_INTERVAL = 0.5;
  * Base URL for the tx mining api
  *
  * @deprecated since version 0.25.0.
- * Will be deleted in version 1.0.0.
  *
  * You should use the methods in src/config.ts instead.
  */
@@ -215,7 +210,6 @@ export const TX_MINING_URL = 'https://txmining.mainnet.hathor.network/';
  * Base URL for the tx mining api in the testnet
  *
  * @deprecated since version 0.25.0.
- * Will be deleted in version 1.0.0.
  *
  * You should use the methods in src/config.ts instead.
  */
@@ -255,7 +249,6 @@ export const SELECT_OUTPUTS_TIMEOUT = 1000 * 60;
  * Wallet service URL
  *
  * @deprecated since version 0.25.0.
- * Will be deleted in version 1.0.0.
  *
  * You should use the methods in src/config.ts instead.
  */
@@ -266,7 +259,6 @@ export const WALLET_SERVICE_TESTNET_BASE_URL  = 'https://wallet-service.testnet.
  * Explorer service URL
  *
  * @deprecated since version 0.25.0.
- * Will be deleted in version 1.0.0.
  *
  * You should use the methods in src/config.ts instead.
  */
