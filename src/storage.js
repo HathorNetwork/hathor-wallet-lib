@@ -20,6 +20,15 @@ class Storage {
   }
 
   /**
+   * Checks whether this.store is set and returns true or false
+   *
+   * @return {boolean} Whether the store is set
+   */
+  isInitialized() {
+    return !!this.store;
+  }
+
+  /**
    * Set the underlying store object
    *
    * @param {Object} myStorage The store to be used

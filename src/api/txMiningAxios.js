@@ -5,10 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import helpers from '../helpers';
-import { TX_MINING_URL, TX_MINING_TESTNET_URL } from '../constants';
 import axiosWrapperCreateRequestInstance from './axiosWrapper';
-import networkInstance from '../network';
+import config from '../config';
 
 /**
  * Create axios instance settings base URL and content type  
@@ -24,12 +22,7 @@ import networkInstance from '../network';
  * @param {number} timeout Timeout in milliseconds for the request
  */
 const txMiningRequestClient = (resolve, timeout) => {
-  let txMiningURL;
-  if (networkInstance.name === 'mainnet') {
-    txMiningURL = TX_MINING_URL;
-  } else {
-    txMiningURL = TX_MINING_TESTNET_URL;
-  }
+  const txMiningURL = config.getTxMiningUrl()
   return axiosWrapperCreateRequestInstance(txMiningURL, resolve, timeout);
 }
 

@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import helpers from '../helpers';
+import config from '../config';
 import axiosWrapperCreateRequestInstance from './axiosWrapper';
 
 /**
@@ -22,7 +22,7 @@ import axiosWrapperCreateRequestInstance from './axiosWrapper';
  * @param {number} timeout Timeout in milliseconds for the request
  */
 export const defaultCreateRequestInstance = (resolve, timeout) => {
-  return axiosWrapperCreateRequestInstance(helpers.getServerURL(), resolve, timeout);
+  return axiosWrapperCreateRequestInstance(config.getServerUrl(), resolve, timeout);
 }
 
 let _createRequestInstance = defaultCreateRequestInstance;
