@@ -7,10 +7,9 @@
 
 import axios from 'axios';
 import {
-    EXPLORER_SERVICE_BASE_URL,
-    EXPLORER_SERVICE_TESTNET_BASE_URL,
     TIMEOUT,
 } from '../constants';
+import config from '../config';
 
 /**
  * Method that creates an axios instance
@@ -26,7 +25,7 @@ import {
  */
 export const axiosInstance = async (network: string, timeout: number = TIMEOUT) => {
   const defaultOptions = {
-    baseURL: getBaseUrl(network),
+    baseURL: config.getExplorerServiceBaseUrl(network),
     timeout: timeout,
     headers: {
       'Content-Type': 'application/json',
@@ -35,18 +34,5 @@ export const axiosInstance = async (network: string, timeout: number = TIMEOUT) 
 
   return axios.create(defaultOptions);
 }
-
-/**
- * Returns the correct base url constant for wallet service based on the network
- *
- * @param {string} network The network, can be either mainnet or testnet
- */
-const getBaseUrl = (network: string): string => {
-  if (network === 'mainnet') {
-    return EXPLORER_SERVICE_BASE_URL;
-  } else {
-    return EXPLORER_SERVICE_TESTNET_BASE_URL;
-  }
-};
 
 export default axiosInstance;

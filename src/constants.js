@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+
 /**
  * Constants defined for the Hathor Wallet
  * @module Constants
@@ -17,6 +18,8 @@ export const DECIMAL_PLACES = 2;
 
 /**
  * ID of the genesis block
+ *
+ * @deprecated since version 0.25.0.
  */
 export const GENESIS_BLOCK = [
   '000164e1e7ec7700a18750f9f50a1a9b63f6c7268637c072ae9ee181e58eb01b'
@@ -24,6 +27,8 @@ export const GENESIS_BLOCK = [
 
 /**
  * ID of the genesis transactions
+ *
+ * @deprecated since version 0.25.0.
  */
 export const GENESIS_TX = [
   '00029b7f8051f6ebdc0338d02d4a8cfbd662500ee03224bbee75a6f2da0350b0',
@@ -51,13 +56,17 @@ export const MIN_API_VERSION = '0.37.2';
 export const LIMIT_ADDRESS_GENERATION = true;
 
 /**
- * Hathor address BIP44 code  
+ * Hathor address BIP44 code
  * (listed here: https://github.com/satoshilabs/slips/blob/master/slip-0044.md)
  */
 export const HATHOR_BIP44_CODE = 280;
 
 /**
  * Server options for the user to choose which one to connect
+ *
+ * @deprecated since version 0.25.0.
+ *
+ * You should use the methods in src/config.ts instead.
  */
 export const DEFAULT_SERVERS = [
   'https://node1.mainnet.hathor.network/v1a/',
@@ -66,6 +75,10 @@ export const DEFAULT_SERVERS = [
 
 /**
  * Default server user will connect when none have been chosen
+ *
+ * @deprecated since version 0.25.0.
+ *
+ * You should use the methods in src/config.ts instead.
  */
 export const DEFAULT_SERVER = DEFAULT_SERVERS[0];
 
@@ -186,8 +199,22 @@ export const MIN_POLLING_INTERVAL = 0.5;
 
 /**
  * Base URL for the tx mining api
+ *
+ * @deprecated since version 0.25.0.
+ *
+ * You should use the methods in src/config.ts instead.
  */
 export const TX_MINING_URL = 'https://txmining.mainnet.hathor.network/';
+
+/**
+ * Base URL for the tx mining api in the testnet
+ *
+ * @deprecated since version 0.25.0.
+ *
+ * You should use the methods in src/config.ts instead.
+ */
+export const TX_MINING_TESTNET_URL = 'https://txmining.testnet.hathor.network/';
+
 
 /**
  * Constants to calculate weight
@@ -214,23 +241,26 @@ export const MAX_OUTPUTS = 255;
 export const TOKEN_DEPOSIT_PERCENTAGE = 0.01
 
 /**
- * Base URL for the tx mining api in the testnet
- */
-export const TX_MINING_TESTNET_URL = 'https://txmining.testnet.hathor.network/';
-
-/**
  * Timeout in milliseconds to call the method to set all selected outputs of a tx as 'selected': false
  */
 export const SELECT_OUTPUTS_TIMEOUT = 1000 * 60;
 
 /**
  * Wallet service URL
+ *
+ * @deprecated since version 0.25.0.
+ *
+ * You should use the methods in src/config.ts instead.
  */
 export const WALLET_SERVICE_BASE_URL  = 'https://wallet-service.hathor.network/';
 export const WALLET_SERVICE_TESTNET_BASE_URL  = 'https://wallet-service.testnet.hathor.network/';
 
 /**
  * Explorer service URL
+ *
+ * @deprecated since version 0.25.0.
+ *
+ * You should use the methods in src/config.ts instead.
  */
 export const EXPLORER_SERVICE_BASE_URL  = 'https://explorer-service.hathor.network/';
 export const EXPLORER_SERVICE_TESTNET_BASE_URL  = 'https://explorer-service.testnet.hathor.network/';

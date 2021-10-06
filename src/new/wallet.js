@@ -147,6 +147,20 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Gets the current server url from connection
+   */
+  getServerUrl() {
+    return this.conn.getCurrentServer();
+  }
+
+  /**
+   * Gets the current network from connection
+   */
+  getNetwork() {
+    return this.conn.getCurrentNetwork();
+  }
+
+  /**
    * Enable debug mode.
    **/
   enableDebugMode() {

@@ -12,7 +12,8 @@
 import wallet from '../src/wallet';
 import helpers from '../src/helpers';
 import dateFormatter from '../src/date';
-import { DEFAULT_SERVER, GAP_LIMIT } from '../src/constants';
+import config, { DEFAULT_SERVER } from '../src/config';
+import { GAP_LIMIT } from '../src/constants';
 import { WalletTypeError } from '../src/errors';
 import storage from '../src/storage';
 import WebSocketHandler from '../src/WebSocketHandler';
@@ -238,25 +239,25 @@ test('Closed', () => {
 
 test('Default server', () => {
   wallet.cleanServer();
-  expect(helpers.getServerURL()).toBe(DEFAULT_SERVER);
+  expect(config.getServerUrl()).toBe(DEFAULT_SERVER);
 
   // set default server
   const defaultServer = 'http://defaultServer';
   wallet.setDefaultServer(defaultServer);
-  expect(helpers.getServerURL()).toBe(defaultServer);
+  expect(config.getServerUrl()).toBe(defaultServer);
 
   // user set server
   const server = 'http://server';
   wallet.changeServer(server);
-  expect(helpers.getServerURL()).toBe(server);
+  expect(config.getServerUrl()).toBe(server);
 
   // Reset wallet data does not clean server.
   wallet.resetWalletData();
-  expect(helpers.getServerURL()).toBe(server);
+  expect(config.getServerUrl()).toBe(server);
 
   // Now clean server will erase the server
   wallet.cleanServer();
-  expect(helpers.getServerURL()).toBe(defaultServer);
+  expect(config.getServerUrl()).toBe(defaultServer);
 });
 
 test('Wallet type', () => {

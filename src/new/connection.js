@@ -7,7 +7,7 @@
 
 import EventEmitter from 'events';
 import networkInstance from '../network';
-import { DEFAULT_SERVERS } from '../constants';
+import config from '../config';
 import version from '../version';
 import helpers from '../helpers';
 import wallet from '../wallet';
@@ -49,8 +49,7 @@ class Connection extends EventEmitter {
     this.onConnectionChange = this.onConnectionChange.bind(this);
     this.handleWalletMessage = this.handleWalletMessage.bind(this);
 
-    this.servers = servers || [...DEFAULT_SERVERS];
-    this.currentServer = this.servers[0];
+    this.currentServer = servers[0] || config.getServerUrl();
 
     const wsOptions = { wsURL: helpers.getWSServerURL(this.currentServer) };
     if (connectionTimeout) {
@@ -135,6 +134,20 @@ class Connection extends EventEmitter {
    **/
   setup() {
     this.websocket.setup();
+  }
+
+  /**
+   * Gets current server
+   */
+  getCurrentServer() {
+    return this.currentServer;
+  }
+
+  /**
+   * Gets current network
+   */
+  getCurrentNetwork() {
+    return this.network;
   }
 }
 
