@@ -17,6 +17,7 @@ import helpers from '../utils/helpers';
 import MemoryStore from '../memory_store';
 import Connection from './connection';
 import SendTransaction from './sendTransaction';
+import Network from '../models/network';
 import { AddressError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 
@@ -158,6 +159,13 @@ class HathorWallet extends EventEmitter {
    */
   getNetwork() {
     return this.conn.getCurrentNetwork();
+  }
+
+  /**
+   * Gets the network model object
+   */
+  getNetworkObject() {
+    return new Network(this.getNetwork());
   }
 
   /**
@@ -1015,7 +1023,7 @@ class HathorWallet extends EventEmitter {
       return {success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED};
     }
     const { inputs, changeAddress } = newOptions;
-    const sendTransaction = new SendTransaction({ outputs, inputs, changeAddress, pin });
+    const sendTransaction = new SendTransaction({ outputs, inputs, changeAddress, pin, network: this.getNetworkObject() });
     return sendTransaction.run();
   }
 
@@ -1118,7 +1126,7 @@ class HathorWallet extends EventEmitter {
    * @inner
    */
   async handleSendPreparedTransaction(transaction) {
-    const sendTransaction = new SendTransaction({ transaction });
+    const sendTransaction = new SendTransaction({ transaction, network: this.getNetworkObject() });
     return sendTransaction.runFromMining();
   }
 
@@ -1173,7 +1181,7 @@ class HathorWallet extends EventEmitter {
       return Promise.reject(ret);
     }
 
-    return helpers.createTxFromData(ret.preparedData);
+    return helpers.createTxFromData(ret.preparedData, this.getNetworkObject());
   }
 
   /**
@@ -1355,7 +1363,7 @@ class HathorWallet extends EventEmitter {
       return Promise.reject(ret);
     }
 
-    return helpers.createTxFromData(ret.preparedData);
+    return helpers.createTxFromData(ret.preparedData, this.getNetworkObject());
   }
 
   /**
@@ -1433,7 +1441,7 @@ class HathorWallet extends EventEmitter {
       return Promise.reject(ret);
     }
 
-    return helpers.createTxFromData(ret.preparedData);
+    return helpers.createTxFromData(ret.preparedData, this.getNetworkObject());
   }
 
   /**
@@ -1514,7 +1522,7 @@ class HathorWallet extends EventEmitter {
       return Promise.reject(ret);
     }
 
-    return helpers.createTxFromData(ret.preparedData);
+    return helpers.createTxFromData(ret.preparedData, this.getNetworkObject());
   }
 
   /**
@@ -1600,7 +1608,7 @@ class HathorWallet extends EventEmitter {
       return Promise.reject(ret);
     }
 
-    return helpers.createTxFromData(ret.preparedData);
+    return helpers.createTxFromData(ret.preparedData, this.getNetworkObject());
   }
 
   /**

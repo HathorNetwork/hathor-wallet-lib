@@ -340,14 +340,18 @@ const helpers = {
    * We used to work only with data object to handle transactions in the past inside the lib
    * This method was created to transform those objects into Transaction class instances
    *
-   * 'data': {'version', 'weight', 'timestamp', 'tokens', 'inputs': [{'tx_id', 'index'}], 'outputs': [{'address', 'value', 'tokenData', 'timelock'}]}
+   * @param {Object} 'data': {'version', 'weight', 'timestamp', 'tokens', 'inputs': [{'tx_id', 'index'}], 'outputs': [{'address', 'value', 'tokenData', 'timelock'}]}
    *
    * if it's a create token transaction, then it expects 'name' and 'symbol' as well.
+   *
+   * @param {Network} network Network to get the address first byte parameter
+   *
+   * @throws {AddressError} If the address used in the P2PKH outputs is invalid
    *
    * @memberof Helpers
    * @inner
    */
-  createTxFromData(data): Transaction | CreateTokenTransaction {
+  createTxFromData(data, network: Network): Transaction | CreateTokenTransaction {
     const inputs: Input[] = [];
     for (const input of data.inputs) {
       const inputObj = new Input(
@@ -369,7 +373,9 @@ const helpers = {
       } else if (output.type === 'p2pkh' || output.type === undefined) {
         // P2PKH
         // for compatibility reasons we will accept an output without type as p2pkh as fallback
-        const address = new Address(output.address);
+        const address = new Address(output.address, { network });
+        // This will throw AddressError in case the adress is invalid
+        address.validateAddress();
         const p2pkh = new P2PKH(address, { timelock: output.timelock || null });
         const p2pkhScript = p2pkh.createScript()
         outputObj = new Output(
