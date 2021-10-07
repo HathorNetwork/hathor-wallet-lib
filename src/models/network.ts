@@ -23,6 +23,12 @@ const versionBytes = {
     'xpriv': 0x0434c8c4, // tnpr
     'xpub': 0x0488b21e,  // xpub // 0x0434c85b -> tnpb
   },
+  'privatenet': {
+    'p2pkh': 0x70,
+    'p2sh': 0x93,
+    'xpriv': 0x0434c8c4, // tnpr
+    'xpub': 0x0488b21e,  // xpub // 0x0434c85b -> tnpb
+  },
 }
 
 /*Networks is an object of the bitcore-lib
@@ -86,9 +92,24 @@ const testnet = Networks.add({
   dnsSeeds: []
 });
 
+const privatenet = Networks.add({
+  name: 'htr-privatenet',
+  alias: 'privatenet',
+  pubkeyhash: versionBytes['privatenet']['p2pkh'],
+  privatekey: 0x80,
+  scripthash: versionBytes['privatenet']['p2sh'],
+  bech32prefix: 'tn',
+  xpubkey: versionBytes['privatenet']['xpub'],
+  xprivkey: versionBytes['privatenet']['xpriv'],
+  networkMagic: 0xf9beb4d9,
+  port: 8333,
+  dnsSeeds: []
+})
+
 const networkOptions = {
   testnet,
-  mainnet
+  mainnet,
+  privatenet
 }
 
 type versionBytesType = {
@@ -118,8 +139,10 @@ class Network {
    * Validate the network name is valid
    */
   validateNetwork() {
-    if (this.name !== 'testnet' && this.name !== 'mainnet') {
-      throw Error('We currently support only mainnet and testnet as network.');
+    const possibleNetworks = Object.keys(networkOptions);
+
+    if (!possibleNetworks.includes(this.name)) {
+      throw Error(`We currently support only ${possibleNetworks} as network.`);
     }
   }
 
