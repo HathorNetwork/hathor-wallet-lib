@@ -290,3 +290,13 @@ export const METADATA_RETRY_LIMIT = 3;
  * Interval between metadata download retries in milliseconds
  */
 export const DOWNLOAD_METADATA_RETRY_INTERVAL = 5000;
+
+/**
+ * Maximum characters of created token name
+ */
+export const MAX_TOKEN_NAME_SIZE = 30;
+
+/**
+ * Maximum characters of created token symbol
+ */
+export const MAX_TOKEN_SYMBOL_SIZE = 5;
