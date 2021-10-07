@@ -174,7 +174,7 @@ const helpers = {
    *
    * You should use the methods in src/config.ts instead.
    */
-  getServerUrl() {
+  getServerURL() {
     return config.getServerUrl();
   },
 
