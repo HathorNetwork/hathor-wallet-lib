@@ -272,10 +272,10 @@ class SendTransaction extends EventEmitter {
           const err = new SendTxError(response.message);
           reject(err);
         }
-      }).catch(() => {
+      }).catch((e) => {
         this.updateOutputSelected(false);
-        const err = new SendTxError(this.unexpectedPushTxError);
-        reject(err);
+        this.emit('send-error', e.message);
+        reject(e);
       });
     });
 
