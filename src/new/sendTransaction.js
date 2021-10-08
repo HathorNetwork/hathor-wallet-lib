@@ -232,10 +232,6 @@ class SendTransaction extends EventEmitter {
     })
 
     this.mineTransaction.on('success', (data) => {
-      this.transaction.parents = data.parents;
-      this.transaction.timestamp = data.timestamp;
-      this.transaction.nonce = data.nonce;
-      this.transaction.weight = data.weight;
       this.emit('mine-tx-ended', data);
     })
 
@@ -301,7 +297,11 @@ class SendTransaction extends EventEmitter {
         // This will await until mine tx is fully completed
         // mineTx method returns a promise that resolves when
         // mining succeeds or rejects when there is an error
-        await this.mineTx();
+        const mineData = await this.mineTx();
+        this.transaction.parents = mineData.parents;
+        this.transaction.timestamp = mineData.timestamp;
+        this.transaction.nonce = mineData.nonce;
+        this.transaction.weight = mineData.weight;
 
         if (until === 'mine-tx') {
           resolve(this.transaction);
