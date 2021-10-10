@@ -41,4 +41,80 @@ test('Get and set network', () => {
     // Invalid network
     const network2 = new Network('abc');
   }).toThrowError();
-})
+});
+
+test("register new network successfully", () => {
+  Network.registerNetwork({
+    name: 'jestnet',
+    alias: 'jestnet',
+    pubkeyhash: 0x70,
+    privatekey: 0x80,
+    scripthash: 0x93,
+    bech32prefix: 'tn',
+    xpubkey: 0x0488b21e,
+    xprivkey: 0x0434c8c4,
+    networkMagic: 0xf9beb4d9,
+    port: 8333,
+    dnsSeeds: []
+  });
+
+  // This shouldn't throw error
+  const network = new Network('jestnet');
+
+  expect(network.getVersionBytes()).toEqual({
+    'p2pkh': 0x70,
+    'p2sh': 0x93,
+    'xpub': 0x0488b21e,
+    'xpriv': 0x0434c8c4
+  })
+});
+
+const getNetworkConfig = (override) => {
+  return Object.assign({
+    name: 'jestnet',
+    alias: 'jestnet',
+    pubkeyhash: 0x70,
+    privatekey: 0x80,
+    scripthash: 0x93,
+    bech32prefix: 'tn',
+    xpubkey: 0x0488b21e,
+    xprivkey: 0x0434c8c4,
+    networkMagic: 0xf9beb4d9,
+    port: 8333,
+    dnsSeeds: []
+  }, override);
+}
+
+test("register invalid network config", () => {
+  Object.entries({
+    'name': undefined,
+    'alias': undefined,
+    'pubkeyhash': undefined,
+    'pubkeyhash': 'abc',
+    'pubkeyhash': 0x111,
+    'privatekey': undefined,
+    'privatekey': 'abc',
+    'privatekey': 0x111,
+    'scripthash': undefined,
+    'bech32prefix': undefined,
+    'xpubkey': undefined,
+    'xpubkey': 'abc',
+    'xprivkey': undefined,
+    'xprivkey': 'abc',
+    'networkMagic': undefined,
+    'networkMagic': 'abc',
+    'port': undefined,
+    'port': 'abc',
+    'dnsSeeds': undefined,
+    'dnsSeeds': 'abc',
+    'dnsSeeds': 123
+  }).forEach(([key, value]) => {
+    expect(() => {
+      Network.registerNetwork(
+        getNetworkConfig({
+          [key]: value,
+        })
+      );
+    }).toThrowError(`Validation errors in network definition: Error: ${key} is invalid.`)
+  })
+});
