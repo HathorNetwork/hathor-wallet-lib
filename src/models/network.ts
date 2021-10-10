@@ -117,6 +117,42 @@ type versionBytesType = {
   p2sh: number,
 }
 
+// TODO I'm not sure if those are the best rules
+const networkSchema = {
+  name: value => typeof value === 'string' && /^([a-z\-])+$/.test(value),  // Only lower-case and dashes allowed
+  alias: value => typeof value === 'string' && /^([a-z\-])+$/.test(value),  // Only lower-case and dashes allowed
+  pubkeyhash: value => typeof value === 'number' && value < 0x100,
+  privatekey: value => typeof value === 'number' && value < 0x100,
+  scripthash: value => typeof value === 'number' && value < 0x100,
+  bech32prefix: value => typeof value === 'string',
+  xpubkey: value => typeof value === 'number', // TODO How to validate valid xpubkey?
+  xprivkey: value => typeof value === 'number', // TODO How to validate valid xprivkey?,
+  networkMagic: value => typeof value === 'number', // TODO How to validate this?,
+  port: value => typeof value === 'number',
+  dnsSeeds: value => Array.isArray(value)
+};
+
+type networkConfigType = {
+  name: string,
+  alias: string,
+  pubkeyhash: number,
+  privatekey: number,
+  scripthash: number,
+  bech32prefix: string,
+  xpubkey: number,
+  xprivkey: number,
+  networkMagic: number,
+  port: number,
+  dnsSeeds: string[]
+}
+
+function validateNetworkConfig(networkConfig: networkConfigType) {
+  return Object
+    .keys(networkSchema)
+    .filter(key => !networkSchema[key](networkConfig[key]))
+    .map(key => new Error(`${key} is invalid.`));
+}
+
 
 class Network {
   // Network name (currently supports only 'testnet' and 'mainnet')
@@ -126,13 +162,42 @@ class Network {
   versionBytes: versionBytesType;
 
   // bitcore-lib Networks object with all network options
-  bitcoreNetwork: Networks;
+  bitcoreNetwork: Networks.Network;
 
   constructor(name: string) {
     this.name = name;
     this.validateNetwork();
     this.versionBytes = versionBytes[name];
     this.bitcoreNetwork = networkOptions[name];
+  }
+
+  /**
+   * Registers a new network configuration.
+   *
+   * We validate the configuration before registering.
+   */
+  static registerNetwork(networkConfig: networkConfigType) {
+    const errors = validateNetworkConfig(networkConfig);
+
+    if (errors.length > 0) {
+      throw new Error(`Validation errors in network definition: ${errors}`);
+    }
+
+    const name: string = networkConfig['name'];
+
+    if (name in Object.keys(networkOptions)) {
+      throw new Error(`The network name ${name} is a reserved name.`);
+    } else if (name.startsWith('htr')) {
+      throw new Error(`You can't use the prefix 'htr' in network names`);
+    }
+
+    networkOptions[name] = Networks.add(networkConfig);
+    versionBytes[name] = {
+      'p2pkh': networkConfig['pubkeyhash'],
+      'p2sh': networkConfig['scripthash'],
+      'xpriv': networkConfig['xprivkey'],
+      'xpub': networkConfig['xpubkey']
+    }
   }
 
   /**
@@ -149,7 +214,7 @@ class Network {
   /**
    * Method created to keep compatibility with old Network class
    */
-  getNetwork(): Networks {
+  getNetwork(): Networks.Network {
     return this.bitcoreNetwork;
   }
 
