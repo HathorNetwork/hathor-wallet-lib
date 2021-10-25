@@ -1,5 +1,5 @@
 ### Acceptance Criteria
-- Include here all things that we are trying to solve with this PR
+- Include here all things that this PR should solve
 
 
 ### Security Checklist
