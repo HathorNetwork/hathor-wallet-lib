@@ -248,6 +248,8 @@ const transaction = {
    *
    * @param {Object} output Output object with {address, timelock} or {data}
    *
+   * @throws {AddressError} If the address of the P2PKH output is invalid
+   *
    * @return {Buffer}
    * @memberof Transaction
    * @inner
@@ -260,7 +262,9 @@ const transaction = {
     } else if (output.type === 'p2pkh' || output.type === undefined) {
       // P2PKH
       // for compatibility reasons we will accept an output without type as p2pkh as fallback
-      const address = new Address(output.address);
+      const address = new Address(output.address, { network });
+      // This will throw AddressError in case the address is invalid
+      address.validateAddress();
       const p2pkh = new P2PKH(address, { timelock: output.timelock });
       return p2pkh.createScript();
     } else {

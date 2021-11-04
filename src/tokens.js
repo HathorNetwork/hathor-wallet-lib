@@ -12,6 +12,7 @@ import transaction from './transaction';
 import wallet from './wallet';
 import storage from './storage';
 import helpers from './helpers';
+import network from './network';
 import helpersUtils from './utils/helpers';
 import walletApi from './api/wallet';
 import SendTransaction from './new/sendTransaction';
@@ -414,7 +415,7 @@ const tokens = {
       return ret;
     }
 
-    const sendTransaction = new SendTransaction({ transaction: helpersUtils.createTxFromData(ret.preparedData) });
+    const sendTransaction = new SendTransaction({ transaction: helpersUtils.createTxFromData(ret.preparedData, network), network });
 
     const promise = new Promise((resolve, reject) => {
       sendTransaction.on('send-tx-success', (tx) => {
@@ -971,7 +972,7 @@ const tokens = {
    * @inner
    */
   handleSendTransaction(data) {
-    const sendTransaction = new SendTransaction({ transaction: helpersUtils.createTxFromData(data) });
+    const sendTransaction = new SendTransaction({ transaction: helpersUtils.createTxFromData(data, network), network });
     // Promise that resolves when push tx finishes with success
     // or rejects in case of an error
     // we need this promise and this method to keep compatibility in case

@@ -236,3 +236,10 @@ export interface ISendTransaction {
   run(until: string | null): Promise<Transaction>;
   runFromMining(until: string | null): Promise<Transaction>;
 }
+
+export interface MineTxSuccessData {
+  nonce: number,
+  weight: number,
+  timestamp: number,
+  parents: string[],
+}

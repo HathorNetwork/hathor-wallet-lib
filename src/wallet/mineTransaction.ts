@@ -7,8 +7,10 @@
 
 import { EventEmitter } from 'events';
 import { MIN_POLLING_INTERVAL } from '../constants';
+import { MineTxError } from '../errors';
 import Transaction from '../models/transaction';
 import txMiningApi from '../api/txMining';
+import { MineTxSuccessData } from './types';
 
 // Error to be shown in case of no miners connected
 const noMinersError = 'There are no miners to resolve the proof of work of this transaction.';
@@ -18,13 +20,6 @@ const unexpectedError = 'An unexpected error happened. Please try to send your t
 
 // Error to be shown in case of a timeout
 const timeoutError = 'Timeout solving transaction\'s proof-of-work.\n\nAll transactions need to solve a proof-of-work as an anti spam mechanism. Currently, Hathor Labs provides this service for free, but their servers may be fully loaded right now.';
-
-type promiseReturnType = {
-  nonce: number,
-  weight: number,
-  timestamp: number,
-  parents: string[],
-};
 
 /**
  * This is transaction mining class responsible for:
@@ -44,7 +39,7 @@ class MineTransaction extends EventEmitter {
   // Transaction to be mined
   transaction: Transaction;
   // Promise that will resolve when the mining is over or reject when an error is found
-  promise: Promise<promiseReturnType>;
+  promise: Promise<MineTxSuccessData>;
   // Mining time estimation
   private estimation: number | null;
   // Mining job ID
@@ -75,11 +70,13 @@ class MineTransaction extends EventEmitter {
       });
 
       this.on('error', (message) => {
-        reject(message);
+        const err = new MineTxError(message);
+        reject(err);
       });
 
       this.on('unexpected-error', (message) => {
-        reject(message);
+        const err = new MineTxError(message);
+        reject(err);
       });
     });
   }
