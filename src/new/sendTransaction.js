@@ -43,7 +43,8 @@ class SendTransaction extends EventEmitter {
     outputs=[],
     inputs=[],
     changeAddress=null,
-    pin=null
+    pin=null,
+    network=null,
   } = {}) {
     super();
 
@@ -52,6 +53,7 @@ class SendTransaction extends EventEmitter {
     this.inputs = inputs;
     this.changeAddress = changeAddress;
     this.pin = pin;
+    this.network = network;
 
     // Error to be shown in case of an unexpected error when executing push tx
     this.unexpectedPushTxError = ErrorMessages.UNEXPECTED_PUSH_TX_ERROR;
@@ -169,7 +171,7 @@ class SendTransaction extends EventEmitter {
     let preparedData = null;
     try {
       preparedData = transaction.prepareData(fullTxData, this.pin);
-      this.transaction = helpers.createTxFromData(preparedData);
+      this.transaction = helpers.createTxFromData(preparedData, this.network);
       return this.transaction;
     } catch(e) {
       const message = oldHelpers.handlePrepareDataError(e);
@@ -230,10 +232,6 @@ class SendTransaction extends EventEmitter {
     })
 
     this.mineTransaction.on('success', (data) => {
-      this.transaction.parents = data.parents;
-      this.transaction.timestamp = data.timestamp;
-      this.transaction.nonce = data.nonce;
-      this.transaction.weight = data.weight;
       this.emit('mine-tx-ended', data);
     })
 
@@ -241,7 +239,7 @@ class SendTransaction extends EventEmitter {
       this.mineTransaction.start();
     }
 
-    return this.mineTransaction;
+    return this.mineTransaction.promise;
   }
 
   /**
@@ -256,25 +254,32 @@ class SendTransaction extends EventEmitter {
       throw new WalletError(ErrorMessages.TRANSACTION_IS_NULL);
     }
 
-    this.emit('send-tx-start', this.transaction);
-    const txHex = this.transaction.toHex();
-    txApi.pushTx(txHex, false, (response) => {
-      if (response.success) {
-        this.transaction.updateHash();
-        this.emit('send-tx-success', this.transaction);
-        if (this._unmarkAsSelectedTimer !== null) {
-          // After finishing the push_tx we can clearTimeout to unmark
-          clearTimeout(this._unmarkAsSelectedTimer);
-          this._unmarkAsSelectedTimer = null;
+    const promise = new Promise((resolve, reject) => {
+      this.emit('send-tx-start', this.transaction);
+      const txHex = this.transaction.toHex();
+      txApi.pushTx(txHex, false, (response) => {
+        if (response.success) {
+          this.transaction.updateHash();
+          this.emit('send-tx-success', this.transaction);
+          if (this._unmarkAsSelectedTimer !== null) {
+            // After finishing the push_tx we can clearTimeout to unmark
+            clearTimeout(this._unmarkAsSelectedTimer);
+            this._unmarkAsSelectedTimer = null;
+          }
+          resolve(this.transaction);
+        } else {
+          this.updateOutputSelected(false);
+          const err = new SendTxError(response.message);
+          reject(err);
         }
-      } else {
+      }).catch((e) => {
         this.updateOutputSelected(false);
-        this.emit('send-error', response.message);
-      }
-    }).catch(() => {
-      this.updateOutputSelected(false);
-      this.emit('send-error', this.unexpectedPushTxError);
+        this.emit('send-error', e.message);
+        reject(e);
+      });
     });
+
+    return promise;
   }
 
   /**
@@ -287,29 +292,28 @@ class SendTransaction extends EventEmitter {
    * @inner
    */
   async runFromMining(until = null) {
-    const promise = new Promise((resolve, reject) => {
-      try {
-        this.mineTx();
-        if (until === 'mine-tx') {
-          resolve(this.transaction);
-          return;
-        }
+    try {
+      // This will await until mine tx is fully completed
+      // mineTx method returns a promise that resolves when
+      // mining succeeds or rejects when there is an error
+      const mineData = await this.mineTx();
+      this.transaction.parents = mineData.parents;
+      this.transaction.timestamp = mineData.timestamp;
+      this.transaction.nonce = mineData.nonce;
+      this.transaction.weight = mineData.weight;
 
-        this.on('mine-tx-ended', (data) => {
-          this.handlePushTx();
-        });
-
-        this.once('send-tx-success', (data) => {
-          resolve(this.transaction);
-        });
-      } catch (err) {
-        if (err instanceof WalletError) {
-          this.emit('send-error', err.message);
-        }
-        reject(err);
+      if (until === 'mine-tx') {
+        return this.transaction;
       }
-    });
-    return promise;
+
+      const tx = await this.handlePushTx();
+      return tx;
+    } catch (err) {
+      if (err instanceof WalletError) {
+        this.emit('send-error', err.message);
+      }
+      throw err;
+    }
   }
 
   /**
@@ -333,28 +337,20 @@ class SendTransaction extends EventEmitter {
    * @inner
    */
   async run(until = null) {
-    const promise = new Promise((resolve, reject) => {
-      try {
-        this.prepareTx();
-        if (until === 'prepare-tx') {
-          resolve(this.transaction);
-          return;
-        }
-
-        const miningPromise = this.runFromMining(until);
-        miningPromise.then((data) => {
-          resolve(data);
-        }, (err) => {
-          reject(err);
-        });
-      } catch (err) {
-        if (err instanceof WalletError) {
-          this.emit('send-error', err.message);
-        }
-        reject(err);
+    try {
+      this.prepareTx();
+      if (until === 'prepare-tx') {
+        return this.transaction;
       }
-    });
-    return promise;
+
+      const tx = await this.runFromMining(until);
+      return tx;
+    } catch (err) {
+      if (err instanceof WalletError) {
+        this.emit('send-error', err.message);
+      }
+      throw err;
+    }
   }
 
   /**

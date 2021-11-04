@@ -164,6 +164,14 @@ export class UtxoError extends WalletError {}
 export class SendTxError extends WalletError {}
 
 /**
+ * Error thrown when mining tx
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class MineTxError extends WalletError {}
+
+/**
  * Error thrown when calling a protected method on an xpub inited wallet
  * Some methods require access to the words or private key
  *

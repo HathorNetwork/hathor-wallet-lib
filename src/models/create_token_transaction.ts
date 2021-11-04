@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { CREATE_TOKEN_TX_VERSION, TOKEN_INFO_VERSION } from '../constants';
+import { CREATE_TOKEN_TX_VERSION, TOKEN_INFO_VERSION, MAX_TOKEN_NAME_SIZE, MAX_TOKEN_SYMBOL_SIZE } from '../constants';
 import { encoding, util } from 'bitcore-lib';
 import { unpackToInt, unpackLen } from '../utils/buffer';
 import helpers from '../utils/helpers';
@@ -123,6 +123,14 @@ class CreateTokenTransaction extends Transaction {
       throw new CreateTokenTxInvalid('Token name and symbol are required when creating a new token');
     }
 
+    if (this.name.length > MAX_TOKEN_NAME_SIZE) {
+      throw new CreateTokenTxInvalid(`Token name size is ${this.name.length} but maximum size is ${MAX_TOKEN_NAME_SIZE}`);
+    }
+
+    if (this.symbol.length > MAX_TOKEN_SYMBOL_SIZE) {
+      throw new CreateTokenTxInvalid(`Token symbol size is ${this.symbol.length} but maximum size is ${MAX_TOKEN_SYMBOL_SIZE}`);
+    }
+
     const nameBytes = buffer.Buffer.from(this.name, 'utf8');
     const symbolBytes = buffer.Buffer.from(this.symbol, 'utf8');
     // Token info version
@@ -143,15 +151,25 @@ class CreateTokenTransaction extends Transaction {
     [tokenInfoVersion, buf] = unpackToInt(1, false, buf);
 
     if (tokenInfoVersion !== TOKEN_INFO_VERSION) {
-      throw new Error(`Unknown token info version: ${tokenInfoVersion}`);
+      throw new CreateTokenTxInvalid(`Unknown token info version: ${tokenInfoVersion}`);
     }
 
     [lenName, buf] = unpackToInt(1, false, buf);
+
+    if (lenName > MAX_TOKEN_NAME_SIZE) {
+      throw new CreateTokenTxInvalid(`Token name size is ${lenName} but maximum size is ${MAX_TOKEN_NAME_SIZE}`);
+    }
+
     [bufName, buf] = unpackLen(lenName, buf);
     this.name = bufName.toString('utf-8');
 
 
     [lenSymbol, buf] = unpackToInt(1, false, buf);
+
+    if (lenSymbol > MAX_TOKEN_SYMBOL_SIZE) {
+      throw new CreateTokenTxInvalid(`Token symbol size is ${lenSymbol} but maximum size is ${MAX_TOKEN_SYMBOL_SIZE}`);
+    }
+
     [bufSymbol, buf] = unpackLen(lenSymbol, buf);
     this.symbol = bufSymbol.toString('utf-8');
 

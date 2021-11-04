@@ -17,7 +17,7 @@ import Address from '../models/address';
 import { HATHOR_TOKEN_CONFIG } from '../constants';
 import { shuffle } from 'lodash';
 import { SendTxError, UtxoError, WalletError, WalletRequestError } from '../errors';
-import { OutputRequestObj, InputRequestObj, TokenAmountMap, ISendTransaction } from './types';
+import { OutputRequestObj, InputRequestObj, TokenAmountMap, ISendTransaction, MineTxSuccessData } from './types';
 
 type optionsType = {
   outputs?: OutputRequestObj[],
@@ -266,7 +266,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @memberof SendTransactionWalletService
    * @inner
    */
-  mineTx(options = {}): MineTransaction {
+  mineTx(options = {}): Promise<MineTxSuccessData> {
     if (this.transaction === null) {
       throw new WalletError('Can\'t mine transaction if it\'s null.');
     }
@@ -306,10 +306,6 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     })
 
     this.mineTransaction.on('success', (data) => {
-      this.transaction!.parents = data.parents;
-      this.transaction!.timestamp = data.timestamp;
-      this.transaction!.nonce = data.nonce;
-      this.transaction!.weight = data.weight;
       this.emit('mine-tx-ended', data);
     })
 
@@ -317,7 +313,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       this.mineTransaction.start();
     }
 
-    return this.mineTransaction;
+    return this.mineTransaction.promise;
   }
 
   /**
@@ -340,9 +336,12 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       const sendData = await walletApi.updateTxProposal(this.wallet, txProposalId, txHex);
       this.transaction.updateHash();
       this.emit('send-tx-success', this.transaction);
+      return this.transaction;
     } catch (err) {
       if (err instanceof WalletRequestError) {
-        this.emit('send-error', 'Error sending tx proposal.');
+        const errMessage = 'Error sending tx proposal.';
+        this.emit('send-error', errMessage);
+        throw SendTxError(errMessage);
       } else {
         throw err;
       }
@@ -359,27 +358,28 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @inner
    */
   async runFromMining(until: string | null = null): Promise<Transaction> {
-    const promise: Promise<Transaction> = new Promise(async (resolve, reject) => {
-      try {
-        this.mineTx();
-        if (until === 'mine-tx') {
-          resolve(this.transaction!);
-          return;
-        }
+    try {
+      // This will await until mine tx is fully completed
+      // mineTx method returns a promise that resolves when
+      // mining succeeds or rejects when there is an error
+      const mineData = await this.mineTx();
+      this.transaction!.parents = mineData.parents;
+      this.transaction!.timestamp = mineData.timestamp;
+      this.transaction!.nonce = mineData.nonce;
+      this.transaction!.weight = mineData.weight;
 
-        this.once('mine-tx-ended', () => this.handleSendTxProposal());
-
-        this.once('send-tx-success', () => {
-          resolve(this.transaction!);
-        });
-      } catch (err) {
-        if (err instanceof WalletError) {
-          this.emit('send-error', err.message);
-        }
-        reject(err);
+      if (until === 'mine-tx') {
+        return this.transaction!;
       }
-    });
-    return promise;
+
+      const tx = await this.handleSendTxProposal();
+      return tx;
+    } catch (err) {
+      if (err instanceof WalletError) {
+        this.emit('send-error', err.message);
+      }
+      throw err;
+    }
   }
 
   /**
@@ -392,34 +392,25 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @inner
    */
   async run(until: string | null = null): Promise<Transaction> {
-    const promise: Promise<Transaction> = new Promise(async (resolve, reject) => {
-      try {
-        const preparedData = await this.prepareTx();
-        if (until === 'prepare-tx') {
-          resolve(this.transaction!);
-          return;
-        }
-
-        this.signTx(preparedData.utxosAddressPath);
-        if (until === 'sign-tx') {
-          resolve(this.transaction!);
-          return;
-        }
-
-        const promiseFromMining = this.runFromMining(until);
-        promiseFromMining.then((tx) => {
-          resolve(tx);
-        }, (err) => {
-          reject(err);
-        });
-      } catch (err) {
-        if (err instanceof WalletError) {
-          this.emit('send-error', err.message);
-        }
-        reject(err);
+    try {
+      const preparedData = await this.prepareTx();
+      if (until === 'prepare-tx') {
+        return this.transaction!;
       }
-    });
-    return promise;
+
+      this.signTx(preparedData.utxosAddressPath);
+      if (until === 'sign-tx') {
+        return this.transaction!;
+      }
+
+      const tx = await this.runFromMining(until);
+      return tx;
+    } catch (err) {
+      if (err instanceof WalletError) {
+        this.emit('send-error', err.message);
+      }
+      throw err;
+    }
   }
 }
 
