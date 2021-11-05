@@ -24,8 +24,8 @@ const versionBytes = {
     'xpub': 0x0488b21e,  // xpub // 0x0434c85b -> tnpb
   },
   'privatenet': {
-    'p2pkh': 0x70,
-    'p2sh': 0x93,
+    'p2pkh': 0x49,
+    'p2sh': 0x87,
     'xpriv': 0x0434c8c4, // tnpr
     'xpub': 0x0488b21e,  // xpub // 0x0434c85b -> tnpb
   },
