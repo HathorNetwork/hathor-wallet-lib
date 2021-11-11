@@ -141,8 +141,8 @@ class Network {
   validateNetwork() {
     const possibleNetworks = Object.keys(networkOptions);
 
-    if (!possibleNetworks.includes(this.name)) {
-      throw Error(`We currently support only ${possibleNetworks} as network.`);
+	if (possibleNetworks.indexOf(this.name) < 0) {
+      throw new Error(`We currently support only [${possibleNetworks}] as network.`);
     }
   }
 
