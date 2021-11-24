@@ -260,7 +260,7 @@ const wallet = {
     const initialAccessData = this.getWalletAccessData() || {};
 
     const encryptedDataWords = this.encryptData(words, password);
-    initialAccessData['words'] = encryptedDataWords.encrypted.toString(),
+    initialAccessData['words'] = encryptedDataWords.encrypted.toString();
 
     this.setWalletAccessData(initialAccessData);
   },
