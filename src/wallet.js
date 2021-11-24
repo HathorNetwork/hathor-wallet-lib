@@ -724,6 +724,44 @@ const wallet = {
   },
 
   /**
+   * Validate old password and change it for the new one
+   *
+   * @param {string} oldPassword
+   * @param {string} newPassword
+   *
+   * @return {boolean} true if the PIN was successfully changed
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  changePassword(oldPassword, newPassword) {
+    if (this.isFromXPub()) {
+        throw WalletFromXPubGuard('changePassword');
+    }
+
+    const isCorrect = this.isPasswordCorrect(oldPassword);
+    if (!isCorrect) {
+      return false;
+    }
+
+    // Get new password hash
+    const newHash = this.hashPassword(newPassword);
+    // Update new Password data in storage
+    const accessData = this.getWalletAccessData();
+    accessData['hashPasswd'] = newHash.key.toString();
+    accessData['saltPasswd'] = newHash.salt;
+
+    // Get and update seed encrypted with PIN
+    const decryptedData = this.decryptData(accessData.words, oldPassword);
+    const encryptedData = this.encryptData(decryptedData, newPassword);
+    accessData['words'] = encryptedData.encrypted.toString();
+
+    this.setWalletAccessData(accessData);
+
+    return true;
+  },
+
+  /**
    * Validate old PIN and change it for the new one
    *
    * @param {string} oldPin
