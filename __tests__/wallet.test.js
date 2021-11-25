@@ -7,10 +7,12 @@
 
 import wallet from '../src/wallet';
 import dateFormatter from '../src/date';
-import { HATHOR_TOKEN_CONFIG } from '../src/constants';
+import Mnemonic from 'bitcore-mnemonic';
+import { HATHOR_TOKEN_CONFIG, HATHOR_BIP44_CODE } from '../src/constants';
 import storage from '../src/storage';
 import WebSocketHandler from '../src/WebSocketHandler';
 import txHistoryFixture from "./__fixtures__/tx_history";
+import network from '../src/network';
 
 beforeEach(() => {
   wallet.setConnection(WebSocketHandler);
@@ -377,4 +379,37 @@ test('Utxo selection', () => {
   // Won't have enough tokens
   expect(ret9.inputsAmount).toBe(0);
   expect(ret9.inputs.length).toBe(0);
+});
+
+test('change pin and password', () => {
+  const words = wallet.generateWalletWords(256);
+  const pin = '123456';
+  const password = 'password';
+  const passphrase = '';
+  wallet.executeGenerateWallet(words, passphrase, pin, password, false);
+
+  const code = new Mnemonic(words);
+  const xpriv = code.toHDPrivateKey(passphrase, network.getNetwork());
+  const privkey = xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
+  const xprivkey = privkey.xprivkey;
+
+  wallet.isPinCorrect(pin);
+  wallet.isPasswordCorrect(password);
+
+  const accessData = wallet.getWalletAccessData();
+  const decryptedXprivkey = wallet.decryptData(accessData.mainKey, pin);
+  expect(xprivkey).toBe(decryptedXprivkey);
+  const decryptedWords = wallet.decryptData(accessData.words, password);
+  expect(words).toBe(decryptedWords);
+
+  const newPin = '111111';
+  const newPassword = 'password1';
+  wallet.changePin(pin, newPin);
+  wallet.changePassword(password, newPassword);
+
+  const newAccessData = wallet.getWalletAccessData();
+  const newDecryptedXprivkey = wallet.decryptData(newAccessData.mainKey, newPin);
+  expect(xprivkey).toBe(newDecryptedXprivkey);
+  const newDecryptedWords = wallet.decryptData(newAccessData.words, newPassword);
+  expect(words).toBe(newDecryptedWords);
 });
