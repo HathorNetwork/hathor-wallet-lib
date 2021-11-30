@@ -8,10 +8,11 @@
 import Output from '../../src/models/output';
 import Address from '../../src/models/address';
 import P2PKH from '../../src/models/p2pkh';
+import ScriptData from '../../src/models/script_data';
 import Network from '../../src/models/network';
 import { OutputValueError, ParseScriptError } from '../../src/errors';
 import buffer from 'buffer';
-import { parseP2PKH } from '../../src/utils/scripts';
+import { parseP2PKH, parseScriptData } from '../../src/utils/scripts';
 import { AUTHORITY_TOKEN_DATA, TOKEN_MINT_MASK, TOKEN_MELT_MASK, MAX_OUTPUT_VALUE } from '../../src/constants';
 
 const address = new Address('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo');
@@ -96,5 +97,25 @@ test('Script', () => {
 
   expect(() => {
     parseP2PKH(o1.script.slice(10), network);
+  }).toThrowError(ParseScriptError);
+});
+
+test('Script data', () => {
+  const data = 'test';
+  const scriptDataObj = new ScriptData(data);
+  const scriptData = scriptDataObj.createScript();
+
+  const parsedData = parseScriptData(scriptData);
+  expect(parsedData.data).toBe(data);
+
+  const wrongData = buffer.Buffer.from('a', 'utf-8');
+  expect(() => {
+    parseScriptData(wrongData);
+  }).toThrowError(ParseScriptError);
+
+  // Remove last element from scriptData (OP_CHECKSIG), then should fail
+  const wrongData2 = scriptData.slice(scriptData.length - 1)
+  expect(() => {
+    parseScriptData(wrongData2);
   }).toThrowError(ParseScriptError);
 });
