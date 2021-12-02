@@ -724,6 +724,37 @@ const wallet = {
   },
 
   /**
+   * Validate the password and returns an object containing data that
+   * was encrypted with the new password
+   *
+   * @param {Object} accessData - The accessData object to retrieve information from
+   * @param {string} oldPassword
+   * @param {string} newPassword
+   *
+   * @return {Object} The new access data
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  _getChangePasswordAccessData (accessData, oldPassword, newPassword) {
+    // Get new password hash
+    const newHash = this.hashPassword(newPassword);
+
+    // Get and update seed encrypted with PIN
+    const decryptedData = this.decryptData(accessData.words, oldPassword);
+    const encryptedData = this.encryptData(decryptedData, newPassword);
+
+    // Create a new object (without mutating the old one) with the updated data
+    const newAccessData = {
+      hashPasswd: newHash.key.toString(),
+      saltPasswd: newHash.salt,
+      words: encryptedData.encrypted.toString(),
+    };
+
+    return newAccessData;
+  },
+
+  /**
    * Validate old password and change it for the new one
    *
    * @param {string} oldPassword
@@ -735,30 +766,41 @@ const wallet = {
    * @inner
    */
   changePassword(oldPassword, newPassword) {
-    if (this.isFromXPub()) {
-        throw WalletFromXPubGuard('changePassword');
-    }
+    return this.changePinAndPassword({
+      oldPassword,
+      newPassword,
+    });
+  },
 
-    const isCorrect = this.isPasswordCorrect(oldPassword);
-    if (!isCorrect) {
-      return false;
-    }
+  /**
+   * Validate pin and returns a object containing the data
+   * that is encrypted with it
+   *
+   * @param {Object} accessData - The access data to retrieve information from
+   * @param {string} oldPassword
+   * @param {string} newPassword
+   *
+   * @return {Object} The new access data
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  _getChangePinAccessData (accessData, oldPin, newPin) {
+    // Get new PIN hash
+    const newHash = this.hashPassword(newPin);
 
-    // Get new password hash
-    const newHash = this.hashPassword(newPassword);
-    // Update new Password data in storage
-    const accessData = this.getWalletAccessData();
-    accessData['hashPasswd'] = newHash.key.toString();
-    accessData['saltPasswd'] = newHash.salt;
+    // Get and update data encrypted with PIN
+    const decryptedData = this.decryptData(accessData.mainKey, oldPin);
+    const encryptedData = this.encryptData(decryptedData, newPin);
 
-    // Get and update seed encrypted with PIN
-    const decryptedData = this.decryptData(accessData.words, oldPassword);
-    const encryptedData = this.encryptData(decryptedData, newPassword);
-    accessData['words'] = encryptedData.encrypted.toString();
+    // Create a new object (without mutating the old one) with the updated data
+    const newAccessData = {
+      hash: newHash.key.toString(),
+      salt: newHash.salt,
+      mainKey: encryptedData.encrypted.toString(),
+    };
 
-    this.setWalletAccessData(accessData);
-
-    return true;
+    return newAccessData;
   },
 
   /**
@@ -773,28 +815,69 @@ const wallet = {
    * @inner
    */
   changePin(oldPin, newPin) {
+    return this.changePinAndPassword({
+      oldPin,
+      newPin,
+    });
+  },
+
+  /**
+   * Validate old password and pin and change them for the new ones
+   *
+   * @param {Object} Object with optional keys to change
+   * @param {string} Object.oldPin Old user PIN
+   * @param {string} Object.newPin New user PIN
+   * @param {string} Object.oldPassword Old user Password
+   * @param {string} Object.newPassword New user Password
+   *
+   * @return {boolean} true if PIN and password were successfully changed
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  changePinAndPassword({ oldPin, newPin, oldPassword, newPassword }) {
     if (this.isFromXPub()) {
-        throw WalletFromXPubGuard('changePin');
+        throw WalletFromXPubGuard('changePinAndPassword');
     }
 
-    const isCorrect = this.isPinCorrect(oldPin);
-    if (!isCorrect) {
+    if (oldPassword && !newPassword) {
       return false;
     }
 
-    // Get new PIN hash
-    const newHash = this.hashPassword(newPin);
-    // Update new PIN data in storage
-    const accessData = this.getWalletAccessData();
-    accessData['hash'] = newHash.key.toString();
-    accessData['salt'] = newHash.salt;
+    if (oldPin && !newPin) {
+      return false;
+    }
 
-    // Get and update data encrypted with PIN
-    const decryptedData = this.decryptData(accessData.mainKey, oldPin);
-    const encryptedData = this.encryptData(decryptedData, newPin);
-    accessData['mainKey'] = encryptedData.encrypted.toString();
+    if (newPassword && !this.isPasswordCorrect(oldPassword)) {
+      return false;
+    }
 
-    this.setWalletAccessData(accessData);
+    if (newPin && !this.isPinCorrect(oldPin)) {
+      return false;
+    }
+
+    const oldAccessData = this.getWalletAccessData();
+    let newAccessData = {
+      ...oldAccessData,
+    };
+
+    if (newPassword) {
+      const newPasswordAccessData = this._getChangePasswordAccessData(oldAccessData, oldPassword, newPassword);
+      newAccessData = {
+        ...newAccessData,
+        ...newPasswordAccessData,
+      };
+    }
+
+    if (newPin) {
+      const newPinAccessData = this._getChangePinAccessData(oldAccessData, oldPin, newPin);
+      newAccessData = {
+        ...newAccessData,
+        ...newPinAccessData,
+      };
+    }
+
+    this.setWalletAccessData(newAccessData);
 
     return true;
   },
