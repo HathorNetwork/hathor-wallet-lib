@@ -8,11 +8,10 @@
 import Output from '../../src/models/output';
 import Address from '../../src/models/address';
 import P2PKH from '../../src/models/p2pkh';
-import ScriptData from '../../src/models/script_data';
 import Network from '../../src/models/network';
 import { OutputValueError, ParseScriptError } from '../../src/errors';
 import buffer from 'buffer';
-import { parseP2PKH, parseScriptData } from '../../src/utils/scripts';
+import { parseP2PKH } from '../../src/utils/scripts';
 import { AUTHORITY_TOKEN_DATA, TOKEN_MINT_MASK, TOKEN_MELT_MASK, MAX_OUTPUT_VALUE } from '../../src/constants';
 
 const address = new Address('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo');
