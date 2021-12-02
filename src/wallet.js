@@ -736,17 +736,16 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  _getChangePasswordAccessData (oldAccessData, oldPassword, newPassword) {
+  _getChangePasswordAccessData (accessData, oldPassword, newPassword) {
     // Get new password hash
     const newHash = this.hashPassword(newPassword);
 
     // Get and update seed encrypted with PIN
-    const decryptedData = this.decryptData(oldAccessData.words, oldPassword);
+    const decryptedData = this.decryptData(accessData.words, oldPassword);
     const encryptedData = this.encryptData(decryptedData, newPassword);
 
     // Create a new object (without mutating the old one) with the updated data
     const newAccessData = {
-      ...oldAccessData,
       hashPasswd: newHash.key.toString(),
       saltPasswd: newHash.salt,
       words: encryptedData.encrypted.toString(),
@@ -767,21 +766,10 @@ const wallet = {
    * @inner
    */
   changePassword(oldPassword, newPassword) {
-    if (this.isFromXPub()) {
-      throw WalletFromXPubGuard('changePassword');
-    }
-
-    const isCorrect = this.isPasswordCorrect(oldPassword);
-    if (!isCorrect) {
-      return false;
-    }
-
-    const oldAccessData = this.getWalletAccessData();
-    const newAccessData = this._getChangePasswordAccessData(oldAccessData, oldPassword, newPassword);
-
-    this.setWalletAccessData(newAccessData);
-
-    return true;
+    return this.changePinAndPassword({
+      oldPassword,
+      newPassword,
+    });
   },
 
   /**
@@ -797,17 +785,16 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  _getChangePinAccessData (oldAccessData, oldPin, newPin) {
+  _getChangePinAccessData (accessData, oldPin, newPin) {
     // Get new PIN hash
     const newHash = this.hashPassword(newPin);
 
     // Get and update data encrypted with PIN
-    const decryptedData = this.decryptData(oldAccessData.mainKey, oldPin);
+    const decryptedData = this.decryptData(accessData.mainKey, oldPin);
     const encryptedData = this.encryptData(decryptedData, newPin);
 
     // Create a new object (without mutating the old one) with the updated data
     const newAccessData = {
-      ...oldAccessData,
       hash: newHash.key.toString(),
       salt: newHash.salt,
       mainKey: encryptedData.encrypted.toString(),
@@ -828,22 +815,10 @@ const wallet = {
    * @inner
    */
   changePin(oldPin, newPin) {
-    if (this.isFromXPub()) {
-        throw WalletFromXPubGuard('changePin');
-    }
-
-    const isCorrect = this.isPinCorrect(oldPin);
-
-    if (!isCorrect) {
-      return false;
-    }
-
-    const oldAccessData = this.getWalletAccessData();
-    const newAccessData = this._getChangePinAccessData(oldAccessData, oldPin, newPin);
-
-    this.setWalletAccessData(newAccessData);
-
-    return true;
+    return this.changePinAndPassword({
+      oldPin,
+      newPin,
+    });
   },
 
   /**
@@ -866,32 +841,47 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  changePinAndPassword(oldPin, newPin, oldPassword, newPassword) {
+  changePinAndPassword({ oldPin, newPin, oldPassword, newPassword }) {
     if (this.isFromXPub()) {
         throw WalletFromXPubGuard('changePinAndPassword');
     }
 
-    if (!this.isPasswordCorrect(oldPassword)) {
+    if (oldPassword && !newPassword) {
       return false;
     }
 
-    if (!this.isPinCorrect(oldPin)) {
+    if (oldPin && !newPin) {
+      return false;
+    }
+
+    if (newPassword && !this.isPasswordCorrect(oldPassword)) {
+      return false;
+    }
+
+    if (newPin && !this.isPinCorrect(oldPin)) {
       return false;
     }
 
     const oldAccessData = this.getWalletAccessData();
-    const newPinAccessData = this._getChangePinAccessData(oldAccessData, oldPin, newPin);
-    const newPasswordAccessData = this._getChangePasswordAccessData(oldAccessData, oldPassword, newPassword);
-
-    const newAccessData = {
+    let newAccessData = {
       ...oldAccessData,
-      hash: newPinAccessData.hash,
-      salt: newPinAccessData.salt,
-      mainKey: newPinAccessData.mainKey,
-      hashPasswd: newPasswordAccessData.hashPasswd,
-      saltPasswd: newPasswordAccessData.saltPasswd,
-      words: newPasswordAccessData.words,
     };
+
+    if (newPassword) {
+      const newPasswordAccessData = this._getChangePasswordAccessData(oldAccessData, oldPassword, newPassword);
+      newAccessData = {
+        ...newAccessData,
+        ...newPasswordAccessData,
+      };
+    }
+
+    if (newPin) {
+      const newPinAccessData = this._getChangePinAccessData(oldAccessData, oldPin, newPin);
+      newAccessData = {
+        ...newAccessData,
+        ...newPinAccessData,
+      };
+    }
 
     this.setWalletAccessData(newAccessData);
 

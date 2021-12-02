@@ -415,7 +415,12 @@ test('change pin and password', () => {
 
   const newPin2 = '222222';
   const newPassword2 = 'password2';
-  wallet.changePinAndPassword(newPin, newPin2, newPassword, newPassword2);
+  wallet.changePinAndPassword({
+    oldPin: newPin,
+    newPin: newPin2,
+    oldPassword: newPassword,
+    newPassword: newPassword2,
+  });
 
   const newAccessData2 = wallet.getWalletAccessData();
   const newDecryptedXprivkey2 = wallet.decryptData(newAccessData2.mainKey, newPin2);
