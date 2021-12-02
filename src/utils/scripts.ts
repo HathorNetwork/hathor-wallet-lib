@@ -53,7 +53,7 @@ export const parseScriptData = (buff: Buffer): ScriptData => {
   let scriptBuf = _.clone(buff);
   if (scriptBuf.length < 2) {
     // At least 1 byte for len data and 1 byte for OP_CHECKSIG
-    throw new ParseScriptError('Invalid output script.');
+    throw new ParseScriptError('Invalid output script. Script must have at least 2 bytes.');
   }
 
   // The expected len will be at least 2 bytes
@@ -75,12 +75,12 @@ export const parseScriptData = (buff: Buffer): ScriptData => {
 
   if (expectedLen !== scriptBuf.length) {
     // The script has different qty of bytes than expected
-    throw new ParseScriptError('Invalid output script.');
+    throw new ParseScriptError(`Invalid output script. Expected len ${expectedLen} and received len ${scriptBuf.length}.`);
   }
 
   if (scriptBuf[expectedLen - 1] !== OP_CHECKSIG[0]) {
     // Last byte must be an OP_CHECKSIG
-    throw new ParseScriptError('Invalid output script.');
+    throw new ParseScriptError('Invalid output script. Last byte must be OP_CHECKSIG.');
   }
 
   // Get data from the script
@@ -90,7 +90,7 @@ export const parseScriptData = (buff: Buffer): ScriptData => {
   try {
     decodedData = data.toString('utf-8');
   } catch (e) {
-    throw new ParseScriptError('Invalid output script.');
+    throw new ParseScriptError('Invalid output script. Error decoding data to utf-8.');
   }
 
   return new ScriptData(decodedData);
