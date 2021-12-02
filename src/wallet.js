@@ -724,10 +724,10 @@ const wallet = {
   },
 
   /**
-   * Validate old password and returns a new accessData object
-   * with updated data using it.
+   * Validate the password and returns an object containing data that
+   * was encrypted with the new password
    *
-   * @param {Object} oldAccessData - The old access data to update
+   * @param {Object} accessData - The accessData object to retrieve information from
    * @param {string} oldPassword
    * @param {string} newPassword
    *
@@ -773,10 +773,10 @@ const wallet = {
   },
 
   /**
-   * Validate old password and returns a new accessData object
-   * with updated data using it.
+   * Validate pin and returns a object containing the data
+   * that is encrypted with it
    *
-   * @param {Object} oldAccessData - The old access data to update
+   * @param {Object} accessData - The access data to retrieve information from
    * @param {string} oldPassword
    * @param {string} newPassword
    *
@@ -824,17 +824,11 @@ const wallet = {
   /**
    * Validate old password and pin and change them for the new ones
    *
-   * This method exists so we can be sure that the `setWalletAccessData` will
-   * be called at the same time, so we can guarantee that we are not changing
-   * the PIN if the password was not changed and vice versa.
-   *
-   * This is only needed on the mobile wallet that uses the PIN as the wallet's
-   * password and needs to update them simultaneously
-   *
-   * @param {string} oldPin
-   * @param {string} newPin
-   * @param {string} oldPassword
-   * @param {string} newPassword
+   * @param {Object} Object with optional keys to change
+   * @param {string} Object.oldPin Old user PIN
+   * @param {string} Object.newPin New user PIN
+   * @param {string} Object.oldPassword Old user Password
+   * @param {string} Object.newPassword New user Password
    *
    * @return {boolean} true if PIN and password were successfully changed
    *
