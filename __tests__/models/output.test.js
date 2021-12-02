@@ -99,23 +99,3 @@ test('Script', () => {
     parseP2PKH(o1.script.slice(10), network);
   }).toThrowError(ParseScriptError);
 });
-
-test('Script data', () => {
-  const data = 'test';
-  const scriptDataObj = new ScriptData(data);
-  const scriptData = scriptDataObj.createScript();
-
-  const parsedData = parseScriptData(scriptData);
-  expect(parsedData.data).toBe(data);
-
-  const wrongData = buffer.Buffer.from('a', 'utf-8');
-  expect(() => {
-    parseScriptData(wrongData);
-  }).toThrowError(ParseScriptError);
-
-  // Remove last element from scriptData (OP_CHECKSIG), then should fail
-  const wrongData2 = scriptData.slice(scriptData.length - 1)
-  expect(() => {
-    parseScriptData(wrongData2);
-  }).toThrowError(ParseScriptError);
-});
