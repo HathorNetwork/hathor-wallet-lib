@@ -724,6 +724,38 @@ const wallet = {
   },
 
   /**
+   * Validate old password and returns a new accessData object
+   * with updated data using it.
+   *
+   * @param {Object} oldAccessData - The old access data to update
+   * @param {string} oldPassword
+   * @param {string} newPassword
+   *
+   * @return {Object} The new access data
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  _getChangePasswordAccessData (oldAccessData, oldPassword, newPassword) {
+    // Get new password hash
+    const newHash = this.hashPassword(newPassword);
+
+    // Get and update seed encrypted with PIN
+    const decryptedData = this.decryptData(oldAccessData.words, oldPassword);
+    const encryptedData = this.encryptData(decryptedData, newPassword);
+
+    // Create a new object (without mutating the old one) with the updated data
+    const newAccessData = {
+      ...oldAccessData,
+      hashPasswd: newHash.key.toString(),
+      saltPasswd: newHash.salt,
+      words: encryptedData.encrypted.toString(),
+    };
+
+    return newAccessData;
+  },
+
+  /**
    * Validate old password and change it for the new one
    *
    * @param {string} oldPassword
@@ -736,7 +768,7 @@ const wallet = {
    */
   changePassword(oldPassword, newPassword) {
     if (this.isFromXPub()) {
-        throw WalletFromXPubGuard('changePassword');
+      throw WalletFromXPubGuard('changePassword');
     }
 
     const isCorrect = this.isPasswordCorrect(oldPassword);
@@ -744,21 +776,44 @@ const wallet = {
       return false;
     }
 
-    // Get new password hash
-    const newHash = this.hashPassword(newPassword);
-    // Update new Password data in storage
-    const accessData = this.getWalletAccessData();
-    accessData['hashPasswd'] = newHash.key.toString();
-    accessData['saltPasswd'] = newHash.salt;
+    const oldAccessData = this.getWalletAccessData();
+    const newAccessData = this._getChangePasswordAccessData(oldAccessData, oldPassword, newPassword);
 
-    // Get and update seed encrypted with PIN
-    const decryptedData = this.decryptData(accessData.words, oldPassword);
-    const encryptedData = this.encryptData(decryptedData, newPassword);
-    accessData['words'] = encryptedData.encrypted.toString();
-
-    this.setWalletAccessData(accessData);
+    this.setWalletAccessData(newAccessData);
 
     return true;
+  },
+
+  /**
+   * Validate old password and returns a new accessData object
+   * with updated data using it.
+   *
+   * @param {Object} oldAccessData - The old access data to update
+   * @param {string} oldPassword
+   * @param {string} newPassword
+   *
+   * @return {Object} The new access data
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  _getChangePinAccessData (oldAccessData, oldPin, newPin) {
+    // Get new PIN hash
+    const newHash = this.hashPassword(newPin);
+
+    // Get and update data encrypted with PIN
+    const decryptedData = this.decryptData(oldAccessData.mainKey, oldPin);
+    const encryptedData = this.encryptData(decryptedData, newPin);
+
+    // Create a new object (without mutating the old one) with the updated data
+    const newAccessData = {
+      ...oldAccessData,
+      hash: newHash.key.toString(),
+      salt: newHash.salt,
+      mainKey: encryptedData.encrypted.toString(),
+    };
+
+    return newAccessData;
   },
 
   /**
@@ -778,23 +833,67 @@ const wallet = {
     }
 
     const isCorrect = this.isPinCorrect(oldPin);
+
     if (!isCorrect) {
       return false;
     }
 
-    // Get new PIN hash
-    const newHash = this.hashPassword(newPin);
-    // Update new PIN data in storage
-    const accessData = this.getWalletAccessData();
-    accessData['hash'] = newHash.key.toString();
-    accessData['salt'] = newHash.salt;
+    const oldAccessData = this.getWalletAccessData();
+    const newAccessData = this._getChangePinAccessData(oldAccessData, oldPin, newPin);
 
-    // Get and update data encrypted with PIN
-    const decryptedData = this.decryptData(accessData.mainKey, oldPin);
-    const encryptedData = this.encryptData(decryptedData, newPin);
-    accessData['mainKey'] = encryptedData.encrypted.toString();
+    this.setWalletAccessData(newAccessData);
 
-    this.setWalletAccessData(accessData);
+    return true;
+  },
+
+  /**
+   * Validate old password and pin and change them for the new ones
+   *
+   * This method exists so we can be sure that the `setWalletAccessData` will
+   * be called at the same time, so we can guarantee that we are not changing
+   * the PIN if the password was not changed and vice versa.
+   *
+   * This is only needed on the mobile wallet that uses the PIN as the wallet's
+   * password and needs to update them simultaneously
+   *
+   * @param {string} oldPin
+   * @param {string} newPin
+   * @param {string} oldPassword
+   * @param {string} newPassword
+   *
+   * @return {boolean} true if PIN and password were successfully changed
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  changePinAndPassword(oldPin, newPin, oldPassword, newPassword) {
+    if (this.isFromXPub()) {
+        throw WalletFromXPubGuard('changePinAndPassword');
+    }
+
+    if (!this.isPasswordCorrect(oldPassword)) {
+      return false;
+    }
+
+    if (!this.isPinCorrect(oldPin)) {
+      return false;
+    }
+
+    const oldAccessData = this.getWalletAccessData();
+    const newPinAccessData = this._getChangePinAccessData(oldAccessData, oldPin, newPin);
+    const newPasswordAccessData = this._getChangePasswordAccessData(oldAccessData, oldPassword, newPassword);
+
+    const newAccessData = {
+      ...oldAccessData,
+      hash: newPinAccessData.hash,
+      salt: newPinAccessData.salt,
+      mainKey: newPinAccessData.mainKey,
+      hashPasswd: newPasswordAccessData.hashPasswd,
+      saltPasswd: newPasswordAccessData.saltPasswd,
+      words: newPasswordAccessData.words,
+    };
+
+    this.setWalletAccessData(newAccessData);
 
     return true;
   },

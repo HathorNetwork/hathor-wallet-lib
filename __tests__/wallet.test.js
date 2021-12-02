@@ -412,4 +412,14 @@ test('change pin and password', () => {
   expect(xprivkey).toBe(newDecryptedXprivkey);
   const newDecryptedWords = wallet.decryptData(newAccessData.words, newPassword);
   expect(words).toBe(newDecryptedWords);
+
+  const newPin2 = '222222';
+  const newPassword2 = 'password2';
+  wallet.changePinAndPassword(newPin, newPin2, newPassword, newPassword2);
+
+  const newAccessData2 = wallet.getWalletAccessData();
+  const newDecryptedXprivkey2 = wallet.decryptData(newAccessData2.mainKey, newPin2);
+  expect(xprivkey).toBe(newDecryptedXprivkey2);
+  const newDecryptedWords2 = wallet.decryptData(newAccessData2.words, newPassword2);
+  expect(words).toBe(newDecryptedWords2);
 });
