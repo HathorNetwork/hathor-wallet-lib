@@ -348,9 +348,9 @@ const transaction = {
   },
 
   /*
-   * Add input data to each input of tx data
+   * Add input data to each input of tx data that belongs to the wallet loaded
    *
-   * @param {Object} data Object with inputs and outputs {'inputs': [{'tx_id', 'index', 'token'}], 'outputs': ['address', 'value', 'timelock']}
+   * @param {Object} data Object with inputs and outputs {'inputs': [{'tx_id', 'index', 'token', 'address'}], 'outputs': ['address', 'value', 'timelock']}
    * @param {Buffer} dataToSign data to sign the transaction in bytes
    * @param {string} pin PIN to decrypt the private key
    *
@@ -368,8 +368,11 @@ const transaction = {
     }
     const keys = walletData.keys;
     for (const input of data.inputs) {
-      const index = keys[input.address].index;
-      input['data'] = this.getSignature(index, hashbuf, pin);
+      if (input.address in keys) {
+        // We will only sign the inputs that belong to the loaded wallet
+        const index = keys[input.address].index;
+        input['data'] = this.getSignature(index, hashbuf, pin);
+      }
     }
     return data;
   },
