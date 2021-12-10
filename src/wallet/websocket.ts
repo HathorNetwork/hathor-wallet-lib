@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import EventEmitter from 'events';
+import { EventEmitter } from 'events';
 import _WebSocket from 'isomorphic-ws';
 
 const WS_READYSTATE_READY = 1;
@@ -18,8 +18,25 @@ const WS_READYSTATE_READY = 1;
  * @name WS
  */
 class WS extends EventEmitter {
+  private WebSocket: _WebSocket;
+  private ws: _WebSocket;
+  private wsURL: string | Function;
+  private started: boolean;
+  private connected: boolean | null;
+  private isOnline: boolean;
+  private heartbeatInterval: number;
+  private connectionTimeout: number;
+  private retryConnectionInterval: number;
+  private openConnectionTimeout: number;
+  private connectedDate: Date | null;
+  private latestSetupDate: Date | null;
+  private latestPingDate: Date | null;
+  private latestRTT: number | null;
+  private timeoutTimer: ReturnType<typeof setTimeout> | null;
+  private heartbeat: ReturnType<typeof setTimeout> | null;
+
   constructor({
-    wsURL,
+    wsURL = 'wss://y4lxi17rej.execute-api.eu-central-1.amazonaws.com/mainnet',
     heartbeatInterval = 3000,
     connectionTimeout = 5000,
     retryConnectionInterval = 1000,
@@ -33,16 +50,17 @@ class WS extends EventEmitter {
     this.WebSocket = _WebSocket;
 
     // This is the URL of the websocket.
+    // 'wss://y4lxi17rej.execute-api.eu-central-1.amazonaws.com/mainnet'; // wsURL;
     this.wsURL = wsURL;
 
     // Boolean to show when there is a websocket started with the server
     this.started = false;
 
     // Boolean to show when the websocket connection is working
-    this.connected = undefined;
+    this.connected = false;
 
     // Store variable that is passed to Redux if ws is online
-    this.isOnline = undefined;
+    this.isOnline = false;
 
     // Heartbeat interval in milliseconds.
     this.heartbeatInterval = heartbeatInterval;
@@ -70,6 +88,8 @@ class WS extends EventEmitter {
 
     // Timer used to detected when connection is down.
     this.timeoutTimer = null;
+
+    this.heartbeat = null;
   }
 
   /**
@@ -92,40 +112,42 @@ class WS extends EventEmitter {
     }
 
     const wsURL = this.getWSServerURL();
-    console.log('wsURL: ', wsURL);
     if (wsURL === null) {
       // TODO Throw error?
       return;
     }
 
     if (this.ws) {
-      // This check is just to prevent trying to open
-      // a connection more than once within the open timeout
-      const dt = (new Date() - this.latestSetupDate) / 1000;
-      if (dt < this.openConnectionTimeout) {
-        return;
+      if (this.latestSetupDate) {
+        // This check is just to prevent trying to open
+        // a connection more than once within the open timeout
+        const dt = (new Date().getTime() - this.latestSetupDate.getTime()) / 1000;
+        if (dt < this.openConnectionTimeout) {
+          return;
+        }
       }
       this.ws.onclose = () => {};
       this.ws.close();
       this.ws = null;
     }
+
     this.ws = new this.WebSocket(wsURL);
     this.latestSetupDate = new Date();
 
     this.ws.onopen = () => {
-        console.log('onopen');
+      console.log('onopen');
       this.onOpen();
     }
     this.ws.onmessage = (evt) => {
-        console.log('onmessage');
+      console.log('onmessage');
       this.onMessage(evt);
     }
     this.ws.onerror = (evt) => {
-        console.log('onerror');
+      console.log('onerror');
       this.onError(evt);
     }
     this.ws.onclose = () => {
-        console.log('onclose');
+      console.log('onclose');
       this.onClose();
     }
   }
@@ -137,13 +159,13 @@ class WS extends EventEmitter {
     if (!this.connectedDate) {
       return null;
     }
-    const now = new Date();
-    return (now - this.connectedDate) / 1000;
+    const now = new Date().getTime();
+    return (now - this.connectedDate.getTime()) / 1000;
   }
 
   onPong() {
     if (this.latestPingDate) {
-      const dt = (new Date() - this.latestPingDate) / 1000;
+      const dt = (new Date().getTime() - this.latestPingDate.getTime()) / 1000;
       this.latestRTT = dt;
       this.latestPingDate = null;
     }
@@ -163,7 +185,7 @@ class WS extends EventEmitter {
     const _type = data.message;
 
     console.log('message received: ', data);
-    if (_type === 'PONG') {
+    if (_type === 'pong') {
       this.onPong();
     } else {
       // The websoket might be exchanging many messages and end up getting the pong from the full node too late
@@ -189,6 +211,10 @@ class WS extends EventEmitter {
     this.heartbeat = setInterval(() => {
       this.sendPing();
     }, this.heartbeatInterval);
+
+    // Subscribe to the current wallet id
+    const msg = JSON.stringify({"action":"join", "id":"9ae747cb0b2d50cdd087d6f9d94fabc44b5529c15487825dcff35b459bf107d1"});
+    this.sendMessage(msg);
   }
 
   /**
@@ -207,6 +233,7 @@ class WS extends EventEmitter {
     setTimeout(() => {
       this.setup()
     }, this.retryConnectionInterval);
+    // @ts-ignore
     clearInterval(this.heartbeat);
   }
 
@@ -270,14 +297,15 @@ class WS extends EventEmitter {
    *
    */
   endConnection() {
-    this.setIsOnline(undefined);
+    this.setIsOnline(false);
     this.started = false;
-    this.connected = undefined;
+    this.connected = null;
     if (this.ws) {
       this.ws.onclose = () => {};
       this.ws.close();
       this.ws = null;
     }
+    // @ts-ignore
     clearInterval(this.heartbeat);
   }
 
@@ -286,7 +314,7 @@ class WS extends EventEmitter {
    *
    * @param {*} value Can be true|false|undefined
    */
-  setIsOnline(value) {
+  setIsOnline(value: boolean) {
     if (this.isOnline !== value) {
       this.isOnline = value;
       // Emits event of online state change
