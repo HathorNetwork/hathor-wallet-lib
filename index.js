@@ -6,7 +6,7 @@ const transaction = require('./lib/transaction');
 const version = require('./lib/version');
 const wallet = require('./lib/wallet');
 const WebSocketHandler = require('./lib/WebSocketHandler');
-const websocket = require('./lib/websocket_wallet_service');
+const websocket = require('./lib/websocket');
 const errors = require('./lib/errors');
 const ErrorMessages = require('./lib/errorMessages');
 const walletApi = require('./lib/api/wallet');
@@ -20,6 +20,7 @@ const network = require('./lib/network');
 const MemoryStore = require('./lib/memory_store');
 const HathorWallet = require('./lib/new/wallet');
 const Connection = require('./lib/new/connection');
+const WalletServiceConnection = require('./lib/wallet/connection');
 const SendTransaction = require('./lib/new/sendTransaction');
 const Address = require('./lib/models/address');
 const Output = require('./lib/models/output');
@@ -60,6 +61,7 @@ module.exports = {
   network: network.default,
   HathorWallet: HathorWallet.default,
   Connection: Connection.default,
+  WalletServiceConnection: WalletServiceConnection.default,
   SendTransaction: SendTransaction.default,
   Address: Address.default,
   Output: Output.default,

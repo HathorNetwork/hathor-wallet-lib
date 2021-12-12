@@ -134,22 +134,10 @@ class WS extends EventEmitter {
     this.ws = new this.WebSocket(wsURL);
     this.latestSetupDate = new Date();
 
-    this.ws.onopen = () => {
-      console.log('onopen');
-      this.onOpen();
-    }
-    this.ws.onmessage = (evt) => {
-      console.log('onmessage');
-      this.onMessage(evt);
-    }
-    this.ws.onerror = (evt) => {
-      console.log('onerror');
-      this.onError(evt);
-    }
-    this.ws.onclose = () => {
-      console.log('onclose');
-      this.onClose();
-    }
+    this.ws.onopen = () => this.onOpen();
+    this.ws.onmessage = (evt) => this.onMessage(evt);
+    this.ws.onerror = (evt) => this.onError(evt);
+    this.ws.onclose = () => this.onClose();
   }
 
   /**
@@ -181,11 +169,9 @@ class WS extends EventEmitter {
    * @param {Object} evt Event that has data (evt.data) sent in the websocket
    */
   onMessage(evt) {
-    const data = JSON.parse(evt.data)
-    const _type = data.message;
+    const payload = JSON.parse(evt.data)
 
-    console.log('message received: ', data);
-    if (_type === 'pong') {
+    if (payload.type === 'pong') {
       this.onPong();
     } else {
       // The websoket might be exchanging many messages and end up getting the pong from the full node too late
@@ -196,23 +182,28 @@ class WS extends EventEmitter {
         this.timeoutTimer = setTimeout(() => this.onConnectionDown(), this.connectionTimeout);
       }
     }
-    this.emit(_type, data)
+
+    if (payload.type === 'join-success') {
+      this.setIsOnline(true);
+    }
+
+    console.log('Emitting:', payload.type, payload);
+    this.emit(payload.type, payload);
   }
 
   /**
    * Method called when websocket connection is opened
    */
   onOpen() {
-    console.log('Connection is open');
     this.connected = true;
     this.connectedDate = new Date();
     this.started = true;
-    this.setIsOnline(true);
     this.heartbeat = setInterval(() => {
       this.sendPing();
     }, this.heartbeatInterval);
 
     // Subscribe to the current wallet id
+    // Note that we will only call setIsOnline when we receive the join-success message
     const msg = JSON.stringify({"action":"join", "id":"9ae747cb0b2d50cdd087d6f9d94fabc44b5529c15487825dcff35b459bf107d1"});
     this.sendMessage(msg);
   }
@@ -245,7 +236,6 @@ class WS extends EventEmitter {
   onError(evt) {
     this.emit('connection_error', evt);
     this.onClose();
-    // console.log('ws error', window.navigator.onLine, evt);
   }
 
   /**

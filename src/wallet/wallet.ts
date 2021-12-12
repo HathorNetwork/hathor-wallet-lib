@@ -9,8 +9,9 @@ import { EventEmitter } from 'events';
 import { HATHOR_BIP44_CODE, HATHOR_TOKEN_CONFIG, TOKEN_MINT_MASK, AUTHORITY_TOKEN_DATA, TOKEN_MELT_MASK } from '../constants';
 import Mnemonic from 'bitcore-mnemonic';
 import { crypto, util, Address as bitcoreAddress } from 'bitcore-lib';
+import wallet from '../wallet';
 import walletApi from './api/walletApi';
-import wallet from '../utils/wallet';
+import walletUtils from '../utils/wallet';
 import helpers from '../utils/helpers';
 import transaction from '../utils/transaction';
 import tokens from '../utils/tokens';
@@ -22,6 +23,7 @@ import Input from '../models/input';
 import Address from '../models/address';
 import Network from '../models/network';
 import networkInstance from '../network';
+import WalletServiceConnection, { ConnectionState } from './connection';
 import MineTransaction from './mineTransaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
 import { shuffle } from 'lodash';
@@ -63,23 +65,25 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // Wallet id from the wallet service
   walletId: string | null;
   // Network in which the wallet is connected ('mainnet' or 'testnet')
-  network: Network
+  network: Network;
   // Xpub of the wallet
-  private xpub: string | null
+  private xpub: string | null;
   // State of the wallet. One of the walletState enum options
-  private state: string
+  private state: string;
   // Variable to prevent start sending more than one tx concurrently
-  private isSendingTx: boolean
+  private isSendingTx: boolean;
   // ID of tx proposal
-  private txProposalId: string | null
+  private txProposalId: string | null;
   // Auth token to be used in the wallet API requests to wallet service
-  private authToken: string | null
+  private authToken: string | null;
   // Wallet status interval
-  private walletStatusInterval: ReturnType<typeof setInterval> | null
+  private walletStatusInterval: ReturnType<typeof setInterval> | null;
   // Variable to store the possible addresses to use that are after the last used address
-  private newAddresses: AddressInfoObject[]
+  private newAddresses: AddressInfoObject[];
   // Index of the address to be used by the wallet
-  private indexToUse: number
+  private indexToUse: number;
+  // WalletService-ready connection class
+  private conn: WalletServiceConnection;
 
   constructor(seed: string, network: Network, options = { passphrase: '' }) {
     super();
@@ -93,7 +97,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.state = walletState.NOT_STARTED;
 
     // It will throw InvalidWords error in case is not valid
-    wallet.wordsValid(seed);
+    walletUtils.wordsValid(seed);
     this.seed = seed;
     this.passphrase = passphrase
 
@@ -108,6 +112,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     this.authToken = null;
     this.walletStatusInterval = null;
+
+    this.conn = new WalletServiceConnection();
 
     // TODO When we integrate the real time events from the wallet service
     // we will need to have a trigger to update this array every new transaction
@@ -126,9 +132,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    */
   async start() {
     this.setState(walletState.LOADING);
-    const xpub = wallet.getXPubKeyFromSeed(this.seed, {passphrase: this.passphrase, networkName: this.network.name});
-    const xpubChangeDerivation = wallet.xpubDeriveChild(xpub, 0);
-    const firstAddress = wallet.getAddressAtIndex(xpubChangeDerivation, 0, this.network.name);
+    const xpub = walletUtils.getXPubKeyFromSeed(this.seed, {passphrase: this.passphrase, networkName: this.network.name});
+    const xpubChangeDerivation = walletUtils.xpubDeriveChild(xpub, 0);
+    const firstAddress = walletUtils.getAddressAtIndex(xpubChangeDerivation, 0, this.network.name);
     this.xpub = xpub;
     const handleCreate = async (data: WalletStatus) => {
       this.walletId = data.walletId;
@@ -138,6 +144,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         }, WALLET_STATUS_POLLING_INTERVAL);
       } else if (data.status === 'ready') {
         await this.onWalletReady();
+        this.conn.start();
+        this.conn.on('new-tx', (newTx) => this.onNewTx(newTx));
+        this.conn.on('update-tx', (updatedTx) => this.emit('update-tx', updatedTx));
       } else {
         throw new WalletRequestError(ErrorMessages.WALLET_STATUS_ERROR);
       }
@@ -147,8 +156,23 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     await handleCreate(data.status);
   }
 
-  onNewTx(wsData) {
+  async onNewTx(newTx: any) {
+    const outputs: any[] = newTx.outputs;
+    let shouldGetNewAddresses = false;
 
+    for (const output of outputs) {
+      if (this.newAddresses.find((newAddress) => newAddress.address === output.decoded.address)) {
+        // break early
+        shouldGetNewAddresses = true;
+        break;
+      }
+    }
+
+    if (shouldGetNewAddresses) {
+      await this.getNewAddresses();
+    }
+
+    this.emit('new-tx', newTx)
   }
 
   /**
@@ -159,6 +183,67 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    */
   getAuthToken(): string | null {
     return this.authToken;
+  }
+
+  /**
+   * Returns the balance for each token in tx, if the input/output belongs to this wallet
+   *
+   * This method is meant to keep compatibility with the old facade
+   * We don't need to check if the address belongs to
+   *
+   * @param {Object} tx Transaction data with array of inputs and outputs
+   *
+   * @return {Object} Object with each token and it's balance in this tx for this wallet
+   **/
+  async getTxBalance(tx, optionsParam = {}) {
+    const options = Object.assign({ includeAuthorities: false }, optionsParam);
+
+    const addressList: GetAddressesObject[] = [];
+
+    for await (let address of this.getAllAddresses()) {
+      addressList.push(address);
+    }
+
+    const addresses: string[] = addressList.map((address: GetAddressesObject) => address.address);
+
+    const balance = {};
+    for (const txout of tx.outputs) {
+      if (wallet.isAuthorityOutput(txout)) {
+        if (options.includeAuthorities) {
+          if (!balance[txout.token]) {
+            balance[txout.token] = 0;
+          }
+        }
+        continue;
+      }
+      if (txout.decoded && txout.decoded.address
+          && addresses.includes(txout.decoded.address)) {
+        if (!balance[txout.token]) {
+          balance[txout.token] = 0;
+        }
+        balance[txout.token] += txout.value;
+      }
+    }
+
+    for (const txin of tx.inputs) {
+      if (wallet.isAuthorityOutput(txin)) {
+        if (options.includeAuthorities) {
+          if (!balance[txin.token]) {
+            balance[txin.token] = 0;
+          }
+        }
+        continue;
+      }
+      if (txin.decoded && txin.decoded.address
+          && addresses.includes(txin.decoded.address)) {
+        if (!balance[txin.token]) {
+          balance[txin.token] = 0;
+        }
+        balance[txin.token] -= txin.value;
+      }
+    }
+
+    return balance;
   }
 
   /**
@@ -336,8 +421,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   signMessage(timestamp: number): string {
-    const xpriv = wallet.getXPrivKeyFromSeed(this.seed, {passphrase: this.passphrase, networkName: this.network.name});
-    const derivedPrivKey = wallet.deriveXpriv(xpriv, '0\'');
+    const xpriv = walletUtils.getXPrivKeyFromSeed(this.seed, {passphrase: this.passphrase, networkName: this.network.name});
+    const derivedPrivKey = walletUtils.deriveXpriv(xpriv, '0\'');
     const address = derivedPrivKey.publicKey.toAddress(this.network.getNetwork()).toString();
 
     const message = new bitcore.Message(String(timestamp).concat(this.walletId!).concat(address));

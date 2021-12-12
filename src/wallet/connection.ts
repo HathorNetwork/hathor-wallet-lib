@@ -5,13 +5,19 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import EventEmitter from 'events';
+import { EventEmitter } from 'events';
 import networkInstance from '../network';
 import { DEFAULT_SERVERS } from '../constants';
 import version from '../version';
 import helpers from '../helpers';
 import wallet from '../wallet';
-import WS from '../websocket';
+import WS from './websocket';
+
+export enum ConnectionState {
+  CLOSED = 0,
+  CONNECTING = 1,
+  CONNECTED = 2,
+}
 
 /**
  * This is a Connection that may be shared by one or more wallets.
@@ -26,12 +32,18 @@ import WS from '../websocket';
  * - wallet-update: Fired when a new wallet message arrive from the websocket.
  **/
 class Connection extends EventEmitter {
+  private network: string;
+  private servers: string[];
+  private state: ConnectionState;
+  private currentServer: string;
+  private websocket: WS;
+
   /*
    * network {String} 'testnet' or 'mainnet'
    * servers {Array} List of servers for the wallet to connect to, e.g. http://localhost:8080/v1a/
    */
   constructor({
-    network,
+    network = 'mainnet',
     servers = [],
     connectionTimeout = null,
   } = {}) {
@@ -44,15 +56,14 @@ class Connection extends EventEmitter {
     networkInstance.setNetwork(network);
     this.network = network;
 
-    this.state = Connection.CLOSED;
+    this.state = ConnectionState.CLOSED;
 
     this.onConnectionChange = this.onConnectionChange.bind(this);
     this.handleWalletMessage = this.handleWalletMessage.bind(this);
-
     this.servers = servers || [...DEFAULT_SERVERS];
     this.currentServer = this.servers[0];
 
-    const wsOptions = { wsURL: helpers.getWSServerURL(this.currentServer) };
+    const wsOptions = { wsURL: 'wss://y4lxi17rej.execute-api.eu-central-1.amazonaws.com/mainnet' };
     if (connectionTimeout) {
       wsOptions['connectionTimeout'] = connectionTimeout;
     }
@@ -65,9 +76,9 @@ class Connection extends EventEmitter {
    **/
   onConnectionChange(value) {
     if (value) {
-      this.setState(Connection.CONNECTED);
+      this.setState(ConnectionState.CONNECTED);
     } else {
-      this.setState(Connection.CONNECTING);
+      this.setState(ConnectionState.CONNECTING);
     }
   }
 
@@ -77,7 +88,8 @@ class Connection extends EventEmitter {
    * @param {Object} wsData Websocket message data
    **/
   handleWalletMessage(wsData) {
-    this.emit('wallet-update', wsData);
+    console.log('Received message from wallet:', wsData);
+    // this.emit('wallet-update', wsData);
   }
 
   /**
@@ -85,7 +97,7 @@ class Connection extends EventEmitter {
    *
    * @param {Number} state New state
    */
-  setState(state) {
+  setState(state: ConnectionState) {
     this.state = state;
     this.emit('state', state);
   }
@@ -95,17 +107,10 @@ class Connection extends EventEmitter {
    **/
   start() {
     this.websocket.on('is_online', this.onConnectionChange);
-    this.websocket.on('wallet', this.handleWalletMessage);
+    this.websocket.on('new-tx', (payload) => this.emit('new-tx', payload.data));
+    this.websocket.on('update-tx', (payload) => this.emit('update-tx', payload.data));
 
-    this.websocket.on('height_updated', (height) => {
-      this.emit('best-block-update', height);
-    });
-
-    this.websocket.on('addresses_loaded', (data) => {
-      this.emit('wallet-load-partial-update', data);
-    });
-
-    this.setState(Connection.CONNECTING);
+    this.setState(ConnectionState.CONNECTING);
     this.websocket.setup();
   }
 
@@ -118,7 +123,7 @@ class Connection extends EventEmitter {
     this.websocket.removeAllListeners();
     this.removeAllListeners();
     this.websocket.endConnection()
-    this.setState(Connection.CLOSED);
+    this.setState(ConnectionState.CLOSED);
   }
 
   /**
@@ -128,19 +133,6 @@ class Connection extends EventEmitter {
   endConnection() {
     this.websocket.endConnection();
   }
-
-  /**
-   * Call websocket setup
-   * Needed for compatibility with old src/wallet code
-   **/
-  setup() {
-    this.websocket.setup();
-  }
 }
-
-// State constants.
-Connection.CLOSED =  0;
-Connection.CONNECTING = 1;
-Connection.CONNECTED = 2;
 
 export default Connection;
