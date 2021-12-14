@@ -254,6 +254,8 @@ export const SELECT_OUTPUTS_TIMEOUT = 1000 * 60;
  */
 export const WALLET_SERVICE_BASE_URL  = 'https://wallet-service.hathor.network/';
 export const WALLET_SERVICE_TESTNET_BASE_URL  = 'https://wallet-service.testnet.hathor.network/';
+export const WALLET_SERVICE_BASE_WS_URL  = 'wss://y4lxi17rej.execute-api.eu-central-1.amazonaws.com/mainnet'; // 'https://ws.wallet-service.hathor.network/';
+export const WALLET_SERVICE_TESTNET_BASE_WS_URL  = 'https://ws.wallet-service.testnet.hathor.network/';
 
 /**
  * Explorer service URL

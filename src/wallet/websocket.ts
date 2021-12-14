@@ -6,6 +6,7 @@
  */
 
 import { EventEmitter } from 'events';
+import { WALLET_SERVICE_TESTNET_BASE_URL } from '../constants.js';
 import _WebSocket from 'isomorphic-ws';
 
 const WS_READYSTATE_READY = 1;
@@ -18,77 +19,68 @@ const WS_READYSTATE_READY = 1;
  * @name WS
  */
 class WS extends EventEmitter {
+  // The walletId to subscribe to new events
+  private walletId: string;
+  // This is the class of the Websocket. It is used to open new WebSocket
+  // connections. We don't directly use it from import, so the unittests
+  // can replace it by a mock.
   private WebSocket: _WebSocket;
+  // This is the websocket instance
   private ws: _WebSocket;
+  // This is the URL of the websocket.
   private wsURL: string | Function;
+  // Boolean to show when there is a websocket started with the server
   private started: boolean;
+  // Boolean to show when the websocket connection is working
   private connected: boolean | null;
+  // Boolean to show when the websocket is online
   private isOnline: boolean;
+  // Heartbeat interval in milliseconds
   private heartbeatInterval: number;
+  // Connection timeout in milliseconds
   private connectionTimeout: number;
+  // Retry connection interval in milliseconds
   private retryConnectionInterval: number;
+  // Open connection timeout in milliseconds
   private openConnectionTimeout: number;
+  // Date of connection.
   private connectedDate: Date | null;
+  // Date of latest setup call. The setup is the way to open a new connection.
   private latestSetupDate: Date | null;
+  // Date of latest ping.
   private latestPingDate: Date | null;
+  // Latest round trip time measured by PING/PONG.
   private latestRTT: number | null;
+  // Timer used to detected when connection is down.
   private timeoutTimer: ReturnType<typeof setTimeout> | null;
+  // Heartbeat interval to send pings
   private heartbeat: ReturnType<typeof setTimeout> | null;
 
   constructor({
-    wsURL = 'wss://y4lxi17rej.execute-api.eu-central-1.amazonaws.com/mainnet',
+    wsURL = WALLET_SERVICE_TESTNET_BASE_URL,
     heartbeatInterval = 3000,
     connectionTimeout = 5000,
     retryConnectionInterval = 1000,
     openConnectionTimeout = 20000,
+    walletId = '',
   } = {}) {
     super();
 
-    // This is the class of the Websocket. It is used to open new WebSocket
-    // connections. We don't directly use it from import, so the unittests
-    // can replace it by a mock.
+    this.walletId = walletId;
     this.WebSocket = _WebSocket;
-
-    // This is the URL of the websocket.
-    // 'wss://y4lxi17rej.execute-api.eu-central-1.amazonaws.com/mainnet'; // wsURL;
     this.wsURL = wsURL;
-
-    // Boolean to show when there is a websocket started with the server
     this.started = false;
-
-    // Boolean to show when the websocket connection is working
     this.connected = false;
-
-    // Store variable that is passed to Redux if ws is online
     this.isOnline = false;
-
-    // Heartbeat interval in milliseconds.
     this.heartbeatInterval = heartbeatInterval;
-
-    // Connection timeout.
     this.connectionTimeout = connectionTimeout;
-
-    // Retry connection interval in milliseconds.
     this.retryConnectionInterval = retryConnectionInterval;
-
-    // Open connection timeout.
     this.openConnectionTimeout = openConnectionTimeout;
-
-    // Date of connection.
     this.connectedDate = null;
-
-    // Date of latest setup call. The setup is the way to open a new connection.
     this.latestSetupDate = null;
-
-    // Date of latest ping.
     this.latestPingDate = null;
-
-    // Latest round trip time measured by PING/PONG.
     this.latestRTT = null;
-
-    // Timer used to detected when connection is down.
     this.timeoutTimer = null;
-
     this.heartbeat = null;
   }
 
@@ -113,8 +105,7 @@ class WS extends EventEmitter {
 
     const wsURL = this.getWSServerURL();
     if (wsURL === null) {
-      // TODO Throw error?
-      return;
+      throw new Error('No server URL specified.');
     }
 
     if (this.ws) {
@@ -187,7 +178,6 @@ class WS extends EventEmitter {
       this.setIsOnline(true);
     }
 
-    console.log('Emitting:', payload.type, payload);
     this.emit(payload.type, payload);
   }
 
@@ -204,7 +194,11 @@ class WS extends EventEmitter {
 
     // Subscribe to the current wallet id
     // Note that we will only call setIsOnline when we receive the join-success message
-    const msg = JSON.stringify({"action":"join", "id":"9ae747cb0b2d50cdd087d6f9d94fabc44b5529c15487825dcff35b459bf107d1"});
+    const msg = JSON.stringify({
+      'action': 'join',
+      'id': this.walletId,
+    });
+
     this.sendMessage(msg);
   }
 
@@ -212,6 +206,7 @@ class WS extends EventEmitter {
    * Method called when websocket connection is closed
    */
   onClose() {
+    console.log('ON CLOSE');
     this.started = false;
     this.connected = false;
     this.connectedDate = null;
@@ -245,6 +240,7 @@ class WS extends EventEmitter {
    */
   sendMessage(msg) {
     if (!this.started) {
+      console.log('Sending message but not started');
       this.setIsOnline(false);
       return;
     }
@@ -279,6 +275,7 @@ class WS extends EventEmitter {
       uptime: this.uptime(),
       connectionTimeout: this.connectionTimeout,
     });
+
     this.onClose();
   };
 
@@ -287,6 +284,7 @@ class WS extends EventEmitter {
    *
    */
   endConnection() {
+    console.log('End connection called');
     this.setIsOnline(false);
     this.started = false;
     this.connected = null;
@@ -301,8 +299,6 @@ class WS extends EventEmitter {
 
   /**
    * Set if websocket is online
-   *
-   * @param {*} value Can be true|false|undefined
    */
   setIsOnline(value: boolean) {
     if (this.isOnline !== value) {

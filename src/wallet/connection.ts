@@ -7,7 +7,11 @@
 
 import { EventEmitter } from 'events';
 import networkInstance from '../network';
-import { DEFAULT_SERVERS } from '../constants';
+import {
+  DEFAULT_SERVERS,
+  WALLET_SERVICE_BASE_WS_URL,
+  WALLET_SERVICE_TESTNET_BASE_WS_URL,
+} from '../constants';
 import version from '../version';
 import helpers from '../helpers';
 import wallet from '../wallet';
@@ -32,19 +36,18 @@ export enum ConnectionState {
  * - wallet-update: Fired when a new wallet message arrive from the websocket.
  **/
 class Connection extends EventEmitter {
+  // the network to connect to, 'testnet' or 'mainnet'
   private network: string;
-  private servers: string[];
   private state: ConnectionState;
-  private currentServer: string;
   private websocket: WS;
+  private walletId: string;
 
   /*
    * network {String} 'testnet' or 'mainnet'
-   * servers {Array} List of servers for the wallet to connect to, e.g. http://localhost:8080/v1a/
    */
   constructor({
     network = 'mainnet',
-    servers = [],
+    walletId = '',
     connectionTimeout = null,
   } = {}) {
     super();
@@ -53,17 +56,24 @@ class Connection extends EventEmitter {
       throw Error('You must explicitly provide the network.');
     }
 
+    if (!walletId || !walletId.length) {
+      throw Error('You must explicitly provide the walletId.');
+    }
+
     networkInstance.setNetwork(network);
     this.network = network;
+
+    this.walletId = walletId;
 
     this.state = ConnectionState.CLOSED;
 
     this.onConnectionChange = this.onConnectionChange.bind(this);
-    this.handleWalletMessage = this.handleWalletMessage.bind(this);
-    this.servers = servers || [...DEFAULT_SERVERS];
-    this.currentServer = this.servers[0];
 
-    const wsOptions = { wsURL: 'wss://y4lxi17rej.execute-api.eu-central-1.amazonaws.com/mainnet' };
+    const wsOptions = {
+      wsURL: this.getWSServerURL(network),
+      walletId: this.walletId,
+    };
+
     if (connectionTimeout) {
       wsOptions['connectionTimeout'] = connectionTimeout;
     }
@@ -74,7 +84,7 @@ class Connection extends EventEmitter {
    * Called when the connection to the websocket changes.
    * It is also called if the network is down.
    **/
-  onConnectionChange(value) {
+  onConnectionChange(value: boolean) {
     if (value) {
       this.setState(ConnectionState.CONNECTED);
     } else {
@@ -82,20 +92,16 @@ class Connection extends EventEmitter {
     }
   }
 
-  /**
-   * Called when a new wallet message arrives from websocket.
-   *
-   * @param {Object} wsData Websocket message data
-   **/
-  handleWalletMessage(wsData) {
-    console.log('Received message from wallet:', wsData);
-    // this.emit('wallet-update', wsData);
+  getWSServerURL(network: string) {
+    if (network === 'mainnet') {
+      return WALLET_SERVICE_BASE_WS_URL;
+    }
+
+    return WALLET_SERVICE_TESTNET_BASE_WS_URL;
   }
 
   /**
    * Update class state
-   *
-   * @param {Number} state New state
    */
   setState(state: ConnectionState) {
     this.state = state;
@@ -118,20 +124,9 @@ class Connection extends EventEmitter {
    * Close the connections and stop emitting events.
    **/
   stop() {
-    // TODO Double check that we are properly cleaning things up.
-    // See: https://github.com/HathorNetwork/hathor-wallet-headless/pull/1#discussion_r369859701
     this.websocket.removeAllListeners();
     this.removeAllListeners();
-    this.websocket.endConnection()
     this.setState(ConnectionState.CLOSED);
-  }
-
-  /**
-   * Call websocket endConnection
-   * Needed for compatibility with old src/wallet code
-   **/
-  endConnection() {
-    this.websocket.endConnection();
   }
 }
 

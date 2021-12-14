@@ -83,7 +83,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // Index of the address to be used by the wallet
   private indexToUse: number;
   // WalletService-ready connection class
-  private conn: WalletServiceConnection;
+  private conn: WalletServiceConnection | null;
 
   constructor(seed: string, network: Network, options = { passphrase: '' }) {
     super();
@@ -93,6 +93,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     if (!seed) {
       throw Error('You must explicitly provide the seed.');
     }
+
+    this.conn = null;
 
     this.state = walletState.NOT_STARTED;
 
@@ -112,8 +114,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     this.authToken = null;
     this.walletStatusInterval = null;
-
-    this.conn = new WalletServiceConnection();
 
     // TODO When we integrate the real time events from the wallet service
     // we will need to have a trigger to update this array every new transaction
@@ -136,6 +136,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const xpubChangeDerivation = walletUtils.xpubDeriveChild(xpub, 0);
     const firstAddress = walletUtils.getAddressAtIndex(xpubChangeDerivation, 0, this.network.name);
     this.xpub = xpub;
+
     const handleCreate = async (data: WalletStatus) => {
       this.walletId = data.walletId;
       if (data.status === 'creating') {
@@ -144,6 +145,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         }, WALLET_STATUS_POLLING_INTERVAL);
       } else if (data.status === 'ready') {
         await this.onWalletReady();
+        this.conn = new WalletServiceConnection({
+          walletId: this.walletId,
+        });
         this.conn.start();
         this.conn.on('new-tx', (newTx) => this.onNewTx(newTx));
         this.conn.on('update-tx', (updatedTx) => this.emit('update-tx', updatedTx));
