@@ -206,7 +206,6 @@ class WS extends EventEmitter {
    * Method called when websocket connection is closed
    */
   onClose() {
-    console.log('ON CLOSE');
     this.started = false;
     this.connected = false;
     this.connectedDate = null;
@@ -240,7 +239,6 @@ class WS extends EventEmitter {
    */
   sendMessage(msg) {
     if (!this.started) {
-      console.log('Sending message but not started');
       this.setIsOnline(false);
       return;
     }
@@ -284,7 +282,6 @@ class WS extends EventEmitter {
    *
    */
   endConnection() {
-    console.log('End connection called');
     this.setIsOnline(false);
     this.started = false;
     this.connected = null;

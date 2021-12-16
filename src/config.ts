@@ -15,8 +15,8 @@ const WALLET_SERVICE_MAINNET_BASE_URL  = 'https://wallet-service.hathor.network/
 const WALLET_SERVICE_TESTNET_BASE_URL  = 'https://wallet-service.testnet.hathor.network/';
 
 // Wallet service Websocket URLs
-const WALLET_SERVICE_MAINNET_WS_BASE_URL  = 'https://ws.wallet-service.hathor.network/';
-const WALLET_SERVICE_TESTNET_WS_BASE_URL  = 'https://ws.wallet-service.testnet.hathor.network/';
+const WALLET_SERVICE_MAINNET_WS_BASE_URL  = 'wss://ws.wallet-service.hathor.network/';
+const WALLET_SERVICE_TESTNET_WS_BASE_URL  = 'wss://ws.wallet-service.testnet.hathor.network/';
 
 // Explorer service URL
 const EXPLORER_SERVICE_MAINNET_BASE_URL  = 'https://explorer-service.hathor.network/';
