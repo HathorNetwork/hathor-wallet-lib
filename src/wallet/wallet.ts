@@ -193,7 +193,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * Returns the balance for each token in tx, if the input/output belongs to this wallet
    *
    * This method is meant to keep compatibility with the old facade
-   * We don't need to check if the address belongs to
    *
    * @param {Object} tx Transaction data with array of inputs and outputs
    *
