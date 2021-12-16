@@ -7,15 +7,13 @@
 
 import { EventEmitter } from 'events';
 import networkInstance from '../network';
-import {
-  DEFAULT_SERVERS,
-  WALLET_SERVICE_BASE_WS_URL,
-  WALLET_SERVICE_TESTNET_BASE_WS_URL,
-} from '../constants';
+import { DEFAULT_SERVERS } from '../constants';
+import Network from '../models/network';
 import version from '../version';
 import helpers from '../helpers';
 import wallet from '../wallet';
 import WS from './websocket';
+import config from '../config';
 
 export enum ConnectionState {
   CLOSED = 0,
@@ -37,7 +35,7 @@ export enum ConnectionState {
  **/
 class Connection extends EventEmitter {
   // the network to connect to, 'testnet' or 'mainnet'
-  private network: string;
+  private network: Network;
   private state: ConnectionState;
   private websocket: WS;
   private walletId: string;
@@ -46,7 +44,7 @@ class Connection extends EventEmitter {
    * network {String} 'testnet' or 'mainnet'
    */
   constructor({
-    network = 'mainnet',
+    network = new Network('mainnet'),
     walletId = '',
     connectionTimeout = null,
   } = {}) {
@@ -60,7 +58,7 @@ class Connection extends EventEmitter {
       throw Error('You must explicitly provide the walletId.');
     }
 
-    networkInstance.setNetwork(network);
+    networkInstance.setNetwork(network.name);
     this.network = network;
 
     this.walletId = walletId;
@@ -70,7 +68,7 @@ class Connection extends EventEmitter {
     this.onConnectionChange = this.onConnectionChange.bind(this);
 
     const wsOptions = {
-      wsURL: this.getWSServerURL(network),
+      wsURL: config.getWalletServiceBaseWsUrl(this.network),
       walletId: this.walletId,
     };
 
@@ -90,14 +88,6 @@ class Connection extends EventEmitter {
     } else {
       this.setState(ConnectionState.CONNECTING);
     }
-  }
-
-  getWSServerURL(network: string) {
-    if (network === 'mainnet') {
-      return WALLET_SERVICE_BASE_WS_URL;
-    }
-
-    return WALLET_SERVICE_TESTNET_BASE_WS_URL;
   }
 
   /**
