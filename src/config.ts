@@ -113,7 +113,7 @@ class Config {
             throw new Error('You should either provide a network or call setWalletServiceBaseUrl before calling this.');
         }
 
-        // Keeps the old behavior for cases that don't explicitly set a WALLET_SERVICE_BASE_URL
+        // Keeps the old behavior for cases that don't explicitly set a WALLET_SERVICE_BASE_WS_URL
         if (network.name == 'mainnet') {
             return WALLET_SERVICE_MAINNET_WS_BASE_URL;
         } else if (network.name == 'testnet'){
@@ -151,7 +151,7 @@ class Config {
             throw new Error('You should either provide a network or call setExplorerServiceBaseUrl before calling this.');
         }
 
-        // Keeps the old behavior for cases that don't explicitly set a WALLET_SERVICE_BASE_URL
+        // Keeps the old behavior for cases that don't explicitly set a EXPLORER_SERVICE_BASE_URL
         if (network == 'mainnet') {
             return EXPLORER_SERVICE_MAINNET_BASE_URL;
         } else if (network == 'testnet'){
