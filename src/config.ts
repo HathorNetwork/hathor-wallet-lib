@@ -10,14 +10,6 @@ export const DEFAULT_SERVER = 'https://node1.mainnet.hathor.network/v1a/';
 const TX_MINING_MAINNET_URL = 'https://txmining.mainnet.hathor.network/';
 const TX_MINING_TESTNET_URL = 'https://txmining.testnet.hathor.network/';
 
-// Wallet service URLs
-const WALLET_SERVICE_MAINNET_BASE_URL  = 'https://wallet-service.hathor.network/';
-const WALLET_SERVICE_TESTNET_BASE_URL  = 'https://wallet-service.testnet.hathor.network/';
-
-// Wallet service Websocket URLs
-const WALLET_SERVICE_MAINNET_WS_BASE_URL  = 'wss://ws.wallet-service.hathor.network/';
-const WALLET_SERVICE_TESTNET_WS_BASE_URL  = 'wss://ws.wallet-service.testnet.hathor.network/';
-
 // Explorer service URL
 const EXPLORER_SERVICE_MAINNET_BASE_URL  = 'https://explorer-service.hathor.network/';
 const EXPLORER_SERVICE_TESTNET_BASE_URL  = 'https://explorer-service.testnet.hathor.network/';
@@ -25,7 +17,7 @@ const EXPLORER_SERVICE_TESTNET_BASE_URL  = 'https://explorer-service.testnet.hat
 class Config {
     TX_MINING_URL?: string;
     WALLET_SERVICE_BASE_URL?: string;
-    WALLET_SERVICE_WS_BASE_URL?: string;
+    WALLET_SERVICE_BASE_WS_URL?: string;
     EXPLORER_SERVICE_BASE_URL?: string;
     SERVER_URL?: string;
 
@@ -85,15 +77,6 @@ class Config {
         if (!network) {
             throw new Error('You should either provide a network or call setWalletServiceBaseUrl before calling this.');
         }
-
-        // Keeps the old behavior for cases that don't explicitly set a WALLET_SERVICE_BASE_URL
-        if (network.name == 'mainnet') {
-            return WALLET_SERVICE_MAINNET_BASE_URL;
-        } else if (network.name == 'testnet'){
-            return WALLET_SERVICE_TESTNET_BASE_URL;
-        } else {
-            throw new Error(`Network ${network.name} doesn't have a correspondent wallet service url. You should set it explicitly.`);
-        }
     }
 
     /**
@@ -105,21 +88,12 @@ class Config {
      * @return {string} The wallet service websocket url
      */
     getWalletServiceBaseWsUrl(network?: Network) {
-        if (this.WALLET_SERVICE_WS_BASE_URL) {
-            return this.WALLET_SERVICE_WS_BASE_URL;
+        if (this.WALLET_SERVICE_BASE_WS_URL) {
+            return this.WALLET_SERVICE_BASE_WS_URL;
         }
 
         if (!network) {
-            throw new Error('You should either provide a network or call setWalletServiceBaseUrl before calling this.');
-        }
-
-        // Keeps the old behavior for cases that don't explicitly set a WALLET_SERVICE_BASE_WS_URL
-        if (network.name == 'mainnet') {
-            return WALLET_SERVICE_MAINNET_WS_BASE_URL;
-        } else if (network.name == 'testnet'){
-            return WALLET_SERVICE_TESTNET_WS_BASE_URL;
-        } else {
-            throw new Error(`Network ${network.name} doesn't have a correspondent wallet service websocket url. You should set it explicitly.`);
+            throw new Error('You should either provide a network or call setWalletServiceBaseWsUrl before calling this.');
         }
     }
 
