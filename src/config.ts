@@ -124,6 +124,15 @@ class Config {
     }
 
     /**
+    * Sets the wallet service websocket url that will be returned by the config object.
+    *
+    * @param {string} url - The url to be set
+    */
+    setWalletServiceBaseWsUrl(url: string) {
+        this.WALLET_SERVICE_BASE_WS_URL = url;
+    }
+
+    /**
     * Sets the explorer service url that will be returned by the config object.
     *
     * @param {string} url - The url to be set
