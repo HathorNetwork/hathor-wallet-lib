@@ -10,7 +10,7 @@ import { WALLET_SERVICE_TESTNET_BASE_URL } from '../constants.js';
 import _WebSocket from 'isomorphic-ws';
 
 const WS_READYSTATE_READY = 1;
-
+const JOIN_TIMEOUT = 5000;
 
 /**
  * Handles websocket connections and message transmission
@@ -51,10 +51,14 @@ class WS extends EventEmitter {
   private latestPingDate: Date | null;
   // Latest round trip time measured by PING/PONG.
   private latestRTT: number | null;
+  // Timer used to detected when join wallet failed
+  private joinTimeoutTimer: ReturnType<typeof setTimeout> | null;
   // Timer used to detected when connection is down.
   private timeoutTimer: ReturnType<typeof setTimeout> | null;
   // Heartbeat interval to send pings
   private heartbeat: ReturnType<typeof setTimeout> | null;
+  // Current join-wallet retry count
+  private joinRetry: number;
 
   constructor({
     wsURL = WALLET_SERVICE_TESTNET_BASE_URL,
@@ -81,7 +85,9 @@ class WS extends EventEmitter {
     this.latestPingDate = null;
     this.latestRTT = null;
     this.timeoutTimer = null;
+    this.joinTimeoutTimer = null;
     this.heartbeat = null;
+    this.joinRetry = 0;
   }
 
   /**
@@ -164,6 +170,8 @@ class WS extends EventEmitter {
 
     if (payload.type === 'pong') {
       this.onPong();
+    } else if (payload.type === 'join-success') {
+      this.onJoinSuccess();
     } else {
       // The websoket might be exchanging many messages and end up getting the pong from the full node too late
       // in that case the websocket would be closed but we know the connection is not down because we are receiving
@@ -172,10 +180,6 @@ class WS extends EventEmitter {
         clearTimeout(this.timeoutTimer);
         this.timeoutTimer = setTimeout(() => this.onConnectionDown(), this.connectionTimeout);
       }
-    }
-
-    if (payload.type === 'join-success') {
-      this.setIsOnline(true);
     }
 
     this.emit(payload.type, payload);
@@ -191,16 +195,9 @@ class WS extends EventEmitter {
     this.heartbeat = setInterval(() => {
       this.sendPing();
     }, this.heartbeatInterval);
-
-    // Subscribe to the current wallet id
-    // Note that we will only call setIsOnline when we receive the join-success message
-    const msg = JSON.stringify({
-      'action': 'join',
-      'id': this.walletId,
-    });
-
-    this.sendMessage(msg);
+    this.joinWallet();
   }
+
 
   /**
    * Method called when websocket connection is closed
@@ -215,9 +212,7 @@ class WS extends EventEmitter {
       this.ws.close();
       this.ws = null;
     }
-    setTimeout(() => {
-      this.setup()
-    }, this.retryConnectionInterval);
+    setTimeout(() => this.setup(), this.retryConnectionInterval);
     // @ts-ignore
     clearInterval(this.heartbeat);
   }
@@ -230,6 +225,36 @@ class WS extends EventEmitter {
   onError(evt) {
     this.emit('connection_error', evt);
     this.onClose();
+  }
+
+  clearJoinTimeout() {
+    if (!this.joinTimeoutTimer) {
+      return;
+    }
+
+    clearTimeout(this.joinTimeoutTimer);
+  }
+
+  onJoinSuccess() {
+    this.clearJoinTimeout();
+    this.setIsOnline(true);
+  }
+
+  onJoinTimeout() {
+    this.clearJoinTimeout();
+    this.joinWallet();
+    this.setIsOnline(false);
+  }
+
+  joinWallet() {
+    // Subscribe to the current wallet id
+    const msg = JSON.stringify({
+      'action': 'join',
+      'id': this.walletId,
+    });
+
+    this.sendMessage(msg);
+    this.joinTimeoutTimer = setTimeout(() => this.onJoinTimeout(), JOIN_TIMEOUT);
   }
 
   /**
