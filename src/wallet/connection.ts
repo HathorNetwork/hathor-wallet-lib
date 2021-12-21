@@ -12,7 +12,7 @@ import Network from '../models/network';
 import version from '../version';
 import helpers from '../helpers';
 import wallet from '../wallet';
-import WS from './websocket';
+import WalletServiceWebSocket from './websocket';
 import config from '../config';
 
 export enum ConnectionState {
@@ -37,7 +37,7 @@ class Connection extends EventEmitter {
   // the network to connect to, 'testnet' or 'mainnet'
   private network: Network;
   private state: ConnectionState;
-  private websocket: WS;
+  private websocket: WalletServiceWebSocket;
   private walletId: string;
 
   /*
@@ -59,12 +59,10 @@ class Connection extends EventEmitter {
     }
 
     networkInstance.setNetwork(network.name);
+
     this.network = network;
-
     this.walletId = walletId;
-
     this.state = ConnectionState.CLOSED;
-
     this.onConnectionChange = this.onConnectionChange.bind(this);
 
     const wsOptions = {
@@ -75,7 +73,7 @@ class Connection extends EventEmitter {
     if (connectionTimeout) {
       wsOptions['connectionTimeout'] = connectionTimeout;
     }
-    this.websocket = new WS(wsOptions);
+    this.websocket = new WalletServiceWebSocket(wsOptions);
   }
 
   /**
@@ -116,6 +114,7 @@ class Connection extends EventEmitter {
   stop() {
     this.websocket.removeAllListeners();
     this.removeAllListeners();
+    this.websocket.endConnection()
     this.setState(ConnectionState.CLOSED);
   }
 }

@@ -5,8 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import _WebSocket from 'isomorphic-ws';
-import WebSocket from './wallet/websocket';
+import BaseWebSocket, { WsOptions } from './base_websocket';
 
 /**
  * Handles websocket connections and message transmission
@@ -14,9 +13,9 @@ import WebSocket from './wallet/websocket';
  * @class
  * @name WS
  */
-class WS extends WebSocket {
-  constructor(params) {
-    super(params);
+class WalletWebSocket extends BaseWebSocket {
+  constructor(options: WsOptions) {
+    super(options);
   }
 
   /**
@@ -42,31 +41,26 @@ class WS extends WebSocket {
   }
 
   /**
-   * Method called when websocket connection is opened
-   */
-  onOpen() {
-    this.connected = true;
-    this.connectedDate = new Date();
-    this.started = true;
-    this.setIsOnline(true);
-    this.heartbeat = setInterval(() => {
-      this.sendPing();
-    }, this.heartbeatInterval);
-  }
-
-  /**
-   * Ping method to check if server is still alive.
+   * Ping method to check if server is still alive
    */
   sendPing() {
     if (this.latestPingDate) {
       // Skipping sendPing. Still waiting for pong...
       return;
     }
-    const msg = JSON.stringify({'type': 'ping'})
+    const msg = JSON.stringify({'type': 'ping'});
     this.latestPingDate = new Date();
     this.timeoutTimer = setTimeout(() => this.onConnectionDown(), this.connectionTimeout);
-    this.sendMessage(msg)
+    this.sendMessage(msg);
+  }
+
+  /**
+   * Extend onOpen to consider online as soon as the websocket connection is open
+   */
+  onOpen() {
+    super.onOpen();
+    this.setIsOnline(true);
   }
 }
 
-export default WS;
+export default WalletWebSocket;

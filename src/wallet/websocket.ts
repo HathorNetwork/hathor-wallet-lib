@@ -5,11 +5,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { EventEmitter } from 'events';
-import { WALLET_SERVICE_TESTNET_BASE_URL } from '../constants.js';
-import _WebSocket from 'isomorphic-ws';
+import BaseWebSocket, {
+  WsOptions,
+  DEFAULT_WS_OPTIONS,
+} from '../base_websocket';
 
-const WS_READYSTATE_READY = 1;
+export interface WalletServiceWebSocketOptions extends WsOptions {
+  walletId: string;
+};
+
 const JOIN_TIMEOUT = 5000;
 
 /**
@@ -18,146 +22,35 @@ const JOIN_TIMEOUT = 5000;
  * @class
  * @name WS
  */
-class WS extends EventEmitter {
+class WalletServiceWebSocket extends BaseWebSocket {
   // The walletId to subscribe to new events
   private walletId: string;
-  // This is the class of the Websocket. It is used to open new WebSocket
-  // connections. We don't directly use it from import, so the unittests
-  // can replace it by a mock.
-  private WebSocket: _WebSocket;
-  // This is the websocket instance
-  private ws: _WebSocket;
-  // This is the URL of the websocket.
-  private wsURL: string | Function;
-  // Boolean to show when there is a websocket started with the server
-  private started: boolean;
-  // Boolean to show when the websocket connection is working
-  private connected: boolean | null;
-  // Boolean to show when the websocket is online
-  private isOnline: boolean;
-  // Heartbeat interval in milliseconds
-  private heartbeatInterval: number;
-  // Connection timeout in milliseconds
-  private connectionTimeout: number;
-  // Retry connection interval in milliseconds
-  private retryConnectionInterval: number;
-  // Open connection timeout in milliseconds
-  private openConnectionTimeout: number;
-  // Date of connection.
-  private connectedDate: Date | null;
-  // Date of latest setup call. The setup is the way to open a new connection.
-  private latestSetupDate: Date | null;
-  // Date of latest ping.
-  private latestPingDate: Date | null;
-  // Latest round trip time measured by PING/PONG.
-  private latestRTT: number | null;
   // Timer used to detected when join wallet failed
   private joinTimeoutTimer: ReturnType<typeof setTimeout> | null;
-  // Timer used to detected when connection is down.
-  private timeoutTimer: ReturnType<typeof setTimeout> | null;
-  // Heartbeat interval to send pings
-  private heartbeat: ReturnType<typeof setTimeout> | null;
-  // Current join-wallet retry count
-  private joinRetry: number;
 
-  constructor({
-    wsURL = WALLET_SERVICE_TESTNET_BASE_URL,
-    heartbeatInterval = 3000,
-    connectionTimeout = 5000,
-    retryConnectionInterval = 1000,
-    openConnectionTimeout = 20000,
-    walletId = '',
-  } = {}) {
-    super();
+  constructor(options: WalletServiceWebSocketOptions) {
+    const {
+      wsURL,
+      heartbeatInterval,
+      connectionTimeout,
+      retryConnectionInterval,
+      openConnectionTimeout,
+      walletId,
+    } = {
+      ...DEFAULT_WS_OPTIONS,
+      ...options,
+    };
+
+    super({
+      wsURL,
+      heartbeatInterval,
+      connectionTimeout,
+      retryConnectionInterval,
+      openConnectionTimeout,
+    });
 
     this.walletId = walletId;
-    this.WebSocket = _WebSocket;
-    this.wsURL = wsURL;
-    this.started = false;
-    this.connected = false;
-    this.isOnline = false;
-    this.heartbeatInterval = heartbeatInterval;
-    this.connectionTimeout = connectionTimeout;
-    this.retryConnectionInterval = retryConnectionInterval;
-    this.openConnectionTimeout = openConnectionTimeout;
-    this.connectedDate = null;
-    this.latestSetupDate = null;
-    this.latestPingDate = null;
-    this.latestRTT = null;
-    this.timeoutTimer = null;
     this.joinTimeoutTimer = null;
-    this.heartbeat = null;
-    this.joinRetry = 0;
-  }
-
-  /**
-   * Return websocket url to connect to.
-   **/
-  getWSServerURL() {
-    if (typeof this.wsURL === 'function') {
-      return this.wsURL();
-    } else {
-      return this.wsURL;
-    }
-  }
-
-  /**
-   * Start websocket object and its methods
-   */
-  setup() {
-    if (this.started) {
-      return;
-    }
-
-    const wsURL = this.getWSServerURL();
-    if (wsURL === null) {
-      throw new Error('No server URL specified.');
-    }
-
-    if (this.ws) {
-      if (this.latestSetupDate) {
-        // This check is just to prevent trying to open
-        // a connection more than once within the open timeout
-        const dt = (new Date().getTime() - this.latestSetupDate.getTime()) / 1000;
-        if (dt < this.openConnectionTimeout) {
-          return;
-        }
-      }
-      this.ws.onclose = () => {};
-      this.ws.close();
-      this.ws = null;
-    }
-
-    this.ws = new this.WebSocket(wsURL);
-    this.latestSetupDate = new Date();
-
-    this.ws.onopen = () => this.onOpen();
-    this.ws.onmessage = (evt) => this.onMessage(evt);
-    this.ws.onerror = (evt) => this.onError(evt);
-    this.ws.onclose = () => this.onClose();
-  }
-
-  /**
-   * Return connection uptime in seconds (or null if not connected).
-   **/
-  uptime() {
-    if (!this.connectedDate) {
-      return null;
-    }
-    const now = new Date().getTime();
-    return (now - this.connectedDate.getTime()) / 1000;
-  }
-
-  onPong() {
-    if (this.latestPingDate) {
-      const dt = (new Date().getTime() - this.latestPingDate.getTime()) / 1000;
-      this.latestRTT = dt;
-      this.latestPingDate = null;
-    }
-    if (this.timeoutTimer) {
-      clearTimeout(this.timeoutTimer);
-      this.timeoutTimer = null;
-    }
   }
 
   /**
@@ -189,44 +82,13 @@ class WS extends EventEmitter {
    * Method called when websocket connection is opened
    */
   onOpen() {
-    this.connected = true;
-    this.connectedDate = new Date();
-    this.started = true;
-    this.heartbeat = setInterval(() => {
-      this.sendPing();
-    }, this.heartbeatInterval);
+    super.onOpen();
     this.joinWallet();
   }
 
-
   /**
-   * Method called when websocket connection is closed
+   * Clears the join timeout timer
    */
-  onClose() {
-    this.started = false;
-    this.connected = false;
-    this.connectedDate = null;
-    this.setIsOnline(false);
-    if (this.ws) {
-      this.ws.onclose = () => {};
-      this.ws.close();
-      this.ws = null;
-    }
-    setTimeout(() => this.setup(), this.retryConnectionInterval);
-    // @ts-ignore
-    clearInterval(this.heartbeat);
-  }
-
-  /**
-   * Method called when an error happend on websocket
-   *
-   * @param {Object} evt Event that contains the error
-   */
-  onError(evt) {
-    this.emit('connection_error', evt);
-    this.onClose();
-  }
-
   clearJoinTimeout() {
     if (!this.joinTimeoutTimer) {
       return;
@@ -235,17 +97,27 @@ class WS extends EventEmitter {
     clearTimeout(this.joinTimeoutTimer);
   }
 
+  /**
+   * Called when the `join-success` event is received on the websocket connection
+   */
   onJoinSuccess() {
     this.clearJoinTimeout();
     this.setIsOnline(true);
   }
 
+  /**
+   * Handler for timeouts on the `join` wallet action
+   */
   onJoinTimeout() {
     this.clearJoinTimeout();
     this.joinWallet();
     this.setIsOnline(false);
   }
 
+  /**
+   * Sends the join action to the websocket connection to start receiving updates
+   * from our wallet
+   */
   joinWallet() {
     // Subscribe to the current wallet id
     const msg = JSON.stringify({
@@ -258,29 +130,7 @@ class WS extends EventEmitter {
   }
 
   /**
-   * Method called to send a message to the server
-   *
-   * @param {string} msg Message to be sent to the server (usually JSON stringified)
-   */
-  sendMessage(msg) {
-    if (!this.started) {
-      this.setIsOnline(false);
-      return;
-    }
-
-    if (this.ws.readyState === WS_READYSTATE_READY) {
-      this.ws.send(msg);
-    } else {
-      // If it is still connecting, we wait a little and try again
-      setTimeout(() => {
-        this.sendMessage(msg);
-      }, 1000);
-    }
-  }
-
-  /**
    * Ping method to check if server is still alive
-   *
    */
   sendPing() {
     if (this.latestPingDate) {
@@ -292,43 +142,6 @@ class WS extends EventEmitter {
     this.timeoutTimer = setTimeout(() => this.onConnectionDown(), this.connectionTimeout);
     this.sendMessage(msg)
   }
-
-  onConnectionDown() {
-    console.warn('Ping timeout. Connection is down...', {
-      uptime: this.uptime(),
-      connectionTimeout: this.connectionTimeout,
-    });
-
-    this.onClose();
-  };
-
-  /**
-   * Method called to end a websocket connection
-   *
-   */
-  endConnection() {
-    this.setIsOnline(false);
-    this.started = false;
-    this.connected = null;
-    if (this.ws) {
-      this.ws.onclose = () => {};
-      this.ws.close();
-      this.ws = null;
-    }
-    // @ts-ignore
-    clearInterval(this.heartbeat);
-  }
-
-  /**
-   * Set if websocket is online
-   */
-  setIsOnline(value: boolean) {
-    if (this.isOnline !== value) {
-      this.isOnline = value;
-      // Emits event of online state change
-      this.emit('is_online', value);
-    }
-  }
 }
 
-export default WS;
+export default WalletServiceWebSocket;
