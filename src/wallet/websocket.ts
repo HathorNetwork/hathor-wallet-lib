@@ -8,7 +8,7 @@
 import BaseWebSocket, {
   WsOptions,
   DEFAULT_WS_OPTIONS,
-} from '../base_websocket';
+} from '../websocket/base';
 
 export interface WalletServiceWebSocketOptions extends WsOptions {
   walletId: string;

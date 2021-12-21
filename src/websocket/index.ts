@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import BaseWebSocket, { WsOptions } from './base_websocket';
+import BaseWebSocket, { WsOptions } from './base';
 
 /**
  * Handles websocket connections and message transmission
