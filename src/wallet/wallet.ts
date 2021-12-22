@@ -42,7 +42,9 @@ import {
   SendTransactionEvents,
   SendTransactionResponse,
   TransactionFullObject,
-  IHathorWallet
+  IHathorWallet,
+  WsTransaction,
+  TxOutput,
 } from './types';
 import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
@@ -149,7 +151,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
           walletId: this.walletId,
         });
         this.conn.start();
-        this.conn.on('new-tx', (newTx) => this.onNewTx(newTx));
+        this.conn.on('new-tx', (newTx: WsTransaction) => this.onNewTx(newTx));
         this.conn.on('update-tx', (updatedTx) => this.emit('update-tx', updatedTx));
       } else {
         throw new WalletRequestError(ErrorMessages.WALLET_STATUS_ERROR);
@@ -160,8 +162,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     await handleCreate(data.status);
   }
 
-  async onNewTx(newTx: any) {
-    const outputs: any[] = newTx.outputs;
+  /**
+   * onNewTx: Event called when a new transaction is received on the websocket feed
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async onNewTx(newTx: WsTransaction) {
+    const outputs: TxOutput[] = newTx.outputs;
     let shouldGetNewAddresses = false;
 
     for (const output of outputs) {

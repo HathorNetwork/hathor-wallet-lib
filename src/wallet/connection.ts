@@ -12,6 +12,9 @@ import BaseConnection, {
   DEFAULT_PARAMS,
   ConnectionParams,
 } from '../connection';
+import {
+  WsTransaction,
+} from './types';
 
 export enum ConnectionState {
   CLOSED = 0,
@@ -82,7 +85,7 @@ class WalletServiceConnection extends BaseConnection {
       throw new Error('Websocket is not initialized.');
     }
     this.websocket.on('is_online', (online) => this.onConnectionChange(online));
-    this.websocket.on('new-tx', (payload) => this.emit('new-tx', payload.data));
+    this.websocket.on('new-tx', (payload) => this.emit('new-tx', payload.data as WsTransaction));
     this.websocket.on('update-tx', (payload) => this.emit('update-tx', payload.data));
 
     this.setState(ConnectionState.CONNECTING);
