@@ -5,13 +5,32 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import EventEmitter from 'events';
-import networkInstance from '../network';
-import config from '../config';
-import version from '../version';
-import helpers from '../helpers';
-import wallet from '../wallet';
-import WS from '../websocket';
+import { EventEmitter } from 'events';
+import networkInstance from './network';
+import config from './config';
+import version from './version';
+import helpers from './helpers';
+import wallet from './wallet';
+import WalletWebSocket from './websocket';
+import WalletServiceWebSocket from './wallet/websocket';
+
+export const DEFAULT_PARAMS = {
+  network: 'mainnet',
+  servers: [],
+  connectionTimeout: 5000,
+};
+
+export enum ConnectionState {
+  CLOSED = 0,
+  CONNECTING = 1,
+  CONNECTED = 2,
+};
+
+export type ConnectionParams = {
+  network?: string;
+  servers?: string[];
+  connectionTimeout?: number;
+};
 
 /**
  * This is a Connection that may be shared by one or more wallets.
@@ -25,48 +44,53 @@ import WS from '../websocket';
  * - state: Fired when the state of the Wallet changes.
  * - wallet-update: Fired when a new wallet message arrive from the websocket.
  **/
-class Connection extends EventEmitter {
+abstract class Connection extends EventEmitter {
+  // network: 'testnet' or 'mainnet'
+  public network: string;
+  public websocket: WalletWebSocket | WalletServiceWebSocket;
+  public currentServer: string;
+  public state: ConnectionState;
+
   /*
-   * network {String} 'testnet' or 'mainnet'
    * servers {Array} List of servers for the wallet to connect to, e.g. http://localhost:8080/v1a/
    */
-  constructor({
-    network,
-    servers = [],
-    connectionTimeout = null,
-  } = {}) {
+  constructor(options: ConnectionParams) {
     super();
+
+    const {
+      network,
+      servers,
+      connectionTimeout,
+    } = {
+      ...DEFAULT_PARAMS,
+      ...options,
+    };
 
     if (!network) {
       throw Error('You must explicitly provide the network.');
     }
 
     networkInstance.setNetwork(network);
-    this.network = network;
-
-    this.state = Connection.CLOSED;
 
     this.onConnectionChange = this.onConnectionChange.bind(this);
-    this.handleWalletMessage = this.handleWalletMessage.bind(this);
 
+    this.network = network;
+    this.state = ConnectionState.CLOSED;
     this.currentServer = servers[0] || config.getServerUrl();
-
-    const wsOptions = { wsURL: helpers.getWSServerURL(this.currentServer) };
-    if (connectionTimeout) {
-      wsOptions['connectionTimeout'] = connectionTimeout;
-    }
-    this.websocket = new WS(wsOptions);
+    this.websocket = this.setupWebSocket(connectionTimeout);
   }
+
+  abstract setupWebSocket(connectionTimeout: number | null): WalletWebSocket | WalletServiceWebSocket;
 
   /**
    * Called when the connection to the websocket changes.
    * It is also called if the network is down.
    **/
-  onConnectionChange(value) {
+  onConnectionChange(value: boolean) {
     if (value) {
-      this.setState(Connection.CONNECTED);
+      this.setState(ConnectionState.CONNECTED);
     } else {
-      this.setState(Connection.CONNECTING);
+      this.setState(ConnectionState.CONNECTING);
     }
   }
 
@@ -92,21 +116,7 @@ class Connection extends EventEmitter {
   /**
    * Connect to the server and start emitting events.
    **/
-  start() {
-    this.websocket.on('is_online', this.onConnectionChange);
-    this.websocket.on('wallet', this.handleWalletMessage);
-
-    this.websocket.on('height_updated', (height) => {
-      this.emit('best-block-update', height);
-    });
-
-    this.websocket.on('addresses_loaded', (data) => {
-      this.emit('wallet-load-partial-update', data);
-    });
-
-    this.setState(Connection.CONNECTING);
-    this.websocket.setup();
-  }
+  abstract start(): void
 
   /**
    * Close the connections and stop emitting events.
@@ -117,7 +127,7 @@ class Connection extends EventEmitter {
     this.websocket.removeAllListeners();
     this.removeAllListeners();
     this.websocket.endConnection()
-    this.setState(Connection.CLOSED);
+    this.setState(ConnectionState.CLOSED);
   }
 
   /**
@@ -139,21 +149,16 @@ class Connection extends EventEmitter {
   /**
    * Gets current server
    */
-  getCurrentServer() {
+  getCurrentServer(): string {
     return this.currentServer;
   }
 
   /**
    * Gets current network
    */
-  getCurrentNetwork() {
+  getCurrentNetwork(): string {
     return this.network;
   }
 }
-
-// State constants.
-Connection.CLOSED =  0;
-Connection.CONNECTING = 1;
-Connection.CONNECTED = 2;
 
 export default Connection;

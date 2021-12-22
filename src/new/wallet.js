@@ -25,6 +25,17 @@ const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';
 
 /**
+ * TODO: This should be removed when this file is migrated to typescript
+ * we need this here because the typescript enum from the Connection file is
+ * not being correctly transpiled here, returning `undefined` for ConnectionState.CLOSED.
+ */
+const ConnectionState = {
+  CLOSED: 0,
+  CONNECTING: 1,
+  CONNECTED: 2,
+};
+
+/**
  * This is a Wallet that is supposed to be simple to be used by a third-party app.
  *
  * This class handles all the details of syncing, including receiving the same transaction
@@ -45,7 +56,7 @@ const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';
  **/
 class HathorWallet extends EventEmitter {
   /*
-   * connection {Connection} A connection to the server
+   * connection {ConnectionState} A connection to the server
    * seed {String} 24 words separated by space
    * passphrase {String} Wallet passphrase
    * tokenUid {String} UID of the token to handle on this wallet
@@ -92,7 +103,7 @@ class HathorWallet extends EventEmitter {
       throw Error('You can\'t use xpriv with passphrase.');
     }
 
-    if (connection.state !== Connection.CLOSED) {
+    if (connection.state !== ConnectionState.CLOSED) {
       throw Error('You can\'t share connections.');
     }
 
@@ -196,7 +207,7 @@ class HathorWallet extends EventEmitter {
    * @param {Number} newState Enum of new state after change
    **/
   onConnectionChangedState(newState) {
-    if (newState === Connection.CONNECTED) {
+    if (newState === ConnectionState.CONNECTED) {
       storage.setStore(this.store);
       this.setState(HathorWallet.SYNCING);
 

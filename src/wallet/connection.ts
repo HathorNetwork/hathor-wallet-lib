@@ -5,20 +5,22 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { EventEmitter } from 'events';
-import networkInstance from '../network';
-import { DEFAULT_SERVERS } from '../constants';
 import Network from '../models/network';
-import version from '../version';
-import helpers from '../helpers';
-import wallet from '../wallet';
 import WalletServiceWebSocket from './websocket';
 import config from '../config';
+import BaseConnection, {
+  DEFAULT_PARAMS,
+  ConnectionParams,
+} from '../connection';
 
 export enum ConnectionState {
   CLOSED = 0,
   CONNECTING = 1,
   CONNECTED = 2,
+}
+
+export interface WalletServiceConnectionParams extends ConnectionParams {
+  walletId: string;
 }
 
 /**
@@ -33,90 +35,57 @@ export enum ConnectionState {
  * - state: Fired when the state of the Wallet changes.
  * - wallet-update: Fired when a new wallet message arrive from the websocket.
  **/
-class Connection extends EventEmitter {
-  // the network to connect to, 'testnet' or 'mainnet'
-  private network: Network;
-  private state: ConnectionState;
-  private websocket: WalletServiceWebSocket;
+class WalletServiceConnection extends BaseConnection {
   private walletId: string;
 
-  /*
-   * network {String} 'testnet' or 'mainnet'
-   */
-  constructor({
-    network = new Network('mainnet'),
-    walletId = '',
-    connectionTimeout = null,
-  } = {}) {
-    super();
+  constructor(options: WalletServiceConnectionParams) {
+    const {
+      network,
+      servers,
+      connectionTimeout,
+      walletId,
+    } = {
+      ...DEFAULT_PARAMS,
+      ...options,
+    };
 
-    if (!network) {
-      throw Error('You must explicitly provide the network.');
-    }
+    super({
+      network,
+      servers,
+      connectionTimeout,
+    });
 
     if (!walletId || !walletId.length) {
       throw Error('You must explicitly provide the walletId.');
     }
 
-    networkInstance.setNetwork(network.name);
-
-    this.network = network;
     this.walletId = walletId;
-    this.state = ConnectionState.CLOSED;
-    this.onConnectionChange = this.onConnectionChange.bind(this);
+  }
 
+  setupWebSocket(connectionTimeout: number) {
     const wsOptions = {
-      wsURL: config.getWalletServiceBaseWsUrl(this.network),
+      wsURL: config.getWalletServiceBaseWsUrl(new Network(this.network)),
       walletId: this.walletId,
     };
 
     if (connectionTimeout) {
       wsOptions['connectionTimeout'] = connectionTimeout;
     }
-    this.websocket = new WalletServiceWebSocket(wsOptions);
-  }
 
-  /**
-   * Called when the connection to the websocket changes.
-   * It is also called if the network is down.
-   **/
-  onConnectionChange(value: boolean) {
-    if (value) {
-      this.setState(ConnectionState.CONNECTED);
-    } else {
-      this.setState(ConnectionState.CONNECTING);
-    }
-  }
-
-  /**
-   * Update class state
-   */
-  setState(state: ConnectionState) {
-    this.state = state;
-    this.emit('state', state);
+    return new WalletServiceWebSocket(wsOptions);
   }
 
   /**
    * Connect to the server and start emitting events.
    **/
   start() {
-    this.websocket.on('is_online', this.onConnectionChange);
+    this.websocket.on('is_online', (online) => this.onConnectionChange(online));
     this.websocket.on('new-tx', (payload) => this.emit('new-tx', payload.data));
     this.websocket.on('update-tx', (payload) => this.emit('update-tx', payload.data));
 
     this.setState(ConnectionState.CONNECTING);
     this.websocket.setup();
   }
-
-  /**
-   * Close the connections and stop emitting events.
-   **/
-  stop() {
-    this.websocket.removeAllListeners();
-    this.removeAllListeners();
-    this.websocket.endConnection()
-    this.setState(ConnectionState.CLOSED);
-  }
 }
 
-export default Connection;
+export default WalletServiceConnection;
