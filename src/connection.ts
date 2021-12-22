@@ -121,9 +121,11 @@ abstract class Connection extends EventEmitter {
   stop() {
     // TODO Double check that we are properly cleaning things up.
     // See: https://github.com/HathorNetwork/hathor-wallet-headless/pull/1#discussion_r369859701
-    this.websocket.removeAllListeners();
     this.removeAllListeners();
-    this.websocket.endConnection()
+    if (this.websocket) {
+      this.websocket.removeAllListeners();
+      this.websocket.endConnection()
+    }
     this.setState(ConnectionState.CLOSED);
   }
 
@@ -132,7 +134,9 @@ abstract class Connection extends EventEmitter {
    * Needed for compatibility with old src/wallet code
    **/
   endConnection() {
-    this.websocket.endConnection();
+    if (this.websocket) {
+      this.websocket.endConnection();
+    }
   }
 
   /**
@@ -140,6 +144,11 @@ abstract class Connection extends EventEmitter {
    * Needed for compatibility with old src/wallet code
    **/
   setup() {
+    // This should never happen as this.websocket is initialized on the constructor
+    if (!this.websocket) {
+      throw new Error('Websocket is not initialized.');
+    }
+
     this.websocket.setup();
   }
 

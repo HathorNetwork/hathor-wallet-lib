@@ -45,6 +45,11 @@ class WalletConnection extends BaseConnection {
    * Connect to the server and start emitting events.
    **/
   start() {
+    // This should never happen as the websocket is initialized on the constructor
+    if (!this.websocket) {
+      throw new Error('Websocket is not initialized');
+    }
+
     this.websocket.on('is_online', this.onConnectionChange);
     this.websocket.on('wallet', this.handleWalletMessage);
 
