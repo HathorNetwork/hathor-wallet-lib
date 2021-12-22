@@ -205,7 +205,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    *
    * @return {Object} Object with each token and it's balance in this tx for this wallet
    **/
-  async getTxBalance(tx, optionsParam = {}) {
+  async getTxBalance(tx: WsTransaction, optionsParam = {}): Promise<{[tokenId: string]: number}> {
     const options = Object.assign({ includeAuthorities: false }, optionsParam);
 
     const addressList: GetAddressesObject[] = [];
