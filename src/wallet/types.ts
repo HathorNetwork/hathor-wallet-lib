@@ -230,6 +230,7 @@ export interface IHathorWallet {
   prepareDestroyAuthorityData(token: string, type: string, count: number): Promise<Transaction>;
   destroyAuthority(token: string, type: string, count: number): Promise<Transaction>;
   getFullHistory(): TransactionFullObject[];
+  getTxBalance(tx: WsTransaction, optionsParams): Promise<{[tokenId: string]: number}>;
 }
 
 export interface ISendTransaction {
