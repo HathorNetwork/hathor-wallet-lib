@@ -117,10 +117,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.authToken = null;
     this.walletStatusInterval = null;
 
-    // TODO When we integrate the real time events from the wallet service
-    // we will need to have a trigger to update this array every new transaction
-    // because the new tx might have used one of those addresses
-    // so we just need to call await this.getNewAddresses(); on the new tx event
     this.newAddresses = [];
     this.indexToUse = -1;
     // TODO should we have a debug mode?
@@ -180,6 +176,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
     }
 
+    // We need to have a to update the `newAddresses` array every new transaction
+    // because the new tx might have used one of those addresses and we try to guarantee
+    // that every transaction uses a new address for increased privacy
     if (shouldGetNewAddresses) {
       await this.getNewAddresses();
     }
