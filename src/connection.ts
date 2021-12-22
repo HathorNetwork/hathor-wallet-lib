@@ -47,7 +47,7 @@ export type ConnectionParams = {
 abstract class Connection extends EventEmitter {
   // network: 'testnet' or 'mainnet'
   public network: string;
-  public websocket: WalletWebSocket | WalletServiceWebSocket;
+  public websocket: WalletWebSocket | WalletServiceWebSocket | null;
   public currentServer: string;
   public state: ConnectionState;
 
@@ -60,7 +60,6 @@ abstract class Connection extends EventEmitter {
     const {
       network,
       servers,
-      connectionTimeout,
     } = {
       ...DEFAULT_PARAMS,
       ...options,
@@ -74,13 +73,11 @@ abstract class Connection extends EventEmitter {
 
     this.onConnectionChange = this.onConnectionChange.bind(this);
 
+    this.websocket = null;
     this.network = network;
     this.state = ConnectionState.CLOSED;
     this.currentServer = servers[0] || config.getServerUrl();
-    this.websocket = this.setupWebSocket(connectionTimeout);
   }
-
-  abstract setupWebSocket(connectionTimeout: number | null): WalletWebSocket | WalletServiceWebSocket;
 
   /**
    * Called when the connection to the websocket changes.

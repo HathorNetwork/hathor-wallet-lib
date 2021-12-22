@@ -29,17 +29,16 @@ import BaseConnection, {
 class WalletConnection extends BaseConnection {
   constructor(options: ConnectionParams) {
     super(options);
-  }
 
-  setupWebSocket(connectionTimeout: number) {
     this.handleWalletMessage = this.handleWalletMessage.bind(this);
 
     const wsOptions = { wsURL: helpers.getWSServerURL(this.currentServer) };
 
-    if (connectionTimeout) {
-      wsOptions['connectionTimeout'] = connectionTimeout;
+    if (options.connectionTimeout) {
+      wsOptions['connectionTimeout'] = options.connectionTimeout;
     }
-    return new WalletWebSocket(wsOptions);
+
+    this.websocket = new WalletWebSocket(wsOptions);
   }
 
   /**

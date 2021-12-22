@@ -60,9 +60,7 @@ class WalletServiceConnection extends BaseConnection {
     }
 
     this.walletId = walletId;
-  }
 
-  setupWebSocket(connectionTimeout: number) {
     const wsOptions = {
       wsURL: config.getWalletServiceBaseWsUrl(new Network(this.network)),
       walletId: this.walletId,
@@ -72,7 +70,7 @@ class WalletServiceConnection extends BaseConnection {
       wsOptions['connectionTimeout'] = connectionTimeout;
     }
 
-    return new WalletServiceWebSocket(wsOptions);
+    this.websocket = new WalletServiceWebSocket(wsOptions);
   }
 
   /**
