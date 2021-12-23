@@ -148,7 +148,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         });
         this.conn.start();
         this.conn.on('new-tx', (newTx: WsTransaction) => this.onNewTx(newTx));
-        this.conn.on('update-tx', (updatedTx) => this.emit('update-tx', updatedTx));
+        this.conn.on('update-tx', (updatedTx) => this.onUpdateTx(updatedTx));
       } else {
         throw new WalletRequestError(ErrorMessages.WALLET_STATUS_ERROR);
       }
@@ -156,6 +156,16 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const data = await walletApi.createWallet(this, this.xpub, firstAddress);
     await handleCreate(data.status);
+  }
+
+  /**
+   * onUpdateTx: Event called when a transaction is updated
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async onUpdateTx(updatedTx) {
+    this.emit('update-tx', updatedTx);
   }
 
   /**
