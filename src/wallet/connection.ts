@@ -65,7 +65,7 @@ class WalletServiceConnection extends BaseConnection {
     this.walletId = walletId;
 
     const wsOptions = {
-      wsURL: config.getWalletServiceBaseWsUrl(new Network(this.network)),
+      wsURL: config.getWalletServiceBaseWsUrl(),
       walletId: this.walletId,
     };
 

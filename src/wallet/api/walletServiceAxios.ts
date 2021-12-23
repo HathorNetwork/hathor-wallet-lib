@@ -26,7 +26,7 @@ import config from '../../config';
 export const axiosInstance = async (wallet: HathorWalletServiceWallet, needsAuth: boolean, timeout: number = TIMEOUT) => {
   // TODO How to allow 'Retry' request?
   const defaultOptions = {
-    baseURL: config.getWalletServiceBaseUrl(wallet.network),
+    baseURL: config.getWalletServiceBaseUrl(),
     timeout: timeout,
     // `validateStatus` defines whether to resolve or reject the promise for a given
     // HTTP response status code. If `validateStatus` returns `true` (or is set to `null`
