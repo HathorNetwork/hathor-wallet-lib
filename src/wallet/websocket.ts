@@ -18,10 +18,13 @@ export interface WalletServiceWebSocketOptions extends WsOptions {
 const DEFAULT_JOIN_TIMEOUT = 5000;
 
 /**
- * Handles websocket connections and message transmission
+ * Handles websocket connections and message transmission.
+ *
+ * This class extends the base websocket class and is meant to be used
+ * exclusively when connecting to the Hathor Wallet Service.
  *
  * @class
- * @name WS
+ * @name WalletServiceWebSocket
  */
 class WalletServiceWebSocket extends BaseWebSocket {
   // The walletId to subscribe to new events

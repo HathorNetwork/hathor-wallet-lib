@@ -10,8 +10,12 @@ import BaseWebSocket, { WsOptions } from './base';
 /**
  * Handles websocket connections and message transmission
  *
+ * This class extends the base websocket class and is currently
+ * used by the default wallet (using the "old" facade) for wallets
+ * that haven't migrated to the Wallet Service yet.
+ *
  * @class
- * @name WS
+ * @name WalletWebSocket
  */
 class WalletWebSocket extends BaseWebSocket {
   constructor(options: WsOptions) {
