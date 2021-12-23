@@ -12,9 +12,10 @@ import BaseWebSocket, {
 
 export interface WalletServiceWebSocketOptions extends WsOptions {
   walletId: string;
+  joinTimeout?: number;
 };
 
-const JOIN_TIMEOUT = 5000;
+const DEFAULT_JOIN_TIMEOUT = 5000;
 
 /**
  * Handles websocket connections and message transmission
@@ -27,6 +28,8 @@ class WalletServiceWebSocket extends BaseWebSocket {
   private walletId: string;
   // Timer used to detected when join wallet failed
   private joinTimeoutTimer: ReturnType<typeof setTimeout> | null;
+  // The default timeout for the join wallet action
+  private joinTimeout: number;
 
   constructor(options: WalletServiceWebSocketOptions) {
     const {
@@ -36,8 +39,10 @@ class WalletServiceWebSocket extends BaseWebSocket {
       retryConnectionInterval,
       openConnectionTimeout,
       walletId,
+      joinTimeout,
     } = {
       ...DEFAULT_WS_OPTIONS,
+      joinTimeout: DEFAULT_JOIN_TIMEOUT,
       ...options,
     };
 
@@ -50,6 +55,7 @@ class WalletServiceWebSocket extends BaseWebSocket {
     });
 
     this.walletId = walletId;
+    this.joinTimeout = joinTimeout;
     this.joinTimeoutTimer = null;
   }
 
@@ -126,7 +132,7 @@ class WalletServiceWebSocket extends BaseWebSocket {
     });
 
     this.sendMessage(msg);
-    this.joinTimeoutTimer = setTimeout(() => this.onJoinTimeout(), JOIN_TIMEOUT);
+    this.joinTimeoutTimer = setTimeout(() => this.onJoinTimeout(), this.joinTimeout);
   }
 
   /**
