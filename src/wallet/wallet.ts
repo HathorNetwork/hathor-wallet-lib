@@ -186,7 +186,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
     }
 
-    // We need to have a to update the `newAddresses` array every new transaction
+    // We need to update the `newAddresses` array on every new transaction
     // because the new tx might have used one of those addresses and we try to guarantee
     // that every transaction uses a new address for increased privacy
     if (shouldGetNewAddresses) {
