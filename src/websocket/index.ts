@@ -45,17 +45,10 @@ class WalletWebSocket extends BaseWebSocket {
   }
 
   /**
-   * Ping method to check if server is still alive
+   * Returns a JSON stringified ping message
    */
-  sendPing() {
-    if (this.latestPingDate) {
-      // Skipping sendPing. Still waiting for pong...
-      return;
-    }
-    const msg = JSON.stringify({'type': 'ping'});
-    this.latestPingDate = new Date();
-    this.timeoutTimer = setTimeout(() => this.onConnectionDown(), this.connectionTimeout);
-    this.sendMessage(msg);
+  getPingMessage() {
+    return JSON.stringify({'type': 'ping'});
   }
 
   /**

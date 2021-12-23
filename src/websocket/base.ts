@@ -232,9 +232,23 @@ abstract class BaseWebSocket extends EventEmitter {
   }
 
   /**
+   * Should return a stringified ping message
+   */
+  abstract getPingMessage(): string
+
+  /**
    * Ping method to check if server is still alive
    */
-  abstract sendPing(): void
+  sendPing() {
+    if (this.latestPingDate) {
+      // Skipping sendPing. Still waiting for pong...
+      return;
+    }
+    const msg = this.getPingMessage();
+    this.latestPingDate = new Date();
+    this.timeoutTimer = setTimeout(() => this.onConnectionDown(), this.connectionTimeout);
+    this.sendMessage(msg);
+  }
 
   /**
    * Event received when the websocket connection is down.
