@@ -1,6 +1,7 @@
 import networkInstance from './network';
 import Network from './models/network';
 import storage from './storage';
+import { GetWalletServiceUrlError, GetWalletServiceWsUrlError } from './errors';
 
 
 // Default server user will connect when none have been chosen
@@ -70,7 +71,7 @@ class Config {
      */
     getWalletServiceBaseUrl(): string {
       if (!this.WALLET_SERVICE_BASE_URL) {
-        throw new Error('Wallet service base URL not set')
+        throw new GetWalletServiceUrlError('Wallet service base URL not set.');
       }
 
       return this.WALLET_SERVICE_BASE_URL;
@@ -85,7 +86,7 @@ class Config {
      */
     getWalletServiceBaseWsUrl(): string {
       if (!this.WALLET_SERVICE_BASE_WS_URL) {
-        throw new Error('Wallet service base WebSocket URL not set.');
+        throw new GetWalletServiceWsUrlError('Wallet service base WebSocket URL not set.');
       }
 
       return this.WALLET_SERVICE_BASE_WS_URL;
