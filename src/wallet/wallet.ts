@@ -164,7 +164,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async onUpdateTx(updatedTx) {
+  onUpdateTx(updatedTx) {
     this.emit('update-tx', updatedTx);
   }
 
