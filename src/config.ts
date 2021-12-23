@@ -57,44 +57,38 @@ class Config {
     *
     * @param {string} url - The url to be set
     */
-    setWalletServiceBaseUrl(url: string) {
-        this.WALLET_SERVICE_BASE_URL = url;
+    setWalletServiceBaseUrl(url: string): void {
+      this.WALLET_SERVICE_BASE_URL = url;
     }
 
     /**
-     * Returns the correct base url constant for wallet service.
-     * If the url was explicitly set using the config object, it is always returned.
-     * Otherwise, we return it based on the provided network object.
+     * Returns the base url for wallet service set previously using setWalletServiceBaseUrl
      *
-     * @param {Network} network The network, can be either mainnet or testnet
+     * Throws an error if it is not yet set.
+     *
      * @return {string} The wallet service url
      */
-    getWalletServiceBaseUrl(network?: Network) {
-        if (this.WALLET_SERVICE_BASE_URL) {
-            return this.WALLET_SERVICE_BASE_URL;
-        }
+    getWalletServiceBaseUrl(): string {
+      if (!this.WALLET_SERVICE_BASE_URL) {
+        throw new Error('Wallet service base URL not set')
+      }
 
-        if (!network) {
-            throw new Error('You should either provide a network or call setWalletServiceBaseUrl before calling this.');
-        }
+      return this.WALLET_SERVICE_BASE_URL;
     }
 
     /**
      * Returns the correct websocket base url constant for wallet service.
-     * If the url was explicitly set using the config object, it is always returned.
-     * Otherwise, we return it based on the provided network object.
      *
-     * @param {Network} network The network, can be either mainnet or testnet
+     * If it is not set, throw an error.
+     *
      * @return {string} The wallet service websocket url
      */
-    getWalletServiceBaseWsUrl(network?: Network) {
-        if (this.WALLET_SERVICE_BASE_WS_URL) {
-            return this.WALLET_SERVICE_BASE_WS_URL;
-        }
+    getWalletServiceBaseWsUrl(): string {
+      if (!this.WALLET_SERVICE_BASE_WS_URL) {
+        throw new Error('Wallet service base WebSocket URL not set.');
+      }
 
-        if (!network) {
-            throw new Error('You should either provide a network or call setWalletServiceBaseWsUrl before calling this.');
-        }
+      return this.WALLET_SERVICE_BASE_WS_URL;
     }
 
     /**
@@ -102,8 +96,8 @@ class Config {
     *
     * @param {string} url - The url to be set
     */
-    setWalletServiceBaseWsUrl(url: string) {
-        this.WALLET_SERVICE_BASE_WS_URL = url;
+    setWalletServiceBaseWsUrl(url: string): void {
+      this.WALLET_SERVICE_BASE_WS_URL = url;
     }
 
     /**
