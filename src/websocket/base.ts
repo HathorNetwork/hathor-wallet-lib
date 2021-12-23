@@ -58,14 +58,14 @@ abstract class BaseWebSocket extends EventEmitter {
   private latestSetupDate: Date | null;
   // Latest round trip time measured by PING/PONG.
   private latestRTT: number | null;
-  // Date of latest ping.
-  public latestPingDate: Date | null;
-  // Timer used to detected when connection is down.
-  public timeoutTimer: ReturnType<typeof setTimeout> | null;
-  // Connection timeout in milliseconds
-  public connectionTimeout: number;
   // Heartbeat interval to send pings
   private heartbeat: ReturnType<typeof setTimeout> | null;
+  // Date of latest ping.
+  protected latestPingDate: Date | null;
+  // Timer used to detected when connection is down.
+  protected timeoutTimer: ReturnType<typeof setTimeout> | null;
+  // Connection timeout in milliseconds
+  protected connectionTimeout: number;
 
   constructor(options: WsOptions) {
     super();

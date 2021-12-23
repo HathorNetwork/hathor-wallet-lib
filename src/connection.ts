@@ -46,10 +46,10 @@ export type ConnectionParams = {
  **/
 abstract class Connection extends EventEmitter {
   // network: 'testnet' or 'mainnet'
-  public network: string;
-  public websocket: WalletWebSocket | WalletServiceWebSocket | null;
-  public currentServer: string;
-  public state: ConnectionState;
+  protected network: string;
+  protected websocket: WalletWebSocket | WalletServiceWebSocket | null;
+  protected currentServer: string;
+  protected state: ConnectionState;
 
   /*
    * servers {Array} List of servers for the wallet to connect to, e.g. http://localhost:8080/v1a/
