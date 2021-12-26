@@ -218,13 +218,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async getTxBalance(tx: WsTransaction, optionsParam = {}): Promise<{[tokenId: string]: number}> {
     const options = Object.assign({ includeAuthorities: false }, optionsParam);
 
-    const addressList: GetAddressesObject[] = [];
+    const addresses: string[] = [];
 
     for await (let address of this.getAllAddresses()) {
-      addressList.push(address);
+      addresses.push(address.address);
     }
-
-    const addresses: string[] = addressList.map((address: GetAddressesObject) => address.address);
 
     const balance = {};
     for (const txout of tx.outputs) {
