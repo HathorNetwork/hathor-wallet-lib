@@ -1737,9 +1737,10 @@ class HathorWallet extends EventEmitter {
    *
    * @param {Object} tx Transaction data with array of inputs and outputs
    *
-   * @return {Object} Object with each token and it's balance in this tx for this wallet
+   * @return {Promise<Object>} Promise that resolves with an object with each token
+   * and it's balance in this tx for this wallet
    **/
-  getTxBalance(tx, optionsParam = {}) {
+  async getTxBalance(tx, optionsParam = {}) {
     const options = Object.assign({ includeAuthorities: false }, optionsParam)
     storage.setStore(this.store);
     const addresses = this._getAllAddressesRaw();
