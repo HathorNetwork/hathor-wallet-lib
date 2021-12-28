@@ -220,8 +220,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const addresses: string[] = [];
 
-    for await (let address of this.getAllAddresses()) {
-      addresses.push(address.address);
+    const generator = this.getAllAddresses();
+
+    let nextAddress;
+    while (!(nextAddress = await generator.next()).done) {
+      addresses.push(nextAddress.value.address);
     }
 
     const balance = {};
