@@ -401,7 +401,7 @@ class HathorWallet extends EventEmitter {
       throw new WalletError('Not implemented.');
     }
     const uid = token || this.token.uid;
-    const balanceByToken = this.getPreProcessedData('balanceByToken');
+    const balanceByToken = await this.getPreProcessedData('balanceByToken');
     const balance = uid in balanceByToken ? balanceByToken[uid] : { available: 0, locked: 0, transactions: 0 };
     return [{
       token: { // Getting token name and symbol is not easy, so we return empty strings
@@ -450,7 +450,7 @@ class HathorWallet extends EventEmitter {
     const newOptions = Object.assign({ token_id: HATHOR_TOKEN_CONFIG.uid, count: 15, skip: 0 }, options);
     const { skip, count } = newOptions;
     const uid = newOptions.token_id || this.token.uid;
-    const historyByToken = this.getPreProcessedData('historyByToken');
+    const historyByToken = await this.getPreProcessedData('historyByToken');
     const historyArray = uid in historyByToken ? historyByToken[uid] : [];
     const slicedHistory = historyArray.slice(skip, skip+count);
     return slicedHistory;
@@ -789,7 +789,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    **/
-  preProcessWalletData() {
+  async preProcessWalletData() {
     storage.setStore(this.store);
     const transactionCountByToken = {};
     const history = this.getFullHistory();
@@ -799,7 +799,8 @@ class HathorWallet extends EventEmitter {
     for (const tx of Object.values(history)) {
       // we first get all tokens present in this tx (that belong to the user) and
       // the corresponding balances
-      const balances = this.getTxBalance(tx, { includeAuthorities: true });
+      /* eslint-disable no-await-in-loop */
+      const balances = await this.getTxBalance(tx, { includeAuthorities: true });
       for (const [tokenUid, tokenTxBalance] of Object.entries(balances)) {
         let tokenHistory = tokensHistory[tokenUid];
         if (tokenHistory === undefined) {
@@ -857,12 +858,12 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    **/
-  onTxArrived(tx, isNew) {
-    const tokensHistory = this.getPreProcessedData('historyByToken');
-    const tokensBalance = this.getPreProcessedData('balanceByToken');
+  async onTxArrived(tx, isNew) {
+    const tokensHistory = await this.getPreProcessedData('historyByToken');
+    const tokensBalance = await this.getPreProcessedData('balanceByToken');
     // we first get all tokens present in this tx (that belong to the user) and
     // the corresponding balances
-    const balances = this.getTxBalance(tx, { includeAuthorities: true });
+    const balances = await this.getTxBalance(tx, { includeAuthorities: true });
     for (const [tokenUid, tokenTxBalance] of Object.entries(balances)) {
       if (isNew) {
         let tokenHistory = tokensHistory[tokenUid];
@@ -885,6 +886,7 @@ class HathorWallet extends EventEmitter {
         tokenHistory.sort((elem1, elem2) => elem2.timestamp - elem1.timestamp);
       } else {
         const currentHistory = tokensHistory[tokenUid];
+        console.log('will try to find index');
         const txIndex = currentHistory.findIndex((el) => el.tx_id === tx.tx_id);
 
         const newHistory = [...currentHistory];
@@ -938,19 +940,19 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    **/
-  getPreProcessedData(key) {
+  async getPreProcessedData(key) {
     if (Object.keys(this.preProcessedData).length === 0) {
-      this.preProcessWalletData();
+      await this.preProcessWalletData();
     }
     return this.preProcessedData[key];
   }
 
-  setState(state) {
+  async setState(state) {
     if (state === HathorWallet.READY && state !== this.state) {
       // Became ready now, so we prepare new localStorage data
       // to support using this facade interchangable with wallet service
       // facade in both wallets
-      this.preProcessWalletData();
+      await this.preProcessWalletData();
     }
     this.state = state;
     this.emit('state', state);
