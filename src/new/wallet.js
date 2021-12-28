@@ -886,7 +886,6 @@ class HathorWallet extends EventEmitter {
         tokenHistory.sort((elem1, elem2) => elem2.timestamp - elem1.timestamp);
       } else {
         const currentHistory = tokensHistory[tokenUid];
-        console.log('will try to find index');
         const txIndex = currentHistory.findIndex((el) => el.tx_id === tx.tx_id);
 
         const newHistory = [...currentHistory];
@@ -947,12 +946,18 @@ class HathorWallet extends EventEmitter {
     return this.preProcessedData[key];
   }
 
-  async setState(state) {
+  setState(state) {
     if (state === HathorWallet.READY && state !== this.state) {
       // Became ready now, so we prepare new localStorage data
       // to support using this facade interchangable with wallet service
       // facade in both wallets
-      await this.preProcessWalletData();
+
+      // Notice: preProcessWalletData is currently async because `getTxBalance`
+      // is async but it resolves instantly -- we only changed `getTxBalance` to async
+      // to match signatures with the new facade. If we ever need to do something really
+      // async on preProcessWalletData and wait for it before setting state to READY, we
+      // probably should refactor setState to be async
+      this.preProcessWalletData();
     }
     this.state = state;
     this.emit('state', state);
