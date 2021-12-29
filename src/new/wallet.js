@@ -25,6 +25,17 @@ const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';
 
 /**
+ * TODO: This should be removed when this file is migrated to typescript
+ * we need this here because the typescript enum from the Connection file is
+ * not being correctly transpiled here, returning `undefined` for ConnectionState.CLOSED.
+ */
+const ConnectionState = {
+  CLOSED: 0,
+  CONNECTING: 1,
+  CONNECTED: 2,
+};
+
+/**
  * This is a Wallet that is supposed to be simple to be used by a third-party app.
  *
  * This class handles all the details of syncing, including receiving the same transaction
@@ -45,7 +56,7 @@ const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';
  **/
 class HathorWallet extends EventEmitter {
   /*
-   * connection {Connection} A connection to the server
+   * connection {ConnectionState} A connection to the server
    * seed {String} 24 words separated by space
    * passphrase {String} Wallet passphrase
    * tokenUid {String} UID of the token to handle on this wallet
@@ -92,7 +103,7 @@ class HathorWallet extends EventEmitter {
       throw Error('You can\'t use xpriv with passphrase.');
     }
 
-    if (connection.state !== Connection.CLOSED) {
+    if (connection.state !== ConnectionState.CLOSED) {
       throw Error('You can\'t share connections.');
     }
 
@@ -196,7 +207,7 @@ class HathorWallet extends EventEmitter {
    * @param {Number} newState Enum of new state after change
    **/
   onConnectionChangedState(newState) {
-    if (newState === Connection.CONNECTED) {
+    if (newState === ConnectionState.CONNECTED) {
       storage.setStore(this.store);
       this.setState(HathorWallet.SYNCING);
 
@@ -390,7 +401,7 @@ class HathorWallet extends EventEmitter {
       throw new WalletError('Not implemented.');
     }
     const uid = token || this.token.uid;
-    const balanceByToken = this.getPreProcessedData('balanceByToken');
+    const balanceByToken = await this.getPreProcessedData('balanceByToken');
     const balance = uid in balanceByToken ? balanceByToken[uid] : { available: 0, locked: 0, transactions: 0 };
     return [{
       token: { // Getting token name and symbol is not easy, so we return empty strings
@@ -439,7 +450,7 @@ class HathorWallet extends EventEmitter {
     const newOptions = Object.assign({ token_id: HATHOR_TOKEN_CONFIG.uid, count: 15, skip: 0 }, options);
     const { skip, count } = newOptions;
     const uid = newOptions.token_id || this.token.uid;
-    const historyByToken = this.getPreProcessedData('historyByToken');
+    const historyByToken = await this.getPreProcessedData('historyByToken');
     const historyArray = uid in historyByToken ? historyByToken[uid] : [];
     const slicedHistory = historyArray.slice(skip, skip+count);
     return slicedHistory;
@@ -778,7 +789,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    **/
-  preProcessWalletData() {
+  async preProcessWalletData() {
     storage.setStore(this.store);
     const transactionCountByToken = {};
     const history = this.getFullHistory();
@@ -788,7 +799,8 @@ class HathorWallet extends EventEmitter {
     for (const tx of Object.values(history)) {
       // we first get all tokens present in this tx (that belong to the user) and
       // the corresponding balances
-      const balances = this.getTxBalance(tx, { includeAuthorities: true });
+      /* eslint-disable no-await-in-loop */
+      const balances = await this.getTxBalance(tx, { includeAuthorities: true });
       for (const [tokenUid, tokenTxBalance] of Object.entries(balances)) {
         let tokenHistory = tokensHistory[tokenUid];
         if (tokenHistory === undefined) {
@@ -846,12 +858,12 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    **/
-  onTxArrived(tx, isNew) {
-    const tokensHistory = this.getPreProcessedData('historyByToken');
-    const tokensBalance = this.getPreProcessedData('balanceByToken');
+  async onTxArrived(tx, isNew) {
+    const tokensHistory = await this.getPreProcessedData('historyByToken');
+    const tokensBalance = await this.getPreProcessedData('balanceByToken');
     // we first get all tokens present in this tx (that belong to the user) and
     // the corresponding balances
-    const balances = this.getTxBalance(tx, { includeAuthorities: true });
+    const balances = await this.getTxBalance(tx, { includeAuthorities: true });
     for (const [tokenUid, tokenTxBalance] of Object.entries(balances)) {
       if (isNew) {
         let tokenHistory = tokensHistory[tokenUid];
@@ -927,9 +939,9 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    **/
-  getPreProcessedData(key) {
+  async getPreProcessedData(key) {
     if (Object.keys(this.preProcessedData).length === 0) {
-      this.preProcessWalletData();
+      await this.preProcessWalletData();
     }
     return this.preProcessedData[key];
   }
@@ -939,6 +951,12 @@ class HathorWallet extends EventEmitter {
       // Became ready now, so we prepare new localStorage data
       // to support using this facade interchangable with wallet service
       // facade in both wallets
+
+      // Notice: preProcessWalletData is currently async because `getTxBalance`
+      // is async but it resolves instantly -- we only changed `getTxBalance` to async
+      // to match signatures with the new facade. If we ever need to do something really
+      // async on preProcessWalletData and wait for it before setting state to READY, we
+      // probably should refactor setState to be async
       this.preProcessWalletData();
     }
     this.state = state;
@@ -1726,9 +1744,10 @@ class HathorWallet extends EventEmitter {
    *
    * @param {Object} tx Transaction data with array of inputs and outputs
    *
-   * @return {Object} Object with each token and it's balance in this tx for this wallet
+   * @return {Promise<Object>} Promise that resolves with an object with each token
+   * and it's balance in this tx for this wallet
    **/
-  getTxBalance(tx, optionsParam = {}) {
+  async getTxBalance(tx, optionsParam = {}) {
     const options = Object.assign({ includeAuthorities: false }, optionsParam)
     storage.setStore(this.store);
     const addresses = this._getAllAddressesRaw();
