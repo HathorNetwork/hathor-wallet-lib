@@ -1,6 +1,7 @@
 import networkInstance from './network';
 import Network from './models/network';
 import storage from './storage';
+import { GetWalletServiceUrlError, GetWalletServiceWsUrlError } from './errors';
 
 
 // Default server user will connect when none have been chosen
@@ -10,10 +11,6 @@ export const DEFAULT_SERVER = 'https://node1.mainnet.hathor.network/v1a/';
 const TX_MINING_MAINNET_URL = 'https://txmining.mainnet.hathor.network/';
 const TX_MINING_TESTNET_URL = 'https://txmining.testnet.hathor.network/';
 
-// Wallet service URL
-const WALLET_SERVICE_MAINNET_BASE_URL  = 'https://wallet-service.hathor.network/';
-const WALLET_SERVICE_TESTNET_BASE_URL  = 'https://wallet-service.testnet.hathor.network/';
-
 // Explorer service URL
 const EXPLORER_SERVICE_MAINNET_BASE_URL  = 'https://explorer-service.hathor.network/';
 const EXPLORER_SERVICE_TESTNET_BASE_URL  = 'https://explorer-service.testnet.hathor.network/';
@@ -21,6 +18,7 @@ const EXPLORER_SERVICE_TESTNET_BASE_URL  = 'https://explorer-service.testnet.hat
 class Config {
     TX_MINING_URL?: string;
     WALLET_SERVICE_BASE_URL?: string;
+    WALLET_SERVICE_BASE_WS_URL?: string;
     EXPLORER_SERVICE_BASE_URL?: string;
     SERVER_URL?: string;
 
@@ -60,35 +58,47 @@ class Config {
     *
     * @param {string} url - The url to be set
     */
-    setWalletServiceBaseUrl(url: string) {
-        this.WALLET_SERVICE_BASE_URL = url;
+    setWalletServiceBaseUrl(url: string): void {
+      this.WALLET_SERVICE_BASE_URL = url;
     }
 
     /**
-     * Returns the correct base url constant for wallet service.
-     * If the url was explicitly set using the config object, it is always returned.
-     * Otherwise, we return it based on the provided network object.
+     * Returns the base url for wallet service set previously using setWalletServiceBaseUrl
      *
-     * @param {Network} network The network, can be either mainnet or testnet
+     * Throws an error if it is not yet set.
+     *
      * @return {string} The wallet service url
      */
-    getWalletServiceBaseUrl(network?: Network) {
-        if (this.WALLET_SERVICE_BASE_URL) {
-            return this.WALLET_SERVICE_BASE_URL;
-        }
+    getWalletServiceBaseUrl(): string {
+      if (!this.WALLET_SERVICE_BASE_URL) {
+        throw new GetWalletServiceUrlError('Wallet service base URL not set.');
+      }
 
-        if (!network) {
-            throw new Error("You should either provide a network or call setWalletServiceBaseUrl before calling this.")
-        }
+      return this.WALLET_SERVICE_BASE_URL;
+    }
 
-        // Keeps the old behavior for cases that don't explicitly set a WALLET_SERVICE_BASE_URL
-        if (network.name == 'mainnet') {
-            return WALLET_SERVICE_MAINNET_BASE_URL;
-        } else if (network.name == 'testnet'){
-            return WALLET_SERVICE_TESTNET_BASE_URL;
-        } else {
-            throw new Error(`Network ${network.name} doesn't have a correspondent wallet service url. You should set it explicitly.`);
-        }
+    /**
+     * Returns the correct websocket base url constant for wallet service.
+     *
+     * If it is not set, throw an error.
+     *
+     * @return {string} The wallet service websocket url
+     */
+    getWalletServiceBaseWsUrl(): string {
+      if (!this.WALLET_SERVICE_BASE_WS_URL) {
+        throw new GetWalletServiceWsUrlError('Wallet service base WebSocket URL not set.');
+      }
+
+      return this.WALLET_SERVICE_BASE_WS_URL;
+    }
+
+    /**
+    * Sets the wallet service websocket url that will be returned by the config object.
+    *
+    * @param {string} url - The url to be set
+    */
+    setWalletServiceBaseWsUrl(url: string): void {
+      this.WALLET_SERVICE_BASE_WS_URL = url;
     }
 
     /**
@@ -116,10 +126,10 @@ class Config {
         }
 
         if (!network) {
-            throw new Error("You should either provide a network or call setExplorerServiceBaseUrl before calling this.")
+            throw new Error('You should either provide a network or call setExplorerServiceBaseUrl before calling this.');
         }
 
-        // Keeps the old behavior for cases that don't explicitly set a WALLET_SERVICE_BASE_URL
+        // Keeps the old behavior for cases that don't explicitly set a EXPLORER_SERVICE_BASE_URL
         if (network == 'mainnet') {
             return EXPLORER_SERVICE_MAINNET_BASE_URL;
         } else if (network == 'testnet'){

@@ -187,3 +187,27 @@ export class WalletFromXPubGuard extends Error {}
  * @inner
  */
 export class GetDagMetadataApiError extends Error {}
+
+/**
+ * Base Error class for Config not set errors
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class ConfigNotSetError extends Error {}
+
+/**
+ * Error thrown when the WalletService URL is not set and a user tries to `get` it
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class GetWalletServiceUrlError extends ConfigNotSetError {}
+
+/**
+ * Error thrown when the WalletService WebSocket URL is not set and a user tries to `get` it
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class GetWalletServiceWsUrlError extends ConfigNotSetError {}
