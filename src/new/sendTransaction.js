@@ -54,6 +54,7 @@ class SendTransaction extends EventEmitter {
     this.changeAddress = changeAddress;
     this.pin = pin;
     this.network = network;
+    this.fullTxData = null;
 
     // Error to be shown in case of an unexpected error when executing push tx
     this.unexpectedPushTxError = ErrorMessages.UNEXPECTED_PUSH_TX_ERROR;
@@ -168,6 +169,7 @@ class SendTransaction extends EventEmitter {
       fullTxData.outputs = [...fullTxData.outputs, ...ret.data.outputs];
     }
 
+    this.fullTxData = fullTxData;
     return fullTxData;
   }
 
@@ -183,10 +185,49 @@ class SendTransaction extends EventEmitter {
    * @inner
    */
   prepareTx() {
-    const fullTxData = this.prepareTxData();
+    if (!this.fullTxData) {
+      this.prepareTxData();
+    }
     let preparedData = null;
     try {
-      preparedData = transaction.prepareData(fullTxData, this.pin);
+      preparedData = transaction.prepareData(this.fullTxData, this.pin);
+      this.transaction = helpers.createTxFromData(preparedData, this.network);
+      return this.transaction;
+    } catch(e) {
+      const message = oldHelpers.handlePrepareDataError(e);
+      throw new SendTxError(message);
+    }
+  }
+
+  /**
+   * Prepare transaction data from inputs, outputs and signatures
+   * Fill the inputs if needed, create output change if needed
+   *
+   * @throws SendTxError
+   *
+   * @return {Transaction} Transaction object prepared to be mined
+   *
+   * @memberof SendTransaction
+   * @inner
+   */
+  prepareTxFrom(signatures) {
+    if (!this.fullTxData) {
+      this.prepareTxData();
+    }
+
+    // add each input data from signature
+    const keys = wallet.getWalletData().keys;
+    for (const [index, input] of this.fullTxData.inputs.entries()) {
+      const signature = Buffer.from(signatures[index]);
+      const keyIndex = keys[input.address].index;
+      const pubkey = wallet.getPublicKey(keyIndex);
+      input['data'] = transaction.createInputData(signature, pubkey);
+    }
+
+    // prepare and create transaction
+    let preparedData = null;
+    try {
+      preparedData = transaction.prepareData(this.fullTxData, null, {getSignature: false, completeTx: false});
       this.transaction = helpers.createTxFromData(preparedData, this.network);
       return this.transaction;
     } catch(e) {
