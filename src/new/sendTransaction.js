@@ -64,16 +64,16 @@ class SendTransaction extends EventEmitter {
 
   /**
    * Prepare transaction data from inputs and outputs
-   * Fill the inputs if needed, create output change if needed and sign inputs
+   * Fill the inputs if needed, create output change if needed
    *
    * @throws SendTxError
    *
-   * @return {Transaction} Transaction object prepared to be mined
+   * @return {Object} fullTxData with tokens array, inputs and outputs
    *
    * @memberof SendTransaction
    * @inner
    */
-  prepareTx() {
+  prepareTxData() {
     const tokensData = {};
     const HTR_UID = HATHOR_TOKEN_CONFIG.uid;
 
@@ -168,6 +168,22 @@ class SendTransaction extends EventEmitter {
       fullTxData.outputs = [...fullTxData.outputs, ...ret.data.outputs];
     }
 
+    return fullTxData;
+  }
+
+  /**
+   * Prepare transaction data from inputs and outputs
+   * Fill the inputs if needed, create output change if needed and sign inputs
+   *
+   * @throws SendTxError
+   *
+   * @return {Transaction} Transaction object prepared to be mined
+   *
+   * @memberof SendTransaction
+   * @inner
+   */
+  prepareTx() {
+    const fullTxData = this.prepareTxData();
     let preparedData = null;
     try {
       preparedData = transaction.prepareData(fullTxData, this.pin);
