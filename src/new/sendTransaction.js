@@ -211,8 +211,10 @@ class SendTransaction extends EventEmitter {
    * @inner
    */
   prepareTxFrom(signatures) {
-    if (!this.fullTxData) {
-      this.prepareTxData();
+    if (this.fullTxData === null) {
+      // This method can only be called with a prepared tx data
+      // because prepareTxData may modify the inputs and outputs
+      throw new SendTxError(ErrorMessages.TRANSACTION_IS_NULL);
     }
 
     // add each input data from signature
