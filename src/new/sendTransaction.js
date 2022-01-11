@@ -205,6 +205,9 @@ class SendTransaction extends EventEmitter {
    * The full tx data should already be prepared
    * since the signatures have already been made
    *
+   * @params {Array<Buffer>} Array of Buffer, each being a signature of the tx data
+   * The order of the signatures must match the inputs (private key used to sign should solve the input)
+   *
    * @throws SendTxError
    *
    * @return {Transaction} Transaction object prepared to be mined
@@ -222,7 +225,7 @@ class SendTransaction extends EventEmitter {
     // add each input data from signature
     const keys = wallet.getWalletData().keys;
     for (const [index, input] of this.fullTxData.inputs.entries()) {
-      const signature = Buffer.from(signatures[index]);
+      const signature = signatures[index];
       const keyIndex = keys[input.address].index;
       const pubkey = wallet.getPublicKey(keyIndex);
       input['data'] = transaction.createInputData(signature, pubkey);
