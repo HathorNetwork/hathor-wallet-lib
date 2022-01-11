@@ -68,6 +68,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   walletId: string | null;
   // Network in which the wallet is connected ('mainnet' or 'testnet')
   network: Network;
+  private requestPassword: Function;
   // Xpub of the wallet
   private xpub: string | null;
   // State of the wallet. One of the walletState enum options
@@ -87,7 +88,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // WalletService-ready connection class
   private conn: WalletServiceConnection | null;
 
-  constructor(seed: string, network: Network, options = { passphrase: '' }) {
+  constructor(requestPassword: Function, seed: string, network: Network, options = { passphrase: '' }) {
     super();
 
     const { passphrase } = options;
@@ -104,6 +105,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     walletUtils.wordsValid(seed);
     this.seed = seed;
     this.passphrase = passphrase
+
+    this.requestPassword = requestPassword;
 
     // ID of wallet after created on wallet service
     this.walletId = null;
@@ -443,8 +446,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  signMessage(timestamp: number): string {
-    const xpriv = walletUtils.getXPrivKeyFromSeed(this.seed, {passphrase: this.passphrase, networkName: this.network.name});
+  signMessage(seed: string, timestamp: number): string {
+    const xpriv = walletUtils.getXPrivKeyFromSeed(seed, {passphrase: this.passphrase, networkName: this.network.name});
     const derivedPrivKey = walletUtils.deriveXpriv(xpriv, '0\'');
     const address = derivedPrivKey.publicKey.toAddress(this.network.getNetwork()).toString();
 
@@ -479,10 +482,22 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     if (!this.authToken || !validateJWTExpireDate(this.authToken)) {
-      const sign = this.signMessage(timestampNow);
+      // Request the client for the password
+      const password = await this.requestPassword();
+
+      // Use it to get the words from the storage
+      const seed = wallet.getWalletWords(password);
+
+      const sign = this.signMessage(seed, timestampNow);
       const data = await walletApi.createAuthToken(this, timestampNow, this.xpub!, sign);
       this.authToken = data.token;
     }
+
+    /* if (!this.authToken || !validateJWTExpireDate(this.authToken)) {
+      const sign = this.signMessage(timestampNow);
+      const data = await walletApi.createAuthToken(this, timestampNow, this.xpub!, sign);
+      this.authToken = data.token;
+    } */
   }
 
   /**
