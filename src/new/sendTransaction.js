@@ -200,8 +200,10 @@ class SendTransaction extends EventEmitter {
   }
 
   /**
-   * Prepare transaction data from inputs, outputs and signatures
-   * Fill the inputs if needed, create output change if needed
+   * Prepare transaction to be mined from signatures
+   *
+   * The full tx data should already be prepared
+   * since the signatures have already been made
    *
    * @throws SendTxError
    *
