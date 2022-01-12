@@ -28,9 +28,10 @@ const MOCK_TX = {
 
 
 test('getTxBalance', async () => {
+  const requestPassword = jest.fn();
   const network = new Network('testnet');
   const words = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
-  const wallet = new HathorWalletServiceWallet(words, network);
+  const wallet = new HathorWalletServiceWallet(requestPassword, words, network);
 
   const getAllAddressesMock = async function* () {
     const addresses: GetAddressesObject[] = [{
