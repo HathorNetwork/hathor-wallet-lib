@@ -9,6 +9,7 @@ import { EventEmitter } from 'events';
 import walletApi from './api/walletApi';
 import MineTransaction from './mineTransaction';
 import HathorWalletServiceWallet from './wallet';
+import wallet from '../wallet';
 import P2PKH from '../models/p2pkh';
 import Transaction from '../models/transaction';
 import Output from '../models/output';
@@ -24,6 +25,7 @@ type optionsType = {
   inputs?: InputRequestObj[],
   changeAddress?: string | null,
   transaction?: Transaction | null,
+  pin?: string | null,
 };
 
 class SendTransactionWalletService extends EventEmitter implements ISendTransaction {
@@ -39,6 +41,9 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
   private transaction: Transaction | null;
   // MineTransaction object
   private mineTransaction: MineTransaction | null;
+
+  // PIN to load the seed from memory
+  private pin: string | null;
 
   constructor(wallet: HathorWalletServiceWallet, options: optionsType = {}) {
     super();
@@ -56,6 +61,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     this.changeAddress = newOptions.changeAddress!;
     this.transaction = newOptions.transaction!;
     this.mineTransaction = null;
+    this.pin = newOptions.pin!;
   }
 
   /**
@@ -245,9 +251,10 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     }
     this.emit('sign-tx-start');
     const dataToSignHash = this.transaction.getDataToSignHash();
+    const seed = wallet.getWalletWords(this.pin);
 
     for (const [idx, inputObj] of this.transaction.inputs.entries()) {
-      const inputData = this.wallet.getInputData(dataToSignHash, utxosAddressPath[idx]);
+      const inputData = this.wallet.getInputData(seed, dataToSignHash, utxosAddressPath[idx]);
       inputObj.setData(inputData);
     }
 

@@ -61,7 +61,7 @@ enum walletState {
 
 class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // String with 24 words separated by space
-  seed: string;
+  seed: string | null;
   // String with wallet passphrase
   passphrase: string;
   // Wallet id from the wallet service
@@ -126,12 +126,27 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
+   * Remove sensitive data from memory
+   *
+   * NOTICE: This won't remove data from memory immediately, we have to wait until javascript
+   * garbage collect it. JavaScript currently does not provide a standard way to trigger
+   * garbage collection
+   **/
+  clearSensitiveData() {
+    this.seed = null;
+  }
+
+  /**
    * Start wallet: load the wallet data, update state and start polling wallet status until it's ready
    *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
   async start() {
+    if (!this.seed) {
+      throw new Error('Seed should be in memory when starting the wallet.');
+    }
+
     this.setState(walletState.LOADING);
     const xpub = walletUtils.getXPubKeyFromSeed(this.seed, {passphrase: this.passphrase, networkName: this.network.name});
     const xpubChangeDerivation = walletUtils.xpubDeriveChild(xpub, 0);
@@ -159,6 +174,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const data = await walletApi.createWallet(this, this.xpub, firstAddress);
     await handleCreate(data.status);
+
+    this.clearSensitiveData();
   }
 
   /**
@@ -460,10 +477,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * Validate that the wallet auth token is valid
    * If it's not valid, requests a new one and update
    *
+   * @param {string} usePassword Accepts the password as a parameter so we don't have to ask
+   * the client for it if we already have it in memory
+   *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async validateAndRenewAuthToken() {
+  async validateAndRenewAuthToken(usePassword?: string) {
     const now = new Date();
     const timestampNow = Math.floor(now.getTime() / 1000);
 
@@ -482,22 +502,22 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     if (!this.authToken || !validateJWTExpireDate(this.authToken)) {
-      // Request the client for the password
-      const password = await this.requestPassword();
+      let seed = this.seed;
 
-      // Use it to get the words from the storage
-      const seed = wallet.getWalletWords(password);
+      if (!seed) {
+        // Request the client for the password
+        const password = usePassword ? usePassword : await this.requestPassword();
 
+        // Use it to get the words from the storage
+        seed = wallet.getWalletWords(password);
+      }
+
+      // @ts-ignore
       const sign = this.signMessage(seed, timestampNow);
       const data = await walletApi.createAuthToken(this, timestampNow, this.xpub!, sign);
+
       this.authToken = data.token;
     }
-
-    /* if (!this.authToken || !validateJWTExpireDate(this.authToken)) {
-      const sign = this.signMessage(timestampNow);
-      const data = await walletApi.createAuthToken(this, timestampNow, this.xpub!, sign);
-      this.authToken = data.token;
-    } */
   }
 
   /**
@@ -542,8 +562,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  getInputData(dataToSignHash: Buffer, addressPath: string): Buffer {
-    const code = new Mnemonic(this.seed);
+  getInputData(seed: string, dataToSignHash: Buffer, addressPath: string): Buffer {
+    const code = new Mnemonic(seed);
     const xpriv = code.toHDPrivateKey(this.passphrase, this.network.bitcoreNetwork);
     const derivedKey = xpriv.deriveNonCompliantChild(addressPath);
     const privateKey = derivedKey.privateKey;
@@ -689,6 +709,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       createMintAuthority: boolean,
       createMeltAuthority: boolean,
       nftData: string | null,
+      pinCode: string | null,
     };
     const newOptions: optionsType = Object.assign({
       address: null,
@@ -696,6 +717,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       createMintAuthority: true,
       createMeltAuthority: true,
       nftData: null,
+      pinCode: null,
     }, options);
 
     const isNFT = newOptions.nftData !== null;
@@ -764,8 +786,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const dataToSignHash = tx.getDataToSignHash();
 
+    if (!newOptions.pinCode) {
+      throw new Error('PIN not specified in prepareCreateNewToken options');
+    }
+
+    const seed = wallet.getWalletWords(newOptions.pinCode);
+
     for (const [idx, inputObj] of tx.inputs.entries()) {
-      const inputData = this.getInputData(dataToSignHash, utxosAddressPath[idx]);
+      const inputData = this.getInputData(seed, dataToSignHash, utxosAddressPath[idx]);
       inputObj.setData(inputData);
     }
 
@@ -796,12 +824,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     type optionsType = {
       address: string | null,
       changeAddress: string | null,
-      createAnotherMint: boolean
+      createAnotherMint: boolean,
+      pinCode: string | null,
     };
     const newOptions: optionsType = Object.assign({
       address: null,
       changeAddress: null,
       createAnotherMint: true,
+      pinCode: null,
     }, options);
 
     // 1. Calculate HTR deposit needed
@@ -864,10 +894,16 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     tx.tokens = [token];
     const dataToSignHash = tx.getDataToSignHash();
 
+    if (!newOptions.pinCode) {
+      throw new Error('PIN not specified in prepareCreateNewToken options');
+    }
+
+    const seed = wallet.getWalletWords(newOptions.pinCode);
+
     for (const [idx, inputObj] of tx.inputs.entries()) {
       // We have an array of utxos and the last input is the one with the authority
       const addressPath = idx === tx.inputs.length - 1 ? mintUtxo.addressPath : utxos[idx].addressPath;
-      const inputData = this.getInputData(dataToSignHash, addressPath);
+      const inputData = this.getInputData(seed, dataToSignHash, addressPath);
       inputObj.setData(inputData);
     }
 
@@ -898,12 +934,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     type optionsType = {
       address: string | null,
       changeAddress: string | null,
-      createAnotherMelt: boolean
+      createAnotherMelt: boolean,
+      pinCode: string | null,
     };
     const newOptions: optionsType = Object.assign({
       address: null,
       changeAddress: null,
       createAnotherMelt: true,
+      pinCode: null,
     }, options);
 
     // 1. Calculate HTR deposit needed
@@ -969,10 +1007,16 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     tx.tokens = [token];
     const dataToSignHash = tx.getDataToSignHash();
 
+    if (!newOptions.pinCode) {
+      throw new Error('PIN not specified in prepareCreateNewToken options');
+    }
+
+    const seed = wallet.getWalletWords(newOptions.pinCode);
+
     for (const [idx, inputObj] of tx.inputs.entries()) {
       // We have an array of utxos and the last input is the one with the authority
       const addressPath = idx === tx.inputs.length - 1 ? meltUtxo.addressPath : utxos[idx].addressPath;
-      const inputData = this.getInputData(dataToSignHash, addressPath);
+      const inputData = this.getInputData(seed, dataToSignHash, addressPath);
       inputObj.setData(inputData);
     }
 
@@ -1002,11 +1046,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.failIfWalletNotReady();
     type optionsType = {
       anotherAuthorityAddress: string | null,
-      createAnotherAuthority: boolean
+      createAnotherAuthority: boolean,
+      pinCode: string | null,
     };
     const newOptions: optionsType = Object.assign({
       anotherAuthorityAddress: null,
       createAnotherAuthority: true,
+      pinCode: null,
     }, options);
 
     let authority, mask;
@@ -1057,9 +1103,15 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const tx = new Transaction(inputsObj, outputsObj);
     tx.tokens = [token];
 
+    if (!newOptions.pinCode) {
+      throw new Error('PIN not specified in prepareCreateNewToken options');
+    }
+
+    const seed = wallet.getWalletWords(newOptions.pinCode);
+
     // Set input data
     const dataToSignHash = tx.getDataToSignHash();
-    const inputData = this.getInputData(dataToSignHash, utxo.addressPath);
+    const inputData = this.getInputData(seed, dataToSignHash, utxo.addressPath);
     inputsObj[0].setData(inputData);
 
     tx.prepareToSend();
@@ -1084,8 +1136,17 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async prepareDestroyAuthorityData(token: string, type: string, count: number): Promise<Transaction> {
+  async prepareDestroyAuthorityData(token: string, type: string, count: number, options = {}): Promise<Transaction> {
     this.failIfWalletNotReady();
+
+    type optionsType = {
+      pinCode: string | null,
+    };
+
+    const newOptions: optionsType = Object.assign({
+      pinCode: null,
+    }, options);
+
     let authority, mask;
     if (type === 'mint') {
       authority = 1;
@@ -1117,8 +1178,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // Set input data
     const dataToSignHash = tx.getDataToSignHash();
 
+    if (!newOptions.pinCode) {
+      throw new Error('PIN not specified in prepareCreateNewToken options');
+    }
+
+    const seed = wallet.getWalletWords(newOptions.pinCode);
+
     for (const [idx, inputObj] of tx.inputs.entries()) {
-      const inputData = this.getInputData(dataToSignHash, ret.utxos[idx].addressPath);
+      const inputData = this.getInputData(seed, dataToSignHash, ret.utxos[idx].addressPath);
       inputObj.setData(inputData);
     }
 
@@ -1132,9 +1199,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async destroyAuthority(token: string, type: string, count: number): Promise<Transaction> {
+  async destroyAuthority(token: string, type: string, count: number, options = {}): Promise<Transaction> {
     this.failIfWalletNotReady();
-    const tx = await this.prepareDestroyAuthorityData(token, type, count);
+    const tx = await this.prepareDestroyAuthorityData(token, type, count, options);
     return this.handleSendPreparedTransaction(tx);
   }
 

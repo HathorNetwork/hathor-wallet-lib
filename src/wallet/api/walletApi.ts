@@ -86,6 +86,7 @@ const walletApi = {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get('wallet/balances', data);
     if (response.status === 200 && response.data.success === true) {
+      console.log('Response data: ', response.data);
       return response.data;
     } else {
       throw new WalletRequestError('Error getting wallet balance.');
@@ -142,6 +143,7 @@ const walletApi = {
     if (response.status === 200) {
       return response.data;
     } else {
+      console.log('What', response.data);
       throw new WalletRequestError('Error sending tx proposal.');
     }
   },
@@ -158,6 +160,7 @@ const walletApi = {
     if (response.status === 200 && response.data.success === true) {
       return response.data;
     } else {
+      console.log('response', response.data);
       throw new WalletRequestError('Error requesting auth token.');
     }
   },
