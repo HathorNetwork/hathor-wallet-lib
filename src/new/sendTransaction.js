@@ -54,6 +54,7 @@ class SendTransaction extends EventEmitter {
     this.changeAddress = changeAddress;
     this.pin = pin;
     this.network = network;
+    this.fullTxData = null;
 
     // Error to be shown in case of an unexpected error when executing push tx
     this.unexpectedPushTxError = ErrorMessages.UNEXPECTED_PUSH_TX_ERROR;
@@ -64,16 +65,16 @@ class SendTransaction extends EventEmitter {
 
   /**
    * Prepare transaction data from inputs and outputs
-   * Fill the inputs if needed, create output change if needed and sign inputs
+   * Fill the inputs if needed, create output change if needed
    *
    * @throws SendTxError
    *
-   * @return {Transaction} Transaction object prepared to be mined
+   * @return {Object} fullTxData with tokens array, inputs and outputs
    *
    * @memberof SendTransaction
    * @inner
    */
-  prepareTx() {
+  prepareTxData() {
     const tokensData = {};
     const HTR_UID = HATHOR_TOKEN_CONFIG.uid;
 
@@ -168,9 +169,72 @@ class SendTransaction extends EventEmitter {
       fullTxData.outputs = [...fullTxData.outputs, ...ret.data.outputs];
     }
 
+    this.fullTxData = fullTxData;
+    return fullTxData;
+  }
+
+  /**
+   * Prepare transaction data from inputs and outputs
+   * Fill the inputs if needed, create output change if needed and sign inputs
+   *
+   * @throws SendTxError
+   *
+   * @return {Transaction} Transaction object prepared to be mined
+   *
+   * @memberof SendTransaction
+   * @inner
+   */
+  prepareTx() {
+    if (!this.fullTxData) {
+      this.prepareTxData();
+    }
     let preparedData = null;
     try {
-      preparedData = transaction.prepareData(fullTxData, this.pin);
+      preparedData = transaction.prepareData(this.fullTxData, this.pin);
+      this.transaction = helpers.createTxFromData(preparedData, this.network);
+      return this.transaction;
+    } catch(e) {
+      const message = oldHelpers.handlePrepareDataError(e);
+      throw new SendTxError(message);
+    }
+  }
+
+  /**
+   * Prepare transaction to be mined from signatures
+   *
+   * The full tx data should already be prepared
+   * since the signatures have already been made
+   *
+   * @params {Array<Buffer>} Array of Buffer, each being a signature of the tx data
+   * The order of the signatures must match the inputs (private key used to sign should solve the input)
+   *
+   * @throws SendTxError
+   *
+   * @return {Transaction} Transaction object prepared to be mined
+   *
+   * @memberof SendTransaction
+   * @inner
+   */
+  prepareTxFrom(signatures) {
+    if (this.fullTxData === null) {
+      // This method can only be called with a prepared tx data
+      // because prepareTxData may modify the inputs and outputs
+      throw new SendTxError(ErrorMessages.TRANSACTION_IS_NULL);
+    }
+
+    // add each input data from signature
+    const keys = wallet.getWalletData().keys;
+    for (const [index, input] of this.fullTxData.inputs.entries()) {
+      const signature = signatures[index];
+      const keyIndex = keys[input.address].index;
+      const pubkey = wallet.getPublicKey(keyIndex);
+      input['data'] = transaction.createInputData(signature, pubkey);
+    }
+
+    // prepare and create transaction
+    let preparedData = null;
+    try {
+      preparedData = transaction.prepareData(this.fullTxData, null, {getSignature: false, completeTx: false});
       this.transaction = helpers.createTxFromData(preparedData, this.network);
       return this.transaction;
     } catch(e) {
