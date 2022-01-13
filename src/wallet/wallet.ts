@@ -68,6 +68,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   walletId: string | null;
   // Network in which the wallet is connected ('mainnet' or 'testnet')
   network: Network;
+  // Method to request the password from the client
   private requestPassword: Function;
   // Xpub of the wallet
   private xpub: string | null;
