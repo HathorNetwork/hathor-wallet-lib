@@ -41,13 +41,23 @@ const walletApi = {
     }
   },
 
-  async createWallet(wallet: HathorWalletServiceWallet, xpubkey: string, firstAddress: string | null = null): Promise<WalletStatusResponseData> {
-    const data = { xpubkey };
+  async createWallet(
+    wallet: HathorWalletServiceWallet,
+    xpubkey: string,
+    authXpub: string,
+    firstAddress: string | null = null,
+  ): Promise<WalletStatusResponseData> {
+    const data = {
+      xpubkey,
+      authXpubkey: authXpub,
+    };
+
     if (firstAddress) {
       data['firstAddress'] = firstAddress;
     }
     const axios = await axiosInstance(wallet, false);
     const response = await axios.post('wallet/init', data);
+    console.log('respoauthXpubnse: ', response);
     if (response.status === 200 && response.data.success) {
       return response.data;
     } else if (response.status === 400 && response.data.error === 'wallet-already-loaded') {
@@ -155,6 +165,7 @@ const walletApi = {
     const data = { ts: timestamp, xpub, sign };
     const axios = await axiosInstance(wallet, false);
     const response = await axios.post('auth/token', data);
+    console.log('Request auth token; ', response);
     if (response.status === 200 && response.data.success === true) {
       return response.data;
     } else {

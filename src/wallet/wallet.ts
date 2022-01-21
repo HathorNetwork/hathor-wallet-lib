@@ -72,6 +72,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   private requestPassword: Function;
   // Xpub of the wallet
   private xpub: string | null;
+  private authXpub: string | null;
   // State of the wallet. One of the walletState enum options
   private state: string;
   // Variable to prevent start sending more than one tx concurrently
@@ -114,6 +115,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.isSendingTx = false;
     this.txProposalId = null;
     this.xpub = null;
+    this.authXpub = null;
 
     this.network = network;
     networkInstance.setNetwork(this.network.name);
@@ -150,9 +152,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     this.setState(walletState.LOADING);
     const xpub = walletUtils.getXPubKeyFromSeed(this.seed, {passphrase: this.passphrase, networkName: this.network.name});
+    const authXpub = walletUtils.getAuthXPubKeyFromSeed(this.seed, {passphrase: this.passphrase, networkName: this.network.name});
     const xpubChangeDerivation = walletUtils.xpubDeriveChild(xpub, 0);
     const firstAddress = walletUtils.getAddressAtIndex(xpubChangeDerivation, 0, this.network.name);
     this.xpub = xpub;
+    this.authXpub = authXpub;
 
     const handleCreate = async (data: WalletStatus) => {
       this.walletId = data.walletId;
@@ -173,7 +177,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
     }
 
-    const data = await walletApi.createWallet(this, this.xpub, firstAddress);
+    const data = await walletApi.createWallet(this, this.xpub, this.authXpub, firstAddress);
     await handleCreate(data.status);
 
     this.clearSensitiveData();
@@ -466,7 +470,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    */
   signMessage(seed: string, timestamp: number): string {
     const xpriv = walletUtils.getXPrivKeyFromSeed(seed, {passphrase: this.passphrase, networkName: this.network.name});
-    const derivedPrivKey = walletUtils.deriveXpriv(xpriv, '0\'');
+    const derivedPrivKey = walletUtils.deriveAuthXpriv(xpriv);
     const address = derivedPrivKey.publicKey.toAddress(this.network.getNetwork()).toString();
 
     const message = new bitcore.Message(String(timestamp).concat(this.walletId!).concat(address));
@@ -516,7 +520,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       if (!seed) throw new Error('Seed cant be null');
 
       const sign = this.signMessage(seed, timestampNow);
-      const data = await walletApi.createAuthToken(this, timestampNow, this.xpub!, sign);
+      const data = await walletApi.createAuthToken(this, timestampNow, this.authXpub!, sign);
 
       this.authToken = data.token;
     }

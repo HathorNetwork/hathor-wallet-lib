@@ -837,7 +837,7 @@ const wallet = {
    */
   changePinAndPassword({ oldPin, newPin, oldPassword, newPassword }) {
     if (this.isFromXPub()) {
-        throw WalletFromXPubGuard('changePinAndPassword');
+      throw WalletFromXPubGuard('changePinAndPassword');
     }
 
     if (oldPassword && !newPassword) {

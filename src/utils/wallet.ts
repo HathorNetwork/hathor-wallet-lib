@@ -198,6 +198,39 @@ const wallet = {
   },
 
   /**
+   * Get auth xpubkey in the 280' purpose path from seed
+   *
+   * @param {String} seed 24 words
+   * @param {Object} options Options with passphrase and networkName
+   *
+   * @return {String} Wallet xpubkey
+   * @memberof Wallet
+   * @inner
+   */
+  getAuthXPubKeyFromSeed(seed: string, options: { passphrase?: string, networkName?: string } = {}): string {
+    const methodOptions = Object.assign({passphrase: '', networkName: 'mainnet', accountDerivationIndex: '0\''}, options);
+    const { accountDerivationIndex } = methodOptions;
+
+    const xpriv = this.getXPrivKeyFromSeed(seed, methodOptions);
+    const privkey = this.deriveAuthXpriv(xpriv);
+
+    return privkey.xpubkey;
+  },
+
+  /**
+   * Derive xpriv from root to the auth specific purpose derivation path
+   *
+   * @param {string} accountDerivationIndex String with derivation index of account (can be hardened)
+   *
+   * @return {HDPrivateKey} Derived private key
+   * @memberof Wallet
+   * @inner
+   */
+  deriveAuthXpriv(xpriv: HDPrivateKey): HDPrivateKey {
+    return xpriv.deriveNonCompliantChild(`m/${HATHOR_BIP44_CODE}'/${HATHOR_BIP44_CODE}'`);
+  },
+
+  /**
    * Get root xpriv from seed
    *
    * @param {String} seed 24 words
