@@ -6,9 +6,6 @@
  */
 
 import axios from 'axios';
-import {
-    TIMEOUT,
-} from '../../constants';
 import HathorWalletServiceWallet from '../wallet';
 import config from '../../config';
 
@@ -23,7 +20,7 @@ import config from '../../config';
  *
  * @param {number} timeout Timeout in milliseconds for the request
  */
-export const axiosInstance = async (wallet: HathorWalletServiceWallet, needsAuth: boolean, timeout: number = TIMEOUT) => {
+export const axiosInstance = async (wallet: HathorWalletServiceWallet, needsAuth: boolean, timeout: number = config.getAxiosTimeout()) => {
   // TODO How to allow 'Retry' request?
   const defaultOptions = {
     baseURL: config.getWalletServiceBaseUrl(),
