@@ -227,9 +227,11 @@ const wallet = {
     let code = new Mnemonic(words);
     let xpriv = code.toHDPrivateKey(passphrase, network.getNetwork());
     let privkey = xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
+    let authXpriv = xpriv.deriveNonCompliantChild(`m/${HATHOR_BIP44_CODE}'/${HATHOR_BIP44_CODE}'`);
 
     let encryptedData = this.encryptData(privkey.xprivkey, pin)
     let encryptedDataWords = this.encryptData(words, password)
+    let encryptedAuthXpriv = this.encryptData(authXpriv, pin)
 
     // Save in storage the encrypted private key and the hash of the pin and password
     let access = {
@@ -237,6 +239,7 @@ const wallet = {
       hash: encryptedData.hash.key.toString(),
       salt: encryptedData.hash.salt,
       words: encryptedDataWords.encrypted.toString(),
+      authKey: encryptedAuthXpriv.encrypted.toString(),
       hashPasswd: encryptedDataWords.hash.key.toString(),
       saltPasswd: encryptedDataWords.hash.salt,
       hashIterations: HASH_ITERATIONS,
