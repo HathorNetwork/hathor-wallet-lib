@@ -1749,6 +1749,21 @@ const wallet = {
     return this.decryptData(accessData.words, password);
   },
 
+  /**
+   * Get the privKey of the auth derivation
+   *
+   * @param {string} pin Pin to decrypt the words
+   *
+   * @return {string} The auth private key
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  getAuthKey(pin) {
+    const accessData = this.getWalletAccessData();
+    return HDPrivateKey(this.decryptData(accessData.authKey, pin));
+  },
+
   /*
    * Save backup done in storage
    *
