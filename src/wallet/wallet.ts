@@ -140,6 +140,39 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
+   * Get auth xpubkey in the 280' purpose path from seed
+   *
+   * @param {String} seed 24 words
+   * @param {Object} options Options with passphrase and networkName
+   *
+   * @return {String} Wallet xpubkey
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  static getAuthXPubKeyFromSeed(seed: string, options: { passphrase?: string, networkName?: string } = {}): string {
+    const methodOptions = Object.assign({passphrase: '', networkName: 'mainnet', accountDerivationIndex: '0\''}, options);
+    const { accountDerivationIndex } = methodOptions;
+
+    const xpriv = walletUtils.getXPrivKeyFromSeed(seed, methodOptions);
+    const privkey = HathorWalletServiceWallet.deriveAuthXpriv(xpriv);
+
+    return privkey.xpubkey;
+  }
+
+  /**
+   * Derive xpriv from root to the auth specific purpose derivation path
+   *
+   * @param {string} accountDerivationIndex String with derivation index of account (can be hardened)
+   *
+   * @return {HDPrivateKey} Derived private key
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  static deriveAuthXpriv(xpriv: bitcore.HDPrivateKey): bitcore.HDPrivateKey {
+    return xpriv.deriveNonCompliantChild(`m/${HATHOR_BIP44_CODE}'/${HATHOR_BIP44_CODE}'`);
+  }
+
+  /**
    * Start wallet: load the wallet data, update state and start polling wallet status until it's ready
    *
    * @memberof HathorWalletServiceWallet
@@ -151,12 +184,34 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     this.setState(walletState.LOADING);
+    const xpriv = walletUtils.getXPrivKeyFromSeed(this.seed, {passphrase: this.passphrase, networkName: this.network.name});
+
     const xpub = walletUtils.getXPubKeyFromSeed(this.seed, {passphrase: this.passphrase, networkName: this.network.name});
-    const authXpub = walletUtils.getAuthXPubKeyFromSeed(this.seed, {passphrase: this.passphrase, networkName: this.network.name});
+    const authXpub = HathorWalletServiceWallet.getAuthXPubKeyFromSeed(this.seed, {
+      passphrase: this.passphrase,
+      networkName: this.network.name,
+    });
+
+    const walletId = walletUtils.sha256d(xpub, 'hex');
+    const now = new Date();
+    const timestampNow = Math.floor(now.getTime() / 1000);
+
+    // prove we own the xpubkey
+    const xpubAccountPath = walletUtils.deriveXpriv(xpriv, '0\'')
+    const address = xpubAccountPath.publicKey.toAddress(this.network.getNetwork()).toString();
+    const message = new bitcore.Message(String(now).concat(walletId).concat(address));
+    const xpubkeySignature = message.sign(xpubAccountPath.privateKey);
+
+
+    // prove we own the auth_xpubkey
+    const authDerivedPrivKey = HathorWalletServiceWallet.deriveAuthXpriv(xpriv);
+    const authAddress = authDerivedPrivKey.publicKey.toAddress(this.network.getNetwork());
+    const authMessage = new bitcore.Message(String(timestampNow).concat(walletId).concat(authAddress));
+    const authXpubkeySignature = authMessage.sign(authDerivedPrivKey.privateKey);
+
     const xpubChangeDerivation = walletUtils.xpubDeriveChild(xpub, 0);
     const firstAddress = walletUtils.getAddressAtIndex(xpubChangeDerivation, 0, this.network.name);
     this.xpub = xpub;
-    this.authXpub = authXpub;
 
     const handleCreate = async (data: WalletStatus) => {
       this.walletId = data.walletId;
@@ -177,7 +232,16 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
     }
 
-    const data = await walletApi.createWallet(this, this.xpub, this.authXpub, firstAddress);
+    const data = await walletApi.createWallet(
+      this,
+      xpub,
+      xpubkeySignature,
+      authXpub,
+      authXpubkeySignature,
+      timestampNow,
+      firstAddress,
+    );
+
     await handleCreate(data.status);
 
     this.clearSensitiveData();
@@ -470,7 +534,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    */
   signMessage(seed: string, timestamp: number): string {
     const xpriv = walletUtils.getXPrivKeyFromSeed(seed, {passphrase: this.passphrase, networkName: this.network.name});
-    const derivedPrivKey = walletUtils.deriveAuthXpriv(xpriv);
+    const derivedPrivKey = HathorWalletServiceWallet.deriveAuthXpriv(xpriv);
     const address = derivedPrivKey.publicKey.toAddress(this.network.getNetwork()).toString();
 
     const message = new bitcore.Message(String(timestamp).concat(this.walletId!).concat(address));

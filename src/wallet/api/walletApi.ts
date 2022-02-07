@@ -1,4 +1,4 @@
-/**
+/**
  * Copyright (c) Hathor Labs and its affiliates.
  *
  * This source code is licensed under the MIT license found in the
@@ -44,12 +44,18 @@ const walletApi = {
   async createWallet(
     wallet: HathorWalletServiceWallet,
     xpubkey: string,
-    authXpub: string,
+    xpubkeySignature: string,
+    authXpubkey: string,
+    authXpubkeySignature: string,
+    timestamp: number,
     firstAddress: string | null = null,
   ): Promise<WalletStatusResponseData> {
     const data = {
       xpubkey,
-      authXpubkey: authXpub,
+      xpubkeySignature,
+      authXpubkey,
+      authXpubkeySignature,
+      timestamp,
     };
 
     if (firstAddress) {

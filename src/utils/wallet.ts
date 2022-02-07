@@ -7,6 +7,7 @@
 
 
 import { crypto, HDPublicKey, HDPrivateKey, Address } from 'bitcore-lib';
+import { createHash, HexBase64Latin1Encoding } from 'crypto';
 import Mnemonic from 'bitcore-mnemonic';
 import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE } from '../constants';
 import { XPubError, InvalidWords, UncompressedPubKeyError } from '../errors';
@@ -198,39 +199,6 @@ const wallet = {
   },
 
   /**
-   * Get auth xpubkey in the 280' purpose path from seed
-   *
-   * @param {String} seed 24 words
-   * @param {Object} options Options with passphrase and networkName
-   *
-   * @return {String} Wallet xpubkey
-   * @memberof Wallet
-   * @inner
-   */
-  getAuthXPubKeyFromSeed(seed: string, options: { passphrase?: string, networkName?: string } = {}): string {
-    const methodOptions = Object.assign({passphrase: '', networkName: 'mainnet', accountDerivationIndex: '0\''}, options);
-    const { accountDerivationIndex } = methodOptions;
-
-    const xpriv = this.getXPrivKeyFromSeed(seed, methodOptions);
-    const privkey = this.deriveAuthXpriv(xpriv);
-
-    return privkey.xpubkey;
-  },
-
-  /**
-   * Derive xpriv from root to the auth specific purpose derivation path
-   *
-   * @param {string} accountDerivationIndex String with derivation index of account (can be hardened)
-   *
-   * @return {HDPrivateKey} Derived private key
-   * @memberof Wallet
-   * @inner
-   */
-  deriveAuthXpriv(xpriv: HDPrivateKey): HDPrivateKey {
-    return xpriv.deriveNonCompliantChild(`m/${HATHOR_BIP44_CODE}'/${HATHOR_BIP44_CODE}'`);
-  },
-
-  /**
    * Get root xpriv from seed
    *
    * @param {String} seed 24 words
@@ -365,7 +333,25 @@ const wallet = {
 
     const derivedXpub = xpub.deriveChild(derivationIndex);
     return derivedXpub.xpubkey;
-  }
+  },
+
+  /**
+ * Calculate the double sha256 hash of the data.
+ *
+ * @remarks
+ * If encoding is provided a string will be returned; otherwise a Buffer is returned.
+ *
+ * @param data - Data to be hashed
+ * @param encoding - The encoding of the returned object
+ * @returns The sha256d hash of the data
+ */
+  sha256d(data: string, encoding: HexBase64Latin1Encoding): string {
+    const hash1 = createHash('sha256');
+    hash1.update(data);
+    const hash2 = createHash('sha256');
+    hash2.update(hash1.digest());
+    return hash2.digest(encoding);
+  },
 }
 
 export default wallet;
