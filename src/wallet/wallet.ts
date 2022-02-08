@@ -513,7 +513,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         seed = wallet.getWalletWords(password);
       }
 
-      // @ts-ignore
+      if (!seed) throw new Error('Seed cant be null');
+
       const sign = this.signMessage(seed, timestampNow);
       const data = await walletApi.createAuthToken(this, timestampNow, this.xpub!, sign);
 
