@@ -230,8 +230,8 @@ const wallet = {
     let authXpriv = xpriv.deriveNonCompliantChild(`m/${HATHOR_BIP44_CODE}'/${HATHOR_BIP44_CODE}'`);
 
     let encryptedData = this.encryptData(privkey.xprivkey, pin)
+    let encryptedAuthXpriv = this.encryptData(authXpriv.xprivkey, pin)
     let encryptedDataWords = this.encryptData(words, password)
-    let encryptedAuthXpriv = this.encryptData(authXpriv, pin)
 
     // Save in storage the encrypted private key and the hash of the pin and password
     let access = {
@@ -261,9 +261,28 @@ const wallet = {
    */
   storeEncryptedWords(words, password) {
     const initialAccessData = this.getWalletAccessData() || {};
-
     const encryptedDataWords = this.encryptData(words, password);
+
     initialAccessData['words'] = encryptedDataWords.encrypted.toString();
+
+    this.setWalletAccessData(initialAccessData);
+  },
+
+  /**
+   * Encrypt a auth xpriv to be used for auth on the Wallet Service facade with
+   * a password and save it on localStorage
+   *
+   * @param {string} key Key to be encrypted
+   * @param {string} password Password to encrypt
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  storeEncryptedAuthKey(key, password) {
+    const initialAccessData = this.getWalletAccessData() || {};
+    const encryptedAuthKey = this.encryptData(key, password);
+
+    initialAccessData['authKey'] = encryptedAuthKey.encrypted.toString();
 
     this.setWalletAccessData(initialAccessData);
   },
@@ -793,14 +812,17 @@ const wallet = {
     const newHash = this.hashPassword(newPin);
 
     // Get and update data encrypted with PIN
-    const decryptedData = this.decryptData(accessData.mainKey, oldPin);
-    const encryptedData = this.encryptData(decryptedData, newPin);
+    const decryptedMainKey = this.decryptData(accessData.mainKey, oldPin);
+    const encryptedMainKey = this.encryptData(decryptedData, newPin);
+    const decryptedAuthKey = this.decryptData(accessData.authKey, oldPin);
+    const encryptedAuthKey = this.encryptData(decryptedAuthKey, newPin);
 
     // Create a new object (without mutating the old one) with the updated data
     const newAccessData = {
       hash: newHash.key.toString(),
       salt: newHash.salt,
       mainKey: encryptedData.encrypted.toString(),
+      authKey: encryptedAuthKey.encrypted.toString(),
     };
 
     return newAccessData;
