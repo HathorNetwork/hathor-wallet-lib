@@ -897,7 +897,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const dataToSignHash = tx.getDataToSignHash();
 
     if (!newOptions.pinCode) {
-      throw new Error('PIN not specified in prepareCreateNewToken options');
+      throw new Error('PIN not specified in prepareMintTokensData options');
     }
 
     const seed = wallet.getWalletWords(newOptions.pinCode);
@@ -1010,7 +1010,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const dataToSignHash = tx.getDataToSignHash();
 
     if (!newOptions.pinCode) {
-      throw new Error('PIN not specified in prepareCreateNewToken options');
+      throw new Error('PIN not specified in prepareMeltTokensData options');
     }
 
     const seed = wallet.getWalletWords(newOptions.pinCode);
@@ -1106,7 +1106,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     tx.tokens = [token];
 
     if (!newOptions.pinCode) {
-      throw new Error('PIN not specified in prepareCreateNewToken options');
+      throw new Error('PIN not specified in prepareDelegateAuthorityData options');
     }
 
     const seed = wallet.getWalletWords(newOptions.pinCode);
@@ -1181,7 +1181,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const dataToSignHash = tx.getDataToSignHash();
 
     if (!newOptions.pinCode) {
-      throw new Error('PIN not specified in prepareCreateNewToken options');
+      throw new Error('PIN not specified in prepareDestroyAuthorityData options');
     }
 
     const seed = wallet.getWalletWords(newOptions.pinCode);
