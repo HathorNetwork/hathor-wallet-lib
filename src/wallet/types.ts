@@ -207,7 +207,7 @@ export interface TransactionFullObject {
 }
 
 export interface IHathorWallet {
-  start();
+  start(options: { pinCode: string });
   getAllAddresses(): AsyncGenerator<GetAddressesObject>;
   getBalance(token: string | null): Promise<GetBalanceObject[]>;
   getTokens(): Promise<string[]>;

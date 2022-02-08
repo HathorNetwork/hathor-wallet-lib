@@ -180,7 +180,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async start() {
+  async start({ pinCode }) {
     if (!this.seed) {
       throw new Error('Seed should be in memory when starting the wallet.');
     }
@@ -216,6 +216,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     this.xpub = xpub;
     this.authXpriv = authDerivedPrivKey;
+
+    // store the authXpriv on the storage
+    wallet.storeEncryptedAuthKey(authDerivedPrivKey.xprivkey, pinCode);
 
     const handleCreate = async (data: WalletStatus) => {
       this.walletId = data.walletId;
