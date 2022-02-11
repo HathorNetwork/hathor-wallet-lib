@@ -6,7 +6,14 @@
  */
 
 import { EventEmitter } from 'events';
-import { HATHOR_BIP44_CODE, HATHOR_TOKEN_CONFIG, TOKEN_MINT_MASK, AUTHORITY_TOKEN_DATA, TOKEN_MELT_MASK } from '../constants';
+import { 
+  HATHOR_BIP44_CODE,
+  HATHOR_TOKEN_CONFIG,
+  TOKEN_MINT_MASK,
+  AUTHORITY_TOKEN_DATA,
+  TOKEN_MELT_MASK,
+  WALLET_SERVICE_AUTH_DERIVATION_PATH,
+} from '../constants';
 import Mnemonic from 'bitcore-mnemonic';
 import { crypto, util, Address as bitcoreAddress } from 'bitcore-lib';
 import wallet from '../wallet';
@@ -171,7 +178,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   static deriveAuthXpriv(xpriv: bitcore.HDPrivateKey): bitcore.HDPrivateKey {
-    return xpriv.deriveNonCompliantChild(`m/${HATHOR_BIP44_CODE}'/${HATHOR_BIP44_CODE}'`);
+    return xpriv.deriveNonCompliantChild(WALLET_SERVICE_AUTH_DERIVATION_PATH);
   }
 
   /**
