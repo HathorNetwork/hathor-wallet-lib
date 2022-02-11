@@ -1774,9 +1774,9 @@ const wallet = {
   /**
    * Get the privKey of the auth derivation
    *
-   * @param {string} pin Pin to decrypt the words
+   * @param {string} pin Pin to decrypt the auth key
    *
-   * @return {string} The auth private key
+   * @return {HDPrivateKey} The auth private key
    *
    * @memberof Wallet
    * @inner
