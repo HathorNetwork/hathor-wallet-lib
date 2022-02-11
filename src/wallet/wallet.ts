@@ -201,14 +201,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // prove we own the xpubkey
     const xpubAccountPath = walletUtils.deriveXpriv(xpriv, '0\'')
     const address = xpubAccountPath.publicKey.toAddress(this.network.getNetwork()).toString();
-    const message = new bitcore.Message(String(timestampNow).concat(walletId).concat(address));
+    const message = new bitcore.Message(String(timestampNow).concat(walletId as string).concat(address));
     const xpubkeySignature = message.sign(xpubAccountPath.privateKey);
 
     // prove we own the auth_xpubkey
     const authDerivedPrivKey = HathorWalletServiceWallet.deriveAuthXpriv(xpriv);
     const authAddress = authDerivedPrivKey.publicKey.toAddress(this.network.getNetwork());
 
-    const authMessage = new bitcore.Message(String(timestampNow).concat(walletId).concat(authAddress));
+    const authMessage = new bitcore.Message(String(timestampNow).concat(walletId as string).concat(authAddress));
     const authXpubkeySignature = authMessage.sign(authDerivedPrivKey.privateKey);
 
     const xpubChangeDerivation = walletUtils.xpubDeriveChild(xpub, 0);

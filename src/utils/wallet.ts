@@ -345,7 +345,7 @@ const wallet = {
  * @param encoding - The encoding of the returned object
  * @returns The sha256d hash of the data
  */
-  sha256d(data: string, encoding: HexBase64Latin1Encoding): string {
+  sha256d(data: string, encoding: HexBase64Latin1Encoding): string | Buffer {
     const hash1 = createHash('sha256');
     hash1.update(data);
     const hash2 = createHash('sha256');
