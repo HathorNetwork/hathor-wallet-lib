@@ -212,22 +212,17 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       networkName: this.network.name,
     });
 
-    const walletId = crypto.Hash.sha256sha256(Buffer.from(xpub)).toString('hex');
     const now = new Date();
     const timestampNow = Math.floor(now.getTime() / 1000);
+    const walletId = crypto.Hash.sha256sha256(Buffer.from(xpub)).toString('hex');
 
     // prove we own the xpubkey
-    const xpubAccountPath = walletUtils.deriveXpriv(xpriv, '0\'');
-    const address = xpubAccountPath.publicKey.toAddress(this.network.getNetwork()).toString();
-    const message = new bitcore.Message(String(timestampNow).concat(walletId as string).concat(address));
-    const xpubkeySignature = message.sign(xpubAccountPath.privateKey);
+    const xprivAccountPath = walletUtils.deriveXpriv(xpriv, '0\'');
+    const xpubkeySignature = this.signMessage(xprivAccountPath, timestampNow, walletId);
 
     // prove we own the auth_xpubkey
     const authDerivedPrivKey = HathorWalletServiceWallet.deriveAuthXpriv(xpriv);
-    const authAddress = authDerivedPrivKey.publicKey.toAddress(this.network.getNetwork());
-
-    const authMessage = new bitcore.Message(String(timestampNow).concat(walletId as string).concat(authAddress));
-    const authXpubkeySignature = authMessage.sign(authDerivedPrivKey.privateKey);
+    const authXpubkeySignature = this.signMessage(authDerivedPrivKey, timestampNow, walletId);
 
     const xpubChangeDerivation = walletUtils.xpubDeriveChild(xpub, 0);
     const firstAddress = walletUtils.getAddressAtIndex(xpubChangeDerivation, 0, this.network.name);
@@ -557,10 +552,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  signMessage(xpriv: bitcore.HDPrivateKey, timestamp: number): string {
-    // const xpriv = walletUtils.getXPrivKeyFromSeed(seed, {passphrase: this.passphrase, networkName: this.network.name});
+  signMessage(xpriv: bitcore.HDPrivateKey, timestamp: number, walletId: string): string {
     const address = xpriv.publicKey.toAddress(this.network.getNetwork()).toString();
-    const message = new bitcore.Message(String(timestamp).concat(this.walletId!).concat(address));
+    const message = new bitcore.Message(String(timestamp).concat(walletId).concat(address));
 
     return message.sign(xpriv.privateKey);
   }
@@ -579,7 +573,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const now = new Date();
     const timestampNow = Math.floor(now.getTime() / 1000);
 
-    const validateJWTExpireDate = (token) => {
+    const validateJWTExpireDate = (token: string) => {
       const base64Url = token.split('.')[1];
       const base64 = base64Url.replace('-', '+').replace('_', '/');
       const decodedData = JSON.parse(Buffer.from(base64, 'base64').toString('binary'));
@@ -604,7 +598,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         xpriv = wallet.getAuthKey(password);
       }
       // @ts-ignore
-      const sign = this.signMessage(xpriv, timestampNow);
+      const sign = this.signMessage(xpriv, timestampNow, this.walletId);
       const data = await walletApi.createAuthToken(this, timestampNow, xpriv.xpubkey, sign);
 
       this.authToken = data.token;
