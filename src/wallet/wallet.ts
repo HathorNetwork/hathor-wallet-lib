@@ -80,7 +80,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // Xpub of the wallet
   private xpub: string | null;
   // Xpriv of the auth derivation path
-  private authXpriv: bitcore.HDPrivateKey | null;
+  private authPrivKey: bitcore.HDPrivateKey | null;
   // State of the wallet. One of the walletState enum options
   private state: string;
   // Variable to prevent start sending more than one tx concurrently
@@ -123,7 +123,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.isSendingTx = false;
     this.txProposalId = null;
     this.xpub = null;
-    this.authXpriv = null;
+    this.authPrivKey = null;
 
     this.network = network;
     networkInstance.setNetwork(this.network.name);
@@ -145,7 +145,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    **/
   clearSensitiveData() {
     this.seed = null;
-    this.authXpriv = null;
+    this.authPrivKey = null;
   }
 
   /**
@@ -165,13 +165,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }, options);
 
     const xpriv = walletUtils.getXPrivKeyFromSeed(seed, methodOptions);
-    const privkey = HathorWalletServiceWallet.deriveAuthXpriv(xpriv);
+    const privkey = HathorWalletServiceWallet.deriveAuthPrivateKey(xpriv);
 
     return privkey.xpubkey;
   }
 
   /**
-   * Derive xpriv from root to the auth specific purpose derivation path
+   * Derive private key from root to the auth specific purpose derivation path
    *
    * @param {HDPrivateKey} xpriv The wallet's root xpriv
    *
@@ -179,7 +179,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  static deriveAuthXpriv(xpriv: bitcore.HDPrivateKey): bitcore.HDPrivateKey {
+  static deriveAuthPrivateKey(xpriv: bitcore.HDPrivateKey): bitcore.HDPrivateKey {
     return xpriv.deriveNonCompliantChild(WALLET_SERVICE_AUTH_DERIVATION_PATH);
   }
 
@@ -221,16 +221,16 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const xpubkeySignature = this.signMessage(xprivAccountPath, timestampNow, walletId);
 
     // prove we own the auth_xpubkey
-    const authDerivedPrivKey = HathorWalletServiceWallet.deriveAuthXpriv(xpriv);
+    const authDerivedPrivKey = HathorWalletServiceWallet.deriveAuthPrivateKey(xpriv);
     const authXpubkeySignature = this.signMessage(authDerivedPrivKey, timestampNow, walletId);
 
     const xpubChangeDerivation = walletUtils.xpubDeriveChild(xpub, 0);
     const firstAddress = walletUtils.getAddressAtIndex(xpubChangeDerivation, 0, this.network.name);
 
     this.xpub = xpub;
-    this.authXpriv = authDerivedPrivKey;
+    this.authPrivKey = authDerivedPrivKey;
 
-    // store the authXpriv on the storage
+    // store the authPrivKey on the storage
     wallet.storeEncryptedAuthKey(authDerivedPrivKey.xprivkey, pinCode);
 
     const handleCreate = async (data: WalletStatus) => {
@@ -588,18 +588,18 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     if (!this.authToken || !validateJWTExpireDate(this.authToken)) {
-      let xpriv = this.authXpriv;
+      let privKey = this.authPrivKey;
 
-      if (!xpriv) {
+      if (!privKey) {
         // Request the client for the PIN
         const password = usePassword ? usePassword : await this.requestPassword();
 
         // Use it to get the words from the storage
-        xpriv = wallet.getAuthKey(password);
+        privKey = wallet.getAuthKey(password);
       }
       // @ts-ignore
-      const sign = this.signMessage(xpriv, timestampNow, this.walletId);
-      const data = await walletApi.createAuthToken(this, timestampNow, xpriv.xpubkey, sign);
+      const sign = this.signMessage(privKey, timestampNow, this.walletId);
+      const data = await walletApi.createAuthToken(this, timestampNow, privKey.xpubkey, sign);
 
       this.authToken = data.token;
     }
