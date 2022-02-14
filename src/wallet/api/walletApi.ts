@@ -167,7 +167,12 @@ const walletApi = {
       xpub: string,
       sign: string,
   ): Promise<AuthTokenResponseData> {
-    const data = { ts: timestamp, xpub, sign };
+    const data = {
+      ts: timestamp,
+      xpub,
+      sign,
+      walletId: wallet.walletId,
+    };
     const axios = await axiosInstance(wallet, false);
     const response = await axios.post('auth/token', data);
     if (response.status === 200 && response.data.success === true) {
