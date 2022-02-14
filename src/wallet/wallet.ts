@@ -159,7 +159,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   static getAuthXPubKeyFromSeed(seed: string, options: { passphrase?: string, networkName?: string } = {}): string {
-    const methodOptions = Object.assign({passphrase: '', networkName: 'mainnet', accountDerivationIndex: '0\''}, options);
+    const methodOptions = Object.assign({
+      passphrase: '',
+      networkName: 'mainnet',
+    }, options);
 
     const xpriv = walletUtils.getXPrivKeyFromSeed(seed, methodOptions);
     const privkey = HathorWalletServiceWallet.deriveAuthXpriv(xpriv);
