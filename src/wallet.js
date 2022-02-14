@@ -272,15 +272,15 @@ const wallet = {
    * Encrypt a auth xpriv to be used for auth on the Wallet Service facade with
    * a password and save it on localStorage
    *
-   * @param {string} key Key to be encrypted
-   * @param {string} password Password to encrypt
+   * @param {string} key Auth key to be encrypted
+   * @param {string} pin Pin code to use as password to encrypt the auth key
    *
    * @memberof Wallet
    * @inner
    */
-  storeEncryptedAuthKey(key, password) {
+  storeEncryptedAuthKey(key, pin) {
     const initialAccessData = this.getWalletAccessData() || {};
-    const encryptedAuthKey = this.encryptData(key, password);
+    const encryptedAuthKey = this.encryptData(key, pin);
 
     initialAccessData['authKey'] = encryptedAuthKey.encrypted.toString();
 
