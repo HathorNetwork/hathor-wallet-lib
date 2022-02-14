@@ -269,25 +269,6 @@ const wallet = {
   },
 
   /**
-   * Encrypt a auth xpriv to be used for auth on the Wallet Service facade with
-   * a password and save it on localStorage
-   *
-   * @param {string} key Auth key to be encrypted
-   * @param {string} pin Pin code to use as password to encrypt the auth key
-   *
-   * @memberof Wallet
-   * @inner
-   */
-  storeEncryptedAuthKey(key, pin) {
-    const initialAccessData = this.getWalletAccessData() || {};
-    const encryptedAuthKey = this.encryptData(key, pin);
-
-    initialAccessData['authKey'] = encryptedAuthKey.encrypted.toString();
-
-    this.setWalletAccessData(initialAccessData);
-  },
-
-  /**
    * Stores hash of password/PIN on localStorage
    *
    * @param {string} password Password to store hash
@@ -814,16 +795,23 @@ const wallet = {
     // Get and update data encrypted with PIN
     const decryptedMainKey = this.decryptData(accessData.mainKey, oldPin);
     const encryptedMainKey = this.encryptData(decryptedData, newPin);
-    const decryptedAuthKey = this.decryptData(accessData.authKey, oldPin);
-    const encryptedAuthKey = this.encryptData(decryptedAuthKey, newPin);
 
     // Create a new object (without mutating the old one) with the updated data
-    const newAccessData = {
+    let newAccessData = {
       hash: newHash.key.toString(),
       salt: newHash.salt,
       mainKey: encryptedData.encrypted.toString(),
-      authKey: encryptedAuthKey.encrypted.toString(),
     };
+
+    if (accessData.authKey) {
+      const decryptedAuthKey = this.decryptData(accessData.authKey, oldPin);
+      const encryptedAuthKey = this.encryptData(decryptedAuthKey, newPin);
+
+      newAccessData = {
+        ...newAccessData,
+        authKey: encryptedAuthKey.encrypted.toString(),
+      };
+    }
 
     return newAccessData;
   },

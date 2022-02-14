@@ -184,6 +184,25 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
+   * Encrypt a auth xpriv to be used for auth on the Wallet Service facade with
+   * a password and save it on localStorage
+   *
+   * @param {string} key Auth key to be encrypted
+   * @param {string} pin Pin code to use as password to encrypt the auth key
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  static storeEncryptedAuthKey(key: string, pin: string) {
+    const initialAccessData = wallet.getWalletAccessData() || {};
+    const encryptedAuthKey = wallet.encryptData(key, pin);
+
+    initialAccessData['authKey'] = encryptedAuthKey.encrypted.toString();
+
+    wallet.setWalletAccessData(initialAccessData);
+  }
+
+  /**
    * Start wallet: load the wallet data, update state and start polling wallet status until it's ready
    *
    * @param {Object} optionsParams Options parameters
@@ -231,7 +250,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.authPrivKey = authDerivedPrivKey;
 
     // store the authPrivKey on the storage
-    wallet.storeEncryptedAuthKey(authDerivedPrivKey.xprivkey, pinCode);
+    HathorWalletServiceWallet.storeEncryptedAuthKey(authDerivedPrivKey.xprivkey, pinCode);
 
     const handleCreate = async (data: WalletStatus) => {
       this.walletId = data.walletId;
