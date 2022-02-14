@@ -200,12 +200,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       networkName: this.network.name,
     });
 
-    const walletId = walletUtils.sha256d(xpub, 'hex');
+    const walletId = crypto.Hash.sha256sha256(Buffer.from(xpub)).toString('hex');
     const now = new Date();
     const timestampNow = Math.floor(now.getTime() / 1000);
 
     // prove we own the xpubkey
-    const xpubAccountPath = walletUtils.deriveXpriv(xpriv, '0\'')
+    const xpubAccountPath = walletUtils.deriveXpriv(xpriv, '0\'');
     const address = xpubAccountPath.publicKey.toAddress(this.network.getNetwork()).toString();
     const message = new bitcore.Message(String(timestampNow).concat(walletId as string).concat(address));
     const xpubkeySignature = message.sign(xpubAccountPath.privateKey);
