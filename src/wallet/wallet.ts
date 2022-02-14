@@ -173,9 +173,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   /**
    * Derive xpriv from root to the auth specific purpose derivation path
    *
-   * @param {string} accountDerivationIndex String with derivation index of account (can be hardened)
+   * @param {HDPrivateKey} xpriv The wallet's root xpriv
    *
-   * @return {HDPrivateKey} Derived private key
+   * @return {HDPrivateKey} Derived private key at the auth derivation path
    * @memberof HathorWalletServiceWallet
    * @inner
    */
@@ -186,12 +186,21 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   /**
    * Start wallet: load the wallet data, update state and start polling wallet status until it's ready
    *
+   * @param {Object} optionsParams Options parameters
+   *  {
+   *   'pinCode': PIN to encrypt the auth xpriv on storage
+   *  }
+   *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
   async start({ pinCode }) {
     if (!this.seed) {
       throw new Error('Seed should be in memory when starting the wallet.');
+    }
+
+    if (!pinCode) {
+      throw new Error('Pin code is required when starting the wallet.');
     }
 
     this.setState(walletState.LOADING);
