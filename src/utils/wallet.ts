@@ -7,6 +7,7 @@
 
 
 import { crypto, HDPublicKey, HDPrivateKey, Address } from 'bitcore-lib';
+import { createHash, HexBase64Latin1Encoding } from 'crypto';
 import Mnemonic from 'bitcore-mnemonic';
 import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE } from '../constants';
 import { XPubError, InvalidWords, UncompressedPubKeyError } from '../errors';
@@ -332,7 +333,7 @@ const wallet = {
 
     const derivedXpub = xpub.deriveChild(derivationIndex);
     return derivedXpub.xpubkey;
-  }
+  },
 }
 
 export default wallet;
