@@ -589,6 +589,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   async validateAndRenewAuthToken(usePassword?: string) {
+    if (!this.walletId) {
+      throw new Error('Wallet not ready yet.');
+    }
+
     const now = new Date();
     const timestampNow = Math.floor(now.getTime() / 1000);
 
@@ -616,12 +620,32 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         // Use it to get the words from the storage
         privKey = wallet.getAuthKey(password);
       }
-      // @ts-ignore
-      const sign = this.signMessage(privKey, timestampNow, this.walletId);
-      const data = await walletApi.createAuthToken(this, timestampNow, privKey.xpubkey, sign);
 
-      this.authToken = data.token;
+      await this.renewToken(privKey, timestampNow, this.walletId);
+    } else {
+      // If we have received the user PIN, we should renew the token anyway
+      // without blocking this method's promise
+      const privKey = wallet.getAuthKey(usePassword);
+      this.renewToken(privKey, timestampNow, this.walletId);
     }
+  }
+
+  /**
+   * Renew the auth token on the wallet service
+   *
+   * @param {HDPrivateKey} privKey - private key to sign the auth message
+   * @param {number} timestamp - Current timestamp to assemble the signature
+   * @param {string} walletId - The initialized wallet identifier on the wallet service
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async renewToken(privKey: bitcore.HDPrivateKey, timestamp: number, walletId: string) {
+    // @ts-ignore
+    const sign = this.signMessage(privKey, timestamp, this.walletId);
+    const data = await walletApi.createAuthToken(this, timestamp, privKey.xpubkey, sign);
+
+    this.authToken = data.token;
   }
 
   /**
