@@ -794,13 +794,13 @@ const wallet = {
 
     // Get and update data encrypted with PIN
     const decryptedMainKey = this.decryptData(accessData.mainKey, oldPin);
-    const encryptedMainKey = this.encryptData(decryptedData, newPin);
+    const encryptedMainKey = this.encryptData(decryptedMainKey, newPin);
 
     // Create a new object (without mutating the old one) with the updated data
     let newAccessData = {
       hash: newHash.key.toString(),
       salt: newHash.salt,
-      mainKey: encryptedData.encrypted.toString(),
+      mainKey: encryptedMainKey.encrypted.toString(),
     };
 
     if (accessData.authKey) {
