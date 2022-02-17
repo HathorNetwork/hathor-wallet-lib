@@ -251,10 +251,14 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     }
     this.emit('sign-tx-start');
     const dataToSignHash = this.transaction.getDataToSignHash();
-    const seed = wallet.getWalletWords(this.pin);
+    const xprivkey = wallet.getXprivKey(this.pin);
 
     for (const [idx, inputObj] of this.transaction.inputs.entries()) {
-      const inputData = this.wallet.getInputData(seed, dataToSignHash, utxosAddressPath[idx]);
+      const inputData = this.wallet.getInputData(
+        xprivkey,
+        dataToSignHash,
+        HathorWalletServiceWallet.getAddressIndexFromFullPath(utxosAddressPath[idx]),
+      );
       inputObj.setData(inputData);
     }
 

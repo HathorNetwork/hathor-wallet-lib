@@ -2712,7 +2712,7 @@ const wallet = {
    */
   getXprivKey(pin) {
     if (this.isFromXPub()) {
-        throw WalletFromXPubGuard('getXprivKey');
+      throw WalletFromXPubGuard('getXprivKey');
     }
 
     const accessData = this.getWalletAccessData();
