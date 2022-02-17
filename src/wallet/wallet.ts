@@ -630,13 +630,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         privKey = wallet.getAuthKey(password);
       }
 
-      await this.renewToken(privKey, timestampNow, this.walletId);
+      await this.renewToken(privKey, timestampNow);
     } else {
       // If we have received the user PIN, we should renew the token anyway
       // without blocking this method's promise
       if (usePassword) {
         const privKey = wallet.getAuthKey(usePassword);
-        this.renewToken(privKey, timestampNow, this.walletId);
+        this.renewToken(privKey, timestampNow);
       }
     }
   }
@@ -651,8 +651,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async renewToken(privKey: bitcore.HDPrivateKey, timestamp: number, walletId: string) {
-    // @ts-ignore
+  async renewToken(privKey: bitcore.HDPrivateKey, timestamp: number) {
+    if (!this.walletId) {
+      throw new Error('Wallet not ready yet.');
+    }
+
     const sign = this.signMessage(privKey, timestamp, this.walletId);
     const data = await walletApi.createAuthToken(this, timestamp, privKey.xpubkey, sign);
 
