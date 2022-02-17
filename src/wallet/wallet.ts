@@ -946,7 +946,15 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     return tx;
   }
 
-  static getAddressIndexFromFullPath(fullPath: string) {
+  /**
+   * Expects a BIP44 path at the address level and returns the address index
+   *
+   * @param {string} fullPath - The full BIP44 path for the address index
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  static getAddressIndexFromFullPath(fullPath: string): number {
     return parseInt(fullPath.split('/')[5], 10);
   }
 
