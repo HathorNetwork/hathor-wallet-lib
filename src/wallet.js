@@ -5,7 +5,24 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { MAX_ADDRESSES_GET, GAP_LIMIT, LIMIT_ADDRESS_GENERATION, HATHOR_BIP44_CODE, TOKEN_MINT_MASK, TOKEN_MELT_MASK, TOKEN_INDEX_MASK, HATHOR_TOKEN_INDEX, HATHOR_TOKEN_CONFIG, MAX_OUTPUT_VALUE, HASH_KEY_SIZE, HASH_ITERATIONS, HD_WALLET_ENTROPY, LOAD_WALLET_MAX_RETRY, LOAD_WALLET_RETRY_SLEEP } from './constants';
+import {
+  MAX_ADDRESSES_GET,
+  GAP_LIMIT,
+  LIMIT_ADDRESS_GENERATION,
+  HATHOR_BIP44_CODE,
+  TOKEN_MINT_MASK,
+  TOKEN_MELT_MASK,
+  TOKEN_INDEX_MASK,
+  HATHOR_TOKEN_INDEX,
+  HATHOR_TOKEN_CONFIG,
+  MAX_OUTPUT_VALUE,
+  HASH_KEY_SIZE,
+  HASH_ITERATIONS,
+  HD_WALLET_ENTROPY,
+  LOAD_WALLET_MAX_RETRY,
+  LOAD_WALLET_RETRY_SLEEP,
+  WALLET_SERVICE_AUTH_DERIVATION_PATH,
+} from './constants';
 import Mnemonic from 'bitcore-mnemonic';
 import { HDPrivateKey, HDPublicKey, Address, crypto } from 'bitcore-lib';
 import CryptoJS from 'crypto-js';
@@ -227,7 +244,7 @@ const wallet = {
     let code = new Mnemonic(words);
     let xpriv = code.toHDPrivateKey(passphrase, network.getNetwork());
     let privkey = xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
-    let authXpriv = xpriv.deriveNonCompliantChild(`m/${HATHOR_BIP44_CODE}'/${HATHOR_BIP44_CODE}'`);
+    let authXpriv = xpriv.deriveNonCompliantChild(WALLET_SERVICE_AUTH_DERIVATION_PATH);
 
     let encryptedData = this.encryptData(privkey.xprivkey, pin)
     let encryptedAuthXpriv = this.encryptData(authXpriv.xprivkey, pin)
