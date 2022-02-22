@@ -30,6 +30,7 @@ import Input from '../models/input';
 import Address from '../models/address';
 import Network from '../models/network';
 import networkInstance from '../network';
+import assert from 'assert';
 import WalletServiceConnection, { ConnectionState } from './connection';
 import MineTransaction from './mineTransaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
@@ -969,7 +970,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   static getAddressIndexFromFullPath(fullPath: string): number {
-    return parseInt(fullPath.split('/')[5], 10);
+    const parts = fullPath.split('/');
+
+    assert.equal(6, parts.length);
+
+    return parseInt(parts[5], 10);
   }
 
   /**
