@@ -205,6 +205,20 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     wallet.setWalletAccessData(initialAccessData);
   }
 
+
+  /**
+   * getWalletIdFromXPub: Get the wallet id given the xpubkey
+   *
+   * @param xpub - The xpubkey
+   * @returns The wallet id
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  static getWalletIdFromXPub(xpub: string) {
+    return crypto.Hash.sha256sha256(Buffer.from(xpub)).toString('hex');
+  }
+
   /**
    * Start wallet: load the wallet data, update state and start polling wallet status until it's ready
    *
@@ -236,7 +250,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const now = new Date();
     const timestampNow = Math.floor(now.getTime() / 1000);
-    const walletId = crypto.Hash.sha256sha256(Buffer.from(xpub)).toString('hex');
+    const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
 
     // prove we own the xpubkey
     const xprivAccountPath = walletUtils.deriveXpriv(xpriv, '0\'');
