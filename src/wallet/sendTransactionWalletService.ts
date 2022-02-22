@@ -257,6 +257,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       const inputData = this.wallet.getInputData(
         xprivkey,
         dataToSignHash,
+        // the wallet service returns the full BIP44 path, but we only need the address path:
         HathorWalletServiceWallet.getAddressIndexFromFullPath(utxosAddressPath[idx]),
       );
       inputObj.setData(inputData);
