@@ -627,7 +627,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         const password = usePassword ? usePassword : await this.requestPassword();
 
         // Use it to get the words from the storage
-        privKey = wallet.getAuthKey(password);
+        privKey = wallet.getAuthPrivKey(password);
       }
 
       await this.renewToken(privKey, timestampNow);
@@ -635,7 +635,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       // If we have received the user PIN, we should renew the token anyway
       // without blocking this method's promise
       if (usePassword) {
-        const privKey = wallet.getAuthKey(usePassword);
+        const privKey = wallet.getAuthPrivKey(usePassword);
         this.renewToken(privKey, timestampNow);
       }
     }

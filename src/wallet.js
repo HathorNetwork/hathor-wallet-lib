@@ -1786,7 +1786,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  getAuthKey(pin) {
+  getAuthPrivKey(pin) {
     const accessData = this.getWalletAccessData();
     return HDPrivateKey(this.decryptData(accessData.authKey, pin));
   },
