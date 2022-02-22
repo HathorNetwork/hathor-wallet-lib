@@ -249,7 +249,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     });
 
     const now = new Date();
-    const timestampNow = Math.floor(now.getTime() / 1000);
+    const timestampNow = Math.floor(now.getTime() / 1000); // in seconds
     const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
 
     // prove we own the xpubkey
