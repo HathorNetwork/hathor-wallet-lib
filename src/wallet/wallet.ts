@@ -611,7 +611,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async validateAndRenewAuthToken(usePassword?: string) {
+  async validateAndRenewAuthToken(usePassword?: string): Promise<void> {
     if (!this.walletId) {
       throw new Error('Wallet not ready yet.');
     }
@@ -619,7 +619,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const now = new Date();
     const timestampNow = Math.floor(now.getTime() / 1000);
 
-    const validateJWTExpireDate = (token: string) => {
+    const validateJWTExpireDate = (token: string): boolean => {
       const base64Url = token.split('.')[1];
       const base64 = base64Url.replace('-', '+').replace('_', '/');
       const decodedData = JSON.parse(Buffer.from(base64, 'base64').toString('binary'));
@@ -631,7 +631,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
 
       return true;
-    }
+    };
 
     if (!this.authToken || !validateJWTExpireDate(this.authToken)) {
       let privKey = this.authPrivKey;
