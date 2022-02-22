@@ -53,6 +53,7 @@ import {
   IHathorWallet,
   WsTransaction,
   TxOutput,
+  CreateWalletAuthData,
 } from './types';
 import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
@@ -242,39 +243,25 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     this.setState(walletState.LOADING);
 
-    const xpriv = walletUtils.getXPrivKeyFromSeed(this.seed, {passphrase: this.passphrase, networkName: this.network.name});
-    const xpub = walletUtils.getXPubKeyFromSeed(this.seed, {passphrase: this.passphrase, networkName: this.network.name});
-    const authXpub = HathorWalletServiceWallet.getAuthXPubKeyFromSeed(this.seed, {
-      passphrase: this.passphrase,
-      networkName: this.network.name,
-    });
-
-    const now = new Date();
-    const timestampNow = Math.floor(now.getTime() / 1000); // in seconds
-    const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
-
-    // prove we own the xpubkey
-    const xprivAccountPath = walletUtils.deriveXpriv(xpriv, '0\'');
-    const xpubkeySignature = this.signMessage(xprivAccountPath, timestampNow, walletId);
-
-    // prove we own the auth_xpubkey
-    const authDerivedPrivKey = HathorWalletServiceWallet.deriveAuthPrivateKey(xpriv);
-    const authXpubkeySignature = this.signMessage(authDerivedPrivKey, timestampNow, walletId);
-
-    const xpubChangeDerivation = walletUtils.xpubDeriveChild(xpub, 0);
-    const firstAddress = walletUtils.getAddressAtIndex(xpubChangeDerivation, 0, this.network.name);
-
-    // Derive the change level path to sign inputs
-    const xprivChangePath = xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
-
-    this.xpub = xpub;
-    this.authPrivKey = authDerivedPrivKey;
+    const {
+      xpub,
+      authXpub,
+      xpubkeySignature,
+      authXpubkeySignature,
+      timestampNow,
+      firstAddress,
+      xprivChangePath,
+      authDerivedPrivKey,
+    } = this.generateCreateWalletAuthData(this.seed);
 
     HathorWalletServiceWallet.initializeAccessData(
       pinCode,
       xprivChangePath.xprivkey,
       authDerivedPrivKey.xprivkey,
     );
+
+    this.xpub = xpub;
+    this.authPrivKey = authDerivedPrivKey;
 
     const handleCreate = async (data: WalletStatus) => {
       this.walletId = data.walletId;
@@ -308,6 +295,44 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     await handleCreate(data.status);
 
     this.clearSensitiveData();
+  }
+
+  generateCreateWalletAuthData(seed: string): CreateWalletAuthData {
+    const xpriv = walletUtils.getXPrivKeyFromSeed(seed, {passphrase: this.passphrase, networkName: this.network.name});
+    const xpub = walletUtils.getXPubKeyFromSeed(seed, {passphrase: this.passphrase, networkName: this.network.name});
+    const authXpub = HathorWalletServiceWallet.getAuthXPubKeyFromSeed(seed, {
+      passphrase: this.passphrase,
+      networkName: this.network.name,
+    });
+
+    const now = new Date();
+    const timestampNow = Math.floor(now.getTime() / 1000); // in seconds
+    const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
+
+    // prove we own the xpubkey
+    const xprivAccountPath = walletUtils.deriveXpriv(xpriv, '0\'');
+    const xpubkeySignature = this.signMessage(xprivAccountPath, timestampNow, walletId);
+
+    // prove we own the auth_xpubkey
+    const authDerivedPrivKey = HathorWalletServiceWallet.deriveAuthPrivateKey(xpriv);
+    const authXpubkeySignature = this.signMessage(authDerivedPrivKey, timestampNow, walletId);
+
+    const xpubChangeDerivation = walletUtils.xpubDeriveChild(xpub, 0);
+    const firstAddress = walletUtils.getAddressAtIndex(xpubChangeDerivation, 0, this.network.name);
+
+    // Derive the change level path to sign inputs
+    const xprivChangePath = xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
+
+    return {
+      xpub,
+      xpubkeySignature,
+      authXpub,
+      authXpubkeySignature,
+      timestampNow,
+      firstAddress,
+      xprivChangePath,
+      authDerivedPrivKey,
+    };
   }
 
   /**
