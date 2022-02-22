@@ -149,7 +149,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
-   * Get auth xpubkey in the 280' purpose path from seed
+   * Get auth xpubkey from seed
    *
    * @param {String} seed 24 words
    * @param {Object} options Options with passphrase and networkName
