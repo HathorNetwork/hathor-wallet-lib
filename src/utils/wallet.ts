@@ -332,7 +332,7 @@ const wallet = {
 
     const derivedXpub = xpub.deriveChild(derivationIndex);
     return derivedXpub.xpubkey;
-  }
+  },
 }
 
 export default wallet;
