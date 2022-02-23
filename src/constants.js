@@ -62,6 +62,11 @@ export const LIMIT_ADDRESS_GENERATION = true;
 export const HATHOR_BIP44_CODE = 280;
 
 /**
+ * Auth derivation path used for auth on the Wallet Service facade
+ */
+export const WALLET_SERVICE_AUTH_DERIVATION_PATH = `m/${HATHOR_BIP44_CODE}'/${HATHOR_BIP44_CODE}'`;
+
+/**
  * Server options for the user to choose which one to connect
  *
  * @deprecated since version 0.25.0.

@@ -41,8 +41,23 @@ const walletApi = {
     }
   },
 
-  async createWallet(wallet: HathorWalletServiceWallet, xpubkey: string, firstAddress: string | null = null): Promise<WalletStatusResponseData> {
-    const data = { xpubkey };
+  async createWallet(
+    wallet: HathorWalletServiceWallet,
+    xpubkey: string,
+    xpubkeySignature: string,
+    authXpubkey: string,
+    authXpubkeySignature: string,
+    timestamp: number,
+    firstAddress: string | null = null,
+  ): Promise<WalletStatusResponseData> {
+    const data = {
+      xpubkey,
+      xpubkeySignature,
+      authXpubkey,
+      authXpubkeySignature,
+      timestamp,
+    };
+
     if (firstAddress) {
       data['firstAddress'] = firstAddress;
     }
@@ -152,7 +167,12 @@ const walletApi = {
       xpub: string,
       sign: string,
   ): Promise<AuthTokenResponseData> {
-    const data = { ts: timestamp, xpub, sign };
+    const data = {
+      ts: timestamp,
+      xpub,
+      sign,
+      walletId: wallet.walletId,
+    };
     const axios = await axiosInstance(wallet, false);
     const response = await axios.post('auth/token', data);
     if (response.status === 200 && response.data.success === true) {

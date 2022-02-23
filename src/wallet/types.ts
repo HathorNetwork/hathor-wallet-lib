@@ -10,6 +10,7 @@ import CreateTokenTransaction from '../models/create_token_transaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
 import Input from '../models/input';
 import Output from '../models/output';
+import bitcore from 'bitcore-lib';
 
 export interface GetAddressesObject {
   address: string; // Address in base58
@@ -207,7 +208,7 @@ export interface TransactionFullObject {
 }
 
 export interface IHathorWallet {
-  start();
+  start(options: { pinCode: string });
   getAllAddresses(): AsyncGenerator<GetAddressesObject>;
   getBalance(token: string | null): Promise<GetBalanceObject[]>;
   getTokens(): Promise<string[]>;
@@ -291,3 +292,14 @@ export interface WsTransaction {
   // eslint-disable-next-line camelcase
   token_symbol?: string;
 }
+
+export interface CreateWalletAuthData {
+  xpub: bitcore.HDPublicKey;
+  xpubkeySignature: string;
+  authXpub: string;
+  authXpubkeySignature: string;
+  timestampNow: number;
+  firstAddress: string;
+  xprivChangePath: bitcore.HDPrivateKey;
+  authDerivedPrivKey: bitcore.HDPrivateKey;
+};

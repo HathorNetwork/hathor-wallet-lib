@@ -6,7 +6,14 @@
  */
 
 import { EventEmitter } from 'events';
-import { HATHOR_BIP44_CODE, HATHOR_TOKEN_CONFIG, TOKEN_MINT_MASK, AUTHORITY_TOKEN_DATA, TOKEN_MELT_MASK } from '../constants';
+import { 
+  HATHOR_BIP44_CODE,
+  HATHOR_TOKEN_CONFIG,
+  TOKEN_MINT_MASK,
+  AUTHORITY_TOKEN_DATA,
+  TOKEN_MELT_MASK,
+  WALLET_SERVICE_AUTH_DERIVATION_PATH,
+} from '../constants';
 import Mnemonic from 'bitcore-mnemonic';
 import { crypto, util, Address as bitcoreAddress } from 'bitcore-lib';
 import wallet from '../wallet';
@@ -23,6 +30,7 @@ import Input from '../models/input';
 import Address from '../models/address';
 import Network from '../models/network';
 import networkInstance from '../network';
+import assert from 'assert';
 import WalletServiceConnection, { ConnectionState } from './connection';
 import MineTransaction from './mineTransaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
@@ -45,6 +53,7 @@ import {
   IHathorWallet,
   WsTransaction,
   TxOutput,
+  CreateWalletAuthData,
 } from './types';
 import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
@@ -61,15 +70,19 @@ enum walletState {
 
 class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // String with 24 words separated by space
-  seed: string;
+  seed: string | null;
   // String with wallet passphrase
   passphrase: string;
   // Wallet id from the wallet service
   walletId: string | null;
   // Network in which the wallet is connected ('mainnet' or 'testnet')
   network: Network;
+  // Method to request the password from the client
+  private requestPassword: Function;
   // Xpub of the wallet
   private xpub: string | null;
+  // Xpriv of the auth derivation path
+  private authPrivKey: bitcore.HDPrivateKey | null;
   // State of the wallet. One of the walletState enum options
   private state: string;
   // Variable to prevent start sending more than one tx concurrently
@@ -87,7 +100,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // WalletService-ready connection class
   private conn: WalletServiceConnection | null;
 
-  constructor(seed: string, network: Network, options = { passphrase: '' }) {
+  constructor(requestPassword: Function, seed: string, network: Network, options = { passphrase: '' }) {
     super();
 
     const { passphrase } = options;
@@ -105,11 +118,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.seed = seed;
     this.passphrase = passphrase
 
+    this.requestPassword = requestPassword;
+
     // ID of wallet after created on wallet service
     this.walletId = null;
     this.isSendingTx = false;
     this.txProposalId = null;
     this.xpub = null;
+    this.authPrivKey = null;
 
     this.network = network;
     networkInstance.setNetwork(this.network.name);
@@ -123,17 +139,129 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
-   * Start wallet: load the wallet data, update state and start polling wallet status until it's ready
+   * Remove sensitive data from memory
+   *
+   * NOTICE: This won't remove data from memory immediately, we have to wait until javascript
+   * garbage collect it. JavaScript currently does not provide a standard way to trigger
+   * garbage collection
+   **/
+  clearSensitiveData() {
+    this.seed = null;
+    this.authPrivKey = null;
+  }
+
+  /**
+   * Get auth xpubkey from seed
+   *
+   * @param {String} seed 24 words
+   * @param {Object} options Options with passphrase and networkName
+   *
+   * @return {String} auth xpubkey
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  static getAuthXPubKeyFromSeed(seed: string, options: { passphrase?: string, networkName?: string } = {}): string {
+    const methodOptions = Object.assign({
+      passphrase: '',
+      networkName: 'mainnet',
+    }, options);
+
+    const xpriv = walletUtils.getXPrivKeyFromSeed(seed, methodOptions);
+    const privkey = HathorWalletServiceWallet.deriveAuthPrivateKey(xpriv);
+
+    return privkey.xpubkey;
+  }
+
+  /**
+   * Derive private key from root to the auth specific purpose derivation path
+   *
+   * @param {HDPrivateKey} xpriv The wallet's root xpriv
+   *
+   * @return {HDPrivateKey} Derived private key at the auth derivation path
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  static deriveAuthPrivateKey(xpriv: bitcore.HDPrivateKey): bitcore.HDPrivateKey {
+    return xpriv.deriveNonCompliantChild(WALLET_SERVICE_AUTH_DERIVATION_PATH);
+  }
+
+  /**
+   * Encrypt and store wallet data on storage using the wallet's PIN code
+   *
+   * @param {string} pin Pin code to use as password to encrypt the auth key
+   * @param {string} mainKey xpriv of the change level derivation to sign inputs
+   * @param {string} authKey xpriv of the auth specific purpose derivation path
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  static initializeAccessData(pin: string, mainKey: string, authKey: string) {
+    const initialAccessData = wallet.getWalletAccessData() || {};
+
+    const encryptedAuthKey = wallet.encryptData(authKey, pin);
+    const encryptedMainKey = wallet.encryptData(mainKey, pin);
+
+    initialAccessData['authKey'] = encryptedAuthKey.encrypted.toString();
+    initialAccessData['mainKey'] = encryptedMainKey.encrypted.toString();
+
+    wallet.setWalletAccessData(initialAccessData);
+  }
+
+
+  /**
+   * getWalletIdFromXPub: Get the wallet id given the xpubkey
+   *
+   * @param xpub - The xpubkey
+   * @returns The wallet id
    *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async start() {
+  static getWalletIdFromXPub(xpub: string) {
+    return crypto.Hash.sha256sha256(Buffer.from(xpub)).toString('hex');
+  }
+
+  /**
+   * Start wallet: load the wallet data, update state and start polling wallet status until it's ready
+   *
+   * @param {Object} optionsParams Options parameters
+   *  {
+   *   'pinCode': PIN to encrypt the auth xpriv on storage
+   *  }
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async start({ pinCode }) {
+    if (!this.seed) {
+      throw new Error('Seed should be in memory when starting the wallet.');
+    }
+
+    if (!pinCode) {
+      throw new Error('Pin code is required when starting the wallet.');
+    }
+
     this.setState(walletState.LOADING);
-    const xpub = walletUtils.getXPubKeyFromSeed(this.seed, {passphrase: this.passphrase, networkName: this.network.name});
-    const xpubChangeDerivation = walletUtils.xpubDeriveChild(xpub, 0);
-    const firstAddress = walletUtils.getAddressAtIndex(xpubChangeDerivation, 0, this.network.name);
+
+    const {
+      xpub,
+      authXpub,
+      xpubkeySignature,
+      authXpubkeySignature,
+      timestampNow,
+      firstAddress,
+      xprivChangePath,
+      authDerivedPrivKey,
+    } = this.generateCreateWalletAuthData(this.seed);
+
+    HathorWalletServiceWallet.initializeAccessData(
+      pinCode,
+      xprivChangePath.xprivkey,
+      authDerivedPrivKey.xprivkey,
+    );
+
     this.xpub = xpub;
+    this.authPrivKey = authDerivedPrivKey;
 
     const handleCreate = async (data: WalletStatus) => {
       this.walletId = data.walletId;
@@ -154,8 +282,57 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
     }
 
-    const data = await walletApi.createWallet(this, this.xpub, firstAddress);
+    const data = await walletApi.createWallet(
+      this,
+      xpub,
+      xpubkeySignature,
+      authXpub,
+      authXpubkeySignature,
+      timestampNow,
+      firstAddress,
+    );
+
     await handleCreate(data.status);
+
+    this.clearSensitiveData();
+  }
+
+  generateCreateWalletAuthData(seed: string): CreateWalletAuthData {
+    const xpriv = walletUtils.getXPrivKeyFromSeed(seed, {passphrase: this.passphrase, networkName: this.network.name});
+    const xpub = walletUtils.getXPubKeyFromSeed(seed, {passphrase: this.passphrase, networkName: this.network.name});
+    const authXpub = HathorWalletServiceWallet.getAuthXPubKeyFromSeed(seed, {
+      passphrase: this.passphrase,
+      networkName: this.network.name,
+    });
+
+    const now = new Date();
+    const timestampNow = Math.floor(now.getTime() / 1000); // in seconds
+    const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
+
+    // prove we own the xpubkey
+    const xprivAccountPath = walletUtils.deriveXpriv(xpriv, '0\'');
+    const xpubkeySignature = this.signMessage(xprivAccountPath, timestampNow, walletId);
+
+    // prove we own the auth_xpubkey
+    const authDerivedPrivKey = HathorWalletServiceWallet.deriveAuthPrivateKey(xpriv);
+    const authXpubkeySignature = this.signMessage(authDerivedPrivKey, timestampNow, walletId);
+
+    const xpubChangeDerivation = walletUtils.xpubDeriveChild(xpub, 0);
+    const firstAddress = walletUtils.getAddressAtIndex(xpubChangeDerivation, 0, this.network.name);
+
+    // Derive the change level path to sign inputs
+    const xprivChangePath = xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
+
+    return {
+      xpub,
+      xpubkeySignature,
+      authXpub,
+      authXpubkeySignature,
+      timestampNow,
+      firstAddress,
+      xprivChangePath,
+      authDerivedPrivKey,
+    };
   }
 
   /**
@@ -443,28 +620,32 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  signMessage(timestamp: number): string {
-    const xpriv = walletUtils.getXPrivKeyFromSeed(this.seed, {passphrase: this.passphrase, networkName: this.network.name});
-    const derivedPrivKey = walletUtils.deriveXpriv(xpriv, '0\'');
-    const address = derivedPrivKey.publicKey.toAddress(this.network.getNetwork()).toString();
+  signMessage(xpriv: bitcore.HDPrivateKey, timestamp: number, walletId: string): string {
+    const address = xpriv.publicKey.toAddress(this.network.getNetwork()).toString();
+    const message = new bitcore.Message(String(timestamp).concat(walletId).concat(address));
 
-    const message = new bitcore.Message(String(timestamp).concat(this.walletId!).concat(address));
-
-    return message.sign(derivedPrivKey.privateKey);
+    return message.sign(xpriv.privateKey);
   }
 
   /**
    * Validate that the wallet auth token is valid
    * If it's not valid, requests a new one and update
    *
+   * @param {string} usePassword Accepts the password as a parameter so we don't have to ask
+   * the client for it if we already have it in memory
+   *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async validateAndRenewAuthToken() {
+  async validateAndRenewAuthToken(usePassword?: string): Promise<void> {
+    if (!this.walletId) {
+      throw new Error('Wallet not ready yet.');
+    }
+
     const now = new Date();
     const timestampNow = Math.floor(now.getTime() / 1000);
 
-    const validateJWTExpireDate = (token) => {
+    const validateJWTExpireDate = (token: string): boolean => {
       const base64Url = token.split('.')[1];
       const base64 = base64Url.replace('-', '+').replace('_', '/');
       const decodedData = JSON.parse(Buffer.from(base64, 'base64').toString('binary'));
@@ -476,13 +657,49 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
 
       return true;
-    }
+    };
 
     if (!this.authToken || !validateJWTExpireDate(this.authToken)) {
-      const sign = this.signMessage(timestampNow);
-      const data = await walletApi.createAuthToken(this, timestampNow, this.xpub!, sign);
-      this.authToken = data.token;
+      let privKey = this.authPrivKey;
+
+      if (!privKey) {
+        // Request the client for the PIN
+        const password = usePassword ? usePassword : await this.requestPassword();
+
+        // Use it to get the words from the storage
+        privKey = wallet.getAuthPrivKey(password);
+      }
+
+      await this.renewAuthToken(privKey, timestampNow);
+    } else {
+      // If we have received the user PIN, we should renew the token anyway
+      // without blocking this method's promise
+      if (usePassword) {
+        const privKey = wallet.getAuthPrivKey(usePassword);
+        this.renewAuthToken(privKey, timestampNow);
+      }
     }
+  }
+
+  /**
+   * Renew the auth token on the wallet service
+   *
+   * @param {HDPrivateKey} privKey - private key to sign the auth message
+   * @param {number} timestamp - Current timestamp to assemble the signature
+   * @param {string} walletId - The initialized wallet identifier on the wallet service
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async renewAuthToken(privKey: bitcore.HDPrivateKey, timestamp: number) {
+    if (!this.walletId) {
+      throw new Error('Wallet not ready yet.');
+    }
+
+    const sign = this.signMessage(privKey, timestamp, this.walletId);
+    const data = await walletApi.createAuthToken(this, timestamp, privKey.xpubkey, sign);
+
+    this.authToken = data.token;
   }
 
   /**
@@ -527,9 +744,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  getInputData(dataToSignHash: Buffer, addressPath: string): Buffer {
-    const code = new Mnemonic(this.seed);
-    const xpriv = code.toHDPrivateKey(this.passphrase, this.network.bitcoreNetwork);
+  getInputData(xprivkey: string, dataToSignHash: Buffer, addressPath: number): Buffer {
+    const xpriv = bitcore.HDPrivateKey(xprivkey);
     const derivedKey = xpriv.deriveNonCompliantChild(addressPath);
     const privateKey = derivedKey.privateKey;
 
@@ -674,6 +890,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       createMintAuthority: boolean,
       createMeltAuthority: boolean,
       nftData: string | null,
+      pinCode: string | null,
     };
     const newOptions: optionsType = Object.assign({
       address: null,
@@ -681,6 +898,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       createMintAuthority: true,
       createMeltAuthority: true,
       nftData: null,
+      pinCode: null,
     }, options);
 
     const isNFT = newOptions.nftData !== null;
@@ -749,13 +967,39 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const dataToSignHash = tx.getDataToSignHash();
 
+    if (!newOptions.pinCode) {
+      throw new Error('PIN not specified in prepareCreateNewToken options');
+    }
+
+    const xprivkey = wallet.getXprivKey(newOptions.pinCode);
+
     for (const [idx, inputObj] of tx.inputs.entries()) {
-      const inputData = this.getInputData(dataToSignHash, utxosAddressPath[idx]);
+      const inputData = this.getInputData(
+        xprivkey,
+        dataToSignHash,
+        HathorWalletServiceWallet.getAddressIndexFromFullPath(utxosAddressPath[idx]),
+      );
       inputObj.setData(inputData);
     }
 
     tx.prepareToSend();
     return tx;
+  }
+
+  /**
+   * Expects a BIP44 path at the address level and returns the address index
+   *
+   * @param {string} fullPath - The full BIP44 path for the address index
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  static getAddressIndexFromFullPath(fullPath: string): number {
+    const parts = fullPath.split('/');
+
+    assert.equal(6, parts.length);
+
+    return parseInt(parts[5], 10);
   }
 
   /**
@@ -781,12 +1025,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     type optionsType = {
       address: string | null,
       changeAddress: string | null,
-      createAnotherMint: boolean
+      createAnotherMint: boolean,
+      pinCode: string | null,
     };
     const newOptions: optionsType = Object.assign({
       address: null,
       changeAddress: null,
       createAnotherMint: true,
+      pinCode: null,
     }, options);
 
     // 1. Calculate HTR deposit needed
@@ -849,10 +1095,20 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     tx.tokens = [token];
     const dataToSignHash = tx.getDataToSignHash();
 
+    if (!newOptions.pinCode) {
+      throw new Error('PIN not specified in prepareMintTokensData options');
+    }
+
+    const xprivkey = wallet.getXprivKey(newOptions.pinCode);
+
     for (const [idx, inputObj] of tx.inputs.entries()) {
       // We have an array of utxos and the last input is the one with the authority
       const addressPath = idx === tx.inputs.length - 1 ? mintUtxo.addressPath : utxos[idx].addressPath;
-      const inputData = this.getInputData(dataToSignHash, addressPath);
+      const inputData = this.getInputData(
+        xprivkey,
+        dataToSignHash,
+        HathorWalletServiceWallet.getAddressIndexFromFullPath(addressPath),
+      );
       inputObj.setData(inputData);
     }
 
@@ -883,12 +1139,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     type optionsType = {
       address: string | null,
       changeAddress: string | null,
-      createAnotherMelt: boolean
+      createAnotherMelt: boolean,
+      pinCode: string | null,
     };
     const newOptions: optionsType = Object.assign({
       address: null,
       changeAddress: null,
       createAnotherMelt: true,
+      pinCode: null,
     }, options);
 
     // 1. Calculate HTR deposit needed
@@ -954,10 +1212,20 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     tx.tokens = [token];
     const dataToSignHash = tx.getDataToSignHash();
 
+    if (!newOptions.pinCode) {
+      throw new Error('PIN not specified in prepareMeltTokensData options');
+    }
+
+    const xprivkey = wallet.getXprivKey(newOptions.pinCode);
+
     for (const [idx, inputObj] of tx.inputs.entries()) {
       // We have an array of utxos and the last input is the one with the authority
       const addressPath = idx === tx.inputs.length - 1 ? meltUtxo.addressPath : utxos[idx].addressPath;
-      const inputData = this.getInputData(dataToSignHash, addressPath);
+      const inputData = this.getInputData(
+        xprivkey,
+        dataToSignHash,
+        HathorWalletServiceWallet.getAddressIndexFromFullPath(addressPath),
+      );
       inputObj.setData(inputData);
     }
 
@@ -987,11 +1255,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.failIfWalletNotReady();
     type optionsType = {
       anotherAuthorityAddress: string | null,
-      createAnotherAuthority: boolean
+      createAnotherAuthority: boolean,
+      pinCode: string | null,
     };
     const newOptions: optionsType = Object.assign({
       anotherAuthorityAddress: null,
       createAnotherAuthority: true,
+      pinCode: null,
     }, options);
 
     let authority, mask;
@@ -1042,9 +1312,19 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const tx = new Transaction(inputsObj, outputsObj);
     tx.tokens = [token];
 
+    if (!newOptions.pinCode) {
+      throw new Error('PIN not specified in prepareDelegateAuthorityData options');
+    }
+
+    const xprivkey = wallet.getXprivKey(newOptions.pinCode);
+
     // Set input data
     const dataToSignHash = tx.getDataToSignHash();
-    const inputData = this.getInputData(dataToSignHash, utxo.addressPath);
+    const inputData = this.getInputData(
+      xprivkey,
+      dataToSignHash,
+      HathorWalletServiceWallet.getAddressIndexFromFullPath(utxo.addressPath),
+    );
     inputsObj[0].setData(inputData);
 
     tx.prepareToSend();
@@ -1069,8 +1349,17 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async prepareDestroyAuthorityData(token: string, type: string, count: number): Promise<Transaction> {
+  async prepareDestroyAuthorityData(token: string, type: string, count: number, options = {}): Promise<Transaction> {
     this.failIfWalletNotReady();
+
+    type optionsType = {
+      pinCode: string | null,
+    };
+
+    const newOptions: optionsType = Object.assign({
+      pinCode: null,
+    }, options);
+
     let authority, mask;
     if (type === 'mint') {
       authority = 1;
@@ -1102,8 +1391,18 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // Set input data
     const dataToSignHash = tx.getDataToSignHash();
 
+    if (!newOptions.pinCode) {
+      throw new Error('PIN not specified in prepareDestroyAuthorityData options');
+    }
+
+    const xprivkey = wallet.getXprivKey(newOptions.pinCode);
+
     for (const [idx, inputObj] of tx.inputs.entries()) {
-      const inputData = this.getInputData(dataToSignHash, ret.utxos[idx].addressPath);
+      const inputData = this.getInputData(
+        xprivkey,
+        dataToSignHash,
+        HathorWalletServiceWallet.getAddressIndexFromFullPath(ret.utxos[idx].addressPath),
+      );
       inputObj.setData(inputData);
     }
 
@@ -1117,9 +1416,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async destroyAuthority(token: string, type: string, count: number): Promise<Transaction> {
+  async destroyAuthority(token: string, type: string, count: number, options = {}): Promise<Transaction> {
     this.failIfWalletNotReady();
-    const tx = await this.prepareDestroyAuthorityData(token, type, count);
+    const tx = await this.prepareDestroyAuthorityData(token, type, count, options);
     return this.handleSendPreparedTransaction(tx);
   }
 
