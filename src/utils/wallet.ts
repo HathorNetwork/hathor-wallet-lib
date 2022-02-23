@@ -6,12 +6,15 @@
  */
 
 
-import { crypto, HDPublicKey, HDPrivateKey, Address } from 'bitcore-lib';
+import { crypto, util, HDPublicKey, HDPrivateKey, Address, Script } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
 import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE } from '../constants';
+import { OP_CHECKMULTISIG, OP_0 } from '../opcodes';
 import { XPubError, InvalidWords, UncompressedPubKeyError } from '../errors';
 import Network from '../models/network';
 import _ from 'lodash';
+import { hexToBuffer } from './buffer';
+import helpers from './helpers';
 
 
 const wallet = {
@@ -332,6 +335,62 @@ const wallet = {
 
     const derivedXpub = xpub.deriveChild(derivationIndex);
     return derivedXpub.xpubkey;
+  },
+
+  /**
+   * Create a P2SH MultiSig redeem script
+   *
+   * @param {string[]} xpubs The list of xpubkeys involved in this MultiSig
+   * @param {number} minSignatures Minimum number of signatures to send a
+   * transaction with this MultiSig
+   * @param {number} index Index to derive the xpubs
+   *
+   * @return {Buffer} A buffer with the redeemScript
+   * @throws {XPubError} In case any of the given xpubs are invalid
+   * @memberof Wallet
+   * @inner
+   */
+  createP2SHRedeemScript(xpubs, minSignatures, index) {
+    const derivedPubKeys: any[] = [];
+    for (const pk of xpubs) {
+      const xpub = new HDPublicKey(pk);
+      // xpub comes derived to m/45'/280'/0'
+      // Derive to m/45'/280'/0'/0/index
+      derivedPubKeys.push(xpub.deriveChild(0).deriveChild(index).publicKey);
+    }
+    const sortedPubKeys = _.sortBy(derivedPubKeys, (publicKey) => {
+      return publicKey.toString('hex');
+    });
+    // bitcore-lib sorts the public keys by default before building the script
+    // noSorting prevents that and keep our order
+    const redeemScript = Script.buildMultisigOut(sortedPubKeys, minSignatures, {noSorting: true});
+    return redeemScript.toBuffer();
+  },
+
+  /**
+   * Create a P2SH MultiSig input data from the signatures and redeemScript
+   *
+   * @param {Buffer[]} signatures The list of signatures collected from participants.
+   * @param {Buffer} redeemScript The redeemScript as a Buffer
+   *
+   * @return {Buffer} A buffer with the input data to send.
+   * @memberof Wallet
+   * @inner
+   */
+  getP2SHInputData(signatures, redeemScript) {
+    // maxSignatures is the first opcode
+    // minSignatures is the second to last opcode
+    const minSignatures = redeemScript.readUInt8(redeemScript.length - 2) - OP_0.readUInt8();
+    const maxSignatures = redeemScript.readUInt8() - OP_0.readUInt8();
+    if (signatures.length < minSignatures || signatures.length > maxSignatures) {
+      // TODO: raise exception to stop this input form being generated
+    }
+    const arr: Buffer[] = [];
+    for (const sig of signatures) {
+      helpers.pushDataToStack(arr, sig);
+    }
+    helpers.pushDataToStack(arr, redeemScript);
+    return util.buffer.concat(arr);
   },
 }
 

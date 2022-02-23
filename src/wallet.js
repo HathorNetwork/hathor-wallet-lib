@@ -24,12 +24,13 @@ import {
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
 } from './constants';
 import Mnemonic from 'bitcore-mnemonic';
-import { HDPrivateKey, HDPublicKey, Address, crypto } from 'bitcore-lib';
+import { HDPrivateKey, HDPublicKey, Address, crypto, Script } from 'bitcore-lib';
 import CryptoJS from 'crypto-js';
 import walletApi from './api/wallet';
 import tokens from './tokens';
 import helpers from './helpers';
 import helperUtils from './utils/helpers';
+import walletUtils from './utils/wallet';
 import { AddressError, ConstantNotSet, OutputValueError, WalletTypeError } from './errors';
 import version from './version';
 import storage from './storage';
@@ -154,6 +155,17 @@ const wallet = {
   },
 
   /**
+   * Test if this is a MultiSig wallet
+   *
+   * @return {Boolean} If the wallet was created as a MultiSig wallet.
+   * @memberof Wallet
+   * @inner
+   */
+  isWalletMultiSig() {
+    return storage.getItem('wallet:multisig');
+  },
+
+  /**
    * Generate HD wallet words
    *
    * @param {string|number} entropy Data to generate the HD Wallet seed - entropy (256 - to generate 24 words)
@@ -174,16 +186,19 @@ const wallet = {
    *
    * @param {string} xpub Extended public-key to start wallet
    * @param {boolean} loadHistory if should load the history from the generated addresses
+   * @param {object} multisig MultiSig data including minSignatures and xpubs of participants
    *
    * @return {Promise} Promise that resolves when finishes loading address history, in case loadHistory = true, else returns null
    * @memberof Wallet
    * @inner
    */
-   executeGenerateWalletFromXPub(xpubkey, loadHistory) {
+   executeGenerateWalletFromXPub(xpubkey, loadHistory, multisig) {
     const accessData = {
       xpubkey: xpubkey,
       from_xpub: true,
     };
+
+     if (multisig) accessData['multisig'] = multisig;
 
     return this.startWallet(accessData, loadHistory);
   },
@@ -195,17 +210,22 @@ const wallet = {
    * @param {string} xpriv Extended private-key to start wallet
    * @param {string} pin
    * @param {boolean} loadHistory if should load the history from the generated addresses
+   * @param {object} multisig MultiSig data including minSignatures and xpubs of participants
    *
    * @return {Promise} Promise that resolves when finishes loading address history, in case loadHistory = true, else returns null
    * @memberof Wallet
    * @inner
    */
-  executeGenerateWalletFromXPriv(xprivkey, pin, loadHistory) {
+  executeGenerateWalletFromXPriv(xprivkey, pin, loadHistory, multisig) {
     const xpriv = HDPrivateKey(xprivkey);
     let initialAccessData;
     let privkey;
     if (xpriv.depth === 0) {
-      privkey = xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
+      if (multisig) {
+        privkey = xpriv.deriveNonCompliantChild(`m/45'/${HATHOR_BIP44_CODE}'/0'/0`);
+      } else {
+        privkey = xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
+      }
       initialAccessData = {};
     } else {
       // Already derived
@@ -223,6 +243,8 @@ const wallet = {
       xpubkey: privkey.xpubkey,
     });
 
+    if (multisig) access['multisig'] = multisig;
+
     return this.startWallet(access, loadHistory);
   },
 
@@ -235,17 +257,22 @@ const wallet = {
    * @param {string} pin
    * @param {string} password
    * @param {boolean} loadHistory if should load the history from the generated addresses
+   * @param {object} multisig MultiSig data including minSignatures and xpubs of participants
    *
    * @return {Promise} Promise that resolves when finishes loading address history, in case loadHistory = true, else returns null
    * @memberof Wallet
    * @inner
    */
-  executeGenerateWallet(words, passphrase, pin, password, loadHistory) {
+  executeGenerateWallet(words, passphrase, pin, password, loadHistory, multisig) {
     let code = new Mnemonic(words);
     let xpriv = code.toHDPrivateKey(passphrase, network.getNetwork());
-    let privkey = xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
     let authXpriv = xpriv.deriveNonCompliantChild(WALLET_SERVICE_AUTH_DERIVATION_PATH);
-
+    let privkey;
+    if (multisig) {
+      privkey = xpriv.deriveNonCompliantChild(`m/45'/${HATHOR_BIP44_CODE}'/0'/0`);
+    } else {
+      privkey = xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
+    }
     let encryptedData = this.encryptData(privkey.xprivkey, pin)
     let encryptedAuthXpriv = this.encryptData(authXpriv.xprivkey, pin)
     let encryptedDataWords = this.encryptData(words, password)
@@ -263,6 +290,8 @@ const wallet = {
       pbkdf2Hasher: 'sha1', // For now we are only using SHA1
       xpubkey: privkey.xpubkey,
     }
+
+    if (multisig) access['multisig'] = multisig;
 
     return this.startWallet(access, loadHistory);
   },
@@ -400,6 +429,50 @@ const wallet = {
   },
 
   /**
+   * Get bitcore Address at given index
+   * Identfy if the storage has MultiSig configured and use the correct method.
+   *
+   * @param {number} index Address index
+   *
+   * @return {Address} bitcore-lib Address instance
+   */
+  generateAddress(index) {
+    if (this.isWalletMultiSig()) {
+      return this.getAddressMultisig(index);
+    } else {
+      return this.getAddressP2PKH(index);
+    }
+  },
+
+  /**
+   * Get P2PKH bitcore Address at given index
+   *
+   * @param {number} index Address index
+   *
+   * @return {Address} bitcore-lib Address instance
+   */
+  getAddressP2PKH(index) {
+    const accessData = this.getWalletAccessData();
+    const xpub = HDPublicKey(accessData.xpubkey);
+    const newKey = xpub.deriveChild(index);
+    return new Address(newKey.publicKey, network.getNetwork());
+  },
+
+  /**
+   * Get MultiSig P2SH bitcore Address at given index
+   *
+   * @param {number} index Address index
+   *
+   * @return {Address} bitcore-lib Address instance
+   */
+  getAddressMultisig(index) {
+    const accessData = this.getWalletAccessData();
+    const multisigData = accessData.multisig;
+    const redeemScript = walletUtils.createP2SHRedeemScript(multisigData.pubkeys, multisigData.minSignatures, index);
+    return Address.payingTo(Script.fromBuffer(redeemScript), network.getNetwork());
+  },
+
+  /**
    * Load the history for each of the addresses of a new generated wallet
    * We always search until the GAP_LIMIT. If we have any history in the middle of the searched addresses
    * we search again until we have the GAP_LIMIT of addresses without any transactions
@@ -428,12 +501,10 @@ const wallet = {
       let dataJson = this.getWalletData();
       let accessData = this.getWalletAccessData();
 
-      const xpub = HDPublicKey(accessData.xpubkey);
       const stopIndex = startIndex + count;
       for (var i=startIndex; i<stopIndex; i++) {
         // Generate each key from index, encrypt and save
-        let key = xpub.deriveChild(i);
-        var address = Address(key.publicKey, network.getNetwork());
+        const address = this.generateAddress(i);
         dataJson.keys[address.toString()] = {privkey: null, index: i};
         addresses.push(address.toString());
 
@@ -982,15 +1053,10 @@ const wallet = {
    * @inner
    */
   generateNewAddress(connection = null) {
-    const accessData = this.getWalletAccessData();
-    const xpub = HDPublicKey(accessData.xpubkey);
-
     // Get last shared index to discover new index
     const lastSharedIndex = this.getLastSharedIndex();
-    let newIndex = lastSharedIndex + 1;
-
-    const newKey = xpub.deriveChild(newIndex);
-    const newAddress = Address(newKey.publicKey, network.getNetwork());
+    const newIndex = lastSharedIndex + 1;
+    const newAddress = this.generateAddress(newIndex);
 
     // Update address data and last generated indexes
     this.updateAddress(newAddress.toString(), newIndex);
@@ -1038,10 +1104,7 @@ const wallet = {
    * @inner
    */
   getAddressAtIndex(index) {
-    const accessData = this.getWalletAccessData();
-    const xpub = HDPublicKey(accessData.xpubkey);
-    const newKey = xpub.deriveChild(index);
-    const address = Address(newKey.publicKey, network.getNetwork());
+    const address = this.generateAddress(index);
     return address.toString();
   },
 
@@ -2191,9 +2254,7 @@ const wallet = {
       // Setting last shared address, if necessary
       const candidateIndex = maxIndex + 1;
       if (candidateIndex > lastSharedIndex) {
-        const xpub = HDPublicKey(this.getWalletAccessData().xpubkey);
-        const key = xpub.deriveChild(candidateIndex);
-        const address = Address(key.publicKey, network.getNetwork()).toString();
+        const address = this.generateAddress(candidateIndex);
         newSharedIndex = candidateIndex;
         newSharedAddress = address;
         this.updateAddress(address, candidateIndex);

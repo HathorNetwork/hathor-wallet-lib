@@ -17,6 +17,7 @@ import wallet from '../wallet';
 import oldHelpers from '../helpers';
 import storage from '../storage';
 import MineTransaction from '../wallet/mineTransaction';
+import Address from '../models/address';
 
 /**
  * This is transaction mining class responsible for:
@@ -104,11 +105,14 @@ class SendTransaction extends EventEmitter {
         tokenData = tokens.indexOf(output.token) + 1;
       }
 
+      const addressObj = new Address(output.address, { network: this.network });
+
       tokensData[output.token].outputs.push({
         address: output.address,
         value: output.value,
         timelock: output.timelock ? output.timelock : null,
         tokenData,
+        type: addressObj.getType(),
       });
     }
 

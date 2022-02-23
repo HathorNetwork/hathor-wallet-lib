@@ -7,13 +7,14 @@
 
 import EventEmitter from 'events';
 import wallet from '../wallet';
-import { HATHOR_TOKEN_CONFIG, HATHOR_BIP44_CODE } from "../constants";
+import { HATHOR_TOKEN_CONFIG, HATHOR_BIP44_CODE, P2SH_ACCT_PATH } from "../constants";
 import tokens from '../tokens';
 import transaction from '../transaction';
 import version from '../version';
 import walletApi from '../api/wallet';
 import storage from '../storage';
 import helpers from '../utils/helpers';
+import walletUtils from '../utils/wallet';
 import MemoryStore from '../memory_store';
 import Connection from './connection';
 import SendTransaction from './sendTransaction';
@@ -84,6 +85,7 @@ class HathorWallet extends EventEmitter {
     debug = false,
     // Callback to be executed before reload data
     beforeReloadCallback = null,
+    multisig = null,
   } = {}) {
     super();
 
@@ -105,6 +107,10 @@ class HathorWallet extends EventEmitter {
 
     if (connection.state !== ConnectionState.CLOSED) {
       throw Error('You can\'t share connections.');
+    }
+
+    if (multisig && !(multisig.pubkeys && multisig.minSignatures)) {
+      throw Error('Multisig configuration requires both pubkeys and minSignatures.');
     }
 
     this.conn = connection;
@@ -156,6 +162,18 @@ class HathorWallet extends EventEmitter {
 
     // This object stores pre-processed data that helps speed up the return of getBalance and getTxHistory
     this.preProcessedData = {};
+
+    this.multisig = {
+      pubkeys: multisig.pubkeys,
+      minSignatures: multisig.minSignatures,
+    };
+  }
+
+  getMultisigPublicKey() {
+    if (!this.seed) throw Error;
+    const xpriv = walletUtils.getXPrivKeyFromSeed(this.seed, { network: this.getNetwork() });
+    const derived = xpriv.deriveNonCompliantChild(P2SH_ACCT_PATH);
+    return derived.xpubkey;
   }
 
   /**
@@ -351,7 +369,13 @@ class HathorWallet extends EventEmitter {
       address = wallet.getCurrentAddress();
     }
     const index = this.getAddressIndex(address);
-    const addressPath = `m/44'/${HATHOR_BIP44_CODE}'/0'/0/${index}`;
+    let addressPath;
+    if (wallet.isWalletMultiSig()) {
+      addressPath = `m/45'/${HATHOR_BIP44_CODE}'/0'/0/${index}`;
+    } else {
+      addressPath = `m/44'/${HATHOR_BIP44_CODE}'/0'/0/${index}`;
+    }
+
     return { address, index, addressPath };
   }
 
@@ -1067,17 +1091,18 @@ class HathorWallet extends EventEmitter {
     }
     storage.setStore(this.store);
     storage.setItem('wallet:server', this.conn.currentServer);
+    storage.setItem('wallet:multisig', !!this.multisig);
 
     this.conn.on('state', this.onConnectionChangedState);
     this.conn.on('wallet-update', this.handleWebsocketMsg);
 
     let ret;
     if (this.seed) {
-      ret = wallet.executeGenerateWallet(this.seed, this.passphrase, pinCode, password, false);
+      ret = wallet.executeGenerateWallet(this.seed, this.passphrase, pinCode, password, false, this.multisig);
     } else if (this.xpriv) {
-      ret = wallet.executeGenerateWalletFromXPriv(this.xpriv, pinCode, false);
+      ret = wallet.executeGenerateWalletFromXPriv(this.xpriv, pinCode, false, this.multisig);
     } else if (this.xpub) {
-      ret = wallet.executeGenerateWalletFromXPub(this.xpub, false);
+      ret = wallet.executeGenerateWalletFromXPub(this.xpub, false, this.multisig);
     } else {
       throw "This should never happen";
     }

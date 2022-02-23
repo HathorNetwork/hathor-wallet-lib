@@ -161,6 +161,14 @@ class Network {
   }
 
   /**
+   * Method to check that a version byte is valid
+   */
+  isVersionByteValid(version: number): Boolean {
+    const versionBytes = this.getVersionBytes();
+    return version !== versionBytes.p2pkh && version !== versionBytes.p2sh;
+  }
+
+  /**
    * Method created to keep compatibility with old Network class
    */
   setNetwork(name: string) {

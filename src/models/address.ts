@@ -94,10 +94,36 @@ class Address {
 
     // Validate version byte. Should be the p2pkh or p2sh
     const firstByte = addressBytes[0];
-    if (firstByte !== this.network.versionBytes.p2pkh && firstByte !== this.network.versionBytes.p2sh) {
+    if (this.network.isVersionByteValid(firstByte)) {
       throw new AddressError(`${errorMessage} Invalid network byte. Expected: ${this.network.versionBytes.p2pkh} or ${this.network.versionBytes.p2sh} and received ${firstByte}.`);
     }
     return true;
+  }
+
+  /**
+   * Get address type
+   *
+   * Will check the version byte of the address against the network's version bytes.
+   * Valid types are p2pkh and p2sh.
+   *
+   * @throws {AddressError} Will throw an error if address is not valid
+   *
+   * @return {string}
+   * @memberof Address
+   * @inner
+   */
+  getType(): string {
+    this.validateAddress();
+    const addressBytes = this.decode();
+
+    const firstByte = addressBytes[0];
+    if (firstByte === this.network.versionBytes.p2pkh) {
+      return 'p2pkh';
+    } else if (firstByte === this.network.versionBytes.p2sh) {
+      return 'p2sh';
+    } else {
+      throw new AddressError('Invalid address type.');
+    }
   }
 }
 

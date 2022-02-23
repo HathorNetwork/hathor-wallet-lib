@@ -10,6 +10,7 @@ import { DECIMAL_PLACES, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, TOKEN_INFO
 import { HDPrivateKey, crypto, encoding, util } from 'bitcore-lib';
 import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError, MaximumNumberParentsError } from './errors';
 import { hexToBuffer } from './utils/buffer';
+import helpersUtils from './utils/helpers';
 import dateFormatter from './date';
 import helpers from './helpers';
 import network from './network';
@@ -21,7 +22,9 @@ import walletApi from './api/wallet';
 import { get } from 'lodash';
 import Address from './models/address';
 import P2PKH from './models/p2pkh';
+import P2SH from './models/p2sh';
 import ScriptData from './models/script_data';
+import P2SHSignature from './models/p2sh_signature';
 
 
 /**
@@ -200,8 +203,7 @@ const transaction = {
     }
 
     // Validate version byte. Should be the p2pkh or p2sh
-    const firstByte = addressBytes[0];
-    if (firstByte !== network.getVersionBytes().p2pkh && firstByte !== network.getVersionBytes().p2sh) {
+    if (network.isVersionByteValid(addressBytes[0])) {
       throw new AddressError(errorMessage);
     }
     return true;
@@ -259,6 +261,13 @@ const transaction = {
       // Data script for NFT
       const scriptData = new ScriptData(output.data);
       return scriptData.createScript();
+    } else if (output.type === 'p2sh') {
+      // P2SH
+      const address = new Address(output.address, { network });
+      // This will throw AddressError in case the address is invalid
+      address.validateAddress();
+      const p2sh = new P2SH(address, { timelock: output.timelock });
+      return p2sh.createScript();
     } else if (output.type === 'p2pkh' || output.type === undefined) {
       // P2PKH
       // for compatibility reasons we will accept an output without type as p2pkh as fallback
@@ -375,6 +384,33 @@ const transaction = {
       }
     }
     return data;
+  },
+
+  getAllSignatures(txHex, network, pin) {
+    const tx = helpersUtils.createTxFromHex(txHex, network);
+    const hash = tx.getDataToSignHash();
+    const accessData = storage.getItem('wallet:accessData');
+    const privateKeyStr = wallet.decryptData(accessData.mainKey, pin);
+    const key = HDPrivateKey(privateKeyStr);
+    const signatures = {};
+
+    for (const {index, value} of tx.inputs.map((value, index) => ({index, value}))) {
+      // get address index
+      const addressIndex = walet.getAddressIndex(input.address);
+      if (!addressIndex) continue;
+
+      const derivedKey = key.deriveNonCompliantChild(index);
+      const privateKey = derivedKey.privateKey;
+
+      // derive key to address index
+      const sig = crypto.ECDSA.sign(hash, privateKey, 'little').set({
+        nhashtype: crypto.Signature.SIGHASH_ALL
+      });
+
+      signatures[index] = sig.toDER();
+    }
+    const p2shSig = P2SHSignature(key.xpubkey, signatures);
+    return p2shSig.serialize();
   },
 
   /*
