@@ -162,7 +162,7 @@ const wallet = {
    * @inner
    */
   isWalletMultiSig() {
-    return storage.getItem('wallet:multisig');
+    return Boolean(storage.getItem('wallet:multisig'));
   },
 
   /**
@@ -198,7 +198,10 @@ const wallet = {
       from_xpub: true,
     };
 
-     if (multisig) accessData['multisig'] = multisig;
+    if (multisig) {
+      const xpub = new HDPublicKey(xpubkey);
+      access['multisig'] = Object.assign({pubkey: xpub.publicKey.toString('hex')}, multisig);
+    }
 
     return this.startWallet(accessData, loadHistory);
   },
@@ -243,7 +246,10 @@ const wallet = {
       xpubkey: privkey.xpubkey,
     });
 
-    if (multisig) access['multisig'] = multisig;
+    if (multisig) {
+      const dxpriv = xpriv.deriveNonCompliantChild(`m/45'/${HATHOR_BIP44_CODE}'/0'`);
+      access['multisig'] = Object.assign({pubkey: dxpriv.publicKey.toString('hex')}, multisig);
+    }
 
     return this.startWallet(access, loadHistory);
   },
@@ -291,7 +297,10 @@ const wallet = {
       xpubkey: privkey.xpubkey,
     }
 
-    if (multisig) access['multisig'] = multisig;
+    if (multisig) {
+      const dxpriv = xpriv.deriveNonCompliantChild(`m/45'/${HATHOR_BIP44_CODE}'/0'`);
+      access['multisig'] = Object.assign({pubkey: dxpriv.publicKey.toString('hex')}, multisig);
+    }
 
     return this.startWallet(access, loadHistory);
   },

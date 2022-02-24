@@ -351,19 +351,18 @@ const wallet = {
    * @inner
    */
   createP2SHRedeemScript(xpubs, minSignatures, index) {
-    const derivedPubKeys: any[] = [];
-    for (const pk of xpubs) {
-      const xpub = new HDPublicKey(pk);
-      // xpub comes derived to m/45'/280'/0'
-      // Derive to m/45'/280'/0'/0/index
-      derivedPubKeys.push(xpub.deriveChild(0).deriveChild(index).publicKey);
-    }
-    const sortedPubKeys = _.sortBy(derivedPubKeys, (publicKey) => {
-      return publicKey.toString('hex');
+
+    const sortedXpubs = _.sortBy(xpubs.map(xp => new HDPublicKey(xp)), (xpub) => {
+      return xpub.publicKey.toString('hex');
     });
+
+    // xpub comes derived to m/45'/280'/0'
+    // Derive to m/45'/280'/0'/0/index
+    const pubkeys = sortedXpubs.map(xpub => xpub.deriveChild(0).deriveChild(index).publicKey);
+
     // bitcore-lib sorts the public keys by default before building the script
-    // noSorting prevents that and keep our order
-    const redeemScript = Script.buildMultisigOut(sortedPubKeys, minSignatures, {noSorting: true});
+    // noSorting prevents that and keeps our order
+    const redeemScript = Script.buildMultisigOut(pubkeys, minSignatures, {noSorting: true});
     return redeemScript.toBuffer();
   },
 
@@ -378,12 +377,12 @@ const wallet = {
    * @inner
    */
   getP2SHInputData(signatures, redeemScript) {
-    // maxSignatures is the first opcode
-    // minSignatures is the second to last opcode
-    const minSignatures = redeemScript.readUInt8(redeemScript.length - 2) - OP_0.readUInt8();
-    const maxSignatures = redeemScript.readUInt8() - OP_0.readUInt8();
+    // minSignatures is the first opcode
+    // maxSignatures is the second to last opcode
+    const minSignatures = redeemScript.readUInt8() - OP_0.readUInt8();
+    const maxSignatures = redeemScript.readUInt8(redeemScript.length - 2) - OP_0.readUInt8();
     if (signatures.length < minSignatures || signatures.length > maxSignatures) {
-      // TODO: raise exception to stop this input form being generated
+      throw new Error('Signatures are incompatible with redeemScript');
     }
     const arr: Buffer[] = [];
     for (const sig of signatures) {

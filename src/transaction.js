@@ -409,7 +409,7 @@ const transaction = {
 
       signatures[index] = sig.toDER();
     }
-    const p2shSig = P2SHSignature(key.xpubkey, signatures);
+    const p2shSig = P2SHSignature(accessData.multisig.pubkey, signatures);
     return p2shSig.serialize();
   },
 
