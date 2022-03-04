@@ -301,7 +301,6 @@ export interface CreateWalletAuthData {
   authXpubkeySignature: string;
   timestampNow: number;
   firstAddress: string;
-  xprivChangePath: bitcore.HDPrivateKey;
   authDerivedPrivKey: bitcore.HDPrivateKey;
 };
 
