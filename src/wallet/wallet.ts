@@ -188,30 +188,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
-   * Encrypt and store wallet data on storage using the wallet's PIN code
-   *
-   * @param {string} pin Pin code to use as password to encrypt the auth key
-   * @param {string} mainKey xpriv of the change level derivation to sign inputs
-   * @param {string} authKey xpriv of the auth specific purpose derivation path
-   *
-   * @memberof Wallet
-   * @inner
-   */
-  static initializeAccessData(pin: string, password: string, mainKey: string, authKey: string) {
-    const initialAccessData = wallet.getWalletAccessData() || {};
-
-    const encryptedAuthKey = wallet.encryptData(authKey, pin);
-    const encryptedMainKey = wallet.encryptData(mainKey, pin);
-
-    initialAccessData['authKey'] = encryptedAuthKey.encrypted.toString();
-    initialAccessData['mainKey'] = encryptedMainKey.encrypted.toString();
-
-    wallet.setWalletAccessData(initialAccessData);
-    wallet.storePasswordHash(password, 'Passwd');
-  }
-
-
-  /**
    * getWalletIdFromXPub: Get the wallet id given the xpubkey
    *
    * @param xpub - The xpubkey
@@ -258,11 +234,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       authDerivedPrivKey,
     } = this.generateCreateWalletAuthData(this.seed);
 
-    HathorWalletServiceWallet.initializeAccessData(
+    wallet.executeGenerateWallet(
+      this.seed,
+      this.passphrase,
       pinCode,
       password,
-      xprivChangePath.xprivkey,
-      authDerivedPrivKey.xprivkey,
+      false,
     );
 
     this.xpub = xpub;
