@@ -267,13 +267,17 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       this.walletId = data.walletId;
 
       if (data.status === 'creating') {
+        // If the wallet status is creating, we should wait until it is ready
+        // before continuing
         await this.pollForWalletStatus();
       } else if (data.status !== 'ready') {
+        // At this stage, if the wallet is not `ready` or `creating` we should
+        // throw an error as there are only three states: `ready`, `creating` or `error`
         throw new WalletRequestError(ErrorMessages.WALLET_STATUS_ERROR);
       }
 
       await this.onWalletReady();
-    }
+    };
 
     const data = await walletApi.createWallet(
       this,
@@ -448,18 +452,20 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    */
   async pollForWalletStatus(): Promise<void> {
     return new Promise((resolve, reject) => {
-      setInterval(async () => {
+      const pollIntervalTimer = setInterval(async () => {
         const data = await walletApi.getWalletStatus(this);
 
         if (data.status.status === 'ready') {
+          clearInterval(pollIntervalTimer);
           return resolve();
         } else if (data.status.status !== 'creating') {
-          // If it's still creating, then the setInterval must run again
+          // Only possible states are 'ready', 'creating' and 'error', if status
+          // is not ready or creating, we should reject the promise
+          clearInterval(pollIntervalTimer);
           return reject(new WalletRequestError('Error getting wallet status.'));
         }
       }, WALLET_STATUS_POLLING_INTERVAL);
     });
-
   }
 
   /**
