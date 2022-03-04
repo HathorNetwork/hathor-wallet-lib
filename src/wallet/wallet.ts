@@ -265,21 +265,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const handleCreate = async (data: WalletStatus) => {
       this.walletId = data.walletId;
+
       if (data.status === 'creating') {
-        this.walletStatusInterval = setInterval(async () => {
-          await this.startPollingStatus();
-        }, WALLET_STATUS_POLLING_INTERVAL);
-      } else if (data.status === 'ready') {
-        await this.onWalletReady();
-        this.conn = new WalletServiceConnection({
-          walletId: this.walletId,
-        });
-        this.conn.start();
-        this.conn.on('new-tx', (newTx: WsTransaction) => this.onNewTx(newTx));
-        this.conn.on('update-tx', (updatedTx) => this.onUpdateTx(updatedTx));
-      } else {
+        await this.pollForWalletStatus();
+      } else if (data.status !== 'ready') {
         throw new WalletRequestError(ErrorMessages.WALLET_STATUS_ERROR);
       }
+
+      await this.onWalletReady();
     }
 
     const data = await walletApi.createWallet(
@@ -453,15 +446,20 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async startPollingStatus() {
-    const data = await walletApi.getWalletStatus(this);
-    if (data.status.status === 'ready') {
-      clearInterval(this.walletStatusInterval!);
-      await this.onWalletReady();
-    } else if (data.status.status !== 'creating') {
-      // If it's still creating, then the setInterval must run again
-      throw new WalletRequestError('Error getting wallet status.');
-    }
+  async pollForWalletStatus(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      setInterval(async () => {
+        const data = await walletApi.getWalletStatus(this);
+
+        if (data.status.status === 'ready') {
+          return resolve();
+        } else if (data.status.status !== 'creating') {
+          // If it's still creating, then the setInterval must run again
+          return reject(new WalletRequestError('Error getting wallet status.'));
+        }
+      }, WALLET_STATUS_POLLING_INTERVAL);
+    });
+
   }
 
   /**
@@ -483,6 +481,17 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   private async onWalletReady() {
+    if (!this.walletId) {
+      // This should never happen
+      throw new Error('Wallet ready but wallet id is not set.');
+    }
+
+    this.conn = new WalletServiceConnection({
+      walletId: this.walletId,
+    });
+    this.conn.start();
+    this.conn.on('new-tx', (newTx: WsTransaction) => this.onNewTx(newTx));
+    this.conn.on('update-tx', (updatedTx) => this.onUpdateTx(updatedTx));
     this.setState(walletState.READY);
     await this.getNewAddresses();
   }
