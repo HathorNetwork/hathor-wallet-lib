@@ -197,7 +197,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof Wallet
    * @inner
    */
-  static initializeAccessData(pin: string, mainKey: string, authKey: string) {
+  static initializeAccessData(pin: string, password: string, mainKey: string, authKey: string) {
     const initialAccessData = wallet.getWalletAccessData() || {};
 
     const encryptedAuthKey = wallet.encryptData(authKey, pin);
@@ -207,6 +207,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     initialAccessData['mainKey'] = encryptedMainKey.encrypted.toString();
 
     wallet.setWalletAccessData(initialAccessData);
+    wallet.storePasswordHash(password, 'Passwd');
   }
 
 
@@ -229,12 +230,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @param {Object} optionsParams Options parameters
    *  {
    *   'pinCode': PIN to encrypt the auth xpriv on storage
+   *   'password': Password to decrypt xpriv information
    *  }
    *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async start({ pinCode }) {
+  async start({ pinCode, password }) {
     if (!this.seed) {
       throw new Error('Seed should be in memory when starting the wallet.');
     }
@@ -258,6 +260,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     HathorWalletServiceWallet.initializeAccessData(
       pinCode,
+      password,
       xprivChangePath.xprivkey,
       authDerivedPrivKey.xprivkey,
     );
