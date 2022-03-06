@@ -113,7 +113,7 @@ abstract class Connection extends EventEmitter {
   /**
    * Connect to the server and start emitting events.
    **/
-  abstract start(): void
+  abstract start(walletId?: string): void
 
   /**
    * Close the connections and stop emitting events.

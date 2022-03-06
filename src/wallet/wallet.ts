@@ -98,7 +98,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // Index of the address to be used by the wallet
   private indexToUse: number;
   // WalletService-ready connection class
-  private conn: WalletServiceConnection | null;
+  private conn: WalletServiceConnection;
 
   constructor(requestPassword: Function, seed: string, network: Network, options = { passphrase: '' }) {
     super();
@@ -109,7 +109,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       throw Error('You must explicitly provide the seed.');
     }
 
-    this.conn = null;
+    // Setup the connection so clients can listen to its events before it is started
+    this.conn = new WalletServiceConnection();
 
     this.state = walletState.NOT_STARTED;
 
@@ -487,19 +488,21 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   private async onWalletReady() {
+    this.setupConnection();
+    this.setState(walletState.READY);
+
+    await this.getNewAddresses();
+  }
+
+  setupConnection() {
     if (!this.walletId) {
       // This should never happen
-      throw new Error('Wallet ready but wallet id is not set.');
+      throw new Error('Tried to setup connection but wallet_id is not set.');
     }
 
-    this.conn = new WalletServiceConnection({
-      walletId: this.walletId,
-    });
-    this.conn.start();
+    this.conn.start(this.walletId);
     this.conn.on('new-tx', (newTx: WsTransaction) => this.onNewTx(newTx));
     this.conn.on('update-tx', (updatedTx) => this.onUpdateTx(updatedTx));
-    this.setState(walletState.READY);
-    await this.getNewAddresses();
   }
 
   /**
