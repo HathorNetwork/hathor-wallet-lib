@@ -8,7 +8,7 @@
 
 import { crypto, util, HDPublicKey, HDPrivateKey, Address, Script } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
-import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE } from '../constants';
+import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE, P2SH_ACCT_PATH } from '../constants';
 import { OP_CHECKMULTISIG, OP_0 } from '../opcodes';
 import { XPubError, InvalidWords, UncompressedPubKeyError } from '../errors';
 import Network from '../models/network';
@@ -390,6 +390,36 @@ const wallet = {
     }
     helpers.pushDataToStack(arr, redeemScript);
     return util.buffer.concat(arr);
+  },
+
+  /**
+   * Create an HDPublicKey on P2SH MultiSig account path from the root xpub
+   *
+   * @param {HDPrivateKey} xpriv HD private key used to derive the multisig xpub.
+   *
+   * @return {string} xpubkey at MultiSig account path
+   * @memberof Wallet
+   * @inner
+   */
+  getMultiSigXPubFromXPriv(xpriv: HDPrivateKey) {
+    const derived = xpriv.deriveNonCompliantChild(P2SH_ACCT_PATH);
+    return derived.xpubkey;
+  },
+
+  /**
+   * Create an HDPublicKey on P2SH MultiSig account path from the seed
+   *
+   * @param {string} seed space separated list of words to use as seed.
+   * @param {Object} options Optionally inform passphrase and network (defaults to no passphrase and mainnet).
+   *
+   * @return {string} xpubkey at MultiSig account path
+   * @memberof Wallet
+   * @inner
+   */
+  getMultiSigXPubFromWords(seed: string, options: { passphrase?: string, networkName?: string } = {}) {
+    const methodOptions = Object.assign({passphrase: '', networkName: 'mainnet'}, options);
+    const xpriv = this.getXPrivKeyFromSeed(seed, methodOptions);
+    return this.getMultiSigXPubFromXPriv(xpriv);
   },
 }
 

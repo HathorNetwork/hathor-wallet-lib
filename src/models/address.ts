@@ -94,7 +94,7 @@ class Address {
 
     // Validate version byte. Should be the p2pkh or p2sh
     const firstByte = addressBytes[0];
-    if (this.network.isVersionByteValid(firstByte)) {
+    if (!this.network.isVersionByteValid(firstByte)) {
       throw new AddressError(`${errorMessage} Invalid network byte. Expected: ${this.network.versionBytes.p2pkh} or ${this.network.versionBytes.p2sh} and received ${firstByte}.`);
     }
     return true;

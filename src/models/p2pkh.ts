@@ -39,7 +39,7 @@ class P2PKH {
 
   /**
    * Create a P2PKH script
-   * 
+   *
    * @return {Buffer}
    * @memberof P2PKH
    * @inner

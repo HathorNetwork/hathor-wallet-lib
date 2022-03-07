@@ -42,3 +42,35 @@ test('Get and set network', () => {
     const network2 = new Network('abc');
   }).toThrowError();
 })
+
+
+test('network.isVersionByteValid', () => {
+  const versionBytes = {
+    'mainnet': {
+      'p2pkh': 0x28,
+      'p2sh': 0x64,
+    },
+    'testnet': {
+      'p2pkh': 0x49,
+      'p2sh': 0x87,
+    },
+  }
+
+  const testnet = new Network('testnet');
+  // Valid version bytes for testnet
+  expect(testnet.isVersionByteValid(versionBytes.testnet.p2pkh)).toBe(true);
+  expect(testnet.isVersionByteValid(versionBytes.testnet.p2sh)).toBe(true);
+  // Invalid version bytes
+  expect(testnet.isVersionByteValid(1)).toBe(false);
+  expect(testnet.isVersionByteValid(105)).toBe(false);
+  expect(testnet.isVersionByteValid(1056)).toBe(false);
+
+  const mainnet = new Network('mainnet');
+  // Valid version bytes for mainnet
+  expect(mainnet.isVersionByteValid(versionBytes.mainnet.p2pkh)).toBe(true);
+  expect(mainnet.isVersionByteValid(versionBytes.mainnet.p2sh)).toBe(true);
+  // Invalid version bytes
+  expect(mainnet.isVersionByteValid(1)).toBe(false);
+  expect(mainnet.isVersionByteValid(105)).toBe(false);
+  expect(mainnet.isVersionByteValid(1056)).toBe(false);
+});

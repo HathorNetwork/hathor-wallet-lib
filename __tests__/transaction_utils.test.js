@@ -229,11 +229,27 @@ test('Push data', () => {
 test('Create output script', () => {
   let address = 'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX';
   let expectedHex = '76a91419a8eb751eab5a13027e8cae215f6a5dafc1a8dd88ac';
+  // p2pkh is default
   expect(transaction.createOutputScript({ address }).toString('hex')).toBe(expectedHex);
+  // p2pkh
+  expect(transaction.createOutputScript({ address, type: 'p2pkh'}).toString('hex')).toBe(expectedHex);
 
   let timestamp = 1550249803;
   let expectedHex2 = '045c66ef4b6f76a91419a8eb751eab5a13027e8cae215f6a5dafc1a8dd88ac';
   expect(transaction.createOutputScript({ address, timelock: timestamp }).toString('hex')).toBe(expectedHex2);
+
+  // p2sh outputs
+  let p2shAddress = 'wcFwC82mLoUudtgakZGMPyTL2aHcgSJgDZ';
+  let expectedHex3 = 'a914b6696aed0a1ef8fe7d604f5436ec6617e6ad92d387'
+  expect(transaction.createOutputScript({ address: p2shAddress, type: 'p2sh' }).toString('hex')).toBe(expectedHex3);
+
+  let expectedHex4 = '045c66ef4b6fa914b6696aed0a1ef8fe7d604f5436ec6617e6ad92d387'
+  expect(transaction.createOutputScript({ address: p2shAddress, timelock: timestamp, type: 'p2sh' }).toString('hex')).toBe(expectedHex4);
+
+  // data outputs
+  let data = '123';
+  let expectedHex5 = '03313233ac';
+  expect(transaction.createOutputScript({ data, type: 'data' }).toString('hex')).toBe(expectedHex5);
 });
 
 test('Create input data', () => {

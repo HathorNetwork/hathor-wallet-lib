@@ -203,7 +203,7 @@ const transaction = {
     }
 
     // Validate version byte. Should be the p2pkh or p2sh
-    if (network.isVersionByteValid(addressBytes[0])) {
+    if (!network.isVersionByteValid(addressBytes[0])) {
       throw new AddressError(errorMessage);
     }
     return true;
@@ -248,7 +248,7 @@ const transaction = {
   /**
    * Create output script
    *
-   * @param {Object} output Output object with {address, timelock} or {data}
+   * @param {Object} output Output object with {address, timelock, type} or {data, type}
    *
    * @throws {AddressError} If the address of the P2PKH output is invalid
    *
@@ -282,7 +282,7 @@ const transaction = {
   },
 
   /**
-   * Create input data
+   * Create P2SH input data
    *
    * @param {Buffer} signature Input signature
    * @param {Buffer} publicKey Input public key
@@ -386,6 +386,18 @@ const transaction = {
     return data;
   },
 
+  /*
+   * Sign and return all signatures of the inputs belonging to this wallet.
+   *
+   * @param {string} txHex hex representation of the transaction.
+   * @param {Network} network Network to get the address first byte parameter
+   * @param {string} pin PIN to decrypt the private key
+   *
+   * @return {string} serialized P2SHSignature data
+   *
+   * @memberof Transaction
+   * @inner
+   */
   getAllSignatures(txHex, network, pin) {
     const tx = helpersUtils.createTxFromHex(txHex, network);
     const hash = tx.getDataToSignHash();

@@ -163,17 +163,33 @@ class HathorWallet extends EventEmitter {
     // This object stores pre-processed data that helps speed up the return of getBalance and getTxHistory
     this.preProcessedData = {};
 
-    this.multisig = {
-      pubkeys: multisig.pubkeys,
-      minSignatures: multisig.minSignatures,
-    };
+    if (multisig) {
+      this.multisig = {
+        pubkeys: multisig.pubkeys,
+        minSignatures: multisig.minSignatures,
+      };
+    }
   }
 
-  getMultisigPublicKey() {
-    if (!this.seed) throw Error;
-    const xpriv = walletUtils.getXPrivKeyFromSeed(this.seed, { network: this.getNetwork() });
-    const derived = xpriv.deriveNonCompliantChild(P2SH_ACCT_PATH);
-    return derived.xpubkey;
+  /**
+   * Gets the xpub derived at the MultiSig account path
+   *
+   * @param {Object} options Only used when deriving from seed, may include passphrase and networkName.
+   */
+  getMultisigPublicKey(options) {
+    if (this.isFromXPub()) {
+      throw new WalletFromXPubGuard('getMultisigPublicKey');
+    }
+
+    if (this.seed) {
+      return walletUtils.getMultiSigXPubFromWords(this.seed, options);
+    }
+
+    if (this.xpriv) {
+      return walletUtils.getMultiSigXPubFromXPriv(this.seed);
+    }
+
+    throw "This should never happen";
   }
 
   /**

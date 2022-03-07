@@ -10,7 +10,7 @@ import { XPubError, InvalidWords, UncompressedPubKeyError } from '../../src/erro
 import Network from '../../src/models/network';
 import Mnemonic from 'bitcore-mnemonic';
 import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE } from '../../src/constants';
-import { util, Address } from 'bitcore-lib';
+import { util, Address, HDPrivateKey } from 'bitcore-lib';
 import { hexToBuffer } from '../../src/utils/buffer';
 
 
@@ -400,4 +400,54 @@ test('mainnet: hd derivation with passphrase', () => {
   for (let i = 0; i < 10; i++) {
     expect(address[i]).toStrictEqual(Addr[i]);
   }
+});
+
+test('createP2SHRedeemScript', () => {
+  const xpubs = [
+    'xpub6BnoFhDySfUAaJQveYx1YvB8YcLdnnGdz19twSXRh6byEfZSWS4ewinKVDVJcvp6m17mAkQiBuhUgytwS561AkyCFXTvSjRXatueS2E4s3K',
+    'xpub6ChkMiCikMrqKCQtZqzuVJCnfsaBKMsnTerc1o6XFU6GrZqbG1HqyWsHapksyp8iq68LkzU94fqk6rjzF1NPbKzTL6okbTvFp9GJVhxsZD2',
+    'xpub6BvZyQQRCQ37AKuxfTMUWSU929fkqQPwmTbTBSvgq2FSUgbc5FPGYYuv2FzcpBNtE8qyjU7kRktibZrwZ7VgiBTCvJ7B6gE9FKuZr869Rzd',
+  ];
+  const minSignatures = 2;
+
+  const redeemScript0 = '5221027105a304d7f3935b64824303687cf96a2400a29a9a69fcfc286a090e71f5acf92102374bba4d4a3d19222db84b5334527fe49e746e3aeac7d18ae14c9ac5a1c1bd0721027892436f6b36eb31edaee157cfa029b1735525626cf7247eb17de5a3db2427ad53ae';
+  expect(wallet.createP2SHRedeemScript(xpubs, minSignatures, 0).toString('hex')).toBe(redeemScript0);
+
+  const redeemScript1 = '522103483dd29818452ddcc11eaa04e00a84f0d733102caa1b124b349c7d4e8f6226972103262d9d3d2339298a0fdee45553ca60765a3486c872271dd1b56e6224ee7ec0d621027af464c0c85f656544bb0b34b3e3e525b7b76a9ab9faa3bbec8d0ceeed62647b53ae';
+  expect(wallet.createP2SHRedeemScript(xpubs, minSignatures, 1).toString('hex')).toBe(redeemScript1);
+});
+
+test('getP2SHInputData', () => {
+  let signature = Buffer.alloc(20);
+
+  // Multisig 2/3
+  const redeemScript0 = '5221027105a304d7f3935b64824303687cf96a2400a29a9a69fcfc286a090e71f5acf92102374bba4d4a3d19222db84b5334527fe49e746e3aeac7d18ae14c9ac5a1c1bd0721027892436f6b36eb31edaee157cfa029b1735525626cf7247eb17de5a3db2427ad53ae';
+  const sig0 = '1400000000000000000000000000000000000000001400000000000000000000000000000000000000004c695221027105a304d7f3935b64824303687cf96a2400a29a9a69fcfc286a090e71f5acf92102374bba4d4a3d19222db84b5334527fe49e746e3aeac7d18ae14c9ac5a1c1bd0721027892436f6b36eb31edaee157cfa029b1735525626cf7247eb17de5a3db2427ad53ae';
+
+  // Create a valid input data
+  expect(wallet.getP2SHInputData([signature, signature], Buffer.from(redeemScript0, 'hex')).toString('hex')).toBe(sig0);
+
+  // Create a valid input data with another script
+  const redeemScript1 = '522103483dd29818452ddcc11eaa04e00a84f0d733102caa1b124b349c7d4e8f6226972103262d9d3d2339298a0fdee45553ca60765a3486c872271dd1b56e6224ee7ec0d621027af464c0c85f656544bb0b34b3e3e525b7b76a9ab9faa3bbec8d0ceeed62647b53ae';
+  const sig1 = '1400000000000000000000000000000000000000001400000000000000000000000000000000000000004c69522103483dd29818452ddcc11eaa04e00a84f0d733102caa1b124b349c7d4e8f6226972103262d9d3d2339298a0fdee45553ca60765a3486c872271dd1b56e6224ee7ec0d621027af464c0c85f656544bb0b34b3e3e525b7b76a9ab9faa3bbec8d0ceeed62647b53ae';
+  expect(wallet.getP2SHInputData([signature, signature], Buffer.from(redeemScript1, 'hex')).toString('hex')).toBe(sig1);
+
+  // The script is a Multisig 2/3
+  // Test passing less than minSignatures
+  expect(() => wallet.getP2SHInputData([signature], Buffer.from(redeemScript0, 'hex'))).toThrow();
+  // Test passing more than maxSignatures
+  expect(() => wallet.getP2SHInputData([signature, signature, signature, signature], Buffer.from(redeemScript0, 'hex'))).toThrow();
+});
+
+test('get multisig xpub', () => {
+
+  const seed = "mutual property noodle reason reform leisure roof foil siren basket decide above offer rate outdoor board input depend sort twenty little veteran code plunge";
+  const xpriv = 'htpr4yPomy8kcy5uFnvKpExM7fUHTVZbS3aBbUmeKQAKSAX1SnYzTCvzzoJtVavt9HU5USsCUXubKZYPwskPLdXaTwStUuMu8q3G8Mpwnbd3uFf';
+  const xpub = 'xpub6BnoFhDySfUAaJQveYx1YvB8YcLdnnGdz19twSXRh6byEfZSWS4ewinKVDVJcvp6m17mAkQiBuhUgytwS561AkyCFXTvSjRXatueS2E4s3K';
+
+  // From xpriv
+  expect(wallet.getMultiSigXPubFromXPriv(HDPrivateKey(xpriv))).toBe(xpub);
+
+  // From words
+  expect(wallet.getMultiSigXPubFromWords(seed)).toBe(xpub);
 });
