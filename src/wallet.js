@@ -2263,7 +2263,7 @@ const wallet = {
       // Setting last shared address, if necessary
       const candidateIndex = maxIndex + 1;
       if (candidateIndex > lastSharedIndex) {
-        const address = this.generateAddress(candidateIndex);
+        const address = this.getAddressAtIndex(candidateIndex);
         newSharedIndex = candidateIndex;
         newSharedAddress = address;
         this.updateAddress(address, candidateIndex);
