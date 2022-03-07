@@ -13,17 +13,12 @@ import helpers from './helpers';
 import wallet from './wallet';
 import WalletWebSocket from './websocket';
 import WalletServiceWebSocket from './wallet/websocket';
+import { ConnectionState } from './wallet/types';
 
 export const DEFAULT_PARAMS = {
   network: 'mainnet',
   servers: [],
   connectionTimeout: 5000,
-};
-
-export enum ConnectionState {
-  CLOSED = 0,
-  CONNECTING = 1,
-  CONNECTED = 2,
 };
 
 export type ConnectionParams = {
