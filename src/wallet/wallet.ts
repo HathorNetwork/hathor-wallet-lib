@@ -92,7 +92,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // Auth token to be used in the wallet API requests to wallet service
   private authToken: string | null;
   // Wallet status interval
-  private walletStatusInterval: ReturnType<typeof setInterval> | null;
   // Variable to store the possible addresses to use that are after the last used address
   private newAddresses: AddressInfoObject[];
   // Index of the address to be used by the wallet
@@ -132,7 +131,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     networkInstance.setNetwork(this.network.name);
 
     this.authToken = null;
-    this.walletStatusInterval = null;
 
     this.newAddresses = [];
     this.indexToUse = -1;
