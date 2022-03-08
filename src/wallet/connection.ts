@@ -40,11 +40,13 @@ export interface WalletServiceConnectionParams extends ConnectionParams {
  **/
 class WalletServiceConnection extends BaseConnection {
   private connectionTimeout?: number;
+  private walletId?: string;
 
   constructor(options?: WalletServiceConnectionParams) {
     const {
       network,
       servers,
+      walletId,
       connectionTimeout,
     } = {
       ...DEFAULT_PARAMS,
@@ -58,15 +60,27 @@ class WalletServiceConnection extends BaseConnection {
     });
 
     this.connectionTimeout = connectionTimeout;
+    this.walletId = walletId;
+  }
+
+  /**
+   * Sets the walletId for the current connection instance
+   **/
+  setWalletId(walletId: string) {
+    this.walletId = walletId;
   }
 
   /**
    * Connect to the server and start emitting events.
    **/
-  start(walletId: string) {
+  start() {
+    if (!this.walletId) {
+      throw new Error('Wallet id should be set before connection start.');
+    }
+
     const wsOptions = {
       wsURL: config.getWalletServiceBaseWsUrl(),
-      walletId: walletId,
+      walletId: this.walletId,
       connectionTimeout: this.connectionTimeout,
     };
 

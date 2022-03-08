@@ -498,9 +498,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       throw new Error('Tried to setup connection but wallet_id is not set.');
     }
 
-    this.conn.start(this.walletId);
+    this.conn.setWalletId(this.walletId);
     this.conn.on('new-tx', (newTx: WsTransaction) => this.onNewTx(newTx));
     this.conn.on('update-tx', (updatedTx) => this.onUpdateTx(updatedTx));
+    this.conn.start();
   }
 
   /**
