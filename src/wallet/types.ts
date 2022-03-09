@@ -208,7 +208,7 @@ export interface TransactionFullObject {
 }
 
 export interface IHathorWallet {
-  start(options: { pinCode: string });
+  start(options: { pinCode: string, password: string });
   getAllAddresses(): AsyncGenerator<GetAddressesObject>;
   getBalance(token: string | null): Promise<GetBalanceObject[]>;
   getTokens(): Promise<string[]>;
@@ -301,7 +301,6 @@ export interface CreateWalletAuthData {
   authXpubkeySignature: string;
   timestampNow: number;
   firstAddress: string;
-  xprivChangePath: bitcore.HDPrivateKey;
   authDerivedPrivKey: bitcore.HDPrivateKey;
 };
 

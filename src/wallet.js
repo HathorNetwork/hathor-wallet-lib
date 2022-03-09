@@ -725,6 +725,7 @@ const wallet = {
     if (!(saltKey in accessData)) {
       // Old wallet, we need to validate with old method and update it to the new method
       hash = this.oldHashPassword(password).toString();
+
       if (hash !== accessData[hashKey]) {
         return false;
       }
@@ -780,7 +781,7 @@ const wallet = {
    * @param {string} oldPassword
    * @param {string} newPassword
    *
-   * @return {boolean} true if the PIN was successfully changed
+   * @return {boolean} true if the password was successfully changed
    *
    * @memberof Wallet
    * @inner
@@ -878,11 +879,11 @@ const wallet = {
       return false;
     }
 
-    if (newPassword && !this.isPasswordCorrect(oldPassword)) {
+    if (newPin && !this.isPinCorrect(oldPin)) {
       return false;
     }
 
-    if (newPin && !this.isPinCorrect(oldPin)) {
+    if (newPassword && !this.isPasswordCorrect(oldPassword)) {
       return false;
     }
 
