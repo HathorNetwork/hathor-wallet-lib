@@ -504,6 +504,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.conn.setWalletId(this.walletId);
     this.conn.on('new-tx', (newTx: WsTransaction) => this.onNewTx(newTx));
     this.conn.on('update-tx', (updatedTx) => this.onUpdateTx(updatedTx));
+    this.conn.on('state', (newState: ConnectionState) => this.onConnectionChangedState(newState));
     this.conn.start();
   }
 
