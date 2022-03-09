@@ -92,13 +92,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // Auth token to be used in the wallet API requests to wallet service
   private authToken: string | null;
   // Wallet status interval
-  private walletStatusInterval: ReturnType<typeof setInterval> | null;
   // Variable to store the possible addresses to use that are after the last used address
   private newAddresses: AddressInfoObject[];
   // Index of the address to be used by the wallet
   private indexToUse: number;
   // WalletService-ready connection class
-  private conn: WalletServiceConnection | null;
+  private conn: WalletServiceConnection;
 
   constructor(requestPassword: Function, seed: string, network: Network, options = { passphrase: '' }) {
     super();
@@ -109,7 +108,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       throw Error('You must explicitly provide the seed.');
     }
 
-    this.conn = null;
+    // Setup the connection so clients can listen to its events before it is started
+    this.conn = new WalletServiceConnection();
 
     this.state = walletState.NOT_STARTED;
 
@@ -131,7 +131,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     networkInstance.setNetwork(this.network.name);
 
     this.authToken = null;
-    this.walletStatusInterval = null;
 
     this.newAddresses = [];
     this.indexToUse = -1;
@@ -265,22 +264,19 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const handleCreate = async (data: WalletStatus) => {
       this.walletId = data.walletId;
+
       if (data.status === 'creating') {
-        this.walletStatusInterval = setInterval(async () => {
-          await this.startPollingStatus();
-        }, WALLET_STATUS_POLLING_INTERVAL);
-      } else if (data.status === 'ready') {
-        await this.onWalletReady();
-        this.conn = new WalletServiceConnection({
-          walletId: this.walletId,
-        });
-        this.conn.start();
-        this.conn.on('new-tx', (newTx: WsTransaction) => this.onNewTx(newTx));
-        this.conn.on('update-tx', (updatedTx) => this.onUpdateTx(updatedTx));
-      } else {
+        // If the wallet status is creating, we should wait until it is ready
+        // before continuing
+        await this.pollForWalletStatus();
+      } else if (data.status !== 'ready') {
+        // At this stage, if the wallet is not `ready` or `creating` we should
+        // throw an error as there are only three states: `ready`, `creating` or `error`
         throw new WalletRequestError(ErrorMessages.WALLET_STATUS_ERROR);
       }
-    }
+
+      await this.onWalletReady();
+    };
 
     const data = await walletApi.createWallet(
       this,
@@ -453,15 +449,22 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async startPollingStatus() {
-    const data = await walletApi.getWalletStatus(this);
-    if (data.status.status === 'ready') {
-      clearInterval(this.walletStatusInterval!);
-      await this.onWalletReady();
-    } else if (data.status.status !== 'creating') {
-      // If it's still creating, then the setInterval must run again
-      throw new WalletRequestError('Error getting wallet status.');
-    }
+  async pollForWalletStatus(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const pollIntervalTimer = setInterval(async () => {
+        const data = await walletApi.getWalletStatus(this);
+
+        if (data.status.status === 'ready') {
+          clearInterval(pollIntervalTimer);
+          return resolve();
+        } else if (data.status.status !== 'creating') {
+          // Only possible states are 'ready', 'creating' and 'error', if status
+          // is not ready or creating, we should reject the promise
+          clearInterval(pollIntervalTimer);
+          return reject(new WalletRequestError('Error getting wallet status.'));
+        }
+      }, WALLET_STATUS_POLLING_INTERVAL);
+    });
   }
 
   /**
@@ -483,8 +486,22 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   private async onWalletReady() {
+    this.setupConnection();
     this.setState(walletState.READY);
+
     await this.getNewAddresses();
+  }
+
+  setupConnection() {
+    if (!this.walletId) {
+      // This should never happen
+      throw new Error('Tried to setup connection but wallet_id is not set.');
+    }
+
+    this.conn.setWalletId(this.walletId);
+    this.conn.on('new-tx', (newTx: WsTransaction) => this.onNewTx(newTx));
+    this.conn.on('update-tx', (updatedTx) => this.onUpdateTx(updatedTx));
+    this.conn.start();
   }
 
   /**
