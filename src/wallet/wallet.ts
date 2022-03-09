@@ -31,7 +31,7 @@ import Address from '../models/address';
 import Network from '../models/network';
 import networkInstance from '../network';
 import assert from 'assert';
-import WalletServiceConnection, { ConnectionState } from './connection';
+import WalletServiceConnection from './connection';
 import MineTransaction from './mineTransaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
 import { shuffle } from 'lodash';
@@ -54,6 +54,7 @@ import {
   WsTransaction,
   TxOutput,
   CreateWalletAuthData,
+  ConnectionState,
 } from './types';
 import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
@@ -92,13 +93,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // Auth token to be used in the wallet API requests to wallet service
   private authToken: string | null;
   // Wallet status interval
-  private walletStatusInterval: ReturnType<typeof setInterval> | null;
   // Variable to store the possible addresses to use that are after the last used address
   private newAddresses: AddressInfoObject[];
   // Index of the address to be used by the wallet
   private indexToUse: number;
   // WalletService-ready connection class
-  private conn: WalletServiceConnection | null;
+  private conn: WalletServiceConnection;
+  // Flag to indicate if the wallet was already connected when the webscoket conn is established
+  private firstConnection: boolean;
 
   constructor(requestPassword: Function, seed: string, network: Network, options = { passphrase: '' }) {
     super();
@@ -109,8 +111,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       throw Error('You must explicitly provide the seed.');
     }
 
-    this.conn = null;
-
+    // Setup the connection so clients can listen to its events before it is started
+    this.conn = new WalletServiceConnection();
     this.state = walletState.NOT_STARTED;
 
     // It will throw InvalidWords error in case is not valid
@@ -131,7 +133,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     networkInstance.setNetwork(this.network.name);
 
     this.authToken = null;
-    this.walletStatusInterval = null;
+    this.firstConnection = true;
 
     this.newAddresses = [];
     this.indexToUse = -1;
@@ -186,29 +188,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
-   * Encrypt and store wallet data on storage using the wallet's PIN code
-   *
-   * @param {string} pin Pin code to use as password to encrypt the auth key
-   * @param {string} mainKey xpriv of the change level derivation to sign inputs
-   * @param {string} authKey xpriv of the auth specific purpose derivation path
-   *
-   * @memberof Wallet
-   * @inner
-   */
-  static initializeAccessData(pin: string, mainKey: string, authKey: string) {
-    const initialAccessData = wallet.getWalletAccessData() || {};
-
-    const encryptedAuthKey = wallet.encryptData(authKey, pin);
-    const encryptedMainKey = wallet.encryptData(mainKey, pin);
-
-    initialAccessData['authKey'] = encryptedAuthKey.encrypted.toString();
-    initialAccessData['mainKey'] = encryptedMainKey.encrypted.toString();
-
-    wallet.setWalletAccessData(initialAccessData);
-  }
-
-
-  /**
    * getWalletIdFromXPub: Get the wallet id given the xpubkey
    *
    * @param xpub - The xpubkey
@@ -227,12 +206,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @param {Object} optionsParams Options parameters
    *  {
    *   'pinCode': PIN to encrypt the auth xpriv on storage
+   *   'password': Password to decrypt xpriv information
    *  }
    *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async start({ pinCode }) {
+  async start({ pinCode, password }) {
     if (!this.seed) {
       throw new Error('Seed should be in memory when starting the wallet.');
     }
@@ -250,14 +230,15 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       authXpubkeySignature,
       timestampNow,
       firstAddress,
-      xprivChangePath,
       authDerivedPrivKey,
     } = this.generateCreateWalletAuthData(this.seed);
 
-    HathorWalletServiceWallet.initializeAccessData(
+    wallet.executeGenerateWallet(
+      this.seed,
+      this.passphrase,
       pinCode,
-      xprivChangePath.xprivkey,
-      authDerivedPrivKey.xprivkey,
+      password,
+      false,
     );
 
     this.xpub = xpub;
@@ -265,22 +246,19 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const handleCreate = async (data: WalletStatus) => {
       this.walletId = data.walletId;
+
       if (data.status === 'creating') {
-        this.walletStatusInterval = setInterval(async () => {
-          await this.startPollingStatus();
-        }, WALLET_STATUS_POLLING_INTERVAL);
-      } else if (data.status === 'ready') {
-        await this.onWalletReady();
-        this.conn = new WalletServiceConnection({
-          walletId: this.walletId,
-        });
-        this.conn.start();
-        this.conn.on('new-tx', (newTx: WsTransaction) => this.onNewTx(newTx));
-        this.conn.on('update-tx', (updatedTx) => this.onUpdateTx(updatedTx));
-      } else {
+        // If the wallet status is creating, we should wait until it is ready
+        // before continuing
+        await this.pollForWalletStatus();
+      } else if (data.status !== 'ready') {
+        // At this stage, if the wallet is not `ready` or `creating` we should
+        // throw an error as there are only three states: `ready`, `creating` or `error`
         throw new WalletRequestError(ErrorMessages.WALLET_STATUS_ERROR);
       }
-    }
+
+      await this.onWalletReady();
+    };
 
     const data = await walletApi.createWallet(
       this,
@@ -320,9 +298,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const xpubChangeDerivation = walletUtils.xpubDeriveChild(xpub, 0);
     const firstAddress = walletUtils.getAddressAtIndex(xpubChangeDerivation, 0, this.network.name);
 
-    // Derive the change level path to sign inputs
-    const xprivChangePath = xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
-
     return {
       xpub,
       xpubkeySignature,
@@ -330,7 +305,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       authXpubkeySignature,
       timestampNow,
       firstAddress,
-      xprivChangePath,
       authDerivedPrivKey,
     };
   }
@@ -453,15 +427,22 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async startPollingStatus() {
-    const data = await walletApi.getWalletStatus(this);
-    if (data.status.status === 'ready') {
-      clearInterval(this.walletStatusInterval!);
-      await this.onWalletReady();
-    } else if (data.status.status !== 'creating') {
-      // If it's still creating, then the setInterval must run again
-      throw new WalletRequestError('Error getting wallet status.');
-    }
+  async pollForWalletStatus(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const pollIntervalTimer = setInterval(async () => {
+        const data = await walletApi.getWalletStatus(this);
+
+        if (data.status.status === 'ready') {
+          clearInterval(pollIntervalTimer);
+          return resolve();
+        } else if (data.status.status !== 'creating') {
+          // Only possible states are 'ready', 'creating' and 'error', if status
+          // is not ready or creating, we should reject the promise
+          clearInterval(pollIntervalTimer);
+          return reject(new WalletRequestError('Error getting wallet status.'));
+        }
+      }, WALLET_STATUS_POLLING_INTERVAL);
+    });
   }
 
   /**
@@ -483,8 +464,46 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   private async onWalletReady() {
+    this.setupConnection();
     this.setState(walletState.READY);
+
     await this.getNewAddresses();
+  }
+
+  setupConnection() {
+    if (!this.walletId) {
+      // This should never happen
+      throw new Error('Tried to setup connection but wallet_id is not set.');
+    }
+
+    this.conn.setWalletId(this.walletId);
+    this.conn.on('new-tx', (newTx: WsTransaction) => this.onNewTx(newTx));
+    this.conn.on('update-tx', (updatedTx) => this.onUpdateTx(updatedTx));
+    this.conn.on('state', (newState: ConnectionState) => this.onConnectionChangedState(newState));
+    this.conn.start();
+  }
+
+  /**
+   * Called when the connection to the websocket changes.
+   * It is also called if the network is down.
+   *
+   * Since the wallet service facade holds no data (as opposed to
+   * the old facade, where the wallet facade receives a storage object),
+   * the client needs to handle the data reload, so we just emit an event
+   * to indicate that a reload is necessary.
+   *
+   * @param {Number} newState Enum of new state after change
+   **/
+  onConnectionChangedState(newState: ConnectionState) {
+    if (newState === ConnectionState.CONNECTED) {
+      // We don't need to reload data if this is the first
+      // connection
+      if (!this.firstConnection) {
+        this.emit('reload-data');
+      }
+
+      this.firstConnection = false;
+    }
   }
 
   /**

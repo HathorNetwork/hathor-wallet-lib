@@ -208,7 +208,7 @@ export interface TransactionFullObject {
 }
 
 export interface IHathorWallet {
-  start(options: { pinCode: string });
+  start(options: { pinCode: string, password: string });
   getAllAddresses(): AsyncGenerator<GetAddressesObject>;
   getBalance(token: string | null): Promise<GetBalanceObject[]>;
   getTokens(): Promise<string[]>;
@@ -232,6 +232,7 @@ export interface IHathorWallet {
   destroyAuthority(token: string, type: string, count: number): Promise<Transaction>;
   getFullHistory(): TransactionFullObject[];
   getTxBalance(tx: WsTransaction, optionsParams): Promise<{[tokenId: string]: number}>;
+  onConnectionChangedState(newState: ConnectionState): void;
 }
 
 export interface ISendTransaction {
@@ -300,6 +301,11 @@ export interface CreateWalletAuthData {
   authXpubkeySignature: string;
   timestampNow: number;
   firstAddress: string;
-  xprivChangePath: bitcore.HDPrivateKey;
   authDerivedPrivKey: bitcore.HDPrivateKey;
 };
+
+export enum ConnectionState {
+  CLOSED = 0,
+  CONNECTING = 1,
+  CONNECTED = 2,
+}
