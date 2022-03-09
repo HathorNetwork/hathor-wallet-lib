@@ -11,8 +11,10 @@ import config from '../config';
 import helpers from '../helpers';
 import BaseConnection, {
   ConnectionParams,
-  ConnectionState,
 } from '../connection';
+import {
+  ConnectionState,
+} from '../wallet/types';
 
 /**
  * This is a Connection that may be shared by one or more wallets.

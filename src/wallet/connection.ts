@@ -14,13 +14,8 @@ import BaseConnection, {
 } from '../connection';
 import {
   WsTransaction,
+  ConnectionState,
 } from './types';
-
-export enum ConnectionState {
-  CLOSED = 0,
-  CONNECTING = 1,
-  CONNECTED = 2,
-}
 
 export interface WalletServiceConnectionParams extends ConnectionParams {
   walletId: string;

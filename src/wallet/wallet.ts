@@ -31,7 +31,7 @@ import Address from '../models/address';
 import Network from '../models/network';
 import networkInstance from '../network';
 import assert from 'assert';
-import WalletServiceConnection, { ConnectionState } from './connection';
+import WalletServiceConnection from './connection';
 import MineTransaction from './mineTransaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
 import { shuffle } from 'lodash';
@@ -54,6 +54,7 @@ import {
   WsTransaction,
   TxOutput,
   CreateWalletAuthData,
+  ConnectionState,
 } from './types';
 import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
@@ -98,6 +99,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   private indexToUse: number;
   // WalletService-ready connection class
   private conn: WalletServiceConnection;
+  // Flag to indicate if the wallet was already connected when the webscoket conn is established
+  private firstConnection: boolean;
 
   constructor(requestPassword: Function, seed: string, network: Network, options = { passphrase: '' }) {
     super();
@@ -110,7 +113,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // Setup the connection so clients can listen to its events before it is started
     this.conn = new WalletServiceConnection();
-
     this.state = walletState.NOT_STARTED;
 
     // It will throw InvalidWords error in case is not valid
@@ -131,6 +133,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     networkInstance.setNetwork(this.network.name);
 
     this.authToken = null;
+    this.firstConnection = true;
 
     this.newAddresses = [];
     this.indexToUse = -1;
@@ -501,7 +504,31 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.conn.setWalletId(this.walletId);
     this.conn.on('new-tx', (newTx: WsTransaction) => this.onNewTx(newTx));
     this.conn.on('update-tx', (updatedTx) => this.onUpdateTx(updatedTx));
+    this.conn.on('state', (newState: ConnectionState) => this.onConnectionChangedState(newState));
     this.conn.start();
+  }
+
+  /**
+   * Called when the connection to the websocket changes.
+   * It is also called if the network is down.
+   *
+   * Since the wallet service facade holds no data (as opposed to
+   * the old facade, where the wallet facade receives a storage object),
+   * the client needs to handle the data reload, so we just emit an event
+   * to indicate that a reload is necessary.
+   *
+   * @param {Number} newState Enum of new state after change
+   **/
+  onConnectionChangedState(newState: ConnectionState) {
+    if (newState === ConnectionState.CONNECTED) {
+      // We don't need to reload data if this is the first
+      // connection
+      if (!this.firstConnection) {
+        this.emit('reload-data');
+      }
+
+      this.firstConnection = false;
+    }
   }
 
   /**

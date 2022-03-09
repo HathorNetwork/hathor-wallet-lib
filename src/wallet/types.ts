@@ -232,6 +232,7 @@ export interface IHathorWallet {
   destroyAuthority(token: string, type: string, count: number): Promise<Transaction>;
   getFullHistory(): TransactionFullObject[];
   getTxBalance(tx: WsTransaction, optionsParams): Promise<{[tokenId: string]: number}>;
+  onConnectionChangedState(newState: ConnectionState): void;
 }
 
 export interface ISendTransaction {
@@ -303,3 +304,9 @@ export interface CreateWalletAuthData {
   xprivChangePath: bitcore.HDPrivateKey;
   authDerivedPrivKey: bitcore.HDPrivateKey;
 };
+
+export enum ConnectionState {
+  CLOSED = 0,
+  CONNECTING = 1,
+  CONNECTED = 2,
+}
