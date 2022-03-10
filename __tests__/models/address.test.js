@@ -34,7 +34,6 @@ test('Validate address', () => {
 })
 
 test('Address getType', () => {
-
   // Testnet p2pkh
   const addr1 = new Address('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo');
   expect(addr1.getType()).toBe('p2pkh');

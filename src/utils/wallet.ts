@@ -351,7 +351,6 @@ const wallet = {
    * @inner
    */
   createP2SHRedeemScript(xpubs, minSignatures, index) {
-
     const sortedXpubs = _.sortBy(xpubs.map(xp => new HDPublicKey(xp)), (xpub) => {
       return xpub.publicKey.toString('hex');
     });

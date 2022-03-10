@@ -325,57 +325,57 @@ test('Utxo selection', () => {
 
   storage.setItem('wallet:data', {keys, historyTransactions: history});
 
-  const ret1 = wallet.getInputsFromAmount(history, 1, "00")
+  const ret1 = wallet.getInputsFromAmount(history, 1, '00')
   // It will get the first utxo
   expect(ret1.inputsAmount).toBe(1);
   expect(ret1.inputs.length).toBe(1);
-  expect(ret1.inputs[0].tx_id).toBe("0000000419625e2587c225fb49f36278c9da681ec05e039125307b8aef3d3d30");
+  expect(ret1.inputs[0].tx_id).toBe('0000000419625e2587c225fb49f36278c9da681ec05e039125307b8aef3d3d30');
 
-  const ret2 = wallet.getInputsFromAmount(history, 2, "00")
+  const ret2 = wallet.getInputsFromAmount(history, 2, '00')
   // It will use all HTR utxos
   expect(ret2.inputsAmount).toBe(2);
   expect(ret2.inputs.length).toBe(2);
 
-  const ret3 = wallet.getInputsFromAmount(history, 3, "00")
+  const ret3 = wallet.getInputsFromAmount(history, 3, '00')
   // It won't have 3 HTR
   expect(ret3.inputsAmount).toBe(0);
   expect(ret3.inputs.length).toBe(0);
 
-  const ret4 = wallet.getInputsFromAmount(history, 1, "02")
-  // It will get the first utxo for token "02"
+  const ret4 = wallet.getInputsFromAmount(history, 1, '02')
+  // It will get the first utxo for token '02'
   expect(ret4.inputsAmount).toBe(1);
   expect(ret4.inputs.length).toBe(1);
-  expect(ret4.inputs[0].tx_id).toBe("0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1053");
+  expect(ret4.inputs[0].tx_id).toBe('0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1053');
 
-  const ret5 = wallet.getInputsFromAmount(history, 3, "02")
-  // It will get the last utxo for token "02"
+  const ret5 = wallet.getInputsFromAmount(history, 3, '02')
+  // It will get the last utxo for token '02'
   expect(ret5.inputsAmount).toBe(3);
   expect(ret5.inputs.length).toBe(1);
-  expect(ret5.inputs[0].tx_id).toBe("0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1055");
+  expect(ret5.inputs[0].tx_id).toBe('0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1055');
 
-  const ret6 = wallet.getInputsFromAmount(history, 4, "02")
-  // It will get the last two utxo for token "02", the ones with bigger amount
+  const ret6 = wallet.getInputsFromAmount(history, 4, '02')
+  // It will get the last two utxo for token '02', the ones with bigger amount
   expect(ret6.inputsAmount).toBe(5);
   expect(ret6.inputs.length).toBe(2);
-  expect(ret6.inputs[0].tx_id).toBe("0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1055");
-  expect(ret6.inputs[1].tx_id).toBe("0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1054");
+  expect(ret6.inputs[0].tx_id).toBe('0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1055');
+  expect(ret6.inputs[1].tx_id).toBe('0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1054');
 
-  const ret7 = wallet.getInputsFromAmount(history, 5, "02")
-  // It will get the last two utxo for token "02", the ones with bigger amount
+  const ret7 = wallet.getInputsFromAmount(history, 5, '02')
+  // It will get the last two utxo for token '02', the ones with bigger amount
   expect(ret7.inputsAmount).toBe(5);
   expect(ret7.inputs.length).toBe(2);
-  expect(ret7.inputs[0].tx_id).toBe("0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1055");
-  expect(ret7.inputs[1].tx_id).toBe("0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1054");
+  expect(ret7.inputs[0].tx_id).toBe('0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1055');
+  expect(ret7.inputs[1].tx_id).toBe('0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1054');
 
-  const ret8 = wallet.getInputsFromAmount(history, 6, "02")
-  // It will get all utxos for token "02"
+  const ret8 = wallet.getInputsFromAmount(history, 6, '02')
+  // It will get all utxos for token '02'
   expect(ret8.inputsAmount).toBe(6);
   expect(ret8.inputs.length).toBe(3);
-  expect(ret8.inputs[0].tx_id).toBe("0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1055");
-  expect(ret8.inputs[1].tx_id).toBe("0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1054");
-  expect(ret8.inputs[2].tx_id).toBe("0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1053");
+  expect(ret8.inputs[0].tx_id).toBe('0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1055');
+  expect(ret8.inputs[1].tx_id).toBe('0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1054');
+  expect(ret8.inputs[2].tx_id).toBe('0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1053');
 
-  const ret9 = wallet.getInputsFromAmount(history, 7, "02")
+  const ret9 = wallet.getInputsFromAmount(history, 7, '02')
   // Won't have enough tokens
   expect(ret9.inputsAmount).toBe(0);
   expect(ret9.inputs.length).toBe(0);
@@ -445,7 +445,7 @@ test('isWalletMultiSig', () => {
 });
 
 test('executeGenerateWallet multisig', () => {
-  const words = "mutual property noodle reason reform leisure roof foil siren basket decide above offer rate outdoor board input depend sort twenty little veteran code plunge";
+  const words = 'mutual property noodle reason reform leisure roof foil siren basket decide above offer rate outdoor board input depend sort twenty little veteran code plunge';
   const multisigData = {
       minSignatures: 2,
       pubkeys: [
@@ -737,7 +737,7 @@ test('executeGenerateWallet multisig', () => {
 });
 
 test('getAddressAtIndex', () => {
-  const words = "mutual property noodle reason reform leisure roof foil siren basket decide above offer rate outdoor board input depend sort twenty little veteran code plunge";
+  const words = 'mutual property noodle reason reform leisure roof foil siren basket decide above offer rate outdoor board input depend sort twenty little veteran code plunge';
   wallet.executeGenerateWallet(words, '', '123456', 'password', false);
   expect(wallet.getAddressAtIndex(1)).toBe('WiA7DCgTcu4rbCUuQcniaFnF33pnRat5Ua');
   expect(wallet.getAddressAtIndex(2)).toBe('WZCWHcdkfSAJqeSutqXDUwSWWEUggRMoNJ');
@@ -747,7 +747,7 @@ test('getAddressAtIndex', () => {
 });
 
 test('getAddressAtIndex multisig', () => {
-  const words = "mutual property noodle reason reform leisure roof foil siren basket decide above offer rate outdoor board input depend sort twenty little veteran code plunge";
+  const words = 'mutual property noodle reason reform leisure roof foil siren basket decide above offer rate outdoor board input depend sort twenty little veteran code plunge';
   const multisigData = {
       minSignatures: 2,
       pubkeys: [

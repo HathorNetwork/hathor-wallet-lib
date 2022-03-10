@@ -239,7 +239,7 @@ const helpers = {
    */
   pushIntToStack(stack: Buffer[], value: number) {
     if (value < 0 || value > 16) {
-      throw new Error("Invalid OP_N, must be [0,16].");
+      throw new Error('Invalid OP_N, must be [0,16].');
     }
     // OP_0 is 0x50 (hex) or 80 (decimal), and OP_N is n + OP_0
     stack.push(Buffer.from([value+80]));

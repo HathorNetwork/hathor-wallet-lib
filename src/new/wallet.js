@@ -174,27 +174,6 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Gets the xpub derived at the MultiSig account path
-   *
-   * @param {Object} options Only used when deriving from seed, may include passphrase and networkName.
-   */
-  getMultisigPublicKey(options) {
-    if (this.isFromXPub()) {
-      throw new WalletFromXPubGuard('getMultisigPublicKey');
-    }
-
-    if (this.seed) {
-      return walletUtils.getMultiSigXPubFromWords(this.seed, options);
-    }
-
-    if (this.xpriv) {
-      return walletUtils.getMultiSigXPubFromXPriv(this.seed);
-    }
-
-    throw "This should never happen";
-  }
-
-  /**
    * Gets the current server url from connection
    */
   getServerUrl() {

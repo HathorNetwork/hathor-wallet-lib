@@ -440,8 +440,7 @@ test('getP2SHInputData', () => {
 });
 
 test('get multisig xpub', () => {
-
-  const seed = "mutual property noodle reason reform leisure roof foil siren basket decide above offer rate outdoor board input depend sort twenty little veteran code plunge";
+  const seed = 'mutual property noodle reason reform leisure roof foil siren basket decide above offer rate outdoor board input depend sort twenty little veteran code plunge';
   const xpriv = 'htpr4yPomy8kcy5uFnvKpExM7fUHTVZbS3aBbUmeKQAKSAX1SnYzTCvzzoJtVavt9HU5USsCUXubKZYPwskPLdXaTwStUuMu8q3G8Mpwnbd3uFf';
   const xpub = 'xpub6BnoFhDySfUAaJQveYx1YvB8YcLdnnGdz19twSXRh6byEfZSWS4ewinKVDVJcvp6m17mAkQiBuhUgytwS561AkyCFXTvSjRXatueS2E4s3K';
 
