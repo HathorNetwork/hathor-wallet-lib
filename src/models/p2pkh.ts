@@ -62,6 +62,54 @@ class P2PKH {
     arr.push(OP_CHECKSIG);
     return util.buffer.concat(arr);
   }
+
+  /**
+   * Identify a script as P2PKH or not.
+   *
+   * @param {Buffer} buf Script as buffer.
+   *
+   * @return {Boolean}
+   * @memberof P2PKH
+   * @inner
+   */
+  static identify(buf: Buffer): Boolean {
+    const op_greaterthan_timestamp = 111;
+    const op_dup = 118;
+    const op_hash160 = 169;
+    const op_equalverify = 136;
+    const op_checksig = 172;
+    if (buf.length !== 31 && buf.length !== 25) {
+      // this is not a P2PKH script
+      return false;
+    }
+    let ptr = 0;
+    if (buf.length === 31) {
+      // with timelock, we begin with timestamp
+      if (buf.readUInt8(ptr++) !== 4) {
+        return false;
+      }
+      ptr += 4
+      // next byte is OP_GREATERTHAN_TIMESTAMP
+      if (buf.readUInt8(ptr++) !== op_greaterthan_timestamp) {
+        return false;
+      }
+    }
+
+    // OP_DUP OP_HASH160
+    if (buf.readUInt8(ptr++) !== op_dup && buf.readUInt8(ptr++) !== op_hash160) {
+      return false;
+    }
+    // address hash
+    if (buf.readUInt8(ptr++) !== 20) {
+      return false;
+    }
+    ptr += 20
+    // OP_EQUALVERIFY OP_CHECKSIG
+    if (buf.readUInt8(ptr++) !== op_equalverify && buf.readUInt8(ptr++) !== op_checksig) {
+      return false;
+    }
+    return true;
+  }
 }
 
 export default P2PKH;

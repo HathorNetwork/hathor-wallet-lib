@@ -58,6 +58,52 @@ class P2SH {
     arr.push(OP_EQUAL);
     return util.buffer.concat(arr);
   }
+
+  /**
+   * Identify a script as P2SH or not.
+   *
+   * @param {Buffer} buf Script as buffer.
+   *
+   * @return {Boolean}
+   * @memberof P2SH
+   * @inner
+   */
+  static identify(buf: Buffer): Boolean {
+    const op_greaterthan_timestamp = 111;
+    const op_hash160 = 169;
+    const op_equal = 135;
+    if (buf.length !== 31 && buf.length !== 25) {
+      // this is not a P2PKH script
+      return false;
+    }
+    let ptr = 0;
+    if (buf.length === 31) {
+      // with timelock, we begin with timestamp
+      if (buf.readUInt8(ptr++) !== 4) {
+        return false;
+      }
+      ptr += 4
+      // next byte is OP_GREATERTHAN_TIMESTAMP
+      if (buf.readUInt8(ptr++) !== op_greaterthan_timestamp) {
+        return false;
+      }
+    }
+
+    // OP_HASH160
+    if (buf.readUInt8(ptr++) !== op_hash160) {
+      return false;
+    }
+    // address hash
+    if (buf.readUInt8(ptr++) !== 20) {
+      return false;
+    }
+    ptr += 20
+    // OP_EQUAL
+    if (buf.readUInt8(ptr++) !== op_equal) {
+      return false;
+    }
+    return true;
+  }
 }
 
 export default P2SH;

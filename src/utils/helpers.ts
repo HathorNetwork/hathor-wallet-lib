@@ -19,7 +19,7 @@ import Output from '../models/output';
 import Network from '../models/network';
 import Address from '../models/address';
 import { hexToBuffer, unpackToInt } from '../utils/buffer';
-import { crypto, encoding } from 'bitcore-lib';
+import { crypto, encoding, Address as bitcoreAddress } from 'bitcore-lib';
 import { clone } from 'lodash';
 import { ParseError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
@@ -283,6 +283,27 @@ const helpers = {
     const checksum = this.getChecksum(slicedAddress);
     const addressBytes = buffer.Buffer.concat([slicedAddress, checksum]);
     return new Address(encoding.Base58.encode(addressBytes), {network});
+  },
+
+  /**
+   * Get encoded address object from script hash (20 bytes) and network.
+   * We use bitcore's Address module to build the address from the hash.
+   *
+   * @param {Buffer} scriptHash 20 bytes of the script hash in the output script
+   * @param {Network} network Network to get the address first byte parameter
+   *
+   * @return {Address}
+   * @memberof Helpers
+   * @inner
+   */
+  encodeAddressP2SH(scriptHash: Buffer, network: Network): Address {
+    if (scriptHash.length !== 20) {
+      throw new Error('Expect script hash that must have 20 bytes.');
+    }
+
+    const addr = bitcoreAddress.fromScriptHash(scriptHash, network);
+
+    return new Address(addr.toString(), {network});
   },
 
   /**
