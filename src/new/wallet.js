@@ -13,6 +13,7 @@ import transaction from '../transaction';
 import version from '../version';
 import walletApi from '../api/wallet';
 import storage from '../storage';
+import { hexToBuffer } from '../utils/buffer';
 import helpers from '../utils/helpers';
 import walletUtils from '../utils/wallet';
 import MemoryStore from '../memory_store';
@@ -21,6 +22,7 @@ import SendTransaction from './sendTransaction';
 import Network from '../models/network';
 import { AddressError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
+import P2SHSignature from './models/p2sh_signature';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';
@@ -277,6 +279,99 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Sign and return all signatures of the inputs belonging to this wallet.
+   *
+   * @param {String} txHex hex representation of the transaction.
+   * @param {String} pin PIN to decrypt the private key
+   *
+   * @return {String} serialized P2SHSignature data
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
+  getAllSignatures(txHex, pin) {
+    storage.setStore(this.store);
+    const tx = helpersUtils.createTxFromHex(txHex, this.getNetworkObject());
+    const hash = tx.getDataToSignHash();
+    const accessData = storage.getItem('wallet:accessData');
+    const privateKeyStr = wallet.decryptData(accessData.mainKey, pin);
+    const key = HDPrivateKey(privateKeyStr);
+    const signatures = {};
+
+    for (const {index, input} of tx.inputs.map((input, index) => ({index, input}))) {
+      // get address index
+      const addressIndex = walet.getAddressIndex(input.address);
+      if (!addressIndex) continue;
+
+      const derivedKey = key.deriveNonCompliantChild(index);
+      const privateKey = derivedKey.privateKey;
+
+      // derive key to address index
+      const sig = crypto.ECDSA.sign(hash, privateKey, 'little').set({
+        nhashtype: crypto.Signature.SIGHASH_ALL
+      });
+
+      signatures[index] = sig.toDER();
+    }
+    const p2shSig = new P2SHSignature(accessData.multisig.pubkey, signatures);
+    return p2shSig.serialize();
+  }
+
+  /**
+   * Assemble transaction from hex and collected p2sh_signatures.
+   *
+   * @param {String} txHex hex representation of the transaction.
+   * @param {Array} signatures Array of serialized p2sh_signatures (string).
+   *
+   * @return {Transaction} with input data created from the signatures.
+   *
+   * @throws {Error} if there are not enough signatures for an input
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
+  assemblePartialTransaction(txHex, signatures) {
+    storage.setStore(this.store);
+    const tx = helpersUtils.createTxFromHex(txHex, this.getNetworkObject());
+    const accessData = storage.getItem('wallet:accessData');
+    const multisigData = accessData.multisig;
+    const xpub = HDPublicKey(accessData.xpubkey);
+    const p2shSignatures = [];
+
+    // deserialize P2SHSignature for all signatures
+    for (const sig of signatures) {
+      try {
+        const p2shSig = P2SHSignature.deserialize(sig);
+        p2shSignatures.push(p2shSig);
+      } catch (e) {
+        // ignore invalid signatures
+        continue
+      }
+    }
+
+    for (const {index, input} of tx.inputs.map((input, index) => ({index, input}))) {
+      // get address index
+      const addressIndex = walet.getAddressIndex(input.address);
+      if (!addressIndex) continue;
+
+      const redeemScript = walletUtils.createP2SHRedeemScript(multisigData.pubkeys, multisigData.minSignatures, addressIndex);
+      const sigs = [];
+      for (p2shSig in p2shSignatures) {
+        try {
+          sigs.push(hexToBuffer(p2shSig.signatures[index]));
+        } catch (e) {
+          // skip if there is no signature, or if it's not hex
+          continue
+        }
+      }
+      const inputData = walletUtils.getP2SHInputData(sigs, redeemScript);
+      tx.inputs[index].setData(inputData);
+    }
+
+    return tx;
+  }
+
+  /**
    * Old getAllAddresses method used to keep compatibility
    * with some methods that used to need it
    *
@@ -369,7 +464,7 @@ class HathorWallet extends EventEmitter {
   /**
    * Get address to be used in the wallet
    *
-   * @params {Object} { markAsUsed } if true, we will locally mark this address as used and won't return it again to be used
+   * @param {Object} { markAsUsed } if true, we will locally mark this address as used and won't return it again to be used
    *
    * @return {Object} { address, index, addressPath }
    *

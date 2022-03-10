@@ -24,7 +24,6 @@ import Address from './models/address';
 import P2PKH from './models/p2pkh';
 import P2SH from './models/p2sh';
 import ScriptData from './models/script_data';
-import P2SHSignature from './models/p2sh_signature';
 
 
 /**
@@ -384,45 +383,6 @@ const transaction = {
       }
     }
     return data;
-  },
-
-  /*
-   * Sign and return all signatures of the inputs belonging to this wallet.
-   *
-   * @param {string} txHex hex representation of the transaction.
-   * @param {Network} network Network to get the address first byte parameter
-   * @param {string} pin PIN to decrypt the private key
-   *
-   * @return {string} serialized P2SHSignature data
-   *
-   * @memberof Transaction
-   * @inner
-   */
-  getAllSignatures(txHex, network, pin) {
-    const tx = helpersUtils.createTxFromHex(txHex, network);
-    const hash = tx.getDataToSignHash();
-    const accessData = storage.getItem('wallet:accessData');
-    const privateKeyStr = wallet.decryptData(accessData.mainKey, pin);
-    const key = HDPrivateKey(privateKeyStr);
-    const signatures = {};
-
-    for (const {index, value} of tx.inputs.map((value, index) => ({index, value}))) {
-      // get address index
-      const addressIndex = walet.getAddressIndex(input.address);
-      if (!addressIndex) continue;
-
-      const derivedKey = key.deriveNonCompliantChild(index);
-      const privateKey = derivedKey.privateKey;
-
-      // derive key to address index
-      const sig = crypto.ECDSA.sign(hash, privateKey, 'little').set({
-        nhashtype: crypto.Signature.SIGHASH_ALL
-      });
-
-      signatures[index] = sig.toDER();
-    }
-    const p2shSig = P2SHSignature(accessData.multisig.pubkey, signatures);
-    return p2shSig.serialize();
   },
 
   /*
