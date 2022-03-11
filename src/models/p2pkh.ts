@@ -96,7 +96,7 @@ class P2PKH {
     }
 
     // OP_DUP OP_HASH160
-    if (buf.readUInt8(ptr++) !== op_dup && buf.readUInt8(ptr++) !== op_hash160) {
+    if (buf.readUInt8(ptr++) !== op_dup || buf.readUInt8(ptr++) !== op_hash160) {
       return false;
     }
     // address hash
@@ -105,7 +105,7 @@ class P2PKH {
     }
     ptr += 20
     // OP_EQUALVERIFY OP_CHECKSIG
-    if (buf.readUInt8(ptr++) !== op_equalverify && buf.readUInt8(ptr++) !== op_checksig) {
+    if (buf.readUInt8(ptr++) !== op_equalverify || buf.readUInt8(ptr++) !== op_checksig) {
       return false;
     }
     return true;

@@ -72,12 +72,12 @@ class P2SH {
     const op_greaterthan_timestamp = 111;
     const op_hash160 = 169;
     const op_equal = 135;
-    if (buf.length !== 31 && buf.length !== 25) {
+    if (buf.length !== 29 && buf.length !== 23) {
       // this is not a P2PKH script
       return false;
     }
     let ptr = 0;
-    if (buf.length === 31) {
+    if (buf.length === 29) {
       // with timelock, we begin with timestamp
       if (buf.readUInt8(ptr++) !== 4) {
         return false;

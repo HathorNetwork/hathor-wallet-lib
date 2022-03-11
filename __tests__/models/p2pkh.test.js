@@ -44,8 +44,8 @@ test('identify p2pkh', () => {
   const p2shScript = 'a914b6696aed0a1ef8fe7d604f5436ec6617e6ad92d387';
   const p2shScriptTimelocked = '042e3db6b06fa914b6696aed0a1ef8fe7d604f5436ec6617e6ad92d387';
 
-  expect(P2SH.identify(script)).toBe(true);
-  expect(P2SH.identify(scriptTimeLocked)).toBe(true);
-  expect(P2SH.identify(p2shScript)).toBe(false);
-  expect(P2SH.identify(p2shScriptTimelocked)).toBe(false);
+  expect(P2PKH.identify(Buffer.from(script, 'hex'))).toBe(true);
+  expect(P2PKH.identify(Buffer.from(scriptTimelocked, 'hex'))).toBe(true);
+  expect(P2PKH.identify(Buffer.from(p2shScript, 'hex'))).toBe(false);
+  expect(P2PKH.identify(Buffer.from(p2shScriptTimelocked, 'hex'))).toBe(false);
 });
