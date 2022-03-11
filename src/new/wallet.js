@@ -22,7 +22,7 @@ import SendTransaction from './sendTransaction';
 import Network from '../models/network';
 import { AddressError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
-import P2SHSignature from './models/p2sh_signature';
+import P2SHSignature from '../models/p2sh_signature';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';
