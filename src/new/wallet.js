@@ -23,6 +23,7 @@ import Network from '../models/network';
 import { AddressError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
+import { HDPrivateKey, HDPublicKey, crypto } from 'bitcore-lib';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';
@@ -270,19 +271,30 @@ class HathorWallet extends EventEmitter {
    */
   getAllSignatures(txHex, pin) {
     storage.setStore(this.store);
-    const tx = helpersUtils.createTxFromHex(txHex, this.getNetworkObject());
+    const tx = helpers.createTxFromHex(txHex, this.getNetworkObject());
     const hash = tx.getDataToSignHash();
+    const walletData = wallet.getWalletData();
+    const historyTransactions = walletData['historyTransactions'] || {};
     const accessData = storage.getItem('wallet:accessData');
     const privateKeyStr = wallet.decryptData(accessData.mainKey, pin);
     const key = HDPrivateKey(privateKeyStr);
     const signatures = {};
 
     for (const {index, input} of tx.inputs.map((input, index) => ({index, input}))) {
-      // get address index
-      const addressIndex = walet.getAddressIndex(input.address);
-      if (!addressIndex) continue;
+      if (!(input.hash in historyTransactions)) {
+        continue;
+      }
 
-      const derivedKey = key.deriveNonCompliantChild(index);
+      const histTx = historyTransactions[input.hash];
+      const address = histTx.outputs[input.index].decoded.address;
+      // get address index
+      const addressIndex = wallet.getAddressIndex(address);
+      if (addressIndex === null || addressIndex === undefined) {
+        // The transaction is on our history but this input is not ours
+        continue;
+      }
+
+      const derivedKey = key.deriveNonCompliantChild(addressIndex);
       const privateKey = derivedKey.privateKey;
 
       // derive key to address index
@@ -290,7 +302,7 @@ class HathorWallet extends EventEmitter {
         nhashtype: crypto.Signature.SIGHASH_ALL
       });
 
-      signatures[index] = sig.toDER();
+      signatures[index] = sig.toString();
     }
     const p2shSig = new P2SHSignature(accessData.multisig.pubkey, signatures);
     return p2shSig.serialize();
@@ -311,31 +323,33 @@ class HathorWallet extends EventEmitter {
    */
   assemblePartialTransaction(txHex, signatures) {
     storage.setStore(this.store);
-    const tx = helpersUtils.createTxFromHex(txHex, this.getNetworkObject());
+    const tx = helpers.createTxFromHex(txHex, this.getNetworkObject());
+    const walletData = wallet.getWalletData();
+    const historyTransactions = walletData['historyTransactions'] || {};
     const accessData = storage.getItem('wallet:accessData');
     const multisigData = accessData.multisig;
     const xpub = HDPublicKey(accessData.xpubkey);
-    const p2shSignatures = [];
 
     // deserialize P2SHSignature for all signatures
-    for (const sig of signatures) {
-      try {
-        const p2shSig = P2SHSignature.deserialize(sig);
-        p2shSignatures.push(p2shSig);
-      } catch (e) {
-        // ignore invalid signatures
-        continue
-      }
-    }
+    const p2shSignatures = signatures.map(sig => P2SHSignature.deserialize(sig));
 
     for (const {index, input} of tx.inputs.map((input, index) => ({index, input}))) {
+      if (!(input.hash in historyTransactions)) {
+        continue;
+      }
+
+      const histTx = historyTransactions[input.hash];
+      const address = histTx.outputs[input.index].decoded.address;
       // get address index
-      const addressIndex = walet.getAddressIndex(input.address);
-      if (!addressIndex) continue;
+      const addressIndex = wallet.getAddressIndex(address);
+      if (addressIndex === null || addressIndex === undefined) {
+        // The transaction is on our history but this input is not ours
+        continue;
+      }
 
       const redeemScript = walletUtils.createP2SHRedeemScript(multisigData.pubkeys, multisigData.minSignatures, addressIndex);
       const sigs = [];
-      for (p2shSig in p2shSignatures) {
+      for (const p2shSig of p2shSignatures) {
         try {
           sigs.push(hexToBuffer(p2shSig.signatures[index]));
         } catch (e) {
