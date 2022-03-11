@@ -301,7 +301,7 @@ const helpers = {
       throw new Error('Expect script hash that must have 20 bytes.');
     }
 
-    const addr = bitcoreAddress.fromScriptHash(scriptHash, network);
+    const addr = bitcoreAddress.fromScriptHash(scriptHash, network.getNetwork());
 
     return new Address(addr.toString(), {network});
   },

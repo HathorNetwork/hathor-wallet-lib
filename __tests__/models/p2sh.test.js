@@ -34,3 +34,16 @@ test('createScript', () => {
   expect(sm1.createScript().toString('hex')).toBe(script);
   expect(sm2.createScript().toString('hex')).toBe(scriptTimelocked);
 });
+
+test('identify p2sh', () => {
+  const script = 'a914b6696aed0a1ef8fe7d604f5436ec6617e6ad92d387';
+  const scriptTimelocked = '042e3db6b06fa914b6696aed0a1ef8fe7d604f5436ec6617e6ad92d387';
+
+  const p2pkhScript = '76a914729181c0f3f2e3f589cc10facbb9332e0c309a7788ac';
+  const p2pkhScriptTimelocked = '042e3db6b06f76a914729181c0f3f2e3f589cc10facbb9332e0c309a7788ac';
+
+  expect(P2SH.identify(script)).toBe(true);
+  expect(P2SH.identify(scriptTimeLocked)).toBe(true);
+  expect(P2SH.identify(p2pkhScript)).toBe(false);
+  expect(P2SH.identify(p2pkhScriptTimelocked)).toBe(false);
+});

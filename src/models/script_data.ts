@@ -24,7 +24,7 @@ class ScriptData {
 
   /**
    * Create an output script from data
-   * 
+   *
    * @return {Buffer}
    * @memberof ScriptData
    * @inner
