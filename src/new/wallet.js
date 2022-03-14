@@ -1125,9 +1125,6 @@ class HathorWallet extends EventEmitter {
     this.serverInfo = null;
     this.firstConnection = true;
     this.walletStopped = true;
-
-    // TODO Double check that we are properly cleaning things up.
-    // See: https://github.com/HathorNetwork/hathor-wallet-headless/pull/1#discussion_r369859701
     this.conn.stop()
   }
 
