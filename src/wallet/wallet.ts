@@ -807,9 +807,20 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  stop() {
+  stop({ cleanStorage = true } = {}) {
     this.walletId = null;
     this.state = walletState.NOT_STARTED;
+    this.firstConnection = true;
+    this.removeAllListeners();
+
+    if (cleanStorage) {
+      wallet.cleanWallet({
+        endConnection: false,
+        connection: this.conn,
+      });
+    }
+
+    this.conn.stop();
   }
 
   /**
