@@ -207,6 +207,10 @@ export interface TransactionFullObject {
   parents: string[];
 }
 
+export interface IStopWalletParams {
+  cleanStorage?: boolean;
+};
+
 export interface IHathorWallet {
   start(options: { pinCode: string, password: string });
   getAllAddresses(): AsyncGenerator<GetAddressesObject>;
@@ -215,7 +219,7 @@ export interface IHathorWallet {
   getTxHistory(options: { token_id?: string, count?: number, skip?: number }): Promise<GetHistoryObject[]>;
   sendManyOutputsTransaction(outputs: OutputRequestObj[], options: { inputs?: InputRequestObj[], changeAddress?: string }): Promise<Transaction>;
   sendTransaction(address: string, value: number, options: { token?: string, changeAddress?: string }): Promise<Transaction>;
-  stop();
+  stop(params?: IStopWalletParams);
   getAddressAtIndex(index: number): string;
   getCurrentAddress({ markAsUsed: boolean }): AddressInfoObject;
   getNextAddress(): AddressInfoObject;
