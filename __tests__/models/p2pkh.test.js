@@ -13,9 +13,9 @@ test('createScript', () => {
   const testnet = new Network('testnet');
   const mainnet = new Network('mainnet');
 
-  // Testnet p2sh
+  // Testnet p2pkh
   const addr1 = new Address('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo', {network: testnet});
-  // Mainnet p2sh
+  // Mainnet p2pkh
   const addr2 = new Address('HNBUHhzkVuSFUNW21HrajUFNUiX8JrznSb', {network: mainnet});
 
   const timestamp = 775796400;

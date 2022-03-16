@@ -38,6 +38,17 @@ class P2PKH {
   }
 
   /**
+   * Get script type
+   *
+   * @return {String}
+   * @memberof P2PKH
+   * @inner
+   */
+  getType(): String {
+    return 'p2pkh';
+  }
+
+  /**
    * Create a P2PKH script
    *
    * @return {Buffer}
@@ -73,11 +84,11 @@ class P2PKH {
    * @inner
    */
   static identify(buf: Buffer): Boolean {
-    const op_greaterthan_timestamp = 111;
-    const op_dup = 118;
-    const op_hash160 = 169;
-    const op_equalverify = 136;
-    const op_checksig = 172;
+    const op_greaterthan_timestamp = OP_GREATERTHAN_TIMESTAMP.readUInt8();
+    const op_dup = OP_DUP.readUInt8();
+    const op_hash160 = OP_HASH160.readUInt8();
+    const op_equalverify = OP_EQUALVERIFY.readUInt8();
+    const op_checksig = OP_CHECKSIG.readUInt8();
     if (buf.length !== 31 && buf.length !== 25) {
       // this is not a P2PKH script
       return false;

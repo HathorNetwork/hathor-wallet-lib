@@ -392,7 +392,7 @@ const wallet = {
   },
 
   /**
-   * Create an HDPublicKey on P2SH MultiSig account path from the root xpub
+   * Create an HDPublicKey on P2SH MultiSig account path from the root xpriv
    *
    * @param {HDPrivateKey} xpriv HD private key used to derive the multisig xpub.
    *

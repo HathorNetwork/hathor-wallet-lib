@@ -22,6 +22,7 @@ import {
   LOAD_WALLET_MAX_RETRY,
   LOAD_WALLET_RETRY_SLEEP,
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
+  P2SH_ACCT_PATH,
 } from './constants';
 import Mnemonic from 'bitcore-mnemonic';
 import { HDPrivateKey, HDPublicKey, Address, crypto, Script } from 'bitcore-lib';
@@ -225,13 +226,16 @@ const wallet = {
     let privkey;
     if (xpriv.depth === 0) {
       if (multisig) {
-        privkey = xpriv.deriveNonCompliantChild(`m/45'/${HATHOR_BIP44_CODE}'/0'/0`);
+        privkey = xpriv.deriveNonCompliantChild(`${P2SH_ACCT_PATH}/0`);
       } else {
         privkey = xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
       }
       initialAccessData = {};
     } else {
       // Already derived
+      if (multisig) {
+        throw new Error('Cannot start multisig for derived xpriv');
+      }
       privkey = xpriv;
       initialAccessData = this.getWalletAccessData() || {};
     }
@@ -247,7 +251,7 @@ const wallet = {
     });
 
     if (multisig) {
-      const dxpriv = xpriv.deriveNonCompliantChild(`m/45'/${HATHOR_BIP44_CODE}'/0'`);
+      const dxpriv = xpriv.deriveNonCompliantChild(P2SH_ACCT_PATH);
       access['multisig'] = Object.assign({pubkey: dxpriv.publicKey.toString('hex')}, multisig);
     }
 
@@ -275,7 +279,7 @@ const wallet = {
     let authXpriv = xpriv.deriveNonCompliantChild(WALLET_SERVICE_AUTH_DERIVATION_PATH);
     let privkey;
     if (multisig) {
-      privkey = xpriv.deriveNonCompliantChild(`m/45'/${HATHOR_BIP44_CODE}'/0'/0`);
+      privkey = xpriv.deriveNonCompliantChild(`${P2SH_ACCT_PATH}/0`);
     } else {
       privkey = xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
     }
@@ -298,7 +302,7 @@ const wallet = {
     }
 
     if (multisig) {
-      const dxpriv = xpriv.deriveNonCompliantChild(`m/45'/${HATHOR_BIP44_CODE}'/0'`);
+      const dxpriv = xpriv.deriveNonCompliantChild(P2SH_ACCT_PATH);
       access['multisig'] = Object.assign({pubkey: dxpriv.publicKey.toString('hex')}, multisig);
     }
 

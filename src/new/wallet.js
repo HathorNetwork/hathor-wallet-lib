@@ -112,8 +112,12 @@ class HathorWallet extends EventEmitter {
       throw Error('You can\'t share connections.');
     }
 
-    if (multisig && !(multisig.pubkeys && multisig.minSignatures)) {
-      throw Error('Multisig configuration requires both pubkeys and minSignatures.');
+    if (multisig) {
+      if (!(multisig.pubkeys && multisig.minSignatures)) {
+        throw Error('Multisig configuration requires both pubkeys and minSignatures.');
+      } else if (multisig.pubkeys.length < multisig.minSignatures) {
+        throw Error('Multisig configuration invalid.');
+      }
     }
 
     this.conn = connection;
@@ -475,7 +479,7 @@ class HathorWallet extends EventEmitter {
     const index = this.getAddressIndex(address);
     let addressPath;
     if (wallet.isWalletMultiSig()) {
-      addressPath = `m/45'/${HATHOR_BIP44_CODE}'/0'/0/${index}`;
+      addressPath = `${P2SH_ACCT_PATH}/0/${index}`;
     } else {
       addressPath = `m/44'/${HATHOR_BIP44_CODE}'/0'/0/${index}`;
     }

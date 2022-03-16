@@ -281,7 +281,7 @@ const transaction = {
   },
 
   /**
-   * Create P2SH input data
+   * Create P2PKH input data
    *
    * @param {Buffer} signature Input signature
    * @param {Buffer} publicKey Input public key

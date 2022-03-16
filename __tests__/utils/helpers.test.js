@@ -188,6 +188,8 @@ test('createTxFromData', () => {
   const p2pkh = new P2PKH(new Address('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo'));
   const defaultTx = helpers.createTxFromData(defaultTxData, testnet);
   expect(defaultTx.getType()).toBe('Transaction');
+  defaultTx.outputs[0].parseScript(testnet);
+  expect(defaultTx.outputs[0].decodedScript.getType()).toBe('p2pkh');
   expect(defaultTx.outputs[0].script.toString('hex')).toBe(p2pkh.createScript().toString('hex'))
   // XXX: we should have a way to test that an output is P2PKH, P2SH or data
 
@@ -221,6 +223,10 @@ test('createTxFromData', () => {
   const scriptData = new ScriptData('123');
   const extraTx = helpers.createTxFromData(extraTxData, testnet);
   expect(extraTx.getType()).toBe('Transaction');
+  extraTx.outputs[0].parseScript(testnet);
+  extraTx.outputs[1].parseScript(testnet);
+  expect(extraTx.outputs[0].decodedScript.getType()).toBe('data');
   expect(extraTx.outputs[0].script.toString('hex')).toBe(scriptData.createScript().toString('hex'));
+  expect(extraTx.outputs[1].decodedScript.getType()).toBe('p2sh');
   expect(extraTx.outputs[1].script.toString('hex')).toBe(p2sh.createScript().toString('hex'));
 });

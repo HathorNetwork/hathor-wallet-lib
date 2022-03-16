@@ -148,7 +148,7 @@ class Output {
     return arr;
   }
 
-  parseScript(network: Network): P2PKH | null {
+  parseScript(network: Network): P2PKH | P2SH | ScriptData | null {
     // It's still unsure how expensive it is to throw an exception in JavaScript. Some languages are really
     // inefficient when it comes to exceptions while others are totally efficient. If it is efficient,
     // we can keep throwing the error. Otherwise, we should just return null
