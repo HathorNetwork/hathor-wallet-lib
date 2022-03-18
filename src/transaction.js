@@ -10,6 +10,7 @@ import { DECIMAL_PLACES, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, TOKEN_INFO
 import { HDPrivateKey, crypto, encoding, util } from 'bitcore-lib';
 import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError, MaximumNumberParentsError } from './errors';
 import { hexToBuffer } from './utils/buffer';
+import helpersUtils from './utils/helpers';
 import dateFormatter from './date';
 import helpers from './helpers';
 import network from './network';
@@ -21,6 +22,7 @@ import walletApi from './api/wallet';
 import { get } from 'lodash';
 import Address from './models/address';
 import P2PKH from './models/p2pkh';
+import P2SH from './models/p2sh';
 import ScriptData from './models/script_data';
 
 
@@ -200,8 +202,7 @@ const transaction = {
     }
 
     // Validate version byte. Should be the p2pkh or p2sh
-    const firstByte = addressBytes[0];
-    if (firstByte !== network.getVersionBytes().p2pkh && firstByte !== network.getVersionBytes().p2sh) {
+    if (!network.isVersionByteValid(addressBytes[0])) {
       throw new AddressError(errorMessage);
     }
     return true;
@@ -246,7 +247,7 @@ const transaction = {
   /**
    * Create output script
    *
-   * @param {Object} output Output object with {address, timelock} or {data}
+   * @param {Object} output Output object with {address, timelock, type} or {data, type}
    *
    * @throws {AddressError} If the address of the P2PKH output is invalid
    *
@@ -259,6 +260,13 @@ const transaction = {
       // Data script for NFT
       const scriptData = new ScriptData(output.data);
       return scriptData.createScript();
+    } else if (output.type === 'p2sh') {
+      // P2SH
+      const address = new Address(output.address, { network });
+      // This will throw AddressError in case the address is invalid
+      address.validateAddress();
+      const p2sh = new P2SH(address, { timelock: output.timelock });
+      return p2sh.createScript();
     } else if (output.type === 'p2pkh' || output.type === undefined) {
       // P2PKH
       // for compatibility reasons we will accept an output without type as p2pkh as fallback
@@ -273,7 +281,7 @@ const transaction = {
   },
 
   /**
-   * Create input data
+   * Create P2PKH input data
    *
    * @param {Buffer} signature Input signature
    * @param {Buffer} publicKey Input public key

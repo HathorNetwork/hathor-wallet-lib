@@ -11,6 +11,7 @@ import buffer from 'buffer';
 import Long from 'long';
 import Transaction from '../models/transaction';
 import P2PKH from '../models/p2pkh';
+import P2SH from '../models/p2sh';
 import ScriptData from '../models/script_data';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import Input from '../models/input';
@@ -18,7 +19,7 @@ import Output from '../models/output';
 import Network from '../models/network';
 import Address from '../models/address';
 import { hexToBuffer, unpackToInt } from '../utils/buffer';
-import { crypto, encoding } from 'bitcore-lib';
+import { crypto, encoding, Address as bitcoreAddress } from 'bitcore-lib';
 import { clone } from 'lodash';
 import { ParseError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
@@ -112,7 +113,7 @@ const helpers = {
   },
 
   /**
-   * Get the version numbers separated by dot  
+   * Get the version numbers separated by dot
    * For example: if you haver version 0.3.1-beta you will get ['0', '3', '1']
    *
    * @param {string} version
@@ -206,9 +207,9 @@ const helpers = {
    * We push the length of data and the data
    * In case the data has length > 75, we need to push the OP_PUSHDATA1 before the length
    * We always push bytes
-   * 
+   *
    * We update the array of Buffer sent as parameter, so we don't return a new one
-   * 
+   *
    * @param {Array} stack Stack of bytes from the script
    * @param {Buffer} data Data to be pushed to stack
    *
@@ -223,11 +224,31 @@ const helpers = {
     stack.push(this.intToBytes(data.length, 1));
     stack.push(data);
   },
-  
+
+  /**
+   * Push an integer to the stack
+   * We always push an opcode representing the number from 0 to 16 (or OP_0 to OP_16)
+   *
+   * We update the array of Buffer sent as parameter, so we don't return a new one
+   *
+   * @param {Array} stack Stack of bytes from the script
+   * @param {number} value number to be pushed on stack
+   *
+   * @memberof Helpers
+   * @inner
+   */
+  pushIntToStack(stack: Buffer[], value: number) {
+    if (value < 0 || value > 16) {
+      throw new Error('Invalid OP_N, must be [0,16].');
+    }
+    // OP_0 is 0x50 (hex) or 80 (decimal), and OP_N is n + OP_0
+    stack.push(Buffer.from([value+80]));
+  },
+
   /**
    * Return the checksum of the bytes passed
    * Checksum is calculated as the 4 first bytes of the double sha256
-   * 
+   *
    * @param {Buffer} bytes Data from where the checksum is calculated
    *
    * @return {Buffer}
@@ -242,7 +263,7 @@ const helpers = {
    * Get encoded address object from address hash (20 bytes) and network
    * We complete the address bytes with the network byte and checksum
    * then we encode to base 58 and create the address object
-   * 
+   *
    * @param {Buffer} addressHash 20 bytes of the address hash in the output script
    * @param {Network} network Network to get the address first byte parameter
    *
@@ -265,11 +286,32 @@ const helpers = {
   },
 
   /**
+   * Get encoded address object from script hash (20 bytes) and network.
+   * We use bitcore's Address module to build the address from the hash.
+   *
+   * @param {Buffer} scriptHash 20 bytes of the script hash in the output script
+   * @param {Network} network Network to get the address first byte parameter
+   *
+   * @return {Address}
+   * @memberof Helpers
+   * @inner
+   */
+  encodeAddressP2SH(scriptHash: Buffer, network: Network): Address {
+    if (scriptHash.length !== 20) {
+      throw new Error('Expect script hash that must have 20 bytes.');
+    }
+
+    const addr = bitcoreAddress.fromScriptHash(scriptHash, network.getNetwork());
+
+    return new Address(addr.toString(), {network});
+  },
+
+  /**
    * Create a transaction from bytes
    * First we get the version value from the bytes to discover the
    * transaction type. We currently support only regular transactions and
    * create token transactions.
-   * 
+   *
    * @param {Buffer} bytes Transaction in bytes
    * @param {Network} network Network to get the address first byte parameter
    *
@@ -304,7 +346,7 @@ const helpers = {
   /**
    * Create a transaction from hex
    * We transform the hex in bytes and call the function to get transaction from bytes
-   * 
+   *
    * @param {string} hex Transaction in hexadecimal
    * @param {Network} network Network to get the address first byte parameter
    *
@@ -370,6 +412,18 @@ const helpers = {
       if (output.type === 'data') {
         // Is NFT output
         outputObj = this.createNFTOutput(output.data);
+      } else if (output.type === 'p2sh') {
+        // P2SH
+        const address = new Address(output.address, { network });
+        // This will throw AddressError in case the adress is invalid
+        address.validateAddress();
+        const p2sh = new P2SH(address, { timelock: output.timelock || null });
+        const p2shScript = p2sh.createScript()
+        outputObj = new Output(
+          output.value,
+          p2shScript,
+          { tokenData: output.tokenData }
+        );
       } else if (output.type === 'p2pkh' || output.type === undefined) {
         // P2PKH
         // for compatibility reasons we will accept an output without type as p2pkh as fallback

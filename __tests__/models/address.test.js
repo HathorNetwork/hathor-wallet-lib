@@ -32,3 +32,23 @@ test('Validate address', () => {
   const addr5 = new Address('HNBUHhzkVuSFUNW21HrajUFNUiX8JrznSc', {network: mainnetNetwork});
   expect(addr5.isValid()).toBe(false);
 })
+
+test('Address getType', () => {
+  // Testnet p2pkh
+  const addr1 = new Address('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo');
+  expect(addr1.getType()).toBe('p2pkh');
+
+  // Testnet p2sh
+  const addr2 = new Address('wcFwC82mLoUudtgakZGMPyTL2aHcgSJgDZ');
+  expect(addr2.getType()).toBe('p2sh');
+
+  const mainnetNetwork = new Network('mainnet')
+
+  // Mainnet p2pkh
+  const addr3 = new Address('HNBUHhzkVuSFUNW21HrajUFNUiX8JrznSb', {network: mainnetNetwork});
+  expect(addr3.getType()).toBe('p2pkh');
+
+  // Mainnet p2sh
+  const addr4 = new Address('hXRpjKbgVVGF1ioYtscCRavnzvGbsditXn', {network: mainnetNetwork});
+  expect(addr4.getType()).toBe('p2sh');
+});

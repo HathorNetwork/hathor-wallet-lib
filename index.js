@@ -25,6 +25,9 @@ const SendTransaction = require('./lib/new/sendTransaction');
 const Address = require('./lib/models/address');
 const Output = require('./lib/models/output');
 const P2PKH = require('./lib/models/p2pkh');
+const P2SH = require('./lib/models/p2sh');
+const P2SHSignature = require('./lib/models/p2sh_signature');
+const ScriptData = require('./lib/models/script_data');
 const Input = require('./lib/models/input');
 const Transaction = require('./lib/models/transaction');
 const CreateTokenTransaction = require('./lib/models/create_token_transaction');
@@ -66,6 +69,9 @@ module.exports = {
   Address: Address.default,
   Output: Output.default,
   P2PKH: P2PKH.default,
+  P2SH: P2SH.default,
+  P2SHSignature: P2SHSignature.default,
+  ScriptData: ScriptData.default,
   Input: Input.default,
   Transaction: Transaction.default,
   CreateTokenTransaction: CreateTokenTransaction.default,
