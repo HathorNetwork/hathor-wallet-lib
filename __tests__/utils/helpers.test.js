@@ -191,7 +191,6 @@ test('createTxFromData', () => {
   defaultTx.outputs[0].parseScript(testnet);
   expect(defaultTx.outputs[0].decodedScript.getType()).toBe('p2pkh');
   expect(defaultTx.outputs[0].script.toString('hex')).toBe(p2pkh.createScript().toString('hex'))
-  // XXX: we should have a way to test that an output is P2PKH, P2SH or data
 
   // data and multisig outputs
   const extraTxData = {
