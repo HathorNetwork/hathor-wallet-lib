@@ -305,3 +305,9 @@ export const MAX_TOKEN_NAME_SIZE = 30;
  * Maximum characters of created token symbol
  */
 export const MAX_TOKEN_SYMBOL_SIZE = 5;
+
+/**
+ * Account path for P2SH MultiSig
+ * account is the last hardened level
+ */
+export const P2SH_ACCT_PATH = `m/45'/${HATHOR_BIP44_CODE}'/0'`;

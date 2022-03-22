@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { OP_GREATERTHAN_TIMESTAMP, OP_DUP, OP_HASH160, OP_EQUALVERIFY, OP_CHECKSIG } from '../opcodes';
+import { OP_GREATERTHAN_TIMESTAMP, OP_HASH160, OP_EQUAL } from '../opcodes';
 import { util } from 'bitcore-lib';
 import helpers from '../utils/helpers';
 import Address from './address';
@@ -15,18 +15,16 @@ type optionsType = {
 };
 
 
-class P2PKH {
+class P2SH {
   // Address object of the value destination
   address: Address;
   // Timestamp of the timelock of the output
   timelock: number | null;
 
   constructor(address: Address, options: optionsType = {}) {
-    const defaultOptions = {
+    const newOptions = Object.assign({
       timelock: null,
-    };
-
-    const newOptions = Object.assign(defaultOptions, options);
+    }, options);
     const { timelock } = newOptions;
 
     if (!address) {
@@ -41,18 +39,18 @@ class P2PKH {
    * Get script type
    *
    * @return {String}
-   * @memberof P2PKH
+   * @memberof P2SH
    * @inner
    */
   getType(): String {
-    return 'p2pkh';
+    return 'p2sh';
   }
 
   /**
-   * Create a P2PKH script
+   * Create a P2SH script
    *
    * @return {Buffer}
-   * @memberof P2PKH
+   * @memberof P2SH
    * @inner
    */
   createScript(): Buffer {
@@ -64,37 +62,33 @@ class P2PKH {
       helpers.pushDataToStack(arr, timelockBytes);
       arr.push(OP_GREATERTHAN_TIMESTAMP);
     }
-    arr.push(OP_DUP);
     arr.push(OP_HASH160);
     // addressHash has a fixed size of 20 bytes, so no need to push OP_PUSHDATA1
     arr.push(helpers.intToBytes(addressHash.length, 1));
     arr.push(addressHash);
-    arr.push(OP_EQUALVERIFY);
-    arr.push(OP_CHECKSIG);
+    arr.push(OP_EQUAL);
     return util.buffer.concat(arr);
   }
 
   /**
-   * Identify a script as P2PKH or not.
+   * Identify a script as P2SH or not.
    *
    * @param {Buffer} buf Script as buffer.
    *
    * @return {Boolean}
-   * @memberof P2PKH
+   * @memberof P2SH
    * @inner
    */
   static identify(buf: Buffer): Boolean {
     const op_greaterthan_timestamp = OP_GREATERTHAN_TIMESTAMP.readUInt8();
-    const op_dup = OP_DUP.readUInt8();
     const op_hash160 = OP_HASH160.readUInt8();
-    const op_equalverify = OP_EQUALVERIFY.readUInt8();
-    const op_checksig = OP_CHECKSIG.readUInt8();
-    if (buf.length !== 31 && buf.length !== 25) {
+    const op_equal = OP_EQUAL.readUInt8();
+    if (buf.length !== 29 && buf.length !== 23) {
       // this is not a P2PKH script
       return false;
     }
     let ptr = 0;
-    if (buf.length === 31) {
+    if (buf.length === 29) {
       // with timelock, we begin with timestamp
       if (buf.readUInt8(ptr++) !== 4) {
         return false;
@@ -106,8 +100,8 @@ class P2PKH {
       }
     }
 
-    // OP_DUP OP_HASH160
-    if (buf.readUInt8(ptr++) !== op_dup || buf.readUInt8(ptr++) !== op_hash160) {
+    // OP_HASH160
+    if (buf.readUInt8(ptr++) !== op_hash160) {
       return false;
     }
     // address hash
@@ -115,12 +109,12 @@ class P2PKH {
       return false;
     }
     ptr += 20
-    // OP_EQUALVERIFY OP_CHECKSIG
-    if (buf.readUInt8(ptr++) !== op_equalverify || buf.readUInt8(ptr++) !== op_checksig) {
+    // OP_EQUAL
+    if (buf.readUInt8(ptr++) !== op_equal) {
       return false;
     }
     return true;
   }
 }
 
-export default P2PKH;
+export default P2SH;

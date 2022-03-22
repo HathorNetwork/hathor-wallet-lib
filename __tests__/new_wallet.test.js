@@ -7,6 +7,7 @@
 
 import { GAP_LIMIT } from '../src/constants';
 import wallet from '../src/wallet';
+import walletUtils from '../src/utils/wallet';
 import WebSocketHandler from '../src/WebSocketHandler';
 import storage from '../src/storage';
 
@@ -34,7 +35,7 @@ mock.onGet('thin_wallet/address_history').reply((config) => {
       'has_more': false,
       'history': [
         {
-          'tx_id': '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e',
+          'tx_id': txId,
           'timestamp': 1548892556,
           'is_voided': false,
           'inputs': [],
@@ -81,7 +82,7 @@ const checkData = () => {
   let walletDataJson = walletData;
   check('historyTransactions' in walletDataJson, true, doneCb);
   check(typeof walletDataJson['historyTransactions'], 'object', doneCb);
-  check('00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e' in walletDataJson['historyTransactions'], true, doneCb);
+  check(txId in walletDataJson['historyTransactions'], true, doneCb);
 
   doneCb();
 }
@@ -106,7 +107,35 @@ test('Generate new HD wallet', (done) => {
   }, (e) => {
     done.fail('Error loading history from addresses');
   });
-}, 15000); // 15s to timeout in case done() is not called
+}, 15000); // 15s to timeout if case done() is not called
+
+test('Generate new MultiSig wallet', (done) => {
+  // Generate seeds for participants
+  const words = wallet.generateWalletWords(256);
+  check(wallet.wordsValid(words).valid, true, done);
+  const words1 = wallet.generateWalletWords(256);
+  check(wallet.wordsValid(words1).valid, true, done);
+  const words2 = wallet.generateWalletWords(256);
+  check(wallet.wordsValid(words2).valid, true, done);
+
+  const xpub = walletUtils.getMultiSigXPubFromWords(words);
+  const xpub1 = walletUtils.getMultiSigXPubFromWords(words1);
+  const xpub2 = walletUtils.getMultiSigXPubFromWords(words2);
+
+  const multisigData = {minSignatures: 2, pubkeys: [xpub, xpub1, xpub2]};
+
+  // Generate new wallet and save data in storage
+  const promise = wallet.executeGenerateWallet(words, '', pin, 'password', true, multisigData);
+
+  let accessData = storage.getItem('wallet:accessData');
+  // Check multisig is correctly configured
+  check('multisig' in accessData, true, done);
+  check('pubkey' in accessData.multisig, true, done);
+  check('pubkeys' in accessData.multisig, true, done);
+  check('minSignatures' in accessData.multisig, true, done);
+  done();
+
+}, 15000); // 15s to timeout if case done() is not called
 
 test('Generate HD wallet from predefined words', (done) => {
   doneCb = done;

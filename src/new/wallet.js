@@ -7,19 +7,23 @@
 
 import EventEmitter from 'events';
 import wallet from '../wallet';
-import { HATHOR_TOKEN_CONFIG, HATHOR_BIP44_CODE } from "../constants";
+import { HATHOR_TOKEN_CONFIG, HATHOR_BIP44_CODE, P2SH_ACCT_PATH } from "../constants";
 import tokens from '../tokens';
 import transaction from '../transaction';
 import version from '../version';
 import walletApi from '../api/wallet';
 import storage from '../storage';
+import { hexToBuffer } from '../utils/buffer';
 import helpers from '../utils/helpers';
+import walletUtils from '../utils/wallet';
 import MemoryStore from '../memory_store';
 import Connection from './connection';
 import SendTransaction from './sendTransaction';
 import Network from '../models/network';
 import { AddressError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
+import P2SHSignature from '../models/p2sh_signature';
+import { HDPrivateKey, HDPublicKey, crypto } from 'bitcore-lib';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';
@@ -84,6 +88,7 @@ class HathorWallet extends EventEmitter {
     debug = false,
     // Callback to be executed before reload data
     beforeReloadCallback = null,
+    multisig = null,
   } = {}) {
     super();
 
@@ -105,6 +110,14 @@ class HathorWallet extends EventEmitter {
 
     if (connection.state !== ConnectionState.CLOSED) {
       throw Error('You can\'t share connections.');
+    }
+
+    if (multisig) {
+      if (!(multisig.pubkeys && multisig.minSignatures)) {
+        throw Error('Multisig configuration requires both pubkeys and minSignatures.');
+      } else if (multisig.pubkeys.length < multisig.minSignatures) {
+        throw Error('Multisig configuration invalid.');
+      }
     }
 
     this.conn = connection;
@@ -156,6 +169,13 @@ class HathorWallet extends EventEmitter {
 
     // This object stores pre-processed data that helps speed up the return of getBalance and getTxHistory
     this.preProcessedData = {};
+
+    if (multisig) {
+      this.multisig = {
+        pubkeys: multisig.pubkeys,
+        minSignatures: multisig.minSignatures,
+      };
+    }
   }
 
   /**
@@ -240,6 +260,112 @@ class HathorWallet extends EventEmitter {
         this.setState(HathorWallet.CONNECTING);
       }
     }
+  }
+
+  /**
+   * Sign and return all signatures of the inputs belonging to this wallet.
+   *
+   * @param {String} txHex hex representation of the transaction.
+   * @param {String} pin PIN to decrypt the private key
+   *
+   * @return {String} serialized P2SHSignature data
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
+  getAllSignatures(txHex, pin) {
+    storage.setStore(this.store);
+    const tx = helpers.createTxFromHex(txHex, this.getNetworkObject());
+    const hash = tx.getDataToSignHash();
+    const walletData = wallet.getWalletData();
+    const historyTransactions = walletData['historyTransactions'] || {};
+    const accessData = storage.getItem('wallet:accessData');
+    const privateKeyStr = wallet.decryptData(accessData.mainKey, pin);
+    const key = HDPrivateKey(privateKeyStr);
+    const signatures = {};
+
+    for (const {index, input} of tx.inputs.map((input, index) => ({index, input}))) {
+      if (!(input.hash in historyTransactions)) {
+        continue;
+      }
+
+      const histTx = historyTransactions[input.hash];
+      const address = histTx.outputs[input.index].decoded.address;
+      // get address index
+      const addressIndex = wallet.getAddressIndex(address);
+      if (addressIndex === null || addressIndex === undefined) {
+        // The transaction is on our history but this input is not ours
+        continue;
+      }
+
+      const derivedKey = key.deriveNonCompliantChild(addressIndex);
+      const privateKey = derivedKey.privateKey;
+
+      // derive key to address index
+      const sig = crypto.ECDSA.sign(hash, privateKey, 'little').set({
+        nhashtype: crypto.Signature.SIGHASH_ALL
+      });
+
+      signatures[index] = sig.toString();
+    }
+    const p2shSig = new P2SHSignature(accessData.multisig.pubkey, signatures);
+    return p2shSig.serialize();
+  }
+
+  /**
+   * Assemble transaction from hex and collected p2sh_signatures.
+   *
+   * @param {String} txHex hex representation of the transaction.
+   * @param {Array} signatures Array of serialized p2sh_signatures (string).
+   *
+   * @return {Transaction} with input data created from the signatures.
+   *
+   * @throws {Error} if there are not enough signatures for an input
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
+  assemblePartialTransaction(txHex, signatures) {
+    storage.setStore(this.store);
+    const tx = helpers.createTxFromHex(txHex, this.getNetworkObject());
+    const walletData = wallet.getWalletData();
+    const historyTransactions = walletData['historyTransactions'] || {};
+    const accessData = storage.getItem('wallet:accessData');
+    const multisigData = accessData.multisig;
+    const xpub = HDPublicKey(accessData.xpubkey);
+
+    // deserialize P2SHSignature for all signatures
+    const p2shSignatures = signatures.map(sig => P2SHSignature.deserialize(sig));
+
+    for (const {index, input} of tx.inputs.map((input, index) => ({index, input}))) {
+      if (!(input.hash in historyTransactions)) {
+        continue;
+      }
+
+      const histTx = historyTransactions[input.hash];
+      const address = histTx.outputs[input.index].decoded.address;
+      // get address index
+      const addressIndex = wallet.getAddressIndex(address);
+      if (addressIndex === null || addressIndex === undefined) {
+        // The transaction is on our history but this input is not ours
+        continue;
+      }
+
+      const redeemScript = walletUtils.createP2SHRedeemScript(multisigData.pubkeys, multisigData.minSignatures, addressIndex);
+      const sigs = [];
+      for (const p2shSig of p2shSignatures) {
+        try {
+          sigs.push(hexToBuffer(p2shSig.signatures[index]));
+        } catch (e) {
+          // skip if there is no signature, or if it's not hex
+          continue
+        }
+      }
+      const inputData = walletUtils.getP2SHInputData(sigs, redeemScript);
+      tx.inputs[index].setData(inputData);
+    }
+
+    return tx;
   }
 
   /**
@@ -335,7 +461,7 @@ class HathorWallet extends EventEmitter {
   /**
    * Get address to be used in the wallet
    *
-   * @params {Object} { markAsUsed } if true, we will locally mark this address as used and won't return it again to be used
+   * @param {Object} { markAsUsed } if true, we will locally mark this address as used and won't return it again to be used
    *
    * @return {Object} { address, index, addressPath }
    *
@@ -351,7 +477,13 @@ class HathorWallet extends EventEmitter {
       address = wallet.getCurrentAddress();
     }
     const index = this.getAddressIndex(address);
-    const addressPath = `m/44'/${HATHOR_BIP44_CODE}'/0'/0/${index}`;
+    let addressPath;
+    if (wallet.isWalletMultiSig()) {
+      addressPath = `${P2SH_ACCT_PATH}/0/${index}`;
+    } else {
+      addressPath = `m/44'/${HATHOR_BIP44_CODE}'/0'/0/${index}`;
+    }
+
     return { address, index, addressPath };
   }
 
@@ -1067,17 +1199,18 @@ class HathorWallet extends EventEmitter {
     }
     storage.setStore(this.store);
     storage.setItem('wallet:server', this.conn.currentServer);
+    storage.setItem('wallet:multisig', !!this.multisig);
 
     this.conn.on('state', this.onConnectionChangedState);
     this.conn.on('wallet-update', this.handleWebsocketMsg);
 
     let ret;
     if (this.seed) {
-      ret = wallet.executeGenerateWallet(this.seed, this.passphrase, pinCode, password, false);
+      ret = wallet.executeGenerateWallet(this.seed, this.passphrase, pinCode, password, false, this.multisig);
     } else if (this.xpriv) {
-      ret = wallet.executeGenerateWalletFromXPriv(this.xpriv, pinCode, false);
+      ret = wallet.executeGenerateWalletFromXPriv(this.xpriv, pinCode, false, this.multisig);
     } else if (this.xpub) {
-      ret = wallet.executeGenerateWalletFromXPub(this.xpub, false);
+      ret = wallet.executeGenerateWalletFromXPub(this.xpub, false, this.multisig);
     } else {
       throw "This should never happen";
     }

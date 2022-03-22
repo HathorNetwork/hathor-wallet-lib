@@ -23,8 +23,19 @@ class ScriptData {
   }
 
   /**
+   * Get script type
+   *
+   * @return {String}
+   * @memberof ScriptData
+   * @inner
+   */
+  getType(): String {
+    return 'data';
+  }
+
+  /**
    * Create an output script from data
-   * 
+   *
    * @return {Buffer}
    * @memberof ScriptData
    * @inner

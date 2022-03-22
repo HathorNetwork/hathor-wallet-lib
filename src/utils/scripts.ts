@@ -1,4 +1,5 @@
 import P2PKH from '../models/p2pkh';
+import P2SH from '../models/p2sh';
 import ScriptData from '../models/script_data';
 import Network from '../models/network';
 import helpers from '../utils/helpers';
@@ -9,7 +10,7 @@ import { OP_PUSHDATA1, OP_CHECKSIG } from '../opcodes';
 
 /**
 * Parse P2PKH output script
-* 
+*
 * @param {Buffer} buff Output script
 * @param {Network} network Network to get the address first byte parameter
 *
@@ -38,6 +39,39 @@ export const parseP2PKH = (buff: Buffer, network: Network): P2PKH => {
   [addressHash, scriptBuf] = unpackLen(20, scriptBuf.slice(3 + offset));
 
   return new P2PKH(helpers.encodeAddress(addressHash, network), { timelock });
+};
+
+/**
+* Parse P2SH output script
+*
+* @param {Buffer} buff Output script
+* @param {Network} network Network to get the address first byte parameter
+*
+* @return {P2SH} P2PKH object
+*/
+export const parseP2SH = (buff: Buffer, network: Network): P2SH => {
+  let timelock: number | null = null;
+  let offset = 0;
+
+  // We should clone the buffer being sent in order to never mutate
+  // what comes from outside the library
+  let scriptBuf = _.clone(buff);
+  if (scriptBuf.length === 29) {
+    // There is timelock in this script
+    // First byte is len, which is always 4 bytes
+    [timelock, scriptBuf] = unpackToInt(4, false, scriptBuf.slice(1));
+    offset = 1;
+  } else {
+    if (scriptBuf.length !== 23) {
+      // It's not a P2PKH
+      throw new ParseScriptError('Invalid output script.');
+    }
+  }
+
+  let scriptHash;
+  [scriptHash, scriptBuf] = unpackLen(20, scriptBuf.slice(2 + offset));
+
+  return new P2SH(helpers.encodeAddressP2SH(scriptHash, network), { timelock });
 };
 
 /**

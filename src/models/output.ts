@@ -9,9 +9,11 @@ import { MAX_OUTPUT_VALUE_32, MAX_OUTPUT_VALUE, TOKEN_AUTHORITY_MASK, TOKEN_MINT
 import { OutputValueError, ParseError } from '../errors';
 import helpers from '../utils/helpers';
 import P2PKH from './p2pkh';
+import P2SH from './p2sh';
+import ScriptData from './script_data';
 import Network from './network';
 import { unpackToInt, unpackLen, bytesToOutputValue } from '../utils/buffer';
-import { parseP2PKH } from '../utils/scripts';
+import { parseP2PKH, parseP2SH, parseScriptData } from '../utils/scripts';
 import _ from 'lodash';
 
 type optionsType = {
@@ -28,7 +30,7 @@ class Output {
   // Output script
   script: Buffer;
   // Decoded output script
-  decodedScript: P2PKH | null;
+  decodedScript: P2PKH | P2SH | ScriptData | null;
 
   constructor(value: number, script: Buffer, options: optionsType = {}) {
     const defaultOptions = {
@@ -146,19 +148,24 @@ class Output {
     return arr;
   }
 
-  parseScript(network: Network): P2PKH | null {
-    // This method will work only for P2PKH scripts for now
-    // The whole lib works only for this type of output script
-    // We should do something similar to what we have in the full node with
-    // Scripts regex verification match in the future
-
+  parseScript(network: Network): P2PKH | P2SH | ScriptData | null {
     // It's still unsure how expensive it is to throw an exception in JavaScript. Some languages are really
     // inefficient when it comes to exceptions while others are totally efficient. If it is efficient,
     // we can keep throwing the error. Otherwise, we should just return null
     // because this method will be used together with others when we are trying to parse a given script.
 
     try {
-      const parsedScript = parseP2PKH(this.script, network);
+      let parsedScript;
+      if (P2PKH.identify(this.script)) {
+        // This is a P2PKH script
+        parsedScript = parseP2PKH(this.script, network);
+      } else if (P2SH.identify(this.script)) {
+        // This is a P2SH script
+        parsedScript = parseP2SH(this.script, network);
+      } else {
+        // defaults to data script
+        parsedScript = parseScriptData(this.script);
+      }
       this.decodedScript = parsedScript;
       return parsedScript;
     } catch (error) {
