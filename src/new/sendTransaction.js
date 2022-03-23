@@ -10,7 +10,6 @@ import { MIN_POLLING_INTERVAL, SELECT_OUTPUTS_TIMEOUT, HATHOR_TOKEN_CONFIG } fro
 import transaction from '../transaction';
 import helpers from '../utils/helpers';
 import txApi from '../api/txApi';
-import txMiningApi from '../api/txMining';
 import { WalletError, SendTxError, OutputValueError, ConstantNotSet, MaximumNumberOutputsError, MaximumNumberInputsError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import wallet from '../wallet';
