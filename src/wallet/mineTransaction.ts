@@ -21,6 +21,9 @@ const unexpectedError = 'An unexpected error happened. Please try to send your t
 // Error to be shown in case of a timeout
 const timeoutError = 'Timeout solving transaction\'s proof-of-work.\n\nAll transactions need to solve a proof-of-work as an anti spam mechanism. Currently, Hathor Labs provides this service for free, but their servers may be fully loaded right now.';
 
+// Error to be shown in case of rate limit exceeded
+const rateLimitExceededError = 'Too many transactions sent in a short time-span.\n\nAll transactions need to solve a proof-of-work as an anti spam mechanism. Currently, Hathor Labs provides a tx mining service for free, but there are limits to the number of transactions someone can mine using it to avoid abuse.\n\nPlease try again in a few seconds.';
+
 /**
  * This is transaction mining class responsible for:
  *
@@ -82,6 +85,20 @@ class MineTransaction extends EventEmitter {
   }
 
   /**
+   * Used to handle errors in requests to the tx mining API 
+   * 
+   * @param error: The error that was received from the axiosInstance
+   */
+  handleRequestError(error: any) {
+    if (error.response && error.response.status === 429) {
+      this.emit('error', rateLimitExceededError);
+    } else {
+      console.error(error);
+      this.emit('unexpected-error', unexpectedError);
+    }
+  }
+
+  /**
    * Submit job to be mined, update object variables of jobID and estimation, and start method to get job status
    * Emits 'job-submitted' after submit.
    */
@@ -101,7 +118,7 @@ class MineTransaction extends EventEmitter {
         this.handleJobStatus();
       }
     }).catch((e) => {
-      this.emit('unexpected-error', unexpectedError);
+      this.handleRequestError(e);
     });
   }
 
@@ -142,7 +159,7 @@ class MineTransaction extends EventEmitter {
           }
         }
       }).catch((e) => {
-        this.emit('unexpected-error', unexpectedError);
+        this.handleRequestError(e);
       });
     }, poll_time);
   }

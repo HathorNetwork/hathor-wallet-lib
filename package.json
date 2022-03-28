@@ -7,7 +7,8 @@
       "<rootDir>/setupTests.js"
     ],
     "collectCoverageFrom": [
-      "<rootDir>/src/*.js",
+      "<rootDir>/src/**/*.js",
+      "<rootDir>/src/**/*.ts",
       "!<rootDir>/node_modules/"
     ],
     "modulePathIgnorePatterns": [
