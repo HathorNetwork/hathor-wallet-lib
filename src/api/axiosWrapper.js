@@ -6,7 +6,7 @@
  */
 
 import axios from 'axios';
-import { TIMEOUT } from '../constants';
+import config from '../config';
 
 /**
  * Method that creates an axios instance
@@ -23,7 +23,7 @@ import { TIMEOUT } from '../constants';
  */
 export const axiosWrapperCreateRequestInstance = (url, resolve, timeout) => {
   if (timeout === undefined) {
-    timeout = TIMEOUT;
+    timeout = config.getAxiosTimeout();
   }
   const defaultOptions = {
     baseURL: url,

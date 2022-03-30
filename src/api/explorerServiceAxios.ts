@@ -6,9 +6,6 @@
  */
 
 import axios from 'axios';
-import {
-    TIMEOUT,
-} from '../constants';
 import config from '../config';
 
 /**
@@ -23,10 +20,10 @@ import config from '../config';
  * @param {string} network The network to access the explorer service
  * @param {number} timeout Timeout in milliseconds for the request
  */
-export const axiosInstance = async (network: string, timeout: number = TIMEOUT) => {
+export const axiosInstance = async (network: string, timeout?: number) => {
   const defaultOptions = {
     baseURL: config.getExplorerServiceBaseUrl(network),
-    timeout: timeout,
+    timeout: timeout || config.getAxiosTimeout(),
     headers: {
       'Content-Type': 'application/json',
     },
