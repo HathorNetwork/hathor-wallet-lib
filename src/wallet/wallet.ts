@@ -70,8 +70,6 @@ enum walletState {
 }
 
 class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
-  // String with 24 words separated by space
-  seed: string | null;
   // String with wallet passphrase
   passphrase: string;
   // Wallet id from the wallet service
@@ -80,8 +78,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   network: Network;
   // Method to request the password from the client
   private requestPassword: Function;
+  // String with 24 words separated by space
+  private seed: string | null;
   // Xpub of the wallet
   private xpub: string | null;
+  // Xpriv of the wallet
+  private xpriv: string | null;
   // Xpriv of the auth derivation path
   private authPrivKey: bitcore.HDPrivateKey | null;
   // State of the wallet. One of the walletState enum options
@@ -102,22 +104,41 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // Flag to indicate if the wallet was already connected when the webscoket conn is established
   private firstConnection: boolean;
 
-  constructor(requestPassword: Function, seed: string, network: Network, options = { passphrase: '' }) {
+  constructor({
+    requestPassword,
+    seed,
+    xpriv,
+    xpub,
+    network,
+    passphrase = '',
+  }) {
     super();
 
-    const { passphrase } = options;
+    if (!seed && !xpriv && !xpub) {
+      throw Error('You must explicitly provide the seed, xpriv or the xpub.');
+    }
 
-    if (!seed) {
-      throw Error('You must explicitly provide the seed.');
+    if (seed && xpriv) {
+      throw Error('You cannot provide both a seed and an xpriv.');
+    }
+
+    if (xpriv && passphrase !== '') {
+      throw Error('You can\'t use xpriv with passphrase.');
+    }
+
+    if (seed) {
+      // It will throw InvalidWords error in case is not valid
+      walletUtils.wordsValid(seed);
     }
 
     // Setup the connection so clients can listen to its events before it is started
     this.conn = new WalletServiceConnection();
     this.state = walletState.NOT_STARTED;
 
-    // It will throw InvalidWords error in case is not valid
-    walletUtils.wordsValid(seed);
+    this.xpriv = xpriv;
     this.seed = seed;
+    this.xpub = xpub;
+
     this.passphrase = passphrase
 
     this.requestPassword = requestPassword;
@@ -184,7 +205,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   static deriveAuthPrivateKey(xpriv: bitcore.HDPrivateKey): bitcore.HDPrivateKey {
-    return xpriv.deriveNonCompliantChild(WALLET_SERVICE_AUTH_DERIVATION_PATH);
+    const ret = xpriv.deriveNonCompliantChild(WALLET_SERVICE_AUTH_DERIVATION_PATH);
+
+    return ret;
   }
 
   /**
@@ -213,10 +236,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   async start({ pinCode, password }) {
-    if (!this.seed) {
-      throw new Error('Seed should be in memory when starting the wallet.');
-    }
-
     if (!pinCode) {
       throw new Error('Pin code is required when starting the wallet.');
     }
@@ -231,15 +250,24 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       timestampNow,
       firstAddress,
       authDerivedPrivKey,
-    } = this.generateCreateWalletAuthData(this.seed);
+    } = this.generateCreateWalletAuthData(pinCode);
 
-    wallet.executeGenerateWallet(
-      this.seed,
-      this.passphrase,
-      pinCode,
-      password,
-      false,
-    );
+    if (this.seed) {
+      wallet.executeGenerateWallet(
+        this.seed,
+        this.passphrase,
+        pinCode,
+        password,
+        false,
+      );
+    } else if(this.xpriv) {
+      wallet.executeGenerateWalletFromXPriv(
+        this.xpriv,
+        pinCode,
+        false,
+        false, // multisig not yet implemented on wallet service
+      );
+    }
 
     this.xpub = xpub;
     this.authPrivKey = authDerivedPrivKey;
@@ -275,24 +303,44 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.clearSensitiveData();
   }
 
-  generateCreateWalletAuthData(seed: string): CreateWalletAuthData {
-    const xpriv = walletUtils.getXPrivKeyFromSeed(seed, {passphrase: this.passphrase, networkName: this.network.name});
-    const xpub = walletUtils.getXPubKeyFromSeed(seed, {passphrase: this.passphrase, networkName: this.network.name});
-    const authXpub = HathorWalletServiceWallet.getAuthXPubKeyFromSeed(seed, {
-      passphrase: this.passphrase,
-      networkName: this.network.name,
-    });
+  generateCreateWalletAuthData(pinCode: string): CreateWalletAuthData {
+    let xpriv: bitcore.HDPrivateKey;
+    let xpub: string;
+    let authXpub: string;
+    let xprivAccountPath: string;
+    let authDerivedPrivKey: bitcore.HDPrivateKey;
 
     const now = new Date();
     const timestampNow = Math.floor(now.getTime() / 1000); // in seconds
-    const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
+
+    if (this.seed) {
+      xpriv = walletUtils.getXPrivKeyFromSeed(this.seed, {passphrase: this.passphrase, networkName: this.network.name});
+      xpub = walletUtils.getXPubKeyFromSeed(this.seed, {passphrase: this.passphrase, networkName: this.network.name});
+      authXpub = HathorWalletServiceWallet.getAuthXPubKeyFromSeed(this.seed, {
+        passphrase: this.passphrase,
+        networkName: this.network.name,
+      });
+      xprivAccountPath = walletUtils.deriveXpriv(xpriv, '0\'');
+      authDerivedPrivKey = HathorWalletServiceWallet.deriveAuthPrivateKey(xpriv);
+    } else if (this.xpriv) {
+      // this.xpriv is already on account path
+      xpriv = bitcore.HDPrivateKey(this.xpriv);
+      xpub = xpriv.xpubkey;
+      xprivAccountPath = xpriv;
+
+      // If the wallet is being loaded from the xpriv, we assume we already have the authXPriv on storage, so just fetch it
+      authDerivedPrivKey = wallet.getAuthPrivKey(pinCode);
+      authXpub = authDerivedPrivKey.xpubkey;
+    } else {
+      throw new Error('generateCreateWalletAuthData called without seed or xpriv in memory.')
+    }
+
+    const walletId: string = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
 
     // prove we own the xpubkey
-    const xprivAccountPath = walletUtils.deriveXpriv(xpriv, '0\'');
     const xpubkeySignature = this.signMessage(xprivAccountPath, timestampNow, walletId);
 
     // prove we own the auth_xpubkey
-    const authDerivedPrivKey = HathorWalletServiceWallet.deriveAuthPrivateKey(xpriv);
     const authXpubkeySignature = this.signMessage(authDerivedPrivKey, timestampNow, walletId);
 
     const xpubChangeDerivation = walletUtils.xpubDeriveChild(xpub, 0);
@@ -836,6 +884,16 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const key = privkey.deriveNonCompliantChild(index);
     const address = bitcoreAddress(key.publicKey, this.network.getNetwork());
     return address.toString();
+  }
+
+  /**
+   * Gets the network model object
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  getNetworkObject() {
+    return this.network;
   }
 
   /**
