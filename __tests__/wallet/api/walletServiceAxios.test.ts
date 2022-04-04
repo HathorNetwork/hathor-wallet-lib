@@ -3,14 +3,18 @@ import Network from '../../../src/models/network';
 import HathorWalletServiceWallet from '../../../src/wallet/wallet';
 import config from '../../../src/config';
 
-const words = 'connect sunny silent cabin leopard start turtle tortoise dial timber woman genre pave tuna rice indicate gown draft palm collect retreat meadow assume spray';
+const seed = 'connect sunny silent cabin leopard start turtle tortoise dial timber woman genre pave tuna rice indicate gown draft palm collect retreat meadow assume spray';
 
 test('use testnet tx mining when network is testnet', async () => {
   config.setWalletServiceBaseUrl('https://wallet-service.testnet.hathor.network/');
 
   const requestPassword = jest.fn();
   const network = new Network('testnet');
-  const wallet = new HathorWalletServiceWallet(requestPassword, words, network);
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+  });
 
   const client = await axiosInstance(wallet, false);
 
@@ -22,7 +26,11 @@ test('use mainnet tx mining when network is mainnet', async () => {
 
   const requestPassword = jest.fn();
   const network = new Network('mainnet');
-  const wallet = new HathorWalletServiceWallet(requestPassword, words, network);
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network
+  });
 
   const client = await axiosInstance(wallet, false);
 
@@ -34,7 +42,11 @@ test('use explicitly configured tx mining', async () => {
 
   const requestPassword = jest.fn();
   const network = new Network('mainnet');
-  const wallet = new HathorWalletServiceWallet(requestPassword, words, network);
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+  });
 
   const client = await axiosInstance(wallet, false);
 
