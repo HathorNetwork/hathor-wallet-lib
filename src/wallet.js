@@ -909,7 +909,6 @@ const wallet = {
       hash: newHash.key.toString(),
       salt: newHash.salt,
       mainKey: encryptedMainKey.encrypted.toString(),
-      acctPathMainKey: encryptedAccPathMainKey.encrypted.toString(),
     };
 
     if (accessData.acctPathMainKey) {
