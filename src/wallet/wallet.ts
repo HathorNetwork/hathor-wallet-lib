@@ -260,7 +260,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         password,
         false,
       );
-    } else if(this.xpriv) {
+    } else if (this.xpriv) {
       wallet.executeGenerateWalletFromXPriv(
         this.xpriv,
         pinCode,
@@ -512,10 +512,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   private async onWalletReady() {
+    // We should wait for new addresses before setting wallet to ready
+    await this.getNewAddresses(true);
+
     this.setupConnection();
     this.setState(walletState.READY);
-
-    await this.getNewAddresses();
   }
 
   setupConnection() {
@@ -575,8 +576,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  private async getNewAddresses() {
-    this.failIfWalletNotReady();
+  private async getNewAddresses(ignoreWalletReady = false) {
+    if (!ignoreWalletReady) {
+      this.failIfWalletNotReady();
+    }
     const data = await walletApi.getNewAddresses(this);
     this.newAddresses = data.addresses;
     this.indexToUse = 0;
