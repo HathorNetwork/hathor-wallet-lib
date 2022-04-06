@@ -17,6 +17,7 @@ const EXPLORER_SERVICE_TESTNET_BASE_URL  = 'https://explorer-service.testnet.hat
 
 class Config {
     TX_MINING_URL?: string;
+    TX_MINING_API_KEY?: string;
     WALLET_SERVICE_BASE_URL?: string;
     WALLET_SERVICE_BASE_WS_URL?: string;
     EXPLORER_SERVICE_BASE_URL?: string;
@@ -51,6 +52,24 @@ class Config {
         } else {
             throw new Error(`Network ${networkInstance.name} doesn't have a correspondent tx mining service url. You should set it explicitly.`);
         }
+    }
+
+    /**
+    * Sets the tx mining service api key that will be returned by the config object.
+    *
+    * @param {string} apiKey - The api key to be set
+    */
+    setTxMiningApiKey(apiKey: string) {
+        this.TX_MINING_API_KEY = apiKey;
+    }
+
+    /**
+     * Gets the configured api key for tx-mining-service
+     * 
+     * @returns The api key
+     */
+    getTxMiningApiKey() {
+        return this.TX_MINING_API_KEY;
     }
 
     /**
