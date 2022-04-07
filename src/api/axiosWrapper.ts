@@ -20,17 +20,19 @@ import { TIMEOUT } from '../constants';
  * @param {String} url Base URL for the api requests
  * @param {callback} resolve Callback to be stored and used in case of a retry after a fail
  * @param {number} timeout Timeout in milliseconds for the request
+ * @param {Object} additionalHeaders Headers to be sent with the request
  */
-export const axiosWrapperCreateRequestInstance = (url, resolve, timeout) => {
+export const axiosWrapperCreateRequestInstance = (url: string, resolve: Function, timeout?: number, additionalHeaders = {}) => {
   if (timeout === undefined) {
     timeout = TIMEOUT;
   }
+
   const defaultOptions = {
     baseURL: url,
     timeout: timeout,
-    headers: {
+    headers: Object.assign({
       'Content-Type': 'application/json',
-    },
+    }, additionalHeaders),
   }
 
   return axios.create(defaultOptions);
