@@ -209,7 +209,7 @@ const wallet = {
   },
 
   /**
-   * Start a new HD wallet from an xpriv.
+   * Start a new HD wallet from a xprivkey.
    * Encrypt this private key and save data in storage
    *
    * @param {string} xpriv Extended private-key to start wallet
@@ -223,6 +223,7 @@ const wallet = {
    */
   executeGenerateWalletFromXPriv(xprivkey, pin, loadHistory, multisig) {
     const xpriv = HDPrivateKey(xprivkey);
+
     let initialAccessData;
     let privkey;
     if (xpriv.depth === 0) {

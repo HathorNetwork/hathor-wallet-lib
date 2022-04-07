@@ -261,8 +261,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         false,
       );
     } else if (this.xpriv) {
+      // executeGenerateWalletFromXPriv expects a xpriv on the change level path
+      const accountLevelPrivKey = new bitcore.HDPrivateKey(this.xpriv);
+      const changeLevelPrivKey = accountLevelPrivKey.deriveNonCompliantChild(0);
+
       wallet.executeGenerateWalletFromXPriv(
-        this.xpriv,
+        changeLevelPrivKey.xprivkey,
         pinCode,
         false,
         false, // multisig not yet implemented on wallet service
