@@ -66,7 +66,7 @@ class Config {
     /**
      * Gets the configured api key for tx-mining-service
      * 
-     * @returns The api key
+     * @returns {string} The api key
      */
     getTxMiningApiKey() {
         return this.TX_MINING_API_KEY;
