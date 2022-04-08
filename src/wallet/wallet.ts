@@ -649,7 +649,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async getUtxos(options: { tokenId?: string, authority?: number, addresses?: string[], totalAmount?: number, count?: number } = {}): Promise<{ utxos: Utxo[], changeAmount: number }> {
+  async getUtxos(options: { tokenId?: string, authority?: number, addresses?: string[], totalAmount?: number, count?: number, skipSpent?: boolean } = {}): Promise<{ utxos: Utxo[], changeAmount: number }> {
     type optionsType = {
       tokenId: string,
       authority: number | null,
@@ -1098,6 +1098,57 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     assert.equal(6, parts.length);
 
     return parseInt(parts[5], 10);
+  }
+
+
+  /**
+   * Get mint authorities
+   * Uses the getUtxos method to return one or many mint authorities
+   *
+   * @param tokenId of the token to select the authority utxo
+   * @param options Object with custom options.
+   *  {
+   *    'many': if should return many utxos or just one (default false),
+   *    'skipSpent': if should not include spent utxos (default true)
+   *  }
+   *
+   * @return Array of objects with {tx_id, index, address} of the authority output. Returns null in case there are no utxos for this type
+   **/
+  async getMintAuthority(tokenId: string, options: { many?: boolean, skipSpent?: boolean } = {}) {
+    const newOptions = Object.assign({ many: false, skipSpent: true }, options);
+    const { utxos } = await this.getUtxos({
+      tokenId,
+      authority: TOKEN_MINT_MASK,
+      skipSpent: newOptions.skipSpent,
+      count: newOptions.many ? undefined : 1,
+    });
+
+    return utxos;
+  }
+
+  /**
+   * Get melt authorities
+   * Uses the getUtxos method to return one or many mint authorities
+   *
+   * @param tokenId of the token to select the authority utxo
+   * @param options Object with custom options.
+   *  {
+   *    'many': if should return many utxos or just one (default false),
+   *    'skipSpent': if should not include spent utxos (default true)
+   *  }
+   *
+   * @return Array of objects with {tx_id, index, address} of the authority output. Returns null in case there are no utxos for this type
+   **/
+  async getMeltAuthority(tokenId: string, options: { many?: boolean, skipSpent?: boolean } = {}) {
+    const newOptions = Object.assign({ many: false, skipSpent: true }, options);
+    const { utxos } = await this.getUtxos({
+      tokenId,
+      authority: TOKEN_MELT_MASK,
+      skipSpent: newOptions.skipSpent,
+      count: newOptions.many ? undefined : 1,
+    });
+
+    return utxos;
   }
 
   /**

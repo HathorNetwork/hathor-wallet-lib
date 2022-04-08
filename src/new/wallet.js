@@ -1438,7 +1438,7 @@ class HathorWallet extends EventEmitter {
    *
    * @return {Array} Array of objects with {tx_id, index, address} of the authority output. Returns null in case there are no utxos for this type
    **/
-  getMintAuthority(tokenUid, options = {}) {
+  async getMintAuthority(tokenUid, options = {}) {
     const newOptions = Object.assign({many: false, skipSpent: true}, options);
     return this.selectAuthorityUtxo(tokenUid, wallet.isMintOutput.bind(wallet), newOptions);
   }
@@ -1456,7 +1456,7 @@ class HathorWallet extends EventEmitter {
    *
    * @return {Array} Array of objects with {tx_id, index, address} of the authority output. Returns null in case there are no utxos for this type
    **/
-  getMeltAuthority(tokenUid, options = {}) {
+  async getMeltAuthority(tokenUid, options = {}) {
     const newOptions = Object.assign({many: false, skipSpent: true}, options);
     return this.selectAuthorityUtxo(tokenUid, wallet.isMeltOutput.bind(wallet), newOptions);
   }
