@@ -55,6 +55,7 @@ import {
   TxOutput,
   CreateWalletAuthData,
   ConnectionState,
+  TokenDetailsObject,
 } from './types';
 import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
@@ -1223,6 +1224,53 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.failIfWalletNotReady();
     const tx = await this.prepareMintTokensData(token, amount, options);
     return this.handleSendPreparedTransaction(tx);
+  }
+
+  /**
+   * Call get token details API
+   *
+   * @param tokenId Token uid to get the token details
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async getTokenDetails(tokenId: string) {
+    const response = await walletApi.getTokenDetails(this, tokenId);
+    const details: TokenDetailsObject = response.details;
+
+    // We should format the response to the same format the thin wallet currently responds
+    const {
+      totalSupply,
+      totalTransactions,
+      availableAuthorities,
+      tokenInfo,
+    } = details;
+
+    const [mint, melt] = availableAuthorities.reduce((acc: [Utxo[], Utxo[]], authority) => {
+      const [mintList, meltList] = acc;
+      if (authority.authorities === TOKEN_MELT_MASK) {
+        return [
+          mintList,
+          [authority, ...meltList],
+        ];
+      } else if (authority.authorities === TOKEN_MINT_MASK) {
+        return [
+          [authority, ...mintList],
+          meltList,
+        ];
+      }
+
+      return acc;
+    }, [[], []]);
+
+    return {
+      mint,
+      melt,
+      name: tokenInfo.name,
+      symbol: tokenInfo.symbol,
+      total: totalSupply,
+      transactions_count: totalTransactions,
+    };
   }
 
   /**

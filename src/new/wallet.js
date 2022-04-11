@@ -1842,6 +1842,20 @@ class HathorWallet extends EventEmitter {
     }
   }
 
+  /**
+   * Call get token details API
+   *
+   * @param tokenId Token uid to get the token details
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async getTokenDetails(tokenId) {
+    return new Promise((resolve, reject) => {
+      return walletApi.getGeneralTokenInfo(tokenId, resolve);
+    });
+  }
+
   isReady() {
     return this.state === HathorWallet.READY;
   }

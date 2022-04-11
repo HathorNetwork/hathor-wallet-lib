@@ -91,6 +91,18 @@ export interface BalanceResponseData {
   balances: GetBalanceObject[];
 }
 
+export interface TokenDetailsResponseData {
+  success: boolean;
+  details: TokenDetailsObject;
+}
+
+export interface TokenDetailsObject {
+  tokenInfo: TokenInfo;
+  totalSupply: number;
+  totalTransactions: number;
+  availableAuthorities: Utxo[];
+}
+
 export interface HistoryResponseData {
   success: boolean;
   history: GetHistoryObject[];
