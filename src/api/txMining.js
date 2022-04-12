@@ -33,8 +33,8 @@ const txMiningApi = {
     }
     return txMiningRequestClient(resolve).post('submit-job', postData).then((res) => {
       resolve(res.data)
-    }, (res) => {
-      return Promise.reject(res);
+    }, (error) => {
+      return Promise.reject(error);
     });
   },
 
@@ -51,8 +51,8 @@ const txMiningApi = {
     const data = {'job-id': job};
     return txMiningRequestClient(resolve).get('job-status', {'params': data}).then((res) => {
       resolve(res.data)
-    }, (res) => {
-      return Promise.reject(res);
+    }, (error) => {
+      return Promise.reject(error);
     });
   },
 
@@ -69,8 +69,8 @@ const txMiningApi = {
     const data = {'job-id': job};
     return txMiningRequestClient(resolve).post('cancel-job', data).then((res) => {
       resolve(res.data)
-    }, (res) => {
-      return Promise.reject(res);
+    }, (error) => {
+      return Promise.reject(error);
     });
   },
 };

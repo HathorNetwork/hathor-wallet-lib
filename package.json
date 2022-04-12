@@ -1,13 +1,14 @@
 {
   "name": "@hathor/wallet-lib",
-  "version": "0.33.1",
+  "version": "0.34.0",
   "description": "Library used by Hathor Wallet",
   "jest": {
     "setupFilesAfterEnv": [
       "<rootDir>/setupTests.js"
     ],
     "collectCoverageFrom": [
-      "<rootDir>/src/*.js",
+      "<rootDir>/src/**/*.js",
+      "<rootDir>/src/**/*.ts",
       "!<rootDir>/node_modules/"
     ],
     "modulePathIgnorePatterns": [
