@@ -276,8 +276,8 @@ const wallet = {
    * @inner
    */
   executeGenerateWallet(words, passphrase, pin, password, loadHistory, multisig) {
-    let code = new Mnemonic(words);
-    let xpriv = code.toHDPrivateKey(passphrase, network.getNetwork());
+    const code = new Mnemonic(words);
+    const xpriv = code.toHDPrivateKey(passphrase, network.getNetwork());
     const authXpriv = xpriv.deriveNonCompliantChild(WALLET_SERVICE_AUTH_DERIVATION_PATH);
     const accPrivKey = xpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
 
@@ -288,13 +288,13 @@ const wallet = {
       privkey = xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
     }
 
-    let encryptedData = this.encryptData(privkey.xprivkey, pin)
-    let encryptedAccountPathXpriv = this.encryptData(accPrivKey.xprivkey, pin);
-    let encryptedAuthXpriv = this.encryptData(authXpriv.xprivkey, pin);
-    let encryptedDataWords = this.encryptData(words, password);
+    const encryptedData = this.encryptData(privkey.xprivkey, pin)
+    const encryptedAccountPathXpriv = this.encryptData(accPrivKey.xprivkey, pin);
+    const encryptedAuthXpriv = this.encryptData(authXpriv.xprivkey, pin);
+    const encryptedDataWords = this.encryptData(words, password);
 
     // Save in storage the encrypted private key and the hash of the pin and password
-    let access = {
+    const access = {
       mainKey: encryptedData.encrypted.toString(),
       acctPathMainKey: encryptedAccountPathXpriv.encrypted.toString(),
       hash: encryptedData.hash.key.toString(),
