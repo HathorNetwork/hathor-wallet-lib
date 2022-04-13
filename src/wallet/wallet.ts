@@ -574,11 +574,16 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * Get the new addresses to be used by this wallet, i.e. the last GAP LIMIT unused addresses
    * Then it updates this.newAddresses and this.indexToUse that handle the addresses to use
    *
+   * @param ignoreWalletReady Will download new addresses even if the wallet is not set to ready
+   *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  private async getNewAddresses(ignoreWalletReady = false) {
+  private async getNewAddresses(ignoreWalletReady: boolean = false) {
+    // If the user is sure the wallet service has already loaded his wallet, he can ignore the check
     if (!ignoreWalletReady) {
+      // We should fail if the wallet is not ready because the wallet service address load mechanism is
+      // asynchronous, so we will get an empty or partial array of addresses if they are not all loaded.
       this.failIfWalletNotReady();
     }
     const data = await walletApi.getNewAddresses(this);
