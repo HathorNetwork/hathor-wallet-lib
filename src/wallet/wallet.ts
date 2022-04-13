@@ -82,7 +82,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   private seed: string | null;
   // Xpub of the wallet
   private xpub: string | null;
-  // Xpriv of the wallet
+  // Xpriv of the wallet on the account derivation path
   private xpriv: string | null;
   // Xpriv of the auth derivation path
   private authPrivKey: bitcore.HDPrivateKey | null;
@@ -306,29 +306,29 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   generateCreateWalletAuthData(pinCode: string): CreateWalletAuthData {
-    let xpriv: bitcore.HDPrivateKey;
     let xpub: string;
     let authXpub: string;
-    let xprivAccountPath: string;
+    let privKeyAccountPath: bitcore.HDPrivateKey;
     let authDerivedPrivKey: bitcore.HDPrivateKey;
 
     const now = new Date();
     const timestampNow = Math.floor(now.getTime() / 1000); // in seconds
 
     if (this.seed) {
-      xpriv = walletUtils.getXPrivKeyFromSeed(this.seed, {passphrase: this.passphrase, networkName: this.network.name});
+      // getXPrivKeyFromSeed returns a HDPrivateKey on the root path
+      const privKey: bitcore.HDPrivateKey = walletUtils.getXPrivKeyFromSeed(this.seed, {passphrase: this.passphrase, networkName: this.network.name});
+      // getXPubKeyFromSeed returns a xpubkey on the account level path
       xpub = walletUtils.getXPubKeyFromSeed(this.seed, {passphrase: this.passphrase, networkName: this.network.name});
       authXpub = HathorWalletServiceWallet.getAuthXPubKeyFromSeed(this.seed, {
         passphrase: this.passphrase,
         networkName: this.network.name,
       });
-      xprivAccountPath = walletUtils.deriveXpriv(xpriv, '0\'');
-      authDerivedPrivKey = HathorWalletServiceWallet.deriveAuthPrivateKey(xpriv);
+      privKeyAccountPath = walletUtils.deriveXpriv(privKey, '0\'');
+      authDerivedPrivKey = HathorWalletServiceWallet.deriveAuthPrivateKey(privKey);
     } else if (this.xpriv) {
-      // this.xpriv is already on account path
-      xpriv = bitcore.HDPrivateKey(this.xpriv);
-      xpub = xpriv.xpubkey;
-      xprivAccountPath = xpriv;
+      // this.xpriv is already on the account derivation path
+      privKeyAccountPath = bitcore.HDPrivateKey(this.xpriv);;
+      xpub = privKeyAccountPath.xpubkey;
 
       // If the wallet is being loaded from the xpriv, we assume we already have the authXPriv on storage, so just fetch it
       authDerivedPrivKey = wallet.getAuthPrivKey(pinCode);
@@ -340,11 +340,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const walletId: string = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
 
     // prove we own the xpubkey
-    const xpubkeySignature = this.signMessage(xprivAccountPath, timestampNow, walletId);
+    const xpubkeySignature = this.signMessage(privKeyAccountPath, timestampNow, walletId);
 
     // prove we own the auth_xpubkey
     const authXpubkeySignature = this.signMessage(authDerivedPrivKey, timestampNow, walletId);
-
     const xpubChangeDerivation = walletUtils.xpubDeriveChild(xpub, 0);
     const firstAddress = walletUtils.getAddressAtIndex(xpubChangeDerivation, 0, this.network.name);
 
