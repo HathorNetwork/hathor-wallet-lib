@@ -237,7 +237,6 @@ export interface IHathorWallet {
   getFullHistory(): TransactionFullObject[];
   getTxBalance(tx: WsTransaction, optionsParams): Promise<{[tokenId: string]: number}>;
   onConnectionChangedState(newState: ConnectionState): void;
-  generateCreateWalletAuthData(pinCode: string): CreateWalletAuthData;
 }
 
 export interface ISendTransaction {
