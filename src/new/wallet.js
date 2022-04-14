@@ -1502,7 +1502,7 @@ class HathorWallet extends EventEmitter {
     const mintAddress = newOptions.address || this.getCurrentAddress().address;
     const mintInput = this.selectAuthorityUtxo(tokenUid, wallet.isMintOutput.bind(wallet));
 
-    if (mintInput.length === 0) {
+    if (!mintInput || mintInput.length === 0) {
       return {success: false, message: 'Don\'t have mint authority output available.'}
     }
 
@@ -1579,7 +1579,7 @@ class HathorWallet extends EventEmitter {
 
     const meltInput = this.selectAuthorityUtxo(tokenUid, wallet.isMeltOutput.bind(wallet));
 
-    if (meltInput.length === 0) {
+    if (!meltInput || meltInput.length === 0) {
       return Promise.reject({success: false, message: 'Don\'t have melt authority output available.'});
     }
 
