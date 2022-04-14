@@ -96,11 +96,16 @@ export interface TokenDetailsResponseData {
   details: TokenDetailsObject;
 }
 
+export interface TokenDetailsAuthoritiesObject {
+  mint: boolean;
+  melt: boolean;
+}
+
 export interface TokenDetailsObject {
   tokenInfo: TokenInfo;
   totalSupply: number;
   totalTransactions: number;
-  availableAuthorities: Utxo[];
+  authorities: TokenDetailsAuthoritiesObject;
 }
 
 export interface HistoryResponseData {
@@ -249,6 +254,7 @@ export interface IHathorWallet {
   getFullHistory(): TransactionFullObject[];
   getTxBalance(tx: WsTransaction, optionsParams): Promise<{[tokenId: string]: number}>;
   onConnectionChangedState(newState: ConnectionState): void;
+  getTokenDetails(tokenId: string): Promise<TokenDetailsObject>;
 }
 
 export interface ISendTransaction {

@@ -1847,13 +1847,28 @@ class HathorWallet extends EventEmitter {
    *
    * @param tokenId Token uid to get the token details
    *
-   * @memberof HathorWalletServiceWallet
-   * @inner
+   * @return {Promise} token details
    */
   async getTokenDetails(tokenId) {
-    return new Promise((resolve, reject) => {
+    const result = await new Promise((resolve) => {
       return walletApi.getGeneralTokenInfo(tokenId, resolve);
     });
+
+    const { name, symbol, mint, melt, total, transactions_count } = result;
+
+    // Transform to the same format the wallet service facade responds
+    return {
+      totalSupply: total,
+      totalTransactions: transactions_count,
+      tokenInfo: {
+        name,
+        symbol,
+      },
+      authorities: {
+        mint: mint.length > 0,
+        melt: melt.length > 0,
+      },
+    };
   }
 
   isReady() {

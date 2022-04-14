@@ -1234,43 +1234,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async getTokenDetails(tokenId: string) {
+  async getTokenDetails(tokenId: string): Promise<TokenDetailsObject> {
     const response = await walletApi.getTokenDetails(this, tokenId);
     const details: TokenDetailsObject = response.details;
 
-    // We should format the response to the same format the thin wallet currently responds
-    const {
-      totalSupply,
-      totalTransactions,
-      availableAuthorities,
-      tokenInfo,
-    } = details;
-
-    const [mint, melt] = availableAuthorities.reduce((acc: [Utxo[], Utxo[]], authority) => {
-      const [mintList, meltList] = acc;
-      if (authority.authorities === TOKEN_MELT_MASK) {
-        return [
-          mintList,
-          [authority, ...meltList],
-        ];
-      } else if (authority.authorities === TOKEN_MINT_MASK) {
-        return [
-          [authority, ...mintList],
-          meltList,
-        ];
-      }
-
-      return acc;
-    }, [[], []]);
-
-    return {
-      mint,
-      melt,
-      name: tokenInfo.name,
-      symbol: tokenInfo.symbol,
-      total: totalSupply,
-      transactions_count: totalTransactions,
-    };
+    return details;
   }
 
   /**
