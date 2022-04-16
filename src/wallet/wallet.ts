@@ -56,6 +56,7 @@ import {
   CreateWalletAuthData,
   ConnectionState,
   TokenDetailsObject,
+  AuthorityTxOutput,
 } from './types';
 import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
@@ -629,8 +630,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   async getUtxoFromId(txId: string, index: number): Promise<Utxo | null> {
-    const data = await walletApi.getUtxos(this, { txId, index });
-    const utxos = data.utxos;
+    const data = await walletApi.getTxOutputs(this, { txId, index });
+    const utxos = data.txOutputs;
     if (utxos.length === 0) {
       // No utxo for this txId/index or is not from the requested wallet
       return null;
@@ -657,12 +658,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       totalAmount: number | null,
       count: number,
       ignoreLocked: boolean,
+      skipSpent: boolean,
     };
     const newOptions: optionsType = Object.assign({
       tokenId: HATHOR_TOKEN_CONFIG.uid,
       authority: null,
       addresses: null,
       totalAmount: null,
+      skipSpent: true, // We want UTXOs only
       count: 1,
     }, options);
 
@@ -672,19 +675,19 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     newOptions['ignoreLocked'] = true;
 
-    const data = await walletApi.getUtxos(this, newOptions);
+    const data = await walletApi.getTxOutputs(this, newOptions);
     let changeAmount = 0;
     let utxos: Utxo[] = []
-    if (data.utxos.length === 0) {
+    if (data.txOutputs.length === 0) {
       // No utxos available for the requested filter
-      utxos = data.utxos;
+      utxos = data.txOutputs;
     } else if (newOptions.authority) {
       // Requests an authority utxo, then I return the count of requested authority utxos
-      utxos = data.utxos.slice(0, newOptions.count);
+      utxos = data.txOutputs.slice(0, newOptions.count);
     } else {
       // We got an array of utxos, then we must check if there is enough amount to fill the totalAmount
       // and slice the least possible utxos
-      const ret = transaction.selectUtxos(data.utxos, newOptions.totalAmount!);
+      const ret = transaction.selectUtxos(data.txOutputs, newOptions.totalAmount!);
       changeAmount = ret.changeAmount;
       utxos = ret.utxos;
     }
@@ -1112,18 +1115,22 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    *    'skipSpent': if should not include spent utxos (default true)
    *  }
    *
-   * @return Array of objects with {tx_id, index, address} of the authority output. Returns null in case there are no utxos for this type
+   * @return Array of objects with {txId, index, address} of the authority output. Returns an empty array in case there are no tx outputs for this type
    **/
-  async getMintAuthority(tokenId: string, options: { many?: boolean, skipSpent?: boolean } = {}) {
+  async getMintAuthority(tokenId: string, options: { many?: boolean, skipSpent?: boolean } = {}): Promise<AuthorityTxOutput[]> {
     const newOptions = Object.assign({ many: false, skipSpent: true }, options);
-    const { utxos } = await this.getUtxos({
+    const { txOutputs } = await walletApi.getTxOutputs(this, {
       tokenId,
       authority: TOKEN_MINT_MASK,
       skipSpent: newOptions.skipSpent,
-      count: newOptions.many ? undefined : 1,
+      maxOutputs: newOptions.many ? undefined : 1,
     });
 
-    return utxos;
+    return txOutputs.map((txOutput) => ({
+      txId: txOutput.txId,
+      index: txOutput.index,
+      address: txOutput.address,
+    }));
   }
 
   /**
@@ -1137,18 +1144,22 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    *    'skipSpent': if should not include spent utxos (default true)
    *  }
    *
-   * @return Array of objects with {tx_id, index, address} of the authority output. Returns null in case there are no utxos for this type
+   * @return Array of objects with {txId, index, address} of the authority output. Returns an empty array in case there are no tx outputs for this type
    **/
-  async getMeltAuthority(tokenId: string, options: { many?: boolean, skipSpent?: boolean } = {}) {
+  async getMeltAuthority(tokenId: string, options: { many?: boolean, skipSpent?: boolean } = {}): Promise<AuthorityTxOutput[]> {
     const newOptions = Object.assign({ many: false, skipSpent: true }, options);
-    const { utxos } = await this.getUtxos({
+    const { txOutputs } = await walletApi.getTxOutputs(this, {
       tokenId,
       authority: TOKEN_MELT_MASK,
       skipSpent: newOptions.skipSpent,
-      count: newOptions.many ? undefined : 1,
+      maxOutputs: newOptions.many ? undefined : 1,
     });
 
-    return utxos;
+    return txOutputs.map((txOutput) => ({
+      txId: txOutput.txId,
+      index: txOutput.index,
+      address: txOutput.address,
+    }));
   }
 
   /**

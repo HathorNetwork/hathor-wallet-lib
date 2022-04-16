@@ -1436,11 +1436,21 @@ class HathorWallet extends EventEmitter {
    *    'skipSpent': if should not include spent utxos (default true)
    *  }
    *
-   * @return {Array} Array of objects with {tx_id, index, address} of the authority output. Returns null in case there are no utxos for this type
+   * @return {Array} Array of objects with {txId, index, address} of the authority output. Returns an empty array in case there are no tx_outupts for this type
    **/
   async getMintAuthority(tokenUid, options = {}) {
     const newOptions = Object.assign({many: false, skipSpent: true}, options);
-    return this.selectAuthorityUtxo(tokenUid, wallet.isMintOutput.bind(wallet), newOptions);
+    const txOutputs = this.selectAuthorityUtxo(tokenUid, wallet.isMintOutput.bind(wallet), newOptions);
+
+    if (!txOutputs) {
+      return [];
+    }
+
+    return txOutputs.map((txOutput) => ({
+      txId: txOutput.tx_id,
+      index: txOutput.index,
+      address: txOutput.address,
+    }));
   }
 
   /**
@@ -1454,11 +1464,21 @@ class HathorWallet extends EventEmitter {
    *    'skipSpent': if should not include spent utxos (default true)
    *  }
    *
-   * @return {Array} Array of objects with {tx_id, index, address} of the authority output. Returns null in case there are no utxos for this type
+   * @return {Array} Array of objects with {txId, index, address} of the authority output. Returns an empty array in case there are no tx_outupts for this type
    **/
   async getMeltAuthority(tokenUid, options = {}) {
     const newOptions = Object.assign({many: false, skipSpent: true}, options);
-    return this.selectAuthorityUtxo(tokenUid, wallet.isMeltOutput.bind(wallet), newOptions);
+    const txOutputs = this.selectAuthorityUtxo(tokenUid, wallet.isMeltOutput.bind(wallet), newOptions);
+
+    if (!txOutputs) {
+      return [];
+    }
+
+    return txOutputs.map((txOutput) => ({
+      txId: txOutput.tx_id,
+      index: txOutput.index,
+      address: txOutput.address,
+    }));
   }
 
   /**

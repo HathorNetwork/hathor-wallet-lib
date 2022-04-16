@@ -160,9 +160,9 @@ export interface SendTxOptionsParam {
   changeAddress: string | undefined;
 }
 
-export interface UtxoResponseData {
+export interface TxOutputResponseData {
   success: boolean;
-  utxos: Utxo[];
+  txOutputs: Utxo[];
 }
 
 export interface Utxo {
@@ -176,6 +176,12 @@ export interface Utxo {
   heightlock: number | null; // output heightlock
   locked: boolean; // if output is locked
   addressPath: string; // path to generate output address
+}
+
+export interface AuthorityTxOutput {
+  txId: string; // output transaction id
+  index: number; // output index
+  address: string; // output address
 }
 
 export interface AuthTokenResponseData {
