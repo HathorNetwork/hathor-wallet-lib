@@ -1138,7 +1138,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
   /**
    * Get melt authorities
-   * Uses the getTxOutputs API method to return one or many mint authorities
+   * Uses the getTxOutputs API method to return one or many melt authorities
    *
    * @param tokenId of the token to select the authority utxo
    * @param options Object with custom options.
