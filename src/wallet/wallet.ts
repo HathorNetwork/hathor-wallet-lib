@@ -1106,6 +1106,19 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     return parseInt(parts[5], 10);
   }
 
+  /**
+   * Helper method to get authority tx_outputs
+   * Uses the getTxOutputs API method to return one or many mint authorities
+   */
+  async _getAuthorityTxOutput(options: {tokenId: string, authority: string, skipSpent: boolean, maxOutputs?: number }): Promise<AuthorityTxOutput[]> {
+    const { txOutputs } = await walletApi.getTxOutputs(this, options);
+
+    return txOutputs.map((txOutput) => ({
+      txId: txOutput.txId,
+      index: txOutput.index,
+      address: txOutput.address,
+    }));
+  }
 
   /**
    * Get mint authorities
@@ -1122,18 +1135,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    **/
   async getMintAuthority(tokenId: string, options: { many?: boolean, skipSpent?: boolean } = {}): Promise<AuthorityTxOutput[]> {
     const newOptions = Object.assign({ many: false, skipSpent: true }, options);
-    const { txOutputs } = await walletApi.getTxOutputs(this, {
+
+    return this._getAuthorityTxOutput({
       tokenId,
       authority: TOKEN_MINT_MASK,
       skipSpent: newOptions.skipSpent,
       maxOutputs: newOptions.many ? undefined : 1,
     });
-
-    return txOutputs.map((txOutput) => ({
-      txId: txOutput.txId,
-      index: txOutput.index,
-      address: txOutput.address,
-    }));
   }
 
   /**
@@ -1151,18 +1159,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    **/
   async getMeltAuthority(tokenId: string, options: { many?: boolean, skipSpent?: boolean } = {}): Promise<AuthorityTxOutput[]> {
     const newOptions = Object.assign({ many: false, skipSpent: true }, options);
-    const { txOutputs } = await walletApi.getTxOutputs(this, {
+
+    return this._getAuthorityTxOutput({
       tokenId,
       authority: TOKEN_MELT_MASK,
       skipSpent: newOptions.skipSpent,
       maxOutputs: newOptions.many ? undefined : 1,
     });
-
-    return txOutputs.map((txOutput) => ({
-      txId: txOutput.txId,
-      index: txOutput.index,
-      address: txOutput.address,
-    }));
   }
 
   /**
