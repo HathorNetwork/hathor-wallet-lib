@@ -630,7 +630,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   async getUtxoFromId(txId: string, index: number): Promise<Utxo | null> {
-    const data = await walletApi.getTxOutputs(this, { txId, index });
+    const data = await walletApi.getTxOutputs(this, {
+      txId,
+      index,
+      skipSpent: true, // This is the API default, but we should be explicit about it
+    });
     const utxos = data.txOutputs;
     if (utxos.length === 0) {
       // No utxo for this txId/index or is not from the requested wallet
