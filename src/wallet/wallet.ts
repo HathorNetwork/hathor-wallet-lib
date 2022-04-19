@@ -650,7 +650,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async getUtxos(options: { tokenId?: string, authority?: number, addresses?: string[], totalAmount?: number, count?: number, skipSpent?: boolean } = {}): Promise<{ utxos: Utxo[], changeAmount: number }> {
+  async getUtxos(options: { tokenId?: string, authority?: number, addresses?: string[], totalAmount?: number, count?: number } = {}): Promise<{ utxos: Utxo[], changeAmount: number }> {
     type optionsType = {
       tokenId: string,
       authority: number | null,
@@ -658,14 +658,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       totalAmount: number | null,
       count: number,
       ignoreLocked: boolean,
-      skipSpent: boolean,
     };
     const newOptions: optionsType = Object.assign({
       tokenId: HATHOR_TOKEN_CONFIG.uid,
       authority: null,
       addresses: null,
       totalAmount: null,
-      skipSpent: true, // We want UTXOs only
       count: 1,
     }, options);
 
@@ -674,6 +672,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     newOptions['ignoreLocked'] = true;
+    newOptions['skipSpent'] = true; // We only want UTXOs
 
     const data = await walletApi.getTxOutputs(this, newOptions);
     let changeAmount = 0;
