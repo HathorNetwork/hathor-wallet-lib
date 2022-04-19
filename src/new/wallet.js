@@ -1426,6 +1426,25 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Transforms a list of transaction outputs to a list with the expected object format from the wallets
+   *
+   * @param {Array} txOutputs The list of tx_outputs to format
+   *
+   * @return {Array} Array of objects with {txId, index, address}. Returns an empty array in case there are no tx_outupts on the input parameter
+   **/
+  _formatTxOutputs(txOutputs) {
+    if (!txOutputs) {
+      return [];
+    }
+
+    return txOutputs.map((txOutput) => ({
+      txId: txOutput.tx_id,
+      index: txOutput.index,
+      address: txOutput.address,
+    }));
+  }
+
+  /**
    * Get mint authorities
    * This is a helper method to call selectAuthorityUtxo without knowledge of the isMintOutput
    *
@@ -1442,15 +1461,7 @@ class HathorWallet extends EventEmitter {
     const newOptions = Object.assign({many: false, skipSpent: true}, options);
     const txOutputs = this.selectAuthorityUtxo(tokenUid, wallet.isMintOutput.bind(wallet), newOptions);
 
-    if (!txOutputs) {
-      return [];
-    }
-
-    return txOutputs.map((txOutput) => ({
-      txId: txOutput.tx_id,
-      index: txOutput.index,
-      address: txOutput.address,
-    }));
+    return this._formatTxOutputs(txOutputs);
   }
 
   /**
@@ -1470,15 +1481,7 @@ class HathorWallet extends EventEmitter {
     const newOptions = Object.assign({many: false, skipSpent: true}, options);
     const txOutputs = this.selectAuthorityUtxo(tokenUid, wallet.isMeltOutput.bind(wallet), newOptions);
 
-    if (!txOutputs) {
-      return [];
-    }
-
-    return txOutputs.map((txOutput) => ({
-      txId: txOutput.tx_id,
-      index: txOutput.index,
-      address: txOutput.address,
-    }));
+    return this._formatTxOutputs(txOutputs);
   }
 
   /**
