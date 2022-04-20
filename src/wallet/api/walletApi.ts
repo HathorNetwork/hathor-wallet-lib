@@ -18,7 +18,8 @@ import {
   TxProposalCreateResponseData,
   TxProposalUpdateResponseData,
   UtxoResponseData,
-  AuthTokenResponseData
+  AuthTokenResponseData,
+  TokenDetailsResponseData,
 } from '../types';
 import HathorWalletServiceWallet from '../wallet';
 import { WalletRequestError } from '../../errors';
@@ -90,6 +91,17 @@ const walletApi = {
       return response.data;
     } else {
       throw new WalletRequestError('Error getting wallet addresses to use.');
+    }
+  },
+
+  async getTokenDetails(wallet: HathorWalletServiceWallet, tokenId: string): Promise<TokenDetailsResponseData> {
+    const axios = await axiosInstance(wallet, true);
+    const response = await axios.get(`wallet/tokens/${tokenId}/details`);
+
+    if (response.status === 200 && response.data.success === true) {
+      return response.data;
+    } else {
+      throw new WalletRequestError('Error getting token details.');
     }
   },
 
