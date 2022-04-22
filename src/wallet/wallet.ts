@@ -1126,6 +1126,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       txId: txOutput.txId,
       index: txOutput.index,
       address: txOutput.address,
+      authorities: txOutput.authorities,
     }));
   }
 
@@ -1140,7 +1141,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    *    'skipSpent': if should not include spent utxos (default true)
    *  }
    *
-   * @return Array of objects with {txId, index, address} of the authority output. Returns an empty array in case there are no tx outputs for this type
+   * @return Promise that resolves with an Array of objects with {txId, index, address, authorities} of the authority output.
+   * Returns an empty array in case there are no tx outputs for this type
    **/
   async getMintAuthority(tokenId: string, options: { many?: boolean, skipSpent?: boolean } = {}): Promise<AuthorityTxOutput[]> {
     const newOptions = Object.assign({ many: false, skipSpent: true }, options);
@@ -1164,7 +1166,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    *    'skipSpent': if should not include spent utxos (default true)
    *  }
    *
-   * @return Array of objects with {txId, index, address} of the authority output. Returns an empty array in case there are no tx outputs for this type
+   * @return Promise that resolves with an Array of objects with {txId, index, address, authorities} of the authority output.
+   * Returns an empty array in case there are no tx outputs for this type
    **/
   async getMeltAuthority(tokenId: string, options: { many?: boolean, skipSpent?: boolean } = {}): Promise<AuthorityTxOutput[]> {
     const newOptions = Object.assign({ many: false, skipSpent: true }, options);

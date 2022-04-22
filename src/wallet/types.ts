@@ -182,6 +182,7 @@ export interface AuthorityTxOutput {
   txId: string; // output transaction id
   index: number; // output index
   address: string; // output address
+  authorities: number; // output authorities
 }
 
 export interface AuthTokenResponseData {
