@@ -56,6 +56,7 @@ import {
   CreateWalletAuthData,
   ConnectionState,
   TokenDetailsObject,
+  AuthorityTxOutput,
 } from './types';
 import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
@@ -306,6 +307,15 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.clearSensitiveData();
   }
 
+  /**
+   * Detects if we are loading from the seed or the account path and returns the
+   * required information for authentication
+   *
+   * @param pinCode The pincode to be used to encrypt the auth xprivkey
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
   generateCreateWalletAuthData(pinCode: string): CreateWalletAuthData {
     let xpub: string;
     let authXpub: string;
@@ -629,8 +639,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   async getUtxoFromId(txId: string, index: number): Promise<Utxo | null> {
-    const data = await walletApi.getUtxos(this, { txId, index });
-    const utxos = data.utxos;
+    const data = await walletApi.getTxOutputs(this, {
+      txId,
+      index,
+      skipSpent: true, // This is the API default, but we should be explicit about it
+    });
+    const utxos = data.txOutputs;
     if (utxos.length === 0) {
       // No utxo for this txId/index or is not from the requested wallet
       return null;
@@ -671,20 +685,21 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     newOptions['ignoreLocked'] = true;
+    newOptions['skipSpent'] = true; // We only want UTXOs
 
-    const data = await walletApi.getUtxos(this, newOptions);
+    const data = await walletApi.getTxOutputs(this, newOptions);
     let changeAmount = 0;
     let utxos: Utxo[] = []
-    if (data.utxos.length === 0) {
+    if (data.txOutputs.length === 0) {
       // No utxos available for the requested filter
-      utxos = data.utxos;
+      utxos = data.txOutputs;
     } else if (newOptions.authority) {
       // Requests an authority utxo, then I return the count of requested authority utxos
-      utxos = data.utxos.slice(0, newOptions.count);
+      utxos = data.txOutputs.slice(0, newOptions.count);
     } else {
       // We got an array of utxos, then we must check if there is enough amount to fill the totalAmount
       // and slice the least possible utxos
-      const ret = transaction.selectUtxos(data.utxos, newOptions.totalAmount!);
+      const ret = transaction.selectUtxos(data.txOutputs, newOptions.totalAmount!);
       changeAmount = ret.changeAmount;
       utxos = ret.utxos;
     }
@@ -1098,6 +1113,71 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     assert.equal(6, parts.length);
 
     return parseInt(parts[5], 10);
+  }
+
+  /**
+   * Helper method to get authority tx_outputs
+   * Uses the getTxOutputs API method to return one or many authorities
+   */
+  async _getAuthorityTxOutput(options: {tokenId: string, authority: number, skipSpent: boolean, maxOutputs?: number }): Promise<AuthorityTxOutput[]> {
+    const { txOutputs } = await walletApi.getTxOutputs(this, options);
+
+    return txOutputs.map((txOutput) => ({
+      txId: txOutput.txId,
+      index: txOutput.index,
+      address: txOutput.address,
+      authorities: txOutput.authorities,
+    }));
+  }
+
+  /**
+   * Get mint authorities
+   * Uses the getTxOutputs API method to return one or many mint authorities
+   *
+   * @param tokenId of the token to select the authority utxo
+   * @param options Object with custom options.
+   *  {
+   *    'many': if should return many utxos or just one (default false),
+   *    'skipSpent': if should not include spent utxos (default true)
+   *  }
+   *
+   * @return Promise that resolves with an Array of objects with {txId, index, address, authorities} of the authority output.
+   * Returns an empty array in case there are no tx outputs for this type
+   **/
+  async getMintAuthority(tokenId: string, options: { many?: boolean, skipSpent?: boolean } = {}): Promise<AuthorityTxOutput[]> {
+    const newOptions = Object.assign({ many: false, skipSpent: true }, options);
+
+    return this._getAuthorityTxOutput({
+      tokenId,
+      authority: TOKEN_MINT_MASK,
+      skipSpent: newOptions.skipSpent,
+      maxOutputs: newOptions.many ? undefined : 1,
+    });
+  }
+
+  /**
+   * Get melt authorities
+   * Uses the getTxOutputs API method to return one or many melt authorities
+   *
+   * @param tokenId of the token to select the authority utxo
+   * @param options Object with custom options.
+   *  {
+   *    'many': if should return many utxos or just one (default false),
+   *    'skipSpent': if should not include spent utxos (default true)
+   *  }
+   *
+   * @return Promise that resolves with an Array of objects with {txId, index, address, authorities} of the authority output.
+   * Returns an empty array in case there are no tx outputs for this type
+   **/
+  async getMeltAuthority(tokenId: string, options: { many?: boolean, skipSpent?: boolean } = {}): Promise<AuthorityTxOutput[]> {
+    const newOptions = Object.assign({ many: false, skipSpent: true }, options);
+
+    return this._getAuthorityTxOutput({
+      tokenId,
+      authority: TOKEN_MELT_MASK,
+      skipSpent: newOptions.skipSpent,
+      maxOutputs: newOptions.many ? undefined : 1,
+    });
   }
 
   /**

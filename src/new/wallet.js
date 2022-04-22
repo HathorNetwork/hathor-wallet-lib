@@ -1369,7 +1369,7 @@ class HathorWallet extends EventEmitter {
    *    'skipSpent': if should not include spent utxos (default true)
    *  }
    *
-   * @return {Array} Array of objects with {tx_id, index, address} of the authority output. Returns null in case there are no utxos for this type
+   * @return {Array} Array of objects with {tx_id, index, address, authorities} of the authority output. Returns null in case there are no utxos for this type
    **/
   selectAuthorityUtxo(tokenUid, filterUTXOs, options = {}) {
     const newOptions = Object.assign({many: false, skipSpent: true}, options);
@@ -1394,7 +1394,7 @@ class HathorWallet extends EventEmitter {
           continue;
         }
 
-        const ret = {tx_id, index, address: output.decoded.address};
+        const ret = {tx_id, index, address: output.decoded.address, authorities: output.value};
         // If output was already used, we can't use it, unless requested in options
         if (output.spent_by) {
           if (skipSpent) {
@@ -1426,6 +1426,26 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Transforms a list of transaction outputs to a list with the expected object format from the wallets
+   *
+   * @param {Array} txOutputs The list of tx_outputs to format
+   *
+   * @return {Array} Array of objects with {txId, index, address, authorities}. Returns an empty array in case there are no tx_outupts on the input parameter
+   **/
+  _formatTxOutputs(txOutputs) {
+    if (!txOutputs) {
+      return [];
+    }
+
+    return txOutputs.map((txOutput) => ({
+      txId: txOutput.tx_id,
+      index: txOutput.index,
+      address: txOutput.address,
+      authorities: txOutput.authorities,
+    }));
+  }
+
+  /**
    * Get mint authorities
    * This is a helper method to call selectAuthorityUtxo without knowledge of the isMintOutput
    *
@@ -1436,11 +1456,14 @@ class HathorWallet extends EventEmitter {
    *    'skipSpent': if should not include spent utxos (default true)
    *  }
    *
-   * @return {Array} Array of objects with {tx_id, index, address} of the authority output. Returns null in case there are no utxos for this type
+   * @return {Promise<Array>} Promise that resolves with an Array of objects with {txId, index, address, authorities}
+   * of the authority output. Returns an empty array in case there are no tx_outupts for this type
    **/
-  getMintAuthority(tokenUid, options = {}) {
+  async getMintAuthority(tokenUid, options = {}) {
     const newOptions = Object.assign({many: false, skipSpent: true}, options);
-    return this.selectAuthorityUtxo(tokenUid, wallet.isMintOutput.bind(wallet), newOptions);
+    const txOutputs = this.selectAuthorityUtxo(tokenUid, wallet.isMintOutput.bind(wallet), newOptions);
+
+    return this._formatTxOutputs(txOutputs);
   }
 
   /**
@@ -1454,11 +1477,14 @@ class HathorWallet extends EventEmitter {
    *    'skipSpent': if should not include spent utxos (default true)
    *  }
    *
-   * @return {Array} Array of objects with {tx_id, index, address} of the authority output. Returns null in case there are no utxos for this type
+   * @return {Promise<Array>} Promise that resolves with an Array of objects with {txId, index, address, authorities} of the authority output.
+   * Returns an empty array in case there are no tx_outupts for this type
    **/
-  getMeltAuthority(tokenUid, options = {}) {
+  async getMeltAuthority(tokenUid, options = {}) {
     const newOptions = Object.assign({many: false, skipSpent: true}, options);
-    return this.selectAuthorityUtxo(tokenUid, wallet.isMeltOutput.bind(wallet), newOptions);
+    const txOutputs = this.selectAuthorityUtxo(tokenUid, wallet.isMeltOutput.bind(wallet), newOptions);
+
+    return this._formatTxOutputs(txOutputs);
   }
 
   /**
