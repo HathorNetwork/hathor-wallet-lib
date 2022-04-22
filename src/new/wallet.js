@@ -1475,7 +1475,8 @@ class HathorWallet extends EventEmitter {
    *    'skipSpent': if should not include spent utxos (default true)
    *  }
    *
-   * @return {Array} Array of objects with {txId, index, address} of the authority output. Returns an empty array in case there are no tx_outupts for this type
+   * @return {Promise<Array>} Promise that resolves with an Array of objects with {txId, index, address} of the authority output.
+   * Returns an empty array in case there are no tx_outupts for this type
    **/
   async getMeltAuthority(tokenUid, options = {}) {
     const newOptions = Object.assign({many: false, skipSpent: true}, options);

@@ -1108,9 +1108,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
   /**
    * Helper method to get authority tx_outputs
-   * Uses the getTxOutputs API method to return one or many mint authorities
+   * Uses the getTxOutputs API method to return one or many authorities
    */
-  async _getAuthorityTxOutput(options: {tokenId: string, authority: string, skipSpent: boolean, maxOutputs?: number }): Promise<AuthorityTxOutput[]> {
+  async _getAuthorityTxOutput(options: {tokenId: string, authority: number, skipSpent: boolean, maxOutputs?: number }): Promise<AuthorityTxOutput[]> {
     const { txOutputs } = await walletApi.getTxOutputs(this, options);
 
     return txOutputs.map((txOutput) => ({
