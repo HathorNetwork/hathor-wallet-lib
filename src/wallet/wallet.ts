@@ -307,6 +307,15 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.clearSensitiveData();
   }
 
+  /**
+   * Detects if we are loading from the seed or the account path and returns the
+   * required information for authentication
+   *
+   * @param pinCode The pincode to be used to encrypt the auth xprivkey
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
   generateCreateWalletAuthData(pinCode: string): CreateWalletAuthData {
     let xpub: string;
     let authXpub: string;
