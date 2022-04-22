@@ -10,7 +10,10 @@ import Network from '../../src/models/network';
 import {
   GetAddressesObject,
   WsTransaction,
+  CreateWalletAuthData,
 } from '../../src/wallet/types';
+import walletUtils from '../../src/utils/wallet';
+import { HDPrivateKey } from 'bitcore-lib';
 
 const MOCK_TX = {
   'tx_id': '0009bc9bf8eab19c41a2aa9b9369d3b6a90ff12072729976634890d35788d5d7',
@@ -25,7 +28,6 @@ const MOCK_TX = {
   'inputs': [],
   'outputs': [],
 };
-
 
 test('getTxBalance', async () => {
   const requestPassword = jest.fn();
@@ -227,3 +229,50 @@ test('getTxBalance', async () => {
   expect(balance['token2']).toStrictEqual(-5);
 });
 
+test('generateCreateWalletAuthData should return correct auth data', async () => {
+  const requestPassword = jest.fn();
+  const mockDate = new Date(100)
+  const spy = jest
+    .spyOn(global, 'Date')
+    .mockImplementation(() => mockDate)
+
+  const network = new Network('testnet');
+  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const pin = '123456';
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+  const passphrase = '';
+  const networkName = network.name;
+
+  const authData: CreateWalletAuthData = wallet.generateCreateWalletAuthData(pin);
+
+  const now = new Date();
+  const timestampNow = Math.floor(mockDate.getTime() / 1000); // in seconds
+
+  const privKey: HDPrivateKey = walletUtils.getXPrivKeyFromSeed(seed, {passphrase, networkName});
+  const xpub = walletUtils.getXPubKeyFromSeed(seed, {passphrase, networkName});
+  const authXpub = HathorWalletServiceWallet.getAuthXPubKeyFromSeed(seed, {passphrase, networkName});
+  const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
+  const privKeyAccountPath = walletUtils.deriveXpriv(privKey, '0\'');
+  const authDerivedPrivKey = HathorWalletServiceWallet.deriveAuthPrivateKey(privKey);
+  const xpubkeySignature = wallet.signMessage(privKeyAccountPath, timestampNow, walletId);
+  const authXpubkeySignature = wallet.signMessage(authDerivedPrivKey, timestampNow, walletId);
+  const xpubChangeDerivation = walletUtils.xpubDeriveChild(xpub, 0);
+  const firstAddress = walletUtils.getAddressAtIndex(xpubChangeDerivation, 0, networkName);
+
+  expect(authData).toBe({
+    xpub,
+    xpubkeySignature,
+    authXpub,
+    authXpubkeySignature,
+    timestampNow,
+    firstAddress,
+    authDerivedPrivKey,
+  });
+});

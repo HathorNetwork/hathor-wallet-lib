@@ -8,7 +8,11 @@
 import wallet from '../src/wallet';
 import dateFormatter from '../src/date';
 import Mnemonic from 'bitcore-mnemonic';
-import { HATHOR_TOKEN_CONFIG, HATHOR_BIP44_CODE } from '../src/constants';
+import {
+  HATHOR_TOKEN_CONFIG,
+  HATHOR_BIP44_CODE,
+  P2PKH_ACCT_PATH,
+} from '../src/constants';
 import storage from '../src/storage';
 import WebSocketHandler from '../src/WebSocketHandler';
 import txHistoryFixture from "./__fixtures__/tx_history";
@@ -763,4 +767,20 @@ test('getAddressAtIndex multisig', () => {
   expect(wallet.getAddressAtIndex(3)).toBe('wLxpApDMvgscSWRMprUzMgHUb9zY586XaS');
   expect(wallet.getAddressAtIndex(4)).toBe('wbjrFtqoegJxQ1x8Aa82EHJgQsk91ghAp5');
   expect(wallet.getAddressAtIndex(5)).toBe('wLEPt68gGg72hRgKogj3FMscCcfwFRSavy');
+});
+
+test('executeGenerateWallet should add the accountLevelPrivKey to storage when starting from the seed', () => {
+  const words = 'mutual property noodle reason reform leisure roof foil siren basket decide above offer rate outdoor board input depend sort twenty little veteran code plunge';
+  const pin = '123456';
+
+  wallet.executeGenerateWallet(words, '', pin, 'password', false, false);
+
+  const code = new Mnemonic(words);
+  const privKey = code.toHDPrivateKey('', network.getNetwork());
+  const accountPathPrivKey = privKey.deriveNonCompliantChild(P2PKH_ACCT_PATH);
+
+  // from storage:
+  const accountPathXprivKey = wallet.getAcctPathXprivKey(pin);
+
+  expect(accountPathXprivKey).toBe(accountPathPrivKey.xprivkey);
 });
