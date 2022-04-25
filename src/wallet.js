@@ -918,7 +918,7 @@ const wallet = {
 
       newAccessData = {
         ...newAccessData,
-        acctPathMainKey: encryptedAccPathMainKey,
+        acctPathMainKey: encryptedAccPathMainKey.encrypted.toString(),
       };
     }
 
