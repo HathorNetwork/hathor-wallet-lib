@@ -89,6 +89,7 @@ class HathorWallet extends EventEmitter {
     // Callback to be executed before reload data
     beforeReloadCallback = null,
     multisig = null,
+    preCalculatedAddresses = null,
   } = {}) {
     super();
 
@@ -137,6 +138,10 @@ class HathorWallet extends EventEmitter {
     this.passphrase = passphrase;
     this.pinCode = pinCode;
     this.password = password;
+
+    if (preCalculatedAddresses) {
+      this.preCalculatedAddresses = preCalculatedAddresses;
+    }
 
     this.store = null;
     if (store) {
@@ -237,7 +242,13 @@ class HathorWallet extends EventEmitter {
       let promise;
       if (this.firstConnection) {
         this.firstConnection = false;
-        promise = wallet.loadAddressHistory(0, wallet.getGapLimit(), this.conn, this.store);
+        promise = wallet.loadAddressHistory(
+          0,
+          wallet.getGapLimit(),
+          this.conn,
+          this.store,
+          this.preCalculatedAddresses
+        );
       } else {
         if (this.beforeReloadCallback) {
           this.beforeReloadCallback();
@@ -639,7 +650,7 @@ class HathorWallet extends EventEmitter {
    * @property {number} token Token used to calculate the amounts received, sent, available and locked
    * @property {number} index Derivation path for the given address
    *
-   * @param {string} address Address to get information of 
+   * @param {string} address Address to get information of
    * @param {AddressInfoOptions} options Optional parameters to filter the results
    *
    * @return {AddressInfo} Aggregated information about the given address
@@ -807,7 +818,7 @@ class HathorWallet extends EventEmitter {
    * @property {{ uid: string, name: string, symbol: string }} token - HTR or custom token
    * @property {{ address: string, amount: number, tx_id: string, locked: boolean, index: number }[]} utxos - Array of utxos that will be consolidated
    * @property {number} total_amount - Amount to be consolidated
-   * 
+   *
    * @param {string} destinationAddress Address of the consolidated utxos
    * @param {UtxoOptions} options Utxo filtering options
    *

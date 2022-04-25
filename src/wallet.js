@@ -508,7 +508,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  loadAddressHistory(startIndex, count, connection = null, store = null) {
+  loadAddressHistory(startIndex, count, connection = null, store = null, preCalculatedAddresses = null) {
     const promise = new Promise((resolve, reject) => {
       let oldStore = storage.store;
       if (store) {
@@ -523,8 +523,10 @@ const wallet = {
 
       const stopIndex = startIndex + count;
       for (var i=startIndex; i<stopIndex; i++) {
-        // Generate each key from index, encrypt and save
-        const address = this.generateAddress(i);
+        // Generate each key from index, encrypt and save ( if it is not provided pre-calculated )
+        const address = preCalculatedAddresses && preCalculatedAddresses[i]
+          ? preCalculatedAddresses[i]
+          : this.generateAddress(i);
         dataJson.keys[address.toString()] = {privkey: null, index: i};
         addresses.push(address.toString());
 
