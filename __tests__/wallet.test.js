@@ -790,8 +790,19 @@ test('executeGenerateWallet should add the accountLevelPrivKey to storage when s
 
   const accessData = wallet.getWalletAccessData();
   const encryptedAcctPathMainKey = accessData.acctPathMainKey;
-  expect(wallet.decryptData(encryptedAcctPathMainKey, pin)).not.toBe(accountPathPrivKey.xprivkey);
+  let decryptedWithWrongPin;
 
+
+  // We have this try catch because decryptData might throw an Malformed UTF-8 Data error depending
+  // on nodejs version and it's enough for us to confirm that the decrypted data is not equal to
+  // the acctPathMainKey
+  try {
+    decryptedWithWrongPin = wallet.decryptData(encryptedAcctPathMainKey, pin)
+  } catch(e) {
+    // do nothing with the error
+  }
+
+  expect(decryptedWithWrongPin).not.toBe(accountPathPrivKey.xprivkey);
   const newAcctPath = wallet.getAcctPathXprivKey(newPin);
   expect(newAcctPath).toBe(accountPathPrivKey.xprivkey)
 });
