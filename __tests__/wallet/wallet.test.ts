@@ -13,7 +13,7 @@ import {
   CreateWalletAuthData,
 } from '../../src/wallet/types';
 import walletUtils from '../../src/utils/wallet';
-import { HDPrivateKey } from 'bitcore-lib';
+import { HDPublicKey, HDPrivateKey, Message } from 'bitcore-lib';
 
 const MOCK_TX = {
   'tx_id': '0009bc9bf8eab19c41a2aa9b9369d3b6a90ff12072729976634890d35788d5d7',
@@ -247,32 +247,34 @@ test('generateCreateWalletAuthData should return correct auth data', async () =>
     xpriv: null,
     xpub: null,
   });
-  const passphrase = '';
-  const networkName = network.name;
 
   const authData: CreateWalletAuthData = wallet.generateCreateWalletAuthData(pin);
-
-  const now = new Date();
   const timestampNow = Math.floor(mockDate.getTime() / 1000); // in seconds
 
-  const privKey: HDPrivateKey = walletUtils.getXPrivKeyFromSeed(seed, {passphrase, networkName});
-  const xpub = walletUtils.getXPubKeyFromSeed(seed, {passphrase, networkName});
-  const authXpub = HathorWalletServiceWallet.getAuthXPubKeyFromSeed(seed, {passphrase, networkName});
-  const walletId = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
-  const privKeyAccountPath = walletUtils.deriveXpriv(privKey, '0\'');
-  const authDerivedPrivKey = HathorWalletServiceWallet.deriveAuthPrivateKey(privKey);
+  // these are deterministic, so we can avoid using the lib's methods to generate them
+  const xpub = 'xpub6D2LLyX98BCEkbTHsE14kgP6atagb9TR3ZBvHYQrT9yEUDYeHVBmrnnyWo3u2cADp4upagFyuu5msxtosceN1FykN22oa41o3fMEJmFG766';
+  const xprivAccountPath = 'tnpr4ugT6rZcxFWFVXBpx3YX4eS5LnUwEzGAvfbzQ9tGst2MTBjijC783X5g2LMfxPrbLJxTPHJ99nB6qDbcqehfXDVTtA33cpn49ZuA6s6WQWP';
+  const walletId = '83f704d8b24d4f9cc252b080b008280bf4b3342065f7b4baee43fd0ec7186db7';
+  const authXpub = 'xpub6AyEt1FdSvP2mXsZfJ4SLHbMugNMQVNdtkhzWoF6nQSSXcstiqEZDXd4Jg7XBscM2K9YMt2ubWXChYXMTAPS99E8Wot1tcMtyfJhhKLZLok';
+  const authXprivKey = 'tnpr4sdMdtJ7Gzh3WTc6k7bteFeLfaGc4LBPms84dQiXD8VZWb4yAY9uQFukpEaJLMpqBds8UUiamnmJWYQt97a3qGqZ5dv7yy3fWERia6CAXNh';
+  const firstAddress = 'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX';
+  const xpubAddress = 'WdSD7aytFEZ5Hp8quhqu3wUCsyyGqcneMu';
+  const authXpubAddress = 'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM';
+
+  const privKeyAccountPath: HDPrivateKey = new HDPrivateKey(xprivAccountPath);
+  const authDerivedPrivKey: HDPrivateKey = new HDPrivateKey(authXprivKey);
+
   const xpubkeySignature = wallet.signMessage(privKeyAccountPath, timestampNow, walletId);
   const authXpubkeySignature = wallet.signMessage(authDerivedPrivKey, timestampNow, walletId);
   const xpubChangeDerivation = walletUtils.xpubDeriveChild(xpub, 0);
-  const firstAddress = walletUtils.getAddressAtIndex(xpubChangeDerivation, 0, networkName);
 
-  expect(authData).toBe({
-    xpub,
-    xpubkeySignature,
-    authXpub,
-    authXpubkeySignature,
-    timestampNow,
-    firstAddress,
-    authDerivedPrivKey,
-  });
+  const xpubMessage = new Message(String(timestampNow).concat(walletId).concat(xpubAddress));
+  const authXpubMessage = new Message(String(timestampNow).concat(walletId).concat(authXpubAddress));
+
+  expect(authData.xpub).toBe(xpub);
+  expect(authData.authXpub).toBe(authXpub);
+  expect(authData.timestampNow).toBe(timestampNow);
+  expect(authData.firstAddress).toBe(firstAddress);
+  expect(xpubMessage.verify(xpubAddress, authData.xpubkeySignature)).toBe(true);
+  expect(authXpubMessage.verify(authXpubAddress, authData.authXpubkeySignature)).toBe(true);
 });
