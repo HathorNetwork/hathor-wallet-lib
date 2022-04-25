@@ -781,6 +781,17 @@ test('executeGenerateWallet should add the accountLevelPrivKey to storage when s
 
   // from storage:
   const accountPathXprivKey = wallet.getAcctPathXprivKey(pin);
-
   expect(accountPathXprivKey).toBe(accountPathPrivKey.xprivkey);
+
+  // we should test the change pin method as it will mutate the acctPathXPriv from storage
+  const newPin = '654321';
+  const changePinSuccess = wallet.changePin(pin, newPin);
+  expect(changePinSuccess).toBe(true);
+
+  const accessData = wallet.getWalletAccessData();
+  const encryptedAcctPathMainKey = accessData.acctPathMainKey;
+  expect(wallet.decryptData(encryptedAcctPathMainKey, pin)).not.toBe(accountPathPrivKey.xprivkey);
+
+  const newAcctPath = wallet.getAcctPathXprivKey(newPin);
+  expect(newAcctPath).toBe(accountPathPrivKey.xprivkey)
 });

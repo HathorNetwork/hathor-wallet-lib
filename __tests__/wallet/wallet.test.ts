@@ -37,6 +37,9 @@ test('getTxBalance', async () => {
     requestPassword,
     seed,
     network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
   });
 
   const getAllAddressesMock = async function* () {
