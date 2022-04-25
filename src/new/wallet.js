@@ -1394,28 +1394,22 @@ class HathorWallet extends EventEmitter {
           continue;
         }
 
-        const ret = {tx_id, index, address: output.decoded.address, authorities: output.value};
         // If output was already used, we can't use it, unless requested in options
-        if (output.spent_by) {
-          if (skipSpent) {
-            continue;
-          }
-
-          if (many) {
-            // If many we push to the array to be returned later
-            utxos.push(ret);
-          } else {
-            return [ret];
-          }
+        if (output.spent_by && skipSpent) {
+          continue;
         }
 
-        if (filterUTXOs(output)) {
-          if (many) {
-            // If many we push to the array to be returned later
-            utxos.push(ret);
-          } else {
-            return [ret];
-          }
+        if (!filterUTXOs(output)) {
+          continue;
+        }
+
+        const ret = {tx_id, index, address: output.decoded.address, authorities: output.value};
+
+        if (many) {
+          // If many we push to the array to be returned later
+          utxos.push(ret);
+        } else {
+          return [ret];
         }
       }
     }
