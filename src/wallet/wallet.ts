@@ -322,8 +322,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     let privKeyAccountPath: bitcore.HDPrivateKey;
     let authDerivedPrivKey: bitcore.HDPrivateKey;
 
-    const now = new Date();
-    const timestampNow = Math.floor(now.getTime() / 1000); // in seconds
+    const now = Date.now();
+    const timestampNow = Math.floor(now / 1000); // in seconds
 
     if (this.seed) {
       // getXPrivKeyFromSeed returns a HDPrivateKey on the root path
