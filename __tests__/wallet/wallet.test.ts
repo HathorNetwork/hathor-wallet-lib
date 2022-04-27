@@ -29,6 +29,10 @@ const MOCK_TX = {
   'outputs': [],
 };
 
+afterEach(() => {
+  jest.clearAllMocks();
+});
+
 test('getTxBalance', async () => {
   const requestPassword = jest.fn();
   const network = new Network('testnet');
@@ -234,10 +238,8 @@ test('getTxBalance', async () => {
 
 test('generateCreateWalletAuthData should return correct auth data', async () => {
   const requestPassword = jest.fn();
-  const mockDate = new Date(100)
-  const spy = jest
-    .spyOn(global, 'Date')
-    .mockImplementation(() => mockDate)
+
+  jest.spyOn(Date, 'now').mockImplementation(() => 10000);
 
   const network = new Network('testnet');
   const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
@@ -252,7 +254,7 @@ test('generateCreateWalletAuthData should return correct auth data', async () =>
   });
 
   const authData: CreateWalletAuthData = wallet.generateCreateWalletAuthData(pin);
-  const timestampNow = Math.floor(mockDate.getTime() / 1000); // in seconds
+  const timestampNow = Math.floor(Date.now() / 1000); // in seconds
 
   // these are deterministic, so we can avoid using the lib's methods to generate them
   const xpub = 'xpub6D2LLyX98BCEkbTHsE14kgP6atagb9TR3ZBvHYQrT9yEUDYeHVBmrnnyWo3u2cADp4upagFyuu5msxtosceN1FykN22oa41o3fMEJmFG766';
