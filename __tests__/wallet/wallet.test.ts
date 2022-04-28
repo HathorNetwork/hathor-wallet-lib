@@ -269,10 +269,6 @@ test('generateCreateWalletAuthData should return correct auth data', async () =>
   const privKeyAccountPath: HDPrivateKey = new HDPrivateKey(xprivAccountPath);
   const authDerivedPrivKey: HDPrivateKey = new HDPrivateKey(authXprivKey);
 
-  const xpubkeySignature = wallet.signMessage(privKeyAccountPath, timestampNow, walletId);
-  const authXpubkeySignature = wallet.signMessage(authDerivedPrivKey, timestampNow, walletId);
-  const xpubChangeDerivation = walletUtils.xpubDeriveChild(xpub, 0);
-
   const xpubMessage = new Message(String(timestampNow).concat(walletId).concat(xpubAddress));
   const authXpubMessage = new Message(String(timestampNow).concat(walletId).concat(authXpubAddress));
 
