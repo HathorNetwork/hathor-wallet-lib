@@ -502,6 +502,7 @@ const wallet = {
    * @param {number} count How many addresses I will load
    * @param {Connection} connection Connection object to subscribe for the addresses
    * @param {Store} store Store object to save the data
+   * @param {string[]} preCalculatedAddresses  An array of pre-calculated addresses for this wallet
    *
    * @return {Promise} Promise that resolves when addresses history is finished loading from server
    *

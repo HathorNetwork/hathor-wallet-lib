@@ -59,13 +59,19 @@ const ConnectionState = {
  *                          one for each request sent to the server.
  **/
 class HathorWallet extends EventEmitter {
-  /*
-   * connection {ConnectionState} A connection to the server
-   * seed {String} 24 words separated by space
-   * passphrase {String} Wallet passphrase
-   * tokenUid {String} UID of the token to handle on this wallet
-   * password {String} Password to encrypt the seed
-   * pin {String} PIN to execute wallet actions
+  /**
+   * @param param
+   * @param {ConnectionState} param.connection A connection to the server
+   * @param {string} param.seed 24 words separated by space
+   * @param {string} [param.passphrase=''] Wallet passphrase
+   * @param {string} [param.xpriv]
+   * @param {string} [param.xpub]
+   * @param {string} [param.tokenUid] UID of the token to handle on this wallet
+   * @param {string} [param.password] Password to encrypt the seed
+   * @param {string} [param.pinCode] PIN to execute wallet actions
+   * @param {boolean} [param.debug] Activates debug mode
+   * @param {{pubkeys:string[],minSignatures:number}} [param.multisig]
+   * @param {string[]} [param.preCalculatedAddresses] An array of pre-calculated addresses
    */
   constructor({
     connection,
@@ -139,9 +145,7 @@ class HathorWallet extends EventEmitter {
     this.pinCode = pinCode;
     this.password = password;
 
-    if (preCalculatedAddresses) {
-      this.preCalculatedAddresses = preCalculatedAddresses;
-    }
+    this.preCalculatedAddresses = preCalculatedAddresses;
 
     this.store = null;
     if (store) {
