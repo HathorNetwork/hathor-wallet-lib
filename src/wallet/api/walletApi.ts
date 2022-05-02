@@ -48,7 +48,7 @@ const walletApi = {
     const response = await axios.get('version');
     const data = response.data;
     if (response.status === 200 && data.success) {
-      return data;
+      return data.data;
     } else {
       throw new WalletRequestError('Error getting fullnode data.');
     }
