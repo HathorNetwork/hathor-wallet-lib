@@ -91,6 +91,23 @@ export interface BalanceResponseData {
   balances: GetBalanceObject[];
 }
 
+export interface TokenDetailsResponseData {
+  success: boolean;
+  details: TokenDetailsObject;
+}
+
+export interface TokenDetailsAuthoritiesObject {
+  mint: boolean;
+  melt: boolean;
+}
+
+export interface TokenDetailsObject {
+  tokenInfo: TokenInfo;
+  totalSupply: number;
+  totalTransactions: number;
+  authorities: TokenDetailsAuthoritiesObject;
+}
+
 export interface HistoryResponseData {
   success: boolean;
   history: GetHistoryObject[];
@@ -143,9 +160,9 @@ export interface SendTxOptionsParam {
   changeAddress: string | undefined;
 }
 
-export interface UtxoResponseData {
+export interface TxOutputResponseData {
   success: boolean;
-  utxos: Utxo[];
+  txOutputs: Utxo[];
 }
 
 export interface Utxo {
@@ -159,6 +176,13 @@ export interface Utxo {
   heightlock: number | null; // output heightlock
   locked: boolean; // if output is locked
   addressPath: string; // path to generate output address
+}
+
+export interface AuthorityTxOutput {
+  txId: string; // output transaction id
+  index: number; // output index
+  address: string; // output address
+  authorities: number; // output authorities
 }
 
 export interface AuthTokenResponseData {
@@ -212,14 +236,14 @@ export interface IStopWalletParams {
 };
 
 export interface IHathorWallet {
-  start(options: { pinCode: string, password: string });
+  start(options: { pinCode: string, password: string }): Promise<void>;
   getAllAddresses(): AsyncGenerator<GetAddressesObject>;
   getBalance(token: string | null): Promise<GetBalanceObject[]>;
   getTokens(): Promise<string[]>;
   getTxHistory(options: { token_id?: string, count?: number, skip?: number }): Promise<GetHistoryObject[]>;
   sendManyOutputsTransaction(outputs: OutputRequestObj[], options: { inputs?: InputRequestObj[], changeAddress?: string }): Promise<Transaction>;
   sendTransaction(address: string, value: number, options: { token?: string, changeAddress?: string }): Promise<Transaction>;
-  stop(params?: IStopWalletParams);
+  stop(params?: IStopWalletParams): void;
   getAddressAtIndex(index: number): string;
   getCurrentAddress({ markAsUsed: boolean }): AddressInfoObject;
   getNextAddress(): AddressInfoObject;
@@ -237,6 +261,7 @@ export interface IHathorWallet {
   getFullHistory(): TransactionFullObject[];
   getTxBalance(tx: WsTransaction, optionsParams): Promise<{[tokenId: string]: number}>;
   onConnectionChangedState(newState: ConnectionState): void;
+  getTokenDetails(tokenId: string): Promise<TokenDetailsObject>;
 }
 
 export interface ISendTransaction {

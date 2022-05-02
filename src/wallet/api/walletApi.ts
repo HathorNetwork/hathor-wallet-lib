@@ -17,7 +17,8 @@ import {
   TokensResponseData,
   TxProposalCreateResponseData,
   TxProposalUpdateResponseData,
-  UtxoResponseData,
+  TokenDetailsResponseData,
+  TxOutputResponseData,
   AuthTokenResponseData
 } from '../types';
 import HathorWalletServiceWallet from '../wallet';
@@ -93,6 +94,17 @@ const walletApi = {
     }
   },
 
+  async getTokenDetails(wallet: HathorWalletServiceWallet, tokenId: string): Promise<TokenDetailsResponseData> {
+    const axios = await axiosInstance(wallet, true);
+    const response = await axios.get(`wallet/tokens/${tokenId}/details`);
+
+    if (response.status === 200 && response.data.success === true) {
+      return response.data;
+    } else {
+      throw new WalletRequestError('Error getting token details.');
+    }
+  },
+
   async getBalances(wallet: HathorWalletServiceWallet, token: string | null = null): Promise<BalanceResponseData> {
     const data = { params: {} };
     if (token) {
@@ -128,10 +140,10 @@ const walletApi = {
     }
   },
 
-  async getUtxos(wallet: HathorWalletServiceWallet, options = {}): Promise<UtxoResponseData> {
+  async getTxOutputs(wallet: HathorWalletServiceWallet, options = {}): Promise<TxOutputResponseData> {
     const data = { params: options }
     const axios = await axiosInstance(wallet, true);
-    const response = await axios.get('wallet/utxos', data);
+    const response = await axios.get('wallet/tx_outputs', data);
     if (response.status === 200 && response.data.success === true) {
       return response.data;
     } else {

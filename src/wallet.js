@@ -22,6 +22,7 @@ import {
   LOAD_WALLET_MAX_RETRY,
   LOAD_WALLET_RETRY_SLEEP,
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
+  P2PKH_ACCT_PATH,
   P2SH_ACCT_PATH,
 } from './constants';
 import Mnemonic from 'bitcore-mnemonic';
@@ -208,7 +209,7 @@ const wallet = {
   },
 
   /**
-   * Start a new HD wallet from an xpriv.
+   * Start a new HD wallet from a xprivkey.
    * Encrypt this private key and save data in storage
    *
    * @param {string} xpriv Extended private-key to start wallet
@@ -222,6 +223,7 @@ const wallet = {
    */
   executeGenerateWalletFromXPriv(xprivkey, pin, loadHistory, multisig) {
     const xpriv = HDPrivateKey(xprivkey);
+
     let initialAccessData;
     let privkey;
     if (xpriv.depth === 0) {
@@ -274,22 +276,27 @@ const wallet = {
    * @inner
    */
   executeGenerateWallet(words, passphrase, pin, password, loadHistory, multisig) {
-    let code = new Mnemonic(words);
-    let xpriv = code.toHDPrivateKey(passphrase, network.getNetwork());
-    let authXpriv = xpriv.deriveNonCompliantChild(WALLET_SERVICE_AUTH_DERIVATION_PATH);
+    const code = new Mnemonic(words);
+    const xpriv = code.toHDPrivateKey(passphrase, network.getNetwork());
+    const authXpriv = xpriv.deriveNonCompliantChild(WALLET_SERVICE_AUTH_DERIVATION_PATH);
+    const accPrivKey = xpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
+
     let privkey;
     if (multisig) {
       privkey = xpriv.deriveNonCompliantChild(`${P2SH_ACCT_PATH}/0`);
     } else {
       privkey = xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
     }
-    let encryptedData = this.encryptData(privkey.xprivkey, pin)
-    let encryptedAuthXpriv = this.encryptData(authXpriv.xprivkey, pin)
-    let encryptedDataWords = this.encryptData(words, password)
+
+    const encryptedData = this.encryptData(privkey.xprivkey, pin)
+    const encryptedAccountPathXpriv = this.encryptData(accPrivKey.xprivkey, pin);
+    const encryptedAuthXpriv = this.encryptData(authXpriv.xprivkey, pin);
+    const encryptedDataWords = this.encryptData(words, password);
 
     // Save in storage the encrypted private key and the hash of the pin and password
-    let access = {
+    const access = {
       mainKey: encryptedData.encrypted.toString(),
+      acctPathMainKey: encryptedAccountPathXpriv.encrypted.toString(),
       hash: encryptedData.hash.key.toString(),
       salt: encryptedData.hash.salt,
       words: encryptedDataWords.encrypted.toString(),
@@ -904,6 +911,16 @@ const wallet = {
       salt: newHash.salt,
       mainKey: encryptedMainKey.encrypted.toString(),
     };
+
+    if (accessData.acctPathMainKey) {
+      const decryptedAccPathMainKey = this.decryptData(accessData.acctPathMainKey, oldPin);
+      const encryptedAccPathMainKey = this.encryptData(decryptedAccPathMainKey, newPin);
+
+      newAccessData = {
+        ...newAccessData,
+        acctPathMainKey: encryptedAccPathMainKey.encrypted.toString(),
+      };
+    }
 
     if (accessData.authKey) {
       const decryptedAuthKey = this.decryptData(accessData.authKey, oldPin);
@@ -2794,6 +2811,25 @@ const wallet = {
 
     const encryptedXPriv = accessData.mainKey;
     const privateKeyStr = wallet.decryptData(encryptedXPriv, pin);
+    return privateKeyStr;
+  },
+
+  /**
+   * Get account path xprivkey from storage
+   *
+   * @param {String} pin User PIN used to encrypt the account path xpriv on storage
+   *
+   * @return {String} Wallet account path xprivkey
+   */
+  getAcctPathXprivKey(pin) {
+    if (this.isFromXPub()) {
+      throw WalletFromXPubGuard('getAcctPathXprivKey');
+    }
+
+    const accessData = this.getWalletAccessData();
+    const encryptedXPriv = accessData.acctPathMainKey;
+    const privateKeyStr = wallet.decryptData(encryptedXPriv, pin);
+
     return privateKeyStr;
   },
 

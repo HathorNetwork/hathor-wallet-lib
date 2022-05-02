@@ -201,7 +201,9 @@ const wallet = {
   },
 
   /**
-   * Get root xpriv from seed
+   * Get root privateKey from seed
+   *
+   * TODO: Change method name as we are not returning a xpriv
    *
    * @param {String} seed 24 words
    * @param {Object} options Options with passphrase, networkName
@@ -221,6 +223,8 @@ const wallet = {
 
   /**
    * Derive xpriv from root to account derivation path
+   *
+   * TODO: Method name is misleading as we are returning a HDPrivateKey and not a xpriv, we should change it
    *
    * @param {string} accountDerivationIndex String with derivation index of account (can be hardened)
    *

@@ -311,3 +311,9 @@ export const MAX_TOKEN_SYMBOL_SIZE = 5;
  * account is the last hardened level
  */
 export const P2SH_ACCT_PATH = `m/45'/${HATHOR_BIP44_CODE}'/0'`;
+
+/**
+ * Account path for P2PKH
+ * account is the last hardened level
+ */
+export const P2PKH_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/0'`;
