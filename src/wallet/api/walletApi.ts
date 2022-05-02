@@ -19,7 +19,8 @@ import {
   TxProposalUpdateResponseData,
   TokenDetailsResponseData,
   TxOutputResponseData,
-  AuthTokenResponseData
+  AuthTokenResponseData,
+  FullNodeVersionData,
 } from '../types';
 import HathorWalletServiceWallet from '../wallet';
 import { WalletRequestError } from '../../errors';
@@ -39,6 +40,17 @@ const walletApi = {
       return data;
     } else {
       throw new WalletRequestError('Error getting wallet status.');
+    }
+  },
+
+  async getVersionData(wallet: HathorWalletServiceWallet): Promise<FullNodeVersionData> {
+    const axios = await axiosInstance(wallet, true);
+    const response = await axios.get('version');
+    const data = response.data;
+    if (response.status === 200 && data.success) {
+      return data;
+    } else {
+      throw new WalletRequestError('Error getting fullnode data.');
     }
   },
 

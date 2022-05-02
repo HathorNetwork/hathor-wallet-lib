@@ -348,6 +348,20 @@ export interface CreateWalletAuthData {
   authDerivedPrivKey: bitcore.HDPrivateKey;
 };
 
+export interface FullNodeVersionData {
+  timestamp: number;
+  version: string;
+  network: string;
+  minWeight: number;
+  minTxWeight: number;
+  minTxWeightCoefficient: number;
+  minTxWeightK: number;
+  tokenDepositPercentage: number;
+  rewardSpendMinBlocks: number;
+  maxNumberInputs: number;
+  maxNumberOutputs: number;
+};
+
 export enum ConnectionState {
   CLOSED = 0,
   CONNECTING = 1,
