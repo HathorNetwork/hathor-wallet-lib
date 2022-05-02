@@ -4,8 +4,9 @@ import storage from './storage';
 import { GetWalletServiceUrlError, GetWalletServiceWsUrlError } from './errors';
 
 
-// Default server user will connect when none have been chosen
+// Default server and network user will connect when none have been chosen
 export const DEFAULT_SERVER = 'https://node1.mainnet.hathor.network/v1a/';
+const DEFAULT_NETWORK = 'network';
 
 // Base URL for the tx mining api
 const TX_MINING_MAINNET_URL = 'https://txmining.mainnet.hathor.network/';
@@ -22,6 +23,7 @@ class Config {
     WALLET_SERVICE_BASE_WS_URL?: string;
     EXPLORER_SERVICE_BASE_URL?: string;
     SERVER_URL?: string;
+    NETWORK?: string;
 
     /**
     * Sets the tx mining service url that will be returned by the config object.
@@ -196,6 +198,36 @@ class Config {
         return DEFAULT_SERVER;
     }
 
+    /**
+     * Sets the current network the wallet is connected to
+     */
+    setNetwork(network: string) {
+      this.NETWORK = network;
+    }
+
+    /**
+    * Gets the current network
+    *
+    * There is more than one method of setting this.
+    * The priority will be given to the network set using the config object.
+    * If not set, we look next into the storage object keys.
+    * If still not set, the default url is returned
+    */
+    getNetwork() {
+      if (this.NETWORK) {
+        return this.NETWORK;
+      }
+
+      if (storage.isInitialized()) {
+        const network = storage.getItem('wallet:network');
+
+        if (network !== null) {
+          return network;
+        }
+      }
+
+      return DEFAULT_NETWORK;
+    }
 }
 
 const instance = new Config();
