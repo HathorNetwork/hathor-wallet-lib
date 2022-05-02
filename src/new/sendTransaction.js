@@ -17,6 +17,7 @@ import oldHelpers from '../helpers';
 import storage from '../storage';
 import MineTransaction from '../wallet/mineTransaction';
 import Address from '../models/address';
+import { OutputType } from '../wallet/types';
 
 /**
  * This is transaction mining class responsible for:
@@ -85,6 +86,10 @@ class SendTransaction extends EventEmitter {
     };
 
     for (const output of this.outputs) {
+      if (output.type === OutputType.DATA) {
+        output.token = HTR_UID;
+      }
+
       if (!(output.token in tokensData)) {
         tokensData[output.token] = getDefaultData();
       }
@@ -96,23 +101,36 @@ class SendTransaction extends EventEmitter {
     });
 
     for (const output of this.outputs) {
-      let tokenData;
-      if (output.token === HTR_UID) {
-        // HTR
-        tokenData = 0;
+      let dataOutput;
+      if (output.type === OutputType.DATA) {
+        // Data output will always have value 1 (0.01) HTR
+        dataOutput = {
+          type: OutputType.DATA,
+          data: output.data,
+          value: 1,
+          tokenData: 0
+        };
       } else {
-        tokenData = tokens.indexOf(output.token) + 1;
+        let tokenData;
+        if (output.token === HTR_UID) {
+          // HTR
+          tokenData = 0;
+        } else {
+          tokenData = tokens.indexOf(output.token) + 1;
+        }
+
+        const addressObj = new Address(output.address, { network: this.network });
+
+        dataOutput = {
+          address: output.address,
+          value: output.value,
+          timelock: output.timelock ? output.timelock : null,
+          tokenData,
+          type: addressObj.getType(),
+        };
       }
 
-      const addressObj = new Address(output.address, { network: this.network });
-
-      tokensData[output.token].outputs.push({
-        address: output.address,
-        value: output.value,
-        timelock: output.timelock ? output.timelock : null,
-        tokenData,
-        type: addressObj.getType(),
-      });
+      tokensData[output.token].outputs.push(dataOutput);
     }
 
     const walletData = wallet.getWalletData();
