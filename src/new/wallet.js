@@ -208,6 +208,27 @@ class HathorWallet extends EventEmitter {
     return new Network(this.getNetwork());
   }
 
+  async getVersionData() {
+    const versionData = await version.checkApiVersion();
+
+    return {
+      // The new facade returns the timestamp of when this information was cached, since we don't
+      // cache this information on the fullnode, it is ok to just return the current timestamp.
+      // This is currently not being used on hathor official wallets
+      timestamp: Date.now(),
+      version: versionData.version,
+      network: versionData.network,
+      minWeight: versionData.min_weight,
+      minTxWeight: versionData.min_tx_weight,
+      minTxWeightCoefficient: versionData.min_tx_weight_coefficient,
+      minTxWeightK: versionData.min_tx_weight_k,
+      tokenDepositPercentage: versionData.token_deposit_percentage,
+      rewardSpendMinBlocks: versionData.reward_spend_min_blocks,
+      maxNumberInputs: versionData.max_number_inputs,
+      maxNumberOutputs: versionData.max_number_outputs,
+    };
+  }
+
   /**
    * Enable debug mode.
    **/

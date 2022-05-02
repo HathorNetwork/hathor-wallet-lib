@@ -166,6 +166,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // TODO should we have a debug mode?
   }
 
+  async getVersionData() {
+    return walletApi.getVersionData(this);
+  }
+
   /**
    * Remove sensitive data from memory
    *
