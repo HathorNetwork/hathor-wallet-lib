@@ -363,6 +363,11 @@ export interface FullNodeVersionData {
   maxNumberOutputs: number;
 };
 
+export interface WalletServiceServerUrls {
+  walletServiceBaseUrl: string;
+  walletServiceWsUrl: string;
+};
+
 export enum ConnectionState {
   CLOSED = 0,
   CONNECTING = 1,

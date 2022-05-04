@@ -60,6 +60,7 @@ import {
   ConnectionState,
   TokenDetailsObject,
   AuthorityTxOutput,
+  WalletServiceServerUrls,
 } from './types';
 import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
@@ -170,17 +171,39 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     return walletApi.getVersionData(this);
   }
 
+  /**
+   * Sets the server to connect on config singleton and storage
+   *
+   * @param {String} newSever - The new server to set the config and storage to
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
   changeServer(newServer: string) {
     storage.setItem('wallet:wallet_service:base_server', newServer);
     config.setWalletServiceBaseUrl(newServer);
   }
 
+  /**
+   * Sets the websocket server to connect on config singleton and storage
+   *
+   * @param {String} newSever - The new websocket server to set the config and storage to
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
   changeWsServer(newServer: string) {
     storage.setItem('wallet:wallet_service:ws_server', newServer);
     config.setWalletServiceBaseWsUrl(newServer);
   }
 
-  static getServerUrlsFromStorage(): { walletServiceBaseUrl: string | null, walletServiceWsUrl: string | null } {
+  /**
+   * Gets the stored websocket and base server urls
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  static getServerUrlsFromStorage(): WalletServiceServerUrls {
     const walletServiceBaseUrl = storage.getItem('wallet:wallet_service:base_server');
     const walletServiceWsUrl = storage.getItem('wallet:wallet_service:ws_server');
 
@@ -344,6 +367,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   generateCreateWalletAuthData(pinCode: string): CreateWalletAuthData {
+    console.log('Generate create auth data called with pin:', pinCode);
     let xpub: string;
     let authXpub: string;
     let privKeyAccountPath: bitcore.HDPrivateKey;
@@ -364,6 +388,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       privKeyAccountPath = walletUtils.deriveXpriv(privKey, '0\'');
       authDerivedPrivKey = HathorWalletServiceWallet.deriveAuthPrivateKey(privKey);
     } else if (this.xpriv) {
+      console.log('from xpriv');
       // this.xpriv is already on the account derivation path
       privKeyAccountPath = bitcore.HDPrivateKey(this.xpriv);;
       xpub = privKeyAccountPath.xpubkey;
@@ -376,8 +401,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     const walletId: string = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
+    console.log('wallet id:', walletId);
 
     // prove we own the xpubkey
+    console.log(privKeyAccountPath, timestampNow, walletId);
     const xpubkeySignature = this.signMessage(privKeyAccountPath, timestampNow, walletId);
 
     // prove we own the auth_xpubkey
