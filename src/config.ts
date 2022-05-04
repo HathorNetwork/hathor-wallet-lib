@@ -6,7 +6,7 @@ import { GetWalletServiceUrlError, GetWalletServiceWsUrlError } from './errors';
 
 // Default server and network user will connect when none have been chosen
 export const DEFAULT_SERVER = 'https://node1.mainnet.hathor.network/v1a/';
-const DEFAULT_NETWORK = 'network';
+const DEFAULT_NETWORK = 'mainnet';
 
 // Base URL for the tx mining api
 const TX_MINING_MAINNET_URL = 'https://txmining.mainnet.hathor.network/';
