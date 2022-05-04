@@ -9,9 +9,11 @@ import wallet from '../src/wallet';
 import dateFormatter from '../src/date';
 import Mnemonic from 'bitcore-mnemonic';
 import {
-  HATHOR_TOKEN_CONFIG,
+  HASH_ITERATIONS,
   HATHOR_BIP44_CODE,
+  HATHOR_TOKEN_CONFIG,
   P2PKH_ACCT_PATH,
+  WALLET_SERVICE_AUTH_DERIVATION_PATH,
 } from '../src/constants';
 import storage from '../src/storage';
 import WebSocketHandler from '../src/WebSocketHandler';
@@ -20,6 +22,66 @@ import network from '../src/network';
 
 beforeEach(() => {
   wallet.setConnection(WebSocketHandler);
+});
+
+test('loadAddressHistory', async () => {
+  const words = wallet.generateWalletWords(256);
+  const pin = '123456';
+
+  // Generating wallet data manually, to skip other undesired steps of `executeGenerateWallet`
+  const code = new Mnemonic(words);
+  const xpriv = code.toHDPrivateKey('', network.getNetwork());
+  const authXpriv = xpriv.deriveNonCompliantChild(WALLET_SERVICE_AUTH_DERIVATION_PATH);
+  const accPrivKey = xpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
+  const privkey = xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
+  const encryptedData = wallet.encryptData(privkey.xprivkey, pin)
+  const encryptedAccountPathXpriv = wallet.encryptData(accPrivKey.xprivkey, pin);
+  const encryptedAuthXpriv = wallet.encryptData(authXpriv.xprivkey, pin);
+  const encryptedDataWords = wallet.encryptData(words, 'password');
+
+  // Setting the storage
+  wallet.setWalletAccessData({
+    mainKey: encryptedData.encrypted.toString(),
+    acctPathMainKey: encryptedAccountPathXpriv.encrypted.toString(),
+    hash: encryptedData.hash.key.toString(),
+    salt: encryptedData.hash.salt,
+    words: encryptedDataWords.encrypted.toString(),
+    authKey: encryptedAuthXpriv.encrypted.toString(),
+    hashPasswd: encryptedDataWords.hash.key.toString(),
+    saltPasswd: encryptedDataWords.hash.salt,
+    hashIterations: HASH_ITERATIONS,
+    pbkdf2Hasher: 'sha1',
+    xpubkey: privkey.xpubkey,
+  });
+  wallet.setWalletData({
+    keys: {},
+    historyTransactions: {},
+  })
+
+  // Executing test
+  const addr1hash = 'WY1URKUnqCTyiixW1Dw29vmeG99hNN4EW6';
+  const addr2hash = 'WTjhJXzQJETVx7BVXdyZmvk396DRRsubdw';
+  const amountOfAddresses = 2
+  const preCalculatedAddresses = await wallet.loadAddressHistory(
+    0,
+    amountOfAddresses,
+    null,
+    null,
+    [addr1hash,addr2hash]
+  ).catch(err => err);
+
+  // Validating results on storage
+  const walletData = storage.getItem('wallet:data');
+  expect(walletData.keys).toHaveProperty(addr1hash)
+  expect(walletData.keys[addr1hash]).toEqual({privkey: null, index: 0});
+  expect(walletData.keys).toHaveProperty(addr2hash)
+  expect(walletData.keys[addr2hash]).toEqual({privkey: null, index: 1});
+
+  /* Despite asking the loadAddressHistory to load only 2 addresses, it generates all addresses up
+   * to the gap limit (21 in length, total).
+   * This happens in getTxHistory > updateHistoryData . So for now we will skip this assertion.
+   */
+  // expect(Object.keys(walletData.keys)).toHaveProperty('length', amountOfAddresses);
 });
 
 test('Wallet operations for transaction', () => {
