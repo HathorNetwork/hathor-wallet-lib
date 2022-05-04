@@ -367,7 +367,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   generateCreateWalletAuthData(pinCode: string): CreateWalletAuthData {
-    console.log('Generate create auth data called with pin:', pinCode);
     let xpub: string;
     let authXpub: string;
     let privKeyAccountPath: bitcore.HDPrivateKey;
@@ -388,7 +387,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       privKeyAccountPath = walletUtils.deriveXpriv(privKey, '0\'');
       authDerivedPrivKey = HathorWalletServiceWallet.deriveAuthPrivateKey(privKey);
     } else if (this.xpriv) {
-      console.log('from xpriv');
       // this.xpriv is already on the account derivation path
       privKeyAccountPath = bitcore.HDPrivateKey(this.xpriv);;
       xpub = privKeyAccountPath.xpubkey;
@@ -401,10 +399,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     const walletId: string = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
-    console.log('wallet id:', walletId);
 
     // prove we own the xpubkey
-    console.log(privKeyAccountPath, timestampNow, walletId);
     const xpubkeySignature = this.signMessage(privKeyAccountPath, timestampNow, walletId);
 
     // prove we own the auth_xpubkey
