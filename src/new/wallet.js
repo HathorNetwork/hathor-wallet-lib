@@ -17,7 +17,7 @@ import { hexToBuffer } from '../utils/buffer';
 import helpers from '../utils/helpers';
 import walletUtils from '../utils/wallet';
 import MemoryStore from '../memory_store';
-import Connection from './connection';
+import config from '../config';
 import SendTransaction from './sendTransaction';
 import Network from '../models/network';
 import { AddressError, WalletError } from '../errors';
@@ -227,6 +227,14 @@ class HathorWallet extends EventEmitter {
       maxNumberInputs: versionData.max_number_inputs,
       maxNumberOutputs: versionData.max_number_outputs,
     };
+  }
+
+  /**
+   * On this facade, we should call wallet.changeServer and also update the config singleton
+   **/
+  changeServer(newServer) {
+    wallet.changeServer(newServer);
+    config.setServerUrl(newServer);
   }
 
   /**

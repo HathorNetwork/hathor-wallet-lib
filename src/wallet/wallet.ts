@@ -22,6 +22,7 @@ import walletUtils from '../utils/wallet';
 import helpers from '../utils/helpers';
 import transaction from '../utils/transaction';
 import tokens from '../utils/tokens';
+import config from '../config';
 import P2PKH from '../models/p2pkh';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
@@ -30,11 +31,10 @@ import Input from '../models/input';
 import Address from '../models/address';
 import Network from '../models/network';
 import networkInstance from '../network';
+import storage from '../storage';
 import assert from 'assert';
 import WalletServiceConnection from './connection';
-import MineTransaction from './mineTransaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
-import { shuffle } from 'lodash';
 import bitcore from 'bitcore-lib';
 import {
   AddressInfoObject,
@@ -168,6 +168,26 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
   async getVersionData() {
     return walletApi.getVersionData(this);
+  }
+
+  changeServer(newServer: string) {
+    storage.setItem('wallet:wallet_service:base_server', newServer);
+    config.setWalletServiceBaseUrl(newServer);
+  }
+
+  changeWsServer(newServer: string) {
+    storage.setItem('wallet:wallet_service:ws_server', newServer);
+    config.setWalletServiceBaseWsUrl(newServer);
+  }
+
+  static getServerUrlsFromStorage(): { walletServiceBaseUrl: string | null, walletServiceWsUrl: string | null } {
+    const walletServiceBaseUrl = storage.getItem('wallet:wallet_service:base_server');
+    const walletServiceWsUrl = storage.getItem('wallet:wallet_service:ws_server');
+
+    return {
+      walletServiceBaseUrl,
+      walletServiceWsUrl,
+    };
   }
 
   /**
