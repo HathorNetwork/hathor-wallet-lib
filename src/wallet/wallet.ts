@@ -167,10 +167,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // TODO should we have a debug mode?
   }
 
-  async getVersionData() {
-    return walletApi.getVersionData(this);
-  }
-
   /**
    * Sets the server to connect on config singleton and storage
    *
@@ -355,6 +351,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     await handleCreate(data.status);
 
     this.clearSensitiveData();
+  }
+
+  /**
+   * Returns version data from the connected fullnode
+   **/
+  async getVersionData() {
+    return walletApi.getVersionData(this);
   }
 
   /**
