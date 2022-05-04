@@ -277,6 +277,7 @@ export interface IHathorWallet {
   getTxBalance(tx: WsTransaction, optionsParams): Promise<{[tokenId: string]: number}>;
   onConnectionChangedState(newState: ConnectionState): void;
   getTokenDetails(tokenId: string): Promise<TokenDetailsObject>;
+  getVersionData(): Promise<FullNodeVersionData>;
 }
 
 export interface ISendTransaction {
