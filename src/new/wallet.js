@@ -59,13 +59,19 @@ const ConnectionState = {
  *                          one for each request sent to the server.
  **/
 class HathorWallet extends EventEmitter {
-  /*
-   * connection {ConnectionState} A connection to the server
-   * seed {String} 24 words separated by space
-   * passphrase {String} Wallet passphrase
-   * tokenUid {String} UID of the token to handle on this wallet
-   * password {String} Password to encrypt the seed
-   * pin {String} PIN to execute wallet actions
+  /**
+   * @param param
+   * @param {ConnectionState} param.connection A connection to the server
+   * @param {string} param.seed 24 words separated by space
+   * @param {string} [param.passphrase=''] Wallet passphrase
+   * @param {string} [param.xpriv]
+   * @param {string} [param.xpub]
+   * @param {string} [param.tokenUid] UID of the token to handle on this wallet
+   * @param {string} [param.password] Password to encrypt the seed
+   * @param {string} [param.pinCode] PIN to execute wallet actions
+   * @param {boolean} [param.debug] Activates debug mode
+   * @param {{pubkeys:string[],minSignatures:number}} [param.multisig]
+   * @param {string[]} [param.preCalculatedAddresses] An array of pre-calculated addresses
    */
   constructor({
     connection,
@@ -89,6 +95,7 @@ class HathorWallet extends EventEmitter {
     // Callback to be executed before reload data
     beforeReloadCallback = null,
     multisig = null,
+    preCalculatedAddresses = null,
   } = {}) {
     super();
 
@@ -137,6 +144,8 @@ class HathorWallet extends EventEmitter {
     this.passphrase = passphrase;
     this.pinCode = pinCode;
     this.password = password;
+
+    this.preCalculatedAddresses = preCalculatedAddresses;
 
     this.store = null;
     if (store) {
@@ -237,7 +246,13 @@ class HathorWallet extends EventEmitter {
       let promise;
       if (this.firstConnection) {
         this.firstConnection = false;
-        promise = wallet.loadAddressHistory(0, wallet.getGapLimit(), this.conn, this.store);
+        promise = wallet.loadAddressHistory(
+          0,
+          wallet.getGapLimit(),
+          this.conn,
+          this.store,
+          this.preCalculatedAddresses
+        );
       } else {
         if (this.beforeReloadCallback) {
           this.beforeReloadCallback();
@@ -639,7 +654,7 @@ class HathorWallet extends EventEmitter {
    * @property {number} token Token used to calculate the amounts received, sent, available and locked
    * @property {number} index Derivation path for the given address
    *
-   * @param {string} address Address to get information of 
+   * @param {string} address Address to get information of
    * @param {AddressInfoOptions} options Optional parameters to filter the results
    *
    * @return {AddressInfo} Aggregated information about the given address
@@ -807,7 +822,7 @@ class HathorWallet extends EventEmitter {
    * @property {{ uid: string, name: string, symbol: string }} token - HTR or custom token
    * @property {{ address: string, amount: number, tx_id: string, locked: boolean, index: number }[]} utxos - Array of utxos that will be consolidated
    * @property {number} total_amount - Amount to be consolidated
-   * 
+   *
    * @param {string} destinationAddress Address of the consolidated utxos
    * @param {UtxoOptions} options Utxo filtering options
    *
