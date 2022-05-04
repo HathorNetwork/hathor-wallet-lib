@@ -116,7 +116,6 @@ abstract class BaseWebSocket extends EventEmitter {
    * Start websocket object and its methods
    */
   setup() {
-    console.log('Setup called');
     if (this.started) {
       return;
     }
@@ -189,12 +188,18 @@ abstract class BaseWebSocket extends EventEmitter {
     }, this.heartbeatInterval);
   }
 
+  /**
+   * Removes all listeners, ends the connection and removes the setup reconnection timer
+   */
   close() {
     this.removeAllListeners();
     this.endConnection()
     this.clearSetupTimer();
   }
 
+  /**
+   * Clears the reconnection timer if it exists
+   */
   clearSetupTimer() {
     if (this.setupTimer) {
       clearTimeout(this.setupTimer);
