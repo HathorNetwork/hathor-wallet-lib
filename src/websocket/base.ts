@@ -193,7 +193,7 @@ abstract class BaseWebSocket extends EventEmitter {
    */
   close() {
     this.removeAllListeners();
-    this.endConnection()
+    this.endConnection();
     this.clearSetupTimer();
   }
 
