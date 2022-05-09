@@ -61,6 +61,7 @@ import {
   TokenDetailsObject,
   AuthorityTxOutput,
   WalletServiceServerUrls,
+  FullNodeVersionData,
 } from './types';
 import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
@@ -356,7 +357,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   /**
    * Returns version data from the connected fullnode
    **/
-  async getVersionData() {
+  async getVersionData(): Promise<FullNodeVersionData> {
     return walletApi.getVersionData(this);
   }
 
