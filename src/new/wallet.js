@@ -208,6 +208,14 @@ class HathorWallet extends EventEmitter {
     return new Network(this.getNetwork());
   }
 
+  /**
+   * Gets version data from the fullnode
+   *
+   * @return {FullNodeVersionData} The data information from the fullnode
+   *
+   * @memberof HathorWallet
+   * @inner
+   **/
   async getVersionData() {
     const versionData = await version.checkApiVersion();
 
