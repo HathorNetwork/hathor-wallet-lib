@@ -231,6 +231,11 @@ class HathorWallet extends EventEmitter {
 
   /**
    * On this facade, we should call wallet.changeServer and also update the config singleton
+   *
+   * @param {String} newServer The new server to change to
+   *
+   * @memberof HathorWallet
+   * @inner
    **/
   changeServer(newServer) {
     wallet.changeServer(newServer);
