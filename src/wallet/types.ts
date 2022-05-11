@@ -277,6 +277,7 @@ export interface IHathorWallet {
   getTxBalance(tx: WsTransaction, optionsParams): Promise<{[tokenId: string]: number}>;
   onConnectionChangedState(newState: ConnectionState): void;
   getTokenDetails(tokenId: string): Promise<TokenDetailsObject>;
+  getVersionData(): Promise<FullNodeVersionData>;
 }
 
 export interface ISendTransaction {
@@ -346,6 +347,25 @@ export interface CreateWalletAuthData {
   timestampNow: number;
   firstAddress: string;
   authDerivedPrivKey: bitcore.HDPrivateKey;
+};
+
+export interface FullNodeVersionData {
+  timestamp: number;
+  version: string;
+  network: string;
+  minWeight: number;
+  minTxWeight: number;
+  minTxWeightCoefficient: number;
+  minTxWeightK: number;
+  tokenDepositPercentage: number;
+  rewardSpendMinBlocks: number;
+  maxNumberInputs: number;
+  maxNumberOutputs: number;
+};
+
+export interface WalletServiceServerUrls {
+  walletServiceBaseUrl: string;
+  walletServiceWsUrl: string;
 };
 
 export enum ConnectionState {

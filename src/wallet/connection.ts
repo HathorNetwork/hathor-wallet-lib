@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import Network from '../models/network';
 import WalletServiceWebSocket from './websocket';
 import config from '../config';
 import BaseConnection, {
