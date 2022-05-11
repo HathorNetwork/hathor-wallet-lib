@@ -174,7 +174,7 @@ export interface OutputRequestObj {
 }
 
 export interface DataScriptOutputRequestObj {
-  type: string; // output type (in this case will be 'data')
+  type: 'data'; // output type
   data: string; // data to store in the output script
 }
 
