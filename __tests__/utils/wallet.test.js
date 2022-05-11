@@ -39,7 +39,7 @@ test('Words', () => {
   }
 
   // Wrong 24th word
-  const wordToPush = lastWord === 'word' ? 'work' : 'word';
+  const wordToPush = lastWord === 'word' ? 'guitar' : 'word';
   invalidArr.push(wordToPush);
   expect(() => wallet.wordsValid(invalidArr.join(' '))).toThrowError(InvalidWords);
 
