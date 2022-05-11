@@ -476,9 +476,30 @@ const helpers = {
    * @inner
    */
   createNFTOutput(data: string): Output {
+    return this.createDataScriptOutput(data);
+  },
+
+  /**
+   * Create an output with data script
+   *
+   * @memberof Helpers
+   * @inner
+   */
+  createDataScriptOutput(data: string): Output {
     const scriptData = new ScriptData(data);
     // Value 1 and token HTR
     return new Output(1, scriptData.createScript());
+  },
+
+  /**
+   * From the base58 of an address we get the type of it, i.e. 'p2pkh' or 'p2sh'
+   *
+   * @memberof Helpers
+   * @inner
+   */
+  getOutputTypeFromAddress(address: string, network: Network): string {
+    const addressObj = new Address(address, { network });
+    return addressObj.getType();
   },
 }
 

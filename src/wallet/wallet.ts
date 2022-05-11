@@ -45,7 +45,10 @@ import {
   SendTxOptionsParam,
   WalletStatus,
   Utxo,
+  OutputType,
+  OutputSendTransaction,
   OutputRequestObj,
+  DataScriptOutputRequestObj,
   InputRequestObj,
   SendTransactionEvents,
   SendTransactionResponse,
@@ -800,14 +803,25 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async sendManyOutputsTransaction(outputs: OutputRequestObj[], options: { inputs?: InputRequestObj[], changeAddress?: string } = {}): Promise<Transaction> {
+  async sendManyOutputsTransaction(outputs: Array<OutputRequestObj | DataScriptOutputRequestObj>, options: { inputs?: InputRequestObj[], changeAddress?: string } = {}): Promise<Transaction> {
     this.failIfWalletNotReady();
     const newOptions = Object.assign({
       inputs: [],
       changeAddress: null
     }, options);
     const { inputs, changeAddress } = newOptions;
-    const sendTransaction = new SendTransactionWalletService(this, { outputs, inputs, changeAddress });
+    const sendTransactionOutputs = outputs.map((output) => {
+      let typedOutput = output as OutputSendTransaction;
+      if (typedOutput.type === OutputType.DATA) {
+        typedOutput.value = 1;
+        typedOutput.token = HATHOR_TOKEN_CONFIG.uid;
+      } else {
+        typedOutput.type = helpers.getOutputTypeFromAddress(typedOutput.address!, this.network);
+      }
+
+      return typedOutput;
+    });
+    const sendTransaction = new SendTransactionWalletService(this, { outputs: sendTransactionOutputs, inputs, changeAddress });
     return sendTransaction.run();
   }
 
