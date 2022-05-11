@@ -197,6 +197,21 @@ export interface OutputRequestObj {
   timelock?: number | null; // output timelock
 }
 
+export interface DataScriptOutputRequestObj {
+  type: 'data'; // output type
+  data: string; // data to store in the output script
+}
+
+// This is the output object to be used in the SendTransactionWalletService class
+export interface OutputSendTransaction {
+  type: string; // output type (in this case will be 'data')
+  value: number; // output value. Optional because we add fixed value of 1 to the output.
+  token: string; // output token. Optional because we add fixed value of HTR token to the output.
+  address?: string; // output address. required for p2pkh or p2sh
+  timelock?: number | null; // output timelock
+  data?: string; // data to store in the output script. required for data script.
+}
+
 export interface InputRequestObj {
   txId: string; // transaction id of the output being spent
   index: number; // index of the output being spent using this input
@@ -262,6 +277,7 @@ export interface IHathorWallet {
   getTxBalance(tx: WsTransaction, optionsParams): Promise<{[tokenId: string]: number}>;
   onConnectionChangedState(newState: ConnectionState): void;
   getTokenDetails(tokenId: string): Promise<TokenDetailsObject>;
+  getVersionData(): Promise<FullNodeVersionData>;
 }
 
 export interface ISendTransaction {
@@ -333,8 +349,33 @@ export interface CreateWalletAuthData {
   authDerivedPrivKey: bitcore.HDPrivateKey;
 };
 
+export interface FullNodeVersionData {
+  timestamp: number;
+  version: string;
+  network: string;
+  minWeight: number;
+  minTxWeight: number;
+  minTxWeightCoefficient: number;
+  minTxWeightK: number;
+  tokenDepositPercentage: number;
+  rewardSpendMinBlocks: number;
+  maxNumberInputs: number;
+  maxNumberOutputs: number;
+};
+
+export interface WalletServiceServerUrls {
+  walletServiceBaseUrl: string;
+  walletServiceWsUrl: string;
+};
+
 export enum ConnectionState {
   CLOSED = 0,
   CONNECTING = 1,
   CONNECTED = 2,
+}
+
+export enum OutputType {
+  P2PKH = 'p2pkh',
+  P2SH = 'p2sh',
+  DATA = 'data',
 }

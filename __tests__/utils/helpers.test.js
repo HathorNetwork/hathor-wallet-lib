@@ -229,3 +229,24 @@ test('createTxFromData', () => {
   expect(extraTx.outputs[1].decodedScript.getType()).toBe('p2sh');
   expect(extraTx.outputs[1].script.toString('hex')).toBe(p2sh.createScript().toString('hex'));
 });
+
+test('getOutputTypeFromAddress', () => {
+  const mainnetNetwork = new Network('mainnet')
+  const testnetNetwork = new Network('testnet')
+
+  // Testnet p2pkh
+  const addr1 = 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo';
+  expect(helpers.getOutputTypeFromAddress(addr1, testnetNetwork)).toBe('p2pkh');
+
+  // Testnet p2sh
+  const addr2 = 'wcFwC82mLoUudtgakZGMPyTL2aHcgSJgDZ';
+  expect(helpers.getOutputTypeFromAddress(addr2, testnetNetwork)).toBe('p2sh');
+
+  // Mainnet p2pkh
+  const addr3 = 'HNBUHhzkVuSFUNW21HrajUFNUiX8JrznSb';
+  expect(helpers.getOutputTypeFromAddress(addr3, mainnetNetwork)).toBe('p2pkh');
+
+  // Mainnet p2sh
+  const addr4 = 'hXRpjKbgVVGF1ioYtscCRavnzvGbsditXn';
+  expect(helpers.getOutputTypeFromAddress(addr4, mainnetNetwork)).toBe('p2sh');
+});

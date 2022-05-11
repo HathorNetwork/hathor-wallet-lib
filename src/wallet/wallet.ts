@@ -22,6 +22,7 @@ import walletUtils from '../utils/wallet';
 import helpers from '../utils/helpers';
 import transaction from '../utils/transaction';
 import tokens from '../utils/tokens';
+import config from '../config';
 import P2PKH from '../models/p2pkh';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
@@ -30,11 +31,10 @@ import Input from '../models/input';
 import Address from '../models/address';
 import Network from '../models/network';
 import networkInstance from '../network';
+import storage from '../storage';
 import assert from 'assert';
 import WalletServiceConnection from './connection';
-import MineTransaction from './mineTransaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
-import { shuffle } from 'lodash';
 import bitcore from 'bitcore-lib';
 import {
   AddressInfoObject,
@@ -45,7 +45,10 @@ import {
   SendTxOptionsParam,
   WalletStatus,
   Utxo,
+  OutputType,
+  OutputSendTransaction,
   OutputRequestObj,
+  DataScriptOutputRequestObj,
   InputRequestObj,
   SendTransactionEvents,
   SendTransactionResponse,
@@ -57,6 +60,8 @@ import {
   ConnectionState,
   TokenDetailsObject,
   AuthorityTxOutput,
+  WalletServiceServerUrls,
+  FullNodeVersionData,
 } from './types';
 import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
@@ -161,6 +166,48 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.newAddresses = [];
     this.indexToUse = -1;
     // TODO should we have a debug mode?
+  }
+
+  /**
+   * Sets the server to connect on config singleton and storage
+   *
+   * @param {String} newSever - The new server to set the config and storage to
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  changeServer(newServer: string) {
+    storage.setItem('wallet:wallet_service:base_server', newServer);
+    config.setWalletServiceBaseUrl(newServer);
+  }
+
+  /**
+   * Sets the websocket server to connect on config singleton and storage
+   *
+   * @param {String} newSever - The new websocket server to set the config and storage to
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  changeWsServer(newServer: string) {
+    storage.setItem('wallet:wallet_service:ws_server', newServer);
+    config.setWalletServiceBaseWsUrl(newServer);
+  }
+
+  /**
+   * Gets the stored websocket and base server urls
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  static getServerUrlsFromStorage(): WalletServiceServerUrls {
+    const walletServiceBaseUrl = storage.getItem('wallet:wallet_service:base_server');
+    const walletServiceWsUrl = storage.getItem('wallet:wallet_service:ws_server');
+
+    return {
+      walletServiceBaseUrl,
+      walletServiceWsUrl,
+    };
   }
 
   /**
@@ -305,6 +352,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     await handleCreate(data.status);
 
     this.clearSensitiveData();
+  }
+
+  /**
+   * Returns version data from the connected fullnode
+   **/
+  async getVersionData(): Promise<FullNodeVersionData> {
+    return walletApi.getVersionData(this);
   }
 
   /**
@@ -800,14 +854,25 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async sendManyOutputsTransaction(outputs: OutputRequestObj[], options: { inputs?: InputRequestObj[], changeAddress?: string } = {}): Promise<Transaction> {
+  async sendManyOutputsTransaction(outputs: Array<OutputRequestObj | DataScriptOutputRequestObj>, options: { inputs?: InputRequestObj[], changeAddress?: string } = {}): Promise<Transaction> {
     this.failIfWalletNotReady();
     const newOptions = Object.assign({
       inputs: [],
       changeAddress: null
     }, options);
     const { inputs, changeAddress } = newOptions;
-    const sendTransaction = new SendTransactionWalletService(this, { outputs, inputs, changeAddress });
+    const sendTransactionOutputs = outputs.map((output) => {
+      let typedOutput = output as OutputSendTransaction;
+      if (typedOutput.type === OutputType.DATA) {
+        typedOutput.value = 1;
+        typedOutput.token = HATHOR_TOKEN_CONFIG.uid;
+      } else {
+        typedOutput.type = helpers.getOutputTypeFromAddress(typedOutput.address!, this.network);
+      }
+
+      return typedOutput;
+    });
+    const sendTransaction = new SendTransactionWalletService(this, { outputs: sendTransactionOutputs, inputs, changeAddress });
     return sendTransaction.run();
   }
 

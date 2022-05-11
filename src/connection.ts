@@ -8,9 +8,6 @@
 import { EventEmitter } from 'events';
 import networkInstance from './network';
 import config from './config';
-import version from './version';
-import helpers from './helpers';
-import wallet from './wallet';
 import WalletWebSocket from './websocket';
 import WalletServiceWebSocket from './wallet/websocket';
 import { ConnectionState } from './wallet/types';
@@ -118,9 +115,9 @@ abstract class Connection extends EventEmitter {
     // See: https://github.com/HathorNetwork/hathor-wallet-headless/pull/1#discussion_r369859701
     this.removeAllListeners();
     if (this.websocket) {
-      this.websocket.removeAllListeners();
-      this.websocket.endConnection()
+      this.websocket.close();
     }
+
     this.setState(ConnectionState.CLOSED);
   }
 

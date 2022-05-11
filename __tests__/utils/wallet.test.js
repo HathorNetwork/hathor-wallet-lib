@@ -17,6 +17,7 @@ import { hexToBuffer } from '../../src/utils/buffer';
 test('Words', () => {
   const words = wallet.generateWalletWords();
   const wordsArr = words.split(' ');
+  const [lastWord] = wordsArr.slice(-1)
   // 24 words
   expect(wordsArr.length).toBe(24);
   // Words are valid
@@ -38,7 +39,8 @@ test('Words', () => {
   }
 
   // Wrong 24th word
-  invalidArr.push('word');
+  const wordToPush = lastWord === 'word' ? 'guitar' : 'word';
+  invalidArr.push(wordToPush);
   expect(() => wallet.wordsValid(invalidArr.join(' '))).toThrowError(InvalidWords);
 
   // If the wrong word does not belong to the mnemonic dictionary we return it in the list of invalidWords

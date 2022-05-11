@@ -10,6 +10,7 @@ import walletApi from './api/walletApi';
 import MineTransaction from './mineTransaction';
 import HathorWalletServiceWallet from './wallet';
 import wallet from '../wallet';
+import helpers from '../utils/helpers';
 import P2PKH from '../models/p2pkh';
 import Transaction from '../models/transaction';
 import Output from '../models/output';
@@ -18,10 +19,10 @@ import Address from '../models/address';
 import { HATHOR_TOKEN_CONFIG } from '../constants';
 import { shuffle } from 'lodash';
 import { SendTxError, UtxoError, WalletError, WalletRequestError } from '../errors';
-import { OutputRequestObj, InputRequestObj, TokenAmountMap, ISendTransaction, MineTxSuccessData } from './types';
+import { OutputSendTransaction, InputRequestObj, TokenAmountMap, ISendTransaction, MineTxSuccessData, OutputType } from './types';
 
 type optionsType = {
-  outputs?: OutputRequestObj[],
+  outputs?: OutputSendTransaction[],
   inputs?: InputRequestObj[],
   changeAddress?: string | null,
   transaction?: Transaction | null,
@@ -32,7 +33,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
   // Wallet that is sending the transaction
   private wallet: HathorWalletServiceWallet;
   // Outputs to prepare the transaction
-  private outputs: OutputRequestObj[];
+  private outputs: OutputSendTransaction[];
   // Optional inputs to prepare the transaction
   private inputs: InputRequestObj[];
   // Optional change address to prepare the transaction
@@ -146,10 +147,14 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @memberof SendTransactionWalletService
    * @inner
    */
-  outputDataToModel(output: OutputRequestObj, tokens: string[]): Output {
-    const address = new Address(output.address, { network: this.wallet.network });
+  outputDataToModel(output: OutputSendTransaction, tokens: string[]): Output {
+    if (output.type === OutputType.DATA) {
+      return helpers.createDataScriptOutput(output.data!);
+    }
+
+    const address = new Address(output.address!, { network: this.wallet.network });
     if (!address.isValid()) {
-      throw new SendTxError(`Address ${output.address} is not valid.`);
+      throw new SendTxError(`Address ${output.address!} is not valid.`);
     }
     const tokenData = (tokens.indexOf(output.token) > -1) ? tokens.indexOf(output.token) + 1 : 0;
     const outputOptions = { tokenData };
@@ -199,7 +204,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       if (amountInputMap[t] > tokenAmountMap[t]) {
         const changeAmount = amountInputMap[t] - tokenAmountMap[t];
         const changeAddress = this.changeAddress || this.wallet.getCurrentAddress({ markAsUsed: true }).address;
-        this.outputs.push({ address: changeAddress, value: changeAmount, token: t });
+        this.outputs.push({ address: changeAddress, value: changeAmount, token: t, type: helpers.getOutputTypeFromAddress(changeAddress, this.wallet.network) });
         // If we add a change output, then we must shuffle it
         this.outputs = shuffle(this.outputs);
       }
@@ -230,7 +235,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
 
       if (changeAmount) {
         const changeAddress = this.changeAddress || this.wallet.getCurrentAddress({ markAsUsed: true }).address;
-        this.outputs.push({ address: changeAddress, value: changeAmount, token });
+        this.outputs.push({ address: changeAddress, value: changeAmount, token, type: helpers.getOutputTypeFromAddress(changeAddress, this.wallet.network) });
         // If we add a change output, then we must shuffle it
         this.outputs = shuffle(this.outputs);
       }
@@ -353,7 +358,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       if (err instanceof WalletRequestError) {
         const errMessage = 'Error sending tx proposal.';
         this.emit('send-error', errMessage);
-        throw SendTxError(errMessage);
+        throw new SendTxError(errMessage);
       } else {
         throw err;
       }

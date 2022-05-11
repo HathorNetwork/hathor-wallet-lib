@@ -64,6 +64,8 @@ abstract class BaseWebSocket extends EventEmitter {
   protected latestPingDate: Date | null;
   // Timer used to detected when connection is down.
   protected timeoutTimer: ReturnType<typeof setTimeout> | null;
+  // Timer used to retry connection
+  protected setupTimer: ReturnType<typeof setTimeout> | null;
   // Connection timeout in milliseconds
   protected connectionTimeout: number;
 
@@ -95,6 +97,7 @@ abstract class BaseWebSocket extends EventEmitter {
     this.latestPingDate = null;
     this.latestRTT = null;
     this.timeoutTimer = null;
+    this.setupTimer = null;
     this.heartbeat = null;
   }
 
@@ -185,6 +188,24 @@ abstract class BaseWebSocket extends EventEmitter {
     }, this.heartbeatInterval);
   }
 
+  /**
+   * Removes all listeners, ends the connection and removes the setup reconnection timer
+   */
+  close() {
+    this.removeAllListeners();
+    this.endConnection();
+    this.clearSetupTimer();
+  }
+
+  /**
+   * Clears the reconnection timer if it exists
+   */
+  clearSetupTimer() {
+    if (this.setupTimer) {
+      clearTimeout(this.setupTimer);
+      this.setupTimer = null;
+    }
+  }
 
   /**
    * Method called when websocket connection is closed
@@ -199,7 +220,9 @@ abstract class BaseWebSocket extends EventEmitter {
       this.ws.close();
       this.ws = null;
     }
-    setTimeout(() => this.setup(), this.retryConnectionInterval);
+
+    this.clearSetupTimer();
+    this.setupTimer = setTimeout(() => this.setup(), this.retryConnectionInterval);
     // @ts-ignore
     clearInterval(this.heartbeat);
   }
