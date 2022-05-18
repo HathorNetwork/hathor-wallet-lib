@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import axios from 'axios';
+import axiosWrapperCreateRequestInstance from './axiosWrapper';
 import {
     TIMEOUT,
 } from '../constants';
@@ -24,15 +24,8 @@ import config from '../config';
  * @param {number} timeout Timeout in milliseconds for the request
  */
 export const axiosInstance = async (network: string, timeout: number = TIMEOUT) => {
-  const defaultOptions = {
-    baseURL: config.getExplorerServiceBaseUrl(network),
-    timeout: timeout,
-    headers: {
-      'Content-Type': 'application/json',
-    },
-  }
-
-  return axios.create(defaultOptions);
+  const baseURL = config.getExplorerServiceBaseUrl(network);
+  return axiosWrapperCreateRequestInstance(baseURL, undefined, timeout);
 }
 
 export default axiosInstance;

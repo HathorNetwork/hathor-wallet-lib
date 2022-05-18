@@ -7,6 +7,7 @@
 
 import axios from 'axios';
 import { TIMEOUT } from '../constants';
+import config from '../config';
 
 /**
  * Method that creates an axios instance
@@ -22,9 +23,15 @@ import { TIMEOUT } from '../constants';
  * @param {number} timeout Timeout in milliseconds for the request
  * @param {Object} additionalHeaders Headers to be sent with the request
  */
-export const axiosWrapperCreateRequestInstance = (url: string, resolve: Function, timeout?: number, additionalHeaders = {}) => {
+export const axiosWrapperCreateRequestInstance = (url: string, resolve?: Function, timeout?: number, additionalHeaders = {}) => {
   if (timeout === undefined) {
     timeout = TIMEOUT;
+  }
+
+  // Any application using the lib may set in the config object a user agent to be set in all requests
+  const userAgent = config.getUserAgent();
+  if (userAgent) {
+    additionalHeaders['User-Agent'] = userAgent;
   }
 
   const defaultOptions = {
