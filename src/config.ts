@@ -24,6 +24,7 @@ class Config {
   EXPLORER_SERVICE_BASE_URL?: string;
   SERVER_URL?: string;
   NETWORK?: string;
+  USER_AGENT?: string;
 
   /**
    * Sets the tx mining service url that will be returned by the config object.
@@ -235,6 +236,20 @@ class Config {
     }
 
     return DEFAULT_NETWORK;
+  }
+
+  /**
+   * Sets the user agent to be set in all requests
+   */
+  setUserAgent(userAgent: string): void {
+    this.USER_AGENT = userAgent;
+  }
+
+  /**
+   * Gets the user agent
+   */
+  getUserAgent(): string | undefined {
+    return this.USER_AGENT;
   }
 }
 
