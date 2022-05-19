@@ -2,31 +2,6 @@
   "name": "@hathor/wallet-lib",
   "version": "0.38.2",
   "description": "Library used by Hathor Wallet",
-  "jest": {
-    "setupFilesAfterEnv": [
-      "<rootDir>/setupTests.js"
-    ],
-    "collectCoverageFrom": [
-      "<rootDir>/src/**/*.js",
-      "<rootDir>/src/**/*.ts",
-      "!<rootDir>/node_modules/"
-    ],
-    "modulePathIgnorePatterns": [
-      "__fixtures__/*"
-    ],
-    "coverageThreshold": {
-      "global": {
-        "branches": 70,
-        "functions": 85,
-        "lines": 85,
-        "statements": 85
-      }
-    },
-    "coverageReporters": [
-      "html",
-      "text"
-    ]
-  },
   "main": "index.js",
   "directories": {
     "lib": "lib"
@@ -47,13 +22,19 @@
   "scripts": {
     "test": "jest --env=node --forceExit",
     "build": "babel --presets @babel/preset-react -d lib/ src && tsc",
-    "tsc": "tsc"
+    "tsc": "tsc",
+    "test_integration": "npm run test_network_up && npm run test_network_integration && npm run test_network_down",
+    "test_network_up": "docker-compose -f ./__tests__/integration/configuration/docker-compose.yml up -d && mkdir -p tmp && cp ./__tests__/integration/configuration/precalculated-wallets.json ./tmp/wallets.json",
+    "test_network_integration": "jest --config jest-integration.config.js --runInBand --forceExit",
+    "test_network_down": "docker-compose -f ./__tests__/integration/configuration/docker-compose.yml down && rm ./tmp/wallets.json"
   },
   "license": "MIT",
   "devDependencies": {
-    "@babel/cli": "^7.4.4",
-    "@babel/core": "^7.4.4",
-    "@babel/preset-env": "^7.4.4",
+    "@babel/cli": "^7.13.0",
+    "@babel/core": "^7.13.1",
+    "@babel/node": "^7.13.0",
+    "@babel/plugin-proposal-class-properties": "^7.13.0",
+    "@babel/preset-env": "^7.13.5",
     "@babel/preset-react": "^7.0.0",
     "@babel/preset-typescript": "^7.10.4",
     "@types/jest": "^27.0.3",
