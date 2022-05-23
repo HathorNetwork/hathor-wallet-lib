@@ -41,7 +41,13 @@ const HathorWalletServiceWallet = require('./lib/wallet/wallet');
 const SendTransactionWalletService = require('./lib/wallet/sendTransactionWalletService');
 const config = require('./lib/config');
 
+const {TxProposalData, TxProposalSignature} = require('./lib/models/tx_proposal');
+const TxProposal = require('./lib/new/txProposal');
+
 module.exports = {
+  TxProposalData,
+  TxProposalSignature,
+  TxProposal: TxProposal.default,
   helpers: helpers.default,
   dateFormatter: dateFormatter.default,
   tokens: tokens.default,

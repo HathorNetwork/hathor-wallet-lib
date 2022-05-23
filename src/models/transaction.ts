@@ -88,7 +88,7 @@ class Transaction {
 
   /**
    * Return transaction data to sign in inputs
-   * 
+   *
    * @return {Buffer}
    * @memberof Transaction
    * @inner
@@ -230,7 +230,7 @@ class Transaction {
 
   /**
    * Calculate the minimum tx weight
-   * 
+   *
    * @throws {ConstantNotSet} If the weight constants are not set yet
    *
    * @return {number} Minimum weight calculated (float)
