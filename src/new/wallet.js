@@ -1472,7 +1472,7 @@ class HathorWallet extends EventEmitter {
     }
 
     if (many) {
-      return utxos || null;
+      return utxos;
     }
     return null;
   }
