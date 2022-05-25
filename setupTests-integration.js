@@ -39,7 +39,7 @@ class MemoryOnlyStore {
 }
 const storage = require('./src/storage').default;
 storage.setStore(new MemoryOnlyStore());
-storage.setItem('wallet:server', 'http://localhost:8080/');
+storage.setItem('wallet:server', 'http://localhost:8083/v1a/');
 
 /**
  * Gets the name of the test being executed from a Jasmine's global variable.
