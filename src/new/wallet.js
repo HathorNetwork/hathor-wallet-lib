@@ -1426,7 +1426,7 @@ class HathorWallet extends EventEmitter {
    *    'skipSpent': if should not include spent utxos (default true)
    *  }
    *
-   * @return {Array} Array of objects with {tx_id, index, address, authorities} of the authority output. Returns null in case there are no utxos for this type
+   * @return {Array|null} Array of objects with {tx_id, index, address, authorities} of the authority output. Returns null in case there are no utxos for this type
    **/
   selectAuthorityUtxo(tokenUid, filterUTXOs, options = {}) {
     const newOptions = Object.assign({many: false, skipSpent: true}, options);
@@ -1474,6 +1474,7 @@ class HathorWallet extends EventEmitter {
     if (many) {
       return utxos;
     }
+    return null;
   }
 
   /**
