@@ -627,17 +627,17 @@ class HathorWallet extends EventEmitter {
   /**
    * Get transaction history
    *
-   * @params {Object} options {token_id, count, skip}
-   *
-   * @return {Promise<Array>} Array of balance for each token
-   * {
-   *   token: {id, name, symbol},
-   *   balance: {unlocked. locked},
-   *   transactions: number,
-   *   lockExpires: number | null,
-   *   tokenAuthorities: {unlocked: {mint, melt}. locked: {mint, melt}}
-   * }
-   *
+   * @param options
+   * @param {string} [options.token_id]
+   * @param {number} [options.count]
+   * @param {number} [options.skip]
+   * @return {Promise<{
+   *   txId:string,
+   *   timestamp:number,
+   *   tokenUid:string,
+   *   balance:number,
+   *   voided:boolean
+   * }[]>} Array of transactions
    * @memberof HathorWallet
    * @inner
    **/

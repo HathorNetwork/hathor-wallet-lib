@@ -9,6 +9,16 @@
 import { parse } from 'path';
 import { loggers, LoggerUtil } from './__tests__/integration/utils/logger.util';
 import config from "./src/config";
+import {
+  FULLNODE_URL,
+  TX_MINING_URL,
+  WALLET_CONSTANTS
+} from "./__tests__/integration/configuration/test-constants";
+import Connection from "./src/new/connection";
+import HathorWallet from "./src/new/wallet";
+import {
+  WalletPrecalculationHelper, precalculationHelpers
+} from "./__tests__/integration/helpers/wallet-precalculation.helper";
 
 // import {
 //   precalculationHelpers, WalletPrecalculationHelper,
@@ -41,8 +51,8 @@ class MemoryOnlyStore {
 }
 const storage = require('./src/storage').default;
 storage.setStore(new MemoryOnlyStore());
-storage.setItem('wallet:server', 'http://localhost:8083/v1a/');
-config.setTxMiningUrl('http://localhost:8035/');
+storage.setItem('wallet:server', FULLNODE_URL);
+config.setTxMiningUrl(TX_MINING_URL);
 
 /**
  * Gets the name of the test being executed from a Jasmine's global variable.
@@ -66,11 +76,11 @@ beforeAll(async () => {
   loggers.test = testLogger;
 
   // Loading pre-calculated wallets
-  // precalculationHelpers.test = new WalletPrecalculationHelper('./tmp/wallets.json');
-  // await precalculationHelpers.test.initWithWalletsFile();
+  precalculationHelpers.test = new WalletPrecalculationHelper('./tmp/wallets.json');
+  await precalculationHelpers.test.initWithWalletsFile();
 });
 
 afterAll(async () => {
   // Storing data about used precalculated wallets for the next test suites
-  // await precalculationHelpers.test.storeDbIntoWalletsFile();
+  await precalculationHelpers.test.storeDbIntoWalletsFile();
 });

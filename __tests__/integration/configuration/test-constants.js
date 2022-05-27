@@ -84,3 +84,7 @@ export const AUTHORITY_VALUE = {
 };
 
 export const HATHOR_TOKEN_ID = HATHOR_TOKEN_CONFIG.uid;
+
+export const NETWORK_NAME = 'privatenet';
+export const FULLNODE_URL = 'http://localhost:8083/v1a/';
+export const TX_MINING_URL = 'http://localhost:8035/';
