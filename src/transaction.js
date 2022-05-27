@@ -745,9 +745,8 @@ const transaction = {
    *  'outputs': ['address', 'value', 'timelock', 'tokenData'],
    * }
    * @param {string} pin Pin to decrypt data
-   * @param {Object} {
-   *   {number} minimumTimestamp Default is 0.
-   * }
+   * @param [options]
+   * @param {number} [options.minimumTimestamp=0] Default is 0
    *
    * @return {Promise}
    * @memberof Transaction

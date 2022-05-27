@@ -1190,11 +1190,9 @@ class HathorWallet extends EventEmitter {
    *
    * @param {String} address Output address
    * @param {Number} value Output value
-   * @param {Object} options Options parameters
-   *  {
-   *   'changeAddress': address of the change output
-   *   'token': token uid
-   *  }
+   * @param [options] Options parameters
+   * @param {string} [options.changeAddress] address of the change output
+   * @param {string} [options.token] token uid
    *
    * @return {Promise<Transaction>} Promise that resolves when transaction is sent
    **/

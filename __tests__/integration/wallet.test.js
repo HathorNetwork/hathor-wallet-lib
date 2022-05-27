@@ -1,4 +1,5 @@
 import wallet from "../../src/wallet";
+import HathorWallet from "../../src/new/wallet";
 import Mnemonic from "bitcore-mnemonic";
 import network from "../../src/network";
 import {
@@ -10,8 +11,12 @@ import {
 import storage from "../../src/storage";
 
 import WebSocketHandler from '../../src/WebSocketHandler';
+import Connection from "../../src/new/connection";
+import { WALLET_CONSTANTS } from "./configuration/test-constants";
 wallet.setConnection(WebSocketHandler);
 WebSocketHandler.setup();
+
+const sampleWords = 'issue middle acid visual long universe robust renew room illness voice wreck security section trip swim lock notable erosion where island nephew identify dilemma';
 
 let genericWalletAccessData = {};
 function getGenericWalletAccessData(wordsSeed) {
@@ -89,12 +94,12 @@ describe('src/wallet.js', () => {
     });
   });
 
-  describe('getTxHistory', () => {
+  describe.skip('getTxHistory', () => {
     it('should get the transaction history for an address', async (done) => {
       const addresses = [
         'WT4RayTkdz1k2RKG9HM9PYmfXiqzNL5cAj'
       ];
-      const words = 'issue middle acid visual long universe robust renew room illness voice wreck security section trip swim lock notable erosion where island nephew identify dilemma';
+      const words = sampleWords;
       wallet.setWalletAccessData(getGenericWalletAccessData(words));
       wallet.setWalletData({
         keys: {},
@@ -126,4 +131,56 @@ describe('src/wallet.js', () => {
       }
     })
   })
-})
+});
+
+describe('new/wallet.ts', () => {
+  describe('send tokens', () => {
+    it('should send HTR token', async (done) => {
+      const words = WALLET_CONSTANTS.genesis.words;
+      let pin = '123456';
+      const connection = new Connection({
+        network: 'privatenet',
+        servers: ['http://localhost:8083/v1a/'],
+        connectionTimeout: 30000,
+      })
+      const walletConfig = {
+        seed: words,
+        connection,
+        password: 'password',
+        pinCode: pin,
+        multisig: false,
+      }
+      try {
+        const hWallet = new HathorWallet(walletConfig);
+        await hWallet.start();
+
+        await new Promise((resolve, reject) => {
+          hWallet.on('state', newState => {
+            // Only continue the tests on wallet ready
+            if (newState === HathorWallet.READY) {
+              return resolve();
+            } else if (newState === HathorWallet.ERROR) {
+              reject(new Error('HathorWallet failed to start.'))
+            }
+
+            // TODO: Add a timeout here.
+          })
+        })
+
+        const result = await hWallet.sendTransaction(
+          'WT4RayTkdz1k2RKG9HM9PYmfXiqzNL5cAj',
+          100,
+          {
+            changeAddress: 'WPhehTyNHTPz954CskfuSgLEfuKXbXeK3f'
+          });
+        console.log(result);
+        done();
+      }
+      catch (e) {
+        console.error(e.stack);
+        done(e);
+      }
+
+    })
+  })
+});

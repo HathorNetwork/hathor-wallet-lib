@@ -8,6 +8,8 @@
 /* eslint-disable global-require */
 import { parse } from 'path';
 import { loggers, LoggerUtil } from './__tests__/integration/utils/logger.util';
+import config from "./src/config";
+
 // import {
 //   precalculationHelpers, WalletPrecalculationHelper,
 // } from './scripts/helpers/wallet-precalculation.helper';
@@ -40,6 +42,7 @@ class MemoryOnlyStore {
 const storage = require('./src/storage').default;
 storage.setStore(new MemoryOnlyStore());
 storage.setItem('wallet:server', 'http://localhost:8083/v1a/');
+config.setTxMiningUrl('http://localhost:8035/');
 
 /**
  * Gets the name of the test being executed from a Jasmine's global variable.
