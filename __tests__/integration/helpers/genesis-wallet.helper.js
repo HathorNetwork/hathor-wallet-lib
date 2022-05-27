@@ -21,6 +21,11 @@ export class GenesisWalletHelper {
    */
   hWallet;
 
+  /**
+   * Starts a genesis wallet. Also serves as a reference for wallet creation boilerplate.
+   * Only returns when the wallet is in a _READY_ state.
+   * @returns {Promise<void>}
+   */
   async start() {
     const words = WALLET_CONSTANTS.genesis.words;
     let pin = '123456';
@@ -49,14 +54,37 @@ export class GenesisWalletHelper {
     }
   }
 
+  /**
+   * @typedef SendTxResponse
+   * @property {{hash:string,index:number,data:Buffer}[]} inputs
+   * @property {{value:number,script:Buffer,tokenData:number,decodedScript:*}[]} outputs
+   * @property {number} version
+   * @property {number} weight
+   * @property {number} nonce
+   * @property {number} timestamp
+   * @property {string[]} parents
+   * @property {*[]} tokens
+   * @property {string} hash
+   * @property {*} _dataToSignCache
+   */
+
+  /**
+   * Internal method to send HTR to another wallet's address.
+   * @param {string} address
+   * @param {number} value
+   * @returns {Promise<SendTxResponse>}
+   * @private
+   */
   async _injectFunds(address, value) {
     try {
       const result = await this.hWallet.sendTransaction(
         address,
         value,
         {
-          changeAddress: 'WPhehTyNHTPz954CskfuSgLEfuKXbXeK3f'
+          changeAddress: WALLET_CONSTANTS.genesis.addresses[0]
         });
+
+      // TODO: Implement event handler to wait for transaction to be updated on wallet.
 
       return result;
     }
@@ -66,6 +94,10 @@ export class GenesisWalletHelper {
     }
   }
 
+  /**
+   * Preferred way to instantiate the GenesisWalletHelper
+   * @returns {Promise<GenesisWalletHelper>}
+   */
   static async getSingleton() {
     if (singleton) {
       return singleton;
@@ -78,6 +110,13 @@ export class GenesisWalletHelper {
     return singleton;
   }
 
+  /**
+   * An easy way to send HTR to another wallet's address for testing.
+   * @param {string} address
+   * @param {number} value
+   * @returns {Promise<SendTxResponse>}
+   * @private
+   */
   static async injectFunds(address, value) {
     const instance = await GenesisWalletHelper.getSingleton()
     return instance._injectFunds(address, value);
