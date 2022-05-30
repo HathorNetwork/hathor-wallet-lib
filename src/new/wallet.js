@@ -391,8 +391,12 @@ class HathorWallet extends EventEmitter {
     const multisigData = accessData.multisig;
     const xpub = HDPublicKey(accessData.xpubkey);
 
-    // deserialize P2SHSignature for all signatures
-    const p2shSignatures = signatures.map(sig => P2SHSignature.deserialize(sig));
+    // Deserialize P2SHSignature for all signatures
+    // XXX: the .sort here is very important since the fullnode requires the signatures
+    // in the same order as the pubkeys in the redeemScript and the order chosen for the
+    // pubkeys is the order of the sorted account path pubkey (hex encoded). This sort
+    // only works because the serialized signature starts with the account path pubkey.
+    const p2shSignatures = signatures.sort().map(sig => P2SHSignature.deserialize(sig));
 
     for (const {index, input} of tx.inputs.map((input, index) => ({index, input}))) {
       if (!(input.hash in historyTransactions)) {
