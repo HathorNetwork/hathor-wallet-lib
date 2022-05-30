@@ -624,17 +624,17 @@ class HathorWallet extends EventEmitter {
   /**
    * Get transaction history
    *
-   * @params {Object} options {token_id, count, skip}
-   *
-   * @return {Promise<Array>} Array of balance for each token
-   * {
-   *   token: {id, name, symbol},
-   *   balance: {unlocked. locked},
-   *   transactions: number,
-   *   lockExpires: number | null,
-   *   tokenAuthorities: {unlocked: {mint, melt}. locked: {mint, melt}}
-   * }
-   *
+   * @param options
+   * @param {string} [options.token_id]
+   * @param {number} [options.count]
+   * @param {number} [options.skip]
+   * @return {Promise<{
+   *   txId:string,
+   *   timestamp:number,
+   *   tokenUid:string,
+   *   balance:number,
+   *   voided:boolean
+   * }[]>} Array of transactions
    * @memberof HathorWallet
    * @inner
    **/
@@ -1187,11 +1187,9 @@ class HathorWallet extends EventEmitter {
    *
    * @param {String} address Output address
    * @param {Number} value Output value
-   * @param {Object} options Options parameters
-   *  {
-   *   'changeAddress': address of the change output
-   *   'token': token uid
-   *  }
+   * @param [options] Options parameters
+   * @param {string} [options.changeAddress] address of the change output
+   * @param {string} [options.token] token uid
    *
    * @return {Promise<Transaction>} Promise that resolves when transaction is sent
    **/
