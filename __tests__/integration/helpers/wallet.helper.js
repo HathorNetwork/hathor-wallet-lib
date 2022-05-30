@@ -8,6 +8,7 @@
 import Connection from "../../../src/new/connection";
 import { FULLNODE_URL, NETWORK_NAME } from "../configuration/test-constants";
 import HathorWallet from "../../../src/new/wallet";
+import { precalculationHelpers } from "./wallet-precalculation.helper";
 
 /**
  * Generates a connection object for starting wallets.
@@ -19,6 +20,29 @@ export function generateConnection() {
     servers: [FULLNODE_URL],
     connectionTimeout: 30000,
   })
+}
+
+/**
+ * Generates a Wallet from an available precalculated seed
+ * @returns {Promise<HathorWallet>}
+ */
+export async function generateWallet() {
+  // Send a transaction to one of the wallet's addresses
+  const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+
+  // Start the wallet
+  const walletConfig = {
+    seed: walletData.words,
+    connection: generateConnection(),
+    password: 'password',
+    pinCode: '000000',
+    preCalculatedAddresses: walletData.addresses,
+  };
+  const hWallet = new HathorWallet(walletConfig);
+  await hWallet.start();
+  await waitForWalletReady(hWallet);
+
+  return hWallet;
 }
 
 /**
@@ -59,8 +83,12 @@ export async function waitForTxReceived(hWallet, txId) {
         return; // Ignore if we didn't receive the transaction we expected.
       }
 
-      // Return the successful transaction
-      resolve(newTx);
+      /*
+       * Return the successful transaction, but only on the next iteration of the event loop.
+       * If we did not insert this delay here, synchronous operations could fetch memory state
+       * from before the transaction.
+       */
+      setTimeout(() => resolve(newTx), 0);
     })
   })
 }

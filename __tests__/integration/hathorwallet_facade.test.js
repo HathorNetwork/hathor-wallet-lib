@@ -1,8 +1,13 @@
 import { precalculationHelpers } from "./helpers/wallet-precalculation.helper";
 import { GenesisWalletHelper } from "./helpers/genesis-wallet.helper";
 import { getRandomInt } from "./utils/core.util";
-import { generateConnection, waitForWalletReady } from "./helpers/wallet.helper";
-import { HathorWallet } from "../../index";
+import {
+  generateConnection,
+  generateWallet,
+  waitForTxReceived,
+  waitForWalletReady
+} from "./helpers/wallet.helper";
+import HathorWallet from "../../src/new/wallet";
 
 describe('start', () => {
 
@@ -102,4 +107,50 @@ describe('start', () => {
     }
     hWallet.stop();
   });
+
 });
+
+describe('getTransactionsCountByAddress', () => {
+  it('should return correct entries for a wallet', async () => {
+    // Create the wallet
+    const hWallet = await generateWallet();
+
+    // Validate empty contents, properties with the address string as a key
+    const tcbaEmpty = hWallet.getTransactionsCountByAddress();
+    expect(tcbaEmpty).toBeDefined();
+    const addressesList = Object.keys(tcbaEmpty);
+    expect(addressesList).toHaveProperty('length',21);
+    for(const address of addressesList) {
+      expect(tcbaEmpty[address]).toBeDefined();
+      expect(tcbaEmpty[address]).toHaveProperty('index');
+      expect(tcbaEmpty[address]).toHaveProperty('transactions', 0);
+    }
+
+    // Generate one transaction and validate its effects
+    await GenesisWalletHelper.injectFunds(addressesList[0], 10, true);
+    const tcba1 = hWallet.getTransactionsCountByAddress();
+    expect(tcba1).toBeDefined();
+    expect(tcba1[addressesList[0]]).toHaveProperty('transactions', 1);
+
+    // Generate another transaction and validate its effects
+    const tx2 = await hWallet.sendTransaction(addressesList[1], 5, {changeAddress: addressesList[2]});
+    await waitForTxReceived(hWallet, tx2.hash);
+    const tcba2 = hWallet.getTransactionsCountByAddress();
+    expect(tcba2[addressesList[0]]).toHaveProperty('transactions', 2);
+    expect(tcba2[addressesList[1]]).toHaveProperty('transactions', 1);
+    expect(tcba2[addressesList[2]]).toHaveProperty('transactions', 1);
+  })
+
+  it('should retrieve more addresses according to gap limit', async () => {
+    const hWallet = await generateWallet();
+
+    const tcbaEmpty = hWallet.getTransactionsCountByAddress();
+    const addressesList = Object.keys(tcbaEmpty);
+    expect(addressesList).toHaveProperty('length',21);
+
+    await GenesisWalletHelper.injectFunds(addressesList[20], 1, true);
+    const tcba1 = hWallet.getTransactionsCountByAddress();
+    const addresses1 = Object.keys(tcba1);
+    expect(addresses1).toHaveProperty('length', 41);
+  })
+})
