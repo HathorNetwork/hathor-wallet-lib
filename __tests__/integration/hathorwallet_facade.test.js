@@ -1,6 +1,6 @@
 import { precalculationHelpers } from "./helpers/wallet-precalculation.helper";
 import { GenesisWalletHelper } from "./helpers/genesis-wallet.helper";
-import { delay, getRandomInt } from "./utils/core.util";
+import { getRandomInt } from "./utils/core.util";
 import { generateConnection, waitForWalletReady } from "./helpers/wallet.helper";
 import { HathorWallet } from "../../index";
 
@@ -11,8 +11,7 @@ describe('start', () => {
     const walletData = precalculationHelpers.test.getPrecalculatedWallet();
     const injectAddress = walletData.addresses[0];
     const injectValue = getRandomInt(10,1);
-    const injectionTx = await GenesisWalletHelper.injectFunds(injectAddress,injectValue);
-    await delay(1000);
+    const injectionTx = await GenesisWalletHelper.injectFunds(injectAddress,injectValue, true);
 
     // Start the wallet
     const walletConfig = {

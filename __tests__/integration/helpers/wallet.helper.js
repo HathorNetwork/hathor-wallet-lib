@@ -29,3 +29,19 @@ export function waitForWalletReady(hWallet) {
     })
   })
 }
+
+export function waitForTxReceived(hWallet, txId) {
+  // TODO: Implement a timeout
+
+  // Only return the positive response after the transaction was received by the websocket
+  return new Promise((resolve, reject) => {
+    hWallet.on('new-tx', newTx => {
+      if (newTx.tx_id !== txId) {
+        return; // Ignore if we didn't receive the transaction we expected.
+      }
+
+      // Return the successful transaction
+      resolve(newTx);
+    })
+  })
+}
