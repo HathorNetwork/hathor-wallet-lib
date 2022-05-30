@@ -388,8 +388,15 @@ const wallet = {
       throw new Error('Signatures are incompatible with redeemScript');
     }
     const arr: Buffer[] = [];
+    let sigCount = 0;
     for (const sig of signatures) {
       helpers.pushDataToStack(arr, sig);
+      if (++sigCount >= minSignatures) {
+        // XXX: This conditional makes it so signatures after minSignatures are ignored
+        // This is because the OP_CHECKMULTISIG will only acknowledge and verify the minimum
+        // number and treat any excess as extra data on stack
+        break;
+      }
     }
     helpers.pushDataToStack(arr, redeemScript);
     return util.buffer.concat(arr);

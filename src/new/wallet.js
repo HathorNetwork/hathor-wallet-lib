@@ -392,7 +392,7 @@ class HathorWallet extends EventEmitter {
     const xpub = HDPublicKey(accessData.xpubkey);
 
     // deserialize P2SHSignature for all signatures
-    const p2shSignatures = signatures.map(sig => P2SHSignature.deserialize(sig));
+    const p2shSignatures = signatures.sort().map(sig => P2SHSignature.deserialize(sig));
 
     for (const {index, input} of tx.inputs.map((input, index) => ({index, input}))) {
       if (!(input.hash in historyTransactions)) {
