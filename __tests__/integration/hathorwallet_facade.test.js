@@ -13,7 +13,6 @@ import { HATHOR_TOKEN_CONFIG } from "../../src/constants";
 describe('start', () => {
 
   it('should start a wallet with no history', async () => {
-    // Send a transaction to one of the wallet's addresses
     const walletData = precalculationHelpers.test.getPrecalculatedWallet();
 
     // Start the wallet
@@ -31,6 +30,13 @@ describe('start', () => {
     // Validate that it has transactions
     const txHistory = await hWallet.getTxHistory();
     expect(txHistory).toHaveProperty('length',0);
+
+    // Validate that the addresses are the same as the pre-calculated that were informed
+    for (const addressIndex in walletData.addresses) {
+      const precalcAddress = walletData.addresses[+addressIndex];
+      const addressAtIndex = hWallet.getAddressAtIndex(+addressIndex);
+      expect(precalcAddress).toEqual(addressAtIndex)
+    }
     hWallet.stop();
   });
 
@@ -61,7 +67,6 @@ describe('start', () => {
   });
 
   it("should calculate the wallet's addresses on start", async () => {
-    // Send a transaction to one of the wallet's addresses
     const walletData = precalculationHelpers.test.getPrecalculatedWallet();
 
     // Start the wallet
@@ -70,31 +75,11 @@ describe('start', () => {
       connection: generateConnection(),
       password: 'password',
       pinCode: '000000',
-    };
-    const hWallet = new HathorWallet(walletConfig);
-    await hWallet.start();
-    await waitForWalletReady(hWallet);
-
-    // Validate that the addresses are the same as the pre-calculated ones
-    for (const addressIndex in walletData.addresses) {
-      const precalcAddress = walletData.addresses[+addressIndex];
-      const addressAtIndex = hWallet.getAddressAtIndex(+addressIndex);
-      expect(precalcAddress).toEqual(addressAtIndex)
-    }
-    hWallet.stop();
-  });
-
-  it('should start a wallet with precalculated addresses', async () => {
-    // Send a transaction to one of the wallet's addresses
-    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
-
-    // Start the wallet
-    const walletConfig = {
-      seed: walletData.words,
-      connection: generateConnection(),
-      password: 'password',
-      pinCode: '000000',
-      preCalculatedAddresses: walletData.addresses,
+      /*
+       * No precalculated addresses here. All will be calculated at runtime.
+       * This operation takes a lot longer under jest's testing framework, so we avoid it
+       * on most tests.
+       */
     };
     const hWallet = new HathorWallet(walletConfig);
     await hWallet.start();
