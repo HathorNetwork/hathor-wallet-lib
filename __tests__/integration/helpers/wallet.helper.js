@@ -9,6 +9,10 @@ import Connection from "../../../src/new/connection";
 import { FULLNODE_URL, NETWORK_NAME } from "../configuration/test-constants";
 import HathorWallet from "../../../src/new/wallet";
 
+/**
+ * Generates a connection object for starting wallets.
+ * @returns {WalletConnection}
+ */
 export function generateConnection() {
   return new Connection({
     network: NETWORK_NAME,
@@ -17,6 +21,12 @@ export function generateConnection() {
   })
 }
 
+/**
+ * Translates the Wallet Ready event into a promise
+ * Waits for the wallet event that indicates this wallet is ready for use.
+ * @param hWallet
+ * @returns {Promise<unknown>}
+ */
 export function waitForWalletReady(hWallet) {
   // Only return the positive response after the wallet is ready
   return new Promise((resolve, reject) => {
@@ -30,7 +40,16 @@ export function waitForWalletReady(hWallet) {
   })
 }
 
-export function waitForTxReceived(hWallet, txId) {
+/**
+ * Translates the tx success event into a promise.
+ * Waits for the wallet event that indicates this transaction id has been fully integrated
+ * into the lib's local caches. Actions that depend on this state can be executed after the
+ * successful response from this function.
+ * @param {HathorWallet} hWallet
+ * @param {string} txId
+ * @returns {Promise<SendTxResponse>}
+ */
+export async function waitForTxReceived(hWallet, txId) {
   // TODO: Implement a timeout
 
   // Only return the positive response after the transaction was received by the websocket
