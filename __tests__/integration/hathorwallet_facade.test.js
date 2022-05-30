@@ -1,6 +1,6 @@
 import { precalculationHelpers } from "./helpers/wallet-precalculation.helper";
 import { GenesisWalletHelper } from "./helpers/genesis-wallet.helper";
-import { getRandomInt } from "./utils/core.util";
+import { delay, getRandomInt } from "./utils/core.util";
 import {
   generateConnection,
   generateWallet,
@@ -8,6 +8,7 @@ import {
   waitForWalletReady
 } from "./helpers/wallet.helper";
 import HathorWallet from "../../src/new/wallet";
+import { HATHOR_TOKEN_CONFIG } from "../../src/constants";
 
 describe('start', () => {
 
@@ -59,7 +60,7 @@ describe('start', () => {
     hWallet.stop();
   });
 
-  it('should start an empty wallet by calculating all its addresses', async () => {
+  it("should calculate the wallet's addresses on start", async () => {
     // Send a transaction to one of the wallet's addresses
     const walletData = precalculationHelpers.test.getPrecalculatedWallet();
 
@@ -153,4 +154,46 @@ describe('getTransactionsCountByAddress', () => {
     const addresses1 = Object.keys(tcba1);
     expect(addresses1).toHaveProperty('length', 41);
   })
+})
+
+describe('getBalance', () => {
+  it('should get the balance for the HTR token', async () => {
+    const hWallet = await generateWallet();
+
+    // Checking whether the token uid parameter is mandatory.
+    const nullTokenErr = await hWallet.getBalance().catch(err => err);
+    expect(nullTokenErr).toBeInstanceOf(Error);
+
+    // Validating the return array has one entry
+    const balance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
+    expect(balance).toHaveProperty('length', 1);
+    const htrBalance = balance[0];
+
+    // Validating HTR token data
+    expect(htrBalance).toHaveProperty('token.id', HATHOR_TOKEN_CONFIG.uid);
+
+    // Validating HTR token balance
+    expect(htrBalance).toHaveProperty('balance.unlocked', 0);
+    expect(htrBalance).toHaveProperty('balance.locked', 0);
+    expect(htrBalance).toHaveProperty('transactions', 0);
+
+    // Generating one transaction to validate its effects
+    const injectedValue = getRandomInt(10,2);
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), injectedValue, true);
+
+    // Validating the transaction effects
+    const balance1 = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
+    const htrBalance1 = balance1[0];
+    expect(htrBalance1).toHaveProperty('balance.unlocked', injectedValue);
+    expect(htrBalance1).toHaveProperty('balance.locked', 0);
+    // TODO: The amount of transactions returned is 2, but even the txHistory here says 1. Fix this.
+    // expect(htrBalance1).toHaveProperty('transactions', 1);
+
+    // Transferring tokens inside the wallet should not change the balance
+    const tx1 = await hWallet.sendTransaction(hWallet.getAddressAtIndex(1), 2);
+    await waitForTxReceived(hWallet, tx1.hash);
+    const balance2 = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
+    expect(balance2[0].balance).toEqual(htrBalance1.balance);
+  })
+
 })
