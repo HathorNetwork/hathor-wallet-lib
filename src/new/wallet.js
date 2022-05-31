@@ -281,7 +281,6 @@ class HathorWallet extends EventEmitter {
     if (newState === ConnectionState.CONNECTED) {
       storage.setStore(this.store);
       this.setState(HathorWallet.SYNCING);
-      this.emit('state', HathorWallet.SYNCING);
 
       // If it's the first connection we just load the history
       // otherwise we are reloading data, so we must execute some cleans
@@ -305,11 +304,9 @@ class HathorWallet extends EventEmitter {
 
       promise.then(() => {
         this.setState(HathorWallet.READY);
-        this.emit('state', HathorWallet.READY);
       }).catch((error) => {
         this.setState(HathorWallet.ERROR);
         console.error('Error loading wallet', {error});
-        this.emit('state', HathorWallet.ERROR);
       })
     } else {
       this.serverInfo = null;
