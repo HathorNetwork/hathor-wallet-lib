@@ -1,6 +1,6 @@
 import { precalculationHelpers } from "./helpers/wallet-precalculation.helper";
 import { GenesisWalletHelper } from "./helpers/genesis-wallet.helper";
-import { delay, getRandomInt } from "./utils/core.util";
+import { getRandomInt } from "./utils/core.util";
 import {
   generateConnection,
   generateWallet,
@@ -181,4 +181,64 @@ describe('getBalance', () => {
     expect(balance2[0].balance).toEqual(htrBalance1.balance);
   })
 
+  it('should get the balance for a custom token', async () => {
+    const hWallet = await generateWallet();
+
+    // Validating results for a nonexistant token
+    const fakeTokenUid = '000002490ab7fc302e076f7aab8b20c35fed81fd1131a955aebbd3cb76e48fb0';
+    const emptyBalance = await hWallet.getBalance(fakeTokenUid);
+    expect(emptyBalance).toHaveProperty('length', 1);
+    expect(emptyBalance[0]).toHaveProperty('token.id', fakeTokenUid);
+    expect(emptyBalance[0]).toHaveProperty('balance.unlocked', 0);
+    expect(emptyBalance[0]).toHaveProperty('balance.locked', 0);
+    expect(emptyBalance[0]).toHaveProperty('transactions', 0);
+
+    // Creating a new custom token
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0),10,true);
+    const newTokenAmount = getRandomInt(1000, 10);
+    const newTokenResponse = await hWallet.createNewToken(
+      'BalanceToken',
+      'BAT',
+      newTokenAmount,
+    )
+    expect(newTokenResponse).toHaveProperty('hash');
+    const tokenUid = newTokenResponse.hash;
+    await waitForTxReceived(hWallet, tokenUid);
+
+    const tknBalance = await hWallet.getBalance(tokenUid);
+    expect(tknBalance[0]).toHaveProperty('balance.unlocked', newTokenAmount);
+
+    // Validating that a different wallet (genesis) has no access to this token
+    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
+    const genesisTknBalance = await gWallet.getBalance(tokenUid);
+    expect(genesisTknBalance).toHaveProperty('length', 1);
+    expect(genesisTknBalance[0]).toHaveProperty('token.id', tokenUid);
+    expect(genesisTknBalance[0]).toHaveProperty('balance.unlocked', 0);
+    expect(genesisTknBalance[0]).toHaveProperty('balance.locked', 0);
+    expect(genesisTknBalance[0]).toHaveProperty('transactions', 0);
+  })
+})
+
+describe('createNewToken', () => {
+  it('should create a new token', async () => {
+    const hWallet = await generateWallet();
+    const addr0 = hWallet.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(addr0,10,true);
+
+    const newTokenResponse = await hWallet.createNewToken(
+      'TokenName',
+      'TKN',
+      100,
+    )
+    expect(newTokenResponse).toHaveProperty('hash');
+    const tokenUid = newTokenResponse.hash;
+    await waitForTxReceived(hWallet, tokenUid);
+
+    expect(newTokenResponse).toHaveProperty('name', 'TokenName');
+    expect(newTokenResponse).toHaveProperty('symbol', 'TKN');
+    expect(newTokenResponse).toHaveProperty('version', 2);
+
+    const tknBalance = await hWallet.getBalance(tokenUid);
+    expect(tknBalance[0].balance.unlocked).toBe(100);
+  })
 })

@@ -1392,22 +1392,35 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * @typedef CreateNewTokenResponse
+   * @property {{hash:string,index:number,data:Buffer}[]} inputs
+   * @property {{value:number,script:Buffer,tokenData:number,decodedScript:*}[]} outputs
+   * @property {number} version
+   * @property {number} weight
+   * @property {number} nonce
+   * @property {number} timestamp
+   * @property {string[]} parents
+   * @property {*[]} tokens
+   * @property {string} hash
+   * @property {*} _dataToSignCache
+   * @property {string} name
+   * @property {string} symbol
+   */
+
+  /**
    * Create a new token for this wallet
    *
-   * @param {String} name Name of the token
-   * @param {String} symbol Symbol of the token
+   * @param {string} name Name of the token
+   * @param {string} symbol Symbol of the token
    * @param {number} amount Quantity of the token to be minted
-   * @param {Object} options Options parameters
-   *  {
-   *   'address': address of the minted token,
-   *   'changeAddress': address of the change output,
-   *   'startMiningTx': boolean to trigger start mining (default true)
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
-   *  }
+   * @param options Options parameters
+   * @param {string} [options.address] address of the minted token
+   * @param {string} [options.changeAddress] address of the change output
+   * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
+   * @param {string} [options.pinCode] pin to decrypt xpriv information.
+   *                                   Optional but required if not set in this
    *
-   * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
-   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
-   *
+   * @return {CreateNewTokenResponse}
    * @memberof HathorWallet
    * @inner
    **/
