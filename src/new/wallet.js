@@ -572,16 +572,15 @@ class HathorWallet extends EventEmitter {
    * @remarks
    * Getting token name and symbol is not easy, so we return empty strings
    *
-   * @params {string} token
+   * @param {string} token
    *
-   * @return {Promise<Array>} Array of balance for each token
-   * {
-   *   token: {id, name, symbol},
-   *   balance: {unlocked. locked},
-   *   transactions: number,
-   *   lockExpires: number | null,
-   *   tokenAuthorities: {unlocked: {mint, melt}. locked: {mint, melt}}
-   * }
+   * @return {Promise<{
+   *   token: {id:string, name:string, symbol:string},
+   *   balance: {unlocked:number, locked:number},
+   *   transactions:number,
+   *   lockExpires:number|null,
+   *   tokenAuthorities: {unlocked: {mint:number,melt:number}, locked: {mint:number,melt:number}}
+   * }[]>} Array of balance for each token
    *
    * @memberof HathorWallet
    * @inner
@@ -1392,7 +1391,7 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * @typedef CreateNewTokenResponse
+   * @typedef BaseTransactionResponse
    * @property {{hash:string,index:number,data:Buffer}[]} inputs
    * @property {{value:number,script:Buffer,tokenData:number,decodedScript:*}[]} outputs
    * @property {number} version
@@ -1400,9 +1399,14 @@ class HathorWallet extends EventEmitter {
    * @property {number} nonce
    * @property {number} timestamp
    * @property {string[]} parents
-   * @property {*[]} tokens
+   * @property {string[]} tokens
    * @property {string} hash
    * @property {*} _dataToSignCache
+   */
+
+  /**
+   * @typedef CreateNewTokenResponse
+   * @extends BaseTransactionResponse
    * @property {string} name
    * @property {string} symbol
    */
@@ -1413,14 +1417,14 @@ class HathorWallet extends EventEmitter {
    * @param {string} name Name of the token
    * @param {string} symbol Symbol of the token
    * @param {number} amount Quantity of the token to be minted
-   * @param options Options parameters
+   * @param [options] Options parameters
    * @param {string} [options.address] address of the minted token
    * @param {string} [options.changeAddress] address of the change output
    * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
    * @param {string} [options.pinCode] pin to decrypt xpriv information.
    *                                   Optional but required if not set in this
    *
-   * @return {CreateNewTokenResponse}
+   * @return {Promise<CreateNewTokenResponse>}
    * @memberof HathorWallet
    * @inner
    **/
@@ -1612,17 +1616,19 @@ class HathorWallet extends EventEmitter {
    *
    * @param {String} tokenUid UID of the token to mint
    * @param {number} amount Quantity to mint
-   * @param {Object} options Options parameters
-   *  {
-   *   'address': destination address of the minted token (if not sent we choose the next available address to use)
-   *   'changeAddress': address of the change output (if not sent we choose the next available address to use)
-   *   'startMiningTx': boolean to trigger start mining (default true)
-   *   'createAnotherMint': boolean to create another mint authority or not for the wallet
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
-   *  }
+   * @param [options] Options parameters
+   * @param {string} [options.address] destination address of the minted token
+   *                                   (if not sent we choose the next available address to use)
+   * @param {string} [options.changeAddress] address of the change output
+   *                                   (if not sent we choose the next available address to use)
+   * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
+   * @param {boolean} [options.createAnotherMint] boolean to create another mint authority or not
+   *                                              for the wallet
+   * @param {string} [options.pinCode] pin to decrypt xpriv information.
+   *                                   Optional but required if not set in this
    *
-   * @return {Promise} Promise that resolves with transaction object if succeeds
-   * or with error message if it fails
+   * @return {Promise<BaseTransactionResponse>} Promise that resolves with transaction object
+   *                                           if it succeeds or with error message if it fails
    *
    * @memberof HathorWallet
    * @inner
@@ -1690,17 +1696,17 @@ class HathorWallet extends EventEmitter {
    *
    * @param {String} tokenUid UID of the token to melt
    * @param {number} amount Quantity to melt
-   * @param {Object} options Options parameters
-   *  {
-   *   'address': address of the HTR deposit back
-   *   'changeAddress': address of the change output
-   *   'createAnotherMelt': boolean to create another melt authority or not for the wallet
-   *   'startMiningTx': boolean to trigger start mining (default true)
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
-   *  }
+   * @param [options] Options parameters
+   * @param {string} [options.address]: address of the HTR deposit back
+   * @param {string} [options.changeAddress] address of the change output
+   * @param {boolean} [options.createAnotherMelt] boolean to create another melt authority or not
+   *                                              for the wallet
+   * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
+   * @param {string} [options.pinCode] pin to decrypt xpriv information.
+   *                                   Optional but required if not set in this
    *
-   * @return {Promise} Promise that resolves with transaction object if succeeds
-   * or with error message if it fails
+   * @return {Promise<CreateNewTokenResponse>} Promise that resolves with transaction object
+   *                                           if it succeeds or with error message if it fails
    *
    * @memberof HathorWallet
    * @inner

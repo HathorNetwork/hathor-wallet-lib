@@ -2,13 +2,15 @@ import { precalculationHelpers } from "./helpers/wallet-precalculation.helper";
 import { GenesisWalletHelper } from "./helpers/genesis-wallet.helper";
 import { getRandomInt } from "./utils/core.util";
 import {
+  createTokenHelper,
   generateConnection,
-  generateWallet,
+  generateWalletHelper,
   waitForTxReceived,
   waitForWalletReady
 } from "./helpers/wallet.helper";
 import HathorWallet from "../../src/new/wallet";
-import { HATHOR_TOKEN_CONFIG } from "../../src/constants";
+import { HATHOR_TOKEN_CONFIG, TOKEN_MINT_MASK } from "../../src/constants";
+import transaction from "../../src/transaction";
 
 describe('start', () => {
 
@@ -45,7 +47,7 @@ describe('start', () => {
     const walletData = precalculationHelpers.test.getPrecalculatedWallet();
     const injectAddress = walletData.addresses[0];
     const injectValue = getRandomInt(10,1);
-    const injectionTx = await GenesisWalletHelper.injectFunds(injectAddress,injectValue, true);
+    const injectionTx = await GenesisWalletHelper.injectFunds(injectAddress,injectValue);
 
     // Start the wallet
     const walletConfig = {
@@ -99,7 +101,7 @@ describe('start', () => {
 describe('getTransactionsCountByAddress', () => {
   it('should return correct entries for a wallet', async () => {
     // Create the wallet
-    const hWallet = await generateWallet();
+    const hWallet = await generateWalletHelper();
 
     // Validate empty contents, properties with the address string as a key
     const tcbaEmpty = hWallet.getTransactionsCountByAddress();
@@ -113,7 +115,7 @@ describe('getTransactionsCountByAddress', () => {
     }
 
     // Generate one transaction and validate its effects
-    await GenesisWalletHelper.injectFunds(addressesList[0], 10, true);
+    await GenesisWalletHelper.injectFunds(addressesList[0], 10);
     const tcba1 = hWallet.getTransactionsCountByAddress();
     expect(tcba1).toBeDefined();
     expect(tcba1[addressesList[0]]).toHaveProperty('transactions', 1);
@@ -128,13 +130,13 @@ describe('getTransactionsCountByAddress', () => {
   })
 
   it('should retrieve more addresses according to gap limit', async () => {
-    const hWallet = await generateWallet();
+    const hWallet = await generateWalletHelper();
 
     const tcbaEmpty = hWallet.getTransactionsCountByAddress();
     const addressesList = Object.keys(tcbaEmpty);
     expect(addressesList).toHaveProperty('length',21);
 
-    await GenesisWalletHelper.injectFunds(addressesList[20], 1, true);
+    await GenesisWalletHelper.injectFunds(addressesList[20], 1);
     const tcba1 = hWallet.getTransactionsCountByAddress();
     const addresses1 = Object.keys(tcba1);
     expect(addresses1).toHaveProperty('length', 41);
@@ -143,7 +145,7 @@ describe('getTransactionsCountByAddress', () => {
 
 describe('getBalance', () => {
   it('should get the balance for the HTR token', async () => {
-    const hWallet = await generateWallet();
+    const hWallet = await generateWalletHelper();
 
     // Checking whether the token uid parameter is mandatory.
     const nullTokenErr = await hWallet.getBalance().catch(err => err);
@@ -164,7 +166,7 @@ describe('getBalance', () => {
 
     // Generating one transaction to validate its effects
     const injectedValue = getRandomInt(10,2);
-    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), injectedValue, true);
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), injectedValue);
 
     // Validating the transaction effects
     const balance1 = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
@@ -182,7 +184,7 @@ describe('getBalance', () => {
   })
 
   it('should get the balance for a custom token', async () => {
-    const hWallet = await generateWallet();
+    const hWallet = await generateWalletHelper();
 
     // Validating results for a nonexistant token
     const fakeTokenUid = '000002490ab7fc302e076f7aab8b20c35fed81fd1131a955aebbd3cb76e48fb0';
@@ -221,7 +223,7 @@ describe('getBalance', () => {
 
 describe('createNewToken', () => {
   it('should create a new token', async () => {
-    const hWallet = await generateWallet();
+    const hWallet = await generateWalletHelper();
     const addr0 = hWallet.getAddressAtIndex(0);
     await GenesisWalletHelper.injectFunds(addr0,10,true);
 
@@ -229,7 +231,7 @@ describe('createNewToken', () => {
       'TokenName',
       'TKN',
       100,
-    )
+    );
     expect(newTokenResponse).toHaveProperty('hash');
     const tokenUid = newTokenResponse.hash;
     await waitForTxReceived(hWallet, tokenUid);
@@ -240,5 +242,172 @@ describe('createNewToken', () => {
 
     const tknBalance = await hWallet.getBalance(tokenUid);
     expect(tknBalance[0].balance.unlocked).toBe(100);
+  })
+})
+
+describe('mintTokens', () => {
+  it('should mint new tokens', async () => {
+    // Setting up the custom token
+    const hWallet = await generateWalletHelper();
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
+    const {hash: tokenUid} = await createTokenHelper(
+      hWallet,
+      'Token to Mint',
+      'TMINT',
+      100,
+    );
+
+    // Minting more of the tokens
+    const mintAmount = getRandomInt(100, 50);
+    const mintResponse = await hWallet.mintTokens(tokenUid, mintAmount);
+    expect(mintResponse.hash).toBeDefined();
+    await waitForTxReceived(hWallet, mintResponse.hash);
+
+    // There is a correct reference to the custom token
+    expect(mintResponse).toHaveProperty('tokens.length', 1);
+    expect(mintResponse.tokens[0]).toEqual(tokenUid);
+
+    // A new mint authority was created by default
+    const authorityOutputs = mintResponse.outputs.filter(
+      o => transaction.isTokenDataAuthority(o.tokenData)
+    );
+    expect(authorityOutputs).toHaveProperty('length', 1);
+    expect(authorityOutputs[0]).toHaveProperty('value', TOKEN_MINT_MASK);
+
+    // Validating custom token balance
+    const tokenBalance = await hWallet.getBalance(tokenUid);
+    const expectedAmount = 100 + mintAmount;
+    expect(tokenBalance[0]).toHaveProperty('balance.unlocked', expectedAmount);
+  })
+
+  it('should deposit correct HTR values for minting', async () => {
+    /**
+     *
+     * @param {HathorWallet} hWallet
+     * @returns {Promise<number>}
+     */
+    async function getHtrBalance(hWallet) {
+      const [htrBalance] = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
+      return htrBalance.balance.unlocked;
+    }
+
+    // Setting up scenario
+    const hWallet = await generateWalletHelper();
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
+    const {hash: tokenUid} = await createTokenHelper(hWallet,
+      'Token to Mint',
+      'TMINT',
+      100,
+    );
+    let expectedHtrFunds = 9;
+
+    // Minting less than 100 tokens consumes 1 HTR
+    let mintResponse
+    mintResponse = await hWallet.mintTokens(tokenUid, 1);
+    expectedHtrFunds -= 1;
+    await waitForTxReceived(hWallet, mintResponse.hash);
+    expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
+
+    // Minting exactly 100 tokens consumes 1 HTR
+    mintResponse = await hWallet.mintTokens(tokenUid, 100);
+    expectedHtrFunds -= 1;
+    await waitForTxReceived(hWallet, mintResponse.hash);
+    expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
+
+    // Minting over 100 tokens consumes 2 HTR
+    mintResponse = await hWallet.mintTokens(tokenUid, 101);
+    expectedHtrFunds -= 2;
+    await waitForTxReceived(hWallet, mintResponse.hash);
+    expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
+
+    // Minting exactly 200 tokens consumes 2 HTR
+    mintResponse = await hWallet.mintTokens(tokenUid, 200);
+    expectedHtrFunds -= 2;
+    await waitForTxReceived(hWallet, mintResponse.hash);
+    expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
+
+    // Minting over 200 tokens consumes 3 HTR
+    mintResponse = await hWallet.mintTokens(tokenUid, 201);
+    expectedHtrFunds -= 3;
+    await waitForTxReceived(hWallet, mintResponse.hash);
+    expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
+  })
+})
+
+describe('meltTokens', () => {
+  it('should melt tokens', async () => {
+    const hWallet = await generateWalletHelper();
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
+
+    // Creating the token
+    const {hash: tokenUid} = await createTokenHelper(
+      hWallet,
+      'Token to Melt',
+      'TMELT',
+      100,
+    );
+
+    // Melting some tokens
+    const meltAmount = getRandomInt(99, 10);
+    const {hash} = await hWallet.meltTokens(tokenUid, meltAmount);
+    await waitForTxReceived(hWallet, hash);
+
+    // Validating custom token balance
+    const tokenBalance = await hWallet.getBalance(tokenUid);
+    const expectedAmount = 100 - meltAmount;
+    expect(tokenBalance[0]).toHaveProperty('balance.unlocked', expectedAmount);
+  })
+
+  it('should recover correct amount of HTR on melting', async () => {
+    /**
+     *
+     * @param {HathorWallet} hWallet
+     * @returns {Promise<number>}
+     */
+    async function getHtrBalance(hWallet) {
+      const [htrBalance] = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
+      return htrBalance.balance.unlocked;
+    }
+
+    // Setting up scenario
+    const hWallet = await generateWalletHelper();
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 20);
+    const {hash: tokenUid} = await createTokenHelper(
+      hWallet,
+      'Token to Melt',
+      'TMELT',
+      1900
+    );
+    let expectedHtrFunds = 1;
+
+    let meltResponse;
+    // Melting less than 100 tokens recovers 0 HTR
+    meltResponse = await hWallet.meltTokens(tokenUid, 99);
+    await waitForTxReceived(hWallet, meltResponse.hash);
+    expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
+
+    // Melting exactly 100 tokens recovers 1 HTR
+    meltResponse = await hWallet.meltTokens(tokenUid, 100);
+    expectedHtrFunds += 1;
+    await waitForTxReceived(hWallet, meltResponse.hash);
+    expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
+
+    // Melting less than 200 tokens recovers 1 HTR
+    meltResponse = await hWallet.meltTokens(tokenUid, 199);
+    expectedHtrFunds += 1;
+    await waitForTxReceived(hWallet, meltResponse.hash);
+    expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
+
+    // Melting exactly 200 tokens recovers 2 HTR
+    meltResponse = await hWallet.meltTokens(tokenUid, 200);
+    expectedHtrFunds += 2;
+    await waitForTxReceived(hWallet, meltResponse.hash);
+    expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
+
+    // Melting less than 300 tokens recovers 2 HTR
+    meltResponse = await hWallet.meltTokens(tokenUid, 299);
+    expectedHtrFunds += 2;
+    await waitForTxReceived(hWallet, meltResponse.hash);
+    expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
   })
 })

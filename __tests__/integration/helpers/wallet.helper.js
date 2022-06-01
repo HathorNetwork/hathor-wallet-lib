@@ -26,7 +26,7 @@ export function generateConnection() {
  * Generates a Wallet from an available precalculated seed
  * @returns {Promise<HathorWallet>}
  */
-export async function generateWallet() {
+export async function generateWalletHelper() {
   // Send a transaction to one of the wallet's addresses
   const walletData = precalculationHelpers.test.getPrecalculatedWallet();
 
@@ -43,6 +43,33 @@ export async function generateWallet() {
   await waitForWalletReady(hWallet);
 
   return hWallet;
+}
+
+/**
+ * Creates a token and awaits for it to be processed by the wallet.
+ * @param {HathorWallet} hWallet
+ * @param {string} name Name of the token
+ * @param {string} symbol Symbol of the token
+ * @param {number} amount Quantity of the token to be minted
+ * @param [options] Options parameters
+ * @param {string} [options.address] address of the minted token
+ * @param {string} [options.changeAddress] address of the change output
+ * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
+ * @param {string} [options.pinCode] pin to decrypt xpriv information.
+ *                                   Optional but required if not set in this
+ *
+ * @return {Promise<CreateNewTokenResponse>}
+ */
+export async function createTokenHelper(hWallet, name, symbol, amount, options) {
+  const newTokenResponse = await hWallet.createNewToken(
+    name,
+    symbol,
+    amount,
+    options,
+  );
+  const tokenUid = newTokenResponse.hash;
+  await waitForTxReceived(hWallet, tokenUid);
+  return newTokenResponse;
 }
 
 /**
@@ -84,11 +111,11 @@ export async function waitForTxReceived(hWallet, txId) {
       }
 
       /*
-       * Return the successful transaction, but only on the next iteration of the event loop.
+       * Return the successful transaction, but only after a few milisseconds.
        * If we did not insert this delay here, synchronous operations could fetch memory state
        * from before the transaction.
        */
-      setTimeout(() => resolve(newTx), 0);
+      setTimeout(() => resolve(newTx), 10);
     })
   })
 }
