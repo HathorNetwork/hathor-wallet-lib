@@ -1861,17 +1861,16 @@ class HathorWallet extends EventEmitter {
   /**
    * Destroy authority
    *
-   * @param {String} tokenUid UID of the token to delegate the authority
-   * @param {String} type Type of the authority to delegate 'mint' or 'melt'
+   * @param {String} tokenUid UID of the token to destroy the authority
+   * @param {'mint'|'melt'} type Type of the authority to destroy: 'mint' or 'melt'
    * @param {number} count How many authority outputs to destroy
-   * @param {Object} options Options parameters
-   *  {
-   *   'startMiningTx': boolean to trigger start mining (default true)
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
-   *  }
+   * @param [options] Options parameters
+   * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
+   * @param {string} [options.pinCode] pin to decrypt xpriv information.
+   *                                   Optional but required if not set in this
    *
-   * @return {Promise} Promise that resolves with transaction object if succeeds
-   * or with error message if it fails
+   * @return {Promise<BaseTransactionResponse>} Promise that resolves with transaction object
+   *                                            if it succeeds or with error message if it fails
    *
    * @memberof HathorWallet
    * @inner
@@ -1946,7 +1945,18 @@ class HathorWallet extends EventEmitter {
    *
    * @param tokenId Token uid to get the token details
    *
-   * @return {Promise} token details
+   * @return {Promise<{
+   *   totalSupply: number,
+   *   totalTransactions: number,
+   *   tokenInfo: {
+   *     name: string,
+   *     symbol: string,
+   *   },
+   *   authorities: {
+   *     mint: boolean,
+   *     melt: boolean,
+   *   },
+   * }>} token details
    */
   async getTokenDetails(tokenId) {
     const result = await new Promise((resolve) => {

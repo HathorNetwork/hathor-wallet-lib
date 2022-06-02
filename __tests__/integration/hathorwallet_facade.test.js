@@ -431,6 +431,65 @@ describe('meltTokens', () => {
   })
 })
 
+// describe('destroyAuthority', () => {
+//   it('should destroy a mint authority', async () => {
+//
+//   })
+// })
+
+describe('getTokenDetails', () => {
+  // TODO: This function currently throws for an invalid token.
+
+  it('should get the correct response for a valid token', async () => {
+    const hWallet = await generateWalletHelper();
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
+    const {hash: tokenUid} = await createTokenHelper(
+      hWallet,
+      'Details Token',
+      'DTOK',
+      100
+    );
+
+    // Validate results for a valid token
+    let details;
+    details = await hWallet.getTokenDetails(tokenUid);
+    expect(details.totalSupply).toEqual(100);
+    expect(details.totalTransactions).toEqual(1);
+    expect(details.tokenInfo.name).toEqual('Details Token');
+    expect(details.tokenInfo.symbol).toEqual('DTOK');
+    expect(details.authorities.mint).toEqual(true);
+    expect(details.authorities.melt).toEqual(true);
+
+    // Emptying the token and validating its results
+    const {hash: meltTx} = await hWallet.meltTokens(tokenUid, 100);
+    await waitForTxReceived(hWallet, meltTx);
+
+    details = await hWallet.getTokenDetails(tokenUid);
+    expect(details.totalSupply).toEqual(0);
+    expect(details.totalTransactions).toEqual(2);
+    expect(details.authorities.mint).toEqual(true);
+    expect(details.authorities.melt).toEqual(true);
+
+    // Destroying mint authority and validating its results
+    const {hash: dMintTx} = await hWallet.destroyAuthority(tokenUid, 'mint', 1);
+    await waitForTxReceived(hWallet, dMintTx);
+    details = await hWallet.getTokenDetails(tokenUid);
+    expect(details.totalTransactions).toEqual(2);
+    expect(details.authorities.mint).toEqual(false);
+    expect(details.authorities.melt).toEqual(true);
+
+    // Destroying melt authority and validating its results
+    const {hash: dMeltTx} = await hWallet.destroyAuthority(tokenUid, 'melt', 1);
+    await waitForTxReceived(hWallet, dMeltTx);
+    details = await hWallet.getTokenDetails(tokenUid);
+    expect(details.totalTransactions).toEqual(2);
+    expect(details.authorities.mint).toEqual(false);
+    expect(details.authorities.melt).toEqual(false);
+
+    hWallet.stop();
+  })
+})
+
 describe('getTxHistory', () => {
   let gWallet;
   beforeAll(async () => {
