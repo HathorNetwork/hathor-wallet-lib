@@ -98,16 +98,48 @@ export function waitForWalletReady(hWallet) {
  * successful response from this function.
  * @param {HathorWallet} hWallet
  * @param {string} txId
+ * @param {number} [timeout=10000] Timeout in milisseconds
  * @returns {Promise<SendTxResponse>}
  */
-export async function waitForTxReceived(hWallet, txId) {
-  // TODO: Implement a timeout
+export async function waitForTxReceived(hWallet, txId, timeout = 10000) {
+  let alreadyResponded = false;
 
   // Only return the positive response after the transaction was received by the websocket
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
+
+    // Event listener
     hWallet.on('new-tx', newTx => {
       if (newTx.tx_id !== txId) {
         return; // Ignore if we didn't receive the transaction we expected.
+      }
+      returnSuccess(newTx);
+    })
+
+    // Timeout handler
+    setTimeout(async () => {
+      // No need to respond if the event listener worked.
+      if (alreadyResponded) {
+        return;
+      }
+
+      /*
+       * If the timeout period passed and did not receive the new-tx event, probably the event
+       * was triggered even before this `waitForTxReceived` method was called.
+       * We'll try a last time to get the transaction data before rejectingt this promise.
+       */
+      const existingTx = hWallet.getTx(txId);
+      if (existingTx) {
+        return returnSuccess(existingTx);
+      }
+
+      // Event listener did not receive the tx and it is not on local cache.
+      alreadyResponded = true;
+      reject(new Error(`Timeout without receiving tx ${txId}`))
+    }, timeout)
+
+    function returnSuccess(newTx) {
+      if (alreadyResponded) {
+        return;
       }
 
       /*
@@ -115,7 +147,10 @@ export async function waitForTxReceived(hWallet, txId) {
        * If we did not insert this delay here, synchronous operations could fetch memory state
        * from before the transaction.
        */
-      setTimeout(() => resolve(newTx), 10);
-    })
+      setTimeout(() => {
+        alreadyResponded = true;
+        resolve(newTx);
+      }, 10);
+    }
   })
 }
