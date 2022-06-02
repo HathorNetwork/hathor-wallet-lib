@@ -1521,14 +1521,17 @@ class HathorWallet extends EventEmitter {
    * This is a helper method to call selectAuthorityUtxo without knowledge of the isMintOutput
    *
    * @param {String} tokenUid UID of the token to select the authority utxo
-   * @param {Object} options Object with custom options.
-   *  {
-   *    'many': if should return many utxos or just one (default false),
-   *    'skipSpent': if should not include spent utxos (default true)
-   *  }
+   * @param [options] Object with custom options.
+   * @param {boolean} [options.many=false] if should return many utxos or just one (default false)
+   * @param {boolean} [options.skipSpent=true] if should not include spent utxos (default true)
    *
-   * @return {Promise<Array>} Promise that resolves with an Array of objects with {txId, index, address, authorities}
-   * of the authority output. Returns an empty array in case there are no tx_outupts for this type
+   * @return {Promise<{
+   *   txId: string,
+   *   index: number,
+   *   address: string,
+   *   authorities: *
+   * }[]>} Promise that resolves with an Array of objects with properties of the authority output.
+   *       Returns an empty array in case there are no tx_outupts for this type.
    **/
   async getMintAuthority(tokenUid, options = {}) {
     const newOptions = Object.assign({many: false, skipSpent: true}, options);
@@ -1542,14 +1545,17 @@ class HathorWallet extends EventEmitter {
    * This is a helper method to call selectAuthorityUtxo without knowledge of the isMeltOutput
    *
    * @param {String} tokenUid UID of the token to select the authority utxo
-   * @param {Object} options Object with custom options.
-   *  {
-   *    'many': if should return many utxos or just one (default false),
-   *    'skipSpent': if should not include spent utxos (default true)
-   *  }
+   * @param [options] Object with custom options.
+   * @param {boolean} [options.many=false] if should return many utxos or just one (default false)
+   * @param {boolean} [options.skipSpent=true] if should not include spent utxos (default true)
    *
-   * @return {Promise<Array>} Promise that resolves with an Array of objects with {txId, index, address, authorities} of the authority output.
-   * Returns an empty array in case there are no tx_outupts for this type
+   * @return {Promise<{
+   *   txId: string,
+   *   index: number,
+   *   address: string,
+   *   authorities: *
+   * }[]>} Promise that resolves with an Array of objects with properties of the authority output.
+   *       Returns an empty array in case there are no tx_outupts for this type.
    **/
   async getMeltAuthority(tokenUid, options = {}) {
     const newOptions = Object.assign({many: false, skipSpent: true}, options);
@@ -1776,17 +1782,17 @@ class HathorWallet extends EventEmitter {
    * Delegate authority
    *
    * @param {String} tokenUid UID of the token to delegate the authority
-   * @param {String} type Type of the authority to delegate 'mint' or 'melt'
+   * @param {'mint'|'melt'} type Type of the authority to delegate 'mint' or 'melt'
    * @param {String} destinationAddress Destination address of the delegated authority
-   * @param {Object} options Options parameters
-   *  {
-   *   'createAnother': if should create another authority for the wallet. Default to true
-   *   'startMiningTx': boolean to trigger start mining (default true)
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
-   *  }
+   * @param [options] Options parameters
+   * @param {boolean} [options.createAnother=true] Should create another authority for the wallet.
+   *                                               Default to true
+   * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
+   * @param {string} [options.pinCode] pin to decrypt xpriv information.
+   *                                   Optional but required if not set in this
    *
-   * @return {Promise} Promise that resolves with transaction object if succeeds
-   * or with error message if it fails
+   * @return {Promise<BaseTransactionResponse>} Promise that resolves with transaction object
+   *                                            if it succeeds or with error message if it fails
    *
    * @memberof HathorWallet
    * @inner
