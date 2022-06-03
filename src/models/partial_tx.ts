@@ -17,6 +17,7 @@ import ScriptData from './script_data';
 
 import transaction from '../transaction';
 import helpers from '../utils/helpers';
+import { IndexOOBError, UnsupportedScriptError } from '../errors';
 
 import txApi from '../api/txApi';
 import { TOKEN_AUTHORITY_MASK, TOKEN_INDEX_MASK, HATHOR_TOKEN_CONFIG } from '../constants';
@@ -47,7 +48,7 @@ type TxData = {
   timestamp?: number,
 };
 
-class ProposalInput extends Input {
+export class ProposalInput extends Input {
   token: string;
   value: number;
   address: string;
@@ -64,6 +65,7 @@ class ProposalInput extends Input {
    *
    * @return {InputData}
    * @memberof ProposalInput
+   * @inner
    */
   toData() {
     return {
@@ -75,7 +77,7 @@ class ProposalInput extends Input {
   }
 }
 
-class ProposalOutput extends Output {
+export class ProposalOutput extends Output {
   token: string;
   isChange: Boolean;
 
@@ -95,13 +97,16 @@ class ProposalOutput extends Output {
   /**
    * Return an object with the relevant output data
    *
+   * @throws {UnsupportedScriptError} Script must be P2SH or P2PKH
+   *
    * @return {OutputData}
    * @memberof ProposalOutput
+   * @inner
    */
   toData(tokenData: number, network: Network) {
     const script = this.parseScript(network);
     if (!(script instanceof P2PKH || script instanceof P2SH)) {
-      throw new Error('invalid output');
+      throw new UnsupportedScriptError('Unsupported script type');
     }
 
     this.setTokenData(tokenData);
@@ -132,7 +137,7 @@ class ProposalOutput extends Output {
  * With this information we will be able to encode the signatures for all inputs on one string.
  * It also has all information needed to assemble the input data if you have enough participants' P2SHSignature serialized signatures.
  */
-export class TxProposalData {
+export class PartialTx {
   inputs: ProposalInput[];
   outputs: ProposalOutput[];
   network: Network;
@@ -144,10 +149,12 @@ export class TxProposalData {
   }
 
   /**
-   * 
+   * Convert the PartialTx into a complete TxData ready to be signed or serialized.
+   *
+   * @throws {UnsupportedScriptError} All output scripts must be P2SH or P2PKH
    *
    * @return {TxData}
-   * @memberof TxProposalData
+   * @memberof PartialTx
    * @inner
    */
   getTxData() {
@@ -161,7 +168,6 @@ export class TxProposalData {
 
     // Remove HTR from tokens array
     tokenSet.delete(HATHOR_TOKEN_CONFIG.uid);
-
     const tokens = Array.from(tokenSet);
 
     const data = {
@@ -176,10 +182,12 @@ export class TxProposalData {
   }
 
   /**
-   * 
+   * Create a Transaction instance from the PartialTx.
+   *
+   * @throws {UnsupportedScriptError} All output scripts must be P2SH or P2PKH
    *
    * @return {Transaction}
-   * @memberof TxProposalData
+   * @memberof PartialTx
    * @inner
    */
   getTx() {
@@ -187,44 +195,79 @@ export class TxProposalData {
   }
 
   /**
-   * 
+   * Calculate balance for all tokens from inputs and outputs.
    *
-   * @return {Boolean}
-   * @memberof TxProposalData
+   * @return {Record<string, number>}
+   * @memberof PartialTx
    * @inner
    */
-  isComplete() {
-    const tokenBalance: Record<string, number> = {};
+  calculateTokenBalance() {
+    const tokenBalance: Record<string, Record<string, number>> = {};
     for (const input of this.inputs) {
       if (!(input.token in tokenBalance)) {
-        tokenBalance[input.token] = 0;
+        tokenBalance[input.token] = {inputs: 0, outputs: 0};
       }
-      tokenBalance[input.token] += input.value;
+      tokenBalance[input.token].inputs += input.value;
     }
 
     for (const output of this.outputs) {
       if (!(output.token in tokenBalance)) {
-        // There is a token on the outputs that is not on the inputs
-        return false;
+        tokenBalance[output.token] = {inputs: 0, outputs: 0};
       }
 
-      tokenBalance[output.token] -= output.value;
+      tokenBalance[output.token].outputs += output.value;
     }
+
+    return tokenBalance;
+  }
+
+  /**
+   * Return true if the balance of the outputs match the balance of the inputs for all tokens.
+   *
+   * @return {Boolean}
+   * @memberof PartialTx
+   * @inner
+   */
+  isComplete() {
+    const tokenBalance = this.calculateTokenBalance();
 
     // Calculated the final balance for all tokens
     // return if all are 0
-    return Object.values(tokenBalance).every(v => v === 0);
+    return Object.values(tokenBalance).every(v => v.inputs === v.outputs);
   }
 
+  /**
+   * Add an UTXO as input on the PartialTx.
+   * This method is async because we need to fetch information on the inputs (token, value)
+   *
+   * @param {string} txId The transaction id of the UTXO.
+   * @param {number} index The index of the UTXO.
+   *
+   * @return {Promise<void>}
+   * @memberof PartialTx
+   * @inner
+   */
   async addInput(txId: string, index: number) {
     // fetch token + value from txId + index
     await txApi.getTransaction(txId, (data) => {
       const utxo = data.tx.outputs[index];
-      const token = utxo.token_data === 0 ? HATHOR_TOKEN_CONFIG.uid : data.tx.tokens[utxo.token_data - 1];
+      const token = utxo.token_data === 0 ? HATHOR_TOKEN_CONFIG : data.tx.tokens[utxo.token_data - 1];
       this.inputs.push(new ProposalInput(txId, index, token.uid, utxo.value, utxo.decoded.address));
     });
   }
 
+
+  /**
+   * Add an output to the PartialTx.
+   *
+   * @param {number} value The amount of tokens on the output.
+   * @param {Buffer} script The output script.
+   * @param {string} token The token UID.
+   * @param {Boolean} isChange If this is a change output.
+   *
+   * @memberof PartialTx
+   * @inner
+   */
   addOutput(value: number, script: Buffer, token: string, isChange: Boolean) {
     this.outputs.push(new ProposalOutput(
       value,
@@ -235,10 +278,12 @@ export class TxProposalData {
   }
 
   /**
-   * 
+   * Serialize the current PartialTx into an UTF8 string.
+   *
+   * @throws {UnsupportedScriptError} All output scripts must be P2SH or P2PKH
    *
    * @returns {string}
-   * @memberof TxProposalData
+   * @memberof PartialTx
    * @inner
    */
   serialize() {
@@ -249,42 +294,38 @@ export class TxProposalData {
       }
     });
     const tx = this.getTx();
-    const data = {
-      "txHex": tx.toHex(),
-      changeOutputs,
-    };
-
-    return Buffer.from(JSON.stringify(data)).toString('hex');
+    const arr = ['PartialTx', tx.toHex(), changeOutputs.join('|')];
+    return arr.join('|');
   }
 
   /**
-   * Deserialize and create an instance of TxProposalData
+   * Deserialize and create an instance of PartialTx
    * This method is async because we need to fetch information on the inputs (token, value)
    *
+   * @param {string} serialized The serialized PartialTx
+   * @param {Network} network Network used when parsing the output scripts
+   *
+   * @throws {SyntaxError} serialized argument should be valid.
+   * @throws {UnsupportedScriptError} All outputs should be P2SH or P2PKH
+   *
    * @returns {Promise}
-   * @memberof TxProposalData
+   * @memberof PartialTx
    * @static
    */
   static async deserialize(serialized: string, network: Network) {
-    const dataStr = Buffer.from(serialized, 'hex').toString();
-    let data;
-    try {
-      data = JSON.parse(dataStr);
-    } catch(err) {
-      // TODO
-      // SyntaxError for parsing json
-      throw new Error('Invalid serialization');
-    }
-
-    if (!(data.txHex && data.changeOutputs)) {
-      throw new Error('invalid data');
-    }
-
     const netw = network || new Network('mainnet');
 
-    const tx = helpers.createTxFromHex(data.txHex, netw);
+    const dataArr = serialized.split('|');
+    const changeOutputs = dataArr.slice(2).map(x => +x);
 
-    const proposal = new TxProposalData(netw);
+    if (dataArr.length < 2 || dataArr[0] !== 'PartialTx' || !changeOutputs.every(x => Number.isInteger(x))) {
+      throw new SyntaxError('Invalid PartialTx');
+    }
+
+    const txHex = dataArr[1];
+    const tx = helpers.createTxFromHex(txHex, netw);
+
+    const proposal = new PartialTx(netw);
 
     for (const input of tx.inputs) {
       await proposal.addInput(input.hash, input.index);
@@ -294,12 +335,12 @@ export class TxProposalData {
       // validate script
       const script = output.parseScript(netw);
       if (!(script instanceof P2PKH || script instanceof P2SH)) {
-        throw new Error('Unsupported script type');
+        throw new UnsupportedScriptError('Unsupported script type');
       }
 
       if (output.isAuthority()) {
         // TODO: we dont allow passing authority on atomic swap?
-        throw new Error('no authority outputs');
+        throw new Error('Authority outputs are unsupported');
       }
 
       const tokenIndex = output.tokenData & TOKEN_INDEX_MASK;
@@ -308,52 +349,90 @@ export class TxProposalData {
         output.value,
         output.script,
         token,
-        index in data.changeOutputs,
+        index in changeOutputs,
       );
     }
 
     return proposal;
+
   }
 }
 
-export class TxProposalSignature {
+export class PartialTxInputData {
   data: Record<number, Buffer>;
-  txId: string;
+  hash: string;
   inputsLen: number;
 
-  constructor(txId: string, inputsLen: number) {
+  constructor(hash: string, inputsLen: number) {
     this.data = {};
-    this.txId = txId;
+    this.hash = hash;
     this.inputsLen = inputsLen;
   }
 
+  /**
+   * Add an input data to the record.
+   *
+   * @param {number} index The input index this data relates to.
+   * @param {Buffer} inputData Input data bytes.
+   *
+   * @throws {IndexOOBError} index should be inside the inputs array.
+   *
+   * @memberof PartialTxInputData
+   * @inner
+   */
   addData(index: number, inputData: Buffer) {
     if (index >= this.inputsLen) {
-      throw new Error('input data OOB');
+      throw new IndexOOBError(`Index ${index} is out of bounds for the ${this.inputsLen} inputs`);
     }
     this.data[index] = inputData;
   }
 
+  /**
+   * Return true if we have an input data for each input.
+   *
+   * @return {Boolean}
+   * @memberof PartialTxInputData
+   * @inner
+   */
   isComplete() {
     return Object.values(this.data).length === this.inputsLen;
   }
 
+  /**
+   * Serialize the current PartialTxInputData into an UTF8 string.
+   *
+   * @returns {string}
+   * @memberof PartialTxInputData
+   * @inner
+   */
   serialize() {
-    const arr = [this.txId];
+    const arr = ['PartialTxInputData', this.hash];
     for (const [index, buf] of Object.entries(this.data)) {
       arr.push(`${index}:${buf.toString('hex')}`);
     }
     return arr.join('|');
   }
 
+  /**
+   * Deserialize the PartialTxInputData and merge with local data.
+   *
+   * @param {string} serialized The serialized PartialTxInputData
+   *
+   * @throws {SyntaxError} serialized argument should be valid.
+   * @memberof PartialTxInputData
+   * @static
+   */
   addSignatures(serialized: string) {
     const arr = serialized.split('|');
-    const txId = arr[0];
-    if (txId !== this.txId) {
-      throw new Error('Signatures for another tx');
+    if (arr.length < 3 || arr[0] != 'PartialTxInputData' || arr[1] !== this.hash) {
+      throw new SyntaxError('Invalid PartialTxInputData');
     }
-    for (const part of arr.slice(1)) {
+    for (const part of arr.slice(2)) {
       const parts = part.split(':');
+      if (parts.length !== 2) {
+        throw new SyntaxError('Invalid PartialTxInputData');
+      }
+
       // This may overwrite an input data but we are allowing this
       this.data[+parts[0]] = Buffer.from(parts[1], 'hex');
     }

@@ -172,6 +172,14 @@ export class SendTxError extends WalletError {}
 export class MineTxError extends WalletError {}
 
 /**
+ * Error thrown when trying to sign or generate a Transaction instance from an incomplete partial transaction.
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class IncompletePartialTxError extends WalletError {}
+
+/**
  * Error thrown when calling a protected method on an xpub inited wallet
  * Some methods require access to the words or private key
  *
@@ -211,3 +219,27 @@ export class GetWalletServiceUrlError extends ConfigNotSetError {}
  * @inner
  */
 export class GetWalletServiceWsUrlError extends ConfigNotSetError {}
+
+/**
+ *
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class PartialTxError extends Error {}
+
+/**
+ * Error thrown when an input data for a non-existent input is added.
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class IndexOOBError extends PartialTxError {}
+
+/**
+ * Error thrown when an output with script type other than [p2sh, p2pkh] is used on PartialTx.
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class UnsupportedScriptError extends PartialTxError {}
