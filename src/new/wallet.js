@@ -669,15 +669,8 @@ class HathorWallet extends EventEmitter {
    *
    * @param {string} id Hash of the transaction to get data from
    *
-   * @return {Object} Data from the transaction to get. Can be null if the wallet does not contain the tx.
-   *  'tx_id': String
-   *  'version': Number
-   *  'weight': Number
-   *  'timestamp': Number
-   *  'is_voided': boolean
-   *  'inputs': Array(Object)
-   *  'outputs': Array(Object)
-   *  'parents': Array(String)
+   * @return {DecodedTx|null} Data from the transaction to get.
+   *                          Can be null if the wallet does not contain the tx.
    */
   getTx(id) {
     const history = this.getFullHistory();
@@ -963,9 +956,37 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * @typedef DecodedTx
+   * @property {string} tx_id
+   * @property {number} version
+   * @property {number} weight
+   * @property {number} timestamp
+   * @property {boolean} is_voided
+   * @property {{
+   *   value: number,
+   *   token_data: number,
+   *   script: string,
+   *   decoded: { type: string, address: string, timelock: number|null },
+   *   token: string,
+   *   tx_id: string,
+   *   index: number
+   * }[]} inputs
+   * @property {{
+   *   value: number,
+   *   token_data: number,
+   *   script: string,
+   *   decoded: { type: string, address: string, timelock: number|null },
+   *   token: string,
+   *   spent_by: string|null,
+   *   selected_as_input: boolean
+   * }[]} outputs
+   * @property {string[]} parents
+   */
+
+  /**
    * Get full wallet history (same as old method to be used for compatibility)
    *
-   * @return {Object} Object with transaction data { tx_id: { full_transaction_data }}
+   * @return {Record<string,DecodedTx>} Object with transaction data { tx_id: { full_transaction_data }}
    *
    * @memberof HathorWallet
    * @inner
@@ -2019,10 +2040,15 @@ class HathorWallet extends EventEmitter {
   /**
    * Returns the balance for each token in tx, if the input/output belongs to this wallet
    *
-   * @param {Object} tx Transaction data with array of inputs and outputs
+   * @param {{
+   *  inputs:{token:string, value:number, decoded?:{address?:string}}[],
+   *  outputs:{token:string, value:number, decoded?:{address?:string}}[],
+   * }} tx Transaction data with array of inputs and outputs
+   * @param [optionsParam]
+   * @param {boolean} [optionsParam.includeAuthorities=false] Retrieve authority balances if true
    *
-   * @return {Promise<Object>} Promise that resolves with an object with each token
-   * and it's balance in this tx for this wallet
+   * @return {Promise<Record<string,number>>} Promise that resolves with an object with each token
+   *                                          and it's balance in this tx for this wallet
    **/
   async getTxBalance(tx, optionsParam = {}) {
     const options = Object.assign({ includeAuthorities: false }, optionsParam)

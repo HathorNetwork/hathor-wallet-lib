@@ -11,6 +11,7 @@ import {
 import HathorWallet from "../../src/new/wallet";
 import { HATHOR_TOKEN_CONFIG, TOKEN_MINT_MASK } from "../../src/constants";
 import transaction from "../../src/transaction";
+import { TOKEN_DATA } from "./configuration/test-constants";
 
 const fakeTokenUid = '000002490ab7fc302e076f7aab8b20c35fed81fd1131a955aebbd3cb76e48fb0';
 const sampleNftAddress = 'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg'
@@ -229,6 +230,102 @@ describe('getBalance', () => {
     expect(genesisTknBalance[0]).toHaveProperty('balance.unlocked', 0);
     expect(genesisTknBalance[0]).toHaveProperty('balance.locked', 0);
     expect(genesisTknBalance[0]).toHaveProperty('transactions', 0);
+  })
+})
+
+describe('getFullHistory', () => {
+  it('should return full history', async () => {
+    const hWallet = await generateWalletHelper();
+
+    // Expect to have an empty list for the full history
+    let history = hWallet.getFullHistory();
+    expect(history).toBeDefined();
+    expect(Object.keys(history)).toHaveLength(0);
+
+    // Injecting some funds on this wallet
+    const fundDestinationAddress = hWallet.getAddressAtIndex(0);
+    const {hash: fundTxId} = await GenesisWalletHelper.injectFunds(fundDestinationAddress, 10);
+
+    // Validating the full history increased in one
+    expect(Object.keys(hWallet.getFullHistory())).toHaveLength(1);
+
+    // Moving the funds inside this wallet so that we have every information about the tx
+    const txDestinationAddress = hWallet.getAddressAtIndex(5);
+    const txChangeAddress = hWallet.getAddressAtIndex(8);
+    const txValue = 6;
+    const rawMoveTx = await hWallet.sendTransaction(
+      txDestinationAddress,
+      txValue,
+      { changeAddress: txChangeAddress }
+    );
+    await waitForTxReceived(hWallet, rawMoveTx.hash);
+
+    history = hWallet.getFullHistory();
+    expect(Object.keys(history)).toHaveLength(2);
+    expect(history).toHaveProperty(rawMoveTx.hash);
+    const moveTx = history[rawMoveTx.hash];
+
+    // Validating transactions properties were correctly translated
+    expect(moveTx).toHaveProperty('tx_id', rawMoveTx.hash);
+    expect(moveTx).toHaveProperty('version', rawMoveTx.version);
+    expect(moveTx).toHaveProperty('weight', rawMoveTx.weight);
+    expect(moveTx).toHaveProperty('timestamp', rawMoveTx.timestamp);
+    expect(moveTx).toHaveProperty('is_voided', false);
+    expect(moveTx.parents).toEqual(rawMoveTx.parents);
+
+    // Validating inputs
+    expect(moveTx.inputs).toHaveLength(rawMoveTx.inputs.length);
+    for(const inputIndex in moveTx.inputs) {
+      const inputObj = moveTx.inputs[inputIndex];
+
+      // Some attributes were correctly translated
+      expect(inputObj.index).toEqual(rawMoveTx.inputs[inputIndex].index);
+      expect(inputObj.tx_id).toEqual(rawMoveTx.inputs[inputIndex].hash);
+
+      // Decoded attributes are correct
+      expect(inputObj).toHaveProperty('token', HATHOR_TOKEN_CONFIG.uid);
+      expect(inputObj).toHaveProperty('token_data', TOKEN_DATA.HTR);
+      expect(inputObj).toHaveProperty('script');
+      expect(inputObj).toHaveProperty('value', 10);
+      expect(inputObj).toHaveProperty('decoded');
+      expect(inputObj.decoded).toHaveProperty('type', 'P2PKH');
+      expect(inputObj.decoded).toHaveProperty('address', fundDestinationAddress);
+    }
+
+    // Validating outputs
+    expect(moveTx.outputs).toHaveLength(rawMoveTx.outputs.length);
+    for(const outputIndex in moveTx.outputs) {
+      const outputObj = moveTx.outputs[outputIndex];
+
+      // Some attributes were correctly translated
+      expect(outputObj.value).toEqual(rawMoveTx.outputs[outputIndex].value);
+      expect(outputObj.token_data).toEqual(rawMoveTx.outputs[outputIndex].tokenData);
+
+      // Decoded attributes are correct
+      expect(outputObj).toHaveProperty('token', HATHOR_TOKEN_CONFIG.uid);
+      expect(outputObj).toHaveProperty('script');
+      expect(outputObj).toHaveProperty('decoded');
+      expect(outputObj).toHaveProperty('spent_by', null);
+      expect(outputObj).toHaveProperty('selected_as_input', false);
+      expect(outputObj.decoded).toHaveProperty('type', 'P2PKH');
+
+      if (outputObj.value === txValue) {
+        expect(outputObj.decoded).toHaveProperty('address', txDestinationAddress);
+      } else {
+        expect(outputObj.decoded).toHaveProperty('address', txChangeAddress);
+      }
+    }
+
+    // Validating that the fundTx now has its output spent by moveTx
+    const fundTx = history[fundTxId];
+    for(const output of fundTx.outputs) {
+      // We are only interested on the output of this wallet, not the Genesis change output
+      if (output.decoded.address !== fundDestinationAddress) {
+        continue;
+      }
+
+      expect(output.spent_by).toEqual(moveTx.tx_id);
+    }
   })
 })
 
