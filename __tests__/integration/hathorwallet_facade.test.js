@@ -232,6 +232,110 @@ describe('getBalance', () => {
   })
 })
 
+describe('sendTransaction', () => {
+  it('should send HTR transactions', async () => {
+    const hWallet = await generateWalletHelper();
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
+
+    // Transaction inside the same wallet
+    const tx1 = await hWallet.sendTransaction(hWallet.getAddressAtIndex(2), 6);
+
+    // Validating all fields
+    await waitForTxReceived(hWallet, tx1.hash);
+    expect(tx1).toHaveProperty('hash');
+    expect(tx1).toHaveProperty('inputs');
+    expect(tx1.inputs).toHaveProperty('length');
+    expect(tx1).toHaveProperty('outputs');
+    expect(tx1.outputs).toHaveProperty('length');
+    expect(tx1).toHaveProperty('version');
+    expect(tx1).toHaveProperty('weight');
+    expect(tx1).toHaveProperty('nonce');
+    expect(tx1).toHaveProperty('timestamp');
+    expect(tx1).toHaveProperty('parents');
+    expect(tx1.parents).toHaveProperty('length');
+    expect(tx1).toHaveProperty('tokens');
+    expect(tx1.tokens).toHaveProperty('length');
+
+    // Validating balance stays the same for internal transactions
+    let htrBalance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
+    expect(htrBalance[0].balance.unlocked).toEqual(10);
+
+    // Validating the correct addresses received the tokens
+    let tcba = hWallet.getTransactionsCountByAddress();
+    expect(tcba[hWallet.getAddressAtIndex(0)]).toHaveProperty('transactions', 2);
+    expect(tcba[hWallet.getAddressAtIndex(1)]).toHaveProperty('transactions', 1);
+    expect(tcba[hWallet.getAddressAtIndex(2)]).toHaveProperty('transactions', 1);
+
+    // Transaction outside the wallet
+    const {hWallet: gWallet} = await GenesisWalletHelper.getSingleton()
+    const {hash: tx2Hash} = await hWallet.sendTransaction(
+      gWallet.getAddressAtIndex(0),
+      8,
+      { changeAddress: hWallet.getAddressAtIndex(5) });
+    await waitForTxReceived(hWallet, tx2Hash);
+
+    // Balance was reduced
+    htrBalance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
+    expect(htrBalance[0].balance.unlocked).toEqual(2);
+
+    // Change was moved to correct address
+    tcba = hWallet.getTransactionsCountByAddress();
+    expect(tcba[hWallet.getAddressAtIndex(0)]).toHaveProperty('transactions', 2);
+    expect(tcba[hWallet.getAddressAtIndex(1)]).toHaveProperty('transactions', 2);
+    expect(tcba[hWallet.getAddressAtIndex(2)]).toHaveProperty('transactions', 2);
+    expect(tcba[hWallet.getAddressAtIndex(3)]).toHaveProperty('transactions', 0);
+    expect(tcba[hWallet.getAddressAtIndex(4)]).toHaveProperty('transactions', 0);
+    expect(tcba[hWallet.getAddressAtIndex(5)]).toHaveProperty('transactions', 1);
+    expect(tcba[hWallet.getAddressAtIndex(6)]).toHaveProperty('transactions', 0);
+  })
+
+  it('should send custom token transactions', async () => {
+    const hWallet = await generateWalletHelper();
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
+    const {hash: tokenUid} = await createTokenHelper(
+      hWallet,
+      'Token to Send',
+      'TTS',
+      100
+    );
+
+    const tx1 = await hWallet.sendTransaction(
+      hWallet.getAddressAtIndex(5),
+      30,
+      { token: tokenUid, changeAddress: hWallet.getAddressAtIndex(6) }
+    );
+    await waitForTxReceived(hWallet, tx1.hash);
+
+    // Validating balance stays the same for internal transactions
+    let htrBalance = await hWallet.getBalance(tokenUid);
+    expect(htrBalance[0].balance.unlocked).toEqual(100);
+
+    let tcba = hWallet.getTransactionsCountByAddress();
+    expect(tcba[hWallet.getAddressAtIndex(5)]).toHaveProperty('transactions', 1);
+    expect(tcba[hWallet.getAddressAtIndex(6)]).toHaveProperty('transactions', 1);
+
+    // Transaction outside the wallet
+    const {hWallet: gWallet} = await GenesisWalletHelper.getSingleton()
+    const {hash: tx2Hash} = await hWallet.sendTransaction(
+      gWallet.getAddressAtIndex(0),
+      80,
+      { token: tokenUid, changeAddress: hWallet.getAddressAtIndex(12) });
+    await waitForTxReceived(hWallet, tx2Hash);
+
+    // Balance was reduced
+    htrBalance = await hWallet.getBalance(tokenUid);
+    expect(htrBalance[0].balance.unlocked).toEqual(20);
+
+    // Change was moved to correct address
+    tcba = hWallet.getTransactionsCountByAddress();
+    expect(tcba[hWallet.getAddressAtIndex(5)]).toHaveProperty('transactions', 2);
+    expect(tcba[hWallet.getAddressAtIndex(6)]).toHaveProperty('transactions', 2);
+    expect(tcba[hWallet.getAddressAtIndex(10)]).toHaveProperty('transactions', 0);
+    expect(tcba[hWallet.getAddressAtIndex(12)]).toHaveProperty('transactions', 1);
+  })
+
+})
+
 describe('createNewToken', () => {
   afterEach(async () => {
     await stopAllWallets();
@@ -691,7 +795,6 @@ describe('createNFT', () => {
     expect(nftBalance[0].balance.unlocked).toEqual(6);
   })
 })
-
 
 describe('getTokenDetails', () => {
   afterEach(async () => {

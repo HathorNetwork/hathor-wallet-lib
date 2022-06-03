@@ -125,7 +125,7 @@ export function waitForWalletReady(hWallet) {
  * @param {number} [timeout=10000] Timeout in milisseconds
  * @returns {Promise<SendTxResponse>}
  */
-export async function waitForTxReceived(hWallet, txId, timeout = 10000) {
+export async function waitForTxReceived(hWallet, txId, timeout = 1000) {
   let alreadyResponded = false;
 
   // Only return the positive response after the transaction was received by the websocket

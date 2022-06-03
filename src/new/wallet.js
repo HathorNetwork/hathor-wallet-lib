@@ -473,8 +473,11 @@ class HathorWallet extends EventEmitter {
   /**
    * Auxiliar method to get the quantity of transactions by each address of the wallet
    *
-   * @return {Object} {address: {index, transactions}}
-   *
+   * @return {Record<string,{index:number,transactions:number}>} Object mapping addresses to entries
+   * @example
+   * const tcba = hWallet.getTransactionsCountByAddress();
+   * const {index, transactions} = tcba['WQketbSbvVixaRHWDAZdFBBpoPGsQ21Zpc'];
+   * if (transactions > 0) console.log(`Address on index ${index} has transactions.`);
    * @memberof HathorWallet
    * @inner
    **/
