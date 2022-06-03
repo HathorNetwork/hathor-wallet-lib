@@ -1529,7 +1529,7 @@ class HathorWallet extends EventEmitter {
    *   txId: string,
    *   index: number,
    *   address: string,
-   *   authorities: *
+   *   authorities: number
    * }[]>} Promise that resolves with an Array of objects with properties of the authority output.
    *       Returns an empty array in case there are no tx_outupts for this type.
    **/
@@ -1553,7 +1553,7 @@ class HathorWallet extends EventEmitter {
    *   txId: string,
    *   index: number,
    *   address: string,
-   *   authorities: *
+   *   authorities: number
    * }[]>} Promise that resolves with an Array of objects with properties of the authority output.
    *       Returns an empty array in case there are no tx_outupts for this type.
    **/
