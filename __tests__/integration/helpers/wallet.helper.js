@@ -132,15 +132,18 @@ export async function waitForTxReceived(hWallet, txId, timeout = 10000) {
   return new Promise(async (resolve, reject) => {
 
     // Event listener
-    hWallet.on('new-tx', newTx => {
+    const handleNewTx = newTx => {
       if (newTx.tx_id !== txId) {
         return; // Ignore if we didn't receive the transaction we expected.
       }
       returnSuccess(newTx);
-    })
+    };
+    hWallet.on('new-tx', handleNewTx);
 
     // Timeout handler
     setTimeout(async () => {
+      hWallet.removeListener('new-tx', handleNewTx);
+
       // No need to respond if the event listener worked.
       if (alreadyResponded) {
         return;
