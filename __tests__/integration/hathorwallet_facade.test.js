@@ -115,9 +115,10 @@ describe('getTransactionsCountByAddress', () => {
     expect(tcbaEmpty).toBeDefined();
     const addressesList = Object.keys(tcbaEmpty);
     expect(addressesList).toHaveProperty('length',21);
-    for(const address of addressesList) {
+    for(const addressIndex in addressesList) {
+      const address = addressesList[+addressIndex];
       expect(tcbaEmpty[address]).toBeDefined();
-      expect(tcbaEmpty[address]).toHaveProperty('index');
+      expect(tcbaEmpty[address]).toHaveProperty('index', +addressIndex);
       expect(tcbaEmpty[address]).toHaveProperty('transactions', 0);
     }
 
