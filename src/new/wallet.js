@@ -322,10 +322,10 @@ class HathorWallet extends EventEmitter {
   /**
    * Sign and return all signatures of the inputs belonging to this wallet.
    *
-   * @param {String} txHex hex representation of the transaction.
-   * @param {String} pin PIN to decrypt the private key
+   * @param {string} txHex hex representation of the transaction.
+   * @param {string} pin PIN to decrypt the private key
    *
-   * @return {String} serialized P2SHSignature data
+   * @return {string} serialized P2SHSignature data
    *
    * @memberof HathorWallet
    * @inner
@@ -372,7 +372,7 @@ class HathorWallet extends EventEmitter {
   /**
    * Assemble transaction from hex and collected p2sh_signatures.
    *
-   * @param {String} txHex hex representation of the transaction.
+   * @param {string} txHex hex representation of the transaction.
    * @param {Array} signatures Array of serialized p2sh_signatures (string).
    *
    * @return {Transaction} with input data created from the signatures.
@@ -664,7 +664,7 @@ class HathorWallet extends EventEmitter {
   /**
    * Get a transaction data from the wallet
    *
-   * @param {String} id Hash of the transaction to get data from
+   * @param {string} id Hash of the transaction to get data from
    *
    * @return {Object} Data from the transaction to get. Can be null if the wallet does not contain the tx.
    *  'tx_id': String
@@ -1110,7 +1110,7 @@ class HathorWallet extends EventEmitter {
   /**
    * Set data in the pre processed object
    *
-   * @param {String} key Key of the pre processed object to be added
+   * @param {string} key Key of the pre processed object to be added
    * @param {Any} value Value of the pre processed object to be added
    *
    * @memberof HathorWallet
@@ -1124,7 +1124,7 @@ class HathorWallet extends EventEmitter {
    * Get data in the pre processed object
    * If pre processed data is empty, we generate it and return
    *
-   * @param {String} key Key of the pre processed object to get the value
+   * @param {string} key Key of the pre processed object to get the value
    *
    * @return {Any} Value of the pre processed object
    *
@@ -1184,7 +1184,7 @@ class HathorWallet extends EventEmitter {
   /**
    * Send a transaction with a single output
    *
-   * @param {String} address Output address
+   * @param {string} address Output address
    * @param {Number} value Output value
    * @param [options] Options parameters
    * @param {string} [options.changeAddress] address of the change output
@@ -1341,8 +1341,8 @@ class HathorWallet extends EventEmitter {
    *
    * @param {Transaction} transaction Transaction object to be mined and pushed to the network
    *
-   * @param {String} name Name of the token
-   * @param {String} symbol Symbol of the token
+   * @param {string} name Name of the token
+   * @param {string} symbol Symbol of the token
    * @param {number} amount Quantity of the token to be minted
    * @param {Object} options Options parameters
    *  {
@@ -1437,7 +1437,7 @@ class HathorWallet extends EventEmitter {
    * Select authority utxo for mint or melt. Depends on the callback received as parameter
    * We could add an {options} parameter to allow common filters (e.g. mint authority, melt authority, p2pkh) to improve this method later.
    *
-   * @param {String} tokenUid UID of the token to select the authority utxo
+   * @param {string} tokenUid UID of the token to select the authority utxo
    * @param {function} filterUTXOs Callback to check if the output is the authority I want (isMeltOutput or isMintOutput)
    * @param {Object} options Object with custom options.
    *  {
@@ -1520,7 +1520,7 @@ class HathorWallet extends EventEmitter {
    * Get mint authorities
    * This is a helper method to call selectAuthorityUtxo without knowledge of the isMintOutput
    *
-   * @param {String} tokenUid UID of the token to select the authority utxo
+   * @param {string} tokenUid UID of the token to select the authority utxo
    * @param [options] Object with custom options.
    * @param {boolean} [options.many=false] if should return many utxos or just one (default false)
    * @param {boolean} [options.skipSpent=true] if should not include spent utxos (default true)
@@ -1544,7 +1544,7 @@ class HathorWallet extends EventEmitter {
    * Get melt authorities
    * This is a helper method to call selectAuthorityUtxo without knowledge of the isMeltOutput
    *
-   * @param {String} tokenUid UID of the token to select the authority utxo
+   * @param {string} tokenUid UID of the token to select the authority utxo
    * @param [options] Object with custom options.
    * @param {boolean} [options.many=false] if should return many utxos or just one (default false)
    * @param {boolean} [options.skipSpent=true] if should not include spent utxos (default true)
@@ -1567,7 +1567,7 @@ class HathorWallet extends EventEmitter {
   /**
    * Prepare mint transaction before mining
    *
-   * @param {String} tokenUid UID of the token to mint
+   * @param {string} tokenUid UID of the token to mint
    * @param {number} amount Quantity to mint
    * @param {Object} options Options parameters
    *  {
@@ -1620,7 +1620,7 @@ class HathorWallet extends EventEmitter {
   /**
    * Mint tokens
    *
-   * @param {String} tokenUid UID of the token to mint
+   * @param {string} tokenUid UID of the token to mint
    * @param {number} amount Quantity to mint
    * @param [options] Options parameters
    * @param {string} [options.address] destination address of the minted token
@@ -1647,7 +1647,7 @@ class HathorWallet extends EventEmitter {
   /**
    * Prepare melt transaction before mining
    *
-   * @param {String} tokenUid UID of the token to melt
+   * @param {string} tokenUid UID of the token to melt
    * @param {number} amount Quantity to melt
    * @param {Object} options Options parameters
    *  {
@@ -1700,7 +1700,7 @@ class HathorWallet extends EventEmitter {
   /**
    * Melt tokens
    *
-   * @param {String} tokenUid UID of the token to melt
+   * @param {string} tokenUid UID of the token to melt
    * @param {number} amount Quantity to melt
    * @param [options] Options parameters
    * @param {string} [options.address]: address of the HTR deposit back
@@ -1725,9 +1725,9 @@ class HathorWallet extends EventEmitter {
   /**
    * Prepare delegate authority transaction before mining
    *
-   * @param {String} tokenUid UID of the token to delegate the authority
-   * @param {String} type Type of the authority to delegate 'mint' or 'melt'
-   * @param {String} destinationAddress Destination address of the delegated authority
+   * @param {string} tokenUid UID of the token to delegate the authority
+   * @param {string} type Type of the authority to delegate 'mint' or 'melt'
+   * @param {string} destinationAddress Destination address of the delegated authority
    * @param {Object} options Options parameters
    *  {
    *   'createAnother': if should create another authority for the wallet. Default to true
@@ -1781,9 +1781,9 @@ class HathorWallet extends EventEmitter {
   /**
    * Delegate authority
    *
-   * @param {String} tokenUid UID of the token to delegate the authority
+   * @param {string} tokenUid UID of the token to delegate the authority
    * @param {'mint'|'melt'} type Type of the authority to delegate 'mint' or 'melt'
-   * @param {String} destinationAddress Destination address of the delegated authority
+   * @param {string} destinationAddress Destination address of the delegated authority
    * @param [options] Options parameters
    * @param {boolean} [options.createAnother=true] Should create another authority for the wallet.
    *                                               Default to true
@@ -1805,8 +1805,8 @@ class HathorWallet extends EventEmitter {
   /**
    * Prepare destroy authority transaction before mining
    *
-   * @param {String} tokenUid UID of the token to delegate the authority
-   * @param {String} type Type of the authority to delegate 'mint' or 'melt'
+   * @param {string} tokenUid UID of the token to delegate the authority
+   * @param {string} type Type of the authority to delegate 'mint' or 'melt'
    * @param {number} count How many authority outputs to destroy
    * @param {Object} options Options parameters
    *  {
@@ -1867,7 +1867,7 @@ class HathorWallet extends EventEmitter {
   /**
    * Destroy authority
    *
-   * @param {String} tokenUid UID of the token to destroy the authority
+   * @param {string} tokenUid UID of the token to destroy the authority
    * @param {'mint'|'melt'} type Type of the authority to destroy: 'mint' or 'melt'
    * @param {number} count How many authority outputs to destroy
    * @param [options] Options parameters
@@ -1901,8 +1901,8 @@ class HathorWallet extends EventEmitter {
   /**
    * Get all authorities utxos for specific token
    *
-   * @param {String} tokenUid UID of the token to delegate the authority
-   * @param {String} type Type of the authority to delegate 'mint' or 'melt'
+   * @param {string} tokenUid UID of the token to delegate the authority
+   * @param {string} type Type of the authority to delegate 'mint' or 'melt'
    *
    * @return {Array} Array of objects with {tx_id, index, address} of the authority output.
    **/
@@ -2095,22 +2095,20 @@ class HathorWallet extends EventEmitter {
   /**
    * Create an NFT for this wallet
    *
-   * @param {String} name Name of the token
-   * @param {String} symbol Symbol of the token
+   * @param {string} name Name of the token
+   * @param {string} symbol Symbol of the token
    * @param {number} amount Quantity of the token to be minted
-   * @param {String} data NFT data string
-   * @param {Object} options Options parameters
-   *  {
-   *   'address': address of the minted token,
-   *   'changeAddress': address of the change output,
-   *   'startMiningTx': boolean to trigger start mining (default true)
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
-   *   'createMint': if should create mint authority when creating the token
-   *   'createMelt': if should create melt authority when creating the token
-   *  }
+   * @param {string} data NFT data string
+   * @param [options] Options parameters
+   * @param {string} [options.address] address of the minted token,
+   * @param {string} [options.changeAddress] address of the change output,
+   * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
+   * @param {string} [options.pinCode] pin to decrypt xpriv information.
+   *                                   Optional but required if not set in this
+   * @param {boolean} [options.createMint=true] should create mint authority when creating the token
+   * @param {boolean} [options.createMelt=true] should create melt authority when creating the token
    *
-   * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
-   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
+   * @return {Promise<CreateNewTokenResponse>}
    *
    * @memberof HathorWallet
    * @inner

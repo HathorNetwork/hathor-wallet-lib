@@ -9,6 +9,7 @@ import Connection from "../../../src/new/connection";
 import { FULLNODE_URL, NETWORK_NAME } from "../configuration/test-constants";
 import HathorWallet from "../../../src/new/wallet";
 import { precalculationHelpers } from "./wallet-precalculation.helper";
+import { GenesisWalletHelper } from "./genesis-wallet.helper";
 
 /**
  * Generates a connection object for starting wallets.
@@ -21,6 +22,8 @@ export function generateConnection() {
     connectionTimeout: 30000,
   })
 }
+
+const startedWallets = [];
 
 /**
  * Generates a Wallet from an available precalculated seed
@@ -41,8 +44,29 @@ export async function generateWalletHelper() {
   const hWallet = new HathorWallet(walletConfig);
   await hWallet.start();
   await waitForWalletReady(hWallet);
+  startedWallets.push(hWallet);
 
   return hWallet;
+}
+
+export async function stopAllWallets() {
+  // Stop all wallets that were started with this helper
+  while (true) {
+    try {
+      const hWallet = startedWallets.pop();
+      hWallet.stop();
+    } catch (e) {
+      console.error(e.stack)
+    }
+
+    if (startedWallets.length === 0) {
+      break;
+    }
+  }
+
+  // Also clean any genesis tx listeners that may be open
+  const {hWallet: gWallet} = await GenesisWalletHelper.getSingleton();
+  gWallet.removeAllListeners('new-tx');
 }
 
 /**

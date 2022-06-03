@@ -4,7 +4,7 @@ import { getRandomInt } from "./utils/core.util";
 import {
   createTokenHelper,
   generateConnection,
-  generateWalletHelper,
+  generateWalletHelper, stopAllWallets,
   waitForTxReceived,
   waitForWalletReady
 } from "./helpers/wallet.helper";
@@ -101,6 +101,10 @@ describe('start', () => {
 });
 
 describe('getTransactionsCountByAddress', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+  })
+
   it('should return correct entries for a wallet', async () => {
     // Create the wallet
     const hWallet = await generateWalletHelper();
@@ -129,8 +133,6 @@ describe('getTransactionsCountByAddress', () => {
     expect(tcba2[addressesList[0]]).toHaveProperty('transactions', 2);
     expect(tcba2[addressesList[1]]).toHaveProperty('transactions', 1);
     expect(tcba2[addressesList[2]]).toHaveProperty('transactions', 1);
-
-    hWallet.stop();
   })
 
   it('should retrieve more addresses according to gap limit', async () => {
@@ -144,12 +146,14 @@ describe('getTransactionsCountByAddress', () => {
     const tcba1 = hWallet.getTransactionsCountByAddress();
     const addresses1 = Object.keys(tcba1);
     expect(addresses1).toHaveLength(41);
-
-    hWallet.stop();
   })
 })
 
 describe('getBalance', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+  })
+
   it('should get the balance for the HTR token', async () => {
     const hWallet = await generateWalletHelper();
 
@@ -187,8 +191,6 @@ describe('getBalance', () => {
     await waitForTxReceived(hWallet, tx1.hash);
     const balance2 = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
     expect(balance2[0].balance).toEqual(htrBalance1.balance);
-
-    hWallet.stop();
   })
 
   it('should get the balance for a custom token', async () => {
@@ -225,12 +227,14 @@ describe('getBalance', () => {
     expect(genesisTknBalance[0]).toHaveProperty('balance.unlocked', 0);
     expect(genesisTknBalance[0]).toHaveProperty('balance.locked', 0);
     expect(genesisTknBalance[0]).toHaveProperty('transactions', 0);
-
-    hWallet.stop();
   })
 })
 
 describe('createNewToken', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+  })
+
   it('should create a new token', async () => {
     const hWallet = await generateWalletHelper();
     const addr0 = hWallet.getAddressAtIndex(0);
@@ -251,12 +255,14 @@ describe('createNewToken', () => {
 
     const tknBalance = await hWallet.getBalance(tokenUid);
     expect(tknBalance[0].balance.unlocked).toBe(100);
-
-    hWallet.stop();
   })
 })
 
 describe('mintTokens', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+  })
+
   it('should mint new tokens', async () => {
     // Setting up the custom token
     const hWallet = await generateWalletHelper();
@@ -289,8 +295,6 @@ describe('mintTokens', () => {
     const tokenBalance = await hWallet.getBalance(tokenUid);
     const expectedAmount = 100 + mintAmount;
     expect(tokenBalance[0]).toHaveProperty('balance.unlocked', expectedAmount);
-
-    hWallet.stop();
   })
 
   it('should deposit correct HTR values for minting', async () => {
@@ -344,12 +348,14 @@ describe('mintTokens', () => {
     expectedHtrFunds -= 3;
     await waitForTxReceived(hWallet, mintResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
-
-    hWallet.stop();
   })
 })
 
 describe('meltTokens', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+  })
+
   it('should melt tokens', async () => {
     const hWallet = await generateWalletHelper();
     await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
@@ -371,8 +377,6 @@ describe('meltTokens', () => {
     const tokenBalance = await hWallet.getBalance(tokenUid);
     const expectedAmount = 100 - meltAmount;
     expect(tokenBalance[0]).toHaveProperty('balance.unlocked', expectedAmount);
-
-    hWallet.stop();
   })
 
   it('should recover correct amount of HTR on melting', async () => {
@@ -426,12 +430,14 @@ describe('meltTokens', () => {
     expectedHtrFunds += 2;
     await waitForTxReceived(hWallet, meltResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
-
-    hWallet.stop();
   })
 })
 
-describe.only('delegateAuthority', () => {
+describe('delegateAuthority', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+  })
+
   it('should delegate authority between wallets', async () => {
     const hWallet1 = await generateWalletHelper();
     const hWallet2 = await generateWalletHelper();
@@ -539,6 +545,10 @@ describe.only('delegateAuthority', () => {
 })
 
 describe('destroyAuthority', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+  })
+
   it('should destroy mint authorities', async () => {
     const hWallet = await generateWalletHelper();
     await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
@@ -580,8 +590,6 @@ describe('destroyAuthority', () => {
     // TODO: This is not the desired outcome. A fix should be implemented.
     expect(mintFailure).toBeInstanceOf(TypeError);
     expect(mintFailure.message).toEqual('this.transaction.inputs is not iterable')
-
-    hWallet.stop();
   })
 
   it('should destroy melt authorities', async () => {
@@ -623,12 +631,14 @@ describe('destroyAuthority', () => {
       .catch(err => err);
     expect(meltFailure).toHaveProperty('success', false);
     expect(meltFailure.message).toContain('authority output');
-
-    hWallet.stop();
   })
 })
 
 describe('getTokenDetails', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+  })
+
   // TODO: This function currently throws for an invalid token.
 
   it('should get the correct response for a valid token', async () => {
@@ -676,12 +686,14 @@ describe('getTokenDetails', () => {
     expect(details.totalTransactions).toEqual(2);
     expect(details.authorities.mint).toEqual(false);
     expect(details.authorities.melt).toEqual(false);
-
-    hWallet.stop();
   })
 })
 
 describe('getTxHistory', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+  })
+
   let gWallet;
   beforeAll(async () => {
     const { hWallet } = await GenesisWalletHelper.getSingleton()
@@ -738,8 +750,6 @@ describe('getTxHistory', () => {
     expect(txHistory.length).toEqual(2);
     expect(txHistory[0].txId).toEqual(tx2.hash);
     expect(txHistory[1].txId).toEqual(tx1.hash);
-
-    hWallet.stop();
   })
 
   it('should show custom token transactions in correct order', async () => {
@@ -821,7 +831,5 @@ describe('getTxHistory', () => {
     expect(txHistory.length).toEqual(2);
     expect(txHistory[0].txId).toEqual(tx2Hash);
     expect(txHistory[1].txId).toEqual(tx1Hash);
-
-    hWallet.stop();
   })
 })
