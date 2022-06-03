@@ -2105,8 +2105,8 @@ class HathorWallet extends EventEmitter {
    * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
    * @param {string} [options.pinCode] pin to decrypt xpriv information.
    *                                   Optional but required if not set in this
-   * @param {boolean} [options.createMint=true] should create mint authority when creating the token
-   * @param {boolean} [options.createMelt=true] should create melt authority when creating the token
+   * @param {boolean} [options.createMint=false] should create mint authority
+   * @param {boolean} [options.createMelt=false] should create melt authority
    *
    * @return {Promise<CreateNewTokenResponse>}
    *

@@ -13,6 +13,7 @@ import { HATHOR_TOKEN_CONFIG, TOKEN_MINT_MASK } from "../../src/constants";
 import transaction from "../../src/transaction";
 
 const fakeTokenUid = '000002490ab7fc302e076f7aab8b20c35fed81fd1131a955aebbd3cb76e48fb0';
+const sampleNftAddress = 'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg'
 
 describe('start', () => {
 
@@ -633,6 +634,63 @@ describe('destroyAuthority', () => {
     expect(meltFailure.message).toContain('authority output');
   })
 })
+
+describe('createNFT', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+  })
+
+  it('should create an NFT with mint/melt authorities', async () => {
+    const hWallet = await generateWalletHelper();
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 100);
+
+    // Creating one NFT with default authorities
+    const nftTx = await hWallet.createNFT(
+      'New NFT',
+      'NNFT',
+      1,
+      sampleNftAddress,
+      { createMint: true, createMelt: true },
+    )
+    expect(nftTx.hash).toBeDefined();
+    expect(nftTx.name).toEqual('New NFT');
+    expect(nftTx.symbol).toEqual('NNFT');
+    await waitForTxReceived(hWallet, nftTx.hash);
+
+    // Validating HTR fee payment
+    const htrBalance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
+    expect(htrBalance[0].balance.unlocked).toEqual(98); // 1 deposit, 1 fee
+    let nftBalance = await hWallet.getBalance(nftTx.hash);
+    expect(nftBalance[0].balance.unlocked).toEqual(1);
+
+    /*
+     * Since NFT authority tokens cannot be read by getMintAuthority, we will try to actually
+     * mint tokens to confirm the authority exists.
+     */
+    const htrMint = await hWallet.mintTokens(
+      nftTx.hash,
+      10,
+    );
+    expect(htrMint).toHaveProperty('hash');
+    await waitForTxReceived(hWallet, htrMint.hash);
+    nftBalance = await hWallet.getBalance(nftTx.hash);
+    expect(nftBalance[0].balance.unlocked).toEqual(11);
+
+    /*
+     * Since NFT authority tokens cannot be read by getMeltAuthority, we will try to actually
+     * melt tokens to confirm the authority exists.
+     */
+    const htrMelt = await hWallet.meltTokens(
+      nftTx.hash,
+      5,
+    );
+    expect(htrMelt).toHaveProperty('hash');
+    await waitForTxReceived(hWallet, htrMelt.hash);
+    nftBalance = await hWallet.getBalance(nftTx.hash);
+    expect(nftBalance[0].balance.unlocked).toEqual(6);
+  })
+})
+
 
 describe('getTokenDetails', () => {
   afterEach(async () => {
