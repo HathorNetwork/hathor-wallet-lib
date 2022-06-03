@@ -122,7 +122,7 @@ test('Generate new MultiSig wallet', (done) => {
   const xpub1 = walletUtils.getMultiSigXPubFromWords(words1);
   const xpub2 = walletUtils.getMultiSigXPubFromWords(words2);
 
-  const multisigData = {minSignatures: 2, pubkeys: [xpub, xpub1, xpub2]};
+  const multisigData = {numSignatures: 2, pubkeys: [xpub, xpub1, xpub2]};
 
   // Generate new wallet and save data in storage
   const promise = wallet.executeGenerateWallet(words, '', pin, 'password', true, multisigData);
@@ -132,7 +132,7 @@ test('Generate new MultiSig wallet', (done) => {
   check('multisig' in accessData, true, done);
   check('pubkey' in accessData.multisig, true, done);
   check('pubkeys' in accessData.multisig, true, done);
-  check('minSignatures' in accessData.multisig, true, done);
+  check('numSignatures' in accessData.multisig, true, done);
   done();
 
 }, 15000); // 15s to timeout if case done() is not called

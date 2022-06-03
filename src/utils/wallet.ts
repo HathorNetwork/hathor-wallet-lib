@@ -345,7 +345,7 @@ const wallet = {
    * Create a P2SH MultiSig redeem script
    *
    * @param {string[]} xpubs The list of xpubkeys involved in this MultiSig
-   * @param {number} minSignatures Minimum number of signatures to send a
+   * @param {number} numSignatures Minimum number of signatures to send a
    * transaction with this MultiSig
    * @param {number} index Index to derive the xpubs
    *
@@ -354,7 +354,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  createP2SHRedeemScript(xpubs, minSignatures, index) {
+  createP2SHRedeemScript(xpubs, numSignatures, index) {
     const sortedXpubs = _.sortBy(xpubs.map(xp => new HDPublicKey(xp)), (xpub) => {
       return xpub.publicKey.toString('hex');
     });
@@ -365,7 +365,7 @@ const wallet = {
 
     // bitcore-lib sorts the public keys by default before building the script
     // noSorting prevents that and keeps our order
-    const redeemScript = Script.buildMultisigOut(pubkeys, minSignatures, {noSorting: true});
+    const redeemScript = Script.buildMultisigOut(pubkeys, numSignatures, {noSorting: true});
     return redeemScript.toBuffer();
   },
 
@@ -380,23 +380,15 @@ const wallet = {
    * @inner
    */
   getP2SHInputData(signatures, redeemScript) {
-    // minSignatures is the first opcode
-    // maxSignatures is the second to last opcode
-    const minSignatures = redeemScript.readUInt8() - OP_0.readUInt8();
-    const maxSignatures = redeemScript.readUInt8(redeemScript.length - 2) - OP_0.readUInt8();
-    if (signatures.length < minSignatures || signatures.length > maxSignatures) {
+    // numSignatures is the first opcode
+    const numSignatures = redeemScript.readUInt8() - OP_0.readUInt8();
+    if (signatures.length !== numSignatures) {
       throw new Error('Signatures are incompatible with redeemScript');
     }
     const arr: Buffer[] = [];
     let sigCount = 0;
     for (const sig of signatures) {
       helpers.pushDataToStack(arr, sig);
-      if (++sigCount >= minSignatures) {
-        // XXX: This conditional makes it so signatures after minSignatures are ignored
-        // This is because the OP_CHECKMULTISIG will only acknowledge and verify the minimum
-        // number and treat any excess as extra data on stack
-        break;
-      }
     }
     helpers.pushDataToStack(arr, redeemScript);
     return util.buffer.concat(arr);
