@@ -2040,15 +2040,16 @@ class HathorWallet extends EventEmitter {
   /**
    * Returns the balance for each token in tx, if the input/output belongs to this wallet
    *
-   * @param {{
-   *  inputs:{token:string, value:number, decoded?:{address?:string}}[],
-   *  outputs:{token:string, value:number, decoded?:{address?:string}}[],
-   * }} tx Transaction data with array of inputs and outputs
+   * @param {DecodedTx} tx Decoded transaction with populated data from local wallet history
    * @param [optionsParam]
    * @param {boolean} [optionsParam.includeAuthorities=false] Retrieve authority balances if true
    *
    * @return {Promise<Record<string,number>>} Promise that resolves with an object with each token
    *                                          and it's balance in this tx for this wallet
+   *
+   * @example
+   * const decodedTx = hathorWalletInstance.getTx(txHash);
+   * const txBalance = await hathorWalletInstance.getTxBalance(decodedTx);
    **/
   async getTxBalance(tx, optionsParam = {}) {
     const options = Object.assign({ includeAuthorities: false }, optionsParam)

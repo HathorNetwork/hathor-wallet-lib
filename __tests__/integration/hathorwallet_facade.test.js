@@ -12,6 +12,7 @@ import HathorWallet from "../../src/new/wallet";
 import { HATHOR_TOKEN_CONFIG, TOKEN_MINT_MASK } from "../../src/constants";
 import transaction from "../../src/transaction";
 import { TOKEN_DATA } from "./configuration/test-constants";
+import { waitFor } from "@babel/core/lib/gensync-utils/async";
 
 const fakeTokenUid = '000002490ab7fc302e076f7aab8b20c35fed81fd1131a955aebbd3cb76e48fb0';
 const sampleNftAddress = 'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg'
@@ -326,6 +327,59 @@ describe('getFullHistory', () => {
 
       expect(output.spent_by).toEqual(moveTx.tx_id);
     }
+  })
+})
+
+describe('getTxBalance', () => {
+  it('should get tx balance', async () => {
+    const hWallet = await generateWalletHelper();
+    const {hash: tx1Hash} = await GenesisWalletHelper.injectFunds(
+      hWallet.getAddressAtIndex(0),
+      10
+    );
+
+    // Validating tx balance for a transaction with a single token (htr)
+    const tx1 = hWallet.getTx(tx1Hash);
+    let txBalance = await hWallet.getTxBalance(tx1);
+    expect(txBalance).toBeDefined()
+    expect(Object.keys(txBalance)).toHaveLength(1);
+    expect(txBalance[HATHOR_TOKEN_CONFIG.uid]).toEqual(10);
+
+    // Validating tx balance for a transaction with two tokens (htr+custom)
+    const {hash:tokenUid} = await createTokenHelper(
+      hWallet,
+      'txBalance Token',
+      'TXBT',
+      100
+    );
+    const tokenCreationTx = hWallet.getTx(tokenUid);
+    txBalance = await hWallet.getTxBalance(tokenCreationTx);
+    expect(Object.keys(txBalance)).toHaveLength(2);
+    expect(txBalance[tokenUid]).toEqual(100);
+    expect(txBalance[HATHOR_TOKEN_CONFIG.uid]).toEqual(-1);
+
+    // Validating that the option to include authority tokens does not change the balance
+    txBalance = await hWallet.getTxBalance(tokenCreationTx, {includeAuthorities: true});
+    expect(Object.keys(txBalance)).toHaveLength(2);
+    expect(txBalance[HATHOR_TOKEN_CONFIG.uid]).toEqual(-1);
+    expect(txBalance).toHaveProperty(tokenUid,100);
+
+    // Validating delegate token transaction behavior
+    const {hash: delegateTxHash} = await hWallet.delegateAuthority(
+      tokenUid,
+      'mint',
+      hWallet.getAddressAtIndex(0)
+    );
+
+    // By default this tx will not have a balance
+    await waitForTxReceived(hWallet, delegateTxHash);
+    const delegateTx = hWallet.getTx(delegateTxHash);
+    txBalance = await hWallet.getTxBalance(delegateTx);
+    expect(Object.keys(txBalance)).toHaveLength(0);
+    // When the "includeAuthorities" parameter is added, the balance should be zero
+    txBalance = await hWallet.getTxBalance(delegateTx, {includeAuthorities: true});
+    expect(Object.keys(txBalance)).toHaveLength(1);
+    expect(txBalance).toHaveProperty(tokenUid, 0);
   })
 })
 
