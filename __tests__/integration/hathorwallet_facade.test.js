@@ -4,15 +4,16 @@ import { getRandomInt } from "./utils/core.util";
 import {
   createTokenHelper,
   generateConnection,
-  generateWalletHelper, stopAllWallets,
+  generateWalletHelper,
+  stopAllWallets,
   waitForTxReceived,
   waitForWalletReady
 } from "./helpers/wallet.helper";
 import HathorWallet from "../../src/new/wallet";
 import { HATHOR_TOKEN_CONFIG, TOKEN_MINT_MASK } from "../../src/constants";
 import transaction from "../../src/transaction";
-import { TOKEN_DATA } from "./configuration/test-constants";
-import { waitFor } from "@babel/core/lib/gensync-utils/async";
+import { AUTHORITY_VALUE, TOKEN_DATA } from "./configuration/test-constants";
+import wallet from "../../src/wallet";
 
 const fakeTokenUid = '000002490ab7fc302e076f7aab8b20c35fed81fd1131a955aebbd3cb76e48fb0';
 const sampleNftAddress = 'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg'
@@ -234,8 +235,12 @@ describe('getBalance', () => {
   })
 })
 
-describe('getFullHistory', () => {
-  it('should return full history', async () => {
+describe.only('getFullHistory', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+  })
+
+  it('should return full history (htr)', async () => {
     const hWallet = await generateWalletHelper();
 
     // Expect to have an empty list for the full history
@@ -328,9 +333,71 @@ describe('getFullHistory', () => {
       expect(output.spent_by).toEqual(moveTx.tx_id);
     }
   })
+
+  it('should return full history (custom token)', async () => {
+    const hWallet = await generateWalletHelper();
+    await GenesisWalletHelper.injectFunds(
+      hWallet.getAddressAtIndex(0),
+      10
+    );
+    const createTokenTx = await createTokenHelper(
+      hWallet,
+      'Full History Token',
+      'FHT',
+      100
+    );
+    const tokenUid = createTokenTx.hash;
+
+    let history = hWallet.getFullHistory();
+    expect(Object.keys(history)).toHaveLength(2);
+
+    // Validating create token properties ( all others have been validated on the previous test )
+    expect(history).toHaveProperty(tokenUid);
+    const createTx = history[tokenUid];
+
+    // Validating inputs
+    expect(createTx.inputs).toHaveLength(1);
+    const inputObj = createTx.inputs[0];
+    expect(inputObj.token).toEqual(HATHOR_TOKEN_CONFIG.uid);
+    expect(inputObj.token_data).toEqual(TOKEN_DATA.HTR);
+    expect(inputObj.value).toEqual(10);
+
+    // Validating outputs
+    expect(createTx.outputs).toHaveLength(4);
+    const changeOutput = createTx.outputs.find(o => o.value === 9);
+    expect(changeOutput).toBeDefined();
+    expect(changeOutput.token).toEqual(HATHOR_TOKEN_CONFIG.uid);
+    expect(changeOutput.token_data).toEqual(TOKEN_DATA.HTR);
+
+    const tokenOutput = createTx.outputs.find(o => o.value === 100);
+    expect(tokenOutput).toBeDefined();
+    expect(tokenOutput.token).toEqual(tokenUid);
+    expect(tokenOutput.token_data).toEqual(TOKEN_DATA.TOKEN);
+
+    const mintOutput = createTx.outputs.find(o => {
+      const isAuthority = wallet.isAuthorityOutput(o);
+      const isMint = o.value === AUTHORITY_VALUE.MINT;
+      return isAuthority && isMint
+    });
+    expect(mintOutput).toBeDefined();
+    expect(mintOutput.token).toEqual(tokenUid);
+
+    const meltOutput = createTx.outputs.find(o => {
+      const isAuthority = wallet.isAuthorityOutput(o);
+      const isMelt = o.value === AUTHORITY_VALUE.MELT;
+      return isAuthority && isMelt
+    });
+    expect(meltOutput).toBeDefined();
+    expect(meltOutput.token).toEqual(tokenUid);
+
+  })
 })
 
 describe('getTxBalance', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+  })
+
   it('should get tx balance', async () => {
     const hWallet = await generateWalletHelper();
     const {hash: tx1Hash} = await GenesisWalletHelper.injectFunds(
@@ -384,6 +451,10 @@ describe('getTxBalance', () => {
 })
 
 describe('sendTransaction', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+  })
+
   it('should send HTR transactions', async () => {
     const hWallet = await generateWalletHelper();
     await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
@@ -484,7 +555,6 @@ describe('sendTransaction', () => {
     expect(tcba[hWallet.getAddressAtIndex(10)]).toHaveProperty('transactions', 0);
     expect(tcba[hWallet.getAddressAtIndex(12)]).toHaveProperty('transactions', 1);
   })
-
 })
 
 describe('createNewToken', () => {
