@@ -235,7 +235,7 @@ describe('getBalance', () => {
   })
 })
 
-describe.only('getFullHistory', () => {
+describe('getFullHistory', () => {
   afterEach(async () => {
     await stopAllWallets();
   })
@@ -555,6 +555,127 @@ describe('sendTransaction', () => {
     expect(tcba[hWallet.getAddressAtIndex(10)]).toHaveProperty('transactions', 0);
     expect(tcba[hWallet.getAddressAtIndex(12)]).toHaveProperty('transactions', 1);
   })
+})
+
+describe('sendManyOutputsTransaction', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+  })
+
+  it('should send simple HTR transactions', async () => {
+    const hWallet = await generateWalletHelper();
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 100);
+
+    // Single input and single output
+    const rawSimpleTx = await hWallet.sendManyOutputsTransaction(
+      [
+        {
+          address: hWallet.getAddressAtIndex(2),
+          value: 100,
+          token: HATHOR_TOKEN_CONFIG.uid
+        },
+      ],
+    );
+    expect(rawSimpleTx).toHaveProperty('hash');
+    await waitForTxReceived(hWallet, rawSimpleTx.hash);
+    const decodedSimple = hWallet.getTx(rawSimpleTx.hash);
+    expect(decodedSimple.inputs).toHaveLength(1);
+    expect(decodedSimple.outputs).toHaveLength(1);
+
+    // Single input and two outputs
+    const rawDoubleOutputTx = await hWallet.sendManyOutputsTransaction(
+      [
+        {
+          address: hWallet.getAddressAtIndex(5),
+          value: 60,
+          token: HATHOR_TOKEN_CONFIG.uid
+        },
+        {
+          address: hWallet.getAddressAtIndex(6),
+          value: 40,
+          token: HATHOR_TOKEN_CONFIG.uid
+        },
+      ],
+    );
+    await waitForTxReceived(hWallet, rawDoubleOutputTx.hash);
+    const decodedDoubleOutput = hWallet.getTx(rawDoubleOutputTx.hash);
+    expect(decodedDoubleOutput.inputs).toHaveLength(1);
+    expect(decodedDoubleOutput.outputs).toHaveLength(2);
+    const largerOutputIndex = decodedDoubleOutput.outputs.findIndex(o => o.value === 60);
+
+    // Explicit input and three outputs
+    const rawExplicitInputTx = await hWallet.sendManyOutputsTransaction(
+      [
+        {
+          address: hWallet.getAddressAtIndex(1),
+          value: 5,
+          token: HATHOR_TOKEN_CONFIG.uid
+        },
+        {
+          address: hWallet.getAddressAtIndex(2),
+          value: 35,
+          token: HATHOR_TOKEN_CONFIG.uid
+        },
+      ],
+      {
+        inputs: [{
+          txId: decodedDoubleOutput.tx_id,
+          token: HATHOR_TOKEN_CONFIG.uid,
+          index: largerOutputIndex
+        }]
+      }
+    );
+    await waitForTxReceived(hWallet, rawExplicitInputTx.hash);
+    const explicitInput = hWallet.getTx(rawExplicitInputTx.hash);
+    expect(explicitInput.inputs).toHaveLength(1);
+    expect(explicitInput.outputs).toHaveLength(3);
+
+    // Both explicit outputs and the automatic one to complete the 60 HTR input
+    expect(explicitInput.outputs.find(o => o.value === 5)).toBeDefined();
+    expect(explicitInput.outputs.find(o => o.value === 35)).toBeDefined();
+    expect(explicitInput.outputs.find(o => o.value === 20)).toBeDefined();
+  })
+
+  it('should send transactions with multiple tokens', async () => {
+    const hWallet = await generateWalletHelper();
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
+    const {hash: tokenUid} = await createTokenHelper(
+      hWallet,
+      'Multiple Tokens Tk',
+      'MTTK',
+      200
+    );
+
+    // const createTokenTx = hWallet.getTx(tokenUid);
+    const rawSendTx = await hWallet.sendManyOutputsTransaction(
+      [
+        { token: tokenUid, value: 110, address: hWallet.getAddressAtIndex(1) },
+        { token: HATHOR_TOKEN_CONFIG.uid, value: 5, address: hWallet.getAddressAtIndex(2) },
+      ]
+    );
+    await waitForTxReceived(hWallet, rawSendTx.hash);
+
+    const sendTx = hWallet.getTx(rawSendTx.hash);
+    expect(sendTx.inputs).toHaveLength(2);
+    expect(sendTx.outputs).toHaveLength(4);
+
+    // Validating that each of the outputs
+    const smallerHtrOutput = sendTx.outputs.find(o => o.value === 3);
+    expect(smallerHtrOutput).toBeDefined();
+    const biggerHtrOutput = sendTx.outputs.find(o => o.value === 5);
+    expect(biggerHtrOutput).toBeDefined();
+    const smallerTokenOutput = sendTx.outputs.find(o => o.value === 90);
+    expect(smallerTokenOutput.token).toEqual(tokenUid);
+    const biggerTokenOutput = sendTx.outputs.find(o => o.value === 110);
+    expect(biggerTokenOutput.token).toEqual(tokenUid);
+
+    // Validating each of the inputs
+    const htrInput = sendTx.inputs.find(o => o.token === HATHOR_TOKEN_CONFIG.uid);
+    expect(htrInput.value).toEqual(8);
+    const tokenInput = sendTx.inputs.find(o => o.token === tokenUid);
+    expect(tokenInput.value).toEqual(200);
+  })
+
 })
 
 describe('createNewToken', () => {

@@ -1232,30 +1232,49 @@ class HathorWallet extends EventEmitter {
   /**
    * Send a transaction from its outputs
    *
-   * @param {Array} outputs Array of outputs with each element as an object with {'address', 'value', 'timelock', 'token'}
-   * @param {Array} inputs Array of inputs with each element as an object with {'txId', 'index', 'token'}
-   * @param {Object} token Token object {'uid', 'name', 'symbol'}. Optional parameter if user already set on the class
-   * @param {Object} options Options parameters
-   *  {
-   *   'changeAddress': address of the change output
-   *   'startMiningTx': boolean to trigger start mining (default true)
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
-   *  }
+   * @param {{
+   *   address: string,
+   *   value: number,
+   *   timelock?: number,
+   *   token: string
+   * }[]} outputs Array of proposed outputs
+   * @param [options]
+   * @param {{
+   *   txId: string,
+   *   index: number,
+   *   token: string
+   * }[]} [options.inputs] Array of proposed inputs
+   * @param {string} [options.changeAddress] address of the change output
+   * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
+   * @param {string} [options.pincode] pin to decrypt xpriv information.
+   *                                   Optional but required if not set in this
    *
-   * @return {Promise<Transaction>} Promise that resolves when transaction is sent
+   * @return {Promise<BaseTransactionResponse>} Promise that resolves when transaction is sent
    **/
   async sendManyOutputsTransaction(outputs, options = {}) {
     if (this.isFromXPub()) {
       throw new WalletFromXPubGuard('sendManyOutputsTransaction');
     }
     storage.setStore(this.store);
-    const newOptions = Object.assign({ inputs: [], changeAddress: null, startMiningTx: true, pinCode: null }, options);
+    const newOptions = Object.assign({
+      inputs: [],
+      changeAddress: null,
+      startMiningTx: true,
+      pinCode: null
+    }, options);
+
     const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       return {success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED};
     }
     const { inputs, changeAddress } = newOptions;
-    const sendTransaction = new SendTransaction({ outputs, inputs, changeAddress, pin, network: this.getNetworkObject() });
+    const sendTransaction = new SendTransaction({
+      outputs,
+      inputs,
+      changeAddress,
+      pin,
+      network: this.getNetworkObject()
+    });
     return sendTransaction.run();
   }
 
