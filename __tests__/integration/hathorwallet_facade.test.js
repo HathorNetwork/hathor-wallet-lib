@@ -10,7 +10,11 @@ import {
   waitForWalletReady
 } from "./helpers/wallet.helper";
 import HathorWallet from "../../src/new/wallet";
-import { HATHOR_TOKEN_CONFIG, TOKEN_MINT_MASK } from "../../src/constants";
+import {
+  HATHOR_TOKEN_CONFIG,
+  TOKEN_MINT_MASK,
+  TOKEN_MELT_MASK
+} from "../../src/constants";
 import transaction from "../../src/transaction";
 import { AUTHORITY_VALUE, TOKEN_DATA } from "./configuration/test-constants";
 import wallet from "../../src/wallet";
@@ -441,7 +445,7 @@ describe('getFullHistory', () => {
 
     const mintOutput = createTx.outputs.find(o => {
       const isAuthority = wallet.isAuthorityOutput(o);
-      const isMint = o.value === AUTHORITY_VALUE.MINT;
+      const isMint = o.value === TOKEN_MINT_MASK;
       return isAuthority && isMint
     });
     expect(mintOutput).toBeDefined();
@@ -449,7 +453,7 @@ describe('getFullHistory', () => {
 
     const meltOutput = createTx.outputs.find(o => {
       const isAuthority = wallet.isAuthorityOutput(o);
-      const isMelt = o.value === AUTHORITY_VALUE.MELT;
+      const isMelt = o.value === TOKEN_MELT_MASK;
       return isAuthority && isMelt
     });
     expect(meltOutput).toBeDefined();

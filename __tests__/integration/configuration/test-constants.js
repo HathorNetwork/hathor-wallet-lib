@@ -1,5 +1,9 @@
-import {TOKEN_MELT_MASK, HATHOR_TOKEN_CONFIG, TOKEN_MINT_MASK} from '../../../src/constants';
-import transactionUtils from '../../../src/transaction';
+/**
+ * Copyright (c) Hathor Labs and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
 
 /**
  * @type {Record<string,{walletId:string,words:string,addresses:string[]}>}
@@ -66,25 +70,10 @@ export const WALLET_CONSTANTS = {
 export const TOKEN_DATA = {
   HTR: 0,
   TOKEN: 1,
-
-  /**
-   * Checks if this token_data indicates this is an authority output, that is, if its 8th bit from
-   * the right is 1.
-   * @see https://github.com/HathorNetwork/rfcs/blob/master/text/0004-tokens.md#token_data-field
-   * @param {number} tokenData "token_data" property from an output
-   * @returns {boolean} True if this is an authority output
-   */
-  isAuthorityToken: tokenData => transactionUtils.isTokenDataAuthority(tokenData)
-
 };
-
-export const AUTHORITY_VALUE = {
-  MINT: TOKEN_MINT_MASK,
-  MELT: TOKEN_MELT_MASK
-};
-
-export const HATHOR_TOKEN_ID = HATHOR_TOKEN_CONFIG.uid;
 
 export const NETWORK_NAME = 'privatenet';
 export const FULLNODE_URL = 'http://localhost:8083/v1a/';
 export const TX_MINING_URL = 'http://localhost:8035/';
+
+export const TX_TIMEOUT_DEFAULT = 2000;

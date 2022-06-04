@@ -6,7 +6,7 @@
  */
 
 import Connection from "../../../src/new/connection";
-import { FULLNODE_URL, NETWORK_NAME } from "../configuration/test-constants";
+import { FULLNODE_URL, NETWORK_NAME, TX_TIMEOUT_DEFAULT } from "../configuration/test-constants";
 import HathorWallet from "../../../src/new/wallet";
 import { precalculationHelpers } from "./wallet-precalculation.helper";
 import { GenesisWalletHelper } from "./genesis-wallet.helper";
@@ -122,10 +122,10 @@ export function waitForWalletReady(hWallet) {
  * successful response from this function.
  * @param {HathorWallet} hWallet
  * @param {string} txId
- * @param {number} [timeout=10000] Timeout in milisseconds
+ * @param {number} [timeout] Timeout in milisseconds. Default value defined on test-constants.
  * @returns {Promise<SendTxResponse>}
  */
-export async function waitForTxReceived(hWallet, txId, timeout = 1000) {
+export async function waitForTxReceived(hWallet, txId, timeout) {
   let alreadyResponded = false;
 
   // Only return the positive response after the transaction was received by the websocket
@@ -141,6 +141,7 @@ export async function waitForTxReceived(hWallet, txId, timeout = 1000) {
     hWallet.on('new-tx', handleNewTx);
 
     // Timeout handler
+    const timeoutPeriod = timeout || TX_TIMEOUT_DEFAULT;
     setTimeout(async () => {
       hWallet.removeListener('new-tx', handleNewTx);
 
@@ -162,7 +163,7 @@ export async function waitForTxReceived(hWallet, txId, timeout = 1000) {
       // Event listener did not receive the tx and it is not on local cache.
       alreadyResponded = true;
       reject(new Error(`Timeout without receiving tx ${txId}`))
-    }, timeout)
+    }, timeoutPeriod)
 
     function returnSuccess(newTx) {
       if (alreadyResponded) {

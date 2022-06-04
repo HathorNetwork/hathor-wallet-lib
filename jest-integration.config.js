@@ -13,4 +13,5 @@ module.exports = {
   coverageReporters: ['text-summary', 'lcov', 'clover'],
   testTimeout: 20 * 60 * 1000, // May be adjusted with optimizations
   setupFilesAfterEnv: ['<rootDir>/setupTests-integration.js'],
+  maxConcurrency: 1,
 };
