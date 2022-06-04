@@ -525,9 +525,11 @@ class HathorWallet extends EventEmitter {
   /**
    * Get address to be used in the wallet
    *
-   * @param {Object} { markAsUsed } if true, we will locally mark this address as used and won't return it again to be used
+   * @param [options]
+   * @param {boolean} [options.markAsUsed=false] if true, we will locally mark this address as used
+   *                                             and won't return it again to be used
    *
-   * @return {Object} { address, index, addressPath }
+   * @return {{ address:string, index:number, addressPath:string }}
    *
    * @memberof HathorWallet
    * @inner
@@ -654,7 +656,7 @@ class HathorWallet extends EventEmitter {
   /**
    * Get tokens that this wallet has transactions
    *
-   * @return {Promise<Array>} Array of strings (token uid)
+   * @return {Promise<string[]>} Array of strings (token uid)
    *
    * @memberof HathorWallet
    * @inner

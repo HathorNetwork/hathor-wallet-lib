@@ -105,6 +105,70 @@ describe('start', () => {
 
 });
 
+describe('addresses methods', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+  })
+
+  it('should get the correct addresses', async () => {
+    const hWallet = await generateWalletHelper();
+    const addressGenerator = await hWallet.getAllAddresses();
+
+    // Validating getAddressAtIndex and getAllAddresses methods
+    for (let i=0; i < 22; ++i) {
+      // Validating generator results
+      const genResults = await addressGenerator.next();
+      expect(genResults).toHaveProperty('value')
+      expect(genResults).toHaveProperty('done')
+
+      // Validating gap limit
+      if (i === 21) {
+        expect(genResults.done).toEqual(true);
+        expect(genResults.value).toBeUndefined();
+        break;
+      }
+
+      // Validating generator contents
+      const addressAtIndex = hWallet.getAddressAtIndex(i);
+      expect(genResults.value.index).toEqual(i);
+      expect(genResults.value.address).toEqual(addressAtIndex);
+    }
+
+    // Validating currentAddress behavior
+    let currentAddress = hWallet.getCurrentAddress();
+    expect(currentAddress.index).toEqual(0);
+    expect(currentAddress.address).toEqual(hWallet.getAddressAtIndex(0));
+    // Expect no change on second call
+    currentAddress = hWallet.getCurrentAddress();
+    expect(currentAddress.index).toEqual(0);
+    expect(currentAddress.address).toEqual(hWallet.getAddressAtIndex(0));
+    // Expect a change when calling with markAsUsed parameters
+    currentAddress = hWallet.getCurrentAddress({markAsUsed: true})
+    expect(currentAddress.index).toEqual(0);
+    expect(currentAddress.address).toEqual(hWallet.getAddressAtIndex(0));
+    // Now it won't return the used one
+    currentAddress = hWallet.getCurrentAddress();
+    expect(currentAddress.index).toEqual(1);
+    expect(currentAddress.address).toEqual(hWallet.getAddressAtIndex(1));
+
+    // Validating getNextAddress behavior
+    let nextAddress = hWallet.getNextAddress();
+    expect(nextAddress.index).toEqual(2);
+    expect(nextAddress.address).toEqual(hWallet.getAddressAtIndex(2));
+    nextAddress = hWallet.getNextAddress();
+    expect(nextAddress.index).toEqual(3);
+    expect(nextAddress.address).toEqual(hWallet.getAddressAtIndex(3));
+
+    // Expect the "current address" to change when a transaction arrives at the current one
+    currentAddress = hWallet.getCurrentAddress();
+    await GenesisWalletHelper.injectFunds(currentAddress.address, 1);
+    const currentAfterTx = hWallet.getCurrentAddress();
+    expect(currentAfterTx.index).toEqual(currentAddress.index+1);
+    expect(currentAfterTx.address).toEqual(hWallet.getAddressAtIndex(currentAddress.index+1));
+
+  })
+})
+
 describe('getTransactionsCountByAddress', () => {
   afterEach(async () => {
     await stopAllWallets();
@@ -1242,16 +1306,27 @@ describe('createNFT', () => {
   })
 })
 
-describe('getTokenDetails', () => {
+describe('getToken methods', () => {
   afterEach(async () => {
     await stopAllWallets();
   })
 
   // TODO: This function currently throws for an invalid token.
 
-  it('should get the correct response for a valid token', async () => {
+  it('should get the correct responses for a valid token', async () => {
     const hWallet = await generateWalletHelper();
     await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
+
+    // Validating getTokenDetails for custom token not in this wallet
+    let details;
+    details = await hWallet.getTokenDetails(fakeTokenUid).catch(err => err);
+    expect(details).toBeInstanceOf(Error);
+
+    // Validating getTokens for no custom tokens
+    let getTokensResponse = await hWallet.getTokens();
+    expect(getTokensResponse).toHaveLength(1);
+    expect(getTokensResponse[0]).toEqual(HATHOR_TOKEN_CONFIG.uid);
+
     const {hash: tokenUid} = await createTokenHelper(
       hWallet,
       'Details Token',
@@ -1259,8 +1334,12 @@ describe('getTokenDetails', () => {
       100
     );
 
+    getTokensResponse = await hWallet.getTokens();
+    expect(getTokensResponse).toHaveLength(2);
+    expect(getTokensResponse[0]).toEqual(HATHOR_TOKEN_CONFIG.uid);
+    expect(getTokensResponse[1]).toEqual(tokenUid);
+
     // Validate results for a valid token
-    let details;
     details = await hWallet.getTokenDetails(tokenUid);
     expect(details.totalSupply).toEqual(100);
     expect(details.totalTransactions).toEqual(1);
