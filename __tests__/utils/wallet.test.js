@@ -410,13 +410,13 @@ test('createP2SHRedeemScript', () => {
     'xpub6ChkMiCikMrqKCQtZqzuVJCnfsaBKMsnTerc1o6XFU6GrZqbG1HqyWsHapksyp8iq68LkzU94fqk6rjzF1NPbKzTL6okbTvFp9GJVhxsZD2',
     'xpub6BvZyQQRCQ37AKuxfTMUWSU929fkqQPwmTbTBSvgq2FSUgbc5FPGYYuv2FzcpBNtE8qyjU7kRktibZrwZ7VgiBTCvJ7B6gE9FKuZr869Rzd',
   ];
-  const minSignatures = 2;
+  const numSignatures = 2;
 
   const redeemScript0 = '5221027105a304d7f3935b64824303687cf96a2400a29a9a69fcfc286a090e71f5acf92102374bba4d4a3d19222db84b5334527fe49e746e3aeac7d18ae14c9ac5a1c1bd0721027892436f6b36eb31edaee157cfa029b1735525626cf7247eb17de5a3db2427ad53ae';
-  expect(wallet.createP2SHRedeemScript(xpubs, minSignatures, 0).toString('hex')).toBe(redeemScript0);
+  expect(wallet.createP2SHRedeemScript(xpubs, numSignatures, 0).toString('hex')).toBe(redeemScript0);
 
   const redeemScript1 = '522103483dd29818452ddcc11eaa04e00a84f0d733102caa1b124b349c7d4e8f6226972103262d9d3d2339298a0fdee45553ca60765a3486c872271dd1b56e6224ee7ec0d621027af464c0c85f656544bb0b34b3e3e525b7b76a9ab9faa3bbec8d0ceeed62647b53ae';
-  expect(wallet.createP2SHRedeemScript(xpubs, minSignatures, 1).toString('hex')).toBe(redeemScript1);
+  expect(wallet.createP2SHRedeemScript(xpubs, numSignatures, 1).toString('hex')).toBe(redeemScript1);
 });
 
 test('getP2SHInputData', () => {
@@ -435,7 +435,7 @@ test('getP2SHInputData', () => {
   expect(wallet.getP2SHInputData([signature, signature], Buffer.from(redeemScript1, 'hex')).toString('hex')).toBe(sig1);
 
   // The script is a Multisig 2/3
-  // Test passing less than minSignatures
+  // Test passing less than numSignatures
   expect(() => wallet.getP2SHInputData([signature], Buffer.from(redeemScript0, 'hex'))).toThrow();
   // Test passing more than maxSignatures
   expect(() => wallet.getP2SHInputData([signature, signature, signature, signature], Buffer.from(redeemScript0, 'hex'))).toThrow();

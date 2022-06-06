@@ -70,7 +70,7 @@ class HathorWallet extends EventEmitter {
    * @param {string} [param.password] Password to encrypt the seed
    * @param {string} [param.pinCode] PIN to execute wallet actions
    * @param {boolean} [param.debug] Activates debug mode
-   * @param {{pubkeys:string[],minSignatures:number}} [param.multisig]
+   * @param {{pubkeys:string[],numSignatures:number}} [param.multisig]
    * @param {string[]} [param.preCalculatedAddresses] An array of pre-calculated addresses
    */
   constructor({
@@ -120,9 +120,9 @@ class HathorWallet extends EventEmitter {
     }
 
     if (multisig) {
-      if (!(multisig.pubkeys && multisig.minSignatures)) {
-        throw Error('Multisig configuration requires both pubkeys and minSignatures.');
-      } else if (multisig.pubkeys.length < multisig.minSignatures) {
+      if (!(multisig.pubkeys && multisig.numSignatures)) {
+        throw Error('Multisig configuration requires both pubkeys and numSignatures.');
+      } else if (multisig.pubkeys.length < multisig.numSignatures) {
         throw Error('Multisig configuration invalid.');
       }
     }
@@ -182,7 +182,7 @@ class HathorWallet extends EventEmitter {
     if (multisig) {
       this.multisig = {
         pubkeys: multisig.pubkeys,
-        minSignatures: multisig.minSignatures,
+        numSignatures: multisig.numSignatures,
       };
     }
   }
@@ -412,7 +412,7 @@ class HathorWallet extends EventEmitter {
         continue;
       }
 
-      const redeemScript = walletUtils.createP2SHRedeemScript(multisigData.pubkeys, multisigData.minSignatures, addressIndex);
+      const redeemScript = walletUtils.createP2SHRedeemScript(multisigData.pubkeys, multisigData.numSignatures, addressIndex);
       const sigs = [];
       for (const p2shSig of p2shSignatures) {
         try {

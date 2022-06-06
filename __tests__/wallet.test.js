@@ -513,7 +513,7 @@ test('isWalletMultiSig', () => {
 test('executeGenerateWallet multisig', () => {
   const words = 'mutual property noodle reason reform leisure roof foil siren basket decide above offer rate outdoor board input depend sort twenty little veteran code plunge';
   const multisigData = {
-      minSignatures: 2,
+      numSignatures: 2,
       pubkeys: [
         'xpub6BnoFhDySfUAaJQveYx1YvB8YcLdnnGdz19twSXRh6byEfZSWS4ewinKVDVJcvp6m17mAkQiBuhUgytwS561AkyCFXTvSjRXatueS2E4s3K',
         'xpub6ChkMiCikMrqKCQtZqzuVJCnfsaBKMsnTerc1o6XFU6GrZqbG1HqyWsHapksyp8iq68LkzU94fqk6rjzF1NPbKzTL6okbTvFp9GJVhxsZD2',
@@ -815,7 +815,7 @@ test('getAddressAtIndex', () => {
 test('getAddressAtIndex multisig', () => {
   const words = 'mutual property noodle reason reform leisure roof foil siren basket decide above offer rate outdoor board input depend sort twenty little veteran code plunge';
   const multisigData = {
-      minSignatures: 2,
+      numSignatures: 2,
       pubkeys: [
         'xpub6BnoFhDySfUAaJQveYx1YvB8YcLdnnGdz19twSXRh6byEfZSWS4ewinKVDVJcvp6m17mAkQiBuhUgytwS561AkyCFXTvSjRXatueS2E4s3K',
         'xpub6ChkMiCikMrqKCQtZqzuVJCnfsaBKMsnTerc1o6XFU6GrZqbG1HqyWsHapksyp8iq68LkzU94fqk6rjzF1NPbKzTL6okbTvFp9GJVhxsZD2',
