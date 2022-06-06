@@ -516,6 +516,21 @@ describe('getTxBalance', () => {
     txBalance = await hWallet.getTxBalance(delegateTx, {includeAuthorities: true});
     expect(Object.keys(txBalance)).toHaveLength(1);
     expect(txBalance).toHaveProperty(tokenUid, 0);
+
+    // Validating that transactions inside a wallet have zero txBalance
+    const {hash: sameWalletTxHash} = await hWallet.sendManyOutputsTransaction(
+      [
+        { address: hWallet.getAddressAtIndex(0), value: 5, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: hWallet.getAddressAtIndex(1), value: 50, token: tokenUid },
+      ]
+    );
+    await waitForTxReceived(hWallet, sameWalletTxHash);
+
+    const sameWalletTx = hWallet.getTx(sameWalletTxHash);
+    txBalance = await hWallet.getTxBalance(sameWalletTx);
+    expect(Object.keys(txBalance)).toHaveLength(2);
+    expect(txBalance[HATHOR_TOKEN_CONFIG.uid]).toEqual(0);
+    expect(txBalance).toHaveProperty(tokenUid,0);
   })
 })
 
@@ -782,11 +797,6 @@ describe('sendManyOutputsTransaction', () => {
     expect(timelockTx.outputs.find(o => o.decoded.timelock === timelock1Timestamp)).toBeDefined();
     expect(timelockTx.outputs.find(o => o.decoded.timelock === timelock2Timestamp)).toBeDefined();
 
-    // getTxBalance
-    console.log('getTxBalance 0: ' + dateFormatter.parseTimestamp(dateFormatter.dateToTimestamp(new Date())));
-    expect(await hWallet.getTxBalance(timelockTx))
-      .toHaveProperty(HATHOR_TOKEN_CONFIG.uid, 0);
-
     // getBalance
     console.log('getBalance 0: ' + dateFormatter.parseTimestamp(dateFormatter.dateToTimestamp(new Date())));
     let htrBalance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
@@ -812,11 +822,6 @@ describe('sendManyOutputsTransaction', () => {
     expect(htrBalance[0].balance.locked).toBe(3);
     expect(htrBalance[0].balance.unlocked).toBe(7);
 
-    // getTxBalance
-    console.log('getTxBalance 1: ' + dateFormatter.parseTimestamp(dateFormatter.dateToTimestamp(new Date())));
-    expect(await hWallet.getTxBalance(timelockTx))
-      .toHaveProperty(HATHOR_TOKEN_CONFIG.uid, 7);
-
     // Confirm that the balance is unavailable
     try {
       console.log('SendTx 1: ' + dateFormatter.parseTimestamp(dateFormatter.dateToTimestamp(new Date())));
@@ -836,11 +841,6 @@ describe('sendManyOutputsTransaction', () => {
     htrBalance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
     expect(htrBalance[0].balance.locked).toBe(0);
     expect(htrBalance[0].balance.unlocked).toBe(10);
-
-    // getTxBalance
-    console.log('GetTxBalance 2: ' + dateFormatter.parseTimestamp(dateFormatter.dateToTimestamp(new Date())));
-    expect(await hWallet.getTxBalance(timelockTx))
-      .toHaveProperty(HATHOR_TOKEN_CONFIG.uid, 10);
 
     // Confirm that now the balance is available
     console.log('SendTx 2: ' + dateFormatter.parseTimestamp(dateFormatter.dateToTimestamp(new Date())));
