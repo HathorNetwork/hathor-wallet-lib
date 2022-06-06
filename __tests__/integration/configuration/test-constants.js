@@ -76,4 +76,5 @@ export const NETWORK_NAME = 'privatenet';
 export const FULLNODE_URL = 'http://localhost:8083/v1a/';
 export const TX_MINING_URL = 'http://localhost:8035/';
 
-export const TX_TIMEOUT_DEFAULT = 2000;
+export const TX_TIMEOUT_DEFAULT = 5000;
+export const DEBUG_LOGGING = true;

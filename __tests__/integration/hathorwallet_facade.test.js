@@ -715,7 +715,6 @@ describe('sendManyOutputsTransaction', () => {
       200
     );
 
-    // const createTokenTx = hWallet.getTx(tokenUid);
     const rawSendTx = await hWallet.sendManyOutputsTransaction(
       [
         { token: tokenUid, value: 110, address: hWallet.getAddressAtIndex(1) },

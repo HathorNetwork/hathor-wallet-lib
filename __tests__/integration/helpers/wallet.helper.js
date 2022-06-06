@@ -6,7 +6,12 @@
  */
 
 import Connection from "../../../src/new/connection";
-import { FULLNODE_URL, NETWORK_NAME, TX_TIMEOUT_DEFAULT } from "../configuration/test-constants";
+import {
+  DEBUG_LOGGING,
+  FULLNODE_URL,
+  NETWORK_NAME,
+  TX_TIMEOUT_DEFAULT
+} from "../configuration/test-constants";
 import HathorWallet from "../../../src/new/wallet";
 import { precalculationHelpers } from "./wallet-precalculation.helper";
 import { GenesisWalletHelper } from "./genesis-wallet.helper";
@@ -126,6 +131,7 @@ export function waitForWalletReady(hWallet) {
  * @returns {Promise<SendTxResponse>}
  */
 export async function waitForTxReceived(hWallet, txId, timeout) {
+  const startTime = Date.now().valueOf();
   let alreadyResponded = false;
 
   // Only return the positive response after the transaction was received by the websocket
@@ -162,10 +168,14 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
 
       // Event listener did not receive the tx and it is not on local cache.
       alreadyResponded = true;
-      reject(new Error(`Timeout without receiving tx ${txId}`))
+      reject(new Error(`Timeout of ${timeoutPeriod}ms without receiving tx ${txId}`))
     }, timeoutPeriod)
 
     function returnSuccess(newTx) {
+      if (DEBUG_LOGGING) {
+        const timeDiff = Date.now().valueOf() - startTime;
+        console.log(`Wait for ${txId} took ${timeDiff}ms.`)
+      }
       if (alreadyResponded) {
         return;
       }
