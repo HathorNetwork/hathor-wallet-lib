@@ -15,6 +15,7 @@ import {
 import HathorWallet from "../../../src/new/wallet";
 import { precalculationHelpers } from "./wallet-precalculation.helper";
 import { GenesisWalletHelper } from "./genesis-wallet.helper";
+import { delay } from "../utils/core.util";
 
 /**
  * Generates a connection object for starting wallets.
@@ -159,7 +160,7 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
       /*
        * If the timeout period passed and did not receive the new-tx event, probably the event
        * was triggered even before this `waitForTxReceived` method was called.
-       * We'll try a last time to get the transaction data before rejectingt this promise.
+       * We'll try a last time to get the transaction data before rejecting this promise.
        */
       const existingTx = hWallet.getTx(txId);
       if (existingTx) {
@@ -171,24 +172,35 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
       reject(new Error(`Timeout of ${timeoutPeriod}ms without receiving tx ${txId}`))
     }, timeoutPeriod)
 
-    function returnSuccess(newTx) {
+    async function returnSuccess(newTx) {
+      const timeDiff = Date.now().valueOf() - startTime;
       if (DEBUG_LOGGING) {
-        const timeDiff = Date.now().valueOf() - startTime;
         console.log(`Wait for ${txId} took ${timeDiff}ms.`)
       }
+
       if (alreadyResponded) {
         return;
       }
+      alreadyResponded = true;
 
       /*
-       * Return the successful transaction, but only after a few milisseconds.
-       * If we did not insert this delay here, synchronous operations could fetch memory state
-       * from before the transaction.
+       * Sometimes the tests happen too fast and it triggers timestamp protections on the fullnode.
+       * We will ensure there is some delay between transactions here.
        */
-      setTimeout(() => {
-        alreadyResponded = true;
-        resolve(newTx);
-      }, 10);
+      await delay(50);
+
+      /*
+       * Confirming that the transaction is indeed on the wallet's history object before preoceeding
+       */
+      let txObj = hWallet.getTx(txId);
+      while (!txObj) {
+        if (DEBUG_LOGGING) {
+          console.warn(`Tx was not available on history. Waiting for 50ms and retrying.`)
+        }
+        await delay(50);
+        txObj = hWallet.getTx(txId);
+      }
+      resolve(newTx);
     }
   })
 }
