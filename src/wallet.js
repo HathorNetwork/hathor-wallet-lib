@@ -188,7 +188,7 @@ const wallet = {
    *
    * @param {string} xpub Extended public-key to start wallet
    * @param {boolean} loadHistory if should load the history from the generated addresses
-   * @param {object} multisig MultiSig data including minSignatures and xpubs of participants
+   * @param {object} multisig MultiSig data including numSignatures and xpubs of participants
    *
    * @return {Promise} Promise that resolves when finishes loading address history, in case loadHistory = true, else returns null
    * @memberof Wallet
@@ -215,7 +215,7 @@ const wallet = {
    * @param {string} xpriv Extended private-key to start wallet
    * @param {string} pin
    * @param {boolean} loadHistory if should load the history from the generated addresses
-   * @param {object} multisig MultiSig data including minSignatures and xpubs of participants
+   * @param {object} multisig MultiSig data including numSignatures and xpubs of participants
    *
    * @return {Promise} Promise that resolves when finishes loading address history, in case loadHistory = true, else returns null
    * @memberof Wallet
@@ -269,7 +269,7 @@ const wallet = {
    * @param {string} pin
    * @param {string} password
    * @param {boolean} loadHistory if should load the history from the generated addresses
-   * @param {object} multisig MultiSig data including minSignatures and xpubs of participants
+   * @param {object} multisig MultiSig data including numSignatures and xpubs of participants
    *
    * @return {Promise} Promise that resolves when finishes loading address history, in case loadHistory = true, else returns null
    * @memberof Wallet
@@ -488,7 +488,7 @@ const wallet = {
   getAddressMultisig(index) {
     const accessData = this.getWalletAccessData();
     const multisigData = accessData.multisig;
-    const redeemScript = walletUtils.createP2SHRedeemScript(multisigData.pubkeys, multisigData.minSignatures, index);
+    const redeemScript = walletUtils.createP2SHRedeemScript(multisigData.pubkeys, multisigData.numSignatures, index);
     return Address.payingTo(Script.fromBuffer(redeemScript), network.getNetwork());
   },
 
