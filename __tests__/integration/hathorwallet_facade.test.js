@@ -7,7 +7,7 @@ import {
   generateWalletHelper,
   stopAllWallets,
   waitForTxReceived,
-  waitForWalletReady
+  waitForWalletReady, waitUntilNextTimestamp
 } from "./helpers/wallet.helper";
 import HathorWallet from "../../src/new/wallet";
 import {
@@ -518,6 +518,7 @@ describe('getTxBalance', () => {
     expect(txBalance).toHaveProperty(tokenUid, 0);
 
     // Validating that transactions inside a wallet have zero txBalance
+    await waitUntilNextTimestamp(hWallet, delegateTxHash);
     const {hash: sameWalletTxHash} = await hWallet.sendManyOutputsTransaction(
       [
         { address: hWallet.getAddressAtIndex(0), value: 5, token: HATHOR_TOKEN_CONFIG.uid },
@@ -574,6 +575,7 @@ describe('sendTransaction', () => {
 
     // Transaction outside the wallet
     const {hWallet: gWallet} = await GenesisWalletHelper.getSingleton()
+    await waitUntilNextTimestamp(hWallet, tx1.hash);
     const {hash: tx2Hash} = await hWallet.sendTransaction(
       gWallet.getAddressAtIndex(0),
       8,
@@ -622,6 +624,7 @@ describe('sendTransaction', () => {
 
     // Transaction outside the wallet
     const {hWallet: gWallet} = await GenesisWalletHelper.getSingleton()
+    await waitUntilNextTimestamp(hWallet, tx1.hash);
     const {hash: tx2Hash} = await hWallet.sendTransaction(
       gWallet.getAddressAtIndex(0),
       80,
@@ -667,6 +670,7 @@ describe('sendManyOutputsTransaction', () => {
     expect(decodedSimple.outputs).toHaveLength(1);
 
     // Single input and two outputs
+    await waitUntilNextTimestamp(hWallet, rawSimpleTx.hash);
     const rawDoubleOutputTx = await hWallet.sendManyOutputsTransaction(
       [
         {
@@ -688,6 +692,7 @@ describe('sendManyOutputsTransaction', () => {
     const largerOutputIndex = decodedDoubleOutput.outputs.findIndex(o => o.value === 60);
 
     // Explicit input and three outputs
+    await waitUntilNextTimestamp(hWallet, rawDoubleOutputTx.hash);
     const rawExplicitInputTx = await hWallet.sendManyOutputsTransaction(
       [
         {
@@ -945,24 +950,28 @@ describe('mintTokens', () => {
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Minting exactly 100 tokens consumes 1 HTR
+    await waitUntilNextTimestamp(hWallet, mintResponse.hash);
     mintResponse = await hWallet.mintTokens(tokenUid, 100);
     expectedHtrFunds -= 1;
     await waitForTxReceived(hWallet, mintResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Minting over 100 tokens consumes 2 HTR
+    await waitUntilNextTimestamp(hWallet, mintResponse.hash);
     mintResponse = await hWallet.mintTokens(tokenUid, 101);
     expectedHtrFunds -= 2;
     await waitForTxReceived(hWallet, mintResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Minting exactly 200 tokens consumes 2 HTR
+    await waitUntilNextTimestamp(hWallet, mintResponse.hash);
     mintResponse = await hWallet.mintTokens(tokenUid, 200);
     expectedHtrFunds -= 2;
     await waitForTxReceived(hWallet, mintResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Minting over 200 tokens consumes 3 HTR
+    await waitUntilNextTimestamp(hWallet, mintResponse.hash);
     mintResponse = await hWallet.mintTokens(tokenUid, 201);
     expectedHtrFunds -= 3;
     await waitForTxReceived(hWallet, mintResponse.hash);
@@ -1027,24 +1036,28 @@ describe('meltTokens', () => {
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Melting exactly 100 tokens recovers 1 HTR
+    await waitUntilNextTimestamp(hWallet, meltResponse.hash);
     meltResponse = await hWallet.meltTokens(tokenUid, 100);
     expectedHtrFunds += 1;
     await waitForTxReceived(hWallet, meltResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Melting less than 200 tokens recovers 1 HTR
+    await waitUntilNextTimestamp(hWallet, meltResponse.hash);
     meltResponse = await hWallet.meltTokens(tokenUid, 199);
     expectedHtrFunds += 1;
     await waitForTxReceived(hWallet, meltResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Melting exactly 200 tokens recovers 2 HTR
+    await waitUntilNextTimestamp(hWallet, meltResponse.hash);
     meltResponse = await hWallet.meltTokens(tokenUid, 200);
     expectedHtrFunds += 2;
     await waitForTxReceived(hWallet, meltResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Melting less than 300 tokens recovers 2 HTR
+    await waitUntilNextTimestamp(hWallet, meltResponse.hash);
     meltResponse = await hWallet.meltTokens(tokenUid, 299);
     expectedHtrFunds += 2;
     await waitForTxReceived(hWallet, meltResponse.hash);
@@ -1090,6 +1103,7 @@ describe('delegateAuthority', () => {
     expect(authorities2[0].authorities).toEqual(1);
 
     // Delegating melt authority to wallet 2
+    await waitUntilNextTimestamp(hWallet1, delegateMintTxId);
     const {hash: delegateMeltTxId} = await hWallet1.delegateAuthority(
       tokenUid,
       'melt',
@@ -1132,6 +1146,7 @@ describe('delegateAuthority', () => {
     await waitForTxReceived(hWallet1, giveAwayMintTx);
 
     // Validating error on mint tokens from Wallet 1
+    waitUntilNextTimestamp(hWallet1, giveAwayMintTx);
     const mintErrorW1 = await hWallet1.mintTokens(tokenUid, 100)
       .catch(err => err);
     expect(mintErrorW1).toBeInstanceOf(Error);
@@ -1152,6 +1167,7 @@ describe('delegateAuthority', () => {
     await waitForTxReceived(hWallet1, giveAwayMeltTx);
 
     // Validating error on mint tokens from Wallet 1
+    await waitUntilNextTimestamp(hWallet1, giveAwayMeltTx);
     const meltTxWallet1 = await hWallet1.meltTokens(tokenUid, 100)
       .catch(err => err);
     expect(meltTxWallet1).toHaveProperty('success', false);
@@ -1191,18 +1207,21 @@ describe('destroyAuthority', () => {
     expect(mintAuthorities).toHaveLength(2);
 
     // Destroying one mint authority
+    await waitUntilNextTimestamp(hWallet, newMintTx);
     const { hash: destroyMintTx } = await hWallet.destroyAuthority(tokenUid, 'mint', 1);
     await waitForTxReceived(hWallet, destroyMintTx);
     mintAuthorities = await hWallet.getMintAuthority(tokenUid, { many: true });
     expect(mintAuthorities).toHaveLength(1);
 
     // Destroying all mint authorities
+    await waitUntilNextTimestamp(hWallet, destroyMintTx);
     const { hash: destroyAllMintTx } = await hWallet.destroyAuthority(tokenUid, 'mint', 1);
     await waitForTxReceived(hWallet, destroyAllMintTx);
     mintAuthorities = await hWallet.getMintAuthority(tokenUid, { many: true });
     expect(mintAuthorities).toHaveLength(0);
 
     // Trying to mint and validating its error object
+    await waitUntilNextTimestamp(hWallet, destroyAllMintTx);
     const mintFailure = await hWallet.mintTokens(tokenUid, 100)
       .catch(err => err);
 
@@ -1234,12 +1253,14 @@ describe('destroyAuthority', () => {
     expect(meltAuthorities).toHaveLength(2);
 
     // Destroying one melt authority
-    const { hash: destroyMintTx } = await hWallet.destroyAuthority(tokenUid, 'melt', 1);
-    await waitForTxReceived(hWallet, destroyMintTx);
+    await waitUntilNextTimestamp(hWallet, newMeltTx);
+    const { hash: destroyMeltTx } = await hWallet.destroyAuthority(tokenUid, 'melt', 1);
+    await waitForTxReceived(hWallet, destroyMeltTx);
     meltAuthorities = await hWallet.getMeltAuthority(tokenUid, { many: true });
     expect(meltAuthorities).toHaveLength(1);
 
     // Destroying all melt authorities
+    await waitUntilNextTimestamp(hWallet, destroyMeltTx);
     const { hash: destroyAllMintTx } = await hWallet.destroyAuthority(tokenUid, 'melt', 1);
     await waitForTxReceived(hWallet, destroyAllMintTx);
     meltAuthorities = await hWallet.getMeltAuthority(tokenUid, { many: true });
@@ -1285,12 +1306,13 @@ describe('createNFT', () => {
      * Since NFT authority tokens cannot be read by getMintAuthority, we will try to actually
      * mint tokens to confirm the authority exists.
      */
-    const htrMint = await hWallet.mintTokens(
+    await waitUntilNextTimestamp(hWallet, nftTx.hash);
+    const rawMintTx = await hWallet.mintTokens(
       nftTx.hash,
       10,
     );
-    expect(htrMint).toHaveProperty('hash');
-    await waitForTxReceived(hWallet, htrMint.hash);
+    expect(rawMintTx).toHaveProperty('hash');
+    await waitForTxReceived(hWallet, rawMintTx.hash);
     nftBalance = await hWallet.getBalance(nftTx.hash);
     expect(nftBalance[0].balance.unlocked).toEqual(11);
 
@@ -1298,6 +1320,7 @@ describe('createNFT', () => {
      * Since NFT authority tokens cannot be read by getMeltAuthority, we will try to actually
      * melt tokens to confirm the authority exists.
      */
+    await waitUntilNextTimestamp(hWallet, rawMintTx.hash);
     const htrMelt = await hWallet.meltTokens(
       nftTx.hash,
       5,
@@ -1362,6 +1385,7 @@ describe('getToken methods', () => {
     expect(details.authorities.melt).toEqual(true);
 
     // Destroying mint authority and validating its results
+    await waitUntilNextTimestamp(hWallet, meltTx);
     const {hash: dMintTx} = await hWallet.destroyAuthority(tokenUid, 'mint', 1);
     await waitForTxReceived(hWallet, dMintTx);
     details = await hWallet.getTokenDetails(tokenUid);
@@ -1370,6 +1394,7 @@ describe('getToken methods', () => {
     expect(details.authorities.melt).toEqual(true);
 
     // Destroying melt authority and validating its results
+    await waitUntilNextTimestamp(hWallet, dMintTx);
     const {hash: dMeltTx} = await hWallet.destroyAuthority(tokenUid, 'melt', 1);
     await waitForTxReceived(hWallet, dMeltTx);
     details = await hWallet.getTokenDetails(tokenUid);
@@ -1417,6 +1442,7 @@ describe('getTxHistory', () => {
     expect(txHistory[0].balance).toEqual(0); // No change in balance, just transfer
 
     // HTR external transfer
+    await waitUntilNextTimestamp(hWallet, tx2.hash);
     const tx3 = await hWallet.sendTransaction(gWallet.getAddressAtIndex(0), 3);
     await waitForTxReceived(hWallet, tx3.hash);
     txHistory = await hWallet.getTxHistory();
@@ -1477,6 +1503,7 @@ describe('getTxHistory', () => {
     expect(txHistory[0].balance).toEqual(0); // No change in balance, just transfer
 
     // Custom token external transfer
+    await waitUntilNextTimestamp(hWallet, tx1Hash);
     const {hash: tx2Hash} = await hWallet.sendTransaction(
       gWallet.getAddressAtIndex(0),
       10,
@@ -1488,6 +1515,7 @@ describe('getTxHistory', () => {
     expect(txHistory[0].balance).toEqual(-10); // 10 less
 
     // Custom token melting
+    await waitUntilNextTimestamp(hWallet, tx2Hash);
     const {hash: tx3Hash} = await hWallet.meltTokens(tokenUid, 20);
     await waitForTxReceived(hWallet, tx3Hash);
     txHistory = await hWallet.getTxHistory({ token_id: tokenUid });
@@ -1496,6 +1524,7 @@ describe('getTxHistory', () => {
     expect(txHistory[0].balance).toEqual(-20); // 20 less
 
     // Custom token minting
+    await waitUntilNextTimestamp(hWallet, tx3Hash);
     const {hash: tx4Hash} = await hWallet.mintTokens(tokenUid, 30);
     await waitForTxReceived(hWallet, tx4Hash);
     txHistory = await hWallet.getTxHistory({ token_id: tokenUid });

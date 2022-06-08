@@ -99,6 +99,7 @@ export async function createTokenHelper(hWallet, name, symbol, amount, options) 
   );
   const tokenUid = newTokenResponse.hash;
   await waitForTxReceived(hWallet, tokenUid);
+  await waitUntilNextTimestamp(hWallet, tokenUid);
   return newTokenResponse;
 }
 
@@ -140,10 +141,13 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
 
     // Event listener
     const handleNewTx = newTx => {
+      // Ignore this event if we didn't receive the transaction we expected.
       if (newTx.tx_id !== txId) {
-        return; // Ignore if we didn't receive the transaction we expected.
+        return;
       }
-      returnSuccess(newTx);
+
+      // This is the correct transaction: resolving the promise.
+      resolveWithSuccess(newTx);
     };
     hWallet.on('new-tx', handleNewTx);
 
@@ -162,9 +166,10 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
        * was triggered even before this `waitForTxReceived` method was called.
        * We'll try a last time to get the transaction data before rejecting this promise.
        */
+      console.log(`Trying to solve timeout of ${timeoutPeriod}ms for ${txId}`);
       const existingTx = hWallet.getTx(txId);
       if (existingTx) {
-        return returnSuccess(existingTx);
+        return resolveWithSuccess(existingTx);
       }
 
       // Event listener did not receive the tx and it is not on local cache.
@@ -172,7 +177,7 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
       reject(new Error(`Timeout of ${timeoutPeriod}ms without receiving tx ${txId}`))
     }, timeoutPeriod)
 
-    async function returnSuccess(newTx) {
+    async function resolveWithSuccess(newTx) {
       const timeDiff = Date.now().valueOf() - startTime;
       if (DEBUG_LOGGING) {
         console.log(`Wait for ${txId} took ${timeDiff}ms.`)
@@ -203,4 +208,34 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
       resolve(newTx);
     }
   })
+}
+
+/**
+ * This method helps a tester to ensure the current timestamp of the next transaction will be at
+ * least one unit greater than the specified transaction.
+ *
+ * Hathor's timestamp has a granularity of seconds, and it does not allow one transaction to have a
+ * parent with a timestamp equal to its own.
+ *
+ * It does not return any content, only delivers the code processing back to the caller at the
+ * desired time.
+ *
+ * @param {HathorWallet} hWallet
+ * @param {string} txId
+ * @returns {void}
+ */
+export async function waitUntilNextTimestamp(hWallet, txId) {
+  const {timestamp} = hWallet.getTx(txId);
+  const nowMilliseconds = Date.now().valueOf();
+  const nextValidMilliseconds = (timestamp + 1) * 1000;
+
+  // We are already past the last valid milissecond
+  if (nowMilliseconds > nextValidMilliseconds) {
+    return
+  }
+
+  // We are still within an invalid time to generate a new timestamp. Waiting for some time...
+  const timeToWait = nextValidMilliseconds - nowMilliseconds + 10;
+  console.log(`Waiting for ${timeToWait}ms for the next timestamp.`);
+  await delay(timeToWait);
 }

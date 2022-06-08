@@ -8,7 +8,7 @@
 import { FULLNODE_URL, WALLET_CONSTANTS } from "../configuration/test-constants";
 import Connection from "../../../src/new/connection";
 import HathorWallet from "../../../src/new/wallet";
-import { waitForTxReceived, waitForWalletReady } from "./wallet.helper";
+import { waitForTxReceived, waitForWalletReady, waitUntilNextTimestamp } from "./wallet.helper";
 
 /**
  * @type {GenesisWalletHelper}
@@ -73,7 +73,7 @@ export class GenesisWalletHelper {
    * @param {string} address
    * @param {number} value
    * @param {boolean} [wait=true] Waits for the websocket confirmation
-   * @returns {Promise<SendTxResponse>}
+   * @returns {Promise<BaseTransactionResponse>}
    * @private
    */
   async _injectFunds(address, value, wait = true) {
@@ -90,6 +90,7 @@ export class GenesisWalletHelper {
       }
 
       await waitForTxReceived(this.hWallet, result.hash);
+      await waitUntilNextTimestamp(this.hWallet, result.hash);
       return result;
     }
     catch (e) {
@@ -119,7 +120,7 @@ export class GenesisWalletHelper {
    * @param {string} address
    * @param {number} value
    * @param {boolean} [wait=true] Waits for the websocket confirmation
-   * @returns {Promise<SendTxResponse>}
+   * @returns {Promise<BaseTransactionResponse>}
    */
   static async injectFunds(address, value, wait = true) {
     const instance = await GenesisWalletHelper.getSingleton()
