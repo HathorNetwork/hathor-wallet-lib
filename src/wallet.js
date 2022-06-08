@@ -1535,7 +1535,7 @@ const wallet = {
    */
   cleanWallet({endConnection = true, connection = null, cleanAccessData = true} = {}) {
     this.unsubscribeAllAddresses({connection});
-    this.cleanLoadedData(cleanAccessData);
+    this.cleanLoadedData({cleanAccessData});
     if (endConnection) {
       const conn = this._getConnection(connection);
       conn.endConnection();
