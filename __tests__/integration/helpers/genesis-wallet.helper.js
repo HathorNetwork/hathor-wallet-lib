@@ -72,11 +72,13 @@ export class GenesisWalletHelper {
    * Internal method to send HTR to another wallet's address.
    * @param {string} address
    * @param {number} value
-   * @param {boolean} [wait=true] Waits for the websocket confirmation
+   * @param [options]
+   * @param {number} [options.waitTimeout] Optional timeout for the websocket confirmation.
+   *                                       Passing 0 here skips this waiting.
    * @returns {Promise<BaseTransactionResponse>}
    * @private
    */
-  async _injectFunds(address, value, wait = true) {
+  async _injectFunds(address, value, options = {}) {
     try {
       const result = await this.hWallet.sendTransaction(
         address,
@@ -85,11 +87,11 @@ export class GenesisWalletHelper {
           changeAddress: WALLET_CONSTANTS.genesis.addresses[0]
         });
 
-      if (!wait) {
+      if (options.waitTimeout === 0) {
         return result;
       }
 
-      await waitForTxReceived(this.hWallet, result.hash);
+      await waitForTxReceived(this.hWallet, result.hash, options.waitTimeout);
       await waitUntilNextTimestamp(this.hWallet, result.hash);
       return result;
     }
@@ -119,11 +121,13 @@ export class GenesisWalletHelper {
    * An easy way to send HTR to another wallet's address for testing.
    * @param {string} address
    * @param {number} value
-   * @param {boolean} [wait=true] Waits for the websocket confirmation
+   * @param [options]
+   * @param {number} [options.waitTimeout] Optional timeout for the websocket confirmation.
+   *                                       Passing 0 here skips this waiting.
    * @returns {Promise<BaseTransactionResponse>}
    */
-  static async injectFunds(address, value, wait = true) {
+  static async injectFunds(address, value, options) {
     const instance = await GenesisWalletHelper.getSingleton()
-    return instance._injectFunds(address, value, wait);
+    return instance._injectFunds(address, value, options);
   }
 }

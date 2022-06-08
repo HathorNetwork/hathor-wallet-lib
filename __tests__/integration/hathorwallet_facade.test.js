@@ -216,7 +216,11 @@ describe('getTransactionsCountByAddress', () => {
     const addressesList = Object.keys(tcbaEmpty);
     expect(addressesList).toHaveProperty('length',21);
 
-    await GenesisWalletHelper.injectFunds(addressesList[20], 1);
+    /*
+     * The generation of new addresses delays the response of this tx.
+     * Increasing timeout to avoid failures here.
+     */
+    await GenesisWalletHelper.injectFunds(addressesList[20], 1, { waitTimeout: 10000 });
     const tcba1 = hWallet.getTransactionsCountByAddress();
     const addresses1 = Object.keys(tcba1);
     expect(addresses1).toHaveLength(41);
