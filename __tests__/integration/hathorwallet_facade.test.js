@@ -774,9 +774,6 @@ describe('sendManyOutputsTransaction', () => {
     const timelock2 = startTime + 8000; // 8 seconds of locked resources
     const timelock1Timestamp = dateFormatter.dateToTimestamp(new Date(timelock1));
     const timelock2Timestamp = dateFormatter.dateToTimestamp(new Date(timelock2));
-    console.log('Start: ' + dateFormatter.parseTimestamp(dateFormatter.dateToTimestamp(new Date())));
-    console.log('Timelock1: ' + dateFormatter.parseTimestamp(timelock1Timestamp));
-    console.log('Timelock2: ' + dateFormatter.parseTimestamp(timelock2Timestamp));
 
     const rawTimelockTx = await hWallet.sendManyOutputsTransaction(
       [
@@ -803,33 +800,29 @@ describe('sendManyOutputsTransaction', () => {
     expect(timelockTx.outputs.find(o => o.decoded.timelock === timelock2Timestamp)).toBeDefined();
 
     // getBalance
-    console.log('getBalance 0: ' + dateFormatter.parseTimestamp(dateFormatter.dateToTimestamp(new Date())));
     let htrBalance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
     expect(htrBalance[0].balance.locked).toBe(10);
     expect(htrBalance[0].balance.unlocked).toBe(0);
 
-    /*
-     * All validations above worked perfectly, but waiting for the tokens to be unlocked
-     * returned inconsistent results.
-     * Skipping the following code until a better solution is found.
-     */
-    return;
 
     // Validating interfaces with only a partial lock of the resources
     const waitFor1 = timelock1 - Date.now().valueOf() + 1000;
     console.log(`Will wait for ${waitFor1}ms for timelock1 to expire`);
     await delay(waitFor1);
-    timelockTx = hWallet.getTx(rawTimelockTx.hash); // Updating data
+
+    /*
+     * The locked/unlocked balances are updated when new transactions arrive.
+     * We will force this update here without a new tx, for testing purposes.
+     */
+    await hWallet.preProcessWalletData();
 
     // getBalance
-    console.log('getBalance 1: ' + dateFormatter.parseTimestamp(dateFormatter.dateToTimestamp(new Date())));
     htrBalance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
     expect(htrBalance[0].balance.locked).toBe(3);
     expect(htrBalance[0].balance.unlocked).toBe(7);
 
     // Confirm that the balance is unavailable
     try {
-      console.log('SendTx 1: ' + dateFormatter.parseTimestamp(dateFormatter.dateToTimestamp(new Date())));
       const deniedTx = await hWallet.sendTransaction(hWallet.getAddressAtIndex(3), 8);
       expect(deniedTx).toBeUndefined(); // This line should actually never be reached
     } catch (err) {
@@ -841,14 +834,15 @@ describe('sendManyOutputsTransaction', () => {
     console.log(`Will wait for ${waitFor2}ms for timelock2 to expire`);
     await delay(waitFor2);
 
+    // Forcing balance updates
+    await hWallet.preProcessWalletData();
+
     // getBalance
-    console.log('getBalance 2: ' + dateFormatter.parseTimestamp(dateFormatter.dateToTimestamp(new Date())));
     htrBalance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
     expect(htrBalance[0].balance.locked).toBe(0);
     expect(htrBalance[0].balance.unlocked).toBe(10);
 
     // Confirm that now the balance is available
-    console.log('SendTx 2: ' + dateFormatter.parseTimestamp(dateFormatter.dateToTimestamp(new Date())));
     const sendTx = await hWallet.sendTransaction(hWallet.getAddressAtIndex(4), 8);
     expect(sendTx).toHaveProperty('hash');
   });
