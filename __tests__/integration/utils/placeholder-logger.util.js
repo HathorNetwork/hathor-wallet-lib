@@ -9,27 +9,27 @@ export default class PlaceholderLoggerUtil {
     prettyPrint: () => {},
     combine: () => {},
     json: () => {},
-  }
+  };
 
   static transports = {
     Console: class FakeConsole { constructor() {} },
     File: class FakeFile { constructor() {} },
-  }
+  };
 
   static createLogger() {
     return {
       info(message, metadata) {
-        const logObj = { ...metadata, message }
+        const logObj = { ...metadata, message };
         console.log(JSON.stringify(logObj));
       },
       warn(message, metadata) {
-        const logObj = { ...metadata, message }
+        const logObj = { ...metadata, message };
         console.log(JSON.stringify(logObj));
       },
       error(message, metadata) {
-        const logObj = { ...metadata, message }
+        const logObj = { ...metadata, message };
         console.log(JSON.stringify(logObj));
       }
-    }
+    };
   }
 }

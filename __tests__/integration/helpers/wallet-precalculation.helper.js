@@ -6,10 +6,10 @@
  */
 
 import { promises as fs } from 'fs';
-import wallet from '../../../src/wallet';
-import walletUtils from '../../../src/utils/wallet'
 import { Address, Script } from 'bitcore-lib';
-import { NETWORK_NAME } from "../configuration/test-constants";
+import wallet from '../../../src/wallet';
+import walletUtils from '../../../src/utils/wallet';
+import { NETWORK_NAME } from '../configuration/test-constants';
 
 /**
  * @typedef PrecalculatedWalletData

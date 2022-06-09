@@ -45,7 +45,7 @@ export class LoggerUtil {
    * @param [options]
    * @param {boolean} [options.reusableFilename] If true, the file will not have a timestamp
    */
-  constructor(title, options = {reusableFilename:false}) {
+  constructor(title, options = { reusableFilename: false }) {
     const date = new Date();
 
     /**
@@ -74,7 +74,7 @@ export class LoggerUtil {
    * @param {boolean} [options.filePrettyPrint] If true, the file will have pretty print
    * @returns {void}
    */
-  init(options = {filePrettyPrint:false}) {
+  init(options = { filePrettyPrint: false }) {
     const consoleOptions = {
       format: winston.format.combine(
         winston.format.timestamp(),

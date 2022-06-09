@@ -5,10 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { FULLNODE_URL, WALLET_CONSTANTS } from "../configuration/test-constants";
-import Connection from "../../../src/new/connection";
-import HathorWallet from "../../../src/new/wallet";
-import { waitForTxReceived, waitForWalletReady, waitUntilNextTimestamp } from "./wallet.helper";
+import { FULLNODE_URL, WALLET_CONSTANTS } from '../configuration/test-constants';
+import Connection from '../../../src/new/connection';
+import HathorWallet from '../../../src/new/wallet';
+import { waitForTxReceived, waitForWalletReady, waitUntilNextTimestamp } from './wallet.helper';
 
 /**
  * @type {GenesisWalletHelper}
@@ -27,13 +27,13 @@ export class GenesisWalletHelper {
    * @returns {Promise<void>}
    */
   async start() {
-    const words = WALLET_CONSTANTS.genesis.words;
-    let pin = '123456';
+    const { words } = WALLET_CONSTANTS.genesis;
+    const pin = '123456';
     const connection = new Connection({
       network: 'privatenet',
       servers: [FULLNODE_URL],
       connectionTimeout: 30000,
-    })
+    });
     try {
       this.hWallet = new HathorWallet({
         seed: words,
@@ -47,8 +47,7 @@ export class GenesisWalletHelper {
 
       // Only return the positive response after the wallet is ready
       await waitForWalletReady(this.hWallet);
-    }
-    catch (e) {
+    } catch (e) {
       console.error(`GenesisWalletHelper: ${e.message}`);
       throw e;
     }
@@ -85,7 +84,8 @@ export class GenesisWalletHelper {
         value,
         {
           changeAddress: WALLET_CONSTANTS.genesis.addresses[0]
-        });
+        }
+      );
 
       if (options.waitTimeout === 0) {
         return result;
@@ -94,8 +94,7 @@ export class GenesisWalletHelper {
       await waitForTxReceived(this.hWallet, result.hash, options.waitTimeout);
       await waitUntilNextTimestamp(this.hWallet, result.hash);
       return result;
-    }
-    catch (e) {
+    } catch (e) {
       console.error(`Failed to inject funds: ${e.message}`);
       throw e;
     }
@@ -127,7 +126,7 @@ export class GenesisWalletHelper {
    * @returns {Promise<BaseTransactionResponse>}
    */
   static async injectFunds(address, value, options) {
-    const instance = await GenesisWalletHelper.getSingleton()
+    const instance = await GenesisWalletHelper.getSingleton();
     return instance._injectFunds(address, value, options);
   }
 }

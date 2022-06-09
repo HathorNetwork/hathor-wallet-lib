@@ -5,17 +5,17 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import Connection from "../../../src/new/connection";
+import Connection from '../../../src/new/connection';
 import {
   DEBUG_LOGGING,
   FULLNODE_URL,
   NETWORK_NAME,
   TX_TIMEOUT_DEFAULT
-} from "../configuration/test-constants";
-import HathorWallet from "../../../src/new/wallet";
-import { precalculationHelpers } from "./wallet-precalculation.helper";
-import { GenesisWalletHelper } from "./genesis-wallet.helper";
-import { delay } from "../utils/core.util";
+} from '../configuration/test-constants';
+import HathorWallet from '../../../src/new/wallet';
+import { precalculationHelpers } from './wallet-precalculation.helper';
+import { GenesisWalletHelper } from './genesis-wallet.helper';
+import { delay } from '../utils/core.util';
 
 /**
  * Generates a connection object for starting wallets.
@@ -26,7 +26,7 @@ export function generateConnection() {
     network: NETWORK_NAME,
     servers: [FULLNODE_URL],
     connectionTimeout: 30000,
-  })
+  });
 }
 
 const startedWallets = [];
@@ -62,7 +62,7 @@ export async function stopAllWallets() {
       const hWallet = startedWallets.pop();
       hWallet.stop();
     } catch (e) {
-      console.error(e.stack)
+      console.error(e.stack);
     }
 
     if (startedWallets.length === 0) {
@@ -71,7 +71,7 @@ export async function stopAllWallets() {
   }
 
   // Also clean any genesis tx listeners that may be open
-  const {hWallet: gWallet} = await GenesisWalletHelper.getSingleton();
+  const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
   gWallet.removeAllListeners('new-tx');
 }
 
@@ -115,11 +115,11 @@ export function waitForWalletReady(hWallet) {
     hWallet.on('state', newState => {
       if (newState === HathorWallet.READY) {
         return resolve();
-      } else if (newState === HathorWallet.ERROR) {
-        reject(new Error('Genesis wallet failed to start.'))
+      } if (newState === HathorWallet.ERROR) {
+        reject(new Error('Genesis wallet failed to start.'));
       }
-    })
-  })
+    });
+  });
 }
 
 /**
@@ -138,7 +138,6 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
 
   // Only return the positive response after the transaction was received by the websocket
   return new Promise(async (resolve, reject) => {
-
     // Event listener
     const handleNewTx = newTx => {
       // Ignore this event if we didn't receive the transaction we expected.
@@ -174,13 +173,13 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
 
       // Event listener did not receive the tx and it is not on local cache.
       alreadyResponded = true;
-      reject(new Error(`Timeout of ${timeoutPeriod}ms without receiving tx ${txId}`))
-    }, timeoutPeriod)
+      reject(new Error(`Timeout of ${timeoutPeriod}ms without receiving tx ${txId}`));
+    }, timeoutPeriod);
 
     async function resolveWithSuccess(newTx) {
       const timeDiff = Date.now().valueOf() - startTime;
       if (DEBUG_LOGGING) {
-        console.log(`Wait for ${txId} took ${timeDiff}ms.`)
+        console.log(`Wait for ${txId} took ${timeDiff}ms.`);
       }
 
       if (alreadyResponded) {
@@ -200,14 +199,14 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
       let txObj = hWallet.getTx(txId);
       while (!txObj) {
         if (DEBUG_LOGGING) {
-          console.warn(`Tx was not available on history. Waiting for 50ms and retrying.`)
+          console.warn(`Tx was not available on history. Waiting for 50ms and retrying.`);
         }
         await delay(50);
         txObj = hWallet.getTx(txId);
       }
       resolve(newTx);
     }
-  })
+  });
 }
 
 /**
@@ -225,13 +224,13 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
  * @returns {void}
  */
 export async function waitUntilNextTimestamp(hWallet, txId) {
-  const {timestamp} = hWallet.getTx(txId);
+  const { timestamp } = hWallet.getTx(txId);
   const nowMilliseconds = Date.now().valueOf();
   const nextValidMilliseconds = (timestamp + 1) * 1000;
 
   // We are already past the last valid milissecond
   if (nowMilliseconds > nextValidMilliseconds) {
-    return
+    return;
   }
 
   // We are still within an invalid time to generate a new timestamp. Waiting for some time...

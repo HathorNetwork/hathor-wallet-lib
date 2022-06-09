@@ -26,12 +26,14 @@
     "test_integration": "npm run test_network_up && npm run test_network_integration && npm run test_network_down",
     "test_network_up": "docker-compose -f ./__tests__/integration/configuration/docker-compose.yml up -d && mkdir -p tmp && cp ./__tests__/integration/configuration/precalculated-wallets.json ./tmp/wallets.json",
     "test_network_integration": "jest --config jest-integration.config.js --runInBand --forceExit",
-    "test_network_down": "docker-compose -f ./__tests__/integration/configuration/docker-compose.yml down && rm ./tmp/wallets.json"
+    "test_network_down": "docker-compose -f ./__tests__/integration/configuration/docker-compose.yml down && rm ./tmp/wallets.json",
+    "lint": "eslint ./__tests__/integration"
   },
   "license": "MIT",
   "devDependencies": {
     "@babel/cli": "^7.13.0",
     "@babel/core": "^7.13.1",
+    "@babel/eslint-parser": "^7.18.2",
     "@babel/node": "^7.13.0",
     "@babel/plugin-proposal-class-properties": "^7.13.0",
     "@babel/preset-env": "^7.13.5",
@@ -40,6 +42,9 @@
     "@types/jest": "^27.0.3",
     "@types/node": "^14.11.2",
     "axios-mock-adapter": "^1.16.0",
+    "eslint": "^8.12.0",
+    "eslint-config-airbnb-base": "^15.0.0",
+    "eslint-plugin-import": "^2.26.0",
     "jest": "^24.8.0",
     "jest-html-reporter": "^2.4.4",
     "jest-localstorage-mock": "^2.4.0",
