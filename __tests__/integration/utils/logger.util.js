@@ -114,7 +114,7 @@ export class LoggerUtil {
    * @param {Record<string,unknown>} [metadata] Additional data for winston logs
    * @returns {void}
    */
-  insertLineToLog(input, metadata) {
+  log(input, metadata) {
     this.#logger.info(input, metadata);
   }
 
@@ -125,7 +125,7 @@ export class LoggerUtil {
    * @param {Record<string,unknown>} [metadata] Additional data for winston logs
    * @returns {void}
    */
-  insertWarnToLog(input, metadata) {
+  warn(input, metadata) {
     this.#logger.warn(input, metadata);
   }
 
@@ -136,52 +136,7 @@ export class LoggerUtil {
    * @param {Record<string,unknown>} [metadata] Additional data for winston logs
    * @returns {void}
    */
-  insertErrorToLog(input, metadata) {
+  error(input, metadata) {
     this.#logger.error(input, metadata);
-  }
-
-  /**
-   * Wrapper for adding a "New Wallet" message for multisig wallets
-   * @param {string} walletId
-   * @param {string} seedKey
-   * @returns {void}
-   */
-  informNewMultisigWallet(walletId, seedKey) {
-    this.#logger.info('New MultiSig wallet created', { walletId, seedKey });
-  }
-
-  /**
-   * Wrapper for adding a "New Wallet" message
-   * @param {string} walletId
-   * @param {string} walletWords
-   * @returns {void}
-   */
-  informNewWallet(walletId, walletWords) {
-    this.#logger.info('New wallet created', { walletId, walletWords });
-  }
-
-  /**
-   * Wrapper for adding a "Wallet Addresses" message
-   * @param {string} walletId
-   * @param {string[]} addresses
-   * @returns {void}
-   */
-  informWalletAddresses(walletId, addresses) {
-    this.#logger.info('Sample of wallet addresses.', { walletId, addresses });
-  }
-
-  /**
-   * Wrapper for adding a "New Transaction" message
-   * @param transactionObject
-   * @param {string} transactionObject.id Transaction identification for debugging on the explorer
-   * @param {string} transactionObject.originWallet
-   * @param {string} [transactionObject.destinationWallet]
-   * @param {number} transactionObject.value
-   * @param {string} [transactionObject.originAddress]
-   * @param {string} transactionObject.destinationAddress
-   * @param {string} [transactionObject.title] Some title to identify the transaction to log readers
-   */
-  async informSimpleTransaction(transactionObject) {
-    this.#logger.info('New transaction', transactionObject);
   }
 }

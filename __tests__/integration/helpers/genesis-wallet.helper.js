@@ -9,6 +9,7 @@ import { FULLNODE_URL, WALLET_CONSTANTS } from '../configuration/test-constants'
 import Connection from '../../../src/new/connection';
 import HathorWallet from '../../../src/new/wallet';
 import { waitForTxReceived, waitForWalletReady, waitUntilNextTimestamp } from './wallet.helper';
+import { loggers } from '../utils/logger.util';
 
 /**
  * @type {GenesisWalletHelper}
@@ -48,7 +49,7 @@ export class GenesisWalletHelper {
       // Only return the positive response after the wallet is ready
       await waitForWalletReady(this.hWallet);
     } catch (e) {
-      console.error(`GenesisWalletHelper: ${e.message}`);
+      loggers.test.error(`GenesisWalletHelper: ${e.message}`);
       throw e;
     }
   }
@@ -95,7 +96,7 @@ export class GenesisWalletHelper {
       await waitUntilNextTimestamp(this.hWallet, result.hash);
       return result;
     } catch (e) {
-      console.error(`Failed to inject funds: ${e.message}`);
+      loggers.test.error(`Failed to inject funds: ${e.message}`);
       throw e;
     }
   }
@@ -136,7 +137,7 @@ export class GenesisWalletHelper {
    * @return {Promise<void>}
    */
   static async clearListeners() {
-    const gWallet = await GenesisWalletHelper.getSingleton();
+    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
     gWallet.removeAllListeners('new-tx');
   }
 }

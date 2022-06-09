@@ -17,9 +17,6 @@ import {
   precalculationHelpers, WalletPrecalculationHelper
 } from './__tests__/integration/helpers/wallet-precalculation.helper';
 
-// import {
-//   precalculationHelpers, WalletPrecalculationHelper,
-// } from './scripts/helpers/wallet-precalculation.helper';
 // Creating memory storage to be used in the place of localStorage
 class MemoryOnlyStore {
   constructor() {

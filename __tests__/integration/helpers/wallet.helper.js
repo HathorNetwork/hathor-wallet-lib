@@ -15,6 +15,7 @@ import {
 import HathorWallet from '../../../src/new/wallet';
 import { precalculationHelpers } from './wallet-precalculation.helper';
 import { delay } from '../utils/core.util';
+import { loggers } from '../utils/logger.util';
 
 /**
  * Generates a connection object for starting wallets.
@@ -61,7 +62,7 @@ export async function stopAllWallets() {
       const hWallet = startedWallets.pop();
       hWallet.stop();
     } catch (e) {
-      console.error(e.stack);
+      loggers.test.error(e.stack);
     }
 
     if (startedWallets.length === 0) {
@@ -160,7 +161,7 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
        * was triggered even before this `waitForTxReceived` method was called.
        * We'll try a last time to get the transaction data before rejecting this promise.
        */
-      console.log(`Trying to solve timeout of ${timeoutPeriod}ms for ${txId}`);
+      loggers.test.log(`Trying to solve timeout of ${timeoutPeriod}ms for ${txId}`);
       const existingTx = hWallet.getTx(txId);
       if (existingTx) {
         return resolveWithSuccess(existingTx);
@@ -174,7 +175,7 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
     async function resolveWithSuccess(newTx) {
       const timeDiff = Date.now().valueOf() - startTime;
       if (DEBUG_LOGGING) {
-        console.log(`Wait for ${txId} took ${timeDiff}ms.`);
+        loggers.test.log(`Wait for ${txId} took ${timeDiff}ms.`);
       }
 
       if (alreadyResponded) {
@@ -194,7 +195,7 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
       let txObj = hWallet.getTx(txId);
       while (!txObj) {
         if (DEBUG_LOGGING) {
-          console.warn(`Tx was not available on history. Waiting for 50ms and retrying.`);
+          loggers.test.warn(`Tx was not available on history. Waiting for 50ms and retrying.`);
         }
         await delay(50);
         txObj = hWallet.getTx(txId);
@@ -230,6 +231,6 @@ export async function waitUntilNextTimestamp(hWallet, txId) {
 
   // We are still within an invalid time to generate a new timestamp. Waiting for some time...
   const timeToWait = nextValidMilliseconds - nowMilliseconds + 10;
-  console.log(`Waiting for ${timeToWait}ms for the next timestamp.`);
+  loggers.test.log(`Waiting for ${timeToWait}ms for the next timestamp.`);
   await delay(timeToWait);
 }

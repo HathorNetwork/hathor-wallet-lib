@@ -18,17 +18,25 @@ export default class PlaceholderLoggerUtil {
 
   static createLogger() {
     return {
+      log(message, metadata) {
+        const timestamp = (new Date()).toISOString();
+        const logObj = { timestamp, ...metadata, message };
+        console.log(JSON.stringify(logObj));
+      },
       info(message, metadata) {
-        const logObj = { ...metadata, message };
+        const timestamp = (new Date()).toISOString();
+        const logObj = { timestamp, ...metadata, message };
         console.log(JSON.stringify(logObj));
       },
       warn(message, metadata) {
-        const logObj = { ...metadata, message };
-        console.log(JSON.stringify(logObj));
+        const timestamp = (new Date()).toISOString();
+        const logObj = { timestamp, ...metadata, message };
+        console.warn(JSON.stringify(logObj));
       },
       error(message, metadata) {
-        const logObj = { ...metadata, message };
-        console.log(JSON.stringify(logObj));
+        const timestamp = (new Date()).toISOString();
+        const logObj = { timestamp, ...metadata, message };
+        console.error(JSON.stringify(logObj));
       }
     };
   }

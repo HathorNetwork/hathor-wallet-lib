@@ -19,6 +19,7 @@ import transaction from '../../src/transaction';
 import { TOKEN_DATA } from './configuration/test-constants';
 import wallet from '../../src/wallet';
 import dateFormatter from '../../src/date';
+import { loggers } from './utils/logger.util';
 
 const fakeTokenUid = '000002490ab7fc302e076f7aab8b20c35fed81fd1131a955aebbd3cb76e48fb0';
 const sampleNftAddress = 'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg';
@@ -841,7 +842,7 @@ describe('sendManyOutputsTransaction', () => {
 
     // Validating interfaces with only a partial lock of the resources
     const waitFor1 = timelock1 - Date.now().valueOf() + 1000;
-    console.log(`Will wait for ${waitFor1}ms for timelock1 to expire`);
+    loggers.test.log(`Will wait for ${waitFor1}ms for timelock1 to expire`);
     await delay(waitFor1);
 
     /*
@@ -865,7 +866,7 @@ describe('sendManyOutputsTransaction', () => {
 
     // Validating interfaces with all resources unlocked
     const waitFor2 = timelock2 - Date.now().valueOf() + 1000;
-    console.log(`Will wait for ${waitFor2}ms for timelock2 to expire`);
+    loggers.test.log(`Will wait for ${waitFor2}ms for timelock2 to expire`);
     await delay(waitFor2);
 
     // Forcing balance updates
