@@ -12,12 +12,9 @@ import config from "./src/config";
 import {
   FULLNODE_URL,
   TX_MINING_URL,
-  WALLET_CONSTANTS
 } from "./__tests__/integration/configuration/test-constants";
-import Connection from "./src/new/connection";
-import HathorWallet from "./src/new/wallet";
 import {
-  WalletPrecalculationHelper, precalculationHelpers
+  precalculationHelpers
 } from "./__tests__/integration/helpers/wallet-precalculation.helper";
 
 // import {

@@ -16,7 +16,7 @@ import {
   TOKEN_MELT_MASK
 } from "../../src/constants";
 import transaction from "../../src/transaction";
-import { AUTHORITY_VALUE, TOKEN_DATA } from "./configuration/test-constants";
+import { TOKEN_DATA } from "./configuration/test-constants";
 import wallet from "../../src/wallet";
 import dateFormatter from "../../src/date";
 
@@ -1089,12 +1089,21 @@ describe('delegateAuthority', () => {
     );
     await waitForTxReceived(hWallet1, delegateMintTxId);
 
+    /*
+     * Authority Token delegation usually takes longer than usual to be reflected on the local
+     * caches. This forced recalculation will be executed before each authority validation below
+     * to avoid a small possibility of the caches being obsolete at assertion time.
+     */
+    await delay(100);
+    await hWallet1.preProcessWalletData();
+
     // Expect wallet 1 to still have one mint authority
     let authorities1 = await hWallet1.getMintAuthority(tokenUid);
     expect(authorities1).toHaveLength(1);
     expect(authorities1[0].txId).toEqual(delegateMintTxId);
     expect(authorities1[0].authorities).toEqual(1);
     // Expect wallet 2 to also have one mint authority
+    await hWallet1.preProcessWalletData();
     let authorities2 = await hWallet2.getMintAuthority(tokenUid);
     expect(authorities2).toHaveLength(1);
     expect(authorities2[0].txId).toEqual(delegateMintTxId);
@@ -1110,11 +1119,13 @@ describe('delegateAuthority', () => {
     await waitForTxReceived(hWallet1, delegateMeltTxId);
 
     // Expect wallet 1 to still have one melt authority
+    await hWallet1.preProcessWalletData();
     authorities1 = await hWallet1.getMeltAuthority(tokenUid);
     expect(authorities1).toHaveLength(1);
     expect(authorities1[0].txId).toEqual(delegateMeltTxId);
     expect(authorities1[0].authorities).toEqual(2);
     // Expect wallet 2 to also have one melt authority
+    await hWallet1.preProcessWalletData();
     authorities2 = await hWallet2.getMeltAuthority(tokenUid);
     expect(authorities2).toHaveLength(1);
     expect(authorities2[0].txId).toEqual(delegateMeltTxId);
