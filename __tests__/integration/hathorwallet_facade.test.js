@@ -110,6 +110,7 @@ describe('start', () => {
 describe('addresses methods', () => {
   afterEach(async () => {
     await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
   });
 
   it('should get the correct addresses', async () => {
@@ -173,6 +174,7 @@ describe('addresses methods', () => {
 describe('getTransactionsCountByAddress', () => {
   afterEach(async () => {
     await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
   });
 
   it('should return correct entries for a wallet', async () => {
@@ -231,6 +233,7 @@ describe('getTransactionsCountByAddress', () => {
 describe('getBalance', () => {
   afterEach(async () => {
     await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
   });
 
   it('should get the balance for the HTR token', async () => {
@@ -312,6 +315,7 @@ describe('getBalance', () => {
 describe('getFullHistory', () => {
   afterEach(async () => {
     await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
   });
 
   it('should return full history (htr)', async () => {
@@ -469,6 +473,7 @@ describe('getFullHistory', () => {
 describe('getTxBalance', () => {
   afterEach(async () => {
     await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
   });
 
   it('should get tx balance', async () => {
@@ -550,6 +555,7 @@ describe('getTxBalance', () => {
 describe('sendTransaction', () => {
   afterEach(async () => {
     await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
   });
 
   it('should send HTR transactions', async () => {
@@ -667,6 +673,7 @@ describe('sendTransaction', () => {
 describe('sendManyOutputsTransaction', () => {
   afterEach(async () => {
     await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
   });
 
   it('should send simple HTR transactions', async () => {
@@ -878,6 +885,7 @@ describe('sendManyOutputsTransaction', () => {
 describe('createNewToken', () => {
   afterEach(async () => {
     await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
   });
 
   it('should create a new token', async () => {
@@ -906,6 +914,7 @@ describe('createNewToken', () => {
 describe('mintTokens', () => {
   afterEach(async () => {
     await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
   });
 
   it('should mint new tokens', async () => {
@@ -1004,6 +1013,7 @@ describe('mintTokens', () => {
 describe('meltTokens', () => {
   afterEach(async () => {
     await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
   });
 
   it('should melt tokens', async () => {
@@ -1090,6 +1100,7 @@ describe('meltTokens', () => {
 describe('delegateAuthority', () => {
   afterEach(async () => {
     await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
   });
 
   it('should delegate authority between wallets', async () => {
@@ -1215,6 +1226,7 @@ describe('delegateAuthority', () => {
 describe('destroyAuthority', () => {
   afterEach(async () => {
     await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
   });
 
   it('should destroy mint authorities', async () => {
@@ -1310,6 +1322,7 @@ describe('destroyAuthority', () => {
 describe('createNFT', () => {
   afterEach(async () => {
     await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
   });
 
   it('should create an NFT with mint/melt authorities', async () => {
@@ -1371,6 +1384,7 @@ describe('createNFT', () => {
 describe('getToken methods', () => {
   afterEach(async () => {
     await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
   });
 
   // TODO: This function currently throws for an invalid token.
@@ -1443,6 +1457,7 @@ describe('getToken methods', () => {
 describe('getTxHistory', () => {
   afterEach(async () => {
     await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
   });
 
   let gWallet;

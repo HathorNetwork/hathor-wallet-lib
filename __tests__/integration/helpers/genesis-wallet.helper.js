@@ -129,4 +129,14 @@ export class GenesisWalletHelper {
     const instance = await GenesisWalletHelper.getSingleton();
     return instance._injectFunds(address, value, options);
   }
+
+  /**
+   * Clears all transaction listeners from the genesis wallet.
+   * Useful when a test run finishes, to ensure there are no leaks.
+   * @return {Promise<void>}
+   */
+  static async clearListeners() {
+    const gWallet = await GenesisWalletHelper.getSingleton();
+    gWallet.removeAllListeners('new-tx');
+  }
 }

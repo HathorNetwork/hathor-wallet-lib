@@ -14,7 +14,6 @@ import {
 } from '../configuration/test-constants';
 import HathorWallet from '../../../src/new/wallet';
 import { precalculationHelpers } from './wallet-precalculation.helper';
-import { GenesisWalletHelper } from './genesis-wallet.helper';
 import { delay } from '../utils/core.util';
 
 /**
@@ -69,10 +68,6 @@ export async function stopAllWallets() {
       break;
     }
   }
-
-  // Also clean any genesis tx listeners that may be open
-  const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
-  gWallet.removeAllListeners('new-tx');
 }
 
 /**
