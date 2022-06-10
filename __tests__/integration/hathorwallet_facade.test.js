@@ -276,7 +276,7 @@ describe('getBalance', () => {
     expect(balance2[0].balance).toEqual(htrBalance1.balance);
   });
 
-  it.only('should get the balance for a custom token', async () => {
+  it('should get the balance for a custom token', async () => {
     const hWallet = await generateWalletHelper();
 
     // Validating results for a nonexistant token
