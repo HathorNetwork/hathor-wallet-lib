@@ -1133,6 +1133,89 @@ const tokens = {
   },
 
   /**
+   * Checks if this transaction is the creation of an NFT following the NFT Standard Creation.
+   * @see https://github.com/HathorNetwork/rfcs/blob/master/text/0032-nft-standard.md#transaction-standard
+   * @param {Object} tx Transaction with decoded inputs and outputs
+   */
+  isNFTToken(tx) {
+    // Basic input validation
+    if (!tx) {
+      return false;
+    }
+
+    // If this is not a token creation tx, it cannot be an NFT
+    if (tx.version !== CREATE_TOKEN_TX_VERSION) {
+      return false;
+    }
+
+    // NFT creation must have at least a DataScript output (the first one) and a Token P2PKH output
+    if (tx.outputs.length < 2) {
+      return false;
+    }
+
+    // NFT creation DataScript output must have value 1 and must be of HTR
+    const firstOutput = tx.outputs[0];
+    if (firstOutput?.value !== 1 || firstOutput?.token_data !== 0) {
+      return false;
+    }
+    // First output must also have a standard-compliant script
+    if (!hasStandardScript(firstOutput)) {
+      return false;
+    }
+
+    // Validating the remaining outputs
+    for (let i = 1; i < tx.outputs.length; ++i) {
+      // All the outputs must also have standard scripts
+      const txOutput = tx.outputs[i];
+      if (!hasStandardScript(txOutput, true)) {
+        return false;
+      }
+
+      // All outputs must be either HTR or the created token
+      const validTokensList = [HATHOR_TOKEN_CONFIG.uid, tx.tx_id];
+      if (!validTokensList.includes(txOutput.token)) {
+        return false;
+      }
+    }
+
+    // Validating inputs
+    for (const input of tx.inputs) {
+      // All inputs must be HTR
+      if (input.token !== HATHOR_TOKEN_CONFIG.uid) {
+        return false;
+      }
+    }
+
+    /*
+     * It can optionally have a melt authority output (but never more than one).
+     * It can optionally have a mint authority output (but never more than one).
+     */
+
+    // All conditions were met: this is a standard NFT creation transaction
+    return true;
+
+    /**
+     * Identifies if the informed output script size is standard
+     * @param {TxOutput} output The transaction output, already decoded
+     * @param {boolean} [onlyStandardScriptType=false] If true, the decoded type will also be validated
+     */
+    function hasStandardScript(output, onlyStandardScriptType = false) {
+      // Validating maximum allowed length
+      if (output.script.length > 256) {
+        return false;
+      }
+
+      // Validating script type
+      if (onlyStandardScriptType) {
+        if (!['p2pkh', 'p2sh'].includes(output.decoded.type.toLowerCase())) {
+          return false;
+        }
+      }
+      return true;
+    }
+  },
+
+  /**
    * Calculate deposit value for the given token mint amount
    *
    * @param {number} mintAmount Amount of tokens being minted
