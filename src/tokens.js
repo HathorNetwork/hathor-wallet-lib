@@ -1164,6 +1164,8 @@ const tokens = {
     }
 
     // Validating the remaining outputs
+    let mintOutputs = 0;
+    let meltOutputs = 0;
     for (let i = 1; i < tx.outputs.length; ++i) {
       // All the outputs must also have standard scripts
       const txOutput = tx.outputs[i];
@@ -1176,6 +1178,23 @@ const tokens = {
       if (!validTokensList.includes(txOutput.token)) {
         return false;
       }
+
+      // Counting authority outputs
+      if (transaction.isTokenDataAuthority(txOutput.token_data)) {
+        switch (txOutput.value) {
+          case TOKEN_MINT_MASK:
+            ++mintOutputs;
+            break;
+          case TOKEN_MELT_MASK:
+            ++meltOutputs;
+            break;
+        }
+      }
+    }
+
+    // Validating maximum of 1 mint and/or melt outputs
+    if (mintOutputs > 1 || meltOutputs > 1) {
+      return false;
     }
 
     // Validating inputs
@@ -1185,11 +1204,6 @@ const tokens = {
         return false;
       }
     }
-
-    /*
-     * It can optionally have a melt authority output (but never more than one).
-     * It can optionally have a mint authority output (but never more than one).
-     */
 
     // All conditions were met: this is a standard NFT creation transaction
     return true;
