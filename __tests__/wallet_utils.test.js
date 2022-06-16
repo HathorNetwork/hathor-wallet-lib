@@ -108,9 +108,16 @@ test('Clean local storage', () => {
   wallet.cleanLoadedData({ cleanAccessData: true });
   testStorageCleaned(true);
 
-
   setMockData();
   wallet.cleanLoadedData({ cleanAccessData: false });
+  testStorageCleaned(false);
+
+  setMockData();
+  wallet.cleanWallet({ cleanAccessData: true });
+  testStorageCleaned(true);
+
+  setMockData();
+  wallet.cleanWallet({ cleanAccessData: false });
   testStorageCleaned(false);
 });
 
