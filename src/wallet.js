@@ -1528,7 +1528,10 @@ const wallet = {
    * - Clean redux
    * - Unsubscribe websocket connections
    *
-   * @param {Object} Optional object with {endConnection: boolean, connection: Connection, cleanAccessData: boolean}
+   * @param {Object} [options]
+   * @param {boolean} [options.endConnection=true] If we should close the websocket connection.
+   * @param {Connection} [options.connection] The websocket connection.
+   * @param {boolean} [options.cleanAccessData] If we should clean the access data from storage.
    *
    * @memberof Wallet
    * @inner
@@ -1558,7 +1561,8 @@ const wallet = {
    * If cleanAccessData is false, wallet:accessData will not be removed. This indicates the
    * wallet has been loaded before.
    *
-   * @param {Object} Optional object with {cleanAccessData: boolean}
+   * @param {Object} [options]
+   * @param {boolean} [options.cleanAccessData=true] If we should clean the access data from storage.
    *
    * @memberof Wallet
    * @inner
