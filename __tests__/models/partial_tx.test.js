@@ -296,12 +296,14 @@ describe('PartialTx serialization', () => {
   });
 
   const testTokenConfig = {name: 'Test Token', symbol: 'TST', uid: '0000389deaf5557642e5a8a26656dcf360b608160f43e7ef79b9bde8ab69a18c'};
+  const txId1 = '00000d906babfa76b092f0088530a85f4d6bae5437304820f4c7a39540d87dd0';
+  const txId2 = '0000584ed8ad32b00e79e1c5cf26b5969ca7cd4d93ae39b776e71cfecf7c8c78';
   const txData = {
     hash: '0000e0f6b20a6578eb41d7846ed9aaeab82a405a7dc9106c2954551fa777568f',
     tokens: [ testTokenConfig.uid ],
     inputs: [
-      {index: 0, tx_id: '00000d906babfa76b092f0088530a85f4d6bae5437304820f4c7a39540d87dd0'},
-      {index: 4, tx_id: '0000584ed8ad32b00e79e1c5cf26b5969ca7cd4d93ae39b776e71cfecf7c8c78'},
+      {index: 0, tx_id: txId1},
+      {index: 4, tx_id: txId2},
     ],
     outputs: [
       {type: 'p2pkh', value: 15, tokenData: 0, address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo'},
@@ -312,6 +314,7 @@ describe('PartialTx serialization', () => {
     weight: 0,
     timestamp: dateFormatter.dateToTimestamp(new Date()),
   };
+  const tx = helpers.createTxFromData(txData, testnet);
   const scriptFromAddressP2PKH = (base58Addr) => {
     const p2pkh = new P2PKH(new Address(base58Addr, { network: testnet }));
     return p2pkh.createScript();
@@ -321,13 +324,11 @@ describe('PartialTx serialization', () => {
 
     const expected = 'PartialTx|00010102030000389deaf5557642e5a8a26656dcf360b608160f43e7ef79b9bde8ab69a18c00000d906babfa76b092f0088530a85f4d6bae5437304820f4c7a39540d87dd00000000000584ed8ad32b00e79e1c5cf26b5969ca7cd4d93ae39b776e71cfecf7c8c780400000000000f00001976a914729181c0f3f2e3f589cc10facbb9332e0c309a7788ac0000000d01001976a9146861143f7dc6b2f9c8525315efe6fcda160a795c88ac0000000c00001976a914486bc4f1e70f242a737d3866147c7f8335c2995f88ac0000000000000000000000010000000000|1|2';
 
-    const tx = helpers.createTxFromData(txData, testnet);
-
     const partialTx = new PartialTx(testnet);
     partialTx.inputs = [
-      new ProposalInput('00000d906babfa76b092f0088530a85f4d6bae5437304820f4c7a39540d87dd0', 0, HATHOR_TOKEN_CONFIG.uid, 27, 'WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi'),
-      new ProposalInput('0000584ed8ad32b00e79e1c5cf26b5969ca7cd4d93ae39b776e71cfecf7c8c78', 4, testTokenConfig.uid, 13, 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo'),
-    ]
+      new ProposalInput(txId1, 0, HATHOR_TOKEN_CONFIG.uid, 27, 'WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi'),
+      new ProposalInput(txId2, 4, testTokenConfig.uid, 13, 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo'),
+    ];
     partialTx.outputs = [
       new ProposalOutput(15, scriptFromAddressP2PKH('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo'), HATHOR_TOKEN_CONFIG.uid, false),
       new ProposalOutput(13, scriptFromAddressP2PKH('WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp'), testTokenConfig.uid, true),
@@ -339,5 +340,45 @@ describe('PartialTx serialization', () => {
     const parts = serialized.split('|');
     expect(parts[0]).toBe('PartialTx');
     expect(parts[1]).toBe(tx.toHex());
+  });
+
+  it('should deserialize a transaction correctly', async () => {
+    const utxos = {
+      '00000d906babfa76b092f0088530a85f4d6bae5437304820f4c7a39540d87dd0': {
+        outputs: [
+          { token_data: 0, value: 27, decoded: { address: 'WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi' } },
+        ],
+      },
+      '0000584ed8ad32b00e79e1c5cf26b5969ca7cd4d93ae39b776e71cfecf7c8c78': {
+        tokens: [testTokenConfig],
+        outputs: [
+          'fake-utxo0',
+          'fake-utxo1',
+          'fake-utxo2',
+          'fake-utxo3',
+          {
+            token_data: 1,
+            value: 13,
+            decoded: { address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo' },
+          },
+        ],
+      },
+    };
+
+    const spyApi = jest.spyOn(txApi, 'getTransaction');
+    spyApi.mockImplementation(async (txId, cb) => {
+      return new Promise(resolve => {
+        process.nextTick(() => {
+          resolve({ success: true, tx: utxos[txId] });
+        });
+      }).then(data => {
+        cb(data);
+      });
+    });
+
+    const serialized = 'PartialTx|00010102030000389deaf5557642e5a8a26656dcf360b608160f43e7ef79b9bde8ab69a18c00000d906babfa76b092f0088530a85f4d6bae5437304820f4c7a39540d87dd00000000000584ed8ad32b00e79e1c5cf26b5969ca7cd4d93ae39b776e71cfecf7c8c780400000000000f00001976a914729181c0f3f2e3f589cc10facbb9332e0c309a7788ac0000000d01001976a9146861143f7dc6b2f9c8525315efe6fcda160a795c88ac0000000c00001976a914486bc4f1e70f242a737d3866147c7f8335c2995f88ac0000000000000000000000010000000000|1|2';
+
+    const partialTx = await PartialTx.deserialize(serialized, testnet);
+    expect(partialTx.serialize()).toBe(serialized);
   });
 });

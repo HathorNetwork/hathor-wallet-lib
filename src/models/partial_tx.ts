@@ -308,7 +308,7 @@ export class PartialTx {
    * @throws {SyntaxError} serialized argument should be valid.
    * @throws {UnsupportedScriptError} All outputs should be P2SH or P2PKH
    *
-   * @returns {Promise}
+   * @returns {Promise<PartialTx>}
    * @memberof PartialTx
    * @static
    */
@@ -325,10 +325,10 @@ export class PartialTx {
     const txHex = dataArr[1];
     const tx = helpers.createTxFromHex(txHex, netw);
 
-    const proposal = new PartialTx(netw);
+    const instance = new PartialTx(netw);
 
     for (const input of tx.inputs) {
-      await proposal.addInput(input.hash, input.index);
+      await instance.addInput(input.hash, input.index);
     }
 
     for (const [index, output] of tx.outputs.entries()) {
@@ -345,15 +345,15 @@ export class PartialTx {
 
       const tokenIndex = output.tokenData & TOKEN_INDEX_MASK;
       const token = tokenIndex === 0 ? HATHOR_TOKEN_CONFIG.uid : tx.tokens[tokenIndex-1];
-      proposal.addOutput(
+      instance.addOutput(
         output.value,
         output.script,
         token,
-        index in changeOutputs,
+        changeOutputs.indexOf(index) > -1,
       );
     }
 
-    return proposal;
+    return instance;
 
   }
 }
