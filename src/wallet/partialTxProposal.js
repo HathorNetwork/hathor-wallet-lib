@@ -11,6 +11,7 @@ import P2SH from '../models/p2sh';
 import P2PKH from '../models/p2pkh';
 import { AddressError, IncompletePartialTxError, InsufficientFundsError } from '../errors';
 import wallet from '../wallet';
+import Network from '../models/network';
 
 import transaction from '../transaction';
 import helpers from '../utils/helpers';
@@ -19,11 +20,13 @@ import { Transaction } from 'bitcore-lib';
 class PartialTxProposal {
 
   /**
-   * @param {Network} network
+   * @param {Object} options
+   * @param {PartialTx|null} [options.partialTx]
+   * @param {Network|null} [options.network]
    */
-  constructor(network) {
-    this.network = network;
-    this.partialTx = new PartialTx(network);
+  constructor({ partialTx = null, network = null }) {
+    this.network = network || new Network('mainnet');
+    this.partialTx = partialTx || new PartialTx(network);
     this.signatures = null;
     this.txdata = null;
     this.transaction = null;
@@ -32,18 +35,20 @@ class PartialTxProposal {
   /**
    * Create a PartialTxProposal instance from the serialized string.
    *
-   * @param {string} serialized - Serialized PartialTx data
-   * @param {Network} network - network
+   * @param {string} serialized Serialized PartialTx data
+   * @param {Object} [options]
+   * @param {Network} [options.network] network
    *
    * @throws {SyntaxError} serialized argument should be a valid PartialTx.
    * @throws {UnsupportedScriptError} All outputs should be P2SH or P2PKH
    *
    * @returns {PartialTxProposal}
    */
-  static async fromPartialTx(serialized, network) {
-    const instance = new PartialTxProposal(network);
-    instance.partialTx = await PartialTx.deserialize(serialized, network);
-    return instance;
+  static async fromPartialTx(serialized, options = {}) {
+    const { network } = Object.assign({ network: null }, options);
+
+    const partialTx = await PartialTx.deserialize(serialized, network);
+    return new PartialTxProposal({partialTx, network});
   }
 
   /**
@@ -53,13 +58,14 @@ class PartialTxProposal {
    * @param {number} value Quantity of tokens being sent
    * @param {Object} [options]
    * @param {string} [options.changeAddress] If we add change, use this address instead of getting a new one from the wallet.
+   * @param {boolean} [options.markAsSelected] Mark the utxo with `selected_as_input`.
    *
    * @throws InsufficientFundsError
    */
   async addSend(token, value, options = {}) {
     this.resetSignatures();
 
-    const { changeAddress } = Object.assign({ changeAddress: wallet.getCurrentAddress() }, options);
+    const { changeAddress, markAsSelected } = Object.assign({ changeAddress: wallet.getCurrentAddress(), markAsSelected: true }, options);
 
     const walletData = wallet.getWalletData();
     const historyTransactions = walletData['historyTransactions'] || {};
@@ -69,7 +75,7 @@ class PartialTxProposal {
     }
 
     for (const input of newData.inputs) {
-      await this.addInput(input.tx_id, input.index);
+      await this.addInput(input.tx_id, input.index, { markAsSelected });
     }
 
     // add change output if needed
@@ -107,11 +113,25 @@ class PartialTxProposal {
    *
    * @param {string} hash Transaction hash
    * @param {number} index UTXO index on the outputs of the transaction.
+   * @param {Object} [options]
+   * @param {boolean} [options.markAsSelected] Mark the utxo with `selected_as_input`.
    *
    * @returns {Promise<void>}
    */
-  async addInput(hash, index) {
+  async addInput(hash, index, options = {}) {
     this.resetSignatures();
+
+    const { markAsSelected } = Object.assign({ markAsSelected: true }, options);
+    if (markAsSelected) {
+      const walletData = wallet.getWalletData();
+      const historyTransactions = walletData['historyTransactions'] || {};
+
+      // The input may not be present on the loaded wallet's history
+      if(hash in historyTransactions) {
+        historyTransactions[hash].outputs[index]['selected_as_input'] = true;
+      }
+    }
+
     await this.partialTx.addInput(hash, index);
   }
 
@@ -153,6 +173,21 @@ class PartialTxProposal {
     this.signatures = null;
     this.transaction = null;
     this.txdata = null;
+  }
+
+  /**
+   * Unmark all inputs currently on the partial tx as not `selected_as_input`.
+   */
+  unmarkAsSelected() {
+    const walletData = wallet.getWalletData();
+    const historyTransactions = walletData['historyTransactions'] || {};
+
+    for(const input of this.partialTx.inputs) {
+      // The input may not be present on the loaded wallet's history
+      if(input.hash in historyTransactions) {
+        historyTransactions[input.hash].outputs[input.index]['selected_as_input'] = false;
+      }
+    }
   }
 
   /**
