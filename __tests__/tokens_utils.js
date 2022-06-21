@@ -15,6 +15,7 @@ import WebSocketHandler from '../src/WebSocketHandler';
 import { TokenValidationError } from '../src/errors';
 import storage from '../src/storage';
 import lodash from 'lodash';
+import { nftCreationTx } from './__fixtures__/sample_txs';
 
 
 const createdTxHashBeforeMining = '5ecac1124aada88c750acdccede58d0308b593923c3034f373403b63ba4edbac';
@@ -254,100 +255,7 @@ test('Token withdraw', () => {
 });
 
 describe('isNFTToken', () => {
-  const sampleNftTx = {
-    tx_id: '006b972eb0d560b168f1d544c7d772e27860a9bc2f21ab7a2a992ea5ad3a99d8',
-    version: 2,
-    weight: 8.000001,
-    timestamp: 1655305812,
-    is_voided: false,
-    nonce: 123,
-    inputs: [
-      {
-        value: 100,
-        token_data: 0,
-        script: 'dqkUaf+xVJ8uAPML/AzwuSB+2W9/M7qIrA==',
-        decoded: {
-          type: 'P2PKH',
-          address: 'WYLW8ujPemSuLJwbeNvvH6y7nakaJ6cEwT',
-          timelock: null,
-        },
-        token: '00',
-        tx_id: '00d11791843e284ce6ad833ee3ee2f3b88cacb6d3888be0eae400abc8d643b8c',
-        index: 1,
-      },
-    ],
-    outputs: [
-      {
-        value: 1,
-        token_data: 0,
-        script: 'TIdpcGZzOi8vYmFmeWJlaWNjZmNsa2R0dWN1Nnk0eWM1Y3ByNnkzeXVpbnI2N3N2bWlpNDZ2NWNmY3JrcDQ3aWhlaHkvYWxidW1zL1FYQnZiR3h2SURFd0lFMWhaMkY2YVc1bElESTNMMDQ9LzIxNzE2Njk1NzQ4XzczOTA4MTUyMThfby5qcGes',
-        decoded: {},
-        token: '00',
-        spent_by: null,
-        selected_as_input: false,
-      },
-      {
-        value: 98,
-        token_data: 0,
-        script: 'dqkUQcQx/3rV1s5VZXqZPc1dkQbPo6eIrA==',
-        decoded: {
-          type: 'P2PKH',
-          address: 'WUfmqHWQZWn7aodAFadwmSDfh2QaUUgCRJ',
-          timelock: null,
-        },
-        token: '00',
-        spent_by: null,
-        selected_as_input: false,
-      },
-      {
-        value: 1,
-        token_data: 1,
-        script: 'dqkUQcQx/3rV1s5VZXqZPc1dkQbPo6eIrA==',
-        decoded: {
-          type: 'P2PKH',
-          address: 'WUfmqHWQZWn7aodAFadwmSDfh2QaUUgCRJ',
-          timelock: null,
-        },
-        token: '006b972eb0d560b168f1d544c7d772e27860a9bc2f21ab7a2a992ea5ad3a99d8',
-        spent_by: null,
-        selected_as_input: false,
-      },
-      {
-        value: 1,
-        token_data: 129,
-        script: 'dqkU1YP+t130UoYD+3ys9MYt1zkWeY6IrA==',
-        decoded: {
-          type: 'P2PKH',
-          address: 'Wi8zvxdXHjaUVAoCJf52t3WovTZYcU9aX6',
-          timelock: null,
-        },
-        token: '006b972eb0d560b168f1d544c7d772e27860a9bc2f21ab7a2a992ea5ad3a99d8',
-        spent_by: null,
-        selected_as_input: false,
-      },
-      {
-        value: 2,
-        token_data: 129,
-        script: 'dqkULlcsARvA+pQS8qytBr6Ryjc/SLeIrA==',
-        decoded: {
-          type: 'P2PKH',
-          address: 'WSu4PZVu6cvi3aejtG8w7bomVmg77DtqYt',
-          timelock: null,
-        },
-        token: '006b972eb0d560b168f1d544c7d772e27860a9bc2f21ab7a2a992ea5ad3a99d8',
-        spent_by: null,
-        selected_as_input: false,
-      },
-    ],
-    parents: [
-      '00d11791843e284ce6ad833ee3ee2f3b88cacb6d3888be0eae400abc8d643b8c',
-      '54165cef1fd4cf2240d702b8383c307c822c16ca407f78014bdefa189a7571c2',
-    ],
-    token_name: 'New NFT',
-    token_symbol: 'NNFT',
-    tokens: [],
-  };
-  const cloneNftSample = () => lodash.cloneDeep(sampleNftTx);
+  const cloneNftSample = () => lodash.cloneDeep(nftCreationTx);
 
   it('should return false for an empty transaction object', () => {
     expect.assertions(1);
@@ -391,7 +299,7 @@ describe('isNFTToken', () => {
     expect(tokens.isNFTToken(tx)).toBe(false);
 
     // Non-standard output type
-    tx.outputs[1].script = sampleNftTx.outputs[1].script;
+    tx.outputs[1].script = nftCreationTx.outputs[1].script;
     tx.outputs[1].decoded.type = 'data';
     expect(tokens.isNFTToken(tx)).toBe(false);
   });
@@ -416,7 +324,7 @@ describe('isNFTToken', () => {
 
   it('should return true for a valid NFT creation transaction', () => {
     expect.assertions(1);
-    expect(tokens.isNFTToken(sampleNftTx)).toBe(true);
+    expect(tokens.isNFTToken(nftCreationTx)).toBe(true);
   });
 
   it('should return true for a NFT without change', () => {
@@ -424,10 +332,10 @@ describe('isNFTToken', () => {
     const tx = cloneNftSample();
 
     tx.outputs = [
-      sampleNftTx.outputs[0], // Fee
-      sampleNftTx.outputs[2], // Token
-      sampleNftTx.outputs[3], // Mint
-      sampleNftTx.outputs[4], // Melt
+      nftCreationTx.outputs[0], // Fee
+      nftCreationTx.outputs[2], // Token
+      nftCreationTx.outputs[3], // Mint
+      nftCreationTx.outputs[4], // Melt
     ];
     expect(tokens.isNFTToken(tx)).toBe(true);
   });
@@ -437,22 +345,22 @@ describe('isNFTToken', () => {
     const tx = cloneNftSample();
 
     tx.outputs = [
-      sampleNftTx.outputs[0], // Fee
-      sampleNftTx.outputs[2], // Token
-      sampleNftTx.outputs[3], // Mint
+      nftCreationTx.outputs[0], // Fee
+      nftCreationTx.outputs[2], // Token
+      nftCreationTx.outputs[3], // Mint
     ];
     expect(tokens.isNFTToken(tx)).toBe(true);
 
     tx.outputs = [
-      sampleNftTx.outputs[0], // Fee
-      sampleNftTx.outputs[2], // Token
-      sampleNftTx.outputs[4], // Melt
+      nftCreationTx.outputs[0], // Fee
+      nftCreationTx.outputs[2], // Token
+      nftCreationTx.outputs[4], // Melt
     ];
     expect(tokens.isNFTToken(tx)).toBe(true);
 
     tx.outputs = [
-      sampleNftTx.outputs[0], // Fee
-      sampleNftTx.outputs[2], // Token
+      nftCreationTx.outputs[0], // Fee
+      nftCreationTx.outputs[2], // Token
     ];
     expect(tokens.isNFTToken(tx)).toBe(true);
   });
@@ -462,18 +370,18 @@ describe('isNFTToken', () => {
     const tx = cloneNftSample();
 
     tx.outputs = [
-      sampleNftTx.outputs[0], // Fee
-      sampleNftTx.outputs[2], // Token
-      sampleNftTx.outputs[3], // Mint
-      sampleNftTx.outputs[3], // Mint
+      nftCreationTx.outputs[0], // Fee
+      nftCreationTx.outputs[2], // Token
+      nftCreationTx.outputs[3], // Mint
+      nftCreationTx.outputs[3], // Mint
     ];
     expect(tokens.isNFTToken(tx)).toBe(false);
 
     tx.outputs = [
-      sampleNftTx.outputs[0], // Fee
-      sampleNftTx.outputs[2], // Token
-      sampleNftTx.outputs[4], // Melt
-      sampleNftTx.outputs[4], // Melt
+      nftCreationTx.outputs[0], // Fee
+      nftCreationTx.outputs[2], // Token
+      nftCreationTx.outputs[4], // Melt
+      nftCreationTx.outputs[4], // Melt
     ];
     expect(tokens.isNFTToken(tx)).toBe(false);
   });
