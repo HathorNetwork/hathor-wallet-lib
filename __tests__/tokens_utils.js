@@ -14,6 +14,7 @@ import { util } from 'bitcore-lib';
 import WebSocketHandler from '../src/WebSocketHandler';
 import { TokenValidationError } from '../src/errors';
 import storage from '../src/storage';
+import lodash from 'lodash';
 
 
 const createdTxHashBeforeMining = '5ecac1124aada88c750acdccede58d0308b593923c3034f373403b63ba4edbac';
@@ -346,7 +347,7 @@ describe('isNFTToken', () => {
     token_symbol: 'NNFT',
     tokens: [],
   };
-  const cloneNftSample = () => JSON.parse(JSON.stringify(sampleNftTx));
+  const cloneNftSample = () => lodash.cloneDeep(sampleNftTx);
 
   it('should return false for an empty transaction object', () => {
     expect.assertions(1);
