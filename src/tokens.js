@@ -18,6 +18,7 @@ import walletApi from './api/wallet';
 import SendTransaction from './new/sendTransaction';
 import { InsufficientFundsError, ConstantNotSet, TokenValidationError } from './errors';
 import { TOKEN_DEPOSIT_PERCENTAGE, CREATE_TOKEN_TX_VERSION, HATHOR_TOKEN_CONFIG, TOKEN_MINT_MASK, TOKEN_MELT_MASK, AUTHORITY_TOKEN_DATA } from './constants';
+import { OutputType } from './wallet/types';
 
 
 /**
@@ -1185,14 +1186,8 @@ const tokens = {
 
       // Counting authority outputs
       if (transaction.isTokenDataAuthority(txOutput.token_data)) {
-        switch (txOutput.value) {
-          case TOKEN_MINT_MASK:
-            ++mintOutputs;
-            break;
-          case TOKEN_MELT_MASK:
-            ++meltOutputs;
-            break;
-        }
+        mintOutputs += (txOutput.value & TOKEN_MINT_MASK) > 0 ? 1 : 0;
+        meltOutputs += (txOutput.value & TOKEN_MELT_MASK) > 0 ? 1 : 0;
       }
     }
 
@@ -1226,12 +1221,10 @@ const tokens = {
       }
 
       // Validating script type
-      if (onlyStandardScriptType) {
-        if (!['p2pkh', 'p2sh'].includes(output.decoded.type.toLowerCase())) {
-          return false;
-        }
-      }
-      return true;
+      return (
+        !onlyStandardScriptType ||
+        [OutputType.P2PKH, OutputType.P2SH].includes(output.decoded.type.toLowerCase())
+      );
     }
   },
 
