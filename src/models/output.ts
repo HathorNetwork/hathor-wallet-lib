@@ -32,6 +32,11 @@ class Output {
   // Decoded output script
   decodedScript: P2PKH | P2SH | ScriptData | null;
 
+  /**
+   * Maximum length of an output script
+   */
+  static get MAXIMUM_SCRIPT_LENGTH() { return 256 };
+
   constructor(value: number, script: Buffer, options: optionsType = {}) {
     const defaultOptions = {
       tokenData: 0,
@@ -130,7 +135,7 @@ class Output {
   getTokenIndex(): number {
     return (this.tokenData & TOKEN_INDEX_MASK) - 1;
   }
-  
+
   /**
    * Serialize an output to bytes
    *

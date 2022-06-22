@@ -6,8 +6,7 @@
  */
 
 import tokens from '../src/tokens';
-import { DEFAULT_TX_VERSION, GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../src/constants';
-import { HDPrivateKey } from 'bitcore-lib';
+import { DEFAULT_TX_VERSION, HATHOR_TOKEN_CONFIG, MAX_OUTPUTS } from '../src/constants';
 import wallet from '../src/wallet';
 import version from '../src/version';
 import { util } from 'bitcore-lib';
@@ -273,6 +272,21 @@ describe('isNFTToken', () => {
     expect.assertions(1);
     const tx = cloneNftSample();
     tx.outputs.length = 1;
+    expect(tokens.isNFTToken(tx)).toBe(false);
+  });
+
+  it('should validate maximum outputs of a transaction', () => {
+    expect.assertions(2);
+    const tx = cloneNftSample();
+
+    // Validating maximum allowed outputs
+    for (let i = 1; i < MAX_OUTPUTS; ++i) {
+      tx.outputs[i] = lodash.cloneDeep(nftCreationTx.outputs[1]);
+    }
+    expect(tokens.isNFTToken(tx)).toBe(true);
+
+    // Validating invalid amount of outputs
+    tx.outputs.push(lodash.cloneDeep(nftCreationTx.outputs[1]));
     expect(tokens.isNFTToken(tx)).toBe(false);
   });
 

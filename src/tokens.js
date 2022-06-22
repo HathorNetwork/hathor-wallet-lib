@@ -17,8 +17,17 @@ import helpersUtils from './utils/helpers';
 import walletApi from './api/wallet';
 import SendTransaction from './new/sendTransaction';
 import { InsufficientFundsError, ConstantNotSet, TokenValidationError } from './errors';
-import { TOKEN_DEPOSIT_PERCENTAGE, CREATE_TOKEN_TX_VERSION, HATHOR_TOKEN_CONFIG, TOKEN_MINT_MASK, TOKEN_MELT_MASK, AUTHORITY_TOKEN_DATA } from './constants';
+import {
+  TOKEN_DEPOSIT_PERCENTAGE,
+  CREATE_TOKEN_TX_VERSION,
+  HATHOR_TOKEN_CONFIG,
+  TOKEN_MINT_MASK,
+  TOKEN_MELT_MASK,
+  AUTHORITY_TOKEN_DATA,
+  MAX_OUTPUTS
+} from './constants';
 import { OutputType } from './wallet/types';
+import Output from './models/output';
 
 
 /**
@@ -1137,7 +1146,7 @@ const tokens = {
    * Checks if this transaction is the creation of an NFT following the NFT Standard Creation.
    * @see https://github.com/HathorNetwork/rfcs/blob/master/text/0032-nft-standard.md#transaction-standard
    *
-   * @param {Object} tx Transaction with decoded inputs and outputs
+   * @param {Transaction} tx Transaction with decoded inputs and outputs
    *
    * @return {boolean}
    */
@@ -1152,8 +1161,11 @@ const tokens = {
       return false;
     }
 
-    // NFT creation must have at least a DataScript output (the first one) and a Token P2PKH output
-    if (tx.outputs.length < 2) {
+    /*
+     * NFT creation must have at least a DataScript output (the first one) and a Token P2PKH output.
+     * Also validating maximum outputs of transactions in general
+     */
+    if (tx.outputs.length < 2 || tx.outputs.length > MAX_OUTPUTS) {
       return false;
     }
 
@@ -1210,19 +1222,19 @@ const tokens = {
     /**
      * Identifies if the informed output script size is standard
      * @param {TxOutput} output The transaction output, already decoded
-     * @param {boolean} [onlyStandardScriptType=false] If true, the decoded type will also be validated
+     * @param {boolean} [strictScriptType=false] If true, the decoded type will also be validated
      *
      * @return {boolean}
      */
-    function hasStandardScript(output, onlyStandardScriptType = false) {
+    function hasStandardScript(output, strictScriptType = false) {
       // Validating maximum allowed length
-      if (output.script.length > 256) {
+      if (output.script.length > Output.MAXIMUM_SCRIPT_LENGTH) {
         return false;
       }
 
       // Validating script type
       return (
-        !onlyStandardScriptType ||
+        !strictScriptType ||
         [OutputType.P2PKH, OutputType.P2SH].includes(output.decoded.type.toLowerCase())
       );
     }
