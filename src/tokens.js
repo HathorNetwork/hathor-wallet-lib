@@ -1135,7 +1135,10 @@ const tokens = {
   /**
    * Checks if this transaction is the creation of an NFT following the NFT Standard Creation.
    * @see https://github.com/HathorNetwork/rfcs/blob/master/text/0032-nft-standard.md#transaction-standard
+   *
    * @param {Object} tx Transaction with decoded inputs and outputs
+   *
+   * @return {boolean}
    */
   isNFTToken(tx) {
     // Basic input validation
@@ -1166,8 +1169,9 @@ const tokens = {
     // Validating the remaining outputs
     let mintOutputs = 0;
     let meltOutputs = 0;
+    // Iterating on all but the first output for validation and counting authorities
     for (let i = 1; i < tx.outputs.length; ++i) {
-      // All the outputs must also have standard scripts
+      // Should have a standard script
       const txOutput = tx.outputs[i];
       if (!hasStandardScript(txOutput, true)) {
         return false;
@@ -1212,6 +1216,8 @@ const tokens = {
      * Identifies if the informed output script size is standard
      * @param {TxOutput} output The transaction output, already decoded
      * @param {boolean} [onlyStandardScriptType=false] If true, the decoded type will also be validated
+     *
+     * @return {boolean}
      */
     function hasStandardScript(output, onlyStandardScriptType = false) {
       // Validating maximum allowed length
