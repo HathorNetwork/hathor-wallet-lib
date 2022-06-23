@@ -15,6 +15,7 @@ import { TokenValidationError } from '../src/errors';
 import storage from '../src/storage';
 import lodash from 'lodash';
 import { nftCreationTx } from './__fixtures__/sample_txs';
+import { OutputType } from '../src/wallet/types';
 
 
 const createdTxHashBeforeMining = '5ecac1124aada88c750acdccede58d0308b593923c3034f373403b63ba4edbac';
@@ -291,7 +292,7 @@ describe('isNFTToken', () => {
   });
 
   it('should return false for a fee output with wrong data', () => {
-    expect.assertions(2);
+    expect.assertions(3);
     const tx = cloneNftSample();
 
     // Wrong Value
@@ -301,6 +302,13 @@ describe('isNFTToken', () => {
     // Wrong Token Data
     tx.outputs[0].value = 1;
     tx.outputs[0].token_data = 1;
+    expect(tokens.isNFTToken(tx)).toBe(false);
+
+    // Wrong Token Script
+    tx.outputs[0].token_data = 0;
+    tx.outputs[0].script = Buffer
+      .from(tx.outputs[0].script,'base64')
+      .toString('hex');
     expect(tokens.isNFTToken(tx)).toBe(false);
   });
 
@@ -314,7 +322,7 @@ describe('isNFTToken', () => {
 
     // Non-standard output type
     tx.outputs[1].script = nftCreationTx.outputs[1].script;
-    tx.outputs[1].decoded.type = 'data';
+    tx.outputs[1].decoded.type = OutputType.DATA;
     expect(tokens.isNFTToken(tx)).toBe(false);
   });
 

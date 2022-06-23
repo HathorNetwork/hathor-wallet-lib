@@ -28,6 +28,7 @@ import {
 } from './constants';
 import { OutputType } from './wallet/types';
 import Output from './models/output';
+import { parseScriptData } from './utils/scripts';
 
 
 /**
@@ -1172,6 +1173,14 @@ const tokens = {
     // NFT creation DataScript output must have value 1 and must be of HTR
     const firstOutput = tx.outputs[0];
     if (firstOutput?.value !== 1 || firstOutput?.token_data !== 0) {
+      return false;
+    }
+    // Validating this script is a valid DataScript
+    try {
+      parseScriptData(Buffer.from(firstOutput.script, 'base64'))
+    }
+    catch (err) {
+      // If it's not a valid Datascript, it will throw on parsing
       return false;
     }
     // First output must also have a standard-compliant script

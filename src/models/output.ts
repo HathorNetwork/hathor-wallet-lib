@@ -34,8 +34,9 @@ class Output {
 
   /**
    * Maximum length of an output script
+   * @type {number}
    */
-  static get MAXIMUM_SCRIPT_LENGTH() { return 256 };
+  static readonly MAXIMUM_SCRIPT_LENGTH: number = 256;
 
   constructor(value: number, script: Buffer, options: optionsType = {}) {
     const defaultOptions = {
