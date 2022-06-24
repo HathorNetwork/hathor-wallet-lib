@@ -107,5 +107,27 @@ WebSocketHandler.websocket = new WS({ wsURL });
 WebSocketHandler.websocket.WebSocket = WebSocket;
 WebSocketHandler.websocket.setup();
 
+expect.extend({
+  toMatchBuffer(received, expected) {
+    let pass;
+    if ((received instanceof Buffer === false) || (expected instanceof Buffer === false)) {
+      pass = false;
+    } else {
+      pass = expected.equals(received);
+    }
+    if (pass) {
+      return {
+        message: () => `expected Buffer(${received.toString('hex')}) to not match expected Buffer(${expected.toString('hex')})`,
+        pass: true,
+      }
+    } else {
+      return {
+        message: () => `expected Buffer(${received.toString('hex')}) to match expected Buffer(${expected.toString('hex')})`,
+        pass: false,
+      }
+    }
+  }
+});
+
 
 global.window = {};

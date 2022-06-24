@@ -47,15 +47,15 @@ describe('PartialTx.getTxData', () => {
     const partialTx = new PartialTx(testnet);
     const data = partialTx.getTxData();
 
-    expect(data.inputs).toBeDefined();
-    expect(data.inputs).toHaveLength(0);
-    expect(data.outputs).toBeDefined();
-    expect(data.outputs).toHaveLength(0);
-    expect(data.tokens).toBeDefined();
-    expect(data.timestamp).toBeDefined();
-    expect(data.weight).toBe(0);
-    expect(data.nonce).toBe(0);
-    expect(data.version).toBe(DEFAULT_TX_VERSION);
+    expect(data).toEqual(expect.objectContaining({
+      inputs: [],
+      outputs: [],
+      tokens: [],
+      timestamp: expect.any(Number),
+      weight: 0,
+      nonce: 0,
+      version: DEFAULT_TX_VERSION,
+    }));
   });
 
   it('should map inputs and outputs to data.', () => {
@@ -72,8 +72,11 @@ describe('PartialTx.getTxData', () => {
     // Expect that toData has been called correctly for both inputs and outputs
     expect(spyInput).toHaveBeenCalledTimes(5);
     expect(spyOutput).toHaveBeenCalledTimes(3);
-    expect(data.inputs).toEqual([0, 1, 2, 3, 4]);
-    expect(data.outputs).toEqual([10, 9, 8]);
+
+    expect(data).toEqual(expect.objectContaining({
+      inputs: [0, 1, 2, 3, 4],
+      outputs: [10, 9, 8],
+    }));
   });
 });
 
@@ -231,30 +234,23 @@ describe('PartialTx.addInput', () => {
     });
 
     const partialTx = new PartialTx(testnet);
+    const expected = []
 
+    expected.push(expect.objectContaining({ hash: '1', token: '1', value: 1 }));
     await partialTx.addInput('1', 0);
-    expect(partialTx.inputs).toHaveLength(1);
-    expect(partialTx.inputs[0].hash).toBe('1');
-    expect(partialTx.inputs[0].token).toBe('1');
-    expect(partialTx.inputs[0].value).toBe(1);
+    expect(partialTx.inputs).toEqual(expected);
 
+    expected.push(expect.objectContaining({ hash: '2', token: '2', value: 4 }));
     await partialTx.addInput('2', 1);
-    expect(partialTx.inputs).toHaveLength(2);
-    expect(partialTx.inputs[1].hash).toBe('2');
-    expect(partialTx.inputs[1].token).toBe('2');
-    expect(partialTx.inputs[1].value).toBe(4);
+    expect(partialTx.inputs).toEqual(expected);
 
+    expected.push(expect.objectContaining({ hash: '1', token: HATHOR_TOKEN_CONFIG.uid, value: 2 }));
     await partialTx.addInput('1', 1);
-    expect(partialTx.inputs).toHaveLength(3);
-    expect(partialTx.inputs[2].hash).toBe('1');
-    expect(partialTx.inputs[2].token).toBe(HATHOR_TOKEN_CONFIG.uid);
-    expect(partialTx.inputs[2].value).toBe(2);
+    expect(partialTx.inputs).toEqual(expected);
 
+    expected.push(expect.objectContaining({ hash: '2', token: HATHOR_TOKEN_CONFIG.uid, value: 3 }));
     await partialTx.addInput('2', 0);
-    expect(partialTx.inputs).toHaveLength(4);
-    expect(partialTx.inputs[3].hash).toBe('2');
-    expect(partialTx.inputs[3].token).toBe(HATHOR_TOKEN_CONFIG.uid);
-    expect(partialTx.inputs[3].value).toBe(3);
+    expect(partialTx.inputs).toEqual(expected);
   });
 });
 
@@ -266,23 +262,29 @@ describe('PartialTx.addOutput', () => {
     const partialTx = new PartialTx(testnet);
 
     expect(partialTx.outputs).toHaveLength(0);
+    const expected = [];
 
+    expected.push(expect.objectContaining({
+      token: '1',
+      isChange: true,
+      value: 27,
+      script: expect.toMatchBuffer(Buffer.from([230, 148, 32])),
+      // Since the tokens array has not been formed, the default value 0 is kept
+      tokenData: 0,
+    }));
     partialTx.addOutput(27, Buffer.from([230, 148, 32]), '1', true);
-    expect(partialTx.outputs).toHaveLength(1);
-    expect(partialTx.outputs[0].token).toBe('1');
-    expect(partialTx.outputs[0].isChange).toBe(true);
-    expect(partialTx.outputs[0].value).toBe(27);
-    expect(partialTx.outputs[0].script.toString('hex')).toBe(Buffer.from([230, 148, 32]).toString('hex'));
-    // Since the tokens array has not been formed, the default value 0 is kept
-    expect(partialTx.outputs[0].tokenData).toBe(0);
+    expect(partialTx.outputs).toEqual(expected);
 
+    expected.push(expect.objectContaining({
+      token: '2',
+      isChange: false,
+      value: 72,
+      script: expect.toMatchBuffer(Buffer.from([1, 2, 3])),
+      // Since the tokens array has not been formed, the default value 0 is kept
+      tokenData: 0,
+    }));
     partialTx.addOutput(72, Buffer.from([1, 2, 3]), '2', false);
-    expect(partialTx.outputs).toHaveLength(2);
-    expect(partialTx.outputs[1].token).toBe('2');
-    expect(partialTx.outputs[1].isChange).toBe(false);
-    expect(partialTx.outputs[1].value).toBe(72);
-    expect(partialTx.outputs[1].script.toString('hex')).toBe(Buffer.from([1, 2, 3]).toString('hex'));
-    expect(partialTx.outputs[0].tokenData).toBe(0);
+    expect(partialTx.outputs).toEqual(expected);
   });
 });
 
@@ -338,8 +340,7 @@ describe('PartialTx serialization', () => {
     const serialized = partialTx.serialize();
     expect(serialized).toBe(expected);
     const parts = serialized.split('|');
-    expect(parts[0]).toBe('PartialTx');
-    expect(parts[1]).toBe(tx.toHex());
+    expect(parts).toEqual(['PartialTx', tx.toHex(), '1', '2']);
   });
 
   it('should deserialize a transaction correctly', async () => {
