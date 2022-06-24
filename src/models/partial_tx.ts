@@ -67,7 +67,7 @@ export class ProposalInput extends Input {
    * @memberof ProposalInput
    * @inner
    */
-  toData() {
+  toData(): InputData {
     return {
       tx_id: this.hash,
       index: this.index,
@@ -79,12 +79,12 @@ export class ProposalInput extends Input {
 
 export class ProposalOutput extends Output {
   token: string;
-  isChange: Boolean;
+  isChange: boolean;
 
   /**
    * We do not set tokenData because the token array is not yet formed
    */
-  constructor(value: number, script: Buffer, token: string, isChange: Boolean) {
+  constructor(value: number, script: Buffer, token: string, isChange: boolean) {
     super(value, script);
     this.token = token;
     this.isChange = isChange;
@@ -103,7 +103,7 @@ export class ProposalOutput extends Output {
    * @memberof ProposalOutput
    * @inner
    */
-  toData(tokenData: number, network: Network) {
+  toData(tokenData: number, network: Network): OutputData {
     const script = this.parseScript(network);
     if (!(script instanceof P2PKH || script instanceof P2SH)) {
       throw new UnsupportedScriptError('Unsupported script type');
@@ -125,27 +125,15 @@ export class ProposalOutput extends Output {
   }
 }
 
-/**
- * This class purpose is serialization/deserialization of signatures from a MultiSig participant
- * The structure of the serialized signature string is:
- * "<pubkey>|<index>:<signature>|<index>:<signature>|..."
- *
- * The `pubkey` is required so we can identify the original signer (and his position on the redeemScript)
- * The `<index>:<signature>` pair is the input index and the signature for that input.
- * The signature is formatted to DER and hex encoded.
- *
- * With this information we will be able to encode the signatures for all inputs on one string.
- * It also has all information needed to assemble the input data if you have enough participants' P2SHSignature serialized signatures.
- */
 export class PartialTx {
   inputs: ProposalInput[];
   outputs: ProposalOutput[];
   network: Network;
 
-  constructor(network?: Network) {
+  constructor(network: Network) {
     this.inputs = [];
     this.outputs = [];
-    this.network = network || new Network('mainnet');
+    this.network = network;
   }
 
   /**
@@ -157,7 +145,7 @@ export class PartialTx {
    * @memberof PartialTx
    * @inner
    */
-  getTxData() {
+  getTxData(): TxData {
     const tokenSet = new Set<string>();
     for (const output of this.outputs) {
       tokenSet.add(output.token);
@@ -190,18 +178,18 @@ export class PartialTx {
    * @memberof PartialTx
    * @inner
    */
-  getTx() {
+  getTx(): Transaction {
     return helpers.createTxFromData(this.getTxData(), this.network);
   }
 
   /**
    * Calculate balance for all tokens from inputs and outputs.
    *
-   * @return {Record<string, number>}
+   * @return {Record<string, Record<string, number>>}
    * @memberof PartialTx
    * @inner
    */
-  calculateTokenBalance() {
+  calculateTokenBalance(): Record<string, Record<string, number>> {
     const tokenBalance: Record<string, Record<string, number>> = {};
     for (const input of this.inputs) {
       if (!(input.token in tokenBalance)) {
@@ -224,11 +212,11 @@ export class PartialTx {
   /**
    * Return true if the balance of the outputs match the balance of the inputs for all tokens.
    *
-   * @return {Boolean}
+   * @return {boolean}
    * @memberof PartialTx
    * @inner
    */
-  isComplete() {
+  isComplete(): boolean {
     const tokenBalance = this.calculateTokenBalance();
 
     // Calculated the final balance for all tokens
@@ -247,7 +235,7 @@ export class PartialTx {
    * @memberof PartialTx
    * @inner
    */
-  async addInput(txId: string, index: number) {
+  async addInput(txId: string, index: number): Promise<void> {
     // fetch token + value from txId + index
     await txApi.getTransaction(txId, (data) => {
       const utxo = data.tx.outputs[index];
@@ -263,12 +251,12 @@ export class PartialTx {
    * @param {number} value The amount of tokens on the output.
    * @param {Buffer} script The output script.
    * @param {string} token The token UID.
-   * @param {Boolean} isChange If this is a change output.
+   * @param {boolean} isChange If this is a change output.
    *
    * @memberof PartialTx
    * @inner
    */
-  addOutput(value: number, script: Buffer, token: string, isChange: Boolean) {
+  addOutput(value: number, script: Buffer, token: string, isChange: boolean) {
     this.outputs.push(new ProposalOutput(
       value,
       script,
@@ -286,7 +274,7 @@ export class PartialTx {
    * @memberof PartialTx
    * @inner
    */
-  serialize() {
+  serialize(): string {
     const changeOutputs: number[] = [];
     this.outputs.forEach((output, index) => {
       if (output.isChange) {
@@ -294,7 +282,7 @@ export class PartialTx {
       }
     });
     const tx = this.getTx();
-    const arr = ['PartialTx', tx.toHex(), changeOutputs.join('|')];
+    const arr = ['PartialTx', tx.toHex(), ...changeOutputs];
     return arr.join('|');
   }
 
@@ -312,8 +300,7 @@ export class PartialTx {
    * @memberof PartialTx
    * @static
    */
-  static async deserialize(serialized: string, network: Network) {
-    const netw = network || new Network('mainnet');
+  static async deserialize(serialized: string, network: Network): Promise<PartialTx> {
 
     const dataArr = serialized.split('|');
     const changeOutputs = dataArr.slice(2).map(x => +x);
@@ -323,9 +310,9 @@ export class PartialTx {
     }
 
     const txHex = dataArr[1];
-    const tx = helpers.createTxFromHex(txHex, netw);
+    const tx = helpers.createTxFromHex(txHex, network);
 
-    const instance = new PartialTx(netw);
+    const instance = new PartialTx(network);
 
     for (const input of tx.inputs) {
       await instance.addInput(input.hash, input.index);
@@ -333,13 +320,13 @@ export class PartialTx {
 
     for (const [index, output] of tx.outputs.entries()) {
       // validate script
-      const script = output.parseScript(netw);
+      const script = output.parseScript(network);
       if (!(script instanceof P2PKH || script instanceof P2SH)) {
         throw new UnsupportedScriptError('Unsupported script type');
       }
 
       if (output.isAuthority()) {
-        // TODO: we dont allow passing authority on atomic swap?
+        // TODO: we dont allow passing authority on atomic swap
         throw new Error('Authority outputs are unsupported');
       }
 
@@ -390,11 +377,11 @@ export class PartialTxInputData {
   /**
    * Return true if we have an input data for each input.
    *
-   * @return {Boolean}
+   * @return {boolean}
    * @memberof PartialTxInputData
    * @inner
    */
-  isComplete() {
+  isComplete(): boolean {
     return Object.values(this.data).length === this.inputsLen;
   }
 
@@ -405,7 +392,7 @@ export class PartialTxInputData {
    * @memberof PartialTxInputData
    * @inner
    */
-  serialize() {
+  serialize(): string {
     const arr = ['PartialTxInputData', this.hash];
     for (const [index, buf] of Object.entries(this.data)) {
       arr.push(`${index}:${buf.toString('hex')}`);

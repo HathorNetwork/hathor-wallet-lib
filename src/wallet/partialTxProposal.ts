@@ -9,26 +9,30 @@ import { PartialTx, PartialTxInputData } from '../models/partial_tx';
 import Address from '../models/address';
 import P2SH from '../models/p2sh';
 import P2PKH from '../models/p2pkh';
+import Transaction from '../models/transaction';
 import { AddressError, IncompletePartialTxError, InsufficientFundsError } from '../errors';
 import wallet from '../wallet';
 import Network from '../models/network';
 
 import transaction from '../transaction';
 import helpers from '../utils/helpers';
-import { Transaction } from 'bitcore-lib';
+
+import { OutputType } from './types';
 
 class PartialTxProposal {
 
+  network: Network;
+  public partialTx: PartialTx;
+  public signatures: PartialTxInputData|null;
+  private transaction: Transaction|null;
+
   /**
-   * @param {Object} options
-   * @param {PartialTx|null} [options.partialTx]
-   * @param {Network|null} [options.network]
+   * @param {Network} network
    */
-  constructor({ partialTx = null, network = null }) {
-    this.network = network || new Network('mainnet');
-    this.partialTx = partialTx || new PartialTx(network);
+  constructor(network: Network) {
+    this.network = network;
+    this.partialTx = new PartialTx(this.network);
     this.signatures = null;
-    this.txdata = null;
     this.transaction = null;
   }
 
@@ -36,19 +40,18 @@ class PartialTxProposal {
    * Create a PartialTxProposal instance from the serialized string.
    *
    * @param {string} serialized Serialized PartialTx data
-   * @param {Object} [options]
-   * @param {Network} [options.network] network
+   * @param {Network} network network
    *
    * @throws {SyntaxError} serialized argument should be a valid PartialTx.
    * @throws {UnsupportedScriptError} All outputs should be P2SH or P2PKH
    *
    * @returns {PartialTxProposal}
    */
-  static async fromPartialTx(serialized, options = {}) {
-    const { network } = Object.assign({ network: null }, options);
-
+  static async fromPartialTx(serialized: string, network: Network) {
     const partialTx = await PartialTx.deserialize(serialized, network);
-    return new PartialTxProposal({partialTx, network});
+    const proposal = new PartialTxProposal(network);
+    proposal.partialTx = partialTx;
+    return proposal;
   }
 
   /**
@@ -57,15 +60,17 @@ class PartialTxProposal {
    * @param {string} token UID of token that is being sent
    * @param {number} value Quantity of tokens being sent
    * @param {Object} [options]
-   * @param {string} [options.changeAddress] If we add change, use this address instead of getting a new one from the wallet.
-   * @param {boolean} [options.markAsSelected] Mark the utxo with `selected_as_input`.
+   * @param {string|null} [options.changeAddress=null] If we add change, use this address instead of getting a new one from the wallet.
+   * @param {boolean} [options.markAsSelected=true] Mark the utxo with `selected_as_input`.
    *
    * @throws InsufficientFundsError
    */
-  async addSend(token, value, options = {}) {
+  async addSend(
+    token: string,
+    value: number,
+    { changeAddress = null, markAsSelected = true }: { changeAddress?: number|null, markAsSelected?: boolean } = {},
+  ) {
     this.resetSignatures();
-
-    const { changeAddress, markAsSelected } = Object.assign({ changeAddress: wallet.getCurrentAddress(), markAsSelected: true }, options);
 
     const walletData = wallet.getWalletData();
     const historyTransactions = walletData['historyTransactions'] || {};
@@ -80,10 +85,11 @@ class PartialTxProposal {
 
     // add change output if needed
     if (newData.inputsAmount > value) {
+      const address = changeAddress || wallet.getCurrentAddress();
       this.addOutput(
         token,
         newData.inputsAmount - value,
-        changeAddress,
+        address,
         { isChange: true },
       );
     }
@@ -95,16 +101,19 @@ class PartialTxProposal {
    * @param {string} token UID of token that is being sent
    * @param {number} value Quantity of tokens being sent
    * @param {Object} [options]
-   * @param {number} [options.timelock] UNIX timestamp of the timelock.
+   * @param {number|null} [options.timelock=null] UNIX timestamp of the timelock.
+   * @param {string|null} [options.address=null] Output address to receive the tokens.
    *
    */
-  addReceive(token, value, options) {
+  addReceive(
+    token: string,
+    value: number,
+    { timelock = null, address = null }: { timelock?: number|null, address?: string|null } = {}) {
     this.resetSignatures();
 
-    const { timelock } = Object.assign({ timelock: null }, options);
     // get an address of our wallet and add the output
-    const address = wallet.getCurrentAddress();
-    this.addOutput(token, value, address, {timelock});
+    const addr = address || wallet.getCurrentAddress();
+    this.addOutput(token, value, addr, { timelock });
   }
 
   /**
@@ -114,14 +123,13 @@ class PartialTxProposal {
    * @param {string} hash Transaction hash
    * @param {number} index UTXO index on the outputs of the transaction.
    * @param {Object} [options]
-   * @param {boolean} [options.markAsSelected] Mark the utxo with `selected_as_input`.
+   * @param {boolean} [options.markAsSelected=true] Mark the utxo with `selected_as_input`.
    *
    * @returns {Promise<void>}
    */
-  async addInput(hash, index, options = {}) {
+  async addInput(hash: string, index: number, { markAsSelected = true }: { markAsSelected?: boolean } = {}) {
     this.resetSignatures();
 
-    const { markAsSelected } = Object.assign({ markAsSelected: true }, options);
     if (markAsSelected) {
       const walletData = wallet.getWalletData();
       const historyTransactions = walletData['historyTransactions'] || {};
@@ -142,21 +150,26 @@ class PartialTxProposal {
    * @param {number} value Quantity of tokens being sent.
    * @param {string} address Create the output script for this address.
    * @param {Object} [options]
-   * @param {number} [options.timelock] UNIX timestamp of the timelock.
-   * @param {boolean} [options.isChange] If the output should be considered as change.
+   * @param {number|null} [options.timelock=null] UNIX timestamp of the timelock.
+   * @param {boolean} [options.isChange=false] If the output should be considered as change.
    *
    * @throws AddressError
    */
-  addOutput(token, value, address, {timelock = null, isChange = false }) {
+  addOutput(
+    token: string,
+    value: number,
+    address: string,
+    { timelock = null, isChange = false }: { timelock?: number|null, isChange?: boolean } = {}
+  ) {
     this.resetSignatures();
 
     const addr = new Address(address, {network: this.network});
     let script;
     switch(addr.getType()) {
-      case 'p2sh':
+      case OutputType.P2SH:
         script = new P2SH(addr, { timelock });
         break
-      case 'p2pkh':
+      case OutputType.P2PKH:
         script = new P2PKH(addr, { timelock });
         break
       default:
@@ -165,14 +178,12 @@ class PartialTxProposal {
     this.partialTx.addOutput(value, script.createScript(), token, isChange);
   }
 
-
   /**
    * Reset any data calculated from the partial tx.
    */
   resetSignatures() {
     this.signatures = null;
     this.transaction = null;
-    this.txdata = null;
   }
 
   /**
@@ -208,23 +219,23 @@ class PartialTxProposal {
    * @throws {UnsupportedScriptError} When we have an unsupported output script.
    * @throws {IndexOOBError} input index should be inside the inputs array.
    */
-  signData(pin) {
+  signData(pin: string) {
     if (!this.partialTx.isComplete()) {
       // partialTx is not complete, we cannot sign it.
       throw new IncompletePartialTxError('Cannot sign incomplete data');
     }
 
-    // save data and sign inputs from the loaded wallet
-    this.txdata = transaction.prepareData(this.partialTx.getTxData(), pin);
-
-    const dataToSign = transaction.dataToSign(this.txdata);
+    const tx: Transaction = this.partialTx.getTx();
 
     this.signatures = new PartialTxInputData(
-      dataToSign.toString('hex'),
-      this.txdata.inputs.length
+      tx.getDataToSign().toString('hex'),
+      tx.inputs.length
     );
 
-    for (const [index, input] of this.txdata.inputs.entries()) {
+    // sign inputs from the loaded wallet and save input data
+    const txdata = transaction.prepareData(this.partialTx.getTxData(), pin);
+
+    for (const [index, input] of txdata.inputs.entries()) {
       if ('data' in input && input.data.length > 0) {
         // add all signatures we know of this tx
         this.signatures.addData(index, input.data);
@@ -240,23 +251,30 @@ class PartialTxProposal {
    * @returns {Transaction}
    */
   prepareTx() {
-    if (!this.isComplete()) {
-      throw new IncompletePartialTxError('Incomplete data or signatures');
+    if (!this.partialTx.isComplete()) {
+      throw new IncompletePartialTxError('Incomplete data');
+    }
+
+    if (this.signatures === null || !this.signatures.isComplete()) {
+      throw new IncompletePartialTxError('Incomplete signatures');
     }
 
     if (this.transaction !== null) {
       return this.transaction;
     }
 
+    const txdata = this.partialTx.getTxData();
+
+    // const data = this.signatures === null ? {} : this.signatures.data;
+
     for (const [index, inputData] of Object.entries(this.signatures.data)) {
-      this.txdata.inputs[index].data = inputData;
+      txdata.inputs[index].data = inputData;
     }
 
-    // XXX: We need to recalculate weight since the last time it was calculated may not have had all signatures
-    this.txdata.weight = 0;
-    transaction.setWeightIfNeeded(this.txdata);
-
-    this.transaction = helpers.createTxFromData(this.txdata, this.network);
+    this.transaction = helpers.createTxFromData(
+      transaction.prepareData(txdata, '', { getSignature: false }),
+      this.network,
+    );
 
     return this.transaction;
   }
