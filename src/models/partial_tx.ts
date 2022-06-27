@@ -25,8 +25,8 @@ import { TOKEN_AUTHORITY_MASK, TOKEN_INDEX_MASK, HATHOR_TOKEN_CONFIG } from '../
 type InputData = {
   tx_id: string,
   index: number,
-  address?: string,
-  data: Buffer,
+  address: string,
+  data?: Buffer,
 };
 
 type OutputData = {
@@ -38,6 +38,7 @@ type OutputData = {
   timelock?: number,
 };
 
+// Transaction data to use with helpers
 type TxData = {
   inputs: InputData[],
   outputs: OutputData[],
@@ -48,6 +49,10 @@ type TxData = {
   timestamp?: number,
 };
 
+/**
+ * Extended version of the Input class with extra data
+ * We need the extra data to calculate the balance of the PartialTx
+ */
 export class ProposalInput extends Input {
   token: string;
   value: number;
@@ -71,12 +76,16 @@ export class ProposalInput extends Input {
     return {
       tx_id: this.hash,
       index: this.index,
-      data: Buffer.from([]),
       address: this.address,
     };
   }
 }
 
+/**
+ * Extended version of the Output class with extra data
+ * We need the extra data to calculate the token_data of the
+ * output on the final transaction and to track which outputs are change.
+ */
 export class ProposalOutput extends Output {
   token: string;
   isChange: boolean;
@@ -125,6 +134,10 @@ export class ProposalOutput extends Output {
   }
 }
 
+/**
+ * This class purpose is to hold and modify the state of the partial transaction.
+ * It is also used to serialize and deserialize the partial transaction state.
+ */
 export class PartialTx {
   inputs: ProposalInput[];
   outputs: ProposalOutput[];
@@ -345,6 +358,15 @@ export class PartialTx {
   }
 }
 
+/**
+ * This class is meant to aggregate input data for a transaction.
+ *
+ * The `hash` is an identifier of the transaction (usually the dataToSign in hex format)
+ * this way any input data added should identify that it is from the same transaction.
+ *
+ * The input data is saved instead of the signature to allow collecting from MultiSig wallets
+ * since for an input we can have multiple signatures.
+ */
 export class PartialTxInputData {
   data: Record<number, Buffer>;
   hash: string;
