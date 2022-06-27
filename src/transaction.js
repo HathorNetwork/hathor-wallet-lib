@@ -594,7 +594,7 @@ const transaction = {
     for (let inputTx of txData.inputs) {
       arr.push(hexToBuffer(inputTx.tx_id));
       arr.push(this.intToBytes(inputTx.index, 1));
-      if (inputTx.data && inputTx.data.length !== 0) {
+      if (inputTx.data) {
         arr.push(this.intToBytes(inputTx.data.length, 2));
         arr.push(inputTx.data);
       } else {
