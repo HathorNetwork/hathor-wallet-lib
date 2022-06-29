@@ -29,6 +29,11 @@ type optionsType = {
   timelock?: number | null | undefined,
 };
 
+/**
+ * Maximum length of an output script
+ * @type {number}
+ */
+export const MAXIMUM_SCRIPT_LENGTH: number = 256;
 
 class Output {
   // Output value as an integer
@@ -39,12 +44,6 @@ class Output {
   script: Buffer;
   // Decoded output script
   decodedScript: P2PKH | P2SH | ScriptData | null;
-
-  /**
-   * Maximum length of an output script
-   * @type {number}
-   */
-  static readonly MAXIMUM_SCRIPT_LENGTH: number = 256;
 
   constructor(value: number, script: Buffer, options: optionsType = {}) {
     const defaultOptions = {
@@ -256,7 +255,7 @@ class Output {
    * @inner
    */
   hasValidLength(): boolean {
-    return this.script.length <= Output.MAXIMUM_SCRIPT_LENGTH;
+    return this.script.length <= MAXIMUM_SCRIPT_LENGTH;
   }
 
   /**

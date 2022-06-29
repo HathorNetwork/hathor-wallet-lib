@@ -27,7 +27,7 @@ import {
   MAX_OUTPUTS
 } from './constants';
 import { OutputType } from './wallet/types';
-import Output from './models/output';
+import Output, { MAXIMUM_SCRIPT_LENGTH } from './models/output';
 import { parseScriptData } from './utils/scripts';
 
 
@@ -1237,7 +1237,7 @@ const tokens = {
      */
     function hasStandardScript(output, strictScriptType = false) {
       // Validating maximum allowed length
-      if (output.script.length > Output.MAXIMUM_SCRIPT_LENGTH) {
+      if (output.script.length > MAXIMUM_SCRIPT_LENGTH) {
         return false;
       }
 
