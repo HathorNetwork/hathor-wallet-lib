@@ -5,17 +5,27 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { TX_HASH_SIZE_BYTES, MERGED_MINED_BLOCK_VERSION, BLOCK_VERSION, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, DECIMAL_PLACES, TOKEN_INFO_VERSION, TX_WEIGHT_CONSTANTS, MAX_INPUTS, MAX_OUTPUTS } from '../constants';
-import { crypto as cryptoBL, encoding, util } from 'bitcore-lib';
-import { bufferToHex, hexToBuffer, unpackToInt, unpackToHex, unpackToFloat } from '../utils/buffer';
-import helpers from '../utils/helpers';
-import Input from './input';
-import Output from './output';
-import Network from './network';
-import { CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError } from '../errors';
-import buffer from 'buffer';
-import { clone } from 'lodash';
-import crypto from 'crypto';
+import {
+  BLOCK_VERSION,
+  CREATE_TOKEN_TX_VERSION,
+  DECIMAL_PLACES,
+  DEFAULT_TX_VERSION,
+  MAX_INPUTS,
+  MAX_OUTPUTS,
+  MERGED_MINED_BLOCK_VERSION,
+  TX_HASH_SIZE_BYTES,
+  TX_WEIGHT_CONSTANTS
+} from '../constants'
+import {crypto as cryptoBL, encoding, util} from 'bitcore-lib'
+import {bufferToHex, hexToBuffer, unpackToFloat, unpackToHex, unpackToInt} from '../utils/buffer'
+import helpers from '../utils/helpers'
+import Input from './input'
+import Output from './output'
+import Network from './network'
+import {MaximumNumberInputsError, MaximumNumberOutputsError} from '../errors'
+import buffer from 'buffer'
+import {clone} from 'lodash'
+import crypto from 'crypto'
 
 enum txType {
   BLOCK = 'Block',
@@ -33,6 +43,49 @@ type optionsType = {
   tokens?: string[],
   hash?: string | null,
 };
+
+export type HistoryTransactionOutput = {
+  value: number,
+  token_data: number,
+  script: string,
+  decoded: {
+    type?: string,
+    address?: string,
+    timelock?: number | null,
+  },
+  token: string,
+  spent_by?: string | null,
+  selected_as_input?: boolean,
+};
+
+export type HistoryTransactionInput = {
+  value: number,
+  token_data: number,
+  script: string,
+  decoded: {
+    type?: string,
+    address?: string,
+    timelock?: number | null,
+  },
+  token: string,
+  tx_id: string,
+  index: number,
+};
+
+export type HistoryTransaction = {
+  tx_id: string,
+  version: number,
+  weight: number,
+  timestamp: number,
+  is_voided: boolean,
+  nonce: number,
+  inputs: HistoryTransactionInput[],
+  outputs: HistoryTransactionOutput[],
+  parents: string[],
+  token_name?: string,
+  token_symbol?: string,
+  tokens: string[],
+}
 
 class Transaction {
   inputs: Input[];
@@ -88,7 +141,7 @@ class Transaction {
 
   /**
    * Return transaction data to sign in inputs
-   * 
+   *
    * @return {Buffer}
    * @memberof Transaction
    * @inner
@@ -230,7 +283,7 @@ class Transaction {
 
   /**
    * Calculate the minimum tx weight
-   * 
+   *
    * @throws {ConstantNotSet} If the weight constants are not set yet
    *
    * @return {number} Minimum weight calculated (float)
@@ -507,6 +560,28 @@ class Transaction {
     tx.updateHash();
 
     return tx;
+  }
+
+  /**
+   * Creates a Transaction instance from an instance of a wallet's history
+   * @param {HistoryTransaction} historyTx A transaction formatted as an instance of a wallet history
+   *
+   * @memberof Transaction
+   * @static
+   * @inner
+   *
+   * @example
+   * const historyTx = myHathorWallet.getTx(myTxHash);
+   * const txInstance = Transaction.createFromHistoryObject(historyTx);
+   */
+  static createFromHistoryObject(historyTx: HistoryTransaction) {
+    const inputs = historyTx.inputs.map(i => new Input(i.tx_id, i.index))
+    const outputs = historyTx.outputs.map(Output.createFromHistoryObject);
+
+    return new Transaction(
+      inputs,
+      outputs,
+      {...historyTx});
   }
 
   /**

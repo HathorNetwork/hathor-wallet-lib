@@ -14,8 +14,10 @@ import Address from '../../src/models/address';
 import Network from '../../src/models/network';
 import { hexToBuffer, bufferToHex } from '../../src/utils/buffer';
 import helpers from '../../src/utils/helpers';
-import { DEFAULT_TX_VERSION } from '../../src/constants';
+import { DEFAULT_TX_VERSION, MAX_OUTPUTS } from '../../src/constants';
 import { MaximumNumberInputsError, MaximumNumberOutputsError, ParseError } from '../../src/errors';
+import { nftCreationTx } from '../__fixtures__/sample_txs';
+import lodash from 'lodash';
 
 const compareTxs = (tx, tx2) => {
   expect(tx2.version).toBe(tx.version);
@@ -57,7 +59,7 @@ const compareTxs = (tx, tx2) => {
 
 
 test('New tx', () => {
-  
+
   const network = new Network('testnet');
   const address1 = new Address('WR1i8USJWQuaU423fwuFQbezfevmT4vFWX');
   const p2pkh1 = new P2PKH(address1);
@@ -337,3 +339,46 @@ test('Known transactions hash', () => {
   expect(tx3.hash).toBe('0000e39fa77e4146b4487a9b7352a05aa07a0da8e8f793280640cae5a7c6e8e3');
 
 });
+
+describe('NFT Validation', () => {
+  const cloneNftSample = () => lodash.cloneDeep(nftCreationTx);
+  const network = new Network('privatenet');
+
+  it('should validate a NFT creation tx', () => {
+    expect.assertions(1);
+
+    const historyTx = cloneNftSample();
+    const txInstance = CreateTokenTransaction.createFromHistoryObject(historyTx);
+
+    expect(() => {
+      txInstance.validateNftCreation(network);
+    }).not.toThrow()
+  })
+
+  it('should throw for a token-creating tx with less than 2 outputs', () => {
+    expect.assertions(1);
+
+    const historyTx = cloneNftSample();
+    historyTx.outputs.length = 1; // Removing all outputs from index 1 onwards
+    const txInstance = CreateTokenTransaction.createFromHistoryObject(historyTx);
+
+    expect(() => txInstance.validateNftCreation(network)).toThrow()
+  });
+
+  it('should validate maximum outputs of a transaction', () => {
+    expect.assertions(2);
+
+    const historyTx = cloneNftSample();
+    const txInstance = CreateTokenTransaction.createFromHistoryObject(historyTx);
+
+    // Adding outputs within allowed limit
+    for (let i = 1; i < MAX_OUTPUTS; ++i) {
+      txInstance.outputs[i] = Output.createFromHistoryObject(historyTx.outputs[1]);
+    }
+    expect(() => txInstance.validateNftCreation(network)).not.toThrow()
+
+    // Validating invalid amount of outputs
+    txInstance.outputs.push(Output.createFromHistoryObject(historyTx.outputs[1]));
+    expect(() => txInstance.validateNftCreation(network)).toThrow()
+  });
+})

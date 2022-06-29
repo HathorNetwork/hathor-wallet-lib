@@ -5,16 +5,24 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { MAX_OUTPUT_VALUE_32, MAX_OUTPUT_VALUE, TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, TOKEN_INDEX_MASK } from '../constants';
-import { OutputValueError, ParseError } from '../errors';
-import helpers from '../utils/helpers';
-import P2PKH from './p2pkh';
-import P2SH from './p2sh';
-import ScriptData from './script_data';
-import Network from './network';
-import { unpackToInt, unpackLen, bytesToOutputValue } from '../utils/buffer';
-import { parseP2PKH, parseP2SH, parseScriptData } from '../utils/scripts';
-import _ from 'lodash';
+import {
+  MAX_OUTPUT_VALUE,
+  MAX_OUTPUT_VALUE_32,
+  TOKEN_AUTHORITY_MASK,
+  TOKEN_INDEX_MASK,
+  TOKEN_MELT_MASK,
+  TOKEN_MINT_MASK
+} from '../constants'
+import {OutputValueError, ParseError} from '../errors'
+import helpers from '../utils/helpers'
+import P2PKH from './p2pkh'
+import P2SH from './p2sh'
+import ScriptData from './script_data'
+import Network from './network'
+import {bytesToOutputValue, unpackLen, unpackToInt} from '../utils/buffer'
+import {parseP2PKH, parseP2SH, parseScriptData} from '../utils/scripts'
+import _ from 'lodash'
+import {HistoryTransactionOutput} from "./transaction"
 
 type optionsType = {
   tokenData?: number | undefined,
@@ -85,7 +93,7 @@ class Output {
     }
   }
 
-  /*
+  /**
    * Returns if output is authority
    *
    * @return {boolean} If it's an authority output or not
@@ -97,7 +105,7 @@ class Output {
     return (this.tokenData & TOKEN_AUTHORITY_MASK) > 0;
   }
 
-  /*
+  /**
    * Verifies if output is of mint
    *
    * @return {boolean} if output is mint
@@ -109,7 +117,7 @@ class Output {
     return this.isAuthority() && ((this.value & TOKEN_MINT_MASK) > 0);
   }
 
-  /*
+  /**
    * Verifies if output is of melt
    *
    * @return {boolean} if output is melt
@@ -135,6 +143,17 @@ class Output {
    */
   getTokenIndex(): number {
     return (this.tokenData & TOKEN_INDEX_MASK) - 1;
+  }
+
+  /**
+   * Checks if this output refers to the HTR token
+   *
+   * @return {boolean} True if it is HTR
+   * @memberOf Output
+   * @inner
+   */
+  isTokenHTR(): boolean {
+    return this.getTokenIndex() === -1;
   }
 
   /**
@@ -215,6 +234,42 @@ class Output {
     output.parseScript(network);
 
     return [output, outputBuffer];
+  }
+
+  static createFromHistoryObject(o: HistoryTransactionOutput): Output {
+    return new Output(
+      o.value,
+      Buffer.from(o.script, 'base64'),
+      {
+        timelock: o.decoded.timelock || null,
+        tokenData: o.token_data,
+      }
+    )
+  }
+
+  /**
+   * Checks if the script length is within the valid limits
+   *
+   * @returns {boolean} True if the script is within valid limits
+   *
+   * @memberof Output
+   * @inner
+   */
+  hasValidLength(): boolean {
+    return this.script.length <= Output.MAXIMUM_SCRIPT_LENGTH;
+  }
+
+  /**
+   * Returns the type of the output, according to the specified network
+   *
+   * @returns {string} Output type
+   *
+   * @memberof Output
+   * @inner
+   */
+  getType(network: Network): string|undefined {
+    const decodedScript = this.decodedScript || this.parseScript(network)
+    return decodedScript?.constructor?.name;
   }
 }
 

@@ -5,17 +5,26 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { CREATE_TOKEN_TX_VERSION, TOKEN_INFO_VERSION, MAX_TOKEN_NAME_SIZE, MAX_TOKEN_SYMBOL_SIZE } from '../constants';
-import { encoding, util } from 'bitcore-lib';
+import {
+  CREATE_TOKEN_TX_VERSION,
+  TOKEN_INFO_VERSION,
+  MAX_TOKEN_NAME_SIZE,
+  MAX_TOKEN_SYMBOL_SIZE,
+  TOKEN_MINT_MASK,
+  TOKEN_MELT_MASK
+} from '../constants'
+import { util } from 'bitcore-lib';
 import { unpackToInt, unpackLen } from '../utils/buffer';
 import helpers from '../utils/helpers';
 import Input from './input';
 import Output from './output';
-import Transaction from './transaction';
+import Transaction, {HistoryTransaction} from './transaction'
 import Network from './network';
-import { CreateTokenTxInvalid } from '../errors';
+import { CreateTokenTxInvalid, InvalidOutputsError, NftValidationError } from '../errors';
 import buffer from 'buffer';
 import { clone } from 'lodash';
+import ScriptData from "./script_data";
+import {OutputType} from "../wallet/types";
 
 type optionsType = {
   weight?: number,
@@ -50,7 +59,7 @@ class CreateTokenTransaction extends Transaction {
 
   /**
    * Return transaction data to sign in inputs
-   * 
+   *
    * @return {Buffer}
    * @memberof Transaction
    * @inner
@@ -241,6 +250,98 @@ class CreateTokenTransaction extends Transaction {
     tx.updateHash();
 
     return tx;
+  }
+
+
+  /**
+   * Creates a Transaction instance from an instance of a wallet's history
+   * @param {HistoryTransaction} historyTx A transaction formatted as an instance of a wallet history
+   *
+   * @memberof Transaction
+   * @static
+   * @inner
+   *
+   * @example
+   * const historyTx = myHathorWallet.getTx(myTxHash);
+   * const txInstance = Transaction.createFromHistoryObject(historyTx);
+   */
+  static createFromHistoryObject(historyTx: HistoryTransaction) {
+    if (!historyTx?.token_name || !historyTx?.token_symbol) {
+      throw new CreateTokenTxInvalid(`Missing token name or symbol`);
+    }
+
+    const inputs = historyTx.inputs.map(i => new Input(i.tx_id, i.index))
+    const outputs = historyTx.outputs.map(Output.createFromHistoryObject);
+
+    return new CreateTokenTransaction(
+      historyTx.token_name,
+      historyTx.token_symbol,
+      inputs,
+      outputs,
+      {...historyTx});
+  }
+
+  /**
+   * @throws {NftValidationError} Will throw an error if the NFT is not valid
+   *
+   * @param {Network} network Network to get output addresses first byte
+   * @returns {void} If this function does not throw, the NFT is valid
+   */
+  validateNftCreation(network: Network): void {
+    // An invalid transaction will fail here too
+    this.validate();
+
+    // No need to check the tx version, it is enforced by the class constructor
+
+    /*
+     * NFT creation must have at least a DataScript output (the first one) and a Token P2PKH output.
+     * Also validating maximum outputs of transactions in general
+     */
+    if (this.outputs.length < 2) {
+      throw new NftValidationError(`Tx has less than the minimum required amount of outputs`);
+    }
+
+    // Validating the first output
+    const firstOutput = this.outputs[0];
+
+    // NFT creation DataScript output must have value 1 and must be of HTR
+    if (firstOutput.value !== 1 || !firstOutput.isTokenHTR()) {
+      throw new NftValidationError(`First output is not a valid NFT fee`);
+    }
+    // NFT creation Datascript must be of type data
+    if (!(firstOutput.parseScript(network) instanceof ScriptData)) {
+      throw new NftValidationError(`First output is not a fee DataScript`)
+    }
+
+    // Validating each output past the first
+    let mintOutputs = 0;
+    let meltOutputs = 0;
+    for (let index=1; index < this.outputs.length; ++index) {
+      const output = this.outputs[index];
+
+      // Must have a valid length
+      if (!output.hasValidLength()) {
+        throw new InvalidOutputsError(`Output at index ${index} script is too long.`)
+      }
+
+      // Ensuring the type of the output is valid
+      const validTypes = [OutputType.P2PKH.toString(), OutputType.P2SH.toString()];
+      const outputType = output.getType(network)?.toLowerCase() || '';
+      if (!validTypes.includes(outputType)) {
+        throw new NftValidationError(`Output at index ${index} is not of a valid type`)
+      }
+
+      // Counting authority outputs
+      if (output.isAuthority()) {
+        mintOutputs += (output.value & TOKEN_MINT_MASK) > 0 ? 1 : 0;
+        meltOutputs += (output.value & TOKEN_MELT_MASK) > 0 ? 1 : 0;
+      }
+    }
+
+    // Validating maximum of 1 mint and/or melt outputs
+    if (mintOutputs > 1 || meltOutputs > 1) {
+      throw new NftValidationError('A maximum of 1 of each mint and melt is allowed');
+    }
   }
 }
 
