@@ -235,15 +235,28 @@ class Output {
     return [output, outputBuffer];
   }
 
-  static createFromHistoryObject(o: HistoryTransactionOutput): Output {
+  /**
+   * Creates an Output from an object extracted from the wallet's history.
+   * @param {HistoryTransactionOutput} historyOutput An output from a tx formatted as an
+   *                                                 instance of a wallet history
+   *
+   * @memberof Output
+   * @static
+   * @inner
+   *
+   * @example
+   * const historyTx = myHathorWallet.getTx(myTxHash);
+   * const outputInstance = Output.createFromHistoryObject(historyTx.outputs[0]);
+   */
+  static createFromHistoryObject(historyOutput: HistoryTransactionOutput): Output {
     return new Output(
-      o.value,
-      Buffer.from(o.script, 'base64'),
+      historyOutput.value,
+      Buffer.from(historyOutput.script, 'base64'),
       {
-        timelock: o.decoded.timelock || null,
-        tokenData: o.token_data,
+        timelock: historyOutput.decoded.timelock || null,
+        tokenData: historyOutput.token_data,
       }
-    )
+    );
   }
 
   /**
@@ -261,6 +274,7 @@ class Output {
   /**
    * Returns the type of the output, according to the specified network
    *
+   * @param {Network} network Network to get output addresses first byte
    * @returns {string} Output type
    *
    * @memberof Output

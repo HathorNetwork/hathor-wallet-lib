@@ -312,7 +312,7 @@ class CreateTokenTransaction extends Transaction {
     }
     // NFT creation Datascript must be of type data
     if (!(firstOutput.parseScript(network) instanceof ScriptData)) {
-      throw new NftValidationError(`First output is not a fee DataScript`)
+      throw new NftValidationError(`First output is not a fee DataScript`);
     }
 
     // Iterating on all but the first output for validation and counting authorities
@@ -323,19 +323,19 @@ class CreateTokenTransaction extends Transaction {
 
       // Must have a valid length
       if (!output.hasValidLength()) {
-        throw new InvalidOutputsError(`Output at index ${index} script is too long.`)
+        throw new InvalidOutputsError(`Output at index ${index} script is too long.`);
       }
 
       // Ensuring the type of the output is valid
       const validTypes = [OutputType.P2PKH.toString(), OutputType.P2SH.toString()];
       const outputType = output.getType(network)?.toLowerCase() || '';
       if (!validTypes.includes(outputType)) {
-        throw new NftValidationError(`Output at index ${index} is not of a valid type`)
+        throw new NftValidationError(`Output at index ${index} is not of a valid type`);
       }
 
       // Ensuring the script size for each output is correct ( must be either 25 or 30 depending on the timelock )
       if (!(output.script.length === 25 || output.script.length === 30)) {
-        throw new NftValidationError(`Output at index ${index} has an invalid length`)
+        throw new NftValidationError(`Output at index ${index} has an invalid length`);
       }
 
       // Counting authority outputs
