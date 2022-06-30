@@ -270,7 +270,7 @@ class CreateTokenTransaction extends Transaction {
       throw new CreateTokenTxInvalid(`Missing token name or symbol`);
     }
 
-    const inputs = historyTx.inputs.map(i => new Input(i.tx_id, i.index))
+    const inputs = historyTx.inputs.map(i => new Input(i.tx_id, i.index));
     const outputs = historyTx.outputs.map(Output.createFromHistoryObject);
 
     return new CreateTokenTransaction(

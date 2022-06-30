@@ -17,14 +17,7 @@ import helpersUtils from './utils/helpers';
 import walletApi from './api/wallet';
 import SendTransaction from './new/sendTransaction';
 import { InsufficientFundsError, ConstantNotSet, TokenValidationError } from './errors';
-import {
-  TOKEN_DEPOSIT_PERCENTAGE,
-  CREATE_TOKEN_TX_VERSION,
-  HATHOR_TOKEN_CONFIG,
-  TOKEN_MINT_MASK,
-  TOKEN_MELT_MASK,
-  AUTHORITY_TOKEN_DATA,
-} from './constants';
+import { TOKEN_DEPOSIT_PERCENTAGE, CREATE_TOKEN_TX_VERSION, HATHOR_TOKEN_CONFIG, TOKEN_MINT_MASK, TOKEN_MELT_MASK, AUTHORITY_TOKEN_DATA } from './constants';
 
 
 /**

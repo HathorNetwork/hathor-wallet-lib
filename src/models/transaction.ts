@@ -575,7 +575,7 @@ class Transaction {
    * const txInstance = Transaction.createFromHistoryObject(historyTx);
    */
   static createFromHistoryObject(historyTx: HistoryTransaction) {
-    const inputs = historyTx.inputs.map(i => new Input(i.tx_id, i.index))
+    const inputs = historyTx.inputs.map(i => new Input(i.tx_id, i.index));
     const outputs = historyTx.outputs.map(Output.createFromHistoryObject);
 
     return new Transaction(

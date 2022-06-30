@@ -352,7 +352,7 @@ describe('NFT Validation', () => {
 
     const txInstance = CreateTokenTransaction.createFromHistoryObject(historyTx);
 
-    expect(() => txInstance.validateNftCreation(network)).not.toThrow()
+    expect(() => txInstance.validateNftCreation(network)).not.toThrow();
   })
 
   it('should throw for a token-creating tx with less than 2 outputs', () => {
@@ -363,7 +363,7 @@ describe('NFT Validation', () => {
     historyTx.outputs.length = 1;
     const txInstance = CreateTokenTransaction.createFromHistoryObject(historyTx);
 
-    expect(() => txInstance.validateNftCreation(network)).toThrow('minimum')
+    expect(() => txInstance.validateNftCreation(network)).toThrow('minimum');
   });
 
   it('should validate maximum outputs of a transaction', () => {
@@ -430,7 +430,7 @@ describe('NFT Validation', () => {
     ];
 
     const txInstance = CreateTokenTransaction.createFromHistoryObject(historyTx);
-    expect(() => txInstance.validateNftCreation(network)).not.toThrow()
+    expect(() => txInstance.validateNftCreation(network)).not.toThrow();
   });
 
   it('should return true for a NFT without mint and/or melt', () => {
@@ -444,7 +444,7 @@ describe('NFT Validation', () => {
       nftCreationTx.outputs[3], // Mint
     ];
     txInstance = CreateTokenTransaction.createFromHistoryObject(historyTx);
-    expect(() => txInstance.validateNftCreation(network)).not.toThrow()
+    expect(() => txInstance.validateNftCreation(network)).not.toThrow();
 
     historyTx.outputs = [
       nftCreationTx.outputs[0], // Fee
@@ -452,14 +452,14 @@ describe('NFT Validation', () => {
       nftCreationTx.outputs[4], // Melt
     ];
     txInstance = CreateTokenTransaction.createFromHistoryObject(historyTx);
-    expect(() => txInstance.validateNftCreation(network)).not.toThrow()
+    expect(() => txInstance.validateNftCreation(network)).not.toThrow();
 
     historyTx.outputs = [
       nftCreationTx.outputs[0], // Fee
       nftCreationTx.outputs[2], // Token
     ];
     txInstance = CreateTokenTransaction.createFromHistoryObject(historyTx);
-    expect(() => txInstance.validateNftCreation(network)).not.toThrow()
+    expect(() => txInstance.validateNftCreation(network)).not.toThrow();
   });
 
   it('should return false for a NFT with 2+ mint and/or melt outputs', () => {

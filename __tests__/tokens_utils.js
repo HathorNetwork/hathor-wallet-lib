@@ -6,16 +6,13 @@
  */
 
 import tokens from '../src/tokens';
-import { DEFAULT_TX_VERSION, HATHOR_TOKEN_CONFIG, MAX_OUTPUTS } from '../src/constants';
+import { HATHOR_TOKEN_CONFIG } from '../src/constants';
 import wallet from '../src/wallet';
 import version from '../src/version';
 import { util } from 'bitcore-lib';
 import WebSocketHandler from '../src/WebSocketHandler';
 import { TokenValidationError } from '../src/errors';
 import storage from '../src/storage';
-import lodash from 'lodash';
-import { nftCreationTx } from './__fixtures__/sample_txs';
-import { OutputType } from '../src/wallet/types';
 
 
 const createdTxHashBeforeMining = '5ecac1124aada88c750acdccede58d0308b593923c3034f373403b63ba4edbac';
