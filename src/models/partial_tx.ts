@@ -81,6 +81,11 @@ export class ProposalInput extends Input {
   }
 }
 
+type outputOptionsType = {
+  tokenData?: number | undefined;
+  timelock?: number | null | undefined;
+};
+
 /**
  * Extended version of the Output class with extra data
  * We need the extra data to calculate the token_data of the
@@ -93,8 +98,8 @@ export class ProposalOutput extends Output {
   /**
    * We do not set tokenData because the token array is not yet formed
    */
-  constructor(value: number, script: Buffer, token: string, isChange: boolean) {
-    super(value, script);
+  constructor(value: number, script: Buffer, token: string, isChange: boolean, options: outputOptionsType = {}) {
+    super(value, script, options);
     this.token = token;
     this.isChange = isChange;
   }
@@ -139,6 +144,8 @@ export class ProposalOutput extends Output {
  * It is also used to serialize and deserialize the partial transaction state.
  */
 export class PartialTx {
+  static prefix: string = 'PartialTx';
+
   inputs: ProposalInput[];
   outputs: ProposalOutput[];
   network: Network;
@@ -171,10 +178,14 @@ export class PartialTx {
     tokenSet.delete(HATHOR_TOKEN_CONFIG.uid);
     const tokens = Array.from(tokenSet);
 
+    // The outputs tokenData will be recalculated maintaining the authority bit
     const data = {
+      tokens,
       inputs: this.inputs.map(i => i.toData()),
-      outputs: this.outputs.map(o => o.toData(tokens.indexOf(o.token)+1, this.network)),
-      tokens
+      outputs: this.outputs.map(o => o.toData(
+        (o.tokenData & TOKEN_AUTHORITY_MASK) | tokens.indexOf(o.token)+1,
+        this.network
+      )),
     };
 
     transaction.completeTx(data);
@@ -205,18 +216,21 @@ export class PartialTx {
   calculateTokenBalance(): Record<string, Record<string, number>> {
     const tokenBalance: Record<string, Record<string, number>> = {};
     for (const input of this.inputs) {
-      if (!(input.token in tokenBalance)) {
+      if (!tokenBalance[input.token]) {
         tokenBalance[input.token] = {inputs: 0, outputs: 0};
       }
       tokenBalance[input.token].inputs += input.value;
     }
 
     for (const output of this.outputs) {
-      if (!(output.token in tokenBalance)) {
+      if (!tokenBalance[output.token]) {
         tokenBalance[output.token] = {inputs: 0, outputs: 0};
       }
 
-      tokenBalance[output.token].outputs += output.value;
+      // Ignore authority outputs for token balance
+      if (!output.isAuthority()) {
+        tokenBalance[output.token].outputs += output.value;
+      }
     }
 
     return tokenBalance;
@@ -269,12 +283,19 @@ export class PartialTx {
    * @memberof PartialTx
    * @inner
    */
-  addOutput(value: number, script: Buffer, token: string, isChange: boolean) {
+  addOutput(
+    value: number,
+    script: Buffer,
+    token: string,
+    tokenData: number,
+    isChange: boolean,
+  ) {
     this.outputs.push(new ProposalOutput(
       value,
       script,
       token,
       isChange,
+      { tokenData },
     ));
   }
 
@@ -295,7 +316,7 @@ export class PartialTx {
       }
     });
     const tx = this.getTx();
-    const arr = ['PartialTx', tx.toHex(), ...changeOutputs];
+    const arr = [PartialTx.prefix, tx.toHex(), ...changeOutputs];
     return arr.join('|');
   }
 
@@ -338,17 +359,13 @@ export class PartialTx {
         throw new UnsupportedScriptError('Unsupported script type');
       }
 
-      if (output.isAuthority()) {
-        // TODO: we dont allow passing authority on atomic swap
-        throw new Error('Authority outputs are unsupported');
-      }
-
       const tokenIndex = output.tokenData & TOKEN_INDEX_MASK;
       const token = tokenIndex === 0 ? HATHOR_TOKEN_CONFIG.uid : tx.tokens[tokenIndex-1];
       instance.addOutput(
         output.value,
         output.script,
         token,
+        output.tokenData,
         changeOutputs.indexOf(index) > -1,
       );
     }
@@ -368,6 +385,8 @@ export class PartialTx {
  * since for an input we can have multiple signatures.
  */
 export class PartialTxInputData {
+  static prefix: string = 'PartialTxInputData';
+
   data: Record<number, Buffer>;
   hash: string;
   inputsLen: number;
@@ -415,7 +434,7 @@ export class PartialTxInputData {
    * @inner
    */
   serialize(): string {
-    const arr = ['PartialTxInputData', this.hash];
+    const arr = [PartialTxInputData.prefix, this.hash];
     for (const [index, buf] of Object.entries(this.data)) {
       arr.push(`${index}:${buf.toString('hex')}`);
     }

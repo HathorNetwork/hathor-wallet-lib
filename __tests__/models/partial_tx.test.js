@@ -12,7 +12,7 @@ import dateFormatter from '../../src/date';
 
 
 import { UnsupportedScriptError } from '../../src/errors';
-import { HATHOR_TOKEN_CONFIG, DEFAULT_TX_VERSION } from '../../src/constants';
+import { HATHOR_TOKEN_CONFIG, DEFAULT_TX_VERSION, TOKEN_AUTHORITY_MASK } from '../../src/constants';
 import helpers from '../../src/utils/helpers';
 import txApi from '../../src/api/txApi';
 import P2PKH from '../../src/models/p2pkh';
@@ -162,6 +162,27 @@ describe('PartialTx.isComplete', () => {
 
     expect(partialTx.isComplete()).toBe(true);
   });
+
+  it('should ignore authority', () => {
+    const partialTx = new PartialTx(testnet);
+
+    partialTx.inputs = [
+      new ProposalInput('hash2', 0, '1', 1, 'W...'),
+      new ProposalInput('hash3', 0, '2', 2, 'W...'),
+      new ProposalInput('hash1', 0, '00', 3, 'W...'),
+    ];
+    partialTx.outputs = [
+      new ProposalOutput(2, Buffer.from([]), '00', false),
+      new ProposalOutput(1, Buffer.from([]), '2', false),
+      new ProposalOutput(1, Buffer.from([]), '1', false),
+      new ProposalOutput(1, Buffer.from([]), '00', false),
+      new ProposalOutput(1, Buffer.from([]), '2', false),
+      // Add authority output for token 2
+      new ProposalOutput(1, Buffer.from([]), '2', false, { tokenData: TOKEN_AUTHORITY_MASK | 1}),
+    ];
+
+    expect(partialTx.isComplete()).toBe(true);
+  });
 });
 
 describe('PartialTx.addInput', () => {
@@ -269,10 +290,9 @@ describe('PartialTx.addOutput', () => {
       isChange: true,
       value: 27,
       script: expect.toMatchBuffer(Buffer.from([230, 148, 32])),
-      // Since the tokens array has not been formed, the default value 0 is kept
-      tokenData: 0,
+      tokenData: 128,
     }));
-    partialTx.addOutput(27, Buffer.from([230, 148, 32]), '1', true);
+    partialTx.addOutput(27, Buffer.from([230, 148, 32]), '1', 128, true);
     expect(partialTx.outputs).toEqual(expected);
 
     expected.push(expect.objectContaining({
@@ -280,10 +300,9 @@ describe('PartialTx.addOutput', () => {
       isChange: false,
       value: 72,
       script: expect.toMatchBuffer(Buffer.from([1, 2, 3])),
-      // Since the tokens array has not been formed, the default value 0 is kept
       tokenData: 0,
     }));
-    partialTx.addOutput(72, Buffer.from([1, 2, 3]), '2', false);
+    partialTx.addOutput(72, Buffer.from([1, 2, 3]), '2', 0, false);
     expect(partialTx.outputs).toEqual(expected);
   });
 });
@@ -340,7 +359,7 @@ describe('PartialTx serialization', () => {
     const serialized = partialTx.serialize();
     expect(serialized).toBe(expected);
     const parts = serialized.split('|');
-    expect(parts).toEqual(['PartialTx', tx.toHex(), '1', '2']);
+    expect(parts).toEqual([PartialTx.prefix, tx.toHex(), '1', '2']);
   });
 
   it('should deserialize a transaction correctly', async () => {

@@ -159,7 +159,11 @@ class PartialTxProposal {
     token: string,
     value: number,
     address: string,
-    { timelock = null, isChange = false }: { timelock?: number|null, isChange?: boolean } = {}
+    {
+      timelock = null,
+      isChange = false,
+      tokenData = 0
+    }: { timelock?: number|null, isChange?: boolean, tokenData?: number } = {}
   ) {
     this.resetSignatures();
 
@@ -175,7 +179,7 @@ class PartialTxProposal {
       default:
         throw new AddressError('Unsupported address type');
     }
-    this.partialTx.addOutput(value, script.createScript(), token, isChange);
+    this.partialTx.addOutput(value, script.createScript(), token, tokenData, isChange);
   }
 
   /**
@@ -207,7 +211,7 @@ class PartialTxProposal {
    * @returns {boolean}
    */
   isComplete() {
-    return this.signatures && this.partialTx.isComplete() && this.signatures.isComplete();
+    return (!!this.signatures) && this.partialTx.isComplete() && this.signatures.isComplete();
   }
 
   /**
@@ -264,8 +268,6 @@ class PartialTxProposal {
     }
 
     const txdata = this.partialTx.getTxData();
-
-    // const data = this.signatures === null ? {} : this.signatures.data;
 
     for (const [index, inputData] of Object.entries(this.signatures.data)) {
       txdata.inputs[index].data = inputData;
