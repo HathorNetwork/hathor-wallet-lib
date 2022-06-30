@@ -404,7 +404,7 @@ describe('NFT Validation', () => {
     expect(() => txInstance.validateNftCreation(network)).toThrow('fee DataScript');
   });
 
-  it('should return false for having a non-standard output script', () => {
+  it('should return false for having an invalid output script', () => {
     expect.assertions(2);
     const historyTx = cloneNftSample();
     const txInstance = CreateTokenTransaction.createFromHistoryObject(historyTx);
