@@ -333,11 +333,6 @@ class CreateTokenTransaction extends Transaction {
         throw new NftValidationError(`Output at index ${index} is not of a valid type`);
       }
 
-      // Ensuring the script size for each output is correct ( must be either 25 or 30 depending on the timelock )
-      if (!(output.script.length === 25 || output.script.length === 30)) {
-        throw new NftValidationError(`Output at index ${index} has an invalid length`);
-      }
-
       // Counting authority outputs
       if (output.isAuthority()) {
         mintOutputs += (output.value & TOKEN_MINT_MASK) > 0 ? 1 : 0;
