@@ -282,6 +282,8 @@ class CreateTokenTransaction extends Transaction {
   }
 
   /**
+   * Checks if this transaction is the creation of an NFT following the NFT Standard Creation.
+   * @see https://github.com/HathorNetwork/rfcs/blob/master/text/0032-nft-standard.md#transaction-standard
    * @throws {NftValidationError} Will throw an error if the NFT is not valid
    *
    * @param {Network} network Network to get output addresses first byte
@@ -313,7 +315,7 @@ class CreateTokenTransaction extends Transaction {
       throw new NftValidationError(`First output is not a fee DataScript`)
     }
 
-    // Validating each output past the first
+    // Iterating on all but the first output for validation and counting authorities
     let mintOutputs = 0;
     let meltOutputs = 0;
     for (let index=1; index < this.outputs.length; ++index) {
