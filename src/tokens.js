@@ -24,11 +24,7 @@ import {
   TOKEN_MINT_MASK,
   TOKEN_MELT_MASK,
   AUTHORITY_TOKEN_DATA,
-  MAX_OUTPUTS
 } from './constants';
-import { OutputType } from './wallet/types';
-import Output, { MAXIMUM_SCRIPT_LENGTH } from './models/output';
-import { parseScriptData } from './utils/scripts';
 
 
 /**
@@ -1141,112 +1137,6 @@ const tokens = {
    */
   isHathorToken(uid) {
     return uid === HATHOR_TOKEN_CONFIG.uid;
-  },
-
-  /**
-   * Checks if this transaction is the creation of an NFT following the NFT Standard Creation.
-   * @see https://github.com/HathorNetwork/rfcs/blob/master/text/0032-nft-standard.md#transaction-standard
-   *
-   * @param {Transaction} tx Transaction with decoded inputs and outputs
-   *
-   * @return {boolean}
-   */
-  isNFTToken(tx) {
-    // Basic input validation
-    if (!tx) {
-      return false;
-    }
-
-    // If this is not a token creation tx, it cannot be an NFT
-    if (tx.version !== CREATE_TOKEN_TX_VERSION) {
-      return false;
-    }
-
-    /*
-     * NFT creation must have at least a DataScript output (the first one) and a Token P2PKH output.
-     * Also validating maximum outputs of transactions in general
-     */
-    if (tx.outputs.length < 2 || tx.outputs.length > MAX_OUTPUTS) {
-      return false;
-    }
-
-    // NFT creation DataScript output must have value 1 and must be of HTR
-    const firstOutput = tx.outputs[0];
-    if (firstOutput?.value !== 1 || firstOutput?.token_data !== 0) {
-      return false;
-    }
-    // Validating this script is a valid DataScript
-    try {
-      parseScriptData(Buffer.from(firstOutput.script, 'base64'))
-    }
-    catch (err) {
-      // If it's not a valid Datascript, it will throw on parsing
-      return false;
-    }
-    // First output must also have a standard-compliant script
-    if (!hasStandardScript(firstOutput)) {
-      return false;
-    }
-
-    // Validating the remaining outputs
-    let mintOutputs = 0;
-    let meltOutputs = 0;
-    // Iterating on all but the first output for validation and counting authorities
-    for (let i = 1; i < tx.outputs.length; ++i) {
-      // Should have a standard script
-      const txOutput = tx.outputs[i];
-      if (!hasStandardScript(txOutput, true)) {
-        return false;
-      }
-
-      // All outputs must be either HTR or the created token
-      const validTokensList = [HATHOR_TOKEN_CONFIG.uid, tx.tx_id];
-      if (!validTokensList.includes(txOutput.token)) {
-        return false;
-      }
-
-      // Counting authority outputs
-      if (transaction.isTokenDataAuthority(txOutput.token_data)) {
-        mintOutputs += (txOutput.value & TOKEN_MINT_MASK) > 0 ? 1 : 0;
-        meltOutputs += (txOutput.value & TOKEN_MELT_MASK) > 0 ? 1 : 0;
-      }
-    }
-
-    // Validating maximum of 1 mint and/or melt outputs
-    if (mintOutputs > 1 || meltOutputs > 1) {
-      return false;
-    }
-
-    // Validating inputs
-    for (const input of tx.inputs) {
-      // All inputs must be HTR
-      if (input.token !== HATHOR_TOKEN_CONFIG.uid) {
-        return false;
-      }
-    }
-
-    // All conditions were met: this is a standard NFT creation transaction
-    return true;
-
-    /**
-     * Identifies if the informed output script size is standard
-     * @param {TxOutput} output The transaction output, already decoded
-     * @param {boolean} [strictScriptType=false] If true, the decoded type will also be validated
-     *
-     * @return {boolean}
-     */
-    function hasStandardScript(output, strictScriptType = false) {
-      // Validating maximum allowed length
-      if (output.script.length > MAXIMUM_SCRIPT_LENGTH) {
-        return false;
-      }
-
-      // Validating script type
-      return (
-        !strictScriptType ||
-        [OutputType.P2PKH, OutputType.P2SH].includes(output.decoded.type.toLowerCase())
-      );
-    }
   },
 
   /**
