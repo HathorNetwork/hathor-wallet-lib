@@ -168,12 +168,12 @@ export class ProposalOutput extends Output {
   }
 }
 
+export const PartialTxPrefix = 'PartialTx';
 /**
  * This class purpose is to hold and modify the state of the partial transaction.
  * It is also used to serialize and deserialize the partial transaction state.
  */
 export class PartialTx {
-  static prefix: string = 'PartialTx';
 
   inputs: ProposalInput[];
   outputs: ProposalOutput[];
@@ -366,7 +366,7 @@ export class PartialTx {
         i.value.toString(16),
       ].join(''));
     const arr = [
-      PartialTx.prefix,
+      PartialTxPrefix,
       tx.toHex(),
       inputArr.join(':'),
       changeOutputs.map(o => o.toString(16)).join(':'), // array of change outputs
@@ -392,7 +392,7 @@ export class PartialTx {
     const dataArr = serialized.split('|');
     const txHex = dataArr[1];
 
-    if (dataArr.length !== 4 || dataArr[0] !== PartialTx.prefix) {
+    if (dataArr.length !== 4 || dataArr[0] !== PartialTxPrefix) {
       throw new SyntaxError('Invalid PartialTx');
     }
 
@@ -491,6 +491,8 @@ export class PartialTx {
   }
 }
 
+export const PartialTxInputDataPrefix = 'PartialTxInputData';
+
 /**
  * This class is meant to aggregate input data for a transaction.
  *
@@ -501,8 +503,6 @@ export class PartialTx {
  * since for an input we can have multiple signatures.
  */
 export class PartialTxInputData {
-  static prefix: string = 'PartialTxInputData';
-
   data: Record<number, Buffer>;
   hash: string;
   inputsLen: number;
@@ -550,7 +550,7 @@ export class PartialTxInputData {
    * @inner
    */
   serialize(): string {
-    const arr = [PartialTxInputData.prefix, this.hash];
+    const arr = [PartialTxInputDataPrefix, this.hash];
     for (const [index, buf] of Object.entries(this.data)) {
       arr.push(`${index}:${buf.toString('hex')}`);
     }
