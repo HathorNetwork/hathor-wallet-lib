@@ -5,17 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { PartialTx, PartialTxInputData, ProposalInput, ProposalOutput } from '../../src/models/partial_tx';
-import Network from '../../src/models/network';
-import Address from '../../src/models/address';
-import dateFormatter from '../../src/date';
-
+import { PartialTxInputData } from '../../src/models/partial_tx';
 
 import { IndexOOBError } from '../../src/errors';
-import { HATHOR_TOKEN_CONFIG, DEFAULT_TX_VERSION } from '../../src/constants';
-import helpers from '../../src/utils/helpers';
-import txApi from '../../src/api/txApi';
-import P2PKH from '../../src/models/p2pkh';
 
 describe('PartialTxInputData.addData', () => {
   it('should throw OOB error when index is OOB', () => {

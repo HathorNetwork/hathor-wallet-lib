@@ -25,7 +25,7 @@ import { TOKEN_AUTHORITY_MASK, TOKEN_INDEX_MASK, HATHOR_TOKEN_CONFIG } from '../
 type InputData = {
   tx_id: string,
   index: number,
-  address: string,
+  address?: string,
   data?: Buffer,
 };
 
@@ -55,13 +55,27 @@ type TxData = {
  */
 export class ProposalInput extends Input {
   token: string;
+  tokenData: number;
   value: number;
-  address: string;
+  address: string|null;
 
-  constructor(hash: string, index: number, token: string, value: number, address: string) {
+  constructor(
+    hash: string,
+    index: number,
+    value: number,
+    tokenData: number,
+    {
+      token = HATHOR_TOKEN_CONFIG.uid,
+      address = null,
+    }: {
+      token?: string;
+      address?: string | null;
+    } = {},
+  ) {
     super(hash, index);
-    this.token = token;
     this.value = value;
+    this.tokenData = tokenData;
+    this.token = token;
     this.address = address;
   }
 
@@ -73,18 +87,21 @@ export class ProposalInput extends Input {
    * @inner
    */
   toData(): InputData {
-    return {
+    const data: InputData = {
       tx_id: this.hash,
       index: this.index,
-      address: this.address,
     };
+    if (this.address) {
+      data.address = this.address;
+    }
+
+    return data;
+  }
+
+  isAuthority(): boolean {
+    return (this.tokenData & TOKEN_AUTHORITY_MASK) > 0;
   }
 }
-
-type outputOptionsType = {
-  tokenData?: number | undefined;
-  timelock?: number | null | undefined;
-};
 
 /**
  * Extended version of the Output class with extra data
@@ -98,8 +115,19 @@ export class ProposalOutput extends Output {
   /**
    * We do not set tokenData because the token array is not yet formed
    */
-  constructor(value: number, script: Buffer, token: string, isChange: boolean, options: outputOptionsType = {}) {
-    super(value, script, options);
+  constructor(
+    value: number,
+    script: Buffer,
+    tokenData: number,
+    {
+      isChange = false,
+      token = HATHOR_TOKEN_CONFIG.uid,
+    }: {
+      token?: string,
+      isChange?: boolean,
+    } = {},
+  ) {
+    super(value, script, { tokenData });
     this.token = token;
     this.isChange = isChange;
   }
@@ -117,18 +145,19 @@ export class ProposalOutput extends Output {
    * @memberof ProposalOutput
    * @inner
    */
-  toData(tokenData: number, network: Network): OutputData {
+  toData(tokenIndex: number, network: Network): OutputData {
     const script = this.parseScript(network);
     if (!(script instanceof P2PKH || script instanceof P2SH)) {
       throw new UnsupportedScriptError('Unsupported script type');
     }
 
-    this.setTokenData(tokenData);
+    // This will keep authority bit while updating the index bits
+    this.setTokenData(this.tokenData | tokenIndex);
 
     const data: OutputData = {
       type: script.getType(),
       value: this.value,
-      tokenData: tokenData,
+      tokenData: this.tokenData,
       address: script.address.base58,
     };
     if (script.timelock) {
@@ -178,14 +207,10 @@ export class PartialTx {
     tokenSet.delete(HATHOR_TOKEN_CONFIG.uid);
     const tokens = Array.from(tokenSet);
 
-    // The outputs tokenData will be recalculated maintaining the authority bit
     const data = {
       tokens,
       inputs: this.inputs.map(i => i.toData()),
-      outputs: this.outputs.map(o => o.toData(
-        (o.tokenData & TOKEN_AUTHORITY_MASK) | tokens.indexOf(o.token)+1,
-        this.network
-      )),
+      outputs: this.outputs.map(o => o.toData(tokens.indexOf(o.token)+1, this.network)),
     };
 
     transaction.completeTx(data);
@@ -219,7 +244,11 @@ export class PartialTx {
       if (!tokenBalance[input.token]) {
         tokenBalance[input.token] = {inputs: 0, outputs: 0};
       }
-      tokenBalance[input.token].inputs += input.value;
+
+      // Ignore authority inputs for token balance
+      if (!input.isAuthority()) {
+        tokenBalance[input.token].inputs += input.value;
+      }
     }
 
     for (const output of this.outputs) {
@@ -253,22 +282,31 @@ export class PartialTx {
 
   /**
    * Add an UTXO as input on the PartialTx.
-   * This method is async because we need to fetch information on the inputs (token, value)
    *
    * @param {string} txId The transaction id of the UTXO.
    * @param {number} index The index of the UTXO.
+   * @param {string} token The token UID.
+   * @param {number} tokenData The token data of the utxo with at least the authority bit.
+   * @param {string} address base58 address
    *
    * @return {Promise<void>}
    * @memberof PartialTx
    * @inner
    */
-  async addInput(txId: string, index: number): Promise<void> {
-    // fetch token + value from txId + index
-    await txApi.getTransaction(txId, (data) => {
-      const utxo = data.tx.outputs[index];
-      const token = utxo.token_data === 0 ? HATHOR_TOKEN_CONFIG : data.tx.tokens[utxo.token_data - 1];
-      this.inputs.push(new ProposalInput(txId, index, token.uid, utxo.value, utxo.decoded.address));
-    });
+  addInput(
+    txId: string,
+    index: number,
+    value: number,
+    tokenData: number,
+    {
+      token = HATHOR_TOKEN_CONFIG.uid,
+      address = null,
+    }: {
+      token?: string;
+      address?: string | null;
+    } = {},
+  ) {
+    this.inputs.push(new ProposalInput(txId, index, value, tokenData, { token, address }));
   }
 
 
@@ -278,6 +316,7 @@ export class PartialTx {
    * @param {number} value The amount of tokens on the output.
    * @param {Buffer} script The output script.
    * @param {string} token The token UID.
+   * @param {number} tokenData The token data of the output with at least the authority bit.
    * @param {boolean} isChange If this is a change output.
    *
    * @memberof PartialTx
@@ -286,16 +325,20 @@ export class PartialTx {
   addOutput(
     value: number,
     script: Buffer,
-    token: string,
     tokenData: number,
-    isChange: boolean,
+    {
+      token = HATHOR_TOKEN_CONFIG.uid,
+      isChange = false,
+    }: {
+      token?: string,
+      isChange?: boolean,
+    } = {},
   ) {
     this.outputs.push(new ProposalOutput(
       value,
       script,
-      token,
-      isChange,
-      { tokenData },
+      tokenData,
+      { token, isChange },
     ));
   }
 
@@ -316,13 +359,23 @@ export class PartialTx {
       }
     });
     const tx = this.getTx();
-    const arr = [PartialTx.prefix, tx.toHex(), ...changeOutputs];
+    // tokenData(1 byte), token(32 bytes | 1 byte), value(variable bytes with max 16)
+    const inputArr = this.inputs.map(i => [
+        Buffer.from([i.tokenData]).toString('hex'), // This ensures we always have 1 byte for token data
+        i.token,
+        i.value.toString(16),
+      ].join(''));
+    const arr = [
+      PartialTx.prefix,
+      tx.toHex(),
+      inputArr.join(':'),
+      changeOutputs.map(o => o.toString(16)).join(':'), // array of change outputs
+    ];
     return arr.join('|');
   }
 
   /**
    * Deserialize and create an instance of PartialTx
-   * This method is async because we need to fetch information on the inputs (token, value)
    *
    * @param {string} serialized The serialized PartialTx
    * @param {Network} network Network used when parsing the output scripts
@@ -330,26 +383,45 @@ export class PartialTx {
    * @throws {SyntaxError} serialized argument should be valid.
    * @throws {UnsupportedScriptError} All outputs should be P2SH or P2PKH
    *
-   * @returns {Promise<PartialTx>}
+   * @returns {PartialTx}
    * @memberof PartialTx
    * @static
    */
-  static async deserialize(serialized: string, network: Network): Promise<PartialTx> {
+  static deserialize(serialized: string, network: Network): PartialTx {
 
     const dataArr = serialized.split('|');
-    const changeOutputs = dataArr.slice(2).map(x => +x);
+    const txHex = dataArr[1];
 
-    if (dataArr.length < 2 || dataArr[0] !== 'PartialTx' || !changeOutputs.every(x => Number.isInteger(x))) {
+    if (dataArr.length !== 4 || dataArr[0] !== PartialTx.prefix) {
       throw new SyntaxError('Invalid PartialTx');
     }
 
-    const txHex = dataArr[1];
+    const inputArr = dataArr[2].split(':').map(h => {
+      let it: number = 0;
+      let token: string, tokenData: number, value: number;
+      // 1 byte of tokenData
+      tokenData = parseInt(h.slice(it, it+2), 16); it += 2;
+      // We have 2 cases, custom token (64 characters) and HTR (2 characters)
+      // HTR case: length range is 5-20 characters (2+2+1 / 2+2+16)
+      // Custom token case: length range is 67-82 characters (2+64+1 / 2+64+16)
+      if (h.length > 64) {
+        token = h.slice(it, it+64); it += 64;
+      } else {
+        token = h.slice(it, it+2); it += 2;
+      }
+      // value can have variable size in hex
+      value = parseInt(h.slice(it), 16);
+      return { token, tokenData, value };
+    });
+    const changeOutputs = dataArr[3].split(':').map(x => parseInt(x, 16));
+
     const tx = helpers.createTxFromHex(txHex, network);
 
     const instance = new PartialTx(network);
 
-    for (const input of tx.inputs) {
-      await instance.addInput(input.hash, input.index);
+    for (const [index, input] of tx.inputs.entries()) {
+      const inputMeta = inputArr[index];
+      instance.addInput(input.hash, input.index, inputMeta.value, inputMeta.tokenData, { token: inputMeta.token });
     }
 
     for (const [index, output] of tx.outputs.entries()) {
@@ -364,14 +436,58 @@ export class PartialTx {
       instance.addOutput(
         output.value,
         output.script,
-        token,
         output.tokenData,
-        changeOutputs.indexOf(index) > -1,
+        { token, isChange: changeOutputs.indexOf(index) > -1 },
       );
     }
 
     return instance;
 
+  }
+
+  async validate(): Promise<boolean> {
+    const promises: Promise<boolean>[] = [];
+
+    for (const input of this.inputs) {
+      const p: Promise<boolean> = new Promise((resolve, reject) => {
+        txApi.getTransaction(input.hash, (data) => {
+          if (!(data && data.tx && data.tx.outputs && data.tx.outputs[input.index])) {
+            return resolve(false);
+          }
+          const utxo = data.tx.outputs[input.index];
+          const token = utxo.token_data === 0 ? HATHOR_TOKEN_CONFIG : data.tx.tokens[utxo.token_data - 1];
+
+          if (!(
+            input.token === token.uid
+            && input.value === utxo.value
+            && input.tokenData === utxo.token_data
+          )) {
+            return resolve(false);
+          }
+
+          if (input.address) {
+            if (input.address !== utxo.decoded.address) {
+              return resolve(false);
+            }
+          } else {
+            // No address on input, set actual address
+            input.address = utxo.decoded.address
+          }
+          return resolve(true);
+        })
+        .then(result => {
+          // should have already resolved
+          reject(new Error('API client did not use the callback'));
+        })
+        .catch(err => reject(err));
+      });
+      promises.push(p);
+    }
+
+    // Check that every promise returns true
+    return Promise.all(promises).then(responses => {
+      return responses.every(x => x);
+    });
   }
 }
 

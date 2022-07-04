@@ -18,7 +18,6 @@ import _ from 'lodash';
 
 type optionsType = {
   tokenData?: number | undefined,
-  timelock?: number | null | undefined,
 };
 
 

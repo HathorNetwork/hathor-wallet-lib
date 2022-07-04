@@ -172,12 +172,12 @@ export class SendTxError extends WalletError {}
 export class MineTxError extends WalletError {}
 
 /**
- * Error thrown when trying to sign or generate a Transaction instance from an incomplete partial transaction.
+ * Error thrown when trying to interact with an incomplete or invalid partial transaction.
  *
  * @memberof Errors
  * @inner
  */
-export class IncompletePartialTxError extends WalletError {}
+export class InvalidPartialTxError extends WalletError {}
 
 /**
  * Error thrown when calling a protected method on an xpub inited wallet

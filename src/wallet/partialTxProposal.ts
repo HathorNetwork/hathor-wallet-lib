@@ -10,9 +10,10 @@ import Address from '../models/address';
 import P2SH from '../models/p2sh';
 import P2PKH from '../models/p2pkh';
 import Transaction from '../models/transaction';
-import { AddressError, IncompletePartialTxError, InsufficientFundsError } from '../errors';
+import { AddressError, InvalidPartialTxError, InsufficientFundsError } from '../errors';
 import wallet from '../wallet';
 import Network from '../models/network';
+import { HATHOR_TOKEN_CONFIG } from '../constants';
 
 import transaction from '../transaction';
 import helpers from '../utils/helpers';
@@ -47,8 +48,8 @@ class PartialTxProposal {
    *
    * @returns {PartialTxProposal}
    */
-  static async fromPartialTx(serialized: string, network: Network) {
-    const partialTx = await PartialTx.deserialize(serialized, network);
+  static fromPartialTx(serialized: string, network: Network) {
+    const partialTx = PartialTx.deserialize(serialized, network);
     const proposal = new PartialTxProposal(network);
     proposal.partialTx = partialTx;
     return proposal;
@@ -65,7 +66,7 @@ class PartialTxProposal {
    *
    * @throws InsufficientFundsError
    */
-  async addSend(
+  addSend(
     token: string,
     value: number,
     { changeAddress = null, markAsSelected = true }: { changeAddress?: number|null, markAsSelected?: boolean } = {},
@@ -80,7 +81,17 @@ class PartialTxProposal {
     }
 
     for (const input of newData.inputs) {
-      await this.addInput(input.tx_id, input.index, { markAsSelected });
+      // Since we chose the input from the historyTransactions, we can be sure this exists.
+      const utxo = historyTransactions[input.tx_id].outputs[input.index];
+      this.addInput(
+        input.tx_id,
+        input.index,
+        utxo.value,
+        {
+          token: utxo.token,
+          address: input.address,
+          markAsSelected,
+        });
     }
 
     // add change output if needed
@@ -118,16 +129,29 @@ class PartialTxProposal {
 
   /**
    * Add an UTXO as input on the partial data.
-   * This need to be async since we may need to fetch the transaction.
    *
    * @param {string} hash Transaction hash
    * @param {number} index UTXO index on the outputs of the transaction.
    * @param {Object} [options]
    * @param {boolean} [options.markAsSelected=true] Mark the utxo with `selected_as_input`.
    *
-   * @returns {Promise<void>}
    */
-  async addInput(hash: string, index: number, { markAsSelected = true }: { markAsSelected?: boolean } = {}) {
+  addInput(
+    hash: string,
+    index: number,
+    value: number,
+    {
+      token = HATHOR_TOKEN_CONFIG.uid,
+      tokenData = 0,
+      address = null,
+      markAsSelected = true,
+    }: {
+      token?: string,
+      tokenData?: number,
+      address?: string|null,
+      markAsSelected?: boolean,
+    } = {},
+  ) {
     this.resetSignatures();
 
     if (markAsSelected) {
@@ -140,7 +164,7 @@ class PartialTxProposal {
       }
     }
 
-    await this.partialTx.addInput(hash, index);
+    this.partialTx.addInput(hash, index, value, tokenData, { token, address });
   }
 
   /**
@@ -179,7 +203,7 @@ class PartialTxProposal {
       default:
         throw new AddressError('Unsupported address type');
     }
-    this.partialTx.addOutput(value, script.createScript(), token, tokenData, isChange);
+    this.partialTx.addOutput(value, script.createScript(), tokenData, { token, isChange });
   }
 
   /**
@@ -219,14 +243,14 @@ class PartialTxProposal {
    *
    * @param {string} pin The loaded wallet's pin to sign the transaction.
    *
-   * @throws {IncompletePartialTxError} Inputs and outputs balance should match before signing.
+   * @throws {InvalidPartialTxError} Inputs and outputs balance should match before signing.
    * @throws {UnsupportedScriptError} When we have an unsupported output script.
    * @throws {IndexOOBError} input index should be inside the inputs array.
    */
-  signData(pin: string) {
+  async signData(pin: string) {
     if (!this.partialTx.isComplete()) {
       // partialTx is not complete, we cannot sign it.
-      throw new IncompletePartialTxError('Cannot sign incomplete data');
+      throw new InvalidPartialTxError('Cannot sign incomplete data');
     }
 
     const tx: Transaction = this.partialTx.getTx();
@@ -235,6 +259,12 @@ class PartialTxProposal {
       tx.getDataToSign().toString('hex'),
       tx.inputs.length
     );
+
+    // The validation method populates the addresses
+    const valid = await this.partialTx.validate();
+    if (!valid) {
+      throw new InvalidPartialTxError('Transaction data inconsistent with fullnode');
+    }
 
     // sign inputs from the loaded wallet and save input data
     const txdata = transaction.prepareData(this.partialTx.getTxData(), pin);
@@ -250,17 +280,17 @@ class PartialTxProposal {
   /**
    * Create and return the Transaction instance if we have all signatures.
    *
-   * @throws IncompletePartialTxError
+   * @throws InvalidPartialTxError
    *
    * @returns {Transaction}
    */
   prepareTx() {
     if (!this.partialTx.isComplete()) {
-      throw new IncompletePartialTxError('Incomplete data');
+      throw new InvalidPartialTxError('Incomplete data');
     }
 
     if (this.signatures === null || !this.signatures.isComplete()) {
-      throw new IncompletePartialTxError('Incomplete signatures');
+      throw new InvalidPartialTxError('Incomplete signatures');
     }
 
     if (this.transaction !== null) {
