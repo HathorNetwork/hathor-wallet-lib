@@ -132,6 +132,11 @@ export class ProposalOutput extends Output {
     this.isChange = isChange;
   }
 
+  /**
+   * Set the value of the property tokenData
+   *
+   * @param {number} tokenData
+   */
   setTokenData(tokenData: number) {
     this.tokenData = tokenData;
   }
@@ -139,9 +144,12 @@ export class ProposalOutput extends Output {
   /**
    * Return an object with the relevant output data
    *
-   * @throws {UnsupportedScriptError} Script must be P2SH or P2PKH
+   * @param {number} tokenIndex Index of the token on the tokens array
+   * @param {Network} network Network used to generate addresses in
    *
-   * @return {OutputData}
+   * @returns {OutputData}
+   *
+   * @throws {UnsupportedScriptError} Script must be P2SH or P2PKH
    * @memberof ProposalOutput
    * @inner
    */
@@ -188,9 +196,9 @@ export class PartialTx {
   /**
    * Convert the PartialTx into a complete TxData ready to be signed or serialized.
    *
-   * @throws {UnsupportedScriptError} All output scripts must be P2SH or P2PKH
+   * @returns {TxData}
    *
-   * @return {TxData}
+   * @throws {UnsupportedScriptError} All output scripts must be P2SH or P2PKH
    * @memberof PartialTx
    * @inner
    */
@@ -221,9 +229,9 @@ export class PartialTx {
   /**
    * Create a Transaction instance from the PartialTx.
    *
-   * @throws {UnsupportedScriptError} All output scripts must be P2SH or P2PKH
+   * @returns {Transaction}
    *
-   * @return {Transaction}
+   * @throws {UnsupportedScriptError} All output scripts must be P2SH or P2PKH
    * @memberof PartialTx
    * @inner
    */
@@ -234,12 +242,12 @@ export class PartialTx {
   /**
    * Calculate balance for all tokens from inputs and outputs.
    *
-   * @return {Record<string, Record<string, number>>}
+   * @returns {Record<string, {inputs: number, outputs: number}}
    * @memberof PartialTx
    * @inner
    */
-  calculateTokenBalance(): Record<string, Record<string, number>> {
-    const tokenBalance: Record<string, Record<string, number>> = {};
+  calculateTokenBalance(): Record<string, {inputs: number, outputs: number}> {
+    const tokenBalance: Record<string, {inputs: number, outputs: number}> = {};
     for (const input of this.inputs) {
       if (!tokenBalance[input.token]) {
         tokenBalance[input.token] = {inputs: 0, outputs: 0};
@@ -268,7 +276,7 @@ export class PartialTx {
   /**
    * Return true if the balance of the outputs match the balance of the inputs for all tokens.
    *
-   * @return {boolean}
+   * @returns {boolean}
    * @memberof PartialTx
    * @inner
    */
@@ -285,11 +293,12 @@ export class PartialTx {
    *
    * @param {string} txId The transaction id of the UTXO.
    * @param {number} index The index of the UTXO.
-   * @param {string} token The token UID.
+   * @param {number} value Value f the UTXO.
    * @param {number} tokenData The token data of the utxo with at least the authority bit.
-   * @param {string} address base58 address
+   * @param {Object} [options]
+   * @param {string} [options.token='00'] The token UID.
+   * @param {string|null} [options.address=null] base58 address
    *
-   * @return {Promise<void>}
    * @memberof PartialTx
    * @inner
    */
@@ -315,9 +324,10 @@ export class PartialTx {
    *
    * @param {number} value The amount of tokens on the output.
    * @param {Buffer} script The output script.
-   * @param {string} token The token UID.
    * @param {number} tokenData The token data of the output with at least the authority bit.
-   * @param {boolean} isChange If this is a change output.
+   * @param {Object} [options]
+   * @param {string} [options.token='00'] The token UID.
+   * @param {boolean|null} [options.isChange=false] isChange If this is a change output.
    *
    * @memberof PartialTx
    * @inner
@@ -345,9 +355,9 @@ export class PartialTx {
   /**
    * Serialize the current PartialTx into an UTF8 string.
    *
-   * @throws {UnsupportedScriptError} All output scripts must be P2SH or P2PKH
-   *
    * @returns {string}
+   *
+   * @throws {UnsupportedScriptError} All output scripts must be P2SH or P2PKH
    * @memberof PartialTx
    * @inner
    */
@@ -380,10 +390,10 @@ export class PartialTx {
    * @param {string} serialized The serialized PartialTx
    * @param {Network} network Network used when parsing the output scripts
    *
+   * @returns {PartialTx}
+   *
    * @throws {SyntaxError} serialized argument should be valid.
    * @throws {UnsupportedScriptError} All outputs should be P2SH or P2PKH
-   *
-   * @returns {PartialTx}
    * @memberof PartialTx
    * @static
    */
@@ -445,6 +455,11 @@ export class PartialTx {
 
   }
 
+  /**
+   * Check the content of the current PartialTx with the fullnode
+   *
+   * @returns {Promise<boolean>}
+   */
   async validate(): Promise<boolean> {
     const promises: Promise<boolean>[] = [];
 
@@ -534,7 +549,7 @@ export class PartialTxInputData {
   /**
    * Return true if we have an input data for each input.
    *
-   * @return {boolean}
+   * @returns {boolean}
    * @memberof PartialTxInputData
    * @inner
    */
