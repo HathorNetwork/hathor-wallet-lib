@@ -563,28 +563,6 @@ class Transaction {
   }
 
   /**
-   * Creates a Transaction instance from an instance of a wallet's history
-   * @param {HistoryTransaction} historyTx A transaction formatted as an instance of a wallet history
-   *
-   * @memberof Transaction
-   * @static
-   * @inner
-   *
-   * @example
-   * const historyTx = myHathorWallet.getTx(myTxHash);
-   * const txInstance = Transaction.createFromHistoryObject(historyTx);
-   */
-  static createFromHistoryObject(historyTx: HistoryTransaction) {
-    const inputs = historyTx.inputs.map(i => new Input(i.tx_id, i.index));
-    const outputs = historyTx.outputs.map(Output.createFromHistoryObject);
-
-    return new Transaction(
-      inputs,
-      outputs,
-      {...historyTx});
-  }
-
-  /**
    * Calculate first part of transaction hash
    *
    * @return {object} Sha256 hash object of part1

@@ -22,7 +22,6 @@ import Network from './network'
 import {bytesToOutputValue, unpackLen, unpackToInt} from '../utils/buffer'
 import {parseP2PKH, parseP2SH, parseScriptData} from '../utils/scripts'
 import _ from 'lodash'
-import {HistoryTransactionOutput} from "./transaction"
 
 type optionsType = {
   tokenData?: number | undefined,
@@ -233,30 +232,6 @@ class Output {
     output.parseScript(network);
 
     return [output, outputBuffer];
-  }
-
-  /**
-   * Creates an Output from an object extracted from the wallet's history.
-   * @param {HistoryTransactionOutput} historyOutput An output from a tx formatted as an
-   *                                                 instance of a wallet history
-   *
-   * @memberof Output
-   * @static
-   * @inner
-   *
-   * @example
-   * const historyTx = myHathorWallet.getTx(myTxHash);
-   * const outputInstance = Output.createFromHistoryObject(historyTx.outputs[0]);
-   */
-  static createFromHistoryObject(historyOutput: HistoryTransactionOutput): Output {
-    return new Output(
-      historyOutput.value,
-      Buffer.from(historyOutput.script, 'base64'),
-      {
-        timelock: historyOutput.decoded.timelock || null,
-        tokenData: historyOutput.token_data,
-      }
-    );
   }
 
   /**

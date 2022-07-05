@@ -18,7 +18,7 @@ import { unpackToInt, unpackLen } from '../utils/buffer';
 import helpers from '../utils/helpers';
 import Input from './input';
 import Output from './output';
-import Transaction, {HistoryTransaction} from './transaction'
+import Transaction from './transaction'
 import Network from './network';
 import { CreateTokenTxInvalid, InvalidOutputsError, NftValidationError } from '../errors';
 import buffer from 'buffer';
@@ -250,35 +250,6 @@ class CreateTokenTransaction extends Transaction {
     tx.updateHash();
 
     return tx;
-  }
-
-
-  /**
-   * Creates a Transaction instance from an instance of a wallet's history
-   * @param {HistoryTransaction} historyTx A transaction formatted as an instance of a wallet history
-   *
-   * @memberof Transaction
-   * @static
-   * @inner
-   *
-   * @example
-   * const historyTx = myHathorWallet.getTx(myTxHash);
-   * const txInstance = Transaction.createFromHistoryObject(historyTx);
-   */
-  static createFromHistoryObject(historyTx: HistoryTransaction) {
-    if (!historyTx?.token_name || !historyTx?.token_symbol) {
-      throw new CreateTokenTxInvalid(`Missing token name or symbol`);
-    }
-
-    const inputs = historyTx.inputs.map(i => new Input(i.tx_id, i.index));
-    const outputs = historyTx.outputs.map(Output.createFromHistoryObject);
-
-    return new CreateTokenTransaction(
-      historyTx.token_name,
-      historyTx.token_symbol,
-      inputs,
-      outputs,
-      {...historyTx});
   }
 
   /**
