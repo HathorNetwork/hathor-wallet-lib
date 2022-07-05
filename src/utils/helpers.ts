@@ -470,18 +470,19 @@ const helpers = {
   },
 
   /**
-   * Creates a Transaction instance from an instance of a wallet's history
+   * Creates a Transaction instance from a populated object from the wallet's history methods.
+   *
+   * _Note_: This helper does not need a _Network_ parameter, since all the output scripts were already decoded.
    * @param {HistoryTransaction} historyTx A transaction formatted as an instance of a wallet history
    *
-   * @memberof Transaction
-   * @static
+   * @memberof Helpers
    * @inner
    *
    * @example
    * const historyTx = myHathorWallet.getTx(myTxHash);
    * const txInstance = helpers.createTxFromHistoryObject(historyTx);
    */
-  createTxFromHistoryObject(historyTx: HistoryTransaction) {
+  createTxFromHistoryObject(historyTx: HistoryTransaction): Transaction | CreateTokenTransaction {
     // Processing a token creation transaction
     const isCreateTokenTx = historyTx.version === CREATE_TOKEN_TX_VERSION
 
@@ -510,16 +511,15 @@ const helpers = {
 
   /**
    * Creates an Output from an object extracted from the wallet's history.
-   * @param {HistoryTransactionOutput} historyOutput An output from a tx formatted as an
-   *                                                 instance of a wallet history
+   * @param {HistoryTransactionOutput} historyOutput An output from a tx populated and formatted by the wallet's
+   *                                                 history methods
    *
-   * @memberof Output
-   * @static
+   * @memberof Helpers
    * @inner
    *
    * @example
    * const historyTx = myHathorWallet.getTx(myTxHash);
-   * const outputInstance = Output.createTxFromHistoryObject(historyTx.outputs[0]);
+   * const outputInstance = heleprs.createOutputFromHistoryObject(historyTx.outputs[0]);
    */
   createOutputFromHistoryObject(historyOutput: HistoryTransactionOutput): Output {
     return new Output(

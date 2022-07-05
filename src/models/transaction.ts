@@ -87,6 +87,15 @@ export type HistoryTransaction = {
   tokens: string[],
 }
 
+/**
+ * Representation of a transaction with helper methods.
+ *
+ * Besides the class `constructor`, there are some helper methods are available to build instances of this class
+ * according to context:
+ * - `Transaction.createFromBytes`: creates a transaction from a buffer and a network
+ * - `helpers.createTxFromData`: creates from a standard lib data object
+ * - `helpers.createTxFromHistoryObject`: creates from a tx populated by the HathorWallet history methods
+ */
 class Transaction {
   inputs: Input[];
   outputs: Output[];
