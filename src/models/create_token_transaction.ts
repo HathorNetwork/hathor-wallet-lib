@@ -279,11 +279,11 @@ class CreateTokenTransaction extends Transaction {
 
     // NFT creation DataScript output must have value 1 and must be of HTR
     if (firstOutput.value !== 1 || !firstOutput.isTokenHTR()) {
-      throw new NftValidationError(`First output is not a valid NFT fee`);
+      throw new NftValidationError(`First output is not a valid NFT data output`);
     }
     // NFT creation Datascript must be of type data
     if (!(firstOutput.parseScript(network) instanceof ScriptData)) {
-      throw new NftValidationError(`First output is not a fee DataScript`);
+      throw new NftValidationError(`First output is not a DataScript`);
     }
 
     // Iterating on all but the first output for validation and counting authorities
