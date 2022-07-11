@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { get } from 'lodash';
+
 import Input from './input';
 import Output from './output';
 import Address from './address';
@@ -293,7 +295,7 @@ export class PartialTx {
    *
    * @param {string} txId The transaction id of the UTXO.
    * @param {number} index The index of the UTXO.
-   * @param {number} value Value f the UTXO.
+   * @param {number} value Value of the UTXO.
    * @param {number} tokenData The token data of the utxo with at least the authority bit.
    * @param {Object} [options]
    * @param {string} [options.token='00'] The token UID.
@@ -407,6 +409,7 @@ export class PartialTx {
     }
 
     const inputArr = dataArr[2].split(':').map(h => {
+      // `it` is the index we are reading on the serialized input metadata
       let it: number = 0;
       let token: string, tokenData: number, value: number;
       // 1 byte of tokenData
@@ -466,11 +469,12 @@ export class PartialTx {
     for (const input of this.inputs) {
       const p: Promise<boolean> = new Promise((resolve, reject) => {
         txApi.getTransaction(input.hash, (data) => {
-          if (!(data && data.tx && data.tx.outputs && data.tx.outputs[input.index])) {
+          const utxo = get(data, `tx.outputs[${input.index}]`);
+          if (!utxo) {
             return resolve(false);
           }
-          const utxo = data.tx.outputs[input.index];
-          const token = utxo.token_data === 0 ? HATHOR_TOKEN_CONFIG : data.tx.tokens[utxo.token_data - 1];
+
+          const token = utxo.token_data === 0 ? HATHOR_TOKEN_CONFIG : get(data, `tx.tokens[${utxo.token_data - 1}]`);
 
           if (!(
             input.token === token.uid

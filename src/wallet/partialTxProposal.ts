@@ -133,7 +133,7 @@ class PartialTxProposal {
    * @param {string} hash Transaction hash
    * @param {number} index UTXO index on the outputs of the transaction.
    * @param {number} value UTXO value.
-   * @param {Object} [options={}]
+   * @param {Object} [options]
    * @param {string} [options.token='00'] Token UID in hex format.
    * @param {number} [options.tokenData=0] TokenData of the UTXO.
    * @param {string|null} [options.address=null] Address that owns the UTXO.
@@ -176,7 +176,7 @@ class PartialTxProposal {
    * @param {string} token UID of token that is being sent.
    * @param {number} value Quantity of tokens being sent.
    * @param {string} address Create the output script for this address.
-   * @param {Object} [options={}]
+   * @param {Object} [options]
    * @param {number|null} [options.timelock=null] UNIX timestamp of the timelock.
    * @param {boolean} [options.isChange=false] If the output should be considered as change.
    * @param {number} [options.tokenData=0] TokenData of the Output.
