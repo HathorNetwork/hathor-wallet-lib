@@ -387,19 +387,19 @@ describe('NFT Validation', () => {
 
     // Wrong Value
     txInstance.outputs[0].value = 2;
-    expect(() => txInstance.validateNftCreation(network)).toThrow('valid NFT fee');
+    expect(() => txInstance.validateNftCreation(network)).toThrow('valid NFT data');
 
     // Wrong Token Data
     txInstance.outputs[0].value = 1;
     txInstance.outputs[0].tokenData = 1;
-    expect(() => txInstance.validateNftCreation(network)).toThrow('valid NFT fee');
+    expect(() => txInstance.validateNftCreation(network)).toThrow('valid NFT data');
 
     // Wrong Token Script
     txInstance.outputs[0].tokenData = 0;
     txInstance.outputs[0].script = Buffer
       .from(historyTx.outputs[0].script,'base64')
       .toString('hex');
-    expect(() => txInstance.validateNftCreation(network)).toThrow('fee DataScript');
+    expect(() => txInstance.validateNftCreation(network)).toThrow('not a DataScript');
   });
 
   it('should return false for having an invalid output script', () => {
