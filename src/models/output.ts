@@ -267,9 +267,9 @@ class Output {
    * @memberof Output
    * @inner
    */
-  getType(network: Network): string|undefined {
+  getType(network: Network): String|undefined {
     const decodedScript = this.decodedScript || this.parseScript(network)
-    return decodedScript?.constructor?.name;
+    return decodedScript?.getType();
   }
 }
 
