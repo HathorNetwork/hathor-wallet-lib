@@ -260,7 +260,7 @@ class CreateTokenTransaction extends Transaction {
    * @param {Network} network Network to get output addresses first byte
    * @returns {void} If this function does not throw, the NFT is valid
    */
-  validateNftCreation(network: Network): void {
+  validateNft(network: Network): void {
     // An invalid transaction will fail here too
     this.validate();
 
