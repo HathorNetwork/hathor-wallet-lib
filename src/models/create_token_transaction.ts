@@ -305,10 +305,8 @@ class CreateTokenTransaction extends Transaction {
       }
 
       // Counting authority outputs
-      if (output.isAuthority()) {
-        mintOutputs += (output.value & TOKEN_MINT_MASK) > 0 ? 1 : 0;
-        meltOutputs += (output.value & TOKEN_MELT_MASK) > 0 ? 1 : 0;
-      }
+      mintOutputs += output.isMint() ? 1 : 0;
+      meltOutputs += output.isMelt() ? 1 : 0;
     }
 
     // Validating maximum of 1 mint and/or melt outputs
