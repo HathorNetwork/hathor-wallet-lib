@@ -160,6 +160,9 @@ export const AUTHORITY_TOKEN_DATA = TOKEN_AUTHORITY_MASK | 1
 
 /**
  * Hathor token config
+ * @property {'Hathor'} name
+ * @property {'HTR'} symbol
+ * @property {'00'} uid
  */
 export const HATHOR_TOKEN_CONFIG = {'name': 'Hathor', 'symbol': 'HTR', 'uid': '00'};
 
