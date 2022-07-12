@@ -244,18 +244,7 @@ class Output {
    */
   hasValidLength(): boolean {
     // No script can have more than the maximum length
-    if (this.script.length > MAXIMUM_SCRIPT_LENGTH) {
-      return false;
-    }
-
-    // P2PKH and P2SH scripts can only have 30 or 25 bytes (with or without timelock)
-    if (P2PKH.identify(this.script) || P2SH.identify(this.script)) {
-      if (!(this.script.length === 25 || this.script.length === 30)) {
-        return false;
-      }
-    }
-
-    return true;
+    return this.script.length <= MAXIMUM_SCRIPT_LENGTH;
   }
 
   /**
