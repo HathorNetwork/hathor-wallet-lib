@@ -6,8 +6,7 @@
  */
 
 import tokens from '../src/tokens';
-import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../src/constants';
-import { HDPrivateKey } from 'bitcore-lib';
+import { HATHOR_TOKEN_CONFIG } from '../src/constants';
 import wallet from '../src/wallet';
 import version from '../src/version';
 import { util } from 'bitcore-lib';
