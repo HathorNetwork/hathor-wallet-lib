@@ -161,8 +161,10 @@ export class ProposalOutput extends Output {
       throw new UnsupportedScriptError('Unsupported script type');
     }
 
+    const authority = this.tokenData & TOKEN_AUTHORITY_MASK;
+
     // This will keep authority bit while updating the index bits
-    this.setTokenData(this.tokenData | tokenIndex);
+    this.setTokenData(authority | tokenIndex);
 
     const data: OutputData = {
       type: script.getType(),

@@ -117,12 +117,12 @@ expect.extend({
     }
     if (pass) {
       return {
-        message: () => `expected Buffer(${received.toString('hex')}) to not match expected Buffer(${expected.toString('hex')})`,
+        message: () => `expected Buffer(${received.toString('hex')}) to not match Buffer(${expected.toString('hex')})`,
         pass: true,
       }
     } else {
       return {
-        message: () => `expected Buffer(${received.toString('hex')}) to match expected Buffer(${expected.toString('hex')})`,
+        message: () => `expected Buffer(${received.toString('hex')}) to match Buffer(${expected.toString('hex')})`,
         pass: false,
       }
     }
