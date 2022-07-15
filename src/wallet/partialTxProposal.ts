@@ -87,9 +87,9 @@ class PartialTxProposal {
         input.tx_id,
         input.index,
         utxo.value,
+        input.address,
         {
           token: utxo.token,
-          address: input.address,
           markAsSelected,
         });
     }
@@ -143,15 +143,14 @@ class PartialTxProposal {
     hash: string,
     index: number,
     value: number,
+    address: string,
     {
       token = HATHOR_TOKEN_CONFIG.uid,
       tokenData = 0,
-      address = null,
       markAsSelected = true,
     }: {
       token?: string,
       tokenData?: number,
-      address?: string|null,
       markAsSelected?: boolean,
     } = {},
   ) {
@@ -167,7 +166,7 @@ class PartialTxProposal {
       }
     }
 
-    this.partialTx.addInput(hash, index, value, tokenData, { token, address });
+    this.partialTx.addInput(hash, index, value, address, { token, tokenData });
   }
 
   /**
@@ -207,7 +206,7 @@ class PartialTxProposal {
       default:
         throw new AddressError('Unsupported address type');
     }
-    this.partialTx.addOutput(value, script.createScript(), tokenData, { token, isChange });
+    this.partialTx.addOutput(value, script.createScript(), { token, tokenData, isChange });
   }
 
   /**
@@ -246,12 +245,13 @@ class PartialTxProposal {
    * Create the data to sign from the current transaction signing the loaded wallet inputs.
    *
    * @param {string} pin The loaded wallet's pin to sign the transaction.
+   * @param {boolean} validate If we should validate the data with the fullnode before signing.
    *
    * @throws {InvalidPartialTxError} Inputs and outputs balance should match before signing.
    * @throws {UnsupportedScriptError} When we have an unsupported output script.
    * @throws {IndexOOBError} input index should be inside the inputs array.
    */
-  async signData(pin: string) {
+  async signData(pin: string, validate: boolean = true) {
     if (!this.partialTx.isComplete()) {
       // partialTx is not complete, we cannot sign it.
       throw new InvalidPartialTxError('Cannot sign incomplete data');
@@ -264,10 +264,12 @@ class PartialTxProposal {
       tx.inputs.length
     );
 
-    // The validation method populates the addresses
-    const valid = await this.partialTx.validate();
-    if (!valid) {
-      throw new InvalidPartialTxError('Transaction data inconsistent with fullnode');
+    if (validate) {
+      // The validation method populates the addresses
+      const valid = await this.partialTx.validate();
+      if (!valid) {
+        throw new InvalidPartialTxError('Transaction data inconsistent with fullnode');
+      }
     }
 
     // sign inputs from the loaded wallet and save input data

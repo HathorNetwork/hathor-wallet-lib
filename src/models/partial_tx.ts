@@ -27,7 +27,7 @@ import { TOKEN_AUTHORITY_MASK, TOKEN_INDEX_MASK, HATHOR_TOKEN_CONFIG } from '../
 type InputData = {
   tx_id: string,
   index: number,
-  address?: string,
+  address: string,
   data?: Buffer,
 };
 
@@ -59,19 +59,19 @@ export class ProposalInput extends Input {
   token: string;
   tokenData: number;
   value: number;
-  address: string|null;
+  address: string;
 
   constructor(
     hash: string,
     index: number,
     value: number,
-    tokenData: number,
+    address: string,
     {
       token = HATHOR_TOKEN_CONFIG.uid,
-      address = null,
+      tokenData = 0,
     }: {
       token?: string;
-      address?: string | null;
+      tokenData?: number,
     } = {},
   ) {
     super(hash, index);
@@ -92,10 +92,8 @@ export class ProposalInput extends Input {
     const data: InputData = {
       tx_id: this.hash,
       index: this.index,
+      address: this.address,
     };
-    if (this.address) {
-      data.address = this.address;
-    }
 
     return data;
   }
@@ -120,13 +118,14 @@ export class ProposalOutput extends Output {
   constructor(
     value: number,
     script: Buffer,
-    tokenData: number,
     {
       isChange = false,
       token = HATHOR_TOKEN_CONFIG.uid,
+      tokenData = 0,
     }: {
       token?: string,
       isChange?: boolean,
+      tokenData?: number,
     } = {},
   ) {
     super(value, script, { tokenData });
@@ -299,9 +298,9 @@ export class PartialTx {
    * @param {number} index The index of the UTXO.
    * @param {number} value Value of the UTXO.
    * @param {number} tokenData The token data of the utxo with at least the authority bit.
+   * @param {string} address base58 address
    * @param {Object} [options]
    * @param {string} [options.token='00'] The token UID.
-   * @param {string|null} [options.address=null] base58 address
    *
    * @memberof PartialTx
    * @inner
@@ -310,16 +309,16 @@ export class PartialTx {
     txId: string,
     index: number,
     value: number,
-    tokenData: number,
+    address: string,
     {
       token = HATHOR_TOKEN_CONFIG.uid,
-      address = null,
+      tokenData = 0,
     }: {
       token?: string;
-      address?: string | null;
+      tokenData?: number;
     } = {},
   ) {
-    this.inputs.push(new ProposalInput(txId, index, value, tokenData, { token, address }));
+    this.inputs.push(new ProposalInput(txId, index, value, address, { token, tokenData }));
   }
 
 
@@ -339,20 +338,20 @@ export class PartialTx {
   addOutput(
     value: number,
     script: Buffer,
-    tokenData: number,
     {
       token = HATHOR_TOKEN_CONFIG.uid,
+      tokenData = 0,
       isChange = false,
     }: {
       token?: string,
       isChange?: boolean,
+      tokenData?: number,
     } = {},
   ) {
     this.outputs.push(new ProposalOutput(
       value,
       script,
-      tokenData,
-      { token, isChange },
+      { token, tokenData, isChange },
     ));
   }
 
@@ -375,10 +374,11 @@ export class PartialTx {
     const tx = this.getTx();
     // tokenData(1 byte), token(32 bytes | 1 byte), value(variable bytes with max 16)
     const inputArr = this.inputs.map(i => [
-        Buffer.from([i.tokenData]).toString('hex'), // This ensures we always have 1 byte for token data
+        i.address,
         i.token,
+        i.tokenData.toString(16),
         i.value.toString(16),
-      ].join(''));
+      ].join(','));
     const arr = [
       PartialTxPrefix,
       tx.toHex(),
@@ -411,22 +411,17 @@ export class PartialTx {
     }
 
     const inputArr = dataArr[2].split(':').map(h => {
-      // `it` is the index we are reading on the serialized input metadata
-      let it: number = 0;
-      let token: string, tokenData: number, value: number;
-      // 1 byte of tokenData
-      tokenData = parseInt(h.slice(it, it+2), 16); it += 2;
-      // We have 2 cases, custom token (64 characters) and HTR (2 characters)
-      // HTR case: length range is 5-20 characters (2+2+1 / 2+2+16)
-      // Custom token case: length range is 67-82 characters (2+64+1 / 2+64+16)
-      if (h.length > 64) {
-        token = h.slice(it, it+64); it += 64;
-      } else {
-        token = h.slice(it, it+2); it += 2;
+      const parts = h.split(',');
+      const meta = {
+        address: parts[0],
+        token: parts[1],
+        tokenData: parseInt(parts[2], 16),
+        value: parseInt(parts[3], 16)
+      };
+      if (isNaN(meta.value) || isNaN(meta.tokenData)) {
+        throw new SyntaxError('Invalid PartialTx');
       }
-      // value can have variable size in hex
-      value = parseInt(h.slice(it), 16);
-      return { token, tokenData, value };
+      return meta;
     });
     const changeOutputs = dataArr[3].split(':').map(x => parseInt(x, 16));
 
@@ -436,7 +431,13 @@ export class PartialTx {
 
     for (const [index, input] of tx.inputs.entries()) {
       const inputMeta = inputArr[index];
-      instance.addInput(input.hash, input.index, inputMeta.value, inputMeta.tokenData, { token: inputMeta.token });
+      instance.addInput(
+        input.hash,
+        input.index,
+        inputMeta.value,
+        inputMeta.address,
+        { token: inputMeta.token, tokenData: inputMeta.tokenData },
+      );
     }
 
     for (const [index, output] of tx.outputs.entries()) {
@@ -451,8 +452,7 @@ export class PartialTx {
       instance.addOutput(
         output.value,
         output.script,
-        output.tokenData,
-        { token, isChange: changeOutputs.indexOf(index) > -1 },
+        { token, tokenData: output.tokenData, isChange: changeOutputs.indexOf(index) > -1 },
       );
     }
 
@@ -478,23 +478,12 @@ export class PartialTx {
 
           const token = utxo.token_data === 0 ? HATHOR_TOKEN_CONFIG : get(data, `tx.tokens[${utxo.token_data - 1}]`);
 
-          if (!(
+          return resolve((
             input.token === token.uid
             && input.value === utxo.value
             && input.tokenData === utxo.token_data
-          )) {
-            return resolve(false);
-          }
-
-          if (input.address) {
-            if (input.address !== utxo.decoded.address) {
-              return resolve(false);
-            }
-          } else {
-            // No address on input, set actual address
-            input.address = utxo.decoded.address
-          }
-          return resolve(true);
+            && input.address === utxo.decoded.address
+          ));
         })
         .then(result => {
           // should have already resolved

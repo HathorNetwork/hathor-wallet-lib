@@ -38,7 +38,7 @@ describe('PartialTx.getTxData', () => {
   it('should support only P2SH and P2PKH', () => {
     const customScript = Buffer.from('data output script');
     const partialTx = new PartialTx(testnet);
-    partialTx.outputs.push(new ProposalOutput(1, customScript, HATHOR_TOKEN_CONFIG.uid, false));
+    partialTx.outputs.push(new ProposalOutput(1, customScript, { token: HATHOR_TOKEN_CONFIG.uid }));
 
     expect(() => partialTx.getTxData()).toThrow(UnsupportedScriptError);
   });
@@ -64,8 +64,8 @@ describe('PartialTx.getTxData', () => {
     spyOutput.mockImplementation(() => o--); // 10, 9, 8
 
     const partialTx = new PartialTx(testnet);
-    partialTx.inputs = Array(5).fill(new ProposalInput('hash', 1, '00', 1, 'W...'));
-    partialTx.outputs = Array(3).fill(new ProposalOutput(1, Buffer.from([]), '00', false));
+    partialTx.inputs = Array(5).fill(new ProposalInput('hash', 1, 1, 'W...'));
+    partialTx.outputs = Array(3).fill(new ProposalOutput(1, Buffer.from([])));
 
     const data = partialTx.getTxData();
 
@@ -119,24 +119,24 @@ describe('PartialTx.isComplete', () => {
     const partialTx = new PartialTx(testnet);
 
     partialTx.inputs = [
-      new ProposalInput('hash1', 0, 100, 0),
-      new ProposalInput('hash2', 0, 1, 1, { token: '1' }),
-      new ProposalInput('hash3', 0, 2, 2, { token: '2' }),
+      new ProposalInput('hash1', 0, 100, 'W'),
+      new ProposalInput('hash2', 0, 1, 'W', { token: '1' }),
+      new ProposalInput('hash3', 0, 2, 'W', { token: '2' }),
     ]
     partialTx.outputs = [
-      new ProposalOutput(100, Buffer.from([]), 0),
-      new ProposalOutput(1, Buffer.from([]), 1, { token: '1' }),
+      new ProposalOutput(100, Buffer.from([])),
+      new ProposalOutput(1, Buffer.from([]), { token: '1' }),
     ]
 
     // Missing token from outputs
     expect(partialTx.isComplete()).toBe(false);
 
     // Outputs have less than inputs for 1 token
-    partialTx.outputs.push(new ProposalOutput(1, Buffer.from([]), 1, { token: '1' }));
+    partialTx.outputs.push(new ProposalOutput(1, Buffer.from([]), { token: '1', tokenData: 1 }));
     expect(partialTx.isComplete()).toBe(false);
 
     // Outputs have more than inputs for 1 token
-    partialTx.outputs.push(new ProposalOutput(2, Buffer.from([]), 2, { token: '2' }));
+    partialTx.outputs.push(new ProposalOutput(2, Buffer.from([]), { token: '2', tokenData: 2 }));
     expect(partialTx.isComplete()).toBe(false);
 
     // Missing token from inputs
@@ -148,16 +148,16 @@ describe('PartialTx.isComplete', () => {
     const partialTx = new PartialTx(testnet);
 
     partialTx.inputs = [
-      new ProposalInput('hash1', 0, 1, 1, { token: '1' }),
-      new ProposalInput('hash2', 0, 2, 2, { token: '2' }),
-      new ProposalInput('hash3', 0, 3, 0),
+      new ProposalInput('hash1', 0, 1, 'W123', { token: '1' }),
+      new ProposalInput('hash2', 0, 2, 'W123', { token: '2' }),
+      new ProposalInput('hash3', 0, 3, 'W123'),
     ];
     partialTx.outputs = [
-      new ProposalOutput(2, Buffer.from([]), 0),
-      new ProposalOutput(1, Buffer.from([]), 2, { token: '2' }),
-      new ProposalOutput(1, Buffer.from([]), 1, { token: '1' }),
-      new ProposalOutput(1, Buffer.from([]), 0),
-      new ProposalOutput(1, Buffer.from([]), 2, { token: '2' }),
+      new ProposalOutput(2, Buffer.from([])),
+      new ProposalOutput(1, Buffer.from([]), { token: '2' }),
+      new ProposalOutput(1, Buffer.from([]), { token: '1' }),
+      new ProposalOutput(1, Buffer.from([])),
+      new ProposalOutput(1, Buffer.from([]), { token: '2' }),
     ];
 
     expect(partialTx.isComplete()).toBe(true);
@@ -167,18 +167,18 @@ describe('PartialTx.isComplete', () => {
     const partialTx = new PartialTx(testnet);
 
     partialTx.inputs = [
-      new ProposalInput('hash1', 0, 1, 1, { token: '1' }),
-      new ProposalInput('hash2', 0, 2, 2, { token: '2' }),
-      new ProposalInput('hash3', 0, 3, 0),
+      new ProposalInput('hash1', 0, 1, 'W123', { token: '1' }),
+      new ProposalInput('hash2', 0, 2, 'W123', { token: '2' }),
+      new ProposalInput('hash3', 0, 3, 'W123'),
     ];
     partialTx.outputs = [
-      new ProposalOutput(2, Buffer.from([]), 0),
-      new ProposalOutput(1, Buffer.from([]), 2, { token: '2' }),
-      new ProposalOutput(1, Buffer.from([]), 1, { token: '1' }),
-      new ProposalOutput(1, Buffer.from([]), 0),
-      new ProposalOutput(1, Buffer.from([]), 2, { token: '2' }),
+      new ProposalOutput(2, Buffer.from([])),
+      new ProposalOutput(1, Buffer.from([]), { token: '2' }),
+      new ProposalOutput(1, Buffer.from([]), { token: '1' }),
+      new ProposalOutput(1, Buffer.from([])),
+      new ProposalOutput(1, Buffer.from([]), { token: '2' }),
       // Add authority output for token 2
-      new ProposalOutput(1, Buffer.from([]), TOKEN_AUTHORITY_MASK | 1, { token: '2' }),
+      new ProposalOutput(1, Buffer.from([]), { token: '2', tokenData: TOKEN_AUTHORITY_MASK | 1 }),
     ];
 
     expect(partialTx.isComplete()).toBe(true);
@@ -193,19 +193,15 @@ describe('PartialTx.addInput', () => {
     const expected = []
 
     expected.push(expect.objectContaining({ hash: 'hash1', index: 0, token: '1', tokenData: 1, value: 1, address: 'W123' }));
-    partialTx.addInput('hash1', 0, 1, 1, { token: '1', address: 'W123' });
+    partialTx.addInput('hash1', 0, 1, 'W123', { token: '1', tokenData: 1 });
     expect(partialTx.inputs).toEqual(expected);
 
     expected.push(expect.objectContaining({ hash: 'hash2', index: 1, token: '00', tokenData: 0, value: 27, address: 'Wabc' }));
-    partialTx.addInput('hash2', 1, 27, 0, { address: 'Wabc' });
+    partialTx.addInput('hash2', 1, 27, 'Wabc');
     expect(partialTx.inputs).toEqual(expected);
 
-    expected.push(expect.objectContaining({ hash: 'hash3', index: 2, token: '2', tokenData: 2, value: 105, address: null }));
-    partialTx.addInput('hash3', 2, 105, 2, { token: '2' });
-    expect(partialTx.inputs).toEqual(expected);
-
-    expected.push(expect.objectContaining({ hash: 'hash4', index: 10, token: '1', tokenData: TOKEN_AUTHORITY_MASK | 3, value: 1056, address: null }));
-    partialTx.addInput('hash4', 10, 1056, TOKEN_AUTHORITY_MASK | 3, { token: '1' });
+    expected.push(expect.objectContaining({ hash: 'hash3', index: 10, token: '1', tokenData: TOKEN_AUTHORITY_MASK | 3, value: 1056, address: 'W1b3' }));
+    partialTx.addInput('hash3', 10, 1056, 'W1b3', { token: '1', tokenData: TOKEN_AUTHORITY_MASK | 3 });
     expect(partialTx.inputs).toEqual(expected);
   });
 });
@@ -226,7 +222,7 @@ describe('PartialTx.addOutput', () => {
       script: expect.toMatchBuffer(Buffer.from([230, 148, 32])),
       tokenData: 128,
     }));
-    partialTx.addOutput(27, Buffer.from([230, 148, 32]), 128, { token: '1', isChange: true});
+    partialTx.addOutput(27, Buffer.from([230, 148, 32]), { token: '1', tokenData: 128, isChange: true});
     expect(partialTx.outputs).toEqual(expected);
 
     expected.push(expect.objectContaining({
@@ -236,7 +232,7 @@ describe('PartialTx.addOutput', () => {
       script: expect.toMatchBuffer(Buffer.from([1, 2, 3])),
       tokenData: 0,
     }));
-    partialTx.addOutput(72, Buffer.from([1, 2, 3]), 0, { token: '2' });
+    partialTx.addOutput(72, Buffer.from([1, 2, 3]), { token: '2' });
     expect(partialTx.outputs).toEqual(expected);
   });
 });
@@ -276,17 +272,19 @@ describe('PartialTx serialization', () => {
   };
 
   it('should serialize a transaction correctly', async () => {
-    const expected = 'PartialTx|00010102030000389deaf5557642e5a8a26656dcf360b608160f43e7ef79b9bde8ab69a18c00000d906babfa76b092f0088530a85f4d6bae5437304820f4c7a39540d87dd00000000000584ed8ad32b00e79e1c5cf26b5969ca7cd4d93ae39b776e71cfecf7c8c780400000000000f00001976a914729181c0f3f2e3f589cc10facbb9332e0c309a7788ac0000000d01001976a9146861143f7dc6b2f9c8525315efe6fcda160a795c88ac0000000c00001976a914486bc4f1e70f242a737d3866147c7f8335c2995f88ac0000000000000000000000010000000000|00001b:010000389deaf5557642e5a8a26656dcf360b608160f43e7ef79b9bde8ab69a18cd|1:2';
+    const expected = 'PartialTx|00010102030000389deaf5557642e5a8a26656dcf360b608160f43e7ef79b9bde8ab69a18c00000d906babfa76b092f0088530a85f4d6bae5437304820f4c7a39540d87dd00000000000584ed8ad32b00e79e1c5cf26b5969ca7cd4d93ae39b776e71cfecf7c8c780400000000000f00001976a914729181c0f3f2e3f589cc10facbb9332e0c309a7788ac0000000d01001976a9146861143f7dc6b2f9c8525315efe6fcda160a795c88ac0000000c00001976a914486bc4f1e70f242a737d3866147c7f8335c2995f88ac0000000000000000000000010000000000|WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi,00,0,1b:WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi,0000389deaf5557642e5a8a26656dcf360b608160f43e7ef79b9bde8ab69a18c,1,d|1:2';
 
     const partialTx = new PartialTx(testnet);
+
+    const address = 'WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi';
     partialTx.inputs = [
-      new ProposalInput(txId1, 0, 27, 0, { token: HATHOR_TOKEN_CONFIG.uid, address: 'WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi' }),
-      new ProposalInput(txId2, 4, 13, 1, { token: testTokenConfig.uid }),
+      new ProposalInput(txId1, 0, 27, address, { token: HATHOR_TOKEN_CONFIG.uid }),
+      new ProposalInput(txId2, 4, 13, address, { token: testTokenConfig.uid, tokenData: 1 }),
     ];
     partialTx.outputs = [
-      new ProposalOutput(15, scriptFromAddressP2PKH('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo'), 0),
-      new ProposalOutput(13, scriptFromAddressP2PKH('WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp'), 1, { token: testTokenConfig.uid, isChange: true }),
-      new ProposalOutput(12, scriptFromAddressP2PKH('WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi'), 0, { isChange: true }),
+      new ProposalOutput(15, scriptFromAddressP2PKH('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo')),
+      new ProposalOutput(13, scriptFromAddressP2PKH('WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp'), { token: testTokenConfig.uid, isChange: true }),
+      new ProposalOutput(12, scriptFromAddressP2PKH('WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi'), { isChange: true }),
     ];
 
     const serialized = partialTx.serialize();
@@ -294,7 +292,7 @@ describe('PartialTx serialization', () => {
   });
 
   it('should deserialize a transaction correctly', () => {
-    const serialized = 'PartialTx|00010102030000389deaf5557642e5a8a26656dcf360b608160f43e7ef79b9bde8ab69a18c00000d906babfa76b092f0088530a85f4d6bae5437304820f4c7a39540d87dd00000000000584ed8ad32b00e79e1c5cf26b5969ca7cd4d93ae39b776e71cfecf7c8c780400000000000f00001976a914729181c0f3f2e3f589cc10facbb9332e0c309a7788ac0000000d01001976a9146861143f7dc6b2f9c8525315efe6fcda160a795c88ac0000000c00001976a914486bc4f1e70f242a737d3866147c7f8335c2995f88ac0000000000000000000000010000000000|00001b:010000389deaf5557642e5a8a26656dcf360b608160f43e7ef79b9bde8ab69a18cd|1:2';
+    const serialized = 'PartialTx|00010102030000389deaf5557642e5a8a26656dcf360b608160f43e7ef79b9bde8ab69a18c00000d906babfa76b092f0088530a85f4d6bae5437304820f4c7a39540d87dd00000000000584ed8ad32b00e79e1c5cf26b5969ca7cd4d93ae39b776e71cfecf7c8c780400000000000f00001976a914729181c0f3f2e3f589cc10facbb9332e0c309a7788ac0000000d01001976a9146861143f7dc6b2f9c8525315efe6fcda160a795c88ac0000000c00001976a914486bc4f1e70f242a737d3866147c7f8335c2995f88ac0000000000000000000000010000000000|WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi,00,0,1b:WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi,0000389deaf5557642e5a8a26656dcf360b608160f43e7ef79b9bde8ab69a18c,1,d|1:2';
     const partialTx = PartialTx.deserialize(serialized, testnet);
     expect(partialTx.serialize()).toBe(serialized);
   });
@@ -352,7 +350,7 @@ describe('PartialTx.validate', () => {
 
     const partialTx = new PartialTx(testnet);
     partialTx.inputs = [
-      new ProposalInput(txId1, 0, 27, 0, { address: addr1 }),
+      new ProposalInput(txId1, 0, 27, addr1),
     ];
     await partialTx.validate();
 
@@ -370,7 +368,7 @@ describe('PartialTx.validate', () => {
 
     const partialTx = new PartialTx(testnet);
     partialTx.inputs = [
-      new ProposalInput(txId1, 0, 27, 0, { address: addr1 }),
+      new ProposalInput(txId1, 0, 27, addr1),
     ];
     await expect(partialTx.validate()).rejects.toEqual('txApiError');
   });
@@ -386,13 +384,13 @@ describe('PartialTx.validate', () => {
 
     const partialTx = new PartialTx(testnet);
     partialTx.inputs = [
-      new ProposalInput(txId1, 0, 27, 0, { address: addr1 }),
-      new ProposalInput(txId2, 4, 13, 1, { address: addr2, token: testTokenConfig.uid }),
+      new ProposalInput(txId1, 0, 27, addr1),
+      new ProposalInput(txId2, 4, 13, addr2, { token: testTokenConfig.uid, tokenData: 1 }),
     ];
     partialTx.outputs = [
-      new ProposalOutput(15, scriptFromAddressP2PKH(addr2), 0),
-      new ProposalOutput(13, scriptFromAddressP2PKH(addr2), 1, { token: testTokenConfig.uid, isChange: true }),
-      new ProposalOutput(12, scriptFromAddressP2PKH(addr1), 0, { isChange: true }),
+      new ProposalOutput(15, scriptFromAddressP2PKH(addr2)),
+      new ProposalOutput(13, scriptFromAddressP2PKH(addr2), { token: testTokenConfig.uid, isChange: true }),
+      new ProposalOutput(12, scriptFromAddressP2PKH(addr1), { isChange: true }),
     ];
 
     await expect(partialTx.validate()).resolves.toEqual(true);
@@ -410,64 +408,39 @@ describe('PartialTx.validate', () => {
     const partialTx = new PartialTx(testnet);
     // Address of inputs[1] is wrong
     partialTx.inputs = [
-      new ProposalInput(txId1, 0, 27, 0, { address: addr1 }),
-      new ProposalInput(txId2, 4, 13, 1, { address: addr1, token: testTokenConfig.uid }),
+      new ProposalInput(txId1, 0, 27, addr1),
+      new ProposalInput(txId2, 4, 13, addr1, { token: testTokenConfig.uid, tokenData: 1 }),
     ];
     partialTx.outputs = [
-      new ProposalOutput(15, scriptFromAddressP2PKH(addr2), 0),
-      new ProposalOutput(13, scriptFromAddressP2PKH(addr2), 1, { token: testTokenConfig.uid, isChange: true }),
-      new ProposalOutput(12, scriptFromAddressP2PKH(addr1), 0, { isChange: true }),
+      new ProposalOutput(15, scriptFromAddressP2PKH(addr2)),
+      new ProposalOutput(13, scriptFromAddressP2PKH(addr2), { token: testTokenConfig.uid, isChange: true }),
+      new ProposalOutput(12, scriptFromAddressP2PKH(addr1), { isChange: true }),
     ];
 
     await expect(partialTx.validate()).resolves.toEqual(false);
 
     // Value of inputs[0] is wrong
     partialTx.inputs = [
-      new ProposalInput(txId1, 0, 28, 0, { address: addr1 }),
-      new ProposalInput(txId2, 4, 13, 1, { address: addr2, token: testTokenConfig.uid }),
+      new ProposalInput(txId1, 0, 28, addr1),
+      new ProposalInput(txId2, 4, 13, addr2, { token: testTokenConfig.uid, tokenData: 1 }),
     ];
 
     await expect(partialTx.validate()).resolves.toEqual(false);
 
     // TokenData of inputs[1] is wrong
     partialTx.inputs = [
-      new ProposalInput(txId1, 0, 27, 0, { address: addr1 }),
-      new ProposalInput(txId2, 4, 13, 2, { address: addr2, token: testTokenConfig.uid }),
+      new ProposalInput(txId1, 0, 27, addr1),
+      new ProposalInput(txId2, 4, 13, addr2, { token: testTokenConfig.uid, tokenData: 2 }),
     ];
 
     await expect(partialTx.validate()).resolves.toEqual(false);
 
     // Token of inputs[0] is wrong
     partialTx.inputs = [
-      new ProposalInput(txId1, 0, 27, 0, { token: testTokenConfig, address: addr1 }),
-      new ProposalInput(txId2, 4, 13, 2, { address: addr2, token: testTokenConfig.uid }),
+      new ProposalInput(txId1, 0, 27, addr1, { token: testTokenConfig }),
+      new ProposalInput(txId2, 4, 13, addr2, { token: testTokenConfig.uid, tokenData: 1 }),
     ];
 
     await expect(partialTx.validate()).resolves.toEqual(false);
-  });
-
-  it('should populate addresses when validating inputs', async () => {
-    spy.mockImplementation(async (txId, cb) => {
-      return new Promise(resolve => {
-        process.nextTick(() => {
-          resolve({ success: true, tx: utxos[txId] });
-        });
-      }).then(data => { cb(data); });
-    });
-
-    const partialTx = new PartialTx(testnet);
-    partialTx.inputs = [
-      new ProposalInput(txId1, 0, 27, 0),
-      new ProposalInput(txId2, 4, 13, 1, { token: testTokenConfig.uid }),
-    ];
-    partialTx.outputs = [
-      new ProposalOutput(15, scriptFromAddressP2PKH(addr2), 0),
-      new ProposalOutput(13, scriptFromAddressP2PKH(addr2), 1, { token: testTokenConfig.uid, isChange: true }),
-      new ProposalOutput(12, scriptFromAddressP2PKH(addr1), 0, { isChange: true }),
-    ];
-
-    await expect(partialTx.validate()).resolves.toEqual(true);
-    expect(partialTx.inputs[0].address).toEqual(addr1);
-    expect(partialTx.inputs[1].address).toEqual(addr2);
   });
 });
