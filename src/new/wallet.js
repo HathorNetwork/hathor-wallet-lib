@@ -860,6 +860,122 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Generates all available utxos
+   *
+   * @typedef {Object} Utxo
+   * @property {string} txId
+   * @property {number} index
+   * @property {string} tokenId
+   * @property {string} address
+   * @property {string} value
+   * @property {number} authorities
+   * @property {number|null} timelock
+   * @property {number|null} heightlock
+   * @property {boolean} locked
+   * @property {string} addressPath
+   *
+   * @param {Object} [options] Utxo filtering options
+   * @property {string} [options.token='00'] - Search for UTXOs of this token UID.
+   * @property {string|null} [options.filter_address=null] - Address to filter the utxos.
+   *
+   * @generator
+   * @function getAllUtxos
+   * @yields {Utxo} all available utxos
+   */
+  * getAllUtxos(options = {}) {
+    storage.setStore(this.store);
+    const data = this.getWalletData();
+    const historyTransactions = Object.values(this.getFullHistory());
+
+    const { token, filter_address } = Object.assign({
+      token: HATHOR_TOKEN_CONFIG.uid,
+      filter_address: null,
+    }, options);
+
+    const utxos = [];
+    for (const tx_id in historyTransactions) {
+      const tx = historyTransactions[tx_id];
+      if (tx.is_voided) {
+        continue;
+      }
+
+      for (const [index, txout] of tx.outputs.entries()) {
+        // check for authority: continue
+
+        if (filter_address && filter_address !== txout.decoded.address) {
+          continue;
+        }
+
+        if (!wallet.isAddressMine(txout.decoded.address, data)) {
+          continue;
+        }
+
+        if (txout.spent_by === null && txout.token === token) {
+          if (wallet.canUseUnspentTx(txout, tx.height)) {
+            const utxo = {
+              txId: tx_id,
+              index,
+              tokenId: token,
+              address: txout.decoded.address,
+              value: txout.value,
+              authorities: 0,
+              timelock: txout.decoded.timelock,
+              heightlock: null,
+              locked: false,
+              addressPath: '',
+            };
+            yield utxo;
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Get utxos of the wallet addresses to fill the amount specified.
+   *
+   * @param {Object} [options] Utxo filtering options
+   * @property {string} [options.token='00'] - Search for UTXOs of this token UID.
+   * @property {string|null} [options.filter_address=null] - Address to filter the utxos.
+   *
+   * @return {{utxos: Utxo[], changeAmount: number}} Utxos and change information.
+   *
+   */
+  getUtxosForAmount(amount, options = {}) {
+    storage.setStore(this.store);
+    const historyTransactions = Object.values(this.getFullHistory());
+
+    const newOptions = Object.assign({
+      token: HATHOR_TOKEN_CONFIG.uid,
+      filter_address: null,
+    }, options);
+
+    return selectUtxos(this.getAllUtxos(newOptions), amount);
+  }
+
+  /**
+   * Mark UTXO selected_as_input.
+   *
+   * @param {string} txId Transaction id of the UTXO
+   * @param {number} index Output index of the UTXO
+   * @param {boolean} [value=true] The value to set the utxos.
+   */
+  markUtxoSelected(txId, index, value = true) {
+    storage.setStore(this.store);
+    const historyTransactions = Object.values(this.getFullHistory());
+    const tx = historyTransactions[txId] || null;
+    const txout = tx && tx.outputs && tx.outputs[index];
+
+    if (!txout) {
+      return;
+    }
+    historyTransactions[txId].outputs[index].selected_as_input = value;
+
+    const walletData = wallet.getWalletData();
+    wallet.setWalletData(Object.assign(walletData, { historyTransactions }));
+  }
+
+  /**
    * Prepare all required data to consolidate utxos.
    *
    * @typedef {Object} PrepareConsolidateUtxosDataResult

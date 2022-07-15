@@ -11,8 +11,8 @@ import P2SH from '../models/p2sh';
 import P2PKH from '../models/p2pkh';
 import Transaction from '../models/transaction';
 import { AddressError, InvalidPartialTxError, InsufficientFundsError } from '../errors';
-import wallet from '../wallet';
 import Network from '../models/network';
+import HathorWallet from '../new/wallet';
 import { HATHOR_TOKEN_CONFIG } from '../constants';
 
 import transaction from '../transaction';
@@ -58,48 +58,43 @@ class PartialTxProposal {
   /**
    * Add inputs sending the amount of tokens specified, may add a change output.
    *
+   * @param {HathorWallet} wallet Wallet which will provide the tokens.
    * @param {string} token UID of token that is being sent
    * @param {number} value Quantity of tokens being sent
    * @param {Object} [options]
    * @param {string|null} [options.changeAddress=null] If we add change, use this address instead of getting a new one from the wallet.
    * @param {boolean} [options.markAsSelected=true] Mark the utxo with `selected_as_input`.
-   *
-   * @throws InsufficientFundsError
    */
   addSend(
+    wallet: HathorWallet,
     token: string,
     value: number,
     { changeAddress = null, markAsSelected = true }: { changeAddress?: number|null, markAsSelected?: boolean } = {},
   ) {
     this.resetSignatures();
 
-    const walletData = wallet.getWalletData();
-    const historyTransactions = walletData['historyTransactions'] || {};
-    const newData = wallet.getInputsFromAmount(historyTransactions, value, token);
-    if (newData.inputsAmount < value) {
-      throw new InsufficientFundsError(`Not enough tokens to send.`);
-    }
+    const historyTransactions = wallet.getFullHistory();
 
-    for (const input of newData.inputs) {
-      // Since we chose the input from the historyTransactions, we can be sure this exists.
-      const utxo = historyTransactions[input.tx_id].outputs[input.index];
+    const utxosDetails = wallet.getUtxoForAmount(value, { token });
+    for (const utxo of utxosDetails.utxos) {
+      // Since we chose the utxos from the historyTransactions, we can be sure this exists.
+      const txout = historyTransactions[utxo.tx_id].outputs[utxo.index];
       this.addInput(
-        input.tx_id,
-        input.index,
+        wallet,
+        utxo.txId,
+        utxo.index,
         utxo.value,
-        input.address,
-        {
-          token: utxo.token,
-          markAsSelected,
-        });
+        utxo.address,
+        { token: utxo.token, tokenData: txout.tokenData, markAsSelected },
+      );
     }
 
     // add change output if needed
-    if (newData.inputsAmount > value) {
+    if (utxosDetails.changeAmount > 0) {
       const address = changeAddress || wallet.getCurrentAddress();
       this.addOutput(
         token,
-        newData.inputsAmount - value,
+        utxosDetails.changeAmount,
         address,
         { isChange: true },
       );
@@ -109,6 +104,7 @@ class PartialTxProposal {
   /**
    * Add outputs receiving the amount of tokens specified.
    *
+   * @param {HathorWallet} wallet Wallet which will receive the tokens.
    * @param {string} token UID of token that is being sent
    * @param {number} value Quantity of tokens being sent
    * @param {Object} [options]
@@ -117,6 +113,7 @@ class PartialTxProposal {
    *
    */
   addReceive(
+    wallet: HathorWallet,
     token: string,
     value: number,
     { timelock = null, address = null }: { timelock?: number|null, address?: string|null } = {}) {
@@ -130,6 +127,7 @@ class PartialTxProposal {
   /**
    * Add an UTXO as input on the partial data.
    *
+   * @param {HathorWallet} wallet Wallet which will provide the tokens.
    * @param {string} hash Transaction hash
    * @param {number} index UTXO index on the outputs of the transaction.
    * @param {number} value UTXO value.
@@ -140,6 +138,7 @@ class PartialTxProposal {
    * @param {boolean} [options.markAsSelected=true] Mark the utxo with `selected_as_input`.
    */
   addInput(
+    wallet: HathorWallet,
     hash: string,
     index: number,
     value: number,
@@ -157,13 +156,7 @@ class PartialTxProposal {
     this.resetSignatures();
 
     if (markAsSelected) {
-      const walletData = wallet.getWalletData();
-      const historyTransactions = walletData['historyTransactions'] || {};
-
-      // The input may not be present on the loaded wallet's history
-      if(hash in historyTransactions) {
-        historyTransactions[hash].outputs[index]['selected_as_input'] = true;
-      }
+      wallet.markUtxoSelected(hash, index);
     }
 
     this.partialTx.addInput(hash, index, value, address, { token, tokenData });
@@ -219,16 +212,12 @@ class PartialTxProposal {
 
   /**
    * Unmark all inputs currently on the partial tx as not `selected_as_input`.
+   *
+   * @param {HathorWallet} wallet Wallet of the UTXOs.
    */
-  unmarkAsSelected() {
-    const walletData = wallet.getWalletData();
-    const historyTransactions = walletData['historyTransactions'] || {};
-
+  unmarkAsSelected(wallet: HathorWallet) {
     for(const input of this.partialTx.inputs) {
-      // The input may not be present on the loaded wallet's history
-      if(input.hash in historyTransactions) {
-        historyTransactions[input.hash].outputs[input.index]['selected_as_input'] = false;
-      }
+      wallet.markUtxoSelected(input.hash, input.index, false);
     }
   }
 
