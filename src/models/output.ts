@@ -18,6 +18,8 @@ import _ from 'lodash';
 
 type optionsType = {
   tokenData?: number | undefined,
+  // FIXME: Timelock as an option is not used, it is extracted from the decoded script.
+  timelock?: number | null | undefined,
 };
 
 
