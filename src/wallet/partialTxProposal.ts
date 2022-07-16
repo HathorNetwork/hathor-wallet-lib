@@ -69,16 +69,16 @@ class PartialTxProposal {
     wallet: HathorWallet,
     token: string,
     value: number,
-    { changeAddress = null, markAsSelected = true }: { changeAddress?: number|null, markAsSelected?: boolean } = {},
+    { changeAddress = null, markAsSelected = true }: { changeAddress?: string|null, markAsSelected?: boolean } = {},
   ) {
     this.resetSignatures();
 
     const historyTransactions = wallet.getFullHistory();
 
-    const utxosDetails = wallet.getUtxoForAmount(value, { token });
+    const utxosDetails = wallet.getUtxosForAmount(value, { token });
     for (const utxo of utxosDetails.utxos) {
       // Since we chose the utxos from the historyTransactions, we can be sure this exists.
-      const txout = historyTransactions[utxo.tx_id].outputs[utxo.index];
+      const txout = historyTransactions[utxo.txId].outputs[utxo.index];
       this.addInput(
         wallet,
         utxo.txId,
@@ -91,7 +91,7 @@ class PartialTxProposal {
 
     // add change output if needed
     if (utxosDetails.changeAmount > 0) {
-      const address = changeAddress || wallet.getCurrentAddress();
+      const address: string = changeAddress || wallet.getCurrentAddress().address;
       this.addOutput(
         token,
         utxosDetails.changeAmount,
@@ -120,7 +120,7 @@ class PartialTxProposal {
     this.resetSignatures();
 
     // get an address of our wallet and add the output
-    const addr = address || wallet.getCurrentAddress();
+    const addr = address || wallet.getCurrentAddress().address;
     this.addOutput(token, value, addr, { timelock });
   }
 

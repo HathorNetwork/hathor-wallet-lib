@@ -24,6 +24,7 @@ import { AddressError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
 import { HDPrivateKey, HDPublicKey, crypto } from 'bitcore-lib';
+import transactionUtils from '../utils/transaction';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';
@@ -884,8 +885,8 @@ class HathorWallet extends EventEmitter {
    */
   * getAllUtxos(options = {}) {
     storage.setStore(this.store);
-    const data = this.getWalletData();
-    const historyTransactions = Object.values(this.getFullHistory());
+    const data = wallet.getWalletData();
+    const historyTransactions = this.getFullHistory();
 
     const { token, filter_address } = Object.assign({
       token: HATHOR_TOKEN_CONFIG.uid,
@@ -950,7 +951,7 @@ class HathorWallet extends EventEmitter {
       filter_address: null,
     }, options);
 
-    return selectUtxos(this.getAllUtxos(newOptions), amount);
+    return transactionUtils.selectUtxos(this.getAllUtxos(newOptions), amount);
   }
 
   /**
