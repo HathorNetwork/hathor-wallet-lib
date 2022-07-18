@@ -1549,6 +1549,7 @@ describe('getTxHistory', () => {
     expect(txHistory).toHaveLength(2);
     expect(txHistory[0].txId).toEqual(tx2.hash);
     expect(txHistory[0].balance).toEqual(0); // No change in balance, just transfer
+    expect(txHistory[1].txId).toEqual(tx1.hash); // Validating correct order
 
     // HTR external transfer
     await waitUntilNextTimestamp(hWallet, tx2.hash);
@@ -1558,6 +1559,8 @@ describe('getTxHistory', () => {
     expect(txHistory).toHaveLength(3);
     expect(txHistory[0].txId).toEqual(tx3.hash);
     expect(txHistory[0].balance).toEqual(-3); // 3 less
+    expect(txHistory[1].txId).toEqual(tx2.hash); // Validating correct order
+    expect(txHistory[2].txId).toEqual(tx1.hash);
 
     // Count option
     txHistory = await hWallet.getTxHistory({ count: 2 });
