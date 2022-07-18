@@ -2,9 +2,9 @@ import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
 import { GenesisWalletHelper } from './helpers/genesis-wallet.helper';
 import { delay, getRandomInt } from './utils/core.util';
 import {
+  createTokenHelper,
   DEFAULT_PASSWORD,
   DEFAULT_PIN_CODE,
-  createTokenHelper,
   generateConnection,
   generateWalletHelper,
   stopAllWallets,
@@ -251,8 +251,7 @@ describe('getBalance', () => {
     const hWallet = await generateWalletHelper();
 
     // Validating that the token uid parameter is mandatory.
-    const nullTokenErr = await hWallet.getBalance().catch(err => err);
-    expect(nullTokenErr).toBeInstanceOf(Error);
+    expect(hWallet.getBalance()).rejects.toThrow();
 
     // Validating the return array has one entry on an empty wallet
     const balance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
@@ -1244,11 +1243,8 @@ describe('delegateAuthority', () => {
 
     // Validating error on mint tokens from Wallet 1
     waitUntilNextTimestamp(hWallet1, giveAwayMintTx);
-    const mintErrorW1 = await hWallet1.mintTokens(tokenUid, 100)
-      .catch(err => err);
-    expect(mintErrorW1).toBeInstanceOf(Error);
+    expect(hWallet1.mintTokens(tokenUid, 100)).rejects.toThrow();
     // TODO: The type of errors on mint and melt are different. They should have a standard.
-    expect(mintErrorW1.message).toContain('inputs');
 
     // Validating sucess on mint tokens from Wallet 2
     await GenesisWalletHelper.injectFunds(hWallet2.getAddressAtIndex(0), 10);
@@ -1448,9 +1444,7 @@ describe('getToken methods', () => {
     await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
 
     // Validating `getTokenDetails` for custom token not in this wallet
-    let details;
-    details = await hWallet.getTokenDetails(fakeTokenUid).catch(err => err);
-    expect(details).toBeInstanceOf(Error);
+    expect(hWallet.getTokenDetails(fakeTokenUid)).rejects.toThrow();
 
     // Validating `getTokens` for no custom tokens
     let getTokensResponse = await hWallet.getTokens();
@@ -1471,7 +1465,7 @@ describe('getToken methods', () => {
     expect(getTokensResponse[1]).toEqual(tokenUid);
 
     // Validate `getTokenDetails` response for a valid token
-    details = await hWallet.getTokenDetails(tokenUid);
+    let details = await hWallet.getTokenDetails(tokenUid);
     expect(details.totalSupply).toEqual(100);
     expect(details.totalTransactions).toEqual(1);
     expect(details.tokenInfo.name).toEqual('Details Token');
