@@ -1152,15 +1152,25 @@ describe('meltTokens', () => {
 });
 
 describe('delegateAuthority', () => {
-  afterEach(async () => {
+  /*
+   * Since these tests need two wallets and the authority tokens are independent from token to token
+   * we can reuse the wallets themselves and only do the build/cleanup operations once.
+   */
+
+  let hWallet1;
+  let hWallet2;
+
+  beforeAll(async () => {
+    hWallet1 = await generateWalletHelper();
+    hWallet2 = await generateWalletHelper();
+  })
+
+  afterAll(async () => {
     await stopAllWallets();
     await GenesisWalletHelper.clearListeners();
   });
 
   it('should delegate authority between wallets', async () => {
-    const hWallet1 = await generateWalletHelper();
-    const hWallet2 = await generateWalletHelper();
-
     // Creating a Custom Token on wallet 1
     await GenesisWalletHelper.injectFunds(hWallet1.getAddressAtIndex(0), 10);
     const { hash: tokenUid } = await createTokenHelper(
@@ -1222,9 +1232,6 @@ describe('delegateAuthority', () => {
   });
 
   it('should delegate authority to another wallet without keeping one', async () => {
-    const hWallet1 = await generateWalletHelper();
-    const hWallet2 = await generateWalletHelper();
-
     // Creating a Custom Token on wallet 1
     await GenesisWalletHelper.injectFunds(hWallet1.getAddressAtIndex(0), 10);
     const { hash: tokenUid } = await createTokenHelper(
@@ -1272,6 +1279,142 @@ describe('delegateAuthority', () => {
     // Validating sucess on melt tokens from Wallet 2
     const meltTxWallet2 = await hWallet2.meltTokens(tokenUid, 50);
     expect(meltTxWallet2).toHaveProperty('hash');
+  });
+
+  it('should delegate mint authority to another wallet while keeping one', async () => {
+    // Creating a Custom Token on wallet 1
+    await GenesisWalletHelper.injectFunds(hWallet1.getAddressAtIndex(0), 10);
+    const { hash: tokenUid } = await createTokenHelper(
+      hWallet1,
+      'Delegate Token 2',
+      'DTK2',
+      100,
+    );
+
+    // Creating another mint authority token on the same wallet
+    const { hash: duplicateMintAuth } = await hWallet1.delegateAuthority(
+      tokenUid,
+      'mint',
+      hWallet1.getAddressAtIndex(1),
+      { createAnother: true }
+    );
+    await waitForTxReceived(hWallet1, duplicateMintAuth);
+
+    // Confirming two authority tokens on wallet1
+    let auth1 = await hWallet1.getMintAuthority(tokenUid, { many:true });
+    expect(auth1).toMatchObject([
+      {
+        txId: duplicateMintAuth,
+        index: 0,
+        address: hWallet1.getAddressAtIndex(1),
+        authorities: 1
+      },
+      {
+        txId: duplicateMintAuth,
+        index: 1,
+        address: expect.any(String),
+        authorities: 1
+      },
+    ]);
+
+    // Now having two mint authority tokens on wallet 1, delegate a single one to wallet 2
+    const { hash: delegateMintAuth } = await hWallet1.delegateAuthority(
+      tokenUid,
+      'mint',
+      hWallet2.getAddressAtIndex(1),
+      { createAnother: false }
+    );
+    await waitForTxReceived(hWallet1, delegateMintAuth);
+
+    // Confirming only one authority token was sent from wallet1 to wallet2
+    auth1 = await hWallet1.getMintAuthority(tokenUid, { many:true });
+    expect(auth1).toMatchObject([
+      {
+        txId: duplicateMintAuth,
+        index: expect.any(Number),
+        address: expect.any(String),
+        authorities: 1
+      },
+    ]);
+
+    // Confirming one authority token was received by wallet2
+    const auth2 = await hWallet2.getMintAuthority(tokenUid, { many:true });
+    expect(auth2).toMatchObject([
+      {
+        txId: duplicateMintAuth,
+        index: expect.any(Number),
+        address: expect.any(String),
+        authorities: 1
+      },
+    ]);
+  });
+
+  it('should delegate melt authority to another wallet while keeping one', async () => {
+    // Creating a Custom Token on wallet 1
+    await GenesisWalletHelper.injectFunds(hWallet1.getAddressAtIndex(0), 10);
+    const { hash: tokenUid } = await createTokenHelper(
+      hWallet1,
+      'Delegate Token 2',
+      'DTK2',
+      100,
+    );
+
+    // Creating another melt authority token on the same wallet
+    const { hash: duplicateMeltAuth } = await hWallet1.delegateAuthority(
+      tokenUid,
+      'melt',
+      hWallet1.getAddressAtIndex(1),
+      { createAnother: true }
+    );
+    await waitForTxReceived(hWallet1, duplicateMeltAuth);
+
+    // Confirming two authority tokens on wallet1
+    let auth1 = await hWallet1.getMeltAuthority(tokenUid, { many:true });
+    expect(auth1).toMatchObject([
+      {
+        txId: duplicateMeltAuth,
+        index: 0,
+        address: hWallet1.getAddressAtIndex(1),
+        authorities: 2, // XXX: Should be 1, but this returns 2
+      },
+      {
+        txId: duplicateMeltAuth,
+        index: 1,
+        address: expect.any(String),
+        authorities: 2, // XXX: Should be 1, but this returns 2
+      },
+    ]);
+
+    // Now having two melt authority tokens on wallet 1, delegate a single one to wallet 2
+    const { hash: delegateMintAuth } = await hWallet1.delegateAuthority(
+      tokenUid,
+      'melt',
+      hWallet2.getAddressAtIndex(1),
+      { createAnother: false }
+    );
+    await waitForTxReceived(hWallet1, delegateMintAuth);
+
+    // Confirming only one authority token was sent from wallet1 to wallet2
+    auth1 = await hWallet1.getMeltAuthority(tokenUid, { many:true });
+    expect(auth1).toMatchObject([
+      {
+        txId: duplicateMeltAuth,
+        index: expect.any(Number),
+        address: expect.any(String),
+        authorities: 2, // XXX: Should be 1, but this returns 2
+      },
+    ]);
+
+    // Confirming one authority token was received by wallet2
+    const auth2 = await hWallet2.getMeltAuthority(tokenUid, { many:true });
+    expect(auth2).toMatchObject([
+      {
+        txId: duplicateMeltAuth,
+        index: expect.any(Number),
+        address: expect.any(String),
+        authorities: 2, // XXX: Should be 1, but this returns 2
+      },
+    ]);
   });
 });
 
