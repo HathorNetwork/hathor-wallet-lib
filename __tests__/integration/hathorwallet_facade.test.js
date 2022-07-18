@@ -2,6 +2,8 @@ import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
 import { GenesisWalletHelper } from './helpers/genesis-wallet.helper';
 import { delay, getRandomInt } from './utils/core.util';
 import {
+  DEFAULT_PASSWORD,
+  DEFAULT_PIN_CODE,
   createTokenHelper,
   generateConnection,
   generateWalletHelper,
@@ -29,8 +31,8 @@ describe('start', () => {
     const walletConfig = {
       seed: walletData.words,
       connection: generateConnection(),
-      password: 'password',
-      pinCode: '000000',
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
       preCalculatedAddresses: walletData.addresses,
     };
     const hWallet = new HathorWallet(walletConfig);
@@ -61,8 +63,8 @@ describe('start', () => {
     const walletConfig = {
       seed: walletData.words,
       connection: generateConnection(),
-      password: 'password',
-      pinCode: '000000',
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
       preCalculatedAddresses: walletData.addresses,
     };
     const hWallet = new HathorWallet(walletConfig);
@@ -83,8 +85,8 @@ describe('start', () => {
     const walletConfig = {
       seed: walletData.words,
       connection: generateConnection(),
-      password: 'password',
-      pinCode: '000000',
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
       /*
        * No precalculated addresses here. All will be calculated at runtime.
        * This operation takes a lot longer under jest's testing framework, so we avoid it

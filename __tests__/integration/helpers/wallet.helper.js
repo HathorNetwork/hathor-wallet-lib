@@ -43,6 +43,9 @@ export function generateConnection() {
   });
 }
 
+export const DEFAULT_PASSWORD = 'password';
+export const DEFAULT_PIN_CODE = '000000';
+
 const startedWallets = [];
 
 /**
@@ -56,8 +59,8 @@ export async function generateWalletHelper() {
   const walletConfig = {
     seed: walletData.words,
     connection: generateConnection(),
-    password: 'password',
-    pinCode: '000000',
+    password: DEFAULT_PASSWORD,
+    pinCode: DEFAULT_PIN_CODE,
     preCalculatedAddresses: walletData.addresses,
   };
   const hWallet = new HathorWallet(walletConfig);
