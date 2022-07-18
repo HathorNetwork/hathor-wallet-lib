@@ -2,6 +2,13 @@
  * This file is a placeholder logger to replace winston while we discuss if we
  * want to have it as a dev-dependency or not.
  */
+
+function getStringifiedLogObject(message, metadata) {
+  const timestamp = (new Date()).toISOString();
+  const logObj = { timestamp, ...metadata, message };
+  return JSON.stringify(logObj);
+}
+
 export default class PlaceholderLoggerUtil {
   static format = {
     timestamp: () => {},
@@ -19,24 +26,16 @@ export default class PlaceholderLoggerUtil {
   static createLogger() {
     return {
       log(message, metadata) {
-        const timestamp = (new Date()).toISOString();
-        const logObj = { timestamp, ...metadata, message };
-        console.log(JSON.stringify(logObj));
+        console.log(getStringifiedLogObject(message, metadata));
       },
       info(message, metadata) {
-        const timestamp = (new Date()).toISOString();
-        const logObj = { timestamp, ...metadata, message };
-        console.info(JSON.stringify(logObj));
+        console.info(getStringifiedLogObject(message, metadata));
       },
       warn(message, metadata) {
-        const timestamp = (new Date()).toISOString();
-        const logObj = { timestamp, ...metadata, message };
-        console.warn(JSON.stringify(logObj));
+        console.warn(getStringifiedLogObject(message, metadata));
       },
       error(message, metadata) {
-        const timestamp = (new Date()).toISOString();
-        const logObj = { timestamp, ...metadata, message };
-        console.error(JSON.stringify(logObj));
+        console.error(getStringifiedLogObject(message, metadata));
       }
     };
   }
