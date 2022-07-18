@@ -19,6 +19,7 @@ import { TOKEN_DATA } from './configuration/test-constants';
 import wallet from '../../src/wallet';
 import dateFormatter from '../../src/date';
 import { loggers } from './utils/logger.util';
+import { SendTxError } from '../../src/errors';
 
 const fakeTokenUid = '000002490ab7fc302e076f7aab8b20c35fed81fd1131a955aebbd3cb76e48fb0';
 const sampleNftData = 'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg';
@@ -685,7 +686,7 @@ describe('sendTransaction', () => {
   });
 });
 
-describe('sendManyOutputsTransaction', () => {
+describe.only('sendManyOutputsTransaction', () => {
   afterEach(async () => {
     await stopAllWallets();
     await GenesisWalletHelper.clearListeners();
@@ -764,7 +765,7 @@ describe('sendManyOutputsTransaction', () => {
     // Expect our explicit outputs and an automatic one to complete the 60 HTR input
     expect(explicitInput.outputs.find(o => o.value === 5)).toBeDefined();
     expect(explicitInput.outputs.find(o => o.value === 35)).toBeDefined();
-    expect(explicitInput.outputs.find(o => o.value === 20)).toBeDefined(); // Automatic
+    expect(explicitInput.outputs.find(o => o.value === 20)).toBeDefined(); // Change output
   });
 
   it('should send transactions with multiple tokens', async () => {
@@ -874,12 +875,9 @@ describe('sendManyOutputsTransaction', () => {
     });
 
     // Confirm that the balance is unavailable
-    try {
-      const deniedTx = await hWallet.sendTransaction(hWallet.getAddressAtIndex(3), 8);
-      expect(deniedTx).toBeUndefined(); // This line should actually never be reached
-    } catch (err) {
-      expect(err).toBeInstanceOf(Error);
-    }
+    expect(hWallet.sendTransaction(hWallet.getAddressAtIndex(3), 8))
+      .rejects.toEqual(new SendTxError('Token undefined: Insufficient amount of tokens'));
+    // XXX: Error message should show the token identification, not "Token undefined"
 
     // Validating interfaces with all resources unlocked
     const waitFor2 = timelock2 - Date.now().valueOf() + 1000;
