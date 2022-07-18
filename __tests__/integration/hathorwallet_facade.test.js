@@ -333,9 +333,7 @@ describe('getFullHistory', () => {
     const hWallet = await generateWalletHelper();
 
     // Expect to have an empty list for the full history
-    let history = hWallet.getFullHistory();
-    expect(history).toBeDefined();
-    expect(Object.keys(history)).toHaveLength(0);
+    expect(Object.keys(hWallet.getFullHistory())).toHaveLength(0);
 
     // Injecting some funds on this wallet
     const fundDestinationAddress = hWallet.getAddressAtIndex(0);
@@ -355,7 +353,7 @@ describe('getFullHistory', () => {
     );
     await waitForTxReceived(hWallet, rawMoveTx.hash);
 
-    history = hWallet.getFullHistory();
+    let history = hWallet.getFullHistory();
     expect(Object.keys(history)).toHaveLength(2);
     expect(history).toHaveProperty(rawMoveTx.hash);
     const moveTx = history[rawMoveTx.hash];
@@ -502,9 +500,9 @@ describe('getTxBalance', () => {
     // Validating tx balance for a transaction with a single token (htr)
     const tx1 = hWallet.getTx(tx1Hash);
     let txBalance = await hWallet.getTxBalance(tx1);
-    expect(txBalance).toBeDefined();
-    expect(Object.keys(txBalance)).toHaveLength(1);
-    expect(txBalance[HATHOR_TOKEN_CONFIG.uid]).toEqual(10);
+    expect(txBalance).toEqual({
+      [HATHOR_TOKEN_CONFIG.uid]: 10
+    });
 
     // Validating tx balance for a transaction with two tokens (htr+custom)
     const { hash: tokenUid } = await createTokenHelper(
@@ -515,15 +513,17 @@ describe('getTxBalance', () => {
     );
     const tokenCreationTx = hWallet.getTx(tokenUid);
     txBalance = await hWallet.getTxBalance(tokenCreationTx);
-    expect(Object.keys(txBalance)).toHaveLength(2);
-    expect(txBalance[tokenUid]).toEqual(100);
-    expect(txBalance[HATHOR_TOKEN_CONFIG.uid]).toEqual(-1);
+    expect(txBalance).toEqual({
+      [tokenUid]: 100,
+      [HATHOR_TOKEN_CONFIG.uid]: -1,
+    })
 
     // Validating that the option to include authority tokens does not change the balance
     txBalance = await hWallet.getTxBalance(tokenCreationTx, { includeAuthorities: true });
-    expect(Object.keys(txBalance)).toHaveLength(2);
-    expect(txBalance[HATHOR_TOKEN_CONFIG.uid]).toEqual(-1);
-    expect(txBalance).toHaveProperty(tokenUid, 100);
+    expect(txBalance).toEqual({
+      [tokenUid]: 100,
+      [HATHOR_TOKEN_CONFIG.uid]: -1,
+    });
 
     // Validating delegate token transaction behavior
     const { hash: delegateTxHash } = await hWallet.delegateAuthority(
@@ -868,8 +868,10 @@ describe('sendManyOutputsTransaction', () => {
 
     // Validating getBalance ( moment 1 )
     htrBalance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
-    expect(htrBalance[0].balance.locked).toBe(3);
-    expect(htrBalance[0].balance.unlocked).toBe(7);
+    expect(htrBalance[0].balance).toEqual({
+      locked: 3,
+      unlocked: 7,
+    });
 
     // Confirm that the balance is unavailable
     try {
