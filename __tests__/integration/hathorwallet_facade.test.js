@@ -420,10 +420,12 @@ describe('getFullHistory', () => {
       hWallet.getAddressAtIndex(0),
       10
     );
+    const tokenName = 'Full History Token';
+    const tokenSymbol = 'FHT';
     const { hash: tokenUid } = await createTokenHelper(
       hWallet,
-      'Full History Token',
-      'FHT',
+      tokenName,
+      tokenSymbol,
       100
     );
 
@@ -433,6 +435,10 @@ describe('getFullHistory', () => {
     // Validating create token properties ( all others have been validated on the previous test )
     expect(history).toHaveProperty(tokenUid);
     const createTx = history[tokenUid];
+
+    // Validating basic token creation properties
+    expect(createTx).toHaveProperty('token_name', tokenName)
+    expect(createTx).toHaveProperty('token_symbol', tokenSymbol)
 
     // Validating inputs
     expect(createTx.inputs).toHaveLength(1);
