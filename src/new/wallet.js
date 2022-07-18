@@ -876,8 +876,8 @@ class HathorWallet extends EventEmitter {
    * @property {string} addressPath
    *
    * @param {Object} [options] Utxo filtering options
-   * @property {string} [options.token='00'] - Search for UTXOs of this token UID.
-   * @property {string|null} [options.filter_address=null] - Address to filter the utxos.
+   * @param {string|null} [options.token=null] - Search for UTXOs of this token UID.
+   * @param {string|null} [options.filter_address=null] - Address to filter the utxos.
    *
    * @generator
    * @function getAllUtxos
@@ -889,7 +889,7 @@ class HathorWallet extends EventEmitter {
     const historyTransactions = this.getFullHistory();
 
     const { token, filter_address } = Object.assign({
-      token: HATHOR_TOKEN_CONFIG.uid,
+      token: null,
       filter_address: null,
     }, options);
 
@@ -901,29 +901,30 @@ class HathorWallet extends EventEmitter {
       }
 
       for (const [index, txout] of tx.outputs.entries()) {
-        // check for authority: continue
-
-        if (filter_address && filter_address !== txout.decoded.address) {
+        if (
+          (filter_address && filter_address !== txout.decoded.address)
+          || (token && txout.token !== token)
+          || (!wallet.isAddressMine(txout.decoded.address, data))
+        ) {
           continue;
         }
 
-        if (!wallet.isAddressMine(txout.decoded.address, data)) {
-          continue;
-        }
-
-        if (txout.spent_by === null && txout.token === token) {
+        if (txout.spent_by === null) {
           if (wallet.canUseUnspentTx(txout, tx.height)) {
+            const isAuthority = (TOKEN_AUTHORITY_MASK | txout.token_data) > 0;
+            const addressIndex = this.isAddressMine(txout.decoded.address) ? this.getAddressIndex(txout.decoded.address) : null;
+
             const utxo = {
               txId: tx_id,
               index,
-              tokenId: token,
+              tokenId: txout.token,
               address: txout.decoded.address,
               value: txout.value,
-              authorities: 0,
+              authorities: isAuthority ? txout.value : 0,
               timelock: txout.decoded.timelock,
-              heightlock: null,
+              heightlock: null, // not enough info to determine this.
               locked: false,
-              addressPath: '',
+              addressPath: addressIndex === null ? '' : `m/44'/280'/0'/0/${addressIndex}`,
             };
             yield utxo;
           }
@@ -936,22 +937,24 @@ class HathorWallet extends EventEmitter {
    * Get utxos of the wallet addresses to fill the amount specified.
    *
    * @param {Object} [options] Utxo filtering options
-   * @property {string} [options.token='00'] - Search for UTXOs of this token UID.
-   * @property {string|null} [options.filter_address=null] - Address to filter the utxos.
+   * @param {string} [options.token='00'] - Search for UTXOs of this token UID.
+   * @param {string|null} [options.filter_address=null] - Address to filter the utxos.
    *
    * @return {{utxos: Utxo[], changeAmount: number}} Utxos and change information.
    *
    */
   getUtxosForAmount(amount, options = {}) {
     storage.setStore(this.store);
-    const historyTransactions = Object.values(this.getFullHistory());
 
     const newOptions = Object.assign({
       token: HATHOR_TOKEN_CONFIG.uid,
       filter_address: null,
     }, options);
 
-    return transactionUtils.selectUtxos(this.getAllUtxos(newOptions), amount);
+    return transactionUtils.selectUtxos(
+      [...this.getAllUtxos(newOptions)].filter(utxo => utxo.authorities === 0),
+      amount,
+    );
   }
 
   /**

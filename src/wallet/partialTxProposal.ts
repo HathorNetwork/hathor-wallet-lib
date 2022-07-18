@@ -85,7 +85,7 @@ class PartialTxProposal {
         utxo.index,
         utxo.value,
         utxo.address,
-        { token: utxo.token, tokenData: txout.tokenData, markAsSelected },
+        { token: utxo.token, tokenData: txout.token_data, markAsSelected },
       );
     }
 
@@ -120,7 +120,7 @@ class PartialTxProposal {
     this.resetSignatures();
 
     // get an address of our wallet and add the output
-    const addr = address || wallet.getCurrentAddress().address;
+    const addr: string = address || wallet.getCurrentAddress().address;
     this.addOutput(token, value, addr, { timelock });
   }
 
