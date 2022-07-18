@@ -1027,35 +1027,35 @@ describe('mintTokens', () => {
     );
     let expectedHtrFunds = 9;
 
-    // Minting less than 100 tokens consumes 1 HTR
+    // Minting less than 1.00 tokens consumes 0.01 HTR
     let mintResponse;
     mintResponse = await hWallet.mintTokens(tokenUid, 1);
     expectedHtrFunds -= 1;
     await waitForTxReceived(hWallet, mintResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
-    // Minting exactly 100 tokens consumes 1 HTR
+    // Minting exactly 1.00 tokens consumes 0.01 HTR
     await waitUntilNextTimestamp(hWallet, mintResponse.hash);
     mintResponse = await hWallet.mintTokens(tokenUid, 100);
     expectedHtrFunds -= 1;
     await waitForTxReceived(hWallet, mintResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
-    // Minting over 100 tokens consumes 2 HTR
+    // Minting between 1.00 and 2.00 tokens consumes 0.02 HTR
     await waitUntilNextTimestamp(hWallet, mintResponse.hash);
     mintResponse = await hWallet.mintTokens(tokenUid, 101);
     expectedHtrFunds -= 2;
     await waitForTxReceived(hWallet, mintResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
-    // Minting exactly 200 tokens consumes 2 HTR
+    // Minting exactly 2.00 tokens consumes 0.02 HTR
     await waitUntilNextTimestamp(hWallet, mintResponse.hash);
     mintResponse = await hWallet.mintTokens(tokenUid, 200);
     expectedHtrFunds -= 2;
     await waitForTxReceived(hWallet, mintResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
-    // Minting over 200 tokens consumes 3 HTR
+    // Minting between 2.00 and 3.00 tokens consumes 0.03 HTR
     await waitUntilNextTimestamp(hWallet, mintResponse.hash);
     mintResponse = await hWallet.mintTokens(tokenUid, 201);
     expectedHtrFunds -= 3;
@@ -1116,33 +1116,33 @@ describe('meltTokens', () => {
     let expectedHtrFunds = 1;
 
     let meltResponse;
-    // Melting less than 100 tokens recovers 0 HTR
+    // Melting less than 1.00 tokens recovers 0 HTR
     meltResponse = await hWallet.meltTokens(tokenUid, 99);
     await waitForTxReceived(hWallet, meltResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
-    // Melting exactly 100 tokens recovers 1 HTR
+    // Melting exactly 1.00 tokens recovers 0.01 HTR
     await waitUntilNextTimestamp(hWallet, meltResponse.hash);
     meltResponse = await hWallet.meltTokens(tokenUid, 100);
     expectedHtrFunds += 1;
     await waitForTxReceived(hWallet, meltResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
-    // Melting less than 200 tokens recovers 1 HTR
+    // Melting between 1.00 and 2.00 tokens recovers 0.01 HTR
     await waitUntilNextTimestamp(hWallet, meltResponse.hash);
     meltResponse = await hWallet.meltTokens(tokenUid, 199);
     expectedHtrFunds += 1;
     await waitForTxReceived(hWallet, meltResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
-    // Melting exactly 200 tokens recovers 2 HTR
+    // Melting exactly 2.00 tokens recovers 0.02 HTR
     await waitUntilNextTimestamp(hWallet, meltResponse.hash);
     meltResponse = await hWallet.meltTokens(tokenUid, 200);
     expectedHtrFunds += 2;
     await waitForTxReceived(hWallet, meltResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
-    // Melting less than 300 tokens recovers 2 HTR
+    // Melting between 2.00 and 3.00 tokens recovers 0.02 HTR
     await waitUntilNextTimestamp(hWallet, meltResponse.hash);
     meltResponse = await hWallet.meltTokens(tokenUid, 299);
     expectedHtrFunds += 2;
