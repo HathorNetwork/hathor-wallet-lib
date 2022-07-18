@@ -1251,7 +1251,7 @@ class HathorWallet extends EventEmitter {
    * @param {string} [options.pincode] pin to decrypt xpriv information.
    *                                   Optional but required if not set in this
    *
-   * @return {Promise<BaseTransactionResponse>} Promise that resolves when transaction is sent
+   * @return {Promise<Transaction>} Promise that resolves when transaction is sent
    **/
   async sendManyOutputsTransaction(outputs, options = {}) {
     if (this.isFromXPub()) {
