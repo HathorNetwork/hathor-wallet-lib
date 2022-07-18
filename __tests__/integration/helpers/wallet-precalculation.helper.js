@@ -16,6 +16,10 @@ import { NETWORK_NAME } from '../configuration/test-constants';
  * @property {boolean} isUsed Indicates if this wallet was already used
  * @property {string} words 24-word seed
  * @property {string[]} addresses List of pre-calculated addresses
+ * @property [multisigDebugData]
+ * @property {number} [multisigDebugData.total] Amount of pubkeys composing this multisig wallet
+ * @property {number} [multisigDebugData.minSignatures] Minimum amount of signatures
+ * @property {string[]} [multisigDebugData.pubkeys] Public keys for this multisig wallet
  */
 
 export const precalculationHelpers = {
@@ -68,10 +72,10 @@ export class WalletPrecalculationHelper {
    *    If empty on common wallets, generates a random seed of 24 words and derives its addresses.
    * @param {number} [params.addressIntervalStart=0] Optional interval start index ( including )
    * @param {number} [params.addressIntervalEnd=22] Optional interval end index ( excluding )
-   * @param {{minSignatures:number,wordsArray:string[]}} [params.multisig] Optional multisig object
-   * @returns {{addresses: string[], words: string}}
+   * @param {{minSignatures:number, wordsArray:string[]}} [params.multisig] Optional multisig object
+   * @returns {PrecalculatedWalletData}
    */
-  static generateAddressesForWordsSeed(params = {}) {
+  static generateAddressesFromWords(params = {}) {
     const timeStart = Date.now().valueOf();
     let wordsInput = params.words;
 
@@ -133,9 +137,9 @@ export class WalletPrecalculationHelper {
     // Finishing benchmark and returning results
     const timeEnd = Date.now().valueOf();
     const timeDiff = timeEnd - timeStart;
+    console.log(`Wallet calculation made in ${timeDiff}ms`);
 
     const returnObject = {
-      duration: timeDiff,
       isUsed: false,
       words: wordsInput,
       addresses: addressesArray
@@ -153,12 +157,8 @@ export class WalletPrecalculationHelper {
    * @private
    */
   async _deserializeWalletsFile() {
-    const dataBuffer = await fs.readFile(this.WALLETS_FILENAME);
-    const strData = dataBuffer.toString();
-
     try {
-      const jsonData = JSON.parse(strData);
-      return jsonData;
+      return require(this.WALLETS_FILENAME);
     } catch (err) {
       console.error('Corrupt wallets file');
       throw err;
@@ -167,7 +167,7 @@ export class WalletPrecalculationHelper {
 
   /**
    * Writes the contents of a wallet array in a human-readable way, but with one wallet per line
-   * @param {unknown[]} wallets
+   * @param {PrecalculatedWalletData[]} wallets
    * @returns {Promise<void>}
    * @private
    */
@@ -192,14 +192,14 @@ export class WalletPrecalculationHelper {
    * @param [params]
    * @param {number} [params.commonWallets=100] Amount of common wallets to be generated
    * @param {boolean} [params.verbose] Optional logging of each wallet
-   * @returns {{words:string,addresses:string[]}[]}
+   * @returns {{words:string, addresses:string[]}[]}
    */
   static generateMultipleWallets(params = {}) {
     const amountOfCommonWallets = params.commonWallets || 100;
 
     const wallets = [];
     for (let i = 0; i < amountOfCommonWallets; ++i) {
-      wallets.push(WalletPrecalculationHelper.generateAddressesForWordsSeed());
+      wallets.push(WalletPrecalculationHelper.generateAddressesFromWords());
       if (params.verbose) console.log(`Generated ${i}`);
     }
 
@@ -211,12 +211,12 @@ export class WalletPrecalculationHelper {
    * @param params
    * @param {string[]} params.wordsArray An array with each element containing 24 words
    * @param {number} params.minSignatures Minimum of signatures for this multisig wallet
-   * @returns {unknown[]}
+   * @returns {PrecalculatedWalletData[]}
    */
   static generateMultisigWalletsForWords(params = {}) {
     const resultingWallets = [];
     for (const walletWords of params.wordsArray) {
-      const multisigWallet = WalletPrecalculationHelper.generateAddressesForWordsSeed({
+      const multisigWallet = WalletPrecalculationHelper.generateAddressesFromWords({
         words: walletWords,
         multisig: {
           wordsArray: params.wordsArray,
