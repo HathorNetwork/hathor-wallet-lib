@@ -36,7 +36,6 @@ const startedWallets = [];
  * @returns {Promise<HathorWallet>}
  */
 export async function generateWalletHelper() {
-  // Send a transaction to one of the wallet's addresses
   const walletData = precalculationHelpers.test.getPrecalculatedWallet();
 
   // Start the wallet
@@ -110,8 +109,8 @@ export function waitForWalletReady(hWallet) {
   return new Promise((resolve, reject) => {
     hWallet.on('state', newState => {
       if (newState === HathorWallet.READY) {
-        return resolve();
-      } if (newState === HathorWallet.ERROR) {
+        resolve();
+      } else if (newState === HathorWallet.ERROR) {
         reject(new Error('Genesis wallet failed to start.'));
       }
     });
