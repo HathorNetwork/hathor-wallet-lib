@@ -26,7 +26,7 @@ export default class PlaceholderLoggerUtil {
       info(message, metadata) {
         const timestamp = (new Date()).toISOString();
         const logObj = { timestamp, ...metadata, message };
-        console.log(JSON.stringify(logObj));
+        console.info(JSON.stringify(logObj));
       },
       warn(message, metadata) {
         const timestamp = (new Date()).toISOString();
