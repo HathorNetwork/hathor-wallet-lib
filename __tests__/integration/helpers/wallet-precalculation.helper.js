@@ -157,8 +157,10 @@ export class WalletPrecalculationHelper {
    * @private
    */
   async _deserializeWalletsFile() {
+    const dataBuffer = await fs.readFile(this.WALLETS_FILENAME);
+    const strData = dataBuffer.toString();
     try {
-      return require(this.WALLETS_FILENAME);
+      return JSON.parse(strData);
     } catch (err) {
       console.error('Corrupt wallets file');
       throw err;
