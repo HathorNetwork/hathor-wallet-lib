@@ -18,6 +18,20 @@ import { delay } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 
 /**
+ * @typedef SendTxResponse
+ * @property {{hash:string,index:number,data:Buffer}[]} inputs
+ * @property {{value:number,script:Buffer,tokenData:number,decodedScript:*}[]} outputs
+ * @property {number} version
+ * @property {number} weight
+ * @property {number} nonce
+ * @property {number} timestamp
+ * @property {string[]} parents
+ * @property {*[]} tokens
+ * @property {string} hash
+ * @property {*} _dataToSignCache
+ */
+
+/**
  * Generates a connection object for starting wallets.
  * @returns {WalletConnection}
  */

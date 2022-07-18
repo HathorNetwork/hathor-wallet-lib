@@ -55,20 +55,6 @@ export class GenesisWalletHelper {
   }
 
   /**
-   * @typedef SendTxResponse
-   * @property {{hash:string,index:number,data:Buffer}[]} inputs
-   * @property {{value:number,script:Buffer,tokenData:number,decodedScript:*}[]} outputs
-   * @property {number} version
-   * @property {number} weight
-   * @property {number} nonce
-   * @property {number} timestamp
-   * @property {string[]} parents
-   * @property {*[]} tokens
-   * @property {string} hash
-   * @property {*} _dataToSignCache
-   */
-
-  /**
    * Internal method to send HTR to another wallet's address.
    * @param {string} address
    * @param {number} value
