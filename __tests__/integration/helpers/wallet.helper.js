@@ -178,14 +178,11 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
       alreadyResponded = true;
 
       /*
-       * Sometimes the tests happen too fast and it triggers timestamp protections on the fullnode.
-       * We will ensure there is some delay between transactions here.
+       * Sometimes even after receiving the `new-tx` event, the transaction is not available on
+       * memory. The code below tries to eliminate these short time-senstive issues with a minimum
+       * of delays.
        */
       await delay(50);
-
-      /*
-       * Confirming that the transaction is indeed on the wallet's history object before preoceeding
-       */
       let txObj = hWallet.getTx(txId);
       while (!txObj) {
         if (DEBUG_LOGGING) {
