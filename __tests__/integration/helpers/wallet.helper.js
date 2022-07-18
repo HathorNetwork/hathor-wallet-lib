@@ -130,6 +130,12 @@ export function waitForWalletReady(hWallet) {
 export async function waitForTxReceived(hWallet, txId, timeout) {
   const startTime = Date.now().valueOf();
   let alreadyResponded = false;
+  const existingTx = hWallet.getTx(txId);
+
+  // If the transaction was already received, return it immediately
+  if (existingTx) {
+    return existingTx;
+  }
 
   // Only return the positive response after the transaction was received by the websocket
   return new Promise(async (resolve, reject) => {
@@ -153,17 +159,6 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
       // No need to respond if the event listener worked.
       if (alreadyResponded) {
         return;
-      }
-
-      /*
-       * If the timeout period passed and did not receive the new-tx event, probably the event
-       * was triggered even before this `waitForTxReceived` method was called.
-       * We'll try a last time to get the transaction data before rejecting this promise.
-       */
-      loggers.test.log(`Trying to solve timeout of ${timeoutPeriod}ms for ${txId}`);
-      const existingTx = hWallet.getTx(txId);
-      if (existingTx) {
-        return resolveWithSuccess(existingTx);
       }
 
       // Event listener did not receive the tx and it is not on local cache.
