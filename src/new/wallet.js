@@ -980,7 +980,7 @@ class HathorWallet extends EventEmitter {
    *   decoded: { type: string, address: string, timelock: number|null },
    *   token: string,
    *   spent_by: string|null,
-   *   selected_as_input: boolean
+   *   selected_as_input?: boolean
    * }[]} outputs
    * @property {string[]} parents
    */
@@ -1437,8 +1437,8 @@ class HathorWallet extends EventEmitter {
 
   /**
    * @typedef BaseTransactionResponse
-   * @property {{hash:string,index:number,data:Buffer}[]} inputs
-   * @property {{value:number,script:Buffer,tokenData:number,decodedScript:*}[]} outputs
+   * @property {{hash:string, index:number, data:Buffer}[]} inputs
+   * @property {{value:number, script:Buffer, tokenData:number, decodedScript:*}[]} outputs
    * @property {number} version
    * @property {number} weight
    * @property {number} nonce
@@ -1756,8 +1756,8 @@ class HathorWallet extends EventEmitter {
    * @param {string} [options.pinCode] pin to decrypt xpriv information.
    *                                   Optional but required if not set in this
    *
-   * @return {Promise<CreateNewTokenResponse>} Promise that resolves with transaction object
-   *                                           if it succeeds or with error message if it fails
+   * @return {Promise<BaseTransactionResponse>} Promise that resolves with transaction object
+   *                                            if it succeeds or with error message if it fails
    *
    * @memberof HathorWallet
    * @inner
