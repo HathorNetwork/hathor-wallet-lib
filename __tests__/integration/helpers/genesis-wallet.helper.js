@@ -12,7 +12,7 @@ import { waitForTxReceived, waitForWalletReady, waitUntilNextTimestamp } from '.
 import { loggers } from '../utils/logger.util';
 
 /**
- * @type {GenesisWalletHelper}
+ * @type {?GenesisWalletHelper}
  */
 let singleton = null;
 
