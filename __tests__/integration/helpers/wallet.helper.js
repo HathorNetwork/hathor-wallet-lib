@@ -69,17 +69,13 @@ export async function generateWalletHelper() {
 }
 
 export async function stopAllWallets() {
+  let hWallet;
   // Stop all wallets that were started with this helper
-  while (true) {
+  while (hWallet = startedWallets.pop()) {
     try {
-      const hWallet = startedWallets.pop();
       hWallet.stop();
     } catch (e) {
       loggers.test.error(e.stack);
-    }
-
-    if (startedWallets.length === 0) {
-      break;
     }
   }
 }
