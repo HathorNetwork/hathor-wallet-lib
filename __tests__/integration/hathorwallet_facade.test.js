@@ -1179,7 +1179,7 @@ describe('delegateAuthority', () => {
     await waitForTxReceived(hWallet1, delegateMintTxId);
 
     /*
-     * Authority Token delegation usually takes longer than usual to be reflected on the local
+     * XXX: Authority Token delegation usually takes longer than usual to be reflected on the local
      * caches. This forced recalculation will be executed before each authority validation below
      * to avoid a small possibility of the caches being obsolete at assertion time.
      */
@@ -1404,7 +1404,7 @@ describe('createNFT', () => {
     expect(nftBalance[0].balance.unlocked).toEqual(1);
 
     /*
-     * Since NFT authority tokens cannot be read by getMintAuthority, we will try to actually
+     * XXX: Since NFT authority tokens cannot be read by getMintAuthority, we will try to actually
      * mint tokens to confirm the authority exists.
      */
     await waitUntilNextTimestamp(hWallet, nftTx.hash);
@@ -1418,7 +1418,7 @@ describe('createNFT', () => {
     expect(nftBalance[0].balance.unlocked).toEqual(11);
 
     /*
-     * Since NFT authority tokens cannot be read by getMeltAuthority, we will try to actually
+     * XXX: Since NFT authority tokens cannot be read by getMeltAuthority, we will try to actually
      * melt tokens to confirm the authority exists.
      */
     await waitUntilNextTimestamp(hWallet, rawMintTx.hash);
