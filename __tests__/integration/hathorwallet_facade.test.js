@@ -41,7 +41,7 @@ describe('start', () => {
 
     // Validate that it has transactions
     const txHistory = await hWallet.getTxHistory();
-    expect(txHistory).toHaveProperty('length', 0);
+    expect(txHistory).toHaveLength(0);
 
     // Validate that the addresses are the same as the pre-calculated that were informed
     for (const addressIndex in walletData.addresses) {
@@ -73,7 +73,7 @@ describe('start', () => {
 
     // Validate that it has transactions
     const txHistory = await hWallet.getTxHistory();
-    expect(txHistory).toHaveProperty('length', 1);
+    expect(txHistory).toHaveLength(1);
     expect(txHistory[0].txId).toEqual(injectionTx.hash);
     hWallet.stop();
   });
@@ -188,7 +188,7 @@ describe('getTransactionsCountByAddress', () => {
     const tcbaEmpty = hWallet.getTransactionsCountByAddress();
     expect(tcbaEmpty).toBeDefined();
     const addressesList = Object.keys(tcbaEmpty);
-    expect(addressesList).toHaveProperty('length', 21);
+    expect(addressesList).toHaveLength(21);
     for (const addressIndex in addressesList) {
       const address = addressesList[+addressIndex];
       expect(tcbaEmpty[address]).toBeDefined();
@@ -220,7 +220,7 @@ describe('getTransactionsCountByAddress', () => {
 
     const tcbaEmpty = hWallet.getTransactionsCountByAddress();
     const addressesList = Object.keys(tcbaEmpty);
-    expect(addressesList).toHaveProperty('length', 21);
+    expect(addressesList).toHaveLength(21);
 
     /*
      * The generation of new addresses delays the response of this tx.
@@ -230,6 +230,14 @@ describe('getTransactionsCountByAddress', () => {
     const tcba1 = hWallet.getTransactionsCountByAddress();
     const addresses1 = Object.keys(tcba1);
     expect(addresses1).toHaveLength(41);
+
+    // Expecting the addresses all have the same sequential properties as before
+    for (const addressIndex in addresses1) {
+      const address = addresses1[+addressIndex];
+      expect(tcba1[address]).toBeDefined();
+      expect(tcba1[address]).toHaveProperty('index', +addressIndex);
+      expect(tcba1[address]).toHaveProperty('transactions', addressIndex === '20' ? 1 : 0);
+    }
   });
 });
 
