@@ -7,7 +7,7 @@
 
 import EventEmitter from 'events';
 import wallet from '../wallet';
-import { HATHOR_TOKEN_CONFIG, HATHOR_BIP44_CODE, P2SH_ACCT_PATH } from "../constants";
+import { HATHOR_TOKEN_CONFIG, HATHOR_BIP44_CODE, TOKEN_AUTHORITY_MASK, P2SH_ACCT_PATH } from "../constants";
 import tokens from '../tokens';
 import transaction from '../transaction';
 import version from '../version';
@@ -911,7 +911,7 @@ class HathorWallet extends EventEmitter {
 
         if (txout.spent_by === null) {
           if (wallet.canUseUnspentTx(txout, tx.height)) {
-            const isAuthority = (TOKEN_AUTHORITY_MASK | txout.token_data) > 0;
+            const isAuthority = (TOKEN_AUTHORITY_MASK & txout.token_data) > 0;
             const addressIndex = this.isAddressMine(txout.decoded.address) ? this.getAddressIndex(txout.decoded.address) : null;
 
             const utxo = {
