@@ -21,7 +21,7 @@ import dateFormatter from '../../src/date';
 import { loggers } from './utils/logger.util';
 
 const fakeTokenUid = '000002490ab7fc302e076f7aab8b20c35fed81fd1131a955aebbd3cb76e48fb0';
-const sampleNftAddress = 'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg';
+const sampleNftData = 'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg';
 
 describe('start', () => {
   it('should start a wallet with no history', async () => {
@@ -1529,7 +1529,7 @@ describe('createNFT', () => {
       'New NFT',
       'NNFT',
       1,
-      sampleNftAddress,
+      sampleNftData,
       {
         createMint: true,
         createMelt: true
