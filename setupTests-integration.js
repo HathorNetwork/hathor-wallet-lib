@@ -16,37 +16,11 @@ import {
 import {
   precalculationHelpers, WalletPrecalculationHelper
 } from './__tests__/integration/helpers/wallet-precalculation.helper';
-
-// Creating memory storage to be used in the place of localStorage
-class MemoryOnlyStore {
-  constructor() {
-    this.hathorMemoryStorage = {};
-  }
-
-  getItem(key) {
-    const ret = this.hathorMemoryStorage[key];
-    if (ret === undefined) {
-      return null;
-    }
-    return ret;
-  }
-
-  setItem(key, value) {
-    this.hathorMemoryStorage[key] = value;
-  }
-
-  removeItem(key) {
-    delete this.hathorMemoryStorage[key];
-  }
-
-  clear() {
-    this.hathorMemoryStorage = {};
-  }
-}
+import MemoryStore from './src/memory_store';
 
 const storage = require('./src/storage').default;
 
-storage.setStore(new MemoryOnlyStore());
+storage.setStore(new MemoryStore());
 storage.setItem('wallet:server', FULLNODE_URL);
 config.setTxMiningUrl(TX_MINING_URL);
 
