@@ -10,6 +10,7 @@ import { DECIMAL_PLACES, DEFAULT_TX_VERSION, CREATE_TOKEN_TX_VERSION } from '../
 import buffer from 'buffer';
 import Long from 'long';
 import Transaction from '../models/transaction';
+import { HistoryTransaction, HistoryTransactionOutput } from '../models/types';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
 import ScriptData from '../models/script_data';
@@ -18,10 +19,10 @@ import Input from '../models/input';
 import Output from '../models/output';
 import Network from '../models/network';
 import Address from '../models/address';
-import { hexToBuffer, unpackToInt } from '../utils/buffer';
+import { hexToBuffer, unpackToInt } from './buffer';
 import { crypto, encoding, Address as bitcoreAddress } from 'bitcore-lib';
 import { clone } from 'lodash';
-import { ParseError } from '../errors';
+import { ParseError, CreateTokenTxInvalid } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 
 /**
@@ -467,6 +468,69 @@ const helpers = {
     } else {
         throw new ParseError(ErrorMessages.UNSUPPORTED_TX_TYPE);
     }
+  },
+
+  /**
+   * Creates a Transaction instance from a populated object from the wallet's history methods.
+   *
+   * _Note_: This helper does not need a _Network_ parameter, since all the output scripts were already decoded.
+   * @param {HistoryTransaction} historyTx A transaction formatted as an instance of a wallet history
+   *
+   * @memberof Helpers
+   * @inner
+   *
+   * @example
+   * const historyTx = myHathorWallet.getTx(myTxHash);
+   * const txInstance = helpers.createTxFromHistoryObject(historyTx);
+   */
+  createTxFromHistoryObject(historyTx: HistoryTransaction): Transaction | CreateTokenTransaction {
+    // Processing a token creation transaction
+    const isCreateTokenTx = historyTx.version === CREATE_TOKEN_TX_VERSION
+
+    if (isCreateTokenTx && (!historyTx?.token_name || !historyTx?.token_symbol)) {
+      throw new CreateTokenTxInvalid(`Missing token name or symbol`)
+    }
+
+    const inputs = historyTx.inputs.map(i => new Input(i.tx_id, i.index))
+    const outputs = historyTx.outputs.map(this.createOutputFromHistoryObject)
+
+    if (isCreateTokenTx) {
+      return new CreateTokenTransaction(
+        historyTx.token_name!,
+        historyTx.token_symbol!,
+        inputs,
+        outputs,
+        {...historyTx})
+    } else {
+      return new Transaction(
+        inputs,
+        outputs,
+        {...historyTx}
+      )
+    }
+  },
+
+  /**
+   * Creates an Output from an object extracted from the wallet's history.
+   * @param {HistoryTransactionOutput} historyOutput An output from a tx populated and formatted by the wallet's
+   *                                                 history methods
+   *
+   * @memberof Helpers
+   * @inner
+   *
+   * @example
+   * const historyTx = myHathorWallet.getTx(myTxHash);
+   * const outputInstance = heleprs.createOutputFromHistoryObject(historyTx.outputs[0]);
+   */
+  createOutputFromHistoryObject(historyOutput: HistoryTransactionOutput): Output {
+    return new Output(
+      historyOutput.value,
+      Buffer.from(historyOutput.script, 'base64'),
+      {
+        timelock: historyOutput.decoded.timelock || null,
+        tokenData: historyOutput.token_data,
+      }
+    );
   },
 
   /**

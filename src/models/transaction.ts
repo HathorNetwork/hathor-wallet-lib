@@ -5,17 +5,27 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { TX_HASH_SIZE_BYTES, MERGED_MINED_BLOCK_VERSION, BLOCK_VERSION, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, DECIMAL_PLACES, TOKEN_INFO_VERSION, TX_WEIGHT_CONSTANTS, MAX_INPUTS, MAX_OUTPUTS } from '../constants';
-import { crypto as cryptoBL, encoding, util } from 'bitcore-lib';
-import { bufferToHex, hexToBuffer, unpackToInt, unpackToHex, unpackToFloat } from '../utils/buffer';
-import helpers from '../utils/helpers';
-import Input from './input';
-import Output from './output';
-import Network from './network';
-import { CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError } from '../errors';
-import buffer from 'buffer';
-import { clone } from 'lodash';
-import crypto from 'crypto';
+import {
+  BLOCK_VERSION,
+  CREATE_TOKEN_TX_VERSION,
+  DECIMAL_PLACES,
+  DEFAULT_TX_VERSION,
+  MAX_INPUTS,
+  MAX_OUTPUTS,
+  MERGED_MINED_BLOCK_VERSION,
+  TX_HASH_SIZE_BYTES,
+  TX_WEIGHT_CONSTANTS
+} from '../constants'
+import {crypto as cryptoBL, encoding, util} from 'bitcore-lib'
+import {bufferToHex, hexToBuffer, unpackToFloat, unpackToHex, unpackToInt} from '../utils/buffer'
+import helpers from '../utils/helpers'
+import Input from './input'
+import Output from './output'
+import Network from './network'
+import {MaximumNumberInputsError, MaximumNumberOutputsError} from '../errors'
+import buffer from 'buffer'
+import {clone} from 'lodash'
+import crypto from 'crypto'
 
 enum txType {
   BLOCK = 'Block',
@@ -34,6 +44,15 @@ type optionsType = {
   hash?: string | null,
 };
 
+/**
+ * Representation of a transaction with helper methods.
+ *
+ * Besides the class `constructor`, there are some helper methods are available to build instances of this class
+ * according to context:
+ * - `Transaction.createFromBytes`: creates a transaction from a buffer and a network
+ * - `helpers.createTxFromData`: creates from a standard lib data object
+ * - `helpers.createTxFromHistoryObject`: creates from a tx populated by the HathorWallet history methods
+ */
 class Transaction {
   inputs: Input[];
   outputs: Output[];
@@ -88,7 +107,7 @@ class Transaction {
 
   /**
    * Return transaction data to sign in inputs
-   * 
+   *
    * @return {Buffer}
    * @memberof Transaction
    * @inner
@@ -230,7 +249,7 @@ class Transaction {
 
   /**
    * Calculate the minimum tx weight
-   * 
+   *
    * @throws {ConstantNotSet} If the weight constants are not set yet
    *
    * @return {number} Minimum weight calculated (float)
