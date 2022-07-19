@@ -1544,33 +1544,47 @@ describe('createNFT', () => {
     let nftBalance = await hWallet.getBalance(nftTx.hash);
     expect(nftBalance[0].balance.unlocked).toEqual(1);
 
-    /*
-     * XXX: Since NFT authority tokens cannot be read by getMintAuthority, we will try to actually
-     * mint tokens to confirm the authority exists.
-     */
+    // Validating mint authority
+    let mintAuth = await hWallet.getMintAuthority(nftTx.hash, { many: true });
+    expect(mintAuth).toHaveLength(1);
+    expect(mintAuth[0]).toHaveProperty('txId', nftTx.hash);
+
+    // Minting new NFT tokens and not creating new authorities
     await waitUntilNextTimestamp(hWallet, nftTx.hash);
     const rawMintTx = await hWallet.mintTokens(
       nftTx.hash,
       10,
+      { createAnotherMint: false }
     );
     expect(rawMintTx).toHaveProperty('hash');
     await waitForTxReceived(hWallet, rawMintTx.hash);
     nftBalance = await hWallet.getBalance(nftTx.hash);
     expect(nftBalance[0].balance.unlocked).toEqual(11);
 
-    /*
-     * XXX: Since NFT authority tokens cannot be read by getMeltAuthority, we will try to actually
-     * melt tokens to confirm the authority exists.
-     */
+    // There should be no mint authority anymore
+    mintAuth = await hWallet.getMintAuthority(nftTx.hash, { many: true });
+    expect(mintAuth).toHaveLength(0);
+
+    // Validating melt authority
+    let meltAuth = await hWallet.getMeltAuthority(nftTx.hash, { many: true });
+    expect(meltAuth).toHaveLength(1);
+    expect(meltAuth[0]).toHaveProperty('txId', nftTx.hash);
+
+    // Melting NFT tokens and not creating new authorities
     await waitUntilNextTimestamp(hWallet, rawMintTx.hash);
     const htrMelt = await hWallet.meltTokens(
       nftTx.hash,
       5,
+      { createAnotherMelt: false }
     );
     expect(htrMelt).toHaveProperty('hash');
     await waitForTxReceived(hWallet, htrMelt.hash);
     nftBalance = await hWallet.getBalance(nftTx.hash);
     expect(nftBalance[0].balance.unlocked).toEqual(6);
+
+    // There should be no melt authority anymore
+    meltAuth = await hWallet.getMeltAuthority(nftTx.hash, { many: true });
+    expect(meltAuth).toHaveLength(0);
   });
 
   it('should create an NFT without authorities', async () => {
