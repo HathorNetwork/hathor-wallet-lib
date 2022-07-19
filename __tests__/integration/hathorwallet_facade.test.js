@@ -686,7 +686,7 @@ describe('sendTransaction', () => {
   });
 });
 
-describe.only('sendManyOutputsTransaction', () => {
+describe('sendManyOutputsTransaction', () => {
   afterEach(async () => {
     await stopAllWallets();
     await GenesisWalletHelper.clearListeners();
@@ -1520,7 +1520,7 @@ describe('createNFT', () => {
 
   it('should create an NFT with mint/melt authorities', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 100);
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
 
     // Creating one NFT with default authorities
     const nftTx = await hWallet.createNFT(
@@ -1540,7 +1540,7 @@ describe('createNFT', () => {
 
     // Validating HTR fee payment
     const htrBalance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
-    expect(htrBalance[0].balance.unlocked).toEqual(98); // 1 deposit, 1 fee
+    expect(htrBalance[0].balance.unlocked).toEqual(8); // 1 deposit, 1 fee
     let nftBalance = await hWallet.getBalance(nftTx.hash);
     expect(nftBalance[0].balance.unlocked).toEqual(1);
 
@@ -1573,7 +1573,37 @@ describe('createNFT', () => {
     expect(nftBalance[0].balance.unlocked).toEqual(6);
   });
 
-  // TODO: Test NFTs without mint/melt authorities. Maybe use getUtxos when their tests are done.
+  it('should create an NFT without authorities', async () => {
+    const hWallet = await generateWalletHelper();
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
+
+    // Creating one NFT without authorities, and with a specific destination address
+    const nftTx = await hWallet.createNFT(
+      'New NFT 2',
+      'NNFT2',
+      1,
+      sampleNftData,
+      {
+        createMint: false,
+        createMelt: false,
+        address: hWallet.getAddressAtIndex(3),
+        changeAddress: hWallet.getAddressAtIndex(4),
+      },
+    );
+    expect(nftTx.hash).toBeDefined();
+    await waitForTxReceived(hWallet, nftTx.hash);
+
+    // Checking for authority outputs on the transaction
+    const authorityOutputs = nftTx.outputs.filter(o => {
+      return wallet.isAuthorityOutput(o);
+    });
+    expect(authorityOutputs).toHaveLength(0);
+
+    // Checking for the destination address
+    const fullTx = hWallet.getTx(nftTx.hash);
+    const nftOutput = fullTx.outputs.find(o => o.token === nftTx.hash);
+    expect(nftOutput).toHaveProperty('decoded.address', hWallet.getAddressAtIndex(3));
+  })
 });
 
 describe('getToken methods', () => {
