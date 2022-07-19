@@ -960,7 +960,29 @@ describe('createNewToken', () => {
       .toHaveProperty('amount', 9);
   });
 
-  // TODO: Test creating token without mint/melt authority
+  it('should create a new token without mint/melt authorities', async () => {
+    // Creating the wallet with the funds
+    const hWallet = await generateWalletHelper();
+    const addr0 = hWallet.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(addr0, 1);
+
+    // Creating the new token
+    const newTokenResponse = await hWallet.createNewToken(
+      'Immutable Token',
+      'ITKN',
+      100,
+      { createMint: false, createMelt: false }
+    );
+
+    // Validating the creation tx
+    expect(newTokenResponse).toHaveProperty('hash');
+
+    // Checking for authority outputs on the transaction
+    const authorityOutputs = newTokenResponse.outputs.filter(o => {
+      return wallet.isAuthorityOutput(o);
+    });
+    expect(authorityOutputs).toHaveLength(0);
+  });
 });
 
 describe('mintTokens', () => {

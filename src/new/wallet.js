@@ -1384,23 +1384,19 @@ class HathorWallet extends EventEmitter {
   /**
    * Prepare create token transaction data before mining
    *
-   * @param {Transaction} transaction Transaction object to be mined and pushed to the network
-   *
    * @param {string} name Name of the token
    * @param {string} symbol Symbol of the token
    * @param {number} amount Quantity of the token to be minted
-   * @param {Object} options Options parameters
-   *  {
-   *   'address': address of the minted token,
-   *   'changeAddress': address of the change output,
-   *   'startMiningTx': boolean to trigger start mining (default true)
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
-   *   'createMint': if should create mint authority when creating the token
-   *   'createMelt': if should create melt authority when creating the token
-   *   'nftData': data string for NFT
-   *  }
+   * @param [options] Options parameters
+   * @param {string} [options.address] address of the minted token,
+   * @param {string} [options.changeAddress] address of the change output,
+   * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
+   * @param {string} [options.pinCode] pin to decrypt xpriv information. Optional but required if not set in this
+   * @param {boolean} [options.createMint=true] if should create mint authority with the token
+   * @param {boolean} [options.createMelt=true] if should create melt authority with the token
+   * @param {string} [options.nftData] data string for NFT
    *
-   * @return {Promise} Promise that resolves with transaction object if succeeds
+   * @return {Transaction | CreateTokenTransaction} Promise that resolves with transaction object if succeeds
    * or with error message if it fails
    *
    * @memberof HathorWallet
@@ -1468,6 +1464,8 @@ class HathorWallet extends EventEmitter {
    * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
    * @param {string} [options.pinCode] pin to decrypt xpriv information.
    *                                   Optional but required if not set in this
+   * @param {boolean} [options.createMint=true] should create mint authority
+   * @param {boolean} [options.createMelt=true] should create melt authority
    *
    * @return {Promise<CreateNewTokenResponse>}
    * @memberof HathorWallet
