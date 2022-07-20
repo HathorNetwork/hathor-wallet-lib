@@ -876,7 +876,7 @@ class HathorWallet extends EventEmitter {
    * @property {string} addressPath
    *
    * @param {Object} [options] Utxo filtering options
-   * @param {string|null} [options.token=null] - Search for UTXOs of this token UID.
+   * @param {string} [options.token='00'] - Search for UTXOs of this token UID.
    * @param {string|null} [options.filter_address=null] - Address to filter the utxos.
    *
    * @generator
@@ -888,7 +888,7 @@ class HathorWallet extends EventEmitter {
     const historyTransactions = this.getFullHistory();
 
     const { token, filter_address } = Object.assign({
-      token: null,
+      token: HATHOR_TOKEN_CONFIG.uid,
       filter_address: null,
     }, options);
 
@@ -902,7 +902,7 @@ class HathorWallet extends EventEmitter {
       for (const [index, txout] of tx.outputs.entries()) {
         if (
           (filter_address && filter_address !== txout.decoded.address)
-          || (token && txout.token !== token)
+          || txout.token !== token
           || (!this.isAddressMine(txout.decoded.address))
         ) {
           continue;
