@@ -885,7 +885,6 @@ class HathorWallet extends EventEmitter {
    */
   * getAllUtxos(options = {}) {
     storage.setStore(this.store);
-    const data = wallet.getWalletData();
     const historyTransactions = this.getFullHistory();
 
     const { token, filter_address } = Object.assign({
@@ -904,7 +903,7 @@ class HathorWallet extends EventEmitter {
         if (
           (filter_address && filter_address !== txout.decoded.address)
           || (token && txout.token !== token)
-          || (!wallet.isAddressMine(txout.decoded.address, data))
+          || (!this.isAddressMine(txout.decoded.address))
         ) {
           continue;
         }
@@ -912,7 +911,7 @@ class HathorWallet extends EventEmitter {
         if (txout.spent_by === null) {
           if (wallet.canUseUnspentTx(txout, tx.height)) {
             const isAuthority = (TOKEN_AUTHORITY_MASK & txout.token_data) > 0;
-            const addressIndex = this.isAddressMine(txout.decoded.address) ? this.getAddressIndex(txout.decoded.address) : null;
+            const addressIndex = this.getAddressIndex(txout.decoded.address);
 
             const utxo = {
               txId: tx_id,
@@ -924,7 +923,7 @@ class HathorWallet extends EventEmitter {
               timelock: txout.decoded.timelock,
               heightlock: null, // not enough info to determine this.
               locked: false,
-              addressPath: addressIndex === null ? '' : `m/44'/280'/0'/0/${addressIndex}`,
+              addressPath: `m/44'/280'/0'/0/${addressIndex}`,
             };
             yield utxo;
           }

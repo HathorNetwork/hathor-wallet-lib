@@ -145,7 +145,7 @@ export class ProposalOutput extends Output {
   /**
    * Return an object with the relevant output data
    *
-   * @param {number} tokenIndex Index of the token on the tokens array
+   * @param {number} tokenIndex Index of the token on the tokens array plus 1 (0 meaning HTR)
    * @param {Network} network Network used to generate addresses in
    *
    * @returns {OutputData}
@@ -358,6 +358,16 @@ export class PartialTx {
   /**
    * Serialize the current PartialTx into an UTF8 string.
    *
+   * The serialization will join 4 parts:
+   * - Fixed prefix
+   * - transaction: in hex format
+   * - inputs metadataA: address, token, tokenData and value
+   * - outputs metadata: change outputs indexes
+   *
+   * Example: PartialTx|00010102...ce|W...vjPi,00,0,1b:W...vjPi,0000389...8c,1,d|1:2
+   * Obs: ellipsis were used to abreviate long parts, there are no ellipsis on the serialized string
+   *
+   *
    * @returns {string}
    *
    * @throws {UnsupportedScriptError} All output scripts must be P2SH or P2PKH
@@ -554,6 +564,14 @@ export class PartialTxInputData {
 
   /**
    * Serialize the current PartialTxInputData into an UTF8 string.
+   *
+   * The serialization will join 3 informations:
+   * - Fixed prefix
+   * - hash: to identify the transaction which these signatures belong to
+   * - inputs data: index and data
+   *
+   * Example: PartialTxInputData|000ca...fe|0:00abc|1:00123
+   * Obs: ellipsis is used to abreviate, there are no ellipsis on the serialized string
    *
    * @returns {string}
    * @memberof PartialTxInputData
