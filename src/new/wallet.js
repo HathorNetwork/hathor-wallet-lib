@@ -910,7 +910,7 @@ class HathorWallet extends EventEmitter {
 
         if (txout.spent_by === null) {
           if (wallet.canUseUnspentTx(txout, tx.height)) {
-            const isAuthority = (TOKEN_AUTHORITY_MASK & txout.token_data) > 0;
+            const isAuthority = wallet.isAuthorityOutput(txout);
             const addressIndex = this.getAddressIndex(txout.decoded.address);
 
             const utxo = {

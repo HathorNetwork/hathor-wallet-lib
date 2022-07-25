@@ -361,7 +361,7 @@ export class PartialTx {
    * The serialization will join 4 parts:
    * - Fixed prefix
    * - transaction: in hex format
-   * - inputs metadataA: address, token, tokenData and value
+   * - inputs metadata: a colon-separated list of address, token, tokenData and value
    * - outputs metadata: change outputs indexes
    *
    * Example: PartialTx|00010102...ce|W...vjPi,00,0,1b:W...vjPi,0000389...8c,1,d|1:2
