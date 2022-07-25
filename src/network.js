@@ -27,7 +27,7 @@ class ExtendedNetwork extends Network {
    */
   setNetwork(name, skipConfig = false) {
     super.setNetwork(name);
- 
+
     if (!skipConfig) {
       config.setNetwork(name);
     }

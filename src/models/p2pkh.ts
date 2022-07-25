@@ -40,11 +40,11 @@ class P2PKH {
   /**
    * Get script type
    *
-   * @return {String}
+   * @return {string}
    * @memberof P2PKH
    * @inner
    */
-  getType(): String {
+  getType(): string {
     return 'p2pkh';
   }
 
