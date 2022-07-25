@@ -60,6 +60,14 @@ export class CreateTokenTxInvalid extends Error {}
 export class TokenValidationError extends Error {}
 
 /**
+ * Error thrown when validating a registration of new NFT
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class NftValidationError extends Error {}
+
+/**
  * Error thrown when transaction has more inputs than the maximum allowed
  *
  * @memberof Errors
@@ -74,6 +82,14 @@ export class MaximumNumberInputsError extends Error {}
  * @inner
  */
 export class MaximumNumberOutputsError extends Error {}
+
+/**
+ * Error thrown when transaction has invalid outputs
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class InvalidOutputsError extends Error {}
 
 /**
  * Error thrown when transaction has more parents than the maximum allowed

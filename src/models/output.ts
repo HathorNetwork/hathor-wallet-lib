@@ -5,16 +5,23 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { MAX_OUTPUT_VALUE_32, MAX_OUTPUT_VALUE, TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, TOKEN_INDEX_MASK } from '../constants';
-import { OutputValueError, ParseError } from '../errors';
-import helpers from '../utils/helpers';
-import P2PKH from './p2pkh';
-import P2SH from './p2sh';
-import ScriptData from './script_data';
-import Network from './network';
-import { unpackToInt, unpackLen, bytesToOutputValue } from '../utils/buffer';
-import { parseP2PKH, parseP2SH, parseScriptData } from '../utils/scripts';
-import _ from 'lodash';
+import {
+  MAX_OUTPUT_VALUE,
+  MAX_OUTPUT_VALUE_32,
+  TOKEN_AUTHORITY_MASK,
+  TOKEN_INDEX_MASK,
+  TOKEN_MELT_MASK,
+  TOKEN_MINT_MASK
+} from '../constants'
+import {OutputValueError, ParseError} from '../errors'
+import helpers from '../utils/helpers'
+import P2PKH from './p2pkh'
+import P2SH from './p2sh'
+import ScriptData from './script_data'
+import Network from './network'
+import {bytesToOutputValue, unpackLen, unpackToInt} from '../utils/buffer'
+import {parseP2PKH, parseP2SH, parseScriptData} from '../utils/scripts'
+import _ from 'lodash'
 
 type optionsType = {
   tokenData?: number | undefined,
@@ -22,6 +29,11 @@ type optionsType = {
   timelock?: number | null | undefined,
 };
 
+/**
+ * Maximum length of an output script
+ * @type {number}
+ */
+export const MAXIMUM_SCRIPT_LENGTH: number = 256;
 
 class Output {
   // Output value as an integer
@@ -80,7 +92,7 @@ class Output {
     }
   }
 
-  /*
+  /**
    * Returns if output is authority
    *
    * @return {boolean} If it's an authority output or not
@@ -92,7 +104,7 @@ class Output {
     return (this.tokenData & TOKEN_AUTHORITY_MASK) > 0;
   }
 
-  /*
+  /**
    * Verifies if output is of mint
    *
    * @return {boolean} if output is mint
@@ -104,7 +116,7 @@ class Output {
     return this.isAuthority() && ((this.value & TOKEN_MINT_MASK) > 0);
   }
 
-  /*
+  /**
    * Verifies if output is of melt
    *
    * @return {boolean} if output is melt
@@ -131,7 +143,18 @@ class Output {
   getTokenIndex(): number {
     return (this.tokenData & TOKEN_INDEX_MASK) - 1;
   }
-  
+
+  /**
+   * Checks if this output refers to the HTR token
+   *
+   * @return {boolean} True if it is HTR
+   * @memberOf Output
+   * @inner
+   */
+  isTokenHTR(): boolean {
+    return this.getTokenIndex() === -1;
+  }
+
   /**
    * Serialize an output to bytes
    *
@@ -210,6 +233,33 @@ class Output {
     output.parseScript(network);
 
     return [output, outputBuffer];
+  }
+
+  /**
+   * Checks if the script length is within the valid limits
+   *
+   * @returns {boolean} True if the script is within valid limits
+   *
+   * @memberof Output
+   * @inner
+   */
+  hasValidLength(): boolean {
+    // No script can have more than the maximum length
+    return this.script.length <= MAXIMUM_SCRIPT_LENGTH;
+  }
+
+  /**
+   * Returns the type of the output, according to the specified network
+   *
+   * @param {Network} network Network to get output addresses first byte
+   * @returns {string} Output type
+   *
+   * @memberof Output
+   * @inner
+   */
+  getType(network: Network): String {
+    const decodedScript = this.decodedScript || this.parseScript(network)
+    return decodedScript?.getType() || '';
   }
 }
 

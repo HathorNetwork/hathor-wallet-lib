@@ -14,8 +14,10 @@ import Address from '../../src/models/address';
 import Network from '../../src/models/network';
 import { hexToBuffer, bufferToHex } from '../../src/utils/buffer';
 import helpers from '../../src/utils/helpers';
-import { DEFAULT_TX_VERSION } from '../../src/constants';
+import { DEFAULT_TX_VERSION, MAX_OUTPUTS } from '../../src/constants';
 import { MaximumNumberInputsError, MaximumNumberOutputsError, ParseError } from '../../src/errors';
+import { nftCreationTx } from '../__fixtures__/sample_txs';
+import lodash from 'lodash';
 
 const compareTxs = (tx, tx2) => {
   expect(tx2.version).toBe(tx.version);
@@ -57,7 +59,7 @@ const compareTxs = (tx, tx2) => {
 
 
 test('New tx', () => {
-  
+
   const network = new Network('testnet');
   const address1 = new Address('WR1i8USJWQuaU423fwuFQbezfevmT4vFWX');
   const p2pkh1 = new P2PKH(address1);
@@ -337,3 +339,148 @@ test('Known transactions hash', () => {
   expect(tx3.hash).toBe('0000e39fa77e4146b4487a9b7352a05aa07a0da8e8f793280640cae5a7c6e8e3');
 
 });
+
+describe('NFT Validation', () => {
+  const cloneNftSample = () => lodash.cloneDeep(nftCreationTx);
+  const network = new Network('privatenet');
+
+  it('should validate a NFT creation tx', () => {
+    expect.assertions(1);
+    const historyTx = cloneNftSample();
+
+    const txInstance = helpers.createTxFromHistoryObject(historyTx);
+
+    expect(() => txInstance.validateNft(network)).not.toThrow();
+  })
+
+  it('should throw for a token-creating tx with less than 2 outputs', () => {
+    expect.assertions(1);
+    const historyTx = cloneNftSample();
+
+    // Removing all outputs from index 1 onwards
+    historyTx.outputs.length = 1;
+    const txInstance = helpers.createTxFromHistoryObject(historyTx);
+
+    expect(() => txInstance.validateNft(network)).toThrow('minimum');
+  });
+
+  it('should validate maximum outputs of a transaction', () => {
+    expect.assertions(2);
+    const historyTx = cloneNftSample();
+    const txInstance = helpers.createTxFromHistoryObject(historyTx);
+
+    // Adding outputs within allowed limit
+    for (let i = 1; i < MAX_OUTPUTS; ++i) {
+      txInstance.outputs[i] = helpers.createOutputFromHistoryObject(historyTx.outputs[1]);
+    }
+    expect(() => txInstance.validateNft(network)).not.toThrow();
+
+    // Adding an output beyond the allowed limit
+    txInstance.outputs.push(helpers.createOutputFromHistoryObject(historyTx.outputs[1]));
+    expect(() => txInstance.validateNft(network)).toThrow('can have at most');
+  });
+
+  it('should return false for a fee output with wrong data', () => {
+    expect.assertions(3);
+    const historyTx = cloneNftSample();
+    const txInstance = helpers.createTxFromHistoryObject(historyTx);
+
+    // Wrong Value
+    txInstance.outputs[0].value = 2;
+    expect(() => txInstance.validateNft(network)).toThrow('valid NFT data');
+
+    // Wrong Token Data
+    txInstance.outputs[0].value = 1;
+    txInstance.outputs[0].tokenData = 1;
+    expect(() => txInstance.validateNft(network)).toThrow('valid NFT data');
+
+    // Wrong Token Script
+    txInstance.outputs[0].tokenData = 0;
+    txInstance.outputs[0].script = Buffer
+      .from(historyTx.outputs[0].script,'base64')
+      .toString('hex');
+    expect(() => txInstance.validateNft(network)).toThrow('not a DataScript');
+  });
+
+  it('should return false for having an invalid output script', () => {
+    expect.assertions(2);
+    const historyTx = cloneNftSample();
+    const txInstance = helpers.createTxFromHistoryObject(historyTx);
+
+    // Script too large
+    txInstance.outputs[1].script = Buffer.from('a'.repeat(257));
+    expect(() => txInstance.validateNft(network)).toThrow('script is too long');
+
+    // Incorrect output type
+    txInstance.outputs[1].script = Buffer.from(historyTx.outputs[0].script, 'base64');
+    expect(() => txInstance.validateNft(network)).toThrow('not of a valid type');
+  });
+
+  it('should return true for a NFT without change', () => {
+    expect.assertions(1);
+    const historyTx = cloneNftSample();
+
+    historyTx.outputs = [
+      nftCreationTx.outputs[0], // Fee
+      nftCreationTx.outputs[2], // Token
+      nftCreationTx.outputs[3], // Mint
+      nftCreationTx.outputs[4], // Melt
+    ];
+
+    const txInstance = helpers.createTxFromHistoryObject(historyTx);
+    expect(() => txInstance.validateNft(network)).not.toThrow();
+  });
+
+  it('should return true for a NFT without mint and/or melt', () => {
+    expect.assertions(3);
+    const historyTx = cloneNftSample();
+    let txInstance;
+
+    historyTx.outputs = [
+      nftCreationTx.outputs[0], // Fee
+      nftCreationTx.outputs[2], // Token
+      nftCreationTx.outputs[3], // Mint
+    ];
+    txInstance = helpers.createTxFromHistoryObject(historyTx);
+    expect(() => txInstance.validateNft(network)).not.toThrow();
+
+    historyTx.outputs = [
+      nftCreationTx.outputs[0], // Fee
+      nftCreationTx.outputs[2], // Token
+      nftCreationTx.outputs[4], // Melt
+    ];
+    txInstance = helpers.createTxFromHistoryObject(historyTx);
+    expect(() => txInstance.validateNft(network)).not.toThrow();
+
+    historyTx.outputs = [
+      nftCreationTx.outputs[0], // Fee
+      nftCreationTx.outputs[2], // Token
+    ];
+    txInstance = helpers.createTxFromHistoryObject(historyTx);
+    expect(() => txInstance.validateNft(network)).not.toThrow();
+  });
+
+  it('should return false for a NFT with 2+ mint and/or melt outputs', () => {
+    expect.assertions(2);
+    const historyTx = cloneNftSample();
+    let txInstance;
+
+    historyTx.outputs = [
+      nftCreationTx.outputs[0], // Fee
+      nftCreationTx.outputs[2], // Token
+      nftCreationTx.outputs[3], // Mint
+      nftCreationTx.outputs[3], // Mint
+    ];
+    txInstance = helpers.createTxFromHistoryObject(historyTx);
+    expect(() => txInstance.validateNft(network)).toThrow('mint and melt is allowed');
+
+    historyTx.outputs = [
+      nftCreationTx.outputs[0], // Fee
+      nftCreationTx.outputs[2], // Token
+      nftCreationTx.outputs[4], // Melt
+      nftCreationTx.outputs[4], // Melt
+    ];
+    txInstance = helpers.createTxFromHistoryObject(historyTx);
+    expect(() => txInstance.validateNft(network)).toThrow('mint and melt is allowed');
+  });
+})
