@@ -5,8 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { util } from 'bitcore-lib';
-
 
 /**
  * This class purpose is serialization/deserialization of signatures from a MultiSig participant

@@ -7,7 +7,7 @@
 
 import EventEmitter from 'events';
 import wallet from '../wallet';
-import { HATHOR_TOKEN_CONFIG, HATHOR_BIP44_CODE, P2SH_ACCT_PATH } from "../constants";
+import { HATHOR_TOKEN_CONFIG, HATHOR_BIP44_CODE, TOKEN_AUTHORITY_MASK, P2SH_ACCT_PATH } from "../constants";
 import tokens from '../tokens';
 import transaction from '../transaction';
 import version from '../version';
@@ -24,6 +24,7 @@ import { AddressError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
 import { HDPrivateKey, HDPublicKey, crypto } from 'bitcore-lib';
+import transactionUtils from '../utils/transaction';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';
@@ -857,6 +858,124 @@ class HathorWallet extends EventEmitter {
     }
 
     return utxoDetails;
+  }
+
+  /**
+   * Generates all available utxos
+   *
+   * @typedef {Object} Utxo
+   * @property {string} txId
+   * @property {number} index
+   * @property {string} tokenId
+   * @property {string} address
+   * @property {string} value
+   * @property {number} authorities
+   * @property {number|null} timelock
+   * @property {number|null} heightlock
+   * @property {boolean} locked
+   * @property {string} addressPath
+   *
+   * @param {Object} [options] Utxo filtering options
+   * @param {string} [options.token='00'] - Search for UTXOs of this token UID.
+   * @param {string|null} [options.filter_address=null] - Address to filter the utxos.
+   *
+   * @generator
+   * @function getAllUtxos
+   * @yields {Utxo} all available utxos
+   */
+  * getAllUtxos(options = {}) {
+    storage.setStore(this.store);
+    const historyTransactions = this.getFullHistory();
+
+    const { token, filter_address } = Object.assign({
+      token: HATHOR_TOKEN_CONFIG.uid,
+      filter_address: null,
+    }, options);
+
+    const utxos = [];
+    for (const tx_id in historyTransactions) {
+      const tx = historyTransactions[tx_id];
+      if (tx.is_voided) {
+        continue;
+      }
+
+      for (const [index, txout] of tx.outputs.entries()) {
+        if (
+          (filter_address && filter_address !== txout.decoded.address)
+          || txout.token !== token
+          || (!this.isAddressMine(txout.decoded.address))
+        ) {
+          continue;
+        }
+
+        if (txout.spent_by === null) {
+          if (wallet.canUseUnspentTx(txout, tx.height)) {
+            const isAuthority = wallet.isAuthorityOutput(txout);
+            const addressIndex = this.getAddressIndex(txout.decoded.address);
+
+            const utxo = {
+              txId: tx_id,
+              index,
+              tokenId: txout.token,
+              address: txout.decoded.address,
+              value: txout.value,
+              authorities: isAuthority ? txout.value : 0,
+              timelock: txout.decoded.timelock,
+              heightlock: null, // not enough info to determine this.
+              locked: false,
+              addressPath: `m/44'/280'/0'/0/${addressIndex}`,
+            };
+            yield utxo;
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Get utxos of the wallet addresses to fill the amount specified.
+   *
+   * @param {Object} [options] Utxo filtering options
+   * @param {string} [options.token='00'] - Search for UTXOs of this token UID.
+   * @param {string|null} [options.filter_address=null] - Address to filter the utxos.
+   *
+   * @return {{utxos: Utxo[], changeAmount: number}} Utxos and change information.
+   *
+   */
+  getUtxosForAmount(amount, options = {}) {
+    storage.setStore(this.store);
+
+    const newOptions = Object.assign({
+      token: HATHOR_TOKEN_CONFIG.uid,
+      filter_address: null,
+    }, options);
+
+    return transactionUtils.selectUtxos(
+      [...this.getAllUtxos(newOptions)].filter(utxo => utxo.authorities === 0),
+      amount,
+    );
+  }
+
+  /**
+   * Mark UTXO selected_as_input.
+   *
+   * @param {string} txId Transaction id of the UTXO
+   * @param {number} index Output index of the UTXO
+   * @param {boolean} [value=true] The value to set the utxos.
+   */
+  markUtxoSelected(txId, index, value = true) {
+    storage.setStore(this.store);
+    const historyTransactions = Object.values(this.getFullHistory());
+    const tx = historyTransactions[txId] || null;
+    const txout = tx && tx.outputs && tx.outputs[index];
+
+    if (!txout) {
+      return;
+    }
+    historyTransactions[txId].outputs[index].selected_as_input = value;
+
+    const walletData = wallet.getWalletData();
+    wallet.setWalletData(Object.assign(walletData, { historyTransactions }));
   }
 
   /**

@@ -38,11 +38,11 @@ class P2SH {
   /**
    * Get script type
    *
-   * @return {String}
+   * @return {string}
    * @memberof P2SH
    * @inner
    */
-  getType(): String {
+  getType(): string {
     return 'p2sh';
   }
 
