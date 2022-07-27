@@ -296,6 +296,37 @@ describe('PartialTx serialization', () => {
     const partialTx = PartialTx.deserialize(serialized, testnet);
     expect(partialTx.serialize()).toBe(serialized);
   });
+
+  it('should deserialize the serialize output', async () => {
+    const address = 'WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi';
+    const partialTx = new PartialTx(testnet);
+
+    const partialEmpty = PartialTx.deserialize(partialTx.serialize(), testnet);
+    expect(partialEmpty.serialize()).toEqual(partialTx.serialize());
+
+    partialTx.inputs = [
+      new ProposalInput(txId1, 0, 27, address, { token: HATHOR_TOKEN_CONFIG.uid }),
+      new ProposalInput(txId2, 4, 13, address, { token: testTokenConfig.uid, tokenData: 1 }),
+    ];
+    const partialOnlyInputs = PartialTx.deserialize(partialTx.serialize(), testnet);
+    expect(partialOnlyInputs.serialize()).toEqual(partialTx.serialize());
+
+    partialTx.inputs = [];
+    partialTx.outputs = [
+      new ProposalOutput(15, scriptFromAddressP2PKH('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo')),
+      new ProposalOutput(13, scriptFromAddressP2PKH('WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp'), { token: testTokenConfig.uid, isChange: true }),
+      new ProposalOutput(12, scriptFromAddressP2PKH('WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi'), { isChange: true }),
+    ];
+    const partialOnlyOutputs = PartialTx.deserialize(partialTx.serialize(), testnet);
+    expect(partialOnlyOutputs.serialize()).toEqual(partialTx.serialize());
+
+    partialTx.inputs = [
+      new ProposalInput(txId1, 0, 27, address, { token: HATHOR_TOKEN_CONFIG.uid }),
+      new ProposalInput(txId2, 4, 13, address, { token: testTokenConfig.uid, tokenData: 1 }),
+    ];
+    const partialFull = PartialTx.deserialize(partialTx.serialize(), testnet);
+    expect(partialFull.serialize()).toEqual(partialTx.serialize());
+  });
 });
 
 describe('PartialTx.validate', () => {
