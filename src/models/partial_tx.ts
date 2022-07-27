@@ -420,7 +420,7 @@ export class PartialTx {
       throw new SyntaxError('Invalid PartialTx');
     }
 
-    const inputArr = dataArr[2].split(':').map(h => {
+    const inputArr = dataArr[2] && dataArr[2].split(':').map(h => {
       const parts = h.split(',');
       const meta = {
         address: parts[0],
@@ -432,7 +432,7 @@ export class PartialTx {
         throw new SyntaxError('Invalid PartialTx');
       }
       return meta;
-    });
+    }) || [];
     const changeOutputs = dataArr[3].split(':').map(x => parseInt(x, 16));
 
     const tx = helpers.createTxFromHex(txHex, network);
