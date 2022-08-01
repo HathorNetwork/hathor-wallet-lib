@@ -124,54 +124,74 @@ describe('addresses methods', () => {
     for (let i = 0; i < 22; ++i) {
       // Validating generator results
       const genResults = await addressGenerator.next();
-      expect(genResults).toHaveProperty('value');
-      expect(genResults).toHaveProperty('done');
+      expect(genResults).toMatchObject({
+        done: expect.any(Boolean),
+      });
 
       // Validating gap limit
       if (i === 21) {
-        expect(genResults.done).toEqual(true);
-        expect(genResults.value).toBeUndefined();
+        expect(genResults).toStrictEqual({
+          done: true,
+          value: undefined,
+        });
         break;
       }
 
       // Validating generator contents
       const addressAtIndex = hWallet.getAddressAtIndex(i);
-      expect(genResults.value.index).toEqual(i);
-      expect(genResults.value.address).toEqual(addressAtIndex);
+      expect(genResults.value).toStrictEqual({
+        index: i,
+        address: addressAtIndex,
+        transactions: 0,
+      });
     }
 
     // Validating currentAddress behavior
     let currentAddress = hWallet.getCurrentAddress();
-    expect(currentAddress.index).toEqual(0);
-    expect(currentAddress.address).toEqual(hWallet.getAddressAtIndex(0));
+    expect(currentAddress).toMatchObject({
+      index: 0,
+      address: wallet.getAddressAtIndex(0),
+    });
     // Expect no change on second call
     currentAddress = hWallet.getCurrentAddress();
-    expect(currentAddress.index).toEqual(0);
-    expect(currentAddress.address).toEqual(hWallet.getAddressAtIndex(0));
+    expect(currentAddress).toMatchObject({
+      index: 0,
+      address: wallet.getAddressAtIndex(0),
+    });
     // Expect the same address for the last time when calling with markAsUsed parameters
     currentAddress = hWallet.getCurrentAddress({ markAsUsed: true });
-    expect(currentAddress.index).toEqual(0);
-    expect(currentAddress.address).toEqual(hWallet.getAddressAtIndex(0));
+    expect(currentAddress).toMatchObject({
+      index: 0,
+      address: wallet.getAddressAtIndex(0),
+    });
     // Now it won't return the used one
     currentAddress = hWallet.getCurrentAddress();
-    expect(currentAddress.index).toEqual(1);
-    expect(currentAddress.address).toEqual(hWallet.getAddressAtIndex(1));
+    expect(currentAddress).toMatchObject({
+      index: 1,
+      address: wallet.getAddressAtIndex(1),
+    });
 
     // Validating getNextAddress behavior
     let nextAddress = hWallet.getNextAddress();
-    expect(nextAddress.index).toEqual(2);
-    expect(nextAddress.address).toEqual(hWallet.getAddressAtIndex(2));
+    expect(nextAddress).toMatchObject({
+      index: 2,
+      address: wallet.getAddressAtIndex(2),
+    });
     // Expecting the next address index
     nextAddress = hWallet.getNextAddress();
-    expect(nextAddress.index).toEqual(3);
-    expect(nextAddress.address).toEqual(hWallet.getAddressAtIndex(3));
+    expect(nextAddress).toMatchObject({
+      index: 3,
+      address: wallet.getAddressAtIndex(3),
+    });
 
     // Expect the "current address" to change when a transaction arrives at the current one
     currentAddress = hWallet.getCurrentAddress();
     await GenesisWalletHelper.injectFunds(currentAddress.address, 1);
     const currentAfterTx = hWallet.getCurrentAddress();
-    expect(currentAfterTx.index).toEqual(currentAddress.index + 1);
-    expect(currentAfterTx.address).toEqual(hWallet.getAddressAtIndex(currentAddress.index + 1));
+    expect(currentAfterTx).toMatchObject({
+      index: currentAddress.index + 1,
+      address: wallet.getAddressAtIndex(currentAddress.index + 1),
+    });
   });
 });
 
