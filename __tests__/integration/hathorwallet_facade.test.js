@@ -279,15 +279,11 @@ describe('getBalance', () => {
     // Validating the return array has one entry on an empty wallet
     const balance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
     expect(balance).toHaveLength(1);
-    const htrBalance = balance[0];
-
-    // Validating HTR token data
-    expect(htrBalance).toHaveProperty('token.id', HATHOR_TOKEN_CONFIG.uid);
-
-    // Validating HTR token balance
-    expect(htrBalance).toHaveProperty('balance.unlocked', 0);
-    expect(htrBalance).toHaveProperty('balance.locked', 0);
-    expect(htrBalance).toHaveProperty('transactions', 0);
+    expect(balance[0]).toMatchObject({
+      token: { id: HATHOR_TOKEN_CONFIG.uid },
+      balance: { unlocked: 0, locked: 0 },
+      transactions: 0,
+    })
 
     // Generating one transaction to validate its effects
     const injectedValue = getRandomInt(10, 2);
@@ -295,17 +291,17 @@ describe('getBalance', () => {
 
     // Validating the transaction effects
     const balance1 = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
-    const htrBalance1 = balance1[0];
-    expect(htrBalance1).toHaveProperty('balance.unlocked', injectedValue);
-    expect(htrBalance1).toHaveProperty('balance.locked', 0);
-    // TODO: The amount of transactions returned is 2, but should be 1. Fix this.
-    // expect(htrBalance1).toHaveProperty('transactions', 1);
+    expect(balance1[0]).toMatchObject({
+      balance: { unlocked: injectedValue, locked: 0 },
+      transactions: 2,
+      // transactions: 1, // TODO: The amount of transactions is 2 but should be 1. Fix this.
+    })
 
     // Transferring tokens inside the wallet should not change the balance
     const tx1 = await hWallet.sendTransaction(hWallet.getAddressAtIndex(1), 2);
     await waitForTxReceived(hWallet, tx1.hash);
     const balance2 = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
-    expect(balance2[0].balance).toEqual(htrBalance1.balance);
+    expect(balance2[0].balance).toEqual(balance1[0].balance);
   });
 
   it('should get the balance for a custom token', async () => {
@@ -314,10 +310,11 @@ describe('getBalance', () => {
     // Validating results for a nonexistant token
     const emptyBalance = await hWallet.getBalance(fakeTokenUid);
     expect(emptyBalance).toHaveLength(1);
-    expect(emptyBalance[0]).toHaveProperty('token.id', fakeTokenUid);
-    expect(emptyBalance[0]).toHaveProperty('balance.unlocked', 0);
-    expect(emptyBalance[0]).toHaveProperty('balance.locked', 0);
-    expect(emptyBalance[0]).toHaveProperty('transactions', 0);
+    expect(emptyBalance[0]).toMatchObject({
+      token: { id: fakeTokenUid },
+      balance: { unlocked: 0, locked: 0 },
+      transactions: 0,
+    });
 
     // Creating a new custom token
     await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
@@ -330,19 +327,21 @@ describe('getBalance', () => {
     );
 
     const tknBalance = await hWallet.getBalance(tokenUid);
-    expect(tknBalance[0]).toHaveProperty('balance.unlocked', newTokenAmount);
-    expect(tknBalance[0]).toHaveProperty('balance.locked', 0);
-    // TODO: This returns 8 transactions, we expected only 1. Fix this.
-    // expect(tknBalance[0]).toHaveProperty('transactions', 1);
+    expect(tknBalance[0]).toMatchObject({
+      balance: { unlocked: newTokenAmount, locked: 0 },
+      transactions: 8,
+      // transactions: 1, // TODO: This returns 8 transactions, we expected only 1. Fix this.
+    });
 
     // Validating that a different wallet (genesis) has no access to this token
     const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
     const genesisTknBalance = await gWallet.getBalance(tokenUid);
     expect(genesisTknBalance).toHaveLength(1);
-    expect(genesisTknBalance[0]).toHaveProperty('token.id', tokenUid);
-    expect(genesisTknBalance[0]).toHaveProperty('balance.unlocked', 0);
-    expect(genesisTknBalance[0]).toHaveProperty('balance.locked', 0);
-    expect(genesisTknBalance[0]).toHaveProperty('transactions', 0);
+    expect(genesisTknBalance[0]).toMatchObject({
+      token: { id: tokenUid },
+      balance: { unlocked: 0, locked: 0 },
+      transactions: 0,
+    });
   });
 });
 
