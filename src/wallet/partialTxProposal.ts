@@ -85,7 +85,7 @@ class PartialTxProposal {
         utxo.index,
         utxo.value,
         utxo.address,
-        { token: utxo.token, tokenData: txout.token_data, markAsSelected },
+        { token: utxo.tokenId, tokenData: txout.token_data, markAsSelected },
       );
     }
 
