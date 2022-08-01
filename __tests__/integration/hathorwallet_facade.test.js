@@ -212,9 +212,10 @@ describe('getTransactionsCountByAddress', () => {
     expect(addressesList).toHaveLength(21);
     for (const addressIndex in addressesList) {
       const address = addressesList[+addressIndex];
-      expect(tcbaEmpty[address]).toBeDefined();
-      expect(tcbaEmpty[address]).toHaveProperty('index', +addressIndex);
-      expect(tcbaEmpty[address]).toHaveProperty('transactions', 0);
+      expect(tcbaEmpty[address]).toStrictEqual({
+        index: +addressIndex,
+        transactions: 0,
+      });
     }
 
     // Generate one transaction and validate its effects
@@ -255,9 +256,10 @@ describe('getTransactionsCountByAddress', () => {
     // Expecting the addresses all have the same sequential properties as before
     for (const addressIndex in addresses1) {
       const address = addresses1[+addressIndex];
-      expect(tcba1[address]).toBeDefined();
-      expect(tcba1[address]).toHaveProperty('index', +addressIndex);
-      expect(tcba1[address]).toHaveProperty('transactions', addressIndex === '20' ? 1 : 0);
+      expect(tcba1[address]).toStrictEqual({
+        index: +addressIndex,
+        transactions: addressIndex === '20' ? 1 : 0,
+      });
     }
   });
 });
