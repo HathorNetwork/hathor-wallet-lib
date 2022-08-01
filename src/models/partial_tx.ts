@@ -596,7 +596,7 @@ export class PartialTxInputData {
    */
   addSignatures(serialized: string) {
     const arr = serialized.split('|');
-    if (arr.length < 3 || arr[0] != 'PartialTxInputData' || arr[1] !== this.hash) {
+    if (arr.length < 2 || arr[0] != 'PartialTxInputData' || arr[1] !== this.hash) {
       throw new SyntaxError('Invalid PartialTxInputData');
     }
     for (const part of arr.slice(2)) {
