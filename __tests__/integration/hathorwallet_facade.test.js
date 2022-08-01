@@ -381,30 +381,30 @@ describe('getFullHistory', () => {
     const moveTx = history[rawMoveTx.hash];
 
     // Validating transactions properties were correctly translated
-    expect(moveTx).toHaveProperty('tx_id', rawMoveTx.hash);
-    expect(moveTx).toHaveProperty('version', rawMoveTx.version);
-    expect(moveTx).toHaveProperty('weight', rawMoveTx.weight);
-    expect(moveTx).toHaveProperty('timestamp', rawMoveTx.timestamp);
-    expect(moveTx).toHaveProperty('is_voided', false);
-    expect(moveTx.parents).toEqual(rawMoveTx.parents);
+    expect(moveTx).toMatchObject({
+      tx_id: rawMoveTx.hash,
+      version: rawMoveTx.version,
+      weight: rawMoveTx.weight,
+      timestamp: rawMoveTx.timestamp,
+      is_voided: false,
+      parents: rawMoveTx.parents,
+    });
 
     // Validating inputs
     expect(moveTx.inputs).toHaveLength(rawMoveTx.inputs.length);
     for (const inputIndex in moveTx.inputs) {
-      const inputObj = moveTx.inputs[inputIndex];
+      expect(moveTx.inputs[inputIndex]).toMatchObject({
+        // Some attributes were correctly translated
+        index: rawMoveTx.inputs[inputIndex].index,
+        tx_id: rawMoveTx.inputs[inputIndex].hash,
 
-      // Some attributes were correctly translated
-      expect(inputObj.index).toEqual(rawMoveTx.inputs[inputIndex].index);
-      expect(inputObj.tx_id).toEqual(rawMoveTx.inputs[inputIndex].hash);
-
-      // Decoded attributes are correct
-      expect(inputObj).toHaveProperty('token', HATHOR_TOKEN_CONFIG.uid);
-      expect(inputObj).toHaveProperty('token_data', TOKEN_DATA.HTR);
-      expect(inputObj).toHaveProperty('script');
-      expect(inputObj).toHaveProperty('value', 10);
-      expect(inputObj).toHaveProperty('decoded');
-      expect(inputObj.decoded).toHaveProperty('type', 'P2PKH');
-      expect(inputObj.decoded).toHaveProperty('address', fundDestinationAddress);
+        // Decoded attributes are correct
+        token: HATHOR_TOKEN_CONFIG.uid,
+        token_data: TOKEN_DATA.HTR,
+        script: expect.any(String),
+        value: 10,
+        decoded: { type: 'P2PKH', address: fundDestinationAddress }
+      });
     }
 
     // Validating outputs
@@ -412,35 +412,29 @@ describe('getFullHistory', () => {
     for (const outputIndex in moveTx.outputs) {
       const outputObj = moveTx.outputs[outputIndex];
 
-      // Some attributes were correctly translated
-      expect(outputObj.value).toEqual(rawMoveTx.outputs[outputIndex].value);
-      expect(outputObj.token_data).toEqual(rawMoveTx.outputs[outputIndex].tokenData);
+      expect(outputObj).toMatchObject({
+        // Some attributes were correctly translated
+        value: rawMoveTx.outputs[outputIndex].value,
+        token_data: rawMoveTx.outputs[outputIndex].tokenData,
 
-      // Decoded attributes are correct
-      expect(outputObj).toHaveProperty('token', HATHOR_TOKEN_CONFIG.uid);
-      expect(outputObj).toHaveProperty('script');
-      expect(outputObj).toHaveProperty('decoded');
-      expect(outputObj).toHaveProperty('spent_by', null);
-      expect(outputObj).toHaveProperty('selected_as_input', false);
-      expect(outputObj.decoded).toHaveProperty('type', 'P2PKH');
-
-      if (outputObj.value === txValue) {
-        expect(outputObj.decoded).toHaveProperty('address', txDestinationAddress);
-      } else {
-        expect(outputObj.decoded).toHaveProperty('address', txChangeAddress);
-      }
+        // Decoded attributes are correct
+        token: HATHOR_TOKEN_CONFIG.uid,
+        script: expect.any(String),
+        decoded: {
+          type: 'P2PKH',
+          address: outputObj.value === txValue
+            ? txDestinationAddress
+            : txChangeAddress,
+        },
+        spent_by: null,
+        selected_as_input: false
+      });
     }
 
     // Validating that the fundTx now has its output spent by moveTx
     const fundTx = history[fundTxId];
-    for (const output of fundTx.outputs) {
-      // We are only interested on the output of this wallet, not the Genesis change output
-      if (output.decoded.address !== fundDestinationAddress) {
-        continue;
-      }
-
-      expect(output.spent_by).toEqual(moveTx.tx_id);
-    }
+    const spentOutput = fundTx.outputs.find(o => o.decoded.address === fundDestinationAddress);
+    expect(spentOutput.spent_by).toEqual(moveTx.tx_id);
   });
 
   it('should return full history (custom token)', async () => {
@@ -466,27 +460,29 @@ describe('getFullHistory', () => {
     const createTx = history[tokenUid];
 
     // Validating basic token creation properties
-    expect(createTx).toHaveProperty('token_name', tokenName)
-    expect(createTx).toHaveProperty('token_symbol', tokenSymbol)
-
-    // Validating inputs
-    expect(createTx.inputs).toHaveLength(1);
-    const inputObj = createTx.inputs[0];
-    expect(inputObj.token).toEqual(HATHOR_TOKEN_CONFIG.uid);
-    expect(inputObj.token_data).toEqual(TOKEN_DATA.HTR);
-    expect(inputObj.value).toEqual(10);
+    expect(createTx).toMatchObject({
+      token_name: tokenName,
+      token_symbol: tokenSymbol,
+      inputs: [{
+        token: HATHOR_TOKEN_CONFIG.uid,
+        token_data: TOKEN_DATA.HTR,
+        value: 10,
+      }]
+    })
 
     // Validating outputs
     expect(createTx.outputs).toHaveLength(4);
     const changeOutput = createTx.outputs.find(o => o.value === 9);
-    expect(changeOutput).toBeDefined();
-    expect(changeOutput.token).toEqual(HATHOR_TOKEN_CONFIG.uid);
-    expect(changeOutput.token_data).toEqual(TOKEN_DATA.HTR);
+    expect(changeOutput).toMatchObject({
+      token: HATHOR_TOKEN_CONFIG.uid,
+      token_data: TOKEN_DATA.HTR,
+    });
 
     const tokenOutput = createTx.outputs.find(o => o.value === 100);
-    expect(tokenOutput).toBeDefined();
-    expect(tokenOutput.token).toEqual(tokenUid);
-    expect(tokenOutput.token_data).toEqual(TOKEN_DATA.TOKEN);
+    expect(tokenOutput).toMatchObject({
+      token: tokenUid,
+      token_data: TOKEN_DATA.TOKEN,
+    });
 
     const mintOutput = createTx.outputs.find(o => {
       const isAuthority = wallet.isAuthorityOutput(o);
