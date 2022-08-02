@@ -1580,9 +1580,11 @@ describe('createNFT', () => {
         createMelt: true
       },
     );
-    expect(nftTx.hash).toBeDefined();
-    expect(nftTx.name).toEqual('New NFT');
-    expect(nftTx.symbol).toEqual('NNFT');
+    expect(nftTx).toMatchObject({
+      hash: expect.any(String),
+      name: 'New NFT',
+      symbol: 'NNFT',
+    });
     await waitForTxReceived(hWallet, nftTx.hash);
 
     // Validating HTR fee payment
