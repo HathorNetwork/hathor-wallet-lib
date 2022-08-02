@@ -274,7 +274,7 @@ describe('getBalance', () => {
     const hWallet = await generateWalletHelper();
 
     // Validating that the token uid parameter is mandatory.
-    expect(hWallet.getBalance()).rejects.toThrow();
+    await expect(hWallet.getBalance()).rejects.toThrow();
 
     // Validating the return array has one entry on an empty wallet
     const balance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
@@ -283,7 +283,7 @@ describe('getBalance', () => {
       token: { id: HATHOR_TOKEN_CONFIG.uid },
       balance: { unlocked: 0, locked: 0 },
       transactions: 0,
-    })
+    });
 
     // Generating one transaction to validate its effects
     const injectedValue = getRandomInt(10, 2);
@@ -295,7 +295,7 @@ describe('getBalance', () => {
       balance: { unlocked: injectedValue, locked: 0 },
       transactions: 2,
       // transactions: 1, // TODO: The amount of transactions is 2 but should be 1. Fix this.
-    })
+    });
 
     // Transferring tokens inside the wallet should not change the balance
     const tx1 = await hWallet.sendTransaction(hWallet.getAddressAtIndex(1), 2);
@@ -375,7 +375,7 @@ describe('getFullHistory', () => {
     );
     await waitForTxReceived(hWallet, rawMoveTx.hash);
 
-    let history = hWallet.getFullHistory();
+    const history = hWallet.getFullHistory();
     expect(Object.keys(history)).toHaveLength(2);
     expect(history).toHaveProperty(rawMoveTx.hash);
     const moveTx = history[rawMoveTx.hash];
@@ -468,7 +468,7 @@ describe('getFullHistory', () => {
         token_data: TOKEN_DATA.HTR,
         value: 10,
       }]
-    })
+    });
 
     // Validating outputs
     expect(createTx.outputs).toHaveLength(4);
@@ -534,7 +534,7 @@ describe('getTxBalance', () => {
     expect(txBalance).toEqual({
       [tokenUid]: 100,
       [HATHOR_TOKEN_CONFIG.uid]: -1,
-    })
+    });
 
     // Validating that the option to include authority tokens does not change the balance
     txBalance = await hWallet.getTxBalance(tokenCreationTx, { includeAuthorities: true });
@@ -611,7 +611,7 @@ describe('sendTransaction', () => {
       timestamp: expect.any(Number),
       parents: expect.any(Array),
       tokens: expect.any(Array)
-    })
+    });
 
     // Validating balance stays the same for internal transactions
     let htrBalance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
@@ -780,7 +780,8 @@ describe('sendManyOutputsTransaction', () => {
     // Expect our explicit outputs and an automatic one to complete the 60 HTR input
     expect(explicitInput.outputs).toContainEqual(expect.objectContaining({ value: 5 }));
     expect(explicitInput.outputs).toContainEqual(expect.objectContaining({ value: 35 }));
-    expect(explicitInput.outputs).toContainEqual(expect.objectContaining({ value: 20 })); // Change output
+    // Validate change output
+    expect(explicitInput.outputs).toContainEqual(expect.objectContaining({ value: 20 }));
   });
 
   it('should send transactions with multiple tokens', async () => {
@@ -827,21 +828,21 @@ describe('sendManyOutputsTransaction', () => {
     expect(sendTx.outputs).toContainEqual(expect.objectContaining({
       value: 90,
       token: tokenUid,
-    }))
+    }));
     expect(sendTx.outputs).toContainEqual(expect.objectContaining({
       value: 110,
       token: tokenUid,
-    }))
+    }));
 
     // Validating that each of the inputs has the values we expect
     expect(sendTx.inputs).toContainEqual(expect.objectContaining({
       value: 8,
       token: HATHOR_TOKEN_CONFIG.uid,
-    }))
+    }));
     expect(sendTx.inputs).toContainEqual(expect.objectContaining({
       value: 200,
       token: tokenUid,
-    }))
+    }));
   });
 
   it('should respect timelocks', async () => {
@@ -978,12 +979,12 @@ describe('createNewToken', () => {
     const { utxos: utxosTokens } = hWallet.getUtxos({ token: tokenUid });
     expect(utxosTokens).toContainEqual(
       expect.objectContaining({ address: destinationAddress, amount: 100 })
-    )
+    );
 
     const { utxos: utxosHtr } = hWallet.getUtxos();
     expect(utxosHtr).toContainEqual(
       expect.objectContaining({ address: changeAddress, amount: 9 })
-    )
+    );
   });
 
   it('should create a new token without mint/melt authorities', async () => {
@@ -1004,9 +1005,7 @@ describe('createNewToken', () => {
     expect(newTokenResponse).toHaveProperty('hash');
 
     // Checking for authority outputs on the transaction
-    const authorityOutputs = newTokenResponse.outputs.filter(o => {
-      return wallet.isAuthorityOutput(o);
-    });
+    const authorityOutputs = newTokenResponse.outputs.filter(o => wallet.isAuthorityOutput(o));
     expect(authorityOutputs).toHaveLength(0);
   });
 });
@@ -1209,7 +1208,7 @@ describe('delegateAuthority', () => {
   beforeAll(async () => {
     hWallet1 = await generateWalletHelper();
     hWallet2 = await generateWalletHelper();
-  })
+  });
 
   afterAll(async () => {
     await stopAllWallets();
@@ -1245,12 +1244,12 @@ describe('delegateAuthority', () => {
     // Expect wallet 1 to still have one mint authority
     let authorities1 = await hWallet1.getMintAuthority(tokenUid);
     expect(authorities1).toHaveLength(1);
-    expect(authorities1[0]).toMatchObject({ txId: delegateMintTxId, authorities: 1 })
+    expect(authorities1[0]).toMatchObject({ txId: delegateMintTxId, authorities: 1 });
     // Expect wallet 2 to also have one mint authority
     await hWallet1.preProcessWalletData();
     let authorities2 = await hWallet2.getMintAuthority(tokenUid);
     expect(authorities2).toHaveLength(1);
-    expect(authorities2[0]).toMatchObject({ txId: delegateMintTxId, authorities: 1 })
+    expect(authorities2[0]).toMatchObject({ txId: delegateMintTxId, authorities: 1 });
 
     // Delegating melt authority to wallet 2
     await waitUntilNextTimestamp(hWallet1, delegateMintTxId);
@@ -1265,12 +1264,12 @@ describe('delegateAuthority', () => {
     await hWallet1.preProcessWalletData();
     authorities1 = await hWallet1.getMeltAuthority(tokenUid);
     expect(authorities1).toHaveLength(1);
-    expect(authorities1[0]).toMatchObject({ txId: delegateMeltTxId, authorities: 2 })
+    expect(authorities1[0]).toMatchObject({ txId: delegateMeltTxId, authorities: 2 });
     // Expect wallet 2 to also have one melt authority
     await hWallet1.preProcessWalletData();
     authorities2 = await hWallet2.getMeltAuthority(tokenUid);
     expect(authorities2).toHaveLength(1);
-    expect(authorities2[0]).toMatchObject({ txId: delegateMeltTxId, authorities: 2 })
+    expect(authorities2[0]).toMatchObject({ txId: delegateMeltTxId, authorities: 2 });
   });
 
   it('should delegate authority to another wallet without keeping one', async () => {
@@ -1318,7 +1317,7 @@ describe('delegateAuthority', () => {
     expect(meltTxWallet1).toMatchObject({
       success: false,
       message: expect.stringContaining('authority output'),
-    })
+    });
 
     // Validating success on melt tokens from Wallet 2
     const meltTxWallet2 = await hWallet2.meltTokens(tokenUid, 50);
@@ -1345,7 +1344,7 @@ describe('delegateAuthority', () => {
     await waitForTxReceived(hWallet1, duplicateMintAuth);
 
     // Confirming two authority tokens on wallet1
-    let auth1 = await hWallet1.getMintAuthority(tokenUid, { many:true });
+    let auth1 = await hWallet1.getMintAuthority(tokenUid, { many: true });
     expect(auth1).toMatchObject([
       {
         txId: duplicateMintAuth,
@@ -1371,7 +1370,7 @@ describe('delegateAuthority', () => {
     await waitForTxReceived(hWallet1, delegateMintAuth);
 
     // Confirming only one authority token was sent from wallet1 to wallet2
-    auth1 = await hWallet1.getMintAuthority(tokenUid, { many:true });
+    auth1 = await hWallet1.getMintAuthority(tokenUid, { many: true });
     expect(auth1).toMatchObject([
       {
         txId: duplicateMintAuth,
@@ -1382,7 +1381,7 @@ describe('delegateAuthority', () => {
     ]);
 
     // Confirming one authority token was received by wallet2
-    const auth2 = await hWallet2.getMintAuthority(tokenUid, { many:true });
+    const auth2 = await hWallet2.getMintAuthority(tokenUid, { many: true });
     expect(auth2).toMatchObject([
       {
         txId: duplicateMintAuth,
@@ -1413,7 +1412,7 @@ describe('delegateAuthority', () => {
     await waitForTxReceived(hWallet1, duplicateMeltAuth);
 
     // Confirming two authority tokens on wallet1
-    let auth1 = await hWallet1.getMeltAuthority(tokenUid, { many:true });
+    let auth1 = await hWallet1.getMeltAuthority(tokenUid, { many: true });
     expect(auth1).toMatchObject([
       {
         txId: duplicateMeltAuth,
@@ -1439,7 +1438,7 @@ describe('delegateAuthority', () => {
     await waitForTxReceived(hWallet1, delegateMintAuth);
 
     // Confirming only one authority token was sent from wallet1 to wallet2
-    auth1 = await hWallet1.getMeltAuthority(tokenUid, { many:true });
+    auth1 = await hWallet1.getMeltAuthority(tokenUid, { many: true });
     expect(auth1).toMatchObject([
       {
         txId: duplicateMeltAuth,
@@ -1450,7 +1449,7 @@ describe('delegateAuthority', () => {
     ]);
 
     // Confirming one authority token was received by wallet2
-    const auth2 = await hWallet2.getMeltAuthority(tokenUid, { many:true });
+    const auth2 = await hWallet2.getMeltAuthority(tokenUid, { many: true });
     expect(auth2).toMatchObject([
       {
         txId: duplicateMeltAuth,
@@ -1656,16 +1655,14 @@ describe('createNFT', () => {
     await waitForTxReceived(hWallet, nftTx.hash);
 
     // Checking for authority outputs on the transaction
-    const authorityOutputs = nftTx.outputs.filter(o => {
-      return wallet.isAuthorityOutput(o);
-    });
+    const authorityOutputs = nftTx.outputs.filter(o => wallet.isAuthorityOutput(o));
     expect(authorityOutputs).toHaveLength(0);
 
     // Checking for the destination address
     const fullTx = hWallet.getTx(nftTx.hash);
     const nftOutput = fullTx.outputs.find(o => o.token === nftTx.hash);
     expect(nftOutput).toHaveProperty('decoded.address', hWallet.getAddressAtIndex(3));
-  })
+  });
 });
 
 describe('getToken methods', () => {
@@ -1695,7 +1692,7 @@ describe('getToken methods', () => {
 
     // Validating `getTokens` response for having custom tokens
     getTokensResponse = await hWallet.getTokens();
-    expect(getTokensResponse).toStrictEqual([ HATHOR_TOKEN_CONFIG.uid, tokenUid ]);
+    expect(getTokensResponse).toStrictEqual([HATHOR_TOKEN_CONFIG.uid, tokenUid]);
 
     // Validate `getTokenDetails` response for a valid token
     let details = await hWallet.getTokenDetails(tokenUid);
@@ -1716,7 +1713,7 @@ describe('getToken methods', () => {
       totalSupply: 0,
       totalTransactions: 2,
       authorities: { mint: true, melt: true },
-    })
+    });
 
     // Destroying mint authority and validating getTokenDetails results
     await waitUntilNextTimestamp(hWallet, meltTx);
@@ -1726,7 +1723,7 @@ describe('getToken methods', () => {
     expect(details).toMatchObject({
       totalTransactions: 2,
       authorities: { mint: false, melt: true }
-    })
+    });
 
     // Destroying melt authority and validating getTokenDetails results
     await waitUntilNextTimestamp(hWallet, dMintTx);
@@ -1736,11 +1733,11 @@ describe('getToken methods', () => {
     expect(details).toMatchObject({
       totalTransactions: 2,
       authorities: { mint: false, melt: false },
-    })
+    });
 
     // Validating `getTokens` response has not changed
     getTokensResponse = await hWallet.getTokens();
-    expect(getTokensResponse).toStrictEqual([ HATHOR_TOKEN_CONFIG.uid, tokenUid ]);
+    expect(getTokensResponse).toStrictEqual([HATHOR_TOKEN_CONFIG.uid, tokenUid]);
   });
 });
 
@@ -1775,7 +1772,7 @@ describe('getTxHistory', () => {
         tokenUid: HATHOR_TOKEN_CONFIG.uid,
         balance: 10
       })
-    ])
+    ]);
 
     // HTR internal transfer
     const tx2 = await hWallet.sendTransaction(hWallet.getAddressAtIndex(1), 4);
