@@ -1246,14 +1246,12 @@ describe('delegateAuthority', () => {
     // Expect wallet 1 to still have one mint authority
     let authorities1 = await hWallet1.getMintAuthority(tokenUid);
     expect(authorities1).toHaveLength(1);
-    expect(authorities1[0].txId).toEqual(delegateMintTxId);
-    expect(authorities1[0].authorities).toEqual(1);
+    expect(authorities1[0]).toMatchObject({ txId: delegateMintTxId, authorities: 1 })
     // Expect wallet 2 to also have one mint authority
     await hWallet1.preProcessWalletData();
     let authorities2 = await hWallet2.getMintAuthority(tokenUid);
     expect(authorities2).toHaveLength(1);
-    expect(authorities2[0].txId).toEqual(delegateMintTxId);
-    expect(authorities2[0].authorities).toEqual(1);
+    expect(authorities2[0]).toMatchObject({ txId: delegateMintTxId, authorities: 1 })
 
     // Delegating melt authority to wallet 2
     await waitUntilNextTimestamp(hWallet1, delegateMintTxId);
@@ -1268,14 +1266,12 @@ describe('delegateAuthority', () => {
     await hWallet1.preProcessWalletData();
     authorities1 = await hWallet1.getMeltAuthority(tokenUid);
     expect(authorities1).toHaveLength(1);
-    expect(authorities1[0].txId).toEqual(delegateMeltTxId);
-    expect(authorities1[0].authorities).toEqual(2);
+    expect(authorities1[0]).toMatchObject({ txId: delegateMeltTxId, authorities: 2 })
     // Expect wallet 2 to also have one melt authority
     await hWallet1.preProcessWalletData();
     authorities2 = await hWallet2.getMeltAuthority(tokenUid);
     expect(authorities2).toHaveLength(1);
-    expect(authorities2[0].txId).toEqual(delegateMeltTxId);
-    expect(authorities2[0].authorities).toEqual(2);
+    expect(authorities2[0]).toMatchObject({ txId: delegateMeltTxId, authorities: 2 })
   });
 
   it('should delegate authority to another wallet without keeping one', async () => {
@@ -1299,10 +1295,10 @@ describe('delegateAuthority', () => {
 
     // Validating error on mint tokens from Wallet 1
     waitUntilNextTimestamp(hWallet1, giveAwayMintTx);
-    expect(hWallet1.mintTokens(tokenUid, 100)).rejects.toThrow();
+    await expect(hWallet1.mintTokens(tokenUid, 100)).rejects.toThrow();
     // TODO: The type of errors on mint and melt are different. They should have a standard.
 
-    // Validating sucess on mint tokens from Wallet 2
+    // Validating success on mint tokens from Wallet 2
     await GenesisWalletHelper.injectFunds(hWallet2.getAddressAtIndex(0), 10);
     const mintTxWallet2 = await hWallet2.mintTokens(tokenUid, 100);
     expect(mintTxWallet2).toHaveProperty('hash');
@@ -1320,10 +1316,12 @@ describe('delegateAuthority', () => {
     await waitUntilNextTimestamp(hWallet1, giveAwayMeltTx);
     const meltTxWallet1 = await hWallet1.meltTokens(tokenUid, 100)
       .catch(err => err);
-    expect(meltTxWallet1).toHaveProperty('success', false);
-    expect(meltTxWallet1.message).toContain('authority output');
+    expect(meltTxWallet1).toMatchObject({
+      success: false,
+      message: expect.stringContaining('authority output'),
+    })
 
-    // Validating sucess on melt tokens from Wallet 2
+    // Validating success on melt tokens from Wallet 2
     const meltTxWallet2 = await hWallet2.meltTokens(tokenUid, 50);
     expect(meltTxWallet2).toHaveProperty('hash');
   });
