@@ -601,19 +601,17 @@ describe('sendTransaction', () => {
 
     // Validating all fields
     await waitForTxReceived(hWallet, tx1.hash);
-    expect(tx1).toHaveProperty('hash');
-    expect(tx1).toHaveProperty('inputs');
-    expect(tx1.inputs).toHaveProperty('length');
-    expect(tx1).toHaveProperty('outputs');
-    expect(tx1.outputs).toHaveProperty('length');
-    expect(tx1).toHaveProperty('version');
-    expect(tx1).toHaveProperty('weight');
-    expect(tx1).toHaveProperty('nonce');
-    expect(tx1).toHaveProperty('timestamp');
-    expect(tx1).toHaveProperty('parents');
-    expect(tx1.parents).toHaveProperty('length');
-    expect(tx1).toHaveProperty('tokens');
-    expect(tx1.tokens).toHaveProperty('length');
+    expect(tx1).toMatchObject({
+      hash: expect.any(String),
+      inputs: expect.any(Array),
+      outputs: expect.any(Array),
+      version: expect.any(Number),
+      weight: expect.any(Number),
+      nonce: expect.any(Number),
+      timestamp: expect.any(Number),
+      parents: expect.any(Array),
+      tokens: expect.any(Array)
+    })
 
     // Validating balance stays the same for internal transactions
     let htrBalance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
