@@ -1769,10 +1769,13 @@ describe('getTxHistory', () => {
     // HTR transaction incoming
     const tx1 = await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
     txHistory = await hWallet.getTxHistory();
-    expect(txHistory).toHaveLength(1);
-    expect(txHistory[0].txId).toEqual(tx1.hash);
-    expect(txHistory[0].tokenUid).toEqual(HATHOR_TOKEN_CONFIG.uid);
-    expect(txHistory[0].balance).toEqual(10);
+    expect(txHistory).toStrictEqual([
+      expect.objectContaining({
+        txId: expect.any(String),
+        tokenUid: HATHOR_TOKEN_CONFIG.uid,
+        balance: 10
+      })
+    ])
 
     // HTR internal transfer
     const tx2 = await hWallet.sendTransaction(hWallet.getAddressAtIndex(1), 4);
