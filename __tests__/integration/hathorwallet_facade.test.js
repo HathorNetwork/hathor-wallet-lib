@@ -20,7 +20,6 @@ import wallet from '../../src/wallet';
 import dateFormatter from '../../src/date';
 import { loggers } from './utils/logger.util';
 import { SendTxError } from '../../src/errors';
-import explorerServiceAxios from '../../src/api/explorerServiceAxios';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 const sampleNftData = 'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg';
@@ -1696,18 +1695,16 @@ describe('getToken methods', () => {
 
     // Validating `getTokens` response for having custom tokens
     getTokensResponse = await hWallet.getTokens();
-    expect(getTokensResponse).toHaveLength(2);
-    expect(getTokensResponse[0]).toEqual(HATHOR_TOKEN_CONFIG.uid);
-    expect(getTokensResponse[1]).toEqual(tokenUid);
+    expect(getTokensResponse).toStrictEqual([ HATHOR_TOKEN_CONFIG.uid, tokenUid ]);
 
     // Validate `getTokenDetails` response for a valid token
     let details = await hWallet.getTokenDetails(tokenUid);
-    expect(details.totalSupply).toEqual(100);
-    expect(details.totalTransactions).toEqual(1);
-    expect(details.tokenInfo.name).toEqual('Details Token');
-    expect(details.tokenInfo.symbol).toEqual('DTOK');
-    expect(details.authorities.mint).toEqual(true);
-    expect(details.authorities.melt).toEqual(true);
+    expect(details).toStrictEqual({
+      totalSupply: 100,
+      totalTransactions: 1,
+      tokenInfo: { name: 'Details Token', symbol: 'DTOK' },
+      authorities: { mint: true, melt: true }
+    });
 
     // Emptying the custom token
     const { hash: meltTx } = await hWallet.meltTokens(tokenUid, 100);
@@ -1715,34 +1712,35 @@ describe('getToken methods', () => {
 
     // Validating `getTokenDetails` response
     details = await hWallet.getTokenDetails(tokenUid);
-    expect(details.totalSupply).toEqual(0);
-    expect(details.totalTransactions).toEqual(2);
-    expect(details.authorities.mint).toEqual(true);
-    expect(details.authorities.melt).toEqual(true);
+    expect(details).toMatchObject({
+      totalSupply: 0,
+      totalTransactions: 2,
+      authorities: { mint: true, melt: true },
+    })
 
     // Destroying mint authority and validating getTokenDetails results
     await waitUntilNextTimestamp(hWallet, meltTx);
     const { hash: dMintTx } = await hWallet.destroyAuthority(tokenUid, 'mint', 1);
     await waitForTxReceived(hWallet, dMintTx);
     details = await hWallet.getTokenDetails(tokenUid);
-    expect(details.totalTransactions).toEqual(2);
-    expect(details.authorities.mint).toEqual(false);
-    expect(details.authorities.melt).toEqual(true);
+    expect(details).toMatchObject({
+      totalTransactions: 2,
+      authorities: { mint: false, melt: true }
+    })
 
     // Destroying melt authority and validating getTokenDetails results
     await waitUntilNextTimestamp(hWallet, dMintTx);
     const { hash: dMeltTx } = await hWallet.destroyAuthority(tokenUid, 'melt', 1);
     await waitForTxReceived(hWallet, dMeltTx);
     details = await hWallet.getTokenDetails(tokenUid);
-    expect(details.totalTransactions).toEqual(2);
-    expect(details.authorities.mint).toEqual(false);
-    expect(details.authorities.melt).toEqual(false);
+    expect(details).toMatchObject({
+      totalTransactions: 2,
+      authorities: { mint: false, melt: false },
+    })
 
     // Validating `getTokens` response has not changed
     getTokensResponse = await hWallet.getTokens();
-    expect(getTokensResponse).toHaveLength(2);
-    expect(getTokensResponse[0]).toEqual(HATHOR_TOKEN_CONFIG.uid);
-    expect(getTokensResponse[1]).toEqual(tokenUid);
+    expect(getTokensResponse).toStrictEqual([ HATHOR_TOKEN_CONFIG.uid, tokenUid ]);
   });
 });
 
