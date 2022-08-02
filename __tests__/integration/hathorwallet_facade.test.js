@@ -20,6 +20,7 @@ import wallet from '../../src/wallet';
 import dateFormatter from '../../src/date';
 import { loggers } from './utils/logger.util';
 import { SendTxError } from '../../src/errors';
+import explorerServiceAxios from '../../src/api/explorerServiceAxios';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 const sampleNftData = 'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg';
@@ -778,9 +779,9 @@ describe('sendManyOutputsTransaction', () => {
     expect(explicitInput.outputs).toHaveLength(3);
 
     // Expect our explicit outputs and an automatic one to complete the 60 HTR input
-    expect(explicitInput.outputs.find(o => o.value === 5)).toBeDefined();
-    expect(explicitInput.outputs.find(o => o.value === 35)).toBeDefined();
-    expect(explicitInput.outputs.find(o => o.value === 20)).toBeDefined(); // Change output
+    expect(explicitInput.outputs).toContainEqual(expect.objectContaining({ value: 5 }));
+    expect(explicitInput.outputs).toContainEqual(expect.objectContaining({ value: 35 }));
+    expect(explicitInput.outputs).toContainEqual(expect.objectContaining({ value: 20 })); // Change output
   });
 
   it('should send transactions with multiple tokens', async () => {
@@ -816,20 +817,32 @@ describe('sendManyOutputsTransaction', () => {
     expect(sendTx.outputs).toHaveLength(4);
 
     // Validating that each of the outputs has the values we expect
-    const smallerHtrOutput = sendTx.outputs.find(o => o.value === 3);
-    expect(smallerHtrOutput).toBeDefined();
-    const biggerHtrOutput = sendTx.outputs.find(o => o.value === 5);
-    expect(biggerHtrOutput).toBeDefined();
-    const smallerTokenOutput = sendTx.outputs.find(o => o.value === 90);
-    expect(smallerTokenOutput.token).toEqual(tokenUid);
-    const biggerTokenOutput = sendTx.outputs.find(o => o.value === 110);
-    expect(biggerTokenOutput.token).toEqual(tokenUid);
+    expect(sendTx.outputs).toContainEqual(expect.objectContaining({
+      value: 3,
+      token: HATHOR_TOKEN_CONFIG.uid,
+    }));
+    expect(sendTx.outputs).toContainEqual(expect.objectContaining({
+      value: 5,
+      token: HATHOR_TOKEN_CONFIG.uid,
+    }));
+    expect(sendTx.outputs).toContainEqual(expect.objectContaining({
+      value: 90,
+      token: tokenUid,
+    }))
+    expect(sendTx.outputs).toContainEqual(expect.objectContaining({
+      value: 110,
+      token: tokenUid,
+    }))
 
     // Validating that each of the inputs has the values we expect
-    const htrInput = sendTx.inputs.find(o => o.token === HATHOR_TOKEN_CONFIG.uid);
-    expect(htrInput.value).toEqual(8);
-    const tokenInput = sendTx.inputs.find(o => o.token === tokenUid);
-    expect(tokenInput.value).toEqual(200);
+    expect(sendTx.inputs).toContainEqual(expect.objectContaining({
+      value: 8,
+      token: HATHOR_TOKEN_CONFIG.uid,
+    }))
+    expect(sendTx.inputs).toContainEqual(expect.objectContaining({
+      value: 200,
+      token: tokenUid,
+    }))
   });
 
   it('should respect timelocks', async () => {
@@ -868,8 +881,7 @@ describe('sendManyOutputsTransaction', () => {
 
     // Validating getBalance ( moment 0 )
     let htrBalance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
-    expect(htrBalance[0].balance.locked).toBe(10);
-    expect(htrBalance[0].balance.unlocked).toBe(0);
+    expect(htrBalance[0].balance).toStrictEqual({ locked: 10, unlocked: 0 });
 
     // Validating interfaces with only a partial lock of the resources
     const waitFor1 = timelock1 - Date.now().valueOf() + 1000;
@@ -884,13 +896,10 @@ describe('sendManyOutputsTransaction', () => {
 
     // Validating getBalance ( moment 1 )
     htrBalance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
-    expect(htrBalance[0].balance).toEqual({
-      locked: 3,
-      unlocked: 7,
-    });
+    expect(htrBalance[0].balance).toEqual({ locked: 3, unlocked: 7 });
 
     // Confirm that the balance is unavailable
-    expect(hWallet.sendTransaction(hWallet.getAddressAtIndex(3), 8))
+    await expect(hWallet.sendTransaction(hWallet.getAddressAtIndex(3), 8))
       .rejects.toEqual(new SendTxError('Token undefined: Insufficient amount of tokens'));
     // XXX: Error message should show the token identification, not "Token undefined"
 
@@ -904,8 +913,7 @@ describe('sendManyOutputsTransaction', () => {
 
     // Validating getBalance ( moment 2 )
     htrBalance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
-    expect(htrBalance[0].balance.locked).toBe(0);
-    expect(htrBalance[0].balance.unlocked).toBe(10);
+    expect(htrBalance[0].balance).toStrictEqual({ locked: 0, unlocked: 10 });
 
     // Confirm that now the balance is available
     const sendTx = await hWallet.sendTransaction(hWallet.getAddressAtIndex(4), 8);
