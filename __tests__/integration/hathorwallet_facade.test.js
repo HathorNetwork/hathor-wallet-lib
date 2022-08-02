@@ -941,10 +941,12 @@ describe('createNewToken', () => {
     );
 
     // Validating the creation tx
-    expect(newTokenResponse).toHaveProperty('hash');
-    expect(newTokenResponse).toHaveProperty('name', 'TokenName');
-    expect(newTokenResponse).toHaveProperty('symbol', 'TKN');
-    expect(newTokenResponse).toHaveProperty('version', 2);
+    expect(newTokenResponse).toMatchObject({
+      hash: expect.any(String),
+      name: 'TokenName',
+      symbol: 'TKN',
+      version: 2,
+    });
     const tokenUid = newTokenResponse.hash;
 
     // Validating wallet balance is updated with this new token
@@ -975,12 +977,14 @@ describe('createNewToken', () => {
 
     // Validating the tokens are on the correct addresses
     const { utxos: utxosTokens } = hWallet.getUtxos({ token: tokenUid });
-    expect(utxosTokens.find(u => u.address === destinationAddress))
-      .toHaveProperty('amount', 100);
+    expect(utxosTokens).toContainEqual(
+      expect.objectContaining({ address: destinationAddress, amount: 100 })
+    )
 
     const { utxos: utxosHtr } = hWallet.getUtxos();
-    expect(utxosHtr.find(u => u.address === changeAddress))
-      .toHaveProperty('amount', 9);
+    expect(utxosHtr).toContainEqual(
+      expect.objectContaining({ address: changeAddress, amount: 9 })
+    )
   });
 
   it('should create a new token without mint/melt authorities', async () => {
