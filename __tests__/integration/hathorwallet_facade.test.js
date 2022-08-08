@@ -394,7 +394,7 @@ describe('getFullHistory', () => {
     expect(moveTx.inputs).toHaveLength(rawMoveTx.inputs.length);
     for (const inputIndex in moveTx.inputs) {
       expect(moveTx.inputs[inputIndex]).toMatchObject({
-        // Some attributes were correctly translated
+        // Translated attributes are correct
         index: rawMoveTx.inputs[inputIndex].index,
         tx_id: rawMoveTx.inputs[inputIndex].hash,
 
@@ -413,7 +413,7 @@ describe('getFullHistory', () => {
       const outputObj = moveTx.outputs[outputIndex];
 
       expect(outputObj).toMatchObject({
-        // Some attributes were correctly translated
+        // Translated attributes are correct
         value: rawMoveTx.outputs[outputIndex].value,
         token_data: rawMoveTx.outputs[outputIndex].tokenData,
 
@@ -1768,7 +1768,7 @@ describe('getTxHistory', () => {
     txHistory = await hWallet.getTxHistory();
     expect(txHistory).toStrictEqual([
       expect.objectContaining({
-        txId: expect.any(String),
+        txId: tx1.hash,
         tokenUid: HATHOR_TOKEN_CONFIG.uid,
         balance: 10
       })
