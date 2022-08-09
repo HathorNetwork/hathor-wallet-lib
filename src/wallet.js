@@ -33,6 +33,7 @@ import tokens from './tokens';
 import helpers from './helpers';
 import helperUtils from './utils/helpers';
 import walletUtils from './utils/wallet';
+import { getAddressType } from './utils/address';
 import { AddressError, ConstantNotSet, OutputValueError, WalletTypeError } from './errors';
 import version from './version';
 import storage from './storage';
@@ -1735,7 +1736,13 @@ const wallet = {
     }
 
     const changeAddress = address ? address : this.getAddressToUse();
-    return {'address': changeAddress, 'value': value, 'tokenData': tokenData, 'isChange': true};
+    return {
+      'address': changeAddress,
+      'value': value,
+      'tokenData': tokenData,
+      'isChange': true,
+      'type': getAddressType(changeAddress, network),
+    };
   },
 
   /*
