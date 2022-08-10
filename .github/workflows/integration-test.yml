@@ -1,0 +1,54 @@
+name: integration-test
+on:
+  pull_request:
+    branches:
+      - dev
+      - master
+
+env:
+  TEST_WALLET_START_TIMEOUT: '180000' # 3 minutes
+
+jobs:
+  itest:
+    runs-on: ubuntu-20.04
+    timeout-minutes: 40
+
+    strategy:
+      matrix:
+        node-version: [14.x, 16.x]
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v1
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run the tests
+        run: npm run test_integration
+
+      - name: Upload debug transaction logs
+        if: always()
+        uses: actions/upload-artifact@v2
+        with:
+          name: test-transacion-logs
+          path: tmp
+
+      - name: Collect docker logs on failure
+        if: failure()
+        uses: jwalton/gh-docker-logs@v1
+        with:
+          dest: './docker-logs'
+      - name: Tar logs
+        if: failure()
+        run: tar cvzf ./docker-logs.tgz ./docker-logs
+      - name: Upload logs to GitHub
+        if: failure()
+        uses: actions/upload-artifact@v2
+        with:
+          name: logs.tgz
+          path: ./docker-logs.tgz
