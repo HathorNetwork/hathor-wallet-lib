@@ -687,23 +687,27 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Get information of a given address
-   *
-   * @typedef {Object} AddressInfoOptions
+   * @typedef AddressInfoOptions
    * @property {string} token Optionally filter transactions by this token uid (Default: HTR)
-   *
-   * @typedef {Object} AddressInfo
+   */
+
+  /**
+   * @typedef AddressInfo
    * @property {number} total_amount_received Sum of the amounts received
    * @property {number} total_amount_sent Sum of the amounts sent
    * @property {number} total_amount_available Amount available to transfer
    * @property {number} total_amount_locked Amount locked and thus no available to transfer
    * @property {number} token Token used to calculate the amounts received, sent, available and locked
    * @property {number} index Derivation path for the given address
+   */
+
+  /**
+   * Get information of a given address
    *
    * @param {string} address Address to get information of
    * @param {AddressInfoOptions} options Optional parameters to filter the results
    *
-   * @return {AddressInfo} Aggregated information about the given address
+   * @returns {AddressInfo} Aggregated information about the given address
    *
    */
   getAddressInfo(address, options = {}) {

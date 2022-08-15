@@ -114,7 +114,7 @@ describe('addresses methods', () => {
     await GenesisWalletHelper.clearListeners();
   });
 
-  it('should get the correct addresses', async () => {
+  it('should get the correct current/next addresses', async () => {
     // Creating a wallet
     const hWallet = await generateWalletHelper();
     // Initializing the getAllAddresses generator
@@ -194,6 +194,183 @@ describe('addresses methods', () => {
     });
   });
 });
+
+describe('getAddressInfo', () => {
+  /**
+   * @type HathorWallet
+   */
+  let hWallet;
+  beforeAll(async () => {
+    hWallet = await generateWalletHelper();
+  });
+
+  afterAll(() => {
+    hWallet.stop();
+  });
+
+
+  it('should test HTR transactions with full value', async () => {
+    const addr0 = hWallet.getAddressAtIndex(0);
+    const addr1 = hWallet.getAddressAtIndex(1);
+
+    // Validating empty address information
+    expect(hWallet.getAddressInfo(addr0)).toMatchObject({
+      total_amount_received: 0,
+      total_amount_sent: 0,
+      total_amount_available: 0,
+      total_amount_locked: 0, // Validating this field only once to check it's returned
+      token: HATHOR_TOKEN_CONFIG.uid, // Validating this field only once to ensure it's correct
+      index: 0,
+    });
+
+    // Validating address after 1 transaction
+    await GenesisWalletHelper.injectFunds(addr0, 10);
+    expect(hWallet.getAddressInfo(addr0)).toMatchObject({
+      total_amount_received: 10,
+      total_amount_sent: 0,
+      total_amount_available: 10,
+    });
+
+
+    // Validating the results for two transactions
+    let tx = await hWallet.sendTransaction(addr1, 10);
+    await waitForTxReceived(hWallet, tx.hash);
+    expect(hWallet.getAddressInfo(addr0)).toMatchObject({
+      total_amount_received: 10,
+      total_amount_sent: 10,
+      total_amount_available: 0,
+      index: 0, // Ensuring the index is correct
+    });
+    expect(hWallet.getAddressInfo(addr1)).toMatchObject({
+      total_amount_received: 10,
+      total_amount_sent: 0,
+      total_amount_available: 10,
+      index: 1, // Ensuring the index is correct
+    });
+
+
+    // Validating the results for the funds returning to previously used address
+    tx = await hWallet.sendTransaction(addr0, 10);
+    await waitForTxReceived(hWallet, tx.hash);
+    expect(hWallet.getAddressInfo(addr0)).toMatchObject({
+      total_amount_received: 20,
+      total_amount_sent: 10,
+      total_amount_available: 10,
+    });
+    expect(hWallet.getAddressInfo(addr1)).toMatchObject({
+      total_amount_received: 10,
+      total_amount_sent: 10,
+      total_amount_available: 0,
+    });
+  });
+
+  it('should test transactions with partial value', async () => {
+    const addr2 = hWallet.getAddressAtIndex(2);
+    const addr3 = hWallet.getAddressAtIndex(3);
+
+    // Ensure both are empty addresses
+    expect(hWallet.getAddressInfo(addr2).total_amount_received).toStrictEqual(0);
+    expect(hWallet.getAddressInfo(addr3).total_amount_received).toStrictEqual(0);
+
+    // Move all the wallet's funds to "2"
+    let tx = await hWallet.sendTransaction(addr2, 10);
+    await waitForTxReceived(hWallet, tx.hash);
+    expect(hWallet.getAddressInfo(addr2)).toMatchObject({
+      total_amount_received: 10,
+      total_amount_sent: 0,
+      total_amount_available: 10,
+    });
+
+    // Move only a part of the funds to "3", the change is returned to "2"
+    tx = await hWallet.sendTransaction(addr3, 4, { changeAddress: addr2 });
+    await waitForTxReceived(hWallet, tx.hash);
+    expect(hWallet.getAddressInfo(addr2)).toMatchObject({
+      total_amount_received: 16, // 10 from one transaction, 6 from the transaction change
+      total_amount_sent: 10, // All the funds were sent
+      total_amount_available: 6, // Only the change remains available
+    });
+    expect(hWallet.getAddressInfo(addr3)).toMatchObject({
+      total_amount_received: 4,
+      total_amount_sent: 0,
+      total_amount_available: 4,
+    });
+  })
+
+  it('should return correct values for locked utxos', async () => {
+    const timelock1 = Date.now().valueOf() + 5000; // 5 seconds of locked resources
+    const timelockTimestamp = dateFormatter.dateToTimestamp(new Date(timelock1));
+    const rawTimelockTx = await hWallet.sendManyOutputsTransaction(
+      [
+        {
+          address: hWallet.getAddressAtIndex(0),
+          value: 7,
+          token: HATHOR_TOKEN_CONFIG.uid,
+        },
+        {
+          address: hWallet.getAddressAtIndex(0),
+          value: 3,
+          token: HATHOR_TOKEN_CONFIG.uid,
+          timelock: timelockTimestamp,
+        }
+      ],
+    );
+    await waitForTxReceived(hWallet, rawTimelockTx.hash);
+
+
+    expect(hWallet.getAddressInfo(hWallet.getAddressAtIndex(0))).toMatchObject({
+      total_amount_available: 7,
+      total_amount_locked: 3,
+    });
+  })
+
+  it('should test custom token transactions', async () => {
+    // Generating a new wallet to avoid conflict with HTR wallet
+    const hWalletCustom = await generateWalletHelper();
+    const addr0Custom = hWalletCustom.getAddressAtIndex(0);
+    const addr1Custom = hWalletCustom.getAddressAtIndex(1);
+
+    await GenesisWalletHelper.injectFunds(addr0Custom, 1);
+    const { hash: tokenUid } = await createTokenHelper(
+      hWalletCustom,
+      'getAddressInfo Token',
+      'GAIT',
+      100,
+      { address: addr0Custom }
+    );
+
+    // Validating address information both in HTR and in custom token
+    expect(hWalletCustom.getAddressInfo(addr0Custom)).toMatchObject({
+      total_amount_received: 1,
+      total_amount_sent: 1, // Custom token mint consumed this balance
+      total_amount_available: 0,
+      total_amount_locked: 0,
+      token: HATHOR_TOKEN_CONFIG.uid,
+      index: 0,
+    });
+    expect(hWalletCustom.getAddressInfo(addr0Custom, { token: tokenUid })).toMatchObject({
+      total_amount_received: 100,
+      total_amount_sent: 0,
+      total_amount_available: 100,
+      total_amount_locked: 0,
+      token: tokenUid,
+      index: 0,
+    });
+
+    // Validating address after 1 transaction
+    let tx = await hWalletCustom.sendTransaction(addr1Custom, 40, { token: tokenUid } );
+    await waitForTxReceived(hWalletCustom, tx.hash);
+    expect(hWalletCustom.getAddressInfo(addr0Custom, { token: tokenUid })).toMatchObject({
+      total_amount_received: 100,
+      total_amount_sent: 100,
+      total_amount_available: 0,
+    });
+    expect(hWalletCustom.getAddressInfo(addr1Custom, { token: tokenUid })).toMatchObject({
+      total_amount_received: 40,
+      total_amount_sent: 0,
+      total_amount_available: 40,
+    });
+  });
+})
 
 describe('getTransactionsCountByAddress', () => {
   afterEach(async () => {
@@ -1911,7 +2088,7 @@ describe('getTxHistory', () => {
   });
 });
 
-describe.only('internal methods', () => {
+describe('internal methods', () => {
   /**
    * @type HathorWallet
    */
@@ -1953,8 +2130,8 @@ describe.only('internal methods', () => {
       maxNumberOutputs: 255,
     })
 
-    const results = gWallet.isFromXPub();
-    loggers.test.log(JSON.stringify(results));
+    // const results = gWallet.getAllUtxos();
+    // loggers.test.log(JSON.stringify(results));
   });
 
   it('should change servers', async () => {
@@ -1981,15 +2158,16 @@ describe.only('internal methods', () => {
  * enableDebugMode - seems to be deprecated
  * disableDebugMode - seems to be deprecated
  * isFromXPub - not relevant for integration
+ * handleWebsocketMsg - not relevant for integration
+ * onConnectionChangedState - too many dependencies, already tested elsewhere
+ *
+ * The following methods should be tested with the Atomic Swap tests
+ * getAllSignatures
+ * assemblePartialTransaction
  */
 
 /*
 
-onConnectionChangedState
-getAllSignatures
-assemblePartialTransaction
-handleWebsocketMsg
-getAddressInfo
 getAllUtxos
 getUtxosForAmount
 markUtxoSelected
