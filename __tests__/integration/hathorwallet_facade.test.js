@@ -15,7 +15,7 @@ import {
 import HathorWallet from '../../src/new/wallet';
 import { HATHOR_TOKEN_CONFIG, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
 import transaction from '../../src/transaction';
-import { TOKEN_DATA } from './configuration/test-constants';
+import { FULLNODE_URL, NETWORK_NAME, TOKEN_DATA } from './configuration/test-constants';
 import wallet from '../../src/wallet';
 import dateFormatter from '../../src/date';
 import { loggers } from './utils/logger.util';
@@ -1910,3 +1910,100 @@ describe('getTxHistory', () => {
     expect(txHistory[1].txId).toEqual(tx1Hash);
   });
 });
+
+describe.only('internal methods', () => {
+  /**
+   * @type HathorWallet
+   */
+  let gWallet;
+  beforeAll(async () => {
+    const { hWallet } = await GenesisWalletHelper.getSingleton();
+    gWallet = hWallet;
+  });
+
+  afterAll(() => {
+    gWallet.stop();
+  });
+
+  it('should test network-related methods', async () => {
+    // GetServerUrl
+    expect(gWallet.getServerUrl()).toStrictEqual(FULLNODE_URL);
+    expect(gWallet.getNetwork()).toStrictEqual(NETWORK_NAME);
+    expect(gWallet.getNetworkObject()).toMatchObject({
+      name: NETWORK_NAME,
+      versionBytes: { p2pkh: 73, p2sh: 135 }, // Calculated for the privnet.py config file
+      bitcoreNetwork: {
+        name: expect.stringContaining(NETWORK_NAME),
+        alias: NETWORK_NAME,
+        pubkeyhash: 73,
+        scripthash: 135
+      }
+    });
+    expect(await gWallet.getVersionData()).toMatchObject({
+      timestamp: expect.any(Number),
+      version: expect.stringMatching(/^\d+\.\d+\.\d+$/),
+      network: NETWORK_NAME,
+      minWeight: expect.any(Number),
+      minTxWeight: expect.any(Number),
+      minTxWeightCoefficient: expect.any(Number),
+      minTxWeightK: expect.any(Number),
+      tokenDepositPercentage: 0.01,
+      rewardSpendMinBlocks: expect.any(Number),
+      maxNumberInputs: 255,
+      maxNumberOutputs: 255,
+    })
+
+    const results = gWallet.isFromXPub();
+    loggers.test.log(JSON.stringify(results));
+  });
+
+  it('should change servers', async () => {
+    gWallet.changeServer('https://node1.testnet.hathor.network/v1a/');
+    const serverChangeTime = Date.now().valueOf();
+    await delay(100);
+
+    let networkData = await gWallet.getVersionData();
+    expect(networkData.timestamp).toBeGreaterThan(serverChangeTime);
+    expect(networkData.network).toMatch(/^testnet.*/);
+
+    gWallet.changeServer(FULLNODE_URL);
+    await delay(100);
+
+    networkData = await gWallet.getVersionData();
+    expect(networkData.timestamp).toBeGreaterThan(serverChangeTime + 200);
+    expect(networkData.network).toStrictEqual(NETWORK_NAME);
+  });
+});
+
+/*
+ * Internal methods not tested - reason:
+ *
+ * enableDebugMode - seems to be deprecated
+ * disableDebugMode - seems to be deprecated
+ * isFromXPub - not relevant for integration
+ */
+
+/*
+
+onConnectionChangedState
+getAllSignatures
+assemblePartialTransaction
+handleWebsocketMsg
+getAddressInfo
+getAllUtxos
+getUtxosForAmount
+markUtxoSelected
+consolidateUtxos
+onTxArrived
+setPreProcessedData
+getPreProcessedData
+setState
+onNewTx
+selectAuthorityUtxo
+clearSensitiveData
+getAuthorityUtxos
+getTokenData
+isReady
+isAddressMine
+getTxAddresses
+ */

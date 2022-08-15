@@ -190,6 +190,7 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Gets the current server url from connection
+   * @return {string} The server url. Ex.: 'http://server.com:8083'
    */
   getServerUrl() {
     return this.conn.getCurrentServer();
@@ -197,6 +198,7 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Gets the current network from connection
+   * @return {string} The network name. Ex.: 'mainnet', 'testnet'
    */
   getNetwork() {
     return this.conn.getCurrentNetwork();
