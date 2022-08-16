@@ -532,11 +532,6 @@ describe('markUtxoSelected', () => {
     // Marking it as selected
     hWallet.markUtxoSelected(txHash, oIndex, true);
 
-    /*
-     * We will force this update here without a new tx, for testing purposes.
-     */
-    await hWallet.preProcessWalletData();
-
     // Validation 1
     rawOutput = hWallet.getTx(txHash).outputs[oIndex];
     loggers.test.log('Output after', rawOutput);
