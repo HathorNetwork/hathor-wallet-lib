@@ -864,9 +864,7 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Generates all available utxos
-   *
-   * @typedef {Object} Utxo
+   * @typedef Utxo
    * @property {string} txId
    * @property {number} index
    * @property {string} tokenId
@@ -877,8 +875,12 @@ class HathorWallet extends EventEmitter {
    * @property {number|null} heightlock
    * @property {boolean} locked
    * @property {string} addressPath
+   */
+
+  /**
+   * Generates all available utxos
    *
-   * @param {Object} [options] Utxo filtering options
+   * @param [options] Utxo filtering options
    * @param {string} [options.token='00'] - Search for UTXOs of this token UID.
    * @param {string|null} [options.filter_address=null] - Address to filter the utxos.
    *

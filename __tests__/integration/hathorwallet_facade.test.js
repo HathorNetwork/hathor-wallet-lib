@@ -2088,6 +2088,126 @@ describe('getTxHistory', () => {
   });
 });
 
+describe('getAllUtxos', () => {
+
+  afterEach(async () => {
+    await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
+  });
+
+  it('should correctly identify all utxos on an empty wallet', async () => {
+    /**
+     * @type HathorWallet
+     */
+    const hWallet = await generateWalletHelper();
+
+    // Get correct results for an empty wallet
+    let utxoGenerator = await hWallet.getAllUtxos();
+    let utxoGenResult = await utxoGenerator.next();
+    expect(utxoGenResult).toStrictEqual({ done: true, value: undefined });
+
+    // Inject a transaction and validate the results
+    const tx1 = await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
+
+    utxoGenerator = await hWallet.getAllUtxos();
+    utxoGenResult = await utxoGenerator.next();
+    expect(utxoGenResult)
+      .toMatchObject({
+        done: false,
+        value: {
+          txId: tx1.hash,
+          index: expect.any(Number),
+          tokenId: HATHOR_TOKEN_CONFIG.uid,
+          address: hWallet.getAddressAtIndex(0),
+          value: 10,
+          authorities: 0,
+          timelock: null,
+          heightlock: null,
+          locked: false,
+          addressPath: expect.stringMatching(/\/0$/), // Matches "m/44'/280'/0'/0/0", for example
+        }
+      });
+
+    expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true })
+  });
+
+  it('should filter by address', async () => {
+    /**
+     * @type HathorWallet
+     */
+    const hWallet = await generateWalletHelper();
+    const tx1 = await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
+
+    // Validate that on the address that received the transaction, the UTXO is listed
+    let utxoGenerator = await hWallet.getAllUtxos({ filter_address: hWallet.getAddressAtIndex(0) });
+    let utxoGenResult = await utxoGenerator.next();
+
+    expect(utxoGenResult.value).toMatchObject({
+      txId: tx1.hash,
+      value: 10,
+    });
+    expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true });
+
+    // Validate that on the address that did not receive any transaction, the results are empty
+    utxoGenerator = await hWallet.getAllUtxos({ filter_address: hWallet.getAddressAtIndex(1) });
+    expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true });
+  })
+
+  it('should filter by custom token', async () => {
+    /**
+     * @type HathorWallet
+     */
+    const hWallet = await generateWalletHelper();
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
+    const { hash: tokenUid } = await createTokenHelper(
+      hWallet,
+      'getAllUtxos Token',
+      'GAUT',
+      100
+    );
+
+    // Validate that the HTR change is listed
+    let utxoGenerator = await hWallet.getAllUtxos();
+    let utxoGenResult = await utxoGenerator.next();
+
+    expect(utxoGenResult.value).toMatchObject({
+      txId: tokenUid,
+      tokenId: HATHOR_TOKEN_CONFIG.uid,
+      value: 9,
+    });
+    expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true });
+
+    // Validate that the custom token utxo is listed with its authority tokens
+    utxoGenerator = await hWallet.getAllUtxos({ token: tokenUid });
+
+    utxoGenResult = await utxoGenerator.next();
+    expect(utxoGenResult.value).toMatchObject({
+      txId: tokenUid,
+      tokenId: tokenUid,
+      value: 100,
+      authorities: 0, // The custom token balance itself
+    });
+
+    utxoGenResult = await utxoGenerator.next();
+    expect(utxoGenResult.value).toMatchObject({
+      txId: tokenUid,
+      tokenId: tokenUid,
+      value: 1,
+      authorities: 1 // Mint authority bits for the custom token
+    });
+
+    utxoGenResult = await utxoGenerator.next();
+    expect(utxoGenResult.value).toMatchObject({
+      txId: tokenUid,
+      tokenId: tokenUid,
+      value: 2,
+      authorities: 2 // Melt authority bits for the custom token
+    });
+
+    expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true });
+  })
+})
+
 describe('internal methods', () => {
   /**
    * @type HathorWallet
