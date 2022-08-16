@@ -970,14 +970,14 @@ class HathorWallet extends EventEmitter {
    */
   markUtxoSelected(txId, index, value = true) {
     storage.setStore(this.store);
-    const historyTransactions = Object.values(this.getFullHistory());
+    const historyTransactions = this.getFullHistory();
     const tx = historyTransactions[txId] || null;
     const txout = tx && tx.outputs && tx.outputs[index];
 
     if (!txout) {
       return;
     }
-    historyTransactions[txId].outputs[index].selected_as_input = value;
+    txout.selected_as_input = value;
 
     const walletData = wallet.getWalletData();
     wallet.setWalletData(Object.assign(walletData, { historyTransactions }));

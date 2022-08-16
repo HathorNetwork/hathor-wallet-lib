@@ -488,7 +488,7 @@ describe('getUtxosForAmount', () => {
   });
 });
 
-describe.only('markUtxoSelected', () => {
+describe('markUtxoSelected', () => {
   /**
    * @type HathorWallet
    */
@@ -545,7 +545,10 @@ describe.only('markUtxoSelected', () => {
     // Validation 2
     expect(hWallet.getUtxos()).toMatchObject({
       total_utxos_available: 0,
-      utxos: [],
+      utxos: [expect.objectContaining({
+        tx_id: txHash,
+        locked: true,
+      })],
     });
 
     // Validation 3
@@ -565,16 +568,19 @@ describe.only('markUtxoSelected', () => {
     expect(rawOutput.selected_as_input).toStrictEqual(true);
 
     // Marking it as not selected
-    hWallet.markUtxoSelected(txHash, index, false);
+    hWallet.markUtxoSelected(txHash, oIndex, false);
 
     // Validation 1
-    rawOutput = hWallet.getTx(txHash).outputs[index];
+    rawOutput = hWallet.getTx(txHash).outputs[oIndex];
     expect(rawOutput.selected_as_input).toStrictEqual(false);
 
     // Validation 2
     expect(hWallet.getUtxos()).toMatchObject({
       total_utxos_available: 1,
-      utxos: [expect.objectContaining({ txId: txHash })],
+      utxos: [expect.objectContaining({
+        tx_id: txHash,
+        locked: false
+      })],
     });
 
     // Validation 3
