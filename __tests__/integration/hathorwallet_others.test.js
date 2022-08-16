@@ -11,6 +11,8 @@ import { FULLNODE_URL, NETWORK_NAME, TOKEN_DATA } from './configuration/test-con
 import dateFormatter from '../../src/date';
 import { loggers } from './utils/logger.util';
 
+const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
+
 describe('getAddressInfo', () => {
   /**
    * @type HathorWallet
@@ -308,11 +310,136 @@ describe('getAllUtxos', () => {
   })
 });
 
-// describe.only('getUtxosForAmount', () => {
-//   it('should work for an empty wallet', async () => {
-//
-//   })
-// })
+describe.only('getUtxosForAmount', () => {
+  /**
+   * @type HathorWallet
+   */
+  let hWallet;
+  let fundTx1hash;
+
+  beforeAll(async () => {
+    hWallet = await generateWalletHelper();
+  })
+
+  afterAll(async () => {
+    hWallet.stop();
+    await GenesisWalletHelper.clearListeners();
+  })
+
+  it('should throw on an empty wallet', async () => {
+    // Should throw for invalid requested amount
+    expect(() => hWallet.getUtxosForAmount(0)).toThrow('positive integer');
+    expect(() => hWallet.getUtxosForAmount(-1)).toThrow('positive integer');
+
+    // Should throw for an amount higher than available funds
+    expect(() => hWallet.getUtxosForAmount(31)).toThrow('utxos to fill total amount');
+  });
+
+  it('should work on a wallet containing a single tx', async () => {
+    const addr0 = hWallet.getAddressAtIndex(0);
+    const addr1 = hWallet.getAddressAtIndex(1);
+    const tx1 = await GenesisWalletHelper.injectFunds(addr0, 10);
+    fundTx1hash = tx1.hash;
+
+    // No change amount
+    expect(hWallet.getUtxosForAmount(10)).toStrictEqual({
+      changeAmount: 0,
+      utxos: [{
+        txId: fundTx1hash,
+        index: expect.any(Number),
+        tokenId: HATHOR_TOKEN_CONFIG.uid,
+        address: addr0,
+        value: 10,
+        authorities: 0,
+        timelock: null,
+        heightlock: null,
+        locked: false,
+        addressPath: expect.any(String),
+      }]
+    });
+
+    expect(hWallet.getUtxosForAmount(6)).toStrictEqual({
+      changeAmount: 4,
+      utxos: [expect.objectContaining({
+        address: addr0,
+        value: 10,
+      })]
+    });
+
+    // Should filter by address
+    expect(hWallet.getUtxosForAmount(10, { filter_address: addr0 })).toStrictEqual({
+      changeAmount: 0,
+      utxos: [expect.anything()]
+    });
+    expect(() => hWallet.getUtxosForAmount(10, { filter_address: addr1 }))
+      .toThrow('utxos to fill total amount');
+
+    // Should throw for an amount higher than available funds
+    expect(() => hWallet.getUtxosForAmount(31)).toThrow('utxos to fill total amount');
+  });
+
+  it('should work on a wallet containing multiple txs', async () => {
+    const addr0 = hWallet.getAddressAtIndex(0);
+    const addr1 = hWallet.getAddressAtIndex(1);
+    const tx2 = await GenesisWalletHelper.injectFunds(addr1, 20);
+
+    /*
+     * Since we don't know which order the transactions will be stored on the history,
+     * we can't make tests that depend on utxo ordering. These will be done on the unit
+     * tests.
+     */
+
+    // Should select only one utxo to satisfy the amount when both can do it
+    expect(hWallet.getUtxosForAmount(7).utxos).toHaveLength(1);
+    expect(hWallet.getUtxosForAmount(10).utxos).toHaveLength(1);
+
+    // Should select the least amount of utxos that can satisfy the amount
+    expect(hWallet.getUtxosForAmount(20)).toStrictEqual({
+      changeAmount: 0,
+      utxos: [expect.objectContaining({
+        txId: tx2.hash,
+        address: addr1,
+        value: 20,
+      })]
+    });
+
+    // Should select more than one utxo to cover an amount
+    expect(hWallet.getUtxosForAmount(29)).toStrictEqual({
+      changeAmount: 1,
+      utxos: expect.arrayContaining([
+        expect.objectContaining({
+          txId: fundTx1hash,
+          value: 10,
+        }),
+        expect.objectContaining({
+          txId: tx2.hash,
+          value: 20,
+        }),
+      ])
+    });
+
+    // Should filter by address
+    expect(hWallet.getUtxosForAmount(10, { filter_address: addr0 })).toStrictEqual({
+      changeAmount: 0,
+      utxos: [expect.objectContaining({
+        txId: fundTx1hash,
+        address: addr0,
+        value: 10,
+      })]
+    });
+    expect(hWallet.getUtxosForAmount(10, { filter_address: addr1 })).toStrictEqual({
+      changeAmount: 10,
+      utxos: [expect.objectContaining({
+        txId: tx2.hash,
+        address: addr1,
+        value: 20,
+      })]
+    });
+
+    // Should throw for an amount higher than available funds
+    expect(() => hWallet.getUtxosForAmount(31)).toThrow('utxos to fill total amount');
+  });
+});
 
 describe('internal methods', () => {
   /**
