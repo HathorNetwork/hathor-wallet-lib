@@ -310,7 +310,7 @@ describe('getAllUtxos', () => {
   })
 });
 
-describe.only('getUtxosForAmount', () => {
+describe('getUtxosForAmount', () => {
   /**
    * @type HathorWallet
    */
@@ -438,6 +438,53 @@ describe.only('getUtxosForAmount', () => {
 
     // Should throw for an amount higher than available funds
     expect(() => hWallet.getUtxosForAmount(31)).toThrow('utxos to fill total amount');
+  });
+
+  it('should filter by custom token', async () => {
+    const addr2 = hWallet.getAddressAtIndex(2);
+    const addr3 = hWallet.getAddressAtIndex(3);
+    const { hash: tokenUid } = await createTokenHelper(
+      hWallet,
+      'getUtxosForAmount Test Token',
+      'GUFAT',
+      200,
+      { address: addr2 }
+    )
+
+    // Should work only with the token filter
+    expect(hWallet.getUtxosForAmount(6, { token: tokenUid }))
+      .toStrictEqual({
+      changeAmount: 194,
+      utxos: [expect.objectContaining({
+        address: addr2,
+        value: 200,
+        tokenId: tokenUid,
+      })]
+    });
+    // Explicitly filtering for HTR
+    expect(hWallet.getUtxosForAmount(6, { token: HATHOR_TOKEN_CONFIG.uid }))
+      .toStrictEqual({
+      changeAmount: expect.any(Number),
+      utxos: [expect.objectContaining({ tokenId: HATHOR_TOKEN_CONFIG.uid })]
+    });
+    // Implicitly filtering for HTR
+    expect(hWallet.getUtxosForAmount(6))
+      .toStrictEqual({
+      changeAmount: expect.any(Number),
+      utxos: [expect.objectContaining({ tokenId: HATHOR_TOKEN_CONFIG.uid })]
+    });
+
+    // The token filter should work combined with the address filter
+    expect(hWallet.getUtxosForAmount(6, { token: tokenUid, filter_address: addr2 }))
+      .toStrictEqual({
+      changeAmount: 194,
+      utxos: [expect.objectContaining({
+        address: addr2,
+        value: 200,
+      })]
+    });
+    expect(() => hWallet.getUtxosForAmount(6, { token: tokenUid, filter_address: addr3 }))
+      .toThrow('utxos to fill');
   });
 });
 
