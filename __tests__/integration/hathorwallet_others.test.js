@@ -7,7 +7,7 @@ import {
   waitForTxReceived,
 } from './helpers/wallet.helper';
 import { HATHOR_TOKEN_CONFIG } from '../../src/constants';
-import { FULLNODE_URL, NETWORK_NAME, TOKEN_DATA } from './configuration/test-constants';
+import { FULLNODE_URL, NETWORK_NAME } from './configuration/test-constants';
 import dateFormatter from '../../src/date';
 import { loggers } from './utils/logger.util';
 
@@ -488,6 +488,111 @@ describe('getUtxosForAmount', () => {
   });
 });
 
+describe.only('markUtxoSelected', () => {
+  /**
+   * @type HathorWallet
+   */
+  let hWallet;
+  /**
+   * @type string
+   */
+  let txHash;
+  /**
+   * @type number
+   */
+  let oIndex;
+
+  beforeAll(async () => {
+    hWallet = await generateWalletHelper();
+    const { hash } = await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
+    const { index } = hWallet.getUtxos().utxos[0];
+    txHash = hash;
+    oIndex = index;
+  })
+
+  afterAll(async () => {
+    hWallet.stop();
+    await GenesisWalletHelper.clearListeners();
+  })
+
+  /*
+   * We will validate this method's results by the following checks:
+   * 1 - getTx() - direct access to the wallet full history
+   * 2 - getUtxos()
+   * 3 - getAllUtxos()
+   * 4 - getUtxosForAmount()
+   */
+
+  it('should mark utxos as selected', async () => {
+    // Validating utxo current state as not selected
+    let rawOutput = hWallet.getTx(txHash).outputs[oIndex];
+    loggers.test.log('Output before', rawOutput);
+    expect(rawOutput.selected_as_input).toStrictEqual(false);
+
+    // Marking it as selected
+    hWallet.markUtxoSelected(txHash, oIndex, true);
+
+    /*
+     * We will force this update here without a new tx, for testing purposes.
+     */
+    await hWallet.preProcessWalletData();
+
+    // Validation 1
+    rawOutput = hWallet.getTx(txHash).outputs[oIndex];
+    loggers.test.log('Output after', rawOutput);
+    expect(rawOutput.selected_as_input).toStrictEqual(true);
+
+    // Validation 2
+    expect(hWallet.getUtxos()).toMatchObject({
+      total_utxos_available: 0,
+      utxos: [],
+    });
+
+    // Validation 3
+    const utxosGenerator = hWallet.getAllUtxos();
+    expect(utxosGenerator.next()).toStrictEqual({
+      value: undefined,
+      done: true,
+    });
+
+    // Validation 4
+    expect(() => hWallet.getUtxosForAmount(10)).toThrow('utxos to fill');
+  })
+
+  it('should mark utxos as not selected', async () => {
+    // Validating utxo current state as selected
+    let rawOutput = hWallet.getTx(txHash).outputs[oIndex];
+    expect(rawOutput.selected_as_input).toStrictEqual(true);
+
+    // Marking it as not selected
+    hWallet.markUtxoSelected(txHash, index, false);
+
+    // Validation 1
+    rawOutput = hWallet.getTx(txHash).outputs[index];
+    expect(rawOutput.selected_as_input).toStrictEqual(false);
+
+    // Validation 2
+    expect(hWallet.getUtxos()).toMatchObject({
+      total_utxos_available: 1,
+      utxos: [expect.objectContaining({ txId: txHash })],
+    });
+
+    // Validation 3
+    const utxosGenerator = hWallet.getAllUtxos();
+    expect(utxosGenerator.next()).toStrictEqual({
+      value: expect.objectContaining({ txId: txHash }),
+      done: false,
+    });
+
+    // Validation 4
+    expect(hWallet.getUtxosForAmount(10)).toStrictEqual({
+      changeAmount: 0,
+      utxos: [expect.objectContaining({ txId: txHash })]
+    })
+  })
+})
+
+// This section tests methods that have side effects impacting the whole wallet. Executing it last.
 describe('internal methods', () => {
   /**
    * @type HathorWallet
@@ -568,7 +673,6 @@ describe('internal methods', () => {
 
 /*
 
-getUtxosForAmount
 markUtxoSelected
 consolidateUtxos
 onTxArrived
