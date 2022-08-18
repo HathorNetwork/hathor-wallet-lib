@@ -4,7 +4,7 @@ import {
   createTokenHelper,
   generateWalletHelper,
   stopAllWallets,
-  waitForTxReceived,
+  waitForTxReceived, waitUntilNextTimestamp,
 } from './helpers/wallet.helper';
 import { HATHOR_TOKEN_CONFIG } from '../../src/constants';
 import { FULLNODE_URL, NETWORK_NAME } from './configuration/test-constants';
@@ -593,6 +593,339 @@ describe('markUtxoSelected', () => {
   })
 })
 
+describe('consolidateUtxos', () => {
+  /** @type HathorWallet */
+  let hWallet1;
+  /** @type HathorWallet */
+  let hWallet2;
+  /** @type string */
+  let tokenHash;
+
+  /*
+   * The test initialization creates two wallets,
+   * Wallet1: Empty, with no transactions
+   * Wallet2: Containing HTR and custom token funds
+   */
+  beforeAll(async () => {
+    hWallet1 = await generateWalletHelper();
+    hWallet2 = await generateWalletHelper();
+    await GenesisWalletHelper.injectFunds(hWallet2.getAddressAtIndex(0), 101)
+    const { hash: tokenUid } = await createTokenHelper(
+      hWallet2,
+      'Consolidate Token',
+      'CTK',
+      100,
+      { address: hWallet2.getAddressAtIndex(0) }
+    );
+    tokenHash = tokenUid;
+  })
+  afterAll(async () => {
+    hWallet1.stop();
+    hWallet2.stop();
+    await GenesisWalletHelper.clearListeners();
+  })
+
+  /**
+   * Helper function to empty wallet1 of a specified token and move it all back to wallet2.
+   * This minimizes test dependency.
+   * @param {string} [token]
+   * @returns {Promise<void>}
+   */
+  async function cleanWallet1(token) {
+    const [balanceObj] = await hWallet1.getBalance(token);
+    const tokenBalance = balanceObj?.balance?.unlocked || 0;
+    if (tokenBalance === 0) {
+      return;
+    }
+
+    const cleanTx = await hWallet1.sendTransaction(
+      hWallet2.getAddressAtIndex(0),
+      tokenBalance,
+      { token }
+    );
+    await waitForTxReceived(hWallet1, cleanTx.hash);
+    await waitUntilNextTimestamp(hWallet1, cleanTx.hash);
+  }
+
+  it('should throw when consolidating on an empty wallet', async () => {
+    await expect(hWallet1.consolidateUtxos(hWallet1.getAddressAtIndex(0)))
+      .rejects.toThrow('available utxo');
+  });
+
+  it('should consolidate two utxos (htr)', async () => {
+    const fundTx = await hWallet2.sendManyOutputsTransaction([
+        { address: hWallet1.getAddressAtIndex(0), value: 4, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: hWallet1.getAddressAtIndex(1), value: 5, token: HATHOR_TOKEN_CONFIG.uid },
+    ]);
+    await waitForTxReceived(hWallet1, fundTx.hash);
+
+    // Sending transaction and validating the method response
+    const consolidateTx = await hWallet1.consolidateUtxos(
+      hWallet1.getAddressAtIndex(2),
+      { token: HATHOR_TOKEN_CONFIG.uid }
+    );
+    expect(consolidateTx).toStrictEqual({
+      total_utxos_consolidated: 2,
+      total_amount: 9,
+      txId: expect.any(String),
+      utxos: expect.arrayContaining([
+        {
+          address: hWallet1.getAddressAtIndex(0),
+          amount: 4,
+          tx_id: fundTx.hash,
+          locked: false,
+          index: expect.any(Number)
+        },
+        {
+          address: hWallet1.getAddressAtIndex(1),
+          amount: 5,
+          tx_id: fundTx.hash,
+          locked: false,
+          index: expect.any(Number)
+        },
+      ])
+    });
+
+    // Validating the updated balance on the wallet
+    await waitForTxReceived(hWallet1, consolidateTx.txId);
+    const utxos = hWallet1.getUtxos();
+    expect(utxos).toStrictEqual({
+      total_amount_available: 9,
+      total_utxos_available: 1,
+      total_amount_locked: 0,
+      total_utxos_locked: 0,
+      utxos: [{
+        address: hWallet1.getAddressAtIndex(2),
+        amount: 9,
+        tx_id: consolidateTx.txId,
+        locked: false,
+        index: 0 // This has a single resulting utxo, so 1 output only
+      }]
+    })
+
+    await waitUntilNextTimestamp(hWallet1, consolidateTx.txId);
+    await cleanWallet1(HATHOR_TOKEN_CONFIG.uid);
+  })
+
+  it('should consolidate two utxos (custom token)', async () => {
+    const fundTx = await hWallet2.sendManyOutputsTransaction([
+        { address: hWallet1.getAddressAtIndex(3), value: 40, token: tokenHash },
+        { address: hWallet1.getAddressAtIndex(4), value: 50, token: tokenHash },
+    ]);
+    await waitForTxReceived(hWallet1, fundTx.hash);
+
+    // Sending transaction and validating the method response
+    const consolidateTx = await hWallet1.consolidateUtxos(
+      hWallet1.getAddressAtIndex(5),
+      { token: tokenHash }
+    );
+    expect(consolidateTx).toStrictEqual({
+      total_utxos_consolidated: 2,
+      total_amount: 90,
+      txId: expect.any(String),
+      utxos: expect.arrayContaining([
+        {
+          address: hWallet1.getAddressAtIndex(3),
+          amount: 40,
+          tx_id: fundTx.hash,
+          locked: false,
+          index: expect.any(Number)
+        },
+        {
+          address: hWallet1.getAddressAtIndex(4),
+          amount: 50,
+          tx_id: fundTx.hash,
+          locked: false,
+          index: expect.any(Number)
+        },
+      ])
+    });
+
+    // Validating the updated balance on the wallet
+    await waitForTxReceived(hWallet1, consolidateTx.txId);
+    const utxos = hWallet1.getUtxos({ token: tokenHash });
+    expect(utxos).toStrictEqual({
+      total_amount_available: 90,
+      total_utxos_available: 1,
+      total_amount_locked: 0,
+      total_utxos_locked: 0,
+      utxos: [{
+        address: hWallet1.getAddressAtIndex(5),
+        amount: 90,
+        tx_id: consolidateTx.txId,
+        locked: false,
+        index: 0 // This has a single resulting utxo, so 1 output only
+      }]
+    })
+
+    await waitUntilNextTimestamp(hWallet1, consolidateTx.txId);
+    await cleanWallet1(tokenHash);
+  })
+
+  it('should consolidate with filter_address filter', async () => {
+    const addr1 = hWallet1.getAddressAtIndex(1);
+    const addr2 = hWallet1.getAddressAtIndex(2);
+
+    const fundTx = await hWallet2.sendManyOutputsTransaction([
+        { address: addr1, value: 1, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: addr1, value: 2, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: addr2, value: 1, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: addr2, value: 1, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: addr2, value: 3, token: HATHOR_TOKEN_CONFIG.uid },
+      ]);
+    await waitForTxReceived(hWallet1, fundTx.hash);
+
+    // Sending transaction and validating the method response
+    const consolidateTx = await hWallet1.consolidateUtxos(
+      hWallet1.getAddressAtIndex(3),
+      {
+        token: HATHOR_TOKEN_CONFIG.uid,
+        filter_address: addr2
+      }
+    );
+    expect(consolidateTx).toStrictEqual({
+      total_utxos_consolidated: 3,
+      total_amount: 5,
+      txId: expect.any(String),
+      utxos: expect.arrayContaining([
+        expect.objectContaining({ address: addr2 }),
+        expect.objectContaining({ address: addr2 }),
+        expect.objectContaining({ address: addr2 }),
+      ]),
+    });
+
+    // Validating the updated balance on the wallet
+    await waitForTxReceived(hWallet1, consolidateTx.txId);
+    expect(hWallet1.getAddressInfo(hWallet1.getAddressAtIndex(1)))
+      .toMatchObject({ total_amount_available: 3 })
+    expect(hWallet1.getAddressInfo(hWallet1.getAddressAtIndex(2)))
+      .toMatchObject({ total_amount_available: 0 })
+    expect(hWallet1.getAddressInfo(hWallet1.getAddressAtIndex(3)))
+      .toMatchObject({ total_amount_available: 5 })
+
+    await waitUntilNextTimestamp(hWallet1, consolidateTx.txId);
+    await cleanWallet1(HATHOR_TOKEN_CONFIG.uid);
+  });
+
+  it('should consolidate with amount_smaller_than filter', async () => {
+    const addr1 = hWallet1.getAddressAtIndex(1);
+
+    const fundTx = await hWallet2.sendManyOutputsTransaction([
+        { address: addr1, value: 1, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: addr1, value: 2, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: addr1, value: 3, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: addr1, value: 4, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: addr1, value: 5, token: HATHOR_TOKEN_CONFIG.uid },
+      ]);
+    await waitForTxReceived(hWallet1, fundTx.hash);
+
+    // Sending transaction and validating the method response
+    const consolidateTx = await hWallet1.consolidateUtxos(
+      hWallet1.getAddressAtIndex(2),
+      {
+        token: HATHOR_TOKEN_CONFIG.uid,
+        amount_smaller_than: 3,
+      }
+    );
+    expect(consolidateTx).toStrictEqual({
+      total_utxos_consolidated: 3,
+      total_amount: 6,
+      txId: expect.any(String),
+      utxos: expect.objectContaining({ length: 3 }),
+    });
+
+    // Validating the updated balance on the wallet
+    await waitForTxReceived(hWallet1, consolidateTx.txId);
+    expect(hWallet1.getAddressInfo(hWallet1.getAddressAtIndex(1)))
+      .toMatchObject({ total_amount_available: 9 })
+    expect(hWallet1.getAddressInfo(hWallet1.getAddressAtIndex(2)))
+      .toMatchObject({ total_amount_available: 6 })
+
+    await waitUntilNextTimestamp(hWallet1, consolidateTx.txId);
+    await cleanWallet1(HATHOR_TOKEN_CONFIG.uid);
+  });
+
+  it('should consolidate with amount_bigger_than filter', async () => {
+    const addr2 = hWallet1.getAddressAtIndex(2);
+
+    const fundTx = await hWallet2.sendManyOutputsTransaction([
+        { address: addr2, value: 1, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: addr2, value: 2, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: addr2, value: 3, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: addr2, value: 4, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: addr2, value: 5, token: HATHOR_TOKEN_CONFIG.uid },
+      ]);
+    await waitForTxReceived(hWallet1, fundTx.hash);
+
+    // Sending transaction and validating the method response
+    const consolidateTx = await hWallet1.consolidateUtxos(
+      hWallet1.getAddressAtIndex(4),
+      {
+        token: HATHOR_TOKEN_CONFIG.uid,
+        amount_bigger_than: 3,
+      }
+    );
+    expect(consolidateTx).toStrictEqual({
+      total_utxos_consolidated: 3,
+      total_amount: 12,
+      txId: expect.any(String),
+      utxos: expect.objectContaining({ length: 3 }),
+    });
+
+    // Validating the updated balance on the wallet
+    await waitForTxReceived(hWallet1, consolidateTx.txId);
+    expect(hWallet1.getAddressInfo(hWallet1.getAddressAtIndex(2)))
+      .toMatchObject({ total_amount_available: 3 })
+    expect(hWallet1.getAddressInfo(hWallet1.getAddressAtIndex(4)))
+      .toMatchObject({ total_amount_available: 12 })
+
+    await waitUntilNextTimestamp(hWallet1, consolidateTx.txId);
+    await cleanWallet1(HATHOR_TOKEN_CONFIG.uid);
+  });
+
+  it('should consolidate with amount_bigger_than and maximum_amount filter', async () => {
+    const addr2 = hWallet1.getAddressAtIndex(2);
+
+    const fundTx = await hWallet2.sendManyOutputsTransaction([
+        { address: addr2, value: 10, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: addr2, value: 15, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: addr2, value: 18, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: addr2, value: 20, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: addr2, value: 35, token: HATHOR_TOKEN_CONFIG.uid },
+      ]);
+    await waitForTxReceived(hWallet1, fundTx.hash);
+
+    // Sending transaction and validating the method response
+    const consolidateTx = await hWallet1.consolidateUtxos(
+      hWallet1.getAddressAtIndex(4),
+      {
+        token: HATHOR_TOKEN_CONFIG.uid,
+        amount_bigger_than: 15,
+        maximum_amount: 33,
+      }
+    );
+    expect(consolidateTx).toStrictEqual({
+      total_utxos_consolidated: 2,
+      total_amount: 33,
+      txId: expect.any(String),
+      utxos: expect.arrayContaining([
+        expect.objectContaining({ amount: 15 }),
+        expect.objectContaining({ amount: 18 }),
+      ])
+    });
+
+    // Validating the updated balance on the wallet
+    await waitForTxReceived(hWallet1, consolidateTx.txId);
+    expect(hWallet1.getAddressInfo(hWallet1.getAddressAtIndex(2)))
+      .toMatchObject({ total_amount_available: 65 })
+    expect(hWallet1.getAddressInfo(hWallet1.getAddressAtIndex(4)))
+      .toMatchObject({ total_amount_available: 33 })
+
+    await waitUntilNextTimestamp(hWallet1, consolidateTx.txId);
+    await cleanWallet1(HATHOR_TOKEN_CONFIG.uid);
+  });
+})
+
 // This section tests methods that have side effects impacting the whole wallet. Executing it last.
 describe('internal methods', () => {
   /**
@@ -635,9 +968,6 @@ describe('internal methods', () => {
       maxNumberInputs: 255,
       maxNumberOutputs: 255,
     })
-
-    // const results = gWallet.getAllUtxos();
-    // loggers.test.log(JSON.stringify(results));
   });
 
   it('should change servers', async () => {
@@ -674,7 +1004,6 @@ describe('internal methods', () => {
 
 /*
 
-markUtxoSelected
 consolidateUtxos
 onTxArrived
 setPreProcessedData

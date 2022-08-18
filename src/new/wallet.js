@@ -774,23 +774,28 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Get utxos of the wallet addresses
    *
-   * @typedef {Object} UtxoOptions
-   * @property {number} max_utxos - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
+   * @typedef UtxoOptions
+   * @property {number} [max_utxos] - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
    * @property {string} token - Token to filter the utxos. If not sent, we select only HTR utxos.
-   * @property {string} filter_address - Address to filter the utxos.
-   * @property {number} amount_smaller_than - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than this value. Integer representation of decimals, i.e. 100 = 1.00.
-   * @property {number} amount_bigger_than - Minimum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount bigger than this value. Integer representation of decimals, i.e. 100 = 1.00.
-   * @property {number} maximum_amount - Limit the maximum total amount to consolidate summing all utxos. Integer representation of decimals, i.e. 100 = 1.00.
-   * @property {boolean} only_available_utxos - Use only available utxos (not locked)
-   *
-   * @typedef {Object} UtxoDetails
+   * @property {string} [filter_address] - Address to filter the utxos.
+   * @property {number} [amount_smaller_than] - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {number} [amount_bigger_than] - Minimum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount bigger than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {number} [maximum_amount] - Limit the maximum total amount to consolidate summing all utxos. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {boolean} [only_available_utxos] - Use only available utxos (not locked)
+   */
+
+  /**
+   * @typedef UtxoDetails
    * @property {number} total_amount_available - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
    * @property {number} total_utxos_available - Token to filter the utxos. If not sent, we select only HTR utxos.
    * @property {number} total_amount_locked - Address to filter the utxos.
    * @property {number} total_utxos_locked - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than this value. Integer representation of decimals, i.e. 100 = 1.00.
    * @property {{ address: string, amount: number, tx_id: string, locked: boolean, index: number }[]} utxos - Array of utxos
+   */
+
+  /**
+   * Get utxos of the wallet addresses
    *
    * @param {UtxoOptions} options Utxo filtering options
    *
@@ -1028,13 +1033,21 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Consolidates many utxos into a single one for either HTR or exactly one custom token.
-   *
-   * @typedef {Object} ConsolidationResult
+   * @typedef ConsolidationResult
    * @property {number} total_utxos_consolidated - Number of utxos consolidated
    * @property {number} total_amount - Consolidated amount
    * @property {number} tx_id - Consolidated transaction id
-   * @property {{ address: string, amount: number, tx_id: string, locked: boolean, index: number }[]} utxos - Array of consolidated utxos
+   * @property {{
+   *  address: string,
+   *  amount: number,
+   *  tx_id: string,
+   *  locked: boolean,
+   *  index: number
+   * }[]} utxos - Array of consolidated utxos
+   */
+
+  /**
+   * Consolidates many utxos into a single one for either HTR or exactly one custom token.
    *
    * @param {string} destinationAddress Address of the consolidated utxos
    * @param {UtxoOptions} options Utxo filtering options
