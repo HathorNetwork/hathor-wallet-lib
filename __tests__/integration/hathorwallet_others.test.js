@@ -68,6 +68,7 @@ describe('getAddressInfo', () => {
 
 
     // Validating the results for the funds returning to previously used address
+    await waitUntilNextTimestamp(hWallet, tx.hash);
     tx = await hWallet.sendTransaction(addr0, 10);
     await waitForTxReceived(hWallet, tx.hash);
     expect(hWallet.getAddressInfo(addr0)).toMatchObject({
