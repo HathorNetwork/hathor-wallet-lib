@@ -7,7 +7,7 @@ import {
   waitForTxReceived, waitUntilNextTimestamp,
 } from './helpers/wallet.helper';
 import { HATHOR_TOKEN_CONFIG, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
-import { FULLNODE_URL, NETWORK_NAME } from './configuration/test-constants';
+import { FULLNODE_URL, NETWORK_NAME, WALLET_CONSTANTS } from './configuration/test-constants';
 import dateFormatter from '../../src/date';
 import { loggers } from './utils/logger.util';
 import wallet from '../../src/wallet';
@@ -191,6 +191,35 @@ describe('getAddressInfo', () => {
     });
   });;
 })
+
+describe('getTxAddresses', () => {
+  it('should identify transaction addresses correctly', async () => {
+    const hWallet = await generateWalletHelper();
+    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
+
+    const tx = await gWallet.sendManyOutputsTransaction([
+      { address: hWallet.getAddressAtIndex(1), value: 1, token: HATHOR_TOKEN_CONFIG.uid },
+      { address: hWallet.getAddressAtIndex(3), value: 3, token: HATHOR_TOKEN_CONFIG.uid },
+      { address: hWallet.getAddressAtIndex(5), value: 5, token: HATHOR_TOKEN_CONFIG.uid },
+    ],{
+      changeAddress: WALLET_CONSTANTS.genesis.addresses[0]
+    });
+    await waitForTxReceived(hWallet, tx.hash);
+
+    const decodedTx = hWallet.getTx(tx.hash);
+    expect(hWallet.getTxAddresses(decodedTx)).toStrictEqual(new Set([
+      hWallet.getAddressAtIndex(1),
+      hWallet.getAddressAtIndex(3),
+      hWallet.getAddressAtIndex(5),
+    ]));
+
+    // By convention, only the address 0 of the genesis wallet is used on the integration tests
+    expect(gWallet.getTxAddresses(decodedTx)).toStrictEqual(new Set([
+      WALLET_CONSTANTS.genesis.addresses[0]
+    ]))
+
+  })
+});
 
 describe('getAllUtxos', () => {
 
@@ -1199,6 +1228,7 @@ describe('internal methods', () => {
  * isFromXPub - not relevant for integration
  * clearSensitiveData - not relevant for integration
  * handleWebsocketMsg - not relevant for integration
+ * getTokenData - not relevant for integration
  * onConnectionChangedState - too many dependencies, already tested elsewhere
  * onTxArrived - too many dependencies, already tested elsewhere
  * setPreProcessedData - not relevant for integration, already tested elsewhere
@@ -1211,10 +1241,4 @@ describe('internal methods', () => {
  * The following methods should be tested with the Atomic Swap tests
  * getAllSignatures
  * assemblePartialTransaction
- */
-
-/*
-
-getTokenData
-getTxAddresses
  */

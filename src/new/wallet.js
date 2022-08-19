@@ -2262,9 +2262,9 @@ class HathorWallet extends EventEmitter {
    * The address might be in the input or output
    * Removes duplicates
    *
-   * @param {Object} tx Transaction data with array of inputs and outputs
+   * @param {DecodedTx} tx Transaction data with array of inputs and outputs
    *
-   * @return {Set} Set of strings with addresses
+   * @return {Set<string>} Set of strings with addresses
    **/
   getTxAddresses(tx) {
     storage.setStore(this.store);
