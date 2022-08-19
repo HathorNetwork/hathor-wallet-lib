@@ -38,9 +38,13 @@ describe('start', () => {
     };
     const hWallet = new HathorWallet(walletConfig);
     await hWallet.start();
-    await waitForWalletReady(hWallet);
 
-    // Validate that it has transactions
+    // Validating that the wallet detects it's not ready
+    expect(hWallet.isReady()).toStrictEqual(false);
+    await waitForWalletReady(hWallet);
+    expect(hWallet.isReady()).toStrictEqual(true);
+
+    // Validate that it has no transactions
     const txHistory = await hWallet.getTxHistory();
     expect(txHistory).toHaveLength(0);
 

@@ -1161,6 +1161,16 @@ describe('internal methods', () => {
     gWallet.stop();
   });
 
+  it('should test the debug methods', async () => {
+    expect(gWallet.debug).toStrictEqual(false);
+
+    gWallet.enableDebugMode();
+    expect(gWallet.debug).toStrictEqual(true);
+
+    gWallet.disableDebugMode();
+    expect(gWallet.debug).toStrictEqual(false);
+  })
+
   it('should test network-related methods', async () => {
     // GetServerUrl fetching from the live fullnode connection
     expect(gWallet.getServerUrl()).toStrictEqual(FULLNODE_URL);
@@ -1214,23 +1224,6 @@ describe('internal methods', () => {
 });
 
 /*
- * Internal methods not tested - reason:
- *
- * enableDebugMode - seems to be deprecated
- * disableDebugMode - seems to be deprecated
- * isFromXPub - not relevant for integration
- * clearSensitiveData - not relevant for integration
- * handleWebsocketMsg - not relevant for integration
- * getTokenData - not relevant for integration
- * onConnectionChangedState - too many dependencies, already tested elsewhere
- * onTxArrived - too many dependencies, already tested elsewhere
- * setPreProcessedData - not relevant for integration, already tested elsewhere
- * getPreProcessedData - not relevant for integration, already tested elsewhere
- * setState - not relevant for integration, already tested elsewhere
- * onNewTx - not relevant for integration, already tested elsewhere
- * isReady - not relevant for integration, already tested elsewhere
- * isAddressMine - not relevant for integration, already tested elsewhere
- *
  * The following methods should be tested with the Atomic Swap tests
  * getAllSignatures
  * assemblePartialTransaction
