@@ -25,7 +25,6 @@ describe('getAddressInfo', () => {
     hWallet.stop();
   });
 
-
   it('should display correct values for HTR transactions with no change', async () => {
     const addr0 = hWallet.getAddressAtIndex(0);
     const addr1 = hWallet.getAddressAtIndex(1);
@@ -82,7 +81,7 @@ describe('getAddressInfo', () => {
 
   it('should throw for an address outside the wallet', async () => {
     expect(() => hWallet.getAddressInfo(WALLET_CONSTANTS.genesis.addresses[0])).toThrow();
-  })
+  });
 
   it('should display correct values for transactions with change', async () => {
     const addr2 = hWallet.getAddressAtIndex(2);
@@ -178,7 +177,7 @@ describe('getAddressInfo', () => {
     });
 
     // Validating address after 1 transaction
-    let tx = await hWalletCustom.sendTransaction(addr1Custom, 40, { token: tokenUid } );
+    const tx = await hWalletCustom.sendTransaction(addr1Custom, 40, { token: tokenUid });
     await waitForTxReceived(hWalletCustom, tx.hash);
     expect(hWalletCustom.getAddressInfo(addr0Custom, { token: tokenUid })).toMatchObject({
       total_amount_received: 100,
@@ -191,7 +190,7 @@ describe('getAddressInfo', () => {
       total_amount_available: 40,
     });
   });
-})
+});
 
 describe('getTxAddresses', () => {
   it('should identify transaction addresses correctly', async () => {
@@ -203,7 +202,7 @@ describe('getTxAddresses', () => {
       { address: hWallet.getAddressAtIndex(1), value: 1, token: HATHOR_TOKEN_CONFIG.uid },
       { address: hWallet.getAddressAtIndex(3), value: 3, token: HATHOR_TOKEN_CONFIG.uid },
       { address: hWallet.getAddressAtIndex(5), value: 5, token: HATHOR_TOKEN_CONFIG.uid },
-    ],{
+    ], {
       changeAddress: WALLET_CONSTANTS.genesis.addresses[0]
     });
     await waitForTxReceived(hWallet, tx.hash);
@@ -219,13 +218,11 @@ describe('getTxAddresses', () => {
     // By convention, only the address 0 of the genesis wallet is used on the integration tests
     expect(gWallet.getTxAddresses(decodedTx)).toStrictEqual(new Set([
       WALLET_CONSTANTS.genesis.addresses[0]
-    ]))
-
-  })
+    ]));
+  });
 });
 
 describe('getAllUtxos', () => {
-
   afterEach(async () => {
     await stopAllWallets();
     await GenesisWalletHelper.clearListeners();
@@ -266,7 +263,7 @@ describe('getAllUtxos', () => {
       });
 
     // Expect the generator to have finished
-    expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true })
+    expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true });
   });
 
   it('should filter by address', async () => {
@@ -278,7 +275,7 @@ describe('getAllUtxos', () => {
 
     // Validate that on the address that received the transaction, the UTXO is listed
     let utxoGenerator = await hWallet.getAllUtxos({ filter_address: hWallet.getAddressAtIndex(0) });
-    let utxoGenResult = await utxoGenerator.next();
+    const utxoGenResult = await utxoGenerator.next();
     expect(utxoGenResult.value).toMatchObject({
       txId: tx1.hash,
       value: 10,
@@ -288,7 +285,7 @@ describe('getAllUtxos', () => {
     // Validate that on the address that did not receive any transaction, the results are empty
     utxoGenerator = await hWallet.getAllUtxos({ filter_address: hWallet.getAddressAtIndex(1) });
     expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true });
-  })
+  });
 
   it('should filter by custom token', async () => {
     /**
@@ -340,7 +337,7 @@ describe('getAllUtxos', () => {
     });
 
     expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true });
-  })
+  });
 });
 
 describe('getUtxosForAmount', () => {
@@ -350,12 +347,12 @@ describe('getUtxosForAmount', () => {
 
   beforeAll(async () => {
     hWallet = await generateWalletHelper();
-  })
+  });
 
   afterAll(async () => {
     hWallet.stop();
     await GenesisWalletHelper.clearListeners();
-  })
+  });
 
   it('should throw on an empty wallet', async () => {
     // Should throw for invalid requested amount
@@ -480,40 +477,40 @@ describe('getUtxosForAmount', () => {
       'GUFAT',
       200,
       { address: addr2 }
-    )
+    );
 
     // Should work only with the token filter
     expect(hWallet.getUtxosForAmount(6, { token: tokenUid }))
       .toStrictEqual({
-      changeAmount: 194,
-      utxos: [expect.objectContaining({
-        address: addr2,
-        value: 200,
-        tokenId: tokenUid,
-      })]
-    });
+        changeAmount: 194,
+        utxos: [expect.objectContaining({
+          address: addr2,
+          value: 200,
+          tokenId: tokenUid,
+        })]
+      });
     // Explicitly filtering for HTR
     expect(hWallet.getUtxosForAmount(6, { token: HATHOR_TOKEN_CONFIG.uid }))
       .toStrictEqual({
-      changeAmount: expect.any(Number),
-      utxos: [expect.objectContaining({ tokenId: HATHOR_TOKEN_CONFIG.uid })]
-    });
+        changeAmount: expect.any(Number),
+        utxos: [expect.objectContaining({ tokenId: HATHOR_TOKEN_CONFIG.uid })]
+      });
     // Implicitly filtering for HTR
     expect(hWallet.getUtxosForAmount(6))
       .toStrictEqual({
-      changeAmount: expect.any(Number),
-      utxos: [expect.objectContaining({ tokenId: HATHOR_TOKEN_CONFIG.uid })]
-    });
+        changeAmount: expect.any(Number),
+        utxos: [expect.objectContaining({ tokenId: HATHOR_TOKEN_CONFIG.uid })]
+      });
 
     // The token filter should work combined with the address filter
     expect(hWallet.getUtxosForAmount(6, { token: tokenUid, filter_address: addr2 }))
       .toStrictEqual({
-      changeAmount: 194,
-      utxos: [expect.objectContaining({
-        address: addr2,
-        value: 200,
-      })]
-    });
+        changeAmount: 194,
+        utxos: [expect.objectContaining({
+          address: addr2,
+          value: 200,
+        })]
+      });
     expect(() => hWallet.getUtxosForAmount(6, { token: tokenUid, filter_address: addr3 }))
       .toThrow('utxos to fill');
   });
@@ -533,12 +530,12 @@ describe('markUtxoSelected', () => {
     const { index } = hWallet.getUtxos().utxos[0];
     txHash = hash;
     oIndex = index;
-  })
+  });
 
   afterAll(async () => {
     hWallet.stop();
     await GenesisWalletHelper.clearListeners();
-  })
+  });
 
   /*
    * We will validate this method's results by the following checks:
@@ -580,7 +577,7 @@ describe('markUtxoSelected', () => {
 
     // Validation 4
     expect(() => hWallet.getUtxosForAmount(10)).toThrow('utxos to fill');
-  })
+  });
 
   it('should mark utxos as not selected', async () => {
     // Validating utxo current state as selected
@@ -614,9 +611,9 @@ describe('markUtxoSelected', () => {
     expect(hWallet.getUtxosForAmount(10)).toStrictEqual({
       changeAmount: 0,
       utxos: [expect.objectContaining({ txId: txHash })]
-    })
-  })
-})
+    });
+  });
+});
 
 describe('consolidateUtxos', () => {
   /** @type HathorWallet */
@@ -634,7 +631,7 @@ describe('consolidateUtxos', () => {
   beforeAll(async () => {
     hWallet1 = await generateWalletHelper();
     hWallet2 = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet2.getAddressAtIndex(0), 101)
+    await GenesisWalletHelper.injectFunds(hWallet2.getAddressAtIndex(0), 101);
     const { hash: tokenUid } = await createTokenHelper(
       hWallet2,
       'Consolidate Token',
@@ -643,12 +640,12 @@ describe('consolidateUtxos', () => {
       { address: hWallet2.getAddressAtIndex(0) }
     );
     tokenHash = tokenUid;
-  })
+  });
   afterAll(async () => {
     hWallet1.stop();
     hWallet2.stop();
     await GenesisWalletHelper.clearListeners();
-  })
+  });
 
   /**
    * Helper function to empty wallet1 of a specified token and move it all back to wallet2.
@@ -678,8 +675,8 @@ describe('consolidateUtxos', () => {
 
   it('should consolidate two utxos (htr)', async () => {
     const fundTx = await hWallet2.sendManyOutputsTransaction([
-        { address: hWallet1.getAddressAtIndex(0), value: 4, token: HATHOR_TOKEN_CONFIG.uid },
-        { address: hWallet1.getAddressAtIndex(1), value: 5, token: HATHOR_TOKEN_CONFIG.uid },
+      { address: hWallet1.getAddressAtIndex(0), value: 4, token: HATHOR_TOKEN_CONFIG.uid },
+      { address: hWallet1.getAddressAtIndex(1), value: 5, token: HATHOR_TOKEN_CONFIG.uid },
     ]);
     await waitForTxReceived(hWallet1, fundTx.hash);
 
@@ -725,16 +722,16 @@ describe('consolidateUtxos', () => {
         locked: false,
         index: 0 // This has a single resulting utxo, so 1 output only
       }]
-    })
+    });
 
     await waitUntilNextTimestamp(hWallet1, consolidateTx.txId);
     await cleanWallet1(HATHOR_TOKEN_CONFIG.uid);
-  })
+  });
 
   it('should consolidate two utxos (custom token)', async () => {
     const fundTx = await hWallet2.sendManyOutputsTransaction([
-        { address: hWallet1.getAddressAtIndex(3), value: 40, token: tokenHash },
-        { address: hWallet1.getAddressAtIndex(4), value: 50, token: tokenHash },
+      { address: hWallet1.getAddressAtIndex(3), value: 40, token: tokenHash },
+      { address: hWallet1.getAddressAtIndex(4), value: 50, token: tokenHash },
     ]);
     await waitForTxReceived(hWallet1, fundTx.hash);
 
@@ -780,23 +777,23 @@ describe('consolidateUtxos', () => {
         locked: false,
         index: 0 // This has a single resulting utxo, so 1 output only
       }]
-    })
+    });
 
     await waitUntilNextTimestamp(hWallet1, consolidateTx.txId);
     await cleanWallet1(tokenHash);
-  })
+  });
 
   it('should consolidate with filter_address filter', async () => {
     const addr1 = hWallet1.getAddressAtIndex(1);
     const addr2 = hWallet1.getAddressAtIndex(2);
 
     const fundTx = await hWallet2.sendManyOutputsTransaction([
-        { address: addr1, value: 1, token: HATHOR_TOKEN_CONFIG.uid },
-        { address: addr1, value: 2, token: HATHOR_TOKEN_CONFIG.uid },
-        { address: addr2, value: 1, token: HATHOR_TOKEN_CONFIG.uid },
-        { address: addr2, value: 1, token: HATHOR_TOKEN_CONFIG.uid },
-        { address: addr2, value: 3, token: HATHOR_TOKEN_CONFIG.uid },
-      ]);
+      { address: addr1, value: 1, token: HATHOR_TOKEN_CONFIG.uid },
+      { address: addr1, value: 2, token: HATHOR_TOKEN_CONFIG.uid },
+      { address: addr2, value: 1, token: HATHOR_TOKEN_CONFIG.uid },
+      { address: addr2, value: 1, token: HATHOR_TOKEN_CONFIG.uid },
+      { address: addr2, value: 3, token: HATHOR_TOKEN_CONFIG.uid },
+    ]);
     await waitForTxReceived(hWallet1, fundTx.hash);
 
     // Sending transaction and validating the method response
@@ -821,11 +818,11 @@ describe('consolidateUtxos', () => {
     // Validating the updated balance on the wallet
     await waitForTxReceived(hWallet1, consolidateTx.txId);
     expect(hWallet1.getAddressInfo(hWallet1.getAddressAtIndex(1)))
-      .toMatchObject({ total_amount_available: 3 })
+      .toMatchObject({ total_amount_available: 3 });
     expect(hWallet1.getAddressInfo(hWallet1.getAddressAtIndex(2)))
-      .toMatchObject({ total_amount_available: 0 })
+      .toMatchObject({ total_amount_available: 0 });
     expect(hWallet1.getAddressInfo(hWallet1.getAddressAtIndex(3)))
-      .toMatchObject({ total_amount_available: 5 })
+      .toMatchObject({ total_amount_available: 5 });
 
     await waitUntilNextTimestamp(hWallet1, consolidateTx.txId);
     await cleanWallet1(HATHOR_TOKEN_CONFIG.uid);
@@ -835,12 +832,12 @@ describe('consolidateUtxos', () => {
     const addr1 = hWallet1.getAddressAtIndex(1);
 
     const fundTx = await hWallet2.sendManyOutputsTransaction([
-        { address: addr1, value: 1, token: HATHOR_TOKEN_CONFIG.uid },
-        { address: addr1, value: 2, token: HATHOR_TOKEN_CONFIG.uid },
-        { address: addr1, value: 3, token: HATHOR_TOKEN_CONFIG.uid },
-        { address: addr1, value: 4, token: HATHOR_TOKEN_CONFIG.uid },
-        { address: addr1, value: 5, token: HATHOR_TOKEN_CONFIG.uid },
-      ]);
+      { address: addr1, value: 1, token: HATHOR_TOKEN_CONFIG.uid },
+      { address: addr1, value: 2, token: HATHOR_TOKEN_CONFIG.uid },
+      { address: addr1, value: 3, token: HATHOR_TOKEN_CONFIG.uid },
+      { address: addr1, value: 4, token: HATHOR_TOKEN_CONFIG.uid },
+      { address: addr1, value: 5, token: HATHOR_TOKEN_CONFIG.uid },
+    ]);
     await waitForTxReceived(hWallet1, fundTx.hash);
 
     // Sending transaction and validating the method response
@@ -861,9 +858,9 @@ describe('consolidateUtxos', () => {
     // Validating the updated balance on the wallet
     await waitForTxReceived(hWallet1, consolidateTx.txId);
     expect(hWallet1.getAddressInfo(hWallet1.getAddressAtIndex(1)))
-      .toMatchObject({ total_amount_available: 9 })
+      .toMatchObject({ total_amount_available: 9 });
     expect(hWallet1.getAddressInfo(hWallet1.getAddressAtIndex(2)))
-      .toMatchObject({ total_amount_available: 6 })
+      .toMatchObject({ total_amount_available: 6 });
 
     await waitUntilNextTimestamp(hWallet1, consolidateTx.txId);
     await cleanWallet1(HATHOR_TOKEN_CONFIG.uid);
@@ -873,12 +870,12 @@ describe('consolidateUtxos', () => {
     const addr2 = hWallet1.getAddressAtIndex(2);
 
     const fundTx = await hWallet2.sendManyOutputsTransaction([
-        { address: addr2, value: 1, token: HATHOR_TOKEN_CONFIG.uid },
-        { address: addr2, value: 2, token: HATHOR_TOKEN_CONFIG.uid },
-        { address: addr2, value: 3, token: HATHOR_TOKEN_CONFIG.uid },
-        { address: addr2, value: 4, token: HATHOR_TOKEN_CONFIG.uid },
-        { address: addr2, value: 5, token: HATHOR_TOKEN_CONFIG.uid },
-      ]);
+      { address: addr2, value: 1, token: HATHOR_TOKEN_CONFIG.uid },
+      { address: addr2, value: 2, token: HATHOR_TOKEN_CONFIG.uid },
+      { address: addr2, value: 3, token: HATHOR_TOKEN_CONFIG.uid },
+      { address: addr2, value: 4, token: HATHOR_TOKEN_CONFIG.uid },
+      { address: addr2, value: 5, token: HATHOR_TOKEN_CONFIG.uid },
+    ]);
     await waitForTxReceived(hWallet1, fundTx.hash);
 
     // Sending transaction and validating the method response
@@ -899,9 +896,9 @@ describe('consolidateUtxos', () => {
     // Validating the updated balance on the wallet
     await waitForTxReceived(hWallet1, consolidateTx.txId);
     expect(hWallet1.getAddressInfo(hWallet1.getAddressAtIndex(2)))
-      .toMatchObject({ total_amount_available: 3 })
+      .toMatchObject({ total_amount_available: 3 });
     expect(hWallet1.getAddressInfo(hWallet1.getAddressAtIndex(4)))
-      .toMatchObject({ total_amount_available: 12 })
+      .toMatchObject({ total_amount_available: 12 });
 
     await waitUntilNextTimestamp(hWallet1, consolidateTx.txId);
     await cleanWallet1(HATHOR_TOKEN_CONFIG.uid);
@@ -911,12 +908,12 @@ describe('consolidateUtxos', () => {
     const addr2 = hWallet1.getAddressAtIndex(2);
 
     const fundTx = await hWallet2.sendManyOutputsTransaction([
-        { address: addr2, value: 1, token: HATHOR_TOKEN_CONFIG.uid },
-        { address: addr2, value: 4, token: HATHOR_TOKEN_CONFIG.uid },
-        { address: addr2, value: 5, token: HATHOR_TOKEN_CONFIG.uid },
-        { address: addr2, value: 20, token: HATHOR_TOKEN_CONFIG.uid },
-        { address: addr2, value: 40, token: HATHOR_TOKEN_CONFIG.uid },
-      ]);
+      { address: addr2, value: 1, token: HATHOR_TOKEN_CONFIG.uid },
+      { address: addr2, value: 4, token: HATHOR_TOKEN_CONFIG.uid },
+      { address: addr2, value: 5, token: HATHOR_TOKEN_CONFIG.uid },
+      { address: addr2, value: 20, token: HATHOR_TOKEN_CONFIG.uid },
+      { address: addr2, value: 40, token: HATHOR_TOKEN_CONFIG.uid },
+    ]);
     await waitForTxReceived(hWallet1, fundTx.hash);
 
     // Sending transaction and validating the method response
@@ -942,14 +939,14 @@ describe('consolidateUtxos', () => {
     // Validating the updated balance on the wallet
     await waitForTxReceived(hWallet1, consolidateTx.txId);
     expect(hWallet1.getAddressInfo(hWallet1.getAddressAtIndex(2)))
-      .toMatchObject({ total_amount_available: 61 })
+      .toMatchObject({ total_amount_available: 61 });
     expect(hWallet1.getAddressInfo(hWallet1.getAddressAtIndex(4)))
-      .toMatchObject({ total_amount_available: 9 })
+      .toMatchObject({ total_amount_available: 9 });
 
     await waitUntilNextTimestamp(hWallet1, consolidateTx.txId);
     await cleanWallet1(HATHOR_TOKEN_CONFIG.uid);
   });
-})
+});
 
 // getAuthorityUtxos acts as a wrapper for selectAuthorityUtxo: testing them together.
 describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
@@ -959,28 +956,30 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
   let tokenHash;
   beforeAll(async () => {
     hWallet = await generateWalletHelper();
-  })
+  });
   afterAll(async () => {
     hWallet.stop();
     await GenesisWalletHelper.clearListeners();
-  })
+  });
 
   it('should work on an empty wallet', async () => {
     // Default options
     expect(hWallet.selectAuthorityUtxo(
       HATHOR_TOKEN_CONFIG.uid,
-      () => true)).toStrictEqual(null);
+      () => true
+    )).toStrictEqual(null);
 
     // With "many" option
     expect(hWallet.selectAuthorityUtxo(
       HATHOR_TOKEN_CONFIG.uid,
       () => true,
-      { many: true })).toStrictEqual([]);
+      { many: true }
+    )).toStrictEqual([]);
 
     // Testing the wrapper method
-    expect(hWallet.getAuthorityUtxos(fakeTokenUid,'mint')).toStrictEqual([]);
-    expect(hWallet.getAuthorityUtxos(fakeTokenUid,'melt')).toStrictEqual([]);
-    expect(() => hWallet.getAuthorityUtxos(fakeTokenUid,'invalid')).toThrow();
+    expect(hWallet.getAuthorityUtxos(fakeTokenUid, 'mint')).toStrictEqual([]);
+    expect(hWallet.getAuthorityUtxos(fakeTokenUid, 'melt')).toStrictEqual([]);
+    expect(() => hWallet.getAuthorityUtxos(fakeTokenUid, 'invalid')).toThrow();
   });
 
   it('should find one authority utxo', async () => {
@@ -1001,14 +1000,14 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
         index: expect.any(Number),
         address: expect.any(String),
         authorities: TOKEN_MINT_MASK,
-      }])
+      }]);
     expect(hWallet.selectAuthorityUtxo(tokenHash, wallet.isMeltOutput.bind(wallet)))
       .toStrictEqual([{
         tx_id: tokenHash,
         index: expect.any(Number),
         address: expect.any(String),
         authorities: 2,
-      }])
+      }]);
 
     // Validating single authority UTXO for a token creation ( with "many" option )
     expect(hWallet.selectAuthorityUtxo(tokenHash, wallet.isMintOutput.bind(wallet), { many: true }))
@@ -1017,14 +1016,14 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
         index: expect.any(Number),
         address: expect.any(String),
         authorities: TOKEN_MINT_MASK,
-      }])
+      }]);
     expect(hWallet.selectAuthorityUtxo(tokenHash, wallet.isMeltOutput.bind(wallet), { many: true }))
       .toStrictEqual([{
         tx_id: tokenHash,
         index: expect.any(Number),
         address: expect.any(String),
         authorities: 2,
-      }])
+      }]);
 
     // Validating the wrapper method
     expect(hWallet.getAuthorityUtxos(tokenHash, 'mint'))
@@ -1040,7 +1039,7 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
         index: expect.any(Number),
         address: expect.any(String),
         authorities: 2,
-      }])
+      }]);
   });
 
   it('should find many "mint" authority utxos', async () => {
@@ -1080,7 +1079,8 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
     expect(hWallet.selectAuthorityUtxo(
       tokenHash,
       wallet.isMintOutput.bind(wallet),
-      { many: true, skipSpent: false }))
+      { many: true, skipSpent: false }
+    ))
       .toStrictEqual([
         {
           tx_id: tokenHash,
@@ -1134,7 +1134,8 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
     expect(hWallet.selectAuthorityUtxo(
       tokenHash,
       wallet.isMeltOutput.bind(wallet),
-      { many: true, skipSpent: false }))
+      { many: true, skipSpent: false }
+    ))
       .toStrictEqual([
         {
           tx_id: tokenHash,
@@ -1173,7 +1174,7 @@ describe('internal methods', () => {
 
     gWallet.disableDebugMode();
     expect(gWallet.debug).toStrictEqual(false);
-  })
+  });
 
   it('should test network-related methods', async () => {
     // GetServerUrl fetching from the live fullnode connection
@@ -1203,7 +1204,7 @@ describe('internal methods', () => {
       rewardSpendMinBlocks: expect.any(Number),
       maxNumberInputs: 255,
       maxNumberOutputs: 255,
-    })
+    });
   });
 
   it('should change servers', async () => {
