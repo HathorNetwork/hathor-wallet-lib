@@ -2087,9 +2087,10 @@ class HathorWallet extends EventEmitter {
    * Get all authorities utxos for specific token
    *
    * @param {string} tokenUid UID of the token to delegate the authority
-   * @param {string} type Type of the authority to delegate 'mint' or 'melt'
+   * @param {"mint"|"melt"} type Type of the authority to search for: 'mint' or 'melt'
    *
-   * @return {Array} Array of objects with {tx_id, index, address} of the authority output.
+   * @return {{tx_id: string, index: number, address: string, authorities: number}[]}
+   *    Array of the authority outputs.
    **/
   getAuthorityUtxos(tokenUid, type) {
     storage.setStore(this.store);

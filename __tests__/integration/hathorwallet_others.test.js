@@ -928,7 +928,8 @@ describe('consolidateUtxos', () => {
   });
 })
 
-describe('selectAuthorityUtxo', () => {
+// getAuthorityUtxos acts as a wrapper for selectAuthorityUtxo: testing them together.
+describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
   /**
    * @type HathorWallet
    */
@@ -952,6 +953,11 @@ describe('selectAuthorityUtxo', () => {
       HATHOR_TOKEN_CONFIG.uid,
       () => true,
       { many: true })).toStrictEqual([]);
+
+    // Testing the wrapper method
+    expect(hWallet.getAuthorityUtxos(fakeTokenUid,'mint')).toStrictEqual([]);
+    expect(hWallet.getAuthorityUtxos(fakeTokenUid,'melt')).toStrictEqual([]);
+    expect(() => hWallet.getAuthorityUtxos(fakeTokenUid,'invalid')).toThrow();
   });
 
   it('should find one authority utxo', async () => {
@@ -996,6 +1002,22 @@ describe('selectAuthorityUtxo', () => {
         address: expect.any(String),
         authorities: 2,
       }])
+
+    // Validating the wrapper method
+    expect(hWallet.getAuthorityUtxos(tokenHash, 'mint'))
+      .toStrictEqual([{
+        tx_id: tokenHash,
+        index: expect.any(Number),
+        address: expect.any(String),
+        authorities: TOKEN_MINT_MASK,
+      }]);
+    expect(hWallet.getAuthorityUtxos(tokenHash, 'melt'))
+      .toStrictEqual([{
+        tx_id: tokenHash,
+        index: expect.any(Number),
+        address: expect.any(String),
+        authorities: 2,
+      }])
   });
 
   it('should find many "mint" authority utxos', async () => {
@@ -1017,6 +1039,13 @@ describe('selectAuthorityUtxo', () => {
         authorities: TOKEN_MINT_MASK,
       }]);
     expect(hWallet.selectAuthorityUtxo(tokenHash, wallet.isMintOutput.bind(wallet), { many: true }))
+      .toStrictEqual([{
+        tx_id: mintDelegationTx.hash,
+        index: expect.any(Number),
+        address: expect.any(String),
+        authorities: TOKEN_MINT_MASK,
+      }]);
+    expect(hWallet.getAuthorityUtxos(tokenHash, 'mint'))
       .toStrictEqual([{
         tx_id: mintDelegationTx.hash,
         index: expect.any(Number),
@@ -1064,6 +1093,13 @@ describe('selectAuthorityUtxo', () => {
         authorities: TOKEN_MELT_MASK,
       }]);
     expect(hWallet.selectAuthorityUtxo(tokenHash, wallet.isMeltOutput.bind(wallet), { many: true }))
+      .toStrictEqual([{
+        tx_id: meltDelegationTx.hash,
+        index: expect.any(Number),
+        address: expect.any(String),
+        authorities: TOKEN_MELT_MASK,
+      }]);
+    expect(hWallet.getAuthorityUtxos(tokenHash, 'melt'))
       .toStrictEqual([{
         tx_id: meltDelegationTx.hash,
         index: expect.any(Number),
@@ -1161,6 +1197,7 @@ describe('internal methods', () => {
  * enableDebugMode - seems to be deprecated
  * disableDebugMode - seems to be deprecated
  * isFromXPub - not relevant for integration
+ * clearSensitiveData - not relevant for integration
  * handleWebsocketMsg - not relevant for integration
  * onConnectionChangedState - too many dependencies, already tested elsewhere
  * onTxArrived - too many dependencies, already tested elsewhere
@@ -1168,6 +1205,8 @@ describe('internal methods', () => {
  * getPreProcessedData - not relevant for integration, already tested elsewhere
  * setState - not relevant for integration, already tested elsewhere
  * onNewTx - not relevant for integration, already tested elsewhere
+ * isReady - not relevant for integration, already tested elsewhere
+ * isAddressMine - not relevant for integration, already tested elsewhere
  *
  * The following methods should be tested with the Atomic Swap tests
  * getAllSignatures
@@ -1176,10 +1215,6 @@ describe('internal methods', () => {
 
 /*
 
-clearSensitiveData
-getAuthorityUtxos
 getTokenData
-isReady
-isAddressMine
 getTxAddresses
  */
