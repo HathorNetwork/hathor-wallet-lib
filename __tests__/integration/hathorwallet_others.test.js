@@ -6,10 +6,11 @@ import {
   stopAllWallets,
   waitForTxReceived, waitUntilNextTimestamp,
 } from './helpers/wallet.helper';
-import { HATHOR_TOKEN_CONFIG } from '../../src/constants';
+import { HATHOR_TOKEN_CONFIG, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
 import { FULLNODE_URL, NETWORK_NAME } from './configuration/test-constants';
 import dateFormatter from '../../src/date';
 import { loggers } from './utils/logger.util';
+import wallet from '../../src/wallet';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 
@@ -927,6 +928,171 @@ describe('consolidateUtxos', () => {
   });
 })
 
+describe('selectAuthorityUtxo', () => {
+  /**
+   * @type HathorWallet
+   */
+  let hWallet;
+  /** @type string */
+  let tokenHash;
+  beforeAll(async () => {
+    hWallet = await generateWalletHelper();
+  })
+  afterAll(async () => {
+    hWallet.stop();
+    await GenesisWalletHelper.clearListeners();
+  })
+
+  it('should work on an empty wallet', async () => {
+    expect(hWallet.selectAuthorityUtxo(
+      HATHOR_TOKEN_CONFIG.uid,
+      () => true)).toStrictEqual(null);
+
+    expect(hWallet.selectAuthorityUtxo(
+      HATHOR_TOKEN_CONFIG.uid,
+      () => true,
+      { many: true })).toStrictEqual([]);
+  });
+
+  it('should find one authority utxo', async () => {
+    // Creating the token
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 1);
+    const { hash: tokenUid } = await createTokenHelper(
+      hWallet,
+      'selectAuthorityUtxo Token',
+      'SAUT',
+      100,
+    );
+    tokenHash = tokenUid;
+
+    // Validating single authority UTXO for a token creation
+    expect(hWallet.selectAuthorityUtxo(tokenHash, wallet.isMintOutput.bind(wallet)))
+      .toStrictEqual([{
+        tx_id: tokenHash,
+        index: expect.any(Number),
+        address: expect.any(String),
+        authorities: TOKEN_MINT_MASK,
+      }])
+    expect(hWallet.selectAuthorityUtxo(tokenHash, wallet.isMeltOutput.bind(wallet)))
+      .toStrictEqual([{
+        tx_id: tokenHash,
+        index: expect.any(Number),
+        address: expect.any(String),
+        authorities: 2,
+      }])
+
+    // Validating single authority UTXO for a token creation ( with "many" option )
+    expect(hWallet.selectAuthorityUtxo(tokenHash, wallet.isMintOutput.bind(wallet), { many: true }))
+      .toStrictEqual([{
+        tx_id: tokenHash,
+        index: expect.any(Number),
+        address: expect.any(String),
+        authorities: TOKEN_MINT_MASK,
+      }])
+    expect(hWallet.selectAuthorityUtxo(tokenHash, wallet.isMeltOutput.bind(wallet), { many: true }))
+      .toStrictEqual([{
+        tx_id: tokenHash,
+        index: expect.any(Number),
+        address: expect.any(String),
+        authorities: 2,
+      }])
+  });
+
+  it('should find many "mint" authority utxos', async () => {
+    // Delegating the mint to another address on the same wallet
+    const mintDelegationTx = await hWallet.delegateAuthority(
+      tokenHash,
+      'mint',
+      hWallet.getAddressAtIndex(1),
+      { createAnother: false }
+    );
+    await waitForTxReceived(hWallet, mintDelegationTx.hash);
+
+    // Should not find the spent utxo
+    expect(hWallet.selectAuthorityUtxo(tokenHash, wallet.isMintOutput.bind(wallet)))
+      .toStrictEqual([{
+        tx_id: mintDelegationTx.hash,
+        index: expect.any(Number),
+        address: expect.any(String),
+        authorities: TOKEN_MINT_MASK,
+      }]);
+    expect(hWallet.selectAuthorityUtxo(tokenHash, wallet.isMintOutput.bind(wallet), { many: true }))
+      .toStrictEqual([{
+        tx_id: mintDelegationTx.hash,
+        index: expect.any(Number),
+        address: expect.any(String),
+        authorities: TOKEN_MINT_MASK,
+      }]);
+
+    // Should return multiple utxos
+    expect(hWallet.selectAuthorityUtxo(
+      tokenHash,
+      wallet.isMintOutput.bind(wallet),
+      { many: true, skipSpent: false }))
+      .toStrictEqual([
+        {
+          tx_id: tokenHash,
+          index: expect.any(Number),
+          address: expect.any(String),
+          authorities: TOKEN_MINT_MASK,
+        },
+        {
+          tx_id: mintDelegationTx.hash,
+          index: expect.any(Number),
+          address: expect.any(String),
+          authorities: TOKEN_MINT_MASK,
+        },
+      ]);
+  });
+
+  it('should find many "melt" authority utxos', async () => {
+    // Delegating the mint to another address on the same wallet
+    const meltDelegationTx = await hWallet.delegateAuthority(
+      tokenHash,
+      'melt',
+      hWallet.getAddressAtIndex(1),
+      { createAnother: false }
+    );
+    await waitForTxReceived(hWallet, meltDelegationTx.hash);
+
+    // Should not find the spent utxo
+    expect(hWallet.selectAuthorityUtxo(tokenHash, wallet.isMeltOutput.bind(wallet)))
+      .toStrictEqual([{
+        tx_id: meltDelegationTx.hash,
+        index: expect.any(Number),
+        address: expect.any(String),
+        authorities: TOKEN_MELT_MASK,
+      }]);
+    expect(hWallet.selectAuthorityUtxo(tokenHash, wallet.isMeltOutput.bind(wallet), { many: true }))
+      .toStrictEqual([{
+        tx_id: meltDelegationTx.hash,
+        index: expect.any(Number),
+        address: expect.any(String),
+        authorities: TOKEN_MELT_MASK,
+      }]);
+
+    // Should return multiple utxos
+    expect(hWallet.selectAuthorityUtxo(
+      tokenHash,
+      wallet.isMeltOutput.bind(wallet),
+      { many: true, skipSpent: false }))
+      .toStrictEqual([
+        {
+          tx_id: tokenHash,
+          index: expect.any(Number),
+          address: expect.any(String),
+          authorities: TOKEN_MELT_MASK,
+        },
+        {
+          tx_id: meltDelegationTx.hash,
+          index: expect.any(Number),
+          address: expect.any(String),
+          authorities: TOKEN_MELT_MASK,
+        },
+      ]);
+  });
+});
+
 // This section tests methods that have side effects impacting the whole wallet. Executing it last.
 describe('internal methods', () => {
   /**
@@ -997,6 +1163,11 @@ describe('internal methods', () => {
  * isFromXPub - not relevant for integration
  * handleWebsocketMsg - not relevant for integration
  * onConnectionChangedState - too many dependencies, already tested elsewhere
+ * onTxArrived - too many dependencies, already tested elsewhere
+ * setPreProcessedData - not relevant for integration, already tested elsewhere
+ * getPreProcessedData - not relevant for integration, already tested elsewhere
+ * setState - not relevant for integration, already tested elsewhere
+ * onNewTx - not relevant for integration, already tested elsewhere
  *
  * The following methods should be tested with the Atomic Swap tests
  * getAllSignatures
@@ -1005,13 +1176,6 @@ describe('internal methods', () => {
 
 /*
 
-consolidateUtxos
-onTxArrived
-setPreProcessedData
-getPreProcessedData
-setState
-onNewTx
-selectAuthorityUtxo
 clearSensitiveData
 getAuthorityUtxos
 getTokenData

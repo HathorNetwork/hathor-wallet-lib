@@ -1622,13 +1622,13 @@ class HathorWallet extends EventEmitter {
    *
    * @param {string} tokenUid UID of the token to select the authority utxo
    * @param {function} filterUTXOs Callback to check if the output is the authority I want (isMeltOutput or isMintOutput)
-   * @param {Object} options Object with custom options.
-   *  {
-   *    'many': if should return many utxos or just one (default false),
-   *    'skipSpent': if should not include spent utxos (default true)
-   *  }
+   * @param [options] Object with custom options.
+   * @param {boolean} [options.many=false] if should return many utxos or just one (default false)
+   * @param {boolean} [options.skipSpent=true] if should not include spent utxos (default true)
    *
-   * @return {Array|null} Array of objects with {tx_id, index, address, authorities} of the authority output. Returns null in case there are no utxos for this type
+   * @return {{tx_id: string, index: number, address: string, authorities: number}[]|null} Array of
+   *     objects of the authority output. Returns null in case there are no utxos for this type or
+   *     an empty array when there are no utxos and option "many" was selected.
    **/
   selectAuthorityUtxo(tokenUid, filterUTXOs, options = {}) {
     const newOptions = Object.assign({many: false, skipSpent: true}, options);
