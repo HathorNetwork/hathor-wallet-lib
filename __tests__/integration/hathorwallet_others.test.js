@@ -911,11 +911,11 @@ describe('consolidateUtxos', () => {
     const addr2 = hWallet1.getAddressAtIndex(2);
 
     const fundTx = await hWallet2.sendManyOutputsTransaction([
-        { address: addr2, value: 10, token: HATHOR_TOKEN_CONFIG.uid },
-        { address: addr2, value: 15, token: HATHOR_TOKEN_CONFIG.uid },
-        { address: addr2, value: 18, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: addr2, value: 1, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: addr2, value: 4, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: addr2, value: 5, token: HATHOR_TOKEN_CONFIG.uid },
         { address: addr2, value: 20, token: HATHOR_TOKEN_CONFIG.uid },
-        { address: addr2, value: 35, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: addr2, value: 40, token: HATHOR_TOKEN_CONFIG.uid },
       ]);
     await waitForTxReceived(hWallet1, fundTx.hash);
 
@@ -924,27 +924,27 @@ describe('consolidateUtxos', () => {
       hWallet1.getAddressAtIndex(4),
       {
         token: HATHOR_TOKEN_CONFIG.uid,
-        amount_bigger_than: 15,
-        maximum_amount: 33,
+        amount_bigger_than: 2,
+        maximum_amount: 15,
       }
     );
     // FIXME: This result is not consistent, sometimes it fetches only utxo "20".
     expect(consolidateTx).toStrictEqual({
       total_utxos_consolidated: 2,
-      total_amount: 33,
+      total_amount: 9,
       txId: expect.any(String),
       utxos: expect.arrayContaining([
-        expect.objectContaining({ amount: 15 }),
-        expect.objectContaining({ amount: 18 }),
+        expect.objectContaining({ amount: 4 }),
+        expect.objectContaining({ amount: 5 }),
       ])
     });
 
     // Validating the updated balance on the wallet
     await waitForTxReceived(hWallet1, consolidateTx.txId);
     expect(hWallet1.getAddressInfo(hWallet1.getAddressAtIndex(2)))
-      .toMatchObject({ total_amount_available: 65 })
+      .toMatchObject({ total_amount_available: 61 })
     expect(hWallet1.getAddressInfo(hWallet1.getAddressAtIndex(4)))
-      .toMatchObject({ total_amount_available: 33 })
+      .toMatchObject({ total_amount_available: 9 })
 
     await waitUntilNextTimestamp(hWallet1, consolidateTx.txId);
     await cleanWallet1(HATHOR_TOKEN_CONFIG.uid);
