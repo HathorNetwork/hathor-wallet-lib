@@ -1,4 +1,4 @@
-import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
+import { multisigWalletsData, precalculationHelpers } from './helpers/wallet-precalculation.helper';
 import { GenesisWalletHelper } from './helpers/genesis-wallet.helper';
 import { delay, getRandomInt } from './utils/core.util';
 import {
@@ -15,7 +15,7 @@ import {
 import HathorWallet from '../../src/new/wallet';
 import { HATHOR_TOKEN_CONFIG, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
 import transaction from '../../src/transaction';
-import { TOKEN_DATA } from './configuration/test-constants';
+import { TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test-constants';
 import wallet from '../../src/wallet';
 import dateFormatter from '../../src/date';
 import { loggers } from './utils/logger.util';
@@ -108,6 +108,27 @@ describe('start', () => {
       const addressAtIndex = hWallet.getAddressAtIndex(+addressIndex);
       expect(precalcAddress).toEqual(addressAtIndex);
     }
+    hWallet.stop();
+  });
+
+  it('should start a multisig wallet', async () => {
+    // Start the wallet
+    const walletConfig = {
+      seed: multisigWalletsData.words[0],
+      connection: generateConnection(),
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+      preCalculatedAddresses: WALLET_CONSTANTS.multisig.addresses,
+      multisig: {
+        pubkeys: multisigWalletsData.pubkeys,
+        numSignatures: 3,
+      },
+    };
+    const hWallet = new HathorWallet(walletConfig);
+    await hWallet.start();
+
+    // Validating that all the booting processes worked
+    await waitForWalletReady(hWallet);
     hWallet.stop();
   });
 });
