@@ -5,7 +5,7 @@ import {
   createTokenHelper,
   DEFAULT_PASSWORD,
   DEFAULT_PIN_CODE,
-  generateConnection,
+  generateConnection, generateMultisigWalletHelper,
   generateWalletHelper,
   stopAllWallets,
   waitForTxReceived,
@@ -20,6 +20,8 @@ import wallet from '../../src/wallet';
 import dateFormatter from '../../src/date';
 import { loggers } from './utils/logger.util';
 import { SendTxError } from '../../src/errors';
+import SendTransaction from '../../src/new/sendTransaction';
+import helpersUtils from '../../src/utils/helpers'
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 const sampleNftData = 'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg';
@@ -723,6 +725,71 @@ describe('sendTransaction', () => {
     expect(tcba[hWallet.getAddressAtIndex(5)]).toHaveProperty('transactions', 2);
     expect(tcba[hWallet.getAddressAtIndex(6)]).toHaveProperty('transactions', 2);
     expect(tcba[hWallet.getAddressAtIndex(12)]).toHaveProperty('transactions', 1);
+  });
+
+  it('should send a multisig transaction', async () => {
+    // Initialize multisig wallets and inject funds to test
+    const mhWallet1 = await generateMultisigWalletHelper({ walletIndex: 0 });
+    const mhWallet2 = await generateMultisigWalletHelper({ walletIndex: 1 });
+    const mhWallet3 = await generateMultisigWalletHelper({ walletIndex: 2 });
+    await GenesisWalletHelper.injectFunds(mhWallet1.getAddressAtIndex(0), 10);
+
+    /*
+     * Building tx proposal:
+     * 1) Identify the UTXO
+     * 2) Build the outputs
+     */
+    const { tx_id: inputTxId, index: inputIndex } = mhWallet1.getUtxos().utxos[0];
+    const network = mhWallet1.getNetworkObject();
+    const sendTransaction = new SendTransaction({
+      inputs: [
+        { txId: inputTxId, index: inputIndex }
+      ],
+      outputs: [
+        { address: mhWallet1.getAddressAtIndex(1), value: 10, token: HATHOR_TOKEN_CONFIG.uid }
+      ],
+      network,
+    });
+    const tx = helpersUtils.createTxFromData(
+      { version: 1, ...sendTransaction.prepareTxData() },
+      network
+    );
+    const txHex = tx.toHex();
+
+    // Getting signatures for the proposal
+    const sig1 = mhWallet1.getAllSignatures(txHex, DEFAULT_PIN_CODE);
+    const sig2 = mhWallet2.getAllSignatures(txHex, DEFAULT_PIN_CODE);
+    const sig3 = mhWallet3.getAllSignatures(txHex, DEFAULT_PIN_CODE);
+
+    // Delay to avoid the same timestamp as the fundTx
+    await waitUntilNextTimestamp(mhWallet1, inputTxId);
+
+    // Sign and push
+    const partiallyAsslembledTx = mhWallet1.assemblePartialTransaction(
+      txHex,
+      [sig1, sig2, sig3]
+    );
+    partiallyAsslembledTx.prepareToSend();
+    const finalTx = new SendTransaction({
+      transaction: partiallyAsslembledTx,
+      network,
+    });
+    loggers.test.log('FinalTx', finalTx.transaction)
+
+    /** @type BaseTransactionResponse */
+    const sentTx = await finalTx.runFromMining();
+    expect(sentTx).toHaveProperty('hash');
+    await waitForTxReceived(mhWallet1, sentTx.hash);
+
+    const historyTx = mhWallet1.getTx(sentTx.hash);
+    loggers.test.log('HistoryTx', historyTx)
+    expect(historyTx).toMatchObject({
+      tx_id: partiallyAsslembledTx.hash,
+      inputs: [expect.objectContaining({
+        tx_id: inputTxId,
+        value: 10,
+      })]
+    })
   });
 });
 

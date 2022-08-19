@@ -36,8 +36,23 @@ import { OutputType } from '../wallet/types';
  * 'unexpected-error': if an unexpected error happens;
  **/
 class SendTransaction extends EventEmitter {
-  /*
-   * data {Object} Prepared tx data
+  /**
+   *
+   * @param {unknown} [transaction] Full tx data
+   * @param {{
+   *   txId: string,
+   *   index: number
+   * }[]} inputs
+   * @param {{
+   *  type: string,
+   *  token: string,
+   *  data?: Buffer,
+   *  address: string,
+   *  value: number,
+   *  timelock: number}[]} outputs
+   * @param {string} [changeAddress]
+   * @param {string} pin
+   * @param {Network} network
    */
   constructor({
     transaction=null,
