@@ -80,6 +80,10 @@ describe('getAddressInfo', () => {
     });
   });
 
+  it('should throw for an address outside the wallet', async () => {
+    expect(() => hWallet.getAddressInfo(WALLET_CONSTANTS.genesis.addresses[0])).toThrow();
+  })
+
   it('should display correct values for transactions with change', async () => {
     const addr2 = hWallet.getAddressAtIndex(2);
     const addr3 = hWallet.getAddressAtIndex(3);
