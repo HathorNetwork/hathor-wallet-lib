@@ -15,9 +15,7 @@ import wallet from '../../src/wallet';
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 
 describe('getAddressInfo', () => {
-  /**
-   * @type HathorWallet
-   */
+  /** @type HathorWallet */
   let hWallet;
   beforeAll(async () => {
     hWallet = await generateWalletHelper();
@@ -28,7 +26,7 @@ describe('getAddressInfo', () => {
   });
 
 
-  it('should test HTR transactions with full value', async () => {
+  it('should display correct values for HTR transactions with no change', async () => {
     const addr0 = hWallet.getAddressAtIndex(0);
     const addr1 = hWallet.getAddressAtIndex(1);
 
@@ -50,7 +48,6 @@ describe('getAddressInfo', () => {
       total_amount_available: 10,
     });
 
-
     // Validating the results for two transactions
     let tx = await hWallet.sendTransaction(addr1, 10);
     await waitForTxReceived(hWallet, tx.hash);
@@ -66,7 +63,6 @@ describe('getAddressInfo', () => {
       total_amount_available: 10,
       index: 1, // Ensuring the index is correct
     });
-
 
     // Validating the results for the funds returning to previously used address
     await waitUntilNextTimestamp(hWallet, tx.hash);
@@ -84,7 +80,7 @@ describe('getAddressInfo', () => {
     });
   });
 
-  it('should test transactions with partial value', async () => {
+  it('should display correct values for transactions with change', async () => {
     const addr2 = hWallet.getAddressAtIndex(2);
     const addr3 = hWallet.getAddressAtIndex(3);
 
@@ -136,7 +132,7 @@ describe('getAddressInfo', () => {
     );
     await waitForTxReceived(hWallet, rawTimelockTx.hash);
 
-
+    // Validating locked balance
     expect(hWallet.getAddressInfo(hWallet.getAddressAtIndex(0))).toMatchObject({
       total_amount_available: 7,
       total_amount_locked: 3,
@@ -149,6 +145,7 @@ describe('getAddressInfo', () => {
     const addr0Custom = hWalletCustom.getAddressAtIndex(0);
     const addr1Custom = hWalletCustom.getAddressAtIndex(1);
 
+    // Creating custom token
     await GenesisWalletHelper.injectFunds(addr0Custom, 1);
     const { hash: tokenUid } = await createTokenHelper(
       hWalletCustom,
@@ -189,7 +186,7 @@ describe('getAddressInfo', () => {
       total_amount_sent: 0,
       total_amount_available: 40,
     });
-  });;
+  });
 })
 
 describe('getTxAddresses', () => {
@@ -197,6 +194,7 @@ describe('getTxAddresses', () => {
     const hWallet = await generateWalletHelper();
     const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
 
+    // Generating a transaction with outputs to multiple addresses
     const tx = await gWallet.sendManyOutputsTransaction([
       { address: hWallet.getAddressAtIndex(1), value: 1, token: HATHOR_TOKEN_CONFIG.uid },
       { address: hWallet.getAddressAtIndex(3), value: 3, token: HATHOR_TOKEN_CONFIG.uid },
@@ -206,6 +204,7 @@ describe('getTxAddresses', () => {
     });
     await waitForTxReceived(hWallet, tx.hash);
 
+    // Validating the method results
     const decodedTx = hWallet.getTx(tx.hash);
     expect(hWallet.getTxAddresses(decodedTx)).toStrictEqual(new Set([
       hWallet.getAddressAtIndex(1),
@@ -242,6 +241,7 @@ describe('getAllUtxos', () => {
     // Inject a transaction and validate the results
     const tx1 = await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
 
+    // Get correct results for a single transaction
     utxoGenerator = await hWallet.getAllUtxos();
     utxoGenResult = await utxoGenerator.next();
     expect(utxoGenResult)
@@ -261,6 +261,7 @@ describe('getAllUtxos', () => {
         }
       });
 
+    // Expect the generator to have finished
     expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true })
   });
 
@@ -274,7 +275,6 @@ describe('getAllUtxos', () => {
     // Validate that on the address that received the transaction, the UTXO is listed
     let utxoGenerator = await hWallet.getAllUtxos({ filter_address: hWallet.getAddressAtIndex(0) });
     let utxoGenResult = await utxoGenerator.next();
-
     expect(utxoGenResult.value).toMatchObject({
       txId: tx1.hash,
       value: 10,
@@ -302,7 +302,6 @@ describe('getAllUtxos', () => {
     // Validate that the HTR change is listed
     let utxoGenerator = await hWallet.getAllUtxos();
     let utxoGenResult = await utxoGenerator.next();
-
     expect(utxoGenResult.value).toMatchObject({
       txId: tokenUid,
       tokenId: HATHOR_TOKEN_CONFIG.uid,
@@ -312,7 +311,6 @@ describe('getAllUtxos', () => {
 
     // Validate that the custom token utxo is listed with its authority tokens
     utxoGenerator = await hWallet.getAllUtxos({ token: tokenUid });
-
     utxoGenResult = await utxoGenerator.next();
     expect(utxoGenResult.value).toMatchObject({
       txId: tokenUid,
@@ -326,7 +324,7 @@ describe('getAllUtxos', () => {
       txId: tokenUid,
       tokenId: tokenUid,
       value: 1,
-      authorities: 1 // Mint authority bits for the custom token
+      authorities: TOKEN_MINT_MASK
     });
 
     utxoGenResult = await utxoGenerator.next();
@@ -334,7 +332,7 @@ describe('getAllUtxos', () => {
       txId: tokenUid,
       tokenId: tokenUid,
       value: 2,
-      authorities: 2 // Melt authority bits for the custom token
+      authorities: TOKEN_MELT_MASK
     });
 
     expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true });
@@ -342,9 +340,7 @@ describe('getAllUtxos', () => {
 });
 
 describe('getUtxosForAmount', () => {
-  /**
-   * @type HathorWallet
-   */
+  /** @type HathorWallet */
   let hWallet;
   let fundTx1hash;
 
@@ -520,17 +516,11 @@ describe('getUtxosForAmount', () => {
 });
 
 describe('markUtxoSelected', () => {
-  /**
-   * @type HathorWallet
-   */
+  /** @type HathorWallet */
   let hWallet;
-  /**
-   * @type string
-   */
+  /** @type string */
   let txHash;
-  /**
-   * @type number
-   */
+  /** @type number */
   let oIndex;
 
   beforeAll(async () => {
@@ -658,7 +648,6 @@ describe('consolidateUtxos', () => {
 
   /**
    * Helper function to empty wallet1 of a specified token and move it all back to wallet2.
-   * This minimizes test dependency.
    * @param {string} [token]
    * @returns {Promise<void>}
    */
@@ -935,6 +924,7 @@ describe('consolidateUtxos', () => {
         maximum_amount: 33,
       }
     );
+    // FIXME: This result is not consistent, sometimes it fetches only utxo "20".
     expect(consolidateTx).toStrictEqual({
       total_utxos_consolidated: 2,
       total_amount: 33,
@@ -959,9 +949,7 @@ describe('consolidateUtxos', () => {
 
 // getAuthorityUtxos acts as a wrapper for selectAuthorityUtxo: testing them together.
 describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
-  /**
-   * @type HathorWallet
-   */
+  /** @type HathorWallet */
   let hWallet;
   /** @type string */
   let tokenHash;
@@ -974,10 +962,12 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
   })
 
   it('should work on an empty wallet', async () => {
+    // Default options
     expect(hWallet.selectAuthorityUtxo(
       HATHOR_TOKEN_CONFIG.uid,
       () => true)).toStrictEqual(null);
 
+    // With "many" option
     expect(hWallet.selectAuthorityUtxo(
       HATHOR_TOKEN_CONFIG.uid,
       () => true,
@@ -1160,9 +1150,7 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
 
 // This section tests methods that have side effects impacting the whole wallet. Executing it last.
 describe('internal methods', () => {
-  /**
-   * @type HathorWallet
-   */
+  /** @type HathorWallet */
   let gWallet;
   beforeAll(async () => {
     const { hWallet } = await GenesisWalletHelper.getSingleton();
@@ -1174,7 +1162,7 @@ describe('internal methods', () => {
   });
 
   it('should test network-related methods', async () => {
-    // GetServerUrl
+    // GetServerUrl fetching from the live fullnode connection
     expect(gWallet.getServerUrl()).toStrictEqual(FULLNODE_URL);
     expect(gWallet.getNetwork()).toStrictEqual(NETWORK_NAME);
     expect(gWallet.getNetworkObject()).toMatchObject({
@@ -1187,6 +1175,8 @@ describe('internal methods', () => {
         scripthash: 135
       }
     });
+
+    // GetVersionData fetching from the live fullnode server
     expect(await gWallet.getVersionData()).toMatchObject({
       timestamp: expect.any(Number),
       version: expect.stringMatching(/^\d+\.\d+\.\d+$/),
@@ -1203,10 +1193,12 @@ describe('internal methods', () => {
   });
 
   it('should change servers', async () => {
+    // Changing from our integration test privatenet to the testnet
     gWallet.changeServer('https://node1.testnet.hathor.network/v1a/');
     const serverChangeTime = Date.now().valueOf();
     await delay(100);
 
+    // Validating the server change with getVersionData
     let networkData = await gWallet.getVersionData();
     expect(networkData.timestamp).toBeGreaterThan(serverChangeTime);
     expect(networkData.network).toMatch(/^testnet.*/);
@@ -1214,6 +1206,7 @@ describe('internal methods', () => {
     gWallet.changeServer(FULLNODE_URL);
     await delay(100);
 
+    // Reverting to the privatenet
     networkData = await gWallet.getVersionData();
     expect(networkData.timestamp).toBeGreaterThan(serverChangeTime + 200);
     expect(networkData.network).toStrictEqual(NETWORK_NAME);
