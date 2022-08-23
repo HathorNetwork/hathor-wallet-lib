@@ -9,6 +9,7 @@ import { PartialTx, PartialTxInputData } from '../models/partial_tx';
 import Address from '../models/address';
 import P2SH from '../models/p2sh';
 import P2PKH from '../models/p2pkh';
+import ScriptData from '../models/script_data';
 import Transaction from '../models/transaction';
 import { AddressError, InvalidPartialTxError, InsufficientFundsError } from '../errors';
 import Network from '../models/network';
@@ -19,7 +20,7 @@ import transaction from '../transaction';
 import helpers from '../utils/helpers';
 import transactionUtils from '../utils/transaction';
 
-import { OutputType, Utxo } from './types';
+import { OutputType, Utxo, Balance } from './types';
 
 interface UtxoExtended extends Utxo {
   tokenData?: number
@@ -235,6 +236,61 @@ class PartialTxProposal {
         throw new AddressError('Unsupported address type');
     }
     this.partialTx.addOutput(value, script.createScript(), { token, tokenData, isChange });
+  }
+
+  /**
+   * Calculate the token balance of the partial tx for a specific wallet.
+   *
+   * @param {HathorWallet} wallet Calculate the balance for this wallet.
+   *
+   * @returns {Record<string, Balance>}
+   */
+  calculateBalance(wallet: HathorWallet): Record<string, Balance> {
+    const tokenBalance: Record<string, Balance> = {};
+
+    for (const input of this.partialTx.inputs) {
+
+      if (!wallet.isAddressMine(input.address)) continue;
+
+      if (!tokenBalance[input.token]) {
+        tokenBalance[input.token] = { unlocked: 0, locked: 0 };
+      }
+
+      // TODO: calculate authority balance
+
+      // calculate token balance
+      if (!input.isAuthority()) {
+        tokenBalance[input.token].unlocked -= input.value;
+      }
+    }
+
+    for (const output of this.partialTx.outputs) {
+      const decodedScript = output.decodedScript || output.parseScript(this.network)
+
+      // Catch data output and non-standard scripts cases
+      if (decodedScript instanceof ScriptData || !decodedScript) continue;
+
+      if (!wallet.isAddressMine(decodedScript.address)) continue;
+
+      if (!tokenBalance[output.token]) {
+        tokenBalance[output.token] = { unlocked: 0, locked: 0 };
+      }
+
+      // TODO: calculate authority balance
+
+      // calculate token balance
+      if (!output.isAuthority()) {
+        if (decodedScript.timelock) {
+          // Locked output
+          tokenBalance[output.token].locked += output.value;
+        } else {
+          // Unlocked output
+          tokenBalance[output.token].unlocked += output.value;
+        }
+      }
+    }
+
+    return tokenBalance;
   }
 
   /**
