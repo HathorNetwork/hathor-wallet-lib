@@ -17,8 +17,13 @@ import { HATHOR_TOKEN_CONFIG } from '../constants';
 
 import transaction from '../transaction';
 import helpers from '../utils/helpers';
+import transactionUtils from '../utils/transaction';
 
-import { OutputType } from './types';
+import { OutputType, Utxo } from './types';
+
+interface UtxoExtended extends Utxo {
+  tokenData?: number
+}
 
 class PartialTxProposal {
 
@@ -48,11 +53,35 @@ class PartialTxProposal {
    *
    * @returns {PartialTxProposal}
    */
-  static fromPartialTx(serialized: string, network: Network) {
+  static fromPartialTx(serialized: string, network: Network): PartialTxProposal {
     const partialTx = PartialTx.deserialize(serialized, network);
     const proposal = new PartialTxProposal(network);
     proposal.partialTx = partialTx;
     return proposal;
+  }
+
+  /**
+   * Get all available utxos on the wallet history for a token.
+   *
+   * @param {HathorWallet} wallet Wallet which will provide the tokens.
+   * @param {string?} [token='00'] UID of token that is being sent
+   *
+   * @returns {UtxoExtended[]}
+   */
+  getWalletUtxos(wallet: HathorWallet, token: string = HATHOR_TOKEN_CONFIG.uid): UtxoExtended[] {
+    const historyTransactions = wallet.getFullHistory();
+    const allUtxos = [...wallet.getAllUtxos({ token })].filter(utxo => utxo.authorities === 0);
+    const allExtendedUtxos: UtxoExtended[] = [];
+    for (const utxo of allUtxos) {
+      // Since we chose the utxos from the historyTransactions, we can be sure this exists.
+      const txout = historyTransactions[utxo.txId].outputs[utxo.index];
+      allExtendedUtxos.push({
+        ...utxo,
+        tokenData: txout.token_data,
+      });
+    }
+
+    return allExtendedUtxos;
   }
 
   /**
@@ -62,6 +91,7 @@ class PartialTxProposal {
    * @param {string} token UID of token that is being sent
    * @param {number} value Quantity of tokens being sent
    * @param {Object} [options]
+   * @param {UtxoExtended[]|null} [options.changeAddress=null] If we add change, use this address instead of getting a new one from the wallet.
    * @param {string|null} [options.changeAddress=null] If we add change, use this address instead of getting a new one from the wallet.
    * @param {boolean} [options.markAsSelected=true] Mark the utxo with `selected_as_input`.
    */
@@ -69,23 +99,28 @@ class PartialTxProposal {
     wallet: HathorWallet,
     token: string,
     value: number,
-    { changeAddress = null, markAsSelected = true }: { changeAddress?: string|null, markAsSelected?: boolean } = {},
+    { utxos = null, changeAddress = null, markAsSelected = true }: { utxos?: UtxoExtended[]|null, changeAddress?: string|null, markAsSelected?: boolean } = {},
   ) {
     this.resetSignatures();
 
-    const historyTransactions = wallet.getFullHistory();
+    // Since the selectUtxos returns a list of Utxo, we need a way to access the original utxo for the tokenData.
+    const utxosDict: Record<string, UtxoExtended> = {};
+    // Use the pool of utxos or all wallet utxos.
+    const allUtxos: UtxoExtended[] = utxos || this.getWalletUtxos(wallet, token);
+    for (const utxo of allUtxos) {
+      utxosDict[utxo.txId] = utxo;
+    }
+    const utxosDetails = transactionUtils.selectUtxos(allUtxos, value);
 
-    const utxosDetails = wallet.getUtxosForAmount(value, { token });
     for (const utxo of utxosDetails.utxos) {
-      // Since we chose the utxos from the historyTransactions, we can be sure this exists.
-      const txout = historyTransactions[utxo.txId].outputs[utxo.index];
+      const tokenData = utxosDict[utxo.txId].tokenData;
       this.addInput(
         wallet,
         utxo.txId,
         utxo.index,
         utxo.value,
         utxo.address,
-        { token: utxo.tokenId, tokenData: txout.token_data, markAsSelected },
+        { token: utxo.tokenId, tokenData, markAsSelected },
       );
     }
 
@@ -226,7 +261,7 @@ class PartialTxProposal {
    *
    * @returns {boolean}
    */
-  isComplete() {
+  isComplete(): boolean {
     return (!!this.signatures) && this.partialTx.isComplete() && this.signatures.isComplete();
   }
 
@@ -279,7 +314,7 @@ class PartialTxProposal {
    *
    * @returns {Transaction}
    */
-  prepareTx() {
+  prepareTx(): Transaction {
     if (!this.partialTx.isComplete()) {
       throw new InvalidPartialTxError('Incomplete data');
     }

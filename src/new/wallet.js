@@ -921,22 +921,8 @@ class HathorWallet extends EventEmitter {
 
         if (txout.spent_by === null) {
           if (wallet.canUseUnspentTx(txout, tx.height)) {
-            const isAuthority = wallet.isAuthorityOutput(txout);
-            const addressIndex = this.getAddressIndex(txout.decoded.address);
-
-            const utxo = {
-              txId: tx_id,
-              index,
-              tokenId: txout.token,
-              address: txout.decoded.address,
-              value: txout.value,
-              authorities: isAuthority ? txout.value : 0,
-              timelock: txout.decoded.timelock,
-              heightlock: null, // not enough info to determine this.
-              locked: false,
-              addressPath: `m/44'/280'/0'/0/${addressIndex}`,
-            };
-            yield utxo;
+            const addressPath = `m/44'/280'/0'/0/${this.getAddressIndex(txout.decoded.address)}`;
+            yield transactionUtils.utxoFromHistoryOutput(tx_id, index, txout, { addressPath });
           }
         }
       }

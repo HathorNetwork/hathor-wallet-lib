@@ -37,6 +37,7 @@ const tokensUtils = require('./lib/utils/tokens');
 const walletUtils = require('./lib/utils/wallet');
 const helpersUtils = require('./lib/utils/helpers');
 const scriptsUtils = require('./lib/utils/scripts');
+const transactionUtils = require('./lib/utils/transaction');
 const HathorWalletServiceWallet = require('./lib/wallet/wallet');
 const SendTransactionWalletService = require('./lib/wallet/sendTransactionWalletService');
 const config = require('./lib/config');
@@ -87,6 +88,7 @@ module.exports = {
   walletUtils: walletUtils.default,
   helpersUtils: helpersUtils.default,
   scriptsUtils: scriptsUtils,
+  transactionUtils: transactionUtils.default,
   HathorWalletServiceWallet: HathorWalletServiceWallet.default,
   SendTransactionWalletService: SendTransactionWalletService.default,
   config: config.default,
