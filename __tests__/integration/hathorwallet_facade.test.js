@@ -220,6 +220,18 @@ describe('addresses methods', () => {
       address: wallet.getAddressAtIndex(currentAddress.index + 1),
     });
   });
+
+  it('should get correct addresses for a multisig wallet', async () => {
+    const mshWallet = await generateMultisigWalletHelper({ walletIndex: 0 });
+
+    // We will assume the wallet never received txs, which is to be expected for the addresses test
+    expect(mshWallet.getCurrentAddress().address).toStrictEqual(WALLET_CONSTANTS.multisig.addresses[0]);
+
+    for (let i=0; i < 21; ++i) {
+      expect(mshWallet.getAddressAtIndex(i))
+        .toStrictEqual(WALLET_CONSTANTS.multisig.addresses[i]);
+    }
+  })
 });
 
 describe('getTransactionsCountByAddress', () => {
