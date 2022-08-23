@@ -57,3 +57,27 @@ export type HistoryTransaction = {
   token_symbol?: string,
   tokens: string[],
 }
+
+/**
+ * A balance object for a token on a transaction or across transactions
+ * containing token and authority balances.
+ */
+export interface Balance {
+  balance: TokenBalance;
+  authority: AuthorityBalance;
+}
+
+export interface TokenBalance {
+  unlocked: number;
+  locked: number;
+}
+
+export interface AuthorityBalance {
+  unlocked: Authority;
+  locked: Authority;
+}
+
+export interface Authority {
+  mint: number;
+  melt: number;
+}
