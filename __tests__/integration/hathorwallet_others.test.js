@@ -11,6 +11,7 @@ import { FULLNODE_URL, NETWORK_NAME, WALLET_CONSTANTS } from './configuration/te
 import dateFormatter from '../../src/date';
 import { loggers } from './utils/logger.util';
 import wallet from '../../src/wallet';
+import transaction from '../../src/transaction';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 
@@ -635,12 +636,12 @@ describe('consolidateUtxos', () => {
   beforeAll(async () => {
     hWallet1 = await generateWalletHelper();
     hWallet2 = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet2.getAddressAtIndex(0), 101);
+    await GenesisWalletHelper.injectFunds(hWallet2.getAddressAtIndex(0), 110);
     const { hash: tokenUid } = await createTokenHelper(
       hWallet2,
       'Consolidate Token',
       'CTK',
-      100,
+      1000,
       { address: hWallet2.getAddressAtIndex(0) }
     );
     tokenHash = tokenUid;
@@ -675,6 +676,20 @@ describe('consolidateUtxos', () => {
   it('should throw when consolidating on an empty wallet', async () => {
     await expect(hWallet1.consolidateUtxos(hWallet1.getAddressAtIndex(0)))
       .rejects.toThrow('available utxo');
+  });
+
+  it('should throw when consolidating on an invalid address', async () => {
+    const fundTx = await hWallet2.sendManyOutputsTransaction([
+      { address: hWallet1.getAddressAtIndex(0), value: 4, token: HATHOR_TOKEN_CONFIG.uid },
+      { address: hWallet1.getAddressAtIndex(1), value: 5, token: HATHOR_TOKEN_CONFIG.uid },
+    ]);
+    await waitForTxReceived(hWallet1, fundTx.hash);
+
+    await expect(hWallet1.consolidateUtxos(hWallet2.getAddressAtIndex(0)))
+      .rejects.toThrow('not owned by this wallet');
+
+    await waitUntilNextTimestamp(hWallet1, fundTx.hash);
+    await cleanWallet1(HATHOR_TOKEN_CONFIG.uid);
   });
 
   it('should consolidate two utxos (htr)', async () => {
@@ -949,6 +964,49 @@ describe('consolidateUtxos', () => {
 
     await waitUntilNextTimestamp(hWallet1, consolidateTx.txId);
     await cleanWallet1(HATHOR_TOKEN_CONFIG.uid);
+  });
+
+  it('should consolidate at most the maximum output constant', async () => {
+    // Generating the maximum outputs possible for a transaction ( by default, 255 )
+    const outputs1 = [];
+    const maxOutputsLimit = transaction.getMaxOutputsConstant();
+    for (let i=1; i < maxOutputsLimit; ++i) {
+      outputs1.push({ address: hWallet1.getAddressAtIndex(0), value: 1, token: tokenHash });
+    }
+    let timeTx = Date.now().valueOf();
+    const fundTx1 = await hWallet2.sendManyOutputsTransaction(outputs1);
+    loggers.test.log(`Tx1 took ${Date.now().valueOf() - timeTx}ms to mine`)
+    await waitForTxReceived(hWallet1, fundTx1.hash);
+    await waitUntilNextTimestamp(hWallet1, fundTx1.hash);
+
+    // Generating another 10 utxos over this limit
+    const outputs2 = [];
+    for (let i=0; i < 10; ++i) {
+      outputs2.push({ address: hWallet1.getAddressAtIndex(1), value: 1, token: tokenHash });
+    }
+    timeTx = Date.now().valueOf();
+    const fundTx2 = await hWallet2.sendManyOutputsTransaction(outputs2);
+    loggers.test.log(`Tx2 took ${Date.now().valueOf() - timeTx}ms to mine`)
+    await waitForTxReceived(hWallet1, fundTx2.hash);
+    await waitUntilNextTimestamp(hWallet1, fundTx2.hash);
+
+    // Trying to consolidate all of them on a single utxo ( this takes 70s on average )
+    timeTx = Date.now().valueOf();
+    const consolidateTx = await hWallet1.consolidateUtxos(
+      hWallet1.getAddressAtIndex(4),
+      { token: tokenHash },
+    );
+    loggers.test.log(`ConsolidateTx took ${Date.now().valueOf() - timeTx}ms to mine`)
+    expect(consolidateTx.utxos).toHaveLength(maxOutputsLimit);
+    /*
+     * We have to increase the timeout for this transaction, as it takes a long time to mine
+     * due to the amount of inputs.
+     */
+    await waitForTxReceived(hWallet1, consolidateTx.tx_id, 60000);
+
+    const utxosAfterConsolidation = await hWallet1.getUtxos({ token: tokenHash });
+    // Ensure the maximum possible amount of utxos was consolidated ( 1 consolidated + 10 from tx2 )
+    expect(utxosAfterConsolidation.total_utxos_available).toStrictEqual(11);
   });
 });
 

@@ -1036,7 +1036,7 @@ class HathorWallet extends EventEmitter {
    * @typedef ConsolidationResult
    * @property {number} total_utxos_consolidated - Number of utxos consolidated
    * @property {number} total_amount - Consolidated amount
-   * @property {number} tx_id - Consolidated transaction id
+   * @property {string} tx_id - Consolidated transaction id
    * @property {{
    *  address: string,
    *  amount: number,
