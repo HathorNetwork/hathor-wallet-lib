@@ -280,7 +280,7 @@ class PartialTxProposal {
       // Catch data output and non-standard scripts cases
       if (decodedScript instanceof ScriptData || !decodedScript) continue;
 
-      if (!wallet.isAddressMine(decodedScript.address)) continue;
+      if (!wallet.isAddressMine(decodedScript.address.base58)) continue;
 
       if (!tokenBalance[output.token]) {
         tokenBalance[output.token] = getEmptyBalance();
