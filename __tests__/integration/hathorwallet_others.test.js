@@ -537,6 +537,10 @@ describe('markUtxoSelected', () => {
     await GenesisWalletHelper.clearListeners();
   });
 
+  it('should treat invalid inputs', () => {
+    expect(() => hWallet.markUtxoSelected(fakeTokenUid, 0)).not.toThrow();
+  });
+
   /*
    * We will validate this method's results by the following checks:
    * 1 - getTx() - direct access to the wallet full history
