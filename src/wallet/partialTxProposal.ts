@@ -14,13 +14,18 @@ import Transaction from '../models/transaction';
 import { AddressError, InvalidPartialTxError, InsufficientFundsError } from '../errors';
 import Network from '../models/network';
 import HathorWallet from '../new/wallet';
-import { HATHOR_TOKEN_CONFIG } from '../constants';
+import {
+  HATHOR_TOKEN_CONFIG,
+  TOKEN_MELT_MASK,
+  TOKEN_MINT_MASK
+} from '../constants';
 
 import transaction from '../transaction';
 import helpers from '../utils/helpers';
 import transactionUtils from '../utils/transaction';
 
-import { OutputType, Utxo, Balance } from './types';
+import { OutputType, Utxo } from './types';
+import { Balance } from '../models/types';
 
 interface UtxoExtended extends Utxo {
   tokenData?: number
@@ -246,21 +251,28 @@ class PartialTxProposal {
    * @returns {Record<string, Balance>}
    */
   calculateBalance(wallet: HathorWallet): Record<string, Balance> {
+    const getEmptyBalance = () => ({
+      balance: { unlocked: 0, locked: 0 },
+      authority: { unlocked: { mint: 0, melt: 0 }, locked: { mint: 0, melt: 0 } },
+    });
     const tokenBalance: Record<string, Balance> = {};
+
 
     for (const input of this.partialTx.inputs) {
 
       if (!wallet.isAddressMine(input.address)) continue;
 
       if (!tokenBalance[input.token]) {
-        tokenBalance[input.token] = { unlocked: 0, locked: 0 };
+        tokenBalance[input.token] = getEmptyBalance();
       }
 
-      // TODO: calculate authority balance
-
-      // calculate token balance
-      if (!input.isAuthority()) {
-        tokenBalance[input.token].unlocked -= input.value;
+      if (input.isAuthority()) {
+        // calculate authority balance
+        tokenBalance[input.token].authority.unlocked.mint -= (input.value & TOKEN_MINT_MASK) > 0 ? 1 : 0;
+        tokenBalance[input.token].authority.unlocked.melt -= (input.value & TOKEN_MELT_MASK) > 0 ? 1 : 0;
+      } else {
+        // calculate token balance
+        tokenBalance[input.token].balance.unlocked -= input.value;
       }
     }
 
@@ -273,19 +285,32 @@ class PartialTxProposal {
       if (!wallet.isAddressMine(decodedScript.address)) continue;
 
       if (!tokenBalance[output.token]) {
-        tokenBalance[output.token] = { unlocked: 0, locked: 0 };
+        tokenBalance[output.token] = getEmptyBalance();
       }
 
-      // TODO: calculate authority balance
-
-      // calculate token balance
-      if (!output.isAuthority()) {
+      if (output.isAuthority()) {
+        /**
+         * Calculate authorities
+         */
         if (decodedScript.timelock) {
           // Locked output
-          tokenBalance[output.token].locked += output.value;
+          tokenBalance[output.token].authority.locked.mint += (output.value & TOKEN_MINT_MASK) > 0 ? 1 : 0;
+          tokenBalance[output.token].authority.locked.melt += (output.value & TOKEN_MELT_MASK) > 0 ? 1 : 0;
         } else {
           // Unlocked output
-          tokenBalance[output.token].unlocked += output.value;
+          tokenBalance[output.token].authority.unlocked.mint += (output.value & TOKEN_MINT_MASK) > 0 ? 1 : 0;
+          tokenBalance[output.token].authority.unlocked.melt += (output.value & TOKEN_MELT_MASK) > 0 ? 1 : 0;
+        }
+      } else {
+        /**
+         * Calculate token balances
+         */
+        if (decodedScript.timelock) {
+          // Locked output
+          tokenBalance[output.token].balance.locked += output.value;
+        } else {
+          // Unlocked output
+          tokenBalance[output.token].balance.unlocked += output.value;
         }
       }
     }
