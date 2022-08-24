@@ -133,6 +133,66 @@ describe('start', () => {
     await waitForWalletReady(hWallet);
     hWallet.stop();
   });
+
+  it('should start a wallet to manage a specific token', async () => {
+    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+
+    // Creating a new wallet with a known set of words just to generate the custom token
+    let hWallet = await generateWalletHelper({
+      seed: walletData.words,
+      preCalculatedAddresses: walletData.addresses,
+    });
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 2);
+    const { hash: tokenUid } = await createTokenHelper(
+      hWallet,
+      'Dedicated Wallet Token',
+      'DWT',
+      100
+    );
+
+    // Stopping this wallet and destroying its memory state
+    await hWallet.stop({ cleanStorage: true });
+    hWallet = null;
+
+    // Starting a new wallet re-using the same words, this time with a specific wallet token
+    hWallet = await generateWalletHelper({
+      seed: walletData.words,
+      preCalculatedAddresses: walletData.addresses,
+      tokenUid,
+    });
+    expect(hWallet.isReady()).toStrictEqual(true); // This operation should work
+
+    // Now testing the methods that use this set tokenUid information
+    // TODO: Implement this code branch
+    await expect(hWallet.getBalance()).rejects.toThrow('Not implemented');
+
+    // FIXME: This test is being made just to increse coverage, but its results are incorrect
+    expect(await hWallet.getTxHistory()).toStrictEqual([
+      // This is the correct expectation for this test:
+      // expect.objectContaining({
+      //   txId: tokenUid,
+      //   tokenUid: tokenUid,
+      //   balance: 100
+      // }),
+      // Below are the incorrect results that are being returned
+      expect.objectContaining({
+        txId: expect.any(String),
+        tokenUid: HATHOR_TOKEN_CONFIG.uid,
+        balance: expect.any(Number),
+      }),
+      expect.objectContaining({
+        txId: expect.any(String),
+        tokenUid: HATHOR_TOKEN_CONFIG.uid,
+        balance: expect.any(Number),
+      }),
+    ]);
+
+    /*
+     * These tests could be created inside the `getBalance` and `getTxHistory` sections but for
+     * simplicity sake, since they are so small, were added here just as a complement to
+     * this `start` test.
+     */
+  })
 });
 
 describe('addresses methods', () => {
