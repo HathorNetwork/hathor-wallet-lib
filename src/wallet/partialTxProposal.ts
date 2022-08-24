@@ -112,7 +112,7 @@ class PartialTxProposal {
     // Since the selectUtxos returns a list of Utxo, we need a way to access the original utxo for the tokenData.
     const utxosDict: Record<string, UtxoExtended> = {};
     // Use the pool of utxos or all wallet utxos.
-    const allUtxos: UtxoExtended[] = utxos || this.getWalletUtxos(wallet, token);
+    const allUtxos: UtxoExtended[] = (utxos && utxos.length > 0) ? utxos : this.getWalletUtxos(wallet, token);
     for (const utxo of allUtxos) {
       utxosDict[utxo.txId] = utxo;
     }
@@ -257,9 +257,7 @@ class PartialTxProposal {
     });
     const tokenBalance: Record<string, Balance> = {};
 
-
     for (const input of this.partialTx.inputs) {
-
       if (!wallet.isAddressMine(input.address)) continue;
 
       if (!tokenBalance[input.token]) {
@@ -277,7 +275,7 @@ class PartialTxProposal {
     }
 
     for (const output of this.partialTx.outputs) {
-      const decodedScript = output.decodedScript || output.parseScript(this.network)
+      const decodedScript = output.decodedScript || output.parseScript(this.network);
 
       // Catch data output and non-standard scripts cases
       if (decodedScript instanceof ScriptData || !decodedScript) continue;
