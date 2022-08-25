@@ -1698,6 +1698,17 @@ describe('destroyAuthority', () => {
     let mintAuthorities = await hWallet.getMintAuthority(tokenUid, { many: true });
     expect(mintAuthorities).toHaveLength(2);
 
+    // Trying to destroy more authorities than there are available
+    await expect(hWallet.destroyAuthority(tokenUid, 'mint', 3))
+      .rejects.toStrictEqual({
+        success: false,
+        message: expect.stringContaining('utxos-available'),
+        errorData: {
+          requestedQuantity: 3,
+          availableQuantity: 2
+        }
+      });
+
     // Destroying one mint authority
     await waitUntilNextTimestamp(hWallet, newMintTx);
     const { hash: destroyMintTx } = await hWallet.destroyAuthority(tokenUid, 'mint', 1);
@@ -1743,6 +1754,17 @@ describe('destroyAuthority', () => {
     // Validating though getMintAuthority
     let meltAuthorities = await hWallet.getMeltAuthority(tokenUid, { many: true });
     expect(meltAuthorities).toHaveLength(2);
+
+    // Trying to destroy more authorities than there are available
+    await expect(hWallet.destroyAuthority(tokenUid, 'melt', 3))
+      .rejects.toStrictEqual({
+        success: false,
+        message: expect.stringContaining('utxos-available'),
+        errorData: {
+          requestedQuantity: 3,
+          availableQuantity: 2
+        }
+      });
 
     // Destroying one melt authority
     await waitUntilNextTimestamp(hWallet, newMeltTx);
