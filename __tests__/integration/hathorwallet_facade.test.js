@@ -168,27 +168,40 @@ describe('start', () => {
     expect(hWallet.isReady()).toStrictEqual(true); // This operation should work
 
     // Now testing the methods that use this set tokenUid information
-    // TODO: Implement this code branch
-    await expect(hWallet.getBalance()).rejects.toThrow('Not implemented');
+    // FIXME: No need to explicitly pass the non-boolean `false` as a tokenUid to get this result.
+    await expect(await hWallet.getBalance(false)).toStrictEqual([
+      {
+        token: {
+          id: tokenUid,
+          name: "",
+          symbol: ""
+        },
+        balance: {
+          unlocked: 100,
+          locked: 0
+        },
+        transactions: 3,
+        lockExpires: null,
+        tokenAuthorities: {
+          unlocked: {
+            mint: true,
+            melt: true
+          },
+          locked: {
+            mint: false,
+            melt: false
+          }
+        }
+      }
+    ]);
 
-    // FIXME: This test is being made just to increse coverage, but its results are incorrect
-    expect(await hWallet.getTxHistory()).toStrictEqual([
-      // This is the correct expectation for this test:
-      // expect.objectContaining({
-      //   txId: tokenUid,
-      //   tokenUid: tokenUid,
-      //   balance: 100
-      // }),
-      // Below are the incorrect results that are being returned
+    // FIXME: We should not have to explicitly pass an empty token uid to get this result
+    const txHistory1 = await hWallet.getTxHistory({ token_id: undefined });
+    expect(txHistory1).toStrictEqual([
       expect.objectContaining({
-        txId: expect.any(String),
-        tokenUid: HATHOR_TOKEN_CONFIG.uid,
-        balance: expect.any(Number),
-      }),
-      expect.objectContaining({
-        txId: expect.any(String),
-        tokenUid: HATHOR_TOKEN_CONFIG.uid,
-        balance: expect.any(Number),
+        txId: tokenUid,
+        tokenUid: tokenUid,
+        balance: 100
       }),
     ]);
 
