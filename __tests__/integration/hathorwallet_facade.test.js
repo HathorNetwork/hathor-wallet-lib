@@ -5,7 +5,8 @@ import {
   createTokenHelper,
   DEFAULT_PASSWORD,
   DEFAULT_PIN_CODE,
-  generateConnection, generateMultisigWalletHelper,
+  generateConnection,
+  generateMultisigWalletHelper,
   generateWalletHelper,
   stopAllWallets,
   waitForTxReceived,
@@ -13,11 +14,7 @@ import {
   waitUntilNextTimestamp
 } from './helpers/wallet.helper';
 import HathorWallet from '../../src/new/wallet';
-import {
-  HATHOR_TOKEN_CONFIG,
-  TOKEN_MELT_MASK,
-  TOKEN_MINT_MASK,
-} from '../../src/constants';
+import { HATHOR_TOKEN_CONFIG, TOKEN_MELT_MASK, TOKEN_MINT_MASK, } from '../../src/constants';
 import transaction from '../../src/transaction';
 import { NETWORK_NAME, TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test-constants';
 import wallet from '../../src/wallet';
@@ -1331,6 +1328,13 @@ describe('mintTokens', () => {
       'TMINT',
       100,
     );
+
+    // Should not mint more tokens than the HTR funds allow
+    await expect(hWallet.mintTokens(tokenUid, 9000))
+      .rejects.toStrictEqual({
+        success: false,
+        message: expect.stringContaining('HTR funds'),
+      });
 
     // Minting more of the tokens
     const mintAmount = getRandomInt(100, 50);
