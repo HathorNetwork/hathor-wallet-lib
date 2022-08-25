@@ -70,7 +70,7 @@ export async function generateWalletHelper(param) {
   let walletData = {};
 
   // Only fetch a precalculated wallet if the input does not offer a specific one
-  if (!param?.seed) {
+  if (!param) {
     walletData = precalculationHelpers.test.getPrecalculatedWallet();
   } else {
     walletData.words = param.seed;

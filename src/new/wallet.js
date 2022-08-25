@@ -20,7 +20,7 @@ import MemoryStore from '../memory_store';
 import config from '../config';
 import SendTransaction from './sendTransaction';
 import Network from '../models/network';
-import { AddressError, WalletError } from '../errors';
+import { AddressError, WalletError, WalletFromXPubGuard } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
 import { HDPrivateKey, HDPublicKey, crypto } from 'bitcore-lib';

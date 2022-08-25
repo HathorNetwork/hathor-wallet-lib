@@ -13,15 +13,20 @@ import {
   waitUntilNextTimestamp
 } from './helpers/wallet.helper';
 import HathorWallet from '../../src/new/wallet';
-import { HATHOR_TOKEN_CONFIG, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
+import {
+  HATHOR_TOKEN_CONFIG,
+  TOKEN_MELT_MASK,
+  TOKEN_MINT_MASK,
+} from '../../src/constants';
 import transaction from '../../src/transaction';
-import { TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test-constants';
+import { NETWORK_NAME, TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test-constants';
 import wallet from '../../src/wallet';
 import dateFormatter from '../../src/date';
 import { loggers } from './utils/logger.util';
-import { SendTxError } from '../../src/errors';
+import { SendTxError, WalletFromXPubGuard } from '../../src/errors';
 import SendTransaction from '../../src/new/sendTransaction';
 import helpersUtils from '../../src/utils/helpers';
+import walletUtils from '../../src/utils/wallet';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 const sampleNftData = 'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg';
@@ -192,6 +197,35 @@ describe('start', () => {
      * simplicity sake, since they are so small, were added here just as a complement to
      * this `start` test.
      */
+  });
+
+  it('should start a wallet via xpub', async () => {
+    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const xpriv = walletUtils.getXPrivKeyFromSeed(
+      walletData.words,
+      { networkName: NETWORK_NAME })
+    const privkey = walletUtils.deriveXpriv(xpriv, "0'/0");
+    const xpub = privkey.xpubkey;
+
+    // Creating a new wallet with a known set of words just to generate the custom token
+    let hWallet = await generateWalletHelper({ xpub });
+    expect(hWallet.isReady()).toStrictEqual(true);
+
+    // Validating that methods that require the private key will throw on call
+    await expect(hWallet.consolidateUtxos()).rejects.toThrow(WalletFromXPubGuard);
+    await expect(hWallet.sendTransaction()).rejects.toThrow(WalletFromXPubGuard);
+    await expect(hWallet.sendManyOutputsTransaction()).rejects.toThrow(WalletFromXPubGuard);
+    await expect(hWallet.prepareCreateNewToken()).rejects.toThrow(WalletFromXPubGuard);
+    await expect(hWallet.prepareMintTokensData()).rejects.toThrow(WalletFromXPubGuard);
+    await expect(hWallet.prepareMeltTokensData()).rejects.toThrow(WalletFromXPubGuard);
+    await expect(hWallet.prepareDelegateAuthorityData()).rejects.toThrow(WalletFromXPubGuard);
+    await expect(hWallet.prepareDestroyAuthorityData()).rejects.toThrow(WalletFromXPubGuard);
+
+    // Validating that the address generation works as intended
+    for (let i=0; i < 21; ++i) {
+      expect(hWallet.getAddressAtIndex(i))
+        .toStrictEqual(walletData.addresses[i]);
+    }
   })
 });
 
