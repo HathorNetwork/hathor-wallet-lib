@@ -967,46 +967,38 @@ describe('consolidateUtxos', () => {
   });
 
   it('should consolidate at most the maximum output constant', async () => {
-    // Generating the maximum outputs possible for a transaction ( by default, 255 )
-    const outputs1 = [];
-    const maxOutputsLimit = transaction.getMaxOutputsConstant();
-    for (let i=1; i < maxOutputsLimit; ++i) {
-      outputs1.push({ address: hWallet1.getAddressAtIndex(0), value: 1, token: tokenHash });
-    }
-    let timeTx = Date.now().valueOf();
-    const fundTx1 = await hWallet2.sendManyOutputsTransaction(outputs1);
-    loggers.test.log(`Tx1 took ${Date.now().valueOf() - timeTx}ms to mine`)
-    await waitForTxReceived(hWallet1, fundTx1.hash);
-    await waitUntilNextTimestamp(hWallet1, fundTx1.hash);
+    // Funding the wallet1
+    const fundTx = await hWallet2.sendManyOutputsTransaction([
+      { address: hWallet1.getAddressAtIndex(0), value: 1, token: tokenHash },
+      { address: hWallet1.getAddressAtIndex(0), value: 1, token: tokenHash },
+      { address: hWallet1.getAddressAtIndex(0), value: 1, token: tokenHash },
+      { address: hWallet1.getAddressAtIndex(0), value: 1, token: tokenHash },
+    ]);
+    await waitForTxReceived(hWallet1, fundTx.hash);
 
-    // Generating another 10 utxos over this limit
-    const outputs2 = [];
-    for (let i=0; i < 10; ++i) {
-      outputs2.push({ address: hWallet1.getAddressAtIndex(1), value: 1, token: tokenHash });
-    }
-    timeTx = Date.now().valueOf();
-    const fundTx2 = await hWallet2.sendManyOutputsTransaction(outputs2);
-    loggers.test.log(`Tx2 took ${Date.now().valueOf() - timeTx}ms to mine`)
-    await waitForTxReceived(hWallet1, fundTx2.hash);
-    await waitUntilNextTimestamp(hWallet1, fundTx2.hash);
+    // We should now have 4 utxos on wallet1 for this custom token
+    expect(hWallet1.getUtxos({ token: tokenHash })).toHaveProperty('total_utxos_available', 4);
 
-    // Trying to consolidate all of them on a single utxo ( this takes 70s on average )
-    timeTx = Date.now().valueOf();
+    // Reducing the amount of maximum outputs allowed for the lib (not the fullnode)
+    const oldMaxInputs = transaction.getMaxInputsConstant();
+    transaction.updateMaxInputsConstant(2);
+
+    // Consolidate all of them on a single utxo
+    await waitUntilNextTimestamp(hWallet1, fundTx.hash);
     const consolidateTx = await hWallet1.consolidateUtxos(
       hWallet1.getAddressAtIndex(4),
       { token: tokenHash },
     );
-    loggers.test.log(`ConsolidateTx took ${Date.now().valueOf() - timeTx}ms to mine`)
-    expect(consolidateTx.utxos).toHaveLength(maxOutputsLimit);
-    /*
-     * We have to increase the timeout for this transaction, as it takes a long time to mine
-     * due to the amount of inputs.
-     */
-    await waitForTxReceived(hWallet1, consolidateTx.tx_id, 60000);
 
-    const utxosAfterConsolidation = await hWallet1.getUtxos({ token: tokenHash });
-    // Ensure the maximum possible amount of utxos was consolidated ( 1 consolidated + 10 from tx2 )
-    expect(utxosAfterConsolidation.total_utxos_available).toStrictEqual(11);
+    // Reverting the amount of maximum outputs allowed by the lib
+    transaction.updateMaxInputsConstant(oldMaxInputs);
+
+    // The lib should respect its maximum output limit
+    expect(consolidateTx.utxos).toHaveLength(2);
+    await waitForTxReceived(hWallet1, consolidateTx.txId);
+
+    // Ensure the maximum possible amount of utxos was consolidated ( 1 consolidated + 2 remaining )
+    expect(hWallet1.getUtxos({ token: tokenHash })).toHaveProperty('total_utxos_available', 3);
   });
 });
 
