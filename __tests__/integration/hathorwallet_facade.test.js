@@ -240,6 +240,69 @@ describe('start', () => {
         .toStrictEqual(walletData.addresses[i]);
     }
   })
+
+  it('should start a wallet without pin', async () => {
+    // Generating the wallet
+    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const hWallet = await generateWalletHelper({
+      seed: walletData.words,
+      preCalculatedAddresses: walletData.addresses,
+      pinCode: DEFAULT_PIN_CODE
+    });
+
+    // Adding funds to it
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
+
+    /*
+     * XXX: The code branches that require a PIN would not be achievable without this hack that
+     * manually removes the pin from the wallet.
+     * In order to increase the test coverage we will add this procedure here
+     */
+    hWallet.pinCode = null;
+
+    // Testing the methods that require a PIN without passing one
+    const defaultMissingPinErrorObject = {
+      success: false,
+      message: expect.stringContaining('Pin'),
+      error: expect.stringContaining('PIN')
+    };
+
+    // XXX: This is the only method that resolves instead of rejects. Check the standard here.
+    await expect(hWallet.sendManyOutputsTransaction([
+      { address: hWallet.getAddressAtIndex(1), value: 1 }
+    ])).resolves.toStrictEqual(defaultMissingPinErrorObject);
+
+    await expect(hWallet.createNewToken(
+      'Pinless Token',
+      'PTT',
+      100
+    )).rejects.toStrictEqual(defaultMissingPinErrorObject);
+
+    await expect(hWallet.mintTokens(
+      fakeTokenUid,
+      100
+    )).rejects.toStrictEqual(defaultMissingPinErrorObject);
+
+    await expect(hWallet.meltTokens(
+      fakeTokenUid,
+      100
+    )).rejects.toStrictEqual(defaultMissingPinErrorObject);
+
+    await expect(hWallet.delegateAuthority(
+      fakeTokenUid,
+      'mint',
+      hWallet.getAddressAtIndex(1)))
+      .rejects.toStrictEqual(defaultMissingPinErrorObject);
+
+    await expect(hWallet.destroyAuthority(
+      fakeTokenUid,
+      'mint',
+      1))
+      .rejects.toStrictEqual(defaultMissingPinErrorObject);
+
+
+    hWallet.stop();
+  });
 });
 
 describe('addresses methods', () => {
