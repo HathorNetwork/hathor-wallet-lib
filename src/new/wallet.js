@@ -71,6 +71,7 @@ class HathorWallet extends EventEmitter {
    * @param {string} [param.password] Password to encrypt the seed
    * @param {string} [param.pinCode] PIN to execute wallet actions
    * @param {boolean} [param.debug] Activates debug mode
+   * @param {MemoryStore} [param.store] Optional store to initialize the wallet with
    * @param {{pubkeys:string[],numSignatures:number}} [param.multisig]
    * @param {string[]} [param.preCalculatedAddresses] An array of pre-calculated addresses
    */
