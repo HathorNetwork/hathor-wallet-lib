@@ -494,6 +494,51 @@ describe('addresses methods', () => {
         .toStrictEqual(WALLET_CONSTANTS.multisig.addresses[i]);
     }
   })
+
+  it('should respect the current gap limit', async () => {
+    // Lowering the gap limit for the tests
+    const originalGapLimit = wallet.getGapLimit();
+    wallet.setGapLimit(3);
+
+    // Initializing a wallet under those conditions and initializing the getAllAddresses generator
+    const hWallet = await generateWalletHelper();
+
+    // The maximum index generated on an empty wallet should be 3
+    expect(await getMaximumIndexFromAddressGenerator()).toStrictEqual(3)
+
+    // Send a transaction to the address on index 1 and expect the gap limit to be respected
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(1), 1);
+    expect(await getMaximumIndexFromAddressGenerator()).toStrictEqual(4)
+
+    // Restore the original gap limit
+    wallet.setGapLimit(originalGapLimit);
+
+    /**
+     * Iterates the getAllAddresses generator and finds the highest address index for the wallet
+     * @return {Promise<number>}
+     */
+    async function getMaximumIndexFromAddressGenerator() {
+      const addressGenerator = await hWallet.getAllAddresses();
+
+      // Results variable
+      let maximumIndex = 0;
+      let generatorIsActive = true;
+
+      // Address generation loop
+      while (generatorIsActive) {
+        const genResults = await addressGenerator.next();
+
+        // If there is an address,
+        if (!genResults.done) {
+          maximumIndex = genResults.value.index;
+        } else {
+          generatorIsActive = false;
+        }
+      }
+      return maximumIndex;
+    }
+
+  })
 });
 
 describe('getTransactionsCountByAddress', () => {
