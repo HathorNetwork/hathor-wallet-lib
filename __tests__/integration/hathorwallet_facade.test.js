@@ -746,7 +746,7 @@ describe('sendTransaction', () => {
   });
 
   it('should send a multisig transaction', async () => {
-    // Initialize multisig wallets and inject funds to test
+    // Initialize 3 wallets from the same multisig and inject funds in them to test
     const mhWallet1 = await generateMultisigWalletHelper({ walletIndex: 0 });
     const mhWallet2 = await generateMultisigWalletHelper({ walletIndex: 1 });
     const mhWallet3 = await generateMultisigWalletHelper({ walletIndex: 2 });
@@ -783,13 +783,13 @@ describe('sendTransaction', () => {
     await waitUntilNextTimestamp(mhWallet1, inputTxId);
 
     // Sign and push
-    const partiallyAsslembledTx = mhWallet1.assemblePartialTransaction(
+    const partiallyAssembledTx = mhWallet1.assemblePartialTransaction(
       txHex,
       [sig1, sig2, sig3]
     );
-    partiallyAsslembledTx.prepareToSend();
+    partiallyAssembledTx.prepareToSend();
     const finalTx = new SendTransaction({
-      transaction: partiallyAsslembledTx,
+      transaction: partiallyAssembledTx,
       network,
     });
 
@@ -800,7 +800,7 @@ describe('sendTransaction', () => {
 
     const historyTx = mhWallet1.getTx(sentTx.hash);
     expect(historyTx).toMatchObject({
-      tx_id: partiallyAsslembledTx.hash,
+      tx_id: partiallyAssembledTx.hash,
       inputs: [expect.objectContaining({
         tx_id: inputTxId,
         value: 10,
