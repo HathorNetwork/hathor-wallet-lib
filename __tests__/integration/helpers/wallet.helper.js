@@ -257,7 +257,7 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
        * memory. The code below tries to eliminate these short time-senstive issues with a minimum
        * of delays.
        */
-      await delay(50);
+      await delay(100);
       let txObj = hWallet.getTx(txId);
       while (!txObj) {
         if (DEBUG_LOGGING) {
