@@ -26,7 +26,7 @@ import helpersUtils from '../../src/utils/helpers';
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 const sampleNftData = 'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg';
 
-describe('start', () => {
+describe.only('start', () => {
   it('should start a wallet with no history', async () => {
     const walletData = precalculationHelpers.test.getPrecalculatedWallet();
 
@@ -113,24 +113,42 @@ describe('start', () => {
     hWallet.stop();
   });
 
-  it('should start a multisig wallet', async () => {
-    // Start the wallet
+  it.only('should start a multisig wallet', async () => {
+    // Start the wallet without precalculated addresses
     const walletConfig = {
       seed: multisigWalletsData.words[0],
       connection: generateConnection(),
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
-      preCalculatedAddresses: WALLET_CONSTANTS.multisig.addresses,
       multisig: {
         pubkeys: multisigWalletsData.pubkeys,
         numSignatures: 3,
       },
     };
+
+    /*
+     * The interaction between the jest infrastructure with the address derivation calculations
+     * somehow make this process very costly and slow, especially for multisig.
+     * Here we lower the gap limit to make this test shorter.
+     */
+    const originalGapLimit = wallet.getGapLimit();
+    wallet.setGapLimit(5);
+
     const hWallet = new HathorWallet(walletConfig);
     await hWallet.start();
 
     // Validating that all the booting processes worked
     await waitForWalletReady(hWallet);
+
+    // Validate that the addresses are the same as the pre-calculated that we have
+    for (let i = 0; i < 5; ++i) {
+      const precalcAddress = WALLET_CONSTANTS.multisig.addresses[i];
+      const addressAtIndex = hWallet.getAddressAtIndex(i);
+      expect(precalcAddress).toStrictEqual(addressAtIndex);
+    }
+
+    // Restoring the gap limit
+    wallet.setGapLimit(originalGapLimit);
     hWallet.stop();
   });
 });
