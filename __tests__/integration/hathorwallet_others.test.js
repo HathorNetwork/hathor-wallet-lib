@@ -1006,7 +1006,7 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
         tx_id: tokenHash,
         index: expect.any(Number),
         address: expect.any(String),
-        authorities: 2,
+        authorities: TOKEN_MELT_MASK,
       }]);
 
     // Validating single authority UTXO for a token creation ( with "many" option )
@@ -1022,7 +1022,7 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
         tx_id: tokenHash,
         index: expect.any(Number),
         address: expect.any(String),
-        authorities: 2,
+        authorities: TOKEN_MELT_MASK,
       }]);
 
     // Validating the wrapper method
@@ -1038,7 +1038,7 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
         tx_id: tokenHash,
         index: expect.any(Number),
         address: expect.any(String),
-        authorities: 2,
+        authorities: TOKEN_MELT_MASK,
       }]);
   });
 

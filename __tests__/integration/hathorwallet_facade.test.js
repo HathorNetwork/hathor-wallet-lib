@@ -1352,12 +1352,18 @@ describe('delegateAuthority', () => {
     // Expect wallet 1 to still have one mint authority
     let authorities1 = await hWallet1.getMintAuthority(tokenUid);
     expect(authorities1).toHaveLength(1);
-    expect(authorities1[0]).toMatchObject({ txId: delegateMintTxId, authorities: 1 });
+    expect(authorities1[0]).toMatchObject({
+      txId: delegateMintTxId,
+      authorities: TOKEN_MINT_MASK
+    });
     // Expect wallet 2 to also have one mint authority
     await hWallet1.preProcessWalletData();
     let authorities2 = await hWallet2.getMintAuthority(tokenUid);
     expect(authorities2).toHaveLength(1);
-    expect(authorities2[0]).toMatchObject({ txId: delegateMintTxId, authorities: 1 });
+    expect(authorities2[0]).toMatchObject({
+      txId: delegateMintTxId,
+      authorities: TOKEN_MINT_MASK
+    });
 
     // Delegating melt authority to wallet 2
     await waitUntilNextTimestamp(hWallet1, delegateMintTxId);
@@ -1372,12 +1378,18 @@ describe('delegateAuthority', () => {
     await hWallet1.preProcessWalletData();
     authorities1 = await hWallet1.getMeltAuthority(tokenUid);
     expect(authorities1).toHaveLength(1);
-    expect(authorities1[0]).toMatchObject({ txId: delegateMeltTxId, authorities: 2 });
+    expect(authorities1[0]).toMatchObject({
+      txId: delegateMeltTxId,
+      authorities: TOKEN_MELT_MASK
+    });
     // Expect wallet 2 to also have one melt authority
     await hWallet1.preProcessWalletData();
     authorities2 = await hWallet2.getMeltAuthority(tokenUid);
     expect(authorities2).toHaveLength(1);
-    expect(authorities2[0]).toMatchObject({ txId: delegateMeltTxId, authorities: 2 });
+    expect(authorities2[0]).toMatchObject({
+      txId: delegateMeltTxId,
+      authorities: TOKEN_MELT_MASK
+    });
   });
 
   it('should delegate authority to another wallet without keeping one', async () => {
@@ -1458,13 +1470,13 @@ describe('delegateAuthority', () => {
         txId: duplicateMintAuth,
         index: 0,
         address: hWallet1.getAddressAtIndex(1),
-        authorities: 1 // number value for TOKEN_MINT_MASK
+        authorities: TOKEN_MINT_MASK // number value for TOKEN_MINT_MASK
       },
       {
         txId: duplicateMintAuth,
         index: 1,
         address: expect.any(String),
-        authorities: 1
+        authorities: TOKEN_MINT_MASK
       },
     ]);
 
@@ -1484,7 +1496,7 @@ describe('delegateAuthority', () => {
         txId: duplicateMintAuth,
         index: expect.any(Number),
         address: expect.any(String),
-        authorities: 1
+        authorities: TOKEN_MINT_MASK
       },
     ]);
 
@@ -1495,7 +1507,7 @@ describe('delegateAuthority', () => {
         txId: duplicateMintAuth,
         index: expect.any(Number),
         address: expect.any(String),
-        authorities: 1
+        authorities: TOKEN_MINT_MASK
       },
     ]);
   });
@@ -1526,13 +1538,13 @@ describe('delegateAuthority', () => {
         txId: duplicateMeltAuth,
         index: 0,
         address: hWallet1.getAddressAtIndex(1),
-        authorities: 2, // number value for TOKEN_MELT_MASK
+        authorities: TOKEN_MELT_MASK,
       },
       {
         txId: duplicateMeltAuth,
         index: 1,
         address: expect.any(String),
-        authorities: 2,
+        authorities: TOKEN_MELT_MASK,
       },
     ]);
 
@@ -1552,7 +1564,7 @@ describe('delegateAuthority', () => {
         txId: duplicateMeltAuth,
         index: expect.any(Number),
         address: expect.any(String),
-        authorities: 2,
+        authorities: TOKEN_MELT_MASK,
       },
     ]);
 
@@ -1563,7 +1575,7 @@ describe('delegateAuthority', () => {
         txId: duplicateMeltAuth,
         index: expect.any(Number),
         address: expect.any(String),
-        authorities: 2,
+        authorities: TOKEN_MELT_MASK,
       },
     ]);
   });
