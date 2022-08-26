@@ -1103,11 +1103,11 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
       tokenHash,
       'melt',
       hWallet.getAddressAtIndex(1),
-      { createAnother: false }
+      { createAnother: true }
     );
     await waitForTxReceived(hWallet, meltDelegationTx.hash);
 
-    // Should not find the spent utxo
+    // Should find a single one of the authority tokens
     expect(hWallet.selectAuthorityUtxo(tokenHash, wallet.isMeltOutput.bind(wallet)))
       .toStrictEqual([{
         tx_id: meltDelegationTx.hash,
@@ -1115,28 +1115,34 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
         address: expect.any(String),
         authorities: TOKEN_MELT_MASK,
       }]);
-    expect(hWallet.selectAuthorityUtxo(tokenHash, wallet.isMeltOutput.bind(wallet), { many: true }))
-      .toStrictEqual([{
-        tx_id: meltDelegationTx.hash,
-        index: expect.any(Number),
-        address: expect.any(String),
-        authorities: TOKEN_MELT_MASK,
-      }]);
-    expect(hWallet.getAuthorityUtxos(tokenHash, 'melt'))
-      .toStrictEqual([{
-        tx_id: meltDelegationTx.hash,
-        index: expect.any(Number),
-        address: expect.any(String),
-        authorities: TOKEN_MELT_MASK,
-      }]);
 
-    // Should return multiple utxos
+    // When searching for "many", should find both the authority tokens
+    const expectedMeltAuthUtxos = [
+      {
+        tx_id: meltDelegationTx.hash,
+        index: expect.any(Number),
+        address: expect.any(String),
+        authorities: TOKEN_MELT_MASK,
+      },
+      {
+        tx_id: meltDelegationTx.hash,
+        index: expect.any(Number),
+        address: expect.any(String),
+        authorities: TOKEN_MELT_MASK,
+      },
+    ];
+    expect(hWallet.selectAuthorityUtxo(tokenHash, wallet.isMeltOutput.bind(wallet), { many: true }))
+      .toStrictEqual(expectedMeltAuthUtxos);
+    expect(hWallet.getAuthorityUtxos(tokenHash, 'melt'))
+      .toStrictEqual(expectedMeltAuthUtxos);
+
+    // Should return the spent utxo as well
     expect(hWallet.selectAuthorityUtxo(
       tokenHash,
       wallet.isMeltOutput.bind(wallet),
       { many: true, skipSpent: false }
     ))
-      .toStrictEqual([
+      .toStrictEqual(expect.arrayContaining([
         {
           tx_id: tokenHash,
           index: expect.any(Number),
@@ -1149,7 +1155,13 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
           address: expect.any(String),
           authorities: TOKEN_MELT_MASK,
         },
-      ]);
+        {
+          tx_id: meltDelegationTx.hash,
+          index: expect.any(Number),
+          address: expect.any(String),
+          authorities: TOKEN_MELT_MASK,
+        },
+      ]));
   });
 });
 
