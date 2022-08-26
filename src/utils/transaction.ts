@@ -40,7 +40,7 @@ const transaction = {
         filledAmount = utxo.value;
       } else {
         if (filledAmount >= totalAmount) {
-          break
+          break;
         }
         filledAmount += utxo.value;
         utxosToUse.push(utxo);

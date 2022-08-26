@@ -27,7 +27,7 @@ import transactionUtils from '../utils/transaction';
 import { OutputType, Utxo } from './types';
 import { Balance } from '../models/types';
 
-interface UtxoExtended extends Utxo {
+export interface UtxoExtended extends Utxo {
   tokenData?: number
 }
 
@@ -74,7 +74,10 @@ class PartialTxProposal {
    *
    * @returns {UtxoExtended[]}
    */
-  getWalletUtxos(wallet: HathorWallet, token: string = HATHOR_TOKEN_CONFIG.uid): UtxoExtended[] {
+  static getWalletUtxos(
+    wallet: HathorWallet,
+    token: string = HATHOR_TOKEN_CONFIG.uid,
+  ): UtxoExtended[] {
     const historyTransactions = wallet.getFullHistory();
     const allUtxos = [...wallet.getAllUtxos({ token })].filter(utxo => utxo.authorities === 0);
     const allExtendedUtxos: UtxoExtended[] = [];
@@ -105,21 +108,28 @@ class PartialTxProposal {
     wallet: HathorWallet,
     token: string,
     value: number,
-    { utxos = null, changeAddress = null, markAsSelected = true }: { utxos?: UtxoExtended[]|null, changeAddress?: string|null, markAsSelected?: boolean } = {},
+    {
+      utxos = null,
+      changeAddress = null,
+      markAsSelected = true,
+    }: { utxos?: UtxoExtended[]|null, changeAddress?: string|null, markAsSelected?: boolean } = {},
   ) {
     this.resetSignatures();
 
-    // Since the selectUtxos returns a list of Utxo, we need a way to access the original utxo for the tokenData.
+    // Since the selectUtxos returns a list of Utxo
+    // we need a way to access the original utxo for the tokenData.
     const utxosDict: Record<string, UtxoExtended> = {};
     // Use the pool of utxos or all wallet utxos.
-    const allUtxos: UtxoExtended[] = (utxos && utxos.length > 0) ? utxos : this.getWalletUtxos(wallet, token);
+    const allUtxos: UtxoExtended[] = (utxos && utxos.length > 0)
+      ? utxos
+      : PartialTxProposal.getWalletUtxos(wallet, token);
     for (const utxo of allUtxos) {
-      utxosDict[utxo.txId] = utxo;
+      utxosDict[`${utxo.txId}-${utxo.index}`] = utxo;
     }
     const utxosDetails = transactionUtils.selectUtxos(allUtxos, value);
 
     for (const utxo of utxosDetails.utxos) {
-      const tokenData = utxosDict[utxo.txId].tokenData;
+      const { tokenData } = utxosDict[`${utxo.txId}-${utxo.index}`];
       this.addInput(
         wallet,
         utxo.txId,
