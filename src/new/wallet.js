@@ -777,7 +777,7 @@ class HathorWallet extends EventEmitter {
    *
    * @typedef UtxoOptions
    * @property {number} [max_utxos] - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
-   * @property {string} token - Token to filter the utxos. If not sent, we select only HTR utxos.
+   * @property {string} [token] - Token to filter the utxos. If not sent, we select only HTR utxos.
    * @property {string} [filter_address] - Address to filter the utxos.
    * @property {number} [amount_smaller_than] - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00.
    * @property {number} [amount_bigger_than] - Minimum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount bigger than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00.

@@ -38,7 +38,7 @@ import { OutputType } from '../wallet/types';
 class SendTransaction extends EventEmitter {
   /**
    *
-   * @param {unknown} [transaction] Full tx data
+   * @param {Transaction} [transaction] Full tx data
    * @param {{
    *   txId: string,
    *   index: number
