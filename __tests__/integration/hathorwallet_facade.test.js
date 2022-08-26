@@ -1592,6 +1592,11 @@ describe('delegateAuthority', () => {
       100,
     );
 
+    // Should handle trying to delegate without the authority
+    // FIXME: This case is throwing and not being treated with "success: false". Fix this.
+    await expect(hWallet1.delegateAuthority(fakeTokenUid, 'mint', hWallet2.getAddressAtIndex(0)))
+      .rejects.toBeInstanceOf(TypeError);
+
     // Delegating mint authority to wallet 2
     const { hash: delegateMintTxId } = await hWallet1.delegateAuthority(
       tokenUid,
