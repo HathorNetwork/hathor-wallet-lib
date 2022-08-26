@@ -14,4 +14,19 @@ module.exports = {
   testTimeout: 20 * 60 * 1000, // May be adjusted with optimizations
   setupFilesAfterEnv: ['<rootDir>/setupTests-integration.js'],
   maxConcurrency: 1,
+  coverageThreshold: {
+    global: {
+      statements: 42,
+      branches: 30,
+      functions: 40,
+      lines: 42
+    },
+    // We need a high coverage for the HathorWallet class
+    './src/new/wallet.js': {
+      statements: 94,
+      branches: 89,
+      functions: 97,
+      lines: 94
+    }
+  },
 };
