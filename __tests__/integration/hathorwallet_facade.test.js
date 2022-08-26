@@ -24,6 +24,7 @@ import { SendTxError, WalletFromXPubGuard } from '../../src/errors';
 import SendTransaction from '../../src/new/sendTransaction';
 import helpersUtils from '../../src/utils/helpers';
 import walletUtils from '../../src/utils/wallet';
+import { ConnectionState } from '../../src/wallet/types';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 const sampleNftData = 'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg';
@@ -32,6 +33,63 @@ describe('start', () => {
   it('should reject with invalid inputs', async () => {
     const walletData = precalculationHelpers.test.getPrecalculatedWallet();
     const connection = generateConnection();
+
+    /*
+     * Invalid parameters on constructing the object
+     */
+    expect(() => new HathorWallet({
+      seed: walletData.words,
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+    })).toThrow('provide a connection');
+
+    expect(() => new HathorWallet({
+      connection,
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+    })).toThrow('seed');
+
+    expect(() => new HathorWallet({
+      seed: walletData.words,
+      xpriv: 'abc123',
+      connection,
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+    })).toThrow('seed and an xpriv');
+
+    expect(() => new HathorWallet({
+      xpriv: 'abc123',
+      connection,
+      passphrase: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+    })).toThrow('xpriv with passphrase');
+
+    expect(() => new HathorWallet({
+      seed: walletData.words,
+      connection: { state: ConnectionState.CONNECTED } ,
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+    })).toThrow('share connections');
+
+    expect(() => new HathorWallet({
+      seed: walletData.words,
+      connection,
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+      multisig: {}
+    })).toThrow('pubkeys and numSignatures');
+
+    expect(() => new HathorWallet({
+      seed: walletData.words,
+      connection,
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+      multisig: { pubkeys: ['abc'], numSignatures: 2 }
+    })).toThrow('configuration invalid');
+
+    /*
+     * Invalid parameters on starting the wallet
+     */
 
     // A common wallet without a pin code
     let walletConfig = {
