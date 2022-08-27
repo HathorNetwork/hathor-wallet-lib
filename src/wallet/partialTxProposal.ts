@@ -23,6 +23,7 @@ import {
 import transaction from '../transaction';
 import helpers from '../utils/helpers';
 import transactionUtils from '../utils/transaction';
+import dateFormatter from '../date';
 
 import { OutputType, Utxo } from './types';
 import { Balance } from '../models/types';
@@ -36,7 +37,7 @@ class PartialTxProposal {
   network: Network;
   public partialTx: PartialTx;
   public signatures: PartialTxInputData|null;
-  private transaction: Transaction|null;
+  public transaction: Transaction|null;
 
   /**
    * @param {Network} network
@@ -261,10 +262,14 @@ class PartialTxProposal {
    * @returns {Record<string, Balance>}
    */
   calculateBalance(wallet: HathorWallet): Record<string, Balance> {
+    const currentTimestamp = dateFormatter.dateToTimestamp(new Date());
+    const isTimelocked = timelock => currentTimestamp < timelock;
+
     const getEmptyBalance = () => ({
       balance: { unlocked: 0, locked: 0 },
       authority: { unlocked: { mint: 0, melt: 0 }, locked: { mint: 0, melt: 0 } },
     });
+
     const tokenBalance: Record<string, Balance> = {};
 
     for (const input of this.partialTx.inputs) {
@@ -300,7 +305,7 @@ class PartialTxProposal {
         /**
          * Calculate authorities
          */
-        if (decodedScript.timelock) {
+        if (isTimelocked(decodedScript.timelock)) {
           // Locked output
           tokenBalance[output.token].authority.locked.mint += (output.value & TOKEN_MINT_MASK) > 0 ? 1 : 0;
           tokenBalance[output.token].authority.locked.melt += (output.value & TOKEN_MELT_MASK) > 0 ? 1 : 0;
@@ -313,7 +318,7 @@ class PartialTxProposal {
         /**
          * Calculate token balances
          */
-        if (decodedScript.timelock) {
+        if (isTimelocked(decodedScript.timelock)) {
           // Locked output
           tokenBalance[output.token].balance.locked += output.value;
         } else {
