@@ -1054,6 +1054,13 @@ describe('sendTransaction', () => {
     await GenesisWalletHelper.injectFunds(mhWallet1.getAddressAtIndex(0), 10);
 
     /*
+     * Under heavy test processing this transaction takes longer than usual to be assimilated by the
+     * HathorWallet. Here we increase this tolerance to increase the success rate of this test.
+     */
+    await delay(1000);
+
+
+    /*
      * Building tx proposal:
      * 1) Identify the UTXO
      * 2) Build the outputs
