@@ -903,7 +903,6 @@ class HathorWallet extends EventEmitter {
       filter_address: null,
     }, options);
 
-    const utxos = [];
     for (const tx_id in historyTransactions) {
       const tx = historyTransactions[tx_id];
       if (tx.is_voided) {

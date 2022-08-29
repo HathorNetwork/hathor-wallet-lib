@@ -7,7 +7,7 @@ module.exports = {
   modulePathIgnorePatterns: ["__fixtures__/*","integration/*"],
   coverageThreshold: {
     global: {
-      branches: 43,
+      branches: 55,
       functions: 58,
       lines: 55,
       statements: 55
