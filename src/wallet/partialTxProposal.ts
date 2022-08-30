@@ -124,10 +124,15 @@ class PartialTxProposal {
     const allUtxos: UtxoExtended[] = (utxos && utxos.length > 0)
       ? utxos
       : PartialTxProposal.getWalletUtxos(wallet, token);
-    for (const utxo of allUtxos) {
+
+    // Filter pool of utxos for only utxos from the token and not already in the partial tx
+    const currentUtxos = this.partialTx.inputs.map(input => `${input.hash}-${input.index}`);
+    const utxosToUse = allUtxos.filter(utxo => utxo.tokenId === token && !currentUtxos.includes(`${utxo.txId}-${utxo.index}`));
+
+    for (const utxo of utxosToUse) {
       utxosDict[`${utxo.txId}-${utxo.index}`] = utxo;
     }
-    const utxosDetails = transactionUtils.selectUtxos(allUtxos, value);
+    const utxosDetails = transactionUtils.selectUtxos(utxosToUse, value);
 
     for (const utxo of utxosDetails.utxos) {
       const { tokenData } = utxosDict[`${utxo.txId}-${utxo.index}`];
