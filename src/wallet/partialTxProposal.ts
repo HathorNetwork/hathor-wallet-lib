@@ -17,7 +17,7 @@ import HathorWallet from '../new/wallet';
 import {
   HATHOR_TOKEN_CONFIG,
   TOKEN_MELT_MASK,
-  TOKEN_MINT_MASK
+  TOKEN_MINT_MASK,
 } from '../constants';
 
 import transaction from '../transaction';
@@ -68,7 +68,8 @@ class PartialTxProposal {
   }
 
   /**
-   * Get all available utxos on the wallet history for a token.
+   * Get all available utxos on the wallet history for a token
+   * and enrich them with tokenData.
    *
    * @param {HathorWallet} wallet Wallet which will provide the tokens.
    * @param {string?} [token='00'] UID of token that is being sent

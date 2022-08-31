@@ -7,7 +7,7 @@
 
 import EventEmitter from 'events';
 import wallet from '../wallet';
-import { HATHOR_TOKEN_CONFIG, HATHOR_BIP44_CODE, TOKEN_AUTHORITY_MASK, P2SH_ACCT_PATH } from "../constants";
+import { HATHOR_TOKEN_CONFIG, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
 import tokens from '../tokens';
 import transaction from '../transaction';
 import version from '../version';
@@ -520,10 +520,31 @@ class HathorWallet extends EventEmitter {
    *
    * @memberof HathorWallet
    * @inner
-   **/
+   */
   getAddressAtIndex(index) {
     storage.setStore(this.store);
     return wallet.getAddressAtIndex(index);
+  }
+
+  /**
+   * Get address path from specific derivation index
+   *
+   * @param {number} index bip32 derivation index
+   *
+   * @return {string} Address path for the given index
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
+  getAddressPathForIndex(index) {
+    storage.setStore(this.store);
+    if (wallet.isWalletMultiSig()) {
+      // P2SH
+      return `${P2SH_ACCT_PATH}/0/${index}`;
+    }
+
+    // P2PKH
+    return `${P2PKH_ACCT_PATH}/0/${index}`;
   }
 
   /**
@@ -537,7 +558,7 @@ class HathorWallet extends EventEmitter {
    *
    * @memberof HathorWallet
    * @inner
-   **/
+   */
   getCurrentAddress({ markAsUsed = false } = {}) {
     storage.setStore(this.store);
     let address;
@@ -547,12 +568,7 @@ class HathorWallet extends EventEmitter {
       address = wallet.getCurrentAddress();
     }
     const index = this.getAddressIndex(address);
-    let addressPath;
-    if (wallet.isWalletMultiSig()) {
-      addressPath = `${P2SH_ACCT_PATH}/0/${index}`;
-    } else {
-      addressPath = `m/44'/${HATHOR_BIP44_CODE}'/0'/0/${index}`;
-    }
+    const addressPath = this.getAddressPathForIndex(index);
 
     return { address, index, addressPath };
   }
@@ -920,7 +936,7 @@ class HathorWallet extends EventEmitter {
 
         if (txout.spent_by === null) {
           if (wallet.canUseUnspentTx(txout, tx.height)) {
-            const addressPath = `m/44'/280'/0'/0/${this.getAddressIndex(txout.decoded.address)}`;
+            const addressPath = this.getAddressPathForIndex(index);
             yield transactionUtils.utxoFromHistoryOutput(tx_id, index, txout, { addressPath });
           }
         }

@@ -261,6 +261,9 @@ test('addReceive', async () => {
 
   const proposal = new PartialTxProposal(testnet);
 
+  /**
+   * Add 1 output of a custom token, get address from wallet
+   */
   proposal.addReceive(hwallet, FAKE_UID, 99);
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(spyOutput).toBeCalledWith(
@@ -276,6 +279,9 @@ test('addReceive', async () => {
   spyOutput.mockClear();
   hwallet.getCurrentAddress.mockClear();
 
+  /**
+   * Add 1 HTR output, giving the destination address
+   */
   proposal.addReceive(hwallet, HATHOR_TOKEN_CONFIG.uid, 180, { address: ADDR2 });
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(spyOutput).toBeCalledWith(
@@ -301,6 +307,9 @@ test('addInput', async () => {
 
   const proposal = new PartialTxProposal(testnet);
 
+  /**
+   * Add 1 HTR input
+   */
   proposal.addInput(hwallet, FAKE_TXID, 5, 999, ADDR1);
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(hwallet.markUtxoSelected).toBeCalledWith(FAKE_TXID, 5);
@@ -311,6 +320,9 @@ test('addInput', async () => {
   spyInput.mockClear();
   hwallet.markUtxoSelected.mockClear();
 
+  /**
+   * Add 1 custom token authority input
+   */
   proposal.addInput(
     hwallet,
     FAKE_TXID,
@@ -334,6 +346,9 @@ test('addOutput', async () => {
 
   const proposal = new PartialTxProposal(testnet);
 
+  /**
+   * Add 1 custom token output
+   */
   proposal.addOutput(FAKE_UID, 999, ADDR1, { tokenData: 2 });
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(spyOutput).toBeCalledWith(
@@ -346,7 +361,9 @@ test('addOutput', async () => {
   spyReset.mockClear();
   spyOutput.mockClear();
 
-  // P2SH
+  /**
+   * Add 1 HTR output to a MultiSig address
+   */
   proposal.addOutput(HATHOR_TOKEN_CONFIG.uid, 456, ADDR4, { isChange: true });
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(spyOutput).toBeCalledWith(
