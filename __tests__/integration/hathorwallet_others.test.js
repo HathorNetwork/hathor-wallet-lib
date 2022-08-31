@@ -11,6 +11,7 @@ import { FULLNODE_URL, NETWORK_NAME, WALLET_CONSTANTS } from './configuration/te
 import dateFormatter from '../../src/date';
 import { loggers } from './utils/logger.util';
 import wallet from '../../src/wallet';
+import { AddressError } from '../../src/errors';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 
@@ -80,7 +81,8 @@ describe('getAddressInfo', () => {
   });
 
   it('should throw for an address outside the wallet', async () => {
-    expect(() => hWallet.getAddressInfo(WALLET_CONSTANTS.genesis.addresses[0])).toThrow();
+    expect(() => hWallet.getAddressInfo(WALLET_CONSTANTS.genesis.addresses[0]))
+      .toThrow(AddressError);
   });
 
   it('should display correct values for transactions with change', async () => {
@@ -979,7 +981,8 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
     // Testing the wrapper method
     expect(hWallet.getAuthorityUtxos(fakeTokenUid, 'mint')).toStrictEqual([]);
     expect(hWallet.getAuthorityUtxos(fakeTokenUid, 'melt')).toStrictEqual([]);
-    expect(() => hWallet.getAuthorityUtxos(fakeTokenUid, 'invalid')).toThrow();
+    expect(() => hWallet.getAuthorityUtxos(fakeTokenUid, 'invalid'))
+      .toThrow('This should never happen.'); // TODO: Improve this error message
   });
 
   it('should find one authority utxo', async () => {
