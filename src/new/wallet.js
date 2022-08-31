@@ -936,7 +936,8 @@ class HathorWallet extends EventEmitter {
 
         if (txout.spent_by === null) {
           if (wallet.canUseUnspentTx(txout, tx.height)) {
-            const addressPath = this.getAddressPathForIndex(index);
+            const addressIndex = this.getAddressIndex(txout.decoded.address);
+            const addressPath = this.getAddressPathForIndex(addressIndex);
             yield transactionUtils.utxoFromHistoryOutput(tx_id, index, txout, { addressPath });
           }
         }
