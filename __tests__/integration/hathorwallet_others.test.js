@@ -185,11 +185,15 @@ describe('getAddressInfo', () => {
       total_amount_received: 100,
       total_amount_sent: 100,
       total_amount_available: 0,
+      token: tokenUid,
+      index: 0,
     });
     expect(hWalletCustom.getAddressInfo(addr1Custom, { token: tokenUid })).toMatchObject({
       total_amount_received: 40,
       total_amount_sent: 0,
       total_amount_available: 40,
+      token: tokenUid,
+      index: 1,
     });
   });
 });
@@ -274,18 +278,28 @@ describe('getAllUtxos', () => {
      */
     const hWallet = await generateWalletHelper();
     const tx1 = await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
+    const tx2 = await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(1), 5);
 
-    // Validate that on the address that received the transaction, the UTXO is listed
+    // Validate that on the address that received tx1, the UTXO is listed
     let utxoGenerator = await hWallet.getAllUtxos({ filter_address: hWallet.getAddressAtIndex(0) });
-    const utxoGenResult = await utxoGenerator.next();
+    let utxoGenResult = await utxoGenerator.next();
     expect(utxoGenResult.value).toMatchObject({
       txId: tx1.hash,
       value: 10,
     });
     expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true });
 
-    // Validate that on the address that did not receive any transaction, the results are empty
+    // Validate that on the address that received tx2, the UTXO is listed
     utxoGenerator = await hWallet.getAllUtxos({ filter_address: hWallet.getAddressAtIndex(1) });
+    utxoGenResult = await utxoGenerator.next();
+    expect(utxoGenResult.value).toMatchObject({
+      txId: tx2.hash,
+      value: 5,
+    });
+    expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true });
+
+    // Validate that on an address that did not receive any transaction, the results are empty
+    utxoGenerator = await hWallet.getAllUtxos({ filter_address: hWallet.getAddressAtIndex(2) });
     expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true });
   });
 
@@ -366,7 +380,7 @@ describe('getUtxosForAmount', () => {
     expect(() => hWallet.getUtxosForAmount(-1)).toThrow('positive integer');
 
     // Should throw for an amount higher than available funds
-    expect(() => hWallet.getUtxosForAmount(31)).toThrow('utxos to fill total amount');
+    expect(() => hWallet.getUtxosForAmount(1)).toThrow('utxos to fill total amount');
   });
 
   it('should work on a wallet containing a single tx', async () => {
@@ -520,6 +534,18 @@ describe('getUtxosForAmount', () => {
     expect(() => hWallet.getUtxosForAmount(6, { token: tokenUid, filter_address: addr3 }))
       .toThrow('utxos to fill');
   });
+
+  it('should not retrieve utxos marked as selected', async () => {
+    // Retrieving the utxo's data and marking it as selected
+    const addr1 = hWallet.getAddressAtIndex(1);
+    const utxosAddr1 = hWallet.getUtxos({ filter_address: addr1 });
+    const singleUtxoAddr1 = utxosAddr1.utxos[0];
+    hWallet.markUtxoSelected(singleUtxoAddr1.tx_id, singleUtxoAddr1.index, true);
+
+    // Validate that it will not be retrieved on getUtxosForAmount
+    expect(hWallet.getUtxosForAmount(10, { filter_address: addr1 }))
+      .toThrow('utxos to fill');
+  })
 });
 
 describe('markUtxoSelected', () => {
