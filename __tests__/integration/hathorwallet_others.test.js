@@ -540,7 +540,7 @@ describe('getUtxosForAmount', () => {
     hWallet.markUtxoSelected(singleUtxoAddr1.tx_id, singleUtxoAddr1.index, true);
 
     // Validate that it will not be retrieved on getUtxosForAmount
-    expect(hWallet.getUtxosForAmount(10, { filter_address: addr1 }))
+    expect(() => hWallet.getUtxosForAmount(10, { filter_address: addr1 }))
       .toThrow('utxos to fill');
   })
 });
