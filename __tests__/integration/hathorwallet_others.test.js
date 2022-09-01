@@ -332,31 +332,28 @@ describe('getAllUtxos', () => {
 
     // Validate that the custom token utxo is listed with its authority tokens
     utxoGenerator = await hWallet.getAllUtxos({ token: tokenUid });
-    utxoGenResult = await utxoGenerator.next();
-    expect(utxoGenResult.value).toMatchObject({
-      txId: tokenUid,
-      tokenId: tokenUid,
-      value: 100,
-      authorities: 0, // The custom token balance itself
-    });
+    const allResults = [...await utxoGenerator];
 
-    utxoGenResult = await utxoGenerator.next();
-    expect(utxoGenResult.value).toMatchObject({
-      txId: tokenUid,
-      tokenId: tokenUid,
-      value: 1,
-      authorities: TOKEN_MINT_MASK
-    });
-
-    utxoGenResult = await utxoGenerator.next();
-    expect(utxoGenResult.value).toMatchObject({
-      txId: tokenUid,
-      tokenId: tokenUid,
-      value: 2,
-      authorities: TOKEN_MELT_MASK
-    });
-
-    expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true });
+    expect(allResults).toStrictEqual(expect.arrayContaining([
+      expect.objectContaining({
+        txId: tokenUid,
+        tokenId: tokenUid,
+        value: 100,
+        authorities: 0, // The custom token balance itself
+      }),
+      expect.objectContaining({
+        txId: tokenUid,
+        tokenId: tokenUid,
+        value: TOKEN_MINT_MASK,
+        authorities: TOKEN_MINT_MASK
+      }),
+      expect.objectContaining({
+        txId: tokenUid,
+        tokenId: tokenUid,
+        value: TOKEN_MELT_MASK,
+        authorities: TOKEN_MELT_MASK
+      }),
+    ]));
   });
 });
 
