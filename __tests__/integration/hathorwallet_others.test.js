@@ -93,7 +93,7 @@ describe('getAddressInfo', () => {
     expect(hWallet.getAddressInfo(addr2).total_amount_received).toStrictEqual(0);
     expect(hWallet.getAddressInfo(addr3).total_amount_received).toStrictEqual(0);
 
-    // Move all the wallet's funds to "2"
+    // Move all the wallet's funds to addr2
     let tx = await hWallet.sendTransaction(addr2, 10);
     await waitForTxReceived(hWallet, tx.hash);
     expect(hWallet.getAddressInfo(addr2)).toMatchObject({
@@ -102,7 +102,7 @@ describe('getAddressInfo', () => {
       total_amount_available: 10,
     });
 
-    // Move only a part of the funds to "3", the change is returned to "2"
+    // Move only a part of the funds to addr3, the change is returned to addr2
     tx = await hWallet.sendTransaction(addr3, 4, { changeAddress: addr2 });
     await waitForTxReceived(hWallet, tx.hash);
     expect(hWallet.getAddressInfo(addr2)).toMatchObject({
@@ -302,7 +302,11 @@ describe('getAllUtxos', () => {
       100
     );
 
-    // Validate that the HTR change is listed
+    /*
+     * Validate that:
+     * - The method's default token is HTR when calling without parameters
+     * - The HTR change is listed
+     */
     let utxoGenerator = await hWallet.getAllUtxos();
     let utxoGenResult = await utxoGenerator.next();
     expect(utxoGenResult.value).toMatchObject({

@@ -1470,7 +1470,7 @@ describe('delegateAuthority', () => {
         txId: duplicateMintAuth,
         index: 0,
         address: hWallet1.getAddressAtIndex(1),
-        authorities: TOKEN_MINT_MASK // number value for TOKEN_MINT_MASK
+        authorities: TOKEN_MINT_MASK
       },
       {
         txId: duplicateMintAuth,
