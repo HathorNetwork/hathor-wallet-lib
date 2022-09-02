@@ -16,7 +16,7 @@ import {
   TX_HASH_SIZE_BYTES,
   TX_WEIGHT_CONSTANTS
 } from '../constants'
-import {crypto as cryptoBL, encoding, util} from 'bitcore-lib'
+import {crypto as cryptoBL, encoding, util, PrivateKey} from 'bitcore-lib'
 import {bufferToHex, hexToBuffer, unpackToFloat, unpackToHex, unpackToInt} from '../utils/buffer'
 import helpers from '../utils/helpers'
 import Input from './input'
@@ -90,6 +90,35 @@ class Transaction {
 
     // All inputs sign the same data, so we cache it in the first getDataToSign method call
     this._dataToSignCache = null;
+  }
+
+  /**
+   * Get the signature from the dataToSignHash for a private key
+   *
+   * @return {Buffer}
+   * @memberof Transaction
+   * @static
+   *
+   */
+  static sign(dataToSignHash: Buffer, privateKey: PrivateKey): Buffer {
+    const signature = cryptoBL.ECDSA.sign(dataToSignHash, privateKey, 'little').set({
+      nhashtype: cryptoBL.Signature.SIGHASH_ALL,
+    });
+    return signature.toDER();
+  }
+
+  /**
+   * Get the signature of this transaction for the given private key
+   *
+   * @param {PrivateKey}
+   *
+   * @return {Buffer}
+   * @memberof Transaction
+   * @inner
+   *
+   */
+  sign(privateKey: PrivateKey): Buffer {
+    return Transaction.sign(this.getDataToSignHash(), privateKey);
   }
 
   /**
