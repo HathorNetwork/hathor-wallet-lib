@@ -529,7 +529,7 @@ class HathorWallet extends EventEmitter {
   /**
    * Get address path from specific derivation index
    *
-   * @param {number} index bip32 derivation index
+   * @param {number} index Address path index
    *
    * @return {string} Address path for the given index
    *

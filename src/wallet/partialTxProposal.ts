@@ -68,7 +68,7 @@ class PartialTxProposal {
   }
 
   /**
-   * Get all available utxos on the wallet history for a token
+   * Get all available non authority utxos on the wallet history for a token
    * and enrich them with tokenData.
    *
    * @param {HathorWallet} wallet Wallet which will provide the tokens.
@@ -102,7 +102,7 @@ class PartialTxProposal {
    * @param {string} token UID of token that is being sent
    * @param {number} value Quantity of tokens being sent
    * @param {Object} [options]
-   * @param {UtxoExtended[]|null} [options.changeAddress=null] If we add change, use this address instead of getting a new one from the wallet.
+   * @param {UtxoExtended[]|null} [options.utxos=[]] utxos to add to the partial transaction.
    * @param {string|null} [options.changeAddress=null] If we add change, use this address instead of getting a new one from the wallet.
    * @param {boolean} [options.markAsSelected=true] Mark the utxo with `selected_as_input`.
    */
