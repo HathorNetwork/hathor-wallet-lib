@@ -11,7 +11,7 @@ import P2SH from '../models/p2sh';
 import P2PKH from '../models/p2pkh';
 import ScriptData from '../models/script_data';
 import Transaction from '../models/transaction';
-import { AddressError, InvalidPartialTxError, InsufficientFundsError } from '../errors';
+import { AddressError, InvalidPartialTxError } from '../errors';
 import Network from '../models/network';
 import HathorWallet from '../new/wallet';
 import {
@@ -28,15 +28,13 @@ import dateFormatter from '../date';
 import { OutputType, Utxo } from './types';
 import { Balance } from '../models/types';
 
-export interface UtxoExtended extends Utxo {
-  tokenData?: number
-}
-
 class PartialTxProposal {
+  public network: Network;
 
-  network: Network;
   public partialTx: PartialTx;
+
   public signatures: PartialTxInputData|null;
+
   public transaction: Transaction|null;
 
   /**
@@ -68,41 +66,13 @@ class PartialTxProposal {
   }
 
   /**
-   * Get all available non authority utxos on the wallet history for a token
-   * and enrich them with tokenData.
-   *
-   * @param {HathorWallet} wallet Wallet which will provide the tokens.
-   * @param {string?} [token='00'] UID of token that is being sent
-   *
-   * @returns {UtxoExtended[]}
-   */
-  static getWalletUtxos(
-    wallet: HathorWallet,
-    token: string = HATHOR_TOKEN_CONFIG.uid,
-  ): UtxoExtended[] {
-    const historyTransactions = wallet.getFullHistory();
-    const allUtxos = [...wallet.getAllUtxos({ token })].filter(utxo => utxo.authorities === 0);
-    const allExtendedUtxos: UtxoExtended[] = [];
-    for (const utxo of allUtxos) {
-      // Since we chose the utxos from the historyTransactions, we can be sure this exists.
-      const txout = historyTransactions[utxo.txId].outputs[utxo.index];
-      allExtendedUtxos.push({
-        ...utxo,
-        tokenData: txout.token_data,
-      });
-    }
-
-    return allExtendedUtxos;
-  }
-
-  /**
    * Add inputs sending the amount of tokens specified, may add a change output.
    *
    * @param {HathorWallet} wallet Wallet which will provide the tokens.
    * @param {string} token UID of token that is being sent
    * @param {number} value Quantity of tokens being sent
    * @param {Object} [options]
-   * @param {UtxoExtended[]|null} [options.utxos=[]] utxos to add to the partial transaction.
+   * @param {Utxo[]|null} [options.utxos=[]] utxos to add to the partial transaction.
    * @param {string|null} [options.changeAddress=null] If we add change, use this address instead of getting a new one from the wallet.
    * @param {boolean} [options.markAsSelected=true] Mark the utxo with `selected_as_input`.
    */
@@ -111,39 +81,32 @@ class PartialTxProposal {
     token: string,
     value: number,
     {
-      utxos = null,
+      utxos = [],
       changeAddress = null,
       markAsSelected = true,
-    }: { utxos?: UtxoExtended[]|null, changeAddress?: string|null, markAsSelected?: boolean } = {},
+    }: { utxos?: Utxo[]|null, changeAddress?: string|null, markAsSelected?: boolean } = {},
   ) {
     this.resetSignatures();
 
-    // Since the selectUtxos returns a list of Utxo
-    // we need a way to access the original utxo for the tokenData.
-    const utxosDict: Record<string, UtxoExtended> = {};
     // Use the pool of utxos or all wallet utxos.
-    const allUtxos: UtxoExtended[] = (utxos && utxos.length > 0)
+    const allUtxos: Utxo[] = (utxos && utxos.length > 0)
       ? utxos
-      : PartialTxProposal.getWalletUtxos(wallet, token);
+      : [...wallet.getAllUtxos({ token })].filter(utxo => utxo.authorities === 0);
 
     // Filter pool of utxos for only utxos from the token and not already in the partial tx
     const currentUtxos = this.partialTx.inputs.map(input => `${input.hash}-${input.index}`);
     const utxosToUse = allUtxos.filter(utxo => utxo.tokenId === token && !currentUtxos.includes(`${utxo.txId}-${utxo.index}`));
 
-    for (const utxo of utxosToUse) {
-      utxosDict[`${utxo.txId}-${utxo.index}`] = utxo;
-    }
     const utxosDetails = transactionUtils.selectUtxos(utxosToUse, value);
 
     for (const utxo of utxosDetails.utxos) {
-      const { tokenData } = utxosDict[`${utxo.txId}-${utxo.index}`];
       this.addInput(
         wallet,
         utxo.txId,
         utxo.index,
         utxo.value,
         utxo.address,
-        { token: utxo.tokenId, tokenData, markAsSelected },
+        { token: utxo.tokenId, authorities: utxo.authorities, markAsSelected },
       );
     }
 
@@ -191,7 +154,7 @@ class PartialTxProposal {
    * @param {number} value UTXO value.
    * @param {Object} [options]
    * @param {string} [options.token='00'] Token UID in hex format.
-   * @param {number} [options.tokenData=0] TokenData of the UTXO.
+   * @param {number} [options.authorities=0] Authority information of the UTXO.
    * @param {string|null} [options.address=null] Address that owns the UTXO.
    * @param {boolean} [options.markAsSelected=true] Mark the utxo with `selected_as_input`.
    */
@@ -203,11 +166,11 @@ class PartialTxProposal {
     address: string,
     {
       token = HATHOR_TOKEN_CONFIG.uid,
-      tokenData = 0,
+      authorities = 0,
       markAsSelected = true,
     }: {
       token?: string,
-      tokenData?: number,
+      authorities?: number,
       markAsSelected?: boolean,
     } = {},
   ) {
@@ -217,7 +180,7 @@ class PartialTxProposal {
       wallet.markUtxoSelected(hash, index);
     }
 
-    this.partialTx.addInput(hash, index, value, address, { token, tokenData });
+    this.partialTx.addInput(hash, index, value, address, { token, authorities });
   }
 
   /**
@@ -229,7 +192,7 @@ class PartialTxProposal {
    * @param {Object} [options]
    * @param {number|null} [options.timelock=null] UNIX timestamp of the timelock.
    * @param {boolean} [options.isChange=false] If the output should be considered as change.
-   * @param {number} [options.tokenData=0] TokenData of the Output.
+   * @param {number} [options.authorities=0] Authority information of the Output.
    *
    * @throws AddressError
    */
@@ -240,24 +203,24 @@ class PartialTxProposal {
     {
       timelock = null,
       isChange = false,
-      tokenData = 0
-    }: { timelock?: number|null, isChange?: boolean, tokenData?: number } = {}
+      authorities = 0
+    }: { timelock?: number|null, isChange?: boolean, authorities?: number } = {}
   ) {
     this.resetSignatures();
 
-    const addr = new Address(address, {network: this.network});
+    const addr = new Address(address, { network: this.network });
     let script;
-    switch(addr.getType()) {
+    switch (addr.getType()) {
       case OutputType.P2SH:
         script = new P2SH(addr, { timelock });
-        break
+        break;
       case OutputType.P2PKH:
         script = new P2PKH(addr, { timelock });
-        break
+        break;
       default:
         throw new AddressError('Unsupported address type');
     }
-    this.partialTx.addOutput(value, script.createScript(), { token, tokenData, isChange });
+    this.partialTx.addOutput(value, script.createScript(), { token, authorities, isChange });
   }
 
   /**
@@ -351,7 +314,7 @@ class PartialTxProposal {
    * @param {HathorWallet} wallet Wallet of the UTXOs.
    */
   unmarkAsSelected(wallet: HathorWallet) {
-    for(const input of this.partialTx.inputs) {
+    for (const input of this.partialTx.inputs) {
       wallet.markUtxoSelected(input.hash, input.index, false);
     }
   }
