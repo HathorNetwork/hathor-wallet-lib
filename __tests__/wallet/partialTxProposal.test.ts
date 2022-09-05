@@ -267,7 +267,8 @@ test('addReceive', async () => {
 
 test('addInput', async () => {
   const spyReset = jest.spyOn(PartialTxProposal.prototype, 'resetSignatures');
-  const spyInput = jest.spyOn(PartialTx.prototype, 'addInput');
+  const spyInput = jest.spyOn(PartialTx.prototype, 'addInput')
+    .mockImplementation(() => {});
 
   const hwallet = fakeHathorWallet({
     markUtxoSelected: jest.fn((hash, index) => {}),
@@ -310,7 +311,8 @@ test('addInput', async () => {
 
 test('addOutput', async () => {
   const spyReset = jest.spyOn(PartialTxProposal.prototype, 'resetSignatures');
-  const spyOutput = jest.spyOn(PartialTx.prototype, 'addOutput');
+  const spyOutput = jest.spyOn(PartialTx.prototype, 'addOutput')
+    .mockImplementation(() => {});
 
   const proposal = new PartialTxProposal(testnet);
 
