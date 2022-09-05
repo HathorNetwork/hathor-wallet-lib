@@ -1,11 +1,11 @@
-import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
+import { multisigWalletsData, precalculationHelpers } from './helpers/wallet-precalculation.helper';
 import { GenesisWalletHelper } from './helpers/genesis-wallet.helper';
 import { delay, getRandomInt } from './utils/core.util';
 import {
   createTokenHelper,
   DEFAULT_PASSWORD,
   DEFAULT_PIN_CODE,
-  generateConnection,
+  generateConnection, generateMultisigWalletHelper,
   generateWalletHelper,
   stopAllWallets,
   waitForTxReceived,
@@ -15,11 +15,13 @@ import {
 import HathorWallet from '../../src/new/wallet';
 import { HATHOR_TOKEN_CONFIG, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
 import transaction from '../../src/transaction';
-import { TOKEN_DATA } from './configuration/test-constants';
+import { TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test-constants';
 import wallet from '../../src/wallet';
 import dateFormatter from '../../src/date';
 import { loggers } from './utils/logger.util';
 import { SendTxError } from '../../src/errors';
+import SendTransaction from '../../src/new/sendTransaction';
+import helpersUtils from '../../src/utils/helpers';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 const sampleNftData = 'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg';
@@ -38,9 +40,13 @@ describe('start', () => {
     };
     const hWallet = new HathorWallet(walletConfig);
     await hWallet.start();
-    await waitForWalletReady(hWallet);
 
-    // Validate that it has transactions
+    // Validating that the wallet detects it's not ready
+    expect(hWallet.isReady()).toStrictEqual(false);
+    await waitForWalletReady(hWallet);
+    expect(hWallet.isReady()).toStrictEqual(true);
+
+    // Validate that it has no transactions
     const txHistory = await hWallet.getTxHistory();
     expect(txHistory).toHaveLength(0);
 
@@ -106,6 +112,45 @@ describe('start', () => {
     }
     hWallet.stop();
   });
+
+  it('should start a multisig wallet', async () => {
+    // Start the wallet without precalculated addresses
+    const walletConfig = {
+      seed: multisigWalletsData.words[0],
+      connection: generateConnection(),
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+      multisig: {
+        pubkeys: multisigWalletsData.pubkeys,
+        numSignatures: 3,
+      },
+    };
+
+    /*
+     * The interaction between the jest infrastructure with the address derivation calculations
+     * somehow make this process very costly and slow, especially for multisig.
+     * Here we lower the gap limit to make this test shorter.
+     */
+    const originalGapLimit = wallet.getGapLimit();
+    wallet.setGapLimit(5);
+
+    const hWallet = new HathorWallet(walletConfig);
+    await hWallet.start();
+
+    // Validating that all the booting processes worked
+    await waitForWalletReady(hWallet);
+
+    // Validate that the addresses are the same as the pre-calculated that we have
+    for (let i = 0; i < 5; ++i) {
+      const precalcAddress = WALLET_CONSTANTS.multisig.addresses[i];
+      const addressAtIndex = hWallet.getAddressAtIndex(i);
+      expect(precalcAddress).toStrictEqual(addressAtIndex);
+    }
+
+    // Restoring the gap limit
+    wallet.setGapLimit(originalGapLimit);
+    hWallet.stop();
+  });
 });
 
 describe('addresses methods', () => {
@@ -114,7 +159,7 @@ describe('addresses methods', () => {
     await GenesisWalletHelper.clearListeners();
   });
 
-  it('should get the correct addresses', async () => {
+  it('should get the correct current/next addresses', async () => {
     // Creating a wallet
     const hWallet = await generateWalletHelper();
     // Initializing the getAllAddresses generator
@@ -699,6 +744,69 @@ describe('sendTransaction', () => {
     expect(tcba[hWallet.getAddressAtIndex(6)]).toHaveProperty('transactions', 2);
     expect(tcba[hWallet.getAddressAtIndex(12)]).toHaveProperty('transactions', 1);
   });
+
+  it('should send a multisig transaction', async () => {
+    // Initialize 3 wallets from the same multisig and inject funds in them to test
+    const mhWallet1 = await generateMultisigWalletHelper({ walletIndex: 0 });
+    const mhWallet2 = await generateMultisigWalletHelper({ walletIndex: 1 });
+    const mhWallet3 = await generateMultisigWalletHelper({ walletIndex: 2 });
+    await GenesisWalletHelper.injectFunds(mhWallet1.getAddressAtIndex(0), 10);
+
+    /*
+     * Building tx proposal:
+     * 1) Identify the UTXO
+     * 2) Build the outputs
+     */
+    const { tx_id: inputTxId, index: inputIndex } = mhWallet1.getUtxos().utxos[0];
+    const network = mhWallet1.getNetworkObject();
+    const sendTransaction = new SendTransaction({
+      inputs: [
+        { txId: inputTxId, index: inputIndex }
+      ],
+      outputs: [
+        { address: mhWallet1.getAddressAtIndex(1), value: 10, token: HATHOR_TOKEN_CONFIG.uid }
+      ],
+      network,
+    });
+    const tx = helpersUtils.createTxFromData(
+      { version: 1, ...sendTransaction.prepareTxData() },
+      network
+    );
+    const txHex = tx.toHex();
+
+    // Getting signatures for the proposal
+    const sig1 = mhWallet1.getAllSignatures(txHex, DEFAULT_PIN_CODE);
+    const sig2 = mhWallet2.getAllSignatures(txHex, DEFAULT_PIN_CODE);
+    const sig3 = mhWallet3.getAllSignatures(txHex, DEFAULT_PIN_CODE);
+
+    // Delay to avoid the same timestamp as the fundTx
+    await waitUntilNextTimestamp(mhWallet1, inputTxId);
+
+    // Sign and push
+    const partiallyAssembledTx = mhWallet1.assemblePartialTransaction(
+      txHex,
+      [sig1, sig2, sig3]
+    );
+    partiallyAssembledTx.prepareToSend();
+    const finalTx = new SendTransaction({
+      transaction: partiallyAssembledTx,
+      network,
+    });
+
+    /** @type BaseTransactionResponse */
+    const sentTx = await finalTx.runFromMining();
+    expect(sentTx).toHaveProperty('hash');
+    await waitForTxReceived(mhWallet1, sentTx.hash);
+
+    const historyTx = mhWallet1.getTx(sentTx.hash);
+    expect(historyTx).toMatchObject({
+      tx_id: partiallyAssembledTx.hash,
+      inputs: [expect.objectContaining({
+        tx_id: inputTxId,
+        value: 10,
+      })]
+    });
+  });
 });
 
 describe('sendManyOutputsTransaction', () => {
@@ -1244,12 +1352,18 @@ describe('delegateAuthority', () => {
     // Expect wallet 1 to still have one mint authority
     let authorities1 = await hWallet1.getMintAuthority(tokenUid);
     expect(authorities1).toHaveLength(1);
-    expect(authorities1[0]).toMatchObject({ txId: delegateMintTxId, authorities: 1 });
+    expect(authorities1[0]).toMatchObject({
+      txId: delegateMintTxId,
+      authorities: TOKEN_MINT_MASK
+    });
     // Expect wallet 2 to also have one mint authority
     await hWallet1.preProcessWalletData();
     let authorities2 = await hWallet2.getMintAuthority(tokenUid);
     expect(authorities2).toHaveLength(1);
-    expect(authorities2[0]).toMatchObject({ txId: delegateMintTxId, authorities: 1 });
+    expect(authorities2[0]).toMatchObject({
+      txId: delegateMintTxId,
+      authorities: TOKEN_MINT_MASK
+    });
 
     // Delegating melt authority to wallet 2
     await waitUntilNextTimestamp(hWallet1, delegateMintTxId);
@@ -1264,12 +1378,18 @@ describe('delegateAuthority', () => {
     await hWallet1.preProcessWalletData();
     authorities1 = await hWallet1.getMeltAuthority(tokenUid);
     expect(authorities1).toHaveLength(1);
-    expect(authorities1[0]).toMatchObject({ txId: delegateMeltTxId, authorities: 2 });
+    expect(authorities1[0]).toMatchObject({
+      txId: delegateMeltTxId,
+      authorities: TOKEN_MELT_MASK
+    });
     // Expect wallet 2 to also have one melt authority
     await hWallet1.preProcessWalletData();
     authorities2 = await hWallet2.getMeltAuthority(tokenUid);
     expect(authorities2).toHaveLength(1);
-    expect(authorities2[0]).toMatchObject({ txId: delegateMeltTxId, authorities: 2 });
+    expect(authorities2[0]).toMatchObject({
+      txId: delegateMeltTxId,
+      authorities: TOKEN_MELT_MASK
+    });
   });
 
   it('should delegate authority to another wallet without keeping one', async () => {
@@ -1350,13 +1470,13 @@ describe('delegateAuthority', () => {
         txId: duplicateMintAuth,
         index: 0,
         address: hWallet1.getAddressAtIndex(1),
-        authorities: 1 // number value for TOKEN_MINT_MASK
+        authorities: TOKEN_MINT_MASK
       },
       {
         txId: duplicateMintAuth,
         index: 1,
         address: expect.any(String),
-        authorities: 1
+        authorities: TOKEN_MINT_MASK
       },
     ]);
 
@@ -1376,7 +1496,7 @@ describe('delegateAuthority', () => {
         txId: duplicateMintAuth,
         index: expect.any(Number),
         address: expect.any(String),
-        authorities: 1
+        authorities: TOKEN_MINT_MASK
       },
     ]);
 
@@ -1387,7 +1507,7 @@ describe('delegateAuthority', () => {
         txId: duplicateMintAuth,
         index: expect.any(Number),
         address: expect.any(String),
-        authorities: 1
+        authorities: TOKEN_MINT_MASK
       },
     ]);
   });
@@ -1418,13 +1538,13 @@ describe('delegateAuthority', () => {
         txId: duplicateMeltAuth,
         index: 0,
         address: hWallet1.getAddressAtIndex(1),
-        authorities: 2, // number value for TOKEN_MELT_MASK
+        authorities: TOKEN_MELT_MASK,
       },
       {
         txId: duplicateMeltAuth,
         index: 1,
         address: expect.any(String),
-        authorities: 2,
+        authorities: TOKEN_MELT_MASK,
       },
     ]);
 
@@ -1444,7 +1564,7 @@ describe('delegateAuthority', () => {
         txId: duplicateMeltAuth,
         index: expect.any(Number),
         address: expect.any(String),
-        authorities: 2,
+        authorities: TOKEN_MELT_MASK,
       },
     ]);
 
@@ -1455,7 +1575,7 @@ describe('delegateAuthority', () => {
         txId: duplicateMeltAuth,
         index: expect.any(Number),
         address: expect.any(String),
-        authorities: 2,
+        authorities: TOKEN_MELT_MASK,
       },
     ]);
   });

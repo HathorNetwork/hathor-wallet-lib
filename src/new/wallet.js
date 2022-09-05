@@ -190,6 +190,7 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Gets the current server url from connection
+   * @return {string} The server url. Ex.: 'http://server.com:8083'
    */
   getServerUrl() {
     return this.conn.getCurrentServer();
@@ -197,6 +198,7 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Gets the current network from connection
+   * @return {string} The network name. Ex.: 'mainnet', 'testnet'
    */
   getNetwork() {
     return this.conn.getCurrentNetwork();
@@ -685,23 +687,27 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Get information of a given address
-   *
-   * @typedef {Object} AddressInfoOptions
+   * @typedef AddressInfoOptions
    * @property {string} token Optionally filter transactions by this token uid (Default: HTR)
-   *
-   * @typedef {Object} AddressInfo
+   */
+
+  /**
+   * @typedef AddressInfo
    * @property {number} total_amount_received Sum of the amounts received
    * @property {number} total_amount_sent Sum of the amounts sent
    * @property {number} total_amount_available Amount available to transfer
    * @property {number} total_amount_locked Amount locked and thus no available to transfer
    * @property {number} token Token used to calculate the amounts received, sent, available and locked
    * @property {number} index Derivation path for the given address
+   */
+
+  /**
+   * Get information of a given address
    *
    * @param {string} address Address to get information of
    * @param {AddressInfoOptions} options Optional parameters to filter the results
    *
-   * @return {AddressInfo} Aggregated information about the given address
+   * @returns {AddressInfo} Aggregated information about the given address
    *
    */
   getAddressInfo(address, options = {}) {
@@ -768,23 +774,28 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Get utxos of the wallet addresses
    *
-   * @typedef {Object} UtxoOptions
-   * @property {number} max_utxos - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
-   * @property {string} token - Token to filter the utxos. If not sent, we select only HTR utxos.
-   * @property {string} filter_address - Address to filter the utxos.
-   * @property {number} amount_smaller_than - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than this value. Integer representation of decimals, i.e. 100 = 1.00.
-   * @property {number} amount_bigger_than - Minimum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount bigger than this value. Integer representation of decimals, i.e. 100 = 1.00.
-   * @property {number} maximum_amount - Limit the maximum total amount to consolidate summing all utxos. Integer representation of decimals, i.e. 100 = 1.00.
-   * @property {boolean} only_available_utxos - Use only available utxos (not locked)
-   *
-   * @typedef {Object} UtxoDetails
+   * @typedef UtxoOptions
+   * @property {number} [max_utxos] - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
+   * @property {string} [token] - Token to filter the utxos. If not sent, we select only HTR utxos.
+   * @property {string} [filter_address] - Address to filter the utxos.
+   * @property {number} [amount_smaller_than] - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {number} [amount_bigger_than] - Minimum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount bigger than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {number} [maximum_amount] - Limit the maximum total amount to consolidate summing all utxos. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {boolean} [only_available_utxos] - Use only available utxos (not locked)
+   */
+
+  /**
+   * @typedef UtxoDetails
    * @property {number} total_amount_available - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
    * @property {number} total_utxos_available - Token to filter the utxos. If not sent, we select only HTR utxos.
    * @property {number} total_amount_locked - Address to filter the utxos.
    * @property {number} total_utxos_locked - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than this value. Integer representation of decimals, i.e. 100 = 1.00.
    * @property {{ address: string, amount: number, tx_id: string, locked: boolean, index: number }[]} utxos - Array of utxos
+   */
+
+  /**
+   * Get utxos of the wallet addresses
    *
    * @param {UtxoOptions} options Utxo filtering options
    *
@@ -858,9 +869,7 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Generates all available utxos
-   *
-   * @typedef {Object} Utxo
+   * @typedef Utxo
    * @property {string} txId
    * @property {number} index
    * @property {string} tokenId
@@ -871,8 +880,12 @@ class HathorWallet extends EventEmitter {
    * @property {number|null} heightlock
    * @property {boolean} locked
    * @property {string} addressPath
+   */
+
+  /**
+   * Generates all available utxos
    *
-   * @param {Object} [options] Utxo filtering options
+   * @param [options] Utxo filtering options
    * @param {string} [options.token='00'] - Search for UTXOs of this token UID.
    * @param {string|null} [options.filter_address=null] - Address to filter the utxos.
    *
@@ -1020,13 +1033,21 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Consolidates many utxos into a single one for either HTR or exactly one custom token.
-   *
-   * @typedef {Object} ConsolidationResult
+   * @typedef ConsolidationResult
    * @property {number} total_utxos_consolidated - Number of utxos consolidated
    * @property {number} total_amount - Consolidated amount
    * @property {number} tx_id - Consolidated transaction id
-   * @property {{ address: string, amount: number, tx_id: string, locked: boolean, index: number }[]} utxos - Array of consolidated utxos
+   * @property {{
+   *  address: string,
+   *  amount: number,
+   *  tx_id: string,
+   *  locked: boolean,
+   *  index: number
+   * }[]} utxos - Array of consolidated utxos
+   */
+
+  /**
+   * Consolidates many utxos into a single one for either HTR or exactly one custom token.
    *
    * @param {string} destinationAddress Address of the consolidated utxos
    * @param {UtxoOptions} options Utxo filtering options
@@ -1601,13 +1622,13 @@ class HathorWallet extends EventEmitter {
    *
    * @param {string} tokenUid UID of the token to select the authority utxo
    * @param {function} filterUTXOs Callback to check if the output is the authority I want (isMeltOutput or isMintOutput)
-   * @param {Object} options Object with custom options.
-   *  {
-   *    'many': if should return many utxos or just one (default false),
-   *    'skipSpent': if should not include spent utxos (default true)
-   *  }
+   * @param [options] Object with custom options.
+   * @param {boolean} [options.many=false] if should return many utxos or just one (default false)
+   * @param {boolean} [options.skipSpent=true] if should not include spent utxos (default true)
    *
-   * @return {Array|null} Array of objects with {tx_id, index, address, authorities} of the authority output. Returns null in case there are no utxos for this type
+   * @return {{tx_id: string, index: number, address: string, authorities: number}[]|null} Array of
+   *     objects of the authority output. Returns null in case there are no utxos for this type or
+   *     an empty array when there are no utxos and option "many" was selected.
    **/
   selectAuthorityUtxo(tokenUid, filterUTXOs, options = {}) {
     const newOptions = Object.assign({many: false, skipSpent: true}, options);
@@ -2066,9 +2087,10 @@ class HathorWallet extends EventEmitter {
    * Get all authorities utxos for specific token
    *
    * @param {string} tokenUid UID of the token to delegate the authority
-   * @param {string} type Type of the authority to delegate 'mint' or 'melt'
+   * @param {"mint"|"melt"} type Type of the authority to search for: 'mint' or 'melt'
    *
-   * @return {Array} Array of objects with {tx_id, index, address} of the authority output.
+   * @return {{tx_id: string, index: number, address: string, authorities: number}[]}
+   *    Array of the authority outputs.
    **/
   getAuthorityUtxos(tokenUid, type) {
     storage.setStore(this.store);
@@ -2240,9 +2262,9 @@ class HathorWallet extends EventEmitter {
    * The address might be in the input or output
    * Removes duplicates
    *
-   * @param {Object} tx Transaction data with array of inputs and outputs
+   * @param {DecodedTx} tx Transaction data with array of inputs and outputs
    *
-   * @return {Set} Set of strings with addresses
+   * @return {Set<string>} Set of strings with addresses
    **/
   getTxAddresses(tx) {
     storage.setStore(this.store);

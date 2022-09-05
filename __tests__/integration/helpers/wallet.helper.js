@@ -10,10 +10,10 @@ import {
   DEBUG_LOGGING,
   FULLNODE_URL,
   NETWORK_NAME,
-  TX_TIMEOUT_DEFAULT
+  TX_TIMEOUT_DEFAULT, WALLET_CONSTANTS
 } from '../configuration/test-constants';
 import HathorWallet from '../../../src/new/wallet';
-import { precalculationHelpers } from './wallet-precalculation.helper';
+import { multisigWalletsData, precalculationHelpers } from './wallet-precalculation.helper';
 import { delay } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 
@@ -69,6 +69,43 @@ export async function generateWalletHelper() {
   startedWallets.push(hWallet);
 
   return hWallet;
+}
+
+/**
+ *
+ * @param [parameters]
+ * @param {number} [parameters.walletIndex] Index of the harcoded wallet that will be used
+ * @param {string} [parameters.walletWords] Custom wallet words to be used. If informed, all the
+ *                                          other parameters (except walletIndex) become mandatory
+ * @param {string[]} [parameters.preCalculatedAddresses] Custom pre-calculated addresses, if
+ *                                                       walletWords is used
+ * @param {string[]} [parameters.pubkeys] Custom pubkeys if walletWords is used
+ * @param {number} [parameters.numSignatures] Custom numSignatures if walletWords is used
+ *
+ * @example
+ * const multisigWallet = await generateMultisigWalletHelper({ walletIndex: 0 });
+ *
+ * @return {Promise<HathorWallet>}
+ */
+export async function generateMultisigWalletHelper(parameters) {
+  // Start the wallet
+  const walletConfig = {
+    seed: parameters.walletWords || multisigWalletsData.words[parameters.walletIndex],
+    connection: generateConnection(),
+    password: DEFAULT_PASSWORD,
+    pinCode: DEFAULT_PIN_CODE,
+    preCalculatedAddresses: parameters.preCalculatedAddresses || WALLET_CONSTANTS.multisig.addresses,
+    multisig: {
+      pubkeys: parameters.pubkeys || multisigWalletsData.pubkeys,
+      numSignatures: parameters.numSignatures || 3,
+    }
+  };
+  const mhWallet = new HathorWallet(walletConfig);
+  await mhWallet.start();
+  await waitForWalletReady(mhWallet);
+  startedWallets.push(mhWallet);
+
+  return mhWallet;
 }
 
 export async function stopAllWallets() {
