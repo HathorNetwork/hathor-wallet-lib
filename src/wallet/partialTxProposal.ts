@@ -137,7 +137,8 @@ class PartialTxProposal {
     wallet: HathorWallet,
     token: string,
     value: number,
-    { timelock = null, address = null }: { timelock?: number|null, address?: string|null } = {}) {
+    { timelock = null, address = null }: { timelock?: number|null, address?: string|null } = {},
+  ) {
     this.resetSignatures();
 
     // get an address of our wallet and add the output
