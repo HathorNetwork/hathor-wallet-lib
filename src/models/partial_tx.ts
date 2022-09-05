@@ -143,6 +143,7 @@ export class ProposalOutput extends Output {
     super(value, script, { tokenData });
     this.token = token;
     this.isChange = isChange;
+    this.authorities = authorities;
   }
 
   /**
