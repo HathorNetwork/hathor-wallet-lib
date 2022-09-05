@@ -11,6 +11,7 @@ import { FULLNODE_URL, NETWORK_NAME, WALLET_CONSTANTS } from './configuration/te
 import dateFormatter from '../../src/date';
 import { loggers } from './utils/logger.util';
 import wallet from '../../src/wallet';
+import { AddressError } from '../../src/errors';
 import transaction from '../../src/transaction';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
@@ -81,7 +82,8 @@ describe('getAddressInfo', () => {
   });
 
   it('should throw for an address outside the wallet', async () => {
-    expect(() => hWallet.getAddressInfo(WALLET_CONSTANTS.genesis.addresses[0])).toThrow();
+    expect(() => hWallet.getAddressInfo(WALLET_CONSTANTS.genesis.addresses[0]))
+      .toThrow(AddressError);
   });
 
   it('should display correct values for transactions with change', async () => {
@@ -92,7 +94,7 @@ describe('getAddressInfo', () => {
     expect(hWallet.getAddressInfo(addr2).total_amount_received).toStrictEqual(0);
     expect(hWallet.getAddressInfo(addr3).total_amount_received).toStrictEqual(0);
 
-    // Move all the wallet's funds to "2"
+    // Move all the wallet's funds to addr2
     let tx = await hWallet.sendTransaction(addr2, 10);
     await waitForTxReceived(hWallet, tx.hash);
     expect(hWallet.getAddressInfo(addr2)).toMatchObject({
@@ -101,7 +103,7 @@ describe('getAddressInfo', () => {
       total_amount_available: 10,
     });
 
-    // Move only a part of the funds to "3", the change is returned to "2"
+    // Move only a part of the funds to addr3, the change is returned to addr2
     tx = await hWallet.sendTransaction(addr3, 4, { changeAddress: addr2 });
     await waitForTxReceived(hWallet, tx.hash);
     expect(hWallet.getAddressInfo(addr2)).toMatchObject({
@@ -184,11 +186,15 @@ describe('getAddressInfo', () => {
       total_amount_received: 100,
       total_amount_sent: 100,
       total_amount_available: 0,
+      token: tokenUid,
+      index: 0,
     });
     expect(hWalletCustom.getAddressInfo(addr1Custom, { token: tokenUid })).toMatchObject({
       total_amount_received: 40,
       total_amount_sent: 0,
       total_amount_available: 40,
+      token: tokenUid,
+      index: 1,
     });
   });
 });
@@ -273,18 +279,28 @@ describe('getAllUtxos', () => {
      */
     const hWallet = await generateWalletHelper();
     const tx1 = await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
+    const tx2 = await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(1), 5);
 
-    // Validate that on the address that received the transaction, the UTXO is listed
+    // Validate that on the address that received tx1, the UTXO is listed
     let utxoGenerator = await hWallet.getAllUtxos({ filter_address: hWallet.getAddressAtIndex(0) });
-    const utxoGenResult = await utxoGenerator.next();
+    let utxoGenResult = await utxoGenerator.next();
     expect(utxoGenResult.value).toMatchObject({
       txId: tx1.hash,
       value: 10,
     });
     expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true });
 
-    // Validate that on the address that did not receive any transaction, the results are empty
+    // Validate that on the address that received tx2, the UTXO is listed
     utxoGenerator = await hWallet.getAllUtxos({ filter_address: hWallet.getAddressAtIndex(1) });
+    utxoGenResult = await utxoGenerator.next();
+    expect(utxoGenResult.value).toMatchObject({
+      txId: tx2.hash,
+      value: 5,
+    });
+    expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true });
+
+    // Validate that on an address that did not receive any transaction, the results are empty
+    utxoGenerator = await hWallet.getAllUtxos({ filter_address: hWallet.getAddressAtIndex(2) });
     expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true });
   });
 
@@ -301,7 +317,11 @@ describe('getAllUtxos', () => {
       100
     );
 
-    // Validate that the HTR change is listed
+    /*
+     * Validate that:
+     * - The method's default token is HTR when calling without parameters
+     * - The HTR change is listed
+     */
     let utxoGenerator = await hWallet.getAllUtxos();
     let utxoGenResult = await utxoGenerator.next();
     expect(utxoGenResult.value).toMatchObject({
@@ -313,31 +333,28 @@ describe('getAllUtxos', () => {
 
     // Validate that the custom token utxo is listed with its authority tokens
     utxoGenerator = await hWallet.getAllUtxos({ token: tokenUid });
-    utxoGenResult = await utxoGenerator.next();
-    expect(utxoGenResult.value).toMatchObject({
-      txId: tokenUid,
-      tokenId: tokenUid,
-      value: 100,
-      authorities: 0, // The custom token balance itself
-    });
+    const allResults = [...await utxoGenerator];
 
-    utxoGenResult = await utxoGenerator.next();
-    expect(utxoGenResult.value).toMatchObject({
-      txId: tokenUid,
-      tokenId: tokenUid,
-      value: 1,
-      authorities: TOKEN_MINT_MASK
-    });
-
-    utxoGenResult = await utxoGenerator.next();
-    expect(utxoGenResult.value).toMatchObject({
-      txId: tokenUid,
-      tokenId: tokenUid,
-      value: 2,
-      authorities: TOKEN_MELT_MASK
-    });
-
-    expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true });
+    expect(allResults).toStrictEqual(expect.arrayContaining([
+      expect.objectContaining({
+        txId: tokenUid,
+        tokenId: tokenUid,
+        value: 100,
+        authorities: 0, // The custom token balance itself
+      }),
+      expect.objectContaining({
+        txId: tokenUid,
+        tokenId: tokenUid,
+        value: TOKEN_MINT_MASK,
+        authorities: TOKEN_MINT_MASK
+      }),
+      expect.objectContaining({
+        txId: tokenUid,
+        tokenId: tokenUid,
+        value: TOKEN_MELT_MASK,
+        authorities: TOKEN_MELT_MASK
+      }),
+    ]));
   });
 });
 
@@ -361,7 +378,7 @@ describe('getUtxosForAmount', () => {
     expect(() => hWallet.getUtxosForAmount(-1)).toThrow('positive integer');
 
     // Should throw for an amount higher than available funds
-    expect(() => hWallet.getUtxosForAmount(31)).toThrow('utxos to fill total amount');
+    expect(() => hWallet.getUtxosForAmount(1)).toThrow('utxos to fill total amount');
   });
 
   it('should work on a wallet containing a single tx', async () => {
@@ -515,6 +532,18 @@ describe('getUtxosForAmount', () => {
     expect(() => hWallet.getUtxosForAmount(6, { token: tokenUid, filter_address: addr3 }))
       .toThrow('utxos to fill');
   });
+
+  it('should not retrieve utxos marked as selected', async () => {
+    // Retrieving the utxo's data and marking it as selected
+    const addr1 = hWallet.getAddressAtIndex(1);
+    const utxosAddr1 = hWallet.getUtxos({ filter_address: addr1 });
+    const singleUtxoAddr1 = utxosAddr1.utxos[0];
+    hWallet.markUtxoSelected(singleUtxoAddr1.tx_id, singleUtxoAddr1.index, true);
+
+    // Validate that it will not be retrieved on getUtxosForAmount
+    expect(() => hWallet.getUtxosForAmount(10, { filter_address: addr1 }))
+      .toThrow('utxos to fill');
+  })
 });
 
 describe('markUtxoSelected', () => {
@@ -1033,7 +1062,8 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
     // Testing the wrapper method
     expect(hWallet.getAuthorityUtxos(fakeTokenUid, 'mint')).toStrictEqual([]);
     expect(hWallet.getAuthorityUtxos(fakeTokenUid, 'melt')).toStrictEqual([]);
-    expect(() => hWallet.getAuthorityUtxos(fakeTokenUid, 'invalid')).toThrow();
+    expect(() => hWallet.getAuthorityUtxos(fakeTokenUid, 'invalid'))
+      .toThrow('This should never happen.'); // TODO: Improve this error message
   });
 
   it('should find one authority utxo', async () => {
@@ -1060,7 +1090,7 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
         tx_id: tokenHash,
         index: expect.any(Number),
         address: expect.any(String),
-        authorities: 2,
+        authorities: TOKEN_MELT_MASK,
       }]);
 
     // Validating single authority UTXO for a token creation ( with "many" option )
@@ -1076,7 +1106,7 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
         tx_id: tokenHash,
         index: expect.any(Number),
         address: expect.any(String),
-        authorities: 2,
+        authorities: TOKEN_MELT_MASK,
       }]);
 
     // Validating the wrapper method
@@ -1092,7 +1122,7 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
         tx_id: tokenHash,
         index: expect.any(Number),
         address: expect.any(String),
-        authorities: 2,
+        authorities: TOKEN_MELT_MASK,
       }]);
   });
 
@@ -1157,11 +1187,11 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
       tokenHash,
       'melt',
       hWallet.getAddressAtIndex(1),
-      { createAnother: false }
+      { createAnother: true }
     );
     await waitForTxReceived(hWallet, meltDelegationTx.hash);
 
-    // Should not find the spent utxo
+    // Should find a single one of the authority tokens
     expect(hWallet.selectAuthorityUtxo(tokenHash, wallet.isMeltOutput.bind(wallet)))
       .toStrictEqual([{
         tx_id: meltDelegationTx.hash,
@@ -1169,28 +1199,34 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
         address: expect.any(String),
         authorities: TOKEN_MELT_MASK,
       }]);
-    expect(hWallet.selectAuthorityUtxo(tokenHash, wallet.isMeltOutput.bind(wallet), { many: true }))
-      .toStrictEqual([{
-        tx_id: meltDelegationTx.hash,
-        index: expect.any(Number),
-        address: expect.any(String),
-        authorities: TOKEN_MELT_MASK,
-      }]);
-    expect(hWallet.getAuthorityUtxos(tokenHash, 'melt'))
-      .toStrictEqual([{
-        tx_id: meltDelegationTx.hash,
-        index: expect.any(Number),
-        address: expect.any(String),
-        authorities: TOKEN_MELT_MASK,
-      }]);
 
-    // Should return multiple utxos
+    // When searching for "many", should find both the authority tokens
+    const expectedMeltAuthUtxos = [
+      {
+        tx_id: meltDelegationTx.hash,
+        index: expect.any(Number),
+        address: expect.any(String),
+        authorities: TOKEN_MELT_MASK,
+      },
+      {
+        tx_id: meltDelegationTx.hash,
+        index: expect.any(Number),
+        address: expect.any(String),
+        authorities: TOKEN_MELT_MASK,
+      },
+    ];
+    expect(hWallet.selectAuthorityUtxo(tokenHash, wallet.isMeltOutput.bind(wallet), { many: true }))
+      .toStrictEqual(expectedMeltAuthUtxos);
+    expect(hWallet.getAuthorityUtxos(tokenHash, 'melt'))
+      .toStrictEqual(expectedMeltAuthUtxos);
+
+    // Should return the spent utxo as well
     expect(hWallet.selectAuthorityUtxo(
       tokenHash,
       wallet.isMeltOutput.bind(wallet),
       { many: true, skipSpent: false }
     ))
-      .toStrictEqual([
+      .toStrictEqual(expect.arrayContaining([
         {
           tx_id: tokenHash,
           index: expect.any(Number),
@@ -1203,7 +1239,13 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
           address: expect.any(String),
           authorities: TOKEN_MELT_MASK,
         },
-      ]);
+        {
+          tx_id: meltDelegationTx.hash,
+          index: expect.any(Number),
+          address: expect.any(String),
+          authorities: TOKEN_MELT_MASK,
+        },
+      ]));
   });
 });
 

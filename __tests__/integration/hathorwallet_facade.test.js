@@ -14,7 +14,7 @@ import {
   waitUntilNextTimestamp
 } from './helpers/wallet.helper';
 import HathorWallet from '../../src/new/wallet';
-import { HATHOR_TOKEN_CONFIG, TOKEN_MELT_MASK, TOKEN_MINT_MASK, } from '../../src/constants';
+import { HATHOR_TOKEN_CONFIG, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
 import transaction from '../../src/transaction';
 import { NETWORK_NAME, TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test-constants';
 import wallet from '../../src/wallet';
@@ -211,25 +211,44 @@ describe('start', () => {
   });
 
   it('should start a multisig wallet', async () => {
-    // Start the wallet
+    // Start the wallet without precalculated addresses
     const walletConfig = {
       seed: multisigWalletsData.words[0],
       connection: generateConnection(),
       password: DEFAULT_PASSWORD,
       pinCode: DEFAULT_PIN_CODE,
-      preCalculatedAddresses: WALLET_CONSTANTS.multisig.addresses,
       multisig: {
         pubkeys: multisigWalletsData.pubkeys,
         numSignatures: 3,
       },
     };
+
+    /*
+     * The interaction between the jest infrastructure with the address derivation calculations
+     * somehow make this process very costly and slow, especially for multisig.
+     * Here we lower the gap limit to make this test shorter.
+     */
+    const originalGapLimit = wallet.getGapLimit();
+    wallet.setGapLimit(5);
+
     const hWallet = new HathorWallet(walletConfig);
     await hWallet.start();
 
     // Validating that all the booting processes worked
     await waitForWalletReady(hWallet);
+
+    // Validate that the addresses are the same as the pre-calculated that we have
+    for (let i = 0; i < 5; ++i) {
+      const precalcAddress = WALLET_CONSTANTS.multisig.addresses[i];
+      const addressAtIndex = hWallet.getAddressAtIndex(i);
+      expect(precalcAddress).toStrictEqual(addressAtIndex);
+    }
+
+    // Restoring the gap limit
+    wallet.setGapLimit(originalGapLimit);
     hWallet.stop();
   });
+
 
   it('should start a wallet to manage a specific token', async () => {
     const walletData = precalculationHelpers.test.getPrecalculatedWallet();
@@ -1047,7 +1066,7 @@ describe('sendTransaction', () => {
   });
 
   it('should send a multisig transaction', async () => {
-    // Initialize multisig wallets and inject funds to test
+    // Initialize 3 wallets from the same multisig and inject funds in them to test
     const mhWallet1 = await generateMultisigWalletHelper({ walletIndex: 0 });
     const mhWallet2 = await generateMultisigWalletHelper({ walletIndex: 1 });
     const mhWallet3 = await generateMultisigWalletHelper({ walletIndex: 2 });
@@ -1058,7 +1077,6 @@ describe('sendTransaction', () => {
      * HathorWallet. Here we increase this tolerance to increase the success rate of this test.
      */
     await delay(1000);
-
 
     /*
      * Building tx proposal:
@@ -1091,13 +1109,13 @@ describe('sendTransaction', () => {
     await waitUntilNextTimestamp(mhWallet1, inputTxId);
 
     // Sign and push
-    const partiallyAsslembledTx = mhWallet1.assemblePartialTransaction(
+    const partiallyAssembledTx = mhWallet1.assemblePartialTransaction(
       txHex,
       [sig1, sig2, sig3]
     );
-    partiallyAsslembledTx.prepareToSend();
+    partiallyAssembledTx.prepareToSend();
     const finalTx = new SendTransaction({
-      transaction: partiallyAsslembledTx,
+      transaction: partiallyAssembledTx,
       network,
     });
 
@@ -1108,7 +1126,7 @@ describe('sendTransaction', () => {
 
     const historyTx = mhWallet1.getTx(sentTx.hash);
     expect(historyTx).toMatchObject({
-      tx_id: partiallyAsslembledTx.hash,
+      tx_id: partiallyAssembledTx.hash,
       inputs: [expect.objectContaining({
         tx_id: inputTxId,
         value: 10,
@@ -1672,12 +1690,18 @@ describe('delegateAuthority', () => {
     // Expect wallet 1 to still have one mint authority
     let authorities1 = await hWallet1.getMintAuthority(tokenUid);
     expect(authorities1).toHaveLength(1);
-    expect(authorities1[0]).toMatchObject({ txId: delegateMintTxId, authorities: 1 });
+    expect(authorities1[0]).toMatchObject({
+      txId: delegateMintTxId,
+      authorities: TOKEN_MINT_MASK
+    });
     // Expect wallet 2 to also have one mint authority
     await hWallet1.preProcessWalletData();
     let authorities2 = await hWallet2.getMintAuthority(tokenUid);
     expect(authorities2).toHaveLength(1);
-    expect(authorities2[0]).toMatchObject({ txId: delegateMintTxId, authorities: 1 });
+    expect(authorities2[0]).toMatchObject({
+      txId: delegateMintTxId,
+      authorities: TOKEN_MINT_MASK
+    });
 
     // Delegating melt authority to wallet 2
     await waitUntilNextTimestamp(hWallet1, delegateMintTxId);
@@ -1692,12 +1716,18 @@ describe('delegateAuthority', () => {
     await hWallet1.preProcessWalletData();
     authorities1 = await hWallet1.getMeltAuthority(tokenUid);
     expect(authorities1).toHaveLength(1);
-    expect(authorities1[0]).toMatchObject({ txId: delegateMeltTxId, authorities: 2 });
+    expect(authorities1[0]).toMatchObject({
+      txId: delegateMeltTxId,
+      authorities: TOKEN_MELT_MASK
+    });
     // Expect wallet 2 to also have one melt authority
     await hWallet1.preProcessWalletData();
     authorities2 = await hWallet2.getMeltAuthority(tokenUid);
     expect(authorities2).toHaveLength(1);
-    expect(authorities2[0]).toMatchObject({ txId: delegateMeltTxId, authorities: 2 });
+    expect(authorities2[0]).toMatchObject({
+      txId: delegateMeltTxId,
+      authorities: TOKEN_MELT_MASK
+    });
   });
 
   it('should delegate authority to another wallet without keeping one', async () => {
@@ -1778,13 +1808,13 @@ describe('delegateAuthority', () => {
         txId: duplicateMintAuth,
         index: 0,
         address: hWallet1.getAddressAtIndex(1),
-        authorities: 1 // number value for TOKEN_MINT_MASK
+        authorities: TOKEN_MINT_MASK
       },
       {
         txId: duplicateMintAuth,
         index: 1,
         address: expect.any(String),
-        authorities: 1
+        authorities: TOKEN_MINT_MASK
       },
     ]);
 
@@ -1804,7 +1834,7 @@ describe('delegateAuthority', () => {
         txId: duplicateMintAuth,
         index: expect.any(Number),
         address: expect.any(String),
-        authorities: 1
+        authorities: TOKEN_MINT_MASK
       },
     ]);
 
@@ -1815,7 +1845,7 @@ describe('delegateAuthority', () => {
         txId: duplicateMintAuth,
         index: expect.any(Number),
         address: expect.any(String),
-        authorities: 1
+        authorities: TOKEN_MINT_MASK
       },
     ]);
   });
@@ -1846,13 +1876,13 @@ describe('delegateAuthority', () => {
         txId: duplicateMeltAuth,
         index: 0,
         address: hWallet1.getAddressAtIndex(1),
-        authorities: 2, // number value for TOKEN_MELT_MASK
+        authorities: TOKEN_MELT_MASK,
       },
       {
         txId: duplicateMeltAuth,
         index: 1,
         address: expect.any(String),
-        authorities: 2,
+        authorities: TOKEN_MELT_MASK,
       },
     ]);
 
@@ -1872,7 +1902,7 @@ describe('delegateAuthority', () => {
         txId: duplicateMeltAuth,
         index: expect.any(Number),
         address: expect.any(String),
-        authorities: 2,
+        authorities: TOKEN_MELT_MASK,
       },
     ]);
 
@@ -1883,7 +1913,7 @@ describe('delegateAuthority', () => {
         txId: duplicateMeltAuth,
         index: expect.any(Number),
         address: expect.any(String),
-        authorities: 2,
+        authorities: TOKEN_MELT_MASK,
       },
     ]);
   });
