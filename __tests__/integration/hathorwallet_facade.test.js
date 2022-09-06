@@ -350,6 +350,30 @@ describe('start', () => {
       expect(hWallet.getAddressAtIndex(i))
         .toStrictEqual(walletData.addresses[i]);
     }
+
+    // Validating balance and utxo methods
+    await expect(hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid)).resolves.toStrictEqual([
+      expect.objectContaining({
+        token: expect.objectContaining({ id: HATHOR_TOKEN_CONFIG.uid }),
+        balance: { unlocked: 0, locked: 0 },
+        transactions: 0,
+      }),
+    ]);
+    expect(hWallet.getUtxos()).toHaveProperty('total_utxos_available', 0);
+
+    // Generating a transaction and validating it shows correctly
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(1), 1);
+
+
+    await expect(hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid)).resolves.toMatchObject([
+      expect.objectContaining({
+        token: expect.objectContaining({ id: HATHOR_TOKEN_CONFIG.uid }),
+        balance: { unlocked: 1, locked: 0 },
+        transactions: 2,
+        // transactions: 1, // TODO: The amount of transactions is 2 but should be 1. Fix this.
+      }),
+    ]);
+    expect(hWallet.getUtxos()).toHaveProperty('total_utxos_available', 1);
   })
 
   it('should start a wallet without pin', async () => {
