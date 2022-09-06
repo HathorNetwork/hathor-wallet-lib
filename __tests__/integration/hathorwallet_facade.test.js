@@ -1568,6 +1568,13 @@ describe('meltTokens', () => {
       100,
     );
 
+    // Should not melt more than there is available
+    await expect(hWallet.meltTokens(tokenUid, 999))
+      .rejects.toStrictEqual({
+        success: false,
+        message: expect.stringContaining('enough inputs to melt'),
+      });
+
     // Melting some tokens
     const meltAmount = getRandomInt(99, 10);
     const { hash } = await hWallet.meltTokens(tokenUid, meltAmount);
