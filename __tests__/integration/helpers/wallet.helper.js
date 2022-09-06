@@ -57,8 +57,8 @@ const startedWallets = [];
  * @param {string} [param.xpriv]
  * @param {string} [param.xpub]
  * @param {string} [param.tokenUid] UID of the token to handle on this wallet
- * @param {string} [param.password] Password to encrypt the seed
- * @param {string} [param.pinCode] PIN to execute wallet actions
+ * @param {string|null} [param.password] Password to encrypt the seed
+ * @param {string|null} [param.pinCode] PIN to execute wallet actions
  * @param {boolean} [param.debug] Activates debug mode
  * @param {{pubkeys:string[],numSignatures:number}} [param.multisig]
  * @param {string[]} [param.preCalculatedAddresses] An array of pre-calculated addresses

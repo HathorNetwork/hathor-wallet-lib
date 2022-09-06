@@ -332,7 +332,11 @@ describe('start', () => {
     const xpub = privkey.xpubkey;
 
     // Creating a new wallet with a known set of words just to generate the custom token
-    let hWallet = await generateWalletHelper({ xpub });
+    const hWallet = await generateWalletHelper({
+      xpub,
+      password: null,
+      pinCode: null,
+    });
     expect(hWallet.isReady()).toStrictEqual(true);
 
     // Validating that methods that require the private key will throw on call
