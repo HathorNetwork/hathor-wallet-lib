@@ -1008,11 +1008,11 @@ describe('consolidateUtxos', () => {
     // We should now have 4 utxos on wallet1 for this custom token
     expect(hWallet1.getUtxos({ token: tokenHash })).toHaveProperty('total_utxos_available', 4);
 
-    // Reducing the amount of maximum outputs allowed for the lib (not the fullnode)
+    // Reducing the amount of maximum inputs allowed for the lib (not the fullnode)
     const oldMaxInputs = transaction.getMaxInputsConstant();
     transaction.updateMaxInputsConstant(2);
 
-    // Consolidate all of them on a single utxo
+    // Trying to consolidate all of them on a single utxo
     await waitUntilNextTimestamp(hWallet1, fundTx.hash);
     const consolidateTx = await hWallet1.consolidateUtxos(
       hWallet1.getAddressAtIndex(4),
@@ -1022,7 +1022,7 @@ describe('consolidateUtxos', () => {
     // Reverting the amount of maximum outputs allowed by the lib
     transaction.updateMaxInputsConstant(oldMaxInputs);
 
-    // The lib should respect its maximum output limit
+    // The lib should respect its maximum output limit at the time of the transaction
     expect(consolidateTx.utxos).toHaveLength(2);
     await waitForTxReceived(hWallet1, consolidateTx.txId);
 
