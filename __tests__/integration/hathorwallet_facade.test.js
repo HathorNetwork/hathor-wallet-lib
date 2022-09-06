@@ -31,7 +31,7 @@ const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d71
 const sampleNftData = 'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg';
 
 describe('start', () => {
-  it('should reject with invalid inputs', async () => {
+  it('should reject with invalid parameters', async () => {
     const walletData = precalculationHelpers.test.getPrecalculatedWallet();
     const connection = generateConnection();
 
