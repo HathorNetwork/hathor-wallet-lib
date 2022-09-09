@@ -49,7 +49,12 @@ export const DEFAULT_PIN_CODE = '000000';
 const startedWallets = [];
 
 /**
- * Generates a Wallet from an available precalculated seed
+ * Simplifies the generation of a Wallet for the integration tests.
+ * When called without parameters, consumes one of the available pre-calculated wallets and returns
+ * it initialized.
+ *
+ * When calling this method with any parameter, please refer to the `walletConfig` object inside to
+ * understand what values are being informed to the `HathorWallet` class by default.
  *
  * @param [param] Optional object with properties to override the generated wallet
  * @param {string} [param.seed] 24 words separated by space
@@ -64,6 +69,13 @@ const startedWallets = [];
  * @param {string[]} [param.preCalculatedAddresses] An array of pre-calculated addresses
  *
  * @returns {Promise<HathorWallet>}
+ *
+ * @example
+ * const hWalletAuto = await generateWalletHelper();
+ * const hWalletManual = await generateWalletHelper({
+ *   seed: 'sample words test',
+ *   addresses: ['addr0','addr1'],
+ * }
  */
 export async function generateWalletHelper(param) {
   /** @type PrecalculatedWalletData */
