@@ -1149,7 +1149,7 @@ describe('sendTransaction', () => {
     /** @type BaseTransactionResponse */
     const sentTx = await finalTx.runFromMining();
     expect(sentTx).toHaveProperty('hash');
-    await waitForTxReceived(mhWallet1, sentTx.hash);
+    await waitForTxReceived(mhWallet1, sentTx.hash, 10000); // Multisig transactions take longer
 
     const historyTx = mhWallet1.getTx(sentTx.hash);
     expect(historyTx).toMatchObject({
