@@ -5,7 +5,8 @@ import {
   createTokenHelper,
   DEFAULT_PASSWORD,
   DEFAULT_PIN_CODE,
-  generateConnection, generateMultisigWalletHelper,
+  generateConnection,
+  generateMultisigWalletHelper,
   generateWalletHelper,
   stopAllWallets,
   waitForTxReceived,
@@ -15,18 +16,114 @@ import {
 import HathorWallet from '../../src/new/wallet';
 import { HATHOR_TOKEN_CONFIG, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
 import transaction from '../../src/transaction';
-import { TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test-constants';
+import { NETWORK_NAME, TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test-constants';
 import wallet from '../../src/wallet';
 import dateFormatter from '../../src/date';
 import { loggers } from './utils/logger.util';
-import { SendTxError } from '../../src/errors';
+import { SendTxError, WalletFromXPubGuard } from '../../src/errors';
 import SendTransaction from '../../src/new/sendTransaction';
 import helpersUtils from '../../src/utils/helpers';
+import walletUtils from '../../src/utils/wallet';
+import { ConnectionState } from '../../src/wallet/types';
+import MemoryStore from '../../src/memory_store'
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 const sampleNftData = 'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg';
 
 describe('start', () => {
+  it('should reject with invalid parameters', async () => {
+    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const connection = generateConnection();
+
+    /*
+     * Invalid parameters on constructing the object
+     */
+    expect(() => new HathorWallet()).toThrow('provide a connection');
+
+    expect(() => new HathorWallet({
+      seed: walletData.words,
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+    })).toThrow('provide a connection');
+
+    expect(() => new HathorWallet({
+      connection,
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+    })).toThrow('seed');
+
+    expect(() => new HathorWallet({
+      seed: walletData.words,
+      xpriv: 'abc123',
+      connection,
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+    })).toThrow('seed and an xpriv');
+
+    expect(() => new HathorWallet({
+      xpriv: 'abc123',
+      connection,
+      passphrase: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+    })).toThrow('xpriv with passphrase');
+
+    expect(() => new HathorWallet({
+      seed: walletData.words,
+      connection: { state: ConnectionState.CONNECTED } ,
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+    })).toThrow('share connections');
+
+    expect(() => new HathorWallet({
+      seed: walletData.words,
+      connection,
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+      multisig: {}
+    })).toThrow('pubkeys and numSignatures');
+
+    expect(() => new HathorWallet({
+      seed: walletData.words,
+      connection,
+      password: DEFAULT_PASSWORD,
+      pinCode: DEFAULT_PIN_CODE,
+      multisig: { pubkeys: ['abc'], numSignatures: 2 }
+    })).toThrow('configuration invalid');
+
+    /*
+     * Invalid parameters on starting the wallet
+     */
+
+    // A common wallet without a pin code
+    let walletConfig = {
+      seed: walletData.words,
+      connection,
+      password: DEFAULT_PASSWORD,
+      preCalculatedAddresses: walletData.addresses,
+      store: new MemoryStore(),
+    };
+    let hWallet = new HathorWallet(walletConfig);
+    await expect(hWallet.start()).rejects.toStrictEqual({
+      success: false,
+      message: expect.stringContaining('Pin'),
+      error: expect.stringContaining('PIN')
+    });
+
+    // A common wallet without password
+    walletConfig = {
+      seed: walletData.words,
+      connection,
+      pinCode: DEFAULT_PIN_CODE,
+      preCalculatedAddresses: walletData.addresses,
+    }
+    hWallet = new HathorWallet(walletConfig);
+    await expect(hWallet.start()).rejects.toStrictEqual({
+      success: false,
+      message: expect.stringContaining('Password'),
+      error: expect.stringContaining('PASSWORD')
+    });
+  });
+
   it('should start a wallet with no history', async () => {
     const walletData = precalculationHelpers.test.getPrecalculatedWallet();
 
@@ -151,6 +248,200 @@ describe('start', () => {
     wallet.setGapLimit(originalGapLimit);
     hWallet.stop();
   });
+
+
+  it('should start a wallet to manage a specific token', async () => {
+    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+
+    // Creating a new wallet with a known set of words just to generate the custom token
+    let hWallet = await generateWalletHelper({
+      seed: walletData.words,
+      preCalculatedAddresses: walletData.addresses,
+    });
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 2);
+    const { hash: tokenUid } = await createTokenHelper(
+      hWallet,
+      'Dedicated Wallet Token',
+      'DWT',
+      100
+    );
+
+    // Stopping this wallet and destroying its memory state
+    await hWallet.stop({ cleanStorage: true });
+    hWallet = null;
+
+    // Starting a new wallet re-using the same words, this time with a specific wallet token
+    hWallet = await generateWalletHelper({
+      seed: walletData.words,
+      preCalculatedAddresses: walletData.addresses,
+      tokenUid,
+    });
+    expect(hWallet.isReady()).toStrictEqual(true); // This operation should work
+
+    // Now testing the methods that use this set tokenUid information
+    // FIXME: No need to explicitly pass the non-boolean `false` as a tokenUid to get this result.
+    await expect(await hWallet.getBalance(false)).toStrictEqual([
+      {
+        token: {
+          id: tokenUid,
+          name: "",
+          symbol: ""
+        },
+        balance: {
+          unlocked: 100,
+          locked: 0
+        },
+        transactions: 3,
+        lockExpires: null,
+        tokenAuthorities: {
+          unlocked: {
+            mint: true,
+            melt: true
+          },
+          locked: {
+            mint: false,
+            melt: false
+          }
+        }
+      }
+    ]);
+
+    // FIXME: We should not have to explicitly pass an empty token uid to get this result
+    const txHistory1 = await hWallet.getTxHistory({ token_id: undefined });
+    expect(txHistory1).toStrictEqual([
+      expect.objectContaining({
+        txId: tokenUid,
+        tokenUid: tokenUid,
+        balance: 100
+      }),
+    ]);
+
+    /*
+     * These tests could be created inside the `getBalance` and `getTxHistory` sections but for
+     * simplicity sake, since they are so small, were added here just as a complement to
+     * this `start` test.
+     */
+  });
+
+  it('should start a wallet via xpub', async () => {
+    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const xpriv = walletUtils.getXPrivKeyFromSeed(
+      walletData.words,
+      { networkName: NETWORK_NAME })
+    const privkey = walletUtils.deriveXpriv(xpriv, "0'/0");
+    const xpub = privkey.xpubkey;
+
+    // Creating a new wallet with a known set of words just to generate the custom token
+    const hWallet = await generateWalletHelper({
+      xpub,
+      password: null,
+      pinCode: null,
+    });
+    expect(hWallet.isReady()).toStrictEqual(true);
+
+    // Validating that methods that require the private key will throw on call
+    await expect(hWallet.consolidateUtxos()).rejects.toThrow(WalletFromXPubGuard);
+    await expect(hWallet.sendTransaction()).rejects.toThrow(WalletFromXPubGuard);
+    await expect(hWallet.sendManyOutputsTransaction()).rejects.toThrow(WalletFromXPubGuard);
+    await expect(hWallet.prepareCreateNewToken()).rejects.toThrow(WalletFromXPubGuard);
+    await expect(hWallet.prepareMintTokensData()).rejects.toThrow(WalletFromXPubGuard);
+    await expect(hWallet.prepareMeltTokensData()).rejects.toThrow(WalletFromXPubGuard);
+    await expect(hWallet.prepareDelegateAuthorityData()).rejects.toThrow(WalletFromXPubGuard);
+    await expect(hWallet.prepareDestroyAuthorityData()).rejects.toThrow(WalletFromXPubGuard);
+
+    // Validating that the address generation works as intended
+    for (let i=0; i < 21; ++i) {
+      expect(hWallet.getAddressAtIndex(i))
+        .toStrictEqual(walletData.addresses[i]);
+    }
+
+    // Validating balance and utxo methods
+    await expect(hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid)).resolves.toStrictEqual([
+      expect.objectContaining({
+        token: expect.objectContaining({ id: HATHOR_TOKEN_CONFIG.uid }),
+        balance: { unlocked: 0, locked: 0 },
+        transactions: 0,
+      }),
+    ]);
+    expect(hWallet.getUtxos()).toHaveProperty('total_utxos_available', 0);
+
+    // Generating a transaction and validating it shows correctly
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(1), 1);
+
+
+    await expect(hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid)).resolves.toMatchObject([
+      expect.objectContaining({
+        token: expect.objectContaining({ id: HATHOR_TOKEN_CONFIG.uid }),
+        balance: { unlocked: 1, locked: 0 },
+        transactions: expect.any(Number),
+        // transactions: 1, // TODO: The amount of transactions is often 2 but should be 1. Ref #397
+      }),
+    ]);
+    expect(hWallet.getUtxos()).toHaveProperty('total_utxos_available', 1);
+  })
+
+  it('should start a wallet without pin', async () => {
+    // Generating the wallet
+    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const hWallet = await generateWalletHelper({
+      seed: walletData.words,
+      preCalculatedAddresses: walletData.addresses,
+      pinCode: DEFAULT_PIN_CODE
+    });
+
+    // Adding funds to it
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
+
+    /*
+     * XXX: The code branches that require a PIN would not be achievable without this hack that
+     * manually removes the pin from the wallet.
+     * In order to increase the test coverage we will add this procedure here
+     */
+    hWallet.pinCode = null;
+
+    // Testing the methods that require a PIN without passing one
+    const defaultMissingPinErrorObject = {
+      success: false,
+      message: expect.stringContaining('Pin'),
+      error: expect.stringContaining('PIN')
+    };
+
+    // XXX: This is the only method that resolves instead of rejects. Check the standard here.
+    await expect(hWallet.sendManyOutputsTransaction([
+      { address: hWallet.getAddressAtIndex(1), value: 1 }
+    ])).resolves.toStrictEqual(defaultMissingPinErrorObject);
+
+    await expect(hWallet.createNewToken(
+      'Pinless Token',
+      'PTT',
+      100
+    )).rejects.toStrictEqual(defaultMissingPinErrorObject);
+
+    await expect(hWallet.mintTokens(
+      fakeTokenUid,
+      100
+    )).rejects.toStrictEqual(defaultMissingPinErrorObject);
+
+    await expect(hWallet.meltTokens(
+      fakeTokenUid,
+      100
+    )).rejects.toStrictEqual(defaultMissingPinErrorObject);
+
+    await expect(hWallet.delegateAuthority(
+      fakeTokenUid,
+      'mint',
+      hWallet.getAddressAtIndex(1)))
+      .rejects.toStrictEqual(defaultMissingPinErrorObject);
+
+    await expect(hWallet.destroyAuthority(
+      fakeTokenUid,
+      'mint',
+      1))
+      .rejects.toStrictEqual(defaultMissingPinErrorObject);
+
+
+    hWallet.stop();
+  });
 });
 
 describe('addresses methods', () => {
@@ -238,6 +529,62 @@ describe('addresses methods', () => {
       address: wallet.getAddressAtIndex(currentAddress.index + 1),
     });
   });
+
+  it('should get correct addresses for a multisig wallet', async () => {
+    const mshWallet = await generateMultisigWalletHelper({ walletIndex: 0 });
+
+    // We will assume the wallet never received txs, which is to be expected for the addresses test
+    expect(mshWallet.getCurrentAddress().address).toStrictEqual(WALLET_CONSTANTS.multisig.addresses[0]);
+
+    for (let i=0; i < 21; ++i) {
+      expect(mshWallet.getAddressAtIndex(i))
+        .toStrictEqual(WALLET_CONSTANTS.multisig.addresses[i]);
+    }
+  })
+
+  it('should respect the current gap limit', async () => {
+    // Lowering the gap limit for the tests
+    const originalGapLimit = wallet.getGapLimit();
+    wallet.setGapLimit(3);
+
+    // Initializing a wallet under those conditions
+    const hWallet = await generateWalletHelper();
+    // Also getting the wallet's storage data to double-check the results
+    const walletData = hWallet.store.getItem('wallet:data');
+
+    /*
+     * The maximum index generated on an empty wallet should be 3 ( four items in total ).
+     * This should be confirmed by the wallet's storage.
+     */
+    expect(await getMaximumIndexFromAddressGenerator()).toStrictEqual(3)
+    expect(Object.keys(walletData.keys)).toHaveLength(4);
+
+    // Send a transaction to the address on index 1 and expect the gap limit to be respected
+    await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(1), 1);
+    expect(await getMaximumIndexFromAddressGenerator()).toStrictEqual(4)
+    expect(Object.keys(walletData.keys)).toHaveLength(5);
+
+    // Restore the original gap limit
+    wallet.setGapLimit(originalGapLimit);
+
+    /**
+     * Iterates the getAllAddresses generator and finds the highest address index for the wallet
+     * @return {Promise<number>}
+     */
+    async function getMaximumIndexFromAddressGenerator() {
+      const addressGenerator = await hWallet.getAllAddresses();
+
+      // Results variable
+      let maximumIndex = 0;
+      for await (const address of addressGenerator) {
+        if (address.index > maximumIndex) {
+          maximumIndex = address.index;
+        }
+      }
+
+      return maximumIndex;
+    }
+  })
 });
 
 describe('getTransactionsCountByAddress', () => {
@@ -338,8 +685,8 @@ describe('getBalance', () => {
     const balance1 = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
     expect(balance1[0]).toMatchObject({
       balance: { unlocked: injectedValue, locked: 0 },
-      transactions: 2,
-      // transactions: 1, // TODO: The amount of transactions is 2 but should be 1. Fix this.
+      transactions: expect.any(Number),
+      // transactions: 1, // TODO: The amount of transactions is often 2 but should be 1. Ref #397
     });
 
     // Transferring tokens inside the wallet should not change the balance
@@ -374,8 +721,8 @@ describe('getBalance', () => {
     const tknBalance = await hWallet.getBalance(tokenUid);
     expect(tknBalance[0]).toMatchObject({
       balance: { unlocked: newTokenAmount, locked: 0 },
-      transactions: 8,
-      // transactions: 1, // TODO: This returns 8 transactions, we expected only 1. Fix this.
+      transactions: expect.any(Number),
+      // transactions: 1, // TODO: This often returns 8 transactions, we expected only 1. Ref #397
     });
 
     // Validating that a different wallet (genesis) has no access to this token
@@ -753,6 +1100,12 @@ describe('sendTransaction', () => {
     await GenesisWalletHelper.injectFunds(mhWallet1.getAddressAtIndex(0), 10);
 
     /*
+     * Under heavy test processing this transaction takes longer than usual to be assimilated by the
+     * HathorWallet. Here we increase this tolerance to increase the success rate of this test.
+     */
+    await delay(1000);
+
+    /*
      * Building tx proposal:
      * 1) Identify the UTXO
      * 2) Build the outputs
@@ -796,7 +1149,7 @@ describe('sendTransaction', () => {
     /** @type BaseTransactionResponse */
     const sentTx = await finalTx.runFromMining();
     expect(sentTx).toHaveProperty('hash');
-    await waitForTxReceived(mhWallet1, sentTx.hash);
+    await waitForTxReceived(mhWallet1, sentTx.hash, 10000); // Multisig transactions take longer
 
     const historyTx = mhWallet1.getTx(sentTx.hash);
     expect(historyTx).toMatchObject({
@@ -1135,6 +1488,13 @@ describe('mintTokens', () => {
       100,
     );
 
+    // Should not mint more tokens than the HTR funds allow
+    await expect(hWallet.mintTokens(tokenUid, 9000))
+      .rejects.toStrictEqual({
+        success: false,
+        message: expect.stringContaining('HTR funds'),
+      });
+
     // Minting more of the tokens
     const mintAmount = getRandomInt(100, 50);
     const mintResponse = await hWallet.mintTokens(tokenUid, mintAmount);
@@ -1235,6 +1595,13 @@ describe('meltTokens', () => {
       100,
     );
 
+    // Should not melt more than there is available
+    await expect(hWallet.meltTokens(tokenUid, 999))
+      .rejects.toStrictEqual({
+        success: false,
+        message: expect.stringContaining('enough inputs to melt'),
+      });
+
     // Melting some tokens
     const meltAmount = getRandomInt(99, 10);
     const { hash } = await hWallet.meltTokens(tokenUid, meltAmount);
@@ -1332,6 +1699,11 @@ describe('delegateAuthority', () => {
       'DTK',
       100,
     );
+
+    // Should handle trying to delegate without the authority
+    // FIXME: This case is throwing and not being treated with "success: false". Fix this.
+    await expect(hWallet1.delegateAuthority(fakeTokenUid, 'mint', hWallet2.getAddressAtIndex(0)))
+      .rejects.toBeInstanceOf(TypeError);
 
     // Delegating mint authority to wallet 2
     const { hash: delegateMintTxId } = await hWallet1.delegateAuthority(
@@ -1609,6 +1981,17 @@ describe('destroyAuthority', () => {
     let mintAuthorities = await hWallet.getMintAuthority(tokenUid, { many: true });
     expect(mintAuthorities).toHaveLength(2);
 
+    // Trying to destroy more authorities than there are available
+    await expect(hWallet.destroyAuthority(tokenUid, 'mint', 3))
+      .rejects.toStrictEqual({
+        success: false,
+        message: expect.stringContaining('utxos-available'),
+        errorData: {
+          requestedQuantity: 3,
+          availableQuantity: 2
+        }
+      });
+
     // Destroying one mint authority
     await waitUntilNextTimestamp(hWallet, newMintTx);
     const { hash: destroyMintTx } = await hWallet.destroyAuthority(tokenUid, 'mint', 1);
@@ -1654,6 +2037,17 @@ describe('destroyAuthority', () => {
     // Validating though getMintAuthority
     let meltAuthorities = await hWallet.getMeltAuthority(tokenUid, { many: true });
     expect(meltAuthorities).toHaveLength(2);
+
+    // Trying to destroy more authorities than there are available
+    await expect(hWallet.destroyAuthority(tokenUid, 'melt', 3))
+      .rejects.toStrictEqual({
+        success: false,
+        message: expect.stringContaining('utxos-available'),
+        errorData: {
+          requestedQuantity: 3,
+          availableQuantity: 2
+        }
+      });
 
     // Destroying one melt authority
     await waitUntilNextTimestamp(hWallet, newMeltTx);

@@ -20,7 +20,7 @@ import MemoryStore from '../memory_store';
 import config from '../config';
 import SendTransaction from './sendTransaction';
 import Network from '../models/network';
-import { AddressError, WalletError } from '../errors';
+import { AddressError, WalletError, WalletFromXPubGuard } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
 import { HDPrivateKey, HDPublicKey, crypto } from 'bitcore-lib';
@@ -71,6 +71,7 @@ class HathorWallet extends EventEmitter {
    * @param {string} [param.password] Password to encrypt the seed
    * @param {string} [param.pinCode] PIN to execute wallet actions
    * @param {boolean} [param.debug] Activates debug mode
+   * @param {Storage} [param.store] Optional store to initialize the wallet with
    * @param {{pubkeys:string[],numSignatures:number}} [param.multisig]
    * @param {string[]} [param.preCalculatedAddresses] An array of pre-calculated addresses
    */
@@ -1036,7 +1037,7 @@ class HathorWallet extends EventEmitter {
    * @typedef ConsolidationResult
    * @property {number} total_utxos_consolidated - Number of utxos consolidated
    * @property {number} total_amount - Consolidated amount
-   * @property {number} tx_id - Consolidated transaction id
+   * @property {string} txId - Consolidated transaction id
    * @property {{
    *  address: string,
    *  amount: number,

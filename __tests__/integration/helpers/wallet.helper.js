@@ -49,11 +49,45 @@ export const DEFAULT_PIN_CODE = '000000';
 const startedWallets = [];
 
 /**
- * Generates a Wallet from an available precalculated seed
+ * Simplifies the generation of a Wallet for the integration tests.
+ * When called without parameters, consumes one of the available pre-calculated wallets and returns
+ * it initialized.
+ *
+ * When calling this method with any parameter, please refer to the `walletConfig` object inside to
+ * understand what values are being informed to the `HathorWallet` class by default.
+ *
+ * @param [param] Optional object with properties to override the generated wallet
+ * @param {string} [param.seed] 24 words separated by space
+ * @param {string} [param.passphrase=''] Wallet passphrase
+ * @param {string} [param.xpriv]
+ * @param {string} [param.xpub]
+ * @param {string} [param.tokenUid] UID of the token to handle on this wallet
+ * @param {string|null} [param.password] Password to encrypt the seed
+ * @param {string|null} [param.pinCode] PIN to execute wallet actions
+ * @param {boolean} [param.debug] Activates debug mode
+ * @param {{pubkeys:string[],numSignatures:number}} [param.multisig]
+ * @param {string[]} [param.preCalculatedAddresses] An array of pre-calculated addresses
+ *
  * @returns {Promise<HathorWallet>}
+ *
+ * @example
+ * const hWalletAuto = await generateWalletHelper();
+ * const hWalletManual = await generateWalletHelper({
+ *   seed: 'sample words test',
+ *   addresses: ['addr0','addr1'],
+ * }
  */
-export async function generateWalletHelper() {
-  const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+export async function generateWalletHelper(param) {
+  /** @type PrecalculatedWalletData */
+  let walletData = {};
+
+  // Only fetch a precalculated wallet if the input does not offer a specific one
+  if (!param) {
+    walletData = precalculationHelpers.test.getPrecalculatedWallet();
+  } else {
+    walletData.words = param.seed;
+    walletData.addresses = param.preCalculatedAddresses;
+  }
 
   // Start the wallet
   const walletConfig = {
@@ -63,6 +97,9 @@ export async function generateWalletHelper() {
     pinCode: DEFAULT_PIN_CODE,
     preCalculatedAddresses: walletData.addresses,
   };
+  if (param) {
+    Object.assign(walletConfig, param);
+  }
   const hWallet = new HathorWallet(walletConfig);
   await hWallet.start();
   await waitForWalletReady(hWallet);
@@ -232,7 +269,7 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
        * memory. The code below tries to eliminate these short time-senstive issues with a minimum
        * of delays.
        */
-      await delay(50);
+      await delay(100);
       let txObj = hWallet.getTx(txId);
       while (!txObj) {
         if (DEBUG_LOGGING) {

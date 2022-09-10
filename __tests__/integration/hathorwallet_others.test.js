@@ -12,6 +12,7 @@ import dateFormatter from '../../src/date';
 import { loggers } from './utils/logger.util';
 import wallet from '../../src/wallet';
 import { AddressError } from '../../src/errors';
+import transaction from '../../src/transaction';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 
@@ -566,6 +567,10 @@ describe('markUtxoSelected', () => {
     await GenesisWalletHelper.clearListeners();
   });
 
+  it('should treat invalid inputs', () => {
+    expect(() => hWallet.markUtxoSelected(fakeTokenUid, 0)).not.toThrow();
+  });
+
   /*
    * We will validate this method's results by the following checks:
    * 1 - getTx() - direct access to the wallet full history
@@ -660,12 +665,12 @@ describe('consolidateUtxos', () => {
   beforeAll(async () => {
     hWallet1 = await generateWalletHelper();
     hWallet2 = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet2.getAddressAtIndex(0), 101);
+    await GenesisWalletHelper.injectFunds(hWallet2.getAddressAtIndex(0), 110);
     const { hash: tokenUid } = await createTokenHelper(
       hWallet2,
       'Consolidate Token',
       'CTK',
-      100,
+      1000,
       { address: hWallet2.getAddressAtIndex(0) }
     );
     tokenHash = tokenUid;
@@ -700,6 +705,20 @@ describe('consolidateUtxos', () => {
   it('should throw when consolidating on an empty wallet', async () => {
     await expect(hWallet1.consolidateUtxos(hWallet1.getAddressAtIndex(0)))
       .rejects.toThrow('available utxo');
+  });
+
+  it('should throw when consolidating on an invalid address', async () => {
+    const fundTx = await hWallet2.sendManyOutputsTransaction([
+      { address: hWallet1.getAddressAtIndex(0), value: 4, token: HATHOR_TOKEN_CONFIG.uid },
+      { address: hWallet1.getAddressAtIndex(1), value: 5, token: HATHOR_TOKEN_CONFIG.uid },
+    ]);
+    await waitForTxReceived(hWallet1, fundTx.hash);
+
+    await expect(hWallet1.consolidateUtxos(hWallet2.getAddressAtIndex(0)))
+      .rejects.toThrow('not owned by this wallet');
+
+    await waitUntilNextTimestamp(hWallet1, fundTx.hash);
+    await cleanWallet1(HATHOR_TOKEN_CONFIG.uid);
   });
 
   it('should consolidate two utxos (htr)', async () => {
@@ -974,6 +993,41 @@ describe('consolidateUtxos', () => {
 
     await waitUntilNextTimestamp(hWallet1, consolidateTx.txId);
     await cleanWallet1(HATHOR_TOKEN_CONFIG.uid);
+  });
+
+  it('should consolidate at most the maximum output constant', async () => {
+    // Funding the wallet1
+    const fundTx = await hWallet2.sendManyOutputsTransaction([
+      { address: hWallet1.getAddressAtIndex(0), value: 1, token: tokenHash },
+      { address: hWallet1.getAddressAtIndex(0), value: 1, token: tokenHash },
+      { address: hWallet1.getAddressAtIndex(0), value: 1, token: tokenHash },
+      { address: hWallet1.getAddressAtIndex(0), value: 1, token: tokenHash },
+    ]);
+    await waitForTxReceived(hWallet1, fundTx.hash);
+
+    // We should now have 4 utxos on wallet1 for this custom token
+    expect(hWallet1.getUtxos({ token: tokenHash })).toHaveProperty('total_utxos_available', 4);
+
+    // Reducing the amount of maximum inputs allowed for the lib (not the fullnode)
+    const oldMaxInputs = transaction.getMaxInputsConstant();
+    transaction.updateMaxInputsConstant(2);
+
+    // Trying to consolidate all of them on a single utxo
+    await waitUntilNextTimestamp(hWallet1, fundTx.hash);
+    const consolidateTx = await hWallet1.consolidateUtxos(
+      hWallet1.getAddressAtIndex(4),
+      { token: tokenHash },
+    );
+
+    // Reverting the amount of maximum outputs allowed by the lib
+    transaction.updateMaxInputsConstant(oldMaxInputs);
+
+    // The lib should respect its maximum output limit at the time of the transaction
+    expect(consolidateTx.utxos).toHaveLength(2);
+    await waitForTxReceived(hWallet1, consolidateTx.txId);
+
+    // Ensure the maximum possible amount of utxos was consolidated ( 1 consolidated + 2 remaining )
+    expect(hWallet1.getUtxos({ token: tokenHash })).toHaveProperty('total_utxos_available', 3);
   });
 });
 
