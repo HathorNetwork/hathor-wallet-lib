@@ -9,6 +9,7 @@ import {
 import { HATHOR_TOKEN_CONFIG } from '../../src/constants';
 import SendTransaction from '../../src/new/sendTransaction';
 import PartialTxProposal from '../../src/wallet/partialTxProposal';
+import storage from '../../src/storage';
 
 describe('partial tx proposal', () => {
   afterEach(async () => {
@@ -59,13 +60,15 @@ describe('partial tx proposal', () => {
     expect(proposal.partialTx.isComplete()).toBeTruthy();
 
     const serialized = proposal.partialTx.serialize();
-
     const proposal1 = PartialTxProposal.fromPartialTx(serialized, network);
+    storage.setStore(hWallet1.store);
     await proposal1.signData(DEFAULT_PIN_CODE, true);
     expect(proposal1.signatures.isComplete()).toBeFalsy();
 
     const proposal2 = PartialTxProposal.fromPartialTx(serialized, network);
+    storage.setStore(hWallet2.store);
     await proposal2.signData(DEFAULT_PIN_CODE, true);
+
     expect(proposal2.signatures.isComplete()).toBeFalsy();
 
     proposal2.signatures.addSignatures(proposal1.signatures.serialize());
