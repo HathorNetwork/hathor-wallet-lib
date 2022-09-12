@@ -58,7 +58,6 @@ describe('partial tx proposal', () => {
     proposal.addReceive(hWallet2, token1Uid, 100);
     expect(proposal.partialTx.isComplete()).toBeTruthy();
 
-    expect(proposal.partialTx.serialize()).toBeInstanceOf(String);
     const serialized = proposal.partialTx.serialize();
 
     const proposal1 = PartialTxProposal.fromPartialTx(serialized, network);
