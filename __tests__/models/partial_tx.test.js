@@ -12,7 +12,13 @@ import dateFormatter from '../../src/date';
 
 
 import { UnsupportedScriptError } from '../../src/errors';
-import { HATHOR_TOKEN_CONFIG, DEFAULT_TX_VERSION, TOKEN_AUTHORITY_MASK } from '../../src/constants';
+import {
+  HATHOR_TOKEN_CONFIG,
+  DEFAULT_TX_VERSION,
+  TOKEN_AUTHORITY_MASK,
+  TOKEN_MINT_MASK,
+  TOKEN_MELT_MASK,
+} from '../../src/constants';
 import helpers from '../../src/utils/helpers';
 import txApi from '../../src/api/txApi';
 import P2PKH from '../../src/models/p2pkh';
@@ -178,7 +184,7 @@ describe('PartialTx.isComplete', () => {
       new ProposalOutput(1, Buffer.from([])),
       new ProposalOutput(1, Buffer.from([]), { token: '2' }),
       // Add authority output for token 2
-      new ProposalOutput(1, Buffer.from([]), { token: '2', authorities: 1 }), // mint
+      new ProposalOutput(1, Buffer.from([]), { token: '2', authorities: TOKEN_MINT_MASK }),
     ];
 
     expect(partialTx.isComplete()).toBe(true);
@@ -203,8 +209,8 @@ describe('PartialTx.addInput', () => {
     expect(partialTx.inputs).toEqual(expected);
 
     // Authority input
-    expected.push(expect.objectContaining({ hash: 'hash3', index: 10, token: '1', authorities: 3, value: 1056, address: 'W1b3' }));
-    partialTx.addInput('hash3', 10, 1056, 'W1b3', { token: '1', authorities: 3 });
+    expected.push(expect.objectContaining({ hash: 'hash3', index: 10, token: '1', authorities: TOKEN_MINT_MASK | TOKEN_MELT_MASK, value: 1056, address: 'W1b3' }));
+    partialTx.addInput('hash3', 10, 1056, 'W1b3', { token: '1', authorities: TOKEN_MINT_MASK | TOKEN_MELT_MASK });
     expect(partialTx.inputs).toEqual(expected);
   });
 });
@@ -223,9 +229,9 @@ describe('PartialTx.addOutput', () => {
       isChange: true,
       value: 27,
       script: expect.toMatchBuffer(Buffer.from([230, 148, 32])),
-      authorities: 2,
+      authorities: TOKEN_MELT_MASK,
     }));
-    partialTx.addOutput(27, Buffer.from([230, 148, 32]), { token: '1', authorities: 2, isChange: true});
+    partialTx.addOutput(27, Buffer.from([230, 148, 32]), { token: '1', authorities: TOKEN_MELT_MASK, isChange: true});
     expect(partialTx.outputs).toEqual(expected);
 
     expected.push(expect.objectContaining({
@@ -464,7 +470,7 @@ describe('PartialTx.validate', () => {
     // TokenData of inputs[1] is wrong
     partialTx.inputs = [
       new ProposalInput(txId1, 0, 27, addr1),
-      new ProposalInput(txId2, 4, 13, addr2, { token: testTokenConfig.uid, authorities: 2 }),
+      new ProposalInput(txId2, 4, 13, addr2, { token: testTokenConfig.uid, authorities: TOKEN_MELT_MASK }),
     ];
 
     await expect(partialTx.validate()).resolves.toEqual(false);

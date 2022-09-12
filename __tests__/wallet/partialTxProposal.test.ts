@@ -295,11 +295,11 @@ test('addInput', async () => {
     20,
     70,
     ADDR2,
-    { token: FAKE_UID, authorities: 1, markAsSelected: false },
+    { token: FAKE_UID, authorities: TOKEN_MINT_MASK, markAsSelected: false },
   );
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(hwallet.markUtxoSelected).not.toHaveBeenCalled();
-  expect(spyInput).toBeCalledWith(FAKE_TXID, 20, 70, ADDR2, { token: FAKE_UID, authorities: 1 });
+  expect(spyInput).toBeCalledWith(FAKE_TXID, 20, 70, ADDR2, { token: FAKE_UID, authorities: TOKEN_MINT_MASK });
 
   // Remove mocks
   spyReset.mockRestore();
@@ -381,12 +381,12 @@ test('calculateBalance', async () => {
     new ProposalInput(FAKE_TXID, 2, 7, ADDR3),
     new ProposalInput(FAKE_TXID, 3, 3, ADDR1),
     // Authority
-    new ProposalInput(FAKE_TXID, 4, TOKEN_MELT_MASK, ADDR2, { token: fakeUid3, authorities: 2 }),
-    new ProposalInput(FAKE_TXID, 5, TOKEN_MELT_MASK, ADDR3, { token: fakeUid3, authorities: 2 }),
+    new ProposalInput(FAKE_TXID, 4, TOKEN_MELT_MASK, ADDR2, { token: fakeUid3, authorities: TOKEN_MELT_MASK }),
+    new ProposalInput(FAKE_TXID, 5, TOKEN_MELT_MASK, ADDR3, { token: fakeUid3, authorities: TOKEN_MELT_MASK }),
     // Not from the wallet
     new ProposalInput(FAKE_TXID, 6, 4, ADDR_OTHER, { token: fakeUid3 }),
     new ProposalInput(FAKE_TXID, 7, 999, ADDR_OTHER, { token: fakeUid4 }),
-    new ProposalInput(FAKE_TXID, 8, TOKEN_MINT_MASK, ADDR_OTHER, { token: fakeUid3, authorities: 1 }),
+    new ProposalInput(FAKE_TXID, 8, TOKEN_MINT_MASK, ADDR_OTHER, { token: fakeUid3, authorities: TOKEN_MINT_MASK }),
   ], [
     new ProposalOutput(5, scriptFromAddressP2PKH(ADDR1), { token: FAKE_UID }),
     new ProposalOutput(8, scriptFromAddressP2PKH(ADDR2), { token: fakeUid2 }),
@@ -397,13 +397,13 @@ test('calculateBalance', async () => {
     new ProposalOutput(3, scriptFromAddressP2PKH(ADDR3, timelock), { token: FAKE_UID }),
     new ProposalOutput(4, scriptFromAddressP2PKH(ADDR1, timelock), { token: fakeUid2 }),
     // Authority
-    new ProposalOutput(TOKEN_MINT_MASK, scriptFromAddressP2PKH(ADDR2), { token: FAKE_UID, authorities: 1 }),
+    new ProposalOutput(TOKEN_MINT_MASK, scriptFromAddressP2PKH(ADDR2), { token: FAKE_UID, authorities: TOKEN_MINT_MASK }),
     // Authority locked
-    new ProposalOutput(TOKEN_MELT_MASK, scriptFromAddressP2PKH(ADDR3, timelock), { token: fakeUid2, authorities: 2 }),
-    new ProposalOutput(TOKEN_MINT_MASK, scriptFromAddressP2PKH(ADDR1, timelock), { token: fakeUid3, authorities: 1 }),
+    new ProposalOutput(TOKEN_MELT_MASK, scriptFromAddressP2PKH(ADDR3, timelock), { token: fakeUid2, authorities: TOKEN_MELT_MASK }),
+    new ProposalOutput(TOKEN_MINT_MASK, scriptFromAddressP2PKH(ADDR1, timelock), { token: fakeUid3, authorities: TOKEN_MINT_MASK }),
     // Not from the wallet
     new ProposalOutput(10, scriptFromAddressP2PKH(ADDR_OTHER)),
-    new ProposalOutput(TOKEN_MELT_MASK, scriptFromAddressP2PKH(ADDR_OTHER), { token: fakeUid2, authorities: 2 }),
+    new ProposalOutput(TOKEN_MELT_MASK, scriptFromAddressP2PKH(ADDR_OTHER), { token: fakeUid2, authorities: TOKEN_MELT_MASK }),
   ]);
   /**
    * Summary of the test fixture
