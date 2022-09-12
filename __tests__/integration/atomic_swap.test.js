@@ -10,8 +10,6 @@ import { HATHOR_TOKEN_CONFIG } from '../../src/constants';
 import SendTransaction from '../../src/new/sendTransaction';
 import PartialTxProposal from '../../src/wallet/partialTxProposal';
 
-const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
-
 describe('partial tx proposal', () => {
   afterEach(async () => {
     await stopAllWallets();
@@ -44,7 +42,7 @@ describe('partial tx proposal', () => {
 
     /**
      * The exchange will be:
-     * 
+     *
      * Wallet1 will send 100 HTR and 100 TK1
      * Wallet2 will send 1000 TK2
      */
@@ -61,6 +59,7 @@ describe('partial tx proposal', () => {
     expect(proposal.partialTx.isComplete()).toBeTruthy();
 
     expect(proposal.partialTx.serialize()).toBeInstanceOf(String);
+    const serialized = proposal.partialTx.serialize();
 
     const proposal1 = PartialTxProposal.fromPartialTx(serialized, network);
     await proposal1.signData(DEFAULT_PIN_CODE, true);
