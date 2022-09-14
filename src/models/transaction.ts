@@ -19,6 +19,7 @@ import {
 import {crypto as cryptoBL, encoding, util, PrivateKey} from 'bitcore-lib'
 import {bufferToHex, hexToBuffer, unpackToFloat, unpackToHex, unpackToInt} from '../utils/buffer'
 import helpers from '../utils/helpers'
+import transactionUtils from 'src/utils/transaction'
 import Input from './input'
 import Output from './output'
 import Network from './network'
@@ -101,10 +102,7 @@ class Transaction {
    *
    */
   static sign(dataToSignHash: Buffer, privateKey: PrivateKey): Buffer {
-    const signature = cryptoBL.ECDSA.sign(dataToSignHash, privateKey, 'little').set({
-      nhashtype: cryptoBL.Signature.SIGHASH_ALL,
-    });
-    return signature.toDER();
+    return transactionUtils.sign(dataToSignHash, privateKey);
   }
 
   /**
@@ -118,7 +116,7 @@ class Transaction {
    *
    */
   sign(privateKey: PrivateKey): Buffer {
-    return Transaction.sign(this.getDataToSignHash(), privateKey);
+    return transactionUtils.sign(this.getDataToSignHash(), privateKey);
   }
 
   /**

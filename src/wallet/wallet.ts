@@ -41,8 +41,6 @@ import {
   GetBalanceObject,
   GetAddressesObject,
   GetHistoryObject,
-  SendManyTxOptionsParam,
-  SendTxOptionsParam,
   WalletStatus,
   Utxo,
   OutputType,
@@ -50,8 +48,6 @@ import {
   OutputRequestObj,
   DataScriptOutputRequestObj,
   InputRequestObj,
-  SendTransactionEvents,
-  SendTransactionResponse,
   TransactionFullObject,
   IHathorWallet,
   WsTransaction,
@@ -906,12 +902,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const derivedKey = xpriv.deriveNonCompliantChild(addressPath);
     const privateKey = derivedKey.privateKey;
 
-    const sig = crypto.ECDSA.sign(dataToSignHash, privateKey, 'little').set({
-      nhashtype: crypto.Signature.SIGHASH_ALL
-    });
-
     const arr = [];
-    helpers.pushDataToStack(arr, sig.toDER());
+    helpers.pushDataToStack(arr, transaction.sign(dataToSignHash, privateKey));
     helpers.pushDataToStack(arr, derivedKey.publicKey.toBuffer());
     return util.buffer.concat(arr);
   }

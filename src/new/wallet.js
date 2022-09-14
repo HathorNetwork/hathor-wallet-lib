@@ -337,7 +337,6 @@ class HathorWallet extends EventEmitter {
   getAllSignatures(txHex, pin) {
     storage.setStore(this.store);
     const tx = helpers.createTxFromHex(txHex, this.getNetworkObject());
-    const hash = tx.getDataToSignHash();
     const walletData = wallet.getWalletData();
     const historyTransactions = walletData['historyTransactions'] || {};
     const accessData = storage.getItem('wallet:accessData');
@@ -359,15 +358,11 @@ class HathorWallet extends EventEmitter {
         continue;
       }
 
+      // derive key to address index
       const derivedKey = key.deriveNonCompliantChild(addressIndex);
       const privateKey = derivedKey.privateKey;
 
-      // derive key to address index
-      const sig = crypto.ECDSA.sign(hash, privateKey, 'little').set({
-        nhashtype: crypto.Signature.SIGHASH_ALL
-      });
-
-      signatures[index] = sig.toString();
+      signatures[index] = tx.sign(privateKey).toString('hex');
     }
     const p2shSig = new P2SHSignature(accessData.multisig.pubkey, signatures);
     return p2shSig.serialize();
@@ -393,7 +388,6 @@ class HathorWallet extends EventEmitter {
     const historyTransactions = walletData['historyTransactions'] || {};
     const accessData = storage.getItem('wallet:accessData');
     const multisigData = accessData.multisig;
-    const xpub = HDPublicKey(accessData.xpubkey);
 
     // Deserialize P2SHSignature for all signatures
     // XXX: the .sort here is very important since the fullnode requires the signatures
