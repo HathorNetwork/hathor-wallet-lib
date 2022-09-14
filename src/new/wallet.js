@@ -7,7 +7,7 @@
 
 import EventEmitter from 'events';
 import wallet from '../wallet';
-import { HATHOR_TOKEN_CONFIG, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
+import { HATHOR_TOKEN_CONFIG, HATHOR_BIP44_CODE, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
 import tokens from '../tokens';
 import transaction from '../transaction';
 import version from '../version';
@@ -23,7 +23,7 @@ import Network from '../models/network';
 import { AddressError, WalletError, WalletFromXPubGuard } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
-import { HDPrivateKey, HDPublicKey, crypto } from 'bitcore-lib';
+import { HDPrivateKey } from 'bitcore-lib';
 import transactionUtils from '../utils/transaction';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';

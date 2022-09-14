@@ -19,7 +19,7 @@ import {
 import {crypto as cryptoBL, encoding, util, PrivateKey} from 'bitcore-lib'
 import {bufferToHex, hexToBuffer, unpackToFloat, unpackToHex, unpackToInt} from '../utils/buffer'
 import helpers from '../utils/helpers'
-import transactionUtils from 'src/utils/transaction'
+import transactionUtils from '../utils/transaction'
 import Input from './input'
 import Output from './output'
 import Network from './network'
