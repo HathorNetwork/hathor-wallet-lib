@@ -9,13 +9,11 @@ import { get } from 'lodash';
 
 import Input from './input';
 import Output from './output';
-import Address from './address';
 import Transaction from './transaction';
 import Network from './network';
 
 import P2PKH from './p2pkh';
 import P2SH from './p2sh';
-import ScriptData from './script_data';
 
 import transaction from '../transaction';
 import helpers from '../utils/helpers';
@@ -25,7 +23,6 @@ import txApi from '../api/txApi';
 import {
   HATHOR_TOKEN_CONFIG,
   TOKEN_AUTHORITY_MASK,
-  TOKEN_INDEX_MASK,
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
 } from '../constants';
@@ -470,10 +467,10 @@ export class PartialTx {
 
       let authorities = 0;
       if (output.isMint()) {
-        authorities += 1;
+        authorities += TOKEN_MINT_MASK;
       }
       if (output.isMelt()) {
-        authorities += 2;
+        authorities += TOKEN_MELT_MASK;
       }
 
       const token = output.isTokenHTR()
