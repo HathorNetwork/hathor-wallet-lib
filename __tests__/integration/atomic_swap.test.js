@@ -6,6 +6,7 @@ import {
   stopAllWallets,
   waitForTxReceived,
 } from './helpers/wallet.helper';
+import { loggers } from './utils/logger.util';
 import { HATHOR_TOKEN_CONFIG } from '../../src/constants';
 import SendTransaction from '../../src/new/sendTransaction';
 import PartialTxProposal from '../../src/wallet/partialTxProposal';
@@ -24,12 +25,12 @@ describe('partial tx proposal', () => {
     const network = hWallet1.getNetworkObject();
 
     // Injecting funds and creating a new custom token
-    await GenesisWalletHelper.injectFunds(hWallet1.getAddressAtIndex(0), 101);
+    await GenesisWalletHelper.injectFunds(hWallet1.getAddressAtIndex(0), 103);
     const { hash: token1Uid } = await createTokenHelper(
       hWallet1,
       'Token1',
       'TK1',
-      100,
+      200,
     );
 
     // Injecting funds and creating a new custom token
@@ -40,6 +41,27 @@ describe('partial tx proposal', () => {
       'TK2',
       1000,
     );
+
+    // Get the balance states before the exchange
+    const w1HTRBefore = await hWallet1.getBalance(HATHOR_TOKEN_CONFIG.uid);
+    const w1Tk1Before = await hWallet1.getBalance(token1Uid);
+    const w1Tk2Before = await hWallet1.getBalance(token2Uid);
+
+    const w2HTRBefore = await hWallet2.getBalance(HATHOR_TOKEN_CONFIG.uid);
+    const w2Tk2Before = await hWallet2.getBalance(token2Uid);
+    const w2Tk1Before = await hWallet2.getBalance(token1Uid);
+    loggers.test.log('Balances before', {
+      wallet1: {
+        HTR: w1HTRBefore,
+        Tk1: w1Tk1Before,
+        Tk2: w1Tk2Before,
+      },
+      wallet2: {
+        HTR: w2HTRBefore,
+        Tk1: w2Tk1Before,
+        Tk2: w2Tk2Before,
+      },
+    });
 
     /**
      * The exchange will be:
@@ -78,5 +100,47 @@ describe('partial tx proposal', () => {
     const sendTransaction = new SendTransaction({ transaction, network });
     const tx = await sendTransaction.runFromMining();
     expect(tx.hash).toBeDefined();
+
+    await waitForTxReceived(hWallet1, tx.hash);
+
+    // Get the balance states before the exchange
+    const w1HTRAfter = await hWallet1.getBalance(HATHOR_TOKEN_CONFIG.uid);
+    const w1Tk1After = await hWallet1.getBalance(token1Uid);
+    const w1Tk2After = await hWallet1.getBalance(token2Uid);
+
+    const w2HTRAfter = await hWallet2.getBalance(HATHOR_TOKEN_CONFIG.uid);
+    const w2Tk2After = await hWallet2.getBalance(token2Uid);
+    const w2Tk1After = await hWallet2.getBalance(token1Uid);
+
+    loggers.test.log('Balances after', {
+      wallet1: {
+        HTR: w1HTRAfter,
+        Tk1: w1Tk1After,
+        Tk2: w1Tk2After,
+      },
+      wallet2: {
+        HTR: w2HTRAfter,
+        Tk1: w2Tk1After,
+        Tk2: w2Tk2After,
+      },
+    });
+
+    // Check balance HTR
+    expect(w1HTRAfter[0].balance.unlocked - w1HTRBefore[0].balance.unlocked).toEqual(-100);
+    expect(w1HTRAfter[0].balance.locked - w1HTRBefore[0].balance.locked).toEqual(0);
+    expect(w2HTRAfter[0].balance.unlocked - w2HTRBefore[0].balance.unlocked).toEqual(100);
+    expect(w2HTRAfter[0].balance.locked - w2HTRBefore[0].balance.locked).toEqual(0);
+
+    // Check balance token1
+    expect(w1Tk1After[0].balance.unlocked - w1Tk1Before[0].balance.unlocked).toEqual(-100);
+    expect(w1Tk1After[0].balance.locked - w1Tk1Before[0].balance.locked).toEqual(0);
+    expect(w2Tk1After[0].balance.unlocked - w2Tk1Before[0].balance.unlocked).toEqual(100);
+    expect(w2Tk1After[0].balance.locked - w2Tk1Before[0].balance.locked).toEqual(0);
+
+    // Check balance token2
+    expect(w1Tk2After[0].balance.unlocked - w1Tk2Before[0].balance.unlocked).toEqual(1000);
+    expect(w1Tk2After[0].balance.locked - w1Tk2Before[0].balance.locked).toEqual(0);
+    expect(w2Tk2After[0].balance.unlocked - w2Tk2Before[0].balance.unlocked).toEqual(-1000);
+    expect(w2Tk2After[0].balance.locked - w2Tk2Before[0].balance.locked).toEqual(0);
   });
 });
