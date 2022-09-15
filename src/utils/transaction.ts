@@ -8,6 +8,9 @@
 
 import { Utxo } from '../wallet/types';
 import { UtxoError } from '../errors';
+import { HistoryTransactionOutput } from '../models/types';
+import HathorWallet from '../new/wallet';
+import wallet from '../wallet';
 
 const transaction = {
   /**
@@ -37,11 +40,11 @@ const transaction = {
         filledAmount = utxo.value;
       } else {
         if (filledAmount >= totalAmount) {
-          break
+          break;
         }
         filledAmount += utxo.value;
         utxosToUse.push(utxo);
-     }
+      }
     }
     if (filledAmount < totalAmount) {
       throw new UtxoError('Don\'t have enough utxos to fill total amount.');
@@ -50,7 +53,43 @@ const transaction = {
     return {
       utxos: utxosToUse,
       changeAmount: filledAmount - totalAmount,
-    }
+    };
+  },
+
+  /**
+   * Convert an output from the history of transactions to an Utxo.
+   *
+   * @param {string} txId The transaction this output belongs to.
+   * @param {number} index The output index on the original transaction.
+   * @param {HistoryTransactionOutput} txout output from the transaction history.
+   * @param {Object} [options]
+   * @param {string} [options.addressPath=''] utxo address bip32 path
+   *
+   * @returns {Utxo}
+   *
+   * @memberof transaction
+   * @inner
+   */
+  utxoFromHistoryOutput(
+    txId: string,
+    index: number,
+    txout: HistoryTransactionOutput,
+    { addressPath = '' }: { addressPath?: string },
+  ): Utxo {
+    const isAuthority = wallet.isAuthorityOutput(txout);
+
+    return {
+      txId,
+      index,
+      addressPath,
+      address: txout.decoded && txout.decoded.address || '',
+      timelock: txout.decoded && txout.decoded.timelock || null,
+      tokenId: txout.token,
+      value: txout.value,
+      authorities: isAuthority ? txout.value : 0,
+      heightlock: null, // not enough info to determine this.
+      locked: false,
+    };
   },
 }
 

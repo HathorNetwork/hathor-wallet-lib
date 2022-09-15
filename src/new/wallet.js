@@ -7,7 +7,7 @@
 
 import EventEmitter from 'events';
 import wallet from '../wallet';
-import { HATHOR_TOKEN_CONFIG, HATHOR_BIP44_CODE, TOKEN_AUTHORITY_MASK, P2SH_ACCT_PATH } from "../constants";
+import { HATHOR_TOKEN_CONFIG, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
 import tokens from '../tokens';
 import transaction from '../transaction';
 import version from '../version';
@@ -20,7 +20,7 @@ import MemoryStore from '../memory_store';
 import config from '../config';
 import SendTransaction from './sendTransaction';
 import Network from '../models/network';
-import { AddressError, WalletError } from '../errors';
+import { AddressError, WalletError, WalletFromXPubGuard } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
 import { HDPrivateKey, HDPublicKey, crypto } from 'bitcore-lib';
@@ -71,6 +71,7 @@ class HathorWallet extends EventEmitter {
    * @param {string} [param.password] Password to encrypt the seed
    * @param {string} [param.pinCode] PIN to execute wallet actions
    * @param {boolean} [param.debug] Activates debug mode
+   * @param {Storage} [param.store] Optional store to initialize the wallet with
    * @param {{pubkeys:string[],numSignatures:number}} [param.multisig]
    * @param {string[]} [param.preCalculatedAddresses] An array of pre-calculated addresses
    */
@@ -190,6 +191,7 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Gets the current server url from connection
+   * @return {string} The server url. Ex.: 'http://server.com:8083'
    */
   getServerUrl() {
     return this.conn.getCurrentServer();
@@ -197,6 +199,7 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Gets the current network from connection
+   * @return {string} The network name. Ex.: 'mainnet', 'testnet'
    */
   getNetwork() {
     return this.conn.getCurrentNetwork();
@@ -323,10 +326,10 @@ class HathorWallet extends EventEmitter {
   /**
    * Sign and return all signatures of the inputs belonging to this wallet.
    *
-   * @param {String} txHex hex representation of the transaction.
-   * @param {String} pin PIN to decrypt the private key
+   * @param {string} txHex hex representation of the transaction.
+   * @param {string} pin PIN to decrypt the private key
    *
-   * @return {String} serialized P2SHSignature data
+   * @return {string} serialized P2SHSignature data
    *
    * @memberof HathorWallet
    * @inner
@@ -373,7 +376,7 @@ class HathorWallet extends EventEmitter {
   /**
    * Assemble transaction from hex and collected p2sh_signatures.
    *
-   * @param {String} txHex hex representation of the transaction.
+   * @param {string} txHex hex representation of the transaction.
    * @param {Array} signatures Array of serialized p2sh_signatures (string).
    *
    * @return {Transaction} with input data created from the signatures.
@@ -474,8 +477,11 @@ class HathorWallet extends EventEmitter {
   /**
    * Auxiliar method to get the quantity of transactions by each address of the wallet
    *
-   * @return {Object} {address: {index, transactions}}
-   *
+   * @return {Record<string,{index:number,transactions:number}>} Object mapping addresses to entries
+   * @example
+   * const tcba = hWallet.getTransactionsCountByAddress();
+   * const {index, transactions} = tcba['WQketbSbvVixaRHWDAZdFBBpoPGsQ21Zpc'];
+   * if (transactions > 0) console.log(`Address on index ${index} has transactions.`);
    * @memberof HathorWallet
    * @inner
    **/
@@ -514,22 +520,45 @@ class HathorWallet extends EventEmitter {
    *
    * @memberof HathorWallet
    * @inner
-   **/
+   */
   getAddressAtIndex(index) {
     storage.setStore(this.store);
     return wallet.getAddressAtIndex(index);
   }
 
   /**
-   * Get address to be used in the wallet
+   * Get address path from specific derivation index
    *
-   * @param {Object} { markAsUsed } if true, we will locally mark this address as used and won't return it again to be used
+   * @param {number} index Address path index
    *
-   * @return {Object} { address, index, addressPath }
+   * @return {string} Address path for the given index
    *
    * @memberof HathorWallet
    * @inner
-   **/
+   */
+  getAddressPathForIndex(index) {
+    storage.setStore(this.store);
+    if (wallet.isWalletMultiSig()) {
+      // P2SH
+      return `${P2SH_ACCT_PATH}/0/${index}`;
+    }
+
+    // P2PKH
+    return `${P2PKH_ACCT_PATH}/0/${index}`;
+  }
+
+  /**
+   * Get address to be used in the wallet
+   *
+   * @param [options]
+   * @param {boolean} [options.markAsUsed=false] if true, we will locally mark this address as used
+   *                                             and won't return it again to be used
+   *
+   * @return {{ address:string, index:number, addressPath:string }}
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
   getCurrentAddress({ markAsUsed = false } = {}) {
     storage.setStore(this.store);
     let address;
@@ -539,12 +568,7 @@ class HathorWallet extends EventEmitter {
       address = wallet.getCurrentAddress();
     }
     const index = this.getAddressIndex(address);
-    let addressPath;
-    if (wallet.isWalletMultiSig()) {
-      addressPath = `${P2SH_ACCT_PATH}/0/${index}`;
-    } else {
-      addressPath = `m/44'/${HATHOR_BIP44_CODE}'/0'/0/${index}`;
-    }
+    const addressPath = this.getAddressPathForIndex(index);
 
     return { address, index, addressPath };
   }
@@ -573,16 +597,15 @@ class HathorWallet extends EventEmitter {
    * @remarks
    * Getting token name and symbol is not easy, so we return empty strings
    *
-   * @params {string} token
+   * @param {string} token
    *
-   * @return {Promise<Array>} Array of balance for each token
-   * {
-   *   token: {id, name, symbol},
-   *   balance: {unlocked. locked},
-   *   transactions: number,
-   *   lockExpires: number | null,
-   *   tokenAuthorities: {unlocked: {mint, melt}. locked: {mint, melt}}
-   * }
+   * @return {Promise<{
+   *   token: {id:string, name:string, symbol:string},
+   *   balance: {unlocked:number, locked:number},
+   *   transactions:number,
+   *   lockExpires:number|null,
+   *   tokenAuthorities: {unlocked: {mint:number,melt:number}, locked: {mint:number,melt:number}}
+   * }[]>} Array of balance for each token
    *
    * @memberof HathorWallet
    * @inner
@@ -625,17 +648,17 @@ class HathorWallet extends EventEmitter {
   /**
    * Get transaction history
    *
-   * @params {Object} options {token_id, count, skip}
-   *
-   * @return {Promise<Array>} Array of balance for each token
-   * {
-   *   token: {id, name, symbol},
-   *   balance: {unlocked. locked},
-   *   transactions: number,
-   *   lockExpires: number | null,
-   *   tokenAuthorities: {unlocked: {mint, melt}. locked: {mint, melt}}
-   * }
-   *
+   * @param options
+   * @param {string} [options.token_id]
+   * @param {number} [options.count]
+   * @param {number} [options.skip]
+   * @return {Promise<{
+   *   txId:string,
+   *   timestamp:number,
+   *   tokenUid:string,
+   *   balance:number,
+   *   voided:boolean
+   * }[]>} Array of transactions
    * @memberof HathorWallet
    * @inner
    **/
@@ -653,7 +676,7 @@ class HathorWallet extends EventEmitter {
   /**
    * Get tokens that this wallet has transactions
    *
-   * @return {Promise<Array>} Array of strings (token uid)
+   * @return {Promise<string[]>} Array of strings (token uid)
    *
    * @memberof HathorWallet
    * @inner
@@ -666,17 +689,10 @@ class HathorWallet extends EventEmitter {
   /**
    * Get a transaction data from the wallet
    *
-   * @param {String} id Hash of the transaction to get data from
+   * @param {string} id Hash of the transaction to get data from
    *
-   * @return {Object} Data from the transaction to get. Can be null if the wallet does not contain the tx.
-   *  'tx_id': String
-   *  'version': Number
-   *  'weight': Number
-   *  'timestamp': Number
-   *  'is_voided': boolean
-   *  'inputs': Array(Object)
-   *  'outputs': Array(Object)
-   *  'parents': Array(String)
+   * @return {DecodedTx|null} Data from the transaction to get.
+   *                          Can be null if the wallet does not contain the tx.
    */
   getTx(id) {
     const history = this.getFullHistory();
@@ -688,23 +704,27 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Get information of a given address
-   *
-   * @typedef {Object} AddressInfoOptions
+   * @typedef AddressInfoOptions
    * @property {string} token Optionally filter transactions by this token uid (Default: HTR)
-   *
-   * @typedef {Object} AddressInfo
+   */
+
+  /**
+   * @typedef AddressInfo
    * @property {number} total_amount_received Sum of the amounts received
    * @property {number} total_amount_sent Sum of the amounts sent
    * @property {number} total_amount_available Amount available to transfer
    * @property {number} total_amount_locked Amount locked and thus no available to transfer
    * @property {number} token Token used to calculate the amounts received, sent, available and locked
    * @property {number} index Derivation path for the given address
+   */
+
+  /**
+   * Get information of a given address
    *
    * @param {string} address Address to get information of
    * @param {AddressInfoOptions} options Optional parameters to filter the results
    *
-   * @return {AddressInfo} Aggregated information about the given address
+   * @returns {AddressInfo} Aggregated information about the given address
    *
    */
   getAddressInfo(address, options = {}) {
@@ -771,23 +791,28 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Get utxos of the wallet addresses
    *
-   * @typedef {Object} UtxoOptions
-   * @property {number} max_utxos - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
-   * @property {string} token - Token to filter the utxos. If not sent, we select only HTR utxos.
-   * @property {string} filter_address - Address to filter the utxos.
-   * @property {number} amount_smaller_than - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than this value. Integer representation of decimals, i.e. 100 = 1.00.
-   * @property {number} amount_bigger_than - Minimum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount bigger than this value. Integer representation of decimals, i.e. 100 = 1.00.
-   * @property {number} maximum_amount - Limit the maximum total amount to consolidate summing all utxos. Integer representation of decimals, i.e. 100 = 1.00.
-   * @property {boolean} only_available_utxos - Use only available utxos (not locked)
-   *
-   * @typedef {Object} UtxoDetails
+   * @typedef UtxoOptions
+   * @property {number} [max_utxos] - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
+   * @property {string} [token] - Token to filter the utxos. If not sent, we select only HTR utxos.
+   * @property {string} [filter_address] - Address to filter the utxos.
+   * @property {number} [amount_smaller_than] - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {number} [amount_bigger_than] - Minimum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount bigger than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {number} [maximum_amount] - Limit the maximum total amount to consolidate summing all utxos. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {boolean} [only_available_utxos] - Use only available utxos (not locked)
+   */
+
+  /**
+   * @typedef UtxoDetails
    * @property {number} total_amount_available - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
    * @property {number} total_utxos_available - Token to filter the utxos. If not sent, we select only HTR utxos.
    * @property {number} total_amount_locked - Address to filter the utxos.
    * @property {number} total_utxos_locked - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than this value. Integer representation of decimals, i.e. 100 = 1.00.
    * @property {{ address: string, amount: number, tx_id: string, locked: boolean, index: number }[]} utxos - Array of utxos
+   */
+
+  /**
+   * Get utxos of the wallet addresses
    *
    * @param {UtxoOptions} options Utxo filtering options
    *
@@ -861,9 +886,7 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Generates all available utxos
-   *
-   * @typedef {Object} Utxo
+   * @typedef Utxo
    * @property {string} txId
    * @property {number} index
    * @property {string} tokenId
@@ -874,8 +897,12 @@ class HathorWallet extends EventEmitter {
    * @property {number|null} heightlock
    * @property {boolean} locked
    * @property {string} addressPath
+   */
+
+  /**
+   * Generates all available utxos
    *
-   * @param {Object} [options] Utxo filtering options
+   * @param [options] Utxo filtering options
    * @param {string} [options.token='00'] - Search for UTXOs of this token UID.
    * @param {string|null} [options.filter_address=null] - Address to filter the utxos.
    *
@@ -892,7 +919,6 @@ class HathorWallet extends EventEmitter {
       filter_address: null,
     }, options);
 
-    const utxos = [];
     for (const tx_id in historyTransactions) {
       const tx = historyTransactions[tx_id];
       if (tx.is_voided) {
@@ -910,22 +936,9 @@ class HathorWallet extends EventEmitter {
 
         if (txout.spent_by === null) {
           if (wallet.canUseUnspentTx(txout, tx.height)) {
-            const isAuthority = wallet.isAuthorityOutput(txout);
             const addressIndex = this.getAddressIndex(txout.decoded.address);
-
-            const utxo = {
-              txId: tx_id,
-              index,
-              tokenId: txout.token,
-              address: txout.decoded.address,
-              value: txout.value,
-              authorities: isAuthority ? txout.value : 0,
-              timelock: txout.decoded.timelock,
-              heightlock: null, // not enough info to determine this.
-              locked: false,
-              addressPath: `m/44'/280'/0'/0/${addressIndex}`,
-            };
-            yield utxo;
+            const addressPath = this.getAddressPathForIndex(addressIndex);
+            yield transactionUtils.utxoFromHistoryOutput(tx_id, index, txout, { addressPath });
           }
         }
       }
@@ -965,14 +978,14 @@ class HathorWallet extends EventEmitter {
    */
   markUtxoSelected(txId, index, value = true) {
     storage.setStore(this.store);
-    const historyTransactions = Object.values(this.getFullHistory());
+    const historyTransactions = this.getFullHistory();
     const tx = historyTransactions[txId] || null;
     const txout = tx && tx.outputs && tx.outputs[index];
 
     if (!txout) {
       return;
     }
-    historyTransactions[txId].outputs[index].selected_as_input = value;
+    txout.selected_as_input = value;
 
     const walletData = wallet.getWalletData();
     wallet.setWalletData(Object.assign(walletData, { historyTransactions }));
@@ -1023,13 +1036,21 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Consolidates many utxos into a single one for either HTR or exactly one custom token.
-   *
-   * @typedef {Object} ConsolidationResult
+   * @typedef ConsolidationResult
    * @property {number} total_utxos_consolidated - Number of utxos consolidated
    * @property {number} total_amount - Consolidated amount
-   * @property {number} tx_id - Consolidated transaction id
-   * @property {{ address: string, amount: number, tx_id: string, locked: boolean, index: number }[]} utxos - Array of consolidated utxos
+   * @property {string} txId - Consolidated transaction id
+   * @property {{
+   *  address: string,
+   *  amount: number,
+   *  tx_id: string,
+   *  locked: boolean,
+   *  index: number
+   * }[]} utxos - Array of consolidated utxos
+   */
+
+  /**
+   * Consolidates many utxos into a single one for either HTR or exactly one custom token.
    *
    * @param {string} destinationAddress Address of the consolidated utxos
    * @param {UtxoOptions} options Utxo filtering options
@@ -1080,9 +1101,37 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * @typedef DecodedTx
+   * @property {string} tx_id
+   * @property {number} version
+   * @property {number} weight
+   * @property {number} timestamp
+   * @property {boolean} is_voided
+   * @property {{
+   *   value: number,
+   *   token_data: number,
+   *   script: string,
+   *   decoded: { type: string, address: string, timelock: number|null },
+   *   token: string,
+   *   tx_id: string,
+   *   index: number
+   * }[]} inputs
+   * @property {{
+   *   value: number,
+   *   token_data: number,
+   *   script: string,
+   *   decoded: { type: string, address: string, timelock: number|null },
+   *   token: string,
+   *   spent_by: string|null,
+   *   selected_as_input?: boolean
+   * }[]} outputs
+   * @property {string[]} parents
+   */
+
+  /**
    * Get full wallet history (same as old method to be used for compatibility)
    *
-   * @return {Object} Object with transaction data { tx_id: { full_transaction_data }}
+   * @return {Record<string,DecodedTx>} Object with transaction data { tx_id: { full_transaction_data }}
    *
    * @memberof HathorWallet
    * @inner
@@ -1230,7 +1279,7 @@ class HathorWallet extends EventEmitter {
   /**
    * Set data in the pre processed object
    *
-   * @param {String} key Key of the pre processed object to be added
+   * @param {string} key Key of the pre processed object to be added
    * @param {Any} value Value of the pre processed object to be added
    *
    * @memberof HathorWallet
@@ -1244,7 +1293,7 @@ class HathorWallet extends EventEmitter {
    * Get data in the pre processed object
    * If pre processed data is empty, we generate it and return
    *
-   * @param {String} key Key of the pre processed object to get the value
+   * @param {string} key Key of the pre processed object to get the value
    *
    * @return {Any} Value of the pre processed object
    *
@@ -1304,13 +1353,11 @@ class HathorWallet extends EventEmitter {
   /**
    * Send a transaction with a single output
    *
-   * @param {String} address Output address
+   * @param {string} address Output address
    * @param {Number} value Output value
-   * @param {Object} options Options parameters
-   *  {
-   *   'changeAddress': address of the change output
-   *   'token': token uid
-   *  }
+   * @param [options] Options parameters
+   * @param {string} [options.changeAddress] address of the change output
+   * @param {string} [options.token] token uid
    *
    * @return {Promise<Transaction>} Promise that resolves when transaction is sent
    **/
@@ -1330,15 +1377,22 @@ class HathorWallet extends EventEmitter {
   /**
    * Send a transaction from its outputs
    *
-   * @param {Array} outputs Array of outputs with each element as an object with {'address', 'value', 'timelock', 'token'}
-   * @param {Array} inputs Array of inputs with each element as an object with {'txId', 'index', 'token'}
-   * @param {Object} token Token object {'uid', 'name', 'symbol'}. Optional parameter if user already set on the class
-   * @param {Object} options Options parameters
-   *  {
-   *   'changeAddress': address of the change output
-   *   'startMiningTx': boolean to trigger start mining (default true)
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
-   *  }
+   * @param {{
+   *   address: string,
+   *   value: number,
+   *   timelock?: number,
+   *   token: string
+   * }[]} outputs Array of proposed outputs
+   * @param [options]
+   * @param {{
+   *   txId: string,
+   *   index: number,
+   *   token: string
+   * }[]} [options.inputs] Array of proposed inputs
+   * @param {string} [options.changeAddress] address of the change output
+   * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
+   * @param {string} [options.pincode] pin to decrypt xpriv information.
+   *                                   Optional but required if not set in this
    *
    * @return {Promise<Transaction>} Promise that resolves when transaction is sent
    **/
@@ -1347,13 +1401,25 @@ class HathorWallet extends EventEmitter {
       throw new WalletFromXPubGuard('sendManyOutputsTransaction');
     }
     storage.setStore(this.store);
-    const newOptions = Object.assign({ inputs: [], changeAddress: null, startMiningTx: true, pinCode: null }, options);
+    const newOptions = Object.assign({
+      inputs: [],
+      changeAddress: null,
+      startMiningTx: true,
+      pinCode: null
+    }, options);
+
     const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       return {success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED};
     }
     const { inputs, changeAddress } = newOptions;
-    const sendTransaction = new SendTransaction({ outputs, inputs, changeAddress, pin, network: this.getNetworkObject() });
+    const sendTransaction = new SendTransaction({
+      outputs,
+      inputs,
+      changeAddress,
+      pin,
+      network: this.getNetworkObject()
+    });
     return sendTransaction.run();
   }
 
@@ -1461,23 +1527,19 @@ class HathorWallet extends EventEmitter {
   /**
    * Prepare create token transaction data before mining
    *
-   * @param {Transaction} transaction Transaction object to be mined and pushed to the network
-   *
-   * @param {String} name Name of the token
-   * @param {String} symbol Symbol of the token
+   * @param {string} name Name of the token
+   * @param {string} symbol Symbol of the token
    * @param {number} amount Quantity of the token to be minted
-   * @param {Object} options Options parameters
-   *  {
-   *   'address': address of the minted token,
-   *   'changeAddress': address of the change output,
-   *   'startMiningTx': boolean to trigger start mining (default true)
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
-   *   'createMint': if should create mint authority when creating the token
-   *   'createMelt': if should create melt authority when creating the token
-   *   'nftData': data string for NFT
-   *  }
+   * @param [options] Options parameters
+   * @param {string} [options.address] address of the minted token,
+   * @param {string} [options.changeAddress] address of the change output,
+   * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
+   * @param {string} [options.pinCode] pin to decrypt xpriv information. Optional but required if not set in this
+   * @param {boolean} [options.createMint=true] if should create mint authority with the token
+   * @param {boolean} [options.createMelt=true] if should create melt authority with the token
+   * @param {string} [options.nftData] data string for NFT
    *
-   * @return {Promise} Promise that resolves with transaction object if succeeds
+   * @return {CreateTokenTransaction} Promise that resolves with transaction object if succeeds
    * or with error message if it fails
    *
    * @memberof HathorWallet
@@ -1513,22 +1575,42 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * @typedef BaseTransactionResponse
+   * @property {{hash:string, index:number, data:Buffer}[]} inputs
+   * @property {{value:number, script:Buffer, tokenData:number, decodedScript:*}[]} outputs
+   * @property {number} version
+   * @property {number} weight
+   * @property {number} nonce
+   * @property {number} timestamp
+   * @property {string[]} parents
+   * @property {string[]} tokens
+   * @property {string} hash
+   * @property {*} _dataToSignCache
+   */
+
+  /**
+   * @typedef CreateNewTokenResponse
+   * @extends BaseTransactionResponse
+   * @property {string} name
+   * @property {string} symbol
+   */
+
+  /**
    * Create a new token for this wallet
    *
-   * @param {String} name Name of the token
-   * @param {String} symbol Symbol of the token
+   * @param {string} name Name of the token
+   * @param {string} symbol Symbol of the token
    * @param {number} amount Quantity of the token to be minted
-   * @param {Object} options Options parameters
-   *  {
-   *   'address': address of the minted token,
-   *   'changeAddress': address of the change output,
-   *   'startMiningTx': boolean to trigger start mining (default true)
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
-   *  }
+   * @param [options] Options parameters
+   * @param {string} [options.address] address of the minted token
+   * @param {string} [options.changeAddress] address of the change output
+   * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
+   * @param {string} [options.pinCode] pin to decrypt xpriv information.
+   *                                   Optional but required if not set in this
+   * @param {boolean} [options.createMint=true] should create mint authority
+   * @param {boolean} [options.createMelt=true] should create melt authority
    *
-   * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
-   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
-   *
+   * @return {Promise<CreateNewTokenResponse>}
    * @memberof HathorWallet
    * @inner
    **/
@@ -1541,15 +1623,15 @@ class HathorWallet extends EventEmitter {
    * Select authority utxo for mint or melt. Depends on the callback received as parameter
    * We could add an {options} parameter to allow common filters (e.g. mint authority, melt authority, p2pkh) to improve this method later.
    *
-   * @param {String} tokenUid UID of the token to select the authority utxo
+   * @param {string} tokenUid UID of the token to select the authority utxo
    * @param {function} filterUTXOs Callback to check if the output is the authority I want (isMeltOutput or isMintOutput)
-   * @param {Object} options Object with custom options.
-   *  {
-   *    'many': if should return many utxos or just one (default false),
-   *    'skipSpent': if should not include spent utxos (default true)
-   *  }
+   * @param [options] Object with custom options.
+   * @param {boolean} [options.many=false] if should return many utxos or just one (default false)
+   * @param {boolean} [options.skipSpent=true] if should not include spent utxos (default true)
    *
-   * @return {Array|null} Array of objects with {tx_id, index, address, authorities} of the authority output. Returns null in case there are no utxos for this type
+   * @return {{tx_id: string, index: number, address: string, authorities: number}[]|null} Array of
+   *     objects of the authority output. Returns null in case there are no utxos for this type or
+   *     an empty array when there are no utxos and option "many" was selected.
    **/
   selectAuthorityUtxo(tokenUid, filterUTXOs, options = {}) {
     const newOptions = Object.assign({many: false, skipSpent: true}, options);
@@ -1624,15 +1706,19 @@ class HathorWallet extends EventEmitter {
    * Get mint authorities
    * This is a helper method to call selectAuthorityUtxo without knowledge of the isMintOutput
    *
-   * @param {String} tokenUid UID of the token to select the authority utxo
-   * @param {Object} options Object with custom options.
-   *  {
-   *    'many': if should return many utxos or just one (default false),
-   *    'skipSpent': if should not include spent utxos (default true)
-   *  }
+   * @param {string} tokenUid UID of the token to select the authority utxo
+   * @param [options] Object with custom options.
+   * @param {boolean} [options.many=false] if should return many utxos or just one (default false)
+   * @param {boolean} [options.skipSpent=true] if should not include spent utxos (default true)
    *
-   * @return {Promise<Array>} Promise that resolves with an Array of objects with {txId, index, address, authorities}
-   * of the authority output. Returns an empty array in case there are no tx_outupts for this type
+   * @return {Promise<{
+   *   txId: string,
+   *   index: number,
+   *   address: string,
+   *   authorities: number
+   * }[]>} Promise that resolves with an Array of objects with properties of the authority output.
+   *       The "authorities" field actually contains the output value with the authority masks.
+   *       Returns an empty array in case there are no tx_outupts for this type.
    **/
   async getMintAuthority(tokenUid, options = {}) {
     const newOptions = Object.assign({many: false, skipSpent: true}, options);
@@ -1645,15 +1731,19 @@ class HathorWallet extends EventEmitter {
    * Get melt authorities
    * This is a helper method to call selectAuthorityUtxo without knowledge of the isMeltOutput
    *
-   * @param {String} tokenUid UID of the token to select the authority utxo
-   * @param {Object} options Object with custom options.
-   *  {
-   *    'many': if should return many utxos or just one (default false),
-   *    'skipSpent': if should not include spent utxos (default true)
-   *  }
+   * @param {string} tokenUid UID of the token to select the authority utxo
+   * @param [options] Object with custom options.
+   * @param {boolean} [options.many=false] if should return many utxos or just one (default false)
+   * @param {boolean} [options.skipSpent=true] if should not include spent utxos (default true)
    *
-   * @return {Promise<Array>} Promise that resolves with an Array of objects with {txId, index, address, authorities} of the authority output.
-   * Returns an empty array in case there are no tx_outupts for this type
+   * @return {Promise<{
+   *   txId: string,
+   *   index: number,
+   *   address: string,
+   *   authorities: number
+   * }[]>} Promise that resolves with an Array of objects with properties of the authority output.
+   *       The "authorities" field actually contains the output value with the authority masks.
+   *       Returns an empty array in case there are no tx_outupts for this type.
    **/
   async getMeltAuthority(tokenUid, options = {}) {
     const newOptions = Object.assign({many: false, skipSpent: true}, options);
@@ -1665,7 +1755,7 @@ class HathorWallet extends EventEmitter {
   /**
    * Prepare mint transaction before mining
    *
-   * @param {String} tokenUid UID of the token to mint
+   * @param {string} tokenUid UID of the token to mint
    * @param {number} amount Quantity to mint
    * @param {Object} options Options parameters
    *  {
@@ -1718,19 +1808,21 @@ class HathorWallet extends EventEmitter {
   /**
    * Mint tokens
    *
-   * @param {String} tokenUid UID of the token to mint
+   * @param {string} tokenUid UID of the token to mint
    * @param {number} amount Quantity to mint
-   * @param {Object} options Options parameters
-   *  {
-   *   'address': destination address of the minted token (if not sent we choose the next available address to use)
-   *   'changeAddress': address of the change output (if not sent we choose the next available address to use)
-   *   'startMiningTx': boolean to trigger start mining (default true)
-   *   'createAnotherMint': boolean to create another mint authority or not for the wallet
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
-   *  }
+   * @param [options] Options parameters
+   * @param {string} [options.address] destination address of the minted token
+   *                                   (if not sent we choose the next available address to use)
+   * @param {string} [options.changeAddress] address of the change output
+   *                                   (if not sent we choose the next available address to use)
+   * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
+   * @param {boolean} [options.createAnotherMint] boolean to create another mint authority or not
+   *                                              for the wallet
+   * @param {string} [options.pinCode] pin to decrypt xpriv information.
+   *                                   Optional but required if not set in this
    *
-   * @return {Promise} Promise that resolves with transaction object if succeeds
-   * or with error message if it fails
+   * @return {Promise<BaseTransactionResponse>} Promise that resolves with transaction object
+   *                                           if it succeeds or with error message if it fails
    *
    * @memberof HathorWallet
    * @inner
@@ -1743,7 +1835,7 @@ class HathorWallet extends EventEmitter {
   /**
    * Prepare melt transaction before mining
    *
-   * @param {String} tokenUid UID of the token to melt
+   * @param {string} tokenUid UID of the token to melt
    * @param {number} amount Quantity to melt
    * @param {Object} options Options parameters
    *  {
@@ -1796,19 +1888,19 @@ class HathorWallet extends EventEmitter {
   /**
    * Melt tokens
    *
-   * @param {String} tokenUid UID of the token to melt
+   * @param {string} tokenUid UID of the token to melt
    * @param {number} amount Quantity to melt
-   * @param {Object} options Options parameters
-   *  {
-   *   'address': address of the HTR deposit back
-   *   'changeAddress': address of the change output
-   *   'createAnotherMelt': boolean to create another melt authority or not for the wallet
-   *   'startMiningTx': boolean to trigger start mining (default true)
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
-   *  }
+   * @param [options] Options parameters
+   * @param {string} [options.address]: address of the HTR deposit back
+   * @param {string} [options.changeAddress] address of the change output
+   * @param {boolean} [options.createAnotherMelt] boolean to create another melt authority or not
+   *                                              for the wallet
+   * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
+   * @param {string} [options.pinCode] pin to decrypt xpriv information.
+   *                                   Optional but required if not set in this
    *
-   * @return {Promise} Promise that resolves with transaction object if succeeds
-   * or with error message if it fails
+   * @return {Promise<BaseTransactionResponse>} Promise that resolves with transaction object
+   *                                            if it succeeds or with error message if it fails
    *
    * @memberof HathorWallet
    * @inner
@@ -1821,9 +1913,9 @@ class HathorWallet extends EventEmitter {
   /**
    * Prepare delegate authority transaction before mining
    *
-   * @param {String} tokenUid UID of the token to delegate the authority
-   * @param {String} type Type of the authority to delegate 'mint' or 'melt'
-   * @param {String} destinationAddress Destination address of the delegated authority
+   * @param {string} tokenUid UID of the token to delegate the authority
+   * @param {string} type Type of the authority to delegate 'mint' or 'melt'
+   * @param {string} destinationAddress Destination address of the delegated authority
    * @param {Object} options Options parameters
    *  {
    *   'createAnother': if should create another authority for the wallet. Default to true
@@ -1877,18 +1969,18 @@ class HathorWallet extends EventEmitter {
   /**
    * Delegate authority
    *
-   * @param {String} tokenUid UID of the token to delegate the authority
-   * @param {String} type Type of the authority to delegate 'mint' or 'melt'
-   * @param {String} destinationAddress Destination address of the delegated authority
-   * @param {Object} options Options parameters
-   *  {
-   *   'createAnother': if should create another authority for the wallet. Default to true
-   *   'startMiningTx': boolean to trigger start mining (default true)
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
-   *  }
+   * @param {string} tokenUid UID of the token to delegate the authority
+   * @param {'mint'|'melt'} type Type of the authority to delegate 'mint' or 'melt'
+   * @param {string} destinationAddress Destination address of the delegated authority
+   * @param [options] Options parameters
+   * @param {boolean} [options.createAnother=true] Should create another authority for the wallet.
+   *                                               Default to true
+   * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
+   * @param {string} [options.pinCode] pin to decrypt xpriv information.
+   *                                   Optional but required if not set in this
    *
-   * @return {Promise} Promise that resolves with transaction object if succeeds
-   * or with error message if it fails
+   * @return {Promise<BaseTransactionResponse>} Promise that resolves with transaction object
+   *                                            if it succeeds or with error message if it fails
    *
    * @memberof HathorWallet
    * @inner
@@ -1901,8 +1993,8 @@ class HathorWallet extends EventEmitter {
   /**
    * Prepare destroy authority transaction before mining
    *
-   * @param {String} tokenUid UID of the token to delegate the authority
-   * @param {String} type Type of the authority to delegate 'mint' or 'melt'
+   * @param {string} tokenUid UID of the token to delegate the authority
+   * @param {string} type Type of the authority to delegate 'mint' or 'melt'
    * @param {number} count How many authority outputs to destroy
    * @param {Object} options Options parameters
    *  {
@@ -1963,17 +2055,16 @@ class HathorWallet extends EventEmitter {
   /**
    * Destroy authority
    *
-   * @param {String} tokenUid UID of the token to delegate the authority
-   * @param {String} type Type of the authority to delegate 'mint' or 'melt'
+   * @param {string} tokenUid UID of the token to destroy the authority
+   * @param {'mint'|'melt'} type Type of the authority to destroy: 'mint' or 'melt'
    * @param {number} count How many authority outputs to destroy
-   * @param {Object} options Options parameters
-   *  {
-   *   'startMiningTx': boolean to trigger start mining (default true)
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
-   *  }
+   * @param [options] Options parameters
+   * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
+   * @param {string} [options.pinCode] pin to decrypt xpriv information.
+   *                                   Optional but required if not set in this
    *
-   * @return {Promise} Promise that resolves with transaction object if succeeds
-   * or with error message if it fails
+   * @return {Promise<BaseTransactionResponse>} Promise that resolves with transaction object
+   *                                            if it succeeds or with error message if it fails
    *
    * @memberof HathorWallet
    * @inner
@@ -1998,10 +2089,11 @@ class HathorWallet extends EventEmitter {
   /**
    * Get all authorities utxos for specific token
    *
-   * @param {String} tokenUid UID of the token to delegate the authority
-   * @param {String} type Type of the authority to delegate 'mint' or 'melt'
+   * @param {string} tokenUid UID of the token to delegate the authority
+   * @param {"mint"|"melt"} type Type of the authority to search for: 'mint' or 'melt'
    *
-   * @return {Array} Array of objects with {tx_id, index, address} of the authority output.
+   * @return {{tx_id: string, index: number, address: string, authorities: number}[]}
+   *    Array of the authority outputs.
    **/
   getAuthorityUtxos(tokenUid, type) {
     storage.setStore(this.store);
@@ -2048,7 +2140,18 @@ class HathorWallet extends EventEmitter {
    *
    * @param tokenId Token uid to get the token details
    *
-   * @return {Promise} token details
+   * @return {Promise<{
+   *   totalSupply: number,
+   *   totalTransactions: number,
+   *   tokenInfo: {
+   *     name: string,
+   *     symbol: string,
+   *   },
+   *   authorities: {
+   *     mint: boolean,
+   *     melt: boolean,
+   *   },
+   * }>} token details
    */
   async getTokenDetails(tokenId) {
     const result = await new Promise((resolve) => {
@@ -2102,10 +2205,16 @@ class HathorWallet extends EventEmitter {
   /**
    * Returns the balance for each token in tx, if the input/output belongs to this wallet
    *
-   * @param {Object} tx Transaction data with array of inputs and outputs
+   * @param {DecodedTx} tx Decoded transaction with populated data from local wallet history
+   * @param [optionsParam]
+   * @param {boolean} [optionsParam.includeAuthorities=false] Retrieve authority balances if true
    *
-   * @return {Promise<Object>} Promise that resolves with an object with each token
-   * and it's balance in this tx for this wallet
+   * @return {Promise<Record<string,number>>} Promise that resolves with an object with each token
+   *                                          and it's balance in this tx for this wallet
+   *
+   * @example
+   * const decodedTx = hathorWalletInstance.getTx(txHash);
+   * const txBalance = await hathorWalletInstance.getTxBalance(decodedTx);
    **/
   async getTxBalance(tx, optionsParam = {}) {
     const options = Object.assign({ includeAuthorities: false }, optionsParam)
@@ -2156,9 +2265,9 @@ class HathorWallet extends EventEmitter {
    * The address might be in the input or output
    * Removes duplicates
    *
-   * @param {Object} tx Transaction data with array of inputs and outputs
+   * @param {DecodedTx} tx Transaction data with array of inputs and outputs
    *
-   * @return {Set} Set of strings with addresses
+   * @return {Set<string>} Set of strings with addresses
    **/
   getTxAddresses(tx) {
     storage.setStore(this.store);
@@ -2181,22 +2290,20 @@ class HathorWallet extends EventEmitter {
   /**
    * Create an NFT for this wallet
    *
-   * @param {String} name Name of the token
-   * @param {String} symbol Symbol of the token
+   * @param {string} name Name of the token
+   * @param {string} symbol Symbol of the token
    * @param {number} amount Quantity of the token to be minted
-   * @param {String} data NFT data string
-   * @param {Object} options Options parameters
-   *  {
-   *   'address': address of the minted token,
-   *   'changeAddress': address of the change output,
-   *   'startMiningTx': boolean to trigger start mining (default true)
-   *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
-   *   'createMint': if should create mint authority when creating the token
-   *   'createMelt': if should create melt authority when creating the token
-   *  }
+   * @param {string} data NFT data string
+   * @param [options] Options parameters
+   * @param {string} [options.address] address of the minted token,
+   * @param {string} [options.changeAddress] address of the change output,
+   * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
+   * @param {string} [options.pinCode] pin to decrypt xpriv information.
+   *                                   Optional but required if not set in this
+   * @param {boolean} [options.createMint=false] should create mint authority
+   * @param {boolean} [options.createMelt=false] should create melt authority
    *
-   * @return {Object} Object with {success: true, sendTransaction, promise}, where sendTransaction is a
-   * SendTransaction object that emit events while the tx is being sent and promise resolves when the sending is done
+   * @return {Promise<CreateNewTokenResponse>}
    *
    * @memberof HathorWallet
    * @inner
