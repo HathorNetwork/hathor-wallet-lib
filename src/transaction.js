@@ -403,7 +403,7 @@ const transaction = {
     const privateKeyStr = wallet.decryptData(encryptedPrivateKey, pin);
     const derivedKey = HDPrivateKey(privateKeyStr).deriveNonCompliantChild(index);
 
-    return this.createInputData(transactionUtils.sign(hash, derivedKey.privateKey), derivedKey.publicKey.toBuffer());
+    return this.createInputData(transactionUtils.getSignature(hash, derivedKey.privateKey), derivedKey.publicKey.toBuffer());
   },
 
   /*

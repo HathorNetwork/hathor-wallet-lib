@@ -496,7 +496,7 @@ describe('sign transaction with privateKey', () => {
     const dataToSignHash = tx.getDataToSignHash();
     const privKey = PrivateKey(privateKey);
 
-    const signature = Transaction.sign(dataToSignHash, privKey);
+    const signature = Transaction.getSignature(dataToSignHash, privKey);
     expect(cryptoBL.ECDSA.verify(
       dataToSignHash,
       cryptoBL.Signature.fromDER(signature),
@@ -511,7 +511,7 @@ describe('sign transaction with privateKey', () => {
     const dataToSignHash = tx.getDataToSignHash();
     const privKey = PrivateKey(privateKey);
 
-    const signature = tx.sign(privKey);
+    const signature = tx.getSignature(privKey);
 
     expect(cryptoBL.ECDSA.verify(
       dataToSignHash,

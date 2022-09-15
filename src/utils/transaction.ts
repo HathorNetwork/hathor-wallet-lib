@@ -16,7 +16,7 @@ const transaction = {
   /**
    * Get the signature from the dataToSignHash for a private key
    *
-   * @param {Buffer} dataToSignHash sha256 of a transaction's dataToSign.
+   * @param {Buffer} dataToSignHash hash of a transaction's dataToSign.
    * @param {PrivateKey} privateKey Signing key.
    *
    * @returns {Buffer}
@@ -24,7 +24,7 @@ const transaction = {
    * @memberof transaction
    * @inner
    */
-  sign(dataToSignHash: Buffer, privateKey: PrivateKey): Buffer {
+  getSignature(dataToSignHash: Buffer, privateKey: PrivateKey): Buffer {
     const signature = cryptoBL.ECDSA.sign(dataToSignHash, privateKey, 'little').set({
       nhashtype: cryptoBL.Signature.SIGHASH_ALL,
     });

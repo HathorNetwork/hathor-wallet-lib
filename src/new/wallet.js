@@ -362,7 +362,7 @@ class HathorWallet extends EventEmitter {
       const derivedKey = key.deriveNonCompliantChild(addressIndex);
       const privateKey = derivedKey.privateKey;
 
-      signatures[index] = tx.sign(privateKey).toString('hex');
+      signatures[index] = tx.getSignature(privateKey).toString('hex');
     }
     const p2shSig = new P2SHSignature(accessData.multisig.pubkey, signatures);
     return p2shSig.serialize();

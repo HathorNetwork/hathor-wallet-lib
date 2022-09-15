@@ -903,7 +903,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const privateKey = derivedKey.privateKey;
 
     const arr = [];
-    helpers.pushDataToStack(arr, transaction.sign(dataToSignHash, privateKey));
+    helpers.pushDataToStack(arr, transaction.getSignature(dataToSignHash, privateKey));
     helpers.pushDataToStack(arr, derivedKey.publicKey.toBuffer());
     return util.buffer.concat(arr);
   }

@@ -101,8 +101,8 @@ class Transaction {
    * @static
    *
    */
-  static sign(dataToSignHash: Buffer, privateKey: PrivateKey): Buffer {
-    return transactionUtils.sign(dataToSignHash, privateKey);
+  static getSignature(dataToSignHash: Buffer, privateKey: PrivateKey): Buffer {
+    return transactionUtils.getSignature(dataToSignHash, privateKey);
   }
 
   /**
@@ -115,8 +115,8 @@ class Transaction {
    * @inner
    *
    */
-  sign(privateKey: PrivateKey): Buffer {
-    return transactionUtils.sign(this.getDataToSignHash(), privateKey);
+  getSignature(privateKey: PrivateKey): Buffer {
+    return transactionUtils.getSignature(this.getDataToSignHash(), privateKey);
   }
 
   /**
