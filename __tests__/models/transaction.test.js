@@ -490,21 +490,6 @@ describe('sign transaction with privateKey', () => {
   const rawTx = '0001010102004898c326075d6fe177e1ba4f3b60d7f3ff7a5a850065f2f46cc07c468ee27f001301e8cdb47aa5894fc459eb018b0a43ec0279e91020c5bc32355e0aad911301006a473045022100f750c25f03fecfed59de8095c77efd1d1e83e6bf9b14902cb47a9fc4c70322ff02203e95e4c32c0cbf2522b05fc8783f0743043738563c4182755f4061e04d1108ba2103c42904d755c9db0e396e92e616c0f5f42f0a713b42361cd95b052406bb7664000000000a01001976a91451a47ceaa460c83b5e59d56d3587cc2629b01c7088ac0000015e01001976a9141b265200f1bf1227e26fd38a74e47399023a30fb88ac40200000218def4163160a3302005aab6f9453051627155ed65eb68ee7bdf112cdeaa9669ee480a361e06f472d001301e8cdb47aa5894fc459eb018b0a43ec0279e91020c5bc32355e0aad911300000006'
   const privateKey = 'e6df47b9c016f3a1c631bb25786b50d7b8beb83fd223ec59235c954b046bee12';
 
-  it('should sign with the static method', () => {
-    const network = new Network('testnet');
-    const tx = helpers.createTxFromHex(rawTx, network);
-    const dataToSignHash = tx.getDataToSignHash();
-    const privKey = PrivateKey(privateKey);
-
-    const signature = Transaction.getSignature(dataToSignHash, privKey);
-    expect(cryptoBL.ECDSA.verify(
-      dataToSignHash,
-      cryptoBL.Signature.fromDER(signature),
-      privKey.toPublicKey(),
-      'little',
-    )).toBeTruthy();
-  });
-
   it('should sign from an instance', () => {
     const network = new Network('testnet');
     const tx = helpers.createTxFromHex(rawTx, network);

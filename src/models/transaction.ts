@@ -94,18 +94,6 @@ class Transaction {
   }
 
   /**
-   * Get the signature from the dataToSignHash for a private key
-   *
-   * @return {Buffer}
-   * @memberof Transaction
-   * @static
-   *
-   */
-  static getSignature(dataToSignHash: Buffer, privateKey: PrivateKey): Buffer {
-    return transactionUtils.getSignature(dataToSignHash, privateKey);
-  }
-
-  /**
    * Get the signature of this transaction for the given private key
    *
    * @param {PrivateKey}
