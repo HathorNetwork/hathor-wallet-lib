@@ -10,7 +10,7 @@ import { DECIMAL_PLACES, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, TOKEN_INFO
 import { HDPrivateKey, crypto, encoding, util } from 'bitcore-lib';
 import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError, MaximumNumberParentsError } from './errors';
 import { hexToBuffer } from './utils/buffer';
-import helpersUtils from './utils/helpers';
+import transactionUtils from './utils/transaction';
 import dateFormatter from './date';
 import helpers from './helpers';
 import network from './network';
@@ -401,14 +401,9 @@ const transaction = {
     const accessData = storage.getItem('wallet:accessData');
     const encryptedPrivateKey = accessData.mainKey;
     const privateKeyStr = wallet.decryptData(encryptedPrivateKey, pin);
-    const key = HDPrivateKey(privateKeyStr)
-    const derivedKey = key.deriveNonCompliantChild(index);
-    const privateKey = derivedKey.privateKey;
+    const derivedKey = HDPrivateKey(privateKeyStr).deriveNonCompliantChild(index);
 
-    const sig = crypto.ECDSA.sign(hash, privateKey, 'little').set({
-      nhashtype: crypto.Signature.SIGHASH_ALL
-    });
-    return this.createInputData(sig.toDER(), derivedKey.publicKey.toBuffer());
+    return this.createInputData(transactionUtils.getSignature(hash, derivedKey.privateKey), derivedKey.publicKey.toBuffer());
   },
 
   /*

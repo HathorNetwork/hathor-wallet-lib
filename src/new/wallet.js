@@ -7,7 +7,7 @@
 
 import EventEmitter from 'events';
 import wallet from '../wallet';
-import { HATHOR_TOKEN_CONFIG, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
+import { HATHOR_TOKEN_CONFIG, HATHOR_BIP44_CODE, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
 import tokens from '../tokens';
 import transaction from '../transaction';
 import version from '../version';
@@ -23,7 +23,7 @@ import Network from '../models/network';
 import { AddressError, WalletError, WalletFromXPubGuard } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
-import { HDPrivateKey, HDPublicKey, crypto } from 'bitcore-lib';
+import { HDPrivateKey } from 'bitcore-lib';
 import transactionUtils from '../utils/transaction';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
@@ -337,7 +337,6 @@ class HathorWallet extends EventEmitter {
   getAllSignatures(txHex, pin) {
     storage.setStore(this.store);
     const tx = helpers.createTxFromHex(txHex, this.getNetworkObject());
-    const hash = tx.getDataToSignHash();
     const walletData = wallet.getWalletData();
     const historyTransactions = walletData['historyTransactions'] || {};
     const accessData = storage.getItem('wallet:accessData');
@@ -359,15 +358,11 @@ class HathorWallet extends EventEmitter {
         continue;
       }
 
+      // derive key to address index
       const derivedKey = key.deriveNonCompliantChild(addressIndex);
       const privateKey = derivedKey.privateKey;
 
-      // derive key to address index
-      const sig = crypto.ECDSA.sign(hash, privateKey, 'little').set({
-        nhashtype: crypto.Signature.SIGHASH_ALL
-      });
-
-      signatures[index] = sig.toString();
+      signatures[index] = tx.getSignature(privateKey).toString('hex');
     }
     const p2shSig = new P2SHSignature(accessData.multisig.pubkey, signatures);
     return p2shSig.serialize();
@@ -393,7 +388,6 @@ class HathorWallet extends EventEmitter {
     const historyTransactions = walletData['historyTransactions'] || {};
     const accessData = storage.getItem('wallet:accessData');
     const multisigData = accessData.multisig;
-    const xpub = HDPublicKey(accessData.xpubkey);
 
     // Deserialize P2SHSignature for all signatures
     // XXX: the .sort here is very important since the fullnode requires the signatures
