@@ -2155,6 +2155,10 @@ class HathorWallet extends EventEmitter {
       return walletApi.getGeneralTokenInfo(tokenId, resolve);
     });
 
+    if (!result.success) {
+      throw new Error(result.message);
+    }
+
     const { name, symbol, mint, melt, total, transactions_count } = result;
 
     // Transform to the same format the wallet service facade responds
