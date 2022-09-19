@@ -335,6 +335,9 @@ class HathorWallet extends EventEmitter {
    * @inner
    */
   getAllSignatures(txHex, pin) {
+    if (this.isFromXPub()) {
+      throw new WalletFromXPubGuard('getAllSignatures');
+    }
     storage.setStore(this.store);
     const tx = helpers.createTxFromHex(txHex, this.getNetworkObject());
     const walletData = wallet.getWalletData();
