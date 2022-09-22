@@ -2191,7 +2191,7 @@ describe('getToken methods', () => {
     await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
 
     // Validating `getTokenDetails` for custom token not in this wallet
-    expect(hWallet.getTokenDetails(fakeTokenUid)).rejects.toThrow();
+    expect(hWallet.getTokenDetails(fakeTokenUid)).rejects.toThrow('Unknown token');
 
     // Validating `getTokens` for no custom tokens
     let getTokensResponse = await hWallet.getTokens();

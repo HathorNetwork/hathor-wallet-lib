@@ -17,7 +17,7 @@ jest.mock('../src/api/wallet', () => {
   };
 });
 
-describe('Get token details teta', () => {
+describe('Get token details', () => {
   const hathorWallet = new FakeHathorWallet();
 
   test('Message thrown by token details should be the same received from the API', () => {
