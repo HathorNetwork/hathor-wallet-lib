@@ -155,11 +155,15 @@ const wallet = {
    * @inner
    */
   getPublicKeyFromXpub(xpubkey: string, index: number): Buffer {
-    let xpub;
+    let xpub: HDPublicKey;
     try {
       xpub = HDPublicKey(xpubkey);
-    } catch (error) {
-      throw new XPubError(error.message);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        throw new XPubError(error.message);
+      } else {
+        throw new XPubError(error);
+      }
     }
     const key = xpub.deriveChild(index);
     return key.publicKey;
@@ -272,11 +276,15 @@ const wallet = {
    * @inner
    */
   getAddresses(xpubkey: string, startIndex: number, quantity: number, networkName: string = 'mainnet'): Object {
-    let xpub;
+    let xpub: HDPublicKey;
     try {
       xpub = HDPublicKey(xpubkey);
-    } catch (error) {
-      throw new XPubError(error.message);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        throw new XPubError(error.message);
+      } else {
+        throw new XPubError(error);
+      }
     }
 
     const network = new Network(networkName);
@@ -303,11 +311,15 @@ const wallet = {
    * @inner
    */
   getAddressAtIndex(xpubkey: string, addressIndex: number, networkName: string = 'mainnet'): string {
-    let xpub;
+    let xpub: HDPublicKey;
     try {
       xpub = HDPublicKey(xpubkey);
-    } catch (error) {
-      throw new XPubError(error.message);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        throw new XPubError(error.message);
+      } else {
+        throw new XPubError(error);
+      }
     }
 
     const network = new Network(networkName);
@@ -330,11 +342,15 @@ const wallet = {
    * @inner
    */
   xpubDeriveChild(xpubkey: string, derivationIndex: number): string {
-    let xpub;
+    let xpub: HDPublicKey;
     try {
       xpub = HDPublicKey(xpubkey);
-    } catch (error) {
-      throw new XPubError(error.message);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        throw new XPubError(error.message);
+      } else {
+        throw new XPubError(error);
+      }
     }
 
     const derivedXpub = xpub.deriveChild(derivationIndex);

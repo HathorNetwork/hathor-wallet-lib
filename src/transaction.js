@@ -371,7 +371,7 @@ const transaction = {
     const accessData = wallet.getWalletAccessData();
     if (accessData.from_xpub) {
       // Trying to access the private key from an xpub started wallet
-      throw WalletFromXPubGuard('transaction.signTx');
+      throw new WalletFromXPubGuard('transaction.signTx');
     }
     const hashbuf = this.getDataToSignHash(dataToSign);
 
@@ -406,7 +406,7 @@ const transaction = {
     const accessData = storage.getItem('wallet:accessData');
     if (accessData.from_xpub) {
       // Trying to access the private key from an xpub started wallet
-      throw WalletFromXPubGuard('transaction.signTx');
+      throw new WalletFromXPubGuard('transaction.getSignature');
     }
     const encryptedPrivateKey = accessData.mainKey;
     const privateKeyStr = wallet.decryptData(encryptedPrivateKey, pin);
