@@ -1578,6 +1578,7 @@ const wallet = {
     storage.removeItem('wallet:lastGeneratedIndex');
     storage.removeItem('wallet:lastUsedIndex');
     storage.removeItem('wallet:lastUsedAddress');
+    storage.removeItem('wallet:multisig');
     // we clean storage, but wallet is still open
     this.setWalletAsOpen();
   },
