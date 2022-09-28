@@ -9,11 +9,10 @@
 import { crypto, util, HDPublicKey, HDPrivateKey, Address, Script } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
 import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE, P2SH_ACCT_PATH } from '../constants';
-import { OP_CHECKMULTISIG, OP_0 } from '../opcodes';
+import { OP_0 } from '../opcodes';
 import { XPubError, InvalidWords, UncompressedPubKeyError } from '../errors';
 import Network from '../models/network';
 import _ from 'lodash';
-import { hexToBuffer } from './buffer';
 import helpers from './helpers';
 
 

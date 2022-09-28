@@ -98,6 +98,21 @@ test('Xpriv and xpub', () => {
   expect(() => wallet.toPubkeyCompressed(hexToBuffer(uncompressedPubKeyHex + 'ab'))).toThrowError(UncompressedPubKeyError);
 });
 
+test('XPub decode errors', () => {
+  expect(() => {
+    return wallet.getPublicKeyFromXpub('xpub', 0);
+  }).toThrow(XPubError);
+
+  expect(() => {
+    return wallet.xpubDeriveChild('xpub', 0);
+  }).toThrow(XPubError);
+
+  expect(() => {
+    return wallet.getAddressAtIndex('xpub', 0);
+  }).toThrow(XPubError);
+
+});
+
 test('isXpubKeyValid', () => {
   const XPUBKEY = 'xpub6EcBoi2vDFcCW5sPAiQpXDYYtXd1mKhUJD64tUi8CPRG1VQFDkAbL8G5gqTmSZD6oq4Yhr5PZ8pKf3Xmb3W3pGcgqzUdFNaCRKL7TZa3res';
   expect(wallet.isXpubKeyValid(XPUBKEY)).toBe(true);
