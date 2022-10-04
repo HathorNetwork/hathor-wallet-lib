@@ -1571,6 +1571,7 @@ const wallet = {
   cleanLoadedData({ cleanAccessData = true } = {}) {
     if (cleanAccessData) {
       storage.removeItem('wallet:accessData');
+      storage.removeItem('wallet:multisig');
     }
     storage.removeItem('wallet:data');
     storage.removeItem('wallet:address');
@@ -1578,7 +1579,6 @@ const wallet = {
     storage.removeItem('wallet:lastGeneratedIndex');
     storage.removeItem('wallet:lastUsedIndex');
     storage.removeItem('wallet:lastUsedAddress');
-    storage.removeItem('wallet:multisig');
     // we clean storage, but wallet is still open
     this.setWalletAsOpen();
   },
