@@ -7,12 +7,13 @@
 
 import transaction from '../src/transaction';
 import wallet from '../src/wallet';
-import { AddressError, OutputValueError, MaximumNumberParentsError } from '../src/errors';
+import { AddressError, OutputValueError, MaximumNumberParentsError, WalletFromXPubGuard } from '../src/errors';
 import buffer from 'buffer';
 import { OP_PUSHDATA1 } from '../src/opcodes';
 import { DEFAULT_TX_VERSION } from '../src/constants';
 import storage from '../src/storage';
 import WebSocketHandler from '../src/WebSocketHandler';
+import walletUtils from '../src/utils/wallet';
 
 const nodeMajorVersion = process.versions.node.split('.')[0];
 
@@ -358,3 +359,16 @@ test('Prepare data to send tokens', async (done) => {
     done.fail('Error sending transaction');
   });
 }, 10000);
+
+test('Write protected methods cannot be called with a readonly wallet loaded', async () => {
+  let words = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const xpubkey = walletUtils.getXPubKeyFromSeed(words);
+  // Generate new wallet and save data in storage
+  await wallet.executeGenerateWalletFromXPub(xpubkey, true);
+  expect(
+    () => (transaction.signTx({'foo': 'bar'}, Buffer.from('datatosign'), '123')),
+  ).toThrow(WalletFromXPubGuard);
+  expect(
+    () => (transaction.getSignature(0, Buffer.from('datatosign'), '123')),
+  ).toThrow(WalletFromXPubGuard);
+});

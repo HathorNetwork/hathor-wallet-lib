@@ -203,7 +203,7 @@ const wallet = {
 
     if (multisig) {
       const xpub = new HDPublicKey(xpubkey);
-      access['multisig'] = Object.assign({pubkey: xpub.publicKey.toString('hex')}, multisig);
+      accessData['multisig'] = Object.assign({pubkey: xpub.publicKey.toString('hex')}, multisig);
     }
 
     return this.startWallet(accessData, loadHistory);
@@ -1571,6 +1571,7 @@ const wallet = {
   cleanLoadedData({ cleanAccessData = true } = {}) {
     if (cleanAccessData) {
       storage.removeItem('wallet:accessData');
+      storage.removeItem('wallet:multisig');
     }
     storage.removeItem('wallet:data');
     storage.removeItem('wallet:address');
