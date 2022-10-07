@@ -11,6 +11,7 @@ import { HATHOR_TOKEN_CONFIG } from '../../src/constants';
 import SendTransaction from '../../src/new/sendTransaction';
 import PartialTxProposal from '../../src/wallet/partialTxProposal';
 import storage from '../../src/storage';
+import { delay } from './utils/core.util';
 
 describe('partial tx proposal', () => {
   afterEach(async () => {
@@ -102,6 +103,7 @@ describe('partial tx proposal', () => {
     expect(tx.hash).toBeDefined();
 
     await waitForTxReceived(hWallet1, tx.hash);
+    await delay(1000); // This transaction seems to take longer than usual to complete
 
     // Get the balance states before the exchange
     const w1HTRAfter = await hWallet1.getBalance(HATHOR_TOKEN_CONFIG.uid);
