@@ -5,10 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { OP_GREATERTHAN_TIMESTAMP, OP_DUP, OP_HASH160, OP_EQUALVERIFY, OP_CHECKSIG, OP_PUSHDATA1 } from './opcodes';
+import { OP_PUSHDATA1 } from './opcodes';
 import { DECIMAL_PLACES, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, TOKEN_INFO_VERSION, MAX_OUTPUT_VALUE_32, MAX_OUTPUT_VALUE, TOKEN_AUTHORITY_MASK, STRATUM_TIMEOUT_RETURN_CODE } from './constants';
 import { HDPrivateKey, crypto, encoding, util } from 'bitcore-lib';
-import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError, MaximumNumberParentsError } from './errors';
+import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError, MaximumNumberParentsError, WalletFromXPubGuard } from './errors';
 import { hexToBuffer } from './utils/buffer';
 import transactionUtils from './utils/transaction';
 import dateFormatter from './date';
@@ -368,6 +368,11 @@ const transaction = {
    * @inner
    */
   signTx(data, dataToSign, pin) {
+    const accessData = wallet.getWalletAccessData();
+    if (accessData.from_xpub) {
+      // Trying to access the private key from an xpub started wallet
+      throw new WalletFromXPubGuard('transaction.signTx');
+    }
     const hashbuf = this.getDataToSignHash(dataToSign);
 
     const walletData = wallet.getWalletData();
@@ -399,6 +404,10 @@ const transaction = {
    */
   getSignature(index, hash, pin) {
     const accessData = storage.getItem('wallet:accessData');
+    if (accessData.from_xpub) {
+      // Trying to access the private key from an xpub started wallet
+      throw new WalletFromXPubGuard('transaction.getSignature');
+    }
     const encryptedPrivateKey = accessData.mainKey;
     const privateKeyStr = wallet.decryptData(encryptedPrivateKey, pin);
     const derivedKey = HDPrivateKey(privateKeyStr).deriveNonCompliantChild(index);
