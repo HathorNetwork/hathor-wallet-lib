@@ -9,27 +9,32 @@ class FakeHathorWallet {
 
 describe('Get token details', () => {
   const hathorWallet = new FakeHathorWallet();
+  const walletApiSpy = jest.spyOn(walletApi, 'getGeneralTokenInfo');
+
+  afterEach(() => {
+    walletApiSpy.mockReset();
+  })
+
+  afterAll(() => {
+    walletApiSpy.mockRestore();
+  })
 
   test('Message thrown by token details should be the same received from the API', async () => {
     expect.assertions(1);
 
-    const walletApiSpy = jest.spyOn(walletApi, 'getGeneralTokenInfo')
-      .mockImplementationOnce(() => {
+    walletApiSpy.mockImplementationOnce(() => {
         throw new Error('Mocked API error');
       });
 
     await expect(hathorWallet.getTokenDetails('tokenUid'))
       .rejects
       .toThrow('Mocked API error');
-
-    walletApiSpy.mockRestore();
   });
 
   test('Should throw when the api results are unsuccessful', async () => {
     expect.assertions(1);
 
-    const walletApiSpy = jest.spyOn(walletApi, 'getGeneralTokenInfo')
-      .mockImplementationOnce((tokenId, resolve) => {
+    walletApiSpy.mockImplementationOnce((tokenId, resolve) => {
         resolve({
           success: false,
           message: 'Mocked non-success message',
@@ -45,15 +50,12 @@ describe('Get token details', () => {
     await expect(hathorWallet.getTokenDetails('tokenUid'))
       .rejects
       .toThrow('Mocked non-success message');
-
-    walletApiSpy.mockRestore();
   });
 
   test('Should return the same values received from the API on success', async () => {
     expect.assertions(1);
 
-    const walletApiSpy = jest.spyOn(walletApi, 'getGeneralTokenInfo')
-      .mockImplementationOnce((tokenId, resolve) => {
+    walletApiSpy.mockImplementationOnce((tokenId, resolve) => {
         resolve({
           success: true,
           name: 'Mocked Name',
@@ -79,8 +81,6 @@ describe('Get token details', () => {
           melt: false,
         },
       })
-
-    walletApiSpy.mockRestore();
   });
 
 });
