@@ -19,6 +19,7 @@ import storage from '../src/storage';
 import WebSocketHandler from '../src/WebSocketHandler';
 import txHistoryFixture from "./__fixtures__/tx_history";
 import network from '../src/network';
+import walletUtils from '../src/utils/wallet';
 
 beforeEach(() => {
   wallet.setConnection(WebSocketHandler);
@@ -867,4 +868,34 @@ test('executeGenerateWallet should add the accountLevelPrivKey to storage when s
   expect(decryptedWithWrongPin).not.toBe(accountPathPrivKey.xprivkey);
   const newAcctPath = wallet.getAcctPathXprivKey(newPin);
   expect(newAcctPath).toBe(accountPathPrivKey.xprivkey)
+});
+
+test('executeGenerateWalletFromXPub', async () => {
+  let words = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const xpubkey = walletUtils.getXPubKeyFromSeed(words);
+  wallet.cleanWallet();
+  // Generate new wallet and save data in storage
+  await wallet.executeGenerateWalletFromXPub(xpubkey, false);
+
+  expect(wallet.isFromXPub()).toBeTruthy();
+  expect(wallet.getWalletAccessData()).toBeTruthy();
+  expect(wallet.getAddressAtIndex(0)).toBe('WiGQC3QaLSp1oK8kDgrJFwspQEF76jRuAV');
+});
+
+test('executeGenerateWalletFromXPub multisig', async () => {
+  let words = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const xpubkey = walletUtils.getXPubKeyFromSeed(words);
+  wallet.cleanWallet();
+  // Generate new multisig wallet and save data in storage
+  storage.setItem('wallet:multisig', true);
+  await wallet.executeGenerateWalletFromXPub(
+    xpubkey,
+    false,
+    { pubkeys: [xpubkey], numSignatures: 1 },
+  );
+
+  expect(wallet.isFromXPub()).toBeTruthy();
+  expect(wallet.isWalletMultiSig()).toBeTruthy();
+  expect(wallet.getWalletAccessData()).toBeTruthy();
+  expect(wallet.getAddressAtIndex(0)).toBe('wQB9Rf8BBR8NdU2fQ316tbWAn41P4tSuGR');
 });

@@ -348,6 +348,7 @@ describe('start', () => {
     await expect(hWallet.prepareMeltTokensData()).rejects.toThrow(WalletFromXPubGuard);
     await expect(hWallet.prepareDelegateAuthorityData()).rejects.toThrow(WalletFromXPubGuard);
     await expect(hWallet.prepareDestroyAuthorityData()).rejects.toThrow(WalletFromXPubGuard);
+    await expect(() => { hWallet.getAllSignatures() }).toThrow(WalletFromXPubGuard);
 
     // Validating that the address generation works as intended
     for (let i=0; i < 21; ++i) {
@@ -2190,7 +2191,7 @@ describe('getToken methods', () => {
     await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
 
     // Validating `getTokenDetails` for custom token not in this wallet
-    expect(hWallet.getTokenDetails(fakeTokenUid)).rejects.toThrow();
+    await expect(hWallet.getTokenDetails(fakeTokenUid)).rejects.toThrow('Unknown token');
 
     // Validating `getTokens` for no custom tokens
     let getTokensResponse = await hWallet.getTokens();

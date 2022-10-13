@@ -5,14 +5,32 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-
 import { Utxo } from '../wallet/types';
 import { UtxoError } from '../errors';
 import { HistoryTransactionOutput } from '../models/types';
 import HathorWallet from '../new/wallet';
 import wallet from '../wallet';
+import {crypto as cryptoBL, PrivateKey} from 'bitcore-lib'
 
 const transaction = {
+  /**
+   * Get the signature from the dataToSignHash for a private key
+   *
+   * @param {Buffer} dataToSignHash hash of a transaction's dataToSign.
+   * @param {PrivateKey} privateKey Signing key.
+   *
+   * @returns {Buffer}
+   *
+   * @memberof transaction
+   * @inner
+   */
+  getSignature(dataToSignHash: Buffer, privateKey: PrivateKey): Buffer {
+    const signature = cryptoBL.ECDSA.sign(dataToSignHash, privateKey, 'little').set({
+      nhashtype: cryptoBL.Signature.SIGHASH_ALL,
+    });
+    return signature.toDER();
+  },
+
   /**
    * Select best utxos with the algorithm described below. This method expects the utxos to be sorted by greatest value
    *
