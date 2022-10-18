@@ -79,7 +79,7 @@ test('utxo from history output', () => {
     tokenId: '00',
     value: 5,
     authorities: 0,
-    heighlock: null, // heighlock is not checked on this method.
+    heightlock: null, // heightlock is not checked on this method.
     locked: false, // The method does not check the lock.
   });
 
@@ -103,7 +103,7 @@ test('utxo from history output', () => {
     tokenId: 'custom-token',
     value: 30,
     authorities: 0,
-    heighlock: null, // heighlock is not checked on this method.
+    heightlock: null, // heightlock is not checked on this method.
     locked: false, // The method does not check the lock.
   });
 
@@ -126,7 +126,7 @@ test('utxo from history output', () => {
     tokenId: 'custom-token',
     value: 2,
     authorities: 2,
-    heighlock: null, // heighlock is not checked on this method.
+    heightlock: null, // heightlock is not checked on this method.
     locked: false, // The method does not check the lock.
   });
 });
