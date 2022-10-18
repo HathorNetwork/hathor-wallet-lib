@@ -2255,6 +2255,53 @@ describe('getToken methods', () => {
   });
 });
 
+describe.only('getSignatures', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
+  });
+
+
+  it('should sign the transaction', async () => {
+    // Creating the wallet with the funds
+    const hWallet = await generateWalletHelper();
+
+    const addr0 = hWallet.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(addr0, 10);
+
+    const { hash: tokenUid } = await createTokenHelper(
+      hWallet,
+      'Signatures token',
+      'SIGT',
+      100
+    );
+
+    const network = hWallet.getNetworkObject();
+    // Build a Transaction to sign
+    let sendTransaction = new SendTransaction({
+      outputs: [
+        { address: hWallet.getAddressAtIndex(5), value: 5, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: hWallet.getAddressAtIndex(6), value: 100, token: tokenUid },
+      ],
+      network,
+    });
+    const txData = sendTransaction.prepareTxData();
+    const completeData = transaction.prepareData(txData, '', { getSignature: false });
+    const tx = helpersUtils.createTxFromData(completeData, network);
+
+    // Sign transaction
+    hWallet.getSignatures(tx);
+    sendTransaction = new SendTransaction({ transaction: tx, network });
+    const minedTx = await sendTransaction.runFromMining('mine-tx');
+    expect(minedTx.nonce).toBeDefined();
+    expect(minedTx.parents).not.toHaveLength(0);
+
+    // Push transaction to test if fullnode will validate it.
+    await sendTransaction.handlePushTx();
+    await waitForTxReceived(hWallet, sendTransaction.transaction.hash);
+  });
+});
+
 describe('getTxHistory', () => {
   afterEach(async () => {
     await stopAllWallets();
@@ -2425,48 +2472,3 @@ describe('getTxHistory', () => {
   });
 });
 
-describe('getSignatures', () => {
-  afterEach(async () => {
-    await stopAllWallets();
-    await GenesisWalletHelper.clearListeners();
-  });
-
-  it('should sign the transaction', async () => {
-    // Creating the wallet with the funds
-    const hWallet = await generateWalletHelper();
-    const addr0 = hWallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(addr0, 10);
-
-    const { hash: tokenUid } = await createTokenHelper(
-      hWallet,
-      'Signatures token',
-      'SIGT',
-      100
-    );
-
-    const network = hWallet.getNetworkObject();
-    // Build a Transaction to sign
-    let sendTransaction = new SendTransaction({
-      outputs: [
-        { address: hWallet.getAddressAtIndex(5), value: 5, token: HATHOR_TOKEN_CONFIG.uid },
-        { address: hWallet.getAddressAtIndex(6), value: 100, token: tokenUid },
-      ],
-      network,
-    });
-    const tx = helpersUtils.createTxFromData(
-      { version: 1, ...sendTransaction.prepareTxData() },
-      network
-    );
-
-    // Sign transaction
-    hWallet.getSignatures(tx);
-    sendTransaction = new SendTransaction({ transaction: tx, network });
-    const minedTx = await sendTransaction.runFromMining('mine-tx');
-    expect(minedTx.nonce instanceof number).toBe(true);
-    expect(minedTx.parents).not.toHaveLength(0);
-
-    // Push transaction to test if fullnode will validate it.
-    await sendTransaction.handlePushTx();
-    await waitForTxReceived(hWallet, sendTransaction.transaction.hash);
-  });
-});
