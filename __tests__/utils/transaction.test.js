@@ -7,6 +7,7 @@
 
 import transaction from '../../src/utils/transaction';
 import { UtxoError } from '../../src/errors';
+import { PrivateKey, crypto } from 'bitcore-lib';
 
 test('Utxo selection', () => {
   const utxos = [
@@ -53,3 +54,96 @@ test('Utxo selection', () => {
     transaction.selectUtxos([], 10);
   }).toThrowError(UtxoError);
 })
+
+test('utxo from history output', () => {
+  const fake_txid = 'fake-txid';
+  const fake_index = 27;
+  const addressPath = 'fake-address-path';
+
+  const txout1 = {
+    token: '00',
+    token_data: 0,
+    value: 5,
+    decoded: {
+      address: 'fake-address',
+      timelock: 10,
+    },
+  };
+
+  expect(transaction.utxoFromHistoryOutput(fake_txid, fake_index, txout1, { addressPath })).toEqual({
+    txId: fake_txid,
+    index: fake_index,
+    addressPath,
+    address: 'fake-address',
+    timelock: 10,
+    tokenId: '00',
+    value: 5,
+    authorities: 0,
+    heighlock: null, // heighlock is not checked on this method.
+    locked: false, // The method does not check the lock.
+  });
+
+
+  // Custom token without timelock
+  const txout2 = {
+    token: 'custom-token',
+    token_data: 5,
+    value: 30,
+    decoded: {
+      address: 'fake-address-2',
+    },
+  };
+
+  expect(transaction.utxoFromHistoryOutput(fake_txid, fake_index, txout2, { addressPath })).toEqual({
+    txId: fake_txid,
+    index: fake_index,
+    addressPath,
+    address: 'fake-address-2',
+    timelock: null,
+    tokenId: 'custom-token',
+    value: 30,
+    authorities: 0,
+    heighlock: null, // heighlock is not checked on this method.
+    locked: false, // The method does not check the lock.
+  });
+
+  // Custom token authority
+  const txout3 = {
+    token: 'custom-token',
+    token_data: 132,
+    value: 2,
+    decoded: {
+      address: 'fake-address-2',
+    },
+  };
+
+  expect(transaction.utxoFromHistoryOutput(fake_txid, fake_index, txout3, { addressPath })).toEqual({
+    txId: fake_txid,
+    index: fake_index,
+    addressPath,
+    address: 'fake-address-2',
+    timelock: null,
+    tokenId: 'custom-token',
+    value: 2,
+    authorities: 2,
+    heighlock: null, // heighlock is not checked on this method.
+    locked: false, // The method does not check the lock.
+  });
+});
+
+test('getSignature', () => {
+  const privkey = new PrivateKey();
+
+  const data = Buffer.from('c0ffee', 'hex');
+  const hashdata = crypto.Hash.sha256(data);
+
+  const signatureDER = transaction.getSignature(hashdata, privkey);
+
+  // A signature made with this util matches the public key
+  expect(crypto.ECDSA.verify(
+    hashdata,
+    crypto.Signature.fromDER(signatureDER),
+    privkey.toPublicKey(),
+    'little', // endianess
+  )).toBe(true);
+});

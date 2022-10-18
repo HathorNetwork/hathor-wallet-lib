@@ -25,6 +25,7 @@ import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
 import { HDPrivateKey } from 'bitcore-lib';
 import transactionUtils from '../utils/transaction';
+import Transaction from '../models/transaction';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';
@@ -2321,6 +2322,53 @@ class HathorWallet extends EventEmitter {
     newOptions['nftData'] = data;
     const tx = await this.prepareCreateNewToken(name, symbol, amount, newOptions);
     return this.handleSendPreparedTransaction(tx);
+  }
+
+  /**
+   * Sign all inputs
+   *
+   * @param {Transaction} tx The transaction to be signed
+   * @param [options]
+   * @param {string} [options.pincode] PIN to decrypt the private key.
+   *                                   Optional but required if not set in this
+   *
+   * @returns {Transaction} The signed transaction
+   */
+  getSignatures(tx, { pinCode = null } = {}) {
+    if (this.isFromXPub()) {
+      throw new WalletFromXPubGuard('getSignatures');
+    }
+    storage.setStore(this.store);
+    const pin = pinCode || this.pinCode;
+    if (!pin) {
+      throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
+    }
+
+    // get private key
+    const accessData = storage.getItem('wallet:accessData');
+    const privateKeyStr = wallet.decryptData(accessData.mainKey, pin);
+    const key = HDPrivateKey(privateKeyStr);
+
+    for (const input of tx.inputs) {
+      const inputTx = this.getTx(input.hash);
+      if (!inputTx) {
+        // Input is not from our wallet
+        continue;
+      }
+      const utxo = inputTx.outputs[input.index];
+      if(utxo && this.isAddressMine(utxo.decoded.address)) {
+        // sign tx with address index
+        const addressIndex = this.getAddressIndex(utxo.decoded.address);
+        // Derive key to addressIndex
+        const derivedKey = key.deriveNonCompliantChild(addressIndex);
+        const privateKey = derivedKey.privateKey;
+        // Get tx signature and populate transaction
+        const sigDER = tx.getSignature(privateKey);
+        const inputData = transaction.createInputData(sigDER, privateKey.publicKey.toBuffer());
+        input.setData(inputData);
+      }
+    }
+    return tx;
   }
 }
 

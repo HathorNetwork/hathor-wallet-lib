@@ -8,7 +8,6 @@
 import { Utxo } from '../wallet/types';
 import { UtxoError } from '../errors';
 import { HistoryTransactionOutput } from '../models/types';
-import HathorWallet from '../new/wallet';
 import wallet from '../wallet';
 import {crypto as cryptoBL, PrivateKey} from 'bitcore-lib'
 
