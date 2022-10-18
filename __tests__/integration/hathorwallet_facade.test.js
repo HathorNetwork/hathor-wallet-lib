@@ -2467,5 +2467,6 @@ describe('getSignatures', () => {
 
     // Push transaction to test if fullnode will validate it.
     await sendTransaction.handlePushTx();
+    await waitForTxReceived(hWallet, sendTransaction.transaction.hash);
   });
 });
