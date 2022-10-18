@@ -249,7 +249,6 @@ describe('start', () => {
     hWallet.stop();
   });
 
-
   it('should start a wallet to manage a specific token', async () => {
     const walletData = precalculationHelpers.test.getPrecalculatedWallet();
 
@@ -2423,5 +2422,50 @@ describe('getTxHistory', () => {
     expect(txHistory.length).toEqual(2);
     expect(txHistory[0].txId).toEqual(tx2Hash);
     expect(txHistory[1].txId).toEqual(tx1Hash);
+  });
+});
+
+describe('getSignatures', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
+  });
+
+  it('should sign the transaction', async () => {
+    // Creating the wallet with the funds
+    const hWallet = await generateWalletHelper();
+    const addr0 = hWallet.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(addr0, 10);
+
+    const { hash: tokenUid } = await createTokenHelper(
+      hWallet,
+      'Signatures token',
+      'SIGT',
+      100
+    );
+
+    const network = hWallet.getNetworkObject();
+    // Build a Transaction to sign
+    let sendTransaction = new SendTransaction({
+      outputs: [
+        { address: hWallet.getAddressAtIndex(5), value: 5, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: hWallet.getAddressAtIndex(6), value: 100, token: tokenUid },
+      ],
+      network,
+    });
+    const tx = helpersUtils.createTxFromData(
+      { version: 1, ...sendTransaction.prepareTxData() },
+      network
+    );
+
+    // Sign transaction
+    hWallet.getSignatures(tx);
+    sendTransaction = new SendTransaction({ transaction: tx, network });
+    const minedTx = await sendTransaction.runFromMining('mine-tx');
+    expect(minedTx.nonce instanceof number).toBe(true);
+    expect(minedTx.parents).not.toHaveLength(0);
+
+    // Push transaction to test if fullnode will validate it.
+    await sendTransaction.handlePushTx();
   });
 });
