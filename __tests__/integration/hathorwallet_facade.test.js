@@ -2255,7 +2255,7 @@ describe('getToken methods', () => {
   });
 });
 
-describe.only('getSignatures', () => {
+describe('getSignatures', () => {
   afterEach(async () => {
     await stopAllWallets();
     await GenesisWalletHelper.clearListeners();
