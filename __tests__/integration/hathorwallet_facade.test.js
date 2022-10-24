@@ -347,7 +347,9 @@ describe('start', () => {
     await expect(hWallet.prepareMeltTokensData()).rejects.toThrow(WalletFromXPubGuard);
     await expect(hWallet.prepareDelegateAuthorityData()).rejects.toThrow(WalletFromXPubGuard);
     await expect(hWallet.prepareDestroyAuthorityData()).rejects.toThrow(WalletFromXPubGuard);
-    await expect(() => { hWallet.getAllSignatures() }).toThrow(WalletFromXPubGuard);
+    expect(hWallet.getAllSignatures).toThrow(WalletFromXPubGuard);
+    expect(hWallet.getSignatures).toThrow(WalletFromXPubGuard);
+    expect(hWallet.signTx).toThrow(WalletFromXPubGuard);
 
     // Validating that the address generation works as intended
     for (let i=0; i < 21; ++i) {
@@ -2255,7 +2257,7 @@ describe('getToken methods', () => {
   });
 });
 
-describe('getSignatures', () => {
+describe('signTx', () => {
   afterEach(async () => {
     await stopAllWallets();
     await GenesisWalletHelper.clearListeners();
@@ -2290,7 +2292,7 @@ describe('getSignatures', () => {
     const tx = helpersUtils.createTxFromData(completeData, network);
 
     // Sign transaction
-    hWallet.getSignatures(tx);
+    hWallet.signTx(tx);
     sendTransaction = new SendTransaction({ transaction: tx, network });
     const minedTx = await sendTransaction.runFromMining('mine-tx');
     expect(minedTx.nonce).toBeDefined();

@@ -341,33 +341,14 @@ class HathorWallet extends EventEmitter {
     }
     storage.setStore(this.store);
     const tx = helpers.createTxFromHex(txHex, this.getNetworkObject());
-    const walletData = wallet.getWalletData();
-    const historyTransactions = walletData['historyTransactions'] || {};
     const accessData = storage.getItem('wallet:accessData');
-    const privateKeyStr = wallet.decryptData(accessData.mainKey, pin);
-    const key = HDPrivateKey(privateKeyStr);
     const signatures = {};
 
-    for (const {index, input} of tx.inputs.map((input, index) => ({index, input}))) {
-      if (!(input.hash in historyTransactions)) {
-        continue;
-      }
-
-      const histTx = historyTransactions[input.hash];
-      const address = histTx.outputs[input.index].decoded.address;
-      // get address index
-      const addressIndex = wallet.getAddressIndex(address);
-      if (addressIndex === null || addressIndex === undefined) {
-        // The transaction is on our history but this input is not ours
-        continue;
-      }
-
-      // derive key to address index
-      const derivedKey = key.deriveNonCompliantChild(addressIndex);
-      const privateKey = derivedKey.privateKey;
-
-      signatures[index] = tx.getSignature(privateKey).toString('hex');
+    for (const signatureInfo of this.getSignatures(tx, { pinCode: pin })) {
+      const { inputIndex, signature } = signatureInfo;
+      signatures[inputIndex] = signature;
     }
+
     const p2shSig = new P2SHSignature(accessData.multisig.pubkey, signatures);
     return p2shSig.serialize();
   }
@@ -2325,14 +2306,54 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Sign all inputs
+   * Identify all inputs from the loaded wallet
+   *
+   * @param {Transaction} tx The transaction
+   *
+   * @returns {{
+   * inputIndex: number,
+   * addressIndex: number,
+   * addressPath: string,
+   * }[]} List of indices and their associated address index
+   */
+   getWalletInputInfo(tx) {
+    storage.setStore(this.store);
+
+    const walletInputs = [];
+
+    for (const [inputIndex, input] of tx.inputs.entries()) {
+      const inputTx = this.getTx(input.hash);
+      if (!inputTx) {
+        // Input is not from our wallet
+        continue;
+      }
+      const utxo = inputTx.outputs[input.index];
+      if (utxo && this.isAddressMine(utxo.decoded.address)) {
+        const addressIndex = this.getAddressIndex(utxo.decoded.address);
+        // BIP32 address path
+        const addressPath = this.getAddressPathForIndex(addressIndex);
+        walletInputs.push({ inputIndex, addressIndex, addressPath });
+      }
+    }
+
+    return walletInputs;
+  }
+
+  /**
+   * Get signatures for all inputs of the loaded wallet.
    *
    * @param {Transaction} tx The transaction to be signed
    * @param [options]
    * @param {string} [options.pincode] PIN to decrypt the private key.
    *                                   Optional but required if not set in this
    *
-   * @returns {Transaction} The signed transaction
+   * @returns {{
+   * inputIndex: number,
+   * addressIndex: number,
+   * addressPath: string,
+   * signature: string,
+   * pubkey: string,
+   * }} Input and signature information
    */
   getSignatures(tx, { pinCode = null } = {}) {
     if (this.isFromXPub()) {
@@ -2349,25 +2370,43 @@ class HathorWallet extends EventEmitter {
     const privateKeyStr = wallet.decryptData(accessData.mainKey, pin);
     const key = HDPrivateKey(privateKeyStr);
 
-    for (const input of tx.inputs) {
-      const inputTx = this.getTx(input.hash);
-      if (!inputTx) {
-        // Input is not from our wallet
-        continue;
-      }
-      const utxo = inputTx.outputs[input.index];
-      if(utxo && this.isAddressMine(utxo.decoded.address)) {
-        // sign tx with address index
-        const addressIndex = this.getAddressIndex(utxo.decoded.address);
-        // Derive key to addressIndex
-        const derivedKey = key.deriveNonCompliantChild(addressIndex);
-        const privateKey = derivedKey.privateKey;
-        // Get tx signature and populate transaction
-        const sigDER = tx.getSignature(privateKey);
-        const inputData = transaction.createInputData(sigDER, privateKey.publicKey.toBuffer());
-        input.setData(inputData);
-      }
+    const signatures = [];
+
+    for (const indices of this.getWalletInputInfo(tx)) {
+      const { addressIndex } = indices;
+      // Derive key to addressIndex
+      const derivedKey = key.deriveNonCompliantChild(addressIndex);
+      const privateKey = derivedKey.privateKey;
+      // Get tx signature and populate transaction
+      const sigDER = tx.getSignature(privateKey);
+      signatures.push({
+        signature: sigDER.toString('hex'),
+        pubkey: privateKey.publicKey.toString(),
+        ...indices,
+      });
     }
+
+    return signatures;
+  }
+
+  /**
+   * Sign all inputs of the given transaction.
+   *   OBS: only for P2PKH wallets.
+   *
+   * @param {Transaction} tx The transaction to be signed
+   * @param [options]
+   * @param {string} [options.pincode] PIN to decrypt the private key.
+   *                                   Optional but required if not set in this
+   *
+   * @returns {Transaction} The signed transaction
+   */
+  signTx(tx, options = {}) {
+    for (const sigInfo of this.getSignatures(tx, options)) {
+      const { signature, pubkey, inputIndex } = sigInfo;
+      const inputData = transaction.createInputData(Buffer.from(signature, 'hex'), Buffer.from(pubkey, 'hex'));
+      tx.inputs[inputIndex].setData(inputData);
+    }
+
     return tx;
   }
 }
