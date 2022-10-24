@@ -347,9 +347,9 @@ describe('start', () => {
     await expect(hWallet.prepareMeltTokensData()).rejects.toThrow(WalletFromXPubGuard);
     await expect(hWallet.prepareDelegateAuthorityData()).rejects.toThrow(WalletFromXPubGuard);
     await expect(hWallet.prepareDestroyAuthorityData()).rejects.toThrow(WalletFromXPubGuard);
-    expect(hWallet.getAllSignatures).toThrow(WalletFromXPubGuard);
-    expect(hWallet.getSignatures).toThrow(WalletFromXPubGuard);
-    expect(hWallet.signTx).toThrow(WalletFromXPubGuard);
+    expect(() => hWallet.getAllSignatures()).toThrow(WalletFromXPubGuard);
+    expect(() => hWallet.getSignatures()).toThrow(WalletFromXPubGuard);
+    expect(() => hWallet.signTx()).toThrow(WalletFromXPubGuard);
 
     // Validating that the address generation works as intended
     for (let i=0; i < 21; ++i) {
