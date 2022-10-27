@@ -2344,7 +2344,7 @@ class HathorWallet extends EventEmitter {
    *
    * @param {Transaction} tx The transaction to be signed
    * @param [options]
-   * @param {string} [options.pincode] PIN to decrypt the private key.
+   * @param {string} [options.pinCode] PIN to decrypt the private key.
    *                                   Optional but required if not set in this
    *
    * @returns {{
@@ -2395,7 +2395,7 @@ class HathorWallet extends EventEmitter {
    *
    * @param {Transaction} tx The transaction to be signed
    * @param [options]
-   * @param {string} [options.pincode] PIN to decrypt the private key.
+   * @param {string} [options.pinCode] PIN to decrypt the private key.
    *                                   Optional but required if not set in this
    *
    * @returns {Transaction} The signed transaction
