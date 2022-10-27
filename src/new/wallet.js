@@ -1370,7 +1370,7 @@ class HathorWallet extends EventEmitter {
    * }[]} [options.inputs] Array of proposed inputs
    * @param {string} [options.changeAddress] address of the change output
    * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
-   * @param {string} [options.pincode] pin to decrypt xpriv information.
+   * @param {string} [options.pinCode] pin to decrypt xpriv information.
    *                                   Optional but required if not set in this
    *
    * @return {Promise<Transaction>} Promise that resolves when transaction is sent
@@ -2314,7 +2314,7 @@ class HathorWallet extends EventEmitter {
    * inputIndex: number,
    * addressIndex: number,
    * addressPath: string,
-   * }[]} List of indices and their associated address index
+   * }[]} List of indexes and their associated address index
    */
    getWalletInputInfo(tx) {
     storage.setStore(this.store);
@@ -2372,8 +2372,8 @@ class HathorWallet extends EventEmitter {
 
     const signatures = [];
 
-    for (const indices of this.getWalletInputInfo(tx)) {
-      const { addressIndex } = indices;
+    for (const indexes of this.getWalletInputInfo(tx)) {
+      const { addressIndex } = indexes;
       // Derive key to addressIndex
       const derivedKey = key.deriveNonCompliantChild(addressIndex);
       const privateKey = derivedKey.privateKey;
@@ -2382,7 +2382,7 @@ class HathorWallet extends EventEmitter {
       signatures.push({
         signature: sigDER.toString('hex'),
         pubkey: privateKey.publicKey.toString(),
-        ...indices,
+        ...indexes,
       });
     }
 
