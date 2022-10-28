@@ -249,7 +249,6 @@ describe('start', () => {
     hWallet.stop();
   });
 
-
   it('should start a wallet to manage a specific token', async () => {
     const walletData = precalculationHelpers.test.getPrecalculatedWallet();
 
@@ -348,7 +347,9 @@ describe('start', () => {
     await expect(hWallet.prepareMeltTokensData()).rejects.toThrow(WalletFromXPubGuard);
     await expect(hWallet.prepareDelegateAuthorityData()).rejects.toThrow(WalletFromXPubGuard);
     await expect(hWallet.prepareDestroyAuthorityData()).rejects.toThrow(WalletFromXPubGuard);
-    await expect(() => { hWallet.getAllSignatures() }).toThrow(WalletFromXPubGuard);
+    expect(() => hWallet.getAllSignatures()).toThrow(WalletFromXPubGuard);
+    expect(() => hWallet.getSignatures()).toThrow(WalletFromXPubGuard);
+    expect(() => hWallet.signTx()).toThrow(WalletFromXPubGuard);
 
     // Validating that the address generation works as intended
     for (let i=0; i < 21; ++i) {
@@ -2256,6 +2257,53 @@ describe('getToken methods', () => {
   });
 });
 
+describe('signTx', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
+  });
+
+
+  it('should sign the transaction', async () => {
+    // Creating the wallet with the funds
+    const hWallet = await generateWalletHelper();
+
+    const addr0 = hWallet.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(addr0, 10);
+
+    const { hash: tokenUid } = await createTokenHelper(
+      hWallet,
+      'Signatures token',
+      'SIGT',
+      100
+    );
+
+    const network = hWallet.getNetworkObject();
+    // Build a Transaction to sign
+    let sendTransaction = new SendTransaction({
+      outputs: [
+        { address: hWallet.getAddressAtIndex(5), value: 5, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: hWallet.getAddressAtIndex(6), value: 100, token: tokenUid },
+      ],
+      network,
+    });
+    const txData = sendTransaction.prepareTxData();
+    const completeData = transaction.prepareData(txData, '', { getSignature: false });
+    const tx = helpersUtils.createTxFromData(completeData, network);
+
+    // Sign transaction
+    hWallet.signTx(tx);
+    sendTransaction = new SendTransaction({ transaction: tx, network });
+    const minedTx = await sendTransaction.runFromMining('mine-tx');
+    expect(minedTx.nonce).toBeDefined();
+    expect(minedTx.parents).not.toHaveLength(0);
+
+    // Push transaction to test if fullnode will validate it.
+    await sendTransaction.handlePushTx();
+    await waitForTxReceived(hWallet, sendTransaction.transaction.hash);
+  });
+});
+
 describe('getTxHistory', () => {
   afterEach(async () => {
     await stopAllWallets();
@@ -2425,3 +2473,4 @@ describe('getTxHistory', () => {
     expect(txHistory[1].txId).toEqual(tx1Hash);
   });
 });
+
