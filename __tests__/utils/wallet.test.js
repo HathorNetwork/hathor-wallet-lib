@@ -86,6 +86,9 @@ test('Xpriv and xpub', () => {
   expectedRet[address10] = 10;
   expect(expectedRet).toStrictEqual(wallet.getAddresses(derivedXpub, 10, 1, 'testnet'));
 
+  // getPublicKeyFromXpub without an index will return the public key at the current derivation level
+  expect(wallet.getPublicKeyFromXpub(derivedXpriv.xpubkey).toString()).toEqual(derivedXpriv.publicKey.toString());
+
   expect(wallet.getAddressAtIndex(derivedXpub, 10, 'testnet')).toBe(address10);
 
   // To pubkey compressed
