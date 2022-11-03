@@ -14,7 +14,7 @@
  * @class
  * @name Storage
  */
-class Storage {
+export class Storage {
   constructor() {
     this.store = null;
   }

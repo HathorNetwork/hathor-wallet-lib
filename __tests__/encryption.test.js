@@ -8,7 +8,6 @@
 import wallet from '../src/wallet';
 import storage from '../src/storage';
 
-
 test('Private key encryption/decryption', () => {
   const pin = '123456';
   const password = 'password';

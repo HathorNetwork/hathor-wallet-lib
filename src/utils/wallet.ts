@@ -145,7 +145,7 @@ const wallet = {
    * you must send in this method the xpubkey from m/44'/280/0'/0 and the index you want to derive
    *
    * @param {String} xpubkey Xpub of the path before the last derivation
-   * @param {number} index Index of the key to derive
+   * @param {number?} index Index of the key to derive, if not present no derivation will be made.
    *
    * @return {Object} Public key object
    * @throws {XPubError} In case the given xpub key is invalid
@@ -153,7 +153,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  getPublicKeyFromXpub(xpubkey: string, index: number): Buffer {
+  getPublicKeyFromXpub(xpubkey: string, index?: number): Buffer {
     let xpub: HDPublicKey;
     try {
       xpub = HDPublicKey(xpubkey);
@@ -163,6 +163,9 @@ const wallet = {
       } else {
         throw new XPubError(error);
       }
+    }
+    if (index === undefined) {
+      return xpub.publicKey;
     }
     const key = xpub.deriveChild(index);
     return key.publicKey;
@@ -369,14 +372,14 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  createP2SHRedeemScript(xpubs, numSignatures, index) {
-    const sortedXpubs = _.sortBy(xpubs.map(xp => new HDPublicKey(xp)), (xpub) => {
+  createP2SHRedeemScript(xpubs: string[], numSignatures: number, index: number): Buffer {
+    const sortedXpubs = _.sortBy(xpubs.map(xp => new HDPublicKey(xp)), (xpub: HDPublicKey) => {
       return xpub.publicKey.toString('hex');
     });
 
     // xpub comes derived to m/45'/280'/0'
     // Derive to m/45'/280'/0'/0/index
-    const pubkeys = sortedXpubs.map(xpub => xpub.deriveChild(0).deriveChild(index).publicKey);
+    const pubkeys = sortedXpubs.map((xpub: HDPublicKey) => xpub.deriveChild(0).deriveChild(index).publicKey);
 
     // bitcore-lib sorts the public keys by default before building the script
     // noSorting prevents that and keeps our order
@@ -394,7 +397,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  getP2SHInputData(signatures, redeemScript) {
+  getP2SHInputData(signatures: Buffer[], redeemScript: Buffer): Buffer {
     // numSignatures is the first opcode
     const numSignatures = redeemScript.readUInt8() - OP_0.readUInt8();
     if (signatures.length !== numSignatures) {
@@ -418,7 +421,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  getMultiSigXPubFromXPriv(xpriv: HDPrivateKey) {
+  getMultiSigXPubFromXPriv(xpriv: HDPrivateKey): string {
     const derived = xpriv.deriveNonCompliantChild(P2SH_ACCT_PATH);
     return derived.xpubkey;
   },
@@ -433,7 +436,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  getMultiSigXPubFromWords(seed: string, options: { passphrase?: string, networkName?: string } = {}) {
+  getMultiSigXPubFromWords(seed: string, options: { passphrase?: string, networkName?: string } = {}): string {
     const methodOptions = Object.assign({passphrase: '', networkName: 'mainnet'}, options);
     const xpriv = this.getXPrivKeyFromSeed(seed, methodOptions);
     return this.getMultiSigXPubFromXPriv(xpriv);

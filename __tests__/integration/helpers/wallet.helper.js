@@ -295,7 +295,7 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
  *
  * @param {HathorWallet} hWallet
  * @param {string} txId
- * @returns {void}
+ * @returns {Promise<void>}
  */
 export async function waitUntilNextTimestamp(hWallet, txId) {
   const { timestamp } = hWallet.getTx(txId);
