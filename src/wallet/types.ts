@@ -81,6 +81,11 @@ export interface AddressesResponseData {
   addresses: GetAddressesObject[];
 }
 
+export interface CheckAddressesMineResponseData {
+  success: boolean;
+  addresses: WalletAddressMap;
+}
+
 export interface NewAddressesResponseData {
   success: boolean;
   addresses: AddressInfoObject[];
@@ -230,6 +235,10 @@ export interface SendTransactionEvents {
 export interface SendTransactionResponse {
   success: boolean;
   transaction: Transaction;
+}
+
+export interface WalletAddressMap {
+  [address: string]: boolean;
 }
 
 export interface TokenAmountMap {
