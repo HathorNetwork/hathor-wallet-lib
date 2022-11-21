@@ -2180,7 +2180,7 @@ class HathorWallet extends EventEmitter {
    *
    * @return {Object} Object with the addresses and whether it belongs of not { address: boolean }
    **/
-  checkAddressesMine(addresses) {
+  async checkAddressesMine(addresses) {
     return addresses.reduce((acc, address) => {
       acc[address] = wallet.isAddressMine(address);
 
