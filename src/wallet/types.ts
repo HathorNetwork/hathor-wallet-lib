@@ -287,6 +287,7 @@ export interface IHathorWallet {
   onConnectionChangedState(newState: ConnectionState): void;
   getTokenDetails(tokenId: string): Promise<TokenDetailsObject>;
   getVersionData(): Promise<FullNodeVersionData>;
+  checkAddressesMine(addresses: string[]): Promise<WalletAddressMap>;
 }
 
 export interface ISendTransaction {
