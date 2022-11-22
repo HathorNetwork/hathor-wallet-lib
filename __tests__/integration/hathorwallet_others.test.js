@@ -237,7 +237,7 @@ describe('checkAddressesMine', () => {
     const address2 = hWallet.getAddressAtIndex(2);
     const address3 = hWallet.getAddressAtIndex(3);
 
-    expect(hWallet.checkAddressesMine([
+    expect(await hWallet.checkAddressesMine([
       address1,
       address2,
       address3,
