@@ -11,9 +11,10 @@ import {
   GetAddressesObject,
   WsTransaction,
   CreateWalletAuthData,
+  WalletAddressMap,
 } from '../../src/wallet/types';
-import walletUtils from '../../src/utils/wallet';
-import { HDPublicKey, HDPrivateKey, Message } from 'bitcore-lib';
+import { HDPrivateKey, Message } from 'bitcore-lib';
+import walletApi from '../../src/wallet/api/walletApi';
 
 const MOCK_TX = {
   'tx_id': '0009bc9bf8eab19c41a2aa9b9369d3b6a90ff12072729976634890d35788d5d7',
@@ -234,6 +235,42 @@ test('getTxBalance', async () => {
   balance = await wallet.getTxBalance(tx);
   expect(balance['token1']).toStrictEqual(0);
   expect(balance['token2']).toStrictEqual(-5);
+});
+
+test('checkAddressesMine', async () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+
+  const checkAddressesMineApiMock = async function () {
+    const addresses: WalletAddressMap = {
+      address1: true,
+      address2: false,
+      address3: false,
+    };
+
+    return {
+      success: true,
+      addresses,
+    };
+  };
+
+  jest.spyOn(walletApi, 'checkAddressesMine')
+    .mockImplementation(checkAddressesMineApiMock);
+
+  const walletAddressMap = await wallet.checkAddressesMine(['address1', 'address2', 'address3']);
+
+  expect(walletAddressMap.address1).toStrictEqual(true);
+  expect(walletAddressMap.address2).toStrictEqual(false);
+  expect(walletAddressMap.address3).toStrictEqual(false);
 });
 
 test('generateCreateWalletAuthData should return correct auth data', async () => {
