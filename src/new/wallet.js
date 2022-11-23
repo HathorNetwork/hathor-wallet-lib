@@ -2182,7 +2182,7 @@ class HathorWallet extends EventEmitter {
    **/
   async checkAddressesMine(addresses) {
     return addresses.reduce((acc, address) => {
-      acc[address] = wallet.isAddressMine(address);
+      acc[address] = this.isAddressMine(address);
 
       return acc;
     }, {});

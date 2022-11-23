@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { HDPrivateKey, Message } from 'bitcore-lib';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import Network from '../../src/models/network';
 import {
@@ -13,21 +14,20 @@ import {
   CreateWalletAuthData,
   WalletAddressMap,
 } from '../../src/wallet/types';
-import { HDPrivateKey, Message } from 'bitcore-lib';
 import walletApi from '../../src/wallet/api/walletApi';
 
 const MOCK_TX = {
-  'tx_id': '0009bc9bf8eab19c41a2aa9b9369d3b6a90ff12072729976634890d35788d5d7',
-  'nonce': 194,
-  'timestamp': 1640451232,
-  'version': 1,
-  'weight': 8.000001,
-  'parents': [
+  tx_id: '0009bc9bf8eab19c41a2aa9b9369d3b6a90ff12072729976634890d35788d5d7',
+  nonce: 194,
+  timestamp: 1640451232,
+  version: 1,
+  weight: 8.000001,
+  parents: [
     '00000e0dada0a1512c61778cad7075e8a2c7109eb35d63199f3c986ead092684',
     '0000000090a41f17769a5acae74f98c96b0c3041c5149a9e6bbfb2d32d85997c'
   ],
-  'inputs': [],
-  'outputs': [],
+  inputs: [],
+  outputs: [],
 };
 
 afterEach(() => {
@@ -62,7 +62,7 @@ test('getTxBalance', async () => {
       transactions: 0,
     }];
 
-    for (let address of addresses) {
+    for (const address of addresses) {
       yield address;
     }
   };
