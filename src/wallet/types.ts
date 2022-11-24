@@ -83,7 +83,7 @@ export interface AddressesResponseData {
 
 export interface CheckAddressesMineResponseData {
   success: boolean;
-  addresses: WalletAddressMap;
+  addresses?: WalletAddressMap;
 }
 
 export interface NewAddressesResponseData {
