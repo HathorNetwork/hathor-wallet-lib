@@ -14,7 +14,10 @@ import {
   CreateWalletAuthData,
   WalletAddressMap,
 } from '../../src/wallet/types';
-import walletApi from '../../src/wallet/api/walletApi';
+import axios from 'axios';
+import MockAdapter from 'axios-mock-adapter';
+import config from '../../src/config';
+
 
 const MOCK_TX = {
   tx_id: '0009bc9bf8eab19c41a2aa9b9369d3b6a90ff12072729976634890d35788d5d7',
@@ -250,27 +253,33 @@ test('checkAddressesMine', async () => {
     xpub: null,
   });
 
-  const checkAddressesMineApiMock = async function () {
-    const addresses: WalletAddressMap = {
+  jest.spyOn(wallet, 'validateAndRenewAuthToken')
+  .mockImplementation(jest.fn());
+
+  config.setWalletServiceBaseUrl('https://wallet-service.testnet.hathor.network/');
+
+  const mock = new MockAdapter(axios);
+
+  mock.onPost('wallet/addresses/check_mine').reply(200, {
+    success: true,
+    addresses: {
       address1: true,
       address2: false,
       address3: false,
-    };
-
-    return {
-      success: true,
-      addresses,
-    };
-  };
-
-  jest.spyOn(walletApi, 'checkAddressesMine')
-    .mockImplementation(checkAddressesMineApiMock);
+    },
+  });
 
   const walletAddressMap = await wallet.checkAddressesMine(['address1', 'address2', 'address3']);
 
   expect(walletAddressMap.address1).toStrictEqual(true);
   expect(walletAddressMap.address2).toStrictEqual(false);
   expect(walletAddressMap.address3).toStrictEqual(false);
+
+  mock.onPost('wallet/addresses/check_mine').reply(400, {
+    success: false,
+  });
+
+  expect(wallet.checkAddressesMine(['address1', 'address2', 'address3'])).resolves.toThrowError('Error checking wallet addresses.');
 });
 
 test('generateCreateWalletAuthData should return correct auth data', async () => {
