@@ -9,6 +9,7 @@ import { axiosInstance } from './walletServiceAxios';
 import Output from '../../models/output';
 import Input from '../../models/input';
 import {
+  CheckAddressesMineResponseData,
   WalletStatusResponseData,
   AddressesResponseData,
   NewAddressesResponseData,
@@ -94,6 +95,19 @@ const walletApi = {
     } else {
       throw new WalletRequestError('Error getting wallet addresses.');
     }
+  },
+
+  async checkAddressesMine(
+    wallet: HathorWalletServiceWallet,
+    addresses: string[],
+  ): Promise<CheckAddressesMineResponseData> {
+    const axios = await axiosInstance(wallet, true);
+    const response = await axios.post('wallet/addresses/check_mine', { addresses });
+    if (response.status === 200 && response.data.success === true) {
+      return response.data;
+    }
+
+    throw new WalletRequestError('Error checking wallet addresses.');
   },
 
   async getNewAddresses(wallet: HathorWalletServiceWallet): Promise<NewAddressesResponseData> {

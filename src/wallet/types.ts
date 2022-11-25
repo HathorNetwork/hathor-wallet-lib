@@ -81,6 +81,11 @@ export interface AddressesResponseData {
   addresses: GetAddressesObject[];
 }
 
+export interface CheckAddressesMineResponseData {
+  success: boolean;
+  addresses: WalletAddressMap;
+}
+
 export interface NewAddressesResponseData {
   success: boolean;
   addresses: AddressInfoObject[];
@@ -232,6 +237,10 @@ export interface SendTransactionResponse {
   transaction: Transaction;
 }
 
+export interface WalletAddressMap {
+  [address: string]: boolean;
+}
+
 export interface TokenAmountMap {
   [token: string]: number; // For each token we have the amount
 }
@@ -278,6 +287,7 @@ export interface IHathorWallet {
   onConnectionChangedState(newState: ConnectionState): void;
   getTokenDetails(tokenId: string): Promise<TokenDetailsObject>;
   getVersionData(): Promise<FullNodeVersionData>;
+  checkAddressesMine(addresses: string[]): Promise<WalletAddressMap>;
 }
 
 export interface ISendTransaction {

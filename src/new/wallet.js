@@ -2174,6 +2174,21 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Check if a list of addresses are from the loaded wallet
+   *
+   * @param {string[]} addresses Addresses to check
+   *
+   * @return {Object} Object with the addresses and whether it belongs or not { address: boolean }
+   **/
+  async checkAddressesMine(addresses) {
+    return addresses.reduce((acc, address) => {
+      acc[address] = this.isAddressMine(address);
+
+      return acc;
+    }, {});
+  }
+
+  /**
    * Get index of address
    * Returns null if address does not belong to the wallet
    *

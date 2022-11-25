@@ -31,6 +31,20 @@ class FakeHathorWallet {
   }
 }
 
+test('checkAddressesMine', async () => {
+  const hWallet = new FakeHathorWallet();
+
+  hWallet.isAddressMine.mockImplementationOnce(() => true);
+
+  expect(await hWallet.checkAddressesMine([
+    'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
+    'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
+  ])).toStrictEqual({
+    WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp: true,
+    WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ: false,
+  });
+});
+
 test('Protected xpub wallet methods', async () => {
   const hWallet = new FakeHathorWallet();
   hWallet.isFromXPub.mockReturnValue(true);

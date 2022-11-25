@@ -58,6 +58,7 @@ import {
   AuthorityTxOutput,
   WalletServiceServerUrls,
   FullNodeVersionData,
+  WalletAddressMap,
 } from './types';
 import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
@@ -1032,6 +1033,18 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
   getFullHistory(): TransactionFullObject[] {
     throw new WalletError('Not implemented.');
+  }
+
+  /**
+   * Checks if the given array of addresses belongs to the caller wallet
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async checkAddressesMine(addresses: string[]): Promise<WalletAddressMap> {
+    const response = await walletApi.checkAddressesMine(this, addresses);
+
+    return response.addresses;
   }
 
   /**
