@@ -229,6 +229,28 @@ describe('getTxAddresses', () => {
   });
 });
 
+describe('checkAddressesMine', () => {
+  it('should ', async () => {
+    const hWallet = await generateWalletHelper();
+
+    const address1 = hWallet.getAddressAtIndex(1);
+    const address2 = hWallet.getAddressAtIndex(2);
+    const address3 = hWallet.getAddressAtIndex(3);
+
+    expect(await hWallet.checkAddressesMine([
+      address1,
+      address2,
+      address3,
+      'invalid-address',
+    ])).toStrictEqual({
+      [address1]: true,
+      [address2]: true,
+      [address3]: true,
+      'invalid-address': false,
+    });
+  });
+});
+
 describe('getAllUtxos', () => {
   afterEach(async () => {
     await stopAllWallets();

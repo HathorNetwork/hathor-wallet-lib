@@ -5,28 +5,32 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { HDPrivateKey, Message } from 'bitcore-lib';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import Network from '../../src/models/network';
 import {
   GetAddressesObject,
   WsTransaction,
   CreateWalletAuthData,
+  WalletAddressMap,
 } from '../../src/wallet/types';
-import walletUtils from '../../src/utils/wallet';
-import { HDPublicKey, HDPrivateKey, Message } from 'bitcore-lib';
+import axios from 'axios';
+import MockAdapter from 'axios-mock-adapter';
+import config from '../../src/config';
+
 
 const MOCK_TX = {
-  'tx_id': '0009bc9bf8eab19c41a2aa9b9369d3b6a90ff12072729976634890d35788d5d7',
-  'nonce': 194,
-  'timestamp': 1640451232,
-  'version': 1,
-  'weight': 8.000001,
-  'parents': [
+  tx_id: '0009bc9bf8eab19c41a2aa9b9369d3b6a90ff12072729976634890d35788d5d7',
+  nonce: 194,
+  timestamp: 1640451232,
+  version: 1,
+  weight: 8.000001,
+  parents: [
     '00000e0dada0a1512c61778cad7075e8a2c7109eb35d63199f3c986ead092684',
     '0000000090a41f17769a5acae74f98c96b0c3041c5149a9e6bbfb2d32d85997c'
   ],
-  'inputs': [],
-  'outputs': [],
+  inputs: [],
+  outputs: [],
 };
 
 afterEach(() => {
@@ -61,7 +65,7 @@ test('getTxBalance', async () => {
       transactions: 0,
     }];
 
-    for (let address of addresses) {
+    for (const address of addresses) {
       yield address;
     }
   };
@@ -234,6 +238,48 @@ test('getTxBalance', async () => {
   balance = await wallet.getTxBalance(tx);
   expect(balance['token1']).toStrictEqual(0);
   expect(balance['token2']).toStrictEqual(-5);
+});
+
+test('checkAddressesMine', async () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+
+  jest.spyOn(wallet, 'validateAndRenewAuthToken')
+  .mockImplementation(jest.fn());
+
+  config.setWalletServiceBaseUrl('https://wallet-service.testnet.hathor.network/');
+
+  const mock = new MockAdapter(axios);
+
+  mock.onPost('wallet/addresses/check_mine').reply(200, {
+    success: true,
+    addresses: {
+      address1: true,
+      address2: false,
+      address3: false,
+    },
+  });
+
+  const walletAddressMap = await wallet.checkAddressesMine(['address1', 'address2', 'address3']);
+
+  expect(walletAddressMap.address1).toStrictEqual(true);
+  expect(walletAddressMap.address2).toStrictEqual(false);
+  expect(walletAddressMap.address3).toStrictEqual(false);
+
+  mock.onPost('wallet/addresses/check_mine').reply(400, {
+    success: false,
+  });
+
+  expect(wallet.checkAddressesMine(['address1', 'address2', 'address3'])).resolves.toThrowError('Error checking wallet addresses.');
 });
 
 test('generateCreateWalletAuthData should return correct auth data', async () => {
