@@ -52,6 +52,7 @@ export interface GetHistoryObject {
   balance: number; // Balance of this tx in this wallet (can be negative)
   timestamp: number; // Transaction timestamp
   voided: boolean; // If transaction is voided
+  version: number; // Transaction version
 }
 
 export interface AddressInfoObject {
