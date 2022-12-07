@@ -1186,6 +1186,7 @@ class HathorWallet extends EventEmitter {
           tokenUid,
           balance: tokenTxBalance,
           voided: tx.is_voided,
+          version: tx.version,
         });
       }
 
@@ -1256,6 +1257,7 @@ class HathorWallet extends EventEmitter {
           tokenUid,
           balance: tokenTxBalance,
           voided: tx.is_voided,
+          version: tx.version,
         });
 
         // in the end, sort (in place) all tx lists in descending order by timestamp
@@ -1271,6 +1273,7 @@ class HathorWallet extends EventEmitter {
           tokenUid,
           balance: tokenTxBalance,
           voided: tx.is_voided,
+          version: tx.version,
         };
         tokensHistory[tokenUid] = newHistory;
       }
