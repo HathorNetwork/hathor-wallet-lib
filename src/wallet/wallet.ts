@@ -1519,12 +1519,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.failIfWalletNotReady();
     type optionsType = {
       anotherAuthorityAddress: string | null,
-      createAnotherAuthority: boolean,
+      createAnother: boolean,
       pinCode: string | null,
     };
     const newOptions: optionsType = Object.assign({
       anotherAuthorityAddress: null,
-      createAnotherAuthority: true,
+      createAnother: true,
       pinCode: null,
     }, options);
 
@@ -1562,7 +1562,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const p2pkhScript = p2pkh.createScript()
     outputsObj.push(new Output(mask, p2pkhScript, {tokenData: AUTHORITY_TOKEN_DATA}));
 
-    if (newOptions.createAnotherAuthority) {
+    if (newOptions.createAnother) {
       const anotherAddressStr = newOptions.anotherAuthorityAddress || this.getCurrentAddress({ markAsUsed: true }).address;
       const anotherAddress = new Address(anotherAddressStr, {network: this.network});
       if (!anotherAddress.isValid()) {
