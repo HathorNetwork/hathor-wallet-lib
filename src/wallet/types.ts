@@ -373,6 +373,36 @@ export interface FullNodeVersionData {
   maxNumberOutputs: number;
 };
 
+export interface PushNotificationResponseData {
+  success: boolean,
+  error?: string,
+  /** This property shows up in case of validation error. */
+  details?: {message: string, path: string}[]
+};
+
+export interface PushRegisterRequestData {
+  pushProvider: 'ios' | 'android',
+  deviceId: string,
+  enablePush?: boolean,
+  enableShowAmounts?: boolean,
+};
+
+export interface PushRegisterResponseData extends PushNotificationResponseData {};
+
+export interface PushUpdateRequestData {
+  deviceId: string,
+  enablePush: boolean,
+  enableShowAmounts: boolean,
+};
+
+export interface PushUpdateResponseData extends PushNotificationResponseData {};
+
+export interface PushUnregisterRequestData {
+  deviceId: string,
+}
+
+export interface PushUnregisterResponseData extends PushNotificationResponseData {};
+
 export interface WalletServiceServerUrls {
   walletServiceBaseUrl: string;
   walletServiceWsUrl: string;
