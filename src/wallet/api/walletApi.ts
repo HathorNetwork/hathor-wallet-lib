@@ -233,7 +233,6 @@ const walletApi = {
     if (response.status === 200 && response.data.success) {
       return response.data;
     } else {
-      console.log('error');
       throw new WalletRequestError('Error registering device for push notification.', { cause: response.data });
     }
   },
