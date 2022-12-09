@@ -259,9 +259,7 @@ test('checkAddressesMine', async () => {
 
   config.setWalletServiceBaseUrl('https://wallet-service.testnet.hathor.network/');
 
-  const mock = new MockAdapter(axios);
-
-  mock.onPost('wallet/addresses/check_mine').reply(200, {
+  mockAxiosAdapter.onPost('wallet/addresses/check_mine').reply(200, {
     success: true,
     addresses: {
       address1: true,
@@ -276,7 +274,7 @@ test('checkAddressesMine', async () => {
   expect(walletAddressMap.address2).toStrictEqual(false);
   expect(walletAddressMap.address3).toStrictEqual(false);
 
-  mock.onPost('wallet/addresses/check_mine').reply(400, {
+  mockAxiosAdapter.onPost('wallet/addresses/check_mine').reply(400, {
     success: false,
   });
 
