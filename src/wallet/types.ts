@@ -380,6 +380,10 @@ export interface PushNotificationResponseData {
   details?: {message: string, path: string}[]
 };
 
+export interface PushNotificationResult {
+  success: boolean,
+}
+
 export interface PushRegisterRequestData {
   pushProvider: 'ios' | 'android',
   deviceId: string,

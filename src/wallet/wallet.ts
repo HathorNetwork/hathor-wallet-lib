@@ -59,6 +59,10 @@ import {
   WalletServiceServerUrls,
   FullNodeVersionData,
   WalletAddressMap,
+  PushRegisterRequestData,
+  PushNotificationResult,
+  PushUpdateRequestData,
+  PushUnregisterRequestData,
 } from './types';
 import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
@@ -1708,6 +1712,42 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     newOptions['nftData'] = data;
     const tx = await this.prepareCreateNewToken(name, symbol, amount, newOptions);
     return this.handleSendPreparedTransaction(tx);
+  }
+
+  /**
+   * Register the device to receive push notifications
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async registerDeviceToPushNotification(payload: PushRegisterRequestData): Promise<PushNotificationResult> {
+    this.failIfWalletNotReady();
+    const data = await walletApi.pushRegister(this, payload);
+    return data;
+  }
+
+  /**
+   * Update the device settings to receive push notifications
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async updateDeviceToPushNotification(payload: PushUpdateRequestData): Promise<PushNotificationResult> {
+    this.failIfWalletNotReady();
+    const data = await walletApi.pushUpdate(this, payload);
+    return data;
+  }
+
+  /**
+   * Delete the device from the push notification service
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async unregisterDeviceToPushNotification(payload: PushUnregisterRequestData): Promise<PushNotificationResult> {
+    this.failIfWalletNotReady();
+    const data = await walletApi.pushUnregister(this, payload);
+    return data;
   }
 }
 

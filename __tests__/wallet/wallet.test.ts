@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { mockAxiosAdapter } from '../__mocks__/wallet.mock';
 import { HDPrivateKey, Message } from 'bitcore-lib';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import Network from '../../src/models/network';
@@ -15,9 +16,9 @@ import {
   WalletAddressMap,
 } from '../../src/wallet/types';
 import axios from 'axios';
-import MockAdapter from 'axios-mock-adapter';
 import config from '../../src/config';
-
+import MockAdapter from 'axios-mock-adapter';
+import axiosInstance from '../../src/wallet/api/walletServiceAxios';
 
 const MOCK_TX = {
   tx_id: '0009bc9bf8eab19c41a2aa9b9369d3b6a90ff12072729976634890d35788d5d7',
@@ -324,4 +325,112 @@ test('generateCreateWalletAuthData should return correct auth data', async () =>
   expect(authData.firstAddress).toBe(firstAddress);
   expect(xpubMessage.verify(xpubAddress, authData.xpubkeySignature)).toBe(true);
   expect(authXpubMessage.verify(authXpubAddress, authData.authXpubkeySignature)).toBe(true);
+});
+
+test('registerDeviceToPushNotification', async () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  // instantiate wallet ready to be used
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+  spyOn(wallet, 'isReady').and.returnValue(true);
+
+  mockAxiosAdapter
+    .onPost('push/register')
+    .replyOnce(200, {
+      success: true,
+    })
+    .onPost('push/register')
+    .replyOnce(400, {
+      success: false,
+      error: 'invalid-payload',
+      details: [{ message: '"deviceId" length must be less than or equal to 256 characters long', path: ['deviceId'] }],
+    });
+
+  const successCall = wallet.registerDeviceToPushNotification({ deviceId: '123', pushProvider: 'android', enablePush: true });
+  
+  await expect(successCall).resolves.toStrictEqual({ success: true });
+
+  const invalidCall = wallet.registerDeviceToPushNotification({ deviceId: '123', pushProvider: 'android', enablePush: true });
+
+  await expect(invalidCall).rejects.toThrowError('Error registering device for push notification.');
+});
+
+test('updateDeviceToPushNotification', async () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  // instantiate wallet ready to be used
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+  spyOn(wallet, 'isReady').and.returnValue(true);
+
+  mockAxiosAdapter
+    .onPut('push/update')
+    .replyOnce(200, {
+      success: true,
+    })
+    .onPut('push/update')
+    .replyOnce(400, {
+      success: false,
+      error: 'invalid-payload',
+      details: [{ message: '"deviceId" length must be less than or equal to 256 characters long', path: ['deviceId'] }],
+    });
+
+  const successCall = wallet.updateDeviceToPushNotification({ deviceId: '123', enablePush: true, enableShowAmounts: true });
+  
+  await expect(successCall).resolves.toStrictEqual({ success: true });
+
+  const invalidCall = wallet.updateDeviceToPushNotification({ deviceId: '123', enablePush: true, enableShowAmounts: true });
+
+  await expect(invalidCall).rejects.toThrowError('Error updating push notification settings for device.');
+});
+
+test('unregisterDeviceToPushNotification', async () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  // instantiate wallet ready to be used
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+  spyOn(wallet, 'isReady').and.returnValue(true);
+
+  mockAxiosAdapter
+    .onPost('push/unregister')
+    .replyOnce(200, {
+      success: true,
+    })
+    .onPost('push/unregister')
+    .replyOnce(400, {
+      success: false,
+      error: 'invalid-payload',
+      details: [{ message: '"deviceId" length must be less than or equal to 256 characters long', path: ['deviceId'] }],
+    });
+
+  const successCall = wallet.unregisterDeviceToPushNotification({ deviceId: '123' });
+  
+  await expect(successCall).resolves.toStrictEqual({ success: true });
+
+  const invalidCall = wallet.unregisterDeviceToPushNotification({ deviceId: '123' });
+
+  await expect(invalidCall).rejects.toThrowError('Error unregistering wallet from push notifications.');
 });
