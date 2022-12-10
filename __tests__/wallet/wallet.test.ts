@@ -19,6 +19,7 @@ import axios from 'axios';
 import config from '../../src/config';
 import MockAdapter from 'axios-mock-adapter';
 import axiosInstance from '../../src/wallet/api/walletServiceAxios';
+import { defaultWalletSeed } from '../__fixtures__/wallet.fixtures';
 
 const MOCK_TX = {
   tx_id: '0009bc9bf8eab19c41a2aa9b9369d3b6a90ff12072729976634890d35788d5d7',
@@ -41,7 +42,7 @@ afterEach(() => {
 test('getTxBalance', async () => {
   const requestPassword = jest.fn();
   const network = new Network('testnet');
-  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const seed = defaultWalletSeed;
   const wallet = new HathorWalletServiceWallet({
     requestPassword,
     seed,
@@ -244,7 +245,7 @@ test('getTxBalance', async () => {
 test('checkAddressesMine', async () => {
   const requestPassword = jest.fn();
   const network = new Network('testnet');
-  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const seed = defaultWalletSeed;
   const wallet = new HathorWalletServiceWallet({
     requestPassword,
     seed,
@@ -287,7 +288,7 @@ test('generateCreateWalletAuthData should return correct auth data', async () =>
   jest.spyOn(Date, 'now').mockImplementation(() => 10000);
 
   const network = new Network('testnet');
-  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const seed = defaultWalletSeed;
   const pin = '123456';
   const wallet = new HathorWalletServiceWallet({
     requestPassword,
@@ -328,7 +329,7 @@ test('generateCreateWalletAuthData should return correct auth data', async () =>
 test('registerDeviceToPushNotification', async () => {
   const requestPassword = jest.fn();
   const network = new Network('testnet');
-  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const seed = defaultWalletSeed;
   // instantiate wallet ready to be used
   const wallet = new HathorWalletServiceWallet({
     requestPassword,
@@ -364,7 +365,7 @@ test('registerDeviceToPushNotification', async () => {
 test('updateDeviceToPushNotification', async () => {
   const requestPassword = jest.fn();
   const network = new Network('testnet');
-  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const seed = defaultWalletSeed;
   // instantiate wallet ready to be used
   const wallet = new HathorWalletServiceWallet({
     requestPassword,
@@ -400,7 +401,7 @@ test('updateDeviceToPushNotification', async () => {
 test('unregisterDeviceToPushNotification', async () => {
   const requestPassword = jest.fn();
   const network = new Network('testnet');
-  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const seed = defaultWalletSeed;
   // instantiate wallet ready to be used
   const wallet = new HathorWalletServiceWallet({
     requestPassword,
