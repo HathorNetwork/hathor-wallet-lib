@@ -1770,6 +1770,18 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const data = await walletApi.graphvizNeighborsQuery(this, txId, graphType, maxLevel);
     return data;
   }
+  
+  /**
+   * Check if websocket connection is enabled
+   * 
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   * 
+   * @returns {boolean} If wallet has websocket connection enabled
+   */
+  isWsEnabled(): boolean {
+    return this._isWsEnabled;
+  }
 }
 
 export default HathorWalletServiceWallet;
