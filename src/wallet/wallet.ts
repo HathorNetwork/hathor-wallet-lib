@@ -33,7 +33,7 @@ import Network from '../models/network';
 import networkInstance from '../network';
 import storage from '../storage';
 import assert from 'assert';
-import WalletServiceConnection from './connection';
+import WalletServiceConnection, { DummyWalletServiceConnection } from './connection';
 import SendTransactionWalletService from './sendTransactionWalletService';
 import bitcore from 'bitcore-lib';
 import {
@@ -109,9 +109,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // Index of the address to be used by the wallet
   private indexToUse: number;
   // WalletService-ready connection class
+  // A wallet initialized with enableWs=false will have a DummyWalletServiceConnection
   private conn: WalletServiceConnection;
   // Flag to indicate if the wallet was already connected when the webscoket conn is established
   private firstConnection: boolean;
+  // Flag to indicate if the websocket connection is enabled
+  private readonly _isWsEnabled: boolean;
 
   constructor({
     requestPassword,
@@ -120,6 +123,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     xpub,
     network,
     passphrase = '',
+    enableWs = true,
   }) {
     super();
 
@@ -141,7 +145,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     // Setup the connection so clients can listen to its events before it is started
-    this.conn = new WalletServiceConnection();
+    if (enableWs) {
+      this.conn = new WalletServiceConnection();
+      this._isWsEnabled = true;
+    } else {
+      // We use a dummy connection to avoid having to change `conn` declaration
+      this.conn = new DummyWalletServiceConnection() as unknown as WalletServiceConnection;
+      this._isWsEnabled = false;
+    }
     this.state = walletState.NOT_STARTED;
 
     this.xpriv = xpriv;
@@ -583,7 +594,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // We should wait for new addresses before setting wallet to ready
     await this.getNewAddresses(true);
 
-    this.setupConnection();
+    if (this.isWsEnabled()) {
+      this.setupConnection();
+    }
     this.setState(walletState.READY);
   }
 
