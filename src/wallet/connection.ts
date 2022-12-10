@@ -32,7 +32,7 @@ export interface WalletServiceConnectionParams extends ConnectionParams {
  * - state: Fired when the state of the Wallet changes.
  * - wallet-update: Fired when a new wallet message arrive from the websocket.
  **/
-class WalletServiceConnection extends BaseConnection {
+export default class WalletServiceConnection extends BaseConnection {
   private connectionTimeout?: number;
   private walletId?: string;
 
@@ -88,4 +88,46 @@ class WalletServiceConnection extends BaseConnection {
   }
 }
 
-export default WalletServiceConnection;
+/**
+ * This connection is used when the wallet has websocket disabled.
+ */
+export class DummyWalletServiceConnection extends BaseConnection {
+  public readonly isDummyConnection = true;
+  private connectionTimeout?: number;
+  private walletId?: string;
+
+  constructor(options?: WalletServiceConnectionParams) {
+    const {
+      network,
+      servers,
+      walletId,
+      connectionTimeout,
+    } = {
+      ...DEFAULT_PARAMS,
+      ...options,
+    };
+
+    super({
+      network,
+      servers,
+      connectionTimeout,
+    });
+
+    this.connectionTimeout = connectionTimeout;
+    this.walletId = walletId;
+  }
+
+  /**
+   * Sets the walletId for the current connection instance
+   **/
+  setWalletId(walletId: string) {
+    this.walletId = walletId;
+  }
+
+  /**
+   * Connect to the server and start emitting events.
+   **/
+  start() {
+    // Do nothing
+  }
+}
