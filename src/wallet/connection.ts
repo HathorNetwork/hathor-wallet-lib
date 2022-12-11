@@ -96,25 +96,11 @@ export class DummyWalletServiceConnection extends BaseConnection {
   private connectionTimeout?: number;
   private walletId?: string;
 
-  constructor(options?: WalletServiceConnectionParams) {
-    const {
-      network,
-      servers,
-      walletId,
-      connectionTimeout,
-    } = {
-      ...DEFAULT_PARAMS,
-      ...options,
-    };
+  constructor(options: WalletServiceConnectionParams = { ...DEFAULT_PARAMS, walletId: '' }) {
+    super(options);
 
-    super({
-      network,
-      servers,
-      connectionTimeout,
-    });
-
-    this.connectionTimeout = connectionTimeout;
-    this.walletId = walletId;
+    this.connectionTimeout = options.connectionTimeout;
+    this.walletId = options.walletId;
   }
 
   /**
