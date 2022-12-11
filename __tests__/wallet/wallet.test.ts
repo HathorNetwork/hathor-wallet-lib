@@ -19,7 +19,7 @@ import axios from 'axios';
 import config from '../../src/config';
 import MockAdapter from 'axios-mock-adapter';
 import axiosInstance from '../../src/wallet/api/walletServiceAxios';
-import { defaultWalletSeed } from '../__fixtures__/wallet.fixtures';
+import { buildSuccessTxByIdTokenDataResponse, buildWalletToAuthenticateApiCall, defaultWalletSeed } from '../__fixtures__/wallet.fixtures';
 
 const MOCK_TX = {
   tx_id: '0009bc9bf8eab19c41a2aa9b9369d3b6a90ff12072729976634890d35788d5d7',
@@ -432,4 +432,56 @@ test('unregisterDeviceToPushNotification', async () => {
   const invalidCall = wallet.unregisterDeviceToPushNotification({ deviceId: '123' });
 
   await expect(invalidCall).rejects.toThrowError('Error unregistering wallet from push notifications.');
+});
+
+test('getTxById', async () => {
+  const wallet = buildWalletToAuthenticateApiCall();
+  spyOn(wallet, 'isReady').and.returnValue(true);
+
+  mockAxiosAdapter.reset();
+  mockAxiosAdapter
+    .onGet('wallet/txById/123')
+    .replyOnce(200, buildSuccessTxByIdTokenDataResponse())
+    .onGet('wallet/txById/123')
+    .replyOnce(400, {
+      success: false,
+      error: 'invalid-payload',
+      details: [{ message: 'vida', path: ['txId'] }],
+    });
+
+  const successCall = wallet.getTxById('123');
+
+  await expect(successCall).resolves.toStrictEqual({
+    success: true,
+    txTokens: [
+      {
+        balance: 10,
+        height: 1,
+        timestamp: 10,
+        tokenId: 'token1',
+        tokenName: 'Token 1',
+        tokenSymbol: 'T1',
+        txId: 'txId1',
+        version: 3,
+        voided: false,
+        weight: 65.4321,
+      },
+      {
+        balance: 7,
+        height: 1,
+        timestamp: 10,
+        tokenId: 'token2',
+        tokenName: 'Token 2',
+        tokenSymbol: 'T2',
+        txId: 'txId1',
+        version: 3,
+        voided: false,
+        weight: 65.4321,
+      },
+    ],
+  });
+
+  const invalidCall = wallet.getTxById('123');
+
+  await expect(invalidCall).rejects.toThrowError('Error getting transaction by its id.');
 });

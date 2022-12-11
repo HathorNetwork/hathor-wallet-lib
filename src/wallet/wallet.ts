@@ -63,6 +63,7 @@ import {
   PushNotificationResult,
   PushUpdateRequestData,
   PushUnregisterRequestData,
+  TxByIdTokensResponseData,
 } from './types';
 import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
@@ -1747,6 +1748,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async unregisterDeviceToPushNotification(payload: PushUnregisterRequestData): Promise<PushNotificationResult> {
     this.failIfWalletNotReady();
     const data = await walletApi.pushUnregister(this, payload);
+    return data;
+  }
+
+  async getTxById(txId: string): Promise<TxByIdTokensResponseData> {
+    this.failIfWalletNotReady();
+    const data = await walletApi.getTxById(this, txId);
     return data;
   }
 }
