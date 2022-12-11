@@ -327,20 +327,10 @@ test('generateCreateWalletAuthData should return correct auth data', async () =>
 });
 
 test('registerDeviceToPushNotification', async () => {
-  const requestPassword = jest.fn();
-  const network = new Network('testnet');
-  const seed = defaultWalletSeed;
-  // instantiate wallet ready to be used
-  const wallet = new HathorWalletServiceWallet({
-    requestPassword,
-    seed,
-    network,
-    passphrase: '',
-    xpriv: null,
-    xpub: null,
-  });
+  const wallet = buildWalletToAuthenticateApiCall();
   spyOn(wallet, 'isReady').and.returnValue(true);
 
+  mockAxiosAdapter.reset();
   mockAxiosAdapter
     .onPost('push/register')
     .replyOnce(200, {
@@ -363,20 +353,10 @@ test('registerDeviceToPushNotification', async () => {
 });
 
 test('updateDeviceToPushNotification', async () => {
-  const requestPassword = jest.fn();
-  const network = new Network('testnet');
-  const seed = defaultWalletSeed;
-  // instantiate wallet ready to be used
-  const wallet = new HathorWalletServiceWallet({
-    requestPassword,
-    seed,
-    network,
-    passphrase: '',
-    xpriv: null,
-    xpub: null,
-  });
+  const wallet = buildWalletToAuthenticateApiCall();
   spyOn(wallet, 'isReady').and.returnValue(true);
 
+  mockAxiosAdapter.reset();
   mockAxiosAdapter
     .onPut('push/update')
     .replyOnce(200, {
@@ -399,20 +379,10 @@ test('updateDeviceToPushNotification', async () => {
 });
 
 test('unregisterDeviceToPushNotification', async () => {
-  const requestPassword = jest.fn();
-  const network = new Network('testnet');
-  const seed = defaultWalletSeed;
-  // instantiate wallet ready to be used
-  const wallet = new HathorWalletServiceWallet({
-    requestPassword,
-    seed,
-    network,
-    passphrase: '',
-    xpriv: null,
-    xpub: null,
-  });
+  const wallet = buildWalletToAuthenticateApiCall();
   spyOn(wallet, 'isReady').and.returnValue(true);
 
+  mockAxiosAdapter.reset();
   mockAxiosAdapter
     .onPost('push/unregister')
     .replyOnce(200, {
