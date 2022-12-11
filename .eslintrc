@@ -35,8 +35,7 @@
     "no-await-in-loop": "off",
     "no-plusplus": "off",
     "guard-for-in": "off",
-    "no-bitwise": "off",
-    "no-this-before-super": "off" // ts(2376) A 'super' call must be the first statement in the constructor when a class contains initialized properties, parameter properties, or private identifiers.
+    "no-bitwise": "off"
   },
   "overrides": [
     {
