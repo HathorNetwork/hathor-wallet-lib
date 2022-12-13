@@ -1715,42 +1715,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     return this.handleSendPreparedTransaction(tx);
   }
 
-  /**
-   * Register the device to receive push notifications
-   *
-   * @memberof HathorWalletServiceWallet
-   * @inner
-   */
-  async registerDeviceToPushNotification(payload: PushRegisterRequestData): Promise<PushNotificationResult> {
-    this.failIfWalletNotReady();
-    const data = await walletApi.pushRegister(this, payload);
-    return data;
-  }
-
-  /**
-   * Update the device settings to receive push notifications
-   *
-   * @memberof HathorWalletServiceWallet
-   * @inner
-   */
-  async updateDeviceToPushNotification(payload: PushUpdateRequestData): Promise<PushNotificationResult> {
-    this.failIfWalletNotReady();
-    const data = await walletApi.pushUpdate(this, payload);
-    return data;
-  }
-
-  /**
-   * Delete the device from the push notification service
-   *
-   * @memberof HathorWalletServiceWallet
-   * @inner
-   */
-  async unregisterDeviceToPushNotification(payload: PushUnregisterRequestData): Promise<PushNotificationResult> {
-    this.failIfWalletNotReady();
-    const data = await walletApi.pushUnregister(this, payload);
-    return data;
-  }
-
   async getTxById(txId: string): Promise<TxByIdTokensResponseData> {
     this.failIfWalletNotReady();
     const data = await walletApi.getTxById(this, txId);
