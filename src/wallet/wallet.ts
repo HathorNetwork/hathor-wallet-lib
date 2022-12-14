@@ -59,10 +59,6 @@ import {
   WalletServiceServerUrls,
   FullNodeVersionData,
   WalletAddressMap,
-  PushRegisterRequestData,
-  PushNotificationResult,
-  PushUpdateRequestData,
-  PushUnregisterRequestData,
   TxByIdTokensResponseData,
 } from './types';
 import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../errors';
