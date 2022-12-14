@@ -32,8 +32,8 @@ export class PushNotification {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  static async unregisterDevice(wallet: HathorWalletServiceWallet, payload: PushUnregisterRequestData): Promise<PushNotificationResult> {
-    const data = await walletApi.pushUnregister(wallet, payload);
+  static async unregisterDevice(wallet: HathorWalletServiceWallet, deviceId: string): Promise<PushNotificationResult> {
+    const data = await walletApi.pushUnregister(wallet, deviceId);
     return data;
   }
 }
