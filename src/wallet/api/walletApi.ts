@@ -6,8 +6,6 @@
  */
 
 import { axiosInstance } from './walletServiceAxios';
-import Output from '../../models/output';
-import Input from '../../models/input';
 import {
   CheckAddressesMineResponseData,
   WalletStatusResponseData,
@@ -27,12 +25,10 @@ import {
   PushUpdateRequestData,
   PushUpdateResponseData,
   PushUnregisterResponseData,
-  PushUnregisterRequestData,
   TxByIdTokensResponseData,
 } from '../types';
 import HathorWalletServiceWallet from '../wallet';
 import { WalletRequestError } from '../../errors';
-import Transaction from 'src/models/transaction';
 
 /**
  * Api calls for wallet

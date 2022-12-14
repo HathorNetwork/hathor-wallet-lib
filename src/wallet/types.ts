@@ -384,8 +384,13 @@ export interface PushNotificationResult {
   success: boolean,
 }
 
+enum PushNotificationProvider {
+  IOS = 'ios',
+  ANDROID = 'android',
+}
+
 export interface PushRegisterRequestData {
-  pushProvider: 'ios' | 'android',
+  pushProvider: PushNotificationProvider,
   deviceId: string,
   enablePush?: boolean,
   enableShowAmounts?: boolean,
