@@ -332,9 +332,9 @@ test('getTxById', async () => {
 
   mockAxiosAdapter.reset();
   mockAxiosAdapter
-    .onGet('wallet/txById/123')
+    .onGet('wallet/transactions/123')
     .replyOnce(200, buildSuccessTxByIdTokenDataResponse())
-    .onGet('wallet/txById/123')
+    .onGet('wallet/transactions/123')
     .replyOnce(400, {
       success: false,
       error: 'invalid-payload',
