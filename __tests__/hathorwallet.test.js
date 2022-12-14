@@ -510,3 +510,26 @@ test('onTxArrived', async () => {
     A: { unlocked: 5, locked: 5, transactions: 1 }
   });
 });
+
+test('getTokenHistoryObject', () => {
+  const tx = {
+    tx_id: '00000000000000000de747d135fd7e7b6a918678a41076ab63be751624e8e339',
+    timestamp: 1671025539,
+    version: 3,
+    is_voided: false,
+  };
+
+  const tokenTxBalance = {
+    '00': 0,
+    '01': 5,
+  };
+
+  const historyObj = HathorWallet.getTokenHistoryObject(tx, '00', tokenTxBalance);
+
+  expect(historyObj.txId).toStrictEqual(tx.tx_id);
+  expect(historyObj.timestamp).toStrictEqual(tx.timestamp);
+  expect(historyObj.version).toStrictEqual(tx.version);
+  expect(historyObj.voided).toStrictEqual(tx.is_voided);
+  expect(historyObj.balance['00']).toStrictEqual(0);
+  expect(historyObj.balance['01']).toStrictEqual(5);
+});
