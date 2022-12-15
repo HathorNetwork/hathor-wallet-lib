@@ -1203,6 +1203,9 @@ class HathorWallet extends EventEmitter {
 
     const tokensBalance = this._getBalanceRaw();
     for (const tokenUid of Object.keys(tokensHistory)) {
+      if (!(tokenUid in tokensBalance)) {
+        tokensBalance[tokenUid] = { available: 0, locked: 0 };
+      }
       tokensBalance[tokenUid].transactions = transactionCountByToken[tokenUid];
     }
 
@@ -1272,6 +1275,9 @@ class HathorWallet extends EventEmitter {
         tokensHistory[tokenUid] = newHistory;
       }
 
+      if (!(tokenUid in updatedTokensBalance)) {
+        updatedTokensBalance[tokenUid] = { available: 0, locked: 0 };
+      }
       // Update token balance
       if (tokenUid in tokensBalance) {
         updatedTokensBalance[tokenUid].transactions = tokensBalance[tokenUid].transactions + 1;
