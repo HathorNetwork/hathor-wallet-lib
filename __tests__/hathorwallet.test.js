@@ -362,9 +362,7 @@ test('getPreProcessedData', async () => {
   const hWallet = new FakeHathorWallet();
   hWallet.preProcessedData = {};
 
-  await expect(async () => {
-    await hWallet.getPreProcessedData('foo');
-  }).rejects.toThrow();
+  await expect(hWallet.getPreProcessedData('foo')).rejects.toThrow();
 
   hWallet.preProcessedData = {
     foo: 123,
@@ -377,6 +375,7 @@ test('setState', async () => {
   const hWallet = new FakeHathorWallet();
   hWallet.preProcessWalletData.mockImplementation(() => Promise.resolve());
   hWallet.state = HathorWallet.SYNCING;
+  hWallet.emit = () => {};
   hWallet.setState(HathorWallet.CONNECTING);
 
   expect(hWallet.preProcessWalletData).toHaveBeenCalled();
