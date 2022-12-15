@@ -17,6 +17,7 @@ import wallet from '../src/wallet';
 import { HDPrivateKey, crypto, PublicKey } from 'bitcore-lib';
 import transaction from '../src/transaction';
 import { Storage } from '../src/storage';
+import Queue from '../src/models/queue';
 
 class FakeHathorWallet {
   constructor() {
@@ -243,4 +244,150 @@ test('getWalletInputInfo', () => {
     { inputIndex: 0, addressIndex: 1, addressPath: 'm/bip32/path' },
     { inputIndex: 2, addressIndex: 1, addressPath: 'm/bip32/path' },
   ]);
+});
+
+test('processTxQueue', async () => {
+  const hWallet = new FakeHathorWallet();
+
+  const processedTxs = [];
+  hWallet.onNewTx.mockImplementation(data => processedTxs.push(data));
+
+  // wsTxQueue is not part of the prototype so it won't be faked on FakeHathorWallet
+  hWallet.wsTxQueue = new Queue();
+  hWallet.wsTxQueue.enqueue(1);
+  hWallet.wsTxQueue.enqueue(2);
+  hWallet.wsTxQueue.enqueue(3);
+
+  await hWallet.processTxQueue();
+
+  expect(processedTxs).toStrictEqual([1, 2, 3]);
+});
+
+test('handleWebsocketMsg', async () => {
+  const hWallet = new FakeHathorWallet();
+
+  const processedTxs = [];
+  hWallet.onNewTx.mockImplementation(data => processedTxs.push(data));
+
+  // wsTxQueue is not part of the prototype so it won't be faked on FakeHathorWallet
+  hWallet.wsTxQueue = new Queue();
+  hWallet.wsTxQueue.enqueue({type: 'wallet:address_history', history: [1]});
+
+  hWallet.state = HathorWallet.PROCESSING;
+  hWallet.handleWebsocketMsg({type: 'wallet:address_history', history: [2]});
+  // We shouldn't process ws txs since we are PROCESSING
+  expect(processedTxs.length).toEqual(0);
+  expect(hWallet.wsTxQueue.size()).toEqual(2);
+
+  // We should process txs when we are READY
+  hWallet.state = HathorWallet.READY;
+  hWallet.handleWebsocketMsg({type: 'wallet:address_history', history: [3]});
+  expect(processedTxs.length).toEqual(1);
+  expect(hWallet.wsTxQueue.size()).toEqual(2);
+});
+
+test('getTxBalance', async () => {
+  const hWallet = new FakeHathorWallet();
+  const mockWalletData = jest.spyOn(wallet, 'getWalletData').mockReturnValue({});
+  const mockAddrCheck = jest.spyOn(wallet, 'isAddressMine').mockReturnValue(true);
+
+  /**
+   * A: -1 +2 = 1
+   * B: -10 +5 = -5
+   *
+   * Auth:
+   * C: +mint
+   * A: -melt, but should return the fund balance
+   */
+  const tx = {
+    outputs: [
+      {
+        token: 'A',
+        token_data: 1,
+        value: 2,
+        decoded: { address: 'Addr1' },
+      },
+      {
+        token: 'B',
+        token_data: 2,
+        value: 5,
+        decoded: { address: 'Addr1' },
+      },
+      {
+        token: 'C',
+        token_data: 130,
+        value: 2,
+        decoded: { address: 'Addr1' },
+      },
+    ],
+    inputs: [
+      {
+        token: 'A',
+        token_data: 1,
+        value: 1,
+        decoded: { address: 'Addr1' },
+      },
+      {
+        token: 'A',
+        token_data: 129,
+        value: 1,
+        decoded: { address: 'Addr1' },
+      },
+      {
+        token: 'B',
+        token_data: 2,
+        value: 10,
+        decoded: { address: 'Addr1' },
+      },
+    ],
+  };
+
+  expect(await hWallet.getTxBalance(tx)).toStrictEqual({
+    'A': 1,
+    'B': -5,
+  });
+
+  expect(await hWallet.getTxBalance(tx, { includeAuthorities: true })).toStrictEqual({
+    'A': 1,
+    'B': -5,
+    'C': 0,
+  });
+
+
+  mockWalletData.mockRestore();
+  mockAddrCheck.mockRestore();
+});
+
+test('getPreProcessedData', async () => {
+  const hWallet = new FakeHathorWallet();
+  hWallet.preProcessedData = {};
+
+  await expect(async () => {
+    await hWallet.getPreProcessedData('foo');
+  }).rejects.toThrow();
+
+  hWallet.preProcessedData = {
+    foo: 123,
+  };
+
+  expect(await hWallet.getPreProcessedData('foo')).toEqual(123);
+});
+
+test('setState', async () => {
+  const hWallet = new FakeHathorWallet();
+  hWallet.preProcessWalletData.mockImplementation(() => Promise.resolve());
+  hWallet.state = HathorWallet.SYNCING;
+  hWallet.setState(HathorWallet.CONNECTING);
+
+  expect(hWallet.preProcessWalletData).toHaveBeenCalled();
+  expect(hWallet.state).toEqual(HathorWallet.CONNECTING);
+
+  hWallet.preProcessWalletData.mockClear();
+  hWallet.setState(HathorWallet.CONNECTING);
+  expect(hWallet.preProcessWalletData).not.toHaveBeenCalled();
+  expect(hWallet.state).toEqual(HathorWallet.CONNECTING);
+
+  hWallet.setState(HathorWallet.READY);
+  expect(hWallet.preProcessWalletData).not.toHaveBeenCalled();
+  expect(hWallet.state).toEqual(HathorWallet.READY);
 });

@@ -18,9 +18,11 @@ type QueueNode<T> = {
 export default class Queue<T=Object> {
   private head?: QueueNode<T>;
   private last?: QueueNode<T>;
+  private length: number;
   constructor() {
     this.head;
     this.last;
+    this.length = 0;
   }
 
   /**
@@ -39,6 +41,7 @@ export default class Queue<T=Object> {
       this.head = node;
     }
     this.last = node;
+    this.length++;
   }
 
   /**
@@ -49,6 +52,7 @@ export default class Queue<T=Object> {
     if (this.head) {
       const first: T = this.head.value;
       this.head = this.head.next;
+      this.length--;
       return first;
     }
   }
@@ -59,5 +63,13 @@ export default class Queue<T=Object> {
    */
   peek(): T|undefined {
     return this.head?.value;
+  }
+
+  /**
+   * Get the size of the current queue
+   * @returns {number} The size of the current queue
+   */
+  size(): number {
+    return this.length;
   }
 }

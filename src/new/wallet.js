@@ -307,6 +307,7 @@ class HathorWallet extends EventEmitter {
         if (this.beforeReloadCallback) {
           this.beforeReloadCallback();
         }
+        this.preProcessedData = {};
         promise = wallet.reloadData({connection: this.conn, store: this.store});
       }
 
@@ -2229,7 +2230,7 @@ class HathorWallet extends EventEmitter {
   async getTxBalance(tx, optionsParam = {}) {
     const options = Object.assign({ includeAuthorities: false }, optionsParam)
     storage.setStore(this.store);
-    const walletData = this.getWalletData();
+    const walletData = wallet.getWalletData();
     const balance = {};
     for (const txout of tx.outputs) {
       if (wallet.isAuthorityOutput(txout)) {
