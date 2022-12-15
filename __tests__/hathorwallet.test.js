@@ -374,17 +374,22 @@ test('getPreProcessedData', async () => {
 test('setState', async () => {
   const hWallet = new FakeHathorWallet();
   hWallet.preProcessWalletData.mockImplementation(() => Promise.resolve());
-  hWallet.state = HathorWallet.SYNCING;
   hWallet.emit = () => {};
-  hWallet.setState(HathorWallet.CONNECTING);
+  hWallet.state = 0;
 
-  expect(hWallet.preProcessWalletData).toHaveBeenCalled();
-  expect(hWallet.state).toEqual(HathorWallet.CONNECTING);
-
-  hWallet.preProcessWalletData.mockClear();
-  hWallet.setState(HathorWallet.CONNECTING);
+  hWallet.setState(HathorWallet.SYNCING);
   expect(hWallet.preProcessWalletData).not.toHaveBeenCalled();
-  expect(hWallet.state).toEqual(HathorWallet.CONNECTING);
+  expect(hWallet.state).toEqual(HathorWallet.SYNCING);
+
+
+  hWallet.setState(HathorWallet.PROCESSING);
+  expect(hWallet.preProcessWalletData).toHaveBeenCalled();
+  expect(hWallet.state).toEqual(HathorWallet.PROCESSING);
+  hWallet.preProcessWalletData.mockClear();
+
+  hWallet.setState(HathorWallet.PROCESSING);
+  expect(hWallet.preProcessWalletData).not.toHaveBeenCalled();
+  expect(hWallet.state).toEqual(HathorWallet.PROCESSING);
 
   hWallet.setState(HathorWallet.READY);
   expect(hWallet.preProcessWalletData).not.toHaveBeenCalled();
