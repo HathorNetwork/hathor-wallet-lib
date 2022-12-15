@@ -455,4 +455,7 @@ test('preProcessWalletData', async () => {
       voided: false,
     }],
   });
+  expect(hWallet.getPreProcessedData('balanceByToken')).toEqual({
+    A: { unlocked: 5, locked: 5, transactions: 1 }
+  });
 });

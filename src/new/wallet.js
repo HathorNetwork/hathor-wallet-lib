@@ -570,8 +570,9 @@ class HathorWallet extends EventEmitter {
    **/
   handleWebsocketMsg(wsData) {
     if (wsData.type === 'wallet:address_history') {
-      if ([HathorWallet.PROCESSING, HathorWallet.SYNCING].includes(this.state)) {
-        // Cannot receive a ws message, so we enqueue for later
+      if (this.state !== HathorWallet.READY) {
+        // Cannot process new transactions from ws when the wallet is not ready.
+        // So we will enqueue this message to be processed later
         this.wsTxQueue.enqueue(wsData);
       } else {
         this.onNewTx(wsData);
@@ -1139,7 +1140,7 @@ class HathorWallet extends EventEmitter {
    */
   async processTxQueue() {
     let wsData = this.wsTxQueue.dequeue();
-    while(wsData !== undefined) {
+    while (wsData !== undefined) {
       // process wsData like it just arrived
       this.onNewTx(wsData);
       wsData = this.wsTxQueue.dequeue();
@@ -1183,7 +1184,7 @@ class HathorWallet extends EventEmitter {
 
       const tokensSeen = [];
       for (const el of [...tx.outputs, ...tx.inputs]) {
-        if (this.isAddressMine(el.decoded.address) && !(el.token in tokensSeen)) {
+        if (this.isAddressMine(el.decoded.address) && !(tokensSeen.includes(el.token))) {
           if (!(el.token in transactionCountByToken)) {
             transactionCountByToken[el.token] = 0;
           }
@@ -1312,12 +1313,21 @@ class HathorWallet extends EventEmitter {
     return this.preProcessedData[key];
   }
 
+  /**
+   * Call the method to process data and resume with the correct state after processing.
+   *
+   * @returns {Promise} A promise that resolves when the wallet is done processing the tx queue.
+   */
+  async onEnterStateProcessing() {
+    // Started processing state now, so we prepare the local data to support using this facade interchangable with wallet service facade in both wallets
+    return this.preProcessWalletData()
+      .then(() => { this.setState(HathorWallet.READY); })
+      .catch(() => { this.setState(HathorWallet.ERROR); });
+  }
+
   setState(state) {
     if (state === HathorWallet.PROCESSING && state !== this.state) {
-      // Started processing state now, so we prepare the local data to support using this facade interchangable with wallet service facade in both wallets
-      this.preProcessWalletData().then(() => {
-        this.setState(HathorWallet.READY);
-      });
+      this.onEnterStateProcessing();
     }
     this.state = state;
     this.emit('state', state);

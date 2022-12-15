@@ -32,9 +32,9 @@ export default class Queue<T=Object> {
   enqueue(value: T) {
     const node: QueueNode<T> = { value, next: undefined };
     if (this.head) {
-      if (this.last === undefined) {
+      if (this.last === undefined || this.last.next !== undefined) {
         // This shouldn't happen
-        throw new Error('Queue: queue has a start but no end');
+        throw new Error('Queue: last element in bad state');
       }
       this.last.next = node;
     } else {

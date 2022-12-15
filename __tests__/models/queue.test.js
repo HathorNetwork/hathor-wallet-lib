@@ -15,14 +15,18 @@ test('Queue operations', () => {
     elements.forEach(el => q.enqueue(el));
     expect(q.size()).toEqual(3);
     // dequeued elements should in the same order as they were enqueued
+    let expectedSize = 3;
     elements.forEach(expected => {
-        // Peek should return the next element
+        // Peek should return the next element without dequeing
         const peekedEl = q.peek();
+        expect(q.size()).toEqual(expectedSize);
         expect(peekedEl).toEqual(expected);
 
         // Dequeue should return the next element
         const el = q.dequeue();
         expect(el).toEqual(expected);
+        expectedSize--;
+        expect(q.size()).toEqual(expectedSize);
     });
     expect(q.size()).toEqual(0);
 
