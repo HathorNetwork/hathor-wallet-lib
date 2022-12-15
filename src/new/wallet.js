@@ -606,7 +606,7 @@ class HathorWallet extends EventEmitter {
       throw new WalletError('Not implemented.');
     }
     const uid = token || this.token.uid;
-    const balanceByToken = await this.getPreProcessedData('balanceByToken');
+    const balanceByToken = this.getPreProcessedData('balanceByToken');
     const balance = uid in balanceByToken ? balanceByToken[uid] : { available: 0, locked: 0, transactions: 0 };
     return [{
       token: { // Getting token name and symbol is not easy, so we return empty strings
@@ -655,7 +655,7 @@ class HathorWallet extends EventEmitter {
     const newOptions = Object.assign({ token_id: HATHOR_TOKEN_CONFIG.uid, count: 15, skip: 0 }, options);
     const { skip, count } = newOptions;
     const uid = newOptions.token_id || this.token.uid;
-    const historyByToken = await this.getPreProcessedData('historyByToken');
+    const historyByToken = this.getPreProcessedData('historyByToken');
     const historyArray = uid in historyByToken ? historyByToken[uid] : [];
     const slicedHistory = historyArray.slice(skip, skip+count);
     return slicedHistory;
@@ -1131,6 +1131,12 @@ class HathorWallet extends EventEmitter {
     return history;
   }
 
+  /**
+   * Process the transactions on the websocket transaction queue as if they just arrived.
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
   async processTxQueue() {
     let wsData = this.wsTxQueue.dequeue();
     while(wsData !== undefined) {
@@ -1204,7 +1210,7 @@ class HathorWallet extends EventEmitter {
     this.setPreProcessedData('historyByToken', tokensHistory);
     this.setPreProcessedData('balanceByToken', tokensBalance);
 
-    await processTxQueue();
+    await this.processTxQueue();
   }
 
   /**
@@ -1219,8 +1225,8 @@ class HathorWallet extends EventEmitter {
    * @inner
    **/
   async onTxArrived(tx, isNew) {
-    const tokensHistory = await this.getPreProcessedData('historyByToken');
-    const tokensBalance = await this.getPreProcessedData('balanceByToken');
+    const tokensHistory = this.getPreProcessedData('historyByToken');
+    const tokensBalance = this.getPreProcessedData('balanceByToken');
     // we first get all tokens present in this tx (that belong to the user) and
     // the corresponding balances
     const balances = await this.getTxBalance(tx, { includeAuthorities: true });
@@ -1299,7 +1305,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    **/
-  async getPreProcessedData(key) {
+  getPreProcessedData(key) {
     if (Object.keys(this.preProcessedData).length === 0) {
       throw new Error('Wallet data has not been processed yet');
     }

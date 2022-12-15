@@ -358,17 +358,19 @@ test('getTxBalance', async () => {
   mockAddrCheck.mockRestore();
 });
 
-test('getPreProcessedData', async () => {
+test('getPreProcessedData', () => {
   const hWallet = new FakeHathorWallet();
   hWallet.preProcessedData = {};
 
-  await expect(hWallet.getPreProcessedData('foo')).rejects.toThrow();
+  expect(() => {
+    hWallet.getPreProcessedData('foo')
+  }).toThrow();
 
   hWallet.preProcessedData = {
     foo: 123,
   };
 
-  expect(await hWallet.getPreProcessedData('foo')).toEqual(123);
+  expect(hWallet.getPreProcessedData('foo')).toEqual(123);
 });
 
 test('setState', async () => {
@@ -380,7 +382,6 @@ test('setState', async () => {
   hWallet.setState(HathorWallet.SYNCING);
   expect(hWallet.preProcessWalletData).not.toHaveBeenCalled();
   expect(hWallet.state).toEqual(HathorWallet.SYNCING);
-
 
   hWallet.setState(HathorWallet.PROCESSING);
   expect(hWallet.preProcessWalletData).toHaveBeenCalled();
@@ -394,4 +395,64 @@ test('setState', async () => {
   hWallet.setState(HathorWallet.READY);
   expect(hWallet.preProcessWalletData).not.toHaveBeenCalled();
   expect(hWallet.state).toEqual(HathorWallet.READY);
+});
+
+test('preProcessWalletData', async () => {
+  const hWallet = new FakeHathorWallet();
+  hWallet.preProcessedData = {};
+
+  hWallet.getTxBalance.mockReturnValue(Promise.resolve({
+    'A': 10,
+  }));
+  hWallet.isAddressMine.mockReturnValue(true);
+
+  hWallet._getBalanceRaw.mockReturnValue({ unlocked: 5, locked: 5 });
+
+  hWallet.getFullHistory.mockReturnValue({
+    'txid1': {
+      tx_id: 'txId1',
+      timestamp: 123,
+      is_voided: false,
+      outputs: [
+        {
+          token: 'A',
+          value: 5,
+          decoded: { address: 'addr1' },
+        },
+        {
+          token: 'A',
+          value: 5,
+          decoded: { address: 'addr1', timelock: 127 },
+        }
+      ],
+      inputs: [],
+    },
+  });
+
+  hWallet.processTxQueue.mockReturnValue(Promise.resolve());
+
+  expect(() => {
+    hWallet.getPreProcessedData('tokens');
+  }).toThrow();
+  expect(() => {
+    hWallet.getPreProcessedData('historyByToken');
+  }).toThrow();
+  expect(() => {
+    hWallet.getPreProcessedData('balanceByToken');
+  }).toThrow();
+
+
+  await hWallet.preProcessWalletData();
+  expect(hWallet.processTxQueue).toHaveBeenCalled();
+
+  expect(hWallet.getPreProcessedData('tokens')).toEqual(['A']);
+  expect(hWallet.getPreProcessedData('historyByToken')).toEqual({
+    'A': [{
+      txId: 'txId1',
+      timestamp: 123,
+      tokenUid: 'A',
+      balance: 10,
+      voided: false,
+    }],
+  });
 });
