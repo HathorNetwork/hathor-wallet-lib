@@ -279,7 +279,7 @@ describe('start', () => {
 
     // Now testing the methods that use this set tokenUid information
     // FIXME: No need to explicitly pass the non-boolean `false` as a tokenUid to get this result.
-    await expect(await hWallet.getBalance(false)).toStrictEqual([
+    expect(await hWallet.getBalance(false)).toStrictEqual([
       {
         token: {
           id: tokenUid,
@@ -290,7 +290,7 @@ describe('start', () => {
           unlocked: 100,
           locked: 0
         },
-        transactions: 3,
+        transactions: 1,
         lockExpires: null,
         tokenAuthorities: {
           unlocked: {
@@ -375,8 +375,7 @@ describe('start', () => {
       expect.objectContaining({
         token: expect.objectContaining({ id: HATHOR_TOKEN_CONFIG.uid }),
         balance: { unlocked: 1, locked: 0 },
-        transactions: expect.any(Number),
-        // transactions: 1, // TODO: The amount of transactions is often 2 but should be 1. Ref #397
+        transactions: 1,
       }),
     ]);
     expect(hWallet.getUtxos()).toHaveProperty('total_utxos_available', 1);
@@ -687,8 +686,7 @@ describe('getBalance', () => {
     const balance1 = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
     expect(balance1[0]).toMatchObject({
       balance: { unlocked: injectedValue, locked: 0 },
-      transactions: expect.any(Number),
-      // transactions: 1, // TODO: The amount of transactions is often 2 but should be 1. Ref #397
+      transactions: 1,
     });
 
     // Transferring tokens inside the wallet should not change the balance
@@ -723,8 +721,7 @@ describe('getBalance', () => {
     const tknBalance = await hWallet.getBalance(tokenUid);
     expect(tknBalance[0]).toMatchObject({
       balance: { unlocked: newTokenAmount, locked: 0 },
-      transactions: expect.any(Number),
-      // transactions: 1, // TODO: This often returns 8 transactions, we expected only 1. Ref #397
+      transactions: 1,
     });
 
     // Validating that a different wallet (genesis) has no access to this token
