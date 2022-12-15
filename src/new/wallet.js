@@ -1140,10 +1140,14 @@ class HathorWallet extends EventEmitter {
    */
   async processTxQueue() {
     let wsData = this.wsTxQueue.dequeue();
+
     while (wsData !== undefined) {
       // process wsData like it just arrived
       this.onNewTx(wsData);
       wsData = this.wsTxQueue.dequeue();
+      // We should release the event loop for other threads
+      // This effectively awaits 0 seconds, but it schedule the next iteration to run after other threads.
+      await new Promise(resolve => { setTimeout(resolve, 0) });
     }
   }
 
