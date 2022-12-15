@@ -25,7 +25,7 @@ module.exports = {
     './src/new/wallet.js': {
       statements: 94,
       branches: 89,
-      functions: 97,
+      functions: 96,
       lines: 94
     }
   },
