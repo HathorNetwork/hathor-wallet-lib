@@ -26,6 +26,7 @@ import P2SHSignature from '../models/p2sh_signature';
 import { HDPrivateKey } from 'bitcore-lib';
 import transactionUtils from '../utils/transaction';
 import Transaction from '../models/transaction';
+import Queue from '../models/queue';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';
@@ -188,6 +189,8 @@ class HathorWallet extends EventEmitter {
         numSignatures: multisig.numSignatures,
       };
     }
+
+    this.wsTxQueue = new Queue();
   }
 
   /**
@@ -308,7 +311,7 @@ class HathorWallet extends EventEmitter {
       }
 
       promise.then(() => {
-        this.setState(HathorWallet.READY);
+        this.setState(HathorWallet.PROCESSING);
       }).catch((error) => {
         this.setState(HathorWallet.ERROR);
         console.error('Error loading wallet', {error});
@@ -566,7 +569,12 @@ class HathorWallet extends EventEmitter {
    **/
   handleWebsocketMsg(wsData) {
     if (wsData.type === 'wallet:address_history') {
-      this.onNewTx(wsData);
+      if ([HathorWallet.PROCESSING, HathorWallet.SYNCING].includes(this.state)) {
+        // Cannot receive a ws message, so we enqueue for later
+        this.wsTxQueue.enqueue(wsData);
+      } else {
+        this.onNewTx(wsData);
+      }
     }
   }
 
@@ -1122,6 +1130,15 @@ class HathorWallet extends EventEmitter {
     return history;
   }
 
+  async processTxQueue() {
+    let wsData = this.wsTxQueue.dequeue();
+    while(wsData !== undefined) {
+      // process wsData like it just arrived
+      this.onNewTx(wsData);
+      wsData = this.wsTxQueue.dequeue();
+    }
+  }
+
   /**
    * Prepare history and balance and save on a cache object
    * to be used as pre processed data
@@ -1185,6 +1202,8 @@ class HathorWallet extends EventEmitter {
     this.setPreProcessedData('tokens', Object.keys(tokensHistory));
     this.setPreProcessedData('historyByToken', tokensHistory);
     this.setPreProcessedData('balanceByToken', tokensBalance);
+
+    await processTxQueue();
   }
 
   /**
@@ -1281,23 +1300,17 @@ class HathorWallet extends EventEmitter {
    **/
   async getPreProcessedData(key) {
     if (Object.keys(this.preProcessedData).length === 0) {
-      await this.preProcessWalletData();
+      throw new Error('Wallet data has not been processed yet');
     }
     return this.preProcessedData[key];
   }
 
   setState(state) {
-    if (state === HathorWallet.READY && state !== this.state) {
-      // Became ready now, so we prepare new localStorage data
-      // to support using this facade interchangable with wallet service
-      // facade in both wallets
-
-      // Notice: preProcessWalletData is currently async because `getTxBalance`
-      // is async but it resolves instantly -- we only changed `getTxBalance` to async
-      // to match signatures with the new facade. If we ever need to do something really
-      // async on preProcessWalletData and wait for it before setting state to READY, we
-      // probably should refactor setState to be async
-      this.preProcessWalletData();
+    if (state === HathorWallet.PROCESSING && state !== this.state) {
+      // Started processing state now, so we prepare the local data to support using this facade interchangable with wallet service facade in both wallets
+      this.preProcessWalletData().then(() => {
+        this.setState(HathorWallet.READY);
+      });
     }
     this.state = state;
     this.emit('state', state);
@@ -1307,7 +1320,6 @@ class HathorWallet extends EventEmitter {
     storage.setStore(this.store);
     const newTx = wsData.history;
 
-    // TODO we also have to update some wallet lib data? Lib should do it by itself
     const walletData = wallet.getWalletData();
     const historyTransactions = 'historyTransactions' in walletData ? walletData.historyTransactions : {};
     const allTokens = 'allTokens' in walletData ? walletData.allTokens : [];
@@ -2217,7 +2229,7 @@ class HathorWallet extends EventEmitter {
   async getTxBalance(tx, optionsParam = {}) {
     const options = Object.assign({ includeAuthorities: false }, optionsParam)
     storage.setStore(this.store);
-    const addresses = this._getAllAddressesRaw();
+    const walletData = this.getWalletData();
     const balance = {};
     for (const txout of tx.outputs) {
       if (wallet.isAuthorityOutput(txout)) {
@@ -2229,7 +2241,7 @@ class HathorWallet extends EventEmitter {
         continue;
       }
       if (txout.decoded && txout.decoded.address
-          && addresses.includes(txout.decoded.address)) {
+          && wallet.isAddressMine(txout.decoded.address, walletData)) {
         if (!balance[txout.token]) {
           balance[txout.token] = 0;
         }
@@ -2247,7 +2259,7 @@ class HathorWallet extends EventEmitter {
         continue;
       }
       if (txin.decoded && txin.decoded.address
-          && addresses.includes(txin.decoded.address)) {
+          && wallet.isAddressMine(txin.decoded.address, walletData)) {
         if (!balance[txin.token]) {
           balance[txin.token] = 0;
         }
@@ -2432,5 +2444,6 @@ HathorWallet.CONNECTING = 1;
 HathorWallet.SYNCING = 2;
 HathorWallet.READY = 3;
 HathorWallet.ERROR = 4;
+HathorWallet.PROCESSING = 5;
 
 export default HathorWallet;
