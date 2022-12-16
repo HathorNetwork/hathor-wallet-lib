@@ -406,7 +406,7 @@ test('preProcessWalletData', async () => {
   }));
   hWallet.isAddressMine.mockReturnValue(true);
 
-  hWallet._getBalanceRaw.mockReturnValue({ unlocked: 5, locked: 5 });
+  hWallet._getBalanceRaw.mockReturnValue({'A': { unlocked: 5, locked: 5 }});
 
   hWallet.getFullHistory.mockReturnValue({
     'txid1': {
