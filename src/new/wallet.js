@@ -26,6 +26,7 @@ import P2SHSignature from '../models/p2sh_signature';
 import { HDPrivateKey } from 'bitcore-lib';
 import transactionUtils from '../utils/transaction';
 import Transaction from '../models/transaction';
+import Queue from '../models/queue';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';
@@ -188,6 +189,8 @@ class HathorWallet extends EventEmitter {
         numSignatures: multisig.numSignatures,
       };
     }
+
+    this.wsTxQueue = new Queue();
   }
 
   /**
@@ -304,11 +307,12 @@ class HathorWallet extends EventEmitter {
         if (this.beforeReloadCallback) {
           this.beforeReloadCallback();
         }
+        this.preProcessedData = {};
         promise = wallet.reloadData({connection: this.conn, store: this.store});
       }
 
       promise.then(() => {
-        this.setState(HathorWallet.READY);
+        this.setState(HathorWallet.PROCESSING);
       }).catch((error) => {
         this.setState(HathorWallet.ERROR);
         console.error('Error loading wallet', {error});
@@ -566,7 +570,13 @@ class HathorWallet extends EventEmitter {
    **/
   handleWebsocketMsg(wsData) {
     if (wsData.type === 'wallet:address_history') {
-      this.onNewTx(wsData);
+      if (this.state !== HathorWallet.READY) {
+        // Cannot process new transactions from ws when the wallet is not ready.
+        // So we will enqueue this message to be processed later
+        this.wsTxQueue.enqueue(wsData);
+      } else {
+        this.onNewTx(wsData);
+      }
     }
   }
 
@@ -597,7 +607,7 @@ class HathorWallet extends EventEmitter {
       throw new WalletError('Not implemented.');
     }
     const uid = token || this.token.uid;
-    const balanceByToken = await this.getPreProcessedData('balanceByToken');
+    const balanceByToken = this.getPreProcessedData('balanceByToken');
     const balance = uid in balanceByToken ? balanceByToken[uid] : { available: 0, locked: 0, transactions: 0 };
     return [{
       token: { // Getting token name and symbol is not easy, so we return empty strings
@@ -646,7 +656,7 @@ class HathorWallet extends EventEmitter {
     const newOptions = Object.assign({ token_id: HATHOR_TOKEN_CONFIG.uid, count: 15, skip: 0 }, options);
     const { skip, count } = newOptions;
     const uid = newOptions.token_id || this.token.uid;
-    const historyByToken = await this.getPreProcessedData('historyByToken');
+    const historyByToken = this.getPreProcessedData('historyByToken');
     const historyArray = uid in historyByToken ? historyByToken[uid] : [];
     const slicedHistory = historyArray.slice(skip, skip+count);
     return slicedHistory;
@@ -1123,6 +1133,25 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Process the transactions on the websocket transaction queue as if they just arrived.
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
+  async processTxQueue() {
+    let wsData = this.wsTxQueue.dequeue();
+
+    while (wsData !== undefined) {
+      // process wsData like it just arrived
+      this.onNewTx(wsData);
+      wsData = this.wsTxQueue.dequeue();
+      // We should release the event loop for other threads
+      // This effectively awaits 0 seconds, but it schedule the next iteration to run after other threads.
+      await new Promise(resolve => { setTimeout(resolve, 0) });
+    }
+  }
+
+  /**
    * Prepare history and balance and save on a cache object
    * to be used as pre processed data
    *
@@ -1159,7 +1188,7 @@ class HathorWallet extends EventEmitter {
 
       const tokensSeen = [];
       for (const el of [...tx.outputs, ...tx.inputs]) {
-        if (this.isAddressMine(el.decoded.address) && !(el.token in tokensSeen)) {
+        if (this.isAddressMine(el.decoded.address) && !(tokensSeen.includes(el.token))) {
           if (!(el.token in transactionCountByToken)) {
             transactionCountByToken[el.token] = 0;
           }
@@ -1185,6 +1214,8 @@ class HathorWallet extends EventEmitter {
     this.setPreProcessedData('tokens', Object.keys(tokensHistory));
     this.setPreProcessedData('historyByToken', tokensHistory);
     this.setPreProcessedData('balanceByToken', tokensBalance);
+
+    await this.processTxQueue();
   }
 
   /**
@@ -1199,8 +1230,8 @@ class HathorWallet extends EventEmitter {
    * @inner
    **/
   async onTxArrived(tx, isNew) {
-    const tokensHistory = await this.getPreProcessedData('historyByToken');
-    const tokensBalance = await this.getPreProcessedData('balanceByToken');
+    const tokensHistory = this.getPreProcessedData('historyByToken');
+    const tokensBalance = this.getPreProcessedData('balanceByToken');
     // we first get all tokens present in this tx (that belong to the user) and
     // the corresponding balances
     const balances = await this.getTxBalance(tx, { includeAuthorities: true });
@@ -1279,25 +1310,28 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    **/
-  async getPreProcessedData(key) {
+  getPreProcessedData(key) {
     if (Object.keys(this.preProcessedData).length === 0) {
-      await this.preProcessWalletData();
+      throw new Error('Wallet data has not been processed yet');
     }
     return this.preProcessedData[key];
   }
 
-  setState(state) {
-    if (state === HathorWallet.READY && state !== this.state) {
-      // Became ready now, so we prepare new localStorage data
-      // to support using this facade interchangable with wallet service
-      // facade in both wallets
+  /**
+   * Call the method to process data and resume with the correct state after processing.
+   *
+   * @returns {Promise} A promise that resolves when the wallet is done processing the tx queue.
+   */
+  async onEnterStateProcessing() {
+    // Started processing state now, so we prepare the local data to support using this facade interchangable with wallet service facade in both wallets
+    return this.preProcessWalletData()
+      .then(() => { this.setState(HathorWallet.READY); })
+      .catch(() => { this.setState(HathorWallet.ERROR); });
+  }
 
-      // Notice: preProcessWalletData is currently async because `getTxBalance`
-      // is async but it resolves instantly -- we only changed `getTxBalance` to async
-      // to match signatures with the new facade. If we ever need to do something really
-      // async on preProcessWalletData and wait for it before setting state to READY, we
-      // probably should refactor setState to be async
-      this.preProcessWalletData();
+  setState(state) {
+    if (state === HathorWallet.PROCESSING && state !== this.state) {
+      this.onEnterStateProcessing();
     }
     this.state = state;
     this.emit('state', state);
@@ -1307,7 +1341,6 @@ class HathorWallet extends EventEmitter {
     storage.setStore(this.store);
     const newTx = wsData.history;
 
-    // TODO we also have to update some wallet lib data? Lib should do it by itself
     const walletData = wallet.getWalletData();
     const historyTransactions = 'historyTransactions' in walletData ? walletData.historyTransactions : {};
     const allTokens = 'allTokens' in walletData ? walletData.allTokens : [];
@@ -2217,7 +2250,7 @@ class HathorWallet extends EventEmitter {
   async getTxBalance(tx, optionsParam = {}) {
     const options = Object.assign({ includeAuthorities: false }, optionsParam)
     storage.setStore(this.store);
-    const addresses = this._getAllAddressesRaw();
+    const walletData = wallet.getWalletData();
     const balance = {};
     for (const txout of tx.outputs) {
       if (wallet.isAuthorityOutput(txout)) {
@@ -2229,7 +2262,7 @@ class HathorWallet extends EventEmitter {
         continue;
       }
       if (txout.decoded && txout.decoded.address
-          && addresses.includes(txout.decoded.address)) {
+          && wallet.isAddressMine(txout.decoded.address, walletData)) {
         if (!balance[txout.token]) {
           balance[txout.token] = 0;
         }
@@ -2247,7 +2280,7 @@ class HathorWallet extends EventEmitter {
         continue;
       }
       if (txin.decoded && txin.decoded.address
-          && addresses.includes(txin.decoded.address)) {
+          && wallet.isAddressMine(txin.decoded.address, walletData)) {
         if (!balance[txin.token]) {
           balance[txin.token] = 0;
         }
@@ -2432,5 +2465,6 @@ HathorWallet.CONNECTING = 1;
 HathorWallet.SYNCING = 2;
 HathorWallet.READY = 3;
 HathorWallet.ERROR = 4;
+HathorWallet.PROCESSING = 5;
 
 export default HathorWallet;
