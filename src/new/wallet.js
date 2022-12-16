@@ -1075,17 +1075,20 @@ class HathorWallet extends EventEmitter {
   /**
    * Get balance for a token (same as old method to be used for compatibility)
    *
-   * @params {string} tokenUid Token uid
+   * @params {string|null} tokenUid Token uid, default will calculate for all tokens
    *
    * @return {Object} Object with balance { available, locked }
    *
    * @memberof HathorWallet
    * @inner
    **/
-  _getBalanceRaw(tokenUid) {
+  _getBalanceRaw(tokenUid = null) {
     storage.setStore(this.store);
     const uid = tokenUid || this.token.uid;
     const historyTransactions = this.getFullHistory();
+    if (tokenUid === null) {
+      return wallet.calculateTokenBalances(Object.values(historyTransactions));
+    }
     return wallet.calculateBalance(Object.values(historyTransactions), uid);
   }
 
@@ -1198,12 +1201,12 @@ class HathorWallet extends EventEmitter {
       }
     }
 
-    const tokensBalance = {};
+    const tokensBalance = this._getBalanceRaw();
     for (const tokenUid of Object.keys(tokensHistory)) {
-      const totalBalance = this._getBalanceRaw(tokenUid);
-      totalBalance['transactions'] = transactionCountByToken[tokenUid];
-      // update token total balance
-      tokensBalance[tokenUid] = totalBalance;
+      if (!(tokenUid in tokensBalance)) {
+        tokensBalance[tokenUid] = { available: 0, locked: 0 };
+      }
+      tokensBalance[tokenUid].transactions = transactionCountByToken[tokenUid];
     }
 
     // in the end, sort (in place) all tx lists in descending order by timestamp
@@ -1232,6 +1235,8 @@ class HathorWallet extends EventEmitter {
   async onTxArrived(tx, isNew) {
     const tokensHistory = this.getPreProcessedData('historyByToken');
     const tokensBalance = this.getPreProcessedData('balanceByToken');
+    const updatedTokensBalance = this._getBalanceRaw();
+
     // we first get all tokens present in this tx (that belong to the user) and
     // the corresponding balances
     const balances = await this.getTxBalance(tx, { includeAuthorities: true });
@@ -1270,15 +1275,17 @@ class HathorWallet extends EventEmitter {
         tokensHistory[tokenUid] = newHistory;
       }
 
+      if (!(tokenUid in updatedTokensBalance)) {
+        updatedTokensBalance[tokenUid] = { available: 0, locked: 0 };
+      }
       // Update token balance
-      const totalBalance = this._getBalanceRaw(tokenUid);
       if (tokenUid in tokensBalance) {
-        totalBalance['transactions'] = tokensBalance[tokenUid].transactions + 1;
+        updatedTokensBalance[tokenUid].transactions = tokensBalance[tokenUid].transactions + 1;
       } else {
-        totalBalance['transactions'] = 1;
+        updatedTokensBalance[tokenUid].transactions = 1;
       }
       // update token total balance
-      tokensBalance[tokenUid] = totalBalance;
+      tokensBalance[tokenUid] = updatedTokensBalance[tokenUid];
     }
 
     this.setPreProcessedData('tokens', Object.keys(tokensHistory));
