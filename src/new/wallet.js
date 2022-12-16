@@ -7,7 +7,7 @@
 
 import EventEmitter from 'events';
 import wallet from '../wallet';
-import { HATHOR_TOKEN_CONFIG, HATHOR_BIP44_CODE, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
+import { HATHOR_TOKEN_CONFIG, P2SH_ACCT_PATH, P2PKH_ACCT_PATH, LOAD_WALLET_RETRY_SLEEP, LOAD_WALLET_MAX_RETRY, MAX_ADDRESSES_GET, MAX_OUTPUT_VALUE } from '../constants';
 import tokens from '../tokens';
 import transaction from '../transaction';
 import version from '../version';
@@ -20,7 +20,7 @@ import MemoryStore from '../memory_store';
 import config from '../config';
 import SendTransaction from './sendTransaction';
 import Network from '../models/network';
-import { AddressError, WalletError, WalletFromXPubGuard } from '../errors';
+import { AddressError, OutputValueError, WalletError, WalletFromXPubGuard } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
 import { HDPrivateKey } from 'bitcore-lib';
@@ -296,19 +296,13 @@ class HathorWallet extends EventEmitter {
       let promise;
       if (this.firstConnection) {
         this.firstConnection = false;
-        promise = wallet.loadAddressHistory(
-          0,
-          wallet.getGapLimit(),
-          this.conn,
-          this.store,
-          this.preCalculatedAddresses
-        );
+        promise = this.loadAddresses(0, wallet.getGapLimit());
       } else {
         if (this.beforeReloadCallback) {
           this.beforeReloadCallback();
         }
         this.preProcessedData = {};
-        promise = wallet.reloadData({connection: this.conn, store: this.store});
+        promise = this.reloadData();
       }
 
       promise.then(() => {
@@ -1352,10 +1346,7 @@ class HathorWallet extends EventEmitter {
     const historyTransactions = 'historyTransactions' in walletData ? walletData.historyTransactions : {};
     const allTokens = 'allTokens' in walletData ? walletData.allTokens : [];
 
-    let isNewTx = true;
-    if (newTx.tx_id in historyTransactions) {
-      isNewTx = false;
-    }
+    const isNewTx = !(newTx.tx_id in historyTransactions);
 
     wallet.updateHistoryData(historyTransactions, allTokens, [newTx], null, walletData, null, this.conn, this.store);
 
@@ -2463,6 +2454,274 @@ class HathorWallet extends EventEmitter {
     }
 
     return tx;
+  }
+
+  /**
+   * Generate addresses and load their history.
+   * The loaded history is added to storage.
+   *
+   * @param {number} startIndex Address index to start to load history
+   * @param {number} count How many addresses I will load
+   *
+   * @return {Promise} Promise that resolves when addresses history is finished loading from server
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
+  async loadAddresses(startIndex, count) {
+    const addresses = [];
+    const walletData = wallet.getWalletData();
+    const stopIndex = startIndex + count;
+    for (const i=startIndex; i < stopIndex; i++) {
+      // Generate each key from index (if not provided pre-calculated)
+      // XXX: maybe getAddressAtIndex should get from preCalculated as well
+      const address = this.preCalculatedAddresses && this.preCalculatedAddresses[i]
+        ? this.preCalculatedAddresses[i]
+        : wallet.generateAddress(i);
+      walletData.keys[address.toString()] = { index: i };
+      addresses.push(address.toString());
+      // Address derivation can be cpu intensive so we release the event loop for other possible operations
+      await new Promise(resolve => { setTimeout(resolve, 0) });
+    }
+    if (storage.getItem('wallet:address') === null) {
+      wallet.updateAddress(addresses[0], startIndex);
+    }
+
+    wallet.updateLastGeneratedIndex(stopIndex - 1);
+    wallet.setWalletData(walletData);
+    return this.fetchTxHistory(addresses);
+  }
+
+  async fetchTxHistory(addresses) {
+    // Split addresses array into chunks of at most MAX_ADDRESSES_GET size
+    // this is good when a use case customizes the GAP_LIMIT (e.g. 4000) then we don't
+    // request /address_history with 4000 addresses
+    const addressesChunks = _.chunk(addresses, MAX_ADDRESSES_GET);
+    const lastChunkIndex = addressesChunks.length - 1;
+    let retryCount = 0;
+
+    for (let i=0; i<=lastChunkIndex; i++) {
+      let hasMore = true;
+      let firstHash = null;
+      let addressesToSearch = addressesChunks[i];
+      const historyBuffer = [];
+
+      // Subscribe in websocket to the addresses
+      for (let address of addressesToSearch) {
+        wallet.subscribeAddress(address, connection);
+      }
+
+      while (hasMore === true) {
+        let response;
+        try {
+          response = await walletApi.getAddressHistoryForAwait(addressesToSearch, firstHash);
+        } catch (e) {
+          // We will retry the request that fails with client timeout
+          // in this request error we don't have the response because
+          // the client closed the connection
+          //
+          // I've tried to set a custom timeout error message in the axios config using timeoutErrorMessage parameter
+          // however the custom message is never used
+          // There are some error reports about it (https://github.com/axios/axios/issues/2716)
+          // Besides that, there are some problems happening in newer axios versions (https://github.com/axios/axios/issues/2710)
+          // One user that opened a PR for axios said he is checking the timeout error with the message includes condition
+          // https://github.com/axios/axios/pull/2874#discussion_r403753852
+          if (e.code === 'ECONNABORTED' && e.response === undefined && e.message.toLowerCase().includes('timeout')) {
+            // in this case we retry
+            continue;
+          }
+
+          // If the load wallet request fails with client timeout, we retry indefinitely
+          // however if we have another error, we have a limit number of retries
+          if (retryCount > LOAD_WALLET_MAX_RETRY) {
+            // Throw any error we don't want to handle here after retry limit is reached
+            throw e;
+          }
+
+          retryCount += 1;
+          await helperUtils.sleep(LOAD_WALLET_RETRY_SLEEP);
+          continue;
+        } finally {
+          // After each thin_wallet/address_history call we should release the event loop
+          await new Promise(resolve => { setTimeout(resolve, 0) });
+        }
+        // Reset retry count because the request succeeded
+        retryCount = 0;
+        const result = response.data;
+
+        if (result.success) {
+          hasMore = result.has_more;
+
+          // This will be an array of pages to avoid deconstructing the array with every page
+          historyBuffer.push(result.history);
+          if (hasMore) {
+            // Prepare parameters for next request
+            firstHash = result.first_hash;
+            const addrIndex = addressesToSearch.indexOf(result.first_address);
+            if (addrIndex === -1) {
+              throw new Error("Invalid address returned from the server.");
+            }
+            addressesToSearch = addressesToSearch.slice(addrIndex);
+          } else {
+            // save the history on storage since the pagination of this chunk is over
+            const historyLoadPartialUpdate = this.saveNewHistory([].concat(...historyBuffer));
+            // emit addresses_loaded with the partial data we just saved
+            this.conn.websocket.emit('addresses_loaded', historyLoadPartialUpdate);
+          }
+        } else {
+          throw new Error(result.message);
+        }
+      }
+    }
+    // After the addresses have been loaded and properly saved we need to check if we
+    // need to load more addresses to keep the gapLimit.
+    // checkGapLimit will resolve when the address history of the gapLimit is loaded
+    await this.checkGapLimit();
+  }
+
+  /**
+   * Check if we need to load more addresses to fill the gap limit.
+   * If we need more addresses generate them then load the history.
+   *
+   * @returns {Promise<void>} A promise that will resolve when the addresses are loaded
+   */
+  async checkGapLimit() {
+    storage.setStore(store);
+    const lastGeneratedIndex = wallet.getLastGeneratedIndex();
+    const lastUsedIndex = wallet.getLastUsedIndex();
+    const gapLimit = wallet.getGapLimit();
+    if (lastUsedIndex + gapLimit > lastGeneratedIndex) {
+      const startIndex = lastGeneratedIndex + 1;
+      const count = lastUsedIndex + gapLimit - lastGeneratedIndex;
+      return this.loadAddresses(startIndex, count);
+    }
+  }
+
+  /*
+   * Reset storage and reload history
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  async reloadData() {
+    // Get old access data
+    const accessData = wallet.getWalletAccessData();
+
+    wallet.cleanWallet({endConnection: false, connection: this.conn});
+    // Restart websocket connection
+    this.conn.setup();
+
+    let newWalletData = {
+      keys: {},
+      historyTransactions: {},
+    }
+
+    this.setWalletAccessData(accessData);
+    this.setWalletData(newWalletData);
+    this.preProcessedData = {};
+
+    // Load history from server
+    return this.loadAddresses(0, wallet.getGapLimit());
+  }
+
+    /**
+   * Update the historyTransactions and allTokens from a new array of history that arrived
+   *
+   * @param {Array} newHistory Array of new data that arrived from the server to be added to local data
+   *
+   * @throws {OutputValueError} Will throw an error if one of the output value is invalid
+   *
+   * @return {Object} Return an object with {addressesFound, maxIndex, historyLength}
+   * @memberof Wallet
+   * @inner
+   */
+  saveNewHistory(newHistory) {
+    storage.setStore(store);
+
+    const walletData = wallet.getWalletData();
+    const oldHistoryTransactions = 'historyTransactions' in walletData ? walletData['historyTransactions'] : {};
+    // XXX: Why copy the history?
+    const historyTransactions = Object.assign({}, oldHistoryTransactions);
+    const allTokens = new Set(walletData.allTokens || []);
+
+    let maxIndex = -1;
+    let lastUsedAddress = null;
+    for (const tx of newHistory) {
+      // If one of the outputs has a value that cannot be handled by the wallet we discard it
+      for (const output of tx.outputs) {
+        if (output.value > MAX_OUTPUT_VALUE) {
+          throw new OutputValueError(`Transaction with id ${tx.tx_id} has output value of ${helpers.prettyValue(output.value)}. Maximum value is ${helpers.prettyValue(MAX_OUTPUT_VALUE)}`);
+        }
+      }
+
+      // We have an output field 'spent_by' that is filled everytime we receive a tx from the websocket that spends the output
+      // Between the tx creation and the websocket message being received we might select an utxo that had already been selected before
+      // To prevent this from happening we've created a custom field ('selected_as_input') that we set when we select the utxo to be used in a tx
+      // The if...else below if to keep this custom attribute correct even after receiving new data from an old tx
+      if (tx.tx_id in historyTransactions) {
+        // It's not a new tx
+        const storageTx = historyTransactions[tx.tx_id];
+        for (const [index, output] of tx.outputs.entries()) {
+          output['selected_as_input'] = storageTx.outputs[index]['selected_as_input'];
+        }
+      } else {
+        // It's a new tx
+        for (const output of tx.outputs) {
+          output['selected_as_input'] = false;
+        }
+      }
+
+      historyTransactions[tx.tx_id] = tx
+
+      for (const txin of tx.inputs) {
+        const key = walletData.keys[txin.decoded.address];
+        if (key) {
+          allTokens.add(txin.token);
+          if (key.index > maxIndex) {
+            maxIndex = key.index;
+            lastUsedAddress = txin.decoded.address
+          }
+        }
+      }
+      for (const txout of tx.outputs) {
+        const key = walletData.keys[txout.decoded.address];
+        if (key) {
+          allTokens.add(txout.token);
+          if (key.index > maxIndex) {
+            maxIndex = key.index;
+            lastUsedAddress = txout.decoded.address
+          }
+        }
+      }
+    }
+
+    let lastUsedIndex = wallet.getLastUsedIndex();
+    if (lastUsedIndex === null) {
+      lastUsedIndex = -1;
+    }
+
+    let lastSharedIndex = wallet.getLastSharedIndex();
+    if (lastSharedIndex === null) {
+      lastSharedIndex = -1;
+    }
+
+    if (maxIndex > lastUsedIndex && lastUsedAddress !== null) {
+      // Setting last used index and last shared index
+      wallet.setLastUsedIndex(lastUsedAddress);
+      // Setting last shared address, if necessary
+      const candidateIndex = maxIndex + 1;
+      if (candidateIndex > lastSharedIndex) {
+        const address = wallet.getAddressAtIndex(candidateIndex);
+        wallet.updateAddress(address, candidateIndex);
+      }
+    }
+
+    // Saving to storage before resolving the promise
+    wallet.saveAddressHistory(historyTransactions, allTokens);
+
+    const lastGeneratedIndex = wallet.getLastGeneratedIndex();
+
+    return { addressesFound: lastGeneratedIndex + 1, maxIndex, historyLength: Object.keys(historyTransactions).length };
   }
 }
 

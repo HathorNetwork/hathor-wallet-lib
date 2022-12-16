@@ -386,6 +386,22 @@ const wallet = {
   },
 
   /**
+   * Update the last generated address index with a new candidate index if it is
+   * greater than the current last generated index.
+   *
+   * @param {number} newIndex The candidate index for the last generated index
+   * @returns {boolean} Wether the last generated index was updated
+   */
+  updateLastGeneratedIndex(newIndex) {
+    const lastGeneratedIndex = this.getLastGeneratedIndex();
+    if (newIndex > lastGeneratedIndex) {
+      storage.setItem('wallet:lastGeneratedIndex', newIndex);
+      return true;
+    }
+    return false;
+  },
+
+  /**
    * Get wallet last generated address index
    *
    * @return {number} Index that was last generated
