@@ -231,6 +231,9 @@ test('Wallet operations for transaction', () => {
   const balance2 = wallet.calculateBalance(filteredHistoryTransactions2, '01');
   expect(balance2).toEqual(expect.objectContaining(expectedBalance['01']));
 
+  // Calculating balance of all tokens
+  expect(wallet.calculateTokenBalances(historyTransactions)).toMatchObject(expectedBalance);
+
   // Calculating balance of one tx
   const tx1 = historyTransactions['00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295d'];
   expect(wallet.getTxBalance(tx1)).toMatchObject({'00': 300, '01': 1000});

@@ -459,3 +459,54 @@ test('preProcessWalletData', async () => {
     A: { unlocked: 5, locked: 5, transactions: 1 }
   });
 });
+
+test('onTxArrived', async () => {
+  const hWallet = new FakeHathorWallet();
+  hWallet.preProcessedData = {
+    tokens: [],
+    historyByToken: {},
+    balanceByToken: {},
+  };
+
+  hWallet.getTxBalance.mockReturnValue(Promise.resolve({
+    'A': 10,
+  }));
+  hWallet.isAddressMine.mockReturnValue(true);
+
+  hWallet._getBalanceRaw.mockReturnValue({'A': { unlocked: 5, locked: 5 }});
+
+  const tx = {
+    tx_id: 'txId1',
+    timestamp: 123,
+    is_voided: false,
+    outputs: [
+      {
+        token: 'A',
+        value: 5,
+        decoded: { address: 'addr1' },
+      },
+      {
+        token: 'A',
+        value: 5,
+        decoded: { address: 'addr1', timelock: 127 },
+      }
+    ],
+    inputs: [],
+  };
+
+  await hWallet.onTxArrived(tx, true);
+
+  expect(hWallet.getPreProcessedData('tokens')).toEqual(['A']);
+  expect(hWallet.getPreProcessedData('historyByToken')).toEqual({
+    'A': [{
+      txId: 'txId1',
+      timestamp: 123,
+      tokenUid: 'A',
+      balance: 10,
+      voided: false,
+    }],
+  });
+  expect(hWallet.getPreProcessedData('balanceByToken')).toEqual({
+    A: { unlocked: 5, locked: 5, transactions: 1 }
+  });
+});
