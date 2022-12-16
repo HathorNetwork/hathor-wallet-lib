@@ -375,7 +375,7 @@ describe('start', () => {
       expect.objectContaining({
         token: expect.objectContaining({ id: HATHOR_TOKEN_CONFIG.uid }),
         balance: { unlocked: 1, locked: 0 },
-        transactions: 2,
+        transactions: 1,
       }),
     ]);
     expect(hWallet.getUtxos()).toHaveProperty('total_utxos_available', 1);
