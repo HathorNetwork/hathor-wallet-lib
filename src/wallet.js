@@ -1327,6 +1327,51 @@ const wallet = {
   },
 
   /**
+   * Calculate the balance for all tokens (available and locked) from the historyTransactions
+   *
+   * @param {Object} historyTransactions Array of transactions
+   *
+   * @return {Record<string, {available: number, locked: number}>} An object with the balance for all tokens in history.
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  calculateTokenBalances(historyTransactions) {
+    function getEmptyBalance() {
+      return {available: 0, locked: 0};
+    }
+    const tokenBalance = {};
+    const data = this.getWalletData();
+    if (data === null) {
+      return tokenBalance;
+    }
+
+    for (let tx of historyTransactions) {
+      if (tx.is_voided) {
+        // Ignore voided transactions.
+        continue;
+      }
+      for (let txout of tx.outputs) {
+        if (this.isAuthorityOutput(txout)) {
+          // Ignore authority outputs.
+          continue;
+        }
+        if (txout.spent_by === null && this.isAddressMine(txout.decoded.address, data)) {
+          if (!(txout.token in tokenBalance)) {
+            tokenBalance[txout.token] = getEmptyBalance();
+          }
+          if (this.canUseUnspentTx(txout, tx.height)) {
+            tokenBalance[txout.token].available += txout.value;
+          } else {
+            tokenBalance[txout.token].locked += txout.value;
+          }
+        }
+      }
+    }
+    return tokenBalance;
+  },
+
+  /**
    * Calculate the balance for each token (available and locked) from the historyTransactions
    *
    * @param {Object} historyTransactions Array of transactions
