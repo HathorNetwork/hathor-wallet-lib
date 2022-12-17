@@ -2472,7 +2472,7 @@ class HathorWallet extends EventEmitter {
     const addresses = [];
     const walletData = wallet.getWalletData();
     const stopIndex = startIndex + count;
-    for (const i=startIndex; i < stopIndex; i++) {
+    for (let i = startIndex; i < stopIndex; i++) {
       // Generate each key from index (if not provided pre-calculated)
       // XXX: maybe getAddressAtIndex should get from preCalculated as well
       const address = this.preCalculatedAddresses && this.preCalculatedAddresses[i]
