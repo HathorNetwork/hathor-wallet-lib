@@ -135,9 +135,7 @@ abstract class BaseWebSocket extends EventEmitter {
         }
       }
 
-      this.clearWsListeners();
-      this.ws.close();
-      this.ws = null;
+      this.closeWs();
     }
 
     this.ws = new this.WebSocket(wsURL);
@@ -152,17 +150,24 @@ abstract class BaseWebSocket extends EventEmitter {
   }
 
   /**
-   * Remove all event listeners from the WebSocket instance 
+   * Sets all event listeners to noops on the WebSocket instance 
+   * and close it.
    **/
-  clearWsListeners() {
+  closeWs() {
     if (!this.ws) {
       return;
     }
 
-    this.ws.onopen = null;
-    this.ws.onclose = null;
-    this.ws.onerror = null;
-    this.ws.onmessage = null;
+    this.ws.onopen = () => {};
+    this.ws.onclose = () => {};
+    this.ws.onerror = () => {};
+    this.ws.onmessage = () => {};
+
+    if (this.ws.readyState === _WebSocket.OPEN) {
+      this.ws.close();
+    }
+
+    this.ws = null;
   }
 
   /**
@@ -235,11 +240,7 @@ abstract class BaseWebSocket extends EventEmitter {
     this.connected = false;
     this.connectedDate = null;
     this.setIsOnline(false);
-    if (this.ws) {
-      this.clearWsListeners();
-      this.ws.close();
-      this.ws = null;
-    }
+    this.closeWs();
 
     this.clearSetupTimer();
     this.setupTimer = setTimeout(() => this.setup(), this.retryConnectionInterval);
@@ -312,11 +313,7 @@ abstract class BaseWebSocket extends EventEmitter {
     this.setIsOnline(false);
     this.started = false;
     this.connected = null;
-    if (this.ws) {
-      this.clearWsListeners();
-      this.ws.close();
-      this.ws = null;
-    }
+    this.closeWs();
     // @ts-ignore
     clearInterval(this.heartbeat);
   }
