@@ -134,7 +134,8 @@ abstract class BaseWebSocket extends EventEmitter {
           return;
         }
       }
-      this.ws.onclose = () => {};
+
+      this.clearWsListeners();
       this.ws.close();
       this.ws = null;
     }
@@ -146,6 +147,22 @@ abstract class BaseWebSocket extends EventEmitter {
     this.ws.onmessage = (evt) => this.onMessage(evt);
     this.ws.onerror = (evt) => this.onError(evt);
     this.ws.onclose = () => this.onClose();
+
+    this.started = true;
+  }
+
+  /**
+   * Remove all event listeners from the WebSocket instance 
+   **/
+  clearWsListeners() {
+    if (!this.ws) {
+      return;
+    }
+
+    this.ws.onopen = null;
+    this.ws.onclose = null;
+    this.ws.onerror = null;
+    this.ws.onmessage = null;
   }
 
   /**
@@ -180,9 +197,12 @@ abstract class BaseWebSocket extends EventEmitter {
    * Method called when websocket connection is opened
    */
   onOpen() {
+    if (!this.started) {
+      return;
+    }
+
     this.connected = true;
     this.connectedDate = new Date();
-    this.started = true;
     this.heartbeat = setInterval(() => {
       this.sendPing();
     }, this.heartbeatInterval);
@@ -216,7 +236,7 @@ abstract class BaseWebSocket extends EventEmitter {
     this.connectedDate = null;
     this.setIsOnline(false);
     if (this.ws) {
-      this.ws.onclose = () => {};
+      this.clearWsListeners();
       this.ws.close();
       this.ws = null;
     }
@@ -239,7 +259,7 @@ abstract class BaseWebSocket extends EventEmitter {
    * Method called to send a message to the server
    */
   sendMessage(msg: string) {
-    if (!this.started) {
+    if (!this.started || !this.connected) {
       this.setIsOnline(false);
       return;
     }
@@ -283,7 +303,7 @@ abstract class BaseWebSocket extends EventEmitter {
     });
 
     this.onClose();
-  };
+  }
 
   /**
    * Method called to end a websocket connection
@@ -293,7 +313,7 @@ abstract class BaseWebSocket extends EventEmitter {
     this.started = false;
     this.connected = null;
     if (this.ws) {
-      this.ws.onclose = () => {};
+      this.clearWsListeners();
       this.ws.close();
       this.ws = null;
     }
