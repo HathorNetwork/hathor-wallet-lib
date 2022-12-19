@@ -6,6 +6,7 @@
  */
 
 import EventEmitter from 'events';
+import _ from 'lodash';
 import wallet from '../wallet';
 import { HATHOR_TOKEN_CONFIG, P2SH_ACCT_PATH, P2PKH_ACCT_PATH, LOAD_WALLET_RETRY_SLEEP, LOAD_WALLET_MAX_RETRY, MAX_ADDRESSES_GET, MAX_OUTPUT_VALUE } from '../constants';
 import tokens from '../tokens';
