@@ -13,12 +13,8 @@ import {
   GetAddressesObject,
   WsTransaction,
   CreateWalletAuthData,
-  WalletAddressMap,
 } from '../../src/wallet/types';
-import axios from 'axios';
 import config from '../../src/config';
-import MockAdapter from 'axios-mock-adapter';
-import axiosInstance from '../../src/wallet/api/walletServiceAxios';
 import { buildSuccessTxByIdTokenDataResponse, buildWalletToAuthenticateApiCall, defaultWalletSeed } from '../__fixtures__/wallet.fixtures';
 import Mnemonic from 'bitcore-mnemonic';
 import gWallet from '../../src/wallet';
