@@ -18,6 +18,8 @@ import { HDPrivateKey, crypto, PublicKey } from 'bitcore-lib';
 import transaction from '../src/transaction';
 import { Storage } from '../src/storage';
 import Queue from '../src/models/queue';
+import MemoryStore from '../src/memory_store';
+import walletApi from '../src/api/wallet';
 
 class FakeHathorWallet {
   constructor() {
@@ -509,4 +511,79 @@ test('onTxArrived', async () => {
   expect(hWallet.getPreProcessedData('balanceByToken')).toEqual({
     A: { unlocked: 5, locked: 5, transactions: 1 }
   });
+});
+
+test('loadAddresses', async () => {
+  const hWallet = new FakeHathorWallet();
+
+  const mockGenerateAddr = jest.spyOn(wallet, 'generateAddress').mockImplementation(index => `addr-${index}`);
+  const mockWalletData = jest.spyOn(wallet, 'getWalletData').mockReturnValue({ keys: {} });
+  const mockUpdateAddr = jest.spyOn(wallet, 'updateAddress').mockImplementation((addr, index) => {});
+  const mockUpdateLastIndex = jest.spyOn(wallet, 'updateLastGeneratedIndex').mockImplementation((addr, index) => {});
+  const mockSet = jest.spyOn(wallet, 'setWalletData').mockImplementation((addr, index) => {});
+  const mockGetItem = jest.spyOn(Storage.prototype, 'getItem').mockReturnValue(null);
+
+  hWallet.fetchTxHistory.mockReturnValue(Promise.resolve());
+
+  await hWallet.loadAddresses(10, 20);
+  expect(mockGenerateAddr).toHaveBeenCalledTimes(20);
+  expect(mockUpdateAddr).toHaveBeenCalledWith('addr-10', 10);
+  expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({
+    keys: expect.any(Object),
+  }));
+  const addrs = [];
+  for (let i = 10; i < 30; i++) {
+    addrs.push(`addr-${i}`);
+  }
+  expect(hWallet.fetchTxHistory).toHaveBeenCalledWith(addrs);
+
+  mockGenerateAddr.mockRestore();
+  mockGenerateAddr.mockRestore();
+  mockWalletData.mockRestore();
+  mockUpdateAddr.mockRestore();
+  mockUpdateLastIndex.mockRestore();
+  mockSet.mockRestore();
+  mockGetItem.mockRestore();
+});
+
+test('fetchTxHistory', async () => {
+  const hWallet = new FakeHathorWallet();
+  hWallet.store = new MemoryStore();
+
+  const mockSubAddr = jest.spyOn(wallet, 'subscribeAddress').mockImplementation((addr, conn) => {});
+  const mockApi = jest.spyOn(walletApi, 'getAddressHistoryForAwait').mockImplementation(() => Promise.resolve({
+    data: {
+      success: true,
+      has_more: false,
+      history: [],
+    },
+  }));
+
+  const mockUpdateAddr = jest.spyOn(wallet, 'updateAddress').mockImplementation((addr, index) => {});
+  const mockUpdateLastIndex = jest.spyOn(wallet, 'updateLastGeneratedIndex').mockImplementation((addr, index) => {});
+  const mockSet = jest.spyOn(wallet, 'setWalletData').mockImplementation((addr, index) => {});
+  const mockGetItem = jest.spyOn(storage, 'getItem').mockReturnValue(null);
+
+  hWallet.fetchTxHistory.mockReturnValue(Promise.resolve());
+
+  await hWallet.loadAddresses(10, 20);
+  expect(mockGenerateAddr).toHaveBeenCalledTimes(20);
+  expect(mockUpdateAddr).toHaveBeenCalledWith('addr-10', 10);
+  expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({
+    keys: expect.any(Object),
+  }));
+  const addrs = [];
+  for (let i = 10; i < 30; i++) {
+    addrs.push(`addr-${i}`);
+  }
+  expect(hWallet.fetchTxHistory).toHaveBeenCalledWith(addrs);
+
+  mockSubAddr.mockRestore();
+
+  mockGenerateAddr.mockRestore();
+  mockWalletData.mockRestore();
+  mockUpdateAddr.mockRestore();
+  mockUpdateLastIndex.mockRestore();
+  mockSet.mockRestore();
+  mockGetItem.mockRestore();
 });

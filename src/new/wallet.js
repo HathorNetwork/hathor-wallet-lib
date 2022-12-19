@@ -2470,6 +2470,8 @@ class HathorWallet extends EventEmitter {
    * @inner
    */
   async loadAddresses(startIndex, count) {
+    storage.setStore(this.store);
+
     const addresses = [];
     const walletData = wallet.getWalletData();
     const stopIndex = startIndex + count;
@@ -2494,6 +2496,7 @@ class HathorWallet extends EventEmitter {
   }
 
   async fetchTxHistory(addresses) {
+    storage.setStore(this.store);
     // Split addresses array into chunks of at most MAX_ADDRESSES_GET size
     // this is good when a use case customizes the GAP_LIMIT (e.g. 4000) then we don't
     // request /address_history with 4000 addresses
@@ -2587,7 +2590,7 @@ class HathorWallet extends EventEmitter {
    * @returns {Promise<void>} A promise that will resolve when the addresses are loaded
    */
   async checkGapLimit() {
-    storage.setStore(store);
+    storage.setStore(this.store);
     const lastGeneratedIndex = wallet.getLastGeneratedIndex();
     const lastUsedIndex = wallet.getLastUsedIndex();
     const gapLimit = wallet.getGapLimit();
@@ -2605,6 +2608,7 @@ class HathorWallet extends EventEmitter {
    * @inner
    */
   async reloadData() {
+    storage.setStore(this.store);
     // Get old access data
     const accessData = wallet.getWalletAccessData();
 
@@ -2637,7 +2641,7 @@ class HathorWallet extends EventEmitter {
    * @inner
    */
   saveNewHistory(newHistory) {
-    storage.setStore(store);
+    storage.setStore(this.store);
 
     const walletData = wallet.getWalletData();
     const oldHistoryTransactions = 'historyTransactions' in walletData ? walletData['historyTransactions'] : {};
