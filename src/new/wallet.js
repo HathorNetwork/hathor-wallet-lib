@@ -2509,7 +2509,7 @@ class HathorWallet extends EventEmitter {
 
       // Subscribe in websocket to the addresses
       for (let address of addressesToSearch) {
-        wallet.subscribeAddress(address, connection);
+        wallet.subscribeAddress(address, this.conn);
       }
 
       while (hasMore === true) {
