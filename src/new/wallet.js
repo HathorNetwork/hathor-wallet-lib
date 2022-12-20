@@ -2543,7 +2543,7 @@ class HathorWallet extends EventEmitter {
           }
 
           retryCount += 1;
-          await helperUtils.sleep(LOAD_WALLET_RETRY_SLEEP);
+          await helpers.sleep(LOAD_WALLET_RETRY_SLEEP);
           continue;
         } finally {
           // After each thin_wallet/address_history call we should release the event loop
@@ -2621,8 +2621,8 @@ class HathorWallet extends EventEmitter {
       historyTransactions: {},
     }
 
-    this.setWalletAccessData(accessData);
-    this.setWalletData(newWalletData);
+    wallet.setWalletAccessData(accessData);
+    wallet.setWalletData(newWalletData);
     this.preProcessedData = {};
 
     // Load history from server

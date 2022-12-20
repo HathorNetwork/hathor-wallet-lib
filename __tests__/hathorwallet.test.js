@@ -549,41 +549,112 @@ test('loadAddresses', async () => {
 test('fetchTxHistory', async () => {
   const hWallet = new FakeHathorWallet();
   hWallet.store = new MemoryStore();
+  hWallet.conn = {
+    websocket: {
+      emit: jest.fn(),
+    }
+  }
 
   const mockSubAddr = jest.spyOn(wallet, 'subscribeAddress').mockImplementation((addr, conn) => {});
-  const mockApi = jest.spyOn(walletApi, 'getAddressHistoryForAwait').mockImplementation(() => Promise.resolve({
+  const mockApi = jest.spyOn(walletApi, 'getAddressHistoryForAwait');
+  // Should retry with timeout errors
+  mockApi.mockImplementationOnce(() => {
+    throw {
+      code: 'ECONNABORTED',
+      response: undefined,
+      message: 'Timeout',
+    };
+  });
+
+  mockApi.mockImplementationOnce(() => Promise.resolve({
+    data: {
+      success: true,
+      has_more: true,
+      first_hash: 'a-hash-to-send',
+      first_address: 'addr2',
+      history: ['tx1'],
+    },
+  }));
+  // Should retry on any error
+  mockApi.mockImplementationOnce(() => {
+    throw new Error('boom!');
+  });
+  mockApi.mockImplementationOnce(() => Promise.resolve({
     data: {
       success: true,
       has_more: false,
-      history: [],
+      history: ['tx2', 'tx3'],
     },
   }));
 
-  const mockUpdateAddr = jest.spyOn(wallet, 'updateAddress').mockImplementation((addr, index) => {});
-  const mockUpdateLastIndex = jest.spyOn(wallet, 'updateLastGeneratedIndex').mockImplementation((addr, index) => {});
-  const mockSet = jest.spyOn(wallet, 'setWalletData').mockImplementation((addr, index) => {});
-  const mockGetItem = jest.spyOn(storage, 'getItem').mockReturnValue(null);
+  hWallet.saveNewHistory.mockReturnValue('history-partial-update');
+  hWallet.checkGapLimit.mockReturnValue(Promise.resolve());
 
-  hWallet.fetchTxHistory.mockReturnValue(Promise.resolve());
-
-  await hWallet.loadAddresses(10, 20);
-  expect(mockGenerateAddr).toHaveBeenCalledTimes(20);
-  expect(mockUpdateAddr).toHaveBeenCalledWith('addr-10', 10);
-  expect(mockSet).toHaveBeenCalledWith(expect.objectContaining({
-    keys: expect.any(Object),
-  }));
-  const addrs = [];
-  for (let i = 10; i < 30; i++) {
-    addrs.push(`addr-${i}`);
-  }
-  expect(hWallet.fetchTxHistory).toHaveBeenCalledWith(addrs);
+  await hWallet.fetchTxHistory(['addr1', 'addr2', 'addr3']);
+  expect(mockSubAddr).toHaveBeenCalledTimes(3);
+  expect(mockApi).toHaveBeenCalledTimes(4);
+  expect(hWallet.saveNewHistory).toBeCalledWith(['tx1', 'tx2', 'tx3']);
+  expect(hWallet.conn.websocket.emit).toHaveBeenCalled();
+  expect(hWallet.checkGapLimit).toHaveBeenCalled();
 
   mockSubAddr.mockRestore();
+  mockApi.mockRestore();
+}, 10000);
 
-  mockGenerateAddr.mockRestore();
-  mockWalletData.mockRestore();
-  mockUpdateAddr.mockRestore();
-  mockUpdateLastIndex.mockRestore();
-  mockSet.mockRestore();
-  mockGetItem.mockRestore();
+test('checkGapLimit', async () => {
+  const hWallet = new FakeHathorWallet();
+  hWallet.store = new MemoryStore();
+
+  const mockLastGenIndex = jest.spyOn(wallet, 'getLastGeneratedIndex');
+  const mockLastUsedIndex = jest.spyOn(wallet, 'getLastUsedIndex');
+  const mockGapLimit = jest.spyOn(wallet, 'getGapLimit');
+
+  hWallet.loadAddresses.mockImplementation(() => Promise.resolve());
+
+  mockLastGenIndex.mockReturnValue(35);
+  mockLastUsedIndex.mockReturnValue(15);
+  mockGapLimit.mockReturnValue(25);
+  // Gap is 20 but gap-limit is 25, will call for another 5
+  await hWallet.checkGapLimit();
+  expect(hWallet.loadAddresses).toHaveBeenCalledWith(36, 5);
+  hWallet.loadAddresses.mockClear();
+
+  mockLastGenIndex.mockReturnValue(100);
+  mockLastUsedIndex.mockReturnValue(90);
+  mockGapLimit.mockReturnValue(5);
+  // Gap is 10 but gap-limit is 5, will not call for more addresses
+  await hWallet.checkGapLimit();
+  expect(hWallet.loadAddresses).not.toHaveBeenCalled();
+
+  mockLastGenIndex.mockRestore();
+  mockLastUsedIndex.mockRestore();
+  mockGapLimit.mockRestore();
+});
+
+test('reloadData', async () => {
+  const hWallet = new FakeHathorWallet();
+  hWallet.store = new MemoryStore();
+  hWallet.conn = {
+    setup: jest.fn(),
+  }
+
+  const mockClean = jest.spyOn(wallet, 'cleanWallet').mockImplementation(() => {});
+  const mockAccess = jest.spyOn(wallet, 'getWalletAccessData').mockImplementation(() => 'wallet-access-data');
+  const mockGapLimit = jest.spyOn(wallet, 'getGapLimit').mockImplementation(() => 40);
+  const mockSetAccess = jest.spyOn(wallet, 'setWalletAccessData').mockImplementation(() => {});
+  const mockSetData = jest.spyOn(wallet, 'setWalletData').mockImplementation(() => {});
+  hWallet.loadAddresses.mockImplementation(() => Promise.resolve());
+
+  await hWallet.reloadData();
+  expect(mockClean).toHaveBeenCalled();
+  expect(mockAccess).toHaveBeenCalled();
+  expect(hWallet.conn.setup).toHaveBeenCalled();
+  expect(mockSetAccess).toHaveBeenCalled();
+  expect(mockSetData).toHaveBeenCalled();
+  expect(hWallet.loadAddresses).toHaveBeenCalledWith(0, 40);
+  mockClean.mockRestore();
+  mockAccess.mockRestore();
+  mockGapLimit.mockRestore();
+  mockSetAccess.mockRestore();
+  mockSetData.mockRestore();
 });
