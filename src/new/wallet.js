@@ -500,6 +500,9 @@ class HathorWallet extends EventEmitter {
    * @inner
    */
   getAddressAtIndex(index) {
+    if (this.preCalculatedAddresses && this.preCalculatedAddresses[index]) {
+      return this.preCalculatedAddresses[index];
+    }
     storage.setStore(this.store);
     return wallet.getAddressAtIndex(index);
   }
@@ -2477,7 +2480,6 @@ class HathorWallet extends EventEmitter {
     const stopIndex = startIndex + count;
     for (let i = startIndex; i < stopIndex; i++) {
       // Generate each key from index (if not provided pre-calculated)
-      // XXX: maybe getAddressAtIndex should get from preCalculated as well
       const address = this.preCalculatedAddresses && this.preCalculatedAddresses[i]
         ? this.preCalculatedAddresses[i]
         : wallet.generateAddress(i);
@@ -2716,7 +2718,7 @@ class HathorWallet extends EventEmitter {
       // Setting last shared address, if necessary
       const candidateIndex = maxIndex + 1;
       if (candidateIndex > lastSharedIndex) {
-        const address = wallet.getAddressAtIndex(candidateIndex);
+        const address = this.getAddressAtIndex(candidateIndex);
         wallet.updateAddress(address, candidateIndex);
       }
     }
