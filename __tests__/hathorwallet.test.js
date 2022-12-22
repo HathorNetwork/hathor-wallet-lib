@@ -20,6 +20,7 @@ import { Storage } from '../src/storage';
 import Queue from '../src/models/queue';
 import MemoryStore from '../src/memory_store';
 import walletApi from '../src/api/wallet';
+import { SampleTx } from './__fixtures__/sample_txs';
 
 class FakeHathorWallet {
   constructor() {
@@ -657,4 +658,52 @@ test('reloadData', async () => {
   mockGapLimit.mockRestore();
   mockSetAccess.mockRestore();
   mockSetData.mockRestore();
+});
+
+test('saveNewHistory', async () => {
+  const hWallet = new FakeHathorWallet();
+  hWallet.store = new MemoryStore();
+  hWallet.conn = {
+    setup: jest.fn(),
+  }
+
+  const mockWalletData = jest.spyOn(wallet, 'getWalletData').mockReturnValue({
+    allTokens: ['tokenA', '00'],
+    keys: {
+      'WSu4PZVu6cvi3aejtG8w7bomVmg77DtqYt': { index: 5 },
+      'Wi8zvxdXHjaUVAoCJf52t3WovTZYcU9aX6': { index: 6 },
+    },
+    historyTransaction: {},
+  });
+  const mockLastUsedIndex = jest.spyOn(wallet, 'getLastUsedIndex').mockReturnValue(4);
+  const mockLastSharedIndex = jest.spyOn(wallet, 'getLastSharedIndex').mockReturnValue(4);
+  const mockSetUsedIndex = jest.spyOn(wallet, 'setLastUsedIndex').mockImplementation(() => {});
+  const mockGetAddr = jest.spyOn(wallet, 'getAddressAtIndex').mockReturnValue('W123');
+  const mockUpdateAddr = jest.spyOn(wallet, 'updateAddress').mockImplementation(() => {});
+  const mockSaveHist = jest.spyOn(wallet, 'saveAddressHistory').mockImplementation(() => {});
+  const mockLastGenIndex = jest.spyOn(wallet, 'getLastGeneratedIndex').mockReturnValue(127);
+
+  expect(await hWallet.saveNewHistory([SampleTx])).toEqual({
+    addressesFound: 128,
+    maxIndex: 6,
+    historyLength: 1,
+  });
+  expect(mockSetUsedIndex).toHaveBeenCalledWith('Wi8zvxdXHjaUVAoCJf52t3WovTZYcU9aX6');
+  expect(mockGetAddr).toHaveBeenCalledWith(7);
+  expect(mockUpdateAddr).toHaveBeenCalledWith('W123', 7);
+  expect(mockSaveHist).toHaveBeenCalled()
+
+  // Check we catch all tokens including previous tokens on storage
+  expect(mockSaveHist.mock.calls[0][1]).toContain('00');
+  expect(mockSaveHist.mock.calls[0][1]).toContain('tokenA');
+  expect(mockSaveHist.mock.calls[0][1]).toContain('0025a6488045d7466639ead179a7f6beb188320f41cdb6df3a971db2ee86dbc3');
+
+  mockWalletData.mockRestore();
+  mockLastUsedIndex.mockRestore();
+  mockLastSharedIndex.mockRestore();
+  mockSetUsedIndex.mockRestore();
+  mockGetAddr.mockRestore();
+  mockUpdateAddr.mockRestore();
+  mockSaveHist.mockRestore();
+  mockLastGenIndex.mockRestore();
 });

@@ -91,3 +91,69 @@ export const nftCreationTx = {
   token_symbol: 'NNFT',
   tokens: [],
 };
+
+export const SampleTx = {
+  hash: '00002d36afd5826ed6cab8efbc4de3419facfd5fb79afa812f3adaa5ec69eadd',
+  version: 1,
+  weight: 17.10059579555697,
+  timestamp: 1661630043,
+  is_voided: false,
+  parents: [
+    '000005303f099333c036a0f4242ea7f902a16fe9e56c1d9291ebc8d1f4e4a58b',
+    '00000e13e779c60dff3685f8017e2e63a819dba2650c87359db5c0300ed06bc1'
+  ],
+  inputs: [
+    {
+      value: 10,
+      token_data: 0,
+      token: '00',
+      script: 'dqkUI3QgCrwQsFYF+OZpRkir842xyJaIrA==',
+      decoded: {
+        type: 'P2PKH',
+        address: 'H9kb9aNd5r2UDgjKJVYJ4Jc3DF3L8ve5Pp',
+        timelock: null,
+      },
+      tx_id: '00001070597c712fa0fcf7e289849d88f0fdd2bc9a948404c885f3e21b8eac4a',
+      index: 1
+    },
+    {
+      value: 20,
+      token_data: 1,
+      token: '0025a6488045d7466639ead179a7f6beb188320f41cdb6df3a971db2ee86dbc3',
+      script: 'dqkULlcsARvA+pQS8qytBr6Ryjc/SLeIrA==',
+      decoded: {
+        type: 'P2PKH',
+        address: 'WSu4PZVu6cvi3aejtG8w7bomVmg77DtqYt',
+        timelock: null,
+      },
+      tx_id: '00001070597c712fa0fcf7e289849d88f0fdd2bc9a948404c885f3e21b8eac4a',
+      index: 1
+    },
+  ],
+  outputs: [
+    {
+      value: 2,
+      token_data: 0,
+      token: '00',
+      script: 'dqkULlcsARvA+pQS8qytBr6Ryjc/SLeIrA==',
+      decoded: {
+        type: 'P2PKH',
+        address: 'WSu4PZVu6cvi3aejtG8w7bomVmg77DtqYt',
+        timelock: null,
+      },
+      spent_by: null,
+    },
+    {
+      value: 10,
+      token_data: 0,
+      token: '00',
+      script: 'dqkU1YP+t130UoYD+3ys9MYt1zkWeY6IrA==',
+      decoded: {
+        type: 'P2PKH',
+        address: 'Wi8zvxdXHjaUVAoCJf52t3WovTZYcU9aX6',
+        timelock: null,
+      },
+      spent_by: null,
+    }
+  ],
+};
