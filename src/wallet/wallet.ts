@@ -561,9 +561,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * Check if wallet is ready and throw error if not ready
    *
    * @memberof HathorWalletServiceWallet
-   * @inner
+   * @public
    */
-  private failIfWalletNotReady() {
+  public failIfWalletNotReady() {
     if (!this.isReady()) {
       throw new WalletError('Wallet not ready');
     }

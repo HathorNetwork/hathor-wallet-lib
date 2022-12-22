@@ -5,6 +5,7 @@ import config from "../src/config";
 
 test('registerDevice', async () => {
   const wallet = buildWalletToAuthenticateApiCall();
+  jest.spyOn(wallet, 'isReady').mockReturnValue(true);
   config.setWalletServiceBaseUrl('https://wallet-service.testnet.hathor.network/');
 
   mockAxiosAdapter.reset();

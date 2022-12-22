@@ -373,45 +373,6 @@ export interface FullNodeVersionData {
   maxNumberOutputs: number;
 };
 
-export interface PushNotificationResponseData {
-  success: boolean,
-  error?: string,
-  /** This property shows up in case of validation error. */
-  details?: {message: string, path: string}[]
-};
-
-export interface PushNotificationResult {
-  success: boolean,
-}
-
-enum PushNotificationProvider {
-  IOS = 'ios',
-  ANDROID = 'android',
-}
-
-export interface PushRegisterRequestData {
-  pushProvider: PushNotificationProvider,
-  deviceId: string,
-  enablePush?: boolean,
-  enableShowAmounts?: boolean,
-};
-
-export interface PushRegisterResponseData extends PushNotificationResponseData {};
-
-export interface PushUpdateRequestData {
-  deviceId: string,
-  enablePush: boolean,
-  enableShowAmounts: boolean,
-};
-
-export interface PushUpdateResponseData extends PushNotificationResponseData {};
-
-export interface PushUnregisterRequestData {
-  deviceId: string,
-}
-
-export interface PushUnregisterResponseData extends PushNotificationResponseData {};
-
 export interface TxByIdTokenData {
   txId: string;
   timestamp: number;
