@@ -47,3 +47,38 @@ test('Error on ws should emit connection_error event', () => {
 
   WebSocketHandler.ws.onError(new Error('expect-me'));
 })
+
+test('websocket started flag should be set after setup()', () => {
+  const ws = new WS({ wsURL: helpers.getWSServerURL() });
+  ws.WebSocket = WebSocket; // Mocked websocket
+
+  expect(ws.started).toBe(false);
+  ws.setup();
+  expect(ws.started).toBe(true);
+});
+
+test('onOpen event should be ignored if started is false', () => {
+  const ws = new WS({ wsURL: helpers.getWSServerURL() });
+
+  expect(ws.connected).toBe(false);
+  expect(ws.started).toBe(false);
+
+  ws.onOpen();
+
+  expect(ws.connected).toBe(false);
+  expect(ws.started).toBe(false);
+  expect(ws.connectedDate).toBe(null);
+
+  ws.setup();
+
+  expect(ws.connected).toBe(false);
+  expect(ws.started).toBe(true);
+
+  ws.onOpen();
+
+  expect(ws.connected).toBe(true);
+  expect(ws.started).toBe(true);
+  expect(ws.connectedDate).not.toBe(null);
+
+  clearInterval(ws.heartbeat);
+});
