@@ -20,11 +20,6 @@ import {
   TxOutputResponseData,
   AuthTokenResponseData,
   FullNodeVersionData,
-  PushRegisterRequestData,
-  PushRegisterResponseData,
-  PushUpdateRequestData,
-  PushUpdateResponseData,
-  PushUnregisterResponseData,
   TxByIdTokensResponseData,
 } from '../types';
 import HathorWalletServiceWallet from '../wallet';
@@ -221,37 +216,6 @@ const walletApi = {
       return response.data;
     } else {
       throw new WalletRequestError('Error requesting auth token.');
-    }
-  },
-
-  async pushRegister(wallet: HathorWalletServiceWallet, payload: PushRegisterRequestData): Promise<PushRegisterResponseData> {
-    const axios = await axiosInstance(wallet, true);
-
-    const response = await axios.post<PushRegisterResponseData>('push/register', payload);
-    if (response.status === 200 && response.data.success) {
-      return response.data;
-    } else {
-      throw new WalletRequestError('Error registering device for push notification.', { cause: response.data });
-    }
-  },
-
-  async pushUpdate(wallet: HathorWalletServiceWallet, payload: PushUpdateRequestData): Promise<PushUpdateResponseData> {
-    const axios = await axiosInstance(wallet, true);
-    const response = await axios.put<PushUpdateResponseData>('push/update', payload);
-    if (response.status === 200 && response.data.success) {
-      return response.data;
-    } else {
-      throw new WalletRequestError('Error updating push notification settings for device.', { cause: response.data });
-    }
-  },
-
-  async pushUnregister(wallet: HathorWalletServiceWallet, deviceId: string): Promise<PushUnregisterResponseData> {
-    const axios = await axiosInstance(wallet, true);
-    const response = await axios.delete(`push/unregister/${deviceId}`);
-    if (response.status === 200 && response.data.success) {
-      return response.data;
-    } else {
-      throw new WalletRequestError('Error unregistering wallet from push notifications.', { cause: response.data });
     }
   },
 

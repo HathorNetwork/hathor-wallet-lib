@@ -1,5 +1,6 @@
-import walletApi from './wallet/api/walletApi';
 import HathorWalletServiceWallet from './wallet/wallet';
+import { axiosInstance } from './wallet/api/walletServiceAxios';
+import { WalletRequestError } from './errors';
 
 export class PushNotification {
 
@@ -11,7 +12,7 @@ export class PushNotification {
    */
   static async registerDevice(wallet: HathorWalletServiceWallet, payload: PushRegisterRequestData): Promise<PushNotificationResult> {
     wallet.failIfWalletNotReady();
-    const data = await walletApi.pushRegister(wallet, payload);
+    const data = await walletServiceClient.pushRegister(wallet, payload);
     return data;
   }
 
@@ -23,7 +24,7 @@ export class PushNotification {
    */
   static async updateDevice(wallet: HathorWalletServiceWallet, payload: PushUpdateRequestData): Promise<PushNotificationResult> {
     wallet.failIfWalletNotReady();
-    const data = await walletApi.pushUpdate(wallet, payload);
+    const data = await walletServiceClient.pushUpdate(wallet, payload);
     return data;
   }
 
@@ -35,9 +36,52 @@ export class PushNotification {
    */
   static async unregisterDevice(wallet: HathorWalletServiceWallet, deviceId: string): Promise<PushNotificationResult> {
     wallet.failIfWalletNotReady();
-    const data = await walletApi.pushUnregister(wallet, deviceId);
+    const data = await walletServiceClient.pushUnregister(wallet, deviceId);
     return data;
   }
+}
+
+const walletServiceClient = {
+  async pushRegister(wallet: HathorWalletServiceWallet, payload: PushRegisterRequestData): Promise<PushRegisterResponseData> {
+    const axios = await axiosInstance(wallet, true);
+
+    const response = await axios.post<PushRegisterResponseData>('push/register', payload);
+    if (response.status === 200 && response.data.success) {
+      return response.data;
+    } else {
+      throw new WalletRequestError('Error registering device for push notification.', { cause: response.data });
+    }
+  },
+
+  async pushUpdate(wallet: HathorWalletServiceWallet, payload: PushUpdateRequestData): Promise<PushUpdateResponseData> {
+    const axios = await axiosInstance(wallet, true);
+    const response = await axios.put<PushUpdateResponseData>('push/update', payload);
+    if (response.status === 200 && response.data.success) {
+      return response.data;
+    } else {
+      throw new WalletRequestError('Error updating push notification settings for device.', { cause: response.data });
+    }
+  },
+
+  async pushUnregister(wallet: HathorWalletServiceWallet, deviceId: string): Promise<PushUnregisterResponseData> {
+    const axios = await axiosInstance(wallet, true);
+    const response = await axios.delete(`push/unregister/${deviceId}`);
+    if (response.status === 200 && response.data.success) {
+      return response.data;
+    } else {
+      throw new WalletRequestError('Error unregistering wallet from push notifications.', { cause: response.data });
+    }
+  },
+
+}
+
+export interface PushNotificationResult {
+  success: boolean,
+}
+
+export enum PushNotificationProvider {
+  IOS = 'ios',
+  ANDROID = 'android',
 }
 
 export interface PushNotificationResponseData {
@@ -46,15 +90,6 @@ export interface PushNotificationResponseData {
   /** This property shows up in case of validation error. */
   details?: {message: string, path: string}[]
 };
-
-export interface PushNotificationResult {
-  success: boolean,
-}
-
-enum PushNotificationProvider {
-  IOS = 'ios',
-  ANDROID = 'android',
-}
 
 export interface PushRegisterRequestData {
   pushProvider: PushNotificationProvider,
@@ -72,9 +107,5 @@ export interface PushUpdateRequestData {
 };
 
 export interface PushUpdateResponseData extends PushNotificationResponseData {};
-
-export interface PushUnregisterRequestData {
-  deviceId: string,
-}
 
 export interface PushUnregisterResponseData extends PushNotificationResponseData {};

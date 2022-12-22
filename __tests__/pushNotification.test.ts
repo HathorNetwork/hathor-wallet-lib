@@ -1,6 +1,6 @@
 import { mockAxiosAdapter } from "./__mocks__/wallet.mock";
 import { buildWalletToAuthenticateApiCall } from "./__fixtures__/wallet.fixtures";
-import { PushNotification } from "../src/pushNotification";
+import { PushNotification, PushNotificationProvider } from "../src/pushNotification";
 import config from "../src/config";
 
 test('registerDevice', async () => {
@@ -21,11 +21,11 @@ test('registerDevice', async () => {
       details: [{ message: '"deviceId" length must be less than or equal to 256 characters long', path: ['deviceId'] }],
     });
 
-  const successCall = PushNotification.registerDevice(wallet, { deviceId: '123', pushProvider: 'android', enablePush: true });
+  const successCall = PushNotification.registerDevice(wallet, { deviceId: '123', pushProvider: PushNotificationProvider.ANDROID, enablePush: true });
   
   await expect(successCall).resolves.toStrictEqual({ success: true });
 
-  const invalidCall = PushNotification.registerDevice(wallet, { deviceId: '123', pushProvider: 'android', enablePush: true });
+  const invalidCall = PushNotification.registerDevice(wallet, { deviceId: '123', pushProvider: PushNotificationProvider.ANDROID, enablePush: true });
 
   await expect(invalidCall).rejects.toThrowError('Error registering device for push notification.');
 });
