@@ -171,6 +171,7 @@ abstract class BaseWebSocket extends EventEmitter {
 
     this.ws = null;
     this.started = false;
+    this.connected = false;
   }
 
   /**
