@@ -40,9 +40,12 @@ abstract class BaseWebSocket extends EventEmitter {
   private ws: _WebSocket;
   // This is the URL of the websocket.
   private wsURL: string | Function;
-  // Boolean to show when there is a websocket started with the server
+  // Boolean that indicates that the websocket was instantiated. It's important to
+  // notice that it does not indicate that the connection has been established with
+  // the server, which is what the `connected` flag indicates
   private started: boolean;
-  // Boolean to show when the websocket connection is working
+  // Boolean to show when the websocket connection was established with the 
+  // server. This gets set to true on the onOpen event listener.
   private connected: boolean | null;
   // Boolean to show when the websocket is online
   private isOnline: boolean;
@@ -261,6 +264,9 @@ abstract class BaseWebSocket extends EventEmitter {
    * Method called to send a message to the server
    */
   sendMessage(msg: string) {
+    // The started flag means that the websocket instance has been
+    // instantiated, but it does not mean that the connection was 
+    // successful yet, which is what the connected flags indicates.
     if (!this.started || !this.connected) {
       this.setIsOnline(false);
       return;
