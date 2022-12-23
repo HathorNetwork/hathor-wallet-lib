@@ -48,15 +48,6 @@ test('Error on ws should emit connection_error event', () => {
   WebSocketHandler.ws.onError(new Error('expect-me'));
 })
 
-test('websocket started flag should be set after setup()', () => {
-  const ws = new WS({ wsURL: helpers.getWSServerURL() });
-  ws.WebSocket = WebSocket; // Mocked websocket
-
-  expect(ws.started).toBe(false);
-  ws.setup();
-  expect(ws.started).toBe(true);
-});
-
 test('onOpen event should be ignored if started is false', () => {
   const ws = new WS({ wsURL: helpers.getWSServerURL() });
 
@@ -81,4 +72,32 @@ test('onOpen event should be ignored if started is false', () => {
   expect(ws.connectedDate).not.toBe(null);
 
   clearInterval(ws.heartbeat);
+});
+
+test('sendMessage should return early if called before onOpen', () => {
+  const ws = new WS({ wsURL: helpers.getWSServerURL() });
+
+  expect(ws.connected).toBe(false);
+  expect(ws.started).toBe(false);
+
+  ws.setup();
+
+  const sendMock = jest.fn();
+  ws.ws.send = sendMock;
+
+  expect(ws.connected).toBe(false);
+  expect(ws.started).toBe(true);
+
+  ws.sendMessage('test');
+
+  expect(sendMock).toHaveBeenCalledTimes(0);
+
+  ws.onOpen();
+  ws.ws.readyState = 1;
+
+  expect(ws.connected).toBe(true);
+
+  ws.sendMessage('test');
+
+  expect(sendMock).toHaveBeenCalledTimes(1);
 });
