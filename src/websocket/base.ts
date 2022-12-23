@@ -8,7 +8,6 @@
 import { EventEmitter } from 'events';
 import _WebSocket from 'isomorphic-ws';
 
-const WS_READYSTATE_READY = 1;
 export const DEFAULT_WS_OPTIONS = {
   wsURL: 'wss://node1.mainnet.hathor.network/v1a/',
   heartbeatInterval: 3000,
@@ -272,7 +271,7 @@ abstract class BaseWebSocket extends EventEmitter {
       return;
     }
 
-    if (this.ws.readyState === WS_READYSTATE_READY) {
+    if (this.ws.readyState === _WebSocket.OPEN) {
       this.ws.send(msg);
     } else {
       // If it is still connecting, we wait a little and try again
