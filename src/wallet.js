@@ -2286,7 +2286,7 @@ const wallet = {
       // If one of the outputs has a value that cannot be handled by the wallet we discard it
       for (const output of tx.outputs) {
         if (output.value > MAX_OUTPUT_VALUE) {
-          throw new OutputValueError(`Transaction with id ${tx.tx_id} has output value of ${helpers.prettyValue(output.value)}. Maximum value is ${helpers.prettyValue(MAX_OUTPUT_VALUE)}`);
+          throw new OutputValueError(`Transaction with id ${tx.tx_id} has output value of ${helperUtils.prettyValue(output.value)}. Maximum value is ${helperUtils.prettyValue(MAX_OUTPUT_VALUE)}`);
         }
       }
 

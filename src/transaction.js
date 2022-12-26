@@ -13,6 +13,7 @@ import { hexToBuffer } from './utils/buffer';
 import transactionUtils from './utils/transaction';
 import dateFormatter from './date';
 import helpers from './helpers';
+import helpersUtils from './helpers';
 import network from './network';
 import wallet from './wallet';
 import storage from './storage';
@@ -660,7 +661,7 @@ const transaction = {
       throw new OutputValueError('Output value must be positive');
     }
     if (value > MAX_OUTPUT_VALUE) {
-      throw new OutputValueError(`Maximum value is ${helpers.prettyValue(MAX_OUTPUT_VALUE)}`);
+      throw new OutputValueError(`Maximum value is ${helpersUtils.prettyValue(MAX_OUTPUT_VALUE)}`);
     }
     if (value > MAX_OUTPUT_VALUE_32) {
       return this.signedIntToBytes(-value, 8);
@@ -764,7 +765,7 @@ const transaction = {
     try {
       data = transaction.prepareData(data, pin, options);
     } catch (e) {
-      const message = helpers.handlePrepareDataError(e);
+      const message = helpersUtils.handlePrepareDataError(e);
       return Promise.reject(message);
     }
     return transaction.sendPreparedTransaction(data);

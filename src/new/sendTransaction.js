@@ -6,14 +6,13 @@
  */
 
 import EventEmitter from 'events';
-import { MIN_POLLING_INTERVAL, SELECT_OUTPUTS_TIMEOUT, HATHOR_TOKEN_CONFIG } from '../constants';
+import { SELECT_OUTPUTS_TIMEOUT, HATHOR_TOKEN_CONFIG } from '../constants';
 import transaction from '../transaction';
 import helpers from '../utils/helpers';
 import txApi from '../api/txApi';
 import { WalletError, SendTxError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import wallet from '../wallet';
-import oldHelpers from '../helpers';
 import storage from '../storage';
 import MineTransaction from '../wallet/mineTransaction';
 import Address from '../models/address';
@@ -231,7 +230,7 @@ class SendTransaction extends EventEmitter {
       this.transaction = helpers.createTxFromData(preparedData, this.network);
       return this.transaction;
     } catch(e) {
-      const message = oldHelpers.handlePrepareDataError(e);
+      const message = helpers.handlePrepareDataError(e);
       throw new SendTxError(message);
     }
   }
@@ -275,7 +274,7 @@ class SendTransaction extends EventEmitter {
       this.transaction = helpers.createTxFromData(preparedData, this.network);
       return this.transaction;
     } catch(e) {
-      const message = oldHelpers.handlePrepareDataError(e);
+      const message = helpers.handlePrepareDataError(e);
       throw new SendTxError(message);
     }
   }

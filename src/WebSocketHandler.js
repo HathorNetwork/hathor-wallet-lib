@@ -7,7 +7,7 @@
 
 
 import wallet from './wallet';
-import helpers from './helpers';
+import helpersUtils from './utils/helpers';
 import WS from './websocket';
 import EventEmitter from 'events';
 
@@ -21,7 +21,7 @@ class WebSocketHandler extends EventEmitter {
 
   setup() {
     if (this.websocket === null) {
-      this.websocket = new WS({ wsURL: helpers.getWSServerURL });
+      this.websocket = new WS({ wsURL: helpersUtils.getWSServerURL });
 
       this.on('is_online', this.handleIsOnline);
 

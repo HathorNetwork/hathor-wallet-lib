@@ -11,7 +11,6 @@ import { hexToBuffer } from './utils/buffer';
 import transaction from './transaction';
 import wallet from './wallet';
 import storage from './storage';
-import helpers from './helpers';
 import network from './network';
 import helpersUtils from './utils/helpers';
 import walletApi from './api/wallet';
@@ -311,10 +310,10 @@ const tokens = {
   tokenInfoExists(name, symbol) {
     const tokens = this.getTokens();
     for (const token of tokens) {
-      if (helpers.cleanupString(token.name) === helpers.cleanupString(name)) {
+      if (helpersUtils.cleanupString(token.name) === helpersUtils.cleanupString(name)) {
         return {token, key: 'name'};
       }
-      if (helpers.cleanupString(token.symbol) === helpers.cleanupString(symbol)) {
+      if (helpersUtils.cleanupString(token.symbol) === helpersUtils.cleanupString(symbol)) {
         return {token, key: 'symbol'};
       }
     }
@@ -948,7 +947,7 @@ const tokens = {
       const preparedData = transaction.prepareData(data, pin, options);
       return {success: true, preparedData};
     } catch (e) {
-      const message = helpers.handlePrepareDataError(e);
+      const message = helpersUtils.handlePrepareDataError(e);
       return {success: false, message};
     }
   },
@@ -1065,7 +1064,7 @@ const tokens = {
     }
     const htrInputs = wallet.getInputsFromAmount(data.historyTransactions, depositAmount, HATHOR_TOKEN_CONFIG.uid);
     if (htrInputs.inputsAmount < depositAmount) {
-      throw new InsufficientFundsError(`Not enough HTR tokens for deposit: ${helpers.prettyValue(depositAmount)} required, ${helpers.prettyValue(htrInputs.inputsAmount)} available`);
+      throw new InsufficientFundsError(`Not enough HTR tokens for deposit: ${helpersUtils.prettyValue(depositAmount)} required, ${helpersUtils.prettyValue(htrInputs.inputsAmount)} available`);
     }
     if (htrInputs.inputsAmount > depositAmount) {
       // Need to create change output

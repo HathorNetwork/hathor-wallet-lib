@@ -9,6 +9,7 @@ import Network from '../models/network';
 import WalletWebSocket from '../websocket';
 import config from '../config';
 import helpers from '../helpers';
+import helpersUtils from '../utils/helpers';
 import BaseConnection, {
   ConnectionParams,
 } from '../connection';
@@ -34,7 +35,7 @@ class WalletConnection extends BaseConnection {
 
     this.handleWalletMessage = this.handleWalletMessage.bind(this);
 
-    const wsOptions = { wsURL: helpers.getWSServerURL(this.currentServer) };
+    const wsOptions = { wsURL: helpersUtils.getWSServerURL(this.currentServer) };
 
     if (options.connectionTimeout) {
       wsOptions['connectionTimeout'] = options.connectionTimeout;

@@ -117,7 +117,7 @@ class Transaction {
    *
    */
   getShortHash(): string {
-    return this.hash === null ? '' : `${this.hash.substring(0,12)}...${this.hash.substring(52,64)}`;
+    return this.hash === null ? '' : helpers.getShortHash(this.hash);
   }
 
   /**
