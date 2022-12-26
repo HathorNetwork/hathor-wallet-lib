@@ -59,6 +59,7 @@ import {
   WalletServiceServerUrls,
   FullNodeVersionData,
   WalletAddressMap,
+  TxByIdTokensResponseData,
 } from './types';
 import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
@@ -560,9 +561,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * Check if wallet is ready and throw error if not ready
    *
    * @memberof HathorWalletServiceWallet
-   * @inner
+   * @public
    */
-  private failIfWalletNotReady() {
+  public failIfWalletNotReady() {
     if (!this.isReady()) {
       throw new WalletError('Wallet not ready');
     }
@@ -1708,6 +1709,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     newOptions['nftData'] = data;
     const tx = await this.prepareCreateNewToken(name, symbol, amount, newOptions);
     return this.handleSendPreparedTransaction(tx);
+  }
+
+  async getTxById(txId: string): Promise<TxByIdTokensResponseData> {
+    this.failIfWalletNotReady();
+    const data = await walletApi.getTxById(this, txId);
+    return data;
   }
 }
 

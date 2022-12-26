@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { mockAxiosAdapter } from '../__mocks__/wallet.mock';
 import { HDPrivateKey, Message } from 'bitcore-lib';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import Network from '../../src/models/network';
@@ -15,9 +16,10 @@ import {
   WalletAddressMap,
 } from '../../src/wallet/types';
 import axios from 'axios';
-import MockAdapter from 'axios-mock-adapter';
 import config from '../../src/config';
-
+import MockAdapter from 'axios-mock-adapter';
+import axiosInstance from '../../src/wallet/api/walletServiceAxios';
+import { buildSuccessTxByIdTokenDataResponse, buildWalletToAuthenticateApiCall, defaultWalletSeed } from '../__fixtures__/wallet.fixtures';
 
 const MOCK_TX = {
   tx_id: '0009bc9bf8eab19c41a2aa9b9369d3b6a90ff12072729976634890d35788d5d7',
@@ -40,7 +42,7 @@ afterEach(() => {
 test('getTxBalance', async () => {
   const requestPassword = jest.fn();
   const network = new Network('testnet');
-  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const seed = defaultWalletSeed;
   const wallet = new HathorWalletServiceWallet({
     requestPassword,
     seed,
@@ -243,7 +245,7 @@ test('getTxBalance', async () => {
 test('checkAddressesMine', async () => {
   const requestPassword = jest.fn();
   const network = new Network('testnet');
-  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const seed = defaultWalletSeed;
   const wallet = new HathorWalletServiceWallet({
     requestPassword,
     seed,
@@ -258,9 +260,7 @@ test('checkAddressesMine', async () => {
 
   config.setWalletServiceBaseUrl('https://wallet-service.testnet.hathor.network/');
 
-  const mock = new MockAdapter(axios);
-
-  mock.onPost('wallet/addresses/check_mine').reply(200, {
+  mockAxiosAdapter.onPost('wallet/addresses/check_mine').reply(200, {
     success: true,
     addresses: {
       address1: true,
@@ -275,7 +275,7 @@ test('checkAddressesMine', async () => {
   expect(walletAddressMap.address2).toStrictEqual(false);
   expect(walletAddressMap.address3).toStrictEqual(false);
 
-  mock.onPost('wallet/addresses/check_mine').reply(400, {
+  mockAxiosAdapter.onPost('wallet/addresses/check_mine').reply(400, {
     success: false,
   });
 
@@ -288,7 +288,7 @@ test('generateCreateWalletAuthData should return correct auth data', async () =>
   jest.spyOn(Date, 'now').mockImplementation(() => 10000);
 
   const network = new Network('testnet');
-  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const seed = defaultWalletSeed;
   const pin = '123456';
   const wallet = new HathorWalletServiceWallet({
     requestPassword,
@@ -324,4 +324,56 @@ test('generateCreateWalletAuthData should return correct auth data', async () =>
   expect(authData.firstAddress).toBe(firstAddress);
   expect(xpubMessage.verify(xpubAddress, authData.xpubkeySignature)).toBe(true);
   expect(authXpubMessage.verify(authXpubAddress, authData.authXpubkeySignature)).toBe(true);
+});
+
+test('getTxById', async () => {
+  const wallet = buildWalletToAuthenticateApiCall();
+  spyOn(wallet, 'isReady').and.returnValue(true);
+
+  mockAxiosAdapter.reset();
+  mockAxiosAdapter
+    .onGet('wallet/transactions/123')
+    .replyOnce(200, buildSuccessTxByIdTokenDataResponse())
+    .onGet('wallet/transactions/123')
+    .replyOnce(400, {
+      success: false,
+      error: 'invalid-payload',
+      details: [{ message: 'vida', path: ['txId'] }],
+    });
+
+  const successCall = wallet.getTxById('123');
+
+  await expect(successCall).resolves.toStrictEqual({
+    success: true,
+    txTokens: [
+      {
+        balance: 10,
+        height: 1,
+        timestamp: 10,
+        tokenId: 'token1',
+        tokenName: 'Token 1',
+        tokenSymbol: 'T1',
+        txId: 'txId1',
+        version: 3,
+        voided: false,
+        weight: 65.4321,
+      },
+      {
+        balance: 7,
+        height: 1,
+        timestamp: 10,
+        tokenId: 'token2',
+        tokenName: 'Token 2',
+        tokenSymbol: 'T2',
+        txId: 'txId1',
+        version: 3,
+        voided: false,
+        weight: 65.4321,
+      },
+    ],
+  });
+
+  const invalidCall = wallet.getTxById('123');
+
+  await expect(invalidCall).rejects.toThrowError('Error getting transaction by its id.');
 });

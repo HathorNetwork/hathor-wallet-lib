@@ -373,6 +373,22 @@ export interface FullNodeVersionData {
   maxNumberOutputs: number;
 };
 
+export interface TxByIdTokenData {
+  txId: string;
+  timestamp: number;
+  version: number;
+  voided: boolean;
+  height?: number | null;
+  weight: number;
+  balance: Balance;
+  tokenId: string;
+  walletId: string;
+  tokenName: string;
+  tokenSymbol: string;
+}
+
+export type TxByIdTokensResponseData = TxByIdTokenData[];
+
 export interface WalletServiceServerUrls {
   walletServiceBaseUrl: string;
   walletServiceWsUrl: string;

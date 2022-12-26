@@ -6,8 +6,6 @@
  */
 
 import { axiosInstance } from './walletServiceAxios';
-import Output from '../../models/output';
-import Input from '../../models/input';
 import {
   CheckAddressesMineResponseData,
   WalletStatusResponseData,
@@ -22,6 +20,7 @@ import {
   TxOutputResponseData,
   AuthTokenResponseData,
   FullNodeVersionData,
+  TxByIdTokensResponseData,
 } from '../types';
 import HathorWalletServiceWallet from '../wallet';
 import { WalletRequestError } from '../../errors';
@@ -217,6 +216,16 @@ const walletApi = {
       return response.data;
     } else {
       throw new WalletRequestError('Error requesting auth token.');
+    }
+  },
+
+  async getTxById(wallet: HathorWalletServiceWallet, txId: string): Promise<TxByIdTokensResponseData> {
+    const axios = await axiosInstance(wallet, true);
+    const response = await axios.get(`wallet/transactions/${txId}`);
+    if (response.status === 200 && response.data.success) {
+      return response.data;
+    } else {
+      throw new WalletRequestError('Error getting transaction by its id.', { cause: response.data });
     }
   },
 };

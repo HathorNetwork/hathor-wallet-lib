@@ -42,6 +42,7 @@ const bufferUtils = require('./lib/utils/buffer');
 const HathorWalletServiceWallet = require('./lib/wallet/wallet');
 const SendTransactionWalletService = require('./lib/wallet/sendTransactionWalletService');
 const config = require('./lib/config');
+const PushNotification = require('./lib/pushNotification');
 
 const {PartialTx, PartialTxInputData} = require('./lib/models/partial_tx');
 const PartialTxProposal = require('./lib/wallet/partialTxProposal');
@@ -94,4 +95,5 @@ module.exports = {
   HathorWalletServiceWallet: HathorWalletServiceWallet.default,
   SendTransactionWalletService: SendTransactionWalletService.default,
   config: config.default,
+  PushNotification,
 }
