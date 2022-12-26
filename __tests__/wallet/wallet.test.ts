@@ -403,7 +403,7 @@ test('prepareDelegateAuthorityData should fail if type is invalid', async () => 
   })).rejects.toThrowError('Type options are mint and melt for delegate authority method.');
 });
 
-test('prepareDelegateAuthorityData should respect createAnother option and validate pin', async () => {
+test('prepareDelegateAuthorityData should validate options', async () => {
   const addresses = [
     'WdSD7aytFEZ5Hp8quhqu3wUCsyyGqcneMu',
     'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM',
@@ -468,9 +468,15 @@ test('prepareDelegateAuthorityData should respect createAnother option and valid
   expect(delegate2.outputs).toHaveLength(1);
 
   expect(wallet.prepareDelegateAuthorityData('00', 'mint', addresses[1], {
+    anotherAuthorityAddress: 'invalid-address',
+    createAnother: true,
+    pinCode: '123456',
+  })).rejects.toThrowError('Address invalid-address is not valid.');
+
+  expect(wallet.prepareDelegateAuthorityData('00', 'mint', addresses[1], {
     anotherAuthorityAddress: addresses[2],
     createAnother: false,
-    pinCode: '123456',
+    pinCode: null,
   })).rejects.toThrowError('PIN not specified in prepareDelegateAuthorityData options');
 });
 
