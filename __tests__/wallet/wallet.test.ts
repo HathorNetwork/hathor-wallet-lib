@@ -20,6 +20,8 @@ import config from '../../src/config';
 import MockAdapter from 'axios-mock-adapter';
 import axiosInstance from '../../src/wallet/api/walletServiceAxios';
 import { buildSuccessTxByIdTokenDataResponse, buildWalletToAuthenticateApiCall, defaultWalletSeed } from '../__fixtures__/wallet.fixtures';
+import Mnemonic from 'bitcore-mnemonic';
+import gWallet from '../../src/wallet';
 
 const MOCK_TX = {
   tx_id: '0009bc9bf8eab19c41a2aa9b9369d3b6a90ff12072729976634890d35788d5d7',
@@ -376,4 +378,69 @@ test('getTxById', async () => {
   const invalidCall = wallet.getTxById('123');
 
   await expect(invalidCall).rejects.toThrowError('Error getting transaction by its id.');
+});
+
+test('prepareDelegateAuthorityData should respect createAnother option', async () => {
+  const addresses = [
+    'WdSD7aytFEZ5Hp8quhqu3wUCsyyGqcneMu',
+    'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM',
+    'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX',
+  ]
+
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+
+  const code = new Mnemonic(seed);
+  const xpriv = code.toHDPrivateKey('', network.getNetwork());
+
+  wallet.setState('Ready');
+
+  const getUtxosMock = async () => ({
+    utxos: [{
+      txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+      index: 0,
+      tokenId: '00',
+      address: addresses[0],
+      value: 1,
+      authorities: 1,
+      timelock: null,
+      heightlock: null,
+      locked: false,
+      addressPath: 'm/280\'/280\'/0/1/0',
+    }],
+    changeAmount: 4,
+  });
+  const getXprivKeyMock = () => xpriv;
+  const getInputDataMock = () => '';
+
+  jest.spyOn(wallet, 'getUtxos').mockImplementation(getUtxosMock);
+  jest.spyOn(gWallet, 'getXprivKey').mockImplementation(getXprivKeyMock);
+  jest.spyOn(wallet, 'getInputData').mockImplementation(getInputDataMock);
+
+  // createAnother option should create another authority utxo to the given address
+  const delegate1 = await wallet.prepareDelegateAuthorityData('00', 'mint', addresses[1], {
+    anotherAuthorityAddress: addresses[2],
+    createAnother: true,
+    pinCode: '123456',
+  });
+
+  expect(delegate1.outputs).toHaveLength(2);
+
+  // if we don't pass createAnother, we should not create another authority utxo
+  const delegate2 = await wallet.prepareDelegateAuthorityData('00', 'mint', addresses[1], {
+    anotherAuthorityAddress: addresses[2],
+    createAnother: false,
+    pinCode: '123456',
+  });
+
+  expect(delegate2.outputs).toHaveLength(1);
 });
