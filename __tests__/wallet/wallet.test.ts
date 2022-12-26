@@ -380,7 +380,30 @@ test('getTxById', async () => {
   await expect(invalidCall).rejects.toThrowError('Error getting transaction by its id.');
 });
 
-test('prepareDelegateAuthorityData should respect createAnother option', async () => {
+test('prepareDelegateAuthorityData should fail if type is invalid', async () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+
+  wallet.setState('Ready');
+
+  // createAnother option should create another authority utxo to the given address
+  expect(wallet.prepareDelegateAuthorityData('00', 'explode', 'addr1', {
+    anotherAuthorityAddress: 'addr2',
+    createAnother: true,
+    pinCode: '123456',
+  })).rejects.toThrowError('Type options are mint and melt for delegate authority method.');
+});
+
+test('prepareDelegateAuthorityData should respect createAnother option and validate pin', async () => {
   const addresses = [
     'WdSD7aytFEZ5Hp8quhqu3wUCsyyGqcneMu',
     'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM',
@@ -443,6 +466,12 @@ test('prepareDelegateAuthorityData should respect createAnother option', async (
   });
 
   expect(delegate2.outputs).toHaveLength(1);
+
+  expect(wallet.prepareDelegateAuthorityData('00', 'mint', addresses[1], {
+    anotherAuthorityAddress: addresses[2],
+    createAnother: false,
+    pinCode: '123456',
+  })).rejects.toThrowError('PIN not specified in prepareDelegateAuthorityData options');
 });
 
 test('destroyAuthority should throw if wallet is not ready', async () => {
