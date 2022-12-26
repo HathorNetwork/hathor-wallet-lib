@@ -444,3 +444,41 @@ test('prepareDelegateAuthorityData should respect createAnother option', async (
 
   expect(delegate2.outputs).toHaveLength(1);
 });
+
+test('destroyAuthority should throw if wallet is not ready', async () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+
+  expect(wallet.destroyAuthority('00', 'mint', 1, {
+    pinCode: '123456',
+  })).rejects.toThrowError('Wallet not ready');
+});
+
+test('delegateAuthority should throw if wallet is not ready', async () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+
+  expect(wallet.delegateAuthority('00', 'mint', 'address1', {
+    createAnother: false,
+    anotherAuthorityAddress: null,
+    pinCode: '123456',
+  })).rejects.toThrowError('Wallet not ready');
+});
