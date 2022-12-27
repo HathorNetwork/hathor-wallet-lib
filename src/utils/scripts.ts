@@ -7,6 +7,7 @@ import { unpackLen, unpackToInt } from '../utils/buffer';
 import _ from 'lodash';
 import { ParseError, ParseScriptError } from '../errors';
 import { OP_PUSHDATA1, OP_CHECKSIG } from '../opcodes';
+import {Script, HDPublicKey} from 'bitcore-lib';
 
 /**
 * Parse P2PKH output script
@@ -156,4 +157,30 @@ export const getPushData = (buff: Buffer): Buffer => {
     start = 1;
   }
   return scriptBuf.slice(start, start + lenData);
+}
+
+/**
+ * Create a P2SH MultiSig redeem script
+ *
+ * @param {string[]} xpubs The list of xpubkeys involved in this MultiSig
+ * @param {number} numSignatures Minimum number of signatures to send a
+ * transaction with this MultiSig
+ * @param {number} index Index to derive the xpubs
+ *
+ * @return {Buffer} A buffer with the redeemScript
+ * @throws {XPubError} In case any of the given xpubs are invalid
+ */
+export function createP2SHRedeemScript(xpubs: string[], numSignatures: number, index: number): Buffer {
+  const sortedXpubs = _.sortBy(xpubs.map(xp => new HDPublicKey(xp)), (xpub: HDPublicKey) => {
+    return xpub.publicKey.toString('hex');
+  });
+
+  // xpub comes derived to m/45'/280'/0'
+  // Derive to m/45'/280'/0'/0/index
+  const pubkeys = sortedXpubs.map((xpub: HDPublicKey) => xpub.deriveChild(0).deriveChild(index).publicKey);
+
+  // bitcore-lib sorts the public keys by default before building the script
+  // noSorting prevents that and keeps our order
+  const redeemScript = Script.buildMultisigOut(pubkeys, numSignatures, {noSorting: true});
+  return redeemScript.toBuffer();
 }

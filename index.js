@@ -3,9 +3,7 @@ const helpers = require('./lib/helpers');
 const dateFormatter = require('./lib/date');
 const tokens = require('./lib/tokens');
 const transaction = require('./lib/transaction');
-const version = require('./lib/version');
 const wallet = require('./lib/wallet');
-const WebSocketHandler = require('./lib/WebSocketHandler');
 const websocket = require('./lib/websocket');
 const errors = require('./lib/errors');
 const ErrorMessages = require('./lib/errorMessages');
@@ -17,7 +15,6 @@ const axios = require('./lib/api/axiosInstance');
 const metadataApi = require('./lib/api/metadataApi');
 const storage = require('./lib/storage');
 const network = require('./lib/network');
-const MemoryStore = require('./lib/memory_store');
 const HathorWallet = require('./lib/new/wallet');
 const Connection = require('./lib/new/connection');
 const WalletServiceConnection = require('./lib/wallet/connection');
@@ -55,9 +52,7 @@ module.exports = {
   dateFormatter: dateFormatter.default,
   tokens: tokens.default,
   transaction: transaction.default,
-  version: version.default,
   wallet: wallet.default,
-  WebSocketHandler: WebSocketHandler.default,
   websocket: websocket.default,
   walletApi: walletApi.default,
   txApi: txApi.default,
@@ -69,7 +64,6 @@ module.exports = {
   constants: constants,
   axios: axios,
   storage: storage.default,
-  MemoryStore: MemoryStore.default,
   network: network.default,
   HathorWallet: HathorWallet.default,
   Connection: Connection.default,

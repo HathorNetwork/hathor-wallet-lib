@@ -6,7 +6,7 @@
  */
 
 import { EventEmitter } from 'events';
-import { 
+import {
   HATHOR_BIP44_CODE,
   HATHOR_TOKEN_CONFIG,
   TOKEN_MINT_MASK,
@@ -18,6 +18,7 @@ import Mnemonic from 'bitcore-mnemonic';
 import { crypto, util, Address as bitcoreAddress } from 'bitcore-lib';
 import wallet from '../wallet';
 import walletApi from './api/walletApi';
+import { deriveAddressFromXPubP2PKH } from '../utils/address';
 import walletUtils from '../utils/wallet';
 import helpers from '../utils/helpers';
 import transaction from '../utils/transaction';
@@ -176,8 +177,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  changeServer(newServer: string) {
-    storage.setItem('wallet:wallet_service:base_server', newServer);
+  async changeServer(newServer: string) {
+    await storage.store.setItem('wallet:wallet_service:base_server', newServer);
     config.setWalletServiceBaseUrl(newServer);
   }
 
@@ -189,8 +190,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  changeWsServer(newServer: string) {
-    storage.setItem('wallet:wallet_service:ws_server', newServer);
+  async changeWsServer(newServer: string) {
+    await storage.store.setItem('wallet:wallet_service:ws_server', newServer);
     config.setWalletServiceBaseWsUrl(newServer);
   }
 
@@ -200,9 +201,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  static getServerUrlsFromStorage(): WalletServiceServerUrls {
-    const walletServiceBaseUrl = storage.getItem('wallet:wallet_service:base_server');
-    const walletServiceWsUrl = storage.getItem('wallet:wallet_service:ws_server');
+  static async getServerUrlsFromStorage(): Promise<WalletServiceServerUrls> {
+    const walletServiceBaseUrl = await storage.store.getItem('wallet:wallet_service:base_server');
+    const walletServiceWsUrl = await storage.store.getItem('wallet:wallet_service:ws_server');
 
     return {
       walletServiceBaseUrl,
@@ -410,7 +411,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // prove we own the auth_xpubkey
     const authXpubkeySignature = this.signMessage(authDerivedPrivKey, timestampNow, walletId);
     const xpubChangeDerivation = walletUtils.xpubDeriveChild(xpub, 0);
-    const firstAddress = walletUtils.getAddressAtIndex(xpubChangeDerivation, 0, this.network.name);
+    const {base58: firstAddress} = deriveAddressFromXPubP2PKH(xpubChangeDerivation, 0, this.network.name);
 
     return {
       xpub,

@@ -32,16 +32,14 @@ import walletApi from './api/wallet';
 import tokens from './tokens';
 import helpers from './helpers';
 import helperUtils from './utils/helpers';
-import walletUtils from './utils/wallet';
+import { createP2SHRedeemScript } from './utils/scripts';
 import { getAddressType } from './utils/address';
 import { AddressError, ConstantNotSet, OutputValueError, WalletTypeError } from './errors';
-import version from './version';
 import storage from './storage';
 import network from './network';
 import transaction from './transaction';
 import dateFormatter from './date';
 import _ from 'lodash';
-import WebSocketHandler from './WebSocketHandler';
 
 /**
  * We use storage and Redux to save data.
@@ -88,7 +86,7 @@ const wallet = {
    * Default websocket handler that will be used in this file
    * If it's using the new wallet class should set a Connection using setConnection
    */
-  _connection: WebSocketHandler,
+  _connection: null,
 
   /*
    * Customizable gap limit value
@@ -489,7 +487,7 @@ const wallet = {
   getAddressMultisig(index) {
     const accessData = this.getWalletAccessData();
     const multisigData = accessData.multisig;
-    const redeemScript = walletUtils.createP2SHRedeemScript(multisigData.pubkeys, multisigData.numSignatures, index);
+    const redeemScript = createP2SHRedeemScript(multisigData.pubkeys, multisigData.numSignatures, index);
     return Address.payingTo(Script.fromBuffer(redeemScript), network.getNetwork());
   },
 

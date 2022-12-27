@@ -157,6 +157,10 @@ abstract class Connection extends EventEmitter {
   getCurrentNetwork(): string {
     return this.network;
   }
+
+  startControlHandlers(options?: any) {
+    return;
+  }
 }
 
 export default Connection;

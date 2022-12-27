@@ -10,8 +10,64 @@ import { UtxoError } from '../errors';
 import { HistoryTransactionOutput } from '../models/types';
 import wallet from '../wallet';
 import {crypto as cryptoBL, PrivateKey} from 'bitcore-lib'
+import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK } from '../constants';
+import Transaction from '../models/transaction';
+import Input from '../models/input';
+import Network from '../models/network';
+import { IBalance, IStorage, IStorageTx } from '../types';
 
 const transaction = {
+
+  /**
+   * Check if the output is an authority output
+   *
+   * @param {Pick<HistoryTransactionOutput, 'token_data'>} output An output with the token_data field
+   * @returns {boolean} If the output is an authority output
+   */
+  isAuthorityOutput(output: Pick<HistoryTransactionOutput, 'token_data'>): boolean {
+    return (output.token_data & TOKEN_AUTHORITY_MASK) > 0;
+  },
+
+  /**
+   * Check if the output is a mint authority output
+   *
+   * @param {Pick<HistoryTransactionOutput, 'token_data'|'value'>} output An output with the token_data and value fields
+   * @returns {boolean} If the output is a mint authority output
+   */
+  isMint(output: Pick<HistoryTransactionOutput, 'token_data'|'value'>): boolean {
+    return this.isAuthorityOutput(output) && ((output.value & TOKEN_MINT_MASK) > 0);
+  },
+
+  /**
+   * Check if the output is a melt authority output
+   *
+   * @param {Pick<HistoryTransactionOutput, 'token_data'|'value'>} output An output with the token_data and value fields
+   * @returns {boolean} If the output is a melt authority output
+   */
+  isMelt(output: Pick<HistoryTransactionOutput, 'token_data'|'value'>): boolean {
+    return this.isAuthorityOutput(output) && ((output.value & TOKEN_MELT_MASK) > 0);
+  },
+
+  /**
+   * Check if the utxo is locked
+   *
+   * @param {Pick<HistoryTransactionOutput, 'decoded'>} output The output to check
+   * @param {{refTs: number|undefined}} options Use these values as reference to check if the output is locked
+   * @returns {boolean} Wheather the output is locked or not
+   */
+  isOutputLocked(
+    output: Pick<HistoryTransactionOutput, 'decoded'>,
+    options: { refTs?: number } = {},
+  ): boolean {
+    // XXX: check reward lock: requires blockHeight, bestBlockHeight and reward_spend_min_blocks
+    const refTs = options.refTs || Math.floor(Date.now() / 1000);
+    return (
+      output.decoded.timelock !== undefined
+      && output.decoded.timelock !== null
+      && output.decoded.timelock <= refTs
+    );
+  },
+
   /**
    * Get the signature from the dataToSignHash for a private key
    *
@@ -107,6 +163,75 @@ const transaction = {
       heightlock: null, // not enough info to determine this.
       locked: false,
     };
+  },
+
+  async getTxBalance(tx: IStorageTx, storage: IStorage): Promise<Record<string, IBalance>> {
+    const balance: Record<string, IBalance> = {};
+    const getEmptyBalance = (): IBalance => ({
+      tokens: { locked: 0, unlocked: 0 },
+      authorities: {
+        mint: { locked: 0, unlocked: 0 },
+        melt: { locked: 0, unlocked: 0 },
+      },
+    });
+
+    const nowTs = Math.floor(Date.now() / 1000);
+    const nowHeight = await storage.getCurrentHeight();
+    const rewardLock = storage.version?.reward_spend_min_blocks;
+    const isHeightLocked = (height?: number): boolean => {
+      // Must have reward lock and height to check for height lock
+      if (!(rewardLock && height)) return false
+      return (height + rewardLock) < nowHeight;
+    };
+
+    for (const output of tx.outputs) {
+      if (!balance[output.token]) {
+        balance[output.token] = getEmptyBalance();
+      }
+      const isLocked = this.isOutputLocked(output, { refTs: nowTs }) || isHeightLocked(output.height);
+
+      if (this.isAuthorityOutput(output)) {
+        if (this.isMint(output)) {
+          if (isLocked) {
+            balance[output.token].authorities.mint.locked += 1;
+          } else {
+            balance[output.token].authorities.mint.unlocked += 1;
+          }
+        }
+        if (this.isMelt(output)) {
+          if (isLocked) {
+            balance[output.token].authorities.melt.locked += 1;
+          } else {
+            balance[output.token].authorities.melt.unlocked += 1;
+          }
+        }
+      } else {
+        if (isLocked) {
+          balance[output.token].tokens.locked += output.value;
+        } else {
+          balance[output.token].tokens.unlocked += output.value;
+        }
+      }
+    }
+
+    for (const input of tx.inputs) {
+      if (!balance[input.token]) {
+        balance[input.token] = getEmptyBalance();
+      }
+
+      if (this.isAuthorityOutput(input)) {
+        if (this.isMint(input)) {
+          balance[input.token].authorities.mint.unlocked -= 1;
+        }
+        if (this.isMelt(input)) {
+          balance[input.token].authorities.melt.unlocked -= 1;
+        }
+      } else {
+        balance[input.token].tokens.unlocked -= input.value;
+      }
+    }
+
+    return balance;
   },
 }
 

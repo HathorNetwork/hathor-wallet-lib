@@ -170,15 +170,6 @@ const helpers = {
   },
 
   /**
-   * @deprecated since version 0.25.0.
-   *
-   * You should use the methods in src/config.ts instead.
-   */
-  getServerURL() {
-    return config.getServerUrl();
-  },
-
-  /**
    * Get the URL to connect to the websocket from the server URL of the wallet
    *
    * @return {string} Websocket URL

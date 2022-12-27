@@ -1,6 +1,5 @@
 import networkInstance from './network';
 import Network from './models/network';
-import storage from './storage';
 import { GetWalletServiceUrlError, GetWalletServiceWsUrlError } from './errors';
 
 
@@ -16,7 +15,7 @@ const TX_MINING_TESTNET_URL = 'https://txmining.testnet.hathor.network/';
 const EXPLORER_SERVICE_MAINNET_BASE_URL  = 'https://explorer-service.hathor.network/';
 const EXPLORER_SERVICE_TESTNET_BASE_URL  = 'https://explorer-service.testnet.hathor.network/';
 
-class Config {
+export class Config {
   TX_MINING_URL?: string;
   TX_MINING_API_KEY?: string;
   WALLET_SERVICE_BASE_URL?: string;
@@ -185,17 +184,6 @@ class Config {
       return this.SERVER_URL;
     }
 
-    if (storage.isInitialized()) {
-      const server = storage.getItem('wallet:server');
-      const defaultServer = storage.getItem('wallet:defaultServer');
-
-      if (server !== null) {
-        return server;
-      } else if (defaultServer !== null) {
-        return defaultServer
-      }
-    }
-
     return DEFAULT_SERVER;
   }
 
@@ -225,14 +213,6 @@ class Config {
   getNetwork(): Network {
     if (this.NETWORK) {
       return new Network(this.NETWORK);
-    }
-
-    if (storage.isInitialized()) {
-      const network = storage.getItem('wallet:network');
-
-      if (network !== null) {
-        return new Network(network);
-      }
     }
 
     return DEFAULT_NETWORK;
