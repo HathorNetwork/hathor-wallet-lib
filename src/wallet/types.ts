@@ -262,7 +262,7 @@ export interface IStopWalletParams {
 
 export interface DelegateAuthorityOptions {
   anotherAuthorityAddress: string | null;
-  createAnother: boolean | null;
+  createAnother: boolean;
   pinCode: string | null;
 };
 
