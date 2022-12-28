@@ -25,6 +25,22 @@ export type ConnectionParams = {
 };
 
 /**
+ * This interface calcify the Connection abstract class.
+ * @since 0.42.1
+ */
+export interface IConnection {
+  start(): void;
+  stop(): void;
+  setup(): void;
+  endConnection(): void;
+  handleWalletMessage(wsData: any): void;
+  onConnectionChange(value: boolean): void;
+  setState(state: ConnectionState): void;
+  getCurrentServer(): string;
+  getCurrentNetwork(): string;
+}
+
+/**
  * This is a Connection that may be shared by one or more wallets.
  *
  * It has the following states:
@@ -36,7 +52,7 @@ export type ConnectionParams = {
  * - state: Fired when the state of the Wallet changes.
  * - wallet-update: Fired when a new wallet message arrive from the websocket.
  **/
-abstract class Connection extends EventEmitter {
+abstract class Connection extends EventEmitter implements IConnection {
   // network: 'testnet' or 'mainnet'
   protected network: string;
   protected websocket: WalletWebSocket | WalletServiceWebSocket | null;

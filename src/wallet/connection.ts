@@ -10,11 +10,13 @@ import config from '../config';
 import BaseConnection, {
   DEFAULT_PARAMS,
   ConnectionParams,
+  IConnection,
 } from '../connection';
 import {
   WsTransaction,
   ConnectionState,
 } from './types';
+import { EventEmitter } from 'stream';
 
 export interface WalletServiceConnectionParams extends ConnectionParams {
   walletId: string;
@@ -91,29 +93,80 @@ export default class WalletServiceConnection extends BaseConnection {
 /**
  * This connection is used when the wallet has websocket disabled.
  */
-export class DummyWalletServiceConnection extends BaseConnection {
+export class DummyWalletServiceConnection extends EventEmitter implements IConnection {
   public readonly isDummyConnection = true;
-  private connectionTimeout?: number;
+
+  private currentNetwork: string;
+  private currentServer: string;
+  protected state: ConnectionState;
   private walletId?: string;
 
-  constructor(options: WalletServiceConnectionParams = { ...DEFAULT_PARAMS, walletId: '' }) {
-    super(options);
+  constructor(options: WalletServiceConnectionParams = { walletId: 'dummy-wallet' }) {
+    super();
 
-    this.connectionTimeout = options.connectionTimeout;
-    this.walletId = options.walletId;
+    const {
+      walletId,
+      network,
+      servers,
+    } = {
+      ...DEFAULT_PARAMS,
+      ...options,
+    };
+
+    if (!network) {
+      throw Error('You must explicitly provide the network.');
+    }
+
+    this.walletId = walletId;
+    this.currentNetwork = network || 'dummynet';
+    this.state = ConnectionState.CLOSED;
+    this.currentServer = servers[0] || config.getServerUrl();
   }
 
-  /**
-   * Sets the walletId for the current connection instance
-   **/
+  start(): void {
+    if (!this.walletId) {
+      throw new Error('Wallet id should be set before connection start.');
+    }
+  }
+
+  stop(): void {
+    this.removeAllListeners();
+    this.setState(ConnectionState.CLOSED);
+  }
+
+  endConnection(): void {
+    throw new Error('Method not implemented.');
+  }
+
+  setup(): void {
+    // There is nothing to setup
+  }
+
+  handleWalletMessage(_wsData: any): void {
+    // There is nothing to handle
+  }
+
+  onConnectionChange(value: boolean): void {
+    if (value) {
+      this.setState(ConnectionState.CONNECTED);
+    } else {
+      this.setState(ConnectionState.CONNECTING);
+    }
+  }
+
+  setState(state: ConnectionState): void {
+    this.state = state;
+  }
+
+  getCurrentServer(): string {
+    return this.currentServer;
+  }
+
+  getCurrentNetwork(): string {
+    return this.currentNetwork;
+  }
+
   setWalletId(walletId: string) {
     this.walletId = walletId;
-  }
-
-  /**
-   * Connect to the server and start emitting events.
-   **/
-  start() {
-    // Do nothing
   }
 }
