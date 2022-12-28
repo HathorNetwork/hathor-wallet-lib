@@ -1135,6 +1135,18 @@ class HathorWallet extends EventEmitter {
     return history;
   }
 
+  /**
+   * Get a formatted TokenHistory object
+   *
+   * @param {Object} tx Full tx object
+   * @param {String} tokenUid The token uid
+   * @param {Object} tokenTxBalance The token balance on this tx
+   *
+   * @return {Object} A formatted TokenHistory object { txId, timestamp, tokenUid, balance, voided, version }
+   *
+   * @memberof HathorWallet
+   * @inner
+   **/
   static getTokenHistoryObject(tx, tokenUid, tokenTxBalance) {
     return {
       txId: tx.tx_id,
