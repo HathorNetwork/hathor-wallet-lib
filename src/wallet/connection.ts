@@ -135,7 +135,7 @@ export class DummyWalletServiceConnection extends EventEmitter implements IConne
   }
 
   endConnection(): void {
-    throw new Error('Method not implemented.');
+    // There is no connection to end
   }
 
   setup(): void {
