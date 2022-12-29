@@ -60,6 +60,8 @@ import {
   FullNodeVersionData,
   WalletAddressMap,
   TxByIdTokensResponseData,
+  DelegateAuthorityOptions,
+  DestroyAuthorityOptions,
 } from './types';
 import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
@@ -1515,20 +1517,20 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async prepareDelegateAuthorityData(token: string, type: string, address: string, options = {}): Promise<Transaction> {
+  async prepareDelegateAuthorityData(
+    token: string,
+    type: string,
+    address: string,
+    {
+      anotherAuthorityAddress = null,
+      createAnother = true,
+      pinCode = null,
+    } : DelegateAuthorityOptions,
+  ): Promise<Transaction> {
     this.failIfWalletNotReady();
-    type optionsType = {
-      anotherAuthorityAddress: string | null,
-      createAnotherAuthority: boolean,
-      pinCode: string | null,
-    };
-    const newOptions: optionsType = Object.assign({
-      anotherAuthorityAddress: null,
-      createAnotherAuthority: true,
-      pinCode: null,
-    }, options);
 
-    let authority, mask;
+    let authority: number;
+    let mask: number;
     if (type === 'mint') {
       authority = 1;
       mask = TOKEN_MINT_MASK;
@@ -1562,25 +1564,28 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const p2pkhScript = p2pkh.createScript()
     outputsObj.push(new Output(mask, p2pkhScript, {tokenData: AUTHORITY_TOKEN_DATA}));
 
-    if (newOptions.createAnotherAuthority) {
-      const anotherAddressStr = newOptions.anotherAuthorityAddress || this.getCurrentAddress({ markAsUsed: true }).address;
+    if (createAnother) {
+      const anotherAddressStr = anotherAuthorityAddress
+        || this.getCurrentAddress({ markAsUsed: true }).address;
       const anotherAddress = new Address(anotherAddressStr, {network: this.network});
       if (!anotherAddress.isValid()) {
-        throw new SendTxError(`Address ${newOptions.anotherAuthorityAddress} is not valid.`);
+        throw new SendTxError(`Address ${anotherAuthorityAddress} is not valid.`);
       }
       const p2pkhAnotherAddress = new P2PKH(anotherAddress);
       const p2pkhAnotherAddressScript = p2pkhAnotherAddress.createScript()
-      outputsObj.push(new Output(mask, p2pkhAnotherAddressScript, {tokenData: AUTHORITY_TOKEN_DATA}));
+      outputsObj.push(new Output(mask, p2pkhAnotherAddressScript, {
+        tokenData: AUTHORITY_TOKEN_DATA,
+      }));
     }
 
     const tx = new Transaction(inputsObj, outputsObj);
     tx.tokens = [token];
 
-    if (!newOptions.pinCode) {
+    if (!pinCode) {
       throw new Error('PIN not specified in prepareDelegateAuthorityData options');
     }
 
-    const xprivkey = wallet.getXprivKey(newOptions.pinCode);
+    const xprivkey = wallet.getXprivKey(pinCode);
 
     // Set input data
     const dataToSignHash = tx.getDataToSignHash();
@@ -1592,6 +1597,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     inputsObj[0].setData(inputData);
 
     tx.prepareToSend();
+
     return tx;
   }
 
@@ -1601,7 +1607,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async delegateAuthority(token: string, type: string, address: string, options = {}): Promise<Transaction> {
+  async delegateAuthority(
+    token: string,
+    type: string,
+    address: string,
+    options: DelegateAuthorityOptions,
+  ): Promise<Transaction> {
     this.failIfWalletNotReady();
     const tx = await this.prepareDelegateAuthorityData(token, type, address, options);
     return this.handleSendPreparedTransaction(tx);
@@ -1613,18 +1624,16 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async prepareDestroyAuthorityData(token: string, type: string, count: number, options = {}): Promise<Transaction> {
+  async prepareDestroyAuthorityData(
+    token: string,
+    type: string,
+    count: number,
+    { pinCode = null }: DestroyAuthorityOptions,
+  ): Promise<Transaction> {
     this.failIfWalletNotReady();
 
-    type optionsType = {
-      pinCode: string | null,
-    };
-
-    const newOptions: optionsType = Object.assign({
-      pinCode: null,
-    }, options);
-
-    let authority, mask;
+    let authority: number;
+    let mask: number;
     if (type === 'mint') {
       authority = 1;
       mask = TOKEN_MINT_MASK;
@@ -1655,11 +1664,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // Set input data
     const dataToSignHash = tx.getDataToSignHash();
 
-    if (!newOptions.pinCode) {
+    if (!pinCode) {
       throw new Error('PIN not specified in prepareDestroyAuthorityData options');
     }
 
-    const xprivkey = wallet.getXprivKey(newOptions.pinCode);
+    const xprivkey = wallet.getXprivKey(pinCode);
 
     for (const [idx, inputObj] of tx.inputs.entries()) {
       const inputData = this.getInputData(
@@ -1680,7 +1689,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async destroyAuthority(token: string, type: string, count: number, options = {}): Promise<Transaction> {
+  async destroyAuthority(
+    token: string,
+    type: string,
+    count: number,
+    options: DestroyAuthorityOptions,
+  ): Promise<Transaction> {
     this.failIfWalletNotReady();
     const tx = await this.prepareDestroyAuthorityData(token, type, count, options);
     return this.handleSendPreparedTransaction(tx);

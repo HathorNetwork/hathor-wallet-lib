@@ -52,6 +52,7 @@ export interface GetHistoryObject {
   balance: number; // Balance of this tx in this wallet (can be negative)
   timestamp: number; // Transaction timestamp
   voided: boolean; // If transaction is voided
+  version: number; // Transaction version
 }
 
 export interface AddressInfoObject {
@@ -259,6 +260,16 @@ export interface IStopWalletParams {
   cleanStorage?: boolean;
 };
 
+export interface DelegateAuthorityOptions {
+  anotherAuthorityAddress: string | null;
+  createAnother: boolean;
+  pinCode: string | null;
+};
+
+export interface DestroyAuthorityOptions {
+  pinCode: string | null;
+}
+
 export interface IHathorWallet {
   start(options: { pinCode: string, password: string }): Promise<void>;
   getAllAddresses(): AsyncGenerator<GetAddressesObject>;
@@ -278,10 +289,30 @@ export interface IHathorWallet {
   mintTokens(token: string, amount: number, options): Promise<Transaction>;
   prepareMeltTokensData(token: string, amount: number, options): Promise<Transaction>;
   meltTokens(token: string, amount: number, options): Promise<Transaction>;
-  prepareDelegateAuthorityData(token: string, type: string, address: string, options): Promise<Transaction>;
-  delegateAuthority(token: string, type: string, address: string, options): Promise<Transaction>;
-  prepareDestroyAuthorityData(token: string, type: string, count: number): Promise<Transaction>;
-  destroyAuthority(token: string, type: string, count: number): Promise<Transaction>;
+  prepareDelegateAuthorityData(
+    token: string,
+    type: string,
+    address: string,
+    options: DelegateAuthorityOptions,
+  ): Promise<Transaction>;
+  delegateAuthority(
+    token: string,
+    type: string,
+    address: string,
+    options: DelegateAuthorityOptions,
+  ): Promise<Transaction>;
+  prepareDestroyAuthorityData(
+    token: string,
+    type: string,
+    count: number,
+    options: DestroyAuthorityOptions,
+  ): Promise<Transaction>;
+  destroyAuthority(
+    token: string, 
+    type: string,
+    count: number,
+    options: DestroyAuthorityOptions,
+  ): Promise<Transaction>;
   getFullHistory(): TransactionFullObject[];
   getTxBalance(tx: WsTransaction, optionsParams): Promise<{[tokenId: string]: number}>;
   onConnectionChangedState(newState: ConnectionState): void;
