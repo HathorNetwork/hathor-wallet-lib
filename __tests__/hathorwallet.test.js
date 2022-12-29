@@ -472,11 +472,16 @@ test('onTxArrived', async () => {
   };
 
   hWallet.getTxBalance.mockReturnValue(Promise.resolve({
-    'A': 10,
+    A: 10,
   }));
   hWallet.isAddressMine.mockReturnValue(true);
 
-  hWallet._getBalanceRaw.mockReturnValue({'A': { unlocked: 5, locked: 5 }});
+  hWallet._getBalanceRaw.mockReturnValue({
+    A: {
+      unlocked: 5,
+      locked: 5,
+    },
+  });
 
   const tx = {
     tx_id: 'txId1',
@@ -512,6 +517,94 @@ test('onTxArrived', async () => {
   expect(hWallet.getPreProcessedData('balanceByToken')).toEqual({
     A: { unlocked: 5, locked: 5, transactions: 1 }
   });
+});
+
+test('onTxArrived on existing tx', async () => {
+  const hWallet = new FakeHathorWallet();
+  hWallet.preProcessedData = {
+    tokens: [],
+    historyByToken: {
+      A: [{
+        tx_id: 'txId1',
+        timestamp: 123,
+        token_uid: 'A',
+        balance: 10,
+        voided: false,
+      }],
+    },
+    balanceByToken: {},
+  };
+
+  hWallet.getTxBalance.mockReturnValue(Promise.resolve({
+    A: 10,
+  }));
+
+  hWallet.isAddressMine.mockReturnValue(true);
+
+  hWallet._getBalanceRaw.mockReturnValue({
+    A: {
+      unlocked: 0,
+      locked: 0,
+    },
+  });
+
+  const tx = {
+    tx_id: 'txId1',
+    timestamp: 123,
+    is_voided: true,
+    outputs: [
+      {
+        token: 'A',
+        value: 5,
+        decoded: { address: 'addr1' },
+      },
+      {
+        token: 'A',
+        value: 5,
+        decoded: { address: 'addr1', timelock: 127 },
+      }
+    ],
+    inputs: [],
+  };
+
+  await hWallet.onTxArrived(tx, false);
+
+  expect(hWallet.getPreProcessedData('tokens')).toEqual(['A']);
+  expect(hWallet.getPreProcessedData('historyByToken')).toEqual({
+    'A': [{
+      txId: 'txId1',
+      timestamp: 123,
+      tokenUid: 'A',
+      balance: 10,
+      voided: true,
+    }],
+  });
+  expect(hWallet.getPreProcessedData('balanceByToken')).toEqual({
+    A: { unlocked: 0, locked: 0, transactions: 1 }
+  });
+});
+
+test('getTokenHistoryObject', () => {
+  const tx = {
+    tx_id: '00000000000000000de747d135fd7e7b6a918678a41076ab63be751624e8e339',
+    timestamp: 1671025539,
+    version: 3,
+    is_voided: false,
+  };
+
+  const tokenTxBalance = {
+    '00': 0,
+    '01': 5,
+  };
+
+  const historyObj = HathorWallet.getTokenHistoryObject(tx, '00', tokenTxBalance);
+
+  expect(historyObj.txId).toStrictEqual(tx.tx_id);
+  expect(historyObj.timestamp).toStrictEqual(tx.timestamp);
+  expect(historyObj.version).toStrictEqual(tx.version);
+  expect(historyObj.voided).toStrictEqual(tx.is_voided);
+  expect(historyObj.balance['00']).toStrictEqual(0);
+  expect(historyObj.balance['01']).toStrictEqual(5);
 });
 
 test('loadAddresses', async () => {

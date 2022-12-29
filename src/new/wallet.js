@@ -1134,6 +1134,29 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Get a formatted TokenHistory object
+   *
+   * @param {Object} tx Full tx object
+   * @param {String} tokenUid The token uid
+   * @param {Object} tokenTxBalance The token balance on this tx
+   *
+   * @return {Object} A formatted TokenHistory object { txId, timestamp, tokenUid, balance, voided, version }
+   *
+   * @memberof HathorWallet
+   * @inner
+   **/
+  static getTokenHistoryObject(tx, tokenUid, tokenTxBalance) {
+    return {
+      txId: tx.tx_id,
+      timestamp: tx.timestamp,
+      tokenUid,
+      balance: tokenTxBalance,
+      voided: tx.is_voided,
+      version: tx.version,
+    };
+  }
+
+  /**
    * Process the transactions on the websocket transaction queue as if they just arrived.
    *
    * @memberof HathorWallet
@@ -1178,13 +1201,7 @@ class HathorWallet extends EventEmitter {
           tokensHistory[tokenUid] = tokenHistory;
         }
         // add this tx to the history of the corresponding token
-        tokenHistory.push({
-          txId: tx.tx_id,
-          timestamp: tx.timestamp,
-          tokenUid,
-          balance: tokenTxBalance,
-          voided: tx.is_voided,
-        });
+        tokenHistory.push(HathorWallet.getTokenHistoryObject(tx, tokenUid, tokenTxBalance));
       }
 
       const tokensSeen = [];
@@ -1248,13 +1265,7 @@ class HathorWallet extends EventEmitter {
         }
 
         // add this tx to the history of the corresponding token
-        tokenHistory.push({
-          txId: tx.tx_id,
-          timestamp: tx.timestamp,
-          tokenUid,
-          balance: tokenTxBalance,
-          voided: tx.is_voided,
-        });
+        tokenHistory.push(HathorWallet.getTokenHistoryObject(tx, tokenUid, tokenTxBalance));
 
         // in the end, sort (in place) all tx lists in descending order by timestamp
         tokenHistory.sort((elem1, elem2) => elem2.timestamp - elem1.timestamp);
@@ -1263,13 +1274,7 @@ class HathorWallet extends EventEmitter {
         const txIndex = currentHistory.findIndex((el) => el.tx_id === tx.tx_id);
 
         const newHistory = [...currentHistory];
-        newHistory[txIndex] = {
-          txId: tx.tx_id,
-          timestamp: tx.timestamp,
-          tokenUid,
-          balance: tokenTxBalance,
-          voided: tx.is_voided,
-        };
+        newHistory[txIndex] = HathorWallet.getTokenHistoryObject(tx, tokenUid, tokenTxBalance);
         tokensHistory[tokenUid] = newHistory;
       }
 
