@@ -156,4 +156,16 @@ export class DummyWalletServiceConnection implements IConnection {
   setWalletId(_walletId: string) {
     // There is nothing to set
   }
+
+  isStateClosed(): boolean {
+    return this.state === ConnectionState.CLOSED;
+  }
+
+  isStateConnected(): boolean {
+    return this.state === ConnectionState.CONNECTED;
+  }
+
+  isStateConnecting(): boolean {
+    return this.state === ConnectionState.CONNECTING;
+  }
 }
