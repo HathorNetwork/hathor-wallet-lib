@@ -2497,6 +2497,14 @@ class HathorWallet extends EventEmitter {
     return this.fetchTxHistory(addresses);
   }
 
+  /**
+   * Fetch history of addresses from server
+   * then load more addresses if needed to fill the gap limit.
+   *
+   * @param {string[]} addresses Array of addresses to fetch history
+   *
+   * @return {Promise<void>} Promise that resolves when addresses history is finished loading from server
+   */
   async fetchTxHistory(addresses) {
     storage.setStore(this.store);
     // Split addresses array into chunks of at most MAX_ADDRESSES_GET size
@@ -2581,8 +2589,8 @@ class HathorWallet extends EventEmitter {
     }
     // After the addresses have been loaded and properly saved we need to check if we
     // need to load more addresses to keep the gapLimit.
-    // checkGapLimit will resolve when the address history of the gapLimit is loaded
-    await this.checkGapLimit();
+    // fillUntilGapLimit will resolve when the address history of the gapLimit is loaded
+    await this.fillUntilGapLimit();
   }
 
   /**
@@ -2591,7 +2599,7 @@ class HathorWallet extends EventEmitter {
    *
    * @returns {Promise<void>} A promise that will resolve when the addresses are loaded
    */
-  async checkGapLimit() {
+  async fillUntilGapLimit() {
     storage.setStore(this.store);
     const lastGeneratedIndex = wallet.getLastGeneratedIndex();
     const lastUsedIndex = wallet.getLastUsedIndex();
@@ -2631,10 +2639,10 @@ class HathorWallet extends EventEmitter {
     return this.loadAddresses(0, wallet.getGapLimit());
   }
 
-    /**
+  /**
    * Update the historyTransactions and allTokens from a new array of history that arrived
    *
-   * @param {Array} newHistory Array of new data that arrived from the server to be added to local data
+   * @param {import('../models/types').HistoryTransaction[]} newHistory Array of new data that arrived from the server to be added to local data
    *
    * @throws {OutputValueError} Will throw an error if one of the output value is invalid
    *

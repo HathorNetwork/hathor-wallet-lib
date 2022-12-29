@@ -589,20 +589,20 @@ test('fetchTxHistory', async () => {
   }));
 
   hWallet.saveNewHistory.mockReturnValue('history-partial-update');
-  hWallet.checkGapLimit.mockReturnValue(Promise.resolve());
+  hWallet.fillUntilGapLimit.mockReturnValue(Promise.resolve());
 
   await hWallet.fetchTxHistory(['addr1', 'addr2', 'addr3']);
   expect(mockSubAddr).toHaveBeenCalledTimes(3);
   expect(mockApi).toHaveBeenCalledTimes(4);
   expect(hWallet.saveNewHistory).toBeCalledWith(['tx1', 'tx2', 'tx3']);
   expect(hWallet.conn.websocket.emit).toHaveBeenCalled();
-  expect(hWallet.checkGapLimit).toHaveBeenCalled();
+  expect(hWallet.fillUntilGapLimit).toHaveBeenCalled();
 
   mockSubAddr.mockRestore();
   mockApi.mockRestore();
 }, 10000);
 
-test('checkGapLimit', async () => {
+test('fillUntilGapLimit', async () => {
   const hWallet = new FakeHathorWallet();
   hWallet.store = new MemoryStore();
 
@@ -616,7 +616,7 @@ test('checkGapLimit', async () => {
   mockLastUsedIndex.mockReturnValue(15);
   mockGapLimit.mockReturnValue(25);
   // Gap is 20 but gap-limit is 25, will call for another 5
-  await hWallet.checkGapLimit();
+  await hWallet.fillUntilGapLimit();
   expect(hWallet.loadAddresses).toHaveBeenCalledWith(36, 5);
   hWallet.loadAddresses.mockClear();
 
@@ -624,7 +624,7 @@ test('checkGapLimit', async () => {
   mockLastUsedIndex.mockReturnValue(90);
   mockGapLimit.mockReturnValue(5);
   // Gap is 10 but gap-limit is 5, will not call for more addresses
-  await hWallet.checkGapLimit();
+  await hWallet.fillUntilGapLimit();
   expect(hWallet.loadAddresses).not.toHaveBeenCalled();
 
   mockLastGenIndex.mockRestore();
