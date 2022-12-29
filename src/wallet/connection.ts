@@ -19,6 +19,7 @@ import {
 import { EventEmitter } from 'events';
 
 export interface WalletServiceConnectionParams extends ConnectionParams {
+  network?: string;
   walletId: string;
 }
 

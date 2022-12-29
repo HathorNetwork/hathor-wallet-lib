@@ -23,7 +23,7 @@ describe('DummyWalletServiceConnection', () => {
   });
 
   it('should return current server and network', () => {
-    const connection = new DummyWalletServiceConnection();
+    const connection = new DummyWalletServiceConnection({ network: 'testnet', walletId: 'walletId' });
     expect(connection.getCurrentServer()).toEqual('http://localhost:8080/');
     expect(connection.getCurrentNetwork()).toEqual('testnet');
   });
