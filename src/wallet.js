@@ -390,7 +390,7 @@ const wallet = {
    * greater than the current last generated index.
    *
    * @param {number} newIndex The candidate index for the last generated index
-   * @returns {boolean} Wether the last generated index was updated
+   * @returns {boolean} Whether the last generated index was updated
    */
   updateLastGeneratedIndex(newIndex) {
     const lastGeneratedIndex = this.getLastGeneratedIndex();

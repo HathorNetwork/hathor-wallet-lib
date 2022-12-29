@@ -2467,7 +2467,7 @@ class HathorWallet extends EventEmitter {
    * @param {number} startIndex Address index to start to load history
    * @param {number} count How many addresses I will load
    *
-   * @return {Promise} Promise that resolves when addresses history is finished loading from server
+   * @return {Promise<void>} Promise that resolves when addresses history is finished loading from server
    *
    * @memberof HathorWallet
    * @inner
@@ -2638,7 +2638,7 @@ class HathorWallet extends EventEmitter {
    *
    * @throws {OutputValueError} Will throw an error if one of the output value is invalid
    *
-   * @return {Object} Return an object with {addressesFound, maxIndex, historyLength}
+   * @return {{addressesFound: number, maxIndex: number, historyLength: number}}
    * @memberof Wallet
    * @inner
    */
