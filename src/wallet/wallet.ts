@@ -594,7 +594,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // We should wait for new addresses before setting wallet to ready
     await this.getNewAddresses(true);
 
-    this.setupConnection();
+    if (this.isWsEnabled()) {
+      this.setupConnection();
+    }
     this.setState(walletState.READY);
   }
 
