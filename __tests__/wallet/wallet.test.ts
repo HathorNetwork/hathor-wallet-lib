@@ -517,3 +517,59 @@ test('delegateAuthority should throw if wallet is not ready', async () => {
     pinCode: '123456',
   })).rejects.toThrowError('Wallet not ready');
 });
+
+test('prepareDestroyAuthority', async () => {
+  const addresses = [
+    'WdSD7aytFEZ5Hp8quhqu3wUCsyyGqcneMu',
+    'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM',
+    'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX',
+  ]
+
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+
+  const code = new Mnemonic(seed);
+  const xpriv = code.toHDPrivateKey('', network.getNetwork());
+
+  wallet.setState('Ready');
+
+  const getUtxosMock = async () => ({
+    utxos: [{
+      txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+      index: 0,
+      tokenId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+      address: addresses[0],
+      value: 1,
+      authorities: 1,
+      timelock: null,
+      heightlock: null,
+      locked: false,
+      addressPath: 'm/280\'/280\'/0/1/0',
+    }],
+    changeAmount: 4,
+  });
+  const getXprivKeyMock = () => xpriv;
+  const getInputDataMock = () => Buffer.from([]);
+
+  jest.spyOn(wallet, 'getUtxos').mockImplementation(getUtxosMock);
+  jest.spyOn(gWallet, 'getXprivKey').mockImplementation(getXprivKeyMock);
+  jest.spyOn(wallet, 'getInputData').mockImplementation(getInputDataMock);
+
+  // createAnother option should create another authority utxo to the given address
+  const delegate1 = await wallet.prepareDestroyAuthorityData('00', 'mint', 1, {
+    pinCode: '123456',
+  });
+
+  expect(delegate1.outputs).toHaveLength(0);
+  expect(delegate1.inputs).toHaveLength(1);
+  expect(delegate1.inputs[0].hash).toStrictEqual('002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f');
+});
