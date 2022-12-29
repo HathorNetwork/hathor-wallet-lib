@@ -21,6 +21,7 @@
   },
   "scripts": {
     "test": "jest --env=node --forceExit",
+    "test:watch": "jest --watch --env=node",
     "build": "babel --presets @babel/preset-react -d lib/ src && tsc",
     "tsc": "tsc",
     "test_integration": "npm run test_network_up && npm run test_network_integration && npm run test_network_down",
