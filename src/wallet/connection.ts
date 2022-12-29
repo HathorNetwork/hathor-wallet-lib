@@ -16,7 +16,7 @@ import {
   WsTransaction,
   ConnectionState,
 } from './types';
-import { EventEmitter } from 'stream';
+import { EventEmitter } from 'events';
 
 export interface WalletServiceConnectionParams extends ConnectionParams {
   walletId: string;
