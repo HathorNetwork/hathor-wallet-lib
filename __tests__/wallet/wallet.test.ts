@@ -380,30 +380,7 @@ test('getTxById', async () => {
   await expect(invalidCall).rejects.toThrowError('Error getting transaction by its id.');
 });
 
-test('prepareDelegateAuthorityData should fail if type is invalid', async () => {
-  const requestPassword = jest.fn();
-  const network = new Network('testnet');
-  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
-  const wallet = new HathorWalletServiceWallet({
-    requestPassword,
-    seed,
-    network,
-    passphrase: '',
-    xpriv: null,
-    xpub: null,
-  });
-
-  wallet.setState('Ready');
-
-  // createAnother option should create another authority utxo to the given address
-  expect(wallet.prepareDelegateAuthorityData('00', 'explode', 'addr1', {
-    anotherAuthorityAddress: 'addr2',
-    createAnother: true,
-    pinCode: '123456',
-  })).rejects.toThrowError('Type options are mint and melt for delegate authority method.');
-});
-
-test('prepareDelegateAuthorityData should validate options', async () => {
+test('prepareDelegateAuthorityData', async () => {
   const addresses = [
     'WdSD7aytFEZ5Hp8quhqu3wUCsyyGqcneMu',
     'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM',
@@ -480,7 +457,7 @@ test('prepareDelegateAuthorityData should validate options', async () => {
   })).rejects.toThrowError('PIN not specified in prepareDelegateAuthorityData options');
 });
 
-test('destroyAuthority should throw if wallet is not ready', async () => {
+test('prepareDelegateAuthorityData should fail if type is invalid', async () => {
   const requestPassword = jest.fn();
   const network = new Network('testnet');
   const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
@@ -493,9 +470,14 @@ test('destroyAuthority should throw if wallet is not ready', async () => {
     xpub: null,
   });
 
-  expect(wallet.destroyAuthority('00', 'mint', 1, {
+  wallet.setState('Ready');
+
+  // createAnother option should create another authority utxo to the given address
+  expect(wallet.prepareDelegateAuthorityData('00', 'explode', 'addr1', {
+    anotherAuthorityAddress: 'addr2',
+    createAnother: true,
     pinCode: '123456',
-  })).rejects.toThrowError('Wallet not ready');
+  })).rejects.toThrowError('Type options are mint and melt for delegate authority method.');
 });
 
 test('delegateAuthority should throw if wallet is not ready', async () => {
@@ -572,4 +554,22 @@ test('prepareDestroyAuthority', async () => {
   expect(delegate1.outputs).toHaveLength(0);
   expect(delegate1.inputs).toHaveLength(1);
   expect(delegate1.inputs[0].hash).toStrictEqual('002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f');
+});
+
+test('destroyAuthority should throw if wallet is not ready', async () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+
+  expect(wallet.destroyAuthority('00', 'mint', 1, {
+    pinCode: '123456',
+  })).rejects.toThrowError('Wallet not ready');
 });

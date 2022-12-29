@@ -499,7 +499,7 @@ test('onTxArrived', async () => {
     inputs: [],
   };
 
-  await hWallet.onTxArrived(tx, false);
+  await hWallet.onTxArrived(tx, true);
 
   expect(hWallet.getPreProcessedData('tokens')).toEqual(['A']);
   expect(hWallet.getPreProcessedData('historyByToken')).toEqual({
