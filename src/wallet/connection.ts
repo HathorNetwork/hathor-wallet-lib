@@ -95,11 +95,11 @@ export default class WalletServiceConnection extends BaseConnection {
  */
 export class DummyWalletServiceConnection extends EventEmitter implements IConnection {
   public readonly isDummyConnection = true;
+  public walletId?: string;
 
   private currentNetwork: string;
   private currentServer: string;
   protected state: ConnectionState;
-  private walletId?: string;
 
   constructor(options: WalletServiceConnectionParams = { walletId: 'dummy-wallet' }) {
     super();
@@ -168,5 +168,17 @@ export class DummyWalletServiceConnection extends EventEmitter implements IConne
 
   setWalletId(walletId: string) {
     this.walletId = walletId;
+  }
+
+  isStateClosed(): boolean {
+    return this.state === ConnectionState.CLOSED;
+  }
+
+  isStateConnected(): boolean {
+    return this.state === ConnectionState.CONNECTED;
+  }
+
+  isStateConnecting(): boolean {
+    return this.state === ConnectionState.CONNECTING;
   }
 }
