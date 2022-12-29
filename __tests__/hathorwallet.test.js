@@ -469,11 +469,16 @@ test('onTxArrived', async () => {
   };
 
   hWallet.getTxBalance.mockReturnValue(Promise.resolve({
-    'A': 10,
+    A: 10,
   }));
   hWallet.isAddressMine.mockReturnValue(true);
 
-  hWallet._getBalanceRaw.mockReturnValue({'A': { unlocked: 5, locked: 5 }});
+  hWallet._getBalanceRaw.mockReturnValue({
+    A: {
+      unlocked: 5,
+      locked: 5,
+    },
+  });
 
   const tx = {
     tx_id: 'txId1',
@@ -494,7 +499,7 @@ test('onTxArrived', async () => {
     inputs: [],
   };
 
-  await hWallet.onTxArrived(tx, true);
+  await hWallet.onTxArrived(tx, false);
 
   expect(hWallet.getPreProcessedData('tokens')).toEqual(['A']);
   expect(hWallet.getPreProcessedData('historyByToken')).toEqual({
@@ -508,6 +513,71 @@ test('onTxArrived', async () => {
   });
   expect(hWallet.getPreProcessedData('balanceByToken')).toEqual({
     A: { unlocked: 5, locked: 5, transactions: 1 }
+  });
+});
+
+test('onTxArrived on existing tx', async () => {
+  const hWallet = new FakeHathorWallet();
+  hWallet.preProcessedData = {
+    tokens: [],
+    historyByToken: {
+      A: [{
+        tx_id: 'txId1',
+        timestamp: 123,
+        token_uid: 'A',
+        balance: 10,
+        voided: false,
+      }],
+    },
+    balanceByToken: {},
+  };
+
+  hWallet.getTxBalance.mockReturnValue(Promise.resolve({
+    A: 10,
+  }));
+
+  hWallet.isAddressMine.mockReturnValue(true);
+
+  hWallet._getBalanceRaw.mockReturnValue({
+    A: {
+      unlocked: 0,
+      locked: 0,
+    },
+  });
+
+  const tx = {
+    tx_id: 'txId1',
+    timestamp: 123,
+    is_voided: true,
+    outputs: [
+      {
+        token: 'A',
+        value: 5,
+        decoded: { address: 'addr1' },
+      },
+      {
+        token: 'A',
+        value: 5,
+        decoded: { address: 'addr1', timelock: 127 },
+      }
+    ],
+    inputs: [],
+  };
+
+  await hWallet.onTxArrived(tx, false);
+
+  expect(hWallet.getPreProcessedData('tokens')).toEqual(['A']);
+  expect(hWallet.getPreProcessedData('historyByToken')).toEqual({
+    'A': [{
+      txId: 'txId1',
+      timestamp: 123,
+      tokenUid: 'A',
+      balance: 10,
+      voided: true,
+    }],
+  });
+  expect(hWallet.getPreProcessedData('balanceByToken')).toEqual({
+    A: { unlocked: 0, locked: 0, transactions: 1 }
   });
 });
 
