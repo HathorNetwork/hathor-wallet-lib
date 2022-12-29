@@ -16,11 +16,7 @@ import {
   WsTransaction,
   ConnectionState,
 } from './types';
-<<<<<<< HEAD
 import { EventEmitter } from 'events';
-=======
-import { EventEmitter } from 'stream';
->>>>>>> 73b7e92 (chore: extract IConnection and refactor wallet dummy connection)
 
 export interface WalletServiceConnectionParams extends ConnectionParams {
   network?: string;
