@@ -675,3 +675,42 @@ test('graphvizNeighborsQuery', async () => {
   mockAxiosAdapter.onGet('wallet/proxy/graphviz/neighbours?txId=tx2&graphType=test&maxLevel=1').reply(200, { success: false, message: 'Transaction not found' });
   await expect(wallet.graphvizNeighborsQuery('tx2', 'test', 1)).rejects.toThrowError(TxNotFoundError);
 });
+
+test('instantiate a new wallet without web socket initialization', async () => {
+  /**
+   * New wallet without web socket initialization
+   */
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+    enableWs: false,
+  });
+  expect(wallet.isWsEnabled()).toBe(false);
+  expect(wallet.isReady()).toBe(false);
+
+  /**
+   * Wallet change its state to ready
+   */
+  const spyOnGetNewAddress = jest.spyOn(wallet as any, 'getNewAddresses')
+    .mockImplementation(() => {
+      return Promise.resolve();
+    });
+  const spyOnSetupConnection = jest.spyOn(wallet, 'setupConnection');
+
+  // get original method implementation for the private method onWalletReady
+  const onWalletReadyImplementation = jest.spyOn(wallet as any, 'onWalletReady')
+    .getMockImplementation();
+  // call method binding to the wallet instance
+  await onWalletReadyImplementation?.call(wallet)
+
+  expect(spyOnGetNewAddress).toBeCalledTimes(1);
+  expect(spyOnSetupConnection).toBeCalledTimes(0);
+  expect(wallet.isReady()).toBeTruthy();
+})
