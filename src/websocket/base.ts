@@ -8,7 +8,6 @@
 import { EventEmitter } from 'events';
 import _WebSocket from 'isomorphic-ws';
 
-const WS_READYSTATE_READY = 1;
 export const DEFAULT_WS_OPTIONS = {
   wsURL: 'wss://node1.mainnet.hathor.network/v1a/',
   heartbeatInterval: 3000,
@@ -40,9 +39,12 @@ abstract class BaseWebSocket extends EventEmitter {
   private ws: _WebSocket;
   // This is the URL of the websocket.
   private wsURL: string | Function;
-  // Boolean to show when there is a websocket started with the server
+  // Boolean that indicates that the websocket was instantiated. It's important to
+  // notice that it does not indicate that the connection has been established with
+  // the server, which is what the `connected` flag indicates
   private started: boolean;
-  // Boolean to show when the websocket connection is working
+  // Boolean to show when the websocket connection was established with the 
+  // server. This gets set to true on the onOpen event listener.
   private connected: boolean | null;
   // Boolean to show when the websocket is online
   private isOnline: boolean;
@@ -134,9 +136,8 @@ abstract class BaseWebSocket extends EventEmitter {
           return;
         }
       }
-      this.ws.onclose = () => {};
-      this.ws.close();
-      this.ws = null;
+
+      this.closeWs();
     }
 
     this.ws = new this.WebSocket(wsURL);
@@ -146,6 +147,31 @@ abstract class BaseWebSocket extends EventEmitter {
     this.ws.onmessage = (evt) => this.onMessage(evt);
     this.ws.onerror = (evt) => this.onError(evt);
     this.ws.onclose = () => this.onClose();
+
+    this.started = true;
+  }
+
+  /**
+   * Sets all event listeners to noops on the WebSocket instance 
+   * and close it.
+   **/
+  closeWs() {
+    if (!this.ws) {
+      return;
+    }
+
+    this.ws.onopen = () => {};
+    this.ws.onclose = () => {};
+    this.ws.onerror = () => {};
+    this.ws.onmessage = () => {};
+
+    if (this.ws.readyState === _WebSocket.OPEN) {
+      this.ws.close();
+    }
+
+    this.ws = null;
+    this.started = false;
+    this.connected = false;
   }
 
   /**
@@ -180,9 +206,12 @@ abstract class BaseWebSocket extends EventEmitter {
    * Method called when websocket connection is opened
    */
   onOpen() {
+    if (!this.started) {
+      return;
+    }
+
     this.connected = true;
     this.connectedDate = new Date();
-    this.started = true;
     this.heartbeat = setInterval(() => {
       this.sendPing();
     }, this.heartbeatInterval);
@@ -215,11 +244,7 @@ abstract class BaseWebSocket extends EventEmitter {
     this.connected = false;
     this.connectedDate = null;
     this.setIsOnline(false);
-    if (this.ws) {
-      this.ws.onclose = () => {};
-      this.ws.close();
-      this.ws = null;
-    }
+    this.closeWs();
 
     this.clearSetupTimer();
     this.setupTimer = setTimeout(() => this.setup(), this.retryConnectionInterval);
@@ -239,12 +264,15 @@ abstract class BaseWebSocket extends EventEmitter {
    * Method called to send a message to the server
    */
   sendMessage(msg: string) {
-    if (!this.started) {
+    // The started flag means that the websocket instance has been
+    // instantiated, but it does not mean that the connection was 
+    // successful yet, which is what the connected flags indicates.
+    if (!this.started || !this.connected) {
       this.setIsOnline(false);
       return;
     }
 
-    if (this.ws.readyState === WS_READYSTATE_READY) {
+    if (this.ws.readyState === _WebSocket.OPEN) {
       this.ws.send(msg);
     } else {
       // If it is still connecting, we wait a little and try again
@@ -283,7 +311,7 @@ abstract class BaseWebSocket extends EventEmitter {
     });
 
     this.onClose();
-  };
+  }
 
   /**
    * Method called to end a websocket connection
@@ -292,11 +320,7 @@ abstract class BaseWebSocket extends EventEmitter {
     this.setIsOnline(false);
     this.started = false;
     this.connected = null;
-    if (this.ws) {
-      this.ws.onclose = () => {};
-      this.ws.close();
-      this.ws = null;
-    }
+    this.closeWs();
     // @ts-ignore
     clearInterval(this.heartbeat);
   }
