@@ -84,11 +84,11 @@ class P2PKH {
    * @inner
    */
   static identify(buf: Buffer): Boolean {
-    const op_greaterthan_timestamp = OP_GREATERTHAN_TIMESTAMP.readUInt8();
-    const op_dup = OP_DUP.readUInt8();
-    const op_hash160 = OP_HASH160.readUInt8();
-    const op_equalverify = OP_EQUALVERIFY.readUInt8();
-    const op_checksig = OP_CHECKSIG.readUInt8();
+    const op_greaterthan_timestamp = OP_GREATERTHAN_TIMESTAMP.readUInt8(0);
+    const op_dup = OP_DUP.readUInt8(0);
+    const op_hash160 = OP_HASH160.readUInt8(0);
+    const op_equalverify = OP_EQUALVERIFY.readUInt8(0);
+    const op_checksig = OP_CHECKSIG.readUInt8(0);
     if (buf.length !== 31 && buf.length !== 25) {
       // this is not a P2PKH script
       return false;
