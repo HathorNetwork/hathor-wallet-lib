@@ -22,6 +22,7 @@ import {
   FullNodeVersionData,
   TxByIdTokensResponseData,
   FullNodeTxResponse,
+  FullNodeTxConfirmationDataResponse,
 } from '../types';
 import HathorWalletServiceWallet from '../wallet';
 import { WalletRequestError } from '../../errors';
@@ -48,6 +49,7 @@ const walletApi = {
     const axios = await axiosInstance(wallet, false);
     const response = await axios.get('version');
     const data = response.data;
+
     if (response.status === 200 && data.success) {
       return data.data;
     } else {
@@ -246,6 +248,38 @@ const walletApi = {
     }
 
     throw new WalletRequestError('Error getting transaction by its id from the proxied fullnode.', {
+      cause: response.data,
+    });
+  },
+
+  async proxyGetTxConfirmationData(
+    wallet: HathorWalletServiceWallet,
+    txId: string,
+  ): Promise<FullNodeTxConfirmationDataResponse> {
+    const axios = await axiosInstance(wallet, true);
+    const response = await axios.get(`wallet/proxy/transactions/${txId}/confirmation_data`);
+    if (response.status === 200 && response.data.success) {
+      return response.data;
+    }
+
+    throw new WalletRequestError('Error getting transaction confirmation data by its id from the proxied fullnode.', {
+      cause: response.data,
+    });
+  },
+
+  async proxyGraphvizNeighborsQuery(
+    wallet: HathorWalletServiceWallet,
+    txId: string,
+    graphType: string,
+    maxLevel: number,
+  ): Promise<string> {
+    const axios = await axiosInstance(wallet, true);
+    const response = await axios.get(`wallet/proxy/graphviz/neighbours?txId=${txId}&graphType=${graphType}&maxLevel=${maxLevel}`);
+    if (response.status === 200) {
+      return response.data;
+    }
+
+    throw new WalletRequestError('Error getting transaction confirmation data by its id from the proxied fullnode.', {
       cause: response.data,
     });
   },

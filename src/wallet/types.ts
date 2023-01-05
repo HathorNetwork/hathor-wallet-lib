@@ -518,3 +518,11 @@ export interface FullNodeTxResponse {
   message?: string;
   spent_outputs?: any;
 }
+
+export interface FullNodeTxConfirmationDataResponse {
+  success: boolean;
+  accumulated_weight: number;
+  accumulated_bigger: boolean;
+  stop_value: number;
+  confirmation_level: number;
+}
