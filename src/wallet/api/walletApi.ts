@@ -21,6 +21,7 @@ import {
   AuthTokenResponseData,
   FullNodeVersionData,
   TxByIdTokensResponseData,
+  FullNodeTxResponse,
 } from '../types';
 import HathorWalletServiceWallet from '../wallet';
 import { WalletRequestError } from '../../errors';
@@ -199,10 +200,10 @@ const walletApi = {
   },
 
   async createAuthToken(
-      wallet: HathorWalletServiceWallet,
-      timestamp: number,
-      xpub: string,
-      sign: string,
+    wallet: HathorWalletServiceWallet,
+    timestamp: number,
+    xpub: string,
+    sign: string,
   ): Promise<AuthTokenResponseData> {
     const data = {
       ts: timestamp,
@@ -214,19 +215,39 @@ const walletApi = {
     const response = await axios.post('auth/token', data);
     if (response.status === 200 && response.data.success === true) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error requesting auth token.');
     }
+
+    throw new WalletRequestError('Error requesting auth token.');
   },
 
-  async getTxById(wallet: HathorWalletServiceWallet, txId: string): Promise<TxByIdTokensResponseData> {
+  async getTxById(
+    wallet: HathorWalletServiceWallet,
+    txId: string,
+  ): Promise<TxByIdTokensResponseData> {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get(`wallet/transactions/${txId}`);
     if (response.status === 200 && response.data.success) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error getting transaction by its id.', { cause: response.data });
     }
+
+    throw new WalletRequestError('Error getting transaction by its id.', {
+      cause: response.data,
+    });
+  },
+
+  async proxyGetTxById(
+    wallet: HathorWalletServiceWallet,
+    txId: string,
+  ): Promise<FullNodeTxResponse> {
+    const axios = await axiosInstance(wallet, true);
+    const response = await axios.get(`wallet/proxy/transactions/${txId}`);
+    if (response.status === 200 && response.data.success) {
+      return response.data;
+    }
+
+    throw new WalletRequestError('Error getting transaction by its id from the proxied fullnode.', {
+      cause: response.data,
+    });
   },
 };
 

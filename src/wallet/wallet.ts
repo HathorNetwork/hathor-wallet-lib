@@ -62,6 +62,7 @@ import {
   TxByIdTokensResponseData,
   DelegateAuthorityOptions,
   DestroyAuthorityOptions,
+  FullNodeTxResponse,
 } from './types';
 import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
@@ -1728,6 +1729,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async getTxById(txId: string): Promise<TxByIdTokensResponseData> {
     this.failIfWalletNotReady();
     const data = await walletApi.getTxById(this, txId);
+    return data;
+  }
+
+  async proxyGetTxById(txId: string): Promise<FullNodeTxResponse> {
+    this.failIfWalletNotReady();
+
+    const data = await walletApi.proxyGetTxById(this, txId);
     return data;
   }
 }
