@@ -573,3 +573,89 @@ test('destroyAuthority should throw if wallet is not ready', async () => {
     pinCode: '123456',
   })).rejects.toThrowError('Wallet not ready');
 });
+
+test('proxyGetTxById', async () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = defaultWalletSeed;
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+
+  wallet.setState('Ready');
+
+  config.setWalletServiceBaseUrl('https://wallet-service.testnet.hathor.network/');
+
+  mockAxiosAdapter.onGet('wallet/proxy/transactions/tx1').reply(200, {
+    success: true,
+    tx: { hash: 'tx1' },
+    meta: {},
+  });
+
+  const proxiedTx = await wallet.proxyGetTxById('tx1');
+
+  expect(proxiedTx.tx.hash).toStrictEqual('tx1');
+});
+
+test('proxyGetTxConfirmationData', async () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = defaultWalletSeed;
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+
+  wallet.setState('Ready');
+
+  config.setWalletServiceBaseUrl('https://wallet-service.testnet.hathor.network/');
+
+  const mockData = {
+    success: true,
+    accumulated_weight: 67.45956109191802,
+    accumulated_bigger: true,
+    stop_value: 67.45416781056525,
+    confirmation_level: 1,
+  };
+
+  mockAxiosAdapter.onGet('wallet/proxy/transactions/tx1/confirmation_data').reply(200, mockData);
+
+  const proxiedConfirmationData = await wallet.proxyGetTxConfirmationData('tx1');
+
+  expect(proxiedConfirmationData).toStrictEqual(mockData);
+});
+
+test('proxyGraphvizNeighborsQuery', async () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = defaultWalletSeed;
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+
+  wallet.setState('Ready');
+
+  config.setWalletServiceBaseUrl('https://wallet-service.testnet.hathor.network/');
+
+  const mockData = 'digraph {}';
+
+  mockAxiosAdapter.onGet('wallet/proxy/graphviz/neighbours?txId=tx1&graphType=test&maxLevel=1').reply(200, mockData);
+
+  const proxiedGraphvizResponse = await wallet.proxyGraphvizNeighborsQuery('tx1', 'test', 1);
+
+  expect(proxiedGraphvizResponse).toStrictEqual(mockData);
+});
