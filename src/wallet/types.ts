@@ -319,6 +319,17 @@ export interface IHathorWallet {
   getTokenDetails(tokenId: string): Promise<TokenDetailsObject>;
   getVersionData(): Promise<FullNodeVersionData>;
   checkAddressesMine(addresses: string[]): Promise<WalletAddressMap>;
+  getFullTxById(
+    txId: string,
+  ): Promise<FullNodeTxResponse>;
+  getTxConfirmationData(
+    txId: string,
+  ): Promise<FullNodeTxConfirmationDataResponse>;
+  graphvizNeighborsQuery(
+    txId: string,
+    graphType: string,
+    maxLevel: number,
+  ): Promise<string>;
 }
 
 export interface ISendTransaction {
