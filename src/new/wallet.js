@@ -27,6 +27,7 @@ import { HDPrivateKey } from 'bitcore-lib';
 import transactionUtils from '../utils/transaction';
 import Transaction from '../models/transaction';
 import Queue from '../models/queue';
+import txApi from '../api/txApi';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';
@@ -2468,6 +2469,50 @@ class HathorWallet extends EventEmitter {
     }
 
     return tx;
+  }
+
+  /**
+   * Queries the fullnode for a transaction
+   *
+   * @param {string} txId The transaction to query
+   *
+   * @returns {FullNodeTxResponse} Transaction data in the fullnode
+   */
+  async getFullTxById(txId) {
+    return new Promise((resolve) => {
+      txApi.getTransaction(txId, resolve);
+    });
+  }
+
+  /**
+   * Queries the fullnode for a transaction confirmation data
+   *
+   * @param {string} txId The transaction to query
+   *
+   * @returns {FullNodeTxConfirmationDataResponse} Transaction confirmation data
+   */
+  async getTxConfirmationData(txId) {
+    return new Promise((resolve) => {
+      txApi.getConfirmationData(txId, resolve);
+    });
+  }
+
+  /**
+   * Queries the fullnode for a graphviz graph, given a graph type and txId
+   *
+   * @param {string} txId The transaction to query
+   * @param {string} graphType The graph type to query
+   * @param {string} maxLevel Max level to render
+   *
+   * @returns {string} The graphviz digraph
+   */
+  async graphvizNeighborsQuery(
+    txId,
+    graphType,
+    maxLevel,
+  ) {
+    const url = `${config.getServerUrl()}graphviz/neighbours.dot?tx=${txId}&graph_type=${graphType}&max_level=${maxLevel}`;
+    return new Promise((resolve) => txApi.getGraphviz(url, resolve));
   }
 }
 
