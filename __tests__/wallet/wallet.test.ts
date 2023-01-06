@@ -600,6 +600,9 @@ test('getFullTxById', async () => {
   const proxiedTx = await wallet.getFullTxById('tx1');
 
   expect(proxiedTx.tx.hash).toStrictEqual('tx1');
+
+  mockAxiosAdapter.onGet('wallet/proxy/transactions/tx1').reply(400, {});
+  expect(wallet.getFullTxById('tx1')).rejects.toThrowError('Error getting transaction by its id from the proxied fullnode.');
 });
 
 test('getTxConfirmationData', async () => {
@@ -632,6 +635,9 @@ test('getTxConfirmationData', async () => {
   const proxiedConfirmationData = await wallet.getTxConfirmationData('tx1');
 
   expect(proxiedConfirmationData).toStrictEqual(mockData);
+
+  mockAxiosAdapter.onGet('wallet/proxy/transactions/tx1/confirmation_data').reply(400, '');
+  expect(wallet.getTxConfirmationData('tx1')).rejects.toThrowError('Error getting transaction confirmation data by its id from the proxied fullnode.');
 });
 
 test('graphvizNeighborsQuery', async () => {
@@ -658,4 +664,7 @@ test('graphvizNeighborsQuery', async () => {
   const proxiedGraphvizResponse = await wallet.graphvizNeighborsQuery('tx1', 'test', 1);
 
   expect(proxiedGraphvizResponse).toStrictEqual(mockData);
+
+  mockAxiosAdapter.onGet('wallet/proxy/graphviz/neighbours?txId=tx1&graphType=test&maxLevel=1').reply(500, '');
+  expect(wallet.graphvizNeighborsQuery('tx1', 'test', 1)).rejects.toThrowError('Error getting transaction confirmation data by its id from the proxied fullnode.');
 });
