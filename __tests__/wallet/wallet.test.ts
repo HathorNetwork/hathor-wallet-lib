@@ -705,12 +705,13 @@ test('instantiate a new wallet without web socket initialization', async () => {
   const spyOnSetupConnection = jest.spyOn(wallet, 'setupConnection');
 
   // get original method implementation for the private method onWalletReady
+  wallet.walletId = 'wallet-id';
   const onWalletReadyImplementation = jest.spyOn(wallet as any, 'onWalletReady')
     .getMockImplementation();
   // call method binding to the wallet instance
   await onWalletReadyImplementation?.call(wallet)
 
   expect(spyOnGetNewAddress).toBeCalledTimes(1);
-  expect(spyOnSetupConnection).toBeCalledTimes(0);
+  expect(spyOnSetupConnection).toBeCalledTimes(1);
   expect(wallet.isReady()).toBeTruthy();
 })
