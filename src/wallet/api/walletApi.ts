@@ -237,7 +237,7 @@ const walletApi = {
     });
   },
 
-  async proxyGetTxById(
+  async getFullTxById(
     wallet: HathorWalletServiceWallet,
     txId: string,
   ): Promise<FullNodeTxResponse> {
@@ -252,7 +252,7 @@ const walletApi = {
     });
   },
 
-  async proxyGetTxConfirmationData(
+  async getTxConfirmationData(
     wallet: HathorWalletServiceWallet,
     txId: string,
   ): Promise<FullNodeTxConfirmationDataResponse> {
@@ -267,7 +267,7 @@ const walletApi = {
     });
   },
 
-  async proxyGraphvizNeighborsQuery(
+  async graphvizNeighborsQuery(
     wallet: HathorWalletServiceWallet,
     txId: string,
     graphType: string,

@@ -1733,28 +1733,28 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     return data;
   }
 
-  async proxyGetTxById(txId: string): Promise<FullNodeTxResponse> {
+  async getFullTxById(txId: string): Promise<FullNodeTxResponse> {
     this.failIfWalletNotReady();
 
-    const data = await walletApi.proxyGetTxById(this, txId);
+    const data = await walletApi.getFullTxById(this, txId);
     return data;
   }
 
-  async proxyGetTxConfirmationData(txId: string): Promise<FullNodeTxConfirmationDataResponse> {
+  async getTxConfirmationData(txId: string): Promise<FullNodeTxConfirmationDataResponse> {
     this.failIfWalletNotReady();
 
-    const data = await walletApi.proxyGetTxConfirmationData(this, txId);
+    const data = await walletApi.getTxConfirmationData(this, txId);
     return data;
   }
 
-  async proxyGraphvizNeighborsQuery(
+  async graphvizNeighborsQuery(
     txId: string,
     graphType: string,
     maxLevel: number,
   ): Promise<string> {
     this.failIfWalletNotReady();
 
-    const data = await walletApi.proxyGraphvizNeighborsQuery(this, txId, graphType, maxLevel);
+    const data = await walletApi.graphvizNeighborsQuery(this, txId, graphType, maxLevel);
     return data;
   }
 }

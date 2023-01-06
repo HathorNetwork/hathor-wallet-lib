@@ -574,7 +574,7 @@ test('destroyAuthority should throw if wallet is not ready', async () => {
   })).rejects.toThrowError('Wallet not ready');
 });
 
-test('proxyGetTxById', async () => {
+test('getFullTxById', async () => {
   const requestPassword = jest.fn();
   const network = new Network('testnet');
   const seed = defaultWalletSeed;
@@ -597,12 +597,12 @@ test('proxyGetTxById', async () => {
     meta: {},
   });
 
-  const proxiedTx = await wallet.proxyGetTxById('tx1');
+  const proxiedTx = await wallet.getFullTxById('tx1');
 
   expect(proxiedTx.tx.hash).toStrictEqual('tx1');
 });
 
-test('proxyGetTxConfirmationData', async () => {
+test('getTxConfirmationData', async () => {
   const requestPassword = jest.fn();
   const network = new Network('testnet');
   const seed = defaultWalletSeed;
@@ -629,12 +629,12 @@ test('proxyGetTxConfirmationData', async () => {
 
   mockAxiosAdapter.onGet('wallet/proxy/transactions/tx1/confirmation_data').reply(200, mockData);
 
-  const proxiedConfirmationData = await wallet.proxyGetTxConfirmationData('tx1');
+  const proxiedConfirmationData = await wallet.getTxConfirmationData('tx1');
 
   expect(proxiedConfirmationData).toStrictEqual(mockData);
 });
 
-test('proxyGraphvizNeighborsQuery', async () => {
+test('graphvizNeighborsQuery', async () => {
   const requestPassword = jest.fn();
   const network = new Network('testnet');
   const seed = defaultWalletSeed;
@@ -655,7 +655,7 @@ test('proxyGraphvizNeighborsQuery', async () => {
 
   mockAxiosAdapter.onGet('wallet/proxy/graphviz/neighbours?txId=tx1&graphType=test&maxLevel=1').reply(200, mockData);
 
-  const proxiedGraphvizResponse = await wallet.proxyGraphvizNeighborsQuery('tx1', 'test', 1);
+  const proxiedGraphvizResponse = await wallet.graphvizNeighborsQuery('tx1', 'test', 1);
 
   expect(proxiedGraphvizResponse).toStrictEqual(mockData);
 });
