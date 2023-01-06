@@ -122,6 +122,17 @@ export class DummyWalletServiceConnection implements IConnection {
     this.currentServer = servers[0] || config.getServerUrl();
   }
 
+  /**
+   * Dummy method to simulate the EventEmitter.on method to avoid errors
+   * @param _event dummy event
+   * @param _listener dummy listener
+   * @returns dummy emitter
+   */
+  on(_event: string, _listener: (...args: any[]) => void): EventEmitter {
+    // return a dummy emitter that does nothing
+    return new EventEmitter();
+  }
+
   start(): void {
     // There is nothing to start
   }
