@@ -2,8 +2,8 @@ import { DummyWalletServiceConnection } from "../../src/wallet/connection";
 import { ConnectionState } from "../../src/wallet/types";
 
 class DummyConnectionUnderTest extends DummyWalletServiceConnection {
-  constructor() {
-    super();
+  constructor(options?: any) {
+    super(options);
   }
 
   public getState(): ConnectionState {
