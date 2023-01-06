@@ -94,7 +94,7 @@ export default class WalletServiceConnection extends BaseConnection {
 /**
  * This connection is used when the wallet has websocket disabled.
  */
-export class DummyWalletServiceConnection extends EventEmitter implements IConnection {
+export class DummyWalletServiceConnection implements IConnection {
   public readonly isDummyConnection = true;
   public walletId?: string;
 
@@ -103,8 +103,6 @@ export class DummyWalletServiceConnection extends EventEmitter implements IConne
   protected state: ConnectionState;
 
   constructor(options: WalletServiceConnectionParams = { walletId: 'dummy-wallet' }) {
-    super();
-
     const {
       walletId,
       network,
@@ -125,14 +123,11 @@ export class DummyWalletServiceConnection extends EventEmitter implements IConne
   }
 
   start(): void {
-    if (!this.walletId) {
-      throw new Error('Wallet id should be set before connection start.');
-    }
+    // There is nothing to start
   }
 
   stop(): void {
-    this.removeAllListeners();
-    this.setState(ConnectionState.CLOSED);
+    // There is nothing to stop
   }
 
   endConnection(): void {
@@ -148,11 +143,7 @@ export class DummyWalletServiceConnection extends EventEmitter implements IConne
   }
 
   onConnectionChange(value: boolean): void {
-    if (value) {
-      this.setState(ConnectionState.CONNECTED);
-    } else {
-      this.setState(ConnectionState.CONNECTING);
-    }
+    // There is nothing to change
   }
 
   setState(state: ConnectionState): void {
@@ -169,17 +160,5 @@ export class DummyWalletServiceConnection extends EventEmitter implements IConne
 
   setWalletId(walletId: string) {
     this.walletId = walletId;
-  }
-
-  isStateClosed(): boolean {
-    return this.state === ConnectionState.CLOSED;
-  }
-
-  isStateConnected(): boolean {
-    return this.state === ConnectionState.CONNECTED;
-  }
-
-  isStateConnecting(): boolean {
-    return this.state === ConnectionState.CONNECTING;
   }
 }
