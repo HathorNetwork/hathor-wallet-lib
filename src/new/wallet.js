@@ -28,7 +28,7 @@ import Queue from '../models/queue';
 import storage from '../storage';
 import FullnodeConnection from './connection';
 import { WalletType } from '../types';
-import { syncHistory, reloadStorage } from '../utils/storage';
+import { syncHistory, reloadStorage, checkGapLimit } from '../utils/storage';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';
@@ -180,6 +180,7 @@ class HathorWallet extends EventEmitter {
     }
 
     this.wsTxQueue = new Queue();
+    this.newTxPromise = Promise.resolve();
     this.storage = storage;
   }
 
@@ -521,7 +522,9 @@ class HathorWallet extends EventEmitter {
         // So we will enqueue this message to be processed later
         this.wsTxQueue.enqueue(wsData);
       } else {
-        this.onNewTx(wsData);
+        this.newTxPromise = this.newTxPromise.then(() => {
+          return this.onNewTx(wsData);
+        });
       }
     }
   }
@@ -1208,19 +1211,19 @@ class HathorWallet extends EventEmitter {
 
   async onNewTx(wsData) {
     const newTx = wsData.history;
+    const storageTx = await this.storage.getTx(newTx.tx_id);
+    const isNewTx = storageTx === null;
 
-    const walletData = wallet.getWalletData();
-    const historyTransactions = 'historyTransactions' in walletData ? walletData.historyTransactions : {};
-    const allTokens = 'allTokens' in walletData ? walletData.allTokens : [];
+    // Save the transaction in the storage
+    await this.storage.addTx(newTx);
 
-    let isNewTx = true;
-    if (newTx.tx_id in historyTransactions) {
-      isNewTx = false;
+    // check gap-limit and load more addresses if needed
+    const fillGapLimit = await checkGapLimit(this.storage);
+    if (fillGapLimit !== null) {
+      await syncHistory(fillGapLimit.nextIndex, fillGapLimit.count, this.storage, this.conn);
     }
-
-    wallet.updateHistoryData(historyTransactions, allTokens, [newTx], null, walletData, null, this.conn, this.store);
-
-    this.onTxArrived(newTx, isNewTx);
+    // Process history to update metadatas
+    await this.storage.processHistory();
 
     if (isNewTx) {
       this.emit('new-tx', newTx);

@@ -6,7 +6,7 @@
  */
 
 import FullnodeConnection from '../new/connection';
-import { IStorage, IStorageAddress, IStorageTx } from '../types';
+import { IStorage, IAddressInfo, IHistoryTx } from '../types';
 import walletApi from '../api/wallet';
 
 import _ from 'lodash';
@@ -25,7 +25,7 @@ export async function loadAddresses(startIndex: number, count: number, storage: 
       continue;
     }
     // derive address at index i
-    let address: IStorageAddress;
+    let address: IAddressInfo;
     if (await storage.getWalletType() === 'p2pkh') {
       address = await deriveAddressP2PKH(i, storage);
     } else {
@@ -51,15 +51,20 @@ export async function reloadStorage(storage: IStorage, connection: FullnodeConne
   return syncHistory(0, 20, storage, connection);
 }
 
-export async function syncHistory(startIndex: number, count: number, storage: IStorage, connection: FullnodeConnection) {
+export async function syncHistory(startIndex: number, count: number, storage: IStorage, connection: FullnodeConnection, processHistory: boolean = false) {
   let itStartIndex = startIndex;
   let itCount = count;
+  let foundAnyTx = false;
 
   while (true) {
     const addresses = await loadAddresses(itStartIndex, itCount, storage);
     // subscribe to addresses
     connection.subscribeAddresses(addresses);
-    for await (let _ of loadAddressHistory(addresses, storage)) {
+    for await (let gotTx of loadAddressHistory(addresses, storage)) {
+      if (gotTx) {
+        // This will signal we have found a transaction when syncing the history
+        foundAnyTx = true;
+      }
       // update UI
       connection.emit('wallet-partial-load-history', {
         addressesFound: storage.store.addressCount(),
@@ -75,9 +80,13 @@ export async function syncHistory(startIndex: number, count: number, storage: IS
     itStartIndex = fillGapLimit.nextIndex;
     itCount = fillGapLimit.count;
   }
+  if (foundAnyTx && processHistory) {
+    await storage.processHistory();
+  }
 }
 
-export async function *loadAddressHistory(addresses: string[], storage: IStorage): AsyncGenerator<void> {
+export async function *loadAddressHistory(addresses: string[], storage: IStorage): AsyncGenerator<boolean> {
+  let foundAnyTx = false;
   // chunkify addresses
   const addressesChunks = _.chunk(addresses, 20); // FIXME: MAX_ADDRESSES_GET
   let retryCount = 0;
@@ -90,7 +99,7 @@ export async function *loadAddressHistory(addresses: string[], storage: IStorage
     while (hasMore === true) {
       let response: AxiosResponse<{
         success: true,
-        history: IStorageTx[],
+        history: IHistoryTx[],
         has_more: boolean,
         first_hash: string,
         first_address: string,
@@ -130,6 +139,7 @@ export async function *loadAddressHistory(addresses: string[], storage: IStorage
 
       if (result.success) {
         for (const tx of result.history) {
+          foundAnyTx = true;
           await storage.addTx(tx);
         }
         hasMore = result.has_more;
@@ -143,7 +153,7 @@ export async function *loadAddressHistory(addresses: string[], storage: IStorage
           addrsToSearch = addrsToSearch.slice(addrIndex);
         } else {
           // Signal that we have more data to update the UI
-          yield;
+          yield foundAnyTx;
         }
       } else {
         throw new Error(result.message);

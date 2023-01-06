@@ -15,7 +15,7 @@ import Network from '../models/network';
 import _ from 'lodash';
 import helpers from './helpers';
 
-import { IMultisigData, IStorageAccessData, WalletType, WALLET_FLAGS } from '../types';
+import { IMultisigData, IWalletAccessData, WalletType, WALLET_FLAGS } from '../types';
 import { encryptData } from './crypto';
 
 
@@ -368,7 +368,7 @@ const wallet = {
     return this.getMultiSigXPubFromXPriv(xpriv);
   },
 
-  generateAccessDataFromXpub(xpubkey: string, {multisig}: {multisig?: IMultisigData}): IStorageAccessData {
+  generateAccessDataFromXpub(xpubkey: string, {multisig}: {multisig?: IMultisigData}): IWalletAccessData {
     let walletType: WalletType;
     if (multisig === undefined) {
       walletType = WalletType.P2PKH;
@@ -414,7 +414,7 @@ const wallet = {
   generateAccessDataFromXpriv(
     xprivkey: string,
     {multisig, pin}: {multisig?: IMultisigData, pin: string},
-  ): IStorageAccessData {
+  ): IWalletAccessData {
     let walletType: WalletType;
     if (multisig === undefined) {
       walletType = WalletType.P2PKH;
@@ -469,7 +469,7 @@ const wallet = {
       password,
       networkName,
     }: {multisig?: IMultisigData, pin: string, password: string, passphrase?: string, networkName: string},
-  ): IStorageAccessData {
+  ): IWalletAccessData {
     let walletType: WalletType;
     if (multisig === undefined) {
       walletType = WalletType.P2PKH;

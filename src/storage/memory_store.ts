@@ -5,33 +5,33 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { IStore, IStorageAddress, IStorageToken, IStorageTokenMetadata, IStorageTx, IStorageUTXO, IStorageAccessData, IUtxoFilterOptions, ITokenBalance, IBalance, IStorageAddressMetadata, IStorageWalletData } from '../types';
+import { IStore, IAddressInfo, ITokenData, ITokenMetadata, IHistoryTx, IUtxo, IWalletAccessData, IUtxoFilterOptions, IBalance, IAddressMetadata, IWalletData } from '../types';
 import transaction from '../utils/transaction';
 import walletApi from '../api/wallet';
 
 
 export class MemoryStore implements IStore {
-  addresses: Map<string, IStorageAddress>;
+  addresses: Map<string, IAddressInfo>;
   addressIndexes: Map<number, string>;
-  addressesMetadata: Map<string, IStorageAddressMetadata>;
-  tokens: Map<string, IStorageToken>;
-  tokensMetadata: Map<string, IStorageTokenMetadata>;
-  registeredTokens: Map<string, IStorageToken>;
-  history: Map<string, IStorageTx>;
-  utxos: Map<string, IStorageUTXO>;
-  accessData: IStorageAccessData|null;
-  walletData: IStorageWalletData;
+  addressesMetadata: Map<string, IAddressMetadata>;
+  tokens: Map<string, ITokenData>;
+  tokensMetadata: Map<string, ITokenMetadata>;
+  registeredTokens: Map<string, ITokenData>;
+  history: Map<string, IHistoryTx>;
+  utxos: Map<string, IUtxo>;
+  accessData: IWalletAccessData|null;
+  walletData: IWalletData;
   genericStorage: Record<string, any>;
 
   constructor() {
-    this.addresses = new Map<string, IStorageAddress>();
+    this.addresses = new Map<string, IAddressInfo>();
     this.addressIndexes = new Map<number, string>();
-    this.addressesMetadata = new Map<string, IStorageAddressMetadata>();
-    this.tokens = new Map<string, IStorageToken>();
-    this.tokensMetadata = new Map<string, IStorageTokenMetadata>();
-    this.registeredTokens = new Map<string, IStorageToken>();
-    this.history = new Map<string, IStorageTx>();
-    this.utxos = new Map<string, IStorageUTXO>();
+    this.addressesMetadata = new Map<string, IAddressMetadata>();
+    this.tokens = new Map<string, ITokenData>();
+    this.tokensMetadata = new Map<string, ITokenMetadata>();
+    this.registeredTokens = new Map<string, ITokenData>();
+    this.history = new Map<string, IHistoryTx>();
+    this.utxos = new Map<string, IUtxo>();
     this.accessData = null;
     this.genericStorage = {};
 
@@ -46,17 +46,17 @@ export class MemoryStore implements IStore {
 
   /** ADDRESSES */
 
-  async *addressIter(): AsyncGenerator<IStorageAddress, any, unknown> {
+  async *addressIter(): AsyncGenerator<IAddressInfo, any, unknown> {
     for (const addrInfo of this.addresses.values()) {
       yield addrInfo;
     }
   }
 
-  async getAddress(base58: string): Promise<IStorageAddress | null> {
+  async getAddress(base58: string): Promise<IAddressInfo | null> {
     return this.addresses.get(base58) || null;
   }
 
-  async getAddressMeta(base58: string): Promise<IStorageAddressMetadata | null> {
+  async getAddressMeta(base58: string): Promise<IAddressMetadata | null> {
     return this.addressesMetadata.get(base58) || null;
   }
 
@@ -64,16 +64,16 @@ export class MemoryStore implements IStore {
     return this.addresses.size;
   }
 
-  async getAddressAtIndex(index: number): Promise<IStorageAddress|null> {
+  async getAddressAtIndex(index: number): Promise<IAddressInfo|null> {
     const addr = this.addressIndexes.get(index);
     if (addr === undefined) {
       // We do not have this index loaded on storage, it should be generated instead
       return null;
     }
-    return this.addresses.get(addr) as IStorageAddress;
+    return this.addresses.get(addr) as IAddressInfo;
   }
 
-  async saveAddress(info: IStorageAddress): Promise<void> {
+  async saveAddress(info: IAddressInfo): Promise<void> {
     if (!info.base58) {
       throw new Error('Invalid address');
     }
@@ -109,7 +109,7 @@ export class MemoryStore implements IStore {
 
   /* TRANSACTIONS */
 
-  async *historyIter(tokenUid?: string | undefined): AsyncGenerator<IStorageTx> {
+  async *historyIter(tokenUid?: string | undefined): AsyncGenerator<IHistoryTx> {
     for (const tx of this.history.values()) {
       if (tokenUid !== undefined) {
         // If a tokenUid is passed, we only yield the transaction if it has the token in one of our addresses
@@ -154,14 +154,14 @@ export class MemoryStore implements IStore {
       };
     }
     const nowTs = Math.floor(Date.now() / 1000);
-    const isTimelocked = (timelock: number|null) => timelock !== null && timelock > nowTs;
+    const isTimelocked = (timelock?: number|null) => (!!timelock) && timelock > nowTs;
     const currentHeight = await this.getCurrentHeight();
-    const isHeightLocked = (blockHeight?: number) => (!!blockHeight) && (!!rewardLock) && ((blockHeight + rewardLock) < currentHeight);
+    const checkRewardLock = (blockHeight?: number) => (!!blockHeight) && (!!rewardLock) && ((blockHeight + rewardLock) < currentHeight);
 
     // recalculate wallet metadata
-    const tokensMetadata = new Map<string, IStorageTokenMetadata>();
-    const addressesMetadata = new Map<string, IStorageAddressMetadata>();
-    const utxos = new Map<string, IStorageUTXO>();
+    const tokensMetadata = new Map<string, ITokenMetadata>();
+    const addressesMetadata = new Map<string, IAddressMetadata>();
+    const utxos = new Map<string, IUtxo>();
 
     const allTokens = new Set<string>();
     let maxIndexUsed = -1;
@@ -171,6 +171,8 @@ export class MemoryStore implements IStore {
         // Ignore voided transactions
         continue;
       }
+      const isHeightLocked = checkRewardLock(tx.height);
+
       for (const [index, output] of tx.outputs.entries()) {
         // if address is not in wallet, ignore
         if (!(output.decoded.address && (await this.addressExists(output.decoded.address)))) continue;
@@ -199,7 +201,7 @@ export class MemoryStore implements IStore {
 
         // calculate balance
         if (isAuthority) {
-          if (isTimelocked(output.decoded.timelock) || isHeightLocked(output.height)) {
+          if (isTimelocked(output.decoded.timelock) || isHeightLocked) {
             if (transaction.isMint(output)) {
               tokensMetadata.get(output.token)!.balance.authorities.mint.locked += 1;
               addressesMetadata.get(output.decoded.address)!.balance.get(output.token)!.authorities.mint.locked += 1;
@@ -219,7 +221,7 @@ export class MemoryStore implements IStore {
             }
           }
         } else {
-          if (isTimelocked(output.decoded.timelock) || isHeightLocked(output.height)) {
+          if (isTimelocked(output.decoded.timelock) || isHeightLocked) {
             tokensMetadata.get(output.token)!.balance.tokens.locked += output.value;
             addressesMetadata.get(output.decoded.address)!.balance.get(output.token)!.tokens.locked += output.value;
           } else {
@@ -229,7 +231,7 @@ export class MemoryStore implements IStore {
         }
 
         // add utxo if available (not spent and unlocked)
-        if (output.spent_by === null && !(isTimelocked(output.decoded.timelock) || isHeightLocked(output.height))) {
+        if (output.spent_by === null && !(isTimelocked(output.decoded.timelock) || isHeightLocked)) {
           utxos.set(`${tx.tx_id}:${index}`, {
             txId: tx.tx_id,
             index,
@@ -238,8 +240,8 @@ export class MemoryStore implements IStore {
             address: output.decoded.address,
             token: output.token,
             value: output.value,
-            timelock: output.decoded.timelock,
-            height: output.height||null,
+            timelock: output.decoded.timelock || null,
+            height: tx.height || null,
           });
         }
       }
@@ -320,7 +322,7 @@ export class MemoryStore implements IStore {
     this.utxos = utxos;
   }
 
-  async saveTx(tx: IStorageTx): Promise<void> {
+  async saveTx(tx: IHistoryTx): Promise<void> {
     this.history.set(tx.tx_id, tx);
 
     let maxIndex = this.walletData.lastUsedAddressIndex;
@@ -338,20 +340,20 @@ export class MemoryStore implements IStore {
     this.walletData.lastUsedAddressIndex = maxIndex;
   }
 
-  async getTx(txId: string): Promise<IStorageTx | null> {
+  async getTx(txId: string): Promise<IHistoryTx | null> {
     return this.history.get(txId) || null;
   }
 
   /** TOKENS */
 
-  async *tokenIter(): AsyncGenerator<IStorageToken & Partial<IStorageTokenMetadata>> {
+  async *tokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>> {
     for (const tokenInfo of this.tokens.values()) {
       const tokenMeta = this.tokensMetadata.get(tokenInfo.uid);
       yield {...tokenInfo, ...tokenMeta};
     }
   }
 
-  async getToken(tokenUid: string): Promise<(IStorageToken & Partial<IStorageTokenMetadata>)|null> {
+  async getToken(tokenUid: string): Promise<(ITokenData & Partial<ITokenMetadata>)|null> {
     const tokenConfig = this.tokens.get(tokenUid);
     if (tokenConfig === undefined) {
       return null;
@@ -363,7 +365,7 @@ export class MemoryStore implements IStore {
     return {...tokenConfig, ...tokenMeta};
   }
 
-  async saveToken(tokenConfig: IStorageToken, meta?: IStorageTokenMetadata | undefined): Promise<void> {
+  async saveToken(tokenConfig: ITokenData, meta?: ITokenMetadata | undefined): Promise<void> {
     if (this.tokens.has(tokenConfig.uid)) {
       throw new Error('Already have this token');
     }
@@ -373,14 +375,14 @@ export class MemoryStore implements IStore {
     }
   }
 
-  async *registeredTokenIter(): AsyncGenerator<IStorageToken & Partial<IStorageTokenMetadata>> {
+  async *registeredTokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>> {
     for (const tokenConfig of this.registeredTokens.values()) {
       const tokenMeta = this.tokensMetadata.get(tokenConfig.uid);
       yield {...tokenConfig, ...tokenMeta};
     }
   }
 
-  async registerToken(token: IStorageToken): Promise<void> {
+  async registerToken(token: ITokenData): Promise<void> {
     this.registeredTokens.set(token.uid, token);
   }
 
@@ -395,20 +397,20 @@ export class MemoryStore implements IStore {
     }
   }
 
-  async editToken(tokenUid: string, meta: IStorageTokenMetadata): Promise<void> {
+  async editToken(tokenUid: string, meta: ITokenMetadata): Promise<void> {
     if (this.tokensMetadata.has(tokenUid)) {
       this.tokensMetadata.set(tokenUid, meta);
     }
   }
 
   /** UTXOS */
-  async *utxoIter(): AsyncGenerator<IStorageUTXO, any, unknown> {
+  async *utxoIter(): AsyncGenerator<IUtxo, any, unknown> {
     for (const utxo of this.utxos.values()) {
       yield utxo;
     }
   }
 
-  async *selectUtxos(options: IUtxoFilterOptions): AsyncGenerator<IStorageUTXO> {
+  async *selectUtxos(options: IUtxoFilterOptions): AsyncGenerator<IUtxo> {
     const token = options.token || '00';
     const authorities = options.authorities || 0;
     const maxUtxos = options.max_utxos || 255; // MAX_INPUTS
@@ -456,17 +458,17 @@ export class MemoryStore implements IStore {
     }
   }
 
-  async saveUtxo(utxo: IStorageUTXO): Promise<void> {
+  async saveUtxo(utxo: IUtxo): Promise<void> {
     this.utxos.set(`${utxo.txId}:${utxo.index}`, utxo);
   }
 
   /** ACCESS DATA */
 
-  async saveAccessData(data: IStorageAccessData): Promise<void> {
+  async saveAccessData(data: IWalletAccessData): Promise<void> {
     this.accessData = data;
   }
 
-  async getAccessData(): Promise<IStorageAccessData|null> {
+  async getAccessData(): Promise<IWalletAccessData|null> {
     if (this.accessData === null) {
       throw new Error('Wallet access data unset');
     }
@@ -489,7 +491,7 @@ export class MemoryStore implements IStore {
     return this.walletData.bestBlockHeight;
   }
 
-  async getWalletData(): Promise<IStorageWalletData> {
+  async getWalletData(): Promise<IWalletData> {
     return this.walletData;
   }
 
@@ -504,14 +506,14 @@ export class MemoryStore implements IStore {
   async cleanStorage(cleanHistory: boolean = false): Promise<void> {
     this.accessData = null;
     if (cleanHistory) {
-      // this.addresses = new Map<string, IStorageAddress>();
+      // this.addresses = new Map<string, IAddressInfo>();
       // this.addressIndexes = new Map<number, string>();
-      // this.addressesMetadata = new Map<string, IStorageAddressMetadata>();
-      this.tokens = new Map<string, IStorageToken>();
-      this.tokensMetadata = new Map<string, IStorageTokenMetadata>();
-      this.registeredTokens = new Map<string, IStorageToken>();
-      this.history = new Map<string, IStorageTx>();
-      this.utxos = new Map<string, IStorageUTXO>();
+      // this.addressesMetadata = new Map<string, IAddressMetadata>();
+      this.tokens = new Map<string, ITokenData>();
+      this.tokensMetadata = new Map<string, ITokenMetadata>();
+      this.registeredTokens = new Map<string, ITokenData>();
+      this.history = new Map<string, IHistoryTx>();
+      this.utxos = new Map<string, IUtxo>();
       // wallet data will be kept
     }
   }

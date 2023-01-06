@@ -10,24 +10,24 @@ import { Config } from "./config";
 import Input from "./models/input";
 import Transaction from "./models/transaction";
 
-export interface IStorageAddress {
+export interface IAddressInfo {
   base58: string;
   bip32AddressIndex: number;
   publicKey?: string;
 }
 
-export interface IStorageAddressMetadata {
+export interface IAddressMetadata {
   numTransactions: number;
   balance: Map<string, IBalance>;
 }
 
-export interface IStorageToken {
+export interface ITokenData {
   uid: string;
   name: string;
   symbol: string;
 }
 
-export interface IStorageTokenMetadata {
+export interface ITokenMetadata {
   numTransactions: number;
   balance: IBalance;
 }
@@ -48,58 +48,104 @@ export interface IAuthoritiesBalance {
 }
 
 // XXX
-export interface IStorageTx {
+export interface IHistoryTx {
   tx_id: string;
   version: number;
   weight: number;
   timestamp: number;
   is_voided: boolean;
+  nonce: number,
+  inputs: IHistoryInput[];
+  outputs: IHistoryOutput[];
   parents: string[];
-  inputs: IStorageInput[];
-  outputs: IStorageOutput[];
-}
-
-export interface IStorageInput {
-  tx_id: string;
-  index: number;
-  token: string;
-  token_data: number;
-  value: number;
-  script: string;
-  decoded: IStorageOutputDecoded;
-}
-
-// Obs: this will change with nano contracts
-export interface IStorageOutputDecoded {
-  type: string;
-  address: string;
-  timelock: number|null;
-}
-
-export interface IStorageOutput {
-  token: string;
-  token_data: number;
-  value: number;
-  script: string;
-  decoded: IStorageOutputDecoded;
-  spent_by: string|null;
+  token_name?: string; // For create token transaction
+  token_symbol?: string; // For create token transaction
+  tokens: string[];
   height?: number;
 }
 
-export interface UtxoId {
-  txId: string;
+export interface IHistoryInput {
+  value: number;
+  token_data: number;
+  script: string;
+  decoded: IHistoryOutputDecoded;
+  token: string;
+  tx_id: string;
   index: number;
 }
 
-export interface IStorageUTXO {
-  txId: string;
-  index: number;
+// export interface IHistoryDecodedAddressOutput {
+//   type: string;
+//   address: string;
+//   timelock?: number|null;
+// }
+
+// export interface IHistoryDecodedDataOutput {
+//   type: string;
+//   data: string;
+// }
+
+// export type IHistoryOutputDecoded = IHistoryDecodedAddressOutput | IHistoryDecodedDataOutput;
+
+// Obs: this will change with nano contracts
+export interface IHistoryOutputDecoded {
+  type?: string;
+  address?: string;
+  timelock?: number|null;
+  data?: string;
+}
+
+export interface IHistoryOutput {
+  value: number;
+  token_data: number;
+  script: string;
+  decoded: IHistoryOutputDecoded;
+  token: string;
+  spent_by: string|null;
+}
+
+export interface IDataOutput {
   token: string;
   value: number;
   authorities: number;
   address: string;
-  type: number; // tx.version, used to identify block and transaction utxos
   timelock: number|null;
+};
+
+export interface IDataInput {
+  txId: string;
+  index: number;
+  token?: string;
+  address?: string;
+  data?: string; // XXX: or Buffer?
+}
+
+// XXX: This type is meant to be used as an intermediary for building transactions
+// It should have everything we need to build and push transactions.
+export interface IDataTx {
+  version: number,
+  inputs: IDataInput[];
+  outputs: IDataOutput[];
+  tokens: string[];
+  weight?: number;
+  nonce?: number,
+  timestamp?: number,
+}
+
+export interface IUtxoId {
+  txId: string;
+  index: number;
+}
+
+export interface IUtxo {
+  txId: string;
+  index: number;
+  token: string;
+  address: string;
+  value: number;
+  authorities: number;
+  timelock: number|null;
+  type: number; // tx.version, used to identify block and transaction utxos
   height: number|null; // only for block outputs
 }
 
@@ -112,17 +158,17 @@ export enum WALLET_FLAGS {
   READONLY = 0b00000001,
 }
 
-export interface IStorageAccessData {
+export interface IWalletAccessData {
   xpubkey: string;
-  mainKey?: IStorageEncryptedData; // encrypted xprivkey (uses pin for encryption)
-  words?: IStorageEncryptedData; // encrypted seed (uses password for encryption)
-  authKey?: IStorageEncryptedData; // encrypted auth key, used for authentication with wallet-service (uses pin for encryption)
+  mainKey?: IEncryptedData; // encrypted xprivkey (uses pin for encryption)
+  words?: IEncryptedData; // encrypted seed (uses password for encryption)
+  authKey?: IEncryptedData; // encrypted auth key, used for authentication with wallet-service (uses pin for encryption)
   multisigData?: IMultisigData;
   walletType: WalletType;
   walletFlags: number;
 }
 
-export interface IStorageWalletData {
+export interface IWalletData {
   lastLoadedAddressIndex: number;
   lastUsedAddressIndex: number;
   currentAddressIndex: number;
@@ -130,7 +176,7 @@ export interface IStorageWalletData {
   gapLimit: number;
 }
 
-export interface IStorageEncryptedData {
+export interface IEncryptedData {
   data: string;
   hash: string;
   salt: string;
@@ -153,7 +199,7 @@ export interface IUtxoFilterOptions {
   max_amount?: number;
   amount_smaller_than?: number;
   amount_bigger_than?: number;
-  filter_method?: (utxo: IStorageUTXO) => boolean;
+  filter_method?: (utxo: IUtxo) => boolean;
 }
 
 export interface ApiVersion {
@@ -171,40 +217,40 @@ export interface ApiVersion {
 
 export interface IStore {
   // Address methods
-  addressIter(): AsyncGenerator<IStorageAddress>;
-  getAddress(base58: string): Promise<IStorageAddress|null>;
-  getAddressMeta(base58: string): Promise<IStorageAddressMetadata|null>;
-  getAddressAtIndex(index: number): Promise<IStorageAddress|null>;
-  saveAddress(info: IStorageAddress): Promise<void>;
+  addressIter(): AsyncGenerator<IAddressInfo>;
+  getAddress(base58: string): Promise<IAddressInfo|null>;
+  getAddressMeta(base58: string): Promise<IAddressMetadata|null>;
+  getAddressAtIndex(index: number): Promise<IAddressInfo|null>;
+  saveAddress(info: IAddressInfo): Promise<void>;
   addressExists(base58: string): Promise<boolean>;
   addressCount(): Promise<number>;
 
   // tx history methods
-  historyIter(tokenUid?: string): AsyncGenerator<IStorageTx>;
-  saveTx(tx: IStorageTx): Promise<void>;
+  historyIter(tokenUid?: string): AsyncGenerator<IHistoryTx>;
+  saveTx(tx: IHistoryTx): Promise<void>;
   processHistory(options: { rewardLock?: number}): Promise<void>;
-  getTx(txId: string): Promise<IStorageTx|null>;
+  getTx(txId: string): Promise<IHistoryTx|null>;
   historyCount(): Promise<number>;
 
   // Tokens methods
-  tokenIter(): AsyncGenerator<IStorageToken & Partial<IStorageTokenMetadata>>;
-  registeredTokenIter(): AsyncGenerator<IStorageToken & Partial<IStorageTokenMetadata>>;
-  getToken(tokenUid: string): Promise<(IStorageToken & Partial<IStorageTokenMetadata>) | null>;
-  saveToken(tokenConfig: IStorageToken, meta?: IStorageTokenMetadata): Promise<void>;
-  registerToken(token: IStorageToken): Promise<void>;
+  tokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>>;
+  registeredTokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>>;
+  getToken(tokenUid: string): Promise<(ITokenData & Partial<ITokenMetadata>) | null>;
+  saveToken(tokenConfig: ITokenData, meta?: ITokenMetadata): Promise<void>;
+  registerToken(token: ITokenData): Promise<void>;
   unregisterToken(tokenUid: string): Promise<void>;
   deleteTokens(tokens: string[]): Promise<void>;
-  editToken(tokenUid: string, meta: IStorageTokenMetadata): Promise<void>;
+  editToken(tokenUid: string, meta: ITokenMetadata): Promise<void>;
 
   // UTXOs methods
-  utxoIter(): AsyncGenerator<IStorageUTXO>;
-  selectUtxos(options: IUtxoFilterOptions): AsyncGenerator<IStorageUTXO>;
-  saveUtxo(utxo: IStorageUTXO): Promise<void>;
+  utxoIter(): AsyncGenerator<IUtxo>;
+  selectUtxos(options: IUtxoFilterOptions): AsyncGenerator<IUtxo>;
+  saveUtxo(utxo: IUtxo): Promise<void>;
 
   // Wallet data
-  getAccessData(): Promise<IStorageAccessData|null>;
-  saveAccessData(data: IStorageAccessData): Promise<void>;
-  getWalletData(): Promise<IStorageWalletData>;
+  getAccessData(): Promise<IWalletAccessData|null>;
+  saveAccessData(data: IWalletAccessData): Promise<void>;
+  getWalletData(): Promise<IWalletData>;
   getLastLoadedAddressIndex(): Promise<number>;
   getLastUsedAddressIndex(): Promise<number>;
   getCurrentHeight(): Promise<number>;
@@ -225,41 +271,41 @@ export interface IStorage {
   version: ApiVersion|null;
 
   // Address methods
-  getAllAddresses(): AsyncGenerator<IStorageAddress & Partial<IStorageAddressMetadata>>;
-  getAddressInfo(base58: string): Promise<(IStorageAddress & Partial<IStorageAddressMetadata>)|null>;
-  getAddressAtIndex(index: number): Promise<IStorageAddress|null>;
-  saveAddress(info: IStorageAddress): Promise<void>;
+  getAllAddresses(): AsyncGenerator<IAddressInfo & Partial<IAddressMetadata>>;
+  getAddressInfo(base58: string): Promise<(IAddressInfo & Partial<IAddressMetadata>)|null>;
+  getAddressAtIndex(index: number): Promise<IAddressInfo|null>;
+  saveAddress(info: IAddressInfo): Promise<void>;
   isAddressMine(base58: string): Promise<boolean>;
   getCurrentAddress(markAsUsed?: boolean): Promise<string>;
 
   // Transaction methods
-  txHistory(): AsyncGenerator<IStorageTx>;
-  tokenHistory(tokenUid?: string): AsyncGenerator<IStorageTx>;
-  getTx(txId: string): Promise<IStorageTx|null>;
-  getSpentTxs(inputs: Input[]): AsyncGenerator<{tx: IStorageTx, input: Input, index: number}>;
-  addTx(tx: IStorageTx): Promise<void>;
+  txHistory(): AsyncGenerator<IHistoryTx>;
+  tokenHistory(tokenUid?: string): AsyncGenerator<IHistoryTx>;
+  getTx(txId: string): Promise<IHistoryTx|null>;
+  getSpentTxs(inputs: Input[]): AsyncGenerator<{tx: IHistoryTx, input: Input, index: number}>;
+  addTx(tx: IHistoryTx): Promise<void>;
   processHistory(): Promise<void>;
 
   // Tokens
-  addToken(data: IStorageToken): Promise<void>;
-  editToken(tokenUid: string, meta: IStorageTokenMetadata): Promise<void>;
-  registerToken(token: IStorageToken): Promise<void>;
+  addToken(data: ITokenData): Promise<void>;
+  editToken(tokenUid: string, meta: ITokenMetadata): Promise<void>;
+  registerToken(token: ITokenData): Promise<void>;
   unregisterToken(tokenUid: string): Promise<void>;
-  getToken(uid: string): Promise<(IStorageToken & Partial<IStorageTokenMetadata>) | null>;
-  getAllTokens(): AsyncGenerator<IStorageToken & Partial<IStorageTokenMetadata>>;
-  getRegisteredTokens(): AsyncGenerator<IStorageToken & Partial<IStorageTokenMetadata>>;
+  getToken(uid: string): Promise<(ITokenData & Partial<ITokenMetadata>) | null>;
+  getAllTokens(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>>;
+  getRegisteredTokens(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>>;
 
   // UTXOs
-  getAllUtxos(): AsyncGenerator<IStorageUTXO>;
-  selectUtxos(options: IUtxoFilterOptions): AsyncGenerator<IStorageUTXO>;
-  fillTx(tx: Transaction): Promise<void>;
-  utxoSelectAsInput(utxo: UtxoId, markAs: boolean, ttl?: number): Promise<void>;
+  getAllUtxos(): AsyncGenerator<IUtxo>;
+  selectUtxos(options: IUtxoFilterOptions): AsyncGenerator<IUtxo>;
+  fillTx(tx: IDataTx, options: {changeAddress?: string}): Promise<void>;
+  utxoSelectAsInput(utxo: IUtxoId, markAs: boolean, ttl?: number): Promise<void>;
 
   // Wallet access data
-  getAccessData(): Promise<IStorageAccessData|null>;
-  saveAccessData(data: IStorageAccessData): Promise<void>;
+  getAccessData(): Promise<IWalletAccessData|null>;
+  saveAccessData(data: IWalletAccessData): Promise<void>;
   getMainXPrivKey(pinCode: string): Promise<string>;
-  getWalletData(): Promise<IStorageWalletData>;
+  getWalletData(): Promise<IWalletData>;
   getWalletType(): Promise<WalletType>;
   getCurrentHeight(): Promise<number>;
   setCurrentHeight(height: number): Promise<void>;

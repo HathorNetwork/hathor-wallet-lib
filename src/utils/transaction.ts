@@ -14,7 +14,7 @@ import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK } from '../const
 import Transaction from '../models/transaction';
 import Input from '../models/input';
 import Network from '../models/network';
-import { IBalance, IStorage, IStorageTx } from '../types';
+import { IBalance, IStorage, IHistoryTx } from '../types';
 
 const transaction = {
 
@@ -165,7 +165,7 @@ const transaction = {
     };
   },
 
-  async getTxBalance(tx: IStorageTx, storage: IStorage): Promise<Record<string, IBalance>> {
+  async getTxBalance(tx: IHistoryTx, storage: IStorage): Promise<Record<string, IBalance>> {
     const balance: Record<string, IBalance> = {};
     const getEmptyBalance = (): IBalance => ({
       tokens: { locked: 0, unlocked: 0 },

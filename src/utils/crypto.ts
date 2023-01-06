@@ -7,6 +7,7 @@
 
 import CryptoJS from 'crypto-js';
 import { HASH_ITERATIONS, HASH_KEY_SIZE } from '../constants';
+import { IEncryptedData } from '../types';
 
 export function hashData(
   data: string,
@@ -39,15 +40,31 @@ export function encryptData(
     iterations = HASH_ITERATIONS,
     pbkdf2Hasher = 'sha1',
   }: {salt?: string, iterations?: number, pbkdf2Hasher?: string} = {},
-): {data: string, hash: string, salt: string, iterations: number, pbkdf2Hasher: string} {
+): IEncryptedData {
   const encrypted = CryptoJS.AES.encrypt(data, password);
   const hash = hashData(password, { salt, iterations, pbkdf2Hasher });
   return { data: encrypted.toString(), ...hash };
 }
 
-export function decryptData(data: string, password: string): string {
+function _decryptData(data: string, password: string): string {
   const decrypted = CryptoJS.AES.decrypt(data, password);
   return decrypted.toString(CryptoJS.enc.Utf8);
+}
+
+export function decryptData(data: IEncryptedData, password: string): string {
+  const keyData = data.data;
+  const hash = data.hash;
+  const options = {
+    salt: data.salt,
+    iterations: data.iterations,
+    pbkdf2Hasher: data.pbkdf2Hasher,
+  };
+  if (validateHash(password, hash, options)) {
+    return _decryptData(keyData, password);
+  } else {
+    // FIXME: create custom error type for password errors
+    throw new Error('Invalid password');
+  }
 }
 
 export function validateHash(

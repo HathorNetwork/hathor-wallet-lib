@@ -6,27 +6,29 @@
  */
 
 import Input from '../models/input';
-import Transaction from '../models/transaction';
 import {
   ApiVersion,
   IStorage,
-  IStorageAddress,
-  IStorageAddressMetadata,
-  IStorageToken,
-  IStorageTokenMetadata,
-  IStorageTx,
-  IStorageUTXO,
-  IStorageAccessData,
+  IAddressInfo,
+  IAddressMetadata,
+  ITokenData,
+  ITokenMetadata,
+  IHistoryTx,
+  IUtxo,
+  IWalletAccessData,
   IStore,
   IUtxoFilterOptions,
-  IStorageWalletData,
+  IWalletData,
   WalletType,
   WALLET_FLAGS,
-  UtxoId,
+  IUtxoId,
+  IDataTx,
+  IDataInput,
+  IDataOutput,
 } from '../types';
 import transaction from '../utils/transaction';
 import config, { Config } from '../config';
-import { decryptData, validateHash } from '../utils/crypto';
+import { decryptData } from '../utils/crypto';
 
 
 export class Storage implements IStorage {
@@ -51,9 +53,9 @@ export class Storage implements IStorage {
    *
    * @async
    * @generator
-   * @yields {Promise<IStorageAddress & Partial<IStorageAddressMetadata>>} The addresses in store.
+   * @yields {Promise<IAddressInfo & Partial<IAddressMetadata>>} The addresses in store.
    */
-  async *getAllAddresses(): AsyncGenerator<IStorageAddress & Partial<IStorageAddressMetadata>> {
+  async *getAllAddresses(): AsyncGenerator<IAddressInfo & Partial<IAddressMetadata>> {
     for await (const address of this.store.addressIter()) {
       const meta = await this.store.getAddressMeta(address.base58);
       yield {...address, ...meta};
@@ -65,9 +67,9 @@ export class Storage implements IStorage {
    *
    * @param {string} base58 The base58 address to fetch
    * @async
-   * @returns {Promise<(IStorageAddress & Partial<IStorageAddressMetadata>)|null>} The address info or null if not found
+   * @returns {Promise<(IAddressInfo & Partial<IAddressMetadata>)|null>} The address info or null if not found
    */
-  async getAddressInfo(base58: string): Promise<(IStorageAddress & Partial<IStorageAddressMetadata>)|null> {
+  async getAddressInfo(base58: string): Promise<(IAddressInfo & Partial<IAddressMetadata>)|null> {
     const address = await this.store.getAddress(base58);
     if (address === null) {
       return null;
@@ -81,9 +83,9 @@ export class Storage implements IStorage {
    *
    * @param {number} index
    * @async
-   * @returns {Promise<IStorageAddress|null>} The address info or null if not found
+   * @returns {Promise<IAddressInfo|null>} The address info or null if not found
    */
-  async getAddressAtIndex(index: number): Promise<IStorageAddress|null> {
+  async getAddressAtIndex(index: number): Promise<IAddressInfo|null> {
     return this.store.getAddressAtIndex(index);
   }
 
@@ -91,7 +93,7 @@ export class Storage implements IStorage {
     return this.store.addressExists(base58);
   }
 
-  async saveAddress(info: IStorageAddress): Promise<void> {
+  async saveAddress(info: IAddressInfo): Promise<void> {
     await this.store.saveAddress(info);
   }
 
@@ -99,23 +101,23 @@ export class Storage implements IStorage {
     return this.store.getCurrentAddress(markAsUsed);
   }
 
-  async *txHistory(): AsyncGenerator<IStorageTx> {
+  async *txHistory(): AsyncGenerator<IHistoryTx> {
     for await (const tx of this.store.historyIter()) {
       yield tx;
     }
   }
 
-  async *tokenHistory(tokenUid?: string): AsyncGenerator<IStorageTx> {
+  async *tokenHistory(tokenUid?: string): AsyncGenerator<IHistoryTx> {
     for await (const tx of this.store.historyIter(tokenUid || '00')) {
       yield tx;
     }
   }
 
-  async getTx(txId: string): Promise<IStorageTx|null> {
+  async getTx(txId: string): Promise<IHistoryTx|null> {
     return this.store.getTx(txId);
   }
 
-  async *getSpentTxs(inputs: Input[]): AsyncGenerator<{tx: IStorageTx, input: Input, index: number}> {
+  async *getSpentTxs(inputs: Input[]): AsyncGenerator<{tx: IHistoryTx, input: Input, index: number}> {
     for await (const [index, input] of inputs.entries()) {
       const tx = await this.getTx(input.hash);
       // Ignore unknown transactions
@@ -124,7 +126,7 @@ export class Storage implements IStorage {
     }
   }
 
-  async addTx(tx: IStorageTx): Promise<void> {
+  async addTx(tx: IHistoryTx): Promise<void> {
     await this.store.saveTx(tx);
   }
 
@@ -134,31 +136,31 @@ export class Storage implements IStorage {
     });
   }
 
-  async addToken(data: IStorageToken): Promise<void> {
+  async addToken(data: ITokenData): Promise<void> {
     await this.store.saveToken(data);
   }
 
-  async editToken(tokenUid: string, meta: IStorageTokenMetadata): Promise<void> {
+  async editToken(tokenUid: string, meta: ITokenMetadata): Promise<void> {
     this.store.editToken(tokenUid, meta);
   }
 
-  async *getAllTokens(): AsyncGenerator<IStorageToken & Partial<IStorageTokenMetadata>> {
+  async *getAllTokens(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>> {
     for await (const token of this.store.tokenIter()) {
       yield token;
     }
   }
 
-  async *getRegisteredTokens(): AsyncGenerator<IStorageToken & Partial<IStorageTokenMetadata>> {
+  async *getRegisteredTokens(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>> {
     for await (const token of this.store.registeredTokenIter()) {
       yield token;
     }
   }
 
-  async getToken(token?: string): Promise<(IStorageToken & Partial<IStorageTokenMetadata>)|null> {
+  async getToken(token?: string): Promise<(ITokenData & Partial<ITokenMetadata>)|null> {
     return this.store.getToken(token || '00');
   }
 
-  async registerToken(token: IStorageToken): Promise<void> {
+  async registerToken(token: ITokenData): Promise<void> {
     await this.store.registerToken(token);
   }
 
@@ -166,14 +168,23 @@ export class Storage implements IStorage {
     await this.store.unregisterToken(tokenUid);
   }
 
-  async *getAllUtxos(): AsyncGenerator<IStorageUTXO, any, unknown> {
+  async *getAllUtxos(): AsyncGenerator<IUtxo, any, unknown> {
     for await (const utxo of this.store.utxoIter()) {
       yield utxo;
     }
   }
 
-  async *selectUtxos(options: IUtxoFilterOptions = {}): AsyncGenerator<IStorageUTXO, any, unknown> {
-    const newFilter = (utxo: IStorageUTXO): boolean => {
+  /**
+   * Select utxos matching the request and do not select any utxos marked for inputs.
+   *
+   * @param options Options to filter utxos and stop when the target is found.
+   *
+   * @async
+   * @generator
+   * @yields {IUtxo}
+   */
+  async *selectUtxos(options: IUtxoFilterOptions = {}): AsyncGenerator<IUtxo, any, unknown> {
+    const newFilter = (utxo: IUtxo): boolean => {
       const utxoId = `${utxo.txId}:${utxo.index}`;
       return (!this.utxosSelectedAsInput.has(utxoId)) && (options.filter_method ? options.filter_method(utxo) : true);
     }
@@ -183,106 +194,195 @@ export class Storage implements IStorage {
     }
   }
 
-  async fillTx(tx: Transaction): Promise<void> {
-    function getDefaultAuthorityBalance(): Record<'mint'|'melt', number> {
-      return {'mint': 0, 'melt': 0};
+  /**
+   * Check the balance of the transaction and add inputs and outputs to match the funds and authorities.
+   * It will fail if we do not have enough funds or authorities and it will fail if we try to add too many inputs or outputs.
+   *
+   * @param tx The incomplete transaction we need to fill
+   * @param {{changeAddress?: string}} [options={}] options to use a change address.
+   *
+   * @async
+   * @returns {Promise<void>}
+   */
+  async fillTx(tx: IDataTx, { changeAddress }: { changeAddress?: string } = {}): Promise<void> {
+    function getEmptyBalance(): Record<'funds'|'mint'|'melt', number> {
+      return {'funds': 0, 'mint': 0, 'melt': 0};
     }
-    const tokenAmountOutputs = new Map<string, number>();
-    const tokenAuthorityOutputs = new Map<string, Record<'mint'|'melt', number>>();
+    const tokensBalance = new Map<string, Record<'funds'|'mint'|'melt', number>>();
+    const addressForChange = changeAddress || (await this.getCurrentAddress());
 
+    // Calculate balance for outputs
     for (const output of tx.outputs) {
-      const token = tx.tokens[output.getTokenIndex()];
-      if (output.isAuthority()) {
+      if (!tokensBalance.has(output.token)) {
+        tokensBalance.set(output.token, getEmptyBalance());
+      }
+
+      if (output.authorities > 0) {
         // Authority output, add to mint or melt balance
-        const balance = tokenAuthorityOutputs.get(token) || getDefaultAuthorityBalance();
-        if (output.isMint()) {
-          balance.mint += 1;
+        // Check for MINT authority
+        if ((output.authorities & 1) > 0) {
+          tokensBalance.get(output.token)!.mint += 1;
         }
-        if (output.isMelt()) {
-          balance.melt += 1;
+        // Check for MELT authority
+        if ((output.authorities & 2) > 0) {
+          tokensBalance.get(output.token)!.melt += 1;
         }
-        tokenAuthorityOutputs.set(token, balance);
       } else {
         // Fund output, add to the amount balance
-        tokenAmountOutputs.set(token, (tokenAmountOutputs.get(token) || 0) + output.value);
+        tokensBalance.get(output.token)!.funds += output.value;
       }
     }
 
-    const tokenAmountInputs = new Map<string, number>();
-    const tokenAuthorityInputs = new Map<string, Record<'mint'|'melt', number>>();
-
+    // Map tx.inputs to Input so we can use getSpentTxs tool
+    const inputs: Input[] = tx.inputs.map(input => new Input(input.txId, input.index));
     // Check the inputs
-    for await (const spentResult of this.getSpentTxs(tx.inputs)) {
-      const {tx: spentTx, input} = spentResult;
-      // const token = spentTx.outputs[input.index].token;
+    // XXX: this.getSpentTxs will only return the inputs of our wallet
+    // If we want to fill inputs/outputs of any wallet we should change this method
+    for await (const {tx: spentTx, input} of this.getSpentTxs(inputs)) {
+      // const {tx: spentTx, input} = spentResult;
       const utxoSpent = spentTx.outputs[input.index];
+      if (!tokensBalance.has(utxoSpent.token)) {
+        tokensBalance.set(utxoSpent.token, getEmptyBalance());
+      }
       if (transaction.isAuthorityOutput(utxoSpent)) {
-        if (!tokenAuthorityOutputs.has(utxoSpent.token)) {
-          // XXX: throw error?
-        }
         // Authority input, add to mint or melt balance
-        const balance = tokenAuthorityInputs.get(utxoSpent.token) || getDefaultAuthorityBalance();
         if (transaction.isMint(utxoSpent)) {
-          balance.mint += 1;
+          tokensBalance.get(utxoSpent.token)!.mint -= 1;
         }
         if (transaction.isMelt(utxoSpent)) {
-          balance.melt += 1;
+          tokensBalance.get(utxoSpent.token)!.melt -= 1;
         }
-        tokenAuthorityInputs.set(utxoSpent.token, balance);
       } else {
-        if (!tokenAuthorityOutputs.has(utxoSpent.token)) {
-          // XXX: throw error?
-        }
         // Fund input, add to the amount balance
-        tokenAmountInputs.set(utxoSpent.token, (tokenAmountInputs.get(utxoSpent.token) || 0) + utxoSpent.value);
+        tokensBalance.get(utxoSpent.token)!.funds -= utxoSpent.value;
       }
     }
 
-    for (const [token, outputBalance] of tokenAmountOutputs) {
-      const inputBalance = tokenAmountInputs.get(token) || 0;
-      if (outputBalance === inputBalance) continue;
-
-      if (outputBalance > inputBalance) {
-        const targetAmount = outputBalance - inputBalance;
+    // tokensBalance holds the balance of all tokens on the transaction
+    const newInputs: IDataInput[] = [];
+    const newOutputs: IDataOutput[] = [];
+    for (const [token, balance] of tokensBalance) {
+      // match funds
+      if (balance.funds > 0) {
+        // We have a surplus of this token on the outputs, so we need to find utxos to match
         let foundAmount = 0;
-        for await (const utxo of this.selectUtxos({
+        for await (const utxo of this.selectUtxos({ token, authorities: 0, target_amount: balance.funds})) {
+          foundAmount += utxo.value;
+          newInputs.push({
+            txId: utxo.txId,
+            index: utxo.index,
+            token: utxo.token,
+            address: utxo.address,
+          });
+        }
+        if (foundAmount < balance.funds) {
+          // XXX: Insufficient funds
+          throw new Error('Insufficient funds');
+        }
+      } else if (balance.funds < 0) {
+        // We have a surplus of this token on the inputs, so we need to add a change output
+        newOutputs.push({
           token,
           authorities: 0,
-          target_amount: targetAmount,
-        })) {
-          foundAmount += utxo.value;
-          tx.inputs.push(new Input(utxo.txId, utxo.index));
-          this.utxoSelectAsInput(utxo, true, 1000);
+          value: Math.abs(balance.funds),
+          address: addressForChange,
+          timelock: null,
+        });
+      }
+
+      // match mint
+      if (balance.mint > 0) {
+        // We have a surplus of this token on the outputs, so we need to find utxos to match
+        let foundAmount = 0;
+        // We use max_utxos to find at most `balance.mint` inputs
+        for await (const utxo of this.selectUtxos({ token, authorities: 1, max_utxos: balance.mint})) {
+          foundAmount += 1;
+          newInputs.push({
+            txId: utxo.txId,
+            index: utxo.index,
+            token: utxo.token,
+            address: utxo.address,
+          });
         }
-        if (foundAmount > targetAmount) {
-          // XXX: change output
-          // tx.outputs.push(new Output(foundAmount - targetAmount, token));
+        if (foundAmount < balance.mint) {
+          // XXX: Insufficient funds
+          throw new Error('Insufficient mint authority');
         }
-      } else {
-        // XXX: add change output
+      } else if (balance.mint < 0) {
+        // We have a surplus of this token on the inputs, so we need to add enough change outputs to match
+        for (let i = 0; i < Math.abs(balance.mint); i++) {
+          newOutputs.push({
+            token,
+            authorities: 1,
+            value: 1,
+            address: addressForChange,
+            timelock: null,
+          });
+        }
+      }
+
+      // match melt
+      if (balance.melt > 0) {
+        // We have a surplus of this token on the outputs, so we need to find utxos to match
+        let foundAmount = 0;
+        // We use max_utxos to find at most `balance.melt` inputs
+        for await (const utxo of this.selectUtxos({ token, authorities: 1, max_utxos: balance.melt})) {
+          foundAmount += 1;
+          newInputs.push({
+            txId: utxo.txId,
+            index: utxo.index,
+            token: utxo.token,
+            address: utxo.address,
+          });
+        }
+        if (foundAmount < balance.melt) {
+          // XXX: Insufficient funds
+          throw new Error('Insufficient melt authority');
+        }
+      } else if (balance.melt < 0) {
+        // We have a surplus of this token on the inputs, so we need to add enough change outputs to match
+        for (let i = 0; i < Math.abs(balance.melt); i++) {
+          newOutputs.push({
+            token,
+            authorities: 2,
+            value: 2,
+            address: addressForChange,
+            timelock: null,
+          });
+        }
       }
     }
 
-    for (const [token, outputBalance] of tokenAuthorityOutputs) {
-      const inputBalance = tokenAuthorityInputs.get(token) || getDefaultAuthorityBalance();
-      if (outputBalance.mint !== inputBalance.mint) {
-        if (outputBalance.mint > inputBalance.mint) {
-          // select inputs to match
-        } else {
-          // add change output
-        }
-      }
-      if (outputBalance.melt !== inputBalance.melt) {
-        if (outputBalance.melt > inputBalance.melt) {
-          // select inputs to match
-        } else {
-          // add change output
-        }
-      }
+    const max_inputs = this.version?.max_number_inputs || 255;
+    const max_outputs = this.version?.max_number_outputs || 255;
+    if (((tx.inputs.length + newInputs.length) > max_inputs)
+      || ((tx.outputs.length + newOutputs.length) > max_outputs)
+    ) {
+      // we have more inputs/outputs than what can be sent on the transaction
+      throw new Error('When over the maximum amount of inputs/outputs');
     }
+
+    for (const input of newInputs) {
+      tx.inputs.push(input);
+    }
+    for (const output of tx.outputs) {
+      tx.outputs.push(output);
+    }
+
+    // return {newInputs, newOutputs}
   }
 
-  async utxoSelectAsInput(utxo: UtxoId, markAs: boolean, ttl?: number): Promise<void> {
+  /**
+   * Mark an utxo as selected as input
+   *
+   * @param {IUtxoId} utxo The Data to identify the utxo
+   * @param {boolean} markAs Mark the utxo as this value
+   * @param {number|undefined} ttl Unmark the utxo after this amount os ms passed
+   *
+   * @async
+   * @returns {Promise<void>}
+   */
+  async utxoSelectAsInput(utxo: IUtxoId, markAs: boolean, ttl?: number): Promise<void> {
     const tx = await this.getTx(utxo.txId);
     if ((!tx) || (!tx.outputs[utxo.index])) {
       return;
@@ -309,15 +409,15 @@ export class Storage implements IStorage {
     }
   }
 
-  async getAccessData(): Promise<IStorageAccessData|null> {
+  async getAccessData(): Promise<IWalletAccessData|null> {
     return this.store.getAccessData();
   }
 
-  async saveAccessData(data: IStorageAccessData): Promise<void> {
+  async saveAccessData(data: IWalletAccessData): Promise<void> {
     return this.store.saveAccessData(data);
   }
 
-  async getWalletData(): Promise<IStorageWalletData> {
+  async getWalletData(): Promise<IWalletData> {
     return this.store.getWalletData();
   }
 
@@ -362,17 +462,12 @@ export class Storage implements IStorage {
     if (accessData.mainKey === undefined) {
       throw new Error('Private key is not present on this wallet.');
     }
-    const keyData = accessData.mainKey.data;
-    const hash = accessData.mainKey.hash;
-    const options = {
-      salt: accessData.mainKey.salt,
-      iterations: accessData.mainKey.iterations,
-      pbkdf2Hasher: accessData.mainKey.pbkdf2Hasher,
-    };
 
-    if(validateHash(pinCode, hash, options)) {
-      return decryptData(keyData, pinCode);
-    } else {
+    try {
+      // decryptData handles pin validation
+      return decryptData(accessData.mainKey, pinCode);
+    } catch(err: unknown) {
+      // FIXME: check error type to not hide crypto errors
       throw new Error('Invalid PIN code.');
     }
   }

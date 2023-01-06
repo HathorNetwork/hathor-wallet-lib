@@ -8,7 +8,7 @@
 import Address from '../models/address';
 import Network from '../models/network';
 import {Address as bitcoreAddress, Script, HDPublicKey} from 'bitcore-lib';
-import { IMultisigData, IStorage, IStorageAddress } from '../types';
+import { IMultisigData, IStorage, IAddressInfo } from '../types';
 import _ from 'lodash';
 import { createP2SHRedeemScript } from './scripts';
 
@@ -25,7 +25,7 @@ export const getAddressType = (address: string, network: Network): string => {
   return addressObj.getType();
 }
 
-export function deriveAddressFromXPubP2PKH(xpubkey: string, index: number, networkName: string): IStorageAddress {
+export function deriveAddressFromXPubP2PKH(xpubkey: string, index: number, networkName: string): IAddressInfo {
   const network = new Network(networkName);
   const hdpubkey = new HDPublicKey(xpubkey);
   const key = hdpubkey.deriveChild(index);
@@ -36,7 +36,7 @@ export function deriveAddressFromXPubP2PKH(xpubkey: string, index: number, netwo
   }
 }
 
-export async function deriveAddressP2PKH(index: number, storage: IStorage): Promise<IStorageAddress> {
+export async function deriveAddressP2PKH(index: number, storage: IStorage): Promise<IAddressInfo> {
   const accessData = await storage.getAccessData();
   if (accessData === null) {
     throw new Error('No access data');
@@ -48,7 +48,7 @@ export async function deriveAddressP2PKH(index: number, storage: IStorage): Prom
   );
 }
 
-export function deriveAddressFromDataP2SH(multisigData: IMultisigData, index: number, networkName: string): IStorageAddress {
+export function deriveAddressFromDataP2SH(multisigData: IMultisigData, index: number, networkName: string): IAddressInfo {
   const network = new Network(networkName);
   const redeemScript = createP2SHRedeemScript(multisigData.pubkeys, multisigData.numSignatures, index);
   const address = new bitcoreAddress.payingTo(Script.fromBuffer(redeemScript), network.bitcoreNetwork);
@@ -65,9 +65,9 @@ export function deriveAddressFromDataP2SH(multisigData: IMultisigData, index: nu
  * @param {IStorage} storage Wallet storage to get p2sh and access data
  *
  * @async
- * @returns {Promise<IStorageAddress>}
+ * @returns {Promise<IAddressInfo>}
  */
-export async function deriveAddressP2SH(index: number, storage: IStorage): Promise<IStorageAddress> {
+export async function deriveAddressP2SH(index: number, storage: IStorage): Promise<IAddressInfo> {
   const accessData = await storage.getAccessData();
   if (accessData === null) {
     throw new Error('No access data');
