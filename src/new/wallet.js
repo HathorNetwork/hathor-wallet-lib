@@ -2479,9 +2479,15 @@ class HathorWallet extends EventEmitter {
    * @returns {FullNodeTxResponse} Transaction data in the fullnode
    */
   async getFullTxById(txId) {
-    return new Promise((resolve) => {
+    const tx = await new Promise(resolve => {
       txApi.getTransaction(txId, resolve);
     });
+
+    if (!tx.success) {
+      throw new Error(`Invalid transaction ${txId}`);
+    }
+
+    return tx;
   }
 
   /**
@@ -2492,9 +2498,15 @@ class HathorWallet extends EventEmitter {
    * @returns {FullNodeTxConfirmationDataResponse} Transaction confirmation data
    */
   async getTxConfirmationData(txId) {
-    return new Promise((resolve) => {
+    const confirmationData = await new Promise(resolve => {
       txApi.getConfirmationData(txId, resolve);
     });
+
+    if (!confirmationData.success) {
+      throw new Error(`Invalid transaction ${txId}`);
+    }
+
+    return confirmationData;
   }
 
   /**
@@ -2512,7 +2524,18 @@ class HathorWallet extends EventEmitter {
     maxLevel,
   ) {
     const url = `${config.getServerUrl()}graphviz/neighbours.dot?tx=${txId}&graph_type=${graphType}&max_level=${maxLevel}`;
-    return new Promise((resolve) => txApi.getGraphviz(url, resolve));
+    const graphvizData = await new Promise(resolve => {
+      txApi.getGraphviz(url, resolve);
+    });
+
+    // The response will either be a string with the graphviz data or an object
+    // { success: boolean, message: string } so we need to check if the response has
+    // the `success` key
+    if (Object.hasOwnProperty.call(graphvizData, 'success') && !graphvizData.success) {
+      throw new Error(`Invalid transaction ${txId}`);
+    }
+
+    return graphvizData;
   }
 }
 
