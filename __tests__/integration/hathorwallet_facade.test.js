@@ -979,6 +979,96 @@ describe('getTxBalance', () => {
   });
 });
 
+describe('getFullTxById', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
+  });
+
+  let gWallet;
+  beforeAll(async () => {
+    const { hWallet } = await GenesisWalletHelper.getSingleton();
+    gWallet = hWallet;
+  });
+
+  it('should download an existing transaction from the fullnode', async () => {
+    const hWallet = await generateWalletHelper();
+
+    const tx1 = await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
+
+    const fullTx = await hWallet.getFullTxById(tx1.hash);
+    expect(fullTx.success).toStrictEqual(true);
+
+    const fullTxKeys = Object.keys(fullTx);
+    expect(fullTxKeys).toContain('meta');
+    expect(fullTxKeys).toContain('tx');
+    expect(fullTxKeys).toContain('success');
+    expect(fullTxKeys).toContain('spent_outputs');
+  });
+
+  it('should throw an error if success is false on response', async () => {
+    expect(gWallet.getFullTxById('invalid-tx-hash')).rejects.toThrowError(`Invalid transaction invalid-tx-hash`);
+  });
+});
+
+describe('getTxConfirmationData', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
+  });
+
+  let gWallet;
+  beforeAll(async () => {
+    const { hWallet } = await GenesisWalletHelper.getSingleton();
+    gWallet = hWallet;
+  });
+
+  it('should download confirmation data for an existing transaction from the fullnode', async () => {
+    const hWallet = await generateWalletHelper();
+
+    const tx1 = await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
+
+    const confirmationData = await hWallet.getTxConfirmationData(tx1.hash);
+
+    expect(confirmationData.success).toStrictEqual(true);
+
+    const confirmationDataKeys = Object.keys(confirmationData);
+    expect(confirmationDataKeys).toContain('accumulated_bigger');
+    expect(confirmationDataKeys).toContain('accumulated_weight');
+    expect(confirmationDataKeys).toContain('confirmation_level');
+    expect(confirmationDataKeys).toContain('success');
+  });
+
+  it('should throw an error if success is false on response', async () => {
+    expect(gWallet.getTxConfirmationData('invalid-tx-hash')).rejects.toThrowError(`Invalid transaction invalid-tx-hash`);
+  });
+});
+
+describe('graphvizNeighborsQuery', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
+  });
+
+  let gWallet;
+  beforeAll(async () => {
+    const { hWallet } = await GenesisWalletHelper.getSingleton();
+    gWallet = hWallet;
+  });
+
+  it('should download graphviz neighbors data for a existing transaction from the fullnode', async () => {
+    const hWallet = await generateWalletHelper();
+    const tx1 = await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
+    const neighborsData = await hWallet.graphvizNeighborsQuery(tx1.hash, 'funds', 1);
+
+    expect(neighborsData).toMatch(/digraph {/);
+  });
+
+  it('should throw an error if success is false on response', async () => {
+    expect(gWallet.graphvizNeighborsQuery('invalid-tx-hash')).rejects.toThrowError(`Invalid transaction invalid-tx-hash`);
+  });
+});
+
 describe('sendTransaction', () => {
   afterEach(async () => {
     await stopAllWallets();
@@ -2472,4 +2562,3 @@ describe('getTxHistory', () => {
     expect(txHistory[1].txId).toEqual(tx1Hash);
   });
 });
-
