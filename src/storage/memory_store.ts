@@ -8,7 +8,19 @@
 import { IStore, IAddressInfo, ITokenData, ITokenMetadata, IHistoryTx, IUtxo, IWalletAccessData, IUtxoFilterOptions, IBalance, IAddressMetadata, IWalletData } from '../types';
 import transaction from '../utils/transaction';
 import walletApi from '../api/wallet';
+import { GAP_LIMIT } from 'src/constants';
 
+
+const DEAFULT_ADDRESSES_WALLET_DATA = {
+  lastLoadedAddressIndex: 0,
+  lastUsedAddressIndex: -1,
+  currentAddressIndex: -1,
+};
+
+const DEFAULT_WALLET_DATA = {
+  bestBlockHeight: 0,
+  gapLimit: GAP_LIMIT,
+};
 
 export class MemoryStore implements IStore {
   addresses: Map<string, IAddressInfo>;
@@ -35,13 +47,7 @@ export class MemoryStore implements IStore {
     this.accessData = null;
     this.genericStorage = {};
 
-    this.walletData = {
-      lastLoadedAddressIndex: 0,
-      lastUsedAddressIndex: -1,
-      currentAddressIndex: -1,
-      bestBlockHeight: 0,
-      gapLimit: 20,
-    };
+    this.walletData = {...DEFAULT_WALLET_DATA, ...DEAFULT_ADDRESSES_WALLET_DATA};
   }
 
   /** ADDRESSES */
@@ -103,6 +109,7 @@ export class MemoryStore implements IStore {
     if (markAsUsed) {
       // Will move the address index only if we have not reached the gap limit
       this.walletData.currentAddressIndex = Math.min(this.walletData.lastLoadedAddressIndex, this.walletData.currentAddressIndex + 1);
+      console.log(`Settings current address to ${this.walletData.currentAddressIndex}`);
     }
     return addressInfo.base58;
   }
@@ -291,6 +298,7 @@ export class MemoryStore implements IStore {
     if (this.walletData.lastUsedAddressIndex < maxIndexUsed) {
       if (this.walletData.currentAddressIndex < maxIndexUsed) {
         this.walletData.currentAddressIndex = Math.min(maxIndexUsed + 1, this.walletData.lastLoadedAddressIndex);
+        console.log(`Settings current address to ${this.walletData.currentAddressIndex}`);
       }
       this.walletData.lastUsedAddressIndex = maxIndexUsed;
     }
@@ -336,6 +344,7 @@ export class MemoryStore implements IStore {
     }
     if (this.walletData.currentAddressIndex < maxIndex) {
       this.walletData.currentAddressIndex = Math.min(maxIndex + 1, this.walletData.lastLoadedAddressIndex);
+      console.log(`Settings current address to ${this.walletData.currentAddressIndex}`);
     }
     this.walletData.lastUsedAddressIndex = maxIndex;
   }
@@ -503,18 +512,22 @@ export class MemoryStore implements IStore {
     this.genericStorage[key] = value;
   }
 
-  async cleanStorage(cleanHistory: boolean = false): Promise<void> {
+  async cleanStorage(cleanHistory: boolean = false, cleanAddresses: boolean = false): Promise<void> {
     this.accessData = null;
     if (cleanHistory) {
-      // this.addresses = new Map<string, IAddressInfo>();
-      // this.addressIndexes = new Map<number, string>();
-      // this.addressesMetadata = new Map<string, IAddressMetadata>();
-      this.tokens = new Map<string, ITokenData>();
-      this.tokensMetadata = new Map<string, ITokenMetadata>();
-      this.registeredTokens = new Map<string, ITokenData>();
-      this.history = new Map<string, IHistoryTx>();
-      this.utxos = new Map<string, IUtxo>();
+      this.tokens = new Map<string, IStorageToken>();
+      this.tokensMetadata = new Map<string, IStorageTokenMetadata>();
+      this.registeredTokens = new Map<string, IStorageToken>();
+      this.history = new Map<string, IStorageTx>();
+      this.utxos = new Map<string, IStorageUTXO>();
       // wallet data will be kept
+    }
+
+    if (cleanAddresses) {
+      this.addresses = new Map<string, IStorageAddress>();
+      this.addressIndexes = new Map<number, string>();
+      this.addressesMetadata = new Map<string, IStorageAddressMetadata>();
+      this.walletData = {...this.walletData, ...DEAFULT_ADDRESSES_WALLET_DATA};
     }
   }
 }

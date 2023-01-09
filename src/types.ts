@@ -5,10 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-// import Output from "../../models/output";
 import { Config } from "./config";
 import Input from "./models/input";
 import Transaction from "./models/transaction";
+import FullNodeConnection from './new/connection';
 
 export interface IAddressInfo {
   base58: string;
@@ -104,32 +104,74 @@ export interface IHistoryOutput {
   spent_by: string|null;
 }
 
-export interface IDataOutput {
+export interface IDataOutputData {
+  type: 'data';
+  token: string;
+  value: number;
+  authorities: number;
+  data: string;
+  timelock: number|null;
+};
+
+export function isDataOutputData(output: IDataOutput): output is IDataOutputData {
+  return output.type === 'data';
+}
+
+export interface IDataOutputAddress {
+  type: 'p2pkh'|'p2sh';
   token: string;
   value: number;
   authorities: number;
   address: string;
   timelock: number|null;
-};
+}
+
+export function isDataOutputAddress(output: IDataOutput): output is IDataOutputAddress {
+  return output.type in ['p2pkh', 'p2sh'];
+}
+
+// This is for create token transactions, where we dont have a token uid yet
+export interface IDataOutputCreateToken {
+  type: 'mint'|'melt';
+  value: number;
+  address: string;
+  timelock: number|null;
+  authorities: number;
+}
+
+export function isDataOutputCreateToken(output: IDataOutput): output is IDataOutputCreateToken {
+  return output.type in ['mint', 'melt'];
+}
+
+export interface IDataOutputOptionals {
+  isChange?: boolean;
+}
+
+export type IDataOutput = (IDataOutputData | IDataOutputAddress | IDataOutputCreateToken) & IDataOutputOptionals;
 
 export interface IDataInput {
   txId: string;
   index: number;
-  token?: string;
-  address?: string;
+  value: number;
+  authorities: number;
+  token: string;
+  address: string;
   data?: string; // XXX: or Buffer?
 }
 
 // XXX: This type is meant to be used as an intermediary for building transactions
 // It should have everything we need to build and push transactions.
 export interface IDataTx {
-  version: number,
+  version?: number,
   inputs: IDataInput[];
   outputs: IDataOutput[];
   tokens: string[];
   weight?: number;
-  nonce?: number,
-  timestamp?: number,
+  nonce?: number;
+  timestamp?: number;
+  parents?: string[];
+  name?: string; // For create token transaction
+  symbol?: string; // For create token transaction
 }
 
 export interface IUtxoId {
@@ -257,11 +299,11 @@ export interface IStore {
   setCurrentHeight(height: number): Promise<void>;
   getCurrentAddress(markAsUsed?: boolean): Promise<string>;
 
-  cleanStorage(cleanHistory?: boolean): Promise<void>;
-
   // Generic storage keys
   getItem(key: string): Promise<any>;
   setItem(key: string, value: any): Promise<void>;
+
+  cleanStorage(cleanHistory?: boolean, cleanAddresses?: boolean): Promise<void>;
 }
 
 export interface IStorage {
@@ -312,5 +354,6 @@ export interface IStorage {
   isReadonly(): Promise<boolean>;
   setApiVersion(version: ApiVersion): void;
 
-  cleanStorage(cleanHistory?: boolean): Promise<void>;
+  cleanStorage(cleanHistory?: boolean, cleanAddresses?: boolean): Promise<void>;
+  handleStop(options: {connection?: FullNodeConnection, cleanStorage?: boolean}): Promise<void>;
 }

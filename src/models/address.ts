@@ -112,7 +112,7 @@ class Address {
    * @memberof Address
    * @inner
    */
-  getType(): string {
+  getType(): 'p2pkh' | 'p2sh' {
     this.validateAddress();
     const addressBytes = this.decode();
 

@@ -25,10 +25,13 @@ import {
   IDataTx,
   IDataInput,
   IDataOutput,
+  isDataOutputCreateToken,
 } from '../types';
 import transaction from '../utils/transaction';
 import config, { Config } from '../config';
 import { decryptData } from '../utils/crypto';
+import FullNodeConnection from '../new/connection';
+import { getAddressType } from 'src/utils/address';
 
 
 export class Storage implements IStorage {
@@ -213,6 +216,11 @@ export class Storage implements IStorage {
 
     // Calculate balance for outputs
     for (const output of tx.outputs) {
+      if (isDataOutputCreateToken(output)) {
+        // This output does not indicate the token because it is creating it
+        // Therefore we cannot find tokens to fill the transaction, since it does not exist yet, so we ignore it
+        continue;
+      }
       if (!tokensBalance.has(output.token)) {
         tokensBalance.set(output.token, getEmptyBalance());
       }
@@ -273,6 +281,8 @@ export class Storage implements IStorage {
             index: utxo.index,
             token: utxo.token,
             address: utxo.address,
+            value: utxo.value,
+            authorities: utxo.authorities,
           });
         }
         if (foundAmount < balance.funds) {
@@ -282,6 +292,7 @@ export class Storage implements IStorage {
       } else if (balance.funds < 0) {
         // We have a surplus of this token on the inputs, so we need to add a change output
         newOutputs.push({
+          type: getAddressType(addressForChange, this.config.getNetwork()),
           token,
           authorities: 0,
           value: Math.abs(balance.funds),
@@ -302,6 +313,8 @@ export class Storage implements IStorage {
             index: utxo.index,
             token: utxo.token,
             address: utxo.address,
+            value: utxo.value,
+            authorities: utxo.authorities,
           });
         }
         if (foundAmount < balance.mint) {
@@ -312,6 +325,7 @@ export class Storage implements IStorage {
         // We have a surplus of this token on the inputs, so we need to add enough change outputs to match
         for (let i = 0; i < Math.abs(balance.mint); i++) {
           newOutputs.push({
+            type: getAddressType(addressForChange, this.config.getNetwork()),
             token,
             authorities: 1,
             value: 1,
@@ -333,6 +347,8 @@ export class Storage implements IStorage {
             index: utxo.index,
             token: utxo.token,
             address: utxo.address,
+            value: utxo.value,
+            authorities: utxo.authorities,
           });
         }
         if (foundAmount < balance.melt) {
@@ -343,6 +359,7 @@ export class Storage implements IStorage {
         // We have a surplus of this token on the inputs, so we need to add enough change outputs to match
         for (let i = 0; i < Math.abs(balance.melt); i++) {
           newOutputs.push({
+            type: getAddressType(addressForChange, this.config.getNetwork()),
             token,
             authorities: 2,
             value: 2,
@@ -472,7 +489,20 @@ export class Storage implements IStorage {
     }
   }
 
-  async cleanStorage(cleanHistory: boolean = false): Promise<void> {
-    return this.store.cleanStorage(cleanHistory);
+  async handleStop({connection, cleanStorage = false}: {connection?: FullNodeConnection, cleanStorage?: boolean} = {}): Promise<void> {
+    if (connection) {
+      for await (const addressInfo of this.getAllAddresses()) {
+        connection.unsubscribeAddress(addressInfo.base58);
+      }
+      connection.removeMetricsHandlers();
+    }
+    this.version = null;
+    if (cleanStorage) {
+      this.cleanStorage(true);
+    }
+  }
+
+  async cleanStorage(cleanHistory: boolean = false, cleanAddresses: boolean = false): Promise<void> {
+    return this.store.cleanStorage(cleanHistory, cleanAddresses);
   }
 }

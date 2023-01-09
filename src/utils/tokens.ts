@@ -6,9 +6,12 @@
  */
 
 
-import { HATHOR_TOKEN_CONFIG, TOKEN_DEPOSIT_PERCENTAGE } from '../constants';
+import { CREATE_TOKEN_TX_VERSION, HATHOR_TOKEN_CONFIG, TOKEN_DEPOSIT_PERCENTAGE, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../constants';
 import helpers from './helpers';
 import buffer from 'buffer';
+import { IDataInput, IDataOutput, IDataTx, IStorage } from '../types';
+import { getAddressType } from './address';
+import { InsufficientFundsError } from '../errors';
 
 type configStringType = {uid: string, name: string, symbol: string}
 
@@ -136,8 +139,13 @@ const tokens = {
    * @inner
    *
    */
-  getDepositAmount(mintAmount: number): number {
-    return Math.ceil(TOKEN_DEPOSIT_PERCENTAGE * mintAmount);
+  getDepositAmount(mintAmount: number, isCreateNFT: boolean = false): number {
+    let depositAmount = Math.ceil(TOKEN_DEPOSIT_PERCENTAGE * mintAmount);
+    if (isCreateNFT) {
+      // The NFT has the normal deposit + 0.01 HTR fee
+      depositAmount += 1;
+    }
+    return depositAmount;
   },
 
   /**
@@ -152,6 +160,321 @@ const tokens = {
    */
   getWithdrawAmount(meltAmount: number): number {
     return Math.floor(TOKEN_DEPOSIT_PERCENTAGE * meltAmount);
+  },
+
+  async prepareMintTxData(
+    address: string,
+    amount: number,
+    storage: IStorage,
+    {
+      token = null,
+      mintInput = null,
+      createAnotherMint = true,
+      createMelt = false,
+      changeAddress = null,
+      isCreateNFT = false,
+    }: {
+      token?: string|null,
+      mintInput?: IDataInput|null,
+      createAnotherMint?: boolean,
+      createMelt?: boolean,
+      changeAddress?: string|null,
+      isCreateNFT?: boolean,
+    } = {},
+  ): Promise<IDataTx> {
+    const inputs: IDataInput[] = [];
+    const outputs: IDataOutput[] = [];
+    const depositAmount = this.getDepositAmount(amount, isCreateNFT);
+
+    // get HTR deposit inputs
+    let foundAmount = 0;
+    for await (const utxo of storage.selectUtxos({token: HATHOR_TOKEN_CONFIG.uid, target_amount: depositAmount})) {
+      foundAmount += utxo.value;
+      inputs.push({
+        txId: utxo.txId,
+        index: utxo.index,
+        value: utxo.value,
+        address: utxo.address,
+        authorities: utxo.authorities,
+        token: utxo.token,
+      });
+    }
+
+    if (foundAmount < depositAmount) {
+      throw new InsufficientFundsError(`Not enough HTR tokens for deposit: ${depositAmount} required, ${foundAmount} available`);
+    }
+
+    // get output change
+    if (foundAmount > depositAmount) {
+      if (changeAddress === null) {
+        throw new Error('Must provide change address if deposit is greater than the required deposit amount');
+      }
+
+      outputs.push({
+        type: getAddressType(changeAddress, storage.config.getNetwork()),
+        address: changeAddress,
+        value: foundAmount - depositAmount,
+        timelock: null,
+        token: HATHOR_TOKEN_CONFIG.uid,
+        authorities: 0,
+        isChange: true,
+      });
+    }
+
+    if (mintInput !== null) {
+      // We are spending a mint input to mint more tokens
+      inputs.push(mintInput);
+    }
+
+    // Add output to mint tokens
+    outputs.push({
+      type: 'mint',
+      address,
+      value: amount,
+      timelock: null,
+      authorities: 0,
+    });
+
+    if (createAnotherMint) {
+      const newAddress = await storage.getCurrentAddress();
+      outputs.push({
+        type: 'mint',
+        address: newAddress,
+        value: TOKEN_MINT_MASK,
+        timelock: null,
+        authorities: 1,
+      });
+    }
+
+    if (createMelt) {
+      const newAddress = await storage.getCurrentAddress();
+      outputs.push({
+        type: 'melt',
+        address: newAddress,
+        value: TOKEN_MELT_MASK,
+        timelock: null,
+        authorities: 2,
+      });
+    }
+
+    const tokens = token !== null ? [token] : [];
+
+    return {
+      inputs,
+      outputs,
+      tokens,
+    };
+  },
+
+  /**
+   * Generate melt transaction data
+   *
+   * @param {string} token Token to melt
+   * @param {IDataInput} authorityMeltInput Input with authority to melt
+   * @param {string} address Address to send the melted HTR tokens
+   * @param {number} amount The amount of tokens to melt
+   * @param {IStorage} storage The storage object
+   * @param {Object} [options={}] Options to create the melt transaction
+   * @param {boolean} [options.createAnotherMelt=true] If should create another melt authority
+   * @param {string|null} [options.changeAddress=null] Address to send the change
+   * @returns {Promise<IDataTx>}
+   */
+  async prepareMeltTxData(
+    token: string,
+    authorityMeltInput: IDataInput, // Authority melt
+    address: string,
+    amount: number,
+    storage: IStorage,
+    {
+      createAnotherMelt = true,
+      changeAddress = null,
+    }: {
+      createAnotherMelt?: boolean,
+      changeAddress?: string|null,
+    } = {},
+  ): Promise<IDataTx> {
+    if ((authorityMeltInput.token !== token) || (authorityMeltInput.authorities !== 2)) {
+      throw new Error('Melt authority input is not valid');
+    }
+    const inputs: IDataInput[] = [authorityMeltInput];
+    const outputs: IDataOutput[] = [];
+    const tokens = [authorityMeltInput.token];
+    const withdrawAmount = this.getWithdrawAmount(amount);
+
+    // get inputs that amount to requested melt amount
+    let foundAmount = 0;
+    for await (const utxo of storage.selectUtxos({token, target_amount: amount})) {
+      foundAmount += utxo.value;
+      inputs.push({
+        txId: utxo.txId,
+        index: utxo.index,
+        value: utxo.value,
+        address: utxo.address,
+        authorities: 0,
+        token: utxo.token,
+      });
+    }
+
+    if (foundAmount < amount) {
+      throw new InsufficientFundsError(`Not enough HTR tokens for withdraw: ${withdrawAmount} required, ${foundAmount} available`);
+    }
+
+    // get output change
+    if (foundAmount > amount) {
+      if (changeAddress === null) {
+        throw new Error('Must provide change address');
+      }
+
+      outputs.push({
+        type: getAddressType(changeAddress, storage.config.getNetwork()),
+        address: changeAddress,
+        value: foundAmount - amount,
+        timelock: null,
+        token: token,
+        authorities: 0,
+        isChange: true,
+      });
+    }
+
+    if (createAnotherMelt) {
+      const newAddress = await storage.getCurrentAddress();
+      outputs.push({
+        type: getAddressType(newAddress, storage.config.getNetwork()),
+        address: newAddress,
+        token,
+        authorities: 2,
+        value: TOKEN_MELT_MASK,
+        timelock: null,
+      });
+    }
+
+    // When melting an amount smaller than 100 (1.00), the withdraw value will be 0, then we don't need to add output for that
+    if (withdrawAmount > 0) {
+      outputs.push({
+        value: withdrawAmount,
+        address,
+        token: HATHOR_TOKEN_CONFIG.uid,
+        authorities: 0,
+        timelock: null,
+        type: getAddressType(address, storage.config.getNetwork()),
+        isChange: true, // XXX: should this be considered change?
+      });
+    }
+
+    return {
+      inputs,
+      outputs,
+      tokens,
+    };
+  },
+
+  /**
+   * Prepare transaction data to create a token.
+   *
+   * @param {string} address Address to create the token
+   * @param {string} name Name of the token being created
+   * @param {string} symbol Symbol of the token being created
+   * @param {number} mintAmount Amount of tokens to mint
+   * @param {IStorage} storage Storage to get necessary data
+   * @param {Object} [options={}] options to create the token
+   * @param {string|null} [options.changeAddress=null] Address to send the change
+   * @param {boolean} [options.createMint=true] Whether to create a mint output
+   * @param {boolean} [options.createMelt=true] Whether to create a melt output
+   * @param {string|null} [options.nftData=null] NFT data to create an NFT token
+   * @returns {Promise<IDataTx>} The transaction data to create the token
+   */
+  async prepareCreateTokenData(
+    address: string,
+    name: string,
+    symbol: string,
+    mintAmount: number,
+    storage: IStorage,
+    {
+      changeAddress = null,
+      createMint = true,
+      createMelt = true,
+      nftData = null,
+    }: {
+      changeAddress?: string|null,
+      createMint?: boolean,
+      createMelt?: boolean,
+      nftData?: string|null,
+    } = {},
+  ): Promise<IDataTx> {
+    const isNFT = nftData !== null;
+    const mintOptions = {
+      createAnotherMint: createMint,
+      createMelt,
+      changeAddress,
+      isNFT,
+    };
+
+    const txData = await this.prepareMintTxData(address, mintAmount, storage, mintOptions);
+    if (isNFT) {
+      // After the transaction data is completed
+      // if it's an NFT I must add the first output as the data script
+      // For NFT data the value is always 0.01 HTR (i.e. 1 integer)
+      txData.outputs.unshift({
+        type: 'data',
+        data: nftData,
+        value: 1,
+        token: HATHOR_TOKEN_CONFIG.uid,
+        authorities: 0,
+        timelock: null,
+      });
+    }
+
+    // Set create token tx version value
+    txData.version = CREATE_TOKEN_TX_VERSION;
+    txData.name = name;
+    txData.symbol = symbol;
+
+    return txData;
+  },
+
+  async prepareDelegateAuthorityTxData(
+    token: string,
+    authorityInput: IDataInput, // Authority input
+    address: string,
+    storage: IStorage,
+    createAnother: boolean = true,
+  ): Promise<IDataTx> {
+    const outputs: IDataOutput[] = [{
+      type: getAddressType(address, storage.config.getNetwork()),
+      address,
+      token,
+      authorities: authorityInput.authorities,
+      value: authorityInput.value,
+      timelock: null,
+    }];
+
+    if (createAnother) {
+      const newAddress = await storage.getCurrentAddress();
+      outputs.push({
+        type: getAddressType(newAddress, storage.config.getNetwork()),
+        address: newAddress,
+        token,
+        authorities: authorityInput.authorities,
+        value: authorityInput.value,
+        timelock: null,
+      });
+    }
+
+    return {
+      outputs,
+      inputs: [authorityInput],
+      tokens: [token],
+    };
+  },
+
+  prepareDestroyAuthorityTxData(
+    authorityInputs: IDataInput[], // Authority inputs
+  ): IDataTx {
+    return {
+      inputs: authorityInputs,
+      outputs: [],
+      tokens: [],
+    };
   },
 }
 

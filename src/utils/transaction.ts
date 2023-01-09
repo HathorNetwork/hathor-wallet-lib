@@ -9,12 +9,20 @@ import { Utxo } from '../wallet/types';
 import { UtxoError } from '../errors';
 import { HistoryTransactionOutput } from '../models/types';
 import wallet from '../wallet';
-import {crypto as cryptoBL, PrivateKey} from 'bitcore-lib'
-import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK } from '../constants';
+import {crypto as cryptoBL, PrivateKey, HDPrivateKey} from 'bitcore-lib'
+import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, HATHOR_TOKEN_CONFIG, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION } from '../constants';
 import Transaction from '../models/transaction';
+import CreateTokenTransaction from 'src/models/create_token_transaction';
 import Input from '../models/input';
+import Output from '../models/output';
 import Network from '../models/network';
-import { IBalance, IStorage, IHistoryTx } from '../types';
+import { IBalance, IStorage, IHistoryTx, IDataOutput, IDataTx, isDataOutputCreateToken } from '../types';
+import Address from '../models/address';
+import P2PKH from '../models/p2pkh';
+import P2SH from '../models/p2sh';
+import ScriptData from '../models/script_data';
+import { ParseError } from '../errors';
+import { OP_PUSHDATA1 } from '../opcodes';
 
 const transaction = {
 
@@ -84,6 +92,28 @@ const transaction = {
       nhashtype: cryptoBL.Signature.SIGHASH_ALL,
     });
     return signature.toDER();
+  },
+
+  async signTransaction(tx: Transaction, storage: IStorage, pinCode: string): Promise<Transaction> {
+    const xprivstr = await storage.getMainXPrivKey(pinCode);
+    const xprivkey = HDPrivateKey.fromString(xprivstr);
+
+    for await (const {tx: spentTx, input} of storage.getSpentTxs(tx.inputs)) {
+      const spentOut = spentTx.outputs[input.index];
+      if (!spentOut.decoded.address) {
+        // This is not a wallet output	
+        continue;
+      }
+      const addressInfo = await storage.getAddressInfo(spentOut.decoded.address);
+      if (!addressInfo) {
+        // Not a wallet address
+        continue;
+      }
+      const xpriv = xprivkey.deriveNonCompliantChild(addressInfo.bip32AddressIndex);
+      input.setData(tx.getSignature(xpriv.privateKey));
+    }
+
+    return tx;
   },
 
   /**
@@ -178,17 +208,13 @@ const transaction = {
     const nowTs = Math.floor(Date.now() / 1000);
     const nowHeight = await storage.getCurrentHeight();
     const rewardLock = storage.version?.reward_spend_min_blocks;
-    const isHeightLocked = (height?: number): boolean => {
-      // Must have reward lock and height to check for height lock
-      if (!(rewardLock && height)) return false
-      return (height + rewardLock) < nowHeight;
-    };
+    const isHeightLocked = (!(rewardLock && tx.height)) ? false : ((tx.height + rewardLock) < nowHeight);
 
     for (const output of tx.outputs) {
       if (!balance[output.token]) {
         balance[output.token] = getEmptyBalance();
       }
-      const isLocked = this.isOutputLocked(output, { refTs: nowTs }) || isHeightLocked(output.height);
+      const isLocked = this.isOutputLocked(output, { refTs: nowTs }) || isHeightLocked;
 
       if (this.isAuthorityOutput(output)) {
         if (this.isMint(output)) {
@@ -232,6 +258,115 @@ const transaction = {
     }
 
     return balance;
+  },
+
+  getTokenDataFromOutput(output: IDataOutput, tokens: string[]): number {
+    if (isDataOutputCreateToken(output)) {
+      // This output does not contain the token since it will be creating
+      // But knowing this, we also know the token index of it.
+      if (output.authorities === 0) {
+        return 1;
+      }
+      return 1 | TOKEN_AUTHORITY_MASK;
+    }
+
+    const tokensWithoutHathor = tokens.filter((token) => token !== HATHOR_TOKEN_CONFIG.uid);
+    const tokenIndex = tokensWithoutHathor.indexOf(output.token) + 1;
+    if (output.authorities === 0) {
+      return tokenIndex;
+    }
+    return tokenIndex | TOKEN_AUTHORITY_MASK;
+  },
+
+  /**
+   * Create output script
+   *
+   * @param {IDataOutput} output Output with data to create the script
+   *
+   * @throws {AddressError} If the address is invalid
+   *
+   * @return {Buffer} Output script
+   */
+  createOutputScript(output: IDataOutput, network: Network): Buffer {
+    if (output.type === 'data') {
+      // Data script for NFT
+      const scriptData = new ScriptData(output.data);
+      return scriptData.createScript();
+    } else if (output.type === 'p2sh') {
+      // P2SH
+      const address = new Address(output.address, { network });
+      // This will throw AddressError in case the address is invalid
+      address.validateAddress();
+      const p2sh = new P2SH(address, { timelock: output.timelock });
+      return p2sh.createScript();
+    } else if (output.type === 'p2pkh') {
+      // P2PKH
+      const address = new Address(output.address, { network });
+      // This will throw AddressError in case the address is invalid
+      address.validateAddress();
+      const p2pkh = new P2PKH(address, { timelock: output.timelock });
+      return p2pkh.createScript();
+    } else {
+      throw new Error('Invalid output for creating script.');
+    }
+  },
+
+  async prepareTransaction(tx: IDataTx, pinCode: string, storage: IStorage): Promise<Transaction> {
+    const network = storage.config.getNetwork();
+    
+    const inputs: Input[] = tx.inputs.map(input => new Input(input.txId, input.index));
+    const outputs: Output[] = tx.outputs.map(output => {
+      const script = this.createOutputScript(output, network);
+      const tokenData = this.getTokenDataFromOutput(output, tx.tokens);
+      return new Output(output.value, script, { tokenData });
+    });
+    let txObj: Transaction;
+    if (tx.version === CREATE_TOKEN_TX_VERSION) {
+      txObj = new CreateTokenTransaction(tx.name!, tx.symbol!, inputs, outputs);
+    } else if (tx.version === DEFAULT_TX_VERSION) {
+      txObj = new Transaction(inputs, outputs, { version: tx.version });
+    } else {
+      throw new ParseError('Invalid transaction version.');
+    }
+
+    await this.signTransaction(txObj, storage, pinCode);
+    // XXX: check tx validity? number of inputs and outputs?
+
+    txObj.prepareToSend();
+    return txObj;
+  },
+
+  /**
+   * Push data to the stack checking if need to add the OP_PUSHDATA1 opcode
+   * We push the length of data and the data
+   * In case the data has length > 75, we need to push the OP_PUSHDATA1 before the length
+   * We always push bytes
+   *
+   * @param {Buffer[]} stack Stack of bytes from the script
+   * @param {Buffer} data Data to be pushed to stack
+   */
+  pushDataToStack(stack: Buffer[], data: Buffer) {
+    // In case data has length bigger than 75, we need to add a pushdata opcode
+    if (data.length > 75) {
+      stack.push(OP_PUSHDATA1);
+    }
+    const lenBuf = Buffer.alloc(1);
+    lenBuf.writeUInt8(data.length);
+    stack.push(lenBuf);
+    stack.push(data);
+  },
+
+  /**
+   * Create P2PKH input data
+   *
+   * @param {Buffer} signature Input signature
+   * @param {Buffer} publicKey Input public key
+   */
+  createInputData(signature: Buffer, publicKey: Buffer) {
+    let arr = [];
+    this.pushDataToStack(arr, signature);
+    this.pushDataToStack(arr, publicKey);
+    return Buffer.concat(arr);
   },
 }
 
