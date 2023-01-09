@@ -16,7 +16,7 @@ import CreateTokenTransaction from 'src/models/create_token_transaction';
 import Input from '../models/input';
 import Output from '../models/output';
 import Network from '../models/network';
-import { IBalance, IStorage, IHistoryTx, IDataOutput, IDataTx, isDataOutputCreateToken } from '../types';
+import { IBalance, IStorage, IHistoryTx, IDataOutput, IDataTx, isDataOutputCreateToken, IHistoryOutput, IDataInput } from '../types';
 import Address from '../models/address';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
@@ -367,6 +367,17 @@ const transaction = {
     this.pushDataToStack(arr, signature);
     this.pushDataToStack(arr, publicKey);
     return Buffer.concat(arr);
+  },
+
+  authoritiesFromOutput(output: IHistoryOutput): number {
+    let authorities = 0;
+    if (this.isMint(output)) {
+      authorities |= TOKEN_MINT_MASK;
+    }
+    if (this.isMelt(output)) {
+      authorities |= TOKEN_MELT_MASK;
+    }
+    return authorities;
   },
 }
 

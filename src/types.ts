@@ -244,6 +244,12 @@ export interface IUtxoFilterOptions {
   filter_method?: (utxo: IUtxo) => boolean;
 }
 
+export interface IFillTxOptions {
+  changeAddress?: string,
+  skipAuthorities?: boolean,
+  chooseInputs?: boolean,
+}
+
 export interface ApiVersion {
   version: string;
   network: string;
@@ -340,7 +346,7 @@ export interface IStorage {
   // UTXOs
   getAllUtxos(): AsyncGenerator<IUtxo>;
   selectUtxos(options: IUtxoFilterOptions): AsyncGenerator<IUtxo>;
-  fillTx(tx: IDataTx, options: {changeAddress?: string}): Promise<void>;
+  fillTx(tx: IDataTx, options: IFillTxOptions): Promise<{inputs: IDataInput[], outputs: IDataOutput[]}>;
   utxoSelectAsInput(utxo: IUtxoId, markAs: boolean, ttl?: number): Promise<void>;
 
   // Wallet access data

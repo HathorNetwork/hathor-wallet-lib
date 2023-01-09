@@ -129,7 +129,9 @@ export class UncompressedPubKeyError extends Error {}
  * @memberof Errors
  * @inner
  */
-export class InvalidWords extends Error {}
+export class InvalidWords extends Error {
+  invalidWords: string[] = [];
+}
 
 /**
  * Error thrown when parsing bytes to an object
@@ -161,7 +163,13 @@ export class WalletError extends Error {}
  * @memberof Errors
  * @inner
  */
-export class WalletRequestError extends WalletError {}
+export class WalletRequestError extends WalletError {
+  cause: any = null;
+  constructor(message: string, errorData: {cause: any} = {cause: null}) {
+    super(message);
+    this.cause = errorData.cause;
+  }
+}
 
 /**
  * Error thrown when get utxo fails
@@ -177,7 +185,9 @@ export class UtxoError extends WalletError {}
  * @memberof Errors
  * @inner
  */
-export class SendTxError extends WalletError {}
+export class SendTxError extends WalletError {
+  errorData: any = null;
+}
 
 /**
  * Error thrown when mining tx

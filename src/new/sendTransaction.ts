@@ -7,17 +7,42 @@
 
 import EventEmitter from 'events';
 import { MIN_POLLING_INTERVAL, SELECT_OUTPUTS_TIMEOUT, HATHOR_TOKEN_CONFIG } from '../constants';
-import transaction from '../transaction';
-import helpers from '../utils/helpers';
+import transactionUtils from '../utils/transaction';
 import txApi from '../api/txApi';
 import { WalletError, SendTxError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
-import wallet from '../wallet';
 import oldHelpers from '../helpers';
-import storage from '../storage';
 import MineTransaction from '../wallet/mineTransaction';
 import Address from '../models/address';
 import { OutputType } from '../wallet/types';
+import { IStorage, IDataTx, IFillTxOptions } from '../types';
+import Transaction from '../models/transaction';
+
+interface ISendInput {
+  txId: string,
+  index: number,
+};
+
+interface ISendDataOutput {
+  type: OutputType.DATA,
+  data: Buffer,
+  value?: number,
+  token?: string,
+}
+
+function isDataOutput(output: ISendOutput): output is ISendDataOutput {
+  return output.type === OutputType.DATA;
+}
+
+interface ISendTokenOutput {
+  type: OutputType.P2PKH|OutputType.P2SH,
+  address: string,
+  value: number,
+  token: string,
+  timelock?: number|null,
+}
+
+type ISendOutput = ISendDataOutput|ISendTokenOutput;
 
 /**
  * This is transaction mining class responsible for:
@@ -36,48 +61,50 @@ import { OutputType } from '../wallet/types';
  * 'unexpected-error': if an unexpected error happens;
  **/
 class SendTransaction extends EventEmitter {
+  storage: IStorage;
+  transaction: Transaction|null;
+  outputs: ISendOutput[];
+  inputs: ISendInput[];
+  changeAddress: string|null;
+  pin: string|null;
+  fullTxData: IDataTx|null;
+  mineTransaction: MineTransaction|null = null;
+
   /**
    *
+   * @param {IStorage} storage Storage object
    * @param [options] Options to initialize the facade
    * @param {Transaction|null} [options.transaction=null] Full tx data
-   * @param {{
-   *   txId: string,
-   *   index: number
-   * }[]} [options.inputs=[]] tx inputs
-   * @param {{
-   *  type: string,
-   *  token: string,
-   *  data?: Buffer,
-   *  address: string,
-   *  value: number,
-   *  timelock: number}[]} [options.outputs=[]] tx outputs
+   * @param {ISendInput[]} [options.inputs=[]] tx inputs
+   * @param {ISendOutput[]} [options.outputs=[]] tx outputs
    * @param {string|null} [options.changeAddress=null] Address to use if we need to create a change output
    * @param {string|null} [options.pin=null] Wallet pin
-   * @param {Network|null} [options.network=null] Network object
+   * @param {IStorage|null} [options.network=null] Network object
    */
-  constructor({
-    transaction=null,
-    outputs=[],
-    inputs=[],
-    changeAddress=null,
-    pin=null,
-    network=null,
-  } = {}) {
+  constructor(
+    storage: IStorage,
+    {
+      transaction=null,
+      outputs=[],
+      inputs=[],
+      changeAddress=null,
+      pin=null,
+    }: {
+      transaction?: Transaction|null,
+      inputs?: ISendInput[],
+      outputs?: ISendOutput[],
+      changeAddress?: string|null,
+      pin?: string|null,
+    } = {}) {
     super();
 
+    this.storage = storage;
     this.transaction = transaction;
     this.outputs = outputs;
     this.inputs = inputs;
     this.changeAddress = changeAddress;
     this.pin = pin;
-    this.network = network;
     this.fullTxData = null;
-
-    // Error to be shown in case of an unexpected error when executing push tx
-    this.unexpectedPushTxError = ErrorMessages.UNEXPECTED_PUSH_TX_ERROR;
-
-    // Stores the setTimeout object to set selected outputs as false
-    this._unmarkAsSelectedTimer = null;
   }
 
   /**
@@ -91,123 +118,84 @@ class SendTransaction extends EventEmitter {
    * @memberof SendTransaction
    * @inner
    */
-  prepareTxData() {
-    const tokensData = {};
+  async prepareTxData(): Promise<IDataTx> {
+    // const tokensData: Record<string, {outputs: IDataOutput[], inputs: IDataInput[]}> = {};
     const HTR_UID = HATHOR_TOKEN_CONFIG.uid;
-
-    // PrepareSendTokensData method expects all inputs/outputs for each token
-    // then the first step is to separate the inputs/outputs for each token
-    const getDefaultData = () => {
-      return { outputs: [], inputs: [] };
+    const network = this.storage.config.getNetwork();
+    const txData: IDataTx = {
+      inputs: [],
+      outputs: [],
+      tokens: [],
     };
+    const chooseInputs = this.inputs.length === 0;
 
     for (const output of this.outputs) {
-      if (output.type === OutputType.DATA) {
+      if (isDataOutput(output)) {
         output.token = HTR_UID;
-      }
 
-      if (!(output.token in tokensData)) {
-        tokensData[output.token] = getDefaultData();
-      }
-    }
-
-    // Get tokens array (HTR is not included)
-    const tokens = Object.keys(tokensData).filter((token) => {
-      return token !== HTR_UID;
-    });
-
-    for (const output of this.outputs) {
-      let dataOutput;
-      if (output.type === OutputType.DATA) {
         // Data output will always have value 1 (0.01) HTR
-        dataOutput = {
+        txData.outputs.push({
           type: OutputType.DATA,
-          data: output.data,
+          data: output.data.toString('hex'),
           value: 1,
-          tokenData: 0
-        };
+          authorities: 0,
+          token: output.token,
+          timelock: null,
+        });
       } else {
-        let tokenData;
-        if (output.token === HTR_UID) {
-          // HTR
-          tokenData = 0;
-        } else {
-          tokenData = tokens.indexOf(output.token) + 1;
+        const addressObj = new Address(output.address, { network });
+        if (output.token !== HTR_UID) {
+          txData.tokens.push(output.token);
         }
 
-        const addressObj = new Address(output.address, { network: this.network });
-
-        dataOutput = {
+        txData.outputs.push({
           address: output.address,
           value: output.value,
           timelock: output.timelock ? output.timelock : null,
-          tokenData,
+          authorities: 0,
+          token: output.token,
           type: addressObj.getType(),
-        };
+        });
       }
-
-      tokensData[output.token].outputs.push(dataOutput);
     }
 
-    const walletData = wallet.getWalletData();
-    const historyTxs = 'historyTransactions' in walletData ? walletData.historyTransactions : {};
     for (const input of this.inputs) {
-      const inputTx = historyTxs[input.txId];
-      if (!inputTx || inputTx.outputs.length < input.index + 1) {
+      const inputTx = await this.storage.getTx(input.txId);
+      if (inputTx === null || (!inputTx.outputs[input.index])) {
         const err = new SendTxError(ErrorMessages.INVALID_INPUT);
         err.errorData = { txId: input.txId, index: input.index };
         throw err;
       }
-      const token = inputTx.outputs[input.index].token;
-
-      if (!(token in tokensData)) {
+      const spentOut = inputTx.outputs[input.index];
+      if (!(spentOut.token in txData.tokens)) {
         // The input select is from a token that is not in the outputs
         const err = new SendTxError(ErrorMessages.INVALID_INPUT);
         err.errorData = { txId: input.txId, index: input.index };
         throw err;
       }
-
-      tokensData[token].inputs.push({
-        tx_id: input.txId,
+      txData.inputs.push({
+        txId: input.txId,
         index: input.index,
-        token,
+        value: spentOut.value,
+        token: spentOut.token,
+        address: spentOut.decoded.address!,
+        authorities: transactionUtils.authoritiesFromOutput(spentOut),
       });
     }
 
-    const fullTxData = Object.assign({tokens}, getDefaultData());
-
-    const tokensUids = tokens.map((token) => { return {uid: token} });
-    for (const tokenUid in tokensData) {
-      // For each token key in tokensData we prepare the data
-      const partialData = tokensData[tokenUid];
-      let chooseInputs = true;
-      if (partialData.inputs.length > 0) {
-        chooseInputs = false;
-      }
-
-      // Warning: prepareSendTokensData(...) might modify `partialData`. It might add inputs in the inputs array
-      // if chooseInputs = true and also the change output to the outputs array, if needed.
-      // it's not a problem to send the token without the symbol/name. This is used only for error message but
-      // it will increase the complexity of the parameters a lot to add the full token in each output/input.
-      // With the wallet service this won't be needed anymore, so I think it's fine [pedroferreira 04-19-2021]
-      const ret = wallet.prepareSendTokensData(partialData, {uid: tokenUid}, chooseInputs, historyTxs, tokensUids, { changeAddress: this.changeAddress });
-
-      if (!ret.success) {
-        ret.debug = {
-          balance: wallet.calculateBalance(Object.values(historyTxs), tokenUid),
-          partialData: partialData, // this might not be the original `partialData`
-          tokenUid,
-          ...ret.debug
-        };
-        throw new SendTxError(ret.message);
-      }
-
-      fullTxData.inputs = [...fullTxData.inputs, ...ret.data.inputs];
-      fullTxData.outputs = [...fullTxData.outputs, ...ret.data.outputs];
+    const options: IFillTxOptions = { chooseInputs, skipAuthorities: true };
+    if (this.changeAddress) {
+      options.changeAddress = this.changeAddress;
     }
+    const newData = await this.storage.fillTx(txData, options);
 
-    this.fullTxData = fullTxData;
-    return fullTxData;
+    // This new IDataTx should be complete with the requested funds
+    this.fullTxData = {
+      inputs: [...txData.inputs, ...newData.inputs],
+      outputs: [...txData.outputs, ...newData.outputs],
+      tokens: txData.tokens,
+    };
+    return this.fullTxData;
   }
 
   /**
@@ -221,14 +209,13 @@ class SendTransaction extends EventEmitter {
    * @memberof SendTransaction
    * @inner
    */
-  prepareTx() {
-    if (!this.fullTxData) {
-      this.prepareTxData();
-    }
-    let preparedData = null;
+  async prepareTx(): Promise<Transaction> {
+    const txData = this.fullTxData || await this.prepareTxData();
     try {
-      preparedData = transaction.prepareData(this.fullTxData, this.pin);
-      this.transaction = helpers.createTxFromData(preparedData, this.network);
+      if (!this.pin) {
+        throw new Error('Pin is not set.');
+      }
+      this.transaction = await transactionUtils.prepareTransaction(txData, this.pin, this.storage);
       return this.transaction;
     } catch(e) {
       const message = oldHelpers.handlePrepareDataError(e);
@@ -252,7 +239,7 @@ class SendTransaction extends EventEmitter {
    * @memberof SendTransaction
    * @inner
    */
-  prepareTxFrom(signatures) {
+  async prepareTxFrom(signatures: Buffer[]): Promise<Transaction> {
     if (this.fullTxData === null) {
       // This method can only be called with a prepared tx data
       // because prepareTxData may modify the inputs and outputs
@@ -260,19 +247,26 @@ class SendTransaction extends EventEmitter {
     }
 
     // add each input data from signature
-    const keys = wallet.getWalletData().keys;
     for (const [index, input] of this.fullTxData.inputs.entries()) {
       const signature = signatures[index];
-      const keyIndex = keys[input.address].index;
-      const pubkey = wallet.getPublicKey(keyIndex);
-      input['data'] = transaction.createInputData(signature, pubkey);
+      const addressInfo = await this.storage.getAddressInfo(input.address);
+      if (addressInfo === null) {
+        // XXX: Not our address, should we fail?
+        continue;
+      }
+      // const publicKey = PublicKey.fromString(addressInfo.publicKey);
+      if (!addressInfo.publicKey) {
+        throw new SendTxError('Missing public key for address');
+      }
+      input.data = transactionUtils.createInputData(signature, Buffer.from(addressInfo.publicKey, 'hex')).toString('hex');
     }
 
     // prepare and create transaction
-    let preparedData = null;
     try {
-      preparedData = transaction.prepareData(this.fullTxData, null, {getSignature: false, completeTx: false});
-      this.transaction = helpers.createTxFromData(preparedData, this.network);
+      if (!this.pin) {
+        throw new Error('Pin is not set.');
+      }
+      this.transaction = await transactionUtils.prepareTransaction(this.fullTxData, this.pin, this.storage);
       return this.transaction;
     } catch(e) {
       const message = oldHelpers.handlePrepareDataError(e);
@@ -292,12 +286,12 @@ class SendTransaction extends EventEmitter {
    * @memberof SendTransaction
    * @inner
    */
-  mineTx(options = {}) {
+  async mineTx(options = {}) {
     if (this.transaction === null) {
       throw new WalletError(ErrorMessages.TRANSACTION_IS_NULL);
     }
 
-    this.updateOutputSelected(true);
+    await this.updateOutputSelected(true);
 
     const newOptions = Object.assign({
       startMiningTx: true,
@@ -350,23 +344,24 @@ class SendTransaction extends EventEmitter {
    * @memberof SendTransaction
    * @inner
    */
-  handlePushTx() {
+  handlePushTx(): Promise<Transaction> {
     if (this.transaction === null) {
       throw new WalletError(ErrorMessages.TRANSACTION_IS_NULL);
     }
 
-    const promise = new Promise((resolve, reject) => {
+    const promise = new Promise<Transaction>((resolve, reject) => {
+      if (this.transaction === null) {
+        throw new WalletError(ErrorMessages.TRANSACTION_IS_NULL);
+      }
       this.emit('send-tx-start', this.transaction);
       const txHex = this.transaction.toHex();
       txApi.pushTx(txHex, false, (response) => {
         if (response.success) {
+          if (this.transaction === null) {
+            throw new WalletError(ErrorMessages.TRANSACTION_IS_NULL);
+          }
           this.transaction.updateHash();
           this.emit('send-tx-success', this.transaction);
-          if (this._unmarkAsSelectedTimer !== null) {
-            // After finishing the push_tx we can clearTimeout to unmark
-            clearTimeout(this._unmarkAsSelectedTimer);
-            this._unmarkAsSelectedTimer = null;
-          }
           resolve(this.transaction);
         } else {
           this.updateOutputSelected(false);
@@ -392,8 +387,11 @@ class SendTransaction extends EventEmitter {
    * @memberof SendTransaction
    * @inner
    */
-  async runFromMining(until = null) {
+  async runFromMining(until = null): Promise<Transaction> {
     try {
+      if (this.transaction === null) {
+        throw new WalletError(ErrorMessages.TRANSACTION_IS_NULL);
+      }
       // This will await until mine tx is fully completed
       // mineTx method returns a promise that resolves when
       // mining succeeds or rejects when there is an error
@@ -460,44 +458,16 @@ class SendTransaction extends EventEmitter {
    * tx arrives from the websocket and set the 'spent_by' key
    *
    * @param {boolean} selected If should set the selected parameter as true or false
-   * @param {Object} store Optional store to use to select the localStorage
    *
    **/
-  updateOutputSelected(selected, store = null) {
-    if (store !== null) {
-      storage.setStore(store);
+  async updateOutputSelected(selected: boolean) {
+    if (this.transaction === null) {
+      throw new WalletError(ErrorMessages.TRANSACTION_IS_NULL);
     }
 
-    const walletData = wallet.getWalletData();
-    if (walletData === null) {
-      // If the user resets the wallet right after sending the transaction, walletData might be null
-      return;
-    }
-
-    const historyTransactions = 'historyTransactions' in walletData ? walletData.historyTransactions : {};
-    const allTokens = 'allTokens' in walletData ? walletData.allTokens : [];
-
-    // Before sending the tx to be mined, we iterate through the inputs and set selected_as_input
+    // Mark all inputs as selected
     for (const input of this.transaction.inputs) {
-      if (input.hash in historyTransactions) {
-        historyTransactions[input.hash].outputs[input.index]['selected_as_input'] = selected;
-      } else {
-        // This isn't supposed to happen but it's definitely happening in a race condition.
-        console.log(`updateOutputSelected: Error updating output as selected=${selected}. ${input.hash} is not in the storage data. Transactions history length: ${Object.values(historyTransactions).length}`);
-      }
-    }
-    wallet.saveAddressHistory(historyTransactions, allTokens);
-
-    if (selected && this._unmarkAsSelectedTimer === null) {
-      // Schedule to set all those outputs as not selected later
-      const myStore = storage.store;
-      this._unmarkAsSelectedTimer = setTimeout(() => {
-        this.updateOutputSelected(false, myStore);
-      }, SELECT_OUTPUTS_TIMEOUT);
-    } else if (!selected && this._unmarkAsSelectedTimer !== null) {
-      // If we unmark the outputs as selected we can already clear the timeout
-      clearTimeout(this._unmarkAsSelectedTimer);
-      this._unmarkAsSelectedTimer = null;
+      await this.storage.utxoSelectAsInput({txId: input.hash, index: input.index}, selected, SELECT_OUTPUTS_TIMEOUT);
     }
   }
 }

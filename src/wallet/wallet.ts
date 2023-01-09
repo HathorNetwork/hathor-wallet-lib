@@ -334,7 +334,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       } else if (data.status !== 'ready') {
         // At this stage, if the wallet is not `ready` or `creating` we should
         // throw an error as there are only three states: `ready`, `creating` or `error`
-        throw new WalletRequestError(ErrorMessages.WALLET_STATUS_ERROR);
+        throw new WalletRequestError(ErrorMessages.WALLET_STATUS_ERROR, {cause: data.status});
       }
 
       await this.onWalletReady();
@@ -554,7 +554,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
           // Only possible states are 'ready', 'creating' and 'error', if status
           // is not ready or creating, we should reject the promise
           clearInterval(pollIntervalTimer);
-          return reject(new WalletRequestError('Error getting wallet status.'));
+          return reject(new WalletRequestError('Error getting wallet status.', {cause: data.status}));
         }
       }, WALLET_STATUS_POLLING_INTERVAL);
     });

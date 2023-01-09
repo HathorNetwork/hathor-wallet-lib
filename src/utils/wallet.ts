@@ -164,7 +164,7 @@ const wallet = {
       if (error instanceof Error) {
         throw new XPubError(error.message);
       } else {
-        throw new XPubError(error);
+        throw new XPubError(error as string);
       }
     }
     if (index === undefined) {
@@ -277,7 +277,7 @@ const wallet = {
       if (error instanceof Error) {
         throw new XPubError(error.message);
       } else {
-        throw new XPubError(error);
+        throw new XPubError(error as string);
       }
     }
 

@@ -9,7 +9,7 @@
 import { CREATE_TOKEN_TX_VERSION, HATHOR_TOKEN_CONFIG, TOKEN_DEPOSIT_PERCENTAGE, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../constants';
 import helpers from './helpers';
 import buffer from 'buffer';
-import { IDataInput, IDataOutput, IDataTx, IStorage } from '../types';
+import { IDataInput, IDataOutput, IDataTx, IHistoryOutput, IStorage } from '../types';
 import { getAddressType } from './address';
 import { InsufficientFundsError } from '../errors';
 
@@ -411,6 +411,11 @@ const tokens = {
 
     const txData = await this.prepareMintTxData(address, mintAmount, storage, mintOptions);
     if (isNFT) {
+      if (nftData === null) {
+        // This should never happen since isNFT is true only if nftData is not null
+        // But the typescript compiler doesn't seem to understand that
+        throw new Error('this should not happen');
+      }
       // After the transaction data is completed
       // if it's an NFT I must add the first output as the data script
       // For NFT data the value is always 0.01 HTR (i.e. 1 integer)

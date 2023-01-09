@@ -26,6 +26,7 @@ import {
   IDataInput,
   IDataOutput,
   isDataOutputCreateToken,
+  IFillTxOptions,
 } from '../types';
 import transaction from '../utils/transaction';
 import config, { Config } from '../config';
@@ -207,7 +208,7 @@ export class Storage implements IStorage {
    * @async
    * @returns {Promise<void>}
    */
-  async fillTx(tx: IDataTx, { changeAddress }: { changeAddress?: string } = {}): Promise<void> {
+  async fillTx(tx: IDataTx, { changeAddress, skipAuthorities = true, chooseInputs = true }: IFillTxOptions = {}): Promise<{inputs: IDataInput[], outputs: IDataOutput[]}> {
     function getEmptyBalance(): Record<'funds'|'mint'|'melt', number> {
       return {'funds': 0, 'mint': 0, 'melt': 0};
     }
@@ -272,6 +273,10 @@ export class Storage implements IStorage {
     for (const [token, balance] of tokensBalance) {
       // match funds
       if (balance.funds > 0) {
+        if (!chooseInputs) {
+          // We cannot choose inputs, so we fail
+          throw new Error(`Insufficient funds in the given inputs for ${token}, missing ${balance.funds} more tokens.`);
+        }
         // We have a surplus of this token on the outputs, so we need to find utxos to match
         let foundAmount = 0;
         for await (const utxo of this.selectUtxos({ token, authorities: 0, target_amount: balance.funds})) {
@@ -301,8 +306,17 @@ export class Storage implements IStorage {
         });
       }
 
+      if (skipAuthorities) {
+        // We will
+        continue;
+      }
+
       // match mint
       if (balance.mint > 0) {
+        if (!chooseInputs) {
+          // We cannot choose inputs, so we fail
+          throw new Error(`Insufficient authority in the given inputs for ${token}, missing ${balance.mint} more mint authority utxos.`);
+        }
         // We have a surplus of this token on the outputs, so we need to find utxos to match
         let foundAmount = 0;
         // We use max_utxos to find at most `balance.mint` inputs
@@ -337,6 +351,10 @@ export class Storage implements IStorage {
 
       // match melt
       if (balance.melt > 0) {
+        if (!chooseInputs) {
+          // We cannot choose inputs, so we fail
+          throw new Error(`Insufficient authority in the given inputs for ${token}, missing ${balance.melt} more melt authority utxos.`);
+        }
         // We have a surplus of this token on the outputs, so we need to find utxos to match
         let foundAmount = 0;
         // We use max_utxos to find at most `balance.melt` inputs
@@ -379,14 +397,14 @@ export class Storage implements IStorage {
       throw new Error('When over the maximum amount of inputs/outputs');
     }
 
-    for (const input of newInputs) {
-      tx.inputs.push(input);
-    }
-    for (const output of tx.outputs) {
-      tx.outputs.push(output);
-    }
+    // for (const input of newInputs) {
+    //   tx.inputs.push(input);
+    // }
+    // for (const output of tx.outputs) {
+    //   tx.outputs.push(output);
+    // }
 
-    // return {newInputs, newOutputs}
+    return {inputs: newInputs, outputs: newOutputs}
   }
 
   /**
@@ -417,7 +435,9 @@ export class Storage implements IStorage {
       if (ttl) {
         setTimeout(() => {
           if (!markAs) {
-            this.utxosSelectedAsInput.delete(utxoId);
+            if (this.utxosSelectedAsInput.has(utxoId)) {
+              this.utxosSelectedAsInput.delete(utxoId);
+            }
           }
         }, ttl);
       }

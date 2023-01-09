@@ -515,18 +515,17 @@ export class MemoryStore implements IStore {
   async cleanStorage(cleanHistory: boolean = false, cleanAddresses: boolean = false): Promise<void> {
     this.accessData = null;
     if (cleanHistory) {
-      this.tokens = new Map<string, IStorageToken>();
-      this.tokensMetadata = new Map<string, IStorageTokenMetadata>();
-      this.registeredTokens = new Map<string, IStorageToken>();
-      this.history = new Map<string, IStorageTx>();
-      this.utxos = new Map<string, IStorageUTXO>();
-      // wallet data will be kept
+      this.tokens = new Map<string, ITokenData>();
+      this.tokensMetadata = new Map<string, ITokenMetadata>();
+      this.registeredTokens = new Map<string, ITokenData>();
+      this.history = new Map<string, IHistoryTx>();
+      this.utxos = new Map<string, IUtxo>();
     }
 
     if (cleanAddresses) {
-      this.addresses = new Map<string, IStorageAddress>();
+      this.addresses = new Map<string, IAddressInfo>();
       this.addressIndexes = new Map<number, string>();
-      this.addressesMetadata = new Map<string, IStorageAddressMetadata>();
+      this.addressesMetadata = new Map<string, IAddressMetadata>();
       this.walletData = {...this.walletData, ...DEAFULT_ADDRESSES_WALLET_DATA};
     }
   }
