@@ -6,6 +6,7 @@
  */
 
 import HathorWallet from '../src/new/wallet';
+import txApi from '../src/api/txApi';
 import { WalletFromXPubGuard } from '../src/errors';
 import Transaction from '../src/models/transaction';
 import Input from '../src/models/input';
@@ -44,6 +45,84 @@ test('checkAddressesMine', async () => {
     WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp: true,
     WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ: false,
   });
+});
+
+test('getFullTxById', async () => {
+  const hWallet = new FakeHathorWallet();
+
+  const getTxSpy = jest.spyOn(txApi, 'getTransaction')
+
+  getTxSpy.mockImplementation((_txId, resolve) => {
+    resolve({
+      success: true,
+      tx: { hash: 'tx1' },
+      meta: {},
+    });
+  });
+
+  const getFullTxByIdResponse = await hWallet.getFullTxById('tx1');
+
+  expect(getFullTxByIdResponse.success).toStrictEqual(true);
+  expect(getFullTxByIdResponse.tx.hash).toStrictEqual('tx1');
+
+  getTxSpy.mockImplementation((_txId, resolve) => resolve({
+    success: false,
+    message: 'Invalid tx',
+  }));
+
+  await expect(hWallet.getFullTxById('tx1')).rejects.toThrowError('Invalid transaction tx1');
+});
+
+test('getTxConfirmationData', async () => {
+  const hWallet = new FakeHathorWallet();
+
+  const getConfirmationDataSpy = jest.spyOn(txApi, 'getConfirmationData')
+
+  const mockData = {
+    success: true,
+    accumulated_weight: 67.45956109191802,
+    accumulated_bigger: true,
+    stop_value: 67.45416781056525,
+    confirmation_level: 1,
+  };
+
+  getConfirmationDataSpy.mockImplementation((_txId, resolve) => {
+    resolve(mockData);
+  });
+
+  const getConfirmationDataResponse = await hWallet.getTxConfirmationData('tx1');
+
+  expect(getConfirmationDataResponse).toStrictEqual(mockData);
+
+  getConfirmationDataSpy.mockImplementation((_txId, resolve) => resolve({
+    success: false,
+    message: 'Invalid tx',
+  }));
+
+  await expect(hWallet.getTxConfirmationData('tx1')).rejects.toThrowError('Invalid transaction tx1');
+});
+
+test('graphvizNeighborsQuery', async () => {
+  const hWallet = new FakeHathorWallet();
+
+  const getGraphvizSpy = jest.spyOn(txApi, 'getGraphviz')
+
+  const mockData = 'digraph {}';
+
+  getGraphvizSpy.mockImplementation((_url, resolve) => {
+    resolve(mockData);
+  });
+
+  const graphvizNeighborsQueryResponse = await hWallet.graphvizNeighborsQuery('tx1', 'type', 1);
+
+  expect(graphvizNeighborsQueryResponse).toStrictEqual(mockData);
+
+  getGraphvizSpy.mockImplementation((_url, resolve) => resolve({
+    success: false,
+    message: 'Invalid tx',
+  }));
+
+  await expect(hWallet.graphvizNeighborsQuery('tx1', 'type', 1)).rejects.toThrowError('Invalid transaction tx1');
 });
 
 test('Protected xpub wallet methods', async () => {
