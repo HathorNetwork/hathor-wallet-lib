@@ -399,7 +399,7 @@ const wallet = {
    */
   getP2SHInputData(signatures: Buffer[], redeemScript: Buffer): Buffer {
     // numSignatures is the first opcode
-    const numSignatures = redeemScript.readUInt8() - OP_0.readUInt8();
+    const numSignatures = redeemScript.readUInt8(0) - OP_0.readUInt8(0);
     if (signatures.length !== numSignatures) {
       throw new Error('Signatures are incompatible with redeemScript');
     }
