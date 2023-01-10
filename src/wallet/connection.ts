@@ -98,38 +98,22 @@ export class DummyWalletServiceConnection implements IConnection {
   public readonly isDummyConnection = true;
   public walletId?: string;
 
-  private currentNetwork: string;
-  private currentServer: string;
   protected state: ConnectionState;
 
   constructor(options: WalletServiceConnectionParams = { walletId: 'dummy-wallet' }) {
-    const {
-      walletId,
-      network,
-      servers,
-    } = {
-      ...DEFAULT_PARAMS,
-      ...options,
-    };
-
-    if (!network) {
-      throw Error('You must explicitly provide the network.');
-    }
-
-    this.walletId = walletId;
-    this.currentNetwork = network || 'dummynet';
+    this.walletId = options.walletId;
     this.state = ConnectionState.CLOSED;
-    this.currentServer = servers[0] || config.getServerUrl();
   }
 
   /**
    * Dummy method to simulate the EventEmitter.on method to avoid errors
+   * when in the wallet initialization it set listeners to the connection.
    * @param _event dummy event
    * @param _listener dummy listener
    * @returns dummy emitter
    */
   on(_event: string, _listener: (...args: any[]) => void): EventEmitter {
-    // return a dummy emitter that does nothing
+    // return a singleton dummy emitter that does nothing
     return new EventEmitter();
   }
 
@@ -153,23 +137,23 @@ export class DummyWalletServiceConnection implements IConnection {
     // There is nothing to handle
   }
 
-  onConnectionChange(value: boolean): void {
+  onConnectionChange(_value: boolean): void {
     // There is nothing to change
   }
 
-  setState(state: ConnectionState): void {
-    this.state = state;
+  setState(_state: ConnectionState): void {
+    // There is nothing to set
   }
 
   getCurrentServer(): string {
-    return this.currentServer;
+    return 'dummy-server';
   }
 
   getCurrentNetwork(): string {
-    return this.currentNetwork;
+    return 'dummy-network';
   }
 
-  setWalletId(walletId: string) {
-    this.walletId = walletId;
+  setWalletId(_walletId: string) {
+    // There is nothing to set
   }
 }
