@@ -8,7 +8,6 @@
 import { Utxo } from '../wallet/types';
 import { UtxoError } from '../errors';
 import { HistoryTransactionOutput } from '../models/types';
-import wallet from '../wallet';
 import {crypto as cryptoBL, PrivateKey, HDPrivateKey} from 'bitcore-lib'
 import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, HATHOR_TOKEN_CONFIG, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION } from '../constants';
 import Transaction from '../models/transaction';
@@ -101,7 +100,7 @@ const transaction = {
     for await (const {tx: spentTx, input} of storage.getSpentTxs(tx.inputs)) {
       const spentOut = spentTx.outputs[input.index];
       if (!spentOut.decoded.address) {
-        // This is not a wallet output	
+        // This is not a wallet output
         continue;
       }
       const addressInfo = await storage.getAddressInfo(spentOut.decoded.address);
@@ -171,7 +170,6 @@ const transaction = {
    * @returns {Utxo}
    *
    * @memberof transaction
-   * @inner
    */
   utxoFromHistoryOutput(
     txId: string,
@@ -179,7 +177,7 @@ const transaction = {
     txout: HistoryTransactionOutput,
     { addressPath = '' }: { addressPath?: string },
   ): Utxo {
-    const isAuthority = wallet.isAuthorityOutput(txout);
+    const isAuthority = this.isAuthorityOutput(txout);
 
     return {
       txId,
@@ -195,6 +193,13 @@ const transaction = {
     };
   },
 
+  /**
+   * Calculate the balance of a transaction
+   *
+   * @param tx Transaction to get balance from
+   * @param storage Storage to get metadata from
+   * @returns {Promise<Record<string, IBalance>>} Balance of the transaction
+   */
   async getTxBalance(tx: IHistoryTx, storage: IStorage): Promise<Record<string, IBalance>> {
     const balance: Record<string, IBalance> = {};
     const getEmptyBalance = (): IBalance => ({
@@ -260,6 +265,13 @@ const transaction = {
     return balance;
   },
 
+  /**
+   * Get the token_data for a given output
+   *
+   * @param {IDataOutput} output output data
+   * @param {string[]} tokens List of tokens in the transaction
+   * @returns {number} Calculated TokenData for the output token
+   */
   getTokenDataFromOutput(output: IDataOutput, tokens: string[]): number {
     if (isDataOutputCreateToken(output)) {
       // This output does not contain the token since it will be creating
@@ -311,29 +323,50 @@ const transaction = {
     }
   },
 
-  async prepareTransaction(tx: IDataTx, pinCode: string, storage: IStorage): Promise<Transaction> {
-    const network = storage.config.getNetwork();
-    
-    const inputs: Input[] = tx.inputs.map(input => new Input(input.txId, input.index));
-    const outputs: Output[] = tx.outputs.map(output => {
+  /**
+   * Create a Transaction instance from tx data.
+   *
+   * @param {IDataTx} txData Tx data to create the transaction
+   * @param {Network} network network to use
+   * @returns {Transaction}
+   */
+  createTransactionFromData(txData: IDataTx, network: Network): Transaction {
+    const inputs: Input[] = txData.inputs.map(input => {
+      const inputObj = new Input(input.txId, input.index);
+      if (input.data) {
+        inputObj.setData(Buffer.from(input.data, 'hex'));
+      }
+      return inputObj;
+    });
+    const outputs: Output[] = txData.outputs.map(output => {
       const script = this.createOutputScript(output, network);
-      const tokenData = this.getTokenDataFromOutput(output, tx.tokens);
+      const tokenData = this.getTokenDataFromOutput(output, txData.tokens);
       return new Output(output.value, script, { tokenData });
     });
-    let txObj: Transaction;
-    if (tx.version === CREATE_TOKEN_TX_VERSION) {
-      txObj = new CreateTokenTransaction(tx.name!, tx.symbol!, inputs, outputs);
-    } else if (tx.version === DEFAULT_TX_VERSION) {
-      txObj = new Transaction(inputs, outputs, { version: tx.version });
+    if (txData.version === CREATE_TOKEN_TX_VERSION) {
+      return new CreateTokenTransaction(txData.name!, txData.symbol!, inputs, outputs);
+    } else if (txData.version === DEFAULT_TX_VERSION) {
+      return new Transaction(inputs, outputs, { version: txData.version });
     } else {
       throw new ParseError('Invalid transaction version.');
     }
+  },
 
-    await this.signTransaction(txObj, storage, pinCode);
-    // XXX: check tx validity? number of inputs and outputs?
+  /**
+   * Prepare a Transaction instance from the transaction data and storage
+   *
+   * @param tx tx data to be prepared
+   * @param pinCode pin to unlock the mainKey for signatures
+   * @param storage Storage to get the mainKey
+   * @returns {Promise<Transaction>} Prepared transaction
+   */
+  async prepareTransaction(txData: IDataTx, pinCode: string, storage: IStorage): Promise<Transaction> {
+    const network = storage.config.getNetwork();
+    const tx = this.createTransactionFromData(txData, network);
+    await this.signTransaction(tx, storage, pinCode);
+    tx.prepareToSend();
 
-    txObj.prepareToSend();
-    return txObj;
+    return tx;
   },
 
   /**
@@ -361,14 +394,21 @@ const transaction = {
    *
    * @param {Buffer} signature Input signature
    * @param {Buffer} publicKey Input public key
+   * @returns {Buffer} Input data
    */
-  createInputData(signature: Buffer, publicKey: Buffer) {
+  createInputData(signature: Buffer, publicKey: Buffer): Buffer {
     let arr = [];
     this.pushDataToStack(arr, signature);
     this.pushDataToStack(arr, publicKey);
     return Buffer.concat(arr);
   },
 
+  /**
+   * Calculate the authorities data for an output
+   *
+   * @param output History output
+   * @returns {number} Authorities from output
+   */
   authoritiesFromOutput(output: IHistoryOutput): number {
     let authorities = 0;
     if (this.isMint(output)) {

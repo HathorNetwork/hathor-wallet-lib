@@ -42,7 +42,7 @@ class P2SH {
    * @memberof P2SH
    * @inner
    */
-  getType(): string {
+  getType(): 'p2sh' {
     return 'p2sh';
   }
 

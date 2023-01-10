@@ -12,37 +12,34 @@ import P2PKH from '../models/p2pkh';
 import ScriptData from '../models/script_data';
 import Transaction from '../models/transaction';
 import { AddressError, InvalidPartialTxError } from '../errors';
-import Network from '../models/network';
-import HathorWallet from '../new/wallet';
 import {
   HATHOR_TOKEN_CONFIG,
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
 } from '../constants';
 
-import transaction from '../transaction';
-import helpers from '../utils/helpers';
 import transactionUtils from '../utils/transaction';
 import dateFormatter from '../date';
 
 import { OutputType, Utxo } from './types';
 import { Balance } from '../models/types';
+import { IStorage } from '../types';
 
 class PartialTxProposal {
-  public network: Network;
-
   public partialTx: PartialTx;
 
   public signatures: PartialTxInputData|null;
 
   public transaction: Transaction|null;
 
+  public storage: IStorage;
+
   /**
    * @param {Network} network
    */
-  constructor(network: Network) {
-    this.network = network;
-    this.partialTx = new PartialTx(this.network);
+  constructor(storage: IStorage) {
+    this.storage = storage;
+    this.partialTx = new PartialTx(storage.config.getNetwork());
     this.signatures = null;
     this.transaction = null;
   }
@@ -58,9 +55,10 @@ class PartialTxProposal {
    *
    * @returns {PartialTxProposal}
    */
-  static fromPartialTx(serialized: string, network: Network): PartialTxProposal {
+  static fromPartialTx(serialized: string, storage: IStorage): PartialTxProposal {
+    const network = storage.config.getNetwork();
     const partialTx = PartialTx.deserialize(serialized, network);
-    const proposal = new PartialTxProposal(network);
+    const proposal = new PartialTxProposal(storage);
     proposal.partialTx = partialTx;
     return proposal;
   }
@@ -68,7 +66,6 @@ class PartialTxProposal {
   /**
    * Add inputs sending the amount of tokens specified, may add a change output.
    *
-   * @param {HathorWallet} wallet Wallet which will provide the tokens.
    * @param {string} token UID of token that is being sent
    * @param {number} value Quantity of tokens being sent
    * @param {Object} [options]
@@ -76,8 +73,7 @@ class PartialTxProposal {
    * @param {string|null} [options.changeAddress=null] If we add change, use this address instead of getting a new one from the wallet.
    * @param {boolean} [options.markAsSelected=true] Mark the utxo with `selected_as_input`.
    */
-  addSend(
-    wallet: HathorWallet,
+  async addSend(
     token: string,
     value: number,
     {
@@ -89,9 +85,26 @@ class PartialTxProposal {
     this.resetSignatures();
 
     // Use the pool of utxos or all wallet utxos.
-    const allUtxos: Utxo[] = (utxos && utxos.length > 0)
-      ? utxos
-      : [...wallet.getAllUtxos({ token })].filter(utxo => utxo.authorities === 0);
+    let allUtxos: Utxo[];
+    if (utxos && utxos.length > 0) {
+      allUtxos = utxos;
+    } else {
+      allUtxos = [];
+      for await (const utxo of this.storage.selectUtxos({token, authorities: 0})) {
+        allUtxos.push({
+          txId: utxo.txId,
+          index: utxo.index,
+          value: utxo.value,
+          tokenId: utxo.token,
+          address: utxo.address,
+          authorities: 0,
+          timelock: utxo.timelock,
+          heightlock: null,
+          locked: false,
+          addressPath: '',
+        });
+      }
+    }
 
     // Filter pool of utxos for only utxos from the token and not already in the partial tx
     const currentUtxos = this.partialTx.inputs.map(input => `${input.hash}-${input.index}`);
@@ -101,7 +114,6 @@ class PartialTxProposal {
 
     for (const utxo of utxosDetails.utxos) {
       this.addInput(
-        wallet,
         utxo.txId,
         utxo.index,
         utxo.value,
@@ -112,7 +124,7 @@ class PartialTxProposal {
 
     // add change output if needed
     if (utxosDetails.changeAmount > 0) {
-      const address: string = changeAddress || wallet.getCurrentAddress().address;
+      const address: string = changeAddress || (await this.storage.getCurrentAddress());
       this.addOutput(
         token,
         utxosDetails.changeAmount,
@@ -125,7 +137,6 @@ class PartialTxProposal {
   /**
    * Add outputs receiving the amount of tokens specified.
    *
-   * @param {HathorWallet} wallet Wallet which will receive the tokens.
    * @param {string} token UID of token that is being sent
    * @param {number} value Quantity of tokens being sent
    * @param {Object} [options]
@@ -133,8 +144,7 @@ class PartialTxProposal {
    * @param {string|null} [options.address=null] Output address to receive the tokens.
    *
    */
-  addReceive(
-    wallet: HathorWallet,
+  async addReceive(
     token: string,
     value: number,
     { timelock = null, address = null }: { timelock?: number|null, address?: string|null } = {},
@@ -142,14 +152,13 @@ class PartialTxProposal {
     this.resetSignatures();
 
     // get an address of our wallet and add the output
-    const addr: string = address || wallet.getCurrentAddress().address;
+    const addr: string = address ? address : (await this.storage.getCurrentAddress());
     this.addOutput(token, value, addr, { timelock });
   }
 
   /**
    * Add an UTXO as input on the partial data.
    *
-   * @param {HathorWallet} wallet Wallet which will provide the tokens.
    * @param {string} hash Transaction hash
    * @param {number} index UTXO index on the outputs of the transaction.
    * @param {number} value UTXO value.
@@ -160,7 +169,6 @@ class PartialTxProposal {
    * @param {boolean} [options.markAsSelected=true] Mark the utxo with `selected_as_input`.
    */
   addInput(
-    wallet: HathorWallet,
     hash: string,
     index: number,
     value: number,
@@ -178,7 +186,7 @@ class PartialTxProposal {
     this.resetSignatures();
 
     if (markAsSelected) {
-      wallet.markUtxoSelected(hash, index);
+      this.storage.utxoSelectAsInput({txId: hash, index}, true)
     }
 
     this.partialTx.addInput(hash, index, value, address, { token, authorities });
@@ -209,8 +217,8 @@ class PartialTxProposal {
   ) {
     this.resetSignatures();
 
-    const addr = new Address(address, { network: this.network });
-    let script;
+    const addr = new Address(address, { network: this.storage.config.getNetwork() });
+    let script: P2SH | P2PKH;
     switch (addr.getType()) {
       case OutputType.P2SH:
         script = new P2SH(addr, { timelock });
@@ -231,7 +239,7 @@ class PartialTxProposal {
    *
    * @returns {Record<string, Balance>}
    */
-  calculateBalance(wallet: HathorWallet): Record<string, Balance> {
+  async calculateBalance(): Promise<Record<string, Balance>> {
     const currentTimestamp = dateFormatter.dateToTimestamp(new Date());
     const isTimelocked = timelock => currentTimestamp < timelock;
 
@@ -243,7 +251,7 @@ class PartialTxProposal {
     const tokenBalance: Record<string, Balance> = {};
 
     for (const input of this.partialTx.inputs) {
-      if (!wallet.isAddressMine(input.address)) continue;
+      if (!await this.storage.isAddressMine(input.address)) continue;
 
       if (!tokenBalance[input.token]) {
         tokenBalance[input.token] = getEmptyBalance();
@@ -260,12 +268,12 @@ class PartialTxProposal {
     }
 
     for (const output of this.partialTx.outputs) {
-      const decodedScript = output.decodedScript || output.parseScript(this.network);
+      const decodedScript = output.decodedScript || output.parseScript(this.storage.config.getNetwork());
 
       // Catch data output and non-standard scripts cases
       if (decodedScript instanceof ScriptData || !decodedScript) continue;
 
-      if (!wallet.isAddressMine(decodedScript.address.base58)) continue;
+      if (!await this.storage.isAddressMine(decodedScript.address.base58)) continue;
 
       if (!tokenBalance[output.token]) {
         tokenBalance[output.token] = getEmptyBalance();
@@ -314,9 +322,9 @@ class PartialTxProposal {
    *
    * @param {HathorWallet} wallet Wallet of the UTXOs.
    */
-  unmarkAsSelected(wallet: HathorWallet) {
+  unmarkAsSelected() {
     for (const input of this.partialTx.inputs) {
-      wallet.markUtxoSelected(input.hash, input.index, false);
+      this.storage.utxoSelectAsInput({txId: input.hash, index: input.index}, false);
     }
   }
 
@@ -361,10 +369,9 @@ class PartialTxProposal {
     }
 
     // sign inputs from the loaded wallet and save input data
-    const txdata = transaction.prepareData(this.partialTx.getTxData(), pin);
-
-    for (const [index, input] of txdata.inputs.entries()) {
-      if ('data' in input && input.data.length > 0) {
+    await transactionUtils.signTransaction(tx, this.storage, pin);
+    for (const [index, input] of tx.inputs.entries()) {
+      if(input.data) {
         // add all signatures we know of this tx
         this.signatures.addData(index, input.data);
       }
@@ -391,17 +398,11 @@ class PartialTxProposal {
       return this.transaction;
     }
 
-    const txdata = this.partialTx.getTxData();
-
     for (const [index, inputData] of Object.entries(this.signatures.data)) {
-      txdata.inputs[index].data = inputData;
+      this.partialTx.inputs[index].setData(inputData);
     }
-
-    this.transaction = helpers.createTxFromData(
-      transaction.prepareData(txdata, '', { getSignature: false }),
-      this.network,
-    );
-
+    this.transaction = this.partialTx.getTx();
+    this.transaction.prepareToSend();
     return this.transaction;
   }
 }

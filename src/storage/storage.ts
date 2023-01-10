@@ -509,6 +509,24 @@ export class Storage implements IStorage {
     }
   }
 
+  async getAuthPrivKey(pinCode: string): Promise<string> {
+    const accessData = await this.getAccessData();
+    if (accessData === null) {
+      throw new Error('Wallet is not initialized.');
+    }
+    if (accessData.authKey === undefined) {
+      throw new Error('Private key is not present on this wallet.');
+    }
+
+    try {
+      // decryptData handles pin validation
+      return decryptData(accessData.authKey, pinCode);
+    } catch(err: unknown) {
+      // FIXME: check error type to not hide crypto errors
+      throw new Error('Invalid PIN code.');
+    }
+  }
+
   async handleStop({connection, cleanStorage = false}: {connection?: FullNodeConnection, cleanStorage?: boolean} = {}): Promise<void> {
     if (connection) {
       for await (const addressInfo of this.getAllAddresses()) {

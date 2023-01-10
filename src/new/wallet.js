@@ -1450,7 +1450,7 @@ class HathorWallet extends EventEmitter {
     if (!pin) {
       return Promise.reject({success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED});
     }
-    const mintAddress = newOptions.address || this.getCurrentAddress().address;
+    const mintAddress = newOptions.address || (await this.getCurrentAddress()).address;
 
     const txData = await tokenUtils.prepareCreateTokenData(
       mintAddress,
