@@ -464,10 +464,10 @@ export interface FullNodeDecodedInput {
 }
 
 export interface FullNodeDecodedOutput {
-  type?: string;
+  type: string;
   address?: string;
   timelock?: number | null;
-  value?: number;
+  value: number;
   token_data?: number;
 }
 
@@ -508,7 +508,7 @@ export interface FullNodeTx {
 
 export interface FullNodeMeta {
   hash: string;
-  spent_outputs: any;
+  spent_outputs: Array<[number, Array<string>]>;
   received_by: string[];
   children: string[];
   conflict_with: string[];
@@ -527,7 +527,7 @@ export interface FullNodeTxResponse {
   meta: FullNodeMeta;
   success: boolean;
   message?: string;
-  spent_outputs?: any;
+  spent_outputs?: Record<string, string>;
 }
 
 export interface FullNodeTxConfirmationDataResponse {
