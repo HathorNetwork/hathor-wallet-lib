@@ -15,7 +15,7 @@ import { unpackToInt, unpackLen } from '../utils/buffer';
 import helpers from '../utils/helpers';
 import Input from './input';
 import Output from './output';
-import Transaction from './transaction'
+import Transaction from './transaction';
 import Network from './network';
 import { CreateTokenTxInvalid, InvalidOutputsError, NftValidationError } from '../errors';
 import buffer from 'buffer';

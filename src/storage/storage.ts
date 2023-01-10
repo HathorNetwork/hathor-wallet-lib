@@ -32,7 +32,7 @@ import transaction from '../utils/transaction';
 import config, { Config } from '../config';
 import { decryptData } from '../utils/crypto';
 import FullNodeConnection from '../new/connection';
-import { getAddressType } from 'src/utils/address';
+import { getAddressType } from '../utils/address';
 
 
 export class Storage implements IStorage {

@@ -27,7 +27,7 @@ import {
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
 } from '../constants';
-import { IDataInput, IDataOutput, IDataTx } from 'src/types';
+import { IDataInput, IDataOutput, IDataTx } from '../types';
 
 // type InputData = {
 //   tx_id: string,
