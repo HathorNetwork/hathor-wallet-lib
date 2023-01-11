@@ -7,6 +7,7 @@
 
 import { OP_PUSHDATA1 } from '../opcodes';
 import { DECIMAL_PLACES, DEFAULT_TX_VERSION, CREATE_TOKEN_TX_VERSION } from '../constants';
+import path from 'path';
 import buffer from 'buffer';
 import Long from 'long';
 import Transaction from '../models/transaction';
@@ -22,8 +23,10 @@ import Address from '../models/address';
 import { hexToBuffer, unpackToInt } from './buffer';
 import { crypto, encoding, Address as bitcoreAddress } from 'bitcore-lib';
 import { clone } from 'lodash';
-import { ParseError, CreateTokenTxInvalid } from '../errors';
+import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError, ParseError } from '../errors';
+
 import { ErrorMessages } from '../errorMessages';
+import config from '../config';
 
 /**
  * Helper methods
@@ -564,6 +567,62 @@ const helpers = {
   getOutputTypeFromAddress(address: string, network: Network): string {
     const addressObj = new Address(address, { network });
     return addressObj.getType();
+  },
+
+  /**
+   * Get the URL to connect to the websocket from the server URL of the wallet
+   *
+   * @return {string} Websocket URL
+   *
+   * @memberof Helpers
+   * @inner
+   */
+  getWSServerURL(url: string|null = null): string {
+    let serverURL: string;
+    if (url === null) {
+      serverURL = config.getServerUrl();
+    } else {
+      serverURL = url;
+    }
+
+    const pieces = serverURL.split(':');
+    const firstPiece = pieces.splice(0, 1);
+    let protocol = '';
+    if (firstPiece[0].indexOf('s') > -1) {
+      // Has ssl
+      protocol = 'wss';
+    } else {
+      // No ssl
+      protocol = 'ws';
+    }
+    serverURL = path.join(`${pieces.join(':')}`, 'ws/');
+    serverURL = `${protocol}:/${serverURL}`;
+    return serverURL;
+  },
+
+  /**
+   * Handle error for method transaction.prepareData
+   * Check if error is one of the expected and return the message
+   * Otherwise, throws the unexpected error
+   *
+   * @param {unknown} e Error thrown
+   *
+   * @return {string} Error message
+   * @memberof Helpers
+   * @inner
+   */
+  handlePrepareDataError(e: unknown): string {
+    if (e instanceof AddressError ||
+        e instanceof OutputValueError ||
+        e instanceof ConstantNotSet ||
+        e instanceof CreateTokenTxInvalid ||
+        e instanceof MaximumNumberOutputsError ||
+        e instanceof MaximumNumberInputsError) {
+      return e.message;
+    } else {
+      // Unhandled error
+      throw e;
+    }
   },
 }
 

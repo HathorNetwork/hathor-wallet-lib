@@ -96,6 +96,7 @@ const transaction = {
   async signTransaction(tx: Transaction, storage: IStorage, pinCode: string): Promise<Transaction> {
     const xprivstr = await storage.getMainXPrivKey(pinCode);
     const xprivkey = HDPrivateKey.fromString(xprivstr);
+    const dataToSignHash = tx.getDataToSignHash();
 
     for await (const {tx: spentTx, input} of storage.getSpentTxs(tx.inputs)) {
       const spentOut = spentTx.outputs[input.index];
@@ -109,7 +110,7 @@ const transaction = {
         continue;
       }
       const xpriv = xprivkey.deriveNonCompliantChild(addressInfo.bip32AddressIndex);
-      input.setData(tx.getSignature(xpriv.privateKey));
+      input.setData(this.getSignature(dataToSignHash, xpriv.privateKey));
     }
 
     return tx;

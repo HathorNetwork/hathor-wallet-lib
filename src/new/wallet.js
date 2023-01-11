@@ -2223,14 +2223,14 @@ class HathorWallet extends EventEmitter {
     const key = HDPrivateKey(xprivkey);
 
     const signatures = [];
-
+    const dataToSignHash = tx.getDataToSignHash();
     for (const indexes of await this.getWalletInputInfo(tx)) {
       const { addressIndex } = indexes;
       // Derive key to addressIndex
       const derivedKey = key.deriveNonCompliantChild(addressIndex);
       const privateKey = derivedKey.privateKey;
       // Get tx signature and populate transaction
-      const sigDER = tx.getSignature(privateKey);
+      const sigDER = transactionUtils.getSignature(dataToSignHash, privateKey);
       signatures.push({
         signature: sigDER.toString('hex'),
         pubkey: privateKey.publicKey.toString(),

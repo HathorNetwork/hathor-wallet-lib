@@ -8,7 +8,7 @@
 import { IStore, IAddressInfo, ITokenData, ITokenMetadata, IHistoryTx, IUtxo, IWalletAccessData, IUtxoFilterOptions, IBalance, IAddressMetadata, IWalletData } from '../types';
 import transaction from '../utils/transaction';
 import walletApi from '../api/wallet';
-import { GAP_LIMIT } from 'src/constants';
+import { GAP_LIMIT } from '../constants';
 
 
 const DEAFULT_ADDRESSES_WALLET_DATA = {

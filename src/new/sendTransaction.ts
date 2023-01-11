@@ -11,7 +11,7 @@ import transactionUtils from '../utils/transaction';
 import txApi from '../api/txApi';
 import { WalletError, SendTxError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
-import oldHelpers from '../helpers';
+import helpers from '../utils/helpers';
 import MineTransaction from '../wallet/mineTransaction';
 import Address from '../models/address';
 import { OutputType } from '../wallet/types';
@@ -218,7 +218,7 @@ class SendTransaction extends EventEmitter {
       this.transaction = await transactionUtils.prepareTransaction(txData, this.pin, this.storage);
       return this.transaction;
     } catch(e) {
-      const message = oldHelpers.handlePrepareDataError(e);
+      const message = helpers.handlePrepareDataError(e);
       throw new SendTxError(message);
     }
   }
@@ -269,7 +269,7 @@ class SendTransaction extends EventEmitter {
       this.transaction = await transactionUtils.prepareTransaction(this.fullTxData, this.pin, this.storage);
       return this.transaction;
     } catch(e) {
-      const message = oldHelpers.handlePrepareDataError(e);
+      const message = helpers.handlePrepareDataError(e);
       throw new SendTxError(message);
     }
   }

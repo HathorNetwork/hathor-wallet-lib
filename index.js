@@ -1,5 +1,4 @@
 const constants = require('./lib/constants');
-const helpers = require('./lib/helpers');
 const dateFormatter = require('./lib/date');
 const websocket = require('./lib/websocket');
 const errors = require('./lib/errors');
@@ -45,7 +44,6 @@ module.exports = {
   PartialTx,
   PartialTxInputData,
   PartialTxProposal: PartialTxProposal.default,
-  helpers: helpers.default,
   dateFormatter: dateFormatter.default,
   websocket: websocket.default,
   walletApi: walletApi.default,
