@@ -113,17 +113,6 @@ export class DummyWalletServiceConnection implements IConnection {
    * @returns dummy emitter
    */
   on(_event: string, _listener: (...args: any[]) => void): EventEmitter {
-    // return a singleton dummy emitter that does nothing
-    return new EventEmitter();
-  }
-
-  /**
-   * Dummy method to simulate the EventEmitter.on method to avoid errors
-   * @param _event dummy event
-   * @param _listener dummy listener
-   * @returns dummy emitter
-   */
-  on(_event: string, _listener: (...args: any[]) => void): EventEmitter {
     // return a dummy emitter that does nothing
     return new EventEmitter();
   }
