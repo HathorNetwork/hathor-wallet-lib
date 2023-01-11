@@ -82,11 +82,11 @@ const txApi = {
    * @inner
    */
   getConfirmationData(id, resolve) {
-    const data = {id};
-    return createRequestInstance(resolve).get(`transaction_acc_weight`, {params: data}).then((res) => {
+    const data = { id };
+    return createRequestInstance(resolve).get(`transaction_acc_weight`, { params: data }).then(res => {
       resolve(res.data);
     }, (res) => {
-      return Promise.reject(res);
+      Promise.reject(res);
     });
   },
 
@@ -141,7 +141,7 @@ const txApi = {
    */
   getDashboardTx(block, tx, resolve) {
     const data = {block, tx}
-    return createRequestInstance(resolve).get(`dashboard_tx`, {params: data}).then((res) => {
+    return createRequestInstance(resolve).get(`dashboard_tx`, {params: data}).then(res => {
       resolve(res.data);
     }, (res) => {
       return Promise.reject(res);
@@ -159,7 +159,7 @@ const txApi = {
    * @inner
    */
   getGraphviz(url, resolve) {
-    return createRequestInstance(resolve).get(url).then((res) => {
+    return createRequestInstance(resolve).get(url).then(res => {
       resolve(res.data);
     }, (res) => {
       return Promise.reject(res);

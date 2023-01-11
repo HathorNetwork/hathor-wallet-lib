@@ -2479,8 +2479,12 @@ class HathorWallet extends EventEmitter {
    * @returns {FullNodeTxResponse} Transaction data in the fullnode
    */
   async getFullTxById(txId) {
-    const tx = await new Promise(resolve => {
-      txApi.getTransaction(txId, resolve);
+    const tx = await new Promise((resolve, reject) => {
+      txApi.getTransaction(txId, resolve)
+        // txApi will call the `resolve` callback and end the promise chain,
+        // so if it falls here, we should throw
+        .then(() => reject(new Error('API client did not use the callback')))
+        .catch(err => reject(err));
     });
 
     if (!tx.success) {
@@ -2498,8 +2502,10 @@ class HathorWallet extends EventEmitter {
    * @returns {FullNodeTxConfirmationDataResponse} Transaction confirmation data
    */
   async getTxConfirmationData(txId) {
-    const confirmationData = await new Promise(resolve => {
-      txApi.getConfirmationData(txId, resolve);
+    const confirmationData = await new Promise((resolve, reject) => {
+      txApi.getConfirmationData(txId, resolve)
+        .then(() => reject(new Error('API client did not use the callback')))
+        .catch(err => reject(err));
     });
 
     if (!confirmationData.success) {
@@ -2524,8 +2530,10 @@ class HathorWallet extends EventEmitter {
     maxLevel,
   ) {
     const url = `${config.getServerUrl()}graphviz/neighbours.dot?tx=${txId}&graph_type=${graphType}&max_level=${maxLevel}`;
-    const graphvizData = await new Promise(resolve => {
-      txApi.getGraphviz(url, resolve);
+    const graphvizData = await new Promise((resolve, reject) => {
+      txApi.getGraphviz(url, resolve)
+        .then(() => reject(new Error('API client did not use the callback')))
+        .catch(err => reject(err));
     });
 
     // The response will either be a string with the graphviz data or an object
@@ -2540,7 +2548,7 @@ class HathorWallet extends EventEmitter {
 }
 
 // State constants.
-HathorWallet.CLOSED =  0;
+HathorWallet.CLOSED = 0;
 HathorWallet.CONNECTING = 1;
 HathorWallet.SYNCING = 2;
 HathorWallet.READY = 3;
