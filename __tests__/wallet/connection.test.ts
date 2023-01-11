@@ -43,25 +43,25 @@ describe('DummyWalletServiceConnection', () => {
     expect(() => connection.onConnectionChange(true)).not.toThrow();
   });
 
-  it('should change state when setState is called', () => {
+  it('should do nothing on setState call', () => {
     const connection = new DummyConnectionUnderTest();
     expect(() => connection.setState(ConnectionState.CONNECTED)).not.toThrow();
 
-    expect(connection.getState()).toStrictEqual(ConnectionState.CONNECTED);
+    expect(connection.getState()).toStrictEqual(ConnectionState.CLOSED);
   });
 
-  it('should return current server and network', () => {
+  it('should return dummy current server and network', () => {
     const connection = new DummyConnectionUnderTest({ network: 'testnet', walletId: 'walletId' });
-    expect(connection.getCurrentServer()).toEqual('http://localhost:8080/');
-    expect(connection.getCurrentNetwork()).toEqual('testnet');
+    expect(connection.getCurrentServer()).toEqual('dummy-server');
+    expect(connection.getCurrentNetwork()).toEqual('dummy-network');
   });
 
   // test setWalletId
-  it('should set walletId', () => {
+  it('should do nothing on setWalletId call', () => {
     const connection = new DummyConnectionUnderTest();
     expect(connection.walletId).toEqual('dummy-wallet');
 
     expect(() => connection.setWalletId('walletId')).not.toThrow();
-    expect(connection.walletId).toEqual('walletId');
+    expect(connection.walletId).toEqual('dummy-wallet');
   });
 });
