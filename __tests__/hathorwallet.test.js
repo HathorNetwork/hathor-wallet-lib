@@ -71,6 +71,19 @@ test('getFullTxById', async () => {
   }));
 
   await expect(hWallet.getFullTxById('tx1')).rejects.toThrowError('Invalid transaction tx1');
+
+  getTxSpy.mockImplementation(() => {
+    throw new Error('Unhandled error');
+  });
+
+  await expect(hWallet.getFullTxById('tx1')).rejects.toThrowError('Unhandled error');
+
+  // Resolve the promise without calling the resolve param
+  getTxSpy.mockImplementation(() => {
+    return Promise.resolve();
+  });
+
+  await expect(hWallet.getFullTxById('tx1')).rejects.toThrowError('API client did not use the callback');
 });
 
 test('getTxConfirmationData', async () => {
@@ -100,6 +113,15 @@ test('getTxConfirmationData', async () => {
   }));
 
   await expect(hWallet.getTxConfirmationData('tx1')).rejects.toThrowError('Invalid transaction tx1');
+
+  getConfirmationDataSpy.mockImplementation((_txId, resolve) => {
+    throw new Error('unhandled error');
+  });
+  await expect(hWallet.getTxConfirmationData('tx1')).rejects.toThrowError('unhandled error');
+
+  // Resolve the promise without calling the resolve param
+  getConfirmationDataSpy.mockImplementation(() => Promise.resolve());
+  await expect(hWallet.getTxConfirmationData('tx1')).rejects.toThrowError('API client did not use the callback');
 });
 
 test('graphvizNeighborsQuery', async () => {
@@ -123,6 +145,15 @@ test('graphvizNeighborsQuery', async () => {
   }));
 
   await expect(hWallet.graphvizNeighborsQuery('tx1', 'type', 1)).rejects.toThrowError('Invalid transaction tx1');
+
+  getGraphvizSpy.mockImplementation(() => {
+    throw new Error('unhandled error');
+  });
+  await expect(hWallet.graphvizNeighborsQuery('tx1', 'type', 1)).rejects.toThrowError('unhandled error');
+
+  // Resolve the promise without calling the resolve param
+  getGraphvizSpy.mockImplementation(() => Promise.resolve());
+  await expect(hWallet.graphvizNeighborsQuery('tx1', 'type', 1)).rejects.toThrowError('API client did not use the callback');
 });
 
 test('Protected xpub wallet methods', async () => {
