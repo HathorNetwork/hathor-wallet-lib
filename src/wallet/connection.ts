@@ -94,27 +94,16 @@ export default class WalletServiceConnection extends BaseConnection {
 /**
  * This connection is used when the wallet has websocket disabled.
  */
-export class DummyWalletServiceConnection implements IConnection {
+export class DummyWalletServiceConnection extends EventEmitter implements IConnection {
   public readonly isDummyConnection = true;
   public walletId?: string;
 
   protected state: ConnectionState;
 
   constructor(options: WalletServiceConnectionParams = { walletId: 'dummy-wallet' }) {
+    super();
     this.walletId = options.walletId;
     this.state = ConnectionState.CLOSED;
-  }
-
-  /**
-   * Dummy method to simulate the EventEmitter.on method to avoid errors
-   * when in the wallet initialization it set listeners to the connection.
-   * @param _event dummy event
-   * @param _listener dummy listener
-   * @returns dummy emitter
-   */
-  on(_event: string, _listener: (...args: any[]) => void): EventEmitter {
-    // return a dummy emitter that does nothing
-    return new EventEmitter();
   }
 
   start(): void {
