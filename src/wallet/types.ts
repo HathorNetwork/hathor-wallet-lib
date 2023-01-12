@@ -319,6 +319,17 @@ export interface IHathorWallet {
   getTokenDetails(tokenId: string): Promise<TokenDetailsObject>;
   getVersionData(): Promise<FullNodeVersionData>;
   checkAddressesMine(addresses: string[]): Promise<WalletAddressMap>;
+  getFullTxById(
+    txId: string,
+  ): Promise<FullNodeTxResponse>;
+  getTxConfirmationData(
+    txId: string,
+  ): Promise<FullNodeTxConfirmationDataResponse>;
+  graphvizNeighborsQuery(
+    txId: string,
+    graphType: string,
+    maxLevel: number,
+  ): Promise<string>;
 }
 
 export interface ISendTransaction {
@@ -435,4 +446,94 @@ export enum OutputType {
   P2PKH = 'p2pkh',
   P2SH = 'p2sh',
   DATA = 'data',
+}
+
+export interface FullNodeToken {
+  uid: string;
+  // Hathor will return name: null and symbol: null
+  name: string | null;
+  symbol: string | null;
+}
+
+export interface FullNodeDecodedInput {
+  type: string;
+  address: string;
+  timelock?: number | null;
+  value: number;
+  token_data: number;
+}
+
+export interface FullNodeDecodedOutput {
+  type: string;
+  address?: string;
+  timelock?: number | null;
+  value: number;
+  token_data?: number;
+}
+
+export interface FullNodeInput {
+  value: number;
+  token_data: number;
+  script: string;
+  decoded: FullNodeDecodedInput;
+  tx_id: string;
+  index: number;
+  token?: string | null;
+  spent_by?: string | null;
+}
+
+export interface FullNodeOutput {
+  value: number;
+  token_data: number;
+  script: string;
+  decoded: FullNodeDecodedOutput;
+  token?: string | null;
+  spent_by?: string | null;
+}
+
+export interface FullNodeTx {
+  hash: string;
+  nonce: string;
+  timestamp: number;
+  version: number;
+  weight: number;
+  parents: string[];
+  inputs: FullNodeInput[];
+  outputs: FullNodeOutput[];
+  tokens: FullNodeToken[];
+  token_name?: string | null;
+  token_symbol?: string | null;
+  raw: string;
+}
+
+export interface FullNodeMeta {
+  hash: string;
+  spent_outputs: Array<[number, Array<string>]>;
+  received_by: string[];
+  children: string[];
+  conflict_with: string[];
+  voided_by: string[];
+  twins: string[];
+  accumulated_weight: number;
+  score: number;
+  height: number;
+  validation?: string;
+  first_block?: string | null;
+  first_block_height?: number | null;
+}
+
+export interface FullNodeTxResponse {
+  tx: FullNodeTx;
+  meta: FullNodeMeta;
+  success: boolean;
+  message?: string;
+  spent_outputs?: Record<string, string>;
+}
+
+export interface FullNodeTxConfirmationDataResponse {
+  success: boolean;
+  accumulated_weight: number;
+  accumulated_bigger: boolean;
+  stop_value: number;
+  confirmation_level: number;
 }
