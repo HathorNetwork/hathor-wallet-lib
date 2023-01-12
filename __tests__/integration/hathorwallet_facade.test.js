@@ -1064,6 +1064,13 @@ describe('graphvizNeighborsQuery', () => {
     expect(neighborsData).toMatch(/digraph {/);
   });
 
+  it('should capture errors when graphviz returns error', async () => {
+    const hWallet = await generateWalletHelper();
+    const tx1 = await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
+
+    expect(hWallet.graphvizNeighborsQuery(tx1.hash)).rejects.toThrowError('Request failed with status code 500');
+  });
+
   it('should throw an error if success is false on response', async () => {
     expect(gWallet.graphvizNeighborsQuery('invalid-tx-hash')).rejects.toThrowError(`Invalid transaction invalid-tx-hash`);
   });
