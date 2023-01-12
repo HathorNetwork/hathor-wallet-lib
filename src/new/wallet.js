@@ -27,6 +27,7 @@ import { HDPrivateKey } from 'bitcore-lib';
 import transactionUtils from '../utils/transaction';
 import Transaction from '../models/transaction';
 import Queue from '../models/queue';
+import txApi from '../api/txApi';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';
@@ -2469,10 +2470,85 @@ class HathorWallet extends EventEmitter {
 
     return tx;
   }
+
+  /**
+   * Queries the fullnode for a transaction
+   *
+   * @param {string} txId The transaction to query
+   *
+   * @returns {FullNodeTxResponse} Transaction data in the fullnode
+   */
+  async getFullTxById(txId) {
+    const tx = await new Promise((resolve, reject) => {
+      txApi.getTransaction(txId, resolve)
+        // txApi will call the `resolve` callback and end the promise chain,
+        // so if it falls here, we should throw
+        .then(() => reject(new Error('API client did not use the callback')))
+        .catch(err => reject(err));
+    });
+
+    if (!tx.success) {
+      throw new Error(`Invalid transaction ${txId}`);
+    }
+
+    return tx;
+  }
+
+  /**
+   * Queries the fullnode for a transaction confirmation data
+   *
+   * @param {string} txId The transaction to query
+   *
+   * @returns {FullNodeTxConfirmationDataResponse} Transaction confirmation data
+   */
+  async getTxConfirmationData(txId) {
+    const confirmationData = await new Promise((resolve, reject) => {
+      txApi.getConfirmationData(txId, resolve)
+        .then(() => reject(new Error('API client did not use the callback')))
+        .catch(err => reject(err));
+    });
+
+    if (!confirmationData.success) {
+      throw new Error(`Invalid transaction ${txId}`);
+    }
+
+    return confirmationData;
+  }
+
+  /**
+   * Queries the fullnode for a graphviz graph, given a graph type and txId
+   *
+   * @param {string} txId The transaction to query
+   * @param {string} graphType The graph type to query
+   * @param {string} maxLevel Max level to render
+   *
+   * @returns {string} The graphviz digraph
+   */
+  async graphvizNeighborsQuery(
+    txId,
+    graphType,
+    maxLevel,
+  ) {
+    const url = `${config.getServerUrl()}graphviz/neighbours.dot?tx=${txId}&graph_type=${graphType}&max_level=${maxLevel}`;
+    const graphvizData = await new Promise((resolve, reject) => {
+      txApi.getGraphviz(url, resolve)
+        .then(() => reject(new Error('API client did not use the callback')))
+        .catch(err => reject(err));
+    });
+
+    // The response will either be a string with the graphviz data or an object
+    // { success: boolean, message: string } so we need to check if the response has
+    // the `success` key
+    if (Object.hasOwnProperty.call(graphvizData, 'success') && !graphvizData.success) {
+      throw new Error(`Invalid transaction ${txId}`);
+    }
+
+    return graphvizData;
+  }
 }
 
 // State constants.
-HathorWallet.CLOSED =  0;
+HathorWallet.CLOSED = 0;
 HathorWallet.CONNECTING = 1;
 HathorWallet.SYNCING = 2;
 HathorWallet.READY = 3;
