@@ -11,4 +11,7 @@ import { MemoryStore } from './memory_store';
 const store = new MemoryStore();
 const storage = new Storage(store);
 
+export { Storage };
+export { MemoryStore };
+
 export default storage;

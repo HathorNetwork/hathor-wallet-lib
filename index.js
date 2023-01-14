@@ -1,5 +1,5 @@
 const constants = require('./lib/constants');
-const dateFormatter = require('./lib/date');
+const dateFormatter = require('./lib/utils/date');
 const websocket = require('./lib/websocket');
 const errors = require('./lib/errors');
 const ErrorMessages = require('./lib/errorMessages');

@@ -21,7 +21,7 @@ import config from '../config';
  * @param {callback} resolve Callback to be stored and used in case of a retry after a fail
  * @param {number} timeout Timeout in milliseconds for the request
  */
-const txMiningRequestClient = (resolve: Function, timeout?: number) => {
+const txMiningRequestClient = (resolve: Function|null, timeout?: number|null) => {
   const txMiningURL = config.getTxMiningUrl();
   const txMiningApiKey = config.getTxMiningApiKey();
 

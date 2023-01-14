@@ -133,6 +133,7 @@ const tokens = {
    * Calculate deposit value for the given token mint amount
    *
    * @param {number} mintAmount Amount of tokens being minted
+   * @param {boolean} isCreateNFT If we are calculating the deposit for a NFT creation
    *
    * @return {number}
    * @memberof Tokens
@@ -162,6 +163,22 @@ const tokens = {
     return Math.floor(TOKEN_DEPOSIT_PERCENTAGE * meltAmount);
   },
 
+  /**
+   * Prepare the transaction data for minting tokens or creating tokens.
+   *
+   * @param address Where to send the minted tokens
+   * @param amount Amount of tokens to mint
+   * @param storage Storage instance of the wallet
+   * @param [options={}] Options to mint tokens
+   * @param {string|null} [options.token=null] Token to mint, may be null if we are creating the token
+   * @param {IDataInput|null} [options.mintInput=null] Input to spend, may be null of we are creating the token
+   * @param {boolean} [options.createAnotherMint=true] If a mint authority should be created on the transaction.
+   * @param {boolean} [options.createMelt=false] If a melt authority should be created on the transaction.
+   * @param {string|null} [options.changeAddress=null] The address to send any change output.
+   * @param {boolean} [options.isCreateNFT=false] If this transaction will create an NFT
+   *
+   * @returns {Promise<IDataTx>} The transaction data
+   */
   async prepareMintTxData(
     address: string,
     amount: number,
@@ -437,6 +454,16 @@ const tokens = {
     return txData;
   },
 
+  /**
+   * Prepare delegate authority transaction data
+   *
+   * @param {string} token Token to delegate authority
+   * @param {IDataInput} authorityInput Utxo to spend
+   * @param {string} address Address to send the authority
+   * @param {IStorage} storage Storage instance of the wallet
+   * @param {boolean} [createAnother=true] If we should create another authority in the current wallet
+   * @returns {Promise<IDataTx>} Transaction data
+   */
   async prepareDelegateAuthorityTxData(
     token: string,
     authorityInput: IDataInput, // Authority input
@@ -472,6 +499,12 @@ const tokens = {
     };
   },
 
+  /**
+   * Prepare transaction data to destroy authority utxos
+   *
+   * @param authorityInputs Authority inputs to destroy
+   * @returns {IDataTx} Transaction data
+   */
   prepareDestroyAuthorityTxData(
     authorityInputs: IDataInput[], // Authority inputs
   ): IDataTx {

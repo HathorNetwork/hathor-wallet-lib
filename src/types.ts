@@ -7,7 +7,6 @@
 
 import { Config } from "./config";
 import Input from "./models/input";
-import Transaction from "./models/transaction";
 import FullNodeConnection from './new/connection';
 
 export interface IAddressInfo {
@@ -127,7 +126,7 @@ export interface IDataOutputAddress {
 }
 
 export function isDataOutputAddress(output: IDataOutput): output is IDataOutputAddress {
-  return output.type in ['p2pkh', 'p2sh'];
+  return ['p2pkh', 'p2sh'].includes(output.type);
 }
 
 // This is for create token transactions, where we dont have a token uid yet
@@ -140,7 +139,7 @@ export interface IDataOutputCreateToken {
 }
 
 export function isDataOutputCreateToken(output: IDataOutput): output is IDataOutputCreateToken {
-  return output.type in ['mint', 'melt'];
+  return ['mint', 'melt'].includes(output.type);
 }
 
 export interface IDataOutputOptionals {
@@ -288,7 +287,7 @@ export interface IStore {
   registerToken(token: ITokenData): Promise<void>;
   unregisterToken(tokenUid: string): Promise<void>;
   deleteTokens(tokens: string[]): Promise<void>;
-  editToken(tokenUid: string, meta: ITokenMetadata): Promise<void>;
+  editToken(tokenUid: string, meta: Partial<ITokenMetadata>): Promise<void>;
 
   // UTXOs methods
   utxoIter(): AsyncGenerator<IUtxo>;
@@ -349,7 +348,7 @@ export interface IStorage {
   fillTx(tx: IDataTx, options: IFillTxOptions): Promise<{inputs: IDataInput[], outputs: IDataOutput[]}>;
   utxoSelectAsInput(utxo: IUtxoId, markAs: boolean, ttl?: number): Promise<void>;
 
-  // Wallet access data
+  // Wallet operations
   getAccessData(): Promise<IWalletAccessData|null>;
   saveAccessData(data: IWalletAccessData): Promise<void>;
   getMainXPrivKey(pinCode: string): Promise<string>;
@@ -360,7 +359,9 @@ export interface IStorage {
   setCurrentHeight(height: number): Promise<void>;
   isReadonly(): Promise<boolean>;
   setApiVersion(version: ApiVersion): void;
+  changePin(oldPin: string, newPin: string): Promise<void>;
+  changePassword(oldPassword: string, newPassword: string): Promise<void>;
 
   cleanStorage(cleanHistory?: boolean, cleanAddresses?: boolean): Promise<void>;
-  handleStop(options: {connection?: FullNodeConnection, cleanStorage?: boolean}): Promise<void>;
+  handleStop(options: {connection?: FullNodeConnection, cleanStorage?: boolean, cleanAddresses?: boolean}): Promise<void>;
 }

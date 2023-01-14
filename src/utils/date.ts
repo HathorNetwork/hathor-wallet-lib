@@ -29,6 +29,31 @@ const dateFormatter = {
   },
 
   /**
+   * Get formatted seconds
+   * From seconds transform into days, hours, minutes and seconds
+   *
+   * @param {number} uptime Seconds of uptime
+   *
+   * @return {string} Formatted uptime seconds
+   *
+   * @memberof Date
+   * @inner
+   */
+  uptimeFormat(uptime) {
+    uptime = Math.floor(uptime);
+    const days = Math.floor(uptime / 3600 / 24);
+    uptime = uptime % (3600 * 24);
+    const hours = Math.floor(uptime / 3600);
+    uptime = uptime % 3600;
+    const minutes = Math.floor(uptime / 60);
+    uptime = uptime % 60;
+    const seconds = uptime;
+    const pad = (n) => (Math.abs(n) >= 10 ? n : '0' + n);
+    const uptime_str = days + ' days, ' + pad(hours) + ':' + pad(minutes) + ':' + pad(seconds);
+    return uptime_str;
+  },
+
+  /**
    * Get timestamp from date
    *
    * @param {Object} date Date object to get timestamp from

@@ -116,11 +116,18 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
   constructor({
     requestPassword,
-    seed,
-    xpriv,
-    xpub,
+    seed = null,
+    xpriv = null,
+    xpub = null,
     network,
     passphrase = '',
+  }: {
+    requestPassword: Function,
+    seed?: string|null,
+    xpriv?: string|null,
+    xpub?: string|null,
+    network: Network,
+    passphrase?: string,
   }) {
     super();
 

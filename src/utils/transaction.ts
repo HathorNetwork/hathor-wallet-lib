@@ -21,7 +21,8 @@ import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
 import ScriptData from '../models/script_data';
 import { ParseError } from '../errors';
-import { OP_PUSHDATA1 } from '../opcodes';
+import helpers from './helpers';
+import { getAddressType } from './address';
 
 const transaction = {
 
@@ -217,6 +218,10 @@ const transaction = {
     const isHeightLocked = (!(rewardLock && tx.height)) ? false : ((tx.height + rewardLock) < nowHeight);
 
     for (const output of tx.outputs) {
+      const address = output.decoded.address;
+      if (!(address && await storage.isAddressMine(address))) {
+        continue;
+      }
       if (!balance[output.token]) {
         balance[output.token] = getEmptyBalance();
       }
@@ -247,6 +252,10 @@ const transaction = {
     }
 
     for (const input of tx.inputs) {
+      const address = input.decoded.address;
+      if (!(address && await storage.isAddressMine(address))) {
+        continue;
+      }
       if (!balance[input.token]) {
         balance[input.token] = getEmptyBalance();
       }
@@ -283,6 +292,7 @@ const transaction = {
       return 1 | TOKEN_AUTHORITY_MASK;
     }
 
+    // Token index of HTR is 0 and if it is a custom token it is its index on tokensWithoutHathor + 1
     const tokensWithoutHathor = tokens.filter((token) => token !== HATHOR_TOKEN_CONFIG.uid);
     const tokenIndex = tokensWithoutHathor.indexOf(output.token) + 1;
     if (output.authorities === 0) {
@@ -305,14 +315,14 @@ const transaction = {
       // Data script for NFT
       const scriptData = new ScriptData(output.data);
       return scriptData.createScript();
-    } else if (output.type === 'p2sh') {
+    } else if (getAddressType(output.address, network) === 'p2sh') {
       // P2SH
       const address = new Address(output.address, { network });
       // This will throw AddressError in case the address is invalid
       address.validateAddress();
       const p2sh = new P2SH(address, { timelock: output.timelock });
       return p2sh.createScript();
-    } else if (output.type === 'p2pkh') {
+    } else if (getAddressType(output.address, network) === 'p2pkh') {
       // P2PKH
       const address = new Address(output.address, { network });
       // This will throw AddressError in case the address is invalid
@@ -371,26 +381,6 @@ const transaction = {
   },
 
   /**
-   * Push data to the stack checking if need to add the OP_PUSHDATA1 opcode
-   * We push the length of data and the data
-   * In case the data has length > 75, we need to push the OP_PUSHDATA1 before the length
-   * We always push bytes
-   *
-   * @param {Buffer[]} stack Stack of bytes from the script
-   * @param {Buffer} data Data to be pushed to stack
-   */
-  pushDataToStack(stack: Buffer[], data: Buffer) {
-    // In case data has length bigger than 75, we need to add a pushdata opcode
-    if (data.length > 75) {
-      stack.push(OP_PUSHDATA1);
-    }
-    const lenBuf = Buffer.alloc(1);
-    lenBuf.writeUInt8(data.length);
-    stack.push(lenBuf);
-    stack.push(data);
-  },
-
-  /**
    * Create P2PKH input data
    *
    * @param {Buffer} signature Input signature
@@ -399,8 +389,8 @@ const transaction = {
    */
   createInputData(signature: Buffer, publicKey: Buffer): Buffer {
     let arr = [];
-    this.pushDataToStack(arr, signature);
-    this.pushDataToStack(arr, publicKey);
+    helpers.pushDataToStack(arr, signature);
+    helpers.pushDataToStack(arr, publicKey);
     return Buffer.concat(arr);
   },
 
@@ -410,7 +400,7 @@ const transaction = {
    * @param output History output
    * @returns {number} Authorities from output
    */
-  authoritiesFromOutput(output: IHistoryOutput): number {
+  authoritiesFromOutput(output: Pick<IHistoryOutput, 'token_data'|'value'>): number {
     let authorities = 0;
     if (this.isMint(output)) {
       authorities |= TOKEN_MINT_MASK;

@@ -20,7 +20,7 @@ import { createP2SHRedeemScript } from './scripts';
  *
  * @returns {string} output type of the address (p2pkh or p2sh)
  */
-export const getAddressType = (address: string, network: Network): 'p2pkh'|'p2sh' => {
+export function getAddressType(address: string, network: Network): 'p2pkh'|'p2sh' {
   const addressObj = new Address(address, { network });
   return addressObj.getType();
 }
@@ -55,7 +55,7 @@ export function deriveAddressFromDataP2SH(multisigData: IMultisigData, index: nu
   return {
     base58: address.toString(),
     bip32AddressIndex: index,
-  }
+  };
 }
 
 /**

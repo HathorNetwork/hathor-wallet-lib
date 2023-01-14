@@ -8,7 +8,7 @@
 import { PartialTx, PartialTxInputData, ProposalInput, ProposalOutput } from '../../src/models/partial_tx';
 import Network from '../../src/models/network';
 import Address from '../../src/models/address';
-import dateFormatter from '../../src/date';
+import dateFormatter from '../../src/utils/date';
 
 
 import { UnsupportedScriptError } from '../../src/errors';

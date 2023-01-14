@@ -8,7 +8,7 @@
 import { IStore, IAddressInfo, ITokenData, ITokenMetadata, IHistoryTx, IUtxo, IWalletAccessData, IUtxoFilterOptions, IBalance, IAddressMetadata, IWalletData } from '../types';
 import transaction from '../utils/transaction';
 import walletApi from '../api/wallet';
-import { GAP_LIMIT } from '../constants';
+import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
 
 
 const DEAFULT_ADDRESSES_WALLET_DATA = {
@@ -39,7 +39,7 @@ export class MemoryStore implements IStore {
     this.addresses = new Map<string, IAddressInfo>();
     this.addressIndexes = new Map<number, string>();
     this.addressesMetadata = new Map<string, IAddressMetadata>();
-    this.tokens = new Map<string, ITokenData>();
+    this.tokens = new Map<string, ITokenData>([[HATHOR_TOKEN_CONFIG.uid, HATHOR_TOKEN_CONFIG]]);
     this.tokensMetadata = new Map<string, ITokenMetadata>();
     this.registeredTokens = new Map<string, ITokenData>();
     this.history = new Map<string, IHistoryTx>();
@@ -91,6 +91,10 @@ export class MemoryStore implements IStore {
     this.addresses.set(info.base58, info);
     this.addressIndexes.set(info.bip32AddressIndex, info.base58);
 
+    if (this.walletData.currentAddressIndex === -1) {
+      this.walletData.currentAddressIndex = info.bip32AddressIndex;
+    }
+
     if (info.bip32AddressIndex > this.walletData.lastLoadedAddressIndex) {
       this.walletData.lastLoadedAddressIndex = info.bip32AddressIndex;
     }
@@ -109,7 +113,6 @@ export class MemoryStore implements IStore {
     if (markAsUsed) {
       // Will move the address index only if we have not reached the gap limit
       this.walletData.currentAddressIndex = Math.min(this.walletData.lastLoadedAddressIndex, this.walletData.currentAddressIndex + 1);
-      console.log(`Settings current address to ${this.walletData.currentAddressIndex}`);
     }
     return addressInfo.base58;
   }
@@ -141,8 +144,9 @@ export class MemoryStore implements IStore {
           yield tx;
           continue;
         }
+      } else {
+        yield tx;
       }
-      yield tx;
     }
   }
 
@@ -298,7 +302,6 @@ export class MemoryStore implements IStore {
     if (this.walletData.lastUsedAddressIndex < maxIndexUsed) {
       if (this.walletData.currentAddressIndex < maxIndexUsed) {
         this.walletData.currentAddressIndex = Math.min(maxIndexUsed + 1, this.walletData.lastLoadedAddressIndex);
-        console.log(`Settings current address to ${this.walletData.currentAddressIndex}`);
       }
       this.walletData.lastUsedAddressIndex = maxIndexUsed;
     }
@@ -344,7 +347,6 @@ export class MemoryStore implements IStore {
     }
     if (this.walletData.currentAddressIndex < maxIndex) {
       this.walletData.currentAddressIndex = Math.min(maxIndex + 1, this.walletData.lastLoadedAddressIndex);
-      console.log(`Settings current address to ${this.walletData.currentAddressIndex}`);
     }
     this.walletData.lastUsedAddressIndex = maxIndex;
   }
@@ -406,10 +408,24 @@ export class MemoryStore implements IStore {
     }
   }
 
-  async editToken(tokenUid: string, meta: ITokenMetadata): Promise<void> {
-    if (this.tokensMetadata.has(tokenUid)) {
-      this.tokensMetadata.set(tokenUid, meta);
+  async editToken(tokenUid: string, meta: Partial<ITokenMetadata>): Promise<void> {
+    const metadata: ITokenMetadata = {
+      numTransactions: 0,
+      balance: {
+        tokens: {unlocked: 0, locked: 0},
+        authorities: {
+          mint: {unlocked: 0, locked: 0},
+          melt: {unlocked: 0, locked: 0},
+        },
+      }
+    };
+    if (meta.numTransactions) {
+      metadata.numTransactions = meta.numTransactions;
     }
+    if (meta.balance) {
+      metadata.balance = meta.balance;
+    }
+    this.tokensMetadata.set(tokenUid, metadata);
   }
 
   /** UTXOS */

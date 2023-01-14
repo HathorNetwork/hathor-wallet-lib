@@ -7,11 +7,8 @@
 
 import helpers from '../../src/utils/helpers';
 import Network from '../../src/models/network';
-import dateFormatter from '../../src/date';
+import dateFormatter from '../../src/utils/date';
 import { unpackToInt, unpackToFloat, hexToBuffer, bufferToHex } from '../../src/utils/buffer';
-import Transaction from '../../src/models/transaction';
-import Output from '../../src/models/output';
-import Input from '../../src/models/input';
 import Address from '../../src/models/address';
 import P2PKH from '../../src/models/p2pkh';
 import P2SH from '../../src/models/p2sh';
@@ -19,8 +16,12 @@ import ScriptData from '../../src/models/script_data';
 import buffer from 'buffer';
 import { OP_PUSHDATA1 } from '../../src/opcodes';
 import { DEFAULT_TX_VERSION, CREATE_TOKEN_TX_VERSION } from '../../src/constants';
+import Transaction from '../../src/models/transaction';
+import CreateTokenTransaction from '../../src/models/create_token_transaction';
+import config from '../../src/config';
+import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError } from '../../src/errors';
 
-const nodeMajorVersion = process.versions.node.split('.')[0];
+// const nodeMajorVersion = process.versions.node.split('.')[0];
 
 test('Round float', () => {
   expect(helpers.roundFloat(1.23)).toBe(1.23);
@@ -32,6 +33,14 @@ test('Pretty value', () => {
   expect(helpers.prettyValue(1000)).toBe('10.00');
   expect(helpers.prettyValue(100000)).toBe('1,000.00');
   expect(helpers.prettyValue(100000000)).toBe('1,000,000.00');
+  expect(helpers.prettyValue(-1000)).toBe('-10.00');
+});
+
+test('Pretty integer value', () => {
+  expect(helpers.prettyIntegerValue(1000)).toBe('1,000');
+  expect(helpers.prettyIntegerValue(100000)).toBe('100,000');
+  expect(helpers.prettyIntegerValue(100000000)).toBe('100,000,000');
+  expect(helpers.prettyIntegerValue(-1000)).toBe('-1,000');
 });
 
 test('Version check', () => {
@@ -129,10 +138,48 @@ test('Checksum', () => {
   expect(helpers.getChecksum(data)).toEqual(Buffer.from([0x6b, 0x13, 0xb9, 0x78]));
 });
 
+test('Encode Address P2PKH', () => {
+  const addressHashHex = 'b2613dcec864801e7ca62043ec44d45747bf3609';
+  const address = 'WewDeXWyvHP7jJTs7tjLoQfoB72LLxJQqN';
+  const addressHash = Buffer.from(addressHashHex, 'hex');
+  const testnet = new Network('testnet');
+  expect(helpers.encodeAddress(addressHash, testnet).base58).toEqual(address);
+});
+
+test('Encode Address P2SH', () => {
+  const scriptHashHex = 'ea254266cc498136f864983b99e09c5c321e7f8a';
+  const address = 'wgyUgNjqZ18uYr4YfE2ALW6tP5hd8MumH5';
+  const scriptHash = Buffer.from(scriptHashHex, 'hex');
+  const testnet = new Network('testnet');
+  expect(helpers.encodeAddressP2SH(scriptHash, testnet).base58).toEqual(address);
+});
+
 test('Buffer to hex', () => {
   const hexString = '044f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa385b6b1b8ead809ca67454d9683fcf2ba03456d6fe2c4abe2b07f0fbdbb2f1c1';
   const buff = hexToBuffer(hexString);
   expect(bufferToHex(buff)).toBe(hexString);
+});
+
+test('createTxFromBytes and Hex', () => {
+  const defaulttxbytes = Buffer.from('0001cafe', 'hex');
+  const createTokentxbytes = Buffer.from('0002cafe', 'hex');
+  const errorTxBytes = Buffer.from('0000cafe', 'hex'); // Block
+  const testnet = new Network('testnet');
+  const spyTx = jest.spyOn(Transaction, 'createFromBytes').mockReturnValue('default-transaction');
+  const spyCreateTokenTx = jest.spyOn(CreateTokenTransaction, 'createFromBytes').mockReturnValue('create-token-transaction');
+
+  // Testing fromBytes
+  expect(helpers.createTxFromBytes(defaulttxbytes, testnet)).toEqual('default-transaction');
+  expect(helpers.createTxFromBytes(createTokentxbytes, testnet)).toEqual('create-token-transaction');
+  expect(() => {helpers.createTxFromBytes(errorTxBytes, testnet)}).toThrow();
+
+  // Testing fromHex
+  expect(helpers.createTxFromHex(defaulttxbytes.toString('hex'), testnet)).toEqual('default-transaction');
+  expect(helpers.createTxFromHex(createTokentxbytes.toString('hex'), testnet)).toEqual('create-token-transaction');
+  expect(() => {helpers.createTxFromHex(errorTxBytes.toString('hex'), testnet)}).toThrow();
+
+  spyTx.mockRestore();
+  spyCreateTokenTx.mockRestore();
 });
 
 test('createTxFromData', () => {
@@ -249,4 +296,35 @@ test('getOutputTypeFromAddress', () => {
   // Mainnet p2sh
   const addr4 = 'hXRpjKbgVVGF1ioYtscCRavnzvGbsditXn';
   expect(helpers.getOutputTypeFromAddress(addr4, mainnetNetwork)).toBe('p2sh');
+});
+
+test('getWSServerURL', () => {
+  config.SERVER_URL = undefined;
+  const serverHTTP = 'http://fullnode.com/api/path/';
+  const serverHTTPS = 'https://fullnode.com/api/path/';
+  const serverWS = 'ws://fullnode.com/api/path/ws/';
+  const serverWSS = 'wss://fullnode.com/api/path/ws/';
+  expect(helpers.getWSServerURL(serverHTTP)).toEqual(serverWS);
+  expect(helpers.getWSServerURL(serverHTTPS)).toEqual(serverWSS);
+  // When no argument is given, use config server
+  config.SERVER_URL = serverHTTPS;
+  expect(helpers.getWSServerURL()).toEqual(serverWSS);
+});
+
+test('handlePrepareDataError', () => {
+  const err1 = new AddressError('err1');
+  const err2 = new OutputValueError('err2');
+  const err3 = new ConstantNotSet('err3');
+  const err4 = new CreateTokenTxInvalid('err4');
+  const err5 = new MaximumNumberInputsError('err5');
+  const err6 = new MaximumNumberOutputsError('err6');
+  const err = new Error('err');
+  expect(helpers.handlePrepareDataError(err1)).toEqual('err1');
+  expect(helpers.handlePrepareDataError(err2)).toEqual('err2');
+  expect(helpers.handlePrepareDataError(err3)).toEqual('err3');
+  expect(helpers.handlePrepareDataError(err4)).toEqual('err4');
+  expect(helpers.handlePrepareDataError(err5)).toEqual('err5');
+  expect(helpers.handlePrepareDataError(err6)).toEqual('err6');
+
+  expect(() => { helpers.handlePrepareDataError(err) }).toThrow(err); 
 });

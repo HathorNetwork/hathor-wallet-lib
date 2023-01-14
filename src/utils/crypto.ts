@@ -9,9 +9,16 @@ import CryptoJS from 'crypto-js';
 import { HASH_ITERATIONS, HASH_KEY_SIZE } from '../constants';
 import { IEncryptedData } from '../types';
 
+/**
+ * Hash a piece of information with the given options.
+ *
+ * @param {string} data Data to hash
+ * @param {{salt: string, iterations: number, pbkdf2Hasher: string}} [options={}] options for the hash algo
+ * @returns {{hash: string, salt: string, iterations: number, pbkdf2Hasher: string}}
+ */
 export function hashData(
   data: string,
-  { salt, iterations = HASH_ITERATIONS, pbkdf2Hasher = 'sha1'}: {salt?: string, iterations?: number, pbkdf2Hasher?: string},
+  { salt, iterations = HASH_ITERATIONS, pbkdf2Hasher = 'sha1'}: {salt?: string, iterations?: number, pbkdf2Hasher?: string} = {},
   ): {hash: string, salt: string, iterations: number, pbkdf2Hasher: string} {
   const actualSalt = salt || CryptoJS.lib.WordArray.random(128 / 8).toString();
 
@@ -32,6 +39,14 @@ export function hashData(
   };
 }
 
+/**
+ * Encrypt a piece of information with a password and add metadata for password validation.
+ *
+ * @param {string} data Data to encrypt
+ * @param {string} password Encryption password to use
+ * @param {{salt: string, iterations: number, pbkdf2Hasher: string}} [options={}] Options to hash the password, for validation
+ * @returns {IEncryptedData} Encrypted data with encryption metadata
+ */
 export function encryptData(
   data: string,
   password: string,
@@ -46,11 +61,25 @@ export function encryptData(
   return { data: encrypted.toString(), ...hash };
 }
 
+/**
+ * Decrypt and encode data.
+ *
+ * @param {string} data Encrypted string of data
+ * @param {string} password Encryption password
+ * @returns {string} Original data
+ */
 function _decryptData(data: string, password: string): string {
   const decrypted = CryptoJS.AES.decrypt(data, password);
   return decrypted.toString(CryptoJS.enc.Utf8);
 }
 
+/**
+ * Validate the password and decrypt the data
+ *
+ * @param {IEncryptedData} data Encrypted data, complete with metadata
+ * @param {string} password The encryption password
+ * @returns {string} The decrypted data
+ */
 export function decryptData(data: IEncryptedData, password: string): string {
   const keyData = data.data;
   const hash = data.hash;
@@ -60,17 +89,31 @@ export function decryptData(data: IEncryptedData, password: string): string {
     pbkdf2Hasher: data.pbkdf2Hasher,
   };
   if (validateHash(password, hash, options)) {
-    return _decryptData(keyData, password);
+    const originalData = _decryptData(keyData, password);
+    if (originalData.length === 0) {
+      // Decrypt error
+      throw new Error('Invalid data.');
+    }
+    return originalData;
   } else {
     // FIXME: create custom error type for password errors
     throw new Error('Invalid password');
   }
 }
 
+/**
+ * Validate that the hashed data matches the given data
+ * Obs: This is used for password validation
+ *
+ * @param {string} dataToValidate What the caller thinks is the original data
+ * @param {string} hashedData The hashed data we use to compare
+ * @param {{salt: string, iterations: number, pbkdf2Hasher: string}} options Options for the hash algo
+ * @returns {boolean} if the data matches
+ */
 export function validateHash(
   dataToValidate: string,
   hashedData: string,
-  { salt, iterations = HASH_ITERATIONS, pbkdf2Hasher = 'sha1'}: {salt?: string, iterations?: number, pbkdf2Hasher?: string},
+  { salt, iterations = HASH_ITERATIONS, pbkdf2Hasher = 'sha1'}: {salt?: string, iterations?: number, pbkdf2Hasher?: string} = {},
 ): boolean {
   const hash = hashData(dataToValidate, { salt, iterations, pbkdf2Hasher });
   return hash.hash === hashedData;

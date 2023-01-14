@@ -9,9 +9,10 @@ import wallet from '../../src/utils/wallet';
 import { XPubError, InvalidWords, UncompressedPubKeyError } from '../../src/errors';
 import Network from '../../src/models/network';
 import Mnemonic from 'bitcore-mnemonic';
-import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE } from '../../src/constants';
-import { util, Address, HDPrivateKey } from 'bitcore-lib';
+import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE, P2SH_ACCT_PATH } from '../../src/constants';
+import { util, Address, HDPrivateKey, HDPublicKey } from 'bitcore-lib';
 import { hexToBuffer } from '../../src/utils/buffer';
+import { WalletType, WALLET_FLAGS } from '../../src/types';
 
 
 test('Words', () => {
@@ -80,16 +81,8 @@ test('Xpriv and xpub', () => {
   const derivedXpub = wallet.xpubFromData(derivedXpriv.publicKey.toBuffer(), chainCode, fingerprint, 'testnet');
   expect(derivedXpub).toBe(derivedXpriv.xpubkey);
 
-  const pubKey = wallet.getPublicKeyFromXpub(derivedXpub, 10);
-  const expectedRet = {};
-  const address10 = Address(pubKey, network.bitcoreNetwork).toString();
-  expectedRet[address10] = 10;
-  expect(expectedRet).toStrictEqual(wallet.getAddresses(derivedXpub, 10, 1, 'testnet'));
-
   // getPublicKeyFromXpub without an index will return the public key at the current derivation level
   expect(wallet.getPublicKeyFromXpub(derivedXpriv.xpubkey).toString()).toEqual(derivedXpriv.publicKey.toString());
-
-  expect(wallet.getAddressAtIndex(derivedXpub, 10, 'testnet')).toBe(address10);
 
   // To pubkey compressed
   const uncompressedPubKeyHex = '044f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa385b6b1b8ead809ca67454d9683fcf2ba03456d6fe2c4abe2b07f0fbdbb2f1c1';
@@ -110,52 +103,12 @@ test('XPub decode errors', () => {
     return wallet.xpubDeriveChild('xpub', 0);
   }).toThrow(XPubError);
 
-  expect(() => {
-    return wallet.getAddressAtIndex('xpub', 0);
-  }).toThrow(XPubError);
-
 });
 
 test('isXpubKeyValid', () => {
   const XPUBKEY = 'xpub6EcBoi2vDFcCW5sPAiQpXDYYtXd1mKhUJD64tUi8CPRG1VQFDkAbL8G5gqTmSZD6oq4Yhr5PZ8pKf3Xmb3W3pGcgqzUdFNaCRKL7TZa3res';
   expect(wallet.isXpubKeyValid(XPUBKEY)).toBe(true);
   expect(wallet.isXpubKeyValid(`${XPUBKEY}aa`)).toBe(false);
-});
-
-test('getHathorAddresses', () => {
-  const XPUBKEY = 'xpub6EcBoi2vDFcCW5sPAiQpXDYYtXd1mKhUJD64tUi8CPRG1VQFDkAbL8G5gqTmSZD6oq4Yhr5PZ8pKf3Xmb3W3pGcgqzUdFNaCRKL7TZa3res';
-  const ADDRESSES = [
-    'H7GtjbWcpd8fcE4KV1QJAiLPsXN4KRMasA',
-    'H9QwruQByN4qiprTAWAjBR9fDXBadFtou4',
-    'HGXziPZxoTK27FuabRQbHMsav2ZBKdNBZK',
-    'HQ2PjhE8ocyGgA17mGn8ny913iVpR6FBAm',
-    'HKghT5LSxtZHa4Z2VYYBW4WDMnQHSVEBHA',
-    'HGx6zgR96ubefHcAGgEv48NJp6ccVxMYJo',
-    'HKobFkfTBqRSCHpbL6cydS6geVg44CHrRL',
-    'HMmFLoWSagfvSUiEbE2mVDY7BYx1HPdXGf',
-    'HQcnzbpCHKqhDm8Hd8mikVyb4oK2qoadPJ',
-    'HEfqUBf4Rd4A35uhdtv7fuUtthGtjptYQC',
-    'HLUjnbbgxzgDTLAU7TjsTHzuZpeYY2xezw',
-    'HBYRWYMpDQzkBPCdAJMix4dGNVi81CC855',
-    'HJVq5DKPTeJ73UpuivJURdhfWnTLG7WAjo',
-    'HGJFqxUw6ntRxLjcEbvFz9GHsLxHzR9hQs',
-    'HPapaHpBZArxt2EK9WUy9HT9H3PgfidBgN',
-    'HJdAEBVMKygzntrw7Q3Qr8osLXLGUe8M65',
-    'HGgSipJMLrHxGHambXtVc9Y9Lf9hxLxRVk',
-    'HGgatY7US4cSPDppzrKUYdp2V1r7LWGyVf',
-  ];
-  let calculatedAddresses = wallet.getAddresses(XPUBKEY, 0, ADDRESSES.length, 'mainnet');
-  let addrList = Object.keys(calculatedAddresses);
-  expect(addrList).toHaveLength(ADDRESSES.length);
-  expect(addrList).toStrictEqual(ADDRESSES);
-
-  // start not from 0
-  calculatedAddresses = wallet.getAddresses(XPUBKEY, 5, ADDRESSES.length - 5, 'mainnet');
-  addrList = Object.keys(calculatedAddresses);
-  expect(addrList).toHaveLength(ADDRESSES.length - 5);
-  expect(addrList).toStrictEqual(ADDRESSES.slice(5));
-
-  expect(() => wallet.getAddresses(`${XPUBKEY}aa`, 5, ADDRESSES.length - 5, 'mainnet')).toThrowError(XPubError);
 });
 
 test('testnet: hd derivation', () => {
@@ -218,23 +171,6 @@ test('testnet: hd derivation', () => {
     expect(addr).toStrictEqual(addrd);
     expect(addr).toStrictEqual(Addr32B[i]);
   }
-
-  // test our address generation
-  // XXX: the accountDerivationIndex being 0'/0 is a temporary fix
-  // getXPubKeyFromSeed does not derive for 'change' (https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki#change)
-  const xpub31B = wallet.getXPubKeyFromSeed(Words31B, {networkName: 'testnet', accountDerivationIndex: '0\'/0'});
-  const addressObj31B = wallet.getAddresses(xpub31B, 0, 10, 'testnet');
-  const address31B = Object.keys(addressObj31B);
-  for (let i = 0; i < 10; i++) {
-    expect(address31B[i]).toStrictEqual(Addr31B[i]);
-  }
-
-  const xpub32B = wallet.getXPubKeyFromSeed(Words32B, {networkName: 'testnet', accountDerivationIndex: '0\'/0'});
-  const addressObj32B = wallet.getAddresses(xpub32B, 0, 10, 'testnet');
-  const address32B = Object.keys(addressObj32B);
-  for (let i = 0; i < 10; i++) {
-    expect(address32B[i]).toStrictEqual(Addr32B[i]);
-  }
 });
 
 test('testnet: hd derivation with passphrase', () => {
@@ -273,20 +209,6 @@ test('testnet: hd derivation with passphrase', () => {
 
     expect(addr).toStrictEqual(addrd);
     expect(addr).toStrictEqual(Addr[i]);
-  }
-
-  const xpub = wallet.getXPubKeyFromSeed(
-      Words,
-      {
-        passphrase: passw,
-        networkName: 'testnet',
-        accountDerivationIndex: '0\'/0',
-      },
-  );
-  const addressObj = wallet.getAddresses(xpub, 0, 10, 'testnet');
-  const address = Object.keys(addressObj);
-  for (let i = 0; i < 10; i++) {
-    expect(address[i]).toStrictEqual(Addr[i]);
   }
 });
 
@@ -350,23 +272,6 @@ test('mainnet: hd derivation', () => {
     expect(addr).toStrictEqual(addrd);
     expect(addr).toStrictEqual(Addr32B[i]);
   }
-
-  // test our address generation
-  // XXX: the accountDerivationIndex being 0'/0 is a temporary fix
-  // getXPubKeyFromSeed does not derive for 'change' (https://github.com/bitcoin/bips/blob/master/bip-0044.mediawiki#change)
-  const xpub31B = wallet.getXPubKeyFromSeed(Words31B, {networkName: 'mainnet', accountDerivationIndex: '0\'/0'});
-  const addressObj31B = wallet.getAddresses(xpub31B, 0, 10, 'mainnet');
-  const address31B = Object.keys(addressObj31B);
-  for (let i = 0; i < 10; i++) {
-    expect(address31B[i]).toStrictEqual(Addr31B[i]);
-  }
-
-  const xpub32B = wallet.getXPubKeyFromSeed(Words32B, {networkName: 'mainnet', accountDerivationIndex: '0\'/0'});
-  const addressObj32B = wallet.getAddresses(xpub32B, 0, 10, 'mainnet');
-  const address32B = Object.keys(addressObj32B);
-  for (let i = 0; i < 10; i++) {
-    expect(address32B[i]).toStrictEqual(Addr32B[i]);
-  }
 });
 
 test('mainnet: hd derivation with passphrase', () => {
@@ -405,20 +310,6 @@ test('mainnet: hd derivation with passphrase', () => {
 
     expect(addr).toStrictEqual(addrd);
     expect(addr).toStrictEqual(Addr[i]);
-  }
-
-  const xpub = wallet.getXPubKeyFromSeed(
-      Words,
-      {
-        passphrase: passw,
-        networkName: 'mainnet',
-        accountDerivationIndex: '0\'/0',
-      },
-  );
-  const addressObj = wallet.getAddresses(xpub, 0, 10, 'mainnet');
-  const address = Object.keys(addressObj);
-  for (let i = 0; i < 10; i++) {
-    expect(address[i]).toStrictEqual(Addr[i]);
   }
 });
 
@@ -469,4 +360,176 @@ test('get multisig xpub', () => {
 
   // From words
   expect(wallet.getMultiSigXPubFromWords(seed)).toBe(xpub);
+});
+
+test('access data from xpub', () => {
+  const xpubkeyChange = 'xpub6EvdxHF4vBs38uFrs6UuN8Zu78LDoqLrskMffXk531wy7xMFb7X9Ntxb9dGL2kbYdKJ1d83dqAifQS2Wzcq2DxJf7HPDPvMZMtNQxyBzAWn';
+  const xpubChange = HDPublicKey.fromString(xpubkeyChange);
+  const xpubkeyAcct = 'xpub6C95ufyyhEr2ntyGGfeHjyvxffmNZQ7WugyChhu1Fzor1tMUc4K2MUdwkcJoTzjVkg46hurWWU9gvZoivLiDk6MdsKukz3JiX5Fib2BDa2T';
+  const xpubAcct = HDPublicKey.fromString(xpubkeyAcct);
+
+  expect(wallet.generateAccessDataFromXpub(xpubkeyAcct)).toMatchObject({
+    xpubkey: xpubAcct.derive(0).xpubkey,
+    walletType: WalletType.P2PKH,
+    walletFlags: WALLET_FLAGS.READONLY,
+    multisigData: undefined,
+  });
+
+  // We assume the xpubkey is on the account level, so it is derived to change.
+  expect(wallet.generateAccessDataFromXpub(xpubkeyChange)).toMatchObject({
+    xpubkey: xpubChange.derive(0).xpubkey,
+    walletType: WalletType.P2PKH,
+    walletFlags: WALLET_FLAGS.READONLY,
+    multisigData: undefined,
+  });
+
+  expect(wallet.generateAccessDataFromXpub(
+    xpubkeyAcct,
+    { multisig: { numSignatures: 2, pubkeys: [xpubkeyAcct, xpubkeyChange] }},
+  )).toMatchObject({
+    xpubkey: xpubAcct.derive(0).xpubkey,
+    walletType: WalletType.MULTISIG,
+    walletFlags: WALLET_FLAGS.READONLY,
+    multisigData: {
+      numSignatures: 2,
+      pubkeys: [xpubkeyAcct, xpubkeyChange],
+      pubkey: xpubAcct.publicKey.toString('hex'),
+    },
+  });
+});
+
+test('access data from xpriv', () => {
+  const xprivkeyRoot = 'htpr4yPomy8kcy5uFJFugmAscbbeih6Cir9ZVaTCSKaCmbAgos8Ymq5BxVDpddzdfbwEnofgFJG3qkMbGS9RMexgju6C2Z9K63c5kJdkWZAwcf2';
+  const xpubkeyRoot = 'xpub661MyMwAqRbcG4KieRwAbL25xy8KCWuDFnzruk9iLGu5PiQ4ZfptSGiuWnNvSXN17jarnZixcKehHLtZi8xRsAnS5bEFaFGiWxUNXVPJtgx';
+
+  const xprivkeyAcct = 'htpr55XXiHBZUnLKn8uTJzszmFWXRPjG5jMs9URYEHKVhK5TS35xpDZKsh8rsTKfU5YPvC4XzWzDWbCCX3xmeSpeEQqK98cRkvz9MmVnWpFFBYb';
+  const xpubkeyAcct = 'xpub6C95ufyyhEr2ntyGGfeHjyvxffmNZQ7WugyChhu1Fzor1tMUc4K2MUdwkcJoTzjVkg46hurWWU9gvZoivLiDk6MdsKukz3JiX5Fib2BDa2T';
+
+  const xpubkeyChange = 'xpub6EvdxHF4vBs38uFrs6UuN8Zu78LDoqLrskMffXk531wy7xMFb7X9Ntxb9dGL2kbYdKJ1d83dqAifQS2Wzcq2DxJf7HPDPvMZMtNQxyBzAWn';
+  const xprivkeyChange = 'htpr58K5ktSehjML89C3uRicPQ9TrrJ7LAbD7Xp1C7AZULDaY75joGmSu7TWGWqb31noixGt9ehSyspRVdFBhCZiJpB1RiuSosUkFw7QezVbECo';
+
+  const xprivRoot = HDPrivateKey.fromString(xprivkeyRoot);
+  const xpubChange = HDPublicKey.fromString(xpubkeyChange);
+
+  // P2PKH from derived will use the derived key
+  expect(wallet.generateAccessDataFromXpriv(xprivkeyChange, { pin: '123' })).toMatchObject({
+    xpubkey: xpubChange.xpubkey,
+    mainKey: expect.objectContaining({
+      data: expect.any(String),
+      hash: expect.any(String),
+      salt: expect.any(String),
+      iterations: expect.any(Number),
+      pbkdf2Hasher: expect.any(String),
+    }),
+    walletType: WalletType.P2PKH,
+    walletFlags: 0,
+    multisigData: undefined,
+  });
+
+  // P2PKH with root xprivkeys will be derived to change level
+  expect(wallet.generateAccessDataFromXpriv(xprivkeyRoot, { pin: '321' })).toMatchObject({
+    xpubkey: xpubChange.xpubkey,
+    mainKey: expect.anything(),
+    walletType: WalletType.P2PKH,
+    walletFlags: 0,
+    multisigData: undefined,
+  });
+
+  // Multisig from root will be derived to the P2SH paths
+  // xpubkey and mainKey will use change path since its the expected path on the utilities
+  // pubkey from the multisigData will be on the p2sh account level
+  expect(wallet.generateAccessDataFromXpriv(
+    xprivkeyRoot,
+    {
+      pin: '123',
+      multisig: {
+        numSignatures: 2,
+        pubkeys: [xpubkeyRoot, xpubkeyAcct, xpubkeyChange],
+      }
+    },
+  )).toMatchObject({
+    xpubkey: xprivRoot.deriveNonCompliantChild(`${P2SH_ACCT_PATH}/0`).xpubkey,
+    walletType: WalletType.MULTISIG,
+    mainKey: expect.anything(),
+    walletFlags: 0,
+    multisigData: {
+      numSignatures: 2,
+      pubkeys: [xpubkeyRoot, xpubkeyAcct, xpubkeyChange],
+      pubkey: xprivRoot.deriveNonCompliantChild(P2SH_ACCT_PATH).publicKey.toString('hex'),
+    },
+  });
+
+  // Cannot start a multisig wallet with a derived xprivkey
+  expect(() => {
+    return wallet.generateAccessDataFromXpriv(
+      xprivkeyAcct,
+      {
+        pin: '123',
+        multisig: {
+          numSignatures: 2,
+          pubkeys: [xpubkeyRoot, xpubkeyAcct, xpubkeyChange],
+        }
+      },
+    );
+  }).toThrow();
+});
+
+test('access data from seed', () => {
+  const seed = 'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+  const xprivkeyRoot = 'htpr4yPomy8kcy5uFJFugmAscbbeih6Cir9ZVaTCSKaCmbAgos8Ymq5BxVDpddzdfbwEnofgFJG3qkMbGS9RMexgju6C2Z9K63c5kJdkWZAwcf2';
+
+  const xpubkeyAcct = 'xpub6C95ufyyhEr2ntyGGfeHjyvxffmNZQ7WugyChhu1Fzor1tMUc4K2MUdwkcJoTzjVkg46hurWWU9gvZoivLiDk6MdsKukz3JiX5Fib2BDa2T';
+  const xpubkeyChange = 'xpub6EvdxHF4vBs38uFrs6UuN8Zu78LDoqLrskMffXk531wy7xMFb7X9Ntxb9dGL2kbYdKJ1d83dqAifQS2Wzcq2DxJf7HPDPvMZMtNQxyBzAWn';
+
+  const xprivRoot = HDPrivateKey.fromString(xprivkeyRoot);
+  const xpubChange = HDPublicKey.fromString(xpubkeyChange);
+
+  // P2PKH from seed
+  expect(wallet.generateAccessDataFromSeed(seed, { pin: '123', password: '456', networkName: 'testnet' })).toMatchObject({
+    xpubkey: xpubChange.xpubkey,
+    mainKey: expect.objectContaining({
+      data: expect.any(String),
+      hash: expect.any(String),
+      salt: expect.any(String),
+      iterations: expect.any(Number),
+      pbkdf2Hasher: expect.any(String),
+    }),
+    authKey: expect.objectContaining({
+      data: expect.any(String),
+      hash: expect.any(String),
+      salt: expect.any(String),
+      iterations: expect.any(Number),
+      pbkdf2Hasher: expect.any(String),
+    }),
+    walletType: WalletType.P2PKH,
+    walletFlags: 0,
+    multisigData: undefined,
+  });
+
+  // Multisig from seed will be derived to the P2SH paths
+  // xpubkey and mainKey will use change path since its the expected path on the utilities
+  // pubkey from the multisigData will be on the p2sh account level
+  expect(wallet.generateAccessDataFromSeed(
+    seed,
+    {
+      pin: '123',
+      password: '567',
+      networkName: 'testnet',
+      multisig: {
+        numSignatures: 2,
+        pubkeys: [xpubkeyAcct, xpubkeyChange],
+      }
+    },
+  )).toMatchObject({
+    xpubkey: xprivRoot.deriveNonCompliantChild(`${P2SH_ACCT_PATH}/0`).xpubkey,
+    walletType: WalletType.MULTISIG,
+    mainKey: expect.anything(),
+    authKey: expect.anything(),
+    walletFlags: 0,
+    multisigData: {
+      numSignatures: 2,
+      pubkeys: [xpubkeyAcct, xpubkeyChange],
+      pubkey: xprivRoot.deriveNonCompliantChild(P2SH_ACCT_PATH).publicKey.toString('hex'),
+    },
+  });
 });

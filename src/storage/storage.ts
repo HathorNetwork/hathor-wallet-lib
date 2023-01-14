@@ -30,7 +30,7 @@ import {
 } from '../types';
 import transaction from '../utils/transaction';
 import config, { Config } from '../config';
-import { decryptData } from '../utils/crypto';
+import { decryptData, encryptData } from '../utils/crypto';
 import FullNodeConnection from '../new/connection';
 import { getAddressType } from '../utils/address';
 
@@ -527,7 +527,7 @@ export class Storage implements IStorage {
     }
   }
 
-  async handleStop({connection, cleanStorage = false}: {connection?: FullNodeConnection, cleanStorage?: boolean} = {}): Promise<void> {
+  async handleStop({connection, cleanStorage = false, cleanAddresses = false}: {connection?: FullNodeConnection, cleanStorage?: boolean, cleanAddresses?: boolean} = {}): Promise<void> {
     if (connection) {
       for await (const addressInfo of this.getAllAddresses()) {
         connection.unsubscribeAddress(addressInfo.base58);
@@ -535,12 +535,66 @@ export class Storage implements IStorage {
       connection.removeMetricsHandlers();
     }
     this.version = null;
-    if (cleanStorage) {
-      this.cleanStorage(true);
+    if (cleanStorage || cleanAddresses) {
+      this.cleanStorage(cleanStorage, cleanAddresses);
     }
   }
 
   async cleanStorage(cleanHistory: boolean = false, cleanAddresses: boolean = false): Promise<void> {
     return this.store.cleanStorage(cleanHistory, cleanAddresses);
+  }
+
+  async changePin(oldPin: string, newPin: string): Promise<void> {
+    const accessData = await this.getAccessData();
+    if (accessData === null) {
+      throw new Error('Wallet is not initialized.');
+    }
+    if (!(accessData.mainKey || accessData.authKey)) {
+      throw new Error('No data to change');
+    }
+
+    if (accessData.mainKey) {
+      try {
+        const mainKey = decryptData(accessData.mainKey, oldPin);
+        const newEncryptedMainKey = encryptData(mainKey, newPin);
+        accessData.mainKey = newEncryptedMainKey;
+      } catch(err: unknown) {
+        throw new Error('Old pin is incorrect.');
+      }
+    }
+
+    if (accessData.authKey) {
+      try {
+        const authKey = decryptData(accessData.authKey, oldPin);
+        const newEncryptedAuthKey = encryptData(authKey, newPin);
+        accessData.authKey = newEncryptedAuthKey;
+      } catch(err: unknown) {
+        throw new Error('Old pin is incorrect.');
+      }
+    }
+
+    // Save the changes made
+    await this.saveAccessData(accessData);
+  }
+
+  async changePassword(oldPassword: string, newPassword: string): Promise<void> {
+    const accessData = await this.getAccessData();
+    if (accessData === null) {
+      throw new Error('Wallet is not initialized.');
+    }
+    if (!accessData.words) {
+      throw new Error('No data to change.');
+    }
+
+    try {
+      const words = decryptData(accessData.words, oldPassword);
+      const newEncryptedWords = encryptData(words, newPassword);
+      accessData.words = newEncryptedWords;
+    } catch(err: unknown) {
+      throw new Error('Old pin is incorrect.');
+    }
+
+    // Save the changes made
+    await this.saveAccessData(accessData);
   }
 }

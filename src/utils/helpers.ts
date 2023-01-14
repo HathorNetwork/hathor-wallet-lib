@@ -373,7 +373,7 @@ const helpers = {
    * @inner
    */
   async sleep(milliseconds: number): Promise<void> {
-    const promise: Promise<void> = new Promise((resolve, reject) => {
+    const promise: Promise<void> = new Promise(resolve => {
       setTimeout(() => {
         resolve();
       }, milliseconds);

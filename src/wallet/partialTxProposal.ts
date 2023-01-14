@@ -19,7 +19,7 @@ import {
 } from '../constants';
 
 import transactionUtils from '../utils/transaction';
-import dateFormatter from '../date';
+import dateFormatter from '../utils/date';
 
 import { OutputType, Utxo } from './types';
 import { Balance } from '../models/types';
@@ -234,8 +234,6 @@ class PartialTxProposal {
 
   /**
    * Calculate the token balance of the partial tx for a specific wallet.
-   *
-   * @param {HathorWallet} wallet Calculate the balance for this wallet.
    *
    * @returns {Record<string, Balance>}
    */

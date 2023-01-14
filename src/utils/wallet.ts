@@ -330,7 +330,6 @@ const wallet = {
       throw new Error('Signatures are incompatible with redeemScript');
     }
     const arr: Buffer[] = [];
-    let sigCount = 0;
     for (const sig of signatures) {
       helpers.pushDataToStack(arr, sig);
     }
@@ -368,30 +367,17 @@ const wallet = {
     return this.getMultiSigXPubFromXPriv(xpriv);
   },
 
-  generateAccessDataFromXpub(xpubkey: string, {multisig}: {multisig?: IMultisigData}): IWalletAccessData {
+  generateAccessDataFromXpub(xpubkey: string, {multisig}: {multisig?: IMultisigData} = {}): IWalletAccessData {
     let walletType: WalletType;
     if (multisig === undefined) {
       walletType = WalletType.P2PKH;
     } else {
       walletType = WalletType.MULTISIG;
     }
-    let xpub: HDPublicKey;
-    let accXPub: HDPublicKey;
-    const argXPub = HDPublicKey(xpubkey);
-    if (argXPub.depth === 0) {
-      if (walletType === WalletType.MULTISIG) {
-        accXPub = argXPub.deriveNonCompliantChild(P2SH_ACCT_PATH);
-        xpub = accXPub.deriveNonCompliantChild(0);
-      } else {
-        accXPub = argXPub.deriveNonCompliantChild(P2PKH_ACCT_PATH);
-        xpub = accXPub.deriveNonCompliantChild(0);
-      }
-    } else {
-      if (walletType === WalletType.MULTISIG) {
-        throw new Error('Cannot start a multisig wallet with a derived xpub');
-      }
-      xpub = argXPub;
-    }
+    // HDPublicKeys cannot derive on hardened paths, so the derivation must be done previously with the xprivkey.
+    // So we assume the user sent an xpub derived to the account level.
+    const accXPub = HDPublicKey(xpubkey);
+    const xpub = accXPub.derive(0);
 
     let multisigData: IMultisigData|undefined;
     if (multisig) {

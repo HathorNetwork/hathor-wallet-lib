@@ -243,7 +243,8 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    **/
-  changeServer(newServer) {
+  async changeServer(newServer) {
+    await this.stop({cleanStorage: true, cleanAddresses: true});
     this.storage.config.setServerUrl(newServer);
   }
 
@@ -447,7 +448,7 @@ class HathorWallet extends EventEmitter {
   /**
    * Get address from specific derivation index
    *
-   * @return {string} Address
+   * @return {Promise<string>} Address
    *
    * @memberof HathorWallet
    * @inner
@@ -1025,29 +1026,6 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Get a formatted TokenHistory object
-   *
-   * @param {Object} tx Full tx object
-   * @param {String} tokenUid The token uid
-   * @param {Object} tokenTxBalance The token balance on this tx
-   *
-   * @return {Object} A formatted TokenHistory object { txId, timestamp, tokenUid, balance, voided, version }
-   *
-   * @memberof HathorWallet
-   * @inner
-   **/
-  static getTokenHistoryObject(tx, tokenUid, tokenTxBalance) {
-    return {
-      txId: tx.tx_id,
-      timestamp: tx.timestamp,
-      tokenUid,
-      balance: tokenTxBalance,
-      voided: tx.is_voided,
-      version: tx.version,
-    };
-  }
-
-  /**
    * Process the transactions on the websocket transaction queue as if they just arrived.
    *
    * @memberof HathorWallet
@@ -1064,126 +1042,6 @@ class HathorWallet extends EventEmitter {
       // This effectively awaits 0 seconds, but it schedule the next iteration to run after other threads.
       await new Promise(resolve => { setTimeout(resolve, 0) });
     }
-  }
-
-  /**
-   * Prepare history and balance and save on a cache object
-   * to be used as pre processed data
-   *
-   * @memberof HathorWallet
-   * @inner
-   **/
-  async preProcessWalletData() {
-    const transactionCountByToken = {};
-    const history = this.getFullHistory();
-    const tokensHistory = {};
-    // iterate through all txs received and map all tokens this wallet has, with
-    // its history and balance
-    for (const tx of Object.values(history)) {
-      // we first get all tokens present in this tx (that belong to the user) and
-      // the corresponding balances
-      /* eslint-disable no-await-in-loop */
-      const balances = await this.getTxBalance(tx, { includeAuthorities: true });
-      for (const [tokenUid, tokenTxBalance] of Object.entries(balances)) {
-        let tokenHistory = tokensHistory[tokenUid];
-        if (tokenHistory === undefined) {
-          tokenHistory = [];
-          tokensHistory[tokenUid] = tokenHistory;
-        }
-        // add this tx to the history of the corresponding token
-        tokenHistory.push(HathorWallet.getTokenHistoryObject(tx, tokenUid, tokenTxBalance));
-      }
-
-      const tokensSeen = [];
-      for (const el of [...tx.outputs, ...tx.inputs]) {
-        if (this.isAddressMine(el.decoded.address) && !(tokensSeen.includes(el.token))) {
-          if (!(el.token in transactionCountByToken)) {
-            transactionCountByToken[el.token] = 0;
-          }
-          tokensSeen.push(el.token);
-          transactionCountByToken[el.token] += 1;
-        }
-      }
-    }
-
-    const tokensBalance = this._getBalanceRaw();
-    for (const tokenUid of Object.keys(tokensHistory)) {
-      if (!(tokenUid in tokensBalance)) {
-        tokensBalance[tokenUid] = { available: 0, locked: 0 };
-      }
-      tokensBalance[tokenUid].transactions = transactionCountByToken[tokenUid];
-    }
-
-    // in the end, sort (in place) all tx lists in descending order by timestamp
-    for (const txList of Object.values(tokensHistory)) {
-      txList.sort((elem1, elem2) => elem2.timestamp - elem1.timestamp);
-    }
-
-    this.setPreProcessedData('tokens', Object.keys(tokensHistory));
-    this.setPreProcessedData('historyByToken', tokensHistory);
-    this.setPreProcessedData('balanceByToken', tokensBalance);
-
-    await this.processTxQueue();
-  }
-
-  /**
-   * When a new tx arrives in the websocket we must update the
-   * pre processed data to reflects in the methods using it
-   * So we calculate the new token balance and update the history
-   *
-   * @param {Object} tx Full transaction object from websocket data
-   * @param {boolean} isNew If the transaction is new or an update
-   *
-   * @memberof HathorWallet
-   * @inner
-   **/
-  async onTxArrived(tx, isNew) {
-    const tokensHistory = this.getPreProcessedData('historyByToken');
-    const tokensBalance = this.getPreProcessedData('balanceByToken');
-    const updatedTokensBalance = this._getBalanceRaw();
-
-    // we first get all tokens present in this tx (that belong to the user) and
-    // the corresponding balances
-    const balances = await this.getTxBalance(tx, { includeAuthorities: true });
-    for (const [tokenUid, tokenTxBalance] of Object.entries(balances)) {
-      if (isNew) {
-        let tokenHistory = tokensHistory[tokenUid];
-        if (tokenHistory === undefined) {
-          // If it's a new token
-          tokenHistory = [];
-          tokensHistory[tokenUid] = tokenHistory;
-        }
-
-        // add this tx to the history of the corresponding token
-        tokenHistory.push(HathorWallet.getTokenHistoryObject(tx, tokenUid, tokenTxBalance));
-
-        // in the end, sort (in place) all tx lists in descending order by timestamp
-        tokenHistory.sort((elem1, elem2) => elem2.timestamp - elem1.timestamp);
-      } else {
-        const currentHistory = tokensHistory[tokenUid];
-        const txIndex = currentHistory.findIndex((el) => el.tx_id === tx.tx_id);
-
-        const newHistory = [...currentHistory];
-        newHistory[txIndex] = HathorWallet.getTokenHistoryObject(tx, tokenUid, tokenTxBalance);
-        tokensHistory[tokenUid] = newHistory;
-      }
-
-      if (!(tokenUid in updatedTokensBalance)) {
-        updatedTokensBalance[tokenUid] = { available: 0, locked: 0 };
-      }
-      // Update token balance
-      if (tokenUid in tokensBalance) {
-        updatedTokensBalance[tokenUid].transactions = tokensBalance[tokenUid].transactions + 1;
-      } else {
-        updatedTokensBalance[tokenUid].transactions = 1;
-      }
-      // update token total balance
-      tokensBalance[tokenUid] = updatedTokensBalance[tokenUid];
-    }
-
-    this.setPreProcessedData('tokens', Object.keys(tokensHistory));
-    this.setPreProcessedData('historyByToken', tokensHistory);
-    this.setPreProcessedData('balanceByToken', tokensBalance);
   }
 
   /**
@@ -1383,12 +1241,12 @@ class HathorWallet extends EventEmitter {
   /**
    * Close the connections and stop emitting events.
    **/
-  stop({ cleanStorage = true } = {}) {
+  async stop({ cleanStorage = true, cleanAddresses = false } = {}) {
     this.setState(HathorWallet.CLOSED);
     this.removeAllListeners();
 
     // XXX: this is not awaited so it can run in the background
-    this.storage.handleStop({connection: this.conn, cleanStorage});
+    await this.storage.handleStop({connection: this.conn, cleanStorage, cleanAddresses});
 
     this.firstConnection = true;
     this.walletStopped = true;

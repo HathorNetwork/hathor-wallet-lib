@@ -10,7 +10,7 @@ beforeAll(() => {
 
 afterEach(() => {
     networkIntance.setNetwork(previousNetwork);
-    config.setTxMiningUrl(undefined);
+    config.TX_MINING_URL = undefined;
 });
 
 test('use testnet tx mining by default', () => {

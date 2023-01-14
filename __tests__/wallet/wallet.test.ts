@@ -6,22 +6,21 @@
  */
 
 import { mockAxiosAdapter } from '../__mocks__/wallet.mock';
-import { HDPrivateKey, Message } from 'bitcore-lib';
+import { Message } from 'bitcore-lib';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import Network from '../../src/models/network';
 import {
   GetAddressesObject,
   WsTransaction,
   CreateWalletAuthData,
-  WalletAddressMap,
 } from '../../src/wallet/types';
-import axios from 'axios';
+// import axios from 'axios';
 import config from '../../src/config';
-import MockAdapter from 'axios-mock-adapter';
-import axiosInstance from '../../src/wallet/api/walletServiceAxios';
-import { buildSuccessTxByIdTokenDataResponse, buildWalletToAuthenticateApiCall, defaultWalletSeed } from '../__fixtures__/wallet.fixtures';
+// import MockAdapter from 'axios-mock-adapter';
+// import axiosInstance from '../../src/wallet/api/walletServiceAxios';
+import { buildSuccessTxByIdTokenDataResponse, buildWalletToAuthenticateApiCall, defaultWalletSeed } from '../__mock_helpers/wallet-service.fixtures';
 import Mnemonic from 'bitcore-mnemonic';
-import gWallet from '../../src/wallet';
+import storage from '../../src/storage';
 
 const MOCK_TX = {
   tx_id: '0009bc9bf8eab19c41a2aa9b9369d3b6a90ff12072729976634890d35788d5d7',
@@ -301,21 +300,21 @@ test('generateCreateWalletAuthData should return correct auth data', async () =>
     xpub: null,
   });
 
-  const authData: CreateWalletAuthData = wallet.generateCreateWalletAuthData(pin);
+  const authData: CreateWalletAuthData = await wallet.generateCreateWalletAuthData(pin);
   const timestampNow = Math.floor(Date.now() / 1000); // in seconds
 
   // these are deterministic, so we can avoid using the lib's methods to generate them
   const xpub = 'xpub6D2LLyX98BCEkbTHsE14kgP6atagb9TR3ZBvHYQrT9yEUDYeHVBmrnnyWo3u2cADp4upagFyuu5msxtosceN1FykN22oa41o3fMEJmFG766';
-  const xprivAccountPath = 'tnpr4ugT6rZcxFWFVXBpx3YX4eS5LnUwEzGAvfbzQ9tGst2MTBjijC783X5g2LMfxPrbLJxTPHJ99nB6qDbcqehfXDVTtA33cpn49ZuA6s6WQWP';
+  // const xprivAccountPath = 'tnpr4ugT6rZcxFWFVXBpx3YX4eS5LnUwEzGAvfbzQ9tGst2MTBjijC783X5g2LMfxPrbLJxTPHJ99nB6qDbcqehfXDVTtA33cpn49ZuA6s6WQWP';
   const walletId = '83f704d8b24d4f9cc252b080b008280bf4b3342065f7b4baee43fd0ec7186db7';
   const authXpub = 'xpub6AyEt1FdSvP2mXsZfJ4SLHbMugNMQVNdtkhzWoF6nQSSXcstiqEZDXd4Jg7XBscM2K9YMt2ubWXChYXMTAPS99E8Wot1tcMtyfJhhKLZLok';
-  const authXprivKey = 'tnpr4sdMdtJ7Gzh3WTc6k7bteFeLfaGc4LBPms84dQiXD8VZWb4yAY9uQFukpEaJLMpqBds8UUiamnmJWYQt97a3qGqZ5dv7yy3fWERia6CAXNh';
+  // const authXprivKey = 'tnpr4sdMdtJ7Gzh3WTc6k7bteFeLfaGc4LBPms84dQiXD8VZWb4yAY9uQFukpEaJLMpqBds8UUiamnmJWYQt97a3qGqZ5dv7yy3fWERia6CAXNh';
   const firstAddress = 'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX';
   const xpubAddress = 'WdSD7aytFEZ5Hp8quhqu3wUCsyyGqcneMu';
   const authXpubAddress = 'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM';
 
-  const privKeyAccountPath: HDPrivateKey = new HDPrivateKey(xprivAccountPath);
-  const authDerivedPrivKey: HDPrivateKey = new HDPrivateKey(authXprivKey);
+  // const privKeyAccountPath: HDPrivateKey = new HDPrivateKey(xprivAccountPath);
+  // const authDerivedPrivKey: HDPrivateKey = new HDPrivateKey(authXprivKey);
 
   const xpubMessage = new Message(String(timestampNow).concat(walletId).concat(xpubAddress));
   const authXpubMessage = new Message(String(timestampNow).concat(walletId).concat(authXpubAddress));
@@ -419,12 +418,12 @@ test('prepareDelegateAuthorityData', async () => {
     }],
     changeAmount: 4,
   });
-  const getXprivKeyMock = () => xpriv;
-  const getInputDataMock = () => '';
+  const getXprivKeyMock = () => xpriv.xprivkey;
+  const getInputDataMock = (xp: string, dtsh: Buffer) => Buffer.alloc(0);
 
-  jest.spyOn(wallet, 'getUtxos').mockImplementation(getUtxosMock);
-  jest.spyOn(gWallet, 'getXprivKey').mockImplementation(getXprivKeyMock);
-  jest.spyOn(wallet, 'getInputData').mockImplementation(getInputDataMock);
+  const spy1 = jest.spyOn(wallet, 'getUtxos').mockImplementation(getUtxosMock);
+  const spy2 = jest.spyOn(storage, 'getMainXPrivKey').mockImplementation(getXprivKeyMock);
+  const spy3 = jest.spyOn(wallet, 'getInputData').mockImplementation(getInputDataMock);
 
   // createAnother option should create another authority utxo to the given address
   const delegate1 = await wallet.prepareDelegateAuthorityData('00', 'mint', addresses[1], {
@@ -455,6 +454,11 @@ test('prepareDelegateAuthorityData', async () => {
     createAnother: false,
     pinCode: null,
   })).rejects.toThrowError('PIN not specified in prepareDelegateAuthorityData options');
+
+  // Clear mocks
+  spy1.mockRestore();
+  spy2.mockRestore();
+  spy3.mockRestore();
 });
 
 test('prepareDelegateAuthorityData should fail if type is invalid', async () => {
@@ -542,9 +546,9 @@ test('prepareDestroyAuthority', async () => {
   const getXprivKeyMock = () => xpriv;
   const getInputDataMock = () => Buffer.from([]);
 
-  jest.spyOn(wallet, 'getUtxos').mockImplementation(getUtxosMock);
-  jest.spyOn(gWallet, 'getXprivKey').mockImplementation(getXprivKeyMock);
-  jest.spyOn(wallet, 'getInputData').mockImplementation(getInputDataMock);
+  const spy1 = jest.spyOn(wallet, 'getUtxos').mockImplementation(getUtxosMock);
+  const spy2 = jest.spyOn(storage, 'getMainXPrivKey').mockImplementation(getXprivKeyMock);
+  const spy3 = jest.spyOn(wallet, 'getInputData').mockImplementation(getInputDataMock);
 
   // createAnother option should create another authority utxo to the given address
   const delegate1 = await wallet.prepareDestroyAuthorityData('00', 'mint', 1, {
@@ -554,6 +558,11 @@ test('prepareDestroyAuthority', async () => {
   expect(delegate1.outputs).toHaveLength(0);
   expect(delegate1.inputs).toHaveLength(1);
   expect(delegate1.inputs[0].hash).toStrictEqual('002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f');
+
+  // Clear mocks
+  spy1.mockRestore();
+  spy2.mockRestore();
+  spy3.mockRestore();  
 });
 
 test('destroyAuthority should throw if wallet is not ready', async () => {

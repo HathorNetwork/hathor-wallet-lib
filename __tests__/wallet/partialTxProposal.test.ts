@@ -12,16 +12,11 @@ import P2PKH from '../../src/models/p2pkh';
 import P2SH from '../../src/models/p2sh';
 import Transaction from '../../src/models/transaction';
 import Address from '../../src/models/address';
-import HathorWallet from '../../src/new/wallet';
-import wallet from '../../src/wallet';
-import dateFormatter from '../../src/date';
-import transaction from '../../src/transaction';
+import dateFormatter from '../../src/utils/date';
 import {
   ProposalInput,
   ProposalOutput,
-  PartialTxPrefix,
   PartialTx,
-  PartialTxInputDataPrefix,
   PartialTxInputData,
 } from '../../src/models/partial_tx';
 import {
@@ -32,25 +27,21 @@ import {
   MAX_INPUTS,
   MAX_OUTPUTS,
   TX_WEIGHT_CONSTANTS,
+  DEFAULT_TX_VERSION,
 } from '../../src/constants';
 
-beforeAll(() => {
-  transaction.updateMaxInputsConstant(MAX_INPUTS);
-  transaction.updateMaxOutputsConstant(MAX_OUTPUTS);
-  transaction.updateTransactionWeightConstants(
-    TX_WEIGHT_CONSTANTS.txMinWeight,
-    TX_WEIGHT_CONSTANTS.txWeightCoefficient,
-    TX_WEIGHT_CONSTANTS.txMinWeightK,
-  );
-});
+import storage, { MemoryStore, Storage } from '../../src/storage';
+import { IUtxo } from '../../src/types';
 
-const fakeHathorWallet = fakeMethods => {
-  const hWallet = {};
-  for (const m of Object.keys(fakeMethods)) {
-    hWallet[m] = fakeMethods[m];
-  }
-  return hWallet as HathorWallet;
-};
+// beforeAll(() => {
+//   transaction.updateMaxInputsConstant(MAX_INPUTS);
+//   transaction.updateMaxOutputsConstant(MAX_OUTPUTS);
+//   transaction.updateTransactionWeightConstants(
+//     TX_WEIGHT_CONSTANTS.txMinWeight,
+//     TX_WEIGHT_CONSTANTS.txWeightCoefficient,
+//     TX_WEIGHT_CONSTANTS.txMinWeightK,
+//   );
+// });
 
 const FAKE_TXID = '3df2d6824ca849c9d3fb17090f1fb269b2ef1075c0e2abda246a59ea4b075515';
 const FAKE_UID = '5342ca1fe63ea9211e425166060f0c6e36193507eb1ca1a091a9a25b90f3b32c';
@@ -65,7 +56,7 @@ const createPartialTx = (inputs, outputs) => {
   partialTx.outputs = outputs;
   return partialTx;
 };
-const scriptFromAddressP2PKH = (base58, timelock = null) => {
+const scriptFromAddressP2PKH = (base58: string, timelock: number|null = null) => {
   const p2pkh = new P2PKH(new Address(base58, { network: testnet }), { timelock });
   return p2pkh.createScript();
 };
@@ -83,7 +74,7 @@ test('fromPartialTx', async () => {
   ]);
 
   const serialized = partialTx.serialize();
-  const proposal = PartialTxProposal.fromPartialTx(serialized, testnet);
+  const proposal = PartialTxProposal.fromPartialTx(serialized, storage);
 
   expect(proposal.partialTx.serialize()).toEqual(serialized);
 
@@ -95,15 +86,25 @@ test('fromPartialTx', async () => {
     ],
   });
 
-  expect(proposal.network).toBe(testnet);
   expect(proposal.signatures).toBe(null);
 });
 
 test('addSend', async () => {
-  const utxos: Utxo[] = [{
+  const utxos: IUtxo[] = [{
     txId: FAKE_TXID,
     index: 1,
-    addressPath: 'm/address/path',
+    token: FAKE_UID,
+    address: ADDR1,
+    value: 10,
+    authorities: 0,
+    timelock: 100,
+    type: DEFAULT_TX_VERSION,
+    height: null,
+  }];
+  const utxosOld: Utxo[] = [{
+    txId: FAKE_TXID,
+    index: 1,
+    addressPath: '',
     address: ADDR1,
     timelock: 100,
     tokenId: FAKE_UID,
@@ -112,11 +113,10 @@ test('addSend', async () => {
     heightlock: null,
     locked: false,
   }];
-  function* utxoMock(options) {
-    for (const u of utxos) {
-      yield u;
-    }
-  }
+
+  const store = new MemoryStore();
+  const testStorage = new Storage(store);
+  testStorage.config.setNetwork('testnet');
 
   const spyReset = jest.spyOn(PartialTxProposal.prototype, 'resetSignatures');
   const spyInput = jest.spyOn(PartialTxProposal.prototype, 'addInput')
@@ -124,22 +124,23 @@ test('addSend', async () => {
   const spyOutput = jest.spyOn(PartialTxProposal.prototype, 'addOutput')
     .mockImplementation(() => {});
 
-  const hwallet = fakeHathorWallet({
-    getCurrentAddress: jest.fn(() => ({
-      address: ADDR2,
-    })),
-    getAllUtxos: jest.fn(utxoMock),
-  });
+  async function* utxoMock(options?: Parameters<typeof testStorage.selectUtxos>[0]) {
+    for (const u of utxos) {
+      yield u;
+    }
+  }
 
-  const proposal = new PartialTxProposal(testnet);
+  const spyUtxos = jest.spyOn(testStorage, 'selectUtxos').mockImplementation(utxoMock);
+  const spyAddr = jest.spyOn(testStorage, 'getCurrentAddress').mockImplementation(() => Promise.resolve(ADDR2));
+
+  const proposal = new PartialTxProposal(testStorage);
 
   /**
    * Add 1 input without change
    */
-  proposal.addSend(hwallet, FAKE_UID, 10);
+  await proposal.addSend(FAKE_UID, 10);
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(spyInput).toBeCalledWith(
-    hwallet,
     FAKE_TXID,
     1,
     10,
@@ -147,23 +148,22 @@ test('addSend', async () => {
     { token: FAKE_UID, authorities: 0, markAsSelected: true },
   );
   expect(spyOutput).not.toHaveBeenCalled();
-  expect(hwallet.getAllUtxos).toBeCalledWith({ token: FAKE_UID });
-  expect(hwallet.getCurrentAddress).not.toHaveBeenCalled();
+  expect(spyUtxos).toBeCalledWith({ token: FAKE_UID, authorities: 0 });
+  expect(spyAddr).not.toHaveBeenCalled();
 
   // Mock cleanup
   spyReset.mockClear();
   spyInput.mockClear();
   spyOutput.mockClear();
-  hwallet.getCurrentAddress.mockClear();
-  hwallet.getAllUtxos.mockClear();
+  spyUtxos.mockClear();
+  spyAddr.mockClear();
 
   /**
    * Add 1 input with change passing utxos and address
    */
-  proposal.addSend(hwallet, FAKE_UID, 4, { utxos, changeAddress: ADDR3 });
+  await proposal.addSend(FAKE_UID, 4, { utxos: utxosOld, changeAddress: ADDR3 });
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(spyInput).toBeCalledWith(
-    hwallet,
     FAKE_TXID,
     1,
     10,
@@ -176,24 +176,23 @@ test('addSend', async () => {
     ADDR3,
     { isChange: true },
   );
-  expect(hwallet.getCurrentAddress).not.toHaveBeenCalled();
-  expect(hwallet.getAllUtxos).not.toHaveBeenCalled();
+  expect(spyAddr).not.toHaveBeenCalled();
+  expect(spyUtxos).not.toHaveBeenCalled();
 
   // Mock cleanup
   spyReset.mockClear();
   spyInput.mockClear();
   spyOutput.mockClear();
-  hwallet.getAllUtxos.mockClear();
-  hwallet.getCurrentAddress.mockClear();
+  spyUtxos.mockClear();
+  spyAddr.mockClear();
 
   /**
    * Add 1 input with change without address and markAsSelected false
    */
-  proposal.addSend(hwallet, FAKE_UID, 8, { markAsSelected: false });
+  await proposal.addSend(FAKE_UID, 8, { markAsSelected: false });
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(hwallet.getAllUtxos).toBeCalledWith({ token: FAKE_UID });
+  expect(spyUtxos).toBeCalledWith({ token: FAKE_UID, authorities: 0 });
   expect(spyInput).toBeCalledWith(
-    hwallet,
     FAKE_TXID,
     1,
     10,
@@ -206,31 +205,31 @@ test('addSend', async () => {
     ADDR2,
     { isChange: true },
   );
-  expect(hwallet.getCurrentAddress).toHaveBeenCalled();
+  expect(spyAddr).toHaveBeenCalled();
 
   // Remove mocks
   spyReset.mockRestore();
   spyInput.mockRestore();
   spyOutput.mockRestore();
+  spyUtxos.mockRestore();
+  spyAddr.mockRestore();
 });
 
 test('addReceive', async () => {
   const spyReset = jest.spyOn(PartialTxProposal.prototype, 'resetSignatures');
   const spyOutput = jest.spyOn(PartialTxProposal.prototype, 'addOutput')
     .mockImplementation(() => {});
-
-  const hwallet = fakeHathorWallet({
-    getCurrentAddress: jest.fn(() => ({
-      address: ADDR1,
-    })),
-  });
-
-  const proposal = new PartialTxProposal(testnet);
+ 
+  const store = new MemoryStore();
+  const testStorage = new Storage(store);
+  testStorage.config.setNetwork('testnet');
+  const proposal = new PartialTxProposal(testStorage);
+  const spyAddr = jest.spyOn(testStorage, 'getCurrentAddress').mockImplementation(() => Promise.resolve(ADDR1));
 
   /**
    * Add 1 output of a custom token, get address from wallet
    */
-  proposal.addReceive(hwallet, FAKE_UID, 99);
+  await proposal.addReceive(FAKE_UID, 99);
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(spyOutput).toBeCalledWith(
     FAKE_UID,
@@ -238,17 +237,17 @@ test('addReceive', async () => {
     ADDR1,
     { timelock: null },
   );
-  expect(hwallet.getCurrentAddress).toHaveBeenCalled();
+  expect(spyAddr).toHaveBeenCalled();
 
   // Mock cleanup
   spyReset.mockClear();
   spyOutput.mockClear();
-  hwallet.getCurrentAddress.mockClear();
+  spyAddr.mockClear();
 
   /**
    * Add 1 HTR output, giving the destination address
    */
-  proposal.addReceive(hwallet, HATHOR_TOKEN_CONFIG.uid, 180, { address: ADDR2 });
+  await proposal.addReceive(HATHOR_TOKEN_CONFIG.uid, 180, { address: ADDR2 });
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(spyOutput).toBeCalledWith(
     HATHOR_TOKEN_CONFIG.uid,
@@ -256,7 +255,7 @@ test('addReceive', async () => {
     ADDR2,
     { timelock: null },
   );
-  expect(hwallet.getCurrentAddress).not.toHaveBeenCalled();
+  expect(spyAddr).not.toHaveBeenCalled();
 
   // Remove mocks
   spyReset.mockRestore();
@@ -267,30 +266,30 @@ test('addInput', async () => {
   const spyReset = jest.spyOn(PartialTxProposal.prototype, 'resetSignatures');
   const spyInput = jest.spyOn(PartialTx.prototype, 'addInput');
 
-  const hwallet = fakeHathorWallet({
-    markUtxoSelected: jest.fn((hash, index) => {}),
-  });
+  const store = new MemoryStore();
+  const testStorage = new Storage(store);
+  testStorage.config.setNetwork('testnet');
+  const spyMark = jest.spyOn(testStorage, 'utxoSelectAsInput').mockImplementation(jest.fn());
 
-  const proposal = new PartialTxProposal(testnet);
+  const proposal = new PartialTxProposal(testStorage);
 
   /**
    * Add 1 HTR input
    */
-  proposal.addInput(hwallet, FAKE_TXID, 5, 999, ADDR1);
+  proposal.addInput(FAKE_TXID, 5, 999, ADDR1);
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(hwallet.markUtxoSelected).toBeCalledWith(FAKE_TXID, 5);
+  expect(spyMark).toBeCalledWith({txId: FAKE_TXID, index: 5}, true);
   expect(spyInput).toBeCalledWith(FAKE_TXID, 5, 999, ADDR1, { token: HATHOR_TOKEN_CONFIG.uid, authorities: 0 });
 
   // Mock cleanup
   spyReset.mockClear();
   spyInput.mockClear();
-  hwallet.markUtxoSelected.mockClear();
+  spyMark.mockClear();
 
   /**
    * Add 1 custom token authority input
    */
   proposal.addInput(
-    hwallet,
     FAKE_TXID,
     20,
     70,
@@ -298,12 +297,13 @@ test('addInput', async () => {
     { token: FAKE_UID, authorities: TOKEN_MINT_MASK, markAsSelected: false },
   );
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(hwallet.markUtxoSelected).not.toHaveBeenCalled();
+  expect(spyMark).not.toHaveBeenCalled();
   expect(spyInput).toBeCalledWith(FAKE_TXID, 20, 70, ADDR2, { token: FAKE_UID, authorities: TOKEN_MINT_MASK });
 
   // Remove mocks
   spyReset.mockRestore();
   spyInput.mockRestore();
+  spyMark.mockRestore();
 });
 
 test('addOutput', async () => {
@@ -311,7 +311,10 @@ test('addOutput', async () => {
   const spyOutput = jest.spyOn(PartialTx.prototype, 'addOutput')
     .mockImplementation(() => {});
 
-  const proposal = new PartialTxProposal(testnet);
+  const store = new MemoryStore();
+  const testStorage = new Storage(store);
+  testStorage.config.setNetwork('testnet');
+  const proposal = new PartialTxProposal(testStorage);
 
   /**
    * Add 1 custom token output
@@ -345,9 +348,12 @@ test('addOutput', async () => {
 });
 
 test('resetSignatures', async () => {
-  const proposal = new PartialTxProposal(testnet);
+  const store = new MemoryStore();
+  const testStorage = new Storage(store);
+  testStorage.config.setNetwork('testnet');
+  const proposal = new PartialTxProposal(testStorage);
   proposal.signatures = new PartialTxInputData('a-hash', 1);
-  proposal.transaction = new Transaction();
+  proposal.transaction = new Transaction([], []);
 
   proposal.resetSignatures();
   expect(proposal.signatures).toEqual(null);
@@ -355,16 +361,19 @@ test('resetSignatures', async () => {
 });
 
 test('prepareTx', async () => {
-  let proposal = new PartialTxProposal(testnet);
+  const store = new MemoryStore();
+  const testStorage = new Storage(store);
+  testStorage.config.setNetwork('testnet');
+  let proposal = new PartialTxProposal(testStorage);
   proposal.signatures = new PartialTxInputData('a-hash', 0);
 
   // Returns a transaction instance
   expect(proposal.prepareTx()).toBeInstanceOf(Transaction);
 
-  proposal = new PartialTxProposal(testnet);
+  proposal = new PartialTxProposal(testStorage);
   proposal.signatures = new PartialTxInputData('another-hash', 0);
   // If the transaction already exists, it will return it
-  const tx = new Transaction();
+  const tx = new Transaction([], []);
   proposal.transaction = tx;
   expect(proposal.prepareTx()).toBe(tx);
 });
@@ -465,20 +474,21 @@ test('calculateBalance', async () => {
     },
   };
 
-  const hwallet = fakeHathorWallet({
-    isAddressMine: jest.fn(base58 => {
-      switch (base58) {
-        case ADDR1:
-        case ADDR2:
-        case ADDR3:
-          return true;
-        default:
-          return false;
-      }
-    }),
+  const store = new MemoryStore();
+  const testStorage = new Storage(store);
+  testStorage.config.setNetwork('testnet');
+  jest.spyOn(testStorage, 'isAddressMine').mockImplementation(async (base58: string) => {
+    switch (base58) {
+      case ADDR1:
+      case ADDR2:
+      case ADDR3:
+        return true;
+      default:
+        return false;
+    }
   });
 
-  const proposal = new PartialTxProposal(testnet);
+  const proposal = new PartialTxProposal(testStorage);
   proposal.partialTx = partialTx;
-  expect(proposal.calculateBalance(hwallet)).toEqual(expected);
+  expect(await proposal.calculateBalance()).toEqual(expected);
 });

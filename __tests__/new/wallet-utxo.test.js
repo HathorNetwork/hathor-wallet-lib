@@ -1,9 +1,32 @@
-import wallet from "../src/wallet";
 import HathorWallet from "../src/new/wallet";
 import txHistoryFixture from "./__fixtures__/tx_history";
 import transaction from "../src/transaction";
+import { MemoryStore, Storage } from "../../src/storage";
 
 const MAX_INPUTS = 255;
+
+class FakeHathorWallet {
+  constructor() {
+    // Will bind all methods to this instance
+    for (const method of Object.getOwnPropertyNames(HathorWallet.prototype)) {
+      if (method === 'constructor' || !(method && HathorWallet.prototype[method])) {
+        continue;
+      }
+      // All methods can be spied on and mocked.
+      this[method] = jest.fn().mockImplementation(HathorWallet.prototype[method].bind(this));
+    }
+
+    // Fake methods
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    this.storage = storage;
+
+
+    this.sendManyOutputsTransaction.mockImplementation(() => {
+      return Promise.resolve({ hash: "123" });
+    });
+  }
+}
 
 class FakeHathorWallet {
   constructor() {

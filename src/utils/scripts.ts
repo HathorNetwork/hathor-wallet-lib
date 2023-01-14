@@ -94,7 +94,7 @@ export const parseScriptData = (buff: Buffer): ScriptData => {
   // The expected len will be at least 2 bytes
   // 1 for the script len and 1 for the OP_CHECKSIG in the end
   let expectedLen = 2;
-  let dataBytesLen;
+  let dataBytesLen: number;
 
   // If we have OP_PUSHDATA1 as first byte, the second byte has the length of data
   // otherwise, the first byte already has the length of data
@@ -120,7 +120,7 @@ export const parseScriptData = (buff: Buffer): ScriptData => {
 
   // Get data from the script
   const data = getPushData(scriptBuf);
-  let decodedData;
+  let decodedData: string;
 
   try {
     decodedData = data.toString('utf-8');

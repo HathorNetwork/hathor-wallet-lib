@@ -18,7 +18,7 @@ import { HATHOR_TOKEN_CONFIG, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src
 import transaction from '../../src/transaction';
 import { NETWORK_NAME, TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test-constants';
 import wallet from '../../src/wallet';
-import dateFormatter from '../../src/date';
+import dateFormatter from '../../src/utils/date';
 import { loggers } from './utils/logger.util';
 import { SendTxError, WalletFromXPubGuard } from '../../src/errors';
 import SendTransaction from '../../src/new/sendTransaction';
