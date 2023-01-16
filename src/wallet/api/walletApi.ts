@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { get } from 'lodash';
 import { axiosInstance } from './walletServiceAxios';
 import {
   CheckAddressesMineResponseData,
@@ -26,6 +27,7 @@ import {
 } from '../types';
 import HathorWalletServiceWallet from '../wallet';
 import { WalletRequestError } from '../../errors';
+import { TxNotFoundError } from '../../errors';
 
 /**
  * Api calls for wallet
@@ -245,6 +247,11 @@ const walletApi = {
     const response = await axios.get(`wallet/proxy/transactions/${txId}`);
     if (response.status === 200 && response.data.success) {
       return response.data;
+    }
+
+    const message = get(response, 'data.message', '');
+    if (message === 'Transaction not found') {
+      throw new TxNotFoundError();
     }
 
     throw new WalletRequestError('Error getting transaction by its id from the proxied fullnode.', {

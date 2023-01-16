@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { get } from 'lodash';
 import EventEmitter from 'events';
 import wallet from '../wallet';
 import { HATHOR_TOKEN_CONFIG, HATHOR_BIP44_CODE, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
@@ -20,7 +21,7 @@ import MemoryStore from '../memory_store';
 import config from '../config';
 import SendTransaction from './sendTransaction';
 import Network from '../models/network';
-import { AddressError, WalletError, WalletFromXPubGuard } from '../errors';
+import { AddressError, TxNotFoundError, WalletError, WalletFromXPubGuard } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
 import { HDPrivateKey } from 'bitcore-lib';
@@ -2488,6 +2489,10 @@ class HathorWallet extends EventEmitter {
     });
 
     if (!tx.success) {
+      if (get(tx, 'message', '') === 'Transaction not found') {
+        throw new TxNotFoundError();
+      }
+
       throw new Error(`Invalid transaction ${txId}`);
     }
 
