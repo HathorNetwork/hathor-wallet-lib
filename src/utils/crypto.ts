@@ -89,12 +89,17 @@ export function decryptData(data: IEncryptedData, password: string): string {
     pbkdf2Hasher: data.pbkdf2Hasher,
   };
   if (validateHash(password, hash, options)) {
-    const originalData = _decryptData(keyData, password);
-    if (originalData.length === 0) {
-      // Decrypt error
+    try {
+      const originalData = _decryptData(keyData, password);
+      if (originalData.length === 0) {
+        // For certain NodeJS versions the CryptoJS.lib.WordArray will not raise an exception for malformed data.
+        // It will just return an empty string, so we throw an error to mark the data as invalid.
+        throw new Error('Invalid data.');
+      }
+      return originalData;
+    } catch (err: unknown) {
       throw new Error('Invalid data.');
     }
-    return originalData;
   } else {
     // FIXME: create custom error type for password errors
     throw new Error('Invalid password');
