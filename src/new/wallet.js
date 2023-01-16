@@ -2472,6 +2472,13 @@ class HathorWallet extends EventEmitter {
     return tx;
   }
 
+  /**
+   * Guard to check if the response is a transaction not found response
+   *
+   * @param {Object} data The request response data
+   *
+   * @throws {TxNotFoundError} If the returned error was a transaction not found
+   */
   static _txNotFoundGuard(data) {
     if (get(data, 'message', '') === 'Transaction not found') {
       throw new TxNotFoundError();
