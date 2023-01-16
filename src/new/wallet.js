@@ -2514,6 +2514,10 @@ class HathorWallet extends EventEmitter {
     });
 
     if (!confirmationData.success) {
+      if (get(confirmationData, 'message', '') === 'Transaction not found') {
+        throw new TxNotFoundError();
+      }
+
       throw new Error(`Invalid transaction ${txId}`);
     }
 
@@ -2545,6 +2549,10 @@ class HathorWallet extends EventEmitter {
     // { success: boolean, message: string } so we need to check if the response has
     // the `success` key
     if (Object.hasOwnProperty.call(graphvizData, 'success') && !graphvizData.success) {
+      if (get(graphvizData, 'message', '') === 'Transaction not found') {
+        throw new TxNotFoundError();
+      }
+
       throw new Error(`Invalid transaction ${txId}`);
     }
 

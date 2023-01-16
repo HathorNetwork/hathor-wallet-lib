@@ -121,6 +121,13 @@ test('getTxConfirmationData', async () => {
 
   await expect(hWallet.getTxConfirmationData('tx1')).rejects.toThrowError('Invalid transaction tx1');
 
+  getConfirmationDataSpy.mockImplementation((_txId, resolve) => resolve({
+    success: false,
+    message: 'Transaction not found',
+  }));
+
+  await expect(hWallet.getTxConfirmationData('tx1')).rejects.toThrowError(TxNotFoundError);
+
   getConfirmationDataSpy.mockImplementation((_txId, resolve) => {
     throw new Error('unhandled error');
   });
@@ -152,6 +159,13 @@ test('graphvizNeighborsQuery', async () => {
   }));
 
   await expect(hWallet.graphvizNeighborsQuery('tx1', 'type', 1)).rejects.toThrowError('Invalid transaction tx1');
+
+  getGraphvizSpy.mockImplementation((_url, resolve) => resolve({
+    success: false,
+    message: 'Transaction not found',
+  }));
+
+  await expect(hWallet.graphvizNeighborsQuery('tx1', 'type', 1)).rejects.toThrowError(TxNotFoundError);
 
   getGraphvizSpy.mockImplementation(() => {
     throw new Error('unhandled error');

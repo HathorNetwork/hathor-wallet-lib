@@ -1046,6 +1046,10 @@ describe('getTxConfirmationData', () => {
   it('should throw an error if success is false on response', async () => {
     expect(gWallet.getTxConfirmationData('invalid-tx-hash')).rejects.toThrowError(`Invalid transaction invalid-tx-hash`);
   });
+
+  it('should throw TxNotFoundError on valid hash but not found transaction', async () => {
+    expect(gWallet.getTxConfirmationData('000000000bc8c6fab1b3a5af184cc0e7ff7934c6ad982c8bea9ab5006ae1bafc')).rejects.toThrowError(TxNotFoundError);
+  });
 });
 
 describe('graphvizNeighborsQuery', () => {
@@ -1077,6 +1081,10 @@ describe('graphvizNeighborsQuery', () => {
 
   it('should throw an error if success is false on response', async () => {
     expect(gWallet.graphvizNeighborsQuery('invalid-tx-hash')).rejects.toThrowError(`Invalid transaction invalid-tx-hash`);
+  });
+
+  it('should throw TxNotFoundError on valid but not found transaction', async () => {
+    expect(gWallet.graphvizNeighborsQuery('000000000bc8c6fab1b3a5af184cc0e7ff7934c6ad982c8bea9ab5006ae1bafc')).rejects.toThrowError(TxNotFoundError);
   });
 });
 

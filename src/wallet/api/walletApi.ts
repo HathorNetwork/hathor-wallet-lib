@@ -269,6 +269,11 @@ const walletApi = {
       return response.data;
     }
 
+    const message = get(response, 'data.message', '');
+    if (message === 'Transaction not found') {
+      throw new TxNotFoundError();
+    }
+
     throw new WalletRequestError('Error getting transaction confirmation data by its id from the proxied fullnode.', {
       cause: response.data,
     });
@@ -289,6 +294,11 @@ const walletApi = {
       // We also need to check if `success` is a key to the object since this API will return
       // a string on success.
       if (Object.hasOwnProperty.call(response.data, 'success') && !response.data.success) {
+        const message = get(response, 'data.message', '');
+        if (message === 'Transaction not found') {
+          throw new TxNotFoundError();
+        }
+
         throw new WalletRequestError(`Error getting neighbors data for ${txId} from the proxied fullnode.`, {
           cause: response.data.message,
         });

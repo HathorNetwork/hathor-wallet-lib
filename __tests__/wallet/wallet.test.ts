@@ -642,6 +642,9 @@ test('getTxConfirmationData', async () => {
 
   mockAxiosAdapter.onGet('wallet/proxy/transactions/tx1/confirmation_data').reply(400, '');
   expect(wallet.getTxConfirmationData('tx1')).rejects.toThrowError('Error getting transaction confirmation data by its id from the proxied fullnode.');
+
+  mockAxiosAdapter.onGet('wallet/proxy/transactions/tx2/confirmation_data').reply(200, { success: false, message: 'Transaction not found' });
+  expect(wallet.getTxConfirmationData('tx2')).rejects.toThrowError(TxNotFoundError);
 });
 
 test('graphvizNeighborsQuery', async () => {
@@ -671,4 +674,7 @@ test('graphvizNeighborsQuery', async () => {
 
   mockAxiosAdapter.onGet('wallet/proxy/graphviz/neighbours?txId=tx1&graphType=test&maxLevel=1').reply(500, '');
   expect(wallet.graphvizNeighborsQuery('tx1', 'test', 1)).rejects.toThrowError('Error getting transaction confirmation data by its id from the proxied fullnode.');
+
+  mockAxiosAdapter.onGet('wallet/proxy/graphviz/neighbours?txId=tx2&graphType=test&maxLevel=1').reply(200, { success: false, message: 'Transaction not found' });
+  expect(wallet.graphvizNeighborsQuery('tx2', 'test', 1)).rejects.toThrowError(TxNotFoundError);
 });
