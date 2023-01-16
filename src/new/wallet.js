@@ -963,7 +963,7 @@ class HathorWallet extends EventEmitter {
     }
     const { outputs, inputs, utxos, total_amount } = await this.prepareConsolidateUtxosData(destinationAddress, options);
 
-    if (!this.isAddressMine(destinationAddress)) {
+    if (!await this.isAddressMine(destinationAddress)) {
       throw new Error('Utxo consolidation to an address not owned by this wallet isn\'t allowed.');
     }
 
@@ -1902,7 +1902,7 @@ class HathorWallet extends EventEmitter {
    *
    * @param {string} address Address to check
    *
-   * @return {boolean}
+   * @return {Promise<boolean>}
    **/
   async isAddressMine(address) {
     return this.storage.isAddressMine(address);

@@ -1,9 +1,11 @@
-import HathorWallet from "../src/new/wallet";
-import txHistoryFixture from "./__fixtures__/tx_history";
-import transaction from "../src/transaction";
+import HathorWallet from "../../src/new/wallet";
+import txHistoryFixture from "../__fixtures__/tx_history";
 import { MemoryStore, Storage } from "../../src/storage";
-
-const MAX_INPUTS = 255;
+import { MAX_INPUTS, MAX_OUTPUTS, TOKEN_DEPOSIT_PERCENTAGE, TX_WEIGHT_CONSTANTS } from "../../src/constants";
+import { HDPrivateKey } from "bitcore-lib";
+import { encryptData } from "../../src/utils/crypto";
+import { WalletType } from "../../src/types";
+import walletApi from "../../src/api/wallet";
 
 class FakeHathorWallet {
   constructor() {
@@ -16,38 +18,50 @@ class FakeHathorWallet {
       this[method] = jest.fn().mockImplementation(HathorWallet.prototype[method].bind(this));
     }
 
-    // Fake methods
-    const store = new MemoryStore();
-    const storage = new Storage(store);
-    this.storage = storage;
-
-
     this.sendManyOutputsTransaction.mockImplementation(() => {
       return Promise.resolve({ hash: "123" });
     });
-  }
-}
 
-class FakeHathorWallet {
-  constructor() {
-    this.wallet = wallet;
-    wallet._rewardSpendMinBlocks = 0;
-    wallet._networkBestChainHeight = 10;
-    this.isFromXPub = HathorWallet.prototype.isFromXPub.bind(this);
-    this.getUtxos = HathorWallet.prototype.getUtxos.bind(this);
-    this.consolidateUtxos = HathorWallet.prototype.consolidateUtxos.bind(this);
-    this.prepareConsolidateUtxosData = HathorWallet.prototype.prepareConsolidateUtxosData.bind(
-      this
-    );
-    this.isAddressMine = (address) =>
-      address === "WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ" ||
-      address === "WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp";
-    this.sendManyOutputsTransaction = jest.fn(() => {
-      return Promise.resolve({ hash: "123" });
+    // Prepare storage
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    storage.setApiVersion({
+      version: 'test',
+      network: 'testnet',
+      min_tx_weight: TX_WEIGHT_CONSTANTS.txMinWeight,
+      min_tx_weight_coefficient: TX_WEIGHT_CONSTANTS.txWeightCoefficient,
+      min_tx_weight_k: TX_WEIGHT_CONSTANTS.txMinWeightK,
+      token_deposit_percentage: TOKEN_DEPOSIT_PERCENTAGE,
+      reward_spend_min_blocks: 0,
+      max_number_inputs: MAX_INPUTS,
+      max_number_outputs: MAX_OUTPUTS,
     });
-  }
-  getFullHistory() {
-    return txHistoryFixture;
+    this.readyPromise = Promise.resolve()
+      .then(async () => {
+        const xpriv = new HDPrivateKey();
+        await storage.saveAccessData({
+          xpubkey: xpriv.xpubkey,
+          mainKey: encryptData(xpriv.xprivkey, '123'),
+          walletType: WalletType.P2PKH,
+          walletFlags: 0,
+        });
+        await storage.setCurrentHeight(10);
+        await storage.saveAddress({ base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0});
+        await storage.saveAddress({ base58: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp', bip32AddressIndex: 1});
+        for (const tx of txHistoryFixture) {
+          await storage.addTx(tx);
+        }
+        const getTokenApi = jest.spyOn(walletApi, 'getGeneralTokenInfo').mockImplementation((uid, resolve) => {
+          resolve({
+            success: true,
+            name: 'Custom token',
+            symbol: 'CTK',
+          });
+        });
+        await storage.processHistory();
+        getTokenApi.mockRestore();
+      });
+    this.storage = storage;
   }
 }
 
@@ -55,22 +69,22 @@ describe("UTXO Consolidation", () => {
   let hathorWallet;
   const destinationAddress = "WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ";
   const invalidDestinationAddress = "WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi";
-  beforeAll(() => {
-    transaction.updateMaxInputsConstant(MAX_INPUTS);
+  beforeAll(async () => {
     hathorWallet = new FakeHathorWallet();
+    await hathorWallet.readyPromise;
   });
 
-  test("filter only HTR utxos", () => {
-    const utxoDetails = hathorWallet.getUtxos();
-    expect(utxoDetails.utxos).toHaveLength(3);
+  test("filter only HTR utxos", async () => {
+    const utxoDetails = await hathorWallet.getUtxos();
+    expect(utxoDetails.utxos).toHaveLength(2);
     expect(utxoDetails.total_amount_available).toBe(2);
     expect(utxoDetails.total_utxos_available).toBe(2);
-    expect(utxoDetails.total_amount_locked).toBe(1);
-    expect(utxoDetails.total_utxos_locked).toBe(1);
+    expect(utxoDetails.total_amount_locked).toBe(0);
+    expect(utxoDetails.total_utxos_locked).toBe(0);
   });
 
-  test("filter by custom token", () => {
-    const utxoDetails = hathorWallet.getUtxos({
+  test("filter by custom token", async () => {
+    const utxoDetails = await hathorWallet.getUtxos({
       token: "01",
     });
     expect(utxoDetails.utxos).toHaveLength(1);
@@ -80,15 +94,15 @@ describe("UTXO Consolidation", () => {
     expect(utxoDetails.total_utxos_locked).toBe(0);
   });
 
-  test("filter by max_utxos", () => {
-    const utxoDetails = hathorWallet.getUtxos({
-      max_utxos: 2,
+  test("filter by max_utxos", async () => {
+    const utxoDetails = await hathorWallet.getUtxos({
+      max_utxos: 1,
     });
-    expect(utxoDetails.utxos).toHaveLength(2);
+    expect(utxoDetails.utxos).toHaveLength(1);
   });
 
-  test("filter by filter_address", () => {
-    const utxoDetails = hathorWallet.getUtxos({
+  test("filter by filter_address", async () => {
+    const utxoDetails = await hathorWallet.getUtxos({
       filter_address: "WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp",
     });
     expect(utxoDetails.utxos).toHaveLength(1);
@@ -98,19 +112,19 @@ describe("UTXO Consolidation", () => {
     expect(utxoDetails.total_utxos_locked).toBe(0);
   });
 
-  test("filter by maximum_amount", () => {
-    const utxoDetails = hathorWallet.getUtxos({
+  test("filter by maximum_amount", async () => {
+    const utxoDetails = await hathorWallet.getUtxos({
       maximum_amount: 2,
     });
-    expect(utxoDetails.utxos).toHaveLength(3);
+    expect(utxoDetails.utxos).toHaveLength(2);
     expect(utxoDetails.total_amount_available).toBe(2);
     expect(utxoDetails.total_utxos_available).toBe(2);
-    expect(utxoDetails.total_amount_locked).toBe(1);
-    expect(utxoDetails.total_utxos_locked).toBe(1);
+    expect(utxoDetails.total_amount_locked).toBe(0);
+    expect(utxoDetails.total_utxos_locked).toBe(0);
   });
 
-  test("filter by amount_bigger_than", () => {
-    const utxoDetails = hathorWallet.getUtxos({
+  test("filter by amount_bigger_than", async () => {
+    const utxoDetails = await hathorWallet.getUtxos({
       token: "02",
       amount_bigger_than: 2.5,
     });
@@ -121,8 +135,8 @@ describe("UTXO Consolidation", () => {
     expect(utxoDetails.total_utxos_locked).toBe(0);
   });
 
-  test("filter by amount_smaller_than", () => {
-    const utxoDetails = hathorWallet.getUtxos({
+  test("filter by amount_smaller_than", async () => {
+    const utxoDetails = await hathorWallet.getUtxos({
       token: "02",
       amount_smaller_than: 1.5,
     });
@@ -131,11 +145,6 @@ describe("UTXO Consolidation", () => {
     expect(utxoDetails.total_utxos_available).toBe(1);
     expect(utxoDetails.total_amount_locked).toBe(0);
     expect(utxoDetails.total_utxos_locked).toBe(0);
-  });
-
-  test("filter only_available utxos", () => {
-    const utxoDetails = hathorWallet.getUtxos({ only_available_utxos: true });
-    expect(utxoDetails.utxos).toHaveLength(2);
   });
 
   test("correctly execute consolidateUtxos", async () => {
@@ -156,12 +165,11 @@ describe("UTXO Consolidation", () => {
     ).toHaveLength(2);
   });
 
-  test("all HTR utxos locked by height", () => {
-    wallet._rewardSpendMinBlocks = 10;
-    const utxoDetails = hathorWallet.getUtxos();
-    expect(utxoDetails.utxos).toHaveLength(3);
-    expect(utxoDetails.total_utxos_locked).toBe(3);
-    wallet._rewardSpendMinBlocks = 0;
+  test("all HTR utxos locked by height", async () => {
+    hathorWallet.storage.version.reward_spend_min_blocks = 10;
+    const utxoDetails = await hathorWallet.getUtxos();
+    expect(utxoDetails.utxos).toHaveLength(0);
+    hathorWallet.storage.version.reward_spend_min_blocks = 0;
   });
 
   test("throw error when there is no utxo to consolidade", async () => {

@@ -187,12 +187,19 @@ export class Storage implements IStorage {
    * @generator
    * @yields {IUtxo}
    */
-  async *selectUtxos(options: IUtxoFilterOptions = {}): AsyncGenerator<IUtxo, any, unknown> {
+  async *selectUtxos(options: Omit<IUtxoFilterOptions, 'reward_lock'> = {}): AsyncGenerator<IUtxo, any, unknown> {
     const newFilter = (utxo: IUtxo): boolean => {
       const utxoId = `${utxo.txId}:${utxo.index}`;
       return (!this.utxosSelectedAsInput.has(utxoId)) && (options.filter_method ? options.filter_method(utxo) : true);
     }
-    const newOptions = {...options, filter_method: newFilter};
+
+    const newOptions: IUtxoFilterOptions = {
+      ...options,
+      filter_method: newFilter,
+    };
+    if (this.version?.reward_spend_min_blocks) {
+      newOptions.reward_lock = this.version.reward_spend_min_blocks;
+    }
     for await (const utxo of this.store.selectUtxos(newOptions)) {
       yield utxo;
     }

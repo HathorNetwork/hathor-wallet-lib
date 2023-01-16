@@ -241,6 +241,7 @@ export interface IUtxoFilterOptions {
   amount_smaller_than?: number;
   amount_bigger_than?: number;
   filter_method?: (utxo: IUtxo) => boolean;
+  reward_lock?: number,
 }
 
 export interface IFillTxOptions {
@@ -344,7 +345,7 @@ export interface IStorage {
 
   // UTXOs
   getAllUtxos(): AsyncGenerator<IUtxo>;
-  selectUtxos(options: IUtxoFilterOptions): AsyncGenerator<IUtxo>;
+  selectUtxos(options: Omit<IUtxoFilterOptions, 'reward_lock'>): AsyncGenerator<IUtxo>;
   fillTx(tx: IDataTx, options: IFillTxOptions): Promise<{inputs: IDataInput[], outputs: IDataOutput[]}>;
   utxoSelectAsInput(utxo: IUtxoId, markAs: boolean, ttl?: number): Promise<void>;
 

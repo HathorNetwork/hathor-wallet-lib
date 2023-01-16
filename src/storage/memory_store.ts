@@ -8,7 +8,7 @@
 import { IStore, IAddressInfo, ITokenData, ITokenMetadata, IHistoryTx, IUtxo, IWalletAccessData, IUtxoFilterOptions, IBalance, IAddressMetadata, IWalletData } from '../types';
 import transaction from '../utils/transaction';
 import walletApi from '../api/wallet';
-import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
+import { BLOCK_VERSION, GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
 
 
 const DEAFULT_ADDRESSES_WALLET_DATA = {
@@ -436,6 +436,19 @@ export class MemoryStore implements IStore {
   }
 
   async *selectUtxos(options: IUtxoFilterOptions): AsyncGenerator<IUtxo> {
+    const networkHeight = await this.getCurrentHeight();
+    const isHeightLocked = (utxo: IUtxo) => {
+      if (utxo.type !== BLOCK_VERSION) {
+        // Only blocks can be reward locked
+        return false;
+      }
+      if (!(options.reward_lock && networkHeight)) {
+        // We do not have details to process reward lock
+        return false;
+      }
+      // Heighlocked when network height is lower than block height + reward_spend_min_blocks
+      return ((utxo.height || 0) + options.reward_lock) > networkHeight;
+    };
     const token = options.token || '00';
     const authorities = options.authorities || 0;
     const maxUtxos = options.max_utxos || 255; // MAX_INPUTS
@@ -447,6 +460,10 @@ export class MemoryStore implements IStore {
     let utxoNum = 0;
 
     for (const utxo of this.utxos.values()) {
+      if (isHeightLocked(utxo)) {
+        // Skip heightlocked utxos
+        continue;
+      }
       let authority_match: boolean;
       if (authorities === 0) {
         authority_match = utxo.authorities === 0;
