@@ -533,6 +533,14 @@ export class MemoryStore implements IStore {
     return this.walletData.bestBlockHeight;
   }
 
+  async setGapLimit(value: number): Promise<void> {
+    this.walletData.gapLimit = value;
+  }
+
+  async getGapLimit(): Promise<number> {
+    return this.walletData.gapLimit;
+  }
+
   async getWalletData(): Promise<IWalletData> {
     return this.walletData;
   }

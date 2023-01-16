@@ -22,8 +22,8 @@ describe('getAddressInfo', () => {
     hWallet = await generateWalletHelper();
   });
 
-  afterAll(() => {
-    hWallet.stop();
+  afterAll(async () => {
+    await hWallet.stop();
   });
 
   it('should display correct values for HTR transactions with no change', async () => {

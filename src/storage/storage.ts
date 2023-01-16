@@ -27,6 +27,7 @@ import {
   IDataOutput,
   isDataOutputCreateToken,
   IFillTxOptions,
+  IBalance,
 } from '../types';
 import transaction from '../utils/transaction';
 import config, { Config } from '../config';
@@ -34,6 +35,10 @@ import { decryptData, encryptData } from '../utils/crypto';
 import FullNodeConnection from '../new/connection';
 import { getAddressType } from '../utils/address';
 
+const DEFAULT_ADDRESS_META: IAddressMetadata = {
+  numTransactions: 0,
+  balance: new Map<string, IBalance>(),
+};
 
 export class Storage implements IStorage {
   store: IStore;
@@ -59,10 +64,10 @@ export class Storage implements IStorage {
    * @generator
    * @yields {Promise<IAddressInfo & Partial<IAddressMetadata>>} The addresses in store.
    */
-  async *getAllAddresses(): AsyncGenerator<IAddressInfo & Partial<IAddressMetadata>> {
+  async *getAllAddresses(): AsyncGenerator<IAddressInfo & IAddressMetadata> {
     for await (const address of this.store.addressIter()) {
       const meta = await this.store.getAddressMeta(address.base58);
-      yield {...address, ...meta};
+      yield {...address, ...DEFAULT_ADDRESS_META, ...meta};
     }
   }
 
@@ -73,13 +78,13 @@ export class Storage implements IStorage {
    * @async
    * @returns {Promise<(IAddressInfo & Partial<IAddressMetadata>)|null>} The address info or null if not found
    */
-  async getAddressInfo(base58: string): Promise<(IAddressInfo & Partial<IAddressMetadata>)|null> {
+  async getAddressInfo(base58: string): Promise<(IAddressInfo & IAddressMetadata)|null> {
     const address = await this.store.getAddress(base58);
     if (address === null) {
       return null;
     }
     const meta = await this.store.getAddressMeta(base58);
-    return {...address, ...meta};
+    return {...address, ...DEFAULT_ADDRESS_META, ...meta};
   }
 
   /**
@@ -603,5 +608,13 @@ export class Storage implements IStorage {
 
     // Save the changes made
     await this.saveAccessData(accessData);
+  }
+
+  async setGapLimit(value: number): Promise<void> {
+    return this.store.setGapLimit(value);
+  }
+
+  async getGapLimit(): Promise<number> {
+    return this.store.getGapLimit();
   }
 }

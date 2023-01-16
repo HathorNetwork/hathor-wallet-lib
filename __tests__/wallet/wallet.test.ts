@@ -280,7 +280,7 @@ test('checkAddressesMine', async () => {
     success: false,
   });
 
-  expect(wallet.checkAddressesMine(['address1', 'address2', 'address3'])).resolves.toThrowError('Error checking wallet addresses.');
+  await expect(wallet.checkAddressesMine(['address1', 'address2', 'address3'])).rejects.toThrowError('Error checking wallet addresses.');
 });
 
 test('generateCreateWalletAuthData should return correct auth data', async () => {
@@ -443,13 +443,13 @@ test('prepareDelegateAuthorityData', async () => {
 
   expect(delegate2.outputs).toHaveLength(1);
 
-  expect(wallet.prepareDelegateAuthorityData('00', 'mint', addresses[1], {
+  await expect(wallet.prepareDelegateAuthorityData('00', 'mint', addresses[1], {
     anotherAuthorityAddress: 'invalid-address',
     createAnother: true,
     pinCode: '123456',
   })).rejects.toThrowError('Address invalid-address is not valid.');
 
-  expect(wallet.prepareDelegateAuthorityData('00', 'mint', addresses[1], {
+  await expect(wallet.prepareDelegateAuthorityData('00', 'mint', addresses[1], {
     anotherAuthorityAddress: addresses[2],
     createAnother: false,
     pinCode: null,
@@ -477,7 +477,7 @@ test('prepareDelegateAuthorityData should fail if type is invalid', async () => 
   wallet.setState('Ready');
 
   // createAnother option should create another authority utxo to the given address
-  expect(wallet.prepareDelegateAuthorityData('00', 'explode', 'addr1', {
+  await expect(wallet.prepareDelegateAuthorityData('00', 'explode', 'addr1', {
     anotherAuthorityAddress: 'addr2',
     createAnother: true,
     pinCode: '123456',
@@ -497,7 +497,7 @@ test('delegateAuthority should throw if wallet is not ready', async () => {
     xpub: null,
   });
 
-  expect(wallet.delegateAuthority('00', 'mint', 'address1', {
+  await expect(wallet.delegateAuthority('00', 'mint', 'address1', {
     createAnother: false,
     anotherAuthorityAddress: null,
     pinCode: '123456',
@@ -578,7 +578,7 @@ test('destroyAuthority should throw if wallet is not ready', async () => {
     xpub: null,
   });
 
-  expect(wallet.destroyAuthority('00', 'mint', 1, {
+  await expect(wallet.destroyAuthority('00', 'mint', 1, {
     pinCode: '123456',
   })).rejects.toThrowError('Wallet not ready');
 });
@@ -611,7 +611,7 @@ test('getFullTxById', async () => {
   expect(proxiedTx.tx.hash).toStrictEqual('tx1');
 
   mockAxiosAdapter.onGet('wallet/proxy/transactions/tx1').reply(400, {});
-  expect(wallet.getFullTxById('tx1')).rejects.toThrowError('Error getting transaction by its id from the proxied fullnode.');
+  await expect(wallet.getFullTxById('tx1')).rejects.toThrowError('Error getting transaction by its id from the proxied fullnode.');
 });
 
 test('getTxConfirmationData', async () => {
@@ -646,7 +646,7 @@ test('getTxConfirmationData', async () => {
   expect(proxiedConfirmationData).toStrictEqual(mockData);
 
   mockAxiosAdapter.onGet('wallet/proxy/transactions/tx1/confirmation_data').reply(400, '');
-  expect(wallet.getTxConfirmationData('tx1')).rejects.toThrowError('Error getting transaction confirmation data by its id from the proxied fullnode.');
+  await expect(wallet.getTxConfirmationData('tx1')).rejects.toThrowError('Error getting transaction confirmation data by its id from the proxied fullnode.');
 });
 
 test('graphvizNeighborsQuery', async () => {
@@ -675,5 +675,5 @@ test('graphvizNeighborsQuery', async () => {
   expect(proxiedGraphvizResponse).toStrictEqual(mockData);
 
   mockAxiosAdapter.onGet('wallet/proxy/graphviz/neighbours?txId=tx1&graphType=test&maxLevel=1').reply(500, '');
-  expect(wallet.graphvizNeighborsQuery('tx1', 'test', 1)).rejects.toThrowError('Error getting transaction confirmation data by its id from the proxied fullnode.');
+  await expect(wallet.graphvizNeighborsQuery('tx1', 'test', 1)).rejects.toThrowError('Error getting neighbors data');
 });

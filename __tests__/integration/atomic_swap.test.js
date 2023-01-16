@@ -10,7 +10,6 @@ import { loggers } from './utils/logger.util';
 import { HATHOR_TOKEN_CONFIG } from '../../src/constants';
 import SendTransaction from '../../src/new/sendTransaction';
 import PartialTxProposal from '../../src/wallet/partialTxProposal';
-import storage from '../../src/storage';
 import { delay } from './utils/core.util';
 
 describe('partial tx proposal', () => {
@@ -26,7 +25,7 @@ describe('partial tx proposal', () => {
     const network = hWallet1.getNetworkObject();
 
     // Injecting funds and creating a new custom token
-    await GenesisWalletHelper.injectFunds(hWallet1.getAddressAtIndex(0), 103);
+    await GenesisWalletHelper.injectFunds(await hWallet1.getAddressAtIndex(0), 103);
     const { hash: token1Uid } = await createTokenHelper(
       hWallet1,
       'Token1',
@@ -35,7 +34,7 @@ describe('partial tx proposal', () => {
     );
 
     // Injecting funds and creating a new custom token
-    await GenesisWalletHelper.injectFunds(hWallet2.getAddressAtIndex(0), 10);
+    await GenesisWalletHelper.injectFunds(await hWallet2.getAddressAtIndex(0), 10);
     const { hash: token2Uid } = await createTokenHelper(
       hWallet2,
       'Token2',
@@ -72,24 +71,22 @@ describe('partial tx proposal', () => {
      */
     const proposal = new PartialTxProposal(network);
     // Wallet1 side
-    proposal.addSend(hWallet1, HATHOR_TOKEN_CONFIG.uid, 100);
-    proposal.addSend(hWallet1, token1Uid, 100);
-    proposal.addReceive(hWallet1, token2Uid, 1000);
+    await proposal.addSend(hWallet1, HATHOR_TOKEN_CONFIG.uid, 100);
+    await proposal.addSend(hWallet1, token1Uid, 100);
+    await proposal.addReceive(hWallet1, token2Uid, 1000);
     expect(proposal.partialTx.isComplete()).toBeFalsy();
     // Wallet2 side
-    proposal.addSend(hWallet2, token2Uid, 1000);
-    proposal.addReceive(hWallet2, HATHOR_TOKEN_CONFIG.uid, 100);
-    proposal.addReceive(hWallet2, token1Uid, 100);
+    await proposal.addSend(hWallet2, token2Uid, 1000);
+    await proposal.addReceive(hWallet2, HATHOR_TOKEN_CONFIG.uid, 100);
+    await proposal.addReceive(hWallet2, token1Uid, 100);
     expect(proposal.partialTx.isComplete()).toBeTruthy();
 
     const serialized = proposal.partialTx.serialize();
-    const proposal1 = PartialTxProposal.fromPartialTx(serialized, network);
-    storage.setStore(hWallet1.store);
+    const proposal1 = PartialTxProposal.fromPartialTx(serialized, hWallet1.storage);
     await proposal1.signData(DEFAULT_PIN_CODE, true);
     expect(proposal1.signatures.isComplete()).toBeFalsy();
 
-    const proposal2 = PartialTxProposal.fromPartialTx(serialized, network);
-    storage.setStore(hWallet2.store);
+    const proposal2 = PartialTxProposal.fromPartialTx(serialized, hWallet2.storage);
     await proposal2.signData(DEFAULT_PIN_CODE, true);
 
     expect(proposal2.signatures.isComplete()).toBeFalsy();

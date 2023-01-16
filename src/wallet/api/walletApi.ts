@@ -26,6 +26,7 @@ import {
 } from '../types';
 import HathorWalletServiceWallet from '../wallet';
 import { WalletRequestError } from '../../errors';
+import axios from 'axios';
 
 /**
  * Api calls for wallet
@@ -104,9 +105,13 @@ const walletApi = {
     addresses: string[],
   ): Promise<CheckAddressesMineResponseData> {
     const axios = await axiosInstance(wallet, true);
-    const response = await axios.post('wallet/addresses/check_mine', { addresses });
-    if (response.status === 200 && response.data.success === true) {
-      return response.data;
+    try {
+      const response = await axios.post('wallet/addresses/check_mine', { addresses });
+      if (response.status === 200 && response.data.success === true) {
+        return response.data;
+      }
+    } catch (err: unknown) {
+      // ignore errors
     }
 
     throw new WalletRequestError('Error checking wallet addresses.');
@@ -274,25 +279,26 @@ const walletApi = {
     maxLevel: number,
   ): Promise<string> {
     const axios = await axiosInstance(wallet, true);
-    const response = await axios.get(`wallet/proxy/graphviz/neighbours?txId=${txId}&graphType=${graphType}&maxLevel=${maxLevel}`);
-    if (response.status === 200) {
-      // The service might answer a status code 200 but output an error message like
-      // { success: false, message: '...' }, we need to handle it.
-      //
-      // We also need to check if `success` is a key to the object since this API will return
-      // a string on success.
-      if (Object.hasOwnProperty.call(response.data, 'success') && !response.data.success) {
-        throw new WalletRequestError(`Error getting neighbors data for ${txId} from the proxied fullnode.`, {
-          cause: response.data.message,
-        });
+    try {
+      const response = await axios.get(`wallet/proxy/graphviz/neighbours?txId=${txId}&graphType=${graphType}&maxLevel=${maxLevel}`);
+      if (response.status === 200) {
+        // The service might answer a status code 200 but output an error message like
+        // { success: false, message: '...' }, we need to handle it.
+        //
+        // We also need to check if `success` is a key to the object since this API will return
+        // a string on success.
+        if (Object.hasOwnProperty.call(response.data, 'success') && !response.data.success) {
+          throw new WalletRequestError(`Error getting neighbors data for ${txId} from the proxied fullnode.`, {
+            cause: response.data.message,
+          });
+        }
+
+        return response.data;
       }
-
-      return response.data;
+    } catch(err: unknown) {
+      // ignore errors
     }
-
-    throw new WalletRequestError(`Error getting neighbors data for ${txId} from the proxied fullnode.`, {
-      cause: response.data,
-    });
+    throw new WalletRequestError(`Error getting neighbors data for ${txId} from the proxied fullnode.`);
   },
 };
 

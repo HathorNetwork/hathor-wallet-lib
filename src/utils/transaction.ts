@@ -354,10 +354,18 @@ const transaction = {
       const tokenData = this.getTokenDataFromOutput(output, txData.tokens);
       return new Output(output.value, script, { tokenData });
     });
+    const options = {
+      version: txData.version,
+      weight: txData.weight || 0,
+      nonce: txData.nonce || 0,
+      timestamp: txData.timestamp || null,
+      parents: txData.parents || [],
+      tokens: txData.tokens || [],
+    };
     if (txData.version === CREATE_TOKEN_TX_VERSION) {
-      return new CreateTokenTransaction(txData.name!, txData.symbol!, inputs, outputs);
+      return new CreateTokenTransaction(txData.name!, txData.symbol!, inputs, outputs, options);
     } else if (txData.version === DEFAULT_TX_VERSION) {
-      return new Transaction(inputs, outputs, { version: txData.version });
+      return new Transaction(inputs, outputs, options);
     } else {
       throw new ParseError('Invalid transaction version.');
     }

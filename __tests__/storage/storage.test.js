@@ -5,7 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import walletApi from "../../src/api/wallet";
 import { MemoryStore, Storage } from "../../src/storage";
+import tx_history from "../__fixtures__/tx_history";
 
 
 test('config version', () => {
@@ -17,6 +19,13 @@ test('config version', () => {
 });
 
 test('store fetch methods', async () => {
+  const getTokenApi = jest.spyOn(walletApi, 'getGeneralTokenInfo').mockImplementation((uid, resolve) => {
+    resolve({
+      success: true,
+      name: 'Custom token',
+      symbol: 'CTK',
+    });
+  });
   const store = new MemoryStore();
   await store.saveAddress({base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0});
   await store.saveAddress({base58: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp', bip32AddressIndex: 1});
@@ -34,7 +43,7 @@ test('store fetch methods', async () => {
   await expect(storage.getAddressInfo('WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ')).resolves.toMatchObject({
     base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
     bip32AddressIndex: 0,
-    numTransactions: 0,
+    numTransactions: 2,
     balance: expect.anything(),
   });
   await expect(storage.getAddressAtIndex(1)).resolves.toMatchObject({
@@ -51,8 +60,9 @@ test('store fetch methods', async () => {
 
   await expect(storage.getTx('0000000110eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e')).resolves.toBeDefined();
 
-  const tokenSpy = jest.spyOn(store, 'tokenHistory').mockImplementation(emptyIter);
+  const tokenSpy = jest.spyOn(store, 'historyIter').mockImplementation(emptyIter);
   for await (const _ of storage.tokenHistory()) { continue };
   expect(tokenSpy).toHaveBeenCalledWith('00');
 
+  getTokenApi.mockRestore();
 });

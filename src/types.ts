@@ -304,6 +304,8 @@ export interface IStore {
   getCurrentHeight(): Promise<number>;
   setCurrentHeight(height: number): Promise<void>;
   getCurrentAddress(markAsUsed?: boolean): Promise<string>;
+  setGapLimit(value: number): Promise<void>;
+  getGapLimit(): Promise<number>;
 
   // Generic storage keys
   getItem(key: string): Promise<any>;
@@ -319,8 +321,8 @@ export interface IStorage {
   version: ApiVersion|null;
 
   // Address methods
-  getAllAddresses(): AsyncGenerator<IAddressInfo & Partial<IAddressMetadata>>;
-  getAddressInfo(base58: string): Promise<(IAddressInfo & Partial<IAddressMetadata>)|null>;
+  getAllAddresses(): AsyncGenerator<IAddressInfo & IAddressMetadata>;
+  getAddressInfo(base58: string): Promise<(IAddressInfo & IAddressMetadata)|null>;
   getAddressAtIndex(index: number): Promise<IAddressInfo|null>;
   saveAddress(info: IAddressInfo): Promise<void>;
   isAddressMine(base58: string): Promise<boolean>;
@@ -362,7 +364,8 @@ export interface IStorage {
   setApiVersion(version: ApiVersion): void;
   changePin(oldPin: string, newPin: string): Promise<void>;
   changePassword(oldPassword: string, newPassword: string): Promise<void>;
-
+  setGapLimit(value: number): Promise<void>;
+  getGapLimit(): Promise<number>;
   cleanStorage(cleanHistory?: boolean, cleanAddresses?: boolean): Promise<void>;
   handleStop(options: {connection?: FullNodeConnection, cleanStorage?: boolean, cleanAddresses?: boolean}): Promise<void>;
 }

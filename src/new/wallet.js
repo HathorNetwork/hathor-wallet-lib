@@ -409,9 +409,9 @@ class HathorWallet extends EventEmitter {
   /**
    * Return all addresses of the wallet with info of each of them
    *
-   * @yields {{address: string, index: number, transactions: number}}  transactions is the count of txs for this address
-   * @generator
    * @async
+   * @generator
+   * @returns {AsyncGenerator<{address: string, index: number, transactions: number}>} transactions is the count of txs for this address
    * @memberof HathorWallet
    **/
   async * getAllAddresses() {
@@ -1013,7 +1013,7 @@ class HathorWallet extends EventEmitter {
   /**
    * Get full wallet history (same as old method to be used for compatibility)
    *
-   * @return {Record<string,DecodedTx>} Object with transaction data { tx_id: { full_transaction_data }}
+   * @return {Promise<Record<string,DecodedTx>>} Object with transaction data { tx_id: { full_transaction_data }}
    *
    * @memberof HathorWallet
    * @inner
@@ -1187,6 +1187,15 @@ class HathorWallet extends EventEmitter {
     this.storage.config.setServerUrl(this.conn.getCurrentServer());
     this.conn.on('state', this.onConnectionChangedState);
     this.conn.on('wallet-update', this.handleWebsocketMsg);
+
+    if (this.preCalculatedAddresses) {
+      for (const [index, addr] of this.preCalculatedAddresses.entries()) {
+        await this.storage.saveAddress({
+          base58: addr,
+          bip32AddressIndex: index,
+        });
+      }
+    }
 
     let accessData;
     if (this.seed) {
@@ -2172,7 +2181,7 @@ class HathorWallet extends EventEmitter {
    * @param {string} graphType The graph type to query
    * @param {string} maxLevel Max level to render
    *
-   * @returns {string} The graphviz digraph
+   * @returns {Promise<string>} The graphviz digraph
    */
   async graphvizNeighborsQuery(
     txId,
