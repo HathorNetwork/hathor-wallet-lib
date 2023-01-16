@@ -675,5 +675,6 @@ test('graphvizNeighborsQuery', async () => {
   expect(proxiedGraphvizResponse).toStrictEqual(mockData);
 
   mockAxiosAdapter.onGet('wallet/proxy/graphviz/neighbours?txId=tx1&graphType=test&maxLevel=1').reply(500, '');
-  await expect(wallet.graphvizNeighborsQuery('tx1', 'test', 1)).rejects.toThrowError('Error getting neighbors data');
+  // Axios will throw on 500 status code
+  await expect(wallet.graphvizNeighborsQuery('tx1', 'test', 1)).rejects.toThrowError('Request failed with status code 500');
 });
