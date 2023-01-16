@@ -2472,6 +2472,12 @@ class HathorWallet extends EventEmitter {
     return tx;
   }
 
+  static _txNotFoundGuard(data) {
+    if (get(data, 'message', '') === 'Transaction not found') {
+      throw new TxNotFoundError();
+    }
+  }
+
   /**
    * Queries the fullnode for a transaction
    *
@@ -2489,9 +2495,7 @@ class HathorWallet extends EventEmitter {
     });
 
     if (!tx.success) {
-      if (get(tx, 'message', '') === 'Transaction not found') {
-        throw new TxNotFoundError();
-      }
+      HathorWallet._txNotFoundGuard(tx);
 
       throw new Error(`Invalid transaction ${txId}`);
     }
@@ -2514,9 +2518,7 @@ class HathorWallet extends EventEmitter {
     });
 
     if (!confirmationData.success) {
-      if (get(confirmationData, 'message', '') === 'Transaction not found') {
-        throw new TxNotFoundError();
-      }
+      HathorWallet._txNotFoundGuard(confirmationData);
 
       throw new Error(`Invalid transaction ${txId}`);
     }
@@ -2549,9 +2551,7 @@ class HathorWallet extends EventEmitter {
     // { success: boolean, message: string } so we need to check if the response has
     // the `success` key
     if (Object.hasOwnProperty.call(graphvizData, 'success') && !graphvizData.success) {
-      if (get(graphvizData, 'message', '') === 'Transaction not found') {
-        throw new TxNotFoundError();
-      }
+      HathorWallet._txNotFoundGuard(graphvizData);
 
       throw new Error(`Invalid transaction ${txId}`);
     }
