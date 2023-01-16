@@ -61,21 +61,21 @@ export const unpackToInt = (n: number, signed: boolean, buff: Buffer): [number, 
   const slicedBuff = buff.slice(0, n);
   if (n === 1) {
     if (signed) {
-      retInt = slicedBuff.readInt8();
+      retInt = slicedBuff.readInt8(0);
     } else {
-      retInt = slicedBuff.readUInt8();
+      retInt = slicedBuff.readUInt8(0);
     }
   } else if (n === 2) {
     if (signed) {
-      retInt = slicedBuff.readInt16BE();
+      retInt = slicedBuff.readInt16BE(0);
     } else {
-      retInt = slicedBuff.readUInt16BE();
+      retInt = slicedBuff.readUInt16BE(0);
     }
   } else if (n === 4) {
     if (signed) {
-      retInt = slicedBuff.readInt32BE();
+      retInt = slicedBuff.readInt32BE(0);
     } else {
-      retInt = slicedBuff.readUInt32BE();
+      retInt = slicedBuff.readUInt32BE(0);
     }
   } else if (n === 8) {
     // We have only signed ints here
@@ -107,7 +107,7 @@ export const unpackToFloat = (buff: Buffer): [number, Buffer] => {
   const n = 8;
   validateLenToUnpack(n, buff);
 
-  const retFloat = buff.slice(0, n).readDoubleBE();
+  const retFloat = buff.slice(0, n).readDoubleBE(0);
   return [
     retFloat,
     buff.slice(n)

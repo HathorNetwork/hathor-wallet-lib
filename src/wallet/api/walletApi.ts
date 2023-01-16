@@ -21,6 +21,8 @@ import {
   AuthTokenResponseData,
   FullNodeVersionData,
   TxByIdTokensResponseData,
+  FullNodeTxResponse,
+  FullNodeTxConfirmationDataResponse,
 } from '../types';
 import HathorWalletServiceWallet from '../wallet';
 import { WalletRequestError } from '../../errors';
@@ -47,6 +49,7 @@ const walletApi = {
     const axios = await axiosInstance(wallet, false);
     const response = await axios.get('version');
     const data = response.data;
+
     if (response.status === 200 && data.success) {
       return data.data;
     } else {
@@ -199,10 +202,10 @@ const walletApi = {
   },
 
   async createAuthToken(
-      wallet: HathorWalletServiceWallet,
-      timestamp: number,
-      xpub: string,
-      sign: string,
+    wallet: HathorWalletServiceWallet,
+    timestamp: number,
+    xpub: string,
+    sign: string,
   ): Promise<AuthTokenResponseData> {
     const data = {
       ts: timestamp,
@@ -214,19 +217,82 @@ const walletApi = {
     const response = await axios.post('auth/token', data);
     if (response.status === 200 && response.data.success === true) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error requesting auth token.');
     }
+
+    throw new WalletRequestError('Error requesting auth token.');
   },
 
-  async getTxById(wallet: HathorWalletServiceWallet, txId: string): Promise<TxByIdTokensResponseData> {
+  async getTxById(
+    wallet: HathorWalletServiceWallet,
+    txId: string,
+  ): Promise<TxByIdTokensResponseData> {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get(`wallet/transactions/${txId}`);
     if (response.status === 200 && response.data.success) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error getting transaction by its id.', { cause: response.data });
     }
+
+    throw new WalletRequestError('Error getting transaction by its id.', {
+      cause: response.data,
+    });
+  },
+
+  async getFullTxById(
+    wallet: HathorWalletServiceWallet,
+    txId: string,
+  ): Promise<FullNodeTxResponse> {
+    const axios = await axiosInstance(wallet, true);
+    const response = await axios.get(`wallet/proxy/transactions/${txId}`);
+    if (response.status === 200 && response.data.success) {
+      return response.data;
+    }
+
+    throw new WalletRequestError('Error getting transaction by its id from the proxied fullnode.', {
+      cause: response.data,
+    });
+  },
+
+  async getTxConfirmationData(
+    wallet: HathorWalletServiceWallet,
+    txId: string,
+  ): Promise<FullNodeTxConfirmationDataResponse> {
+    const axios = await axiosInstance(wallet, true);
+    const response = await axios.get(`wallet/proxy/transactions/${txId}/confirmation_data`);
+    if (response.status === 200 && response.data.success) {
+      return response.data;
+    }
+
+    throw new WalletRequestError('Error getting transaction confirmation data by its id from the proxied fullnode.', {
+      cause: response.data,
+    });
+  },
+
+  async graphvizNeighborsQuery(
+    wallet: HathorWalletServiceWallet,
+    txId: string,
+    graphType: string,
+    maxLevel: number,
+  ): Promise<string> {
+    const axios = await axiosInstance(wallet, true);
+    const response = await axios.get(`wallet/proxy/graphviz/neighbours?txId=${txId}&graphType=${graphType}&maxLevel=${maxLevel}`);
+    if (response.status === 200) {
+      // The service might answer a status code 200 but output an error message like
+      // { success: false, message: '...' }, we need to handle it.
+      //
+      // We also need to check if `success` is a key to the object since this API will return
+      // a string on success.
+      if (Object.hasOwnProperty.call(response.data, 'success') && !response.data.success) {
+        throw new WalletRequestError(`Error getting neighbors data for ${txId} from the proxied fullnode.`, {
+          cause: response.data.message,
+        });
+      }
+
+      return response.data;
+    }
+
+    throw new WalletRequestError(`Error getting neighbors data for ${txId} from the proxied fullnode.`, {
+      cause: response.data,
+    });
   },
 };
 

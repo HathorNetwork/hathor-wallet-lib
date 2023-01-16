@@ -582,3 +582,98 @@ test('destroyAuthority should throw if wallet is not ready', async () => {
     pinCode: '123456',
   })).rejects.toThrowError('Wallet not ready');
 });
+
+test('getFullTxById', async () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = defaultWalletSeed;
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+
+  wallet.setState('Ready');
+
+  config.setWalletServiceBaseUrl('https://wallet-service.testnet.hathor.network/');
+
+  mockAxiosAdapter.onGet('wallet/proxy/transactions/tx1').reply(200, {
+    success: true,
+    tx: { hash: 'tx1' },
+    meta: {},
+  });
+
+  const proxiedTx = await wallet.getFullTxById('tx1');
+
+  expect(proxiedTx.tx.hash).toStrictEqual('tx1');
+
+  mockAxiosAdapter.onGet('wallet/proxy/transactions/tx1').reply(400, {});
+  expect(wallet.getFullTxById('tx1')).rejects.toThrowError('Error getting transaction by its id from the proxied fullnode.');
+});
+
+test('getTxConfirmationData', async () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = defaultWalletSeed;
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+
+  wallet.setState('Ready');
+
+  config.setWalletServiceBaseUrl('https://wallet-service.testnet.hathor.network/');
+
+  const mockData = {
+    success: true,
+    accumulated_weight: 67.45956109191802,
+    accumulated_bigger: true,
+    stop_value: 67.45416781056525,
+    confirmation_level: 1,
+  };
+
+  mockAxiosAdapter.onGet('wallet/proxy/transactions/tx1/confirmation_data').reply(200, mockData);
+
+  const proxiedConfirmationData = await wallet.getTxConfirmationData('tx1');
+
+  expect(proxiedConfirmationData).toStrictEqual(mockData);
+
+  mockAxiosAdapter.onGet('wallet/proxy/transactions/tx1/confirmation_data').reply(400, '');
+  expect(wallet.getTxConfirmationData('tx1')).rejects.toThrowError('Error getting transaction confirmation data by its id from the proxied fullnode.');
+});
+
+test('graphvizNeighborsQuery', async () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = defaultWalletSeed;
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+
+  wallet.setState('Ready');
+
+  config.setWalletServiceBaseUrl('https://wallet-service.testnet.hathor.network/');
+
+  const mockData = 'digraph {}';
+
+  mockAxiosAdapter.onGet('wallet/proxy/graphviz/neighbours?txId=tx1&graphType=test&maxLevel=1').reply(200, mockData);
+
+  const proxiedGraphvizResponse = await wallet.graphvizNeighborsQuery('tx1', 'test', 1);
+
+  expect(proxiedGraphvizResponse).toStrictEqual(mockData);
+
+  mockAxiosAdapter.onGet('wallet/proxy/graphviz/neighbours?txId=tx1&graphType=test&maxLevel=1').reply(500, '');
+  expect(wallet.graphvizNeighborsQuery('tx1', 'test', 1)).rejects.toThrowError('Error getting transaction confirmation data by its id from the proxied fullnode.');
+});
