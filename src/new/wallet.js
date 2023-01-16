@@ -1695,6 +1695,7 @@ class HathorWallet extends EventEmitter {
       tokenUid,
       delegateInput[0],
       destinationAddress,
+      this.storage,
       createAnother,
     );
 
