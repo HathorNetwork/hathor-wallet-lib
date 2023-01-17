@@ -20,7 +20,7 @@ import { NETWORK_NAME, TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test
 import wallet from '../../src/wallet';
 import dateFormatter from '../../src/date';
 import { loggers } from './utils/logger.util';
-import { SendTxError, WalletFromXPubGuard } from '../../src/errors';
+import { TxNotFoundError, SendTxError, WalletFromXPubGuard } from '../../src/errors';
 import SendTransaction from '../../src/new/sendTransaction';
 import helpersUtils from '../../src/utils/helpers';
 import walletUtils from '../../src/utils/wallet';
@@ -1007,7 +1007,11 @@ describe('getFullTxById', () => {
   });
 
   it('should throw an error if success is false on response', async () => {
-    expect(gWallet.getFullTxById('invalid-tx-hash')).rejects.toThrowError(`Invalid transaction invalid-tx-hash`);
+    await expect(gWallet.getFullTxById('invalid-tx-hash')).rejects.toThrowError(`Invalid transaction invalid-tx-hash`);
+  });
+
+  it('should throw an error on valid but not found transaction', async () => {
+    await expect(gWallet.getFullTxById('0011371a7c07f7e8017c52c0a4f5293ccf30c865d96255d1b515f96f7a6a6299')).rejects.toThrowError(TxNotFoundError);
   });
 });
 
@@ -1040,7 +1044,11 @@ describe('getTxConfirmationData', () => {
   });
 
   it('should throw an error if success is false on response', async () => {
-    expect(gWallet.getTxConfirmationData('invalid-tx-hash')).rejects.toThrowError(`Invalid transaction invalid-tx-hash`);
+    await expect(gWallet.getTxConfirmationData('invalid-tx-hash')).rejects.toThrowError(`Invalid transaction invalid-tx-hash`);
+  });
+
+  it('should throw TxNotFoundError on valid hash but not found transaction', async () => {
+    await expect(gWallet.getTxConfirmationData('000000000bc8c6fab1b3a5af184cc0e7ff7934c6ad982c8bea9ab5006ae1bafc')).rejects.toThrowError(TxNotFoundError);
   });
 });
 
@@ -1068,11 +1076,15 @@ describe('graphvizNeighborsQuery', () => {
     const hWallet = await generateWalletHelper();
     const tx1 = await GenesisWalletHelper.injectFunds(hWallet.getAddressAtIndex(0), 10);
 
-    expect(hWallet.graphvizNeighborsQuery(tx1.hash)).rejects.toThrowError('Request failed with status code 500');
+    await expect(hWallet.graphvizNeighborsQuery(tx1.hash)).rejects.toThrowError('Request failed with status code 500');
   });
 
   it('should throw an error if success is false on response', async () => {
-    expect(gWallet.graphvizNeighborsQuery('invalid-tx-hash')).rejects.toThrowError(`Invalid transaction invalid-tx-hash`);
+    await expect(gWallet.graphvizNeighborsQuery('invalid-tx-hash')).rejects.toThrowError(`Invalid transaction invalid-tx-hash`);
+  });
+
+  it('should throw TxNotFoundError on valid but not found transaction', async () => {
+    await expect(gWallet.graphvizNeighborsQuery('000000000bc8c6fab1b3a5af184cc0e7ff7934c6ad982c8bea9ab5006ae1bafc')).rejects.toThrowError(TxNotFoundError);
   });
 });
 

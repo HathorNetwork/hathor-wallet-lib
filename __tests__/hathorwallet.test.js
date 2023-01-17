@@ -7,7 +7,7 @@
 
 import HathorWallet from '../src/new/wallet';
 import txApi from '../src/api/txApi';
-import { WalletFromXPubGuard } from '../src/errors';
+import { TxNotFoundError, WalletFromXPubGuard } from '../src/errors';
 import Transaction from '../src/models/transaction';
 import Input from '../src/models/input';
 import Output from '../src/models/output';
@@ -84,6 +84,13 @@ test('getFullTxById', async () => {
   });
 
   await expect(hWallet.getFullTxById('tx1')).rejects.toThrowError('API client did not use the callback');
+
+  getTxSpy.mockImplementation((_txId, resolve) => resolve({
+    success: false,
+    message: 'Transaction not found',
+  }));
+
+  await expect(hWallet.getFullTxById('tx1')).rejects.toThrowError(TxNotFoundError);
 });
 
 test('getTxConfirmationData', async () => {
@@ -113,6 +120,13 @@ test('getTxConfirmationData', async () => {
   }));
 
   await expect(hWallet.getTxConfirmationData('tx1')).rejects.toThrowError('Invalid transaction tx1');
+
+  getConfirmationDataSpy.mockImplementation((_txId, resolve) => resolve({
+    success: false,
+    message: 'Transaction not found',
+  }));
+
+  await expect(hWallet.getTxConfirmationData('tx1')).rejects.toThrowError(TxNotFoundError);
 
   getConfirmationDataSpy.mockImplementation((_txId, resolve) => {
     throw new Error('unhandled error');
@@ -145,6 +159,13 @@ test('graphvizNeighborsQuery', async () => {
   }));
 
   await expect(hWallet.graphvizNeighborsQuery('tx1', 'type', 1)).rejects.toThrowError('Invalid transaction tx1');
+
+  getGraphvizSpy.mockImplementation((_url, resolve) => resolve({
+    success: false,
+    message: 'Transaction not found',
+  }));
+
+  await expect(hWallet.graphvizNeighborsQuery('tx1', 'type', 1)).rejects.toThrowError(TxNotFoundError);
 
   getGraphvizSpy.mockImplementation(() => {
     throw new Error('unhandled error');
