@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { get } from 'lodash';
 import { axiosInstance } from './walletServiceAxios';
 import {
   CheckAddressesMineResponseData,
@@ -27,6 +28,7 @@ import {
 import HathorWalletServiceWallet from '../wallet';
 import { WalletRequestError } from '../../errors';
 import axios from 'axios';
+import { TxNotFoundError } from '../../errors';
 
 /**
  * Api calls for wallet
@@ -238,6 +240,14 @@ const walletApi = {
     });
   },
 
+  _txNotFoundGuard(data: unknown) {
+    const message = get(data, 'message', '');
+
+    if (message === 'Transaction not found') {
+      throw new TxNotFoundError();
+    }
+  },
+
   async getFullTxById(
     wallet: HathorWalletServiceWallet,
     txId: string,
@@ -247,6 +257,8 @@ const walletApi = {
     if (response.status === 200 && response.data.success) {
       return response.data;
     }
+
+    walletApi._txNotFoundGuard(response.data);
 
     throw new WalletRequestError('Error getting transaction by its id from the proxied fullnode.', {
       cause: response.data,
@@ -262,6 +274,8 @@ const walletApi = {
     if (response.status === 200 && response.data.success) {
       return response.data;
     }
+
+    walletApi._txNotFoundGuard(response.data);
 
     throw new WalletRequestError('Error getting transaction confirmation data by its id from the proxied fullnode.', {
       cause: response.data,
@@ -283,6 +297,8 @@ const walletApi = {
       // We also need to check if `success` is a key to the object since this API will return
       // a string on success.
       if (Object.hasOwnProperty.call(response.data, 'success') && !response.data.success) {
+        walletApi._txNotFoundGuard(response.data);
+
         throw new WalletRequestError(`Error getting neighbors data for ${txId} from the proxied fullnode.`, {
           cause: response.data.message,
         });
@@ -290,7 +306,10 @@ const walletApi = {
 
       return response.data;
     }
-    throw new WalletRequestError(`Error getting neighbors data for ${txId} from the proxied fullnode.`);
+
+    throw new WalletRequestError(`Error getting neighbors data for ${txId} from the proxied fullnode.`, {
+      cause: response.data,
+    });
   },
 };
 

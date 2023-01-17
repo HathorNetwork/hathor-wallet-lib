@@ -269,3 +269,12 @@ export class IndexOOBError extends PartialTxError {}
  * @inner
  */
 export class UnsupportedScriptError extends PartialTxError {}
+
+
+/**
+ * Error thrown when a requested transaction is not found
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class TxNotFoundError extends Error {};

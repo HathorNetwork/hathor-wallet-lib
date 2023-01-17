@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { get } from 'lodash';
 import EventEmitter from 'events';
 import { HATHOR_TOKEN_CONFIG, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
 import tokenUtils from '../utils/tokens';
@@ -16,7 +17,7 @@ import { createP2SHRedeemScript } from '../utils/scripts';
 import walletUtils from '../utils/wallet';
 import SendTransaction from './sendTransaction';
 import Network from '../models/network';
-import { AddressError, WalletError, WalletFromXPubGuard } from '../errors';
+import { AddressError, TxNotFoundError, WalletError, WalletFromXPubGuard } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
 import { HDPrivateKey } from 'bitcore-lib';
@@ -2134,6 +2135,19 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Guard to check if the response is a transaction not found response
+   *
+   * @param {Object} data The request response data
+   *
+   * @throws {TxNotFoundError} If the returned error was a transaction not found
+   */
+  static _txNotFoundGuard(data) {
+    if (get(data, 'message', '') === 'Transaction not found') {
+      throw new TxNotFoundError();
+    }
+  }
+
+  /**
    * Queries the fullnode for a transaction
    *
    * @param {string} txId The transaction to query
@@ -2150,6 +2164,8 @@ class HathorWallet extends EventEmitter {
     });
 
     if (!tx.success) {
+      HathorWallet._txNotFoundGuard(tx);
+
       throw new Error(`Invalid transaction ${txId}`);
     }
 
@@ -2171,6 +2187,8 @@ class HathorWallet extends EventEmitter {
     });
 
     if (!confirmationData.success) {
+      HathorWallet._txNotFoundGuard(confirmationData);
+
       throw new Error(`Invalid transaction ${txId}`);
     }
 
@@ -2191,7 +2209,7 @@ class HathorWallet extends EventEmitter {
     graphType,
     maxLevel,
   ) {
-    const url = `${config.getServerUrl()}graphviz/neighbours.dot?tx=${txId}&graph_type=${graphType}&max_level=${maxLevel}`;
+    const url = `${this.storage.config.getServerUrl()}graphviz/neighbours.dot?tx=${txId}&graph_type=${graphType}&max_level=${maxLevel}`;
     const graphvizData = await new Promise((resolve, reject) => {
       txApi.getGraphviz(url, resolve)
         .then(() => reject(new Error('API client did not use the callback')))
@@ -2202,6 +2220,8 @@ class HathorWallet extends EventEmitter {
     // { success: boolean, message: string } so we need to check if the response has
     // the `success` key
     if (Object.hasOwnProperty.call(graphvizData, 'success') && !graphvizData.success) {
+      HathorWallet._txNotFoundGuard(graphvizData);
+
       throw new Error(`Invalid transaction ${txId}`);
     }
 
