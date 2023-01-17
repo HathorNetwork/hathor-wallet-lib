@@ -22,6 +22,7 @@ import axiosInstance from '../../src/wallet/api/walletServiceAxios';
 import { buildSuccessTxByIdTokenDataResponse, buildWalletToAuthenticateApiCall, defaultWalletSeed } from '../__fixtures__/wallet.fixtures';
 import Mnemonic from 'bitcore-mnemonic';
 import gWallet from '../../src/wallet';
+import { TxNotFoundError } from '../../src/errors';
 
 const MOCK_TX = {
   tx_id: '0009bc9bf8eab19c41a2aa9b9369d3b6a90ff12072729976634890d35788d5d7',
@@ -601,8 +602,11 @@ test('getFullTxById', async () => {
 
   expect(proxiedTx.tx.hash).toStrictEqual('tx1');
 
-  mockAxiosAdapter.onGet('wallet/proxy/transactions/tx1').reply(400, {});
-  expect(wallet.getFullTxById('tx1')).rejects.toThrowError('Error getting transaction by its id from the proxied fullnode.');
+  mockAxiosAdapter.onGet('wallet/proxy/transactions/tx2').reply(400, {});
+  await expect(wallet.getFullTxById('tx2')).rejects.toThrowError('Error getting transaction by its id from the proxied fullnode.');
+
+  mockAxiosAdapter.onGet('wallet/proxy/transactions/tx3').reply(200, { success: false, message: 'Transaction not found' });
+  await expect(wallet.getFullTxById('tx3')).rejects.toThrowError(TxNotFoundError);
 });
 
 test('getTxConfirmationData', async () => {
@@ -637,7 +641,10 @@ test('getTxConfirmationData', async () => {
   expect(proxiedConfirmationData).toStrictEqual(mockData);
 
   mockAxiosAdapter.onGet('wallet/proxy/transactions/tx1/confirmation_data').reply(400, '');
-  expect(wallet.getTxConfirmationData('tx1')).rejects.toThrowError('Error getting transaction confirmation data by its id from the proxied fullnode.');
+  await expect(wallet.getTxConfirmationData('tx1')).rejects.toThrowError('Error getting transaction confirmation data by its id from the proxied fullnode.');
+
+  mockAxiosAdapter.onGet('wallet/proxy/transactions/tx2/confirmation_data').reply(200, { success: false, message: 'Transaction not found' });
+  await expect(wallet.getTxConfirmationData('tx2')).rejects.toThrowError(TxNotFoundError);
 });
 
 test('graphvizNeighborsQuery', async () => {
@@ -666,5 +673,9 @@ test('graphvizNeighborsQuery', async () => {
   expect(proxiedGraphvizResponse).toStrictEqual(mockData);
 
   mockAxiosAdapter.onGet('wallet/proxy/graphviz/neighbours?txId=tx1&graphType=test&maxLevel=1').reply(500, '');
-  expect(wallet.graphvizNeighborsQuery('tx1', 'test', 1)).rejects.toThrowError('Error getting transaction confirmation data by its id from the proxied fullnode.');
+  // Axios will throw on 500 status code
+  await expect(wallet.graphvizNeighborsQuery('tx1', 'test', 1)).rejects.toThrowError('Request failed with status code 500');
+
+  mockAxiosAdapter.onGet('wallet/proxy/graphviz/neighbours?txId=tx2&graphType=test&maxLevel=1').reply(200, { success: false, message: 'Transaction not found' });
+  await expect(wallet.graphvizNeighborsQuery('tx2', 'test', 1)).rejects.toThrowError(TxNotFoundError);
 });
