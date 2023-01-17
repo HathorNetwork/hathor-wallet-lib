@@ -712,6 +712,6 @@ test('instantiate a new wallet without web socket initialization', async () => {
   await onWalletReadyImplementation?.call(wallet)
 
   expect(spyOnGetNewAddress).toBeCalledTimes(1);
-  expect(spyOnSetupConnection).toBeCalledTimes(1);
+  expect(spyOnSetupConnection).toBeCalledTimes(0);
   expect(wallet.isReady()).toBeTruthy();
 })
