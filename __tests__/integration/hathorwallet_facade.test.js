@@ -20,10 +20,8 @@ import dateFormatter from '../../src/utils/date';
 import { loggers } from './utils/logger.util';
 import { SendTxError, WalletFromXPubGuard } from '../../src/errors';
 import SendTransaction from '../../src/new/sendTransaction';
-import helpersUtils from '../../src/utils/helpers';
 import walletUtils from '../../src/utils/wallet';
 import { ConnectionState } from '../../src/wallet/types';
-import MemoryStore from '../../src/memory_store'
 import transaction from '../../src/utils/transaction';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
@@ -99,7 +97,6 @@ describe('start', () => {
       connection,
       password: DEFAULT_PASSWORD,
       preCalculatedAddresses: walletData.addresses,
-      store: new MemoryStore(),
     };
     let hWallet = new HathorWallet(walletConfig);
     await expect(hWallet.start()).rejects.toStrictEqual({
