@@ -1229,17 +1229,19 @@ describe('sendTransaction', () => {
      */
     const { tx_id: inputTxId, index: inputIndex } = (await mhWallet1.getUtxos()).utxos[0];
     const network = mhWallet1.getNetworkObject();
-    const sendTransaction = new SendTransaction({
-      inputs: [
-        { txId: inputTxId, index: inputIndex }
-      ],
-      outputs: [
-        { address: await mhWallet1.getAddressAtIndex(1), value: 10, token: HATHOR_TOKEN_CONFIG.uid }
-      ],
-      network,
-    });
+    const sendTransaction = new SendTransaction(
+      mhWallet1.storage,
+      {
+        inputs: [
+          { txId: inputTxId, index: inputIndex }
+        ],
+        outputs: [
+          { address: await mhWallet1.getAddressAtIndex(1), value: 10, token: HATHOR_TOKEN_CONFIG.uid }
+        ],
+      }
+    );
     const tx = transaction.createTransactionFromData(
-      { version: 1, ...sendTransaction.prepareTxData() },
+      { version: 1, ...(await sendTransaction.prepareTxData()) },
       network
     );
     const txHex = tx.toHex();
@@ -1258,10 +1260,10 @@ describe('sendTransaction', () => {
       [sig1, sig2, sig3]
     );
     partiallyAssembledTx.prepareToSend();
-    const finalTx = new SendTransaction({
-      transaction: partiallyAssembledTx,
-      network,
-    });
+    const finalTx = new SendTransaction(
+      mhWallet1.storage,
+      { transaction: partiallyAssembledTx },
+    );
 
     /** @type BaseTransactionResponse */
     const sentTx = await finalTx.runFromMining();
@@ -2395,20 +2397,22 @@ describe('signTx', () => {
 
     const network = hWallet.getNetworkObject();
     // Build a Transaction to sign
-    let sendTransaction = new SendTransaction({
-      outputs: [
-        { address: await hWallet.getAddressAtIndex(5), value: 5, token: HATHOR_TOKEN_CONFIG.uid },
-        { address: await hWallet.getAddressAtIndex(6), value: 100, token: tokenUid },
-      ],
-      network,
-    });
+    let sendTransaction = new SendTransaction(
+      hWallet.storage,
+      {
+        outputs: [
+          { address: await hWallet.getAddressAtIndex(5), value: 5, token: HATHOR_TOKEN_CONFIG.uid },
+          { address: await hWallet.getAddressAtIndex(6), value: 100, token: tokenUid },
+        ],
+      },
+    );
     const txData = await sendTransaction.prepareTxData();
     const tx = transaction.createTransactionFromData(txData, network);
     tx.prepareToSend();
 
     // Sign transaction
     await hWallet.signTx(tx);
-    sendTransaction = new SendTransaction({ transaction: tx, network });
+    sendTransaction = new SendTransaction(hWallet.storage, { transaction: tx });
     const minedTx = await sendTransaction.runFromMining('mine-tx');
     expect(minedTx.nonce).toBeDefined();
     expect(minedTx.parents).not.toHaveLength(0);

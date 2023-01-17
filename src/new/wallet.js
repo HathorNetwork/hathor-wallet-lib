@@ -1152,13 +1152,15 @@ class HathorWallet extends EventEmitter {
       return {success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED};
     }
     const { inputs, changeAddress } = newOptions;
-    const sendTransaction = new SendTransaction({
-      outputs,
-      inputs,
-      changeAddress,
-      pin,
-      network: this.getNetworkObject()
-    });
+    const sendTransaction = new SendTransaction(
+      this.storage,
+      {
+        outputs,
+        inputs,
+        changeAddress,
+        pin,
+      },
+    );
     return sendTransaction.run();
   }
 
@@ -1276,7 +1278,7 @@ class HathorWallet extends EventEmitter {
    * @inner
    */
   async handleSendPreparedTransaction(transaction) {
-    const sendTransaction = new SendTransaction({ transaction, network: this.getNetworkObject() });
+    const sendTransaction = new SendTransaction(this.storage, { transaction });
     return sendTransaction.runFromMining();
   }
 

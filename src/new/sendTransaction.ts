@@ -437,7 +437,7 @@ class SendTransaction extends EventEmitter {
    */
   async run(until = null) {
     try {
-      this.prepareTx();
+      await this.prepareTx();
       if (until === 'prepare-tx') {
         return this.transaction;
       }

@@ -304,7 +304,7 @@ export class Storage implements IStorage {
         }
         if (foundAmount < balance.funds) {
           // XXX: Insufficient funds
-          throw new Error('Insufficient funds');
+          throw new Error(`Insufficient funds, found ${foundAmount} but requested ${balance.funds}`);
         }
       } else if (balance.funds < 0) {
         // We have a surplus of this token on the inputs, so we need to add a change output
