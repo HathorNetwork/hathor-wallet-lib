@@ -355,7 +355,7 @@ const transaction = {
       return new Output(output.value, script, { tokenData });
     });
     const options = {
-      version: txData.version,
+      version: txData.version === undefined ? DEFAULT_TX_VERSION : txData.version,
       weight: txData.weight || 0,
       nonce: txData.nonce || 0,
       timestamp: txData.timestamp || null,
