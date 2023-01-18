@@ -2565,6 +2565,101 @@ class HathorWallet extends EventEmitter {
 
     return graphvizData;
   }
+
+  /**
+   * This function is responsible for getting the details of each token in the transaction.
+   * @param {Object} wallet the current wallet
+   * @param {{ [tokenUid]: number }} tokenBalances Object with the token uid as key and the balance as value
+   * @returns {Promise<Array<{ txId: string, timestamp: number, version: number, voided: boolean, weight: number, tokenName: string, tokenSymbol: string, balance: number }>> } Array of token details
+   * @example
+   * [
+   *  {
+   *   txId: '000021e7addbb94a8e43d7f1237d556d47efc4d34800c5923ed3a75bf5a2886e';
+   *   timestamp: 123456789;
+   *   version: 1;
+   *   voided: false;
+   *   weight: 18.5;
+   *   tokenId: '00',
+   *   tokenName: 'Hathor',
+   *   tokenSymbol: 'HTR',
+   *   balance: 100,
+   *  },
+   * ]
+   */
+  async getTxById(txId) {
+    /**
+     * This function is responsible for calculate the balance of each token in the transaction.
+     * that belongs to the wallet.
+     * @param {{ txId: string, timestamp: number, voided: boolean }} tx
+     * @returns {{ [tokenUid]: number }} Object with the token uid as key and the balance as value
+     */
+    const getTokensBalance = (tx) => {
+      const mineOutputs = tx.outputs.filter((output) => this.isAddressMine(output.decoded.address));
+      const tokensBalance = mineOutputs.reduce((acc, output) => {
+        const { token, value } = output;
+        if (acc[token]) {
+          acc[token] += value;
+        } else {
+          acc[token] = value;
+        }
+        return acc;
+      }, {});
+      return tokensBalance;
+    };
+
+    /**
+     * This function is responsible for getting the details of each token in the transaction.
+     * @param {Object} wallet the current wallet
+     * @param {{ [tokenUid]: number }} tokenBalances Object with the token uid as key and the balance as value
+     * @returns {Promise<Array<{ txId: string, timestamp: number, version: number, voided: boolean, height: number, weight: number, tokenName: string, tokenSymbol: string, balance: number }>> } Array of token details
+     * @example
+     * [
+     *  {
+     *   txId: '000021e7addbb94a8e43d7f1237d556d47efc4d34800c5923ed3a75bf5a2886e',
+     *   timestamp: 1673039453,
+     *   version: 1;
+     *   voided: false;
+     *   weight: 18.5;
+     *   tokenId: '00',
+     *   tokenName: 'Hathor',
+     *   tokenSymbol: 'HTR',
+     *   balance: 100,
+     *  },
+     * ]
+     */
+    const getTokenDetails = async (wallet, tx, tokenBalances) => {
+      const tokenUids = Object.keys(tokenBalances);
+      try {
+        const tokenDetails = await Promise.all(
+          tokenUids.map(async (token) => {
+            const tokenInfo = await wallet.getTokenDetails(token);
+            return {
+              txId: tx.tx_id,
+              timestamp: tx.timestamp,
+              version: tx.version,
+              voided: tx.is_voided,
+              weight: tx.weight,
+              tokenId: token,
+              tokenName: tokenInfo.tokenInfo.name,
+              tokenSymbol: tokenInfo.tokenInfo.symbol,
+              balance: tokenBalances[token],
+            };
+          })
+        );
+        return tokenDetails;
+      } catch (error) {
+        console.error('Error getting token details: ', error);
+        return [];
+      }
+    };
+
+    const history = this.getFullHistory();
+    const tx = history[txId];
+    const tokenBalances = getTokensBalance(tx);
+    const tokenDetails = await getTokenDetails(this, tx, tokenBalances);
+    return tokenDetails;
+  }
+
 }
 
 // State constants.
