@@ -109,7 +109,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // Index of the address to be used by the wallet
   private indexToUse: number;
   // WalletService-ready connection class
-  // A wallet initialized with enableWs=false will have a DummyWalletServiceConnection
   private conn: WalletServiceConnection;
   // Flag to indicate if the wallet was already connected when the webscoket conn is established
   private firstConnection: boolean;
@@ -149,7 +148,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     if (enableWs) {
       this._isWsEnabled = true;
     } else {
-      // We use a dummy connection to avoid having to change `conn` declaration
       this._isWsEnabled = false;
     }
     this.state = walletState.NOT_STARTED;
