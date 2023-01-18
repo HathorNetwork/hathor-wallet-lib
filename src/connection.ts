@@ -36,7 +36,7 @@ export type ConnectionParams = {
  * - state: Fired when the state of the Wallet changes.
  * - wallet-update: Fired when a new wallet message arrive from the websocket.
  **/
-abstract class Connection extends EventEmitter implements IConnection {
+abstract class Connection extends EventEmitter {
   // network: 'testnet' or 'mainnet'
   protected network: string;
   protected websocket: WalletWebSocket | WalletServiceWebSocket | null;
