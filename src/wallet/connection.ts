@@ -10,16 +10,14 @@ import config from '../config';
 import BaseConnection, {
   DEFAULT_PARAMS,
   ConnectionParams,
-  IConnection,
 } from '../connection';
 import {
   WsTransaction,
   ConnectionState,
 } from './types';
-import { EventEmitter } from 'events';
 
 export interface WalletServiceConnectionParams extends ConnectionParams {
-  network?: string;
+  network: string;
   walletId: string;
 }
 
