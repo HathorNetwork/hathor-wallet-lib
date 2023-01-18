@@ -15,7 +15,6 @@ import helpers from '../utils/helpers';
 import { deriveAddressP2PKH, deriveAddressP2SH } from '../utils/address';
 
 export async function loadAddresses(startIndex: number, count: number, storage: IStorage): Promise<string[]> {
-  console.log(`Called loadAddresses with ${startIndex} and ${count}}`);
   const addresses: string[] = [];
   const stopIndex = startIndex + count;
   for (let i = startIndex; i < stopIndex; i++) {

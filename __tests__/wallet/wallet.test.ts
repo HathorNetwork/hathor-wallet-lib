@@ -20,7 +20,6 @@ import config from '../../src/config';
 // import axiosInstance from '../../src/wallet/api/walletServiceAxios';
 import { buildSuccessTxByIdTokenDataResponse, buildWalletToAuthenticateApiCall, defaultWalletSeed } from '../__mock_helpers/wallet-service.fixtures';
 import Mnemonic from 'bitcore-mnemonic';
-import storage from '../../src/storage';
 import { TxNotFoundError } from '../../src/errors';
 
 const MOCK_TX = {
@@ -419,11 +418,10 @@ test('prepareDelegateAuthorityData', async () => {
     }],
     changeAmount: 4,
   });
-  const getXprivKeyMock = () => xpriv.xprivkey;
   const getInputDataMock = (xp: string, dtsh: Buffer) => Buffer.alloc(0);
 
   const spy1 = jest.spyOn(wallet, 'getUtxos').mockImplementation(getUtxosMock);
-  const spy2 = jest.spyOn(storage, 'getMainXPrivKey').mockImplementation(getXprivKeyMock);
+  const spy2 = jest.spyOn(wallet.storage, 'getMainXPrivKey').mockReturnValue(Promise.resolve(xpriv.xprivkey));
   const spy3 = jest.spyOn(wallet, 'getInputData').mockImplementation(getInputDataMock);
 
   // createAnother option should create another authority utxo to the given address
@@ -544,11 +542,10 @@ test('prepareDestroyAuthority', async () => {
     }],
     changeAmount: 4,
   });
-  const getXprivKeyMock = () => xpriv;
   const getInputDataMock = () => Buffer.from([]);
 
   const spy1 = jest.spyOn(wallet, 'getUtxos').mockImplementation(getUtxosMock);
-  const spy2 = jest.spyOn(storage, 'getMainXPrivKey').mockImplementation(getXprivKeyMock);
+  const spy2 = jest.spyOn(wallet.storage, 'getMainXPrivKey').mockReturnValue(Promise.resolve(xpriv.xprivkey));
   const spy3 = jest.spyOn(wallet, 'getInputData').mockImplementation(getInputDataMock);
 
   // createAnother option should create another authority utxo to the given address

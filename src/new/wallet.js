@@ -24,11 +24,11 @@ import { HDPrivateKey } from 'bitcore-lib';
 import transactionUtils from '../utils/transaction';
 import Transaction from '../models/transaction';
 import Queue from '../models/queue';
-import storage from '../storage';
 import FullnodeConnection from './connection';
 import { WalletType } from '../types';
 import { syncHistory, reloadStorage, checkGapLimit } from '../utils/storage';
 import txApi from '../api/txApi';
+import { MemoryStore, Storage } from '../storage';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';
@@ -67,6 +67,7 @@ class HathorWallet extends EventEmitter {
   /**
    * @param param
    * @param {FullnodeConnection} param.connection A connection to the server
+   * @param {Storage} storage A storage
    * @param {string} param.seed 24 words separated by space
    * @param {string} [param.passphrase=''] Wallet passphrase
    * @param {string} [param.xpriv]
@@ -80,6 +81,7 @@ class HathorWallet extends EventEmitter {
    */
   constructor({
     connection,
+    storage,
 
     seed,
     passphrase = '',
@@ -130,7 +132,13 @@ class HathorWallet extends EventEmitter {
       }
     }
 
-    this.storage = storage;
+    if (storage) {
+      this.storage = storage;
+    } else {
+      // Default to a memory store
+      const store = new MemoryStore();
+      this.storage = new Storage(store);
+    }
     this.conn = connection;
     this.conn.startControlHandlers(this.storage);
 
@@ -553,7 +561,21 @@ class HathorWallet extends EventEmitter {
       throw new WalletError('Not implemented.');
     }
     const uid = token || this.token.uid;
-    const tokenData = await this.storage.getToken(uid);
+    let tokenData = await this.storage.getToken(uid);
+    if (tokenData === null) {
+      // We don't have the token on storage, so we need to return an empty default response
+      tokenData = {
+        uid,
+        numTransactions: 0,
+        balance: {
+          tokens: {unlocked: 0, locked: 0},
+          authorities: {
+            mint: {unlocked: 0, locked: 0},
+            melt: {unlocked: 0, locked: 0},
+          },
+        },
+      };
+    }
     return [{
       token: {
         id: tokenData.uid,
@@ -1230,7 +1252,6 @@ class HathorWallet extends EventEmitter {
     } else {
       throw new Error('This should never happen');
     }
-
     await this.storage.saveAccessData(accessData);
 
     this.clearSensitiveData();

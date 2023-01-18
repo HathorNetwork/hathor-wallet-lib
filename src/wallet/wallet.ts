@@ -31,7 +31,7 @@ import Input from '../models/input';
 import Address from '../models/address';
 import Network from '../models/network';
 import networkInstance from '../network';
-import storage from '../storage';
+import { MemoryStore, Storage } from '../storage';
 import assert from 'assert';
 import WalletServiceConnection from './connection';
 import SendTransactionWalletService from './sendTransactionWalletService';
@@ -150,7 +150,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       walletUtils.wordsValid(seed);
     }
 
-    this.storage = storage;
+    const store = new MemoryStore();
+    this.storage = new Storage(store);
 
     // Setup the connection so clients can listen to its events before it is started
     this.conn = new WalletServiceConnection();
@@ -191,7 +192,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   async changeServer(newServer: string) {
-    await storage.store.setItem('wallet:wallet_service:base_server', newServer);
+    await this.storage.store.setItem('wallet:wallet_service:base_server', newServer);
     config.setWalletServiceBaseUrl(newServer);
   }
 
@@ -204,7 +205,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   async changeWsServer(newServer: string) {
-    await storage.store.setItem('wallet:wallet_service:ws_server', newServer);
+    await this.storage.store.setItem('wallet:wallet_service:ws_server', newServer);
     config.setWalletServiceBaseWsUrl(newServer);
   }
 
@@ -214,9 +215,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  static async getServerUrlsFromStorage(): Promise<WalletServiceServerUrls> {
-    const walletServiceBaseUrl = await storage.store.getItem('wallet:wallet_service:base_server');
-    const walletServiceWsUrl = await storage.store.getItem('wallet:wallet_service:ws_server');
+  async getServerUrlsFromStorage(): Promise<WalletServiceServerUrls> {
+    const walletServiceBaseUrl = await this.storage.store.getItem('wallet:wallet_service:base_server');
+    const walletServiceWsUrl = await this.storage.store.getItem('wallet:wallet_service:ws_server');
 
     return {
       walletServiceBaseUrl,

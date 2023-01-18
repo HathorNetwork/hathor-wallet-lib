@@ -223,13 +223,11 @@ const tokens = {
 
     // get output change
     if (foundAmount > depositAmount) {
-      if (changeAddress === null) {
-        throw new Error('Must provide change address if deposit is greater than the required deposit amount');
-      }
+      const cAddress = changeAddress || await storage.getCurrentAddress();
 
       outputs.push({
-        type: getAddressType(changeAddress, storage.config.getNetwork()),
-        address: changeAddress,
+        type: getAddressType(cAddress, storage.config.getNetwork()),
+        address: cAddress,
         value: foundAmount - depositAmount,
         timelock: null,
         token: HATHOR_TOKEN_CONFIG.uid,

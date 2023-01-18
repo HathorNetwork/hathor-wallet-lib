@@ -21,16 +21,12 @@ import {
 } from '../../src/models/partial_tx';
 import {
   HATHOR_TOKEN_CONFIG,
-  TOKEN_AUTHORITY_MASK,
   TOKEN_MINT_MASK,
   TOKEN_MELT_MASK,
-  MAX_INPUTS,
-  MAX_OUTPUTS,
-  TX_WEIGHT_CONSTANTS,
   DEFAULT_TX_VERSION,
 } from '../../src/constants';
 
-import storage, { MemoryStore, Storage } from '../../src/storage';
+import { MemoryStore, Storage } from '../../src/storage';
 import { IUtxo } from '../../src/types';
 
 // beforeAll(() => {
@@ -74,7 +70,10 @@ test('fromPartialTx', async () => {
   ]);
 
   const serialized = partialTx.serialize();
-  const proposal = PartialTxProposal.fromPartialTx(serialized, storage);
+  const store = new MemoryStore();
+  const testStorage = new Storage(store);
+
+  const proposal = PartialTxProposal.fromPartialTx(serialized, testStorage);
 
   expect(proposal.partialTx.serialize()).toEqual(serialized);
 

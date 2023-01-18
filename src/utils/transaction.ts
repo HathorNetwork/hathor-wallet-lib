@@ -111,7 +111,11 @@ const transaction = {
         continue;
       }
       const xpriv = xprivkey.deriveNonCompliantChild(addressInfo.bip32AddressIndex);
-      input.setData(this.getSignature(dataToSignHash, xpriv.privateKey));
+      const inputData = this.createInputData(
+        this.getSignature(dataToSignHash, xpriv.privateKey),
+        xpriv.publicKey.toBuffer(),
+      );
+      input.setData(inputData);
     }
 
     return tx;
@@ -362,9 +366,9 @@ const transaction = {
       parents: txData.parents || [],
       tokens: txData.tokens || [],
     };
-    if (txData.version === CREATE_TOKEN_TX_VERSION) {
+    if (options.version === CREATE_TOKEN_TX_VERSION) {
       return new CreateTokenTransaction(txData.name!, txData.symbol!, inputs, outputs, options);
-    } else if (txData.version === DEFAULT_TX_VERSION) {
+    } else if (options.version === DEFAULT_TX_VERSION) {
       return new Transaction(inputs, outputs, options);
     } else {
       throw new ParseError('Invalid transaction version.');

@@ -419,6 +419,8 @@ class SendTransaction extends EventEmitter {
    * Method created for compatibility reasons
    * some people might be using the old facade and this start method just calls runFromMining
    *
+   * @deprecated
+   *
    * @memberof SendTransaction
    * @inner
    */

@@ -305,6 +305,16 @@ export class Storage implements IStorage {
         if (foundAmount < balance.funds) {
           // XXX: Insufficient funds
           throw new Error(`Insufficient funds, found ${foundAmount} but requested ${balance.funds}`);
+        } else if (foundAmount > balance.funds) {
+          // Add change output
+          newOutputs.push({
+            type: getAddressType(addressForChange, this.config.getNetwork()),
+            token,
+            authorities: 0,
+            value: foundAmount - balance.funds,
+            address: addressForChange,
+            timelock: null,
+          });
         }
       } else if (balance.funds < 0) {
         // We have a surplus of this token on the inputs, so we need to add a change output
@@ -347,6 +357,8 @@ export class Storage implements IStorage {
           // XXX: Insufficient funds
           throw new Error('Insufficient mint authority');
         }
+        // Since we use max_utxos to stop before we select more the the
+        // balance requires there is no need to add an authority change
       } else if (balance.mint < 0) {
         // We have a surplus of this token on the inputs, so we need to add enough change outputs to match
         for (let i = 0; i < Math.abs(balance.mint); i++) {
@@ -385,6 +397,8 @@ export class Storage implements IStorage {
           // XXX: Insufficient funds
           throw new Error('Insufficient melt authority');
         }
+        // Since we use max_utxos to stop before we select more the the
+        // balance requires there is no need to add an authority change
       } else if (balance.melt < 0) {
         // We have a surplus of this token on the inputs, so we need to add enough change outputs to match
         for (let i = 0; i < Math.abs(balance.melt); i++) {
