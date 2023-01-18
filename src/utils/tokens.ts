@@ -331,18 +331,16 @@ const tokens = {
     }
 
     if (foundAmount < amount) {
-      throw new InsufficientFundsError(`Not enough HTR tokens for withdraw: ${withdrawAmount} required, ${foundAmount} available`);
+      throw new InsufficientFundsError(`Not enough tokens to melt: ${amount} requested, ${foundAmount} available`);
     }
 
     // get output change
     if (foundAmount > amount) {
-      if (changeAddress === null) {
-        throw new Error('Must provide change address');
-      }
+      const cAddress = changeAddress || await storage.getCurrentAddress();
 
       outputs.push({
-        type: getAddressType(changeAddress, storage.config.getNetwork()),
-        address: changeAddress,
+        type: getAddressType(cAddress, storage.config.getNetwork()),
+        address: cAddress,
         value: foundAmount - amount,
         timelock: null,
         token: token,
@@ -416,16 +414,16 @@ const tokens = {
       nftData?: string|null,
     } = {},
   ): Promise<IDataTx> {
-    const isNFT = nftData !== null;
+    const isCreateNFT = !!nftData;
     const mintOptions = {
       createAnotherMint: createMint,
       createMelt,
       changeAddress,
-      isNFT,
+      isCreateNFT,
     };
 
     const txData = await this.prepareMintTxData(address, mintAmount, storage, mintOptions);
-    if (isNFT) {
+    if (isCreateNFT) {
       if (nftData === null) {
         // This should never happen since isNFT is true only if nftData is not null
         // But the typescript compiler doesn't seem to understand that

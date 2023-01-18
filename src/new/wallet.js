@@ -620,7 +620,7 @@ class HathorWallet extends EventEmitter {
     const uid = newOptions.token_id || this.token.uid;
 
     const txs = [];
-    const it = 0;
+    let it = 0;
     for await (const tx of this.storage.tokenHistory(uid)) {
       if (it < skip) {
         it++;
@@ -1049,9 +1049,9 @@ class HathorWallet extends EventEmitter {
    * @inner
    **/
   async getFullHistory() {
-    const history = [];
+    const history = {};
     for await (const tx of this.storage.txHistory()) {
-      history.push(tx);
+      history[tx.tx_id] = tx;
     }
     return history;
   }
@@ -1179,7 +1179,7 @@ class HathorWallet extends EventEmitter {
 
     const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
-      return {success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED};
+      throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
     const { inputs, changeAddress } = newOptions;
     const sendTransaction = new SendTransaction(
@@ -1208,11 +1208,11 @@ class HathorWallet extends EventEmitter {
     const pinCode = options.pinCode || this.pinCode;
     const password = options.password || this.password;
     if (!this.xpub && !pinCode) {
-      return Promise.reject({success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED});
+      throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
     if (this.seed && !password) {
-      return Promise.reject({success: false, message: 'Password is required.', error: 'PASSWORD_REQUIRED'});
+      throw new Error('Password is required.');
     }
 
     this.storage.config.setNetwork(this.conn.network);
@@ -1347,7 +1347,7 @@ class HathorWallet extends EventEmitter {
     }, options);
     const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
-      return Promise.reject({success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED});
+      throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
     const mintAddress = newOptions.address || (await this.getCurrentAddress()).address;
 
@@ -1509,12 +1509,12 @@ class HathorWallet extends EventEmitter {
 
     const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
-      throw new Error({success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED});
+      throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
     const mintAddress = newOptions.address || (await this.getCurrentAddress()).address;
 
-    const mintInput = this.getMintAuthority(tokenUid, {many: false});
+    const mintInput = await this.getMintAuthority(tokenUid, {many: false});
 
     if (!mintInput || mintInput.length === 0) {
       throw new Error('Don\'t have mint authority output available.');
@@ -1524,9 +1524,9 @@ class HathorWallet extends EventEmitter {
       token: tokenUid,
       mintInput: mintInput[0],
       createAnotherMint: newOptions.createAnotherMint,
-      changeAddress,
+      changeAddress: newOptions.changeAddress,
     };
-    const txData = tokenUtils.prepareMintTxData(
+    const txData = await tokenUtils.prepareMintTxData(
       mintAddress,
       amount,
       this.storage,
@@ -1594,23 +1594,23 @@ class HathorWallet extends EventEmitter {
 
     const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
-      return Promise.reject({success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED});
+      throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
-    const meltInput = this.getMeltAuthority(tokenUid, {many: false});
+    const meltInput = await this.getMeltAuthority(tokenUid, {many: false});
 
     if (!meltInput || meltInput.length === 0) {
-      throw new Error({success: false, message: 'Don\'t have melt authority output available.'});
+      throw new Error('Don\'t have melt authority output available.');
     }
 
     const meltOptions = {
       createAnotherMelt: newOptions.createAnotherMelt,
       changeAddress: newOptions.changeAddress,
     };
-    const txData = tokenUtils.prepareMeltTxData(
+    const txData = await tokenUtils.prepareMeltTxData(
       tokenUid,
-      meltInput,
-      newOptions.address,
+      meltInput[0],
+      newOptions.address || (await this.getCurrentAddress()).address,
       amount,
       this.storage,
       meltOptions,
@@ -1668,7 +1668,7 @@ class HathorWallet extends EventEmitter {
     const newOptions = Object.assign({ createAnother: true, pinCode: null }, options);
     const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
-      throw new Error({success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED});
+      throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
     const { createAnother } = newOptions;
     let delegateInput;
@@ -1744,19 +1744,19 @@ class HathorWallet extends EventEmitter {
     const newOptions = Object.assign({ pinCode: null }, options);
     const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
-      throw new Error({success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED});
+      throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
     let destroyInputs;
     if (type === 'mint') {
-      destroyInputs = this.getMintAuthority(tokenUid, {many: true});
+      destroyInputs = await this.getMintAuthority(tokenUid, {many: true});
     } else if (type === 'melt') {
-      destroyInputs = this.getMeltAuthority(tokenUid, {many: true});
+      destroyInputs = await this.getMeltAuthority(tokenUid, {many: true});
     } else {
       throw new Error('This should never happen.')
     }
 
     if (destroyInputs.length < count) {
-      throw new Error({ success: false, message: ErrorMessages.NO_UTXOS_AVAILABLE, errorData: { requestedQuantity: count, availableQuantity: destroyInputs.length } });
+      throw new Error(ErrorMessages.NO_UTXOS_AVAILABLE);
     }
 
     const data = [];

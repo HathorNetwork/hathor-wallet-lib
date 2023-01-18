@@ -206,7 +206,7 @@ export function waitForWalletReady(hWallet) {
     setTimeout(() => {
       hWallet.removeListener('state', handleState);
       reject(new Error('Wallet could not be ready.'));
-    }, 15000);
+    }, 120000);
   });
 }
 

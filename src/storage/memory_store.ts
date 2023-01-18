@@ -182,6 +182,8 @@ export class MemoryStore implements IStore {
         // Ignore voided transactions
         continue;
       }
+      const txAddresses = new Set<string>();
+      const txTokens = new Set<string>();
       const isHeightLocked = checkRewardLock(tx.height);
 
       for (const [index, output] of tx.outputs.entries()) {
@@ -201,8 +203,10 @@ export class MemoryStore implements IStore {
 
         // update metadata
         allTokens.add(output.token);
-        tokensMetadata.get(output.token)!.numTransactions += 1;
-        addressesMetadata.get(output.decoded.address)!.numTransactions += 1;
+        txTokens.add(output.token);
+        txAddresses.add(output.decoded.address);
+        // tokensMetadata.get(output.token)!.numTransactions += 1;
+        // addressesMetadata.get(output.decoded.address)!.numTransactions += 1;
         // check index
         if (this.addresses.get(output.decoded.address)!.bip32AddressIndex > maxIndexUsed) {
           maxIndexUsed = this.addresses.get(output.decoded.address)!.bip32AddressIndex;
@@ -272,9 +276,11 @@ export class MemoryStore implements IStore {
         }
 
         // update metadata
-        addressesMetadata.get(input.decoded.address)!.numTransactions += 1;
+        txTokens.add(input.token);
+        txAddresses.add(input.decoded.address);
+        // addressesMetadata.get(input.decoded.address)!.numTransactions += 1;
+        // tokensMetadata.get(input.token)!.numTransactions += 1;
         allTokens.add(input.token);
-        tokensMetadata.get(input.token)!.numTransactions += 1;
 
         // check index
         if (this.addresses.get(input.decoded.address)!.bip32AddressIndex > maxIndexUsed) {
@@ -296,6 +302,13 @@ export class MemoryStore implements IStore {
           tokensMetadata.get(input.token)!.balance.tokens.unlocked -= input.value;
           addressesMetadata.get(input.decoded.address)!.balance.get(input.token)!.tokens.unlocked -= input.value;
         }
+      }
+
+      for (const token of txTokens) {
+        tokensMetadata.get(token)!.numTransactions += 1;
+      }
+      for (const address of txAddresses) {
+        addressesMetadata.get(address)!.numTransactions += 1;
       }
     }
 
@@ -369,11 +382,19 @@ export class MemoryStore implements IStore {
     if (tokenConfig === undefined) {
       return null;
     }
+    const DEFAULT_TOKEN_META: ITokenMetadata = {
+    numTransactions: 0,
+    balance: {
+        tokens: {unlocked: 0, locked: 0},
+        authorities: {
+          mint: {unlocked: 0, locked: 0},
+          melt: {unlocked: 0, locked: 0},
+        },
+      }
+    };
     const tokenMeta = this.tokensMetadata.get(tokenUid);
-    if (tokenMeta === undefined) {
-      throw new Error('configuration error: missing token metadata');
-    }
-    return {...tokenConfig, ...tokenMeta};
+
+    return {...tokenConfig, ...DEFAULT_TOKEN_META, ...tokenMeta};
   }
 
   async saveToken(tokenConfig: ITokenData, meta?: ITokenMetadata | undefined): Promise<void> {
