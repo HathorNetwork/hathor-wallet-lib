@@ -13,7 +13,6 @@ import { MemoryStore, Storage } from '../../src/storage';
 import { HDPrivateKey } from 'bitcore-lib';
 import Input from '../../src/models/input';
 import Transaction from '../../src/models/transaction';
-import { transferableAbortController } from 'util';
 
 test('isAuthorityOutput', () => {
   expect(transaction.isAuthorityOutput({token_data: TOKEN_AUTHORITY_MASK})).toBe(true);
@@ -104,9 +103,10 @@ test('signTransaction', async () => {
   expect(await transaction.signTransaction(tx, storage, '123')).toBe(tx);
   const hashdata = tx.getDataToSignHash();
   expect(input0.data).toEqual(null);
+  const sig1 = input1.data.slice(1, 1+input1.data[0]);
   expect(crypto.ECDSA.verify(
     hashdata,
-    crypto.Signature.fromDER(input1.data),
+    crypto.Signature.fromDER(sig1),
     xpriv.deriveChild(10).publicKey,
     'little', // endianess
   )).toBe(true);
