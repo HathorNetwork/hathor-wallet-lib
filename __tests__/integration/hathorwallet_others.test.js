@@ -996,14 +996,14 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
     tokenHash = tokenUid;
 
     // Validating single authority UTXO for a token creation
-    expect(await hWallet.selectAuthorityUtxo(tokenHash, transaction.isMint))
+    expect(await hWallet.selectAuthorityUtxo(tokenHash, transaction.isMint.bind(transaction)))
       .toStrictEqual([{
         tx_id: tokenHash,
         index: expect.any(Number),
         address: expect.any(String),
         authorities: TOKEN_MINT_MASK,
       }]);
-    expect(await hWallet.selectAuthorityUtxo(tokenHash, transaction.isMelt))
+    expect(await hWallet.selectAuthorityUtxo(tokenHash, transaction.isMelt.bind(transaction)))
       .toStrictEqual([{
         tx_id: tokenHash,
         index: expect.any(Number),
@@ -1012,14 +1012,14 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
       }]);
 
     // Validating single authority UTXO for a token creation ( with "many" option )
-    expect(await hWallet.selectAuthorityUtxo(tokenHash, transaction.isMint, { many: true }))
+    expect(await hWallet.selectAuthorityUtxo(tokenHash, transaction.isMint.bind(transaction), { many: true }))
       .toStrictEqual([{
         tx_id: tokenHash,
         index: expect.any(Number),
         address: expect.any(String),
         authorities: TOKEN_MINT_MASK,
       }]);
-    expect(await hWallet.selectAuthorityUtxo(tokenHash, transaction.isMelt, { many: true }))
+    expect(await hWallet.selectAuthorityUtxo(tokenHash, transaction.isMelt.bind(transaction), { many: true }))
       .toStrictEqual([{
         tx_id: tokenHash,
         index: expect.any(Number),
@@ -1055,14 +1055,14 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
     await waitForTxReceived(hWallet, mintDelegationTx.hash);
 
     // Should not find the spent utxo
-    expect(await hWallet.selectAuthorityUtxo(tokenHash, transaction.isMint))
+    expect(await hWallet.selectAuthorityUtxo(tokenHash, transaction.isMint.bind(transaction)))
       .toStrictEqual([{
         tx_id: mintDelegationTx.hash,
         index: expect.any(Number),
         address: expect.any(String),
         authorities: TOKEN_MINT_MASK,
       }]);
-    expect(await hWallet.selectAuthorityUtxo(tokenHash, transaction.isMint, { many: true }))
+    expect(await hWallet.selectAuthorityUtxo(tokenHash, transaction.isMint.bind(transaction), { many: true }))
       .toStrictEqual([{
         tx_id: mintDelegationTx.hash,
         index: expect.any(Number),
@@ -1080,7 +1080,7 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
     // Should return multiple utxos
     expect(await hWallet.selectAuthorityUtxo(
       tokenHash,
-      transaction.isMint,
+      transaction.isMint.bind(transaction),
       { many: true, skipSpent: false }
     ))
       .toStrictEqual([
@@ -1110,7 +1110,7 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
     await waitForTxReceived(hWallet, meltDelegationTx.hash);
 
     // Should find a single one of the authority tokens
-    expect(await hWallet.selectAuthorityUtxo(tokenHash, transaction.isMelt))
+    expect(await hWallet.selectAuthorityUtxo(tokenHash, transaction.isMelt.bind(transaction)))
       .toStrictEqual([{
         tx_id: meltDelegationTx.hash,
         index: expect.any(Number),
@@ -1133,7 +1133,7 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
         authorities: TOKEN_MELT_MASK,
       },
     ];
-    expect(await hWallet.selectAuthorityUtxo(tokenHash, transaction.isMelt, { many: true }))
+    expect(await hWallet.selectAuthorityUtxo(tokenHash, transaction.isMelt.bind(transaction), { many: true }))
       .toStrictEqual(expectedMeltAuthUtxos);
     expect(await hWallet.getAuthorityUtxos(tokenHash, 'melt'))
       .toStrictEqual(expectedMeltAuthUtxos);
@@ -1141,7 +1141,7 @@ describe('selectAuthorityUtxo and getAuthorityUtxos', () => {
     // Should return the spent utxo as well
     expect(await hWallet.selectAuthorityUtxo(
       tokenHash,
-      transaction.isMelt,
+      transaction.isMelt.bind(transaction),
       { many: true, skipSpent: false }
     ))
       .toStrictEqual(expect.arrayContaining([
