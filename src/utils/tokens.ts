@@ -440,7 +440,6 @@ const tokens = {
         value: 1,
         token: HATHOR_TOKEN_CONFIG.uid,
         authorities: 0,
-        timelock: null,
       });
     }
 
