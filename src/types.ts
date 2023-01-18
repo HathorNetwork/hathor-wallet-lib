@@ -46,7 +46,6 @@ export interface IAuthoritiesBalance {
   melt: ITokenBalance;
 }
 
-// XXX
 export interface IHistoryTx {
   tx_id: string;
   version: number;
@@ -109,7 +108,6 @@ export interface IDataOutputData {
   value: number;
   authorities: number;
   data: string;
-  timelock: number|null;
 };
 
 export function isDataOutputData(output: IDataOutput): output is IDataOutputData {

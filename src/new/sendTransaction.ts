@@ -18,23 +18,23 @@ import { OutputType } from '../wallet/types';
 import { IStorage, IDataTx, IFillTxOptions } from '../types';
 import Transaction from '../models/transaction';
 
-interface ISendInput {
+export interface ISendInput {
   txId: string,
   index: number,
 };
 
-interface ISendDataOutput {
+export interface ISendDataOutput {
   type: OutputType.DATA,
   data: Buffer,
   value?: number,
   token?: string,
 }
 
-function isDataOutput(output: ISendOutput): output is ISendDataOutput {
+export function isDataOutput(output: ISendOutput): output is ISendDataOutput {
   return output.type === OutputType.DATA;
 }
 
-interface ISendTokenOutput {
+export interface ISendTokenOutput {
   type: OutputType.P2PKH|OutputType.P2SH,
   address: string,
   value: number,
@@ -42,7 +42,7 @@ interface ISendTokenOutput {
   timelock?: number|null,
 }
 
-type ISendOutput = ISendDataOutput|ISendTokenOutput;
+export type ISendOutput = ISendDataOutput|ISendTokenOutput;
 
 /**
  * This is transaction mining class responsible for:
@@ -128,9 +128,11 @@ class SendTransaction extends EventEmitter {
       tokens: [],
     };
     const chooseInputs = this.inputs.length === 0;
+    const tokenSet = new Set<string>();
 
     for (const output of this.outputs) {
       if (isDataOutput(output)) {
+        tokenSet.add(HTR_UID);
         output.token = HTR_UID;
 
         // Data output will always have value 1 (0.01) HTR
@@ -140,13 +142,10 @@ class SendTransaction extends EventEmitter {
           value: 1,
           authorities: 0,
           token: output.token,
-          timelock: null,
         });
       } else {
         const addressObj = new Address(output.address, { network });
-        if (output.token !== HTR_UID) {
-          txData.tokens.push(output.token);
-        }
+        tokenSet.add(output.token);
 
         txData.outputs.push({
           address: output.address,
@@ -167,7 +166,7 @@ class SendTransaction extends EventEmitter {
         throw err;
       }
       const spentOut = inputTx.outputs[input.index];
-      if (!(spentOut.token in txData.tokens)) {
+      if (!tokenSet.has(spentOut.token)) {
         // The input select is from a token that is not in the outputs
         const err = new SendTxError(ErrorMessages.INVALID_INPUT);
         err.errorData = { txId: input.txId, index: input.index };
@@ -188,12 +187,12 @@ class SendTransaction extends EventEmitter {
       options.changeAddress = this.changeAddress;
     }
     const newData = await this.storage.fillTx(txData, options);
-
+    tokenSet.delete(HTR_UID);
     // This new IDataTx should be complete with the requested funds
     this.fullTxData = {
       inputs: [...txData.inputs, ...newData.inputs],
       outputs: [...txData.outputs, ...newData.outputs],
-      tokens: txData.tokens,
+      tokens: Array.from(tokenSet),
     };
     return this.fullTxData;
   }
@@ -251,10 +250,9 @@ class SendTransaction extends EventEmitter {
       const signature = signatures[index];
       const addressInfo = await this.storage.getAddressInfo(input.address);
       if (addressInfo === null) {
-        // XXX: Not our address, should we fail?
-        continue;
+        throw new SendTxError(ErrorMessages.INVALID_INPUT);
       }
-      // const publicKey = PublicKey.fromString(addressInfo.publicKey);
+      // Creates input data for P2PKH
       if (!addressInfo.publicKey) {
         throw new SendTxError('Missing public key for address');
       }
@@ -263,10 +261,8 @@ class SendTransaction extends EventEmitter {
 
     // prepare and create transaction
     try {
-      if (!this.pin) {
-        throw new Error('Pin is not set.');
-      }
-      this.transaction = await transactionUtils.prepareTransaction(this.fullTxData, this.pin, this.storage);
+      this.transaction = transactionUtils.createTransactionFromData(this.fullTxData, this.storage.config.getNetwork());
+      this.transaction.prepareToSend();
       return this.transaction;
     } catch(e) {
       const message = helpers.handlePrepareDataError(e);
