@@ -24,7 +24,7 @@ import walletUtils from '../../src/utils/wallet';
 import { ConnectionState } from '../../src/wallet/types';
 import transaction from '../../src/utils/transaction';
 import Mnemonic from 'bitcore-mnemonic/lib/mnemonic';
-import { P2PKH_ACCT_PATH } from '../../lib/constants';
+import { P2PKH_ACCT_PATH } from '../../src/constants';
 import Network from '../../src/models/network';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
