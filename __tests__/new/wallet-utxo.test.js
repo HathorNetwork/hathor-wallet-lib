@@ -112,9 +112,9 @@ describe("UTXO Consolidation", () => {
     expect(utxoDetails.total_utxos_locked).toBe(0);
   });
 
-  test("filter by maximum_amount", async () => {
+  test("filter by max_amount", async () => {
     const utxoDetails = await hathorWallet.getUtxos({
-      maximum_amount: 2,
+      max_amount: 2,
     });
     expect(utxoDetails.utxos).toHaveLength(2);
     expect(utxoDetails.total_amount_available).toBe(2);

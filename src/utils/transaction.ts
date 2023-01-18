@@ -72,7 +72,7 @@ const transaction = {
     return (
       output.decoded.timelock !== undefined
       && output.decoded.timelock !== null
-      && output.decoded.timelock <= refTs
+      && output.decoded.timelock > refTs
     );
   },
 

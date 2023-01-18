@@ -616,7 +616,7 @@ class HathorWallet extends EventEmitter {
    **/
   async getTxHistory(options = {}) {
     const newOptions = Object.assign({ token_id: HATHOR_TOKEN_CONFIG.uid, count: 15, skip: 0 }, options);
-    const { skip, count } = newOptions;
+    let { skip, count } = newOptions;
     const uid = newOptions.token_id || this.token.uid;
 
     const txs = [];
@@ -650,7 +650,7 @@ class HathorWallet extends EventEmitter {
    **/
   async getTokens() {
     const tokens = [];
-    for await (const token of this.storage.getTokens()) {
+    for await (const token of this.storage.getAllTokens()) {
       tokens.push(token.uid);
     }
     return tokens;
@@ -718,16 +718,16 @@ class HathorWallet extends EventEmitter {
     for await (const tx of this.storage.txHistory()) {
       // Voided transactions should be ignored
       if (tx.is_voided) {
-        return;
+        continue;
       };
 
       // Iterate through outputs
       for (const output of tx.outputs) {
-        const is_address_valid = output.decoded && output.decoded.address === address;
+        const is_address_valid = output.decoded && (output.decoded.address === address);
         const is_token_valid = token === output.token;
         const is_authority = transactionUtils.isAuthorityOutput(output);
-        if (!is_address_valid || !is_token_valid || is_authority) {
-          return;
+        if ((!is_address_valid) || (!is_token_valid) || is_authority) {
+          continue;
         }
 
         const is_spent = output.spent_by !== null;
@@ -742,7 +742,7 @@ class HathorWallet extends EventEmitter {
 
         if (is_spent) {
           addressInfo.total_amount_sent += output.value;
-          return;
+          continue;
         }
 
         if (is_locked) {
@@ -764,7 +764,7 @@ class HathorWallet extends EventEmitter {
    * @property {string} [filter_address] - Address to filter the utxos.
    * @property {number} [amount_smaller_than] - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00.
    * @property {number} [amount_bigger_than] - Minimum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount bigger than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00.
-   * @property {number} [maximum_amount] - Limit the maximum total amount to consolidate summing all utxos. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {number} [max_amount] - Limit the maximum total amount to consolidate summing all utxos. Integer representation of decimals, i.e. 100 = 1.00.
    * @property {boolean} [only_available_utxos] - Use only available utxos (not locked)
    */
 
@@ -793,7 +793,7 @@ class HathorWallet extends EventEmitter {
       filter_address: options.filter_address,
       amount_smaller_than: options.amount_smaller_than,
       amount_bigger_than: options.amount_bigger_than,
-      maximum_amount: options.max_amount,
+      max_amount: options.max_amount,
     }
     const utxoDetails = {
       total_amount_available: 0,
@@ -818,7 +818,7 @@ class HathorWallet extends EventEmitter {
         address: utxo.address,
         amount: utxo.value,
         tx_id: utxo.txId,
-        locked: is_locked,
+        locked: !!is_locked,
         index: utxo.index,
       };
 
@@ -860,9 +860,16 @@ class HathorWallet extends EventEmitter {
    * @yields {Utxo} all available utxos
    */
   async * getAllUtxos(options = {}) {
+    const nowHeight = await this.storage.getCurrentHeight();
+    const rewardLock = this.storage.version?.reward_spend_min_blocks;
+    const isHeightLocked = (blockHeight) => blockHeight && nowHeight && rewardLock && ((blockHeight + rewardLock) < nowHeight );
     for await (const utxo of this.storage.selectUtxos(options)) {
       const addressIndex = await this.getAddressIndex(utxo.address);
       const addressPath = await this.getAddressPathForIndex(addressIndex);
+      const isLocked = !!(
+        (utxo.height && isHeightLocked(utxo.height))
+        || (utxo.timelock && (utxo.timelock > Math.floor(new Date()/1000)))
+      );
       yield {
         txId: utxo.txId,
         index: utxo.index,
@@ -871,8 +878,8 @@ class HathorWallet extends EventEmitter {
         value: utxo.value,
         authorities: utxo.authorities,
         timelock: utxo.timelock,
-        heightlock: utxo.height,
-        locked: utxo.locked,
+        heightlock: utxo.height && isHeightLocked(utxo.height),
+        locked: isLocked,
         addressPath,
       };
     }
@@ -928,7 +935,7 @@ class HathorWallet extends EventEmitter {
    * @param {string} destinationAddress Address of the consolidated utxos
    * @param {UtxoOptions} options Utxo filtering options
    *
-   * @return {PrepareConsolidateUtxosDataResult} Required data to consolidate utxos
+   * @return {Promise<PrepareConsolidateUtxosDataResult>} Required data to consolidate utxos
    *
    */
   async prepareConsolidateUtxosData(destinationAddress, options = {}) {
@@ -1235,7 +1242,7 @@ class HathorWallet extends EventEmitter {
         }
       );
     } else if (this.xpriv) {
-      accessData = walletUtils.generateAccessDataFromXPriv(
+      accessData = walletUtils.generateAccessDataFromXpriv(
         this.xpriv,
         {
           multisig: this.multisig,
@@ -1243,7 +1250,7 @@ class HathorWallet extends EventEmitter {
         },
       );
     } else if (this.xpub) {
-      accessData = walletUtils.generateAccessDataFromXPub(
+      accessData = walletUtils.generateAccessDataFromXpub(
         this.xpub,
         {
           multisig: this.multisig,
@@ -1406,43 +1413,6 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * FIXME: maybe remove this?
-   * Select authority utxo for mint or melt. Depends on the callback received as parameter
-   * We could add an {options} parameter to allow common filters (e.g. mint authority, melt authority, p2pkh) to improve this method later.
-   *
-   * @param {string} tokenUid UID of the token to select the authority utxo
-   * @param {function} filterUTXOs Callback to check if the output is the authority I want (isMeltOutput or isMintOutput)
-   * @param [options] Object with custom options.
-   * @param {boolean} [options.many=false] if should return many utxos or just one (default false)
-   *
-   * @return {{tx_id: string, index: number, address: string, authorities: number}[]|null} Array of
-   *     objects of the authority output. Returns null in case there are no utxos for this type or
-   *     an empty array when there are no utxos and option "many" was selected.
-   **/
-  async selectAuthorityUtxo(tokenUid, filterUTXOs, options = {}) {
-    const utxos = [];
-    const newOptions = {
-      token: tokenUid,
-      authorities: 3, // Will select any authority utxo
-    };
-    if (filterUTXOs) {
-      newOptions.filter_method = filterUTXOs;
-    }
-    if (!options.many) {
-      newOptions.max_utxos = 1;
-    }
-    for await (const utxo of this.storage.selectUtxos(newOptions)) {
-      utxos.push(utxo);
-    }
-    if ((!options.many) && (utxos.length === 0)) {
-      // For backwards compatibility
-      // If we want 1 utxo and there are none, we return null
-      return null;
-    }
-    return utxos;
-  }
-
-  /**
    * Get mint authorities
    *
    * @param {string} tokenUid UID of the token to select the authority utxo
@@ -1475,7 +1445,6 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * # FIXME: tokens helpers
    * Get melt authorities
    *
    * @param {string} tokenUid UID of the token to select the authority utxo
@@ -1704,9 +1673,9 @@ class HathorWallet extends EventEmitter {
     const { createAnother } = newOptions;
     let delegateInput;
     if (type === 'mint') {
-      delegateInput = this.getMintAuthority(tokenUid, {many: false});
+      delegateInput = await this.getMintAuthority(tokenUid, {many: false});
     } else if (type === 'melt') {
-      delegateInput = this.getMeltAuthority(tokenUid, {many: false});
+      delegateInput = await this.getMeltAuthority(tokenUid, {many: false});
     } else {
       throw new Error('This should never happen.')
     }
@@ -1852,7 +1821,7 @@ class HathorWallet extends EventEmitter {
     if (type === 'mint') {
       return this.getMintAuthority(tokenUid, { many: true });
     } else if (type === 'melt') {
-      return this.getMintAuthority(tokenUid, { many: true });
+      return this.getMeltAuthority(tokenUid, { many: true });
     } else {
       throw new Error('This should never happen.')
     }

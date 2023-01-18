@@ -299,8 +299,8 @@ export class MemoryStore implements IStore {
       }
     }
 
-    if (this.walletData.lastUsedAddressIndex < maxIndexUsed) {
-      if (this.walletData.currentAddressIndex < maxIndexUsed) {
+    if (this.walletData.lastUsedAddressIndex <= maxIndexUsed) {
+      if (this.walletData.currentAddressIndex <= maxIndexUsed) {
         this.walletData.currentAddressIndex = Math.min(maxIndexUsed + 1, this.walletData.lastLoadedAddressIndex);
       }
       this.walletData.lastUsedAddressIndex = maxIndexUsed;
@@ -482,7 +482,7 @@ export class MemoryStore implements IStore {
         continue;
       }
 
-      if (options.max_amount && (sumAmount + utxo.value) > options.max_amount) {
+      if (options.max_amount && ((sumAmount + utxo.value) > options.max_amount)) {
         // If this utxo is returned we would pass the max_amount
         // XXX: We could also return to stop iteration early
         // This ensures we have the closest to max_amount
