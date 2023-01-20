@@ -2649,17 +2649,25 @@ class HathorWallet extends EventEmitter {
         return tokenDetails;
       } catch (error) {
         console.error('Error getting token details: ', error);
-        return [];
+        throw new Error('Error getting token details');
       }
     };
 
     const history = this.getFullHistory();
     const tx = history[txId];
+    if (!tx) {
+      throw new Error(`Transaction ${txId} not found`);
+    }
+
     const tokenBalances = getTokensBalance(tx);
+    const { length: hasBalance } = Object.keys(tokenBalances);
+    if (!hasBalance) {
+      throw new Error(`Transaction ${txId} does not have any balance for this wallet`);
+    }
+
     const tokenDetails = await getTokenDetails(this, tx, tokenBalances);
     return tokenDetails;
   }
-
 }
 
 // State constants.

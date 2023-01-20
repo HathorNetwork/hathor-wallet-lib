@@ -734,3 +734,136 @@ test('getTokenHistoryObject', () => {
   expect(historyObj.balance['00']).toStrictEqual(0);
   expect(historyObj.balance['01']).toStrictEqual(5);
 });
+
+test('getTxById', async () => {
+  const hWallet = new FakeHathorWallet();
+
+  const txId = 'tx1';
+  const mineAddress = 'addr1';
+  const notMineAddress = 'addr2';
+
+  const buildValidFullHistory = () => ({
+    [txId]: {
+      tx_id: txId,
+      version: 1,
+      weight: 1,
+      timestamp: 1,
+      is_voided: false,
+      inputs: [],
+      outputs: [
+        {
+          token: '00',
+          value: 942,
+          decoded: {
+            address: mineAddress,
+          },
+        },
+        {
+          token: 'A',
+          value: 329,
+          decoded: {
+            address: mineAddress,
+          },
+        },
+        {
+          token: '00',
+          value: 731,
+          decoded: {
+            address: notMineAddress,
+          },
+        },
+      ],
+      parents: [],
+    },
+  })
+
+  const localTokenDetails = (token) => {
+    if (token === '00') {
+      return {
+        tokenInfo: {
+          uid: '00',
+          name: 'Hathor',
+          symbol: 'HTR',
+        }
+      };
+    } else if (token === 'A') {
+      return {
+        tokenInfo: {
+          uid: 'A',
+          name: 'Token A',
+          symbol: 'A',
+        }
+      };
+    }
+  };
+
+  const localIsAddressMine = (addr) => {
+    return addr === mineAddress;
+  };
+
+  // happy path
+  hWallet.getFullHistory.mockReturnValue(buildValidFullHistory());
+  hWallet.getTokenDetails.mockImplementation(localTokenDetails);
+  hWallet.isAddressMine.mockImplementation(localIsAddressMine);
+  // act
+  await expect(hWallet.getTxById(txId)).resolves.toStrictEqual([
+    {
+      txId: txId,
+      timestamp: 1,
+      version: 1,
+      voided: false,
+      weight: 1,
+      tokenId: '00',
+      tokenName: 'Hathor',
+      tokenSymbol: 'HTR',
+      balance: 942
+    },
+    {
+      txId: txId,
+      timestamp: 1,
+      version: 1,
+      voided: false,
+      weight: 1,
+      tokenId: 'A',
+      tokenName: 'Token A',
+      tokenSymbol: 'A',
+      balance: 329
+    }
+  ]);
+
+  // getFullHistory do not have our tx
+  hWallet.getFullHistory.mockReturnValue({
+    'tx2': {},
+  });
+  // act
+  await expect(hWallet.getTxById(txId)).rejects.toThrow(`Transaction ${txId} not found`);
+
+  // getFullHistory returns an empty object
+  hWallet.getFullHistory.mockReturnValue({});
+  // act
+  await expect(hWallet.getTxById(txId)).rejects.toThrow(`Transaction ${txId} not found`);
+
+  // none of the address is mine
+  hWallet.getFullHistory.mockReturnValue(buildValidFullHistory());
+  hWallet.isAddressMine.mockImplementation((_addr) => false)
+  // act
+  await expect(hWallet.getTxById(txId)).rejects.toThrow(`Transaction ${txId} does not have any balance for this wallet`);
+
+  // error while getting token details
+  hWallet.getFullHistory.mockReturnValue(buildValidFullHistory());
+  hWallet.isAddressMine.mockImplementation(localIsAddressMine);
+  hWallet.getTokenDetails.mockImplementation((_token) => {
+    throw new Error('Error while getting token info');
+  });
+  // act
+  await expect(hWallet.getTxById(txId)).rejects.toThrow('Error getting token details');
+
+  // error while getting token details
+  hWallet.getFullHistory.mockReturnValue(buildValidFullHistory());
+  hWallet.isAddressMine.mockImplementation(localIsAddressMine);
+  hWallet.getTokenDetails.mockImplementation((_token) => {
+    throw new Error('Error while getting token info');
+  });
+  // act
+  await expect(hWallet.getTxById(txId)).rejects.toThrow('Error getting token details');
+});
