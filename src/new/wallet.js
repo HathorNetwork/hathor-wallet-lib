@@ -1205,6 +1205,9 @@ class HathorWallet extends EventEmitter {
       throw new Error('Password is required.');
     }
 
+    // Check database consistency
+    await this.storage.store.validate();
+
     this.storage.config.setNetwork(this.conn.network);
     this.storage.config.setServerUrl(this.conn.getCurrentServer());
     this.conn.on('state', this.onConnectionChangedState);

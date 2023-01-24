@@ -21,6 +21,11 @@ export interface IAddressMetadata {
   balance: Map<string, IBalance>;
 }
 
+export interface IAddressMetadataAsRecord {
+  numTransactions: number,
+  balance: Record<string, IBalance>;
+}
+
 export interface ITokenData {
   uid: string;
   name: string;
@@ -251,6 +256,7 @@ export interface ApiVersion {
 }
 
 export interface IStore {
+  validate(): Promise<void>;
   // Address methods
   addressIter(): AsyncGenerator<IAddressInfo>;
   getAddress(base58: string): Promise<IAddressInfo|null>;
@@ -356,4 +362,83 @@ export interface IStorage {
   getGapLimit(): Promise<number>;
   cleanStorage(cleanHistory?: boolean, cleanAddresses?: boolean): Promise<void>;
   handleStop(options: {connection?: FullNodeConnection, cleanStorage?: boolean, cleanAddresses?: boolean}): Promise<void>;
+}
+
+/**
+ */
+export interface IKVStoreIndex<TValidate> {
+  indexVersion: string;
+  validate(): Promise<TValidate>;
+  checkVersion(): Promise<void>;
+}
+
+export interface AddressIndexValidateResponse {
+  firstIndex: number;
+  lastIndex: number;
+}
+
+export interface IKVAddressIndex extends IKVStoreIndex<AddressIndexValidateResponse> {
+  getAddressInfo(base58: string): Promise<IAddressInfo | null>;
+  addressExists(base58: string): Promise<boolean>;
+  addressIter(): AsyncGenerator<IAddressInfo>;
+  setAddressMeta(uid: string, meta: IAddressMetadata): Promise<void>;
+  getAddressMeta(base58: string): Promise<IAddressMetadata | null>;
+  getAddressAtIndex(index: number): Promise<string|null>;
+  saveAddress(info: IAddressInfo): Promise<void>;
+  addressCount(): Promise<number>;
+  clearMeta(): Promise<void>;
+}
+
+export interface HistoryIndexValidateResponse {
+  count: number,
+  tokens: string[],
+  addresses: string[],
+}
+
+export interface IKVHistoryIndex extends IKVStoreIndex<HistoryIndexValidateResponse> {
+  historyIter(tokenUid?: string): AsyncGenerator<IHistoryTx>;
+  getTx(txId: string): Promise<IHistoryTx|null>;
+  saveTx(tx: IHistoryTx): Promise<void>;
+  historyCount(): Promise<number>;
+}
+
+export interface IKVUtxoIndex extends IKVStoreIndex<void> {
+  utxoIter(): AsyncGenerator<IUtxo>;
+  selectUtxos(options: IUtxoFilterOptions): AsyncGenerator<IUtxo>;
+  saveUtxo(utxo: IUtxo): Promise<void>;
+  clear(): Promise<void>;
+}
+
+export interface IKVTokenIndex extends IKVStoreIndex<void> {
+  tokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>>;
+  registeredTokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>>;
+  hasToken(tokenUid: string): Promise<boolean>;
+  getToken(tokenUid: string): Promise<(ITokenData & Partial<ITokenMetadata>) | null>;
+  getTokenMetadata(tokenUid: string): Promise<ITokenMetadata|null>;
+  saveToken(tokenConfig: ITokenData): Promise<void>;
+  saveMetadata(uid: string, meta: ITokenMetadata): Promise<void>;
+  registerToken(token: ITokenData): Promise<void>;
+  unregisterToken(tokenUid: string): Promise<void>;
+  deleteTokens(tokens: string[]): Promise<void>;
+  editToken(tokenUid: string, meta: Partial<ITokenMetadata>): Promise<void>;
+  clearMeta(): Promise<void>;
+}
+
+export interface IKVWalletIndex extends IKVStoreIndex<void> {
+  getAccessData(): Promise<IWalletAccessData|null>;
+  saveAccessData(data: IWalletAccessData): Promise<void>;
+  getWalletData(): Promise<IWalletData>;
+  getLastLoadedAddressIndex(): Promise<number>;
+  setLastLoadedAddressIndex(value: number): Promise<void>;
+  getLastUsedAddressIndex(): Promise<number>;
+  setLastUsedAddressIndex(value: number): Promise<void>;
+  getCurrentHeight(): Promise<number>;
+  setCurrentHeight(height: number): Promise<void>;
+  setCurrentAddressIndex(value: number): Promise<void>;
+  getCurrentAddressIndex(): Promise<number>;
+  setGapLimit(value: number): Promise<void>;
+  getGapLimit(): Promise<number>;
+
+  getItem(key: string): Promise<any>;
+  setItem(key: string, value: any): Promise<void>;
 }

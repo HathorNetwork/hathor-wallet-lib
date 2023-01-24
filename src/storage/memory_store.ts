@@ -100,6 +100,10 @@ export class MemoryStore implements IStore {
     this.walletData = { ...DEFAULT_WALLET_DATA, ...DEFAULT_ADDRESSES_WALLET_DATA };
   }
 
+  async validate(): Promise<void> {
+    // This is a noop since the memory store always starts clean.
+  }
+
   /** ADDRESSES */
 
   /**
