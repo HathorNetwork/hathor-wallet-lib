@@ -804,7 +804,7 @@ test('getTxById', async () => {
   // happy path
   hWallet.getFullHistory.mockReturnValue(buildValidFullHistory());
   hWallet.getTokenDetails.mockImplementation(localTokenDetails);
-  hWallet.isAddressMine.mockImplementation(localIsAddressMine);
+  hWallet.getTxBalance.mockReturnValue({ '00': 1673, 'A': 329 });
   // act
   await expect(hWallet.getTxById(txId)).resolves.toStrictEqual([
     {
@@ -816,7 +816,7 @@ test('getTxById', async () => {
       tokenId: '00',
       tokenName: 'Hathor',
       tokenSymbol: 'HTR',
-      balance: 942
+      balance: 1673
     },
     {
       txId: txId,
@@ -845,22 +845,13 @@ test('getTxById', async () => {
 
   // none of the address is mine
   hWallet.getFullHistory.mockReturnValue(buildValidFullHistory());
-  hWallet.isAddressMine.mockImplementation((_addr) => false)
+  hWallet.getTxBalance.mockReturnValue({});
   // act
   await expect(hWallet.getTxById(txId)).rejects.toThrow(`Transaction ${txId} does not have any balance for this wallet`);
 
   // error while getting token details
   hWallet.getFullHistory.mockReturnValue(buildValidFullHistory());
-  hWallet.isAddressMine.mockImplementation(localIsAddressMine);
-  hWallet.getTokenDetails.mockImplementation((_token) => {
-    throw new Error('Error while getting token info');
-  });
-  // act
-  await expect(hWallet.getTxById(txId)).rejects.toThrow('Error getting token details');
-
-  // error while getting token details
-  hWallet.getFullHistory.mockReturnValue(buildValidFullHistory());
-  hWallet.isAddressMine.mockImplementation(localIsAddressMine);
+  hWallet.getTxBalance.mockReturnValue({ '00': 1673, 'A': 329 });
   hWallet.getTokenDetails.mockImplementation((_token) => {
     throw new Error('Error while getting token info');
   });

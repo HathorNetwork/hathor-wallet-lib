@@ -2588,26 +2588,6 @@ class HathorWallet extends EventEmitter {
    */
   async getTxById(txId) {
     /**
-     * This function is responsible for calculate the balance of each token in the transaction.
-     * that belongs to the wallet.
-     * @param {{ txId: string, timestamp: number, voided: boolean }} tx
-     * @returns {{ [tokenUid]: number }} Object with the token uid as key and the balance as value
-     */
-    const getTokensBalance = (tx) => {
-      const mineOutputs = tx.outputs.filter((output) => this.isAddressMine(output.decoded.address));
-      const tokensBalance = mineOutputs.reduce((acc, output) => {
-        const { token, value } = output;
-        if (acc[token]) {
-          acc[token] += value;
-        } else {
-          acc[token] = value;
-        }
-        return acc;
-      }, {});
-      return tokensBalance;
-    };
-
-    /**
      * This function is responsible for getting the details of each token in the transaction.
      * @param {Object} wallet the current wallet
      * @param {{ [tokenUid]: number }} tokenBalances Object with the token uid as key and the balance as value
@@ -2659,7 +2639,9 @@ class HathorWallet extends EventEmitter {
       throw new Error(`Transaction ${txId} not found`);
     }
 
-    const tokenBalances = getTokensBalance(tx);
+    // Get the balance of each token in the transaction that belongs to this wallet
+    // sample output: { 'A': 100, 'B': 10 }, where 'A' and 'B' are token UIDs
+    const tokenBalances = await this.getTxBalance(tx);
     const { length: hasBalance } = Object.keys(tokenBalances);
     if (!hasBalance) {
       throw new Error(`Transaction ${txId} does not have any balance for this wallet`);
