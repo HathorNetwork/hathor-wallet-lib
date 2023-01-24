@@ -370,6 +370,7 @@ export interface IKVStoreIndex<TValidate> {
   indexVersion: string;
   validate(): Promise<TValidate>;
   checkVersion(): Promise<void>;
+  close(): Promise<void>;
 }
 
 export interface AddressIndexValidateResponse {
@@ -387,6 +388,7 @@ export interface IKVAddressIndex extends IKVStoreIndex<AddressIndexValidateRespo
   saveAddress(info: IAddressInfo): Promise<void>;
   addressCount(): Promise<number>;
   clearMeta(): Promise<void>;
+  clear(): Promise<void>;
 }
 
 export interface HistoryIndexValidateResponse {
@@ -400,6 +402,7 @@ export interface IKVHistoryIndex extends IKVStoreIndex<HistoryIndexValidateRespo
   getTx(txId: string): Promise<IHistoryTx|null>;
   saveTx(tx: IHistoryTx): Promise<void>;
   historyCount(): Promise<number>;
+  clear(): Promise<void>;
 }
 
 export interface IKVUtxoIndex extends IKVStoreIndex<void> {
@@ -422,6 +425,7 @@ export interface IKVTokenIndex extends IKVStoreIndex<void> {
   deleteTokens(tokens: string[]): Promise<void>;
   editToken(tokenUid: string, meta: Partial<ITokenMetadata>): Promise<void>;
   clearMeta(): Promise<void>;
+  clear(): Promise<void>;
 }
 
 export interface IKVWalletIndex extends IKVStoreIndex<void> {
@@ -441,4 +445,7 @@ export interface IKVWalletIndex extends IKVStoreIndex<void> {
 
   getItem(key: string): Promise<any>;
   setItem(key: string, value: any): Promise<void>;
+
+  cleanAccessData(): Promise<void>;
+  cleanWalletData(clear: boolean): Promise<void>;
 }

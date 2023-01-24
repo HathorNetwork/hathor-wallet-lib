@@ -89,7 +89,7 @@ export class MemoryStore implements IStore {
     this.addresses = new Map<string, IAddressInfo>();
     this.addressIndexes = new Map<number, string>();
     this.addressesMetadata = new Map<string, IAddressMetadata>();
-    this.tokens = new Map<string, ITokenData>([[HATHOR_TOKEN_CONFIG.uid, HATHOR_TOKEN_CONFIG]]);
+    this.tokens = new Map<string, ITokenData>();
     this.tokensMetadata = new Map<string, ITokenMetadata>();
     this.registeredTokens = new Map<string, ITokenData>();
     this.history = new Map<string, IHistoryTx>();

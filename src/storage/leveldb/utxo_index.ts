@@ -7,11 +7,11 @@
 
 import path from 'path';
 import { Level, ValueIteratorOptions } from 'level';
-import { AbstractLevel, AbstractSublevel } from 'abstract-level';
+import { AbstractSublevel } from 'abstract-level';
 import { IKVUtxoIndex, IUtxo, IUtxoFilterOptions } from '../../types';
 import _ from 'lodash';
 import { BLOCK_VERSION, HATHOR_TOKEN_CONFIG, MAX_INPUTS } from '../../constants';
-import { KEY_NOT_FOUND_MESSAGE } from './errors';
+import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 
 export const UTXO_PREFIX = 'utxo';
 export const TOKEN_ADDRESS_UTXO_PREFIX = 'token:address:utxo';
@@ -50,6 +50,10 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
     this.tokenAddressUtxoDB = db.sublevel<string, IUtxo>(TOKEN_ADDRESS_UTXO_PREFIX, { valueEncoding: 'json' });
   }
 
+  async close(): Promise<void> {
+    await this.utxoDB.db.close();
+  }
+
   async checkVersion(): Promise<void> {
     const db = this.utxoDB.db;
     try {
@@ -58,12 +62,10 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
         throw new Error(`Database version mismatch for ${this.constructor.name}: database version (${dbVersion}) expected version (${this.indexVersion})`);
       }
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        if (err.message.includes(KEY_NOT_FOUND_MESSAGE)) {
-          // This is a new db, add version and return
-          await db.put('version', this.indexVersion);
-          return;
-        }
+      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
+        // This is a new db, add version and return
+        await db.put('version', this.indexVersion);
+        return;
       }
       throw err;
     }
@@ -85,13 +87,9 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
         }
 
       } catch(err: unknown) {
-        if (err instanceof Error) {
-          if (err.message.includes(KEY_NOT_FOUND_MESSAGE)) {
-            // Create if missing
-            await this.tokenUtxoDB.put(_token_utxo_key(value), value);
-          } else {
-            throw err;
-          }
+        if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
+          // Create if missing
+          await this.tokenUtxoDB.put(_token_utxo_key(value), value);
         } else {
           throw err;
         }
@@ -103,12 +101,10 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
           throw new Error('Inconsistent database')
         }
       } catch(err: unknown) {
-        if (err instanceof Error) {
-          if (err.message.includes(KEY_NOT_FOUND_MESSAGE)) {
-            // Create if missing
-            await this.tokenAddressUtxoDB.put(_token_address_utxo_key(value), value);
-            continue;
-          }
+        if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
+          // Create if missing
+          await this.tokenAddressUtxoDB.put(_token_address_utxo_key(value), value);
+          continue;
         }
         throw err;
       }

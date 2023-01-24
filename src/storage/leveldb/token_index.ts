@@ -7,19 +7,13 @@
 
 import path from 'path';
 import { Level } from 'level';
-import { AbstractLevel, AbstractSublevel } from 'abstract-level';
-import { IKVHistoryIndex, IHistoryTx, HistoryIndexValidateResponse, IKVTokenIndex, ITokenData, ITokenMetadata } from '../../types';
-import { KEY_NOT_FOUND_MESSAGE } from './errors';
+import { AbstractSublevel } from 'abstract-level';
+import { IKVTokenIndex, ITokenData, ITokenMetadata } from '../../types';
+import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 
 export const TOKEN_PREFIX = 'token';
 export const META_PREFIX = 'meta';
 export const REGISTER_PREFIX = 'registered';
-
-function _ts_key(tx: Pick<IHistoryTx, 'timestamp'|'tx_id'>): string {
-  const buf = Buffer.alloc(4);
-  buf.writeUint32BE(tx.timestamp);
-  return `${buf.toString('hex')}:${tx.tx_id}`;
-}
 
 export default class LevelTokenIndex implements IKVTokenIndex {
   dbpath: string;
@@ -32,8 +26,12 @@ export default class LevelTokenIndex implements IKVTokenIndex {
     this.dbpath = path.join(dbpath, 'tokens');
     const db = new Level(this.dbpath);
     this.tokenDB = db.sublevel<string, ITokenData>(TOKEN_PREFIX, { valueEncoding: 'json' });
-    this.metadataDB = db.sublevel<string, ITokenMetadata>(TOKEN_PREFIX, { valueEncoding: 'json' });
-    this.registeredDB = db.sublevel<string, ITokenData>(TOKEN_PREFIX, { valueEncoding: 'json' });
+    this.metadataDB = db.sublevel<string, ITokenMetadata>(META_PREFIX, { valueEncoding: 'json' });
+    this.registeredDB = db.sublevel<string, ITokenData>(REGISTER_PREFIX, { valueEncoding: 'json' });
+  }
+
+  async close(): Promise<void> {
+    await this.tokenDB.db.close();
   }
 
   async checkVersion(): Promise<void> {
@@ -44,12 +42,10 @@ export default class LevelTokenIndex implements IKVTokenIndex {
         throw new Error(`Database version mismatch for ${this.constructor.name}: database version (${dbVersion}) expected version (${this.indexVersion})`);
       }
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        if (err.message.includes(KEY_NOT_FOUND_MESSAGE)) {
-          // This is a new db, add version and return
-          await db.put('version', this.indexVersion);
-          return;
-        }
+      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
+        // This is a new db, add version and return
+        await db.put('version', this.indexVersion);
+        return;
       }
       throw err;
     }
@@ -90,10 +86,8 @@ export default class LevelTokenIndex implements IKVTokenIndex {
     try {
       token = await this.tokenDB.get(uid);
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        if (err.message.includes(KEY_NOT_FOUND_MESSAGE)) {
-          return null;
-        }
+      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
+        return null;
       }
       throw err;
     }
@@ -117,10 +111,8 @@ export default class LevelTokenIndex implements IKVTokenIndex {
     try {
       return await this.metadataDB.get(uid);
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        if (err.message.includes(KEY_NOT_FOUND_MESSAGE)) {
-          return null;
-        }
+      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
+        return null;
       }
       throw err;
     }
@@ -173,5 +165,9 @@ export default class LevelTokenIndex implements IKVTokenIndex {
 
   async clearMeta(): Promise<void> {
     await this.metadataDB.clear();
+  }
+
+  async clear(): Promise<void> {
+    await this.tokenDB.db.clear();
   }
 }

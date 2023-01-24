@@ -7,9 +7,9 @@
 
 import path from 'path';
 import { Level } from 'level';
-import { AbstractLevel, AbstractSublevel } from 'abstract-level';
+import { AbstractSublevel } from 'abstract-level';
 import { IAddressInfo, IAddressMetadata, IKVAddressIndex, AddressIndexValidateResponse, IAddressMetadataAsRecord, IBalance } from '../../types';
-import { KEY_NOT_FOUND_CODE, KEY_NOT_FOUND_MESSAGE } from './errors';
+import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 
 export const ADDRESS_PREFIX = 'address';
 export const INDEX_PREFIX = 'index';
@@ -40,6 +40,10 @@ export default class LevelAddressIndex implements IKVAddressIndex {
     this.addressesMetaDB = db.sublevel<string, IAddressMetadataAsRecord>(ADDRESS_META_PREFIX, {valueEncoding: 'json'});
   }
 
+  async close(): Promise<void> {
+    await this.addressesDB.db.close();
+  }
+
   async checkVersion(): Promise<void> {
     const db = this.addressesDB.db;
     try {
@@ -48,13 +52,12 @@ export default class LevelAddressIndex implements IKVAddressIndex {
         throw new Error(`Database version mismatch for ${this.constructor.name}: database version (${dbVersion}) expected version (${this.indexVersion})`);
       }
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        if (err.message.includes(KEY_NOT_FOUND_MESSAGE)) {
-          // This is a new db, add version and return
-          await db.put('version', this.indexVersion);
-          return;
-        }
+      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
+        // This is a new db, add version and return
+        await db.put('version', this.indexVersion);
+        return;
       }
+
       throw err;
     }
   }
@@ -83,12 +86,10 @@ export default class LevelAddressIndex implements IKVAddressIndex {
           throw new Error('Inconsistent database');
         }
       } catch(err: unknown) {
-        if (err instanceof Error) {
-          if (err.message.includes(KEY_NOT_FOUND_MESSAGE)) {
-            // Create if index is missing
-            await this.addressesIndexDB.put(_index_key(value.bip32AddressIndex), value.base58);
-            continue;
-          }
+        if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
+          // Create if index is missing
+          await this.addressesIndexDB.put(_index_key(value.bip32AddressIndex), value.base58);
+          continue;
         }
         throw err;
       }
@@ -100,10 +101,8 @@ export default class LevelAddressIndex implements IKVAddressIndex {
     try {
       return await this.addressesDB.get(base58);
     } catch(err: unknown) {
-      if (err instanceof Error) {
-        if (err.message.includes(KEY_NOT_FOUND_MESSAGE)) {
-          return null;
-        }
+      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
+        return null;
       }
       throw err;
     }
@@ -124,7 +123,7 @@ export default class LevelAddressIndex implements IKVAddressIndex {
   }
 
   async setAddressMeta(address: string, meta: IAddressMetadata): Promise<void> {
-    const dbMeta: IAddressMetadataAsRecord = {numTransactions: meta.numTransactions, balance: {}}; 
+    const dbMeta: IAddressMetadataAsRecord = {numTransactions: meta.numTransactions, balance: {}};
     for (const [uid, balance] of meta.balance.entries()) {
       dbMeta.balance[uid] = balance;
     }
@@ -140,23 +139,22 @@ export default class LevelAddressIndex implements IKVAddressIndex {
       }
       return meta;
     } catch(err: unknown) {
-      if (err instanceof Error) {
-        if (err.message.includes(KEY_NOT_FOUND_MESSAGE)) {
-          return null;
-        }
+      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
+        return null;
       }
       throw err;
     }
   }
 
   async getAddressAtIndex(index: number): Promise<string|null> {
+    if (index < 0) {
+      return null;
+    }
     try {
       return await this.addressesIndexDB.get(_index_key(index));
     } catch(err: unknown) {
-      if (err instanceof Error) {
-        if (err.message.includes(KEY_NOT_FOUND_MESSAGE)) {
-          return null;
-        }
+      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
+        return null;
       }
       throw err;
     }
@@ -178,5 +176,9 @@ export default class LevelAddressIndex implements IKVAddressIndex {
 
   async clearMeta(): Promise<void> {
     await this.addressesMetaDB.clear();
+  }
+
+  async clear(): Promise<void> {
+    this.addressesDB.db.clear();
   }
 }

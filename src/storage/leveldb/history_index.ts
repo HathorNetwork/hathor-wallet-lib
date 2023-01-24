@@ -7,9 +7,9 @@
 
 import path from 'path';
 import { Level } from 'level';
-import { AbstractLevel, AbstractSublevel } from 'abstract-level';
+import { AbstractSublevel } from 'abstract-level';
 import { IKVHistoryIndex, IHistoryTx, HistoryIndexValidateResponse } from '../../types';
-import { KEY_NOT_FOUND_CODE, KEY_NOT_FOUND_MESSAGE } from './errors';
+import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 
 export const HISTORY_PREFIX = 'history';
 export const TS_HISTORY_PREFIX = 'ts_history';
@@ -36,6 +36,10 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
     this.size = 0;
   }
 
+  async close(): Promise<void> {
+    await this.historyDB.db.close();
+  }
+
   async checkVersion(): Promise<void> {
     const db = this.historyDB.db;
     try {
@@ -44,12 +48,10 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
         throw new Error(`Database version mismatch for ${this.constructor.name}: database version (${dbVersion}) expected version (${this.indexVersion})`);
       }
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        if (err.message.includes(KEY_NOT_FOUND_MESSAGE)) {
-          // This is a new db, add version and return
-          await db.put('version', this.indexVersion);
-          return;
-        }
+      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
+        // This is a new db, add version and return
+        await db.put('version', this.indexVersion);
+        return;
       }
       throw err;
     }
@@ -82,12 +84,10 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
       try {
         await this.tsHistoryDB.get(`${value.timestamp}:${value.tx_id}`);
       } catch(err: unknown) {
-        if (err instanceof Error) {
-          if (err.message.includes(KEY_NOT_FOUND_MESSAGE)) {
-            // Create if index is missing
-            await this.tsHistoryDB.put(_ts_key(value), value);
-            continue;
-          }
+        if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
+          // Create if index is missing
+          await this.tsHistoryDB.put(_ts_key(value), value);
+          continue;
         }
         throw err;
       }
@@ -121,10 +121,8 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
     try {
       return await this.historyDB.get(txId);
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        if (err.message.includes(KEY_NOT_FOUND_MESSAGE)) {
-          return null;
-        }
+      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
+        return null;
       }
       throw err;
     }
@@ -143,5 +141,9 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
       count += 1;
     }
     return count;
+  }
+
+  async clear(): Promise<void> {
+    await this.historyDB.db.clear();
   }
 }

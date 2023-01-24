@@ -15,6 +15,8 @@ import LevelWalletIndex from './wallet_index';
 import LevelTokenIndex from './token_index';
 import walletApi from '../../api/wallet';
 import transaction from '../../utils/transaction';
+import { rmSync } from 'fs';
+import { HATHOR_TOKEN_CONFIG } from '../../constants';
 
 export default class LevelDBStore implements IStore {
   addressIndex: LevelAddressIndex;
@@ -39,14 +41,25 @@ export default class LevelDBStore implements IStore {
     this.dbpath = dbpath;
   }
 
+  async close(): Promise<void> {
+    await this.addressIndex.close();
+    await this.historyIndex.close();
+    await this.utxoIndex.close();
+    await this.walletIndex.close();
+    await this.tokenIndex.close();
+  }
+
+  async destroy(): Promise<void> {
+    await this.close();
+    rmSync(this.dbpath, { recursive: true, force: true });
+  }
+
   async validate(): Promise<void> {
-    console.log('Begin validation');
     await this.addressIndex.validate();
     await this.historyIndex.validate();
     await this.utxoIndex.validate();
     await this.tokenIndex.validate();
     await this.walletIndex.validate();
-    console.log('validation OK!');
   }
 
   async *addressIter(): AsyncGenerator<IAddressInfo> {
@@ -299,7 +312,6 @@ export default class LevelDBStore implements IStore {
       }
     }
 
-    console.log(`processHistory maxIndexUsed(${maxIndexUsed}), lastUsedAddressIndex(${await this.walletIndex.getLastUsedAddressIndex()}), currentAddressIndex(${await this.walletIndex.getCurrentAddressIndex()})`);
     if ((await this.walletIndex.getLastUsedAddressIndex()) <= maxIndexUsed) {
       if ((await this.walletIndex.getCurrentAddressIndex()) <= maxIndexUsed) {
         await this.walletIndex.setCurrentAddressIndex(Math.min(maxIndexUsed + 1, await this.walletIndex.getLastLoadedAddressIndex()));
@@ -308,6 +320,9 @@ export default class LevelDBStore implements IStore {
     }
 
     for (const uid of allTokens) {
+      if (uid === HATHOR_TOKEN_CONFIG.uid) {
+        await this.tokenIndex.saveToken(HATHOR_TOKEN_CONFIG);
+      }
       const tokenInfo = await this.tokenIndex.getToken(uid);
       if (!tokenInfo) {
         // this is a new token, we need to get the token data from api
@@ -421,7 +436,11 @@ export default class LevelDBStore implements IStore {
   }
 
   async getAccessData(): Promise<IWalletAccessData | null> {
-    return this.walletIndex.getAccessData();
+    const accessData = await this.walletIndex.getAccessData();
+    if (accessData === null) {
+      throw new Error('Wallet access data unset');
+    }
+    return accessData;
   }
 
   async getLastLoadedAddressIndex(): Promise<number> {
@@ -462,13 +481,15 @@ export default class LevelDBStore implements IStore {
 
   async cleanStorage(cleanHistory?: boolean | undefined, cleanAddresses?: boolean | undefined): Promise<void> {
     // set access data to null
-    // if cleanHistory
-    //    - clean tokens(meta and registered), history, utxos
-    // if cleanAddresses
-    //    - clean addresses (meta and indexes), set some walletData to default
+    await this.walletIndex.cleanAccessData();
+    if (cleanHistory) {
+      await this.tokenIndex.clear();
+      await this.historyIndex.clear();
+      await this.utxoIndex.clear();
+    }
     if (cleanAddresses) {
-      // clean addressIndex
-      // clean walletIndex.walletDB but keep network height and gap limit
+      await this.addressIndex.clear();
+      await this.walletIndex.cleanWalletData();
     }
   }
 }

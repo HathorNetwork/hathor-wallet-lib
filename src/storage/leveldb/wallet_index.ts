@@ -7,10 +7,10 @@
 
 import path from 'path';
 import { Level } from 'level';
-import { AbstractLevel, AbstractSublevel } from 'abstract-level';
+import { AbstractSublevel } from 'abstract-level';
 import { IKVWalletIndex, IWalletData, IWalletAccessData } from '../../types';
 import { GAP_LIMIT } from '../../constants';
-import { KEY_NOT_FOUND_MESSAGE } from './errors';
+import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 
 export const ACCESS_PREFIX = 'access';
 export const WALLET_PREFIX = 'wallet';
@@ -29,6 +29,10 @@ export default class LevelWalletIndex implements IKVWalletIndex {
     this.accessDB = db.sublevel<string, IWalletAccessData>(ACCESS_PREFIX, { valueEncoding: 'json' });
     this.walletDB = db.sublevel(WALLET_PREFIX);
     this.genericDB = db.sublevel<string, any>(GENERIC_PREFIX, { valueEncoding: 'json' });
+  }
+
+  async close(): Promise<void> {
+    await this.accessDB.db.close();
   }
 
   async _setNumber(dest: 'access'|'wallet'|'generic', key: string, value: number) {
@@ -64,11 +68,10 @@ export default class LevelWalletIndex implements IKVWalletIndex {
 
       return buf.readUint32BE(0);
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        if (err.message.includes(KEY_NOT_FOUND_MESSAGE)) {
-          return null
-        }
+      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
+        return null;
       }
+
       throw err;
     }
   }
@@ -81,12 +84,10 @@ export default class LevelWalletIndex implements IKVWalletIndex {
         throw new Error(`Database version mismatch for ${this.constructor.name}: database version (${dbVersion}) expected version (${this.indexVersion})`);
       }
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        if (err.message.includes(KEY_NOT_FOUND_MESSAGE)) {
-          // This is a new db, add version and return
-          await db.put('version', this.indexVersion);
-          return;
-        }
+      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
+        // This is a new db, add version and return
+        await db.put('version', this.indexVersion);
+        return;
       }
       throw err;
     }
@@ -169,10 +170,8 @@ export default class LevelWalletIndex implements IKVWalletIndex {
     try {
       return await this.accessDB.get('data');
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        if (err.message.includes(KEY_NOT_FOUND_MESSAGE)) {
-          return null
-        }
+      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
+        return null;
       }
       throw err;
     }
@@ -182,10 +181,8 @@ export default class LevelWalletIndex implements IKVWalletIndex {
     try {
       return await this.genericDB.get(key);
     } catch (err: unknown) {
-      if (err instanceof Error) {
-        if (err.message.includes(KEY_NOT_FOUND_MESSAGE)) {
-          return null
-        }
+      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
+        return null;
       }
       throw err;
     }
@@ -193,5 +190,21 @@ export default class LevelWalletIndex implements IKVWalletIndex {
 
   async setItem(key: string, value: any): Promise<void> {
     await this.genericDB.put(key, value);
+  }
+
+  async cleanAccessData(): Promise<void> {
+    await this.accessDB.clear();
+  }
+
+  async cleanWalletData(clear: boolean = false): Promise<void> {
+    if (clear) {
+      await this.walletDB.clear();
+    } else {
+      const batch = this.walletDB.batch();
+      batch.del('lastLoadedAddressIndex');
+      batch.del('lastUsedAddressIndex');
+      batch.del('currentAddressIndex');
+      await batch.write();
+    }
   }
 }
