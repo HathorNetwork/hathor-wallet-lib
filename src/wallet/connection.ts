@@ -17,7 +17,6 @@ import {
 } from './types';
 
 export interface WalletServiceConnectionParams extends ConnectionParams {
-  network: string;
   walletId: string;
 }
 
