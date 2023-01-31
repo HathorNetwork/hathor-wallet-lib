@@ -2568,8 +2568,7 @@ class HathorWallet extends EventEmitter {
 
   /**
    * This function is responsible for getting the details of each token in the transaction.
-   * @param {Object} wallet the current wallet
-   * @param {{ [tokenUid]: number }} tokenBalances Object with the token uid as key and the balance as value
+   * @param {string} txId - Transaction id
    * @returns {Promise<Array<{ txId: string, timestamp: number, version: number, voided: boolean, weight: number, tokenName: string, tokenSymbol: string, balance: number }>> } Array of token details
    * @example
    * [
