@@ -2581,3 +2581,61 @@ describe('getTxHistory', () => {
     expect(txHistory[1].txId).toEqual(tx1Hash);
   });
 });
+
+describe('getTxById', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
+  });
+
+  let gWallet;
+  beforeAll(async () => {
+    gWallet = await generateWalletHelper();
+  });
+
+  it('should return tx token balance', async () => {
+    const tx1 = await GenesisWalletHelper.injectFunds(
+      gWallet.getAddressAtIndex(0),
+      10,
+    );
+
+    /**
+     * @example
+     * [
+     *   {
+     *     "balance": 10,
+     *     "timestamp": 1675195819,
+     *     "tokenId": "00",
+     *     "tokenName": "Hathor",
+     *     "tokenSymbol": "HTR",
+     *     "txId": "00b1e296631984a43b81d2abc50d992335a78719e5684612510a9b61f0805646",
+     *     "version": 1,
+     *     "voided": false,
+     *     "weight": 8.000001,
+     *   },
+     * ]
+     */
+    const txDetails = await gWallet.getTxById(tx1.hash);
+    expect(txDetails).toHaveLength(1);
+
+    const firstTokenDetails = txDetails[0];
+    const tokenDetailsKeys = Object.keys(firstTokenDetails);
+    expect(tokenDetailsKeys.join(',')).toStrictEqual(
+      'txId,timestamp,version,voided,weight,tokenId,tokenName,tokenSymbol,balance',
+    );
+
+    expect(firstTokenDetails.txId).toStrictEqual(tx1.hash);
+    expect(firstTokenDetails.timestamp).toBeGreaterThan(0);
+    expect(firstTokenDetails.version).toStrictEqual(1);
+    expect(firstTokenDetails.voided).toStrictEqual(false);
+    expect(firstTokenDetails.weight).toBeGreaterThan(0);
+    expect(firstTokenDetails.tokenId).toStrictEqual('00');
+    expect(firstTokenDetails.tokenName).toStrictEqual('Hathor');
+    expect(firstTokenDetails.tokenSymbol).toStrictEqual('HTR');
+    expect(firstTokenDetails.balance).toStrictEqual(10);
+  });
+
+  it('should throw an error tx id is invalid', async () => {
+    await expect(gWallet.getTxById('invalid-tx-hash')).rejects.toThrowError(`Invalid transaction invalid-tx-hash`);
+  });
+});
