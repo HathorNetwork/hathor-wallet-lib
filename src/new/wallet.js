@@ -2585,70 +2585,52 @@ class HathorWallet extends EventEmitter {
    *   balance: 100,
    *  },
    * ]
+   * @throws {Error} (propagation) Invalid transaction
+   * @throws {Error} (propagation) Client did not use the callback
+   * @throws {Error} (propagation) Transaction not found
+   * @throws {Error} (propagation) Transaction does not have any balance for this wallet
    */
   async getTxById(txId) {
     /**
-     * This function is responsible for getting the details of each token in the transaction.
-     * @param {Object} wallet the current wallet
-     * @param {{ [tokenUid]: number }} tokenBalances Object with the token uid as key and the balance as value
-     * @returns {Promise<Array<{ txId: string, timestamp: number, version: number, voided: boolean, height: number, weight: number, tokenName: string, tokenSymbol: string, balance: number }>> } Array of token details
-     * @example
-     * [
-     *  {
-     *   txId: '000021e7addbb94a8e43d7f1237d556d47efc4d34800c5923ed3a75bf5a2886e',
-     *   timestamp: 1673039453,
-     *   version: 1;
-     *   voided: false;
-     *   weight: 18.5;
-     *   tokenId: '00',
-     *   tokenName: 'Hathor',
-     *   tokenSymbol: 'HTR',
-     *   balance: 100,
-     *  },
-     * ]
+     * @throws {Error} Invalid transaction
+     * @throws {Error} Client did not use the callback
+     * @throws {Error} Transaction not found
      */
-    const getTokenDetails = async (wallet, tx, tokenBalances) => {
-      const tokenUids = Object.keys(tokenBalances);
-      try {
-        const tokenDetails = await Promise.all(
-          tokenUids.map(async (token) => {
-            const tokenInfo = await wallet.getTokenDetails(token);
-            return {
-              txId: tx.tx_id,
-              timestamp: tx.timestamp,
-              version: tx.version,
-              voided: tx.is_voided,
-              weight: tx.weight,
-              tokenId: token,
-              tokenName: tokenInfo.tokenInfo.name,
-              tokenSymbol: tokenInfo.tokenInfo.symbol,
-              balance: tokenBalances[token],
-            };
-          })
-        );
-        return tokenDetails;
-      } catch (error) {
-        console.error('Error getting token details: ', error);
-        throw new Error('Error getting token details');
-      }
-    };
-
-    const history = this.getFullHistory();
-    const tx = history[txId];
-    if (!tx) {
-      throw new Error(`Transaction ${txId} not found`);
-    }
-
+    const fullTx = await this.getFullTxById(txId);
     // Get the balance of each token in the transaction that belongs to this wallet
     // sample output: { 'A': 100, 'B': 10 }, where 'A' and 'B' are token UIDs
-    const tokenBalances = await this.getTxBalance(tx);
+    const tokenBalances = await this.getTxBalance(fullTx.tx);
     const { length: hasBalance } = Object.keys(tokenBalances);
     if (!hasBalance) {
       throw new Error(`Transaction ${txId} does not have any balance for this wallet`);
     }
 
-    const tokenDetails = await getTokenDetails(this, tx, tokenBalances);
-    return tokenDetails;
+    const listTokenUid = Object.keys(tokenBalances);
+    const result = listTokenUid.map((uid) => {
+      const getToken = (tokenUid) => {
+        const token = fullTx.tx.tokens.find((token) => token.uid === tokenUid)
+        return token || { uid: '00', name: 'Hathor', symbol: 'HTR' };
+      };
+
+      const isVoided = fullTx.meta.voided_by.length > 0;
+      const token = getToken(uid);
+      const tokenBalance = tokenBalances[uid];
+
+      const tokenDetails = {
+        txId,
+        timestamp: fullTx.tx.timestamp,
+        version: fullTx.tx.version,
+        voided: isVoided,
+        weight: fullTx.tx.weight,
+        tokenId: token.uid,
+        tokenName: token.name,
+        tokenSymbol: token.symbol,
+        balance: tokenBalance,
+      };
+      return tokenDetails;
+    });
+
+    return result;
   }
 }
 
