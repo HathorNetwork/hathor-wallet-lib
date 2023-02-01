@@ -2607,8 +2607,16 @@ class HathorWallet extends EventEmitter {
     const listTokenUid = Object.keys(tokenBalances);
     const result = listTokenUid.map((uid) => {
       const getToken = (tokenUid) => {
+        if (tokenUid === HATHOR_TOKEN_CONFIG.uid) {
+          return HATHOR_TOKEN_CONFIG;
+        }
+
         const token = fullTx.tx.tokens.find((token) => token.uid === tokenUid)
-        return token || { uid: '00', name: 'Hathor', symbol: 'HTR' };
+        if (!token) {
+          throw new Error(`Token ${tokenUid} not found in tx`);
+        }
+
+        return token;
       };
 
       const isVoided = fullTx.meta.voided_by.length > 0;
