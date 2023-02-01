@@ -14,30 +14,86 @@ import {
   DelegateAuthorityOptions,
   DestroyAuthorityOptions,
   WsTransaction,
+  AddressInfoObject,
+  GetBalanceObject,
+  GetHistoryObject,
   ConnectionState,
 } from '../wallet/types';
 import CreateTokenTransaction from '../models/create_token_transaction';
-import SendTransactionWalletService from '../wallet/sendTransactionWalletService';
 import Transaction from '../models/transaction';
 
 class FakeHathorWallet extends EventEmitter implements IHathorWallet {
-  async start(options: { pinCode: string, password: string }) {
+  private state = 'Not started';
+
+  private newAddresses: AddressInfoObject[] = [];
+
+  private tokenBalances: {[tokenId: string]: GetBalanceObject} = {};
+
+  private tokenHistory: {[tokenId: string]: GetHistoryObject[]} = {};
+
+  private tokens: string[] = [];
+
+  public conn: EventEmitter = new EventEmitter();
+
+  isReady() {
+    return this.state === 'Ready';
+  }
+
+  setAddresses(addresses: AddressInfoObject[]) {
+    this.newAddresses = addresses;
+  }
+
+  setTokens(tokens: string[]) {
+    this.tokens = tokens;
+  }
+
+  setTokenHistory(tokenId: string, history: GetHistoryObject[]) {
+    this.tokenHistory[tokenId] = history;
+  }
+
+  setTokenBalance(tokenId: string, balance: GetBalanceObject) {
+    this.tokenBalances[tokenId] = balance;
+  }
+
+  setState(state: string) {
+    this.state = state;
+    this.emit('state', state);
+  }
+
+  async start() {
+    await new Promise(resolve => {
+      setTimeout(resolve, 1500);
+    });
+    this.setState('Ready');
+
+    this.conn.emit('state', ConnectionState.CONNECTED);
     return Promise.resolve();
   }
 
   async* getAllAddresses() {
+    for (const address of this.newAddresses) {
+      yield {
+        address: address.address,
+        index: address.index,
+        transactions: 0,
+      };
+    }
   }
 
   getBalance(token: string | null) {
-    return Promise.resolve([]);
+    return Promise.resolve([this.tokenBalances[token || '00']]);
   }
 
   getTokens() {
-    return Promise.resolve([]);
+    return Promise.resolve(this.tokens);
   }
 
   getTxHistory(options: { token_id?: string, count?: number, skip?: number }) {
-    return Promise.resolve([]);
+    const tokenId = options.token_id || '00';
+    const skip = options.skip;
+    const count = options.count;
+
+    return Promise.resolve(this.tokenHistory[tokenId].slice(skip, count));
   }
 
   sendManyOutputsTransaction(
@@ -58,7 +114,7 @@ class FakeHathorWallet extends EventEmitter implements IHathorWallet {
       changeAddress?: string,
     }
   ) {
-    return Promise.resolve(new SendTransactionWalletService(this));
+    return Promise.resolve(new Transaction([], []));
   }
 
   stop(params?: IStopWalletParams) {}
@@ -67,7 +123,7 @@ class FakeHathorWallet extends EventEmitter implements IHathorWallet {
     return '';
   }
 
-  getCurrentAddress({ markAsUsed: boolean }) {
+  getCurrentAddress() {
     return {
       address: '',
       index: 0,
@@ -76,13 +132,8 @@ class FakeHathorWallet extends EventEmitter implements IHathorWallet {
     };
   }
 
-  getNextAddress() {
-    return {
-      address: '',
-      index: 0,
-      addressPath: '',
-      info: '',
-    };
+  async getNextAddress() {
+    return Promise.resolve(this.newAddresses[Math.floor(Math.random() * this.newAddresses.length)]);
   }
 
   prepareCreateNewToken(name: string, symbol: string, amount: number, options) {
