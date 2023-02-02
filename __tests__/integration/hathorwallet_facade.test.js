@@ -2583,14 +2583,14 @@ describe('getTxHistory', () => {
 });
 
 describe('getTxById', () => {
-  afterEach(async () => {
-    await stopAllWallets();
-    await GenesisWalletHelper.clearListeners();
-  });
-
   let gWallet;
   beforeAll(async () => {
     gWallet = await generateWalletHelper();
+  });
+
+  afterAll(async () => {
+    await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
   });
 
   it('should return tx token balance', async () => {
