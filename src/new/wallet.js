@@ -2587,15 +2587,52 @@ class HathorWallet extends EventEmitter {
    * @throws {Error} (propagation) Invalid transaction
    * @throws {Error} (propagation) Client did not use the callback
    * @throws {Error} (propagation) Transaction not found
-   * @throws {Error} (propagation) Transaction does not have any balance for this wallet
+   * @throws {Error} Transaction does not have any balance for this wallet
+   * @throws {Error} Token uid not found for token index
    */
   async getTxById(txId) {
+    /**
+     * Hydrate input and output with token uid
+     * @param {Transaction.input|Transaction.output} io - Input or output
+     * @param {Array} tokens - Array of token configs
+     * @example
+     * {
+     *   ...output,
+     *   token: '00',
+     * }
+     * @throws {Error} Token uid not found for token index
+     */
+    const hydrateWithTokenUid = (io, tokens) => {
+      const { token_data } = io;
+
+      if (token_data === 0) {
+        return {
+          ...io,
+          token: HATHOR_TOKEN_CONFIG.uid
+        };
+      }
+
+      const tokenIdx = wallet.getTokenIndex(token_data);
+      const tokenUid = tokens[tokenIdx]?.uid;
+      if (!tokenUid) {
+        throw new Error(`Token uid not found for token index ${tokenIdx}`);
+      }
+
+      return {
+        ...io,
+        token: tokenUid,
+      };
+    };
+
     /**
      * @throws {Error} Invalid transaction
      * @throws {Error} Client did not use the callback
      * @throws {Error} Transaction not found
      */
     const fullTx = await this.getFullTxById(txId);
+    fullTx.tx.outputs = fullTx.tx.outputs.map((output) => hydrateWithTokenUid(output, fullTx.tx.tokens));
+    fullTx.tx.inputs = fullTx.tx.inputs.map((input) => hydrateWithTokenUid(input, fullTx.tx.tokens));
+
     // Get the balance of each token in the transaction that belongs to this wallet
     // sample output: { 'A': 100, 'B': 10 }, where 'A' and 'B' are token UIDs
     const tokenBalances = await this.getTxBalance(fullTx.tx);
