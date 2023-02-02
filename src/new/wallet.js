@@ -2565,6 +2565,80 @@ class HathorWallet extends EventEmitter {
 
     return graphvizData;
   }
+
+  /**
+   * This function is responsible for getting the details of each token in the transaction.
+   * @param {string} txId - Transaction id
+   * @returns {Promise<Array<{ txId: string, timestamp: number, version: number, voided: boolean, weight: number, tokenName: string, tokenSymbol: string, balance: number }>> } Array of token details
+   * @example
+   * [
+   *  {
+   *   txId: '000021e7addbb94a8e43d7f1237d556d47efc4d34800c5923ed3a75bf5a2886e';
+   *   timestamp: 123456789;
+   *   version: 1;
+   *   voided: false;
+   *   weight: 18.5;
+   *   tokenId: '00',
+   *   tokenName: 'Hathor',
+   *   tokenSymbol: 'HTR',
+   *   balance: 100,
+   *  },
+   * ]
+   * @throws {Error} (propagation) Invalid transaction
+   * @throws {Error} (propagation) Client did not use the callback
+   * @throws {Error} (propagation) Transaction not found
+   * @throws {Error} (propagation) Transaction does not have any balance for this wallet
+   */
+  async getTxById(txId) {
+    /**
+     * @throws {Error} Invalid transaction
+     * @throws {Error} Client did not use the callback
+     * @throws {Error} Transaction not found
+     */
+    const fullTx = await this.getFullTxById(txId);
+    // Get the balance of each token in the transaction that belongs to this wallet
+    // sample output: { 'A': 100, 'B': 10 }, where 'A' and 'B' are token UIDs
+    const tokenBalances = await this.getTxBalance(fullTx.tx);
+    const { length: hasBalance } = Object.keys(tokenBalances);
+    if (!hasBalance) {
+      throw new Error(`Transaction ${txId} does not have any balance for this wallet`);
+    }
+
+    const listTokenUid = Object.keys(tokenBalances);
+    const result = listTokenUid.map((uid) => {
+      const getToken = (tokenUid) => {
+        if (tokenUid === HATHOR_TOKEN_CONFIG.uid) {
+          return HATHOR_TOKEN_CONFIG;
+        }
+
+        const token = fullTx.tx.tokens.find((token) => token.uid === tokenUid)
+        if (!token) {
+          throw new Error(`Token ${tokenUid} not found in tx`);
+        }
+
+        return token;
+      };
+
+      const isVoided = fullTx.meta.voided_by.length > 0;
+      const token = getToken(uid);
+      const tokenBalance = tokenBalances[uid];
+
+      const tokenDetails = {
+        txId,
+        timestamp: fullTx.tx.timestamp,
+        version: fullTx.tx.version,
+        voided: isVoided,
+        weight: fullTx.tx.weight,
+        tokenId: token.uid,
+        tokenName: token.name,
+        tokenSymbol: token.symbol,
+        balance: tokenBalance,
+      };
+      return tokenDetails;
+    });
+
+    return result;
+  }
 }
 
 // State constants.
