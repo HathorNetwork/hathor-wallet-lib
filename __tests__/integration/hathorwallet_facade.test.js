@@ -30,6 +30,67 @@ import MemoryStore from '../../src/memory_store'
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 const sampleNftData = 'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg';
 
+describe('getTxById', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
+  });
+
+  it('should return tx token balance', async () => {
+    const hWallet = await generateWalletHelper();
+
+    // Expect to have an empty list for the full history
+    expect(Object.keys(hWallet.getFullHistory())).toHaveLength(0);
+
+    // Injecting some funds on this wallet
+    const fundDestinationAddress = hWallet.getAddressAtIndex(0);
+    const tx1 = await GenesisWalletHelper.injectFunds(fundDestinationAddress, 10);
+
+    // Validating the full history increased in one
+    expect(Object.keys(hWallet.getFullHistory())).toHaveLength(1);
+
+    /**
+     * @example
+     * [
+     *   {
+     *     "balance": 10,
+     *     "timestamp": 1675195819,
+     *     "tokenId": "00",
+     *     "tokenName": "Hathor",
+     *     "tokenSymbol": "HTR",
+     *     "txId": "00b1e296631984a43b81d2abc50d992335a78719e5684612510a9b61f0805646",
+     *     "version": 1,
+     *     "voided": false,
+     *     "weight": 8.000001,
+     *   },
+     * ]
+     */
+    const txDetails = await hWallet.getTxById(tx1.hash);
+    expect(txDetails).toHaveLength(1);
+
+    const firstTokenDetails = txDetails[0];
+    const tokenDetailsKeys = Object.keys(firstTokenDetails);
+    expect(tokenDetailsKeys.join(',')).toStrictEqual(
+      'txId,timestamp,version,voided,weight,tokenId,tokenName,tokenSymbol,balance',
+    );
+
+    expect(firstTokenDetails.txId).toStrictEqual(tx1.hash);
+    expect(firstTokenDetails.timestamp).toBeGreaterThan(0);
+    expect(firstTokenDetails.version).toStrictEqual(1);
+    expect(firstTokenDetails.voided).toStrictEqual(false);
+    expect(firstTokenDetails.weight).toBeGreaterThan(0);
+    expect(firstTokenDetails.tokenId).toStrictEqual('00');
+    expect(firstTokenDetails.tokenName).toStrictEqual('Hathor');
+    expect(firstTokenDetails.tokenSymbol).toStrictEqual('HTR');
+    expect(firstTokenDetails.balance).toStrictEqual(10);
+  });
+
+  it('should throw an error tx id is invalid', async () => {
+    const hWallet = await generateWalletHelper();
+    await expect(hWallet.getTxById('invalid-tx-hash')).rejects.toThrowError(`Invalid transaction invalid-tx-hash`);
+  });
+});
+
 describe('start', () => {
   it('should reject with invalid parameters', async () => {
     const walletData = precalculationHelpers.test.getPrecalculatedWallet();
@@ -2579,66 +2640,5 @@ describe('getTxHistory', () => {
     expect(txHistory.length).toEqual(2);
     expect(txHistory[0].txId).toEqual(tx2Hash);
     expect(txHistory[1].txId).toEqual(tx1Hash);
-  });
-});
-
-describe('getTxById', () => {
-  afterEach(async () => {
-    await stopAllWallets();
-    await GenesisWalletHelper.clearListeners();
-  });
-
-  it('should return tx token balance', async () => {
-    const hWallet = await generateWalletHelper();
-
-    // Expect to have an empty list for the full history
-    expect(Object.keys(hWallet.getFullHistory())).toHaveLength(0);
-
-    // Injecting some funds on this wallet
-    const fundDestinationAddress = hWallet.getAddressAtIndex(0);
-    const tx1 = await GenesisWalletHelper.injectFunds(fundDestinationAddress, 10);
-
-    // Validating the full history increased in one
-    expect(Object.keys(hWallet.getFullHistory())).toHaveLength(1);
-
-    /**
-     * @example
-     * [
-     *   {
-     *     "balance": 10,
-     *     "timestamp": 1675195819,
-     *     "tokenId": "00",
-     *     "tokenName": "Hathor",
-     *     "tokenSymbol": "HTR",
-     *     "txId": "00b1e296631984a43b81d2abc50d992335a78719e5684612510a9b61f0805646",
-     *     "version": 1,
-     *     "voided": false,
-     *     "weight": 8.000001,
-     *   },
-     * ]
-     */
-    const txDetails = await hWallet.getTxById(tx1.hash);
-    expect(txDetails).toHaveLength(1);
-
-    const firstTokenDetails = txDetails[0];
-    const tokenDetailsKeys = Object.keys(firstTokenDetails);
-    expect(tokenDetailsKeys.join(',')).toStrictEqual(
-      'txId,timestamp,version,voided,weight,tokenId,tokenName,tokenSymbol,balance',
-    );
-
-    expect(firstTokenDetails.txId).toStrictEqual(tx1.hash);
-    expect(firstTokenDetails.timestamp).toBeGreaterThan(0);
-    expect(firstTokenDetails.version).toStrictEqual(1);
-    expect(firstTokenDetails.voided).toStrictEqual(false);
-    expect(firstTokenDetails.weight).toBeGreaterThan(0);
-    expect(firstTokenDetails.tokenId).toStrictEqual('00');
-    expect(firstTokenDetails.tokenName).toStrictEqual('Hathor');
-    expect(firstTokenDetails.tokenSymbol).toStrictEqual('HTR');
-    expect(firstTokenDetails.balance).toStrictEqual(10);
-  });
-
-  it('should throw an error tx id is invalid', async () => {
-    const hWallet = await generateWalletHelper();
-    await expect(hWallet.getTxById('invalid-tx-hash')).rejects.toThrowError(`Invalid transaction invalid-tx-hash`);
   });
 });
