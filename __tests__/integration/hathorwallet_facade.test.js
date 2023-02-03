@@ -2583,21 +2583,23 @@ describe('getTxHistory', () => {
 });
 
 describe('getTxById', () => {
-  let gWallet;
-  beforeAll(async () => {
-    gWallet = await generateWalletHelper();
-  });
-
-  afterAll(async () => {
+  afterEach(async () => {
     await stopAllWallets();
     await GenesisWalletHelper.clearListeners();
   });
 
   it('should return tx token balance', async () => {
-    const tx1 = await GenesisWalletHelper.injectFunds(
-      gWallet.getAddressAtIndex(0),
-      10,
-    );
+    const hWallet = await generateWalletHelper();
+
+    // Expect to have an empty list for the full history
+    expect(Object.keys(hWallet.getFullHistory())).toHaveLength(0);
+
+    // Injecting some funds on this wallet
+    const fundDestinationAddress = hWallet.getAddressAtIndex(0);
+    const tx1 = await GenesisWalletHelper.injectFunds(fundDestinationAddress, 10);
+
+    // Validating the full history increased in one
+    expect(Object.keys(hWallet.getFullHistory())).toHaveLength(1);
 
     /**
      * @example
@@ -2615,7 +2617,7 @@ describe('getTxById', () => {
      *   },
      * ]
      */
-    const txDetails = await gWallet.getTxById(tx1.hash);
+    const txDetails = await hWallet.getTxById(tx1.hash);
     expect(txDetails).toHaveLength(1);
 
     const firstTokenDetails = txDetails[0];
@@ -2636,6 +2638,7 @@ describe('getTxById', () => {
   });
 
   it('should throw an error tx id is invalid', async () => {
-    await expect(gWallet.getTxById('invalid-tx-hash')).rejects.toThrowError(`Invalid transaction invalid-tx-hash`);
+    const hWallet = await generateWalletHelper();
+    await expect(hWallet.getTxById('invalid-tx-hash')).rejects.toThrowError(`Invalid transaction invalid-tx-hash`);
   });
 });
