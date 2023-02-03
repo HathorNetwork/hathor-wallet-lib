@@ -83,11 +83,30 @@ describe('getTxById', () => {
     expect(firstTokenDetails.tokenName).toStrictEqual('Hathor');
     expect(firstTokenDetails.tokenSymbol).toStrictEqual('HTR');
     expect(firstTokenDetails.balance).toStrictEqual(10);
+
+    // throw error if token uid not found in tokens list
+    jest.spyOn(hWallet, 'getFullTxById').mockResolvedValue({
+      success: true,
+      tx: {
+        ...tx1,
+        // impossible token_data
+        inputs: [{ ...tx1.inputs[0], token_data: -1 }],
+      },
+    });
+    await expect(hWallet.getTxById(tx1.hash)).rejects.toThrowError('Token undefined not found in tokens list');
+    jest.spyOn(hWallet, 'getFullTxById').mockRestore();
+
+    // thorw error if token not found in tx
+    jest.spyOn(hWallet, 'getTxBalance').mockResolvedValue({
+      'unknown-token': 10,
+    });
+    await expect(hWallet.getTxById(tx1.hash)).rejects.toThrowError('Token unknown-token not found in tx');
+    jest.spyOn(hWallet, 'getTxBalance').mockRestore();
   });
 
   it('should throw an error tx id is invalid', async () => {
     const hWallet = await generateWalletHelper();
-    await expect(hWallet.getTxById('invalid-tx-hash')).rejects.toThrowError(`Invalid transaction invalid-tx-hash`);
+    await expect(hWallet.getTxById('invalid-tx-hash')).rejects.toThrowError('Invalid transaction invalid-tx-hash');
   });
 });
 

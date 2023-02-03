@@ -2588,7 +2588,8 @@ class HathorWallet extends EventEmitter {
    * @throws {Error} (propagation) Client did not use the callback
    * @throws {Error} (propagation) Transaction not found
    * @throws {Error} Transaction does not have any balance for this wallet
-   * @throws {Error} Token uid not found for token index
+   * @throws {Error} Token uid not found in tokens list
+   * @throws {Error} Token uid not found in tx
    */
   async getTxById(txId) {
     /**
@@ -2600,7 +2601,7 @@ class HathorWallet extends EventEmitter {
      *   ...output,
      *   token: '00',
      * }
-     * @throws {Error} Token uid not found for token index
+     * @throws {Error} Token uid not found in tokens list
      */
     const hydrateWithTokenUid = (io, tokens) => {
       const { token_data } = io;
@@ -2615,7 +2616,7 @@ class HathorWallet extends EventEmitter {
       const tokenIdx = wallet.getTokenIndex(token_data);
       const tokenUid = tokens[tokenIdx]?.uid;
       if (!tokenUid) {
-        throw new Error(`Token uid not found for token index ${tokenIdx}`);
+        throw new Error(`Token ${tokenUid} not found in tokens list`);
       }
 
       return {
