@@ -795,30 +795,33 @@ test('getTxById', async () => {
   hWallet.getFullTxById.mockResolvedValue(buildValidFullHistory(txId));
   hWallet.getTxBalance.mockReturnValue({ '00': 1673, 'A': 329 });
   // act
-  await expect(hWallet.getTxById(txId)).resolves.toStrictEqual([
-    {
-      txId: txId,
-      timestamp: 1,
-      version: 1,
-      voided: false,
-      weight: 1,
-      tokenId: '00',
-      tokenName: 'Hathor',
-      tokenSymbol: 'HTR',
-      balance: 1673
-    },
-    {
-      txId: txId,
-      timestamp: 1,
-      version: 1,
-      voided: false,
-      weight: 1,
-      tokenId: 'A',
-      tokenName: 'Token A',
-      tokenSymbol: 'A',
-      balance: 329
-    }
-  ]);
+  await expect(hWallet.getTxById(txId)).resolves.toStrictEqual({
+    success: true,
+    txTokens: [
+      {
+        txId: txId,
+        timestamp: 1,
+        version: 1,
+        voided: false,
+        weight: 1,
+        tokenId: '00',
+        tokenName: 'Hathor',
+        tokenSymbol: 'HTR',
+        balance: 1673
+      },
+      {
+        txId: txId,
+        timestamp: 1,
+        version: 1,
+        voided: false,
+        weight: 1,
+        tokenId: 'A',
+        tokenName: 'Token A',
+        tokenSymbol: 'A',
+        balance: 329
+      },
+    ],
+  });
 
   // getFullTxById do not have our tx
   hWallet.getFullTxById.mockRejectedValue(new Error('Transaction not found'));
