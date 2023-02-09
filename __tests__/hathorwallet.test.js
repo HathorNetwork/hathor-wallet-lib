@@ -750,41 +750,34 @@ test('getTxById', async () => {
       weight: 1,
       parents: [],
       inputs: [],
-      outputs: [
-        {
-          token: '00',
-          value: 942,
-          decoded: {
-            address: mineAddress,
-          },
+      outputs: [{
+        token: '00',
+        value: 942,
+        decoded: {
+          address: mineAddress,
         },
-        {
-          token: 'A',
-          value: 329,
-          decoded: {
-            address: mineAddress,
-          },
+      }, {
+        token: 'A',
+        value: 329,
+        decoded: {
+          address: mineAddress,
         },
-        {
-          token: '00',
-          value: 731,
-          decoded: {
-            address: notMineAddress,
-          },
+      }, {
+        token: '00',
+        value: 731,
+        decoded: {
+          address: notMineAddress,
         },
-      ],
-      tokens: [
-        {
-          uid: '00',
-          name: 'Hathor',
-          symbol: 'HTR',
-        },
-        {
-          uid: 'A',
-          name: 'Token A',
-          symbol: 'A',
-        },
-      ]
+      }],
+      tokens: [{
+        uid: '00',
+        name: 'Hathor',
+        symbol: 'HTR',
+      }, {
+        uid: 'A',
+        name: 'Token A',
+        symbol: 'A',
+      }]
     },
     meta: {
       voided_by: [],
