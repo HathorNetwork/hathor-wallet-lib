@@ -145,11 +145,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // Setup the connection so clients can listen to its events before it is started
     this.conn = new WalletServiceConnection();
-    if (enableWs) {
-      this._isWsEnabled = true;
-    } else {
-      this._isWsEnabled = false;
-    }
+    this._isWsEnabled = enableWs;
     this.state = walletState.NOT_STARTED;
 
     this.xpriv = xpriv;
