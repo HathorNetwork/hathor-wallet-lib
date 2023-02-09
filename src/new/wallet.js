@@ -2569,21 +2569,36 @@ class HathorWallet extends EventEmitter {
   /**
    * This function is responsible for getting the details of each token in the transaction.
    * @param {string} txId - Transaction id
-   * @returns {Promise<Array<{ txId: string, timestamp: number, version: number, voided: boolean, weight: number, tokenName: string, tokenSymbol: string, balance: number }>> } Array of token details
+   * @returns {Promise<{
+   *   success: boolean
+   *   txTokens: Array<{
+   *     txId: string,
+   *     timestamp: number,
+   *     version: number,
+   *     voided: boolean,
+   *     weight: number,
+   *     tokenName: string,
+   *     tokenSymbol: string,
+   *     balance: number
+   *   }>
+   * }>} Array of token details
    * @example
-   * [
-   *  {
-   *   txId: '000021e7addbb94a8e43d7f1237d556d47efc4d34800c5923ed3a75bf5a2886e';
-   *   timestamp: 123456789;
-   *   version: 1;
-   *   voided: false;
-   *   weight: 18.5;
-   *   tokenId: '00',
-   *   tokenName: 'Hathor',
-   *   tokenSymbol: 'HTR',
-   *   balance: 100,
-   *  },
-   * ]
+   * {
+   *   success: true,
+   *   txTokens: [
+   *     {
+   *      txId: '000021e7addbb94a8e43d7f1237d556d47efc4d34800c5923ed3a75bf5a2886e';
+   *      timestamp: 123456789;
+   *      version: 1;
+   *      voided: false;
+   *      weight: 18.5;
+   *      tokenId: '00',
+   *      tokenName: 'Hathor',
+   *      tokenSymbol: 'HTR',
+   *      balance: 100,
+   *     },
+   *   ],
+   * }
    * @throws {Error} (propagation) Invalid transaction
    * @throws {Error} (propagation) Client did not use the callback
    * @throws {Error} (propagation) Transaction not found
@@ -2643,7 +2658,12 @@ class HathorWallet extends EventEmitter {
     }
 
     const listTokenUid = Object.keys(tokenBalances);
-    const result = listTokenUid.map((uid) => {
+    const txTokens = listTokenUid.map((uid) => {
+      /**
+       * Retrieves the token config from the transaction.
+       * @param {string} tokenUid
+       * @returns {TokenInfo} Token config
+       */
       const getToken = (tokenUid) => {
         if (tokenUid === HATHOR_TOKEN_CONFIG.uid) {
           return HATHOR_TOKEN_CONFIG;
@@ -2675,7 +2695,7 @@ class HathorWallet extends EventEmitter {
       return tokenDetails;
     });
 
-    return result;
+    return { success: true, txTokens };
   }
 }
 

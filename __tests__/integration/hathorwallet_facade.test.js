@@ -51,24 +51,28 @@ describe('getTxById', () => {
 
     /**
      * @example
-     * [
-     *   {
-     *     "balance": 10,
-     *     "timestamp": 1675195819,
-     *     "tokenId": "00",
-     *     "tokenName": "Hathor",
-     *     "tokenSymbol": "HTR",
-     *     "txId": "00b1e296631984a43b81d2abc50d992335a78719e5684612510a9b61f0805646",
-     *     "version": 1,
-     *     "voided": false,
-     *     "weight": 8.000001,
-     *   },
-     * ]
+     * {
+     *   "success": true,
+     *   "txTokens": [
+     *     {
+     *       "balance": 10,
+     *       "timestamp": 1675195819,
+     *       "tokenId": "00",
+     *       "tokenName": "Hathor",
+     *       "tokenSymbol": "HTR",
+     *       "txId": "00b1e296631984a43b81d2abc50d992335a78719e5684612510a9b61f0805646",
+     *       "version": 1,
+     *       "voided": false,
+     *       "weight": 8.000001,
+     *     },
+     *   ],
+     * }
      */
-    const txDetails = await hWallet.getTxById(tx1.hash);
-    expect(txDetails).toHaveLength(1);
+    const result = await hWallet.getTxById(tx1.hash);
+    expect(result.success).toStrictEqual(true);
+    expect(result.txTokens).toHaveLength(1);
 
-    const firstTokenDetails = txDetails[0];
+    const firstTokenDetails = result.txTokens[0];
     const tokenDetailsKeys = Object.keys(firstTokenDetails);
     expect(tokenDetailsKeys.join(',')).toStrictEqual(
       'txId,timestamp,version,voided,weight,tokenId,tokenName,tokenSymbol,balance',
