@@ -756,24 +756,23 @@ test('getTxById', async () => {
         decoded: {
           address: mineAddress,
         },
+        token_data: 0,
       }, {
         token: 'A',
         value: 329,
         decoded: {
           address: mineAddress,
         },
+        token_data: 1,
       }, {
         token: '00',
         value: 731,
         decoded: {
           address: notMineAddress,
         },
+        token_data: 0,
       }],
       tokens: [{
-        uid: '00',
-        name: 'Hathor',
-        symbol: 'HTR',
-      }, {
         uid: 'A',
         name: 'Token A',
         symbol: 'A',
