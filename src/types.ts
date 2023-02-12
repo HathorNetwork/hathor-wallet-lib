@@ -72,24 +72,11 @@ export interface IHistoryInput {
   index: number;
 }
 
-// export interface IHistoryDecodedAddressOutput {
-//   type: string;
-//   address: string;
-//   timelock?: number|null;
-// }
-
-// export interface IHistoryDecodedDataOutput {
-//   type: string;
-//   data: string;
-// }
-
-// export type IHistoryOutputDecoded = IHistoryDecodedAddressOutput | IHistoryDecodedDataOutput;
-
 // Obs: this will change with nano contracts
 export interface IHistoryOutputDecoded {
   type?: string;
   address?: string;
-  timelock?: number|null;
+  timelock?: number | null;
   data?: string;
 }
 
@@ -99,7 +86,7 @@ export interface IHistoryOutput {
   script: string;
   decoded: IHistoryOutputDecoded;
   token: string;
-  spent_by: string|null;
+  spent_by: string | null;
 }
 
 export interface IDataOutputData {
@@ -120,7 +107,7 @@ export interface IDataOutputAddress {
   value: number;
   authorities: number;
   address: string;
-  timelock: number|null;
+  timelock: number | null;
 }
 
 export function isDataOutputAddress(output: IDataOutput): output is IDataOutputAddress {
@@ -129,7 +116,7 @@ export function isDataOutputAddress(output: IDataOutput): output is IDataOutputA
 
 // This is for create token transactions, where we dont have a token uid yet
 export interface IDataOutputCreateToken {
-  type: 'mint'|'melt';
+  type: 'mint' | 'melt';
   value: number;
   address: string;
   timelock: number|null;
@@ -183,9 +170,9 @@ export interface IUtxo {
   address: string;
   value: number;
   authorities: number;
-  timelock: number|null;
-  type: number; // tx.version, used to identify block and transaction utxos
-  height: number|null; // only for block outputs
+  timelock: number | null;
+  type: number; // tx.version, is the value of the transaction version byte
+  height: number | null; // only for block outputs
 }
 
 export enum WalletType {

@@ -7,9 +7,8 @@
 
 import Address from '../models/address';
 import Network from '../models/network';
-import {Address as bitcoreAddress, Script, HDPublicKey} from 'bitcore-lib';
+import { Address as bitcoreAddress, Script, HDPublicKey } from 'bitcore-lib';
 import { IMultisigData, IStorage, IAddressInfo } from '../types';
-import _ from 'lodash';
 import { createP2SHRedeemScript } from './scripts';
 
 /**
@@ -20,7 +19,7 @@ import { createP2SHRedeemScript } from './scripts';
  *
  * @returns {string} output type of the address (p2pkh or p2sh)
  */
-export function getAddressType(address: string, network: Network): 'p2pkh'|'p2sh' {
+export function getAddressType(address: string, network: Network): 'p2pkh' | 'p2sh' {
   const addressObj = new Address(address, { network });
   return addressObj.getType();
 }

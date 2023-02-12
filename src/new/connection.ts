@@ -76,7 +76,7 @@ class WalletConnection extends BaseConnection {
   subscribeAddresses(addresses: string[]) {
     if (this.websocket) {
       for (const address of addresses) {
-        const msg = JSON.stringify({'type': 'subscribe_address', 'address': address});
+        const msg = JSON.stringify({ type: 'subscribe_address', address });
         this.websocket.sendMessage(msg);
       }
     }
@@ -84,7 +84,7 @@ class WalletConnection extends BaseConnection {
 
   unsubscribeAddress(address: string) {
     if (this.websocket) {
-      const msg = JSON.stringify({'type': 'unsubscribe_address', 'address': address});
+      const msg = JSON.stringify({type: 'unsubscribe_address', address});
       this.websocket.sendMessage(msg);
     }
   }
@@ -93,13 +93,6 @@ class WalletConnection extends BaseConnection {
     if (this.websocket) {
       this.websocket.on('dashboard', handleWsDashboard(storage));
       this.websocket.on('subscribe_address', handleSubscribeAddress());
-    }
-  }
-
-  removeMetricsHandlers() {
-    if (this.websocket) {
-      this.websocket.removeAllListeners('dashboard');
-      this.websocket.removeAllListeners('subscribe_address');
     }
   }
 }

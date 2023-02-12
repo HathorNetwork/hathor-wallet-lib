@@ -21,8 +21,6 @@ import CreateTokenTransaction from '../../src/models/create_token_transaction';
 import config from '../../src/config';
 import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError } from '../../src/errors';
 
-// const nodeMajorVersion = process.versions.node.split('.')[0];
-
 test('Round float', () => {
   expect(helpers.roundFloat(1.23)).toBe(1.23);
   expect(helpers.roundFloat(1.2345)).toBe(1.23);

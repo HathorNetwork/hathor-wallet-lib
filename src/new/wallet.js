@@ -29,6 +29,7 @@ import { WalletType } from '../types';
 import { syncHistory, reloadStorage, checkGapLimit } from '../utils/storage';
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
+import { deriveAddressP2PKH, deriveAddressP2SH } from '../utils/address';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';
@@ -286,32 +287,30 @@ class HathorWallet extends EventEmitter {
    *
    * @param {Number} newState Enum of new state after change
    **/
-  onConnectionChangedState(newState) {
+  async onConnectionChangedState(newState) {
     if (newState === ConnectionState.CONNECTED) {
       this.setState(HathorWallet.SYNCING);
 
+      try {
       // If it's the first connection we just load the history
       // otherwise we are reloading data, so we must execute some cleans
       // before loading the full data again
-      let promise;
       if (this.firstConnection) {
         this.firstConnection = false;
-        promise = this.storage.getWalletData().then((walletData) => {
-          return syncHistory(0, walletData.gapLimit, this.storage, this.conn);
-        });
+        const walletData = await this.storage.getWalletData();
+        await syncHistory(0, walletData.gapLimit, this.storage, this.conn);
       } else {
         if (this.beforeReloadCallback) {
           this.beforeReloadCallback();
         }
-        promise = reloadStorage(this.storage, this.conn);
+        await reloadStorage(this.storage, this.conn);
       }
+      this.setState(HathorWallet.PROCESSING);
 
-      promise.then(() => {
-        this.setState(HathorWallet.PROCESSING);
-      }).catch((error) => {
+      } catch (error) {
         this.setState(HathorWallet.ERROR);
         console.error('Error loading wallet', {error});
-      })
+      }
     } else {
       if (this.walletStopped) {
         this.setState(HathorWallet.CLOSED);
@@ -437,25 +436,6 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Auxiliar method to get the quantity of transactions by each address of the wallet
-   *
-   * @deprecated we have this information from storage
-   *
-   * @yields {{address: string, index: number, transactions: number}}
-   * @memberof HathorWallet
-   * @inner
-   **/
-  async *getTransactionsCountByAddress() {
-    for await (const address of this.storage.getAllAddresses()) {
-      yield {
-        address: address.base58,
-        index: address.bip32AddressIndex,
-        transactions: address.numTransactions,
-      }
-    }
-  }
-
-  /**
    * Get address from specific derivation index
    *
    * @return {Promise<string>} Address
@@ -464,8 +444,16 @@ class HathorWallet extends EventEmitter {
    * @inner
    */
   async getAddressAtIndex(index) {
-    const address = await this.storage.getAddressAtIndex(index);
-    // XXX: Should we derive the address if we don't have it on the storage?
+    let address = await this.storage.getAddressAtIndex(index);
+
+    if (address === null) {
+      if (await this.storage.getWalletType() === 'p2pkh') {
+        address = await deriveAddressP2PKH(index, this.storage);
+      } else {
+        address = await deriveAddressP2SH(index, storage);
+      }
+      await this.storage.saveAddress(address);
+    }
     return address.base58;
   }
 

@@ -7,7 +7,7 @@ import { unpackLen, unpackToInt } from '../utils/buffer';
 import _ from 'lodash';
 import { ParseError, ParseScriptError } from '../errors';
 import { OP_PUSHDATA1, OP_CHECKSIG } from '../opcodes';
-import {Script, HDPublicKey} from 'bitcore-lib';
+import { Script, HDPublicKey } from 'bitcore-lib';
 
 /**
 * Parse P2PKH output script

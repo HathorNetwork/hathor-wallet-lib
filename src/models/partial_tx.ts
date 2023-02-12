@@ -29,33 +29,6 @@ import {
 } from '../constants';
 import { IDataInput, IDataOutput, IDataTx } from '../types';
 
-// type InputData = {
-//   tx_id: string,
-//   index: number,
-//   address: string,
-//   data?: Buffer,
-// };
-
-// type OutputData = {
-//   type: string,
-//   value: number,
-//   tokenData: number,
-//   address?: string,
-//   data?: string,
-//   timelock?: number,
-// };
-
-// // Transaction data to use with helpers
-// type TxData = {
-//   inputs: InputData[],
-//   outputs: OutputData[],
-//   tokens: string[],
-//   weight?: number,
-//   nonce?: number,
-//   version?: number,
-//   timestamp?: number,
-// };
-
 /**
  * Extended version of the Input class with extra data
  * We need the extra data to calculate the balance of the PartialTx

@@ -408,10 +408,10 @@ const tokens = {
       createMelt = true,
       nftData = null,
     }: {
-      changeAddress?: string|null,
+      changeAddress?: string | null,
       createMint?: boolean,
       createMelt?: boolean,
-      nftData?: string|null,
+      nftData?: string | null,
     } = {},
   ): Promise<IDataTx> {
     const isCreateNFT = !!nftData;

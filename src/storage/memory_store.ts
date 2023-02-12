@@ -5,10 +5,22 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { IStore, IAddressInfo, ITokenData, ITokenMetadata, IHistoryTx, IUtxo, IWalletAccessData, IUtxoFilterOptions, IBalance, IAddressMetadata, IWalletData } from '../types';
+import {
+  IStore,
+  IAddressInfo,
+  ITokenData,
+  ITokenMetadata,
+  IHistoryTx,
+  IUtxo,
+  IWalletAccessData,
+  IUtxoFilterOptions,
+  IBalance,
+  IAddressMetadata,
+  IWalletData,
+} from '../types';
 import transaction from '../utils/transaction';
 import walletApi from '../api/wallet';
-import { BLOCK_VERSION, GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
+import { BLOCK_VERSION, GAP_LIMIT, HATHOR_TOKEN_CONFIG, MAX_INPUTS } from '../constants';
 
 
 const DEAFULT_ADDRESSES_WALLET_DATA = {
@@ -31,7 +43,7 @@ export class MemoryStore implements IStore {
   registeredTokens: Map<string, ITokenData>;
   history: Map<string, IHistoryTx>;
   utxos: Map<string, IUtxo>;
-  accessData: IWalletAccessData|null;
+  accessData: IWalletAccessData | null;
   walletData: IWalletData;
   genericStorage: Record<string, any>;
 
@@ -47,30 +59,61 @@ export class MemoryStore implements IStore {
     this.accessData = null;
     this.genericStorage = {};
 
-    this.walletData = {...DEFAULT_WALLET_DATA, ...DEAFULT_ADDRESSES_WALLET_DATA};
+    this.walletData = { ...DEFAULT_WALLET_DATA, ...DEAFULT_ADDRESSES_WALLET_DATA };
   }
 
   /** ADDRESSES */
 
+  /**
+   * Iterate on all addresses
+   *
+   * @async
+   * @returns {AsyncGenerator<IAddressInfo>}
+   */
   async *addressIter(): AsyncGenerator<IAddressInfo, any, unknown> {
     for (const addrInfo of this.addresses.values()) {
       yield addrInfo;
     }
   }
 
+  /**
+   * Get the address info if it exists.
+   *
+   * @param {string} base58 Address in base58 to search
+   * @async
+   * @returns {Promise<IAddressInfo | null>} A promise with the address info or null if not in storage
+   */
   async getAddress(base58: string): Promise<IAddressInfo | null> {
     return this.addresses.get(base58) || null;
   }
 
+  /**
+   * Get the metadata for an address if it exists.
+   *
+   * @param {string} base58 Address in base58 to search the metadata
+   * @async
+   * @returns {Promise<IAddressMetadata | null>} A promise with the address metadata or null if not in storage
+   */
   async getAddressMeta(base58: string): Promise<IAddressMetadata | null> {
     return this.addressesMetadata.get(base58) || null;
   }
 
+  /**
+   * Count the number of addresses in storage.
+   * @async
+   * @returns {Promise<number>} A promise with the number of addresses
+   */
   async addressCount(): Promise<number> {
     return this.addresses.size;
   }
 
-  async getAddressAtIndex(index: number): Promise<IAddressInfo|null> {
+  /**
+   * Get the address info from its bip32 index.
+   * @param index bip32 address index to search for
+   * @async
+   * @returns {Promise<IAddressInfo | null>} The address info or null if not in storage
+   */
+  async getAddressAtIndex(index: number): Promise<IAddressInfo | null> {
     const addr = this.addressIndexes.get(index);
     if (addr === undefined) {
       // We do not have this index loaded on storage, it should be generated instead
@@ -79,6 +122,12 @@ export class MemoryStore implements IStore {
     return this.addresses.get(addr) as IAddressInfo;
   }
 
+  /**
+   * Save the address in storage
+   * @param {IAddressInfo} info Info on address to save
+   * @async
+   * @returns {Promise<void>}
+   */
   async saveAddress(info: IAddressInfo): Promise<void> {
     if (!info.base58) {
       throw new Error('Invalid address');
@@ -100,10 +149,23 @@ export class MemoryStore implements IStore {
     }
   }
 
+  /**
+   * Check that an address is in our storage.
+   * @param {string} base58 Address to check.
+   * @async
+   * @returns A promise that resolves to wheather the address is saved in storage or no.
+   */
   async addressExists(base58: string): Promise<boolean> {
     return this.addresses.has(base58);
   }
 
+  /**
+   * Get the current address.
+   *
+   * @param markAsUsed If we should set the next address as current
+   * @async
+   * @returns {Promise<string>} The address in base58 format
+   */
   async getCurrentAddress(markAsUsed?: boolean): Promise<string> {
     const addressInfo = await this.getAddressAtIndex(this.walletData.currentAddressIndex);
     if (!addressInfo) {
@@ -119,53 +181,74 @@ export class MemoryStore implements IStore {
 
   /* TRANSACTIONS */
 
+  /**
+   * Iterate on the transaction history.
+   *
+   * @param {string|undefined} tokenUid Only yield txs with this token.
+   *
+   * @async
+   * @returns {AsyncGenerator<IHistoryTx>}
+   */
   async *historyIter(tokenUid?: string | undefined): AsyncGenerator<IHistoryTx> {
     for (const tx of this.history.values()) {
-      if (tokenUid !== undefined) {
-        // If a tokenUid is passed, we only yield the transaction if it has the token in one of our addresses
-        let found = false;
-        for (const input of tx.inputs) {
-          if (input.decoded.address && this.addresses.has(input.decoded.address) && input.token === tokenUid) {
-            found = true;
-            break;
-          }
-        }
-        if (found) {
-          yield tx;
-          continue;
-        }
-        for (const output of tx.outputs) {
-          if (output.decoded.address && this.addresses.has(output.decoded.address) && output.token === tokenUid) {
-            found = true;
-            break;
-          }
-        }
-        if (found) {
-          yield tx;
-          continue;
-        }
-      } else {
+      if (tokenUid === undefined) {
         yield tx;
+        continue;
+      }
+
+      // If a tokenUid is passed, we only yield the transaction if it has the token in one of our addresses
+      let found = false;
+      for (const input of tx.inputs) {
+        if (input.decoded.address && this.addresses.has(input.decoded.address) && input.token === tokenUid) {
+          found = true;
+          break;
+        }
+      }
+      if (found) {
+        yield tx;
+        continue;
+      }
+      for (const output of tx.outputs) {
+        if (output.decoded.address && this.addresses.has(output.decoded.address) && output.token === tokenUid) {
+          found = true;
+          break;
+        }
+      }
+      if (found) {
+        yield tx;
+        continue;
       }
     }
   }
 
+  /**
+   * Get the size of the transaction history.
+   *
+   * @returns {Promise<number>} The size of the transaction history
+   */
   async historyCount(): Promise<number> {
     return this.history.size;
   }
 
-  async processHistory({ rewardLock }: {rewardLock?: number} = {}): Promise<void> {
+  /**
+   * Process the history of transactions and create metadata to be used by the wallet.
+   *
+   * @param {{rewardLock: number}} [option={}] Use this configuration when processing the storage
+   * @async
+   * @returns {Promise<void>}
+   */
+  async processHistory({ rewardLock }: { rewardLock?: number } = {}): Promise<void> {
     function getEmptyBalance(): IBalance {
       return {
-        tokens: {unlocked: 0, locked: 0},
+        tokens: { unlocked: 0, locked: 0 },
         authorities: {
-          mint: {unlocked: 0, locked: 0},
-          melt: {unlocked: 0, locked: 0},
+          mint: { unlocked: 0, locked: 0 },
+          melt: { unlocked: 0, locked: 0 },
         }
       };
     }
     const nowTs = Math.floor(Date.now() / 1000);
-    const isTimelocked = (timelock?: number|null) => (!!timelock) && timelock > nowTs;
+    const isTimelocked = (timelock?: number | null) => (!!timelock) && timelock > nowTs;
     const currentHeight = await this.getCurrentHeight();
     const checkRewardLock = (blockHeight?: number) => (!!blockHeight) && (!!rewardLock) && ((blockHeight + rewardLock) < currentHeight);
 
@@ -205,8 +288,6 @@ export class MemoryStore implements IStore {
         allTokens.add(output.token);
         txTokens.add(output.token);
         txAddresses.add(output.decoded.address);
-        // tokensMetadata.get(output.token)!.numTransactions += 1;
-        // addressesMetadata.get(output.decoded.address)!.numTransactions += 1;
         // check index
         if (this.addresses.get(output.decoded.address)!.bip32AddressIndex > maxIndexUsed) {
           maxIndexUsed = this.addresses.get(output.decoded.address)!.bip32AddressIndex;
@@ -278,8 +359,6 @@ export class MemoryStore implements IStore {
         // update metadata
         txTokens.add(input.token);
         txAddresses.add(input.decoded.address);
-        // addressesMetadata.get(input.decoded.address)!.numTransactions += 1;
-        // tokensMetadata.get(input.token)!.numTransactions += 1;
         allTokens.add(input.token);
 
         // check index
@@ -346,6 +425,12 @@ export class MemoryStore implements IStore {
     this.utxos = utxos;
   }
 
+  /**
+   * Save a transaction on storage.
+   * @param {IHistoryTx} tx The transaction to store
+   * @async
+   * @returns {Promise<void>}
+   */
   async saveTx(tx: IHistoryTx): Promise<void> {
     this.history.set(tx.tx_id, tx);
 
@@ -364,39 +449,63 @@ export class MemoryStore implements IStore {
     this.walletData.lastUsedAddressIndex = maxIndex;
   }
 
+  /**
+   * Fetch a transaction in the storage by its id.
+   * @param txId The transaction id
+   * @async
+   * @returns {Promise<IHistoryTx | null>} A promise with the transaction or null
+   */
   async getTx(txId: string): Promise<IHistoryTx | null> {
     return this.history.get(txId) || null;
   }
 
   /** TOKENS */
 
+  /**
+   * Iterate on tokens with the available metadata
+   *
+   * @async
+   * @returns {AsyncGenerator<ITokenData & Partial<ITokenMetadata>>}
+   */
   async *tokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>> {
     for (const tokenInfo of this.tokens.values()) {
       const tokenMeta = this.tokensMetadata.get(tokenInfo.uid);
-      yield {...tokenInfo, ...tokenMeta};
+      yield { ...tokenInfo, ...tokenMeta };
     }
   }
 
-  async getToken(tokenUid: string): Promise<(ITokenData & Partial<ITokenMetadata>)|null> {
+  /**
+   * Get a token on storage from the uid
+   * @param tokenUid The token id to fetch
+   * @returns {Promise<(ITokenData & Partial<ITokenMetadata>) | null>} The token data if present
+   */
+  async getToken(tokenUid: string): Promise<(ITokenData & Partial<ITokenMetadata>) | null> {
     const tokenConfig = this.tokens.get(tokenUid);
     if (tokenConfig === undefined) {
       return null;
     }
     const DEFAULT_TOKEN_META: ITokenMetadata = {
-    numTransactions: 0,
-    balance: {
-        tokens: {unlocked: 0, locked: 0},
+      numTransactions: 0,
+      balance: {
+        tokens: { unlocked: 0, locked: 0 },
         authorities: {
-          mint: {unlocked: 0, locked: 0},
-          melt: {unlocked: 0, locked: 0},
+          mint: { unlocked: 0, locked: 0 },
+          melt: { unlocked: 0, locked: 0 },
         },
       }
     };
     const tokenMeta = this.tokensMetadata.get(tokenUid);
 
-    return {...tokenConfig, ...DEFAULT_TOKEN_META, ...tokenMeta};
+    return { ...tokenConfig, ...DEFAULT_TOKEN_META, ...tokenMeta };
   }
 
+  /**
+   * Save a token on storage
+   * @param {ITokenData} tokenConfig Token config
+   * @param {ITokenMetadata|undefined} [meta] The token metadata
+   * @async
+   * @returns {Promise<void>}
+   */
   async saveToken(tokenConfig: ITokenData, meta?: ITokenMetadata | undefined): Promise<void> {
     if (this.tokens.has(tokenConfig.uid)) {
       throw new Error('Already have this token');
@@ -407,21 +516,49 @@ export class MemoryStore implements IStore {
     }
   }
 
+  /**
+   * Iterate on registered tokens.
+   *
+   * @async
+   * @returns {AsyncGenerator<ITokenData & Partial<ITokenMetadata>>}
+   */
   async *registeredTokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>> {
     for (const tokenConfig of this.registeredTokens.values()) {
       const tokenMeta = this.tokensMetadata.get(tokenConfig.uid);
-      yield {...tokenConfig, ...tokenMeta};
+      yield { ...tokenConfig, ...tokenMeta };
     }
   }
 
+  /**
+   * Register a token.
+   *
+   * Obs: we require the token data because the token being registered may not be on our storage yet.
+   *
+   * @param token Token config to register
+   * @async
+   * @returns {Promise<void>}
+   */
   async registerToken(token: ITokenData): Promise<void> {
     this.registeredTokens.set(token.uid, token);
   }
 
+  /**
+   * Unregister a token.
+   *
+   * @param {string} tokenUid Token id
+   * @async
+   * @returns {Promise<void>}
+   */
   async unregisterToken(tokenUid: string): Promise<void> {
     this.registeredTokens.delete(tokenUid);
   }
 
+  /**
+   * Delete tokens from storage.
+   * @param tokens A list of token ids to delete
+   * @async
+   * @returns {Promise<void>}
+   */
   async deleteTokens(tokens: string[]): Promise<void> {
     for (const tokenUid of tokens) {
       this.tokens.delete(tokenUid);
@@ -429,14 +566,20 @@ export class MemoryStore implements IStore {
     }
   }
 
+  /**
+   * Edit token metadata on storage.
+   * @param {string} tokenUid Token id to edit
+   * @param {Partial<ITokenMetadata>} meta Metadata to save
+   * @returns {Promise<void>}
+   */
   async editToken(tokenUid: string, meta: Partial<ITokenMetadata>): Promise<void> {
     const metadata: ITokenMetadata = {
       numTransactions: 0,
       balance: {
-        tokens: {unlocked: 0, locked: 0},
+        tokens: { unlocked: 0, locked: 0 },
         authorities: {
-          mint: {unlocked: 0, locked: 0},
-          melt: {unlocked: 0, locked: 0},
+          mint: { unlocked: 0, locked: 0 },
+          melt: { unlocked: 0, locked: 0 },
         },
       }
     };
@@ -450,12 +593,24 @@ export class MemoryStore implements IStore {
   }
 
   /** UTXOS */
+
+  /**
+   * Iterate on all available utxos.
+   * @async
+   * @returns {AsyncGenerator<IUtxo>}
+   */
   async *utxoIter(): AsyncGenerator<IUtxo, any, unknown> {
     for (const utxo of this.utxos.values()) {
       yield utxo;
     }
   }
 
+  /**
+   * Fetch utxos based on a selection criteria
+   * @param {IUtxoFilterOptions} options Options to filter utxos
+   * @async
+   * @returns {AsyncGenerator<IUtxo>}
+   */
   async *selectUtxos(options: IUtxoFilterOptions): AsyncGenerator<IUtxo> {
     const networkHeight = await this.getCurrentHeight();
     const isHeightLocked = (utxo: IUtxo) => {
@@ -470,9 +625,9 @@ export class MemoryStore implements IStore {
       // Heighlocked when network height is lower than block height + reward_spend_min_blocks
       return ((utxo.height || 0) + options.reward_lock) > networkHeight;
     };
-    const token = options.token || '00';
+    const token = options.token || HATHOR_TOKEN_CONFIG.uid;
     const authorities = options.authorities || 0;
-    const maxUtxos = options.max_utxos || 255; // MAX_INPUTS
+    const maxUtxos = options.max_utxos || MAX_INPUTS;
     if (options.max_amount && options.target_amount) {
       throw new Error('invalid options');
     }
@@ -521,65 +676,137 @@ export class MemoryStore implements IStore {
     }
   }
 
+  /**
+   * Save an utxo on storage.
+   * @param {IUtxo} utxo Utxo to save
+   * @async
+   * @returns {Promise<void>}
+   */
   async saveUtxo(utxo: IUtxo): Promise<void> {
     this.utxos.set(`${utxo.txId}:${utxo.index}`, utxo);
   }
 
   /** ACCESS DATA */
 
+  /**
+   * Save access data on storage.
+   * @param {IWalletAccessData} data Access data to save
+   * @async
+   * @returns {Promise<void>}
+   */
   async saveAccessData(data: IWalletAccessData): Promise<void> {
     this.accessData = data;
   }
 
-  async getAccessData(): Promise<IWalletAccessData|null> {
+  /**
+   * Fetch wallet access data on storage if present.
+   * @async
+   * @returns {Promise<IWalletAccessData | null>} A promise with the wallet access data.
+   */
+  async getAccessData(): Promise<IWalletAccessData | null> {
     if (this.accessData === null) {
       throw new Error('Wallet access data unset');
     }
     return this.accessData;
   }
 
+  /**
+   * Get the last bip32 address index loaded on storage.
+   * @async
+   * @returns {Promise<number>}
+   */
   async getLastLoadedAddressIndex(): Promise<number> {
     return this.walletData.lastLoadedAddressIndex;
   }
 
+  /**
+   * Get the last bip32 address index used, i.e. with any transaction.
+   * @async
+   * @returns {Promise<number>}
+   */
   async getLastUsedAddressIndex(): Promise<number> {
     return this.walletData.lastUsedAddressIndex;
   }
 
+  /**
+   * Set the current best chain height.
+   * @async
+   * @param {number} height Height to set.
+   */
   async setCurrentHeight(height: number): Promise<void> {
     this.walletData.bestBlockHeight = height;
   }
 
+  /**
+   * Get the current best chain height.
+   * @async
+   * @returns {Promise<number>}
+   */
   async getCurrentHeight(): Promise<number> {
     return this.walletData.bestBlockHeight;
   }
 
+  /**
+   * Set the gap limit for this wallet.
+   * @async
+   * @param {number} value Gat limit to set.
+   */
   async setGapLimit(value: number): Promise<void> {
     this.walletData.gapLimit = value;
   }
 
+  /**
+   * Get the current wallet gap limit.
+   * @async
+   * @returns {Promise<number>}
+   */
   async getGapLimit(): Promise<number> {
     return this.walletData.gapLimit;
   }
 
+  /**
+   * Get the wallet data.
+   * @async
+   * @returns {Promise<IWalletData>}
+   */
   async getWalletData(): Promise<IWalletData> {
     return this.walletData;
   }
 
+  /**
+   * Get an entry on the generic storage.
+   * @param {string} key Key to fetch
+   * @async
+   * @returns {Promise<any>}
+   */
   async getItem(key: string): Promise<any> {
     return this.genericStorage[key];
   }
 
+  /**
+   * Set an item on the generic storage.
+   *
+   * @param {string} key Key to store
+   * @param {any} value Value to store
+   * @async
+   * @returns {Promise<void>}
+   */
   async setItem(key: string, value: any): Promise<void> {
     this.genericStorage[key] = value;
   }
 
+  /**
+   * Clean the storage.
+   * @param cleanHistory if we should clean the transaction history.
+   * @param cleanAddresses if we should clean the addresses.
+   * @async
+   * @returns {Promise<void>}
+   */
   async cleanStorage(cleanHistory: boolean = false, cleanAddresses: boolean = false): Promise<void> {
     this.accessData = null;
     if (cleanHistory) {
       this.tokens = new Map<string, ITokenData>();
       this.tokensMetadata = new Map<string, ITokenMetadata>();
-      this.registeredTokens = new Map<string, ITokenData>();
       this.history = new Map<string, IHistoryTx>();
       this.utxos = new Map<string, IUtxo>();
     }
@@ -588,7 +815,7 @@ export class MemoryStore implements IStore {
       this.addresses = new Map<string, IAddressInfo>();
       this.addressIndexes = new Map<number, string>();
       this.addressesMetadata = new Map<string, IAddressMetadata>();
-      this.walletData = {...this.walletData, ...DEAFULT_ADDRESSES_WALLET_DATA};
+      this.walletData = { ...this.walletData, ...DEAFULT_ADDRESSES_WALLET_DATA };
     }
   }
 }

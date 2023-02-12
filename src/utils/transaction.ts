@@ -42,7 +42,7 @@ const transaction = {
    * @param {Pick<HistoryTransactionOutput, 'token_data'|'value'>} output An output with the token_data and value fields
    * @returns {boolean} If the output is a mint authority output
    */
-  isMint(output: Pick<HistoryTransactionOutput, 'token_data'|'value'>): boolean {
+  isMint(output: Pick<HistoryTransactionOutput, 'token_data' | 'value'>): boolean {
     return this.isAuthorityOutput(output) && ((output.value & TOKEN_MINT_MASK) > 0);
   },
 
@@ -52,7 +52,7 @@ const transaction = {
    * @param {Pick<HistoryTransactionOutput, 'token_data'|'value'>} output An output with the token_data and value fields
    * @returns {boolean} If the output is a melt authority output
    */
-  isMelt(output: Pick<HistoryTransactionOutput, 'token_data'|'value'>): boolean {
+  isMelt(output: Pick<HistoryTransactionOutput, 'token_data' | 'value'>): boolean {
     return this.isAuthorityOutput(output) && ((output.value & TOKEN_MELT_MASK) > 0);
   },
 

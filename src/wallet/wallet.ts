@@ -125,9 +125,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     passphrase = '',
   }: {
     requestPassword: Function,
-    seed?: string|null,
-    xpriv?: string|null,
-    xpub?: string|null,
+    seed?: string | null,
+    xpriv?: string | null,
+    xpub?: string | null,
     network: Network,
     passphrase?: string,
   }) {

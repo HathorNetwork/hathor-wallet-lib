@@ -42,7 +42,7 @@ type optionsType = {
   parents?: string[],
   tokens?: string[],
   hash?: string | null,
-  height?: number|null,
+  height?: number | null,
 };
 
 /**
@@ -60,7 +60,7 @@ class Transaction {
   version: number;
   weight: number;
   nonce: number;
-  height: number|null;
+  height: number | null;
   timestamp: number | null;
   parents: string[];
   tokens: string[];

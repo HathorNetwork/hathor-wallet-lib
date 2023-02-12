@@ -5,13 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from "../../src/constants";
-import { MemoryStore } from "../../src/storage";
-import tx_history from "../__fixtures__/tx_history";
-import walletApi from "../../src/api/wallet";
-import { HDPrivateKey } from "bitcore-lib";
-import { encryptData } from "../../src/utils/crypto";
-import { WalletType } from "../../src/types";
+import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../../src/constants';
+import { MemoryStore } from '../../src/storage';
+import tx_history from '../__fixtures__/tx_history';
+import walletApi from '../../src/api/wallet';
+import { HDPrivateKey } from 'bitcore-lib';
+import { encryptData } from '../../src/utils/crypto';
+import { WalletType } from '../../src/types';
 
 
 test('default values', async () => {
@@ -96,7 +96,7 @@ test('history methods', async () => {
 
   const txId = '0000000110eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e';
   await expect(store.getTx(txId)).resolves.toMatchObject({
-    tx_id: "0000000110eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e",
+    tx_id: '0000000110eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e',
   });
 
   store.walletData.bestBlockHeight = 11;

@@ -39,7 +39,7 @@ const dateFormatter = {
    * @memberof Date
    * @inner
    */
-  uptimeFormat(uptime) {
+  uptimeFormat(uptime: number): string {
     uptime = Math.floor(uptime);
     const days = Math.floor(uptime / 3600 / 24);
     uptime = uptime % (3600 * 24);

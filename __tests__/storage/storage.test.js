@@ -5,9 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import walletApi from "../../src/api/wallet";
-import { MemoryStore, Storage } from "../../src/storage";
-import tx_history from "../__fixtures__/tx_history";
+import walletApi from '../../src/api/wallet';
+import { MemoryStore, Storage } from '../../src/storage';
+import tx_history from '../__fixtures__/tx_history';
 
 
 test('config version', () => {

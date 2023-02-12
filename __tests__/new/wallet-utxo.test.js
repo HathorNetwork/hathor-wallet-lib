@@ -1,11 +1,11 @@
-import HathorWallet from "../../src/new/wallet";
-import txHistoryFixture from "../__fixtures__/tx_history";
-import { MemoryStore, Storage } from "../../src/storage";
-import { MAX_INPUTS, MAX_OUTPUTS, TOKEN_DEPOSIT_PERCENTAGE, TX_WEIGHT_CONSTANTS } from "../../src/constants";
-import { HDPrivateKey } from "bitcore-lib";
-import { encryptData } from "../../src/utils/crypto";
-import { WalletType } from "../../src/types";
-import walletApi from "../../src/api/wallet";
+import HathorWallet from '../../src/new/wallet';
+import txHistoryFixture from '../__fixtures__/tx_history';
+import { MemoryStore, Storage } from '../../src/storage';
+import { MAX_INPUTS, MAX_OUTPUTS, TOKEN_DEPOSIT_PERCENTAGE, TX_WEIGHT_CONSTANTS } from '../../src/constants';
+import { HDPrivateKey } from 'bitcore-lib';
+import { encryptData } from '../../src/utils/crypto';
+import { WalletType } from '../../src/types';
+import walletApi from '../../src/api/wallet';
 
 class FakeHathorWallet {
   constructor() {
@@ -19,7 +19,7 @@ class FakeHathorWallet {
     }
 
     this.sendManyOutputsTransaction.mockImplementation(() => {
-      return Promise.resolve({ hash: "123" });
+      return Promise.resolve({ hash: '123' });
     });
 
     // Prepare storage
@@ -65,16 +65,16 @@ class FakeHathorWallet {
   }
 }
 
-describe("UTXO Consolidation", () => {
+describe('UTXO Consolidation', () => {
   let hathorWallet;
-  const destinationAddress = "WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ";
-  const invalidDestinationAddress = "WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi";
+  const destinationAddress = 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ';
+  const invalidDestinationAddress = 'WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi';
   beforeAll(async () => {
     hathorWallet = new FakeHathorWallet();
     await hathorWallet.readyPromise;
   });
 
-  test("filter only HTR utxos", async () => {
+  test('filter only HTR utxos', async () => {
     const utxoDetails = await hathorWallet.getUtxos();
     expect(utxoDetails.utxos).toHaveLength(2);
     expect(utxoDetails.total_amount_available).toBe(2);
@@ -83,9 +83,9 @@ describe("UTXO Consolidation", () => {
     expect(utxoDetails.total_utxos_locked).toBe(0);
   });
 
-  test("filter by custom token", async () => {
+  test('filter by custom token', async () => {
     const utxoDetails = await hathorWallet.getUtxos({
-      token: "01",
+      token: '01',
     });
     expect(utxoDetails.utxos).toHaveLength(1);
     expect(utxoDetails.total_amount_available).toBe(1);
@@ -94,16 +94,16 @@ describe("UTXO Consolidation", () => {
     expect(utxoDetails.total_utxos_locked).toBe(0);
   });
 
-  test("filter by max_utxos", async () => {
+  test('filter by max_utxos', async () => {
     const utxoDetails = await hathorWallet.getUtxos({
       max_utxos: 1,
     });
     expect(utxoDetails.utxos).toHaveLength(1);
   });
 
-  test("filter by filter_address", async () => {
+  test('filter by filter_address', async () => {
     const utxoDetails = await hathorWallet.getUtxos({
-      filter_address: "WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp",
+      filter_address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
     });
     expect(utxoDetails.utxos).toHaveLength(1);
     expect(utxoDetails.total_amount_available).toBe(1);
@@ -112,7 +112,7 @@ describe("UTXO Consolidation", () => {
     expect(utxoDetails.total_utxos_locked).toBe(0);
   });
 
-  test("filter by max_amount", async () => {
+  test('filter by max_amount', async () => {
     const utxoDetails = await hathorWallet.getUtxos({
       max_amount: 2,
     });
@@ -123,9 +123,9 @@ describe("UTXO Consolidation", () => {
     expect(utxoDetails.total_utxos_locked).toBe(0);
   });
 
-  test("filter by amount_bigger_than", async () => {
+  test('filter by amount_bigger_than', async () => {
     const utxoDetails = await hathorWallet.getUtxos({
-      token: "02",
+      token: '02',
       amount_bigger_than: 2.5,
     });
     expect(utxoDetails.utxos).toHaveLength(1);
@@ -135,9 +135,9 @@ describe("UTXO Consolidation", () => {
     expect(utxoDetails.total_utxos_locked).toBe(0);
   });
 
-  test("filter by amount_smaller_than", async () => {
+  test('filter by amount_smaller_than', async () => {
     const utxoDetails = await hathorWallet.getUtxos({
-      token: "02",
+      token: '02',
       amount_smaller_than: 1.5,
     });
     expect(utxoDetails.utxos).toHaveLength(1);
@@ -147,17 +147,17 @@ describe("UTXO Consolidation", () => {
     expect(utxoDetails.total_utxos_locked).toBe(0);
   });
 
-  test("correctly execute consolidateUtxos", async () => {
+  test('correctly execute consolidateUtxos', async () => {
     const result = await hathorWallet.consolidateUtxos(destinationAddress);
     expect(hathorWallet.sendManyOutputsTransaction).toBeCalled();
     expect(result.total_utxos_consolidated).toBe(2);
     expect(result.total_amount).toBe(2);
-    expect(result.txId).toBe("123");
+    expect(result.txId).toBe('123');
     expect(result.utxos).toHaveLength(2);
     expect(result.utxos.some((utxo) => utxo.locked)).toBeFalsy();
     // assert single output
     expect(hathorWallet.sendManyOutputsTransaction.mock.calls[0][0]).toEqual([
-      { address: destinationAddress, value: 2, token: "00" },
+      { address: destinationAddress, value: 2, token: '00' },
     ]);
     // assert 2 inputs only
     expect(
@@ -165,22 +165,22 @@ describe("UTXO Consolidation", () => {
     ).toHaveLength(2);
   });
 
-  test("all HTR utxos locked by height", async () => {
+  test('all HTR utxos locked by height', async () => {
     hathorWallet.storage.version.reward_spend_min_blocks = 10;
     const utxoDetails = await hathorWallet.getUtxos();
     expect(utxoDetails.utxos).toHaveLength(0);
     hathorWallet.storage.version.reward_spend_min_blocks = 0;
   });
 
-  test("throw error when there is no utxo to consolidade", async () => {
+  test('throw error when there is no utxo to consolidade', async () => {
     await expect(
-      hathorWallet.consolidateUtxos(destinationAddress, { token: "05" })
-    ).rejects.toEqual(new Error("No available utxo to consolidate."));
+      hathorWallet.consolidateUtxos(destinationAddress, { token: '05' })
+    ).rejects.toEqual(new Error('No available utxo to consolidate.'));
   });
 
-  test("throw error for invalid destinationAddress", async () => {
+  test('throw error for invalid destinationAddress', async () => {
     await expect(
       hathorWallet.consolidateUtxos(invalidDestinationAddress)
-    ).rejects.toEqual(new Error("Utxo consolidation to an address not owned by this wallet isn\'t allowed."));
+    ).rejects.toEqual(new Error('Utxo consolidation to an address not owned by this wallet isn\'t allowed.'));
   });
 });

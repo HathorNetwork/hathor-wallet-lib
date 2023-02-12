@@ -27,7 +27,6 @@ import {
 } from '../types';
 import HathorWalletServiceWallet from '../wallet';
 import { WalletRequestError } from '../../errors';
-import axios from 'axios';
 import { TxNotFoundError } from '../../errors';
 
 /**
@@ -241,7 +240,7 @@ const walletApi = {
   },
 
   _txNotFoundGuard(data: unknown) {
-    const message = get(data, 'message', '');
+    const message = get<unknown, string, string>(data, 'message', '');
 
     if (message === 'Transaction not found') {
       throw new TxNotFoundError();

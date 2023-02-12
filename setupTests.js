@@ -38,16 +38,14 @@ mock.onGet('thin_wallet/address_history').reply((config) => {
   return [200, {'success': true, 'has_more': false, 'history': []}];
 });
 
-mock.onGet('version').reply((config) => {
-  return [200, {
+mock.onGet('version').reply((config) => ([200, {
     version: '1.0.0',
     network: 'testnet',
     min_tx_weight: 14,
     min_tx_weight_coefficient: 1.6,
     min_tx_weight_k: 100,
     token_deposit_percentage: 0.01,
-  }];
-});
+  }]));
 
 expect.extend({
   toMatchBuffer(received, expected) {

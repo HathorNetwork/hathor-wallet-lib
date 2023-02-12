@@ -34,6 +34,7 @@ import config, { Config } from '../config';
 import { decryptData, encryptData } from '../utils/crypto';
 import FullNodeConnection from '../new/connection';
 import { getAddressType } from '../utils/address';
+import { HATHOR_TOKEN_CONFIG, MAX_INPUTS, MAX_OUTPUTS } from '../constants';
 
 const DEFAULT_ADDRESS_META: IAddressMetadata = {
   numTransactions: 0,
@@ -53,6 +54,10 @@ export class Storage implements IStorage {
     this.version = null;
   }
 
+  /**
+   * Set the fullnode api version data.
+   * @param {ApiVersion} version Fullnode api version data
+   */
   setApiVersion(version: ApiVersion): void {
     this.version = version;
   }
@@ -78,7 +83,7 @@ export class Storage implements IStorage {
    * @async
    * @returns {Promise<(IAddressInfo & Partial<IAddressMetadata>)|null>} The address info or null if not found
    */
-  async getAddressInfo(base58: string): Promise<(IAddressInfo & IAddressMetadata)|null> {
+  async getAddressInfo(base58: string): Promise<(IAddressInfo & IAddressMetadata) | null> {
     const address = await this.store.getAddress(base58);
     if (address === null) {
       return null;
@@ -94,38 +99,76 @@ export class Storage implements IStorage {
    * @async
    * @returns {Promise<IAddressInfo|null>} The address info or null if not found
    */
-  async getAddressAtIndex(index: number): Promise<IAddressInfo|null> {
+  async getAddressAtIndex(index: number): Promise<IAddressInfo | null> {
     return this.store.getAddressAtIndex(index);
   }
 
+  /**
+   * Check if the address is from our wallet.
+   * @param {string} base58 The address encoded as base58
+   * @returns {Promise<boolean>} If the address is known by the storage
+   */
   async isAddressMine(base58: string): Promise<boolean> {
     return this.store.addressExists(base58);
   }
 
+  /**
+   * Save address info on storage
+   * @param {IAddressInfo} info Address info to save on storage
+   * @returns {Promise<void>}
+   */
   async saveAddress(info: IAddressInfo): Promise<void> {
     await this.store.saveAddress(info);
   }
 
+  /**
+   * Get the current address.
+   *
+   * @param {boolean|undefined} markAsUsed If we should set the next address as current
+   * @returns {Promise<string>} The address in base58 encoding
+   */
   async getCurrentAddress(markAsUsed?: boolean): Promise<string> {
     return this.store.getCurrentAddress(markAsUsed);
   }
 
+  /**
+   * Iterate on the history of transactions.
+   * @returns {AsyncGenerator<IHistoryTx>}
+   */
   async *txHistory(): AsyncGenerator<IHistoryTx> {
     for await (const tx of this.store.historyIter()) {
       yield tx;
     }
   }
 
+  /**
+   * Iterate on the history of transactions that include the given token.
+   *
+   * @param {string|undefined} [tokenUid='00'] Token to fetch, defaults to HTR
+   * @returns {AsyncGenerator<IHistoryTx>}
+   */
   async *tokenHistory(tokenUid?: string): AsyncGenerator<IHistoryTx> {
-    for await (const tx of this.store.historyIter(tokenUid || '00')) {
+    for await (const tx of this.store.historyIter(tokenUid || HATHOR_TOKEN_CONFIG.uid)) {
       yield tx;
     }
   }
 
+  /**
+   * Fetch a transaction on the storage by it's id.
+   *
+   * @param {string} txId The transaction id to fetch
+   * @returns {Promise<IHistoryTx | null>} The transaction or null if not on storage
+   */
   async getTx(txId: string): Promise<IHistoryTx|null> {
     return this.store.getTx(txId);
   }
 
+  /**
+   * Get the transactions being spent by the given inputs if they belong in our wallet.
+   *
+   * @param {Input[]} inputs A list of inputs
+   * @returns {AsyncGenerator<{tx: IHistoryTx, input: Input, index: number}>}
+   */
   async *getSpentTxs(inputs: Input[]): AsyncGenerator<{tx: IHistoryTx, input: Input, index: number}> {
     for await (const [index, input] of inputs.entries()) {
       const tx = await this.getTx(input.hash);
@@ -135,48 +178,101 @@ export class Storage implements IStorage {
     }
   }
 
+  /**
+   * Add a transaction on storage.
+   *
+   * @param {IHistoryTx} tx The transaction
+   * @returns {Promise<void>}
+   */
   async addTx(tx: IHistoryTx): Promise<void> {
     await this.store.saveTx(tx);
   }
 
+  /**
+   * Process the transaction history to calculate the metadata.
+   * @returns {Promise<void>}
+   */
   async processHistory(): Promise<void> {
     await this.store.processHistory({
       rewardLock: this.version?.reward_spend_min_blocks,
     });
   }
 
+  /**
+   * Save a token data on storage.
+   *
+   * @param {ITokenData} data Token data to save.
+   * @returns {Promise<void>}
+   */
   async addToken(data: ITokenData): Promise<void> {
     await this.store.saveToken(data);
   }
 
-  async editToken(tokenUid: string, meta: ITokenMetadata): Promise<void> {
+  /**
+   * Edit a token metadata.
+   *
+   * @param {string} tokenUid The token uid to edit.
+   * @param {Partial<ITokenMetadata>} meta metadata to save.
+   * @returns {Promise<void>}
+   */
+  async editToken(tokenUid: string, meta: Partial<ITokenMetadata>): Promise<void> {
     this.store.editToken(tokenUid, meta);
   }
 
+  /**
+   * Iterate on all tokens on the storage.
+   *
+   * @returns {AsyncGenerator<ITokenData & Partial<ITokenMetadata>>}
+   */
   async *getAllTokens(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>> {
     for await (const token of this.store.tokenIter()) {
       yield token;
     }
   }
 
+  /**
+   * Iterate on all registered tokens of the wallet.
+   *
+   * @returns {AsyncGenerator<ITokenData & Partial<ITokenMetadata>>}
+   */
   async *getRegisteredTokens(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>> {
     for await (const token of this.store.registeredTokenIter()) {
       yield token;
     }
   }
 
+  /**
+   * Get a token from storage along with the metadata of the wallet transactions.
+   *
+   * @param {string|undefined} [token='00'] Token uid to fetch
+   * @returns {Promise<(ITokenData & Partial<ITokenMetadata>)|null>}
+   */
   async getToken(token?: string): Promise<(ITokenData & Partial<ITokenMetadata>)|null> {
-    return this.store.getToken(token || '00');
+    return this.store.getToken(token || HATHOR_TOKEN_CONFIG.uid);
   }
 
+  /**
+   * Regsiter a token.
+   * @param {ITokenData} token Token data to register
+   * @returns {Promise<void>}
+   */
   async registerToken(token: ITokenData): Promise<void> {
     await this.store.registerToken(token);
   }
 
+  /**
+   * Unregister a token from the wallet.
+   * @param {Promise<void>} tokenUid Token uid to unregister.
+   * @returns {Promise<void>}
+   */
   async unregisterToken(tokenUid: string): Promise<void> {
     await this.store.unregisterToken(tokenUid);
   }
 
+  /**
+   * Iterate on all utxos of the wallet.
+   * @returns {AsyncGenerator<IUtxo, any, unknown>}
+   */
   async *getAllUtxos(): AsyncGenerator<IUtxo, any, unknown> {
     for await (const utxo of this.store.utxoIter()) {
       yield utxo;
@@ -186,11 +282,8 @@ export class Storage implements IStorage {
   /**
    * Select utxos matching the request and do not select any utxos marked for inputs.
    *
-   * @param options Options to filter utxos and stop when the target is found.
-   *
-   * @async
-   * @generator
-   * @yields {IUtxo}
+   * @param {Omit<IUtxoFilterOptions, 'reward_lock'>} [options={}] Options to filter utxos and stop when the target is found.
+   * @returns {AsyncGenerator<IUtxo, any, unknown>}
    */
   async *selectUtxos(options: Omit<IUtxoFilterOptions, 'reward_lock'> = {}): AsyncGenerator<IUtxo, any, unknown> {
     const newFilter = (utxo: IUtxo): boolean => {
@@ -414,8 +507,8 @@ export class Storage implements IStorage {
       }
     }
 
-    const max_inputs = this.version?.max_number_inputs || 255;
-    const max_outputs = this.version?.max_number_outputs || 255;
+    const max_inputs = this.version?.max_number_inputs || MAX_INPUTS;
+    const max_outputs = this.version?.max_number_outputs || MAX_OUTPUTS;
     if (((tx.inputs.length + newInputs.length) > max_inputs)
       || ((tx.outputs.length + newOutputs.length) > max_outputs)
     ) {
@@ -472,18 +565,39 @@ export class Storage implements IStorage {
     }
   }
 
-  async getAccessData(): Promise<IWalletAccessData|null> {
+  /**
+   * Get the wallet's access data if the wallet is initialized.
+   *
+   * @returns {Promise<IWalletAccessData | null>}
+   */
+  async getAccessData(): Promise<IWalletAccessData | null> {
     return this.store.getAccessData();
   }
 
+  /**
+   * Save the access data, initializing the wallet.
+   *
+   * @param {IWalletAccessData} data The wallet access data
+   * @returns {Promise<void>}
+   */
   async saveAccessData(data: IWalletAccessData): Promise<void> {
     return this.store.saveAccessData(data);
   }
 
+  /**
+   * Get the wallet's metadata.
+   *
+   * @returns {Promise<IWalletData>}
+   */
   async getWalletData(): Promise<IWalletData> {
     return this.store.getWalletData();
   }
 
+  /**
+   * Get the wallet type, i.e. P2PKH or MultiSig.
+   *
+   * @returns {Promise<WalletType>}
+   */
   async getWalletType(): Promise<WalletType> {
     const accessData = await this.getAccessData();
     if (accessData === null) {
@@ -509,6 +623,10 @@ export class Storage implements IStorage {
     return this.store.getCurrentHeight();
   }
 
+  /**
+   * Return wheather the wallet is readonly, i.e. was started without the private key.
+   * @returns {Promise<boolean>}
+   */
   async isReadonly(): Promise<boolean> {
     const accessData = await this.getAccessData();
     if (accessData === null) {
@@ -517,6 +635,12 @@ export class Storage implements IStorage {
     return (accessData.walletFlags & WALLET_FLAGS.READONLY) > 0;
   }
 
+  /**
+   * Decrypt and return the main private key of the wallet.
+   *
+   * @param {string} pinCode Pin to unlock the private key
+   * @returns {Promise<string>} The HDPrivateKey in string format.
+   */
   async getMainXPrivKey(pinCode: string): Promise<string> {
     const accessData = await this.getAccessData();
     if (accessData === null) {
@@ -535,6 +659,12 @@ export class Storage implements IStorage {
     }
   }
 
+  /**
+   * Decrypt and return the auth private key of the wallet.
+   * 
+   * @param {string} pinCode Pin to unlock the private key
+   * @returns {Promise<string>} The Auth HDPrivateKey in string format.
+   */
   async getAuthPrivKey(pinCode: string): Promise<string> {
     const accessData = await this.getAccessData();
     if (accessData === null) {
@@ -553,6 +683,11 @@ export class Storage implements IStorage {
     }
   }
 
+  /**
+   * Handle storage operations for a wallet being stopped.
+   * @param {{connection?: FullNodeConnection, cleanStorage?: boolean, cleanAddresses?: boolean}} Options to handle stop
+   * @returns {Promise<void>}
+   */
   async handleStop({connection, cleanStorage = false, cleanAddresses = false}: {connection?: FullNodeConnection, cleanStorage?: boolean, cleanAddresses?: boolean} = {}): Promise<void> {
     if (connection) {
       for await (const addressInfo of this.getAllAddresses()) {
@@ -566,10 +701,23 @@ export class Storage implements IStorage {
     }
   }
 
+  /**
+   * Clean the storage data.
+   * 
+   * @param {boolean} [cleanHistory=false] If we should clean the history data
+   * @param {boolean} [cleanAddresses=false] If we should clean the address data
+   * @returns {Promise<void>}
+   */
   async cleanStorage(cleanHistory: boolean = false, cleanAddresses: boolean = false): Promise<void> {
     return this.store.cleanStorage(cleanHistory, cleanAddresses);
   }
 
+  /**
+   * Change the wallet pin.
+   * @param {string} oldPin Old pin to unlock data.
+   * @param {string} newPin New pin to lock data.
+   * @returns {Promise<void>}
+   */
   async changePin(oldPin: string, newPin: string): Promise<void> {
     const accessData = await this.getAccessData();
     if (accessData === null) {
@@ -603,6 +751,13 @@ export class Storage implements IStorage {
     await this.saveAccessData(accessData);
   }
 
+  /**
+   * Change the wallet password.
+   * 
+   * @param {string} oldPassword Old password
+   * @param {string} newPassword New password
+   * @returns {Promise<void>}
+   */
   async changePassword(oldPassword: string, newPassword: string): Promise<void> {
     const accessData = await this.getAccessData();
     if (accessData === null) {
@@ -624,10 +779,19 @@ export class Storage implements IStorage {
     await this.saveAccessData(accessData);
   }
 
+  /**
+   * Set the wallet gap limit.
+   * @param {number} value New gap limit to use.
+   * @returns {Promise<void>}
+   */
   async setGapLimit(value: number): Promise<void> {
     return this.store.setGapLimit(value);
   }
 
+  /**
+   * Get the wallet gap limit.
+   * @returns {Promise<number>}
+   */
   async getGapLimit(): Promise<number> {
     return this.store.getGapLimit();
   }

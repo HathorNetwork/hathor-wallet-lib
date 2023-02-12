@@ -6,7 +6,7 @@
  */
 
 import EventEmitter from 'events';
-import { MIN_POLLING_INTERVAL, SELECT_OUTPUTS_TIMEOUT, HATHOR_TOKEN_CONFIG } from '../constants';
+import { SELECT_OUTPUTS_TIMEOUT, HATHOR_TOKEN_CONFIG } from '../constants';
 import transactionUtils from '../utils/transaction';
 import txApi from '../api/txApi';
 import { WalletError, SendTxError } from '../errors';
@@ -35,14 +35,14 @@ export function isDataOutput(output: ISendOutput): output is ISendDataOutput {
 }
 
 export interface ISendTokenOutput {
-  type: OutputType.P2PKH|OutputType.P2SH,
+  type: OutputType.P2PKH | OutputType.P2SH,
   address: string,
   value: number,
   token: string,
-  timelock?: number|null,
+  timelock?: number | null,
 }
 
-export type ISendOutput = ISendDataOutput|ISendTokenOutput;
+export type ISendOutput = ISendDataOutput | ISendTokenOutput;
 
 /**
  * This is transaction mining class responsible for:
@@ -62,13 +62,13 @@ export type ISendOutput = ISendDataOutput|ISendTokenOutput;
  **/
 class SendTransaction extends EventEmitter {
   storage: IStorage;
-  transaction: Transaction|null;
+  transaction: Transaction | null;
   outputs: ISendOutput[];
   inputs: ISendInput[];
-  changeAddress: string|null;
-  pin: string|null;
-  fullTxData: IDataTx|null;
-  mineTransaction: MineTransaction|null = null;
+  changeAddress: string | null;
+  pin: string | null;
+  fullTxData: IDataTx | null;
+  mineTransaction: MineTransaction | null = null;
 
   /**
    *
@@ -84,17 +84,17 @@ class SendTransaction extends EventEmitter {
   constructor(
     storage: IStorage,
     {
-      transaction=null,
-      outputs=[],
-      inputs=[],
-      changeAddress=null,
-      pin=null,
+      transaction = null,
+      outputs = [],
+      inputs = [],
+      changeAddress = null,
+      pin = null,
     }: {
-      transaction?: Transaction|null,
+      transaction?: Transaction | null,
       inputs?: ISendInput[],
       outputs?: ISendOutput[],
-      changeAddress?: string|null,
-      pin?: string|null,
+      changeAddress?: string | null,
+      pin?: string | null,
     } = {}) {
     super();
 

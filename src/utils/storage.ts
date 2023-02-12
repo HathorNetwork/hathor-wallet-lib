@@ -9,7 +9,7 @@ import FullnodeConnection from '../new/connection';
 import { IStorage, IAddressInfo, IHistoryTx } from '../types';
 import walletApi from '../api/wallet';
 
-import _ from 'lodash';
+import { chunk } from 'lodash';
 import axios, { AxiosError, AxiosResponse } from 'axios';
 import helpers from '../utils/helpers';
 import { deriveAddressP2PKH, deriveAddressP2SH } from '../utils/address';
@@ -43,12 +43,14 @@ export async function reloadStorage(storage: IStorage, connection: FullnodeConne
   for await (const address of storage.getAllAddresses()) {
     connection.unsubscribeAddress(address.base58);
   }
-  const walletData = storage.store
-  // clean all data except for accessData
-  // optionally end connection
-  // setup connection
-  // reload from gap-limit
-  return syncHistory(0, 20, storage, connection);
+  const accessData = await storage.getAccessData();
+  if (accessData != null) {
+    // Clean entire storage
+    await storage.cleanStorage(true, true);
+    // Reset access data
+    await storage.saveAccessData(accessData);
+  }
+  return syncHistory(0, await storage.getGapLimit(), storage, connection);
 }
 
 export async function syncHistory(startIndex: number, count: number, storage: IStorage, connection: FullnodeConnection, processHistory: boolean = false) {
@@ -88,7 +90,7 @@ export async function syncHistory(startIndex: number, count: number, storage: IS
 export async function *loadAddressHistory(addresses: string[], storage: IStorage): AsyncGenerator<boolean> {
   let foundAnyTx = false;
   // chunkify addresses
-  const addressesChunks = _.chunk(addresses, 20); // FIXME: MAX_ADDRESSES_GET
+  const addressesChunks = chunk(addresses, 20); // FIXME: MAX_ADDRESSES_GET
   let retryCount = 0;
 
   for (let i=0; i<addressesChunks.length; i++) {

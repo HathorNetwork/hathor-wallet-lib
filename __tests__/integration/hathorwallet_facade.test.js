@@ -522,62 +522,6 @@ describe('addresses methods', () => {
   })
 });
 
-describe('getTransactionsCountByAddress', () => {
-  afterEach(async () => {
-    await stopAllWallets();
-    await GenesisWalletHelper.clearListeners();
-  });
-
-  it('should return correct entries for a wallet', async () => {
-    // Create the wallet
-    const hWallet = await generateWalletHelper();
-
-    // Validate empty contents, properties with the address string as a key
-    const tcbaGen = hWallet.getTransactionsCountByAddress();
-    const tcbaEmpty = {};
-    for await (const address of tcbaGen) {
-      tcbaEmpty[address.address] = address;
-    }
-    expect(tcbaEmpty).toBeDefined();
-    const addressesList = Object.keys(tcbaEmpty);
-    expect(addressesList).toHaveLength(22);
-    for (const addressIndex in addressesList) {
-      const address = addressesList[+addressIndex];
-      expect(tcbaEmpty[address]).toStrictEqual({
-        address,
-        index: +addressIndex,
-        transactions: 0,
-      });
-    }
-
-    // Generate one transaction and validate its effects
-    await GenesisWalletHelper.injectFunds(addressesList[0], 10);
-    const tcba1Gen = hWallet.getTransactionsCountByAddress();
-    const tcba1 = {};
-    for await (const addr of tcba1Gen) {
-      tcba1[addr.address] = addr;
-    }
-    expect(tcba1).toBeDefined();
-    expect(tcba1[addressesList[0]]).toHaveProperty('transactions', 1);
-
-    // Generate another transaction and validate its effects
-    const tx2 = await hWallet.sendTransaction(
-      addressesList[1],
-      5,
-      { changeAddress: addressesList[2] }
-    );
-    await waitForTxReceived(hWallet, tx2.hash);
-    const tcba2Gen = hWallet.getTransactionsCountByAddress();
-    const tcba2 = {};
-    for await (const addr of tcba2Gen) {
-      tcba2[addr.address] = addr;
-    }
-    expect(tcba2[addressesList[0]]).toHaveProperty('transactions', 2);
-    expect(tcba2[addressesList[1]]).toHaveProperty('transactions', 1);
-    expect(tcba2[addressesList[2]]).toHaveProperty('transactions', 1);
-  });
-});
-
 describe('getBalance', () => {
   afterEach(async () => {
     await stopAllWallets();
@@ -1040,14 +984,9 @@ describe('sendTransaction', () => {
     expect(htrBalance[0].balance.unlocked).toEqual(10);
 
     // Validating the correct addresses received the tokens
-    let tcbaGen = hWallet.getTransactionsCountByAddress();
-    let tcba = {};
-    for await (const addr of tcbaGen) {
-      tcba[addr.address] = addr;
-    }
-    expect(tcba[await hWallet.getAddressAtIndex(0)]).toHaveProperty('transactions', 2);
-    expect(tcba[await hWallet.getAddressAtIndex(1)]).toHaveProperty('transactions', 1);
-    expect(tcba[await hWallet.getAddressAtIndex(2)]).toHaveProperty('transactions', 1);
+    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(0))).toHaveProperty('numTransactions', 2);
+    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(1))).toHaveProperty('numTransactions', 1);
+    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(2))).toHaveProperty('numTransactions', 1);
 
     // Sending a transaction to outside the wallet ( returning funds to genesis )
     const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
@@ -1064,18 +1003,13 @@ describe('sendTransaction', () => {
     expect(htrBalance[0].balance.unlocked).toEqual(2);
 
     // Change was moved to correct address
-    tcbaGen = hWallet.getTransactionsCountByAddress();
-    tcba = {};
-    for await (const addr of tcbaGen) {
-      tcba[addr.address] = addr;
-    }
-    expect(tcba[await hWallet.getAddressAtIndex(0)]).toHaveProperty('transactions', 2);
-    expect(tcba[await hWallet.getAddressAtIndex(1)]).toHaveProperty('transactions', 2);
-    expect(tcba[await hWallet.getAddressAtIndex(2)]).toHaveProperty('transactions', 2);
-    expect(tcba[await hWallet.getAddressAtIndex(3)]).toHaveProperty('transactions', 0);
-    expect(tcba[await hWallet.getAddressAtIndex(4)]).toHaveProperty('transactions', 0);
-    expect(tcba[await hWallet.getAddressAtIndex(5)]).toHaveProperty('transactions', 1);
-    expect(tcba[await hWallet.getAddressAtIndex(6)]).toHaveProperty('transactions', 0);
+    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(0))).toHaveProperty('numTransactions', 2);
+    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(1))).toHaveProperty('numTransactions', 2);
+    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(2))).toHaveProperty('numTransactions', 2);
+    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(3))).toHaveProperty('numTransactions', 0);
+    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(4))).toHaveProperty('numTransactions', 0);
+    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(5))).toHaveProperty('numTransactions', 1);
+    expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(6))).toHaveProperty('numTransactions', 0);
   });
 
   it('should send custom token transactions', async () => {
