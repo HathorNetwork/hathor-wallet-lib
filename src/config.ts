@@ -16,9 +16,14 @@ const TX_MINING_TESTNET_URL = 'https://txmining.testnet.hathor.network/';
 const EXPLORER_SERVICE_MAINNET_BASE_URL  = 'https://explorer-service.hathor.network/';
 const EXPLORER_SERVICE_TESTNET_BASE_URL  = 'https://explorer-service.testnet.hathor.network/';
 
+// Explorer service URL
+const SWAP_SERVICE_MAINNET_BASE_URL  = 'https://atomic-swap-service.hathor.network/';
+const SWAP_SERVICE_TESTNET_BASE_URL  = 'https://atomic-swap-service.testnet.hathor.network/';
+
 class Config {
   TX_MINING_URL?: string;
   TX_MINING_API_KEY?: string;
+  SWAP_SERVICE_BASE_URL?: string;
   WALLET_SERVICE_BASE_URL?: string;
   WALLET_SERVICE_BASE_WS_URL?: string;
   EXPLORER_SERVICE_BASE_URL?: string;
@@ -68,7 +73,7 @@ class Config {
 
   /**
    * Gets the configured api key for tx-mining-service
-   * 
+   *
    * @returns The api key
    */
   getTxMiningApiKey(): string | undefined {
@@ -97,6 +102,29 @@ class Config {
     }
 
     return this.WALLET_SERVICE_BASE_URL;
+  }
+
+  /**
+   * Returns the base url for swap service
+   * Throws an error if it is not yet set.
+   *
+   * @return The swap service url
+   */
+  getSwapServiceBaseUrl(): string {
+    if (!this.SWAP_SERVICE_BASE_URL) {
+      throw new GetWalletServiceUrlError('Swap service base URL not set.');
+    }
+
+    return this.SWAP_SERVICE_BASE_URL;
+  }
+
+  /**
+   * Sets the swap service url that will be returned by the config object.
+   *
+   * @param url - The url to be set
+   */
+  setSwapServiceBaseUrl(url: string): void {
+    this.SWAP_SERVICE_BASE_URL = url;
   }
 
   /**
