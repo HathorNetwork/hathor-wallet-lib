@@ -105,17 +105,32 @@ class Config {
   }
 
   /**
-   * Returns the base url for swap service
-   * Throws an error if it is not yet set.
+   * Returns the correct base url constant for the Atomic Swap Service.
+   * If the url was explicitly set using the config object, it is always returned.
+   * Otherwise, we return it based on the provided network parameter.
    *
-   * @return The swap service url
+   * If the url was not set in the config, and no network is provided, we throw an Error.
+   *
+   * @param network - The name of the network to be used to select the url.
+   * @return The Atomic Swap Service url
    */
-  getSwapServiceBaseUrl(): string {
-    if (!this.SWAP_SERVICE_BASE_URL) {
-      throw new GetWalletServiceUrlError('Swap service base URL not set.');
+  getSwapServiceBaseUrl(network?: 'mainnet'|'testnet'): string {
+    if (this.SWAP_SERVICE_BASE_URL) {
+      return this.SWAP_SERVICE_BASE_URL;
     }
 
-    return this.SWAP_SERVICE_BASE_URL;
+    if (!network) {
+      throw new Error('You should either provide a network or call setSwapServiceBaseUrl before calling this.');
+    }
+
+    // Keeps the old behavior for cases that don't explicitly set a SWAP_SERVICE_BASE_URL
+    if (network == 'mainnet') {
+      return SWAP_SERVICE_MAINNET_BASE_URL;
+    } else if (network == 'testnet'){
+      return SWAP_SERVICE_TESTNET_BASE_URL;
+    } else {
+      throw new Error(`Network ${network} doesn't have a correspondent Atomic Swap Service url. You should set it explicitly.`);
+    }
   }
 
   /**

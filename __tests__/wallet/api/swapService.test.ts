@@ -26,12 +26,36 @@ describe('hashing and encrypting', () => {
   })
 })
 
-describe('create api', () => {
-
-  it('should throw an error if the backend base URL was not configured', async () => {
-    await expect(create('PartialTx||', 'abc'))
-      .rejects.toThrowError('Swap service base URL not set.');
+describe('base url configuration', () => {
+  it('should throw when no url parameter was offered', () => {
+      expect(() => config.getSwapServiceBaseUrl())
+        .toThrowError('You should either provide a network or call setSwapServiceBaseUrl before calling this.');
   })
+
+  it('should return mainnet address when requested', () => {
+      expect(config.getSwapServiceBaseUrl('mainnet'))
+        .toStrictEqual('https://atomic-swap-service.hathor.network/')
+  })
+
+  it('should return testnet address when requested', () => {
+      expect(config.getSwapServiceBaseUrl('testnet'))
+        .toContain('testnet')
+  })
+
+  it('should throw when an invalid network is requested', () => {
+    // @ts-ignore
+    expect(() => config.getSwapServiceBaseUrl('invalid'))
+      .toThrowError('You should set it explicitly.');
+  })
+
+  it('should return the specified baseURL when it was set', () => {
+    config.setSwapServiceBaseUrl('http://swap-base-url')
+      expect(config.getSwapServiceBaseUrl())
+        .toStrictEqual('http://swap-base-url')
+  })
+})
+
+describe('create api', () => {
 
   it('should handle backend errors', async () => {
     config.setSwapServiceBaseUrl('http://mock-swap-url/')
