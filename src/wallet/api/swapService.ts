@@ -67,6 +67,7 @@ const axiosInstance = async (timeout: number = TIMEOUT, network?: 'mainnet'|'tes
  * @param serializedPartialTx
  * @param password
  * @return Promise<{ success: boolean, id: string }>
+ * @throws {Error} When the swap service network is not configured
  * @example
  * const results = await create('PartialTx|0001000000000000000000000063f78c0e0000000000||', 'pass123')
  */
