@@ -39,13 +39,13 @@ describe('base url configuration', () => {
 
   it('should return testnet address when requested', () => {
       expect(config.getSwapServiceBaseUrl('testnet'))
-        .toContain('testnet')
+        .toStrictEqual('https://atomic-swap-service.testnet.hathor.network/')
   })
 
   it('should throw when an invalid network is requested', () => {
     // @ts-ignore
     expect(() => config.getSwapServiceBaseUrl('invalid'))
-      .toThrowError('You should set it explicitly.');
+      .toThrowError(`Network invalid doesn't have a correspondent Atomic Swap Service url. You should set it explicitly by calling setSwapServiceBaseUrl.`);
   })
 
   it('should return the specified baseURL when it was set', () => {
@@ -57,11 +57,18 @@ describe('base url configuration', () => {
 
 describe('create api', () => {
 
+  it('should throw missing parameter errors', async () => {
+    // @ts-ignore
+    await expect(create()).rejects.toThrowError('Missing serializedPartialTx');
+    // @ts-ignore
+    await expect(create('PartialTx|0001000000000000000000000063f78c0e0000000000||')).rejects.toThrowError('Missing password');
+  })
+
   it('should handle backend errors', async () => {
     config.setSwapServiceBaseUrl('http://mock-swap-url/')
 
     mockAxiosAdapter.onPost('/').reply(503)
-    await expect(create('PartialTx||', 'abc'))
+    await expect(create('PartialTx|0001000000000000000000000063f78c0e0000000000||', 'abc'))
       .rejects.toThrowError('Request failed with status code 503');
   })
 
@@ -73,7 +80,7 @@ describe('create api', () => {
       id: 'proposal-id-123'
     };
     mockAxiosAdapter.onPost('/').reply(200, responseData)
-    await expect(create('PartialTx||', 'abc'))
+    await expect(create('PartialTx|0001000000000000000000000063f78c0e0000000000||', 'abc'))
       .resolves.toStrictEqual(responseData)
   })
 })

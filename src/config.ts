@@ -16,7 +16,7 @@ const TX_MINING_TESTNET_URL = 'https://txmining.testnet.hathor.network/';
 const EXPLORER_SERVICE_MAINNET_BASE_URL  = 'https://explorer-service.hathor.network/';
 const EXPLORER_SERVICE_TESTNET_BASE_URL  = 'https://explorer-service.testnet.hathor.network/';
 
-// Explorer service URL
+// Atomic Swap Service URL
 const SWAP_SERVICE_MAINNET_BASE_URL  = 'https://atomic-swap-service.hathor.network/';
 const SWAP_SERVICE_TESTNET_BASE_URL  = 'https://atomic-swap-service.testnet.hathor.network/';
 
@@ -112,6 +112,8 @@ class Config {
    * If the url was not set in the config, and no network is provided, we throw an Error.
    *
    * @param network - The name of the network to be used to select the url.
+   * @throws {Error} When `network` is not 'mainnet' or 'testnet'
+   * @throws {Error} When `network` is not provided neither by `setSwapServiceBaseUrl` nor parameter
    * @return The Atomic Swap Service url
    */
   getSwapServiceBaseUrl(network?: 'mainnet'|'testnet'): string {
@@ -129,7 +131,7 @@ class Config {
     } else if (network == 'testnet'){
       return SWAP_SERVICE_TESTNET_BASE_URL;
     } else {
-      throw new Error(`Network ${network} doesn't have a correspondent Atomic Swap Service url. You should set it explicitly.`);
+      throw new Error(`Network ${network} doesn't have a correspondent Atomic Swap Service url. You should set it explicitly by calling setSwapServiceBaseUrl.`);
     }
   }
 

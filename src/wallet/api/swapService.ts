@@ -66,8 +66,18 @@ const axiosInstance = async (timeout: number = TIMEOUT, network?: 'mainnet'|'tes
  * Calls the Atomic Swap Service requesting the creation of a new proposal identifier for the informed partialTx.
  * @param serializedPartialTx
  * @param password
+ * @return Promise<{ success: boolean, id: string }>
+ * @example
+ * const results = await create('PartialTx|0001000000000000000000000063f78c0e0000000000||', 'pass123')
  */
 export const create = async (serializedPartialTx: string, password: string) => {
+  if (!serializedPartialTx) {
+    throw new Error('Missing serializedPartialTx')
+  }
+  if (!password) {
+    throw new Error('Missing password')
+  }
+
   const swapAxios = await axiosInstance();
   const payload = {
     partialTx: encryptString(serializedPartialTx, password),
