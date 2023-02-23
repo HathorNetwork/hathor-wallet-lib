@@ -112,6 +112,74 @@ describe('getTxById', () => {
     const hWallet = await generateWalletHelper();
     await expect(hWallet.getTxById('invalid-tx-hash')).rejects.toThrowError('Invalid transaction invalid-tx-hash');
   });
+
+  it('should get the balance for a custom token', async () => {
+    const hWallet = await generateWalletHelper();
+
+    // Test case: non-existent token
+    const emptyBalance = await hWallet.getBalance(fakeTokenUid);
+    // Assert that only one balance is returned
+    expect(emptyBalance).toHaveLength(1);
+    // Assert the balance is zero
+    expect(emptyBalance[0]).toMatchObject({
+      token: { id: fakeTokenUid },
+      balance: { unlocked: 0, locked: 0 },
+      transactions: 0,
+    });
+
+    // Test case: custom token with funds
+    const address = hWallet.getAddressAtIndex(0);
+    // Inject 10 HTR into the wallet
+    await GenesisWalletHelper.injectFunds(address, 10);
+    // Generate a random amount of new tokens
+    const newTokenAmount = getRandomInt(1000, 10);
+    // Create a new custom token with the generated amount
+    const { hash: tokenUid } = await createTokenHelper(
+      hWallet,
+      'BalanceToken',
+      'BAT',
+      newTokenAmount,
+    );
+    // Get the balance of the new token
+    const tknBalance = await hWallet.getBalance(tokenUid);
+    // Assert that only one balance is returned
+    expect(tknBalance).toHaveLength(1);
+    // Assert the balance is equal to the amount generated
+    expect(tknBalance[0]).toMatchObject({
+      token: { id: tokenUid },
+      balance: { unlocked: newTokenAmount, locked: 0 },
+      transactions: expect.any(Number),
+      /**
+       * TODO: The amount of transactions is often 8 but should be 1. Ref #397
+       * @see https://github.com/HathorNetwork/hathor-wallet-lib/issues/397
+       */
+      // transactions: 1, 
+    });
+    // Get balance for the token creation transaction
+    const result = await hWallet.getTxById(tokenUid);
+    expect(result.success).toStrictEqual(true);
+    expect(result.txTokens).toHaveLength(2);
+    expect(result.txTokens).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        tokenId: HATHOR_TOKEN_CONFIG.uid,
+        balance: expect.any(Number),
+      }),
+      expect.objectContaining({
+        tokenId: tokenUid,
+        balance: newTokenAmount,
+      }),
+    ]));
+
+    // Test case: non-accessible token for another wallet (genesis)
+    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
+    const genesisTknBalance = await gWallet.getBalance(tokenUid);
+    expect(genesisTknBalance).toHaveLength(1);
+    expect(genesisTknBalance[0]).toMatchObject({
+      token: { id: tokenUid },
+      balance: { unlocked: 0, locked: 0 },
+      transactions: 0,
+    });
+  });
 });
 
 describe('start', () => {
