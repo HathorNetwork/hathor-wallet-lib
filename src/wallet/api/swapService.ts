@@ -47,9 +47,10 @@ export function hashPassword(password): string {
 /**
  * Returns an axios instance pre-configured for interacting with the Atomic Swap Service
  * @param [timeout] Optional timeout, defaults to the lib's timeout constant
+ * @param [network] Optional network. If not present, defaults connection to the lib's configured baseUrl
  */
-const axiosInstance = async (timeout: number = TIMEOUT) => {
-  const swapServiceBaseUrl = config.getSwapServiceBaseUrl();
+const axiosInstance = async (timeout: number = TIMEOUT, network?: 'mainnet'|'testnet') => {
+  const swapServiceBaseUrl = config.getSwapServiceBaseUrl(network);
   const defaultOptions = {
     baseURL: swapServiceBaseUrl,
     timeout: timeout,
