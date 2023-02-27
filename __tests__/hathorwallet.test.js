@@ -19,6 +19,7 @@ import { HDPrivateKey, crypto, PublicKey } from 'bitcore-lib';
 import transaction from '../src/transaction';
 import { Storage } from '../src/storage';
 import Queue from '../src/models/queue';
+import { FullNodeTxResponse } from '../src/wallet/types';
 
 class FakeHathorWallet {
   constructor() {
@@ -733,4 +734,92 @@ test('getTokenHistoryObject', () => {
   expect(historyObj.voided).toStrictEqual(tx.is_voided);
   expect(historyObj.balance['00']).toStrictEqual(0);
   expect(historyObj.balance['01']).toStrictEqual(5);
+});
+
+test('getTxById', async () => {
+  const hWallet = new FakeHathorWallet();
+
+  const txId = 'tx1';
+  const mineAddress = 'addr1';
+  const notMineAddress = 'addr2';
+
+  const buildValidFullHistory = (_txId) => ({
+    tx: {
+      timestamp: 1,
+      version: 1,
+      weight: 1,
+      parents: [],
+      inputs: [],
+      outputs: [{
+        token: '00',
+        value: 942,
+        decoded: {
+          address: mineAddress,
+        },
+        token_data: 0,
+      }, {
+        token: 'A',
+        value: 329,
+        decoded: {
+          address: mineAddress,
+        },
+        token_data: 1,
+      }, {
+        token: '00',
+        value: 731,
+        decoded: {
+          address: notMineAddress,
+        },
+        token_data: 0,
+      }],
+      tokens: [{
+        uid: 'A',
+        name: 'Token A',
+        symbol: 'A',
+      }]
+    },
+    meta: {
+      voided_by: [],
+    },
+  });
+
+  // happy path
+  hWallet.getFullTxById.mockResolvedValue(buildValidFullHistory(txId));
+  hWallet.getTxBalance.mockReturnValue({ '00': 1673, 'A': 329 });
+  // act
+  await expect(hWallet.getTxById(txId)).resolves.toStrictEqual({
+    success: true,
+    txTokens: [{
+      txId: txId,
+      timestamp: 1,
+      version: 1,
+      voided: false,
+      weight: 1,
+      tokenId: '00',
+      tokenName: 'Hathor',
+      tokenSymbol: 'HTR',
+      balance: 1673
+    }, {
+      txId: txId,
+      timestamp: 1,
+      version: 1,
+      voided: false,
+      weight: 1,
+      tokenId: 'A',
+      tokenName: 'Token A',
+      tokenSymbol: 'A',
+      balance: 329
+    }],
+  });
+
+  // getFullTxById do not have our tx
+  hWallet.getFullTxById.mockRejectedValue(new Error('Transaction not found'));
+  // act
+  await expect(hWallet.getTxById(txId)).rejects.toThrow('Transaction not found');
+
+  // getFullTxById return valid fullTx but getTxBalance return empty
+  hWallet.getFullTxById.mockResolvedValue(buildValidFullHistory(txId));
+  hWallet.getTxBalance.mockResolvedValue({});
+  // act
+  await expect(hWallet.getTxById(txId)).rejects.toThrow(`Transaction ${txId} does not have any balance for this wallet`);
 });

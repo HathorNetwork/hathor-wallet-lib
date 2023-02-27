@@ -32,7 +32,7 @@ export interface WalletServiceConnectionParams extends ConnectionParams {
  * - state: Fired when the state of the Wallet changes.
  * - wallet-update: Fired when a new wallet message arrive from the websocket.
  **/
-class WalletServiceConnection extends BaseConnection {
+export default class WalletServiceConnection extends BaseConnection {
   private connectionTimeout?: number;
   private walletId?: string;
 
@@ -87,5 +87,3 @@ class WalletServiceConnection extends BaseConnection {
     this.websocket.setup();
   }
 }
-
-export default WalletServiceConnection;
