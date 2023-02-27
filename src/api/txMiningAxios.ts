@@ -18,10 +18,10 @@ import config from '../config';
 /**
  * Create an axios instance to be used when sending requests
  *
- * @param {Function|null} resolve Callback to be stored and used in case of a retry after a fail
- * @param {number|null|undefined} [timeout] Timeout in milliseconds for the request
+ * @param {Function | null} resolve Callback to be stored and used in case of a retry after a fail
+ * @param {number | null | undefined} [timeout] Timeout in milliseconds for the request
  */
-const txMiningRequestClient = (resolve: Function|null, timeout?: number|null) => {
+const txMiningRequestClient = (resolve: Function | null, timeout?: number | null) => {
   const txMiningURL = config.getTxMiningUrl();
   const txMiningApiKey = config.getTxMiningApiKey();
 

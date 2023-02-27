@@ -162,7 +162,7 @@ export class MemoryStore implements IStore {
   /**
    * Get the current address.
    *
-   * @param markAsUsed If we should set the next address as current
+   * @param {boolean | undefined} markAsUsed If we should set the next address as current
    * @async
    * @returns {Promise<string>} The address in base58 format
    */

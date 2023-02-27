@@ -304,46 +304,38 @@ export class Storage implements IStorage {
   }
 
   /**
-   * Check the balance of the transaction and add inputs and outputs to match the funds and authorities.
-   * It will fail if we do not have enough funds or authorities and it will fail if we try to add too many inputs or outputs.
-   *
-   * @param tx The incomplete transaction we need to fill
-   * @param {{changeAddress?: string}} [options={}] options to use a change address.
-   *
-   * @async
-   * @returns {Promise<void>}
+   * Calculate the token balance of a transaction, including authorities.
+   * @param {IDataTx} tx The transaction we want to calculate the balance.
+   * @returns {Promise<Map<string, Record<'funds'|'mint'|'melt', number>>>} The balance of all tokens on the transaction.
    */
-  async fillTx(tx: IDataTx, { changeAddress, skipAuthorities = true, chooseInputs = true }: IFillTxOptions = {}): Promise<{inputs: IDataInput[], outputs: IDataOutput[]}> {
+  async calculateTxBalance(tx: IDataTx): Promise<Map<string, Record<'funds'|'mint'|'melt', number>>> {
     function getEmptyBalance(): Record<'funds'|'mint'|'melt', number> {
       return {'funds': 0, 'mint': 0, 'melt': 0};
     }
-    const tokensBalance = new Map<string, Record<'funds'|'mint'|'melt', number>>();
-    const addressForChange = changeAddress || (await this.getCurrentAddress());
+    const balance = new Map<string, Record<'funds'|'mint'|'melt', number>>();
 
-    // Calculate balance for outputs
     for (const output of tx.outputs) {
       if (isDataOutputCreateToken(output)) {
         // This output does not indicate the token because it is creating it
         // Therefore we cannot find tokens to fill the transaction, since it does not exist yet, so we ignore it
         continue;
       }
-      if (!tokensBalance.has(output.token)) {
-        tokensBalance.set(output.token, getEmptyBalance());
+      if (!balance.has(output.token)) {
+        balance.set(output.token, getEmptyBalance());
       }
-
       if (output.authorities > 0) {
         // Authority output, add to mint or melt balance
         // Check for MINT authority
         if ((output.authorities & 1) > 0) {
-          tokensBalance.get(output.token)!.mint += 1;
+          balance.get(output.token)!.mint += 1;
         }
         // Check for MELT authority
         if ((output.authorities & 2) > 0) {
-          tokensBalance.get(output.token)!.melt += 1;
+          balance.get(output.token)!.melt += 1;
         }
       } else {
         // Fund output, add to the amount balance
-        tokensBalance.get(output.token)!.funds += output.value;
+        balance.get(output.token)!.funds += output.value;
       }
     }
 
@@ -355,158 +347,187 @@ export class Storage implements IStorage {
     for await (const {tx: spentTx, input} of this.getSpentTxs(inputs)) {
       // const {tx: spentTx, input} = spentResult;
       const utxoSpent = spentTx.outputs[input.index];
-      if (!tokensBalance.has(utxoSpent.token)) {
-        tokensBalance.set(utxoSpent.token, getEmptyBalance());
+      if (!balance.has(utxoSpent.token)) {
+        balance.set(utxoSpent.token, getEmptyBalance());
       }
       if (transaction.isAuthorityOutput(utxoSpent)) {
         // Authority input, add to mint or melt balance
         if (transaction.isMint(utxoSpent)) {
-          tokensBalance.get(utxoSpent.token)!.mint -= 1;
+          balance.get(utxoSpent.token)!.mint -= 1;
         }
         if (transaction.isMelt(utxoSpent)) {
-          tokensBalance.get(utxoSpent.token)!.melt -= 1;
+          balance.get(utxoSpent.token)!.melt -= 1;
         }
       } else {
         // Fund input, add to the amount balance
-        tokensBalance.get(utxoSpent.token)!.funds -= utxoSpent.value;
+        balance.get(utxoSpent.token)!.funds -= utxoSpent.value;
       }
     }
 
-    // tokensBalance holds the balance of all tokens on the transaction
+    return balance;
+  }
+
+  /**
+   * Match the selected balance for the given authority and token.
+   *
+   * @param {number} singleBalance The balance we want to match
+   * @param {string} token The token uid
+   * @param {number} authorities The authorities we want to match
+   * @param {string} changeAddress change address to use
+   * @param {boolean} chooseInputs If we can add new inputs to the transaction
+   * @returns {Promise<{inputs: IDataInput[], outputs: IDataOutput[]}>} The inputs and outputs that match the balance
+   *
+   * @internal
+   */
+  async matchBalanceSelection(
+    singleBalance: number,
+    token: string,
+    authorities: number,
+    changeAddress: string,
+    chooseInputs: boolean,
+  ): Promise<{inputs: IDataInput[], outputs: IDataOutput[]}> {
     const newInputs: IDataInput[] = [];
     const newOutputs: IDataOutput[] = [];
-    for (const [token, balance] of tokensBalance) {
-      // match funds
-      if (balance.funds > 0) {
-        if (!chooseInputs) {
-          // We cannot choose inputs, so we fail
-          throw new Error(`Insufficient funds in the given inputs for ${token}, missing ${balance.funds} more tokens.`);
-        }
-        // We have a surplus of this token on the outputs, so we need to find utxos to match
-        let foundAmount = 0;
-        for await (const utxo of this.selectUtxos({ token, authorities: 0, target_amount: balance.funds})) {
+
+    const options: Omit<IUtxoFilterOptions, 'reward_lock'> = {
+      authorities,
+      token,
+    };
+    const isAuthority = authorities > 0;
+    if (isAuthority) {
+      options.max_utxos = singleBalance;
+    } else {
+      options.target_amount = singleBalance;
+    }
+
+    if (singleBalance > 0) {
+      if (!chooseInputs) {
+        // We cannot choose inputs, so we fail
+        throw new Error(`Insufficient funds in the given inputs for ${token}, missing ${singleBalance} more tokens.`);
+      }
+      // We have a surplus of this token on the outputs, so we need to find utxos to match
+      let foundAmount = 0;
+      for await (const utxo of this.selectUtxos(options)) {
+        if (isAuthority) {
+          foundAmount += 1;
+        } else {
           foundAmount += utxo.value;
-          newInputs.push({
-            txId: utxo.txId,
-            index: utxo.index,
-            token: utxo.token,
-            address: utxo.address,
-            value: utxo.value,
-            authorities: utxo.authorities,
-          });
         }
-        if (foundAmount < balance.funds) {
-          // XXX: Insufficient funds
-          throw new Error(`Insufficient funds, found ${foundAmount} but requested ${balance.funds}`);
-        } else if (foundAmount > balance.funds) {
+        newInputs.push({
+          txId: utxo.txId,
+          index: utxo.index,
+          token: utxo.token,
+          address: utxo.address,
+          value: utxo.value,
+          authorities: utxo.authorities,
+        });
+      }
+      if (foundAmount < singleBalance) {
+        // XXX: Insufficient funds
+        throw new Error(`Insufficient funds, found ${foundAmount} but requested ${singleBalance}`);
+      } else if (foundAmount > singleBalance) {
+        if (isAuthority) {
+          // Since we use max_utxos for authorities we should stop before we select more utxos than
+          // required, so there should be no need to add an authority change
+          throw new Error('This should never happen, authorities should be exact');
+        } else {
           // Add change output
           newOutputs.push({
-            type: getAddressType(addressForChange, this.config.getNetwork()),
+            type: getAddressType(changeAddress, this.config.getNetwork()),
             token,
             authorities: 0,
-            value: foundAmount - balance.funds,
-            address: addressForChange,
+            value: foundAmount - singleBalance,
+            address: changeAddress,
             timelock: null,
           });
         }
-      } else if (balance.funds < 0) {
-        // We have a surplus of this token on the inputs, so we need to add a change output
+      }
+    } else if (singleBalance < 0) {
+      // We have a surplus of this token on the inputs, so we need to add a change output
+      if (isAuthority) {
+        for (let i = 0; i < Math.abs(singleBalance); i++) {
+          newOutputs.push({
+            type: getAddressType(changeAddress, this.config.getNetwork()),
+            token,
+            authorities: authorities,
+            value: authorities,
+            address: changeAddress,
+            timelock: null,
+          });
+        }
+      } else {
         newOutputs.push({
-          type: getAddressType(addressForChange, this.config.getNetwork()),
+          type: getAddressType(changeAddress, this.config.getNetwork()),
           token,
           authorities: 0,
-          value: Math.abs(balance.funds),
-          address: addressForChange,
+          value: Math.abs(singleBalance),
+          address: changeAddress,
           timelock: null,
         });
       }
+    }
+
+    return {inputs: newInputs, outputs: newOutputs};
+  }
+
+  /**
+   * Generate inputs and outputs so that the transaction balance is filled.
+   *
+   * @param {Map<string, Record<'funds'|'mint'|'melt', number>>} txBalance Balance of funds and authorities for all tokens on the transaction
+   * @param {IFillTxOptions} [options={}]
+   * @param {string} options.changeAddress Address to send change to
+   * @param {boolean} [options.skipAuthorities=false] If we should fill authorities or only funds
+   * @param {boolean} [options.chooseInputs=true] If we can choose inputs when needed or not
+   * @returns {Promise<{inputs: IDataInput[], outputs: IDataOutput[]}>} The inputs and outputs to fill the transaction
+   */
+  async matchTxTokensBalance(
+    txBalance: Map<string, Record<'funds'|'mint'|'melt', number>>,
+    { changeAddress, skipAuthorities = true, chooseInputs = true }: IFillTxOptions = {},
+  ): Promise<{inputs: IDataInput[], outputs: IDataOutput[]}> {
+    const addressForChange = changeAddress || (await this.getCurrentAddress());
+    // balance holds the balance of all tokens on the transaction
+    const newInputs: IDataInput[] = [];
+    const newOutputs: IDataOutput[] = [];
+    for (const [token, balance] of txBalance.entries()) {
+      // match funds
+      const {inputs: fundsInputs, outputs: fundsOutputs} = await this.matchBalanceSelection(balance.funds, token, 0, addressForChange, chooseInputs);
+      newInputs.push(...fundsInputs);
+      newOutputs.push(...fundsOutputs);
 
       if (skipAuthorities) {
-        // We will
         continue;
       }
 
       // match mint
-      if (balance.mint > 0) {
-        if (!chooseInputs) {
-          // We cannot choose inputs, so we fail
-          throw new Error(`Insufficient authority in the given inputs for ${token}, missing ${balance.mint} more mint authority utxos.`);
-        }
-        // We have a surplus of this token on the outputs, so we need to find utxos to match
-        let foundAmount = 0;
-        // We use max_utxos to find at most `balance.mint` inputs
-        for await (const utxo of this.selectUtxos({ token, authorities: 1, max_utxos: balance.mint})) {
-          foundAmount += 1;
-          newInputs.push({
-            txId: utxo.txId,
-            index: utxo.index,
-            token: utxo.token,
-            address: utxo.address,
-            value: utxo.value,
-            authorities: utxo.authorities,
-          });
-        }
-        if (foundAmount < balance.mint) {
-          // XXX: Insufficient funds
-          throw new Error('Insufficient mint authority');
-        }
-        // Since we use max_utxos to stop before we select more the the
-        // balance requires there is no need to add an authority change
-      } else if (balance.mint < 0) {
-        // We have a surplus of this token on the inputs, so we need to add enough change outputs to match
-        for (let i = 0; i < Math.abs(balance.mint); i++) {
-          newOutputs.push({
-            type: getAddressType(addressForChange, this.config.getNetwork()),
-            token,
-            authorities: 1,
-            value: 1,
-            address: addressForChange,
-            timelock: null,
-          });
-        }
-      }
-
+      const {inputs: mintInputs, outputs: mintOutputs} = await this.matchBalanceSelection(balance.mint, token, 1, addressForChange, chooseInputs);
       // match melt
-      if (balance.melt > 0) {
-        if (!chooseInputs) {
-          // We cannot choose inputs, so we fail
-          throw new Error(`Insufficient authority in the given inputs for ${token}, missing ${balance.melt} more melt authority utxos.`);
-        }
-        // We have a surplus of this token on the outputs, so we need to find utxos to match
-        let foundAmount = 0;
-        // We use max_utxos to find at most `balance.melt` inputs
-        for await (const utxo of this.selectUtxos({ token, authorities: 1, max_utxos: balance.melt})) {
-          foundAmount += 1;
-          newInputs.push({
-            txId: utxo.txId,
-            index: utxo.index,
-            token: utxo.token,
-            address: utxo.address,
-            value: utxo.value,
-            authorities: utxo.authorities,
-          });
-        }
-        if (foundAmount < balance.melt) {
-          // XXX: Insufficient funds
-          throw new Error('Insufficient melt authority');
-        }
-        // Since we use max_utxos to stop before we select more the the
-        // balance requires there is no need to add an authority change
-      } else if (balance.melt < 0) {
-        // We have a surplus of this token on the inputs, so we need to add enough change outputs to match
-        for (let i = 0; i < Math.abs(balance.melt); i++) {
-          newOutputs.push({
-            type: getAddressType(addressForChange, this.config.getNetwork()),
-            token,
-            authorities: 2,
-            value: 2,
-            address: addressForChange,
-            timelock: null,
-          });
-        }
-      }
+      const {inputs: meltInputs, outputs: meltOutputs} = await this.matchBalanceSelection(balance.melt, token, 2, addressForChange, chooseInputs);
+
+      newInputs.push(...mintInputs, ...meltInputs);
+      newOutputs.push(...mintOutputs, ...meltOutputs);
     }
 
+    return {
+      inputs: newInputs,
+      outputs: newOutputs,
+    }
+  }
+
+  /**
+   * Check the balance of the transaction and add inputs and outputs to match the funds and authorities.
+   * It will fail if we do not have enough funds or authorities and it will fail if we try to add too many inputs or outputs.
+   *
+   * @param tx The incomplete transaction we need to fill
+   * @param {IFillTxOptions} [options={}] options to use a change address.
+   *
+   * @async
+   * @returns {Promise<void>}
+   */
+  async fillTx(tx: IDataTx, options: IFillTxOptions = {}): Promise<{inputs: IDataInput[], outputs: IDataOutput[]}> {
+    const tokensBalance = await this.calculateTxBalance(tx);
+    const {inputs: newInputs, outputs: newOutputs} = await this.matchTxTokensBalance(tokensBalance, options);
+
+    // Validate if we will add too many inputs/outputs
     const max_inputs = this.version?.max_number_inputs || MAX_INPUTS;
     const max_outputs = this.version?.max_number_outputs || MAX_OUTPUTS;
     if (((tx.inputs.length + newInputs.length) > max_inputs)
@@ -515,13 +536,6 @@ export class Storage implements IStorage {
       // we have more inputs/outputs than what can be sent on the transaction
       throw new Error('When over the maximum amount of inputs/outputs');
     }
-
-    // for (const input of newInputs) {
-    //   tx.inputs.push(input);
-    // }
-    // for (const output of tx.outputs) {
-    //   tx.outputs.push(output);
-    // }
 
     return {inputs: newInputs, outputs: newOutputs}
   }
@@ -566,6 +580,21 @@ export class Storage implements IStorage {
   }
 
   /**
+   * Helper to check if the access data exists before returning it.
+   * Having the accessData as null means the wallet is not initialized so we should throw an error.
+   *
+   * @returns {Promise<IWalletAccessData>} The access data.
+   * @internal
+   */
+  async _getValidAccessData(): Promise<IWalletAccessData> {
+    const accessData = await this.getAccessData();
+    if (!accessData) {
+      throw new Error('Wallet was not initialized');
+    }
+    return accessData;
+  }
+
+  /**
    * Get the wallet's access data if the wallet is initialized.
    *
    * @returns {Promise<IWalletAccessData | null>}
@@ -599,10 +628,7 @@ export class Storage implements IStorage {
    * @returns {Promise<WalletType>}
    */
   async getWalletType(): Promise<WalletType> {
-    const accessData = await this.getAccessData();
-    if (accessData === null) {
-      throw new Error('Wallet type not set.');
-    }
+    const accessData = await this._getValidAccessData();
     return accessData.walletType;
   }
 
@@ -628,10 +654,7 @@ export class Storage implements IStorage {
    * @returns {Promise<boolean>}
    */
   async isReadonly(): Promise<boolean> {
-    const accessData = await this.getAccessData();
-    if (accessData === null) {
-      throw new Error('Wallet is not initialized.');
-    }
+    const accessData = await this._getValidAccessData();
     return (accessData.walletFlags & WALLET_FLAGS.READONLY) > 0;
   }
 
@@ -642,10 +665,7 @@ export class Storage implements IStorage {
    * @returns {Promise<string>} The HDPrivateKey in string format.
    */
   async getMainXPrivKey(pinCode: string): Promise<string> {
-    const accessData = await this.getAccessData();
-    if (accessData === null) {
-      throw new Error('Wallet is not initialized.');
-    }
+    const accessData = await this._getValidAccessData();
     if (accessData.mainKey === undefined) {
       throw new Error('Private key is not present on this wallet.');
     }
@@ -661,15 +681,12 @@ export class Storage implements IStorage {
 
   /**
    * Decrypt and return the auth private key of the wallet.
-   * 
+   *
    * @param {string} pinCode Pin to unlock the private key
    * @returns {Promise<string>} The Auth HDPrivateKey in string format.
    */
   async getAuthPrivKey(pinCode: string): Promise<string> {
-    const accessData = await this.getAccessData();
-    if (accessData === null) {
-      throw new Error('Wallet is not initialized.');
-    }
+    const accessData = await this._getValidAccessData();
     if (accessData.authKey === undefined) {
       throw new Error('Private key is not present on this wallet.');
     }
@@ -703,7 +720,7 @@ export class Storage implements IStorage {
 
   /**
    * Clean the storage data.
-   * 
+   *
    * @param {boolean} [cleanHistory=false] If we should clean the history data
    * @param {boolean} [cleanAddresses=false] If we should clean the address data
    * @returns {Promise<void>}
@@ -719,10 +736,7 @@ export class Storage implements IStorage {
    * @returns {Promise<void>}
    */
   async changePin(oldPin: string, newPin: string): Promise<void> {
-    const accessData = await this.getAccessData();
-    if (accessData === null) {
-      throw new Error('Wallet is not initialized.');
-    }
+    const accessData = await this._getValidAccessData();
     if (!(accessData.mainKey || accessData.authKey)) {
       throw new Error('No data to change');
     }
@@ -753,16 +767,13 @@ export class Storage implements IStorage {
 
   /**
    * Change the wallet password.
-   * 
+   *
    * @param {string} oldPassword Old password
    * @param {string} newPassword New password
    * @returns {Promise<void>}
    */
   async changePassword(oldPassword: string, newPassword: string): Promise<void> {
-    const accessData = await this.getAccessData();
-    if (accessData === null) {
-      throw new Error('Wallet is not initialized.');
-    }
+    const accessData = await this._getValidAccessData();
     if (!accessData.words) {
       throw new Error('No data to change.');
     }
