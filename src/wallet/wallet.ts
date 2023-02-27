@@ -112,6 +112,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   private conn: WalletServiceConnection;
   // Flag to indicate if the wallet was already connected when the webscoket conn is established
   private firstConnection: boolean;
+  // Flag to indicate if the websocket connection is enabled
+  private readonly _isWsEnabled: boolean;
 
   constructor({
     requestPassword,
@@ -120,6 +122,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     xpub,
     network,
     passphrase = '',
+    enableWs = true,
   }) {
     super();
 
@@ -142,6 +145,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // Setup the connection so clients can listen to its events before it is started
     this.conn = new WalletServiceConnection();
+    this._isWsEnabled = enableWs;
     this.state = walletState.NOT_STARTED;
 
     this.xpriv = xpriv;
@@ -583,7 +587,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // We should wait for new addresses before setting wallet to ready
     await this.getNewAddresses(true);
 
-    this.setupConnection();
+    if (this.isWsEnabled()) {
+      this.setupConnection();
+    }
     this.setState(walletState.READY);
   }
 
@@ -1756,6 +1762,18 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const data = await walletApi.graphvizNeighborsQuery(this, txId, graphType, maxLevel);
     return data;
+  }
+  
+  /**
+   * Check if websocket connection is enabled
+   * 
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   * 
+   * @returns {boolean} If wallet has websocket connection enabled
+   */
+  isWsEnabled(): boolean {
+    return this._isWsEnabled;
   }
 }
 

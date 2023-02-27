@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+process.env.NODE_ENV = 'test';
+
 // Creating memory storage to be used in the place of localStorage
 class MemoryOnlyStore {
   constructor() {

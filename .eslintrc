@@ -35,7 +35,7 @@
     "no-await-in-loop": "off",
     "no-plusplus": "off",
     "guard-for-in": "off",
-    "no-bitwise": "off",
+    "no-bitwise": "off"
   },
   "overrides": [
     {
