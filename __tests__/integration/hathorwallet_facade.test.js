@@ -43,7 +43,7 @@ describe('getTxById', () => {
     expect(Object.keys(hWallet.getFullHistory())).toHaveLength(0);
 
     // Injecting some funds on this wallet
-    const fundDestinationAddress = hWallet.getAddressAtIndex(0);
+    const fundDestinationAddress = await hWallet.getAddressAtIndex(0);
     const tx1 = await GenesisWalletHelper.injectFunds(fundDestinationAddress, 10);
 
     // Validating the full history increased in one
@@ -128,7 +128,7 @@ describe('getTxById', () => {
     });
 
     // Test case: custom token with funds
-    const address = hWallet.getAddressAtIndex(0);
+    const address = await hWallet.getAddressAtIndex(0);
     // Inject 10 HTR into the wallet
     await GenesisWalletHelper.injectFunds(address, 10);
     // Generate a random amount of new tokens
