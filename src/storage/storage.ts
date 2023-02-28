@@ -376,7 +376,6 @@ export class Storage implements IStorage {
    * @param {string} changeAddress change address to use
    * @param {boolean} chooseInputs If we can add new inputs to the transaction
    * @returns {Promise<{inputs: IDataInput[], outputs: IDataOutput[]}>} The inputs and outputs that match the balance
-   *
    * @internal
    */
   async matchBalanceSelection(
@@ -479,6 +478,7 @@ export class Storage implements IStorage {
    * @param {boolean} [options.skipAuthorities=false] If we should fill authorities or only funds
    * @param {boolean} [options.chooseInputs=true] If we can choose inputs when needed or not
    * @returns {Promise<{inputs: IDataInput[], outputs: IDataOutput[]}>} The inputs and outputs to fill the transaction
+   * @internal
    */
   async matchTxTokensBalance(
     txBalance: Map<string, Record<'funds'|'mint'|'melt', number>>,

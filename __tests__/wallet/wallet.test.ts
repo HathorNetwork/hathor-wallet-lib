@@ -14,10 +14,7 @@ import {
   WsTransaction,
   CreateWalletAuthData,
 } from '../../src/wallet/types';
-// import axios from 'axios';
 import config from '../../src/config';
-// import MockAdapter from 'axios-mock-adapter';
-// import axiosInstance from '../../src/wallet/api/walletServiceAxios';
 import { buildSuccessTxByIdTokenDataResponse, buildWalletToAuthenticateApiCall, defaultWalletSeed } from '../__mock_helpers/wallet-service.fixtures';
 import Mnemonic from 'bitcore-mnemonic';
 import { TxNotFoundError } from '../../src/errors';
@@ -305,16 +302,12 @@ test('generateCreateWalletAuthData should return correct auth data', async () =>
 
   // these are deterministic, so we can avoid using the lib's methods to generate them
   const xpub = 'xpub6D2LLyX98BCEkbTHsE14kgP6atagb9TR3ZBvHYQrT9yEUDYeHVBmrnnyWo3u2cADp4upagFyuu5msxtosceN1FykN22oa41o3fMEJmFG766';
-  // const xprivAccountPath = 'tnpr4ugT6rZcxFWFVXBpx3YX4eS5LnUwEzGAvfbzQ9tGst2MTBjijC783X5g2LMfxPrbLJxTPHJ99nB6qDbcqehfXDVTtA33cpn49ZuA6s6WQWP';
   const walletId = '83f704d8b24d4f9cc252b080b008280bf4b3342065f7b4baee43fd0ec7186db7';
   const authXpub = 'xpub6AyEt1FdSvP2mXsZfJ4SLHbMugNMQVNdtkhzWoF6nQSSXcstiqEZDXd4Jg7XBscM2K9YMt2ubWXChYXMTAPS99E8Wot1tcMtyfJhhKLZLok';
-  // const authXprivKey = 'tnpr4sdMdtJ7Gzh3WTc6k7bteFeLfaGc4LBPms84dQiXD8VZWb4yAY9uQFukpEaJLMpqBds8UUiamnmJWYQt97a3qGqZ5dv7yy3fWERia6CAXNh';
   const firstAddress = 'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX';
   const xpubAddress = 'WdSD7aytFEZ5Hp8quhqu3wUCsyyGqcneMu';
   const authXpubAddress = 'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM';
 
-  // const privKeyAccountPath: HDPrivateKey = new HDPrivateKey(xprivAccountPath);
-  // const authDerivedPrivKey: HDPrivateKey = new HDPrivateKey(authXprivKey);
 
   const xpubMessage = new Message(String(timestampNow).concat(walletId).concat(xpubAddress));
   const authXpubMessage = new Message(String(timestampNow).concat(walletId).concat(authXpubAddress));
@@ -685,3 +678,43 @@ test('graphvizNeighborsQuery', async () => {
   mockAxiosAdapter.onGet('wallet/proxy/graphviz/neighbours?txId=tx2&graphType=test&maxLevel=1').reply(200, { success: false, message: 'Transaction not found' });
   await expect(wallet.graphvizNeighborsQuery('tx2', 'test', 1)).rejects.toThrowError(TxNotFoundError);
 });
+
+test('instantiate a new wallet without web socket initialization', async () => {
+  /**
+   * New wallet without web socket initialization
+   */
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+    enableWs: false,
+  });
+  expect(wallet.isWsEnabled()).toBe(false);
+  expect(wallet.isReady()).toBe(false);
+
+  /**
+   * Wallet change its state to ready
+   */
+  const spyOnGetNewAddress = jest.spyOn(wallet as any, 'getNewAddresses')
+    .mockImplementation(() => {
+      return Promise.resolve();
+    });
+  const spyOnSetupConnection = jest.spyOn(wallet, 'setupConnection');
+
+  // get original method implementation for the private method onWalletReady
+  wallet.walletId = 'wallet-id';
+  const onWalletReadyImplementation = jest.spyOn(wallet as any, 'onWalletReady')
+    .getMockImplementation();
+  // call method binding to the wallet instance
+  await onWalletReadyImplementation?.call(wallet)
+
+  expect(spyOnGetNewAddress).toBeCalledTimes(1);
+  expect(spyOnSetupConnection).toBeCalledTimes(0);
+  expect(wallet.isReady()).toBeTruthy();
+})

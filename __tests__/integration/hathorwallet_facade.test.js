@@ -30,6 +30,158 @@ import Network from '../../src/models/network';
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 const sampleNftData = 'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg';
 
+describe('getTxById', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
+  });
+
+  it('should return tx token balance', async () => {
+    const hWallet = await generateWalletHelper();
+
+    // Expect to have an empty list for the full history
+    expect(Object.keys(hWallet.getFullHistory())).toHaveLength(0);
+
+    // Injecting some funds on this wallet
+    const fundDestinationAddress = hWallet.getAddressAtIndex(0);
+    const tx1 = await GenesisWalletHelper.injectFunds(fundDestinationAddress, 10);
+
+    // Validating the full history increased in one
+    expect(Object.keys(hWallet.getFullHistory())).toHaveLength(1);
+
+    /**
+     * @example
+     * {
+     *   "success": true,
+     *   "txTokens": [
+     *     {
+     *       "balance": 10,
+     *       "timestamp": 1675195819,
+     *       "tokenId": "00",
+     *       "tokenName": "Hathor",
+     *       "tokenSymbol": "HTR",
+     *       "txId": "00b1e296631984a43b81d2abc50d992335a78719e5684612510a9b61f0805646",
+     *       "version": 1,
+     *       "voided": false,
+     *       "weight": 8.000001,
+     *     },
+     *   ],
+     * }
+     */
+    const result = await hWallet.getTxById(tx1.hash);
+    expect(result.success).toStrictEqual(true);
+    expect(result.txTokens).toHaveLength(1);
+
+    const firstTokenDetails = result.txTokens[0];
+    const tokenDetailsKeys = Object.keys(firstTokenDetails);
+    expect(tokenDetailsKeys.join(',')).toStrictEqual(
+      'txId,timestamp,version,voided,weight,tokenId,tokenName,tokenSymbol,balance',
+    );
+
+    expect(firstTokenDetails.txId).toStrictEqual(tx1.hash);
+    expect(firstTokenDetails.timestamp).toBeGreaterThan(0);
+    expect(firstTokenDetails.version).toStrictEqual(1);
+    expect(firstTokenDetails.voided).toStrictEqual(false);
+    expect(firstTokenDetails.weight).toBeGreaterThan(0);
+    expect(firstTokenDetails.tokenId).toStrictEqual('00');
+    expect(firstTokenDetails.tokenName).toStrictEqual('Hathor');
+    expect(firstTokenDetails.tokenSymbol).toStrictEqual('HTR');
+    expect(firstTokenDetails.balance).toStrictEqual(10);
+
+    // throw error if token uid not found in tokens list
+    jest.spyOn(hWallet, 'getFullTxById').mockResolvedValue({
+      success: true,
+      tx: {
+        ...tx1,
+        // impossible token_data
+        inputs: [{ ...tx1.inputs[0], token_data: -1 }],
+      },
+    });
+    await expect(hWallet.getTxById(tx1.hash)).rejects.toThrowError('Token undefined not found in tokens list');
+    jest.spyOn(hWallet, 'getFullTxById').mockRestore();
+
+    // thorw error if token not found in tx
+    jest.spyOn(hWallet, 'getTxBalance').mockResolvedValue({
+      'unknown-token': 10,
+    });
+    await expect(hWallet.getTxById(tx1.hash)).rejects.toThrowError('Token unknown-token not found in tx');
+    jest.spyOn(hWallet, 'getTxBalance').mockRestore();
+  });
+
+  it('should throw an error tx id is invalid', async () => {
+    const hWallet = await generateWalletHelper();
+    await expect(hWallet.getTxById('invalid-tx-hash')).rejects.toThrowError('Invalid transaction invalid-tx-hash');
+  });
+
+  it('should get the balance for a custom token', async () => {
+    const hWallet = await generateWalletHelper();
+
+    // Test case: non-existent token
+    const emptyBalance = await hWallet.getBalance(fakeTokenUid);
+    // Assert that only one balance is returned
+    expect(emptyBalance).toHaveLength(1);
+    // Assert the balance is zero
+    expect(emptyBalance[0]).toMatchObject({
+      token: { id: fakeTokenUid },
+      balance: { unlocked: 0, locked: 0 },
+      transactions: 0,
+    });
+
+    // Test case: custom token with funds
+    const address = hWallet.getAddressAtIndex(0);
+    // Inject 10 HTR into the wallet
+    await GenesisWalletHelper.injectFunds(address, 10);
+    // Generate a random amount of new tokens
+    const newTokenAmount = getRandomInt(1000, 10);
+    // Create a new custom token with the generated amount
+    const { hash: tokenUid } = await createTokenHelper(
+      hWallet,
+      'BalanceToken',
+      'BAT',
+      newTokenAmount,
+    );
+    // Get the balance of the new token
+    const tknBalance = await hWallet.getBalance(tokenUid);
+    // Assert that only one balance is returned
+    expect(tknBalance).toHaveLength(1);
+    // Assert the balance is equal to the amount generated
+    expect(tknBalance[0]).toMatchObject({
+      token: { id: tokenUid },
+      balance: { unlocked: newTokenAmount, locked: 0 },
+      transactions: expect.any(Number),
+      /**
+       * TODO: The amount of transactions is often 8 but should be 1. Ref #397
+       * @see https://github.com/HathorNetwork/hathor-wallet-lib/issues/397
+       */
+      // transactions: 1, 
+    });
+    // Get balance for the token creation transaction
+    const result = await hWallet.getTxById(tokenUid);
+    expect(result.success).toStrictEqual(true);
+    expect(result.txTokens).toHaveLength(2);
+    expect(result.txTokens).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        tokenId: HATHOR_TOKEN_CONFIG.uid,
+        balance: expect.any(Number),
+      }),
+      expect.objectContaining({
+        tokenId: tokenUid,
+        balance: newTokenAmount,
+      }),
+    ]));
+
+    // Test case: non-accessible token for another wallet (genesis)
+    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
+    const genesisTknBalance = await gWallet.getBalance(tokenUid);
+    expect(genesisTknBalance).toHaveLength(1);
+    expect(genesisTknBalance[0]).toMatchObject({
+      token: { id: tokenUid },
+      balance: { unlocked: 0, locked: 0 },
+      transactions: 0,
+    });
+  });
+});
+
 describe('start', () => {
   it('should reject with invalid parameters', async () => {
     const walletData = precalculationHelpers.test.getPrecalculatedWallet();

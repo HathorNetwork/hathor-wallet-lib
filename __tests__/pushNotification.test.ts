@@ -10,11 +10,11 @@ test('registerDevice', async () => {
 
   mockAxiosAdapter.reset();
   mockAxiosAdapter
-    .onPost('push/register')
+    .onPost('wallet/push/register')
     .replyOnce(200, {
       success: true,
     })
-    .onPost('push/register')
+    .onPost('wallet/push/register')
     .replyOnce(400, {
       success: false,
       error: 'invalid-payload',
@@ -36,11 +36,11 @@ test('updateDevice', async () => {
 
   mockAxiosAdapter.reset();
   mockAxiosAdapter
-    .onPut('push/update')
+    .onPut('wallet/push/update')
     .replyOnce(200, {
       success: true,
     })
-    .onPut('push/update')
+    .onPut('wallet/push/update')
     .replyOnce(400, {
       success: false,
       error: 'invalid-payload',
@@ -62,11 +62,11 @@ test('unregisterDevice', async () => {
 
   mockAxiosAdapter.reset();
   mockAxiosAdapter
-    .onDelete('push/unregister/123')
+    .onDelete('wallet/push/unregister/123')
     .replyOnce(200, {
       success: true,
     })
-    .onDelete('push/unregister/123')
+    .onDelete('wallet/push/unregister/123')
     .replyOnce(400, {
       success: false,
       error: 'invalid-payload',

@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+process.env.NODE_ENV = 'test';
+
 // Mocking localStorage for tests
 import 'jest-localstorage-mock';
 import helpers from './src/utils/helpers';

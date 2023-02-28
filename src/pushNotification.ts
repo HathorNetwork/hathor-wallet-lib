@@ -45,7 +45,7 @@ const walletServiceClient = {
   async pushRegister(wallet: HathorWalletServiceWallet, payload: PushRegisterRequestData): Promise<PushRegisterResponseData> {
     const axios = await axiosInstance(wallet, true);
 
-    const response = await axios.post<PushRegisterResponseData>('push/register', payload);
+    const response = await axios.post<PushRegisterResponseData>('wallet/push/register', payload);
     if (response.status === 200 && response.data.success) {
       return response.data;
     } else {
@@ -55,7 +55,7 @@ const walletServiceClient = {
 
   async pushUpdate(wallet: HathorWalletServiceWallet, payload: PushUpdateRequestData): Promise<PushUpdateResponseData> {
     const axios = await axiosInstance(wallet, true);
-    const response = await axios.put<PushUpdateResponseData>('push/update', payload);
+    const response = await axios.put<PushUpdateResponseData>('wallet/push/update', payload);
     if (response.status === 200 && response.data.success) {
       return response.data;
     } else {
@@ -65,7 +65,7 @@ const walletServiceClient = {
 
   async pushUnregister(wallet: HathorWalletServiceWallet, deviceId: string): Promise<PushUnregisterResponseData> {
     const axios = await axiosInstance(wallet, true);
-    const response = await axios.delete(`push/unregister/${deviceId}`);
+    const response = await axios.delete(`wallet/push/unregister/${deviceId}`);
     if (response.status === 200 && response.data.success) {
       return response.data;
     } else {
