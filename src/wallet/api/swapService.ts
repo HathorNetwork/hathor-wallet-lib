@@ -12,6 +12,7 @@ import sha256 from 'crypto-js/sha256';
 import AES from 'crypto-js/aes';
 import CryptoJS from 'crypto-js';
 import { AtomicSwapProposal } from "../../models/types";
+import { PartialTxPrefix } from '../../models/partial_tx';
 
 /**
  * This interface represents the type returned on the HTTP response, with its untreated and encrypted data.
@@ -132,7 +133,6 @@ export const get = async (proposalId: string, password: string): Promise<AtomicS
   } as AxiosRequestConfig;
 
   const { data } = await swapAxios.get<RawBackendProposal>(`/${proposalId}`, options);
-  // TODO: Implement a way to idenfity if the password is incorrect
 
   const decryptedData: AtomicSwapProposal = {
     proposalId: data.id,
@@ -145,5 +145,10 @@ export const get = async (proposalId: string, password: string): Promise<AtomicS
       timestamp: r.timestamp,
     }))
   };
+
+  // If the PartialTx does not have the correct prefix, it was not correctly decoded
+  if (!decryptedData.partialTx.startsWith(PartialTxPrefix)) {
+    throw new Error('Incorrect password: could not decode the proposal');
+  }
   return decryptedData;
 };

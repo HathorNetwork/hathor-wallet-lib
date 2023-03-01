@@ -103,6 +103,34 @@ describe('get api', () => {
       .rejects.toThrowError('Request failed with status code 503');
   })
 
+  it('should throw if the password cannot decode the proposal', async () => {
+    const originalPartialTx = 'PartialTx|0001000000000000000000000063f78c0e0000000000||';
+    const password = 'abc';
+    const incorrectPassword = 'bcd';
+
+    config.setSwapServiceBaseUrl('http://mock-swap-url/')
+    const rawHttpBody = {
+      id: 'b4a5b077-c599-41e8-a791-85e08efcb1da',
+      partialTx: encryptString(originalPartialTx, password),
+      signatures: null,
+      timestamp: 'Wed Mar 01 2023 18:56:00 GMT-0300 (Brasilia Standard Time)',
+      version: 0,
+      history: []
+    }
+
+    const responseData = {
+      proposalId: 'b4a5b077-c599-41e8-a791-85e08efcb1da',
+      partialTx: originalPartialTx,
+      signatures: null,
+      timestamp: 'Wed Mar 01 2023 18:56:00 GMT-0300 (Brasilia Standard Time)',
+      version: 0,
+      history: []
+    };
+    mockAxiosAdapter.onGet('/b4a5b077-c599-41e8-a791-85e08efcb1da').reply(200, rawHttpBody)
+    await expect(get('b4a5b077-c599-41e8-a791-85e08efcb1da', incorrectPassword))
+      .rejects.toThrowError('Incorrect password: could not decode the proposal');
+  })
+
   it('should return the backend results on a successful request', async () => {
     const originalPartialTx = 'PartialTx|0001000000000000000000000063f78c0e0000000000||';
     const password = 'abc';
