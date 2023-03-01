@@ -40,6 +40,7 @@ const PushNotification = require('./lib/pushNotification');
 
 const {PartialTx, PartialTxInputData} = require('./lib/models/partial_tx');
 const PartialTxProposal = require('./lib/wallet/partialTxProposal');
+const swapService = require('./lib/wallet/api/swapService');
 
 module.exports = {
   PartialTx,
@@ -84,4 +85,5 @@ module.exports = {
   SendTransactionWalletService: SendTransactionWalletService.default,
   config: config.default,
   PushNotification,
+  swapService: swapService,
 }

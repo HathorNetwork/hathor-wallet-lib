@@ -15,9 +15,14 @@ const TX_MINING_TESTNET_URL = 'https://txmining.testnet.hathor.network/';
 const EXPLORER_SERVICE_MAINNET_BASE_URL  = 'https://explorer-service.hathor.network/';
 const EXPLORER_SERVICE_TESTNET_BASE_URL  = 'https://explorer-service.testnet.hathor.network/';
 
+// Atomic Swap Service URL
+const SWAP_SERVICE_MAINNET_BASE_URL  = 'https://atomic-swap-service.hathor.network/';
+const SWAP_SERVICE_TESTNET_BASE_URL  = 'https://atomic-swap-service.testnet.hathor.network/';
+
 export class Config {
   TX_MINING_URL?: string;
   TX_MINING_API_KEY?: string;
+  SWAP_SERVICE_BASE_URL?: string;
   WALLET_SERVICE_BASE_URL?: string;
   WALLET_SERVICE_BASE_WS_URL?: string;
   EXPLORER_SERVICE_BASE_URL?: string;
@@ -67,7 +72,7 @@ export class Config {
 
   /**
    * Gets the configured api key for tx-mining-service
-   * 
+   *
    * @returns The api key
    */
   getTxMiningApiKey(): string | undefined {
@@ -96,6 +101,46 @@ export class Config {
     }
 
     return this.WALLET_SERVICE_BASE_URL;
+  }
+
+  /**
+   * Returns the correct base url constant for the Atomic Swap Service.
+   * If the url was explicitly set using the config object, it is always returned.
+   * Otherwise, we return it based on the provided network parameter.
+   *
+   * If the url was not set in the config, and no network is provided, we throw an Error.
+   *
+   * @param network - The name of the network to be used to select the url.
+   * @throws {Error} When `network` is not 'mainnet' or 'testnet'
+   * @throws {Error} When `network` is not provided neither by `setSwapServiceBaseUrl` nor parameter
+   * @return The Atomic Swap Service url
+   */
+  getSwapServiceBaseUrl(network?: 'mainnet'|'testnet'): string {
+    if (this.SWAP_SERVICE_BASE_URL) {
+      return this.SWAP_SERVICE_BASE_URL;
+    }
+
+    if (!network) {
+      throw new Error('You should either provide a network or call setSwapServiceBaseUrl before calling this.');
+    }
+
+    // Keeps the old behavior for cases that don't explicitly set a SWAP_SERVICE_BASE_URL
+    if (network == 'mainnet') {
+      return SWAP_SERVICE_MAINNET_BASE_URL;
+    } else if (network == 'testnet'){
+      return SWAP_SERVICE_TESTNET_BASE_URL;
+    } else {
+      throw new Error(`Network ${network} doesn't have a correspondent Atomic Swap Service url. You should set it explicitly by calling setSwapServiceBaseUrl.`);
+    }
+  }
+
+  /**
+   * Sets the swap service url that will be returned by the config object.
+   *
+   * @param url - The url to be set
+   */
+  setSwapServiceBaseUrl(url: string): void {
+    this.SWAP_SERVICE_BASE_URL = url;
   }
 
   /**
