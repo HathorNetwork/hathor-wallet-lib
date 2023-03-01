@@ -509,6 +509,7 @@ describe('start', () => {
 
     // Generating a transaction and validating it shows correctly
     await GenesisWalletHelper.injectFunds(await hWallet.getAddressAtIndex(1), 1);
+    await delay(1000);
 
     await expect(hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid)).resolves.toMatchObject([
       expect.objectContaining({
