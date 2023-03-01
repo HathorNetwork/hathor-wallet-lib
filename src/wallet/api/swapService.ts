@@ -120,6 +120,7 @@ export const create = async (serializedPartialTx: string, password: string) => {
  * Fetches from the Atomic Swap Service the most up-to-date version of the proposal by the given id
  * and decrypts it locally
  * @throws {Error} When the swap service network is not configured
+ * @throws {Error} When the password is incorrect and the proposal cannot be decoded
  * @param proposalId
  * @param password
  * @example
