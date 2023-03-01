@@ -2268,7 +2268,7 @@ class HathorWallet extends EventEmitter {
         };
       }
 
-      const tokenIdx = tokenUtils.getTokenIndex(tokens, token_data);
+      const tokenIdx = tokenUtils.getTokenIndexFromData(token_data);
       const tokenUid = tokens[tokenIdx - 1]?.uid;
       if (!tokenUid) {
         throw new Error(`Token ${tokenUid} not found in tokens list`);

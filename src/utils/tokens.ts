@@ -6,7 +6,7 @@
  */
 
 
-import { CREATE_TOKEN_TX_VERSION, HATHOR_TOKEN_CONFIG, TOKEN_DEPOSIT_PERCENTAGE, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../constants';
+import { CREATE_TOKEN_TX_VERSION, HATHOR_TOKEN_CONFIG, TOKEN_DEPOSIT_PERCENTAGE, TOKEN_MELT_MASK, TOKEN_MINT_MASK, TOKEN_INDEX_MASK } from '../constants';
 import helpers from './helpers';
 import buffer from 'buffer';
 import { IDataInput, IDataOutput, IDataTx, IHistoryOutput, IStorage } from '../types';
@@ -113,6 +113,16 @@ const tokens = {
       const myIndex = tokensWithoutHathor.findIndex((token) => token.uid === uid);
       return myIndex + 1;
     }
+  },
+
+  /**
+   * Get token index from tokenData in output.
+   * 0 is HTR and any other are mapped to the tx tokens array at index = tokenIndex - 1.
+   * @param {number} tokenData Token data from output
+   * @returns {number} Token index
+   */
+  getTokenIndexFromData(tokenData: number): number {
+    return tokenData & TOKEN_INDEX_MASK;
   },
 
   /**
