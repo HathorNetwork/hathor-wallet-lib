@@ -157,4 +157,38 @@ describe('get api', () => {
     const resolvedData = await get('b4a5b077-c599-41e8-a791-85e08efcb1da', password);
     expect(resolvedData).toStrictEqual(responseData)
   })
+
+  it('should correctly parse the history', async () => {
+    const originalPartialTx = 'PartialTx|0001000000000000000000000063f78c0e0000000000||';
+    const password = 'abc';
+    const encryptedPartialTx = encryptString(originalPartialTx, password);
+
+    config.setSwapServiceBaseUrl('http://mock-swap-url/')
+    const rawHttpBody = {
+      id: 'b4a5b077-c599-41e8-a791-85e08efcb1da',
+      partialTx: encryptedPartialTx,
+      signatures: null,
+      timestamp: 'Wed Mar 01 2023 18:56:00 GMT-0300 (Brasilia Standard Time)',
+      version: 0,
+      history: [{
+        partialTx: encryptedPartialTx,
+        timestamp: 'Wed Fev 01 2023 18:56:00 GMT-0300 (Brasilia Standard Time)'
+      }]
+    }
+
+    const responseData = {
+      proposalId: 'b4a5b077-c599-41e8-a791-85e08efcb1da',
+      partialTx: originalPartialTx,
+      signatures: null,
+      timestamp: 'Wed Mar 01 2023 18:56:00 GMT-0300 (Brasilia Standard Time)',
+      version: 0,
+      history: [{
+        partialTx: originalPartialTx,
+        timestamp: 'Wed Fev 01 2023 18:56:00 GMT-0300 (Brasilia Standard Time)'
+      }]
+    };
+    mockAxiosAdapter.onGet('/b4a5b077-c599-41e8-a791-85e08efcb1da').reply(200, rawHttpBody)
+    const resolvedData = await get('b4a5b077-c599-41e8-a791-85e08efcb1da', password);
+    expect(resolvedData).toStrictEqual(responseData)
+  })
 })
