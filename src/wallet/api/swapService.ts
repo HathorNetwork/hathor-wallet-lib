@@ -6,11 +6,25 @@
  */
 
 import config from "../../config";
-import axios from "axios";
+import axios, { AxiosRequestConfig } from "axios";
 import { TIMEOUT, } from '../../constants';
 import sha256 from 'crypto-js/sha256';
 import AES from 'crypto-js/aes';
 import CryptoJS from 'crypto-js';
+import { AtomicSwapProposal } from "../../models/types";
+
+/**
+ * This interface represents the type returned on the HTTP response, with its untreated and encrypted data.
+ * The results should be translated to an `AtomicSwapProposal` interface before being sent out of this service.
+ */
+interface RawBackendProposal {
+  id: string,
+  partialTx: string,
+  signatures: string | null,
+  timestamp: string,
+  version: number,
+  history: { partialTx: string, timestamp: string }[]
+}
 
 /**
  * Encrypts a string ( PartialTx or Signatures ) before sending it to the backend
@@ -31,6 +45,12 @@ export function encryptString(serialized: string, password: string): string {
  * @param password
  */
 export function decryptString(serialized: string, password: string): string {
+  if (!serialized) {
+    throw new Error('Missing encrypted string');
+  }
+  if (!password) {
+    throw new Error('Missing password');
+  }
   const aesDecryptedObject = AES.decrypt(serialized, password);
   return aesDecryptedObject.toString(CryptoJS.enc.Utf8);
 }
@@ -87,4 +107,43 @@ export const create = async (serializedPartialTx: string, password: string) => {
 
   const { data } = await swapAxios.post<{ success: boolean, id: string }>('/', payload);
   return data;
+};
+
+/**
+ * Fetches from the Atomic Swap Service the most up-to-date version of the proposal by the given id
+ * and decrypts it locally
+ * @throws {Error} When the swap service network is not configured
+ * @param proposalId
+ * @param password
+ * @example
+ * const results = await create('b4a5b077-c599-41e8-a791-85e08efcb1da', 'pass123')
+ */
+export const get = async (proposalId: string, password: string): Promise<AtomicSwapProposal> => {
+  if (!proposalId) {
+    throw new Error('Missing proposalId');
+  }
+  if (!password) {
+    throw new Error('Missing password');
+  }
+
+  const swapAxios = await axiosInstance();
+  const options = {
+    headers: { 'X-Auth-Password': hashPassword(password) }
+  } as AxiosRequestConfig;
+
+  const { data } = await swapAxios.get<RawBackendProposal>(`/${proposalId}`, options);
+  // TODO: Implement a way to idenfity if the password is incorrect
+
+  const decryptedData: AtomicSwapProposal = {
+    proposalId: data.id,
+    version: data.version,
+    timestamp: data.timestamp,
+    partialTx: decryptString(data.partialTx, password),
+    signatures: data.signatures ? decryptString(data.signatures, password) : null,
+    history: data.history.map(r => ({
+      partialTx: decryptString(r.partialTx, password),
+      timestamp: r.timestamp,
+    }))
+  };
+  return decryptedData;
 };

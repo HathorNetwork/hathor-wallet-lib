@@ -1,5 +1,5 @@
 
-import { decryptString, encryptString, hashPassword, create } from '../../../src/wallet/api/swapService'
+import { decryptString, encryptString, hashPassword, create, get } from '../../../src/wallet/api/swapService'
 import config from '../../../src/config';
 import MockAdapter from 'axios-mock-adapter';
 import axios from 'axios';
@@ -82,5 +82,51 @@ describe('create api', () => {
     mockAxiosAdapter.onPost('/').reply(200, responseData)
     await expect(create('PartialTx|0001000000000000000000000063f78c0e0000000000||', 'abc'))
       .resolves.toStrictEqual(responseData)
+  })
+})
+
+describe('get api', () => {
+
+  it('should throw missing parameter errors', async () => {
+    // @ts-ignore
+    await expect(get()).rejects.toThrowError('Missing proposalId');
+    // @ts-ignore
+    await expect(get('b4a5b077-c599-41e8-a791-85e08efcb1da'))
+      .rejects.toThrowError('Missing password');
+  })
+
+  it('should handle backend errors', async () => {
+    config.setSwapServiceBaseUrl('http://mock-swap-url/')
+
+    mockAxiosAdapter.onGet('/b4a5b077-c599-41e8-a791-85e08efcb1da').reply(503)
+    await expect(get('b4a5b077-c599-41e8-a791-85e08efcb1da', 'abc'))
+      .rejects.toThrowError('Request failed with status code 503');
+  })
+
+  it('should return the backend results on a successful request', async () => {
+    const originalPartialTx = 'PartialTx|0001000000000000000000000063f78c0e0000000000||';
+    const password = 'abc';
+
+    config.setSwapServiceBaseUrl('http://mock-swap-url/')
+    const rawHttpBody = {
+      id: 'b4a5b077-c599-41e8-a791-85e08efcb1da',
+      partialTx: encryptString(originalPartialTx, password),
+      signatures: null,
+      timestamp: 'Wed Mar 01 2023 18:56:00 GMT-0300 (Brasilia Standard Time)',
+      version: 0,
+      history: []
+    }
+
+    const responseData = {
+      proposalId: 'b4a5b077-c599-41e8-a791-85e08efcb1da',
+      partialTx: originalPartialTx,
+      signatures: null,
+      timestamp: 'Wed Mar 01 2023 18:56:00 GMT-0300 (Brasilia Standard Time)',
+      version: 0,
+      history: []
+    };
+    mockAxiosAdapter.onGet('/b4a5b077-c599-41e8-a791-85e08efcb1da').reply(200, rawHttpBody)
+    const resolvedData = await get('b4a5b077-c599-41e8-a791-85e08efcb1da', password);
+    expect(resolvedData).toStrictEqual(responseData)
   })
 })
