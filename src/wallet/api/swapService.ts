@@ -33,6 +33,12 @@ interface RawBackendProposal {
  * @param password
  */
 export function encryptString(serialized: string, password: string): string {
+  if (!serialized) {
+    throw new Error('Missing encrypted string');
+  }
+  if (!password) {
+    throw new Error('Missing password');
+  }
   const aesEncryptedObject = AES.encrypt(serialized, password);
 
   // Serializing the cipher output in Base64 to avoid loss of encryption parameter data
@@ -134,21 +140,34 @@ export const get = async (proposalId: string, password: string): Promise<AtomicS
 
   const { data } = await swapAxios.get<RawBackendProposal>(`/${proposalId}`, options);
 
-  const decryptedData: AtomicSwapProposal = {
-    proposalId: data.id,
-    version: data.version,
-    timestamp: data.timestamp,
-    partialTx: decryptString(data.partialTx, password),
-    signatures: data.signatures ? decryptString(data.signatures, password) : null,
-    history: data.history.map(r => ({
-      partialTx: decryptString(r.partialTx, password),
-      timestamp: r.timestamp,
-    }))
-  };
+  // Decrypting the backend contents and handling its possible failures
+  try {
+    const decryptedData: AtomicSwapProposal = {
+      proposalId: data.id,
+      version: data.version,
+      timestamp: data.timestamp,
+      partialTx: decryptString(data.partialTx, password),
+      signatures: data.signatures ? decryptString(data.signatures, password) : null,
+      history: data.history.map(r => ({
+        partialTx: decryptString(r.partialTx, password),
+        timestamp: r.timestamp,
+      }))
+    };
 
-  // If the PartialTx does not have the correct prefix, it was not correctly decoded
-  if (!decryptedData.partialTx.startsWith(PartialTxPrefix)) {
-    throw new Error('Incorrect password: could not decode the proposal');
+    // If the PartialTx does not have the correct prefix, it was not correctly decoded: incorrect password
+    if (!decryptedData.partialTx.startsWith(PartialTxPrefix)) {
+      throw new Error('Incorrect password: could not decode the proposal');
+    }
+
+    // Decoding was successful, return the data
+    return decryptedData;
+  } catch (err) {
+    // If the failure was specifically on the decoding, our password was incorrect.
+    if (err.message === "Malformed UTF-8 data") {
+      throw new Error('Incorrect password: could not decode the proposal');
+    }
+
+    // Rethrow any other errors that may happen
+    throw err;
   }
-  return decryptedData;
 };
