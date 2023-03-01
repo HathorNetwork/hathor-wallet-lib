@@ -1,6 +1,6 @@
 {
   "name": "@hathor/wallet-lib",
-  "version": "0.44.2",
+  "version": "0.45.0",
   "description": "Library used by Hathor Wallet",
   "main": "index.js",
   "directories": {
@@ -21,6 +21,7 @@
   },
   "scripts": {
     "test": "jest --env=node --forceExit",
+    "test:watch": "jest --watch --env=node",
     "build": "babel --presets @babel/preset-react -d lib/ src && tsc",
     "tsc": "tsc",
     "test_integration": "npm run test_network_up && npm run test_network_integration && npm run test_network_down",
