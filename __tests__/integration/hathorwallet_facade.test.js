@@ -45,9 +45,9 @@ describe('getTxById', () => {
     // Injecting some funds on this wallet
     const fundDestinationAddress = await hWallet.getAddressAtIndex(0);
     const tx1 = await GenesisWalletHelper.injectFunds(fundDestinationAddress, 10);
-
+    await delay(1000);
     // Validating the full history increased in one
-    expect(Object.keys(hWallet.getFullHistory())).toHaveLength(1);
+    expect(Object.keys(await hWallet.getFullHistory())).toHaveLength(1);
 
     /**
      * @example
@@ -141,6 +141,7 @@ describe('getTxById', () => {
       newTokenAmount,
     );
     // Get the balance of the new token
+    await delay(1000);
     const tknBalance = await hWallet.getBalance(tokenUid);
     // Assert that only one balance is returned
     expect(tknBalance).toHaveLength(1);
@@ -405,6 +406,7 @@ describe('start', () => {
       100
     );
 
+    await delay(1000);
     // Stopping this wallet and destroying its memory state
     await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
     hWallet = null;

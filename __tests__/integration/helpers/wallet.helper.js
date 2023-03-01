@@ -182,6 +182,7 @@ export async function createTokenHelper(hWallet, name, symbol, amount, options) 
   const tokenUid = newTokenResponse.hash;
   await waitForTxReceived(hWallet, tokenUid);
   await waitUntilNextTimestamp(hWallet, tokenUid);
+  await delay(1000);
   return newTokenResponse;
 }
 
@@ -275,7 +276,7 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
        * memory. The code below tries to eliminate these short time-senstive issues with a minimum
        * of delays.
        */
-      await delay(100);
+      await delay(500);
       let txObj = await hWallet.getTx(txId);
       while (!txObj) {
         if (DEBUG_LOGGING) {
