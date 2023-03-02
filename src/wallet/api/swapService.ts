@@ -124,7 +124,7 @@ export const create = async (serializedPartialTx: string, password: string) => {
  * @param proposalId
  * @param password
  * @example
- * const results = await create('b4a5b077-c599-41e8-a791-85e08efcb1da', 'pass123')
+ * const results = await get('b4a5b077-c599-41e8-a791-85e08efcb1da', 'pass123')
  */
 export const get = async (proposalId: string, password: string): Promise<AtomicSwapProposal> => {
   if (!proposalId) {
