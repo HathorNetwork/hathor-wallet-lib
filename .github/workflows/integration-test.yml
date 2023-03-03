@@ -4,6 +4,7 @@ on:
     branches:
       - dev
       - master
+      - feat/new-storage-scheme
 
 env:
   TEST_WALLET_START_TIMEOUT: '180000' # 3 minutes
