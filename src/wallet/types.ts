@@ -280,7 +280,7 @@ export interface IHathorWallet {
   sendTransaction(address: string, value: number, options: { token?: string, changeAddress?: string }): Promise<Transaction>;
   stop(params?: IStopWalletParams): void;
   getAddressAtIndex(index: number): string;
-  getCurrentAddress({ markAsUsed: boolean }): AddressInfoObject;
+  getCurrentAddress(options: { markAsUsed: boolean }): AddressInfoObject;
   getNextAddress(): AddressInfoObject;
   prepareCreateNewToken(name: string, symbol: string, amount: number, options): Promise<CreateTokenTransaction>;
   createNewToken(name: string, symbol: string, amount: number, options): Promise<Transaction>;
