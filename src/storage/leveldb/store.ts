@@ -318,7 +318,7 @@ export default class LevelDBStore implements IStore {
       }
     }
 
-    if ((await this.walletIndex.getLastUsedAddressIndex()) <= maxIndexUsed) {
+    if (maxIndexUsed > -1 && (await this.walletIndex.getLastUsedAddressIndex()) <= maxIndexUsed) {
       if ((await this.walletIndex.getCurrentAddressIndex()) <= maxIndexUsed) {
         await this.walletIndex.setCurrentAddressIndex(Math.min(maxIndexUsed + 1, await this.walletIndex.getLastLoadedAddressIndex()));
       }
@@ -436,7 +436,7 @@ export default class LevelDBStore implements IStore {
 
   async saveAccessData(data: IWalletAccessData): Promise<void> {
     if (this.xpubkey !== data.xpubkey) {
-      throw new Error('Invalid access data: xpubkey used to initiade the store does not match access data being saved');
+      throw new Error('Invalid access data: xpubkey used to initiate the store does not match access data being saved');
     }
     await this.walletIndex.saveAccessData(data);
   }
