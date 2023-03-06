@@ -15,7 +15,7 @@ import LevelWalletIndex from './wallet_index';
 import LevelTokenIndex from './token_index';
 import walletApi from '../../api/wallet';
 import transaction from '../../utils/transaction';
-import { rmSync } from 'fs';
+import fs from 'fs';
 import { HATHOR_TOKEN_CONFIG } from '../../constants';
 
 export default class LevelDBStore implements IStore {
@@ -51,7 +51,13 @@ export default class LevelDBStore implements IStore {
 
   async destroy(): Promise<void> {
     await this.close();
-    rmSync(this.dbpath, { recursive: true, force: true });
+    if (process.version < 'v14.14.0') {
+      // rmSync was introduced in v14.14.0, earlier versions should use rmdirSync
+      // https://nodejs.org/docs/latest-v14.x/api/fs.html#fs_fs_rmdirsync_path_options
+      fs.rmdirSync(this.dbpath, { recursive: true });
+    } else {
+      fs.rmSync(this.dbpath, { recursive: true, force: true });
+    }
   }
 
   async validate(): Promise<void> {
