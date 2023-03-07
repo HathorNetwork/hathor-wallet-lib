@@ -1,5 +1,5 @@
 
-import { decryptString, encryptString, hashPassword, create, get } from '../../../src/wallet/api/swapService'
+import { decryptString, encryptString, hashPassword, create, get, update } from '../../../src/wallet/api/swapService'
 import config from '../../../src/config';
 import MockAdapter from 'axios-mock-adapter';
 import axios from 'axios';
@@ -259,5 +259,88 @@ describe('get api', () => {
     mockAxiosAdapter.onGet('/b4a5b077-c599-41e8-a791-85e08efcb1da').reply(200, rawHttpBody)
     const resolvedData = await get('b4a5b077-c599-41e8-a791-85e08efcb1da', password);
     expect(resolvedData).toStrictEqual(responseData)
+  })
+})
+
+describe('update api', () => {
+
+  it('should throw missing parameter errors', async () => {
+    // @ts-ignore
+    await expect(update()).rejects.toThrowError('proposalId');
+    // @ts-ignore
+    await expect(update({
+      proposalId: 'abc',
+    })).rejects.toThrowError('password');
+    // @ts-ignore
+    await expect(update({
+      proposalId: 'abc',
+      password: '123',
+    })).rejects.toThrowError('partialTx');
+    // @ts-ignore
+    await expect(update({
+      proposalId: 'abc',
+      password: '123',
+      partialTx: 'abc123',
+    })).rejects.toThrowError('version');
+    // @ts-ignore
+    await expect(update({
+      proposalId: 'abc',
+      password: '123',
+      partialTx: 'abc123',
+      version: 'a',
+    })).rejects.toThrowError('Invalid version number');
+  })
+
+  it('should handle backend errors', async () => {
+    config.setSwapServiceBaseUrl('http://mock-swap-url/')
+
+    mockAxiosAdapter.onPut('/b4a5b077-c599-41e8-a791-85e08efcb1da').reply(503)
+    await expect(update({
+      proposalId: 'b4a5b077-c599-41e8-a791-85e08efcb1da',
+      password: 'abc',
+      partialTx: 'PartialTx|0001000000000000000000000063f78c0e0000000000||',
+      version: 0,
+    }))
+      .rejects.toThrowError('Request failed with status code 503');
+  })
+
+  it('should handle backend unsuccess', async () => {
+    config.setSwapServiceBaseUrl('http://mock-swap-url/')
+
+    mockAxiosAdapter.onPut('/b4a5b077-c599-41e8-a791-85e08efcb1da').reply(200, { success: false });
+    await expect(update({
+      proposalId: 'b4a5b077-c599-41e8-a791-85e08efcb1da',
+      password: 'abc',
+      partialTx: 'PartialTx|0001000000000000000000000063f78c0e0000000000||',
+      version: 0,
+    }))
+      .resolves.toStrictEqual({ success: false });
+  })
+
+  it('should handle backend success', async () => {
+    config.setSwapServiceBaseUrl('http://mock-swap-url/')
+
+    mockAxiosAdapter.onPut('/b4a5b077-c599-41e8-a791-85e08efcb1da').reply(200, { success: true });
+    await expect(update({
+      proposalId: 'b4a5b077-c599-41e8-a791-85e08efcb1da',
+      password: 'abc',
+      partialTx: 'PartialTx|0001000000000000000000000063f78c0e0000000000||',
+      version: 0,
+    }))
+      .resolves.toStrictEqual({ success: true });
+  })
+
+  it('should accept the signatures parameter', async () => {
+    config.setSwapServiceBaseUrl('http://mock-swap-url/')
+
+    mockAxiosAdapter.onPut('/b4a5b077-c599-41e8-a791-85e08efcb1da').reply(200, { success: true });
+    await expect(update({
+      proposalId: 'b4a5b077-c599-41e8-a791-85e08efcb1da',
+      password: 'abc',
+      partialTx: 'PartialTx|0001000000000000000000000063f78c0e0000000000||',
+      version: 0,
+      signatures: 'PartialTxInputData|0001010204002f91917e63ce0f9d21a6b50adc45539f0ffe1d35b|0:4630440220514e0867c310232eb9ab1c18274a10b5bf163b8cd681',
+    }))
+      .resolves.toStrictEqual({ success: true });
   })
 })

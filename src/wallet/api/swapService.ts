@@ -13,6 +13,7 @@ import AES from 'crypto-js/aes';
 import CryptoJS from 'crypto-js';
 import { AtomicSwapProposal } from "../../models/types";
 import { PartialTxPrefix } from '../../models/partial_tx';
+import { isNumber } from 'lodash';
 
 /**
  * This interface represents the type returned on the HTTP response, with its untreated and encrypted data.
@@ -183,26 +184,53 @@ interface SwapUpdateParams {
 
 /**
  * Updates the proposal on the Atomic Swap Service with the parameters informed
- * @param proposalId
- * @param password
- * @param partialTx
- * @param version
- * @param [signatures]
  */
 export const update = async ({proposalId, password, partialTx, version, signatures}: SwapUpdateParams):
   Promise<{ success: boolean }> => {
+  validateParameters();
+
   const swapAxios = await axiosInstance();
   const options = {
     headers: { 'X-Auth-Password': hashPassword(password) }
   } as AxiosRequestConfig;
 
   const payload = {
-    partialTx,
+    partialTx: encryptString(partialTx, password),
     version,
-    signatures,
+    signatures: signatures ? encryptString(signatures, password) : null,
   };
 
   const { data } = await swapAxios.put<{ success: boolean }>(`/${proposalId}`, payload, options);
   return { success: data?.success };
+
+  /**
+   * Validates the many mandatory parameters for the `update` method
+   * @throws {Error} if any mandatory parameter is missing
+   * @throws {Error} if any version parameter is invalid
+   */
+  function validateParameters() {
+    // Checking for missing parameters
+    const missingParameters: String[] = [];
+    if (!proposalId) {
+      missingParameters.push('proposalId');
+    }
+    if (!password) {
+      missingParameters.push('password');
+    }
+    if (!partialTx) {
+      missingParameters.push('partialTx');
+    }
+    if (version === undefined || version === null) {
+      missingParameters.push('version');
+    }
+    if (missingParameters.length > 0) {
+      throw new Error(`Missing mandatory parameters: ${missingParameters.join(', ')}`)
+    }
+
+    // Checking for invalid parameters
+    if (!isNumber(version) || version < 0) {
+      throw new Error('Invalid version number');
+    }
+  }
 };
 
