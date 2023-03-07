@@ -266,7 +266,9 @@ describe('update api', () => {
 
   it('should throw missing parameter errors', async () => {
     // @ts-ignore
-    await expect(update()).rejects.toThrowError('proposalId');
+    await expect(update()).rejects.toThrowError('Missing mandatory parameters');
+    // @ts-ignore
+    await expect(update({})).rejects.toThrowError('proposalId');
     // @ts-ignore
     await expect(update({
       proposalId: 'abc',

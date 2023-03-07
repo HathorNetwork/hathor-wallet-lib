@@ -185,9 +185,10 @@ interface SwapUpdateParams {
 /**
  * Updates the proposal on the Atomic Swap Service with the parameters informed
  */
-export const update = async ({proposalId, password, partialTx, version, signatures}: SwapUpdateParams):
+export const update = async (params: SwapUpdateParams):
   Promise<{ success: boolean }> => {
   validateParameters();
+  const { proposalId, password, partialTx, version, signatures } = params;
 
   const swapAxios = await axiosInstance();
   const options = {
@@ -209,6 +210,11 @@ export const update = async ({proposalId, password, partialTx, version, signatur
    * @throws {Error} if any version parameter is invalid
    */
   function validateParameters() {
+    if (!params) {
+      throw new Error(`Missing mandatory parameters.`);
+    }
+
+    const { proposalId, password, partialTx, version } = params;
     // Checking for missing parameters
     const missingParameters: String[] = [];
     if (!proposalId) {
@@ -224,7 +230,7 @@ export const update = async ({proposalId, password, partialTx, version, signatur
       missingParameters.push('version');
     }
     if (missingParameters.length > 0) {
-      throw new Error(`Missing mandatory parameters: ${missingParameters.join(', ')}`)
+      throw new Error(`Missing mandatory parameters: ${missingParameters.join(', ')}`);
     }
 
     // Checking for invalid parameters
