@@ -81,3 +81,15 @@ export interface Authority {
   mint: number;
   melt: number;
 }
+
+/**
+ * A backend-mediated Atomic Swap proposal, containing backend metadata such as id, version and history
+ */
+export interface AtomicSwapProposal {
+  proposalId: string,
+  partialTx: string,
+  signatures: string | null,
+  timestamp: string,
+  version: number,
+  history: { partialTx: string, timestamp: string }[]
+}
