@@ -172,3 +172,37 @@ export const get = async (proposalId: string, password: string): Promise<AtomicS
     throw err;
   }
 };
+
+interface SwapUpdateParams {
+  proposalId: string;
+  password: string;
+  partialTx: string;
+  version: number;
+  signatures?: string;
+}
+
+/**
+ * Updates the proposal on the Atomic Swap Service with the parameters informed
+ * @param proposalId
+ * @param password
+ * @param partialTx
+ * @param version
+ * @param [signatures]
+ */
+export const update = async ({proposalId, password, partialTx, version, signatures}: SwapUpdateParams):
+  Promise<{ success: boolean }> => {
+  const swapAxios = await axiosInstance();
+  const options = {
+    headers: { 'X-Auth-Password': hashPassword(password) }
+  } as AxiosRequestConfig;
+
+  const payload = {
+    partialTx,
+    version,
+    signatures,
+  };
+
+  const { data } = await swapAxios.put<{ success: boolean }>(`/${proposalId}`, payload, options);
+  return { success: data?.success };
+};
+
