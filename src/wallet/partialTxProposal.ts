@@ -372,6 +372,27 @@ class PartialTxProposal {
   }
 
   /**
+   * Overwrites the proposal's signatures with the serialized contents in the parameters
+   * @param serializedSignatures
+   *
+   * @throws {InvalidPartialTxError} Inputs and outputs balance should match before the signatures can be added.
+   */
+  setSignatures(serializedSignatures: string): void {
+    if (!this.partialTx.isComplete()) {
+      // partialTx is not complete, we cannot sign it.
+      throw new InvalidPartialTxError('Cannot sign incomplete data');
+    }
+    const tx: Transaction = this.partialTx.getTx();
+
+    this.signatures = new PartialTxInputData(
+      tx.getDataToSign().toString('hex'),
+      tx.inputs.length
+    );
+
+    this.signatures.addSignatures(serializedSignatures)
+  }
+
+  /**
    * Create and return the Transaction instance if we have all signatures.
    *
    * @throws InvalidPartialTxError
