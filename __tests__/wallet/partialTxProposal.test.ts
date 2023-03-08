@@ -33,6 +33,7 @@ import {
   MAX_OUTPUTS,
   TX_WEIGHT_CONSTANTS,
 } from '../../src/constants';
+import { InvalidPartialTxError } from '../../src/errors.js';
 
 beforeAll(() => {
   transaction.updateMaxInputsConstant(MAX_INPUTS);
@@ -352,6 +353,26 @@ test('resetSignatures', async () => {
   proposal.resetSignatures();
   expect(proposal.signatures).toEqual(null);
   expect(proposal.transaction).toEqual(null);
+});
+
+test('setSignatures', async () => {
+  const proposal = new PartialTxProposal(testnet);
+  const signatures = new PartialTxInputData(proposal.partialTx.getTx().toHex(), 0);
+  const spyAdd = jest.spyOn(PartialTxInputData.prototype, 'addSignatures').mockImplementation(() => {});
+  const serializedSignatures = signatures.serialize();
+
+  // Ensure it throws on an incomplete partialTx
+  const spyComplete = jest.spyOn(proposal.partialTx, 'isComplete').mockImplementationOnce(() => false);
+  expect(() => proposal.setSignatures(serializedSignatures)).toThrowError(InvalidPartialTxError);
+
+  // Adds the serialized signatures on a complete partialTx
+  spyComplete.mockImplementationOnce(() => true);
+  proposal.setSignatures(serializedSignatures);
+  expect(proposal.signatures).toBeInstanceOf(PartialTxInputData);
+  expect(spyAdd).toHaveBeenCalledWith(serializedSignatures);
+
+  spyAdd.mockRestore();
+  spyComplete.mockRestore();
 });
 
 test('prepareTx', async () => {
