@@ -181,7 +181,7 @@ const tokens = {
    * @param storage Storage instance of the wallet
    * @param [options={}] Options to mint tokens
    * @param {string|null} [options.token=null] Token to mint, may be null if we are creating the token
-   * @param {IDataInput|null} [options.mintInput=null] Input to spend, may be null of we are creating the token
+   * @param {IDataInput|null} [options.mintInput=null] Input to spend, may be null if we are creating the token
    * @param {boolean} [options.createAnotherMint=true] If a mint authority should be created on the transaction.
    * @param {boolean} [options.createMelt=false] If a melt authority should be created on the transaction.
    * @param {string|null} [options.changeAddress=null] The address to send any change output.

@@ -28,7 +28,7 @@ export function hashData(
   // https://github.com/brix/crypto-js/blob/develop/src/pbkdf2.js#L24
   const hash = CryptoJS.PBKDF2(data, actualSalt, {
     keySize: HASH_KEY_SIZE / 32,
-    iterations: HASH_ITERATIONS,
+    iterations,
   });
 
   return {

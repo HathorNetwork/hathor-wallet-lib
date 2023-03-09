@@ -344,7 +344,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         },
       );
     } else {
-      throw new Error('This shouldn never happen.');
+      throw new Error('This should never happen.');
     }
     await this.storage.saveAccessData(accessData);
 
@@ -978,9 +978,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.firstConnection = true;
     this.removeAllListeners();
 
-    //XXX: Should we unsubscribe from each address?
     this.storage.handleStop({ cleanStorage });
-
     this.conn.stop();
   }
 

@@ -13,7 +13,15 @@ import { chunk } from 'lodash';
 import axios, { AxiosError, AxiosResponse } from 'axios';
 import helpers from '../utils/helpers';
 import { deriveAddressP2PKH, deriveAddressP2SH } from '../utils/address';
+import { MAX_ADDRESSES_GET, LOAD_WALLET_MAX_RETRY, LOAD_WALLET_RETRY_SLEEP } from '../constants';
 
+/**
+ * Derive requested addresses (if not already loaded), save them on storage then return them.
+ * @param {number} startIndex Index to start loading addresses
+ * @param {number} count Number of addresses to load
+ * @param {IStorage} storage The storage to load the addresses
+ * @returns {Promise<stringp[]>} List of loaded addresses in base58
+ */
 export async function loadAddresses(startIndex: number, count: number, storage: IStorage): Promise<string[]> {
   const addresses: string[] = [];
   const stopIndex = startIndex + count;
@@ -38,6 +46,12 @@ export async function loadAddresses(startIndex: number, count: number, storage: 
   return addresses;
 }
 
+/**
+ * Reload all addresses and transactions from the full node
+ * @param {IStorage} storage Storage to be reloaded
+ * @param {FullnodeConnection} connection Connection to be used to reload the storage
+ * @returns {Promise<void>}
+ */
 export async function reloadStorage(storage: IStorage, connection: FullnodeConnection) {
   // unsub all addresses
   for await (const address of storage.getAllAddresses()) {
@@ -53,6 +67,16 @@ export async function reloadStorage(storage: IStorage, connection: FullnodeConne
   return syncHistory(0, await storage.getGapLimit(), storage, connection);
 }
 
+/**
+ * Fetch the history of the addresses and save it on storage.
+ * Optionally process the history after loading it.
+ *
+ * @param {number} startIndex Index to start loading addresses
+ * @param {number} count Number of addresses to load
+ * @param {IStorage} storage The storage to load the addresses
+ * @param {FullnodeConnection} connection Connection to the full node
+ * @param {boolean} processHistory If we should process the history after loading it.
+ */
 export async function syncHistory(startIndex: number, count: number, storage: IStorage, connection: FullnodeConnection, processHistory: boolean = false) {
   let itStartIndex = startIndex;
   let itCount = count;
@@ -87,10 +111,18 @@ export async function syncHistory(startIndex: number, count: number, storage: IS
   }
 }
 
+/**
+ * Fetch the tx history for a chunkified list of addresses.
+ * This method returns an AsyncGenerator so that the caller can update the UI if any transaction is found during the load process.
+ *
+ * @param {stringp[]} addresses List of addresses to load history
+ * @param {IStorage} storage The storage to load the addresses
+ * @returns {AsyncGenerator<boolean>} If we found any transaction in the history
+ */
 export async function *loadAddressHistory(addresses: string[], storage: IStorage): AsyncGenerator<boolean> {
   let foundAnyTx = false;
   // chunkify addresses
-  const addressesChunks = chunk(addresses, 20); // FIXME: MAX_ADDRESSES_GET
+  const addressesChunks = chunk(addresses, MAX_ADDRESSES_GET);
   let retryCount = 0;
 
   for (let i=0; i<addressesChunks.length; i++) {
@@ -127,12 +159,12 @@ export async function *loadAddressHistory(addresses: string[], storage: IStorage
           continue;
         }
 
-        if (retryCount > 5) { // FIXME: LOAD_WALLET_MAX_RETRY
+        if (retryCount > LOAD_WALLET_MAX_RETRY) {
           throw e;
         }
 
         retryCount++;
-        await helpers.sleep(5000); // FIXME: LOAD_WALLET_RETRY_SLEEP
+        await helpers.sleep(LOAD_WALLET_RETRY_SLEEP);
         continue;
       }
       // Request has succeeded, reset retry count
@@ -164,9 +196,15 @@ export async function *loadAddressHistory(addresses: string[], storage: IStorage
   }
 }
 
+/**
+ * Check if the storage has at least `gapLimit` addresses loaded without any transaction.
+ * If it doesn't, it will return the next index to load and the number of addresses to fill the gap.
+ * @param {IStorage} storage The storage instance
+ * @returns {Promise<{nextIndex: number, count: number}|null>}
+ */
 export async function checkGapLimit(storage: IStorage): Promise<{nextIndex: number, count: number}|null> {
   // check gap limit
-  const {lastLoadedAddressIndex, lastUsedAddressIndex, gapLimit } = await storage.getWalletData();
+  const { lastLoadedAddressIndex, lastUsedAddressIndex, gapLimit } = await storage.getWalletData();
   if ((lastUsedAddressIndex + gapLimit) > lastLoadedAddressIndex) {
     // we need to generate more addresses to fill the gap limit
     return {

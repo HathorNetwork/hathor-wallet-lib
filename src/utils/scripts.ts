@@ -5,7 +5,7 @@ import Network from '../models/network';
 import helpers from '../utils/helpers';
 import { unpackLen, unpackToInt } from '../utils/buffer';
 import _ from 'lodash';
-import { ParseError, ParseScriptError } from '../errors';
+import { ParseError, ParseScriptError, XPubError } from '../errors';
 import { OP_PUSHDATA1, OP_CHECKSIG } from '../opcodes';
 import { Script, HDPublicKey } from 'bitcore-lib';
 
@@ -171,13 +171,18 @@ export const getPushData = (buff: Buffer): Buffer => {
  * @throws {XPubError} In case any of the given xpubs are invalid
  */
 export function createP2SHRedeemScript(xpubs: string[], numSignatures: number, index: number): Buffer {
-  const sortedXpubs = _.sortBy(xpubs.map(xp => new HDPublicKey(xp)), (xpub: HDPublicKey) => {
-    return xpub.publicKey.toString('hex');
-  });
+  let sortedXpubs: HDPublicKey[];
+  try {
+    sortedXpubs = _.sortBy(xpubs.map(xp => new HDPublicKey(xp)), (xpub: HDPublicKey) => {
+      return xpub.publicKey.toString('hex');
+    });
+  } catch (e) {
+    throw new XPubError('Invalid xpub');
+  }
 
   // xpub comes derived to m/45'/280'/0'
   // Derive to m/45'/280'/0'/0/index
-  const pubkeys = sortedXpubs.map((xpub: HDPublicKey) => xpub.deriveChild(0).deriveChild(index).publicKey);
+  const pubkeys = sortedXpubs.map((xpub) => xpub.deriveChild(0).deriveChild(index).publicKey);
 
   // bitcore-lib sorts the public keys by default before building the script
   // noSorting prevents that and keeps our order

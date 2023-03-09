@@ -35,16 +35,57 @@ const DEFAULT_WALLET_DATA = {
 };
 
 export class MemoryStore implements IStore {
+  /**
+   * Map<base58, IAddressInfo>
+   * where base58 is the address in base58
+   */
   addresses: Map<string, IAddressInfo>;
+  /**
+   * Map<index, base58>
+   * where index is the address index and base58 is the address in base58
+   */
   addressIndexes: Map<number, string>;
+  /**
+   * Map<base58, IAddressMetadata>
+   * where base58 is the address in base58
+   */
   addressesMetadata: Map<string, IAddressMetadata>;
+  /**
+   * Map<uid, ITokenData>
+   * where uid is the token uid in hex
+   */
   tokens: Map<string, ITokenData>;
+  /**
+   * Map<uid, ITokenMetadata>
+   * where uid is the token uid in hex
+   */
   tokensMetadata: Map<string, ITokenMetadata>;
+  /**
+   * Map<uid, ITokenData>
+   * where uid is the token uid in hex
+   */
   registeredTokens: Map<string, ITokenData>;
+  /**
+   * Map<txId, IHistoryTx>
+   * where txId is the transaction id in hex
+   */
   history: Map<string, IHistoryTx>;
+  /**
+   * Map<utxoid, IUtxo>
+   * where utxoid is the txId + index, a string representation of IUtxoId
+   */
   utxos: Map<string, IUtxo>;
+  /**
+   * Wallet access data
+   */
   accessData: IWalletAccessData | null;
+  /**
+   * Wallet metadata
+   */
   walletData: IWalletData;
+  /**
+   * Generic storage for any other data
+   */
   genericStorage: Record<string, any>;
 
   constructor() {

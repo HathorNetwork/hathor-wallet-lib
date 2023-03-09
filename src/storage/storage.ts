@@ -244,11 +244,11 @@ export class Storage implements IStorage {
   /**
    * Get a token from storage along with the metadata of the wallet transactions.
    *
-   * @param {string|undefined} [token='00'] Token uid to fetch
+   * @param {string} token Token uid to fetch
    * @returns {Promise<(ITokenData & Partial<ITokenMetadata>)|null>}
    */
-  async getToken(token?: string): Promise<(ITokenData & Partial<ITokenMetadata>)|null> {
-    return this.store.getToken(token || HATHOR_TOKEN_CONFIG.uid);
+  async getToken(token: string): Promise<(ITokenData & Partial<ITokenMetadata>)|null> {
+    return this.store.getToken(token);
   }
 
   /**
@@ -345,13 +345,12 @@ export class Storage implements IStorage {
     // XXX: this.getSpentTxs will only return the inputs of our wallet
     // If we want to fill inputs/outputs of any wallet we should change this method
     for await (const {tx: spentTx, input} of this.getSpentTxs(inputs)) {
-      // const {tx: spentTx, input} = spentResult;
       const utxoSpent = spentTx.outputs[input.index];
       if (!balance.has(utxoSpent.token)) {
         balance.set(utxoSpent.token, getEmptyBalance());
       }
       if (transaction.isAuthorityOutput(utxoSpent)) {
-        // Authority input, add to mint or melt balance
+        // Authority input, remove from mint or melt balance
         if (transaction.isMint(utxoSpent)) {
           balance.get(utxoSpent.token)!.mint -= 1;
         }
@@ -359,7 +358,7 @@ export class Storage implements IStorage {
           balance.get(utxoSpent.token)!.melt -= 1;
         }
       } else {
-        // Fund input, add to the amount balance
+        // Fund input, remove from the amount balance
         balance.get(utxoSpent.token)!.funds -= utxoSpent.value;
       }
     }
@@ -494,7 +493,7 @@ export class Storage implements IStorage {
       newInputs.push(...fundsInputs);
       newOutputs.push(...fundsOutputs);
 
-      if (skipAuthorities) {
+      if (skipAuthorities || token === HATHOR_TOKEN_CONFIG.uid) {
         continue;
       }
 

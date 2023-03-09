@@ -12,6 +12,7 @@ import FullNodeConnection from './new/connection';
 export interface IAddressInfo {
   base58: string;
   bip32AddressIndex: number;
+  // Only for p2pkh, undefined for multisig
   publicKey?: string;
 }
 
@@ -140,7 +141,7 @@ export interface IDataInput {
   authorities: number;
   token: string;
   address: string;
-  data?: string; // XXX: or Buffer?
+  data?: string;
 }
 
 // XXX: This type is meant to be used as an intermediary for building transactions

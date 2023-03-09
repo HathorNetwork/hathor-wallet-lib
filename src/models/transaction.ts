@@ -42,7 +42,6 @@ type optionsType = {
   parents?: string[],
   tokens?: string[],
   hash?: string | null,
-  height?: number | null,
 };
 
 /**
@@ -60,7 +59,6 @@ class Transaction {
   version: number;
   weight: number;
   nonce: number;
-  height: number | null;
   timestamp: number | null;
   parents: string[];
   tokens: string[];
@@ -72,21 +70,19 @@ class Transaction {
       version: DEFAULT_TX_VERSION,
       weight: 0,
       nonce: 0,
-      height: null,
       timestamp: null,
       parents: [],
       tokens: [],
       hash: null,
     };
     const newOptions = Object.assign(defaultOptions, options);
-    const { version, weight, nonce, height, timestamp, parents, tokens, hash } = newOptions;
+    const { version, weight, nonce, timestamp, parents, tokens, hash } = newOptions;
 
     this.inputs = inputs;
     this.outputs = outputs;
     this.version = version!;
     this.weight = weight!;
     this.nonce = nonce!;
-    this.height = height || null;
     this.timestamp = timestamp!;
     this.parents = parents!;
     this.tokens = tokens!;
