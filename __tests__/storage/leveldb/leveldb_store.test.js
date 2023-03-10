@@ -46,7 +46,6 @@ test('addresses methods', async () => {
   // The order should follow the index ordering
   expect(values).toStrictEqual(['b', 'a', 'c']);
 
-
   await expect(store.getAddress('b')).resolves.toStrictEqual({ base58: 'b', bip32AddressIndex: 1 });
   await expect(store.getAddressMeta('b')).resolves.toMatchObject({ numTransactions: 5 });
   await expect(store.addressCount()).resolves.toEqual(3);
