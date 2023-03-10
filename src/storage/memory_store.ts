@@ -98,6 +98,10 @@ export class MemoryStore implements IStore {
     this.genericStorage = {};
 
     this.walletData = { ...DEFAULT_WALLET_DATA, ...DEFAULT_ADDRESSES_WALLET_DATA };
+    this.walletData = { ...DEFAULT_WALLET_DATA, ...DEFAULT_ADDRESSES_WALLET_DATA };
+
+    // Add HTR to storage tokens
+    this.tokens.set(HATHOR_TOKEN_CONFIG.uid, HATHOR_TOKEN_CONFIG);
   }
 
   async validate(): Promise<void> {

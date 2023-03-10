@@ -10,6 +10,7 @@ import { Level } from 'level';
 import { AbstractSublevel } from 'abstract-level';
 import { IKVTokenIndex, ITokenData, ITokenMetadata } from '../../types';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
+import { HATHOR_TOKEN_CONFIG } from '../../constants';
 
 export const TOKEN_PREFIX = 'token';
 export const META_PREFIX = 'meta';
@@ -43,6 +44,9 @@ export default class LevelTokenIndex implements IKVTokenIndex {
     this.tokenDB = db.sublevel<string, ITokenData>(TOKEN_PREFIX, { valueEncoding: 'json' });
     this.metadataDB = db.sublevel<string, ITokenMetadata>(META_PREFIX, { valueEncoding: 'json' });
     this.registeredDB = db.sublevel<string, ITokenData>(REGISTER_PREFIX, { valueEncoding: 'json' });
+
+    // Add HTR to the database
+    this.saveToken(HATHOR_TOKEN_CONFIG);
   }
 
   /**

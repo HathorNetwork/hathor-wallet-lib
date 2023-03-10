@@ -326,9 +326,6 @@ export default class LevelDBStore implements IStore {
     }
 
     for (const uid of allTokens) {
-      if (uid === HATHOR_TOKEN_CONFIG.uid) {
-        await this.tokenIndex.saveToken(HATHOR_TOKEN_CONFIG);
-      }
       const tokenInfo = await this.tokenIndex.getToken(uid);
       if (!tokenInfo) {
         // this is a new token, we need to get the token data from api
