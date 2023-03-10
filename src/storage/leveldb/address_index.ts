@@ -133,12 +133,15 @@ export default class LevelAddressIndex implements IKVAddressIndex {
   async getAddressMeta(base58: string): Promise<IAddressMetadata | null> {
     try {
       const dbmeta = await this.addressesMetaDB.get(base58);
-      const meta: IAddressMetadata = {numTransactions: dbmeta.numTransactions, balance: new Map<string, IBalance>()};
+      const meta: IAddressMetadata = {
+        numTransactions: dbmeta.numTransactions,
+        balance: new Map<string, IBalance>(),
+      };
       for (const [uid, balance] of Object.entries(dbmeta.balance)) {
         meta.balance.set(uid, balance);
       }
       return meta;
-    } catch(err: unknown) {
+    } catch (err: unknown) {
       if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
         return null;
       }
@@ -152,7 +155,7 @@ export default class LevelAddressIndex implements IKVAddressIndex {
     }
     try {
       return await this.addressesIndexDB.get(_index_key(index));
-    } catch(err: unknown) {
+    } catch (err: unknown) {
       if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
         return null;
       }

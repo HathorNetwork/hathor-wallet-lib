@@ -53,10 +53,10 @@ export default class LevelDBStore implements IStore {
     await this.close();
     if (process.version < 'v14.14.0') {
       // rmSync was introduced in v14.14.0, earlier versions should use rmdirSync
-      // https://nodejs.org/docs/latest-v14.x/api/fs.html#fs_fs_rmdirsync_path_options
-      fs.rmdirSync(this.dbpath, { recursive: true });
+      // https://nodejs.org/docs/latest-v14.x/api/fs.html#fs_fspromises_rmdir_path_options
+      fs.promises.rmdir(this.dbpath, { recursive: true });
     } else {
-      fs.rmSync(this.dbpath, { recursive: true, force: true });
+      await fs.promises.rm(this.dbpath, { recursive: true, force: true });
     }
   }
 

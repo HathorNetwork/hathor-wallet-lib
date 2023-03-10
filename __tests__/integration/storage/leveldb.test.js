@@ -35,7 +35,7 @@ async function stopWallets() {
   }
 }
 
-describe("LevelDB persistent store", () => {
+describe('LevelDB persistent store', () => {
   afterEach(async () => {
     await stopWallets();
     await stopAllWallets();
@@ -46,7 +46,6 @@ describe("LevelDB persistent store", () => {
     const DATA_DIR = './testdata.leveldb';
     const walletData = precalculationHelpers.test.getPrecalculatedWallet();
     const xpubkey = walletUtils.getXPubKeyFromSeed(walletData.words, { accountDerivationIndex: '0\'/0' });
-
     const store = new LevelDBStore(DATA_DIR, xpubkey);
     const storage = new Storage(store);
 

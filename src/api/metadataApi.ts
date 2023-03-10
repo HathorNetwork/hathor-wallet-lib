@@ -26,7 +26,7 @@ const metadataApi = {
     while (retries >= 0) {
       const client = await explorerServiceAxios(network);
       try {
-        const response = await client.get(`metadata/dag`, { params: { id }});
+        const response = await client.get('metadata/dag', { params: { id } });
         if (response.data) {
           return response.data;
         } else {

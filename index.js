@@ -9,7 +9,7 @@ const txMiningApi = require('./lib/api/txMining');
 const versionApi = require('./lib/api/version');
 const axios = require('./lib/api/axiosInstance');
 const metadataApi = require('./lib/api/metadataApi');
-const storage = require('./lib/storage/storage');
+const { Storage } = require('./lib/storage/storage');
 const LevelDBStore = require('./lib/storage/leveldb/store');
 const memoryStore = require('./lib/storage/memory_store');
 const network = require('./lib/network');
@@ -59,7 +59,7 @@ module.exports = {
   ErrorMessages,
   constants,
   axios,
-  Storage: storage.Storage,
+  Storage,
   LevelDBStore: LevelDBStore.default,
   MemoryStore: memoryStore.MemoryStore,
   network: network.default,

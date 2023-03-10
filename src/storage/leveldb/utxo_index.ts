@@ -216,8 +216,5 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
   async clear(): Promise<void> {
     // This should clear all utxos subdbs
     await this.utxoDB.db.clear();
-    // await this.utxoDB.clear();
-    // await this.tokenUtxoDB.clear();
-    // await this.tokenAddressUtxoDB.clear();    
   }
 }

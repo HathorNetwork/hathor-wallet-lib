@@ -9,7 +9,10 @@ export const KEY_NOT_FOUND_MESSAGE = 'NotFound';
 export const KEY_NOT_FOUND_CODE = 'LEVEL_NOT_FOUND';
 
 export function errorCodeOrNull(err: unknown): string|null {
-  if(typeof err === 'object' && err !== null && 'code' in err && err.code !== undefined) {
+  if(typeof err === 'object'
+     && err !== null
+     && 'code' in err
+     && err.code !== undefined) {
     return err.code as string;
   }
 

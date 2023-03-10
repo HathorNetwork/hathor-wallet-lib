@@ -74,16 +74,9 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
         throw new Error('Inconsistent database');
       }
 
-      // for (const io of [...value.inputs, ...value.outputs]) {
-      //   if (io.decoded.address) {
-      //     addresses.add(io.decoded.address);
-      //   }
-      //   tokens.add(io.token);
-      // }
-
       try {
         await this.tsHistoryDB.get(`${value.timestamp}:${value.tx_id}`);
-      } catch(err: unknown) {
+      } catch (err: unknown) {
         if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
           // Create if index is missing
           await this.tsHistoryDB.put(_ts_key(value), value);
