@@ -17,8 +17,23 @@ export const REGISTER_PREFIX = 'registered';
 
 export default class LevelTokenIndex implements IKVTokenIndex {
   dbpath: string;
+  /**
+   * Main token database
+   * Key: uid
+   * Value: ITokenData (json encoded)
+   */
   tokenDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, ITokenData>;
+  /**
+   * Token metadata database
+   * Key: uid
+   * Value: ITokenMetadata (json encoded)
+   */
   metadataDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, ITokenMetadata>;
+  /**
+   * Registered tokens database
+   * Key: uid
+   * Value: ITokenData (json encoded)
+   */
   registeredDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, ITokenData>;
   indexVersion: string = '0.0.1';
 
@@ -30,10 +45,18 @@ export default class LevelTokenIndex implements IKVTokenIndex {
     this.registeredDB = db.sublevel<string, ITokenData>(REGISTER_PREFIX, { valueEncoding: 'json' });
   }
 
+  /**
+   * Close the database and the sublevel children.
+   * @returns {Promise<void>}
+   */
   async close(): Promise<void> {
     await this.tokenDB.db.close();
   }
 
+  /**
+   * Check that the index version matches the expected version.
+   * @returns {Promise<void>}
+   */
   async checkVersion(): Promise<void> {
     const db = this.tokenDB.db;
     try {
@@ -62,6 +85,10 @@ export default class LevelTokenIndex implements IKVTokenIndex {
     }
   }
 
+  /**
+   * Iterate over all tokens in the database
+   * @returns {AsyncGenerator<ITokenData & Partial<ITokenMetadata>>}
+   */
   async * tokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>> {
     for await (const token of this.tokenDB.values()) {
       const meta = await this.getTokenMetadata(token.uid);
@@ -69,6 +96,10 @@ export default class LevelTokenIndex implements IKVTokenIndex {
     }
   }
 
+  /**
+   * Iterate over all registered tokens in the database
+   * @returns {AsyncGenerator<ITokenData & Partial<ITokenMetadata>>}
+   */
   async *registeredTokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>> {
     for await (const token of this.registeredDB.values()) {
       const meta = await this.getTokenMetadata(token.uid);
@@ -76,11 +107,21 @@ export default class LevelTokenIndex implements IKVTokenIndex {
     }
   }
 
+  /**
+   * Check if a token is on the database
+   * @param {string} tokenUid
+   * @returns {Promise<boolean>}
+   */
   async hasToken(tokenUid: string): Promise<boolean> {
     const token = await this.getToken(tokenUid);
     return token !== null;
   }
 
+  /**
+   * Get a token from the database.
+   * @param {string} uid
+   * @returns {Promise<(ITokenData & Partial<ITokenMetadata>)|null>}
+   */
   async getToken(uid: string): Promise<(ITokenData & Partial<ITokenMetadata>)|null> {
     let token: ITokenData;
     try {
@@ -107,6 +148,11 @@ export default class LevelTokenIndex implements IKVTokenIndex {
     return {...token, ...DEFAULT_TOKEN_META, ...meta};
   }
 
+  /**
+   * Get a token metadata from the database.
+   * @param {string} uid
+   * @returns {Promise<ITokenMetadata|null>}
+   */
   async getTokenMetadata(uid: string): Promise<ITokenMetadata | null> {
     try {
       return await this.metadataDB.get(uid);
@@ -118,22 +164,47 @@ export default class LevelTokenIndex implements IKVTokenIndex {
     }
   }
 
+  /**
+   * Save a token to the database.
+   * @param {ITokenData} token Token to be saved
+   * @returns {Promise<void>}
+   */
   async saveToken(token: ITokenData): Promise<void> {
     await this.tokenDB.put(token.uid, token);
   }
 
+  /**
+   * Save a token metadata to the database.
+   * @param {string} uid token uid
+   * @param {ITokenMetadata} meta Token metadata to be saved
+   * @returns {Promise<void>}
+   */
   async saveMetadata(uid: string, meta: ITokenMetadata): Promise<void> {
     await this.metadataDB.put(uid, meta);
   }
 
+  /**
+   * Add a token to the registered list.
+   * @param {ITokenData} token Token to register
+   * @returns {Promise<void>}
+   */
   async registerToken(token: ITokenData): Promise<void> {
     await this.registeredDB.put(token.uid, token);
   }
 
+  /**
+   * Remove a token from the registered list.
+   * @param {string} tokenUid Token uid to unregister
+   * @returns {Promise<void>}
+   */
   async unregisterToken(tokenUid: string): Promise<void> {
     await this.registeredDB.del(tokenUid);
   }
 
+  /**
+   * Delete a token from the database.
+   * @param {string[]} tokens List of token uids to be deleted
+   */
   async deleteTokens(tokens: string[]): Promise<void> {
     for (const uid of tokens) {
       await this.tokenDB.del(uid);
@@ -141,6 +212,12 @@ export default class LevelTokenIndex implements IKVTokenIndex {
     }
   }
 
+  /**
+   * Edit token metadata
+   * @param {string} tokenUid token uid
+   * @param {Partial<ITokenMetadata>} meta metadata to add
+   * @returns {Promise<void>}
+   */
   async editToken(tokenUid: string, meta: Partial<ITokenMetadata>): Promise<void> {
     const metadata: ITokenMetadata = {
       numTransactions: 0,
@@ -163,10 +240,18 @@ export default class LevelTokenIndex implements IKVTokenIndex {
     await this.metadataDB.put(tokenUid, metadata);
   }
 
+  /**
+   * Clear metadata index.
+   * @returns {Promise<void>}
+   */
   async clearMeta(): Promise<void> {
     await this.metadataDB.clear();
   }
 
+  /**
+   * Clear all entries from the database.
+   * @returns {Promise<void>}
+   */
   async clear(): Promise<void> {
     await this.tokenDB.db.clear();
   }

@@ -15,6 +15,13 @@ export const ADDRESS_PREFIX = 'address';
 export const INDEX_PREFIX = 'index';
 export const ADDRESS_META_PREFIX = 'meta';
 
+/**
+ * The database key for addressIndexDB is a string.
+ * This method converts the index number to its string representation.
+ *
+ * @param index The address index
+ * @returns {string} hex value of the uint32 representation of the index
+ */
 function _index_key(index: number): string {
   const buf = Buffer.alloc(4);
   buf.writeUint32BE(index);
@@ -26,10 +33,26 @@ export default class LevelAddressIndex implements IKVAddressIndex {
   // Level implements AbstractLevel (with extra options like location, etc)
   // SubLevel implements AbstractSublevel which extends AbstractLevel
   // AbstractSubLevel requires the type of database(Level) the type of information saved at the database (string|Buffer|Uint8Array) and the types of keys and values it expects.
+
+  /**
+   * Main address database
+   * Key: address in base58
+   * Value: json encoded IAddressInfo
+   */
   addressesDB: AbstractSublevel<Level, string|Buffer|Uint8Array, string, IAddressInfo>;
+  /**
+   * Index database
+   * Key: index in uint32
+   * Value: address in base58
+   */
   addressesIndexDB: AbstractSublevel<Level, string|Buffer|Uint8Array, string, string>;
+  /**
+   * Address metadata database
+   * Key: address in base58
+   * Value: json encoded IAddressMetadata
+   */
   addressesMetaDB: AbstractSublevel<Level, string|Buffer|Uint8Array, string, IAddressMetadataAsRecord>;
-  indexVersion: string = '0.0.2';
+  indexVersion: string = '0.0.1';
 
   constructor(dbpath: string) {
     this.dbpath = path.join(dbpath, 'addresses');
@@ -40,10 +63,18 @@ export default class LevelAddressIndex implements IKVAddressIndex {
     this.addressesMetaDB = db.sublevel<string, IAddressMetadataAsRecord>(ADDRESS_META_PREFIX, {valueEncoding: 'json'});
   }
 
+  /**
+   * Close the database and the sublevel children.
+   * @returns {Promise<void>}
+   */
   async close(): Promise<void> {
     await this.addressesDB.db.close();
   }
 
+  /**
+   * Check that the index version matches the expected version.
+   * @returns {Promise<void>}
+   */
   async checkVersion(): Promise<void> {
     const db = this.addressesDB.db;
     try {
@@ -62,6 +93,11 @@ export default class LevelAddressIndex implements IKVAddressIndex {
     }
   }
 
+  /**
+   * Validate the index consistency along with the sublevel children.
+   * We check that all addresses in the addressesDB have an index in the addressesIndexDB.
+   * @returns {Promise<AddressIndexValidateResponse>} The first and last index in the database
+   */
   async validate(): Promise<AddressIndexValidateResponse> {
     // Clear metadata since we cannot guarantee the validity
     await this.addressesMetaDB.clear();
@@ -97,6 +133,11 @@ export default class LevelAddressIndex implements IKVAddressIndex {
     return ret;
   }
 
+  /**
+   * Fetch the address info from the database.
+   * @param {string} base58 The address in base58
+   * @returns {Promise<IAddressInfo|null>}
+   */
   async getAddressInfo(base58: string): Promise<IAddressInfo | null> {
     try {
       return await this.addressesDB.get(base58);
@@ -108,10 +149,23 @@ export default class LevelAddressIndex implements IKVAddressIndex {
     }
   }
 
+  /**
+   * Check if the address exists in the database.
+   * @param {string} base58 The address in base58
+   * @returns {Promise<boolean>} True if the address exists in the database.
+   */
   async addressExists(base58: string): Promise<boolean> {
     return (await this.getAddressInfo(base58)) !== null;
   }
 
+  /**
+   * Iterate on all addresses, ordered by the bip32 address index.
+   *
+   * The iteration is done on the db sorted by bip32 address index (addressesIndexDB)
+   * This ensures an ordered iteration.
+   *
+   * @returns {AsyncGenerator<IAddressInfo>}
+   */
   async * addressIter(): AsyncGenerator<IAddressInfo> {
     for await (const address of this.addressesIndexDB.values()) {
       const info = await this.getAddressInfo(address);
@@ -122,6 +176,15 @@ export default class LevelAddressIndex implements IKVAddressIndex {
     }
   }
 
+  /**
+   * Save an address metadata in the database.
+   *
+   * The meta argument type is IAddressMetadata that uses a Map which is unsupported
+   * with leveldb native json encoding so we convert it to an object using Record instead.
+   *
+   * @param {string} address Address in base58
+   * @param {IAddressMetadata} meta metadata to store
+   */
   async setAddressMeta(address: string, meta: IAddressMetadata): Promise<void> {
     const dbMeta: IAddressMetadataAsRecord = {numTransactions: meta.numTransactions, balance: {}};
     for (const [uid, balance] of meta.balance.entries()) {
@@ -130,6 +193,15 @@ export default class LevelAddressIndex implements IKVAddressIndex {
     await this.addressesMetaDB.put(address, dbMeta);
   }
 
+  /**
+   * Fetch address metadata from the database.
+   *
+   * Due to Leveldb json encoding the type returned is IAddressMetadataAsRecord
+   * Which we need to convert to IAddressMetadata before returning.
+   *
+   * @param base58 Address in base58
+   * @returns {Promise<IAddressMetadata|null>}
+   */
   async getAddressMeta(base58: string): Promise<IAddressMetadata | null> {
     try {
       const dbmeta = await this.addressesMetaDB.get(base58);
@@ -149,6 +221,11 @@ export default class LevelAddressIndex implements IKVAddressIndex {
     }
   }
 
+  /**
+   * Get address using its bip32 index.
+   * @param index Address bip32 index
+   * @returns {Promise<string|null>}
+   */
   async getAddressAtIndex(index: number): Promise<string|null> {
     if (index < 0) {
       return null;
@@ -163,11 +240,20 @@ export default class LevelAddressIndex implements IKVAddressIndex {
     }
   }
 
+  /**
+   * Save address on database.
+   * @param info Address info to save
+   */
   async saveAddress(info: IAddressInfo): Promise<void> {
     await this.addressesDB.put(info.base58, info);
     await this.addressesIndexDB.put(_index_key(info.bip32AddressIndex), info.base58);
   }
 
+  /**
+   * Count the number of addresses in the database.
+   *
+   * @returns {Promise<number>} Number of addresses in the database
+   */
   async addressCount(): Promise<number> {
     // Level is bad at counting addresses addresses
     let count = 0;
@@ -177,10 +263,16 @@ export default class LevelAddressIndex implements IKVAddressIndex {
     return count;
   }
 
+  /**
+   * Clear the address metadata database.
+   */
   async clearMeta(): Promise<void> {
     await this.addressesMetaDB.clear();
   }
 
+  /**
+   * Clear the entire address database.
+   */
   async clear(): Promise<void> {
     this.addressesDB.db.clear();
   }

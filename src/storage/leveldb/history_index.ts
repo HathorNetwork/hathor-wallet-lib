@@ -23,9 +23,18 @@ function _ts_key(tx: Pick<IHistoryTx, 'timestamp'|'tx_id'>): string {
 
 export default class LevelHistoryIndex implements IKVHistoryIndex {
   dbpath: string;
+  /**
+   * Main tx history database:
+   * Key: tx_id
+   * Value: IHistoryTx (json encoded)
+   */
   historyDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, IHistoryTx>;
+  /**
+   * Timestamp index, used to iterate on transaction in order.
+   * Key: timestamp:tx_id
+   * Value: IHistoryTx (json encoded)
+   */
   tsHistoryDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, IHistoryTx>;
-  size: number;
   indexVersion: string = '0.0.1';
 
   constructor(dbpath: string) {
@@ -33,13 +42,20 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
     const db = new Level(this.dbpath);
     this.historyDB = db.sublevel<string, IHistoryTx>(HISTORY_PREFIX, { valueEncoding: 'json' });
     this.tsHistoryDB = db.sublevel<string, IHistoryTx>(TS_HISTORY_PREFIX, { valueEncoding: 'json' });
-    this.size = 0;
   }
 
+  /**
+   * Close the database and the sublevel children.
+   * @returns {Promise<void>}
+   */
   async close(): Promise<void> {
     await this.historyDB.db.close();
   }
 
+  /**
+   * Check that the index version matches the expected version.
+   * @returns {Promise<void>}
+   */
   async checkVersion(): Promise<void> {
     const db = this.historyDB.db;
     try {
@@ -57,17 +73,19 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
     }
   }
 
+  /**
+   * Validate the index.
+   * This method iterates on all transactions and checks that we have a corresponding entry on the timestamp index.
+   * If we find a missing entry, we create it.
+   * @returns {Promise<HistoryIndexValidateResponse>}
+   */
   async validate(): Promise<HistoryIndexValidateResponse> {
     await this.checkVersion();
 
     let ret: HistoryIndexValidateResponse = {
       count: 0,
-      tokens: [],
-      addresses: [],
     };
-    const addresses = new Set<string>();
-    const tokens = new Set<string>();
-    // Iterate on all addresses and check that we have a corresponding index entry
+    // Iterate on all txs and check that we have a corresponding entry on the timestamp index
     for await (const [key, value] of this.historyDB.iterator()) {
       ret.count += 1;
       if (key !== value.tx_id) {
@@ -85,11 +103,14 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
         throw err;
       }
     }
-    ret.addresses = Array.from(addresses);
-    ret.tokens = Array.from(tokens);
     return ret;
   }
 
+  /**
+   * Iterate on the tx history.
+   * @param {string|undefined} [tokenUid] Token uid to filter transactions. If undefined, returns all transactions.
+   * @returns {AsyncGenerator<IHistoryTx>}
+   */
   async * historyIter(tokenUid?: string): AsyncGenerator<IHistoryTx> {
     for await (const info of this.tsHistoryDB.values({ reverse: true })) {
       if (tokenUid === undefined) {
@@ -110,6 +131,11 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
     }
   }
 
+  /**
+   * Fetch a transaction from the database.
+   * @param txId The transaction id
+   * @returns {Promise<IHistoryTx | null>}
+   */
   async getTx(txId: string): Promise<IHistoryTx | null> {
     try {
       return await this.historyDB.get(txId);
@@ -121,11 +147,19 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
     }
   }
 
+  /**
+   * Save a transaction on the database.
+   * @param {IHistoryTx} tx The transaction to save
+   */
   async saveTx(tx: IHistoryTx): Promise<void> {
     await this.historyDB.put(tx.tx_id, tx);
     await this.tsHistoryDB.put(_ts_key(tx), tx);
   }
 
+  /**
+   * Count the number of transactions on the database.
+   * @returns {Promise<number>} The number of transactions on the database
+   */
   async historyCount(): Promise<number> {
     // Level is bad at counting db size
     // An alternative would be to have a counter and increase it on every new transaction
@@ -136,6 +170,10 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
     return count;
   }
 
+  /**
+   * Clear all database entries.
+   * @returns {Promise<void>}
+   */
   async clear(): Promise<void> {
     await this.historyDB.db.clear();
   }

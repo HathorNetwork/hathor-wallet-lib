@@ -17,10 +17,20 @@ export const UTXO_PREFIX = 'utxo';
 export const TOKEN_ADDRESS_UTXO_PREFIX = 'token:address:utxo';
 export const TOKEN_UTXO_PREFIX = 'token:utxo';
 
+/**
+ * Create a string representing the utxo id to be used as database key.
+ * @param {Pick<IUtxo, 'txId'|'index'>} utxo The utxo to calculate the id
+ * @returns {string} a string representing the utxo id
+ */
 function _utxo_id(utxo: Pick<IUtxo, 'txId'|'index'>): string {
   return `${utxo.txId}:${utxo.index}`;
 }
 
+/**
+ * Create the database key for tokenAddressUtxoDB from the utxo.
+ * @param {IUtxo} utxo
+ * @returns {string}
+ */
 function _token_address_utxo_key(utxo: IUtxo): string {
   const buf = Buffer.alloc(8);
   buf.writeBigUint64BE(BigInt(utxo.value));
@@ -28,6 +38,11 @@ function _token_address_utxo_key(utxo: IUtxo): string {
   return `${utxo.authorities}:${utxo.token}:${utxo.address}:${value}:${_utxo_id(utxo)}`;
 }
 
+/**
+ * Create the database key for tokenUtxoDB from the utxo.
+ * @param {IUtxo} utxo
+ * @returns {string}
+ */
 function _token_utxo_key(utxo: IUtxo): string {
   const buf = Buffer.alloc(8);
   buf.writeBigUint64BE(BigInt(utxo.value));
@@ -37,8 +52,23 @@ function _token_utxo_key(utxo: IUtxo): string {
 
 export default class LevelUtxoIndex implements IKVUtxoIndex {
   dbpath: string;
+  /**
+   * Main utxo database
+   * Key: tx_id:index
+   * Value: IUtxo (json encoded)
+   */
   utxoDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, IUtxo>;
+  /**
+   * Reverse search index for utxo database
+   * Key: authorities:token:value:tx_id:index
+   * Value: IUtxo (json encoded)
+   */
   tokenUtxoDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, IUtxo>;
+  /**
+   * Reverse search index for utxo database
+   * Key: authorities:token:address:value:tx_id:index
+   * Value: IUtxo (json encoded)
+   */
   tokenAddressUtxoDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, IUtxo>;
   indexVersion: string = '0.0.1';
 
@@ -50,10 +80,18 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
     this.tokenAddressUtxoDB = db.sublevel<string, IUtxo>(TOKEN_ADDRESS_UTXO_PREFIX, { valueEncoding: 'json' });
   }
 
+  /**
+   * Close the database and the sublevel children.
+   * @returns {Promise<void>}
+   */
   async close(): Promise<void> {
     await this.utxoDB.db.close();
   }
 
+  /**
+   * Check that the index version matches the expected version.
+   * @returns {Promise<void>}
+   */
   async checkVersion(): Promise<void> {
     const db = this.utxoDB.db;
     try {
@@ -111,12 +149,30 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
     }
   }
 
+  /**
+   * Iterate on all utxos in the database.
+   * @returns {AsyncGenerator<IUtxo>}
+   */
   async * utxoIter(): AsyncGenerator<IUtxo> {
     for await (const utxo of this.utxoDB.values()) {
       yield utxo;
     }
   }
 
+  /**
+   * Select utxos to match the given filter options.
+   *
+   * Depending on which options are set, the utxos will be filtered using different indexes.
+   * We expect `token` and `authorities` to always be set.
+   * If we have `address` set, we will use the `tokenAddressUtxoDB` index.
+   * Otherwise we will use the `tokenUtxoDB` index.
+   *
+   * The value filter works since we use the uint64 in big endian.
+   *
+   * @param {IUtxoFilterOptions} options Which parameters to use to filter the utxos.
+   * @param {number|undefined} networkHeight Height of the network, used to check if the utxo is height locked
+   * @returns {AsyncGenerator<IUtxo>}
+   */
   async * selectUtxos(options: IUtxoFilterOptions, networkHeight?: number): AsyncGenerator<IUtxo> {
     const isHeightLocked = (utxo: IUtxo) => {
       if (utxo.type !== BLOCK_VERSION) {
@@ -207,12 +263,22 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
     }
   }
 
+  /**
+   * Save utxo on the database.
+   * Also save on all reverse search indexes.
+   * @param {IUtxo} utxo
+   * @returns {Promise<void>}
+   */
   async saveUtxo(utxo: IUtxo): Promise<void> {
     await this.utxoDB.put(_utxo_id(utxo), utxo);
     await this.tokenAddressUtxoDB.put(_token_address_utxo_key(utxo), utxo);
     await this.tokenUtxoDB.put(_token_utxo_key(utxo), utxo);
   }
 
+  /**
+   * Clear all entries from the database.
+   * @returns {Promise<void>}
+   */
   async clear(): Promise<void> {
     // This should clear all utxos subdbs
     await this.utxoDB.db.clear();

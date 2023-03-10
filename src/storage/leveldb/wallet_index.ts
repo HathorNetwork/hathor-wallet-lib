@@ -18,8 +18,17 @@ export const GENERIC_PREFIX = 'generic';
 
 export default class LevelWalletIndex implements IKVWalletIndex {
   dbpath: string;
+  /**
+   * Database to store wallet access data.
+   */
   accessDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, IWalletAccessData>;
+  /**
+   * Database to store wallet data.
+   */
   walletDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, string>;
+  /**
+   * Database to store generic wallet data.
+   */
   genericDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, any>;
   indexVersion: string = '0.0.1';
 
@@ -35,6 +44,14 @@ export default class LevelWalletIndex implements IKVWalletIndex {
     await this.accessDB.db.close();
   }
 
+  /**
+   * Convert a number to a uint32 buffer before saving on database.
+   * Internal helper method, since this logic is used in multiple places.
+   *
+   * @param {'access'|'wallet'|'generic'} dest Which database to use.
+   * @param key The key to use when setting the value.
+   * @param {number} value The value to set.
+   */
   async _setNumber(dest: 'access'|'wallet'|'generic', key: string, value: number) {
     const buf = Buffer.alloc(4);
     buf.writeUInt32BE(value);
@@ -46,11 +63,19 @@ export default class LevelWalletIndex implements IKVWalletIndex {
         await this.walletDB.put<string, Buffer>(key, buf, { valueEncoding: 'buffer'});
         break;
       case 'generic':
-        await this.walletDB.put<string, Buffer>(key, buf, { valueEncoding: 'buffer'});
+        await this.genericDB.put<string, Buffer>(key, buf, { valueEncoding: 'buffer'});
         break;
     }
   }
 
+  /**
+   * Get the number from the uint32 buffer saved on database.
+   * Internal helper method, since this logic is used in multiple places.
+   *
+   * @param {'access'|'wallet'|'generic'} dest Which database to fetch from.
+   * @param {string} key The key to fetch.
+   * @returns {Promise<number|null>}
+   */
   async _getNumber(dest: 'access'|'wallet'|'generic', key: string): Promise<number|null> {
     try {
       let buf: Buffer;
@@ -62,7 +87,7 @@ export default class LevelWalletIndex implements IKVWalletIndex {
           buf = await this.walletDB.get<string, Buffer>(key, { valueEncoding: 'buffer'});
           break;
         case 'generic':
-          buf = await this.walletDB.get<string, Buffer>(key, { valueEncoding: 'buffer'});
+          buf = await this.genericDB.get<string, Buffer>(key, { valueEncoding: 'buffer'});
           break;
       }
 
@@ -76,6 +101,10 @@ export default class LevelWalletIndex implements IKVWalletIndex {
     }
   }
 
+  /**
+   * Check if the index version is valid.
+   * @returns {Promise<null>}
+   */
   async checkVersion(): Promise<void> {
     const db = this.accessDB.db;
     try {
@@ -93,59 +122,115 @@ export default class LevelWalletIndex implements IKVWalletIndex {
     }
   }
 
+  /**
+   * Validate the database.
+   * @returns {Promise<void>}
+   */
   async validate(): Promise<void> {
     await this.checkVersion();
   }
 
+  /**
+   * Get the configured gap limit.
+   * @returns {Promise<number>} defaults to constants.GAP_LIMIT
+   */
   async getGapLimit(): Promise<number> {
     const value = await this._getNumber('wallet', 'gapLimit');
     return value || GAP_LIMIT;
   }
 
+  /**
+   * Configure a wallet specific gap limit.
+   * @param {number} value gap limit.
+   */
   async setGapLimit(value: number): Promise<void> {
     await this._setNumber('wallet', 'gapLimit', value);
   }
 
+  /**
+   * Get the value of the current address index.
+   * The current address is the most recent unused address.
+   * @returns {Promise<number>} defaults to -1
+   */
   async getCurrentAddressIndex(): Promise<number> {
     const value = await this._getNumber('wallet', 'currentAddressIndex');
     if (value === null) return -1;
     return value;
   }
 
+  /**
+   * Set the value of the current address index.
+   * @param {number} value Current address index.
+   * @returns {Promise<void>}
+   */
   async setCurrentAddressIndex(value: number): Promise<void> {
     await this._setNumber('wallet', 'currentAddressIndex', value);
   }
 
+  /**
+   * Get the value of the current network height.
+   * The network height is the number of blocks on the blockchain.
+   * @returns {Promise<number>} defaults to 0
+   */
   async getCurrentHeight(): Promise<number> {
     const value = await this._getNumber('wallet', 'networkHeight');
     if (value === null) return 0;
     return value;
   }
 
+  /**
+   * Set the value of the current network height.
+   * @param {number} value network height.
+   * @returns {Promise<void>}
+   */
   async setCurrentHeight(value: number): Promise<void> {
     await this._setNumber('wallet', 'networkHeight', value);
   }
 
+  /**
+   * Get the value of the last used address index.
+   * The last used address is the highest address index that has been used.
+   * @returns {Promise<number>} defaults to -1
+   */
   async getLastUsedAddressIndex(): Promise<number> {
     const value = await this._getNumber('wallet', 'lastUsedAddressIndex');
     if (value === null) return -1;
     return value;
   }
 
+  /**
+   * Set the value of the last used address index.
+   * @param {number} value last used address index.
+   * @returns {Promise<void>}
+   */
   async setLastUsedAddressIndex(value: number): Promise<void> {
     await this._setNumber('wallet', 'lastUsedAddressIndex', value);
   }
 
+  /**
+   * Get the value of the last loaded address index.
+   * The last loaded address is the highest address index.
+   * @returns {Promise<number>} defaults to 0
+   */
   async getLastLoadedAddressIndex(): Promise<number> {
     const value = await this._getNumber('wallet', 'lastLoadedAddressIndex');
     if (value === null) return 0;
     return value;
   }
 
+  /**
+   * Set the value of the last loaded address index.
+   * @param {number} value last loaded address index.
+   * @returns {Promise<void>}
+   */
   async setLastLoadedAddressIndex(value: number): Promise<void> {
     await this._setNumber('wallet', 'lastLoadedAddressIndex', value);
   }
 
+  /**
+   * Get the wallet data.
+   * @returns {Promise<IWalletData>}
+   */
   async getWalletData(): Promise<IWalletData> {
     const lastLoadedAddressIndex = await this.getLastLoadedAddressIndex();
     const lastUsedAddressIndex = await this.getLastUsedAddressIndex();
@@ -161,11 +246,19 @@ export default class LevelWalletIndex implements IKVWalletIndex {
     };
   }
 
+  /**
+   * Save wallet access data.
+   * @param {IWalletAccessData} data Wallet access data.
+   * @returns {Promise<void>}
+   */
   async saveAccessData(data: IWalletAccessData): Promise<void> {
-    // XXX: Any checks?
     await this.accessDB.put('data', data);
   }
 
+  /**
+   * Get wallet access data.
+   * @returns {Promise<IWalletAccessData | null>}
+   */
   async getAccessData(): Promise<IWalletAccessData | null> {
     try {
       return await this.accessDB.get('data');
@@ -177,6 +270,11 @@ export default class LevelWalletIndex implements IKVWalletIndex {
     }
   }
 
+  /**
+   * Fetch a key from the database.
+   * @param key database key.
+   * @returns {Promise<any>}
+   */
   async getItem(key: string): Promise<any> {
     try {
       return await this.genericDB.get(key);
@@ -188,10 +286,18 @@ export default class LevelWalletIndex implements IKVWalletIndex {
     }
   }
 
+  /**
+   * Save a key/value pair to the database.
+   * @param {string} key database key
+   * @param {any} value database value
+   */
   async setItem(key: string, value: any): Promise<void> {
     await this.genericDB.put(key, value);
   }
 
+  /**
+   * Clean the wallet access data.
+   */
   async cleanAccessData(): Promise<void> {
     await this.accessDB.clear();
   }

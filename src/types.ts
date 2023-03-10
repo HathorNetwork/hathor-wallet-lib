@@ -393,8 +393,6 @@ export interface IKVAddressIndex extends IKVStoreIndex<AddressIndexValidateRespo
 
 export interface HistoryIndexValidateResponse {
   count: number,
-  tokens: string[],
-  addresses: string[],
 }
 
 export interface IKVHistoryIndex extends IKVStoreIndex<HistoryIndexValidateResponse> {
