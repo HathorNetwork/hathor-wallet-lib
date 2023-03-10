@@ -48,11 +48,11 @@ export default class LevelWalletIndex implements IKVWalletIndex {
    * Convert a number to a uint32 buffer before saving on database.
    * Internal helper method, since this logic is used in multiple places.
    *
-   * @param {'access'|'wallet'|'generic'} dest Which database to use.
+   * @param {'access'|'wallet'} dest Which database to use.
    * @param key The key to use when setting the value.
    * @param {number} value The value to set.
    */
-  async _setNumber(dest: 'access'|'wallet'|'generic', key: string, value: number) {
+  async _setNumber(dest: 'access'|'wallet', key: string, value: number) {
     const buf = Buffer.alloc(4);
     buf.writeUInt32BE(value);
     switch(dest) {
@@ -62,9 +62,6 @@ export default class LevelWalletIndex implements IKVWalletIndex {
       case 'wallet':
         await this.walletDB.put<string, Buffer>(key, buf, { valueEncoding: 'buffer'});
         break;
-      case 'generic':
-        await this.genericDB.put<string, Buffer>(key, buf, { valueEncoding: 'buffer'});
-        break;
     }
   }
 
@@ -72,11 +69,11 @@ export default class LevelWalletIndex implements IKVWalletIndex {
    * Get the number from the uint32 buffer saved on database.
    * Internal helper method, since this logic is used in multiple places.
    *
-   * @param {'access'|'wallet'|'generic'} dest Which database to fetch from.
+   * @param {'access'|'wallet'} dest Which database to fetch from.
    * @param {string} key The key to fetch.
    * @returns {Promise<number|null>}
    */
-  async _getNumber(dest: 'access'|'wallet'|'generic', key: string): Promise<number|null> {
+  async _getNumber(dest: 'access'|'wallet', key: string): Promise<number|null> {
     try {
       let buf: Buffer;
       switch(dest) {
@@ -85,9 +82,6 @@ export default class LevelWalletIndex implements IKVWalletIndex {
           break;
         case 'wallet':
           buf = await this.walletDB.get<string, Buffer>(key, { valueEncoding: 'buffer'});
-          break;
-        case 'generic':
-          buf = await this.genericDB.get<string, Buffer>(key, { valueEncoding: 'buffer'});
           break;
       }
 
