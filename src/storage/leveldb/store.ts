@@ -52,9 +52,9 @@ export default class LevelDBStore implements IStore {
   async destroy(): Promise<void> {
     await this.close();
     if (process.version < 'v14.14.0') {
-      // rmSync was introduced in v14.14.0, earlier versions should use rmdirSync
+      // rm was introduced in v14.14.0, earlier versions should use rmdir
       // https://nodejs.org/docs/latest-v14.x/api/fs.html#fs_fspromises_rmdir_path_options
-      fs.promises.rmdir(this.dbpath, { recursive: true });
+      await fs.promises.rmdir(this.dbpath, { recursive: true });
     } else {
       await fs.promises.rm(this.dbpath, { recursive: true, force: true });
     }
