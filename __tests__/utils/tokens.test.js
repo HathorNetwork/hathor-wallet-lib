@@ -47,13 +47,10 @@ test('Token deposit', () => {
   expect(tokens.getDepositAmount(0.1)).toBe(1);
   expect(tokens.getDepositAmount(500)).toBe(5);
   expect(tokens.getDepositAmount(550)).toBe(6);
+});
 
-  // When creating an NFT (not minting) there is a 0.01HTR fee
-  expect(tokens.getDepositAmount(100, true)).toBe(2);
-  expect(tokens.getDepositAmount(1, true)).toBe(2);
-  expect(tokens.getDepositAmount(0.1, true)).toBe(2);
-  expect(tokens.getDepositAmount(500, true)).toBe(6);
-  expect(tokens.getDepositAmount(550, true)).toBe(7);
+test('NFT creation fee', () => {
+  expect(tokens.getNFTCreationFee()).toBe(1);
 });
 
 test('Token withdraw', () => {
