@@ -110,7 +110,7 @@ export default class LevelDBStore implements IStore {
     }
 
     if (info.bip32AddressIndex > (await this.walletIndex.getLastLoadedAddressIndex())) {
-      this.walletIndex.setLastLoadedAddressIndex(info.bip32AddressIndex);
+      await this.walletIndex.setLastLoadedAddressIndex(info.bip32AddressIndex);
     }
   }
 
@@ -360,9 +360,9 @@ export default class LevelDBStore implements IStore {
       }
     }
     if ((await this.walletIndex.getCurrentAddressIndex()) < maxIndex) {
-      this.walletIndex.setCurrentAddressIndex(Math.min(maxIndex + 1, await this.walletIndex.getLastLoadedAddressIndex()));
+      await this.walletIndex.setCurrentAddressIndex(Math.min(maxIndex + 1, await this.walletIndex.getLastLoadedAddressIndex()));
     }
-    this.walletIndex.setLastUsedAddressIndex(maxIndex);
+    await this.walletIndex.setLastUsedAddressIndex(maxIndex);
   }
 
   async getTx(txId: string): Promise<IHistoryTx | null> {
