@@ -384,11 +384,13 @@ class PartialTxProposal {
     }
     const tx: Transaction = this.partialTx.getTx();
 
+    // Creating an empty signatures object
     this.signatures = new PartialTxInputData(
       tx.getDataToSign().toString('hex'),
       tx.inputs.length
     );
 
+    // Setting the signatures data from the parameters
     this.signatures.addSignatures(serializedSignatures)
   }
 

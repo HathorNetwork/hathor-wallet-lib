@@ -368,8 +368,9 @@ test('setSignatures', async () => {
   // Adds the serialized signatures on a complete partialTx
   spyComplete.mockImplementationOnce(() => true);
   proposal.setSignatures(serializedSignatures);
-  expect(proposal.signatures).toBeInstanceOf(PartialTxInputData);
-  expect(spyAdd).toHaveBeenCalledWith(serializedSignatures);
+  expect(proposal.signatures).toBeInstanceOf(PartialTxInputData); // A full signatures object is available on proposal
+  expect(spyAdd).toHaveBeenCalledTimes(1); // Only a single pass is executed
+  expect(spyAdd).toHaveBeenCalledWith(serializedSignatures); // The signatures added are from the parameters
 
   spyAdd.mockRestore();
   spyComplete.mockRestore();
