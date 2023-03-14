@@ -187,7 +187,9 @@ interface SwapUpdateParams {
  */
 export const update = async (params: SwapUpdateParams):
   Promise<{ success: boolean }> => {
+  // Validates the input parameters and throws in case of errors
   validateParameters();
+
   const { proposalId, password, partialTx, version, signatures } = params;
 
   const swapAxios = await axiosInstance();
