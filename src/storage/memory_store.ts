@@ -595,19 +595,6 @@ export class MemoryStore implements IStore {
   }
 
   /**
-   * Delete tokens from storage.
-   * @param tokens A list of token ids to delete
-   * @async
-   * @returns {Promise<void>}
-   */
-  async deleteTokens(tokens: string[]): Promise<void> {
-    for (const tokenUid of tokens) {
-      this.tokens.delete(tokenUid);
-      this.tokensMetadata.delete(tokenUid);
-    }
-  }
-
-  /**
    * Edit token metadata on storage.
    * @param {string} tokenUid Token id to edit
    * @param {Partial<ITokenMetadata>} meta Metadata to save

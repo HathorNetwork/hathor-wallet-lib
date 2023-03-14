@@ -199,27 +199,6 @@ export class Storage implements IStorage {
   }
 
   /**
-   * Save a token data on storage.
-   *
-   * @param {ITokenData} data Token data to save.
-   * @returns {Promise<void>}
-   */
-  async addToken(data: ITokenData): Promise<void> {
-    await this.store.saveToken(data);
-  }
-
-  /**
-   * Edit a token metadata.
-   *
-   * @param {string} tokenUid The token uid to edit.
-   * @param {Partial<ITokenMetadata>} meta metadata to save.
-   * @returns {Promise<void>}
-   */
-  async editToken(tokenUid: string, meta: Partial<ITokenMetadata>): Promise<void> {
-    this.store.editToken(tokenUid, meta);
-  }
-
-  /**
    * Iterate on all tokens on the storage.
    *
    * @returns {AsyncGenerator<ITokenData & Partial<ITokenMetadata>>}

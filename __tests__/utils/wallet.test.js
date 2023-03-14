@@ -368,6 +368,7 @@ test('access data from xpub', () => {
   const xpubkeyAcct = 'xpub6C95ufyyhEr2ntyGGfeHjyvxffmNZQ7WugyChhu1Fzor1tMUc4K2MUdwkcJoTzjVkg46hurWWU9gvZoivLiDk6MdsKukz3JiX5Fib2BDa2T';
   const xpubAcct = HDPublicKey.fromString(xpubkeyAcct);
 
+  // We support using the account xpub to generate the access data
   expect(wallet.generateAccessDataFromXpub(xpubkeyAcct)).toMatchObject({
     xpubkey: xpubAcct.derive(0).xpubkey,
     walletType: WalletType.P2PKH,
@@ -375,9 +376,9 @@ test('access data from xpub', () => {
     multisigData: undefined,
   });
 
-  // We assume the xpubkey is on the account level, so it is derived to change.
+  // We support using the change xpub to generate the access data
   expect(wallet.generateAccessDataFromXpub(xpubkeyChange)).toMatchObject({
-    xpubkey: xpubChange.derive(0).xpubkey,
+    xpubkey: xpubChange.xpubkey,
     walletType: WalletType.P2PKH,
     walletFlags: WALLET_FLAGS.READONLY,
     multisigData: undefined,
@@ -396,6 +397,20 @@ test('access data from xpub', () => {
       pubkey: xpubAcct.publicKey.toString('hex'),
     },
   });
+
+  // We cannot start a multisig wallet with a change path xpub.
+  expect(() => {
+    return wallet.generateAccessDataFromXpub(
+      xpubkeyChange,
+      { multisig: { numSignatures: 2, pubkeys: [xpubkeyAcct, xpubkeyChange] }},
+    );
+  }).toThrowError('Cannot create a multisig wallet with a change path xpub');
+
+  // Unsupported xpub derivation depth.
+  expect(() => {
+    return wallet.generateAccessDataFromXpub(xpubChange.derive(0).xpubkey);
+  }).toThrowError('Invalid xpub');
+
 });
 
 test('access data from xpriv', () => {

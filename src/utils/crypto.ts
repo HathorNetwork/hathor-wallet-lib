@@ -12,6 +12,11 @@ import { IEncryptedData } from '../types';
 /**
  * Hash a piece of information with the given options.
  *
+ * pbkdf2Hasher is the name of the hash implementation to use with PBKDF2.
+ * Currently supported hash algorithms are:
+ * - sha1
+ * - sha256
+ *
  * @param {string} data Data to hash
  * @param {{salt: string, iterations: number, pbkdf2Hasher: string}} [options={}] options for the hash algo
  * @returns {{hash: string, salt: string, iterations: number, pbkdf2Hasher: string}}
@@ -20,6 +25,17 @@ export function hashData(
   data: string,
   { salt, iterations = HASH_ITERATIONS, pbkdf2Hasher = 'sha1'}: {salt?: string, iterations?: number, pbkdf2Hasher?: string} = {},
   ): {hash: string, salt: string, iterations: number, pbkdf2Hasher: string} {
+  const hashers = new Map<string, any>([
+    ['sha1', CryptoJS.algo.SHA1],
+    ['sha256', CryptoJS.algo.SHA256],
+  ]);
+
+  const hasher = hashers.get(pbkdf2Hasher);
+  if (!hasher) {
+    // Used an unsupported hasher algorithm
+    throw new Error(`Invalid hasher: ${pbkdf2Hasher}`);
+  }
+
   const actualSalt = salt || CryptoJS.lib.WordArray.random(128 / 8).toString();
 
   // NIST has issued Special Publication SP 800-132 recommending PBKDF2
@@ -28,6 +44,7 @@ export function hashData(
   // https://github.com/brix/crypto-js/blob/develop/src/pbkdf2.js#L24
   const hash = CryptoJS.PBKDF2(data, actualSalt, {
     keySize: HASH_KEY_SIZE / 32,
+    hasher,
     iterations,
   });
 

@@ -202,9 +202,6 @@ test('token methods', async () => {
   }
   expect(registered).toHaveLength(1);
 
-  await store.deleteTokens(['01', '02']);
-  expect(store.tokens.size).toEqual(1);
-
   await store.editToken('00', { numTransactions: 10 });
   expect(store.tokensMetadata.get('00')).toMatchObject({
     numTransactions: 10,

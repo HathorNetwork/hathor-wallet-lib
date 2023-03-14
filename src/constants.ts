@@ -151,7 +151,12 @@ export const SEND_TOKENS_TIMEOUT: number = 300000;
 export const HASH_ITERATIONS: number = 1000;
 
 /**
- * Size of the key to hash the password
+ * Size of the key to hash the password (in bits).
+ *
+ * CryptoJS expects the size in words so this will be converted in code.
+ * The conversion is done by dividing by 32, so HASH_KEY_SIZE needs to be a multiple of 32.
+ *
+ * Actual keySize will be 256/32 = 8 words.
  */
 export const HASH_KEY_SIZE: number = 256;
 

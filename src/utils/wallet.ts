@@ -367,6 +367,22 @@ const wallet = {
     return this.getMultiSigXPubFromXPriv(xpriv);
   },
 
+  /**
+   * Generate access data from xpubkey.
+   * The access data will be used to start a wallet and derive the wallet's addresses.
+   * This method can only generate READONLY wallets since we do not have the private key.
+   * 
+   * We can only accept xpubs derived to the account or change path.
+   * Since hdpublickeys cannot derive on hardened paths, the derivation must be done previously with the private key
+   * The last path with hardened derivation defined on bip44 is the account path so we support using an account path xpub.
+   * We can also use the change path xpub since we use it to derive the addresses
+   * but we cannot use the address path xpub since we won't be able to derive all addresses.
+   * And the wallet-lib currently does not support the creation of a wallet with a single address.
+   * 
+   * @param {string} xpubkey HDPublicKey in string format.
+   * @param {{ multisig: IMultisigData }} [options={}] Options to generate the access data.
+   * @returns {IWalletAccessData}
+   */
   generateAccessDataFromXpub(xpubkey: string, {multisig}: {multisig?: IMultisigData} = {}): IWalletAccessData {
     let walletType: WalletType;
     if (multisig === undefined) {
@@ -376,23 +392,46 @@ const wallet = {
     }
     // HDPublicKeys cannot derive on hardened paths, so the derivation must be done previously with the xprivkey.
     // So we assume the user sent an xpub derived to the account level.
-    const accXPub = HDPublicKey(xpubkey);
-    const xpub = accXPub.derive(0);
 
-    let multisigData: IMultisigData|undefined;
-    if (multisig) {
-      multisigData = {
-        ...multisig,
-        pubkey: accXPub.publicKey.toString('hex'),
+    const argXpub = new HDPublicKey(xpubkey);
+
+    let multisigData: IMultisigData|undefined = undefined;
+    let xpub: HDPublicKey;
+
+    if (argXpub.depth === 3) {
+      // This is an account path xpub which we expect was derived to the path m/45'/280'/0'
+      xpub = argXpub.derive(0);
+
+      if (multisig) {
+        // A multisig wallet requires the account path publickey to determine which participant this wallet is.
+        // Since we have the account path xpub we can initialize the readonly multisig wallet.
+        multisigData = {
+          ...multisig,
+          pubkey: argXpub.publicKey.toString('hex'),
+        }
+      } else {
+        multisigData = undefined;
+      }
+    } else if (argXpub.depth === 4) {
+      // This is a change path xpub which we expect was derived to the path m/45'/280'/0'/0
+      xpub = argXpub;
+
+      if (multisig) {
+        // A multisig wallet requires the account path publickey to determine which participant this wallet is.
+        // Since we cannot get the account path publickey we must stop the wallet creation.
+        throw new Error('Cannot create a multisig wallet with a change path xpub');
       }
     } else {
-      multisigData = undefined;
+      // We currently only support account path and change path xpubs.
+      throw new Error('Invalid xpub');
     }
 
     return {
+      // Change path hdpublickey in string format
       xpubkey: xpub.xpubkey,
       walletType,
       multisigData,
+      // We force the readonly flag because we are starting a wallet without the private key
       walletFlags: 0 | WALLET_FLAGS.READONLY,
     };
   },

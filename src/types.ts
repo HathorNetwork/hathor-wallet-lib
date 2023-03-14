@@ -273,7 +273,6 @@ export interface IStore {
   saveToken(tokenConfig: ITokenData, meta?: ITokenMetadata): Promise<void>;
   registerToken(token: ITokenData): Promise<void>;
   unregisterToken(tokenUid: string): Promise<void>;
-  deleteTokens(tokens: string[]): Promise<void>;
   editToken(tokenUid: string, meta: Partial<ITokenMetadata>): Promise<void>;
 
   // UTXOs methods
@@ -323,8 +322,6 @@ export interface IStorage {
   processHistory(): Promise<void>;
 
   // Tokens
-  addToken(data: ITokenData): Promise<void>;
-  editToken(tokenUid: string, meta: ITokenMetadata): Promise<void>;
   registerToken(token: ITokenData): Promise<void>;
   unregisterToken(tokenUid: string): Promise<void>;
   getToken(uid: string): Promise<(ITokenData & Partial<ITokenMetadata>) | null>;

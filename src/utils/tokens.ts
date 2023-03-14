@@ -183,7 +183,6 @@ const tokens = {
    * @param {string|null} [options.token=null] Token to mint, may be null if we are creating the token
    * @param {IDataInput|null} [options.mintInput=null] Input to spend, may be null if we are creating the token
    * @param {boolean} [options.createAnotherMint=true] If a mint authority should be created on the transaction.
-   * @param {boolean} [options.createMelt=false] If a melt authority should be created on the transaction.
    * @param {string|null} [options.changeAddress=null] The address to send any change output.
    * @param {boolean} [options.isCreateNFT=false] If this transaction will create an NFT
    *
@@ -197,7 +196,6 @@ const tokens = {
       token = null,
       mintInput = null,
       createAnotherMint = true,
-      createMelt = false,
       changeAddress = null,
       isCreateNFT = false,
     }: {
@@ -268,17 +266,6 @@ const tokens = {
         value: TOKEN_MINT_MASK,
         timelock: null,
         authorities: 1,
-      });
-    }
-
-    if (createMelt) {
-      const newAddress = await storage.getCurrentAddress();
-      outputs.push({
-        type: 'melt',
-        address: newAddress,
-        value: TOKEN_MELT_MASK,
-        timelock: null,
-        authorities: 2,
       });
     }
 
@@ -380,7 +367,6 @@ const tokens = {
         authorities: 0,
         timelock: null,
         type: getAddressType(address, storage.config.getNetwork()),
-        isChange: true, // XXX: should this be considered change?
       });
     }
 
@@ -433,6 +419,18 @@ const tokens = {
     };
 
     const txData = await this.prepareMintTxData(address, mintAmount, storage, mintOptions);
+
+    if (createMelt) {
+      const newAddress = await storage.getCurrentAddress();
+      txData.outputs.push({
+        type: 'melt',
+        address: newAddress,
+        value: TOKEN_MELT_MASK,
+        timelock: null,
+        authorities: 2,
+      });
+    }
+
     if (isCreateNFT) {
       if (nftData === null) {
         // This should never happen since isNFT is true only if nftData is not null
@@ -460,7 +458,11 @@ const tokens = {
   },
 
   /**
-   * Prepare delegate authority transaction data
+   * Prepare delegate authority transaction data.
+   *
+   * This method creates the tx data to delegate the authority of `authorityInput` to `address`.
+   * So the we will create an output with the same authorities of the `authorityInput`.
+   * Meaning that we do not yet support creating a mint only authority (authorities=1) from a mint/melt authority (authorities=3).
    *
    * @param {string} token Token to delegate authority
    * @param {IDataInput} authorityInput Utxo to spend
