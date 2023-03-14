@@ -25,11 +25,10 @@ import {
   IDataTx,
   IDataInput,
   IDataOutput,
-  isDataOutputCreateToken,
   IFillTxOptions,
   IBalance,
 } from '../types';
-import transaction from '../utils/transaction';
+import transactionUtils from '../utils/transaction';
 import config, { Config } from '../config';
 import { decryptData, encryptData } from '../utils/crypto';
 import FullNodeConnection from '../new/connection';
@@ -283,69 +282,6 @@ export class Storage implements IStorage {
   }
 
   /**
-   * Calculate the token balance of a transaction, including authorities.
-   * @param {IDataTx} tx The transaction we want to calculate the balance.
-   * @returns {Promise<Map<string, Record<'funds'|'mint'|'melt', number>>>} The balance of all tokens on the transaction.
-   */
-  async calculateTxBalance(tx: IDataTx): Promise<Map<string, Record<'funds'|'mint'|'melt', number>>> {
-    function getEmptyBalance(): Record<'funds'|'mint'|'melt', number> {
-      return {'funds': 0, 'mint': 0, 'melt': 0};
-    }
-    const balance = new Map<string, Record<'funds'|'mint'|'melt', number>>();
-
-    for (const output of tx.outputs) {
-      if (isDataOutputCreateToken(output)) {
-        // This output does not indicate the token because it is creating it
-        // Therefore we cannot find tokens to fill the transaction, since it does not exist yet, so we ignore it
-        continue;
-      }
-      if (!balance.has(output.token)) {
-        balance.set(output.token, getEmptyBalance());
-      }
-      if (output.authorities > 0) {
-        // Authority output, add to mint or melt balance
-        // Check for MINT authority
-        if ((output.authorities & 1) > 0) {
-          balance.get(output.token)!.mint += 1;
-        }
-        // Check for MELT authority
-        if ((output.authorities & 2) > 0) {
-          balance.get(output.token)!.melt += 1;
-        }
-      } else {
-        // Fund output, add to the amount balance
-        balance.get(output.token)!.funds += output.value;
-      }
-    }
-
-    // Map tx.inputs to Input so we can use getSpentTxs tool
-    const inputs: Input[] = tx.inputs.map(input => new Input(input.txId, input.index));
-    // Check the inputs
-    // XXX: this.getSpentTxs will only return the inputs of our wallet
-    // If we want to fill inputs/outputs of any wallet we should change this method
-    for await (const {tx: spentTx, input} of this.getSpentTxs(inputs)) {
-      const utxoSpent = spentTx.outputs[input.index];
-      if (!balance.has(utxoSpent.token)) {
-        balance.set(utxoSpent.token, getEmptyBalance());
-      }
-      if (transaction.isAuthorityOutput(utxoSpent)) {
-        // Authority input, remove from mint or melt balance
-        if (transaction.isMint(utxoSpent)) {
-          balance.get(utxoSpent.token)!.mint -= 1;
-        }
-        if (transaction.isMelt(utxoSpent)) {
-          balance.get(utxoSpent.token)!.melt -= 1;
-        }
-      } else {
-        // Fund input, remove from the amount balance
-        balance.get(utxoSpent.token)!.funds -= utxoSpent.value;
-      }
-    }
-
-    return balance;
-  }
-
-  /**
    * Match the selected balance for the given authority and token.
    *
    * @param {number} singleBalance The balance we want to match
@@ -502,7 +438,7 @@ export class Storage implements IStorage {
    * @returns {Promise<void>}
    */
   async fillTx(tx: IDataTx, options: IFillTxOptions = {}): Promise<{inputs: IDataInput[], outputs: IDataOutput[]}> {
-    const tokensBalance = await this.calculateTxBalance(tx);
+    const tokensBalance = await transactionUtils.calculateTxBalanceToFillTx(tx);
     const {inputs: newInputs, outputs: newOutputs} = await this.matchTxTokensBalance(tokensBalance, options);
 
     // Validate if we will add too many inputs/outputs

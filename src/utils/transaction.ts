@@ -15,7 +15,7 @@ import CreateTokenTransaction from '../models/create_token_transaction';
 import Input from '../models/input';
 import Output from '../models/output';
 import Network from '../models/network';
-import { IBalance, IStorage, IHistoryTx, IDataOutput, IDataTx, isDataOutputCreateToken, IHistoryOutput, IDataInput } from '../types';
+import { IBalance, IStorage, IHistoryTx, IDataOutput, IDataTx, isDataOutputCreateToken, IHistoryOutput } from '../types';
 import Address from '../models/address';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
@@ -273,6 +273,77 @@ const transaction = {
         }
       } else {
         balance[input.token].tokens.unlocked -= input.value;
+      }
+    }
+
+    return balance;
+  },
+
+  /**
+   * Calculate the token balance of a transaction, including authorities.
+   * The balance will be indexed by token uid and will contain funds, mint and melt properties.
+   * The funds property will contain the amount of tokens.
+   * The mint and melt properties will contain the amount of mint and melt authorities.
+   *
+   * We will consider the balance from the inputs as negative and the outputs as positive
+   * So that if the balance if positive we have a surplus of the token in the outputs.
+   * If the balance is negative we have a deficit of the token in the outputs.
+   *
+   * Normal txs can be "unbalanced" when minting or melting tokens, but since we are not required to add the minted tokens on the inputs
+   * Or conversely add the melted tokens on the outputs, we will ignore minted/melted funds.
+   *
+   * @param {IDataTx} tx The transaction we want to calculate the balance.
+   * @returns {Promise<Map<string, Record<'funds'|'mint'|'melt', number>>>} The balance of all tokens on the transaction.
+   */
+  async calculateTxBalanceToFillTx(tx: IDataTx): Promise<Map<string, Record<'funds'|'mint'|'melt', number>>> {
+    function getEmptyBalance(): Record<'funds'|'mint'|'melt', number> {
+      return {'funds': 0, 'mint': 0, 'melt': 0};
+    }
+    const balance = new Map<string, Record<'funds'|'mint'|'melt', number>>();
+
+    for (const output of tx.outputs) {
+      if (isDataOutputCreateToken(output)) {
+        // This is a mint output
+        // Since we are creating this token on the transaction we do not need to add inputs to match the balance
+        // So we will skip this output.
+        continue;
+      }
+      if (!balance.has(output.token)) {
+        balance.set(output.token, getEmptyBalance());
+      }
+      if (output.authorities > 0) {
+        // Authority output, add to mint or melt balance
+        // Check for MINT authority
+        if ((output.authorities & 1) > 0) {
+          balance.get(output.token)!.mint += 1;
+        }
+        // Check for MELT authority
+        if ((output.authorities & 2) > 0) {
+          balance.get(output.token)!.melt += 1;
+        }
+      } else {
+        // Fund output, add to the amount balance
+        balance.get(output.token)!.funds += output.value;
+      }
+    }
+
+    for (const input of tx.inputs) {
+      if (!balance.has(input.token)) {
+        balance.set(input.token, getEmptyBalance());
+      }
+      if (input.authorities > 0) {
+        // Authority input, remove from mint or melt balance
+        // Check for MINT authority
+        if ((input.authorities & 1) > 0) {
+          balance.get(input.token)!.mint -= 1;
+        }
+        // Check for MELT authority
+        if ((input.authorities & 2) > 0) {
+          balance.get(input.token)!.melt -= 1;
+        }
+      } else {
+        // Fund input, remove from the amount balance
+        balance.get(input.token)!.funds -= input.value;
       }
     }
 
