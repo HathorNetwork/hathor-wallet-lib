@@ -307,6 +307,7 @@ export class Storage implements IStorage {
     const options: Omit<IUtxoFilterOptions, 'reward_lock'> = {
       authorities,
       token,
+      only_available_utxos: true,
     };
     const isAuthority = authorities > 0;
     if (isAuthority) {
