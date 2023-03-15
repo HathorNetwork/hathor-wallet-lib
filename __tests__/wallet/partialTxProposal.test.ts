@@ -357,21 +357,31 @@ test('resetSignatures', async () => {
 
 test('setSignatures', async () => {
   const proposal = new PartialTxProposal(testnet);
-  const signatures = new PartialTxInputData(proposal.partialTx.getTx().toHex(), 0);
+  // @ts-ignore
+  const spyProposalTx = jest.spyOn(proposal.partialTx, 'getTx').mockImplementation(() => ({
+    getDataToSign: () => 'hexHash',
+    inputs: { length: 2 },
+    hash: 'hexHash'
+  }));
+  let serializedSignatures = 'PartialTxInputData|wrongHash|0:cafe00|1:cafe01'; // Incorrect hash on serialized sig
   const spyAdd = jest.spyOn(PartialTxInputData.prototype, 'addSignatures').mockImplementation(() => {});
-  const serializedSignatures = signatures.serialize();
 
   // Ensure it throws on an incomplete partialTx
   const spyComplete = jest.spyOn(proposal.partialTx, 'isComplete').mockImplementationOnce(() => false);
-  expect(() => proposal.setSignatures(serializedSignatures)).toThrowError(InvalidPartialTxError);
+  expect(() => proposal.setSignatures(serializedSignatures)).toThrowError('Cannot sign incomplete data');
 
-  // Adds the serialized signatures on a complete partialTx
+  // Ensure it doesn't allow adding signatures for the wrong tx hash
   spyComplete.mockImplementationOnce(() => true);
+  expect(() => proposal.setSignatures(serializedSignatures)).toThrowError('Signatures do not match tx hash');
+
+  // Adds the serialized signatures on a complete partialTx for the correct tx
+  serializedSignatures = serializedSignatures.replace('wrongHash', 'hexHash');
   proposal.setSignatures(serializedSignatures);
   expect(proposal.signatures).toBeInstanceOf(PartialTxInputData); // A full signatures object is available on proposal
   expect(spyAdd).toHaveBeenCalledTimes(1); // Only a single pass is executed
   expect(spyAdd).toHaveBeenCalledWith(serializedSignatures); // The signatures added are from the parameters
 
+  spyProposalTx.mockRestore();
   spyAdd.mockRestore();
   spyComplete.mockRestore();
 });

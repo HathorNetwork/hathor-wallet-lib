@@ -384,6 +384,12 @@ class PartialTxProposal {
     }
     const tx: Transaction = this.partialTx.getTx();
 
+    // Validating signatures hash before setting them
+    const arr = serializedSignatures.split('|');
+    if (arr[1] !== tx.hash) {
+      throw new InvalidPartialTxError('Signatures do not match tx hash');
+    }
+
     // Creating an empty signatures object
     this.signatures = new PartialTxInputData(
       tx.getDataToSign().toString('hex'),
