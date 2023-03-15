@@ -29,6 +29,7 @@ import {
   IBalance,
 } from '../types';
 import transactionUtils from '../utils/transaction';
+import { processHistory } from '../utils/storage';
 import config, { Config } from '../config';
 import { decryptData, encryptData } from '../utils/crypto';
 import FullNodeConnection from '../new/connection';
@@ -192,9 +193,10 @@ export class Storage implements IStorage {
    * @returns {Promise<void>}
    */
   async processHistory(): Promise<void> {
-    await this.store.processHistory({
-      rewardLock: this.version?.reward_spend_min_blocks,
-    });
+    await processHistory(
+      this.store,
+      { rewardLock: this.version?.reward_spend_min_blocks },
+    );
   }
 
   /**

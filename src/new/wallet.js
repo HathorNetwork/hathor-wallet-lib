@@ -783,6 +783,7 @@ class HathorWallet extends EventEmitter {
       amount_smaller_than: options.amount_smaller_than,
       amount_bigger_than: options.amount_bigger_than,
       max_amount: options.max_amount,
+      only_available_utxos: options.only_available_utxos,
     }
     const utxoDetails = {
       total_amount_available: 0,
@@ -792,14 +793,14 @@ class HathorWallet extends EventEmitter {
       utxos: [],
     };
     const nowTs = Math.floor(Date.now() / 1000);
-    const isTimeLocked = (timestamp) => timestamp && nowTs && (timestamp < nowTs);
+    const isTimeLocked = (timestamp) => timestamp && nowTs && (nowTs < timestamp);
     const nowHeight = await this.storage.getCurrentHeight();
     const rewardLock = this.storage.version?.reward_spend_min_blocks;
-    const isHeightLocked = (blockHeight) => blockHeight && nowHeight && rewardLock && ((blockHeight + rewardLock) < nowHeight );
+    const isHeightLocked = (blockHeight) => blockHeight && nowHeight && (rewardLock !== undefined) && (nowHeight < (blockHeight + rewardLock) );
 
     for await (const utxo of this.storage.selectUtxos(newOptions)) {
-      const is_locked = isTimeLocked(utxo.timelock) || isHeightLocked(utxo.height);
-      if (options.only_available_utxos && is_locked) {
+      const isLocked = isTimeLocked(utxo.timelock) || isHeightLocked(utxo.height);
+      if (options.only_available_utxos && isLocked) {
         continue;
       }
 
@@ -807,12 +808,12 @@ class HathorWallet extends EventEmitter {
         address: utxo.address,
         amount: utxo.value,
         tx_id: utxo.txId,
-        locked: !!is_locked,
+        locked: !!isLocked,
         index: utxo.index,
       };
 
       utxoDetails.utxos.push(utxoInfo);
-      if (is_locked) {
+      if (isLocked) {
         utxoDetails.total_amount_locked += utxo.value;
         utxoDetails.total_utxos_locked += 1;
       } else {

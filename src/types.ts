@@ -226,6 +226,7 @@ export interface IUtxoFilterOptions {
   max_amount?: number;
   amount_smaller_than?: number;
   amount_bigger_than?: number;
+  only_available_utxos?: boolean;
   filter_method?: (utxo: IUtxo) => boolean;
   reward_lock?: number,
 }
@@ -258,11 +259,11 @@ export interface IStore {
   saveAddress(info: IAddressInfo): Promise<void>;
   addressExists(base58: string): Promise<boolean>;
   addressCount(): Promise<number>;
+  editAddress(base58: string, meta: IAddressMetadata): Promise<void>;
 
   // tx history methods
   historyIter(tokenUid?: string): AsyncGenerator<IHistoryTx>;
   saveTx(tx: IHistoryTx): Promise<void>;
-  processHistory(options: { rewardLock?: number}): Promise<void>;
   getTx(txId: string): Promise<IHistoryTx|null>;
   historyCount(): Promise<number>;
 
@@ -270,10 +271,11 @@ export interface IStore {
   tokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>>;
   registeredTokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>>;
   getToken(tokenUid: string): Promise<(ITokenData & Partial<ITokenMetadata>) | null>;
+  getTokenMeta(tokenUid: string): Promise<ITokenMetadata | null>;
   saveToken(tokenConfig: ITokenData, meta?: ITokenMetadata): Promise<void>;
   registerToken(token: ITokenData): Promise<void>;
   unregisterToken(tokenUid: string): Promise<void>;
-  editToken(tokenUid: string, meta: Partial<ITokenMetadata>): Promise<void>;
+  editToken(tokenUid: string, meta: ITokenMetadata): Promise<void>;
 
   // UTXOs methods
   utxoIter(): AsyncGenerator<IUtxo>;
@@ -286,9 +288,11 @@ export interface IStore {
   getWalletData(): Promise<IWalletData>;
   getLastLoadedAddressIndex(): Promise<number>;
   getLastUsedAddressIndex(): Promise<number>;
+  setLastUsedAddressIndex(index: number): Promise<void>;
   getCurrentHeight(): Promise<number>;
   setCurrentHeight(height: number): Promise<void>;
   getCurrentAddress(markAsUsed?: boolean): Promise<string>;
+  setCurrentAddressIndex(index: number): Promise<void>;
   setGapLimit(value: number): Promise<void>;
   getGapLimit(): Promise<number>;
 
@@ -297,6 +301,7 @@ export interface IStore {
   setItem(key: string, value: any): Promise<void>;
 
   cleanStorage(cleanHistory?: boolean, cleanAddresses?: boolean): Promise<void>;
+  cleanMetadata(): Promise<void>;
 }
 
 export interface IStorage {

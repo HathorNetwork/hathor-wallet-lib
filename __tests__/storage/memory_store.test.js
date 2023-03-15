@@ -5,13 +5,14 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../../src/constants';
+import { GAP_LIMIT } from '../../src/constants';
 import { MemoryStore } from '../../src/storage';
 import tx_history from '../__fixtures__/tx_history';
 import walletApi from '../../src/api/wallet';
 import { HDPrivateKey } from 'bitcore-lib';
 import { encryptData } from '../../src/utils/crypto';
 import { WalletType } from '../../src/types';
+import { processHistory } from '../../src/utils/storage';
 
 
 test('default values', async () => {
@@ -107,7 +108,7 @@ test('history methods', async () => {
       symbol: 'CTK',
     });
   });
-  await store.processHistory({ rewardLock: 1 });
+  await processHistory(store, { rewardLock: 1 });
   expect(getTokenApi).not.toHaveBeenCalledWith('00', expect.anything());
   expect(getTokenApi).toHaveBeenCalledWith('01', expect.anything());
   expect(getTokenApi).toHaveBeenCalledWith('02', expect.anything());
@@ -202,10 +203,10 @@ test('token methods', async () => {
   }
   expect(registered).toHaveLength(1);
 
-  await store.editToken('00', { numTransactions: 10 });
+  await store.editToken('00', { numTransactions: 10, balance: { tokens: { locked: 1, unlocked: 2 } } });
   expect(store.tokensMetadata.get('00')).toMatchObject({
     numTransactions: 10,
-    balance: expect.anything(),
+    balance: expect.objectContaining({ tokens: { locked: 1, unlocked: 2 } }),
   });
 });
 

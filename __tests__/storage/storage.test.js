@@ -8,6 +8,7 @@
 import walletApi from '../../src/api/wallet';
 import { MemoryStore, Storage } from '../../src/storage';
 import tx_history from '../__fixtures__/tx_history';
+import { processHistory } from '../../src/utils/storage';
 
 
 test('config version', () => {
@@ -32,7 +33,7 @@ test('store fetch methods', async () => {
   for (const tx of tx_history) {
     await store.saveTx(tx);
   }
-  await store.processHistory();
+  await processHistory(store);
   const storage = new Storage(store);
 
   let buf = [];

@@ -19,6 +19,7 @@ import {
   IWalletData,
 } from '../types';
 import transaction from '../utils/transaction';
+import { processHistory } from '../utils/storage';
 import walletApi from '../api/wallet';
 import { BLOCK_VERSION, GAP_LIMIT, HATHOR_TOKEN_CONFIG, MAX_INPUTS } from '../constants';
 
@@ -220,6 +221,24 @@ export class MemoryStore implements IStore {
     return addressInfo.base58;
   }
 
+  /**
+   * Set the value of the current address index.
+   * @param {number} index The index to set
+   */
+  async setCurrentAddressIndex(index: number): Promise<void> {
+    this.walletData.currentAddressIndex = index;
+  }
+
+  /**
+   * Edit address metadata.
+   *
+   * @param {string} base58 The address in base58 format
+   * @param {IAddressMetadata} meta The metadata to save
+   */
+  async editAddress(base58: string, meta: IAddressMetadata): Promise<void> {
+    this.addressesMetadata.set(base58, meta);
+  }
+
   /* TRANSACTIONS */
 
   /**
@@ -269,201 +288,6 @@ export class MemoryStore implements IStore {
    */
   async historyCount(): Promise<number> {
     return this.history.size;
-  }
-
-  /**
-   * Process the history of transactions and create metadata to be used by the wallet.
-   *
-   * @param {{rewardLock: number}} [option={}] Use this configuration when processing the storage
-   * @async
-   * @returns {Promise<void>}
-   */
-  async processHistory({ rewardLock }: { rewardLock?: number } = {}): Promise<void> {
-    function getEmptyBalance(): IBalance {
-      return {
-        tokens: { unlocked: 0, locked: 0 },
-        authorities: {
-          mint: { unlocked: 0, locked: 0 },
-          melt: { unlocked: 0, locked: 0 },
-        }
-      };
-    }
-    const nowTs = Math.floor(Date.now() / 1000);
-    const isTimelocked = (timelock?: number | null) => (!!timelock) && timelock > nowTs;
-    const currentHeight = await this.getCurrentHeight();
-    const checkRewardLock = (blockHeight?: number) => (!!blockHeight) && (!!rewardLock) && ((blockHeight + rewardLock) < currentHeight);
-
-    // recalculate wallet metadata
-    const tokensMetadata = new Map<string, ITokenMetadata>();
-    const addressesMetadata = new Map<string, IAddressMetadata>();
-    const utxos = new Map<string, IUtxo>();
-
-    const allTokens = new Set<string>();
-    let maxIndexUsed = -1;
-    // process entire history
-    for await (const tx of this.historyIter()) {
-      if (tx.is_voided) {
-        // Ignore voided transactions
-        continue;
-      }
-      const txAddresses = new Set<string>();
-      const txTokens = new Set<string>();
-      const isHeightLocked = checkRewardLock(tx.height);
-
-      for (const [index, output] of tx.outputs.entries()) {
-        // if address is not in wallet, ignore
-        if (!(output.decoded.address && (await this.addressExists(output.decoded.address)))) continue;
-
-        // create if not exists
-        if (!addressesMetadata.has(output.decoded.address)) {
-          addressesMetadata.set(output.decoded.address, { numTransactions: 0, balance: new Map() });
-        }
-        if (!addressesMetadata.get(output.decoded.address)!.balance.has(output.token)) {
-          addressesMetadata.get(output.decoded.address)!.balance.set(output.token, getEmptyBalance());
-        }
-        if (!tokensMetadata.has(output.token)) {
-          tokensMetadata.set(output.token, { numTransactions: 0, balance: getEmptyBalance() });
-        }
-
-        // update metadata
-        allTokens.add(output.token);
-        txTokens.add(output.token);
-        txAddresses.add(output.decoded.address);
-        // check index
-        if (this.addresses.get(output.decoded.address)!.bip32AddressIndex > maxIndexUsed) {
-          maxIndexUsed = this.addresses.get(output.decoded.address)!.bip32AddressIndex;
-        }
-
-        const isAuthority: boolean = transaction.isAuthorityOutput(output);
-
-        // calculate balance
-        if (isAuthority) {
-          if (isTimelocked(output.decoded.timelock) || isHeightLocked) {
-            if (transaction.isMint(output)) {
-              tokensMetadata.get(output.token)!.balance.authorities.mint.locked += 1;
-              addressesMetadata.get(output.decoded.address)!.balance.get(output.token)!.authorities.mint.locked += 1;
-            }
-            if (transaction.isMelt(output)) {
-              tokensMetadata.get(output.token)!.balance.authorities.melt.locked += 1;
-              addressesMetadata.get(output.decoded.address)!.balance.get(output.token)!.authorities.melt.locked += 1;
-            }
-          } else {
-            if (transaction.isMint(output)) {
-              tokensMetadata.get(output.token)!.balance.authorities.mint.unlocked += 1;
-              addressesMetadata.get(output.decoded.address)!.balance.get(output.token)!.authorities.mint.unlocked += 1;
-            }
-            if (transaction.isMelt(output)) {
-              tokensMetadata.get(output.token)!.balance.authorities.melt.unlocked += 1;
-              addressesMetadata.get(output.decoded.address)!.balance.get(output.token)!.authorities.melt.unlocked += 1;
-            }
-          }
-        } else {
-          if (isTimelocked(output.decoded.timelock) || isHeightLocked) {
-            tokensMetadata.get(output.token)!.balance.tokens.locked += output.value;
-            addressesMetadata.get(output.decoded.address)!.balance.get(output.token)!.tokens.locked += output.value;
-          } else {
-            tokensMetadata.get(output.token)!.balance.tokens.unlocked += output.value;
-            addressesMetadata.get(output.decoded.address)!.balance.get(output.token)!.tokens.unlocked += output.value;
-          }
-        }
-
-        // add utxo if available (not spent and unlocked)
-        if (output.spent_by === null && !(isTimelocked(output.decoded.timelock) || isHeightLocked)) {
-          utxos.set(`${tx.tx_id}:${index}`, {
-            txId: tx.tx_id,
-            index,
-            type: tx.version,
-            authorities: transaction.isAuthorityOutput(output) ? output.value : 0,
-            address: output.decoded.address,
-            token: output.token,
-            value: output.value,
-            timelock: output.decoded.timelock || null,
-            height: tx.height || null,
-          });
-        }
-      }
-      for (const input of tx.inputs) {
-        // If this is not
-        if (!(input.decoded.address && (await this.addressExists(input.decoded.address)))) continue;
-
-        // create if not exists
-        if (!addressesMetadata.has(input.decoded.address)) {
-          addressesMetadata.set(input.decoded.address, { numTransactions: 0, balance: new Map() });
-        }
-        if (!addressesMetadata.get(input.decoded.address)!.balance.has(input.token)) {
-          addressesMetadata.get(input.decoded.address)!.balance.set(input.token, getEmptyBalance());
-        }
-        if (!tokensMetadata.has(input.token)) {
-          tokensMetadata.set(input.token, { numTransactions: 0, balance: getEmptyBalance() });
-        }
-
-        // update metadata
-        txTokens.add(input.token);
-        txAddresses.add(input.decoded.address);
-        allTokens.add(input.token);
-
-        // check index
-        if (this.addresses.get(input.decoded.address)!.bip32AddressIndex > maxIndexUsed) {
-          maxIndexUsed = this.addresses.get(input.decoded.address)!.bip32AddressIndex;
-        }
-
-        const isAuthority: boolean = transaction.isAuthorityOutput(input);
-
-        if (isAuthority) {
-          if (transaction.isMint(input)) {
-            tokensMetadata.get(input.token)!.balance.authorities.mint.unlocked -= 1;
-            addressesMetadata.get(input.decoded.address)!.balance.get(input.token)!.authorities.mint.unlocked -= 1;
-          }
-          if (transaction.isMelt(input)) {
-            tokensMetadata.get(input.token)!.balance.authorities.melt.unlocked -= 1;
-            addressesMetadata.get(input.decoded.address)!.balance.get(input.token)!.authorities.melt.unlocked -= 1;
-          }
-        } else {
-          tokensMetadata.get(input.token)!.balance.tokens.unlocked -= input.value;
-          addressesMetadata.get(input.decoded.address)!.balance.get(input.token)!.tokens.unlocked -= input.value;
-        }
-      }
-
-      for (const token of txTokens) {
-        tokensMetadata.get(token)!.numTransactions += 1;
-      }
-      for (const address of txAddresses) {
-        addressesMetadata.get(address)!.numTransactions += 1;
-      }
-    }
-
-    if (this.walletData.lastUsedAddressIndex <= maxIndexUsed) {
-      if (this.walletData.currentAddressIndex <= maxIndexUsed) {
-        this.walletData.currentAddressIndex = Math.min(maxIndexUsed + 1, this.walletData.lastLoadedAddressIndex);
-      }
-      this.walletData.lastUsedAddressIndex = maxIndexUsed;
-    }
-
-    for (const uid of allTokens) {
-      const tokenInfo = this.tokens.get(uid);
-      if (!tokenInfo) {
-        // this is a new token, we need to get the token data from api
-        const result: {
-          success: true;
-          name: string;
-          symbol: string;
-        } | { success: false, message: string } = await new Promise((resolve) => {
-          return walletApi.getGeneralTokenInfo(uid, resolve);
-        });
-
-        if (!result.success) {
-          throw new Error(result.message);
-        }
-
-        const { name, symbol } = result;
-        const tokenData = { uid, name, symbol };
-        this.tokens.set(uid, tokenData);
-      }
-    }
-
-    this.tokensMetadata = tokensMetadata;
-    this.addressesMetadata = addressesMetadata;
-    this.utxos = utxos;
   }
 
   /**
@@ -541,6 +365,20 @@ export class MemoryStore implements IStore {
   }
 
   /**
+   * Fetch the token metadata from the storage.
+   *
+   * @param {string} tokenUid The token id to fetch metadata.
+   * @returns {Promise<ITokenMetadata | null>} The token metadata if present
+   */
+  async getTokenMeta(tokenUid: string): Promise<ITokenMetadata | null> {
+    const tokenMeta = this.tokensMetadata.get(tokenUid);
+    if (tokenMeta === undefined) {
+      return null;
+    }
+    return tokenMeta;
+  }
+
+  /**
    * Save a token on storage
    * @param {ITokenData} tokenConfig Token config
    * @param {ITokenMetadata|undefined} [meta] The token metadata
@@ -600,24 +438,8 @@ export class MemoryStore implements IStore {
    * @param {Partial<ITokenMetadata>} meta Metadata to save
    * @returns {Promise<void>}
    */
-  async editToken(tokenUid: string, meta: Partial<ITokenMetadata>): Promise<void> {
-    const metadata: ITokenMetadata = {
-      numTransactions: 0,
-      balance: {
-        tokens: { unlocked: 0, locked: 0 },
-        authorities: {
-          mint: { unlocked: 0, locked: 0 },
-          melt: { unlocked: 0, locked: 0 },
-        },
-      }
-    };
-    if (meta.numTransactions) {
-      metadata.numTransactions = meta.numTransactions;
-    }
-    if (meta.balance) {
-      metadata.balance = meta.balance;
-    }
-    this.tokensMetadata.set(tokenUid, metadata);
+  async editToken(tokenUid: string, meta: ITokenMetadata): Promise<void> {
+    this.tokensMetadata.set(tokenUid, meta);
   }
 
   /** UTXOS */
@@ -641,6 +463,8 @@ export class MemoryStore implements IStore {
    */
   async *selectUtxos(options: IUtxoFilterOptions): AsyncGenerator<IUtxo> {
     const networkHeight = await this.getCurrentHeight();
+    const nowTs = Math.floor(Date.now() / 1000);
+    const isTimeLocked = (timestamp: number) => (!!timestamp) && (nowTs < timestamp);
     const isHeightLocked = (utxo: IUtxo) => {
       if (utxo.type !== BLOCK_VERSION) {
         // Only blocks can be reward locked
@@ -651,8 +475,9 @@ export class MemoryStore implements IStore {
         return false;
       }
       // Heighlocked when network height is lower than block height + reward_spend_min_blocks
-      return ((utxo.height || 0) + options.reward_lock) > networkHeight;
+      return networkHeight < ((utxo.height || 0) + options.reward_lock);
     };
+    const isLocked = (utxo: IUtxo) => isTimeLocked(utxo.timelock || 0) || isHeightLocked(utxo);
     const token = options.token || HATHOR_TOKEN_CONFIG.uid;
     const authorities = options.authorities || 0;
     const maxUtxos = options.max_utxos || MAX_INPUTS;
@@ -664,8 +489,8 @@ export class MemoryStore implements IStore {
     let utxoNum = 0;
 
     for (const utxo of this.utxos.values()) {
-      if (isHeightLocked(utxo)) {
-        // Skip heightlocked utxos
+      if (options.only_available_utxos && isLocked(utxo)) {
+        // Skip locked utxos if we only want available utxos
         continue;
       }
       let authority_match: boolean;
@@ -696,7 +521,11 @@ export class MemoryStore implements IStore {
       yield utxo;
 
       utxoNum += 1;
-      sumAmount += utxo.value;
+      if (!isLocked(utxo)) {
+        // sumAmount is used to filter for a target_amount and max_amount
+        // both only count unlocked utxos.
+        sumAmount += utxo.value;
+      }
       if ((options.target_amount && sumAmount >= options.target_amount) || (utxoNum >= maxUtxos)) {
         // We have reached either the target amount or the max number of utxos requested
         return;
@@ -763,6 +592,14 @@ export class MemoryStore implements IStore {
    */
   async setCurrentHeight(height: number): Promise<void> {
     this.walletData.bestBlockHeight = height;
+  }
+
+  /**
+   * Set the last bip32 address index used on storage.
+   * @param {number} index The index to set as last used address.
+   */
+  async setLastUsedAddressIndex(index: number): Promise<void> {
+    this.walletData.lastUsedAddressIndex = index;
   }
 
   /**
@@ -845,5 +682,20 @@ export class MemoryStore implements IStore {
       this.addressesMetadata = new Map<string, IAddressMetadata>();
       this.walletData = { ...this.walletData, ...DEAFULT_ADDRESSES_WALLET_DATA };
     }
+  }
+
+  /**
+   * Clean the store metadata.
+   *
+   * This is used when processing the history to avoid keeping metadata from a voided tx.
+   * `processHistory` is additive, so if we don't clean the metadata we are passive to keep stale metadata.
+   * This is also true for utxos since processing txs that spent utxos will not remove the utxo from the store.
+   *
+   * @returns {Promise<void>}
+   */
+  async cleanMetadata(): Promise<void> {
+    this.tokensMetadata = new Map<string, ITokenMetadata>();
+    this.addressesMetadata = new Map<string, IAddressMetadata>();
+    this.utxos = new Map<string, IUtxo>();
   }
 }
