@@ -52,6 +52,11 @@ export default class LevelAddressIndex implements IKVAddressIndex {
    * Value: json encoded IAddressMetadata
    */
   addressesMetaDB: AbstractSublevel<Level, string|Buffer|Uint8Array, string, IAddressMetadataAsRecord>;
+  /**
+   * Whether the index is validated or not
+   * This is used to avoid using the address count before we know it is valid.
+   */
+  isValidated: boolean;
   indexVersion: string = '0.0.1';
 
   constructor(dbpath: string) {
@@ -61,6 +66,7 @@ export default class LevelAddressIndex implements IKVAddressIndex {
     this.addressesDB = db.sublevel<string, IAddressInfo>(ADDRESS_PREFIX, {valueEncoding: 'json'});
     this.addressesIndexDB = db.sublevel(INDEX_PREFIX);
     this.addressesMetaDB = db.sublevel<string, IAddressMetadataAsRecord>(ADDRESS_META_PREFIX, {valueEncoding: 'json'});
+    this.isValidated = false;
   }
 
   /**
@@ -103,8 +109,11 @@ export default class LevelAddressIndex implements IKVAddressIndex {
     await this.addressesMetaDB.clear();
 
     const ret: AddressIndexValidateResponse = {firstIndex: Infinity, lastIndex: -1};
+    let size = 0;
     // Iterate on all addresses and check that we have a corresponding index entry
     for await (const [key, value] of this.addressesDB.iterator()) {
+      // increment size counter
+      size++;
       if (key !== value.base58) {
         throw new Error('Inconsistent database');
       }
@@ -130,7 +139,73 @@ export default class LevelAddressIndex implements IKVAddressIndex {
         throw err;
       }
     }
+
+    // We just did a full address count, we can save the size and trust it
+    const buf = Buffer.alloc(4);
+    buf.writeUInt32BE(size);
+    await this.addressesDB.db.put('size', buf.toString('hex'));
+
+    // Validation is complete
+    this.isValidated = true;
     return ret;
+  }
+
+  /**
+   * Get the pre-calculated number of addresses in the database.
+   * The database value is only used if the index is validated.
+   * If the index is not validated, we run a full count.
+   *
+   * @returns {Promise<number>} The number of addresses in the database
+   */
+  async addressCount(): Promise<number> {
+    if (!this.isValidated) {
+      // Since we have not yet validated the index, we cannot trust the address count
+      return await this.runAddressCount();
+    }
+    // The index is validated, we can trust the address count
+    const db = this.addressesDB.db;
+    try {
+      // Address count is an index, but it is stored as a uint32 hex string.
+      const sizeStr = await db.get('size');
+      // To fetch from the db we need to read the uint32 from the hex string.
+      const buf = Buffer.from(sizeStr, 'hex');
+      return buf.readUInt32BE(0);
+    } catch (err: unknown) {
+      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
+        return 0;
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Increment the address count in the database.
+   * @returns {Promise<void>}
+   */
+  async incrAddressCount(): Promise<void> {
+    const db = this.addressesDB.db;
+    const size = await this.addressCount();
+    const buf = Buffer.alloc(4);
+    buf.writeUInt32BE(size + 1);
+    await db.put('size', buf.toString('hex'));
+  }
+
+  /**
+   * Run a full count of the addresses in the database.
+   * Since we have made a full count we can update the address count in the database.
+   *
+   * @returns {Promise<number>} The number of addresses in the database
+   */
+  async runAddressCount(): Promise<number> {
+    const db = this.addressesDB.db;
+    let size = 0;
+    for await (let _ of this.addressesDB.iterator()) {
+      size++;
+    }
+    const buf = Buffer.alloc(4);
+    buf.writeUInt32BE(size);
+    await db.put('size', buf.toString('hex'));
+    return size;
   }
 
   /**
@@ -247,20 +322,6 @@ export default class LevelAddressIndex implements IKVAddressIndex {
   async saveAddress(info: IAddressInfo): Promise<void> {
     await this.addressesDB.put(info.base58, info);
     await this.addressesIndexDB.put(_index_key(info.bip32AddressIndex), info.base58);
-  }
-
-  /**
-   * Count the number of addresses in the database.
-   *
-   * @returns {Promise<number>} Number of addresses in the database
-   */
-  async addressCount(): Promise<number> {
-    // Level is bad at counting addresses addresses
-    let count = 0;
-    for await (let _ of this.addressesDB.keys()) {
-      count += 1;
-    }
-    return count;
   }
 
   /**

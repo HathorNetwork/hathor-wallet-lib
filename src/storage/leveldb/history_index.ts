@@ -35,6 +35,11 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
    * Value: IHistoryTx (json encoded)
    */
   tsHistoryDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, IHistoryTx>;
+  /**
+   * Whether the index is validated or not
+   * This is used to avoid using the tx count before we know it is valid.
+   */
+  isValidated: boolean;
   indexVersion: string = '0.0.1';
 
   constructor(dbpath: string) {
@@ -42,6 +47,7 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
     const db = new Level(this.dbpath);
     this.historyDB = db.sublevel<string, IHistoryTx>(HISTORY_PREFIX, { valueEncoding: 'json' });
     this.tsHistoryDB = db.sublevel<string, IHistoryTx>(TS_HISTORY_PREFIX, { valueEncoding: 'json' });
+    this.isValidated = false;
   }
 
   /**
@@ -103,7 +109,73 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
         throw err;
       }
     }
+
+    // We have validated the index, we can now trust the tx count
+    const buf = Buffer.alloc(4);
+    buf.writeUInt32BE(ret.count);
+    await this.historyDB.db.put('size', buf.toString('hex'));
+
+    // Set the index as validated
+    this.isValidated = true;
     return ret;
+  }
+
+  /**
+   * Get the pre-calculated number of txs in the database.
+   * The database value is only used if the index is validated.
+   * If the index is not validated, we run a full count.
+   *
+   * @returns {Promise<number>} The number of txs in the database
+   */
+  async historyCount(): Promise<number> {
+    if (!this.isValidated) {
+      // Since we have not yet validated the index, we cannot trust the tx count
+      return await this.runHistoryCount();
+    }
+    // The index is validated, we can trust the tx count
+    const db = this.historyDB.db;
+    try {
+      // tx count is an index, but it is stored as a uint32 hex string.
+      const sizeStr = await db.get('size');
+      // To fetch from the db we need to read the uint32 from the hex string.
+      const buf = Buffer.from(sizeStr, 'hex');
+      return buf.readUInt32BE(0);
+    } catch (err: unknown) {
+      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
+        return 0;
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Increment the tx count in the database.
+   * @returns {Promise<void>}
+   */
+  async incrHistoryCount(): Promise<void> {
+    const db = this.historyDB.db;
+    const size = await this.historyCount();
+    const buf = Buffer.alloc(4);
+    buf.writeUInt32BE(size + 1);
+    await db.put('size', buf.toString('hex'));
+  }
+
+  /**
+   * Run a full count of the txs in the database.
+   * Since we have made a full count we can update the tx count in the database.
+   *
+   * @returns {Promise<number>} The number of txs in the database
+   */
+  async runHistoryCount(): Promise<number> {
+    const db = this.historyDB.db;
+    let size = 0;
+    for await (let _ of this.historyDB.iterator()) {
+      size++;
+    }
+    const buf = Buffer.alloc(4);
+    buf.writeUInt32BE(size);
+    await db.put('size', buf.toString('hex'));
+    return size;
   }
 
   /**
@@ -154,20 +226,6 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
   async saveTx(tx: IHistoryTx): Promise<void> {
     await this.historyDB.put(tx.tx_id, tx);
     await this.tsHistoryDB.put(_ts_key(tx), tx);
-  }
-
-  /**
-   * Count the number of transactions on the database.
-   * @returns {Promise<number>} The number of transactions on the database
-   */
-  async historyCount(): Promise<number> {
-    // Level is bad at counting db size
-    // An alternative would be to have a counter and increase it on every new transaction
-    let count = 0;
-    for await (let _ of this.historyDB.keys()) {
-      count += 1;
-    }
-    return count;
   }
 
   /**
