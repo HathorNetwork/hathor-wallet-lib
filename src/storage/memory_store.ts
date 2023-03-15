@@ -14,17 +14,13 @@ import {
   IUtxo,
   IWalletAccessData,
   IUtxoFilterOptions,
-  IBalance,
   IAddressMetadata,
   IWalletData,
 } from '../types';
-import transaction from '../utils/transaction';
-import { processHistory } from '../utils/storage';
-import walletApi from '../api/wallet';
 import { BLOCK_VERSION, GAP_LIMIT, HATHOR_TOKEN_CONFIG, MAX_INPUTS } from '../constants';
 
 
-const DEAFULT_ADDRESSES_WALLET_DATA = {
+const DEFAULT_ADDRESSES_WALLET_DATA = {
   lastLoadedAddressIndex: 0,
   lastUsedAddressIndex: -1,
   currentAddressIndex: -1,
@@ -101,7 +97,7 @@ export class MemoryStore implements IStore {
     this.accessData = null;
     this.genericStorage = {};
 
-    this.walletData = { ...DEFAULT_WALLET_DATA, ...DEAFULT_ADDRESSES_WALLET_DATA };
+    this.walletData = { ...DEFAULT_WALLET_DATA, ...DEFAULT_ADDRESSES_WALLET_DATA };
   }
 
   /** ADDRESSES */
@@ -680,7 +676,7 @@ export class MemoryStore implements IStore {
       this.addresses = new Map<string, IAddressInfo>();
       this.addressIndexes = new Map<number, string>();
       this.addressesMetadata = new Map<string, IAddressMetadata>();
-      this.walletData = { ...this.walletData, ...DEAFULT_ADDRESSES_WALLET_DATA };
+      this.walletData = { ...this.walletData, ...DEFAULT_ADDRESSES_WALLET_DATA };
     }
   }
 

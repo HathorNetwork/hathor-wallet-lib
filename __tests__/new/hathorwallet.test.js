@@ -16,6 +16,7 @@ import { MemoryStore, Storage } from '../../src/storage';
 import Queue from '../../src/models/queue';
 import { WalletType } from '../../src/types';
 import txApi from '../../src/api/txApi';
+import * as addressUtils from '../../src/utils/address';
 
 class FakeHathorWallet {
   constructor() {
@@ -459,4 +460,32 @@ test('setState', async () => {
   await new Promise(resolve => { setTimeout(resolve, 0)});
   expect(hWallet.onEnterStateProcessing).not.toHaveBeenCalled();
   expect(hWallet.state).toEqual(HathorWallet.READY);
+});
+
+test('getAddressAtIndex', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  const hWallet = new FakeHathorWallet();
+  
+  jest.spyOn(storage, 'saveAddress').mockImplementation(() => Promise.resolve());
+  const walletTypeSpy = jest.spyOn(storage, 'getWalletType');
+  const addressSpy = jest.spyOn(storage, 'getAddressAtIndex');
+  addressSpy.mockImplementationOnce(() => Promise.resolve({base58: 'a'}));
+  addressSpy.mockImplementationOnce(() => Promise.resolve(null));
+  hWallet.storage = storage;
+
+  const p2pkhDeriveSpy = jest.spyOn(addressUtils, 'deriveAddressP2PKH').mockImplementationOnce(() => Promise.resolve({base58: 'address1'}));
+  const p2shDeriveSpy = jest.spyOn(addressUtils, 'deriveAddressP2SH').mockImplementationOnce(() => Promise.resolve({base58: 'address2'}));
+
+  await expect(hWallet.getAddressAtIndex(0)).resolves.toEqual('a');
+  // Storage should return null from now on, so we will test if we call the derive methods
+  // P2PKH
+  walletTypeSpy.mockReturnValueOnce(Promise.resolve('p2pkh'));
+  await expect(hWallet.getAddressAtIndex(1)).resolves.toEqual('address1');
+  // P2SH
+  walletTypeSpy.mockReturnValueOnce(Promise.resolve('p2sh'));
+  await expect(hWallet.getAddressAtIndex(2)).resolves.toEqual('address2');
+
+  p2pkhDeriveSpy.mockRestore();
+  p2shDeriveSpy.mockRestore();
 });
