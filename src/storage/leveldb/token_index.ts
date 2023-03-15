@@ -222,26 +222,8 @@ export default class LevelTokenIndex implements IKVTokenIndex {
    * @param {Partial<ITokenMetadata>} meta metadata to add
    * @returns {Promise<void>}
    */
-  async editToken(tokenUid: string, meta: Partial<ITokenMetadata>): Promise<void> {
-    const metadata: ITokenMetadata = {
-      numTransactions: 0,
-      balance: {
-        tokens: {unlocked: 0, locked: 0},
-        authorities: {
-          mint: {unlocked: 0, locked: 0},
-          melt: {unlocked: 0, locked: 0},
-        },
-      }
-    };
-    if (meta.numTransactions) {
-      metadata.numTransactions = meta.numTransactions;
-    }
-
-    if (meta.balance) {
-      metadata.balance = meta.balance;
-    }
-
-    await this.metadataDB.put(tokenUid, metadata);
+  async editToken(tokenUid: string, meta: ITokenMetadata): Promise<void> {
+    await this.metadataDB.put(tokenUid, meta);
   }
 
   /**

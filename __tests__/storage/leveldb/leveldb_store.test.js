@@ -12,6 +12,7 @@ import walletApi from "../../../src/api/wallet";
 import { HDPrivateKey } from "bitcore-lib";
 import { encryptData } from "../../../src/utils/crypto";
 import { WalletType } from "../../../src/types";
+import { processHistory } from "../../../src/utils/storage";
 
 function _addr_index_key(index) {
   const buf = Buffer.alloc(4);
@@ -117,7 +118,7 @@ test('history methods', async () => {
       symbol: 'CTK',
     });
   });
-  await store.processHistory({ rewardLock: 1 });
+  await processHistory(store, { rewardLock: 1 });
   expect(getTokenApi).not.toHaveBeenCalledWith('00', expect.anything());
   expect(getTokenApi).toHaveBeenCalledWith('01', expect.anything());
   expect(getTokenApi).toHaveBeenCalledWith('02', expect.anything());
@@ -223,17 +224,12 @@ test('token methods', async () => {
   }
   expect(registered).toHaveLength(1);
 
-  await store.deleteTokens(['01', '02']);
-  count = 0;
-  for await (let _ of store.tokenIndex.tokenDB.iterator()) {
-    count += 1;
-  }
-  expect(count).toEqual(1);
-
-  await store.editToken('00', { numTransactions: 10 });
+  await store.editToken('00', { numTransactions: 10, balance: { tokens: { locked: 1, unlocked: 2 } } });
   await expect(store.tokenIndex.getTokenMetadata('00')).resolves.toMatchObject({
     numTransactions: 10,
-    balance: expect.anything(),
+    balance: {
+      tokens: { locked: 1, unlocked: 2 },
+    },
   });
 
   await store.destroy();

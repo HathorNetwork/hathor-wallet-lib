@@ -156,8 +156,6 @@ test('history methods', async () => {
 test('token methods', async () => {
   const store = new MemoryStore();
 
-  store.tokens.set('00', HATHOR_TOKEN_CONFIG);
-
   await store.saveToken({ uid: '01', name: 'Token 01', symbol: 'TK01'});
   expect(store.tokens.size).toEqual(2);
   expect(store.tokens.get('01')).toBeDefined();
