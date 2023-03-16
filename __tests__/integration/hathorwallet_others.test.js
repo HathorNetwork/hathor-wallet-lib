@@ -41,6 +41,7 @@ describe('getAddressInfo', () => {
 
     // Validating address after 1 transaction
     await GenesisWalletHelper.injectFunds(addr0, 10);
+    await delay(500);
     await expect(hWallet.getAddressInfo(addr0)).resolves.toMatchObject({
       total_amount_received: 10,
       total_amount_sent: 0,
@@ -92,6 +93,7 @@ describe('getAddressInfo', () => {
     expect((await hWallet.getAddressInfo(addr2)).total_amount_received).toStrictEqual(0);
     expect((await hWallet.getAddressInfo(addr3)).total_amount_received).toStrictEqual(0);
 
+    await delay(500);
     // Move all the wallet's funds to addr2
     let tx = await hWallet.sendTransaction(addr2, 10);
     await waitForTxReceived(hWallet, tx.hash);

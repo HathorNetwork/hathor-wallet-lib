@@ -10,6 +10,7 @@ import Connection from '../../../src/new/connection';
 import HathorWallet from '../../../src/new/wallet';
 import { waitForTxReceived, waitForWalletReady, waitUntilNextTimestamp } from './wallet.helper';
 import { loggers } from '../utils/logger.util';
+import { delay } from '../utils/core.util';
 
 /**
  * @type {?GenesisWalletHelper}
@@ -98,6 +99,7 @@ export class GenesisWalletHelper {
 
     const hWallet = new GenesisWalletHelper();
     await hWallet.start();
+    await delay(500);
 
     singleton = hWallet;
     return singleton;

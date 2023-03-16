@@ -1561,7 +1561,7 @@ describe('createNewToken', () => {
       }
     );
     await waitForTxReceived(hWallet, tokenUid);
-
+    await delay(500);
     // Validating the tokens are on the correct addresses
     const { utxos: utxosTokens } = await hWallet.getUtxos({ token: tokenUid });
     expect(utxosTokens).toContainEqual(
