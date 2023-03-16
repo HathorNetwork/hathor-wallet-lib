@@ -413,13 +413,17 @@ export async function processHistory(store: IStore, { rewardLock }: { rewardLock
     }
   }
 
-  // Update wallet data
-  const walletData = await store.getWalletData();
-  if (walletData.lastUsedAddressIndex <= maxIndexUsed) {
-    if (walletData.currentAddressIndex <= maxIndexUsed) {
-      await store.setCurrentAddressIndex(Math.min(maxIndexUsed + 1, walletData.lastLoadedAddressIndex));
+  // maxIndexUsed -1 means we didn't find any address in the transactions
+  // so we don't need to update the wallet data
+  if (maxIndexUsed > -1) {
+    // Update wallet data
+    const walletData = await store.getWalletData();
+    if (walletData.lastUsedAddressIndex <= maxIndexUsed) {
+      if (walletData.currentAddressIndex <= maxIndexUsed) {
+        await store.setCurrentAddressIndex(Math.min(maxIndexUsed + 1, walletData.lastLoadedAddressIndex));
+      }
+      await store.setLastUsedAddressIndex(maxIndexUsed);
     }
-    await store.setLastUsedAddressIndex(maxIndexUsed);
   }
 
   // Update token config
