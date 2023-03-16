@@ -226,6 +226,7 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
   async saveTx(tx: IHistoryTx): Promise<void> {
     await this.historyDB.put(tx.tx_id, tx);
     await this.tsHistoryDB.put(_ts_key(tx), tx);
+    await this.incrHistoryCount();
   }
 
   /**

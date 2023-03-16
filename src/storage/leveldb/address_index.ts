@@ -322,6 +322,7 @@ export default class LevelAddressIndex implements IKVAddressIndex {
   async saveAddress(info: IAddressInfo): Promise<void> {
     await this.addressesDB.put(info.base58, info);
     await this.addressesIndexDB.put(_index_key(info.bip32AddressIndex), info.base58);
+    await this.incrAddressCount();
   }
 
   /**
