@@ -58,6 +58,7 @@ export default class LevelAddressIndex implements IKVAddressIndex {
    */
   isValidated: boolean;
   indexVersion: string = '0.0.1';
+  size: number;
 
   constructor(dbpath: string) {
     this.dbpath = path.join(dbpath, 'addresses');
@@ -67,6 +68,7 @@ export default class LevelAddressIndex implements IKVAddressIndex {
     this.addressesIndexDB = db.sublevel(INDEX_PREFIX);
     this.addressesMetaDB = db.sublevel<string, IAddressMetadataAsRecord>(ADDRESS_META_PREFIX, {valueEncoding: 'json'});
     this.isValidated = false;
+    this.size = 0;
   }
 
   /**
@@ -141,9 +143,7 @@ export default class LevelAddressIndex implements IKVAddressIndex {
     }
 
     // We just did a full address count, we can save the size and trust it
-    const buf = Buffer.alloc(4);
-    buf.writeUInt32BE(size);
-    await this.addressesDB.db.put('size', buf.toString('hex'));
+    this.size = size;
 
     // Validation is complete
     this.isValidated = true;
@@ -151,9 +151,18 @@ export default class LevelAddressIndex implements IKVAddressIndex {
   }
 
   /**
-   * Get the pre-calculated number of addresses in the database.
-   * The database value is only used if the index is validated.
-   * If the index is not validated, we run a full count.
+   * Get the number of addresses saved in the database.
+   *
+   * leveldb does not have a count method and the feature request for this was rejected (see https://github.com/google/leveldb/issues/119).
+   * As stated in the issue above "There is no way to implement count more efficiently inside leveldb than outside."
+   * This means that the best way to count the number of entries would be to iterate on all keys and count them.
+   * Another sugestion would be to have an external count of addresses, this is done with the this.size variable.
+   *
+   * The problem with this.size is that it is not updated when we start a database.
+   * This is why we update the size when we validate the index and then we can use the pre-calculated size.
+   * If the index has not been validated we will run a full count.
+   * While a full count runs in O(n) it has been confirmed to be very fast with leveldb.
+   * And since the wallet runs the validation when it starts we do not expect to use the full count with a running wallet.
    *
    * @returns {Promise<number>} The number of addresses in the database
    */
@@ -162,32 +171,7 @@ export default class LevelAddressIndex implements IKVAddressIndex {
       // Since we have not yet validated the index, we cannot trust the address count
       return await this.runAddressCount();
     }
-    // The index is validated, we can trust the address count
-    const db = this.addressesDB.db;
-    try {
-      // Address count is an index, but it is stored as a uint32 hex string.
-      const sizeStr = await db.get('size');
-      // To fetch from the db we need to read the uint32 from the hex string.
-      const buf = Buffer.from(sizeStr, 'hex');
-      return buf.readUInt32BE(0);
-    } catch (err: unknown) {
-      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
-        return 0;
-      }
-      throw err;
-    }
-  }
-
-  /**
-   * Increment the address count in the database.
-   * @returns {Promise<void>}
-   */
-  async incrAddressCount(): Promise<void> {
-    const db = this.addressesDB.db;
-    const size = await this.addressCount();
-    const buf = Buffer.alloc(4);
-    buf.writeUInt32BE(size + 1);
-    await db.put('size', buf.toString('hex'));
+    return this.size;
   }
 
   /**
@@ -197,14 +181,10 @@ export default class LevelAddressIndex implements IKVAddressIndex {
    * @returns {Promise<number>} The number of addresses in the database
    */
   async runAddressCount(): Promise<number> {
-    const db = this.addressesDB.db;
     let size = 0;
     for await (let _ of this.addressesDB.iterator()) {
       size++;
     }
-    const buf = Buffer.alloc(4);
-    buf.writeUInt32BE(size);
-    await db.put('size', buf.toString('hex'));
     return size;
   }
 
@@ -322,7 +302,7 @@ export default class LevelAddressIndex implements IKVAddressIndex {
   async saveAddress(info: IAddressInfo): Promise<void> {
     await this.addressesDB.put(info.base58, info);
     await this.addressesIndexDB.put(_index_key(info.bip32AddressIndex), info.base58);
-    await this.incrAddressCount();
+    this.size++;
   }
 
   /**

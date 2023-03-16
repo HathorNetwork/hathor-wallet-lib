@@ -40,6 +40,7 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
    * This is used to avoid using the tx count before we know it is valid.
    */
   isValidated: boolean;
+  size: number;
   indexVersion: string = '0.0.1';
 
   constructor(dbpath: string) {
@@ -48,6 +49,7 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
     this.historyDB = db.sublevel<string, IHistoryTx>(HISTORY_PREFIX, { valueEncoding: 'json' });
     this.tsHistoryDB = db.sublevel<string, IHistoryTx>(TS_HISTORY_PREFIX, { valueEncoding: 'json' });
     this.isValidated = false;
+    this.size = 0;
   }
 
   /**
@@ -111,9 +113,7 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
     }
 
     // We have validated the index, we can now trust the tx count
-    const buf = Buffer.alloc(4);
-    buf.writeUInt32BE(ret.count);
-    await this.historyDB.db.put('size', buf.toString('hex'));
+    this.size = ret.count;
 
     // Set the index as validated
     this.isValidated = true;
@@ -121,9 +121,18 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
   }
 
   /**
-   * Get the pre-calculated number of txs in the database.
-   * The database value is only used if the index is validated.
-   * If the index is not validated, we run a full count.
+   * Get the number of txs in the database.
+   *
+   * leveldb does not have a count method and the feature request for this was rejected (see https://github.com/google/leveldb/issues/119).
+   * As stated in the issue above "There is no way to implement count more efficiently inside leveldb than outside."
+   * This means that the best way to count the number of entries would be to iterate on all keys and count them.
+   * Another sugestion would be to have an external count of txs, this is done with the this.size variable.
+   *
+   * The problem with this.size is that it is not updated when we start a database.
+   * This is why we update the size when we validate the index and then we can use the pre-calculated size.
+   * If the index has not been validated we will run a full count.
+   * While a full count runs in O(n) it has been confirmed to be very fast with leveldb.
+   * And since the wallet runs the validation when it starts we do not expect to use the full count with a running wallet.
    *
    * @returns {Promise<number>} The number of txs in the database
    */
@@ -132,49 +141,19 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
       // Since we have not yet validated the index, we cannot trust the tx count
       return await this.runHistoryCount();
     }
-    // The index is validated, we can trust the tx count
-    const db = this.historyDB.db;
-    try {
-      // tx count is an index, but it is stored as a uint32 hex string.
-      const sizeStr = await db.get('size');
-      // To fetch from the db we need to read the uint32 from the hex string.
-      const buf = Buffer.from(sizeStr, 'hex');
-      return buf.readUInt32BE(0);
-    } catch (err: unknown) {
-      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
-        return 0;
-      }
-      throw err;
-    }
-  }
-
-  /**
-   * Increment the tx count in the database.
-   * @returns {Promise<void>}
-   */
-  async incrHistoryCount(): Promise<void> {
-    const db = this.historyDB.db;
-    const size = await this.historyCount();
-    const buf = Buffer.alloc(4);
-    buf.writeUInt32BE(size + 1);
-    await db.put('size', buf.toString('hex'));
+    return this.size;
   }
 
   /**
    * Run a full count of the txs in the database.
-   * Since we have made a full count we can update the tx count in the database.
    *
    * @returns {Promise<number>} The number of txs in the database
    */
   async runHistoryCount(): Promise<number> {
-    const db = this.historyDB.db;
     let size = 0;
     for await (let _ of this.historyDB.iterator()) {
       size++;
     }
-    const buf = Buffer.alloc(4);
-    buf.writeUInt32BE(size);
-    await db.put('size', buf.toString('hex'));
     return size;
   }
 
@@ -226,7 +205,7 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
   async saveTx(tx: IHistoryTx): Promise<void> {
     await this.historyDB.put(tx.tx_id, tx);
     await this.tsHistoryDB.put(_ts_key(tx), tx);
-    await this.incrHistoryCount();
+    this.size++;
   }
 
   /**
