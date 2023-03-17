@@ -344,8 +344,8 @@ export async function processHistory(store: IStore, { rewardLock }: { rewardLock
         });
       }
 
-      await store.editToken(output.token, tokenMeta);
-      await store.editAddress(output.decoded.address, addressMeta);
+      await store.editTokenMeta(output.token, tokenMeta);
+      await store.editAddressMeta(output.decoded.address, addressMeta);
     }
     for (const input of tx.inputs) {
       if (!input.decoded.address) continue;
@@ -395,21 +395,21 @@ export async function processHistory(store: IStore, { rewardLock }: { rewardLock
       }
 
       // save address and token metadata
-      await store.editToken(input.token, tokenMeta);
-      await store.editAddress(input.decoded.address, addressMeta);
+      await store.editTokenMeta(input.token, tokenMeta);
+      await store.editAddressMeta(input.decoded.address, addressMeta);
     }
 
     for (const token of txTokens) {
       const tokenMeta = await store.getTokenMeta(token);
       if (tokenMeta === null) continue;
       tokenMeta.numTransactions += 1;
-      await store.editToken(token, tokenMeta);
+      await store.editTokenMeta(token, tokenMeta);
     }
     for (const address of txAddresses) {
       const addressMeta = await store.getAddressMeta(address);
       if (addressMeta === null) continue;
       addressMeta.numTransactions += 1;
-      await store.editAddress(address, addressMeta);
+      await store.editAddressMeta(address, addressMeta);
     }
   }
 
