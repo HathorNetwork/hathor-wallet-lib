@@ -143,20 +143,22 @@ const tokens = {
    * Calculate deposit value for the given token mint amount
    *
    * @param {number} mintAmount Amount of tokens being minted
-   * @param {boolean} isCreateNFT If we are calculating the deposit for a NFT creation
    *
    * @return {number}
    * @memberof Tokens
    * @inner
    *
    */
-  getDepositAmount(mintAmount: number, isCreateNFT: boolean = false): number {
-    let depositAmount = Math.ceil(TOKEN_DEPOSIT_PERCENTAGE * mintAmount);
-    if (isCreateNFT) {
-      // The NFT has the normal deposit + 0.01 HTR fee
-      depositAmount += 1;
-    }
-    return depositAmount;
+  getDepositAmount(mintAmount: number): number {
+    return Math.ceil(TOKEN_DEPOSIT_PERCENTAGE * mintAmount);
+  },
+
+  /**
+   * Get the HTR value of the fee to create a NFT
+   * @returns {number} The fee to create a NFT
+   */
+  getNFTCreationFee(): number {
+    return 1;
   },
 
   /**
@@ -209,7 +211,10 @@ const tokens = {
   ): Promise<IDataTx> {
     const inputs: IDataInput[] = [];
     const outputs: IDataOutput[] = [];
-    const depositAmount = this.getDepositAmount(amount, isCreateNFT);
+    let depositAmount = this.getDepositAmount(amount);
+    if (isCreateNFT) {
+      depositAmount += this.getNFTCreationFee();
+    }
 
     // get HTR deposit inputs
     let foundAmount = 0;

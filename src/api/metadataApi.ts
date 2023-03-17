@@ -9,6 +9,7 @@ import explorerServiceAxios from './explorerServiceAxios';
 import helpers from '../utils/helpers';
 import { METADATA_RETRY_LIMIT, DOWNLOAD_METADATA_RETRY_INTERVAL } from '../constants';
 import { GetDagMetadataApiError } from '../errors';
+import axios from 'axios';
 
 const metadataApi = {
   async getDagMetadata(id: string, network: string, options = {}) {
@@ -23,9 +24,9 @@ const metadataApi = {
 
     let { retries, retryInterval } = newOptions;
     while (retries >= 0) {
-      const axios = await explorerServiceAxios(network);
+      const client = await explorerServiceAxios(network);
       try {
-        const response = await axios.get(`metadata/dag`, { params: { id }});
+        const response = await client.get('metadata/dag', { params: { id } });
         if (response.data) {
           return response.data;
         } else {
@@ -34,11 +35,15 @@ const metadataApi = {
           throw new GetDagMetadataApiError('Invalid metadata API response.');
         }
       } catch (e) {
-        if (e.response && e.response.status === 404) {
+        if (axios.isAxiosError(e) && e.response && e.response.status === 404) {
           // No need to do anything, the metadata for this token was not found
           // There is no error here, we just return null
           return null;
         } else {
+          if (!(e instanceof Error)) {
+            // This is for the typescript compiler, since it doesn't know that e is an Error
+            throw new GetDagMetadataApiError('Unknown error.');
+          }
           // Error downloading metadata
           if (retries === 0) {
             // If we have no more retries left, then we propagate the error

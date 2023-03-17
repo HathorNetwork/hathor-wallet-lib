@@ -1561,7 +1561,7 @@ describe('createNewToken', () => {
       }
     );
     await waitForTxReceived(hWallet, tokenUid);
-
+    await delay(500);
     // Validating the tokens are on the correct addresses
     const { utxos: utxosTokens } = await hWallet.getUtxos({ token: tokenUid });
     expect(utxosTokens).toContainEqual(
@@ -1747,6 +1747,7 @@ describe('meltTokens', () => {
     // Setting up scenario
     const hWallet = await generateWalletHelper();
     await GenesisWalletHelper.injectFunds(await hWallet.getAddressAtIndex(0), 20);
+    await delay(500);
     const { hash: tokenUid } = await createTokenHelper(
       hWallet,
       'Token to Melt',

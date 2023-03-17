@@ -71,5 +71,7 @@ expect.extend({
   }
 });
 
-
-global.window = {};
+// jest test environment does not include the TextEncoder and TextDecoder glopbals which are required by Level (to test persistent storage with leveldb)
+const { TextEncoder, TextDecoder } = require('util');
+global.TextEncoder = TextEncoder;
+global.TextDecoder = TextDecoder;

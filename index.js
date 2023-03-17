@@ -9,7 +9,9 @@ const txMiningApi = require('./lib/api/txMining');
 const versionApi = require('./lib/api/version');
 const axios = require('./lib/api/axiosInstance');
 const metadataApi = require('./lib/api/metadataApi');
-const storage = require('./lib/storage');
+const { Storage } = require('./lib/storage/storage');
+const LevelDBStore = require('./lib/storage/leveldb/store');
+const memoryStore = require('./lib/storage/memory_store');
 const network = require('./lib/network');
 const HathorWallet = require('./lib/new/wallet');
 const Connection = require('./lib/new/connection');
@@ -57,7 +59,9 @@ module.exports = {
   ErrorMessages,
   constants,
   axios,
-  storage: storage.default,
+  Storage,
+  LevelDBStore: LevelDBStore.default,
+  MemoryStore: memoryStore.MemoryStore,
   network: network.default,
   HathorWallet: HathorWallet.default,
   Connection: Connection.default,
