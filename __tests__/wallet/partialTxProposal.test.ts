@@ -219,7 +219,7 @@ test('addReceive', async () => {
   const spyReset = jest.spyOn(PartialTxProposal.prototype, 'resetSignatures');
   const spyOutput = jest.spyOn(PartialTxProposal.prototype, 'addOutput')
     .mockImplementation(() => {});
- 
+
   const store = new MemoryStore();
   const testStorage = new Storage(store);
   testStorage.config.setNetwork('testnet');
@@ -361,7 +361,11 @@ test('resetSignatures', async () => {
 });
 
 test('setSignatures', async () => {
-  const proposal = new PartialTxProposal(testnet);
+  const store = new MemoryStore();
+  const testStorage = new Storage(store);
+  testStorage.config.setNetwork('testnet');
+
+  const proposal = new PartialTxProposal(testStorage);
   // @ts-ignore
   const spyProposalTx = jest.spyOn(proposal.partialTx, 'getTx').mockImplementation(() => ({
     getDataToSign: () => 'hexHash',
