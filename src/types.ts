@@ -418,6 +418,9 @@ export interface IKVUtxoIndex extends IKVStoreIndex<void> {
   utxoIter(): AsyncGenerator<IUtxo>;
   selectUtxos(options: IUtxoFilterOptions): AsyncGenerator<IUtxo>;
   saveUtxo(utxo: IUtxo): Promise<void>;
+  saveLockedUtxo(lockedUtxo: ILockedUtxo): Promise<void>;
+  iterateLockedUtxos(): AsyncGenerator<ILockedUtxo>;
+  unlockUtxo(lockedUtxo: ILockedUtxo): Promise<void>;
   clear(): Promise<void>;
 }
 
