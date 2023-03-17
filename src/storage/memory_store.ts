@@ -238,7 +238,7 @@ export class MemoryStore implements IStore {
    * @param {string} base58 The address in base58 format
    * @param {IAddressMetadata} meta The metadata to save
    */
-  async editAddress(base58: string, meta: IAddressMetadata): Promise<void> {
+  async editAddressMeta(base58: string, meta: IAddressMetadata): Promise<void> {
     this.addressesMetadata.set(base58, meta);
   }
 
@@ -441,7 +441,7 @@ export class MemoryStore implements IStore {
    * @param {Partial<ITokenMetadata>} meta Metadata to save
    * @returns {Promise<void>}
    */
-  async editToken(tokenUid: string, meta: ITokenMetadata): Promise<void> {
+  async editTokenMeta(tokenUid: string, meta: ITokenMetadata): Promise<void> {
     this.tokensMetadata.set(tokenUid, meta);
   }
 

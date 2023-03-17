@@ -265,7 +265,7 @@ export interface IStore {
   saveAddress(info: IAddressInfo): Promise<void>;
   addressExists(base58: string): Promise<boolean>;
   addressCount(): Promise<number>;
-  editAddress(base58: string, meta: IAddressMetadata): Promise<void>;
+  editAddressMeta(base58: string, meta: IAddressMetadata): Promise<void>;
 
   // tx history methods
   historyIter(tokenUid?: string): AsyncGenerator<IHistoryTx>;
@@ -281,7 +281,7 @@ export interface IStore {
   saveToken(tokenConfig: ITokenData, meta?: ITokenMetadata): Promise<void>;
   registerToken(token: ITokenData): Promise<void>;
   unregisterToken(tokenUid: string): Promise<void>;
-  editToken(tokenUid: string, meta: ITokenMetadata): Promise<void>;
+  editTokenMeta(tokenUid: string, meta: ITokenMetadata): Promise<void>;
 
   // UTXOs methods
   utxoIter(): AsyncGenerator<IUtxo>;

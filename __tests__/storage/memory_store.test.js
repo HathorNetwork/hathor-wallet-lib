@@ -203,7 +203,7 @@ test('token methods', async () => {
   }
   expect(registered).toHaveLength(1);
 
-  await store.editToken('00', { numTransactions: 10, balance: { tokens: { locked: 1, unlocked: 2 } } });
+  await store.editTokenMeta('00', { numTransactions: 10, balance: { tokens: { locked: 1, unlocked: 2 } } });
   expect(store.tokensMetadata.get('00')).toMatchObject({
     numTransactions: 10,
     balance: expect.objectContaining({ tokens: { locked: 1, unlocked: 2 } }),
