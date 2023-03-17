@@ -163,7 +163,11 @@ export const get = async (proposalId: string, password: string): Promise<AtomicS
 
     // Decoding was successful, return the data
     return decryptedData;
-  } catch (err) {
+  } catch (err: unknown) {
+    if (!(err instanceof Error)) {
+      // If the error is not an Error, rethrow it
+      throw err;
+    }
     // If the failure was specifically on the decoding, our password was incorrect.
     if (err.message === "Malformed UTF-8 data") {
       throw new Error('Incorrect password: could not decode the proposal');
