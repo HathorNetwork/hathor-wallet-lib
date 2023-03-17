@@ -176,7 +176,6 @@ export default class LevelAddressIndex implements IKVAddressIndex {
 
   /**
    * Run a full count of the addresses in the database.
-   * Since we have made a full count we can update the address count in the database.
    *
    * @returns {Promise<number>} The number of addresses in the database
    */

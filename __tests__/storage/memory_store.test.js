@@ -156,6 +156,10 @@ test('history methods', async () => {
 test('token methods', async () => {
   const store = new MemoryStore();
 
+  // Starts with HTR
+  expect(store.tokens.size).toEqual(1);
+  expect(store.tokens.get('00')).toBeDefined();
+
   await store.saveToken({ uid: '01', name: 'Token 01', symbol: 'TK01'});
   expect(store.tokens.size).toEqual(2);
   expect(store.tokens.get('01')).toBeDefined();
