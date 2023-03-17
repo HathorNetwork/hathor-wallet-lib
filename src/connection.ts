@@ -157,6 +157,23 @@ abstract class Connection extends EventEmitter {
   getCurrentNetwork(): string {
     return this.network;
   }
+
+  startControlHandlers(options?: any) {
+    return;
+  }
+
+  removeMetricsHandlers() {
+    if (this.websocket) {
+      this.websocket.removeAllListeners('dashboard');
+      this.websocket.removeAllListeners('subscribe_address');
+    }
+  }
+
+  sendMessageWS(msg: any) {
+    if (this.websocket) {
+      this.websocket.sendMessage(msg);
+    }
+  }
 }
 
 export default Connection;

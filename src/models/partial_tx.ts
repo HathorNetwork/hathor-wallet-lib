@@ -15,44 +15,19 @@ import Network from './network';
 import P2PKH from './p2pkh';
 import P2SH from './p2sh';
 
-import transaction from '../transaction';
+import transactionUtils from '../utils/transaction';
 import helpers from '../utils/helpers';
 import { IndexOOBError, UnsupportedScriptError } from '../errors';
 
 import txApi from '../api/txApi';
 import {
+  DEFAULT_TX_VERSION,
   HATHOR_TOKEN_CONFIG,
   TOKEN_AUTHORITY_MASK,
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
 } from '../constants';
-
-type InputData = {
-  tx_id: string,
-  index: number,
-  address: string,
-  data?: Buffer,
-};
-
-type OutputData = {
-  type: string,
-  value: number,
-  tokenData: number,
-  address?: string,
-  data?: string,
-  timelock?: number,
-};
-
-// Transaction data to use with helpers
-type TxData = {
-  inputs: InputData[],
-  outputs: OutputData[],
-  tokens: string[],
-  weight?: number,
-  nonce?: number,
-  version?: number,
-  timestamp?: number,
-};
+import { IDataInput, IDataOutput, IDataTx } from '../types';
 
 /**
  * Extended version of the Input class with extra data
@@ -87,16 +62,23 @@ export class ProposalInput extends Input {
   /**
    * Return an object with the relevant input data
    *
-   * @return {InputData}
+   * @return {IDataInput}
    * @memberof ProposalInput
    * @inner
    */
-  toData(): InputData {
-    const data: InputData = {
-      tx_id: this.hash,
+  toData(): IDataInput {
+    const data: IDataInput = {
+      txId: this.hash,
       index: this.index,
       address: this.address,
+      token: this.token,
+      value: this.value,
+      authorities: this.authorities,
     };
+
+    if (this.data) {
+      data.data = this.data.toString('hex');
+    }
 
     return data;
   }
@@ -158,13 +140,13 @@ export class ProposalOutput extends Output {
    * @param {number} tokenIndex Index of the token on the tokens array plus 1 (0 meaning HTR)
    * @param {Network} network Network used to generate addresses in
    *
-   * @returns {OutputData}
+   * @returns {IDataOutput}
    *
    * @throws {UnsupportedScriptError} Script must be P2SH or P2PKH
    * @memberof ProposalOutput
    * @inner
    */
-  toData(tokenIndex: number, network: Network): OutputData {
+  toData(tokenIndex: number, network: Network): IDataOutput {
     const script = this.parseScript(network);
     if (!(script instanceof P2PKH || script instanceof P2SH)) {
       throw new UnsupportedScriptError('Unsupported script type');
@@ -175,15 +157,14 @@ export class ProposalOutput extends Output {
     // This will keep authority bit while updating the index bits
     this.setTokenData(tokenData);
 
-    const data: OutputData = {
+    const data: IDataOutput = {
       type: script.getType(),
       value: this.value,
-      tokenData: this.tokenData,
       address: script.address.base58,
+      authorities: this.authorities,
+      token: this.token,
+      timelock: script.timelock,
     };
-    if (script.timelock) {
-      data.timelock = script.timelock;
-    }
 
     return data;
   }
@@ -215,7 +196,7 @@ export class PartialTx {
    * @memberof PartialTx
    * @inner
    */
-  getTxData(): TxData {
+  getTxData(): IDataTx {
     const tokenSet = new Set<string>();
     for (const output of this.outputs) {
       tokenSet.add(output.token);
@@ -229,12 +210,11 @@ export class PartialTx {
     const tokens = Array.from(tokenSet);
 
     const data = {
+      version: DEFAULT_TX_VERSION,
       tokens,
       inputs: this.inputs.map(i => i.toData()),
       outputs: this.outputs.map(o => o.toData(tokens.indexOf(o.token) + 1, this.network)),
     };
-
-    transaction.completeTx(data);
 
     return data;
   }
@@ -249,7 +229,7 @@ export class PartialTx {
    * @inner
    */
   getTx(): Transaction {
-    return helpers.createTxFromData(this.getTxData(), this.network);
+    return transactionUtils.createTransactionFromData(this.getTxData(), this.network);
   }
 
   /**

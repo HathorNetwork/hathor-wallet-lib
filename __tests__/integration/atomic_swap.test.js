@@ -10,7 +10,6 @@ import { loggers } from './utils/logger.util';
 import { HATHOR_TOKEN_CONFIG } from '../../src/constants';
 import SendTransaction from '../../src/new/sendTransaction';
 import PartialTxProposal from '../../src/wallet/partialTxProposal';
-import storage from '../../src/storage';
 import { delay } from './utils/core.util';
 
 describe('partial tx proposal', () => {
@@ -23,10 +22,9 @@ describe('partial tx proposal', () => {
     // Create the wallet
     const hWallet1 = await generateWalletHelper();
     const hWallet2 = await generateWalletHelper();
-    const network = hWallet1.getNetworkObject();
 
     // Injecting funds and creating a new custom token
-    await GenesisWalletHelper.injectFunds(hWallet1.getAddressAtIndex(0), 103);
+    const txI = await GenesisWalletHelper.injectFunds(await hWallet1.getAddressAtIndex(0), 103);
     const { hash: token1Uid } = await createTokenHelper(
       hWallet1,
       'Token1',
@@ -35,7 +33,7 @@ describe('partial tx proposal', () => {
     );
 
     // Injecting funds and creating a new custom token
-    await GenesisWalletHelper.injectFunds(hWallet2.getAddressAtIndex(0), 10);
+    await GenesisWalletHelper.injectFunds(await hWallet2.getAddressAtIndex(0), 10);
     const { hash: token2Uid } = await createTokenHelper(
       hWallet2,
       'Token2',
@@ -70,35 +68,33 @@ describe('partial tx proposal', () => {
      * Wallet1 will send 100 HTR and 100 TK1
      * Wallet2 will send 1000 TK2
      */
-    const proposal = new PartialTxProposal(network);
     // Wallet1 side
-    proposal.addSend(hWallet1, HATHOR_TOKEN_CONFIG.uid, 100);
-    proposal.addSend(hWallet1, token1Uid, 100);
-    proposal.addReceive(hWallet1, token2Uid, 1000);
-    expect(proposal.partialTx.isComplete()).toBeFalsy();
-    // Wallet2 side
-    proposal.addSend(hWallet2, token2Uid, 1000);
-    proposal.addReceive(hWallet2, HATHOR_TOKEN_CONFIG.uid, 100);
-    proposal.addReceive(hWallet2, token1Uid, 100);
-    expect(proposal.partialTx.isComplete()).toBeTruthy();
-
-    const serialized = proposal.partialTx.serialize();
-    const proposal1 = PartialTxProposal.fromPartialTx(serialized, network);
-    storage.setStore(hWallet1.store);
-    await proposal1.signData(DEFAULT_PIN_CODE, true);
-    expect(proposal1.signatures.isComplete()).toBeFalsy();
-
-    const proposal2 = PartialTxProposal.fromPartialTx(serialized, network);
-    storage.setStore(hWallet2.store);
+    const proposal1 = new PartialTxProposal(hWallet1.storage);
+    await proposal1.addSend(HATHOR_TOKEN_CONFIG.uid, 100);
+    await proposal1.addSend(token1Uid, 100);
+    await proposal1.addReceive(token2Uid, 1000);
+    expect(proposal1.partialTx.isComplete()).toBeFalsy();
+    const serialized1 = proposal1.partialTx.serialize();
+    // Wallet2 side + sign
+    const proposal2 = PartialTxProposal.fromPartialTx(serialized1, hWallet2.storage);
+    await proposal2.addSend(token2Uid, 1000);
+    await proposal2.addReceive(HATHOR_TOKEN_CONFIG.uid, 100);
+    await proposal2.addReceive(token1Uid, 100);
+    expect(proposal2.partialTx.isComplete()).toBeTruthy();
     await proposal2.signData(DEFAULT_PIN_CODE, true);
-
     expect(proposal2.signatures.isComplete()).toBeFalsy();
 
-    proposal2.signatures.addSignatures(proposal1.signatures.serialize());
-    expect(proposal2.signatures.isComplete()).toBeTruthy();
+    // Signatures come back to wallet1
+    const serialized2 = proposal2.partialTx.serialize();
+    const proposal1After = PartialTxProposal.fromPartialTx(serialized2, hWallet1.storage);
+    await proposal1After.signData(DEFAULT_PIN_CODE, true);
+    expect(proposal1After.signatures.isComplete()).toBeFalsy();
+    proposal1After.signatures.addSignatures(proposal2.signatures.serialize());
 
-    const transaction = proposal2.prepareTx();
-    const sendTransaction = new SendTransaction({ transaction, network });
+    expect(proposal1After.signatures.isComplete()).toBeTruthy();
+
+    const transaction = proposal1After.prepareTx();
+    const sendTransaction = new SendTransaction(hWallet1.storage, { transaction });
     const tx = await sendTransaction.runFromMining();
     expect(tx.hash).toBeDefined();
 

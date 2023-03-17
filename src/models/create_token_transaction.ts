@@ -10,15 +10,12 @@ import {
   TOKEN_INFO_VERSION,
   MAX_TOKEN_NAME_SIZE,
   MAX_TOKEN_SYMBOL_SIZE,
-  TOKEN_MINT_MASK,
-  TOKEN_MELT_MASK
 } from '../constants'
-import { util } from 'bitcore-lib';
 import { unpackToInt, unpackLen } from '../utils/buffer';
 import helpers from '../utils/helpers';
 import Input from './input';
 import Output from './output';
-import Transaction from './transaction'
+import Transaction from './transaction';
 import Network from './network';
 import { CreateTokenTxInvalid, InvalidOutputsError, NftValidationError } from '../errors';
 import buffer from 'buffer';
@@ -58,47 +55,6 @@ class CreateTokenTransaction extends Transaction {
   }
 
   /**
-   * Return transaction data to sign in inputs
-   *
-   * @return {Buffer}
-   * @memberof Transaction
-   * @inner
-   */
-  getDataToSign(): Buffer {
-    if (this._dataToSignCache !== null) {
-      return this._dataToSignCache!;
-    }
-
-    let arr: any[] = []
-    this.serializeFundsFields(arr, false);
-
-    this._dataToSignCache = util.buffer.concat(arr);
-    return this._dataToSignCache!;
-  }
-
-  /**
-   * Serialize tx to bytes
-   *
-   * @return {Buffer}
-   * @memberof Transaction
-   * @inner
-   */
-  toBytes(): Buffer {
-    let arr: any = []
-    // Serialize first the funds part
-    //
-    this.serializeFundsFields(arr, true);
-
-    // Graph fields
-    this.serializeGraphFields(arr);
-
-    // Nonce
-    this.serializeNonce(arr);
-
-    return util.buffer.concat(arr);
-  }
-
-  /**
    * Serialize funds fields
    * version, len inputs, len outputs, inputs, outputs and token info
    *
@@ -123,7 +79,7 @@ class CreateTokenTransaction extends Transaction {
   /**
    * Serialize create token tx info to bytes
    *
-   * @return {Array} array of bytes
+   * @param {Buffer[]} array of bytes
    * @memberof Transaction
    * @inner
    */

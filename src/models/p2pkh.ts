@@ -44,7 +44,7 @@ class P2PKH {
    * @memberof P2PKH
    * @inner
    */
-  getType(): string {
+  getType(): 'p2pkh' {
     return 'p2pkh';
   }
 

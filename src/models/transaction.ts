@@ -19,7 +19,6 @@ import {
 import {crypto as cryptoBL, encoding, util, PrivateKey} from 'bitcore-lib'
 import {bufferToHex, hexToBuffer, unpackToFloat, unpackToHex, unpackToInt} from '../utils/buffer'
 import helpers from '../utils/helpers'
-import transactionUtils from '../utils/transaction'
 import Input from './input'
 import Output from './output'
 import Network from './network'
@@ -91,20 +90,6 @@ class Transaction {
 
     // All inputs sign the same data, so we cache it in the first getDataToSign method call
     this._dataToSignCache = null;
-  }
-
-  /**
-   * Get the signature of this transaction for the given private key
-   *
-   * @param {PrivateKey}
-   *
-   * @return {Buffer}
-   * @memberof Transaction
-   * @inner
-   *
-   */
-  getSignature(privateKey: PrivateKey): Buffer {
-    return transactionUtils.getSignature(this.getDataToSignHash(), privateKey);
   }
 
   /**

@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import {parseP2PKH, parseP2SH, parseScriptData} from '../../src/utils/scripts';
+import {createP2SHRedeemScript, parseP2PKH, parseP2SH, parseScriptData} from '../../src/utils/scripts';
 import Network from '../../src/models/network';
 
 test('parseP2PKH', () => {
@@ -71,4 +71,21 @@ test('parseScriptData', () => {
   const data = 'hathor://test';
   const script = '0d686174686f723a2f2f74657374ac';
   expect(parseScriptData(Buffer.from(script, 'hex')).data).toBe(data);
+});
+
+test('createP2SHRedeemScript', () => {
+  const multisig =  {
+    data: {
+      numSignatures: 3,
+      pubkeys: [
+        'xpub6CvvCBtHqFfErbcW2Rv28TmZ3MqcFuWQVKGg8xDzLeAwEAHRz9LBTgSFSj7B99scSvZGbq6TxAyyATA9b6cnwsgduNs9NGKQJnEQr3PYtwK',
+        'xpub6CA16g2qPwukWAWBMdJKU3p2fQEEi831W3WAs2nesuCzPhbrG29aJsoRDSEDT4Ac3smqSk51uuv6oujU3MAAL3d1Nm87q9GDwE3HRGQLjdP',
+        'xpub6BwNT613Vzy7ARVHDEpoX23SMBEZQMJXdqTWYjQKvJZJVDBjEemU38exJEhc6qbFVc4MmarN68gUKHkyZ3NEgXXCbWtoXXGouHpwMEcXJLf',
+        'xpub6DCyPHg4AwXsdiMh7QSTHR7afmNVwZKHBBMFUiy5aCYQNaWp68ceQXYXCGQr5fZyLAe5hiJDdXrq6w3AXzvVmjFX9F7EdM87repxJEhsmjL',
+        'xpub6CgPUcCCJ9pAK7Rj52hwkxTutSRv91Fq74Hx1SjN62eg6Mp3S3YCJFPChPaDjpp9jCbCZHibBgdKnfNdq6hE9umyjyZKUCySBNF7wkoG4uK',
+      ],
+    },
+  };
+  const scriptHex = '532102a847d31a64c190d2ec082c46eb23aff9c591c59f3be86e90404d45aa42841ac22103ee726ee90b034eb4dcfc4ee9cd7d0b743f41eb93de0c21d750e6110e46cf5986210339f5fa440e0f2754226e04ca5b1c3510416fc54739ba3101d03b3b99d8366e4121025e7c288c0e988f02c8c2b64bd4656743e279fa50c0b287c0985b3635fd85b8b9210383689a51fc5285188b19194ef2e3cf1ee752854f73ca186c9b1b99e0698805ef55ae';
+  expect(createP2SHRedeemScript(multisig.data.pubkeys, multisig.data.numSignatures, 0)).toMatchBuffer(Buffer.from(scriptHex, 'hex'));
 });

@@ -7,9 +7,9 @@
 
 import { promises as fs } from 'fs';
 import { Address, Script } from 'bitcore-lib';
-import wallet from '../../../src/wallet';
 import walletUtils from '../../../src/utils/wallet';
 import { NETWORK_NAME } from '../configuration/test-constants';
+import { deriveAddressFromXPubP2PKH } from '../../../src/utils/address';
 
 /**
  * @typedef PrecalculatedWalletData
@@ -106,7 +106,7 @@ export class WalletPrecalculationHelper {
     } else {
       // Generating 24-word seed if none was informed
       if (!wordsInput) {
-        wordsInput = wallet.generateWalletWords();
+        wordsInput = walletUtils.generateWalletWords();
       }
 
       /*
@@ -121,16 +121,9 @@ export class WalletPrecalculationHelper {
         networkName: NETWORK_NAME,
         accountDerivationIndex,
       });
-      const addresses = walletUtils.getAddresses(
-        xpubkey,
-        addressIntervalStart,
-        addressIntervalEnd,
-        NETWORK_NAME
-      );
-
-      // Formatting addresses to a simple array format
-      for (const hash in addresses) {
-        addressesArray[addresses[hash]] = hash;
+      for (let i = addressIntervalStart; i < addressIntervalEnd; i++) {
+        const addrInfo = deriveAddressFromXPubP2PKH(xpubkey, addressIntervalStart, NETWORK_NAME);
+        addressesArray.push(addrInfo.base58);
       }
     }
 

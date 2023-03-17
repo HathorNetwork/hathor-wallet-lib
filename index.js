@@ -1,11 +1,5 @@
 const constants = require('./lib/constants');
-const helpers = require('./lib/helpers');
-const dateFormatter = require('./lib/date');
-const tokens = require('./lib/tokens');
-const transaction = require('./lib/transaction');
-const version = require('./lib/version');
-const wallet = require('./lib/wallet');
-const WebSocketHandler = require('./lib/WebSocketHandler');
+const dateFormatter = require('./lib/utils/date');
 const websocket = require('./lib/websocket');
 const errors = require('./lib/errors');
 const ErrorMessages = require('./lib/errorMessages');
@@ -15,9 +9,10 @@ const txMiningApi = require('./lib/api/txMining');
 const versionApi = require('./lib/api/version');
 const axios = require('./lib/api/axiosInstance');
 const metadataApi = require('./lib/api/metadataApi');
-const storage = require('./lib/storage');
+const { Storage } = require('./lib/storage/storage');
+const LevelDBStore = require('./lib/storage/leveldb/store');
+const memoryStore = require('./lib/storage/memory_store');
 const network = require('./lib/network');
-const MemoryStore = require('./lib/memory_store');
 const HathorWallet = require('./lib/new/wallet');
 const Connection = require('./lib/new/connection');
 const WalletServiceConnection = require('./lib/wallet/connection');
@@ -32,6 +27,7 @@ const Input = require('./lib/models/input');
 const Transaction = require('./lib/models/transaction');
 const CreateTokenTransaction = require('./lib/models/create_token_transaction');
 const Network = require('./lib/models/network');
+const cryptoUtils = require('./lib/utils/crypto');
 const dateUtils = require('./lib/utils/date');
 const tokensUtils = require('./lib/utils/tokens');
 const walletUtils = require('./lib/utils/wallet');
@@ -52,25 +48,20 @@ module.exports = {
   PartialTx,
   PartialTxInputData,
   PartialTxProposal: PartialTxProposal.default,
-  helpers: helpers.default,
   dateFormatter: dateFormatter.default,
-  tokens: tokens.default,
-  transaction: transaction.default,
-  version: version.default,
-  wallet: wallet.default,
-  WebSocketHandler: WebSocketHandler.default,
   websocket: websocket.default,
   walletApi: walletApi.default,
   txApi: txApi.default,
   txMiningApi: txMiningApi.default,
   versionApi: versionApi.default,
   metadataApi: metadataApi.default,
-  errors: errors,
-  ErrorMessages: ErrorMessages,
-  constants: constants,
-  axios: axios,
-  storage: storage.default,
-  MemoryStore: MemoryStore.default,
+  errors,
+  ErrorMessages,
+  constants,
+  axios,
+  Storage,
+  LevelDBStore: LevelDBStore.default,
+  MemoryStore: memoryStore.MemoryStore,
   network: network.default,
   HathorWallet: HathorWallet.default,
   Connection: Connection.default,
@@ -86,16 +77,17 @@ module.exports = {
   Transaction: Transaction.default,
   CreateTokenTransaction: CreateTokenTransaction.default,
   Network: Network.default,
+  cryptoUtils,
   dateUtils: dateUtils.default,
   tokensUtils: tokensUtils.default,
   walletUtils: walletUtils.default,
   helpersUtils: helpersUtils.default,
-  scriptsUtils: scriptsUtils,
-  bufferUtils: bufferUtils,
+  scriptsUtils,
+  bufferUtils,
   transactionUtils: transactionUtils.default,
   HathorWalletServiceWallet: HathorWalletServiceWallet.default,
   SendTransactionWalletService: SendTransactionWalletService.default,
   config: config.default,
   PushNotification,
-  swapService: swapService,
+  swapService,
 }
