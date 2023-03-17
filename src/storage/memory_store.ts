@@ -16,6 +16,7 @@ import {
   IUtxoFilterOptions,
   IAddressMetadata,
   IWalletData,
+  ILockedUtxo,
 } from '../types';
 import { BLOCK_VERSION, GAP_LIMIT, HATHOR_TOKEN_CONFIG, MAX_INPUTS } from '../constants';
 
@@ -132,6 +133,7 @@ export class MemoryStore implements IStore {
    * Generic storage for any other data
    */
   genericStorage: Record<string, any>;
+  lockedUtxos: Map<string, ILockedUtxo>;
 
   constructor() {
     this.addresses = new Map<string, IAddressInfo>();
@@ -145,6 +147,7 @@ export class MemoryStore implements IStore {
     this.utxos = new Map<string, IUtxo>();
     this.accessData = null;
     this.genericStorage = {};
+    this.lockedUtxos = new Map<string, ILockedUtxo>;
 
     this.walletData = { ...DEFAULT_WALLET_DATA, ...DEFAULT_ADDRESSES_WALLET_DATA };
 
@@ -618,6 +621,20 @@ export class MemoryStore implements IStore {
    */
   async saveUtxo(utxo: IUtxo): Promise<void> {
     this.utxos.set(`${utxo.txId}:${utxo.index}`, utxo);
+  }
+
+  async saveLockedUtxo(lockedUtxo: ILockedUtxo): Promise<void> {
+    this.lockedUtxos.set(`${lockedUtxo.tx.tx_id}:${lockedUtxo.index}`, lockedUtxo);
+  }
+
+  async *iterateLockedUtxos(): AsyncGenerator<ILockedUtxo> {
+    for (const lockedUtxo of this.lockedUtxos.values()) {
+      yield lockedUtxo;
+    }
+  }
+
+  async unlockUtxo(lockedUtxo: ILockedUtxo): Promise<void> {
+    this.lockedUtxos.delete(`${lockedUtxo.tx.tx_id}:${lockedUtxo.index}`);
   }
 
   /** ACCESS DATA */
