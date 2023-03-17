@@ -497,6 +497,29 @@ export class Storage implements IStorage {
   }
 
   /**
+   * Check if an utxo is selected as input.
+   * 
+   * @param {IUtxoId} utxo The utxo we want to check if it is selected as input
+   * @returns {Promise<boolean>}
+   */
+  async isUtxoSelectedAsInput(utxo: IUtxoId): Promise<boolean> {
+    const utxoId = `${utxo.txId}:${utxo.index}`;
+    return this.utxosSelectedAsInput.has(utxoId);
+  }
+
+  async *utxoSelectedAsInputIter(): AsyncGenerator<IUtxoId, any, unknown> {
+    for (const [utxoStr, isSelected] of this.utxosSelectedAsInput.entries()) {
+      if (isSelected) {
+        const [txId, index] = utxoStr.split(':');
+        yield {
+          txId,
+          index: parseInt(index, 10),
+        };
+      }
+    }
+  }
+
+  /**
    * Helper to check if the access data exists before returning it.
    * Having the accessData as null means the wallet is not initialized so we should throw an error.
    *
