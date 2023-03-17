@@ -224,7 +224,7 @@ test('token methods', async () => {
   }
   expect(registered).toHaveLength(1);
 
-  await store.editToken('00', { numTransactions: 10, balance: { tokens: { locked: 1, unlocked: 2 } } });
+  await store.editTokenMeta('00', { numTransactions: 10, balance: { tokens: { locked: 1, unlocked: 2 } } });
   await expect(store.tokenIndex.getTokenMetadata('00')).resolves.toMatchObject({
     numTransactions: 10,
     balance: {

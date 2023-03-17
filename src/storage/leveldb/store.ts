@@ -97,7 +97,7 @@ export default class LevelDBStore implements IStore {
     await this.walletIndex.setCurrentAddressIndex(index);
   }
 
-  async editAddress(base58: string, meta: IAddressMetadata): Promise<void> {
+  async editAddressMeta(base58: string, meta: IAddressMetadata): Promise<void> {
     await this.addressIndex.setAddressMeta(base58, meta);
   }
 
@@ -207,8 +207,8 @@ export default class LevelDBStore implements IStore {
     await this.tokenIndex.unregisterToken(tokenUid);
   }
 
-  async editToken(tokenUid: string, meta: ITokenMetadata): Promise<void> {
-    await this.tokenIndex.editToken(tokenUid, meta);
+  async editTokenMeta(tokenUid: string, meta: ITokenMetadata): Promise<void> {
+    await this.tokenIndex.editTokenMeta(tokenUid, meta);
   }
 
   // Utxos

@@ -222,7 +222,7 @@ export default class LevelTokenIndex implements IKVTokenIndex {
    * @param {Partial<ITokenMetadata>} meta metadata to add
    * @returns {Promise<void>}
    */
-  async editToken(tokenUid: string, meta: ITokenMetadata): Promise<void> {
+  async editTokenMeta(tokenUid: string, meta: ITokenMetadata): Promise<void> {
     await this.metadataDB.put(tokenUid, meta);
   }
 

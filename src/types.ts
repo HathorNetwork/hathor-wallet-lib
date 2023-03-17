@@ -421,7 +421,7 @@ export interface IKVTokenIndex extends IKVStoreIndex<void> {
   registerToken(token: ITokenData): Promise<void>;
   unregisterToken(tokenUid: string): Promise<void>;
   deleteTokens(tokens: string[]): Promise<void>;
-  editToken(tokenUid: string, meta: Partial<ITokenMetadata>): Promise<void>;
+  editTokenMeta(tokenUid: string, meta: Partial<ITokenMetadata>): Promise<void>;
   clearMeta(): Promise<void>;
   clear(): Promise<void>;
 }
