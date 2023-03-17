@@ -252,11 +252,14 @@ export async function processHistory(store: IStore, { rewardLock }: { rewardLock
 export async function updateWalletMetadataFromProcessedTxData(store: IStore, { maxIndexUsed, tokens }: { maxIndexUsed: number, tokens: Set<string>}): Promise<void> {
   // Update wallet data
   const walletData = await store.getWalletData();
-  if (walletData.lastUsedAddressIndex <= maxIndexUsed) {
-    if (walletData.currentAddressIndex <= maxIndexUsed) {
-      await store.setCurrentAddressIndex(Math.min(maxIndexUsed + 1, walletData.lastLoadedAddressIndex));
+  if (maxIndexUsed > -1) {
+    // If maxIndexUsed is -1 it means we didn't find any tx, so we don't need to update the wallet data
+    if (walletData.lastUsedAddressIndex <= maxIndexUsed) {
+      if (walletData.currentAddressIndex <= maxIndexUsed) {
+        await store.setCurrentAddressIndex(Math.min(maxIndexUsed + 1, walletData.lastLoadedAddressIndex));
+      }
+      await store.setLastUsedAddressIndex(maxIndexUsed);
     }
-    await store.setLastUsedAddressIndex(maxIndexUsed);
   }
 
   // Update token config
