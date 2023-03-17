@@ -23,7 +23,7 @@ import config from '../config';
  * @param {number} timeout Timeout in milliseconds for the request
  * @param {Object} additionalHeaders Headers to be sent with the request
  */
-export const axiosWrapperCreateRequestInstance = (url: string, resolve?: Function, timeout?: number, additionalHeaders = {}) => {
+export const axiosWrapperCreateRequestInstance = (url: string, resolve?: Function|null, timeout?: number|null, additionalHeaders = {}) => {
   if (timeout === undefined) {
     timeout = TIMEOUT;
   }
@@ -34,12 +34,18 @@ export const axiosWrapperCreateRequestInstance = (url: string, resolve?: Functio
     additionalHeaders['User-Agent'] = userAgent;
   }
 
-  const defaultOptions = {
+  const defaultOptions: {
+    baseURL: string,
+    timeout?: number,
+    headers: Record<string, string>,
+  } = {
     baseURL: url,
-    timeout: timeout,
     headers: Object.assign({
       'Content-Type': 'application/json',
     }, additionalHeaders),
+  }
+  if (timeout) {
+    defaultOptions.timeout = timeout;
   }
 
   return axios.create(defaultOptions);

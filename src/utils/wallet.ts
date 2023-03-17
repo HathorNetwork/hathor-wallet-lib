@@ -6,14 +6,17 @@
  */
 
 
-import { crypto, util, HDPublicKey, HDPrivateKey, Address, Script } from 'bitcore-lib';
+import { crypto, util, HDPublicKey, HDPrivateKey, Script } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
-import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE, P2SH_ACCT_PATH } from '../constants';
+import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE, P2SH_ACCT_PATH, P2PKH_ACCT_PATH, WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../constants';
 import { OP_0 } from '../opcodes';
 import { XPubError, InvalidWords, UncompressedPubKeyError } from '../errors';
 import Network from '../models/network';
 import _ from 'lodash';
 import helpers from './helpers';
+
+import { IMultisigData, IWalletAccessData, WalletType, WALLET_FLAGS } from '../types';
+import { encryptData } from './crypto';
 
 
 const wallet = {
@@ -161,7 +164,7 @@ const wallet = {
       if (error instanceof Error) {
         throw new XPubError(error.message);
       } else {
-        throw new XPubError(error);
+        throw new XPubError(error as string);
       }
     }
     if (index === undefined) {
@@ -256,83 +259,6 @@ const wallet = {
   },
 
   /**
-   * Get Hathor addresses in bulk, passing the start index and quantity of addresses to be generated
-   *
-   * @example
-   * ```
-   * getAddresses('myxpub', 2, 3, 'mainnet') => {
-   *   'address2': 2,
-   *   'address3': 3,
-   *   'address4': 4,
-   * }
-   * ```
-   *
-   * @param {string} xpubkey The xpubkey
-   * @param {number} startIndex Generate addresses starting from this index
-   * @param {number} quantity Amount of addresses to generate
-   * @param {string} networkName 'mainnet' or 'testnet'
-   *
-   * @return {Object} An object with the generated addresses and corresponding index (string => number)
-   * @throws {XPubError} In case the given xpub key is invalid
-   * @memberof Wallet
-   * @inner
-   */
-  getAddresses(xpubkey: string, startIndex: number, quantity: number, networkName: string = 'mainnet'): Object {
-    let xpub: HDPublicKey;
-    try {
-      xpub = HDPublicKey(xpubkey);
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        throw new XPubError(error.message);
-      } else {
-        throw new XPubError(error);
-      }
-    }
-
-    const network = new Network(networkName);
-
-    const addrMap = {};
-    for (let index = startIndex; index < startIndex + quantity; index++) {
-      const key = xpub.deriveChild(index);
-      const address = Address(key.publicKey, network.bitcoreNetwork);
-      addrMap[address.toString()] = index;
-    }
-    return addrMap;
-  },
-
-  /**
-   * Get Hathor address at specific index
-   *
-   * @param {string} xpubkey The xpubkey in the last derivation path (change level according to BIP0044)
-   * @param {number} addressIndex Index of address to generate
-   * @param {string} networkName 'mainnet' or 'testnet'
-   *
-   * @return {string} Address at the requested index
-   * @throws {XPubError} In case the given xpub key is invalid
-   * @memberof Wallet
-   * @inner
-   */
-  getAddressAtIndex(xpubkey: string, addressIndex: number, networkName: string = 'mainnet'): string {
-    let xpub: HDPublicKey;
-    try {
-      xpub = HDPublicKey(xpubkey);
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        throw new XPubError(error.message);
-      } else {
-        throw new XPubError(error);
-      }
-    }
-
-    const network = new Network(networkName);
-
-    const key = xpub.deriveChild(addressIndex);
-    const address = Address(key.publicKey, network.bitcoreNetwork);
-
-    return address.toString();
-  },
-
-  /**
    * Derive next step of child from xpub
    *
    * @param {string} xpubkey The xpubkey
@@ -351,7 +277,7 @@ const wallet = {
       if (error instanceof Error) {
         throw new XPubError(error.message);
       } else {
-        throw new XPubError(error);
+        throw new XPubError(error as string);
       }
     }
 
@@ -404,7 +330,6 @@ const wallet = {
       throw new Error('Signatures are incompatible with redeemScript');
     }
     const arr: Buffer[] = [];
-    let sigCount = 0;
     for (const sig of signatures) {
       helpers.pushDataToStack(arr, sig);
     }
@@ -440,6 +365,181 @@ const wallet = {
     const methodOptions = Object.assign({passphrase: '', networkName: 'mainnet'}, options);
     const xpriv = this.getXPrivKeyFromSeed(seed, methodOptions);
     return this.getMultiSigXPubFromXPriv(xpriv);
+  },
+
+  /**
+   * Generate access data from xpubkey.
+   * The access data will be used to start a wallet and derive the wallet's addresses.
+   * This method can only generate READONLY wallets since we do not have the private key.
+   * 
+   * We can only accept xpubs derived to the account or change path.
+   * Since hdpublickeys cannot derive on hardened paths, the derivation must be done previously with the private key
+   * The last path with hardened derivation defined on bip44 is the account path so we support using an account path xpub.
+   * We can also use the change path xpub since we use it to derive the addresses
+   * but we cannot use the address path xpub since we won't be able to derive all addresses.
+   * And the wallet-lib currently does not support the creation of a wallet with a single address.
+   * 
+   * @param {string} xpubkey HDPublicKey in string format.
+   * @param {{ multisig: IMultisigData }} [options={}] Options to generate the access data.
+   * @returns {IWalletAccessData}
+   */
+  generateAccessDataFromXpub(xpubkey: string, {multisig}: {multisig?: IMultisigData} = {}): IWalletAccessData {
+    let walletType: WalletType;
+    if (multisig === undefined) {
+      walletType = WalletType.P2PKH;
+    } else {
+      walletType = WalletType.MULTISIG;
+    }
+    // HDPublicKeys cannot derive on hardened paths, so the derivation must be done previously with the xprivkey.
+    // So we assume the user sent an xpub derived to the account level.
+
+    const argXpub = new HDPublicKey(xpubkey);
+
+    let multisigData: IMultisigData|undefined = undefined;
+    let xpub: HDPublicKey;
+
+    if (argXpub.depth === 3) {
+      // This is an account path xpub which we expect was derived to the path m/45'/280'/0'
+      xpub = argXpub.derive(0);
+
+      if (multisig) {
+        // A multisig wallet requires the account path publickey to determine which participant this wallet is.
+        // Since we have the account path xpub we can initialize the readonly multisig wallet.
+        multisigData = {
+          ...multisig,
+          pubkey: argXpub.publicKey.toString('hex'),
+        }
+      } else {
+        multisigData = undefined;
+      }
+    } else if (argXpub.depth === 4) {
+      // This is a change path xpub which we expect was derived to the path m/45'/280'/0'/0
+      xpub = argXpub;
+
+      if (multisig) {
+        // A multisig wallet requires the account path publickey to determine which participant this wallet is.
+        // Since we cannot get the account path publickey we must stop the wallet creation.
+        throw new Error('Cannot create a multisig wallet with a change path xpub');
+      }
+    } else {
+      // We currently only support account path and change path xpubs.
+      throw new Error('Invalid xpub');
+    }
+
+    return {
+      // Change path hdpublickey in string format
+      xpubkey: xpub.xpubkey,
+      walletType,
+      multisigData,
+      // We force the readonly flag because we are starting a wallet without the private key
+      walletFlags: 0 | WALLET_FLAGS.READONLY,
+    };
+  },
+
+  generateAccessDataFromXpriv(
+    xprivkey: string,
+    {multisig, pin}: {multisig?: IMultisigData, pin: string},
+  ): IWalletAccessData {
+    let walletType: WalletType;
+    if (multisig === undefined) {
+      walletType = WalletType.P2PKH;
+    } else {
+      walletType = WalletType.MULTISIG;
+    }
+
+    const argXpriv = new HDPrivateKey(xprivkey);
+    let xpriv: HDPrivateKey;
+    if (argXpriv.depth === 0) {
+      if (walletType === WalletType.MULTISIG) {
+        xpriv = argXpriv.deriveNonCompliantChild(`${P2SH_ACCT_PATH}/0`);
+      } else {
+        xpriv = argXpriv.deriveNonCompliantChild(`${P2PKH_ACCT_PATH}/0`);
+      }
+    } else {
+      if (walletType === WalletType.MULTISIG) {
+        throw new Error('Cannot start a multisig wallet with a derived xpriv');
+      }
+      xpriv = argXpriv;
+    }
+
+    const encryptedMainKey = encryptData(xpriv.xprivkey, pin);
+
+    let multisigData: IMultisigData|undefined;
+    if (multisig === undefined) {
+      multisigData = undefined;
+    } else {
+      // For multisig wallets we need to save the pubkey of the account path
+      const derivedXpriv = argXpriv.deriveNonCompliantChild(P2SH_ACCT_PATH);
+      multisigData = {
+        pubkey: derivedXpriv.publicKey.toString('hex'),
+        ...multisig,
+      };
+    }
+
+    return {
+      walletType,
+      multisigData,
+      mainKey: encryptedMainKey,
+      xpubkey: xpriv.xpubkey,
+      walletFlags: 0,
+    };
+  },
+
+  generateAccessDataFromSeed(
+    words: string,
+    {
+      multisig,
+      passphrase='',
+      pin,
+      password,
+      networkName,
+    }: {multisig?: IMultisigData, pin: string, password: string, passphrase?: string, networkName: string},
+  ): IWalletAccessData {
+    let walletType: WalletType;
+    if (multisig === undefined) {
+      walletType = WalletType.P2PKH;
+    } else {
+      walletType = WalletType.MULTISIG;
+    }
+
+    const code = new Mnemonic(words);
+    const rootXpriv = code.toHDPrivateKey(passphrase, new Network(networkName));
+    const authXpriv = rootXpriv.deriveNonCompliantChild(WALLET_SERVICE_AUTH_DERIVATION_PATH);
+
+    let accXpriv: HDPrivateKey;
+    let xpriv: HDPrivateKey;
+    if (walletType === WalletType.MULTISIG) {
+      accXpriv = rootXpriv.deriveNonCompliantChild(P2SH_ACCT_PATH);
+      xpriv = accXpriv.deriveNonCompliantChild(0);
+    } else {
+      accXpriv = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
+      xpriv = accXpriv.deriveNonCompliantChild(0);
+    }
+
+    const encryptedMainKey = encryptData(xpriv.xprivkey, pin);
+    const encryptedAuthPathKey = encryptData(authXpriv.xprivkey, pin);
+    const encryptedWords = encryptData(words, password);
+
+    let multisigData: IMultisigData|undefined;
+    if (multisig === undefined) {
+      multisigData = undefined;
+    } else {
+      // For multisig wallets we need to save the pubkey of the account path
+      multisigData = {
+        pubkey: accXpriv.publicKey.toString('hex'),
+        ...multisig,
+      };
+    }
+
+    return {
+      walletType,
+      multisigData,
+      xpubkey: xpriv.xpubkey,
+      mainKey: encryptedMainKey,
+      authKey: encryptedAuthPathKey,
+      words: encryptedWords,
+      walletFlags: 0,
+    };
   },
 }
 

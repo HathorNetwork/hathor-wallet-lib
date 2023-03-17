@@ -49,6 +49,10 @@ test('Token deposit', () => {
   expect(tokens.getDepositAmount(550)).toBe(6);
 });
 
+test('NFT creation fee', () => {
+  expect(tokens.getNFTCreationFee()).toBe(1);
+});
+
 test('Token withdraw', () => {
   // considering HTR deposit is 1%
   expect(tokens.getWithdrawAmount(100)).toBe(1);
