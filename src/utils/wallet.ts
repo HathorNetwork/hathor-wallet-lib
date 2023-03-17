@@ -6,7 +6,7 @@
  */
 
 
-import { crypto, util, HDPublicKey, HDPrivateKey, Script } from 'bitcore-lib';
+import { crypto, util, HDPublicKey, HDPrivateKey, Script, PublicKey } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
 import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE, P2SH_ACCT_PATH, P2PKH_ACCT_PATH, WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../constants';
 import { OP_0 } from '../opcodes';
@@ -156,7 +156,7 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  getPublicKeyFromXpub(xpubkey: string, index?: number): Buffer {
+  getPublicKeyFromXpub(xpubkey: string, index?: number): PublicKey {
     let xpub: HDPublicKey;
     try {
       xpub = HDPublicKey(xpubkey);

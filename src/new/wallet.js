@@ -723,7 +723,7 @@ class HathorWallet extends EventEmitter {
         // XXX: we currently do not check heightlock on the helper, checking here for compatibility
         const nowHeight = await this.storage.getCurrentHeight();
         const rewardLock = this.storage.version?.reward_spend_min_blocks;
-        const is_height_locked = tx.height && nowHeight && rewardLock && ((tx.height + rewardLock) < nowHeight );
+        const is_height_locked = tx.height && nowHeight && rewardLock && (nowHeight < (tx.height + rewardLock) );
         const is_locked = is_time_locked || is_height_locked;
 
         addressInfo.total_amount_received += output.value;
