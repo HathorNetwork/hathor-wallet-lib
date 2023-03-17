@@ -16,8 +16,8 @@ const EXPLORER_SERVICE_MAINNET_BASE_URL  = 'https://explorer-service.hathor.netw
 const EXPLORER_SERVICE_TESTNET_BASE_URL  = 'https://explorer-service.testnet.hathor.network/';
 
 // Atomic Swap Service URL
-const SWAP_SERVICE_MAINNET_BASE_URL  = 'https://atomic-swap-service.hathor.network/';
-const SWAP_SERVICE_TESTNET_BASE_URL  = 'https://atomic-swap-service.testnet.hathor.network/';
+export const SWAP_SERVICE_MAINNET_BASE_URL  = 'https://atomic-swap-service.hathor.network/';
+export const SWAP_SERVICE_TESTNET_BASE_URL  = 'https://atomic-swap-service.testnet.hathor.network/';
 
 export class Config {
   TX_MINING_URL?: string;
