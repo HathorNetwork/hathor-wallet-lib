@@ -79,7 +79,7 @@ test('prepareTxData', async () => {
   };
   const inputs = [{ txId: 'spent-tx-id', index: 0 }];
   const outputs = [addrOutput, dataOutput];
-  const sendTransaction = new SendTransaction(storage, {inputs, outputs});
+  const sendTransaction = new SendTransaction({storage, inputs, outputs});
   await expect(sendTransaction.prepareTxData()).resolves.toMatchObject({
     inputs: [
       {

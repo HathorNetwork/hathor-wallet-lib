@@ -1173,8 +1173,8 @@ class HathorWallet extends EventEmitter {
     }
     const { inputs, changeAddress } = newOptions;
     const sendTransaction = new SendTransaction(
-      this.storage,
       {
+        storage: this.storage,
         outputs,
         inputs,
         changeAddress,
@@ -1300,7 +1300,7 @@ class HathorWallet extends EventEmitter {
    * @inner
    */
   async handleSendPreparedTransaction(transaction) {
-    const sendTransaction = new SendTransaction(this.storage, { transaction });
+    const sendTransaction = new SendTransaction({ storage: this.storage, transaction });
     return sendTransaction.runFromMining();
   }
 
