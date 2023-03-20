@@ -1766,6 +1766,7 @@ describe('meltTokens', () => {
     meltResponse = await hWallet.meltTokens(tokenUid, 100);
     expectedHtrFunds += 1;
     await waitForTxReceived(hWallet, meltResponse.hash);
+    await delay(100);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Melting between 1.00 and 2.00 tokens recovers 0.01 HTR
