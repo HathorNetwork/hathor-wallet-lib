@@ -58,7 +58,7 @@ test('updateDevice', async () => {
 
 test('unregisterDevice', async () => {
   const wallet = buildWalletToAuthenticateApiCall();
-  spyOn(wallet, 'isReady').and.returnValue(true);
+  jest.spyOn(wallet, 'isReady').mockReturnValue(true);
 
   mockAxiosAdapter.reset();
   mockAxiosAdapter
