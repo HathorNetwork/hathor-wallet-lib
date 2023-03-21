@@ -35,10 +35,16 @@ const DEFAULT_WALLET_DATA = {
  * Get the ordering key for a transaction.
  * This will be used to sort the transactions by timestamp.
  *
- * @param {IHistoryTx} tx The transaction
+ * @param {Pick<IHistoryTx, 'timestamp'|'tx_id'>} tx The transaction, at least with timestamp and tx_id
  * @returns {string} The ordering key for the transaction
+ * @example
+ * // returns '0000000f:cafe'
+ * getOrderingKey({ tx_id: 'cafe', timestamp: 15 });
+ * @example
+ * // returns '5fbec5d0:abcdef'
+ * getOrderingKey({ tx_id: 'abcdef', timestamp: 1606338000 });
  */
-function getOrderingKey(tx: IHistoryTx): string {
+function getOrderingKey(tx: Pick<IHistoryTx, 'timestamp'|'tx_id'>): string {
   const buf = Buffer.alloc(4);
   buf.writeUInt32BE(tx.timestamp, 0);
   return `${buf.toString('hex')}:${tx.tx_id}`;
@@ -51,6 +57,12 @@ function getOrderingKey(tx: IHistoryTx): string {
  *
  * @param {string} key The ordering key of a transaction
  * @returns {{ timestamp: number, txId: string }}
+ * @example
+ * // returns { timestamp: 15, txId: 'cafe' }
+ * getPartsFromOrderingKey('0000000f:cafe');
+ * @example
+ * // returns { timestamp: 1606338000, txId: 'abcdef' }
+ * getPartsFromOrderingKey('5fbec5d0:abcdef');
  */
 function getPartsFromOrderingKey(key: string): { timestamp: number, txId: string } {
   const parts = key.split(':');
