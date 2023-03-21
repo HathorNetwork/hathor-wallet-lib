@@ -10,7 +10,9 @@ import { IStorage } from "../types";
 export function handleWsDashboard(storage: IStorage) {
   return (data: any) => {
     // update network height
-    storage.setCurrentHeight(data.best_block_height as number);
+    const height = data.best_block_height as number;
+    storage.setCurrentHeight(height);
+    storage.unlockUtxos(height);
   }
 }
 

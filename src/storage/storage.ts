@@ -260,6 +260,19 @@ export class Storage implements IStorage {
   }
 
   /**
+   * Process the locked utxos to unlock them if the lock has expired.
+   * Will process both timelocked and heightlocked utxos.
+   *
+   * @param {number} height The network height to use as reference to unlock utxos
+   * @returns {Promise<void>}
+   */
+  async unlockUtxos(height: number): Promise<void> {
+    // Will wait for the previous execution to finish before starting the next one
+    // This is to prevent multiple calls to this method to run in parallel and "double unlock" utxos
+    this.utxoUnlockWait = this.utxoUnlockWait.then(() => this.processLockedUtxos(height));
+  }
+
+  /**
    * Iterate on all utxos of the wallet.
    * @returns {AsyncGenerator<IUtxo, any, unknown>}
    */
@@ -619,9 +632,6 @@ export class Storage implements IStorage {
    */
   async setCurrentHeight(height: number): Promise<void> {
     await this.store.setCurrentHeight(height);
-    // process utxo unlocks
-    // Will wait for the previous execution to finish before starting the next one
-    this.utxoUnlockWait = this.utxoUnlockWait.then(() => this.processLockedUtxos(height));
   }
 
   /**
