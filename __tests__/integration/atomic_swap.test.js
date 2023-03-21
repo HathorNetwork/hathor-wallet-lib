@@ -94,7 +94,7 @@ describe('partial tx proposal', () => {
     expect(proposal1After.signatures.isComplete()).toBeTruthy();
 
     const transaction = proposal1After.prepareTx();
-    const sendTransaction = new SendTransaction({storage: hWallet1.storage, transaction });
+    const sendTransaction = new SendTransaction({ storage: hWallet1.storage, transaction });
     const tx = await sendTransaction.runFromMining();
     expect(tx.hash).toBeDefined();
 

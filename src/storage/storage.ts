@@ -512,6 +512,8 @@ export class Storage implements IStorage {
    * 
    * @param {IUtxoId} utxo The utxo we want to check if it is selected as input
    * @returns {Promise<boolean>}
+   * @example
+   * const isSelected = await isUtxoSelectedAsInput({ txId: 'tx1', index: 0 });
    */
   async isUtxoSelectedAsInput(utxo: IUtxoId): Promise<boolean> {
     const utxoId = `${utxo.txId}:${utxo.index}`;
