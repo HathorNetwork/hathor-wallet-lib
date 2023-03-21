@@ -351,10 +351,14 @@ export class MemoryStore implements IStore {
   async saveTx(tx: IHistoryTx): Promise<void> {
     this.history.set(tx.tx_id, tx);
 
-    // Add transaction to the ordering list
-    // and sort it so we ensure the order
-    this.historyTs.push(getOrderingKey(tx));
-    this.historyTs.sort();
+    // Protect ordering list from updates on the same transaction
+    // We can check the historyTs but it's O(n) and this check is O(1).
+    if (!this.history.has(tx.tx_id)) {
+      // Add transaction to the ordering list
+      // and sort it so we ensure the order
+      this.historyTs.push(getOrderingKey(tx));
+      this.historyTs.sort();
+    }
 
     let maxIndex = this.walletData.lastUsedAddressIndex;
     for (const el of [...tx.inputs, ...tx.outputs]) {
