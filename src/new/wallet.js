@@ -800,9 +800,6 @@ class HathorWallet extends EventEmitter {
 
     for await (const utxo of this.storage.selectUtxos(newOptions)) {
       const isLocked = isTimeLocked(utxo.timelock) || isHeightLocked(utxo.height);
-      if (options.only_available_utxos && isLocked) {
-        continue;
-      }
 
       const utxoInfo = {
         address: utxo.address,

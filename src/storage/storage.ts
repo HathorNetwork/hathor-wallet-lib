@@ -266,9 +266,20 @@ export class Storage implements IStorage {
    * @returns {AsyncGenerator<IUtxo, any, unknown>}
    */
   async *selectUtxos(options: Omit<IUtxoFilterOptions, 'reward_lock'> = {}): AsyncGenerator<IUtxo, any, unknown> {
-    const newFilter = (utxo: IUtxo): boolean => {
+    const filterSelected = (utxo: IUtxo): boolean => {
       const utxoId = `${utxo.txId}:${utxo.index}`;
-      return (!this.utxosSelectedAsInput.has(utxoId)) && (options.filter_method ? options.filter_method(utxo) : true);
+      return !this.utxosSelectedAsInput.has(utxoId);
+    }
+    const newFilter = (utxo: IUtxo): boolean => {
+      const optionsFilter = (options.filter_method ? options.filter_method(utxo) : true);
+      const selectedFilter = filterSelected(utxo);
+      if (options.only_available_utxos) {
+        // We need to check if the utxo is selected as an input since we only want available utxos.
+        return selectedFilter && optionsFilter;
+      } else {
+        // Only check the filter method if we don't care about available utxos.
+        return optionsFilter;
+      }
     }
 
     const newOptions: IUtxoFilterOptions = {
@@ -507,7 +518,7 @@ export class Storage implements IStorage {
     return this.utxosSelectedAsInput.has(utxoId);
   }
 
-  async *utxoSelectedAsInputIter(): AsyncGenerator<IUtxoId, any, unknown> {
+  async *utxoSelectedAsInputIter(): AsyncGenerator<IUtxoId> {
     for (const [utxoStr, isSelected] of this.utxosSelectedAsInput.entries()) {
       if (isSelected) {
         const [txId, index] = utxoStr.split(':');
