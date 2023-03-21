@@ -251,7 +251,7 @@ describe('checkAddressesMine', () => {
   });
 });
 
-describe('getAllUtxos', () => {
+describe('getAvailableUtxos', () => {
   afterEach(async () => {
     await stopAllWallets();
     await GenesisWalletHelper.clearListeners();
@@ -264,7 +264,7 @@ describe('getAllUtxos', () => {
     const hWallet = await generateWalletHelper();
 
     // Get correct results for an empty wallet
-    let utxoGenerator = await hWallet.getAllUtxos();
+    let utxoGenerator = await hWallet.getAvailableUtxos();
     let utxoGenResult = await utxoGenerator.next();
     expect(utxoGenResult).toStrictEqual({ done: true, value: undefined });
 
@@ -272,7 +272,7 @@ describe('getAllUtxos', () => {
     const tx1 = await GenesisWalletHelper.injectFunds(await hWallet.getAddressAtIndex(0), 10);
 
     // Get correct results for a single transaction
-    utxoGenerator = await hWallet.getAllUtxos();
+    utxoGenerator = await hWallet.getAvailableUtxos();
     utxoGenResult = await utxoGenerator.next();
     expect(utxoGenResult)
       .toMatchObject({
@@ -304,7 +304,7 @@ describe('getAllUtxos', () => {
     const tx2 = await GenesisWalletHelper.injectFunds(await hWallet.getAddressAtIndex(1), 5);
 
     // Validate that on the address that received tx1, the UTXO is listed
-    let utxoGenerator = await hWallet.getAllUtxos({ filter_address: await hWallet.getAddressAtIndex(0) });
+    let utxoGenerator = await hWallet.getAvailableUtxos({ filter_address: await hWallet.getAddressAtIndex(0) });
     let utxoGenResult = await utxoGenerator.next();
     expect(utxoGenResult.value).toMatchObject({
       txId: tx1.hash,
@@ -313,7 +313,7 @@ describe('getAllUtxos', () => {
     expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true });
 
     // Validate that on the address that received tx2, the UTXO is listed
-    utxoGenerator = await hWallet.getAllUtxos({ filter_address: await hWallet.getAddressAtIndex(1) });
+    utxoGenerator = await hWallet.getAvailableUtxos({ filter_address: await hWallet.getAddressAtIndex(1) });
     utxoGenResult = await utxoGenerator.next();
     expect(utxoGenResult.value).toMatchObject({
       txId: tx2.hash,
@@ -322,7 +322,7 @@ describe('getAllUtxos', () => {
     expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true });
 
     // Validate that on an address that did not receive any transaction, the results are empty
-    utxoGenerator = await hWallet.getAllUtxos({ filter_address: await hWallet.getAddressAtIndex(2) });
+    utxoGenerator = await hWallet.getAvailableUtxos({ filter_address: await hWallet.getAddressAtIndex(2) });
     expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true });
   });
 
@@ -334,7 +334,7 @@ describe('getAllUtxos', () => {
     await GenesisWalletHelper.injectFunds(await hWallet.getAddressAtIndex(0), 10);
     const { hash: tokenUid } = await createTokenHelper(
       hWallet,
-      'getAllUtxos Token',
+      'getAvailableUtxos Token',
       'GAUT',
       100
     );
@@ -344,7 +344,7 @@ describe('getAllUtxos', () => {
      * - The method's default token is HTR when calling without parameters
      * - The HTR change is listed
      */
-    let utxoGenerator = await hWallet.getAllUtxos();
+    let utxoGenerator = await hWallet.getAvailableUtxos();
     let utxoGenResult = await utxoGenerator.next();
     expect(utxoGenResult.value).toMatchObject({
       txId: tokenUid,
@@ -355,7 +355,7 @@ describe('getAllUtxos', () => {
 
     // Validate that the custom token utxo is listed with its authority tokens
     // By default list only funds
-    utxoGenerator = hWallet.getAllUtxos({ token: tokenUid });
+    utxoGenerator = hWallet.getAvailableUtxos({ token: tokenUid });
     let allResults = [];
     for await (const u of utxoGenerator) {
       allResults.push(u);
@@ -371,7 +371,7 @@ describe('getAllUtxos', () => {
     ]));
 
     // List all authorities
-    utxoGenerator = hWallet.getAllUtxos({ token: tokenUid, authorities: 3 });
+    utxoGenerator = hWallet.getAvailableUtxos({ token: tokenUid, authorities: 3 });
     allResults = [];
     for await (const u of utxoGenerator) {
       allResults.push(u);
