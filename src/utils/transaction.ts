@@ -506,7 +506,7 @@ const transaction = {
     const rewardLock = storage.version?.reward_spend_min_blocks || 0;
     const nowTs = Math.floor(Date.now() / 1000);
     const tx = await storage.getTx(utxo.txId);
-    if (tx === null) {
+    if (tx === null || (tx.outputs && tx.outputs.length <= utxo.index)) {
       // This is not our utxo, so we cannot spend it.
       return false;
     }

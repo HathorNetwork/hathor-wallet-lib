@@ -846,7 +846,7 @@ class HathorWallet extends EventEmitter {
    * @generator
    * @yields {Utxo} all available utxos
    */
-  async * getAllUtxos(options = {}) {
+  async * getAvailableUtxos(options = {}) {
     // This method only returns available utxos
     for await (const utxo of this.storage.selectUtxos({...options, only_available_utxos: true})) {
       const addressIndex = await this.getAddressIndex(utxo.address);
@@ -882,7 +882,7 @@ class HathorWallet extends EventEmitter {
     }, options);
 
     const utxos = [];
-    for await (const utxo of this.getAllUtxos(newOptions)) {
+    for await (const utxo of this.getAvailableUtxos(newOptions)) {
       utxos.push(utxo);
     }
 

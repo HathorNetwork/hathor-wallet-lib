@@ -509,7 +509,7 @@ export class Storage implements IStorage {
 
   /**
    * Check if an utxo is selected as input.
-   * 
+   *
    * @param {IUtxoId} utxo The utxo we want to check if it is selected as input
    * @returns {Promise<boolean>}
    * @example
@@ -520,6 +520,12 @@ export class Storage implements IStorage {
     return this.utxosSelectedAsInput.has(utxoId);
   }
 
+  /**
+   * Iterate on all locked utxos.
+   * Used to check if the utxos are still locked.
+   *
+   * @returns {AsyncGenerator<IUtxoId>}
+   */
   async *utxoSelectedAsInputIter(): AsyncGenerator<IUtxoId> {
     for (const [utxoStr, isSelected] of this.utxosSelectedAsInput.entries()) {
       if (isSelected) {
