@@ -186,6 +186,15 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
       // Heighlocked when network height is lower than block height + reward_spend_min_blocks
       return ((utxo.height || 0) + options.reward_lock) > networkHeight;
     };
+    const nowTs = Math.floor(Date.now() / 1000);
+    const isTimelocked = (utxo: IUtxo) => {
+      if (utxo.timelock === null) {
+        // Not timelocked
+        return false;
+      }
+      // Timelocked when now is lower than timelock
+      return nowTs < utxo.timelock;
+    };
 
     const token = options.token || HATHOR_TOKEN_CONFIG.uid;
     const authorities = options.authorities || 0;
@@ -244,7 +253,12 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
     let sumAmount = 0;
     let utxoNum = 0;
     for await (const utxo of db.values(itOptions)) {
-      if (isHeightLocked(utxo) || (options.filter_method && !options.filter_method(utxo))) {
+      if (options.only_available_utxos) {
+        if (isHeightLocked(utxo) || isTimelocked(utxo)) {
+          continue;
+        }
+      }
+      if (options.filter_method && !options.filter_method(utxo)) {
         continue;
       }
       if (options.max_amount && ((sumAmount + utxo.value) > options.max_amount)) {
