@@ -847,16 +847,10 @@ class HathorWallet extends EventEmitter {
    * @yields {Utxo} all available utxos
    */
   async * getAllUtxos(options = {}) {
-    const nowHeight = await this.storage.getCurrentHeight();
-    const rewardLock = this.storage.version?.reward_spend_min_blocks;
-    const isHeightLocked = (blockHeight) => blockHeight && nowHeight && rewardLock && ((blockHeight + rewardLock) < nowHeight );
-    for await (const utxo of this.storage.selectUtxos(options)) {
+    // This method only returns available utxos
+    for await (const utxo of this.storage.selectUtxos({...options, only_available_utxos: true})) {
       const addressIndex = await this.getAddressIndex(utxo.address);
       const addressPath = await this.getAddressPathForIndex(addressIndex);
-      const isLocked = !!(
-        (utxo.height && isHeightLocked(utxo.height))
-        || (utxo.timelock && (utxo.timelock > Math.floor(new Date()/1000)))
-      );
       yield {
         txId: utxo.txId,
         index: utxo.index,
@@ -865,8 +859,8 @@ class HathorWallet extends EventEmitter {
         value: utxo.value,
         authorities: utxo.authorities,
         timelock: utxo.timelock,
-        heightlock: utxo.height && isHeightLocked(utxo.height),
-        locked: isLocked,
+        heightlock: null,
+        locked: false,
         addressPath,
       };
     }
