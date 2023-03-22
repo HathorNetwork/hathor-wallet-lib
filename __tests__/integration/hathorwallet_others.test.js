@@ -569,7 +569,7 @@ describe('getUtxosForAmount', () => {
       .rejects.toThrow('utxos to fill');
   });
 
-  it.only('should not retrieve utxos marked as selected', async () => {
+  it('should not retrieve utxos marked as selected', async () => {
     // Retrieving the utxo's data and marking it as selected
     const addr = await hWallet.getAddressAtIndex(11);
     await GenesisWalletHelper.injectFunds(addr, 100);
