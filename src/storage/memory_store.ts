@@ -364,8 +364,12 @@ export class MemoryStore implements IStore {
     // Protect ordering list from updates on the same transaction
     // We can check the historyTs but it's O(n) and this check is O(1).
     if (!this.history.has(tx.tx_id)) {
-      // Add transaction to the ordering list
-      // and sort it so we ensure the order
+      // Add transaction to the ordering list and sort it
+      // Wallets expect to show users the transactions in order of descending timestamp
+      // This is so wallets can show the most recent transactions to users
+      // XXX: If this becomes a performance bottleneck we can either allow wallets to skip ordering
+      // or have the ordering be done during history processing so that
+      // we don't have to sort the list every time we add a new transaction
       this.historyTs.push(getOrderingKey(tx));
       this.historyTs.sort();
     }
