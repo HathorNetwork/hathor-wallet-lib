@@ -746,6 +746,7 @@ export class MemoryStore implements IStore {
       this.tokens = new Map<string, ITokenData>();
       this.tokensMetadata = new Map<string, ITokenMetadata>();
       this.history = new Map<string, IHistoryTx>();
+      this.historyTs = [];
       this.utxos = new Map<string, IUtxo>();
     }
 
