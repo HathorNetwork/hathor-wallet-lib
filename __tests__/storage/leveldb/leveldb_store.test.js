@@ -236,9 +236,8 @@ test('token methods', async () => {
 });
 
 test('utxo methods', async () => {
-  const currDate = new Date('2020-01-01T00:00:00.000Z');
-  const dateLocked = new Date('2020-03-01T00:00:00.000Z');
-  jest.useFakeTimers().setSystemTime(currDate);
+  const dateLocked = new Date('3000-03-01T12:00');
+
   const xpriv = HDPrivateKey();
   const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
   const utxos = [
@@ -276,8 +275,9 @@ test('utxo methods', async () => {
       height: null,
     },
   ];
-  await store.saveUtxo(utxos[0]);
-  await store.saveUtxo(utxos[1]);
+  for (const u of utxos) {
+    await store.saveUtxo(u);
+  }
   let buf = [];
   for await (const u of store.utxoIter()) {
     buf.push(u);
