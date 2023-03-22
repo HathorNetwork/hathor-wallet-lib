@@ -571,13 +571,16 @@ describe('getUtxosForAmount', () => {
 
   it('should not retrieve utxos marked as selected', async () => {
     // Retrieving the utxo's data and marking it as selected
-    const addr1 = await hWallet.getAddressAtIndex(1);
-    const utxosAddr1 = await hWallet.getUtxos({ filter_address: addr1 });
+    const addr = await hWallet.getAddressAtIndex(11);
+    await GenesisWalletHelper.injectFunds(addr, 100);
+    await delay(100);
+
+    const utxosAddr1 = await hWallet.getUtxos({ filter_address: addr });
     const singleUtxoAddr1 = utxosAddr1.utxos[0];
     await hWallet.markUtxoSelected(singleUtxoAddr1.tx_id, singleUtxoAddr1.index, true);
 
     // Validate that it will not be retrieved on getUtxosForAmount
-    await expect(hWallet.getUtxosForAmount(10, { filter_address: addr1 }))
+    await expect(hWallet.getUtxosForAmount(50, { filter_address: addr }))
       .rejects.toThrow('utxos to fill');
   })
 });

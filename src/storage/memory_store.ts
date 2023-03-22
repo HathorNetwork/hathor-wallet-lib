@@ -31,6 +31,48 @@ const DEFAULT_WALLET_DATA = {
   gapLimit: GAP_LIMIT,
 };
 
+/**
+ * Get the ordering key for a transaction.
+ * This will be used to sort the transactions by timestamp.
+ *
+ * @param {Pick<IHistoryTx, 'timestamp'|'tx_id'>} tx The transaction, at least with timestamp and tx_id
+ * @returns {string} The ordering key for the transaction
+ * @example
+ * // returns '0000000f:cafe'
+ * getOrderingKey({ tx_id: 'cafe', timestamp: 15 });
+ * @example
+ * // returns '5fbec5d0:abcdef'
+ * getOrderingKey({ tx_id: 'abcdef', timestamp: 1606338000 });
+ */
+function getOrderingKey(tx: Pick<IHistoryTx, 'timestamp'|'tx_id'>): string {
+  const buf = Buffer.alloc(4);
+  buf.writeUInt32BE(tx.timestamp, 0);
+  return `${buf.toString('hex')}:${tx.tx_id}`;
+}
+
+/**
+ * Get the parts of the ordering key.
+ * This is meant to be used to decode the ordering key
+ * so we can fetch the transaction from the storage.
+ *
+ * @param {string} key The ordering key of a transaction
+ * @returns {{ timestamp: number, txId: string }}
+ * @example
+ * // returns { timestamp: 15, txId: 'cafe' }
+ * getPartsFromOrderingKey('0000000f:cafe');
+ * @example
+ * // returns { timestamp: 1606338000, txId: 'abcdef' }
+ * getPartsFromOrderingKey('5fbec5d0:abcdef');
+ */
+function getPartsFromOrderingKey(key: string): { timestamp: number, txId: string } {
+  const parts = key.split(':');
+  const buf = Buffer.from(parts[0], 'hex');
+  return {
+    timestamp: buf.readUInt32BE(0),
+    txId: parts[1],
+  };
+}
+
 export class MemoryStore implements IStore {
   /**
    * Map<base58, IAddressInfo>
@@ -68,6 +110,12 @@ export class MemoryStore implements IStore {
    */
   history: Map<string, IHistoryTx>;
   /**
+   * Array of `<timestamp>:<txId>` strings, which should be always sorted.
+   * `timestamp` should be in uint32 representation
+   * This will force the items to be ordered by timestamp.
+   */
+  historyTs: string[];
+  /**
    * Map<utxoid, IUtxo>
    * where utxoid is the txId + index, a string representation of IUtxoId
    */
@@ -93,6 +141,7 @@ export class MemoryStore implements IStore {
     this.tokensMetadata = new Map<string, ITokenMetadata>();
     this.registeredTokens = new Map<string, ITokenData>();
     this.history = new Map<string, IHistoryTx>();
+    this.historyTs = [];
     this.utxos = new Map<string, IUtxo>();
     this.accessData = null;
     this.genericStorage = {};
@@ -245,7 +294,7 @@ export class MemoryStore implements IStore {
   /* TRANSACTIONS */
 
   /**
-   * Iterate on the transaction history.
+   * Iterate on the transaction history ordered by timestamp.
    *
    * @param {string|undefined} tokenUid Only yield txs with this token.
    *
@@ -253,7 +302,19 @@ export class MemoryStore implements IStore {
    * @returns {AsyncGenerator<IHistoryTx>}
    */
   async *historyIter(tokenUid?: string | undefined): AsyncGenerator<IHistoryTx> {
-    for (const tx of this.history.values()) {
+    /**
+     * We iterate in reverse order so the most recent transactions are yielded first.
+     * This is to maintain the behavior in the wallets and allow the user to see the most recent transactions first.
+     */
+    for (let i = this.historyTs.length - 1; i >= 0; i -= 1) {
+      const orderKey = this.historyTs[i];
+      const { txId } = getPartsFromOrderingKey(orderKey);
+      const tx = this.history.get(txId);
+      if (!tx) {
+        // This should never happen since any transactions in historyTs should also be in history
+        throw new Error('Transaction not found');
+      }
+
       if (tokenUid === undefined) {
         yield tx;
         continue;
@@ -300,6 +361,19 @@ export class MemoryStore implements IStore {
    * @returns {Promise<void>}
    */
   async saveTx(tx: IHistoryTx): Promise<void> {
+    // Protect ordering list from updates on the same transaction
+    // We can check the historyTs but it's O(n) and this check is O(1).
+    if (!this.history.has(tx.tx_id)) {
+      // Add transaction to the ordering list and sort it
+      // Wallets expect to show users the transactions in order of descending timestamp
+      // This is so wallets can show the most recent transactions to users
+      // XXX: If this becomes a performance bottleneck we can either allow wallets to skip ordering
+      // or have the ordering be done during history processing so that
+      // we don't have to sort the list every time we add a new transaction
+      this.historyTs.push(getOrderingKey(tx));
+      this.historyTs.sort();
+    }
+
     this.history.set(tx.tx_id, tx);
 
     let maxIndex = this.walletData.lastUsedAddressIndex;
@@ -676,6 +750,7 @@ export class MemoryStore implements IStore {
       this.tokens = new Map<string, ITokenData>();
       this.tokensMetadata = new Map<string, ITokenMetadata>();
       this.history = new Map<string, IHistoryTx>();
+      this.historyTs = [];
       this.utxos = new Map<string, IUtxo>();
     }
 
