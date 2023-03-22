@@ -147,7 +147,7 @@ export class MemoryStore implements IStore {
     this.utxos = new Map<string, IUtxo>();
     this.accessData = null;
     this.genericStorage = {};
-    this.lockedUtxos = new Map<string, ILockedUtxo>;
+    this.lockedUtxos = new Map<string, ILockedUtxo>();
 
     this.walletData = { ...DEFAULT_WALLET_DATA, ...DEFAULT_ADDRESSES_WALLET_DATA };
 
@@ -792,5 +792,6 @@ export class MemoryStore implements IStore {
     this.tokensMetadata = new Map<string, ITokenMetadata>();
     this.addressesMetadata = new Map<string, IAddressMetadata>();
     this.utxos = new Map<string, IUtxo>();
+    this.lockedUtxos = new Map<string, ILockedUtxo>();
   }
 }

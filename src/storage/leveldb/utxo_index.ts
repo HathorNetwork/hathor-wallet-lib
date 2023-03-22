@@ -71,6 +71,11 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
    * Value: IUtxo (json encoded)
    */
   tokenAddressUtxoDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, IUtxo>;
+  /**
+   * Locked utxo database
+   * Key: tx_id:index
+   * Value: ILockedUtxo (json encoded)
+   */
   lockedUtxoDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, ILockedUtxo>;
   indexVersion: string = '0.0.1';
 
@@ -316,5 +321,6 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
   async clear(): Promise<void> {
     // This should clear all utxos subdbs
     await this.utxoDB.db.clear();
+    await this.lockedUtxoDB.clear();
   }
 }

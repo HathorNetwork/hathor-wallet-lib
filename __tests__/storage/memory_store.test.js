@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { GAP_LIMIT } from '../../src/constants';
+import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, GAP_LIMIT } from '../../src/constants';
 import { MemoryStore } from '../../src/storage';
 import tx_history from '../__fixtures__/tx_history';
 import walletApi from '../../src/api/wallet';
@@ -260,6 +260,125 @@ test('utxo methods', async () => {
   }
   expect(buf).toHaveLength(1);
   expect(buf[0].txId).toEqual('tx02');
+});
+
+test('locked utxo methods', async () => {
+  const tsFromDate = (date) => Math.floor(date.getTime() / 1000);
+  const tsBefore = new Date('2023-03-21T11:00:00');
+  const tsCurrent = new Date('2023-03-21T12:00:00');
+  const tsAfter = new Date('2023-03-21T13:00:00');
+
+  function getLockedUtxo(txId, address, timelock, height, value, token, token_data) {
+    return {
+      index: 0,
+      tx: {
+        tx_id: txId,
+        height,
+        version: 1,
+        timestamp: tsFromDate(tsBefore),
+        is_voided: false,
+        outputs: [
+          {
+            value,
+            token_data,
+            token,
+            spent_by: null,
+            decoded: {
+              type: 'P2PKH',
+              address,
+              timelock,
+            }
+          },
+        ],
+      },
+    };
+  }
+
+  function getUtxoFromLocked(lutxo) {
+    const { tx, index } = lutxo;
+    const { outputs } = tx;
+    const output = outputs[index];
+    const { decoded } = output;
+    const { address, timelock } = decoded;
+    return {
+      txId: tx.tx_id,
+      index,
+      token: output.token,
+      address,
+      value: output.value,
+      authorities: 0,
+      timelock,
+      type: tx.version,
+      height: tx.height,
+    };
+  }
+
+  jest
+   .useFakeTimers()
+   .setSystemTime(tsCurrent);
+
+  const store = new MemoryStore();
+  const lockedUtxos = [
+    // utxo to be unlocked by time
+    getLockedUtxo(
+      'tx01',
+      'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
+      tsFromDate(tsBefore),
+      null,
+      100, // value
+      '00', // token
+      0, // token_data
+    ),
+    // timelocked
+    getLockedUtxo(
+      'tx02',
+      'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
+      tsFromDate(tsAfter),
+      null,
+      100, // value
+      '00', // token
+      0, // token_data
+    ),
+    // utxo to be unlocked by height
+    getLockedUtxo(
+      'tx03',
+      'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
+      tsFromDate(tsBefore),
+      null,
+      100, // value
+      '01', // token
+      0, // token_data
+    ),
+    // heightlocked
+    getLockedUtxo(
+      'tx04',
+      'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
+      tsFromDate(tsBefore),
+      null,
+      TOKEN_MINT_MASK, // value, mint
+      '01', // token
+      TOKEN_AUTHORITY_MASK | 1, // token_data
+    ),
+  ];
+  for (const lutxo of lockedUtxos) {
+    await store.saveUtxo(getUtxoFromLocked(lutxo));
+    await store.saveLockedUtxo(lutxo);
+  }
+  expect(store.utxos.size).toEqual(4);
+  expect(store.lockedUtxos.size).toEqual(4);
+
+  // iteration on locked utxos yields all locked utxos
+  const buf = [];
+  for await (const u of store.iterateLockedUtxos()) {
+    buf.push(u);
+  }
+  expect(buf).toHaveLength(4);
+  expect(buf).toEqual(lockedUtxos);
+
+  // Unlocking only affects locked utxos
+  await store.unlockUtxo(lockedUtxos[0]);
+  expect(store.utxos.size).toEqual(4);
+  expect(store.lockedUtxos.size).toEqual(3);
 });
 
 test('access data methods', async () => {

@@ -508,6 +508,7 @@ export async function processUtxoUnlock(
   const tx = lockedUtxo.tx;
   const output = tx.outputs[lockedUtxo.index];
   // Skip data outputs since they do not have an address and do not "belong" in a wallet
+  // This shouldn't happen, but we check it just in case
   if (!output.decoded.address) return;
 
   const isTimelocked = (!!nowTs)
