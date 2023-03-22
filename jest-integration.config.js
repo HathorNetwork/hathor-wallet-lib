@@ -4,6 +4,7 @@ const mainTestMatch = process.env.SPECIFIC_INTEGRATION_TEST_FILE
   : '<rootDir>/__tests__/integration/**/*.test.js';
 
 module.exports = {
+  testRunner: "jest-jasmine2",
   clearMocks: true,
   coverageDirectory: 'coverage-integration',
   testEnvironment: 'node',

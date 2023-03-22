@@ -344,6 +344,8 @@ export interface IStorage {
   selectUtxos(options: Omit<IUtxoFilterOptions, 'reward_lock'>): AsyncGenerator<IUtxo>;
   fillTx(tx: IDataTx, options: IFillTxOptions): Promise<{inputs: IDataInput[], outputs: IDataOutput[]}>;
   utxoSelectAsInput(utxo: IUtxoId, markAs: boolean, ttl?: number): Promise<void>;
+  isUtxoSelectedAsInput(utxo: IUtxoId): Promise<boolean>;
+  utxoSelectedAsInputIter(): AsyncGenerator<IUtxoId>;
 
   // Wallet operations
   getAccessData(): Promise<IWalletAccessData|null>;

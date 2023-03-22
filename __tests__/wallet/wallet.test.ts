@@ -322,7 +322,7 @@ test('generateCreateWalletAuthData should return correct auth data', async () =>
 
 test('getTxById', async () => {
   const wallet = buildWalletToAuthenticateApiCall();
-  spyOn(wallet, 'isReady').and.returnValue(true);
+  jest.spyOn(wallet, 'isReady').mockReturnValue(true);
 
   mockAxiosAdapter.reset();
   mockAxiosAdapter

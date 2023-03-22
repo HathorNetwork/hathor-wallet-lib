@@ -1237,8 +1237,8 @@ describe('sendTransaction', () => {
     const { tx_id: inputTxId, index: inputIndex } = (await mhWallet1.getUtxos()).utxos[0];
     const network = mhWallet1.getNetworkObject();
     const sendTransaction = new SendTransaction(
-      mhWallet1.storage,
       {
+        storage: mhWallet1.storage,
         inputs: [
           { txId: inputTxId, index: inputIndex }
         ],
@@ -1268,8 +1268,7 @@ describe('sendTransaction', () => {
     );
     partiallyAssembledTx.prepareToSend();
     const finalTx = new SendTransaction(
-      mhWallet1.storage,
-      { transaction: partiallyAssembledTx },
+      { storage: mhWallet1.storage, transaction: partiallyAssembledTx },
     );
 
     /** @type BaseTransactionResponse */
@@ -1767,6 +1766,7 @@ describe('meltTokens', () => {
     meltResponse = await hWallet.meltTokens(tokenUid, 100);
     expectedHtrFunds += 1;
     await waitForTxReceived(hWallet, meltResponse.hash);
+    await delay(100);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Melting between 1.00 and 2.00 tokens recovers 0.01 HTR
@@ -2371,8 +2371,8 @@ describe('signTx', () => {
     const network = hWallet.getNetworkObject();
     // Build a Transaction to sign
     let sendTransaction = new SendTransaction(
-      hWallet.storage,
       {
+        storage: hWallet.storage,
         outputs: [
           { address: await hWallet.getAddressAtIndex(5), value: 5, token: HATHOR_TOKEN_CONFIG.uid },
           { address: await hWallet.getAddressAtIndex(6), value: 100, token: tokenUid },
@@ -2385,7 +2385,7 @@ describe('signTx', () => {
 
     // Sign transaction
     await hWallet.signTx(tx);
-    sendTransaction = new SendTransaction(hWallet.storage, { transaction: tx });
+    sendTransaction = new SendTransaction({ storage: hWallet.storage, transaction: tx });
     const minedTx = await sendTransaction.runFromMining('mine-tx');
     expect(minedTx.nonce).toBeDefined();
     expect(minedTx.parents).not.toHaveLength(0);

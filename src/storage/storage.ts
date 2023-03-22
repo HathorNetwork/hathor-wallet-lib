@@ -266,9 +266,20 @@ export class Storage implements IStorage {
    * @returns {AsyncGenerator<IUtxo, any, unknown>}
    */
   async *selectUtxos(options: Omit<IUtxoFilterOptions, 'reward_lock'> = {}): AsyncGenerator<IUtxo, any, unknown> {
-    const newFilter = (utxo: IUtxo): boolean => {
+    const filterSelected = (utxo: IUtxo): boolean => {
       const utxoId = `${utxo.txId}:${utxo.index}`;
-      return (!this.utxosSelectedAsInput.has(utxoId)) && (options.filter_method ? options.filter_method(utxo) : true);
+      return !this.utxosSelectedAsInput.has(utxoId);
+    }
+    const newFilter = (utxo: IUtxo): boolean => {
+      const optionsFilter = (options.filter_method ? options.filter_method(utxo) : true);
+      const selectedFilter = filterSelected(utxo);
+      if (options.only_available_utxos) {
+        // We need to check if the utxo is selected as an input since we only want available utxos.
+        return selectedFilter && optionsFilter;
+      } else {
+        // Only check the filter method if we don't care about available utxos.
+        return optionsFilter;
+      }
     }
 
     const newOptions: IUtxoFilterOptions = {
@@ -493,6 +504,37 @@ export class Storage implements IStorage {
       }
     } else {
       this.utxosSelectedAsInput.delete(utxoId);
+    }
+  }
+
+  /**
+   * Check if an utxo is selected as input.
+   *
+   * @param {IUtxoId} utxo The utxo we want to check if it is selected as input
+   * @returns {Promise<boolean>}
+   * @example
+   * const isSelected = await isUtxoSelectedAsInput({ txId: 'tx1', index: 0 });
+   */
+  async isUtxoSelectedAsInput(utxo: IUtxoId): Promise<boolean> {
+    const utxoId = `${utxo.txId}:${utxo.index}`;
+    return this.utxosSelectedAsInput.has(utxoId);
+  }
+
+  /**
+   * Iterate on all locked utxos.
+   * Used to check if the utxos are still locked.
+   *
+   * @returns {AsyncGenerator<IUtxoId>}
+   */
+  async *utxoSelectedAsInputIter(): AsyncGenerator<IUtxoId> {
+    for (const [utxoStr, isSelected] of this.utxosSelectedAsInput.entries()) {
+      if (isSelected) {
+        const [txId, index] = utxoStr.split(':');
+        yield {
+          txId,
+          index: parseInt(index, 10),
+        };
+      }
     }
   }
 

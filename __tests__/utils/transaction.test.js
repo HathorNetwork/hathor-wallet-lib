@@ -270,3 +270,109 @@ test('authorities from output', () => {
   expect(transaction.authoritiesFromOutput(outputMelt)).toEqual(2);
   expect(transaction.authoritiesFromOutput(outputMintMelt)).toEqual(3);
 });
+
+test('canUseUtxo', async () => {
+  const tsFromDate = (date) => Math.floor(date.getTime() / 1000);
+  const t1 = new Date('2020-11-25T18:00:00');
+  const t2 = new Date('2020-11-27T21:00:00');
+  const t3 = new Date('2022-04-16T17:00:00');
+  const t4 = new Date('2023-03-20T11:00:00');
+
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+
+  jest.spyOn(storage, 'getCurrentHeight').mockReturnValue(Promise.resolve(10));
+  const txSpy = jest.spyOn(storage, 'getTx');
+  const isSelSpy = jest.spyOn(storage, 'isUtxoSelectedAsInput').mockReturnValue(Promise.resolve(false));
+  storage.version = { reward_spend_min_blocks: 5 };
+
+  jest.useFakeTimers()
+  jest.setSystemTime(t3);
+
+  // Free tx, in both timelock, heightlock and not selected as input
+  const tx1 = {
+    height: 1, // +reward_lock = 6 and current height is 10, so it's unlocked!
+    outputs: [
+      {
+        decoded: {
+          timelock: tsFromDate(t1), // unlocked
+        }
+      },
+      {
+        decoded: {
+          timelock: tsFromDate(t4), // locked
+        }
+      },
+    ],
+  };
+  txSpy.mockReturnValue(Promise.resolve(tx1));
+  await expect(transaction.canUseUtxo({ txId: 'tx1', index: 0 }, storage)).resolves.toBe(true);
+
+  // Marking as selected as input should make it fail
+  isSelSpy.mockReturnValueOnce(Promise.resolve(true));
+  await expect(transaction.canUseUtxo({ txId: 'tx1', index: 0 }, storage)).resolves.toBe(false);
+  // And if it got unselected it would work again
+  await expect(transaction.canUseUtxo({ txId: 'tx1', index: 0 }, storage)).resolves.toBe(true);
+
+  // Timelocked
+  await expect(transaction.canUseUtxo({ txId: 'tx1', index: 1 }, storage)).resolves.toBe(false);
+  // Timelocked and selected should not interfere in each other
+  isSelSpy.mockReturnValueOnce(Promise.resolve(true));
+  await expect(transaction.canUseUtxo({ txId: 'tx1', index: 1 }, storage)).resolves.toBe(false);
+
+  // Heightlocked
+  const tx2 = {
+    height: 6, // +reward_lock = 11 and current height is 10, so it's locked!
+    outputs: [
+      {
+        decoded: {
+          timelock: tsFromDate(t2), // unlocked
+        }
+      },
+      {
+        decoded: {
+          timelock: tsFromDate(t4), // locked
+        }
+      },
+    ],
+  };
+  txSpy.mockReturnValue(Promise.resolve(tx2));
+  await expect(transaction.canUseUtxo({ txId: 'tx2', index: 0 }, storage)).resolves.toBe(false);
+  // Heightlocked and selected should not interfere in each other
+  isSelSpy.mockReturnValueOnce(Promise.resolve(true));
+  await expect(transaction.canUseUtxo({ txId: 'tx2', index: 0 }, storage)).resolves.toBe(false);
+
+  // Timelocked and heightlocked
+  await expect(transaction.canUseUtxo({ txId: 'tx2', index: 1 }, storage)).resolves.toBe(false);
+
+  // All types of locks at the same time
+  isSelSpy.mockReturnValueOnce(Promise.resolve(true));
+  await expect(transaction.canUseUtxo({ txId: 'tx2', index: 1 }, storage)).resolves.toBe(false);
+
+  // A transaction does not have height, so it cannot be heightlocked
+  const tx3 = {
+    height: null,
+    outputs: [
+      {
+        decoded: {
+          timelock: tsFromDate(t2), // unlocked
+        }
+      },
+      {
+        decoded: {
+          timelock: tsFromDate(t4), // locked
+        }
+      },
+    ],
+  };
+  txSpy.mockReturnValue(Promise.resolve(tx3));
+  await expect(transaction.canUseUtxo({ txId: 'tx3', index: 0 }, storage)).resolves.toBe(true);
+  await expect(transaction.canUseUtxo({ txId: 'tx3', index: 1 }, storage)).resolves.toBe(false);
+  // Even when the height is lower than the reward lock
+  storage.version = { reward_spend_min_blocks: 300 };
+  await expect(transaction.canUseUtxo({ txId: 'tx3', index: 0 }, storage)).resolves.toBe(true);
+  await expect(transaction.canUseUtxo({ txId: 'tx3', index: 1 }, storage)).resolves.toBe(false);
+
+  // Clean fake timers config
+  jest.useRealTimers();
+});

@@ -15,7 +15,7 @@ import CreateTokenTransaction from '../models/create_token_transaction';
 import Input from '../models/input';
 import Output from '../models/output';
 import Network from '../models/network';
-import { IBalance, IStorage, IHistoryTx, IDataOutput, IDataTx, isDataOutputCreateToken, IHistoryOutput } from '../types';
+import { IBalance, IStorage, IHistoryTx, IDataOutput, IDataTx, isDataOutputCreateToken, IHistoryOutput, IUtxoId } from '../types';
 import Address from '../models/address';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
@@ -72,7 +72,7 @@ const transaction = {
     return (
       output.decoded.timelock !== undefined
       && output.decoded.timelock !== null
-      && output.decoded.timelock > refTs
+      && refTs < output.decoded.timelock
     );
   },
 
@@ -492,6 +492,33 @@ const transaction = {
       authorities |= TOKEN_MELT_MASK;
     }
     return authorities;
+  },
+
+  /**
+   * Check if an utxo is available to be spent.
+   *
+   * @param {IUtxoId} utxo Utxo to check if we can use it
+   * @param {IStorage} storage storage that may have the tx
+   * @returns {Promise<boolean>}
+   */
+  async canUseUtxo(utxo: IUtxoId, storage: IStorage): Promise<boolean> {
+    const currentHeight = await storage.getCurrentHeight();
+    const rewardLock = storage.version?.reward_spend_min_blocks || 0;
+    const nowTs = Math.floor(Date.now() / 1000);
+    const tx = await storage.getTx(utxo.txId);
+    if (tx === null || (tx.outputs && tx.outputs.length <= utxo.index)) {
+      // This is not our utxo, so we cannot spend it.
+      return false;
+    }
+    const output = tx.outputs[utxo.index];
+    const isTimelocked = (!!output.decoded.timelock) && nowTs < output.decoded.timelock;
+    const isHeightLocked = (!!tx.height) && (!!rewardLock) && (currentHeight < (tx.height + rewardLock));
+    const isSelectedAsInput = await storage.isUtxoSelectedAsInput(utxo);
+
+    // If utxo is selected as input on another tx we cannot use it
+    // If utxo is timelocked we cannot use it
+    // If utxo is height locked we cannot use it
+    return !(isSelectedAsInput || isTimelocked || isHeightLocked);
   },
 }
 

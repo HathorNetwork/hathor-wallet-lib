@@ -79,7 +79,7 @@ test('prepareTxData', async () => {
   };
   const inputs = [{ txId: 'spent-tx-id', index: 0 }];
   const outputs = [addrOutput, dataOutput];
-  const sendTransaction = new SendTransaction(storage, {inputs, outputs});
+  const sendTransaction = new SendTransaction({storage, inputs, outputs});
   await expect(sendTransaction.prepareTxData()).resolves.toMatchObject({
     inputs: [
       {
@@ -118,4 +118,19 @@ test('prepareTxData', async () => {
   await expect(sendTransaction.prepareTx()).resolves.toEqual('a-prepared-transaction');
 
   prepareSpy.mockRestore();
+});
+
+test('invalid method calls', async () => {
+  const sendTransaction = new SendTransaction();
+
+  // Methods that require storage should throw an error
+  await expect(sendTransaction.prepareTxData()).rejects.toThrow('Storage is not set.');
+  await expect(sendTransaction.prepareTx()).rejects.toThrow('Storage is not set.');
+  await expect(sendTransaction.prepareTxFrom([])).rejects.toThrow('Storage is not set.');
+  await expect(sendTransaction.run()).rejects.toThrow('Storage is not set.');
+
+  // updateOutputSelected without storage will be a no-op
+  const sendTransaction2 = new SendTransaction({ transaction: 'a-transaction-instance' });
+  await expect(sendTransaction2.updateOutputSelected(true)).resolves.toBeUndefined();
+
 });

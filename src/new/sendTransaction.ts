@@ -61,7 +61,7 @@ export type ISendOutput = ISendDataOutput | ISendTokenOutput;
  * 'unexpected-error': if an unexpected error happens;
  **/
 class SendTransaction extends EventEmitter {
-  storage: IStorage;
+  storage: IStorage | null;
   transaction: Transaction | null;
   outputs: ISendOutput[];
   inputs: ISendInput[];
@@ -82,14 +82,15 @@ class SendTransaction extends EventEmitter {
    * @param {IStorage|null} [options.network=null] Network object
    */
   constructor(
-    storage: IStorage,
     {
+      storage = null,
       transaction = null,
       outputs = [],
       inputs = [],
       changeAddress = null,
       pin = null,
     }: {
+      storage?: IStorage | null,
       transaction?: Transaction | null,
       inputs?: ISendInput[],
       outputs?: ISendOutput[],
@@ -119,6 +120,9 @@ class SendTransaction extends EventEmitter {
    * @inner
    */
   async prepareTxData(): Promise<IDataTx> {
+    if (!this.storage) {
+      throw new SendTxError('Storage is not set.');
+    }
     // const tokensData: Record<string, {outputs: IDataOutput[], inputs: IDataInput[]}> = {};
     const HTR_UID = HATHOR_TOKEN_CONFIG.uid;
     const network = this.storage.config.getNetwork();
@@ -209,6 +213,9 @@ class SendTransaction extends EventEmitter {
    * @inner
    */
   async prepareTx(): Promise<Transaction> {
+    if (!this.storage) {
+      throw new SendTxError('Storage is not set.');
+    }
     const txData = this.fullTxData || await this.prepareTxData();
     try {
       if (!this.pin) {
@@ -239,6 +246,9 @@ class SendTransaction extends EventEmitter {
    * @inner
    */
   async prepareTxFrom(signatures: Buffer[]): Promise<Transaction> {
+    if (!this.storage) {
+      throw new SendTxError('Storage is not set.');
+    }
     if (this.fullTxData === null) {
       // This method can only be called with a prepared tx data
       // because prepareTxData may modify the inputs and outputs
@@ -461,6 +471,11 @@ class SendTransaction extends EventEmitter {
   async updateOutputSelected(selected: boolean) {
     if (this.transaction === null) {
       throw new WalletError(ErrorMessages.TRANSACTION_IS_NULL);
+    }
+
+    if (!this.storage) {
+      // No storage available, so we can't update the selected utxos
+      return;
     }
 
     // Mark all inputs as selected
