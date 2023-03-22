@@ -236,6 +236,8 @@ test('token methods', async () => {
 });
 
 test('utxo methods', async () => {
+  const dateLocked = new Date('3000-03-01T12:00');
+
   const xpriv = HDPrivateKey();
   const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
   const utxos = [
@@ -261,18 +263,37 @@ test('utxo methods', async () => {
       type: 1,
       height: null,
     },
+    {
+      txId: 'tx03',
+      index: 40,
+      token: '00',
+      address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
+      value: 100,
+      authorities: 0,
+      timelock: Math.floor(dateLocked.getTime() / 1000),
+      type: 1,
+      height: null,
+    },
   ];
-  await store.saveUtxo(utxos[0]);
-  await store.saveUtxo(utxos[1]);
+  for (const u of utxos) {
+    await store.saveUtxo(u);
+  }
   let buf = [];
   for await (const u of store.utxoIter()) {
     buf.push(u);
   }
-  expect(buf).toHaveLength(2);
+  expect(buf).toHaveLength(3);
 
   // Default values will filter for HTR token
   buf = [];
   for await (const u of store.selectUtxos({})) {
+    buf.push(u);
+  }
+  expect(buf).toHaveLength(2);
+
+  // only_available_utxos should filter locked utxos
+  buf = [];
+  for await (const u of store.selectUtxos({ only_available_utxos: true })) {
     buf.push(u);
   }
   expect(buf).toHaveLength(1);
