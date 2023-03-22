@@ -623,16 +623,34 @@ export class MemoryStore implements IStore {
     this.utxos.set(`${utxo.txId}:${utxo.index}`, utxo);
   }
 
+  /**
+   * Save a locked utxo.
+   * Used when a new utxo is received but it is either time locked or height locked.
+   * The locked utxo index will be used to manage the locked utxos.
+   *
+   * @param {ILockedUtxo} lockedUtxo The locked utxo to be saved
+   * @returns {Promise<void>}
+   */
   async saveLockedUtxo(lockedUtxo: ILockedUtxo): Promise<void> {
     this.lockedUtxos.set(`${lockedUtxo.tx.tx_id}:${lockedUtxo.index}`, lockedUtxo);
   }
 
+  /**
+   * Iterate over all locked utxos
+   * @returns {AsyncGenerator<ILockedUtxo>}
+   */
   async *iterateLockedUtxos(): AsyncGenerator<ILockedUtxo> {
     for (const lockedUtxo of this.lockedUtxos.values()) {
       yield lockedUtxo;
     }
   }
 
+  /**
+   * Remove an utxo from the locked utxos if it became unlocked.
+   *
+   * @param lockedUtxo utxo that became unlocked
+   * @returns {Promise<void>}
+   */
   async unlockUtxo(lockedUtxo: ILockedUtxo): Promise<void> {
     this.lockedUtxos.delete(`${lockedUtxo.tx.tx_id}:${lockedUtxo.index}`);
   }

@@ -249,7 +249,14 @@ export async function processHistory(store: IStore, { rewardLock }: { rewardLock
   await updateWalletMetadataFromProcessedTxData(store, { maxIndexUsed, tokens });
 }
 
-export async function updateWalletMetadataFromProcessedTxData(store: IStore, { maxIndexUsed, tokens }: { maxIndexUsed: number, tokens: Set<string>}): Promise<void> {
+/**
+ * Update the store wallet data based on accumulated data from processed txs.
+ * @param {IStore} store The store instance
+ * @param {Object} options
+ * @param {number} options.maxIndexUsed The maximum index used in the processed txs
+ * @param {Set<string>} options.tokens A set of tokens found in the processed txs
+ */
+async function updateWalletMetadataFromProcessedTxData(store: IStore, { maxIndexUsed, tokens }: { maxIndexUsed: number, tokens: Set<string>}): Promise<void> {
   // Update wallet data
   const walletData = await store.getWalletData();
   if (maxIndexUsed > -1) {
@@ -289,6 +296,19 @@ export async function updateWalletMetadataFromProcessedTxData(store: IStore, { m
   }
 }
 
+/**
+ * Process a new transaction, adding or creating the metadata for the addresses and tokens involved.
+ * Will udpate relevant wallet data and utxos.
+ * The return object contains the max address index used and the tokens found in the transaction.
+ *
+ * @param {IStore} store The store instance
+ * @param {IHistoryTx} tx The new transaction to be processed
+ * @param {Object} [options]
+ * @param {number} [options.rewardLock] The reward lock of the network
+ * @param {number} [options.nowTs] The current timestamp
+ * @param {number} [options.currentHeight] The current height of the best chain
+ * @returns {Promise<{ maxAddressIndex: number, tokens: Set<string> }>}
+ */
 export async function processNewTx(
   store: IStore,
   tx: IHistoryTx,
@@ -490,6 +510,18 @@ export async function processNewTx(
   }
 }
 
+/**
+ * Process locked utxo and update the balances.
+ * If the utxo is still locked nothing is done.
+ *
+ * @param {IStore} store The store to be used
+ * @param {ILockedUtxo} lockedUtxo The utxo to be unlocked
+ * @param {Object} [options]
+ * @param {number} [options.rewardLock] The reward lock of the network
+ * @param {number} [options.nowTs] The current timestamp
+ * @param {number} [options.currentHeight] The current height of the best chain
+ * @returns {Promise<void>}
+ */
 export async function processUtxoUnlock(
   store: IStore,
   lockedUtxo: ILockedUtxo,

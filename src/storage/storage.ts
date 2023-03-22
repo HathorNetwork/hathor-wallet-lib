@@ -263,6 +263,8 @@ export class Storage implements IStorage {
    * Process the locked utxos to unlock them if the lock has expired.
    * Will process both timelocked and heightlocked utxos.
    *
+   * We will wait for the any previous execution to finish before starting the next one.
+   *
    * @param {number} height The network height to use as reference to unlock utxos
    * @returns {Promise<void>}
    */
@@ -530,6 +532,13 @@ export class Storage implements IStorage {
     }
   }
 
+  /**
+   * Iterate over all locked utxos and unlock them if needed
+   * When a utxo is unlocked, the balances and metadatas are updated
+   * and the utxo is removed from the locked utxos.
+   *
+   * @param {number} height The new height of the best chain
+   */
   async processLockedUtxos(height: number): Promise<void> {
     const nowTs = Math.floor(Date.now() / 1000);
     for await (const lockedUtxo of this.store.iterateLockedUtxos()) {
