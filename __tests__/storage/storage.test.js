@@ -68,6 +68,40 @@ test('store fetch methods', async () => {
   getTokenApi.mockRestore();
 });
 
+test('selecting utxos', async () => {
+  const getTokenApi = jest.spyOn(walletApi, 'getGeneralTokenInfo').mockImplementation((uid, resolve) => {
+    resolve({
+      success: true,
+      name: 'Custom token',
+      symbol: 'CTK',
+    });
+  });
+  const store = new MemoryStore();
+  await store.saveAddress({base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0});
+  await store.saveAddress({base58: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp', bip32AddressIndex: 1});
+  for (const tx of tx_history) {
+    await store.saveTx(tx);
+  }
+  await processHistory(store);
+  const storage = new Storage(store);
+
+  // Should use the filter_method
+  // filter_method returns true if the utxo is acceptable
+  // it returns false if we do not want to use the utxo
+  const wantedTx = '0000000419625e2587c225fb49f36278c9da681ec05e039125307b8aef3d3d30';
+  const options = {
+    filter_method: (utxo) => utxo.txId === wantedTx,
+  };
+  let buf = [];
+  for await (const utxo of storage.selectUtxos(options)) {
+    buf.push(utxo);
+  }
+  expect(buf).toHaveLength(1);
+  expect(buf[0].txId).toBe(wantedTx);
+
+  getTokenApi.mockRestore();
+});
+
 test('utxos selected as inputs', async () => {
   const store = new MemoryStore();
   const storage = new Storage(store);

@@ -286,7 +286,7 @@ test('canUseUtxo', async () => {
   const isSelSpy = jest.spyOn(storage, 'isUtxoSelectedAsInput').mockReturnValue(Promise.resolve(false));
   storage.version = { reward_spend_min_blocks: 5 };
 
-  jest.useFakeTimers()
+  jest.useFakeTimers();
   jest.setSystemTime(t3);
 
   // Free tx, in both timelock, heightlock and not selected as input
