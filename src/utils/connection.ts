@@ -11,8 +11,12 @@ export function handleWsDashboard(storage: IStorage) {
   return (data: any) => {
     // update network height
     const height = data.best_block_height as number;
-    storage.setCurrentHeight(height);
-    storage.unlockUtxos(height);
+    storage.getCurrentHeight().then(async (currentHeight) => {
+      await storage.setCurrentHeight(height);
+      if (height !== currentHeight) {
+        await storage.unlockUtxos(height);
+      }
+    });
   }
 }
 

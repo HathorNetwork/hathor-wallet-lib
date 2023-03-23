@@ -298,7 +298,7 @@ async function updateWalletMetadataFromProcessedTxData(store: IStore, { maxIndex
 
 /**
  * Process a new transaction, adding or creating the metadata for the addresses and tokens involved.
- * Will udpate relevant wallet data and utxos.
+ * Will update relevant wallet data and utxos.
  * The return object contains the max address index used and the tokens found in the transaction.
  *
  * @param {IStore} store The store instance
@@ -344,14 +344,14 @@ export async function processNewTx(
   let maxIndexUsed = -1;
 
   for (const [index, output] of tx.outputs.entries()) {
-    // Check if this output is locked
-    const isLocked = isTimelocked(output.decoded.timelock) || isHeightLocked;
-
     // Skip data outputs since they do not have an address and do not "belong" in a wallet
     if (!output.decoded.address) continue;
     const addressInfo = await store.getAddress(output.decoded.address);
     // if address is not in wallet, ignore
     if (!addressInfo) continue;
+
+    // Check if this output is locked
+    const isLocked = isTimelocked(output.decoded.timelock) || isHeightLocked;
 
     const isAuthority: boolean = transactionUtils.isAuthorityOutput(output);
     let addressMeta = await store.getAddressMeta(output.decoded.address);

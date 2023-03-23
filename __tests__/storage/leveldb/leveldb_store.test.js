@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from "../../../src/constants";
+import { HATHOR_TOKEN_CONFIG } from "../../../src/constants";
 import { LevelDBStore } from "../../../src/storage";
 import tx_history from "../../__fixtures__/tx_history";
 import walletApi from "../../../src/api/wallet";

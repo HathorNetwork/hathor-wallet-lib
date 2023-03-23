@@ -263,7 +263,7 @@ export class Storage implements IStorage {
    * Process the locked utxos to unlock them if the lock has expired.
    * Will process both timelocked and heightlocked utxos.
    *
-   * We will wait for the any previous execution to finish before starting the next one.
+   * We will wait for any previous execution to finish before starting the next one.
    *
    * @param {number} height The network height to use as reference to unlock utxos
    * @returns {Promise<void>}
