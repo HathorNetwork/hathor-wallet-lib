@@ -11,13 +11,13 @@ export function handleWsDashboard(storage: IStorage) {
   return (data: any) => {
     // update network height
     const height = data.best_block_height as number;
-    storage.getCurrentHeight().then(async (currentHeight) => {
-      await storage.setCurrentHeight(height);
+    storage.getCurrentHeight().then(currentHeight => {
       if (height !== currentHeight) {
-        await storage.unlockUtxos(height);
+        storage.setCurrentHeight(height);
+        storage.unlockUtxos(height);
       }
     });
-  }
+  };
 }
 
 export function handleSubscribeAddress() {
