@@ -345,7 +345,7 @@ describe('process locked utxos', () => {
       },
     });
 
-    // Now we have a new heigth, unlocking some utxos
+    // Now we have a new height, unlocking some utxos
     await storage.processLockedUtxos(10);
     firstAddrMeta = await store.getAddressMeta('WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ');
     secondAddrMeta = await store.getAddressMeta('WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp');
