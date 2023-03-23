@@ -8,7 +8,7 @@
 import path from 'path';
 import { Level, ValueIteratorOptions } from 'level';
 import { AbstractSublevel } from 'abstract-level';
-import { IKVUtxoIndex, IUtxo, IUtxoFilterOptions } from '../../types';
+import { IKVUtxoIndex, IUtxo, IUtxoFilterOptions, ILockedUtxo } from '../../types';
 import _ from 'lodash';
 import { BLOCK_VERSION, HATHOR_TOKEN_CONFIG, MAX_INPUTS } from '../../constants';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
@@ -16,6 +16,7 @@ import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 export const UTXO_PREFIX = 'utxo';
 export const TOKEN_ADDRESS_UTXO_PREFIX = 'token:address:utxo';
 export const TOKEN_UTXO_PREFIX = 'token:utxo';
+export const LOCKED_UTXO_PREFIX = 'locked:utxo';
 
 /**
  * Create a string representing the utxo id to be used as database key.
@@ -70,6 +71,12 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
    * Value: IUtxo (json encoded)
    */
   tokenAddressUtxoDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, IUtxo>;
+  /**
+   * Locked utxo database
+   * Key: tx_id:index
+   * Value: ILockedUtxo (json encoded)
+   */
+  lockedUtxoDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, ILockedUtxo>;
   indexVersion: string = '0.0.1';
 
   constructor(dbpath: string) {
@@ -78,6 +85,7 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
     this.utxoDB = db.sublevel<string, IUtxo>(UTXO_PREFIX, { valueEncoding: 'json' });
     this.tokenUtxoDB = db.sublevel<string, IUtxo>(TOKEN_UTXO_PREFIX, { valueEncoding: 'json' });
     this.tokenAddressUtxoDB = db.sublevel<string, IUtxo>(TOKEN_ADDRESS_UTXO_PREFIX, { valueEncoding: 'json' });
+    this.lockedUtxoDB = db.sublevel<string, ILockedUtxo>(LOCKED_UTXO_PREFIX, { valueEncoding: 'json' });
   }
 
   /**
@@ -290,11 +298,43 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
   }
 
   /**
+   * Save a locked utxo on the database.
+   *
+   * @param {ILockedUtxo} lockedUtxo The locked utxo to be saved
+   * @returns {Promise<void>}
+   */
+  async saveLockedUtxo(lockedUtxo: ILockedUtxo): Promise<void> {
+    const utxoId = _utxo_id({txId: lockedUtxo.tx.tx_id, index: lockedUtxo.index});
+    return this.lockedUtxoDB.put(utxoId, lockedUtxo);
+  }
+
+  /**
+   * Remove a locked utxo from the database.
+   * @param {ILockedUtxo} lockedUtxo Locked utxo to be unlocked
+   * @returns {Promise<void>}
+   */
+  async unlockUtxo(lockedUtxo: ILockedUtxo): Promise<void> {
+    const utxoId = _utxo_id({txId: lockedUtxo.tx.tx_id, index: lockedUtxo.index});
+    return this.lockedUtxoDB.del(utxoId);
+  }
+
+  /**
+   * Iterate on all locked utxos
+   * @returns {AsyncGenerator<ILockedUtxo>}
+   */
+  async *iterateLockedUtxos(): AsyncGenerator<ILockedUtxo> {
+    for await (const lockedUtxo of this.lockedUtxoDB.values()) {
+      yield lockedUtxo;
+    }
+  }
+
+  /**
    * Clear all entries from the database.
    * @returns {Promise<void>}
    */
   async clear(): Promise<void> {
     // This should clear all utxos subdbs
     await this.utxoDB.db.clear();
+    await this.lockedUtxoDB.clear();
   }
 }

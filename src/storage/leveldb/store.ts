@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { IAddressInfo, IAddressMetadata, IBalance, IHistoryTx, IStore, ITokenData, ITokenMetadata, IUtxo, IUtxoFilterOptions, IWalletAccessData, IWalletData } from '../../types';
+import { IAddressInfo, IAddressMetadata, IBalance, IHistoryTx, ILockedUtxo, IStore, ITokenData, ITokenMetadata, IUtxo, IUtxoFilterOptions, IWalletAccessData, IWalletData } from '../../types';
 import { HDPublicKey } from 'bitcore-lib'
 import path from 'path';
 import LevelAddressIndex from './address_index';
@@ -13,8 +13,6 @@ import LevelHistoryIndex from './history_index';
 import LevelUtxoIndex from './utxo_index';
 import LevelWalletIndex from './wallet_index';
 import LevelTokenIndex from './token_index';
-import walletApi from '../../api/wallet';
-import transaction from '../../utils/transaction';
 import fs from 'fs';
 
 export default class LevelDBStore implements IStore {
@@ -232,6 +230,40 @@ export default class LevelDBStore implements IStore {
   async saveUtxo(utxo: IUtxo): Promise<void> {
     return this.utxoIndex.saveUtxo(utxo);
   }
+
+  /**
+   * Save a locked utxo to the database.
+   * Used when a new utxo is received but it is either time locked or height locked.
+   * The locked utxo index will be used to manage the locked utxos.
+   *
+   * @param {ILockedUtxo} lockedUtxo The locked utxo to be saved
+   * @returns {Promise<void>}
+   */
+  async saveLockedUtxo(lockedUtxo: ILockedUtxo): Promise<void> {
+    return this.utxoIndex.saveLockedUtxo(lockedUtxo);
+  }
+
+  /**
+   * Remove an utxo from the locked utxos if it became unlocked.
+   *
+   * @param lockedUtxo utxo that became unlocked
+   * @returns {Promise<void>}
+   */
+  async unlockUtxo(lockedUtxo: ILockedUtxo): Promise<void> {
+    return this.utxoIndex.unlockUtxo(lockedUtxo);
+  }
+
+  /**
+   * Iterate over all locked utxos
+   * @returns {AsyncGenerator<ILockedUtxo>}
+   */
+  async *iterateLockedUtxos(): AsyncGenerator<ILockedUtxo> {
+    for await (const lockedUtxo of this.utxoIndex.iterateLockedUtxos()) {
+      yield lockedUtxo;
+    }
+  }
+
+  // Wallet
 
   async saveAccessData(data: IWalletAccessData): Promise<void> {
     if (this.xpubkey !== data.xpubkey) {

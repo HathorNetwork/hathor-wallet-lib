@@ -181,6 +181,11 @@ export interface IUtxo {
   height: number | null; // only for block outputs
 }
 
+export interface ILockedUtxo {
+  tx: IHistoryTx,
+  index: number,
+}
+
 export enum WalletType {
   P2PKH = 'p2pkh',
   MULTISIG = 'multisig',
@@ -287,6 +292,9 @@ export interface IStore {
   utxoIter(): AsyncGenerator<IUtxo>;
   selectUtxos(options: IUtxoFilterOptions): AsyncGenerator<IUtxo>;
   saveUtxo(utxo: IUtxo): Promise<void>;
+  saveLockedUtxo(lockedUtxo: ILockedUtxo): Promise<void>;
+  iterateLockedUtxos(): AsyncGenerator<ILockedUtxo>;
+  unlockUtxo(lockedUtxo: ILockedUtxo): Promise<void>;
 
   // Wallet data
   getAccessData(): Promise<IWalletAccessData|null>;
@@ -346,6 +354,8 @@ export interface IStorage {
   utxoSelectAsInput(utxo: IUtxoId, markAs: boolean, ttl?: number): Promise<void>;
   isUtxoSelectedAsInput(utxo: IUtxoId): Promise<boolean>;
   utxoSelectedAsInputIter(): AsyncGenerator<IUtxoId>;
+  unlockUtxos(height: number): Promise<void>;
+  processLockedUtxos(height: number): Promise<void>;
 
   // Wallet operations
   getAccessData(): Promise<IWalletAccessData|null>;
@@ -409,6 +419,9 @@ export interface IKVUtxoIndex extends IKVStoreIndex<void> {
   utxoIter(): AsyncGenerator<IUtxo>;
   selectUtxos(options: IUtxoFilterOptions): AsyncGenerator<IUtxo>;
   saveUtxo(utxo: IUtxo): Promise<void>;
+  saveLockedUtxo(lockedUtxo: ILockedUtxo): Promise<void>;
+  iterateLockedUtxos(): AsyncGenerator<ILockedUtxo>;
+  unlockUtxo(lockedUtxo: ILockedUtxo): Promise<void>;
   clear(): Promise<void>;
 }
 

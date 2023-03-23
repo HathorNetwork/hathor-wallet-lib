@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { GAP_LIMIT } from '../../src/constants';
+import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, GAP_LIMIT } from '../../src/constants';
 import { MemoryStore } from '../../src/storage';
 import tx_history from '../__fixtures__/tx_history';
 import walletApi from '../../src/api/wallet';
@@ -116,7 +116,7 @@ test('history methods', async () => {
   expect(store.tokensMetadata.get('00')).toMatchObject({
     numTransactions: 4,
     balance: {
-      tokens: { locked: 3, unlocked: 1 },
+      tokens: { locked: 2, unlocked: 2 },
       authorities: {
         mint: { locked: 0, unlocked: 0 },
         melt: { locked: 0, unlocked: 0 },
@@ -126,7 +126,7 @@ test('history methods', async () => {
   expect(store.tokensMetadata.get('01')).toMatchObject({
     numTransactions: 2,
     balance: {
-      tokens: { locked: 1, unlocked: 0 },
+      tokens: { locked: 0, unlocked: 1 },
       authorities: {
         mint: { locked: 1, unlocked: 0 },
         melt: { locked: 0, unlocked: 0 },
@@ -136,7 +136,7 @@ test('history methods', async () => {
   expect(store.tokensMetadata.get('02')).toMatchObject({
     numTransactions: 3,
     balance: {
-      tokens: { locked: 6, unlocked: 0 },
+      tokens: { locked: 0, unlocked: 6 },
       authorities: {
         mint: { locked: 0, unlocked: 0 },
         melt: { locked: 0, unlocked: 0 },
