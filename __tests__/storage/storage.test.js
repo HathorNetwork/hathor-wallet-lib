@@ -6,10 +6,13 @@
  */
 
 import walletApi from '../../src/api/wallet';
-import { MemoryStore, Storage } from '../../src/storage';
+import { MemoryStore, Storage, LevelDBStore } from '../../src/storage';
 import tx_history from '../__fixtures__/tx_history';
 import { processHistory } from '../../src/utils/storage';
+import { TOKEN_AUTHORITY_MASK, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
+import { HDPrivateKey } from "bitcore-lib";
 
+const DATA_DIR = './testdata.leveldb';
 
 test('config version', () => {
   const store = new MemoryStore();
@@ -143,3 +146,247 @@ test('utxos selected as inputs', async () => {
   await storage.utxoSelectAsInput({ txId: 'a-tx-id3', index: 0 }, true);
   expect(storage.utxosSelectedAsInput.get('a-tx-id3:0')).toBeUndefined();
 });
+
+
+describe('process locked utxos', () => {
+  it('should work with memory store', async () => {
+    const store = new MemoryStore();
+    processLockedUtxoTest(store);
+  });
+
+  it('should work with leveldb store', async () => {
+    const xpriv = HDPrivateKey();
+    const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
+    processLockedUtxoTest(store);
+  });
+
+  function getLockedUtxo(txId, address, timelock, height, value, token, token_data) {
+    return {
+      index: 0,
+      tx: {
+        tx_id: txId,
+        height,
+        version: 1,
+        timestamp: timelock,
+        is_voided: false,
+        inputs: [],
+        outputs: [
+          {
+            value,
+            token_data,
+            token,
+            spent_by: null,
+            decoded: {
+              type: 'P2PKH',
+              address,
+              timelock,
+            }
+          },
+        ],
+      },
+    };
+  }
+
+  function getUtxoFromLocked(lutxo) {
+    const { tx, index } = lutxo;
+    const { outputs } = tx;
+    const output = outputs[index];
+    const { decoded } = output;
+    const { address, timelock } = decoded;
+    return {
+      txId: tx.tx_id,
+      index,
+      token: output.token,
+      address,
+      value: output.value,
+      authorities: 0,
+      timelock,
+      type: tx.version,
+      height: tx.height,
+    };
+  }
+
+  /**
+   * Run the "process locked utxo" test suite on the given store instance.
+   *
+   * @param {IStore} store The store instance to test
+   */
+  async function processLockedUtxoTest(store) {
+    const nowTs = Math.floor(Date.now() / 1000);
+    const tsLocked = nowTs + 60;
+    const tsUnLocked = nowTs - 60;
+
+
+    const storage = new Storage(store);
+    storage.version = {
+      reward_spend_min_blocks: 1,
+    };
+    const lockedUtxos = [
+      // utxo to be unlocked by time
+      getLockedUtxo(
+        'tx01',
+        'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
+        tsUnLocked,
+        null,
+        100, // value
+        '00', // token
+        0, // token_data
+      ),
+      // timelocked
+      getLockedUtxo(
+        'tx02',
+        'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
+        tsLocked,
+        null,
+        100, // value
+        '00', // token
+        0, // token_data
+      ),
+      // utxo to be unlocked by height
+      getLockedUtxo(
+        'tx03',
+        'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
+        tsUnLocked,
+        5,
+        100, // value
+        '01', // token
+        0, // token_data
+      ),
+      // heightlocked
+      getLockedUtxo(
+        'tx04',
+        'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
+        tsUnLocked,
+        100,
+        TOKEN_MINT_MASK, // value, mint
+        '01', // token
+        TOKEN_AUTHORITY_MASK | 1, // token_data
+      ),
+    ];
+    await store.saveAddress({base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0});
+    await store.saveAddress({base58: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp', bip32AddressIndex: 1});
+    for (const lutxo of lockedUtxos) {
+      await store.saveTx(lutxo.tx);
+      await store.saveUtxo(getUtxoFromLocked(lutxo));
+      await store.saveLockedUtxo(lutxo);
+    }
+    // at first all utxos are locked
+    await store.editAddressMeta(
+      'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
+      {
+        numTransactions: 2,
+        balance: new Map([
+          [
+            '00',
+            {
+              tokens: { locked: 200, unlocked: 0 },
+              authorities: { mint: { locked: 0, unlocked: 0 }, melt: { locked: 0, unlocked: 0 } },
+            },
+          ]
+        ]),
+      },
+    );
+    await store.editAddressMeta(
+      'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
+      {
+        numTransactions: 2,
+        balance: new Map([
+          [
+            '01',
+            {
+              tokens: { locked: 100, unlocked: 0 },
+              authorities: { mint: { locked: 1, unlocked: 0 }, melt: { locked: 0, unlocked: 0 } },
+            },
+          ]
+        ]),
+      },
+    );
+
+    // time has passed, unlocking some utxos
+    await storage.processLockedUtxos(1);
+    let firstAddrMeta = await store.getAddressMeta('WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ');
+    let secondAddrMeta = await store.getAddressMeta('WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp');
+    expect(firstAddrMeta.numTransactions).toEqual(2);
+    expect(secondAddrMeta.numTransactions).toEqual(2);
+    expect(Object.fromEntries(firstAddrMeta.balance)).toMatchObject({
+      '00': {
+        tokens: {
+          locked: 100,
+          unlocked: 100,
+        },
+        authorities: {
+          mint: {
+            locked: 0,
+            unlocked: 0,
+          },
+          melt: {
+            locked: 0,
+            unlocked: 0,
+          },
+        },
+      },
+    });
+    expect(Object.fromEntries(secondAddrMeta.balance)).toMatchObject({
+      '01': {
+        tokens: {
+          locked: 100,
+          unlocked: 0,
+        },
+        authorities: {
+          mint: {
+            locked: 1,
+            unlocked: 0,
+          },
+          melt: {
+            locked: 0,
+            unlocked: 0,
+          },
+        },
+      },
+    });
+
+    // Now we have a new height, unlocking some utxos
+    await storage.processLockedUtxos(10);
+    firstAddrMeta = await store.getAddressMeta('WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ');
+    secondAddrMeta = await store.getAddressMeta('WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp');
+    expect(firstAddrMeta.numTransactions).toEqual(2);
+    expect(secondAddrMeta.numTransactions).toEqual(2);
+    expect(Object.fromEntries(firstAddrMeta.balance)).toMatchObject({
+      '00': {
+        tokens: {
+          locked: 100,
+          unlocked: 100,
+        },
+        authorities: {
+          mint: {
+            locked: 0,
+            unlocked: 0,
+          },
+          melt: {
+            locked: 0,
+            unlocked: 0,
+          },
+        },
+      },
+    });
+    expect(Object.fromEntries(secondAddrMeta.balance)).toMatchObject({
+      '01': {
+        tokens: {
+          locked: 0,
+          unlocked: 100,
+        },
+        authorities: {
+          mint: {
+            locked: 1,
+            unlocked: 0,
+          },
+          melt: {
+            locked: 0,
+            unlocked: 0,
+          },
+        },
+      },
+    });
+  }
+});
+

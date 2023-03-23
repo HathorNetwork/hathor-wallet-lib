@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from "../../../src/constants";
+import { HATHOR_TOKEN_CONFIG } from "../../../src/constants";
 import { LevelDBStore } from "../../../src/storage";
 import tx_history from "../../__fixtures__/tx_history";
 import walletApi from "../../../src/api/wallet";
@@ -126,7 +126,7 @@ test('history methods', async () => {
   await expect(store.tokenIndex.getTokenMetadata('00')).resolves.toMatchObject({
     numTransactions: 4,
     balance: {
-      tokens: { locked: 3, unlocked: 1 },
+      tokens: { locked: 2, unlocked: 2 },
       authorities: {
         mint: { locked: 0, unlocked: 0 },
         melt: { locked: 0, unlocked: 0 },
@@ -136,7 +136,7 @@ test('history methods', async () => {
   await expect(store.tokenIndex.getTokenMetadata('01')).resolves.toMatchObject({
     numTransactions: 2,
     balance: {
-      tokens: { locked: 1, unlocked: 0 },
+      tokens: { locked: 0, unlocked: 1 },
       authorities: {
         mint: { locked: 1, unlocked: 0 },
         melt: { locked: 0, unlocked: 0 },
@@ -146,7 +146,7 @@ test('history methods', async () => {
   await expect(store.tokenIndex.getTokenMetadata('02')).resolves.toMatchObject({
     numTransactions: 3,
     balance: {
-      tokens: { locked: 6, unlocked: 0 },
+      tokens: { locked: 0, unlocked: 6 },
       authorities: {
         mint: { locked: 0, unlocked: 0 },
         melt: { locked: 0, unlocked: 0 },

@@ -29,7 +29,7 @@ import {
   IBalance,
 } from '../types';
 import transactionUtils from '../utils/transaction';
-import { processHistory } from '../utils/storage';
+import { processHistory, processUtxoUnlock } from '../utils/storage';
 import config, { Config } from '../config';
 import { decryptData, encryptData } from '../utils/crypto';
 import FullNodeConnection from '../new/connection';
@@ -46,12 +46,22 @@ export class Storage implements IStorage {
   utxosSelectedAsInput: Map<string, boolean>;
   config: Config;
   version: ApiVersion|null;
+  /**
+   * This promise is used to chain the calls to process unlocked utxos.
+   * This way we can avoid concurrent calls.
+   * The best way to do this would be an async queue or a mutex, but to avoid adding
+   * more dependencies we are using this simpler method.
+   *
+   * We can change this implementation to use a mutex or async queue in the future.
+   */
+  utxoUnlockWait: Promise<void>;
 
   constructor(store: IStore) {
     this.store = store;
     this.utxosSelectedAsInput = new Map<string, boolean>();
     this.config = config;
     this.version = null;
+    this.utxoUnlockWait = Promise.resolve();
   }
 
   /**
@@ -247,6 +257,21 @@ export class Storage implements IStorage {
    */
   async unregisterToken(tokenUid: string): Promise<void> {
     await this.store.unregisterToken(tokenUid);
+  }
+
+  /**
+   * Process the locked utxos to unlock them if the lock has expired.
+   * Will process both timelocked and heightlocked utxos.
+   *
+   * We will wait for any previous execution to finish before starting the next one.
+   *
+   * @param {number} height The network height to use as reference to unlock utxos
+   * @returns {Promise<void>}
+   */
+  async unlockUtxos(height: number): Promise<void> {
+    // Will wait for the previous execution to finish before starting the next one
+    // This is to prevent multiple calls to this method to run in parallel and "double unlock" utxos
+    this.utxoUnlockWait = this.utxoUnlockWait.then(() => this.processLockedUtxos(height));
   }
 
   /**
@@ -508,6 +533,24 @@ export class Storage implements IStorage {
   }
 
   /**
+   * Iterate over all locked utxos and unlock them if needed
+   * When a utxo is unlocked, the balances and metadatas are updated
+   * and the utxo is removed from the locked utxos.
+   *
+   * @param {number} height The new height of the best chain
+   */
+  async processLockedUtxos(height: number): Promise<void> {
+    const nowTs = Math.floor(Date.now() / 1000);
+    for await (const lockedUtxo of this.store.iterateLockedUtxos()) {
+      await processUtxoUnlock(this.store, lockedUtxo, {
+        nowTs,
+        rewardLock: this.version?.reward_spend_min_blocks || 0,
+        currentHeight: height,
+      });
+    }
+  }
+
+  /**
    * Check if an utxo is selected as input.
    *
    * @param {IUtxoId} utxo The utxo we want to check if it is selected as input
@@ -597,7 +640,7 @@ export class Storage implements IStorage {
    * @returns {Promise<void>} The current height of the network
    */
   async setCurrentHeight(height: number): Promise<void> {
-    return this.store.setCurrentHeight(height);
+    await this.store.setCurrentHeight(height);
   }
 
   /**
