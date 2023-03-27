@@ -17,7 +17,7 @@ import {
   TX_WEIGHT_CONSTANTS
 } from '../constants'
 import {crypto as cryptoBL, encoding, util, PrivateKey} from 'bitcore-lib'
-import {bufferToHex, hexToBuffer, unpackToFloat, unpackToHex, unpackToInt} from '../utils/buffer'
+import {bufferToHex, hexToBuffer, unpackToFloat, unpackToHex, unpackToInt, intToBytes} from '../utils/buffer'
 import helpers from '../utils/helpers'
 import Input from './input'
 import Output from './output'
@@ -137,10 +137,10 @@ class Transaction {
    */
   serializeFundsFields(array: Buffer[], addInputData: boolean) {
     // Tx version
-    array.push(helpers.intToBytes(this.version, 2))
+    array.push(intToBytes(this.version, 2))
 
     // Len tokens
-    array.push(helpers.intToBytes(this.tokens.length, 1))
+    array.push(intToBytes(this.tokens.length, 1))
 
     // Len of inputs and outputs
     this.serializeFundsFieldsLen(array);
@@ -173,10 +173,10 @@ class Transaction {
    */
   serializeFundsFieldsLen(array: Buffer[]) {
     // Len inputs
-    array.push(helpers.intToBytes(this.inputs.length, 1))
+    array.push(intToBytes(this.inputs.length, 1))
 
     // Len outputs
-    array.push(helpers.intToBytes(this.outputs.length, 1))
+    array.push(intToBytes(this.outputs.length, 1))
   }
 
   /**
@@ -207,16 +207,16 @@ class Transaction {
     // Weight is a float with 8 bytes
     array.push(helpers.floatToBytes(this.weight, 8));
     // Timestamp
-    array.push(helpers.intToBytes(this.timestamp!, 4))
+    array.push(intToBytes(this.timestamp!, 4))
 
     if (this.parents) {
-      array.push(helpers.intToBytes(this.parents.length, 1))
+      array.push(intToBytes(this.parents.length, 1))
       for (const parent of this.parents) {
         array.push(hexToBuffer(parent));
       }
     } else {
       // Len parents (parents will be calculated in the backend)
-      array.push(helpers.intToBytes(0, 1))
+      array.push(intToBytes(0, 1))
     }
   }
 
@@ -230,7 +230,7 @@ class Transaction {
    */
   serializeNonce(array: Buffer[]) {
     // Add nonce in the end
-    array.push(helpers.intToBytes(this.nonce, 4));
+    array.push(intToBytes(this.nonce, 4));
   }
 
   /*

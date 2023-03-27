@@ -20,7 +20,7 @@ import Input from '../models/input';
 import Output from '../models/output';
 import Network from '../models/network';
 import Address from '../models/address';
-import { hexToBuffer, unpackToInt } from './buffer';
+import { hexToBuffer, unpackToInt, intToBytes } from './buffer';
 import { crypto, encoding, Address as bitcoreAddress } from 'bitcore-lib';
 import { clone } from 'lodash';
 import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError, ParseError } from '../errors';
@@ -138,24 +138,11 @@ const helpers = {
    * @param {number} bytes How many bytes this number uses
    *
    * @return {Buffer} number in bytes
+   * @deprecated Import this function directly from `utils/buffer.ts`
    * @memberof Helpers
    * @inner
    */
-  intToBytes(value: number, bytes: number): Buffer {
-    let arr = new ArrayBuffer(bytes);
-    let view = new DataView(arr);
-    if (bytes === 1) {
-      // byteOffset = 0;
-      view.setUint8(0, value);
-    } else if (bytes === 2) {
-      // byteOffset = 0; isLittleEndian = false
-      view.setUint16(0, value, false);
-    } else if (bytes === 4) {
-      // byteOffset = 0; isLittleEndian = false
-      view.setUint32(0, value, false);
-    }
-    return buffer.Buffer.from(arr);
-  },
+  intToBytes: intToBytes,
 
   /**
    * Transform signed int to bytes (1, 2, or 4 bytes)
