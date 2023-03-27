@@ -14,7 +14,6 @@ const isHexa = (value: string): boolean => {
  * @param {number} bytes How many bytes this number uses
  *
  * @return {Buffer} number in bytes
- * @memberof Helpers
  * @inner
  */
 export function intToBytes(value: number, bytes: number): Buffer {
@@ -40,7 +39,6 @@ export function intToBytes(value: number, bytes: number): Buffer {
  * @param {number} bytes How many bytes this number uses
  *
  * @return {Buffer} number in bytes
- * @memberof Helpers
  * @inner
  */
 export function signedIntToBytes(value: number, bytes: number): Buffer {
@@ -69,7 +67,6 @@ export function signedIntToBytes(value: number, bytes: number): Buffer {
  * @param {number} bytes How many bytes this number uses
  *
  * @return {Buffer} number in bytes
- * @memberof Helpers
  * @inner
  */
 export function floatToBytes(value: number, bytes: number): Buffer {

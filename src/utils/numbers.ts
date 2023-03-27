@@ -7,7 +7,6 @@ import { DECIMAL_PLACES } from '../constants';
  *
  * @return {string} Formatted value
  *
- * @memberof Helpers
  * @inner
  */
 export function prettyValue(value: number): string {
@@ -24,7 +23,6 @@ export function prettyValue(value: number): string {
  *
  * @return {string} Formatted value
  *
- * @memberof Helpers
  * @inner
  */
 export function prettyIntegerValue(value: number): string {
