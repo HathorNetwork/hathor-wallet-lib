@@ -40,7 +40,9 @@ jobs:
 
       - name: Collect docker logs on failure
         if: failure()
-        uses: jwalton/gh-docker-logs@v2
+        # pinned jwalton/gh-docker-logs@v2.2.1 to its commit sha
+        # https://github.com/jwalton/gh-docker-logs/releases/tag/v2.2.1
+        uses: jwalton/gh-docker-logs@59c9656cd3cb7542525f3dce7ae2f44c0ff85d66
         with:
           dest: './docker-logs'
       - name: Tar logs
