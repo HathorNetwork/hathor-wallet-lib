@@ -8,7 +8,15 @@
 import helpers from '../../src/utils/helpers';
 import Network from '../../src/models/network';
 import dateFormatter from '../../src/utils/date';
-import { unpackToInt, unpackToFloat, hexToBuffer, bufferToHex, intToBytes, floatToBytes } from '../../src/utils/buffer';
+import {
+  unpackToInt,
+  unpackToFloat,
+  hexToBuffer,
+  bufferToHex,
+  intToBytes,
+  signedIntToBytes,
+  floatToBytes
+} from '../../src/utils/buffer';
 import Address from '../../src/models/address';
 import P2PKH from '../../src/models/p2pkh';
 import P2SH from '../../src/models/p2sh';
@@ -73,19 +81,19 @@ test('Unsigned int to bytes', () => {
 
 test('Signed int to bytes', () => {
   let number1 = 10;
-  let buf1 = helpers.signedIntToBytes(number1, 1);
+  let buf1 = signedIntToBytes(number1, 1);
   expect(unpackToInt(1, true, buf1)[0]).toBe(number1);
 
   let number2 = 300;
-  let buf2 = helpers.signedIntToBytes(number2, 2);
+  let buf2 = signedIntToBytes(number2, 2);
   expect(unpackToInt(2, true, buf2)[0]).toBe(number2);
 
   let number3 = 70000;
-  let buf3 = helpers.signedIntToBytes(number3, 4);
+  let buf3 = signedIntToBytes(number3, 4);
   expect(unpackToInt(4, true, buf3)[0]).toBe(number3);
 
   let number4 = 2**33;
-  let buf4 = helpers.signedIntToBytes(number4, 8);
+  let buf4 = signedIntToBytes(number4, 8);
   expect(unpackToInt(8, true, buf4)[0]).toBe(number4);
 });
 

@@ -26,7 +26,6 @@ import {
   intToBytes,
   floatToBytes
 } from '../utils/buffer';
-import helpers from '../utils/helpers'
 import Input from './input'
 import Output from './output'
 import Network from './network'

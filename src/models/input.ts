@@ -6,7 +6,6 @@
  */
 
 import { hexToBuffer } from '../utils/buffer';
-import helpers from '../utils/helpers';
 import { TX_HASH_SIZE_BYTES } from '../constants';
 import { unpackToInt, unpackToHex, unpackLen, intToBytes } from '../utils/buffer';
 import _ from 'lodash';

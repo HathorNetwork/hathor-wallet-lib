@@ -9,7 +9,6 @@ import { OP_PUSHDATA1 } from '../opcodes';
 import { DECIMAL_PLACES, DEFAULT_TX_VERSION, CREATE_TOKEN_TX_VERSION } from '../constants';
 import path from 'path';
 import buffer from 'buffer';
-import Long from 'long';
 import Transaction from '../models/transaction';
 import { HistoryTransaction, HistoryTransactionOutput } from '../models/types';
 import P2PKH from '../models/p2pkh';
@@ -20,7 +19,7 @@ import Input from '../models/input';
 import Output from '../models/output';
 import Network from '../models/network';
 import Address from '../models/address';
-import { hexToBuffer, unpackToInt, intToBytes, floatToBytes } from './buffer';
+import { hexToBuffer, unpackToInt, intToBytes, signedIntToBytes, floatToBytes } from './buffer';
 import { crypto, encoding, Address as bitcoreAddress } from 'bitcore-lib';
 import { clone } from 'lodash';
 import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError, ParseError } from '../errors';
@@ -151,27 +150,11 @@ const helpers = {
    * @param {number} bytes How many bytes this number uses
    *
    * @return {Buffer} number in bytes
+   * @deprecated Import this function directly from `utils/buffer.ts`
    * @memberof Helpers
    * @inner
    */
-  signedIntToBytes(value: number, bytes: number): Buffer {
-    let arr = new ArrayBuffer(bytes);
-    let view = new DataView(arr);
-    if (bytes === 1) {
-      // byteOffset = 0
-      view.setInt8(0, value);
-    } else if (bytes === 2) {
-      // byteOffset = 0; isLittleEndian = false
-      view.setInt16(0, value, false);
-    } else if (bytes === 4) {
-      view.setInt32(0, value, false);
-    } else if (bytes === 8) {
-      // In case of 8 bytes I need to handle the int with a Long lib
-      let long = Long.fromNumber(value, false);
-      arr = long.toBytesBE();
-    }
-    return buffer.Buffer.from(arr);
-  },
+  signedIntToBytes: signedIntToBytes,
 
   /**
    * Transform float to bytes

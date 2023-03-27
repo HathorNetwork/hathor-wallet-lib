@@ -19,7 +19,7 @@ import P2PKH from './p2pkh'
 import P2SH from './p2sh'
 import ScriptData from './script_data'
 import Network from './network'
-import {bytesToOutputValue, unpackLen, unpackToInt, intToBytes} from '../utils/buffer'
+import { bytesToOutputValue, unpackLen, unpackToInt, intToBytes, signedIntToBytes } from '../utils/buffer';
 import {parseP2PKH, parseP2SH, parseScriptData} from '../utils/scripts'
 import _ from 'lodash'
 
@@ -86,9 +86,9 @@ class Output {
       throw new OutputValueError(`Maximum value is ${helpers.prettyValue(MAX_OUTPUT_VALUE)}`);
     }
     if (this.value > MAX_OUTPUT_VALUE_32) {
-      return helpers.signedIntToBytes(-this.value, 8);
+      return signedIntToBytes(-this.value, 8);
     } else {
-      return helpers.signedIntToBytes(this.value, 4);
+      return signedIntToBytes(this.value, 4);
     }
   }
 
