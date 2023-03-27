@@ -212,7 +212,7 @@ const helpers = {
     if (data.length > 75) {
       stack.push(OP_PUSHDATA1);
     }
-    stack.push(this.intToBytes(data.length, 1));
+    stack.push(intToBytes(data.length, 1));
     stack.push(data);
   },
 

@@ -8,7 +8,7 @@
 import { hexToBuffer } from '../utils/buffer';
 import helpers from '../utils/helpers';
 import { TX_HASH_SIZE_BYTES } from '../constants';
-import { unpackToInt, unpackToHex, unpackLen } from '../utils/buffer';
+import { unpackToInt, unpackToHex, unpackLen, intToBytes } from '../utils/buffer';
 import _ from 'lodash';
 
 type optionsType = {
@@ -57,12 +57,12 @@ class Input {
   serialize(addData: boolean = true): Buffer[] {
     const arr: Buffer[] = [];
     arr.push(hexToBuffer(this.hash));
-    arr.push(helpers.intToBytes(this.index, 1));
+    arr.push(intToBytes(this.index, 1));
     if (this.data && addData) {
-      arr.push(helpers.intToBytes(this.data.length, 2));
+      arr.push(intToBytes(this.data.length, 2));
       arr.push(this.data);
     } else {
-      arr.push(helpers.intToBytes(0, 2));
+      arr.push(intToBytes(0, 2));
     }
     return arr;
   }

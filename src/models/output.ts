@@ -19,7 +19,7 @@ import P2PKH from './p2pkh'
 import P2SH from './p2sh'
 import ScriptData from './script_data'
 import Network from './network'
-import {bytesToOutputValue, unpackLen, unpackToInt} from '../utils/buffer'
+import {bytesToOutputValue, unpackLen, unpackToInt, intToBytes} from '../utils/buffer'
 import {parseP2PKH, parseP2SH, parseScriptData} from '../utils/scripts'
 import _ from 'lodash'
 
@@ -166,8 +166,8 @@ class Output {
     const arr: Buffer[] = [];
     arr.push(this.valueToBytes());
     // Token data
-    arr.push(helpers.intToBytes(this.tokenData, 1));
-    arr.push(helpers.intToBytes(this.script.length, 2));
+    arr.push(intToBytes(this.tokenData, 1));
+    arr.push(intToBytes(this.script.length, 2));
     arr.push(this.script);
     return arr;
   }

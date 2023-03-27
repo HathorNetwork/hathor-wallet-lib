@@ -8,7 +8,7 @@
 import helpers from '../../src/utils/helpers';
 import Network from '../../src/models/network';
 import dateFormatter from '../../src/utils/date';
-import { unpackToInt, unpackToFloat, hexToBuffer, bufferToHex } from '../../src/utils/buffer';
+import { unpackToInt, unpackToFloat, hexToBuffer, bufferToHex, intToBytes } from '../../src/utils/buffer';
 import Address from '../../src/models/address';
 import P2PKH from '../../src/models/p2pkh';
 import P2SH from '../../src/models/p2sh';
@@ -59,15 +59,15 @@ test('Version check', () => {
 
 test('Unsigned int to bytes', () => {
   let number1 = 10;
-  let buf1 = helpers.intToBytes(number1, 1);
+  let buf1 = intToBytes(number1, 1);
   expect(unpackToInt(1, false, buf1)[0]).toBe(number1);
 
   let number2 = 300;
-  let buf2 = helpers.intToBytes(number2, 2);
+  let buf2 = intToBytes(number2, 2);
   expect(unpackToInt(2, false, buf2)[0]).toBe(number2);
 
   let number3 = 70000;
-  let buf3 = helpers.intToBytes(number3, 4);
+  let buf3 = intToBytes(number3, 4);
   expect(unpackToInt(4, false, buf3)[0]).toBe(number3);
 });
 
@@ -324,5 +324,5 @@ test('handlePrepareDataError', () => {
   expect(helpers.handlePrepareDataError(err5)).toEqual('err5');
   expect(helpers.handlePrepareDataError(err6)).toEqual('err6');
 
-  expect(() => { helpers.handlePrepareDataError(err) }).toThrow(err); 
+  expect(() => { helpers.handlePrepareDataError(err) }).toThrow(err);
 });
