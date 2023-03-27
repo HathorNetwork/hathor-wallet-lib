@@ -20,6 +20,7 @@ import Output from '../models/output';
 import Network from '../models/network';
 import Address from '../models/address';
 import { hexToBuffer, unpackToInt, intToBytes, signedIntToBytes, floatToBytes } from './buffer';
+import { prettyValue, prettyIntegerValue } from './numbers';
 import { crypto, encoding, Address as bitcoreAddress } from 'bitcore-lib';
 import { clone } from 'lodash';
 import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError, ParseError } from '../errors';
@@ -55,16 +56,12 @@ const helpers = {
    * @param {number} value Amount to be formatted
    *
    * @return {string} Formatted value
+   * @deprecated Import this function directly from `utils/numbers.ts`
    *
    * @memberof Helpers
    * @inner
    */
-  prettyValue(value: number): string {
-    const fixedPlaces = (value/10**DECIMAL_PLACES).toFixed(DECIMAL_PLACES);
-    const integerPart = fixedPlaces.split('.')[0];
-    const decimalPart = fixedPlaces.split('.')[1];
-    return `${this.prettyIntegerValue(parseInt(integerPart))}.${decimalPart}`;
-  },
+  prettyValue: prettyValue,
 
   /**
    * Get the formatted value for an integer number
@@ -72,15 +69,12 @@ const helpers = {
    * @param {number} value Amount to be formatted
    *
    * @return {string} Formatted value
+   * @deprecated Import this function directly from `utils/numbers.ts`
    *
    * @memberof Helpers
    * @inner
    */
-  prettyIntegerValue(value: number): string {
-    const integerFormated = new Intl.NumberFormat('en-US').format(Math.abs(value));
-    const signal = value < 0 ? '-' : '';
-    return `${signal}${integerFormated}`;
-  },
+  prettyIntegerValue: prettyIntegerValue,
 
   /**
    * Validate if the passed version is valid, comparing with the minVersion

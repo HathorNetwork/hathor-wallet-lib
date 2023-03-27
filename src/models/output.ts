@@ -14,12 +14,12 @@ import {
   TOKEN_MINT_MASK
 } from '../constants'
 import {OutputValueError, ParseError} from '../errors'
-import helpers from '../utils/helpers'
 import P2PKH from './p2pkh'
 import P2SH from './p2sh'
 import ScriptData from './script_data'
 import Network from './network'
 import { bytesToOutputValue, unpackLen, unpackToInt, intToBytes, signedIntToBytes } from '../utils/buffer';
+import { prettyValue } from '../utils/numbers';
 import {parseP2PKH, parseP2SH, parseScriptData} from '../utils/scripts'
 import _ from 'lodash'
 
@@ -83,7 +83,7 @@ class Output {
       throw new OutputValueError('Output value must be positive');
     }
     if (this.value > MAX_OUTPUT_VALUE) {
-      throw new OutputValueError(`Maximum value is ${helpers.prettyValue(MAX_OUTPUT_VALUE)}`);
+      throw new OutputValueError(`Maximum value is ${prettyValue(MAX_OUTPUT_VALUE)}`);
     }
     if (this.value > MAX_OUTPUT_VALUE_32) {
       return signedIntToBytes(-this.value, 8);

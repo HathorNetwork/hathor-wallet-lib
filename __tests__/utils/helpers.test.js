@@ -17,6 +17,7 @@ import {
   signedIntToBytes,
   floatToBytes
 } from '../../src/utils/buffer';
+import { prettyValue, prettyIntegerValue } from '../../src/utils/numbers';
 import Address from '../../src/models/address';
 import P2PKH from '../../src/models/p2pkh';
 import P2SH from '../../src/models/p2sh';
@@ -36,17 +37,17 @@ test('Round float', () => {
 });
 
 test('Pretty value', () => {
-  expect(helpers.prettyValue(1000)).toBe('10.00');
-  expect(helpers.prettyValue(100000)).toBe('1,000.00');
-  expect(helpers.prettyValue(100000000)).toBe('1,000,000.00');
-  expect(helpers.prettyValue(-1000)).toBe('-10.00');
+  expect(prettyValue(1000)).toBe('10.00');
+  expect(prettyValue(100000)).toBe('1,000.00');
+  expect(prettyValue(100000000)).toBe('1,000,000.00');
+  expect(prettyValue(-1000)).toBe('-10.00');
 });
 
 test('Pretty integer value', () => {
-  expect(helpers.prettyIntegerValue(1000)).toBe('1,000');
-  expect(helpers.prettyIntegerValue(100000)).toBe('100,000');
-  expect(helpers.prettyIntegerValue(100000000)).toBe('100,000,000');
-  expect(helpers.prettyIntegerValue(-1000)).toBe('-1,000');
+  expect(prettyIntegerValue(1000)).toBe('1,000');
+  expect(prettyIntegerValue(100000)).toBe('100,000');
+  expect(prettyIntegerValue(100000000)).toBe('100,000,000');
+  expect(prettyIntegerValue(-1000)).toBe('-1,000');
 });
 
 test('Version check', () => {
