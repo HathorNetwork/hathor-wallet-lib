@@ -20,7 +20,7 @@ import Input from '../models/input';
 import Output from '../models/output';
 import Network from '../models/network';
 import Address from '../models/address';
-import { hexToBuffer, unpackToInt, intToBytes } from './buffer';
+import { hexToBuffer, unpackToInt, intToBytes, floatToBytes } from './buffer';
 import { crypto, encoding, Address as bitcoreAddress } from 'bitcore-lib';
 import { clone } from 'lodash';
 import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError, ParseError } from '../errors';
@@ -180,18 +180,11 @@ const helpers = {
    * @param {number} bytes How many bytes this number uses
    *
    * @return {Buffer} number in bytes
+   * @deprecated Import this function directly from `utils/buffer.ts`
    * @memberof Helpers
    * @inner
    */
-  floatToBytes(value: number, bytes: number): Buffer {
-    let arr = new ArrayBuffer(bytes);
-    let view = new DataView(arr);
-    if (bytes === 8) {
-      // byteOffset = 0; isLitteEndian = false
-      view.setFloat64(0, value, false);
-    }
-    return buffer.Buffer.from(arr);
-  },
+  floatToBytes: floatToBytes,
 
   /**
    * Push data to the stack checking if need to add the OP_PUSHDATA1 opcode

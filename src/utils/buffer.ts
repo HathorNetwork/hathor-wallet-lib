@@ -32,6 +32,26 @@ export function intToBytes(value: number, bytes: number): Buffer {
   return buffer.Buffer.from(arr);
 }
 
+/**
+ * Transform float to bytes
+ *
+ * @param {number} value Integer to be transformed to bytes
+ * @param {number} bytes How many bytes this number uses
+ *
+ * @return {Buffer} number in bytes
+ * @memberof Helpers
+ * @inner
+ */
+export function floatToBytes(value: number, bytes: number): Buffer {
+  let arr = new ArrayBuffer(bytes);
+  let view = new DataView(arr);
+  if (bytes === 8) {
+    // byteOffset = 0; isLitteEndian = false
+    view.setFloat64(0, value, false);
+  }
+  return buffer.Buffer.from(arr);
+}
+
 export const hexToBuffer = (value: string): Buffer => {
   if (!isHexa(value)) {
     throw new Error("hexToBuffer: argument must be a strict hex string.");

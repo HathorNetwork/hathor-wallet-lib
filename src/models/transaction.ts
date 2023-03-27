@@ -17,7 +17,15 @@ import {
   TX_WEIGHT_CONSTANTS
 } from '../constants'
 import {crypto as cryptoBL, encoding, util, PrivateKey} from 'bitcore-lib'
-import {bufferToHex, hexToBuffer, unpackToFloat, unpackToHex, unpackToInt, intToBytes} from '../utils/buffer'
+import {
+  bufferToHex,
+  hexToBuffer,
+  unpackToFloat,
+  unpackToHex,
+  unpackToInt,
+  intToBytes,
+  floatToBytes
+} from '../utils/buffer';
 import helpers from '../utils/helpers'
 import Input from './input'
 import Output from './output'
@@ -205,7 +213,7 @@ class Transaction {
     // Now serialize the graph part
     //
     // Weight is a float with 8 bytes
-    array.push(helpers.floatToBytes(this.weight, 8));
+    array.push(floatToBytes(this.weight, 8));
     // Timestamp
     array.push(intToBytes(this.timestamp!, 4))
 

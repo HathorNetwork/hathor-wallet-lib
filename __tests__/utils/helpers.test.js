@@ -8,7 +8,7 @@
 import helpers from '../../src/utils/helpers';
 import Network from '../../src/models/network';
 import dateFormatter from '../../src/utils/date';
-import { unpackToInt, unpackToFloat, hexToBuffer, bufferToHex, intToBytes } from '../../src/utils/buffer';
+import { unpackToInt, unpackToFloat, hexToBuffer, bufferToHex, intToBytes, floatToBytes } from '../../src/utils/buffer';
 import Address from '../../src/models/address';
 import P2PKH from '../../src/models/p2pkh';
 import P2SH from '../../src/models/p2sh';
@@ -91,7 +91,7 @@ test('Signed int to bytes', () => {
 
 test('Float to bytes', () => {
   let number = 10.5;
-  let buffer = helpers.floatToBytes(number, 8);
+  let buffer = floatToBytes(number, 8);
   expect(unpackToFloat(buffer)[0]).toBe(number);
 });
 
