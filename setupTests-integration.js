@@ -9,19 +9,11 @@
 import { parse } from 'path';
 import { loggers, LoggerUtil } from './__tests__/integration/utils/logger.util';
 import config from './src/config';
-import {
-  FULLNODE_URL,
-  TX_MINING_URL,
-} from './__tests__/integration/configuration/test-constants';
+import { TX_MINING_URL } from './__tests__/integration/configuration/test-constants';
 import {
   precalculationHelpers, WalletPrecalculationHelper
 } from './__tests__/integration/helpers/wallet-precalculation.helper';
-import MemoryStore from './src/memory_store';
 
-const storage = require('./src/storage').default;
-
-storage.setStore(new MemoryStore());
-storage.setItem('wallet:server', FULLNODE_URL);
 config.setTxMiningUrl(TX_MINING_URL);
 
 /**

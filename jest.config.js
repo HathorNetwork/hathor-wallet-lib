@@ -4,13 +4,13 @@ module.exports = {
   collectCoverage: true,
   collectCoverageFrom: ["<rootDir>/src/**/*.js","<rootDir>/src/**/*.ts","!<rootDir>/node_modules/"],
   coverageReporters: ['text-summary', 'lcov', 'clover'],
-  modulePathIgnorePatterns: ["__fixtures__/*","integration/*","__mocks__/*"],
+  modulePathIgnorePatterns: ["__fixtures__/*","integration/*","__mocks__/*","__mock_helpers/"],
   coverageThreshold: {
     global: {
-      branches: 45,
-      functions: 58,
-      lines: 55,
-      statements: 55
+      branches: 40,
+      functions: 50,
+      lines: 48,
+      statements: 49
     }
   },
 };

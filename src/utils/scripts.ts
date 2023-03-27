@@ -5,8 +5,9 @@ import Network from '../models/network';
 import helpers from '../utils/helpers';
 import { unpackLen, unpackToInt } from '../utils/buffer';
 import _ from 'lodash';
-import { ParseError, ParseScriptError } from '../errors';
+import { ParseError, ParseScriptError, XPubError } from '../errors';
 import { OP_PUSHDATA1, OP_CHECKSIG } from '../opcodes';
+import { Script, HDPublicKey } from 'bitcore-lib';
 
 /**
 * Parse P2PKH output script
@@ -93,7 +94,7 @@ export const parseScriptData = (buff: Buffer): ScriptData => {
   // The expected len will be at least 2 bytes
   // 1 for the script len and 1 for the OP_CHECKSIG in the end
   let expectedLen = 2;
-  let dataBytesLen;
+  let dataBytesLen: number;
 
   // If we have OP_PUSHDATA1 as first byte, the second byte has the length of data
   // otherwise, the first byte already has the length of data
@@ -119,7 +120,7 @@ export const parseScriptData = (buff: Buffer): ScriptData => {
 
   // Get data from the script
   const data = getPushData(scriptBuf);
-  let decodedData;
+  let decodedData: string;
 
   try {
     decodedData = data.toString('utf-8');
@@ -156,4 +157,35 @@ export const getPushData = (buff: Buffer): Buffer => {
     start = 1;
   }
   return scriptBuf.slice(start, start + lenData);
+}
+
+/**
+ * Create a P2SH MultiSig redeem script
+ *
+ * @param {string[]} xpubs The list of xpubkeys involved in this MultiSig
+ * @param {number} numSignatures Minimum number of signatures to send a
+ * transaction with this MultiSig
+ * @param {number} index Index to derive the xpubs
+ *
+ * @return {Buffer} A buffer with the redeemScript
+ * @throws {XPubError} In case any of the given xpubs are invalid
+ */
+export function createP2SHRedeemScript(xpubs: string[], numSignatures: number, index: number): Buffer {
+  let sortedXpubs: HDPublicKey[];
+  try {
+    sortedXpubs = _.sortBy(xpubs.map(xp => new HDPublicKey(xp)), (xpub: HDPublicKey) => {
+      return xpub.publicKey.toString('hex');
+    });
+  } catch (e) {
+    throw new XPubError('Invalid xpub');
+  }
+
+  // xpub comes derived to m/45'/280'/0'
+  // Derive to m/45'/280'/0'/0/index
+  const pubkeys = sortedXpubs.map((xpub) => xpub.deriveChild(0).deriveChild(index).publicKey);
+
+  // bitcore-lib sorts the public keys by default before building the script
+  // noSorting prevents that and keeps our order
+  const redeemScript = Script.buildMultisigOut(pubkeys, numSignatures, {noSorting: true});
+  return redeemScript.toBuffer();
 }

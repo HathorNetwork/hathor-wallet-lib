@@ -7,45 +7,13 @@
 
 process.env.NODE_ENV = 'test';
 
-// Creating memory storage to be used in the place of localStorage
-class MemoryOnlyStore {
-  constructor() {
-    this.hathorMemoryStorage = {};
-  }
-
-  getItem(key) {
-    const ret = this.hathorMemoryStorage[key];
-    if (ret === undefined) {
-      return null
-    }
-    return ret;
-  }
-
-  setItem(key, value) {
-    this.hathorMemoryStorage[key] = value;
-  }
-
-  removeItem(key) {
-    delete this.hathorMemoryStorage[key];
-  }
-
-  clear() {
-    this.hathorMemoryStorage = {};
-  }
-}
-
 // Mocking localStorage for tests
 import 'jest-localstorage-mock';
-const storage = require('./src/storage').default;
-
+import helpers from './src/utils/helpers';
 // Mocking WebSocket for tests
 import { Server, WebSocket } from 'mock-socket';
 global.WebSocket = WebSocket;
 
-import helpers from './src/helpers';
-
-storage.setStore(new MemoryOnlyStore());
-storage.setItem('wallet:server', 'http://localhost:8080/');
 let wsURL = helpers.getWSServerURL();
 
 // Creating a ws mock server
@@ -62,24 +30,6 @@ mockServer.on('connection', socket => {
   });
 });
 
-// When using asyncronous test jest expect does not raise fail
-// so we need to call done.fail() ourselves when some test is wrong
-global.check = (realValue, expectedValue, doneCb) => {
-  if (expectedValue !== realValue) {
-    doneCb.fail(`${expectedValue} != ${realValue}`);
-  }
-}
-
-global.checkNot = (realValue, notExpectedValue, doneCb) => {
-  if (notExpectedValue === realValue) {
-    doneCb.fail(`${notExpectedValue} != ${realValue}`);
-  }
-}
-
-global.isObjectEmpty = (obj) => {
-  return Object.entries(obj).length === 0 && obj.constructor === Object
-}
-
 // Mocking axios
 import axios from 'axios';
 import MockAdapter from 'axios-mock-adapter';
@@ -90,24 +40,14 @@ mock.onGet('thin_wallet/address_history').reply((config) => {
   return [200, {'success': true, 'has_more': false, 'history': []}];
 });
 
-mock.onGet('version').reply((config) => {
-  const data = {
+mock.onGet('version').reply((config) => ([200, {
     version: '1.0.0',
-    network: 'mainnet',
+    network: 'testnet',
     min_tx_weight: 14,
     min_tx_weight_coefficient: 1.6,
     min_tx_weight_k: 100,
     token_deposit_percentage: 0.01,
-  }
-  return [200, data];
-});
-
-import WebSocketHandler from './src/WebSocketHandler';
-import WS from './src/websocket';
-
-WebSocketHandler.websocket = new WS({ wsURL });
-WebSocketHandler.websocket.WebSocket = WebSocket;
-WebSocketHandler.websocket.setup();
+  }]));
 
 expect.extend({
   toMatchBuffer(received, expected) {
@@ -131,5 +71,7 @@ expect.extend({
   }
 });
 
-
-global.window = {};
+// jest test environment does not include the TextEncoder and TextDecoder glopbals which are required by Level (to test persistent storage with leveldb)
+const { TextEncoder, TextDecoder } = require('util');
+global.TextEncoder = TextEncoder;
+global.TextDecoder = TextDecoder;

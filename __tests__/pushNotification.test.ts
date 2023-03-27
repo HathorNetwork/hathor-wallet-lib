@@ -1,5 +1,5 @@
 import { mockAxiosAdapter } from "./__mocks__/wallet.mock";
-import { buildWalletToAuthenticateApiCall } from "./__fixtures__/wallet.fixtures";
+import { buildWalletToAuthenticateApiCall } from "./__mock_helpers/wallet-service.fixtures";
 import { PushNotification, PushNotificationProvider } from "../src/pushNotification";
 import config from "../src/config";
 
@@ -58,7 +58,7 @@ test('updateDevice', async () => {
 
 test('unregisterDevice', async () => {
   const wallet = buildWalletToAuthenticateApiCall();
-  spyOn(wallet, 'isReady').and.returnValue(true);
+  jest.spyOn(wallet, 'isReady').mockReturnValue(true);
 
   mockAxiosAdapter.reset();
   mockAxiosAdapter

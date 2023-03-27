@@ -13,6 +13,7 @@ import AES from 'crypto-js/aes';
 import CryptoJS from 'crypto-js';
 import { AtomicSwapProposal } from "../../models/types";
 import { PartialTxPrefix } from '../../models/partial_tx';
+import { isNumber } from 'lodash';
 
 /**
  * This interface represents the type returned on the HTTP response, with its untreated and encrypted data.
@@ -162,7 +163,11 @@ export const get = async (proposalId: string, password: string): Promise<AtomicS
 
     // Decoding was successful, return the data
     return decryptedData;
-  } catch (err) {
+  } catch (err: unknown) {
+    if (!(err instanceof Error)) {
+      // If the error is not an Error, rethrow it
+      throw err;
+    }
     // If the failure was specifically on the decoding, our password was incorrect.
     if (err.message === "Malformed UTF-8 data") {
       throw new Error('Incorrect password: could not decode the proposal');
@@ -172,3 +177,72 @@ export const get = async (proposalId: string, password: string): Promise<AtomicS
     throw err;
   }
 };
+
+interface SwapUpdateParams {
+  proposalId: string;
+  password: string;
+  partialTx: string;
+  version: number;
+  signatures?: string;
+}
+
+/**
+ * Updates the proposal on the Atomic Swap Service with the parameters informed
+ */
+export const update = async (params: SwapUpdateParams):
+  Promise<{ success: boolean }> => {
+  // Validates the input parameters and throws in case of errors
+  validateParameters();
+
+  const { proposalId, password, partialTx, version, signatures } = params;
+
+  const swapAxios = await axiosInstance();
+  const options = {
+    headers: { 'X-Auth-Password': hashPassword(password) }
+  } as AxiosRequestConfig;
+
+  const payload = {
+    partialTx: encryptString(partialTx, password),
+    version,
+    signatures: signatures ? encryptString(signatures, password) : null,
+  };
+
+  const { data } = await swapAxios.put<{ success: boolean }>(`/${proposalId}`, payload, options);
+  return { success: data?.success };
+
+  /**
+   * Validates the many mandatory parameters for the `update` method
+   * @throws {Error} if any mandatory parameter is missing
+   * @throws {Error} if any version parameter is invalid
+   */
+  function validateParameters() {
+    if (!params) {
+      throw new Error(`Missing mandatory parameters.`);
+    }
+
+    const { proposalId, password, partialTx, version } = params;
+    // Checking for missing parameters
+    const missingParameters: String[] = [];
+    if (!proposalId) {
+      missingParameters.push('proposalId');
+    }
+    if (!password) {
+      missingParameters.push('password');
+    }
+    if (!partialTx) {
+      missingParameters.push('partialTx');
+    }
+    if (version === undefined || version === null) {
+      missingParameters.push('version');
+    }
+    if (missingParameters.length > 0) {
+      throw new Error(`Missing mandatory parameters: ${missingParameters.join(', ')}`);
+    }
+
+    // Checking for invalid parameters
+    if (!isNumber(version) || version < 0) {
+      throw new Error('Invalid version number');
+    }
+  }
+};
+

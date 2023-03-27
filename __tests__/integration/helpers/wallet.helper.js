@@ -75,7 +75,7 @@ const startedWallets = [];
  * const hWalletManual = await generateWalletHelper({
  *   seed: 'sample words test',
  *   addresses: ['addr0','addr1'],
- * }
+ * })
  */
 export async function generateWalletHelper(param) {
   /** @type PrecalculatedWalletData */
@@ -150,7 +150,7 @@ export async function stopAllWallets() {
   // Stop all wallets that were started with this helper
   while (hWallet = startedWallets.pop()) {
     try {
-      hWallet.stop();
+      await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
     } catch (e) {
       loggers.test.error(e.stack);
     }
@@ -182,6 +182,7 @@ export async function createTokenHelper(hWallet, name, symbol, amount, options) 
   const tokenUid = newTokenResponse.hash;
   await waitForTxReceived(hWallet, tokenUid);
   await waitUntilNextTimestamp(hWallet, tokenUid);
+  await delay(1000);
   return newTokenResponse;
 }
 
@@ -194,13 +195,19 @@ export async function createTokenHelper(hWallet, name, symbol, amount, options) 
 export function waitForWalletReady(hWallet) {
   // Only return the positive response after the wallet is ready
   return new Promise((resolve, reject) => {
-    hWallet.on('state', newState => {
+    const handleState = newState => {
       if (newState === HathorWallet.READY) {
         resolve();
       } else if (newState === HathorWallet.ERROR) {
-        reject(new Error('Genesis wallet failed to start.'));
+        reject(new Error('Wallet failed to start.'));
       }
-    });
+    };
+    hWallet.on('state', handleState);
+    // No wallet on tests should take more than 15s to be ready
+    setTimeout(() => {
+      hWallet.removeListener('state', handleState);
+      reject(new Error('Wallet could not be ready.'));
+    }, 120000);
   });
 }
 
@@ -217,7 +224,7 @@ export function waitForWalletReady(hWallet) {
 export async function waitForTxReceived(hWallet, txId, timeout) {
   const startTime = Date.now().valueOf();
   let alreadyResponded = false;
-  const existingTx = hWallet.getTx(txId);
+  const existingTx = await hWallet.getTx(txId);
 
   // If the transaction was already received, return it immediately
   if (existingTx) {
@@ -269,14 +276,14 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
        * memory. The code below tries to eliminate these short time-senstive issues with a minimum
        * of delays.
        */
-      await delay(100);
-      let txObj = hWallet.getTx(txId);
+      await delay(500);
+      let txObj = await hWallet.getTx(txId);
       while (!txObj) {
         if (DEBUG_LOGGING) {
           loggers.test.warn(`Tx was not available on history. Waiting for 50ms and retrying.`);
         }
         await delay(50);
-        txObj = hWallet.getTx(txId);
+        txObj = await hWallet.getTx(txId);
       }
       resolve(newTx);
     }
@@ -298,7 +305,7 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
  * @returns {Promise<void>}
  */
 export async function waitUntilNextTimestamp(hWallet, txId) {
-  const { timestamp } = hWallet.getTx(txId);
+  const { timestamp } = await hWallet.getTx(txId);
   const nowMilliseconds = Date.now().valueOf();
   const nextValidMilliseconds = (timestamp + 1) * 1000;
 

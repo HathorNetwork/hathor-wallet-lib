@@ -9,7 +9,6 @@ import { EventEmitter } from 'events';
 import walletApi from './api/walletApi';
 import MineTransaction from './mineTransaction';
 import HathorWalletServiceWallet from './wallet';
-import wallet from '../wallet';
 import helpers from '../utils/helpers';
 import P2PKH from '../models/p2pkh';
 import Transaction from '../models/transaction';
@@ -250,13 +249,13 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @memberof SendTransactionWalletService
    * @inner
    */
-  signTx(utxosAddressPath: string[]) {
+  async signTx(utxosAddressPath: string[]) {
     if (this.transaction === null) {
       throw new WalletError('Can\'t sign transaction if it\'s null.');
     }
     this.emit('sign-tx-start');
     const dataToSignHash = this.transaction.getDataToSignHash();
-    const xprivkey = wallet.getXprivKey(this.pin);
+    const xprivkey = await this.wallet.storage.getMainXPrivKey(this.pin || '');
 
     for (const [idx, inputObj] of this.transaction.inputs.entries()) {
       const inputData = this.wallet.getInputData(
@@ -415,7 +414,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
         return this.transaction!;
       }
 
-      this.signTx(preparedData.utxosAddressPath);
+      await this.signTx(preparedData.utxosAddressPath);
       if (until === 'sign-tx') {
         return this.transaction!;
       }

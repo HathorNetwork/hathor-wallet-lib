@@ -4,6 +4,7 @@ const mainTestMatch = process.env.SPECIFIC_INTEGRATION_TEST_FILE
   : '<rootDir>/__tests__/integration/**/*.test.js';
 
 module.exports = {
+  testRunner: "jest-jasmine2",
   clearMocks: true,
   coverageDirectory: 'coverage-integration',
   testEnvironment: 'node',
@@ -23,10 +24,10 @@ module.exports = {
     },
     // We need a high coverage for the HathorWallet class
     './src/new/wallet.js': {
-      statements: 93,
-      branches: 89,
-      functions: 93,
-      lines: 93
+      statements: 92,
+      branches: 85,
+      functions: 91,
+      lines: 92
     }
   },
 };

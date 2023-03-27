@@ -8,7 +8,7 @@
 import { PartialTx, PartialTxInputData, ProposalInput, ProposalOutput } from '../../src/models/partial_tx';
 import Network from '../../src/models/network';
 import Address from '../../src/models/address';
-import dateFormatter from '../../src/date';
+import dateFormatter from '../../src/utils/date';
 
 
 import { UnsupportedScriptError } from '../../src/errors';
@@ -22,6 +22,7 @@ import {
 import helpers from '../../src/utils/helpers';
 import txApi from '../../src/api/txApi';
 import P2PKH from '../../src/models/p2pkh';
+import transaction from '../../src/utils/transaction';
 
 
 describe('PartialTx.getTxData', () => {
@@ -57,9 +58,6 @@ describe('PartialTx.getTxData', () => {
       inputs: [],
       outputs: [],
       tokens: [],
-      timestamp: expect.any(Number),
-      weight: 0,
-      nonce: 0,
       version: DEFAULT_TX_VERSION,
     }));
   });
@@ -89,23 +87,23 @@ describe('PartialTx.getTxData', () => {
 
 describe('PartialTx.getTx', () => {
   const testnet = new Network('testnet');
-  const spyHelper = jest.spyOn(helpers, 'createTxFromData');
+  const spyCreateTx = jest.spyOn(transaction, 'createTransactionFromData');
   const spyData = jest.spyOn(PartialTx.prototype, 'getTxData');
 
   afterEach(() => {
     // Reset mocks
-    spyHelper.mockReset();
+    spyCreateTx.mockReset();
     spyData.mockReset();
   });
 
   afterAll(() => {
     // Clear mocks
-    spyHelper.mockRestore();
+    spyCreateTx.mockRestore();
     spyData.mockRestore();
   });
 
   it('should map inputs and outputs to data.', () => {
-    spyHelper.mockImplementation(() => 'txResult');
+    spyCreateTx.mockImplementation(() => 'txResult');
     spyData.mockImplementation(() => 'getTxDataResult');
 
     const partialTx = new PartialTx(testnet);
@@ -113,7 +111,7 @@ describe('PartialTx.getTx', () => {
 
     expect(tx).toBe('txResult');
     expect(spyData).toHaveBeenCalled();
-    expect(spyHelper).toHaveBeenCalledWith('getTxDataResult', testnet);
+    expect(spyCreateTx).toHaveBeenCalledWith('getTxDataResult', testnet);
   });
 });
 
@@ -258,30 +256,13 @@ describe('PartialTx serialization', () => {
   const testTokenConfig = {name: 'Test Token', symbol: 'TST', uid: '0000389deaf5557642e5a8a26656dcf360b608160f43e7ef79b9bde8ab69a18c'};
   const txId1 = '00000d906babfa76b092f0088530a85f4d6bae5437304820f4c7a39540d87dd0';
   const txId2 = '0000584ed8ad32b00e79e1c5cf26b5969ca7cd4d93ae39b776e71cfecf7c8c78';
-  const txData = {
-    hash: '0000e0f6b20a6578eb41d7846ed9aaeab82a405a7dc9106c2954551fa777568f',
-    tokens: [ testTokenConfig.uid ],
-    inputs: [
-      {index: 0, tx_id: txId1},
-      {index: 4, tx_id: txId2},
-    ],
-    outputs: [
-      {type: 'p2pkh', value: 15, tokenData: 0, address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo'},
-      {type: 'p2pkh', value: 13, tokenData: 1, address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp'},
-      {type: 'p2pkh', value: 12, tokenData: 0, address: 'WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi'},
-    ],
-    version: DEFAULT_TX_VERSION,
-    weight: 0,
-    timestamp: dateFormatter.dateToTimestamp(new Date()),
-  };
-  const tx = helpers.createTxFromData(txData, testnet);
   const scriptFromAddressP2PKH = (base58Addr) => {
     const p2pkh = new P2PKH(new Address(base58Addr, { network: testnet }));
     return p2pkh.createScript();
   };
 
   it('should serialize a transaction correctly', async () => {
-    const expected = 'PartialTx|00010102030000389deaf5557642e5a8a26656dcf360b608160f43e7ef79b9bde8ab69a18c00000d906babfa76b092f0088530a85f4d6bae5437304820f4c7a39540d87dd00000000000584ed8ad32b00e79e1c5cf26b5969ca7cd4d93ae39b776e71cfecf7c8c780400000000000f00001976a914729181c0f3f2e3f589cc10facbb9332e0c309a7788ac0000000d01001976a9146861143f7dc6b2f9c8525315efe6fcda160a795c88ac0000000c00001976a914486bc4f1e70f242a737d3866147c7f8335c2995f88ac0000000000000000000000010000000000|WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi,00,0,1b:WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi,0000389deaf5557642e5a8a26656dcf360b608160f43e7ef79b9bde8ab69a18c,0,d|1:2';
+    const expected = 'PartialTx|00010102030000389deaf5557642e5a8a26656dcf360b608160f43e7ef79b9bde8ab69a18c00000d906babfa76b092f0088530a85f4d6bae5437304820f4c7a39540d87dd00000000000584ed8ad32b00e79e1c5cf26b5969ca7cd4d93ae39b776e71cfecf7c8c780400000000000f00001976a914729181c0f3f2e3f589cc10facbb9332e0c309a7788ac0000000d01001976a9146861143f7dc6b2f9c8525315efe6fcda160a795c88ac0000000c00001976a914486bc4f1e70f242a737d3866147c7f8335c2995f88ac0000000000000000000000000000000000|WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi,00,0,1b:WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi,0000389deaf5557642e5a8a26656dcf360b608160f43e7ef79b9bde8ab69a18c,0,d|1:2';
 
     const partialTx = new PartialTx(testnet);
 
@@ -301,7 +282,7 @@ describe('PartialTx serialization', () => {
   });
 
   it('should deserialize a transaction correctly', () => {
-    const serialized = 'PartialTx|00010102030000389deaf5557642e5a8a26656dcf360b608160f43e7ef79b9bde8ab69a18c00000d906babfa76b092f0088530a85f4d6bae5437304820f4c7a39540d87dd00000000000584ed8ad32b00e79e1c5cf26b5969ca7cd4d93ae39b776e71cfecf7c8c780400000000000f00001976a914729181c0f3f2e3f589cc10facbb9332e0c309a7788ac0000000d01001976a9146861143f7dc6b2f9c8525315efe6fcda160a795c88ac0000000c00001976a914486bc4f1e70f242a737d3866147c7f8335c2995f88ac0000000000000000000000010000000000|WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi,00,0,1b:WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi,0000389deaf5557642e5a8a26656dcf360b608160f43e7ef79b9bde8ab69a18c,0,d|1:2';
+    const serialized = 'PartialTx|00010102030000389deaf5557642e5a8a26656dcf360b608160f43e7ef79b9bde8ab69a18c00000d906babfa76b092f0088530a85f4d6bae5437304820f4c7a39540d87dd00000000000584ed8ad32b00e79e1c5cf26b5969ca7cd4d93ae39b776e71cfecf7c8c780400000000000f00001976a914729181c0f3f2e3f589cc10facbb9332e0c309a7788ac0000000d01001976a9146861143f7dc6b2f9c8525315efe6fcda160a795c88ac0000000c00001976a914486bc4f1e70f242a737d3866147c7f8335c2995f88ac0000000000000000000000000000000000|WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi,00,0,1b:WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi,0000389deaf5557642e5a8a26656dcf360b608160f43e7ef79b9bde8ab69a18c,0,d|1:2';
     const partialTx = PartialTx.deserialize(serialized, testnet);
     expect(partialTx.serialize()).toBe(serialized);
   });

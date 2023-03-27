@@ -5,16 +5,17 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import Network from '../models/network';
 import WalletWebSocket from '../websocket';
-import config from '../config';
-import helpers from '../helpers';
+import helpers from '../utils/helpers';
 import BaseConnection, {
   ConnectionParams,
 } from '../connection';
 import {
   ConnectionState,
 } from '../wallet/types';
+import { handleSubscribeAddress, handleWsDashboard } from '../utils/connection';
+import { IStorage } from '../types';
+
 
 /**
  * This is a Connection that may be shared by one or more wallets.
@@ -65,6 +66,34 @@ class WalletConnection extends BaseConnection {
 
     this.setState(ConnectionState.CONNECTING);
     this.websocket.setup();
+  }
+
+  startControlHandlers(storage: IStorage) {
+    this.removeMetricsHandlers();
+    this.addMetricsHandlers(storage);
+  }
+
+  subscribeAddresses(addresses: string[]) {
+    if (this.websocket) {
+      for (const address of addresses) {
+        const msg = JSON.stringify({ type: 'subscribe_address', address });
+        this.websocket.sendMessage(msg);
+      }
+    }
+  }
+
+  unsubscribeAddress(address: string) {
+    if (this.websocket) {
+      const msg = JSON.stringify({type: 'unsubscribe_address', address});
+      this.websocket.sendMessage(msg);
+    }
+  }
+
+  addMetricsHandlers(storage: IStorage) {
+    if (this.websocket) {
+      this.websocket.on('dashboard', handleWsDashboard(storage));
+      this.websocket.on('subscribe_address', handleSubscribeAddress());
+    }
   }
 }
 
