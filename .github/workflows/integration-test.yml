@@ -18,10 +18,12 @@ jobs:
         node-version: [14.x, 16.x]
 
     steps:
-      - uses: actions/checkout@v3
+        # https://github.com/actions/checkout/releases/tag/v3.5.0
+      - uses: actions/checkout@8f4b7f84864484a7bf31766abe9204da3cbe65b3
 
       - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v3
+        # https://github.com/actions/setup-node/releases/tag/v3.6.0
+        uses: actions/setup-node@64ed1c7eab4cce3362f8c340dee64e5eaeef8f7c
         with:
           node-version: ${{ matrix.node-version }}
 
@@ -33,14 +35,16 @@ jobs:
 
       - name: Upload debug transaction logs
         if: always()
-        uses: actions/upload-artifact@v3
+        # https://github.com/actions/upload-artifact/releases/tag/v3.1.2
+        uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce
         with:
           name: test-transacion-logs
           path: tmp
 
       - name: Collect docker logs on failure
         if: failure()
-        uses: jwalton/gh-docker-logs@v2
+        # https://github.com/jwalton/gh-docker-logs/releases/tag/v2.2.1
+        uses: jwalton/gh-docker-logs@59c9656cd3cb7542525f3dce7ae2f44c0ff85d66
         with:
           dest: './docker-logs'
       - name: Tar logs
@@ -48,7 +52,8 @@ jobs:
         run: tar cvzf ./docker-logs.tgz ./docker-logs
       - name: Upload logs to GitHub
         if: failure()
-        uses: actions/upload-artifact@v2
+        # https://github.com/actions/upload-artifact/releases/tag/v3.1.2
+        uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce
         with:
           name: logs.tgz
           path: ./docker-logs.tgz
