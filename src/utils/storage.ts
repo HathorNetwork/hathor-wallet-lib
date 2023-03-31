@@ -6,7 +6,7 @@
  */
 
 import FullnodeConnection from '../new/connection';
-import { IStorage, IAddressInfo, IHistoryTx, IBalance, ITokenMetadata, IAddressMetadata, IUtxo, IStore, IHistoryOutput, ILockedUtxo } from '../types';
+import { IStorage, IAddressInfo, IHistoryTx, IBalance, ILockedUtxo } from '../types';
 import walletApi from '../api/wallet';
 
 import { chunk } from 'lodash';
@@ -222,12 +222,13 @@ export async function checkGapLimit(storage: IStorage): Promise<{nextIndex: numb
  * History processing is a complex and nuanced method so we created a utility to avoid errors on other store implementations.
  * This utility only uses the store methods so it can be used by any store implementation.
  *
- * @param {IStore} store IStore instance holding the history to be processed.
+ * @param {IStorage} storage Storage instance.
  * @param {{rewardLock: number}} [options={}] Use this configuration when processing the storage
  * @async
  * @returns {Promise<void>}
  */
-export async function processHistory(store: IStore, { rewardLock }: { rewardLock?: number } = {}): Promise<void> {
+export async function processHistory(storage: IStorage, { rewardLock }: { rewardLock?: number } = {}): Promise<void> {
+  const store = storage.store;
   // We have an additive method to update metadata so we need to clean the current metadata before processing.
   await store.cleanMetadata();
 
@@ -238,7 +239,7 @@ export async function processHistory(store: IStore, { rewardLock }: { rewardLock
   let maxIndexUsed = -1;
   // Iterate on all txs of the history updating the metadata as we go
   for await (const tx of store.historyIter()) {
-    const processedData = await processNewTx(store, tx, { rewardLock, nowTs, currentHeight });
+    const processedData = await processNewTx(storage, tx, { rewardLock, nowTs, currentHeight });
     maxIndexUsed = Math.max(maxIndexUsed, processedData.maxAddressIndex);
     for (const token of processedData.tokens) {
       tokens.add(token);
@@ -246,17 +247,18 @@ export async function processHistory(store: IStore, { rewardLock }: { rewardLock
   }
 
   // Update wallet data
-  await updateWalletMetadataFromProcessedTxData(store, { maxIndexUsed, tokens });
+  await updateWalletMetadataFromProcessedTxData(storage, { maxIndexUsed, tokens });
 }
 
 /**
  * Update the store wallet data based on accumulated data from processed txs.
- * @param {IStore} store The store instance
+ * @param {IStorage} storage Storage instance.
  * @param {Object} options
  * @param {number} options.maxIndexUsed The maximum index used in the processed txs
  * @param {Set<string>} options.tokens A set of tokens found in the processed txs
  */
-async function updateWalletMetadataFromProcessedTxData(store: IStore, { maxIndexUsed, tokens }: { maxIndexUsed: number, tokens: Set<string>}): Promise<void> {
+async function updateWalletMetadataFromProcessedTxData(storage: IStorage, { maxIndexUsed, tokens }: { maxIndexUsed: number, tokens: Set<string>}): Promise<void> {
+  const store = storage.store;
   // Update wallet data
   const walletData = await store.getWalletData();
   if (maxIndexUsed > -1) {
@@ -301,7 +303,7 @@ async function updateWalletMetadataFromProcessedTxData(store: IStore, { maxIndex
  * Will update relevant wallet data and utxos.
  * The return object contains the max address index used and the tokens found in the transaction.
  *
- * @param {IStore} store The store instance
+ * @param {IStorage} storage Storage instance.
  * @param {IHistoryTx} tx The new transaction to be processed
  * @param {Object} [options]
  * @param {number} [options.rewardLock] The reward lock of the network
@@ -310,7 +312,7 @@ async function updateWalletMetadataFromProcessedTxData(store: IStore, { maxIndex
  * @returns {Promise<{ maxAddressIndex: number, tokens: Set<string> }>}
  */
 export async function processNewTx(
-  store: IStore,
+  storage: IStorage,
   tx: IHistoryTx,
   { rewardLock, nowTs, currentHeight }: { rewardLock?: number, nowTs?: number, currentHeight?: number } = {},
 ): Promise<{
@@ -326,6 +328,8 @@ export async function processNewTx(
       }
     };
   }
+
+  const store = storage.store;
 
   // We ignore voided transactions
   if (tx.is_voided) return {
@@ -433,6 +437,11 @@ export async function processNewTx(
         // So that later when it becomes unlocked we can update the balances with processUtxoUnlock
         await store.saveLockedUtxo({ tx, index });
       }
+    } else {
+      // If the output is spent we remove it from the utxos selected_as_inputs if it's there
+      if (await storage.isUtxoSelectedAsInput({ txId: tx.tx_id, index })) {
+        await storage.utxoSelectAsInput({ txId: tx.tx_id, index }, false);
+      }
     }
 
     await store.editTokenMeta(output.token, tokenMeta);
@@ -514,7 +523,7 @@ export async function processNewTx(
  * Process locked utxo and update the balances.
  * If the utxo is still locked nothing is done.
  *
- * @param {IStore} store The store to be used
+ * @param {IStorage} storage Storage instance.
  * @param {ILockedUtxo} lockedUtxo The utxo to be unlocked
  * @param {Object} [options]
  * @param {number} [options.rewardLock] The reward lock of the network
@@ -523,7 +532,7 @@ export async function processNewTx(
  * @returns {Promise<void>}
  */
 export async function processUtxoUnlock(
-  store: IStore,
+  storage: IStorage,
   lockedUtxo: ILockedUtxo,
   { rewardLock, nowTs, currentHeight }: { rewardLock?: number, nowTs?: number, currentHeight?: number } = {},
 ): Promise<void> {
@@ -536,6 +545,8 @@ export async function processUtxoUnlock(
       }
     };
   }
+
+  const store = storage.store;
 
   const tx = lockedUtxo.tx;
   const output = tx.outputs[lockedUtxo.index];

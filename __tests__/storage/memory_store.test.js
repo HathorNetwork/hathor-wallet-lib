@@ -5,8 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, GAP_LIMIT } from '../../src/constants';
-import { MemoryStore } from '../../src/storage';
+import { GAP_LIMIT } from '../../src/constants';
+import { MemoryStore, Storage } from '../../src/storage';
 import tx_history from '../__fixtures__/tx_history';
 import walletApi from '../../src/api/wallet';
 import { HDPrivateKey } from 'bitcore-lib';
@@ -78,6 +78,7 @@ test('history methods', async () => {
   const store = new MemoryStore();
   await store.saveAddress({base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0});
   await store.saveAddress({base58: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp', bip32AddressIndex: 1});
+  const storage = new Storage(store);
 
   for (const tx of tx_history) {
     await store.saveTx(tx);
@@ -108,7 +109,7 @@ test('history methods', async () => {
       symbol: 'CTK',
     });
   });
-  await processHistory(store, { rewardLock: 1 });
+  await processHistory(storage, { rewardLock: 1 });
   expect(getTokenApi).not.toHaveBeenCalledWith('00', expect.anything());
   expect(getTokenApi).toHaveBeenCalledWith('01', expect.anything());
   expect(getTokenApi).toHaveBeenCalledWith('02', expect.anything());
