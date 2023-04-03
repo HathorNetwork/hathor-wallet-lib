@@ -1,21 +1,20 @@
-import { GenesisWalletHelper } from './helpers/genesis-wallet.helper';
+import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
 import {
-  createTokenHelper,
   DEFAULT_PIN_CODE,
   DEFAULT_PASSWORD,
-  generateWalletHelper,
   generateConnection,
   stopAllWallets,
   waitForWalletReady,
   waitForTxReceived,
-} from './helpers/wallet.helper';
+} from '../helpers/wallet.helper';
 import HathorWallet from '../../../src/new/wallet';
-import { loggers } from './utils/logger.util';
-import SendTransaction from '../../src/new/sendTransaction';
-import { delay } from './utils/core.util';
+import { loggers } from '../utils/logger.util';
+import { delay } from '../utils/core.util';
 import SendTransaction from '../../../src/new/sendTransaction';
 import { LevelDBStore, MemoryStore, Storage } from '../../../src/storage';
-import { walletUtils } from '../../../src/utils/wallet';
+import walletUtils from '../../../src/utils/wallet';
+import { HATHOR_TOKEN_CONFIG } from '../../../src/constants';
 
 const startedWallets = [];
 
@@ -72,16 +71,18 @@ describe('locked utxos', () => {
 
     const sendTx = new SendTransaction({
       storage: hwallet.storage,
-      outputs: {
+      outputs: [{
+        type: 'p2pkh',
         address: await hwallet.getAddressAtIndex(1),
         value: 1,
-      },
+        token: HATHOR_TOKEN_CONFIG.uid,
+      }],
       pin: DEFAULT_PIN_CODE,
     });
     await sendTx.prepareTx();
     await sendTx.updateOutputSelected(true);
     // This shouldn't fail since if we did not have tokens the prepareTx should have failed
-    const input = sendTx.transaction.input[0];
+    const input = sendTx.transaction.inputs[0];
     const utxoId = { txId: input.hash, index: input.index };
     await expect(hwallet.storage.isUtxoSelectedAsInput(utxoId)).resolves.toBe(true);
     // Send a transaction spending the only utxo on the wallet.
