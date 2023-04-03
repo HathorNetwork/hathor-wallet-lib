@@ -19,8 +19,7 @@ import Input from '../models/input';
 import Output from '../models/output';
 import Network from '../models/network';
 import Address from '../models/address';
-import { hexToBuffer, unpackToInt, intToBytes, signedIntToBytes, floatToBytes } from './buffer';
-import { prettyValue, prettyIntegerValue } from './numbers';
+import { hexToBuffer, unpackToInt, intToBytes } from './buffer';
 import { crypto, encoding, Address as bitcoreAddress } from 'bitcore-lib';
 import { clone } from 'lodash';
 import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError, ParseError } from '../errors';
@@ -49,32 +48,6 @@ const helpers = {
   roundFloat(n: number): number {
     return Math.round(n*100)/100
   },
-
-  /**
-   * Get the formatted value with decimal places and thousand separators
-   *
-   * @param {number} value Amount to be formatted
-   *
-   * @return {string} Formatted value
-   * @deprecated Import this function directly from `utils/numbers.ts`
-   *
-   * @memberof Helpers
-   * @inner
-   */
-  prettyValue: prettyValue,
-
-  /**
-   * Get the formatted value for an integer number
-   *
-   * @param {number} value Amount to be formatted
-   *
-   * @return {string} Formatted value
-   * @deprecated Import this function directly from `utils/numbers.ts`
-   *
-   * @memberof Helpers
-   * @inner
-   */
-  prettyIntegerValue: prettyIntegerValue,
 
   /**
    * Validate if the passed version is valid, comparing with the minVersion
@@ -123,45 +96,6 @@ const helpers = {
   getCleanVersionArray(version: string): string[] {
     return version.replace(/[^\d.]/g, '').split('.');
   },
-
-  /**
-   * Transform int to bytes
-   *
-   * @param {number} value Integer to be transformed to bytes
-   * @param {number} bytes How many bytes this number uses
-   *
-   * @return {Buffer} number in bytes
-   * @deprecated Import this function directly from `utils/buffer.ts`
-   * @memberof Helpers
-   * @inner
-   */
-  intToBytes: intToBytes,
-
-  /**
-   * Transform signed int to bytes (1, 2, or 4 bytes)
-   *
-   * @param {number} value Integer to be transformed to bytes
-   * @param {number} bytes How many bytes this number uses
-   *
-   * @return {Buffer} number in bytes
-   * @deprecated Import this function directly from `utils/buffer.ts`
-   * @memberof Helpers
-   * @inner
-   */
-  signedIntToBytes: signedIntToBytes,
-
-  /**
-   * Transform float to bytes
-   *
-   * @param {number} value Integer to be transformed to bytes
-   * @param {number} bytes How many bytes this number uses
-   *
-   * @return {Buffer} number in bytes
-   * @deprecated Import this function directly from `utils/buffer.ts`
-   * @memberof Helpers
-   * @inner
-   */
-  floatToBytes: floatToBytes,
 
   /**
    * Push data to the stack checking if need to add the OP_PUSHDATA1 opcode
