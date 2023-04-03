@@ -15,7 +15,7 @@ import helpers from '../utils/helpers';
 import MineTransaction from '../wallet/mineTransaction';
 import Address from '../models/address';
 import { OutputType } from '../wallet/types';
-import { IStorage, IDataTx, IFillTxOptions } from '../types';
+import { IStorage, IDataTx, IDataInput, IDataOutput, IFillTxOptions } from '../types';
 import Transaction from '../models/transaction';
 
 export interface ISendInput {
@@ -123,7 +123,6 @@ class SendTransaction extends EventEmitter {
     if (!this.storage) {
       throw new SendTxError('Storage is not set.');
     }
-    // const tokensData: Record<string, {outputs: IDataOutput[], inputs: IDataInput[]}> = {};
     const HTR_UID = HATHOR_TOKEN_CONFIG.uid;
     const network = this.storage.config.getNetwork();
     const txData: IDataTx = {
