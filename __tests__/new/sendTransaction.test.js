@@ -91,6 +91,7 @@ test('prepareTxData', async () => {
         authorities: 0,
       },
       'an-input-from-storage',
+      'an-input-from-storage',
     ],
     outputs: [
       {
@@ -108,6 +109,7 @@ test('prepareTxData', async () => {
         authorities: 0,
         token: HATHOR_TOKEN_CONFIG.uid,
       },
+      'an-output-from-storage',
       'an-output-from-storage',
     ],
     tokens: ['01'],

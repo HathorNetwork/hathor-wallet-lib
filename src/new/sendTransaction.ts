@@ -132,11 +132,12 @@ class SendTransaction extends EventEmitter {
       tokens: [],
     };
     const chooseInputs = this.inputs.length === 0;
-    const tokenSet = new Set<string>();
+    // Map of token uid to the chooseInputs value of this token
+    const tokenMap = new Map<string, boolean>();
 
     for (const output of this.outputs) {
       if (isDataOutput(output)) {
-        tokenSet.add(HTR_UID);
+        tokenMap.set(HTR_UID, false);
         output.token = HTR_UID;
 
         // Data output will always have value 1 (0.01) HTR
@@ -149,7 +150,8 @@ class SendTransaction extends EventEmitter {
         });
       } else {
         const addressObj = new Address(output.address, { network });
-        tokenSet.add(output.token);
+        // We set chooseInputs false as default and may be overwritten by the inputs.
+        tokenMap.set(output.token, false);
 
         txData.outputs.push({
           address: output.address,
@@ -170,12 +172,13 @@ class SendTransaction extends EventEmitter {
         throw err;
       }
       const spentOut = inputTx.outputs[input.index];
-      if (!tokenSet.has(spentOut.token)) {
+      if (!tokenMap.has(spentOut.token)) {
         // The input select is from a token that is not in the outputs
         const err = new SendTxError(ErrorMessages.INVALID_INPUT);
         err.errorData = { txId: input.txId, index: input.index };
         throw err;
       }
+      tokenMap.set(spentOut.token, true);
       txData.inputs.push({
         txId: input.txId,
         index: input.index,
@@ -186,18 +189,25 @@ class SendTransaction extends EventEmitter {
       });
     }
 
-    const options: IFillTxOptions = { chooseInputs, skipAuthorities: true };
-    if (this.changeAddress) {
-      options.changeAddress = this.changeAddress;
+    const partialTxData: {inputs: IDataInput[], outputs: IDataOutput[]} = {inputs: [], outputs: []};
+    for (const [token, chooseInputs] of tokenMap) {
+      const options: IFillTxOptions = { chooseInputs, skipAuthorities: true };
+      if (this.changeAddress) {
+        options.changeAddress = this.changeAddress;
+      }
+      const newData = await this.storage.fillTx(token, txData, options);
+      partialTxData.inputs.push(...newData.inputs);
+      partialTxData.outputs.push(...newData.outputs);
     }
-    const newData = await this.storage.fillTx(txData, options);
-    tokenSet.delete(HTR_UID);
+
+    tokenMap.delete(HTR_UID);
     // This new IDataTx should be complete with the requested funds
     this.fullTxData = {
-      inputs: [...txData.inputs, ...newData.inputs],
-      outputs: [...txData.outputs, ...newData.outputs],
-      tokens: Array.from(tokenSet),
+      inputs: [...txData.inputs, ...partialTxData.inputs],
+      outputs: [...txData.outputs, ...partialTxData.outputs],
+      tokens: Array.from(tokenMap.keys()),
     };
+
     return this.fullTxData;
   }
 
