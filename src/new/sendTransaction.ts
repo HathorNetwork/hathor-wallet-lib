@@ -150,8 +150,9 @@ class SendTransaction extends EventEmitter {
         });
       } else {
         const addressObj = new Address(output.address, { network });
-        // We set chooseInputs false as default and may be overwritten by the inputs.
-        tokenMap.set(output.token, false);
+        // We set chooseInputs true as default and may be overwritten by the inputs.
+        // chooseInputs should be true if no inputs are given
+        tokenMap.set(output.token, true);
 
         txData.outputs.push({
           address: output.address,
@@ -178,7 +179,7 @@ class SendTransaction extends EventEmitter {
         err.errorData = { txId: input.txId, index: input.index };
         throw err;
       }
-      tokenMap.set(spentOut.token, true);
+      tokenMap.set(spentOut.token, false);
       txData.inputs.push({
         txId: input.txId,
         index: input.index,
