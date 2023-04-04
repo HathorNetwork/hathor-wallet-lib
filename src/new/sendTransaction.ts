@@ -130,13 +130,12 @@ class SendTransaction extends EventEmitter {
       outputs: [],
       tokens: [],
     };
-    const chooseInputs = this.inputs.length === 0;
     // Map of token uid to the chooseInputs value of this token
     const tokenMap = new Map<string, boolean>();
 
     for (const output of this.outputs) {
       if (isDataOutput(output)) {
-        tokenMap.set(HTR_UID, false);
+        tokenMap.set(HTR_UID, true);
         output.token = HTR_UID;
 
         // Data output will always have value 1 (0.01) HTR
