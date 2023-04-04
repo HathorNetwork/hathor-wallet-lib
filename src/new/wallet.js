@@ -260,6 +260,55 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Set the value of the gap limit for this wallet instance.
+   * @param {number} value The new gap limit value
+   * @returns {Promise<void>}
+   */
+  async setGapLimit(value) {
+    return this.storage.setGapLimit(value);
+  }
+
+  /**
+   * Get the access data object from storage.
+   * @returns {Promise<import('../types').IWalletAccessData>}
+   */
+  async getAccessData() {
+    const accessData = await this.storage.getAccessData();
+    if (!accessData) {
+      throw new WalletError('Wallet was not initialized.');
+    }
+    return accessData;
+  }
+
+  /**
+   * Get the configured wallet type.
+   * @returns {Promise<string>} The wallet type
+   */
+  async getWalletType() {
+    const accessData = await this.getAccessData();
+    return accessData.walletType;
+  }
+
+  /**
+   * Get the multisig data object from storage.
+   * Only works if the wallet is a multisig wallet.
+   *
+   * @returns {Promise<import('../types').IMultisigData>}
+   */
+  async getMultisigData() {
+    const accessData = await this.getAccessData();
+    if (accessData.walletType === 'multisig') {
+      if (accessData.multisigData) {
+        return accessData.multisigData;
+      } else {
+        throw new WalletError('Multisig data not found in storage');
+      }
+    } else {
+      throw new WalletError('Wallet is not a multisig wallet.');
+    }
+  }
+
+  /**
    * Enable debug mode.
    **/
   enableDebugMode() {
