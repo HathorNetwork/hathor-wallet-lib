@@ -2548,8 +2548,10 @@ describe('storage methods', () => {
     const hWallet = await generateWalletHelper();
     await hWallet.setGapLimit(100);
     await expect(hWallet.storage.getGapLimit()).resolves.toEqual(100);
+    await expect(hWallet.getGapLimit()).resolves.toEqual(100);
     await hWallet.setGapLimit(11);
     await expect(hWallet.storage.getGapLimit()).resolves.toEqual(11);
+    await expect(hWallet.getGapLimit()).resolves.toEqual(11);
   });
 
   it('should get the wallet access data from storage', async () => {

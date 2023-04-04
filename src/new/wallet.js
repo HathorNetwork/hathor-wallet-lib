@@ -269,6 +269,14 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Get the value of the gap limit for this wallet instance.
+   * @returns {Promise<number>}
+   */
+    async getGapLimit() {
+      return this.storage.getGapLimit();
+    }
+
+  /**
    * Get the access data object from storage.
    * @returns {Promise<import('../types').IWalletAccessData>}
    */
@@ -297,7 +305,7 @@ class HathorWallet extends EventEmitter {
    */
   async getMultisigData() {
     const accessData = await this.getAccessData();
-    if (accessData.walletType === 'multisig') {
+    if (accessData.walletType === WalletType.MULTISIG) {
       if (accessData.multisigData) {
         return accessData.multisigData;
       } else {

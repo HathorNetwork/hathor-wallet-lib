@@ -490,17 +490,19 @@ test('getAddressAtIndex', async () => {
   p2shDeriveSpy.mockRestore();
 });
 
-test('setGapLimit', async () => {
+test('GapLimit', async () => {
   const store = new MemoryStore();
   const storage = new Storage(store);
 
   const gapSpy = jest.spyOn(storage, 'setGapLimit').mockImplementationOnce(() => Promise.resolve());
+  jest.spyOn(storage, 'getGapLimit').mockImplementationOnce(() => Promise.resolve(123));
 
   const hWallet = new FakeHathorWallet();
   hWallet.storage = storage;
 
   await hWallet.setGapLimit(10);
   expect(gapSpy).toBeCalledWith(10);
+  await expect(hWallet.getGapLimit()).resolves.toEqual(123);
 });
 
 test('getAccessData', async () => {
@@ -523,7 +525,7 @@ test('getWalletType', async () => {
   const store = new MemoryStore();
   const storage = new Storage(store);
 
-  const dataSpy = jest.spyOn(storage, 'getAccessData')
+  jest.spyOn(storage, 'getAccessData')
       .mockImplementationOnce(() => Promise.resolve({
         walletType: 'p2pkh',
       }));
