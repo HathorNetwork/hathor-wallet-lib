@@ -292,8 +292,9 @@ const transaction = {
    * Normal txs can be "unbalanced" when minting or melting tokens, but since we are not required to add the minted tokens on the inputs
    * Or conversely add the melted tokens on the outputs, we will ignore minted/melted funds.
    *
+   * @param {string} token The token we want to calculate the balance.
    * @param {IDataTx} tx The transaction we want to calculate the balance.
-   * @returns {Promise<Record<'funds'|'mint'|'melt', number>>} The balance of all tokens on the transaction.
+   * @returns {Promise<Record<'funds'|'mint'|'melt', number>>} The balance of the given token on the transaction.
    */
   async calculateTxBalanceToFillTx(token: string, tx: IDataTx): Promise<Record<'funds'|'mint'|'melt', number>> {
     const balance = {'funds': 0, 'mint': 0, 'melt': 0};
