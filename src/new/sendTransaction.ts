@@ -15,8 +15,9 @@ import helpers from '../utils/helpers';
 import MineTransaction from '../wallet/mineTransaction';
 import Address from '../models/address';
 import { OutputType } from '../wallet/types';
-import { IStorage, IDataTx, IDataInput, IDataOutput, IFillTxOptions } from '../types';
+import { IStorage, IDataTx, IFillTxOptions, IDataOutput, IDataInput, IUtxoSelectionOptions, isDataOutputCreateToken } from '../types';
 import Transaction from '../models/transaction';
+import { bestUtxoSelection } from 'src/utils/utxo';
 
 export interface ISendInput {
   txId: string,
@@ -60,7 +61,7 @@ export type ISendOutput = ISendDataOutput | ISendTokenOutput;
  * 'send-error': if an error happens;
  * 'unexpected-error': if an unexpected error happens;
  **/
-class SendTransaction extends EventEmitter {
+export default class SendTransaction extends EventEmitter {
   storage: IStorage | null;
   transaction: Transaction | null;
   outputs: ISendOutput[];
@@ -73,7 +74,7 @@ class SendTransaction extends EventEmitter {
   /**
    *
    * @param {IStorage} storage Storage object
-   * @param [options] Options to initialize the facade
+   * @param {Object} [options={}] Options to initialize the facade
    * @param {Transaction|null} [options.transaction=null] Full tx data
    * @param {ISendInput[]} [options.inputs=[]] tx inputs
    * @param {ISendOutput[]} [options.outputs=[]] tx outputs
@@ -494,4 +495,162 @@ class SendTransaction extends EventEmitter {
   }
 }
 
-export default SendTransaction;
+/**
+ * Check the tx data and propose inputs and outputs to complete the transaction.
+ * We will only check a single token
+ *
+ * @param {IStorage} storage
+ * @param {IDataTx} dataTx
+ * @param {IUtxoSelectionOptions} options
+ */
+export async function prepareSendTokensData(
+  storage: IStorage,
+  dataTx: IDataTx,
+  options: IUtxoSelectionOptions = {},
+): Promise<Pick<IDataTx, 'inputs'|'outputs'>> {
+  const token = options.token || HATHOR_TOKEN_CONFIG.uid;
+  const utxoSelection = options.utxoSelectionMethod || bestUtxoSelection;
+  const newtxData: Pick<IDataTx, 'inputs'|'outputs'> = { inputs: [], outputs: [] };
+  let outputAmount = 0;
+
+  // Calculate balance for the token on the transaction
+  for (const output of dataTx.outputs) {
+    if (isDataOutputCreateToken(output)) {
+      // This is a mint output
+      // Since the current transaction is creating the token we can safely ignore it
+      continue;
+    }
+    const outputToken = output.token || HATHOR_TOKEN_CONFIG.uid;
+    if (outputToken !== token) {
+      // This output is not for the token we are looking for
+      continue;
+    }
+    outputAmount += output.value;
+  }
+
+  if (options.chooseInputs) {
+    if (outputAmount === 0) {
+      // We cannot process a target amount of 0 tokens.
+      throw new Error('Invalid amount of tokens to send.');
+    }
+
+    // We will choose the inputs to fill outputAmount.funds
+    const newUtxos = await utxoSelection(storage, token, outputAmount);
+    newtxData.inputs = newUtxos.utxos.map((utxo) => {
+      return {
+        txId: utxo.txId,
+        index: utxo.index,
+        value: utxo.value,
+        authorities: utxo.authorities,
+        token: utxo.token,
+        address: utxo.address,
+      } as IDataInput;
+    });
+
+    if (newUtxos.amount > outputAmount) {
+      // We need to create a change output
+      const changeAddress = options.changeAddress || await storage.getCurrentAddress();
+      const changeOutput: IDataOutput = {
+        type: 'p2pkh', //get from wallet
+        token,
+        value: newUtxos.amount - outputAmount,
+        address: changeAddress,
+        authorities: 0,
+        timelock: null,
+        isChange: true,
+      };
+      newtxData.outputs.push(changeOutput);
+    }
+  } else {
+    let inputAmount = 0;
+    for (const input of dataTx.inputs) {
+      // We will check the validity and availability of the provided inputs
+      // and the amount (suggesting a change if needed)
+      // The inputs do not need to be added on newtxData.inputs since they are provided by the caller.
+      const checkSpent = await checkUnspentInput(storage, input, token);
+      if (!checkSpent.success) {
+        throw new Error(`Token: ${token}. ${checkSpent.message}`);
+      }
+
+      if (!transactionUtils.canUseUtxo(input, storage)) {
+        throw new Error(`Token: ${token}. Output [${input.txId}, ${input.index}] is locked or being used`);
+      }
+
+      inputAmount += input.value;
+    }
+    if (inputAmount < outputAmount) {
+      throw new Error(`Token: ${token}. Sum of outputs is greater than sum of inputs`);
+    }
+    if (inputAmount > outputAmount) {
+      // Need to create a change output
+        const changeAddress = options.changeAddress || await storage.getCurrentAddress();
+        newtxData.outputs.push({
+        type: 'p2pkh', //get from wallet
+        token,
+        value: inputAmount - outputAmount,
+        address: changeAddress,
+        authorities: 0,
+        timelock: null,
+        isChange: true,
+      });
+    }
+  }
+
+  return newtxData;
+}
+
+/**
+ * Check that the input is unspent, valid and available.
+ * Will return a user-friendly message if it is not.
+ *
+ * @param {IStorage} storage The storage instance
+ * @param {IDataInput} input The input we are checking
+ * @param {string} selectedToken The token uid we are checking
+ * @returns {Promise<{success: boolean, message: string}>}
+ */
+export async function checkUnspentInput(
+  storage: IStorage,
+  input: IDataInput,
+  selectedToken: string,
+): Promise<{success: boolean, message: string}> {
+  const tx = await storage.getTx(input.txId);
+  if (tx === null) {
+    return { success: false, message: `Transaction [${input.txId}] does not exist in the wallet` };
+  }
+  if (tx.is_voided) {
+    return { success: false, message: `Transaction [${input.txId}] is voided` };
+  }
+  if (tx.outputs.length - 1 > input.index) {
+    return { success: false, message: `Transaction [${input.txId}] does not have this output [index=${input.index}]` };
+  }
+
+  const txout = tx.outputs[input.index];
+  if (transactionUtils.isAuthorityOutput(txout)) {
+    /**
+     * XXX: We are NOT enabling authority outputs for now.
+     */
+    return { success: false, message: `Output [${input.index}] of transaction [${input.txId}] is an authority output` };
+  }
+
+  if (txout.decoded.address) {
+    if (txout.decoded.address !== input.address) {
+      return { success: false, message: `Output [${input.index}] of transaction [${input.txId}] does not have the same address as the provided input` };
+    }
+    if (!await storage.isAddressMine(txout.decoded.address)) {
+      return { success: false, message: `Output [${input.index}] of transaction [${input.txId}] is not yours` };
+    }
+  } else {
+    // This output does not have an address, so it cannot be spent by us
+    return { success: false, message: `Output [${input.index}] of transaction [${input.txId}] cannot be spent since it does not belong to an address` };
+  }
+
+  if (txout.token !== input.token || input.token !== selectedToken) {
+    return { success: false, message: `Output [${input.index}] of transaction [${input.txId}] is not from selected token [${selectedToken}]`};
+  }
+
+  if (txout.spent_by !== null) {
+    return { success: false, message: `Output [${input.index}] of transaction [${input.txId}] is already spent` };
+  }
+
+  return { success: true, message: '' };
+}

@@ -230,7 +230,7 @@ export interface IMultisigData {
 export interface IUtxoFilterOptions {
   token?: string; // default to HTR
   authorities?: number; // default to 0 (funds)
-  max_utxos?: number; // default to 255 (MAX_INPUTS)
+  max_utxos?: number; // default to unlimited
   filter_address?: string;
   target_amount?: number;
   max_amount?: number;
@@ -239,6 +239,15 @@ export interface IUtxoFilterOptions {
   only_available_utxos?: boolean;
   filter_method?: (utxo: IUtxo) => boolean;
   reward_lock?: number,
+}
+
+export type UtxoSelectionAlgorithm = (storage: IStorage, token: string, amount: number) => Promise<{ utxos: IUtxo[], amount: number }>;
+
+export interface IUtxoSelectionOptions {
+  token?: string,
+  changeAddress?: string,
+  chooseInputs?: boolean,
+  utxoSelectionMethod?: UtxoSelectionAlgorithm,
 }
 
 export interface IFillTxOptions {
