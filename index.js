@@ -27,6 +27,7 @@ const Input = require('./lib/models/input');
 const Transaction = require('./lib/models/transaction');
 const CreateTokenTransaction = require('./lib/models/create_token_transaction');
 const Network = require('./lib/models/network');
+const addressUtils = require('./lib/utils/address');
 const cryptoUtils = require('./lib/utils/crypto');
 const dateUtils = require('./lib/utils/date');
 const tokensUtils = require('./lib/utils/tokens');
@@ -78,6 +79,7 @@ module.exports = {
   Transaction: Transaction.default,
   CreateTokenTransaction: CreateTokenTransaction.default,
   Network: Network.default,
+  addressUtils,
   cryptoUtils,
   dateUtils: dateUtils.default,
   tokensUtils: tokensUtils.default,
