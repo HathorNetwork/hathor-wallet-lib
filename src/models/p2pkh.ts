@@ -7,6 +7,7 @@
 
 import { OP_GREATERTHAN_TIMESTAMP, OP_DUP, OP_HASH160, OP_EQUALVERIFY, OP_CHECKSIG } from '../opcodes';
 import { util } from 'bitcore-lib';
+import { intToBytes } from '../utils/buffer';
 import helpers from '../utils/helpers';
 import Address from './address';
 
@@ -60,14 +61,14 @@ class P2PKH {
     const addressBytes = this.address.decode();
     const addressHash = addressBytes.slice(1, -4);
     if (this.timelock) {
-      let timelockBytes = helpers.intToBytes(this.timelock, 4);
+      let timelockBytes = intToBytes(this.timelock, 4);
       helpers.pushDataToStack(arr, timelockBytes);
       arr.push(OP_GREATERTHAN_TIMESTAMP);
     }
     arr.push(OP_DUP);
     arr.push(OP_HASH160);
     // addressHash has a fixed size of 20 bytes, so no need to push OP_PUSHDATA1
-    arr.push(helpers.intToBytes(addressHash.length, 1));
+    arr.push(intToBytes(addressHash.length, 1));
     arr.push(addressHash);
     arr.push(OP_EQUALVERIFY);
     arr.push(OP_CHECKSIG);

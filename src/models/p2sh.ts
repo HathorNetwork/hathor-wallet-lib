@@ -8,6 +8,7 @@
 import { OP_GREATERTHAN_TIMESTAMP, OP_HASH160, OP_EQUAL } from '../opcodes';
 import { util } from 'bitcore-lib';
 import helpers from '../utils/helpers';
+import { intToBytes } from '../utils/buffer';
 import Address from './address';
 
 type optionsType = {
@@ -58,13 +59,13 @@ class P2SH {
     const addressBytes = this.address.decode();
     const addressHash = addressBytes.slice(1, -4);
     if (this.timelock) {
-      let timelockBytes = helpers.intToBytes(this.timelock, 4);
+      let timelockBytes = intToBytes(this.timelock, 4);
       helpers.pushDataToStack(arr, timelockBytes);
       arr.push(OP_GREATERTHAN_TIMESTAMP);
     }
     arr.push(OP_HASH160);
     // addressHash has a fixed size of 20 bytes, so no need to push OP_PUSHDATA1
-    arr.push(helpers.intToBytes(addressHash.length, 1));
+    arr.push(intToBytes(addressHash.length, 1));
     arr.push(addressHash);
     arr.push(OP_EQUAL);
     return util.buffer.concat(arr);

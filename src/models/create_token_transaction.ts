@@ -11,8 +11,7 @@ import {
   MAX_TOKEN_NAME_SIZE,
   MAX_TOKEN_SYMBOL_SIZE,
 } from '../constants'
-import { unpackToInt, unpackLen } from '../utils/buffer';
-import helpers from '../utils/helpers';
+import { unpackToInt, unpackLen, intToBytes } from '../utils/buffer';
 import Input from './input';
 import Output from './output';
 import Transaction from './transaction';
@@ -66,7 +65,7 @@ class CreateTokenTransaction extends Transaction {
    */
   serializeFundsFields(array: Buffer[], addInputData: boolean) {
     // Tx version
-    array.push(helpers.intToBytes(this.version, 2))
+    array.push(intToBytes(this.version, 2))
 
     // Funds len and fields
     this.serializeFundsFieldsLen(array);
@@ -99,13 +98,13 @@ class CreateTokenTransaction extends Transaction {
     const nameBytes = buffer.Buffer.from(this.name, 'utf8');
     const symbolBytes = buffer.Buffer.from(this.symbol, 'utf8');
     // Token info version
-    array.push(helpers.intToBytes(TOKEN_INFO_VERSION, 1));
+    array.push(intToBytes(TOKEN_INFO_VERSION, 1));
     // Token name size
-    array.push(helpers.intToBytes(nameBytes.length, 1));
+    array.push(intToBytes(nameBytes.length, 1));
     // Token name
     array.push(nameBytes);
     // Token symbol size
-    array.push(helpers.intToBytes(symbolBytes.length, 1));
+    array.push(intToBytes(symbolBytes.length, 1));
     // Token symbol
     array.push(symbolBytes);
   }
