@@ -41,13 +41,25 @@ test('prepareTxData', async () => {
   const store = new MemoryStore();
   const storage = new Storage(store);
   storage.config.setNetwork('testnet');
-  jest.spyOn(storage, 'fillTx').mockReturnValue(Promise.resolve({
-    inputs: ['an-input-from-storage'],
-    outputs: ['an-output-from-storage'],
-  }));
+
+  async function *selectUtxoMock(options) {
+    if (options.token === '00') {
+      yield {
+        txId: 'another-spent-tx-id',
+        index: 0,
+        value: 2,
+        token: '00',
+        address: 'another-spent-utxo-address',
+        authorities: 0,
+      };
+    }
+  }
+
+  jest.spyOn(storage, 'selectUtxos').mockImplementation(selectUtxoMock);
+  jest.spyOn(storage, 'getCurrentAddress').mockReturnValue(Promise.resolve('W-change-address'))
   jest.spyOn(storage, 'getTx').mockReturnValue(Promise.resolve({
     outputs: [{
-      value: 10,
+      value: 11,
       token: '01',
       decoded: {
         address: 'spent-utxo-address',
@@ -55,10 +67,14 @@ test('prepareTxData', async () => {
       token_data: 1,
     }]
   }));
+  jest.spyOn(storage, 'isAddressMine').mockReturnValue(true);
+  const preparedTx = {
+    validate: jest.fn(),
+  }
   const prepareSpy = jest.spyOn(
       transaction,
       'prepareTransaction')
-    .mockReturnValue(Promise.resolve('a-prepared-transaction'));
+    .mockReturnValue(Promise.resolve(preparedTx));
 
   /**
    * @type {ISendDataOutput}
@@ -66,7 +82,7 @@ test('prepareTxData', async () => {
   const addrOutput = {
     type: OutputType.P2PKH,
     address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
-    value: 11,
+    value: 10,
     token: '01',
   };
 
@@ -79,24 +95,36 @@ test('prepareTxData', async () => {
   };
   const inputs = [{ txId: 'spent-tx-id', index: 0 }];
   const outputs = [addrOutput, dataOutput];
-  const sendTransaction = new SendTransaction({storage, inputs, outputs});
+  let sendTransaction = new SendTransaction({
+    storage,
+    outputs,
+    inputs,
+  });
   await expect(sendTransaction.prepareTxData()).resolves.toMatchObject({
     inputs: [
       {
         txId: 'spent-tx-id',
         index: 0,
-        value: 10,
+        value: 11,
         token: '01',
         address: 'spent-utxo-address',
         authorities: 0,
       },
-      'an-input-from-storage',
-      'an-input-from-storage',
+      {
+        address: 'another-spent-utxo-address',
+        authorities: 0,
+        index: 0,
+        token: '00',
+        txId: 'another-spent-tx-id',
+        value: 2,
+      }
     ],
-    outputs: [
+    // We use array containing because the order of the outputs is not guaranteed
+    // If there is a change output we will shuffle the outputs
+    outputs: expect.arrayContaining([
       {
         address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
-        value: 11,
+        value: 10,
         timelock: null,
         token: '01',
         authorities: 0,
@@ -109,15 +137,31 @@ test('prepareTxData', async () => {
         authorities: 0,
         token: HATHOR_TOKEN_CONFIG.uid,
       },
-      'an-output-from-storage',
-      'an-output-from-storage',
-    ],
+      {
+        address: 'W-change-address',
+        authorities: 0,
+        isChange: true,
+        timelock: null,
+        token: '00',
+        type: 'p2pkh',
+        value: 1,
+      },
+      {
+        address: 'W-change-address',
+        authorities: 0,
+        isChange: true,
+        timelock: null,
+        token: '01',
+        type: 'p2pkh',
+        value: 1,
+      },
+    ]),
     tokens: ['01'],
   });
 
   await expect(sendTransaction.prepareTx()).rejects.toThrow('Pin is not set.');
   sendTransaction.pin = '000000';
-  await expect(sendTransaction.prepareTx()).resolves.toEqual('a-prepared-transaction');
+  await expect(sendTransaction.prepareTx()).resolves.toBe(preparedTx);
 
   prepareSpy.mockRestore();
 });

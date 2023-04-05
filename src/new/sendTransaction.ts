@@ -17,7 +17,8 @@ import Address from '../models/address';
 import { OutputType } from '../wallet/types';
 import { IStorage, IDataTx, IDataOutput, IDataInput, IUtxoSelectionOptions, isDataOutputCreateToken } from '../types';
 import Transaction from '../models/transaction';
-import { bestUtxoSelection } from 'src/utils/utxo';
+import { bestUtxoSelection } from '../utils/utxo';
+import { shuffle } from 'lodash';
 
 export interface ISendInput {
   txId: string,
@@ -203,11 +204,19 @@ export default class SendTransaction extends EventEmitter {
       partialTxData.outputs.push(...proposedData.outputs);
     }
 
+    let outputs: IDataOutput[];
+    if (partialTxData.outputs.length === 0) {
+      outputs = txData.outputs;
+    } else {
+      // Shuffle outputs, so we don't have change output always in the same index
+      outputs = shuffle([...txData.outputs, ...partialTxData.outputs])
+    }
+
     tokenMap.delete(HTR_UID);
     // This new IDataTx should be complete with the requested funds
     this.fullTxData = {
+      outputs,
       inputs: [...txData.inputs, ...partialTxData.inputs],
-      outputs: [...txData.outputs, ...partialTxData.outputs],
       tokens: Array.from(tokenMap.keys()),
     };
 
@@ -653,7 +662,7 @@ export async function checkUnspentInput(
     return { success: false, message: `Output [${input.index}] of transaction [${input.txId}] is not from selected token [${selectedToken}]`};
   }
 
-  if (txout.spent_by !== null) {
+  if (txout.spent_by) {
     return { success: false, message: `Output [${input.index}] of transaction [${input.txId}] is already spent` };
   }
 
