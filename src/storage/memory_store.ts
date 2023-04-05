@@ -18,7 +18,7 @@ import {
   IWalletData,
   ILockedUtxo,
 } from '../types';
-import { BLOCK_VERSION, GAP_LIMIT, HATHOR_TOKEN_CONFIG, MAX_INPUTS } from '../constants';
+import { BLOCK_VERSION, GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
 
 
 const DEFAULT_ADDRESSES_WALLET_DATA = {
@@ -560,7 +560,6 @@ export class MemoryStore implements IStore {
     const isLocked = (utxo: IUtxo) => isTimeLocked(utxo.timelock || 0) || isHeightLocked(utxo);
     const token = options.token || HATHOR_TOKEN_CONFIG.uid;
     const authorities = options.authorities || 0;
-    const maxUtxos = options.max_utxos || MAX_INPUTS;
     if (options.max_amount && options.target_amount) {
       throw new Error('invalid options');
     }
@@ -593,8 +592,7 @@ export class MemoryStore implements IStore {
 
       if (options.max_amount && ((sumAmount + utxo.value) > options.max_amount)) {
         // If this utxo is returned we would pass the max_amount
-        // XXX: We could also return to stop iteration early
-        // This ensures we have the closest to max_amount
+        // We continue to ensure we have the closest to max_amount
         continue;
       }
 
@@ -606,7 +604,7 @@ export class MemoryStore implements IStore {
         // both only count unlocked utxos.
         sumAmount += utxo.value;
       }
-      if ((options.target_amount && sumAmount >= options.target_amount) || (utxoNum >= maxUtxos)) {
+      if ((options.target_amount && sumAmount >= options.target_amount) || (options.max_utxos && utxoNum >= options.max_utxos)) {
         // We have reached either the target amount or the max number of utxos requested
         return;
       }

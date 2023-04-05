@@ -15,7 +15,7 @@ import helpers from '../utils/helpers';
 import MineTransaction from '../wallet/mineTransaction';
 import Address from '../models/address';
 import { OutputType } from '../wallet/types';
-import { IStorage, IDataTx, IFillTxOptions, IDataOutput, IDataInput, IUtxoSelectionOptions, isDataOutputCreateToken } from '../types';
+import { IStorage, IDataTx, IDataOutput, IDataInput, IUtxoSelectionOptions, isDataOutputCreateToken } from '../types';
 import Transaction from '../models/transaction';
 import { bestUtxoSelection } from 'src/utils/utxo';
 
@@ -189,15 +189,18 @@ export default class SendTransaction extends EventEmitter {
       });
     }
 
-    const partialTxData: {inputs: IDataInput[], outputs: IDataOutput[]} = {inputs: [], outputs: []};
+    const partialTxData: Pick<IDataTx, "outputs" | "inputs"> = {inputs: [], outputs: []};
     for (const [token, chooseInputs] of tokenMap) {
-      const options: IFillTxOptions = { chooseInputs, skipAuthorities: true };
+      const options: IUtxoSelectionOptions = {
+        token,
+        chooseInputs,
+      };
       if (this.changeAddress) {
         options.changeAddress = this.changeAddress;
       }
-      const newData = await this.storage.fillTx(token, txData, options);
-      partialTxData.inputs.push(...newData.inputs);
-      partialTxData.outputs.push(...newData.outputs);
+      const proposedData = await prepareSendTokensData(this.storage, txData, options);
+      partialTxData.inputs.push(...proposedData.inputs);
+      partialTxData.outputs.push(...proposedData.outputs);
     }
 
     tokenMap.delete(HTR_UID);
@@ -232,6 +235,8 @@ export default class SendTransaction extends EventEmitter {
         throw new Error('Pin is not set.');
       }
       this.transaction = await transactionUtils.prepareTransaction(txData, this.pin, this.storage);
+      // This will validate if the transaction has more than the max number of inputs and outputs.
+      this.transaction.validate();
       return this.transaction;
     } catch(e) {
       const message = helpers.handlePrepareDataError(e);

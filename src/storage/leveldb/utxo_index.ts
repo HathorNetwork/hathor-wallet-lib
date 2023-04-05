@@ -10,7 +10,7 @@ import { Level, ValueIteratorOptions } from 'level';
 import { AbstractSublevel } from 'abstract-level';
 import { IKVUtxoIndex, IUtxo, IUtxoFilterOptions, ILockedUtxo } from '../../types';
 import _ from 'lodash';
-import { BLOCK_VERSION, HATHOR_TOKEN_CONFIG, MAX_INPUTS } from '../../constants';
+import { BLOCK_VERSION, HATHOR_TOKEN_CONFIG } from '../../constants';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 
 export const UTXO_PREFIX = 'utxo';
@@ -206,12 +206,12 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
 
     const token = options.token || HATHOR_TOKEN_CONFIG.uid;
     const authorities = options.authorities || 0;
-    const maxUtxos = options.max_utxos || MAX_INPUTS;
 
     let db: typeof this.utxoDB;
     const itOptions: ValueIteratorOptions<string, IUtxo> = {};
     if (options.filter_address !== undefined) {
       // Use tokenAddressUtxoDB
+      // Key: <authorities>:<token>:<address>:<value>:<tx_id>:<index>
       db = this.tokenAddressUtxoDB;
       let minkey = `${authorities}:${token}:${options.filter_address}:`;
       let maxkey = `${authorities}:${token}:`;
@@ -235,6 +235,7 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
       itOptions.lte = maxkey;
     } else {
       // No need to filter by address, just tokens
+      // Key: <authorities>:<token>:<value>:<tx_id>:<index>
       db = this.tokenUtxoDB;
       let minkey = `${authorities}:${token}:`;
       let maxkey = `${authorities}:`;
@@ -278,7 +279,7 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
       utxoNum += 1;
       sumAmount += utxo.value;
 
-      if ((options.target_amount && sumAmount >= options.target_amount) || (utxoNum >= maxUtxos)) {
+      if ((options.target_amount && sumAmount >= options.target_amount) || (options.max_utxos && utxoNum >= options.max_utxos)) {
         // We have reached either the target amount or the max number of utxos requested
         return;
       }
