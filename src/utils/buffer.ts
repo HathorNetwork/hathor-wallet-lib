@@ -1,11 +1,83 @@
-import assert from 'assert';
 import buffer from 'buffer';
+import Long from 'long';
 import { ParseError } from '../errors';
 
 const isHexa = (value: string): boolean => {
   // test if value is string?
   return /^[0-9a-fA-F]*$/.test(value);
 };
+
+/**
+ * Transform int to bytes
+ *
+ * @param {number} value Integer to be transformed to bytes
+ * @param {number} bytes How many bytes this number uses
+ *
+ * @return {Buffer} number in bytes
+ * @inner
+ */
+export function intToBytes(value: number, bytes: number): Buffer {
+  let arr = new ArrayBuffer(bytes);
+  let view = new DataView(arr);
+  if (bytes === 1) {
+    // byteOffset = 0;
+    view.setUint8(0, value);
+  } else if (bytes === 2) {
+    // byteOffset = 0; isLittleEndian = false
+    view.setUint16(0, value, false);
+  } else if (bytes === 4) {
+    // byteOffset = 0; isLittleEndian = false
+    view.setUint32(0, value, false);
+  }
+  return buffer.Buffer.from(arr);
+}
+
+/**
+ * Transform signed int to bytes (1, 2, or 4 bytes)
+ *
+ * @param {number} value Integer to be transformed to bytes
+ * @param {number} bytes How many bytes this number uses
+ *
+ * @return {Buffer} number in bytes
+ * @inner
+ */
+export function signedIntToBytes(value: number, bytes: number): Buffer {
+  let arr = new ArrayBuffer(bytes);
+  let view = new DataView(arr);
+  if (bytes === 1) {
+    // byteOffset = 0
+    view.setInt8(0, value);
+  } else if (bytes === 2) {
+    // byteOffset = 0; isLittleEndian = false
+    view.setInt16(0, value, false);
+  } else if (bytes === 4) {
+    view.setInt32(0, value, false);
+  } else if (bytes === 8) {
+    // In case of 8 bytes I need to handle the int with a Long lib
+    let long = Long.fromNumber(value, false);
+    arr = long.toBytesBE();
+  }
+  return buffer.Buffer.from(arr);
+}
+
+/**
+ * Transform float to bytes
+ *
+ * @param {number} value Integer to be transformed to bytes
+ * @param {number} bytes How many bytes this number uses
+ *
+ * @return {Buffer} number in bytes
+ * @inner
+ */
+export function floatToBytes(value: number, bytes: number): Buffer {
+  let arr = new ArrayBuffer(bytes);
+  let view = new DataView(arr);
+  if (bytes === 8) {
+    // byteOffset = 0; isLitteEndian = false
+    view.setFloat64(0, value, false);
+  }
+  return buffer.Buffer.from(arr);
+}
 
 export const hexToBuffer = (value: string): Buffer => {
   if (!isHexa(value)) {

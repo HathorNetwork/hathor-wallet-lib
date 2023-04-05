@@ -14,12 +14,12 @@ import {
   TOKEN_MINT_MASK
 } from '../constants'
 import {OutputValueError, ParseError} from '../errors'
-import helpers from '../utils/helpers'
 import P2PKH from './p2pkh'
 import P2SH from './p2sh'
 import ScriptData from './script_data'
 import Network from './network'
-import {bytesToOutputValue, unpackLen, unpackToInt} from '../utils/buffer'
+import { bytesToOutputValue, unpackLen, unpackToInt, intToBytes, signedIntToBytes } from '../utils/buffer';
+import { prettyValue } from '../utils/numbers';
 import {parseP2PKH, parseP2SH, parseScriptData} from '../utils/scripts'
 import _ from 'lodash'
 
@@ -83,12 +83,12 @@ class Output {
       throw new OutputValueError('Output value must be positive');
     }
     if (this.value > MAX_OUTPUT_VALUE) {
-      throw new OutputValueError(`Maximum value is ${helpers.prettyValue(MAX_OUTPUT_VALUE)}`);
+      throw new OutputValueError(`Maximum value is ${prettyValue(MAX_OUTPUT_VALUE)}`);
     }
     if (this.value > MAX_OUTPUT_VALUE_32) {
-      return helpers.signedIntToBytes(-this.value, 8);
+      return signedIntToBytes(-this.value, 8);
     } else {
-      return helpers.signedIntToBytes(this.value, 4);
+      return signedIntToBytes(this.value, 4);
     }
   }
 
@@ -166,8 +166,8 @@ class Output {
     const arr: Buffer[] = [];
     arr.push(this.valueToBytes());
     // Token data
-    arr.push(helpers.intToBytes(this.tokenData, 1));
-    arr.push(helpers.intToBytes(this.script.length, 2));
+    arr.push(intToBytes(this.tokenData, 1));
+    arr.push(intToBytes(this.script.length, 2));
     arr.push(this.script);
     return arr;
   }
