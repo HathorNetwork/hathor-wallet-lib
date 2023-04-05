@@ -9,7 +9,7 @@ import walletApi from '../../src/api/wallet';
 import { MemoryStore, Storage, LevelDBStore } from '../../src/storage';
 import tx_history from '../__fixtures__/tx_history';
 import { processHistory } from '../../src/utils/storage';
-import { TOKEN_AUTHORITY_MASK, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
+import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK } from '../../src/constants';
 import { HDPrivateKey } from "bitcore-lib";
 
 const DATA_DIR = './testdata.leveldb';
@@ -36,8 +36,8 @@ test('store fetch methods', async () => {
   for (const tx of tx_history) {
     await store.saveTx(tx);
   }
-  await processHistory(store);
   const storage = new Storage(store);
+  await processHistory(storage);
 
   let buf = [];
   for await (const a of storage.getAllAddresses()) {
@@ -85,8 +85,8 @@ test('selecting utxos', async () => {
   for (const tx of tx_history) {
     await store.saveTx(tx);
   }
-  await processHistory(store);
   const storage = new Storage(store);
+  await processHistory(storage);
 
   // Should use the filter_method
   // filter_method returns true if the utxo is acceptable
