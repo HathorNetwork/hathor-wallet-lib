@@ -305,15 +305,14 @@ class HathorWallet extends EventEmitter {
    */
   async getMultisigData() {
     const accessData = await this.getAccessData();
-    if (accessData.walletType === WalletType.MULTISIG) {
-      if (accessData.multisigData) {
-        return accessData.multisigData;
-      } else {
-        throw new WalletError('Multisig data not found in storage');
-      }
-    } else {
+    if (accessData.walletType !== WalletType.MULTISIG) {
       throw new WalletError('Wallet is not a multisig wallet.');
     }
+    if (!accessData.multisigData) {
+      throw new WalletError('Multisig data not found in storage');
+    }
+
+    return accessData.multisigData;
   }
 
   /**
