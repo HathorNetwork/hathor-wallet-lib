@@ -208,7 +208,7 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
     const authorities = options.authorities || 0;
 
     let db: typeof this.utxoDB;
-    const itOptions: ValueIteratorOptions<string, IUtxo> = {};
+    const itOptions: ValueIteratorOptions<string, IUtxo> = { reverse: true };
     if (options.filter_address !== undefined) {
       // Use tokenAddressUtxoDB
       // Key: <authorities>:<token>:<address>:<value>:<tx_id>:<index>
