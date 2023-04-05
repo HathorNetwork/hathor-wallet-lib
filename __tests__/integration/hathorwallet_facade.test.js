@@ -26,6 +26,7 @@ import transaction from '../../src/utils/transaction';
 import Mnemonic from 'bitcore-mnemonic/lib/mnemonic';
 import { P2PKH_ACCT_PATH } from '../../src/constants';
 import Network from '../../src/models/network';
+import { WalletType } from '../../src/types';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 const sampleNftData = 'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg';
@@ -2534,5 +2535,36 @@ describe('getTxHistory', () => {
       count: 2
     });
     expect(txHistory.length).toEqual(2);
+  });
+});
+
+describe('storage methods', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
+  });
+
+  it('should configure the gap limit for the wallet', async () => {
+    const hWallet = await generateWalletHelper();
+    await hWallet.setGapLimit(100);
+    await expect(hWallet.storage.getGapLimit()).resolves.toEqual(100);
+    await expect(hWallet.getGapLimit()).resolves.toEqual(100);
+    await hWallet.setGapLimit(11);
+    await expect(hWallet.storage.getGapLimit()).resolves.toEqual(11);
+    await expect(hWallet.getGapLimit()).resolves.toEqual(11);
+  });
+
+  it('should get the wallet access data from storage', async () => {
+    const hWallet = await generateWalletHelper();
+    const accessData = await hWallet.storage.getAccessData();
+    await expect(hWallet.getWalletType()).resolves.toEqual(WalletType.P2PKH);
+    await expect(hWallet.getAccessData()).resolves.toEqual(accessData);
+    await expect(hWallet.getMultisigData()).rejects.toThrow('Wallet is not a multisig wallet.');
+
+    const mshWallet = await generateMultisigWalletHelper({ walletIndex: 0 });
+    const mshAccessData = await mshWallet.storage.getAccessData();
+    await expect(mshWallet.getWalletType()).resolves.toEqual(WalletType.MULTISIG);
+    await expect(mshWallet.getAccessData()).resolves.toEqual(mshAccessData);
+    await expect(mshWallet.getMultisigData()).resolves.toEqual(mshAccessData.multisigData);
   });
 });
