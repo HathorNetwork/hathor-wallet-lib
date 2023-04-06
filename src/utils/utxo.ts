@@ -5,9 +5,30 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { IStorage, IUtxo, IUtxoFilterOptions } from '../types';
+import { IStorage, IUtxo, IUtxoFilterOptions, UtxoSelectionAlgorithm } from '../types';
 import { orderBy } from 'lodash';
 
+export enum UtxoSelection {
+  FAST = 'fast',
+  BEST = 'best',
+};
+
+/**
+ * Get the algorithm function from the enum value.
+ *
+ * @param algorithm The algorithm to get
+ * @returns {UtxoSelectionAlgorithm} The algorithm function
+ */
+export function getAlgorithmFromEnum(algorithm: UtxoSelection): UtxoSelectionAlgorithm {
+  switch (algorithm) {
+    case UtxoSelection.FAST:
+      return fastUtxoSelection;
+    case UtxoSelection.BEST:
+      return bestUtxoSelection;
+    default:
+      throw new Error(`Unknown algorithm ${algorithm}`);
+  }
+}
 
 /**
  * Select utxos to fill the amount required.
@@ -27,11 +48,12 @@ export async function fastUtxoSelection(
   const utxos: IUtxo[] = [];
   let utxosAmount = 0;
 
-  const options = {
+  const options: IUtxoFilterOptions = {
     token,
     authorities: 0,
     target_amount: amount,
     only_available_utxos: true,
+    order_by_value: 'desc',
   };
 
   for await (const utxo of storage.selectUtxos(options)) {
@@ -116,13 +138,13 @@ export async function bestUtxoSelection(
       amount: 0,
     };
   } else {
-    // We have enough funds but we need to select more than one utxo
-    // We will sort by value descending and get the utxos until the amount is fulfilled
-    // This will ensure we use the smallest number of utxos and avoid hitting the maximum number of inputs
-    const sortedUtxos = orderBy(utxos, ['value'], ['desc']);
+    // We need to ensure we use the smallest number of utxos and avoid hitting the maximum number of inputs
+    // This can be done by ordering the utxos by value and selecting the highest values first untill the amount is fulfilled
+    // But since the store ensures the utxos are ordered by value descending, we can just iterate on them to achieve the same result
+    // This is emsured due to options.order_by_value = 'desc' on the selectUtxos method.
     const selectedUtxos: IUtxo[] = [];
     let selectedAmount = 0;
-    for (const utxo of sortedUtxos) {
+    for (const utxo of utxos) {
       selectedUtxos.push(utxo);
       selectedAmount += utxo.value;
       if (selectedAmount >= amount) {

@@ -8,6 +8,7 @@
 import { HATHOR_TOKEN_CONFIG } from "../../src/constants";
 import SendTransaction, { ISendInput, ISendOutput, ISendDataOutput, ISendTokenOutput, isDataOutput } from "../../src/new/sendTransaction";
 import { MemoryStore, Storage } from "../../src/storage";
+import { WalletType } from "../../src/types";
 import transaction from "../../src/utils/transaction";
 import { OutputType } from "../../src/wallet/types";
 
@@ -55,6 +56,7 @@ test('prepareTxData', async () => {
     }
   }
 
+  jest.spyOn(storage, 'getWalletType').mockReturnValue(Promise.resolve(WalletType.P2PKH));
   jest.spyOn(storage, 'selectUtxos').mockImplementation(selectUtxoMock);
   jest.spyOn(storage, 'getCurrentAddress').mockReturnValue(Promise.resolve('W-change-address'))
   jest.spyOn(storage, 'getTx').mockReturnValue(Promise.resolve({

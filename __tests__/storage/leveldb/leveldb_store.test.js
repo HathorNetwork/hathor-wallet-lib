@@ -20,7 +20,7 @@ function _addr_index_key(index) {
   return buf.toString('hex');
 }
 
-const DATA_DIR = './data.leveldb';
+const DATA_DIR = './testdata.leveldb';
 
 test('addresses methods', async () => {
   const xpriv = HDPrivateKey();
