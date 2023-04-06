@@ -15,7 +15,7 @@ import helpers from '../utils/helpers';
 import MineTransaction from '../wallet/mineTransaction';
 import Address from '../models/address';
 import { OutputType } from '../wallet/types';
-import { IStorage, IDataTx, IDataOutput, IDataInput, IUtxoSelectionOptions, isDataOutputCreateToken } from '../types';
+import { IStorage, IDataTx, IDataOutput, IDataInput, IUtxoSelectionOptions, isDataOutputCreateToken, WalletType } from '../types';
 import Transaction from '../models/transaction';
 import { bestUtxoSelection } from '../utils/utxo';
 import { shuffle } from 'lodash';
@@ -564,8 +564,18 @@ export async function prepareSendTokensData(
     if (newUtxos.amount > outputAmount) {
       // We need to create a change output
       const changeAddress = options.changeAddress || await storage.getCurrentAddress();
+      const walletType = await storage.getWalletType();
+      let outputType: 'p2pkh'|'p2sh';
+      if (walletType === WalletType.P2PKH) {
+        outputType = 'p2pkh';
+      } else if (walletType === WalletType.MULTISIG) {
+        outputType = 'p2sh';
+      } else {
+        throw new Error('Unsupported wallet type.');
+      }
+
       const changeOutput: IDataOutput = {
-        type: 'p2pkh', //get from wallet
+        type: outputType,
         token,
         value: newUtxos.amount - outputAmount,
         address: changeAddress,
@@ -598,8 +608,18 @@ export async function prepareSendTokensData(
     if (inputAmount > outputAmount) {
       // Need to create a change output
         const changeAddress = options.changeAddress || await storage.getCurrentAddress();
+        const walletType = await storage.getWalletType();
+        let outputType: 'p2pkh'|'p2sh';
+        if (walletType === WalletType.P2PKH) {
+          outputType = 'p2pkh';
+        } else if (walletType === WalletType.MULTISIG) {
+          outputType = 'p2sh';
+        } else {
+          throw new Error('Unsupported wallet type.');
+        }
+
         newtxData.outputs.push({
-        type: 'p2pkh', //get from wallet
+        type: outputType,
         token,
         value: inputAmount - outputAmount,
         address: changeAddress,
@@ -634,7 +654,7 @@ export async function checkUnspentInput(
   if (tx.is_voided) {
     return { success: false, message: `Transaction [${input.txId}] is voided` };
   }
-  if (tx.outputs.length - 1 > input.index) {
+  if (tx.outputs.length - 1 < input.index) {
     return { success: false, message: `Transaction [${input.txId}] does not have this output [index=${input.index}]` };
   }
 
