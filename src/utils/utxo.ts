@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { IStorage, IUtxo } from '../types';
+import { IStorage, IUtxo, IUtxoFilterOptions } from '../types';
 import { orderBy } from 'lodash';
 
 
@@ -71,10 +71,11 @@ export async function bestUtxoSelection(
   let utxosAmount = 0;
   let selectedUtxo: IUtxo|null = null;
 
-  const options = {
+  const options: IUtxoFilterOptions = {
     token,
     authorities: 0,
     only_available_utxos: true,
+    order_by_value: 'desc',
   };
   for await (const utxo of storage.selectUtxos(options)) {
     // storage ensures the utxo can be used
@@ -90,9 +91,16 @@ export async function bestUtxoSelection(
 
     if (utxo.value > amount) {
       // We want to select the smallest utxo that is bigger than the amount
-      if (selectedUtxo === null || utxo.value <= selectedUtxo.value) {
+      if (selectedUtxo === null || utxo.value < selectedUtxo.value) {
         selectedUtxo = utxo;
       }
+    }
+
+    if ((utxo.value < amount) && (selectedUtxo !== null)) {
+      // We already have an utxo that is bigger than the amount required
+      // with the lowest possible value.
+      // We don't need to iterate more
+      break;
     }
   }
 
