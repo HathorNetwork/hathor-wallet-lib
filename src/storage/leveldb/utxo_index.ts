@@ -208,10 +208,22 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
     const authorities = options.authorities || 0;
 
     let db: typeof this.utxoDB;
-    const itOptions: ValueIteratorOptions<string, IUtxo> = { reverse: true };
+    const itOptions: ValueIteratorOptions<string, IUtxo> = {};
+    if (options.order_by_value === 'desc') {
+      // The default behavior is to iterate in ascending order of keys
+      // And the keys are in the format <authorities>:<token>:<value>:<tx_id>:<index>
+      // Or <authorities>:<token>:<address>:<value>:<tx_id>:<index>
+      // But in both the authorities and token are fixed (address is only used when it is fixed as well)
+      // So the value is always the first "free" part of the key and since we are using big endian
+      // The iteration will always order the value in ascending order
+      // And the reverse iteration will order the value in descending order
+      itOptions.reverse = true;
+    }
     if (options.filter_address !== undefined) {
       // Use tokenAddressUtxoDB
       // Key: <authorities>:<token>:<address>:<value>:<tx_id>:<index>
+      // authorities, token and address are fixed
+      // value can be filtered with options.amount_bigger_than and options.amount_smaller_than
       db = this.tokenAddressUtxoDB;
       let minkey = `${authorities}:${token}:${options.filter_address}:`;
       let maxkey = `${authorities}:${token}:`;
@@ -236,6 +248,8 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
     } else {
       // No need to filter by address, just tokens
       // Key: <authorities>:<token>:<value>:<tx_id>:<index>
+      // authorities and token are fixed
+      // value can be filtered with options.amount_bigger_than and options.amount_smaller_than
       db = this.tokenUtxoDB;
       let minkey = `${authorities}:${token}:`;
       let maxkey = `${authorities}:`;

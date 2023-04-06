@@ -239,6 +239,9 @@ export interface IUtxoFilterOptions {
   only_available_utxos?: boolean;
   filter_method?: (utxo: IUtxo) => boolean;
   reward_lock?: number,
+  // Will order utxos by value, asc or desc
+  // If not set, will not order
+  order_by_value?: 'asc' | 'desc';
 }
 
 export type UtxoSelectionAlgorithm = (storage: IStorage, token: string, amount: number) => Promise<{ utxos: IUtxo[], amount: number }>;

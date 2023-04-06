@@ -19,6 +19,7 @@ import {
   ILockedUtxo,
 } from '../types';
 import { BLOCK_VERSION, GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
+import { orderBy } from 'lodash';
 
 
 const DEFAULT_ADDRESSES_WALLET_DATA = {
@@ -567,7 +568,17 @@ export class MemoryStore implements IStore {
     let sumAmount = 0;
     let utxoNum = 0;
 
-    for (const utxo of this.utxos.values()) {
+    // Map.prototype.values() is an iterable but orderBy returns an array
+    // Both work with for...of so we can use them interchangeably
+    let iter: IterableIterator<IUtxo> | IUtxo[];
+    if (options.order_by_value) {
+      // Sort by value as requested in options.order_by_value
+      iter = orderBy(Array.from(this.utxos.values()), ['value'], [options.order_by_value]);
+    } else {
+      iter = this.utxos.values();
+    }
+
+    for (const utxo of iter) {
       if (options.only_available_utxos && isLocked(utxo)) {
         // Skip locked utxos if we only want available utxos
         continue;
