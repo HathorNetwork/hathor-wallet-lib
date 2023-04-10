@@ -199,9 +199,16 @@ export default class SendTransaction extends EventEmitter {
       if (this.changeAddress) {
         options.changeAddress = this.changeAddress;
       }
-      const proposedData = await prepareSendTokensData(this.storage, txData, options);
-      partialTxData.inputs.push(...proposedData.inputs);
-      partialTxData.outputs.push(...proposedData.outputs);
+      try {
+        const proposedData = await prepareSendTokensData(this.storage, txData, options);
+        partialTxData.inputs.push(...proposedData.inputs);
+        partialTxData.outputs.push(...proposedData.outputs);
+      } catch (e) {
+        if (e instanceof Error) {
+          throw new SendTxError(e.message);
+        }
+        throw e;
+      }
     }
 
     let outputs: IDataOutput[];
@@ -550,6 +557,9 @@ export async function prepareSendTokensData(
 
     // We will choose the inputs to fill outputAmount.funds
     const newUtxos = await utxoSelection(storage, token, outputAmount);
+    if (newUtxos.amount < outputAmount) {
+      throw new Error(`Token: ${token}. Insufficient amount of tokens to fill the amount.`);
+    }
     newtxData.inputs = newUtxos.utxos.map((utxo) => {
       return {
         txId: utxo.txId,
@@ -596,7 +606,7 @@ export async function prepareSendTokensData(
         throw new Error(`Token: ${token}. ${checkSpent.message}`);
       }
 
-      if (!transactionUtils.canUseUtxo(input, storage)) {
+      if (!await transactionUtils.canUseUtxo(input, storage)) {
         throw new Error(`Token: ${token}. Output [${input.txId}, ${input.index}] is locked or being used`);
       }
 
@@ -671,7 +681,7 @@ export async function checkUnspentInput(
       return { success: false, message: `Output [${input.index}] of transaction [${input.txId}] does not have the same address as the provided input` };
     }
     if (!await storage.isAddressMine(txout.decoded.address)) {
-      return { success: false, message: `Output [${input.index}] of transaction [${input.txId}] is not yours` };
+      return { success: false, message: `Output [${input.index}] of transaction [${input.txId}] is not from the wallet` };
     }
   } else {
     // This output does not have an address, so it cannot be spent by us

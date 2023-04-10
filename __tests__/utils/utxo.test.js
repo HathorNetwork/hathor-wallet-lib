@@ -151,7 +151,7 @@ describe('bestUtxoSelection', () => {
     await expect(fastUtxoSelection(storage, '01', 500)).resolves.toMatchObject({ utxos: [utxos[5]], amount: 600 });
     await expect(fastUtxoSelection(storage, '01', 600)).resolves.toMatchObject({ utxos: [utxos[5]], amount: 600 });
 
-    // Trying to select an amount that can be fulfilled with 1 utxo will select the smallest utxo that can fulfill it
+    // Trying to select an amount that can be fulfilled with 1 utxo will select the biggest utxo that can fulfill it
     await expect(fastUtxoSelection(storage, '00', 101)).resolves.toMatchObject({ utxos: [utxos[2]], amount: 300 });
     await expect(fastUtxoSelection(storage, '00', 201)).resolves.toMatchObject({ utxos: [utxos[2]], amount: 300 });
     await expect(fastUtxoSelection(storage, '01', 300)).resolves.toMatchObject({ utxos: [utxos[5]], amount: 600 });

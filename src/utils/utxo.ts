@@ -6,7 +6,6 @@
  */
 
 import { IStorage, IUtxo, IUtxoFilterOptions, UtxoSelectionAlgorithm } from '../types';
-import { orderBy } from 'lodash';
 
 export enum UtxoSelection {
   FAST = 'fast',
@@ -118,11 +117,19 @@ export async function bestUtxoSelection(
       }
     }
 
-    if ((utxo.value < amount) && (selectedUtxo !== null)) {
-      // We already have an utxo that is bigger than the amount required
-      // with the lowest possible value.
-      // We don't need to iterate more
-      break;
+    if (utxo.value < amount) {
+      if (selectedUtxo !== null) {
+        // We already have an utxo that is bigger than the amount required
+        // with the lowest possible value.
+        // We don't need to iterate more
+        break;
+      }
+
+      if (utxosAmount >= amount) {
+        // We have enough funds to fill the amount required
+        // We don't need to iterate more
+        break;
+      }
     }
   }
 
@@ -139,9 +146,9 @@ export async function bestUtxoSelection(
     };
   } else {
     // We need to ensure we use the smallest number of utxos and avoid hitting the maximum number of inputs
-    // This can be done by ordering the utxos by value and selecting the highest values first untill the amount is fulfilled
+    // This can be done by ordering the utxos by value and selecting the highest values first until the amount is fulfilled
     // But since the store ensures the utxos are ordered by value descending, we can just iterate on them to achieve the same result
-    // This is emsured due to options.order_by_value = 'desc' on the selectUtxos method.
+    // This is ensured due to options.order_by_value = 'desc' on the selectUtxos method.
     const selectedUtxos: IUtxo[] = [];
     let selectedAmount = 0;
     for (const utxo of utxos) {

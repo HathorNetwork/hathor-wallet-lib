@@ -293,7 +293,10 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
       utxoNum += 1;
       sumAmount += utxo.value;
 
-      if ((options.target_amount && sumAmount >= options.target_amount) || (options.max_utxos && utxoNum >= options.max_utxos)) {
+      if (
+        (options.target_amount && sumAmount >= options.target_amount)
+        || (options.max_utxos && utxoNum >= options.max_utxos)
+      ) {
         // We have reached either the target amount or the max number of utxos requested
         return;
       }
