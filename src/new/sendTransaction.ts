@@ -529,6 +529,17 @@ export async function prepareSendTokensData(
   dataTx: IDataTx,
   options: IUtxoSelectionOptions = {},
 ): Promise<Pick<IDataTx, 'inputs'|'outputs'>> {
+  async function getOutputTypeFromWallet(): Promise<'p2pkh'|'p2sh'> {
+    const walletType = await storage.getWalletType();
+    if (walletType === WalletType.P2PKH) {
+      return 'p2pkh';
+    } else if (walletType === WalletType.MULTISIG) {
+      return 'p2sh';
+    } else {
+      throw new Error('Unsupported wallet type.');
+    }
+  }
+
   const token = options.token || HATHOR_TOKEN_CONFIG.uid;
   const utxoSelection = options.utxoSelectionMethod || bestUtxoSelection;
   const newtxData: Pick<IDataTx, 'inputs'|'outputs'> = { inputs: [], outputs: [] };
@@ -574,18 +585,8 @@ export async function prepareSendTokensData(
     if (newUtxos.amount > outputAmount) {
       // We need to create a change output
       const changeAddress = options.changeAddress || await storage.getCurrentAddress();
-      const walletType = await storage.getWalletType();
-      let outputType: 'p2pkh'|'p2sh';
-      if (walletType === WalletType.P2PKH) {
-        outputType = 'p2pkh';
-      } else if (walletType === WalletType.MULTISIG) {
-        outputType = 'p2sh';
-      } else {
-        throw new Error('Unsupported wallet type.');
-      }
-
       const changeOutput: IDataOutput = {
-        type: outputType,
+        type: await getOutputTypeFromWallet(),
         token,
         value: newUtxos.amount - outputAmount,
         address: changeAddress,
@@ -617,19 +618,9 @@ export async function prepareSendTokensData(
     }
     if (inputAmount > outputAmount) {
       // Need to create a change output
-        const changeAddress = options.changeAddress || await storage.getCurrentAddress();
-        const walletType = await storage.getWalletType();
-        let outputType: 'p2pkh'|'p2sh';
-        if (walletType === WalletType.P2PKH) {
-          outputType = 'p2pkh';
-        } else if (walletType === WalletType.MULTISIG) {
-          outputType = 'p2sh';
-        } else {
-          throw new Error('Unsupported wallet type.');
-        }
-
-        newtxData.outputs.push({
-        type: outputType,
+      const changeAddress = options.changeAddress || await storage.getCurrentAddress();
+      newtxData.outputs.push({
+        type: await getOutputTypeFromWallet(),
         token,
         value: inputAmount - outputAmount,
         address: changeAddress,
