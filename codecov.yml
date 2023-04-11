@@ -12,8 +12,7 @@ coverage:
     patch:
       default:
         # minimum coverage ratio that the commit must meet to be considered a success
-        # XXX: this value should return to 70% after this PR is merged
-        target: 40%
+        target: 70%
         if_ci_failed: error
         only_pulls: true
 
