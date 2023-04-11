@@ -147,20 +147,13 @@ export async function bestUtxoSelection(
   } else {
     // We need to ensure we use the smallest number of utxos and avoid hitting the maximum number of inputs
     // This can be done by ordering the utxos by value and selecting the highest values first until the amount is fulfilled
-    // But since the store ensures the utxos are ordered by value descending, we can just iterate on them to achieve the same result
-    // This is ensured due to options.order_by_value = 'desc' on the selectUtxos method.
-    const selectedUtxos: IUtxo[] = [];
-    let selectedAmount = 0;
-    for (const utxo of utxos) {
-      selectedUtxos.push(utxo);
-      selectedAmount += utxo.value;
-      if (selectedAmount >= amount) {
-        break;
-      }
-    }
+    // But since the store ensures the utxos are ordered by value descending
+    // (Which is ensured by options.order_by_value = 'desc' on the selectUtxos method)
+    // And we stop selecting when the amount in the utxos array is greater than or equal to the requested amount
+    // We can just return the utxos selected during the loop above
     return {
-      utxos: selectedUtxos,
-      amount: selectedAmount,
+      utxos,
+      amount: utxosAmount,
     };
   }
 }
