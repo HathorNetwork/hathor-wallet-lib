@@ -46,9 +46,12 @@ export default class LevelDBStore implements IStore {
   }
 
   async destroy(): Promise<void> {
+    await this.addressIndex.clear();
+    await this.historyIndex.clear();
+    await this.utxoIndex.clear();
+    await this.walletIndex.clear();
+    await this.tokenIndex.clear();
     await this.close();
-    // XXX: Using fs to remove store files breaks when running on browser environment
-    // Due to fs not existing on those environments.
   }
 
   async validate(): Promise<void> {
