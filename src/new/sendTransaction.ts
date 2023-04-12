@@ -15,8 +15,10 @@ import helpers from '../utils/helpers';
 import MineTransaction from '../wallet/mineTransaction';
 import Address from '../models/address';
 import { OutputType } from '../wallet/types';
-import { IStorage, IDataTx, IDataInput, IDataOutput, IFillTxOptions } from '../types';
+import { IStorage, IDataTx, IDataOutput, IDataInput, IUtxoSelectionOptions, isDataOutputCreateToken, WalletType } from '../types';
 import Transaction from '../models/transaction';
+import { bestUtxoSelection } from '../utils/utxo';
+import { shuffle } from 'lodash';
 
 export interface ISendInput {
   txId: string,
@@ -60,7 +62,7 @@ export type ISendOutput = ISendDataOutput | ISendTokenOutput;
  * 'send-error': if an error happens;
  * 'unexpected-error': if an unexpected error happens;
  **/
-class SendTransaction extends EventEmitter {
+export default class SendTransaction extends EventEmitter {
   storage: IStorage | null;
   transaction: Transaction | null;
   outputs: ISendOutput[];
@@ -73,7 +75,7 @@ class SendTransaction extends EventEmitter {
   /**
    *
    * @param {IStorage} storage Storage object
-   * @param [options] Options to initialize the facade
+   * @param {Object} [options={}] Options to initialize the facade
    * @param {Transaction|null} [options.transaction=null] Full tx data
    * @param {ISendInput[]} [options.inputs=[]] tx inputs
    * @param {ISendOutput[]} [options.outputs=[]] tx outputs
@@ -188,22 +190,40 @@ class SendTransaction extends EventEmitter {
       });
     }
 
-    const partialTxData: {inputs: IDataInput[], outputs: IDataOutput[]} = {inputs: [], outputs: []};
+    const partialTxData: Pick<IDataTx, "outputs" | "inputs"> = {inputs: [], outputs: []};
     for (const [token, chooseInputs] of tokenMap) {
-      const options: IFillTxOptions = { chooseInputs, skipAuthorities: true };
+      const options: IUtxoSelectionOptions = {
+        token,
+        chooseInputs,
+      };
       if (this.changeAddress) {
         options.changeAddress = this.changeAddress;
       }
-      const newData = await this.storage.fillTx(token, txData, options);
-      partialTxData.inputs.push(...newData.inputs);
-      partialTxData.outputs.push(...newData.outputs);
+      try {
+        const proposedData = await prepareSendTokensData(this.storage, txData, options);
+        partialTxData.inputs.push(...proposedData.inputs);
+        partialTxData.outputs.push(...proposedData.outputs);
+      } catch (e) {
+        if (e instanceof Error) {
+          throw new SendTxError(e.message);
+        }
+        throw e;
+      }
+    }
+
+    let outputs: IDataOutput[];
+    if (partialTxData.outputs.length === 0) {
+      outputs = txData.outputs;
+    } else {
+      // Shuffle outputs, so we don't have change output always in the same index
+      outputs = shuffle([...txData.outputs, ...partialTxData.outputs])
     }
 
     tokenMap.delete(HTR_UID);
     // This new IDataTx should be complete with the requested funds
     this.fullTxData = {
+      outputs,
       inputs: [...txData.inputs, ...partialTxData.inputs],
-      outputs: [...txData.outputs, ...partialTxData.outputs],
       tokens: Array.from(tokenMap.keys()),
     };
 
@@ -231,6 +251,8 @@ class SendTransaction extends EventEmitter {
         throw new Error('Pin is not set.');
       }
       this.transaction = await transactionUtils.prepareTransaction(txData, this.pin, this.storage);
+      // This will validate if the transaction has more than the max number of inputs and outputs.
+      this.transaction.validate();
       return this.transaction;
     } catch(e) {
       const message = helpers.handlePrepareDataError(e);
@@ -494,4 +516,176 @@ class SendTransaction extends EventEmitter {
   }
 }
 
-export default SendTransaction;
+/**
+ * Check the tx data and propose inputs and outputs to complete the transaction.
+ * We will only check a single token
+ *
+ * @param {IStorage} storage
+ * @param {IDataTx} dataTx
+ * @param {IUtxoSelectionOptions} options
+ */
+export async function prepareSendTokensData(
+  storage: IStorage,
+  dataTx: IDataTx,
+  options: IUtxoSelectionOptions = {},
+): Promise<Pick<IDataTx, 'inputs'|'outputs'>> {
+  async function getOutputTypeFromWallet(): Promise<'p2pkh'|'p2sh'> {
+    const walletType = await storage.getWalletType();
+    if (walletType === WalletType.P2PKH) {
+      return 'p2pkh';
+    } else if (walletType === WalletType.MULTISIG) {
+      return 'p2sh';
+    } else {
+      throw new Error('Unsupported wallet type.');
+    }
+  }
+
+  const token = options.token || HATHOR_TOKEN_CONFIG.uid;
+  const utxoSelection = options.utxoSelectionMethod || bestUtxoSelection;
+  const newtxData: Pick<IDataTx, 'inputs'|'outputs'> = { inputs: [], outputs: [] };
+  let outputAmount = 0;
+
+  // Calculate balance for the token on the transaction
+  for (const output of dataTx.outputs) {
+    if (isDataOutputCreateToken(output)) {
+      // This is a mint output
+      // Since the current transaction is creating the token we can safely ignore it
+      continue;
+    }
+    const outputToken = output.token || HATHOR_TOKEN_CONFIG.uid;
+    if (outputToken !== token) {
+      // This output is not for the token we are looking for
+      continue;
+    }
+    outputAmount += output.value;
+  }
+
+  if (options.chooseInputs) {
+    if (outputAmount === 0) {
+      // We cannot process a target amount of 0 tokens.
+      throw new Error('Invalid amount of tokens to send.');
+    }
+
+    // We will choose the inputs to fill outputAmount.funds
+    const newUtxos = await utxoSelection(storage, token, outputAmount);
+    if (newUtxos.amount < outputAmount) {
+      throw new Error(`Token: ${token}. Insufficient amount of tokens to fill the amount.`);
+    }
+    newtxData.inputs = newUtxos.utxos.map((utxo) => {
+      return {
+        txId: utxo.txId,
+        index: utxo.index,
+        value: utxo.value,
+        authorities: utxo.authorities,
+        token: utxo.token,
+        address: utxo.address,
+      } as IDataInput;
+    });
+
+    if (newUtxos.amount > outputAmount) {
+      // We need to create a change output
+      const changeAddress = options.changeAddress || await storage.getCurrentAddress();
+      const changeOutput: IDataOutput = {
+        type: await getOutputTypeFromWallet(),
+        token,
+        value: newUtxos.amount - outputAmount,
+        address: changeAddress,
+        authorities: 0,
+        timelock: null,
+        isChange: true,
+      };
+      newtxData.outputs.push(changeOutput);
+    }
+  } else {
+    let inputAmount = 0;
+    for (const input of dataTx.inputs) {
+      // We will check the validity and availability of the provided inputs
+      // and the amount (suggesting a change if needed)
+      // The inputs do not need to be added on newtxData.inputs since they are provided by the caller.
+      const checkSpent = await checkUnspentInput(storage, input, token);
+      if (!checkSpent.success) {
+        throw new Error(`Token: ${token}. ${checkSpent.message}`);
+      }
+
+      if (!await transactionUtils.canUseUtxo(input, storage)) {
+        throw new Error(`Token: ${token}. Output [${input.txId}, ${input.index}] is locked or being used`);
+      }
+
+      inputAmount += input.value;
+    }
+    if (inputAmount < outputAmount) {
+      throw new Error(`Token: ${token}. Sum of outputs is greater than sum of inputs`);
+    }
+    if (inputAmount > outputAmount) {
+      // Need to create a change output
+      const changeAddress = options.changeAddress || await storage.getCurrentAddress();
+      newtxData.outputs.push({
+        type: await getOutputTypeFromWallet(),
+        token,
+        value: inputAmount - outputAmount,
+        address: changeAddress,
+        authorities: 0,
+        timelock: null,
+        isChange: true,
+      });
+    }
+  }
+
+  return newtxData;
+}
+
+/**
+ * Check that the input is unspent, valid and available.
+ * Will return a user-friendly message if it is not.
+ *
+ * @param {IStorage} storage The storage instance
+ * @param {IDataInput} input The input we are checking
+ * @param {string} selectedToken The token uid we are checking
+ * @returns {Promise<{success: boolean, message: string}>}
+ */
+export async function checkUnspentInput(
+  storage: IStorage,
+  input: IDataInput,
+  selectedToken: string,
+): Promise<{success: boolean, message: string}> {
+  const tx = await storage.getTx(input.txId);
+  if (tx === null) {
+    return { success: false, message: `Transaction [${input.txId}] does not exist in the wallet` };
+  }
+  if (tx.is_voided) {
+    return { success: false, message: `Transaction [${input.txId}] is voided` };
+  }
+  if (tx.outputs.length - 1 < input.index) {
+    return { success: false, message: `Transaction [${input.txId}] does not have this output [index=${input.index}]` };
+  }
+
+  const txout = tx.outputs[input.index];
+  if (transactionUtils.isAuthorityOutput(txout)) {
+    /**
+     * XXX: We are NOT enabling authority outputs for now.
+     */
+    return { success: false, message: `Output [${input.index}] of transaction [${input.txId}] is an authority output` };
+  }
+
+  if (txout.decoded.address) {
+    if (txout.decoded.address !== input.address) {
+      return { success: false, message: `Output [${input.index}] of transaction [${input.txId}] does not have the same address as the provided input` };
+    }
+    if (!await storage.isAddressMine(txout.decoded.address)) {
+      return { success: false, message: `Output [${input.index}] of transaction [${input.txId}] is not from the wallet` };
+    }
+  } else {
+    // This output does not have an address, so it cannot be spent by us
+    return { success: false, message: `Output [${input.index}] of transaction [${input.txId}] cannot be spent since it does not belong to an address` };
+  }
+
+  if (txout.token !== input.token || input.token !== selectedToken) {
+    return { success: false, message: `Output [${input.index}] of transaction [${input.txId}] is not from selected token [${selectedToken}]`};
+  }
+
+  if (txout.spent_by) {
+    return { success: false, message: `Output [${input.index}] of transaction [${input.txId}] is already spent` };
+  }
+
+  return { success: true, message: '' };
+}
