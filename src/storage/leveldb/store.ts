@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { IAddressInfo, IAddressMetadata, IBalance, IHistoryTx, ILockedUtxo, IStore, ITokenData, ITokenMetadata, IUtxo, IUtxoFilterOptions, IWalletAccessData, IWalletData } from '../../types';
+import { IAddressInfo, IAddressMetadata, IHistoryTx, ILockedUtxo, IStore, ITokenData, ITokenMetadata, IUtxo, IUtxoFilterOptions, IWalletAccessData, IWalletData } from '../../types';
 import { HDPublicKey } from 'bitcore-lib'
 import path from 'path';
 import LevelAddressIndex from './address_index';
@@ -13,7 +13,6 @@ import LevelHistoryIndex from './history_index';
 import LevelUtxoIndex from './utxo_index';
 import LevelWalletIndex from './wallet_index';
 import LevelTokenIndex from './token_index';
-import fs from 'fs';
 
 export default class LevelDBStore implements IStore {
   addressIndex: LevelAddressIndex;
@@ -47,14 +46,12 @@ export default class LevelDBStore implements IStore {
   }
 
   async destroy(): Promise<void> {
+    await this.addressIndex.clear();
+    await this.historyIndex.clear();
+    await this.utxoIndex.clear();
+    await this.walletIndex.clear();
+    await this.tokenIndex.clear();
     await this.close();
-    if (process.version < 'v14.14.0') {
-      // rm was introduced in v14.14.0, earlier versions should use rmdir
-      // https://nodejs.org/docs/latest-v14.x/api/fs.html#fs_fspromises_rmdir_path_options
-      await fs.promises.rmdir(this.dbpath, { recursive: true });
-    } else {
-      await fs.promises.rm(this.dbpath, { recursive: true, force: true });
-    }
   }
 
   async validate(): Promise<void> {
