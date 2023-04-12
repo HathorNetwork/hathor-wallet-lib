@@ -599,7 +599,7 @@ export async function prepareSendTokensData(
   } else {
     let inputAmount = 0;
     for (const input of dataTx.inputs) {
-      if (input.token != token) {
+      if (input.token !== token) {
         // The input is not for the token we are checking
         continue;
       }
