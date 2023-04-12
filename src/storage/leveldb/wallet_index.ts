@@ -307,4 +307,11 @@ export default class LevelWalletIndex implements IKVWalletIndex {
       await batch.write();
     }
   }
+
+  /**
+   * Delete all entries on the database.
+   */
+  async clear(): Promise<void> {
+    this.walletDB.db.clear();
+  }
 }
