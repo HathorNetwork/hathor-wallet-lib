@@ -204,7 +204,7 @@ export class Storage implements IStorage {
    */
   async processHistory(): Promise<void> {
     await processHistory(
-      this.store,
+      this,
       { rewardLock: this.version?.reward_spend_min_blocks },
     );
   }
@@ -541,7 +541,7 @@ export class Storage implements IStorage {
   async processLockedUtxos(height: number): Promise<void> {
     const nowTs = Math.floor(Date.now() / 1000);
     for await (const lockedUtxo of this.store.iterateLockedUtxos()) {
-      await processUtxoUnlock(this.store, lockedUtxo, {
+      await processUtxoUnlock(this, lockedUtxo, {
         nowTs,
         rewardLock: this.version?.reward_spend_min_blocks || 0,
         currentHeight: height,

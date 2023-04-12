@@ -6,7 +6,7 @@
  */
 
 import { HATHOR_TOKEN_CONFIG } from "../../../src/constants";
-import { LevelDBStore } from "../../../src/storage";
+import { LevelDBStore, Storage } from "../../../src/storage";
 import tx_history from "../../__fixtures__/tx_history";
 import walletApi from "../../../src/api/wallet";
 import { HDPrivateKey } from "bitcore-lib";
@@ -88,6 +88,7 @@ test('history methods', async () => {
   const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
   await store.saveAddress({base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0});
   await store.saveAddress({base58: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp', bip32AddressIndex: 1});
+  const storage = new Storage(store);
 
   for (const tx of tx_history) {
     await store.saveTx(tx);
@@ -118,7 +119,7 @@ test('history methods', async () => {
       symbol: 'CTK',
     });
   });
-  await processHistory(store, { rewardLock: 1 });
+  await processHistory(storage, { rewardLock: 1 });
   expect(getTokenApi).not.toHaveBeenCalledWith('00', expect.anything());
   expect(getTokenApi).toHaveBeenCalledWith('01', expect.anything());
   expect(getTokenApi).toHaveBeenCalledWith('02', expect.anything());
