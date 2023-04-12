@@ -599,6 +599,11 @@ export async function prepareSendTokensData(
   } else {
     let inputAmount = 0;
     for (const input of dataTx.inputs) {
+      if (input.token !== token) {
+        // The input is not for the token we are checking
+        continue;
+      }
+
       // We will check the validity and availability of the provided inputs
       // and the amount (suggesting a change if needed)
       // The inputs do not need to be added on newtxData.inputs since they are provided by the caller.
