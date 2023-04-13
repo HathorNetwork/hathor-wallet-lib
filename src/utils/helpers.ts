@@ -9,7 +9,6 @@ import { OP_PUSHDATA1 } from '../opcodes';
 import { DECIMAL_PLACES, DEFAULT_TX_VERSION, CREATE_TOKEN_TX_VERSION } from '../constants';
 import path from 'path';
 import buffer from 'buffer';
-import Long from 'long';
 import Transaction from '../models/transaction';
 import { HistoryTransaction, HistoryTransactionOutput } from '../models/types';
 import P2PKH from '../models/p2pkh';
@@ -20,7 +19,7 @@ import Input from '../models/input';
 import Output from '../models/output';
 import Network from '../models/network';
 import Address from '../models/address';
-import { hexToBuffer, unpackToInt } from './buffer';
+import { hexToBuffer, unpackToInt, intToBytes } from './buffer';
 import { crypto, encoding, Address as bitcoreAddress } from 'bitcore-lib';
 import { clone } from 'lodash';
 import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError, ParseError } from '../errors';
@@ -48,39 +47,6 @@ const helpers = {
    */
   roundFloat(n: number): number {
     return Math.round(n*100)/100
-  },
-
-  /**
-   * Get the formatted value with decimal places and thousand separators
-   *
-   * @param {number} value Amount to be formatted
-   *
-   * @return {string} Formatted value
-   *
-   * @memberof Helpers
-   * @inner
-   */
-  prettyValue(value: number): string {
-    const fixedPlaces = (value/10**DECIMAL_PLACES).toFixed(DECIMAL_PLACES);
-    const integerPart = fixedPlaces.split('.')[0];
-    const decimalPart = fixedPlaces.split('.')[1];
-    return `${this.prettyIntegerValue(parseInt(integerPart))}.${decimalPart}`;
-  },
-
-  /**
-   * Get the formatted value for an integer number
-   *
-   * @param {number} value Amount to be formatted
-   *
-   * @return {string} Formatted value
-   *
-   * @memberof Helpers
-   * @inner
-   */
-  prettyIntegerValue(value: number): string {
-    const integerFormated = new Intl.NumberFormat('en-US').format(Math.abs(value));
-    const signal = value < 0 ? '-' : '';
-    return `${signal}${integerFormated}`;
   },
 
   /**
@@ -132,81 +98,6 @@ const helpers = {
   },
 
   /**
-   * Transform int to bytes
-   *
-   * @param {number} value Integer to be transformed to bytes
-   * @param {number} bytes How many bytes this number uses
-   *
-   * @return {Buffer} number in bytes
-   * @memberof Helpers
-   * @inner
-   */
-  intToBytes(value: number, bytes: number): Buffer {
-    let arr = new ArrayBuffer(bytes);
-    let view = new DataView(arr);
-    if (bytes === 1) {
-      // byteOffset = 0;
-      view.setUint8(0, value);
-    } else if (bytes === 2) {
-      // byteOffset = 0; isLittleEndian = false
-      view.setUint16(0, value, false);
-    } else if (bytes === 4) {
-      // byteOffset = 0; isLittleEndian = false
-      view.setUint32(0, value, false);
-    }
-    return buffer.Buffer.from(arr);
-  },
-
-  /**
-   * Transform signed int to bytes (1, 2, or 4 bytes)
-   *
-   * @param {number} value Integer to be transformed to bytes
-   * @param {number} bytes How many bytes this number uses
-   *
-   * @return {Buffer} number in bytes
-   * @memberof Helpers
-   * @inner
-   */
-  signedIntToBytes(value: number, bytes: number): Buffer {
-    let arr = new ArrayBuffer(bytes);
-    let view = new DataView(arr);
-    if (bytes === 1) {
-      // byteOffset = 0
-      view.setInt8(0, value);
-    } else if (bytes === 2) {
-      // byteOffset = 0; isLittleEndian = false
-      view.setInt16(0, value, false);
-    } else if (bytes === 4) {
-      view.setInt32(0, value, false);
-    } else if (bytes === 8) {
-      // In case of 8 bytes I need to handle the int with a Long lib
-      let long = Long.fromNumber(value, false);
-      arr = long.toBytesBE();
-    }
-    return buffer.Buffer.from(arr);
-  },
-
-  /**
-   * Transform float to bytes
-   *
-   * @param {number} value Integer to be transformed to bytes
-   * @param {number} bytes How many bytes this number uses
-   *
-   * @return {Buffer} number in bytes
-   * @memberof Helpers
-   * @inner
-   */
-  floatToBytes(value: number, bytes: number): Buffer {
-    let arr = new ArrayBuffer(bytes);
-    let view = new DataView(arr);
-    if (bytes === 8) {
-      // byteOffset = 0; isLitteEndian = false
-      view.setFloat64(0, value, false);
-    }
-    return buffer.Buffer.from(arr);
-  },
-
-  /**
    * Push data to the stack checking if need to add the OP_PUSHDATA1 opcode
    * We push the length of data and the data
    * In case the data has length > 75, we need to push the OP_PUSHDATA1 before the length
@@ -225,7 +116,7 @@ const helpers = {
     if (data.length > 75) {
       stack.push(OP_PUSHDATA1);
     }
-    stack.push(this.intToBytes(data.length, 1));
+    stack.push(intToBytes(data.length, 1));
     stack.push(data);
   },
 

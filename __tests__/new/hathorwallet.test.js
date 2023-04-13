@@ -219,7 +219,7 @@ test('getSignatures', async () => {
     },
     {
       inputIndex: 5,
-      addressIndex: 5,      
+      addressIndex: 5,
     }
   ]));
   const mockGetSig = jest.spyOn(transactionUtils, 'getSignature').mockReturnValue(Buffer.from('cafe', 'hex'));
@@ -258,7 +258,7 @@ test('signTx', async () => {
       pubkey: 'be',
     },
   ]));
-  
+
 
   const txId = '000164e1e7ec7700a18750f9f50a1a9b63f6c7268637c072ae9ee181e58eb01b';
   const tx = new Transaction(
@@ -466,7 +466,7 @@ test('getAddressAtIndex', async () => {
   const store = new MemoryStore();
   const storage = new Storage(store);
   const hWallet = new FakeHathorWallet();
-  
+
   jest.spyOn(storage, 'saveAddress').mockImplementation(() => Promise.resolve());
   const walletTypeSpy = jest.spyOn(storage, 'getWalletType');
   const addressSpy = jest.spyOn(storage, 'getAddressAtIndex');
@@ -488,4 +488,79 @@ test('getAddressAtIndex', async () => {
 
   p2pkhDeriveSpy.mockRestore();
   p2shDeriveSpy.mockRestore();
+});
+
+test('GapLimit', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+
+  const gapSpy = jest.spyOn(storage, 'setGapLimit').mockImplementationOnce(() => Promise.resolve());
+  jest.spyOn(storage, 'getGapLimit').mockImplementationOnce(() => Promise.resolve(123));
+
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = storage;
+
+  await hWallet.setGapLimit(10);
+  expect(gapSpy).toBeCalledWith(10);
+  await expect(hWallet.getGapLimit()).resolves.toEqual(123);
+});
+
+test('getAccessData', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+
+  const dataSpy = jest.spyOn(storage, 'getAccessData').mockImplementationOnce(() => Promise.resolve(null));
+
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = storage;
+
+  // Throw if the wallet is not initialized
+  await expect(hWallet.getAccessData()).rejects.toThrow('Wallet was not initialized.');
+  // Return the access data from storage
+  dataSpy.mockImplementationOnce(() => Promise.resolve('access data object'));
+  await expect(hWallet.getAccessData()).resolves.toEqual('access data object');
+});
+
+test('getWalletType', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+
+  jest.spyOn(storage, 'getAccessData')
+      .mockImplementationOnce(() => Promise.resolve({
+        walletType: 'p2pkh',
+      }));
+
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = storage;
+
+  await expect(hWallet.getWalletType()).resolves.toEqual('p2pkh');
+});
+
+test('getMultisigData', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+
+  const dataSpy = jest.spyOn(storage, 'getAccessData')
+      .mockImplementationOnce(() => Promise.resolve({
+        walletType: 'p2pkh',
+      }));
+
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = storage;
+
+  // Should throw if the wallet is not a multisig wallet
+  await expect(hWallet.getMultisigData()).rejects.toThrow('Wallet is not a multisig wallet.');
+
+  // Should return the multisig data from storage
+  dataSpy.mockImplementationOnce(() => Promise.resolve({
+    walletType: 'multisig',
+    multisigData: 'multisig data',
+  }));
+  await expect(hWallet.getMultisigData()).resolves.toEqual('multisig data');
+
+  // Will throw if the multisig data is not found in storage
+  dataSpy.mockImplementationOnce(() => Promise.resolve({
+    walletType: 'multisig',
+  }));
+  await expect(hWallet.getMultisigData()).rejects.toThrow('Multisig data not found in storage');
 });

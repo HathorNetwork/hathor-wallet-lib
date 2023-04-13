@@ -27,6 +27,7 @@ const Input = require('./lib/models/input');
 const Transaction = require('./lib/models/transaction');
 const CreateTokenTransaction = require('./lib/models/create_token_transaction');
 const Network = require('./lib/models/network');
+const addressUtils = require('./lib/utils/address');
 const cryptoUtils = require('./lib/utils/crypto');
 const dateUtils = require('./lib/utils/date');
 const tokensUtils = require('./lib/utils/tokens');
@@ -39,6 +40,7 @@ const HathorWalletServiceWallet = require('./lib/wallet/wallet');
 const SendTransactionWalletService = require('./lib/wallet/sendTransactionWalletService');
 const config = require('./lib/config');
 const PushNotification = require('./lib/pushNotification');
+const { WalletType } = require('./lib/types');
 
 const {PartialTx, PartialTxInputData} = require('./lib/models/partial_tx');
 const PartialTxProposal = require('./lib/wallet/partialTxProposal');
@@ -77,6 +79,7 @@ module.exports = {
   Transaction: Transaction.default,
   CreateTokenTransaction: CreateTokenTransaction.default,
   Network: Network.default,
+  addressUtils,
   cryptoUtils,
   dateUtils: dateUtils.default,
   tokensUtils: tokensUtils.default,
@@ -90,4 +93,5 @@ module.exports = {
   config: config.default,
   PushNotification,
   swapService,
+  WalletType,
 }

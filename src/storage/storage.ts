@@ -204,7 +204,7 @@ export class Storage implements IStorage {
    */
   async processHistory(): Promise<void> {
     await processHistory(
-      this.store,
+      this,
       { rewardLock: this.version?.reward_spend_min_blocks },
     );
   }
@@ -425,7 +425,8 @@ export class Storage implements IStorage {
   /**
    * Generate inputs and outputs so that the transaction balance is filled.
    *
-   * @param {Map<string, Record<'funds'|'mint'|'melt', number>>} txBalance Balance of funds and authorities for all tokens on the transaction
+   * @param {string} token Token uid
+   * @param {Record<'funds'|'mint'|'melt', number>} balance Balance of funds and authorities for a token on the transaction
    * @param {IFillTxOptions} [options={}]
    * @param {string} options.changeAddress Address to send change to
    * @param {boolean} [options.skipAuthorities=false] If we should fill authorities or only funds
@@ -433,24 +434,22 @@ export class Storage implements IStorage {
    * @returns {Promise<{inputs: IDataInput[], outputs: IDataOutput[]}>} The inputs and outputs to fill the transaction
    * @internal
    */
-  async matchTxTokensBalance(
-    txBalance: Map<string, Record<'funds'|'mint'|'melt', number>>,
+  async matchTokenBalance(
+    token: string,
+    balance: Record<'funds'|'mint'|'melt', number>,
     { changeAddress, skipAuthorities = true, chooseInputs = true }: IFillTxOptions = {},
   ): Promise<{inputs: IDataInput[], outputs: IDataOutput[]}> {
     const addressForChange = changeAddress || (await this.getCurrentAddress());
     // balance holds the balance of all tokens on the transaction
     const newInputs: IDataInput[] = [];
     const newOutputs: IDataOutput[] = [];
-    for (const [token, balance] of txBalance.entries()) {
-      // match funds
-      const {inputs: fundsInputs, outputs: fundsOutputs} = await this.matchBalanceSelection(balance.funds, token, 0, addressForChange, chooseInputs);
-      newInputs.push(...fundsInputs);
-      newOutputs.push(...fundsOutputs);
+    // match funds
+    const {inputs: fundsInputs, outputs: fundsOutputs} = await this.matchBalanceSelection(balance.funds, token, 0, addressForChange, chooseInputs);
+    newInputs.push(...fundsInputs);
+    newOutputs.push(...fundsOutputs);
 
-      if (skipAuthorities || token === HATHOR_TOKEN_CONFIG.uid) {
-        continue;
-      }
-
+    if (!(skipAuthorities || token === HATHOR_TOKEN_CONFIG.uid)) {
+      // Match authority balance (only possible for custom tokens)
       // match mint
       const {inputs: mintInputs, outputs: mintOutputs} = await this.matchBalanceSelection(balance.mint, token, 1, addressForChange, chooseInputs);
       // match melt
@@ -476,9 +475,9 @@ export class Storage implements IStorage {
    * @async
    * @returns {Promise<void>}
    */
-  async fillTx(tx: IDataTx, options: IFillTxOptions = {}): Promise<{inputs: IDataInput[], outputs: IDataOutput[]}> {
-    const tokensBalance = await transactionUtils.calculateTxBalanceToFillTx(tx);
-    const {inputs: newInputs, outputs: newOutputs} = await this.matchTxTokensBalance(tokensBalance, options);
+  async fillTx(token:string, tx: IDataTx, options: IFillTxOptions = {}): Promise<{inputs: IDataInput[], outputs: IDataOutput[]}> {
+    const tokenBalance = await transactionUtils.calculateTxBalanceToFillTx(token, tx);
+    const {inputs: newInputs, outputs: newOutputs} = await this.matchTokenBalance(token, tokenBalance, options);
 
     // Validate if we will add too many inputs/outputs
     const max_inputs = this.version?.max_number_inputs || MAX_INPUTS;
@@ -542,7 +541,7 @@ export class Storage implements IStorage {
   async processLockedUtxos(height: number): Promise<void> {
     const nowTs = Math.floor(Date.now() / 1000);
     for await (const lockedUtxo of this.store.iterateLockedUtxos()) {
-      await processUtxoUnlock(this.store, lockedUtxo, {
+      await processUtxoUnlock(this, lockedUtxo, {
         nowTs,
         rewardLock: this.version?.reward_spend_min_blocks || 0,
         currentHeight: height,

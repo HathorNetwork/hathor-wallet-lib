@@ -230,7 +230,7 @@ export interface IMultisigData {
 export interface IUtxoFilterOptions {
   token?: string; // default to HTR
   authorities?: number; // default to 0 (funds)
-  max_utxos?: number; // default to 255 (MAX_INPUTS)
+  max_utxos?: number; // default to unlimited
   filter_address?: string;
   target_amount?: number;
   max_amount?: number;
@@ -239,6 +239,18 @@ export interface IUtxoFilterOptions {
   only_available_utxos?: boolean;
   filter_method?: (utxo: IUtxo) => boolean;
   reward_lock?: number,
+  // Will order utxos by value, asc or desc
+  // If not set, will not order
+  order_by_value?: 'asc' | 'desc';
+}
+
+export type UtxoSelectionAlgorithm = (storage: IStorage, token: string, amount: number) => Promise<{ utxos: IUtxo[], amount: number }>;
+
+export interface IUtxoSelectionOptions {
+  token?: string,
+  changeAddress?: string,
+  chooseInputs?: boolean,
+  utxoSelectionMethod?: UtxoSelectionAlgorithm,
 }
 
 export interface IFillTxOptions {
@@ -350,7 +362,7 @@ export interface IStorage {
   // UTXOs
   getAllUtxos(): AsyncGenerator<IUtxo>;
   selectUtxos(options: Omit<IUtxoFilterOptions, 'reward_lock'>): AsyncGenerator<IUtxo>;
-  fillTx(tx: IDataTx, options: IFillTxOptions): Promise<{inputs: IDataInput[], outputs: IDataOutput[]}>;
+  fillTx(token: string, tx: IDataTx, options: IFillTxOptions): Promise<{inputs: IDataInput[], outputs: IDataOutput[]}>;
   utxoSelectAsInput(utxo: IUtxoId, markAs: boolean, ttl?: number): Promise<void>;
   isUtxoSelectedAsInput(utxo: IUtxoId): Promise<boolean>;
   utxoSelectedAsInputIter(): AsyncGenerator<IUtxoId>;

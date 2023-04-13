@@ -8,7 +8,6 @@
 import helpers from '../../src/utils/helpers';
 import Network from '../../src/models/network';
 import dateFormatter from '../../src/utils/date';
-import { unpackToInt, unpackToFloat, hexToBuffer, bufferToHex } from '../../src/utils/buffer';
 import Address from '../../src/models/address';
 import P2PKH from '../../src/models/p2pkh';
 import P2SH from '../../src/models/p2sh';
@@ -27,20 +26,6 @@ test('Round float', () => {
   expect(helpers.roundFloat(1.2355)).toBe(1.24);
 });
 
-test('Pretty value', () => {
-  expect(helpers.prettyValue(1000)).toBe('10.00');
-  expect(helpers.prettyValue(100000)).toBe('1,000.00');
-  expect(helpers.prettyValue(100000000)).toBe('1,000,000.00');
-  expect(helpers.prettyValue(-1000)).toBe('-10.00');
-});
-
-test('Pretty integer value', () => {
-  expect(helpers.prettyIntegerValue(1000)).toBe('1,000');
-  expect(helpers.prettyIntegerValue(100000)).toBe('100,000');
-  expect(helpers.prettyIntegerValue(100000000)).toBe('100,000,000');
-  expect(helpers.prettyIntegerValue(-1000)).toBe('-1,000');
-});
-
 test('Version check', () => {
   expect(helpers.isVersionAllowed('2.0.1-beta', '0.1.1')).toBe(false);
   expect(helpers.isVersionAllowed('2.0.1-beta', '0.1.1-beta')).toBe(true);
@@ -55,44 +40,6 @@ test('Version check', () => {
 
   expect(helpers.getCleanVersionArray('0.3.1')).toEqual(["0", "3", "1"]);
   expect(helpers.getCleanVersionArray('0.3.2-beta')).toEqual(["0", "3", "2"]);
-});
-
-test('Unsigned int to bytes', () => {
-  let number1 = 10;
-  let buf1 = helpers.intToBytes(number1, 1);
-  expect(unpackToInt(1, false, buf1)[0]).toBe(number1);
-
-  let number2 = 300;
-  let buf2 = helpers.intToBytes(number2, 2);
-  expect(unpackToInt(2, false, buf2)[0]).toBe(number2);
-
-  let number3 = 70000;
-  let buf3 = helpers.intToBytes(number3, 4);
-  expect(unpackToInt(4, false, buf3)[0]).toBe(number3);
-});
-
-test('Signed int to bytes', () => {
-  let number1 = 10;
-  let buf1 = helpers.signedIntToBytes(number1, 1);
-  expect(unpackToInt(1, true, buf1)[0]).toBe(number1);
-
-  let number2 = 300;
-  let buf2 = helpers.signedIntToBytes(number2, 2);
-  expect(unpackToInt(2, true, buf2)[0]).toBe(number2);
-
-  let number3 = 70000;
-  let buf3 = helpers.signedIntToBytes(number3, 4);
-  expect(unpackToInt(4, true, buf3)[0]).toBe(number3);
-
-  let number4 = 2**33;
-  let buf4 = helpers.signedIntToBytes(number4, 8);
-  expect(unpackToInt(8, true, buf4)[0]).toBe(number4);
-});
-
-test('Float to bytes', () => {
-  let number = 10.5;
-  let buffer = helpers.floatToBytes(number, 8);
-  expect(unpackToFloat(buffer)[0]).toBe(number);
 });
 
 test('Push data', () => {
@@ -150,12 +97,6 @@ test('Encode Address P2SH', () => {
   const scriptHash = Buffer.from(scriptHashHex, 'hex');
   const testnet = new Network('testnet');
   expect(helpers.encodeAddressP2SH(scriptHash, testnet).base58).toEqual(address);
-});
-
-test('Buffer to hex', () => {
-  const hexString = '044f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa385b6b1b8ead809ca67454d9683fcf2ba03456d6fe2c4abe2b07f0fbdbb2f1c1';
-  const buff = hexToBuffer(hexString);
-  expect(bufferToHex(buff)).toBe(hexString);
 });
 
 test('createTxFromBytes and Hex', () => {
@@ -324,5 +265,5 @@ test('handlePrepareDataError', () => {
   expect(helpers.handlePrepareDataError(err5)).toEqual('err5');
   expect(helpers.handlePrepareDataError(err6)).toEqual('err6');
 
-  expect(() => { helpers.handlePrepareDataError(err) }).toThrow(err); 
+  expect(() => { helpers.handlePrepareDataError(err) }).toThrow(err);
 });
