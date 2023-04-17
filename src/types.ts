@@ -343,6 +343,7 @@ export interface IStorage {
   saveAddress(info: IAddressInfo): Promise<void>;
   isAddressMine(base58: string): Promise<boolean>;
   getCurrentAddress(markAsUsed?: boolean): Promise<string>;
+  getChangeAddress(options?: {changeAddress?: null|string}): Promise<string>;
 
   // Transaction methods
   txHistory(): AsyncGenerator<IHistoryTx>;

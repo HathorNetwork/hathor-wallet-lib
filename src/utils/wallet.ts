@@ -66,7 +66,6 @@ const wallet = {
     } else if (!Mnemonic.isValid(newWordsString)) {
       // Check if there is a word that does not belong to the list of possible words
       const errorList = getInvalidWords(wordsArray);
-      let errorMessage = '';
       if (errorList.length > 0) {
         const err = new InvalidWords('Invalid words.');
         err.invalidWords = errorList;
@@ -371,14 +370,14 @@ const wallet = {
    * Generate access data from xpubkey.
    * The access data will be used to start a wallet and derive the wallet's addresses.
    * This method can only generate READONLY wallets since we do not have the private key.
-   * 
+   *
    * We can only accept xpubs derived to the account or change path.
    * Since hdpublickeys cannot derive on hardened paths, the derivation must be done previously with the private key
    * The last path with hardened derivation defined on bip44 is the account path so we support using an account path xpub.
    * We can also use the change path xpub since we use it to derive the addresses
    * but we cannot use the address path xpub since we won't be able to derive all addresses.
    * And the wallet-lib currently does not support the creation of a wallet with a single address.
-   * 
+   *
    * @param {string} xpubkey HDPublicKey in string format.
    * @param {{ multisig: IMultisigData }} [options={}] Options to generate the access data.
    * @returns {IWalletAccessData}
