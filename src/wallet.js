@@ -34,7 +34,7 @@ import helpers from './helpers';
 import helperUtils from './utils/helpers';
 import walletUtils from './utils/wallet';
 import { getAddressType } from './utils/address';
-import { AddressError, ConstantNotSet, OutputValueError, WalletTypeError } from './errors';
+import { AddressError, ConstantNotSet, OutputValueError, WalletFromXPubGuard, WalletTypeError } from './errors';
 import version from './version';
 import storage from './storage';
 import network from './network';
@@ -289,7 +289,7 @@ const wallet = {
       privkey = xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
     }
 
-    const encryptedData = this.encryptData(privkey.xprivkey, pin)
+    const encryptedData = this.encryptData(privkey.xprivkey, pin);
     const encryptedAccountPathXpriv = this.encryptData(accPrivKey.xprivkey, pin);
     const encryptedAuthXpriv = this.encryptData(authXpriv.xprivkey, pin);
     const encryptedDataWords = this.encryptData(words, password);
@@ -307,11 +307,11 @@ const wallet = {
       hashIterations: HASH_ITERATIONS,
       pbkdf2Hasher: 'sha1', // For now we are only using SHA1
       xpubkey: privkey.xpubkey,
-    }
+    };
 
     if (multisig) {
       const dxpriv = xpriv.deriveNonCompliantChild(P2SH_ACCT_PATH);
-      access['multisig'] = Object.assign({pubkey: dxpriv.publicKey.toString('hex')}, multisig);
+      access['multisig'] = Object.assign({ pubkey: dxpriv.publicKey.toString('hex') }, multisig);
     }
 
     return this.startWallet(access, loadHistory);
@@ -2894,6 +2894,11 @@ const wallet = {
 
     const accessData = this.getWalletAccessData();
     const encryptedXPriv = accessData.acctPathMainKey;
+
+    if (!encryptedXPriv) {
+      return null;
+    }
+
     const privateKeyStr = wallet.decryptData(encryptedXPriv, pin);
 
     return privateKeyStr;
