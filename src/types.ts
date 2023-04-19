@@ -377,6 +377,7 @@ export interface IStorage {
   getAccessData(): Promise<IWalletAccessData|null>;
   saveAccessData(data: IWalletAccessData): Promise<void>;
   getMainXPrivKey(pinCode: string): Promise<string>;
+  getAcctPathXPrivKey(pinCode: string): Promise<string>;
   getAuthPrivKey(pinCode: string): Promise<string>;
   getWalletData(): Promise<IWalletData>;
   getWalletType(): Promise<WalletType>;

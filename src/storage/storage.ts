@@ -724,6 +724,27 @@ export class Storage implements IStorage {
   }
 
   /**
+   * Get account path xprivkey if available.
+   *
+   * @param {string} pinCode
+   * @returns {Promise<string>}
+   */
+  async getAcctPathXPrivKey(pinCode: string): Promise<string> {
+    const accessData = await this._getValidAccessData();
+    if (accessData.acctPathKey === undefined) {
+      throw new Error('Private key is not present on this wallet.');
+    }
+
+    try {
+      // decryptData handles pin validation
+      return decryptData(accessData.acctPathKey, pinCode);
+    } catch(err: unknown) {
+      // FIXME: check error type to not hide crypto errors
+      throw new Error('Invalid PIN code.');
+    }
+  }
+
+  /**
    * Decrypt and return the auth private key of the wallet.
    *
    * @param {string} pinCode Pin to unlock the private key
