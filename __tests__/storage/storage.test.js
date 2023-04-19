@@ -11,6 +11,8 @@ import tx_history from '../__fixtures__/tx_history';
 import { processHistory } from '../../src/utils/storage';
 import { TOKEN_AUTHORITY_MASK, TOKEN_DEPOSIT_PERCENTAGE, TOKEN_MINT_MASK } from '../../src/constants';
 import { HDPrivateKey } from "bitcore-lib";
+import * as cryptoUtils from '../../src/utils/crypto';
+import { access } from 'fs';
 
 const DATA_DIR = './testdata.leveldb';
 
@@ -164,13 +166,13 @@ test('utxos selected as inputs', async () => {
 describe('process locked utxos', () => {
   it('should work with memory store', async () => {
     const store = new MemoryStore();
-    processLockedUtxoTest(store);
+    await processLockedUtxoTest(store);
   });
 
   it('should work with leveldb store', async () => {
     const xpriv = HDPrivateKey();
     const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
-    processLockedUtxoTest(store);
+    await processLockedUtxoTest(store);
   });
 
   function getLockedUtxo(txId, address, timelock, height, value, token, token_data) {
@@ -433,3 +435,41 @@ describe('getChangeAddress', () => {
     await expect(storage.getChangeAddress()).resolves.toEqual(addr1);
   }
 });
+
+describe('getAcctPathXpriv', () => {
+
+  it('should work with memory store', async () => {
+    const store = new MemoryStore();
+    await getAcctXprivTest(store);
+  });
+
+  it('should work with leveldb store', async () => {
+    const xpriv = HDPrivateKey();
+    const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
+    await getAcctXprivTest(store);
+  });
+
+  /**
+    * Test the method to get account path xpriv on any IStore
+    * @param {IStore} store
+    */
+  async function getAcctXprivTest(store) {
+    const storage = new Storage(store);
+    const decryptSpy = jest.spyOn(cryptoUtils, 'decryptData');
+    const accessDataSpy = jest.spyOn(storage, '_getValidAccessData');
+
+    // Throw when we don't have account path key
+    accessDataSpy.mockReturnValue(Promise.resolve({}));
+    await expect(storage.getAcctPathXPrivKey('pin')).rejects.toThrow('Private key');
+
+    // It should fail if decryption is not possible
+    decryptSpy.mockImplementation(() => { throw new Error('Boom!'); });
+    accessDataSpy.mockReturnValue(Promise.resolve({ acctPathKey: 'encrypted-invalid-key' }));
+    await expect(storage.getAcctPathXPrivKey('pin')).rejects.toThrow('Invalid PIN code.');
+
+    // It should return the decrypted key if pin is correct
+    decryptSpy.mockReturnValue('account-path-key');
+    accessDataSpy.mockReturnValue(Promise.resolve({ acctPathKey: 'encrypted-valid-key' }));
+    await expect(storage.getAcctPathXPrivKey('pin')).resolves.toEqual('account-path-key');
+  }
+})
