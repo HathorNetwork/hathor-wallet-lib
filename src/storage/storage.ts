@@ -142,8 +142,8 @@ export class Storage implements IStorage {
   }
 
   /**
-   * Get a change address to use, if one is provided we need to check we own its
-   * If not provided the current address will be used instead.
+   * Get a change address to use, if one is provided we need to check if we own it
+   * If not provided, the current address will be used instead.
    *
    * @param {Object} [options={}]
    * @param {string|null|undefined} [options.changeAddress=undefined] User provided change address to use
