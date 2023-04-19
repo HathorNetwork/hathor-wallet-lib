@@ -2885,7 +2885,7 @@ const wallet = {
    *
    * @param {String} pin User PIN used to encrypt the account path xpriv on storage
    *
-   * @return {String} Wallet account path xprivkey
+   * @return {String | null} Wallet account path xprivkey or null if it's not on storage
    */
   getAcctPathXprivKey(pin) {
     if (this.isFromXPub()) {
