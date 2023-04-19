@@ -198,6 +198,7 @@ export enum WALLET_FLAGS {
 export interface IWalletAccessData {
   xpubkey: string;
   mainKey?: IEncryptedData; // encrypted xprivkey (uses pin for encryption)
+  acctPathKey?: IEncryptedData; // encrypted account path xprivkey (uses pin for encryption)
   words?: IEncryptedData; // encrypted seed (uses password for encryption)
   authKey?: IEncryptedData; // encrypted auth key, used for authentication with wallet-service (uses pin for encryption)
   multisigData?: IMultisigData;

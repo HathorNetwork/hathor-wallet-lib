@@ -448,11 +448,14 @@ const wallet = {
 
     const argXpriv = new HDPrivateKey(xprivkey);
     let xpriv: HDPrivateKey;
+    let acctXpriv: HDPrivateKey|null = null;
     if (argXpriv.depth === 0) {
       if (walletType === WalletType.MULTISIG) {
-        xpriv = argXpriv.deriveNonCompliantChild(`${P2SH_ACCT_PATH}/0`);
+        acctXpriv = argXpriv.deriveNonCompliantChild(P2SH_ACCT_PATH);
+        xpriv = acctXpriv.deriveNonCompliantChild(0);
       } else {
-        xpriv = argXpriv.deriveNonCompliantChild(`${P2PKH_ACCT_PATH}/0`);
+        acctXpriv = argXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
+        xpriv = acctXpriv.deriveNonCompliantChild(0);
       }
     } else {
       if (walletType === WalletType.MULTISIG) {
@@ -475,13 +478,21 @@ const wallet = {
       };
     }
 
-    return {
+    const accessData: IWalletAccessData = {
       walletType,
       multisigData,
       mainKey: encryptedMainKey,
       xpubkey: xpriv.xpubkey,
       walletFlags: 0,
     };
+
+    if (acctXpriv !== null) {
+      // Account path key will only be available if the provided key is a root key
+      const encryptedAuthPathKey = encryptData(acctXpriv.xprivkey, pin);
+      accessData.acctPathKey = encryptedAuthPathKey;
+    }
+
+    return accessData;
   },
 
   generateAccessDataFromSeed(
@@ -516,6 +527,7 @@ const wallet = {
     }
 
     const encryptedMainKey = encryptData(xpriv.xprivkey, pin);
+    const encryptedAcctPathKey = encryptData(accXpriv.xprivkey, pin);
     const encryptedAuthPathKey = encryptData(authXpriv.xprivkey, pin);
     const encryptedWords = encryptData(words, password);
 
@@ -535,6 +547,7 @@ const wallet = {
       multisigData,
       xpubkey: xpriv.xpubkey,
       mainKey: encryptedMainKey,
+      acctPathKey: encryptedAcctPathKey,
       authKey: encryptedAuthPathKey,
       words: encryptedWords,
       walletFlags: 0,
