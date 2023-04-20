@@ -33,6 +33,7 @@ const dateUtils = require('./lib/utils/date');
 const tokensUtils = require('./lib/utils/tokens');
 const walletUtils = require('./lib/utils/wallet');
 const helpersUtils = require('./lib/utils/helpers');
+const numberUtils = require('./lib/utils/numbers');
 const scriptsUtils = require('./lib/utils/scripts');
 const transactionUtils = require('./lib/utils/transaction');
 const bufferUtils = require('./lib/utils/buffer');
@@ -84,6 +85,7 @@ module.exports = {
   dateUtils: dateUtils.default,
   tokensUtils: tokensUtils.default,
   walletUtils: walletUtils.default,
+  numberUtils: numberUtils,
   helpersUtils: helpersUtils.default,
   scriptsUtils,
   bufferUtils,

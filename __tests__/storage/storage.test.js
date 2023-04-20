@@ -390,3 +390,33 @@ describe('process locked utxos', () => {
   }
 });
 
+describe('getChangeAddress', () => {
+  it('should work with memory store', async () => {
+    const store = new MemoryStore();
+    getChangeAddressTest(store);
+  });
+
+  it('should work with leveldb store', async () => {
+    const xpriv = HDPrivateKey();
+    const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
+    getChangeAddressTest(store);
+  });
+
+  async function getChangeAddressTest(store) {
+    const storage = new Storage(store);
+    const addr0 = 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ';
+    const addr1 = 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp'
+    await store.saveAddress({base58: addr0, bip32AddressIndex: 0});
+    await store.saveAddress({base58: addr1, bip32AddressIndex: 1});
+    await store.setCurrentAddressIndex(0)
+
+    // Expect to get the provided address if it is from the wallet
+    await expect(storage.getChangeAddress({ changeAddress: addr1 })).resolves.toEqual(addr1);
+    // Should throw if the provided address is not from the wallet
+    await expect(storage.getChangeAddress({ changeAddress: 'invalid' })).rejects.toThrow('Change address');
+    // If one is not provided we get the current address
+    await expect(storage.getChangeAddress()).resolves.toEqual(addr0);
+    await store.setCurrentAddressIndex(1)
+    await expect(storage.getChangeAddress()).resolves.toEqual(addr1);
+  }
+});

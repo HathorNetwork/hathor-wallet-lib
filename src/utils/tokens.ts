@@ -236,7 +236,7 @@ const tokens = {
 
     // get output change
     if (foundAmount > depositAmount) {
-      const cAddress = changeAddress || await storage.getCurrentAddress();
+      const cAddress = await storage.getChangeAddress({ changeAddress });
 
       outputs.push({
         type: getAddressType(cAddress, storage.config.getNetwork()),
@@ -338,7 +338,7 @@ const tokens = {
 
     // get output change
     if (foundAmount > amount) {
-      const cAddress = changeAddress || await storage.getCurrentAddress();
+      const cAddress = await storage.getChangeAddress({ changeAddress });
 
       outputs.push({
         type: getAddressType(cAddress, storage.config.getNetwork()),
