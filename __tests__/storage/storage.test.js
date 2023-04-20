@@ -12,7 +12,6 @@ import { processHistory } from '../../src/utils/storage';
 import { TOKEN_AUTHORITY_MASK, TOKEN_DEPOSIT_PERCENTAGE, TOKEN_MINT_MASK } from '../../src/constants';
 import { HDPrivateKey } from "bitcore-lib";
 import * as cryptoUtils from '../../src/utils/crypto';
-import { access } from 'fs';
 
 const DATA_DIR = './testdata.leveldb';
 
@@ -408,13 +407,13 @@ describe('process locked utxos', () => {
 describe('getChangeAddress', () => {
   it('should work with memory store', async () => {
     const store = new MemoryStore();
-    getChangeAddressTest(store);
+    await getChangeAddressTest(store);
   });
 
   it('should work with leveldb store', async () => {
     const xpriv = HDPrivateKey();
     const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
-    getChangeAddressTest(store);
+    await getChangeAddressTest(store);
   });
 
   async function getChangeAddressTest(store) {
@@ -472,4 +471,4 @@ describe('getAcctPathXpriv', () => {
     accessDataSpy.mockReturnValue(Promise.resolve({ acctPathKey: 'encrypted-valid-key' }));
     await expect(storage.getAcctPathXPrivKey('pin')).resolves.toEqual('account-path-key');
   }
-})
+});
