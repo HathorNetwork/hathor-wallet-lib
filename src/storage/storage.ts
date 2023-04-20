@@ -794,7 +794,7 @@ export class Storage implements IStorage {
     return validateHash(pinCode, data.hash, options);
   }
 
-  async checkPassword(pinCode: string): Promise<boolean> {
+  async checkPassword(password: string): Promise<boolean> {
     const accessData = await this._getValidAccessData();
     if (!accessData.words) {
       throw new Error('Cannot check password without the words.');
@@ -806,7 +806,7 @@ export class Storage implements IStorage {
       iterations: data.iterations,
       pbkdf2Hasher: data.pbkdf2Hasher,
     };
-    return validateHash(pinCode, data.hash, options);
+    return validateHash(password, data.hash, options);
   }
 
   /**

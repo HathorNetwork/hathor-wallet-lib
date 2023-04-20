@@ -2403,6 +2403,33 @@ class HathorWallet extends EventEmitter {
 
     return { success: true, txTokens };
   }
+
+  /**
+   * Check if the pin used to encrypt the main key is valid.
+   * @param {string} pin
+   * @returns {Promise<boolean>}
+   */
+  async checkPin(pin) {
+    return this.storage.checkPin(pin);
+  }
+
+  /**
+   * Check if the password used to encrypt the seed is valid.
+   * @param {string} password
+   * @returns {Promise<boolean>}
+   */
+  async checkPassword(password) {
+    return this.storage.checkPassword(password);
+  }
+
+  /**
+   * @param {string} pin
+   * @param {string} password
+   * @returns {Promise<boolean>}
+   */
+  async checkPinAndPassword(pin, password) {
+    return this.checkPin(pin) && this.checkPassword(password);
+  }
 }
 
 // State constants.
