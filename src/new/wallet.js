@@ -2428,7 +2428,7 @@ class HathorWallet extends EventEmitter {
    * @returns {Promise<boolean>}
    */
   async checkPinAndPassword(pin, password) {
-    return this.checkPin(pin) && this.checkPassword(password);
+    return await this.checkPin(pin) && await this.checkPassword(password);
   }
 }
 
