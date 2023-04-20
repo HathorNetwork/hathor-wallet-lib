@@ -714,13 +714,8 @@ export class Storage implements IStorage {
       throw new Error('Private key is not present on this wallet.');
     }
 
-    try {
-      // decryptData handles pin validation
-      return decryptData(accessData.mainKey, pinCode);
-    } catch(err: unknown) {
-      // FIXME: check error type to not hide crypto errors
-      throw new Error('Invalid PIN code.');
-    }
+    // decryptData handles pin validation
+    return decryptData(accessData.mainKey, pinCode);
   }
 
   /**
@@ -735,13 +730,8 @@ export class Storage implements IStorage {
       throw new Error('Private key is not present on this wallet.');
     }
 
-    try {
-      // decryptData handles pin validation
-      return decryptData(accessData.acctPathKey, pinCode);
-    } catch(err: unknown) {
-      // FIXME: check error type to not hide crypto errors
-      throw new Error('Invalid PIN code.');
-    }
+    // decryptData handles pin validation
+    return decryptData(accessData.acctPathKey, pinCode);
   }
 
   /**
@@ -756,13 +746,8 @@ export class Storage implements IStorage {
       throw new Error('Private key is not present on this wallet.');
     }
 
-    try {
-      // decryptData handles pin validation
-      return decryptData(accessData.authKey, pinCode);
-    } catch(err: unknown) {
-      // FIXME: check error type to not hide crypto errors
-      throw new Error('Invalid PIN code.');
-    }
+    // decryptData handles pin validation
+    return decryptData(accessData.authKey, pinCode);
   }
 
   /**
@@ -802,28 +787,26 @@ export class Storage implements IStorage {
    */
   async changePin(oldPin: string, newPin: string): Promise<void> {
     const accessData = await this._getValidAccessData();
-    if (!(accessData.mainKey || accessData.authKey)) {
+    if (!(accessData.mainKey || accessData.authKey || accessData.acctPathKey)) {
       throw new Error('No data to change');
     }
 
     if (accessData.mainKey) {
-      try {
-        const mainKey = decryptData(accessData.mainKey, oldPin);
-        const newEncryptedMainKey = encryptData(mainKey, newPin);
-        accessData.mainKey = newEncryptedMainKey;
-      } catch(err: unknown) {
-        throw new Error('Old pin is incorrect.');
-      }
+      const mainKey = decryptData(accessData.mainKey, oldPin);
+      const newEncryptedMainKey = encryptData(mainKey, newPin);
+      accessData.mainKey = newEncryptedMainKey;
     }
 
     if (accessData.authKey) {
-      try {
-        const authKey = decryptData(accessData.authKey, oldPin);
-        const newEncryptedAuthKey = encryptData(authKey, newPin);
-        accessData.authKey = newEncryptedAuthKey;
-      } catch(err: unknown) {
-        throw new Error('Old pin is incorrect.');
-      }
+      const authKey = decryptData(accessData.authKey, oldPin);
+      const newEncryptedAuthKey = encryptData(authKey, newPin);
+      accessData.authKey = newEncryptedAuthKey;
+    }
+
+    if (accessData.acctPathKey) {
+      const acctKey = decryptData(accessData.acctPathKey, oldPin);
+      const newEncryptedAcctKey = encryptData(acctKey, newPin);
+      accessData.acctPathKey = newEncryptedAcctKey;
     }
 
     // Save the changes made
@@ -843,13 +826,9 @@ export class Storage implements IStorage {
       throw new Error('No data to change.');
     }
 
-    try {
-      const words = decryptData(accessData.words, oldPassword);
-      const newEncryptedWords = encryptData(words, newPassword);
-      accessData.words = newEncryptedWords;
-    } catch(err: unknown) {
-      throw new Error('Old pin is incorrect.');
-    }
+    const words = decryptData(accessData.words, oldPassword);
+    const newEncryptedWords = encryptData(words, newPassword);
+    accessData.words = newEncryptedWords;
 
     // Save the changes made
     await this.saveAccessData(accessData);

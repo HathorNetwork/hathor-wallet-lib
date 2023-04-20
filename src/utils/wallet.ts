@@ -448,7 +448,7 @@ const wallet = {
 
     const argXpriv = new HDPrivateKey(xprivkey);
     let xpriv: HDPrivateKey;
-    let acctXpriv: HDPrivateKey|null = null;
+    let acctXpriv: HDPrivateKey | null = null;
     if (argXpriv.depth === 0) {
       if (walletType === WalletType.MULTISIG) {
         acctXpriv = argXpriv.deriveNonCompliantChild(P2SH_ACCT_PATH);
