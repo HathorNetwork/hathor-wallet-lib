@@ -31,7 +31,7 @@ import {
 import transactionUtils from '../utils/transaction';
 import { processHistory, processUtxoUnlock } from '../utils/storage';
 import config, { Config } from '../config';
-import { decryptData, encryptData } from '../utils/crypto';
+import { decryptData, encryptData, validateHash } from '../utils/crypto';
 import FullNodeConnection from '../new/connection';
 import { getAddressType } from '../utils/address';
 import { HATHOR_TOKEN_CONFIG, MAX_INPUTS, MAX_OUTPUTS, TOKEN_DEPOSIT_PERCENTAGE } from '../constants';
@@ -777,6 +777,36 @@ export class Storage implements IStorage {
    */
   async cleanStorage(cleanHistory: boolean = false, cleanAddresses: boolean = false): Promise<void> {
     return this.store.cleanStorage(cleanHistory, cleanAddresses);
+  }
+
+  async checkPin(pinCode: string): Promise<boolean> {
+    const accessData = await this._getValidAccessData();
+    if (!accessData.mainKey) {
+      throw new Error('Cannot check pin without the private key.');
+    }
+
+    const data = accessData.mainKey;
+    const options = {
+      salt: data.salt,
+      iterations: data.iterations,
+      pbkdf2Hasher: data.pbkdf2Hasher,
+    };
+    return validateHash(pinCode, data.hash, options);
+  }
+
+  async checkPassword(pinCode: string): Promise<boolean> {
+    const accessData = await this._getValidAccessData();
+    if (!accessData.words) {
+      throw new Error('Cannot check password without the words.');
+    }
+
+    const data = accessData.words;
+    const options = {
+      salt: data.salt,
+      iterations: data.iterations,
+      pbkdf2Hasher: data.pbkdf2Hasher,
+    };
+    return validateHash(pinCode, data.hash, options);
   }
 
   /**
