@@ -9,6 +9,7 @@ import walletApi from '../../src/api/wallet';
 import { MemoryStore, Storage, LevelDBStore } from '../../src/storage';
 import tx_history from '../__fixtures__/tx_history';
 import { processHistory, loadAddresses } from '../../src/utils/storage';
+import walletUtils from '../../src/utils/wallet';
 import { P2PKH_ACCT_PATH, TOKEN_DEPOSIT_PERCENTAGE, TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../../src/constants';
 import { HDPrivateKey, crypto } from "bitcore-lib";
 import Mnemonic from 'bitcore-mnemonic';
@@ -637,4 +638,71 @@ test('change pin and password', async () => {
   expect(() => cryptoUtils.decryptData(accessData.mainKey, '321')).not.toThrow();
   expect(() => cryptoUtils.decryptData(accessData.authKey, '321')).not.toThrow();
   expect(() => cryptoUtils.decryptData(accessData.acctPathKey, '321')).not.toThrow();
+});
+
+describe('checkPin and checkPassword', () => {
+  const PINCODE = '1234'
+  const PASSWD = 'passwd'
+
+  it('should work with memory store', async () => {
+    const seed = walletUtils.generateWalletWords();
+    const accessData = walletUtils.generateAccessDataFromSeed(
+      seed,
+      {
+        pin: PINCODE,
+        password: PASSWD,
+        networkName: 'testnet',
+      },
+    );
+    const store = new MemoryStore();
+    await store.saveAccessData(accessData);
+    await checkPinTest(store);
+    await checkPasswdTest(store);
+  });
+
+  it('should work with leveldb store', async () => {
+    const seed = walletUtils.generateWalletWords();
+    const accessData = walletUtils.generateAccessDataFromSeed(
+      seed,
+      {
+        pin: PINCODE,
+        password: PASSWD,
+        networkName: 'testnet',
+      },
+    );
+    const store = new LevelDBStore(DATA_DIR, accessData.xpubkey);
+    await store.saveAccessData(accessData);
+    await checkPinTest(store);
+    await checkPasswdTest(store);
+  });
+
+  async function checkPinTest(store) {
+    const storage = new Storage(store);
+    await expect(storage.checkPin(PINCODE)).resolves.toEqual(true);
+    await expect(storage.checkPin('0000')).resolves.toEqual(false);
+
+    // No access data should throw
+    jest.spyOn(storage, 'getAccessData')
+      .mockReturnValue(Promise.resolve({foo: 'bar'}));
+    await expect(storage.checkPin('0000')).rejects.toThrow();
+
+    jest.spyOn(storage, '_getValidAccessData')
+      .mockReturnValue(Promise.resolve({}));
+    await expect(storage.checkPin('0000')).rejects.toThrow();
+  }
+
+  async function checkPasswdTest(store) {
+    const storage = new Storage(store);
+    await expect(storage.checkPassword(PASSWD)).resolves.toEqual(true);
+    await expect(storage.checkPassword('0000')).resolves.toEqual(false);
+
+    // No access data should throw
+    jest.spyOn(storage, 'getAccessData')
+      .mockReturnValue(Promise.resolve({foo: 'bar'}));
+    await expect(storage.checkPassword('0000')).rejects.toThrow();
+
+    jest.spyOn(storage, '_getValidAccessData')
+      .mockReturnValue(Promise.resolve({}));
+    await expect(storage.checkPassword('0000')).rejects.toThrow();
+  }
 });
