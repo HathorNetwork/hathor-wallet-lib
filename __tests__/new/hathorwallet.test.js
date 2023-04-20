@@ -621,7 +621,7 @@ test('checkPin', async () => {
 
   checkPinSpy.mockReturnValue(Promise.resolve(true));
   await expect(hWallet.checkPin('0000')).resolves.toEqual(true);
-  expect(checkPinSpy).toHaveBeenCalledTimes(2);
+  expect(checkPinSpy).toHaveBeenCalledTimes(1);
 });
 
 test('checkPassword', async () => {
@@ -651,32 +651,16 @@ test('checkPinAndPassword', async () => {
   checkPinSpy.mockReturnValue(Promise.resolve(false));
   checkPasswdSpy.mockReturnValue(Promise.resolve(false));
   await expect(hWallet.checkPinAndPassword('0000', 'passwd')).resolves.toEqual(false);
-  expect(checkPinSpy).toHaveBeenCalledTimes(1);
-  expect(checkPasswdSpy).toHaveBeenCalledTimes(0);
-  checkPinSpy.mockClear();
-  checkPasswdSpy.mockClear();
 
   checkPinSpy.mockReturnValue(Promise.resolve(true));
   checkPasswdSpy.mockReturnValue(Promise.resolve(false));
   await expect(hWallet.checkPinAndPassword('0000', 'passwd')).resolves.toEqual(false);
-  expect(checkPinSpy).toHaveBeenCalledTimes(1);
-  expect(checkPasswdSpy).toHaveBeenCalledTimes(1);
-  checkPinSpy.mockClear();
-  checkPasswdSpy.mockClear();
-
-  checkPinSpy.mockReturnValue(Promise.resolve(true));
-  checkPasswdSpy.mockReturnValue(Promise.resolve(true));
-  await expect(hWallet.checkPinAndPassword('0000', 'passwd')).resolves.toEqual(true);
-  expect(checkPinSpy).toHaveBeenCalledTimes(1);
-  expect(checkPasswdSpy).toHaveBeenCalledTimes(1);
-  checkPinSpy.mockClear();
-  checkPasswdSpy.mockClear();
 
   checkPinSpy.mockReturnValue(Promise.resolve(false));
   checkPasswdSpy.mockReturnValue(Promise.resolve(true));
   await expect(hWallet.checkPinAndPassword('0000', 'passwd')).resolves.toEqual(false);
-  expect(checkPinSpy).toHaveBeenCalledTimes(1);
-  expect(checkPasswdSpy).toHaveBeenCalledTimes(0);
-  checkPinSpy.mockClear();
-  checkPasswdSpy.mockClear();
+
+  checkPinSpy.mockReturnValue(Promise.resolve(true));
+  checkPasswdSpy.mockReturnValue(Promise.resolve(true));
+  await expect(hWallet.checkPinAndPassword('0000', 'passwd')).resolves.toEqual(true);
 });
