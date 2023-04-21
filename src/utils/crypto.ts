@@ -6,7 +6,7 @@
  */
 
 import CryptoJS from 'crypto-js';
-import { DecryptionError, InvalidPasswdError, UnsupportedHasherError } from 'src/errors';
+import { DecryptionError, InvalidPasswdError, UnsupportedHasherError } from '../errors';
 import { HASH_ITERATIONS, HASH_KEY_SIZE } from '../constants';
 import { IEncryptedData } from '../types';
 

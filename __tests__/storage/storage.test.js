@@ -464,7 +464,7 @@ describe('getAcctPathXpriv', () => {
     // It should fail if decryption is not possible
     decryptSpy.mockImplementation(() => { throw new Error('Boom!'); });
     accessDataSpy.mockReturnValue(Promise.resolve({ acctPathKey: 'encrypted-invalid-key' }));
-    await expect(storage.getAcctPathXPrivKey('pin')).rejects.toThrow('Invalid PIN code.');
+    await expect(storage.getAcctPathXPrivKey('pin')).rejects.toThrow('Boom!');
 
     // It should return the decrypted key if pin is correct
     decryptSpy.mockReturnValue('account-path-key');
