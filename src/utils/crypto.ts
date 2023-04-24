@@ -140,3 +140,19 @@ export function validateHash(
   const hash = hashData(dataToValidate, { salt, iterations, pbkdf2Hasher });
   return hash.hash === hashedData;
 }
+
+/**
+ * Check that the given password was used to encrypt the given data.
+ * @param {IEncryptedData} data The encrypted data.
+ * @param {string} password The password we want to check against the data.
+ *
+ * @returns {boolean}
+ */
+export function checkPassword(data: IEncryptedData, password: string): boolean {
+  const options = {
+    salt: data.salt,
+    iterations: data.iterations,
+    pbkdf2Hasher: data.pbkdf2Hasher,
+  };
+  return validateHash(password, data.hash, options);
+}

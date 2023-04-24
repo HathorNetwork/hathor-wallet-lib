@@ -31,7 +31,7 @@ import {
 import transactionUtils from '../utils/transaction';
 import { processHistory, processUtxoUnlock } from '../utils/storage';
 import config, { Config } from '../config';
-import { decryptData, encryptData, validateHash } from '../utils/crypto';
+import { decryptData, encryptData, checkPassword } from '../utils/crypto';
 import FullNodeConnection from '../new/connection';
 import { getAddressType } from '../utils/address';
 import { HATHOR_TOKEN_CONFIG, MAX_INPUTS, MAX_OUTPUTS, TOKEN_DEPOSIT_PERCENTAGE } from '../constants';
@@ -785,13 +785,7 @@ export class Storage implements IStorage {
       throw new Error('Cannot check pin without the private key.');
     }
 
-    const data = accessData.mainKey;
-    const options = {
-      salt: data.salt,
-      iterations: data.iterations,
-      pbkdf2Hasher: data.pbkdf2Hasher,
-    };
-    return validateHash(pinCode, data.hash, options);
+    return checkPassword(accessData.mainKey, pinCode);
   }
 
   async checkPassword(password: string): Promise<boolean> {
@@ -800,13 +794,7 @@ export class Storage implements IStorage {
       throw new Error('Cannot check password without the words.');
     }
 
-    const data = accessData.words;
-    const options = {
-      salt: data.salt,
-      iterations: data.iterations,
-      pbkdf2Hasher: data.pbkdf2Hasher,
-    };
-    return validateHash(password, data.hash, options);
+    return checkPassword(accessData.words, password);
   }
 
   /**
