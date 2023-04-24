@@ -111,7 +111,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   private indexToUse: number;
   // WalletService-ready connection class
   private conn: WalletServiceConnection;
-  // Flag to indicate if the wallet was already connected when the webscoket conn is established
+  // Flag to indicate if the wallet was already connected when the websocket conn is established
   private firstConnection: boolean;
   // Flag to indicate if the websocket connection is enabled
   private readonly _isWsEnabled: boolean;
@@ -885,13 +885,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async sendManyOutputsTransaction(outputs: Array<OutputRequestObj | DataScriptOutputRequestObj>, options: { inputs?: InputRequestObj[], changeAddress?: string } = {}): Promise<Transaction> {
+  async sendManyOutputsTransaction(outputs: Array<OutputRequestObj | DataScriptOutputRequestObj>, options: { inputs?: InputRequestObj[], changeAddress?: string, pinCode?: string } = {}): Promise<Transaction> {
     this.failIfWalletNotReady();
     const newOptions = Object.assign({
       inputs: [],
       changeAddress: null
     }, options);
-    const { inputs, changeAddress } = newOptions;
+    const { inputs, changeAddress, pinCode } = newOptions;
     const sendTransactionOutputs = outputs.map((output) => {
       let typedOutput = output as OutputSendTransaction;
       if (typedOutput.type === OutputType.DATA) {
@@ -903,7 +903,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
       return typedOutput;
     });
-    const sendTransaction = new SendTransactionWalletService(this, { outputs: sendTransactionOutputs, inputs, changeAddress });
+    const sendTransaction = new SendTransactionWalletService(this, { outputs: sendTransactionOutputs, inputs, changeAddress, pin: pinCode });
     return sendTransaction.run();
   }
 
@@ -913,15 +913,15 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async sendTransaction(address: string, value: number, options: { token?: string, changeAddress?: string } = {}): Promise<Transaction> {
+  async sendTransaction(address: string, value: number, options: { token?: string, changeAddress?: string, pinCode?: string } = {}): Promise<Transaction> {
     this.failIfWalletNotReady();
     const newOptions = Object.assign({
       token: '00',
       changeAddress: null
     }, options);
-    const { token, changeAddress } = newOptions;
+    const { token, changeAddress, pinCode } = newOptions;
     const outputs = [{ address, value, token }];
-    return this.sendManyOutputsTransaction(outputs, { inputs: [], changeAddress });
+    return this.sendManyOutputsTransaction(outputs, { inputs: [], changeAddress, pinCode });
   }
 
   /**
