@@ -38,6 +38,7 @@ const scriptsUtils = require('./lib/utils/scripts');
 const transactionUtils = require('./lib/utils/transaction');
 const bufferUtils = require('./lib/utils/buffer');
 const HathorWalletServiceWallet = require('./lib/wallet/wallet');
+const walletServiceApi = require('./lib/wallet/api/walletApi');
 const SendTransactionWalletService = require('./lib/wallet/sendTransactionWalletService');
 const config = require('./lib/config');
 const PushNotification = require('./lib/pushNotification');
@@ -91,6 +92,7 @@ module.exports = {
   bufferUtils,
   transactionUtils: transactionUtils.default,
   HathorWalletServiceWallet: HathorWalletServiceWallet.default,
+  walletServiceApi: walletServiceApi.default,
   SendTransactionWalletService: SendTransactionWalletService.default,
   config: config.default,
   PushNotification,
