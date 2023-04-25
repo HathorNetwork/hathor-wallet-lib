@@ -592,12 +592,13 @@ const wallet = {
    * Change the encryption pin on the fields that are encrypted using the pin.
    * Will not save the access data, only return the new access data.
    *
-   * @param {IWalletAccessData} data The current access data encrypted with `oldPin`.
+   * @param {IWalletAccessData} accessData The current access data encrypted with `oldPin`.
    * @param {string} oldPin Used to decrypt the old access data.
    * @param {string} newPin Encrypt the fields with this pin.
    * @returns {IWalletAccessData} The access data with fields encrypted with `newPin`.
    */
-  changeEncryptionPin(data: IWalletAccessData, oldPin: string, newPin: string): IWalletAccessData {
+  changeEncryptionPin(accessData: IWalletAccessData, oldPin: string, newPin: string): IWalletAccessData {
+    const data = _.cloneDeep(accessData);
     if (!(data.mainKey || data.authKey)) {
       throw new Error('No data to change');
     }
@@ -629,12 +630,13 @@ const wallet = {
    * Change the encryption pin on the fields that are encrypted using the pin.
    * Will not save the access data, only return the new access data.
    *
-   * @param {IWalletAccessData} data The current access data encrypted with `oldPin`.
+   * @param {IWalletAccessData} accessData The current access data encrypted with `oldPin`.
    * @param {string} oldPassword Used to decrypt the old access data.
    * @param {string} newPassword Encrypt the fields with this pin.
    * @returns {IWalletAccessData} The access data with fields encrypted with `newPin`.
    */
-  changeEncryptionPassword(data: IWalletAccessData, oldPassword: string, newPassword: string): IWalletAccessData {
+  changeEncryptionPassword(accessData: IWalletAccessData, oldPassword: string, newPassword: string): IWalletAccessData {
+    const data = _.cloneDeep(accessData);
     if (!data.words) {
       throw new Error('No data to change');
     }
@@ -642,7 +644,7 @@ const wallet = {
     try {
       const words = decryptData(data.words, oldPassword);
       const newEncryptedWords = encryptData(words, newPassword);
-      data.mainKey = newEncryptedWords;
+      data.words = newEncryptedWords;
     } catch(err: unknown) {
       throw new Error('Old password is incorrect.');
     }
