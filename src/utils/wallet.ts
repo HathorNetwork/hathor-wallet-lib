@@ -15,8 +15,8 @@ import Network from '../models/network';
 import _ from 'lodash';
 import helpers from './helpers';
 
-import { IMultisigData, IWalletAccessData, WalletType, WALLET_FLAGS } from '../types';
-import { encryptData } from './crypto';
+import { IEncryptedData, IMultisigData, IWalletAccessData, WalletType, WALLET_FLAGS } from '../types';
+import { encryptData, decryptData } from './crypto';
 
 
 const wallet = {
@@ -586,6 +586,68 @@ const wallet = {
       words: encryptedWords,
       walletFlags: 0,
     };
+  },
+
+  /**
+   * Change the encryption pin on the fields that are encrypted using the pin.
+   * Will not save the access data, only return the new access data.
+   *
+   * @param {IWalletAccessData} data The current access data encrypted with `oldPin`.
+   * @param {string} oldPin Used to decrypt the old access data.
+   * @param {string} newPin Encrypt the fields with this pin.
+   * @returns {IWalletAccessData} The access data with fields encrypted with `newPin`.
+   */
+  changeEncryptionPin(data: IWalletAccessData, oldPin: string, newPin: string): IWalletAccessData {
+    if (!(data.mainKey || data.authKey)) {
+      throw new Error('No data to change');
+    }
+
+    if (data.mainKey) {
+      try {
+        const mainKey = decryptData(data.mainKey, oldPin);
+        const newEncryptedMainKey = encryptData(mainKey, newPin);
+        data.mainKey = newEncryptedMainKey;
+      } catch(err: unknown) {
+        throw new Error('Old pin is incorrect.');
+      }
+    }
+
+    if (data.authKey) {
+      try {
+        const authKey = decryptData(data.authKey, oldPin);
+        const newEncryptedAuthKey = encryptData(authKey, newPin);
+        data.authKey = newEncryptedAuthKey;
+      } catch(err: unknown) {
+        throw new Error('Old pin is incorrect.');
+      }
+    }
+
+    return data;
+  },
+
+  /**
+   * Change the encryption pin on the fields that are encrypted using the pin.
+   * Will not save the access data, only return the new access data.
+   *
+   * @param {IWalletAccessData} data The current access data encrypted with `oldPin`.
+   * @param {string} oldPassword Used to decrypt the old access data.
+   * @param {string} newPassword Encrypt the fields with this pin.
+   * @returns {IWalletAccessData} The access data with fields encrypted with `newPin`.
+   */
+  changeEncryptionPassword(data: IWalletAccessData, oldPassword: string, newPassword: string): IWalletAccessData {
+    if (!data.words) {
+      throw new Error('No data to change');
+    }
+
+    try {
+      const words = decryptData(data.words, oldPassword);
+      const newEncryptedWords = encryptData(words, newPassword);
+      data.mainKey = newEncryptedWords;
+    } catch(err: unknown) {
+      throw new Error('Old password is incorrect.');
+    }
+
+    return data;
   },
 }
 
