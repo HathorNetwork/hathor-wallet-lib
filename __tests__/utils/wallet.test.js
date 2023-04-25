@@ -563,6 +563,9 @@ test('change pin and password', async () => {
   expect(checkPassword(accessData.mainKey, '123')).toEqual(true);
   expect(checkPassword(accessData.authKey, '123')).toEqual(true);
 
+  expect(() => wallet.changeEncryptionPin(accessData, 'invalid-pin', '321')).toThrow('Old pin is incorrect.');
+  expect(() => wallet.changeEncryptionPassword(accessData, 'invalid-passwd', '456')).toThrow('Old password is incorrect.');
+
   const pinChangedAccessData = wallet.changeEncryptionPin(accessData, '123', '321');
   expect(checkPassword(pinChangedAccessData.words, '456')).toEqual(true);
   expect(checkPassword(pinChangedAccessData.mainKey, '321')).toEqual(true);
