@@ -780,6 +780,14 @@ export class Storage implements IStorage {
     return this.store.cleanStorage(cleanHistory, cleanAddresses);
   }
 
+  /**
+   * Check if the pin is correct
+   *
+   * @param {string} pinCode - Pin to check
+   * @returns {Promise<boolean>}
+   * @throws {Error} if the wallet is not initialized
+   * @throws {Error} if the wallet does not have the private key
+   */
   async checkPin(pinCode: string): Promise<boolean> {
     const accessData = await this._getValidAccessData();
     if (!accessData.mainKey) {
@@ -789,6 +797,14 @@ export class Storage implements IStorage {
     return checkPassword(accessData.mainKey, pinCode);
   }
 
+  /**
+   * Check if the password is correct
+   *
+   * @param {string} password - Password to check
+   * @returns {Promise<boolean>}
+   * @throws {Error} if the wallet is not initialized
+   * @throws {Error} if the wallet does not have the private key
+   */
   async checkPassword(password: string): Promise<boolean> {
     const accessData = await this._getValidAccessData();
     if (!accessData.words) {

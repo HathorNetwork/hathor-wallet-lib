@@ -10,7 +10,7 @@ import { XPubError, InvalidWords, UncompressedPubKeyError } from '../../src/erro
 import Network from '../../src/models/network';
 import Mnemonic from 'bitcore-mnemonic';
 import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE, P2SH_ACCT_PATH } from '../../src/constants';
-import { util, Address, HDPrivateKey, HDPublicKey } from 'bitcore-lib';
+import { util, HDPrivateKey, HDPublicKey } from 'bitcore-lib';
 import { hexToBuffer } from '../../src/utils/buffer';
 import { WalletType, WALLET_FLAGS } from '../../src/types';
 import { checkPassword } from '../../src/utils/crypto';
@@ -561,16 +561,20 @@ test('change pin and password', async () => {
   // Check the pin and password were used correctly
   expect(checkPassword(accessData.words, '456')).toEqual(true);
   expect(checkPassword(accessData.mainKey, '123')).toEqual(true);
+  expect(checkPassword(accessData.authKey, '123')).toEqual(true);
 
   const pinChangedAccessData = wallet.changeEncryptionPin(accessData, '123', '321');
   expect(checkPassword(pinChangedAccessData.words, '456')).toEqual(true);
   expect(checkPassword(pinChangedAccessData.mainKey, '321')).toEqual(true);
+  expect(checkPassword(pinChangedAccessData.authKey, '321')).toEqual(true);
 
   const passwdChangedAccessData = wallet.changeEncryptionPassword(accessData, '456', '654');
   expect(checkPassword(passwdChangedAccessData.words, '654')).toEqual(true);
   expect(checkPassword(passwdChangedAccessData.mainKey, '123')).toEqual(true);
+  expect(checkPassword(passwdChangedAccessData.authKey, '123')).toEqual(true);
 
   const bothChangedAccessData = wallet.changeEncryptionPassword(pinChangedAccessData, '456', '654');
   expect(checkPassword(bothChangedAccessData.words, '654')).toEqual(true);
   expect(checkPassword(bothChangedAccessData.mainKey, '321')).toEqual(true);
+  expect(checkPassword(bothChangedAccessData.authKey, '321')).toEqual(true);
 })

@@ -7,7 +7,7 @@
 
 import CryptoJS from 'crypto-js';
 import { DecryptionError, InvalidPasswdError } from '../../src/errors';
-import { hashData, validateHash, encryptData, decryptData } from '../../src/utils/crypto';
+import { hashData, validateHash, encryptData, decryptData, checkPassword } from '../../src/utils/crypto';
 
 test('validateHash', () => {
   const data = 'a-valid-data';
@@ -62,4 +62,14 @@ test('encryption test', () => {
     pbkdf2Hasher: encrypted.pbkdf2Hasher,
   };
   expect(() => { decryptData(invalidData, passwd) }).toThrowError(DecryptionError);
+});
+
+test('check password', () => {
+  const data = 'a-valid-data';
+  const passwd = 'a-valid-passwd';
+  const invalidPasswd = 'an-invalid-passwd';
+  const encrypted = encryptData(data, passwd);
+
+  expect(checkPassword(encrypted, passwd)).toEqual(true)
+  expect(checkPassword(encrypted, invalidPasswd)).toEqual(false)
 });
