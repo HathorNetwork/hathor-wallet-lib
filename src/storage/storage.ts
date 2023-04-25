@@ -726,7 +726,7 @@ export class Storage implements IStorage {
    */
   async getAcctPathXPrivKey(pinCode: string): Promise<string> {
     const accessData = await this._getValidAccessData();
-    if (accessData.acctPathKey === undefined) {
+    if (!accessData.acctPathKey) {
       throw new Error('Private key is not present on this wallet.');
     }
 

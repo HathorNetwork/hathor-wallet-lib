@@ -488,8 +488,8 @@ const wallet = {
 
     if (acctXpriv !== null) {
       // Account path key will only be available if the provided key is a root key
-      const encryptedAuthPathKey = encryptData(acctXpriv.xprivkey, pin);
-      accessData.acctPathKey = encryptedAuthPathKey;
+      const encryptedAcctPathKey = encryptData(acctXpriv.xprivkey, pin);
+      accessData.acctPathKey = encryptedAcctPathKey;
     }
 
     return accessData;
