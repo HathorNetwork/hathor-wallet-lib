@@ -9,17 +9,30 @@ import walletApi from '../../src/api/wallet';
 import { MemoryStore, Storage, LevelDBStore } from '../../src/storage';
 import tx_history from '../__fixtures__/tx_history';
 import { processHistory } from '../../src/utils/storage';
-import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK } from '../../src/constants';
+import { TOKEN_AUTHORITY_MASK, TOKEN_DEPOSIT_PERCENTAGE, TOKEN_MINT_MASK } from '../../src/constants';
 import { HDPrivateKey } from "bitcore-lib";
 
 const DATA_DIR = './testdata.leveldb';
 
-test('config version', () => {
-  const store = new MemoryStore();
-  const storage = new Storage(store);
-  const version = {foo: 'bar'};
-  storage.setApiVersion(version);
-  expect(storage.version).toBe(version);
+describe('config version', () => {
+  it('should set api version', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    const version = {foo: 'bar'};
+    storage.setApiVersion(version);
+    expect(storage.version).toBe(version);
+  });
+
+  it('should get deposit from version', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    expect(storage.getTokenDepositPercentage()).toEqual(TOKEN_DEPOSIT_PERCENTAGE);
+    const version = {token_deposit_percentage: 0.5}; // 50%
+    storage.setApiVersion(version);
+    expect(storage.getTokenDepositPercentage()).toEqual(0.5);
+    storage.setApiVersion(null);
+    expect(storage.getTokenDepositPercentage()).toEqual(TOKEN_DEPOSIT_PERCENTAGE);
+  });
 });
 
 test('store fetch methods', async () => {

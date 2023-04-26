@@ -514,6 +514,16 @@ export class MemoryStore implements IStore {
   }
 
   /**
+   * Return if a token uid is registered or not.
+   *
+   * @param {string} tokenUid - Token id
+   * @returns {Promise<boolean>}
+   */
+  async isTokenRegistered(tokenUid: string): Promise<boolean> {
+    return this.registeredTokens.has(tokenUid);
+  }
+
+  /**
    * Edit token metadata on storage.
    * @param {string} tokenUid Token id to edit
    * @param {Partial<ITokenMetadata>} meta Metadata to save

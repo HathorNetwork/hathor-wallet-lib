@@ -202,6 +202,10 @@ export default class LevelDBStore implements IStore {
     await this.tokenIndex.unregisterToken(tokenUid);
   }
 
+  async isTokenRegistered(tokenUid: string): Promise<boolean> {
+    return this.tokenIndex.isTokenRegistered(tokenUid);
+  }
+
   async editTokenMeta(tokenUid: string, meta: ITokenMetadata): Promise<void> {
     await this.tokenIndex.editTokenMeta(tokenUid, meta);
   }

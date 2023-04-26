@@ -298,6 +298,7 @@ export interface IStore {
   saveToken(tokenConfig: ITokenData, meta?: ITokenMetadata): Promise<void>;
   registerToken(token: ITokenData): Promise<void>;
   unregisterToken(tokenUid: string): Promise<void>;
+  isTokenRegistered(tokenUid: string): Promise<boolean>;
   editTokenMeta(tokenUid: string, meta: ITokenMetadata): Promise<void>;
 
   // UTXOs methods
@@ -354,6 +355,7 @@ export interface IStorage {
   processHistory(): Promise<void>;
 
   // Tokens
+  isTokenRegistered(tokenUid: string): Promise<boolean>;
   registerToken(token: ITokenData): Promise<void>;
   unregisterToken(tokenUid: string): Promise<void>;
   getToken(uid: string): Promise<(ITokenData & Partial<ITokenMetadata>) | null>;
@@ -448,6 +450,7 @@ export interface IKVTokenIndex extends IKVStoreIndex<void> {
   saveMetadata(uid: string, meta: ITokenMetadata): Promise<void>;
   registerToken(token: ITokenData): Promise<void>;
   unregisterToken(tokenUid: string): Promise<void>;
+  isTokenRegistered(tokenUid: string): Promise<boolean>;
   deleteTokens(tokens: string[]): Promise<void>;
   editTokenMeta(tokenUid: string, meta: Partial<ITokenMetadata>): Promise<void>;
   clearMeta(): Promise<void>;
