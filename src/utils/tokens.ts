@@ -9,14 +9,95 @@
 import { CREATE_TOKEN_TX_VERSION, HATHOR_TOKEN_CONFIG, TOKEN_DEPOSIT_PERCENTAGE, TOKEN_MELT_MASK, TOKEN_MINT_MASK, TOKEN_INDEX_MASK } from '../constants';
 import helpers from './helpers';
 import buffer from 'buffer';
-import { IDataInput, IDataOutput, IDataTx, IHistoryOutput, IStorage } from '../types';
+import { IDataInput, IDataOutput, IDataTx, IStorage, ITokenData } from '../types';
 import { getAddressType } from './address';
-import { InsufficientFundsError } from '../errors';
-
-type configStringType = {uid: string, name: string, symbol: string}
+import { InsufficientFundsError, TokenValidationError } from '../errors';
+import walletApi from '../api/wallet';
 
 
 const tokens = {
+
+  /**
+   * Validate the configuration string and if we should register the token in it.
+   *
+   * @param {IStorage} storage To check if we have a similarly named token in storage.
+   * @param {string} config Configuration string to check
+   * @param {string | undefined} uid Check that the configuration string matches this uid.
+   * @returns {Promise<ITokenData>}
+   */
+  async validateTokenToAddByConfigurationString(storage: IStorage, config: string, uid?: string): Promise<ITokenData> {
+    const tokenData = this.getTokenFromConfigurationString(config);
+    if (!tokenData) {
+      throw new Error('Invalid configuration string');
+    }
+    if (uid && tokenData.uid !== uid) {
+      throw new Error(`Configuration string uid does not match: ${uid} != ${tokenData.uid}`)
+    }
+
+    await this.validadateTokenToAddByData(storage, tokenData);
+    return tokenData;
+  },
+
+  /**
+   * Validate the token data and if we should register the token in it.
+   *
+   * - Check if the token is already registered.
+   * - Check if we have a token in storage with the same name or symbol.
+   * - Check the uid with the fullnode and fail if the name or symbol does not match.
+   *
+   * @param storage - to check if we have a similarly named token in storage.
+   * @param tokenData - Token data to check.
+   * @returns {Promise<void>}
+   */
+  async validadateTokenToAddByData(storage: IStorage, tokenData: ITokenData): Promise<void> {
+    if (await storage.isTokenRegistered(tokenData.uid)) {
+      throw new TokenValidationError(`You already have this token: ${tokenData.uid} (${tokenData.name})`)
+    }
+
+    const isDuplicate = await this.checkDuplicateTokenInfo(storage, tokenData);
+    if (isDuplicate) {
+      throw new TokenValidationError(`You already have a token with this ${isDuplicate.key}: ${isDuplicate.token.uid} - ${isDuplicate.token.name} (${isDuplicate.token.symbol})`);
+    }
+
+    // Validate if name and symbol match with the token info in the DAG
+    const response = await new Promise<any>((resolve) => {
+      return walletApi.getGeneralTokenInfo(tokenData.uid, resolve);
+    });
+
+    if (!response.success) {
+      throw new TokenValidationError(response.message);
+    }
+
+    if (response.name !== tokenData.name) {
+      throw new TokenValidationError(`Token name does not match with the real one. Added: ${tokenData.name}. Real: ${response.name}`);
+    }
+    if (response.symbol !== tokenData.symbol) {
+      throw new TokenValidationError(`Token symbol does not match with the real one. Added: ${tokenData.symbol}. Real: ${response.symbol}`);
+    }
+  },
+
+  /**
+   * Check if we have a token with the same name or symbol in the storage.
+   *
+   * @param {IStorage} storage to retrieve the registered tokens.
+   * @param {ITokenData} tokenData token we are searching.
+   * @returns {Promise<null | { token: ITokenData, key: string }>}
+   */
+  async checkDuplicateTokenInfo(storage: IStorage, tokenData: ITokenData): Promise<null | { token: ITokenData, key: string }> {
+    const cleanName = helpers.cleanupString(tokenData.name);
+    const cleanSymbol = helpers.cleanupString(tokenData.symbol);
+    for await (const registeredToken of storage.getRegisteredTokens()) {
+      if (helpers.cleanupString(registeredToken.name) === cleanName) {
+        return { token: registeredToken, key: 'name' };
+      }
+      if (helpers.cleanupString(registeredToken.symbol) === cleanSymbol) {
+        return { token: registeredToken, key: 'name' };
+      }
+    }
+
+    return null;
+  },
+
   /**
    * Check if string is a valid configuration token string.
    *
@@ -67,7 +148,7 @@ const tokens = {
    * @inner
    *
    */
-  getTokenFromConfigurationString(config: string): configStringType | null {
+  getTokenFromConfigurationString(config: string): ITokenData | null {
     // First we validate that first char is [ and last one is ]
     if (!config || config[0] !== '[' || config[config.length - 1] !== ']') {
       return null;
@@ -103,7 +184,7 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  getTokenIndex(tokens: configStringType[], uid: string): number {
+  getTokenIndex(tokens: ITokenData[], uid: string): number {
     // If token is Hathor, index is always 0
     // Otherwise, it is always the array index + 1
     if (uid === HATHOR_TOKEN_CONFIG.uid) {

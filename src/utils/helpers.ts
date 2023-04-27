@@ -515,6 +515,17 @@ const helpers = {
       throw e;
     }
   },
+
+  /**
+   * Cleans a string for comparison. Remove multiple spaces, and spaces at the beginning and end, and transform to lowercase.
+   *
+   * @param {string} s String to be cleaned
+   * @return {string} String after clean
+   * @memberof Helpers
+   */
+  cleanupString(s: string): string {
+    return s.replace(/\s\s+/g, ' ').trim().toLowerCase();
+  },
 }
 
 export default helpers;
