@@ -1165,6 +1165,7 @@ class HathorWallet extends EventEmitter {
    * @param [options] Options parameters
    * @param {string} [options.changeAddress] address of the change output
    * @param {string} [options.token] token uid
+   * @param {string} [options.pinCode] pin to decrypt the private key
    *
    * @return {Promise<Transaction>} Promise that resolves when transaction is sent
    **/
@@ -1176,9 +1177,9 @@ class HathorWallet extends EventEmitter {
       token: '00',
       changeAddress: null
     }, options);
-    const { token, changeAddress } = newOptions;
+    const { token, changeAddress, pinCode } = newOptions;
     const outputs = [{ address, value, token }];
-    return this.sendManyOutputsTransaction(outputs, { inputs: [], changeAddress });
+    return this.sendManyOutputsTransaction(outputs, { inputs: [], changeAddress, pinCode });
   }
 
   /**
