@@ -630,10 +630,10 @@ const wallet = {
    * Change the encryption pin on the fields that are encrypted using the pin.
    * Will not save the access data, only return the new access data.
    *
-   * @param {IWalletAccessData} accessData The current access data encrypted with `oldPin`.
+   * @param {IWalletAccessData} accessData The current access data encrypted with `oldPassword`.
    * @param {string} oldPassword Used to decrypt the old access data.
    * @param {string} newPassword Encrypt the fields with this pin.
-   * @returns {IWalletAccessData} The access data with fields encrypted with `newPin`.
+   * @returns {IWalletAccessData} The access data with fields encrypted with `newPassword`.
    */
   changeEncryptionPassword(accessData: IWalletAccessData, oldPassword: string, newPassword: string): IWalletAccessData {
     const data = _.cloneDeep(accessData);
