@@ -20,21 +20,21 @@ const tokens = {
   /**
    * Validate the configuration string and if we should register the token in it.
    *
-   * @param {IStorage} storage To check if we have a similarly named token in storage.
    * @param {string} config Configuration string to check
+   * @param {IStorage | undefined} storage To check if we have a similarly named token in storage.
    * @param {string | undefined} uid Check that the configuration string matches this uid.
    * @returns {Promise<ITokenData>}
    */
-  async validateTokenToAddByConfigurationString(storage: IStorage, config: string, uid?: string): Promise<ITokenData> {
+  async validateTokenToAddByConfigurationString(config: string, storage?: IStorage, uid?: string): Promise<ITokenData> {
     const tokenData = this.getTokenFromConfigurationString(config);
     if (!tokenData) {
-      throw new Error('Invalid configuration string');
+      throw new TokenValidationError('Invalid configuration string');
     }
     if (uid && tokenData.uid !== uid) {
-      throw new Error(`Configuration string uid does not match: ${uid} != ${tokenData.uid}`)
+      throw new TokenValidationError(`Configuration string uid does not match: ${uid} != ${tokenData.uid}`)
     }
 
-    await this.validadateTokenToAddByData(storage, tokenData);
+    await this.validadateTokenToAddByData(tokenData, storage);
     return tokenData;
   },
 
@@ -45,18 +45,20 @@ const tokens = {
    * - Check if we have a token in storage with the same name or symbol.
    * - Check the uid with the fullnode and fail if the name or symbol does not match.
    *
-   * @param storage - to check if we have a similarly named token in storage.
-   * @param tokenData - Token data to check.
+   * @param {ITokenData} tokenData Token data to check.
+   * @param {IStorage | undefined} storage to check if we have a similarly named token in storage.
    * @returns {Promise<void>}
    */
-  async validadateTokenToAddByData(storage: IStorage, tokenData: ITokenData): Promise<void> {
-    if (await storage.isTokenRegistered(tokenData.uid)) {
-      throw new TokenValidationError(`You already have this token: ${tokenData.uid} (${tokenData.name})`)
-    }
+  async validadateTokenToAddByData(tokenData: ITokenData, storage?: IStorage): Promise<void> {
+    if (storage) {
+      if (await storage.isTokenRegistered(tokenData.uid)) {
+        throw new TokenValidationError(`You already have this token: ${tokenData.uid} (${tokenData.name})`)
+      }
 
-    const isDuplicate = await this.checkDuplicateTokenInfo(storage, tokenData);
-    if (isDuplicate) {
-      throw new TokenValidationError(`You already have a token with this ${isDuplicate.key}: ${isDuplicate.token.uid} - ${isDuplicate.token.name} (${isDuplicate.token.symbol})`);
+      const isDuplicate = await this.checkDuplicateTokenInfo(tokenData, storage);
+      if (isDuplicate) {
+        throw new TokenValidationError(`You already have a token with this ${isDuplicate.key}: ${isDuplicate.token.uid} - ${isDuplicate.token.name} (${isDuplicate.token.symbol})`);
+      }
     }
 
     // Validate if name and symbol match with the token info in the DAG
@@ -83,7 +85,7 @@ const tokens = {
    * @param {ITokenData} tokenData token we are searching.
    * @returns {Promise<null | { token: ITokenData, key: string }>}
    */
-  async checkDuplicateTokenInfo(storage: IStorage, tokenData: ITokenData): Promise<null | { token: ITokenData, key: string }> {
+  async checkDuplicateTokenInfo(tokenData: ITokenData, storage: IStorage): Promise<null | { token: ITokenData, key: string }> {
     const cleanName = helpers.cleanupString(tokenData.name);
     const cleanSymbol = helpers.cleanupString(tokenData.symbol);
     for await (const registeredToken of storage.getRegisteredTokens()) {
@@ -91,7 +93,7 @@ const tokens = {
         return { token: registeredToken, key: 'name' };
       }
       if (helpers.cleanupString(registeredToken.symbol) === cleanSymbol) {
-        return { token: registeredToken, key: 'name' };
+        return { token: registeredToken, key: 'symbol' };
       }
     }
 

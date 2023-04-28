@@ -389,6 +389,7 @@ export interface IStorage {
   getGapLimit(): Promise<number>;
   cleanStorage(cleanHistory?: boolean, cleanAddresses?: boolean): Promise<void>;
   handleStop(options: {connection?: FullNodeConnection, cleanStorage?: boolean, cleanAddresses?: boolean}): Promise<void>;
+  getTokenDepositPercentage(): number;
 }
 
 /**
