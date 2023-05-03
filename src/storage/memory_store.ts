@@ -800,7 +800,6 @@ export class MemoryStore implements IStore {
    * @returns {Promise<void>}
    */
   async cleanStorage(cleanHistory: boolean = false, cleanAddresses: boolean = false): Promise<void> {
-    this.accessData = null;
     if (cleanHistory) {
       this.tokens = new Map<string, ITokenData>();
       this.tokensMetadata = new Map<string, ITokenMetadata>();
