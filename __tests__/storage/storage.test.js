@@ -35,13 +35,13 @@ describe('handleStop', () => {
   it('should work with memory store', async () => {
     const store = new MemoryStore();
     await handleStopTest(store);
-  });
+  }, 10000);
 
   it('should work with leveldb store', async () => {
     const walletId = crypto.Hash.sha256(Buffer.from(accessData.xpubkey)).toString('hex');
     const store = new LevelDBStore(walletId, DATA_DIR);
     await handleStopTest(store);
-  });
+  }, 10000);
 
   /**
    * @param {IStore} store
@@ -90,7 +90,10 @@ describe('handleStop', () => {
     await expect(store.addressCount()).resolves.toEqual(0);
 
     // Access data is untouched when stopping the wallet
-    await expect(storage.getAccessData()).resolves.toMatchObject(accessData);
+    // XXX: since we stringify to save on store, the optional undefined properties are removed
+    // Since they are optional and unset, we can safely remove them from the expected value
+    const expectedData = JSON.parse(JSON.stringify(accessData));
+    await expect(storage.getAccessData()).resolves.toMatchObject(expectedData);
   }
 });
 

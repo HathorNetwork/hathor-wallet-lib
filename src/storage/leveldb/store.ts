@@ -152,10 +152,12 @@ export default class LevelDBStore implements IStore {
         }
       }
     }
-    if ((await this.walletIndex.getCurrentAddressIndex()) < maxIndex) {
-      await this.walletIndex.setCurrentAddressIndex(Math.min(maxIndex + 1, await this.walletIndex.getLastLoadedAddressIndex()));
+    if (maxIndex >= 0) {
+      if ((await this.walletIndex.getCurrentAddressIndex()) < maxIndex) {
+        await this.walletIndex.setCurrentAddressIndex(Math.min(maxIndex + 1, await this.walletIndex.getLastLoadedAddressIndex()));
+      }
+      await this.walletIndex.setLastUsedAddressIndex(maxIndex);
     }
-    await this.walletIndex.setLastUsedAddressIndex(maxIndex);
   }
 
   async getTx(txId: string): Promise<IHistoryTx | null> {
@@ -314,7 +316,7 @@ export default class LevelDBStore implements IStore {
     await this.walletIndex.setItem(key, value);
   }
 
-  async cleanStorage(cleanHistory?: boolean | undefined, cleanAddresses?: boolean | undefined): Promise<void> {
+  async cleanStorage(cleanHistory: boolean = false, cleanAddresses: boolean = false): Promise<void> {
     if (cleanHistory) {
       await this.tokenIndex.clear();
       await this.historyIndex.clear();
