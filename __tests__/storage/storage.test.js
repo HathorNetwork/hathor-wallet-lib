@@ -10,7 +10,7 @@ import { MemoryStore, Storage, LevelDBStore } from '../../src/storage';
 import tx_history from '../__fixtures__/tx_history';
 import { processHistory } from '../../src/utils/storage';
 import { P2PKH_ACCT_PATH, TOKEN_DEPOSIT_PERCENTAGE, TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../../src/constants';
-import { HDPrivateKey } from "bitcore-lib";
+import { HDPrivateKey, crypto } from "bitcore-lib";
 import Mnemonic from 'bitcore-mnemonic';
 import * as cryptoUtils from '../../src/utils/crypto';
 import walletUtils from '../../src/utils/wallet';
@@ -174,7 +174,7 @@ describe('process locked utxos', () => {
 
   it('should work with leveldb store', async () => {
     const xpriv = HDPrivateKey();
-    const walletId = crypto.Hash.sha256(xpriv.xpubkey).toString('hex');
+    const walletId = crypto.Hash.sha256(Buffer.from(xpriv.xpubkey)).toString('hex');
     const store = new LevelDBStore(walletId, DATA_DIR);
     await processLockedUtxoTest(store);
   });
@@ -417,7 +417,7 @@ describe('getChangeAddress', () => {
 
   it('should work with leveldb store', async () => {
     const xpriv = HDPrivateKey();
-    const walletId = crypto.Hash.sha256(xpriv.xpubkey).toString('hex');
+    const walletId = crypto.Hash.sha256(Buffer.from(xpriv.xpubkey)).toString('hex');
     const store = new LevelDBStore(walletId, DATA_DIR);
     await getChangeAddressTest(store);
   });

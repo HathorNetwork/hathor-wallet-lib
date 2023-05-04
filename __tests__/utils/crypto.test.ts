@@ -8,7 +8,6 @@
 import CryptoJS from 'crypto-js';
 import { DecryptionError, InvalidPasswdError } from '../../src/errors';
 import { hashData, validateHash, encryptData, decryptData } from '../../src/utils/crypto';
-import { crypto } from "bitcore-lib";
 
 test('validateHash', () => {
   const data = 'a-valid-data';

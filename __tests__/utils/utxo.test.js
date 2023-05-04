@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { HDPrivateKey } from "bitcore-lib";
+import { HDPrivateKey, crypto } from "bitcore-lib";
 import { LevelDBStore, MemoryStore, Storage } from "../../src/storage";
 import { bestUtxoSelection, fastUtxoSelection } from "../../src/utils/utxo";
 
@@ -118,7 +118,7 @@ describe('bestUtxoSelection', () => {
 
   test('bestUtxoSelection with indexeddb store', async () => {
     const xpriv = new HDPrivateKey();
-    const walletId = crypto.Hash.sha256(xpriv.xpubkey).toString('hex');
+    const walletId = crypto.Hash.sha256(Buffer.from(xpriv.xpubkey)).toString('hex');
     const store = new LevelDBStore(walletId, DATA_DIR);
     await testBestUtxoSelection(store);
   });
@@ -173,7 +173,7 @@ describe('bestUtxoSelection', () => {
 
   test('fastUtxoSelection with indexeddb store', async () => {
     const xpriv = new HDPrivateKey();
-    const walletId = crypto.Hash.sha256(xpriv.xpubkey).toString('hex');
+    const walletId = crypto.Hash.sha256(Buffer.from(xpriv.xpubkey)).toString('hex');
     const store = new LevelDBStore(walletId, DATA_DIR);
     await testFastUtxoSelection(store);
   });

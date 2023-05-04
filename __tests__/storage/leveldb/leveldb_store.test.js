@@ -25,7 +25,7 @@ const DATA_DIR = './testdata.leveldb';
 
 test('addresses methods', async () => {
   const xpriv = HDPrivateKey();
-  const walletId = crypto.Hash.sha256(xpriv.xpubkey).toString('hex');
+  const walletId = crypto.Hash.sha256(Buffer.from(xpriv.xpubkey)).toString('hex');
   const store = new LevelDBStore(walletId, DATA_DIR);
   const addrBatch = store.addressIndex.addressesDB.batch();
   addrBatch.put('a', { base58: 'a', bip32AddressIndex: 2 });
@@ -87,7 +87,7 @@ test('addresses methods', async () => {
 
 test('history methods', async () => {
   const xpriv = HDPrivateKey();
-  const walletId = crypto.Hash.sha256(xpriv.xpubkey).toString('hex');
+  const walletId = crypto.Hash.sha256(Buffer.from(xpriv.xpubkey)).toString('hex');
   const store = new LevelDBStore(walletId, DATA_DIR);
   await store.saveAddress({base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0});
   await store.saveAddress({base58: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp', bip32AddressIndex: 1});
@@ -173,7 +173,7 @@ test('history methods', async () => {
 
 test('token methods', async () => {
   const xpriv = HDPrivateKey();
-  const walletId = crypto.Hash.sha256(xpriv.xpubkey).toString('hex');
+  const walletId = crypto.Hash.sha256(Buffer.from(xpriv.xpubkey)).toString('hex');
   const store = new LevelDBStore(walletId, DATA_DIR);
 
   store.tokenIndex.saveToken(HATHOR_TOKEN_CONFIG);
@@ -244,7 +244,7 @@ test('utxo methods', async () => {
   const dateLocked = new Date('3000-03-01T12:00');
 
   const xpriv = HDPrivateKey();
-  const walletId = crypto.Hash.sha256(xpriv.xpubkey).toString('hex');
+  const walletId = crypto.Hash.sha256(Buffer.from(xpriv.xpubkey)).toString('hex');
   const store = new LevelDBStore(walletId, DATA_DIR);
   const utxos = [
     {
@@ -318,7 +318,7 @@ test('utxo methods', async () => {
 
 test('access data methods', async () => {
   const xpriv = HDPrivateKey();
-  const walletId = crypto.Hash.sha256(xpriv.xpubkey).toString('hex');
+  const walletId = crypto.Hash.sha256(Buffer.from(xpriv.xpubkey)).toString('hex');
   const store = new LevelDBStore(walletId, DATA_DIR);
 
   const encryptedMain = encryptData(xpriv.xprivkey, '123');

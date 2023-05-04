@@ -47,7 +47,7 @@ describe('LevelDB persistent store', () => {
     const DATA_DIR = './testdata.leveldb';
     const walletData = precalculationHelpers.test.getPrecalculatedWallet();
     const xpubkey = walletUtils.getXPubKeyFromSeed(walletData.words, { accountDerivationIndex: '0\'/0' });
-    const walletId = crypto.Hash.sha256(xpubkey).toString('hex');
+    const walletId = crypto.Hash.sha256(Buffer.from(xpubkey)).toString('hex');
     const store = new LevelDBStore(walletId, DATA_DIR);
     const storage = new Storage(store);
 
