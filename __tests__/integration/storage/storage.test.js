@@ -15,6 +15,7 @@ import SendTransaction from '../../../src/new/sendTransaction';
 import { LevelDBStore, MemoryStore, Storage } from '../../../src/storage';
 import walletUtils from '../../../src/utils/wallet';
 import { HATHOR_TOKEN_CONFIG } from '../../../src/constants';
+import { crypto } from "bitcore-lib";
 
 const startedWallets = [];
 

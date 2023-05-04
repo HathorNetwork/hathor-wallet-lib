@@ -8,6 +8,7 @@
 import { LevelDBStore, MemoryStore, Storage } from "../../src/storage";
 import { HDPrivateKey } from "bitcore-lib";
 import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK } from "../../src/constants";
+import { crypto } from "bitcore-lib";
 
 const DATA_DIR = './testdata.leveldb';
 

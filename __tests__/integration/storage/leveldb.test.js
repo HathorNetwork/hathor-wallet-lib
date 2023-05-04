@@ -18,6 +18,7 @@ import { LevelDBStore, Storage } from '../../../src/storage';
 import walletUtils from '../../../src/utils/wallet';
 import HathorWallet from '../../../src/new/wallet';
 import { loggers } from '../utils/logger.util';
+import { crypto } from "bitcore-lib";
 
 const startedWallets = [];
 
