@@ -71,7 +71,7 @@ describe('bestUtxoSelection', () => {
 
   /**
    * Should select the best utxos to use in a transaction
-   * @param {IStore} store 
+   * @param {IStore} store
    */
   async function testBestUtxoSelection(store) {
     await addUtxosToStore(store);
@@ -118,13 +118,14 @@ describe('bestUtxoSelection', () => {
 
   test('bestUtxoSelection with indexeddb store', async () => {
     const xpriv = new HDPrivateKey();
-    const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
+    const walletId = crypto.Hash.sha256(xpriv.xpubkey).toString('hex');
+    const store = new LevelDBStore(walletId, DATA_DIR);
     await testBestUtxoSelection(store);
   });
 
   /**
    * Should select the highest utxos until the amount is fulfilled
-   * @param {IStore} store 
+   * @param {IStore} store
    */
   async function testFastUtxoSelection(store) {
     await addUtxosToStore(store);
@@ -172,7 +173,8 @@ describe('bestUtxoSelection', () => {
 
   test('fastUtxoSelection with indexeddb store', async () => {
     const xpriv = new HDPrivateKey();
-    const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
+    const walletId = crypto.Hash.sha256(xpriv.xpubkey).toString('hex');
+    const store = new LevelDBStore(walletId, DATA_DIR);
     await testFastUtxoSelection(store);
   });
 });

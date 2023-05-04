@@ -33,7 +33,8 @@ describe("locked utxo methods", () => {
 
   it('should work with leveldb store', async () => {
     const xpriv = new HDPrivateKey();
-    const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
+    const walletId = crypto.Hash.sha256(xpriv.xpubkey).toString('hex');
+    const store = new LevelDBStore(walletId, DATA_DIR);
     await testLockedUtxoMethods(store);
   });
 

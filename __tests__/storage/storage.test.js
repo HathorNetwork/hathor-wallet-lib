@@ -174,7 +174,8 @@ describe('process locked utxos', () => {
 
   it('should work with leveldb store', async () => {
     const xpriv = HDPrivateKey();
-    const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
+    const walletId = crypto.Hash.sha256(xpriv.xpubkey).toString('hex');
+    const store = new LevelDBStore(walletId, DATA_DIR);
     await processLockedUtxoTest(store);
   });
 
@@ -416,7 +417,8 @@ describe('getChangeAddress', () => {
 
   it('should work with leveldb store', async () => {
     const xpriv = HDPrivateKey();
-    const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
+    const walletId = crypto.Hash.sha256(xpriv.xpubkey).toString('hex');
+    const store = new LevelDBStore(walletId, DATA_DIR);
     await getChangeAddressTest(store);
   });
 

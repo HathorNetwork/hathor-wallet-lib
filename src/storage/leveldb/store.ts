@@ -6,7 +6,6 @@
  */
 
 import { IAddressInfo, IAddressMetadata, IHistoryTx, ILockedUtxo, IStore, ITokenData, ITokenMetadata, IUtxo, IUtxoFilterOptions, IWalletAccessData, IWalletData } from '../../types';
-import { HDPublicKey } from 'bitcore-lib'
 import path from 'path';
 import LevelAddressIndex from './address_index';
 import LevelHistoryIndex from './history_index';
@@ -22,13 +21,9 @@ export default class LevelDBStore implements IStore {
   walletIndex: LevelWalletIndex;
   tokenIndex: LevelTokenIndex;
   dbpath: string;
-  xpubkey: string;
 
-  constructor(dbroot: string, xpubkey: string) {
-    // The xpubkey in the account or change path?
-    this.xpubkey = xpubkey;
-    const xpub = HDPublicKey.fromString(xpubkey);
-    const dbpath = path.join(dbroot, xpub.publicKey.toString());
+  constructor(dirpath: string, dbroot: string = 'hathor.data') {
+    const dbpath = path.join(dbroot, dirpath);
     this.addressIndex = new LevelAddressIndex(dbpath);
     this.historyIndex = new LevelHistoryIndex(dbpath);
     this.utxoIndex = new LevelUtxoIndex(dbpath);
@@ -268,9 +263,6 @@ export default class LevelDBStore implements IStore {
   // Wallet
 
   async saveAccessData(data: IWalletAccessData): Promise<void> {
-    if (this.xpubkey !== data.xpubkey) {
-      throw new Error('Invalid access data: xpubkey used to initiate the store does not match access data being saved');
-    }
     await this.walletIndex.saveAccessData(data);
   }
 
