@@ -8,7 +8,7 @@
 import walletApi from '../../src/api/wallet';
 import { MemoryStore, Storage, LevelDBStore } from '../../src/storage';
 import tx_history from '../__fixtures__/tx_history';
-import { processHistory } from '../../src/utils/storage';
+import { processHistory, loadAddresses } from '../../src/utils/storage';
 import { P2PKH_ACCT_PATH, TOKEN_DEPOSIT_PERCENTAGE, TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../../src/constants';
 import { HDPrivateKey, crypto } from "bitcore-lib";
 import Mnemonic from 'bitcore-mnemonic';
@@ -18,6 +18,81 @@ import { InvalidPasswdError } from '../../src/errors';
 import Network from '../../src/models/network';
 
 const DATA_DIR = './testdata.leveldb';
+
+describe('handleStop', () => {
+  const PIN = '0000';
+  const PASSWD = '0000';
+  const seed = walletUtils.generateWalletWords();
+  const accessData = walletUtils.generateAccessDataFromSeed(
+    seed,
+    {
+      pin: PIN,
+      password: PASSWD,
+      networkName: 'testnet',
+    },
+  );
+
+  it('should work with memory store', async () => {
+    const store = new MemoryStore();
+    await handleStopTest(store);
+  });
+
+  it('should work with leveldb store', async () => {
+    const walletId = crypto.Hash.sha256(Buffer.from(accessData.xpubkey)).toString('hex');
+    const store = new LevelDBStore(walletId, DATA_DIR);
+    await handleStopTest(store);
+  });
+
+  /**
+   * @param {IStore} store
+   */
+  async function handleStopTest(store) {
+    const storage = new Storage(store);
+    await storage.saveAccessData(accessData);
+    await loadAddresses(0, 20, storage);
+    await storage.addTx({
+      tx_id: 'a-new-tx',
+      timestamp: 123,
+      inputs: [],
+      outputs: [],
+    });
+    // We have 1 transaction
+    await expect(store.historyCount()).resolves.toEqual(1);
+    // And 20 addresses
+    await expect(store.addressCount()).resolves.toEqual(20);
+
+    storage.version = 'something';
+    // handleStop with defaults
+    await storage.handleStop()
+    // Will clean the version
+    expect(storage.version).toEqual(null);
+    // Nothing changed in the store
+    await expect(store.historyCount()).resolves.toEqual(1);
+    await expect(store.addressCount()).resolves.toEqual(20);
+
+    // handleStop with cleanStorage = true
+    await storage.handleStop({ cleanStorage: true });
+    // Will clean the history bit not addresses
+    await expect(store.historyCount()).resolves.toEqual(0);
+    await expect(store.addressCount()).resolves.toEqual(20);
+
+    await storage.addTx({
+      tx_id: 'another-new-tx',
+      timestamp: 1234,
+      inputs: [],
+      outputs: [],
+    });
+
+    // handleStop with cleanAddresses = true
+    await storage.handleStop({ cleanAddresses: true });
+    // Will clean the history bit not addresses
+    await expect(store.historyCount()).resolves.toEqual(1);
+    await expect(store.addressCount()).resolves.toEqual(0);
+
+    // Access data is untouched when stopping the wallet
+    await expect(storage.getAccessData()).resolves.toMatchObject(accessData);
+  }
+});
 
 describe('config version', () => {
   it('should set api version', async () => {
