@@ -1270,37 +1270,46 @@ class HathorWallet extends EventEmitter {
       }
     }
 
-    let accessData;
-    if (this.seed) {
-      accessData = walletUtils.generateAccessDataFromSeed(
-        this.seed,
-        {
-          multisig: this.multisig,
-          passphrase: this.passphrase,
-          pin: pinCode,
-          password,
-          networkName: this.conn.network,
-        }
-      );
-    } else if (this.xpriv) {
-      accessData = walletUtils.generateAccessDataFromXpriv(
-        this.xpriv,
-        {
-          multisig: this.multisig,
-          pin: pinCode,
-        },
-      );
-    } else if (this.xpub) {
-      accessData = walletUtils.generateAccessDataFromXpub(
-        this.xpub,
-        {
-          multisig: this.multisig,
-        },
-      );
-    } else {
-      throw new Error('This should never happen');
+    let hasAccessData;
+    try {
+      const accessData = await this.storage.getAccessData();
+      hasAccessData = !!accessData;
+    } catch (err) {
+      hasAccessData = false;
     }
-    await this.storage.saveAccessData(accessData);
+    if (!hasAccessData) {
+      let accessData;
+      if (this.seed) {
+        accessData = walletUtils.generateAccessDataFromSeed(
+          this.seed,
+          {
+            multisig: this.multisig,
+            passphrase: this.passphrase,
+            pin: pinCode,
+            password,
+            networkName: this.conn.network,
+          }
+        );
+      } else if (this.xpriv) {
+        accessData = walletUtils.generateAccessDataFromXpriv(
+          this.xpriv,
+          {
+            multisig: this.multisig,
+            pin: pinCode,
+          },
+        );
+      } else if (this.xpub) {
+        accessData = walletUtils.generateAccessDataFromXpub(
+          this.xpub,
+          {
+            multisig: this.multisig,
+          },
+        );
+      } else {
+        throw new Error('This should never happen');
+      }
+      await this.storage.saveAccessData(accessData);
+    }
 
     this.clearSensitiveData();
     this.getTokenData();

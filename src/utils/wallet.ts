@@ -435,9 +435,30 @@ const wallet = {
     };
   },
 
+  /**
+   * Generate access data from the xprivkey.
+   * We can use either the root xprivkey or the change path xprivkey.
+   * Obs: A multisig wallet cannot be started with a change path xprivkey.
+   *
+   * The seed can be passed so we save it on the storage, even if its not used. 
+   * Obs: must also pass password to encrypt the seed.
+   *
+   * @param {string} xprivkey
+   * @param {Object} options
+   * @param {IMultisigData | undefined} [options.multisig=undefined]
+   * @param {string} [options.pin]
+   * @param {string | undefined} [options.seed=undefined]
+   * @param {string | undefined} [options.password=undefined]
+   * @returns {IWalletAccessData}
+   */
   generateAccessDataFromXpriv(
     xprivkey: string,
-    {multisig, pin}: {multisig?: IMultisigData, pin: string},
+    {
+      multisig,
+      pin,
+      seed,
+      password,
+    }: {multisig?: IMultisigData, pin: string, seed?: string, password?: string},
   ): IWalletAccessData {
     let walletType: WalletType;
     if (multisig === undefined) {
@@ -490,6 +511,11 @@ const wallet = {
       // Account path key will only be available if the provided key is a root key
       const encryptedAcctPathKey = encryptData(acctXpriv.xprivkey, pin);
       accessData.acctPathKey = encryptedAcctPathKey;
+    }
+
+    if (!!(seed && password)) {
+      const encryptedWords = encryptData(seed, password);
+      accessData.words = encryptedWords;
     }
 
     return accessData;
