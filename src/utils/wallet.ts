@@ -599,28 +599,26 @@ const wallet = {
    */
   changeEncryptionPin(accessData: IWalletAccessData, oldPin: string, newPin: string): IWalletAccessData {
     const data = _.cloneDeep(accessData);
-    if (!(data.mainKey || data.authKey)) {
+    if (!(data.mainKey || data.authKey || data.acctPathKey)) {
       throw new Error('No data to change');
     }
 
     if (data.mainKey) {
-      try {
-        const mainKey = decryptData(data.mainKey, oldPin);
-        const newEncryptedMainKey = encryptData(mainKey, newPin);
-        data.mainKey = newEncryptedMainKey;
-      } catch(err: unknown) {
-        throw new Error('Old pin is incorrect.');
-      }
+      const mainKey = decryptData(data.mainKey, oldPin);
+      const newEncryptedMainKey = encryptData(mainKey, newPin);
+      data.mainKey = newEncryptedMainKey;
     }
 
     if (data.authKey) {
-      try {
-        const authKey = decryptData(data.authKey, oldPin);
-        const newEncryptedAuthKey = encryptData(authKey, newPin);
-        data.authKey = newEncryptedAuthKey;
-      } catch(err: unknown) {
-        throw new Error('Old pin is incorrect.');
-      }
+      const authKey = decryptData(data.authKey, oldPin);
+      const newEncryptedAuthKey = encryptData(authKey, newPin);
+      data.authKey = newEncryptedAuthKey;
+    }
+
+    if (data.acctPathKey) {
+      const acctPathKey = decryptData(data.acctPathKey, oldPin);
+      const newEncryptedAcctPathKey = encryptData(acctPathKey, newPin);
+      data.acctPathKey = newEncryptedAcctPathKey;
     }
 
     return data;
@@ -641,13 +639,9 @@ const wallet = {
       throw new Error('No data to change');
     }
 
-    try {
-      const words = decryptData(data.words, oldPassword);
-      const newEncryptedWords = encryptData(words, newPassword);
-      data.words = newEncryptedWords;
-    } catch(err: unknown) {
-      throw new Error('Old password is incorrect.');
-    }
+    const words = decryptData(data.words, oldPassword);
+    const newEncryptedWords = encryptData(words, newPassword);
+    data.words = newEncryptedWords;
 
     return data;
   },
