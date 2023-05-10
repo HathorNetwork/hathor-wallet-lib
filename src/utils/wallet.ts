@@ -627,12 +627,12 @@ const wallet = {
   },
 
   /**
-   * Change the encryption pin on the fields that are encrypted using the pin.
+   * Change the encryption password on the seed.
    * Will not save the access data, only return the new access data.
    *
    * @param {IWalletAccessData} accessData The current access data encrypted with `oldPassword`.
    * @param {string} oldPassword Used to decrypt the old access data.
-   * @param {string} newPassword Encrypt the fields with this pin.
+   * @param {string} newPassword Encrypt the seed with this password.
    * @returns {IWalletAccessData} The access data with fields encrypted with `newPassword`.
    */
   changeEncryptionPassword(accessData: IWalletAccessData, oldPassword: string, newPassword: string): IWalletAccessData {
