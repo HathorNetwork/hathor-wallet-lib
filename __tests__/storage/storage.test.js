@@ -529,3 +529,32 @@ describe('access data methods', () => {
     await expect(storage.getAuthPrivKey('123')).rejects.toThrow('Private key');
   }
 });
+
+test('change pin and password', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+
+  const seed = 'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+  let accessData = walletUtils.generateAccessDataFromSeed(
+    seed,
+    { pin: '123', password: '456', networkName: 'testnet' },
+  );
+  await storage.saveAccessData(accessData);
+
+  await expect(() => storage.changePin('invalid-pin', '321')).rejects.toThrow(InvalidPasswdError);
+  await expect(() => storage.changePassword('invalid-passwd', '456')).rejects.toThrow(InvalidPasswdError);
+
+  await storage.changePin('123', '321');
+  accessData = await storage.getAccessData();
+  expect(() => cryptoUtils.decryptData(accessData.words, '456')).not.toThrow();
+  expect(() => cryptoUtils.decryptData(accessData.mainKey, '321')).not.toThrow();
+  expect(() => cryptoUtils.decryptData(accessData.authKey, '321')).not.toThrow();
+  expect(() => cryptoUtils.decryptData(accessData.acctPathKey, '321')).not.toThrow();
+
+  await storage.changePassword('456', '654');
+  accessData = await storage.getAccessData();
+  expect(() => cryptoUtils.decryptData(accessData.words, '654')).not.toThrow();
+  expect(() => cryptoUtils.decryptData(accessData.mainKey, '321')).not.toThrow();
+  expect(() => cryptoUtils.decryptData(accessData.authKey, '321')).not.toThrow();
+  expect(() => cryptoUtils.decryptData(accessData.acctPathKey, '321')).not.toThrow();
+});
