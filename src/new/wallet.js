@@ -1336,7 +1336,6 @@ class HathorWallet extends EventEmitter {
     this.setState(HathorWallet.CLOSED);
     this.removeAllListeners();
 
-    // XXX: this is not awaited so it can run in the background
     await this.storage.handleStop({connection: this.conn, cleanStorage, cleanAddresses});
 
     this.firstConnection = true;
