@@ -272,6 +272,6 @@ test('cleanupString', () => {
   expect(helpers.cleanupString('str 1')).toEqual('str 1');
   expect(helpers.cleanupString('str  2')).toEqual('str 2');
   expect(helpers.cleanupString('str\t 3')).toEqual('str 3');
-  expect(helpers.cleanupString('  Str\t 4   \t')).toEqual(' str 4 ');
+  expect(helpers.cleanupString('  Str\t 4   \t')).toEqual('str 4');
   expect(helpers.cleanupString('STR 5')).toEqual('str 5');
 });
