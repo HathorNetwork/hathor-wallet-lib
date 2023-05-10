@@ -226,14 +226,15 @@ const tokens = {
    * Calculate deposit value for the given token mint amount
    *
    * @param {number} mintAmount Amount of tokens being minted
+   * @param {number} [depositPercent=TOKEN_DEPOSIT_PERCENTAGE] token deposit percentage.
    *
    * @return {number}
    * @memberof Tokens
    * @inner
    *
    */
-  getDepositAmount(mintAmount: number): number {
-    return Math.ceil(TOKEN_DEPOSIT_PERCENTAGE * mintAmount);
+  getDepositAmount(mintAmount: number, depositPercent: number = TOKEN_DEPOSIT_PERCENTAGE): number {
+    return Math.ceil(depositPercent * mintAmount);
   },
 
   /**
@@ -248,14 +249,15 @@ const tokens = {
    * Calculate withdraw value for the given token melt amount
    *
    * @param {number} meltAmount Amount of tokens being melted
+   * @param {number} [depositPercent=TOKEN_DEPOSIT_PERCENTAGE] token deposit percentage.
    *
    * @return {number}
    * @memberof Tokens
    * @inner
    *
    */
-  getWithdrawAmount(meltAmount: number): number {
-    return Math.floor(TOKEN_DEPOSIT_PERCENTAGE * meltAmount);
+  getWithdrawAmount(meltAmount: number, depositPercent: number = TOKEN_DEPOSIT_PERCENTAGE): number {
+    return Math.floor(depositPercent * meltAmount);
   },
 
   /**
@@ -294,7 +296,8 @@ const tokens = {
   ): Promise<IDataTx> {
     const inputs: IDataInput[] = [];
     const outputs: IDataOutput[] = [];
-    let depositAmount = this.getDepositAmount(amount);
+    const depositPercent = storage.getTokenDepositPercentage();
+    let depositAmount = this.getDepositAmount(amount, depositPercent);
     if (isCreateNFT) {
       depositAmount += this.getNFTCreationFee();
     }
@@ -399,7 +402,8 @@ const tokens = {
     const inputs: IDataInput[] = [authorityMeltInput];
     const outputs: IDataOutput[] = [];
     const tokens = [authorityMeltInput.token];
-    const withdrawAmount = this.getWithdrawAmount(amount);
+    const depositPercent = storage.getTokenDepositPercentage();
+    const withdrawAmount = this.getWithdrawAmount(amount, depositPercent);
 
     // get inputs that amount to requested melt amount
     let foundAmount = 0;

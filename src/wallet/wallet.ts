@@ -1114,8 +1114,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const isNFT = newOptions.nftData !== null;
 
+    const depositPercent = this.storage.getTokenDepositPercentage();
     // 1. Calculate HTR deposit needed
-    let deposit = tokens.getDepositAmount(amount);
+    let deposit = tokens.getDepositAmount(amount, depositPercent);
 
     if (isNFT) {
       // For NFT we have a fee of 0.01 HTR, then the deposit utxo query must get an additional 1
@@ -1311,8 +1312,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       pinCode: null,
     }, options);
 
+    const depositPercent = this.storage.getTokenDepositPercentage();
     // 1. Calculate HTR deposit needed
-    const deposit = tokens.getDepositAmount(amount);
+    const deposit = tokens.getDepositAmount(amount, depositPercent);
 
     // 2. Get utxos for HTR
     const { utxos, changeAmount } = await this.getUtxos({ tokenId: HATHOR_TOKEN_CONFIG.uid, totalAmount: deposit });
@@ -1440,8 +1442,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       pinCode: null,
     }, options);
 
+    const depositPercent = this.storage.getTokenDepositPercentage();
     // 1. Calculate HTR deposit needed
-    const withdraw = tokens.getWithdrawAmount(amount);
+    const withdraw = tokens.getWithdrawAmount(amount, depositPercent);
 
     // 2. Get utxos for custom token to melt
     const { utxos, changeAmount } = await this.getUtxos({ tokenId: token, totalAmount: amount });
@@ -1780,13 +1783,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const data = await walletApi.graphvizNeighborsQuery(this, txId, graphType, maxLevel);
     return data;
   }
-  
+
   /**
    * Check if websocket connection is enabled
-   * 
+   *
    * @memberof HathorWalletServiceWallet
    * @inner
-   * 
+   *
    * @returns {boolean} If wallet has websocket connection enabled
    */
   isWsEnabled(): boolean {
