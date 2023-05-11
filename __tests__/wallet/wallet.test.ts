@@ -17,7 +17,7 @@ import {
 import config from '../../src/config';
 import { buildSuccessTxByIdTokenDataResponse, buildWalletToAuthenticateApiCall, defaultWalletSeed } from '../__mock_helpers/wallet-service.fixtures';
 import Mnemonic from 'bitcore-mnemonic';
-import { TxNotFoundError } from '../../src/errors';
+import { TxNotFoundError, SendTxError } from '../../src/errors';
 import SendTransactionWalletService from '../../src/wallet/sendTransactionWalletService';
 import transaction from '../../src/utils/transaction';
 import { TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
@@ -448,7 +448,15 @@ test('prepareMintTokens', async () => {
   const spy2 = jest.spyOn(wallet.storage, 'getMainXPrivKey').mockReturnValue(Promise.resolve(xpriv.xprivkey));
   const spy3 = jest.spyOn(wallet, 'getInputData').mockImplementation(getInputDataMock);
 
-  // createAnother option should create another authority utxo to the given address
+  // error because of wrong authority output address
+  await expect(wallet.prepareMintTokensData('01', 100, {
+    address: addresses[1],
+    createAnotherMint: true,
+    mintAuthorityAddress: 'abc',
+    pinCode: '123456',
+  })).rejects.toThrowError(SendTxError);
+
+  // mint data with correct address for authority output
   const mintData = await wallet.prepareMintTokensData('01', 100, {
     address: addresses[1],
     createAnotherMint: true,
@@ -540,7 +548,15 @@ test('prepareMeltTokens', async () => {
   const spy2 = jest.spyOn(wallet.storage, 'getMainXPrivKey').mockReturnValue(Promise.resolve(xpriv.xprivkey));
   const spy3 = jest.spyOn(wallet, 'getInputData').mockImplementation(getInputDataMock);
 
-  // createAnother option should create another authority utxo to the given address
+  // error because of wrong authority output address
+  await expect(wallet.prepareMeltTokensData('01', 1, {
+    address: addresses[1],
+    createAnotherMelt: true,
+    meltAuthorityAddress: 'abc',
+    pinCode: '123456',
+  })).rejects.toThrowError(SendTxError);
+
+  // melt data with correct address for authority output
   const meltData = await wallet.prepareMeltTokensData('01', 1, {
     address: addresses[1],
     createAnotherMelt: true,
