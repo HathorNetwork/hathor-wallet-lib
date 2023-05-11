@@ -34,7 +34,7 @@ import config, { Config } from '../config';
 import { decryptData, encryptData } from '../utils/crypto';
 import FullNodeConnection from '../new/connection';
 import { getAddressType } from '../utils/address';
-import { HATHOR_TOKEN_CONFIG, MAX_INPUTS, MAX_OUTPUTS } from '../constants';
+import { HATHOR_TOKEN_CONFIG, MAX_INPUTS, MAX_OUTPUTS, TOKEN_DEPOSIT_PERCENTAGE } from '../constants';
 
 const DEFAULT_ADDRESS_META: IAddressMetadata = {
   numTransactions: 0,
@@ -70,6 +70,21 @@ export class Storage implements IStorage {
    */
   setApiVersion(version: ApiVersion): void {
     this.version = version;
+  }
+
+  /**
+   * Return the deposit percentage for creating tokens.
+   * @returns {number}
+   */
+  getTokenDepositPercentage(): number {
+    if (this.version && this.version.token_deposit_percentage) {
+      return this.version.token_deposit_percentage;
+    }
+    /**
+     *  When using wallet-service facade we do not update the version constants
+     *  Since this data is important for the wallets UI we will return the default value here.
+     */
+    return TOKEN_DEPOSIT_PERCENTAGE;
   }
 
   /**
@@ -276,6 +291,15 @@ export class Storage implements IStorage {
    */
   async unregisterToken(tokenUid: string): Promise<void> {
     await this.store.unregisterToken(tokenUid);
+  }
+
+  /**
+   * Return if a token is registered.
+   * @param tokenUid - Token id.
+   * @returns {Promise<boolean>}
+   */
+  async isTokenRegistered(tokenUid: string): Promise<boolean> {
+    return this.store.isTokenRegistered(tokenUid);
   }
 
   /**
