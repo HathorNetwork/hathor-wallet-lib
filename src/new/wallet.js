@@ -1529,6 +1529,7 @@ class HathorWallet extends EventEmitter {
    *   'changeAddress': address of the change output
    *   'startMiningTx': boolean to trigger start mining (default true)
    *   'createAnotherMint': boolean to create another mint authority or not for the wallet
+   *   'mintAuthorityAddress': address to send the new mint authority created
    *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
    *  }
    *
@@ -1546,6 +1547,7 @@ class HathorWallet extends EventEmitter {
       address: null,
       changeAddress: null,
       createAnotherMint: true,
+      mintAuthorityAddress: null,
       pinCode: null,
     }, options);
 
@@ -1567,6 +1569,7 @@ class HathorWallet extends EventEmitter {
       mintInput: mintInput[0],
       createAnotherMint: newOptions.createAnotherMint,
       changeAddress: newOptions.changeAddress,
+      mintAuthorityAddress: newOptions.mintAuthorityAddress,
     };
     const txData = await tokenUtils.prepareMintTxData(
       mintAddress,
@@ -1590,6 +1593,7 @@ class HathorWallet extends EventEmitter {
    * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
    * @param {boolean} [options.createAnotherMint] boolean to create another mint authority or not
    *                                              for the wallet
+   * @param {string} [options.mintAuthorityAddress] address to send the new mint authority created
    * @param {string} [options.pinCode] pin to decrypt xpriv information.
    *                                   Optional but required if not set in this
    *
@@ -1614,6 +1618,7 @@ class HathorWallet extends EventEmitter {
    *   'address': address of the HTR deposit back
    *   'changeAddress': address of the change output
    *   'createAnotherMelt': boolean to create another melt authority or not for the wallet
+   *   'meltAuthorityAddress': address to send the new melt authority created
    *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
    *  }
    *
@@ -1631,6 +1636,7 @@ class HathorWallet extends EventEmitter {
       address: null,
       changeAddress: null,
       createAnotherMelt: true,
+      meltAuthorityAddress: null,
       pinCode: null,
     }, options);
 
@@ -1647,6 +1653,7 @@ class HathorWallet extends EventEmitter {
 
     const meltOptions = {
       createAnotherMelt: newOptions.createAnotherMelt,
+      meltAuthorityAddress: newOptions.meltAuthorityAddress,
       changeAddress: newOptions.changeAddress,
     };
     const txData = await tokenUtils.prepareMeltTxData(
@@ -1670,6 +1677,7 @@ class HathorWallet extends EventEmitter {
    * @param {string} [options.changeAddress] address of the change output
    * @param {boolean} [options.createAnotherMelt] boolean to create another melt authority or not
    *                                              for the wallet
+   * @param {string} [options.meltAuthorityAddress] address to send the new melt authority created
    * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
    * @param {string} [options.pinCode] pin to decrypt xpriv information.
    *                                   Optional but required if not set in this
