@@ -174,7 +174,7 @@ export class Storage implements IStorage {
       return changeAddress;
     }
 
-    return await this.getCurrentAddress();
+    return this.getCurrentAddress();
   }
 
   /**
