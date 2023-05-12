@@ -440,7 +440,7 @@ const wallet = {
    * We can use either the root xprivkey or the change path xprivkey.
    * Obs: A multisig wallet cannot be started with a change path xprivkey.
    *
-   * The seed can be passed so we save it on the storage, even if its not used. 
+   * The seed can be passed so we save it on the storage, even if its not used.
    * Obs: must also pass password to encrypt the seed.
    *
    * @param {string} xprivkey
@@ -470,7 +470,9 @@ const wallet = {
     const argXpriv = new HDPrivateKey(xprivkey);
     let xpriv: HDPrivateKey;
     let acctXpriv: HDPrivateKey | null = null;
+    let authXpriv: HDPrivateKey | null = null;
     if (argXpriv.depth === 0) {
+      authXpriv = argXpriv.deriveNonCompliantChild(WALLET_SERVICE_AUTH_DERIVATION_PATH);
       if (walletType === WalletType.MULTISIG) {
         acctXpriv = argXpriv.deriveNonCompliantChild(P2SH_ACCT_PATH);
         xpriv = acctXpriv.deriveNonCompliantChild(0);
@@ -511,6 +513,12 @@ const wallet = {
       // Account path key will only be available if the provided key is a root key
       const encryptedAcctPathKey = encryptData(acctXpriv.xprivkey, pin);
       accessData.acctPathKey = encryptedAcctPathKey;
+    }
+
+    if (authXpriv) {
+      // Auth path key will only be available if the provided key is a root key.
+      const encryptedAuthPathKey = encryptData(authXpriv.xprivkey, pin);
+      accessData.authKey = encryptedAuthPathKey;
     }
 
     if (!!(seed && password)) {
