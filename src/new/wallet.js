@@ -1277,9 +1277,10 @@ class HathorWallet extends EventEmitter {
     } catch (err) {
       if (err instanceof UninitializedWalletError) {
         hasAccessData = false;
+      } else {
+        // Do not hide unexpected errors
+        throw err;
       }
-      // Do not hide unexpected errors
-      throw err;
     }
     if (!hasAccessData) {
       let accessData;
