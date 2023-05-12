@@ -20,6 +20,7 @@ import {
 } from '../types';
 import { BLOCK_VERSION, GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
 import { orderBy } from 'lodash';
+import { UninitializedWalletError } from '../errors';
 
 
 const DEFAULT_ADDRESSES_WALLET_DATA = {
@@ -693,7 +694,7 @@ export class MemoryStore implements IStore {
    */
   async getAccessData(): Promise<IWalletAccessData | null> {
     if (this.accessData === null) {
-      throw new Error('Wallet access data unset');
+      throw new UninitializedWalletError();
     }
     return this.accessData;
   }

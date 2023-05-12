@@ -13,6 +13,7 @@ import LevelHistoryIndex from './history_index';
 import LevelUtxoIndex from './utxo_index';
 import LevelWalletIndex from './wallet_index';
 import LevelTokenIndex from './token_index';
+import { UninitializedWalletError } from '../../errors';
 
 export default class LevelDBStore implements IStore {
   addressIndex: LevelAddressIndex;
@@ -276,7 +277,7 @@ export default class LevelDBStore implements IStore {
   async getAccessData(): Promise<IWalletAccessData | null> {
     const accessData = await this.walletIndex.getAccessData();
     if (accessData === null) {
-      throw new Error('Wallet access data unset');
+      throw new UninitializedWalletError();
     }
     return accessData;
   }

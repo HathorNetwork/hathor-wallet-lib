@@ -17,7 +17,7 @@ import { createP2SHRedeemScript } from '../utils/scripts';
 import walletUtils from '../utils/wallet';
 import SendTransaction from './sendTransaction';
 import Network from '../models/network';
-import { AddressError, TxNotFoundError, WalletError, WalletFromXPubGuard } from '../errors';
+import { AddressError, TxNotFoundError, UninitializedWalletError, WalletError, WalletFromXPubGuard } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
 import { HDPrivateKey } from 'bitcore-lib';
@@ -1270,37 +1270,51 @@ class HathorWallet extends EventEmitter {
       }
     }
 
-    let accessData;
-    if (this.seed) {
-      accessData = walletUtils.generateAccessDataFromSeed(
-        this.seed,
-        {
-          multisig: this.multisig,
-          passphrase: this.passphrase,
-          pin: pinCode,
-          password,
-          networkName: this.conn.network,
-        }
-      );
-    } else if (this.xpriv) {
-      accessData = walletUtils.generateAccessDataFromXpriv(
-        this.xpriv,
-        {
-          multisig: this.multisig,
-          pin: pinCode,
-        },
-      );
-    } else if (this.xpub) {
-      accessData = walletUtils.generateAccessDataFromXpub(
-        this.xpub,
-        {
-          multisig: this.multisig,
-        },
-      );
-    } else {
-      throw new Error('This should never happen');
+    let hasAccessData;
+    try {
+      const accessData = await this.storage.getAccessData();
+      hasAccessData = !!accessData;
+    } catch (err) {
+      if (err instanceof UninitializedWalletError) {
+        hasAccessData = false;
+      } else {
+        // Do not hide unexpected errors
+        throw err;
+      }
     }
-    await this.storage.saveAccessData(accessData);
+    if (!hasAccessData) {
+      let accessData;
+      if (this.seed) {
+        accessData = walletUtils.generateAccessDataFromSeed(
+          this.seed,
+          {
+            multisig: this.multisig,
+            passphrase: this.passphrase,
+            pin: pinCode,
+            password,
+            networkName: this.conn.network,
+          }
+        );
+      } else if (this.xpriv) {
+        accessData = walletUtils.generateAccessDataFromXpriv(
+          this.xpriv,
+          {
+            multisig: this.multisig,
+            pin: pinCode,
+          },
+        );
+      } else if (this.xpub) {
+        accessData = walletUtils.generateAccessDataFromXpub(
+          this.xpub,
+          {
+            multisig: this.multisig,
+          },
+        );
+      } else {
+        throw new Error('This should never happen');
+      }
+      await this.storage.saveAccessData(accessData);
+    }
 
     this.clearSensitiveData();
     this.getTokenData();
@@ -1327,7 +1341,6 @@ class HathorWallet extends EventEmitter {
     this.setState(HathorWallet.CLOSED);
     this.removeAllListeners();
 
-    // XXX: this is not awaited so it can run in the background
     await this.storage.handleStop({connection: this.conn, cleanStorage, cleanAddresses});
 
     this.firstConnection = true;

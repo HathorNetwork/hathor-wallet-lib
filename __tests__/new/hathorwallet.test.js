@@ -17,6 +17,8 @@ import Queue from '../../src/models/queue';
 import { WalletType } from '../../src/types';
 import txApi from '../../src/api/txApi';
 import * as addressUtils from '../../src/utils/address';
+import versionApi from '../../src/api/version';
+import { decryptData } from '../../src/utils/crypto';
 
 class FakeHathorWallet {
   constructor() {
@@ -563,4 +565,42 @@ test('getMultisigData', async () => {
     walletType: 'multisig',
   }));
   await expect(hWallet.getMultisigData()).rejects.toThrow('Multisig data not found in storage');
+});
+
+test('start', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  const seed = 'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+
+  let accessData;
+  async function saveAccessData(data) {
+    accessData = data;
+    await store.saveAccessData(data);
+  }
+  storage.saveAccessData = saveAccessData;
+
+  const conn = {
+    network: 'testnet',
+    getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
+    on: jest.fn(),
+    start: jest.fn(),
+  };
+
+  jest.spyOn(versionApi, 'getVersion').mockImplementation((resolve) => {
+    resolve({
+      network: 'testnet',
+    });
+  })
+
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = storage;
+  hWallet.seed = seed;
+  hWallet.conn = conn;
+
+  hWallet.getTokenData = jest.fn();
+  hWallet.setState = jest.fn();
+
+  await hWallet.start({ pinCode: '123', password: '456' });
+  const actualAccessData = await storage.getAccessData();
+  expect(decryptData(actualAccessData.words, '456')).toEqual(seed);
 });

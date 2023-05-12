@@ -198,6 +198,7 @@ export enum WALLET_FLAGS {
 export interface IWalletAccessData {
   xpubkey: string;
   mainKey?: IEncryptedData; // encrypted xprivkey (uses pin for encryption)
+  acctPathKey?: IEncryptedData; // encrypted account path xprivkey (uses pin for encryption)
   words?: IEncryptedData; // encrypted seed (uses password for encryption)
   authKey?: IEncryptedData; // encrypted auth key, used for authentication with wallet-service (uses pin for encryption)
   multisigData?: IMultisigData;
@@ -376,6 +377,7 @@ export interface IStorage {
   getAccessData(): Promise<IWalletAccessData|null>;
   saveAccessData(data: IWalletAccessData): Promise<void>;
   getMainXPrivKey(pinCode: string): Promise<string>;
+  getAcctPathXPrivKey(pinCode: string): Promise<string>;
   getAuthPrivKey(pinCode: string): Promise<string>;
   getWalletData(): Promise<IWalletData>;
   getWalletType(): Promise<WalletType>;

@@ -9,8 +9,13 @@ import walletApi from '../../src/api/wallet';
 import { MemoryStore, Storage, LevelDBStore } from '../../src/storage';
 import tx_history from '../__fixtures__/tx_history';
 import { processHistory } from '../../src/utils/storage';
-import { TOKEN_AUTHORITY_MASK, TOKEN_DEPOSIT_PERCENTAGE, TOKEN_MINT_MASK } from '../../src/constants';
+import { P2PKH_ACCT_PATH, TOKEN_DEPOSIT_PERCENTAGE, TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../../src/constants';
 import { HDPrivateKey } from "bitcore-lib";
+import Mnemonic from 'bitcore-mnemonic';
+import * as cryptoUtils from '../../src/utils/crypto';
+import walletUtils from '../../src/utils/wallet';
+import { InvalidPasswdError } from '../../src/errors';
+import Network from '../../src/models/network';
 
 const DATA_DIR = './testdata.leveldb';
 
@@ -164,13 +169,13 @@ test('utxos selected as inputs', async () => {
 describe('process locked utxos', () => {
   it('should work with memory store', async () => {
     const store = new MemoryStore();
-    processLockedUtxoTest(store);
+    await processLockedUtxoTest(store);
   });
 
   it('should work with leveldb store', async () => {
     const xpriv = HDPrivateKey();
     const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
-    processLockedUtxoTest(store);
+    await processLockedUtxoTest(store);
   });
 
   function getLockedUtxo(txId, address, timelock, height, value, token, token_data) {
@@ -406,13 +411,13 @@ describe('process locked utxos', () => {
 describe('getChangeAddress', () => {
   it('should work with memory store', async () => {
     const store = new MemoryStore();
-    getChangeAddressTest(store);
+    await getChangeAddressTest(store);
   });
 
   it('should work with leveldb store', async () => {
     const xpriv = HDPrivateKey();
     const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
-    getChangeAddressTest(store);
+    await getChangeAddressTest(store);
   });
 
   async function getChangeAddressTest(store) {
@@ -432,4 +437,124 @@ describe('getChangeAddress', () => {
     await store.setCurrentAddressIndex(1)
     await expect(storage.getChangeAddress()).resolves.toEqual(addr1);
   }
+});
+
+describe('getAcctPathXpriv', () => {
+
+  it('should work with memory store', async () => {
+    const store = new MemoryStore();
+    await getAcctXprivTest(store);
+  });
+
+  it('should work with leveldb store', async () => {
+    const xpriv = HDPrivateKey();
+    const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
+    await getAcctXprivTest(store);
+  });
+
+  /**
+    * Test the method to get account path xpriv on any IStore
+    * @param {IStore} store
+    */
+  async function getAcctXprivTest(store) {
+    const storage = new Storage(store);
+    const decryptSpy = jest.spyOn(cryptoUtils, 'decryptData');
+    const accessDataSpy = jest.spyOn(storage, '_getValidAccessData');
+
+    // Throw when we don't have account path key
+    accessDataSpy.mockReturnValue(Promise.resolve({}));
+    await expect(storage.getAcctPathXPrivKey('pin')).rejects.toThrow('Private key');
+
+    // It should fail if decryption is not possible
+    decryptSpy.mockImplementation(() => { throw new Error('Boom!'); });
+    accessDataSpy.mockReturnValue(Promise.resolve({ acctPathKey: 'encrypted-invalid-key' }));
+    await expect(storage.getAcctPathXPrivKey('pin')).rejects.toThrow('Boom!');
+
+    // It should return the decrypted key if pin is correct
+    decryptSpy.mockReturnValue('account-path-key');
+    accessDataSpy.mockReturnValue(Promise.resolve({ acctPathKey: 'encrypted-valid-key' }));
+    await expect(storage.getAcctPathXPrivKey('pin')).resolves.toEqual('account-path-key');
+
+    decryptSpy.mockRestore();
+  }
+});
+
+describe('access data methods', () => {
+  const seed = 'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+  const accessData = walletUtils.generateAccessDataFromSeed(
+    seed,
+    { pin: '123', password: '456', networkName: 'testnet' },
+  );
+  const code = new Mnemonic(seed);
+  const rootXpriv = code.toHDPrivateKey('', new Network('testnet'));
+  const authKey = rootXpriv.deriveNonCompliantChild(WALLET_SERVICE_AUTH_DERIVATION_PATH);
+  const acctKey = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
+  const mainKey = acctKey.deriveNonCompliantChild(0);
+
+  it('should work with memory store', async () => {
+    const store = new MemoryStore();
+    await accessDataTest(store);
+  });
+
+  it('should work with leveldb store', async () => {
+    const store = new LevelDBStore(DATA_DIR, mainKey.xpubkey);
+    await accessDataTest(store);
+  });
+
+  async function accessDataTest(store) {
+    await store.saveAccessData(accessData);
+    const storage = new Storage(store);
+    // getMainXPrivKey
+    await expect(storage.getMainXPrivKey('123')).resolves.toEqual(mainKey.xprivkey);
+    // getAcctPathXPrivKey
+    await expect(storage.getAcctPathXPrivKey('123')).resolves.toEqual(acctKey.xprivkey);
+    // getAuthPrivKey
+    await expect(storage.getAuthPrivKey('123')).resolves.toEqual(authKey.xprivkey);
+
+    // Should throw InvalidPasswdError when pin is incorrect
+    // getMainXPrivKey
+    await expect(storage.getMainXPrivKey('456')).rejects.toThrow(InvalidPasswdError);
+    // getAcctPathXPrivKey
+    await expect(storage.getAcctPathXPrivKey('456')).rejects.toThrow(InvalidPasswdError);
+    // getAuthPrivKey
+    await expect(storage.getAuthPrivKey('456')).rejects.toThrow(InvalidPasswdError);
+
+    // Should throw error when there is no data to get
+    jest.spyOn(storage, '_getValidAccessData').mockReturnValue(Promise.resolve({}));
+    // getMainXPrivKey
+    await expect(storage.getMainXPrivKey('123')).rejects.toThrow('Private key');
+    // getAcctPathXPrivKey
+    await expect(storage.getAcctPathXPrivKey('123')).rejects.toThrow('Private key');
+    // getAuthPrivKey
+    await expect(storage.getAuthPrivKey('123')).rejects.toThrow('Private key');
+  }
+});
+
+test('change pin and password', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+
+  const seed = 'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+  let accessData = walletUtils.generateAccessDataFromSeed(
+    seed,
+    { pin: '123', password: '456', networkName: 'testnet' },
+  );
+  await storage.saveAccessData(accessData);
+
+  await expect(() => storage.changePin('invalid-pin', '321')).rejects.toThrow(InvalidPasswdError);
+  await expect(() => storage.changePassword('invalid-passwd', '456')).rejects.toThrow(InvalidPasswdError);
+
+  await storage.changePin('123', '321');
+  accessData = await storage.getAccessData();
+  expect(() => cryptoUtils.decryptData(accessData.words, '456')).not.toThrow();
+  expect(() => cryptoUtils.decryptData(accessData.mainKey, '321')).not.toThrow();
+  expect(() => cryptoUtils.decryptData(accessData.authKey, '321')).not.toThrow();
+  expect(() => cryptoUtils.decryptData(accessData.acctPathKey, '321')).not.toThrow();
+
+  await storage.changePassword('456', '654');
+  accessData = await storage.getAccessData();
+  expect(() => cryptoUtils.decryptData(accessData.words, '654')).not.toThrow();
+  expect(() => cryptoUtils.decryptData(accessData.mainKey, '321')).not.toThrow();
+  expect(() => cryptoUtils.decryptData(accessData.authKey, '321')).not.toThrow();
+  expect(() => cryptoUtils.decryptData(accessData.acctPathKey, '321')).not.toThrow();
 });
