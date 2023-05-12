@@ -17,7 +17,7 @@ import { createP2SHRedeemScript } from '../utils/scripts';
 import walletUtils from '../utils/wallet';
 import SendTransaction from './sendTransaction';
 import Network from '../models/network';
-import { AddressError, TxNotFoundError, WalletError, WalletFromXPubGuard } from '../errors';
+import { AddressError, TxNotFoundError, UninitializedWalletError, WalletError, WalletFromXPubGuard } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
 import { HDPrivateKey } from 'bitcore-lib';
@@ -1275,7 +1275,11 @@ class HathorWallet extends EventEmitter {
       const accessData = await this.storage.getAccessData();
       hasAccessData = !!accessData;
     } catch (err) {
-      hasAccessData = false;
+      if (err instanceof UninitializedWalletError) {
+        hasAccessData = false;
+      }
+      // Do not hide unexpected errors
+      throw err;
     }
     if (!hasAccessData) {
       let accessData;

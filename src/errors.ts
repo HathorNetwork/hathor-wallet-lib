@@ -294,3 +294,7 @@ export class DecryptionError extends Error {
 export class UnsupportedHasherError extends Error {
   errorCode: string = ErrorMessages.UNSUPPORTED_HASHER;
 }
+
+export class UninitializedWalletError extends WalletError {
+  errorCode: string = ErrorMessages.UNINITIALIZED_WALLET;
+}

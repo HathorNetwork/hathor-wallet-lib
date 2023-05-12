@@ -21,4 +21,6 @@ export enum ErrorMessages {
   // PBKDF2 encryption requires a hasher algo and we currently support:
   // sha1, sha256
   UNSUPPORTED_HASHER = 'unsupported-hasher',
+  // When access data is not set
+  UNINITIALIZED_WALLET = 'uninitialized-wallet',
 }
