@@ -24,6 +24,8 @@ export default class LevelDBStore implements IStore {
 
   constructor(dirpath: string, dbroot: string = 'hathor.data') {
     const dbpath = path.join(dbroot, dirpath);
+    // XXX: We can treat dbpath to avoid special
+    // characters that are not acceptable in the filesystem
     this.addressIndex = new LevelAddressIndex(dbpath);
     this.historyIndex = new LevelHistoryIndex(dbpath);
     this.utxoIndex = new LevelUtxoIndex(dbpath);
@@ -152,6 +154,7 @@ export default class LevelDBStore implements IStore {
         }
       }
     }
+    // Address index should always be greater than or equal to 0
     if (maxIndex >= 0) {
       if ((await this.walletIndex.getCurrentAddressIndex()) < maxIndex) {
         await this.walletIndex.setCurrentAddressIndex(Math.min(maxIndex + 1, await this.walletIndex.getLastLoadedAddressIndex()));
