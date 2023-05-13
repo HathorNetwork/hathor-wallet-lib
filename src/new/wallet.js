@@ -1845,7 +1845,7 @@ class HathorWallet extends EventEmitter {
    *                                   (if not sent we choose the next available address to use)
    * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
    * @param {boolean} [options.createAnotherMint] boolean to create another mint authority or not
-   *                                              for the wallet
+   * @param {string} [options.mintAuthorityAddress] the address to send the new mint authority created
    * @param {string} [options.pinCode] pin to decrypt xpriv information.
    *                                   Optional but required if not set in this
    *
@@ -1936,6 +1936,7 @@ class HathorWallet extends EventEmitter {
    * @param {string} [options.changeAddress] address of the change output
    * @param {boolean} [options.createAnotherMelt] boolean to create another melt authority or not
    *                                              for the wallet
+   * @param {string} [options.meltAuthorityAddress] the address to send the new melt authority created
    * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
    * @param {string} [options.pinCode] pin to decrypt xpriv information.
    *                                   Optional but required if not set in this

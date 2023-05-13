@@ -655,7 +655,7 @@ const tokens = {
    * @inner
    */
   createMeltData(meltInput, token, amount, createAnotherMelt, options = { depositAddress: null, changeAddress: null, meltAuthorityAddress: null }) {
-    const { depositAddress, changeAddress } = options;
+    const { depositAddress, changeAddress, meltAuthorityAddress } = options;
     // Get inputs that sum at least the amount requested to melt
     const result = this.getMeltInputs(amount, token);
 
