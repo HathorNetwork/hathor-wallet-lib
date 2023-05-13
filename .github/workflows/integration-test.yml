@@ -4,6 +4,7 @@ on:
     branches:
       - dev
       - master
+      - v0.46.1_master
 
 env:
   TEST_WALLET_START_TIMEOUT: '180000' # 3 minutes
