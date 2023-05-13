@@ -1789,6 +1789,7 @@ class HathorWallet extends EventEmitter {
    *   'changeAddress': address of the change output
    *   'startMiningTx': boolean to trigger start mining (default true)
    *   'createAnotherMint': boolean to create another mint authority or not for the wallet
+   *   'mintAuthorityAddress': string The address to send the new mint authority created
    *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
    *  }
    *
@@ -1807,6 +1808,7 @@ class HathorWallet extends EventEmitter {
       address: null,
       changeAddress: null,
       createAnotherMint: true,
+      mintAuthorityAddress: null,
       startMiningTx: true,
       pinCode: null,
     }, options);
@@ -1868,6 +1870,7 @@ class HathorWallet extends EventEmitter {
    *   'address': address of the HTR deposit back
    *   'changeAddress': address of the change output
    *   'createAnotherMelt': boolean to create another melt authority or not for the wallet
+   *   'meltAuthorityAddress': string The address to send the new melt authority created
    *   'startMiningTx': boolean to trigger start mining (default true)
    *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
    *  }
@@ -1887,6 +1890,7 @@ class HathorWallet extends EventEmitter {
       address: null,
       changeAddress: null,
       createAnotherMelt: true,
+      meltAuthorityAddress: null,
       startMiningTx: true,
       pinCode: null,
     }, options);
@@ -1903,7 +1907,18 @@ class HathorWallet extends EventEmitter {
     }
 
     // Always create another melt authority output
-    const ret = tokens.generateMeltData(meltInput[0], tokenUid, amount, pin, newOptions.createAnotherMelt, { depositAddress: newOptions.address, changeAddress: newOptions.changeAddress });
+    const ret = tokens.generateMeltData(
+      meltInput[0],
+      tokenUid,
+      amount,
+      pin,
+      newOptions.createAnotherMelt,
+      {
+        depositAddress: newOptions.address,
+        changeAddress: newOptions.changeAddress,
+        meltAuthorityAddress: newOptions.meltAuthorityAddress
+      }
+    );
     if (!ret.success) {
       return Promise.reject(ret);
     }
