@@ -764,7 +764,7 @@ export class Storage implements IStorage {
     }
     this.version = null;
     if (cleanStorage || cleanAddresses) {
-      this.cleanStorage(cleanStorage, cleanAddresses);
+      await this.cleanStorage(cleanStorage, cleanAddresses);
     }
   }
 

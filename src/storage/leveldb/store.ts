@@ -6,7 +6,6 @@
  */
 
 import { IAddressInfo, IAddressMetadata, IHistoryTx, ILockedUtxo, IStore, ITokenData, ITokenMetadata, IUtxo, IUtxoFilterOptions, IWalletAccessData, IWalletData } from '../../types';
-import { HDPublicKey } from 'bitcore-lib'
 import path from 'path';
 import LevelAddressIndex from './address_index';
 import LevelHistoryIndex from './history_index';
@@ -22,13 +21,11 @@ export default class LevelDBStore implements IStore {
   walletIndex: LevelWalletIndex;
   tokenIndex: LevelTokenIndex;
   dbpath: string;
-  xpubkey: string;
 
-  constructor(dbroot: string, xpubkey: string) {
-    // The xpubkey in the account or change path?
-    this.xpubkey = xpubkey;
-    const xpub = HDPublicKey.fromString(xpubkey);
-    const dbpath = path.join(dbroot, xpub.publicKey.toString());
+  constructor(dirpath: string, dbroot: string = 'hathor.data') {
+    const dbpath = path.join(dbroot, dirpath);
+    // XXX: We can treat dbpath to avoid special
+    // characters that are not acceptable in the filesystem
     this.addressIndex = new LevelAddressIndex(dbpath);
     this.historyIndex = new LevelHistoryIndex(dbpath);
     this.utxoIndex = new LevelUtxoIndex(dbpath);
@@ -157,10 +154,13 @@ export default class LevelDBStore implements IStore {
         }
       }
     }
-    if ((await this.walletIndex.getCurrentAddressIndex()) < maxIndex) {
-      await this.walletIndex.setCurrentAddressIndex(Math.min(maxIndex + 1, await this.walletIndex.getLastLoadedAddressIndex()));
+    // Address index should always be greater than or equal to 0
+    if (maxIndex >= 0) {
+      if ((await this.walletIndex.getCurrentAddressIndex()) < maxIndex) {
+        await this.walletIndex.setCurrentAddressIndex(Math.min(maxIndex + 1, await this.walletIndex.getLastLoadedAddressIndex()));
+      }
+      await this.walletIndex.setLastUsedAddressIndex(maxIndex);
     }
-    await this.walletIndex.setLastUsedAddressIndex(maxIndex);
   }
 
   async getTx(txId: string): Promise<IHistoryTx | null> {
@@ -268,9 +268,6 @@ export default class LevelDBStore implements IStore {
   // Wallet
 
   async saveAccessData(data: IWalletAccessData): Promise<void> {
-    if (this.xpubkey !== data.xpubkey) {
-      throw new Error('Invalid access data: xpubkey used to initiate the store does not match access data being saved');
-    }
     await this.walletIndex.saveAccessData(data);
   }
 
@@ -322,9 +319,7 @@ export default class LevelDBStore implements IStore {
     await this.walletIndex.setItem(key, value);
   }
 
-  async cleanStorage(cleanHistory?: boolean | undefined, cleanAddresses?: boolean | undefined): Promise<void> {
-    // set access data to null
-    await this.walletIndex.cleanAccessData();
+  async cleanStorage(cleanHistory: boolean = false, cleanAddresses: boolean = false): Promise<void> {
     if (cleanHistory) {
       await this.tokenIndex.clear();
       await this.historyIndex.clear();
