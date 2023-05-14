@@ -1792,7 +1792,7 @@ describe('mintTokens', () => {
 
     // Validating a new mint authority was created by default
     const authorityOutputs2 = mintResponse2.outputs.filter(
-      o => transaction.isAuthorityOutput({token_data: o.tokenData})
+      o => transaction.isTokenDataAuthority(o.tokenData)
     );
     expect(authorityOutputs2).toHaveLength(1);
     const authorityOutput = authorityOutputs2[0];
@@ -1908,7 +1908,7 @@ describe('meltTokens', () => {
 
     // Validating a new melt authority was created by default
     const authorityOutputs = meltResponse.outputs.filter(
-      o => transaction.isAuthorityOutput({token_data: o.tokenData})
+      o => transaction.isTokenDataAuthority(o.tokenData)
     );
     expect(authorityOutputs).toHaveLength(1);
     const authorityOutput = authorityOutputs[0];
