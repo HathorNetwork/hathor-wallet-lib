@@ -528,7 +528,8 @@ describe('getAcctPathXpriv', () => {
 
   it('should work with leveldb store', async () => {
     const xpriv = HDPrivateKey();
-    const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
+    const walletId = crypto.Hash.sha256(Buffer.from(xpriv.xpubkey)).toString('hex');
+    const store = new LevelDBStore(walletId, DATA_DIR);
     await getAcctXprivTest(store);
   });
 
@@ -577,7 +578,8 @@ describe('access data methods', () => {
   });
 
   it('should work with leveldb store', async () => {
-    const store = new LevelDBStore(DATA_DIR, mainKey.xpubkey);
+    const walletId = crypto.Hash.sha256(Buffer.from(mainKey.xpubkey)).toString('hex');
+    const store = new LevelDBStore(walletId, DATA_DIR);
     await accessDataTest(store);
   });
 
@@ -669,7 +671,8 @@ describe('checkPin and checkPassword', () => {
         networkName: 'testnet',
       },
     );
-    const store = new LevelDBStore(DATA_DIR, accessData.xpubkey);
+    const walletId = crypto.Hash.sha256(Buffer.from(accessData.xpubkey)).toString('hex');
+    const store = new LevelDBStore(walletId, DATA_DIR);
     await store.saveAccessData(accessData);
     await checkPinTest(store);
     await checkPasswdTest(store);

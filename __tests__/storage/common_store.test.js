@@ -177,7 +177,8 @@ describe('registered tokens', () => {
 
   it('should work with leveldb store', async () => {
     const xpriv = new HDPrivateKey();
-    const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
+    const walletId = crypto.Hash.sha256(Buffer.from(xpriv.xpubkey)).toString('hex');
+    const store = new LevelDBStore(walletId, DATA_DIR);
     await testRegisteredTokens(store);
   });
 
