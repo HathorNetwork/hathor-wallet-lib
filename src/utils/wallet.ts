@@ -15,11 +15,24 @@ import Network from '../models/network';
 import _ from 'lodash';
 import helpers from './helpers';
 
-import { IEncryptedData, IMultisigData, IWalletAccessData, WalletType, WALLET_FLAGS } from '../types';
+import { IMultisigData, IWalletAccessData, WalletType, WALLET_FLAGS } from '../types';
 import { encryptData, decryptData } from './crypto';
 
 
 const wallet = {
+  /**
+   * Get the wallet id given the change path xpubkey
+   *
+   * @param {string} xpub - The change path xpubkey
+   * @returns {string} The walletId
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  getWalletIdFromXPub(xpub: string): string {
+    return crypto.Hash.sha256sha256(Buffer.from(xpub)).toString('hex');
+  },
+
   /**
    * Verify if words passed to generate wallet are valid. In case of invalid, returns message
    *

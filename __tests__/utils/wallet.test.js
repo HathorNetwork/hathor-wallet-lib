@@ -10,7 +10,7 @@ import { XPubError, InvalidWords, UncompressedPubKeyError, InvalidPasswdError } 
 import Network from '../../src/models/network';
 import Mnemonic from 'bitcore-mnemonic';
 import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE, P2SH_ACCT_PATH } from '../../src/constants';
-import { util, HDPrivateKey, HDPublicKey } from 'bitcore-lib';
+import { crypto, util, HDPrivateKey, HDPublicKey } from 'bitcore-lib';
 import { hexToBuffer } from '../../src/utils/buffer';
 import { WalletType, WALLET_FLAGS } from '../../src/types';
 import { checkPassword } from '../../src/utils/crypto';
@@ -581,3 +581,10 @@ test('change pin and password', async () => {
   expect(checkPassword(bothChangedAccessData.mainKey, '321')).toEqual(true);
   expect(checkPassword(bothChangedAccessData.authKey, '321')).toEqual(true);
 })
+
+test('getWalletIdFromXpub', () => {
+  // The walletId is the sha256d of a given string in hex format
+  const str = 'change-path-xpub';
+  const expected = crypto.Hash.sha256sha256(Buffer.from(str)).toString('hex');
+  expect(wallet.getWalletIdFromXPub(str)).toEqual(expected);
+});
