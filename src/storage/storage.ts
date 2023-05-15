@@ -31,9 +31,10 @@ import {
 import transactionUtils from '../utils/transaction';
 import { processHistory, processUtxoUnlock } from '../utils/storage';
 import config, { Config } from '../config';
-import { decryptData, encryptData } from '../utils/crypto';
+import { decryptData, checkPassword } from '../utils/crypto';
 import FullNodeConnection from '../new/connection';
 import { getAddressType } from '../utils/address';
+import walletUtils from '../utils/wallet';
 import { HATHOR_TOKEN_CONFIG, MAX_INPUTS, MAX_OUTPUTS, TOKEN_DEPOSIT_PERCENTAGE } from '../constants';
 
 const DEFAULT_ADDRESS_META: IAddressMetadata = {
@@ -780,6 +781,40 @@ export class Storage implements IStorage {
   }
 
   /**
+   * Check if the pin is correct
+   *
+   * @param {string} pinCode - Pin to check
+   * @returns {Promise<boolean>}
+   * @throws {Error} if the wallet is not initialized
+   * @throws {Error} if the wallet does not have the private key
+   */
+  async checkPin(pinCode: string): Promise<boolean> {
+    const accessData = await this._getValidAccessData();
+    if (!accessData.mainKey) {
+      throw new Error('Cannot check pin without the private key.');
+    }
+
+    return checkPassword(accessData.mainKey, pinCode);
+  }
+
+  /**
+   * Check if the password is correct
+   *
+   * @param {string} password - Password to check
+   * @returns {Promise<boolean>}
+   * @throws {Error} if the wallet is not initialized
+   * @throws {Error} if the wallet does not have the private key
+   */
+  async checkPassword(password: string): Promise<boolean> {
+    const accessData = await this._getValidAccessData();
+    if (!accessData.words) {
+      throw new Error('Cannot check password without the words.');
+    }
+
+    return checkPassword(accessData.words, password);
+  }
+
+  /**
    * Change the wallet pin.
    * @param {string} oldPin Old pin to unlock data.
    * @param {string} newPin New pin to lock data.
@@ -787,30 +822,11 @@ export class Storage implements IStorage {
    */
   async changePin(oldPin: string, newPin: string): Promise<void> {
     const accessData = await this._getValidAccessData();
-    if (!(accessData.mainKey || accessData.authKey || accessData.acctPathKey)) {
-      throw new Error('No data to change');
-    }
 
-    if (accessData.mainKey) {
-      const mainKey = decryptData(accessData.mainKey, oldPin);
-      const newEncryptedMainKey = encryptData(mainKey, newPin);
-      accessData.mainKey = newEncryptedMainKey;
-    }
-
-    if (accessData.authKey) {
-      const authKey = decryptData(accessData.authKey, oldPin);
-      const newEncryptedAuthKey = encryptData(authKey, newPin);
-      accessData.authKey = newEncryptedAuthKey;
-    }
-
-    if (accessData.acctPathKey) {
-      const acctKey = decryptData(accessData.acctPathKey, oldPin);
-      const newEncryptedAcctKey = encryptData(acctKey, newPin);
-      accessData.acctPathKey = newEncryptedAcctKey;
-    }
+    const newAccessData = walletUtils.changeEncryptionPin(accessData, oldPin, newPin);
 
     // Save the changes made
-    await this.saveAccessData(accessData);
+    await this.saveAccessData(newAccessData);
   }
 
   /**
@@ -822,16 +838,11 @@ export class Storage implements IStorage {
    */
   async changePassword(oldPassword: string, newPassword: string): Promise<void> {
     const accessData = await this._getValidAccessData();
-    if (!accessData.words) {
-      throw new Error('No data to change.');
-    }
 
-    const words = decryptData(accessData.words, oldPassword);
-    const newEncryptedWords = encryptData(words, newPassword);
-    accessData.words = newEncryptedWords;
+    const newAccessData = walletUtils.changeEncryptionPassword(accessData, oldPassword, newPassword);
 
     // Save the changes made
-    await this.saveAccessData(accessData);
+    await this.saveAccessData(newAccessData);
   }
 
   /**

@@ -15,8 +15,8 @@ import Network from '../models/network';
 import _ from 'lodash';
 import helpers from './helpers';
 
-import { IMultisigData, IWalletAccessData, WalletType, WALLET_FLAGS } from '../types';
-import { encryptData } from './crypto';
+import { IEncryptedData, IMultisigData, IWalletAccessData, WalletType, WALLET_FLAGS } from '../types';
+import { encryptData, decryptData } from './crypto';
 
 
 const wallet = {
@@ -586,6 +586,64 @@ const wallet = {
       words: encryptedWords,
       walletFlags: 0,
     };
+  },
+
+  /**
+   * Change the encryption pin on the fields that are encrypted using the pin.
+   * Will not save the access data, only return the new access data.
+   *
+   * @param {IWalletAccessData} accessData The current access data encrypted with `oldPin`.
+   * @param {string} oldPin Used to decrypt the old access data.
+   * @param {string} newPin Encrypt the fields with this pin.
+   * @returns {IWalletAccessData} The access data with fields encrypted with `newPin`.
+   */
+  changeEncryptionPin(accessData: IWalletAccessData, oldPin: string, newPin: string): IWalletAccessData {
+    const data = _.cloneDeep(accessData);
+    if (!(data.mainKey || data.authKey || data.acctPathKey)) {
+      throw new Error('No data to change');
+    }
+
+    if (data.mainKey) {
+      const mainKey = decryptData(data.mainKey, oldPin);
+      const newEncryptedMainKey = encryptData(mainKey, newPin);
+      data.mainKey = newEncryptedMainKey;
+    }
+
+    if (data.authKey) {
+      const authKey = decryptData(data.authKey, oldPin);
+      const newEncryptedAuthKey = encryptData(authKey, newPin);
+      data.authKey = newEncryptedAuthKey;
+    }
+
+    if (data.acctPathKey) {
+      const acctPathKey = decryptData(data.acctPathKey, oldPin);
+      const newEncryptedAcctPathKey = encryptData(acctPathKey, newPin);
+      data.acctPathKey = newEncryptedAcctPathKey;
+    }
+
+    return data;
+  },
+
+  /**
+   * Change the encryption password on the seed.
+   * Will not save the access data, only return the new access data.
+   *
+   * @param {IWalletAccessData} accessData The current access data encrypted with `oldPassword`.
+   * @param {string} oldPassword Used to decrypt the old access data.
+   * @param {string} newPassword Encrypt the seed with this password.
+   * @returns {IWalletAccessData} The access data with fields encrypted with `newPassword`.
+   */
+  changeEncryptionPassword(accessData: IWalletAccessData, oldPassword: string, newPassword: string): IWalletAccessData {
+    const data = _.cloneDeep(accessData);
+    if (!data.words) {
+      throw new Error('No data to change');
+    }
+
+    const words = decryptData(data.words, oldPassword);
+    const newEncryptedWords = encryptData(words, newPassword);
+    data.words = newEncryptedWords;
+
+    return data;
   },
 }
 

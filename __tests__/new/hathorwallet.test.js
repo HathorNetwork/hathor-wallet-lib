@@ -604,3 +604,79 @@ test('start', async () => {
   const actualAccessData = await storage.getAccessData();
   expect(decryptData(actualAccessData.words, '456')).toEqual(seed);
 });
+
+test('checkPin', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+
+  const checkPinSpy = jest.spyOn(storage, 'checkPin');
+
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = storage;
+
+  checkPinSpy.mockReturnValue(Promise.resolve(false));
+  await expect(hWallet.checkPin('0000')).resolves.toEqual(false);
+  expect(checkPinSpy).toHaveBeenCalledTimes(1);
+  checkPinSpy.mockClear()
+
+  checkPinSpy.mockReturnValue(Promise.resolve(true));
+  await expect(hWallet.checkPin('0000')).resolves.toEqual(true);
+  expect(checkPinSpy).toHaveBeenCalledTimes(1);
+});
+
+test('checkPassword', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+
+  const checkPasswdSpy = jest.spyOn(storage, 'checkPassword');
+
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = storage;
+
+  checkPasswdSpy.mockReturnValue(Promise.resolve(false));
+  await expect(hWallet.checkPassword('0000')).resolves.toEqual(false);
+  expect(checkPasswdSpy).toHaveBeenCalledTimes(1);
+  checkPasswdSpy.mockClear()
+
+  checkPasswdSpy.mockReturnValue(Promise.resolve(true));
+  await expect(hWallet.checkPassword('0000')).resolves.toEqual(true);
+  expect(checkPasswdSpy).toHaveBeenCalledTimes(1);
+});
+
+test('checkPinAndPassword', async () => {
+  const hWallet = new FakeHathorWallet();
+  const checkPinSpy = jest.spyOn(hWallet, 'checkPin');
+  const checkPasswdSpy = jest.spyOn(hWallet, 'checkPassword');
+
+  checkPinSpy.mockReturnValue(Promise.resolve(false));
+  checkPasswdSpy.mockReturnValue(Promise.resolve(false));
+  await expect(hWallet.checkPinAndPassword('0000', 'passwd')).resolves.toEqual(false);
+  expect(checkPinSpy).toHaveBeenCalledTimes(1);
+  expect(checkPasswdSpy).toHaveBeenCalledTimes(0);
+  checkPinSpy.mockClear();
+  checkPasswdSpy.mockClear();
+
+  checkPinSpy.mockReturnValue(Promise.resolve(true));
+  checkPasswdSpy.mockReturnValue(Promise.resolve(false));
+  await expect(hWallet.checkPinAndPassword('0000', 'passwd')).resolves.toEqual(false);
+  expect(checkPinSpy).toHaveBeenCalledTimes(1);
+  expect(checkPasswdSpy).toHaveBeenCalledTimes(1);
+  checkPinSpy.mockClear();
+  checkPasswdSpy.mockClear();
+
+  checkPinSpy.mockReturnValue(Promise.resolve(true));
+  checkPasswdSpy.mockReturnValue(Promise.resolve(true));
+  await expect(hWallet.checkPinAndPassword('0000', 'passwd')).resolves.toEqual(true);
+  expect(checkPinSpy).toHaveBeenCalledTimes(1);
+  expect(checkPasswdSpy).toHaveBeenCalledTimes(1);
+  checkPinSpy.mockClear();
+  checkPasswdSpy.mockClear();
+
+  checkPinSpy.mockReturnValue(Promise.resolve(false));
+  checkPasswdSpy.mockReturnValue(Promise.resolve(true));
+  await expect(hWallet.checkPinAndPassword('0000', 'passwd')).resolves.toEqual(false);
+  expect(checkPinSpy).toHaveBeenCalledTimes(1);
+  expect(checkPasswdSpy).toHaveBeenCalledTimes(0);
+  checkPinSpy.mockClear();
+  checkPasswdSpy.mockClear();
+});
