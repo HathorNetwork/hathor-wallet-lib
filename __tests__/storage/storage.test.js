@@ -14,7 +14,6 @@ import { P2PKH_ACCT_PATH, TOKEN_DEPOSIT_PERCENTAGE, TOKEN_AUTHORITY_MASK, TOKEN_
 import { HDPrivateKey, crypto } from "bitcore-lib";
 import Mnemonic from 'bitcore-mnemonic';
 import * as cryptoUtils from '../../src/utils/crypto';
-import walletUtils from '../../src/utils/wallet';
 import { InvalidPasswdError } from '../../src/errors';
 import Network from '../../src/models/network';
 
