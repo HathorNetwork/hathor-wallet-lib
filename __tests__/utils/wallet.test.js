@@ -6,7 +6,7 @@
  */
 
 import wallet from '../../src/utils/wallet';
-import { XPubError, InvalidWords, UncompressedPubKeyError } from '../../src/errors';
+import { XPubError, InvalidWords, UncompressedPubKeyError, InvalidPasswdError } from '../../src/errors';
 import Network from '../../src/models/network';
 import Mnemonic from 'bitcore-mnemonic';
 import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE, P2SH_ACCT_PATH } from '../../src/constants';
@@ -563,8 +563,8 @@ test('change pin and password', async () => {
   expect(checkPassword(accessData.mainKey, '123')).toEqual(true);
   expect(checkPassword(accessData.authKey, '123')).toEqual(true);
 
-  expect(() => wallet.changeEncryptionPin(accessData, 'invalid-pin', '321')).toThrow('Old pin is incorrect.');
-  expect(() => wallet.changeEncryptionPassword(accessData, 'invalid-passwd', '456')).toThrow('Old password is incorrect.');
+  expect(() => wallet.changeEncryptionPin(accessData, 'invalid-pin', '321')).toThrow(InvalidPasswdError);
+  expect(() => wallet.changeEncryptionPassword(accessData, 'invalid-passwd', '456')).toThrow(InvalidPasswdError);
 
   const pinChangedAccessData = wallet.changeEncryptionPin(accessData, '123', '321');
   expect(checkPassword(pinChangedAccessData.words, '456')).toEqual(true);
