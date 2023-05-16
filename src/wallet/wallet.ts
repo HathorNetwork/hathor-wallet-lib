@@ -65,7 +65,7 @@ import {
   FullNodeTxResponse,
   FullNodeTxConfirmationDataResponse,
 } from './types';
-import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../errors';
+import { SendTxError, UtxoError, WalletRequestError, WalletError, UninitializedWalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import { IStorage, IWalletAccessData } from '../types';
 
@@ -126,6 +126,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     network,
     passphrase = '',
     enableWs = true,
+    storage = null,
   }: {
     requestPassword: Function,
     seed?: string | null,
@@ -134,6 +135,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     network: Network,
     passphrase?: string,
     enableWs: boolean,
+    storage: IStorage | null,
   }) {
     super();
 
@@ -154,8 +156,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       walletUtils.wordsValid(seed);
     }
 
-    const store = new MemoryStore();
-    this.storage = new Storage(store);
+    if (!storage) {
+      const store = new MemoryStore();
+      this.storage = new Storage(store);
+    } else {
+      this.storage = storage;
+    }
 
     // Setup the connection so clients can listen to its events before it is started
     this.conn = new WalletServiceConnection();
@@ -302,12 +308,57 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async start({ pinCode, password }) {
+  async start({ pinCode, password }: { pinCode?: string, password?: string } = {}) {
     if (!pinCode) {
       throw new Error('Pin code is required when starting the wallet.');
     }
 
     this.setState(walletState.LOADING);
+
+    let hasAccessData: boolean;
+    try {
+      const accessData = await this.storage.getAccessData();
+      hasAccessData = !!accessData;
+    } catch (err) {
+      if (err instanceof UninitializedWalletError) {
+        hasAccessData = false;
+      } else {
+        throw err;
+      }
+    }
+    if (!hasAccessData) {
+      let accessData: IWalletAccessData;
+      if (this.seed) {
+        if (!password) {
+          throw new Error('Password is required when starting the wallet from the seed.');
+        }
+        accessData = walletUtils.generateAccessDataFromSeed(
+          this.seed,
+          {
+            passphrase: this.passphrase,
+            pin: pinCode,
+            password,
+            networkName: this.network.name,
+            // multisig: not implemented on wallet service yet
+          }
+        );
+      } else if (this.xpriv) {
+        // generateAccessDataFromXpriv expects a xpriv on the change level path
+        const accountLevelPrivKey = new bitcore.HDPrivateKey(this.xpriv);
+        const changeLevelPrivKey = accountLevelPrivKey.deriveNonCompliantChild(0);
+
+        accessData = walletUtils.generateAccessDataFromXpriv(
+          changeLevelPrivKey.xprivkey,
+          {
+            pin: pinCode,
+            // multisig: not implemented on wallet service yet
+          },
+        );
+      } else {
+        throw new Error('This should never happen.');
+      }
+      await this.storage.saveAccessData(accessData);
+    }
 
     const {
       xpub,
@@ -318,35 +369,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       firstAddress,
       authDerivedPrivKey,
     } = await this.generateCreateWalletAuthData(pinCode);
-
-    let accessData: IWalletAccessData;
-    if (this.seed) {
-      accessData = walletUtils.generateAccessDataFromSeed(
-        this.seed,
-        {
-          passphrase: this.passphrase,
-          pin: pinCode,
-          password,
-          networkName: this.network.name,
-          // multisig: not implemented on wallet service yet
-        }
-      );
-    } else if (this.xpriv) {
-      // generateAccessDataFromXpriv expects a xpriv on the change level path
-      const accountLevelPrivKey = new bitcore.HDPrivateKey(this.xpriv);
-      const changeLevelPrivKey = accountLevelPrivKey.deriveNonCompliantChild(0);
-
-      accessData = walletUtils.generateAccessDataFromXpriv(
-        changeLevelPrivKey.xprivkey,
-        {
-          pin: pinCode,
-          // multisig: not implemented on wallet service yet
-        },
-      );
-    } else {
-      throw new Error('This should never happen.');
-    }
-    await this.storage.saveAccessData(accessData);
 
     this.xpub = xpub;
     this.authPrivKey = authDerivedPrivKey;
