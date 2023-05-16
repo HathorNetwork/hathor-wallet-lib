@@ -11,7 +11,7 @@ import tx_history from '../__fixtures__/tx_history';
 import { processHistory, loadAddresses } from '../../src/utils/storage';
 import walletUtils from '../../src/utils/wallet';
 import { P2PKH_ACCT_PATH, TOKEN_DEPOSIT_PERCENTAGE, TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../../src/constants';
-import { HDPrivateKey, crypto } from "bitcore-lib";
+import { HDPrivateKey } from "bitcore-lib";
 import Mnemonic from 'bitcore-mnemonic';
 import * as cryptoUtils from '../../src/utils/crypto';
 import { InvalidPasswdError } from '../../src/errors';
@@ -38,7 +38,7 @@ describe('handleStop', () => {
   }, 10000);
 
   it('should work with leveldb store', async () => {
-    const walletId = crypto.Hash.sha256(Buffer.from(accessData.xpubkey)).toString('hex');
+    const walletId = walletUtils.getWalletIdFromXPub(accessData.xpubkey);
     const store = new LevelDBStore(walletId, DATA_DIR);
     await handleStopTest(store);
   }, 10000);
@@ -252,7 +252,7 @@ describe('process locked utxos', () => {
 
   it('should work with leveldb store', async () => {
     const xpriv = HDPrivateKey();
-    const walletId = crypto.Hash.sha256(Buffer.from(xpriv.xpubkey)).toString('hex');
+    const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
     const store = new LevelDBStore(walletId, DATA_DIR);
     await processLockedUtxoTest(store);
   });
@@ -495,7 +495,7 @@ describe('getChangeAddress', () => {
 
   it('should work with leveldb store', async () => {
     const xpriv = HDPrivateKey();
-    const walletId = crypto.Hash.sha256(Buffer.from(xpriv.xpubkey)).toString('hex');
+    const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
     const store = new LevelDBStore(walletId, DATA_DIR);
     await getChangeAddressTest(store);
   });
@@ -528,7 +528,8 @@ describe('getAcctPathXpriv', () => {
 
   it('should work with leveldb store', async () => {
     const xpriv = HDPrivateKey();
-    const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
+    const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
+    const store = new LevelDBStore(walletId, DATA_DIR);
     await getAcctXprivTest(store);
   });
 
@@ -577,7 +578,8 @@ describe('access data methods', () => {
   });
 
   it('should work with leveldb store', async () => {
-    const store = new LevelDBStore(DATA_DIR, mainKey.xpubkey);
+    const walletId = walletUtils.getWalletIdFromXPub(mainKey.xpubkey);
+    const store = new LevelDBStore(walletId, DATA_DIR);
     await accessDataTest(store);
   });
 
@@ -669,7 +671,8 @@ describe('checkPin and checkPassword', () => {
         networkName: 'testnet',
       },
     );
-    const store = new LevelDBStore(DATA_DIR, accessData.xpubkey);
+    const walletId = walletUtils.getWalletIdFromXPub(accessData.xpubkey);
+    const store = new LevelDBStore(walletId, DATA_DIR);
     await store.saveAccessData(accessData);
     await checkPinTest(store);
     await checkPasswdTest(store);

@@ -1,16 +1,12 @@
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import {
-  createTokenHelper,
   DEFAULT_PASSWORD,
   DEFAULT_PIN_CODE,
   generateConnection,
-  generateMultisigWalletHelper,
-  generateWalletHelper,
   stopAllWallets,
   waitForTxReceived,
   waitForWalletReady,
-  waitUntilNextTimestamp
 } from '../helpers/wallet.helper';
 import { delay } from '../utils/core.util';
 
@@ -18,7 +14,6 @@ import { LevelDBStore, Storage } from '../../../src/storage';
 import walletUtils from '../../../src/utils/wallet';
 import HathorWallet from '../../../src/new/wallet';
 import { loggers } from '../utils/logger.util';
-import { crypto } from "bitcore-lib";
 
 const startedWallets = [];
 
@@ -47,7 +42,8 @@ describe('LevelDB persistent store', () => {
     const DATA_DIR = './testdata.leveldb';
     const walletData = precalculationHelpers.test.getPrecalculatedWallet();
     const xpubkey = walletUtils.getXPubKeyFromSeed(walletData.words, { accountDerivationIndex: '0\'/0' });
-    const walletId = crypto.Hash.sha256(Buffer.from(xpubkey)).toString('hex');
+    const walletId = walletUtils.getWalletIdFromXPub(xpubkey);
+
     const store = new LevelDBStore(walletId, DATA_DIR);
     const storage = new Storage(store);
 
