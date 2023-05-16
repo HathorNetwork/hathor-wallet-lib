@@ -287,7 +287,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   static getWalletIdFromXPub(xpub: string) {
-    return crypto.Hash.sha256sha256(Buffer.from(xpub)).toString('hex');
+    return walletUtils.getWalletIdFromXPub(xpub);
   }
 
   /**
