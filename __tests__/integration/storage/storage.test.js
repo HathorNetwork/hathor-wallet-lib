@@ -15,7 +15,6 @@ import SendTransaction from '../../../src/new/sendTransaction';
 import { LevelDBStore, MemoryStore, Storage } from '../../../src/storage';
 import walletUtils from '../../../src/utils/wallet';
 import { HATHOR_TOKEN_CONFIG } from '../../../src/constants';
-import { crypto } from "bitcore-lib";
 
 const startedWallets = [];
 
@@ -105,7 +104,7 @@ describe('locked utxos', () => {
     const DATA_DIR = './testdata.leveldb';
     const walletDataLDB = precalculationHelpers.test.getPrecalculatedWallet();
     const xpubkeyLDB = walletUtils.getXPubKeyFromSeed(walletDataLDB.words, { accountDerivationIndex: '0\'/0' });
-    const walletId = crypto.Hash.sha256(Buffer.from(xpubkeyLDB)).toString('hex');
+    const walletId = walletUtils.getWalletIdFromXPub(xpubkeyLDB);
     const storeLDB = new LevelDBStore(walletId, DATA_DIR);
     const storageLDB = new Storage(storeLDB);
     await testUnlockWhenSpent(storageLDB, walletDataLDB);

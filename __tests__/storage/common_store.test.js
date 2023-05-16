@@ -8,7 +8,7 @@
 import { LevelDBStore, MemoryStore, Storage } from "../../src/storage";
 import { HDPrivateKey } from "bitcore-lib";
 import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK } from "../../src/constants";
-import { crypto } from "bitcore-lib";
+import walletUtils from "../../src/utils/wallet";
 
 const DATA_DIR = './testdata.leveldb';
 
@@ -34,7 +34,7 @@ describe("locked utxo methods", () => {
 
   it('should work with leveldb store', async () => {
     const xpriv = new HDPrivateKey();
-    const walletId = crypto.Hash.sha256(Buffer.from(xpriv.xpubkey)).toString('hex');
+    const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
     const store = new LevelDBStore(walletId, DATA_DIR);
     await testLockedUtxoMethods(store);
   });
@@ -177,7 +177,7 @@ describe('registered tokens', () => {
 
   it('should work with leveldb store', async () => {
     const xpriv = new HDPrivateKey();
-    const walletId = crypto.Hash.sha256(Buffer.from(xpriv.xpubkey)).toString('hex');
+    const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
     const store = new LevelDBStore(walletId, DATA_DIR);
     await testRegisteredTokens(store);
   });
