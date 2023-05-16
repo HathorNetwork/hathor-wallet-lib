@@ -68,6 +68,7 @@ import {
 import { SendTxError, UtxoError, WalletRequestError, WalletError, UninitializedWalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import { IStorage, IWalletAccessData } from '../types';
+import { encryptData } from '../utils/crypto';
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
@@ -94,6 +95,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   private xpub: string | null;
   // Xpriv of the wallet on the account derivation path
   private xpriv: string | null;
+  private authxpriv: string | null;
   // Xpriv of the auth derivation path
   private authPrivKey: bitcore.HDPrivateKey | null;
   // State of the wallet. One of the walletState enum options
@@ -122,6 +124,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     requestPassword,
     seed = null,
     xpriv = null,
+    authxpriv = null,
     xpub = null,
     network,
     passphrase = '',
@@ -131,6 +134,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     requestPassword: Function,
     seed?: string | null,
     xpriv?: string | null,
+    authxpriv?: string | null,
     xpub?: string | null,
     network: Network,
     passphrase?: string,
@@ -151,6 +155,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       throw Error('You can\'t use xpriv with passphrase.');
     }
 
+    if (xpriv && !authxpriv) {
+      throw new Error('You must provide both the account path xpriv and auth path xpriv.');
+    }
+
     if (seed) {
       // It will throw InvalidWords error in case is not valid
       walletUtils.wordsValid(seed);
@@ -169,6 +177,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.state = walletState.NOT_STARTED;
 
     this.xpriv = xpriv;
+    this.authxpriv = authxpriv;
     this.seed = seed;
     this.xpub = xpub;
 
@@ -354,6 +363,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
             // multisig: not implemented on wallet service yet
           },
         );
+        accessData.authKey = encryptData(this.authxpriv!, pinCode);
       } else {
         throw new Error('This should never happen.');
       }
