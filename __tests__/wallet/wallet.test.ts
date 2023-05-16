@@ -21,6 +21,11 @@ import { TxNotFoundError, SendTxError } from '../../src/errors';
 import SendTransactionWalletService from '../../src/wallet/sendTransactionWalletService';
 import transaction from '../../src/utils/transaction';
 import { TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
+import { MemoryStore, Storage } from '../../src/storage';
+import walletApi from '../../src/wallet/api/walletApi';
+import { WalletStatus } from '../../src/wallet/types';
+import wallet from '../../src/utils/wallet';
+import { resolve } from 'path';
 
 // Mock SendTransactionWalletService class so we don't try to send actual transactions
 // TODO: We should refactor the way we use classes from inside other classes. Using dependency injection would facilitate unit tests a lot and avoid mocks like this.
@@ -798,7 +803,7 @@ test('prepareDestroyAuthority', async () => {
   // Clear mocks
   spy1.mockRestore();
   spy2.mockRestore();
-  spy3.mockRestore();  
+  spy3.mockRestore();
 });
 
 test('destroyAuthority should throw if wallet is not ready', async () => {
@@ -1260,4 +1265,50 @@ test('createNFTs', async () => {
   spy2.mockRestore();
   spy3.mockRestore();
   spy4.mockRestore();
+});
+
+test('start', async () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = defaultWalletSeed;
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+
+  jest.spyOn(HathorWalletServiceWallet.prototype, 'pollForWalletStatus').mockImplementation(() => Promise.resolve());
+  jest.spyOn(HathorWalletServiceWallet.prototype, 'setupConnection').mockImplementation(jest.fn());
+  jest.spyOn(walletApi, 'getNewAddresses')
+    .mockImplementation(() => Promise.resolve({ success: true, addresses: [] }));
+  jest.spyOn(walletApi, 'createWallet')
+    .mockImplementation(() => Promise.resolve({
+      success: true,
+      status: {
+        walletId: 'id',
+        xpubkey: 'xpub',
+        status: 'creating',
+        maxGap: 20,
+        createdAt: 0,
+        readyAt: 0,
+      },
+    }));
+
+  const wallet1 = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    storage,
+  });
+  await wallet1.start({ pinCode: '1234', password: '1234' });
+  await wallet1.stop();
+
+  // The storage should have the accessData
+  const wallet2 = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    storage,
+  });
+  await wallet2.start({ pinCode: '1234', password: '1234' });
+  await wallet2.stop();
 });
