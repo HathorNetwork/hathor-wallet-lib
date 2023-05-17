@@ -36,6 +36,7 @@ import FullNodeConnection from '../new/connection';
 import { getAddressType } from '../utils/address';
 import walletUtils from '../utils/wallet';
 import { HATHOR_TOKEN_CONFIG, MAX_INPUTS, MAX_OUTPUTS, TOKEN_DEPOSIT_PERCENTAGE } from '../constants';
+import { UninitializedWalletError } from '../errors';
 
 const DEFAULT_ADDRESS_META: IAddressMetadata = {
   numTransactions: 0,
@@ -634,7 +635,7 @@ export class Storage implements IStorage {
   async _getValidAccessData(): Promise<IWalletAccessData> {
     const accessData = await this.getAccessData();
     if (!accessData) {
-      throw new Error('Wallet was not initialized');
+      throw new UninitializedWalletError();
     }
     return accessData;
   }
