@@ -454,6 +454,7 @@ const tokens = {
    * }
    * @param {Object} options {
    *   {boolean} createAnotherMint If should create another mint output after spending this one
+   *   {string} mintAuthorityAddress The address to send the new mint authority created
    *   {boolean} createMelt If should create a melt output (useful when creating a new token)
    *   {string} changeAddress Address to send the change of HTR after mint deposit
    *   {boolean} isNFT If it's getting mint data for an NFT
@@ -469,12 +470,13 @@ const tokens = {
   createMintData(mintInput, token, address, amount, depositInputs, options) {
     const fnOptions = Object.assign({
       createAnotherMint: true,
+      mintAuthorityAddress: null,
       createMelt: false,
       changeAddress: null,
       isNFT: false,
     }, options);
 
-    const { createAnotherMint, createMelt, changeAddress, isNFT } = fnOptions;
+    const { createAnotherMint, mintAuthorityAddress, createMelt, changeAddress, isNFT } = fnOptions;
     const inputs = [];
     const outputs = [];
 
@@ -507,7 +509,7 @@ const tokens = {
 
     if (createAnotherMint) {
       // Output2: new mint authority for this wallet
-      const newAddress = wallet.getAddressToUse();
+      const newAddress = mintAuthorityAddress || wallet.getAddressToUse();
       outputs.push({'address': newAddress, 'value': TOKEN_MINT_MASK, 'tokenData': AUTHORITY_TOKEN_DATA});
     }
 
@@ -550,6 +552,7 @@ const tokens = {
    * @param {Object} options {
    *   {number} minimumTimestamp Tx minimum timestamp (default = 0)
    *   {boolean} createAnotherMint If should create another mint output after spending this one
+   *   {string} mintAuthorityAddress The address to send the new mint authority created
    *   {boolean} createMelt If should create a melt output (useful when creating a new token)
    *   {string} changeAddress Address to send the change of HTR after mint deposit
    * }
@@ -564,6 +567,7 @@ const tokens = {
   generateMintData(mintInput, token, address, amount, depositInputs, pin, options) {
     const fnOptions = Object.assign({
       createAnotherMint: true,
+      mintAuthorityAddress: null,
       createMelt: false,
       minimumTimestamp: 0,
       changeAddress: null,
@@ -642,6 +646,7 @@ const tokens = {
    *  {
    *   'depositAddress': address of the HTR deposit back
    *   'changeAddress': address of the change output
+   *   'meltAuthorityAddress': the address to send the new melt authority created
    *  }
    *
    * @return {Object} Melt data {'inputs', 'outputs', 'tokens'}
@@ -649,8 +654,8 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  createMeltData(meltInput, token, amount, createAnotherMelt, options = { depositAddress: null, changeAddress: null }) {
-    const { depositAddress, changeAddress } = options;
+  createMeltData(meltInput, token, amount, createAnotherMelt, options = { depositAddress: null, changeAddress: null, meltAuthorityAddress: null }) {
+    const { depositAddress, changeAddress, meltAuthorityAddress } = options;
     // Get inputs that sum at least the amount requested to melt
     const result = this.getMeltInputs(amount, token);
 
@@ -671,7 +676,7 @@ const tokens = {
 
     if (createAnotherMelt) {
       // New melt authority for this wallet
-      const newAddress = wallet.getAddressToUse();
+      const newAddress = meltAuthorityAddress || wallet.getAddressToUse();
       outputs.push({'address': newAddress, 'value': TOKEN_MELT_MASK, 'tokenData': AUTHORITY_TOKEN_DATA});
     }
 
@@ -703,6 +708,7 @@ const tokens = {
    *  {
    *   'depositAddress': address of the HTR deposit back
    *   'changeAddress': address of the change output for the custom token melt
+   *   'meltAuthorityAddress': the address to send the new melt authority created
    *  }
    *
    * @return {Object} Prepared transaction data with signed inputs, weight, timestamp
@@ -710,7 +716,7 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  generateMeltData(meltInput, token, amount, pin, createAnotherMelt, options = { depositAddress: null, changeAddress: null }) {
+  generateMeltData(meltInput, token, amount, pin, createAnotherMelt, options = { depositAddress: null, changeAddress: null, meltAuthorityAddress: null }) {
     // Get melt data
     const newTxData = this.createMeltData(meltInput, token, amount, createAnotherMelt, options);
     if (!newTxData) {
