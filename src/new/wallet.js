@@ -1820,7 +1820,7 @@ class HathorWallet extends EventEmitter {
       return Promise.reject({success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED});
     }
 
-    if (newOptions.mintAuthorityAddress && !allowExternalMintAuthorityAddress) {
+    if (newOptions.mintAuthorityAddress && !newOptions.allowExternalMintAuthorityAddress) {
       // Validate that the mint authority address belongs to the wallet
       if (!this.isAddressMine(newOptions.mintAuthorityAddress)) {
         return Promise.reject({ success: false, message: 'The mint authority address must belong to your wallet.' });
@@ -1914,7 +1914,7 @@ class HathorWallet extends EventEmitter {
       return Promise.reject({success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED});
     }
 
-    if (newOptions.meltAuthorityAddress && !allowExternalMeltAuthorityAddress) {
+    if (newOptions.meltAuthorityAddress && !newOptions.allowExternalMeltAuthorityAddress) {
       // Validate that the melt authority address belongs to the wallet
       if (!this.isAddressMine(newOptions.meltAuthorityAddress)) {
         return Promise.reject({ success: false, message: 'The melt authority address must belong to your wallet.' });
