@@ -95,7 +95,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   private xpub: string | null;
   // Xpriv of the wallet on the account derivation path
   private xpriv: string | null;
-  private authxpriv: string | null;
   // Xpriv of the auth derivation path
   private authPrivKey: bitcore.HDPrivateKey | null;
   // State of the wallet. One of the walletState enum options
@@ -177,9 +176,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.state = walletState.NOT_STARTED;
 
     this.xpriv = xpriv;
-    this.authxpriv = authxpriv;
     this.seed = seed;
     this.xpub = xpub;
+    this.authPrivKey = authxpriv ? bitcore.HDPrivateKey(authxpriv) : null;
 
     this.passphrase = passphrase
 
@@ -190,7 +189,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.isSendingTx = false;
     this.txProposalId = null;
     this.xpub = null;
-    this.authPrivKey = null;
 
     this.network = network;
     networkInstance.setNetwork(this.network.name);
@@ -363,7 +361,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
             // multisig: not implemented on wallet service yet
           },
         );
-        accessData.authKey = encryptData(this.authxpriv!, pinCode);
+        accessData.authKey = encryptData(this.authPrivKey.xprivkey!, pinCode);
       } else {
         throw new Error('This should never happen.');
       }
