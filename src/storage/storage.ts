@@ -862,4 +862,9 @@ export class Storage implements IStorage {
   async getGapLimit(): Promise<number> {
     return this.store.getGapLimit();
   }
+
+  async isHardwareWallet(): Promise<boolean> {
+    const accessData = await this._getValidAccessData();
+    return (accessData.walletFlags & WALLET_FLAGS.HARDWARE) > 0;
+  }
 }

@@ -395,7 +395,13 @@ const wallet = {
    * @param {{ multisig: IMultisigData }} [options={}] Options to generate the access data.
    * @returns {IWalletAccessData}
    */
-  generateAccessDataFromXpub(xpubkey: string, {multisig}: {multisig?: IMultisigData} = {}): IWalletAccessData {
+  generateAccessDataFromXpub(
+    xpubkey: string,
+    { multisig, hardware = false }: { multisig?: IMultisigData, hardware?: boolean} = {}): IWalletAccessData {
+    let walletFlags = 0 | WALLET_FLAGS.READONLY;
+    if (hardware) {
+      walletFlags |= WALLET_FLAGS.HARDWARE;
+    }
     let walletType: WalletType;
     if (multisig === undefined) {
       walletType = WalletType.P2PKH;
@@ -444,7 +450,7 @@ const wallet = {
       walletType,
       multisigData,
       // We force the readonly flag because we are starting a wallet without the private key
-      walletFlags: 0 | WALLET_FLAGS.READONLY,
+      walletFlags,
     };
   },
 
