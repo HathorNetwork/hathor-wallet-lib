@@ -2689,7 +2689,7 @@ describe('createNFT', () => {
     const addr0 = hWallet.getAddressAtIndex(0);
     const addr10 = hWallet.getAddressAtIndex(10);
     const addr11 = hWallet.getAddressAtIndex(11);
-    await GenesisWalletHelper.injectFunds(addr0, 1);
+    await GenesisWalletHelper.injectFunds(addr0, 10);
 
     // Creating the new token
     const newTokenResponse = await hWallet.createNFT(
@@ -2741,7 +2741,7 @@ describe('createNFT', () => {
     const addr0 = hWallet.getAddressAtIndex(0);
     const addr2_0 = hWallet2.getAddressAtIndex(0);
     const addr2_1 = hWallet2.getAddressAtIndex(1);
-    await GenesisWalletHelper.injectFunds(addr0, 1);
+    await GenesisWalletHelper.injectFunds(addr0, 10);
 
     // Error creating token with external address
     await expect(hWallet.createNFT(
