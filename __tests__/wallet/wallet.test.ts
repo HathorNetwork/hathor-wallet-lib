@@ -18,15 +18,6 @@ import config from '../../src/config';
 import { buildSuccessTxByIdTokenDataResponse, buildWalletToAuthenticateApiCall, defaultWalletSeed } from '../__mock_helpers/wallet-service.fixtures';
 import Mnemonic from 'bitcore-mnemonic';
 import { TxNotFoundError } from '../../src/errors';
-import SendTransactionWalletService from '../../src/wallet/sendTransactionWalletService';
-
-// Mock SendTransactionWalletService class so we don't try to send actual transactions
-// TODO: We should refactor the way we use classes from inside other classes. Using dependency injection would facilitate unit tests a lot and avoid mocks like this.
-jest.mock('../../src/wallet/sendTransactionWalletService', () => {
-  return jest.fn().mockImplementation(() => {
-    return {run: () => {}};
-  });
-});
 
 const MOCK_TX = {
   tx_id: '0009bc9bf8eab19c41a2aa9b9369d3b6a90ff12072729976634890d35788d5d7',
@@ -726,24 +717,4 @@ test('instantiate a new wallet without web socket initialization', async () => {
   expect(spyOnGetNewAddress).toBeCalledTimes(1);
   expect(spyOnSetupConnection).toBeCalledTimes(0);
   expect(wallet.isReady()).toBeTruthy();
-});
-
-test('sendTransaction', async () => {
-  // Initialize wallet
-  const wallet = buildWalletToAuthenticateApiCall();
-  jest.spyOn(wallet, 'isReady').mockReturnValue(true);
-
-  // Send transaction
-  await wallet.sendTransaction('WYLW8ujPemSuLJwbeNvvH6y7nakaJ6cEwT', 10, { pinCode: "1234" });
-
-  // Assertions
-  expect(SendTransactionWalletService).toHaveBeenCalledWith(
-    expect.any(HathorWalletServiceWallet),
-    {
-      "changeAddress": null,
-      "inputs": [],
-      "outputs": [{"address": "WYLW8ujPemSuLJwbeNvvH6y7nakaJ6cEwT", "token": "00", "type": "p2pkh", "value": 10}],
-      "pin": "1234"
-    }
-  );
-});
+})

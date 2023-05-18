@@ -31,11 +31,10 @@ import {
 import transactionUtils from '../utils/transaction';
 import { processHistory, processUtxoUnlock } from '../utils/storage';
 import config, { Config } from '../config';
-import { decryptData, checkPassword } from '../utils/crypto';
+import { decryptData, encryptData } from '../utils/crypto';
 import FullNodeConnection from '../new/connection';
 import { getAddressType } from '../utils/address';
-import walletUtils from '../utils/wallet';
-import { HATHOR_TOKEN_CONFIG, MAX_INPUTS, MAX_OUTPUTS, TOKEN_DEPOSIT_PERCENTAGE } from '../constants';
+import { HATHOR_TOKEN_CONFIG, MAX_INPUTS, MAX_OUTPUTS } from '../constants';
 
 const DEFAULT_ADDRESS_META: IAddressMetadata = {
   numTransactions: 0,
@@ -71,21 +70,6 @@ export class Storage implements IStorage {
    */
   setApiVersion(version: ApiVersion): void {
     this.version = version;
-  }
-
-  /**
-   * Return the deposit percentage for creating tokens.
-   * @returns {number}
-   */
-  getTokenDepositPercentage(): number {
-    if (this.version && this.version.token_deposit_percentage) {
-      return this.version.token_deposit_percentage;
-    }
-    /**
-     *  When using wallet-service facade we do not update the version constants
-     *  Since this data is important for the wallets UI we will return the default value here.
-     */
-    return TOKEN_DEPOSIT_PERCENTAGE;
   }
 
   /**
@@ -155,25 +139,6 @@ export class Storage implements IStorage {
    */
   async getCurrentAddress(markAsUsed?: boolean): Promise<string> {
     return this.store.getCurrentAddress(markAsUsed);
-  }
-
-  /**
-   * Get a change address to use, if one is provided we need to check if we own it
-   * If not provided, the current address will be used instead.
-   *
-   * @param {Object} [options={}]
-   * @param {string|null|undefined} [options.changeAddress=undefined] User provided change address to use
-   * @returns {Promise<string>} The change address to use
-   */
-  async getChangeAddress({ changeAddress }: { changeAddress?: string | null | undefined; } = {}): Promise<string> {
-    if (changeAddress) {
-      if (!await this.isAddressMine(changeAddress)) {
-        throw new Error("Change address is not from the wallet");
-      }
-      return changeAddress;
-    }
-
-    return this.getCurrentAddress();
   }
 
   /**
@@ -292,15 +257,6 @@ export class Storage implements IStorage {
    */
   async unregisterToken(tokenUid: string): Promise<void> {
     await this.store.unregisterToken(tokenUid);
-  }
-
-  /**
-   * Return if a token is registered.
-   * @param tokenUid - Token id.
-   * @returns {Promise<boolean>}
-   */
-  async isTokenRegistered(tokenUid: string): Promise<boolean> {
-    return this.store.isTokenRegistered(tokenUid);
   }
 
   /**
@@ -715,24 +671,13 @@ export class Storage implements IStorage {
       throw new Error('Private key is not present on this wallet.');
     }
 
-    // decryptData handles pin validation
-    return decryptData(accessData.mainKey, pinCode);
-  }
-
-  /**
-   * Get account path xprivkey if available.
-   *
-   * @param {string} pinCode
-   * @returns {Promise<string>}
-   */
-  async getAcctPathXPrivKey(pinCode: string): Promise<string> {
-    const accessData = await this._getValidAccessData();
-    if (!accessData.acctPathKey) {
-      throw new Error('Private key is not present on this wallet.');
+    try {
+      // decryptData handles pin validation
+      return decryptData(accessData.mainKey, pinCode);
+    } catch(err: unknown) {
+      // FIXME: check error type to not hide crypto errors
+      throw new Error('Invalid PIN code.');
     }
-
-    // decryptData handles pin validation
-    return decryptData(accessData.acctPathKey, pinCode);
   }
 
   /**
@@ -747,8 +692,13 @@ export class Storage implements IStorage {
       throw new Error('Private key is not present on this wallet.');
     }
 
-    // decryptData handles pin validation
-    return decryptData(accessData.authKey, pinCode);
+    try {
+      // decryptData handles pin validation
+      return decryptData(accessData.authKey, pinCode);
+    } catch(err: unknown) {
+      // FIXME: check error type to not hide crypto errors
+      throw new Error('Invalid PIN code.');
+    }
   }
 
   /**
@@ -765,7 +715,7 @@ export class Storage implements IStorage {
     }
     this.version = null;
     if (cleanStorage || cleanAddresses) {
-      await this.cleanStorage(cleanStorage, cleanAddresses);
+      this.cleanStorage(cleanStorage, cleanAddresses);
     }
   }
 
@@ -781,40 +731,6 @@ export class Storage implements IStorage {
   }
 
   /**
-   * Check if the pin is correct
-   *
-   * @param {string} pinCode - Pin to check
-   * @returns {Promise<boolean>}
-   * @throws {Error} if the wallet is not initialized
-   * @throws {Error} if the wallet does not have the private key
-   */
-  async checkPin(pinCode: string): Promise<boolean> {
-    const accessData = await this._getValidAccessData();
-    if (!accessData.mainKey) {
-      throw new Error('Cannot check pin without the private key.');
-    }
-
-    return checkPassword(accessData.mainKey, pinCode);
-  }
-
-  /**
-   * Check if the password is correct
-   *
-   * @param {string} password - Password to check
-   * @returns {Promise<boolean>}
-   * @throws {Error} if the wallet is not initialized
-   * @throws {Error} if the wallet does not have the private key
-   */
-  async checkPassword(password: string): Promise<boolean> {
-    const accessData = await this._getValidAccessData();
-    if (!accessData.words) {
-      throw new Error('Cannot check password without the words.');
-    }
-
-    return checkPassword(accessData.words, password);
-  }
-
-  /**
    * Change the wallet pin.
    * @param {string} oldPin Old pin to unlock data.
    * @param {string} newPin New pin to lock data.
@@ -822,11 +738,32 @@ export class Storage implements IStorage {
    */
   async changePin(oldPin: string, newPin: string): Promise<void> {
     const accessData = await this._getValidAccessData();
+    if (!(accessData.mainKey || accessData.authKey)) {
+      throw new Error('No data to change');
+    }
 
-    const newAccessData = walletUtils.changeEncryptionPin(accessData, oldPin, newPin);
+    if (accessData.mainKey) {
+      try {
+        const mainKey = decryptData(accessData.mainKey, oldPin);
+        const newEncryptedMainKey = encryptData(mainKey, newPin);
+        accessData.mainKey = newEncryptedMainKey;
+      } catch(err: unknown) {
+        throw new Error('Old pin is incorrect.');
+      }
+    }
+
+    if (accessData.authKey) {
+      try {
+        const authKey = decryptData(accessData.authKey, oldPin);
+        const newEncryptedAuthKey = encryptData(authKey, newPin);
+        accessData.authKey = newEncryptedAuthKey;
+      } catch(err: unknown) {
+        throw new Error('Old pin is incorrect.');
+      }
+    }
 
     // Save the changes made
-    await this.saveAccessData(newAccessData);
+    await this.saveAccessData(accessData);
   }
 
   /**
@@ -838,11 +775,20 @@ export class Storage implements IStorage {
    */
   async changePassword(oldPassword: string, newPassword: string): Promise<void> {
     const accessData = await this._getValidAccessData();
+    if (!accessData.words) {
+      throw new Error('No data to change.');
+    }
 
-    const newAccessData = walletUtils.changeEncryptionPassword(accessData, oldPassword, newPassword);
+    try {
+      const words = decryptData(accessData.words, oldPassword);
+      const newEncryptedWords = encryptData(words, newPassword);
+      accessData.words = newEncryptedWords;
+    } catch(err: unknown) {
+      throw new Error('Old pin is incorrect.');
+    }
 
     // Save the changes made
-    await this.saveAccessData(newAccessData);
+    await this.saveAccessData(accessData);
   }
 
   /**

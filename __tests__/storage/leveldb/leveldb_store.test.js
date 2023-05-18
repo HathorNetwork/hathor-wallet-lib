@@ -13,7 +13,6 @@ import { HDPrivateKey } from "bitcore-lib";
 import { encryptData } from "../../../src/utils/crypto";
 import { WalletType } from "../../../src/types";
 import { processHistory } from "../../../src/utils/storage";
-import walletUtils from "../../../src/utils/wallet";
 
 function _addr_index_key(index) {
   const buf = Buffer.alloc(4);
@@ -25,8 +24,7 @@ const DATA_DIR = './testdata.leveldb';
 
 test('addresses methods', async () => {
   const xpriv = HDPrivateKey();
-  const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
-  const store = new LevelDBStore(walletId, DATA_DIR);
+  const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
   const addrBatch = store.addressIndex.addressesDB.batch();
   addrBatch.put('a', { base58: 'a', bip32AddressIndex: 2 });
   addrBatch.put('b', { base58: 'b', bip32AddressIndex: 1 });
@@ -87,8 +85,7 @@ test('addresses methods', async () => {
 
 test('history methods', async () => {
   const xpriv = HDPrivateKey();
-  const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
-  const store = new LevelDBStore(walletId, DATA_DIR);
+  const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
   await store.saveAddress({base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0});
   await store.saveAddress({base58: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp', bip32AddressIndex: 1});
   const storage = new Storage(store);
@@ -173,8 +170,7 @@ test('history methods', async () => {
 
 test('token methods', async () => {
   const xpriv = HDPrivateKey();
-  const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
-  const store = new LevelDBStore(walletId, DATA_DIR);
+  const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
 
   store.tokenIndex.saveToken(HATHOR_TOKEN_CONFIG);
 
@@ -244,8 +240,7 @@ test('utxo methods', async () => {
   const dateLocked = new Date('3000-03-01T12:00');
 
   const xpriv = HDPrivateKey();
-  const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
-  const store = new LevelDBStore(walletId, DATA_DIR);
+  const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
   const utxos = [
     {
       txId: 'tx01',
@@ -318,8 +313,7 @@ test('utxo methods', async () => {
 
 test('access data methods', async () => {
   const xpriv = HDPrivateKey();
-  const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
-  const store = new LevelDBStore(walletId, DATA_DIR);
+  const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
 
   const encryptedMain = encryptData(xpriv.xprivkey, '123');
   const accessData = {

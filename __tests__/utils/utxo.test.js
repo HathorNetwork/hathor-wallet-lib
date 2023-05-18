@@ -8,7 +8,6 @@
 import { HDPrivateKey } from "bitcore-lib";
 import { LevelDBStore, MemoryStore, Storage } from "../../src/storage";
 import { bestUtxoSelection, fastUtxoSelection } from "../../src/utils/utxo";
-import walletUtils from "../../src/utils/wallet";
 
 const DATA_DIR = './testdata.leveldb';
 
@@ -72,7 +71,7 @@ describe('bestUtxoSelection', () => {
 
   /**
    * Should select the best utxos to use in a transaction
-   * @param {IStore} store
+   * @param {IStore} store 
    */
   async function testBestUtxoSelection(store) {
     await addUtxosToStore(store);
@@ -119,14 +118,13 @@ describe('bestUtxoSelection', () => {
 
   test('bestUtxoSelection with indexeddb store', async () => {
     const xpriv = new HDPrivateKey();
-    const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
-    const store = new LevelDBStore(walletId, DATA_DIR);
+    const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
     await testBestUtxoSelection(store);
   });
 
   /**
    * Should select the highest utxos until the amount is fulfilled
-   * @param {IStore} store
+   * @param {IStore} store 
    */
   async function testFastUtxoSelection(store) {
     await addUtxosToStore(store);
@@ -174,8 +172,7 @@ describe('bestUtxoSelection', () => {
 
   test('fastUtxoSelection with indexeddb store', async () => {
     const xpriv = new HDPrivateKey();
-    const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
-    const store = new LevelDBStore(walletId, DATA_DIR);
+    const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
     await testFastUtxoSelection(store);
   });
 });

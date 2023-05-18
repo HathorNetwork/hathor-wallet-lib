@@ -53,9 +53,6 @@ export default class LevelWalletIndex implements IKVWalletIndex {
    * @param {number} value The value to set.
    */
   async _setNumber(dest: 'access'|'wallet', key: string, value: number) {
-    if (value < 0) {
-      throw new Error(`Invalid unsigned int ${value} being set on ${key}`);
-    }
     const buf = Buffer.alloc(4);
     buf.writeUInt32BE(value);
     switch(dest) {

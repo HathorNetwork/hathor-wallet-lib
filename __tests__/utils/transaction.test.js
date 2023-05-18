@@ -49,7 +49,7 @@ test('getSignature', () => {
   const privkey = new PrivateKey();
 
   const data = Buffer.from('c0ffee', 'hex');
-  const hashdata = crypto.Hash.sha256(Buffer.from(data));
+  const hashdata = crypto.Hash.sha256(data);
 
   const signatureDER = transaction.getSignature(hashdata, privkey);
 
@@ -93,7 +93,7 @@ test('signTransaction', async () => {
         }
       };
     }
-  }
+  } 
   jest.spyOn(storage, 'getSpentTxs').mockImplementation(getSpentMock);
   const input0 = new Input('cafe', 0);
   const input1 = new Input('d00d', 1);
@@ -115,8 +115,8 @@ test('signTransaction', async () => {
 
 test('Utxo selection', () => {
   const utxos = [
-    {address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi', value: 10, txId: '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2d', index: 5},
-    {address: 'Wmu3y4rWs6n4JJAdRtAz4mDn4d7GkTcqKc', value: 5, txId: '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e', index: 6},
+    {address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi', value: 10, txId: '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2d', index: 5}, 
+    {address: 'Wmu3y4rWs6n4JJAdRtAz4mDn4d7GkTcqKc', value: 5, txId: '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e', index: 6}, 
   ];
 
   const selectedUtxos = transaction.selectUtxos(utxos, 3);

@@ -18,6 +18,7 @@ import { DEFAULT_TX_VERSION, MAX_OUTPUTS } from '../../src/constants';
 import { MaximumNumberInputsError, MaximumNumberOutputsError, ParseError } from '../../src/errors';
 import { nftCreationTx } from '../__fixtures__/sample_txs';
 import lodash from 'lodash';
+import { PrivateKey, crypto as cryptoBL } from 'bitcore-lib';
 
 const compareTxs = (tx, tx2) => {
   expect(tx2.version).toBe(tx.version);

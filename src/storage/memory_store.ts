@@ -20,7 +20,6 @@ import {
 } from '../types';
 import { BLOCK_VERSION, GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
 import { orderBy } from 'lodash';
-import { UninitializedWalletError } from '../errors';
 
 
 const DEFAULT_ADDRESSES_WALLET_DATA = {
@@ -515,16 +514,6 @@ export class MemoryStore implements IStore {
   }
 
   /**
-   * Return if a token uid is registered or not.
-   *
-   * @param {string} tokenUid - Token id
-   * @returns {Promise<boolean>}
-   */
-  async isTokenRegistered(tokenUid: string): Promise<boolean> {
-    return this.registeredTokens.has(tokenUid);
-  }
-
-  /**
    * Edit token metadata on storage.
    * @param {string} tokenUid Token id to edit
    * @param {Partial<ITokenMetadata>} meta Metadata to save
@@ -694,7 +683,7 @@ export class MemoryStore implements IStore {
    */
   async getAccessData(): Promise<IWalletAccessData | null> {
     if (this.accessData === null) {
-      throw new UninitializedWalletError();
+      throw new Error('Wallet access data unset');
     }
     return this.accessData;
   }
@@ -800,6 +789,7 @@ export class MemoryStore implements IStore {
    * @returns {Promise<void>}
    */
   async cleanStorage(cleanHistory: boolean = false, cleanAddresses: boolean = false): Promise<void> {
+    this.accessData = null;
     if (cleanHistory) {
       this.tokens = new Map<string, ITokenData>();
       this.tokensMetadata = new Map<string, ITokenMetadata>();

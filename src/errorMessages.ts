@@ -12,15 +12,4 @@ export enum ErrorMessages {
   NO_UTXOS_AVAILABLE = 'no-utxos-available',
   UNSUPPORTED_TX_TYPE = 'unsupported-tx-type',
   WALLET_STATUS_ERROR = 'wallet-status-error',
-  // Default error code for wallet errors
-  DEFAULT_WALLET_ERROR = 'wallet-error',
-  // When the password/pin is correct but the encrypted data is corrupted
-  DECRYPTION_ERROR = 'decrypt-error',
-  // When the given password/pin is invalid
-  INVALID_PASSWD = 'invalid-passwd',
-  // PBKDF2 encryption requires a hasher algo and we currently support:
-  // sha1, sha256
-  UNSUPPORTED_HASHER = 'unsupported-hasher',
-  // When access data is not set
-  UNINITIALIZED_WALLET = 'uninitialized-wallet',
 }

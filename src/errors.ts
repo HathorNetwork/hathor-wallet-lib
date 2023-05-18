@@ -5,8 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { ErrorMessages } from "./errorMessages";
-
 /**
  * Possible errors to be thrown in wallet
  *
@@ -157,9 +155,7 @@ export class ParseScriptError extends ParseError {}
  * @memberof Errors
  * @inner
  */
-export class WalletError extends Error {
-  errorCode: string = ErrorMessages.DEFAULT_WALLET_ERROR;
-};
+export class WalletError extends Error {}
 
 /**
  * Error thrown when executing wallet requests
@@ -216,7 +212,7 @@ export class InvalidPartialTxError extends WalletError {}
  * @memberof Errors
  * @inner
  */
-export class WalletFromXPubGuard extends WalletError {}
+export class WalletFromXPubGuard extends Error {}
 
 /**
  * Error thrown when there is an error getting dag metadata using wallet service
@@ -282,19 +278,3 @@ export class UnsupportedScriptError extends PartialTxError {}
  * @inner
  */
 export class TxNotFoundError extends Error {};
-
-export class InvalidPasswdError extends WalletError {
-  errorCode: string = ErrorMessages.INVALID_PASSWD;
-}
-
-export class DecryptionError extends Error {
-  errorCode: string = ErrorMessages.DECRYPTION_ERROR
-}
-
-export class UnsupportedHasherError extends Error {
-  errorCode: string = ErrorMessages.UNSUPPORTED_HASHER;
-}
-
-export class UninitializedWalletError extends WalletError {
-  errorCode: string = ErrorMessages.UNINITIALIZED_WALLET;
-}

@@ -1,12 +1,16 @@
 import { precalculationHelpers } from '../helpers/wallet-precalculation.helper';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import {
+  createTokenHelper,
   DEFAULT_PASSWORD,
   DEFAULT_PIN_CODE,
   generateConnection,
+  generateMultisigWalletHelper,
+  generateWalletHelper,
   stopAllWallets,
   waitForTxReceived,
   waitForWalletReady,
+  waitUntilNextTimestamp
 } from '../helpers/wallet.helper';
 import { delay } from '../utils/core.util';
 
@@ -42,9 +46,7 @@ describe('LevelDB persistent store', () => {
     const DATA_DIR = './testdata.leveldb';
     const walletData = precalculationHelpers.test.getPrecalculatedWallet();
     const xpubkey = walletUtils.getXPubKeyFromSeed(walletData.words, { accountDerivationIndex: '0\'/0' });
-    const walletId = walletUtils.getWalletIdFromXPub(xpubkey);
-
-    const store = new LevelDBStore(walletId, DATA_DIR);
+    const store = new LevelDBStore(DATA_DIR, xpubkey);
     const storage = new Storage(store);
 
     // Start the wallet

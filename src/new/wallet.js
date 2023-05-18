@@ -17,7 +17,7 @@ import { createP2SHRedeemScript } from '../utils/scripts';
 import walletUtils from '../utils/wallet';
 import SendTransaction from './sendTransaction';
 import Network from '../models/network';
-import { AddressError, TxNotFoundError, UninitializedWalletError, WalletError, WalletFromXPubGuard } from '../errors';
+import { AddressError, TxNotFoundError, WalletError, WalletFromXPubGuard } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
 import { HDPrivateKey } from 'bitcore-lib';
@@ -1165,7 +1165,6 @@ class HathorWallet extends EventEmitter {
    * @param [options] Options parameters
    * @param {string} [options.changeAddress] address of the change output
    * @param {string} [options.token] token uid
-   * @param {string} [options.pinCode] pin to decrypt the private key
    *
    * @return {Promise<Transaction>} Promise that resolves when transaction is sent
    **/
@@ -1177,9 +1176,9 @@ class HathorWallet extends EventEmitter {
       token: '00',
       changeAddress: null
     }, options);
-    const { token, changeAddress, pinCode } = newOptions;
+    const { token, changeAddress } = newOptions;
     const outputs = [{ address, value, token }];
-    return this.sendManyOutputsTransaction(outputs, { inputs: [], changeAddress, pinCode });
+    return this.sendManyOutputsTransaction(outputs, { inputs: [], changeAddress });
   }
 
   /**
@@ -1270,51 +1269,37 @@ class HathorWallet extends EventEmitter {
       }
     }
 
-    let hasAccessData;
-    try {
-      const accessData = await this.storage.getAccessData();
-      hasAccessData = !!accessData;
-    } catch (err) {
-      if (err instanceof UninitializedWalletError) {
-        hasAccessData = false;
-      } else {
-        // Do not hide unexpected errors
-        throw err;
-      }
+    let accessData;
+    if (this.seed) {
+      accessData = walletUtils.generateAccessDataFromSeed(
+        this.seed,
+        {
+          multisig: this.multisig,
+          passphrase: this.passphrase,
+          pin: pinCode,
+          password,
+          networkName: this.conn.network,
+        }
+      );
+    } else if (this.xpriv) {
+      accessData = walletUtils.generateAccessDataFromXpriv(
+        this.xpriv,
+        {
+          multisig: this.multisig,
+          pin: pinCode,
+        },
+      );
+    } else if (this.xpub) {
+      accessData = walletUtils.generateAccessDataFromXpub(
+        this.xpub,
+        {
+          multisig: this.multisig,
+        },
+      );
+    } else {
+      throw new Error('This should never happen');
     }
-    if (!hasAccessData) {
-      let accessData;
-      if (this.seed) {
-        accessData = walletUtils.generateAccessDataFromSeed(
-          this.seed,
-          {
-            multisig: this.multisig,
-            passphrase: this.passphrase,
-            pin: pinCode,
-            password,
-            networkName: this.conn.network,
-          }
-        );
-      } else if (this.xpriv) {
-        accessData = walletUtils.generateAccessDataFromXpriv(
-          this.xpriv,
-          {
-            multisig: this.multisig,
-            pin: pinCode,
-          },
-        );
-      } else if (this.xpub) {
-        accessData = walletUtils.generateAccessDataFromXpub(
-          this.xpub,
-          {
-            multisig: this.multisig,
-          },
-        );
-      } else {
-        throw new Error('This should never happen');
-      }
-      await this.storage.saveAccessData(accessData);
-    }
+    await this.storage.saveAccessData(accessData);
 
     this.clearSensitiveData();
     this.getTokenData();
@@ -1341,6 +1326,7 @@ class HathorWallet extends EventEmitter {
     this.setState(HathorWallet.CLOSED);
     this.removeAllListeners();
 
+    // XXX: this is not awaited so it can run in the background
     await this.storage.handleStop({connection: this.conn, cleanStorage, cleanAddresses});
 
     this.firstConnection = true;
@@ -2402,33 +2388,6 @@ class HathorWallet extends EventEmitter {
     });
 
     return { success: true, txTokens };
-  }
-
-  /**
-   * Check if the pin used to encrypt the main key is valid.
-   * @param {string} pin
-   * @returns {Promise<boolean>}
-   */
-  async checkPin(pin) {
-    return this.storage.checkPin(pin);
-  }
-
-  /**
-   * Check if the password used to encrypt the seed is valid.
-   * @param {string} password
-   * @returns {Promise<boolean>}
-   */
-  async checkPassword(password) {
-    return this.storage.checkPassword(password);
-  }
-
-  /**
-   * @param {string} pin
-   * @param {string} password
-   * @returns {Promise<boolean>}
-   */
-  async checkPinAndPassword(pin, password) {
-    return await this.checkPin(pin) && await this.checkPassword(password);
   }
 }
 

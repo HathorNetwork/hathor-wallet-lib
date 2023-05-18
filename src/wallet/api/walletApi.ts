@@ -203,16 +203,6 @@ const walletApi = {
     }
   },
 
-  async deleteTxProposal(wallet: HathorWalletServiceWallet, id: string): Promise<TxProposalUpdateResponseData> {
-    const axios = await axiosInstance(wallet, true);
-    const response = await axios.delete(`tx/proposal/${id}`);
-    if (response.status === 200) {
-      return response.data;
-    } else {
-      throw new WalletRequestError('Error deleting tx proposal.');
-    }
-  },
-
   async createAuthToken(
     wallet: HathorWalletServiceWallet,
     timestamp: number,

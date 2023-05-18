@@ -16,23 +16,10 @@ import _ from 'lodash';
 import helpers from './helpers';
 
 import { IMultisigData, IWalletAccessData, WalletType, WALLET_FLAGS } from '../types';
-import { encryptData, decryptData } from './crypto';
+import { encryptData } from './crypto';
 
 
 const wallet = {
-  /**
-   * Get the wallet id given the change path xpubkey
-   *
-   * @param {string} xpub - The change path xpubkey
-   * @returns {string} The walletId
-   *
-   * @memberof Wallet
-   * @inner
-   */
-  getWalletIdFromXPub(xpub: string): string {
-    return crypto.Hash.sha256sha256(Buffer.from(xpub)).toString('hex');
-  },
-
   /**
    * Verify if words passed to generate wallet are valid. In case of invalid, returns message
    *
@@ -79,6 +66,7 @@ const wallet = {
     } else if (!Mnemonic.isValid(newWordsString)) {
       // Check if there is a word that does not belong to the list of possible words
       const errorList = getInvalidWords(wordsArray);
+      let errorMessage = '';
       if (errorList.length > 0) {
         const err = new InvalidWords('Invalid words.');
         err.invalidWords = errorList;
@@ -383,14 +371,14 @@ const wallet = {
    * Generate access data from xpubkey.
    * The access data will be used to start a wallet and derive the wallet's addresses.
    * This method can only generate READONLY wallets since we do not have the private key.
-   *
+   * 
    * We can only accept xpubs derived to the account or change path.
    * Since hdpublickeys cannot derive on hardened paths, the derivation must be done previously with the private key
    * The last path with hardened derivation defined on bip44 is the account path so we support using an account path xpub.
    * We can also use the change path xpub since we use it to derive the addresses
    * but we cannot use the address path xpub since we won't be able to derive all addresses.
    * And the wallet-lib currently does not support the creation of a wallet with a single address.
-   *
+   * 
    * @param {string} xpubkey HDPublicKey in string format.
    * @param {{ multisig: IMultisigData }} [options={}] Options to generate the access data.
    * @returns {IWalletAccessData}
@@ -448,30 +436,9 @@ const wallet = {
     };
   },
 
-  /**
-   * Generate access data from the xprivkey.
-   * We can use either the root xprivkey or the change path xprivkey.
-   * Obs: A multisig wallet cannot be started with a change path xprivkey.
-   *
-   * The seed can be passed so we save it on the storage, even if its not used.
-   * Obs: must also pass password to encrypt the seed.
-   *
-   * @param {string} xprivkey
-   * @param {Object} options
-   * @param {IMultisigData | undefined} [options.multisig=undefined]
-   * @param {string} [options.pin]
-   * @param {string | undefined} [options.seed=undefined]
-   * @param {string | undefined} [options.password=undefined]
-   * @returns {IWalletAccessData}
-   */
   generateAccessDataFromXpriv(
     xprivkey: string,
-    {
-      multisig,
-      pin,
-      seed,
-      password,
-    }: {multisig?: IMultisigData, pin: string, seed?: string, password?: string},
+    {multisig, pin}: {multisig?: IMultisigData, pin: string},
   ): IWalletAccessData {
     let walletType: WalletType;
     if (multisig === undefined) {
@@ -482,16 +449,11 @@ const wallet = {
 
     const argXpriv = new HDPrivateKey(xprivkey);
     let xpriv: HDPrivateKey;
-    let acctXpriv: HDPrivateKey | null = null;
-    let authXpriv: HDPrivateKey | null = null;
     if (argXpriv.depth === 0) {
-      authXpriv = argXpriv.deriveNonCompliantChild(WALLET_SERVICE_AUTH_DERIVATION_PATH);
       if (walletType === WalletType.MULTISIG) {
-        acctXpriv = argXpriv.deriveNonCompliantChild(P2SH_ACCT_PATH);
-        xpriv = acctXpriv.deriveNonCompliantChild(0);
+        xpriv = argXpriv.deriveNonCompliantChild(`${P2SH_ACCT_PATH}/0`);
       } else {
-        acctXpriv = argXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
-        xpriv = acctXpriv.deriveNonCompliantChild(0);
+        xpriv = argXpriv.deriveNonCompliantChild(`${P2PKH_ACCT_PATH}/0`);
       }
     } else {
       if (walletType === WalletType.MULTISIG) {
@@ -514,32 +476,13 @@ const wallet = {
       };
     }
 
-    const accessData: IWalletAccessData = {
+    return {
       walletType,
       multisigData,
       mainKey: encryptedMainKey,
       xpubkey: xpriv.xpubkey,
       walletFlags: 0,
     };
-
-    if (acctXpriv !== null) {
-      // Account path key will only be available if the provided key is a root key
-      const encryptedAcctPathKey = encryptData(acctXpriv.xprivkey, pin);
-      accessData.acctPathKey = encryptedAcctPathKey;
-    }
-
-    if (authXpriv) {
-      // Auth path key will only be available if the provided key is a root key.
-      const encryptedAuthPathKey = encryptData(authXpriv.xprivkey, pin);
-      accessData.authKey = encryptedAuthPathKey;
-    }
-
-    if (!!(seed && password)) {
-      const encryptedWords = encryptData(seed, password);
-      accessData.words = encryptedWords;
-    }
-
-    return accessData;
   },
 
   generateAccessDataFromSeed(
@@ -574,7 +517,6 @@ const wallet = {
     }
 
     const encryptedMainKey = encryptData(xpriv.xprivkey, pin);
-    const encryptedAcctPathKey = encryptData(accXpriv.xprivkey, pin);
     const encryptedAuthPathKey = encryptData(authXpriv.xprivkey, pin);
     const encryptedWords = encryptData(words, password);
 
@@ -594,69 +536,10 @@ const wallet = {
       multisigData,
       xpubkey: xpriv.xpubkey,
       mainKey: encryptedMainKey,
-      acctPathKey: encryptedAcctPathKey,
       authKey: encryptedAuthPathKey,
       words: encryptedWords,
       walletFlags: 0,
     };
-  },
-
-  /**
-   * Change the encryption pin on the fields that are encrypted using the pin.
-   * Will not save the access data, only return the new access data.
-   *
-   * @param {IWalletAccessData} accessData The current access data encrypted with `oldPin`.
-   * @param {string} oldPin Used to decrypt the old access data.
-   * @param {string} newPin Encrypt the fields with this pin.
-   * @returns {IWalletAccessData} The access data with fields encrypted with `newPin`.
-   */
-  changeEncryptionPin(accessData: IWalletAccessData, oldPin: string, newPin: string): IWalletAccessData {
-    const data = _.cloneDeep(accessData);
-    if (!(data.mainKey || data.authKey || data.acctPathKey)) {
-      throw new Error('No data to change');
-    }
-
-    if (data.mainKey) {
-      const mainKey = decryptData(data.mainKey, oldPin);
-      const newEncryptedMainKey = encryptData(mainKey, newPin);
-      data.mainKey = newEncryptedMainKey;
-    }
-
-    if (data.authKey) {
-      const authKey = decryptData(data.authKey, oldPin);
-      const newEncryptedAuthKey = encryptData(authKey, newPin);
-      data.authKey = newEncryptedAuthKey;
-    }
-
-    if (data.acctPathKey) {
-      const acctPathKey = decryptData(data.acctPathKey, oldPin);
-      const newEncryptedAcctPathKey = encryptData(acctPathKey, newPin);
-      data.acctPathKey = newEncryptedAcctPathKey;
-    }
-
-    return data;
-  },
-
-  /**
-   * Change the encryption password on the seed.
-   * Will not save the access data, only return the new access data.
-   *
-   * @param {IWalletAccessData} accessData The current access data encrypted with `oldPassword`.
-   * @param {string} oldPassword Used to decrypt the old access data.
-   * @param {string} newPassword Encrypt the seed with this password.
-   * @returns {IWalletAccessData} The access data with fields encrypted with `newPassword`.
-   */
-  changeEncryptionPassword(accessData: IWalletAccessData, oldPassword: string, newPassword: string): IWalletAccessData {
-    const data = _.cloneDeep(accessData);
-    if (!data.words) {
-      throw new Error('No data to change');
-    }
-
-    const words = decryptData(data.words, oldPassword);
-    const newEncryptedWords = encryptData(words, newPassword);
-    data.words = newEncryptedWords;
-
-    return data;
   },
 }
 

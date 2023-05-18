@@ -206,24 +206,6 @@ export default class LevelTokenIndex implements IKVTokenIndex {
   }
 
   /**
-   * Return if a token is registered.
-   * @param tokenUid - Token id
-   * @returns {Promise<boolean>}
-   */
-  async isTokenRegistered(tokenUid: string): Promise<boolean> {
-    try {
-      await this.registeredDB.get(tokenUid);
-      return true;
-    } catch (err: unknown) {
-      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
-        // Did not find the token among the registered tokens
-        return false;
-      }
-      throw err;
-    }
-  }
-
-  /**
    * Delete a token from the database.
    * @param {string[]} tokens List of token uids to be deleted
    */

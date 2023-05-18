@@ -283,7 +283,6 @@ test('prepareSendTokensData', async () => {
   const store = new MemoryStore();
   const storage = new Storage(store);
   jest.spyOn(storage, 'getWalletType').mockReturnValue(Promise.resolve(WalletType.P2PKH));
-  jest.spyOn(storage, 'getChangeAddress').mockImplementation(({ changeAddress }) => Promise.resolve(changeAddress));
   jest.spyOn(transaction, 'canUseUtxo').mockReturnValue(Promise.resolve(true));
 
   const tx = {

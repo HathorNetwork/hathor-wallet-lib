@@ -111,7 +111,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   private indexToUse: number;
   // WalletService-ready connection class
   private conn: WalletServiceConnection;
-  // Flag to indicate if the wallet was already connected when the websocket conn is established
+  // Flag to indicate if the wallet was already connected when the webscoket conn is established
   private firstConnection: boolean;
   // Flag to indicate if the websocket connection is enabled
   private readonly _isWsEnabled: boolean;
@@ -287,7 +287,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   static getWalletIdFromXPub(xpub: string) {
-    return walletUtils.getWalletIdFromXPub(xpub);
+    return crypto.Hash.sha256sha256(Buffer.from(xpub)).toString('hex');
   }
 
   /**
@@ -885,13 +885,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async sendManyOutputsTransaction(outputs: Array<OutputRequestObj | DataScriptOutputRequestObj>, options: { inputs?: InputRequestObj[], changeAddress?: string, pinCode?: string } = {}): Promise<Transaction> {
+  async sendManyOutputsTransaction(outputs: Array<OutputRequestObj | DataScriptOutputRequestObj>, options: { inputs?: InputRequestObj[], changeAddress?: string } = {}): Promise<Transaction> {
     this.failIfWalletNotReady();
     const newOptions = Object.assign({
       inputs: [],
       changeAddress: null
     }, options);
-    const { inputs, changeAddress, pinCode } = newOptions;
+    const { inputs, changeAddress } = newOptions;
     const sendTransactionOutputs = outputs.map((output) => {
       let typedOutput = output as OutputSendTransaction;
       if (typedOutput.type === OutputType.DATA) {
@@ -903,7 +903,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
       return typedOutput;
     });
-    const sendTransaction = new SendTransactionWalletService(this, { outputs: sendTransactionOutputs, inputs, changeAddress, pin: pinCode });
+    const sendTransaction = new SendTransactionWalletService(this, { outputs: sendTransactionOutputs, inputs, changeAddress });
     return sendTransaction.run();
   }
 
@@ -913,15 +913,15 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async sendTransaction(address: string, value: number, options: { token?: string, changeAddress?: string, pinCode?: string } = {}): Promise<Transaction> {
+  async sendTransaction(address: string, value: number, options: { token?: string, changeAddress?: string } = {}): Promise<Transaction> {
     this.failIfWalletNotReady();
     const newOptions = Object.assign({
       token: '00',
       changeAddress: null
     }, options);
-    const { token, changeAddress, pinCode } = newOptions;
+    const { token, changeAddress } = newOptions;
     const outputs = [{ address, value, token }];
-    return this.sendManyOutputsTransaction(outputs, { inputs: [], changeAddress, pinCode });
+    return this.sendManyOutputsTransaction(outputs, { inputs: [], changeAddress });
   }
 
   /**
@@ -1114,9 +1114,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const isNFT = newOptions.nftData !== null;
 
-    const depositPercent = this.storage.getTokenDepositPercentage();
     // 1. Calculate HTR deposit needed
-    let deposit = tokens.getDepositAmount(amount, depositPercent);
+    let deposit = tokens.getDepositAmount(amount);
 
     if (isNFT) {
       // For NFT we have a fee of 0.01 HTR, then the deposit utxo query must get an additional 1
@@ -1312,9 +1311,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       pinCode: null,
     }, options);
 
-    const depositPercent = this.storage.getTokenDepositPercentage();
     // 1. Calculate HTR deposit needed
-    const deposit = tokens.getDepositAmount(amount, depositPercent);
+    const deposit = tokens.getDepositAmount(amount);
 
     // 2. Get utxos for HTR
     const { utxos, changeAmount } = await this.getUtxos({ tokenId: HATHOR_TOKEN_CONFIG.uid, totalAmount: deposit });
@@ -1442,9 +1440,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       pinCode: null,
     }, options);
 
-    const depositPercent = this.storage.getTokenDepositPercentage();
     // 1. Calculate HTR deposit needed
-    const withdraw = tokens.getWithdrawAmount(amount, depositPercent);
+    const withdraw = tokens.getWithdrawAmount(amount);
 
     // 2. Get utxos for custom token to melt
     const { utxos, changeAmount } = await this.getUtxos({ tokenId: token, totalAmount: amount });
@@ -1783,44 +1780,17 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const data = await walletApi.graphvizNeighborsQuery(this, txId, graphType, maxLevel);
     return data;
   }
-
+  
   /**
    * Check if websocket connection is enabled
-   *
+   * 
    * @memberof HathorWalletServiceWallet
    * @inner
-   *
+   * 
    * @returns {boolean} If wallet has websocket connection enabled
    */
   isWsEnabled(): boolean {
     return this._isWsEnabled;
-  }
-
-  /**
-   * Check if the pin used to encrypt the main key is valid.
-   * @param {string} pin
-   * @returns {Promise<boolean>}
-   */
-  async checkPin(pin: string): Promise<boolean> {
-    return this.storage.checkPin(pin);
-  }
-
-  /**
-   * Check if the password used to encrypt the seed is valid.
-   * @param {string} password
-   * @returns {Promise<boolean>}
-   */
-  async checkPassword(password: string): Promise<boolean> {
-    return this.storage.checkPassword(password);
-  }
-
-  /**
-   * @param {string} pin
-   * @param {string} password
-   * @returns {Promise<boolean>}
-   */
-  async checkPinAndPassword(pin: string, password: string): Promise<boolean> {
-    return await this.checkPin(pin) && await this.checkPassword(password);
   }
 }
 
