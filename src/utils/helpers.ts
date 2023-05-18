@@ -6,7 +6,7 @@
  */
 
 import { OP_PUSHDATA1 } from '../opcodes';
-import { DECIMAL_PLACES, DEFAULT_TX_VERSION, CREATE_TOKEN_TX_VERSION } from '../constants';
+import { DEFAULT_TX_VERSION, CREATE_TOKEN_TX_VERSION } from '../constants';
 import path from 'path';
 import buffer from 'buffer';
 import Transaction from '../models/transaction';
@@ -514,6 +514,17 @@ const helpers = {
       // Unhandled error
       throw e;
     }
+  },
+
+  /**
+   * Cleans a string for comparison. Remove multiple spaces, and spaces at the beginning and end, and transform to lowercase.
+   *
+   * @param {string} s String to be cleaned
+   * @return {string} String after clean
+   * @memberof Helpers
+   */
+  cleanupString(s: string): string {
+    return s.replace(/\s\s+/g, ' ').trim().toLowerCase();
   },
 }
 

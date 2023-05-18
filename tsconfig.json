@@ -9,7 +9,8 @@
     "outDir": "./lib/",
     "baseUrl": ".",
     "noImplicitAny": false,
-    "rootDir": "./src"
+    "rootDir": "./src",
+    "declaration": true
   },
   "include": ["./src/**/*.ts"]
 }
