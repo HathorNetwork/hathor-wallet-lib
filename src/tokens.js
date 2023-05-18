@@ -333,7 +333,9 @@ const tokens = {
    *  {
    *   'changeAddress': address of the change output,
    *   'createMint': if should create another mint authority
+   *   'mintAuthorityAddress': the address to send the mint authority created
    *   'createMelt': if should create melt authority
+   *   'meltAuthorityAddress': the address to send the melt authority created
    *   'nftData': Data for NFT first output,
    *  }
    *
@@ -346,16 +348,27 @@ const tokens = {
     const newOptions = Object.assign({
       changeAddress: null,
       createMint: true,
+      mintAuthorityAddress: null,
       createMelt: true,
+      meltAuthorityAddress: null,
       nftData: null
     }, options);
-    const { changeAddress, createMint, createMelt, nftData } = newOptions;
+    const {
+      changeAddress,
+      createMint,
+      mintAuthorityAddress,
+      createMelt,
+      meltAuthorityAddress,
+      nftData
+    } = newOptions;
 
     const isNFT = nftData !== null;
 
     const mintOptions = {
       createAnotherMint: createMint,
+      mintAuthorityAddress,
       createMelt,
+      meltAuthorityAddress,
       changeAddress,
       isNFT,
     };
@@ -456,6 +469,7 @@ const tokens = {
    *   {boolean} createAnotherMint If should create another mint output after spending this one
    *   {string} mintAuthorityAddress The address to send the new mint authority created
    *   {boolean} createMelt If should create a melt output (useful when creating a new token)
+   *   {string} meltAuthorityAddress The address to send the new melt authority created
    *   {string} changeAddress Address to send the change of HTR after mint deposit
    *   {boolean} isNFT If it's getting mint data for an NFT
    * }
@@ -472,11 +486,12 @@ const tokens = {
       createAnotherMint: true,
       mintAuthorityAddress: null,
       createMelt: false,
+      meltAuthorityAddress: null,
       changeAddress: null,
       isNFT: false,
     }, options);
 
-    const { createAnotherMint, mintAuthorityAddress, createMelt, changeAddress, isNFT } = fnOptions;
+    const { createAnotherMint, mintAuthorityAddress, createMelt, meltAuthorityAddress, changeAddress, isNFT } = fnOptions;
     const inputs = [];
     const outputs = [];
 
@@ -515,7 +530,7 @@ const tokens = {
 
     if (createMelt) {
       // We create a melt output for this wallet when creating the token
-      const newAddress2 = wallet.getAddressToUse();
+      const newAddress2 = meltAuthorityAddress || wallet.getAddressToUse();
       outputs.push({'address': newAddress2, 'value': TOKEN_MELT_MASK, 'tokenData': AUTHORITY_TOKEN_DATA});
     }
 
