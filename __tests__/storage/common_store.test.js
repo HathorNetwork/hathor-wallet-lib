@@ -5,9 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { LevelDBStore, MemoryStore } from "../../src/storage";
+import { LevelDBStore, MemoryStore, Storage } from "../../src/storage";
 import { HDPrivateKey } from "bitcore-lib";
 import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK } from "../../src/constants";
+import walletUtils from "../../src/utils/wallet";
 
 const DATA_DIR = './testdata.leveldb';
 
@@ -33,7 +34,8 @@ describe("locked utxo methods", () => {
 
   it('should work with leveldb store', async () => {
     const xpriv = new HDPrivateKey();
-    const store = new LevelDBStore(DATA_DIR, xpriv.xpubkey);
+    const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
+    const store = new LevelDBStore(walletId, DATA_DIR);
     await testLockedUtxoMethods(store);
   });
 
@@ -164,5 +166,26 @@ describe("locked utxo methods", () => {
       utxo: 4,
       lockedUtxo: 3,
     });
+  }
+});
+
+describe('registered tokens', () => {
+  it('should work with memory store', async () => {
+    const store = new MemoryStore();
+    await testRegisteredTokens(store);
+  });
+
+  it('should work with leveldb store', async () => {
+    const xpriv = new HDPrivateKey();
+    const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
+    const store = new LevelDBStore(walletId, DATA_DIR);
+    await testRegisteredTokens(store);
+  });
+
+  async function testRegisteredTokens(store) {
+    const storage = new Storage(store);
+    await storage.registerToken({ uid: 'abc1', name: 'test token 1', symbol: 'TST1' });
+    await expect(storage.isTokenRegistered('abc1')).resolves.toEqual(true);
+    await expect(storage.isTokenRegistered('abc2')).resolves.toEqual(false);
   }
 });

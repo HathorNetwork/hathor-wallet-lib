@@ -198,6 +198,7 @@ export enum WALLET_FLAGS {
 export interface IWalletAccessData {
   xpubkey: string;
   mainKey?: IEncryptedData; // encrypted xprivkey (uses pin for encryption)
+  acctPathKey?: IEncryptedData; // encrypted account path xprivkey (uses pin for encryption)
   words?: IEncryptedData; // encrypted seed (uses password for encryption)
   authKey?: IEncryptedData; // encrypted auth key, used for authentication with wallet-service (uses pin for encryption)
   multisigData?: IMultisigData;
@@ -298,6 +299,7 @@ export interface IStore {
   saveToken(tokenConfig: ITokenData, meta?: ITokenMetadata): Promise<void>;
   registerToken(token: ITokenData): Promise<void>;
   unregisterToken(tokenUid: string): Promise<void>;
+  isTokenRegistered(tokenUid: string): Promise<boolean>;
   editTokenMeta(tokenUid: string, meta: ITokenMetadata): Promise<void>;
 
   // UTXOs methods
@@ -343,6 +345,7 @@ export interface IStorage {
   saveAddress(info: IAddressInfo): Promise<void>;
   isAddressMine(base58: string): Promise<boolean>;
   getCurrentAddress(markAsUsed?: boolean): Promise<string>;
+  getChangeAddress(options?: {changeAddress?: null|string}): Promise<string>;
 
   // Transaction methods
   txHistory(): AsyncGenerator<IHistoryTx>;
@@ -353,6 +356,7 @@ export interface IStorage {
   processHistory(): Promise<void>;
 
   // Tokens
+  isTokenRegistered(tokenUid: string): Promise<boolean>;
   registerToken(token: ITokenData): Promise<void>;
   unregisterToken(tokenUid: string): Promise<void>;
   getToken(uid: string): Promise<(ITokenData & Partial<ITokenMetadata>) | null>;
@@ -373,6 +377,7 @@ export interface IStorage {
   getAccessData(): Promise<IWalletAccessData|null>;
   saveAccessData(data: IWalletAccessData): Promise<void>;
   getMainXPrivKey(pinCode: string): Promise<string>;
+  getAcctPathXPrivKey(pinCode: string): Promise<string>;
   getAuthPrivKey(pinCode: string): Promise<string>;
   getWalletData(): Promise<IWalletData>;
   getWalletType(): Promise<WalletType>;
@@ -386,6 +391,9 @@ export interface IStorage {
   getGapLimit(): Promise<number>;
   cleanStorage(cleanHistory?: boolean, cleanAddresses?: boolean): Promise<void>;
   handleStop(options: {connection?: FullNodeConnection, cleanStorage?: boolean, cleanAddresses?: boolean}): Promise<void>;
+  getTokenDepositPercentage(): number;
+  checkPin(pinCode: string): Promise<boolean>;
+  checkPassword(password: string): Promise<boolean>;
 }
 
 /**
@@ -447,6 +455,7 @@ export interface IKVTokenIndex extends IKVStoreIndex<void> {
   saveMetadata(uid: string, meta: ITokenMetadata): Promise<void>;
   registerToken(token: ITokenData): Promise<void>;
   unregisterToken(tokenUid: string): Promise<void>;
+  isTokenRegistered(tokenUid: string): Promise<boolean>;
   deleteTokens(tokens: string[]): Promise<void>;
   editTokenMeta(tokenUid: string, meta: Partial<ITokenMetadata>): Promise<void>;
   clearMeta(): Promise<void>;

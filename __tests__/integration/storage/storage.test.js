@@ -104,7 +104,8 @@ describe('locked utxos', () => {
     const DATA_DIR = './testdata.leveldb';
     const walletDataLDB = precalculationHelpers.test.getPrecalculatedWallet();
     const xpubkeyLDB = walletUtils.getXPubKeyFromSeed(walletDataLDB.words, { accountDerivationIndex: '0\'/0' });
-    const storeLDB = new LevelDBStore(DATA_DIR, xpubkeyLDB);
+    const walletId = walletUtils.getWalletIdFromXPub(xpubkeyLDB);
+    const storeLDB = new LevelDBStore(walletId, DATA_DIR);
     const storageLDB = new Storage(storeLDB);
     await testUnlockWhenSpent(storageLDB, walletDataLDB);
   })

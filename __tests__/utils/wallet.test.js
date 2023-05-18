@@ -6,13 +6,14 @@
  */
 
 import wallet from '../../src/utils/wallet';
-import { XPubError, InvalidWords, UncompressedPubKeyError } from '../../src/errors';
+import { XPubError, InvalidWords, UncompressedPubKeyError, InvalidPasswdError } from '../../src/errors';
 import Network from '../../src/models/network';
 import Mnemonic from 'bitcore-mnemonic';
 import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE, P2SH_ACCT_PATH } from '../../src/constants';
-import { util, Address, HDPrivateKey, HDPublicKey } from 'bitcore-lib';
+import { crypto, util, HDPrivateKey, HDPublicKey } from 'bitcore-lib';
 import { hexToBuffer } from '../../src/utils/buffer';
 import { WalletType, WALLET_FLAGS } from '../../src/types';
+import { checkPassword } from '../../src/utils/crypto';
 
 
 test('Words', () => {
@@ -547,4 +548,43 @@ test('access data from seed', () => {
       pubkey: xprivRoot.deriveNonCompliantChild(P2SH_ACCT_PATH).publicKey.toString('hex'),
     },
   });
+});
+
+
+test('change pin and password', async () => {
+  const seed = 'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+  const accessData = wallet.generateAccessDataFromSeed(
+    seed,
+    { pin: '123', password: '456', networkName: 'testnet' },
+  );
+
+  // Check the pin and password were used correctly
+  expect(checkPassword(accessData.words, '456')).toEqual(true);
+  expect(checkPassword(accessData.mainKey, '123')).toEqual(true);
+  expect(checkPassword(accessData.authKey, '123')).toEqual(true);
+
+  expect(() => wallet.changeEncryptionPin(accessData, 'invalid-pin', '321')).toThrow(InvalidPasswdError);
+  expect(() => wallet.changeEncryptionPassword(accessData, 'invalid-passwd', '456')).toThrow(InvalidPasswdError);
+
+  const pinChangedAccessData = wallet.changeEncryptionPin(accessData, '123', '321');
+  expect(checkPassword(pinChangedAccessData.words, '456')).toEqual(true);
+  expect(checkPassword(pinChangedAccessData.mainKey, '321')).toEqual(true);
+  expect(checkPassword(pinChangedAccessData.authKey, '321')).toEqual(true);
+
+  const passwdChangedAccessData = wallet.changeEncryptionPassword(accessData, '456', '654');
+  expect(checkPassword(passwdChangedAccessData.words, '654')).toEqual(true);
+  expect(checkPassword(passwdChangedAccessData.mainKey, '123')).toEqual(true);
+  expect(checkPassword(passwdChangedAccessData.authKey, '123')).toEqual(true);
+
+  const bothChangedAccessData = wallet.changeEncryptionPassword(pinChangedAccessData, '456', '654');
+  expect(checkPassword(bothChangedAccessData.words, '654')).toEqual(true);
+  expect(checkPassword(bothChangedAccessData.mainKey, '321')).toEqual(true);
+  expect(checkPassword(bothChangedAccessData.authKey, '321')).toEqual(true);
+})
+
+test('getWalletIdFromXpub', () => {
+  // The walletId is the sha256d of a given string in hex format
+  const str = 'change-path-xpub';
+  const expected = crypto.Hash.sha256sha256(Buffer.from(str)).toString('hex');
+  expect(wallet.getWalletIdFromXPub(str)).toEqual(expected);
 });

@@ -6,6 +6,7 @@
  */
 
 import CryptoJS from 'crypto-js';
+import { DecryptionError, InvalidPasswdError, UnsupportedHasherError } from '../errors';
 import { HASH_ITERATIONS, HASH_KEY_SIZE } from '../constants';
 import { IEncryptedData } from '../types';
 
@@ -33,7 +34,7 @@ export function hashData(
   const hasher = hashers.get(pbkdf2Hasher);
   if (!hasher) {
     // Used an unsupported hasher algorithm
-    throw new Error(`Invalid hasher: ${pbkdf2Hasher}`);
+    throw new UnsupportedHasherError(`Invalid hasher: ${pbkdf2Hasher}`);
   }
 
   const actualSalt = salt || CryptoJS.lib.WordArray.random(128 / 8).toString();
@@ -111,15 +112,14 @@ export function decryptData(data: IEncryptedData, password: string): string {
       if (originalData.length === 0) {
         // For certain NodeJS versions the CryptoJS.lib.WordArray will not raise an exception for malformed data.
         // It will just return an empty string, so we throw an error to mark the data as invalid.
-        throw new Error('Invalid data.');
+        throw new DecryptionError();
       }
       return originalData;
     } catch (err: unknown) {
-      throw new Error('Invalid data.');
+      throw new DecryptionError();
     }
   } else {
-    // FIXME: create custom error type for password errors
-    throw new Error('Invalid password');
+    throw new InvalidPasswdError();
   }
 }
 
@@ -139,4 +139,20 @@ export function validateHash(
 ): boolean {
   const hash = hashData(dataToValidate, { salt, iterations, pbkdf2Hasher });
   return hash.hash === hashedData;
+}
+
+/**
+ * Check that the given password was used to encrypt the given data.
+ * @param {IEncryptedData} data The encrypted data.
+ * @param {string} password The password we want to check against the data.
+ *
+ * @returns {boolean}
+ */
+export function checkPassword(data: IEncryptedData, password: string): boolean {
+  const options = {
+    salt: data.salt,
+    iterations: data.iterations,
+    pbkdf2Hasher: data.pbkdf2Hasher,
+  };
+  return validateHash(password, data.hash, options);
 }

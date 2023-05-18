@@ -584,7 +584,9 @@ export async function prepareSendTokensData(
 
     if (newUtxos.amount > outputAmount) {
       // We need to create a change output
-      const changeAddress = options.changeAddress || await storage.getCurrentAddress();
+      const changeAddress = await storage.getChangeAddress({
+        changeAddress: options.changeAddress,
+      });
       const changeOutput: IDataOutput = {
         type: await getOutputTypeFromWallet(),
         token,
@@ -623,7 +625,9 @@ export async function prepareSendTokensData(
     }
     if (inputAmount > outputAmount) {
       // Need to create a change output
-      const changeAddress = options.changeAddress || await storage.getCurrentAddress();
+      const changeAddress = await storage.getChangeAddress({
+        changeAddress: options.changeAddress,
+      });
       newtxData.outputs.push({
         type: await getOutputTypeFromWallet(),
         token,

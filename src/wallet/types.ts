@@ -308,7 +308,7 @@ export interface IHathorWallet {
     options: DestroyAuthorityOptions,
   ): Promise<Transaction>;
   destroyAuthority(
-    token: string, 
+    token: string,
     type: string,
     count: number,
     options: DestroyAuthorityOptions,
@@ -330,6 +330,9 @@ export interface IHathorWallet {
     graphType: string,
     maxLevel: number,
   ): Promise<string>;
+  checkPin(pin: string): Promise<boolean>;
+  checkPassword(password: string): Promise<boolean>;
+  checkPinAndPassword(pin: string, password: string): Promise<boolean>;
 }
 
 export interface ISendTransaction {
