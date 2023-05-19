@@ -57,22 +57,19 @@ export class AtomicSwapServiceConnection extends BaseConnection {
     }
 
     this.websocket.on('pong', (value) => {
-      console.log(`Received pong: ${value}`);
       this.emit('pong', value);
     })
 
     this.websocket.on('is_online', (value) => {
-      console.log(`Received is_online with value ${value}`);
       return this.onConnectionChange(value)
     });
 
     this.websocket.on('proposal_updated', (data) => {
-      console.log(`Received proposal_updated with data.`);
       this.emit('update-atomic-swap-proposal', data);
     });
 
     this.websocket.on('connection_error', (err) => {
-      console.error(`Something happened! ${err.message}`);
+      console.error(`Atomic Swap Service Websocket error: ${err.message}`);
     })
 
     this.setState(ConnectionState.CONNECTING);

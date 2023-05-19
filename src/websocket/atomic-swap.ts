@@ -28,7 +28,6 @@ class AtomicSwapWebSocket extends BaseWebSocket {
    * @param {Object} evt Event that has data (evt.data) sent in the websocket
    */
   onMessage(evt) {
-    console.log(`Received message!!! ${JSON.stringify(evt)}`);
     const message = JSON.parse(evt.data)
     const _type = message.type.split(':')[0]
     if (_type === 'pong') {
