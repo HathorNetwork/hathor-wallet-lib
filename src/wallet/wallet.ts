@@ -358,10 +358,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
           changeLevelPrivKey.xprivkey,
           {
             pin: pinCode,
+            authXpriv: this.authPrivKey.xprivkey!,
             // multisig: not implemented on wallet service yet
           },
         );
-        accessData.authKey = encryptData(this.authPrivKey.xprivkey!, pinCode);
       } else {
         throw new Error('This should never happen.');
       }
