@@ -1,8 +1,29 @@
 import { AtomicSwapServiceConnection } from '../../src/new/swapConnection';
 import { ConnectionState } from '../../src/wallet/types';
+import AtomicSwapWebSocket from '../../src/websocket/atomic-swap';
 
 const network = 'testnet';
 const atomicSwapServiceWs = 'http://localhost:3002' // mock value
+
+let sendMessageSpy, setupSpy;
+
+beforeAll(() => {
+  sendMessageSpy = jest.spyOn(AtomicSwapWebSocket.prototype, 'sendMessage')
+    .mockImplementation(jest.fn());
+
+  setupSpy = jest.spyOn(AtomicSwapWebSocket.prototype, 'setup')
+    .mockImplementation(jest.fn());
+})
+
+afterEach(() => {
+  sendMessageSpy.mockClear();
+  setupSpy.mockClear();
+})
+
+afterAll(() => {
+  sendMessageSpy.mockRestore();
+  setupSpy.mockRestore();
+})
 
 describe('start', () => {
   it('should handle a websocket failure', () => {
@@ -24,10 +45,6 @@ describe('start', () => {
       atomicSwapServiceWs,
     );
 
-    // Mocking the actual connection
-    const setupSpy = jest.spyOn(atomicConnection.websocket, 'setup')
-      .mockImplementation(jest.fn());
-
     atomicConnection.start();
     expect(atomicConnection.getState()).toStrictEqual(ConnectionState.CONNECTING);
     expect(setupSpy).toHaveBeenCalled()
@@ -38,10 +55,6 @@ describe('start', () => {
       { network },
       atomicSwapServiceWs,
     );
-
-    // Mocking the actual connection
-    const setupSpy = jest.spyOn(atomicConnection.websocket, 'setup')
-      .mockImplementation(jest.fn());
     atomicConnection.start();
 
     // Testing listeners
@@ -59,5 +72,37 @@ describe('start', () => {
       .mockImplementation(jest.fn());
     atomicConnection.websocket.emit('is_online', { some: 'data' });
     expect(onlineListener).toHaveBeenCalledWith({ some: 'data' });
+  })
+})
+
+describe('proposal handling', () => {
+  it('should send a subscribe proposal message', () => {
+    const atomicConnection = new AtomicSwapServiceConnection(
+      { network },
+      atomicSwapServiceWs,
+    );
+
+    atomicConnection.subscribeProposal(['abc', '123']);
+    expect(sendMessageSpy).toHaveBeenCalledWith(JSON.stringify({
+      type: 'subscribe_proposal',
+      proposalId: 'abc'
+    }));
+    expect(sendMessageSpy).toHaveBeenCalledWith(JSON.stringify({
+      type: 'subscribe_proposal',
+      proposalId: '123'
+    }));
+  })
+
+  it('should send a unsubscribe proposal message', () => {
+    const atomicConnection = new AtomicSwapServiceConnection(
+      { network },
+      atomicSwapServiceWs,
+    );
+
+    atomicConnection.unsubscribeProposal('123');
+    expect(sendMessageSpy).toHaveBeenCalledWith(JSON.stringify({
+      type: 'unsubscribe_proposal',
+      proposalId: '123'
+    }));
   })
 })

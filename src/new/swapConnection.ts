@@ -80,13 +80,7 @@ export class AtomicSwapServiceConnection extends BaseConnection {
     return this.state;
   }
 
-  startControlHandlers(storage: IStorage) {
-    this.removeMetricsHandlers();
-    this.addMetricsHandlers(storage);
-  }
-
   subscribeProposal(proposalsIds: string[]) {
-    console.log(`Subscribing proposals: ${JSON.stringify(proposalsIds)}`);
     if (this.websocket) {
       for (const proposalId of proposalsIds) {
         const msg = JSON.stringify({ type: 'subscribe_proposal', proposalId });
@@ -96,17 +90,9 @@ export class AtomicSwapServiceConnection extends BaseConnection {
   }
 
   unsubscribeProposal(proposalId: string) {
-    console.log(`UNSubscribing proposal: ${proposalId}`);
     if (this.websocket) {
       const msg = JSON.stringify({type: 'unsubscribe_proposal', proposalId});
       this.websocket.sendMessage(msg);
-    }
-  }
-
-  addMetricsHandlers(storage: IStorage) {
-    if (this.websocket) {
-      this.websocket.on('dashboard', handleWsDashboard(storage));
-      this.websocket.on('subscribe_address', handleSubscribeAddress());
     }
   }
 }
