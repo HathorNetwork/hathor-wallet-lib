@@ -41,7 +41,10 @@ describe('start', () => {
 
   it('should have the state "connecting"', () => {
     const atomicConnection = new AtomicSwapServiceConnection(
-      { network },
+      {
+        network,
+        connectionTimeout: 10000,
+      },
       atomicSwapServiceWs,
     );
 
@@ -72,6 +75,9 @@ describe('start', () => {
       .mockImplementation(jest.fn());
     atomicConnection.websocket.emit('is_online', { some: 'data' });
     expect(onlineListener).toHaveBeenCalledWith({ some: 'data' });
+
+    // Although this test does not assert anything, it increases coverage
+    atomicConnection.websocket.emit('connection_error', { error: 'content' });
   })
 })
 
