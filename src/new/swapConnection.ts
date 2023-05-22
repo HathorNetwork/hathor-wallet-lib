@@ -11,13 +11,11 @@ import BaseConnection, {
 import {
   ConnectionState,
 } from '../wallet/types';
-import { handleSubscribeAddress, handleWsDashboard } from '../utils/connection';
-import { IStorage } from '../types';
 import AtomicSwapWebSocket from '../websocket/atomic-swap';
 
 
 /**
- * This is a Connection that may be shared by one or more wallets.
+ * This is a Websocket Connection with the Atomic Swap Service
  *
  * It has the following states:
  * - CLOSED: When it is disconnected from the server.
@@ -25,8 +23,7 @@ import AtomicSwapWebSocket from '../websocket/atomic-swap';
  * - CONNECTED: When it is connected.
  *
  * You can subscribe for the following events:
- * - state: Fired when the state of the Wallet changes.
- * - wallet-update: Fired when a new wallet message arrive from the websocket.
+ * - update-atomic-swap-proposal: Fired when the state of a listened proposal changes
  **/
 export class AtomicSwapServiceConnection extends BaseConnection {
   static CLOSED = 0;
