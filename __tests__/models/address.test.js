@@ -7,6 +7,8 @@
 
 import Address from '../../src/models/address';
 import Network from '../../src/models/network';
+import P2PKH from '../../src/models/p2pkh';
+import P2SH from '../../src/models/p2sh';
 
 
 test('Validate address', () => {
@@ -51,4 +53,14 @@ test('Address getType', () => {
   // Mainnet p2sh
   const addr4 = new Address('hXRpjKbgVVGF1ioYtscCRavnzvGbsditXn', {network: mainnetNetwork});
   expect(addr4.getType()).toBe('p2sh');
+});
+
+test('Address script', () => {
+  const addr = new Address('wcFwC82mLoUudtgakZGMPyTL2aHcgSJgDZ');
+  const p2sh = new P2SH(addr);
+  expect(addr.getScript()).toBe(p2sh.createScript());
+
+  const addr2 = new Address('HNBUHhzkVuSFUNW21HrajUFNUiX8JrznSb', {network: mainnetNetwork});
+  const p2pkh = new P2PKH(addr2);
+  expect(addr2.getScript()).toBe(p2pkh.createScript());
 });

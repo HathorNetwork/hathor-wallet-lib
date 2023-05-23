@@ -8,6 +8,8 @@
 import { AddressError } from '../errors';
 import { encoding, util } from 'bitcore-lib';
 import Network from './network';
+import P2PKH from './p2pkh';
+import P2SH from './p2sh';
 import _ from 'lodash';
 import helpers from '../utils/helpers';
 
@@ -123,6 +125,29 @@ class Address {
       return 'p2sh';
     } else {
       throw new AddressError('Invalid address type.');
+    }
+  }
+
+  /**
+   * Get address script
+   *
+   * Will get the type of the address (p2pkh or p2sh)
+   * then create the script
+   *
+   * @throws {AddressError} Will throw an error if address is not valid
+   *
+   * @return {Buffer}
+   * @memberof Address
+   * @inner
+   */
+  getScript(): Buffer {
+    const addressType = this.getType();
+    if (addressType === 'p2pkh') {
+      const p2pkh = new P2PKH(this);
+      return p2pkh.createScript();
+    } else {
+      const p2sh = new P2SH(this);
+      return p2sh.createScript();
     }
   }
 }
