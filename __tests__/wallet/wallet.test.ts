@@ -390,6 +390,13 @@ test('prepareMintTokens', async () => {
     'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX',
   ]
 
+  mockAxiosAdapter.onPost('wallet/addresses/check_mine').reply(200, {
+    success: true,
+    addresses: {
+      'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX': true,
+    },
+  });
+
   const requestPassword = jest.fn();
   const network = new Network('testnet');
   const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
@@ -456,6 +463,15 @@ test('prepareMintTokens', async () => {
     pinCode: '123456',
   })).rejects.toThrowError(SendTxError);
 
+  // error because of wrong authority output address
+  await expect(wallet.prepareMintTokensData('01', 100, {
+    address: addresses[1],
+    createAnotherMint: true,
+    mintAuthorityAddress: 'abc',
+    allowExternalMintAuthorityAddress: true,
+    pinCode: '123456',
+  })).rejects.toThrowError(SendTxError);
+
   // mint data with correct address for authority output
   const mintData = await wallet.prepareMintTokensData('01', 100, {
     address: addresses[1],
@@ -489,6 +505,13 @@ test('prepareMeltTokens', async () => {
     'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM',
     'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX',
   ]
+
+  mockAxiosAdapter.onPost('wallet/addresses/check_mine').reply(200, {
+    success: true,
+    addresses: {
+      'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX': true,
+    },
+  });
 
   const requestPassword = jest.fn();
   const network = new Network('testnet');
@@ -553,6 +576,15 @@ test('prepareMeltTokens', async () => {
     address: addresses[1],
     createAnotherMelt: true,
     meltAuthorityAddress: 'abc',
+    pinCode: '123456',
+  })).rejects.toThrowError(SendTxError);
+
+  // error because of wrong authority output address
+  await expect(wallet.prepareMeltTokensData('01', 1, {
+    address: addresses[1],
+    createAnotherMelt: true,
+    meltAuthorityAddress: 'abc',
+    allowExternalMeltAuthorityAddress: true,
     pinCode: '123456',
   })).rejects.toThrowError(SendTxError);
 

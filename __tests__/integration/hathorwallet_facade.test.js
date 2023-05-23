@@ -1672,10 +1672,7 @@ describe('mintTokens', () => {
     const externalAddress = await hWallet2.getAddressAtIndex(0);
 
     await expect(hWallet.mintTokens(tokenUid, 100, { mintAuthorityAddress: externalAddress }))
-      .rejects.toStrictEqual({
-        success: false,
-        message: expect.stringContaining('must belong to your wallet'),
-      });
+      .rejects.toThrow('must belong to your wallet');
 
     // Mint tokens with external address but allowing it
     const mintResponse4 = await hWallet.mintTokens(tokenUid, 100, { mintAuthorityAddress: externalAddress, allowExternalMintAuthorityAddress: true });
@@ -1820,10 +1817,7 @@ describe('meltTokens', () => {
     const externalAddress = await hWallet2.getAddressAtIndex(0);
 
     await expect(hWallet.meltTokens(tokenUid, 100, { meltAuthorityAddress: externalAddress }))
-      .rejects.toStrictEqual({
-        success: false,
-        message: expect.stringContaining('must belong to your wallet'),
-      });
+      .rejects.toThrow('must belong to your wallet');
 
     // Melt tokens with external address but allowing it
     const meltResponse3 = await hWallet.meltTokens(tokenUid, 100, { meltAuthorityAddress: externalAddress, allowExternalMeltAuthorityAddress: true });
