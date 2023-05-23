@@ -58,9 +58,10 @@ test('Address getType', () => {
 test('Address script', () => {
   const addr = new Address('wcFwC82mLoUudtgakZGMPyTL2aHcgSJgDZ');
   const p2sh = new P2SH(addr);
-  expect(addr.getScript()).toBe(p2sh.createScript());
+  expect(addr.getScript()).toStrictEqual(p2sh.createScript());
 
+  const mainnetNetwork = new Network('mainnet')
   const addr2 = new Address('HNBUHhzkVuSFUNW21HrajUFNUiX8JrznSb', {network: mainnetNetwork});
   const p2pkh = new P2PKH(addr2);
-  expect(addr2.getScript()).toBe(p2pkh.createScript());
+  expect(addr2.getScript()).toStrictEqual(p2pkh.createScript());
 });
