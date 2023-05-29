@@ -1639,6 +1639,68 @@ describe('mintTokens', () => {
     const tokenBalance = await hWallet.getBalance(tokenUid);
     const expectedAmount = 100 + mintAmount;
     expect(tokenBalance[0]).toHaveProperty('balance.unlocked', expectedAmount);
+
+    // Mint tokens with defined mint authority address
+    const address0 = await hWallet.getAddressAtIndex(0);
+
+    const mintResponse2 = await hWallet.mintTokens(tokenUid, 100, { mintAuthorityAddress: address0 });
+    expect(mintResponse2.hash).toBeDefined();
+    await waitForTxReceived(hWallet, mintResponse2.hash);
+
+    // Validating there is a correct reference to the custom token
+    expect(mintResponse2).toHaveProperty('tokens.length', 1);
+    expect(mintResponse2.tokens[0]).toEqual(tokenUid);
+
+    // Validating a new mint authority was created by default
+    const authorityOutputs2 = mintResponse2.outputs.filter(
+      o => transaction.isAuthorityOutput({token_data: o.tokenData})
+    );
+    expect(authorityOutputs2).toHaveLength(1);
+    const authorityOutput = authorityOutputs2[0];
+    expect(authorityOutput.value).toEqual(TOKEN_MINT_MASK);
+    const p2pkh = authorityOutput.parseScript(hWallet.getNetworkObject());
+    // Validate that the authority output was sent to the correct address
+    expect(p2pkh.address.base58).toEqual(address0);
+
+    // Validating custom token balance
+    const tokenBalance2 = await hWallet.getBalance(tokenUid);
+    const expectedAmount2 = expectedAmount + 100;
+    expect(tokenBalance2[0]).toHaveProperty('balance.unlocked', expectedAmount2);
+
+    // Mint tokens with external address should return error by default
+    const hWallet2 = await generateWalletHelper();
+    const externalAddress = await hWallet2.getAddressAtIndex(0);
+
+    await expect(hWallet.mintTokens(tokenUid, 100, { mintAuthorityAddress: externalAddress }))
+      .rejects.toThrow('must belong to your wallet');
+
+    // Mint tokens with external address but allowing it
+    const mintResponse4 = await hWallet.mintTokens(tokenUid, 100, {
+      mintAuthorityAddress: externalAddress,
+      allowExternalMintAuthorityAddress: true
+    });
+    expect(mintResponse4.hash).toBeDefined();
+    await waitForTxReceived(hWallet, mintResponse4.hash);
+
+    // Validating there is a correct reference to the custom token
+    expect(mintResponse4).toHaveProperty('tokens.length', 1);
+    expect(mintResponse4.tokens[0]).toEqual(tokenUid);
+
+    // Validating a new mint authority was created by default
+    const authorityOutputs4 = mintResponse4.outputs.filter(
+      o => transaction.isAuthorityOutput({token_data: o.tokenData})
+    );
+    expect(authorityOutputs4).toHaveLength(1);
+    const authorityOutput4 = authorityOutputs4[0];
+    expect(authorityOutput4.value).toEqual(TOKEN_MINT_MASK);
+    const p4pkh = authorityOutput4.parseScript(hWallet.getNetworkObject());
+    // Validate that the authority output was sent to the correct address
+    expect(p4pkh.address.base58).toEqual(externalAddress);
+
+    // Validating custom token balance
+    const tokenBalance4 = await hWallet.getBalance(tokenUid);
+    const expectedAmount4 = expectedAmount2 + 100;
+    expect(tokenBalance4[0]).toHaveProperty('balance.unlocked', expectedAmount4);
   });
 
   it('should deposit correct HTR values for minting', async () => {
@@ -1715,7 +1777,7 @@ describe('meltTokens', () => {
       hWallet,
       'Token to Melt',
       'TMELT',
-      100,
+      300,
     );
 
     // Should not melt more than there is available
@@ -1729,8 +1791,59 @@ describe('meltTokens', () => {
 
     // Validating custom token balance
     const tokenBalance = await hWallet.getBalance(tokenUid);
-    const expectedAmount = 100 - meltAmount;
+    const expectedAmount = 300 - meltAmount;
     expect(tokenBalance[0]).toHaveProperty('balance.unlocked', expectedAmount);
+
+    // Melt tokens with defined melt authority address
+    const address0 = await hWallet.getAddressAtIndex(0);
+    const meltResponse = await hWallet.meltTokens(tokenUid, 100, { meltAuthorityAddress: address0 });
+    await waitForTxReceived(hWallet, meltResponse.hash);
+
+    // Validating a new melt authority was created by default
+    const authorityOutputs = meltResponse.outputs.filter(
+      o => transaction.isAuthorityOutput({token_data: o.tokenData})
+    );
+    expect(authorityOutputs).toHaveLength(1);
+    const authorityOutput = authorityOutputs[0];
+    expect(authorityOutput.value).toEqual(TOKEN_MELT_MASK);
+    const p2pkh = authorityOutput.parseScript(hWallet.getNetworkObject());
+    // Validate that the authority output was sent to the correct address
+    expect(p2pkh.address.base58).toEqual(address0);
+
+    // Validating custom token balance
+    const tokenBalance2 = await hWallet.getBalance(tokenUid);
+    const expectedAmount2 = expectedAmount - 100;
+    expect(tokenBalance2[0]).toHaveProperty('balance.unlocked', expectedAmount2);
+
+    // Melt tokens with external address should return error
+    const hWallet2 = await generateWalletHelper();
+    const externalAddress = await hWallet2.getAddressAtIndex(0);
+
+    await expect(hWallet.meltTokens(tokenUid, 100, { meltAuthorityAddress: externalAddress }))
+      .rejects.toThrow('must belong to your wallet');
+
+    // Melt tokens with external address but allowing it
+    const meltResponse3 = await hWallet.meltTokens(tokenUid, 100, {
+      meltAuthorityAddress: externalAddress,
+      allowExternalMeltAuthorityAddress: true
+    });
+    await waitForTxReceived(hWallet, meltResponse3.hash);
+
+    // Validating a new melt authority was created by default
+    const authorityOutputs3 = meltResponse3.outputs.filter(
+      o => transaction.isAuthorityOutput({token_data: o.tokenData})
+    );
+    expect(authorityOutputs3).toHaveLength(1);
+    const authorityOutput3 = authorityOutputs3[0];
+    expect(authorityOutput3.value).toEqual(TOKEN_MELT_MASK);
+    const p3pkh = authorityOutput3.parseScript(hWallet.getNetworkObject());
+    // Validate that the authority output was sent to the correct address
+    expect(p3pkh.address.base58).toEqual(externalAddress);
+
+    // Validating custom token balance
+    const tokenBalance3 = await hWallet.getBalance(tokenUid);
+    const expectedAmount3 = expectedAmount2 - 100;
+    expect(tokenBalance3[0]).toHaveProperty('balance.unlocked', expectedAmount3);
   });
 
   it('should recover correct amount of HTR on melting', async () => {

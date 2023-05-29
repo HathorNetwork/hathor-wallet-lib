@@ -270,6 +270,7 @@ const tokens = {
    * @param {string|null} [options.token=null] Token to mint, may be null if we are creating the token
    * @param {IDataInput|null} [options.mintInput=null] Input to spend, may be null if we are creating the token
    * @param {boolean} [options.createAnotherMint=true] If a mint authority should be created on the transaction.
+   * @param {string|null} [options.mintAuthorityAddress=null] The address to send the new mint authority created
    * @param {string|null} [options.changeAddress=null] The address to send any change output.
    * @param {boolean} [options.isCreateNFT=false] If this transaction will create an NFT
    *
@@ -285,13 +286,15 @@ const tokens = {
       createAnotherMint = true,
       changeAddress = null,
       isCreateNFT = false,
+      mintAuthorityAddress = null,
     }: {
-      token?: string|null,
-      mintInput?: IDataInput|null,
+      token?: string | null,
+      mintInput?: IDataInput | null,
       createAnotherMint?: boolean,
       createMelt?: boolean,
-      changeAddress?: string|null,
+      changeAddress?: string | null,
       isCreateNFT?: boolean,
+      mintAuthorityAddress?: string | null,
     } = {},
   ): Promise<IDataTx> {
     const inputs: IDataInput[] = [];
@@ -350,7 +353,7 @@ const tokens = {
     });
 
     if (createAnotherMint) {
-      const newAddress = await storage.getCurrentAddress();
+      const newAddress = mintAuthorityAddress || await storage.getCurrentAddress();
       outputs.push({
         type: 'mint',
         address: newAddress,
@@ -379,7 +382,8 @@ const tokens = {
    * @param {IStorage} storage The storage object
    * @param {Object} [options={}] Options to create the melt transaction
    * @param {boolean} [options.createAnotherMelt=true] If should create another melt authority
-   * @param {string|null} [options.changeAddress=null] Address to send the change
+   * @param {string | null} [options.meltAuthorityAddress=null] Address to send the new melt authority created
+   * @param {string | null} [options.changeAddress=null] Address to send the change
    * @returns {Promise<IDataTx>}
    */
   async prepareMeltTxData(
@@ -390,10 +394,12 @@ const tokens = {
     storage: IStorage,
     {
       createAnotherMelt = true,
+      meltAuthorityAddress = null,
       changeAddress = null,
     }: {
       createAnotherMelt?: boolean,
-      changeAddress?: string|null,
+      meltAuthorityAddress?: string | null,
+      changeAddress?: string | null,
     } = {},
   ): Promise<IDataTx> {
     if ((authorityMeltInput.token !== token) || (authorityMeltInput.authorities !== 2)) {
@@ -439,7 +445,7 @@ const tokens = {
     }
 
     if (createAnotherMelt) {
-      const newAddress = await storage.getCurrentAddress();
+      const newAddress = meltAuthorityAddress || await storage.getCurrentAddress();
       outputs.push({
         type: getAddressType(newAddress, storage.config.getNetwork()),
         address: newAddress,
