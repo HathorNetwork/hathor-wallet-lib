@@ -30,6 +30,8 @@ jest.mock('../../src/wallet/sendTransactionWalletService', () => {
   });
 });
 
+const addressPath = 'm/280\'/280\'/0/1/0';
+
 const MOCK_TX = {
   tx_id: '0009bc9bf8eab19c41a2aa9b9369d3b6a90ff12072729976634890d35788d5d7',
   nonce: 194,
@@ -427,7 +429,7 @@ test('prepareMintTokens', async () => {
           timelock: null,
           heightlock: null,
           locked: false,
-          addressPath: 'm/280\'/280\'/0/1/0',
+          addressPath,
         }],
         changeAmount: 0,
       };
@@ -443,7 +445,7 @@ test('prepareMintTokens', async () => {
           timelock: null,
           heightlock: null,
           locked: false,
-          addressPath: 'm/280\'/280\'/0/1/0',
+          addressPath,
         }],
         changeAmount: 0,
       };
@@ -543,7 +545,7 @@ test('prepareMeltTokens', async () => {
           timelock: null,
           heightlock: null,
           locked: false,
-          addressPath: 'm/280\'/280\'/0/1/0',
+          addressPath,
         }],
         changeAmount: 0,
       };
@@ -559,7 +561,7 @@ test('prepareMeltTokens', async () => {
           timelock: null,
           heightlock: null,
           locked: false,
-          addressPath: 'm/280\'/280\'/0/1/0',
+          addressPath,
         }],
         changeAmount: 0,
       };
@@ -650,7 +652,7 @@ test('prepareDelegateAuthorityData', async () => {
       timelock: null,
       heightlock: null,
       locked: false,
-      addressPath: 'm/280\'/280\'/0/1/0',
+      addressPath,
     }],
     changeAmount: 4,
   });
@@ -774,7 +776,7 @@ test('prepareDestroyAuthority', async () => {
       timelock: null,
       heightlock: null,
       locked: false,
-      addressPath: 'm/280\'/280\'/0/1/0',
+      addressPath,
     }],
     changeAmount: 4,
   });

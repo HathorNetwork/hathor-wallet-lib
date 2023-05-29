@@ -1675,7 +1675,10 @@ describe('mintTokens', () => {
       .rejects.toThrow('must belong to your wallet');
 
     // Mint tokens with external address but allowing it
-    const mintResponse4 = await hWallet.mintTokens(tokenUid, 100, { mintAuthorityAddress: externalAddress, allowExternalMintAuthorityAddress: true });
+    const mintResponse4 = await hWallet.mintTokens(tokenUid, 100, {
+      mintAuthorityAddress: externalAddress,
+      allowExternalMintAuthorityAddress: true
+    });
     expect(mintResponse4.hash).toBeDefined();
     await waitForTxReceived(hWallet, mintResponse4.hash);
 
@@ -1820,7 +1823,10 @@ describe('meltTokens', () => {
       .rejects.toThrow('must belong to your wallet');
 
     // Melt tokens with external address but allowing it
-    const meltResponse3 = await hWallet.meltTokens(tokenUid, 100, { meltAuthorityAddress: externalAddress, allowExternalMeltAuthorityAddress: true });
+    const meltResponse3 = await hWallet.meltTokens(tokenUid, 100, {
+      meltAuthorityAddress: externalAddress,
+      allowExternalMeltAuthorityAddress: true
+    });
     await waitForTxReceived(hWallet, meltResponse3.hash);
 
     // Validating a new melt authority was created by default

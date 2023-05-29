@@ -288,13 +288,13 @@ const tokens = {
       isCreateNFT = false,
       mintAuthorityAddress = null,
     }: {
-      token?: string|null,
-      mintInput?: IDataInput|null,
+      token?: string | null,
+      mintInput?: IDataInput | null,
       createAnotherMint?: boolean,
       createMelt?: boolean,
-      changeAddress?: string|null,
+      changeAddress?: string | null,
       isCreateNFT?: boolean,
-      mintAuthorityAddress?: string|null,
+      mintAuthorityAddress?: string | null,
     } = {},
   ): Promise<IDataTx> {
     const inputs: IDataInput[] = [];
@@ -382,8 +382,8 @@ const tokens = {
    * @param {IStorage} storage The storage object
    * @param {Object} [options={}] Options to create the melt transaction
    * @param {boolean} [options.createAnotherMelt=true] If should create another melt authority
-   * @param {string|null} [options.meltAuthorityAddress=null] Address to send the new melt authority created
-   * @param {string|null} [options.changeAddress=null] Address to send the change
+   * @param {string | null} [options.meltAuthorityAddress=null] Address to send the new melt authority created
+   * @param {string | null} [options.changeAddress=null] Address to send the change
    * @returns {Promise<IDataTx>}
    */
   async prepareMeltTxData(
@@ -398,8 +398,8 @@ const tokens = {
       changeAddress = null,
     }: {
       createAnotherMelt?: boolean,
-      meltAuthorityAddress?: string|null,
-      changeAddress?: string|null,
+      meltAuthorityAddress?: string | null,
+      changeAddress?: string | null,
     } = {},
   ): Promise<IDataTx> {
     if ((authorityMeltInput.token !== token) || (authorityMeltInput.authorities !== 2)) {

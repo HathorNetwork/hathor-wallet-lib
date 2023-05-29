@@ -1366,7 +1366,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     if (newOptions.createAnotherMint) {
       // b. Mint authority
-      const authorityAddress = newOptions.mintAuthorityAddress || this.getCurrentAddress({ markAsUsed: true }).address;
+      const authorityAddress = newOptions.mintAuthorityAddress
+        || this.getCurrentAddress({ markAsUsed: true }).address;
       const authorityAddressObj = new Address(authorityAddress, { network: this.network });
       if (!authorityAddressObj.isValid()) {
         throw new SendTxError(`Address ${newOptions.mintAuthorityAddress} is not valid.`);
@@ -1517,13 +1518,18 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     if (newOptions.createAnotherMelt) {
       // b. Melt authority
-      const authorityAddress = newOptions.meltAuthorityAddress || this.getCurrentAddress({ markAsUsed: true }).address;
+      const authorityAddress = newOptions.meltAuthorityAddress
+        || this.getCurrentAddress({ markAsUsed: true }).address;
       const authorityAddressObj = new Address(authorityAddress, { network: this.network });
       if (!authorityAddressObj.isValid()) {
         throw new SendTxError(`Address ${newOptions.meltAuthorityAddress} is not valid.`);
       }
       const p2pkhAuthorityScript = authorityAddressObj.getScript();
-      outputsObj.push(new Output(TOKEN_MELT_MASK, p2pkhAuthorityScript, { tokenData: AUTHORITY_TOKEN_DATA }));
+      outputsObj.push(
+        new Output(TOKEN_MELT_MASK, p2pkhAuthorityScript, {
+          tokenData: AUTHORITY_TOKEN_DATA
+        })
+      );
     }
 
     if (changeAmount) {
