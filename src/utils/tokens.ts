@@ -291,7 +291,6 @@ const tokens = {
       token?: string | null,
       mintInput?: IDataInput | null,
       createAnotherMint?: boolean,
-      createMelt?: boolean,
       changeAddress?: string | null,
       isCreateNFT?: boolean,
       mintAuthorityAddress?: string | null,
@@ -486,7 +485,9 @@ const tokens = {
    * @param {Object} [options={}] options to create the token
    * @param {string|null} [options.changeAddress=null] Address to send the change
    * @param {boolean} [options.createMint=true] Whether to create a mint output
+   * @param {string} [options.mintAuthorityAddress] the address to send the mint authority created
    * @param {boolean} [options.createMelt=true] Whether to create a melt output
+   * @param {string} [options.meltAuthorityAddress] the address to send the melt authority created
    * @param {string|null} [options.nftData=null] NFT data to create an NFT token
    * @returns {Promise<IDataTx>} The transaction data to create the token
    */
@@ -499,19 +500,23 @@ const tokens = {
     {
       changeAddress = null,
       createMint = true,
+      mintAuthorityAddress = null,
       createMelt = true,
+      meltAuthorityAddress = null,
       nftData = null,
     }: {
       changeAddress?: string | null,
       createMint?: boolean,
+      mintAuthorityAddress?: string | null,
       createMelt?: boolean,
+      meltAuthorityAddress?: string | null,
       nftData?: string | null,
     } = {},
   ): Promise<IDataTx> {
     const isCreateNFT = !!nftData;
     const mintOptions = {
       createAnotherMint: createMint,
-      createMelt,
+      mintAuthorityAddress,
       changeAddress,
       isCreateNFT,
     };
@@ -519,7 +524,7 @@ const tokens = {
     const txData = await this.prepareMintTxData(address, mintAmount, storage, mintOptions);
 
     if (createMelt) {
-      const newAddress = await storage.getCurrentAddress();
+      const newAddress = meltAuthorityAddress || await storage.getCurrentAddress();
       txData.outputs.push({
         type: 'melt',
         address: newAddress,

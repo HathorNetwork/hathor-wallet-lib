@@ -1099,7 +1099,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       address: string | null,
       changeAddress: string | null,
       createMintAuthority: boolean,
+      mintAuthorityAddress: string | null,
+      allowExternalMintAuthorityAddress: boolean | null,
       createMeltAuthority: boolean,
+      meltAuthorityAddress: string | null,
+      allowExternalMeltAuthorityAddress: boolean | null,
       nftData: string | null,
       pinCode: string | null,
     };
@@ -1107,10 +1111,30 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       address: null,
       changeAddress: null,
       createMintAuthority: true,
+      mintAuthorityAddress: null,
+      allowExternalMintAuthorityAddress: false,
       createMeltAuthority: true,
+      meltAuthorityAddress: null,
+      allowExternalMeltAuthorityAddress: false,
       nftData: null,
       pinCode: null,
     }, options);
+
+    if (newOptions.mintAuthorityAddress && !newOptions.allowExternalMintAuthorityAddress) {
+      // Validate that the mint authority address belongs to the wallet
+      const checkAddressMineMap = await this.checkAddressesMine([newOptions.mintAuthorityAddress]);
+      if (!checkAddressMineMap[newOptions.mintAuthorityAddress]) {
+        throw new SendTxError('The mint authority address must belong to your wallet.');
+      }
+    }
+
+    if (newOptions.meltAuthorityAddress && !newOptions.allowExternalMeltAuthorityAddress) {
+      // Validate that the melt authority address belongs to the wallet
+      const checkAddressMineMap = await this.checkAddressesMine([newOptions.meltAuthorityAddress]);
+      if (!checkAddressMineMap[newOptions.meltAuthorityAddress]) {
+        throw new SendTxError('The melt authority address must belong to your wallet.');
+      }
+    }
 
     const isNFT = newOptions.nftData !== null;
 
@@ -1149,17 +1173,37 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     if (!address.isValid()) {
       throw new SendTxError(`Address ${newOptions.address} is not valid.`);
     }
+
+    // TODO use method from the other PR before merging
     const p2pkh = new P2PKH(address);
     const p2pkhScript = p2pkh.createScript()
     outputsObj.push(new Output(amount, p2pkhScript, {tokenData: 1}));
 
     if (newOptions.createMintAuthority) {
       // b. Mint authority
-      outputsObj.push(new Output(TOKEN_MINT_MASK, p2pkhScript, {tokenData: AUTHORITY_TOKEN_DATA}));
+      const mintAuthorityAddress = newOptions.mintAuthorityAddress || this.getCurrentAddress({ markAsUsed: true }).address;
+      const mintAuthorityAddressObj = new Address(mintAuthorityAddress, {network: this.network});
+      if (!mintAuthorityAddressObj.isValid()) {
+        throw new SendTxError(`Address ${newOptions.mintAuthorityAddress} is not valid.`);
+      }
+
+      // TODO use method from the other PR before merging
+      const p2pkhMintAuthority = new P2PKH(mintAuthorityAddressObj);
+      const p2pkhMintAuthorityScript = p2pkhMintAuthority.createScript()
+      outputsObj.push(new Output(TOKEN_MINT_MASK, p2pkhMintAuthorityScript, {tokenData: AUTHORITY_TOKEN_DATA}));
     }
 
     if (newOptions.createMeltAuthority) {
       // c. Melt authority
+      const meltAuthorityAddress = newOptions.meltAuthorityAddress || this.getCurrentAddress({ markAsUsed: true }).address;
+      const meltAuthorityAddressObj = new Address(meltAuthorityAddress, {network: this.network});
+      if (!meltAuthorityAddressObj.isValid()) {
+        throw new SendTxError(`Address ${newOptions.meltAuthorityAddress} is not valid.`);
+      }
+
+      // TODO use method from the other PR before merging
+      const p2pkhMeltAuthority = new P2PKH(meltAuthorityAddressObj);
+      const p2pkhMeltAuthorityScript = p2pkhMeltAuthority.createScript()
       outputsObj.push(new Output(TOKEN_MELT_MASK, p2pkhScript, {tokenData: AUTHORITY_TOKEN_DATA}));
     }
 
@@ -1782,7 +1826,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       address: string | null,
       changeAddress: string | null,
       createMintAuthority: boolean,
+      mintAuthorityAddress: string | null,
+      allowExternalMintAuthorityAddress: boolean | null,
       createMeltAuthority: boolean,
+      meltAuthorityAddress: string | null,
+      allowExternalMeltAuthorityAddress: boolean | null,
     };
     const newOptions: optionsType = Object.assign({
       address: null,

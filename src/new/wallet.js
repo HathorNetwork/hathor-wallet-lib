@@ -1368,7 +1368,13 @@ class HathorWallet extends EventEmitter {
    * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
    * @param {string} [options.pinCode] pin to decrypt xpriv information. Optional but required if not set in this
    * @param {boolean} [options.createMint=true] if should create mint authority with the token
+   * @param {string} [options.mintAuthorityAddress] the address to send the mint authority created
+   * @param {boolean} [options.allowExternalMintAuthorityAddress=false] allow the mint authority address
+   *                                                                    to be from another wallet
    * @param {boolean} [options.createMelt=true] if should create melt authority with the token
+   * @param {string} [options.meltAuthorityAddress] the address to send the melt authority created
+   * @param {boolean} [options.allowExternalMeltAuthorityAddress=false] allow the melt authority address
+   *                                                                    to be from another wallet
    * @param {string} [options.nftData] data string for NFT
    *
    * @return {CreateTokenTransaction} Promise that resolves with transaction object if succeeds
@@ -1387,13 +1393,35 @@ class HathorWallet extends EventEmitter {
       startMiningTx: true,
       pinCode: null,
       createMint: true,
+      mintAuthorityAddress: null,
+      allowExternalMintAuthorityAddress: false,
       createMelt: true,
+      meltAuthorityAddress: null,
+      allowExternalMeltAuthorityAddress: false,
       nftData: null
     }, options);
+
     const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
+
+    if (newOptions.mintAuthorityAddress && !newOptions.allowExternalMintAuthorityAddress) {
+      // Validate that the mint authority address belongs to the wallet
+      const isAddressMine = await this.isAddressMine(newOptions.mintAuthorityAddress);
+      if (!isAddressMine) {
+        throw new Error('The mint authority address must belong to your wallet.');
+      }
+    }
+
+    if (newOptions.meltAuthorityAddress && !newOptions.allowExternalMeltAuthorityAddress) {
+      // Validate that the melt authority address belongs to the wallet
+      const isAddressMine = await this.isAddressMine(newOptions.meltAuthorityAddress);
+      if (!isAddressMine) {
+        throw new Error('The melt authority address must belong to your wallet.');
+      }
+    }
+
     const mintAddress = newOptions.address || (await this.getCurrentAddress()).address;
 
     const txData = await tokenUtils.prepareCreateTokenData(
@@ -1405,7 +1433,9 @@ class HathorWallet extends EventEmitter {
       {
         changeAddress: newOptions.changeAddress,
         createMint: newOptions.createMint,
+        mintAuthorityAddress: newOptions.mintAuthorityAddress,
         createMelt: newOptions.createMelt,
+        meltAuthorityAddress: newOptions.meltAuthorityAddress,
         nftData: newOptions.nftData
       },
     );
@@ -1446,7 +1476,13 @@ class HathorWallet extends EventEmitter {
    * @param {string} [options.pinCode] pin to decrypt xpriv information.
    *                                   Optional but required if not set in this
    * @param {boolean} [options.createMint=true] should create mint authority
+   * @param {string} [options.mintAuthorityAddress] the address to send the mint authority created
+   * @param {boolean} [options.allowExternalMintAuthorityAddress=false] allow the mint authority address
+   *                                                                    to be from another wallet
    * @param {boolean} [options.createMelt=true] should create melt authority
+   * @param {string} [options.meltAuthorityAddress] the address to send the melt authority created
+   * @param {boolean} [options.allowExternalMeltAuthorityAddress=false] allow the melt authority address
+   *                                                                    to be from another wallet
    *
    * @return {Promise<CreateNewTokenResponse>}
    * @memberof HathorWallet
@@ -2085,7 +2121,13 @@ class HathorWallet extends EventEmitter {
    * @param {string} [options.pinCode] pin to decrypt xpriv information.
    *                                   Optional but required if not set in this
    * @param {boolean} [options.createMint=false] should create mint authority
+   * @param {string} [options.mintAuthorityAddress] the address to send the mint authority created
+   * @param {boolean} [options.allowExternalMintAuthorityAddress=false] allow the mint authority address
+   *                                                                    to be from another wallet
    * @param {boolean} [options.createMelt=false] should create melt authority
+   * @param {string} [options.meltAuthorityAddress] the address to send the melt authority created
+   * @param {boolean} [options.allowExternalMeltAuthorityAddress=false] allow the melt authority address
+   *                                                                    to be from another wallet
    *
    * @return {Promise<CreateNewTokenResponse>}
    *
@@ -2099,7 +2141,11 @@ class HathorWallet extends EventEmitter {
       startMiningTx: true,
       pinCode: null,
       createMint: false,
+      mintAuthorityAddress: null,
+      allowExternalMintAuthorityAddress: false,
       createMelt: false,
+      meltAuthorityAddress: null,
+      allowExternalMeltAuthorityAddress: false,
     }, options);
     newOptions['nftData'] = data;
     const tx = await this.prepareCreateNewToken(name, symbol, amount, newOptions);
