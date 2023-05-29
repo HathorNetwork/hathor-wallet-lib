@@ -1174,9 +1174,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       throw new SendTxError(`Address ${newOptions.address} is not valid.`);
     }
 
-    // TODO use method from the other PR before merging
-    const p2pkh = new P2PKH(address);
-    const p2pkhScript = p2pkh.createScript()
+    const p2pkhScript = address.getScript();
     outputsObj.push(new Output(amount, p2pkhScript, {tokenData: 1}));
 
     if (newOptions.createMintAuthority) {
@@ -1187,9 +1185,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         throw new SendTxError(`Address ${newOptions.mintAuthorityAddress} is not valid.`);
       }
 
-      // TODO use method from the other PR before merging
-      const p2pkhMintAuthority = new P2PKH(mintAuthorityAddressObj);
-      const p2pkhMintAuthorityScript = p2pkhMintAuthority.createScript()
+      const p2pkhMintAuthorityScript = mintAuthorityAddressObj.getScript();
       outputsObj.push(new Output(TOKEN_MINT_MASK, p2pkhMintAuthorityScript, {tokenData: AUTHORITY_TOKEN_DATA}));
     }
 
@@ -1201,10 +1197,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         throw new SendTxError(`Address ${newOptions.meltAuthorityAddress} is not valid.`);
       }
 
-      // TODO use method from the other PR before merging
-      const p2pkhMeltAuthority = new P2PKH(meltAuthorityAddressObj);
-      const p2pkhMeltAuthorityScript = p2pkhMeltAuthority.createScript()
-      outputsObj.push(new Output(TOKEN_MELT_MASK, p2pkhScript, {tokenData: AUTHORITY_TOKEN_DATA}));
+      const p2pkhMeltAuthorityScript = meltAuthorityAddressObj.getScript();
+      outputsObj.push(new Output(TOKEN_MELT_MASK, p2pkhMeltAuthorityScript, {tokenData: AUTHORITY_TOKEN_DATA}));
     }
 
     if (changeAmount) {
@@ -1404,8 +1398,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     if (!address.isValid()) {
       throw new SendTxError(`Address ${newOptions.address} is not valid.`);
     }
-    const p2pkh = new P2PKH(address);
-    const p2pkhScript = p2pkh.createScript()
+    const p2pkhScript = address.getScript();
     outputsObj.push(new Output(amount, p2pkhScript, {tokenData: 1}));
 
     if (newOptions.createAnotherMint) {
@@ -1836,7 +1829,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       address: null,
       changeAddress: null,
       createMintAuthority: false,
+      mintAuthorityAddress: null,
+      allowExternalMintAuthorityAddress: false,
       createMeltAuthority: false,
+      meltAuthorityAddress: null,
+      allowExternalMeltAuthorityAddress: false,
     }, options);
     newOptions['nftData'] = data;
     const tx = await this.prepareCreateNewToken(name, symbol, amount, newOptions);
