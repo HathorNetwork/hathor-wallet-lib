@@ -23,7 +23,7 @@
   "scripts": {
     "test": "jest --env=node --forceExit",
     "test:watch": "jest --watch --env=node",
-    "build": "babel --presets @babel/preset-react -d lib/ src && tsc",
+    "build": "babel -d lib/ src && tsc",
     "tsc": "tsc",
     "test_integration": "npm run test_network_up && npm run test_network_integration && npm run test_network_down",
     "test_network_up": "docker-compose -f ./__tests__/integration/configuration/docker-compose.yml up -d && mkdir -p tmp && cp ./__tests__/integration/configuration/precalculated-wallets.json ./tmp/wallets.json",
@@ -39,6 +39,7 @@
     "@babel/eslint-parser": "^7.18.2",
     "@babel/node": "^7.13.0",
     "@babel/plugin-proposal-class-properties": "^7.13.0",
+    "@babel/plugin-transform-async-generator-functions": "^7.22.3",
     "@babel/preset-env": "^7.13.5",
     "@babel/preset-react": "^7.0.0",
     "@babel/preset-typescript": "^7.21.0",
