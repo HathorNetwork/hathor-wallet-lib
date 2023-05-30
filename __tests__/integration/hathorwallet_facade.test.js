@@ -1598,9 +1598,9 @@ describe('createNewToken', () => {
   it('Create token using mint/melt address', async () => {
     // Creating the wallet with the funds
     const hWallet = await generateWalletHelper();
-    const addr0 = hWallet.getAddressAtIndex(0);
-    const addr10 = hWallet.getAddressAtIndex(10);
-    const addr11 = hWallet.getAddressAtIndex(11);
+    const addr0 = await hWallet.getAddressAtIndex(0);
+    const addr10 = await hWallet.getAddressAtIndex(10);
+    const addr11 = await hWallet.getAddressAtIndex(11);
     await GenesisWalletHelper.injectFunds(addr0, 1);
 
     // Creating the new token
@@ -1649,9 +1649,9 @@ describe('createNewToken', () => {
     // Creating the wallet with the funds
     const hWallet = await generateWalletHelper();
     const hWallet2 = await generateWalletHelper();
-    const addr0 = hWallet.getAddressAtIndex(0);
-    const addr2_0 = hWallet2.getAddressAtIndex(0);
-    const addr2_1 = hWallet2.getAddressAtIndex(1);
+    const addr0 = await hWallet.getAddressAtIndex(0);
+    const addr2_0 = await hWallet2.getAddressAtIndex(0);
+    const addr2_1 = await hWallet2.getAddressAtIndex(1);
     await GenesisWalletHelper.injectFunds(addr0, 1);
 
     // Error creating token with external address
@@ -2516,9 +2516,9 @@ describe('createNFT', () => {
   it('Create token using mint/melt address', async () => {
     // Creating the wallet with the funds
     const hWallet = await generateWalletHelper();
-    const addr0 = hWallet.getAddressAtIndex(0);
-    const addr10 = hWallet.getAddressAtIndex(10);
-    const addr11 = hWallet.getAddressAtIndex(11);
+    const addr0 = await hWallet.getAddressAtIndex(0);
+    const addr10 = await hWallet.getAddressAtIndex(10);
+    const addr11 = await hWallet.getAddressAtIndex(11);
     await GenesisWalletHelper.injectFunds(addr0, 10);
 
     // Creating the new token
@@ -2568,9 +2568,9 @@ describe('createNFT', () => {
     // Creating the wallet with the funds
     const hWallet = await generateWalletHelper();
     const hWallet2 = await generateWalletHelper();
-    const addr0 = hWallet.getAddressAtIndex(0);
-    const addr2_0 = hWallet2.getAddressAtIndex(0);
-    const addr2_1 = hWallet2.getAddressAtIndex(1);
+    const addr0 = await hWallet.getAddressAtIndex(0);
+    const addr2_0 = await hWallet2.getAddressAtIndex(0);
+    const addr2_1 = await hWallet2.getAddressAtIndex(1);
     await GenesisWalletHelper.injectFunds(addr0, 10);
 
     // Error creating token with external address
