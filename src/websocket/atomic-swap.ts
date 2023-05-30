@@ -27,7 +27,7 @@ class AtomicSwapWebSocket extends BaseWebSocket {
    */
   onMessage(evt) {
     const message = JSON.parse(evt.data)
-    const _type = message.type.split(':')[0]
+    const _type = message.type;
     if (_type === 'pong') {
       this.onPong();
     } else {
