@@ -983,3 +983,263 @@ test('sendTransaction', async () => {
     }
   );
 });
+
+test('createTokens', async () => {
+  const addresses = [
+    'WdSD7aytFEZ5Hp8quhqu3wUCsyyGqcneMu',
+    'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM',
+    'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX',
+  ]
+
+  mockAxiosAdapter.onPost('wallet/addresses/check_mine').reply(200, {
+    success: true,
+    addresses: {
+      'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX': true,
+    },
+  });
+
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+
+  const code = new Mnemonic(seed);
+  const xpriv = code.toHDPrivateKey('', network.getNetwork());
+
+  wallet.setState('Ready');
+
+  const getUtxosMock = async () => {
+    return {
+      utxos: [{
+        txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5d',
+        index: 0,
+        tokenId: '00',
+        address: addresses[0],
+        value: 1,
+        authorities: 0,
+        timelock: null,
+        heightlock: null,
+        locked: false,
+        addressPath,
+      }],
+      changeAmount: 0,
+    };
+  };
+  const getInputDataMock = (xp: string, dtsh: Buffer) => Buffer.alloc(0);
+
+  const getCurrentAddressDataMock = () => {
+    return {
+      address: addresses[0]
+    };
+  };
+
+  const spy1 = jest.spyOn(wallet, 'getUtxos').mockImplementation(getUtxosMock);
+  const spy2 = jest.spyOn(wallet.storage, 'getMainXPrivKey').mockReturnValue(Promise.resolve(xpriv.xprivkey));
+  const spy3 = jest.spyOn(wallet, 'getInputData').mockImplementation(getInputDataMock);
+  const spy4 = jest.spyOn(wallet, 'getCurrentAddress').mockImplementation(getCurrentAddressDataMock);
+
+  // error because of wrong authority output address
+  await expect(wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
+    address: addresses[1],
+    createMintAuthority: true,
+    mintAuthorityAddress: 'abc',
+    pinCode: '123456',
+  })).rejects.toThrowError(SendTxError);
+
+  // error because of wrong authority output address
+  await expect(wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
+    address: addresses[1],
+    createMintAuthority: true,
+    mintAuthorityAddress: 'abc',
+    pinCode: '123456',
+  })).rejects.toThrowError(SendTxError);
+
+  // create token with correct address for authority output
+  const tokenData = await wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
+    address: addresses[1],
+    createMintAuthority: true,
+    mintAuthorityAddress: addresses[2],
+    pinCode: '123456',
+  });
+
+  expect(tokenData.outputs).toHaveLength(3);
+
+  const authorityOutputs = tokenData.outputs.filter(
+    o => transaction.isAuthorityOutput({ token_data: o.tokenData })
+  );
+
+  const mintAuthority = authorityOutputs.filter(
+    o => o.value === TOKEN_MINT_MASK
+  );
+
+  expect(authorityOutputs).toHaveLength(2);
+  expect(mintAuthority[0].value).toEqual(TOKEN_MINT_MASK);
+  const p2pkh = mintAuthority[0].parseScript(network);
+  // Validate that the authority output was sent to the correct address
+  expect(p2pkh.address.base58).toEqual(addresses[2]);
+
+  // create token with correct address for authority output
+  const tokenData2 = await wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
+    address: addresses[1],
+    createMintAuthority: false,
+    meltAuthorityAddress: addresses[2],
+    pinCode: '123456',
+  });
+
+  expect(tokenData2.outputs).toHaveLength(2);
+
+  const authorityOutputs2 = tokenData2.outputs.filter(
+    o => transaction.isAuthorityOutput({ token_data: o.tokenData })
+  );
+
+  expect(authorityOutputs2).toHaveLength(1);
+  const authorityOutput = authorityOutputs2[0];
+  expect(authorityOutput.value).toEqual(TOKEN_MELT_MASK);
+  const p2pkh2 = authorityOutput.parseScript(network);
+  // Validate that the authority output was sent to the correct address
+  expect(p2pkh2.address.base58).toEqual(addresses[2]);
+
+  // Clear mocks
+  spy1.mockRestore();
+  spy2.mockRestore();
+  spy3.mockRestore();
+  spy4.mockRestore();
+});
+
+test('createNFTs', async () => {
+  const addresses = [
+    'WdSD7aytFEZ5Hp8quhqu3wUCsyyGqcneMu',
+    'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM',
+    'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX',
+  ]
+
+  mockAxiosAdapter.onPost('wallet/addresses/check_mine').reply(200, {
+    success: true,
+    addresses: {
+      'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX': true,
+    },
+  });
+
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+
+  const code = new Mnemonic(seed);
+  const xpriv = code.toHDPrivateKey('', network.getNetwork());
+
+  wallet.setState('Ready');
+
+  const getUtxosMock = async () => {
+    return {
+      utxos: [{
+        txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5d',
+        index: 0,
+        tokenId: '00',
+        address: addresses[0],
+        value: 1,
+        authorities: 0,
+        timelock: null,
+        heightlock: null,
+        locked: false,
+        addressPath,
+      }],
+      changeAmount: 0,
+    };
+  };
+  const getInputDataMock = (xp: string, dtsh: Buffer) => Buffer.alloc(0);
+
+  const getCurrentAddressDataMock = async () => { address: addresses[0] };
+
+  const spy1 = jest.spyOn(wallet, 'getUtxos').mockImplementation(getUtxosMock);
+  const spy2 = jest.spyOn(wallet.storage, 'getMainXPrivKey').mockReturnValue(Promise.resolve(xpriv.xprivkey));
+  const spy3 = jest.spyOn(wallet, 'getInputData').mockImplementation(getInputDataMock);
+  const spy4 = jest.spyOn(wallet, 'getCurrentAddress').mockImplementation(getCurrentAddressDataMock);
+
+  // error because of wrong authority output address
+  await expect(wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
+    address: addresses[1],
+    createMintAuthority: true,
+    mintAuthorityAddress: 'abc',
+    pinCode: '123456',
+    nftData: 'data',
+  })).rejects.toThrowError(SendTxError);
+
+  // error because of wrong authority output address
+  await expect(wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
+    address: addresses[1],
+    createMintAuthority: true,
+    mintAuthorityAddress: 'abc',
+    pinCode: '123456',
+    nftData: 'data',
+  })).rejects.toThrowError(SendTxError);
+
+  // create token with correct address for authority output
+  const tokenData = await wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
+    address: addresses[1],
+    createMintAuthority: true,
+    mintAuthorityAddress: addresses[2],
+    createMeltAuthority: false,
+    pinCode: '123456',
+    nftData: 'data',
+  });
+
+  // Token minted, mint authority, and data output
+  expect(tokenData.outputs).toHaveLength(3);
+
+  const authorityOutputs = tokenData.outputs.filter(
+    o => transaction.isAuthorityOutput({ token_data: o.tokenData })
+  );
+
+  const authorityOutput = authorityOutputs[0];
+
+  expect(authorityOutputs).toHaveLength(1);
+  expect(authorityOutput.value).toEqual(TOKEN_MINT_MASK);
+  const p2pkh = authorityOutput.parseScript(network);
+  // Validate that the authority output was sent to the correct address
+  expect(p2pkh.address.base58).toEqual(addresses[2]);
+
+  // create token with correct address for authority output
+  const tokenData2 = await wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
+    address: addresses[1],
+    createMintAuthority: false,
+    createMeltAuthority: true,
+    meltAuthorityAddress: addresses[2],
+    pinCode: '123456',
+    nftData: 'data',
+  });
+
+  // Token minted, melt authority, and data output
+  expect(tokenData2.outputs).toHaveLength(3);
+
+  const authorityOutputs2 = tokenData2.outputs.filter(
+    o => transaction.isAuthorityOutput({ token_data: o.tokenData })
+  );
+
+  expect(authorityOutputs2).toHaveLength(1);
+  const authorityOutput2 = authorityOutputs2[0];
+  expect(authorityOutput2.value).toEqual(TOKEN_MELT_MASK);
+  const p2pkh2 = authorityOutput2.parseScript(network);
+  // Validate that the authority output was sent to the correct address
+  expect(p2pkh2.address.base58).toEqual(addresses[2]);
+
+  // Clear mocks
+  spy1.mockRestore();
+  spy2.mockRestore();
+  spy3.mockRestore();
+  spy4.mockRestore();
+});
