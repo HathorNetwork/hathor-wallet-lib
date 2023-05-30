@@ -1061,6 +1061,24 @@ test('createTokens', async () => {
     pinCode: '123456',
   })).rejects.toThrowError(SendTxError);
 
+  // error because of invalid external authority output address
+  await expect(wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
+    address: addresses[1],
+    createMintAuthority: true,
+    mintAuthorityAddress: 'abc',
+    allowExternalMintAuthorityAddress: true,
+    pinCode: '123456',
+  })).rejects.toThrowError(SendTxError);
+
+  // error because of invalid external authority output address
+  await expect(wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
+    address: addresses[1],
+    createMeltAuthority: true,
+    meltAuthorityAddress: 'abc',
+    allowExternalMeltAuthorityAddress: true,
+    pinCode: '123456',
+  })).rejects.toThrowError(SendTxError);
+
   // create token with correct address for authority output
   const tokenData = await wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
     address: addresses[1],
