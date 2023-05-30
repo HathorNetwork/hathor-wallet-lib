@@ -68,7 +68,6 @@ import {
 import { SendTxError, UtxoError, WalletRequestError, WalletError, UninitializedWalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import { IStorage, IWalletAccessData } from '../types';
-import { encryptData } from '../utils/crypto';
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
@@ -178,6 +177,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.xpriv = xpriv;
     this.seed = seed;
     this.xpub = xpub;
+    if (authxpriv && !bitcore.HDPrivateKey.isValidSerialized(authxpriv)) {
+      throw new Error('authxpriv parameter is an invalid hd privatekey');
+    }
     this.authPrivKey = authxpriv ? bitcore.HDPrivateKey(authxpriv) : null;
 
     this.passphrase = passphrase
@@ -204,7 +206,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   /**
    * Sets the server to connect on config singleton and storage
    *
-   * @param {String} newSever - The new server to set the config and storage to
+   * @param {String} newServer - The new server to set the config and storage to
    *
    * @memberof HathorWalletServiceWallet
    * @inner
@@ -217,7 +219,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   /**
    * Sets the websocket server to connect on config singleton and storage
    *
-   * @param {String} newSever - The new websocket server to set the config and storage to
+   * @param {String} newServer - The new websocket server to set the config and storage to
    *
    * @memberof HathorWalletServiceWallet
    * @inner
@@ -333,6 +335,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         throw err;
       }
     }
+
     if (!hasAccessData) {
       let accessData: IWalletAccessData;
       if (this.seed) {
@@ -363,8 +366,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
           },
         );
       } else {
-        throw new Error('This should never happen.');
+        throw new Error('WalletService facade initialized without seed or xprivkey');
       }
+
       await this.storage.saveAccessData(accessData);
     }
 
@@ -893,7 +897,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    *
    * @param {HDPrivateKey} privKey - private key to sign the auth message
    * @param {number} timestamp - Current timestamp to assemble the signature
-   * @param {string} walletId - The initialized wallet identifier on the wallet service
    *
    * @memberof HathorWalletServiceWallet
    * @inner
@@ -1770,13 +1773,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.failIfWalletNotReady();
 
     let authority: number;
-    let mask: number;
     if (type === 'mint') {
       authority = 1;
-      mask = TOKEN_MINT_MASK;
     } else if (type === 'melt') {
       authority = 2;
-      mask = TOKEN_MELT_MASK;
     } else {
       throw new WalletError('Type options are mint and melt for destroy authority method.')
     }
