@@ -680,3 +680,42 @@ test('checkPinAndPassword', async () => {
   checkPinSpy.mockClear();
   checkPasswdSpy.mockClear();
 });
+
+test('getTxHistory', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = storage;
+
+  async function * historyMock() {
+    yield {
+      tx_id: 'mock-tx-id',
+      timestamp: 123,
+      is_voided: false,
+    };
+  }
+
+  hWallet.getTxBalance = jest.fn().mockReturnValue(Promise.resolve({
+    'mock-token-uid': 456,
+  }));
+  jest.spyOn(storage, 'tokenHistory').mockImplementation(historyMock);
+
+  await expect(hWallet.getTxHistory({ token_id: 'mock-token-uid' }))
+    .resolves.toStrictEqual([{
+      txId: 'mock-tx-id',
+      timestamp: 123,
+      tokenUid: 'mock-token-uid',
+      voided: false,
+      balance: 456,
+    }]);
+
+  await expect(hWallet.getTxHistory({ token_id: 'mock-token-uid2' }))
+    .resolves.toMatchObject([{
+      txId: 'mock-tx-id',
+      timestamp: 123,
+      tokenUid: 'mock-token-uid2',
+      voided: false,
+      balance: 0,
+    }]);
+});

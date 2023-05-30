@@ -653,7 +653,8 @@ class HathorWallet extends EventEmitter {
    *   txId:string,
    *   timestamp:number,
    *   tokenUid:string,
-   *   voided:boolean
+   *   voided:boolean,
+   *   balance: number,
    * }[]>} Array of transactions
    * @memberof HathorWallet
    * @inner
@@ -673,11 +674,13 @@ class HathorWallet extends EventEmitter {
       if (count <= 0) {
         break;
       }
+      const txbalance = await this.getTxBalance(tx);
       txs.push({
         txId: tx.tx_id,
         timestamp: tx.timestamp,
         tokenUid: uid,
         voided: tx.is_voided,
+        balance: txbalance[uid] || 0,
       });
       count--;
     }
