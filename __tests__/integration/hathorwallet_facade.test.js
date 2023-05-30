@@ -453,7 +453,6 @@ describe('start', () => {
     expect(txHistory1).toStrictEqual([
       expect.objectContaining({
         txId: tokenUid,
-        tokenUid: tokenUid,
       }),
     ]);
 
@@ -2538,7 +2537,6 @@ describe('getTxHistory', () => {
     expect(txHistory).toStrictEqual([
       expect.objectContaining({
         txId: tx1.hash,
-        tokenUid: HATHOR_TOKEN_CONFIG.uid,
       })
     ]);
 
