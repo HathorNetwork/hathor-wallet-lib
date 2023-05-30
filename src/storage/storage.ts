@@ -863,6 +863,10 @@ export class Storage implements IStorage {
     return this.store.getGapLimit();
   }
 
+  /**
+   * Return if the loaded wallet was started from a hardware wallet.
+   * @returns {Promise<boolean>}
+   */
   async isHardwareWallet(): Promise<boolean> {
     const accessData = await this._getValidAccessData();
     return (accessData.walletFlags & WALLET_FLAGS.HARDWARE) > 0;
