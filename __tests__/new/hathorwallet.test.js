@@ -686,11 +686,13 @@ test('getTxHistory', async () => {
   const storage = new Storage(store);
 
   const hWallet = new FakeHathorWallet();
+
   hWallet.storage = storage;
 
   async function * historyMock() {
     yield {
       tx_id: 'mock-tx-id',
+      version: 1,
       timestamp: 123,
       is_voided: false,
     };
@@ -705,17 +707,17 @@ test('getTxHistory', async () => {
     .resolves.toStrictEqual([{
       txId: 'mock-tx-id',
       timestamp: 123,
-      tokenUid: 'mock-token-uid',
       voided: false,
       balance: 456,
+      version: 1,
     }]);
 
   await expect(hWallet.getTxHistory({ token_id: 'mock-token-uid2' }))
     .resolves.toMatchObject([{
       txId: 'mock-tx-id',
       timestamp: 123,
-      tokenUid: 'mock-token-uid2',
       voided: false,
       balance: 0,
+      version: 1,
     }]);
 });

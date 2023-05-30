@@ -650,11 +650,11 @@ class HathorWallet extends EventEmitter {
    * @param {number} [options.count]
    * @param {number} [options.skip]
    * @return {Promise<{
-   *   txId:string,
-   *   timestamp:number,
-   *   tokenUid:string,
-   *   voided:boolean,
+   *   txId: string,
    *   balance: number,
+   *   timestamp: number,
+   *   voided: boolean,
+   *   version: number,
    * }[]>} Array of transactions
    * @memberof HathorWallet
    * @inner
@@ -678,9 +678,9 @@ class HathorWallet extends EventEmitter {
       txs.push({
         txId: tx.tx_id,
         timestamp: tx.timestamp,
-        tokenUid: uid,
         voided: tx.is_voided,
         balance: txbalance[uid] || 0,
+        version: tx.version,
       });
       count--;
     }
