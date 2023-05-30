@@ -1663,10 +1663,7 @@ describe('createNewToken', () => {
         createMint: true,
         mintAuthorityAddress: addr2_0,
       }
-    )).rejects.toStrictEqual({
-      success: false,
-      message: expect.stringContaining('must belong to your wallet'),
-    });
+    )).rejects.toThrow('must belong to your wallet');
 
     await expect(hWallet.createNewToken(
       'New Token',
@@ -1676,10 +1673,7 @@ describe('createNewToken', () => {
         createMelt: true,
         meltAuthorityAddress: addr2_1,
       }
-    )).rejects.toStrictEqual({
-      success: false,
-      message: expect.stringContaining('must belong to your wallet'),
-    });
+    )).rejects.toThrow('must belong to your wallet');
 
     // Creating the new token allowing external address
     const newTokenResponse = await hWallet.createNewToken(
@@ -2583,10 +2577,7 @@ describe('createNFT', () => {
         createMint: true,
         mintAuthorityAddress: addr2_0,
       }
-    )).rejects.toStrictEqual({
-      success: false,
-      message: expect.stringContaining('must belong to your wallet'),
-    });
+    )).rejects.toThrow('must belong to your wallet');
 
     await expect(hWallet.createNFT(
       'New Token',
@@ -2597,10 +2588,7 @@ describe('createNFT', () => {
         createMelt: true,
         meltAuthorityAddress: addr2_1,
       }
-    )).rejects.toStrictEqual({
-      success: false,
-      message: expect.stringContaining('must belong to your wallet'),
-    });
+    )).rejects.toThrow('must belong to your wallet');
 
     // Creating the new token allowing external address
     const newTokenResponse = await hWallet.createNFT(
