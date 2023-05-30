@@ -15,7 +15,7 @@ import Network from '../models/network';
 import _ from 'lodash';
 import helpers from './helpers';
 
-import { IMultisigData, IWalletAccessData, WalletType, WALLET_FLAGS } from '../types';
+import { IEncryptedData, IMultisigData, IWalletAccessData, WalletType, WALLET_FLAGS } from '../types';
 import { encryptData, decryptData } from './crypto';
 
 
