@@ -1056,8 +1056,8 @@ test('createTokens', async () => {
   // error because of wrong authority output address
   await expect(wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
     address: addresses[1],
-    createMintAuthority: true,
-    mintAuthorityAddress: 'abc',
+    createMeltAuthority: true,
+    meltAuthorityAddress: 'abc',
     pinCode: '123456',
   })).rejects.toThrowError(SendTxError);
 
