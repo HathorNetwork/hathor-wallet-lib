@@ -721,7 +721,17 @@ test('isHardware', async () => {
   await expect(storage.isHardwareWallet()).resolves.toBe(true);
 
   accessDataSpy.mockReturnValue(Promise.resolve({
+    walletFlags: WALLET_FLAGS.HARDWARE | WALLET_FLAGS.READONLY,
+  }));
+  await expect(storage.isHardwareWallet()).resolves.toBe(true);
+
+  accessDataSpy.mockReturnValue(Promise.resolve({
     walletFlags: 0,
+  }));
+  await expect(storage.isHardwareWallet()).resolves.toBe(false);
+
+  accessDataSpy.mockReturnValue(Promise.resolve({
+    walletFlags: WALLET_FLAGS.READONLY,
   }));
   await expect(storage.isHardwareWallet()).resolves.toBe(false);
 });

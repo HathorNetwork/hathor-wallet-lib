@@ -392,7 +392,9 @@ const wallet = {
    * And the wallet-lib currently does not support the creation of a wallet with a single address.
    *
    * @param {string} xpubkey HDPublicKey in string format.
-   * @param {{ multisig: IMultisigData }} [options={}] Options to generate the access data.
+   * @param {Object} [options={}] Options to generate the access data.
+   * @param {IMultisigData|undefined} [options.multisig=undefined] MultiSig data of the wallet
+   * @param {boolean} [options.hardware=false] If the wallet is a hardware wallet
    * @returns {IWalletAccessData}
    */
   generateAccessDataFromXpub(
