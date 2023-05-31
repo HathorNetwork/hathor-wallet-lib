@@ -16,6 +16,7 @@ import Mnemonic from 'bitcore-mnemonic';
 import * as cryptoUtils from '../../src/utils/crypto';
 import { InvalidPasswdError } from '../../src/errors';
 import Network from '../../src/models/network';
+import { WALLET_FLAGS } from '../../src/types';
 
 const DATA_DIR = './testdata.leveldb';
 
@@ -707,4 +708,20 @@ describe('checkPin and checkPassword', () => {
       .mockReturnValue(Promise.resolve({}));
     await expect(storage.checkPassword('0000')).rejects.toThrow();
   }
+});
+
+test('isHardware', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  const accessDataSpy = jest.spyOn(storage, '_getValidAccessData');
+
+  accessDataSpy.mockReturnValue(Promise.resolve({
+    walletFlags: WALLET_FLAGS.HARDWARE,
+  }));
+  await expect(storage.isHardwareWallet()).resolves.toBe(true);
+
+  accessDataSpy.mockReturnValue(Promise.resolve({
+    walletFlags: 0,
+  }));
+  await expect(storage.isHardwareWallet()).resolves.toBe(false);
 });
