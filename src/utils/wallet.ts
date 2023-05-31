@@ -15,7 +15,7 @@ import Network from '../models/network';
 import _ from 'lodash';
 import helpers from './helpers';
 
-import { IMultisigData, IWalletAccessData, WalletType, WALLET_FLAGS } from '../types';
+import { IEncryptedData, IMultisigData, IWalletAccessData, WalletType, WALLET_FLAGS } from '../types';
 import { encryptData, decryptData } from './crypto';
 
 
@@ -462,6 +462,7 @@ const wallet = {
    * @param {string} [options.pin]
    * @param {string | undefined} [options.seed=undefined]
    * @param {string | undefined} [options.password=undefined]
+   * @param {string | undefined} [options.authXpriv=undefined]
    * @returns {IWalletAccessData}
    */
   generateAccessDataFromXpriv(
@@ -471,7 +472,14 @@ const wallet = {
       pin,
       seed,
       password,
-    }: {multisig?: IMultisigData, pin: string, seed?: string, password?: string},
+      authXpriv,
+    }: {
+      multisig?: IMultisigData,
+      pin: string,
+      seed?: string,
+      password?: string,
+      authXpriv?: string,
+    },
   ): IWalletAccessData {
     let walletType: WalletType;
     if (multisig === undefined) {
@@ -483,9 +491,9 @@ const wallet = {
     const argXpriv = new HDPrivateKey(xprivkey);
     let xpriv: HDPrivateKey;
     let acctXpriv: HDPrivateKey | null = null;
-    let authXpriv: HDPrivateKey | null = null;
+    let derivedAuthKey: HDPrivateKey | null = null;
     if (argXpriv.depth === 0) {
-      authXpriv = argXpriv.deriveNonCompliantChild(WALLET_SERVICE_AUTH_DERIVATION_PATH);
+      derivedAuthKey = argXpriv.deriveNonCompliantChild(WALLET_SERVICE_AUTH_DERIVATION_PATH);
       if (walletType === WalletType.MULTISIG) {
         acctXpriv = argXpriv.deriveNonCompliantChild(P2SH_ACCT_PATH);
         xpriv = acctXpriv.deriveNonCompliantChild(0);
@@ -528,10 +536,14 @@ const wallet = {
       accessData.acctPathKey = encryptedAcctPathKey;
     }
 
-    if (authXpriv) {
-      // Auth path key will only be available if the provided key is a root key.
-      const encryptedAuthPathKey = encryptData(authXpriv.xprivkey, pin);
-      accessData.authKey = encryptedAuthPathKey;
+    if (authXpriv || derivedAuthKey) {
+      let authKey: IEncryptedData;
+      if (authXpriv) {
+        authKey = encryptData(authXpriv, pin);
+      } else {
+        authKey = encryptData(derivedAuthKey.xprivkey, pin);
+      }
+      accessData.authKey = authKey;
     }
 
     if (!!(seed && password)) {

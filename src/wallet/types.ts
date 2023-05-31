@@ -65,7 +65,7 @@ export interface AddressInfoObject {
 export interface WalletStatusResponseData {
   success: boolean;
   status: WalletStatus;
-  error: string | undefined; // Optional error code when there is a problem creating the wallet
+  error?: string | undefined; // Optional error code when there is a problem creating the wallet
 }
 
 export interface WalletStatus {
