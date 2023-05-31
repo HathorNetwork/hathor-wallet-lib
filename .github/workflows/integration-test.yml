@@ -40,7 +40,12 @@ jobs:
         with:
           name: test-transacion-logs
           path: tmp
-
+      - name: Upload coverage
+        # https://github.com/codecov/codecov-action/releases/tag/v3.1.1
+        uses: codecov/codecov-action@d9f34f8cd5cb3b3eb79b3e4b5dae3a16df499a70
+        if: ${{ matrix.node-version }} == 14.x
+        with:
+          verbose: true
       - name: Collect docker logs on failure
         if: failure()
         # https://github.com/jwalton/gh-docker-logs/releases/tag/v2.2.1

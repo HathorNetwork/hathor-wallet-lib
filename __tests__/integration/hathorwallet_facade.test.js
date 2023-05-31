@@ -1594,6 +1594,130 @@ describe('createNewToken', () => {
     const authorityOutputs = newTokenResponse.outputs.filter(o => transaction.isAuthorityOutput(o));
     expect(authorityOutputs).toHaveLength(0);
   });
+
+  it('Create token using mint/melt address', async () => {
+    // Creating the wallet with the funds
+    const hWallet = await generateWalletHelper();
+    const addr0 = await hWallet.getAddressAtIndex(0);
+    const addr10 = await hWallet.getAddressAtIndex(10);
+    const addr11 = await hWallet.getAddressAtIndex(11);
+    await GenesisWalletHelper.injectFunds(addr0, 1);
+
+    // Creating the new token
+    const newTokenResponse = await hWallet.createNewToken(
+      'New Token',
+      'NTKN',
+      100,
+      {
+        createMint: true,
+        mintAuthorityAddress: addr10,
+        createMelt: true,
+        meltAuthorityAddress: addr11,
+      }
+    );
+
+    // Validating the creation tx
+    expect(newTokenResponse).toHaveProperty('hash');
+    await waitForTxReceived(hWallet, newTokenResponse.hash);
+
+    // Validating a new mint authority was created by default
+    const authorityOutputs = newTokenResponse.outputs.filter(
+      o => transaction.isAuthorityOutput({token_data: o.tokenData})
+    );
+    expect(authorityOutputs).toHaveLength(2);
+    const mintOutput = authorityOutputs.filter(
+      o => o.value === TOKEN_MINT_MASK
+    );
+    const mintP2pkh = mintOutput[0].parseScript(hWallet.getNetworkObject());
+    // Validate that the mint output was sent to the correct address
+    expect(mintP2pkh.address.base58).toEqual(addr10);
+
+    const meltOutput = authorityOutputs.filter(
+      o => o.value === TOKEN_MELT_MASK
+    );
+    const meltP2pkh = meltOutput[0].parseScript(hWallet.getNetworkObject());
+    // Validate that the melt output was sent to the correct address
+    expect(meltP2pkh.address.base58).toEqual(addr11);
+
+    // Validating custom token balance
+    const tokenBalance = await hWallet.getBalance(newTokenResponse.hash);
+    const expectedAmount = 100;
+    expect(tokenBalance[0]).toHaveProperty('balance.unlocked', expectedAmount);
+  });
+
+  it('Create token using external mint/melt address', async () => {
+    // Creating the wallet with the funds
+    const hWallet = await generateWalletHelper();
+    const hWallet2 = await generateWalletHelper();
+    const addr0 = await hWallet.getAddressAtIndex(0);
+    const addr2_0 = await hWallet2.getAddressAtIndex(0);
+    const addr2_1 = await hWallet2.getAddressAtIndex(1);
+    await GenesisWalletHelper.injectFunds(addr0, 1);
+
+    // Error creating token with external address
+    await expect(hWallet.createNewToken(
+      'New Token',
+      'NTKN',
+      100,
+      {
+        createMint: true,
+        mintAuthorityAddress: addr2_0,
+      }
+    )).rejects.toThrow('must belong to your wallet');
+
+    await expect(hWallet.createNewToken(
+      'New Token',
+      'NTKN',
+      100,
+      {
+        createMelt: true,
+        meltAuthorityAddress: addr2_1,
+      }
+    )).rejects.toThrow('must belong to your wallet');
+
+    // Creating the new token allowing external address
+    const newTokenResponse = await hWallet.createNewToken(
+      'New Token',
+      'NTKN',
+      100,
+      {
+        createMint: true,
+        mintAuthorityAddress: addr2_0,
+        allowExternalMintAuthorityAddress: true,
+        createMelt: true,
+        meltAuthorityAddress: addr2_1,
+        allowExternalMeltAuthorityAddress: true,
+      }
+    );
+
+    // Validating the creation tx
+    expect(newTokenResponse).toHaveProperty('hash');
+    await waitForTxReceived(hWallet, newTokenResponse.hash);
+
+    // Validating a new mint authority was created by default
+    const authorityOutputs = newTokenResponse.outputs.filter(
+      o => transaction.isAuthorityOutput({token_data: o.tokenData})
+    );
+    expect(authorityOutputs).toHaveLength(2);
+    const mintOutput = authorityOutputs.filter(
+      o => o.value === TOKEN_MINT_MASK
+    );
+    const mintP2pkh = mintOutput[0].parseScript(hWallet.getNetworkObject());
+    // Validate that the mint output was sent to the correct address
+    expect(mintP2pkh.address.base58).toEqual(addr2_0);
+
+    const meltOutput = authorityOutputs.filter(
+      o => o.value === TOKEN_MELT_MASK
+    );
+    const meltP2pkh = meltOutput[0].parseScript(hWallet.getNetworkObject());
+    // Validate that the melt output was sent to the correct address
+    expect(meltP2pkh.address.base58).toEqual(addr2_1);
+
+    // Validating custom token balance
+    const tokenBalance = await hWallet.getBalance(newTokenResponse.hash);
+    const expectedAmount = 100;
+    expect(tokenBalance[0]).toHaveProperty('balance.unlocked', expectedAmount);
+  });
 });
 
 describe('mintTokens', () => {
@@ -2381,6 +2505,134 @@ describe('createNFT', () => {
     const fullTx = await hWallet.getTx(nftTx.hash);
     const nftOutput = fullTx.outputs.find(o => o.token === nftTx.hash);
     expect(nftOutput).toHaveProperty('decoded.address', await hWallet.getAddressAtIndex(3));
+  });
+
+  it('Create token using mint/melt address', async () => {
+    // Creating the wallet with the funds
+    const hWallet = await generateWalletHelper();
+    const addr0 = await hWallet.getAddressAtIndex(0);
+    const addr10 = await hWallet.getAddressAtIndex(10);
+    const addr11 = await hWallet.getAddressAtIndex(11);
+    await GenesisWalletHelper.injectFunds(addr0, 10);
+
+    // Creating the new token
+    const newTokenResponse = await hWallet.createNFT(
+      'New Token',
+      'NTKN',
+      100,
+      sampleNftData,
+      {
+        createMint: true,
+        mintAuthorityAddress: addr10,
+        createMelt: true,
+        meltAuthorityAddress: addr11,
+      }
+    );
+
+    // Validating the creation tx
+    expect(newTokenResponse).toHaveProperty('hash');
+    await waitForTxReceived(hWallet, newTokenResponse.hash);
+
+    // Validating a new mint authority was created by default
+    const authorityOutputs = newTokenResponse.outputs.filter(
+      o => transaction.isAuthorityOutput({token_data: o.tokenData})
+    );
+    expect(authorityOutputs).toHaveLength(2);
+    const mintOutput = authorityOutputs.filter(
+      o => o.value === TOKEN_MINT_MASK
+    );
+    const mintP2pkh = mintOutput[0].parseScript(hWallet.getNetworkObject());
+    // Validate that the mint output was sent to the correct address
+    expect(mintP2pkh.address.base58).toEqual(addr10);
+
+    const meltOutput = authorityOutputs.filter(
+      o => o.value === TOKEN_MELT_MASK
+    );
+    const meltP2pkh = meltOutput[0].parseScript(hWallet.getNetworkObject());
+    // Validate that the melt output was sent to the correct address
+    expect(meltP2pkh.address.base58).toEqual(addr11);
+
+    // Validating custom token balance
+    const tokenBalance = await hWallet.getBalance(newTokenResponse.hash);
+    const expectedAmount = 100;
+    expect(tokenBalance[0]).toHaveProperty('balance.unlocked', expectedAmount);
+  });
+
+  it('Create token using external mint/melt address', async () => {
+    // Creating the wallet with the funds
+    const hWallet = await generateWalletHelper();
+    const hWallet2 = await generateWalletHelper();
+    const addr0 = await hWallet.getAddressAtIndex(0);
+    const addr2_0 = await hWallet2.getAddressAtIndex(0);
+    const addr2_1 = await hWallet2.getAddressAtIndex(1);
+    await GenesisWalletHelper.injectFunds(addr0, 10);
+
+    // Error creating token with external address
+    await expect(hWallet.createNFT(
+      'New Token',
+      'NTKN',
+      100,
+      sampleNftData,
+      {
+        createMint: true,
+        mintAuthorityAddress: addr2_0,
+      }
+    )).rejects.toThrow('must belong to your wallet');
+
+    await expect(hWallet.createNFT(
+      'New Token',
+      'NTKN',
+      100,
+      sampleNftData,
+      {
+        createMelt: true,
+        meltAuthorityAddress: addr2_1,
+      }
+    )).rejects.toThrow('must belong to your wallet');
+
+    // Creating the new token allowing external address
+    const newTokenResponse = await hWallet.createNFT(
+      'New Token',
+      'NTKN',
+      100,
+      sampleNftData,
+      {
+        createMint: true,
+        mintAuthorityAddress: addr2_0,
+        allowExternalMintAuthorityAddress: true,
+        createMelt: true,
+        meltAuthorityAddress: addr2_1,
+        allowExternalMeltAuthorityAddress: true,
+      }
+    );
+
+    // Validating the creation tx
+    expect(newTokenResponse).toHaveProperty('hash');
+    await waitForTxReceived(hWallet, newTokenResponse.hash);
+
+    // Validating a new mint authority was created by default
+    const authorityOutputs = newTokenResponse.outputs.filter(
+      o => transaction.isAuthorityOutput({token_data: o.tokenData})
+    );
+    expect(authorityOutputs).toHaveLength(2);
+    const mintOutput = authorityOutputs.filter(
+      o => o.value === TOKEN_MINT_MASK
+    );
+    const mintP2pkh = mintOutput[0].parseScript(hWallet.getNetworkObject());
+    // Validate that the mint output was sent to the correct address
+    expect(mintP2pkh.address.base58).toEqual(addr2_0);
+
+    const meltOutput = authorityOutputs.filter(
+      o => o.value === TOKEN_MELT_MASK
+    );
+    const meltP2pkh = meltOutput[0].parseScript(hWallet.getNetworkObject());
+    // Validate that the melt output was sent to the correct address
+    expect(meltP2pkh.address.base58).toEqual(addr2_1);
+
+    // Validating custom token balance
+    const tokenBalance = await hWallet.getBalance(newTokenResponse.hash);
+    const expectedAmount = 100;
+    expect(tokenBalance[0]).toHaveProperty('balance.unlocked', expectedAmount);
   });
 });
 
