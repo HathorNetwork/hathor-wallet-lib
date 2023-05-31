@@ -462,6 +462,7 @@ const wallet = {
    * @param {string} [options.pin]
    * @param {string | undefined} [options.seed=undefined]
    * @param {string | undefined} [options.password=undefined]
+   * @param {string | undefined} [options.authXpriv=undefined]
    * @returns {IWalletAccessData}
    */
   generateAccessDataFromXpriv(

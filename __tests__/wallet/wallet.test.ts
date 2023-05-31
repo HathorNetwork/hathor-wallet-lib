@@ -1348,4 +1348,16 @@ test('start', async () => {
     authKey: expect.anything(),
   });
   await wallet.stop();
+
+  // Check we throw an error when giving an invalid authxpriv
+  expect(() => {
+    return new HathorWalletServiceWallet({
+      requestPassword,
+      xpriv: acctKey,
+      authxpriv: 'invalid-xprivkey',
+      network,
+      passphrase: '',
+      storage,
+    });
+  }).toThrow('authxpriv parameter is an invalid hd privatekey');
 });
