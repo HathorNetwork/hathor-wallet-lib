@@ -8,6 +8,7 @@ import {
   generateConnection,
   generateMultisigWalletHelper,
   generateWalletHelper,
+  generateWalletHelperRO,
   stopAllWallets,
   waitForTxReceived,
   waitForWalletReady,
@@ -2933,12 +2934,9 @@ describe('storage methods', () => {
 
   it('should return if the wallet is a hardware wallet', async () => {
     const hWallet = await generateWalletHelper();
-    const accessData = await hWallet.storage.getAccessData();
-
     await expect(hWallet.isHardwareWallet()).resolves.toBe(false);
 
-    accessData.walletFlags |= WALLET_FLAGS.HARDWARE;
-    await hWallet.storage.saveAccessData(accessData);
-    await expect(hWallet.isHardwareWallet()).resolves.toBe(true);
+    const hWalletRO = await generateWalletHelperRO({ hardware: true });
+    await expect(hWalletRO.isHardwareWallet()).resolves.toBe(true);
   });
 });
