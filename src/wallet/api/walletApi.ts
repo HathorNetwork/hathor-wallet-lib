@@ -39,24 +39,24 @@ const walletApi = {
   async getWalletStatus(wallet: HathorWalletServiceWallet): Promise<WalletStatusResponseData> {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get('wallet/status');
-    const data = response.data;
+    const { data } = response;
     if (response.status === 200 && data.success) {
       return data;
-    } else {
-      throw new WalletRequestError('Error getting wallet status.');
     }
+
+    throw new WalletRequestError('Error getting wallet status.');
   },
 
   async getVersionData(wallet: HathorWalletServiceWallet): Promise<FullNodeVersionData> {
     const axios = await axiosInstance(wallet, false);
     const response = await axios.get('version');
-    const data = response.data;
+    const { data } = response;
 
     if (response.status === 200 && data.success) {
       return data.data;
-    } else {
-      throw new WalletRequestError('Error getting fullnode data.');
     }
+
+    throw new WalletRequestError('Error getting fullnode data.');
   },
 
   async createWallet(
@@ -91,14 +91,19 @@ const walletApi = {
     }
   },
 
-  async getAddresses(wallet: HathorWalletServiceWallet): Promise<AddressesResponseData> {
+  async getAddresses(
+    wallet: HathorWalletServiceWallet,
+    index?: number,
+  ): Promise<AddressesResponseData> {
     const axios = await axiosInstance(wallet, true);
-    const response = await axios.get('wallet/addresses');
+    const url = `wallet/addresses${index ? '?index=' + index : ''}`;
+    const response = await axios.get(url);
+
     if (response.status === 200 && response.data.success === true) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error getting wallet addresses.');
     }
+
+    throw new WalletRequestError('Error getting wallet addresses.');
   },
 
   async checkAddressesMine(
