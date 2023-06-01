@@ -721,3 +721,18 @@ test('getTxHistory', async () => {
       version: 1,
     }]);
 });
+
+test('isHardwareWallet', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = storage;
+
+  const hwSpy = jest.spyOn(storage, 'isHardwareWallet');
+
+  hwSpy.mockReturnValue(Promise.resolve(true));
+  await expect(hWallet.isHardwareWallet()).resolves.toBe(true);
+
+  hwSpy.mockReturnValue(Promise.resolve(false));
+  await expect(hWallet.isHardwareWallet()).resolves.toBe(false);
+});

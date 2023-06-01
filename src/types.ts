@@ -193,6 +193,7 @@ export enum WalletType {
 
 export enum WALLET_FLAGS {
   READONLY = 0b00000001,
+  HARDWARE = 0b00000010,
 }
 
 export interface IWalletAccessData {
@@ -394,6 +395,7 @@ export interface IStorage {
   getTokenDepositPercentage(): number;
   checkPin(pinCode: string): Promise<boolean>;
   checkPassword(password: string): Promise<boolean>;
+  isHardwareWallet(): Promise<boolean>;
 }
 
 /**

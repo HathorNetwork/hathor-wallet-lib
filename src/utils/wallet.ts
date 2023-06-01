@@ -392,10 +392,18 @@ const wallet = {
    * And the wallet-lib currently does not support the creation of a wallet with a single address.
    *
    * @param {string} xpubkey HDPublicKey in string format.
-   * @param {{ multisig: IMultisigData }} [options={}] Options to generate the access data.
+   * @param {Object} [options={}] Options to generate the access data.
+   * @param {IMultisigData|undefined} [options.multisig=undefined] MultiSig data of the wallet
+   * @param {boolean} [options.hardware=false] If the wallet is a hardware wallet
    * @returns {IWalletAccessData}
    */
-  generateAccessDataFromXpub(xpubkey: string, {multisig}: {multisig?: IMultisigData} = {}): IWalletAccessData {
+  generateAccessDataFromXpub(
+    xpubkey: string,
+    { multisig, hardware = false }: { multisig?: IMultisigData, hardware?: boolean} = {}): IWalletAccessData {
+    let walletFlags = 0 | WALLET_FLAGS.READONLY;
+    if (hardware) {
+      walletFlags |= WALLET_FLAGS.HARDWARE;
+    }
     let walletType: WalletType;
     if (multisig === undefined) {
       walletType = WalletType.P2PKH;
@@ -444,7 +452,7 @@ const wallet = {
       walletType,
       multisigData,
       // We force the readonly flag because we are starting a wallet without the private key
-      walletFlags: 0 | WALLET_FLAGS.READONLY,
+      walletFlags,
     };
   },
 

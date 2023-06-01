@@ -1939,6 +1939,17 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async checkPinAndPassword(pin: string, password: string): Promise<boolean> {
     return await this.checkPin(pin) && await this.checkPassword(password);
   }
+
+
+  /**
+   * Check if the wallet is a hardware wallet.
+   * @returns {Promise<boolean>}
+   */
+  async isHardwareWallet(): Promise<boolean> {
+    // We currently do not have support for hardware wallets
+    // in the wallet-service facade.
+    return false;
+  }
 }
 
 export default HathorWalletServiceWallet;

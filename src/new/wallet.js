@@ -2499,6 +2499,14 @@ class HathorWallet extends EventEmitter {
   async checkPinAndPassword(pin, password) {
     return await this.checkPin(pin) && await this.checkPassword(password);
   }
+
+  /**
+   * Check if the wallet is a hardware wallet.
+   * @returns {Promise<boolean>}
+   */
+  async isHardwareWallet() {
+    return this.storage.isHardwareWallet();
+  }
 }
 
 // State constants.

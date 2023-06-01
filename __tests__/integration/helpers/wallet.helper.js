@@ -13,9 +13,11 @@ import {
   TX_TIMEOUT_DEFAULT, WALLET_CONSTANTS
 } from '../configuration/test-constants';
 import HathorWallet from '../../../src/new/wallet';
+import walletUtils from '../../../src/utils/wallet';
 import { multisigWalletsData, precalculationHelpers } from './wallet-precalculation.helper';
 import { delay } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
+import { MemoryStore, Storage } from '../../../src/storage';
 
 /**
  * @typedef SendTxResponse
@@ -100,6 +102,66 @@ export async function generateWalletHelper(param) {
   if (param) {
     Object.assign(walletConfig, param);
   }
+  const hWallet = new HathorWallet(walletConfig);
+  await hWallet.start();
+  await waitForWalletReady(hWallet);
+  startedWallets.push(hWallet);
+
+  return hWallet;
+}
+
+/**
+ * Simplifies the generation of a readonly wallet for the integration tests.
+ *
+ * @param {Object} [options] Options to change the wallet configuration
+ * @param {string} [options.xpub=undefined] Xpub to use instead of using a pre-calculated one
+ * @param {string|null} [options.pinCode] PIN to execute wallet actions
+ * @param {string[]} [options.preCalculatedAddresses] An array of pre-calculated addresses
+ * @param {boolean} [options.hardware=false] If the wallet is a hardware wallet
+ * @param {IMultisigData} [options.multisig] multisig configuration of the wallet
+ *
+ * @returns {Promise<HathorWallet>}
+ *
+ * @example
+ * const hWalletAuto = await generateWalletHelperRO();
+ */
+export async function generateWalletHelperRO(options) {
+  /** @type PrecalculatedWalletData */
+  let walletData = {};
+  /** @type string */
+  let xpub;
+  // Only fetch a precalculated wallet if the input does not offer a specific one
+  if (!options.xpub) {
+    walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    xpub = walletUtils.getXPubKeyFromSeed(
+      walletData.words,
+      { networkName: 'testnet' },
+    );
+  } else {
+    walletData.addresses = options.preCalculatedAddresses;
+    xpub = options.xpub;
+  }
+
+  const accessData = walletUtils.generateAccessDataFromXpub(
+    xpub,
+    {
+      multisig: options.multisig,
+      hardware: options.hardware,
+    }
+  );
+  const store = new MemoryStore();
+  await store.saveAccessData(accessData);
+  const storage = new Storage(store);
+
+  // Start the wallet
+  const walletConfig = {
+    xpub,
+    connection: generateConnection(),
+    storage,
+    password: DEFAULT_PASSWORD,
+    pinCode: DEFAULT_PIN_CODE,
+    preCalculatedAddresses: walletData.addresses,
+  };
   const hWallet = new HathorWallet(walletConfig);
   await hWallet.start();
   await waitForWalletReady(hWallet);
