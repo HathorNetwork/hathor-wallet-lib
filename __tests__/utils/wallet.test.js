@@ -385,6 +385,14 @@ test('access data from xpub', () => {
     multisigData: undefined,
   });
 
+  // We support starting the wallet in hardware mode
+  expect(wallet.generateAccessDataFromXpub(xpubkeyChange, { hardware: true })).toMatchObject({
+    xpubkey: xpubChange.xpubkey,
+    walletType: WalletType.P2PKH,
+    walletFlags: WALLET_FLAGS.READONLY | WALLET_FLAGS.HARDWARE,
+    multisigData: undefined,
+  });
+
   expect(wallet.generateAccessDataFromXpub(
     xpubkeyAcct,
     { multisig: { numSignatures: 2, pubkeys: [xpubkeyAcct, xpubkeyChange] }},

@@ -65,7 +65,7 @@ import {
   FullNodeTxResponse,
   FullNodeTxConfirmationDataResponse,
 } from './types';
-import { SendTxError, UtxoError, WalletRequestError, WalletError } from '../errors';
+import { SendTxError, UtxoError, WalletRequestError, WalletError, UninitializedWalletError } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import { IStorage, IWalletAccessData } from '../types';
 
@@ -122,18 +122,22 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     requestPassword,
     seed = null,
     xpriv = null,
+    authxpriv = null,
     xpub = null,
     network,
     passphrase = '',
     enableWs = true,
+    storage = null,
   }: {
     requestPassword: Function,
     seed?: string | null,
     xpriv?: string | null,
+    authxpriv?: string | null,
     xpub?: string | null,
     network: Network,
     passphrase?: string,
-    enableWs: boolean,
+    enableWs?: boolean,
+    storage?: IStorage | null,
   }) {
     super();
 
@@ -149,13 +153,21 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       throw Error('You can\'t use xpriv with passphrase.');
     }
 
+    if (xpriv && !authxpriv) {
+      throw new Error('You must provide both the account path xpriv and auth path xpriv.');
+    }
+
     if (seed) {
       // It will throw InvalidWords error in case is not valid
       walletUtils.wordsValid(seed);
     }
 
-    const store = new MemoryStore();
-    this.storage = new Storage(store);
+    if (!storage) {
+      const store = new MemoryStore();
+      this.storage = new Storage(store);
+    } else {
+      this.storage = storage;
+    }
 
     // Setup the connection so clients can listen to its events before it is started
     this.conn = new WalletServiceConnection();
@@ -165,6 +177,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.xpriv = xpriv;
     this.seed = seed;
     this.xpub = xpub;
+    if (authxpriv && !bitcore.HDPrivateKey.isValidSerialized(authxpriv)) {
+      throw new Error('authxpriv parameter is an invalid hd privatekey');
+    }
+    this.authPrivKey = authxpriv ? bitcore.HDPrivateKey(authxpriv) : null;
 
     this.passphrase = passphrase
 
@@ -175,7 +191,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.isSendingTx = false;
     this.txProposalId = null;
     this.xpub = null;
-    this.authPrivKey = null;
 
     this.network = network;
     networkInstance.setNetwork(this.network.name);
@@ -191,7 +206,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   /**
    * Sets the server to connect on config singleton and storage
    *
-   * @param {String} newSever - The new server to set the config and storage to
+   * @param {String} newServer - The new server to set the config and storage to
    *
    * @memberof HathorWalletServiceWallet
    * @inner
@@ -204,7 +219,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   /**
    * Sets the websocket server to connect on config singleton and storage
    *
-   * @param {String} newSever - The new websocket server to set the config and storage to
+   * @param {String} newServer - The new websocket server to set the config and storage to
    *
    * @memberof HathorWalletServiceWallet
    * @inner
@@ -302,12 +317,60 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async start({ pinCode, password }) {
+  async start({ pinCode, password }: { pinCode?: string, password?: string } = {}) {
     if (!pinCode) {
       throw new Error('Pin code is required when starting the wallet.');
     }
 
     this.setState(walletState.LOADING);
+
+    let hasAccessData: boolean;
+    try {
+      const accessData = await this.storage.getAccessData();
+      hasAccessData = !!accessData;
+    } catch (err) {
+      if (err instanceof UninitializedWalletError) {
+        hasAccessData = false;
+      } else {
+        throw err;
+      }
+    }
+
+    if (!hasAccessData) {
+      let accessData: IWalletAccessData;
+      if (this.seed) {
+        if (!password) {
+          throw new Error('Password is required when starting the wallet from the seed.');
+        }
+        accessData = walletUtils.generateAccessDataFromSeed(
+          this.seed,
+          {
+            passphrase: this.passphrase,
+            pin: pinCode,
+            password,
+            networkName: this.network.name,
+            // multisig: not implemented on wallet service yet
+          }
+        );
+      } else if (this.xpriv) {
+        // generateAccessDataFromXpriv expects a xpriv on the change level path
+        const accountLevelPrivKey = new bitcore.HDPrivateKey(this.xpriv);
+        const changeLevelPrivKey = accountLevelPrivKey.deriveNonCompliantChild(0);
+
+        accessData = walletUtils.generateAccessDataFromXpriv(
+          changeLevelPrivKey.xprivkey,
+          {
+            pin: pinCode,
+            authXpriv: this.authPrivKey.xprivkey!,
+            // multisig: not implemented on wallet service yet
+          },
+        );
+      } else {
+        throw new Error('WalletService facade initialized without seed or xprivkey');
+      }
+
+      await this.storage.saveAccessData(accessData);
+    }
 
     const {
       xpub,
@@ -318,35 +381,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       firstAddress,
       authDerivedPrivKey,
     } = await this.generateCreateWalletAuthData(pinCode);
-
-    let accessData: IWalletAccessData;
-    if (this.seed) {
-      accessData = walletUtils.generateAccessDataFromSeed(
-        this.seed,
-        {
-          passphrase: this.passphrase,
-          pin: pinCode,
-          password,
-          networkName: this.network.name,
-          // multisig: not implemented on wallet service yet
-        }
-      );
-    } else if (this.xpriv) {
-      // generateAccessDataFromXpriv expects a xpriv on the change level path
-      const accountLevelPrivKey = new bitcore.HDPrivateKey(this.xpriv);
-      const changeLevelPrivKey = accountLevelPrivKey.deriveNonCompliantChild(0);
-
-      accessData = walletUtils.generateAccessDataFromXpriv(
-        changeLevelPrivKey.xprivkey,
-        {
-          pin: pinCode,
-          // multisig: not implemented on wallet service yet
-        },
-      );
-    } else {
-      throw new Error('This should never happen.');
-    }
-    await this.storage.saveAccessData(accessData);
 
     this.xpub = xpub;
     this.authPrivKey = authDerivedPrivKey;
@@ -863,7 +897,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    *
    * @param {HDPrivateKey} privKey - private key to sign the auth message
    * @param {number} timestamp - Current timestamp to assemble the signature
-   * @param {string} walletId - The initialized wallet identifier on the wallet service
    *
    * @memberof HathorWalletServiceWallet
    * @inner
@@ -972,13 +1005,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  stop({ cleanStorage = true } = {}) {
+  async stop({ cleanStorage = true } = {}) {
     this.walletId = null;
     this.state = walletState.NOT_STARTED;
     this.firstConnection = true;
     this.removeAllListeners();
 
-    this.storage.handleStop({ cleanStorage });
+    await this.storage.handleStop({ cleanStorage });
     this.conn.stop();
   }
 
@@ -1099,7 +1132,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       address: string | null,
       changeAddress: string | null,
       createMintAuthority: boolean,
+      mintAuthorityAddress: string | null,
+      allowExternalMintAuthorityAddress: boolean | null,
       createMeltAuthority: boolean,
+      meltAuthorityAddress: string | null,
+      allowExternalMeltAuthorityAddress: boolean | null,
       nftData: string | null,
       pinCode: string | null,
     };
@@ -1107,10 +1144,30 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       address: null,
       changeAddress: null,
       createMintAuthority: true,
+      mintAuthorityAddress: null,
+      allowExternalMintAuthorityAddress: false,
       createMeltAuthority: true,
+      meltAuthorityAddress: null,
+      allowExternalMeltAuthorityAddress: false,
       nftData: null,
       pinCode: null,
     }, options);
+
+    if (newOptions.mintAuthorityAddress && !newOptions.allowExternalMintAuthorityAddress) {
+      // Validate that the mint authority address belongs to the wallet
+      const checkAddressMineMap = await this.checkAddressesMine([newOptions.mintAuthorityAddress]);
+      if (!checkAddressMineMap[newOptions.mintAuthorityAddress]) {
+        throw new SendTxError('The mint authority address must belong to your wallet.');
+      }
+    }
+
+    if (newOptions.meltAuthorityAddress && !newOptions.allowExternalMeltAuthorityAddress) {
+      // Validate that the melt authority address belongs to the wallet
+      const checkAddressMineMap = await this.checkAddressesMine([newOptions.meltAuthorityAddress]);
+      if (!checkAddressMineMap[newOptions.meltAuthorityAddress]) {
+        throw new SendTxError('The melt authority address must belong to your wallet.');
+      }
+    }
 
     const isNFT = newOptions.nftData !== null;
 
@@ -1149,18 +1206,32 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     if (!address.isValid()) {
       throw new SendTxError(`Address ${newOptions.address} is not valid.`);
     }
-    const p2pkh = new P2PKH(address);
-    const p2pkhScript = p2pkh.createScript()
+
+    const p2pkhScript = address.getScript();
     outputsObj.push(new Output(amount, p2pkhScript, {tokenData: 1}));
 
     if (newOptions.createMintAuthority) {
       // b. Mint authority
-      outputsObj.push(new Output(TOKEN_MINT_MASK, p2pkhScript, {tokenData: AUTHORITY_TOKEN_DATA}));
+      const mintAuthorityAddress = newOptions.mintAuthorityAddress || this.getCurrentAddress({ markAsUsed: true }).address;
+      const mintAuthorityAddressObj = new Address(mintAuthorityAddress, {network: this.network});
+      if (!mintAuthorityAddressObj.isValid()) {
+        throw new SendTxError(`Address ${newOptions.mintAuthorityAddress} is not valid.`);
+      }
+
+      const p2pkhMintAuthorityScript = mintAuthorityAddressObj.getScript();
+      outputsObj.push(new Output(TOKEN_MINT_MASK, p2pkhMintAuthorityScript, {tokenData: AUTHORITY_TOKEN_DATA}));
     }
 
     if (newOptions.createMeltAuthority) {
       // c. Melt authority
-      outputsObj.push(new Output(TOKEN_MELT_MASK, p2pkhScript, {tokenData: AUTHORITY_TOKEN_DATA}));
+      const meltAuthorityAddress = newOptions.meltAuthorityAddress || this.getCurrentAddress({ markAsUsed: true }).address;
+      const meltAuthorityAddressObj = new Address(meltAuthorityAddress, {network: this.network});
+      if (!meltAuthorityAddressObj.isValid()) {
+        throw new SendTxError(`Address ${newOptions.meltAuthorityAddress} is not valid.`);
+      }
+
+      const p2pkhMeltAuthorityScript = meltAuthorityAddressObj.getScript();
+      outputsObj.push(new Output(TOKEN_MELT_MASK, p2pkhMeltAuthorityScript, {tokenData: AUTHORITY_TOKEN_DATA}));
     }
 
     if (changeAmount) {
@@ -1303,17 +1374,29 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       address: string | null,
       changeAddress: string | null,
       createAnotherMint: boolean,
+      mintAuthorityAddress: string | null,
+      allowExternalMintAuthorityAddress: boolean,
       pinCode: string | null,
     };
     const newOptions: optionsType = Object.assign({
       address: null,
       changeAddress: null,
       createAnotherMint: true,
+      mintAuthorityAddress: null,
+      allowExternalMintAuthorityAddress: false,
       pinCode: null,
     }, options);
 
-    const depositPercent = this.storage.getTokenDepositPercentage();
+    if (newOptions.mintAuthorityAddress && !newOptions.allowExternalMintAuthorityAddress) {
+      // Validate that the mint authority address belongs to the wallet
+      const checkAddressMineMap = await this.checkAddressesMine([newOptions.mintAuthorityAddress]);
+      if (!checkAddressMineMap[newOptions.mintAuthorityAddress]) {
+        throw new SendTxError('The mint authority address must belong to your wallet.');
+      }
+    }
+
     // 1. Calculate HTR deposit needed
+    const depositPercent = this.storage.getTokenDepositPercentage();
     const deposit = tokens.getDepositAmount(amount, depositPercent);
 
     // 2. Get utxos for HTR
@@ -1348,13 +1431,19 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     if (!address.isValid()) {
       throw new SendTxError(`Address ${newOptions.address} is not valid.`);
     }
-    const p2pkh = new P2PKH(address);
-    const p2pkhScript = p2pkh.createScript()
+    const p2pkhScript = address.getScript();
     outputsObj.push(new Output(amount, p2pkhScript, {tokenData: 1}));
 
     if (newOptions.createAnotherMint) {
       // b. Mint authority
-      outputsObj.push(new Output(TOKEN_MINT_MASK, p2pkhScript, {tokenData: AUTHORITY_TOKEN_DATA}));
+      const authorityAddress = newOptions.mintAuthorityAddress
+        || this.getCurrentAddress({ markAsUsed: true }).address;
+      const authorityAddressObj = new Address(authorityAddress, { network: this.network });
+      if (!authorityAddressObj.isValid()) {
+        throw new SendTxError(`Address ${newOptions.mintAuthorityAddress} is not valid.`);
+      }
+      const p2pkhAuthorityScript = authorityAddressObj.getScript();
+      outputsObj.push(new Output(TOKEN_MINT_MASK, p2pkhAuthorityScript, { tokenData: AUTHORITY_TOKEN_DATA }));
     }
 
     if (changeAmount) {
@@ -1433,17 +1522,29 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       address: string | null,
       changeAddress: string | null,
       createAnotherMelt: boolean,
+      meltAuthorityAddress: string | null,
+      allowExternalMeltAuthorityAddress: boolean,
       pinCode: string | null,
     };
     const newOptions: optionsType = Object.assign({
       address: null,
       changeAddress: null,
       createAnotherMelt: true,
+      meltAuthorityAddress: null,
+      allowExternalMeltAuthorityAddress: false,
       pinCode: null,
     }, options);
 
-    const depositPercent = this.storage.getTokenDepositPercentage();
+    if (newOptions.meltAuthorityAddress && !newOptions.allowExternalMeltAuthorityAddress) {
+      // Validate that the melt authority address belongs to the wallet
+      const checkAddressMineMap = await this.checkAddressesMine([newOptions.meltAuthorityAddress]);
+      if (!checkAddressMineMap[newOptions.meltAuthorityAddress]) {
+        throw new SendTxError('The melt authority address must belong to your wallet.');
+      }
+    }
+
     // 1. Calculate HTR deposit needed
+    const depositPercent = this.storage.getTokenDepositPercentage();
     const withdraw = tokens.getWithdrawAmount(amount, depositPercent);
 
     // 2. Get utxos for custom token to melt
@@ -1486,8 +1587,19 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     if (newOptions.createAnotherMelt) {
-      // b. Mint authority
-      outputsObj.push(new Output(TOKEN_MELT_MASK, p2pkhScript, {tokenData: AUTHORITY_TOKEN_DATA}));
+      // b. Melt authority
+      const authorityAddress = newOptions.meltAuthorityAddress
+        || this.getCurrentAddress({ markAsUsed: true }).address;
+      const authorityAddressObj = new Address(authorityAddress, { network: this.network });
+      if (!authorityAddressObj.isValid()) {
+        throw new SendTxError(`Address ${newOptions.meltAuthorityAddress} is not valid.`);
+      }
+      const p2pkhAuthorityScript = authorityAddressObj.getScript();
+      outputsObj.push(
+        new Output(TOKEN_MELT_MASK, p2pkhAuthorityScript, {
+          tokenData: AUTHORITY_TOKEN_DATA
+        })
+      );
     }
 
     if (changeAmount) {
@@ -1661,13 +1773,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.failIfWalletNotReady();
 
     let authority: number;
-    let mask: number;
     if (type === 'mint') {
       authority = 1;
-      mask = TOKEN_MINT_MASK;
     } else if (type === 'melt') {
       authority = 2;
-      mask = TOKEN_MELT_MASK;
     } else {
       throw new WalletError('Type options are mint and melt for destroy authority method.')
     }
@@ -1740,13 +1849,21 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       address: string | null,
       changeAddress: string | null,
       createMintAuthority: boolean,
+      mintAuthorityAddress: string | null,
+      allowExternalMintAuthorityAddress: boolean | null,
       createMeltAuthority: boolean,
+      meltAuthorityAddress: string | null,
+      allowExternalMeltAuthorityAddress: boolean | null,
     };
     const newOptions: optionsType = Object.assign({
       address: null,
       changeAddress: null,
       createMintAuthority: false,
+      mintAuthorityAddress: null,
+      allowExternalMintAuthorityAddress: false,
       createMeltAuthority: false,
+      meltAuthorityAddress: null,
+      allowExternalMeltAuthorityAddress: false,
     }, options);
     newOptions['nftData'] = data;
     const tx = await this.prepareCreateNewToken(name, symbol, amount, newOptions);
@@ -1821,6 +1938,17 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    */
   async checkPinAndPassword(pin: string, password: string): Promise<boolean> {
     return await this.checkPin(pin) && await this.checkPassword(password);
+  }
+
+
+  /**
+   * Check if the wallet is a hardware wallet.
+   * @returns {Promise<boolean>}
+   */
+  async isHardwareWallet(): Promise<boolean> {
+    // We currently do not have support for hardware wallets
+    // in the wallet-service facade.
+    return false;
   }
 }
 
