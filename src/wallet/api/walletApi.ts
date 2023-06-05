@@ -50,13 +50,13 @@ const walletApi = {
   async getVersionData(wallet: HathorWalletServiceWallet): Promise<FullNodeVersionData> {
     const axios = await axiosInstance(wallet, false);
     const response = await axios.get('version');
-    const { data } = response;
+    const data = response.data;
 
     if (response.status === 200 && data.success) {
       return data.data;
+    } else {
+      throw new WalletRequestError('Error getting fullnode data.');
     }
-
-    throw new WalletRequestError('Error getting fullnode data.');
   },
 
   async createWallet(
