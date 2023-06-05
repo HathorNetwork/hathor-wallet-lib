@@ -1025,7 +1025,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const { addresses } = await walletApi.getAddresses(this, index);
 
     if (addresses.length <= 0) {
-      throw new Error('Error getting wallet addresses');
+      throw new Error('Error getting wallet addresses.');
     }
 
     return addresses[0].address;
