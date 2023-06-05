@@ -6,6 +6,7 @@
  */
 
 import { get } from 'lodash';
+import bitcore from 'bitcore-lib';
 import EventEmitter from 'events';
 import { HATHOR_TOKEN_CONFIG, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
 import tokenUtils from '../utils/tokens';
@@ -1337,6 +1338,22 @@ class HathorWallet extends EventEmitter {
     this.firstConnection = true;
     this.walletStopped = true;
     this.conn.stop();
+  }
+
+  /**
+   * Returns an address' privateKey given an index and the encryption password
+   *
+   * @param {string} pinCode - The PIN used to encrypt data in accessData
+   * @param {number} addressIndex - The address' index to fetch
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async getAddressPrivKey(pinCode, addressIndex) {
+    const mainXPrivKey = await this.storage.getMainXPrivKey(pinCode);
+    const addressXPriv = new bitcore.HDPrivateKey(mainXPrivKey).derive(addressIndex);
+
+    return addressXPriv.privateKey;
   }
 
   /**

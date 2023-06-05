@@ -15,7 +15,11 @@ import {
   CreateWalletAuthData,
 } from '../../src/wallet/types';
 import config from '../../src/config';
-import { buildSuccessTxByIdTokenDataResponse, buildWalletToAuthenticateApiCall, defaultWalletSeed } from '../__mock_helpers/wallet-service.fixtures';
+import {
+  buildSuccessTxByIdTokenDataResponse,
+  buildWalletToAuthenticateApiCall,
+  defaultWalletSeed,
+} from '../__mock_helpers/wallet-service.fixtures';
 import Mnemonic from 'bitcore-mnemonic';
 import { TxNotFoundError, SendTxError } from '../../src/errors';
 import SendTransactionWalletService from '../../src/wallet/sendTransactionWalletService';
@@ -1401,4 +1405,56 @@ test('start', async () => {
       storage,
     });
   }).toThrow('authxpriv parameter is an invalid hd privatekey');
+});
+
+test('getAddressPrivKey', async () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = defaultWalletSeed;
+  let store = new MemoryStore();
+  let storage = new Storage(store);
+  const accessData = walletUtils.generateAccessDataFromSeed(seed, {
+    networkName: 'testnet',
+    password: '1234',
+    pin: '1234',
+  });
+
+  jest.spyOn(HathorWalletServiceWallet.prototype, 'pollForWalletStatus').mockImplementation(() => Promise.resolve());
+  jest.spyOn(HathorWalletServiceWallet.prototype, 'setupConnection').mockImplementation(jest.fn());
+  jest.spyOn(walletApi, 'getNewAddresses')
+    .mockImplementation(() => Promise.resolve({ success: true, addresses: [] }));
+  jest.spyOn(walletApi, 'createWallet')
+    .mockImplementation(() => Promise.resolve({
+      success: true,
+      status: {
+        walletId: 'id',
+        xpubkey: 'xpub',
+        status: 'creating',
+        maxGap: 20,
+        createdAt: 0,
+        readyAt: 0,
+      },
+    }));
+
+  let wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    storage,
+  });
+  await wallet.start({ pinCode: '1234', password: '1234' });
+
+  expect([
+    await wallet.getAddressPrivKey('1234', 1),
+    await wallet.getAddressPrivKey('1234', 2),
+    await wallet.getAddressPrivKey('1234', 3),
+    await wallet.getAddressPrivKey('1234', 4),
+    // We need to pass the network because bitcore-lib forces bitcoin network
+  ].map((privKey) => privKey.toAddress(network.getNetwork()).toString()))
+  .toStrictEqual([
+    'WgSpcCwYAbtt31S2cqU7hHJkUHdac2EPWG',
+    'WPfG7P4YQDJ4MpwTS6qrfGW4fvYvAhPpV7',
+    'WUgjC47cFz5z9Uag92MKdnL8XgHdCfscNx',
+    'WPRp9yj7Tjj9praWMy1whXuUc5zi1TdQtm'
+  ]);
 });

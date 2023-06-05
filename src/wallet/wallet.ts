@@ -7,7 +7,6 @@
 
 import { EventEmitter } from 'events';
 import {
-  HATHOR_BIP44_CODE,
   HATHOR_TOKEN_CONFIG,
   TOKEN_MINT_MASK,
   AUTHORITY_TOKEN_DATA,
@@ -1029,6 +1028,22 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     return addresses[0].address;
+  }
+
+  /**
+   * Returns an address' privateKey given an index and the encryption password
+   *
+   * @param {string} pinCode - The PIN used to encrypt data in accessData
+   * @param {number} addressIndex - The address' index to fetch
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async getAddressPrivKey(pinCode: string, addressIndex: number): Promise<bitcore.PrivateKey> {
+    const mainXPrivKey = await this.storage.getMainXPrivKey(pinCode);
+    const addressXPriv = new bitcore.HDPrivateKey(mainXPrivKey).derive(addressIndex);
+
+    return addressXPriv.privateKey;
   }
 
   /**

@@ -7,6 +7,7 @@
 
 import HathorWallet from '../../src/new/wallet';
 import { TxNotFoundError, WalletFromXPubGuard } from '../../src/errors';
+import Network from '../../src/models/network';
 import Transaction from '../../src/models/transaction';
 import Input from '../../src/models/input';
 import { DEFAULT_TX_VERSION, P2PKH_ACCT_PATH } from '../../src/constants';
@@ -490,6 +491,42 @@ test('getAddressAtIndex', async () => {
 
   p2pkhDeriveSpy.mockRestore();
   p2shDeriveSpy.mockRestore();
+});
+
+test('getAddressPrivKey', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  const seed = 'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+
+  const conn = {
+    network: 'testnet',
+    getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
+    on: jest.fn(),
+    start: jest.fn(),
+  };
+
+  jest.spyOn(versionApi, 'getVersion')
+    .mockImplementation(resolve => {
+      resolve({
+        network: 'testnet',
+      });
+    });
+
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = storage;
+  hWallet.seed = seed;
+  hWallet.conn = conn;
+
+  hWallet.getTokenData = jest.fn();
+  hWallet.setState = jest.fn();
+
+  await hWallet.start({ pinCode: '123', password: '456' });
+
+  const address0 = await hWallet.getAddressAtIndex(0);
+  const address0PrivKey = await hWallet.getAddressPrivKey('123', 0);
+
+  expect(address0PrivKey.toAddress(new Network('testnet').getNetwork()).toString())
+    .toStrictEqual(address0);
 });
 
 test('GapLimit', async () => {
