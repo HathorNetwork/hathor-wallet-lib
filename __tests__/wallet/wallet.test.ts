@@ -55,7 +55,7 @@ afterEach(() => {
   jest.clearAllMocks();
 });
 
-test('getAddressAtIndex WALLET_SERVICE', async () => {
+test('getAddressAtIndex', async () => {
   const requestPassword = jest.fn();
   const network = new Network('testnet');
   const seed = defaultWalletSeed;
@@ -75,6 +75,8 @@ test('getAddressAtIndex WALLET_SERVICE', async () => {
   };
 
   const spy = jest.spyOn(walletApi, 'getAddresses')
+
+  // We should return only the address property on success
   spy.mockImplementationOnce(() => Promise.resolve({
     success: true,
     addresses: [address],
@@ -83,6 +85,7 @@ test('getAddressAtIndex WALLET_SERVICE', async () => {
   const addressAtIndex = await wallet.getAddressAtIndex(0);
   expect(addressAtIndex).toStrictEqual(address.address);
 
+  // We should fail if no addresses were returned
   spy.mockImplementationOnce(() => Promise.resolve({
     success: false,
     addresses: [],
