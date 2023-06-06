@@ -9,7 +9,7 @@ import { Utxo } from '../wallet/types';
 import { UtxoError } from '../errors';
 import { HistoryTransactionOutput } from '../models/types';
 import {crypto as cryptoBL, PrivateKey, HDPrivateKey} from 'bitcore-lib'
-import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, HATHOR_TOKEN_CONFIG, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, DEFAULT_SIGNAL_BITS } from '../constants';
+import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, HATHOR_TOKEN_CONFIG, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, DEFAULT_SIGNAL_BITS, BLOCK_VERSION, MERGED_MINED_BLOCK_VERSION } from '../constants';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import Input from '../models/input';
@@ -25,6 +25,16 @@ import helpers from './helpers';
 import { getAddressType } from './address';
 
 const transaction = {
+
+  /**
+   * Return if a tx is a block or not.
+   *
+   * @param {Pick<IHistoryTx, 'version'>} tx - Transaction to check
+   * @returns {boolean}
+   */
+  isBlock(tx: Pick<IHistoryTx, 'version'>): boolean {
+    return (tx.version === BLOCK_VERSION || tx.version === MERGED_MINED_BLOCK_VERSION);
+  }
 
   /**
    * Check if the output is an authority output
@@ -528,6 +538,35 @@ const transaction = {
     // If utxo is timelocked we cannot use it
     // If utxo is height locked we cannot use it
     return !(isSelectedAsInput || isTimelocked || isHeightLocked);
+  },
+
+  /**
+   * Get object type (Transaction or Block)
+   *
+   * @param {Pick<IHistoryTx, 'version'>} tx Object to get the type
+   *
+   * @return {string} Type of the object
+   *
+   * @memberof Helpers
+   * @inner
+   */
+  getTxType(tx: Pick<IHistoryTx, 'version'>): string {
+    if (this.isBlock(tx)) {
+      if (tx.version === BLOCK_VERSION) {
+        return 'Block';
+      } else if (tx.version === MERGED_MINED_BLOCK_VERSION) {
+        return 'Merged Mining Block';
+      }
+    } else {
+      if (tx.version === DEFAULT_TX_VERSION) {
+        return 'Transaction';
+      } else if (tx.version === CREATE_TOKEN_TX_VERSION) {
+        return 'Create Token Transaction';
+      }
+    }
+
+    // If there is no match
+    return 'Unknown';
   },
 }
 

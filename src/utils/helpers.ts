@@ -23,6 +23,7 @@ import { hexToBuffer, unpackToInt, intToBytes } from './buffer';
 import { crypto, encoding, Address as bitcoreAddress } from 'bitcore-lib';
 import { clone } from 'lodash';
 import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError, ParseError } from '../errors';
+import { AxiosInstance, AxiosRequestConfig } from 'axios';
 
 import { ErrorMessages } from '../errorMessages';
 import config from '../config';
@@ -527,6 +528,43 @@ const helpers = {
    */
   cleanupString(s: string): string {
     return s.replace(/\s\s+/g, ' ').trim().toLowerCase();
+  },
+
+  /**
+   * Axios fails merging this configuration to the default configuration because it has an issue
+   * with circular structures: https://github.com/mzabriskie/axios/issues/370
+   * Got this code from https://github.com/softonic/axios-retry/blob/master/es/index.js#L203
+   *
+   * @param {AxiosInstance} axios Axios instance
+   * @param {AxiosRequestConfig} config New axios config
+   *
+   * @memberof Helpers
+   * @inner
+   */
+  fixAxiosConfig(axios: AxiosInstance, config: AxiosRequestConfig) {
+    if (axios.defaults.httpAgent === config.httpAgent) {
+      delete config.httpAgent;
+    }
+    if (axios.defaults.httpsAgent === config.httpsAgent) {
+      delete config.httpsAgent;
+    }
+
+    config.transformRequest = [data => data];
+  },
+
+  /**
+   * Returns a string with the short version of the id of a transaction
+   * Returns {first12Chars}...{last12Chars}
+   *
+   * @param {string} hash Transaction ID to be shortened
+   *
+   * @return {string}
+   * @memberof Helpers
+   * @inner
+   *
+   */
+  getShortHash(hash: string): string {
+    return `${hash.substring(0,12)}...${hash.substring(52,64)}`;
   },
 }
 

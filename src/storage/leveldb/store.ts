@@ -316,7 +316,7 @@ export default class LevelDBStore implements IStore {
 
   async cleanStorage(cleanHistory: boolean = false, cleanAddresses: boolean = false): Promise<void> {
     if (cleanHistory) {
-      await this.tokenIndex.clear();
+      await this.tokenIndex.clear(true);
       await this.historyIndex.clear();
       await this.utxoIndex.clear();
     }
