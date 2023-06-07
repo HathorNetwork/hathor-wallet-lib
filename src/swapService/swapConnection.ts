@@ -8,7 +8,7 @@
 import {
   ConnectionState,
 } from '../wallet/types';
-import GenericWebSocket from '../websocket/index';
+import GenericWebSocket from '../websocket';
 import { EventEmitter } from 'events';
 
 

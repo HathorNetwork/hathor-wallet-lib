@@ -1,4 +1,4 @@
-import { AtomicSwapServiceConnection } from '../../src/new/swapConnection';
+import { AtomicSwapServiceConnection } from '../../src/swapService/swapConnection';
 import { ConnectionState } from '../../src/wallet/types';
 import GenericWebSocket from '../../src/websocket/index';
 
