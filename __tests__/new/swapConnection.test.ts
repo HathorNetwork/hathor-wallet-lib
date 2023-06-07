@@ -1,16 +1,16 @@
 import { AtomicSwapServiceConnection } from '../../src/new/swapConnection';
 import { ConnectionState } from '../../src/wallet/types';
-import WalletWebSocket from '../../src/websocket/index';
+import GenericWebSocket from '../../src/websocket/index';
 
 const atomicSwapServiceWs = 'http://localhost:3002' // mock value
 
 let sendMessageSpy, setupSpy;
 
 beforeAll(() => {
-  sendMessageSpy = jest.spyOn(WalletWebSocket.prototype, 'sendMessage')
+  sendMessageSpy = jest.spyOn(GenericWebSocket.prototype, 'sendMessage')
     .mockImplementation(jest.fn());
 
-  setupSpy = jest.spyOn(WalletWebSocket.prototype, 'setup')
+  setupSpy = jest.spyOn(GenericWebSocket.prototype, 'setup')
     .mockImplementation(jest.fn());
 })
 

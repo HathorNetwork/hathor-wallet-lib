@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import WalletWebSocket from '../websocket';
+import GenericWebSocket from '../websocket';
 import helpers from '../utils/helpers';
 import BaseConnection, {
   ConnectionParams,
@@ -41,7 +41,7 @@ class WalletConnection extends BaseConnection {
       wsOptions['connectionTimeout'] = options.connectionTimeout;
     }
 
-    this.websocket = new WalletWebSocket(wsOptions);
+    this.websocket = new GenericWebSocket(wsOptions);
   }
 
   /**

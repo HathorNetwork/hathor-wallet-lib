@@ -8,7 +8,7 @@
 import {
   ConnectionState,
 } from '../wallet/types';
-import WalletWebSocket from '../websocket/index';
+import GenericWebSocket from '../websocket/index';
 import { EventEmitter } from 'events';
 
 
@@ -26,7 +26,7 @@ import { EventEmitter } from 'events';
  * - pong: Internal or debug use only. Fired when the health check is received from the backend
  **/
 export class AtomicSwapServiceConnection extends EventEmitter {
-  websocket: WalletWebSocket;
+  websocket: GenericWebSocket;
   protected state: ConnectionState;
 
   constructor(options: { wsURL: string, connectionTimeout?: number }) {
@@ -39,7 +39,7 @@ export class AtomicSwapServiceConnection extends EventEmitter {
     if (options.connectionTimeout) {
       wsOptions.connectionTimeout = options.connectionTimeout;
     }
-    this.websocket = new WalletWebSocket(wsOptions);
+    this.websocket = new GenericWebSocket(wsOptions);
 
     // Remaining properties initialization
     this.state = ConnectionState.CLOSED;

@@ -1,4 +1,4 @@
-import WalletWebSocket from '../../src/websocket/index';
+import GenericWebSocket from '../../src/websocket/index';
 
 let sendMessageSpy;
 const baseWsOptions = {
@@ -6,7 +6,7 @@ const baseWsOptions = {
 };
 
 beforeAll(() => {
-  sendMessageSpy = jest.spyOn(WalletWebSocket.prototype, 'sendMessage')
+  sendMessageSpy = jest.spyOn(GenericWebSocket.prototype, 'sendMessage')
     .mockImplementation(jest.fn());
 })
 
@@ -16,7 +16,7 @@ afterAll(() => {
 
 describe('getPingMessage', () => {
   it('should return the ping message', () => {
-    const atomicSwapWebsocket = new WalletWebSocket(baseWsOptions);
+    const atomicSwapWebsocket = new GenericWebSocket(baseWsOptions);
     expect(atomicSwapWebsocket.getPingMessage())
       .toStrictEqual(JSON.stringify({ type: 'ping' }));
   })
@@ -24,7 +24,7 @@ describe('getPingMessage', () => {
 
 describe('onOpen', () => {
   it('should set the websocket as online', () => {
-    const atomicSwapWebsocket = new WalletWebSocket(baseWsOptions);
+    const atomicSwapWebsocket = new GenericWebSocket(baseWsOptions);
     const onlineListener = jest.fn();
 
     atomicSwapWebsocket.on('is_online', onlineListener);
@@ -37,7 +37,7 @@ describe('onOpen', () => {
 
 describe('onMessage', () => {
   it('should call onPong for a pong response', () => {
-    const wsInstance = new WalletWebSocket(baseWsOptions);
+    const wsInstance = new GenericWebSocket(baseWsOptions);
     const pongSpy = jest.spyOn(wsInstance, 'onPong')
       .mockImplementation(jest.fn());
 
@@ -46,14 +46,14 @@ describe('onMessage', () => {
   })
 
   it('should receive messages after initializing the timeoutTimer', () => {
-    const wsInstance = new WalletWebSocket(baseWsOptions);
+    const wsInstance = new GenericWebSocket(baseWsOptions);
 
     wsInstance.sendPing();
     wsInstance.onMessage({ data: JSON.stringify({ type: 'other' }) });
   })
 
   it('should re-emit messages with their same type', () => {
-    const wsInstance = new WalletWebSocket(baseWsOptions);
+    const wsInstance = new GenericWebSocket(baseWsOptions);
     const arbitraryListener = jest.fn();
 
     wsInstance.on('arbitrary', arbitraryListener);
@@ -68,7 +68,7 @@ describe('onMessage', () => {
   })
 
   it('should split message types by default', () => {
-    const wsInstance = new WalletWebSocket({
+    const wsInstance = new GenericWebSocket({
       ...baseWsOptions,
     });
     const arbitraryListener = jest.fn();
@@ -85,7 +85,7 @@ describe('onMessage', () => {
   })
 
   it('should split message types when splitMessageType is true', () => {
-    const wsInstance = new WalletWebSocket({
+    const wsInstance = new GenericWebSocket({
       ...baseWsOptions,
       splitMessageType: true,
     });
@@ -103,7 +103,7 @@ describe('onMessage', () => {
   })
 
   it('should NOT split message types when splitMessageType is false', () => {
-    const wsInstance = new WalletWebSocket({
+    const wsInstance = new GenericWebSocket({
       ...baseWsOptions,
       splitMessageType: false,
     });
