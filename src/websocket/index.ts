@@ -18,8 +18,12 @@ import BaseWebSocket, { WsOptions } from './base';
  * @name WalletWebSocket
  */
 class WalletWebSocket extends BaseWebSocket {
-  constructor(options: WsOptions) {
+  private readonly splitMessageType: boolean;
+
+  constructor(options: WsOptions & { splitMessageType?: boolean }) {
     super(options);
+
+    this.splitMessageType = options.splitMessageType ?? true;
   }
 
   /**
@@ -29,7 +33,9 @@ class WalletWebSocket extends BaseWebSocket {
    */
   onMessage(evt) {
     const message = JSON.parse(evt.data)
-    const _type = message.type.split(':')[0]
+    const _type = this.splitMessageType
+      ? message.type.split(':')[0]
+      : message.type;
     if (_type === 'pong') {
       this.onPong();
     } else {
