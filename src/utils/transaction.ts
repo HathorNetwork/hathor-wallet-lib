@@ -23,6 +23,7 @@ import ScriptData from '../models/script_data';
 import { ParseError } from '../errors';
 import helpers from './helpers';
 import { getAddressType } from './address';
+import dateFormatter from './date';
 
 const transaction = {
 
@@ -34,7 +35,7 @@ const transaction = {
    */
   isBlock(tx: Pick<IHistoryTx, 'version'>): boolean {
     return (tx.version === BLOCK_VERSION || tx.version === MERGED_MINED_BLOCK_VERSION);
-  }
+  },
 
   /**
    * Check if the output is an authority output
