@@ -2,7 +2,6 @@ import { AtomicSwapServiceConnection } from '../../src/new/swapConnection';
 import { ConnectionState } from '../../src/wallet/types';
 import AtomicSwapWebSocket from '../../src/websocket/atomic-swap';
 
-const network = 'testnet';
 const atomicSwapServiceWs = 'http://localhost:3002' // mock value
 
 let sendMessageSpy, setupSpy;
@@ -28,8 +27,7 @@ afterAll(() => {
 describe('start', () => {
   it('should handle a websocket failure', () => {
     const atomicConnection = new AtomicSwapServiceConnection(
-      { network },
-      atomicSwapServiceWs,
+      { wsURL: atomicSwapServiceWs },
     );
 
     // Forcing an error
@@ -42,10 +40,9 @@ describe('start', () => {
   it('should have the state "connecting"', () => {
     const atomicConnection = new AtomicSwapServiceConnection(
       {
-        network,
+        wsURL: atomicSwapServiceWs,
         connectionTimeout: 10000,
       },
-      atomicSwapServiceWs,
     );
 
     atomicConnection.start();
@@ -55,8 +52,7 @@ describe('start', () => {
 
   it('should initialize the listeners', () => {
     const atomicConnection = new AtomicSwapServiceConnection(
-      { network },
-      atomicSwapServiceWs,
+      { wsURL: atomicSwapServiceWs },
     );
     atomicConnection.start();
 
@@ -84,8 +80,7 @@ describe('start', () => {
 describe('proposal handling', () => {
   it('should send a subscribe proposal message', () => {
     const atomicConnection = new AtomicSwapServiceConnection(
-      { network },
-      atomicSwapServiceWs,
+      { wsURL: atomicSwapServiceWs },
     );
 
     atomicConnection.subscribeProposal(['abc', '123']);
@@ -101,8 +96,7 @@ describe('proposal handling', () => {
 
   it('should send a unsubscribe proposal message', () => {
     const atomicConnection = new AtomicSwapServiceConnection(
-      { network },
-      atomicSwapServiceWs,
+      { wsURL: atomicSwapServiceWs },
     );
 
     atomicConnection.unsubscribeProposal('123');

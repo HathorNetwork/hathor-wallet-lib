@@ -5,13 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import BaseConnection, {
-  ConnectionParams,
-} from '../connection';
 import {
   ConnectionState,
 } from '../wallet/types';
 import AtomicSwapWebSocket from '../websocket/atomic-swap';
+import { EventEmitter } from 'events';
 
 
 /**
@@ -24,24 +22,27 @@ import AtomicSwapWebSocket from '../websocket/atomic-swap';
  *
  * You can subscribe for the following events:
  * - update-atomic-swap-proposal: Fired when the state of a listened proposal changes
+ * - state: Fired when the websocket connection state changes
+ * - pong: Internal or debug use only. Fired when the health check is received from the backend
  **/
-export class AtomicSwapServiceConnection extends BaseConnection {
-  static CLOSED = 0;
-  static CONNECTING = 1;
-  static CONNECTED = 2;
-
+export class AtomicSwapServiceConnection extends EventEmitter {
   websocket: AtomicSwapWebSocket;
+  protected state: ConnectionState;
 
-  constructor(options: ConnectionParams, wsURL) {
-    super(options);
+  constructor(options: { wsURL: string, connectionTimeout?: number }) {
+    super();
 
-    const wsOptions = { wsURL };
-
+    // Initializing WebSocket
+    const wsOptions = {
+      wsURL: options.wsURL,
+    } as { wsURL: string, connectionTimeout?: number };
     if (options.connectionTimeout) {
-      wsOptions['connectionTimeout'] = options.connectionTimeout;
+      wsOptions.connectionTimeout = options.connectionTimeout;
     }
-
     this.websocket = new AtomicSwapWebSocket(wsOptions);
+
+    // Remaining properties initialization
+    this.state = ConnectionState.CLOSED;
   }
 
   /**
@@ -71,6 +72,28 @@ export class AtomicSwapServiceConnection extends BaseConnection {
 
     this.setState(ConnectionState.CONNECTING);
     this.websocket.setup();
+  }
+
+  /**
+   * Called when the connection to the websocket changes.
+   * It is also called if the network is down.
+   **/
+  onConnectionChange(value: boolean) {
+    if (value) {
+      this.setState(ConnectionState.CONNECTED);
+    } else {
+      this.setState(ConnectionState.CONNECTING);
+    }
+  }
+
+  /**
+   * Update class state
+   *
+   * @param {Number} state New state
+   */
+  private setState(state) {
+    this.state = state;
+    this.emit('state', state);
   }
 
   getState() {
