@@ -274,7 +274,7 @@ test('access data methods', async () => {
     walletType: WalletType.P2PKH,
   };
 
-  await expect(store.getAccessData()).rejects.toThrow();
+  await expect(store.getAccessData()).resolves.toEqual(null);
   await store.saveAccessData(accessData);
   expect(store.accessData).toBe(accessData);
   await expect(store.getAccessData()).resolves.toBe(accessData);
