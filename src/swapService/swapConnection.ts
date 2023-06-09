@@ -111,7 +111,7 @@ export class AtomicSwapServiceConnection extends EventEmitter {
 
   unsubscribeProposal(proposalId: string) {
     if (this.websocket) {
-      const msg = JSON.stringify({type: 'unsubscribe_proposal', proposalId});
+      const msg = JSON.stringify({ type: 'unsubscribe_proposal', proposalId });
       this.websocket.sendMessage(msg);
     }
   }
