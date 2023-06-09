@@ -8,7 +8,7 @@
 import { EventEmitter } from 'events';
 import networkInstance from './network';
 import config from './config';
-import WalletWebSocket from './websocket';
+import GenericWebSocket from './websocket';
 import WalletServiceWebSocket from './wallet/websocket';
 import { ConnectionState } from './wallet/types';
 
@@ -39,7 +39,7 @@ export type ConnectionParams = {
 abstract class Connection extends EventEmitter {
   // network: 'testnet' or 'mainnet'
   protected network: string;
-  protected websocket: WalletWebSocket | WalletServiceWebSocket | null;
+  protected websocket: GenericWebSocket | WalletServiceWebSocket | null;
   protected currentServer: string;
   protected state: ConnectionState;
 
