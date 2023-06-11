@@ -23,6 +23,7 @@ import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
 import { HDPrivateKey } from 'bitcore-lib';
 import transactionUtils from '../utils/transaction';
+import { signMessage } from '../utils/crypto';
 import Transaction from '../models/transaction';
 import Queue from '../models/queue';
 import FullnodeConnection from './connection';
@@ -1354,6 +1355,30 @@ class HathorWallet extends EventEmitter {
     const addressXPriv = new bitcore.HDPrivateKey(mainXPrivKey).derive(addressIndex);
 
     return addressXPriv.privateKey;
+  }
+
+  /**
+   * Returns a base64 encoded signed message with an address' private key given an
+   * andress index
+   *
+   * @param {string} message - The message to sign
+   * @param {number} pinCode - The address index to sign with
+   * @param {string} pinCode - The PIN used to encrypt data in accessData
+   *
+   * @return {Promise} Promise that resolves with the signed message
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async signMessageWithAddress(
+    message,
+    index,
+    pinCode,
+  ) {
+    const addressPrivKey = await this.getAddressPrivKey(pinCode, index);
+    const signedMessage = signMessage(message, addressPrivKey);
+
+    return signedMessage;
   }
 
   /**

@@ -19,7 +19,7 @@ import { WalletType } from '../../src/types';
 import txApi from '../../src/api/txApi';
 import * as addressUtils from '../../src/utils/address';
 import versionApi from '../../src/api/version';
-import { decryptData } from '../../src/utils/crypto';
+import { decryptData, verifyMessage } from '../../src/utils/crypto';
 
 class FakeHathorWallet {
   constructor() {
@@ -527,6 +527,53 @@ test('getAddressPrivKey', async () => {
 
   expect(address0PrivKey.toAddress(new Network('testnet').getNetwork()).toString())
     .toStrictEqual(address0);
+});
+
+test('signMessageWithAddress', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  const seed = 'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+
+  const conn = {
+    network: 'testnet',
+    getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
+    on: jest.fn(),
+    start: jest.fn(),
+  };
+
+  jest.spyOn(versionApi, 'getVersion')
+    .mockImplementation(resolve => {
+      resolve({
+        network: 'testnet',
+      });
+    });
+
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = storage;
+  hWallet.seed = seed;
+  hWallet.conn = conn;
+
+  hWallet.getTokenData = jest.fn();
+  hWallet.setState = jest.fn();
+
+  await hWallet.start({
+    pinCode: '123',
+    password: '456',
+  });
+
+  const message = 'sign-me-please';
+  const addressIndex = 2;
+  const signedMessage = await hWallet.signMessageWithAddress(
+    message,
+    5,
+    '1234',
+  );
+
+  expect(verifyMessage(
+    message,
+    signedMessage,
+    await hWallet.getAddressAtIndex(addressIndex),
+  )).toBeTruthy();
 });
 
 test('GapLimit', async () => {

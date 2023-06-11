@@ -28,7 +28,7 @@ import { TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
 import { MemoryStore, Storage } from '../../src/storage';
 import walletApi from '../../src/wallet/api/walletApi';
 import walletUtils from '../../src/utils/wallet';
-import { decryptData } from '../../src/utils/crypto';
+import { decryptData, verifyMessage } from '../../src/utils/crypto';
 import { WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../../src/constants';
 
 // Mock SendTransactionWalletService class so we don't try to send actual transactions
@@ -1457,4 +1457,55 @@ test('getAddressPrivKey', async () => {
     'WUgjC47cFz5z9Uag92MKdnL8XgHdCfscNx',
     'WPRp9yj7Tjj9praWMy1whXuUc5zi1TdQtm'
   ]);
+});
+
+test('signMessageWithAddress', async () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = defaultWalletSeed;
+  let store = new MemoryStore();
+  let storage = new Storage(store);
+  const accessData = walletUtils.generateAccessDataFromSeed(seed, {
+    networkName: 'testnet',
+    password: '1234',
+    pin: '1234',
+  });
+
+  jest.spyOn(HathorWalletServiceWallet.prototype, 'pollForWalletStatus').mockImplementation(() => Promise.resolve());
+  jest.spyOn(HathorWalletServiceWallet.prototype, 'setupConnection').mockImplementation(jest.fn());
+  jest.spyOn(walletApi, 'getNewAddresses')
+    .mockImplementation(() => Promise.resolve({ success: true, addresses: [] }));
+  jest.spyOn(walletApi, 'createWallet')
+    .mockImplementation(() => Promise.resolve({
+      success: true,
+      status: {
+        walletId: 'id',
+        xpubkey: 'xpub',
+        status: 'creating',
+        maxGap: 20,
+        createdAt: 0,
+        readyAt: 0,
+      },
+    }));
+
+  let wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    storage,
+  });
+
+  await wallet.start({ pinCode: '1234', password: '1234' });
+
+  const message = 'sign-me-please';
+  const addressIndex = 2;
+  const address = 'WPfG7P4YQDJ4MpwTS6qrfGW4fvYvAhPpV7';
+  const signedMessage = await wallet.signMessageWithAddress(
+    message,
+    addressIndex,
+    '1234',
+  );
+
+  expect(verifyMessage(message, signedMessage, address))
+    .toBeTruthy();
 });
