@@ -96,7 +96,7 @@ const walletApi = {
     index?: number,
   ): Promise<AddressesResponseData> {
     const axios = await axiosInstance(wallet, true);
-    const path = typeof isNumber(index) ? `?index=${index}` : '';
+    const path = isNumber(index) ? `?index=${index}` : '';
     const url = `wallet/addresses${path}`;
     const response = await axios.get(url);
 
