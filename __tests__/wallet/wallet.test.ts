@@ -55,6 +55,47 @@ afterEach(() => {
   jest.clearAllMocks();
 });
 
+test('getAddressAtIndex', async () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = defaultWalletSeed;
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+
+  const address = {
+    address: 'address1',
+    index: 0,
+    transactions: 50,
+  };
+
+  const spy = jest.spyOn(walletApi, 'getAddresses')
+
+  // We should return only the address property on success
+  spy.mockImplementationOnce(() => Promise.resolve({
+    success: true,
+    addresses: [address],
+  }));
+
+  const addressAtIndex = await wallet.getAddressAtIndex(0);
+  expect(addressAtIndex).toStrictEqual(address.address);
+
+  // We should fail if no addresses were returned
+  spy.mockImplementationOnce(() => Promise.resolve({
+    success: false,
+    addresses: [],
+  }));
+
+  await expect(wallet.getAddressAtIndex(0))
+    .rejects
+    .toThrowError('Error getting wallet addresses.');
+});
+
 test('getTxBalance', async () => {
   const requestPassword = jest.fn();
   const network = new Network('testnet');

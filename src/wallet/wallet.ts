@@ -1021,13 +1021,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  getAddressAtIndex(index: number): string {
-    const code = new Mnemonic(this.seed);
-    const xpriv = code.toHDPrivateKey(this.passphrase, this.network.bitcoreNetwork);
-    const privkey = xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
-    const key = privkey.deriveNonCompliantChild(index);
-    const address = bitcoreAddress(key.publicKey, this.network.getNetwork());
-    return address.toString();
+  async getAddressAtIndex(index: number): Promise<string> {
+    const { addresses } = await walletApi.getAddresses(this, index);
+
+    if (addresses.length <= 0) {
+      throw new Error('Error getting wallet addresses.');
+    }
+
+    return addresses[0].address;
   }
 
   /**
