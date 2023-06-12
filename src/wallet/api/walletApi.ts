@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { get } from 'lodash';
+import { get, isNumber } from 'lodash';
 import { axiosInstance } from './walletServiceAxios';
 import {
   CheckAddressesMineResponseData,
@@ -96,7 +96,7 @@ const walletApi = {
     index?: number,
   ): Promise<AddressesResponseData> {
     const axios = await axiosInstance(wallet, true);
-    const path = typeof index === 'number' ? `?index=${index}` : '';
+    const path = typeof isNumber(index) ? `?index=${index}` : '';
     const url = `wallet/addresses${path}`;
     const response = await axios.get(url);
 
