@@ -10,16 +10,20 @@ import BaseWebSocket, { WsOptions } from './base';
 /**
  * Handles websocket connections and message transmission
  *
- * This class extends the base websocket class and is currently
- * used by the default wallet (using the "old" facade) for wallets
- * that haven't migrated to the Wallet Service yet.
+ * This class extends the base websocket class and is currently used by:
+ * - the default wallet (using the "old" facade) for wallets that haven't migrated to the Wallet Service yet.
+ * - the Atomic Swap Service event listeners
  *
  * @class
- * @name WalletWebSocket
+ * @name GenericWebSocket
  */
-class WalletWebSocket extends BaseWebSocket {
-  constructor(options: WsOptions) {
+class GenericWebSocket extends BaseWebSocket {
+  private readonly splitMessageType: boolean;
+
+  constructor(options: WsOptions & { splitMessageType?: boolean }) {
     super(options);
+
+    this.splitMessageType = options.splitMessageType ?? true;
   }
 
   /**
@@ -29,12 +33,14 @@ class WalletWebSocket extends BaseWebSocket {
    */
   onMessage(evt) {
     const message = JSON.parse(evt.data)
-    const _type = message.type.split(':')[0]
+    const _type = this.splitMessageType
+      ? message.type.split(':')[0]
+      : message.type;
     if (_type === 'pong') {
       this.onPong();
     } else {
-      // The websoket might be exchanging many messages and end up getting the pong from the full node too late
-      // in that case the websocket would be closed but we know the connection is not down because we are receiving
+      // The websocket might be exchanging many messages and end up getting the pong from the full node too late
+      // in that case the websocket would be closed, but we know the connection is not down because we are receiving
       // other messages. Because of that we just reset the timeoutTimer when we receive a message that is not a pong
       if (this.timeoutTimer) {
         clearTimeout(this.timeoutTimer);
@@ -60,4 +66,4 @@ class WalletWebSocket extends BaseWebSocket {
   }
 }
 
-export default WalletWebSocket;
+export default GenericWebSocket;
