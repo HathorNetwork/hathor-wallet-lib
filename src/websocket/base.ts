@@ -191,10 +191,7 @@ abstract class BaseWebSocket extends EventEmitter {
       this.latestRTT = dt;
       this.latestPingDate = null;
     }
-    if (this.timeoutTimer) {
-      clearTimeout(this.timeoutTimer);
-      this.timeoutTimer = null;
-    }
+    this.clearPongTimeoutTimer();
   }
 
   /**
@@ -224,6 +221,7 @@ abstract class BaseWebSocket extends EventEmitter {
     this.removeAllListeners();
     this.endConnection();
     this.clearSetupTimer();
+    this.clearPongTimeoutTimer();
   }
 
   /**
@@ -237,16 +235,28 @@ abstract class BaseWebSocket extends EventEmitter {
   }
 
   /**
+   * Clears the pong timeout timer if it exists
+   */
+  clearPongTimeoutTimer() {
+    if (this.timeoutTimer) {
+      clearTimeout(this.timeoutTimer);
+      this.timeoutTimer = null;
+    }
+  }
+
+  /**
    * Method called when websocket connection is closed
    */
   onClose() {
     this.started = false;
     this.connected = false;
     this.connectedDate = null;
+    this.latestPingDate = null;
     this.setIsOnline(false);
     this.closeWs();
 
     this.clearSetupTimer();
+    this.clearPongTimeoutTimer();
     this.setupTimer = setTimeout(() => this.setup(), this.retryConnectionInterval);
     // @ts-ignore
     clearInterval(this.heartbeat);
