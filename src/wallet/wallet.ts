@@ -1040,11 +1040,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async getAddressPrivKey(pinCode: string, addressIndex: number): Promise<bitcore.PrivateKey> {
+  async getAddressPrivKey(pinCode: string, addressIndex: number): Promise<bitcore.HDPrivateKey> {
     const mainXPrivKey = await this.storage.getMainXPrivKey(pinCode);
-    const addressXPriv = new bitcore.HDPrivateKey(mainXPrivKey).derive(addressIndex);
+    const addressHDPrivKey = new bitcore.HDPrivateKey(mainXPrivKey).derive(addressIndex);
 
-    return addressXPriv.privateKey;
+    return addressHDPrivKey;
   }
 
   /**
@@ -1089,8 +1089,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     index: number,
     pinCode: string,
   ): Promise<string> {
-    const addressPrivKey: bitcore.PrivateKey = await this.getAddressPrivKey(pinCode, index);
-    const signedMessage: string = signMessage(message, addressPrivKey);
+    const addressHDPrivKey: bitcore.HDPrivateKey = await this.getAddressPrivKey(pinCode, index);
+    const signedMessage: string = signMessage(message, addressHDPrivKey.privateKey);
 
     return signedMessage;
   }

@@ -523,9 +523,9 @@ test('getAddressPrivKey', async () => {
   await hWallet.start({ pinCode: '123', password: '456' });
 
   const address0 = await hWallet.getAddressAtIndex(0);
-  const address0PrivKey = await hWallet.getAddressPrivKey('123', 0);
+  const address0HDPrivKey = await hWallet.getAddressPrivKey('123', 0);
 
-  expect(address0PrivKey.toAddress(new Network('testnet').getNetwork()).toString())
+  expect(address0HDPrivKey.privateKey.toAddress(new Network('testnet').getNetwork()).toString())
     .toStrictEqual(address0);
 });
 

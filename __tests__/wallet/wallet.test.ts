@@ -1450,7 +1450,7 @@ test('getAddressPrivKey', async () => {
     await wallet.getAddressPrivKey('1234', 3),
     await wallet.getAddressPrivKey('1234', 4),
     // We need to pass the network because bitcore-lib forces bitcoin network
-  ].map((privKey) => privKey.toAddress(network.getNetwork()).toString()))
+  ].map((hdPrivKey) => hdPrivKey.privateKey.toAddress(network.getNetwork()).toString()))
   .toStrictEqual([
     'WgSpcCwYAbtt31S2cqU7hHJkUHdac2EPWG',
     'WPfG7P4YQDJ4MpwTS6qrfGW4fvYvAhPpV7',

@@ -1342,19 +1342,21 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Returns an address' privateKey given an index and the encryption password
+   * Returns an address' HDPrivateKey given an index and the encryption password
    *
    * @param {string} pinCode - The PIN used to encrypt data in accessData
    * @param {number} addressIndex - The address' index to fetch
+   *
+   * @returns {Promise<HDPrivateKey>} Promise that resolves with the HDPrivateKey
    *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
   async getAddressPrivKey(pinCode, addressIndex) {
     const mainXPrivKey = await this.storage.getMainXPrivKey(pinCode);
-    const addressXPriv = new bitcore.HDPrivateKey(mainXPrivKey).derive(addressIndex);
+    const addressHDPrivKey = new bitcore.HDPrivateKey(mainXPrivKey).derive(addressIndex);
 
-    return addressXPriv.privateKey;
+    return addressHDPrivKey;
   }
 
   /**
@@ -1375,8 +1377,8 @@ class HathorWallet extends EventEmitter {
     index,
     pinCode,
   ) {
-    const addressPrivKey = await this.getAddressPrivKey(pinCode, index);
-    const signedMessage = signMessage(message, addressPrivKey);
+    const addressHDPrivKey = await this.getAddressPrivKey(pinCode, index);
+    const signedMessage = signMessage(message, addressHDPrivKey.privateKey);
 
     return signedMessage;
   }
