@@ -557,15 +557,15 @@ test('signMessageWithAddress', async () => {
   hWallet.setState = jest.fn();
 
   await hWallet.start({
-    pinCode: '123',
-    password: '456',
+    pinCode: '1234',
+    password: '1234',
   });
 
   const message = 'sign-me-please';
   const addressIndex = 2;
   const signedMessage = await hWallet.signMessageWithAddress(
     message,
-    5,
+    addressIndex,
     '1234',
   );
 
