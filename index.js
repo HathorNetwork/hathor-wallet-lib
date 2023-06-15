@@ -47,7 +47,7 @@ const { WalletType } = require('./lib/types');
 const {PartialTx, PartialTxInputData} = require('./lib/models/partial_tx');
 const PartialTxProposal = require('./lib/wallet/partialTxProposal');
 const swapService = require('./lib/wallet/api/swapService');
-const { AtomicSwapServiceConnection } = require('./lib/new/swapConnection');
+const { AtomicSwapServiceConnection } = require('./lib/swapService/swapConnection');
 
 module.exports = {
   PartialTx,
