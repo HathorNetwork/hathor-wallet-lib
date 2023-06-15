@@ -1349,7 +1349,7 @@ class HathorWallet extends EventEmitter {
    *
    * @returns {Promise<HDPrivateKey>} Promise that resolves with the HDPrivateKey
    *
-   * @memberof HathorWalletServiceWallet
+   * @memberof HathorWallet
    * @inner
    */
   async getAddressPrivKey(pinCode, addressIndex) {
@@ -1364,12 +1364,12 @@ class HathorWallet extends EventEmitter {
    * andress index
    *
    * @param {string} message - The message to sign
-   * @param {number} pinCode - The address index to sign with
+   * @param {number} index - The address index to sign with
    * @param {string} pinCode - The PIN used to encrypt data in accessData
    *
    * @return {Promise} Promise that resolves with the signed message
    *
-   * @memberof HathorWalletServiceWallet
+   * @memberof HathorWallet
    * @inner
    */
   async signMessageWithAddress(
