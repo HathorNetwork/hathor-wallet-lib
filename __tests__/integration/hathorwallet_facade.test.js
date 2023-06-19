@@ -665,6 +665,20 @@ describe('addresses methods', () => {
     });
   });
 
+  it('should get address privkeys correctly', async () => {
+    // Creating a wallet
+    const hWallet = await generateWalletHelper();
+    // Validate 20 address private keys
+    for (let i = 0; i < 20; i++) {
+      const addressHDPrivKey = await hWallet.getAddressPrivKey(DEFAULT_PIN_CODE, i);
+      // Validate that it's from the same address:
+      expect(addressHDPrivKey
+        .privateKey
+        .toAddress(hWallet.getNetworkObject().bitcoreNetwork)
+        .toString()).toStrictEqual(await hWallet.getAddressAtIndex(i));
+    }
+  });
+
   it('should get correct addresses for a multisig wallet', async () => {
     const mshWallet = await generateMultisigWalletHelper({ walletIndex: 0 });
 
