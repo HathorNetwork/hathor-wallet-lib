@@ -54,6 +54,7 @@ export interface IAuthoritiesBalance {
 
 export interface IHistoryTx {
   tx_id: string;
+  signalBits: number;
   version: number;
   weight: number;
   timestamp: number;
@@ -152,6 +153,7 @@ export interface IDataInput {
 // XXX: This type is meant to be used as an intermediary for building transactions
 // It should have everything we need to build and push transactions.
 export interface IDataTx {
+  signalBits?: number,
   version?: number,
   inputs: IDataInput[];
   outputs: IDataOutput[];

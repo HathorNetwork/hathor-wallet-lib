@@ -7,6 +7,7 @@
 
 import {
   BLOCK_VERSION,
+  DEFAULT_SIGNAL_BITS,
   CREATE_TOKEN_TX_VERSION,
   DECIMAL_PLACES,
   DEFAULT_TX_VERSION,
@@ -42,6 +43,7 @@ enum txType {
 }
 
 type optionsType = {
+  signalBits?: number,
   version?: number,
   weight?: number,
   nonce?: number,
@@ -63,6 +65,7 @@ type optionsType = {
 class Transaction {
   inputs: Input[];
   outputs: Output[];
+  signalBits: number;
   version: number;
   weight: number;
   nonce: number;
@@ -74,6 +77,7 @@ class Transaction {
 
   constructor(inputs: Input[], outputs: Output[], options: optionsType = {}) {
     const defaultOptions: optionsType = {
+      signalBits: DEFAULT_SIGNAL_BITS,
       version: DEFAULT_TX_VERSION,
       weight: 0,
       nonce: 0,
@@ -83,10 +87,11 @@ class Transaction {
       hash: null,
     };
     const newOptions = Object.assign(defaultOptions, options);
-    const { version, weight, nonce, timestamp, parents, tokens, hash } = newOptions;
+    const { signalBits, version, weight, nonce, timestamp, parents, tokens, hash } = newOptions;
 
     this.inputs = inputs;
     this.outputs = outputs;
+    this.signalBits = signalBits!;
     this.version = version!;
     this.weight = weight!;
     this.nonce = nonce!;
@@ -134,7 +139,7 @@ class Transaction {
 
   /**
    * Serialize funds fields
-   * version, len tokens, len inputs, len outputs, tokens array, inputs and outputs
+   * signal bits, version, len tokens, len inputs, len outputs, tokens array, inputs and outputs
    *
    * @param {Buffer[]} array Array of buffer to push the serialized fields
    * @param {boolean} addInputData If should add input data when serializing it
@@ -143,8 +148,11 @@ class Transaction {
    * @inner
    */
   serializeFundsFields(array: Buffer[], addInputData: boolean) {
+    // Signal bits
+    array.push(intToBytes(this.signalBits, 1))
+
     // Tx version
-    array.push(intToBytes(this.version, 2))
+    array.push(intToBytes(this.version, 1))
 
     // Len tokens
     array.push(intToBytes(this.tokens.length, 1))
@@ -427,7 +435,7 @@ class Transaction {
   }
 
   /**
-   * Gets funds fields (version, tokens, inputs, outputs) from bytes
+   * Gets funds fields (signalBits, version, tokens, inputs, outputs) from bytes
    * and saves them in `this`
    *
    * @param {Buffer} buf Buffer with bytes to get fields
@@ -438,8 +446,11 @@ class Transaction {
    * @inner
    */
   getFundsFieldsFromBytes(buf: Buffer, network: Network): Buffer {
+    // Signal bits
+    [this.signalBits, buf] = unpackToInt(1, false, buf);
+
     // Tx version
-    [this.version, buf] = unpackToInt(2, false, buf);
+    [this.version, buf] = unpackToInt(1, false, buf);
 
     let lenTokens, lenInputs, lenOutputs;
 

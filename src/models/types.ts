@@ -45,6 +45,7 @@ export type HistoryTransactionInput = {
  */
 export type HistoryTransaction = {
   tx_id: string,
+  signalBits: number,
   version: number,
   weight: number,
   timestamp: number,
