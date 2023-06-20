@@ -18,6 +18,7 @@ import HathorWallet from '../../src/new/wallet';
 import { HATHOR_TOKEN_CONFIG, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
 import { NETWORK_NAME, TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test-constants';
 import dateFormatter from '../../src/utils/date';
+import { verifyMessage } from '../../src/utils/crypto';
 import { loggers } from './utils/logger.util';
 import { TxNotFoundError, SendTxError, WalletFromXPubGuard } from '../../src/errors';
 import SendTransaction from '../../src/new/sendTransaction';
@@ -663,6 +664,39 @@ describe('addresses methods', () => {
       index: currentAddress.index + 1,
       address: await hWallet.getAddressAtIndex(currentAddress.index + 1),
     });
+  });
+
+  it('should get address privkeys correctly', async () => {
+    // Creating a wallet
+    const hWallet = await generateWalletHelper();
+    // Validate 20 address private keys
+    for (let i = 0; i < 20; i++) {
+      const addressHDPrivKey = await hWallet.getAddressPrivKey(DEFAULT_PIN_CODE, i);
+      // Validate that it's from the same address:
+      expect(addressHDPrivKey
+        .privateKey
+        .toAddress(hWallet.getNetworkObject().bitcoreNetwork)
+        .toString()).toStrictEqual(await hWallet.getAddressAtIndex(i));
+    }
+  });
+
+  it('should sign messages with an address privkey', async () => {
+    // Creating a wallet
+    const hWallet = await generateWalletHelper();
+    // Validate 20 address private keys
+    for (let i = 0; i < 20; i++) {
+      const messageToSign = 'sign-me';
+      const address = await hWallet.getAddressAtIndex(i);
+      const signedMessage = await hWallet.signMessageWithAddress(
+        messageToSign,
+        i,
+        DEFAULT_PIN_CODE,
+      );
+
+      expect(
+        verifyMessage(messageToSign, signedMessage, address),
+      ).toStrictEqual(true);
+    }
   });
 
   it('should get correct addresses for a multisig wallet', async () => {

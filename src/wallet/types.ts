@@ -5,12 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import bitcore from 'bitcore-lib';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
 import Input from '../models/input';
 import Output from '../models/output';
-import bitcore from 'bitcore-lib';
 
 export interface GetAddressesObject {
   address: string; // Address in base58
@@ -282,6 +282,8 @@ export interface IHathorWallet {
   getAddressAtIndex(index: number): Promise<string>;
   getCurrentAddress(options: { markAsUsed: boolean }): AddressInfoObject;
   getNextAddress(): AddressInfoObject;
+  getAddressPrivKey(pinCode: string, addressIndex: number): Promise<bitcore.PrivateKey>;
+  signMessageWithAddress(message: string, index: number, pinCode: string): Promise<string>;
   prepareCreateNewToken(name: string, symbol: string, amount: number, options): Promise<CreateTokenTransaction>;
   createNewToken(name: string, symbol: string, amount: number, options): Promise<Transaction>;
   createNFT(name: string, symbol: string, amount: number, data: string, options): Promise<Transaction>;

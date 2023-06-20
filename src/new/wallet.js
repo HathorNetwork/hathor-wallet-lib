@@ -6,6 +6,7 @@
  */
 
 import { get } from 'lodash';
+import bitcore from 'bitcore-lib';
 import EventEmitter from 'events';
 import { HATHOR_TOKEN_CONFIG, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
 import tokenUtils from '../utils/tokens';
@@ -22,6 +23,7 @@ import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
 import { HDPrivateKey } from 'bitcore-lib';
 import transactionUtils from '../utils/transaction';
+import { signMessage } from '../utils/crypto';
 import Transaction from '../models/transaction';
 import Queue from '../models/queue';
 import FullnodeConnection from './connection';
@@ -1337,6 +1339,48 @@ class HathorWallet extends EventEmitter {
     this.firstConnection = true;
     this.walletStopped = true;
     this.conn.stop();
+  }
+
+  /**
+   * Returns an address' HDPrivateKey given an index and the encryption password
+   *
+   * @param {string} pinCode - The PIN used to encrypt data in accessData
+   * @param {number} addressIndex - The address' index to fetch
+   *
+   * @returns {Promise<HDPrivateKey>} Promise that resolves with the HDPrivateKey
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
+  async getAddressPrivKey(pinCode, addressIndex) {
+    const mainXPrivKey = await this.storage.getMainXPrivKey(pinCode);
+    const addressHDPrivKey = new bitcore.HDPrivateKey(mainXPrivKey).derive(addressIndex);
+
+    return addressHDPrivKey;
+  }
+
+  /**
+   * Returns a base64 encoded signed message with an address' private key given an
+   * andress index
+   *
+   * @param {string} message - The message to sign
+   * @param {number} index - The address index to sign with
+   * @param {string} pinCode - The PIN used to encrypt data in accessData
+   *
+   * @return {Promise} Promise that resolves with the signed message
+   *
+   * @memberof HathorWallet
+   * @inner
+   */
+  async signMessageWithAddress(
+    message,
+    index,
+    pinCode,
+  ) {
+    const addressHDPrivKey = await this.getAddressPrivKey(pinCode, index);
+    const signedMessage = signMessage(message, addressHDPrivKey.privateKey);
+
+    return signedMessage;
   }
 
   /**

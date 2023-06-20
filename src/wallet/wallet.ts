@@ -7,7 +7,6 @@
 
 import { EventEmitter } from 'events';
 import {
-  HATHOR_BIP44_CODE,
   HATHOR_TOKEN_CONFIG,
   TOKEN_MINT_MASK,
   AUTHORITY_TOKEN_DATA,
@@ -15,6 +14,7 @@ import {
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
 } from '../constants';
 import Mnemonic from 'bitcore-mnemonic';
+import { signMessage } from '../utils/crypto';
 import { crypto, util, Address as bitcoreAddress } from 'bitcore-lib';
 import walletApi from './api/walletApi';
 import { deriveAddressFromXPubP2PKH } from '../utils/address';
@@ -1032,6 +1032,22 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
+   * Returns an address' privateKey given an index and the encryption password
+   *
+   * @param {string} pinCode - The PIN used to encrypt data in accessData
+   * @param {number} addressIndex - The address' index to fetch
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async getAddressPrivKey(pinCode: string, addressIndex: number): Promise<bitcore.HDPrivateKey> {
+    const mainXPrivKey = await this.storage.getMainXPrivKey(pinCode);
+    const addressHDPrivKey = new bitcore.HDPrivateKey(mainXPrivKey).derive(addressIndex);
+
+    return addressHDPrivKey;
+  }
+
+  /**
    * Gets the network model object
    *
    * @memberof HathorWalletServiceWallet
@@ -1059,6 +1075,24 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       this.indexToUse += 1;
     }
     return addressInfo;
+  }
+
+  /**
+   * Returns a base64 encoded signed message with an address' private key given an
+   * address index
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async signMessageWithAddress(
+    message: string,
+    index: number,
+    pinCode: string,
+  ): Promise<string> {
+    const addressHDPrivKey: bitcore.HDPrivateKey = await this.getAddressPrivKey(pinCode, index);
+    const signedMessage: string = signMessage(message, addressHDPrivKey.privateKey);
+
+    return signedMessage;
   }
 
   /**

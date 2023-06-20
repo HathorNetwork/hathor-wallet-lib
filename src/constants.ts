@@ -246,3 +246,8 @@ export const P2SH_ACCT_PATH = `m/45'/${HATHOR_BIP44_CODE}'/0'`;
  * account is the last hardened level
  */
 export const P2PKH_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/0'`;
+
+/**
+ * String to be prefixed before signed messages using bitcore-message
+ */
+export const HATHOR_MAGIC_BYTES = 'Hathor Signed Message:\n';
