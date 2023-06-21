@@ -13,7 +13,6 @@ import {
   TOKEN_MELT_MASK,
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
 } from '../constants';
-import Mnemonic from 'bitcore-mnemonic';
 import { signMessage } from '../utils/crypto';
 import { crypto, util, Address as bitcoreAddress } from 'bitcore-lib';
 import walletApi from './api/walletApi';
@@ -830,11 +829,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  signMessage(xpriv: bitcore.HDPrivateKey, timestamp: number, walletId: string): string {
-    const address = xpriv.publicKey.toAddress(this.network.getNetwork()).toString();
-    const message = new bitcore.Message(String(timestamp).concat(walletId).concat(address));
+  signMessage(hdPrivKey: bitcore.HDPrivateKey, timestamp: number, walletId: string): string {
+    const address = hdPrivKey.publicKey.toAddress(this.network.getNetwork()).toString();
+    const message = String(timestamp).concat(walletId).concat(address);
 
-    return message.sign(xpriv.privateKey);
+    return signMessage(message, hdPrivKey.privateKey);
   }
 
   /**
