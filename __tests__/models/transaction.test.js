@@ -14,7 +14,7 @@ import Address from '../../src/models/address';
 import Network from '../../src/models/network';
 import { hexToBuffer, bufferToHex } from '../../src/utils/buffer';
 import helpers from '../../src/utils/helpers';
-import { DEFAULT_TX_VERSION, MAX_OUTPUTS } from '../../src/constants';
+import { DEFAULT_TX_VERSION, MAX_OUTPUTS, DEFAULT_SIGNAL_BITS } from '../../src/constants';
 import { MaximumNumberInputsError, MaximumNumberOutputsError, ParseError } from '../../src/errors';
 import { nftCreationTx } from '../__fixtures__/sample_txs';
 import lodash from 'lodash';
@@ -92,6 +92,7 @@ test('New tx', () => {
 
   expect(tx.nonce).toBe(0);
   expect(tx.version).toBe(DEFAULT_TX_VERSION);
+  expect(tx.signalBits).toBe(DEFAULT_SIGNAL_BITS);
   expect(tx.weight).toBe(18.0387508740556);
 
   expect(tx.getOutputsSum()).toBe(2000);
@@ -238,6 +239,7 @@ test('Known transactions hash', () => {
   const tx = helpers.createTxFromHex(rawTx, network);
 
   expect(tx.version).toBe(1);
+  expect(tx.signalBits).toBe(DEFAULT_SIGNAL_BITS);
   expect(tx.tokens.length).toBe(0);
   expect(tx.inputs.length).toBe(1);
   expect(tx.outputs.length).toBe(2);
@@ -265,6 +267,7 @@ test('Known transactions hash', () => {
 
   const tx2 = helpers.createTxFromHex(rawTxCreation, network);
   expect(tx2.version).toBe(2);
+  expect(tx2.signalBits).toBe(DEFAULT_SIGNAL_BITS);
   expect(tx2.name).toBe('WatCoin9');
   expect(tx2.symbol).toBe('WAT9');
   expect(tx2.tokens.length).toBe(0);
@@ -303,6 +306,7 @@ test('Known transactions hash', () => {
 
   const tx3 = helpers.createTxFromHex(rawBigTx, network);
   expect(tx3.version).toBe(1);
+  expect(tx3.signalBits).toBe(DEFAULT_SIGNAL_BITS);
   expect(tx3.tokens.length).toBe(2);
   expect(tx3.tokens[0]).toBe('0028660612661c0592bb9b6cb8e77124caefbb0d68a119ea558c4947a68f9eef');
   expect(tx3.tokens[1]).toBe('00efbc2e64ea93768c29823882185b633bf6380a15f7b621c68dc777558f06ae');

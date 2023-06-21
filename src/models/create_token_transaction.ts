@@ -10,6 +10,7 @@ import {
   TOKEN_INFO_VERSION,
   MAX_TOKEN_NAME_SIZE,
   MAX_TOKEN_SYMBOL_SIZE,
+  DEFAULT_SIGNAL_BITS,
 } from '../constants'
 import { unpackToInt, unpackLen, intToBytes } from '../utils/buffer';
 import Input from './input';
@@ -23,6 +24,7 @@ import ScriptData from "./script_data";
 import {OutputType} from "../wallet/types";
 
 type optionsType = {
+  signalBits?: number,
   weight?: number,
   nonce?: number,
   timestamp?: number | null,
@@ -38,6 +40,7 @@ class CreateTokenTransaction extends Transaction {
 
   constructor(name: string, symbol: string, inputs: Input[], outputs: Output[], options: optionsType = {}) {
     const defaultOptions: optionsType = {
+      signalBits: DEFAULT_SIGNAL_BITS,
       weight: 0,
       nonce: 0,
       timestamp: null,
@@ -55,7 +58,7 @@ class CreateTokenTransaction extends Transaction {
 
   /**
    * Serialize funds fields
-   * version, len inputs, len outputs, inputs, outputs and token info
+   * signal bits, version, len inputs, len outputs, inputs, outputs and token info
    *
    * @param {Buffer[]} array Array of buffer to push the serialized fields
    * @param {boolean} addInputData If should add input data when serializing it
@@ -64,8 +67,11 @@ class CreateTokenTransaction extends Transaction {
    * @inner
    */
   serializeFundsFields(array: Buffer[], addInputData: boolean) {
+    // Signal bits
+    array.push(intToBytes(this.signalBits, 1))
+
     // Tx version
-    array.push(intToBytes(this.version, 2))
+    array.push(intToBytes(this.version, 1))
 
     // Funds len and fields
     this.serializeFundsFieldsLen(array);
@@ -141,7 +147,7 @@ class CreateTokenTransaction extends Transaction {
   }
 
   /**
-   * Gets funds fields (version, inputs, outputs) from bytes
+   * Gets funds fields (signalBits, version, inputs, outputs) from bytes
    * and saves them in `this`
    *
    * @param {Buffer} buf Buffer with bytes to get fields
@@ -152,8 +158,11 @@ class CreateTokenTransaction extends Transaction {
    * @inner
    */
   getFundsFieldsFromBytes(buf: Buffer, network: Network): Buffer {
+    // Signal bits
+    [this.signalBits, buf] = unpackToInt(1, false, buf);
+
     // Tx version
-    [this.version, buf] = unpackToInt(2, false, buf);
+    [this.version, buf] = unpackToInt(1, false, buf);
 
     let lenInputs, lenOutputs;
 

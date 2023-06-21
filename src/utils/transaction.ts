@@ -9,7 +9,7 @@ import { Utxo } from '../wallet/types';
 import { UtxoError } from '../errors';
 import { HistoryTransactionOutput } from '../models/types';
 import {crypto as cryptoBL, PrivateKey, HDPrivateKey} from 'bitcore-lib'
-import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, HATHOR_TOKEN_CONFIG, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION } from '../constants';
+import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, HATHOR_TOKEN_CONFIG, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, DEFAULT_SIGNAL_BITS } from '../constants';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import Input from '../models/input';
@@ -426,6 +426,7 @@ const transaction = {
       return new Output(output.value, script, { tokenData });
     });
     const options = {
+      signalBits: txData.signalBits === undefined ? DEFAULT_SIGNAL_BITS : txData.signalBits,
       version: txData.version === undefined ? DEFAULT_TX_VERSION : txData.version,
       weight: txData.weight || 0,
       nonce: txData.nonce || 0,
