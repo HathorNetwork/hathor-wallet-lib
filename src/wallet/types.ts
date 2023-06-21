@@ -384,6 +384,7 @@ export interface WsTransaction {
   tx_id: string;
   nonce: number;
   timestamp: number;
+  signalBits: number;
   version: number;
   weight: number;
   parents: string[];
