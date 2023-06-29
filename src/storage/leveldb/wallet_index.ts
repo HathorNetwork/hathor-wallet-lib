@@ -78,15 +78,20 @@ export default class LevelWalletIndex implements IKVWalletIndex {
    */
   async _getNumber(dest: 'access'|'wallet', key: string): Promise<number|null> {
     try {
-      let buf: Buffer;
+      // valueEncoding of buffer can be Buffer of Uint8Array depending on the level implementation
+      // classic-level will return Buffer
+      // browser-level will return Uint8Array
+      let tmp: Buffer|Uint8Array;
       switch(dest) {
         case 'access':
-          buf = await this.accessDB.get<string, Buffer>(key, { valueEncoding: 'buffer'});
+          tmp = await this.accessDB.get<string, Buffer>(key, { valueEncoding: 'buffer'});
           break;
         case 'wallet':
-          buf = await this.walletDB.get<string, Buffer>(key, { valueEncoding: 'buffer'});
+          tmp = await this.walletDB.get<string, Buffer>(key, { valueEncoding: 'buffer'});
           break;
       }
+
+      const buf = Buffer.from(tmp)
 
       return buf.readUint32BE(0);
     } catch (err: unknown) {
