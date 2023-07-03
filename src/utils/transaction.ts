@@ -449,12 +449,15 @@ const transaction = {
    * @param tx tx data to be prepared
    * @param pinCode pin to unlock the mainKey for signatures
    * @param storage Storage to get the mainKey
+   * @param signTx sign transaction instance (default true)
    * @returns {Promise<Transaction>} Prepared transaction
    */
-  async prepareTransaction(txData: IDataTx, pinCode: string, storage: IStorage): Promise<Transaction> {
+  async prepareTransaction(txData: IDataTx, pinCode: string, storage: IStorage, signTx = true): Promise<Transaction> {
     const network = storage.config.getNetwork();
     const tx = this.createTransactionFromData(txData, network);
-    await this.signTransaction(tx, storage, pinCode);
+    if (signTx) {
+      await this.signTransaction(tx, storage, pinCode);
+    }
     tx.prepareToSend();
 
     return tx;

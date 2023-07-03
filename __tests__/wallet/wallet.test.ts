@@ -524,6 +524,22 @@ test('prepareMintTokens', async () => {
     pinCode: '123456',
   })).rejects.toThrowError(SendTxError);
 
+  // mint data without sign the transaction
+  const mintDataNotSigned = await wallet.prepareMintTokensData('01', 100, {
+    address: addresses[1],
+    mintAuthorityAddress: addresses[2],
+    pinCode: '123456',
+    signTx: false
+  });
+  expect(mintDataNotSigned.inputs).toEqual([
+    expect.objectContaining({
+      data: null,
+    }),
+    expect.objectContaining({
+      data: null,
+    }),
+  ])
+
   // mint data with correct address for authority output
   const mintData = await wallet.prepareMintTokensData('01', 100, {
     address: addresses[1],
@@ -532,6 +548,14 @@ test('prepareMintTokens', async () => {
     pinCode: '123456',
   });
 
+  expect(mintDataNotSigned.inputs).toEqual([
+    expect.objectContaining({
+      data: expect.any(Object),
+    }),
+    expect.objectContaining({
+      data: expect.any(Object),
+    }),
+  ])
   expect(mintData.outputs).toHaveLength(2);
 
   const authorityOutputs = mintData.outputs.filter(
@@ -640,6 +664,22 @@ test('prepareMeltTokens', async () => {
     pinCode: '123456',
   })).rejects.toThrowError(SendTxError);
 
+  // melt data without sign the transaction
+  const meltDataNotSigned = await wallet.prepareMeltTokensData('01', 100, {
+    address: addresses[1],
+    meltAuthorityAddress: addresses[2],
+    pinCode: '123456',
+    signTx: false
+  });
+  expect(meltDataNotSigned.inputs).toEqual([
+    expect.objectContaining({
+      data: null,
+    }),
+    expect.objectContaining({
+      data: null,
+    }),
+  ])
+
   // melt data with correct address for authority output
   const meltData = await wallet.prepareMeltTokensData('01', 1, {
     address: addresses[1],
@@ -648,6 +688,14 @@ test('prepareMeltTokens', async () => {
     pinCode: '123456',
   });
 
+  expect(meltDataNotSigned.inputs).toEqual([
+    expect.objectContaining({
+      data: expect.any(Object),
+    }),
+    expect.objectContaining({
+      data: expect.any(Object),
+    }),
+  ])
   expect(meltData.outputs).toHaveLength(1);
 
   const authorityOutputs = meltData.outputs.filter(
@@ -1129,6 +1177,19 @@ test('createTokens', async () => {
     pinCode: '123456',
   })).rejects.toThrowError(SendTxError);
 
+  // create token without sign the transaction
+  const tokenDataNotSigned = await wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
+    address: addresses[1],
+    mintAuthorityAddress: addresses[2],
+    pinCode: '123456',
+    signTx: false,
+  });
+  expect(tokenDataNotSigned.inputs).toEqual([
+    expect.objectContaining({
+      data: null,
+    }),
+  ])
+
   // create token with correct address for authority output
   const tokenData = await wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
     address: addresses[1],
@@ -1137,6 +1198,11 @@ test('createTokens', async () => {
     pinCode: '123456',
   });
 
+  expect(tokenData.inputs).toEqual([
+    expect.objectContaining({
+      data: expect.any(Object),
+    }),
+  ])
   expect(tokenData.outputs).toHaveLength(3);
 
   const authorityOutputs = tokenData.outputs.filter(
