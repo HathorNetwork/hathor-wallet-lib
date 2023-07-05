@@ -1490,7 +1490,9 @@ class HathorWallet extends EventEmitter {
       txData,
       pin,
       this.storage,
-      newOptions.signTx
+      {
+        signTx: newOptions.signTx,
+      },
     );
   }
 
@@ -1684,7 +1686,9 @@ class HathorWallet extends EventEmitter {
       txData,
       pin,
       this.storage,
-      newOptions.signTx
+      {
+        signTx: newOptions.signTx,
+      },
     );
   }
 
@@ -1790,7 +1794,9 @@ class HathorWallet extends EventEmitter {
       txData,
       pin,
       this.storage,
-      newOptions.signTx
+      {
+        signTx: newOptions.signTx,
+      },
     );
   }
 

@@ -1285,7 +1285,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const tx = new CreateTokenTransaction(name, symbol, inputsObj, outputsObj);
 
     // Sign transaction
-    if(newOptions.signTx) {
+    if (newOptions.signTx) {
       const dataToSignHash = tx.getDataToSignHash();
 
       if (!newOptions.pinCode) {
@@ -1665,7 +1665,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     tx.tokens = [token];
 
     // Sign transaction
-    if(newOptions.signTx) {
+    if (newOptions.signTx) {
       const dataToSignHash = tx.getDataToSignHash();
 
       if (!newOptions.pinCode) {
