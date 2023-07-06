@@ -1421,6 +1421,8 @@ class HathorWallet extends EventEmitter {
    *                                                                    to be from another wallet
    * @param {string} [options.nftData] data string for NFT
    *
+   * @param {boolean} [options.signTx] sign transaction instance (default true)
+   *
    * @return {CreateTokenTransaction} Promise that resolves with transaction object if succeeds
    * or with error message if it fails
    *
@@ -1442,7 +1444,8 @@ class HathorWallet extends EventEmitter {
       createMelt: true,
       meltAuthorityAddress: null,
       allowExternalMeltAuthorityAddress: false,
-      nftData: null
+      nftData: null,
+      signTx: true,
     }, options);
 
     const pin = newOptions.pinCode || this.pinCode;
@@ -1483,7 +1486,14 @@ class HathorWallet extends EventEmitter {
         nftData: newOptions.nftData
       },
     );
-    return await transactionUtils.prepareTransaction(txData, pin, this.storage);
+    return await transactionUtils.prepareTransaction(
+      txData,
+      pin,
+      this.storage,
+      {
+        signTx: newOptions.signTx,
+      },
+    );
   }
 
   /**
@@ -1615,6 +1625,7 @@ class HathorWallet extends EventEmitter {
    *   'mintAuthorityAddress': address to send the new mint authority created
    *   'allowExternalMintAuthorityAddress': boolean allow the mint authority address to be from another wallet (default false)
    *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
+   *   'signTx': boolean to sign transaction instance (default true)
    *  }
    *
    * @return {Promise} Promise that resolves with transaction object if succeeds
@@ -1634,6 +1645,7 @@ class HathorWallet extends EventEmitter {
       mintAuthorityAddress: null,
       allowExternalMintAuthorityAddress: false,
       pinCode: null,
+      signTx: true,
     }, options);
 
     const pin = newOptions.pinCode || this.pinCode;
@@ -1670,7 +1682,14 @@ class HathorWallet extends EventEmitter {
       this.storage,
       mintOptions,
     );
-    return await transactionUtils.prepareTransaction(txData, pin, this.storage);
+    return await transactionUtils.prepareTransaction(
+      txData,
+      pin,
+      this.storage,
+      {
+        signTx: newOptions.signTx,
+      },
+    );
   }
 
   /**
@@ -1716,6 +1735,7 @@ class HathorWallet extends EventEmitter {
    *   'meltAuthorityAddress': address to send the new melt authority created
    *   'allowExternalMeltAuthorityAddress': boolean allow the melt authority address to be from another wallet (default false)
    *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
+   *   'signTx': boolean to sign transaction instance (default true)
    *  }
    *
    * @return {Promise} Promise that resolves with transaction object if succeeds
@@ -1735,6 +1755,7 @@ class HathorWallet extends EventEmitter {
       meltAuthorityAddress: null,
       allowExternalMeltAuthorityAddress: false,
       pinCode: null,
+      signTx: true,
     }, options);
 
     const pin = newOptions.pinCode || this.pinCode;
@@ -1769,7 +1790,14 @@ class HathorWallet extends EventEmitter {
       this.storage,
       meltOptions,
     );
-    return await transactionUtils.prepareTransaction(txData, pin, this.storage);
+    return await transactionUtils.prepareTransaction(
+      txData,
+      pin,
+      this.storage,
+      {
+        signTx: newOptions.signTx,
+      },
+    );
   }
 
   /**
