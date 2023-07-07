@@ -23,7 +23,7 @@
   "scripts": {
     "test": "jest --env=node --forceExit",
     "test:watch": "jest --watch --env=node",
-    "build": "babel -d lib/ src && tsc",
+    "build": "babel -d lib --extensions \".ts,.js\" src && tsc",
     "tsc": "tsc",
     "test_integration": "npm run test_network_up && npm run test_network_integration && npm run test_network_down",
     "test_network_up": "docker-compose -f ./__tests__/integration/configuration/docker-compose.yml up -d && mkdir -p tmp && cp ./__tests__/integration/configuration/precalculated-wallets.json ./tmp/wallets.json",
