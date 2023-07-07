@@ -141,7 +141,7 @@ class Network {
   validateNetwork() {
     const possibleNetworks = Object.keys(networkOptions);
 
-	if (possibleNetworks.indexOf(this.name) < 0) {
+    if (possibleNetworks.indexOf(this.name) < 0) {
       throw new Error(`We currently support only [${possibleNetworks}] as network.`);
     }
   }
@@ -180,4 +180,3 @@ class Network {
 }
 
 export default Network;
-

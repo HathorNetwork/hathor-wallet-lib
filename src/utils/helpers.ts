@@ -227,7 +227,8 @@ const helpers = {
     const cloneBuffer = clone(bytes);
 
     // Get version
-    const [version, ] = unpackToInt(2, false, cloneBuffer);
+    const [_signalBits, buf] = unpackToInt(1, false, cloneBuffer);
+    const [version,] = unpackToInt(1, false, buf);
 
     if (version === DEFAULT_TX_VERSION) {
       return Transaction.createFromBytes(cloneBuffer, network);
@@ -339,6 +340,7 @@ const helpers = {
     }
 
     const options = {
+      signalBits: data.signalBits,
       version: data.version,
       weight: data.weight,
       timestamp: data.timestamp,

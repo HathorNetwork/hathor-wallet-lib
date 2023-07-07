@@ -48,6 +48,11 @@ export const HATHOR_BIP44_CODE = 280;
 export const WALLET_SERVICE_AUTH_DERIVATION_PATH = `m/${HATHOR_BIP44_CODE}'/${HATHOR_BIP44_CODE}'`;
 
 /**
+ * Default signalBits value
+ */
+export const DEFAULT_SIGNAL_BITS = 0;
+
+/**
  * Block version field
  */
 export const BLOCK_VERSION = 0;
@@ -246,3 +251,8 @@ export const P2SH_ACCT_PATH = `m/45'/${HATHOR_BIP44_CODE}'/0'`;
  * account is the last hardened level
  */
 export const P2PKH_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/0'`;
+
+/**
+ * String to be prefixed before signed messages using bitcore-message
+ */
+export const HATHOR_MAGIC_BYTES = 'Hathor Signed Message:\n';

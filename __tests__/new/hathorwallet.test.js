@@ -5,11 +5,18 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import Address from '../../src/models/address';
 import HathorWallet from '../../src/new/wallet';
 import { TxNotFoundError, WalletFromXPubGuard } from '../../src/errors';
+import Network from '../../src/models/network';
 import Transaction from '../../src/models/transaction';
 import Input from '../../src/models/input';
-import { DEFAULT_TX_VERSION, P2PKH_ACCT_PATH } from '../../src/constants';
+import {
+  DEFAULT_TX_VERSION,
+  P2PKH_ACCT_PATH,
+  TOKEN_MINT_MASK,
+  TOKEN_MELT_MASK,
+} from '../../src/constants';
 import { HDPrivateKey } from 'bitcore-lib';
 import transactionUtils from '../../src/utils/transaction';
 import { MemoryStore, Storage } from '../../src/storage';
@@ -18,7 +25,7 @@ import { WalletType } from '../../src/types';
 import txApi from '../../src/api/txApi';
 import * as addressUtils from '../../src/utils/address';
 import versionApi from '../../src/api/version';
-import { decryptData } from '../../src/utils/crypto';
+import { decryptData, verifyMessage } from '../../src/utils/crypto';
 
 class FakeHathorWallet {
   constructor() {
@@ -492,6 +499,89 @@ test('getAddressAtIndex', async () => {
   p2shDeriveSpy.mockRestore();
 });
 
+test('getAddressPrivKey', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  const seed = 'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+
+  const conn = {
+    network: 'testnet',
+    getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
+    on: jest.fn(),
+    start: jest.fn(),
+  };
+
+  jest.spyOn(versionApi, 'getVersion')
+    .mockImplementation(resolve => {
+      resolve({
+        network: 'testnet',
+      });
+    });
+
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = storage;
+  hWallet.seed = seed;
+  hWallet.conn = conn;
+
+  hWallet.getTokenData = jest.fn();
+  hWallet.setState = jest.fn();
+
+  await hWallet.start({ pinCode: '123', password: '456' });
+
+  const address0 = await hWallet.getAddressAtIndex(0);
+  const address0HDPrivKey = await hWallet.getAddressPrivKey('123', 0);
+
+  expect(address0HDPrivKey.privateKey.toAddress(new Network('testnet').getNetwork()).toString())
+    .toStrictEqual(address0);
+});
+
+test('signMessageWithAddress', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  const seed = 'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+
+  const conn = {
+    network: 'testnet',
+    getCurrentServer: jest.fn().mockReturnValue('https://fullnode'),
+    on: jest.fn(),
+    start: jest.fn(),
+  };
+
+  jest.spyOn(versionApi, 'getVersion')
+    .mockImplementation(resolve => {
+      resolve({
+        network: 'testnet',
+      });
+    });
+
+  const hWallet = new FakeHathorWallet();
+  hWallet.storage = storage;
+  hWallet.seed = seed;
+  hWallet.conn = conn;
+
+  hWallet.getTokenData = jest.fn();
+  hWallet.setState = jest.fn();
+
+  await hWallet.start({
+    pinCode: '1234',
+    password: '1234',
+  });
+
+  const message = 'sign-me-please';
+  const addressIndex = 2;
+  const signedMessage = await hWallet.signMessageWithAddress(
+    message,
+    addressIndex,
+    '1234',
+  );
+
+  expect(verifyMessage(
+    message,
+    signedMessage,
+    await hWallet.getAddressAtIndex(addressIndex),
+  )).toBeTruthy();
+});
+
 test('GapLimit', async () => {
   const store = new MemoryStore();
   const storage = new Storage(store);
@@ -736,3 +826,154 @@ test('isHardwareWallet', async () => {
   hwSpy.mockReturnValue(Promise.resolve(false));
   await expect(hWallet.isHardwareWallet()).resolves.toBe(false);
 });
+
+describe('prepare transactions without signature', () => {
+  /**
+   * Generate an async generator that yields utxo.
+   */
+  const generateSelectUtxos = (utxo) => {
+    async function* fakeSelectUtxos(_options) {
+      yield utxo;
+    }
+    return fakeSelectUtxos;
+  }
+
+  /**
+   * Return an instance of Storage with mocks to support the tests.
+   */
+  const getStorage = (params) => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    jest.spyOn(storage, 'isReadonly').mockReturnValue(params.readOnly);
+    jest.spyOn(storage, 'getCurrentAddress').mockResolvedValue(params.currentAddress);
+    jest.spyOn(storage, 'selectUtxos').mockImplementation(params.selectUtxos);
+    return storage;
+  };
+
+  const fakeAddress = new Address('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo');
+  const fakeTokenToDepositUtxo = {
+    txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+    index: 0,
+    value: 2,
+    token: '00',
+    address: fakeAddress.base58,
+    authorities: 0,
+  };
+
+  test('prepareCreateNewToken', async () => {
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: false,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo)
+    });
+
+    // prepare create token
+    const txData = await hWallet.prepareCreateNewToken('01', 'my01', 100, {
+      address: fakeAddress.base58,
+      pinCode: '1234',
+      signTx: false, // skip the signature
+    });
+
+    // assert the transaction is not signed
+    expect(txData.inputs).toHaveLength(1);
+    expect(txData.inputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        data: null,
+      }),
+    ]));
+  });
+
+  test('prepareMintTokensData', async () => {
+    // fake stuff to support the test
+    const fakeMintAuthority = [{
+      txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+      index: 0,
+      value: 1,
+      token: '01',
+      address: fakeAddress.base58,
+      authorities: TOKEN_MINT_MASK,
+      timelock: null,
+      locked: false,
+    }];
+
+    // wallet and mocks
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: false,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
+    });
+    jest.spyOn(hWallet, 'getMintAuthority').mockReturnValue(fakeMintAuthority);
+
+    // prepare mint
+    const txData = await hWallet.prepareMintTokensData('01', 100, {
+      address: fakeAddress.base58,
+      pinCode: '1234',
+      signTx: false, // skip the signature
+    });
+
+    // assert the transaction is not signed
+    expect(txData.inputs).toHaveLength(2);
+    expect(txData.inputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        data: null,
+      }),
+      expect.objectContaining({
+        data: null,
+      }),
+    ]));
+  });
+
+  test('prepareMeltTokensData', async () => {
+    // fake stuff to support the test
+    const fakeTokenToMeltUtxo = {
+      txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+      index: 0,
+      value: 100,
+      token: '01',
+      address: fakeAddress.base58,
+      authorities: 0,
+      timelock: null,
+      locked: false,
+    };
+    const fakeMeltAuthority = [{
+      txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+      index: 0,
+      value: 1,
+      token: '01',
+      address: fakeAddress.base58,
+      authorities: TOKEN_MELT_MASK,
+      timelock: null,
+      locked: false,
+    }];
+
+    // wallet and mocks
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: false,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToMeltUtxo),
+    });
+    jest.spyOn(hWallet, 'getMeltAuthority').mockReturnValue(fakeMeltAuthority);
+
+    // prepare melt
+    const txData = await hWallet.prepareMeltTokensData('01', 100, {
+      address: fakeAddress.base58,
+      pinCode: '1234',
+      signTx: false, // skip the signature
+    });
+
+    // assert the transaction is not signed
+    expect(txData.inputs).toHaveLength(2);
+    expect(txData.inputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        data: null,
+      }),
+      expect.objectContaining({
+        data: null,
+      }),
+    ]));
+  });
+});
+

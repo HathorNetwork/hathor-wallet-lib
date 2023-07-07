@@ -7,14 +7,13 @@
 
 import { EventEmitter } from 'events';
 import {
-  HATHOR_BIP44_CODE,
   HATHOR_TOKEN_CONFIG,
   TOKEN_MINT_MASK,
   AUTHORITY_TOKEN_DATA,
   TOKEN_MELT_MASK,
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
 } from '../constants';
-import Mnemonic from 'bitcore-mnemonic';
+import { signMessage } from '../utils/crypto';
 import { crypto, util, Address as bitcoreAddress } from 'bitcore-lib';
 import walletApi from './api/walletApi';
 import { deriveAddressFromXPubP2PKH } from '../utils/address';
@@ -830,11 +829,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  signMessage(xpriv: bitcore.HDPrivateKey, timestamp: number, walletId: string): string {
-    const address = xpriv.publicKey.toAddress(this.network.getNetwork()).toString();
-    const message = new bitcore.Message(String(timestamp).concat(walletId).concat(address));
+  signMessage(hdPrivKey: bitcore.HDPrivateKey, timestamp: number, walletId: string): string {
+    const address = hdPrivKey.publicKey.toAddress(this.network.getNetwork()).toString();
+    const message = String(timestamp).concat(walletId).concat(address);
 
-    return message.sign(xpriv.privateKey);
+    return signMessage(message, hdPrivKey.privateKey);
   }
 
   /**
@@ -1021,13 +1020,30 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  getAddressAtIndex(index: number): string {
-    const code = new Mnemonic(this.seed);
-    const xpriv = code.toHDPrivateKey(this.passphrase, this.network.bitcoreNetwork);
-    const privkey = xpriv.deriveNonCompliantChild(`m/44'/${HATHOR_BIP44_CODE}'/0'/0`);
-    const key = privkey.deriveNonCompliantChild(index);
-    const address = bitcoreAddress(key.publicKey, this.network.getNetwork());
-    return address.toString();
+  async getAddressAtIndex(index: number): Promise<string> {
+    const { addresses } = await walletApi.getAddresses(this, index);
+
+    if (addresses.length <= 0) {
+      throw new Error('Error getting wallet addresses.');
+    }
+
+    return addresses[0].address;
+  }
+
+  /**
+   * Returns an address' privateKey given an index and the encryption password
+   *
+   * @param {string} pinCode - The PIN used to encrypt data in accessData
+   * @param {number} addressIndex - The address' index to fetch
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async getAddressPrivKey(pinCode: string, addressIndex: number): Promise<bitcore.HDPrivateKey> {
+    const mainXPrivKey = await this.storage.getMainXPrivKey(pinCode);
+    const addressHDPrivKey = new bitcore.HDPrivateKey(mainXPrivKey).derive(addressIndex);
+
+    return addressHDPrivKey;
   }
 
   /**
@@ -1058,6 +1074,24 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       this.indexToUse += 1;
     }
     return addressInfo;
+  }
+
+  /**
+   * Returns a base64 encoded signed message with an address' private key given an
+   * address index
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async signMessageWithAddress(
+    message: string,
+    index: number,
+    pinCode: string,
+  ): Promise<string> {
+    const addressHDPrivKey: bitcore.HDPrivateKey = await this.getAddressPrivKey(pinCode, index);
+    const signedMessage: string = signMessage(message, addressHDPrivKey.privateKey);
+
+    return signedMessage;
   }
 
   /**
@@ -1139,6 +1173,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       allowExternalMeltAuthorityAddress: boolean | null,
       nftData: string | null,
       pinCode: string | null,
+      signTx: boolean,
     };
     const newOptions: optionsType = Object.assign({
       address: null,
@@ -1151,6 +1186,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       allowExternalMeltAuthorityAddress: false,
       nftData: null,
       pinCode: null,
+      signTx: true,
     }, options);
 
     if (newOptions.mintAuthorityAddress && !newOptions.allowExternalMintAuthorityAddress) {
@@ -1248,21 +1284,24 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const tx = new CreateTokenTransaction(name, symbol, inputsObj, outputsObj);
 
-    const dataToSignHash = tx.getDataToSignHash();
+    // Sign transaction
+    if (newOptions.signTx) {
+      const dataToSignHash = tx.getDataToSignHash();
 
-    if (!newOptions.pinCode) {
-      throw new Error('PIN not specified in prepareCreateNewToken options');
-    }
+      if (!newOptions.pinCode) {
+        throw new Error('PIN not specified in prepareCreateNewToken options');
+      }
 
-    const xprivkey = await this.storage.getMainXPrivKey(newOptions.pinCode);
+      const xprivkey = await this.storage.getMainXPrivKey(newOptions.pinCode);
 
-    for (const [idx, inputObj] of tx.inputs.entries()) {
-      const inputData = this.getInputData(
-        xprivkey,
-        dataToSignHash,
-        HathorWalletServiceWallet.getAddressIndexFromFullPath(utxosAddressPath[idx]),
-      );
-      inputObj.setData(inputData);
+      for (const [idx, inputObj] of tx.inputs.entries()) {
+        const inputData = this.getInputData(
+          xprivkey,
+          dataToSignHash,
+          HathorWalletServiceWallet.getAddressIndexFromFullPath(utxosAddressPath[idx]),
+        );
+        inputObj.setData(inputData);
+      }
     }
 
     tx.prepareToSend();
@@ -1377,6 +1416,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       mintAuthorityAddress: string | null,
       allowExternalMintAuthorityAddress: boolean,
       pinCode: string | null,
+      signTx: boolean,
     };
     const newOptions: optionsType = Object.assign({
       address: null,
@@ -1385,6 +1425,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       mintAuthorityAddress: null,
       allowExternalMintAuthorityAddress: false,
       pinCode: null,
+      signTx: true,
     }, options);
 
     if (newOptions.mintAuthorityAddress && !newOptions.allowExternalMintAuthorityAddress) {
@@ -1460,23 +1501,27 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const tx = new Transaction(inputsObj, outputsObj);
     tx.tokens = [token];
-    const dataToSignHash = tx.getDataToSignHash();
 
-    if (!newOptions.pinCode) {
-      throw new Error('PIN not specified in prepareMintTokensData options');
-    }
+    // Sign transaction
+    if (newOptions.signTx) {
+      const dataToSignHash = tx.getDataToSignHash();
 
-    const xprivkey = await this.storage.getMainXPrivKey(newOptions.pinCode);
+      if (!newOptions.pinCode) {
+        throw new Error('PIN not specified in prepareMintTokensData options');
+      }
 
-    for (const [idx, inputObj] of tx.inputs.entries()) {
-      // We have an array of utxos and the last input is the one with the authority
-      const addressPath = idx === tx.inputs.length - 1 ? mintUtxo.addressPath : utxos[idx].addressPath;
-      const inputData = this.getInputData(
-        xprivkey,
-        dataToSignHash,
-        HathorWalletServiceWallet.getAddressIndexFromFullPath(addressPath),
-      );
-      inputObj.setData(inputData);
+      const xprivkey = await this.storage.getMainXPrivKey(newOptions.pinCode);
+
+      for (const [idx, inputObj] of tx.inputs.entries()) {
+        // We have an array of utxos and the last input is the one with the authority
+        const addressPath = idx === tx.inputs.length - 1 ? mintUtxo.addressPath : utxos[idx].addressPath;
+        const inputData = this.getInputData(
+          xprivkey,
+          dataToSignHash,
+          HathorWalletServiceWallet.getAddressIndexFromFullPath(addressPath),
+        );
+        inputObj.setData(inputData);
+      }
     }
 
     tx.prepareToSend();
@@ -1525,6 +1570,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       meltAuthorityAddress: string | null,
       allowExternalMeltAuthorityAddress: boolean,
       pinCode: string | null,
+      signTx: boolean,
     };
     const newOptions: optionsType = Object.assign({
       address: null,
@@ -1533,6 +1579,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       meltAuthorityAddress: null,
       allowExternalMeltAuthorityAddress: false,
       pinCode: null,
+      signTx: true,
     }, options);
 
     if (newOptions.meltAuthorityAddress && !newOptions.allowExternalMeltAuthorityAddress) {
@@ -1616,23 +1663,27 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const tx = new Transaction(inputsObj, outputsObj);
     tx.tokens = [token];
-    const dataToSignHash = tx.getDataToSignHash();
 
-    if (!newOptions.pinCode) {
-      throw new Error('PIN not specified in prepareMeltTokensData options');
-    }
+    // Sign transaction
+    if (newOptions.signTx) {
+      const dataToSignHash = tx.getDataToSignHash();
 
-    const xprivkey = await this.storage.getMainXPrivKey(newOptions.pinCode);
+      if (!newOptions.pinCode) {
+        throw new Error('PIN not specified in prepareMeltTokensData options');
+      }
 
-    for (const [idx, inputObj] of tx.inputs.entries()) {
-      // We have an array of utxos and the last input is the one with the authority
-      const addressPath = idx === tx.inputs.length - 1 ? meltUtxo.addressPath : utxos[idx].addressPath;
-      const inputData = this.getInputData(
-        xprivkey,
-        dataToSignHash,
-        HathorWalletServiceWallet.getAddressIndexFromFullPath(addressPath),
-      );
-      inputObj.setData(inputData);
+      const xprivkey = await this.storage.getMainXPrivKey(newOptions.pinCode);
+
+      for (const [idx, inputObj] of tx.inputs.entries()) {
+        // We have an array of utxos and the last input is the one with the authority
+        const addressPath = idx === tx.inputs.length - 1 ? meltUtxo.addressPath : utxos[idx].addressPath;
+        const inputData = this.getInputData(
+          xprivkey,
+          dataToSignHash,
+          HathorWalletServiceWallet.getAddressIndexFromFullPath(addressPath),
+        );
+        inputObj.setData(inputData);
+      }
     }
 
     tx.prepareToSend();

@@ -6,9 +6,13 @@
  */
 
 import CryptoJS from 'crypto-js';
+import bitcore from 'bitcore-lib';
 import { DecryptionError, InvalidPasswdError, UnsupportedHasherError } from '../errors';
-import { HASH_ITERATIONS, HASH_KEY_SIZE } from '../constants';
+import { HATHOR_MAGIC_BYTES, HASH_ITERATIONS, HASH_KEY_SIZE } from '../constants';
 import { IEncryptedData } from '../types';
+
+// Monkey-patch MAGIC_BYTES to use Hathor's
+bitcore.Message.MAGIC_BYTES = Buffer.from(HATHOR_MAGIC_BYTES);
 
 /**
  * Hash a piece of information with the given options.
@@ -155,4 +159,38 @@ export function checkPassword(data: IEncryptedData, password: string): boolean {
     pbkdf2Hasher: data.pbkdf2Hasher,
   };
   return validateHash(password, data.hash, options);
+}
+
+/**
+ * Signs an arbitrary message given a private key
+ * @param {string} message The message to be signed using a privateKey
+ * @param {bitcore.PrivateKey} privateKey The privateKey to sign the message with
+ *
+ * @returns {string} Base64 encoded signature
+ */
+export function signMessage(
+  message: string,
+  privateKey: bitcore.PrivateKey
+): string {
+  const signature = bitcore.Message(message).sign(privateKey);
+  return signature;
+}
+
+/**
+ * Verifies that a message was signed with an address' privateKey
+ *
+ * @param {string} message The message to be signed using a privateKey
+ * @param {string} signature The signature in base64
+ * @param {string} address The address which the message was signed with
+ *
+ * @returns {boolean}
+ */
+export function verifyMessage(
+  message: string,
+  signature: string,
+  address: string,
+): boolean {
+  const bitcoreLibMessage = new bitcore.Message(message);
+
+  return bitcoreLibMessage.verify(new bitcore.Address(address), signature);
 }

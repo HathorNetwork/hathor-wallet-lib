@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { get } from 'lodash';
+import { get, isNumber } from 'lodash';
 import { axiosInstance } from './walletServiceAxios';
 import {
   CheckAddressesMineResponseData,
@@ -91,14 +91,20 @@ const walletApi = {
     }
   },
 
-  async getAddresses(wallet: HathorWalletServiceWallet): Promise<AddressesResponseData> {
+  async getAddresses(
+    wallet: HathorWalletServiceWallet,
+    index?: number,
+  ): Promise<AddressesResponseData> {
     const axios = await axiosInstance(wallet, true);
-    const response = await axios.get('wallet/addresses');
+    const path = isNumber(index) ? `?index=${index}` : '';
+    const url = `wallet/addresses${path}`;
+    const response = await axios.get(url);
+
     if (response.status === 200 && response.data.success === true) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error getting wallet addresses.');
     }
+
+    throw new WalletRequestError('Error getting wallet addresses.');
   },
 
   async checkAddressesMine(

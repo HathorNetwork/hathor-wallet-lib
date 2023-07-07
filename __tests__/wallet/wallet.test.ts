@@ -15,7 +15,11 @@ import {
   CreateWalletAuthData,
 } from '../../src/wallet/types';
 import config from '../../src/config';
-import { buildSuccessTxByIdTokenDataResponse, buildWalletToAuthenticateApiCall, defaultWalletSeed } from '../__mock_helpers/wallet-service.fixtures';
+import {
+  buildSuccessTxByIdTokenDataResponse,
+  buildWalletToAuthenticateApiCall,
+  defaultWalletSeed,
+} from '../__mock_helpers/wallet-service.fixtures';
 import Mnemonic from 'bitcore-mnemonic';
 import { TxNotFoundError, SendTxError } from '../../src/errors';
 import SendTransactionWalletService from '../../src/wallet/sendTransactionWalletService';
@@ -24,7 +28,7 @@ import { TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
 import { MemoryStore, Storage } from '../../src/storage';
 import walletApi from '../../src/wallet/api/walletApi';
 import walletUtils from '../../src/utils/wallet';
-import { decryptData } from '../../src/utils/crypto';
+import { decryptData, verifyMessage } from '../../src/utils/crypto';
 import { WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../../src/constants';
 
 // Mock SendTransactionWalletService class so we don't try to send actual transactions
@@ -53,6 +57,47 @@ const MOCK_TX = {
 
 afterEach(() => {
   jest.clearAllMocks();
+});
+
+test('getAddressAtIndex', async () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = defaultWalletSeed;
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+
+  const address = {
+    address: 'address1',
+    index: 0,
+    transactions: 50,
+  };
+
+  const spy = jest.spyOn(walletApi, 'getAddresses')
+
+  // We should return only the address property on success
+  spy.mockImplementationOnce(() => Promise.resolve({
+    success: true,
+    addresses: [address],
+  }));
+
+  const addressAtIndex = await wallet.getAddressAtIndex(0);
+  expect(addressAtIndex).toStrictEqual(address.address);
+
+  // We should fail if no addresses were returned
+  spy.mockImplementationOnce(() => Promise.resolve({
+    success: false,
+    addresses: [],
+  }));
+
+  await expect(wallet.getAddressAtIndex(0))
+    .rejects
+    .toThrowError('Error getting wallet addresses.');
 });
 
 test('getTxBalance', async () => {
@@ -479,6 +524,22 @@ test('prepareMintTokens', async () => {
     pinCode: '123456',
   })).rejects.toThrowError(SendTxError);
 
+  // mint data without sign the transaction
+  const mintDataNotSigned = await wallet.prepareMintTokensData('01', 100, {
+    address: addresses[1],
+    mintAuthorityAddress: addresses[2],
+    pinCode: '123456',
+    signTx: false
+  });
+  expect(mintDataNotSigned.inputs).toEqual([
+    expect.objectContaining({
+      data: null,
+    }),
+    expect.objectContaining({
+      data: null,
+    }),
+  ])
+
   // mint data with correct address for authority output
   const mintData = await wallet.prepareMintTokensData('01', 100, {
     address: addresses[1],
@@ -487,6 +548,14 @@ test('prepareMintTokens', async () => {
     pinCode: '123456',
   });
 
+  expect(mintDataNotSigned.inputs).toEqual([
+    expect.objectContaining({
+      data: expect.any(Object),
+    }),
+    expect.objectContaining({
+      data: expect.any(Object),
+    }),
+  ])
   expect(mintData.outputs).toHaveLength(2);
 
   const authorityOutputs = mintData.outputs.filter(
@@ -595,6 +664,22 @@ test('prepareMeltTokens', async () => {
     pinCode: '123456',
   })).rejects.toThrowError(SendTxError);
 
+  // melt data without sign the transaction
+  const meltDataNotSigned = await wallet.prepareMeltTokensData('01', 100, {
+    address: addresses[1],
+    meltAuthorityAddress: addresses[2],
+    pinCode: '123456',
+    signTx: false
+  });
+  expect(meltDataNotSigned.inputs).toEqual([
+    expect.objectContaining({
+      data: null,
+    }),
+    expect.objectContaining({
+      data: null,
+    }),
+  ])
+
   // melt data with correct address for authority output
   const meltData = await wallet.prepareMeltTokensData('01', 1, {
     address: addresses[1],
@@ -603,6 +688,14 @@ test('prepareMeltTokens', async () => {
     pinCode: '123456',
   });
 
+  expect(meltDataNotSigned.inputs).toEqual([
+    expect.objectContaining({
+      data: expect.any(Object),
+    }),
+    expect.objectContaining({
+      data: expect.any(Object),
+    }),
+  ])
   expect(meltData.outputs).toHaveLength(1);
 
   const authorityOutputs = meltData.outputs.filter(
@@ -1084,6 +1177,19 @@ test('createTokens', async () => {
     pinCode: '123456',
   })).rejects.toThrowError(SendTxError);
 
+  // create token without sign the transaction
+  const tokenDataNotSigned = await wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
+    address: addresses[1],
+    mintAuthorityAddress: addresses[2],
+    pinCode: '123456',
+    signTx: false,
+  });
+  expect(tokenDataNotSigned.inputs).toEqual([
+    expect.objectContaining({
+      data: null,
+    }),
+  ])
+
   // create token with correct address for authority output
   const tokenData = await wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
     address: addresses[1],
@@ -1092,6 +1198,11 @@ test('createTokens', async () => {
     pinCode: '123456',
   });
 
+  expect(tokenData.inputs).toEqual([
+    expect.objectContaining({
+      data: expect.any(Object),
+    }),
+  ])
   expect(tokenData.outputs).toHaveLength(3);
 
   const authorityOutputs = tokenData.outputs.filter(
@@ -1360,4 +1471,107 @@ test('start', async () => {
       storage,
     });
   }).toThrow('authxpriv parameter is an invalid hd privatekey');
+});
+
+test('getAddressPrivKey', async () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = defaultWalletSeed;
+  let store = new MemoryStore();
+  let storage = new Storage(store);
+  const accessData = walletUtils.generateAccessDataFromSeed(seed, {
+    networkName: 'testnet',
+    password: '1234',
+    pin: '1234',
+  });
+
+  jest.spyOn(HathorWalletServiceWallet.prototype, 'pollForWalletStatus').mockImplementation(() => Promise.resolve());
+  jest.spyOn(HathorWalletServiceWallet.prototype, 'setupConnection').mockImplementation(jest.fn());
+  jest.spyOn(walletApi, 'getNewAddresses')
+    .mockImplementation(() => Promise.resolve({ success: true, addresses: [] }));
+  jest.spyOn(walletApi, 'createWallet')
+    .mockImplementation(() => Promise.resolve({
+      success: true,
+      status: {
+        walletId: 'id',
+        xpubkey: 'xpub',
+        status: 'creating',
+        maxGap: 20,
+        createdAt: 0,
+        readyAt: 0,
+      },
+    }));
+
+  let wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    storage,
+  });
+  await wallet.start({ pinCode: '1234', password: '1234' });
+
+  expect([
+    await wallet.getAddressPrivKey('1234', 1),
+    await wallet.getAddressPrivKey('1234', 2),
+    await wallet.getAddressPrivKey('1234', 3),
+    await wallet.getAddressPrivKey('1234', 4),
+    // We need to pass the network because bitcore-lib forces bitcoin network
+  ].map((hdPrivKey) => hdPrivKey.privateKey.toAddress(network.getNetwork()).toString()))
+  .toStrictEqual([
+    'WgSpcCwYAbtt31S2cqU7hHJkUHdac2EPWG',
+    'WPfG7P4YQDJ4MpwTS6qrfGW4fvYvAhPpV7',
+    'WUgjC47cFz5z9Uag92MKdnL8XgHdCfscNx',
+    'WPRp9yj7Tjj9praWMy1whXuUc5zi1TdQtm'
+  ]);
+});
+
+test('signMessageWithAddress', async () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = defaultWalletSeed;
+  let store = new MemoryStore();
+  let storage = new Storage(store);
+  const accessData = walletUtils.generateAccessDataFromSeed(seed, {
+    networkName: 'testnet',
+    password: '1234',
+    pin: '1234',
+  });
+
+  jest.spyOn(HathorWalletServiceWallet.prototype, 'pollForWalletStatus').mockImplementation(() => Promise.resolve());
+  jest.spyOn(HathorWalletServiceWallet.prototype, 'setupConnection').mockImplementation(jest.fn());
+  jest.spyOn(walletApi, 'getNewAddresses')
+    .mockImplementation(() => Promise.resolve({ success: true, addresses: [] }));
+  jest.spyOn(walletApi, 'createWallet')
+    .mockImplementation(() => Promise.resolve({
+      success: true,
+      status: {
+        walletId: 'id',
+        xpubkey: 'xpub',
+        status: 'creating',
+        maxGap: 20,
+        createdAt: 0,
+        readyAt: 0,
+      },
+    }));
+
+  let wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    storage,
+  });
+
+  await wallet.start({ pinCode: '1234', password: '1234' });
+
+  const message = 'sign-me-please';
+  const addressIndex = 2;
+  const address = 'WPfG7P4YQDJ4MpwTS6qrfGW4fvYvAhPpV7';
+  const signedMessage = await wallet.signMessageWithAddress(
+    message,
+    addressIndex,
+    '1234',
+  );
+
+  expect(verifyMessage(message, signedMessage, address))
+    .toBeTruthy();
 });

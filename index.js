@@ -47,6 +47,7 @@ const { WalletType } = require('./lib/types');
 const {PartialTx, PartialTxInputData} = require('./lib/models/partial_tx');
 const PartialTxProposal = require('./lib/wallet/partialTxProposal');
 const swapService = require('./lib/wallet/api/swapService');
+const { AtomicSwapServiceConnection } = require('./lib/swapService/swapConnection');
 
 module.exports = {
   PartialTx,
@@ -69,6 +70,7 @@ module.exports = {
   network: network.default,
   HathorWallet: HathorWallet.default,
   Connection: Connection.default,
+  AtomicSwapServiceConnection: AtomicSwapServiceConnection,
   WalletServiceConnection: WalletServiceConnection.default,
   SendTransaction: SendTransaction.default,
   Address: Address.default,
