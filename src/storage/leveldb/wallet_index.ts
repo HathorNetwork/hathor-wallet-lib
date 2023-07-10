@@ -11,6 +11,7 @@ import { AbstractSublevel } from 'abstract-level';
 import { IKVWalletIndex, IWalletData, IWalletAccessData } from '../../types';
 import { GAP_LIMIT } from '../../constants';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
+import { Buffer } from 'buffer';
 
 export const ACCESS_PREFIX = 'access';
 export const WALLET_PREFIX = 'wallet';
@@ -81,19 +82,25 @@ export default class LevelWalletIndex implements IKVWalletIndex {
       // valueEncoding of buffer can be Buffer of Uint8Array depending on the level implementation
       // classic-level will return Buffer
       // browser-level will return Uint8Array
-      let tmp: Buffer|Uint8Array;
+      let buf: Buffer|Uint8Array;
       switch(dest) {
         case 'access':
-          tmp = await this.accessDB.get<string, Buffer>(key, { valueEncoding: 'buffer'});
+          buf = await this.accessDB.get<string, Buffer>(key, { valueEncoding: 'buffer'});
           break;
         case 'wallet':
-          tmp = await this.walletDB.get<string, Buffer>(key, { valueEncoding: 'buffer'});
+          buf = await this.walletDB.get<string, Buffer>(key, { valueEncoding: 'buffer'});
           break;
       }
 
-      const buf = Buffer.from(tmp)
+      if (Buffer.isBuffer(buf)) {
+        return buf.readUint32BE(0);
+      } else if (buf instanceof Uint8Array) {
+        const newBuf = new Uint32Array(buf.buffer);
+        return newBuf[0];
+      } else {
+        throw new Error('Cannot read value received from the database');
+      }
 
-      return buf.readUint32BE(0);
     } catch (err: unknown) {
       if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
         return null;

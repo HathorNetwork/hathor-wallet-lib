@@ -10,6 +10,7 @@ import { Level } from 'level';
 import { AbstractSublevel } from 'abstract-level';
 import { IKVHistoryIndex, IHistoryTx, HistoryIndexValidateResponse } from '../../types';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
+import { Buffer } from 'buffer';
 
 export const HISTORY_PREFIX = 'history';
 export const TS_HISTORY_PREFIX = 'ts_history';

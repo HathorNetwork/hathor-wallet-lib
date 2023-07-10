@@ -12,6 +12,7 @@ import { IKVUtxoIndex, IUtxo, IUtxoFilterOptions, ILockedUtxo } from '../../type
 import _ from 'lodash';
 import { BLOCK_VERSION, HATHOR_TOKEN_CONFIG } from '../../constants';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
+import { Buffer } from 'buffer';
 
 export const UTXO_PREFIX = 'utxo';
 export const TOKEN_ADDRESS_UTXO_PREFIX = 'token:address:utxo';

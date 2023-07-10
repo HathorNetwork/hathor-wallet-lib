@@ -10,6 +10,7 @@ import { Level } from 'level';
 import { AbstractSublevel } from 'abstract-level';
 import { IAddressInfo, IAddressMetadata, IKVAddressIndex, AddressIndexValidateResponse, IAddressMetadataAsRecord, IBalance } from '../../types';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
+import { Buffer } from 'buffer';
 
 export const ADDRESS_PREFIX = 'address';
 export const INDEX_PREFIX = 'index';
