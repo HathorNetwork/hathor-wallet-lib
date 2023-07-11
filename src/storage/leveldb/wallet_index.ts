@@ -11,7 +11,6 @@ import { AbstractSublevel } from 'abstract-level';
 import { IKVWalletIndex, IWalletData, IWalletAccessData } from '../../types';
 import { GAP_LIMIT } from '../../constants';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
-import { Buffer } from 'buffer';
 
 export const ACCESS_PREFIX = 'access';
 export const WALLET_PREFIX = 'wallet';
@@ -49,52 +48,29 @@ export default class LevelWalletIndex implements IKVWalletIndex {
    * Convert a number to a uint32 buffer before saving on database.
    * Internal helper method, since this logic is used in multiple places.
    *
-   * @param {'access'|'wallet'} dest Which database to use.
    * @param key The key to use when setting the value.
    * @param {number} value The value to set.
    */
-  async _setNumber(dest: 'access'|'wallet', key: string, value: number) {
+  async _setNumber(key: string, value: number) {
     if (value < 0) {
       throw new Error(`Invalid unsigned int ${value} being set on ${key}`);
     }
-    const buf = Buffer.alloc(4);
-    buf.writeUInt32BE(value);
-    switch(dest) {
-      case 'access':
-        await this.accessDB.put<string, Buffer>(key, buf, { valueEncoding: 'buffer'});
-        break;
-      case 'wallet':
-        await this.walletDB.put<string, Buffer>(key, buf, { valueEncoding: 'buffer'});
-        break;
-    }
+
+    const val = value.toString(16).padStart(8, '0');
+    await this.walletDB.put(key, val);
   }
 
   /**
    * Get the number from the uint32 buffer saved on database.
    * Internal helper method, since this logic is used in multiple places.
    *
-   * @param {'access'|'wallet'} dest Which database to fetch from.
    * @param {string} key The key to fetch.
    * @returns {Promise<number|null>}
    */
-  async _getNumber(dest: 'access'|'wallet', key: string): Promise<number|null> {
+  async _getNumber(key: string): Promise<number|null> {
     try {
-      // valueEncoding of buffer can be Buffer of Uint8Array depending on the level implementation
-      // classic-level will return Buffer
-      // browser-level will return Uint8Array
-      let tmp: Buffer|Uint8Array;
-      switch(dest) {
-        case 'access':
-          tmp = await this.accessDB.get<string, Buffer>(key, { valueEncoding: 'buffer'});
-          break;
-        case 'wallet':
-          tmp = await this.walletDB.get<string, Buffer>(key, { valueEncoding: 'buffer'});
-          break;
-      }
-
-      const buf = Uint8Array.from(tmp);
-      const buf32 = new Uint32Array(buf.buffer);
-      return buf32[0];
+      const tmp = await this.walletDB.get(key);
+      return Number('0x'+tmp);
     } catch (err: unknown) {
       if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
         return null;
@@ -138,7 +114,7 @@ export default class LevelWalletIndex implements IKVWalletIndex {
    * @returns {Promise<number>} defaults to constants.GAP_LIMIT
    */
   async getGapLimit(): Promise<number> {
-    const value = await this._getNumber('wallet', 'gapLimit');
+    const value = await this._getNumber('gapLimit');
     return value || GAP_LIMIT;
   }
 
@@ -147,7 +123,7 @@ export default class LevelWalletIndex implements IKVWalletIndex {
    * @param {number} value gap limit.
    */
   async setGapLimit(value: number): Promise<void> {
-    await this._setNumber('wallet', 'gapLimit', value);
+    await this._setNumber('gapLimit', value);
   }
 
   /**
@@ -156,7 +132,7 @@ export default class LevelWalletIndex implements IKVWalletIndex {
    * @returns {Promise<number>} defaults to -1
    */
   async getCurrentAddressIndex(): Promise<number> {
-    const value = await this._getNumber('wallet', 'currentAddressIndex');
+    const value = await this._getNumber('currentAddressIndex');
     if (value === null) return -1;
     return value;
   }
@@ -167,7 +143,7 @@ export default class LevelWalletIndex implements IKVWalletIndex {
    * @returns {Promise<void>}
    */
   async setCurrentAddressIndex(value: number): Promise<void> {
-    await this._setNumber('wallet', 'currentAddressIndex', value);
+    await this._setNumber('currentAddressIndex', value);
   }
 
   /**
@@ -176,7 +152,7 @@ export default class LevelWalletIndex implements IKVWalletIndex {
    * @returns {Promise<number>} defaults to 0
    */
   async getCurrentHeight(): Promise<number> {
-    const value = await this._getNumber('wallet', 'networkHeight');
+    const value = await this._getNumber('networkHeight');
     if (value === null) return 0;
     return value;
   }
@@ -187,7 +163,7 @@ export default class LevelWalletIndex implements IKVWalletIndex {
    * @returns {Promise<void>}
    */
   async setCurrentHeight(value: number): Promise<void> {
-    await this._setNumber('wallet', 'networkHeight', value);
+    await this._setNumber('networkHeight', value);
   }
 
   /**
@@ -196,7 +172,7 @@ export default class LevelWalletIndex implements IKVWalletIndex {
    * @returns {Promise<number>} defaults to -1
    */
   async getLastUsedAddressIndex(): Promise<number> {
-    const value = await this._getNumber('wallet', 'lastUsedAddressIndex');
+    const value = await this._getNumber('lastUsedAddressIndex');
     if (value === null) return -1;
     return value;
   }
@@ -207,7 +183,7 @@ export default class LevelWalletIndex implements IKVWalletIndex {
    * @returns {Promise<void>}
    */
   async setLastUsedAddressIndex(value: number): Promise<void> {
-    await this._setNumber('wallet', 'lastUsedAddressIndex', value);
+    await this._setNumber('lastUsedAddressIndex', value);
   }
 
   /**
@@ -216,7 +192,7 @@ export default class LevelWalletIndex implements IKVWalletIndex {
    * @returns {Promise<number>} defaults to 0
    */
   async getLastLoadedAddressIndex(): Promise<number> {
-    const value = await this._getNumber('wallet', 'lastLoadedAddressIndex');
+    const value = await this._getNumber('lastLoadedAddressIndex');
     if (value === null) return 0;
     return value;
   }
@@ -227,7 +203,7 @@ export default class LevelWalletIndex implements IKVWalletIndex {
    * @returns {Promise<void>}
    */
   async setLastLoadedAddressIndex(value: number): Promise<void> {
-    await this._setNumber('wallet', 'lastLoadedAddressIndex', value);
+    await this._setNumber('lastLoadedAddressIndex', value);
   }
 
   /**
