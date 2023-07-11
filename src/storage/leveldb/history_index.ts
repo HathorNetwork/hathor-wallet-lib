@@ -10,16 +10,14 @@ import { Level } from 'level';
 import { AbstractSublevel } from 'abstract-level';
 import { IKVHistoryIndex, IHistoryTx, HistoryIndexValidateResponse } from '../../types';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
-import { Buffer } from 'buffer';
 
 export const HISTORY_PREFIX = 'history';
 export const TS_HISTORY_PREFIX = 'ts_history';
 
 
 function _ts_key(tx: Pick<IHistoryTx, 'timestamp'|'tx_id'>): string {
-  const buf = Buffer.alloc(4);
-  buf.writeUint32BE(tx.timestamp);
-  return `${buf.toString('hex')}:${tx.tx_id}`;
+  const hexTimestamp = tx.timestamp.toString(16).padStart(8, '0');
+  return `${hexTimestamp}:${tx.tx_id}`;
 }
 
 export default class LevelHistoryIndex implements IKVHistoryIndex {
