@@ -533,7 +533,7 @@ const helpers = {
   /**
    * Axios fails merging this configuration to the default configuration because it has an issue
    * with circular structures: https://github.com/mzabriskie/axios/issues/370
-   * Got this code from https://github.com/softonic/axios-retry/blob/master/es/index.js#L203
+   * Got this code from https://github.com/softonic/axios-retry/blob/master/es/index.mjs#L203
    *
    * @param {AxiosInstance} axios Axios instance
    * @param {AxiosRequestConfig} config New axios config

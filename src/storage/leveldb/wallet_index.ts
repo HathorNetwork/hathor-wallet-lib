@@ -70,7 +70,7 @@ export default class LevelWalletIndex implements IKVWalletIndex {
   async _getNumber(key: string): Promise<number|null> {
     try {
       const tmp = await this.walletDB.get(key);
-      return Number('0x'+tmp);
+      return Number(`0x${tmp}`);
     } catch (err: unknown) {
       if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
         return null;

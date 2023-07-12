@@ -16,6 +16,8 @@ export const TS_HISTORY_PREFIX = 'ts_history';
 
 
 function _ts_key(tx: Pick<IHistoryTx, 'timestamp'|'tx_id'>): string {
+  // .toString(16) will convert the number to a hex string
+  // .padStart(8, '0') will pad the number to 4 bytes
   const hexTimestamp = tx.timestamp.toString(16).padStart(8, '0');
   return `${hexTimestamp}:${tx.tx_id}`;
 }
