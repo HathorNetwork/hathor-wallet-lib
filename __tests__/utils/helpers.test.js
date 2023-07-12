@@ -275,3 +275,40 @@ test('cleanupString', () => {
   expect(helpers.cleanupString('  Str\t 4   \t')).toEqual('str 4');
   expect(helpers.cleanupString('STR 5')).toEqual('str 5');
 });
+
+test('fixAxiosConfig', () => {
+  let axiosObj = {
+    defaults: {
+      httpAgent: '123',
+      httpsAgent: '456',
+    },
+  };
+  let configObj = {
+    httpAgent: '123',
+    httpsAgent: '456',
+  };
+  helpers.fixAxiosConfig(axiosObj, configObj);
+  expect(configObj.httpAgent).toBeUndefined();
+  expect(configObj.httpsAgent).toBeUndefined();
+  expect(configObj.transformRequest).toBeDefined();
+
+  axiosObj = {
+    defaults: {
+      httpAgent: '1234',
+      httpsAgent: '4567',
+    },
+  };
+  configObj = {
+    httpAgent: '123',
+    httpsAgent: '456',
+  };
+
+  helpers.fixAxiosConfig(axiosObj, configObj);
+  expect(configObj.httpAgent).toBeDefined();
+  expect(configObj.httpsAgent).toBeDefined();
+  expect(configObj.transformRequest).toBeDefined();
+});
+
+test('getShortHash', () => {
+  expect(helpers.getShortHash('123456123456' + Array(40).fill(0).join('') + '654321654321')).toEqual('123456123456...654321654321');
+});

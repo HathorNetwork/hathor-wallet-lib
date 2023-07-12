@@ -8,7 +8,7 @@
 import transaction from '../../src/utils/transaction';
 import { UtxoError } from '../../src/errors';
 import { PrivateKey, crypto } from 'bitcore-lib';
-import { TOKEN_AUTHORITY_MASK, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
+import { BLOCK_VERSION, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, MERGED_MINED_BLOCK_VERSION, TOKEN_AUTHORITY_MASK, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
 import { MemoryStore, Storage } from '../../src/storage';
 import { HDPrivateKey } from 'bitcore-lib';
 import Input from '../../src/models/input';
@@ -375,4 +375,19 @@ test('canUseUtxo', async () => {
 
   // Clean fake timers config
   jest.useRealTimers();
+});
+
+test('isBlock', () => {
+  expect(transaction.isBlock({ version: BLOCK_VERSION })).toBe(true);
+  expect(transaction.isBlock({ version: DEFAULT_TX_VERSION })).toBe(false);
+  expect(transaction.isBlock({ version: CREATE_TOKEN_TX_VERSION })).toBe(false);
+  expect(transaction.isBlock({ version: MERGED_MINED_BLOCK_VERSION })).toBe(true);
+});
+
+test('getTxType', () => {
+  expect(transaction.getTxType({ version: BLOCK_VERSION })).toBe('Block');
+  expect(transaction.getTxType({ version: DEFAULT_TX_VERSION })).toBe('Transaction');
+  expect(transaction.getTxType({ version: CREATE_TOKEN_TX_VERSION })).toBe('Create Token Transaction');
+  expect(transaction.getTxType({ version: MERGED_MINED_BLOCK_VERSION })).toBe('Merged Mining Block');
+  expect(transaction.getTxType({ version: 999 })).toBe('Unknown');
 });
