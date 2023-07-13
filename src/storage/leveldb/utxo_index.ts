@@ -34,10 +34,12 @@ function _utxo_id(utxo: Pick<IUtxo, 'txId'|'index'>): string {
  * @returns {string}
  */
 function _token_address_utxo_key(utxo: IUtxo): string {
-  const buf = Buffer.alloc(8);
-  buf.writeBigUint64BE(BigInt(utxo.value));
-  const value = buf.toString('hex');
+  const value = _int_to_hex(utxo.value);
   return `${utxo.authorities}:${utxo.token}:${utxo.address}:${value}:${_utxo_id(utxo)}`;
+}
+
+function _int_to_hex(value: Number): string {
+  return value.toString(16).padStart(16, '0');
 }
 
 /**
@@ -46,10 +48,7 @@ function _token_address_utxo_key(utxo: IUtxo): string {
  * @returns {string}
  */
 function _token_utxo_key(utxo: IUtxo): string {
-  const buf = Buffer.alloc(8);
-  buf.writeBigUint64BE(BigInt(utxo.value));
-  const value = buf.toString('hex');
-  return `${utxo.authorities}:${utxo.token}:${value}:${_utxo_id(utxo)}`;
+  return `${utxo.authorities}:${utxo.token}:${_int_to_hex(utxo.value)}:${_utxo_id(utxo)}`;
 }
 
 export default class LevelUtxoIndex implements IKVUtxoIndex {
@@ -230,14 +229,10 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
       let maxkey = `${authorities}:${token}:`;
 
       if (options.amount_bigger_than) {
-        const minvalbuf = Buffer.alloc(8);
-        minvalbuf.writeBigUint64BE(BigInt(options.amount_bigger_than));
-        minkey = `${minkey}${minvalbuf.toString('hex')}`;
+        minkey = `${minkey}${_int_to_hex(options.amount_bigger_than)}`;
       }
       if (options.amount_smaller_than !== undefined) {
-        const maxvalbuf = Buffer.alloc(8);
-        maxvalbuf.writeBigUint64BE(BigInt(options.amount_smaller_than + 1));
-        maxkey = `${maxkey}${options.filter_address}:${maxvalbuf.toString('hex')}`;
+        maxkey = `${maxkey}${options.filter_address}:${_int_to_hex(options.amount_smaller_than + 1)}`;
       } else {
         const lastChar = String.fromCharCode(options.filter_address.charCodeAt(options.filter_address.length - 1) + 1);
         const maxaddr = `${options.filter_address.slice(0, -1)}${lastChar}`;
@@ -256,14 +251,10 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
       let maxkey = `${authorities}:`;
 
       if (options.amount_bigger_than) {
-        const minvalbuf = Buffer.alloc(8);
-        minvalbuf.writeBigUint64BE(BigInt(options.amount_bigger_than));
-        minkey = `${minkey}${minvalbuf.toString('hex')}`;
+        minkey = `${minkey}${_int_to_hex(options.amount_bigger_than)}`;
       }
       if (options.amount_smaller_than !== undefined) {
-        const maxvalbuf = Buffer.alloc(8);
-        maxvalbuf.writeBigUint64BE(BigInt(options.amount_smaller_than + 1));
-        maxkey = `${maxkey}${token}:${maxvalbuf.toString('hex')}`;
+        maxkey = `${maxkey}${token}:${_int_to_hex(options.amount_smaller_than + 1)}`;
       } else {
         const lastChar = String.fromCharCode(token.charCodeAt(token.length - 1) + 1);
         const maxtoken = `${token.slice(0, -1)}${lastChar}`;
