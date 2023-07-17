@@ -45,7 +45,7 @@ export default class LevelWalletIndex implements IKVWalletIndex {
   }
 
   /**
-   * Convert a number to a uint32 buffer before saving on database.
+   * Save a number as a string encoded as the hex value.
    * Internal helper method, since this logic is used in multiple places.
    *
    * @param key The key to use when setting the value.
@@ -61,7 +61,7 @@ export default class LevelWalletIndex implements IKVWalletIndex {
   }
 
   /**
-   * Get the number from the uint32 buffer saved on database.
+   * Get the number from its hex value string saved on the database.
    * Internal helper method, since this logic is used in multiple places.
    *
    * @param {string} key The key to fetch.
