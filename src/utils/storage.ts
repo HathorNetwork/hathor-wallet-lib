@@ -93,9 +93,9 @@ export async function syncHistory(startIndex: number, count: number, storage: IS
         foundAnyTx = true;
       }
       // update UI
-      connection.emit('wallet-partial-load-history', {
-        addressesFound: storage.store.addressCount(),
-        historyLength: storage.store.historyCount(),
+      connection.emit('wallet-load-partial-update', {
+        addressesFound: await storage.store.addressCount(),
+        historyLength: await storage.store.historyCount(),
       });
     }
     // check gap limit

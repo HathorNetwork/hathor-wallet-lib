@@ -12,5 +12,8 @@ module.exports = {
     ],
     '@babel/preset-typescript',
   ],
-  plugins: ["@babel/plugin-transform-async-generator-functions"],
+  plugins: [
+    "@babel/plugin-transform-async-generator-functions",
+    "@babel/plugin-proposal-class-properties",
+  ],
 };

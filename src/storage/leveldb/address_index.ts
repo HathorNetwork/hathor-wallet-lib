@@ -23,9 +23,9 @@ export const ADDRESS_META_PREFIX = 'meta';
  * @returns {string} hex value of the uint32 representation of the index
  */
 function _index_key(index: number): string {
-  const buf = Buffer.alloc(4);
-  buf.writeUint32BE(index);
-  return buf.toString('hex');
+  // .toString(16) will convert the number to a hex string
+  // .padStart(8, '0') will pad the number to 4 bytes
+  return index.toString(16).padStart(8, '0');
 }
 
 export default class LevelAddressIndex implements IKVAddressIndex {
