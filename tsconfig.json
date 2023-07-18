@@ -10,7 +10,10 @@
     "baseUrl": ".",
     "noImplicitAny": false,
     "rootDir": "./src",
-    "declaration": true
+    "declaration": true,
+    "declarationMap": true,
+    "emitDeclarationOnly": true,
+    "isolatedModules": true
   },
   "include": ["./src/**/*.ts"]
 }

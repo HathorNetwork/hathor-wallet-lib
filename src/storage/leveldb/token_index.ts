@@ -254,9 +254,15 @@ export default class LevelTokenIndex implements IKVTokenIndex {
 
   /**
    * Clear all entries from the database.
+   * @param {boolean} skipRegistered skip deleting the registered tokens
    * @returns {Promise<void>}
    */
-  async clear(): Promise<void> {
-    await this.tokenDB.db.clear();
+  async clear(skipRegistered: boolean = false): Promise<void> {
+    if (skipRegistered) {
+      await this.tokenDB.clear();
+      await this.metadataDB.clear();
+    } else {
+      await this.tokenDB.db.clear();
+    }
   }
 }
