@@ -102,7 +102,7 @@ const transaction = {
     }
 
     // Heighlocked when current height is lower than block height + reward_spend_min_blocks of the network
-    return currentHeight <= (blockHeight + rewardLock);
+    return currentHeight < (blockHeight + rewardLock);
   },
 
   /**
