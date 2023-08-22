@@ -18,8 +18,9 @@ import {
   IWalletData,
   ILockedUtxo,
 } from '../types';
-import { BLOCK_VERSION, GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
+import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
 import { orderBy } from 'lodash';
+import transactionUtils from '../utils/transaction';
 
 
 const DEFAULT_ADDRESSES_WALLET_DATA = {
@@ -557,16 +558,11 @@ export class MemoryStore implements IStore {
     const nowTs = Math.floor(Date.now() / 1000);
     const isTimeLocked = (timestamp: number) => (!!timestamp) && (nowTs < timestamp);
     const isHeightLocked = (utxo: IUtxo) => {
-      if (utxo.type !== BLOCK_VERSION) {
+      if (!transactionUtils.isBlock({ version: utxo.type })) {
         // Only blocks can be reward locked
         return false;
       }
-      if (!(options.reward_lock && networkHeight)) {
-        // We do not have details to process reward lock
-        return false;
-      }
-      // Heighlocked when network height is lower than block height + reward_spend_min_blocks
-      return networkHeight < ((utxo.height || 0) + options.reward_lock);
+      return transactionUtils.isHeightLocked(utxo.height, networkHeight, options.reward_lock);
     };
     const isLocked = (utxo: IUtxo) => isTimeLocked(utxo.timelock || 0) || isHeightLocked(utxo);
     const token = options.token || HATHOR_TOKEN_CONFIG.uid;

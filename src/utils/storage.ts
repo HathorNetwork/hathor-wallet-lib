@@ -337,12 +337,7 @@ export async function processNewTx(
     tokens: new Set(),
   };
 
-  const isTimelocked = (timelock?: number | null) => (!!nowTs) && (!!timelock) && nowTs < timelock;
-  const isHeightLocked = (!!tx.height)
-                         && (!!currentHeight)
-                         && (!!rewardLock)
-                         && (rewardLock > 0)
-                         && (currentHeight < (tx.height + rewardLock));
+  const isHeightLocked = transactionUtils.isHeightLocked(tx.height, currentHeight, rewardLock);
   const txAddresses = new Set<string>();
   const txTokens = new Set<string>();
   let maxIndexUsed = -1;
@@ -355,7 +350,7 @@ export async function processNewTx(
     if (!addressInfo) continue;
 
     // Check if this output is locked
-    const isLocked = isTimelocked(output.decoded.timelock) || isHeightLocked;
+    const isLocked = transactionUtils.isOutputLocked(output, { refTs: nowTs }) || isHeightLocked;
 
     const isAuthority: boolean = transactionUtils.isAuthorityOutput(output);
     let addressMeta = await store.getAddressMeta(output.decoded.address);
@@ -554,14 +549,8 @@ export async function processUtxoUnlock(
   // This shouldn't happen, but we check it just in case
   if (!output.decoded.address) return;
 
-  const isTimelocked = (!!nowTs)
-                       && (!!output.decoded.timelock)
-                       && (nowTs < output.decoded.timelock);
-  const isHeightLocked = (!!tx.height)
-                         && (!!currentHeight)
-                         && (!!rewardLock)
-                         && (rewardLock > 0)
-                         && (currentHeight < (tx.height + rewardLock));
+  const isTimelocked = transactionUtils.isOutputLocked(output, { refTs: nowTs });
+  const isHeightLocked = transactionUtils.isHeightLocked(tx.height, currentHeight, rewardLock);
   if (isTimelocked || isHeightLocked) {
     // This utxo is still locked, no need to process it
     return;
