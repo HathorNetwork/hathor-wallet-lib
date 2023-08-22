@@ -23,7 +23,6 @@ import ScriptData from '../models/script_data';
 import { ParseError } from '../errors';
 import helpers from './helpers';
 import { getAddressType } from './address';
-import dateFormatter from './date';
 
 const transaction = {
 

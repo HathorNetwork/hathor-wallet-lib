@@ -18,8 +18,9 @@ import {
   IWalletData,
   ILockedUtxo,
 } from '../types';
-import { BLOCK_VERSION, GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
+import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
 import { orderBy } from 'lodash';
+import transactionUtils from '../utils/transaction';
 
 
 const DEFAULT_ADDRESSES_WALLET_DATA = {
@@ -557,7 +558,7 @@ export class MemoryStore implements IStore {
     const nowTs = Math.floor(Date.now() / 1000);
     const isTimeLocked = (timestamp: number) => (!!timestamp) && (nowTs < timestamp);
     const isHeightLocked = (utxo: IUtxo) => {
-      if (utxo.type !== BLOCK_VERSION) {
+      if (!transactionUtils.isBlock({ version: utxo.type })) {
         // Only blocks can be reward locked
         return false;
       }
