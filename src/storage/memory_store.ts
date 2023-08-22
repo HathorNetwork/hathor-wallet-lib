@@ -562,12 +562,7 @@ export class MemoryStore implements IStore {
         // Only blocks can be reward locked
         return false;
       }
-      if (!(options.reward_lock && networkHeight)) {
-        // We do not have details to process reward lock
-        return false;
-      }
-      // Heighlocked when network height is lower than block height + reward_spend_min_blocks
-      return networkHeight < ((utxo.height || 0) + options.reward_lock);
+      return transactionUtils.isHeightLocked(utxo.height, networkHeight, options.reward_lock);
     };
     const isLocked = (utxo: IUtxo) => isTimeLocked(utxo.timelock || 0) || isHeightLocked(utxo);
     const token = options.token || HATHOR_TOKEN_CONFIG.uid;
