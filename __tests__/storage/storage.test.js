@@ -735,3 +735,171 @@ test('isHardware', async () => {
   }));
   await expect(storage.isHardwareWallet()).resolves.toBe(false);
 });
+
+describe('utxo selection in all stores', () => {
+  it('should work with memory store', async () => {
+    const store = new MemoryStore();
+    await testSelectUtxos(store);
+  });
+
+  it('should work with leveldb store', async () => {
+    const xpriv = new HDPrivateKey();
+    const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
+    const store = new LevelDBStore(walletId, DATA_DIR);
+    await testSelectUtxos(store);
+  });
+
+  async function testSelectUtxos(store) {
+    const storage = new Storage(store);
+
+    const dateLocked = new Date('3000-03-01T12:00');
+
+    const utxos = [
+      {
+        txId: 'tx00',
+        index: 1,
+        token: '00',
+        address: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
+        value: 10,
+        authorities: 0,
+        timelock: null,
+        type: 0,
+        height: 250,
+      },
+      {
+        txId: 'tx01',
+        index: 2,
+        token: '00',
+        address: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
+        value: 20,
+        authorities: 0,
+        timelock: null,
+        type: 0,
+        height: 100,
+      },
+      {
+        txId: 'tx10',
+        index: 3,
+        token: '1',
+        address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
+        value: 30,
+        authorities: 0,
+        timelock: Math.floor(dateLocked.getTime() / 1000),
+        type: 1,
+        height: null,
+      },
+      {
+        txId: 'tx11',
+        index: 4,
+        token: '00',
+        address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
+        value: 40,
+        authorities: 0,
+        timelock: null,
+        type: 1,
+        height: null,
+      },
+      {
+        txId: 'tx20',
+        index: 5,
+        token: '00',
+        address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
+        value: 30,
+        authorities: 0,
+        timelock: null,
+        type: 2,
+        height: null,
+      },
+      {
+        txId: 'tx21',
+        index: 6,
+        token: '2',
+        address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
+        value: 30,
+        authorities: 0,
+        timelock: Math.floor(dateLocked.getTime() / 1000),
+        type: 2,
+        height: null,
+      },
+      {
+        txId: 'tx30',
+        index: 7,
+        token: '00',
+        address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
+        value: 40,
+        authorities: 0,
+        timelock: null,
+        type: 3,
+        height: 200,
+      },
+      {
+        txId: 'tx31',
+        index: 8,
+        token: '00',
+        address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
+        value: 40,
+        authorities: 0,
+        timelock: null,
+        type: 3,
+        height: 50,
+      },
+    ];
+
+    // Current height is 200 with reward lock of 100
+    // Blocks of height 100 and down are considered unlocked.
+    //
+    await storage.setCurrentHeight(200);
+    storage.setApiVersion({ reward_spend_min_blocks: 100 });
+
+    for (const u of utxos) {
+      await store.saveUtxo(u);
+    }
+    let buf = [];
+    for await (const u of storage.getAllUtxos()) {
+      buf.push(u);
+    }
+    expect(buf).toHaveLength(8);
+
+    // Default values will filter for HTR token
+    buf = [];
+    for await (const u of storage.selectUtxos({})) {
+      buf.push(u);
+    }
+    expect(buf).toHaveLength(6);
+
+    // only_available_utxos should filter locked utxos
+    buf = [];
+    for await (const u of storage.selectUtxos({ only_available_utxos: true })) {
+      buf.push(u);
+    }
+    expect(buf).toHaveLength(4);
+
+    // If we mark a free utxo as selected, it should not be returned with only_available_utxos
+    // First we need the tx in history, for this we will mock it
+    const txSpy = jest.spyOn(storage, 'getTx');
+    txSpy.mockReturnValue(Promise.resolve({
+      tx_id: 'tx01',
+      index: 2,
+      version: 0,
+      outputs: [{}, {}, { spent_by: null }],
+    }));
+    await storage.utxoSelectAsInput({ txId: 'tx01', index: 2 }, true);
+    buf = [];
+    for await (const u of storage.selectUtxos({ only_available_utxos: true })) {
+      buf.push(u);
+    }
+    expect(buf).toHaveLength(3);
+    // Unmark to make it easier on the next tests
+    await storage.utxoSelectAsInput({ txId: 'tx01', index: 2 }, true);
+    txSpy.mockRestore();
+
+    // Filter for custom token
+    buf = [];
+    for await (const u of storage.selectUtxos({token: '2'})) {
+      buf.push(u);
+    }
+    expect(buf).toHaveLength(1);
+    expect(buf[0].txId).toEqual('tx21');
+    expect(buf[0].index).toEqual(6);
+  }
+});

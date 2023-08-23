@@ -23,7 +23,6 @@ import ScriptData from '../models/script_data';
 import { ParseError } from '../errors';
 import helpers from './helpers';
 import { getAddressType } from './address';
-import dateFormatter from './date';
 
 const transaction = {
 
@@ -85,6 +84,25 @@ const transaction = {
       && output.decoded.timelock !== null
       && refTs < output.decoded.timelock
     );
+  },
+
+  /**
+   * Check if an output in the given conditions would be height locked (or under reward lock)
+   *
+   * @param {number|undefined|null} blockHeight The height of the block
+   * @param {number|undefined|null} currentHeight The height of the network
+   * @param {number|undefined|null} rewardLock The reward lock of the network
+   *
+   * @returns {boolean} If the output is heightlocked
+   */
+  isHeightLocked(blockHeight: number|undefined|null, currentHeight: number|undefined|null, rewardLock: number|undefined|null): boolean {
+    if (!(blockHeight && currentHeight && rewardLock)) {
+      // We do not have the details needed to consider this as locked
+      return false;
+    }
+
+    // Heighlocked when current height is lower than block height + reward_spend_min_blocks of the network
+    return currentHeight < (blockHeight + rewardLock);
   },
 
   /**
@@ -230,7 +248,7 @@ const transaction = {
     const nowTs = Math.floor(Date.now() / 1000);
     const nowHeight = await storage.getCurrentHeight();
     const rewardLock = storage.version?.reward_spend_min_blocks;
-    const isHeightLocked = (!(rewardLock && tx.height)) ? false : ((tx.height + rewardLock) < nowHeight);
+    const isHeightLocked = this.isHeightLocked(tx.height, nowHeight, rewardLock);
 
     for (const output of tx.outputs) {
       const address = output.decoded.address;
@@ -531,8 +549,8 @@ const transaction = {
       return false;
     }
     const output = tx.outputs[utxo.index];
-    const isTimelocked = (!!output.decoded.timelock) && nowTs < output.decoded.timelock;
-    const isHeightLocked = (!!tx.height) && (!!rewardLock) && (currentHeight < (tx.height + rewardLock));
+    const isTimelocked = this.isOutputLocked(output, { refTs: nowTs });
+    const isHeightLocked = this.isHeightLocked(tx.height, currentHeight, rewardLock);
     const isSelectedAsInput = await storage.isUtxoSelectedAsInput(utxo);
 
     // If utxo is selected as input on another tx we cannot use it

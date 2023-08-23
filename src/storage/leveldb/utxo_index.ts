@@ -10,9 +10,9 @@ import { Level, ValueIteratorOptions } from 'level';
 import { AbstractSublevel } from 'abstract-level';
 import { IKVUtxoIndex, IUtxo, IUtxoFilterOptions, ILockedUtxo } from '../../types';
 import _ from 'lodash';
-import { BLOCK_VERSION, HATHOR_TOKEN_CONFIG } from '../../constants';
+import { HATHOR_TOKEN_CONFIG } from '../../constants';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
-import { Buffer } from 'buffer';
+import transactionUtils from '../../utils/transaction';
 
 export const UTXO_PREFIX = 'utxo';
 export const TOKEN_ADDRESS_UTXO_PREFIX = 'token:address:utxo';
@@ -183,16 +183,11 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
    */
   async * selectUtxos(options: IUtxoFilterOptions, networkHeight?: number): AsyncGenerator<IUtxo> {
     const isHeightLocked = (utxo: IUtxo) => {
-      if (utxo.type !== BLOCK_VERSION) {
+      if (!transactionUtils.isBlock({ version: utxo.type })) {
         // Only blocks can be reward locked
         return false;
       }
-      if (!(options.reward_lock && networkHeight)) {
-        // We do not have details to process reward lock
-        return false;
-      }
-      // Heighlocked when network height is lower than block height + reward_spend_min_blocks
-      return ((utxo.height || 0) + options.reward_lock) > networkHeight;
+      return transactionUtils.isHeightLocked(utxo.height, networkHeight, options.reward_lock);
     };
     const nowTs = Math.floor(Date.now() / 1000);
     const isTimelocked = (utxo: IUtxo) => {
