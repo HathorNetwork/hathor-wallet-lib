@@ -12,6 +12,7 @@ import buffer from 'buffer';
 import { IDataInput, IDataOutput, IDataTx, IStorage, ITokenData } from '../types';
 import { getAddressType } from './address';
 import { InsufficientFundsError, TokenValidationError } from '../errors';
+import { bestUtxoSelection } from './utxo';
 import walletApi from '../api/wallet';
 
 
@@ -287,6 +288,7 @@ const tokens = {
       changeAddress = null,
       isCreateNFT = false,
       mintAuthorityAddress = null,
+      utxoSelection = bestUtxoSelection,
     }: {
       token?: string | null,
       mintInput?: IDataInput | null,
@@ -294,6 +296,7 @@ const tokens = {
       changeAddress?: string | null,
       isCreateNFT?: boolean,
       mintAuthorityAddress?: string | null,
+      utxoSelection: UtxoSelectionAlgorithm,
     } = {},
   ): Promise<IDataTx> {
     const inputs: IDataInput[] = [];
@@ -305,9 +308,9 @@ const tokens = {
     }
 
     // get HTR deposit inputs
-    let foundAmount = 0;
-    for await (const utxo of storage.selectUtxos({token: HATHOR_TOKEN_CONFIG.uid, target_amount: depositAmount})) {
-      foundAmount += utxo.value;
+    const selectedUtxos = await utxoSelection(storage, HATHOR_TOKEN_CONFIG.uid, depositAmount);
+    const foundAmount = selectedUtxos.amount;
+    for (const utxo of selectedUtxos.utxos) {
       inputs.push({
         txId: utxo.txId,
         index: utxo.index,
@@ -395,10 +398,12 @@ const tokens = {
       createAnotherMelt = true,
       meltAuthorityAddress = null,
       changeAddress = null,
+      utxoSelection = bestUtxoSelection,
     }: {
       createAnotherMelt?: boolean,
       meltAuthorityAddress?: string | null,
       changeAddress?: string | null,
+      utxoSelection: UtxoSelectionAlgorithm,
     } = {},
   ): Promise<IDataTx> {
     if ((authorityMeltInput.token !== token) || (authorityMeltInput.authorities !== 2)) {
@@ -411,9 +416,9 @@ const tokens = {
     const withdrawAmount = this.getWithdrawAmount(amount, depositPercent);
 
     // get inputs that amount to requested melt amount
-    let foundAmount = 0;
-    for await (const utxo of storage.selectUtxos({token, target_amount: amount})) {
-      foundAmount += utxo.value;
+    const selectedUtxos = await utxoSelection(storage, token, amount);
+    const foundAmount = selectedUtxos.amount;
+    for (const utxo of selectedUtxos.utxos) {
       inputs.push({
         txId: utxo.txId,
         index: utxo.index,
