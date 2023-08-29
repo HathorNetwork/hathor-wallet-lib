@@ -9,7 +9,7 @@
 import { CREATE_TOKEN_TX_VERSION, HATHOR_TOKEN_CONFIG, TOKEN_DEPOSIT_PERCENTAGE, TOKEN_MELT_MASK, TOKEN_MINT_MASK, TOKEN_INDEX_MASK } from '../constants';
 import helpers from './helpers';
 import buffer from 'buffer';
-import { IDataInput, IDataOutput, IDataTx, IStorage, ITokenData } from '../types';
+import { IDataInput, IDataOutput, IDataTx, IStorage, ITokenData, UtxoSelectionAlgorithm } from '../types';
 import { getAddressType } from './address';
 import { InsufficientFundsError, TokenValidationError } from '../errors';
 import { bestUtxoSelection } from './utxo';
@@ -274,6 +274,7 @@ const tokens = {
    * @param {string|null} [options.mintAuthorityAddress=null] The address to send the new mint authority created
    * @param {string|null} [options.changeAddress=null] The address to send any change output.
    * @param {boolean} [options.isCreateNFT=false] If this transaction will create an NFT
+   * @param {function} [options.utxoSelection=bestUtxoSelection] Algorithm to select utxos. Use the best method by default
    *
    * @returns {Promise<IDataTx>} The transaction data
    */
@@ -296,7 +297,7 @@ const tokens = {
       changeAddress?: string | null,
       isCreateNFT?: boolean,
       mintAuthorityAddress?: string | null,
-      utxoSelection: UtxoSelectionAlgorithm,
+      utxoSelection?: UtxoSelectionAlgorithm,
     } = {},
   ): Promise<IDataTx> {
     const inputs: IDataInput[] = [];
@@ -386,6 +387,7 @@ const tokens = {
    * @param {boolean} [options.createAnotherMelt=true] If should create another melt authority
    * @param {string | null} [options.meltAuthorityAddress=null] Address to send the new melt authority created
    * @param {string | null} [options.changeAddress=null] Address to send the change
+   * @param {function} [options.utxoSelection=bestUtxoSelection] Algorithm to select utxos. Use the best method by default
    * @returns {Promise<IDataTx>}
    */
   async prepareMeltTxData(
@@ -403,7 +405,7 @@ const tokens = {
       createAnotherMelt?: boolean,
       meltAuthorityAddress?: string | null,
       changeAddress?: string | null,
-      utxoSelection: UtxoSelectionAlgorithm,
+      utxoSelection?: UtxoSelectionAlgorithm,
     } = {},
   ): Promise<IDataTx> {
     if ((authorityMeltInput.token !== token) || (authorityMeltInput.authorities !== 2)) {
