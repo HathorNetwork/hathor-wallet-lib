@@ -73,6 +73,16 @@ export const CREATE_TOKEN_TX_VERSION = 2;
 export const MERGED_MINED_BLOCK_VERSION = 3;
 
 /**
+ * Nano Contracts transaction version field
+ */
+export const NANO_CONTRACTS_VERSION = 4;
+
+/**
+ * Nano Contracts version
+ */
+export const NANO_CONTRACTS_INFO_VERSION = 1;
+
+/**
  * Create token information version
  * so far we expect name and symbol
  */
