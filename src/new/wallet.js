@@ -6,21 +6,35 @@
  */
 
 import { get } from 'lodash';
-import bitcore, { HDPrivateKey } from 'bitcore-lib';
+import bitcore, { HDPrivateKey, crypto } from 'bitcore-lib';
 import EventEmitter from 'events';
-import { HATHOR_TOKEN_CONFIG, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
+import { HATHOR_TOKEN_CONFIG, P2SH_ACCT_PATH, P2PKH_ACCT_PATH, NANO_CONTRACTS_VERSION } from '../constants';
 import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
+import ncApi from '../api/nano';
 import versionApi from '../api/version';
-import { hexToBuffer } from '../utils/buffer';
+import { hexToBuffer, intToBytes } from '../utils/buffer';
+import { decryptData } from '../utils/crypto';
 import helpers from '../utils/helpers';
 import { createP2SHRedeemScript } from '../utils/scripts';
 import walletUtils from '../utils/wallet';
 import SendTransaction from './sendTransaction';
 import Network from '../models/network';
-import { AddressError, TxNotFoundError, WalletError, WalletFromXPubGuard } from '../errors';
+import {
+  AddressError,
+  NanoContractTransactionError,
+  PinRequiredError,
+  TxNotFoundError,
+  WalletError,
+  WalletFromXPubGuard
+} from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
+import Address from '../models/address';
+import P2PKH from '../models/p2pkh';
+import P2SH from '../models/p2sh';
+import Output from '../models/output';
+import Input from '../models/input';
 import transactionUtils from '../utils/transaction';
 import { signMessage } from '../utils/crypto';
 import Transaction from '../models/transaction';
@@ -31,9 +45,10 @@ import { syncHistory, reloadStorage, scanPolicyStartAddresses, checkScanningPoli
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH } from '../utils/address';
+import { signAndPushNCTransaction } from '../nano_contracts/utils';
+import NanoContractTransactionBuilder from '../nano_contracts/builder';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
-const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';
 
 /**
  * TODO: This should be removed when this file is migrated to typescript
@@ -239,6 +254,7 @@ class HathorWallet extends EventEmitter {
       timestamp: Date.now(),
       version: versionData.version,
       network: versionData.network,
+      capabilities: versionData.capabilities,
       minWeight: versionData.min_weight,
       minTxWeight: versionData.min_tx_weight,
       minTxWeightCoefficient: versionData.min_tx_weight_coefficient,
@@ -247,6 +263,7 @@ class HathorWallet extends EventEmitter {
       rewardSpendMinBlocks: versionData.reward_spend_min_blocks,
       maxNumberInputs: versionData.max_number_inputs,
       maxNumberOutputs: versionData.max_number_outputs,
+      capabilities: versionData.capabilities,
     };
   }
 
@@ -2434,7 +2451,6 @@ class HathorWallet extends EventEmitter {
         .then(() => reject(new Error('API client did not use the callback')))
         .catch(err => reject(err));
     });
-
     if (!tx.success) {
       HathorWallet._txNotFoundGuard(tx);
 
@@ -2665,6 +2681,166 @@ class HathorWallet extends EventEmitter {
    */
   async isHardwareWallet() {
     return this.storage.isHardwareWallet();
+  }
+
+  /**
+   * Create and send a nano contract transaction
+   *
+   * @param {string} method Method of nano contract to have the transaction created
+   * @param {string} address Address that will be used to sign the nano contract transaction
+   * @param [data]
+   * @param {string | null} [data.blueprintId] ID of the blueprint to create the nano contract. Required if method is initialize
+   * @param {string | null} [data.ncId] ID of the nano contract to execute method. Required if method is not initialize
+   * @param {NanoContractAction[]} [data.actions] List of actions to execute in the nano contract transaction
+   * @param {any[]} [data.args] List of arguments for the method to be executed in the transaction
+   * @param [options]
+   * @param {string} [options.pinCode] PIN to decrypt the private key.
+   *                                   Optional but required if not set in this
+   *
+   * @returns {Promise<NanoContract>}
+   */
+  async createAndSendNanoContractTransaction(method, address, data, options = {}) {
+    if (await this.storage.isReadonly()) {
+      throw new WalletFromXPubGuard('createAndSendNanoContractTransaction');
+    }
+    const newOptions = Object.assign({ pinCode: null }, options);
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
+    }
+
+    if (method !== 'initialize' && !data.ncId) {
+      // Initialize is the only method that creates the nano contract
+      // the other methods must have the corresponding ncId to be executed
+      throw new NanoContractTransactionError('Missing nano contract id. Parameter ncId in data');
+    }
+
+    if (method === 'initialize' && !data.blueprintId) {
+      // Initialize needs the blueprint ID
+      throw new NanoContractTransactionError('Missing blueprint id. Parameter blueprintId in data');
+    }
+
+    let blueprintId = data.blueprintId;
+
+    if (method !== 'initialize') {
+      let response;
+      try {
+        response = await this.getFullTxById(data.ncId);
+      } catch {
+        // Error getting nano contract transaction data from the full node
+        throw new NanoContractTransactionError(`Error getting nano contract transaction data with id ${data.ncId} from the full node`);
+      }
+
+      if (response.tx.version !== NANO_CONTRACTS_VERSION) {
+        throw new NanoContractTransactionError(`Transaction with id ${data.ncId} is not a nano contract transaction.`);
+      }
+
+      blueprintId = response.tx.nc_blueprint_id;
+    }
+
+    // Get the blueprint data from full node
+    const blueprintInformation = await ncApi.getBlueprintInformation(blueprintId);
+    const methodArgs = get(blueprintInformation, `public_methods.${method}.args`);
+    if (!methodArgs) {
+      throw new NanoContractTransactionError(`Blueprint does not have method ${method}.`);
+    }
+
+    // Args may come as undefined
+    const argsLen = data.args ? data.args.length : 0;
+    if (argsLen !== methodArgs.length) {
+      throw new NanoContractTransactionError(`Method needs ${methodArgs.length} parameters but data has ${data.args.length}.`);
+    }
+
+    for (const [index, arg] of methodArgs.entries()) {
+      let typeToCheck = arg.type;
+      if (typeToCheck.startsWith('SignedData')) {
+        // Signed data will always be an hexadecimal with the
+        // signed part and the data itself
+        typeToCheck = 'str';
+      }
+      switch (typeToCheck) {
+        case 'bytes':
+          // Bytes arguments are sent in hexadecimal
+          try {
+            data.args[index] = hexToBuffer(data.args[index]);
+          } catch {
+            // Data sent is not a hex
+            throw new NanoContractTransactionError(`Invalid hexadecimal for argument number ${index + 1}.`);
+          }
+          break;
+        case 'int':
+        case 'float':
+          if (typeof data.args[index] !== 'number') {
+            throw new NanoContractTransactionError(`Expects argument number ${index + 1} type ${arg.type} but received type ${typeof data.args[index]}.`);
+          }
+          break;
+        case 'str':
+          if (typeof data.args[index] !== 'string') {
+            throw new NanoContractTransactionError(`Expects argument number ${index + 1} type ${arg.type} but received type ${typeof data.args[index]}.`);
+          }
+          break;
+        default:
+          if (arg.type !== typeof data.args[index]) {
+            throw new NanoContractTransactionError(`Expects argument number ${index + 1} type ${arg.type} but received type ${typeof data.args[index]}.`);
+          }
+      }
+    }
+
+    // Get private key that will sign the nano contract transaction
+    let derivedKey;
+    try {
+      derivedKey = await this.getHDPrivateKeyFromAddress(address, options);
+    } catch (e) {
+      if (e instanceof AddressError) {
+        throw NanoContractTransactionError('Address used to sign the transaction does not belong to the wallet.');
+      }
+      throw e;
+    }
+    const privateKey = derivedKey.privateKey;
+
+    // Build and send transaction
+    const builder = new NanoContractTransactionBuilder();
+    builder.setMethod(method);
+    builder.setWallet(this);
+    builder.setBlueprintId(blueprintId);
+    builder.setNcId(method === 'initialize' ? null : data.ncId);
+    builder.setCaller(privateKey);
+    builder.setActions(data.actions);
+    builder.setArgs(data.args);
+
+    const nc = await builder.build();
+    return signAndPushNCTransaction(nc, privateKey, pin, this.storage);
+  }
+
+  /**
+   * Generate and return the HDPrivateKey for an address
+   *
+   * @param {string} address Address to get the HDPrivateKey from
+   * @param [options]
+   * @param {string} [options.pinCode] PIN to decrypt the private key.
+   *                                   Optional but required if not set in this
+   *
+   * @returns {Promise<HDPrivateKey>}
+   */
+  async getHDPrivateKeyFromAddress(address, options = {}) {
+    if (await this.storage.isReadonly()) {
+      throw new WalletFromXPubGuard('getHDPrivateKeyFromAddress');
+    }
+    const newOptions = Object.assign({ pinCode: null }, options);
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
+    }
+
+    const addressIndex = await this.getAddressIndex(address);
+    if (addressIndex === null) {
+      throw new AddressError('Address does not belong to the wallet.');
+    }
+    const accessData = await this.getAccessData();
+    const encryptedPrivateKey = accessData.mainKey;
+    const privateKeyStr = decryptData(encryptedPrivateKey, pin);
+    const key = HDPrivateKey(privateKeyStr)
+    return key.deriveNonCompliantChild(addressIndex);
   }
 }
 

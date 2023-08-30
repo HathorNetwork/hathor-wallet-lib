@@ -411,6 +411,7 @@ export interface FullNodeVersionData {
   timestamp: number;
   version: string;
   network: string;
+  capabilities: string[];
   minWeight: number;
   minTxWeight: number;
   minTxWeightCoefficient: number;

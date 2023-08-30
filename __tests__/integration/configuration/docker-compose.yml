@@ -5,7 +5,8 @@ services:
   # https://github.com/HathorNetwork/rfcs/blob/master/text/0033-private-network-guide.md
 
   fullnode:
-    image: hathornetwork/hathor-core
+    image:
+      ${HATHOR_LIB_INTEGRATION_TESTS_FULLNODE_IMAGE:-hathornetwork/hathor-core}
     command: [
       "run_node",
       "--listen", "tcp:40404",
@@ -29,7 +30,8 @@ services:
       - hathor-privnet
 
   tx-mining-service:
-    image: hathornetwork/tx-mining-service
+    image:
+      ${HATHOR_LIB_INTEGRATION_TESTS_TXMINING_IMAGE:-hathornetwork/tx-mining-service}
     depends_on:
       - fullnode
     ports:

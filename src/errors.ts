@@ -274,7 +274,6 @@ export class IndexOOBError extends PartialTxError {}
  */
 export class UnsupportedScriptError extends PartialTxError {}
 
-
 /**
  * Error thrown when a requested transaction is not found
  *
@@ -298,3 +297,47 @@ export class UnsupportedHasherError extends Error {
 export class UninitializedWalletError extends WalletError {
   errorCode: string = ErrorMessages.UNINITIALIZED_WALLET;
 }
+
+/**
+ * Error thrown during any API request
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class RequestError extends Error {};
+
+/**
+ * Error thrown during nano API request
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class NanoRequestError extends RequestError {};
+
+/**
+ * Error thrown when PIN is required in a method but it's not set
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class PinRequiredError extends Error {
+  errorCode: string = ErrorMessages.PIN_REQUIRED;
+};
+
+/**
+ * Error thrown during the creation of a nano contract transaction
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class NanoContractTransactionError extends Error {};
+
+/**
+ * Error thrown when parsing a nano contract transaction
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class NanoContractTransactionParseError extends Error {};
+
+export class OracleParseError extends Error {};
