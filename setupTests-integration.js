@@ -13,6 +13,10 @@ import { TX_MINING_URL } from './__tests__/integration/configuration/test-consta
 import {
   precalculationHelpers, WalletPrecalculationHelper
 } from './__tests__/integration/helpers/wallet-precalculation.helper';
+import {
+  generateWalletHelper,
+  waitNextBlock
+} from './__tests__/integration/helpers/wallet.helper';
 
 config.setTxMiningUrl(TX_MINING_URL);
 
@@ -40,6 +44,13 @@ beforeAll(async () => {
   // Loading pre-calculated wallets
   precalculationHelpers.test = new WalletPrecalculationHelper('./tmp/wallets.json');
   await precalculationHelpers.test.initWithWalletsFile();
+
+  // I'm getting any wallet just to call the wait next block helper twice
+  // this will guarantee that we will already have funds unlocked to spend
+  // since our tests reward lock blocks is 1
+  const hWallet = await generateWalletHelper();
+  await waitNextBlock(hWallet);
+  await waitNextBlock(hWallet);
 });
 
 afterAll(async () => {

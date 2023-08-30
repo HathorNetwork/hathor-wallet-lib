@@ -8,11 +8,13 @@
 import { get } from 'lodash';
 import bitcore from 'bitcore-lib';
 import EventEmitter from 'events';
-import { HATHOR_TOKEN_CONFIG, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
+import { HATHOR_TOKEN_CONFIG, P2SH_ACCT_PATH, P2PKH_ACCT_PATH, NANO_CONTRACTS_VERSION } from '../constants';
 import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
 import versionApi from '../api/version';
-import { hexToBuffer } from '../utils/buffer';
+import { hexToBuffer, intToBytes } from '../utils/buffer';
+import { parseScript } from '../utils/scripts';
+import { decryptData } from '../utils/crypto';
 import helpers from '../utils/helpers';
 import { createP2SHRedeemScript } from '../utils/scripts';
 import walletUtils from '../utils/wallet';
@@ -21,7 +23,13 @@ import Network from '../models/network';
 import { AddressError, TxNotFoundError, WalletError, WalletFromXPubGuard } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
-import { HDPrivateKey } from 'bitcore-lib';
+import Address from '../models/address';
+import P2PKH from '../models/p2pkh';
+import P2SH from '../models/p2sh';
+import Output from '../models/output';
+import Input from '../models/input';
+import BetTransactionBuilder from '../nano_contracts/builder';
+import { HDPrivateKey, crypto } from 'bitcore-lib';
 import transactionUtils from '../utils/transaction';
 import { signMessage } from '../utils/crypto';
 import Transaction from '../models/transaction';
@@ -238,6 +246,7 @@ class HathorWallet extends EventEmitter {
       timestamp: Date.now(),
       version: versionData.version,
       network: versionData.network,
+      capabilities: versionData.capabilities,
       minWeight: versionData.min_weight,
       minTxWeight: versionData.min_tx_weight,
       minTxWeightCoefficient: versionData.min_tx_weight_coefficient,
@@ -246,6 +255,7 @@ class HathorWallet extends EventEmitter {
       rewardSpendMinBlocks: versionData.reward_spend_min_blocks,
       maxNumberInputs: versionData.max_number_inputs,
       maxNumberOutputs: versionData.max_number_outputs,
+      capabilities: versionData.capabilities,
     };
   }
 
@@ -2577,6 +2587,252 @@ class HathorWallet extends EventEmitter {
    */
   async isHardwareWallet() {
     return this.storage.isHardwareWallet();
+  }
+
+  async createBetNanoContract(tokenUid, dateLastDeposit, oracle, indexOfAddressToSign, options = {}) {
+    if (await this.storage.isReadonly()) {
+      throw new WalletFromXPubGuard('createBetNanoContract');
+    }
+    const newOptions = Object.assign({ pinCode: null }, options);
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      // TODO throw error
+      return Promise.reject({success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED});
+    }
+
+    const accessData = await this.getAccessData();
+    const encryptedPrivateKey = accessData.mainKey;
+    const privateKeyStr = decryptData(encryptedPrivateKey, pin);
+    const key = HDPrivateKey(privateKeyStr)
+    const derivedKey = key.deriveNonCompliantChild(indexOfAddressToSign);
+    const privateKey = derivedKey.privateKey;
+    const pubkey = privateKey.publicKey.toBuffer();
+
+    let oracleScript;
+    const address = new Address(oracle, { network: this.getNetworkObject() });
+    if (address.isValid()) {
+      const outputScriptType = address.getType();
+      let outputScript;
+      if (outputScriptType === 'p2pkh') {
+        outputScript = new P2PKH(address);
+      } else if (outputScriptType === 'p2sh') {
+        outputScript = new P2SH(address);
+      } else {
+        throw Error('Invalid output script type');
+      }
+      oracleScript = outputScript.createScript();
+    } else {
+      // Oracle script is a custom script
+      oracleScript = bufferUtils.hexToBuffer(oracle); // TODO handle hex invalid error
+    }
+
+    const builder = new BetTransactionBuilder();
+    const bet = builder.createBetNC(pubkey, oracleScript, tokenUid, dateLastDeposit);
+    const dataToSignHash = bet.getDataToSignHash();
+    const sig = crypto.ECDSA.sign(dataToSignHash, privateKey, 'little').set({
+      nhashtype: crypto.Signature.SIGHASH_ALL
+    });
+    bet.signature = sig.toDER();
+    bet.prepareToSend();
+
+    const sendTransaction = new SendTransaction(
+      {
+        storage: this.storage,
+        transaction: bet,
+        pin,
+      },
+    );
+    return sendTransaction.runFromMining();
+  }
+
+  async makeBet(ncId, ncAddress, betAddress, result, amount, token, options = {}) {
+    if (this.isFromXPub()) {
+      throw new WalletFromXPubGuard('makeBet');
+    }
+    const newOptions = Object.assign({
+      changeAddress: null,
+      pinCode: null,
+    }, options);
+
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      // TODO throw error
+      return Promise.reject({success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED});
+    }
+
+    const ncAddressIndex = await this.getAddressIndex(ncAddress);
+
+    const accessData = await this.getAccessData();
+    const encryptedPrivateKey = accessData.mainKey;
+    const privateKeyStr = decryptData(encryptedPrivateKey, pin);
+    const key = HDPrivateKey(privateKeyStr)
+    const derivedKey = key.deriveNonCompliantChild(ncAddressIndex);
+    const privateKey = derivedKey.privateKey;
+    const pubkey = privateKey.publicKey.toBuffer();
+
+    const utxosData = await this.getUtxosForAmount(amount, { token });
+    const inputsObj = [];
+    for (const utxo of utxosData.utxos) {
+      inputsObj.push(new Input(utxo.txId, utxo.index));
+    }
+
+    const outputsObj = [];
+    const network = this.getNetworkObject();
+    if (utxosData.changeAmount) {
+      const changeAddressParam = newOptions.changeAddress;
+      if (changeAddressParam && !this.isAddressMine(changeAddressParam)) {
+        // TODO
+        throw Error();
+      }
+
+      const changeAddressStr = changeAddressParam || (await this.getCurrentAddress()).address;
+      const changeAddress = new Address(changeAddressStr, { network });
+      // This will throw AddressError in case the adress is invalid
+      changeAddress.validateAddress();
+      // TODO Use new method created in another PR
+      const p2pkh = new P2PKH(changeAddress);
+      const p2pkhScript = p2pkh.createScript()
+      const outputObj = new Output(
+        utxosData.changeAmount,
+        p2pkhScript,
+        {
+          tokenData: token === HATHOR_TOKEN_CONFIG.uid ? 0 : 1
+        }
+      );
+      outputsObj.push(outputObj);
+    }
+
+    const builder = new BetTransactionBuilder();
+    const addressObj = new Address(betAddress, { network });
+    const tx = builder.deposit(ncId, pubkey, inputsObj, outputsObj, addressObj, result);
+    const dataToSignHash = tx.getDataToSignHash();
+    const sig = crypto.ECDSA.sign(dataToSignHash, privateKey, 'little').set({
+      nhashtype: crypto.Signature.SIGHASH_ALL
+    });
+    tx.signature = sig.toDER();
+
+    // Inputs signature
+    await transactionUtils.signTransaction(tx, this.storage, pin);
+    tx.prepareToSend();
+
+    const sendTransaction = new SendTransaction({
+      storage: this.storage,
+      transaction: tx,
+      pin,
+    });
+    return sendTransaction.runFromMining();
+  }
+
+  async makeWithdrawal(ncId, ncAddress, amount, token, options = {}) {
+    if (this.isFromXPub()) {
+      throw new WalletFromXPubGuard('makeWithdrawal');
+    }
+    const newOptions = Object.assign({ pinCode: null }, options);
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      // TODO throw error
+      return Promise.reject({success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED});
+    }
+
+    const ncAddressIndex = await this.getAddressIndex(ncAddress);
+
+    const accessData = await this.getAccessData();
+    const encryptedPrivateKey = accessData.mainKey;
+    const privateKeyStr = decryptData(encryptedPrivateKey, pin);
+    const key = HDPrivateKey(privateKeyStr)
+    const derivedKey = key.deriveNonCompliantChild(ncAddressIndex);
+    const privateKey = derivedKey.privateKey;
+    const pubkey = privateKey.publicKey.toBuffer();
+
+    // They will be used to sign tx
+    const address = new Address(ncAddress, { network: this.getNetworkObject() });
+    const p2pkh = new P2PKH(address);
+    const p2pkhScript = p2pkh.createScript()
+    const output = new Output(
+      amount,
+      p2pkhScript,
+      {
+        tokenData: token === HATHOR_TOKEN_CONFIG.uid ? 0 : 1
+      }
+    );
+
+    const builder = new BetTransactionBuilder();
+    const tx = builder.withdraw(ncId, pubkey, [output]);
+    const dataToSignHash = tx.getDataToSignHash();
+    const sig = crypto.ECDSA.sign(dataToSignHash, privateKey, 'little').set({
+      nhashtype: crypto.Signature.SIGHASH_ALL
+    });
+    tx.signature = sig.toDER();
+
+    tx.prepareToSend();
+
+    const sendTransaction = new SendTransaction({
+      storage: this.storage,
+      transaction: tx,
+      pin,
+    });
+    return sendTransaction.runFromMining();
+  }
+
+  async setResult(ncId, ncAddress, result, oracleScriptHex, oracleInputData, options = {}) {
+    if (this.isFromXPub()) {
+      throw new WalletFromXPubGuard('setResult');
+    }
+    const newOptions = Object.assign({ pinCode: null }, options);
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      // TODO throw error
+      return Promise.reject({success: false, message: ERROR_MESSAGE_PIN_REQUIRED, error: ERROR_CODE_PIN_REQUIRED});
+    }
+
+    const ncAddressIndex = await this.getAddressIndex(ncAddress);
+
+    const accessData = await this.getAccessData();
+    const encryptedPrivateKey = accessData.mainKey;
+    const privateKeyStr = decryptData(encryptedPrivateKey, pin);
+    const key = HDPrivateKey(privateKeyStr)
+    const derivedKey = key.deriveNonCompliantChild(ncAddressIndex);
+    const privateKey = derivedKey.privateKey;
+    const pubkey = privateKey.publicKey.toBuffer();
+
+    const resultSerialized = Buffer.from(result, 'utf8');
+
+    const parsedOracleScript = this.parseOracleScript(oracleScriptHex);
+    let inputData;
+    if (parsedOracleScript) {
+      // This is only when the oracle is an address, otherwise we will have the signed input data
+      const address = parsedOracleScript.address.base58;
+      const addressIndex = await this.getAddressIndex(address);
+      // TODO If address index not found, not from this wallet, so throw error
+      const oracleKey = key.deriveNonCompliantChild(addressIndex);
+
+      const signatureOracle = transactionUtils.getSignature(transactionUtils.getDataToSignHash(resultSerialized), oracleKey.privateKey);
+      const oraclePubKeyBuffer = oracleKey.publicKey.toBuffer();
+      inputData = transactionUtils.createInputData(signatureOracle, oraclePubKeyBuffer);
+    } else {
+      inputData = oracleInputData;
+    }
+
+    const builder = new BetTransactionBuilder();
+    const tx = builder.setResult(ncId, pubkey, inputData, result);
+    const dataToSignHash = tx.getDataToSignHash();
+    const sig = crypto.ECDSA.sign(dataToSignHash, privateKey, 'little').set({
+      nhashtype: crypto.Signature.SIGHASH_ALL
+    });
+    tx.signature = sig.toDER();
+    tx.prepareToSend();
+
+    const sendTransaction = new SendTransaction({
+      storage: this.storage,
+      transaction: tx,
+      pin,
+    });
+    return sendTransaction.runFromMining();
+  }
+
+  parseOracleScript(oracleScriptHex) {
+    const oracleScriptBuffer = hexToBuffer(oracleScriptHex);
+    return parseScript(oracleScriptBuffer, this.getNetworkObject());
   }
 }
 

@@ -189,3 +189,32 @@ export function createP2SHRedeemScript(xpubs: string[], numSignatures: number, i
   const redeemScript = Script.buildMultisigOut(pubkeys, numSignatures, {noSorting: true});
   return redeemScript.toBuffer();
 }
+
+export const parseScript = (script: Buffer, network: Network): P2PKH | P2SH | ScriptData | null => {
+  // It's still unsure how expensive it is to throw an exception in JavaScript. Some languages are really
+  // inefficient when it comes to exceptions while others are totally efficient. If it is efficient,
+  // we can keep throwing the error. Otherwise, we should just return null
+  // because this method will be used together with others when we are trying to parse a given script.
+
+  try {
+    let parsedScript;
+    if (P2PKH.identify(script)) {
+      // This is a P2PKH script
+      parsedScript = parseP2PKH(script, network);
+    } else if (P2SH.identify(script)) {
+      // This is a P2SH script
+      parsedScript = parseP2SH(script, network);
+    } else {
+      // defaults to data script
+      parsedScript = parseScriptData(script);
+    }
+    return parsedScript;
+  } catch (error) {
+    if (error instanceof ParseError) {
+      // We don't know how to parse this script
+      return null;
+    } else {
+      throw error;
+    }
+  }
+}
