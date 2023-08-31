@@ -312,14 +312,7 @@ const tokens = {
     const selectedUtxos = await utxoSelection(storage, HATHOR_TOKEN_CONFIG.uid, depositAmount);
     const foundAmount = selectedUtxos.amount;
     for (const utxo of selectedUtxos.utxos) {
-      inputs.push({
-        txId: utxo.txId,
-        index: utxo.index,
-        value: utxo.value,
-        address: utxo.address,
-        authorities: utxo.authorities,
-        token: utxo.token,
-      });
+      inputs.push(helpers.getDataInputFromUtxo(utxo));
     }
 
     if (foundAmount < depositAmount) {
@@ -421,14 +414,7 @@ const tokens = {
     const selectedUtxos = await utxoSelection(storage, token, amount);
     const foundAmount = selectedUtxos.amount;
     for (const utxo of selectedUtxos.utxos) {
-      inputs.push({
-        txId: utxo.txId,
-        index: utxo.index,
-        value: utxo.value,
-        address: utxo.address,
-        authorities: 0,
-        token: utxo.token,
-      });
+      inputs.push(helpers.getDataInputFromUtxo(utxo));
     }
 
     if (foundAmount < amount) {
