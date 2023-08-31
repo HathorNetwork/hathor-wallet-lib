@@ -256,8 +256,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    **/
-  async changeServer(newServer) {
-    await this.stop({cleanStorage: true, cleanAddresses: true});
+  changeServer(newServer) {
     this.storage.config.setServerUrl(newServer);
   }
 
