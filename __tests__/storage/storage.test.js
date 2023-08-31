@@ -48,7 +48,13 @@ describe('handleStop', () => {
    * @param {IStore} store
    */
   async function handleStopTest(store) {
+    async function toArray(gen) {
+      const out = [];
+      for await (const it of gen) out.push(it);
+      return out;
+    }
     const storage = new Storage(store);
+    const testToken = { uid: 'testtoken', name: 'Test token', symbol: 'TST' };
     await storage.saveAccessData(accessData);
     await loadAddresses(0, 20, storage);
     await storage.addTx({
@@ -57,10 +63,15 @@ describe('handleStop', () => {
       inputs: [],
       outputs: [],
     });
+    await storage.registerToken(testToken);
     // We have 1 transaction
     await expect(store.historyCount()).resolves.toEqual(1);
-    // And 20 addresses
+    // 20 addresses
     await expect(store.addressCount()).resolves.toEqual(20);
+    // And 1 registered token
+    let tokens = await toArray(storage.getRegisteredTokens());
+    expect(tokens).toHaveLength(1);
+    expect(tokens[0]).toEqual(testToken);
 
     storage.version = 'something';
     // handleStop with defaults
@@ -70,12 +81,18 @@ describe('handleStop', () => {
     // Nothing changed in the store
     await expect(store.historyCount()).resolves.toEqual(1);
     await expect(store.addressCount()).resolves.toEqual(20);
+    tokens = await toArray(storage.getRegisteredTokens());
+    expect(tokens).toHaveLength(1);
+    expect(tokens[0]).toEqual(testToken);
 
     // handleStop with cleanStorage = true
     await storage.handleStop({ cleanStorage: true });
-    // Will clean the history bit not addresses
+    // Will clean the history bit not addresses or registered tokens
     await expect(store.historyCount()).resolves.toEqual(0);
     await expect(store.addressCount()).resolves.toEqual(20);
+    tokens = await toArray(storage.getRegisteredTokens());
+    expect(tokens).toHaveLength(1);
+    expect(tokens[0]).toEqual(testToken);
 
     await storage.addTx({
       tx_id: 'another-new-tx',
@@ -89,6 +106,9 @@ describe('handleStop', () => {
     // Will clean the history bit not addresses
     await expect(store.historyCount()).resolves.toEqual(1);
     await expect(store.addressCount()).resolves.toEqual(0);
+    tokens = await toArray(storage.getRegisteredTokens());
+    expect(tokens).toHaveLength(1);
+    expect(tokens[0]).toEqual(testToken);
 
     // Access data is untouched when stopping the wallet
     // XXX: since we stringify to save on store, the optional undefined properties are removed
