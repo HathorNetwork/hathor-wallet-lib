@@ -251,6 +251,60 @@ export async function processHistory(storage: IStorage, { rewardLock }: { reward
 }
 
 /**
+ * Fetch and save the data of the token set on the storage
+ * @param {IStorage} storage - Storage to save the tokens.
+ * @param {Set<string>} tokens - set of tokens to fetch and save.
+ * @returns {Promise<void>}
+ */
+async function updateTokensData(storage: IStorage, tokens: Set<string>): Promise<void> {
+  async function fetchTokenData(uid: string): Promise<{
+    success: true,
+    name: string,
+    symbol: string,
+  } | { success: false, message: string }> {
+    let retryCount = 0;
+
+    while (retryCount <= 5) {
+      try {
+        // Fetch and return the api response
+        let result: {
+          success: true;
+          name: string;
+          symbol: string;
+        } | { success: false, message: string } = await new Promise((resolve) => {
+          return walletApi.getGeneralTokenInfo(uid, resolve);
+        });
+        return result;
+      } catch (err: unknown) {
+        // Increase the retry counter and try again
+        retryCount += 1;
+        continue;
+      }
+    }
+
+    throw new Error('Too many attempts');
+  }
+
+  const store = storage.store;
+  for (const uid of tokens) {
+    const tokenInfo = await store.getToken(uid);
+    if (!tokenInfo) {
+      // The only error that can be thrown is 'too many retries'
+      const response = await fetchTokenData(uid);
+
+      if (!response.success) {
+        throw new Error(response.message);
+      }
+
+      const { name, symbol } = response;
+      const tokenData = { uid, name, symbol };
+      // saveToken will ignore the meta and save only the token config
+      await store.saveToken(tokenData);
+    }
+  }
+}
+
+/**
  * Update the store wallet data based on accumulated data from processed txs.
  * @param {IStorage} storage Storage instance.
  * @param {Object} options
@@ -274,28 +328,7 @@ async function updateWalletMetadataFromProcessedTxData(storage: IStorage, { maxI
   // Update token config
   // Up until now we have updated the tokens metadata, but the token config may be missing
   // So we will check if we have each token found, if not we will fetch the token config from the api.
-  for (const uid of tokens) {
-    const tokenInfo = await store.getToken(uid);
-    if (!tokenInfo) {
-      // this is a new token, we need to get the token data from api
-      const result: {
-        success: true;
-        name: string;
-        symbol: string;
-      } | { success: false, message: string } = await new Promise((resolve) => {
-        return walletApi.getGeneralTokenInfo(uid, resolve);
-      });
-
-      if (!result.success) {
-        throw new Error(result.message);
-      }
-
-      const { name, symbol } = result;
-      const tokenData = { uid, name, symbol };
-      // saveToken will ignore the meta and save only the token config
-      await store.saveToken(tokenData);
-    }
-  }
+  await updateTokensData(storage, tokens);
 }
 
 /**
