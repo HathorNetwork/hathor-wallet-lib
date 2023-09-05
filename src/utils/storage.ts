@@ -276,6 +276,7 @@ async function updateTokensData(storage: IStorage, tokens: Set<string>): Promise
         });
         return result;
       } catch (err: unknown) {
+        console.error(err);
         // Increase the retry counter and try again
         retryCount += 1;
         continue;
