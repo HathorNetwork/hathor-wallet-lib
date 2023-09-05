@@ -1421,7 +1421,7 @@ test('start', async () => {
   });
   await wallet.stop();
 
-  await storage.cleanStorage(true, true);
+  await storage.cleanStorage(true, true, true);
   await storage.saveAccessData(accessData);
   wallet = new HathorWalletServiceWallet({
     requestPassword,

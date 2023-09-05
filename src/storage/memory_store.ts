@@ -786,18 +786,20 @@ export class MemoryStore implements IStore {
 
   /**
    * Clean the storage.
-   * @param cleanHistory if we should clean the transaction history.
-   * @param cleanAddresses if we should clean the addresses.
+   * @param {boolean} cleanHistory if we should clean the transaction history.
+   * @param {boolean} cleanAddresses if we should clean the addresses.
+   * @param {boolean} cleanTokens if we should clean the registered tokens.
    * @async
    * @returns {Promise<void>}
    */
-  async cleanStorage(cleanHistory: boolean = false, cleanAddresses: boolean = false): Promise<void> {
+  async cleanStorage(cleanHistory: boolean = false, cleanAddresses: boolean = false, cleanTokens: boolean = false): Promise<void> {
     if (cleanHistory) {
       this.tokens = new Map<string, ITokenData>();
       this.tokensMetadata = new Map<string, ITokenMetadata>();
       this.history = new Map<string, IHistoryTx>();
       this.historyTs = [];
       this.utxos = new Map<string, IUtxo>();
+      this.lockedUtxos = new Map<string, ILockedUtxo>();
     }
 
     if (cleanAddresses) {
@@ -805,6 +807,10 @@ export class MemoryStore implements IStore {
       this.addressIndexes = new Map<number, string>();
       this.addressesMetadata = new Map<string, IAddressMetadata>();
       this.walletData = { ...this.walletData, ...DEFAULT_ADDRESSES_WALLET_DATA };
+    }
+
+    if (cleanTokens) {
+      this.registeredTokens = new Map<string, ITokenData>();
     }
   }
 

@@ -331,7 +331,7 @@ export interface IStore {
   getItem(key: string): Promise<any>;
   setItem(key: string, value: any): Promise<void>;
 
-  cleanStorage(cleanHistory?: boolean, cleanAddresses?: boolean): Promise<void>;
+  cleanStorage(cleanHistory?: boolean, cleanAddresses?: boolean, cleanTokens?: boolean): Promise<void>;
   cleanMetadata(): Promise<void>;
 }
 
@@ -392,7 +392,7 @@ export interface IStorage {
   changePassword(oldPassword: string, newPassword: string): Promise<void>;
   setGapLimit(value: number): Promise<void>;
   getGapLimit(): Promise<number>;
-  cleanStorage(cleanHistory?: boolean, cleanAddresses?: boolean): Promise<void>;
+  cleanStorage(cleanHistory?: boolean, cleanAddresses?: boolean, cleanTokens?: boolean): Promise<void>;
   handleStop(options: {connection?: FullNodeConnection, cleanStorage?: boolean, cleanAddresses?: boolean}): Promise<void>;
   getTokenDepositPercentage(): number;
   checkPin(pinCode: string): Promise<boolean>;
@@ -463,7 +463,7 @@ export interface IKVTokenIndex extends IKVStoreIndex<void> {
   deleteTokens(tokens: string[]): Promise<void>;
   editTokenMeta(tokenUid: string, meta: Partial<ITokenMetadata>): Promise<void>;
   clearMeta(): Promise<void>;
-  clear(): Promise<void>;
+  clear(cleanTokens?: boolean, cleanRegisteredTokens?: boolean): Promise<void>;
 }
 
 export interface IKVWalletIndex extends IKVStoreIndex<void> {
