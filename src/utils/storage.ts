@@ -277,8 +277,13 @@ async function updateTokensData(storage: IStorage, tokens: Set<string>): Promise
         return result;
       } catch (err: unknown) {
         console.error(err);
+        // This delay will give us the exponential backoff intervals of
+        // 500ms, 1s, 2s, 4s and 8s
+        const delay = 500 * (2 ** retryCount);
         // Increase the retry counter and try again
         retryCount += 1;
+        // Wait `delay` ms before another attempt
+        await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
     }
