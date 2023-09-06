@@ -288,7 +288,7 @@ async function updateTokensData(storage: IStorage, tokens: Set<string>): Promise
       }
     }
 
-    throw new Error('Too many attempts');
+    throw new Error(`Too many attempts at fetchTokenData for ${uid}`);
   }
 
   const store = storage.store;
