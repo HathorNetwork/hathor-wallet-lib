@@ -21,6 +21,12 @@ function _addr_index_key(index) {
   return buf.toString('hex');
 }
 
+async function asyncGenToArray(gen) {
+  const out = [];
+  for await (const it of gen) out.push(it);
+  return out;
+}
+
 const DATA_DIR = './testdata.leveldb';
 
 test('addresses methods', async () => {
@@ -42,12 +48,9 @@ test('addresses methods', async () => {
   metaBatch.put('b', {numTransactions: 5, balance: {}});
   await metaBatch.write();
 
-  const values = [];
-  for await (const info of store.addressIter()) {
-    values.push(info.base58);
-  }
+  const values = await asyncGenToArray(store.addressIter());
   // The order should follow the index ordering
-  expect(values).toStrictEqual(['b', 'a', 'c']);
+  expect(values.map(x => x.base58)).toStrictEqual(['b', 'a', 'c']);
 
   await expect(store.getAddress('b')).resolves.toStrictEqual({ base58: 'b', bip32AddressIndex: 1 });
   await expect(store.getAddressMeta('b')).resolves.toMatchObject({ numTransactions: 5 });
@@ -97,17 +100,11 @@ test('history methods', async () => {
     await store.saveTx(tx);
   }
   await expect(store.historyCount()).resolves.toEqual(11);
-  let txsBuf = [];
-  for await (const tx of store.historyIter()) {
-    txsBuf.push(tx);
-  }
-  expect(txsBuf).toHaveLength(11);
-  txsBuf = [];
-  for await (const tx of store.historyIter('01')) {
-    txsBuf.push(tx);
-  }
-  expect(txsBuf).toHaveLength(2);
-  txsBuf = [];
+  await expect(asyncGenToArray(store.historyIter()))
+        .resolves.toHaveLength(11);
+
+  await expect(asyncGenToArray(store.historyIter('01')))
+        .resolves.toHaveLength(2);
 
   const txId = '0000000110eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e';
   await expect(store.getTx(txId)).resolves.toMatchObject({
@@ -179,11 +176,8 @@ test('token methods', async () => {
   store.tokenIndex.saveToken(HATHOR_TOKEN_CONFIG);
 
   await store.saveToken({ uid: '01', name: 'Token 01', symbol: 'TK01'});
-  let count = 0;
-  for await (let _ of store.tokenIndex.tokenDB.iterator()) {
-    count += 1;
-  }
-  expect(count).toEqual(2);
+  await expect(asyncGenToArray(store.tokenIndex.tokenDB.iterator()))
+        .resolves.toHaveLength(2);
   await expect(store.tokenIndex.getToken('01')).resolves.not.toBeNull();
   await expect(store.tokenIndex.getTokenMetadata('01')).resolves.toBeNull();
   await store.saveToken(
@@ -199,35 +193,23 @@ test('token methods', async () => {
       },
     },
   );
-  count = 0;
-  for await (let _ of store.tokenIndex.tokenDB.iterator()) {
-    count += 1;
-  }
-  expect(count).toEqual(3);
+  await expect(asyncGenToArray(store.tokenIndex.tokenDB.iterator()))
+        .resolves.toHaveLength(3);
   await expect(store.tokenIndex.getToken('02')).resolves.not.toBeNull();
   await expect(store.tokenIndex.getTokenMetadata('02')).resolves.not.toBeNull();
 
-  let registered = [];
-  for await (const token of store.registeredTokenIter()) {
-    registered.push(token);
-  }
-  expect(registered).toHaveLength(0);
+  await expect(asyncGenToArray(store.registeredTokenIter()))
+        .resolves.toHaveLength(0);
 
   await store.registerToken({ uid: '02', name: 'Token 02', symbol: 'TK02'});
   await store.registerToken({ uid: '03', name: 'Token 03', symbol: 'TK03'});
 
-  registered = [];
-  for await (const token of store.registeredTokenIter()) {
-    registered.push(token);
-  }
-  expect(registered).toHaveLength(2);
+  await expect(asyncGenToArray(store.registeredTokenIter()))
+        .resolves.toHaveLength(2);
 
   await store.unregisterToken('02');
-  registered = [];
-  for await (const token of store.registeredTokenIter()) {
-    registered.push(token);
-  }
-  expect(registered).toHaveLength(1);
+  await expect(asyncGenToArray(store.registeredTokenIter()))
+        .resolves.toHaveLength(1);
 
   await store.editTokenMeta('00', { numTransactions: 10, balance: { tokens: { locked: 1, unlocked: 2 } } });
   await expect(store.tokenIndex.getTokenMetadata('00')).resolves.toMatchObject({
@@ -284,21 +266,15 @@ test('utxo methods', async () => {
   for (const u of utxos) {
     await store.saveUtxo(u);
   }
-  let buf = [];
-  for await (const u of store.utxoIter()) {
-    buf.push(u);
-  }
-  expect(buf).toHaveLength(3);
+  await expect(asyncGenToArray(store.utxoIter()))
+        .resolves.toHaveLength(3);
 
   // Default values will filter for HTR token
-  buf = [];
-  for await (const u of store.selectUtxos({})) {
-    buf.push(u);
-  }
-  expect(buf).toHaveLength(2);
+  await expect(asyncGenToArray(store.selectUtxos({})))
+        .resolves.toHaveLength(2);
 
   // only_available_utxos should filter locked utxos
-  buf = [];
+  let buf = [];
   for await (const u of store.selectUtxos({ only_available_utxos: true })) {
     buf.push(u);
   }
@@ -347,39 +323,66 @@ test('access data methods', async () => {
   await store.setItem('foo', 'bar');
   await expect(store.getItem('foo')).resolves.toEqual('bar');
 
-  let count = 0;
-  for await (let _ of store.historyIter()) {
-    count += 1;
-  }
-  expect(count).toEqual(0);
-  count = 0;
-  for await (let _ of store.addressIter()) {
-    count += 1;
-  }
-  expect(count).toEqual(0);
+  await expect(asyncGenToArray(store.historyIter()))
+        .resolves.toHaveLength(0);
+  await expect(asyncGenToArray(store.addressIter()))
+        .resolves.toHaveLength(0);
+  await expect(asyncGenToArray(store.registeredTokenIter()))
+        .resolves.toHaveLength(0);
   await store.saveAddress({base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0});
   await store.saveTx(tx_history[0]);
-  count = 0;
-  for await (let _ of store.historyIter()) {
-    count += 1;
-  }
-  expect(count).toEqual(1);
-  count = 0;
-  for await (let _ of store.addressIter()) {
-    count += 1;
-  }
-  expect(count).toEqual(1);
+  await store.registerToken({ uid: 'testtoken', name: 'Test token', symbol: 'TST' });
+  await expect(asyncGenToArray(store.historyIter()))
+        .resolves.toHaveLength(1);
+  await expect(asyncGenToArray(store.addressIter()))
+        .resolves.toHaveLength(1);
+  await expect(asyncGenToArray(store.registeredTokenIter()))
+        .resolves.toHaveLength(1);
+
+  // Clean storage but keep registered tokens
   await store.cleanStorage(true, true);
-  count = 0;
-  for await (let _ of store.historyIter()) {
-    count += 1;
-  }
-  expect(count).toEqual(0);
-  count = 0;
-  for await (let _ of store.addressIter()) {
-    count += 1;
-  }
-  expect(count).toEqual(0);
+  await expect(asyncGenToArray(store.historyIter()))
+        .resolves.toHaveLength(0);
+  await expect(asyncGenToArray(store.addressIter()))
+        .resolves.toHaveLength(0);
+  await expect(asyncGenToArray(store.registeredTokenIter()))
+        .resolves.toHaveLength(1);
+
+  // Clean only registered tokens
+  await store.saveAddress({base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0});
+  await store.saveTx(tx_history[0]);
+  await store.registerToken({ uid: 'testtoken', name: 'Test token', symbol: 'TST' });
+  await expect(asyncGenToArray(store.historyIter()))
+        .resolves.toHaveLength(1);
+  await expect(asyncGenToArray(store.addressIter()))
+        .resolves.toHaveLength(1);
+  await expect(asyncGenToArray(store.registeredTokenIter()))
+        .resolves.toHaveLength(1);
+
+  await store.cleanStorage(false, false, true);
+  await expect(asyncGenToArray(store.historyIter()))
+        .resolves.toHaveLength(1);
+  await expect(asyncGenToArray(store.addressIter()))
+        .resolves.toHaveLength(1);
+  await expect(asyncGenToArray(store.registeredTokenIter()))
+        .resolves.toHaveLength(0);
+
+  // Clean all
+  await store.registerToken({ uid: 'testtoken', name: 'Test token', symbol: 'TST' });
+  await expect(asyncGenToArray(store.historyIter()))
+        .resolves.toHaveLength(1);
+  await expect(asyncGenToArray(store.addressIter()))
+        .resolves.toHaveLength(1);
+  await expect(asyncGenToArray(store.registeredTokenIter()))
+        .resolves.toHaveLength(1);
+
+  await store.cleanStorage(true, true, true);
+  await expect(asyncGenToArray(store.historyIter()))
+        .resolves.toHaveLength(0);
+  await expect(asyncGenToArray(store.addressIter()))
+        .resolves.toHaveLength(0);
+  await expect(asyncGenToArray(store.registeredTokenIter()))
+        .resolves.toHaveLength(0);
 
   await store.destroy();
 });

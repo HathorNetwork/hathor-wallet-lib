@@ -27,6 +27,7 @@ import { AxiosInstance, AxiosRequestConfig } from 'axios';
 
 import { ErrorMessages } from '../errorMessages';
 import config from '../config';
+import { IDataInput, IUtxo } from '../types';
 
 /**
  * Helper methods
@@ -565,6 +566,27 @@ const helpers = {
    */
   getShortHash(hash: string): string {
     return `${hash.substring(0,12)}...${hash.substring(52,64)}`;
+  },
+
+  /**
+   * Returns IDataInput formatted from an IUtxo object
+   *
+   * @param {IUtxo} utxo Utxo to get IDataInput from
+   *
+   * @return {IDataInput}
+   * @memberof Helpers
+   * @inner
+   *
+   */
+  getDataInputFromUtxo(utxo: IUtxo): IDataInput {
+    return {
+      txId: utxo.txId,
+      index: utxo.index,
+      value: utxo.value,
+      authorities: utxo.authorities,
+      token: utxo.token,
+      address: utxo.address,
+    } as IDataInput;
   },
 }
 
