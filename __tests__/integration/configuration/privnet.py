@@ -1,6 +1,5 @@
 from hathor.conf.settings import HathorSettings
 
-
 # This file is the Private Network Configuration for the Fullnode
 # It is consumed by the docker-compose.yml file on the integration folder.
 # For more information, refer to:
@@ -28,9 +27,5 @@ SETTINGS = HathorSettings(
     GENESIS_TX1_HASH=bytes.fromhex('54165cef1fd4cf2240d702b8383c307c822c16ca407f78014bdefa189a7571c2'),
     GENESIS_TX1_NONCE=0,
     GENESIS_TX2_HASH=bytes.fromhex('039906854ce6309b3180945f2a23deb9edff369753f7082e19053f5ac11bfbae'),
-    GENESIS_TX2_NONCE=0,
-    ENABLE_NANO_CONTRACTS=True,
-    BLUEPRINTS={
-        bytes.fromhex('3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595'): 'Bet'
-    },
+    GENESIS_TX2_NONCE=0
 )

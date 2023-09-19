@@ -16,7 +16,6 @@ services:
       "--allow-mining-without-peers",
       "--unsafe-mode", "privatenet",
       "--memory-storage",
-      "--nc-history-index",
     ]
     environment:
       HATHOR_CONFIG_FILE: privnet.conf.privnet

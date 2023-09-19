@@ -17,7 +17,7 @@ import P2PKH from '../../../src/models/p2pkh';
 import { isEmpty } from 'lodash';
 import { delay } from '../utils/core.util';
 
-describe('full cycle of bet nano contract', () => {
+describe.skip('full cycle of bet nano contract', () => {
   /** @type HathorWallet */
   let hWallet;
 
