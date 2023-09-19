@@ -21,7 +21,12 @@ class BetTransactionBuilder {
   /**
    * Create bet NC transaction
    *
-   * @return {Transaction}
+   * @param {Buffer} pubkey Public key to sign the nano contract transaction
+   * @param {Buffer} oracleScript Script of the oracle
+   * @param {string} tokenUid Token of the bet
+   * @param {number} dateLastOffer Timestamp of the last offer
+   *
+   * @return {NanoContract}
    * @memberof BetTransactionBuilder
    * @inner
    */
@@ -36,6 +41,20 @@ class BetTransactionBuilder {
     return nc;
   }
 
+  /**
+   * Create transaction to make a deposit
+   *
+   * @param {string} nano_contract_id Nano contract id
+   * @param {Buffer} pubkey Public key to sign the nano contract transaction
+   * @param {Input[]} inputs List of inputs for this deposit transaction
+   * @param {Output[]} outputs List of outputs for this deposit transaction
+   * @param {Address} address Address to receive the tokens in case of success of the bet
+   * @param {string} result Result to bet
+   *
+   * @return {NanoContract}
+   * @memberof BetTransactionBuilder
+   * @inner
+   */
   deposit(nano_contract_id: string, pubkey: Buffer, inputs: Input[], outputs: Output[], address: Address, result: string): NanoContract {
     const serializer = new Serializer();
     const serializedAddress = serializer.fromBytes(address.decode());
@@ -46,12 +65,35 @@ class BetTransactionBuilder {
     return nc;
   }
 
+  /**
+   * Create transaction to make a withdrawal
+   *
+   * @param {string} nano_contract_id Nano contract id
+   * @param {Buffer} pubkey Public key to sign the nano contract transaction
+   * @param {Output[]} outputs List of outputs for this deposit transaction
+   *
+   * @return {NanoContract}
+   * @memberof BetTransactionBuilder
+   * @inner
+   */
   withdraw(nano_contract_id: string, pubkey: Buffer, outputs: Output[]): NanoContract {
     // Amount and address to withdraw will be in the outputs
     const nc = new NanoContract([], outputs, nano_contract_id, 'withdraw', [], pubkey, null);
     return nc;
   }
 
+  /**
+   * Create transaction to set the bet result
+   *
+   * @param {string} nano_contract_id Nano contract id
+   * @param {Buffer} pubkey Public key to sign the nano contract transaction
+   * @param {Buffer} inputData Data of the input for the oracle
+   * @param {string} result Result of the bet
+   *
+   * @return {NanoContract}
+   * @memberof BetTransactionBuilder
+   * @inner
+   */
   setResult(nano_contract_id: string, pubkey: Buffer, inputData: Buffer, result: string): NanoContract {
     const serializer = new Serializer();
     // XXX Why the full node has decode to ASCII and not UTF-8?
