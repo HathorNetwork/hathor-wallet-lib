@@ -190,6 +190,14 @@ export function createP2SHRedeemScript(xpubs: string[], numSignatures: number, i
   return redeemScript.toBuffer();
 }
 
+/**
+* Parse script to get an object corresponding to the script data
+*
+* @param {Buffer} script Output script to parse
+* @param {Network} network Network to get the address first byte parameter
+*
+* @return {P2PKH | P2SH | ScriptData | null} Parsed script object
+*/
 export const parseScript = (script: Buffer, network: Network): P2PKH | P2SH | ScriptData | null => {
   // It's still unsure how expensive it is to throw an exception in JavaScript. Some languages are really
   // inefficient when it comes to exceptions while others are totally efficient. If it is efficient,
