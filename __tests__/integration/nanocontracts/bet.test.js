@@ -17,6 +17,10 @@ import P2PKH from '../../../src/models/p2pkh';
 import { isEmpty } from 'lodash';
 import { delay } from '../utils/core.util';
 
+// We have to skip this test because it needs nano contract support in the full node.
+// Until we have this support in the public docker image, the CI won't succeed if this is not skipped
+// After skipping it, we must also add `--nc-history-index` as a new parameter for the integration tests full node
+// and add the blueprints in the configuration file for the tests privnet
 describe.skip('full cycle of bet nano contract', () => {
   /** @type HathorWallet */
   let hWallet;
