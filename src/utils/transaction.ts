@@ -566,7 +566,7 @@ const transaction = {
    *
    * @return {string} Type of the object
    *
-   * @memberof Helpers
+   * @memberof transaction
    * @inner
    */
   getTxType(tx: Pick<IHistoryTx, 'version'>): string {
@@ -588,6 +588,16 @@ const transaction = {
     return 'Unknown';
   },
 
+  /**
+   * Get hash data to sign the transaction
+   *
+   * @param {Buffer} data Transaction data
+   *
+   * @return {Buffer} Hash data to sign transaction
+   *
+   * @memberof transaction
+   * @inner
+   */
   getDataToSignHash(data: Buffer): Buffer {
     const hashbuf = cryptoBL.Hash.sha256(data);
     return new encoding.BufferReader(hashbuf).readReverse();
