@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { IAddressInfo, IAddressMetadata, IHistoryTx, ILockedUtxo, IStore, ITokenData, ITokenMetadata, IUtxo, IUtxoFilterOptions, IWalletAccessData, IWalletData } from '../../types';
+import { AddressScanPolicy, IAddressInfo, IAddressMetadata, IHistoryTx, ILockedUtxo, IStore, ITokenData, ITokenMetadata, IUtxo, IUtxoFilterOptions, IWalletAccessData, IWalletData } from '../../types';
 import path from 'path';
 import LevelAddressIndex from './address_index';
 import LevelHistoryIndex from './history_index';
@@ -300,6 +300,10 @@ export default class LevelDBStore implements IStore {
 
   async getGapLimit(): Promise<number> {
     return this.walletIndex.getGapLimit();
+  }
+
+  async getScanningPolicy(): Promise<AddressScanPolicy> {
+    return this.walletIndex.getScanningPolicy();
   }
 
   async getWalletData(): Promise<IWalletData> {

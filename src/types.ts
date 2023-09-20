@@ -5,8 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { Config } from "./config";
-import Input from "./models/input";
+import { Config } from './config';
+import Input from './models/input';
 import FullNodeConnection from './new/connection';
 
 export interface IAddressInfo {
@@ -209,12 +209,38 @@ export interface IWalletAccessData {
   walletFlags: number;
 }
 
+export interface IGapLimitAddressScanPolicy {
+  gapLimit: number;
+}
+
+export interface IManualAddressScanPolicy {
+  startIndex: number;
+  endIndex: number;
+}
+
+/**
+ * This is a request from the scanning policy to load `count` addresses starting from nextIndex.
+ */
+export interface IScanPolicyLoadAddresses {
+  nextIndex: number;
+  count: number;
+}
+
+export type AddressScanPolicy = 'gap-limit' | 'manual';
+
+export type AddressScanPolicyData = IGapLimitAddressScanPolicy | IManualAddressScanPolicy;
+
+export function isGapLimitScanPolicy(scanPolicyData: AddressScanPolicyData): scanPolicyData is IGapLimitAddressScanPolicy {
+  return (scanPolicyData as IGapLimitAddressScanPolicy).gapLimit !== undefined;
+}
+
 export interface IWalletData {
   lastLoadedAddressIndex: number;
   lastUsedAddressIndex: number;
   currentAddressIndex: number;
   bestBlockHeight: number;
-  gapLimit: number;
+  scanPolicy: AddressScanPolicy;
+  scanPolicyData: AddressScanPolicyData;
 }
 
 export interface IEncryptedData {
@@ -326,6 +352,7 @@ export interface IStore {
   setCurrentAddressIndex(index: number): Promise<void>;
   setGapLimit(value: number): Promise<void>;
   getGapLimit(): Promise<number>;
+  getScanningPolicy(): Promise<AddressScanPolicy>;
 
   // Generic storage keys
   getItem(key: string): Promise<any>;
@@ -398,6 +425,7 @@ export interface IStorage {
   checkPin(pinCode: string): Promise<boolean>;
   checkPassword(password: string): Promise<boolean>;
   isHardwareWallet(): Promise<boolean>;
+  getScanningPolicy(): Promise<AddressScanPolicy>;
 }
 
 /**

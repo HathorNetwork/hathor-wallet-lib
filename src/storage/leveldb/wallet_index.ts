@@ -8,8 +8,8 @@
 import path from 'path';
 import { Level } from 'level';
 import { AbstractSublevel } from 'abstract-level';
-import { IKVWalletIndex, IWalletData, IWalletAccessData } from '../../types';
-import { GAP_LIMIT } from '../../constants';
+import { IKVWalletIndex, IWalletData, IWalletAccessData, AddressScanPolicy, AddressScanPolicyData } from '../../types';
+import { GAP_LIMIT, DEFAULT_ADDRESS_SCANNING_POLICY } from '../../constants';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 
 export const ACCESS_PREFIX = 'access';
@@ -207,6 +207,24 @@ export default class LevelWalletIndex implements IKVWalletIndex {
   }
 
   /**
+   * Get the scanning policy.
+   * @returns {Promise<AddressScanPolicy>}
+   */
+  async getScanningPolicy(): Promise<AddressScanPolicy> {
+    try {
+      const value = await this.walletDB.get('scanningPolicy');
+      if (!value) return DEFAULT_ADDRESS_SCANNING_POLICY;
+      return value as AddressScanPolicy;
+    } catch (err: unknown) {
+      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
+        // Default behavior is gap-limit
+        return DEFAULT_ADDRESS_SCANNING_POLICY;
+      }
+      throw err;
+    }
+  }
+
+  /**
    * Get the wallet data.
    * @returns {Promise<IWalletData>}
    */
@@ -215,13 +233,29 @@ export default class LevelWalletIndex implements IKVWalletIndex {
     const lastUsedAddressIndex = await this.getLastUsedAddressIndex();
     const currentAddressIndex = await this.getCurrentAddressIndex();
     const bestBlockHeight = await this.getCurrentHeight();
-    const gapLimit = await this.getGapLimit();
+    const scanPolicy = await this.getScanningPolicy();
+    let scanPolicyData: AddressScanPolicyData;
+    switch(scanPolicy) {
+      case 'manual':
+        scanPolicyData = {
+          startIndex: 0,
+          endIndex: 1,
+        };
+        break;
+      default:
+      case 'gap-limit':
+        scanPolicyData = {
+          gapLimit: await this.getGapLimit(),
+        };
+        break;
+    }
     return {
       lastLoadedAddressIndex,
       lastUsedAddressIndex,
       currentAddressIndex,
       bestBlockHeight,
-      gapLimit,
+      scanPolicy,
+      scanPolicyData,
     };
   }
 

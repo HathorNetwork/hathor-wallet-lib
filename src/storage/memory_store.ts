@@ -13,12 +13,14 @@ import {
   IHistoryTx,
   IUtxo,
   IWalletAccessData,
+  isGapLimitScanPolicy,
   IUtxoFilterOptions,
   IAddressMetadata,
   IWalletData,
   ILockedUtxo,
+  AddressScanPolicy,
 } from '../types';
-import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
+import { DEFAULT_ADDRESS_SCANNING_POLICY, GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
 import { orderBy } from 'lodash';
 import transactionUtils from '../utils/transaction';
 
@@ -31,7 +33,10 @@ const DEFAULT_ADDRESSES_WALLET_DATA = {
 
 const DEFAULT_WALLET_DATA = {
   bestBlockHeight: 0,
-  gapLimit: GAP_LIMIT,
+  scanPolicy: DEFAULT_ADDRESS_SCANNING_POLICY,
+  scanPolicyData: {
+    gapLimit: GAP_LIMIT,
+  },
 };
 
 /**
@@ -741,7 +746,16 @@ export class MemoryStore implements IStore {
    * @param {number} value Gat limit to set.
    */
   async setGapLimit(value: number): Promise<void> {
-    this.walletData.gapLimit = value;
+    if (!isGapLimitScanPolicy(this.walletData.scanPolicyData)) {
+      // Since the wallet is not configured to use gap-limiy this should be a no-op
+      return;
+    }
+    if (!this.walletData.scanPolicyData) {
+      this.walletData.scanPolicyData = {
+        gapLimit: value,
+      };
+    }
+    this.walletData.scanPolicyData.gapLimit = value;
   }
 
   /**
@@ -750,7 +764,21 @@ export class MemoryStore implements IStore {
    * @returns {Promise<number>}
    */
   async getGapLimit(): Promise<number> {
-    return this.walletData.gapLimit;
+    if (!isGapLimitScanPolicy(this.walletData.scanPolicyData)) {
+      // Return the default value if the wallet is not configured for gap-limit. If we want to
+      // check for gap-limit configuration we should use the `getScanningPolicy` method
+      return GAP_LIMIT;
+    }
+    return this.walletData.scanPolicyData.gapLimit;
+  }
+
+  /**
+   * Get the configured address scanning policy.
+   * @async
+   * @returns {Promise<AddressScanPolicy>}
+   */
+  async getScanningPolicy(): Promise<AddressScanPolicy> {
+    return this.walletData.scanPolicy;
   }
 
   /**
