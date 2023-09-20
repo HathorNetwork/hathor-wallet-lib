@@ -23,4 +23,6 @@ export enum ErrorMessages {
   UNSUPPORTED_HASHER = 'unsupported-hasher',
   // When access data is not set
   UNINITIALIZED_WALLET = 'uninitialized-wallet',
+  // When PIN is required in a method and not set
+  PIN_REQUIRED = 'pin-required',
 }

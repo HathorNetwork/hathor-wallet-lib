@@ -313,3 +313,21 @@ export class RequestError extends Error {};
  * @inner
  */
 export class NanoRequestError extends RequestError {};
+
+/**
+ * Error thrown when PIN is required in a method but it's not set
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class PinRequiredError extends Error {
+  errorCode: string = ErrorMessages.PIN_REQUIRED;
+};
+
+/**
+ * Error thrown when during the creation of a nano contract transaction
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class NanoContractTransactionError extends Error {};
