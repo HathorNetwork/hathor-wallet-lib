@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { AddressScanPolicy } from "./types";
+
 
 /**
  * Constants defined for the Hathor Wallet
@@ -256,3 +258,8 @@ export const P2PKH_ACCT_PATH = `m/44'/${HATHOR_BIP44_CODE}'/0'`;
  * String to be prefixed before signed messages using bitcore-message
  */
 export const HATHOR_MAGIC_BYTES = 'Hathor Signed Message:\n';
+
+/**
+ * Default address scanning policy
+ */
+export const DEFAULT_ADDRESS_SCANNING_POLICY: AddressScanPolicy = 'gap-limit';

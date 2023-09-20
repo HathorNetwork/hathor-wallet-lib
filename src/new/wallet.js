@@ -6,7 +6,7 @@
  */
 
 import { get } from 'lodash';
-import bitcore from 'bitcore-lib';
+import bitcore, { HDPrivateKey } from 'bitcore-lib';
 import EventEmitter from 'events';
 import { HATHOR_TOKEN_CONFIG, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
 import tokenUtils from '../utils/tokens';
@@ -21,14 +21,13 @@ import Network from '../models/network';
 import { AddressError, TxNotFoundError, WalletError, WalletFromXPubGuard } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
-import { HDPrivateKey } from 'bitcore-lib';
 import transactionUtils from '../utils/transaction';
 import { signMessage } from '../utils/crypto';
 import Transaction from '../models/transaction';
 import Queue from '../models/queue';
 import FullnodeConnection from './connection';
 import { WalletType } from '../types';
-import { syncHistory, reloadStorage, checkGapLimit } from '../utils/storage';
+import { syncHistory, reloadStorage, scanPolicyStartAddresses, checkScanningPolicy } from '../utils/storage';
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH } from '../utils/address';
@@ -343,38 +342,40 @@ class HathorWallet extends EventEmitter {
    * It is also called if the network is down.
    *
    * @param {Number} newState Enum of new state after change
-   **/
+   */
   async onConnectionChangedState(newState) {
     if (newState === ConnectionState.CONNECTED) {
       this.setState(HathorWallet.SYNCING);
 
       try {
-      // If it's the first connection we just load the history
-      // otherwise we are reloading data, so we must execute some cleans
-      // before loading the full data again
-      if (this.firstConnection) {
-        this.firstConnection = false;
-        const walletData = await this.storage.getWalletData();
-        await syncHistory(0, walletData.gapLimit, this.storage, this.conn);
-      } else {
-        if (this.beforeReloadCallback) {
-          this.beforeReloadCallback();
+        // If it's the first connection we just load the history
+        // otherwise we are reloading data, so we must execute some cleans
+        // before loading the full data again
+        if (this.firstConnection) {
+          this.firstConnection = false;
+          const addressesToLoad = await scanPolicyStartAddresses(this.storage);
+          await syncHistory(
+            addressesToLoad.nextIndex,
+            addressesToLoad.count,
+            this.storage,
+            this.conn,
+          );
+        } else {
+          if (this.beforeReloadCallback) {
+            this.beforeReloadCallback();
+          }
+          await reloadStorage(this.storage, this.conn);
         }
-        await reloadStorage(this.storage, this.conn);
-      }
-      this.setState(HathorWallet.PROCESSING);
-
+        this.setState(HathorWallet.PROCESSING);
       } catch (error) {
         this.setState(HathorWallet.ERROR);
-        console.error('Error loading wallet', {error});
+        console.error('Error loading wallet', { error });
       }
+    } else if (this.walletStopped) {
+      this.setState(HathorWallet.CLOSED);
     } else {
-      if (this.walletStopped) {
-        this.setState(HathorWallet.CLOSED);
-      } else {
-        // Otherwise we just lost websocket connection
-        this.setState(HathorWallet.CONNECTING);
-      }
+      // Otherwise we just lost websocket connection
+      this.setState(HathorWallet.CONNECTING);
     }
   }
 
@@ -1145,9 +1146,14 @@ class HathorWallet extends EventEmitter {
     await this.storage.addTx(newTx);
 
     // check gap-limit and load more addresses if needed
-    const fillGapLimit = await checkGapLimit(this.storage);
-    if (fillGapLimit !== null) {
-      await syncHistory(fillGapLimit.nextIndex, fillGapLimit.count, this.storage, this.conn);
+    const loadMoreAddresses = await checkScanningPolicy(this.storage);
+    if (loadMoreAddresses !== null) {
+      await syncHistory(
+        loadMoreAddresses.nextIndex,
+        loadMoreAddresses.count,
+        this.storage,
+        this.conn,
+      );
     }
     // Process history to update metadatas
     await this.storage.processHistory();
@@ -1157,8 +1163,7 @@ class HathorWallet extends EventEmitter {
     } else {
       this.emit('update-tx', newTx);
     }
-    return;
-  };
+  }
 
   /**
    * Send a transaction with a single output

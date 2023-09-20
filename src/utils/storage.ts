@@ -6,7 +6,7 @@
  */
 
 import FullnodeConnection from '../new/connection';
-import { IStorage, IAddressInfo, IHistoryTx, IBalance, ILockedUtxo } from '../types';
+import { IStorage, IAddressInfo, IHistoryTx, IBalance, ILockedUtxo, isGapLimitScanPolicy, IScanPolicyLoadAddresses } from '../types';
 import walletApi from '../api/wallet';
 
 import { chunk } from 'lodash';
@@ -53,7 +53,7 @@ export async function loadAddresses(startIndex: number, count: number, storage: 
  * @param {FullnodeConnection} connection Connection to be used to reload the storage
  * @returns {Promise<void>}
  */
-export async function reloadStorage(storage: IStorage, connection: FullnodeConnection) {
+export async function reloadStorage(storage: IStorage, connection: FullnodeConnection): Promise<void> {
   // unsub all addresses
   for await (const address of storage.getAllAddresses()) {
     connection.unsubscribeAddress(address.base58);
@@ -65,7 +65,8 @@ export async function reloadStorage(storage: IStorage, connection: FullnodeConne
     // Reset access data
     await storage.saveAccessData(accessData);
   }
-  return syncHistory(0, await storage.getGapLimit(), storage, connection);
+  const addressesToLoad = await scanPolicyStartAddresses(storage);
+  return syncHistory(addressesToLoad.nextIndex, addressesToLoad.count, storage, connection);
 }
 
 /**
@@ -98,14 +99,16 @@ export async function syncHistory(startIndex: number, count: number, storage: IS
         historyLength: await storage.store.historyCount(),
       });
     }
-    // check gap limit
-    const fillGapLimit = await checkGapLimit(storage);
-    if (fillGapLimit === null) {
-      // gap limit is filled and we can stop loading addresses
+
+    // Check if we need to load more addresses from the address scanning policy
+    const loadMoreAddresses = await checkScanningPolicy(storage);
+    if (loadMoreAddresses === null) {
+      // No more addresses to load
       break;
     }
-    itStartIndex = fillGapLimit.nextIndex;
-    itCount = fillGapLimit.count;
+    // The scanning policy configured requires more addresses to be loaded
+    itStartIndex = loadMoreAddresses.nextIndex;
+    itCount = loadMoreAddresses.count;
   }
   if (foundAnyTx && processHistory) {
     await storage.processHistory();
@@ -198,14 +201,56 @@ export async function *loadAddressHistory(addresses: string[], storage: IStorage
 }
 
 /**
+ * Get the starting addresses to load from the scanning policy
+ * @param {IStorage} storage The storage instance
+ * @returns {Promise<IScanPolicyLoadAddresses>}
+ */
+export async function scanPolicyStartAddresses(storage: IStorage): Promise<IScanPolicyLoadAddresses> {
+  const scanPolicy = await storage.getScanningPolicy();
+  switch (scanPolicy) {
+    default:
+    case 'gap-limit':
+      return {
+        nextIndex: 0,
+        count: await storage.getGapLimit(),
+      };
+  }
+
+}
+
+/**
+ * Use the correct method for the configured address scanning policy to check if we should
+ * load more addresses
+ * @param {IStorage} storage The storage instance
+ * @returns {Promise<IScanPolicyLoadAddresses|null>}
+ */
+export async function checkScanningPolicy(storage: IStorage): Promise<IScanPolicyLoadAddresses|null> {
+  const scanPolicy = await storage.getScanningPolicy();
+  switch (scanPolicy) {
+    case 'gap-limit':
+      return await checkGapLimit(storage);
+    default:
+      return null
+  }
+}
+
+/**
  * Check if the storage has at least `gapLimit` addresses loaded without any transaction.
  * If it doesn't, it will return the next index to load and the number of addresses to fill the gap.
  * @param {IStorage} storage The storage instance
- * @returns {Promise<{nextIndex: number, count: number}|null>}
+ * @returns {Promise<IScanPolicyLoadAddresses|null>}
  */
-export async function checkGapLimit(storage: IStorage): Promise<{nextIndex: number, count: number}|null> {
+export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadAddresses|null> {
+  if (await storage.getScanningPolicy() !== 'gap-limit') {
+    // Since the wallet is not configured to use gap-limit this is a no-op
+    return null;
+  }
   // check gap limit
-  const { lastLoadedAddressIndex, lastUsedAddressIndex, gapLimit } = await storage.getWalletData();
+  const { lastLoadedAddressIndex, lastUsedAddressIndex, scanPolicyData } = await storage.getWalletData();
+  if (!isGapLimitScanPolicy(scanPolicyData)) {
+    throw new Error('Wallet is configured to use gap-limit but the scan policy data is not configured as gap-limit');
+  }
+  const gapLimit = scanPolicyData.gapLimit;
   if ((lastUsedAddressIndex + gapLimit) > lastLoadedAddressIndex) {
     // we need to generate more addresses to fill the gap limit
     return {
