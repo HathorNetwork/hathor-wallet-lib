@@ -1204,11 +1204,13 @@ describe('sendTransaction', () => {
     expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(4))).toHaveProperty('numTransactions', 0);
     expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(5))).toHaveProperty('numTransactions', 1);
     expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(6))).toHaveProperty('numTransactions', 0);
+    await delay(1000);
   });
 
   it('should send custom token transactions', async () => {
     const hWallet = await generateWalletHelper();
     await GenesisWalletHelper.injectFunds(await hWallet.getAddressAtIndex(0), 10);
+    await delay(1000);
     const { hash: tokenUid } = await createTokenHelper(
       hWallet,
       'Token to Send',
@@ -1558,6 +1560,7 @@ describe('createNewToken', () => {
     const hWallet = await generateWalletHelper();
     const addr0 = await hWallet.getAddressAtIndex(0);
     await GenesisWalletHelper.injectFunds(addr0, 10);
+    await delay(1000);
 
     // Creating the new token
     const newTokenResponse = await hWallet.createNewToken(
@@ -1642,6 +1645,7 @@ describe('createNewToken', () => {
     const addr10 = await hWallet.getAddressAtIndex(10);
     const addr11 = await hWallet.getAddressAtIndex(11);
     await GenesisWalletHelper.injectFunds(addr0, 1);
+    await delay(1000);
 
     // Creating the new token
     const newTokenResponse = await hWallet.createNewToken(
@@ -2293,6 +2297,7 @@ describe('delegateAuthority', () => {
       { createAnother: true }
     );
     await waitForTxReceived(hWallet1, duplicateMeltAuth);
+    await delay(1000);
 
     // Confirming two authority tokens on wallet1
     let auth1 = await hWallet1.getMeltAuthority(tokenUid, { many: true });
