@@ -22,7 +22,10 @@ test('default values', async () => {
     lastUsedAddressIndex: -1,
     currentAddressIndex: -1,
     bestBlockHeight: 0,
-    gapLimit: GAP_LIMIT,
+    scanPolicy: 'gap-limit',
+    scanPolicyData: {
+      gapLimit: GAP_LIMIT,
+    },
   });
 });
 
