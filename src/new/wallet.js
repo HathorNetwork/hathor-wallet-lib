@@ -2684,6 +2684,14 @@ class HathorWallet extends EventEmitter {
     return this.storage.isHardwareWallet();
   }
 
+  /**
+   * Get the private key of the wallet at the address index
+   *
+   * @param {number} addressIndex Index of the address to derive the private key
+   * @param {string} pin Pin to decrypt data
+   *
+   * @returns {Promise<HDPrivateKey>}
+   */
   async getPrivateKeyAtIndex(addressIndex, pin) {
     const accessData = await this.getAccessData();
     const encryptedPrivateKey = accessData.mainKey;
@@ -2695,16 +2703,27 @@ class HathorWallet extends EventEmitter {
     return privateKey;
   }
 
-  async prepareNCTransactionAndSend(tx, privateKey, pin) {
+  /**
+   * Sign a transaction and create a send transaction object
+   *
+   * @param {Transaction} tx Transaction to sign and send
+   * @param {HDPrivateKey} privateKey Private key of the nano contract's tx signature
+   * @param {string} pin Pin to decrypt data
+   *
+   * @returns {Promise<SendTransaction>}
+   */
+  async getNCSendTransactionObject(tx, privateKey, pin) {
     const dataToSignHash = tx.getDataToSignHash();
     const sig = crypto.ECDSA.sign(dataToSignHash, privateKey, 'little').set({
       nhashtype: crypto.Signature.SIGHASH_ALL
     });
+    // Add nano signature
     tx.signature = sig.toDER();
     // Inputs signature, if there are any
     await transactionUtils.signTransaction(tx, this.storage, pin);
     tx.prepareToSend();
 
+    // Create send transaction object
     const sendTransaction = new SendTransaction({
       storage: this.storage,
       transaction: tx,
@@ -2713,6 +2732,19 @@ class HathorWallet extends EventEmitter {
     return sendTransaction;
   }
 
+  /**
+   * Create a nano contract transaction for the bet blueprint
+   *
+   * @param {string} tokenUid Token of the nano contract
+   * @param {number} dateLastDeposit Timestamp of the last possible deposit
+   * @param {string} oracle Oracle data that can be the address in base58, or the hex of the script
+   * @param {number} indexOfAddressToSign Index of the address of the wallet to sign the nc tx
+   * @param [options]
+   * @param {string} [options.pinCode] PIN to decrypt the private key.
+   *                                   Optional but required if not set in this
+   *
+   * @returns {Promise<NanoContract>}
+   */
   async createBetNanoContract(tokenUid, dateLastDeposit, oracle, indexOfAddressToSign, options = {}) {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('createBetNanoContract');
@@ -2723,10 +2755,14 @@ class HathorWallet extends EventEmitter {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
+    // Get private key that will sign the nano contract transaction
     const privateKey = await this.getPrivateKeyAtIndex(indexOfAddressToSign, pin);
 
     let oracleScript;
     const address = new Address(oracle, { network: this.getNetworkObject() });
+    // First check if the oracle is a base58 address
+    // In case of success, set the output script as oracle
+    // Otherwise, it's a custom script in hexadecimal
     if (address.isValid()) {
       const outputScriptType = address.getType();
       let outputScript;
@@ -2748,12 +2784,29 @@ class HathorWallet extends EventEmitter {
       }
     }
 
+    // Build the bet nc transaction and send
     const builder = new BetTransactionBuilder();
     const bet = builder.createBetNC(privateKey.publicKey.toBuffer(), oracleScript, tokenUid, dateLastDeposit);
-    const sendTransaction = await this.prepareNCTransactionAndSend(bet, privateKey, pin);
+    const sendTransaction = await this.getNCSendTransactionObject(bet, privateKey, pin);
     return sendTransaction.runFromMining();
   }
 
+  /**
+   * Create a nano contract transaction deposit
+   *
+   * @param {string} ncId ID of the nano contract to deposit
+   * @param {string} ncAddress Address in base58 that will be used to sign the nc transaction
+   * @param {string} betAddress Address that will be able to withdraw the amount in case this bet wins
+   * @param {string} result Result to bet
+   * @param {number} amount Amount to bet
+   * @param {string} token Token of the bet
+   * @param [options]
+   * @param {string} [options.changeAddress] Change address for the transaction.
+   * @param {string} [options.pinCode] PIN to decrypt the private key.
+   *                                   Optional but required if not set in this
+   *
+   * @returns {Promise<NanoContract>}
+   */
   async makeBet(ncId, ncAddress, betAddress, result, amount, token, options = {}) {
     if (this.isFromXPub()) {
       throw new WalletFromXPubGuard('makeBet');
@@ -2768,9 +2821,11 @@ class HathorWallet extends EventEmitter {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
+    // Get private key that will sign the nano contract transaction
     const ncAddressIndex = await this.getAddressIndex(ncAddress);
     const privateKey = await this.getPrivateKeyAtIndex(ncAddressIndex, pin);
 
+    // Get the utxos with the amount of the bet and create the inputs
     const utxosData = await this.getUtxosForAmount(amount, { token });
     const inputsObj = [];
     for (const utxo of utxosData.utxos) {
@@ -2779,6 +2834,7 @@ class HathorWallet extends EventEmitter {
 
     const outputsObj = [];
     const network = this.getNetworkObject();
+    // If there's a change amount left in the utxos, create the change output
     if (utxosData.changeAmount) {
       const changeAddressParam = newOptions.changeAddress;
       if (changeAddressParam && !this.isAddressMine(changeAddressParam)) {
@@ -2801,13 +2857,27 @@ class HathorWallet extends EventEmitter {
       outputsObj.push(outputObj);
     }
 
+    // Build the deposit nc transaction and send
     const builder = new BetTransactionBuilder();
     const addressObj = new Address(betAddress, { network });
     const tx = builder.deposit(ncId, privateKey.publicKey.toBuffer(), inputsObj, outputsObj, addressObj, result);
-    const sendTransaction = await this.prepareNCTransactionAndSend(tx, privateKey, pin);
+    const sendTransaction = await this.getNCSendTransactionObject(tx, privateKey, pin);
     return sendTransaction.runFromMining();
   }
 
+  /**
+   * Create a nano contract transaction for withdrawal
+   *
+   * @param {string} ncId ID of the nano contract to withdraw
+   * @param {string} ncAddress Address in base58 that will be used to sign the nc transaction
+   * @param {number} amount Amount to withdraw
+   * @param {string} token Token of the nano contract
+   * @param [options]
+   * @param {string} [options.pinCode] PIN to decrypt the private key.
+   *                                   Optional but required if not set in this
+   *
+   * @returns {Promise<NanoContract>}
+   */
   async makeWithdrawal(ncId, ncAddress, amount, token, options = {}) {
     if (this.isFromXPub()) {
       throw new WalletFromXPubGuard('makeWithdrawal');
@@ -2818,10 +2888,11 @@ class HathorWallet extends EventEmitter {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
+    // Get private key that will sign the nano contract transaction
     const ncAddressIndex = await this.getAddressIndex(ncAddress);
     const privateKey = await this.getPrivateKeyAtIndex(ncAddressIndex, pin);
 
-    // They will be used to sign tx
+    // Create the output with the withdeawal address and amount
     const address = new Address(ncAddress, { network: this.getNetworkObject() });
     const p2pkh = new P2PKH(address);
     const p2pkhScript = p2pkh.createScript()
@@ -2833,12 +2904,27 @@ class HathorWallet extends EventEmitter {
       }
     );
 
+    // Build the withdrawal nc transaction and send
     const builder = new BetTransactionBuilder();
     const tx = builder.withdraw(ncId, privateKey.publicKey.toBuffer(), [output]);
-    const sendTransaction = await this.prepareNCTransactionAndSend(tx, privateKey, pin);
+    const sendTransaction = await this.getNCSendTransactionObject(tx, privateKey, pin);
     return sendTransaction.runFromMining();
   }
 
+  /**
+   * Create a nano contract transaction to set the result
+   *
+   * @param {string} ncId ID of the nano contract to set the result
+   * @param {string} ncAddress Address in base58 that will be used to sign the nc transaction
+   * @param {string} result Final result of the nano contract
+   * @param {string | undefined} oracleScriptHex Hex of the oracle script to set the result, in case it's an address
+   * @param {string | undefined} oracleInputData Hex of the oracle input data to set the result, in case it's not an address
+   * @param [options]
+   * @param {string} [options.pinCode] PIN to decrypt the private key.
+   *                                   Optional but required if not set in this
+   *
+   * @returns {Promise<NanoContract>}
+   */
   async setResult(ncId, ncAddress, result, oracleScriptHex, oracleInputData, options = {}) {
     if (this.isFromXPub()) {
       throw new WalletFromXPubGuard('setResult');
@@ -2849,11 +2935,13 @@ class HathorWallet extends EventEmitter {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
+    // Get private key that will sign the nano contract transaction
     const ncAddressIndex = await this.getAddressIndex(ncAddress);
     const privateKey = await this.getPrivateKeyAtIndex(ncAddressIndex, pin);
 
     const resultSerialized = Buffer.from(result, 'utf8');
 
+    // Parse oracle script to validate if it's an address of this wallet
     const parsedOracleScript = this.parseOracleScript(oracleScriptHex);
     let inputData;
     if (parsedOracleScript) {
@@ -2873,15 +2961,24 @@ class HathorWallet extends EventEmitter {
       const oraclePubKeyBuffer = oracleKey.publicKey.toBuffer();
       inputData = transactionUtils.createInputData(signatureOracle, oraclePubKeyBuffer);
     } else {
+      // If it's not an address, we use the oracleInputData as the inputData directly
       inputData = oracleInputData;
     }
 
+    // Build the set result nc transaction and send
     const builder = new BetTransactionBuilder();
     const tx = builder.setResult(ncId, privateKey.publicKey.toBuffer(), inputData, result);
-    const sendTransaction = await this.prepareNCTransactionAndSend(tx, privateKey, pin);
+    const sendTransaction = await this.getNCSendTransactionObject(tx, privateKey, pin);
     return sendTransaction.runFromMining();
   }
 
+  /**
+   * Get an oracle script in hex and parse it to try to get an output script
+   *
+   * @param {string} oracleScriptHex Oracle script in hexadecimal
+   *
+   * @returns {P2PKH | P2SH | ScriptData | null} Parsed script object
+   */
   parseOracleScript(oracleScriptHex) {
     const oracleScriptBuffer = hexToBuffer(oracleScriptHex);
     return parseScript(oracleScriptBuffer, this.getNetworkObject());
