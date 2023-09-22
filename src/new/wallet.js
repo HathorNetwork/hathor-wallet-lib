@@ -13,7 +13,6 @@ import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
 import versionApi from '../api/version';
 import { hexToBuffer, intToBytes } from '../utils/buffer';
-import { parseScript } from '../utils/scripts';
 import { decryptData } from '../utils/crypto';
 import helpers from '../utils/helpers';
 import { createP2SHRedeemScript } from '../utils/scripts';
@@ -47,6 +46,8 @@ import { syncHistory, reloadStorage, scanPolicyStartAddresses, checkScanningPoli
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH } from '../utils/address';
+import BlueprintsMap from '../nano_contracts/blueprints/blueprint_map';
+import Bet from '../nano_contracts/blueprints/bet';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 
@@ -2685,14 +2686,62 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Get the private key of the wallet at the address index
+   * Execute a nano contract method of a blueprint, creating the transaction and pushing to the network
    *
-   * @param {number} addressIndex Index of the address to derive the private key
-   * @param {string} pin Pin to decrypt data
+   * @param {string} blueprint Blueprint to execute the method
+   * @param {string} method Method of nano contract to have the transaction created
+   * @param {string} address Address that will be used to sign the nano contract transaction
+   * @param {Object} data Object with each method parameters
+   * @param [options]
+   * @param {string} [options.pinCode] PIN to decrypt the private key.
+   *                                   Optional but required if not set in this
    *
-   * @returns {Promise<HDPrivateKey>}
+   * @returns {Promise<NanoContract>}
    */
-  async getPrivateKeyAtIndex(addressIndex, pin) {
+  async executeNanoContractMethod(blueprint, method, address, data, options = {}) {
+    if (await this.storage.isReadonly()) {
+      throw new WalletFromXPubGuard('executeNanoContractMethod');
+    }
+    const newOptions = Object.assign({ pinCode: null }, options);
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
+    }
+
+    // Get the blueprint chosen
+    const methodsMap = BlueprintsMap[blueprint];
+    if (!methodsMap) {
+        throw new NanoContractTransactionError('Invalid blueprint.');
+    }
+
+    // Get the parameters required of the method chosen
+    const methodParameters = methodsMap[method];
+    if (!methodParameters) {
+        throw new NanoContractTransactionError('Invalid blueprint method.');
+    }
+
+    if (method !== 'initialize' && !data.ncId) {
+      // Initialize is the only method that creates the nano contract
+      // the other methods must have the corresponding ncId to be executed
+      throw new NanoContractTransactionError('Missing nano contract id. Parameter ncId in data');
+    }
+
+    // Validates that all required parameters are in the data object
+    for (const parameter in methodParameters) {
+      const type = methodParameters[parameter];
+
+      if (parameter.endsWith('?')) {
+        // Optional parameter
+        continue;
+      }
+
+      if (typeof data[parameter] !== type) {
+        throw new NanoContractTransactionError(`Invalid parameter ${parameter}. Expected type ${type} but found type ${typeof data[parameter]}`);
+      }
+    }
+
+    // Get private key that will sign the nano contract transaction
+    const addressIndex = await this.getAddressIndex(address);
     const accessData = await this.getAccessData();
     const encryptedPrivateKey = accessData.mainKey;
     const privateKeyStr = decryptData(encryptedPrivateKey, pin);
@@ -2700,288 +2749,8 @@ class HathorWallet extends EventEmitter {
     const derivedKey = key.deriveNonCompliantChild(addressIndex);
     const privateKey = derivedKey.privateKey;
 
-    return privateKey;
-  }
-
-  /**
-   * Sign a transaction and create a send transaction object
-   *
-   * @param {Transaction} tx Transaction to sign and send
-   * @param {HDPrivateKey} privateKey Private key of the nano contract's tx signature
-   * @param {string} pin Pin to decrypt data
-   *
-   * @returns {Promise<SendTransaction>}
-   */
-  async getNCSendTransactionObject(tx, privateKey, pin) {
-    const dataToSignHash = tx.getDataToSignHash();
-    const sig = crypto.ECDSA.sign(dataToSignHash, privateKey, 'little').set({
-      nhashtype: crypto.Signature.SIGHASH_ALL
-    });
-    // Add nano signature
-    tx.signature = sig.toDER();
-    // Inputs signature, if there are any
-    await transactionUtils.signTransaction(tx, this.storage, pin);
-    tx.prepareToSend();
-
-    // Create send transaction object
-    const sendTransaction = new SendTransaction({
-      storage: this.storage,
-      transaction: tx,
-      pin,
-    });
-    return sendTransaction;
-  }
-
-  /**
-   * Create a nano contract transaction for the bet blueprint
-   *
-   * @param {string} tokenUid Token of the nano contract
-   * @param {number} dateLastDeposit Timestamp of the last possible deposit
-   * @param {string} oracle Oracle data that can be the address in base58, or the hex of the script
-   * @param {number} indexOfAddressToSign Index of the address of the wallet to sign the nc tx
-   * @param [options]
-   * @param {string} [options.pinCode] PIN to decrypt the private key.
-   *                                   Optional but required if not set in this
-   *
-   * @returns {Promise<NanoContract>}
-   */
-  async createBetNanoContract(tokenUid, dateLastDeposit, oracle, indexOfAddressToSign, options = {}) {
-    if (await this.storage.isReadonly()) {
-      throw new WalletFromXPubGuard('createBetNanoContract');
-    }
-    const newOptions = Object.assign({ pinCode: null }, options);
-    const pin = newOptions.pinCode || this.pinCode;
-    if (!pin) {
-      throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
-    }
-
-    // Get private key that will sign the nano contract transaction
-    const privateKey = await this.getPrivateKeyAtIndex(indexOfAddressToSign, pin);
-
-    let oracleScript;
-    const address = new Address(oracle, { network: this.getNetworkObject() });
-    // First check if the oracle is a base58 address
-    // In case of success, set the output script as oracle
-    // Otherwise, it's a custom script in hexadecimal
-    if (address.isValid()) {
-      const outputScriptType = address.getType();
-      let outputScript;
-      if (outputScriptType === 'p2pkh') {
-        outputScript = new P2PKH(address);
-      } else if (outputScriptType === 'p2sh') {
-        outputScript = new P2SH(address);
-      } else {
-        throw new NanoContractTransactionError('Invalid output script type.');
-      }
-      oracleScript = outputScript.createScript();
-    } else {
-      // Oracle script is a custom script
-      try {
-        oracleScript = bufferUtils.hexToBuffer(oracle);
-      } catch (err) {
-        // Invalid hex
-        throw new NanoContractTransactionError('Invalid hex value for oracle script.');
-      }
-    }
-
-    // Build the bet nc transaction and send
-    const builder = new BetTransactionBuilder();
-    const bet = builder.createBetNC(privateKey.publicKey.toBuffer(), oracleScript, tokenUid, dateLastDeposit);
-    const sendTransaction = await this.getNCSendTransactionObject(bet, privateKey, pin);
-    return sendTransaction.runFromMining();
-  }
-
-  /**
-   * Create a nano contract transaction deposit
-   *
-   * @param {string} ncId ID of the nano contract to deposit
-   * @param {string} ncAddress Address in base58 that will be used to sign the nc transaction
-   * @param {string} betAddress Address that will be able to withdraw the amount in case this bet wins
-   * @param {string} result Result to bet
-   * @param {number} amount Amount to bet
-   * @param {string} token Token of the bet
-   * @param [options]
-   * @param {string} [options.changeAddress] Change address for the transaction.
-   * @param {string} [options.pinCode] PIN to decrypt the private key.
-   *                                   Optional but required if not set in this
-   *
-   * @returns {Promise<NanoContract>}
-   */
-  async makeBet(ncId, ncAddress, betAddress, result, amount, token, options = {}) {
-    if (this.isFromXPub()) {
-      throw new WalletFromXPubGuard('makeBet');
-    }
-    const newOptions = Object.assign({
-      changeAddress: null,
-      pinCode: null,
-    }, options);
-
-    const pin = newOptions.pinCode || this.pinCode;
-    if (!pin) {
-      throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
-    }
-
-    // Get private key that will sign the nano contract transaction
-    const ncAddressIndex = await this.getAddressIndex(ncAddress);
-    const privateKey = await this.getPrivateKeyAtIndex(ncAddressIndex, pin);
-
-    // Get the utxos with the amount of the bet and create the inputs
-    const utxosData = await this.getUtxosForAmount(amount, { token });
-    const inputsObj = [];
-    for (const utxo of utxosData.utxos) {
-      inputsObj.push(new Input(utxo.txId, utxo.index));
-    }
-
-    const outputsObj = [];
-    const network = this.getNetworkObject();
-    // If there's a change amount left in the utxos, create the change output
-    if (utxosData.changeAmount) {
-      const changeAddressParam = newOptions.changeAddress;
-      if (changeAddressParam && !this.isAddressMine(changeAddressParam)) {
-        throw new NanoContractTransactionError('Change address must belong to the same wallet.');
-      }
-
-      const changeAddressStr = changeAddressParam || (await this.getCurrentAddress()).address;
-      const changeAddress = new Address(changeAddressStr, { network });
-      // This will throw AddressError in case the adress is invalid
-      changeAddress.validateAddress();
-      const p2pkh = new P2PKH(changeAddress);
-      const p2pkhScript = p2pkh.createScript()
-      const outputObj = new Output(
-        utxosData.changeAmount,
-        p2pkhScript,
-        {
-          tokenData: token === HATHOR_TOKEN_CONFIG.uid ? 0 : 1
-        }
-      );
-      outputsObj.push(outputObj);
-    }
-
-    // Build the deposit nc transaction and send
-    const builder = new BetTransactionBuilder();
-    const addressObj = new Address(betAddress, { network });
-    const tx = builder.deposit(ncId, privateKey.publicKey.toBuffer(), inputsObj, outputsObj, addressObj, result);
-    const sendTransaction = await this.getNCSendTransactionObject(tx, privateKey, pin);
-    return sendTransaction.runFromMining();
-  }
-
-  /**
-   * Create a nano contract transaction for withdrawal
-   *
-   * @param {string} ncId ID of the nano contract to withdraw
-   * @param {string} ncAddress Address in base58 that will be used to sign the nc transaction
-   * @param {number} amount Amount to withdraw
-   * @param {string} token Token of the nano contract
-   * @param [options]
-   * @param {string} [options.pinCode] PIN to decrypt the private key.
-   *                                   Optional but required if not set in this
-   *
-   * @returns {Promise<NanoContract>}
-   */
-  async makeWithdrawal(ncId, ncAddress, amount, token, options = {}) {
-    if (this.isFromXPub()) {
-      throw new WalletFromXPubGuard('makeWithdrawal');
-    }
-    const newOptions = Object.assign({ pinCode: null }, options);
-    const pin = newOptions.pinCode || this.pinCode;
-    if (!pin) {
-      throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
-    }
-
-    // Get private key that will sign the nano contract transaction
-    const ncAddressIndex = await this.getAddressIndex(ncAddress);
-    const privateKey = await this.getPrivateKeyAtIndex(ncAddressIndex, pin);
-
-    // Create the output with the withdeawal address and amount
-    const address = new Address(ncAddress, { network: this.getNetworkObject() });
-    const p2pkh = new P2PKH(address);
-    const p2pkhScript = p2pkh.createScript()
-    const output = new Output(
-      amount,
-      p2pkhScript,
-      {
-        tokenData: token === HATHOR_TOKEN_CONFIG.uid ? 0 : 1
-      }
-    );
-
-    // Build the withdrawal nc transaction and send
-    const builder = new BetTransactionBuilder();
-    const tx = builder.withdraw(ncId, privateKey.publicKey.toBuffer(), [output]);
-    const sendTransaction = await this.getNCSendTransactionObject(tx, privateKey, pin);
-    return sendTransaction.runFromMining();
-  }
-
-  /**
-   * Create a nano contract transaction to set the result
-   *
-   * @param {string} ncId ID of the nano contract to set the result
-   * @param {string} ncAddress Address in base58 that will be used to sign the nc transaction
-   * @param {string} result Final result of the nano contract
-   * @param {string | undefined} oracleScriptHex Hex of the oracle script to set the result, in case it's an address
-   * @param {string | undefined} oracleInputData Hex of the oracle input data to set the result, in case it's not an address
-   * @param [options]
-   * @param {string} [options.pinCode] PIN to decrypt the private key.
-   *                                   Optional but required if not set in this
-   *
-   * @returns {Promise<NanoContract>}
-   */
-  async setResult(ncId, ncAddress, result, oracleScriptHex, oracleInputData, options = {}) {
-    if (this.isFromXPub()) {
-      throw new WalletFromXPubGuard('setResult');
-    }
-    const newOptions = Object.assign({ pinCode: null }, options);
-    const pin = newOptions.pinCode || this.pinCode;
-    if (!pin) {
-      throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
-    }
-
-    // Get private key that will sign the nano contract transaction
-    const ncAddressIndex = await this.getAddressIndex(ncAddress);
-    const privateKey = await this.getPrivateKeyAtIndex(ncAddressIndex, pin);
-
-    const resultSerialized = Buffer.from(result, 'utf8');
-
-    // Parse oracle script to validate if it's an address of this wallet
-    const parsedOracleScript = this.parseOracleScript(oracleScriptHex);
-    let inputData;
-    if (parsedOracleScript) {
-      // This is only when the oracle is an address, otherwise we will have the signed input data
-      const address = parsedOracleScript.address.base58;
-      const addressIndex = await this.getAddressIndex(address);
-      if (addressIndex === null) {
-        throw new NanoContractTransactionError('Address of the oracle does not belong to the wallet.');
-      }
-      const accessData = await this.getAccessData();
-      const encryptedPrivateKey = accessData.mainKey;
-      const privateKeyStr = decryptData(encryptedPrivateKey, pin);
-      const key = HDPrivateKey(privateKeyStr)
-      const oracleKey = key.deriveNonCompliantChild(addressIndex);
-
-      const signatureOracle = transactionUtils.getSignature(transactionUtils.getDataToSignHash(resultSerialized), oracleKey.privateKey);
-      const oraclePubKeyBuffer = oracleKey.publicKey.toBuffer();
-      inputData = transactionUtils.createInputData(signatureOracle, oraclePubKeyBuffer);
-    } else {
-      // If it's not an address, we use the oracleInputData as the inputData directly
-      inputData = oracleInputData;
-    }
-
-    // Build the set result nc transaction and send
-    const builder = new BetTransactionBuilder();
-    const tx = builder.setResult(ncId, privateKey.publicKey.toBuffer(), inputData, result);
-    const sendTransaction = await this.getNCSendTransactionObject(tx, privateKey, pin);
-    return sendTransaction.runFromMining();
-  }
-
-  /**
-   * Get an oracle script in hex and parse it to try to get an output script
-   *
-   * @param {string} oracleScriptHex Oracle script in hexadecimal
-   *
-   * @returns {P2PKH | P2SH | ScriptData | null} Parsed script object
-   */
-  parseOracleScript(oracleScriptHex) {
-    const oracleScriptBuffer = hexToBuffer(oracleScriptHex);
-    return parseScript(oracleScriptBuffer, this.getNetworkObject());
+    // Call method of the Bet class
+    return Bet[method](this, pin, privateKey, data);
   }
 }
 
