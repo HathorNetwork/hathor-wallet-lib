@@ -7,7 +7,7 @@
 
 import { LevelDBStore, MemoryStore, Storage } from "../../src/storage";
 import { HDPrivateKey } from "bitcore-lib";
-import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK } from "../../src/constants";
+import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, GAP_LIMIT } from "../../src/constants";
 import walletUtils from "../../src/utils/wallet";
 
 const DATA_DIR = './testdata.leveldb';
@@ -187,5 +187,25 @@ describe('registered tokens', () => {
     await storage.registerToken({ uid: 'abc1', name: 'test token 1', symbol: 'TST1' });
     await expect(storage.isTokenRegistered('abc1')).resolves.toEqual(true);
     await expect(storage.isTokenRegistered('abc2')).resolves.toEqual(false);
+  }
+});
+
+describe('scanning policy methods', () => {
+  it('should work with memory store', async () => {
+    const store = new MemoryStore();
+    await testScanningPolicyes(store);
+  });
+
+  it('should work with leveldb store', async () => {
+    const xpriv = new HDPrivateKey();
+    const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
+    const store = new LevelDBStore(walletId, DATA_DIR);
+    await testScanningPolicyes(store);
+  });
+
+  async function testScanningPolicyes(store) {
+    const storage = new Storage(store);
+    await expect(storage.getGapLimit()).resolves.toEqual(GAP_LIMIT);
+    await expect(storage.getScanningPolicy()).resolves.toEqual('gap-limit');
   }
 });
