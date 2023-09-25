@@ -2,7 +2,7 @@ import * as constants  from './constants';
 import dateFormatter  from './utils/date';
 import websocket  from './websocket';
 import * as errors  from './errors';
-import { ErrorMessages }  from './errorMessages';
+import * as ErrorMessages  from './errorMessages';
 import walletApi  from './api/wallet';
 import txApi  from './api/txApi';
 import txMiningApi  from './api/txMining';
