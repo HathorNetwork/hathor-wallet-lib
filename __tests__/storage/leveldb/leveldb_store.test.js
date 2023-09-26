@@ -5,15 +5,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { HATHOR_TOKEN_CONFIG } from "../../../src/constants";
-import { LevelDBStore, Storage } from "../../../src/storage";
-import tx_history from "../../__fixtures__/tx_history";
-import walletApi from "../../../src/api/wallet";
-import { HDPrivateKey } from "bitcore-lib";
-import { encryptData } from "../../../src/utils/crypto";
-import { WalletType } from "../../../src/types";
-import { processHistory } from "../../../src/utils/storage";
-import walletUtils from "../../../src/utils/wallet";
+import { DEFAULT_ADDRESS_SCANNING_POLICY, HATHOR_TOKEN_CONFIG } from '../../../src/constants';
+import { LevelDBStore, Storage } from '../../../src/storage';
+import tx_history from '../../__fixtures__/tx_history';
+import walletApi from '../../../src/api/wallet';
+import { HDPrivateKey } from 'bitcore-lib';
+import { encryptData } from '../../../src/utils/crypto';
+import { WalletType } from '../../../src/types';
+import { processHistory } from '../../../src/utils/storage';
+import walletUtils from '../../../src/utils/wallet';
 
 function _addr_index_key(index) {
   const buf = Buffer.alloc(4);
@@ -383,6 +383,8 @@ test('access data methods', async () => {
         .resolves.toHaveLength(0);
   await expect(asyncGenToArray(store.registeredTokenIter()))
         .resolves.toHaveLength(0);
+
+  await expect(store.getScanningPolicy()).resolves.toEqual(DEFAULT_ADDRESS_SCANNING_POLICY);
 
   await store.destroy();
 });
