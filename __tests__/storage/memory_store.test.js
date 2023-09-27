@@ -22,8 +22,8 @@ test('default values', async () => {
     lastUsedAddressIndex: -1,
     currentAddressIndex: -1,
     bestBlockHeight: 0,
-    scanPolicy: 'gap-limit',
     scanPolicyData: {
+      policy: 'gap-limit',
       gapLimit: GAP_LIMIT,
     },
   });
