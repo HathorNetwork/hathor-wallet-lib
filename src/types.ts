@@ -210,10 +210,12 @@ export interface IWalletAccessData {
 }
 
 export interface IGapLimitAddressScanPolicy {
+  policy: 'gap-limit';
   gapLimit: number;
 }
 
-export interface IManualAddressScanPolicy {
+export interface IIndexLimitAddressScanPolicy {
+  policy: 'index-limit';
   startIndex: number;
   endIndex: number;
 }
@@ -226,12 +228,16 @@ export interface IScanPolicyLoadAddresses {
   count: number;
 }
 
-export type AddressScanPolicy = 'gap-limit' | 'manual';
+export type AddressScanPolicy = 'gap-limit' | 'index-limit';
 
-export type AddressScanPolicyData = IGapLimitAddressScanPolicy | IManualAddressScanPolicy;
+export type AddressScanPolicyData = IGapLimitAddressScanPolicy | IIndexLimitAddressScanPolicy;
 
 export function isGapLimitScanPolicy(scanPolicyData: AddressScanPolicyData): scanPolicyData is IGapLimitAddressScanPolicy {
-  return (scanPolicyData as IGapLimitAddressScanPolicy).gapLimit !== undefined;
+  return scanPolicyData.policy === 'gap-limit';
+}
+
+export function isIndexLimitScanPolicy(scanPolicyData: AddressScanPolicyData): scanPolicyData is IIndexLimitAddressScanPolicy {
+  return scanPolicyData.policy === 'index-limit';
 }
 
 export interface IWalletData {
@@ -239,7 +245,6 @@ export interface IWalletData {
   lastUsedAddressIndex: number;
   currentAddressIndex: number;
   bestBlockHeight: number;
-  scanPolicy: AddressScanPolicy;
   scanPolicyData: AddressScanPolicyData;
 }
 
@@ -352,7 +357,10 @@ export interface IStore {
   setCurrentAddressIndex(index: number): Promise<void>;
   setGapLimit(value: number): Promise<void>;
   getGapLimit(): Promise<number>;
+  getIndexLimit(): Promise<Omit<IIndexLimitAddressScanPolicy, 'policy'> | null>;
   getScanningPolicy(): Promise<AddressScanPolicy>;
+  setScanningPolicyData(data: AddressScanPolicyData): Promise<void>;
+  getScanningPolicyData(): Promise<AddressScanPolicyData>;
 
   // Generic storage keys
   getItem(key: string): Promise<any>;
@@ -419,6 +427,7 @@ export interface IStorage {
   changePassword(oldPassword: string, newPassword: string): Promise<void>;
   setGapLimit(value: number): Promise<void>;
   getGapLimit(): Promise<number>;
+  getIndexLimit(): Promise<Omit<IIndexLimitAddressScanPolicy, 'policy'> | null>;
   cleanStorage(cleanHistory?: boolean, cleanAddresses?: boolean, cleanTokens?: boolean): Promise<void>;
   handleStop(options: {connection?: FullNodeConnection, cleanStorage?: boolean, cleanAddresses?: boolean}): Promise<void>;
   getTokenDepositPercentage(): number;
@@ -426,6 +435,8 @@ export interface IStorage {
   checkPassword(password: string): Promise<boolean>;
   isHardwareWallet(): Promise<boolean>;
   getScanningPolicy(): Promise<AddressScanPolicy>;
+  getScanningPolicyData(): Promise<AddressScanPolicyData>;
+  setScanningPolicyData(data: AddressScanPolicyData | null): Promise<void>;
 }
 
 /**
@@ -508,6 +519,10 @@ export interface IKVWalletIndex extends IKVStoreIndex<void> {
   getCurrentAddressIndex(): Promise<number>;
   setGapLimit(value: number): Promise<void>;
   getGapLimit(): Promise<number>;
+  getIndexLimit(): Promise<Omit<IIndexLimitAddressScanPolicy, 'policy'> | null>;
+  getScanningPolicy(): Promise<AddressScanPolicy>;
+  setScanningPolicyData(data: AddressScanPolicyData): Promise<void>;
+  getScanningPolicyData(): Promise<AddressScanPolicyData>;
 
   getItem(key: string): Promise<any>;
   setItem(key: string, value: any): Promise<void>;

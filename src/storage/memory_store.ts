@@ -19,8 +19,10 @@ import {
   IWalletData,
   ILockedUtxo,
   AddressScanPolicy,
+  AddressScanPolicyData,
+  IIndexLimitAddressScanPolicy,
 } from '../types';
-import { DEFAULT_ADDRESS_SCANNING_POLICY, GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
+import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
 import { orderBy } from 'lodash';
 import transactionUtils from '../utils/transaction';
 
@@ -31,12 +33,14 @@ const DEFAULT_ADDRESSES_WALLET_DATA = {
   currentAddressIndex: -1,
 };
 
+const DEFAULT_SCAN_POLICY_DATA: AddressScanPolicyData = {
+  policy: 'gap-limit',
+  gapLimit: GAP_LIMIT,
+}
+
 const DEFAULT_WALLET_DATA = {
   bestBlockHeight: 0,
-  scanPolicy: DEFAULT_ADDRESS_SCANNING_POLICY,
-  scanPolicyData: {
-    gapLimit: GAP_LIMIT,
-  },
+  scanPolicyData: DEFAULT_SCAN_POLICY_DATA,
 };
 
 /**
@@ -746,16 +750,17 @@ export class MemoryStore implements IStore {
    * @param {number} value Gat limit to set.
    */
   async setGapLimit(value: number): Promise<void> {
-    if (!isGapLimitScanPolicy(this.walletData.scanPolicyData)) {
-      // Since the wallet is not configured to use gap-limiy this should be a no-op
-      return;
-    }
     if (!this.walletData.scanPolicyData) {
       this.walletData.scanPolicyData = {
+        policy: 'gap-limit',
         gapLimit: value,
       };
+      return;
     }
-    this.walletData.scanPolicyData.gapLimit = value;
+
+    if (isGapLimitScanPolicy(this.walletData.scanPolicyData)) {
+      this.walletData.scanPolicyData.gapLimit = value;
+    }
   }
 
   /**
@@ -764,12 +769,21 @@ export class MemoryStore implements IStore {
    * @returns {Promise<number>}
    */
   async getGapLimit(): Promise<number> {
-    if (!isGapLimitScanPolicy(this.walletData.scanPolicyData)) {
-      // Return the default value if the wallet is not configured for gap-limit. If we want to
-      // check for gap-limit configuration we should use the `getScanningPolicy` method
-      return GAP_LIMIT;
+    if (isGapLimitScanPolicy(this.walletData.scanPolicyData)) {
+      return this.walletData.scanPolicyData.gapLimit || GAP_LIMIT;
     }
-    return this.walletData.scanPolicyData.gapLimit;
+    // Return default gap limit
+    return GAP_LIMIT;
+  }
+
+  async getIndexLimit(): Promise<Omit<IIndexLimitAddressScanPolicy, 'policy'> | null> {
+    if (this.walletData.scanPolicyData?.policy === 'index-limit') {
+      return {
+        startIndex: this.walletData?.scanPolicyData?.startIndex || 0,
+        endIndex: this.walletData?.scanPolicyData?.endIndex || 0,
+      };
+    }
+    return null;
   }
 
   /**
@@ -778,7 +792,15 @@ export class MemoryStore implements IStore {
    * @returns {Promise<AddressScanPolicy>}
    */
   async getScanningPolicy(): Promise<AddressScanPolicy> {
-    return this.walletData.scanPolicy;
+    return this.walletData.scanPolicyData?.policy || 'gap-limit';
+  }
+
+  async setScanningPolicyData(data: AddressScanPolicyData): Promise<void> {
+    this.walletData.scanPolicyData = data;
+  }
+
+  async getScanningPolicyData(): Promise<AddressScanPolicyData> {
+    return this.walletData.scanPolicyData || DEFAULT_SCAN_POLICY_DATA;
   }
 
   /**

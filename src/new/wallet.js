@@ -64,7 +64,7 @@ const ConnectionState = {
  * - update-tx: Fired when a known tx is updated. Usually, it happens when one of its outputs is spent.
  * - more-addresses-loaded: Fired when loading the history of transactions. It is fired multiple times,
  *                          one for each request sent to the server.
- **/
+ */
 class HathorWallet extends EventEmitter {
   /**
    * @param param
@@ -80,6 +80,8 @@ class HathorWallet extends EventEmitter {
    * @param {boolean} [param.debug] Activates debug mode
    * @param {{pubkeys:string[],numSignatures:number}} [param.multisig]
    * @param {string[]} [param.preCalculatedAddresses] An array of pre-calculated addresses
+   * @param {import('../types').AddressScanPolicyData} [param.scanPolicy] config specific to
+   * the address scan policy.
    */
   constructor({
     connection,
@@ -103,6 +105,7 @@ class HathorWallet extends EventEmitter {
     beforeReloadCallback = null,
     multisig = null,
     preCalculatedAddresses = null,
+    scanPolicy = null,
   } = {}) {
     super();
 
@@ -192,6 +195,8 @@ class HathorWallet extends EventEmitter {
 
     this.wsTxQueue = new Queue();
     this.newTxPromise = Promise.resolve();
+
+    this.scanPolicy = scanPolicy;
   }
 
   /**
@@ -269,12 +274,68 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Load more addresses if configured to index-limit scanning policy.
+   * If not, do nothing.
+   * @param {number} count Number of addresses to load
+   */
+  async indexLimitLoadMore(count) {
+    const scanPolicy = await this.storage.getScanningPolicy();
+    if (scanPolicy !== 'index-limit') {
+      // This is a no-op
+      return;
+    }
+
+    const limits = this.storage.getIndexLimit();
+    const newEndIndex = limits.endIndex + count;
+    await this.indexLimitSetEndIndex(newEndIndex);
+  }
+
+  /**
+   * Set the value of the index limit end for this wallet instance.
+   * @param {number} endIndex The new index limit value
+   * @returns {Promise<void>}
+   */
+  async indexLimitSetEndIndex(endIndex) {
+    const scanPolicy = await this.storage.getScanningPolicy();
+    if (scanPolicy !== 'index-limit') {
+      // This is a no-op
+      return;
+    }
+
+    const limits = this.storage.getIndexLimit();
+
+    if (endIndex <= limits.endIndex) {
+      // Cannot unload addresses from storage.
+      return;
+    }
+
+    const newPolicyData = {
+      ...limits,
+      endIndex,
+      policy: 'index-limit',
+    };
+    await this.storage.setScanningPolicyData(newPolicyData);
+    // Force loading more addresses
+    const loadMoreAddresses = await checkScanningPolicy(this.storage);
+    if (loadMoreAddresses !== null) {
+      // This will process the history if any transaction is found.
+      await syncHistory(
+        loadMoreAddresses.nextIndex,
+        loadMoreAddresses.count,
+        this.storage,
+        this.conn,
+        true,
+      );
+    }
+  }
+
+  /**
    * Get the value of the gap limit for this wallet instance.
    * @returns {Promise<number>}
    */
-    async getGapLimit() {
-      return this.storage.getGapLimit();
-    }
+  async getGapLimit() {
+    return this.storage.getGapLimit();
+  }
 
   /**
    * Get the access data object from storage.
@@ -1145,7 +1206,7 @@ class HathorWallet extends EventEmitter {
     // Save the transaction in the storage
     await this.storage.addTx(newTx);
 
-    // check gap-limit and load more addresses if needed
+    // check address scanning policy and load more addresses if needed
     const loadMoreAddresses = await checkScanningPolicy(this.storage);
     if (loadMoreAddresses !== null) {
       await syncHistory(
@@ -1248,9 +1309,9 @@ class HathorWallet extends EventEmitter {
    *   'pinCode': pin to decrypt xpriv information. Required if not set in object.
    *   'password': password to decrypt xpriv information. Required if not set in object.
    *  }
-   **/
+   */
   async start(optionsParams = {}) {
-    const options = Object.assign({ pinCode: null, password: null }, optionsParams);
+    const options = { pinCode: null, password: null, ...optionsParams };
     const pinCode = options.pinCode || this.pinCode;
     const password = options.password || this.password;
     if (!this.xpub && !pinCode) {
@@ -1263,6 +1324,7 @@ class HathorWallet extends EventEmitter {
 
     // Check database consistency
     await this.storage.store.validate();
+    await this.storage.setScanningPolicyData(this.scanPolicy || null);
 
     this.storage.config.setNetwork(this.conn.network);
     this.storage.config.setServerUrl(this.conn.getCurrentServer());
@@ -1332,7 +1394,7 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Close the connections and stop emitting events.
-   **/
+   */
   async stop({ cleanStorage = true, cleanAddresses = false } = {}) {
     this.setState(HathorWallet.CLOSED);
     this.removeAllListeners();
