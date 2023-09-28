@@ -285,7 +285,10 @@ class HathorWallet extends EventEmitter {
       return;
     }
 
-    const limits = this.storage.getIndexLimit();
+    const limits = await this.storage.getIndexLimit();
+    if (!limits) {
+      return;
+    }
     const newEndIndex = limits.endIndex + count;
     await this.indexLimitSetEndIndex(newEndIndex);
   }
@@ -302,7 +305,10 @@ class HathorWallet extends EventEmitter {
       return;
     }
 
-    const limits = this.storage.getIndexLimit();
+    const limits = await this.storage.getIndexLimit();
+    if (!limits) {
+      return;
+    }
 
     if (endIndex <= limits.endIndex) {
       // Cannot unload addresses from storage.
