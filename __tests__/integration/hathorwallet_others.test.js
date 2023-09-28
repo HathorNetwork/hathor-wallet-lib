@@ -1172,7 +1172,7 @@ describe('index-limit address scanning policy', () => {
       scanPolicy: {
         policy: 'index-limit',
         startIndex: 0,
-        endIndex: 10,
+        endIndex: 9,
       },
     });
   });
@@ -1182,12 +1182,15 @@ describe('index-limit address scanning policy', () => {
   });
 
   it('should start a wallet configured to index-limit', async () => {
+    // 0-9 addresses = 10
     await expect(hWallet.storage.store.addressCount()).resolves.toEqual(10);
 
+    // 0-14 addresses = 15
     await hWallet.indexLimitLoadMore(5);
     await expect(hWallet.storage.store.addressCount()).resolves.toEqual(15);
 
-    await hWallet.indexLimitSetEndIndex(25);
+    // 0-24 addresses = 25
+    await hWallet.indexLimitSetEndIndex(24);
     await expect(hWallet.storage.store.addressCount()).resolves.toEqual(25);
 
     // Setting below current loaded index will be a no-op
