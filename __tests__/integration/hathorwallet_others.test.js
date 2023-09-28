@@ -1167,7 +1167,8 @@ describe('index-limit address scanning policy', () => {
   beforeAll(async () => {
     const walletData = precalculationHelpers.test.getPrecalculatedWallet();
     hWallet = await generateWalletHelper({
-      ...walletData,
+      seed: walletData.words,
+      addresses: walletData.addresses,
       scanPolicy: {
         policy: 'index-limit',
         startIndex: 0,
