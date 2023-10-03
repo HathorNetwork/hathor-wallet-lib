@@ -244,7 +244,7 @@ export async function createTokenHelper(hWallet, name, symbol, amount, options) 
   const tokenUid = newTokenResponse.hash;
   await waitForTxReceived(hWallet, tokenUid);
   await waitUntilNextTimestamp(hWallet, tokenUid);
-  await delay(1000);
+  await delay(2000);
   return newTokenResponse;
 }
 
@@ -338,13 +338,13 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
        * memory. The code below tries to eliminate these short time-senstive issues with a minimum
        * of delays.
        */
-      await delay(500);
+      await delay(1000);
       let txObj = await hWallet.getTx(txId);
       while (!txObj) {
         if (DEBUG_LOGGING) {
-          loggers.test.warn(`Tx was not available on history. Waiting for 50ms and retrying.`);
+          loggers.test.warn(`Tx was not available on history. Waiting for 100ms and retrying.`);
         }
-        await delay(50);
+        await delay(100);
         txObj = await hWallet.getTx(txId);
       }
       resolve(newTx);
@@ -377,7 +377,7 @@ export async function waitUntilNextTimestamp(hWallet, txId) {
   }
 
   // We are still within an invalid time to generate a new timestamp. Waiting for some time...
-  const timeToWait = nextValidMilliseconds - nowMilliseconds + 10;
+  const timeToWait = nextValidMilliseconds - nowMilliseconds + 100;
   loggers.test.log(`Waiting for ${timeToWait}ms for the next timestamp.`);
   await delay(timeToWait);
 }
