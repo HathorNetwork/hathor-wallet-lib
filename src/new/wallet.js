@@ -183,9 +183,6 @@ class HathorWallet extends EventEmitter {
     // Set to true when stop() method is called
     this.walletStopped = false;
 
-    // This object stores pre-processed data that helps speed up the return of getBalance and getTxHistory
-    this.preProcessedData = {};
-
     if (multisig) {
       this.multisig = {
         pubkeys: multisig.pubkeys,
@@ -1174,13 +1171,16 @@ class HathorWallet extends EventEmitter {
     let wsData = this.wsTxQueue.dequeue();
 
     while (wsData !== undefined) {
-      // process wsData like it just arrived
-      await this.onNewTx(wsData);
+      // save new txdata
+      await this.onNewTx(wsData, false);
       wsData = this.wsTxQueue.dequeue();
       // We should release the event loop for other threads
-      // This effectively awaits 0 seconds, but it schedule the next iteration to run after other threads.
-      await new Promise(resolve => { setTimeout(resolve, 0) });
+      // This effectively awaits 0 seconds
+      // but it schedule the next iteration to run after other threads.
+      await new Promise(resolve => { setTimeout(resolve, 0); });
     }
+    // After all transactions on the queue are saved, process the history
+    await this.storage.processHistory();
   }
 
   /**
@@ -1189,8 +1189,10 @@ class HathorWallet extends EventEmitter {
    * @returns {Promise} A promise that resolves when the wallet is done processing the tx queue.
    */
   async onEnterStateProcessing() {
-    // Started processing state now, so we prepare the local data to support using this facade interchangable with wallet service facade in both wallets
-    return this.storage.processHistory()
+    // Started processing state now
+    // Process the queue of transactions received until now
+    // and then resume with the correct state
+    return this.processTxQueue()
       .then(() => { this.setState(HathorWallet.READY); })
       .catch(() => { this.setState(HathorWallet.ERROR); });
   }
@@ -1204,7 +1206,7 @@ class HathorWallet extends EventEmitter {
     this.emit('state', state);
   }
 
-  async onNewTx(wsData) {
+  async onNewTx(wsData, processHistory = true) {
     const newTx = wsData.history;
     const storageTx = await this.storage.getTx(newTx.tx_id);
     const isNewTx = storageTx === null;
@@ -1222,8 +1224,10 @@ class HathorWallet extends EventEmitter {
         this.conn,
       );
     }
-    // Process history to update metadatas
-    await this.storage.processHistory();
+    if (processHistory) {
+      // Process history to update metadatas
+      await this.storage.processHistory();
+    }
 
     if (isNewTx) {
       this.emit('new-tx', newTx);
