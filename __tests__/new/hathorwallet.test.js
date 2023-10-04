@@ -325,6 +325,9 @@ test('getWalletInputInfo', async () => {
 
 test('processTxQueue', async () => {
   const hWallet = new FakeHathorWallet();
+  hWallet.storage = {
+    processHistory: jest.fn(),
+  };
 
   const processedTxs = [];
   hWallet.onNewTx.mockImplementation(data => {
@@ -340,6 +343,7 @@ test('processTxQueue', async () => {
 
   await hWallet.processTxQueue();
   expect(processedTxs).toStrictEqual([1, 2, 3]);
+  expect(hWallet.storage.processHistory).toBeCalledTimes(1);
 });
 
 test('handleWebsocketMsg', async () => {
