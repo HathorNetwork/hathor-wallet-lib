@@ -157,7 +157,7 @@ describe('getTxById', () => {
        * TODO: The amount of transactions is often 8 but should be 1. Ref #397
        * @see https://github.com/HathorNetwork/hathor-wallet-lib/issues/397
        */
-      // transactions: 1, 
+      // transactions: 1,
     });
     // Get balance for the token creation transaction
     const result = await hWallet.getTxById(tokenUid);
@@ -1220,6 +1220,7 @@ describe('sendTransaction', () => {
         changeAddress: await hWallet.getAddressAtIndex(6)
       }
     );
+    await delay(10000);
     await waitForTxReceived(hWallet, tx1.hash);
 
     // Validating balance stays the same for internal transactions
@@ -1887,6 +1888,7 @@ describe('mintTokens', () => {
     let mintResponse;
     mintResponse = await hWallet.mintTokens(tokenUid, 1);
     expectedHtrFunds -= 1;
+    await delay(10000);
     await waitForTxReceived(hWallet, mintResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
@@ -1894,6 +1896,7 @@ describe('mintTokens', () => {
     await waitUntilNextTimestamp(hWallet, mintResponse.hash);
     mintResponse = await hWallet.mintTokens(tokenUid, 100);
     expectedHtrFunds -= 1;
+    await delay(10000);
     await waitForTxReceived(hWallet, mintResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
@@ -1901,6 +1904,7 @@ describe('mintTokens', () => {
     await waitUntilNextTimestamp(hWallet, mintResponse.hash);
     mintResponse = await hWallet.mintTokens(tokenUid, 101);
     expectedHtrFunds -= 2;
+    await delay(10000);
     await waitForTxReceived(hWallet, mintResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
@@ -1908,6 +1912,7 @@ describe('mintTokens', () => {
     await waitUntilNextTimestamp(hWallet, mintResponse.hash);
     mintResponse = await hWallet.mintTokens(tokenUid, 200);
     expectedHtrFunds -= 2;
+    await delay(10000);
     await waitForTxReceived(hWallet, mintResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
@@ -1915,6 +1920,7 @@ describe('mintTokens', () => {
     await waitUntilNextTimestamp(hWallet, mintResponse.hash);
     mintResponse = await hWallet.mintTokens(tokenUid, 201);
     expectedHtrFunds -= 3;
+    await delay(10000);
     await waitForTxReceived(hWallet, mintResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
   });
@@ -2030,6 +2036,7 @@ describe('meltTokens', () => {
     let meltResponse;
     // Melting less than 1.00 tokens recovers 0 HTR
     meltResponse = await hWallet.meltTokens(tokenUid, 99);
+    await delay(10000);
     await waitForTxReceived(hWallet, meltResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
@@ -2037,6 +2044,7 @@ describe('meltTokens', () => {
     await waitUntilNextTimestamp(hWallet, meltResponse.hash);
     meltResponse = await hWallet.meltTokens(tokenUid, 100);
     expectedHtrFunds += 1;
+    await delay(10000);
     await waitForTxReceived(hWallet, meltResponse.hash);
     await delay(100);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
@@ -2045,6 +2053,7 @@ describe('meltTokens', () => {
     await waitUntilNextTimestamp(hWallet, meltResponse.hash);
     meltResponse = await hWallet.meltTokens(tokenUid, 199);
     expectedHtrFunds += 1;
+    await delay(10000);
     await waitForTxReceived(hWallet, meltResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
@@ -2052,6 +2061,7 @@ describe('meltTokens', () => {
     await waitUntilNextTimestamp(hWallet, meltResponse.hash);
     meltResponse = await hWallet.meltTokens(tokenUid, 200);
     expectedHtrFunds += 2;
+    await delay(10000);
     await waitForTxReceived(hWallet, meltResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
@@ -2059,6 +2069,7 @@ describe('meltTokens', () => {
     await waitUntilNextTimestamp(hWallet, meltResponse.hash);
     meltResponse = await hWallet.meltTokens(tokenUid, 299);
     expectedHtrFunds += 2;
+    await delay(10000);
     await waitForTxReceived(hWallet, meltResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
   });
@@ -2287,6 +2298,7 @@ describe('delegateAuthority', () => {
       await hWallet1.getAddressAtIndex(1),
       { createAnother: true }
     );
+    await delay(10000);
     await waitForTxReceived(hWallet1, duplicateMeltAuth);
 
     // Confirming two authority tokens on wallet1
@@ -2313,6 +2325,7 @@ describe('delegateAuthority', () => {
       await hWallet2.getAddressAtIndex(1),
       { createAnother: false }
     );
+    await delay(10000);
     await waitForTxReceived(hWallet1, delegateMintAuth);
 
     // Confirming only one authority token was sent from wallet1 to wallet2
