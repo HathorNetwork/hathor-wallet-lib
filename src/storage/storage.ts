@@ -775,10 +775,11 @@ export class Storage implements IStorage {
    *
    * @param {boolean} [cleanHistory=false] If we should clean the history data
    * @param {boolean} [cleanAddresses=false] If we should clean the address data
+   * @param {boolean} [cleanTokens=false] If we should clean the registered tokens
    * @returns {Promise<void>}
    */
-  async cleanStorage(cleanHistory: boolean = false, cleanAddresses: boolean = false): Promise<void> {
-    return this.store.cleanStorage(cleanHistory, cleanAddresses);
+  async cleanStorage(cleanHistory: boolean = false, cleanAddresses: boolean = false, cleanTokens: boolean = false): Promise<void> {
+    return this.store.cleanStorage(cleanHistory, cleanAddresses, cleanTokens);
   }
 
   /**

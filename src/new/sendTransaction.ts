@@ -571,16 +571,7 @@ export async function prepareSendTokensData(
     if (newUtxos.amount < outputAmount) {
       throw new Error(`Token: ${token}. Insufficient amount of tokens to fill the amount.`);
     }
-    newtxData.inputs = newUtxos.utxos.map((utxo) => {
-      return {
-        txId: utxo.txId,
-        index: utxo.index,
-        value: utxo.value,
-        authorities: utxo.authorities,
-        token: utxo.token,
-        address: utxo.address,
-      } as IDataInput;
-    });
+    newtxData.inputs = newUtxos.utxos.map(helpers.getDataInputFromUtxo);
 
     if (newUtxos.amount > outputAmount) {
       // We need to create a change output

@@ -314,9 +314,10 @@ export default class LevelDBStore implements IStore {
     await this.walletIndex.setItem(key, value);
   }
 
-  async cleanStorage(cleanHistory: boolean = false, cleanAddresses: boolean = false): Promise<void> {
+  async cleanStorage(cleanHistory: boolean = false, cleanAddresses: boolean = false, cleanTokens: boolean = false): Promise<void> {
+    // If both are false the method will be a no-op
+    await this.tokenIndex.clear(cleanHistory, cleanTokens);
     if (cleanHistory) {
-      await this.tokenIndex.clear(true);
       await this.historyIndex.clear();
       await this.utxoIndex.clear();
     }
