@@ -23,7 +23,7 @@ const txMiningApi = {
    * @param {Number} timeout Optional parameter to define the timeout of the submit job in seconds
    *
    * @return {Promise}
-   * @memberof txMiningApi
+   * @memberof ApiTxMining
    * @inner
    */
   submitJob(tx, propagate, add_parents, timeout, resolve) {
@@ -44,7 +44,7 @@ const txMiningApi = {
    * @param {String} job Job id
    *
    * @return {Promise}
-   * @memberof txMiningApi
+   * @memberof ApiTxMining
    * @inner
    */
   getJobStatus(job, resolve) {
@@ -62,7 +62,7 @@ const txMiningApi = {
    * @param {String} job Job id
    *
    * @return {Promise}
-   * @memberof txMiningApi
+   * @memberof ApiTxMining
    * @inner
    */
   cancelJob(job, resolve) {
@@ -73,6 +73,23 @@ const txMiningApi = {
       return Promise.reject(error);
     });
   },
+
+  /**
+   * Get health information for the tx-mining-service
+   *
+   * @return {Promise}
+   * @memberof ApiTxMining
+   * @inner
+   */
+  async getHealth() {
+    return new Promise((resolve, reject) => {
+      txMiningRequestClient(resolve).get(`health`).then((res) => {
+        resolve(res.data);
+      }, (res) => {
+        reject(res);
+      });
+    });
+  }
 };
 
 export default txMiningApi;

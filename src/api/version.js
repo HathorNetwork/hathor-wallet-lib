@@ -29,6 +29,23 @@ const versionApi = {
     }, (res) => {
       return Promise.reject(res);
     });
+  },
+
+  /**
+   * Get version of full node running in connected server
+   *
+   * @return {Promise}
+   * @memberof ApiVersion
+   * @inner
+   */
+  async asyncGetVersion() {
+    return new Promise((resolve, reject) => {
+      createRequestInstance(resolve).get(`version`).then((res) => {
+        resolve(res.data);
+      }, (res) => {
+        reject(res);
+      });
+    });
   }
 };
 
