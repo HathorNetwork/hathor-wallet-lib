@@ -1156,6 +1156,7 @@ describe('sendTransaction', () => {
 
     // Validating all fields
     await waitForTxReceived(hWallet, tx1.hash);
+    await delay(2000)
     expect(tx1).toMatchObject({
       hash: expect.any(String),
       inputs: expect.any(Array),
@@ -1186,6 +1187,7 @@ describe('sendTransaction', () => {
       { changeAddress: await hWallet.getAddressAtIndex(5) }
     );
     await waitForTxReceived(hWallet, tx2Hash);
+    await delay(2000);
 
     // Balance was reduced
     htrBalance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
