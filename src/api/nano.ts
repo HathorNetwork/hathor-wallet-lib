@@ -25,10 +25,10 @@ const ncApi = {
    * @memberof ApiNanoContracts
    * @inner
    */
-  async getNanoContractState(id: string, fields: string[]) {
-    const data = { id, fields };
+  async getNanoContractState(id: string, fields: string[], balances: string[], calls: string[]) {
+    const data = { id, fields, balances, calls };
     const axios = await createRequestInstance();
-    const response = await axios.get(`nano_contracts/state`, {params: data});
+    const response = await axios.get(`nano_contract/state`, {params: data});
     const responseData = response.data;
     if (response.status === 200 && responseData.success) {
       return responseData;
@@ -46,10 +46,17 @@ const ncApi = {
    * @memberof ApiNanoContracts
    * @inner
    */
-  async getNanoContractHistory(id: string) {
+  async getNanoContractHistory(id: string, count: number | null = null, after: string | null = null) {
     const data = { id };
+    if (count) {
+      data['count'] = count;
+    }
+
+    if (after) {
+      data['after'] = after;
+    }
     const axios = await createRequestInstance();
-    const response = await axios.get(`nano_contracts/history`, {params: data});
+    const response = await axios.get(`nano_contract/history`, {params: data});
     const responseData = response.data;
     if (response.status === 200 && responseData.success) {
       return responseData;
