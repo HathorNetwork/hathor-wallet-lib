@@ -11,11 +11,12 @@ import { HATHOR_TOKEN_CONFIG } from '../../../src/constants';
 import ncApi from '../../../src/api/nano';
 import helpersUtils from '../../../src/utils/helpers';
 import dateFormatter from '../../../src/utils/date';
-import { bufferToHex } from '../../../src/utils/buffer';
+import { bufferToHex, hexToBuffer } from '../../../src/utils/buffer';
 import Address from '../../../src/models/address';
 import P2PKH from '../../../src/models/p2pkh';
 import { isEmpty } from 'lodash';
 import { delay } from '../utils/core.util';
+import { getOracleBufferFromHex, getOracleInputData } from '../../../src/nano_contracts/utils';
 
 // We have to skip this test because it needs nano contract support in the full node.
 // Until we have this support in the public docker image, the CI won't succeed if this is not skipped
@@ -49,20 +50,98 @@ describe.skip('full cycle of bet nano contract', () => {
   }
 
   it('bet deposit', async () => {
-    // Create NC
+    const address0 = await hWallet.getAddressAtIndex(0);
     const address1 = await hWallet.getAddressAtIndex(1);
-    const dateLastOffer = dateFormatter.dateToTimestamp(new Date()) + 6000;
-    const tx1 = await hWallet.createBetNanoContract(HATHOR_TOKEN_CONFIG.uid, dateLastOffer, address1, 0);
+    const dateLastBet = dateFormatter.dateToTimestamp(new Date()) + 6000;
+    const network = hWallet.getNetworkObject();
+
+    // Create NC
+    const oracleData = getOracleBufferFromHex(address1, network);
+    const tx1 = await hWallet.createAndSendNanoContractTransaction(
+      '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595',
+      'initialize',
+      address0,
+      {
+        args: [
+          {
+            type: 'byte',
+            value: bufferToHex(oracleData)
+          },
+          {
+            type: 'byte',
+            value: HATHOR_TOKEN_CONFIG.uid
+          },
+          {
+            type: 'int',
+            value: dateLastBet
+          },
+        ]
+      }
+    );
     await checkTxValid(tx1.hash);
 
     // Bet 100 to address 2
     const address2 = await hWallet.getAddressAtIndex(2);
-    const txBet = await hWallet.makeBet(tx1.hash, address2, address2, '1x0', 100, HATHOR_TOKEN_CONFIG.uid);
+    const address2Obj = new Address(address2, { network });
+    const txBet = await hWallet.createAndSendNanoContractTransaction(
+      '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595',
+      'bet',
+      address2,
+      {
+        args: [
+          {
+            type: 'byte',
+            value: bufferToHex(address2Obj.decode())
+          },
+          {
+            type: 'string',
+            value: '1x0'
+          }
+        ],
+        actions: [
+          {
+            type: 'deposit',
+            token: HATHOR_TOKEN_CONFIG.uid,
+            data: {
+              amount: 100
+            }
+          }
+        ],
+        ncId: tx1.hash
+      }
+    );
     await checkTxValid(txBet.hash);
 
     // Bet 200 to address 3
     const address3 = await hWallet.getAddressAtIndex(3);
-    const txBet2 = await hWallet.makeBet(tx1.hash, address3, address3, '2x0', 200, HATHOR_TOKEN_CONFIG.uid);
+    const address3Obj = new Address(address3, { network });
+    const txBet2 = await hWallet.createAndSendNanoContractTransaction(
+      '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595',
+      'bet',
+      address3,
+      {
+        args: [
+          {
+            type: 'byte',
+            value: bufferToHex(address3Obj.decode())
+          },
+          {
+            type: 'string',
+            value: '2x0'
+          }
+        ],
+        actions: [
+          {
+            type: 'deposit',
+            token: HATHOR_TOKEN_CONFIG.uid,
+            data: {
+              amount: 200
+            }
+          }
+        ],
+        ncId: tx1.hash
+      }
+    );
     await checkTxValid(txBet2.hash);
 
     // Get nc history
@@ -88,27 +167,60 @@ describe.skip('full cycle of bet nano contract', () => {
         `withdrawals.a'${address3}'`
       ]
     );
-    const addressObj1 = new Address(address1, { network: hWallet.getNetworkObject() });
+    const addressObj1 = new Address(address1, { network });
     const outputScriptObj1 = new P2PKH(addressObj1);
     const outputScriptBuffer1 = outputScriptObj1.createScript();
 
-    expect(ncState.token_uid).toBe(HATHOR_TOKEN_CONFIG.uid);
-    expect(ncState.date_last_offer).toBe(dateLastOffer);
-    expect(ncState.oracle_script).toBe(bufferToHex(outputScriptBuffer1));
-    expect(ncState.final_result).toBeNull();
-    expect(ncState.total).toBe(300);
-    expect(ncState[`address_details.a'${address2}'`]).toHaveProperty('1x0', 100);
-    expect(ncState[`withdrawals.a'${address2}'`]).toBeNull();
-    expect(ncState[`address_details.a'${address3}'`]).toHaveProperty('2x0', 200);
-    expect(ncState[`withdrawals.a'${address3}'`]).toBeNull();
+    expect(ncState.fields.token_uid.value).toBe(HATHOR_TOKEN_CONFIG.uid);
+    expect(ncState.fields.date_last_offer.value).toBe(dateLastBet);
+    expect(ncState.fields.oracle_script.value).toBe(bufferToHex(outputScriptBuffer1));
+    expect(ncState.fields.final_result.value).toBeNull();
+    expect(ncState.fields.total.value).toBe(300);
+    expect(ncState.fields[`address_details.a'${address2}'`].value).toHaveProperty('1x0', 100);
+    expect(ncState.fields[`withdrawals.a'${address2}'`].value).toBeUndefined();
+    expect(ncState.fields[`address_details.a'${address3}'`].value).toHaveProperty('2x0', 200);
+    expect(ncState.fields[`withdrawals.a'${address3}'`].value).toBeUndefined();
 
     // Set result to '1x0'
-    const txSetResult = await hWallet.setResult(tx1.hash, address1, '1x0', ncState.oracle_script);
+    const result = '1x0';
+    const resultSerialized = Buffer.from(result, 'utf8');
+    const inputData = await getOracleInputData(ncState.fields.oracle_script.value, resultSerialized, hWallet);
+    const txSetResult = await hWallet.createAndSendNanoContractTransaction(
+      '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595',
+      'set_result',
+      address1,
+      {
+        args: [
+          {
+            type: 'SignedData',
+            value: `${bufferToHex(inputData)},${result},string`
+          }
+        ],
+        ncId: tx1.hash
+      }
+    );
     await checkTxValid(txSetResult.hash);
     txIds.push(txSetResult.hash);
 
     // Try to withdraw to address 2, success
-    const txWithdrawal = await hWallet.makeWithdrawal(tx1.hash, address2, 300, HATHOR_TOKEN_CONFIG.uid);
+    const txWithdrawal = await hWallet.createAndSendNanoContractTransaction(
+      '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595',
+      'withdraw',
+      address2,
+      {
+        actions: [
+          {
+            type: 'withdrawal',
+            token: HATHOR_TOKEN_CONFIG.uid,
+            data: {
+              amount: 300,
+              address: address2
+            }
+          }
+        ],
+        ncId: tx1.hash
+      }
+    );
     await checkTxValid(txWithdrawal.hash);
     txIds.push(txWithdrawal.hash);
     
@@ -127,15 +239,15 @@ describe.skip('full cycle of bet nano contract', () => {
         `withdrawals.a'${address3}'`
       ]
     );
-    expect(ncState2.token_uid).toBe(HATHOR_TOKEN_CONFIG.uid);
-    expect(ncState2.date_last_offer).toBe(dateLastOffer);
-    expect(ncState2.oracle_script).toBe(bufferToHex(outputScriptBuffer1));
-    expect(ncState2.final_result).toBe('1x0');
-    expect(ncState2.total).toBe(300);
-    expect(ncState2[`address_details.a'${address2}'`]).toHaveProperty('1x0', 100);
-    expect(ncState2[`withdrawals.a'${address2}'`]).toBe(300);
-    expect(ncState2[`address_details.a'${address3}'`]).toHaveProperty('2x0', 200);
-    expect(ncState2[`withdrawals.a'${address3}'`]).toBeNull();
+    expect(ncState2.fields.token_uid.value).toBe(HATHOR_TOKEN_CONFIG.uid);
+    expect(ncState2.fields.date_last_offer.value).toBe(dateLastBet);
+    expect(ncState2.fields.oracle_script.value).toBe(bufferToHex(outputScriptBuffer1));
+    expect(ncState2.fields.final_result.value).toBe('1x0');
+    expect(ncState2.fields.total.value).toBe(300);
+    expect(ncState2.fields[`address_details.a'${address2}'`].value).toHaveProperty('1x0', 100);
+    expect(ncState2.fields[`withdrawals.a'${address2}'`].value).toBe(300);
+    expect(ncState2.fields[`address_details.a'${address3}'`].value).toHaveProperty('2x0', 200);
+    expect(ncState2.fields[`withdrawals.a'${address3}'`].value).toBeUndefined();
 
     // Get history again
     const ncHistory2 = await ncApi.getNanoContractHistory(tx1.hash);
