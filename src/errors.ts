@@ -331,3 +331,5 @@ export class PinRequiredError extends Error {
  * @inner
  */
 export class NanoContractTransactionError extends Error {};
+
+export class OracleParseError extends Error {};

@@ -34,7 +34,6 @@ import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
 import Output from '../models/output';
 import Input from '../models/input';
-import BetTransactionBuilder from '../nano_contracts/builder';
 import { HDPrivateKey, crypto } from 'bitcore-lib';
 import transactionUtils from '../utils/transaction';
 import { signMessage } from '../utils/crypto';
@@ -46,8 +45,8 @@ import { syncHistory, reloadStorage, checkGapLimit } from '../utils/storage';
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH } from '../utils/address';
-import BlueprintsMap from '../nano_contracts/blueprints/blueprint_map';
-import Bet from '../nano_contracts/blueprints/bet';
+import { signAndPushNCTransaction } from '../nano_contracts/utils';
+import NanoContractTransactionBuilder from '../nano_contracts/builder';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 
@@ -2596,38 +2595,29 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Execute a nano contract method of a blueprint, creating the transaction and pushing to the network
+   * Create and send a nano contract transaction
    *
-   * @param {string} blueprint Blueprint to execute the method
+   * @param {string} blueprintId Blueprint ID to execute the method
    * @param {string} method Method of nano contract to have the transaction created
    * @param {string} address Address that will be used to sign the nano contract transaction
-   * @param {Object} data Object with each method parameters
+   * @param [data]
+   * @param {string | null} [data.ncId] ID of the nano contract to execute method. Required if method is not initialize
+   * @param {NanoContractAction[]} [data.actions] List of actions to execute in the nano contract transaction
+   * @param {NanoContractArg[]} [data.args] List of arguments (values and types) for the method to be executed in the transaction
    * @param [options]
    * @param {string} [options.pinCode] PIN to decrypt the private key.
    *                                   Optional but required if not set in this
    *
    * @returns {Promise<NanoContract>}
    */
-  async executeNanoContractMethod(blueprint, method, address, data, options = {}) {
+  async createAndSendNanoContractTransaction(blueprintId, method, address, data, options = {}) {
     if (await this.storage.isReadonly()) {
-      throw new WalletFromXPubGuard('executeNanoContractMethod');
+      throw new WalletFromXPubGuard('createAndSendNanoContractTransaction');
     }
     const newOptions = Object.assign({ pinCode: null }, options);
     const pin = newOptions.pinCode || this.pinCode;
     if (!pin) {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
-    }
-
-    // Get the blueprint chosen
-    const methodsMap = BlueprintsMap[blueprint];
-    if (!methodsMap) {
-        throw new NanoContractTransactionError('Invalid blueprint.');
-    }
-
-    // Get the parameters required of the method chosen
-    const methodParameters = methodsMap[method];
-    if (!methodParameters) {
-        throw new NanoContractTransactionError('Invalid blueprint method.');
     }
 
     if (method !== 'initialize' && !data.ncId) {
@@ -2636,31 +2626,65 @@ class HathorWallet extends EventEmitter {
       throw new NanoContractTransactionError('Missing nano contract id. Parameter ncId in data');
     }
 
+    // Get the blueprint data from full node
+    // TODO
+
     // Validates that all required parameters are in the data object
-    for (const parameter in methodParameters) {
-      const type = methodParameters[parameter];
+    // TODO
 
-      if (parameter.endsWith('?')) {
-        // Optional parameter
-        continue;
-      }
-
-      if (typeof data[parameter] !== type) {
-        throw new NanoContractTransactionError(`Invalid parameter ${parameter}. Expected type ${type} but found type ${typeof data[parameter]}`);
+    // For each arg, if the type is byte, it must be transformed from hex to Buffer
+    for (const arg of data.args) {
+      if (arg.type === 'byte') {
+        arg.value = hexToBuffer(arg.value);
       }
     }
 
     // Get private key that will sign the nano contract transaction
+    const derivedKey = await this.getHDPrivateKeyFromAddress(address, pin);
+    const privateKey = derivedKey.privateKey;
+
+    // Build and send transaction
+    const builder = new NanoContractTransactionBuilder();
+    builder.setMethod(method);
+    builder.setWallet(this);
+    builder.setId(method === 'initialize' ? blueprintId : data.ncId);
+    builder.setCaller(privateKey);
+    builder.setActions(data.actions);
+    builder.setArgs(data.args);
+
+    const nc = await builder.build();
+    return signAndPushNCTransaction(nc, privateKey, pin, this.storage);
+  }
+
+  /**
+   * Generate and return the HDPrivateKey for an address
+   *
+   * @param {string} address Address to get the HDPrivateKey from
+   * @param [options]
+   * @param {string} [options.pinCode] PIN to decrypt the private key.
+   *                                   Optional but required if not set in this
+   *
+   * @returns {Promise<HDPrivateKey>}
+   */
+  async getHDPrivateKeyFromAddress(address, options = {}) {
+    if (await this.storage.isReadonly()) {
+      throw new WalletFromXPubGuard('getHDPrivateKeyFromAddress');
+    }
+    const newOptions = Object.assign({ pinCode: null }, options);
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
+    }
+
     const addressIndex = await this.getAddressIndex(address);
+    if (addressIndex === null) {
+      throw new Error('Address does not belong to the wallet.');
+    }
     const accessData = await this.getAccessData();
     const encryptedPrivateKey = accessData.mainKey;
     const privateKeyStr = decryptData(encryptedPrivateKey, pin);
     const key = HDPrivateKey(privateKeyStr)
-    const derivedKey = key.deriveNonCompliantChild(addressIndex);
-    const privateKey = derivedKey.privateKey;
-
-    // Call method of the Bet class
-    return Bet[method](this, pin, privateKey, data);
+    return key.deriveNonCompliantChild(addressIndex);
   }
 }
 
