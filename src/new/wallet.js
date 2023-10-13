@@ -2633,9 +2633,11 @@ class HathorWallet extends EventEmitter {
     // TODO
 
     // For each arg, if the type is byte, it must be transformed from hex to Buffer
-    for (const arg of data.args) {
-      if (arg.type === 'byte') {
-        arg.value = hexToBuffer(arg.value);
+    if (data.args) {
+      for (const arg of data.args) {
+        if (arg.type === 'byte') {
+          arg.value = hexToBuffer(arg.value);
+        }
       }
     }
 
