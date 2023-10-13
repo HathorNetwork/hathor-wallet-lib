@@ -81,7 +81,7 @@ class NanoContractTransactionBuilder {
     this.wallet = wallet;
   }
 
-  async executeDeposit(action: NanoContractActionDeposit): Promise<[Input[], Output[]]> {
+  async executeDeposit(action: NanoContractActionDeposit, tokens: string[]): Promise<[Input[], Output[]]> {
     // Get the utxos with the amount of the bet and create the inputs
     const utxosData = await this.wallet.getUtxosForAmount(action.data.amount, { token: action.token });
     const inputs: Input[] = [];
@@ -104,11 +104,12 @@ class NanoContractTransactionBuilder {
       changeAddress.validateAddress();
       const p2pkh = new P2PKH(changeAddress);
       const p2pkhScript = p2pkh.createScript()
+      const tokenIndex = action.token === HATHOR_TOKEN_CONFIG.uid ? 0 : tokens.findIndex((token) => token === action.token) + 1;
       const outputObj = new Output(
         utxosData.changeAmount,
         p2pkhScript,
         {
-          tokenData: action.token === HATHOR_TOKEN_CONFIG.uid ? 0 : 1
+          tokenData: tokenIndex
         }
       );
       outputs.push(outputObj);
@@ -117,16 +118,17 @@ class NanoContractTransactionBuilder {
     return [inputs, outputs];
   }
 
-  executeWithdrawal(action: NanoContractActionWithdrawal): Output {
+  executeWithdrawal(action: NanoContractActionWithdrawal, tokens: string[]): Output {
     // Create the output with the withdrawal address and amount
     const addressObj = new Address(action.data.address, { network: this.wallet.getNetworkObject() });
     const p2pkh = new P2PKH(addressObj);
     const p2pkhScript = p2pkh.createScript()
+    const tokenIndex = action.token === HATHOR_TOKEN_CONFIG.uid ? 0 : tokens.findIndex((token) => token === action.token) + 1;
     const output = new Output(
       action.data.amount,
       p2pkhScript,
       {
-        tokenData: action.token === HATHOR_TOKEN_CONFIG.uid ? 0 : 1
+        tokenData: tokenIndex
       }
     );
 
@@ -140,15 +142,24 @@ class NanoContractTransactionBuilder {
 
     let inputs: Input[] = [];
     let outputs: Output[] = [];
+    let tokens: string[] = [];
     if (this.actions) {
+      const tokenSet = new Set<string>();
+      for (const action of this.actions) {
+        // Get token list
+        if (action.token !== HATHOR_TOKEN_CONFIG.uid) {
+          tokenSet.add(action.token);
+        }
+      }
+      tokens = Array.from(tokenSet);
       for (const action of this.actions) {
         // Call action
         if (action.type === NanoContractActionType.DEPOSIT) {
-          const ret = await this.executeDeposit(action);
+          const ret = await this.executeDeposit(action, tokens);
           inputs = concat(inputs, ret[0]);
           outputs = concat(outputs, ret[1]);
         } else if (action.type === NanoContractActionType.WITHDRAWAL) {
-          const output = this.executeWithdrawal(action);
+          const output = this.executeWithdrawal(action, tokens);
           outputs = concat(outputs, output);
         } else {
           throw new Error('Invalid type for nano contract action.');
@@ -177,7 +188,7 @@ class NanoContractTransactionBuilder {
       }
     }
 
-    const nc = new NanoContract(inputs, outputs, this.id, this.method, serializedArgs, this.caller.publicKey.toBuffer(), null);
+    const nc = new NanoContract(inputs, outputs, tokens, this.id, this.method, serializedArgs, this.caller.publicKey.toBuffer(), null);
     return nc;
   }
 }

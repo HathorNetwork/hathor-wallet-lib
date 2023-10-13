@@ -19,8 +19,8 @@ class NanoContract extends Transaction {
   pubkey: Buffer;
   signature: Buffer | null;
 
-  constructor(inputs: Input[], outputs: Output[], id: string, method: string, args: Buffer[], pubkey: Buffer, signature: Buffer | null = null) {
-    super(inputs, outputs);
+  constructor(inputs: Input[], outputs: Output[], tokens: string[], id: string, method: string, args: Buffer[], pubkey: Buffer, signature: Buffer | null = null) {
+    super(inputs, outputs, { tokens });
     this.version = NANO_CONTRACTS_VERSION;
 
     this.id = id;
