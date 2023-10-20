@@ -284,6 +284,7 @@ export function waitForWalletReady(hWallet) {
  * @returns {Promise<SendTxResponse>}
  */
 export async function waitForTxReceived(hWallet, txId, timeout) {
+  loggers.test.log(`Waiting for transaction: ${txId}`);
   const startTime = Date.now().valueOf();
   let alreadyResponded = false;
   const existingTx = await hWallet.getTx(txId);
@@ -294,22 +295,24 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
   }
 
   // Only return the positive response after the transaction was received by the websocket
-  return new Promise(async (resolve, reject) => {
+  return new Promise((resolve, reject) => {
     // Event listener
-    const handleNewTx = newTx => {
+    const handleNewTx = async newTx => {
       // Ignore this event if we didn't receive the transaction we expected.
       if (newTx.tx_id !== txId) {
+        loggers.test.log(`Got new tx ${newTx.tx_id}, expected ${txId}`);
         return;
       }
+      hWallet.removeListener('new-tx', handleNewTx);
 
       // This is the correct transaction: resolving the promise.
-      resolveWithSuccess(newTx);
+      await resolveWithSuccess(newTx);
     };
     hWallet.on('new-tx', handleNewTx);
 
     // Timeout handler
     const timeoutPeriod = timeout || TX_TIMEOUT_DEFAULT;
-    setTimeout(async () => {
+    setTimeout(() => {
       hWallet.removeListener('new-tx', handleNewTx);
 
       // No need to respond if the event listener worked.
@@ -368,6 +371,7 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
  */
 export async function waitUntilNextTimestamp(hWallet, txId) {
   const { timestamp } = await hWallet.getTx(txId);
+  console.log(`waitUntilNextTimestamp timestamp: ${timestamp}`);
   const nowMilliseconds = Date.now().valueOf();
   const nextValidMilliseconds = (timestamp + 1) * 1000;
 

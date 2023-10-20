@@ -657,7 +657,7 @@ describe('addresses methods', () => {
     // Expect the "current address" to change when a transaction arrives at the current one
     currentAddress = await hWallet.getCurrentAddress();
     await GenesisWalletHelper.injectFunds(currentAddress.address, 1);
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await delay(1000);
     const currentAfterTx = await hWallet.getCurrentAddress();
     expect(currentAfterTx).toMatchObject({
       index: currentAddress.index + 1,
@@ -704,11 +704,11 @@ describe('addresses methods', () => {
     // We will assume the wallet never received txs, which is to be expected for the addresses test
     expect((await mshWallet.getCurrentAddress()).address).toStrictEqual(WALLET_CONSTANTS.multisig.addresses[0]);
 
-    for (let i=0; i < 21; ++i) {
+    for (let i = 0; i < 21; ++i) {
       expect(await mshWallet.getAddressAtIndex(i))
         .toStrictEqual(WALLET_CONSTANTS.multisig.addresses[i]);
     }
-  })
+  });
 });
 
 describe('getBalance', () => {
@@ -735,6 +735,7 @@ describe('getBalance', () => {
     // Generating one transaction to validate its effects
     const injectedValue = getRandomInt(10, 2);
     await GenesisWalletHelper.injectFunds(await hWallet.getAddressAtIndex(0), injectedValue);
+    await delay(1000);
 
     // Validating the transaction effects
     const balance1 = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
@@ -889,6 +890,7 @@ describe('getFullHistory', () => {
       await hWallet.getAddressAtIndex(0),
       10
     );
+    await delay(1000);
     const tokenName = 'Full History Token';
     const tokenSymbol = 'FHT';
     const { hash: tokenUid } = await createTokenHelper(
@@ -1150,13 +1152,14 @@ describe('sendTransaction', () => {
   it('should send HTR transactions', async () => {
     const hWallet = await generateWalletHelper();
     await GenesisWalletHelper.injectFunds(await hWallet.getAddressAtIndex(0), 10);
+    await delay(1000);
 
     // Sending a transaction inside the same wallet
     const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(2), 6);
 
     // Validating all fields
     await waitForTxReceived(hWallet, tx1.hash);
-    await delay(2000)
+    await delay(2000);
     expect(tx1).toMatchObject({
       hash: expect.any(String),
       inputs: expect.any(Array),
@@ -1212,6 +1215,7 @@ describe('sendTransaction', () => {
       'TTS',
       100
     );
+    await delay(1000);
 
     const tx1 = await hWallet.sendTransaction(
       await hWallet.getAddressAtIndex(5),

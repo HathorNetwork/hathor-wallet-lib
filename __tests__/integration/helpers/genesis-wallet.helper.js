@@ -81,6 +81,7 @@ export class GenesisWalletHelper {
 
       await waitForTxReceived(this.hWallet, result.hash, options.waitTimeout);
       await waitUntilNextTimestamp(this.hWallet, result.hash);
+      await delay(1000);
       return result;
     } catch (e) {
       loggers.test.error(`Failed to inject funds: ${e.message}`);
