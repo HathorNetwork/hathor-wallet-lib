@@ -1228,6 +1228,7 @@ describe('sendTransaction', () => {
       }
     );
     await waitForTxReceived(hWallet, tx1.hash);
+    await delay(1000);
 
     // Validating balance stays the same for internal transactions
     let htrBalance = await hWallet.getBalance(tokenUid);
@@ -1239,6 +1240,7 @@ describe('sendTransaction', () => {
     // Transaction outside the wallet
     const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
     await waitUntilNextTimestamp(hWallet, tx1.hash);
+    await delay(1000);
     const { hash: tx2Hash } = await hWallet.sendTransaction(
       await gWallet.getAddressAtIndex(0),
       80,
@@ -1247,6 +1249,7 @@ describe('sendTransaction', () => {
         changeAddress: await hWallet.getAddressAtIndex(12)
       }
     );
+    await delay(1000);
     await waitForTxReceived(hWallet, tx2Hash);
 
     // Balance was reduced
@@ -1897,34 +1900,43 @@ describe('mintTokens', () => {
     mintResponse = await hWallet.mintTokens(tokenUid, 1);
     expectedHtrFunds -= 1;
     await waitForTxReceived(hWallet, mintResponse.hash);
-    expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
+    await delay(500);
+    await expect(getHtrBalance(hWallet)).resolves.toBe(expectedHtrFunds);
 
     // Minting exactly 1.00 tokens consumes 0.01 HTR
     await waitUntilNextTimestamp(hWallet, mintResponse.hash);
+    await delay(500);
     mintResponse = await hWallet.mintTokens(tokenUid, 100);
     expectedHtrFunds -= 1;
     await waitForTxReceived(hWallet, mintResponse.hash);
+    await delay(500);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Minting between 1.00 and 2.00 tokens consumes 0.02 HTR
     await waitUntilNextTimestamp(hWallet, mintResponse.hash);
+    await delay(500);
     mintResponse = await hWallet.mintTokens(tokenUid, 101);
     expectedHtrFunds -= 2;
     await waitForTxReceived(hWallet, mintResponse.hash);
+    await delay(500);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Minting exactly 2.00 tokens consumes 0.02 HTR
     await waitUntilNextTimestamp(hWallet, mintResponse.hash);
+    await delay(500);
     mintResponse = await hWallet.mintTokens(tokenUid, 200);
     expectedHtrFunds -= 2;
     await waitForTxReceived(hWallet, mintResponse.hash);
+    await delay(500);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Minting between 2.00 and 3.00 tokens consumes 0.03 HTR
     await waitUntilNextTimestamp(hWallet, mintResponse.hash);
+    await delay(500);
     mintResponse = await hWallet.mintTokens(tokenUid, 201);
     expectedHtrFunds -= 3;
     await waitForTxReceived(hWallet, mintResponse.hash);
+    await delay(500);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
   });
 });
@@ -2034,41 +2046,50 @@ describe('meltTokens', () => {
       'TMELT',
       1900
     );
+    await delay(500);
     let expectedHtrFunds = 1;
 
     let meltResponse;
     // Melting less than 1.00 tokens recovers 0 HTR
     meltResponse = await hWallet.meltTokens(tokenUid, 99);
     await waitForTxReceived(hWallet, meltResponse.hash);
+    await delay(500);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Melting exactly 1.00 tokens recovers 0.01 HTR
     await waitUntilNextTimestamp(hWallet, meltResponse.hash);
+    await delay(500);
     meltResponse = await hWallet.meltTokens(tokenUid, 100);
     expectedHtrFunds += 1;
     await waitForTxReceived(hWallet, meltResponse.hash);
-    await delay(100);
+    await delay(500);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Melting between 1.00 and 2.00 tokens recovers 0.01 HTR
     await waitUntilNextTimestamp(hWallet, meltResponse.hash);
+    await delay(500);
     meltResponse = await hWallet.meltTokens(tokenUid, 199);
     expectedHtrFunds += 1;
     await waitForTxReceived(hWallet, meltResponse.hash);
+    await delay(500);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Melting exactly 2.00 tokens recovers 0.02 HTR
     await waitUntilNextTimestamp(hWallet, meltResponse.hash);
+    await delay(500);
     meltResponse = await hWallet.meltTokens(tokenUid, 200);
     expectedHtrFunds += 2;
     await waitForTxReceived(hWallet, meltResponse.hash);
+    await delay(500);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Melting between 2.00 and 3.00 tokens recovers 0.02 HTR
     await waitUntilNextTimestamp(hWallet, meltResponse.hash);
+    await delay(500);
     meltResponse = await hWallet.meltTokens(tokenUid, 299);
     expectedHtrFunds += 2;
     await waitForTxReceived(hWallet, meltResponse.hash);
+    await delay(500);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
   });
 });
