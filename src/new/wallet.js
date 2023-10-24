@@ -1152,6 +1152,10 @@ class HathorWallet extends EventEmitter {
     // Process history to update metadatas
     await this.storage.processHistory();
 
+    if (isNewTx && newTx.is_voided) {
+      await this.storage.handleVoidedTx(newTx);
+    }
+
     if (isNewTx) {
       this.emit('new-tx', newTx);
     } else {

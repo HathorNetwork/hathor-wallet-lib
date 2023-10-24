@@ -872,4 +872,36 @@ export class Storage implements IStorage {
     const accessData = await this._getValidAccessData();
     return (accessData.walletFlags & WALLET_FLAGS.HARDWARE) > 0;
   }
+
+  /**
+   * Clean spent_by from outputs that were spent by transactions that became voided
+   * @returns {Promise<void>}
+   */
+  async handleVoidedTx(tx: IHistoryTx): Promise<void> {
+    if (!tx.is_voided) {
+      // We are just handling voided tx here
+      return;
+    }
+
+    for (const input of tx.inputs) {
+      const inputTx = await this.getTx(input.tx_id);
+      if (!inputTx) {
+        // This input is not spending an output from this wallet
+        continue;
+      }
+
+      if (input.index > inputTx.outputs.length - 1) {
+        // Invalid output index
+        throw new Error('Try to get output in an index that doesn\'t exist.');
+      }
+
+      const output = inputTx.outputs[input.index];
+      // If the spent by of this output is the transaction that has just become voided
+      // then we must clean it and update the storage
+      if (output.spent_by === tx.tx_id) {
+        output.spent_by = null;
+        await this.addTx(inputTx);
+      }
+    }
+  }
 }
