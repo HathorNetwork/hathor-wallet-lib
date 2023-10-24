@@ -286,73 +286,21 @@ export function waitForWalletReady(hWallet) {
 export async function waitForTxReceived(hWallet, txId, timeout) {
   loggers.test.log(`Waiting for transaction: ${txId}`);
   const startTime = Date.now().valueOf();
-  let alreadyResponded = false;
-  const existingTx = await hWallet.getTx(txId);
-
-  // If the transaction was already received, return it immediately
-  if (existingTx) {
-    return existingTx;
-  }
-
-  // Only return the positive response after the transaction was received by the websocket
-  return new Promise((resolve, reject) => {
-    // Event listener
-    const handleNewTx = async newTx => {
-      // Ignore this event if we didn't receive the transaction we expected.
-      if (newTx.tx_id !== txId) {
-        loggers.test.log(`Got new tx ${newTx.tx_id}, expected ${txId}`);
-        return;
-      }
-      hWallet.removeListener('new-tx', handleNewTx);
-
-      // This is the correct transaction: resolving the promise.
-      await resolveWithSuccess(newTx);
-    };
-    hWallet.on('new-tx', handleNewTx);
-
-    // Timeout handler
-    const timeoutPeriod = timeout || TX_TIMEOUT_DEFAULT;
-    setTimeout(() => {
-      hWallet.removeListener('new-tx', handleNewTx);
-
-      // No need to respond if the event listener worked.
-      if (alreadyResponded) {
-        return;
-      }
-
-      // Event listener did not receive the tx and it is not on local cache.
-      alreadyResponded = true;
-      reject(new Error(`Timeout of ${timeoutPeriod}ms without receiving tx ${txId}`));
-    }, timeoutPeriod);
-
-    async function resolveWithSuccess(newTx) {
+  const timeoutPeriod = timeout || TX_TIMEOUT_DEFAULT;
+  const timeoutTs = startTime + timeoutPeriod;
+  while (Date.now().valueOf() < timeoutTs) {
+    await delay(0);
+    const txObj = await hWallet.getTx(txId);
+    if (txObj) {
       const timeDiff = Date.now().valueOf() - startTime;
-      if (DEBUG_LOGGING) {
-        loggers.test.log(`Wait for ${txId} took ${timeDiff}ms.`);
-      }
-
-      if (alreadyResponded) {
-        return;
-      }
-      alreadyResponded = true;
-
-      /*
-       * Sometimes even after receiving the `new-tx` event, the transaction is not available on
-       * memory. The code below tries to eliminate these short time-senstive issues with a minimum
-       * of delays.
-       */
-      await delay(1000);
-      let txObj = await hWallet.getTx(txId);
-      while (!txObj) {
-        if (DEBUG_LOGGING) {
-          loggers.test.warn(`Tx was not available on history. Waiting for 50ms and retrying.`);
-        }
-        await delay(50);
-        txObj = await hWallet.getTx(txId);
-      }
-      resolve(newTx);
+      loggers.test.log(`Wait for ${txId} took ${timeDiff}ms.`);
+      return txObj;
     }
-  });
+    await delay(1000);
+  }
+  const timeDiff = Date.now().valueOf() - startTime;
+  loggers.test.log(`Timeout for ${txId} after waiting for ${timeDiff}ms.`);
+  throw new Error(`Timeout of ${timeoutPeriod}ms without receiving tx ${txId}`);
 }
 
 /**
@@ -373,7 +321,7 @@ export async function waitUntilNextTimestamp(hWallet, txId) {
   const { timestamp } = await hWallet.getTx(txId);
   console.log(`waitUntilNextTimestamp timestamp: ${timestamp}`);
   const nowMilliseconds = Date.now().valueOf();
-  const nextValidMilliseconds = (timestamp + 1) * 1000;
+  const nextValidMilliseconds = (timestamp + 2) * 1000;
 
   // We are already past the last valid milissecond
   if (nowMilliseconds > nextValidMilliseconds) {
