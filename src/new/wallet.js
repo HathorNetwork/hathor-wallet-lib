@@ -6,7 +6,7 @@
  */
 
 import { get } from 'lodash';
-import bitcore from 'bitcore-lib';
+import bitcore, { HDPrivateKey } from 'bitcore-lib';
 import EventEmitter from 'events';
 import { HATHOR_TOKEN_CONFIG, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
 import tokenUtils from '../utils/tokens';
@@ -21,14 +21,13 @@ import Network from '../models/network';
 import { AddressError, TxNotFoundError, WalletError, WalletFromXPubGuard } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
-import { HDPrivateKey } from 'bitcore-lib';
 import transactionUtils from '../utils/transaction';
 import { signMessage } from '../utils/crypto';
 import Transaction from '../models/transaction';
 import Queue from '../models/queue';
 import FullnodeConnection from './connection';
 import { TxHistoryProcessingStatus, WalletType } from '../types';
-import { syncHistory, reloadStorage, checkGapLimit } from '../utils/storage';
+import { syncHistory, reloadStorage, scanPolicyStartAddresses, checkScanningPolicy } from '../utils/storage';
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH } from '../utils/address';
@@ -65,7 +64,7 @@ const ConnectionState = {
  * - update-tx: Fired when a known tx is updated. Usually, it happens when one of its outputs is spent.
  * - more-addresses-loaded: Fired when loading the history of transactions. It is fired multiple times,
  *                          one for each request sent to the server.
- **/
+ */
 class HathorWallet extends EventEmitter {
   /**
    * @param param
@@ -81,6 +80,8 @@ class HathorWallet extends EventEmitter {
    * @param {boolean} [param.debug] Activates debug mode
    * @param {{pubkeys:string[],numSignatures:number}} [param.multisig]
    * @param {string[]} [param.preCalculatedAddresses] An array of pre-calculated addresses
+   * @param {import('../types').AddressScanPolicyData} [param.scanPolicy] config specific to
+   * the address scan policy.
    */
   constructor({
     connection,
@@ -104,6 +105,7 @@ class HathorWallet extends EventEmitter {
     beforeReloadCallback = null,
     multisig = null,
     preCalculatedAddresses = null,
+    scanPolicy = null,
   } = {}) {
     super();
 
@@ -181,9 +183,6 @@ class HathorWallet extends EventEmitter {
     // Set to true when stop() method is called
     this.walletStopped = false;
 
-    // This object stores pre-processed data that helps speed up the return of getBalance and getTxHistory
-    this.preProcessedData = {};
-
     if (multisig) {
       this.multisig = {
         pubkeys: multisig.pubkeys,
@@ -193,6 +192,8 @@ class HathorWallet extends EventEmitter {
 
     this.wsTxQueue = new Queue();
     this.newTxPromise = Promise.resolve();
+
+    this.scanPolicy = scanPolicy;
   }
 
   /**
@@ -270,12 +271,74 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Load more addresses if configured to index-limit scanning policy.
+   * If not, do nothing.
+   * @param {number} count Number of addresses to load
+   */
+  async indexLimitLoadMore(count) {
+    const scanPolicy = await this.storage.getScanningPolicy();
+    if (scanPolicy !== 'index-limit') {
+      // This is a no-op
+      return;
+    }
+
+    const limits = await this.storage.getIndexLimit();
+    if (!limits) {
+      return;
+    }
+    const newEndIndex = limits.endIndex + count;
+    await this.indexLimitSetEndIndex(newEndIndex);
+  }
+
+  /**
+   * Set the value of the index limit end for this wallet instance.
+   * @param {number} endIndex The new index limit value
+   * @returns {Promise<void>}
+   */
+  async indexLimitSetEndIndex(endIndex) {
+    const scanPolicy = await this.storage.getScanningPolicy();
+    if (scanPolicy !== 'index-limit') {
+      // This is a no-op
+      return;
+    }
+
+    const limits = await this.storage.getIndexLimit();
+    if (!limits) {
+      return;
+    }
+
+    if (endIndex <= limits.endIndex) {
+      // Cannot unload addresses from storage.
+      return;
+    }
+
+    const newPolicyData = {
+      ...limits,
+      endIndex,
+      policy: 'index-limit',
+    };
+    await this.storage.setScanningPolicyData(newPolicyData);
+    // Force loading more addresses
+    const loadMoreAddresses = await checkScanningPolicy(this.storage);
+    if (loadMoreAddresses !== null) {
+      // This will process the history if any transaction is found.
+      await syncHistory(
+        loadMoreAddresses.nextIndex,
+        loadMoreAddresses.count,
+        this.storage,
+        this.conn,
+        true,
+      );
+    }
+  }
+
+  /**
    * Get the value of the gap limit for this wallet instance.
    * @returns {Promise<number>}
    */
-    async getGapLimit() {
-      return this.storage.getGapLimit();
-    }
+  async getGapLimit() {
+    return this.storage.getGapLimit();
+  }
 
   /**
    * Get the access data object from storage.
@@ -343,38 +406,40 @@ class HathorWallet extends EventEmitter {
    * It is also called if the network is down.
    *
    * @param {Number} newState Enum of new state after change
-   **/
+   */
   async onConnectionChangedState(newState) {
     if (newState === ConnectionState.CONNECTED) {
       this.setState(HathorWallet.SYNCING);
 
       try {
-      // If it's the first connection we just load the history
-      // otherwise we are reloading data, so we must execute some cleans
-      // before loading the full data again
-      if (this.firstConnection) {
-        this.firstConnection = false;
-        const walletData = await this.storage.getWalletData();
-        await syncHistory(0, walletData.gapLimit, this.storage, this.conn);
-      } else {
-        if (this.beforeReloadCallback) {
-          this.beforeReloadCallback();
+        // If it's the first connection we just load the history
+        // otherwise we are reloading data, so we must execute some cleans
+        // before loading the full data again
+        if (this.firstConnection) {
+          this.firstConnection = false;
+          const addressesToLoad = await scanPolicyStartAddresses(this.storage);
+          await syncHistory(
+            addressesToLoad.nextIndex,
+            addressesToLoad.count,
+            this.storage,
+            this.conn,
+          );
+        } else {
+          if (this.beforeReloadCallback) {
+            this.beforeReloadCallback();
+          }
+          await reloadStorage(this.storage, this.conn);
         }
-        await reloadStorage(this.storage, this.conn);
-      }
-      this.setState(HathorWallet.PROCESSING);
-
+        this.setState(HathorWallet.PROCESSING);
       } catch (error) {
         this.setState(HathorWallet.ERROR);
-        console.error('Error loading wallet', {error});
+        console.error('Error loading wallet', { error });
       }
+    } else if (this.walletStopped) {
+      this.setState(HathorWallet.CLOSED);
     } else {
-      if (this.walletStopped) {
-        this.setState(HathorWallet.CLOSED);
-      } else {
-        // Otherwise we just lost websocket connection
-        this.setState(HathorWallet.CONNECTING);
-      }
+      // Otherwise we just lost websocket connection
+      this.setState(HathorWallet.CONNECTING);
     }
   }
 
@@ -1121,8 +1186,10 @@ class HathorWallet extends EventEmitter {
    * @returns {Promise} A promise that resolves when the wallet is done processing the tx queue.
    */
   async onEnterStateProcessing() {
-    // Started processing state now, so we prepare the local data to support using this facade interchangable with wallet service facade in both wallets
-    return this.storage.processHistory()
+    // Started processing state now
+    // Process the queue of transactions received until now
+    // and then resume with the correct state
+    return this.processTxQueue()
       .then(() => { this.setState(HathorWallet.READY); })
       .catch(() => { this.setState(HathorWallet.ERROR); });
   }
@@ -1146,12 +1213,16 @@ class HathorWallet extends EventEmitter {
     // Save the transaction in the storage
     await this.storage.addTx(newTx);
 
-    // check gap-limit and load more addresses if needed
-    const fillGapLimit = await checkGapLimit(this.storage);
-    if (fillGapLimit !== null) {
-      await syncHistory(fillGapLimit.nextIndex, fillGapLimit.count, this.storage, this.conn);
+    // check address scanning policy and load more addresses if needed
+    const loadMoreAddresses = await checkScanningPolicy(this.storage);
+    if (loadMoreAddresses !== null) {
+      await syncHistory(
+        loadMoreAddresses.nextIndex,
+        loadMoreAddresses.count,
+        this.storage,
+        this.conn,
+      );
     }
-    // Process history to update metadatas
     await this.storage.processHistory();
 
     newTx.processingStatus = TxHistoryProcessingStatus.FINISHED;
@@ -1163,8 +1234,7 @@ class HathorWallet extends EventEmitter {
     } else {
       this.emit('update-tx', newTx);
     }
-    return;
-  };
+  }
 
   /**
    * Send a transaction with a single output
@@ -1177,7 +1247,7 @@ class HathorWallet extends EventEmitter {
    * @param {string} [options.pinCode] pin to decrypt the private key
    *
    * @return {Promise<Transaction>} Promise that resolves when transaction is sent
-   **/
+   */
   async sendTransaction(address, value, options = {}) {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('sendTransaction');
@@ -1264,6 +1334,7 @@ class HathorWallet extends EventEmitter {
 
     // Check database consistency
     await this.storage.store.validate();
+    await this.storage.setScanningPolicyData(this.scanPolicy || null);
 
     this.storage.config.setNetwork(this.conn.network);
     this.storage.config.setServerUrl(this.conn.getCurrentServer());
@@ -1333,7 +1404,7 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Close the connections and stop emitting events.
-   **/
+   */
   async stop({ cleanStorage = true, cleanAddresses = false } = {}) {
     this.setState(HathorWallet.CLOSED);
     this.removeAllListeners();

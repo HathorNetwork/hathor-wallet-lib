@@ -27,6 +27,9 @@ import {
   IDataOutput,
   IFillTxOptions,
   IBalance,
+  AddressScanPolicy,
+  AddressScanPolicyData,
+  IIndexLimitAddressScanPolicy,
 } from '../types';
 import transactionUtils from '../utils/transaction';
 import { processHistory, processUtxoUnlock } from '../utils/storage';
@@ -862,6 +865,36 @@ export class Storage implements IStorage {
    */
   async getGapLimit(): Promise<number> {
     return this.store.getGapLimit();
+  }
+
+  /**
+   * Get the index limit.
+   * @returns {Promise<Omit<IIndexLimitAddressScanPolicy, 'policy'>>}
+   */
+  async getIndexLimit(): Promise<Omit<IIndexLimitAddressScanPolicy, 'policy'> | null> {
+    return this.store.getIndexLimit();
+  }
+
+  /**
+   * Get the scanning policy.
+   * @returns {Promise<AddressScanPolicy>}
+   */
+  async getScanningPolicy(): Promise<AddressScanPolicy> {
+    return this.store.getScanningPolicy();
+  }
+
+  /**
+   * Set the scanning policy data.
+   * @param {AddressScanPolicyData | null} data
+   * @returns {Promise<void>}
+   */
+  async setScanningPolicyData(data: AddressScanPolicyData | null): Promise<void> {
+      if (!data) return;
+      await this.store.setScanningPolicyData(data);
+  }
+
+  async getScanningPolicyData(): Promise<AddressScanPolicyData> {
+    return this.store.getScanningPolicyData();
   }
 
   /**

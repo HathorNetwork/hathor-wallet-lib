@@ -8,8 +8,8 @@
 import path from 'path';
 import { Level } from 'level';
 import { AbstractSublevel } from 'abstract-level';
-import { IKVWalletIndex, IWalletData, IWalletAccessData } from '../../types';
-import { GAP_LIMIT } from '../../constants';
+import { IKVWalletIndex, IWalletData, IWalletAccessData, AddressScanPolicy, AddressScanPolicyData, isGapLimitScanPolicy, isIndexLimitScanPolicy, IGapLimitAddressScanPolicy, IIndexLimitAddressScanPolicy } from '../../types';
+import { GAP_LIMIT, DEFAULT_ADDRESS_SCANNING_POLICY } from '../../constants';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 
 export const ACCESS_PREFIX = 'access';
@@ -127,6 +127,19 @@ export default class LevelWalletIndex implements IKVWalletIndex {
   }
 
   /**
+   * Get the index limit.
+   * @returns {Promise<Omit<IIndexLimitAddressScanPolicy, 'policy'> | null>}
+   */
+  async getIndexLimit(): Promise<Omit<IIndexLimitAddressScanPolicy, 'policy'> | null> {
+      const startIndex = await this._getNumber('startIndex') || 0;
+      const endIndex = await this._getNumber('endIndex') || 0;
+      return {
+        startIndex,
+        endIndex,
+      };
+  }
+
+  /**
    * Get the value of the current address index.
    * The current address is the most recent unused address.
    * @returns {Promise<number>} defaults to -1
@@ -207,6 +220,61 @@ export default class LevelWalletIndex implements IKVWalletIndex {
   }
 
   /**
+   * Get the scanning policy.
+   * @returns {Promise<AddressScanPolicy>}
+   */
+  async getScanningPolicy(): Promise<AddressScanPolicy> {
+    try {
+      const value = await this.walletDB.get('scanningPolicy');
+      if (!value) return DEFAULT_ADDRESS_SCANNING_POLICY;
+      return value as AddressScanPolicy;
+    } catch (err: unknown) {
+      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
+        // Default behavior is gap-limit
+        return DEFAULT_ADDRESS_SCANNING_POLICY;
+      }
+      throw err;
+    }
+  }
+
+  async setScanningPolicyData(data: AddressScanPolicyData): Promise<void> {
+    if (isGapLimitScanPolicy(data)) {
+      await this.walletDB.put('scanningPolicy', 'gap-limit');
+      await this.setGapLimit(data.gapLimit);
+      return;
+    }
+
+    if (isIndexLimitScanPolicy(data)) {
+      await this.walletDB.put('scanningPolicy', 'index-limit');
+      await this._setNumber('startIndex', data.startIndex);
+      await this._setNumber('endIndex', data.endIndex);
+      return;
+    }
+
+    throw new Error('Invalid scanning policy data');
+  }
+
+  async getScanningPolicyData(): Promise<AddressScanPolicyData> {
+    const policy = await this.getScanningPolicy();
+    if (policy == 'gap-limit') {
+      return {
+        policy: 'gap-limit',
+        gapLimit: await this.getGapLimit(),
+      } as IGapLimitAddressScanPolicy;
+    }
+
+    if (policy == 'index-limit') {
+      return {
+        policy: 'index-limit',
+        startIndex: await this._getNumber('startIndex') || 0,
+        endIndex: await this._getNumber('endIndex') || 0,
+      } as IIndexLimitAddressScanPolicy;
+    }
+
+    throw new Error('Invalid scanning policy');
+  }
+
+  /**
    * Get the wallet data.
    * @returns {Promise<IWalletData>}
    */
@@ -215,13 +283,13 @@ export default class LevelWalletIndex implements IKVWalletIndex {
     const lastUsedAddressIndex = await this.getLastUsedAddressIndex();
     const currentAddressIndex = await this.getCurrentAddressIndex();
     const bestBlockHeight = await this.getCurrentHeight();
-    const gapLimit = await this.getGapLimit();
+    const scanPolicyData = await this.getScanningPolicyData();
     return {
       lastLoadedAddressIndex,
       lastUsedAddressIndex,
       currentAddressIndex,
       bestBlockHeight,
-      gapLimit,
+      scanPolicyData,
     };
   }
 

@@ -9,8 +9,8 @@ import {
 import { HATHOR_TOKEN_CONFIG, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
 import { FULLNODE_URL, NETWORK_NAME, WALLET_CONSTANTS } from './configuration/test-constants';
 import dateFormatter from '../../src/utils/date';
-import { loggers } from './utils/logger.util';
 import { AddressError } from '../../src/errors';
+import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 
@@ -1169,8 +1169,40 @@ describe('internal methods', () => {
   });
 });
 
-/*
- * The following methods should be tested with the Atomic Swap tests
- * getAllSignatures
- * assemblePartialTransaction
- */
+describe('index-limit address scanning policy', () => {
+  /** @type HathorWallet */
+  let hWallet;
+  beforeAll(async () => {
+    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    hWallet = await generateWalletHelper({
+      seed: walletData.words,
+      addresses: walletData.addresses,
+      scanPolicy: {
+        policy: 'index-limit',
+        startIndex: 0,
+        endIndex: 9,
+      },
+    });
+  });
+
+  afterAll(async () => {
+    await hWallet.stop();
+  });
+
+  it('should start a wallet configured to index-limit', async () => {
+    // 0-9 addresses = 10
+    await expect(hWallet.storage.store.addressCount()).resolves.toEqual(10);
+
+    // 0-14 addresses = 15
+    await hWallet.indexLimitLoadMore(5);
+    await expect(hWallet.storage.store.addressCount()).resolves.toEqual(15);
+
+    // 0-24 addresses = 25
+    await hWallet.indexLimitSetEndIndex(24);
+    await expect(hWallet.storage.store.addressCount()).resolves.toEqual(25);
+
+    // Setting below current loaded index will be a no-op
+    await hWallet.indexLimitSetEndIndex(5);
+    await expect(hWallet.storage.store.addressCount()).resolves.toEqual(25);
+  });
+});
