@@ -85,8 +85,8 @@ const txMiningApi = {
     return new Promise((resolve, reject) => {
       txMiningRequestClient(resolve).get(`health`).then((res) => {
         resolve(res.data);
-      }, (res) => {
-        reject(res);
+      }, (err) => {
+        reject(err);
       });
     });
   }

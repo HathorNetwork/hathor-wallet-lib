@@ -26,8 +26,8 @@ const healthApi = {
       // TODO: We should chage this to get `health` instead of `version`
       createRequestInstance(resolve).get(`version`).then((res) => {
         resolve(res.data);
-      }, (res) => {
-        reject(res);
+      }, (err) => {
+        reject(err);
       });
     });
   }

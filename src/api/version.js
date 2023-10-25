@@ -42,8 +42,8 @@ const versionApi = {
     return new Promise((resolve, reject) => {
       createRequestInstance(resolve).get(`version`).then((res) => {
         resolve(res.data);
-      }, (res) => {
-        reject(res);
+      }, (err) => {
+        reject(err);
       });
     });
   }
