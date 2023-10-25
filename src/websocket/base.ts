@@ -212,6 +212,8 @@ abstract class BaseWebSocket extends EventEmitter {
     this.heartbeat = setInterval(() => {
       this.sendPing();
     }, this.heartbeatInterval);
+
+    console.info('Websocket connection opened.');
   }
 
   /**
@@ -315,7 +317,7 @@ abstract class BaseWebSocket extends EventEmitter {
    * Event received when the websocket connection is down.
    */
   onConnectionDown() {
-    console.warn('Ping timeout. Connection is down...', {
+    console.warn('Websocket ping timeout. Connection is down...', {
       uptime: this.uptime(),
       connectionTimeout: this.connectionTimeout,
     });
