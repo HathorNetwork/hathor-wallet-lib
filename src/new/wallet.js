@@ -1171,13 +1171,28 @@ class HathorWallet extends EventEmitter {
     let wsData = this.wsTxQueue.dequeue();
 
     while (wsData !== undefined) {
-      // process wsData like it just arrived
-      await this.onNewTx(wsData);
-      wsData = this.wsTxQueue.dequeue();
+      const newTx = wsData.history;
+      // Save the transaction in the storage
+      await this.storage.addTx(newTx);
       // We should release the event loop for other threads
       // This effectively awaits 0 seconds, but it schedule the next iteration to run after other threads.
       await new Promise(resolve => { setTimeout(resolve, 0); });
+      wsData = this.wsTxQueue.dequeue();
     }
+
+    // check address scanning policy and load more addresses if needed
+    const loadMoreAddresses = await checkScanningPolicy(this.storage);
+    if (loadMoreAddresses !== null) {
+      await syncHistory(
+        loadMoreAddresses.nextIndex,
+        loadMoreAddresses.count,
+        this.storage,
+        this.conn,
+      );
+    }
+
+    // Finish by processing the history we just added.
+    return this.storage.processHistory();
   }
 
   /**
@@ -1187,15 +1202,21 @@ class HathorWallet extends EventEmitter {
    */
   async onEnterStateProcessing() {
     // Started processing state now, so we prepare the local data to support using this facade interchangable with wallet service facade in both wallets
-    return this.storage.processHistory()
-      .then(() => { this.setState(HathorWallet.READY); })
-      .catch(() => { this.setState(HathorWallet.ERROR); });
+    try {
+      await this.processTxQueue();
+      this.setState(HathorWallet.READY);
+    } catch (e) {
+      this.setState(HathorWallet.ERROR);
+    }
   }
 
   setState(state) {
     if (state === HathorWallet.PROCESSING && state !== this.state) {
       // XXX: will not await this so we can process history on background.
-      this.onEnterStateProcessing();
+      this.onEnterStateProcessing().catch(e => {
+        console.error(e);
+        this.setState(HathorWallet.ERROR);
+      });
     }
     this.state = state;
     this.emit('state', state);
