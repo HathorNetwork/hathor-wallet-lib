@@ -1176,7 +1176,7 @@ class HathorWallet extends EventEmitter {
       wsData = this.wsTxQueue.dequeue();
       // We should release the event loop for other threads
       // This effectively awaits 0 seconds, but it schedule the next iteration to run after other threads.
-      await new Promise(resolve => { setTimeout(resolve, 0) });
+      await new Promise(resolve => { setTimeout(resolve, 0); });
     }
   }
 
@@ -1186,10 +1186,8 @@ class HathorWallet extends EventEmitter {
    * @returns {Promise} A promise that resolves when the wallet is done processing the tx queue.
    */
   async onEnterStateProcessing() {
-    // Started processing state now
-    // Process the queue of transactions received until now
-    // and then resume with the correct state
-    return this.processTxQueue()
+    // Started processing state now, so we prepare the local data to support using this facade interchangable with wallet service facade in both wallets
+    return this.storage.processHistory()
       .then(() => { this.setState(HathorWallet.READY); })
       .catch(() => { this.setState(HathorWallet.ERROR); });
   }
@@ -1282,7 +1280,7 @@ class HathorWallet extends EventEmitter {
    *                                   Optional but required if not set in this
    *
    * @return {Promise<Transaction>} Promise that resolves when transaction is sent
-   **/
+   */
   async sendManyOutputsTransaction(outputs, options = {}) {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('sendManyOutputsTransaction');
@@ -1319,7 +1317,7 @@ class HathorWallet extends EventEmitter {
    *   'pinCode': pin to decrypt xpriv information. Required if not set in object.
    *   'password': password to decrypt xpriv information. Required if not set in object.
    *  }
-   **/
+   */
   async start(optionsParams = {}) {
     const options = Object.assign({ pinCode: null, password: null }, optionsParams);
     const pinCode = options.pinCode || this.pinCode;
