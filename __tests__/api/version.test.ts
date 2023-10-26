@@ -13,29 +13,61 @@ describe('versionApi', () => {
     mock.restore();
   });
 
-  it('getVersion should return version data', async () => {
-    const data = { version: '1.0.0' };
-    mock.onGet('/version').reply(200, data);
+  describe('getVersion', () => {
+    it('should return version data', async () => {
+      const data = { version: '1.0.0' };
+      mock.onGet('/version').reply(200, data);
 
-    const result = await new Promise((resolve, reject) => {
-      versionApi.getVersion(resolve);
+      const result = await new Promise((resolve, reject) => {
+        versionApi.getVersion(resolve);
+      });
+
+      expect(result).toEqual(data);
     });
 
-    expect(result).toEqual(data);
+    it('should allow capturing errors in case of network error', async () => {
+      mock.onGet('/version').networkError();
+
+      await expect(versionApi.getVersion(() => {})).rejects.toThrow();
+    });
+
+    it('should allow capturing errors in case the server responds with 500', async () => {
+      mock.onGet('/version').reply(500);
+
+      try {
+        await versionApi.getVersion(() => {});
+      } catch (e) {
+        expect(e.message).toEqual('Request failed with status code 500');
+        expect(e.response.status).toEqual(500);
+      }
+    });
   });
 
-  it('asyncGetVersion should return version data', async () => {
-    const data = { version: '1.0.0' };
-    mock.onGet('/version').reply(200, data);
+  describe('asyncGetVersion', () => {
+    it('should return version data', async () => {
+      const data = { version: '1.0.0' };
+      mock.onGet('/version').reply(200, data);
 
-    const result = await versionApi.asyncGetVersion();
+      const result = await versionApi.asyncGetVersion();
 
-    expect(result).toEqual(data);
-  });
+      expect(result).toEqual(data);
+    });
 
-  it('asyncGetVersion should allow capturing errors in case of network error', async () => {
-    mock.onGet('/version').networkError();
+    it('should allow capturing errors in case of network error', async () => {
+      mock.onGet('/version').networkError();
 
-    await expect(versionApi.asyncGetVersion()).rejects.toThrow();
+      await expect(versionApi.asyncGetVersion()).rejects.toThrow();
+    });
+
+    it('should allow capturing errors in case the server responds with 500', async () => {
+      mock.onGet('/version').reply(500);
+
+      try {
+        await versionApi.asyncGetVersion();
+      } catch (e) {
+        expect(e.message).toEqual('Request failed with status code 500');
+        expect(e.response.status).toEqual(500);
+      }
+    });
   });
 });
