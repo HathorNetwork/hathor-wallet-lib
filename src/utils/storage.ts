@@ -218,13 +218,12 @@ export async function scanPolicyStartAddresses(storage: IStorage): Promise<IScan
         nextIndex: limits.startIndex,
         count: limits.endIndex - limits.startIndex + 1,
       };
+    default:
     case 'gap-limit':
       return {
         nextIndex: 0,
         count: await storage.getGapLimit(),
       };
-    default:
-      throw new Error('Invalid scanning policy');
   }
 }
 
@@ -289,8 +288,7 @@ export async function checkIndexLimit(storage: IStorage): Promise<IScanPolicyLoa
 export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadAddresses|null> {
   if (await storage.getScanningPolicy() !== 'gap-limit') {
     // Since the wallet is not configured to use gap-limit this is a no-op
-    throw new Error('Wallet is not configured to use gap-limit');
-    // return null;
+    return null;
   }
   // check gap limit
   const { lastLoadedAddressIndex, lastUsedAddressIndex, scanPolicyData } = await storage.getWalletData();
