@@ -1180,6 +1180,13 @@ class HathorWallet extends EventEmitter {
       wsData = this.wsTxQueue.dequeue();
     }
 
+    await this.checkScanningPolicy();
+
+    // Finish by processing the history we just added.
+    return this.storage.processHistory();
+  }
+
+  async checkScanningPolicy() {
     // check address scanning policy and load more addresses if needed
     const loadMoreAddresses = await checkScanningPolicy(this.storage);
     if (loadMoreAddresses !== null) {
@@ -1190,9 +1197,6 @@ class HathorWallet extends EventEmitter {
         this.conn,
       );
     }
-
-    // Finish by processing the history we just added.
-    return this.storage.processHistory();
   }
 
   /**
@@ -1232,16 +1236,7 @@ class HathorWallet extends EventEmitter {
     // Save the transaction in the storage
     await this.storage.addTx(newTx);
 
-    // check address scanning policy and load more addresses if needed
-    const loadMoreAddresses = await checkScanningPolicy(this.storage);
-    if (loadMoreAddresses !== null) {
-      await syncHistory(
-        loadMoreAddresses.nextIndex,
-        loadMoreAddresses.count,
-        this.storage,
-        this.conn,
-      );
-    }
+    await this.checkScanningPolicy();
     await this.storage.processHistory();
 
     newTx.processingStatus = TxHistoryProcessingStatus.FINISHED;
