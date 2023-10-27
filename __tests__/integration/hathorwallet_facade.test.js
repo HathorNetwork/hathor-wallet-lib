@@ -35,6 +35,7 @@ const sampleNftData = 'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcr
 
 describe('getTxById', () => {
   afterEach(async () => {
+    console.log('A');
     await stopAllWallets();
     await GenesisWalletHelper.clearListeners();
   });
