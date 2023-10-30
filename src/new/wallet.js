@@ -228,7 +228,7 @@ class HathorWallet extends EventEmitter {
    **/
   async getVersionData() {
     const versionData = await new Promise((resolve, reject)=> {
-      versionApi.getVersion(resolve).catch((error) => reject(error))
+      versionApi.getVersion(resolve).catch((error) => reject(error));
     });
 
     return {
