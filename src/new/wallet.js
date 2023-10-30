@@ -65,7 +65,7 @@ const ConnectionState = {
  * - update-tx: Fired when a known tx is updated. Usually, it happens when one of its outputs is spent.
  * - more-addresses-loaded: Fired when loading the history of transactions. It is fired multiple times,
  *                          one for each request sent to the server.
- **/
+ */
 class HathorWallet extends EventEmitter {
   /**
    * @param param
@@ -225,7 +225,7 @@ class HathorWallet extends EventEmitter {
    *
    * @memberof HathorWallet
    * @inner
-   **/
+   */
   async getVersionData() {
     const versionData = await new Promise(resolve => {
       versionApi.getVersion(resolve)
@@ -255,7 +255,7 @@ class HathorWallet extends EventEmitter {
    *
    * @memberof HathorWallet
    * @inner
-   **/
+   */
   changeServer(newServer) {
     this.storage.config.setServerUrl(newServer);
   }
@@ -318,14 +318,14 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Enable debug mode.
-   **/
+   */
   enableDebugMode() {
     this.debug = true;
   }
 
   /**
    * Disable debug mode.
-   **/
+   */
   disableDebugMode() {
     this.debug = false;
   }
@@ -343,7 +343,7 @@ class HathorWallet extends EventEmitter {
    * It is also called if the network is down.
    *
    * @param {Number} newState Enum of new state after change
-   **/
+   */
   async onConnectionChangedState(newState) {
     if (newState === ConnectionState.CONNECTED) {
       this.setState(HathorWallet.SYNCING);
@@ -478,7 +478,7 @@ class HathorWallet extends EventEmitter {
    * @generator
    * @returns {AsyncGenerator<{address: string, index: number, transactions: number}>} transactions is the count of txs for this address
    * @memberof HathorWallet
-   **/
+   */
   async * getAllAddresses() {
     // We add the count of transactions
     // in order to replicate the same return as the new
@@ -568,7 +568,7 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Called when a new message arrives from websocket.
-   **/
+   */
   handleWebsocketMsg(wsData) {
     if (wsData.type === 'wallet:address_history') {
       if (this.state !== HathorWallet.READY) {
@@ -598,7 +598,7 @@ class HathorWallet extends EventEmitter {
    *
    * @memberof HathorWallet
    * @inner
-   **/
+   */
   async getBalance(token = null) {
     // TODO if token is null we should get the balance for each token I have
     // but we don't use it in the wallets, so I won't implement it
@@ -659,7 +659,7 @@ class HathorWallet extends EventEmitter {
    * }[]>} Array of transactions
    * @memberof HathorWallet
    * @inner
-   **/
+   */
   async getTxHistory(options = {}) {
     const newOptions = Object.assign({ token_id: HATHOR_TOKEN_CONFIG.uid, count: 15, skip: 0 }, options);
     let { skip, count } = newOptions;
@@ -695,7 +695,7 @@ class HathorWallet extends EventEmitter {
    *
    * @memberof HathorWallet
    * @inner
-   **/
+   */
   async getTokens() {
     const tokens = [];
     for await (const token of this.storage.getAllTokens()) {
@@ -1087,7 +1087,7 @@ class HathorWallet extends EventEmitter {
    *
    * @memberof HathorWallet
    * @inner
-   **/
+   */
   async getFullHistory() {
     const history = {};
     for await (const tx of this.storage.txHistory()) {
@@ -1171,7 +1171,7 @@ class HathorWallet extends EventEmitter {
    * @param {string} [options.pinCode] pin to decrypt the private key
    *
    * @return {Promise<Transaction>} Promise that resolves when transaction is sent
-   **/
+   */
   async sendTransaction(address, value, options = {}) {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('sendTransaction');
@@ -1206,7 +1206,7 @@ class HathorWallet extends EventEmitter {
    *                                   Optional but required if not set in this
    *
    * @return {Promise<Transaction>} Promise that resolves when transaction is sent
-   **/
+   */
   async sendManyOutputsTransaction(outputs, options = {}) {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('sendManyOutputsTransaction');
@@ -1243,7 +1243,7 @@ class HathorWallet extends EventEmitter {
    *   'pinCode': pin to decrypt xpriv information. Required if not set in object.
    *   'password': password to decrypt xpriv information. Required if not set in object.
    *  }
-   **/
+   */
   async start(optionsParams = {}) {
     const options = Object.assign({ pinCode: null, password: null }, optionsParams);
     const pinCode = options.pinCode || this.pinCode;
@@ -1327,7 +1327,7 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Close the connections and stop emitting events.
-   **/
+   */
   async stop({ cleanStorage = true, cleanAddresses = false } = {}) {
     this.setState(HathorWallet.CLOSED);
     this.removeAllListeners();
@@ -1539,7 +1539,7 @@ class HathorWallet extends EventEmitter {
    * @return {Promise<CreateNewTokenResponse>}
    * @memberof HathorWallet
    * @inner
-   **/
+   */
   async createNewToken(name, symbol, amount, options = {}) {
     const tx = await this.prepareCreateNewToken(name, symbol, amount, options);
     return this.handleSendPreparedTransaction(tx);
@@ -1560,7 +1560,7 @@ class HathorWallet extends EventEmitter {
    * }[]>} Promise that resolves with an Array of objects with properties of the authority output.
    *       The "authorities" field actually contains the output value with the authority masks.
    *       Returns an empty array in case there are no tx_outupts for this type.
-   **/
+   */
   async getMintAuthority(tokenUid, options = {}) {
     const newOptions = {
       token: tokenUid,
@@ -1592,7 +1592,7 @@ class HathorWallet extends EventEmitter {
    * }[]>} Promise that resolves with an Array of objects with properties of the authority output.
    *       The "authorities" field actually contains the output value with the authority masks.
    *       Returns an empty array in case there are no tx_outupts for this type.
-   **/
+   */
   async getMeltAuthority(tokenUid, options = {}) {
     const newOptions = {
       token: tokenUid,
@@ -1631,7 +1631,7 @@ class HathorWallet extends EventEmitter {
    *
    * @memberof HathorWallet
    * @inner
-   **/
+   */
   async prepareMintTokensData(tokenUid, amount, options = {}) {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('mintTokens');
@@ -1714,7 +1714,7 @@ class HathorWallet extends EventEmitter {
    *
    * @memberof HathorWallet
    * @inner
-   **/
+   */
   async mintTokens(tokenUid, amount, options = {}) {
     const tx = await this.prepareMintTokensData(tokenUid, amount, options);
     return this.handleSendPreparedTransaction(tx);
@@ -1741,7 +1741,7 @@ class HathorWallet extends EventEmitter {
    *
    * @memberof HathorWallet
    * @inner
-   **/
+   */
   async prepareMeltTokensData(tokenUid, amount, options = {}) {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('meltTokens');
@@ -1820,7 +1820,7 @@ class HathorWallet extends EventEmitter {
    *
    * @memberof HathorWallet
    * @inner
-   **/
+   */
   async meltTokens(tokenUid, amount, options = {}) {
     const tx = await this.prepareMeltTokensData(tokenUid, amount, options);
     return this.handleSendPreparedTransaction(tx);
@@ -1843,7 +1843,7 @@ class HathorWallet extends EventEmitter {
    *
    * @memberof HathorWallet
    * @inner
-   **/
+   */
   async prepareDelegateAuthorityData(tokenUid, type, destinationAddress, options = {}) {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('delegateAuthority');
@@ -1896,7 +1896,7 @@ class HathorWallet extends EventEmitter {
    *
    * @memberof HathorWallet
    * @inner
-   **/
+   */
   async delegateAuthority(tokenUid, type, destinationAddress, options = {}) {
     const tx = await this.prepareDelegateAuthorityData(tokenUid, type, destinationAddress, options);
     return this.handleSendPreparedTransaction(tx);
@@ -1919,7 +1919,7 @@ class HathorWallet extends EventEmitter {
    *
    * @memberof HathorWallet
    * @inner
-   **/
+   */
   async prepareDestroyAuthorityData(tokenUid, type, count, options = {}) {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('destroyAuthority');
@@ -1973,7 +1973,7 @@ class HathorWallet extends EventEmitter {
    *
    * @memberof HathorWallet
    * @inner
-   **/
+   */
   async destroyAuthority(tokenUid, type, count, options = {}) {
     const tx = await this.prepareDestroyAuthorityData(tokenUid, type, count, options);
     return this.handleSendPreparedTransaction(tx);
@@ -1985,7 +1985,7 @@ class HathorWallet extends EventEmitter {
    * NOTICE: This won't remove data from memory immediately, we have to wait until javascript
    * garbage collect it. JavaScript currently does not provide a standard way to trigger
    * garbage collection
-   **/
+   */
   clearSensitiveData() {
     this.xpriv = undefined;
     this.seed = undefined;
@@ -1999,7 +1999,7 @@ class HathorWallet extends EventEmitter {
    *
    * @return {{tx_id: string, index: number, address: string, authorities: number}[]}
    *    Array of the authority outputs.
-   **/
+   */
   async getAuthorityUtxos(tokenUid, type) {
     if (type === 'mint') {
       return this.getMintAuthority(tokenUid, { many: true });
@@ -2090,7 +2090,7 @@ class HathorWallet extends EventEmitter {
    * @param {string} address Address to check
    *
    * @return {Promise<boolean>}
-   **/
+   */
   async isAddressMine(address) {
     return this.storage.isAddressMine(address);
   }
@@ -2101,7 +2101,7 @@ class HathorWallet extends EventEmitter {
    * @param {string[]} addresses Addresses to check
    *
    * @return {Object} Object with the addresses and whether it belongs or not { address: boolean }
-   **/
+   */
   async checkAddressesMine(addresses) {
     const promises = [];
     for (const address of addresses) {
@@ -2124,7 +2124,7 @@ class HathorWallet extends EventEmitter {
    * @param {string} address Address to get the index
    *
    * @return {Promise<number>}
-   **/
+   */
   async getAddressIndex(address) {
     const addresInfo = await this.storage.getAddressInfo(address);
     return addresInfo.bip32AddressIndex;
@@ -2144,7 +2144,7 @@ class HathorWallet extends EventEmitter {
    * @example
    * const decodedTx = hathorWalletInstance.getTx(txHash);
    * const txBalance = await hathorWalletInstance.getTxBalance(decodedTx);
-   **/
+   */
   async getTxBalance(tx, optionsParam = {}) {
     const balance = {};
     const fullBalance = await transactionUtils.getTxBalance(tx, this.storage);
@@ -2165,7 +2165,7 @@ class HathorWallet extends EventEmitter {
    * @param {DecodedTx} tx Transaction data with array of inputs and outputs
    *
    * @return {Set<string>} Set of strings with addresses
-   **/
+   */
   async getTxAddresses(tx) {
     const addresses = new Set();
     for (const io of [...tx.outputs, ...tx.inputs]) {
@@ -2203,7 +2203,7 @@ class HathorWallet extends EventEmitter {
    *
    * @memberof HathorWallet
    * @inner
-   **/
+   */
   async createNFT(name, symbol, amount, data, options = {}) {
     const newOptions = Object.assign({
       address: null,
