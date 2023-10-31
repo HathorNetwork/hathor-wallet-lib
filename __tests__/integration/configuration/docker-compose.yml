@@ -5,7 +5,7 @@ services:
   # https://github.com/HathorNetwork/rfcs/blob/master/text/0033-private-network-guide.md
 
   fullnode:
-    image: hathornetwork/hathor-core
+    image: hathornetwork/hathor-core:v0.56.0
     command: [
       "run_node",
       "--listen", "tcp:40404",
