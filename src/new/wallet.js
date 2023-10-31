@@ -227,8 +227,8 @@ class HathorWallet extends EventEmitter {
    * @inner
    **/
   async getVersionData() {
-    const versionData = await new Promise(resolve => {
-      versionApi.getVersion(resolve)
+    const versionData = await new Promise((resolve, reject)=> {
+      versionApi.getVersion(resolve).catch((error) => reject(error));
     });
 
     return {
@@ -1312,8 +1312,8 @@ class HathorWallet extends EventEmitter {
     this.walletStopped = false;
     this.setState(HathorWallet.CONNECTING);
 
-    const info = await new Promise(resolve => {
-      versionApi.getVersion(resolve);
+    const info = await new Promise((resolve , reject)=> {
+      versionApi.getVersion(resolve).catch((error) => reject(error));
     });
     if (info.network.indexOf(this.conn.network) >= 0) {
       this.storage.setApiVersion(info);
