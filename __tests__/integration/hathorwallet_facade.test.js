@@ -2206,8 +2206,8 @@ describe('delegateAuthority', () => {
     // TODO: The type of errors on mint and melt are different. They should have a standard.
 
     // Validating success on mint tokens from Wallet 2
-    const { hash: fundsHash } = await GenesisWalletHelper.injectFunds(await hWallet2.getAddressAtIndex(0), 10);
-    await waitForTxReceived(hWallet2, fundsHash);
+    const { hash: fundsHash2 } = await GenesisWalletHelper.injectFunds(await hWallet2.getAddressAtIndex(0), 10);
+    await waitForTxReceived(hWallet2, fundsHash2);
     const mintTxWallet2 = await hWallet2.mintTokens(tokenUid, 100);
     expect(mintTxWallet2).toHaveProperty('hash');
     await waitForTxReceived(hWallet2, mintTxWallet2.hash);
