@@ -28,3 +28,5 @@ MIN_TX_WEIGHT: 1
 REWARD_SPEND_MIN_BLOCKS: 1
 
 CHECKPOINTS: []
+
+extends: mainnet.yml
