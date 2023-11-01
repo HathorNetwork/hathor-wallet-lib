@@ -327,20 +327,19 @@ test('processTxQueue', async () => {
   const hWallet = new FakeHathorWallet();
 
   const processedTxs = [];
-  hWallet.checkScanningPolicy = jest.fn();
+  hWallet.onNewTx = jest.fn().mockImplementation(data => {
+    processedTxs.push(data);
+    return Promise.resolve();
+  })
   hWallet.storage = {
-    addTx: jest.fn().mockImplementation(data => {
-      processedTxs.push(data);
-      return Promise.resolve();
-    }),
     processHistory: jest.fn(),
   }
 
   // wsTxQueue is not part of the prototype so it won't be faked on FakeHathorWallet
   hWallet.wsTxQueue = new Queue();
-  hWallet.wsTxQueue.enqueue({ history: 1 });
-  hWallet.wsTxQueue.enqueue({ history: 2 });
-  hWallet.wsTxQueue.enqueue({ history: 3 });
+  hWallet.wsTxQueue.enqueue(1);
+  hWallet.wsTxQueue.enqueue(2);
+  hWallet.wsTxQueue.enqueue(3);
 
   await hWallet.processTxQueue();
   expect(processedTxs).toStrictEqual([1, 2, 3]);

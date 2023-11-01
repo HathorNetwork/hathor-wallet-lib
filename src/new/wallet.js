@@ -1171,19 +1171,16 @@ class HathorWallet extends EventEmitter {
     let wsData = this.wsTxQueue.dequeue();
 
     while (wsData !== undefined) {
-      const newTx = wsData.history;
-      // Save the transaction in the storage
-      await this.storage.addTx(newTx);
-      // We should release the event loop for other threads
-      // This effectively awaits 0 seconds, but it schedule the next iteration to run after other threads.
-      await new Promise(resolve => { setTimeout(resolve, 0); });
+      // save new txdata
+      await this.onNewTx(wsData, false);
       wsData = this.wsTxQueue.dequeue();
+      // We should release the event loop for other threads
+      // This effectively awaits 0 seconds
+      // but it schedule the next iteration to run after other threads.
+      await new Promise(resolve => { setTimeout(resolve, 0); });
     }
-
-    await this.checkScanningPolicy();
-
-    // Finish by processing the history we just added.
-    return this.storage.processHistory();
+    // After all transactions on the queue are saved, process the history
+    await this.storage.processHistory();
   }
 
   async checkScanningPolicy() {
@@ -1226,7 +1223,7 @@ class HathorWallet extends EventEmitter {
     this.emit('state', state);
   }
 
-  async onNewTx(wsData) {
+  async onNewTx(wsData, processHistory = true) {
     const newTx = wsData.history;
     const storageTx = await this.storage.getTx(newTx.tx_id);
     const isNewTx = storageTx === null;
@@ -1237,7 +1234,10 @@ class HathorWallet extends EventEmitter {
     await this.storage.addTx(newTx);
 
     await this.checkScanningPolicy();
-    await this.storage.processHistory();
+    if (processHistory) {
+      // Process history to update metadatas
+      await this.storage.processHistory();
+    }
 
     newTx.processingStatus = TxHistoryProcessingStatus.FINISHED;
     // Save the transaction in the storage
