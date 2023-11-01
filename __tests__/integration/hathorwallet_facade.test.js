@@ -2105,6 +2105,7 @@ describe('delegateAuthority', () => {
       await hWallet2.getAddressAtIndex(0)
     );
     await waitForTxReceived(hWallet1, delegateMintTxId);
+    await waitForTxReceived(hWallet2, delegateMintTxId);
 
     /*
      * XXX: Authority Token delegation usually takes longer than usual to be reflected on the local
@@ -2138,6 +2139,7 @@ describe('delegateAuthority', () => {
       await hWallet2.getAddressAtIndex(0)
     );
     await waitForTxReceived(hWallet1, delegateMeltTxId);
+    await waitForTxReceived(hWallet2, delegateMeltTxId);
 
     // Expect wallet 1 to still have one melt authority
     await hWallet1.storage.processHistory();
