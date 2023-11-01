@@ -17,7 +17,7 @@ services:
       "--memory-storage",
     ]
     environment:
-      HATHOR_CONFIG_FILE: privnet.conf.privnetyml
+      HATHOR_CONFIG_YAML: privnet.conf.privnet
     ports:
       - "8083:8080"
       - "40404:40404"
