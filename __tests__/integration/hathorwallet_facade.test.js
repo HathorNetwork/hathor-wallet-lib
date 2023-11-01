@@ -2177,6 +2177,7 @@ describe('delegateAuthority', () => {
       { createAnother: false }
     );
     await waitForTxReceived(hWallet1, giveAwayMintTx);
+    await waitForTxReceived(hWallet2, giveAwayMintTx);
 
     // Validating error on mint tokens from Wallet 1
     await waitUntilNextTimestamp(hWallet1, giveAwayMintTx);
@@ -2187,6 +2188,7 @@ describe('delegateAuthority', () => {
     await GenesisWalletHelper.injectFunds(await hWallet2.getAddressAtIndex(0), 10);
     const mintTxWallet2 = await hWallet2.mintTokens(tokenUid, 100);
     expect(mintTxWallet2).toHaveProperty('hash');
+    await waitForTxReceived(hWallet2, mintTxWallet2.hash);
 
     // Delegate melt authority without keeping one on wallet 1
     const { hash: giveAwayMeltTx } = await hWallet1.delegateAuthority(
@@ -2196,6 +2198,7 @@ describe('delegateAuthority', () => {
       { createAnother: false }
     );
     await waitForTxReceived(hWallet1, giveAwayMeltTx);
+    await waitForTxReceived(hWallet2, giveAwayMeltTx);
 
     // Validating error on mint tokens from Wallet 1
     await waitUntilNextTimestamp(hWallet1, giveAwayMeltTx);
@@ -2249,6 +2252,7 @@ describe('delegateAuthority', () => {
       { createAnother: false }
     );
     await waitForTxReceived(hWallet1, delegateMintAuth);
+    await waitForTxReceived(hWallet2, delegateMintAuth);
 
     // Confirming only one authority token was sent from wallet1 to wallet2
     auth1 = await hWallet1.getMintAuthority(tokenUid, { many: true });
@@ -2317,6 +2321,7 @@ describe('delegateAuthority', () => {
       { createAnother: false }
     );
     await waitForTxReceived(hWallet1, delegateMintAuth);
+    await waitForTxReceived(hWallet2, delegateMintAuth);
 
     // Confirming only one authority token was sent from wallet1 to wallet2
     auth1 = await hWallet1.getMeltAuthority(tokenUid, { many: true });
