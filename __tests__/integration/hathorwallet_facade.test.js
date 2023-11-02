@@ -805,7 +805,7 @@ describe('getFullHistory', () => {
 
     // Injecting some funds on this wallet
     const fundDestinationAddress = await hWallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hWallet, fundDestinationAddress, 10);
+    const { hash: fundTxId } = await GenesisWalletHelper.injectFunds(hWallet, fundDestinationAddress, 10);
 
     // Validating the full history increased in one
     await expect(hWallet.storage.store.historyCount()).resolves.toEqual(1);
@@ -877,7 +877,7 @@ describe('getFullHistory', () => {
     }
 
     // Validating that the fundTx now has its output spent by moveTx
-    const fundTx = history[fundsHash];
+    const fundTx = history[fundTxId];
     const spentOutput = fundTx.outputs.find(o => o.decoded.address === fundDestinationAddress);
     expect(spentOutput.spent_by).toEqual(moveTx.tx_id);
   });
