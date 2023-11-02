@@ -333,12 +333,6 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
       }
       alreadyResponded = true;
 
-      /*
-       * Sometimes even after receiving the `new-tx` event, the transaction is not available on
-       * memory. The code below tries to eliminate these short time-senstive issues with a minimum
-       * of delays.
-       */
-      await delay(500);
       let txObj = await hWallet.getTx(txId);
       while (!txObj) {
         if (DEBUG_LOGGING) {
