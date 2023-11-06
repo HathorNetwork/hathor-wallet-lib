@@ -283,50 +283,51 @@ export function waitForWalletReady(hWallet) {
  * @returns {Promise<SendTxResponse>}
  */
 export async function waitForTxReceived(hWallet, txId, timeout) {
-  return new Promise(async (resolve, reject) => {
-    const startTime = Date.now().valueOf();
-    let timeoutHandler;
-    let timeoutReached = false;
-    const timeoutPeriod = timeout || TX_TIMEOUT_DEFAULT;
-    // Timeout handler
-    timeoutHandler = setTimeout(() => {
-      timeoutReached = true;
-    }, timeoutPeriod);
+  console.log('Wait for tx received', txId);
+  const startTime = Date.now().valueOf();
+  let timeoutHandler;
+  let timeoutReached = false;
+  const timeoutPeriod = timeout || TX_TIMEOUT_DEFAULT;
+  // Timeout handler
+  timeoutHandler = setTimeout(() => {
+    timeoutReached = true;
+  }, timeoutPeriod);
 
-    let storageTx = await hWallet.getTx(txId);
+  let storageTx = await hWallet.getTx(txId);
 
-    while (!storageTx) {
-      if (timeoutReached) {
-        break;
-      }
-
-      // Tx not found, wait 1s before trying again
-      await delay(1000);
-      storageTx = await hWallet.getTx(txId);
-    }
-
-    if (timeoutHandler) {
-      clearTimeout(timeoutHandler);
-    }
-
+  while (!storageTx || storageTx.processingStatus !== 'finished') {
     if (timeoutReached) {
-      // We must do the timeout handling like this because if I reject the promise directly
-      // inside the setTimeout block, this while block will continue running forever.
-      reject(new Error(`Timeout of ${timeoutPeriod}ms without receiving the tx with id ${txId}`));
-    } else {
-      const timeDiff = Date.now().valueOf() - startTime;
-      if (DEBUG_LOGGING) {
-        loggers.test.log(`Wait for ${txId} took ${timeDiff}ms.`);
-      }
-
-      if (storageTx.is_voided === false) {
-        // TODO add comment
-        await updateInputsSpentBy(hWallet, storageTx);
-      }
-
-      resolve(storageTx);
+      break;
     }
-  });
+
+    // Tx not found, wait 1s before trying again
+    await delay(1000);
+    storageTx = await hWallet.getTx(txId);
+  }
+
+  if (timeoutHandler) {
+    clearTimeout(timeoutHandler);
+  }
+
+  if (timeoutReached) {
+    // We must do the timeout handling like this because if I reject the promise directly
+    // inside the setTimeout block, this while block will continue running forever.
+    throw new Error(`Timeout of ${timeoutPeriod}ms without receiving the tx with id ${txId}`);
+  } else {
+    const timeDiff = Date.now().valueOf() - startTime;
+    if (DEBUG_LOGGING) {
+      loggers.test.log(`Wait for ${txId} took ${timeDiff}ms.`);
+    }
+
+    if (storageTx.is_voided === false) {
+      // TODO add comment
+      await updateInputsSpentBy(hWallet, storageTx);
+    }
+
+    console.log('Tx received', storageTx);
+
+    return storageTx;
+  }
 }
 
 /**
@@ -387,4 +388,14 @@ export async function waitUntilNextTimestamp(hWallet, txId) {
   const timeToWait = nextValidMilliseconds - nowMilliseconds + 10;
   loggers.test.log(`Waiting for ${timeToWait}ms for the next timestamp.`);
   await delay(timeToWait);
+}
+
+export async function waitNextBlock(storage) {
+  const currentHeight = await storage.getCurrentHeight();
+  let height = currentHeight;
+
+  while (height === currentHeight) {
+    await delay(1000);
+    height = await storage.getCurrentHeight();
+  }
 }

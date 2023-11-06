@@ -67,6 +67,7 @@ export interface IHistoryTx {
   token_symbol?: string; // For create token transaction
   tokens: string[];
   height?: number;
+  processingStatus?: string;
 }
 
 export interface IHistoryInput {
