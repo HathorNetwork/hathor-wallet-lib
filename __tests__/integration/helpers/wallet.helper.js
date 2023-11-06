@@ -322,6 +322,7 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
     if (storageTx.is_voided === false) {
       // TODO add comment
       await updateInputsSpentBy(hWallet, storageTx);
+      await hWallet.storage.processHistory();
     }
 
     console.log('Tx received', storageTx);
@@ -358,7 +359,6 @@ async function updateInputsSpentBy(hWallet, tx) {
     await hWallet.storage.addTx(inputTx);
   }
 }
-
 
 /**
  * This method helps a tester to ensure the current timestamp of the next transaction will be at
