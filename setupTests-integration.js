@@ -13,6 +13,8 @@ import { TX_MINING_URL } from './__tests__/integration/configuration/test-consta
 import {
   precalculationHelpers, WalletPrecalculationHelper
 } from './__tests__/integration/helpers/wallet-precalculation.helper';
+import { GenesisWalletHelper } from './__tests__/integration/helpers/genesis-wallet.helper';
+import { waitNextBlock } from './__tests__/integration/helpers/wallet.helper';
 
 config.setTxMiningUrl(TX_MINING_URL);
 
@@ -40,6 +42,10 @@ beforeAll(async () => {
   // Loading pre-calculated wallets
   precalculationHelpers.test = new WalletPrecalculationHelper('./tmp/wallets.json');
   await precalculationHelpers.test.initWithWalletsFile();
+
+  // Await first block to be mined to release genesis reward lock
+  const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
+  await waitNextBlock(gWallet.storage);
 });
 
 afterAll(async () => {
