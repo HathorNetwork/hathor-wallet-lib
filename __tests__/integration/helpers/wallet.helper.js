@@ -283,67 +283,81 @@ export function waitForWalletReady(hWallet) {
  * @returns {Promise<SendTxResponse>}
  */
 export async function waitForTxReceived(hWallet, txId, timeout) {
-  const startTime = Date.now().valueOf();
-  let alreadyResponded = false;
-  const existingTx = await hWallet.getTx(txId);
-
-  // If the transaction was already received, return it immediately
-  if (existingTx) {
-    return existingTx;
-  }
-
-  // Only return the positive response after the transaction was received by the websocket
   return new Promise(async (resolve, reject) => {
-    // Event listener
-    const handleNewTx = newTx => {
-      // Ignore this event if we didn't receive the transaction we expected.
-      if (newTx.tx_id !== txId) {
-        return;
-      }
-
-      // This is the correct transaction: resolving the promise.
-      resolveWithSuccess(newTx);
-    };
-    hWallet.on('new-tx', handleNewTx);
-
-    // Timeout handler
+    const startTime = Date.now().valueOf();
+    let timeoutHandler;
+    let timeoutReached = false;
     const timeoutPeriod = timeout || TX_TIMEOUT_DEFAULT;
-    setTimeout(async () => {
-      hWallet.removeListener('new-tx', handleNewTx);
-
-      // No need to respond if the event listener worked.
-      if (alreadyResponded) {
-        return;
-      }
-
-      // Event listener did not receive the tx and it is not on local cache.
-      alreadyResponded = true;
-      reject(new Error(`Timeout of ${timeoutPeriod}ms without receiving tx ${txId}`));
+    // Timeout handler
+    timeoutHandler = setTimeout(() => {
+      timeoutReached = true;
     }, timeoutPeriod);
 
-    async function resolveWithSuccess(newTx) {
+    let storageTx = await hWallet.getTx(txId);
+
+    while (!storageTx) {
+      if (timeoutReached) {
+        break;
+      }
+
+      // Tx not found, wait 1s before trying again
+      await delay(1000);
+      storageTx = await hWallet.getTx(txId);
+    }
+
+    if (timeoutHandler) {
+      clearTimeout(timeoutHandler);
+    }
+
+    if (timeoutReached) {
+      // We must do the timeout handling like this because if I reject the promise directly
+      // inside the setTimeout block, this while block will continue running forever.
+      reject(new Error(`Timeout of ${timeoutPeriod}ms without receiving the tx with id ${txId}`));
+    } else {
       const timeDiff = Date.now().valueOf() - startTime;
       if (DEBUG_LOGGING) {
         loggers.test.log(`Wait for ${txId} took ${timeDiff}ms.`);
       }
 
-      if (alreadyResponded) {
-        return;
+      if (storageTx.is_voided === false) {
+        // TODO add comment
+        await updateInputsSpentBy(hWallet, storageTx);
       }
-      alreadyResponded = true;
 
-      let txObj = await hWallet.getTx(txId);
-      while (!txObj) {
-        if (DEBUG_LOGGING) {
-          loggers.test.warn(`Tx was not available on history. Waiting for 50ms and retrying.`);
-        }
-        await delay(50);
-        txObj = await hWallet.getTx(txId);
-      }
-      resolve(newTx);
+      resolve(storageTx);
     }
   });
 }
+
+/**
+ * Translates the tx success event into a promise.
+ * Waits for the wallet event that indicates this transaction id has been fully integrated
+ * into the lib's local caches. Actions that depend on this state can be executed after the
+ * successful response from this function.
+ * @param {HathorWallet} hWallet
+ * @param {string} txId
+ * @param {number} [timeout] Timeout in milisseconds. Default value defined on test-constants.
+ * @returns {Promise<SendTxResponse>}
+ */
+async function updateInputsSpentBy(hWallet, tx) {
+  for (const input of tx.inputs) {
+    const inputTx = await hWallet.getTx(input.tx_id);
+    if (!inputTx) {
+      // This input is not spending an output from this wallet
+      continue;
+    }
+
+    if (input.index > inputTx.outputs.length - 1) {
+      // Invalid output index
+      throw new Error('Try to get output in an index that doesn\'t exist.');
+    }
+
+    const output = inputTx.outputs[input.index];
+    output.spent_by = tx.tx_id;
+    await hWallet.storage.addTx(inputTx);
+  }
+}
+
 
 /**
  * This method helps a tester to ensure the current timestamp of the next transaction will be at
