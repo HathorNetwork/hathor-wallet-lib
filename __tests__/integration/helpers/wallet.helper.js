@@ -283,7 +283,6 @@ export function waitForWalletReady(hWallet) {
  * @returns {Promise<SendTxResponse>}
  */
 export async function waitForTxReceived(hWallet, txId, timeout) {
-  console.log('Wait for tx received', txId);
   const startTime = Date.now().valueOf();
   let timeoutHandler;
   let timeoutReached = false;
@@ -324,8 +323,6 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
       await updateInputsSpentBy(hWallet, storageTx);
       await hWallet.storage.processHistory();
     }
-
-    console.log('Tx received', storageTx);
 
     return storageTx;
   }
