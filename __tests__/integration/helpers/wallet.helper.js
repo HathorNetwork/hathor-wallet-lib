@@ -244,7 +244,6 @@ export async function createTokenHelper(hWallet, name, symbol, amount, options) 
   const tokenUid = newTokenResponse.hash;
   await waitForTxReceived(hWallet, tokenUid);
   await waitUntilNextTimestamp(hWallet, tokenUid);
-  await delay(1000);
   return newTokenResponse;
 }
 
@@ -274,82 +273,94 @@ export function waitForWalletReady(hWallet) {
 }
 
 /**
- * Translates the tx success event into a promise.
- * Waits for the wallet event that indicates this transaction id has been fully integrated
- * into the lib's local caches. Actions that depend on this state can be executed after the
- * successful response from this function.
+ * Waits for the wallet to receive the transaction from a websocket message
+ * and process the history
+ *
  * @param {HathorWallet} hWallet
  * @param {string} txId
  * @param {number} [timeout] Timeout in milisseconds. Default value defined on test-constants.
- * @returns {Promise<SendTxResponse>}
+ * @returns {Promise<IHistoryTx>}
  */
 export async function waitForTxReceived(hWallet, txId, timeout) {
   const startTime = Date.now().valueOf();
-  let alreadyResponded = false;
-  const existingTx = await hWallet.getTx(txId);
+  let timeoutHandler;
+  let timeoutReached = false;
+  const timeoutPeriod = timeout || TX_TIMEOUT_DEFAULT;
+  // Timeout handler
+  timeoutHandler = setTimeout(() => {
+    timeoutReached = true;
+  }, timeoutPeriod);
 
-  // If the transaction was already received, return it immediately
-  if (existingTx) {
-    return existingTx;
+  let storageTx = await hWallet.getTx(txId);
+
+  // We consider that the tx was received after it's in the storage
+  // and the history processing is finished
+  while (!storageTx || storageTx.processingStatus !== 'finished') {
+    if (timeoutReached) {
+      break;
+    }
+
+    // Tx not found, wait 1s before trying again
+    await delay(1000);
+    storageTx = await hWallet.getTx(txId);
   }
 
-  // Only return the positive response after the transaction was received by the websocket
-  return new Promise(async (resolve, reject) => {
-    // Event listener
-    const handleNewTx = newTx => {
-      // Ignore this event if we didn't receive the transaction we expected.
-      if (newTx.tx_id !== txId) {
-        return;
-      }
+  // Clean timeout handler
+  if (timeoutHandler) {
+    clearTimeout(timeoutHandler);
+  }
 
-      // This is the correct transaction: resolving the promise.
-      resolveWithSuccess(newTx);
-    };
-    hWallet.on('new-tx', handleNewTx);
-
-    // Timeout handler
-    const timeoutPeriod = timeout || TX_TIMEOUT_DEFAULT;
-    setTimeout(async () => {
-      hWallet.removeListener('new-tx', handleNewTx);
-
-      // No need to respond if the event listener worked.
-      if (alreadyResponded) {
-        return;
-      }
-
-      // Event listener did not receive the tx and it is not on local cache.
-      alreadyResponded = true;
-      reject(new Error(`Timeout of ${timeoutPeriod}ms without receiving tx ${txId}`));
-    }, timeoutPeriod);
-
-    async function resolveWithSuccess(newTx) {
-      const timeDiff = Date.now().valueOf() - startTime;
-      if (DEBUG_LOGGING) {
-        loggers.test.log(`Wait for ${txId} took ${timeDiff}ms.`);
-      }
-
-      if (alreadyResponded) {
-        return;
-      }
-      alreadyResponded = true;
-
-      /*
-       * Sometimes even after receiving the `new-tx` event, the transaction is not available on
-       * memory. The code below tries to eliminate these short time-senstive issues with a minimum
-       * of delays.
-       */
-      await delay(500);
-      let txObj = await hWallet.getTx(txId);
-      while (!txObj) {
-        if (DEBUG_LOGGING) {
-          loggers.test.warn(`Tx was not available on history. Waiting for 50ms and retrying.`);
-        }
-        await delay(50);
-        txObj = await hWallet.getTx(txId);
-      }
-      resolve(newTx);
+  if (timeoutReached) {
+    // Throw error in case of timeout
+    throw new Error(`Timeout of ${timeoutPeriod}ms without receiving the tx with id ${txId}`);
+  } else {
+    const timeDiff = Date.now().valueOf() - startTime;
+    if (DEBUG_LOGGING) {
+      loggers.test.log(`Wait for ${txId} took ${timeDiff}ms.`);
     }
-  });
+
+    if (storageTx.is_voided === false) {
+      // We can't consider the metadata only of the transaction, it affects
+      // also the metadata of the transactions that were spent on it
+      // We could await for the update-tx event of the transactions of the inputs to arrive
+      // before considering the transaction metadata fully updated, however it's complicated
+      // to handle these events, since they might arrive even before we call this method
+      // To simplify everything, here we manually set the utxos as spent and process the history
+      // so after the transaction arrives, all the metadata involved on it is updated and we can
+      // continue running the tests to correctly check balances, addresses, and everyting else
+      await updateInputsSpentBy(hWallet, storageTx);
+      await hWallet.storage.processHistory();
+    }
+
+    return storageTx;
+  }
+}
+
+/**
+ * Loop through all inputs of a tx, get the corresponding transaction in the storage and
+ * update the spent_by attribute
+ *
+ * @param {HathorWallet} hWallet
+ * @param {IHistoryTx} txId
+ * @returns {Promise<void>}
+ */
+async function updateInputsSpentBy(hWallet, tx) {
+  for (const input of tx.inputs) {
+    const inputTx = await hWallet.getTx(input.tx_id);
+    if (!inputTx) {
+      // This input is not spending an output from this wallet
+      continue;
+    }
+
+    if (input.index > inputTx.outputs.length - 1) {
+      // Invalid output index
+      throw new Error('Try to get output in an index that doesn\'t exist.');
+    }
+
+    const output = inputTx.outputs[input.index];
+    output.spent_by = tx.tx_id;
+    await hWallet.storage.addTx(inputTx);
+  }
 }
 
 /**
