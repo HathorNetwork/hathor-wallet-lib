@@ -396,8 +396,26 @@ export async function waitNextBlock(storage) {
   const currentHeight = await storage.getCurrentHeight();
   let height = currentHeight;
 
+  const timeout = 120000; // 120s of timeout to find the next block
+  let timeoutReached = false;
+  // Timeout handler
+  const timeoutHandler = setTimeout(() => {
+    timeoutReached = true;
+  }, timeout);
+
   while (height === currentHeight) {
+    if (timeoutReached) {
+      break;
+    }
+
     await delay(1000);
     height = await storage.getCurrentHeight();
+  }
+
+  // Clear timeout handler
+  clearTimeout(timeoutHandler);
+
+  if (timeoutReached) {
+    throw new Error('Timeout reached when waiting for the next block.');
   }
 }
