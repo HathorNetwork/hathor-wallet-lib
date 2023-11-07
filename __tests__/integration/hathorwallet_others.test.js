@@ -40,8 +40,7 @@ describe('getAddressInfo', () => {
     });
 
     // Validating address after 1 transaction
-    await GenesisWalletHelper.injectFunds(addr0, 10);
-    await delay(500);
+    await GenesisWalletHelper.injectFunds(hWallet, addr0, 10);
     await expect(hWallet.getAddressInfo(addr0)).resolves.toMatchObject({
       total_amount_received: 10,
       total_amount_sent: 0,
@@ -152,7 +151,7 @@ describe('getAddressInfo', () => {
     const addr1Custom = await hWalletCustom.getAddressAtIndex(1);
 
     // Creating custom token
-    await GenesisWalletHelper.injectFunds(addr0Custom, 1);
+    await GenesisWalletHelper.injectFunds(hWalletCustom, addr0Custom, 1);
     const { hash: tokenUid } = await createTokenHelper(
       hWalletCustom,
       'getAddressInfo Token',
@@ -213,6 +212,7 @@ describe('getTxAddresses', () => {
       changeAddress: WALLET_CONSTANTS.genesis.addresses[0]
     });
     await waitForTxReceived(hWallet, tx.hash);
+    await waitForTxReceived(gWallet, tx.hash);
 
     // Validating the method results
     const decodedTx = await hWallet.getTx(tx.hash);
@@ -269,7 +269,7 @@ describe('getAvailableUtxos', () => {
     expect(utxoGenResult).toStrictEqual({ done: true, value: undefined });
 
     // Inject a transaction and validate the results
-    const tx1 = await GenesisWalletHelper.injectFunds(await hWallet.getAddressAtIndex(0), 10);
+    const tx1 = await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10);
 
     // Get correct results for a single transaction
     utxoGenerator = await hWallet.getAvailableUtxos();
@@ -300,8 +300,8 @@ describe('getAvailableUtxos', () => {
      * @type HathorWallet
      */
     const hWallet = await generateWalletHelper();
-    const tx1 = await GenesisWalletHelper.injectFunds(await hWallet.getAddressAtIndex(0), 10);
-    const tx2 = await GenesisWalletHelper.injectFunds(await hWallet.getAddressAtIndex(1), 5);
+    const tx1 = await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10);
+    const tx2 = await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(1), 5);
 
     // Validate that on the address that received tx1, the UTXO is listed
     let utxoGenerator = await hWallet.getAvailableUtxos({ filter_address: await hWallet.getAddressAtIndex(0) });
@@ -331,7 +331,7 @@ describe('getAvailableUtxos', () => {
      * @type HathorWallet
      */
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(await hWallet.getAddressAtIndex(0), 10);
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10);
     const { hash: tokenUid } = await createTokenHelper(
       hWallet,
       'getAvailableUtxos Token',
@@ -420,7 +420,7 @@ describe('getUtxosForAmount', () => {
   it('should work on a wallet containing a single tx', async () => {
     const addr0 = await hWallet.getAddressAtIndex(0);
     const addr1 = await hWallet.getAddressAtIndex(1);
-    const tx1 = await GenesisWalletHelper.injectFunds(addr0, 10);
+    const tx1 = await GenesisWalletHelper.injectFunds(hWallet, addr0, 10);
     fundTx1hash = tx1.hash;
 
     // No change amount
@@ -463,7 +463,7 @@ describe('getUtxosForAmount', () => {
   it('should work on a wallet containing multiple txs', async () => {
     const addr0 = await hWallet.getAddressAtIndex(0);
     const addr1 = await hWallet.getAddressAtIndex(1);
-    const tx2 = await GenesisWalletHelper.injectFunds(addr1, 20);
+    const tx2 = await GenesisWalletHelper.injectFunds(hWallet, addr1, 20);
 
     /*
      * Since we don't know which order the transactions will be stored on the history,
@@ -572,8 +572,7 @@ describe('getUtxosForAmount', () => {
   it('should not retrieve utxos marked as selected', async () => {
     // Retrieving the utxo's data and marking it as selected
     const addr = await hWallet.getAddressAtIndex(11);
-    await GenesisWalletHelper.injectFunds(addr, 100);
-    await delay(100);
+    await GenesisWalletHelper.injectFunds(hWallet, addr, 100);
 
     const utxosAddr1 = await hWallet.getUtxos({ filter_address: addr });
     const singleUtxoAddr1 = utxosAddr1.utxos[0];
@@ -601,7 +600,7 @@ describe('consolidateUtxos', () => {
   beforeAll(async () => {
     hWallet1 = await generateWalletHelper();
     hWallet2 = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(await hWallet2.getAddressAtIndex(0), 110);
+    await GenesisWalletHelper.injectFunds(hWallet2, await hWallet2.getAddressAtIndex(0), 110);
     const { hash: tokenUid } = await createTokenHelper(
       hWallet2,
       'Consolidate Token',
@@ -635,6 +634,7 @@ describe('consolidateUtxos', () => {
       { token }
     );
     await waitForTxReceived(hWallet1, cleanTx.hash);
+    await waitForTxReceived(hWallet2, cleanTx.hash);
     await waitUntilNextTimestamp(hWallet1, cleanTx.hash);
   }
 
@@ -649,6 +649,7 @@ describe('consolidateUtxos', () => {
       { address: await hWallet1.getAddressAtIndex(1), value: 5, token: HATHOR_TOKEN_CONFIG.uid },
     ]);
     await waitForTxReceived(hWallet1, fundTx.hash);
+    await waitForTxReceived(hWallet2, fundTx.hash);
 
     await expect(hWallet1.consolidateUtxos(hWallet2.getAddressAtIndex(0)))
       .rejects.toThrow('not owned by this wallet');
@@ -663,6 +664,7 @@ describe('consolidateUtxos', () => {
       { address: await hWallet1.getAddressAtIndex(1), value: 5, token: HATHOR_TOKEN_CONFIG.uid },
     ]);
     await waitForTxReceived(hWallet1, fundTx.hash);
+    await waitForTxReceived(hWallet2, fundTx.hash);
 
     // Sending transaction and validating the method response
     const consolidateTx = await hWallet1.consolidateUtxos(
@@ -718,6 +720,7 @@ describe('consolidateUtxos', () => {
       { address: await hWallet1.getAddressAtIndex(4), value: 50, token: tokenHash },
     ]);
     await waitForTxReceived(hWallet1, fundTx.hash);
+    await waitForTxReceived(hWallet2, fundTx.hash);
 
     // Sending transaction and validating the method response
     const consolidateTx = await hWallet1.consolidateUtxos(
@@ -779,6 +782,7 @@ describe('consolidateUtxos', () => {
       { address: addr2, value: 3, token: HATHOR_TOKEN_CONFIG.uid },
     ]);
     await waitForTxReceived(hWallet1, fundTx.hash);
+    await waitForTxReceived(hWallet2, fundTx.hash);
 
     // Sending transaction and validating the method response
     const consolidateTx = await hWallet1.consolidateUtxos(
@@ -823,6 +827,7 @@ describe('consolidateUtxos', () => {
       { address: addr1, value: 5, token: HATHOR_TOKEN_CONFIG.uid },
     ]);
     await waitForTxReceived(hWallet1, fundTx.hash);
+    await waitForTxReceived(hWallet2, fundTx.hash);
 
     // Sending transaction and validating the method response
     const consolidateTx = await hWallet1.consolidateUtxos(
@@ -861,6 +866,7 @@ describe('consolidateUtxos', () => {
       { address: addr2, value: 5, token: HATHOR_TOKEN_CONFIG.uid },
     ]);
     await waitForTxReceived(hWallet1, fundTx.hash);
+    await waitForTxReceived(hWallet2, fundTx.hash);
 
     // Sending transaction and validating the method response
     const consolidateTx = await hWallet1.consolidateUtxos(
@@ -899,10 +905,11 @@ describe('consolidateUtxos', () => {
       { address: addr2, value: 40, token: HATHOR_TOKEN_CONFIG.uid },
     ]);
     await waitForTxReceived(hWallet1, fundTx.hash);
+    await waitForTxReceived(hWallet2, fundTx.hash);
 
     // Sending transaction and validating the method response
     const consolidateTx = await hWallet1.consolidateUtxos(
-      await await hWallet1.getAddressAtIndex(4),
+      await hWallet1.getAddressAtIndex(4),
       {
         token: HATHOR_TOKEN_CONFIG.uid,
         amount_bigger_than: 2,
@@ -940,6 +947,7 @@ describe('consolidateUtxos', () => {
       { address: await hWallet1.getAddressAtIndex(0), value: 1, token: tokenHash },
     ]);
     await waitForTxReceived(hWallet1, fundTx.hash);
+    await waitForTxReceived(hWallet2, fundTx.hash);
 
     // We should now have 4 utxos on wallet1 for this custom token
     expect(await hWallet1.getUtxos({ token: tokenHash })).toHaveProperty('total_utxos_available', 4);
@@ -990,7 +998,7 @@ describe('getAuthorityUtxos', () => {
 
   it('should find one authority utxo', async () => {
     // Creating the token
-    await GenesisWalletHelper.injectFunds(await hWallet.getAddressAtIndex(0), 1);
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 1);
     const { hash: tokenUid } = await createTokenHelper(
       hWallet,
       'getAuthorityUtxos Token',

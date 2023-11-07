@@ -1141,6 +1141,8 @@ class HathorWallet extends EventEmitter {
     const storageTx = await this.storage.getTx(newTx.tx_id);
     const isNewTx = storageTx === null;
 
+    newTx.processingStatus = 'started';
+
     // Save the transaction in the storage
     await this.storage.addTx(newTx);
 
@@ -1151,6 +1153,10 @@ class HathorWallet extends EventEmitter {
     }
     // Process history to update metadatas
     await this.storage.processHistory();
+
+    newTx.processingStatus = 'finished';
+    // Save the transaction in the storage
+    await this.storage.addTx(newTx);
 
     if (isNewTx) {
       this.emit('new-tx', newTx);

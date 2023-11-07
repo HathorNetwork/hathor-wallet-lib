@@ -24,7 +24,7 @@ describe('partial tx proposal', () => {
     const hWallet2 = await generateWalletHelper();
 
     // Injecting funds and creating a new custom token
-    const txI = await GenesisWalletHelper.injectFunds(await hWallet1.getAddressAtIndex(0), 103);
+    const txI = await GenesisWalletHelper.injectFunds(hWallet1, await hWallet1.getAddressAtIndex(0), 103);
     const { hash: token1Uid } = await createTokenHelper(
       hWallet1,
       'Token1',
@@ -33,7 +33,7 @@ describe('partial tx proposal', () => {
     );
 
     // Injecting funds and creating a new custom token
-    await GenesisWalletHelper.injectFunds(await hWallet2.getAddressAtIndex(0), 10);
+    await GenesisWalletHelper.injectFunds(hWallet2, await hWallet2.getAddressAtIndex(0), 10);
     const { hash: token2Uid } = await createTokenHelper(
       hWallet2,
       'Token2',
@@ -99,7 +99,7 @@ describe('partial tx proposal', () => {
     expect(tx.hash).toBeDefined();
 
     await waitForTxReceived(hWallet1, tx.hash);
-    await delay(1000); // This transaction seems to take longer than usual to complete
+    await waitForTxReceived(hWallet2, tx.hash);
 
     // Get the balance states before the exchange
     const w1HTRAfter = await hWallet1.getBalance(HATHOR_TOKEN_CONFIG.uid);

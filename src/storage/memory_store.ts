@@ -390,7 +390,7 @@ export class MemoryStore implements IStore {
         }
       }
     }
-    if (this.walletData.currentAddressIndex < maxIndex) {
+    if (this.walletData.currentAddressIndex <= maxIndex) {
       this.walletData.currentAddressIndex = Math.min(maxIndex + 1, this.walletData.lastLoadedAddressIndex);
     }
     this.walletData.lastUsedAddressIndex = maxIndex;

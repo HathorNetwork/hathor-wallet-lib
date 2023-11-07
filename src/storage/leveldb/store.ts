@@ -155,7 +155,7 @@ export default class LevelDBStore implements IStore {
     }
     // Address index should always be greater than or equal to 0
     if (maxIndex >= 0) {
-      if ((await this.walletIndex.getCurrentAddressIndex()) < maxIndex) {
+      if ((await this.walletIndex.getCurrentAddressIndex()) <= maxIndex) {
         await this.walletIndex.setCurrentAddressIndex(Math.min(maxIndex + 1, await this.walletIndex.getLastLoadedAddressIndex()));
       }
       await this.walletIndex.setLastUsedAddressIndex(maxIndex);
