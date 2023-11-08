@@ -408,7 +408,13 @@ export async function waitNextBlock(storage) {
   const currentHeight = await storage.getCurrentHeight();
   let height = currentHeight;
 
-  const timeout = 120000; // 120s of timeout to find the next block
+  // This timeout is a protection, so the integration tests
+  // don't keep running in case of a problem
+  // After using the timeout as 120s, we had some timeouts
+  // because the CI runs in a free github runner
+  // so we decided to increase this timeout to 600s, so
+  // we don't have this error anymore
+  const timeout = 600000;
   let timeoutReached = false;
   // Timeout handler
   const timeoutHandler = setTimeout(() => {
