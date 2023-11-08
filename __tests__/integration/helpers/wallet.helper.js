@@ -314,27 +314,27 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
   if (timeoutReached) {
     // Throw error in case of timeout
     throw new Error(`Timeout of ${timeoutPeriod}ms without receiving the tx with id ${txId}`);
-  } else {
-    const timeDiff = Date.now().valueOf() - startTime;
-    if (DEBUG_LOGGING) {
-      loggers.test.log(`Wait for ${txId} took ${timeDiff}ms.`);
-    }
-
-    if (storageTx.is_voided === false) {
-      // We can't consider the metadata only of the transaction, it affects
-      // also the metadata of the transactions that were spent on it
-      // We could await for the update-tx event of the transactions of the inputs to arrive
-      // before considering the transaction metadata fully updated, however it's complicated
-      // to handle these events, since they might arrive even before we call this method
-      // To simplify everything, here we manually set the utxos as spent and process the history
-      // so after the transaction arrives, all the metadata involved on it is updated and we can
-      // continue running the tests to correctly check balances, addresses, and everyting else
-      await updateInputsSpentBy(hWallet, storageTx);
-      await hWallet.storage.processHistory();
-    }
-
-    return storageTx;
   }
+
+  const timeDiff = Date.now().valueOf() - startTime;
+  if (DEBUG_LOGGING) {
+    loggers.test.log(`Wait for ${txId} took ${timeDiff}ms.`);
+  }
+
+  if (storageTx.is_voided === false) {
+    // We can't consider the metadata only of the transaction, it affects
+    // also the metadata of the transactions that were spent on it
+    // We could await for the update-tx event of the transactions of the inputs to arrive
+    // before considering the transaction metadata fully updated, however it's complicated
+    // to handle these events, since they might arrive even before we call this method
+    // To simplify everything, here we manually set the utxos as spent and process the history
+    // so after the transaction arrives, all the metadata involved on it is updated and we can
+    // continue running the tests to correctly check balances, addresses, and everyting else
+    await updateInputsSpentBy(hWallet, storageTx);
+    await hWallet.storage.processHistory();
+  }
+
+  return storageTx;
 }
 
 /**
