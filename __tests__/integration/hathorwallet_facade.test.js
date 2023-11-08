@@ -306,6 +306,17 @@ describe('start', () => {
     // Send a transaction to one of the wallet's addresses
     const walletData = precalculationHelpers.test.getPrecalculatedWallet();
 
+    // We are not using the injectFunds helper method here because
+    // we want to send this transaction before the wallet is started
+    // then we don't have the wallet object, which is an expected parameter
+    // for the injectFunds method now
+    // Since we start and load the wallet after the transaction is sent to the full node
+    // we don't need to worry for it to be received in the websocket
+    const injectAddress = walletData.addresses[0];
+    const injectValue = getRandomInt(10, 1);
+    const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
+    const injectionTx = await gWallet.sendTransaction(injectAddress, injectValue);
+
     // Start the wallet
     const walletConfig = {
       seed: walletData.words,
@@ -317,10 +328,6 @@ describe('start', () => {
     const hWallet = new HathorWallet(walletConfig);
     await hWallet.start();
     await waitForWalletReady(hWallet);
-
-    const injectAddress = walletData.addresses[0];
-    const injectValue = getRandomInt(10, 1);
-    const injectionTx = await GenesisWalletHelper.injectFunds(hWallet, injectAddress, injectValue);
 
     // Validate that it has transactions
     const txHistory = await hWallet.getTxHistory();
