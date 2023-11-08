@@ -381,3 +381,41 @@ export async function waitUntilNextTimestamp(hWallet, txId) {
   loggers.test.log(`Waiting for ${timeToWait}ms for the next timestamp.`);
   await delay(timeToWait);
 }
+
+/**
+ * This method gets the current height of the network
+ * and awaits until the height changes
+ *
+ * We are ignoring the possibility of reorgs here, we
+ * assume that if the height changes, a new block has arrived
+ *
+ * @param {Storage} storage
+ * @returns {Promise<void>}
+ */
+export async function waitNextBlock(storage) {
+  const currentHeight = await storage.getCurrentHeight();
+  let height = currentHeight;
+
+  const timeout = 120000; // 120s of timeout to find the next block
+  let timeoutReached = false;
+  // Timeout handler
+  const timeoutHandler = setTimeout(() => {
+    timeoutReached = true;
+  }, timeout);
+
+  while (height === currentHeight) {
+    if (timeoutReached) {
+      break;
+    }
+
+    await delay(1000);
+    height = await storage.getCurrentHeight();
+  }
+
+  // Clear timeout handler
+  clearTimeout(timeoutHandler);
+
+  if (timeoutReached) {
+    throw new Error('Timeout reached when waiting for the next block.');
+  }
+}
