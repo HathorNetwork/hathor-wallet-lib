@@ -18,6 +18,7 @@ import { multisigWalletsData, precalculationHelpers } from './wallet-precalculat
 import { delay } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 import { MemoryStore, Storage } from '../../../src/storage';
+import { TxHistoryProcessingStatus } from '../../../src/types';
 
 /**
  * @typedef SendTxResponse
@@ -295,7 +296,7 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
 
   // We consider that the tx was received after it's in the storage
   // and the history processing is finished
-  while (!storageTx || storageTx.processingStatus !== 'finished') {
+  while (!storageTx || storageTx.processingStatus !== TxHistoryProcessingStatus.FINISHED) {
     if (timeoutReached) {
       break;
     }
