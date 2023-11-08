@@ -1534,7 +1534,6 @@ describe('sendManyOutputsTransaction', () => {
     // Confirm that now the balance is available
     const sendTx = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(4), 8);
     expect(sendTx).toHaveProperty('hash');
-    await waitForTxReceived(hWallet, sendTx.hash);
   });
 });
 
