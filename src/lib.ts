@@ -6,6 +6,7 @@ import * as ErrorMessages from './errorMessages';
 import walletApi from './api/wallet';
 import txApi from './api/txApi';
 import txMiningApi from './api/txMining';
+import healthApi from './api/health';
 import versionApi from './api/version';
 import * as axios from './api/axiosInstance';
 import metadataApi from './api/metadataApi';
@@ -57,6 +58,7 @@ export {
   walletApi,
   txApi,
   txMiningApi,
+  healthApi,
   versionApi,
   metadataApi,
   errors,

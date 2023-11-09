@@ -71,7 +71,7 @@ const txApi = {
     return this.getTransactionBase(data, resolve);
   },
 
-  /*
+  /**
    * Call api to get confirmation data of a tx
    *
    * @param {string} id Transaction hash in hex
@@ -90,7 +90,7 @@ const txApi = {
     });
   },
 
-  /*
+  /**
    * Call api to decode a transaction
    *
    * @param {string} hex_tx Full transaction in hexadecimal
@@ -109,7 +109,7 @@ const txApi = {
     });
   },
 
-  /*
+  /**
    * Call api to push a transaction
    *
    * @param {string} hex_tx Full transaction in hexadecimal
@@ -128,7 +128,7 @@ const txApi = {
     });
   },
 
-  /*
+  /**
    * Call api to get dashboard data
    *
    * @param {number} block Quantity of blocks to return
@@ -148,7 +148,7 @@ const txApi = {
     });
   },
 
-  /*
+  /**
    * Call api to get graphviz
    *
    * @param {string} url URL to get graph data
