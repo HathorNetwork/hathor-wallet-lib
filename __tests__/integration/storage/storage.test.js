@@ -65,9 +65,7 @@ describe('locked utxos', () => {
   async function testUnlockWhenSpent(storage, walletData) {
     const hwallet = await startWallet(storage, walletData);
     const address = await hwallet.getAddressAtIndex(0);
-    const tx = await GenesisWalletHelper.injectFunds(address, 1);
-    await waitForTxReceived(hwallet, tx.hash);
-    await delay(500);
+    const tx = await GenesisWalletHelper.injectFunds(hwallet, address, 1);
 
     const sendTx = new SendTransaction({
       storage: hwallet.storage,
@@ -88,7 +86,6 @@ describe('locked utxos', () => {
     // Send a transaction spending the only utxo on the wallet.
     const tx1 = await sendTx.runFromMining();
     await waitForTxReceived(hwallet, tx1.hash);
-    await delay(500);
     await expect(hwallet.storage.isUtxoSelectedAsInput(utxoId)).resolves.toBe(false);
   }
 

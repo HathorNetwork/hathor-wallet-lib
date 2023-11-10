@@ -27,7 +27,7 @@ import { signMessage } from '../utils/crypto';
 import Transaction from '../models/transaction';
 import Queue from '../models/queue';
 import FullnodeConnection from './connection';
-import { WalletType } from '../types';
+import { TxHistoryProcessingStatus, WalletType } from '../types';
 import { syncHistory, reloadStorage, checkGapLimit } from '../utils/storage';
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
@@ -227,8 +227,8 @@ class HathorWallet extends EventEmitter {
    * @inner
    **/
   async getVersionData() {
-    const versionData = await new Promise(resolve => {
-      versionApi.getVersion(resolve)
+    const versionData = await new Promise((resolve, reject)=> {
+      versionApi.getVersion(resolve).catch((error) => reject(error));
     });
 
     return {
@@ -1141,6 +1141,8 @@ class HathorWallet extends EventEmitter {
     const storageTx = await this.storage.getTx(newTx.tx_id);
     const isNewTx = storageTx === null;
 
+    newTx.processingStatus = TxHistoryProcessingStatus.PROCESSING;
+
     // Save the transaction in the storage
     await this.storage.addTx(newTx);
 
@@ -1151,6 +1153,10 @@ class HathorWallet extends EventEmitter {
     }
     // Process history to update metadatas
     await this.storage.processHistory();
+
+    newTx.processingStatus = TxHistoryProcessingStatus.FINISHED;
+    // Save the transaction in the storage
+    await this.storage.addTx(newTx);
 
     if (isNewTx) {
       this.emit('new-tx', newTx);
@@ -1312,8 +1318,8 @@ class HathorWallet extends EventEmitter {
     this.walletStopped = false;
     this.setState(HathorWallet.CONNECTING);
 
-    const info = await new Promise(resolve => {
-      versionApi.getVersion(resolve);
+    const info = await new Promise((resolve , reject)=> {
+      versionApi.getVersion(resolve).catch((error) => reject(error));
     });
     if (info.network.indexOf(this.conn.network) >= 0) {
       this.storage.setApiVersion(info);
