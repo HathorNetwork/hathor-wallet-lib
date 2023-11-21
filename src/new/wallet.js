@@ -633,7 +633,7 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Called when a new message arrives from websocket.
-   **/
+   */
   handleWebsocketMsg(wsData) {
     if (wsData.type === 'wallet:address_history') {
       if (this.state !== HathorWallet.READY) {
@@ -641,9 +641,7 @@ class HathorWallet extends EventEmitter {
         // So we will enqueue this message to be processed later
         this.wsTxQueue.enqueue(wsData);
       } else {
-        this.newTxPromise = this.newTxPromise.then(() => {
-          return this.onNewTx(wsData);
-        });
+        this.newTxPromise = this.newTxPromise.then(() => this.onNewTx(wsData));
       }
     }
   }
@@ -1172,15 +1170,13 @@ class HathorWallet extends EventEmitter {
 
     while (wsData !== undefined) {
       // save new txdata
-      await this.onNewTx(wsData, false);
+      await this.onNewTx(wsData);
       wsData = this.wsTxQueue.dequeue();
       // We should release the event loop for other threads
       // This effectively awaits 0 seconds
       // but it schedule the next iteration to run after other threads.
       await new Promise(resolve => { setTimeout(resolve, 0); });
     }
-    // After all transactions on the queue are saved, process the history
-    await this.storage.processHistory();
   }
 
   async checkScanningPolicy() {
@@ -1223,7 +1219,7 @@ class HathorWallet extends EventEmitter {
     this.emit('state', state);
   }
 
-  async onNewTx(wsData, processHistory = true) {
+  async onNewTx(wsData) {
     const newTx = wsData.history;
     const storageTx = await this.storage.getTx(newTx.tx_id);
     const isNewTx = storageTx === null;
@@ -1234,10 +1230,8 @@ class HathorWallet extends EventEmitter {
     await this.storage.addTx(newTx);
 
     await this.checkScanningPolicy();
-    if (processHistory) {
-      // Process history to update metadatas
-      await this.storage.processHistory();
-    }
+    // Process history to update metadatas
+    await this.storage.processHistory();
 
     newTx.processingStatus = TxHistoryProcessingStatus.FINISHED;
     // Save the transaction in the storage
