@@ -1177,6 +1177,8 @@ class HathorWallet extends EventEmitter {
       // but it schedule the next iteration to run after other threads.
       await new Promise(resolve => { setTimeout(resolve, 0); });
     }
+
+    await this.storage.processHistory();
   }
 
   async checkScanningPolicy() {
