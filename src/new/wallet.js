@@ -2642,7 +2642,7 @@ class HathorWallet extends EventEmitter {
     }
 
     // Get private key that will sign the nano contract transaction
-    const derivedKey = await this.getHDPrivateKeyFromAddress(address, pin);
+    const derivedKey = await this.getHDPrivateKeyFromAddress(address, options);
     const privateKey = derivedKey.privateKey;
 
     // Build and send transaction
