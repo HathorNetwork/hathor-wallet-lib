@@ -25,6 +25,7 @@ import {
 import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
 import { orderBy } from 'lodash';
 import transactionUtils from '../utils/transaction';
+import { cloneDeep } from 'lodash';
 
 
 const DEFAULT_ADDRESSES_WALLET_DATA = {
@@ -160,7 +161,7 @@ export class MemoryStore implements IStore {
     this.genericStorage = {};
     this.lockedUtxos = new Map<string, ILockedUtxo>();
 
-    this.walletData = { ...DEFAULT_WALLET_DATA, ...DEFAULT_ADDRESSES_WALLET_DATA };
+    this.walletData = cloneDeep({ ...DEFAULT_WALLET_DATA, ...DEFAULT_ADDRESSES_WALLET_DATA });
 
     // Add HTR to storage tokens
     this.tokens.set(HATHOR_TOKEN_CONFIG.uid, HATHOR_TOKEN_CONFIG);
