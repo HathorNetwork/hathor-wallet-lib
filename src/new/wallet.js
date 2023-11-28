@@ -284,7 +284,7 @@ class HathorWallet extends EventEmitter {
 
     const limits = await this.storage.getIndexLimit();
     if (!limits) {
-      return;
+      throw new Error('Index limit scanning policy config error');
     }
     const newEndIndex = limits.endIndex + count;
     await this.indexLimitSetEndIndex(newEndIndex);

@@ -193,17 +193,17 @@ describe('registered tokens', () => {
 describe('scanning policy methods', () => {
   it('should work with memory store', async () => {
     const store = new MemoryStore();
-    await testScanningPolicyes(store);
+    await testScanningPolicies(store);
   });
 
   it('should work with leveldb store', async () => {
     const xpriv = new HDPrivateKey();
     const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
     const store = new LevelDBStore(walletId, DATA_DIR);
-    await testScanningPolicyes(store);
+    await testScanningPolicies(store);
   });
 
-  async function testScanningPolicyes(store) {
+  async function testScanningPolicies(store) {
     const storage = new Storage(store);
     // Default is gap-limit
     await expect(storage.getGapLimit()).resolves.toEqual(GAP_LIMIT);
