@@ -25,13 +25,16 @@ describe('scanning policy methods', () => {
     const store = new MemoryStore();
     const storage = new Storage(store);
     const gapLimit = 27;
-    jest.spyOn(storage, 'getGapLimit').mockReturnValue(Promise.resolve(gapLimit));
+    jest.spyOn(storage, 'getScanningPolicyData').mockReturnValue(Promise.resolve({
+      policy: 'gap-limit',
+      gapLimit,
+    }));
     const policyMock = jest.spyOn(storage, 'getScanningPolicy');
 
     policyMock.mockReturnValue(Promise.resolve('gap-limit'));
     await expect(checkScanningPolicy(storage)).resolves.toEqual({
       nextIndex: 1,
-      count: 19,
+      count: 26,
     });
 
     policyMock.mockReturnValue(Promise.resolve('invalid-policy'));

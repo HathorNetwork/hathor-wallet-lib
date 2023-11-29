@@ -291,7 +291,8 @@ export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadA
     return null;
   }
   // check gap limit
-  const { lastLoadedAddressIndex, lastUsedAddressIndex, scanPolicyData } = await storage.getWalletData();
+  const { lastLoadedAddressIndex, lastUsedAddressIndex } = await storage.getWalletData();
+  const scanPolicyData = await storage.getScanningPolicyData();
   if (!isGapLimitScanPolicy(scanPolicyData)) {
     // This error should never happen, but this enforces scanPolicyData typing
     throw new Error('Wallet is configured to use gap-limit but the scan policy data is not configured as gap-limit');

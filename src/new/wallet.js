@@ -318,18 +318,8 @@ class HathorWallet extends EventEmitter {
       policy: 'index-limit',
     };
     await this.storage.setScanningPolicyData(newPolicyData);
-    // Force loading more addresses
-    const loadMoreAddresses = await checkScanningPolicy(this.storage);
-    if (loadMoreAddresses !== null) {
-      // This will process the history if any transaction is found.
-      await syncHistory(
-        loadMoreAddresses.nextIndex,
-        loadMoreAddresses.count,
-        this.storage,
-        this.conn,
-        true,
-      );
-    }
+    // Force loading more addresses and process history if any tx is found
+    this.scanAddressesToLoad(true);
   }
 
   /**
@@ -1181,7 +1171,14 @@ class HathorWallet extends EventEmitter {
     await this.storage.processHistory();
   }
 
-  async checkScanningPolicy() {
+  /**
+   * Check if we need to load more addresses and load them if needed.
+   * The configured scanning policy will be used to determine the loaded addresses.
+   * @param {boolean} processHistory If we should process the txs found on the loaded addresses.
+   *
+   * @returns {Promise<void>}
+   */
+  async scanAddressesToLoad(processHistory = false) {
     // check address scanning policy and load more addresses if needed
     const loadMoreAddresses = await checkScanningPolicy(this.storage);
     if (loadMoreAddresses !== null) {
@@ -1190,6 +1187,7 @@ class HathorWallet extends EventEmitter {
         loadMoreAddresses.count,
         this.storage,
         this.conn,
+        processHistory,
       );
     }
   }
@@ -1231,7 +1229,7 @@ class HathorWallet extends EventEmitter {
     // Save the transaction in the storage
     await this.storage.addTx(newTx);
 
-    await this.checkScanningPolicy();
+    await this.scanAddressesToLoad();
     // Process history to update metadatas
     await this.storage.processHistory();
 
