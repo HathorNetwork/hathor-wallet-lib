@@ -864,6 +864,9 @@ export class Storage implements IStorage {
    * @returns {Promise<number>}
    */
   async getGapLimit(): Promise<number> {
+    if (await this.getScanningPolicy() !== 'gap-limit') {
+      throw new Error('Wallet is not configured to use gap limit');
+    }
     return this.store.getGapLimit();
   }
 

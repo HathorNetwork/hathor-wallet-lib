@@ -319,7 +319,7 @@ class HathorWallet extends EventEmitter {
     };
     await this.storage.setScanningPolicyData(newPolicyData);
     // Force loading more addresses and process history if any tx is found
-    this.scanAddressesToLoad(true);
+    await this.scanAddressesToLoad(true);
   }
 
   /**
