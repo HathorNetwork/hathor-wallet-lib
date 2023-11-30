@@ -896,6 +896,10 @@ export class Storage implements IStorage {
       await this.store.setScanningPolicyData(data);
   }
 
+  /**
+   * Get the scanning policy data.
+   * @returns {Promise<AddressScanPolicyData>}
+   */
   async getScanningPolicyData(): Promise<AddressScanPolicyData> {
     return this.store.getScanningPolicyData();
   }

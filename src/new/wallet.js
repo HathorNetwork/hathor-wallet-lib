@@ -272,14 +272,13 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Load more addresses if configured to index-limit scanning policy.
-   * If not, do nothing.
    * @param {number} count Number of addresses to load
+   * @returns {Promise<number>} The index of the last address loaded
    */
   async indexLimitLoadMore(count) {
     const scanPolicy = await this.storage.getScanningPolicy();
     if (scanPolicy !== 'index-limit') {
-      // This is a no-op
-      return;
+      throw new Error('Wallet is not configured for index-limit scanning policy');
     }
 
     const limits = await this.storage.getIndexLimit();
@@ -288,6 +287,7 @@ class HathorWallet extends EventEmitter {
     }
     const newEndIndex = limits.endIndex + count;
     await this.indexLimitSetEndIndex(newEndIndex);
+    return newEndIndex;
   }
 
   /**
@@ -298,13 +298,12 @@ class HathorWallet extends EventEmitter {
   async indexLimitSetEndIndex(endIndex) {
     const scanPolicy = await this.storage.getScanningPolicy();
     if (scanPolicy !== 'index-limit') {
-      // This is a no-op
-      return;
+      throw new Error('Wallet is not configured for index-limit scanning policy');
     }
 
     const limits = await this.storage.getIndexLimit();
     if (!limits) {
-      return;
+      throw new Error('Index limit scanning policy config error');
     }
 
     if (endIndex <= limits.endIndex) {
