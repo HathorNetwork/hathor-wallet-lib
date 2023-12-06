@@ -215,6 +215,11 @@ export interface IWalletAccessData {
   walletFlags: number;
 }
 
+export enum SCANNING_POLICY {
+  GAP_LIMIT = 'gap-limit',
+  INDEX_LIMIT = 'index-limit',
+};
+
 export interface IGapLimitAddressScanPolicy {
   policy: 'gap-limit';
   gapLimit: number;

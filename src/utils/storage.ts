@@ -6,7 +6,7 @@
  */
 
 import FullnodeConnection from '../new/connection';
-import { IStorage, IAddressInfo, IHistoryTx, IBalance, ILockedUtxo, isGapLimitScanPolicy, IScanPolicyLoadAddresses, isIndexLimitScanPolicy } from '../types';
+import { IStorage, IAddressInfo, IHistoryTx, IBalance, ILockedUtxo, isGapLimitScanPolicy, IScanPolicyLoadAddresses, isIndexLimitScanPolicy, SCANNING_POLICY } from '../types';
 import walletApi from '../api/wallet';
 
 import { chunk } from 'lodash';
@@ -208,7 +208,7 @@ export async function *loadAddressHistory(addresses: string[], storage: IStorage
 export async function scanPolicyStartAddresses(storage: IStorage): Promise<IScanPolicyLoadAddresses> {
   const scanPolicy = await storage.getScanningPolicy();
   switch (scanPolicy) {
-    case 'index-limit':
+    case SCANNING_POLICY.INDEX_LIMIT:
       const limits = await storage.getIndexLimit();
       if (!limits) {
         // This should not happen but it enforces the limits type
@@ -219,7 +219,7 @@ export async function scanPolicyStartAddresses(storage: IStorage): Promise<IScan
         count: limits.endIndex - limits.startIndex + 1,
       };
     default:
-    case 'gap-limit':
+    case SCANNING_POLICY.GAP_LIMIT:
       return {
         nextIndex: 0,
         count: await storage.getGapLimit(),
@@ -236,9 +236,9 @@ export async function scanPolicyStartAddresses(storage: IStorage): Promise<IScan
 export async function checkScanningPolicy(storage: IStorage): Promise<IScanPolicyLoadAddresses|null> {
   const scanPolicy = await storage.getScanningPolicy();
   switch (scanPolicy) {
-    case 'index-limit':
+    case SCANNING_POLICY.INDEX_LIMIT:
       return checkIndexLimit(storage);
-    case 'gap-limit':
+    case SCANNING_POLICY.GAP_LIMIT:
       return checkGapLimit(storage);
     default:
       return null
@@ -252,7 +252,7 @@ export async function checkScanningPolicy(storage: IStorage): Promise<IScanPolic
  * @returns {Promise<IScanPolicyLoadAddresses|null>}
  */
 export async function checkIndexLimit(storage: IStorage): Promise<IScanPolicyLoadAddresses|null> {
-  if (await storage.getScanningPolicy() !== 'index-limit') {
+  if (await storage.getScanningPolicy() !== SCANNING_POLICY.INDEX_LIMIT) {
     // Since the wallet is not configured to use index-limit this is a no-op
     return null;
   }
@@ -286,7 +286,7 @@ export async function checkIndexLimit(storage: IStorage): Promise<IScanPolicyLoa
  * @returns {Promise<IScanPolicyLoadAddresses|null>}
  */
 export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadAddresses|null> {
-  if (await storage.getScanningPolicy() !== 'gap-limit') {
+  if (await storage.getScanningPolicy() !== SCANNING_POLICY.GAP_LIMIT) {
     // Since the wallet is not configured to use gap-limit this is a no-op
     return null;
   }

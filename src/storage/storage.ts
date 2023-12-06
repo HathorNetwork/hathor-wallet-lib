@@ -30,6 +30,7 @@ import {
   AddressScanPolicy,
   AddressScanPolicyData,
   IIndexLimitAddressScanPolicy,
+  SCANNING_POLICY,
 } from '../types';
 import transactionUtils from '../utils/transaction';
 import { processHistory, processUtxoUnlock } from '../utils/storage';
@@ -864,7 +865,7 @@ export class Storage implements IStorage {
    * @returns {Promise<number>}
    */
   async getGapLimit(): Promise<number> {
-    if (await this.getScanningPolicy() !== 'gap-limit') {
+    if (await this.getScanningPolicy() !== SCANNING_POLICY.GAP_LIMIT) {
       throw new Error('Wallet is not configured to use gap limit');
     }
     return this.store.getGapLimit();

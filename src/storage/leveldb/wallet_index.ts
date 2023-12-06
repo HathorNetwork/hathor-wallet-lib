@@ -8,7 +8,7 @@
 import path from 'path';
 import { Level } from 'level';
 import { AbstractSublevel } from 'abstract-level';
-import { IKVWalletIndex, IWalletData, IWalletAccessData, AddressScanPolicy, AddressScanPolicyData, isGapLimitScanPolicy, isIndexLimitScanPolicy, IGapLimitAddressScanPolicy, IIndexLimitAddressScanPolicy } from '../../types';
+import { IKVWalletIndex, IWalletData, IWalletAccessData, AddressScanPolicy, AddressScanPolicyData, isGapLimitScanPolicy, isIndexLimitScanPolicy, IGapLimitAddressScanPolicy, IIndexLimitAddressScanPolicy, SCANNING_POLICY } from '../../types';
 import { GAP_LIMIT, DEFAULT_ADDRESS_SCANNING_POLICY } from '../../constants';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 
@@ -239,13 +239,13 @@ export default class LevelWalletIndex implements IKVWalletIndex {
 
   async setScanningPolicyData(data: AddressScanPolicyData): Promise<void> {
     if (isGapLimitScanPolicy(data)) {
-      await this.walletDB.put('scanningPolicy', 'gap-limit');
+      await this.walletDB.put('scanningPolicy', SCANNING_POLICY.GAP_LIMIT);
       await this.setGapLimit(data.gapLimit);
       return;
     }
 
     if (isIndexLimitScanPolicy(data)) {
-      await this.walletDB.put('scanningPolicy', 'index-limit');
+      await this.walletDB.put('scanningPolicy', SCANNING_POLICY.INDEX_LIMIT);
       await this._setNumber('startIndex', data.startIndex);
       await this._setNumber('endIndex', data.endIndex);
       return;
@@ -256,16 +256,16 @@ export default class LevelWalletIndex implements IKVWalletIndex {
 
   async getScanningPolicyData(): Promise<AddressScanPolicyData> {
     const policy = await this.getScanningPolicy();
-    if (policy == 'gap-limit') {
+    if (policy == SCANNING_POLICY.GAP_LIMIT) {
       return {
-        policy: 'gap-limit',
+        policy: SCANNING_POLICY.GAP_LIMIT,
         gapLimit: await this.getGapLimit(),
       } as IGapLimitAddressScanPolicy;
     }
 
-    if (policy == 'index-limit') {
+    if (policy == SCANNING_POLICY.INDEX_LIMIT) {
       return {
-        policy: 'index-limit',
+        policy: SCANNING_POLICY.INDEX_LIMIT,
         startIndex: await this._getNumber('startIndex') || 0,
         endIndex: await this._getNumber('endIndex') || 0,
       } as IIndexLimitAddressScanPolicy;

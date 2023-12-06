@@ -26,7 +26,7 @@ import { signMessage } from '../utils/crypto';
 import Transaction from '../models/transaction';
 import Queue from '../models/queue';
 import FullnodeConnection from './connection';
-import { TxHistoryProcessingStatus, WalletType } from '../types';
+import { SCANNING_POLICY, TxHistoryProcessingStatus, WalletType } from '../types';
 import { syncHistory, reloadStorage, scanPolicyStartAddresses, checkScanningPolicy } from '../utils/storage';
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
@@ -277,7 +277,7 @@ class HathorWallet extends EventEmitter {
    */
   async indexLimitLoadMore(count) {
     const scanPolicy = await this.storage.getScanningPolicy();
-    if (scanPolicy !== 'index-limit') {
+    if (scanPolicy !== SCANNING_POLICY.INDEX_LIMIT) {
       throw new Error('Wallet is not configured for index-limit scanning policy');
     }
 
@@ -297,7 +297,7 @@ class HathorWallet extends EventEmitter {
    */
   async indexLimitSetEndIndex(endIndex) {
     const scanPolicy = await this.storage.getScanningPolicy();
-    if (scanPolicy !== 'index-limit') {
+    if (scanPolicy !== SCANNING_POLICY.INDEX_LIMIT) {
       throw new Error('Wallet is not configured for index-limit scanning policy');
     }
 
@@ -314,7 +314,7 @@ class HathorWallet extends EventEmitter {
     const newPolicyData = {
       ...limits,
       endIndex,
-      policy: 'index-limit',
+      policy: SCANNING_POLICY.INDEX_LIMIT,
     };
     await this.storage.setScanningPolicyData(newPolicyData);
     // Force loading more addresses and process history if any tx is found

@@ -21,6 +21,7 @@ import {
   AddressScanPolicy,
   AddressScanPolicyData,
   IIndexLimitAddressScanPolicy,
+  SCANNING_POLICY,
 } from '../types';
 import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
 import { orderBy } from 'lodash';
@@ -35,7 +36,7 @@ const DEFAULT_ADDRESSES_WALLET_DATA = {
 };
 
 const DEFAULT_SCAN_POLICY_DATA: AddressScanPolicyData = {
-  policy: 'gap-limit',
+  policy: SCANNING_POLICY.GAP_LIMIT,
   gapLimit: GAP_LIMIT,
 }
 
@@ -753,7 +754,7 @@ export class MemoryStore implements IStore {
   async setGapLimit(value: number): Promise<void> {
     if (!this.walletData.scanPolicyData) {
       this.walletData.scanPolicyData = {
-        policy: 'gap-limit',
+        policy: SCANNING_POLICY.GAP_LIMIT,
         gapLimit: value,
       };
       return;
@@ -773,7 +774,7 @@ export class MemoryStore implements IStore {
     if (isGapLimitScanPolicy(this.walletData.scanPolicyData)) {
       if (!this.walletData.scanPolicyData.gapLimit) {
         this.walletData.scanPolicyData = {
-          policy: 'gap-limit',
+          policy: SCANNING_POLICY.GAP_LIMIT,
           gapLimit: GAP_LIMIT,
         };
       }
@@ -784,7 +785,7 @@ export class MemoryStore implements IStore {
   }
 
   async getIndexLimit(): Promise<Omit<IIndexLimitAddressScanPolicy, 'policy'> | null> {
-    if (this.walletData.scanPolicyData?.policy === 'index-limit') {
+    if (this.walletData.scanPolicyData?.policy === SCANNING_POLICY.INDEX_LIMIT) {
       return {
         startIndex: this.walletData?.scanPolicyData?.startIndex || 0,
         endIndex: this.walletData?.scanPolicyData?.endIndex || 0,
@@ -799,7 +800,7 @@ export class MemoryStore implements IStore {
    * @returns {Promise<AddressScanPolicy>}
    */
   async getScanningPolicy(): Promise<AddressScanPolicy> {
-    return this.walletData.scanPolicyData?.policy || 'gap-limit';
+    return this.walletData.scanPolicyData?.policy || SCANNING_POLICY.GAP_LIMIT;
   }
 
   async setScanningPolicyData(data: AddressScanPolicyData): Promise<void> {
