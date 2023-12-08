@@ -11,6 +11,7 @@ import { FULLNODE_URL, NETWORK_NAME, WALLET_CONSTANTS } from './configuration/te
 import dateFormatter from '../../src/utils/date';
 import { AddressError } from '../../src/errors';
 import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
+import { ConnectionState } from '../../src/wallet/types';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 
@@ -1098,12 +1099,17 @@ describe('getAuthorityUtxos', () => {
 describe('internal methods', () => {
   /** @type HathorWallet */
   let gWallet;
+  /** @type HathorWallet */
+  let hWallet;
   beforeAll(async () => {
-    const { hWallet } = await GenesisWalletHelper.getSingleton();
-    gWallet = hWallet;
+    const { hWallet: ghWallet } = await GenesisWalletHelper.getSingleton();
+    gWallet = ghWallet;
+    hWallet = await generateWalletHelper();
   });
 
   afterAll(async () => {
+    hWallet.stop();
+    await GenesisWalletHelper.clearListeners();
     await gWallet.stop();
   });
 
@@ -1166,6 +1172,14 @@ describe('internal methods', () => {
     networkData = await gWallet.getVersionData();
     expect(networkData.timestamp).toBeGreaterThan(serverChangeTime + 200);
     expect(networkData.network).toStrictEqual(NETWORK_NAME);
+  });
+
+  it('should reload the storage', async () => {
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10);
+    const spy = jest.spyOn(hWallet.storage, 'processHistory');
+    // Simulate that we received an event of the connection becoming active
+    await hWallet.onConnectionChangedState(ConnectionState.CONNECTED);
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 });
 
