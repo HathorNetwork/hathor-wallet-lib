@@ -221,12 +221,12 @@ export enum SCANNING_POLICY {
 };
 
 export interface IGapLimitAddressScanPolicy {
-  policy: 'gap-limit';
+  policy: SCANNING_POLICY.GAP_LIMIT;
   gapLimit: number;
 }
 
 export interface IIndexLimitAddressScanPolicy {
-  policy: 'index-limit';
+  policy: SCANNING_POLICY.INDEX_LIMIT;
   startIndex: number;
   endIndex: number;
 }
@@ -239,16 +239,16 @@ export interface IScanPolicyLoadAddresses {
   count: number;
 }
 
-export type AddressScanPolicy = 'gap-limit' | 'index-limit';
+export type AddressScanPolicy = SCANNING_POLICY.GAP_LIMIT | SCANNING_POLICY.INDEX_LIMIT;
 
 export type AddressScanPolicyData = IGapLimitAddressScanPolicy | IIndexLimitAddressScanPolicy;
 
 export function isGapLimitScanPolicy(scanPolicyData: AddressScanPolicyData): scanPolicyData is IGapLimitAddressScanPolicy {
-  return scanPolicyData.policy === 'gap-limit';
+  return scanPolicyData.policy === SCANNING_POLICY.GAP_LIMIT;
 }
 
 export function isIndexLimitScanPolicy(scanPolicyData: AddressScanPolicyData): scanPolicyData is IIndexLimitAddressScanPolicy {
-  return scanPolicyData.policy === 'index-limit';
+  return scanPolicyData.policy === SCANNING_POLICY.INDEX_LIMIT;
 }
 
 export interface IWalletData {

@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { AddressScanPolicy } from "./types";
+import { AddressScanPolicy, SCANNING_POLICY } from "./types";
 
 
 /**
@@ -262,4 +262,4 @@ export const HATHOR_MAGIC_BYTES = 'Hathor Signed Message:\n';
 /**
  * Default address scanning policy
  */
-export const DEFAULT_ADDRESS_SCANNING_POLICY: AddressScanPolicy = 'gap-limit';
+export const DEFAULT_ADDRESS_SCANNING_POLICY: AddressScanPolicy = SCANNING_POLICY.GAP_LIMIT;
