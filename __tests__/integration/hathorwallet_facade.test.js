@@ -156,7 +156,7 @@ describe('getTxById', () => {
        * TODO: The amount of transactions is often 8 but should be 1. Ref #397
        * @see https://github.com/HathorNetwork/hathor-wallet-lib/issues/397
        */
-      // transactions: 1, 
+      // transactions: 1,
     });
     // Get balance for the token creation transaction
     const result = await hWallet.getTxById(tokenUid);
@@ -352,7 +352,7 @@ describe('start', () => {
        */
     };
     const hWallet = new HathorWallet(walletConfig);
-    hWallet.storage.setGapLimit(100); // load more addresses than preCalculated
+    await hWallet.storage.setGapLimit(100); // load more addresses than preCalculated
     await hWallet.start();
     await waitForWalletReady(hWallet);
 
@@ -384,7 +384,7 @@ describe('start', () => {
      * somehow make this process very costly and slow, especially for multisig.
      * Here we lower the gap limit to make this test shorter.
      */
-    hWallet.storage.setGapLimit(5);
+    await hWallet.storage.setGapLimit(5);
     await hWallet.start();
 
     // Validating that all the booting processes worked

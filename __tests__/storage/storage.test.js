@@ -10,7 +10,7 @@ import { MemoryStore, Storage, LevelDBStore } from '../../src/storage';
 import tx_history from '../__fixtures__/tx_history';
 import { processHistory, loadAddresses } from '../../src/utils/storage';
 import walletUtils from '../../src/utils/wallet';
-import { P2PKH_ACCT_PATH, TOKEN_DEPOSIT_PERCENTAGE, TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../../src/constants';
+import { P2PKH_ACCT_PATH, TOKEN_DEPOSIT_PERCENTAGE, TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, WALLET_SERVICE_AUTH_DERIVATION_PATH, GAP_LIMIT } from '../../src/constants';
 import { HDPrivateKey } from "bitcore-lib";
 import Mnemonic from 'bitcore-mnemonic';
 import * as cryptoUtils from '../../src/utils/crypto';
@@ -921,5 +921,36 @@ describe('utxo selection in all stores', () => {
     expect(buf).toHaveLength(1);
     expect(buf[0].txId).toEqual('tx21');
     expect(buf[0].index).toEqual(6);
+  }
+});
+
+
+describe('scanning policy methods', () => {
+  it('should work with memory store', async () => {
+    const store = new MemoryStore();
+    await testScanningPolicy(store);
+  });
+
+  it('should work with leveldb store', async () => {
+    const xpriv = new HDPrivateKey();
+    const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
+    const store = new LevelDBStore(walletId, DATA_DIR);
+    await testScanningPolicy(store);
+  });
+
+  async function testScanningPolicy(store) {
+    const storage = new Storage(store);
+    const policyMock = jest.spyOn(storage, 'getScanningPolicy');
+
+    // The default gap-limit is the GAP_LIMIT constant
+    policyMock.mockReturnValue(Promise.resolve('gap-limit'));
+    await expect(storage.getGapLimit()).resolves.toEqual(GAP_LIMIT);
+
+    // Setting gap-limit to 27
+    await storage.setGapLimit(27);
+    await expect(storage.getGapLimit()).resolves.toEqual(27);
+
+    policyMock.mockReturnValue(Promise.resolve('index-limit'));
+    await expect(storage.getGapLimit()).rejects.toThrow();
   }
 });

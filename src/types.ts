@@ -5,8 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { Config } from "./config";
-import Input from "./models/input";
+import { Config } from './config';
+import Input from './models/input';
 import FullNodeConnection from './new/connection';
 
 export interface IAddressInfo {
@@ -215,12 +215,48 @@ export interface IWalletAccessData {
   walletFlags: number;
 }
 
+export enum SCANNING_POLICY {
+  GAP_LIMIT = 'gap-limit',
+  INDEX_LIMIT = 'index-limit',
+};
+
+export interface IGapLimitAddressScanPolicy {
+  policy: SCANNING_POLICY.GAP_LIMIT;
+  gapLimit: number;
+}
+
+export interface IIndexLimitAddressScanPolicy {
+  policy: SCANNING_POLICY.INDEX_LIMIT;
+  startIndex: number;
+  endIndex: number;
+}
+
+/**
+ * This is a request from the scanning policy to load `count` addresses starting from nextIndex.
+ */
+export interface IScanPolicyLoadAddresses {
+  nextIndex: number;
+  count: number;
+}
+
+export type AddressScanPolicy = SCANNING_POLICY.GAP_LIMIT | SCANNING_POLICY.INDEX_LIMIT;
+
+export type AddressScanPolicyData = IGapLimitAddressScanPolicy | IIndexLimitAddressScanPolicy;
+
+export function isGapLimitScanPolicy(scanPolicyData: AddressScanPolicyData): scanPolicyData is IGapLimitAddressScanPolicy {
+  return scanPolicyData.policy === SCANNING_POLICY.GAP_LIMIT;
+}
+
+export function isIndexLimitScanPolicy(scanPolicyData: AddressScanPolicyData): scanPolicyData is IIndexLimitAddressScanPolicy {
+  return scanPolicyData.policy === SCANNING_POLICY.INDEX_LIMIT;
+}
+
 export interface IWalletData {
   lastLoadedAddressIndex: number;
   lastUsedAddressIndex: number;
   currentAddressIndex: number;
   bestBlockHeight: number;
-  gapLimit: number;
+  scanPolicyData: AddressScanPolicyData;
 }
 
 export interface IEncryptedData {
@@ -332,6 +368,10 @@ export interface IStore {
   setCurrentAddressIndex(index: number): Promise<void>;
   setGapLimit(value: number): Promise<void>;
   getGapLimit(): Promise<number>;
+  getIndexLimit(): Promise<Omit<IIndexLimitAddressScanPolicy, 'policy'> | null>;
+  getScanningPolicy(): Promise<AddressScanPolicy>;
+  setScanningPolicyData(data: AddressScanPolicyData): Promise<void>;
+  getScanningPolicyData(): Promise<AddressScanPolicyData>;
 
   // Generic storage keys
   getItem(key: string): Promise<any>;
@@ -398,12 +438,16 @@ export interface IStorage {
   changePassword(oldPassword: string, newPassword: string): Promise<void>;
   setGapLimit(value: number): Promise<void>;
   getGapLimit(): Promise<number>;
+  getIndexLimit(): Promise<Omit<IIndexLimitAddressScanPolicy, 'policy'> | null>;
   cleanStorage(cleanHistory?: boolean, cleanAddresses?: boolean, cleanTokens?: boolean): Promise<void>;
   handleStop(options: {connection?: FullNodeConnection, cleanStorage?: boolean, cleanAddresses?: boolean}): Promise<void>;
   getTokenDepositPercentage(): number;
   checkPin(pinCode: string): Promise<boolean>;
   checkPassword(password: string): Promise<boolean>;
   isHardwareWallet(): Promise<boolean>;
+  getScanningPolicy(): Promise<AddressScanPolicy>;
+  getScanningPolicyData(): Promise<AddressScanPolicyData>;
+  setScanningPolicyData(data: AddressScanPolicyData | null): Promise<void>;
 }
 
 /**
@@ -486,6 +530,10 @@ export interface IKVWalletIndex extends IKVStoreIndex<void> {
   getCurrentAddressIndex(): Promise<number>;
   setGapLimit(value: number): Promise<void>;
   getGapLimit(): Promise<number>;
+  getIndexLimit(): Promise<Omit<IIndexLimitAddressScanPolicy, 'policy'> | null>;
+  getScanningPolicy(): Promise<AddressScanPolicy>;
+  setScanningPolicyData(data: AddressScanPolicyData): Promise<void>;
+  getScanningPolicyData(): Promise<AddressScanPolicyData>;
 
   getItem(key: string): Promise<any>;
   setItem(key: string, value: any): Promise<void>;
