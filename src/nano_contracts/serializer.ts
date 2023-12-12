@@ -21,7 +21,7 @@ class Serializer {
     switch (type) {
       case 'string':
         return this.fromString(value);
-      case 'byte':
+      case 'bytes':
         return this.fromBytes(value);
       case 'int':
         return this.fromInt(value);
