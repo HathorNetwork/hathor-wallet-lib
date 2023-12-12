@@ -13,14 +13,20 @@ import {
   IHistoryTx,
   IUtxo,
   IWalletAccessData,
+  isGapLimitScanPolicy,
   IUtxoFilterOptions,
   IAddressMetadata,
   IWalletData,
   ILockedUtxo,
+  AddressScanPolicy,
+  AddressScanPolicyData,
+  IIndexLimitAddressScanPolicy,
+  SCANNING_POLICY,
 } from '../types';
 import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
 import { orderBy } from 'lodash';
 import transactionUtils from '../utils/transaction';
+import { cloneDeep } from 'lodash';
 
 
 const DEFAULT_ADDRESSES_WALLET_DATA = {
@@ -29,9 +35,14 @@ const DEFAULT_ADDRESSES_WALLET_DATA = {
   currentAddressIndex: -1,
 };
 
+const DEFAULT_SCAN_POLICY_DATA: AddressScanPolicyData = {
+  policy: SCANNING_POLICY.GAP_LIMIT,
+  gapLimit: GAP_LIMIT,
+}
+
 const DEFAULT_WALLET_DATA = {
   bestBlockHeight: 0,
-  gapLimit: GAP_LIMIT,
+  scanPolicyData: DEFAULT_SCAN_POLICY_DATA,
 };
 
 /**
@@ -151,7 +162,7 @@ export class MemoryStore implements IStore {
     this.genericStorage = {};
     this.lockedUtxos = new Map<string, ILockedUtxo>();
 
-    this.walletData = { ...DEFAULT_WALLET_DATA, ...DEFAULT_ADDRESSES_WALLET_DATA };
+    this.walletData = cloneDeep({ ...DEFAULT_WALLET_DATA, ...DEFAULT_ADDRESSES_WALLET_DATA });
 
     // Add HTR to storage tokens
     this.tokens.set(HATHOR_TOKEN_CONFIG.uid, HATHOR_TOKEN_CONFIG);
@@ -741,7 +752,17 @@ export class MemoryStore implements IStore {
    * @param {number} value Gat limit to set.
    */
   async setGapLimit(value: number): Promise<void> {
-    this.walletData.gapLimit = value;
+    if (!this.walletData.scanPolicyData) {
+      this.walletData.scanPolicyData = {
+        policy: SCANNING_POLICY.GAP_LIMIT,
+        gapLimit: value,
+      };
+      return;
+    }
+
+    if (isGapLimitScanPolicy(this.walletData.scanPolicyData)) {
+      this.walletData.scanPolicyData.gapLimit = value;
+    }
   }
 
   /**
@@ -750,7 +771,44 @@ export class MemoryStore implements IStore {
    * @returns {Promise<number>}
    */
   async getGapLimit(): Promise<number> {
-    return this.walletData.gapLimit;
+    if (isGapLimitScanPolicy(this.walletData.scanPolicyData)) {
+      if (!this.walletData.scanPolicyData.gapLimit) {
+        this.walletData.scanPolicyData = {
+          policy: SCANNING_POLICY.GAP_LIMIT,
+          gapLimit: GAP_LIMIT,
+        };
+      }
+      return this.walletData.scanPolicyData.gapLimit;
+    }
+    // Return default gap limit
+    return GAP_LIMIT;
+  }
+
+  async getIndexLimit(): Promise<Omit<IIndexLimitAddressScanPolicy, 'policy'> | null> {
+    if (this.walletData.scanPolicyData?.policy === SCANNING_POLICY.INDEX_LIMIT) {
+      return {
+        startIndex: this.walletData?.scanPolicyData?.startIndex || 0,
+        endIndex: this.walletData?.scanPolicyData?.endIndex || 0,
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Get the configured address scanning policy.
+   * @async
+   * @returns {Promise<AddressScanPolicy>}
+   */
+  async getScanningPolicy(): Promise<AddressScanPolicy> {
+    return this.walletData.scanPolicyData?.policy || SCANNING_POLICY.GAP_LIMIT;
+  }
+
+  async setScanningPolicyData(data: AddressScanPolicyData): Promise<void> {
+    this.walletData.scanPolicyData = data;
+  }
+
+  async getScanningPolicyData(): Promise<AddressScanPolicyData> {
+    return this.walletData.scanPolicyData || DEFAULT_SCAN_POLICY_DATA;
   }
 
   /**

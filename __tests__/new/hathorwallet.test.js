@@ -331,6 +331,9 @@ test('processTxQueue', async () => {
     processedTxs.push(data);
     return Promise.resolve();
   });
+  hWallet.storage = {
+    processHistory: jest.fn(),
+  }
 
   // wsTxQueue is not part of the prototype so it won't be faked on FakeHathorWallet
   hWallet.wsTxQueue = new Queue();
