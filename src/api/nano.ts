@@ -64,6 +64,27 @@ const ncApi = {
       throw new NanoRequestError('Error getting nano contract history.')
     }
   },
+
+  /**
+   * Call get blueprint information
+   *
+   * @param id Blueprint ID
+   *
+   * @return {Promise}
+   * @memberof ApiNanoContracts
+   * @inner
+   */
+  async getBlueprintInformation(id: string) {
+    const data = { blueprint_id: id };
+    const axios = await createRequestInstance();
+    const response = await axios.get(`nano_contract/blueprint`, { params: data });
+    const responseData = response.data;
+    if (response.status === 200) {
+      return responseData;
+    } else {
+      throw new NanoRequestError('Error getting blueprint information.')
+    }
+  },
 };
 
 export default ncApi;
