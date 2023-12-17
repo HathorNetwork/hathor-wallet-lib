@@ -29,6 +29,7 @@ import Mnemonic from 'bitcore-mnemonic/lib/mnemonic';
 import { P2PKH_ACCT_PATH } from '../../src/constants';
 import Network from '../../src/models/network';
 import { WalletType, WALLET_FLAGS } from '../../src/types';
+import { parseScriptData } from '../../src/utils/scripts';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 const sampleNftData = 'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg';
@@ -2431,6 +2432,40 @@ describe('destroyAuthority', () => {
 
     // Trying to melt and validating its error object
     await expect(hWallet.meltTokens(tokenUid, 100)).rejects.toThrow('authority output');
+  });
+});
+
+describe('create token with data outputs', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
+  });
+
+  it('should create a token with data outputs', async () => {
+    const hWallet = await generateWalletHelper();
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10);
+    const tx = await createTokenHelper(
+      hWallet,
+      'Token with data outputs',
+      'DOUT',
+      100,
+      {
+        data: ['test1', 'test2']
+      }
+    );
+
+    // Make sure the last 2 outputs are the data outputs
+    const lastOutput = tx.outputs[tx.outputs.length - 1];
+    expect(lastOutput.value).toBe(1);
+    expect(lastOutput.tokenData).toBe(0);
+    const lastOutputScript = parseScriptData(lastOutput.script);
+    expect(lastOutputScript.data).toBe('test2');
+
+    const outputBeforeLast = tx.outputs[tx.outputs.length - 2];
+    expect(outputBeforeLast.value).toBe(1);
+    expect(outputBeforeLast.tokenData).toBe(0);
+    const outputBeforeLastScript = parseScriptData(outputBeforeLast.script);
+    expect(outputBeforeLastScript.data).toBe('test1');
   });
 });
 

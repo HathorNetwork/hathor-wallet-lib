@@ -239,10 +239,10 @@ const tokens = {
   },
 
   /**
-   * Get the HTR value of the fee to create a NFT
-   * @returns {number} The fee to create a NFT
+   * Get the HTR value of the fee to add a data script output
+   * @returns {number} The fee to have a data script output
    */
-  getNFTCreationFee(): number {
+  getDataScriptOutputFee(): number {
     return 1;
   },
 
@@ -273,7 +273,7 @@ const tokens = {
    * @param {boolean} [options.createAnotherMint=true] If a mint authority should be created on the transaction.
    * @param {string|null} [options.mintAuthorityAddress=null] The address to send the new mint authority created
    * @param {string|null} [options.changeAddress=null] The address to send any change output.
-   * @param {boolean} [options.isCreateNFT=false] If this transaction will create an NFT
+   * @param {string[]|null} [options.data=null] list of data strings to add each as a data script output
    * @param {function} [options.utxoSelection=bestUtxoSelection] Algorithm to select utxos. Use the best method by default
    *
    * @returns {Promise<IDataTx>} The transaction data
@@ -287,7 +287,7 @@ const tokens = {
       mintInput = null,
       createAnotherMint = true,
       changeAddress = null,
-      isCreateNFT = false,
+      data = null,
       mintAuthorityAddress = null,
       utxoSelection = bestUtxoSelection,
     }: {
@@ -295,7 +295,7 @@ const tokens = {
       mintInput?: IDataInput | null,
       createAnotherMint?: boolean,
       changeAddress?: string | null,
-      isCreateNFT?: boolean,
+      data?: string[] | null,
       mintAuthorityAddress?: string | null,
       utxoSelection?: UtxoSelectionAlgorithm,
     } = {},
@@ -304,8 +304,10 @@ const tokens = {
     const outputs: IDataOutput[] = [];
     const depositPercent = storage.getTokenDepositPercentage();
     let depositAmount = this.getDepositAmount(amount, depositPercent);
-    if (isCreateNFT) {
-      depositAmount += this.getNFTCreationFee();
+    if (data) {
+      // The deposit amount will be the quantity of data strings in the array
+      // multiplied by the fee
+      depositAmount += this.getDataScriptOutputFee() * data.length;
     }
 
     // get HTR deposit inputs
@@ -481,7 +483,8 @@ const tokens = {
    * @param {string} [options.mintAuthorityAddress] the address to send the mint authority created
    * @param {boolean} [options.createMelt=true] Whether to create a melt output
    * @param {string} [options.meltAuthorityAddress] the address to send the melt authority created
-   * @param {string|null} [options.nftData=null] NFT data to create an NFT token
+   * @param {string[]|null} [options.data=null] list of data strings to add each as a data script output
+   * @param {boolean} [options.isCreateNFT=false] if the create token is an NFT creation call
    * @returns {Promise<IDataTx>} The transaction data to create the token
    */
   async prepareCreateTokenData(
@@ -496,22 +499,23 @@ const tokens = {
       mintAuthorityAddress = null,
       createMelt = true,
       meltAuthorityAddress = null,
-      nftData = null,
+      data = null,
+      isCreateNFT = false,
     }: {
       changeAddress?: string | null,
       createMint?: boolean,
       mintAuthorityAddress?: string | null,
       createMelt?: boolean,
       meltAuthorityAddress?: string | null,
-      nftData?: string | null,
+      data?: string[] | null,
+      isCreateNFT?: boolean,
     } = {},
   ): Promise<IDataTx> {
-    const isCreateNFT = !!nftData;
     const mintOptions = {
       createAnotherMint: createMint,
       mintAuthorityAddress,
       changeAddress,
-      isCreateNFT,
+      data
     };
 
     const txData = await this.prepareMintTxData(address, mintAmount, storage, mintOptions);
@@ -527,22 +531,25 @@ const tokens = {
       });
     }
 
-    if (isCreateNFT) {
-      if (nftData === null) {
-        // This should never happen since isNFT is true only if nftData is not null
-        // But the typescript compiler doesn't seem to understand that
-        throw new Error('this should not happen');
+    if (data !== null) {
+      for (const dataString of data) {
+        const outputData = {
+          type: 'data',
+          data: dataString,
+          value: 1,
+          token: HATHOR_TOKEN_CONFIG.uid,
+          authorities: 0,
+        };
+
+        // We currently have an external service that identifies NFT tokens with the first output as the data output
+        // that's why we are keeping like this
+        // However, this will change after a new project is completed to better identify an NFT token
+        if (isCreateNFT) {
+          txData.outputs.unshift(outputData);
+        } else {
+          txData.outputs.push(outputData);
+        }
       }
-      // After the transaction data is completed
-      // if it's an NFT I must add the first output as the data script
-      // For NFT data the value is always 0.01 HTR (i.e. 1 integer)
-      txData.outputs.unshift({
-        type: 'data',
-        data: nftData,
-        value: 1,
-        token: HATHOR_TOKEN_CONFIG.uid,
-        authorities: 0,
-      });
     }
 
     // Set create token tx version value
