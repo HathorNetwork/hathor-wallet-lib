@@ -539,7 +539,7 @@ const tokens = {
           value: 1,
           token: HATHOR_TOKEN_CONFIG.uid,
           authorities: 0,
-        };
+        } as IDataOutput;
 
         // We currently have an external service that identifies NFT tokens with the first output as the data output
         // that's why we are keeping like this
