@@ -544,6 +544,7 @@ const tokens = {
         // We currently have an external service that identifies NFT tokens with the first output as the data output
         // that's why we are keeping like this
         // However, this will change after a new project is completed to better identify an NFT token
+        // the method that validates the NFT is in src/models/CreateTokenTransaction.validateNft
         if (isCreateNFT) {
           txData.outputs.unshift(outputData);
         } else {
