@@ -20,7 +20,7 @@ import { NETWORK_NAME, TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test
 import dateFormatter from '../../src/utils/date';
 import { verifyMessage } from '../../src/utils/crypto';
 import { loggers } from './utils/logger.util';
-import { TxNotFoundError, SendTxError, WalletFromXPubGuard } from '../../src/errors';
+import { NftValidationError, TxNotFoundError, SendTxError, WalletFromXPubGuard } from '../../src/errors';
 import SendTransaction from '../../src/new/sendTransaction';
 import walletUtils from '../../src/utils/wallet';
 import { ConnectionState } from '../../src/wallet/types';
@@ -2466,6 +2466,10 @@ describe('create token with data outputs', () => {
     expect(outputBeforeLast.tokenData).toBe(0);
     const outputBeforeLastScript = parseScriptData(outputBeforeLast.script);
     expect(outputBeforeLastScript.data).toBe('test1');
+
+    expect(() => {
+      tx.validateNft(hWallet.getNetworkObject())
+    }).toThrow(NftValidationError);
   });
 });
 
