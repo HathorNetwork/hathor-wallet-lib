@@ -273,7 +273,7 @@ const tokens = {
    * @param {boolean} [options.createAnotherMint=true] If a mint authority should be created on the transaction.
    * @param {string|null} [options.mintAuthorityAddress=null] The address to send the new mint authority created
    * @param {string|null} [options.changeAddress=null] The address to send any change output.
-   * @param {string[]|null} [options.data=null] list of data strings to add each as a data script output
+   * @param {string[]|null} [options.data=null] list of data strings using utf8 encoding to add each as a data script output
    * @param {function} [options.utxoSelection=bestUtxoSelection] Algorithm to select utxos. Use the best method by default
    *
    * @returns {Promise<IDataTx>} The transaction data
@@ -483,7 +483,7 @@ const tokens = {
    * @param {string} [options.mintAuthorityAddress] the address to send the mint authority created
    * @param {boolean} [options.createMelt=true] Whether to create a melt output
    * @param {string} [options.meltAuthorityAddress] the address to send the melt authority created
-   * @param {string[]|null} [options.data=null] list of data strings to add each as a data script output
+   * @param {string[]|null} [options.data=null] list of data strings using utf8 encoding to add each as a data script output
    * @param {boolean} [options.isCreateNFT=false] if the create token is an NFT creation call
    * @returns {Promise<IDataTx>} The transaction data to create the token
    */

@@ -1501,7 +1501,7 @@ class HathorWallet extends EventEmitter {
    * @param {string} [options.meltAuthorityAddress] the address to send the melt authority created
    * @param {boolean} [options.allowExternalMeltAuthorityAddress=false] allow the melt authority address
    *                                                                    to be from another wallet
-   * @param {string[]=null} [options.data] list of data strings to add each as a data script output
+   * @param {string[]=null} [options.data] list of data strings using utf8 encoding to add each as a data script output
    *
    * @param {boolean} [options.signTx] sign transaction instance (default true)
    * @param {boolean} [options.isCreateNFT=false] if the create token is an NFT creation call
@@ -1622,7 +1622,7 @@ class HathorWallet extends EventEmitter {
    * @param {string} [options.meltAuthorityAddress] the address to send the melt authority created
    * @param {boolean} [options.allowExternalMeltAuthorityAddress=false] allow the melt authority address
    *                                                                    to be from another wallet
-   * @param {string[]=null} [options.data] list of data strings to add each as a data script output
+   * @param {string[]=null} [options.data] list of data strings using utf8 encoding to add each as a data script output
    *
    * @return {Promise<CreateNewTokenResponse>}
    * @memberof HathorWallet
@@ -2271,7 +2271,7 @@ class HathorWallet extends EventEmitter {
    * @param {string} name Name of the token
    * @param {string} symbol Symbol of the token
    * @param {number} amount Quantity of the token to be minted
-   * @param {string} data NFT data string
+   * @param {string} data NFT data string using utf8 encoding
    * @param [options] Options parameters
    * @param {string} [options.address] address of the minted token,
    * @param {string} [options.changeAddress] address of the change output,
