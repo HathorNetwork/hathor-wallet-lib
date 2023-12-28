@@ -118,8 +118,8 @@ test('Token deposit', () => {
   expect(tokens.getDepositAmount(550)).toBe(6);
 });
 
-test('NFT creation fee', () => {
-  expect(tokens.getNFTCreationFee()).toBe(1);
+test('Fee for data script output', () => {
+  expect(tokens.getDataScriptOutputFee()).toBe(1);
 });
 
 test('Token withdraw', () => {
