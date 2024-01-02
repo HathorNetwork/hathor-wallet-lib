@@ -16,30 +16,28 @@ import Serializer from './serializer';
 import { HDPrivateKey } from 'bitcore-lib';
 import HathorWallet from '../new/wallet';
 import { NanoContractTransactionError } from '../errors';
-import { concat } from 'lodash'
+import { concat, get } from 'lodash'
 import {
   NanoContractActionType,
   NanoContractAction,
-  NanoContractActionDeposit,
-  NanoContractActionWithdrawal,
-  NanoContractDepositData,
-  NanoContractWithdrawalData,
-  NanoContractArg
 } from './types';
+import ncApi from '../api/nano';
 
 
 class NanoContractTransactionBuilder {
-  // blueprint ID for initialize, nano contract ID for the other methods
-  id: string | null;
+  blueprintId: string | null;
+  // nano contract ID, null if initialize
+  ncId: string | null;
   method: string | null;
   actions: NanoContractAction[] | null;
   caller: HDPrivateKey | null;
-  args: NanoContractArg[] | null;
+  args: any[] | null;
   transaction: NanoContract | null;
   wallet: HathorWallet | null;
 
   constructor() {
-    this.id = null;
+    this.blueprintId = null;
+    this.ncId = null;
     this.method = null;
     this.actions = null;
     this.caller = null;
@@ -65,7 +63,7 @@ class NanoContractTransactionBuilder {
     this.actions = actions;
   }
 
-  setArgs(args: NanoContractArg[]) {
+  setArgs(args: any[]) {
     this.args = args;
   }
 
@@ -73,17 +71,33 @@ class NanoContractTransactionBuilder {
     this.caller = caller;
   }
 
-  setId(id: string) {
-    this.id = id;
+  setBlueprintId(blueprintId: string) {
+    this.blueprintId = blueprintId;
+  }
+
+  setNcId(ncId: string) {
+    this.ncId = ncId;
   }
 
   setWallet(wallet: HathorWallet) {
     this.wallet = wallet;
   }
 
-  async executeDeposit(action: NanoContractActionDeposit, tokens: string[]): Promise<[Input[], Output[]]> {
+  async executeDeposit(action: NanoContractAction, tokens: string[]): Promise<[Input[], Output[]]> {
+    if (action.type !== NanoContractActionType.DEPOSIT) {
+      throw new NanoContractTransactionError('Can\'t execute a deposit with an action which type is differente than deposit.');
+    }
+
+    if (!action.amount || !action.token) {
+      throw new NanoContractTransactionError('Amount and token are required for deposit action.');
+    }
+
     // Get the utxos with the amount of the bet and create the inputs
-    const utxosData = await this.wallet.getUtxosForAmount(action.data.amount, { token: action.token });
+    const utxoOptions: { token: string, filter_address?: string | null } = { token: action.token };
+    if (action.address) {
+      utxoOptions.filter_address = action.address;
+    }
+    const utxosData = await this.wallet.getUtxosForAmount(action.amount, { token: action.token });
     const inputs: Input[] = [];
     for (const utxo of utxosData.utxos) {
       inputs.push(new Input(utxo.txId, utxo.index));
@@ -93,7 +107,7 @@ class NanoContractTransactionBuilder {
     const network = this.wallet.getNetworkObject();
     // If there's a change amount left in the utxos, create the change output
     if (utxosData.changeAmount) {
-      const changeAddressParam = action.data.changeAddress;
+      const changeAddressParam = action.changeAddress;
       if (changeAddressParam && !this.wallet.isAddressMine(changeAddressParam)) {
         throw new NanoContractTransactionError('Change address must belong to the same wallet.');
       }
@@ -118,14 +132,22 @@ class NanoContractTransactionBuilder {
     return [inputs, outputs];
   }
 
-  executeWithdrawal(action: NanoContractActionWithdrawal, tokens: string[]): Output {
+  executeWithdrawal(action: NanoContractAction, tokens: string[]): Output {
+    if (action.type !== NanoContractActionType.WITHDRAWAL) {
+      throw new NanoContractTransactionError('Can\'t execute a deposit with an action which type is differente than withdrawal.');
+    }
+
+    if (!action.address || !action.amount || !action.token) {
+      throw new NanoContractTransactionError('Address, amount and token are required for withdrawal action.');
+    }
+
     // Create the output with the withdrawal address and amount
-    const addressObj = new Address(action.data.address, { network: this.wallet.getNetworkObject() });
+    const addressObj = new Address(action.address, { network: this.wallet.getNetworkObject() });
     const p2pkh = new P2PKH(addressObj);
     const p2pkhScript = p2pkh.createScript()
     const tokenIndex = action.token === HATHOR_TOKEN_CONFIG.uid ? 0 : tokens.findIndex((token) => token === action.token) + 1;
     const output = new Output(
-      action.data.amount,
+      action.amount,
       p2pkhScript,
       {
         tokenData: tokenIndex
@@ -136,8 +158,12 @@ class NanoContractTransactionBuilder {
   }
 
   async build(): Promise<NanoContract> {
-    if (this.id === null || this.method === null || this.caller === null) {
-      throw new Error('Must have id, method and caller.');
+    if (this.blueprintId === null || this.method === null || this.caller === null) {
+      throw new Error('Must have blueprint id, method and caller.');
+    }
+
+    if (this.method !== 'initialize' && this.ncId === null) {
+      throw new Error(`Nano contract ID cannot be null for method ${this.method}`);
     }
 
     let inputs: Input[] = [];
@@ -170,10 +196,20 @@ class NanoContractTransactionBuilder {
     const serializedArgs: Buffer[] = [];
     if (this.args) {
       const serializer = new Serializer();
-      for (const arg of this.args) {
+      const blueprintInformation = await ncApi.getBlueprintInformation(this.blueprintId);
+      const methodArgs = get(blueprintInformation, `public_methods.${this.method}.args`);
+      if (!methodArgs) {
+        throw new NanoContractTransactionError(`Blueprint does not have method ${this.method}.`);
+      }
+
+      if (this.args.length !== methodArgs.length) {
+        throw new NanoContractTransactionError(`Method needs ${methodArgs.length} parameters but data has ${this.args.length}.`);
+      }
+
+      for (const [index, arg] of methodArgs.entries()) {
         let serialized: Buffer;
         if (arg.type === 'SignedData') {
-          const splittedValue = arg.value.split(',');
+          const splittedValue = this.args[index].split(',');
           if (splittedValue.length !== 3) {
             throw new Error('Signed data requires 3 parameters.');
           }
@@ -182,13 +218,20 @@ class NanoContractTransactionBuilder {
           const tupleValues: [Buffer, any, string] = splittedValue;
           serialized = serializer.fromSigned(...tupleValues);
         } else {
-          serialized = serializer.serializeFromType(arg.value, arg.type);
+          serialized = serializer.serializeFromType(this.args[index], arg.type);
         }
         serializedArgs.push(serialized);
       }
     }
 
-    const nc = new NanoContract(inputs, outputs, tokens, this.id, this.method, serializedArgs, this.caller.publicKey.toBuffer(), null);
+    const ncId = this.method === 'initialize' ? this.blueprintId : this.ncId;
+
+    if (ncId === null) {
+      // This was validated in the beginning of the method but the linter was complaining about it
+      throw new Error('This should never happen.');
+    }
+
+    const nc = new NanoContract(inputs, outputs, tokens, ncId, this.method, serializedArgs, this.caller.publicKey.toBuffer(), null);
     return nc;
   }
 }

@@ -10,32 +10,23 @@ export enum NanoContractActionType {
   WITHDRAWAL = 'withdrawal',
 }
 
-export interface NanoContractActionDeposit {
-  type: NanoContractActionType.DEPOSIT;
+export interface NanoContractAction {
+  type: NanoContractActionType.DEPOSIT | NanoContractActionType.WITHDRAWAL;
   token: string;
-  data: NanoContractDepositData;
-}
-
-export interface NanoContractActionWithdrawal {
-  type: NanoContractActionType.WITHDRAWAL;
-  token: string;
-  data: NanoContractWithdrawalData;
-}
-
-export type NanoContractAction = NanoContractActionDeposit | NanoContractActionWithdrawal;
-
-export interface NanoContractDepositData {
   amount: number;
+  // For withdrawal is required, which is address to send the output
+  // For deposit is optional, and it's the address to filter the utxos
   address: string | null;
+  // For deposit action is the change address used by the change output after selecting the utxos
   changeAddress: string | null;
 }
 
-export interface NanoContractWithdrawalData {
-  amount: number;
-  address: string;
-}
-
-export interface NanoContractArg {
+// Arguments for blueprint methods
+export interface NanoContractParsedArgument {
+  // Argument name in the blueprint code
+  name: string;
+  // Argument type from hathor-core code
   type: string;
-  value: any;
+  // Parsed value
+  parsed: any;
 }
