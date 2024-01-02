@@ -6,11 +6,12 @@
  */
 
 import { get } from 'lodash';
-import bitcore, { HDPrivateKey } from 'bitcore-lib';
+import bitcore, { HDPrivateKey, crypto } from 'bitcore-lib';
 import EventEmitter from 'events';
 import { HATHOR_TOKEN_CONFIG, P2SH_ACCT_PATH, P2PKH_ACCT_PATH, NANO_CONTRACTS_VERSION } from '../constants';
 import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
+import ncApi from '../api/nano';
 import versionApi from '../api/version';
 import { hexToBuffer, intToBytes } from '../utils/buffer';
 import { decryptData } from '../utils/crypto';
@@ -34,7 +35,6 @@ import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
 import Output from '../models/output';
 import Input from '../models/input';
-import { HDPrivateKey, crypto } from 'bitcore-lib';
 import transactionUtils from '../utils/transaction';
 import { signMessage } from '../utils/crypto';
 import Transaction from '../models/transaction';
@@ -2451,7 +2451,6 @@ class HathorWallet extends EventEmitter {
         .then(() => reject(new Error('API client did not use the callback')))
         .catch(err => reject(err));
     });
-
     if (!tx.success) {
       HathorWallet._txNotFoundGuard(tx);
 
@@ -2687,20 +2686,20 @@ class HathorWallet extends EventEmitter {
   /**
    * Create and send a nano contract transaction
    *
-   * @param {string} blueprintId Blueprint ID to execute the method
    * @param {string} method Method of nano contract to have the transaction created
    * @param {string} address Address that will be used to sign the nano contract transaction
    * @param [data]
+   * @param {string | null} [data.blueprintId] ID of the blueprint to create the nano contract. Required if method is initialize
    * @param {string | null} [data.ncId] ID of the nano contract to execute method. Required if method is not initialize
    * @param {NanoContractAction[]} [data.actions] List of actions to execute in the nano contract transaction
-   * @param {NanoContractArg[]} [data.args] List of arguments (values and types) for the method to be executed in the transaction
+   * @param {any[]} [data.args] List of arguments for the method to be executed in the transaction
    * @param [options]
    * @param {string} [options.pinCode] PIN to decrypt the private key.
    *                                   Optional but required if not set in this
    *
    * @returns {Promise<NanoContract>}
    */
-  async createAndSendNanoContractTransaction(blueprintId, method, address, data, options = {}) {
+  async createAndSendNanoContractTransaction(method, address, data, options = {}) {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('createAndSendNanoContractTransaction');
     }
@@ -2716,30 +2715,82 @@ class HathorWallet extends EventEmitter {
       throw new NanoContractTransactionError('Missing nano contract id. Parameter ncId in data');
     }
 
+    if (method === 'initialize' && !data.blueprintId) {
+      // Initialize needs the blueprint ID
+      throw new NanoContractTransactionError('Missing blueprint id. Parameter blueprintId in data');
+    }
+
+    let blueprintId = data.blueprintId;
+
+    if (method !== 'initialize') {
+      let response;
+      try {
+        response = await this.getFullTxById(data.ncId);
+      } catch {
+        // Error getting nano contract transaction data from the full node
+        throw new NanoContractTransactionError(`Error getting nano contract transaction data with id ${data.ncId} from the full node`);
+      }
+
+      if (response.tx.version !== NANO_CONTRACTS_VERSION) {
+        throw new NanoContractTransactionError(`Transaction with id ${data.ncId} is not a nano contract transaction.`);
+      }
+
+      blueprintId = response.tx.nc_blueprint_id;
+    }
+
     // Get the blueprint data from full node
-    // TODO
+    const blueprintInformation = await ncApi.getBlueprintInformation(blueprintId);
+    const methodArgs = get(blueprintInformation, `public_methods.${method}.args`);
+    if (!methodArgs) {
+      throw new NanoContractTransactionError(`Blueprint does not have method ${method}.`);
+    }
 
-    // Validates that all required parameters are in the data object
-    // TODO
+    if (data.args.length !== methodArgs.length) {
+      throw new NanoContractTransactionError(`Method needs ${methodArgs.length} parameters but data has ${data.args.length}.`);
+    }
 
-    // For each arg, if the type is byte, it must be transformed from hex to Buffer
-    if (data.args) {
-      for (const arg of data.args) {
-        if (arg.type === 'byte') {
-          arg.value = hexToBuffer(arg.value);
-        }
+    for (const [index, arg] of methodArgs.entries()) {
+      switch (arg.type) {
+        case 'bytes':
+          // Bytes arguments are sent in hexadecimal
+          try {
+            data.args[index] = hexToBuffer(data.args[index]);
+          } catch {
+            // Data sent is not a hex
+            throw new NanoContractTransactionError(`Invalid hexadecimal for argument number ${index + 1}.`);
+          }
+          break;
+        case 'int':
+        case 'float':
+          if (typeof data.args[index] !== 'number') {
+            throw new NanoContractTransactionError(`Expects argument number ${index + 1} type ${arg.type} but received type ${typeof data.args[index]}.`);
+          }
+          break;
+        default:
+          if (arg.type !== typeof data.args[index]) {
+            throw new NanoContractTransactionError(`Expects argument number ${index + 1} type ${arg.type} but received type ${typeof data.args[index]}.`);
+          }
       }
     }
 
     // Get private key that will sign the nano contract transaction
-    const derivedKey = await this.getHDPrivateKeyFromAddress(address, options);
+    let derivedKey;
+    try {
+      derivedKey = await this.getHDPrivateKeyFromAddress(address, options);
+    } catch (e) {
+      if (e instanceof AddressError) {
+        throw NanoContractTransactionError('Address used to sign the transaction does not belong to the wallet.');
+      }
+      throw e;
+    }
     const privateKey = derivedKey.privateKey;
 
     // Build and send transaction
     const builder = new NanoContractTransactionBuilder();
     builder.setMethod(method);
     builder.setWallet(this);
-    builder.setId(method === 'initialize' ? blueprintId : data.ncId);
+    builder.setBlueprintId(blueprintId);
+    builder.setNcId(method === 'initialize' ? null : data.ncId);
     builder.setCaller(privateKey);
     builder.setActions(data.actions);
     builder.setArgs(data.args);
@@ -2770,7 +2821,7 @@ class HathorWallet extends EventEmitter {
 
     const addressIndex = await this.getAddressIndex(address);
     if (addressIndex === null) {
-      throw new Error('Address does not belong to the wallet.');
+      throw new AddressError('Address does not belong to the wallet.');
     }
     const accessData = await this.getAccessData();
     const encryptedPrivateKey = accessData.mainKey;
