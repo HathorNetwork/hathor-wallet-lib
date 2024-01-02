@@ -18,7 +18,7 @@ import helpers from '../utils/helpers';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
 import Address from '../models/address';
-import { OracleParseError } from '../errors';
+import { OracleParseError, WalletFromXPubGuard } from '../errors';
 import { OutputType } from '../wallet/types';
 import { parseScript } from '../utils/scripts';
 import { decryptData } from '../utils/crypto';
@@ -82,13 +82,19 @@ export const getOracleBufferFromHex = (oracle: string, network: Network): Buffer
   }
 }
 
-export const getOracleInputData = async (oracleData: string, resultSerialized: Buffer, wallet: HathorWallet): Promise<Buffer> => {
+export const getOracleInputData = async (oracleData: Buffer, resultSerialized: Buffer, wallet: HathorWallet): Promise<Buffer> => {
   // Parse oracle script to validate if it's an address of this wallet
-  const oracleDataBuffer = hexToBuffer(oracleData);
-  const parsedOracleScript = parseScript(oracleDataBuffer, wallet.getNetworkObject());
+  const parsedOracleScript = parseScript(oracleData, wallet.getNetworkObject());
   if (parsedOracleScript && !(parsedOracleScript instanceof ScriptData)) {
+    if (await wallet.storage.isReadonly()) {
+      throw new WalletFromXPubGuard('getOracleInputData');
+    }
+
     // This is only when the oracle is an address, otherwise we will have the signed input data
     const address = parsedOracleScript.address.base58;
+    if (!wallet.isAddressMine(address)) {
+      throw new OracleParseError('Oracle address is not from the loaded wallet.');
+    }
     const oracleKey = await wallet.getHDPrivateKeyFromAddress(address);
 
     const signatureOracle = transactionUtils.getSignature(transactionUtils.getDataToSignHash(resultSerialized), oracleKey.privateKey);
@@ -96,6 +102,6 @@ export const getOracleInputData = async (oracleData: string, resultSerialized: B
     return transactionUtils.createInputData(signatureOracle, oraclePubKeyBuffer);
   } else {
     // If it's not an address, we use the oracleInputData as the inputData directly
-    return oracleDataBuffer;
+    return oracleData;
   }
 }
