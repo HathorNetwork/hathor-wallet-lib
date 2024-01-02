@@ -716,6 +716,21 @@ describe('addresses methods', () => {
         .toStrictEqual(WALLET_CONSTANTS.multisig.addresses[i]);
     }
   })
+
+  it('should correctly get index of address using getAddressIndex', async () => {
+    // Creating a wallet
+    const hWallet = await generateWalletHelper();
+    const address = await hWallet.getAddressAtIndex(2);
+
+    const index = await hWallet.getAddressIndex(address);
+
+    expect(index).toBe(2);
+
+    // Address that does not belong to the wallet returns null
+    const nullIndex = await hWallet.getAddressIndex('test');
+
+    expect(nullIndex).toBe(null);
+  })
 });
 
 describe('getBalance', () => {
