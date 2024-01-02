@@ -2211,7 +2211,7 @@ class HathorWallet extends EventEmitter {
    *
    * @param {string} address Address to get the index
    *
-   * @return {Promise<number>}
+   * @return {Promise<number | null>}
    **/
   async getAddressIndex(address) {
     const addressInfo = await this.storage.getAddressInfo(address);
