@@ -12,15 +12,8 @@ import ncApi from '../api/nano';
 import { Address as bitcoreAddress, PublicKey as bitcorePublicKey } from 'bitcore-lib';
 import { get } from 'lodash';
 import { hexToBuffer, unpackToInt } from '../utils/buffer';
-import {
-  NanoContractActionType,
-  NanoContractAction,
-  NanoContractActionDeposit,
-  NanoContractActionWithdrawal,
-  NanoContractDepositData,
-  NanoContractWithdrawalData,
-  NanoContractArg
-} from './types';
+import { NanoContractTransactionParseError } from '../errors';
+import { NanoContractParsedArgument } from './types';
 
 
 class NanoContractTransactionParser {
@@ -29,8 +22,7 @@ class NanoContractTransactionParser {
   publicKey: string;
   address: Address | null;
   args: string | null;
-  // TODO create type for parsed args
-  parsedArgs: Object | null;
+  parsedArgs: NanoContractParsedArgument[] | null;
 
   constructor(blueprintId: string, method: string, publicKey: string, args: string | null) {
     this.blueprintId = blueprintId;
@@ -49,7 +41,7 @@ class NanoContractTransactionParser {
   }
 
   async parseArguments() {
-    const parsedArgs: Object[] = [];
+    const parsedArgs: NanoContractParsedArgument[] = [];
     if (!this.args) {
       return;
     }
@@ -59,16 +51,19 @@ class NanoContractTransactionParser {
     const blueprintInformation = await ncApi.getBlueprintInformation(this.blueprintId);
     const methodArgs = get(blueprintInformation, `public_methods.${this.method}.args`);
     if (!methodArgs) {
-      // TODO Handle error
-      return;
+      throw new NanoContractTransactionParseError('Failed to parse nano contract transaction. Method not found.');
     }
 
     let argsBuffer = Buffer.from(this.args, 'hex');
     let size: number;
-    // TODO handle error
     for (const arg of methodArgs) {
       [size, argsBuffer] = unpackToInt(2, false, argsBuffer);
-      const parsed = deserializer.deserializeFromType(argsBuffer.slice(0, size), arg.type);
+      let parsed;
+      try {
+        parsed = deserializer.deserializeFromType(argsBuffer.slice(0, size), arg.type);
+      } catch {
+        throw new NanoContractTransactionParseError(`Failed to deserialize argument ${arg}.`);
+      }
       parsedArgs.push({ ...arg, parsed });
       argsBuffer = argsBuffer.slice(size);
     }

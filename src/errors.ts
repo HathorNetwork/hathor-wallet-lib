@@ -325,11 +325,19 @@ export class PinRequiredError extends Error {
 };
 
 /**
- * Error thrown when during the creation of a nano contract transaction
+ * Error thrown during the creation of a nano contract transaction
  *
  * @memberof Errors
  * @inner
  */
 export class NanoContractTransactionError extends Error {};
+
+/**
+ * Error thrown when parsing a nano contract transaction
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class NanoContractTransactionParseError extends Error {};
 
 export class OracleParseError extends Error {};
