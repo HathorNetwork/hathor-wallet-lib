@@ -6,13 +6,16 @@
  */
 
 
-import { unpackToFloat, unpackToInt } from '../utils/buffer';
+import { bufferToHex, unpackToFloat, unpackToInt } from '../utils/buffer';
+
+// Number of bytes used to serialize the size of the value
+const SERIALIZATION_SIZE_LEN = 2;
 
 
 class Deserializer {
   deserializeFromType(value: Buffer, type: string): any {
     switch (type) {
-      case 'string':
+      case 'str':
         return this.toString(value);
       case 'bytes':
         return this.toBytes(value);
@@ -49,6 +52,16 @@ class Deserializer {
     } else {
       return false;
     }
+  }
+
+  toSigned(signedData: Buffer, type: string): string {
+    let signedBuffer: Buffer;
+    let size: number;
+    // [len(serializedResult)][serializedResult][inputData]
+    [size, signedBuffer] = unpackToInt(2, false, signedData);
+    const parsed = this.deserializeFromType(signedBuffer.slice(0, size), type);
+    signedBuffer = signedBuffer.slice(size);
+    return `${bufferToHex(signedBuffer)},${parsed},${type}`;
   }
 }
 

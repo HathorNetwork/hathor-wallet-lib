@@ -19,7 +19,7 @@ class Serializer {
 
   serializeFromType(value: any, type: string): Buffer {
     switch (type) {
-      case 'string':
+      case 'str':
         return this.fromString(value);
       case 'bytes':
         return this.fromBytes(value);
@@ -30,7 +30,7 @@ class Serializer {
       case 'bool':
         return this.fromBool(value);
       default:
-        throw new Error('Invalid type.');
+        throw new Error(`Invalid type. ${type}.`);
     }
   }
 

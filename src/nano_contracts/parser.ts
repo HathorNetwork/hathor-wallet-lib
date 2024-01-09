@@ -60,7 +60,12 @@ class NanoContractTransactionParser {
       [size, argsBuffer] = unpackToInt(2, false, argsBuffer);
       let parsed;
       try {
-        parsed = deserializer.deserializeFromType(argsBuffer.slice(0, size), arg.type);
+        if (arg.type.startsWith('SignedData[')) {
+          const type = arg.type.slice(0, -1).split('[')[1];
+          parsed = deserializer.toSigned(argsBuffer.slice(0, size), type);
+        } else {
+          parsed = deserializer.deserializeFromType(argsBuffer.slice(0, size), arg.type);
+        }
       } catch {
         throw new NanoContractTransactionParseError(`Failed to deserialize argument ${arg}.`);
       }

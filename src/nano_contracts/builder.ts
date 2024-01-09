@@ -208,7 +208,7 @@ class NanoContractTransactionBuilder {
 
       for (const [index, arg] of methodArgs.entries()) {
         let serialized: Buffer;
-        if (arg.type === 'SignedData') {
+        if (arg.type.startsWith('SignedData[')) {
           const splittedValue = this.args[index].split(',');
           if (splittedValue.length !== 3) {
             throw new Error('Signed data requires 3 parameters.');

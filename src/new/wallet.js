@@ -2745,12 +2745,20 @@ class HathorWallet extends EventEmitter {
       throw new NanoContractTransactionError(`Blueprint does not have method ${method}.`);
     }
 
-    if (data.args.length !== methodArgs.length) {
+    // Args may come as undefined
+    const argsLen = data.args ? data.args.length : 0;
+    if (argsLen !== methodArgs.length) {
       throw new NanoContractTransactionError(`Method needs ${methodArgs.length} parameters but data has ${data.args.length}.`);
     }
 
     for (const [index, arg] of methodArgs.entries()) {
-      switch (arg.type) {
+      let typeToCheck = arg.type;
+      if (typeToCheck.startsWith('SignedData')) {
+        // Signed data will always be an hexadecimal with the
+        // signed part and the data itself
+        typeToCheck = 'str';
+      }
+      switch (typeToCheck) {
         case 'bytes':
           // Bytes arguments are sent in hexadecimal
           try {
@@ -2763,6 +2771,11 @@ class HathorWallet extends EventEmitter {
         case 'int':
         case 'float':
           if (typeof data.args[index] !== 'number') {
+            throw new NanoContractTransactionError(`Expects argument number ${index + 1} type ${arg.type} but received type ${typeof data.args[index]}.`);
+          }
+          break;
+        case 'str':
+          if (typeof data.args[index] !== 'string') {
             throw new NanoContractTransactionError(`Expects argument number ${index + 1} type ${arg.type} but received type ${typeof data.args[index]}.`);
           }
           break;
