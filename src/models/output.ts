@@ -20,7 +20,7 @@ import ScriptData from './script_data'
 import Network from './network'
 import { bytesToOutputValue, unpackLen, unpackToInt, intToBytes, signedIntToBytes } from '../utils/buffer';
 import { prettyValue } from '../utils/numbers';
-import {parseP2PKH, parseP2SH, parseScriptData} from '../utils/scripts'
+import {parseP2PKH, parseP2SH, parseScriptData, parseScript} from '../utils/scripts'
 import _ from 'lodash'
 
 type optionsType = {
@@ -178,28 +178,8 @@ class Output {
     // we can keep throwing the error. Otherwise, we should just return null
     // because this method will be used together with others when we are trying to parse a given script.
 
-    try {
-      let parsedScript;
-      if (P2PKH.identify(this.script)) {
-        // This is a P2PKH script
-        parsedScript = parseP2PKH(this.script, network);
-      } else if (P2SH.identify(this.script)) {
-        // This is a P2SH script
-        parsedScript = parseP2SH(this.script, network);
-      } else {
-        // defaults to data script
-        parsedScript = parseScriptData(this.script);
-      }
-      this.decodedScript = parsedScript;
-      return parsedScript;
-    } catch (error) {
-      if (error instanceof ParseError) {
-        // We don't know how to parse this script
-        return null;
-      } else {
-        throw error;
-      }
-    }
+    this.decodedScript = parseScript(this.script, network);
+    return this.decodedScript;
   }
 
   /**
