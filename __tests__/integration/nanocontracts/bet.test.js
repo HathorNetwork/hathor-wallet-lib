@@ -15,20 +15,20 @@ import { bufferToHex, hexToBuffer } from '../../../src/utils/buffer';
 import Address from '../../../src/models/address';
 import P2PKH from '../../../src/models/p2pkh';
 import { isEmpty } from 'lodash';
-import { delay } from '../utils/core.util';
 import { getOracleBufferFromHex, getOracleInputData } from '../../../src/nano_contracts/utils';
+import NanoContractTransactionParser from '../../../src/nano_contracts/parser';
 
 // We have to skip this test because it needs nano contract support in the full node.
 // Until we have this support in the public docker image, the CI won't succeed if this is not skipped
 // After skipping it, we must also add `--nc-history-index` as a new parameter for the integration tests full node
 // and add the blueprints in the configuration file for the tests privnet
-describe.skip('full cycle of bet nano contract', () => {
+describe('full cycle of bet nano contract', () => {
   /** @type HathorWallet */
   let hWallet;
 
   beforeAll(async () => {
     hWallet = await generateWalletHelper();
-    const tx = await GenesisWalletHelper.injectFunds(await hWallet.getAddressAtIndex(0), 1000);
+    const tx = await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 1000);
     await waitForTxReceived(hWallet, tx.hash);
   });
 
@@ -54,95 +54,100 @@ describe.skip('full cycle of bet nano contract', () => {
     const address1 = await hWallet.getAddressAtIndex(1);
     const dateLastBet = dateFormatter.dateToTimestamp(new Date()) + 6000;
     const network = hWallet.getNetworkObject();
+    const blueprintId = '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595';
 
     // Create NC
     const oracleData = getOracleBufferFromHex(address1, network);
     const tx1 = await hWallet.createAndSendNanoContractTransaction(
-      '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595',
       'initialize',
       address0,
       {
+        blueprintId,
         args: [
-          {
-            type: 'byte',
-            value: bufferToHex(oracleData)
-          },
-          {
-            type: 'byte',
-            value: HATHOR_TOKEN_CONFIG.uid
-          },
-          {
-            type: 'int',
-            value: dateLastBet
-          },
+          bufferToHex(oracleData),
+          HATHOR_TOKEN_CONFIG.uid,
+          dateLastBet
         ]
       }
     );
     await checkTxValid(tx1.hash);
+    const tx1Data = await hWallet.getFullTxById(tx1.hash);
+
+    const tx1Parser = new NanoContractTransactionParser(blueprintId, 'initialize', tx1Data.tx.nc_pubkey, tx1Data.tx.nc_args);
+    tx1Parser.parseAddress();
+    await tx1Parser.parseArguments();
+    expect(tx1Parser.address.base58).toBe(address0);
+    expect(tx1Parser.parsedArgs).toStrictEqual([
+      { name: 'oracle_script', type: 'bytes', parsed: oracleData },
+      { name: 'token_uid', type: 'bytes', parsed: Buffer.from([HATHOR_TOKEN_CONFIG.uid]) },
+      { name: 'date_last_offer', type: 'int', parsed: dateLastBet },
+    ]);
 
     // Bet 100 to address 2
     const address2 = await hWallet.getAddressAtIndex(2);
     const address2Obj = new Address(address2, { network });
     const txBet = await hWallet.createAndSendNanoContractTransaction(
-      '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595',
       'bet',
       address2,
       {
+        ncId: tx1.hash,
         args: [
-          {
-            type: 'byte',
-            value: bufferToHex(address2Obj.decode())
-          },
-          {
-            type: 'string',
-            value: '1x0'
-          }
+          bufferToHex(address2Obj.decode()),
+          '1x0'
         ],
         actions: [
           {
             type: 'deposit',
             token: HATHOR_TOKEN_CONFIG.uid,
-            data: {
-              amount: 100
-            }
+            amount: 100
           }
         ],
-        ncId: tx1.hash
       }
     );
     await checkTxValid(txBet.hash);
+    const txBetData = await hWallet.getFullTxById(txBet.hash);
+
+    const txBetParser = new NanoContractTransactionParser(blueprintId, 'bet', txBetData.tx.nc_pubkey, txBetData.tx.nc_args);
+    txBetParser.parseAddress();
+    await txBetParser.parseArguments();
+    expect(txBetParser.address.base58).toBe(address2);
+    expect(txBetParser.parsedArgs).toStrictEqual([
+      { name: 'address', type: 'bytes', parsed: address2Obj.decode() },
+      { name: 'score', type: 'str', parsed: '1x0' },
+    ]);
 
     // Bet 200 to address 3
     const address3 = await hWallet.getAddressAtIndex(3);
     const address3Obj = new Address(address3, { network });
     const txBet2 = await hWallet.createAndSendNanoContractTransaction(
-      '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595',
       'bet',
       address3,
       {
+        ncId: tx1.hash,
         args: [
-          {
-            type: 'byte',
-            value: bufferToHex(address3Obj.decode())
-          },
-          {
-            type: 'string',
-            value: '2x0'
-          }
+          bufferToHex(address3Obj.decode()),
+          '2x0'
         ],
         actions: [
           {
             type: 'deposit',
             token: HATHOR_TOKEN_CONFIG.uid,
-            data: {
-              amount: 200
-            }
+            amount: 200
           }
         ],
-        ncId: tx1.hash
       }
     );
     await checkTxValid(txBet2.hash);
+    const txBet2Data = await hWallet.getFullTxById(txBet2.hash);
+
+    const txBet2Parser = new NanoContractTransactionParser(blueprintId, 'bet', txBet2Data.tx.nc_pubkey, txBet2Data.tx.nc_args);
+    txBet2Parser.parseAddress();
+    await txBet2Parser.parseArguments();
+    expect(txBet2Parser.address.base58).toBe(address3);
+    expect(txBet2Parser.parsedArgs).toStrictEqual([
+      { name: 'address', type: 'bytes', parsed: address3Obj.decode() },
+      { name: 'score', type: 'str', parsed: '2x0' },
+    ]);
 
     // Get nc history
     const txIds = [tx1.hash, txBet.hash, txBet2.hash];
@@ -184,45 +189,56 @@ describe.skip('full cycle of bet nano contract', () => {
     // Set result to '1x0'
     const result = '1x0';
     const resultSerialized = Buffer.from(result, 'utf8');
-    const inputData = await getOracleInputData(ncState.fields.oracle_script.value, resultSerialized, hWallet);
+    const inputData = await getOracleInputData(oracleData, resultSerialized, hWallet);
     const txSetResult = await hWallet.createAndSendNanoContractTransaction(
-      '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595',
       'set_result',
       address1,
       {
+        ncId: tx1.hash,
         args: [
-          {
-            type: 'SignedData',
-            value: `${bufferToHex(inputData)},${result},string`
-          }
+          `${bufferToHex(inputData)},${result},str`
         ],
-        ncId: tx1.hash
       }
     );
     await checkTxValid(txSetResult.hash);
     txIds.push(txSetResult.hash);
 
+    const txSetResultData = await hWallet.getFullTxById(txSetResult.hash);
+
+    const txSetResultParser = new NanoContractTransactionParser(blueprintId, 'set_result', txSetResultData.tx.nc_pubkey, txSetResultData.tx.nc_args);
+    txSetResultParser.parseAddress();
+    await txSetResultParser.parseArguments();
+    expect(txSetResultParser.address.base58).toBe(address1);
+    expect(txSetResultParser.parsedArgs).toStrictEqual([
+      { name: 'result', type: 'SignedData[str]', parsed: `${bufferToHex(inputData)},${result},str` },
+    ]);
+
     // Try to withdraw to address 2, success
     const txWithdrawal = await hWallet.createAndSendNanoContractTransaction(
-      '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595',
       'withdraw',
       address2,
       {
+        ncId: tx1.hash,
         actions: [
           {
             type: 'withdrawal',
             token: HATHOR_TOKEN_CONFIG.uid,
-            data: {
-              amount: 300,
-              address: address2
-            }
+            amount: 300,
+            address: address2
           }
         ],
-        ncId: tx1.hash
       }
     );
     await checkTxValid(txWithdrawal.hash);
     txIds.push(txWithdrawal.hash);
+
+    const txWithdrawalData = await hWallet.getFullTxById(txWithdrawal.hash);
+
+    const txWithdrawalParser = new NanoContractTransactionParser(blueprintId, 'set_result', txWithdrawalData.tx.nc_pubkey, txWithdrawalData.tx.nc_args);
+    txWithdrawalParser.parseAddress();
+    await txWithdrawalParser.parseArguments();
+    expect(txWithdrawalParser.address.base58).toBe(address2);
+    expect(txWithdrawalParser.parsedArgs).toBe(null);
     
     // Get state again
     const ncState2 = await ncApi.getNanoContractState(
