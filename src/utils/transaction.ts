@@ -23,6 +23,9 @@ import ScriptData from '../models/script_data';
 import { ParseError } from '../errors';
 import helpers from './helpers';
 import { getAddressType } from './address';
+import { FullNodeTxResponse } from '../wallet/types';
+import { parseScript } from './scripts';
+import { tokensUtils } from 'src/lib';
 
 const transaction = {
 
@@ -587,6 +590,100 @@ const transaction = {
     // If there is no match
     return 'Unknown';
   },
+
+  /**
+   * Convert fullnode tx to history tx
+   *
+   * @param {FullNodeTxResponse} tx Fullnode tx
+   * @param {Network} network
+   *
+   * @returns {IHistoryTx} History tx
+   */
+  convertFullnodeTxToHistoryTx(tx: FullNodeTxResponse, network: Network): IHistoryTx {
+    const historyTx: IHistoryTx = {
+      tx_id: tx.tx.hash,
+      signalBits: tx.tx.signal_bits,
+      version: tx.tx.version,
+      weight: tx.tx.weight,
+      timestamp: tx.tx.timestamp,
+      is_voided: tx.meta.voided_by.length !== 0,
+      nonce: parseInt(tx.tx.nonce, 10) || 0,
+      inputs: [],
+      outputs: [],
+      parents: tx.tx.parents,
+      tokens: tx.tx.tokens.map(t => t.uid),
+    };
+    if (tx.tx.token_name && tx.tx.token_symbol) {
+      historyTx.token_name = tx.tx.token_name;
+      historyTx.token_symbol = tx.tx.token_symbol;
+    }
+    if (tx.meta && tx.meta.height) {
+      historyTx.height = tx.meta.height;
+    }
+
+    const spentBys: Record<number, string|null> = {};
+    tx.meta.spent_outputs.forEach(spent => {
+      spentBys[spent[0]] = spent[1].length > 0 ? spent[1][0] : null;
+    });
+
+    for (const [outputIndex, output] of tx.tx.outputs.entries()) {
+
+      let token: string;
+      if (output.token) {
+        token = output.token;
+      } else {
+        const tokenIndex = tokensUtils.getTokenIndexFromData(output.token_data);
+        if (tokenIndex === 0) {
+          token = HATHOR_TOKEN_CONFIG.uid;
+        } else {
+          token = tx.tx.tokens[tokenIndex - 1].uid;
+        }
+      }
+
+      const parsedScript = parseScript(Buffer.from(output.script, 'hex'), network);
+      const decoded = parsedScript?.getDecoded() || {};
+
+
+      historyTx.outputs.push({
+        value: output.value,
+        token_data: output.token_data,
+        script: output.script,
+        token,
+        decoded,
+        spent_by: spentBys[outputIndex] || null,
+      });
+    }
+
+    for (const input of tx.tx.inputs) {
+
+      let token: string;
+      if (input.token) {
+        token = input.token;
+      } else {
+        const tokenIndex = tokensUtils.getTokenIndexFromData(input.token_data);
+        if (tokenIndex === 0) {
+          token = HATHOR_TOKEN_CONFIG.uid;
+        } else {
+          token = tx.tx.tokens[tokenIndex - 1].uid;
+        }
+      }
+
+      const parsedScript = parseScript(Buffer.from(input.script, 'hex'), network);
+      const decoded = parsedScript?.getDecoded() || {};
+
+      historyTx.inputs.push({
+        value: input.value,
+        token_data: input.token_data,
+        script: input.script,
+        decoded,
+        token,
+        tx_id: input.tx_id,
+        index: input.index,
+      });
+    }
+
+    return historyTx;
+  }
 }
 
 export default transaction;

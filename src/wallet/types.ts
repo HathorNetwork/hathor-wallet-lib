@@ -500,6 +500,7 @@ export interface FullNodeOutput {
 export interface FullNodeTx {
   hash: string;
   nonce: string;
+  signal_bits: number;
   timestamp: number;
   version: number;
   weight: number;
