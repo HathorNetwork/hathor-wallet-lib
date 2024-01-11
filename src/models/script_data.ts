@@ -9,6 +9,7 @@ import { OP_CHECKSIG } from '../opcodes';
 import { util } from 'bitcore-lib';
 import helpers from '../utils/helpers';
 import buffer from 'buffer';
+import { IHistoryOutputDecoded } from '../types';
 
 class ScriptData {
   // String of data to store on the script
@@ -25,11 +26,11 @@ class ScriptData {
   /**
    * Get script type
    *
-   * @return {String}
+   * @return {string}
    * @memberof ScriptData
    * @inner
    */
-  getType(): String {
+  getType(): 'data' {
     return 'data';
   }
 
@@ -46,6 +47,18 @@ class ScriptData {
     helpers.pushDataToStack(arr, dataBytes);
     arr.push(OP_CHECKSIG);
     return util.buffer.concat(arr);
+  }
+
+  /**
+   * Get decoded output.
+   *
+   * @return {IHistoryOutputDecoded}
+   */
+  getDecoded(): IHistoryOutputDecoded {
+    return {
+      type: this.getType(),
+      data: this.data,
+    }
   }
 }
 

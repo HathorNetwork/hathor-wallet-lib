@@ -1200,6 +1200,7 @@ class HathorWallet extends EventEmitter {
     // Started processing state now, so we prepare the local data to support using this facade interchangable with wallet service facade in both wallets
     try {
       await this.processTxQueue();
+      this.conn.notifyWalletReady();
       this.setState(HathorWallet.READY);
     } catch (e) {
       this.setState(HathorWallet.ERROR);
@@ -1401,7 +1402,7 @@ class HathorWallet extends EventEmitter {
     });
     if (info.network.indexOf(this.conn.network) >= 0) {
       this.storage.setApiVersion(info);
-      this.conn.start(); // XXX: maybe await?
+      this.conn.start();
     } else {
       this.setState(HathorWallet.CLOSED);
       throw new Error(`Wrong network. server=${info.network} expected=${this.conn.network}`);

@@ -10,6 +10,7 @@ import { util } from 'bitcore-lib';
 import helpers from '../utils/helpers';
 import { intToBytes } from '../utils/buffer';
 import Address from './address';
+import { IHistoryOutputDecoded } from '../types';
 
 type optionsType = {
   timelock?: number | null | undefined,
@@ -69,6 +70,19 @@ class P2SH {
     arr.push(addressHash);
     arr.push(OP_EQUAL);
     return util.buffer.concat(arr);
+  }
+
+  /**
+   * Get decoded output.
+   *
+   * @return {IHistoryOutputDecoded}
+   */
+  getDecoded(): IHistoryOutputDecoded {
+    return {
+      type: this.getType(),
+      address: this.address.base58,
+      timelock: this.timelock,
+    }
   }
 
   /**

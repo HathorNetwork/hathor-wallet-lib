@@ -189,3 +189,23 @@ export function createP2SHRedeemScript(xpubs: string[], numSignatures: number, i
   const redeemScript = Script.buildMultisigOut(pubkeys, numSignatures, {noSorting: true});
   return redeemScript.toBuffer();
 }
+
+export function parseScript(script: Buffer, network: Network): P2PKH | P2SH | ScriptData | null {
+  try {
+    if (P2PKH.identify(script)) {
+      // This is a P2PKH script
+      return parseP2PKH(script, network);
+    } else if (P2SH.identify(script)) {
+      // This is a P2SH script
+      return parseP2SH(script, network);
+    }
+    // defaults to data script
+    return parseScriptData(script);
+  } catch (error) {
+    if (error instanceof ParseError) {
+      // We don't know how to parse this script
+      return null;
+    }
+    throw error;
+  }
+}

@@ -97,12 +97,4 @@ class WalletConnection extends BaseConnection {
   }
 }
 
-// TODO: This is to maintain compatibility until we migrate to typescript
-// @ts-ignore
-WalletConnection.CLOSED = 0;
-// @ts-ignore
-WalletConnection.CONNECTING = 1;
-// @ts-ignore
-WalletConnection.CONNECTED = 2;
-
 export default WalletConnection;
