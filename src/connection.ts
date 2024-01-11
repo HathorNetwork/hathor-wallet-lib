@@ -103,6 +103,13 @@ abstract class Connection extends EventEmitter {
   }
 
   /**
+   * Some connection managers may need to run some action when the wallet is ready.
+   */
+  notifyWalletReady() {
+    return;
+  }
+
+  /**
    * Connect to the server and start emitting events.
    **/
   abstract start(): void

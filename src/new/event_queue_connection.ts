@@ -189,6 +189,8 @@ interface EventQueueData {
   latest_event_id: number;
 }
 
+const EVENT_QUEUE_EVENT_TYPE = 'EVENT';
+
 class EventQueueConnection extends BaseConnection {
 
   private subAddresses: Record<string, any>;
@@ -213,6 +215,21 @@ class EventQueueConnection extends BaseConnection {
     this.storage =  options.storage;
   }
 
+  setState(state: ConnectionState): void {
+    if (state === ConnectionState.CONNECTING) {
+      // We need to stop the listener to avoid adding transactions when the connection
+      // is reestablished but the wallet is not ready.
+      this.websocket?.removeAllListeners(EVENT_QUEUE_EVENT_TYPE);
+    }
+
+    this.state = state;
+    this.emit('state', state);
+  }
+
+  notifyWalletReady(): void {
+    this.websocket?.on(EVENT_QUEUE_EVENT_TYPE, this.handleEvent.bind(this));
+  }
+
   /**
    * Connect to the server and start emitting events.
    **/
@@ -224,7 +241,7 @@ class EventQueueConnection extends BaseConnection {
 
     this.websocket.on('is_online', this.onConnectionChange);
 
-    this.websocket.on('EVENT', this.handleEvent.bind(this))
+    this.websocket.on(EVENT_QUEUE_EVENT_TYPE, this.handleEvent.bind(this))
 
     this.setState(ConnectionState.CONNECTING);
     this.websocket.setup();
@@ -397,17 +414,8 @@ class EventQueueConnection extends BaseConnection {
     const referenceTx = await this.fetchTxData(tx.hash);
     historyTx.inputs = cloneDeep(referenceTx.inputs);
 
-
     return historyTx;
   }
 }
-
-// TODO: This is to maintain compatibility until we migrate to typescript
-// @ts-ignore
-EventQueueConnection.CLOSED = 0;
-// @ts-ignore
-EventQueueConnection.CONNECTING = 1;
-// @ts-ignore
-EventQueueConnection.CONNECTED = 2;
 
 export default EventQueueConnection;
