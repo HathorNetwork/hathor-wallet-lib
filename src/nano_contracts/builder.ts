@@ -216,6 +216,10 @@ class NanoContractTransactionBuilder {
           // First value must be a Buffer but comes as hex
           splittedValue[0] = hexToBuffer(splittedValue[0]);
           const tupleValues: [Buffer, any, string] = splittedValue;
+          if (tupleValues[2] === 'bytes') {
+            // If the result is expected as bytes, it will come here in the args as hex value
+            tupleValues[1] = hexToBuffer(tupleValues[1]);
+          }
           serialized = serializer.fromSigned(...tupleValues);
         } else {
           serialized = serializer.serializeFromType(this.args[index], arg.type);
