@@ -15,14 +15,15 @@ import { bufferToHex, hexToBuffer } from '../../../src/utils/buffer';
 import Address from '../../../src/models/address';
 import P2PKH from '../../../src/models/p2pkh';
 import { isEmpty } from 'lodash';
-import { getOracleBufferFromHex, getOracleInputData } from '../../../src/nano_contracts/utils';
+import { getOracleBuffer, getOracleInputData } from '../../../src/nano_contracts/utils';
 import NanoContractTransactionParser from '../../../src/nano_contracts/parser';
+import Serializer from '../../../src/nano_contracts/serializer';
 
 // We have to skip this test because it needs nano contract support in the full node.
 // Until we have this support in the public docker image, the CI won't succeed if this is not skipped
 // After skipping it, we must also add `--nc-history-index` as a new parameter for the integration tests full node
 // and add the blueprints in the configuration file for the tests privnet
-describe('full cycle of bet nano contract', () => {
+describe.skip('full cycle of bet nano contract', () => {
   /** @type HathorWallet */
   let hWallet;
 
@@ -57,7 +58,7 @@ describe('full cycle of bet nano contract', () => {
     const blueprintId = '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595';
 
     // Create NC
-    const oracleData = getOracleBufferFromHex(address1, network);
+    const oracleData = getOracleBuffer(address1, network);
     const tx1 = await hWallet.createAndSendNanoContractTransaction(
       'initialize',
       address0,
@@ -187,8 +188,9 @@ describe('full cycle of bet nano contract', () => {
     expect(ncState.fields[`withdrawals.a'${address3}'`].value).toBeUndefined();
 
     // Set result to '1x0'
+    const nanoSerializer = new Serializer();
     const result = '1x0';
-    const resultSerialized = Buffer.from(result, 'utf8');
+    const resultSerialized = nanoSerializer.serializeFromType(result, 'str');
     const inputData = await getOracleInputData(oracleData, resultSerialized, hWallet);
     const txSetResult = await hWallet.createAndSendNanoContractTransaction(
       'set_result',
