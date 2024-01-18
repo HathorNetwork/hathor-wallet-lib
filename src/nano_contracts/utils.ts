@@ -55,7 +55,15 @@ export const signAndPushNCTransaction = async (tx: NanoContract, privateKey, pin
   return sendTransaction.runFromMining();
 }
 
-export const getOracleBufferFromHex = (oracle: string, network: Network): Buffer => {
+/**
+ * Get oracle buffer from oracle string (address in base58 or oracle data directly in hex)
+ *
+ * @param {string} oracle Address in base58 or oracle data directly in hex
+ * @param {Network} network Network to calculate the address
+ *
+ * @returns {Buffer}
+ */
+export const getOracleBuffer = (oracle: string, network: Network): Buffer => {
   const address = new Address(oracle, { network });
   // First check if the oracle is a base58 address
   // In case of success, set the output script as oracle
@@ -82,6 +90,15 @@ export const getOracleBufferFromHex = (oracle: string, network: Network): Buffer
   }
 }
 
+/**
+ * Get oracle input data
+ *
+ * @param {Buffer} oracleData Oracle data
+ * @param {Buffer} resultSerialized Result to sign with oracle data already serialized
+ * @param {HathorWallet} wallet Hathor Wallet object
+ *
+ * @returns {Promise<Buffer>}
+ */
 export const getOracleInputData = async (oracleData: Buffer, resultSerialized: Buffer, wallet: HathorWallet): Promise<Buffer> => {
   // Parse oracle script to validate if it's an address of this wallet
   const parsedOracleScript = parseScript(oracleData, wallet.getNetworkObject());
