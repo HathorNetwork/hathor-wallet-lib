@@ -29,4 +29,6 @@ export enum ErrorMessages {
   NANO_REQUEST_ERROR = 'nano-request-error',
   // 404 request error for nano contracts APIs
   NANO_REQUEST_ERROR_404 = 'nano-request-error-404',
+  // When PIN is required in a method and not set
+  PIN_REQUIRED = 'pin-required',
 }

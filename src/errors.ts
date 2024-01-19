@@ -327,3 +327,37 @@ export class NanoRequestError extends RequestError {
 export class NanoRequest404Error extends NanoRequestError {
   errorCode: string = ErrorMessages.NANO_REQUEST_ERROR_404;
 };
+
+/**
+ * Error thrown when PIN is required in a method but it's not set
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class PinRequiredError extends Error {
+  errorCode: string = ErrorMessages.PIN_REQUIRED;
+};
+
+/**
+ * Error thrown during the creation of a nano contract transaction
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class NanoContractTransactionError extends Error {};
+
+/**
+ * Error thrown when parsing a nano contract transaction
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class NanoContractTransactionParseError extends Error {};
+
+/**
+ * Error thrown when parsing an oracle script
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class OracleParseError extends Error {};
