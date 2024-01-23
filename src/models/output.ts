@@ -20,7 +20,7 @@ import ScriptData from './script_data'
 import Network from './network'
 import { bytesToOutputValue, unpackLen, unpackToInt, intToBytes, signedIntToBytes } from '../utils/buffer';
 import { prettyValue } from '../utils/numbers';
-import { parseScript } from '../utils/scripts'
+import { parseScript as utilsParseScript } from '../utils/scripts'
 import _ from 'lodash'
 
 type optionsType = {
@@ -173,7 +173,7 @@ class Output {
   }
 
   parseScript(network: Network): P2PKH | P2SH | ScriptData | null {
-    this.decodedScript = parseScript(this.script, network);
+    this.decodedScript = utilsParseScript(this.script, network);
     return this.decodedScript;
   }
 
