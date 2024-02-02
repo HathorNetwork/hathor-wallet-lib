@@ -10,6 +10,7 @@
     "/lib"
   ],
   "dependencies": {
+    "@lavamoat/preinstall-always-fail": "^2.0.0",
     "axios": "^0.21.4",
     "bitcore-lib": "^8.25.10",
     "bitcore-mnemonic": "^8.25.10",
@@ -44,6 +45,7 @@
     "@babel/preset-env": "^7.13.5",
     "@babel/preset-react": "^7.0.0",
     "@babel/preset-typescript": "^7.21.0",
+    "@lavamoat/allow-scripts": "^3.0.1",
     "@types/crypto-js": "^4.1.1",
     "@types/jest": "^27.0.3",
     "@types/level": "^6.0.1",
@@ -71,5 +73,12 @@
   "bugs": {
     "url": "https://github.com/HathorNetwork/hathor-wallet-lib/issues"
   },
-  "homepage": "https://github.com/HathorNetwork/hathor-wallet-lib#readme"
+  "homepage": "https://github.com/HathorNetwork/hathor-wallet-lib#readme",
+  "lavamoat": {
+    "allowScripts": {
+      "@babel/node>core-js": false,
+      "@lavamoat/preinstall-always-fail": false,
+      "level>classic-level": false
+    }
+  }
 }
