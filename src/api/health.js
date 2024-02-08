@@ -23,8 +23,7 @@ const healthApi = {
    */
   async getHealth() {
     return new Promise((resolve, reject) => {
-      // TODO: We should chage this to get `health` instead of `version`
-      createRequestInstance(resolve).get(`version`).then((res) => {
+      createRequestInstance(resolve).get(`health`).then((res) => {
         resolve(res.data);
       }, (err) => {
         reject(err);
