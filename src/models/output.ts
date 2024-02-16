@@ -13,14 +13,14 @@ import {
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK
 } from '../constants'
-import {OutputValueError, ParseError} from '../errors'
+import { OutputValueError, ParseError } from '../errors'
 import P2PKH from './p2pkh'
 import P2SH from './p2sh'
 import ScriptData from './script_data'
 import Network from './network'
 import { bytesToOutputValue, unpackLen, unpackToInt, intToBytes, signedIntToBytes } from '../utils/buffer';
 import { prettyValue } from '../utils/numbers';
-import {parseP2PKH, parseP2SH, parseScriptData} from '../utils/scripts'
+import { parseScript as utilsParseScript } from '../utils/scripts'
 import _ from 'lodash'
 
 type optionsType = {
@@ -173,33 +173,8 @@ class Output {
   }
 
   parseScript(network: Network): P2PKH | P2SH | ScriptData | null {
-    // It's still unsure how expensive it is to throw an exception in JavaScript. Some languages are really
-    // inefficient when it comes to exceptions while others are totally efficient. If it is efficient,
-    // we can keep throwing the error. Otherwise, we should just return null
-    // because this method will be used together with others when we are trying to parse a given script.
-
-    try {
-      let parsedScript;
-      if (P2PKH.identify(this.script)) {
-        // This is a P2PKH script
-        parsedScript = parseP2PKH(this.script, network);
-      } else if (P2SH.identify(this.script)) {
-        // This is a P2SH script
-        parsedScript = parseP2SH(this.script, network);
-      } else {
-        // defaults to data script
-        parsedScript = parseScriptData(this.script);
-      }
-      this.decodedScript = parsedScript;
-      return parsedScript;
-    } catch (error) {
-      if (error instanceof ParseError) {
-        // We don't know how to parse this script
-        return null;
-      } else {
-        throw error;
-      }
-    }
+    this.decodedScript = utilsParseScript(this.script, network);
+    return this.decodedScript;
   }
 
   /**

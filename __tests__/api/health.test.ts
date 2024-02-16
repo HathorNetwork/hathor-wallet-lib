@@ -15,7 +15,7 @@ describe('healthApi', () => {
 
   it('getHealth should return health data', async () => {
     const data = { status: 'pass' };
-    mock.onGet('version').reply(200, data);
+    mock.onGet('health').reply(200, data);
 
     const result = await healthApi.getHealth();
 
@@ -23,7 +23,7 @@ describe('healthApi', () => {
   });
 
   it('getHealth should allow capturing errors in case of network error', async () => {
-    mock.onGet('version').networkError();
+    mock.onGet('health').networkError();
 
     await expect(healthApi.getHealth()).rejects.toThrow();
   });
