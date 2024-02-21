@@ -25,16 +25,16 @@ import { decryptData } from '../utils/crypto';
 import { HDPrivateKey } from 'bitcore-lib';
 
 /**
- * Sign a transaction, create a send transaction object, mine and push
+ * Sign a transaction and create a send transaction object
  *
  * @param {Transaction} tx Transaction to sign and send
  * @param {HDPrivateKey} privateKey Private key of the nano contract's tx signature
  * @param {string} pin Pin to decrypt data
  * @param {IStorage} storage Wallet storage object
  *
- * @returns {Promise<NanoContract>}
+ * @returns {Promise<SendTransaction>}
  */
-export const signAndPushNCTransaction = async (tx: NanoContract, privateKey, pin: string, storage): Promise<Transaction> => {
+export const signAndPrepareNCTransaction = async (tx: NanoContract, privateKey, pin: string, storage): Promise<SendTransaction> => {
   const dataToSignHash = tx.getDataToSignHash();
   const sig = crypto.ECDSA.sign(dataToSignHash, privateKey, 'little').set({
     nhashtype: crypto.Signature.SIGHASH_ALL
@@ -46,13 +46,11 @@ export const signAndPushNCTransaction = async (tx: NanoContract, privateKey, pin
   tx.prepareToSend();
 
   // Create send transaction object
-  const sendTransaction = new SendTransaction({
+  return new SendTransaction({
     storage,
     transaction: tx,
     pin,
   });
-
-  return sendTransaction.runFromMining();
 }
 
 /**

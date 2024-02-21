@@ -6,35 +6,21 @@
  */
 
 import { get } from 'lodash';
-import bitcore, { HDPrivateKey, crypto } from 'bitcore-lib';
+import bitcore, { HDPrivateKey } from 'bitcore-lib';
 import EventEmitter from 'events';
-import { HATHOR_TOKEN_CONFIG, P2SH_ACCT_PATH, P2PKH_ACCT_PATH, NANO_CONTRACTS_VERSION } from '../constants';
+import { HATHOR_TOKEN_CONFIG, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
 import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
-import ncApi from '../api/nano';
 import versionApi from '../api/version';
-import { hexToBuffer, intToBytes } from '../utils/buffer';
-import { decryptData } from '../utils/crypto';
+import { hexToBuffer } from '../utils/buffer';
 import helpers from '../utils/helpers';
 import { createP2SHRedeemScript } from '../utils/scripts';
 import walletUtils from '../utils/wallet';
 import SendTransaction from './sendTransaction';
 import Network from '../models/network';
-import {
-  AddressError,
-  NanoContractTransactionError,
-  PinRequiredError,
-  TxNotFoundError,
-  WalletError,
-  WalletFromXPubGuard
-} from '../errors';
+import { AddressError, TxNotFoundError, WalletError, WalletFromXPubGuard } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
-import Address from '../models/address';
-import P2PKH from '../models/p2pkh';
-import P2SH from '../models/p2sh';
-import Output from '../models/output';
-import Input from '../models/input';
 import transactionUtils from '../utils/transaction';
 import { signMessage } from '../utils/crypto';
 import Transaction from '../models/transaction';
@@ -45,7 +31,7 @@ import { syncHistory, reloadStorage, scanPolicyStartAddresses, checkScanningPoli
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH } from '../utils/address';
-import { signAndPushNCTransaction } from '../nano_contracts/utils';
+import { signAndPrepareNCTransaction } from '../nano_contracts/utils';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
@@ -2449,6 +2435,7 @@ class HathorWallet extends EventEmitter {
         .then(() => reject(new Error('API client did not use the callback')))
         .catch(err => reject(err));
     });
+
     if (!tx.success) {
       HathorWallet._txNotFoundGuard(tx);
 
@@ -2682,7 +2669,7 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Create and send a nano contract transaction
+   * Create a nano contract transaction and create a SendTransaction object with it
    *
    * @param {string} method Method of nano contract to have the transaction created
    * @param {string} address Address that will be used to sign the nano contract transaction
@@ -2695,9 +2682,9 @@ class HathorWallet extends EventEmitter {
    * @param {string} [options.pinCode] PIN to decrypt the private key.
    *                                   Optional but required if not set in this
    *
-   * @returns {Promise<NanoContract>}
+   * @returns {Promise<SendTransaction>}
    */
-  async createAndSendNanoContractTransaction(method, address, data, options = {}) {
+  async createNanoContractTransaction(method, address, data, options = {}) {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('createAndSendNanoContractTransaction');
     }
@@ -2750,7 +2737,15 @@ class HathorWallet extends EventEmitter {
     }
 
     for (const [index, arg] of methodArgs.entries()) {
-      let typeToCheck = arg.type;
+      // Check optional type
+      // Optional fields end with ?
+      const splittedType = arg.type.split('?');
+      const isOptional = splittedType.length === 2;
+      if (isOptional && data.args[index] === null) {
+        // It's an optional field and the data is null, so it's fine
+        continue;
+      }
+      let typeToCheck = splittedType[0];
       if (typeToCheck.startsWith('SignedData')) {
         // Signed data will always be an hexadecimal with the
         // signed part and the data itself
@@ -2807,7 +2802,28 @@ class HathorWallet extends EventEmitter {
     builder.setArgs(data.args);
 
     const nc = await builder.build();
-    return signAndPushNCTransaction(nc, privateKey, pin, this.storage);
+    return signAndPrepareNCTransaction(nc, privateKey, pin, this.storage);
+  }
+
+  /**
+   * Create and send a nano contract transaction
+   *
+   * @param {string} method Method of nano contract to have the transaction created
+   * @param {string} address Address that will be used to sign the nano contract transaction
+   * @param [data]
+   * @param {string | null} [data.blueprintId] ID of the blueprint to create the nano contract. Required if method is initialize
+   * @param {string | null} [data.ncId] ID of the nano contract to execute method. Required if method is not initialize
+   * @param {NanoContractAction[]} [data.actions] List of actions to execute in the nano contract transaction
+   * @param {any[]} [data.args] List of arguments for the method to be executed in the transaction
+   * @param [options]
+   * @param {string} [options.pinCode] PIN to decrypt the private key.
+   *                                   Optional but required if not set in this
+   *
+   * @returns {Promise<NanoContract>}
+   */
+  async createAndSendNanoContractTransaction(method, address, data, options = {}) {
+    const sendTransactionNC = this.createNanoContractTransaction(method, address, data, options);
+    return sendTransactionNC.runFromMining();
   }
 
   /**
