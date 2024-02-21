@@ -117,7 +117,7 @@ const transaction = {
    * @inner
    */
   getSignature(dataToSignHash: Buffer, privateKey: PrivateKey): Buffer {
-    const signature = cryptoBL.ECDSA.sign(dataToSignHash, privateKey, 'little').set({
+    const signature = cryptoBL.ECDSA.sign(dataToSignHash, privateKey).set({
       nhashtype: cryptoBL.Signature.SIGHASH_ALL,
     });
     return signature.toDER();

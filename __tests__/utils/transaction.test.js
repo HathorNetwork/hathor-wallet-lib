@@ -58,7 +58,6 @@ test('getSignature', () => {
     hashdata,
     crypto.Signature.fromDER(signatureDER),
     privkey.toPublicKey(),
-    'little', // endianess
   )).toBe(true);
 });
 
@@ -108,7 +107,6 @@ test('signTransaction', async () => {
     hashdata,
     crypto.Signature.fromDER(sig1),
     xpriv.deriveChild(10).publicKey,
-    'little', // endianess
   )).toBe(true);
   expect(input2.data).toEqual(null);
 });
