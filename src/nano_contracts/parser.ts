@@ -60,11 +60,29 @@ class NanoContractTransactionParser {
       [size, argsBuffer] = unpackToInt(2, false, argsBuffer);
       let parsed;
       try {
-        if (arg.type.startsWith('SignedData[')) {
-          const type = arg.type.slice(0, -1).split('[')[1];
+        // Check optional type
+        // Optional fields end with ?
+        const splittedType = arg.type.split('?');
+        const isOptional = splittedType.length === 2;
+        if (isOptional) {
+          const isEmpty = argsBuffer[0] === 0;
+          argsBuffer = argsBuffer.slice(1);
+          if (isEmpty) {
+            // It's an empty optional field
+            parsedArgs.push({ ...arg, null });
+            continue;
+          } else {
+            // The first element of argsBuffer of an optional indicates if it's empty
+            // so we must reduce the size to deserialize the field
+            size--;
+          }
+        }
+        let typeToCheck = splittedType[0];
+        if (typeToCheck.startsWith('SignedData[')) {
+          const type = typeToCheck.slice(0, -1).split('[')[1];
           parsed = deserializer.toSigned(argsBuffer.slice(0, size), type);
         } else {
-          parsed = deserializer.deserializeFromType(argsBuffer.slice(0, size), arg.type);
+          parsed = deserializer.deserializeFromType(argsBuffer.slice(0, size), typeToCheck);
         }
       } catch {
         throw new NanoContractTransactionParseError(`Failed to deserialize argument ${arg}.`);
