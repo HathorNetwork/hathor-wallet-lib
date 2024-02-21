@@ -313,3 +313,11 @@ export class RequestError extends Error {};
  * @inner
  */
 export class NanoRequestError extends RequestError {};
+
+/**
+ * Error thrown during nano API request for 404
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class NanoRequest404Error extends NanoRequestError {};

@@ -6,7 +6,7 @@
  */
 
 import { createRequestInstance } from './axiosInstance';
-import { NanoRequestError } from '../errors';
+import { NanoRequest404Error, NanoRequestError } from '../errors';
 
 /**
  * Api calls for nano contracts
@@ -33,7 +33,11 @@ const ncApi = {
     if (response.status === 200 && responseData.success) {
       return responseData;
     } else {
-      throw new NanoRequestError('Error getting nano contract state.')
+      if (response.status === 404) {
+        throw new NanoRequest404Error('Nano contract not found.');
+      } else {
+        throw new NanoRequestError('Error getting nano contract state.')
+      }
     }
   },
 
@@ -61,7 +65,11 @@ const ncApi = {
     if (response.status === 200 && responseData.success) {
       return responseData;
     } else {
-      throw new NanoRequestError('Error getting nano contract history.')
+      if (response.status === 404) {
+        throw new NanoRequest404Error('Nano contract not found.');
+      } else {
+        throw new NanoRequestError('Error getting nano contract history.')
+      }
     }
   },
 
@@ -82,7 +90,11 @@ const ncApi = {
     if (response.status === 200) {
       return responseData;
     } else {
-      throw new NanoRequestError('Error getting blueprint information.')
+      if (response.status === 404) {
+        throw new NanoRequest404Error('Blueprint not found.');
+      } else {
+        throw new NanoRequestError('Error getting blueprint information.')
+      }
     }
   },
 };
