@@ -79,7 +79,7 @@ test('New tx', () => {
   const dataToSign = tx.getDataToSign();
   expect(dataToSign.toString('hex')).toBe(expectedDataToSignHex);
 
-  const expectedDataToSignHashHex = 'df1a5572fa6b4750832c7fc2206a1ca53dbc4872c2a8738116f1801257ee647f';
+  const expectedDataToSignHashHex = '7f64ee571280f1168173a8c27248bc3da51c6a20c27f2c8350476bfa72551adf';
   const dataToSignHash = tx.getDataToSignHash();
   expect(dataToSignHash.toString('hex')).toBe(expectedDataToSignHashHex);
 
