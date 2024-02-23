@@ -22,6 +22,7 @@ import {
   AddressScanPolicyData,
   IIndexLimitAddressScanPolicy,
   SCANNING_POLICY,
+  INcData,
 } from '../types';
 import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
 import { orderBy } from 'lodash';
@@ -119,6 +120,11 @@ export class MemoryStore implements IStore {
    */
   registeredTokens: Map<string, ITokenData>;
   /**
+   * Map<ncKey, INcData>
+   * where ncKey is a pair address:ncId concatenated.
+   */
+  registeredNanoContracts: Map<string, INcData>;
+  /**
    * Map<txId, IHistoryTx>
    * where txId is the transaction id in hex
    */
@@ -161,6 +167,7 @@ export class MemoryStore implements IStore {
     this.accessData = null;
     this.genericStorage = {};
     this.lockedUtxos = new Map<string, ILockedUtxo>();
+    this.registeredNanoContracts = new Map<string, INcData>();
 
     this.walletData = cloneDeep({ ...DEFAULT_WALLET_DATA, ...DEFAULT_ADDRESSES_WALLET_DATA });
 
@@ -886,5 +893,38 @@ export class MemoryStore implements IStore {
     this.addressesMetadata = new Map<string, IAddressMetadata>();
     this.utxos = new Map<string, IUtxo>();
     this.lockedUtxos = new Map<string, ILockedUtxo>();
+  }
+
+  /**
+   * Return if a nano contract key is registered or not.
+   *
+   * @param ncKey Pair address:ncId registered.
+   * @returns Nano contract data instance.
+   * @async
+   */
+  async isNanoContractRegistered(ncKey: string): Promise<boolean> {
+    return this.registeredNanoContracts.has(ncKey);
+  }
+
+  /**
+   * Get a nano contract data on storage from the ncKey.
+   *
+   * @param ncKey Pair address:ncId registered.
+   * @returns Nano contract data instance.
+   * @async
+   */
+  async getNanoContract(ncKey: string): Promise<INcData | null> {
+    return this.registeredNanoContracts.get(ncKey) || null;
+  }
+
+  /**
+   * Register a nano contract data.
+   *
+   * @param ncKey Pair address:ncId to register as key.
+   * @param ncValue Nano contract basic information.
+   * @async
+   */
+  async registerNanoContract(ncKey: string, ncValue: INcData): Promise<void> {
+    this.registeredNanoContracts.set(ncKey, ncValue);
   }
 }

@@ -31,8 +31,7 @@ import {
   AddressScanPolicyData,
   IIndexLimitAddressScanPolicy,
   SCANNING_POLICY,
-  EcdsaTxSign,
-  IInputSignature,
+  INcData,
 } from '../types';
 import transactionUtils from '../utils/transaction';
 import { processHistory, processUtxoUnlock } from '../utils/storage';
@@ -967,5 +966,23 @@ export class Storage implements IStorage {
   async isHardwareWallet(): Promise<boolean> {
     const accessData = await this._getValidAccessData();
     return (accessData.walletFlags & WALLET_FLAGS.HARDWARE) > 0;
+  }
+
+  /**
+   * Get nano contract data.
+   * @param ncKey Pair address:ncId registered.
+   * @returns An instance of Nano Contract data.
+   */
+  async getNanoContract(ncKey: string): Promise<INcData | null> {
+    return this.store.getNanoContract(ncKey);
+  }
+
+  /**
+   * Register nano contract data instance.
+   * @param ncKey Address and nano contract id concatenated.
+   * @param ncData Nano Contract basic information.
+   */
+  async registerNanoContract(ncKey: string, ncValue: INcData): Promise<void> {
+    return this.store.registerNanoContract(ncKey, ncValue);
   }
 }

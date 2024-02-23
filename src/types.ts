@@ -392,6 +392,11 @@ export interface IStore {
   setScanningPolicyData(data: AddressScanPolicyData): Promise<void>;
   getScanningPolicyData(): Promise<AddressScanPolicyData>;
 
+  // Nano Contract methods
+  isNanoContractRegistered(ncKey: string): Promise<boolean>;
+  getNanoContract(ncKey: string): Promise<INcData | null>;
+  registerNanoContract(ncKey: string, ncValue: INcData): Promise<void>;
+
   // Generic storage keys
   getItem(key: string): Promise<any>;
   setItem(key: string, value: any): Promise<void>;
@@ -472,6 +477,11 @@ export interface IStorage {
   getScanningPolicy(): Promise<AddressScanPolicy>;
   getScanningPolicyData(): Promise<AddressScanPolicyData>;
   setScanningPolicyData(data: AddressScanPolicyData | null): Promise<void>;
+
+  // Nano Contract methods
+  isNanoContractRegistered(ncKey: string): Promise<boolean>;
+  getNanoContract(ncKey: string): Promise<INcData | null>;
+  registerNanoContract(ncKey: string, ncValue: INcData): Promise<void>;
 }
 
 /**
@@ -564,4 +574,11 @@ export interface IKVWalletIndex extends IKVStoreIndex<void> {
 
   cleanAccessData(): Promise<void>;
   cleanWalletData(clear: boolean): Promise<void>;
+}
+
+export interface INcData {
+  address: string;
+  ncId: string;
+  blueprintId: string;
+  blueprintName: string;
 }
