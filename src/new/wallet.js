@@ -39,6 +39,7 @@ import { syncHistory, reloadStorage, scanPolicyStartAddresses, checkScanningPoli
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH } from '../utils/address';
+import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../utils/address';
 import { signAndPushNCTransaction } from '../nano_contracts/utils';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 
@@ -76,9 +77,9 @@ const ConnectionState = {
  */
 class HathorWallet extends EventEmitter {
   /**
-   * @param param
+   * @param {Object} param
    * @param {FullnodeConnection} param.connection A connection to the server
-   * @param {Storage} storage A storage
+   * @param {Storage} param.storage A storage
    * @param {string} param.seed 24 words separated by space
    * @param {string} [param.passphrase=''] Wallet passphrase
    * @param {string} [param.xpriv]
@@ -147,10 +148,16 @@ class HathorWallet extends EventEmitter {
     }
 
     if (storage) {
+      /**
+       * @type {import('../types').IStorage}
+       */
       this.storage = storage;
     } else {
       // Default to a memory store
       const store = new MemoryStore();
+      /**
+       * @type {import('../types').IStorage}
+       */
       this.storage = new Storage(store);
     }
     this.conn = connection;
@@ -705,19 +712,29 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Summarizes the IHistoryTx that comes from wallet token's history.
+   *
+   * @typedef {Object} SummaryHistoryTx
+   * @property {string} txId - Transaction hash
+   * @property {number} balance
+   * @property {number} timestamp
+   * @property {boolean} voided
+   * @property {number} version
+   * @property {string} [ncId] - Nano Contract transaction hash
+   * @property {string} [ncMethod] - Nano Contract method called
+   * @property {Address} [ncCaller] - Nano Contract transaction's signing address
+   */
+
+  /**
    * Get transaction history
    *
    * @param options
    * @param {string} [options.token_id]
    * @param {number} [options.count]
    * @param {number} [options.skip]
-   * @return {Promise<{
-   *   txId: string,
-   *   balance: number,
-   *   timestamp: number,
-   *   voided: boolean,
-   *   version: number,
-   * }[]>} Array of transactions
+   *
+   * @return {Promise<SummaryHistoryTx[]>} Array of transactions
+   *
    * @memberof HathorWallet
    * @inner
    **/
@@ -737,13 +754,17 @@ class HathorWallet extends EventEmitter {
         break;
       }
       const txbalance = await this.getTxBalance(tx);
-      txs.push({
+      const txHistory = {
         txId: tx.tx_id,
         timestamp: tx.timestamp,
         voided: tx.is_voided,
         balance: txbalance[uid] || 0,
         version: tx.version,
-      });
+        ncId: tx.nc_id,
+        ncMethod: tx.nc_method,
+        ncCaller: getAddressFromPubkey(tx.nc_pubkey),
+      };
+      txs.push(txHistory);
       count--;
     }
     return txs;

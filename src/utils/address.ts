@@ -5,13 +5,16 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import Config from '../config';
 import Address from '../models/address';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
 import Network from '../models/network';
-import { Address as bitcoreAddress, Script, HDPublicKey } from 'bitcore-lib';
+import { hexToBuffer } from '../utils/buffer';
+import { Address as bitcoreAddress, PublicKey as bitcorePublicKey, Script, HDPublicKey } from 'bitcore-lib';
 import { IMultisigData, IStorage, IAddressInfo } from '../types';
 import { createP2SHRedeemScript } from './scripts';
+
 
 /**
  * Parse address and return the address type
@@ -104,4 +107,21 @@ export function createOutputScriptFromAddress(address: string, network: Network)
   } else {
     throw new Error('Invalid address type');
   }
+}
+
+/**
+ * Parse the public key and return an address.
+ *
+ * @param pubkey Hex string conveying the public key.
+ * @returns The address object from parsed publicKey or null if publicKey is nulish.
+ */
+export function getAddressFromPubkey(pubkey: string): Address|null {
+  if (pubkey == null) {
+    return pubkey;
+  }
+
+  const network = Config.getNetwork();
+  const pubkeyBuffer = hexToBuffer(pubkey);
+  const base58 = new bitcoreAddress(bitcorePublicKey(pubkeyBuffer), network.bitcoreNetwork).toString()
+  return new Address(base58, { network });
 }
