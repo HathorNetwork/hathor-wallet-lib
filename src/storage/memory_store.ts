@@ -876,6 +876,7 @@ export class MemoryStore implements IStore {
 
     if (cleanTokens) {
       this.registeredTokens = new Map<string, ITokenData>();
+      this.registeredNanoContracts = new Map<string, INcData>();
     }
   }
 
