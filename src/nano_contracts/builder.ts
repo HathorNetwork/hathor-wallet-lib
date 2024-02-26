@@ -208,7 +208,21 @@ class NanoContractTransactionBuilder {
 
       for (const [index, arg] of methodArgs.entries()) {
         let serialized: Buffer;
-        if (arg.type.startsWith('SignedData[')) {
+        // Check optional type
+        // Optional fields end with ?
+        const splittedType = arg.type.split('?');
+        const isOptional = splittedType.length === 2;
+        if (isOptional) {
+          const isEmpty = this.args[index] === null;
+          if (isEmpty) {
+            // It's an empty optional field
+            serialized = serializer.fromOptional(true);
+            serializedArgs.push(serialized);
+            continue;
+          }
+        }
+        let typeToCheck = splittedType[0];
+        if (typeToCheck.startsWith('SignedData[')) {
           const splittedValue = this.args[index].split(',');
           if (splittedValue.length !== 3) {
             throw new Error('Signed data requires 3 parameters.');
@@ -222,7 +236,11 @@ class NanoContractTransactionBuilder {
           }
           serialized = serializer.fromSigned(...tupleValues);
         } else {
-          serialized = serializer.serializeFromType(this.args[index], arg.type);
+          if (isOptional) {
+            serialized = serializer.fromOptional(false, this.args[index], typeToCheck);
+          } else {
+            serialized = serializer.serializeFromType(this.args[index], typeToCheck);
+          }
         }
         serializedArgs.push(serialized);
       }
