@@ -304,7 +304,9 @@ export class UninitializedWalletError extends WalletError {
  * @memberof Errors
  * @inner
  */
-export class RequestError extends Error {};
+export class RequestError extends Error {
+  errorCode: string = ErrorMessages.REQUEST_ERROR;
+};
 
 /**
  * Error thrown during nano API request
@@ -312,7 +314,9 @@ export class RequestError extends Error {};
  * @memberof Errors
  * @inner
  */
-export class NanoRequestError extends RequestError {};
+export class NanoRequestError extends RequestError {
+  errorCode: string = ErrorMessages.NANO_REQUEST_ERROR;
+};
 
 /**
  * Error thrown during nano API request for 404
@@ -320,4 +324,6 @@ export class NanoRequestError extends RequestError {};
  * @memberof Errors
  * @inner
  */
-export class NanoRequest404Error extends NanoRequestError {};
+export class NanoRequest404Error extends NanoRequestError {
+  errorCode: string = ErrorMessages.NANO_REQUEST_ERROR_404;
+};
