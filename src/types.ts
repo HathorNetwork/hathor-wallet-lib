@@ -68,6 +68,11 @@ export interface IHistoryTx {
   tokens: string[];
   height?: number;
   processingStatus?: TxHistoryProcessingStatus;
+  nc_id?: string; // For nano contract
+  nc_blueprint_id?: string; // For nano contract
+  nc_method?: string; // For nano contract
+  nc_args?: string; // For nano contract. Args in hex
+  nc_pubkey?: string; // For nano contract. Pubkey in hex
 }
 
 export enum TxHistoryProcessingStatus {

@@ -4,6 +4,7 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
+import { IHistoryTx } from '../types';
 
 export enum NanoContractActionType {
   DEPOSIT = 'deposit',
@@ -29,4 +30,68 @@ export interface NanoContractParsedArgument {
   type: string;
   // Parsed value
   parsed: any;
+}
+
+interface MethodArgInfo {
+  // Name of the method argument
+  name: string;
+  // Type of the method argument
+  type: string;
+}
+
+interface MethodInfo {
+  // List of information about the method arguments
+  args: MethodArgInfo[];
+  // Method return type
+  return_type?: string;
+}
+
+export interface NanoContractBlueprintInformationAPIResponse {
+  // Blueprint ID
+  id: string;
+  // Blueprint name
+  name: string;
+  // Blueprint attributes object where the key is the attribute
+  // name and the value is the attribute type
+  attributes: Map<string, string>;
+  // Public methods available
+  public_methods: Map<string, MethodInfo>;
+  // Private methods available
+  private_methods: Map<string, MethodInfo>;
+}
+
+export interface NanoContractHistoryAPIResponse {
+  // If the request succeeded
+  success: boolean;
+  // Amount of elements requested
+  count: number;
+  // After which hash was requested
+  after?: string;
+  // List of elements
+  history: IHistoryTx[];
+}
+
+interface StateValueSuccess {
+  // State value return
+  value: any;
+}
+
+interface StateValueError {
+  // State value error
+  errmsg: string;
+}
+
+export interface NanoContractStateAPIResponse {
+  // If the request succeeded
+  success: boolean;
+  // ID of the nano contract
+  nc_id: string;
+  // Blueprint name
+  blueprint_name: string;
+  // Fields requested
+  fields: Map<string, StateValueSuccess | StateValueError>;
+  // Balances requested
+  balances: Map<string, StateValueSuccess | StateValueError>;
+  // Calls requested
+  calls: Map<string, StateValueSuccess | StateValueError>;
 }
