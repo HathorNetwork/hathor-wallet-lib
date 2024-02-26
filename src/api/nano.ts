@@ -20,8 +20,9 @@ const ncApi = {
    *
    * @param id Nano Contract ID
    * @param fields Array of fields to get state
+   * @param balances Array of balances to get state
+   * @param calls Array of private method calls to execute in the nano contract and get the result
    *
-   * @return {Promise}
    * @memberof ApiNanoContracts
    * @inner
    */
@@ -46,8 +47,9 @@ const ncApi = {
    * Call get nano contracts history API
    *
    * @param id Nano Contract ID
+   * @param count Quantity of elements to return
+   * @param after Used for pagination in the results
    *
-   * @return {Promise}
    * @memberof ApiNanoContracts
    * @inner
    */
