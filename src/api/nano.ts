@@ -30,15 +30,16 @@ const ncApi = {
     const axios = await createRequestInstance();
     const response = await axios.get(`nano_contract/state`, {params: data});
     const responseData = response.data;
+
     if (response.status === 200 && responseData.success) {
       return responseData;
-    } else {
-      if (response.status === 404) {
-        throw new NanoRequest404Error('Nano contract not found.');
-      } else {
-        throw new NanoRequestError('Error getting nano contract state.')
-      }
     }
+
+    if (response.status === 404) {
+      throw new NanoRequest404Error('Nano contract not found.');
+    }
+
+    throw new NanoRequestError('Error getting nano contract state.')
   },
 
   /**
@@ -51,26 +52,19 @@ const ncApi = {
    * @inner
    */
   async getNanoContractHistory(id: string, count: number | null = null, after: string | null = null) {
-    const data = { id };
-    if (count) {
-      data['count'] = count;
-    }
-
-    if (after) {
-      data['after'] = after;
-    }
+    const data = { id, count, after };
     const axios = await createRequestInstance();
     const response = await axios.get(`nano_contract/history`, {params: data});
     const responseData = response.data;
     if (response.status === 200 && responseData.success) {
       return responseData;
-    } else {
-      if (response.status === 404) {
-        throw new NanoRequest404Error('Nano contract not found.');
-      } else {
-        throw new NanoRequestError('Error getting nano contract history.')
-      }
     }
+
+    if (response.status === 404) {
+      throw new NanoRequest404Error('Nano contract not found.');
+    }
+
+    throw new NanoRequestError('Error getting nano contract history.')
   },
 
   /**
@@ -89,13 +83,13 @@ const ncApi = {
     const responseData = response.data;
     if (response.status === 200) {
       return responseData;
-    } else {
-      if (response.status === 404) {
-        throw new NanoRequest404Error('Blueprint not found.');
-      } else {
-        throw new NanoRequestError('Error getting blueprint information.')
-      }
     }
+
+    if (response.status === 404) {
+      throw new NanoRequest404Error('Blueprint not found.');
+    }
+
+    throw new NanoRequestError('Error getting blueprint information.')
   },
 };
 
