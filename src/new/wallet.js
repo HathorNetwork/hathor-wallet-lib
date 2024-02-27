@@ -29,6 +29,12 @@ import {
 } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
+import Address from '../models/address';
+import P2PKH from '../models/p2pkh';
+import P2SH from '../models/p2sh';
+import Output from '../models/output';
+import Input from '../models/input';
+import { IStorage } from '../types';
 import transactionUtils from '../utils/transaction';
 import { signMessage } from '../utils/crypto';
 import Transaction from '../models/transaction';
@@ -79,7 +85,7 @@ class HathorWallet extends EventEmitter {
   /**
    * @param {Object} param
    * @param {FullnodeConnection} param.connection A connection to the server
-   * @param {Storage} param.storage A storage
+   * @param {IStorage} param.storage A storage
    * @param {string} param.seed 24 words separated by space
    * @param {string} [param.passphrase=''] Wallet passphrase
    * @param {string} [param.xpriv]
