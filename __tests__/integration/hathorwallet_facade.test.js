@@ -476,7 +476,7 @@ describe('start', () => {
   it('should start a wallet via xpub', async () => {
     const walletData = precalculationHelpers.test.getPrecalculatedWallet();
     const code = new Mnemonic(walletData.words);
-    const rootXpriv = code.toHDPrivateKey('', new Network('privatenet'));
+    const rootXpriv = code.toHDPrivateKey('', new Network('testnet'));
     const xpriv = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
     const xpub = xpriv.xpubkey;
 

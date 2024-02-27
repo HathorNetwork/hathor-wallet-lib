@@ -14,7 +14,7 @@ services:
       "--test-mode-tx-weight",
       "--wallet-index",
       "--allow-mining-without-peers",
-      "--unsafe-mode", "privatenet",
+      "--unsafe-mode", "nano-testnet-alpha",
       "--memory-storage",
       "--nc-history-index",
     ]
