@@ -600,21 +600,6 @@ const transaction = {
     // If there is no match
     return 'Unknown';
   },
-
-  /**
-   * Get hash data to sign the transaction
-   *
-   * @param {Buffer} data Transaction data
-   *
-   * @return {Buffer} Hash data to sign transaction
-   *
-   * @memberof transaction
-   * @inner
-   */
-  getDataToSignHash(data: Buffer): Buffer {
-    const hashbuf = cryptoBL.Hash.sha256(data);
-    return new encoding.BufferReader(hashbuf).readReverse();
-  },
 }
 
 export default transaction;

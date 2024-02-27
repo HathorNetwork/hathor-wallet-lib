@@ -36,11 +36,8 @@ import { HDPrivateKey } from 'bitcore-lib';
  */
 export const signAndPushNCTransaction = async (tx: NanoContract, privateKey, pin: string, storage): Promise<Transaction> => {
   const dataToSignHash = tx.getDataToSignHash();
-  const sig = crypto.ECDSA.sign(dataToSignHash, privateKey, 'little').set({
-    nhashtype: crypto.Signature.SIGHASH_ALL
-  });
   // Add nano signature
-  tx.signature = sig.toDER();
+  tx.signature = transactionUtils.getSignature(dataToSignHash, privateKey);
   // Inputs signature, if there are any
   await transactionUtils.signTransaction(tx, storage, pin);
   tx.prepareToSend();
@@ -114,7 +111,7 @@ export const getOracleInputData = async (oracleData: Buffer, resultSerialized: B
     }
     const oracleKey = await wallet.getHDPrivateKeyFromAddress(address);
 
-    const signatureOracle = transactionUtils.getSignature(transactionUtils.getDataToSignHash(resultSerialized), oracleKey.privateKey);
+    const signatureOracle = transactionUtils.getSignature(crypto.Hash.sha256(resultSerialized), oracleKey.privateKey);
     const oraclePubKeyBuffer = oracleKey.publicKey.toBuffer();
     return transactionUtils.createInputData(signatureOracle, oraclePubKeyBuffer);
   } else {
