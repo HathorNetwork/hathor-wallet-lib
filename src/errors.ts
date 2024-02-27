@@ -274,7 +274,6 @@ export class IndexOOBError extends PartialTxError {}
  */
 export class UnsupportedScriptError extends PartialTxError {}
 
-
 /**
  * Error thrown when a requested transaction is not found
  *
@@ -298,3 +297,33 @@ export class UnsupportedHasherError extends Error {
 export class UninitializedWalletError extends WalletError {
   errorCode: string = ErrorMessages.UNINITIALIZED_WALLET;
 }
+
+/**
+ * Error thrown during any API request
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class RequestError extends Error {
+  errorCode: string = ErrorMessages.REQUEST_ERROR;
+};
+
+/**
+ * Error thrown during nano API request
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class NanoRequestError extends RequestError {
+  errorCode: string = ErrorMessages.NANO_REQUEST_ERROR;
+};
+
+/**
+ * Error thrown during nano API request for 404
+ *
+ * @memberof Errors
+ * @inner
+ */
+export class NanoRequest404Error extends NanoRequestError {
+  errorCode: string = ErrorMessages.NANO_REQUEST_ERROR_404;
+};
