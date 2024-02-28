@@ -302,42 +302,59 @@ test('access data methods', async () => {
   await store.saveAddress({base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0});
   await store.saveTx(tx_history[0]);
   await store.registerToken({ uid: 'testtoken', name: 'Test token', symbol: 'TST' });
-  await store.registerNanoContract('WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ:001', { address: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', ncId: '001', blueprintId: '001', blueprintName: 'Bet' });
   expect(store.history.size).toEqual(1);
   expect(store.addresses.size).toEqual(1);
   expect(store.registeredTokens.size).toEqual(1);
-  expect(store.registeredNanoContracts.size).toEqual(1);
   await store.cleanStorage(true, true);
   expect(store.history.size).toEqual(0)
   expect(store.addresses.size).toEqual(0)
   expect(store.registeredTokens.size).toEqual(1);
-  expect(store.registeredNanoContracts.size).toEqual(1);
 
   // Clean only registered tokens
   await store.saveAddress({base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0});
   await store.saveTx(tx_history[0]);
   await store.registerToken({ uid: 'testtoken', name: 'Test token', symbol: 'TST' });
-  await store.registerNanoContract('WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ:001', { address: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', ncId: '001', blueprintId: '001', blueprintName: 'Bet' });
   expect(store.history.size).toEqual(1);
   expect(store.addresses.size).toEqual(1);
   expect(store.registeredTokens.size).toEqual(1);
-  expect(store.registeredNanoContracts.size).toEqual(1);
   await store.cleanStorage(false, false, true);
   expect(store.history.size).toEqual(1)
   expect(store.addresses.size).toEqual(1)
   expect(store.registeredTokens.size).toEqual(0);
-  expect(store.registeredNanoContracts.size).toEqual(0);
 
   // Clean all
   await store.registerToken({ uid: 'testtoken', name: 'Test token', symbol: 'TST' });
-  await store.registerNanoContract('WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ:001', { address: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', ncId: '001', blueprintId: '001', blueprintName: 'Bet' });
   expect(store.history.size).toEqual(1);
   expect(store.addresses.size).toEqual(1);
   expect(store.registeredTokens.size).toEqual(1);
-  expect(store.registeredNanoContracts.size).toEqual(1);
   await store.cleanStorage(true, true, true);
   expect(store.history.size).toEqual(0)
   expect(store.addresses.size).toEqual(0)
   expect(store.registeredTokens.size).toEqual(0);
+});
+
+test('nano contract methods', async () => {
+  const store = new MemoryStore();
+
+  // Asserts the store is empty
+  await expect(store.getNanoContract('address:nanoContractId')).resolves.toBeNull();
+  await expect(store.isNanoContractRegistered('address:nanoContractId')).resolves.toBeFalsy();
+  expect(store.registeredNanoContracts.size).toEqual(0);
+
+  // Asserts nano contract is registerd with success
+  await store.registerNanoContract('WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ:001', {
+    address: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
+    ncId: '001',
+    blueprintId: '001',
+    blueprintName: 'Bet'
+  });
+  await expect(store.getNanoContract('WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ:001')).resolves.toBeDefined();
+  await expect(store.isNanoContractRegistered('WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ:001')).resolves.toBeTruthy();
+  expect(store.registeredNanoContracts.size).toEqual(1);
+
+  // Asserts store is cleaned only when tokens are cleaned too
+  await store.cleanStorage(false, false, false); // not cleaning tokens
+  expect(store.registeredNanoContracts.size).toEqual(1);
+  await store.cleanStorage(false, false, true); // cleaning tokens
   expect(store.registeredNanoContracts.size).toEqual(0);
 });

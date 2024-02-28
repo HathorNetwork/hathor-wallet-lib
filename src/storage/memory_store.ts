@@ -897,10 +897,10 @@ export class MemoryStore implements IStore {
   }
 
   /**
-   * Return if a nano contract key is registered or not.
+   * Return if the nano contract is registered for the given address based on ncKey.
    *
-   * @param ncKey Pair address:ncId registered.
-   * @returns Nano contract data instance.
+   * @param ncKey Pair address:ncId concatenated.
+   * @returns `true` if registered and `false` otherwise.
    * @async
    */
   async isNanoContractRegistered(ncKey: string): Promise<boolean> {

@@ -576,6 +576,13 @@ export interface IKVWalletIndex extends IKVStoreIndex<void> {
   cleanWalletData(clear: boolean): Promise<void>;
 }
 
+export interface IKVNanoContractIndex extends IKVStoreIndex<void> {
+  isNanoContractRegistered(ncKey: string): Promise<boolean>;
+  getNanoContract(ncKey: string): Promise<INcData | null>;
+  registerNanoContract(ncKey: string, ncValue: INcData): Promise<void>;
+  clear(): Promise<void>;
+}
+
 export interface INcData {
   address: string;
   ncId: string;
