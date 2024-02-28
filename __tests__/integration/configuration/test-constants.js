@@ -98,6 +98,7 @@ export const TOKEN_DATA = {
   TOKEN: 1,
 };
 
+export const FULLNODE_NETWORK_NAME = 'nano-testnet-alpha';
 export const NETWORK_NAME = 'testnet';
 export const FULLNODE_URL = 'http://localhost:8083/v1a/';
 export const TX_MINING_URL = 'http://localhost:8035/';
