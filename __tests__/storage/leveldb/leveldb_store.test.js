@@ -14,7 +14,6 @@ import { encryptData } from '../../../src/utils/crypto';
 import { WalletType } from '../../../src/types';
 import { processHistory } from '../../../src/utils/storage';
 import walletUtils from '../../../src/utils/wallet';
-import { warn } from 'console';
 
 function _addr_index_key(index) {
   const buf = Buffer.alloc(4);

@@ -393,7 +393,7 @@ export default class LevelDBStore implements IStore {
    * @async
    */
   async getNanoContract(ncKey: string): Promise<INcData | null> {
-    return this.nanoContractIndex.getNanoContract(ncKey) || null;
+    return this.nanoContractIndex.getNanoContract(ncKey);
   }
 
   /**
