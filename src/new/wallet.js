@@ -155,14 +155,14 @@ class HathorWallet extends EventEmitter {
 
     if (storage) {
       /**
-       * @type {import('../types').IStorage}
+       * @type {IStorage}
        */
       this.storage = storage;
     } else {
       // Default to a memory store
       const store = new MemoryStore();
       /**
-       * @type {import('../types').IStorage}
+       * @type {IStorage}
        */
       this.storage = new Storage(store);
     }
