@@ -7,6 +7,11 @@
 
 import { createRequestInstance } from './axiosInstance';
 import { NanoRequest404Error, NanoRequestError } from '../errors';
+import {
+    NanoContractBlueprintInformationAPIResponse,
+    NanoContractHistoryAPIResponse,
+    NanoContractStateAPIResponse,
+} from '../nano_contracts/types';
 import { AxiosError } from 'axios';
 
 /**
@@ -27,7 +32,7 @@ const ncApi = {
    * @memberof ApiNanoContracts
    * @inner
    */
-  async getNanoContractState(id: string, fields: string[], balances: string[], calls: string[]) {
+  async getNanoContractState(id: string, fields: string[], balances: string[], calls: string[]): Promise<NanoContractStateAPIResponse> {
     const data = { id, fields, balances, calls };
     const axios = await createRequestInstance();
     try {
@@ -61,7 +66,7 @@ const ncApi = {
    * @memberof ApiNanoContracts
    * @inner
    */
-  async getNanoContractHistory(id: string, count: number | null = null, after: string | null = null) {
+  async getNanoContractHistory(id: string, count: number | null = null, after: string | null = null): Promise<NanoContractHistoryAPIResponse> {
     const data = { id, count, after };
     const axios = await createRequestInstance();
     try {
@@ -94,7 +99,7 @@ const ncApi = {
    * @memberof ApiNanoContracts
    * @inner
    */
-  async getBlueprintInformation(id: string) {
+  async getBlueprintInformation(id: string): Promise<NanoContractBlueprintInformationAPIResponse> {
     const data = { blueprint_id: id };
     const axios = await createRequestInstance();
     try {

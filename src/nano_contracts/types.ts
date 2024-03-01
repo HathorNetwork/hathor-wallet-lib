@@ -32,7 +32,7 @@ export interface NanoContractParsedArgument {
   parsed: any;
 }
 
-interface MethodArgInfo {
+export interface MethodArgInfo {
   // Name of the method argument
   name: string;
   // Type of the method argument

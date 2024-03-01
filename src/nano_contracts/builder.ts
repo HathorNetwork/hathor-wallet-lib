@@ -20,6 +20,7 @@ import { concat, get } from 'lodash'
 import {
   NanoContractActionType,
   NanoContractAction,
+  MethodArgInfo,
 } from './types';
 import ncApi from '../api/nano';
 
@@ -197,7 +198,7 @@ class NanoContractTransactionBuilder {
     if (this.args) {
       const serializer = new Serializer();
       const blueprintInformation = await ncApi.getBlueprintInformation(this.blueprintId);
-      const methodArgs = get(blueprintInformation, `public_methods.${this.method}.args`);
+      const methodArgs = get(blueprintInformation, `public_methods.${this.method}.args`, []) as MethodArgInfo[];
       if (!methodArgs) {
         throw new NanoContractTransactionError(`Blueprint does not have method ${this.method}.`);
       }
