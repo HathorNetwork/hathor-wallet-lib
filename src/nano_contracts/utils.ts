@@ -20,6 +20,7 @@ import P2SH from '../models/p2sh';
 import Address from '../models/address';
 import { OracleParseError, WalletFromXPubGuard } from '../errors';
 import { OutputType } from '../wallet/types';
+import { IStorage } from '../types';
 import { parseScript } from '../utils/scripts';
 import { decryptData } from '../utils/crypto';
 import { HDPrivateKey } from 'bitcore-lib';
@@ -27,14 +28,12 @@ import { HDPrivateKey } from 'bitcore-lib';
 /**
  * Sign a transaction, create a send transaction object, mine and push
  *
- * @param {Transaction} tx Transaction to sign and send
- * @param {HDPrivateKey} privateKey Private key of the nano contract's tx signature
- * @param {string} pin Pin to decrypt data
- * @param {IStorage} storage Wallet storage object
- *
- * @returns {Promise<NanoContract>}
+ * @param {tx} Transaction to sign and send
+ * @param {privateKey} Private key of the nano contract's tx signature
+ * @param {pin} Pin to decrypt data
+ * @param {storage} Wallet storage object
  */
-export const signAndPushNCTransaction = async (tx: NanoContract, privateKey, pin: string, storage): Promise<Transaction> => {
+export const signAndPushNCTransaction = async (tx: NanoContract, privateKey: HDPrivateKey, pin: string, storage: IStorage): Promise<Transaction> => {
   const dataToSignHash = tx.getDataToSignHash();
   // Add nano signature
   tx.signature = transactionUtils.getSignature(dataToSignHash, privateKey);
@@ -55,10 +54,8 @@ export const signAndPushNCTransaction = async (tx: NanoContract, privateKey, pin
 /**
  * Get oracle buffer from oracle string (address in base58 or oracle data directly in hex)
  *
- * @param {string} oracle Address in base58 or oracle data directly in hex
- * @param {Network} network Network to calculate the address
- *
- * @returns {Buffer}
+ * @param {oracle} Address in base58 or oracle data directly in hex
+ * @param {network} Network to calculate the address
  */
 export const getOracleBuffer = (oracle: string, network: Network): Buffer => {
   const address = new Address(oracle, { network });
@@ -76,25 +73,23 @@ export const getOracleBuffer = (oracle: string, network: Network): Buffer => {
       throw new OracleParseError('Invalid output script type.');
     }
     return outputScript.createScript();
-  } else {
-    // Oracle script is a custom script
-    try {
-      return hexToBuffer(oracle);
-    } catch (err) {
-      // Invalid hex
-      throw new OracleParseError('Invalid hex value for oracle script.');
-    }
+  }
+
+  // Oracle script is a custom script
+  try {
+    return hexToBuffer(oracle);
+  } catch (err) {
+    // Invalid hex
+    throw new OracleParseError('Invalid hex value for oracle script.');
   }
 }
 
 /**
  * Get oracle input data
  *
- * @param {Buffer} oracleData Oracle data
- * @param {Buffer} resultSerialized Result to sign with oracle data already serialized
- * @param {HathorWallet} wallet Hathor Wallet object
- *
- * @returns {Promise<Buffer>}
+ * @param {oracleData} Oracle data
+ * @param {resultSerialized} Result to sign with oracle data already serialized
+ * @param {wallet} Hathor Wallet object
  */
 export const getOracleInputData = async (oracleData: Buffer, resultSerialized: Buffer, wallet: HathorWallet): Promise<Buffer> => {
   // Parse oracle script to validate if it's an address of this wallet
@@ -114,8 +109,8 @@ export const getOracleInputData = async (oracleData: Buffer, resultSerialized: B
     const signatureOracle = transactionUtils.getSignature(crypto.Hash.sha256(resultSerialized), oracleKey.privateKey);
     const oraclePubKeyBuffer = oracleKey.publicKey.toBuffer();
     return transactionUtils.createInputData(signatureOracle, oraclePubKeyBuffer);
-  } else {
-    // If it's not an address, we use the oracleInputData as the inputData directly
-    return oracleData;
   }
+
+  // If it's not an address, we use the oracleInputData as the inputData directly
+  return oracleData;
 }

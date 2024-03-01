@@ -13,10 +13,32 @@ const SERIALIZATION_SIZE_LEN = 2;
 
 
 class Serializer {
+  /**
+   * Push an integer to buffer as the len of serialized element
+   * Use SERIALIZATION_SIZE_LEN as the quantity of bytes to serialize
+   * the integer
+   *
+   * @param {buf} Array of buffer to push the serialized integer
+   * @param {len} Integer to serialize
+   *
+   * @memberof Serializer
+   * @inner
+   */
   pushLenValue(buf: Buffer[], len: number) {
     buf.push(intToBytes(len, SERIALIZATION_SIZE_LEN));
   }
 
+  /**
+   * Helper method to serialize any value from its type
+   * We receive these type from the full node, so we
+   * use the python syntax
+   *
+   * @param {value} Value to serialize
+   * @param {type} Type of the value to be serialized
+   *
+   * @memberof Serializer
+   * @inner
+   */
   serializeFromType(value: any, type: string): Buffer {
     switch (type) {
       case 'str':
@@ -34,22 +56,62 @@ class Serializer {
     }
   }
 
+  /**
+   * Serialize string value
+   *
+   * @param {value} Value to serialize
+   *
+   * @memberof Serializer
+   * @inner
+   */
   fromString(value: string): Buffer {
     return Buffer.from(value, 'utf8');
   }
 
+  /**
+   * Serialize bytes value
+   *
+   * @param {value} Value to serialize
+   *
+   * @memberof Serializer
+   * @inner
+   */
   fromBytes(value: Buffer): Buffer {
     return Buffer.from(value)
   }
 
+  /**
+   * Serialize integer value
+   *
+   * @param {value} Value to serialize
+   *
+   * @memberof Serializer
+   * @inner
+   */
   fromInt(value: number): Buffer {
     return signedIntToBytes(value, 4);
   }
 
+  /**
+   * Serialize float value
+   *
+   * @param {value} Value to serialize
+   *
+   * @memberof Serializer
+   * @inner
+   */
   fromFloat(value: number): Buffer {
     return floatToBytes(value, 8);
   }
 
+  /**
+   * Serialize boolean value
+   *
+   * @param {value} Value to serialize
+   *
+   * @memberof Serializer
+   * @inner
+   */
   fromBool(value: boolean): Buffer {
     if (value) {
       return Buffer.from([1]);
@@ -58,6 +120,15 @@ class Serializer {
     }
   }
 
+  /**
+   * Serialize a list of values
+   *
+   * @param {value} List of values to serialize
+   * @param {type} Type of the elements on the list
+   *
+   * @memberof Serializer
+   * @inner
+   */
   fromList(value: any[], type: string): Buffer {
     const ret: Buffer[] = [];
     this.pushLenValue(ret, value.length);
@@ -68,6 +139,16 @@ class Serializer {
     return Buffer.concat(ret);
   }
 
+  /**
+   * Serialize an optional value
+   *
+   * @param {isEmpty} If the optional has a value or not
+   * @param {value} Value to serialize (optional)
+   * @param {type} Type of the value to serialize (optional)
+   *
+   * @memberof Serializer
+   * @inner
+   */
   fromOptional(isEmpty: boolean, value?: any, type?: string) {
     // We are not supporting List optional for now
     if (isEmpty) {
@@ -86,6 +167,17 @@ class Serializer {
     return Buffer.concat(ret);
   }
 
+  /**
+   * Serialize a signed value
+   * [len(serializedResult)][serializedResult][inputData]
+   *
+   * @param {inputData} Input data of the signed value
+   * @param {value} Value to serialize
+   * @param {type} Type of the value to serialize
+   *
+   * @memberof Serializer
+   * @inner
+   */
   fromSigned(inputData: Buffer, value: any, type: string) {
     const ret: Buffer[] = [];
 

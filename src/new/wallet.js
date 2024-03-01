@@ -6,14 +6,14 @@
  */
 
 import { get } from 'lodash';
-import bitcore, { HDPrivateKey, crypto } from 'bitcore-lib';
+import bitcore, { HDPrivateKey } from 'bitcore-lib';
 import EventEmitter from 'events';
 import { HATHOR_TOKEN_CONFIG, P2SH_ACCT_PATH, P2PKH_ACCT_PATH, NANO_CONTRACTS_VERSION } from '../constants';
 import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
 import ncApi from '../api/nano';
 import versionApi from '../api/version';
-import { hexToBuffer, intToBytes } from '../utils/buffer';
+import { hexToBuffer } from '../utils/buffer';
 import { decryptData } from '../utils/crypto';
 import helpers from '../utils/helpers';
 import { createP2SHRedeemScript } from '../utils/scripts';
@@ -30,11 +30,6 @@ import {
 } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
-import Address from '../models/address';
-import P2PKH from '../models/p2pkh';
-import P2SH from '../models/p2sh';
-import Output from '../models/output';
-import Input from '../models/input';
 import transactionUtils from '../utils/transaction';
 import { signMessage } from '../utils/crypto';
 import Transaction from '../models/transaction';
@@ -2749,6 +2744,8 @@ class HathorWallet extends EventEmitter {
       throw new NanoContractTransactionError(`Method needs ${methodArgs.length} parameters but data has ${data.args.length}.`);
     }
 
+    // Here we validate that the arguments sent in the data array of args has
+    // the expected type for each parameter of the blueprint method
     for (const [index, arg] of methodArgs.entries()) {
       let typeToCheck = arg.type;
       if (typeToCheck.startsWith('SignedData')) {

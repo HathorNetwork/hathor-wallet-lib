@@ -30,6 +30,16 @@ class NanoContract extends Transaction {
     this.signature = signature;
   }
 
+  /**
+   * Serialize funds fields
+   * Add the serialized fields to the array parameter
+   *
+   * @param {array} Array of buffer to push the serialized fields
+   * @param {addInputData} If should add input data when serializing it
+   *
+   * @memberof NanoContract
+   * @inner
+   */
   serializeFundsFields(array: Buffer[], addInputData: boolean) {
     super.serializeFundsFields(array, addInputData);
 
@@ -67,7 +77,6 @@ class NanoContract extends Transaction {
   /**
    * Serialize tx to bytes
    *
-   * @return {Buffer}
    * @memberof NanoContract
    * @inner
    */

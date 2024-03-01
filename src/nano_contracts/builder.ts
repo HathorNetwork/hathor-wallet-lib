@@ -47,10 +47,26 @@ class NanoContractTransactionBuilder {
     this.wallet = null;
   }
 
+  /**
+   * Set object method attribute
+   *
+   * @param {method} Method name
+   *
+   * @memberof NanoContractTransactionBuilder
+   * @inner
+   */
   setMethod(method: string) {
     this.method = method;
   }
 
+  /**
+   * Set object actions attribute
+   *
+   * @param {actions} List of actions
+   *
+   * @memberof NanoContractTransactionBuilder
+   * @inner
+   */
   setActions(actions: NanoContractAction[]) {
     // Check if there's only one action for each token
     if (actions) {
@@ -64,26 +80,76 @@ class NanoContractTransactionBuilder {
     this.actions = actions;
   }
 
+  /**
+   * Set object args attribute
+   *
+   * @param {args} List of arguments
+   *
+   * @memberof NanoContractTransactionBuilder
+   * @inner
+   */
   setArgs(args: any[]) {
     this.args = args;
   }
 
+  /**
+   * Set object caller attribute
+   *
+   * @param {caller} Caller private key
+   *
+   * @memberof NanoContractTransactionBuilder
+   * @inner
+   */
   setCaller(caller: HDPrivateKey) {
     this.caller = caller;
   }
 
+  /**
+   * Set object blueprintId attribute
+   *
+   * @param {blueprintId} Blueprint id
+   *
+   * @memberof NanoContractTransactionBuilder
+   * @inner
+   */
   setBlueprintId(blueprintId: string) {
     this.blueprintId = blueprintId;
   }
 
+  /**
+   * Set object ncId attribute
+   *
+   * @param {ncId} Nano contract id
+   *
+   * @memberof NanoContractTransactionBuilder
+   * @inner
+   */
   setNcId(ncId: string) {
     this.ncId = ncId;
   }
 
+  /**
+   * Set object wallet attribute
+   *
+   * @param {wallet} Wallet object building this transaction
+   *
+   * @memberof NanoContractTransactionBuilder
+   * @inner
+   */
   setWallet(wallet: HathorWallet) {
     this.wallet = wallet;
   }
 
+  /**
+   * Execute a deposit action
+   * Create inputs (and maybe change outputs) to complete the deposit
+   *
+   * @param {action} Action to be completed (must be a deposit type)
+   * @param {tokens} Array of tokens to get the token data correctly
+   *
+   * @memberof NanoContractTransactionBuilder
+   * @inner
+   */
   async executeDeposit(action: NanoContractAction, tokens: string[]): Promise<[Input[], Output[]]> {
     if (action.type !== NanoContractActionType.DEPOSIT) {
       throw new NanoContractTransactionError('Can\'t execute a deposit with an action which type is differente than deposit.');
@@ -93,7 +159,7 @@ class NanoContractTransactionBuilder {
       throw new NanoContractTransactionError('Amount and token are required for deposit action.');
     }
 
-    // Get the utxos with the amount of the bet and create the inputs
+    // Get the utxos with the amount of the deposit and create the inputs
     const utxoOptions: { token: string, filter_address?: string | null } = { token: action.token };
     if (action.address) {
       utxoOptions.filter_address = action.address;
@@ -133,9 +199,19 @@ class NanoContractTransactionBuilder {
     return [inputs, outputs];
   }
 
+  /**
+   * Execute a withdrawal action
+   * Create outputs to complete the withdrawal
+   *
+   * @param {action} Action to be completed (must be a withdrawal type)
+   * @param {tokens} Array of tokens to get the token data correctly
+   *
+   * @memberof NanoContractTransactionBuilder
+   * @inner
+   */
   executeWithdrawal(action: NanoContractAction, tokens: string[]): Output {
     if (action.type !== NanoContractActionType.WITHDRAWAL) {
-      throw new NanoContractTransactionError('Can\'t execute a deposit with an action which type is differente than withdrawal.');
+      throw new NanoContractTransactionError('Can\'t execute a withdrawal with an action which type is differente than withdrawal.');
     }
 
     if (!action.address || !action.amount || !action.token) {
@@ -158,6 +234,12 @@ class NanoContractTransactionBuilder {
     return output;
   }
 
+  /**
+   * Build the nano contract transaction
+   *
+   * @memberof NanoContractTransactionBuilder
+   * @inner
+   */
   async build(): Promise<NanoContract> {
     if (this.blueprintId === null || this.method === null || this.caller === null) {
       throw new Error('Must have blueprint id, method and caller.');
@@ -167,6 +249,7 @@ class NanoContractTransactionBuilder {
       throw new Error(`Nano contract ID cannot be null for method ${this.method}`);
     }
 
+    // Transform actions into inputs and outputs
     let inputs: Input[] = [];
     let outputs: Output[] = [];
     let tokens: string[] = [];
@@ -194,6 +277,7 @@ class NanoContractTransactionBuilder {
       }
     }
 
+    // Serialize the method arguments
     const serializedArgs: Buffer[] = [];
     if (this.args) {
       const serializer = new Serializer();
