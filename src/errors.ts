@@ -344,7 +344,9 @@ export class PinRequiredError extends Error {
  * @memberof Errors
  * @inner
  */
-export class NanoContractTransactionError extends Error {};
+export class NanoContractTransactionError extends Error {
+  errorCode: string = ErrorMessages.NANO_TRANSACTION_CREATE_ERROR;
+};
 
 /**
  * Error thrown when parsing a nano contract transaction
@@ -352,7 +354,9 @@ export class NanoContractTransactionError extends Error {};
  * @memberof Errors
  * @inner
  */
-export class NanoContractTransactionParseError extends Error {};
+export class NanoContractTransactionParseError extends Error {
+  errorCode: string = ErrorMessages.NANO_TRANSACTION_PARSE_ERROR;
+};
 
 /**
  * Error thrown when parsing an oracle script
@@ -360,4 +364,6 @@ export class NanoContractTransactionParseError extends Error {};
  * @memberof Errors
  * @inner
  */
-export class OracleParseError extends Error {};
+export class OracleParseError extends Error {
+  errorCode: string = ErrorMessages.NANO_ORACLE_PARSE_ERROR;
+};
