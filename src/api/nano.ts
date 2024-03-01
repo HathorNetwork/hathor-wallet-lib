@@ -7,6 +7,7 @@
 
 import { createRequestInstance } from './axiosInstance';
 import { NanoRequest404Error, NanoRequestError } from '../errors';
+import { AxiosError } from 'axios';
 
 /**
  * Api calls for nano contracts
@@ -36,7 +37,13 @@ const ncApi = {
         return responseData;
       }
     } catch (e) {
-      if (e.response.status === 404) {
+      // Workaround to access e.response from axios, so the typescript linter doesn't complain
+      const error = e as AxiosError<Error>;
+      if (error.response === undefined) {
+        throw e;
+      }
+
+      if (error.response.status === 404) {
         throw new NanoRequest404Error('Nano contract not found.');
       }
     }
@@ -64,7 +71,13 @@ const ncApi = {
         return responseData;
       }
     } catch (e) {
-      if (e.response.status === 404) {
+      // Workaround to access e.response from axios, so the typescript linter doesn't complain
+      const error = e as AxiosError<Error>;
+      if (error.response === undefined) {
+        throw e;
+      }
+
+      if (error.response.status === 404) {
         throw new NanoRequest404Error('Nano contract not found.');
       }
     }
@@ -91,7 +104,13 @@ const ncApi = {
         return responseData;
       }
     } catch (e) {
-      if (e.response.status === 404) {
+      // Workaround to access e.response from axios, so the typescript linter doesn't complain
+      const error = e as AxiosError<Error>;
+      if (error.response === undefined) {
+        throw e;
+      }
+
+      if (error.response.status === 404) {
         throw new NanoRequest404Error('Blueprint not found.');
       }
     }
