@@ -34,6 +34,7 @@ import dateUtils from './utils/date';
 import tokensUtils from './utils/tokens';
 import walletUtils from './utils/wallet';
 import helpersUtils from './utils/helpers';
+import * as storageUtilsFull from './utils/storage';
 import * as numberUtils from './utils/numbers';
 import * as scriptsUtils from './utils/scripts';
 import transactionUtils from './utils/transaction';
@@ -48,6 +49,9 @@ import { PartialTx, PartialTxInputData } from './models/partial_tx';
 import PartialTxProposal from './wallet/partialTxProposal';
 import * as swapService from './wallet/api/swapService';
 import { AtomicSwapServiceConnection } from './swapService/swapConnection';
+
+// There is no need to export all the utils: filtering only the properties needed by external consumers
+const storageUtils = { reloadStorage: storageUtilsFull.reloadStorage };
 
 export {
   PartialTx,
@@ -94,6 +98,7 @@ export {
   scriptsUtils,
   bufferUtils,
   transactionUtils,
+  storageUtils,
   HathorWalletServiceWallet,
   walletServiceApi,
   SendTransactionWalletService,
