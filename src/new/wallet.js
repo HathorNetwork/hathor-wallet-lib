@@ -2790,7 +2790,7 @@ class HathorWallet extends EventEmitter {
       derivedKey = await this.getHDPrivateKeyFromAddress(address, options);
     } catch (e) {
       if (e instanceof AddressError) {
-        throw NanoContractTransactionError('Address used to sign the transaction does not belong to the wallet.');
+        throw new NanoContractTransactionError('Address used to sign the transaction does not belong to the wallet.');
       }
       throw e;
     }
