@@ -500,6 +500,8 @@ describe('start', () => {
     await expect(hWallet.getAllSignatures()).rejects.toThrow(WalletFromXPubGuard);
     await expect(hWallet.getSignatures()).rejects.toThrow(WalletFromXPubGuard);
     await expect(hWallet.signTx()).rejects.toThrow(WalletFromXPubGuard);
+    await expect(hWallet.createAndSendNanoContractTransaction()).rejects.toThrow(WalletFromXPubGuard);
+    await expect(hWallet.getHDPrivateKeyFromAddress()).rejects.toThrow(WalletFromXPubGuard);
 
     // Validating that the address generation works as intended
     for (let i=0; i < 20; ++i) {
