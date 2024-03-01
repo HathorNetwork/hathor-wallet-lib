@@ -20,7 +20,7 @@ import {
   MERGED_MINED_BLOCK_VERSION,
   NANO_CONTRACTS_VERSION
 } from '../constants';
-import { crypto as cryptoBL, encoding, PrivateKey, HDPrivateKey } from 'bitcore-lib'
+import { crypto as cryptoBL, PrivateKey, HDPrivateKey } from 'bitcore-lib'
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import Input from '../models/input';
