@@ -32,6 +32,7 @@ import {
   IIndexLimitAddressScanPolicy,
   SCANNING_POLICY,
   EcdsaTxSignP2PKH,
+  IInputSignature,
 } from '../types';
 import transactionUtils from '../utils/transaction';
 import { processHistory, processUtxoUnlock } from '../utils/storage';
@@ -87,11 +88,11 @@ export class Storage implements IStorage {
     this.txSignP2PKH = txSignP2PKH;
   }
 
-  async signTxP2PKH(tx: Transaction, pinCode: string): Promise<Transaction> {
+  async signTxP2PKH(tx: Transaction, pinCode: string): Promise<IInputSignature[]> {
     if (this.txSignP2PKH) {
       return this.txSignP2PKH(tx, this, pinCode);
     }
-    return transactionUtils.signTransaction(tx, this, pinCode);
+    return transactionUtils.getSignatureForTx(tx, this, pinCode);
   }
 
   /**

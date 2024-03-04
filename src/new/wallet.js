@@ -2331,7 +2331,7 @@ class HathorWallet extends EventEmitter {
    * addressPath: string,
    * }[]>} List of indexes and their associated address index
    */
-   async getWalletInputInfo(tx) {
+  async getWalletInputInfo(tx) {
     const walletInputs = [];
 
     for await (const {tx: spentTx, input, index} of this.storage.getSpentTxs(tx.inputs)) {
@@ -2364,34 +2364,12 @@ class HathorWallet extends EventEmitter {
    * }>} Input and signature information
    */
   async getSignatures(tx, { pinCode = null } = {}) {
-    if (await this.storage.isReadonly()) {
-      throw new WalletFromXPubGuard('getSignatures');
-    }
     const pin = pinCode || this.pinCode;
-    if (!pin) {
-      throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
-    }
-
-    const xprivkey = await this.storage.getMainXPrivKey(pin);
-    const key = HDPrivateKey(xprivkey);
-
-    const signatures = [];
-    const dataToSignHash = tx.getDataToSignHash();
-    for (const indexes of await this.getWalletInputInfo(tx)) {
-      const { addressIndex } = indexes;
-      // Derive key to addressIndex
-      const derivedKey = key.deriveNonCompliantChild(addressIndex);
-      const privateKey = derivedKey.privateKey;
-      // Get tx signature and populate transaction
-      const sigDER = transactionUtils.getSignature(dataToSignHash, privateKey);
-      signatures.push({
-        signature: sigDER.toString('hex'),
-        pubkey: privateKey.publicKey.toString(),
-        ...indexes,
-      });
-    }
-
-    return signatures;
+    const signatures = await this.storage.signTxP2PKH(tx, pin);
+    return signatures.map(sigData => ({
+      ...sigData,
+      addressPath: this.getAddressPathForIndex(sigData.addressIndex),
+    }));
   }
 
   /**
