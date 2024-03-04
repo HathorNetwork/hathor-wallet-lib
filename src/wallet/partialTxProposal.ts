@@ -367,7 +367,7 @@ class PartialTxProposal {
     }
 
     // sign inputs from the loaded wallet and save input data
-    await transactionUtils.signTransaction(tx, this.storage, pin);
+    await this.storage.signTxP2PKH(tx, pin);
     for (const [index, input] of tx.inputs.entries()) {
       if(input.data) {
         // add all signatures we know of this tx
