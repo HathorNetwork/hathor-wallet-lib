@@ -31,6 +31,7 @@ import {
   AddressScanPolicyData,
   IIndexLimitAddressScanPolicy,
   SCANNING_POLICY,
+  EcdsaTxSignP2PKH,
 } from '../types';
 import transactionUtils from '../utils/transaction';
 import { processHistory, processUtxoUnlock } from '../utils/storage';
@@ -41,6 +42,8 @@ import { getAddressType } from '../utils/address';
 import walletUtils from '../utils/wallet';
 import { HATHOR_TOKEN_CONFIG, MAX_INPUTS, MAX_OUTPUTS, TOKEN_DEPOSIT_PERCENTAGE } from '../constants';
 import { UninitializedWalletError } from '../errors';
+import { HDPublicKey } from 'bitcore-lib';
+import Transaction from '../models/transaction';
 
 const DEFAULT_ADDRESS_META: IAddressMetadata = {
   numTransactions: 0,
@@ -52,6 +55,7 @@ export class Storage implements IStorage {
   utxosSelectedAsInput: Map<string, boolean>;
   config: Config;
   version: ApiVersion|null;
+  txSignP2PKH: EcdsaTxSignP2PKH|null;
   /**
    * This promise is used to chain the calls to process unlocked utxos.
    * This way we can avoid concurrent calls.
@@ -68,6 +72,7 @@ export class Storage implements IStorage {
     this.config = config;
     this.version = null;
     this.utxoUnlockWait = Promise.resolve();
+    this.txSignP2PKH = null;
   }
 
   /**
@@ -76,6 +81,17 @@ export class Storage implements IStorage {
    */
   setApiVersion(version: ApiVersion): void {
     this.version = version;
+  }
+
+  setTxSignP2PKH(txSignP2PKH: EcdsaTxSignP2PKH): void {
+    this.txSignP2PKH = txSignP2PKH;
+  }
+
+  async signTxP2PKH(tx: Transaction, pinCode: string): Promise<Transaction> {
+    if (this.txSignP2PKH) {
+      return this.txSignP2PKH(tx, this, pinCode);
+    }
+    return transactionUtils.signTransaction(tx, this, pinCode);
   }
 
   /**
@@ -132,6 +148,20 @@ export class Storage implements IStorage {
    */
   async getAddressAtIndex(index: number): Promise<IAddressInfo | null> {
     return this.store.getAddressAtIndex(index);
+  }
+
+  async getAddressPubkey(index: number): Promise<string> {
+    const addressInfo = await this.store.getAddressAtIndex(index);
+    if (addressInfo?.publicKey) {
+      // public key already cached on address info
+      return addressInfo.publicKey;
+    }
+
+    // derive public key from xpub
+    const accessData = await this._getValidAccessData();
+    const hdpubkey = new HDPublicKey(accessData.xpubkey);
+    const key: HDPublicKey = hdpubkey.deriveChild(index);
+    return key.publicKey.toString('hex');
   }
 
   /**

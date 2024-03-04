@@ -1571,7 +1571,7 @@ class HathorWallet extends EventEmitter {
         isCreateNFT: newOptions.isCreateNFT,
       },
     );
-    return await transactionUtils.prepareTransaction(
+    return transactionUtils.prepareTransaction(
       txData,
       pin,
       this.storage,
@@ -1768,7 +1768,7 @@ class HathorWallet extends EventEmitter {
       this.storage,
       mintOptions,
     );
-    return await transactionUtils.prepareTransaction(
+    return transactionUtils.prepareTransaction(
       txData,
       pin,
       this.storage,
@@ -1876,7 +1876,7 @@ class HathorWallet extends EventEmitter {
       this.storage,
       meltOptions,
     );
-    return await transactionUtils.prepareTransaction(
+    return transactionUtils.prepareTransaction(
       txData,
       pin,
       this.storage,
@@ -1963,7 +1963,7 @@ class HathorWallet extends EventEmitter {
       createAnother,
     );
 
-    return await transactionUtils.prepareTransaction(txData, pin, this.storage);
+    return transactionUtils.prepareTransaction(txData, pin, this.storage);
   }
 
   /**
@@ -2042,7 +2042,7 @@ class HathorWallet extends EventEmitter {
     }
 
     const txData = tokenUtils.prepareDestroyAuthorityTxData(data);
-    return await transactionUtils.prepareTransaction(txData, pin, this.storage);
+    return transactionUtils.prepareTransaction(txData, pin, this.storage);
   }
 
   /**

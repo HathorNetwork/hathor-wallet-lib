@@ -494,7 +494,7 @@ const transaction = {
     const network = storage.config.getNetwork();
     const tx = this.createTransactionFromData(txData, network);
     if (newOptions.signTx) {
-      await this.signTransaction(tx, storage, pinCode);
+      await storage.signTxP2PKH(tx, pinCode);
     }
     tx.prepareToSend();
 
