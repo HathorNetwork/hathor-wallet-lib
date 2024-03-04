@@ -80,8 +80,10 @@ test('signTransaction', async () => {
     }
   });
   async function* getSpentMock(inputs) {
+    let index = 0;
     for (const inp of inputs) {
       yield {
+        index,
         input: inp,
         tx: {
           outputs: [
@@ -91,6 +93,7 @@ test('signTransaction', async () => {
           ],
         }
       };
+      index += 1;
     }
   }
   jest.spyOn(storage, 'getSpentTxs').mockImplementation(getSpentMock);

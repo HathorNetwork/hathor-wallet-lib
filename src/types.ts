@@ -10,12 +10,19 @@ import Transaction from './models/transaction';
 import Input from './models/input';
 import FullNodeConnection from './new/connection';
 
+export interface IInputSignature {
+  inputIndex: number,
+  addressIndex: number,
+  signature: Buffer,
+  pubkey: Buffer,
+}
+
 /**
  * Signature that receives the data to sign.
  * For transactions, it should expect the sighash_all hashed once with sha256.
  * The implementation must take care of the second sha256.
  */
-export type EcdsaTxSignP2PKH = (tx: Transaction, storage: IStorage, pinCode: string) => Promise<Transaction>;
+export type EcdsaTxSignP2PKH = (tx: Transaction, storage: IStorage, pinCode: string) => Promise<IInputSignature[]>;
 
 export interface IAddressInfo {
   base58: string;
@@ -396,7 +403,7 @@ export interface IStorage {
   version: ApiVersion|null;
 
   setTxSignP2PKH(txSignP2PKH: EcdsaTxSignP2PKH): void;
-  signTxP2PKH(tx: Transaction, pinCode: string): Promise<Transaction>;
+  signTxP2PKH(tx: Transaction, pinCode: string): Promise<IInputSignature[]>;
 
   // Address methods
   getAllAddresses(): AsyncGenerator<IAddressInfo & IAddressMetadata>;
