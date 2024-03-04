@@ -31,7 +31,7 @@ import {
   AddressScanPolicyData,
   IIndexLimitAddressScanPolicy,
   SCANNING_POLICY,
-  EcdsaTxSignP2PKH,
+  EcdsaTxSign,
   IInputSignature,
 } from '../types';
 import transactionUtils from '../utils/transaction';
@@ -56,7 +56,7 @@ export class Storage implements IStorage {
   utxosSelectedAsInput: Map<string, boolean>;
   config: Config;
   version: ApiVersion|null;
-  txSignP2PKH: EcdsaTxSignP2PKH|null;
+  txSignFunc: EcdsaTxSign|null;
   /**
    * This promise is used to chain the calls to process unlocked utxos.
    * This way we can avoid concurrent calls.
@@ -73,7 +73,7 @@ export class Storage implements IStorage {
     this.config = config;
     this.version = null;
     this.utxoUnlockWait = Promise.resolve();
-    this.txSignP2PKH = null;
+    this.txSignFunc = null;
   }
 
   /**
@@ -84,13 +84,13 @@ export class Storage implements IStorage {
     this.version = version;
   }
 
-  setTxSignP2PKH(txSignP2PKH: EcdsaTxSignP2PKH): void {
-    this.txSignP2PKH = txSignP2PKH;
+  setTxSign(txSign: EcdsaTxSign): void {
+    this.txSignFunc = txSign;
   }
 
-  async signTxP2PKH(tx: Transaction, pinCode: string): Promise<IInputSignature[]> {
-    if (this.txSignP2PKH) {
-      return this.txSignP2PKH(tx, this, pinCode);
+  async signTx(tx: Transaction, pinCode: string): Promise<IInputSignature[]> {
+    if (this.txSignFunc) {
+      return this.txSignFunc(tx, this, pinCode);
     }
     return transactionUtils.getSignatureForTx(tx, this, pinCode);
   }
