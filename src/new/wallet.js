@@ -90,6 +90,7 @@ class HathorWallet extends EventEmitter {
    * @param {{pubkeys:string[],numSignatures:number}} [param.multisig]
    * @param {string[]} [param.preCalculatedAddresses] An array of pre-calculated addresses
    * @param {import('../types').AddressScanPolicyData} [param.scanPolicy] config specific to
+   * @param {boolean} [param.disableXpubGuard=false] Whether we should disable the xpub guard
    * the address scan policy.
    */
   constructor({
@@ -115,6 +116,7 @@ class HathorWallet extends EventEmitter {
     multisig = null,
     preCalculatedAddresses = null,
     scanPolicy = null,
+    disableXpubGuard = false,
   } = {}) {
     super();
 
@@ -203,6 +205,7 @@ class HathorWallet extends EventEmitter {
     this.newTxPromise = Promise.resolve();
 
     this.scanPolicy = scanPolicy;
+    this.disableXpubGuard = disableXpubGuard;
   }
 
   /**
@@ -454,9 +457,9 @@ class HathorWallet extends EventEmitter {
    * @inner
    */
   async getAllSignatures(txHex, pin) {
-    // if (await this.storage.isReadonly()) {
-    //   throw new WalletFromXPubGuard('getAllSignatures');
-    // }
+    if ((!this.disableXpubGuard) && await this.storage.isReadonly()) {
+      throw new WalletFromXPubGuard('getAllSignatures');
+    }
     const tx = helpers.createTxFromHex(txHex, this.getNetworkObject());
     const accessData = await this.storage.getAccessData();
     if (accessData === null) {
@@ -1090,7 +1093,7 @@ class HathorWallet extends EventEmitter {
    *
    */
   async consolidateUtxos(destinationAddress, options = {}) {
-    if (await this.storage.isReadonly()) {
+    if ((!this.disableXpubGuard) && await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('consolidateUtxos');
     }
     const { outputs, inputs, utxos, total_amount } = await this.prepareConsolidateUtxosData(destinationAddress, options);
@@ -1265,7 +1268,7 @@ class HathorWallet extends EventEmitter {
    * @return {Promise<Transaction>} Promise that resolves when transaction is sent
    */
   async sendTransaction(address, value, options = {}) {
-    if (await this.storage.isReadonly()) {
+    if ((!this.disableXpubGuard) && await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('sendTransaction');
     }
     const newOptions = Object.assign({
@@ -1300,7 +1303,7 @@ class HathorWallet extends EventEmitter {
    * @return {Promise<Transaction>} Promise that resolves when transaction is sent
    */
   async sendManyOutputsTransaction(outputs, options = {}) {
-    if (await this.storage.isReadonly()) {
+    if ((!this.disableXpubGuard) && await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('sendManyOutputsTransaction');
     }
     const newOptions = Object.assign({
@@ -1522,7 +1525,7 @@ class HathorWallet extends EventEmitter {
    * @inner
    */
   async prepareCreateNewToken(name, symbol, amount, options = {}) {
-    if (await this.storage.isReadonly()) {
+    if ((!this.disableXpubGuard) && await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('createNewToken');
     }
     const newOptions = Object.assign({
@@ -1730,7 +1733,7 @@ class HathorWallet extends EventEmitter {
    * @inner
    **/
   async prepareMintTokensData(tokenUid, amount, options = {}) {
-    if (await this.storage.isReadonly()) {
+    if ((!this.disableXpubGuard) && await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('mintTokens');
     }
     const newOptions = Object.assign({
@@ -1840,7 +1843,7 @@ class HathorWallet extends EventEmitter {
    * @inner
    **/
   async prepareMeltTokensData(tokenUid, amount, options = {}) {
-    if (await this.storage.isReadonly()) {
+    if ((!this.disableXpubGuard) && await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('meltTokens');
     }
     const newOptions = Object.assign({
@@ -1942,7 +1945,7 @@ class HathorWallet extends EventEmitter {
    * @inner
    **/
   async prepareDelegateAuthorityData(tokenUid, type, destinationAddress, options = {}) {
-    if (await this.storage.isReadonly()) {
+    if ((!this.disableXpubGuard) && await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('delegateAuthority');
     }
     const newOptions = Object.assign({ createAnother: true, pinCode: null }, options);
@@ -2018,7 +2021,7 @@ class HathorWallet extends EventEmitter {
    * @inner
    **/
   async prepareDestroyAuthorityData(tokenUid, type, count, options = {}) {
-    if (await this.storage.isReadonly()) {
+    if ((!this.disableXpubGuard) && await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('destroyAuthority');
     }
     const newOptions = Object.assign({ pinCode: null }, options);
@@ -2364,6 +2367,9 @@ class HathorWallet extends EventEmitter {
    * }>} Input and signature information
    */
   async getSignatures(tx, { pinCode = null } = {}) {
+    if ((!this.disableXpubGuard) && await this.storage.isReadonly()) {
+      throw new WalletFromXPubGuard('getSignatures');
+    }
     const pin = pinCode || this.pinCode;
     const signatures = await this.storage.signTx(tx, pin);
     const sigInfoArray = [];
