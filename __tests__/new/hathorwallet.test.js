@@ -237,15 +237,15 @@ test('getSignatures', async () => {
   const signatures = await hWallet.getSignatures('a-transaction', { pinCode: '123' });
   expect(signatures.length).toEqual(2);
   expect(signatures[0]).toMatchObject({
-    signature: Buffer.from('cafe', 'hex'),
-    pubkey: Buffer.from('abcd', 'hex'),
+    signature: 'cafe',
+    pubkey: 'abcd',
     inputIndex: 0,
     addressIndex: 1,
     addressPath: "m/44'/280'/0'/0/1",
   });
   expect(signatures[1]).toMatchObject({
-    signature: Buffer.from('1234', 'hex'),
-    pubkey: Buffer.from('d00d', 'hex'),
+    signature: '1234',
+    pubkey: 'd00d',
     inputIndex: 0,
     addressIndex: 2,
     addressPath: "m/44'/280'/0'/0/2",
