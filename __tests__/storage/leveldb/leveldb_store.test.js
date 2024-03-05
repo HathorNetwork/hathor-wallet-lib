@@ -423,5 +423,5 @@ test('nano contract methods', async () => {
 
   // Asserts store is closed
   await store.destroy();
-  expect(store.nanoContractIndex.registeredDB.status).toBe('closed');
+  expect(store.nanoContractIndex.registeredDB.db.status).toBe('closed');
 });

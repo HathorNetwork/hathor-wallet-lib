@@ -27,7 +27,6 @@ export default class LevelNanoContractIndex implements IKVNanoContractIndex {
    * @returns {Promise<void>}
    */
   async close(): Promise<void> {
-    await this.registeredDB.close();
     await this.registeredDB.db.close();
   }
 
