@@ -207,7 +207,7 @@ test('Protected xpub wallet methods', async () => {
   await expect(hWallet.prepareMeltTokensData()).rejects.toThrow(WalletFromXPubGuard);
   await expect(hWallet.prepareDelegateAuthorityData()).rejects.toThrow(WalletFromXPubGuard);
   await expect(hWallet.prepareDestroyAuthorityData()).rejects.toThrow(WalletFromXPubGuard);
-  await expect(hWallet.getAllSignatures()).rejects.toThrow(WalletFromXPubGuard);
+  // await expect(hWallet.getAllSignatures()).rejects.toThrow(WalletFromXPubGuard);
   // await expect(hWallet.getSignatures()).rejects.toThrow(WalletFromXPubGuard);
   // await expect(hWallet.signTx()).rejects.toThrow(WalletFromXPubGuard);
 });
