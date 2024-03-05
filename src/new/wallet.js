@@ -505,7 +505,7 @@ class HathorWallet extends EventEmitter {
     // only works because the serialized signature starts with the account path pubkey.
     const p2shSignatures = signatures.sort().map(sig => P2SHSignature.deserialize(sig));
 
-    for await (const {tx: spentTx, input, index} of this.storage.getSpentTxs(tx.inputs)) {
+    for await (const { tx: spentTx, input, index } of this.storage.getSpentTxs(tx.inputs)) {
       const spentUtxo = spentTx.outputs[input.index];
       const storageAddress = (await this.storage.getAddressInfo(spentUtxo.decoded.address));
       if (storageAddress === null) {
@@ -524,7 +524,7 @@ class HathorWallet extends EventEmitter {
           sigs.push(hexToBuffer(p2shSig.signatures[index]));
         } catch (e) {
           // skip if there is no signature, or if it's not hex
-          continue
+          continue;
         }
       }
       const inputData = walletUtils.getP2SHInputData(sigs, redeemScript);
@@ -2370,6 +2370,7 @@ class HathorWallet extends EventEmitter {
     for (const sigData of signatures) {
       ret.push({
         ...sigData,
+        signature: sigData.signature.toString('hex'),
         addressPath: await this.getAddressPathForIndex(sigData.addressIndex),
       });
     }
