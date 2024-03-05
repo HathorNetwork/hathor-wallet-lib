@@ -1,6 +1,7 @@
 import path from 'path';
 import { Level } from 'level';
-import { AbstractSublevel } from 'abstract-level'; import { IKVNanoContractIndex, INcData } from "src/types";
+import { AbstractSublevel } from 'abstract-level';
+import { IKVNanoContractIndex, INcData } from "src/types";
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 
 export const REGISTERED_PREFIX = 'registered';
@@ -27,6 +28,7 @@ export default class LevelNanoContractIndex implements IKVNanoContractIndex {
    */
   async close(): Promise<void> {
     await this.registeredDB.close();
+    await this.registeredDB.db.close();
   }
 
   /**
@@ -62,7 +64,7 @@ export default class LevelNanoContractIndex implements IKVNanoContractIndex {
    * Delete all entries on the database.
    */
   async clear(): Promise<void> {
-      await this.registeredDB.clear();
+      await this.registeredDB.db.clear();
   }
 
   /**
@@ -93,17 +95,15 @@ export default class LevelNanoContractIndex implements IKVNanoContractIndex {
    * @async
    */
   async getNanoContract(ncKey: string): Promise<INcData | null> {
-    let ncValue: INcData;
     try {
-      ncValue = await this.registeredDB.get(ncKey);
+      const ncValue = await this.registeredDB.get(ncKey);
+      return { ...ncValue };
     } catch (err: unknown) {
       if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
         return null;
       }
       throw err;
     }
-
-    return {...ncValue};
   }
 
   /**
