@@ -316,6 +316,13 @@ export class RequestError extends Error {
  */
 export class NanoRequestError extends RequestError {
   errorCode: string = ErrorMessages.NANO_REQUEST_ERROR;
+  originError: unknown | null = null;
+  response: any | null = null;
+  constructor(message: string, originError: unknown | null = null, response: any | null = null) {
+    super(message);
+    this.originError = originError;
+    this.response = response;
+  }
 };
 
 /**

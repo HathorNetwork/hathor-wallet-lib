@@ -41,19 +41,18 @@ const ncApi = {
       if (response.status === 200 && responseData.success) {
         return responseData;
       }
-    } catch (e) {
-      // Workaround to access e.response from axios, so the typescript linter doesn't complain
-      const error = e as AxiosError<Error>;
-      if (error.response === undefined) {
-        throw e;
+
+      throw new NanoRequestError('Error getting nano contract state.', null, response);
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        const e = error as AxiosError<Error>;
+        if (e.response && e.response.status === 404) {
+          throw new NanoRequest404Error('Nano contract not found.', e, e.response);
+        }
       }
 
-      if (error.response.status === 404) {
-        throw new NanoRequest404Error('Nano contract not found.');
-      }
+      throw new NanoRequestError('Error getting nano contract state.', error);
     }
-
-    throw new NanoRequestError('Error getting nano contract state.')
   },
 
   /**
@@ -75,19 +74,18 @@ const ncApi = {
       if (response.status === 200 && responseData.success) {
         return responseData;
       }
-    } catch (e) {
-      // Workaround to access e.response from axios, so the typescript linter doesn't complain
-      const error = e as AxiosError<Error>;
-      if (error.response === undefined) {
-        throw e;
+
+      throw new NanoRequestError('Error getting nano contract history.', null, response);
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        const e = error as AxiosError<Error>;
+        if (e.response && e.response.status === 404) {
+          throw new NanoRequest404Error('Nano contract not found.', e, e.response);
+        }
       }
 
-      if (error.response.status === 404) {
-        throw new NanoRequest404Error('Nano contract not found.');
-      }
+      throw new NanoRequestError('Error getting nano contract history.', error);
     }
-
-    throw new NanoRequestError('Error getting nano contract history.')
   },
 
   /**
@@ -108,19 +106,18 @@ const ncApi = {
       if (response.status === 200) {
         return responseData;
       }
-    } catch (e) {
-      // Workaround to access e.response from axios, so the typescript linter doesn't complain
-      const error = e as AxiosError<Error>;
-      if (error.response === undefined) {
-        throw e;
+
+      throw new NanoRequestError('Error getting blueprint information.', null, response);
+    } catch (error: unknown) {
+      if (axios.isAxiosError(error)) {
+        const e = error as AxiosError<Error>;
+        if (e.response && e.response.status === 404) {
+          throw new NanoRequest404Error('Blueprint not found.', e, e.response);
+        }
       }
 
-      if (error.response.status === 404) {
-        throw new NanoRequest404Error('Blueprint not found.');
-      }
+      throw new NanoRequestError('Error getting blueprint information.', error);
     }
-
-    throw new NanoRequestError('Error getting blueprint information.')
   },
 };
 
