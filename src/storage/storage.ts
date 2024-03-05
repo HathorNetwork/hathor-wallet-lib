@@ -84,10 +84,20 @@ export class Storage implements IStorage {
     this.version = version;
   }
 
+  /**
+   * Set the tx signing function
+   * @param {EcdsaTxSign} txSign The signing function
+   */
   setTxSign(txSign: EcdsaTxSign): void {
     this.txSignFunc = txSign;
   }
 
+  /**
+   * Sign the transaction
+   * @param {Transaction} tx The transaction to sign
+   * @param {string} pinCode The pin code
+   * @returns {Promise<IInputSignature[]>} The signatures
+   */
   async signTx(tx: Transaction, pinCode: string): Promise<IInputSignature[]> {
     if (this.txSignFunc) {
       return this.txSignFunc(tx, this, pinCode);
@@ -151,6 +161,12 @@ export class Storage implements IStorage {
     return this.store.getAddressAtIndex(index);
   }
 
+  /**
+   * Get the address public key, if not available derive from xpub
+   * @param {number} index
+   * @async
+   * @returns {Promise<string>} The public key DER encoded in hex
+   */
   async getAddressPubkey(index: number): Promise<string> {
     const addressInfo = await this.store.getAddressAtIndex(index);
     if (addressInfo?.publicKey) {

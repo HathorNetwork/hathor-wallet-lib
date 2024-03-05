@@ -2366,16 +2366,16 @@ class HathorWallet extends EventEmitter {
   async getSignatures(tx, { pinCode = null } = {}) {
     const pin = pinCode || this.pinCode;
     const signatures = await this.storage.signTx(tx, pin);
-    const ret = [];
+    const sigInfoArray = [];
     for (const sigData of signatures) {
-      ret.push({
+      sigInfoArray.push({
         ...sigData,
         pubkey: sigData.pubkey.toString('hex'),
         signature: sigData.signature.toString('hex'),
         addressPath: await this.getAddressPathForIndex(sigData.addressIndex),
       });
     }
-    return ret;
+    return sigInfoArray;
   }
 
   /**
