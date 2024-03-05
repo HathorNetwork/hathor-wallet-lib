@@ -164,7 +164,7 @@ class NanoContractTransactionBuilder {
     if (action.address) {
       utxoOptions.filter_address = action.address;
     }
-    const utxosData = await this.wallet.getUtxosForAmount(action.amount, { token: action.token });
+    const utxosData = await this.wallet.getUtxosForAmount(action.amount, utxoOptions);
     const inputs: Input[] = [];
     for (const utxo of utxosData.utxos) {
       inputs.push(new Input(utxo.txId, utxo.index));
