@@ -49,7 +49,7 @@ import PartialTxProposal from './wallet/partialTxProposal';
 import * as swapService from './wallet/api/swapService';
 import { AtomicSwapServiceConnection } from './swapService/swapConnection';
 import ncApi from './api/nano';
-import Serializer from './nano_contracts/serializer';
+import NanoContractSerializer from './nano_contracts/serializer';
 import * as nanoUtils from './nano_contracts/utils';
 
 export {
@@ -105,6 +105,6 @@ export {
   swapService,
   WalletType,
   ncApi,
-  Serializer,
+  NanoContractSerializer,
   nanoUtils,
 };
