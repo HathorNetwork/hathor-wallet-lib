@@ -12,7 +12,7 @@ import {
     NanoContractHistoryAPIResponse,
     NanoContractStateAPIResponse,
 } from '../nano_contracts/types';
-import { AxiosError } from 'axios';
+import axios, { AxiosError } from 'axios';
 
 /**
  * Api calls for nano contracts
@@ -34,9 +34,9 @@ const ncApi = {
    */
   async getNanoContractState(id: string, fields: string[], balances: string[], calls: string[]): Promise<NanoContractStateAPIResponse> {
     const data = { id, fields, balances, calls };
-    const axios = await createRequestInstance();
+    const axiosInstance = await createRequestInstance();
     try {
-      const response = await axios.get(`nano_contract/state`, {params: data});
+      const response = await axiosInstance.get(`nano_contract/state`, {params: data});
       const responseData = response.data;
       if (response.status === 200 && responseData.success) {
         return responseData;
@@ -67,9 +67,9 @@ const ncApi = {
    */
   async getNanoContractHistory(id: string, count: number | null = null, after: string | null = null): Promise<NanoContractHistoryAPIResponse> {
     const data = { id, count, after };
-    const axios = await createRequestInstance();
+    const axiosInstance = await createRequestInstance();
     try {
-      const response = await axios.get(`nano_contract/history`, {params: data});
+      const response = await axiosInstance.get(`nano_contract/history`, {params: data});
       const responseData = response.data;
       if (response.status === 200 && responseData.success) {
         return responseData;
@@ -99,9 +99,9 @@ const ncApi = {
    */
   async getBlueprintInformation(id: string): Promise<NanoContractBlueprintInformationAPIResponse> {
     const data = { blueprint_id: id };
-    const axios = await createRequestInstance();
+    const axiosInstance = await createRequestInstance();
     try {
-      const response = await axios.get(`nano_contract/blueprint`, { params: data });
+      const response = await axiosInstance.get(`nano_contract/blueprint`, { params: data });
       const responseData = response.data;
       if (response.status === 200) {
         return responseData;
