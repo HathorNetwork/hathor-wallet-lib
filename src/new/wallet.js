@@ -30,10 +30,6 @@ import {
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
 import Address from '../models/address';
-import P2PKH from '../models/p2pkh';
-import P2SH from '../models/p2sh';
-import Output from '../models/output';
-import Input from '../models/input';
 import { IStorage } from '../types';
 import transactionUtils from '../utils/transaction';
 import { signMessage } from '../utils/crypto';
@@ -46,8 +42,6 @@ import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH } from '../utils/address';
 import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../utils/address';
-import { signAndPushNCTransaction } from '../nano_contracts/utils';
-import NanoContractTransactionBuilder from '../nano_contracts/builder';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 
