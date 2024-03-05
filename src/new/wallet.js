@@ -2370,6 +2370,7 @@ class HathorWallet extends EventEmitter {
     for (const sigData of signatures) {
       ret.push({
         ...sigData,
+        pubkey: sigData.pubkey.toString('hex'),
         signature: sigData.signature.toString('hex'),
         addressPath: await this.getAddressPathForIndex(sigData.addressIndex),
       });
