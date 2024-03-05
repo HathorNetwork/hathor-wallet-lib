@@ -80,7 +80,10 @@ export const MERGED_MINED_BLOCK_VERSION = 3;
 export const NANO_CONTRACTS_VERSION = 4;
 
 /**
- * Nano Contracts version
+ * Nano Contracts information version
+ * If we decide to change the serialization of nano information
+ * data, then we can change this version, so we can
+ * correctly deserialize all the nano contract transactions
  */
 export const NANO_CONTRACTS_INFO_VERSION = 1;
 
