@@ -40,7 +40,6 @@ import { SCANNING_POLICY, TxHistoryProcessingStatus, WalletType } from '../types
 import { syncHistory, reloadStorage, scanPolicyStartAddresses, checkScanningPolicy } from '../utils/storage';
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
-import { deriveAddressP2PKH, deriveAddressP2SH } from '../utils/address';
 import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../utils/address';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
