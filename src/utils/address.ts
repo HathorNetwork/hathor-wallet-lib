@@ -113,9 +113,9 @@ export function createOutputScriptFromAddress(address: string, network: Network)
  *
  * @param pubkey Hex string conveying the public key.
  * @param network Address's network.
- * @returns The address object from parsed publicKey or null if publicKey is nulish.
+ * @returns The address object from parsed publicKey
  */
-export function getAddressFromPubkey(pubkey: string, network: Network): Address|null {
+export function getAddressFromPubkey(pubkey: string, network: Network): Address {
   const pubkeyBuffer = hexToBuffer(pubkey);
   const base58 = new bitcoreAddress(bitcorePublicKey(pubkeyBuffer), network.bitcoreNetwork).toString()
   return new Address(base58, { network });
