@@ -159,6 +159,11 @@ class NanoContractTransactionBuilder {
       throw new NanoContractTransactionError('Amount and token are required for deposit action.');
     }
 
+    const changeAddressParam = action.changeAddress;
+    if (changeAddressParam && !(await this.wallet.isAddressMine(changeAddressParam))) {
+      throw new NanoContractTransactionError('Change address must belong to the same wallet.');
+    }
+
     // Get the utxos with the amount of the deposit and create the inputs
     const utxoOptions: { token: string, filter_address?: string | null } = { token: action.token };
     if (action.address) {
@@ -174,10 +179,6 @@ class NanoContractTransactionBuilder {
     const network = this.wallet.getNetworkObject();
     // If there's a change amount left in the utxos, create the change output
     if (utxosData.changeAmount) {
-      const changeAddressParam = action.changeAddress;
-      if (changeAddressParam && !this.wallet.isAddressMine(changeAddressParam)) {
-        throw new NanoContractTransactionError('Change address must belong to the same wallet.');
-      }
 
       const changeAddressStr = changeAddressParam || (await this.wallet.getCurrentAddress()).address;
       const changeAddress = new Address(changeAddressStr, { network });
@@ -320,8 +321,7 @@ class NanoContractTransactionBuilder {
       throw new Error('This should never happen.');
     }
 
-    const nc = new NanoContract(inputs, outputs, tokens, ncId, this.method, serializedArgs, this.caller.publicKey.toBuffer(), null);
-    return nc;
+    return new NanoContract(inputs, outputs, tokens, ncId, this.method, serializedArgs, this.caller.publicKey.toBuffer(), null);
   }
 }
 
