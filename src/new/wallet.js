@@ -2337,7 +2337,7 @@ class HathorWallet extends EventEmitter {
   async getWalletInputInfo(tx) {
     const walletInputs = [];
 
-    for await (const {tx: spentTx, input, index} of this.storage.getSpentTxs(tx.inputs)) {
+    for await (const { tx: spentTx, input, index } of this.storage.getSpentTxs(tx.inputs)) {
       const addressInfo = await this.storage.getAddressInfo(spentTx.outputs[input.index].decoded.address);
       if (addressInfo === null) {
         continue;
