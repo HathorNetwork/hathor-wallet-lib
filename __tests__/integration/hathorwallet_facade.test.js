@@ -33,6 +33,43 @@ import { parseScriptData } from '../../src/utils/scripts';
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 const sampleNftData = 'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg';
 
+describe('getWalletInputInfo', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
+  });
+
+  it('should return the address index and address path', async () => {
+    const hWallet = await generateWalletHelper();
+    const address = await hWallet.getAddressAtIndex(1);
+
+    const network = hWallet.getNetworkObject();
+    await GenesisWalletHelper.injectFunds(hWallet, address, 10);
+
+    const sendTransaction = new SendTransaction(
+      {
+        storage: hWallet.storage,
+        outputs: [
+          {
+            address: await hWallet.getAddressAtIndex(2),
+            value: 5,
+            token: HATHOR_TOKEN_CONFIG.uid,
+          },
+        ],
+      },
+    );
+    const txData = await sendTransaction.prepareTxData();
+    const tx = transaction.createTransactionFromData(txData, network);
+    tx.prepareToSend();
+
+    await expect(hWallet.getWalletInputInfo(tx)).resolves.toEqual([{
+      inputIndex: 0,
+      addressIndex: 1,
+      addressPath: "m/44'/280'/0'/0/1",
+    }]);
+  });
+});
+
 describe('getTxById', () => {
   afterEach(async () => {
     await stopAllWallets();
@@ -3037,42 +3074,5 @@ describe('storage methods', () => {
 
     const hWalletRO = await generateWalletHelperRO({ hardware: true });
     await expect(hWalletRO.isHardwareWallet()).resolves.toBe(true);
-  });
-});
-
-describe('getWalletInputInfo', () => {
-  afterEach(async () => {
-    await stopAllWallets();
-    await GenesisWalletHelper.clearListeners();
-  });
-
-  it.only('should return the address index and address path', async () => {
-    const hWallet = await generateWalletHelper();
-    const address = await hWallet.getAddressAtIndex(1);
-
-    const network = hWallet.getNetworkObject();
-    await GenesisWalletHelper.injectFunds(hWallet, address, 10);
-
-    const sendTransaction = new SendTransaction(
-      {
-        storage: hWallet.storage,
-        outputs: [
-          {
-            address: await hWallet.getAddressAtIndex(2),
-            value: 5,
-            token: HATHOR_TOKEN_CONFIG.uid,
-          },
-        ],
-      },
-    );
-    const txData = await sendTransaction.prepareTxData();
-    const tx = transaction.createTransactionFromData(txData, network);
-    tx.prepareToSend();
-
-    await expect(hWallet.getWalletInputInfo(tx)).resolves.toEqual([{
-      inputIndex: 0,
-      addressIndex: 1,
-      addressPath: "m/44'/280'/0'/0/1",
-    }]);
   });
 });
