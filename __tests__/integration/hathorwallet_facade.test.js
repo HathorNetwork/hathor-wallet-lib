@@ -523,6 +523,7 @@ describe('start', () => {
       pinCode: null,
     });
     expect(hWallet.isReady()).toStrictEqual(true);
+    await expect(hWallet.isReadonly()).resolves.toBe(true);
 
     // Validating that methods that require the private key will throw on call
     await expect(hWallet.consolidateUtxos()).rejects.toThrow(WalletFromXPubGuard);
@@ -566,7 +567,25 @@ describe('start', () => {
       }),
     ]);
     await expect(hWallet.getUtxos()).resolves.toHaveProperty('total_utxos_available', 1);
-  })
+  });
+
+  it('should start an externally signed wallet', async () => {
+    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const code = new Mnemonic(walletData.words);
+    const rootXpriv = code.toHDPrivateKey('', new Network('privatenet'));
+    const xpriv = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
+    const xpub = xpriv.xpubkey;
+
+    // Creating a new wallet with a known set of words just to generate the custom token
+    const hWallet = await generateWalletHelper({
+      xpub,
+      password: null,
+      pinCode: null,
+      isSignedExternally: true,
+    });
+    expect(hWallet.isReady()).toStrictEqual(true);
+    await expect(hWallet.isReadonly()).resolves.toBe(false);
+  });
 
   it('should start a wallet without pin', async () => {
     // Generating the wallet
