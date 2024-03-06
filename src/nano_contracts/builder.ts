@@ -11,6 +11,8 @@ import Input from '../models/input';
 import Address from '../models/address';
 import NanoContract from './nano_contract';
 import { hexToBuffer } from '../utils/buffer';
+import transactionUtils from '../utils/transaction';
+import { IDataOutput } from '../types';
 import { HATHOR_TOKEN_CONFIG } from '../constants';
 import Serializer from './serializer';
 import { HDPrivateKey } from 'bitcore-lib';
@@ -179,17 +181,17 @@ class NanoContractTransactionBuilder {
     const network = this.wallet.getNetworkObject();
     // If there's a change amount left in the utxos, create the change output
     if (utxosData.changeAmount) {
-
       const changeAddressStr = changeAddressParam || (await this.wallet.getCurrentAddress()).address;
-      const changeAddress = new Address(changeAddressStr, { network });
+      const outputData = {
+        address: changeAddressStr
+      } as IDataOutput
       // This will throw AddressError in case the adress is invalid
-      changeAddress.validateAddress();
-      const p2pkh = new P2PKH(changeAddress);
-      const p2pkhScript = p2pkh.createScript()
+      // this handles p2pkh and p2sh scripts
+      const outputScript = transactionUtils.createOutputScript(outputData, network);
       const tokenIndex = action.token === HATHOR_TOKEN_CONFIG.uid ? 0 : tokens.findIndex((token) => token === action.token) + 1;
       const outputObj = new Output(
         utxosData.changeAmount,
-        p2pkhScript,
+        outputScript,
         {
           tokenData: tokenIndex
         }
