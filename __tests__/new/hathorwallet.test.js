@@ -215,7 +215,7 @@ test('Protected xpub wallet methods', async () => {
 test('getSignatures', async () => {
   const store = new MemoryStore();
   const storage = new Storage(store);
-  // jest.spyOn(storage, 'isReadonly').mockReturnValue(Promise.resolve(false));
+  jest.spyOn(storage, 'isReadonly').mockReturnValue(Promise.resolve(false));
   jest.spyOn(storage, 'getWalletType').mockReturnValue(Promise.resolve(WalletType.P2PKH));
   jest.spyOn(storage, 'signTx').mockReturnValue(Promise.resolve([
     {

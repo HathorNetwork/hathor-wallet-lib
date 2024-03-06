@@ -16,19 +16,18 @@ import {
 } from './helpers/wallet.helper';
 import HathorWallet from '../../src/new/wallet';
 import { HATHOR_TOKEN_CONFIG, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
-import { NETWORK_NAME, TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test-constants';
+import { TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test-constants';
 import dateFormatter from '../../src/utils/date';
 import { verifyMessage } from '../../src/utils/crypto';
 import { loggers } from './utils/logger.util';
-import { NftValidationError, TxNotFoundError, SendTxError, WalletFromXPubGuard } from '../../src/errors';
+import { NftValidationError, TxNotFoundError, WalletFromXPubGuard } from '../../src/errors';
 import SendTransaction from '../../src/new/sendTransaction';
-import walletUtils from '../../src/utils/wallet';
 import { ConnectionState } from '../../src/wallet/types';
 import transaction from '../../src/utils/transaction';
 import Mnemonic from 'bitcore-mnemonic/lib/mnemonic';
 import { P2PKH_ACCT_PATH } from '../../src/constants';
 import Network from '../../src/models/network';
-import { WalletType, WALLET_FLAGS } from '../../src/types';
+import { WalletType } from '../../src/types';
 import { parseScriptData } from '../../src/utils/scripts';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
@@ -730,7 +729,15 @@ describe('addresses methods', () => {
     const nullIndex = await hWallet.getAddressIndex('test');
 
     expect(nullIndex).toBe(null);
-  })
+  });
+
+  it('should derive an address if it has not been generated yet', async () => {
+    const hWallet = await generateWalletHelper();
+    await expect(hWallet.getAddressAtIndex(50)).resolves.toBeDefined();
+
+    const mshWallet = await generateMultisigWalletHelper({ walletIndex: 0 });
+    await expect(mshWallet.getAddressAtIndex(50)).resolves.toBeDefined();
+  });
 });
 
 describe('getBalance', () => {
@@ -3028,5 +3035,42 @@ describe('storage methods', () => {
 
     const hWalletRO = await generateWalletHelperRO({ hardware: true });
     await expect(hWalletRO.isHardwareWallet()).resolves.toBe(true);
+  });
+});
+
+describe('getWalletInputInfo', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
+  });
+
+  it.only('should return the address index and address path', async () => {
+    const hWallet = await generateWalletHelper();
+    const address = await hWallet.getAddressAtIndex(1);
+
+    const network = hWallet.getNetworkObject();
+    await GenesisWalletHelper.injectFunds(hWallet, address, 10);
+
+    const sendTransaction = new SendTransaction(
+      {
+        storage: hWallet.storage,
+        outputs: [
+          {
+            address: await hWallet.getAddressAtIndex(2),
+            value: 5,
+            token: HATHOR_TOKEN_CONFIG.uid,
+          },
+        ],
+      },
+    );
+    const txData = await sendTransaction.prepareTxData();
+    const tx = transaction.createTransactionFromData(txData, network);
+    tx.prepareToSend();
+
+    await expect(hWallet.getWalletInputInfo(tx)).resolves.toEqual([{
+      inputIndex: 0,
+      addressIndex: 1,
+      addressPath: "m/44'/280'/0'/0/1",
+    }]);
   });
 });
