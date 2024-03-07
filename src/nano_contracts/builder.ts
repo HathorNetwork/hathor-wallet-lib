@@ -59,6 +59,7 @@ class NanoContractTransactionBuilder {
    */
   setMethod(method: string) {
     this.method = method;
+    return this;
   }
 
   /**
@@ -80,6 +81,7 @@ class NanoContractTransactionBuilder {
     }
 
     this.actions = actions;
+    return this;
   }
 
   /**
@@ -92,6 +94,7 @@ class NanoContractTransactionBuilder {
    */
   setArgs(args: any[]) {
     this.args = args;
+    return this;
   }
 
   /**
@@ -104,6 +107,7 @@ class NanoContractTransactionBuilder {
    */
   setCaller(caller: HDPrivateKey) {
     this.caller = caller;
+    return this;
   }
 
   /**
@@ -116,6 +120,7 @@ class NanoContractTransactionBuilder {
    */
   setBlueprintId(blueprintId: string) {
     this.blueprintId = blueprintId;
+    return this;
   }
 
   /**
@@ -128,6 +133,7 @@ class NanoContractTransactionBuilder {
    */
   setNcId(ncId: string) {
     this.ncId = ncId;
+    return this;
   }
 
   /**
@@ -140,6 +146,7 @@ class NanoContractTransactionBuilder {
    */
   setWallet(wallet: HathorWallet) {
     this.wallet = wallet;
+    return this;
   }
 
   /**

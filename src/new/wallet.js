@@ -2793,14 +2793,14 @@ class HathorWallet extends EventEmitter {
     }
 
     // Build and send transaction
-    const builder = new NanoContractTransactionBuilder();
-    builder.setMethod(method);
-    builder.setWallet(this);
-    builder.setBlueprintId(blueprintId);
-    builder.setNcId(method === 'initialize' ? null : data.ncId);
-    builder.setCaller(privateKey);
-    builder.setActions(data.actions);
-    builder.setArgs(data.args);
+    const builder = new NanoContractTransactionBuilder()
+                          .setMethod(method)
+                          .setWallet(this)
+                          .setBlueprintId(blueprintId)
+                          .setNcId(method === 'initialize' ? null : data.ncId)
+                          .setCaller(privateKey)
+                          .setActions(data.actions)
+                          .setArgs(data.args)
 
     const nc = await builder.build();
     return signAndPushNCTransaction(nc, privateKey, pin, this.storage);
