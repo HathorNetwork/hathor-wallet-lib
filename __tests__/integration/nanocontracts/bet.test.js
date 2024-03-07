@@ -23,6 +23,7 @@ import Serializer from '../../../src/nano_contracts/serializer';
 import { NanoContractTransactionError, NanoRequest404Error } from '../../../src/errors';
 
 let fundsTx;
+const blueprintId = '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595';
 
 describe('full cycle of bet nano contract', () => {
   /** @type HathorWallet */
@@ -56,7 +57,6 @@ describe('full cycle of bet nano contract', () => {
     const address1 = await hWallet.getAddressAtIndex(1);
     const dateLastBet = dateFormatter.dateToTimestamp(new Date()) + 6000;
     const network = hWallet.getNetworkObject();
-    const blueprintId = '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595';
 
     // Create NC
     const oracleData = getOracleBuffer(address1, network);
