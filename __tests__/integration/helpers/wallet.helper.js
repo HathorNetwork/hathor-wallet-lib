@@ -461,8 +461,13 @@ export async function waitTxConfirmed(hWallet, txId, timeout) {
       }, timeout);
     }
 
-    while (await getTxFirstBlock(hWallet, txId) === null) {
-      await delay(1000);
+    try {
+      while (await getTxFirstBlock(hWallet, txId) === null) {
+        await delay(1000);
+      }
+    } catch {
+      // Get API request might fail, so we reject the promise
+      reject(new Error('Error getting transaction first block.'));
     }
 
     if (timeoutHandler) {
