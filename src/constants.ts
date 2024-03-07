@@ -88,6 +88,11 @@ export const NANO_CONTRACTS_VERSION = 4;
 export const NANO_CONTRACTS_INFO_VERSION = 1;
 
 /**
+ * String with the name of the initialize method of all blueprints
+ */
+export const NANO_CONTRACTS_INITIALIZE_METHOD = 'initialize';
+
+/**
  * Create token information version
  * so far we expect name and symbol
  */

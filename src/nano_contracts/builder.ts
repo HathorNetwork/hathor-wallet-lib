@@ -13,7 +13,10 @@ import NanoContract from './nano_contract';
 import { hexToBuffer } from '../utils/buffer';
 import transactionUtils from '../utils/transaction';
 import { IDataOutput } from '../types';
-import { HATHOR_TOKEN_CONFIG, NANO_CONTRACTS_VERSION } from '../constants';
+import {
+    HATHOR_TOKEN_CONFIG,
+    NANO_CONTRACTS_INITIALIZE_METHOD,
+    NANO_CONTRACTS_VERSION } from '../constants';
 import Serializer from './serializer';
 import { HDPrivateKey } from 'bitcore-lib';
 import HathorWallet from '../new/wallet';
@@ -252,12 +255,12 @@ class NanoContractTransactionBuilder {
    * @inner
    */
   async build(): Promise<NanoContract> {
-    if (this.method === 'initialize' && !this.blueprintId) {
+    if (this.method === NANO_CONTRACTS_INITIALIZE_METHOD && !this.blueprintId) {
       // Initialize needs the blueprint ID
       throw new NanoContractTransactionError('Missing blueprint id. Parameter blueprintId in data');
     }
 
-    if (this.method !== 'initialize') {
+    if (this.method !== NANO_CONTRACTS_INITIALIZE_METHOD) {
       // Get the blueprint id from the nano transaction in the full node
       if (!this.ncId) {
         throw new NanoContractTransactionError(`Nano contract ID cannot be null for method ${this.method}`);
@@ -349,7 +352,7 @@ class NanoContractTransactionBuilder {
       }
     }
 
-    const ncId = this.method === 'initialize' ? this.blueprintId : this.ncId;
+    const ncId = this.method === NANO_CONTRACTS_INITIALIZE_METHOD ? this.blueprintId : this.ncId;
 
     if (ncId == null) {
       // This was validated in the beginning of the method but the linter was complaining about it

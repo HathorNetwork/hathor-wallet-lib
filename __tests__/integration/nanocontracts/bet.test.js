@@ -7,7 +7,10 @@ import {
   waitNextBlock,
   waitTxConfirmed
 } from '../helpers/wallet.helper';
-import { HATHOR_TOKEN_CONFIG } from '../../../src/constants';
+import {
+  HATHOR_TOKEN_CONFIG,
+  NANO_CONTRACTS_INITIALIZE_METHOD
+} from '../../../src/constants';
 import ncApi from '../../../src/api/nano';
 import helpersUtils from '../../../src/utils/helpers';
 import dateFormatter from '../../../src/utils/date';
@@ -58,7 +61,7 @@ describe('full cycle of bet nano contract', () => {
     // Create NC
     const oracleData = getOracleBuffer(address1, network);
     const tx1 = await hWallet.createAndSendNanoContractTransaction(
-      'initialize',
+      NANO_CONTRACTS_INITIALIZE_METHOD,
       address0,
       {
         blueprintId,
@@ -234,7 +237,7 @@ describe('full cycle of bet nano contract', () => {
     // Initialize missing blueprintId
     const oracleData = getOracleBuffer(address1, network);
     await expect(hWallet.createAndSendNanoContractTransaction(
-      'initialize',
+      NANO_CONTRACTS_INITIALIZE_METHOD,
       address0,
       {
         args: [
@@ -247,7 +250,7 @@ describe('full cycle of bet nano contract', () => {
 
     // Invalid blueprint id
     await expect(hWallet.createAndSendNanoContractTransaction(
-      'initialize',
+      NANO_CONTRACTS_INITIALIZE_METHOD,
       address0,
       {
         blueprintId: '1234',
@@ -261,7 +264,7 @@ describe('full cycle of bet nano contract', () => {
 
     // Missing last argument
     await expect(hWallet.createAndSendNanoContractTransaction(
-      'initialize',
+      NANO_CONTRACTS_INITIALIZE_METHOD,
       address0,
       {
         blueprintId,
@@ -276,7 +279,7 @@ describe('full cycle of bet nano contract', () => {
     const hWallet2 = await generateWalletHelper();
     const addressNewWallet = await hWallet2.getAddressAtIndex(0);
     await expect(hWallet.createAndSendNanoContractTransaction(
-      'initialize',
+      NANO_CONTRACTS_INITIALIZE_METHOD,
       addressNewWallet,
       {
         blueprintId,
@@ -290,7 +293,7 @@ describe('full cycle of bet nano contract', () => {
 
     // Oracle data is expected to be a hexa
     await expect(hWallet.createAndSendNanoContractTransaction(
-      'initialize',
+      NANO_CONTRACTS_INITIALIZE_METHOD,
       address0,
       {
         blueprintId,
@@ -304,7 +307,7 @@ describe('full cycle of bet nano contract', () => {
 
     // Date last bet is expected to be an integer
     await expect(hWallet.createAndSendNanoContractTransaction(
-      'initialize',
+      NANO_CONTRACTS_INITIALIZE_METHOD,
       address0,
       {
         blueprintId,
