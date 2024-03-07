@@ -8,10 +8,9 @@
 import { get } from 'lodash';
 import bitcore, { HDPrivateKey } from 'bitcore-lib';
 import EventEmitter from 'events';
-import { HATHOR_TOKEN_CONFIG, P2SH_ACCT_PATH, P2PKH_ACCT_PATH, NANO_CONTRACTS_VERSION } from '../constants';
+import { HATHOR_TOKEN_CONFIG, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
 import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
-import ncApi from '../api/nano';
 import versionApi from '../api/version';
 import { hexToBuffer } from '../utils/buffer';
 import { decryptData } from '../utils/crypto';
@@ -2702,85 +2701,6 @@ class HathorWallet extends EventEmitter {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
-    if (method !== 'initialize' && !data.ncId) {
-      // Initialize is the only method that creates the nano contract
-      // the other methods must have the corresponding ncId to be executed
-      throw new NanoContractTransactionError('Missing nano contract id. Parameter ncId in data');
-    }
-
-    if (method === 'initialize' && !data.blueprintId) {
-      // Initialize needs the blueprint ID
-      throw new NanoContractTransactionError('Missing blueprint id. Parameter blueprintId in data');
-    }
-
-    let blueprintId = data.blueprintId;
-
-    if (method !== 'initialize') {
-      let response;
-      try {
-        response = await this.getFullTxById(data.ncId);
-      } catch {
-        // Error getting nano contract transaction data from the full node
-        throw new NanoContractTransactionError(`Error getting nano contract transaction data with id ${data.ncId} from the full node`);
-      }
-
-      if (response.tx.version !== NANO_CONTRACTS_VERSION) {
-        throw new NanoContractTransactionError(`Transaction with id ${data.ncId} is not a nano contract transaction.`);
-      }
-
-      blueprintId = response.tx.nc_blueprint_id;
-    }
-
-    // Get the blueprint data from full node
-    const blueprintInformation = await ncApi.getBlueprintInformation(blueprintId);
-    const methodArgs = get(blueprintInformation, `public_methods.${method}.args`);
-    if (!methodArgs) {
-      throw new NanoContractTransactionError(`Blueprint does not have method ${method}.`);
-    }
-
-    // Args may come as undefined
-    const argsLen = data.args ? data.args.length : 0;
-    if (argsLen !== methodArgs.length) {
-      throw new NanoContractTransactionError(`Method needs ${methodArgs.length} parameters but data has ${data.args.length}.`);
-    }
-
-    // Here we validate that the arguments sent in the data array of args has
-    // the expected type for each parameter of the blueprint method
-    for (const [index, arg] of methodArgs.entries()) {
-      let typeToCheck = arg.type;
-      if (typeToCheck.startsWith('SignedData')) {
-        // Signed data will always be an hexadecimal with the
-        // signature len, signature, and the data itself
-        typeToCheck = 'str';
-      }
-      switch (typeToCheck) {
-        case 'bytes':
-          // Bytes arguments are sent in hexadecimal
-          try {
-            data.args[index] = hexToBuffer(data.args[index]);
-          } catch {
-            // Data sent is not a hex
-            throw new NanoContractTransactionError(`Invalid hexadecimal for argument number ${index + 1}.`);
-          }
-          break;
-        case 'int':
-        case 'float':
-          if (typeof data.args[index] !== 'number') {
-            throw new NanoContractTransactionError(`Expects argument number ${index + 1} type ${arg.type} but received type ${typeof data.args[index]}.`);
-          }
-          break;
-        case 'str':
-          if (typeof data.args[index] !== 'string') {
-            throw new NanoContractTransactionError(`Expects argument number ${index + 1} type ${arg.type} but received type ${typeof data.args[index]}.`);
-          }
-          break;
-        default:
-          if (arg.type !== typeof data.args[index]) {
-            throw new NanoContractTransactionError(`Expects argument number ${index + 1} type ${arg.type} but received type ${typeof data.args[index]}.`);
-          }
-      }
-    }
-
     // Get private key that will sign the nano contract transaction
     let privateKey;
     try {
@@ -2796,8 +2716,8 @@ class HathorWallet extends EventEmitter {
     const builder = new NanoContractTransactionBuilder()
                           .setMethod(method)
                           .setWallet(this)
-                          .setBlueprintId(blueprintId)
-                          .setNcId(method === 'initialize' ? null : data.ncId)
+                          .setBlueprintId(data.blueprintId)
+                          .setNcId(data.ncId)
                           .setCaller(privateKey)
                           .setActions(data.actions)
                           .setArgs(data.args)

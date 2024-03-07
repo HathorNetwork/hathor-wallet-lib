@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { get } from 'lodash';
 import transactionUtils from '../utils/transaction';
 import { crypto } from 'bitcore-lib';
 import SendTransaction from '../new/sendTransaction';
@@ -13,17 +14,23 @@ import NanoContract from './nano_contract';
 import Transaction from '../models/transaction';
 import Network from '../models/network';
 import ScriptData from '../models/script_data';
+import ncApi from '../api/nano';
 import { hexToBuffer, bufferToHex, unpackLen } from '../utils/buffer';
 import helpers from '../utils/helpers';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
 import Address from '../models/address';
-import { OracleParseError, WalletFromXPubGuard } from '../errors';
+import {
+  NanoContractTransactionError,
+  OracleParseError,
+  WalletFromXPubGuard
+} from '../errors';
 import { OutputType } from '../wallet/types';
 import { IStorage } from '../types';
 import { parseScript } from '../utils/scripts';
 import { decryptData } from '../utils/crypto';
 import { PrivateKey } from 'bitcore-lib';
+import { MethodArgInfo } from './types';
 
 /**
  * Sign a transaction, create a send transaction object, mine and push
@@ -113,4 +120,68 @@ export const getOracleInputData = async (oracleData: Buffer, resultSerialized: B
 
   // If it's not an address, we use the oracleInputData as the inputData directly
   return oracleData;
+}
+
+
+/**
+ * Validate if nano contracts arguments match the expected ones from the blueprint method
+ *
+ * @param {blueprintId} Blueprint ID
+ * @param {method} Method name
+ * @param {args} Arguments of the method to check if have the expected types
+ *
+ * @throws NanoContractTransactionError in case the arguments are not valid
+ * @throws NanoRequest404Error in case the blueprint ID does not exist on the full node
+ */
+export const validateBlueprintMethodArgs = async (blueprintId, method, args): Promise<void> => {
+  // Get the blueprint data from full node
+  const blueprintInformation = await ncApi.getBlueprintInformation(blueprintId);
+
+  const methodArgs = get(blueprintInformation, `public_methods.${method}.args`, []) as MethodArgInfo[];
+  if (!methodArgs) {
+    throw new NanoContractTransactionError(`Blueprint does not have method ${method}.`);
+  }
+
+  // Args may come as undefined
+  const argsLen = args ? args.length : 0;
+  if (argsLen !== methodArgs.length) {
+    throw new NanoContractTransactionError(`Method needs ${methodArgs.length} parameters but data has ${args.length}.`);
+  }
+
+  // Here we validate that the arguments sent in the data array of args has
+  // the expected type for each parameter of the blueprint method
+  for (const [index, arg] of methodArgs.entries()) {
+    let typeToCheck = arg.type;
+    if (typeToCheck.startsWith('SignedData')) {
+      // Signed data will always be an hexadecimal with the
+      // signature len, signature, and the data itself
+      typeToCheck = 'str';
+    }
+    switch (typeToCheck) {
+      case 'bytes':
+        // Bytes arguments are sent in hexadecimal
+        try {
+          args[index] = hexToBuffer(args[index]);
+        } catch {
+          // Data sent is not a hex
+          throw new NanoContractTransactionError(`Invalid hexadecimal for argument number ${index + 1}.`);
+        }
+        break;
+      case 'int':
+      case 'float':
+        if (typeof args[index] !== 'number') {
+          throw new NanoContractTransactionError(`Expects argument number ${index + 1} type ${arg.type} but received type ${typeof args[index]}.`);
+        }
+        break;
+      case 'str':
+        if (typeof args[index] !== 'string') {
+          throw new NanoContractTransactionError(`Expects argument number ${index + 1} type ${arg.type} but received type ${typeof args[index]}.`);
+        }
+        break;
+      default:
+        if (arg.type !== typeof args[index]) {
+          throw new NanoContractTransactionError(`Expects argument number ${index + 1} type ${arg.type} but received type ${typeof args[index]}.`);
+        }
+    }
+  }
 }

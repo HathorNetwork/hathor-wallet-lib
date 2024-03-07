@@ -13,7 +13,7 @@ import NanoContract from './nano_contract';
 import { hexToBuffer } from '../utils/buffer';
 import transactionUtils from '../utils/transaction';
 import { IDataOutput } from '../types';
-import { HATHOR_TOKEN_CONFIG } from '../constants';
+import { HATHOR_TOKEN_CONFIG, NANO_CONTRACTS_VERSION } from '../constants';
 import Serializer from './serializer';
 import { HDPrivateKey } from 'bitcore-lib';
 import HathorWallet from '../new/wallet';
@@ -25,12 +25,13 @@ import {
   MethodArgInfo,
 } from './types';
 import ncApi from '../api/nano';
+import { validateBlueprintMethodArgs } from './utils';
 
 
 class NanoContractTransactionBuilder {
-  blueprintId: string | null;
+  blueprintId: string | null | undefined;
   // nano contract ID, null if initialize
-  ncId: string | null;
+  ncId: string | null | undefined;
   method: string | null;
   actions: NanoContractAction[] | null;
   caller: HDPrivateKey | null;
@@ -251,13 +252,38 @@ class NanoContractTransactionBuilder {
    * @inner
    */
   async build(): Promise<NanoContract> {
-    if (this.blueprintId === null || this.method === null || this.caller === null) {
-      throw new Error('Must have blueprint id, method and caller.');
+    if (this.method === 'initialize' && !this.blueprintId) {
+      // Initialize needs the blueprint ID
+      throw new NanoContractTransactionError('Missing blueprint id. Parameter blueprintId in data');
     }
 
-    if (this.method !== 'initialize' && this.ncId === null) {
-      throw new Error(`Nano contract ID cannot be null for method ${this.method}`);
+    if (this.method !== 'initialize') {
+      // Get the blueprint id from the nano transaction in the full node
+      if (!this.ncId) {
+        throw new NanoContractTransactionError(`Nano contract ID cannot be null for method ${this.method}`);
+      }
+
+      let response;
+      try {
+        response = await this.wallet.getFullTxById(this.ncId);
+      } catch {
+        // Error getting nano contract transaction data from the full node
+        throw new NanoContractTransactionError(`Error getting nano contract transaction data with id ${this.ncId} from the full node`);
+      }
+
+      if (response.tx.version !== NANO_CONTRACTS_VERSION) {
+        throw new NanoContractTransactionError(`Transaction with id ${this.ncId} is not a nano contract transaction.`);
+      }
+
+      this.blueprintId = response.tx.nc_blueprint_id;
     }
+
+    if (!this.blueprintId || !this.method || !this.caller) {
+      throw new NanoContractTransactionError('Must have blueprint id, method and caller.');
+    }
+
+    // Validate if the arguments match the expected method arguments
+    await validateBlueprintMethodArgs(this.blueprintId, this.method, this.args);
 
     // Transform actions into inputs and outputs
     let inputs: Input[] = [];
@@ -325,7 +351,7 @@ class NanoContractTransactionBuilder {
 
     const ncId = this.method === 'initialize' ? this.blueprintId : this.ncId;
 
-    if (ncId === null) {
+    if (ncId == null) {
       // This was validated in the beginning of the method but the linter was complaining about it
       throw new Error('This should never happen.');
     }
