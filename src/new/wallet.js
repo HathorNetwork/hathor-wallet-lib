@@ -2782,16 +2782,15 @@ class HathorWallet extends EventEmitter {
     }
 
     // Get private key that will sign the nano contract transaction
-    let derivedKey;
+    let privateKey;
     try {
-      derivedKey = await this.getHDPrivateKeyFromAddress(address, options);
+      privateKey = await this.getPrivateKeyFromAddress(address, options);
     } catch (e) {
       if (e instanceof AddressError) {
         throw new NanoContractTransactionError('Address used to sign the transaction does not belong to the wallet.');
       }
       throw e;
     }
-    const privateKey = derivedKey.privateKey;
 
     // Build and send transaction
     const builder = new NanoContractTransactionBuilder();
@@ -2808,18 +2807,18 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Generate and return the HDPrivateKey for an address
+   * Generate and return the PrivateKey for an address
    *
-   * @param {string} address Address to get the HDPrivateKey from
+   * @param {string} address Address to get the PrivateKey from
    * @param [options]
    * @param {string} [options.pinCode] PIN to decrypt the private key.
    *                                   Optional but required if not set in this
    *
    * @returns {Promise<HDPrivateKey>}
    */
-  async getHDPrivateKeyFromAddress(address, options = {}) {
+  async getPrivateKeyFromAddress(address, options = {}) {
     if (await this.storage.isReadonly()) {
-      throw new WalletFromXPubGuard('getHDPrivateKeyFromAddress');
+      throw new WalletFromXPubGuard('getPrivateKeyFromAddress');
     }
     const newOptions = Object.assign({ pinCode: null }, options);
     const pin = newOptions.pinCode || this.pinCode;
@@ -2831,11 +2830,12 @@ class HathorWallet extends EventEmitter {
     if (addressIndex === null) {
       throw new AddressError('Address does not belong to the wallet.');
     }
-    const accessData = await this.getAccessData();
-    const encryptedPrivateKey = accessData.mainKey;
-    const privateKeyStr = decryptData(encryptedPrivateKey, pin);
-    const key = HDPrivateKey(privateKeyStr)
-    return key.deriveNonCompliantChild(addressIndex);
+
+    const xprivkey = await this.storage.getMainXPrivKey(pin);
+    const key = HDPrivateKey(xprivkey);
+    // Derive key to addressIndex
+    const derivedKey = key.deriveNonCompliantChild(addressIndex);
+    return derivedKey.privateKey;
   }
 }
 

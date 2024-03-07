@@ -23,7 +23,7 @@ import { OutputType } from '../wallet/types';
 import { IStorage } from '../types';
 import { parseScript } from '../utils/scripts';
 import { decryptData } from '../utils/crypto';
-import { HDPrivateKey } from 'bitcore-lib';
+import { PrivateKey } from 'bitcore-lib';
 
 /**
  * Sign a transaction, create a send transaction object, mine and push
@@ -33,7 +33,7 @@ import { HDPrivateKey } from 'bitcore-lib';
  * @param {pin} Pin to decrypt data
  * @param {storage} Wallet storage object
  */
-export const signAndPushNCTransaction = async (tx: NanoContract, privateKey: HDPrivateKey, pin: string, storage: IStorage): Promise<Transaction> => {
+export const signAndPushNCTransaction = async (tx: NanoContract, privateKey: PrivateKey, pin: string, storage: IStorage): Promise<Transaction> => {
   const dataToSignHash = tx.getDataToSignHash();
   // Add nano signature
   tx.signature = transactionUtils.getSignature(dataToSignHash, privateKey);
@@ -104,9 +104,9 @@ export const getOracleInputData = async (oracleData: Buffer, resultSerialized: B
     if (!wallet.isAddressMine(address)) {
       throw new OracleParseError('Oracle address is not from the loaded wallet.');
     }
-    const oracleKey = await wallet.getHDPrivateKeyFromAddress(address);
+    const oracleKey = await wallet.getPrivateKeyFromAddress(address);
 
-    const signatureOracle = transactionUtils.getSignature(crypto.Hash.sha256(resultSerialized), oracleKey.privateKey);
+    const signatureOracle = transactionUtils.getSignature(crypto.Hash.sha256(resultSerialized), oracleKey);
     const oraclePubKeyBuffer = oracleKey.publicKey.toBuffer();
     return transactionUtils.createInputData(signatureOracle, oraclePubKeyBuffer);
   }
