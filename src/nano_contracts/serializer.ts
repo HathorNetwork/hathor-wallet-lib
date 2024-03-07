@@ -169,7 +169,7 @@ class Serializer {
 
   /**
    * Serialize a signed value
-   * [len(serializedResult)][serializedResult][inputData]
+   * [len(serializedValue)][serializedValue][inputData]
    *
    * @param {inputData} Input data of the signed value
    * @param {value} Value to serialize
@@ -181,7 +181,7 @@ class Serializer {
   fromSigned(inputData: Buffer, value: any, type: string) {
     const ret: Buffer[] = [];
 
-    // [len(serializedResult)][serializedResult][inputData]
+    // [len(serializedValue)][serializedValue][inputData]
     const serialized = this.serializeFromType(value, type);
     this.pushLenValue(ret, serialized.length);
     ret.push(serialized);

@@ -2750,7 +2750,7 @@ class HathorWallet extends EventEmitter {
       let typeToCheck = arg.type;
       if (typeToCheck.startsWith('SignedData')) {
         // Signed data will always be an hexadecimal with the
-        // signed part and the data itself
+        // signature len, signature, and the data itself
         typeToCheck = 'str';
       }
       switch (typeToCheck) {
