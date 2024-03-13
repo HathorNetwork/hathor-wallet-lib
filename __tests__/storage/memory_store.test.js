@@ -337,19 +337,33 @@ test('nano contract methods', async () => {
   const store = new MemoryStore();
 
   // Asserts the store is empty
-  await expect(store.getNanoContract('address:nanoContractId')).resolves.toBeNull();
-  await expect(store.isNanoContractRegistered('address:nanoContractId')).resolves.toBeFalsy();
+  await expect(store.getNanoContract('nanoContractId')).resolves.toBeNull();
+  await expect(store.isNanoContractRegistered('nanoContractId')).resolves.toBeFalsy();
   expect(store.registeredNanoContracts.size).toEqual(0);
 
   // Asserts nano contract is registerd with success
-  await store.registerNanoContract('WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ:001', {
-    address: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
+  await store.registerNanoContract('001', {
     ncId: '001',
     blueprintId: '001',
     blueprintName: 'Bet'
   });
-  await expect(store.getNanoContract('WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ:001')).resolves.toBeDefined();
-  await expect(store.isNanoContractRegistered('WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ:001')).resolves.toBeTruthy();
+  await expect(store.getNanoContract('001')).resolves.toBeDefined();
+  await expect(store.isNanoContractRegistered('001')).resolves.toBeTruthy();
+  expect(store.registeredNanoContracts.size).toEqual(1);
+
+  await store.registerNanoContract('002', {
+    ncId: '002',
+    blueprintId: '001',
+    blueprintName: 'Bet'
+  });
+  await expect(store.getNanoContract('002')).resolves.toBeDefined();
+  await expect(store.isNanoContractRegistered('002')).resolves.toBeTruthy();
+  expect(store.registeredNanoContracts.size).toEqual(2);
+
+  // Asserts nano contract is unregisterd with success
+  await store.unregisterNanoContract('002');
+  await expect(store.getNanoContract('002')).resolves.toBeNull();
+  await expect(store.isNanoContractRegistered('002')).resolves.toBeFalsy();
   expect(store.registeredNanoContracts.size).toEqual(1);
 
   // Asserts store is cleaned only when tokens are cleaned too

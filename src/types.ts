@@ -393,9 +393,10 @@ export interface IStore {
   getScanningPolicyData(): Promise<AddressScanPolicyData>;
 
   // Nano Contract methods
-  isNanoContractRegistered(ncKey: string): Promise<boolean>;
-  getNanoContract(ncKey: string): Promise<INcData | null>;
-  registerNanoContract(ncKey: string, ncValue: INcData): Promise<void>;
+  isNanoContractRegistered(ncId: string): Promise<boolean>;
+  getNanoContract(ncId: string): Promise<INcData | null>;
+  registerNanoContract(ncId: string, ncValue: INcData): Promise<void>;
+  unregisterNanoContract(ncId: string): Promise<void>;
 
   // Generic storage keys
   getItem(key: string): Promise<any>;
@@ -482,6 +483,7 @@ export interface IStorage {
   isNanoContractRegistered(ncKey: string): Promise<boolean>;
   getNanoContract(ncKey: string): Promise<INcData | null>;
   registerNanoContract(ncKey: string, ncValue: INcData): Promise<void>;
+  unregisterNanoContract(ncId: string): Promise<void>;
 }
 
 /**
@@ -584,7 +586,6 @@ export interface IKVNanoContractIndex extends IKVStoreIndex<void> {
 }
 
 export interface INcData {
-  address: string;
   ncId: string;
   blueprintId: string;
   blueprintName: string;

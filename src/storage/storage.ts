@@ -970,29 +970,38 @@ export class Storage implements IStorage {
 
   /**
    * Return if the nano contract is registered for the given address based on ncKey.
-   * @param ncKey Pair address:ncId concatenated.
+   * @param ncId Nano Contract ID.
    * @returns `true` if registered and `false` otherwise.
    * @async
    */
-  async isNanoContractRegistered(ncKey: string): Promise<boolean> {
-    return this.store.isNanoContractRegistered(ncKey);
+  async isNanoContractRegistered(ncId: string): Promise<boolean> {
+    return this.store.isNanoContractRegistered(ncId);
   }
 
   /**
    * Get nano contract data.
-   * @param ncKey Pair address:ncId registered.
+   * @param ncId Nano Contract ID.
    * @returns An instance of Nano Contract data.
    */
-  async getNanoContract(ncKey: string): Promise<INcData | null> {
-    return this.store.getNanoContract(ncKey);
+  async getNanoContract(ncId: string): Promise<INcData | null> {
+    return this.store.getNanoContract(ncId);
   }
 
   /**
    * Register nano contract data instance.
-   * @param ncKey Address and nano contract id concatenated.
-   * @param ncData Nano Contract basic information.
+   * @param ncId Nano Contract ID.
+   * @param ncValue Nano Contract basic information.
    */
-  async registerNanoContract(ncKey: string, ncValue: INcData): Promise<void> {
-    return this.store.registerNanoContract(ncKey, ncValue);
+  async registerNanoContract(ncId: string, ncValue: INcData): Promise<void> {
+    return this.store.registerNanoContract(ncId, ncValue);
+  }
+
+  /**
+   * Unregister nano contract.
+   * @param ncId Nano Contract ID.
+   * @param ncValue Nano Contract basic information.
+   */
+  async unregisterNanoContract(ncId: string): Promise<void> {
+    return this.store.unregisterNanoContract(ncId);
   }
 }

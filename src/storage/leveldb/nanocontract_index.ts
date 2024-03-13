@@ -69,13 +69,13 @@ export default class LevelNanoContractIndex implements IKVNanoContractIndex {
   /**
    * Return if the nano contract is registered for the given address based on ncKey.
    *
-   * @param ncKey Pair address:ncId concatenated.
+   * @param ncId Nano Contract ID.
    * @returns `true` if registered and `false` otherwise.
    * @async
    */
-  async isNanoContractRegistered(ncKey: string): Promise<boolean> {
+  async isNanoContractRegistered(ncId: string): Promise<boolean> {
     try {
-      await this.registeredDB.get(ncKey);
+      await this.registeredDB.get(ncId);
       return true;
     } catch (err: unknown) {
       if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
@@ -89,13 +89,13 @@ export default class LevelNanoContractIndex implements IKVNanoContractIndex {
   /**
    * Get a nano contract data on database from the ncKey.
    *
-   * @param ncKey Pair address:ncId registered.
+   * @param ncId Nano Contract ID.
    * @returns Nano contract data instance.
    * @async
    */
-  async getNanoContract(ncKey: string): Promise<INcData | null> {
+  async getNanoContract(ncId: string): Promise<INcData | null> {
     try {
-      const ncValue = await this.registeredDB.get(ncKey);
+      const ncValue = await this.registeredDB.get(ncId);
       return { ...ncValue };
     } catch (err: unknown) {
       if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
@@ -108,11 +108,21 @@ export default class LevelNanoContractIndex implements IKVNanoContractIndex {
   /**
    * Register a nano contract data.
    *
-   * @param ncKey Pair address:ncId to register as key.
+   * @param ncId Nano Contract ID.
    * @param ncValue Nano contract basic information.
    * @async
    */
-  async registerNanoContract(ncKey: string, ncValue: INcData): Promise<void> {
-    await this.registeredDB.put(ncKey, ncValue);
+  async registerNanoContract(ncId: string, ncValue: INcData): Promise<void> {
+    await this.registeredDB.put(ncId, ncValue);
+  }
+
+  /**
+   * Unregister nano contract.
+   *
+   * @param ncId Nano Contract ID.
+   * @async
+   */
+  async unregisterNanoContract(ncId: string): Promise<void> {
+    await this.registeredDB.del(ncId);
   }
 }
