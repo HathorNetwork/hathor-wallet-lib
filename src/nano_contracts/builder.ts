@@ -233,13 +233,17 @@ class NanoContractTransactionBuilder {
     }
 
     // Create the output with the withdrawal address and amount
-    const addressObj = new Address(action.address, { network: this.wallet.getNetworkObject() });
-    const p2pkh = new P2PKH(addressObj);
-    const p2pkhScript = p2pkh.createScript()
+    const outputData = {
+      address: action.address
+    } as IDataOutput
+    // This will throw AddressError in case the adress is invalid
+    // this handles p2pkh and p2sh scripts
+    const outputScript = transactionUtils.createOutputScript(outputData, this.wallet.getNetworkObject());
+
     const tokenIndex = action.token === HATHOR_TOKEN_CONFIG.uid ? 0 : tokens.findIndex((token) => token === action.token) + 1;
     const output = new Output(
       action.amount,
-      p2pkhScript,
+      outputScript,
       {
         tokenData: tokenIndex
       }
