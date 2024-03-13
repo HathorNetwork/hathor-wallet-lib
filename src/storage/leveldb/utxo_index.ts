@@ -13,6 +13,7 @@ import _ from 'lodash';
 import { HATHOR_TOKEN_CONFIG } from '../../constants';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 import transactionUtils from '../../utils/transaction';
+import { checkLevelDbVersion } from '../../utils/storage';
 
 export const UTXO_PREFIX = 'utxo';
 export const TOKEN_ADDRESS_UTXO_PREFIX = 'token:address:utxo';
@@ -102,19 +103,8 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
    */
   async checkVersion(): Promise<void> {
     const db = this.utxoDB.db;
-    try {
-      const dbVersion = await db.get('version');
-      if (this.indexVersion !== dbVersion) {
-        throw new Error(`Database version mismatch for ${this.constructor.name}: database version (${dbVersion}) expected version (${this.indexVersion})`);
-      }
-    } catch (err: unknown) {
-      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
-        // This is a new db, add version and return
-        await db.put('version', this.indexVersion);
-        return;
-      }
-      throw err;
-    }
+    const instanceName = this.constructor.name;
+    await checkLevelDbVersion(instanceName, db, this.indexVersion);
   }
 
   async validate(): Promise<void> {

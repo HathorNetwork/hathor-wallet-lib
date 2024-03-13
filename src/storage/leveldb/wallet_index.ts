@@ -11,6 +11,7 @@ import { AbstractSublevel } from 'abstract-level';
 import { IKVWalletIndex, IWalletData, IWalletAccessData, AddressScanPolicy, AddressScanPolicyData, isGapLimitScanPolicy, isIndexLimitScanPolicy, IGapLimitAddressScanPolicy, IIndexLimitAddressScanPolicy, SCANNING_POLICY } from '../../types';
 import { GAP_LIMIT, DEFAULT_ADDRESS_SCANNING_POLICY } from '../../constants';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
+import { checkLevelDbVersion } from '../../utils/storage';
 
 export const ACCESS_PREFIX = 'access';
 export const WALLET_PREFIX = 'wallet';
@@ -86,19 +87,8 @@ export default class LevelWalletIndex implements IKVWalletIndex {
    */
   async checkVersion(): Promise<void> {
     const db = this.accessDB.db;
-    try {
-      const dbVersion = await db.get('version');
-      if (this.indexVersion !== dbVersion) {
-        throw new Error(`Database version mismatch for ${this.constructor.name}: database version (${dbVersion}) expected version (${this.indexVersion})`);
-      }
-    } catch (err: unknown) {
-      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
-        // This is a new db, add version and return
-        await db.put('version', this.indexVersion);
-        return;
-      }
-      throw err;
-    }
+    const instanceName = this.constructor.name;
+    await checkLevelDbVersion(instanceName, db, this.indexVersion);
   }
 
   /**

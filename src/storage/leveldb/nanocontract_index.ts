@@ -3,6 +3,7 @@ import { Level } from 'level';
 import { AbstractSublevel } from 'abstract-level';
 import { IKVNanoContractIndex, INcData } from "src/types";
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
+import { checkLevelDbVersion } from '../../utils/storage';
 
 export const REGISTERED_PREFIX = 'registered';
 
@@ -36,19 +37,8 @@ export default class LevelNanoContractIndex implements IKVNanoContractIndex {
    */
   async checkVersion(): Promise<void> {
     const db = this.registeredDB.db;
-    try {
-      const dbVersion = await db.get('version');
-      if (this.indexVersion !== dbVersion) {
-        throw new Error(`Database version mismatch for ${this.constructor.name}: database version (${dbVersion}) expected version (${this.indexVersion})`);
-      }
-    } catch (err: unknown) {
-      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
-        // This is a new db, add version and return
-        await db.put('version', this.indexVersion);
-        return;
-      }
-      throw err;
-    }
+    const instanceName = this.constructor.name;
+    await checkLevelDbVersion(instanceName, db, this.indexVersion);
   }
 
   /**
