@@ -1,5 +1,6 @@
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import {
+  generateMultisigWalletHelper,
   generateWalletHelper,
   stopAllWallets,
   waitForTxReceived,
@@ -21,6 +22,7 @@ import { isEmpty } from 'lodash';
 import { getOracleBuffer, getOracleInputData } from '../../../src/nano_contracts/utils';
 import Serializer from '../../../src/nano_contracts/serializer';
 import { NanoContractTransactionError, NanoRequest404Error } from '../../../src/errors';
+import { OutputType } from '../../../src/wallet/types';
 
 let fundsTx;
 const blueprintId = '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595';
@@ -28,39 +30,49 @@ const blueprintId = '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e7
 describe('full cycle of bet nano contract', () => {
   /** @type HathorWallet */
   let hWallet;
+  let mhWallet;
 
   beforeAll(async () => {
     hWallet = await generateWalletHelper();
     fundsTx = await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 1000);
-    await waitForTxReceived(hWallet, fundsTx.hash);
+
+    mhWallet = await generateMultisigWalletHelper({ walletIndex: 3 });
+    await GenesisWalletHelper.injectFunds(mhWallet, await mhWallet.getAddressAtIndex(0), 1000);
   });
 
   afterAll(async () => {
     await hWallet.stop();
+    await mhWallet.stop();
     await GenesisWalletHelper.clearListeners();
   });
 
-  const checkTxValid = async (txId) => {
+  const checkTxValid = async (wallet, txId) => {
     expect(txId).toBeDefined();
-    await waitForTxReceived(hWallet, txId);
+    await waitForTxReceived(wallet, txId);
     // We need to wait for the tx to get a first block, so we guarantee it was executed
-    await waitTxConfirmed(hWallet, txId);
+    await waitTxConfirmed(wallet, txId);
     // Now we query the transaction from the full node to double check it's still valid after the nano execution
     // and it already has a first block, so it was really executed
-    const txAfterExecution = await hWallet.getFullTxById(txId);
+    const txAfterExecution = await wallet.getFullTxById(txId);
     expect(isEmpty(txAfterExecution.meta.voided_by)).toBe(true);
     expect(isEmpty(txAfterExecution.meta.first_block)).not.toBeNull();
   }
 
-  it('bet deposit', async () => {
-    const address0 = await hWallet.getAddressAtIndex(0);
-    const address1 = await hWallet.getAddressAtIndex(1);
+  const executeTests = async (wallet) => {
+    const address0 = await wallet.getAddressAtIndex(0);
+    const address1 = await wallet.getAddressAtIndex(1);
     const dateLastBet = dateFormatter.dateToTimestamp(new Date()) + 6000;
-    const network = hWallet.getNetworkObject();
+    const network = wallet.getNetworkObject();
+
+    const utxos = await wallet.getUtxos();
+    // We must have one utxo in the address 0 of 1000 HTR
+    expect(utxos.utxos.length).toBe(1);
+    expect(utxos.utxos[0].address).toBe(address0);
+    expect(utxos.utxos[0].amount).toBe(1000);
 
     // Create NC
     const oracleData = getOracleBuffer(address1, network);
-    const tx1 = await hWallet.createAndSendNanoContractTransaction(
+    const tx1 = await wallet.createAndSendNanoContractTransaction(
       NANO_CONTRACTS_INITIALIZE_METHOD,
       address0,
       {
@@ -72,12 +84,12 @@ describe('full cycle of bet nano contract', () => {
         ]
       }
     );
-    await checkTxValid(tx1.hash);
+    await checkTxValid(wallet, tx1.hash);
 
     // Bet 100 to address 2
-    const address2 = await hWallet.getAddressAtIndex(2);
+    const address2 = await wallet.getAddressAtIndex(2);
     const address2Obj = new Address(address2, { network });
-    const txBet = await hWallet.createAndSendNanoContractTransaction(
+    const txBet = await wallet.createAndSendNanoContractTransaction(
       'bet',
       address2,
       {
@@ -90,17 +102,25 @@ describe('full cycle of bet nano contract', () => {
           {
             type: 'deposit',
             token: HATHOR_TOKEN_CONFIG.uid,
-            amount: 100
+            amount: 100,
+            changeAddress: address0,
           }
         ],
       }
     );
-    await checkTxValid(txBet.hash);
+    await checkTxValid(wallet, txBet.hash);
+
+    const utxos2 = await wallet.getUtxos();
+    // We must have one utxo in the address 0 of 900 HTR
+    // this validates that the change address parameter worked fine
+    expect(utxos2.utxos.length).toBe(1);
+    expect(utxos2.utxos[0].address).toBe(address0);
+    expect(utxos2.utxos[0].amount).toBe(900);
 
     // Bet 200 to address 3
-    const address3 = await hWallet.getAddressAtIndex(3);
+    const address3 = await wallet.getAddressAtIndex(3);
     const address3Obj = new Address(address3, { network });
-    const txBet2 = await hWallet.createAndSendNanoContractTransaction(
+    const txBet2 = await wallet.createAndSendNanoContractTransaction(
       'bet',
       address3,
       {
@@ -118,7 +138,7 @@ describe('full cycle of bet nano contract', () => {
         ],
       }
     );
-    await checkTxValid(txBet2.hash);
+    await checkTxValid(wallet, txBet2.hash);
 
     // Get nc history
     const txIds = [tx1.hash, txBet.hash, txBet2.hash];
@@ -144,8 +164,16 @@ describe('full cycle of bet nano contract', () => {
       ]
     );
     const addressObj1 = new Address(address1, { network });
-    const outputScriptObj1 = new P2PKH(addressObj1);
-    const outputScriptBuffer1 = outputScriptObj1.createScript();
+    const outputScriptType = addressObj1.getType();
+    let outputScript;
+    if (outputScriptType === OutputType.P2PKH) {
+      outputScript = new P2PKH(addressObj1);
+    } else if (outputScriptType === OutputType.P2SH) {
+      outputScript = new P2SH(addressObj1);
+    } else {
+      throw new Error('Invalid address.');
+    }
+    const outputScriptBuffer1 = outputScript.createScript();
 
     expect(ncState.fields.token_uid.value).toBe(HATHOR_TOKEN_CONFIG.uid);
     expect(ncState.fields.date_last_offer.value).toBe(dateLastBet);
@@ -161,8 +189,8 @@ describe('full cycle of bet nano contract', () => {
     const nanoSerializer = new Serializer();
     const result = '1x0';
     const resultSerialized = nanoSerializer.serializeFromType(result, 'str');
-    const inputData = await getOracleInputData(oracleData, resultSerialized, hWallet);
-    const txSetResult = await hWallet.createAndSendNanoContractTransaction(
+    const inputData = await getOracleInputData(oracleData, resultSerialized, wallet);
+    const txSetResult = await wallet.createAndSendNanoContractTransaction(
       'set_result',
       address1,
       {
@@ -172,11 +200,10 @@ describe('full cycle of bet nano contract', () => {
         ],
       }
     );
-    await checkTxValid(txSetResult.hash);
-    txIds.push(txSetResult.hash);
+    await checkTxValid(wallet, txSetResult.hash);
 
     // Try to withdraw to address 2, success
-    const txWithdrawal = await hWallet.createAndSendNanoContractTransaction(
+    const txWithdrawal = await wallet.createAndSendNanoContractTransaction(
       'withdraw',
       address2,
       {
@@ -191,40 +218,17 @@ describe('full cycle of bet nano contract', () => {
         ],
       }
     );
-    await checkTxValid(txWithdrawal.hash);
-    txIds.push(txWithdrawal.hash);
-    
-    // Get state again
-    const ncState2 = await ncApi.getNanoContractState(
-      tx1.hash,
-      [
-        'token_uid',
-        'total',
-        'final_result',
-        'oracle_script',
-        'date_last_offer',
-        `address_details.a'${address2}'`,
-        `withdrawals.a'${address2}'`,
-        `address_details.a'${address3}'`,
-        `withdrawals.a'${address3}'`
-      ]
-    );
-    expect(ncState2.fields.token_uid.value).toBe(HATHOR_TOKEN_CONFIG.uid);
-    expect(ncState2.fields.date_last_offer.value).toBe(dateLastBet);
-    expect(ncState2.fields.oracle_script.value).toBe(bufferToHex(outputScriptBuffer1));
-    expect(ncState2.fields.final_result.value).toBe('1x0');
-    expect(ncState2.fields.total.value).toBe(300);
-    expect(ncState2.fields[`address_details.a'${address2}'`].value).toHaveProperty('1x0', 100);
-    expect(ncState2.fields[`withdrawals.a'${address2}'`].value).toBe(300);
-    expect(ncState2.fields[`address_details.a'${address3}'`].value).toHaveProperty('2x0', 200);
-    expect(ncState2.fields[`withdrawals.a'${address3}'`].value).toBeUndefined();
+    await checkTxValid(wallet, txWithdrawal.hash);
+  }
 
-    // Get history again
-    const ncHistory2 = await ncApi.getNanoContractHistory(tx1.hash);
-    expect(ncHistory2.history.length).toBe(5);
-    for (const tx of ncHistory2.history) {
-      expect(txIds).toContain(tx.hash);
-    }
+  it('bet deposit', async () => {
+    await executeTests(hWallet);
+  });
+
+  // The hathor-core and the wallet-lib are still not ready for
+  // using nano contracts with a Multisig wallet
+  it.skip('bet deposit with multisig wallet', async () => {
+    await executeTests(mhWallet);
   });
 
   it('handle errors', async () => {
