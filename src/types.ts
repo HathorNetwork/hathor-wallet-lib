@@ -18,9 +18,8 @@ export interface IInputSignature {
 }
 
 /**
- * Signature that receives the data to sign.
- * For transactions, it should expect the sighash_all hashed once with sha256.
- * The implementation must take care of the second sha256.
+ * This is the method signature for a method that signs a transaction and
+ * returns an array with signature information.
  */
 export type EcdsaTxSign = (tx: Transaction, storage: IStorage, pinCode: string) => Promise<IInputSignature[]>;
 
