@@ -217,7 +217,7 @@ test('getSignatures', async () => {
   const storage = new Storage(store);
   jest.spyOn(storage, 'isReadonly').mockReturnValue(Promise.resolve(false));
   jest.spyOn(storage, 'getWalletType').mockReturnValue(Promise.resolve(WalletType.P2PKH));
-  jest.spyOn(storage, 'signTx').mockReturnValue(Promise.resolve([
+  jest.spyOn(storage, 'getTxSignatures').mockReturnValue(Promise.resolve([
     {
       signature: Buffer.from('cafe', 'hex'),
       pubkey: Buffer.from('abcd', 'hex'),
