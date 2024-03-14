@@ -195,6 +195,9 @@ class Serializer {
     if (splittedValue[2] === 'bytes') {
       // If the result is expected as bytes, it will come here in the args as hex value
       splittedValue[1] = hexToBuffer(splittedValue[1]);
+    } else if (splittedValue[2] === 'bool') {
+      // If the result is expected as boolean, it will come here as a string true/false
+      splittedValue[1] = splittedValue[1] === 'true';
     }
 
     const [inputData, value, type] = splittedValue;
