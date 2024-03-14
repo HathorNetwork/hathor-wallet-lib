@@ -45,6 +45,10 @@ class Serializer {
    * @inner
    */
   serializeFromType(value: any, type: string): Buffer {
+    if (type.startsWith('SignedData[')) {
+      return this.fromSigned(value as string);
+    }
+
     switch (type) {
       case 'str':
         return this.fromString(value);
@@ -191,16 +195,20 @@ class Serializer {
       throw new Error('Signed data requires 3 parameters.');
     }
     // First value must be a Buffer but comes as hex
-    splittedValue[0] = hexToBuffer(splittedValue[0]);
-    if (splittedValue[2] === 'bytes') {
+    const inputData = hexToBuffer(splittedValue[0]);
+    const type = splittedValue[2];
+    let value: Buffer | string | boolean;
+    if (type === 'bytes') {
       // If the result is expected as bytes, it will come here in the args as hex value
-      splittedValue[1] = hexToBuffer(splittedValue[1]);
-    } else if (splittedValue[2] === 'bool') {
+      value = hexToBuffer(splittedValue[1]);
+    } else if (type === 'bool') {
       // If the result is expected as boolean, it will come here as a string true/false
-      splittedValue[1] = splittedValue[1] === 'true';
+      value = splittedValue[1] === 'true';
+    } else {
+      // For the other types
+      value = splittedValue[1];
     }
 
-    const [inputData, value, type] = splittedValue;
     const ret: Buffer[] = [];
 
     // [len(serializedValue)][serializedValue][inputData]

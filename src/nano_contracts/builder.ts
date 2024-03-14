@@ -328,12 +328,7 @@ class NanoContractTransactionBuilder {
       }
 
       for (const [index, arg] of methodArgs.entries()) {
-        let serialized: Buffer;
-        if (arg.type.startsWith('SignedData[')) {
-          serialized = serializer.fromSigned(this.args[index]);
-        } else {
-          serialized = serializer.serializeFromType(this.args[index], arg.type);
-        }
+        const serialized = serializer.serializeFromType(this.args[index], arg.type);
         serializedArgs.push(serialized);
       }
     }
