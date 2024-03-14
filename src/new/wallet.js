@@ -2375,7 +2375,7 @@ class HathorWallet extends EventEmitter {
       throw new WalletFromXPubGuard('getSignatures');
     }
     const pin = pinCode || this.pinCode;
-    const signatures = await this.storage.signTx(tx, pin);
+    const signatures = await this.storage.getTxSignatures(tx, pin);
     const sigInfoArray = [];
     for (const sigData of signatures) {
       sigInfoArray.push({

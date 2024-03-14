@@ -407,8 +407,8 @@ export interface IStorage {
   config: Config;
   version: ApiVersion|null;
 
-  setTxSign(txSign: EcdsaTxSign): void;
-  signTx(tx: Transaction, pinCode: string): Promise<IInputSignature[]>;
+  setTxSignatureMethod(txSign: EcdsaTxSign): void;
+  getTxSignatures(tx: Transaction, pinCode: string): Promise<IInputSignature[]>;
 
   // Address methods
   getAllAddresses(): AsyncGenerator<IAddressInfo & IAddressMetadata>;

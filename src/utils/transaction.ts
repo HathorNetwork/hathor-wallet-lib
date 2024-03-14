@@ -164,7 +164,7 @@ const transaction = {
   },
 
   async signTransaction(tx: Transaction, storage: IStorage, pinCode: string): Promise<Transaction> {
-    const signatures = await storage.signTx(tx, pinCode);
+    const signatures = await storage.getTxSignatures(tx, pinCode);
     for (const sigData of signatures) {
       const input = tx.inputs[sigData.inputIndex];
       const inputData = this.createInputData(

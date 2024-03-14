@@ -88,7 +88,7 @@ export class Storage implements IStorage {
    * Set the tx signing function
    * @param {EcdsaTxSign} txSign The signing function
    */
-  setTxSign(txSign: EcdsaTxSign): void {
+  setTxSignatureMethod(txSign: EcdsaTxSign): void {
     this.txSignFunc = txSign;
   }
 
@@ -98,7 +98,7 @@ export class Storage implements IStorage {
    * @param {string} pinCode The pin code
    * @returns {Promise<IInputSignature[]>} The signatures
    */
-  async signTx(tx: Transaction, pinCode: string): Promise<IInputSignature[]> {
+  async getTxSignatures(tx: Transaction, pinCode: string): Promise<IInputSignature[]> {
     if (this.txSignFunc) {
       return this.txSignFunc(tx, this, pinCode);
     }

@@ -4,16 +4,17 @@ import {
   DEFAULT_PIN_CODE,
   DEFAULT_PASSWORD,
   generateConnection,
+  generateWalletHelper,
   stopAllWallets,
   waitForWalletReady,
   waitForTxReceived,
 } from '../helpers/wallet.helper';
 import HathorWallet from '../../../src/new/wallet';
 import { loggers } from '../utils/logger.util';
-import { delay } from '../utils/core.util';
 import SendTransaction from '../../../src/new/sendTransaction';
 import { LevelDBStore, MemoryStore, Storage } from '../../../src/storage';
 import walletUtils from '../../../src/utils/wallet';
+import transactionUtils from '../../../src/utils/transaction';
 import { HATHOR_TOKEN_CONFIG } from '../../../src/constants';
 
 const startedWallets = [];
@@ -65,7 +66,7 @@ describe('locked utxos', () => {
   async function testUnlockWhenSpent(storage, walletData) {
     const hwallet = await startWallet(storage, walletData);
     const address = await hwallet.getAddressAtIndex(0);
-    const tx = await GenesisWalletHelper.injectFunds(hwallet, address, 1);
+    await GenesisWalletHelper.injectFunds(hwallet, address, 1);
 
     const sendTx = new SendTransaction({
       storage: hwallet.storage,
@@ -105,5 +106,25 @@ describe('locked utxos', () => {
     const storeLDB = new LevelDBStore(walletId, DATA_DIR);
     const storageLDB = new Storage(storeLDB);
     await testUnlockWhenSpent(storageLDB, walletDataLDB);
-  })
+  });
+});
+
+describe('custom signature method', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
+  });
+
+  it('should sign transactions with custom signature method', async () => {
+    const hwallet = await generateWalletHelper();
+    const address = await hwallet.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(hwallet, address, 10);
+
+    const customSignFunc = jest.fn().mockImplementation(transactionUtils.getSignatureForTx);
+    hwallet.storage.setTxSignatureMethod(customSignFunc);
+    const address2 = await hwallet.getAddressAtIndex(2);
+    await hwallet.sendTransaction(address2, 10);
+
+    expect(customSignFunc).toHaveBeenCalled();
+  });
 });
