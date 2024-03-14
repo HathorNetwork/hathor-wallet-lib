@@ -954,3 +954,39 @@ describe('scanning policy methods', () => {
     await expect(storage.getGapLimit()).rejects.toThrow();
   }
 });
+
+describe('getAddressPubkey', () => {
+  it('should work with cached pubkey', async () => {
+    const hdprivkey = new HDPrivateKey();
+    const publicKey = hdprivkey.publicKey.toString('hex');
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    await store.saveAddress({
+      base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
+      bip32AddressIndex: 0,
+      publicKey,
+    });
+    await expect(storage.getAddressPubkey(0)).resolves.toEqual(publicKey);
+  });
+
+  it('should derive publicKey of not cached address pubkey', async () => {
+    const hdprivkey = new HDPrivateKey();
+    // Derived to change m/44'/280'/0'/0
+    const hdpubkey = hdprivkey.deriveNonCompliantChild('m/44\'/280\'/0\'/0');
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    await store.saveAccessData({
+      xpubkey: hdpubkey.xpubkey,
+    });
+    await store.saveAddress({
+      base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
+      bip32AddressIndex: 10,
+    });
+    // Address exists but without public key
+    const publicKey10 = hdpubkey.derive(10).publicKey.toString('hex');
+    await expect(storage.getAddressPubkey(10)).resolves.toEqual(publicKey10);
+    // Address is not saved on storage
+    const publicKey20 = hdpubkey.derive(20).publicKey.toString('hex');
+    await expect(storage.getAddressPubkey(20)).resolves.toEqual(publicKey20);
+  });
+});
