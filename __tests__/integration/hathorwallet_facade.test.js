@@ -476,7 +476,7 @@ describe('start', () => {
   it('should start a wallet via xpub', async () => {
     const walletData = precalculationHelpers.test.getPrecalculatedWallet();
     const code = new Mnemonic(walletData.words);
-    const rootXpriv = code.toHDPrivateKey('', new Network('privatenet'));
+    const rootXpriv = code.toHDPrivateKey('', new Network('testnet'));
     const xpriv = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
     const xpub = xpriv.xpubkey;
 
@@ -500,6 +500,8 @@ describe('start', () => {
     await expect(hWallet.getAllSignatures()).rejects.toThrow(WalletFromXPubGuard);
     await expect(hWallet.getSignatures()).rejects.toThrow(WalletFromXPubGuard);
     await expect(hWallet.signTx()).rejects.toThrow(WalletFromXPubGuard);
+    await expect(hWallet.createAndSendNanoContractTransaction()).rejects.toThrow(WalletFromXPubGuard);
+    await expect(hWallet.getPrivateKeyFromAddress()).rejects.toThrow(WalletFromXPubGuard);
 
     // Validating that the address generation works as intended
     for (let i=0; i < 20; ++i) {

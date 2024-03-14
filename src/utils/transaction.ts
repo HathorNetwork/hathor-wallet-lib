@@ -8,8 +8,19 @@
 import { Utxo } from '../wallet/types';
 import { UtxoError } from '../errors';
 import { HistoryTransactionOutput } from '../models/types';
-import {crypto as cryptoBL, PrivateKey, HDPrivateKey} from 'bitcore-lib'
-import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, HATHOR_TOKEN_CONFIG, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, DEFAULT_SIGNAL_BITS, BLOCK_VERSION, MERGED_MINED_BLOCK_VERSION } from '../constants';
+import {
+  TOKEN_AUTHORITY_MASK,
+  TOKEN_MINT_MASK,
+  TOKEN_MELT_MASK,
+  HATHOR_TOKEN_CONFIG,
+  CREATE_TOKEN_TX_VERSION,
+  DEFAULT_TX_VERSION,
+  DEFAULT_SIGNAL_BITS,
+  BLOCK_VERSION,
+  MERGED_MINED_BLOCK_VERSION,
+  NANO_CONTRACTS_VERSION
+} from '../constants';
+import { crypto as cryptoBL, PrivateKey, HDPrivateKey } from 'bitcore-lib'
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import Input from '../models/input';
@@ -566,7 +577,7 @@ const transaction = {
    *
    * @return {string} Type of the object
    *
-   * @memberof Helpers
+   * @memberof transaction
    * @inner
    */
   getTxType(tx: Pick<IHistoryTx, 'version'>): string {
@@ -581,6 +592,8 @@ const transaction = {
         return 'Transaction';
       } else if (tx.version === CREATE_TOKEN_TX_VERSION) {
         return 'Create Token Transaction';
+      } else if (tx.version === NANO_CONTRACTS_VERSION) {
+        return 'Nano Contract';
       }
     }
 

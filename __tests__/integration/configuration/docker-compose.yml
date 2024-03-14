@@ -5,7 +5,8 @@ services:
   # https://github.com/HathorNetwork/rfcs/blob/master/text/0033-private-network-guide.md
 
   fullnode:
-    image: hathornetwork/hathor-core
+    image:
+      ${HATHOR_LIB_INTEGRATION_TESTS_FULLNODE_IMAGE:-hathornetwork/hathor-core:experimental-nano-sdk-v1.1}
     command: [
       "run_node",
       "--listen", "tcp:40404",
@@ -13,8 +14,9 @@ services:
       "--test-mode-tx-weight",
       "--wallet-index",
       "--allow-mining-without-peers",
-      "--unsafe-mode", "privatenet",
+      "--unsafe-mode", "nano-testnet-alpha",
       "--memory-storage",
+      "--nc-history-index",
     ]
     environment:
       HATHOR_CONFIG_YAML: privnet/conf/privnet.yml
@@ -29,7 +31,8 @@ services:
       - hathor-privnet
 
   tx-mining-service:
-    image: hathornetwork/tx-mining-service
+    image:
+      ${HATHOR_LIB_INTEGRATION_TESTS_TXMINING_IMAGE:-hathornetwork/tx-mining-service}
     depends_on:
       - fullnode
     ports:

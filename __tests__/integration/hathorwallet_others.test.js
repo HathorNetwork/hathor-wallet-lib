@@ -7,7 +7,7 @@ import {
   waitForTxReceived, waitUntilNextTimestamp,
 } from './helpers/wallet.helper';
 import { HATHOR_TOKEN_CONFIG, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
-import { FULLNODE_URL, NETWORK_NAME, WALLET_CONSTANTS } from './configuration/test-constants';
+import { FULLNODE_NETWORK_NAME, FULLNODE_URL, NETWORK_NAME, WALLET_CONSTANTS } from './configuration/test-constants';
 import dateFormatter from '../../src/utils/date';
 import { AddressError } from '../../src/errors';
 import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
@@ -1132,7 +1132,7 @@ describe('internal methods', () => {
       versionBytes: { p2pkh: 73, p2sh: 135 }, // Calculated for the privnet.py config file
       bitcoreNetwork: {
         name: expect.stringContaining(NETWORK_NAME),
-        alias: NETWORK_NAME,
+        alias: 'test', // this is the alias for the testnet network
         pubkeyhash: 73,
         scripthash: 135
       }
@@ -1141,8 +1141,8 @@ describe('internal methods', () => {
     // GetVersionData fetching from the live fullnode server
     expect(await gWallet.getVersionData()).toMatchObject({
       timestamp: expect.any(Number),
-      version: expect.stringMatching(/^\d+\.\d+\.\d+$/),
-      network: NETWORK_NAME,
+      version: expect.stringMatching(/^\d+\.\d+\.\d+.*$/),
+      network: FULLNODE_NETWORK_NAME,
       minWeight: expect.any(Number),
       minTxWeight: expect.any(Number),
       minTxWeightCoefficient: expect.any(Number),
@@ -1171,7 +1171,7 @@ describe('internal methods', () => {
     // Reverting to the privatenet
     networkData = await gWallet.getVersionData();
     expect(networkData.timestamp).toBeGreaterThan(serverChangeTime + 200);
-    expect(networkData.network).toStrictEqual(NETWORK_NAME);
+    expect(networkData.network).toStrictEqual(FULLNODE_NETWORK_NAME);
   });
 
   it('should reload the storage', async () => {

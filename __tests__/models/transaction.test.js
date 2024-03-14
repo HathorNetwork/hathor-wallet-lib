@@ -346,7 +346,7 @@ test('Known transactions hash', () => {
 
 describe('NFT Validation', () => {
   const cloneNftSample = () => lodash.cloneDeep(nftCreationTx);
-  const network = new Network('privatenet');
+  const network = new Network('testnet');
 
   it('should validate a NFT creation tx', () => {
     expect.assertions(1);

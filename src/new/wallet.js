@@ -13,12 +13,20 @@ import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
 import versionApi from '../api/version';
 import { hexToBuffer } from '../utils/buffer';
+import { decryptData } from '../utils/crypto';
 import helpers from '../utils/helpers';
 import { createP2SHRedeemScript } from '../utils/scripts';
 import walletUtils from '../utils/wallet';
 import SendTransaction from './sendTransaction';
 import Network from '../models/network';
-import { AddressError, TxNotFoundError, WalletError, WalletFromXPubGuard } from '../errors';
+import {
+  AddressError,
+  NanoContractTransactionError,
+  PinRequiredError,
+  TxNotFoundError,
+  WalletError,
+  WalletFromXPubGuard
+} from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
 import transactionUtils from '../utils/transaction';
@@ -31,9 +39,10 @@ import { syncHistory, reloadStorage, scanPolicyStartAddresses, checkScanningPoli
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH } from '../utils/address';
+import { signAndPushNCTransaction } from '../nano_contracts/utils';
+import NanoContractTransactionBuilder from '../nano_contracts/builder';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
-const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';
 
 /**
  * TODO: This should be removed when this file is migrated to typescript
@@ -2434,7 +2443,6 @@ class HathorWallet extends EventEmitter {
         .then(() => reject(new Error('API client did not use the callback')))
         .catch(err => reject(err));
     });
-
     if (!tx.success) {
       HathorWallet._txNotFoundGuard(tx);
 
@@ -2665,6 +2673,89 @@ class HathorWallet extends EventEmitter {
    */
   async isHardwareWallet() {
     return this.storage.isHardwareWallet();
+  }
+
+  /**
+   * Create and send a nano contract transaction
+   *
+   * @param {string} method Method of nano contract to have the transaction created
+   * @param {string} address Address that will be used to sign the nano contract transaction
+   * @param [data]
+   * @param {string | null} [data.blueprintId] ID of the blueprint to create the nano contract. Required if method is initialize
+   * @param {string | null} [data.ncId] ID of the nano contract to execute method. Required if method is not initialize
+   * @param {NanoContractAction[]} [data.actions] List of actions to execute in the nano contract transaction
+   * @param {any[]} [data.args] List of arguments for the method to be executed in the transaction
+   * @param [options]
+   * @param {string} [options.pinCode] PIN to decrypt the private key.
+   *                                   Optional but required if not set in this
+   *
+   * @returns {Promise<NanoContract>}
+   */
+  async createAndSendNanoContractTransaction(method, address, data, options = {}) {
+    if (await this.storage.isReadonly()) {
+      throw new WalletFromXPubGuard('createAndSendNanoContractTransaction');
+    }
+    const newOptions = Object.assign({ pinCode: null }, options);
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
+    }
+
+    // Get private key that will sign the nano contract transaction
+    let privateKey;
+    try {
+      privateKey = await this.getPrivateKeyFromAddress(address, options);
+    } catch (e) {
+      if (e instanceof AddressError) {
+        throw new NanoContractTransactionError('Address used to sign the transaction does not belong to the wallet.');
+      }
+      throw e;
+    }
+
+    // Build and send transaction
+    const builder = new NanoContractTransactionBuilder()
+                          .setMethod(method)
+                          .setWallet(this)
+                          .setBlueprintId(data.blueprintId)
+                          .setNcId(data.ncId)
+                          .setCaller(privateKey)
+                          .setActions(data.actions)
+                          .setArgs(data.args)
+
+    const nc = await builder.build();
+    return signAndPushNCTransaction(nc, privateKey, pin, this.storage);
+  }
+
+  /**
+   * Generate and return the PrivateKey for an address
+   *
+   * @param {string} address Address to get the PrivateKey from
+   * @param [options]
+   * @param {string} [options.pinCode] PIN to decrypt the private key.
+   *                                   Optional but required if not set in this
+   *
+   * @returns {Promise<HDPrivateKey>}
+   */
+  async getPrivateKeyFromAddress(address, options = {}) {
+    if (await this.storage.isReadonly()) {
+      throw new WalletFromXPubGuard('getPrivateKeyFromAddress');
+    }
+    const newOptions = Object.assign({ pinCode: null }, options);
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
+    }
+
+    const addressIndex = await this.getAddressIndex(address);
+    if (addressIndex === null) {
+      throw new AddressError('Address does not belong to the wallet.');
+    }
+
+    const xprivkey = await this.storage.getMainXPrivKey(pin);
+    const key = HDPrivateKey(xprivkey);
+    // Derive key to addressIndex
+    const derivedKey = key.deriveNonCompliantChild(addressIndex);
+    return derivedKey.privateKey;
   }
 }
 

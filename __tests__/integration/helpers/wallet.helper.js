@@ -19,6 +19,7 @@ import { delay } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 import { MemoryStore, Storage } from '../../../src/storage';
 import { TxHistoryProcessingStatus } from '../../../src/types';
+import { get } from 'lodash';
 
 /**
  * @typedef SendTxResponse
@@ -436,4 +437,55 @@ export async function waitNextBlock(storage) {
   if (timeoutReached) {
     throw new Error('Timeout reached when waiting for the next block.');
   }
+}
+
+/**
+ * This method awaits a tx to be confirmed by a block and then resolves the promise.
+ *
+ * It does not return any content, only delivers the code processing back to the caller at the
+ * desired time.
+ *
+ * @param {HathorWallet} hWallet
+ * @param {String} txId
+ * @param {number | null | undefined} timeout
+ * @returns {Promise<void>}
+ */
+export async function waitTxConfirmed(hWallet, txId, timeout) {
+  // Only return the positive response after the tx has a first block
+  return new Promise(async (resolve, reject) => {
+    let timeoutHandler;
+    if (timeout) {
+      // Timeout handler
+      timeoutHandler = setTimeout(async () => {
+        reject(new Error(`Timeout of ${timeout}ms without confirming the transaction`));
+      }, timeout);
+    }
+
+    try {
+      while (await getTxFirstBlock(hWallet, txId) === null) {
+        await delay(1000);
+      }
+    } catch {
+      // Get API request might fail, so we reject the promise
+      reject(new Error('Error getting transaction first block.'));
+    }
+
+    if (timeoutHandler) {
+      clearTimeout(timeoutHandler);
+    }
+
+    resolve();
+  });
+}
+
+/**
+ * This method returns the first block of a transaction
+ *
+ * @param {HathorWallet} hWallet
+ * @param {String} txId
+ * @returns {Promise<String>}
+ */
+export async function getTxFirstBlock(hWallet, txId) {
+  const txData = await hWallet.getFullTxById(txId);
+  return get(txData, 'meta.first_block');
 }
