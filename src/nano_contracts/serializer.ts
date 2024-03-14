@@ -6,7 +6,12 @@
  */
 
 
-import { intToBytes, floatToBytes, signedIntToBytes } from '../utils/buffer';
+import {
+  hexToBuffer,
+  intToBytes,
+  floatToBytes,
+  signedIntToBytes
+} from '../utils/buffer';
 
 // Number of bytes used to serialize the size of the value
 const SERIALIZATION_SIZE_LEN = 2;
@@ -149,7 +154,7 @@ class Serializer {
    * @memberof Serializer
    * @inner
    */
-  fromOptional(isEmpty: boolean, value?: any, type?: string) {
+  fromOptional(isEmpty: boolean, value?: any, type?: string): Buffer {
     // We are not supporting List optional for now
     if (isEmpty) {
       return Buffer.from([0]);
@@ -169,16 +174,30 @@ class Serializer {
 
   /**
    * Serialize a signed value
+   * We expect the value as a string separated by comma (,)
+   * with 3 elements (inputData, value, type)
+   *
+   * The serialization will be
    * [len(serializedValue)][serializedValue][inputData]
    *
-   * @param {inputData} Input data of the signed value
-   * @param {value} Value to serialize
-   * @param {type} Type of the value to serialize
+   * @param {signedValue} String value with inputData, value, and type separated by comma
    *
    * @memberof Serializer
    * @inner
    */
-  fromSigned(inputData: Buffer, value: any, type: string) {
+  fromSigned(signedValue: string): Buffer {
+    const splittedValue = signedValue.split(',');
+    if (splittedValue.length !== 3) {
+      throw new Error('Signed data requires 3 parameters.');
+    }
+    // First value must be a Buffer but comes as hex
+    splittedValue[0] = hexToBuffer(splittedValue[0]);
+    if (splittedValue[2] === 'bytes') {
+      // If the result is expected as bytes, it will come here in the args as hex value
+      splittedValue[1] = hexToBuffer(splittedValue[1]);
+    }
+
+    const [inputData, value, type] = splittedValue;
     const ret: Buffer[] = [];
 
     // [len(serializedValue)][serializedValue][inputData]

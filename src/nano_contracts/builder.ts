@@ -10,7 +10,6 @@ import P2PKH from '../models/p2pkh';
 import Input from '../models/input';
 import Address from '../models/address';
 import NanoContract from './nano_contract';
-import { hexToBuffer } from '../utils/buffer';
 import { createOutputScriptFromAddress } from '../utils/address';
 import { IDataOutput } from '../types';
 import {
@@ -331,18 +330,7 @@ class NanoContractTransactionBuilder {
       for (const [index, arg] of methodArgs.entries()) {
         let serialized: Buffer;
         if (arg.type.startsWith('SignedData[')) {
-          const splittedValue = this.args[index].split(',');
-          if (splittedValue.length !== 3) {
-            throw new Error('Signed data requires 3 parameters.');
-          }
-          // First value must be a Buffer but comes as hex
-          splittedValue[0] = hexToBuffer(splittedValue[0]);
-          const tupleValues: [Buffer, any, string] = splittedValue;
-          if (tupleValues[2] === 'bytes') {
-            // If the result is expected as bytes, it will come here in the args as hex value
-            tupleValues[1] = hexToBuffer(tupleValues[1]);
-          }
-          serialized = serializer.fromSigned(...tupleValues);
+          serialized = serializer.fromSigned(this.args[index]);
         } else {
           serialized = serializer.serializeFromType(this.args[index], arg.type);
         }
