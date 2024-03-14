@@ -11,7 +11,7 @@ import Input from '../models/input';
 import Address from '../models/address';
 import NanoContract from './nano_contract';
 import { hexToBuffer } from '../utils/buffer';
-import transactionUtils from '../utils/transaction';
+import { createOutputScriptFromAddress } from '../utils/address';
 import { IDataOutput } from '../types';
 import {
     HATHOR_TOKEN_CONFIG,
@@ -193,12 +193,9 @@ class NanoContractTransactionBuilder {
     // If there's a change amount left in the utxos, create the change output
     if (utxosData.changeAmount) {
       const changeAddressStr = changeAddressParam || (await this.wallet.getCurrentAddress()).address;
-      const outputData = {
-        address: changeAddressStr
-      } as IDataOutput
       // This will throw AddressError in case the adress is invalid
       // this handles p2pkh and p2sh scripts
-      const outputScript = transactionUtils.createOutputScript(outputData, network);
+      const outputScript = createOutputScriptFromAddress(changeAddressStr, network);
       const tokenIndex = action.token === HATHOR_TOKEN_CONFIG.uid ? 0 : tokens.findIndex((token) => token === action.token) + 1;
       const outputObj = new Output(
         utxosData.changeAmount,
@@ -231,14 +228,11 @@ class NanoContractTransactionBuilder {
     if (!action.address || !action.amount || !action.token) {
       throw new NanoContractTransactionError('Address, amount and token are required for withdrawal action.');
     }
-
     // Create the output with the withdrawal address and amount
-    const outputData = {
-      address: action.address
-    } as IDataOutput
+
     // This will throw AddressError in case the adress is invalid
     // this handles p2pkh and p2sh scripts
-    const outputScript = transactionUtils.createOutputScript(outputData, this.wallet.getNetworkObject());
+    const outputScript = createOutputScriptFromAddress(action.address, this.wallet.getNetworkObject());
 
     const tokenIndex = action.token === HATHOR_TOKEN_CONFIG.uid ? 0 : tokens.findIndex((token) => token === action.token) + 1;
     const output = new Output(
