@@ -23,6 +23,7 @@ import { getOracleBuffer, getOracleInputData } from '../../../src/nano_contracts
 import Serializer from '../../../src/nano_contracts/serializer';
 import { NanoContractTransactionError, NanoRequest404Error } from '../../../src/errors';
 import { OutputType } from '../../../src/wallet/types';
+import NanoContractTransactionParser from '../../../src/nano_contracts/parser';
 
 let fundsTx;
 const blueprintId = '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595';
@@ -85,6 +86,17 @@ describe('full cycle of bet nano contract', () => {
       }
     );
     await checkTxValid(wallet, tx1.hash);
+    const tx1Data = await wallet.getFullTxById(tx1.hash);
+
+    const tx1Parser = new NanoContractTransactionParser(blueprintId, NANO_CONTRACTS_INITIALIZE_METHOD, tx1Data.tx.nc_pubkey, tx1Data.tx.nc_args);
+    tx1Parser.parseAddress();
+    await tx1Parser.parseArguments();
+    expect(tx1Parser.address.base58).toBe(address0);
+    expect(tx1Parser.parsedArgs).toStrictEqual([
+      { name: 'oracle_script', type: 'bytes', parsed: oracleData },
+      { name: 'token_uid', type: 'bytes', parsed: Buffer.from([HATHOR_TOKEN_CONFIG.uid]) },
+      { name: 'date_last_offer', type: 'int', parsed: dateLastBet },
+    ]);
 
     // Bet 100 to address 2
     const address2 = await wallet.getAddressAtIndex(2);
@@ -109,6 +121,16 @@ describe('full cycle of bet nano contract', () => {
       }
     );
     await checkTxValid(wallet, txBet.hash);
+    const txBetData = await wallet.getFullTxById(txBet.hash);
+
+    const txBetParser = new NanoContractTransactionParser(blueprintId, 'bet', txBetData.tx.nc_pubkey, txBetData.tx.nc_args);
+    txBetParser.parseAddress();
+    await txBetParser.parseArguments();
+    expect(txBetParser.address.base58).toBe(address2);
+    expect(txBetParser.parsedArgs).toStrictEqual([
+      { name: 'address', type: 'bytes', parsed: address2Obj.decode() },
+      { name: 'score', type: 'str', parsed: '1x0' },
+    ]);
 
     const utxos2 = await wallet.getUtxos();
     // We must have one utxo in the address 0 of 900 HTR
@@ -139,6 +161,16 @@ describe('full cycle of bet nano contract', () => {
       }
     );
     await checkTxValid(wallet, txBet2.hash);
+    const txBet2Data = await wallet.getFullTxById(txBet2.hash);
+
+    const txBet2Parser = new NanoContractTransactionParser(blueprintId, 'bet', txBet2Data.tx.nc_pubkey, txBet2Data.tx.nc_args);
+    txBet2Parser.parseAddress();
+    await txBet2Parser.parseArguments();
+    expect(txBet2Parser.address.base58).toBe(address3);
+    expect(txBet2Parser.parsedArgs).toStrictEqual([
+      { name: 'address', type: 'bytes', parsed: address3Obj.decode() },
+      { name: 'score', type: 'str', parsed: '2x0' },
+    ]);
 
     // Get nc history
     const txIds = [tx1.hash, txBet.hash, txBet2.hash];
@@ -201,6 +233,16 @@ describe('full cycle of bet nano contract', () => {
       }
     );
     await checkTxValid(wallet, txSetResult.hash);
+    txIds.push(txSetResult.hash);
+    const txSetResultData = await wallet.getFullTxById(txSetResult.hash);
+
+    const txSetResultParser = new NanoContractTransactionParser(blueprintId, 'set_result', txSetResultData.tx.nc_pubkey, txSetResultData.tx.nc_args);
+    txSetResultParser.parseAddress();
+    await txSetResultParser.parseArguments();
+    expect(txSetResultParser.address.base58).toBe(address1);
+    expect(txSetResultParser.parsedArgs).toStrictEqual([
+      { name: 'result', type: 'SignedData[str]', parsed: `${bufferToHex(inputData)},${result},str` },
+    ]);
 
     // Try to withdraw to address 2, success
     const txWithdrawal = await wallet.createAndSendNanoContractTransaction(
@@ -219,6 +261,46 @@ describe('full cycle of bet nano contract', () => {
       }
     );
     await checkTxValid(wallet, txWithdrawal.hash);
+    txIds.push(txWithdrawal.hash);
+
+    const txWithdrawalData = await wallet.getFullTxById(txWithdrawal.hash);
+
+    const txWithdrawalParser = new NanoContractTransactionParser(blueprintId, 'set_result', txWithdrawalData.tx.nc_pubkey, txWithdrawalData.tx.nc_args);
+    txWithdrawalParser.parseAddress();
+    await txWithdrawalParser.parseArguments();
+    expect(txWithdrawalParser.address.base58).toBe(address2);
+    expect(txWithdrawalParser.parsedArgs).toBe(null);
+
+    // Get state again
+    const ncState2 = await ncApi.getNanoContractState(
+      tx1.hash,
+      [
+        'token_uid',
+        'total',
+        'final_result',
+        'oracle_script',
+        'date_last_offer',
+        `address_details.a'${address2}'`,
+        `withdrawals.a'${address2}'`,
+        `address_details.a'${address3}'`,
+        `withdrawals.a'${address3}'`
+      ]
+    );
+    expect(ncState2.fields.token_uid.value).toBe(HATHOR_TOKEN_CONFIG.uid);
+    expect(ncState2.fields.date_last_offer.value).toBe(dateLastBet);
+    expect(ncState2.fields.oracle_script.value).toBe(bufferToHex(outputScriptBuffer1));
+    expect(ncState2.fields.final_result.value).toBe('1x0');
+    expect(ncState2.fields.total.value).toBe(300);
+    expect(ncState2.fields[`address_details.a'${address2}'`].value).toHaveProperty('1x0', 100);
+    expect(ncState2.fields[`withdrawals.a'${address2}'`].value).toBe(300);
+    expect(ncState2.fields[`address_details.a'${address3}'`].value).toHaveProperty('2x0', 200);
+    expect(ncState2.fields[`withdrawals.a'${address3}'`].value).toBeUndefined();
+    // Get history again
+    const ncHistory2 = await ncApi.getNanoContractHistory(tx1.hash);
+    expect(ncHistory2.history.length).toBe(5);
+    for (const tx of ncHistory2.history) {
+      expect(txIds).toContain(tx.hash);
+    }
   }
 
   it('bet deposit', async () => {

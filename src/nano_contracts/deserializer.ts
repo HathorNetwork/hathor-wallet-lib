@@ -14,6 +14,10 @@ const SERIALIZATION_SIZE_LEN = 2;
 
 class Deserializer {
   deserializeFromType(value: Buffer, type: string): any {
+    if (type.startsWith('SignedData[')) {
+      return this.toSigned(value, type);
+    }
+
     switch (type) {
       case 'str':
         return this.toString(value);
@@ -55,13 +59,15 @@ class Deserializer {
   }
 
   toSigned(signedData: Buffer, type: string): string {
+    const valueType = type.slice(0, -1).split('[')[1];
+
     let signedBuffer: Buffer;
     let size: number;
     // [len(serializedResult)][serializedResult][inputData]
     [size, signedBuffer] = unpackToInt(2, false, signedData);
-    const parsed = this.deserializeFromType(signedBuffer.slice(0, size), type);
+    const parsed = this.deserializeFromType(signedBuffer.slice(0, size), valueType);
     signedBuffer = signedBuffer.slice(size);
-    return `${bufferToHex(signedBuffer)},${parsed},${type}`;
+    return `${bufferToHex(signedBuffer)},${parsed},${valueType}`;
   }
 }
 
