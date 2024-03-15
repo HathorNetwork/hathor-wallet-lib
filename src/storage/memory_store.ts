@@ -120,8 +120,8 @@ export class MemoryStore implements IStore {
    */
   registeredTokens: Map<string, ITokenData>;
   /**
-   * Map<ncKey, INcData>
-   * where ncKey is a pair address:ncId concatenated.
+   * Map<ncId, INcData>
+   * where ncId is the nano contract id in hex
    */
   registeredNanoContracts: Map<string, INcData>;
   /**
@@ -897,7 +897,7 @@ export class MemoryStore implements IStore {
   }
 
   /**
-   * Return if the nano contract is registered for the given address based on ncKey.
+   * Return if the nano contract is registered for the given address based on ncId.
    *
    * @param ncId Nano Contract ID.
    * @returns `true` if registered and `false` otherwise.
