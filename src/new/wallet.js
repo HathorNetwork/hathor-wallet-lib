@@ -41,8 +41,8 @@ import { syncHistory, reloadStorage, scanPolicyStartAddresses, checkScanningPoli
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../utils/address';
-import NanoContractTransactionBuilder from '../../src/nano_contracts/builder';
-import { signAndPushNCTransaction } from '../../src/nano_contracts/utils';
+import NanoContractTransactionBuilder from '../nano_contracts/builder';
+import { signAndPushNCTransaction } from '../nano_contracts/utils';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 
