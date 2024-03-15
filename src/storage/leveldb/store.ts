@@ -78,6 +78,7 @@ export default class LevelDBStore implements IStore {
     await this.utxoIndex.validate();
     await this.tokenIndex.validate();
     await this.walletIndex.validate();
+    await this.nanoContractIndex.validate();
   }
 
   async *addressIter(): AsyncGenerator<IAddressInfo> {
@@ -375,36 +376,36 @@ export default class LevelDBStore implements IStore {
   }
 
   /**
-   * Return if the nano contract is registered for the given address based on ncKey.
+   * Return if the nano contract is registered for the given address based on ncId.
    *
-   * @param ncKey Pair address:ncId concatenated.
+   * @param ncId Nano Contract Id.
    * @returns `true` if registered and `false` otherwise.
    * @async
    */
-  async isNanoContractRegistered(ncKey: string): Promise<boolean> {
-    return this.nanoContractIndex.isNanoContractRegistered(ncKey);
+  async isNanoContractRegistered(ncId: string): Promise<boolean> {
+    return this.nanoContractIndex.isNanoContractRegistered(ncId);
   }
 
   /**
-   * Get a nano contract data on storage from the ncKey.
+   * Get a nano contract data on storage from the ncId.
    *
-   * @param ncKey Pair address:ncId registered.
+   * @param ncId Nano Contract Id.
    * @returns Nano contract data instance.
    * @async
    */
-  async getNanoContract(ncKey: string): Promise<INcData | null> {
-    return this.nanoContractIndex.getNanoContract(ncKey);
+  async getNanoContract(ncId: string): Promise<INcData | null> {
+    return this.nanoContractIndex.getNanoContract(ncId);
   }
 
   /**
    * Register a nano contract data.
    *
-   * @param ncKey Pair address:ncId to register as key.
+   * @param ncId Nano Contract Id.
    * @param ncValue Nano contract basic information.
    * @async
    */
-  async registerNanoContract(ncKey: string, ncValue: INcData): Promise<void> {
-    this.nanoContractIndex.registerNanoContract(ncKey, ncValue);
+  async registerNanoContract(ncId: string, ncValue: INcData): Promise<void> {
+    this.nanoContractIndex.registerNanoContract(ncId, ncValue);
   }
 
   /**

@@ -908,7 +908,7 @@ export class MemoryStore implements IStore {
   }
 
   /**
-   * Get a nano contract data on storage from the ncKey.
+   * Get a nano contract data on storage from the ncId.
    *
    * @param ncId Nano Contract ID.
    * @returns Nano contract data instance.

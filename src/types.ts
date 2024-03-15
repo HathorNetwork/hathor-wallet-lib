@@ -480,9 +480,9 @@ export interface IStorage {
   setScanningPolicyData(data: AddressScanPolicyData | null): Promise<void>;
 
   // Nano Contract methods
-  isNanoContractRegistered(ncKey: string): Promise<boolean>;
-  getNanoContract(ncKey: string): Promise<INcData | null>;
-  registerNanoContract(ncKey: string, ncValue: INcData): Promise<void>;
+  isNanoContractRegistered(ncId: string): Promise<boolean>;
+  getNanoContract(ncId: string): Promise<INcData | null>;
+  registerNanoContract(ncId: string, ncValue: INcData): Promise<void>;
   unregisterNanoContract(ncId: string): Promise<void>;
 }
 
@@ -579,9 +579,10 @@ export interface IKVWalletIndex extends IKVStoreIndex<void> {
 }
 
 export interface IKVNanoContractIndex extends IKVStoreIndex<void> {
-  isNanoContractRegistered(ncKey: string): Promise<boolean>;
-  getNanoContract(ncKey: string): Promise<INcData | null>;
-  registerNanoContract(ncKey: string, ncValue: INcData): Promise<void>;
+  isNanoContractRegistered(ncId: string): Promise<boolean>;
+  getNanoContract(ncId: string): Promise<INcData | null>;
+  registerNanoContract(ncId: string, ncValue: INcData): Promise<void>;
+  unregisterNanoContract(ncId: string): Promise<void>;
   clear(): Promise<void>;
 }
 

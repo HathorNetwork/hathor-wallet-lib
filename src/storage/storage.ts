@@ -969,7 +969,7 @@ export class Storage implements IStorage {
   }
 
   /**
-   * Return if the nano contract is registered for the given address based on ncKey.
+   * Return if the nano contract is registered for the given address based on ncId.
    * @param ncId Nano Contract ID.
    * @returns `true` if registered and `false` otherwise.
    * @async
@@ -999,7 +999,6 @@ export class Storage implements IStorage {
   /**
    * Unregister nano contract.
    * @param ncId Nano Contract ID.
-   * @param ncValue Nano Contract basic information.
    */
   async unregisterNanoContract(ncId: string): Promise<void> {
     return this.store.unregisterNanoContract(ncId);

@@ -11,7 +11,7 @@ export default class LevelNanoContractIndex implements IKVNanoContractIndex {
   dbpath: string;
   /**
    * Registered Nano Contract database
-   * Key: nckey
+   * Key: ncId
    * Value: INcData (json encoded)
    */
   registeredDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, INcData>;
@@ -53,11 +53,11 @@ export default class LevelNanoContractIndex implements IKVNanoContractIndex {
    * Delete all entries on the database.
    */
   async clear(): Promise<void> {
-      await this.registeredDB.db.clear();
+    await this.registeredDB.db.clear();
   }
 
   /**
-   * Return if the nano contract is registered for the given address based on ncKey.
+   * Return if the nano contract is registered for the given ncId.
    *
    * @param ncId Nano Contract ID.
    * @returns `true` if registered and `false` otherwise.
@@ -69,7 +69,7 @@ export default class LevelNanoContractIndex implements IKVNanoContractIndex {
       return true;
     } catch (err: unknown) {
       if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
-        // Did not find the token among the registered tokens
+        // Did not find the registered nano contract.
         return false;
       }
       throw err;
@@ -77,7 +77,7 @@ export default class LevelNanoContractIndex implements IKVNanoContractIndex {
   }
 
   /**
-   * Get a nano contract data on database from the ncKey.
+   * Get a nano contract data on database from the ncId.
    *
    * @param ncId Nano Contract ID.
    * @returns Nano contract data instance.
