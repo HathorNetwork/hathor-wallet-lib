@@ -132,9 +132,9 @@ describe('custom signature method', () => {
     await GenesisWalletHelper.injectFunds(hwallet, address, 10);
 
     const customSignFunc = jest.fn().mockImplementation(transactionUtils.getSignatureForTx.bind(transactionUtils));
-    expect(storage.hasTxSignatureMethod()).toEqual(false);
+    expect(hwallet.storage.hasTxSignatureMethod()).toEqual(false);
     hwallet.storage.setTxSignatureMethod(customSignFunc);
-    expect(storage.hasTxSignatureMethod()).toEqual(true);
+    expect(hwallet.storage.hasTxSignatureMethod()).toEqual(true);
     const address2 = await hwallet.getAddressAtIndex(2);
     await hwallet.sendTransaction(address2, 10);
 
