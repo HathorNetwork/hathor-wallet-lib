@@ -29,6 +29,7 @@ import { P2PKH_ACCT_PATH } from '../../src/constants';
 import Network from '../../src/models/network';
 import { WalletType } from '../../src/types';
 import { parseScriptData } from '../../src/utils/scripts';
+import { MemoryStore, Storage } from '../../src/storage';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 const sampleNftData = 'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg';
@@ -581,10 +582,35 @@ describe('start', () => {
       xpub,
       password: null,
       pinCode: null,
-      isSignedExternally: true,
+    });
+    hWallet.setExternalTxSigningMethod(async () => {});
+    expect(hWallet.isReady()).toStrictEqual(true);
+    await expect(hWallet.isReadonly()).resolves.toBe(false);
+    hWallet.setExternalTxSigningMethod(null);
+    await expect(hWallet.isReadonly()).resolves.toBe(true);
+  });
+
+  it('should start an externally signed wallet from storage', async () => {
+    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    const code = new Mnemonic(walletData.words);
+    const rootXpriv = code.toHDPrivateKey('', new Network('privatenet'));
+    const xpriv = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
+    const xpub = xpriv.xpubkey;
+
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    storage.setTxSignatureMethod(async () => {});
+    // Creating a new wallet with a known set of words just to generate the custom token
+    const hWallet = await generateWalletHelper({
+      xpub,
+      storage,
+      password: null,
+      pinCode: null,
     });
     expect(hWallet.isReady()).toStrictEqual(true);
     await expect(hWallet.isReadonly()).resolves.toBe(false);
+    hWallet.setExternalTxSigningMethod(null);
+    await expect(hWallet.isReadonly()).resolves.toBe(true);
   });
 
   it('should start a wallet without pin', async () => {
