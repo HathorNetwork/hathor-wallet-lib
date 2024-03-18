@@ -802,6 +802,9 @@ test('getTxHistory', async () => {
       voided: false,
       balance: 456,
       version: 1,
+      ncId: undefined,
+      ncMethod: undefined,
+      ncCaller: undefined,
     }]);
 
   await expect(hWallet.getTxHistory({ token_id: 'mock-token-uid2' }))
@@ -811,6 +814,9 @@ test('getTxHistory', async () => {
       voided: false,
       balance: 0,
       version: 1,
+      ncId: undefined,
+      ncMethod: undefined,
+      ncCaller: undefined,
     }]);
 });
 
