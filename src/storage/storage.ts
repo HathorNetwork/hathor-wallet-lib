@@ -85,6 +85,14 @@ export class Storage implements IStorage {
   }
 
   /**
+   * Check if the tx signing method is set
+   * @returns {boolean}
+   */
+  hasTxSignatureMethod(): boolean {
+    return !!this.txSignFunc;
+  }
+
+  /**
    * Set the tx signing function
    * @param {EcdsaTxSign} txSign The signing function
    */

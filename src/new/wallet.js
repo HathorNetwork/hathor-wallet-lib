@@ -90,7 +90,6 @@ class HathorWallet extends EventEmitter {
    * @param {{pubkeys:string[],numSignatures:number}} [param.multisig]
    * @param {string[]} [param.preCalculatedAddresses] An array of pre-calculated addresses
    * @param {import('../types').AddressScanPolicyData} [param.scanPolicy] config specific to
-   * @param {boolean} [param.isSignedExternally=false] Whether we should disable the xpub guard
    * the address scan policy.
    */
   constructor({
@@ -116,7 +115,6 @@ class HathorWallet extends EventEmitter {
     multisig = null,
     preCalculatedAddresses = null,
     scanPolicy = null,
-    isSignedExternally = false,
   } = {}) {
     super();
 
@@ -205,7 +203,7 @@ class HathorWallet extends EventEmitter {
     this.newTxPromise = Promise.resolve();
 
     this.scanPolicy = scanPolicy;
-    this.isSignedExternally = isSignedExternally;
+    this.isSignedExternally = this.storage.hasTxSignatureMethod();
   }
 
   /**
@@ -2375,6 +2373,9 @@ class HathorWallet extends EventEmitter {
       throw new WalletFromXPubGuard('getSignatures');
     }
     const pin = pinCode || this.pinCode;
+    if (!pin) {
+      throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
+    }
     const signatures = await this.storage.getTxSignatures(tx, pin);
     const sigInfoArray = [];
     for (const sigData of signatures) {
@@ -2750,6 +2751,15 @@ class HathorWallet extends EventEmitter {
     // Derive key to addressIndex
     const derivedKey = key.deriveNonCompliantChild(addressIndex);
     return derivedKey.privateKey;
+  }
+
+  /**
+   * Set the external tx signing method.
+   * @param {EcdsaTxSign} method
+   */
+  setExternalTxSigningMethod(method) {
+    this.isSignedExternally = true;
+    this.storage.setTxSignatureMethod(method);
   }
 }
 

@@ -979,3 +979,11 @@ describe('prepare transactions without signature', () => {
   });
 });
 
+test('setExternalTxSigningMethod', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  const hwallet = new FakeHathorWallet();
+  hwallet.storage = storage;
+  hwallet.setExternalTxSigningMethod(async () => {});
+  expect(hwallet.isSignedExternally).toBe(true);
+});

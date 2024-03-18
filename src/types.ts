@@ -406,6 +406,7 @@ export interface IStorage {
   config: Config;
   version: ApiVersion|null;
 
+  hasTxSignatureMethod(): boolean;
   setTxSignatureMethod(txSign: EcdsaTxSign): void;
   getTxSignatures(tx: Transaction, pinCode: string): Promise<IInputSignature[]>;
 
