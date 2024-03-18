@@ -6,8 +6,22 @@
  */
 
 import { Config } from './config';
+import Transaction from './models/transaction';
 import Input from './models/input';
 import FullNodeConnection from './new/connection';
+
+export interface IInputSignature {
+  inputIndex: number,
+  addressIndex: number,
+  signature: Buffer,
+  pubkey: Buffer,
+}
+
+/**
+ * This is the method signature for a method that signs a transaction and
+ * returns an array with signature information.
+ */
+export type EcdsaTxSign = (tx: Transaction, storage: IStorage, pinCode: string) => Promise<IInputSignature[]>;
 
 export interface IAddressInfo {
   base58: string;
@@ -392,10 +406,15 @@ export interface IStorage {
   config: Config;
   version: ApiVersion|null;
 
+  hasTxSignatureMethod(): boolean;
+  setTxSignatureMethod(txSign: EcdsaTxSign): void;
+  getTxSignatures(tx: Transaction, pinCode: string): Promise<IInputSignature[]>;
+
   // Address methods
   getAllAddresses(): AsyncGenerator<IAddressInfo & IAddressMetadata>;
   getAddressInfo(base58: string): Promise<(IAddressInfo & IAddressMetadata)|null>;
   getAddressAtIndex(index: number): Promise<IAddressInfo|null>;
+  getAddressPubkey(index: number): Promise<string>;
   saveAddress(info: IAddressInfo): Promise<void>;
   isAddressMine(base58: string): Promise<boolean>;
   getCurrentAddress(markAsUsed?: boolean): Promise<string>;

@@ -31,6 +31,8 @@ import {
   AddressScanPolicyData,
   IIndexLimitAddressScanPolicy,
   SCANNING_POLICY,
+  EcdsaTxSign,
+  IInputSignature,
 } from '../types';
 import transactionUtils from '../utils/transaction';
 import { processHistory, processUtxoUnlock } from '../utils/storage';
@@ -41,6 +43,8 @@ import { getAddressType } from '../utils/address';
 import walletUtils from '../utils/wallet';
 import { HATHOR_TOKEN_CONFIG, MAX_INPUTS, MAX_OUTPUTS, TOKEN_DEPOSIT_PERCENTAGE } from '../constants';
 import { UninitializedWalletError } from '../errors';
+import { HDPublicKey } from 'bitcore-lib';
+import Transaction from '../models/transaction';
 
 const DEFAULT_ADDRESS_META: IAddressMetadata = {
   numTransactions: 0,
@@ -52,6 +56,7 @@ export class Storage implements IStorage {
   utxosSelectedAsInput: Map<string, boolean>;
   config: Config;
   version: ApiVersion|null;
+  txSignFunc: EcdsaTxSign|null;
   /**
    * This promise is used to chain the calls to process unlocked utxos.
    * This way we can avoid concurrent calls.
@@ -68,6 +73,7 @@ export class Storage implements IStorage {
     this.config = config;
     this.version = null;
     this.utxoUnlockWait = Promise.resolve();
+    this.txSignFunc = null;
   }
 
   /**
@@ -76,6 +82,35 @@ export class Storage implements IStorage {
    */
   setApiVersion(version: ApiVersion): void {
     this.version = version;
+  }
+
+  /**
+   * Check if the tx signing method is set
+   * @returns {boolean}
+   */
+  hasTxSignatureMethod(): boolean {
+    return !!this.txSignFunc;
+  }
+
+  /**
+   * Set the tx signing function
+   * @param {EcdsaTxSign} txSign The signing function
+   */
+  setTxSignatureMethod(txSign: EcdsaTxSign): void {
+    this.txSignFunc = txSign;
+  }
+
+  /**
+   * Sign the transaction
+   * @param {Transaction} tx The transaction to sign
+   * @param {string} pinCode The pin code
+   * @returns {Promise<IInputSignature[]>} The signatures
+   */
+  async getTxSignatures(tx: Transaction, pinCode: string): Promise<IInputSignature[]> {
+    if (this.txSignFunc) {
+      return this.txSignFunc(tx, this, pinCode);
+    }
+    return transactionUtils.getSignatureForTx(tx, this, pinCode);
   }
 
   /**
@@ -132,6 +167,26 @@ export class Storage implements IStorage {
    */
   async getAddressAtIndex(index: number): Promise<IAddressInfo | null> {
     return this.store.getAddressAtIndex(index);
+  }
+
+  /**
+   * Get the address public key, if not available derive from xpub
+   * @param {number} index
+   * @async
+   * @returns {Promise<string>} The public key DER encoded in hex
+   */
+  async getAddressPubkey(index: number): Promise<string> {
+    const addressInfo = await this.store.getAddressAtIndex(index);
+    if (addressInfo?.publicKey) {
+      // public key already cached on address info
+      return addressInfo.publicKey;
+    }
+
+    // derive public key from xpub
+    const accessData = await this._getValidAccessData();
+    const hdpubkey = new HDPublicKey(accessData.xpubkey);
+    const key: HDPublicKey = hdpubkey.deriveChild(index);
+    return key.publicKey.toString('hex');
   }
 
   /**

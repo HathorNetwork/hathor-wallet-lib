@@ -26,7 +26,7 @@ import CreateTokenTransaction from '../models/create_token_transaction';
 import Input from '../models/input';
 import Output from '../models/output';
 import Network from '../models/network';
-import { IBalance, IStorage, IHistoryTx, IDataOutput, IDataTx, isDataOutputCreateToken, IHistoryOutput, IUtxoId } from '../types';
+import { IBalance, IStorage, IHistoryTx, IDataOutput, IDataTx, isDataOutputCreateToken, IHistoryOutput, IUtxoId, IInputSignature } from '../types';
 import Address from '../models/address';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
@@ -134,12 +134,13 @@ const transaction = {
     return signature.toDER();
   },
 
-  async signTransaction(tx: Transaction, storage: IStorage, pinCode: string): Promise<Transaction> {
+  async getSignatureForTx(tx: Transaction, storage: IStorage, pinCode: string): Promise<IInputSignature[]> {
     const xprivstr = await storage.getMainXPrivKey(pinCode);
     const xprivkey = HDPrivateKey.fromString(xprivstr);
     const dataToSignHash = tx.getDataToSignHash();
+    const signatures: IInputSignature[] = [];
 
-    for await (const {tx: spentTx, input} of storage.getSpentTxs(tx.inputs)) {
+    for await (const {tx: spentTx, input, index: inputIndex} of storage.getSpentTxs(tx.inputs)) {
       const spentOut = spentTx.outputs[input.index];
       if (!spentOut.decoded.address) {
         // This is not a wallet output
@@ -151,13 +152,27 @@ const transaction = {
         continue;
       }
       const xpriv = xprivkey.deriveNonCompliantChild(addressInfo.bip32AddressIndex);
+      signatures.push({
+        inputIndex,
+        addressIndex: addressInfo.bip32AddressIndex,
+        signature: this.getSignature(dataToSignHash, xpriv.privateKey),
+        pubkey: xpriv.publicKey.toDER(),
+      });
+    }
+
+    return signatures;
+  },
+
+  async signTransaction(tx: Transaction, storage: IStorage, pinCode: string): Promise<Transaction> {
+    const signatures = await storage.getTxSignatures(tx, pinCode);
+    for (const sigData of signatures) {
+      const input = tx.inputs[sigData.inputIndex];
       const inputData = this.createInputData(
-        this.getSignature(dataToSignHash, xpriv.privateKey),
-        xpriv.publicKey.toBuffer(),
+        sigData.signature,
+        sigData.pubkey,
       );
       input.setData(inputData);
     }
-
     return tx;
   },
 
