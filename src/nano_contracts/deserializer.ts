@@ -8,11 +8,19 @@
 
 import { bufferToHex, unpackToFloat, unpackToInt } from '../utils/buffer';
 
-// Number of bytes used to serialize the size of the value
-const SERIALIZATION_SIZE_LEN = 2;
-
 
 class Deserializer {
+  /**
+   * Helper method to deserialize any value from its type
+   * We receive these type from the full node, so we
+   * use the python syntax
+   *
+   * @param {value} Value to deserialize
+   * @param {type} Type of the value to be deserialized
+   *
+   * @memberof Deserializer
+   * @inner
+   */
   deserializeFromType(value: Buffer, type: string): any {
     if (type.startsWith('SignedData[')) {
       return this.toSigned(value, type);
@@ -34,22 +42,62 @@ class Deserializer {
     }
   }
 
+  /**
+   * Deserialize string value
+   *
+   * @param {value} Value to deserialize
+   *
+   * @memberof Deserializer
+   * @inner
+   */
   toString(value: Buffer): string {
     return value.toString('utf8');
   }
 
+  /**
+   * Deserialize bytes value
+   *
+   * @param {value} Value to deserialize
+   *
+   * @memberof Deserializer
+   * @inner
+   */
   toBytes(value: Buffer): Buffer {
     return value;
   }
 
+  /**
+   * Deserialize int value
+   *
+   * @param {value} Value to deserialize
+   *
+   * @memberof Deserializer
+   * @inner
+   */
   toInt(value: Buffer): number {
     return unpackToInt(4, true, value)[0];
   }
 
+  /**
+   * Deserialize float value
+   *
+   * @param {value} Value to deserialize
+   *
+   * @memberof Deserializer
+   * @inner
+   */
   toFloat(value: Buffer): number {
     return unpackToFloat(value)[0];
   }
 
+  /**
+   * Deserialize boolean value
+   *
+   * @param {value} Value to deserialize
+   *
+   * @memberof Deserializer
+   * @inner
+   */
   toBool(value: Buffer): boolean {
     if (value[0]) {
       return true;
@@ -58,6 +106,18 @@ class Deserializer {
     }
   }
 
+  /**
+   * Deserialize a signed value
+   *
+   * The signedData what will be deserialized is
+   * [len(serializedValue)][serializedValue][inputData]
+   *
+   * @param {signedData} Buffer with serialized signed value
+   * @param {type} Type of the signed value, with the subtype, e.g., SignedData[str]
+   *
+   * @memberof Deserializer
+   * @inner
+   */
   toSigned(signedData: Buffer, type: string): string {
     const valueType = type.slice(0, -1).split('[')[1];
 

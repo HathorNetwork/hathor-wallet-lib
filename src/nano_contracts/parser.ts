@@ -33,6 +33,12 @@ class NanoContractTransactionParser {
     this.parsedArgs = null;
   }
 
+  /**
+   * Parse the nano public key to a base58 address
+   *
+   * @memberof NanoContractTransactionParser
+   * @inner
+   */
   parseAddress() {
     const network = Config.getNetwork();
     const pubkeyBuffer = hexToBuffer(this.publicKey);
@@ -40,6 +46,12 @@ class NanoContractTransactionParser {
     this.address = new Address(base58, { network });
   }
 
+  /**
+   * Parse the arguments in hex into a list of parsed arguments
+   *
+   * @memberof NanoContractTransactionParser
+   * @inner
+   */
   async parseArguments() {
     const parsedArgs: NanoContractParsedArgument[] = [];
     if (!this.args) {
