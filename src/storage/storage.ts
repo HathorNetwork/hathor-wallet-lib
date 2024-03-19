@@ -32,6 +32,8 @@ import {
   IIndexLimitAddressScanPolicy,
   SCANNING_POLICY,
   INcData,
+  EcdsaTxSign,
+  IInputSignature,
 } from '../types';
 import transactionUtils from '../utils/transaction';
 import { processHistory, processUtxoUnlock } from '../utils/storage';
