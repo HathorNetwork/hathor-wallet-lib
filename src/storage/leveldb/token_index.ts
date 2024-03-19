@@ -11,6 +11,7 @@ import { AbstractSublevel } from 'abstract-level';
 import { IKVTokenIndex, ITokenData, ITokenMetadata } from '../../types';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 import { HATHOR_TOKEN_CONFIG } from '../../constants';
+import { checkLevelDbVersion } from './utils';
 
 export const TOKEN_PREFIX = 'token';
 export const META_PREFIX = 'meta';
@@ -63,19 +64,8 @@ export default class LevelTokenIndex implements IKVTokenIndex {
    */
   async checkVersion(): Promise<void> {
     const db = this.tokenDB.db;
-    try {
-      const dbVersion = await db.get('version');
-      if (this.indexVersion !== dbVersion) {
-        throw new Error(`Database version mismatch for ${this.constructor.name}: database version (${dbVersion}) expected version (${this.indexVersion})`);
-      }
-    } catch (err: unknown) {
-      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
-        // This is a new db, add version and return
-        await db.put('version', this.indexVersion);
-        return;
-      }
-      throw err;
-    }
+    const instanceName = this.constructor.name;
+    await checkLevelDbVersion(instanceName, db, this.indexVersion);
   }
 
   async validate(): Promise<void> {

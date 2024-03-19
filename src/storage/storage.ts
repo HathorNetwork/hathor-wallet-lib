@@ -31,6 +31,7 @@ import {
   AddressScanPolicyData,
   IIndexLimitAddressScanPolicy,
   SCANNING_POLICY,
+  INcData,
   EcdsaTxSign,
   IInputSignature,
 } from '../types';
@@ -967,5 +968,41 @@ export class Storage implements IStorage {
   async isHardwareWallet(): Promise<boolean> {
     const accessData = await this._getValidAccessData();
     return (accessData.walletFlags & WALLET_FLAGS.HARDWARE) > 0;
+  }
+
+  /**
+   * Return if the nano contract is registered for the given address based on ncId.
+   * @param ncId Nano Contract ID.
+   * @returns `true` if registered and `false` otherwise.
+   * @async
+   */
+  async isNanoContractRegistered(ncId: string): Promise<boolean> {
+    return this.store.isNanoContractRegistered(ncId);
+  }
+
+  /**
+   * Get nano contract data.
+   * @param ncId Nano Contract ID.
+   * @returns An instance of Nano Contract data.
+   */
+  async getNanoContract(ncId: string): Promise<INcData | null> {
+    return this.store.getNanoContract(ncId);
+  }
+
+  /**
+   * Register nano contract data instance.
+   * @param ncId Nano Contract ID.
+   * @param ncValue Nano Contract basic information.
+   */
+  async registerNanoContract(ncId: string, ncValue: INcData): Promise<void> {
+    return this.store.registerNanoContract(ncId, ncValue);
+  }
+
+  /**
+   * Unregister nano contract.
+   * @param ncId Nano Contract ID.
+   */
+  async unregisterNanoContract(ncId: string): Promise<void> {
+    return this.store.unregisterNanoContract(ncId);
   }
 }

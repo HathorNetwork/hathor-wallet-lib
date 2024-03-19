@@ -388,3 +388,56 @@ test('access data methods', async () => {
 
   await store.destroy();
 });
+
+test('nano contract methods', async () => {
+  const xpriv = HDPrivateKey();
+  const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
+  const timestamp = Date.now().toString();
+  const store = new LevelDBStore(walletId, `${DATA_DIR}_${timestamp}` );
+
+  // Asserts the store is empty
+  await expect(store.getNanoContract('001')).resolves.toBeNull();
+  await expect(store.isNanoContractRegistered('001')).resolves.toBeFalsy();
+  await expect(asyncGenToArray(store.nanoContractIndex.registeredDB.iterator()))
+        .resolves.toHaveLength(0);
+
+  // Asserts nano contract is registerd with success
+  await store.registerNanoContract('001', {
+    ncId: '001',
+    blueprintId: '001',
+    blueprintName: 'Bet'
+  });
+  await expect(store.getNanoContract('001')).resolves.toBeDefined();
+  await expect(store.isNanoContractRegistered('001')).resolves.toBeTruthy();
+  await expect(asyncGenToArray(store.nanoContractIndex.registeredDB.iterator()))
+        .resolves.toHaveLength(1);
+
+  await store.registerNanoContract('002', {
+    ncId: '002',
+    blueprintId: '001',
+    blueprintName: 'Bet'
+  });
+  await expect(store.getNanoContract('002')).resolves.toBeDefined();
+  await expect(store.isNanoContractRegistered('002')).resolves.toBeTruthy();
+  await expect(asyncGenToArray(store.nanoContractIndex.registeredDB.iterator()))
+        .resolves.toHaveLength(2);
+
+  // Asserts nano contract is unregistered with success
+  await store.unregisterNanoContract('002');
+  await expect(store.getNanoContract('002')).resolves.toBeNull();
+  await expect(store.isNanoContractRegistered('002')).resolves.toBeFalsy();
+  await expect(asyncGenToArray(store.nanoContractIndex.registeredDB.iterator()))
+        .resolves.toHaveLength(1);
+
+  // Asserts store is cleaned only when tokens are cleaned too
+  await store.cleanStorage(false, false, false); // not cleaning tokens
+  await expect(asyncGenToArray(store.nanoContractIndex.registeredDB.iterator()))
+        .resolves.toHaveLength(1);
+  await store.cleanStorage(false, false, true); // cleaning tokens
+  await expect(asyncGenToArray(store.nanoContractIndex.registeredDB.iterator()))
+        .resolves.toHaveLength(0);
+
+  // Asserts store is closed
+  await store.destroy();
+  expect(store.nanoContractIndex.registeredDB.db.status).toBe('closed');
+});

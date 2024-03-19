@@ -5,12 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { chunk } from 'lodash';
+import axios, { AxiosError, AxiosResponse } from 'axios';
+
 import FullnodeConnection from '../new/connection';
 import { IStorage, IAddressInfo, IHistoryTx, IBalance, ILockedUtxo, isGapLimitScanPolicy, IScanPolicyLoadAddresses, isIndexLimitScanPolicy, SCANNING_POLICY } from '../types';
 import walletApi from '../api/wallet';
-
-import { chunk } from 'lodash';
-import axios, { AxiosError, AxiosResponse } from 'axios';
 import helpers from '../utils/helpers';
 import transactionUtils from '../utils/transaction';
 import { deriveAddressP2PKH, deriveAddressP2SH } from '../utils/address';

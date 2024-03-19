@@ -10,6 +10,7 @@ import { Level } from 'level';
 import { AbstractSublevel } from 'abstract-level';
 import { IKVHistoryIndex, IHistoryTx, HistoryIndexValidateResponse } from '../../types';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
+import { checkLevelDbVersion } from './utils';
 
 export const HISTORY_PREFIX = 'history';
 export const TS_HISTORY_PREFIX = 'ts_history';
@@ -67,19 +68,8 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
    */
   async checkVersion(): Promise<void> {
     const db = this.historyDB.db;
-    try {
-      const dbVersion = await db.get('version');
-      if (this.indexVersion !== dbVersion) {
-        throw new Error(`Database version mismatch for ${this.constructor.name}: database version (${dbVersion}) expected version (${this.indexVersion})`);
-      }
-    } catch (err: unknown) {
-      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
-        // This is a new db, add version and return
-        await db.put('version', this.indexVersion);
-        return;
-      }
-      throw err;
-    }
+    const instanceName = this.constructor.name;
+    await checkLevelDbVersion(instanceName, db, this.indexVersion);
   }
 
   /**

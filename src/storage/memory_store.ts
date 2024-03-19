@@ -22,6 +22,7 @@ import {
   AddressScanPolicyData,
   IIndexLimitAddressScanPolicy,
   SCANNING_POLICY,
+  INcData,
 } from '../types';
 import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
 import { orderBy } from 'lodash';
@@ -119,6 +120,11 @@ export class MemoryStore implements IStore {
    */
   registeredTokens: Map<string, ITokenData>;
   /**
+   * Map<ncId, INcData>
+   * where ncId is the nano contract id in hex
+   */
+  registeredNanoContracts: Map<string, INcData>;
+  /**
    * Map<txId, IHistoryTx>
    * where txId is the transaction id in hex
    */
@@ -161,6 +167,7 @@ export class MemoryStore implements IStore {
     this.accessData = null;
     this.genericStorage = {};
     this.lockedUtxos = new Map<string, ILockedUtxo>();
+    this.registeredNanoContracts = new Map<string, INcData>();
 
     this.walletData = cloneDeep({ ...DEFAULT_WALLET_DATA, ...DEFAULT_ADDRESSES_WALLET_DATA });
 
@@ -869,6 +876,7 @@ export class MemoryStore implements IStore {
 
     if (cleanTokens) {
       this.registeredTokens = new Map<string, ITokenData>();
+      this.registeredNanoContracts = new Map<string, INcData>();
     }
   }
 
@@ -886,5 +894,47 @@ export class MemoryStore implements IStore {
     this.addressesMetadata = new Map<string, IAddressMetadata>();
     this.utxos = new Map<string, IUtxo>();
     this.lockedUtxos = new Map<string, ILockedUtxo>();
+  }
+
+  /**
+   * Return if the nano contract is registered for the given address based on ncId.
+   *
+   * @param ncId Nano Contract ID.
+   * @returns `true` if registered and `false` otherwise.
+   * @async
+   */
+  async isNanoContractRegistered(ncId: string): Promise<boolean> {
+    return this.registeredNanoContracts.has(ncId);
+  }
+
+  /**
+   * Get a nano contract data on storage from the ncId.
+   *
+   * @param ncId Nano Contract ID.
+   * @returns Nano contract data instance.
+   * @async
+   */
+  async getNanoContract(ncId: string): Promise<INcData | null> {
+    return this.registeredNanoContracts.get(ncId) || null;
+  }
+
+  /**
+   * Register a nano contract data.
+   *
+   * @param ncId Nano Contract ID.
+   * @param ncValue Nano contract basic information.
+   * @async
+   */
+  async registerNanoContract(ncId: string, ncValue: INcData): Promise<void> {
+    this.registeredNanoContracts.set(ncId, ncValue);
+  }
+
+  /**
+   * Unregister nano contract.
+   *
+   * @param ncId Nano Contract ID.
+   */
+  async unregisterNanoContract(ncId: string): Promise<void> {
+    this.registeredNanoContracts.delete(ncId);
   }
 }
