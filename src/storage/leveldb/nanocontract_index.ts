@@ -64,16 +64,8 @@ export default class LevelNanoContractIndex implements IKVNanoContractIndex {
    * @async
    */
   async isNanoContractRegistered(ncId: string): Promise<boolean> {
-    try {
-      await this.registeredDB.get(ncId);
-      return true;
-    } catch (err: unknown) {
-      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
-        // Did not find the registered nano contract.
-        return false;
-      }
-      throw err;
-    }
+    const nc = await this.getNanoContract(ncId);
+    return nc !== null;
   }
 
   /**
