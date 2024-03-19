@@ -11,7 +11,7 @@ import { AbstractSublevel } from 'abstract-level';
 import { IKVWalletIndex, IWalletData, IWalletAccessData, AddressScanPolicy, AddressScanPolicyData, isGapLimitScanPolicy, isIndexLimitScanPolicy, IGapLimitAddressScanPolicy, IIndexLimitAddressScanPolicy, SCANNING_POLICY } from '../../types';
 import { GAP_LIMIT, DEFAULT_ADDRESS_SCANNING_POLICY } from '../../constants';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
-import { checkLevelDbVersion } from '../../utils/storage';
+import { checkLevelDbVersion } from './utils';
 
 export const ACCESS_PREFIX = 'access';
 export const WALLET_PREFIX = 'wallet';

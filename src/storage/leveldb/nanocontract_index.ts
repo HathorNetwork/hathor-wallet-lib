@@ -3,7 +3,7 @@ import { Level } from 'level';
 import { AbstractSublevel } from 'abstract-level';
 import { IKVNanoContractIndex, INcData } from "src/types";
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
-import { checkLevelDbVersion } from '../../utils/storage';
+import { checkLevelDbVersion } from './utils';
 
 export const REGISTERED_PREFIX = 'registered';
 

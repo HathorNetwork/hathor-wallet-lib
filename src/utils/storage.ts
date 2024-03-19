@@ -7,7 +7,6 @@
 
 import { chunk } from 'lodash';
 import axios, { AxiosError, AxiosResponse } from 'axios';
-import { Level } from 'level';
 
 import FullnodeConnection from '../new/connection';
 import { IStorage, IAddressInfo, IHistoryTx, IBalance, ILockedUtxo, isGapLimitScanPolicy, IScanPolicyLoadAddresses, isIndexLimitScanPolicy, SCANNING_POLICY } from '../types';
@@ -16,7 +15,6 @@ import helpers from '../utils/helpers';
 import transactionUtils from '../utils/transaction';
 import { deriveAddressP2PKH, deriveAddressP2SH } from '../utils/address';
 import { MAX_ADDRESSES_GET, LOAD_WALLET_MAX_RETRY, LOAD_WALLET_RETRY_SLEEP } from '../constants';
-import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from '../storage/leveldb/errors';
 
 /**
  * Derive requested addresses (if not already loaded), save them on storage then return them.
@@ -745,28 +743,4 @@ export async function processUtxoUnlock(
   await store.editAddressMeta(output.decoded.address, addressMeta);
   // Remove utxo from locked utxos so that it is not processed again
   await store.unlockUtxo(lockedUtxo);
-}
-
-/**
- * Check that the index version matches the expected version.
- *
- * @param instanceName Database instance name
- * @param db Level instance
- * @param indexVersion Database index version
- * @async
- */
-export async function checkLevelDbVersion(instanceName: string, db: Level, indexVersion: string): Promise<void> {
-  try {
-    const dbVersion = await db.get('version');
-    if (indexVersion !== dbVersion) {
-      throw new Error(`Database version mismatch for ${instanceName}: database version (${dbVersion}) expected version (${indexVersion})`);
-    }
-  } catch (err: unknown) {
-    if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
-      // This is a new db, add version and return
-      await db.put('version', indexVersion);
-      return;
-    }
-    throw err;
-  }
 }

@@ -11,7 +11,7 @@ import { AbstractSublevel } from 'abstract-level';
 import { IKVTokenIndex, ITokenData, ITokenMetadata } from '../../types';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 import { HATHOR_TOKEN_CONFIG } from '../../constants';
-import { checkLevelDbVersion } from '../../utils/storage';
+import { checkLevelDbVersion } from './utils';
 
 export const TOKEN_PREFIX = 'token';
 export const META_PREFIX = 'meta';

@@ -13,7 +13,7 @@ import _ from 'lodash';
 import { HATHOR_TOKEN_CONFIG } from '../../constants';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 import transactionUtils from '../../utils/transaction';
-import { checkLevelDbVersion } from '../../utils/storage';
+import { checkLevelDbVersion } from './utils';
 
 export const UTXO_PREFIX = 'utxo';
 export const TOKEN_ADDRESS_UTXO_PREFIX = 'token:address:utxo';
