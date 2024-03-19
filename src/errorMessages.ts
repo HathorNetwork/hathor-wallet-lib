@@ -23,4 +23,18 @@ export enum ErrorMessages {
   UNSUPPORTED_HASHER = 'unsupported-hasher',
   // When access data is not set
   UNINITIALIZED_WALLET = 'uninitialized-wallet',
+  // Any request error
+  REQUEST_ERROR = 'request-error',
+  // Any request error for nano contracts APIs
+  NANO_REQUEST_ERROR = 'nano-request-error',
+  // 404 request error for nano contracts APIs
+  NANO_REQUEST_ERROR_404 = 'nano-request-error-404',
+  // Error when creating nano contract transaction
+  NANO_TRANSACTION_CREATE_ERROR = 'nano-transaction-create-error',
+  // Error when parsing nano contract transaction
+  NANO_TRANSACTION_PARSE_ERROR = 'nano-transaction-parse-error',
+  // Error when parsing an oracle script
+  NANO_ORACLE_PARSE_ERROR = 'nano-oracle-parse-error',
+  // When PIN is required in a method and not set
+  PIN_REQUIRED = 'pin-required',
 }

@@ -32,7 +32,7 @@ export class GenesisWalletHelper {
     const { words } = WALLET_CONSTANTS.genesis;
     const pin = '123456';
     const connection = new Connection({
-      network: 'privatenet',
+      network: 'testnet',
       servers: [FULLNODE_URL],
       connectionTimeout: 30000,
     });

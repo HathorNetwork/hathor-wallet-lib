@@ -17,7 +17,7 @@ import {
   TX_HASH_SIZE_BYTES,
   TX_WEIGHT_CONSTANTS
 } from '../constants'
-import {crypto as cryptoBL, encoding, util, PrivateKey} from 'bitcore-lib'
+import {crypto as cryptoBL, util} from 'bitcore-lib'
 import {
   bufferToHex,
   hexToBuffer,
@@ -258,8 +258,7 @@ class Transaction {
    */
   getDataToSignHash(): Buffer {
     const dataToSign = this.getDataToSign();
-    const hashbuf = cryptoBL.Hash.sha256sha256(dataToSign);
-    return new encoding.BufferReader(hashbuf).readReverse();
+    return cryptoBL.Hash.sha256sha256(dataToSign);
   }
 
   /**

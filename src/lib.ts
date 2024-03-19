@@ -48,6 +48,9 @@ import { PartialTx, PartialTxInputData } from './models/partial_tx';
 import PartialTxProposal from './wallet/partialTxProposal';
 import * as swapService from './wallet/api/swapService';
 import { AtomicSwapServiceConnection } from './swapService/swapConnection';
+import ncApi from './api/nano';
+import NanoContractSerializer from './nano_contracts/serializer';
+import * as nanoUtils from './nano_contracts/utils';
 
 export {
   PartialTx,
@@ -101,4 +104,7 @@ export {
   PushNotification,
   swapService,
   WalletType,
+  ncApi,
+  NanoContractSerializer,
+  nanoUtils,
 };

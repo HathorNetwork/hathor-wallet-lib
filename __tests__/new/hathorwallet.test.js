@@ -215,42 +215,41 @@ test('Protected xpub wallet methods', async () => {
 test('getSignatures', async () => {
   const store = new MemoryStore();
   const storage = new Storage(store);
-  const xpriv = new HDPrivateKey();
   jest.spyOn(storage, 'isReadonly').mockReturnValue(Promise.resolve(false));
-  jest.spyOn(storage, 'getMainXPrivKey').mockReturnValue(Promise.resolve(xpriv.xprivkey));
+  jest.spyOn(storage, 'getWalletType').mockReturnValue(Promise.resolve(WalletType.P2PKH));
+  jest.spyOn(storage, 'getTxSignatures').mockReturnValue(Promise.resolve([
+    {
+      signature: Buffer.from('cafe', 'hex'),
+      pubkey: Buffer.from('abcd', 'hex'),
+      inputIndex: 0,
+      addressIndex: 1,
+    },
+    {
+      signature: Buffer.from('1234', 'hex'),
+      pubkey: Buffer.from('d00d', 'hex'),
+      inputIndex: 0,
+      addressIndex: 2,
+    },
+  ]));
 
   const hWallet = new FakeHathorWallet();
   hWallet.storage = storage;
-  hWallet.getWalletInputInfo.mockReturnValue(Promise.resolve([
-    {
-      inputIndex: 0,
-      addressIndex: 0,
-    },
-    {
-      inputIndex: 5,
-      addressIndex: 5,
-    }
-  ]));
-  const mockGetSig = jest.spyOn(transactionUtils, 'getSignature').mockReturnValue(Buffer.from('cafe', 'hex'));
-  const tx = {
-    getDataToSignHash: jest.fn().mockReturnValue(Buffer.from('d00d', 'hex')),
-  }
-  const signatures = await hWallet.getSignatures(tx, {pinCode: '123'});
+  const signatures = await hWallet.getSignatures('a-transaction', { pinCode: '123' });
   expect(signatures.length).toEqual(2);
   expect(signatures[0]).toMatchObject({
     signature: 'cafe',
-    pubkey: xpriv.deriveNonCompliantChild(0).publicKey.toString(),
+    pubkey: 'abcd',
     inputIndex: 0,
-    addressIndex: 0,
+    addressIndex: 1,
+    addressPath: "m/44'/280'/0'/0/1",
   });
   expect(signatures[1]).toMatchObject({
-    signature: 'cafe',
-    pubkey: xpriv.deriveNonCompliantChild(5).publicKey.toString(),
-    inputIndex: 5,
-    addressIndex: 5,
+    signature: '1234',
+    pubkey: 'd00d',
+    inputIndex: 0,
+    addressIndex: 2,
+    addressPath: "m/44'/280'/0'/0/2",
   });
-
-  mockGetSig.mockRestore();
 });
 
 test('signTx', async () => {
@@ -313,7 +312,7 @@ test('getWalletInputInfo', async () => {
 
   const tx = {
     inputs: [new Input('hash', 0)],
-  }
+  };
   const returned = await hWallet.getWalletInputInfo(tx);
   expect(returned.length).toEqual(1);
   expect(returned[0]).toMatchObject({
@@ -803,6 +802,9 @@ test('getTxHistory', async () => {
       voided: false,
       balance: 456,
       version: 1,
+      ncId: undefined,
+      ncMethod: undefined,
+      ncCaller: undefined,
     }]);
 
   await expect(hWallet.getTxHistory({ token_id: 'mock-token-uid2' }))
@@ -812,6 +814,9 @@ test('getTxHistory', async () => {
       voided: false,
       balance: 0,
       version: 1,
+      ncId: undefined,
+      ncMethod: undefined,
+      ncCaller: undefined,
     }]);
 });
 
@@ -980,3 +985,11 @@ describe('prepare transactions without signature', () => {
   });
 });
 
+test('setExternalTxSigningMethod', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  const hwallet = new FakeHathorWallet();
+  hwallet.storage = storage;
+  hwallet.setExternalTxSigningMethod(async () => {});
+  expect(hwallet.isSignedExternally).toBe(true);
+});

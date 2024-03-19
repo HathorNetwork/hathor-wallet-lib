@@ -13,6 +13,7 @@ import {
   IHistoryTx,
   IIndexLimitAddressScanPolicy,
   ILockedUtxo,
+  INcData,
   IStore,
   ITokenData,
   ITokenMetadata,
@@ -27,6 +28,7 @@ import LevelHistoryIndex from './history_index';
 import LevelUtxoIndex from './utxo_index';
 import LevelWalletIndex from './wallet_index';
 import LevelTokenIndex from './token_index';
+import LevelNanoContractIndex from './nanocontract_index';
 
 export default class LevelDBStore implements IStore {
   addressIndex: LevelAddressIndex;
@@ -34,6 +36,7 @@ export default class LevelDBStore implements IStore {
   utxoIndex: LevelUtxoIndex;
   walletIndex: LevelWalletIndex;
   tokenIndex: LevelTokenIndex;
+  nanoContractIndex: LevelNanoContractIndex;
   dbpath: string;
 
   constructor(dirpath: string, dbroot: string = 'hathor.data') {
@@ -45,6 +48,7 @@ export default class LevelDBStore implements IStore {
     this.utxoIndex = new LevelUtxoIndex(dbpath);
     this.walletIndex = new LevelWalletIndex(dbpath);
     this.tokenIndex = new LevelTokenIndex(dbpath);
+    this.nanoContractIndex = new LevelNanoContractIndex(dbpath);
 
     this.dbpath = dbpath;
   }
@@ -55,6 +59,7 @@ export default class LevelDBStore implements IStore {
     await this.utxoIndex.close();
     await this.walletIndex.close();
     await this.tokenIndex.close();
+    await this.nanoContractIndex.close();
   }
 
   async destroy(): Promise<void> {
@@ -63,6 +68,7 @@ export default class LevelDBStore implements IStore {
     await this.utxoIndex.clear();
     await this.walletIndex.clear();
     await this.tokenIndex.clear();
+    await this.nanoContractIndex.clear();
     await this.close();
   }
 
@@ -72,6 +78,7 @@ export default class LevelDBStore implements IStore {
     await this.utxoIndex.validate();
     await this.tokenIndex.validate();
     await this.walletIndex.validate();
+    await this.nanoContractIndex.validate();
   }
 
   async *addressIter(): AsyncGenerator<IAddressInfo> {
@@ -356,11 +363,58 @@ export default class LevelDBStore implements IStore {
       await this.addressIndex.clear();
       await this.walletIndex.cleanWalletData();
     }
+    /* Clean registered nano contracts when cleaning tokens */
+    if (cleanTokens) {
+      await this.nanoContractIndex.clear();
+    }
   }
 
   async cleanMetadata(): Promise<void> {
     await this.tokenIndex.clearMeta();
     await this.addressIndex.clearMeta();
     await this.utxoIndex.clear();
+  }
+
+  /**
+   * Return if the nano contract is registered for the given address based on ncId.
+   *
+   * @param ncId Nano Contract Id.
+   * @returns `true` if registered and `false` otherwise.
+   * @async
+   */
+  async isNanoContractRegistered(ncId: string): Promise<boolean> {
+    return this.nanoContractIndex.isNanoContractRegistered(ncId);
+  }
+
+  /**
+   * Get a nano contract data on storage from the ncId.
+   *
+   * @param ncId Nano Contract Id.
+   * @returns Nano contract data instance.
+   * @async
+   */
+  async getNanoContract(ncId: string): Promise<INcData | null> {
+    return this.nanoContractIndex.getNanoContract(ncId);
+  }
+
+  /**
+   * Register a nano contract data.
+   *
+   * @param ncId Nano Contract Id.
+   * @param ncValue Nano contract basic information.
+   * @async
+   */
+  async registerNanoContract(ncId: string, ncValue: INcData): Promise<void> {
+    this.nanoContractIndex.registerNanoContract(ncId, ncValue);
+  }
+
+  /**
+   * Unregister a nano contract.
+   *
+   * @param ncId Nano Contract ID.
+   * @async
+   */
+  async unregisterNanoContract(ncId: string): Promise<void> {
+    this.nanoContractIndex.unregisterNanoContract(ncId);
   }
 }

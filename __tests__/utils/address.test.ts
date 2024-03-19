@@ -15,6 +15,7 @@ import {
   deriveAddressFromXPubP2PKH,
   deriveAddressP2PKH,
   deriveAddressP2SH,
+  getAddressFromPubkey,
 } from '../../src/utils/address';
 
 const seed = 'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
@@ -157,4 +158,14 @@ test('Derive address p2sh', async () => {
 
   spy.mockReturnValue(Promise.resolve(null));
   await expect(deriveAddressP2SH(0, storage)).rejects.toThrow('No access data');
+});
+
+test('Get address from pubkey', async () => {
+  const base58 = WALLET_DATA.p2pkh.addresses[0];
+  const { publicKey } = deriveAddressFromXPubP2PKH(xpubkey, 0, 'testnet');
+  const address = getAddressFromPubkey(publicKey!, new Network('testnet'));
+
+  expect(address.getType()).toBe(WalletType.P2PKH);
+  expect(address.base58).toBe(base58);
+  expect(address.validateAddress()).toBeTruthy();
 });

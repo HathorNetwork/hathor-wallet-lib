@@ -13,14 +13,24 @@ import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
 import versionApi from '../api/version';
 import { hexToBuffer } from '../utils/buffer';
+import { decryptData } from '../utils/crypto';
 import helpers from '../utils/helpers';
 import { createP2SHRedeemScript } from '../utils/scripts';
 import walletUtils from '../utils/wallet';
 import SendTransaction from './sendTransaction';
 import Network from '../models/network';
-import { AddressError, TxNotFoundError, WalletError, WalletFromXPubGuard } from '../errors';
+import {
+  AddressError,
+  NanoContractTransactionError,
+  PinRequiredError,
+  TxNotFoundError,
+  WalletError,
+  WalletFromXPubGuard
+} from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
+import Address from '../models/address';
+import { IStorage } from '../types';
 import transactionUtils from '../utils/transaction';
 import { signMessage } from '../utils/crypto';
 import Transaction from '../models/transaction';
@@ -30,10 +40,11 @@ import { SCANNING_POLICY, TxHistoryProcessingStatus, WalletType } from '../types
 import { syncHistory, reloadStorage, scanPolicyStartAddresses, checkScanningPolicy } from '../utils/storage';
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
-import { deriveAddressP2PKH, deriveAddressP2SH } from '../utils/address';
+import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../utils/address';
+import NanoContractTransactionBuilder from '../nano_contracts/builder';
+import { signAndPushNCTransaction } from '../nano_contracts/utils';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
-const ERROR_CODE_PIN_REQUIRED = 'PIN_REQUIRED';
 
 /**
  * TODO: This should be removed when this file is migrated to typescript
@@ -67,9 +78,9 @@ const ConnectionState = {
  */
 class HathorWallet extends EventEmitter {
   /**
-   * @param param
+   * @param {Object} param
    * @param {FullnodeConnection} param.connection A connection to the server
-   * @param {Storage} storage A storage
+   * @param {IStorage} param.storage A storage
    * @param {string} param.seed 24 words separated by space
    * @param {string} [param.passphrase=''] Wallet passphrase
    * @param {string} [param.xpriv]
@@ -138,10 +149,16 @@ class HathorWallet extends EventEmitter {
     }
 
     if (storage) {
+      /**
+       * @type {IStorage}
+       */
       this.storage = storage;
     } else {
       // Default to a memory store
       const store = new MemoryStore();
+      /**
+       * @type {IStorage}
+       */
       this.storage = new Storage(store);
     }
     this.conn = connection;
@@ -194,6 +211,7 @@ class HathorWallet extends EventEmitter {
     this.newTxPromise = Promise.resolve();
 
     this.scanPolicy = scanPolicy;
+    this.isSignedExternally = this.storage.hasTxSignatureMethod();
   }
 
   /**
@@ -377,17 +395,21 @@ class HathorWallet extends EventEmitter {
 
   /**
    * Disable debug mode.
-   **/
+   */
   disableDebugMode() {
     this.debug = false;
   }
 
   /**
-   * @deprecated We should use storage.isReadonly instead
-   * Test if this wallet started only with an xpub
+   * Check that this wallet is readonly.
+   * This can be shortcircuted if the wallet is meant to be signed externally.
+   * @returns {Promise<boolean>}
    */
-  isFromXPub() {
-    return Boolean(this.xpub);
+  async isReadonly() {
+    if (this.isSignedExternally) {
+      return false;
+    }
+    return this.storage.isReadonly();
   }
 
   /**
@@ -445,7 +467,7 @@ class HathorWallet extends EventEmitter {
    * @inner
    */
   async getAllSignatures(txHex, pin) {
-    if (await this.storage.isReadonly()) {
+    if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('getAllSignatures');
     }
     const tx = helpers.createTxFromHex(txHex, this.getNetworkObject());
@@ -496,7 +518,7 @@ class HathorWallet extends EventEmitter {
     // only works because the serialized signature starts with the account path pubkey.
     const p2shSignatures = signatures.sort().map(sig => P2SHSignature.deserialize(sig));
 
-    for await (const {tx: spentTx, input, index} of this.storage.getSpentTxs(tx.inputs)) {
+    for await (const { tx: spentTx, input, index } of this.storage.getSpentTxs(tx.inputs)) {
       const spentUtxo = spentTx.outputs[input.index];
       const storageAddress = (await this.storage.getAddressInfo(spentUtxo.decoded.address));
       if (storageAddress === null) {
@@ -515,7 +537,7 @@ class HathorWallet extends EventEmitter {
           sigs.push(hexToBuffer(p2shSig.signatures[index]));
         } catch (e) {
           // skip if there is no signature, or if it's not hex
-          continue
+          continue;
         }
       }
       const inputData = walletUtils.getP2SHInputData(sigs, redeemScript);
@@ -696,19 +718,29 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
+   * Summarizes the IHistoryTx that comes from wallet token's history.
+   *
+   * @typedef {Object} SummaryHistoryTx
+   * @property {string} txId - Transaction hash
+   * @property {number} balance
+   * @property {number} timestamp
+   * @property {boolean} voided
+   * @property {number} version
+   * @property {string} [ncId] - Nano Contract transaction hash
+   * @property {string} [ncMethod] - Nano Contract method called
+   * @property {Address} [ncCaller] - Nano Contract transaction's signing address
+   */
+
+  /**
    * Get transaction history
    *
    * @param options
    * @param {string} [options.token_id]
    * @param {number} [options.count]
    * @param {number} [options.skip]
-   * @return {Promise<{
-   *   txId: string,
-   *   balance: number,
-   *   timestamp: number,
-   *   voided: boolean,
-   *   version: number,
-   * }[]>} Array of transactions
+   *
+   * @return {Promise<SummaryHistoryTx[]>} Array of transactions
+   *
    * @memberof HathorWallet
    * @inner
    **/
@@ -728,13 +760,17 @@ class HathorWallet extends EventEmitter {
         break;
       }
       const txbalance = await this.getTxBalance(tx);
-      txs.push({
+      const txHistory = {
         txId: tx.tx_id,
         timestamp: tx.timestamp,
         voided: tx.is_voided,
         balance: txbalance[uid] || 0,
         version: tx.version,
-      });
+        ncId: tx.nc_id,
+        ncMethod: tx.nc_method,
+        ncCaller: tx.nc_pubkey && getAddressFromPubkey(tx.nc_pubkey),
+      };
+      txs.push(txHistory);
       count--;
     }
     return txs;
@@ -1081,7 +1117,7 @@ class HathorWallet extends EventEmitter {
    *
    */
   async consolidateUtxos(destinationAddress, options = {}) {
-    if (await this.storage.isReadonly()) {
+    if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('consolidateUtxos');
     }
     const { outputs, inputs, utxos, total_amount } = await this.prepareConsolidateUtxosData(destinationAddress, options);
@@ -1256,7 +1292,7 @@ class HathorWallet extends EventEmitter {
    * @return {Promise<Transaction>} Promise that resolves when transaction is sent
    */
   async sendTransaction(address, value, options = {}) {
-    if (await this.storage.isReadonly()) {
+    if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('sendTransaction');
     }
     const newOptions = Object.assign({
@@ -1291,7 +1327,7 @@ class HathorWallet extends EventEmitter {
    * @return {Promise<Transaction>} Promise that resolves when transaction is sent
    */
   async sendManyOutputsTransaction(outputs, options = {}) {
-    if (await this.storage.isReadonly()) {
+    if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('sendManyOutputsTransaction');
     }
     const newOptions = Object.assign({
@@ -1513,7 +1549,7 @@ class HathorWallet extends EventEmitter {
    * @inner
    */
   async prepareCreateNewToken(name, symbol, amount, options = {}) {
-    if (await this.storage.isReadonly()) {
+    if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('createNewToken');
     }
     const newOptions = Object.assign({
@@ -1571,7 +1607,7 @@ class HathorWallet extends EventEmitter {
         isCreateNFT: newOptions.isCreateNFT,
       },
     );
-    return await transactionUtils.prepareTransaction(
+    return transactionUtils.prepareTransaction(
       txData,
       pin,
       this.storage,
@@ -1721,7 +1757,7 @@ class HathorWallet extends EventEmitter {
    * @inner
    **/
   async prepareMintTokensData(tokenUid, amount, options = {}) {
-    if (await this.storage.isReadonly()) {
+    if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('mintTokens');
     }
     const newOptions = Object.assign({
@@ -1768,7 +1804,7 @@ class HathorWallet extends EventEmitter {
       this.storage,
       mintOptions,
     );
-    return await transactionUtils.prepareTransaction(
+    return transactionUtils.prepareTransaction(
       txData,
       pin,
       this.storage,
@@ -1831,7 +1867,7 @@ class HathorWallet extends EventEmitter {
    * @inner
    **/
   async prepareMeltTokensData(tokenUid, amount, options = {}) {
-    if (await this.storage.isReadonly()) {
+    if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('meltTokens');
     }
     const newOptions = Object.assign({
@@ -1876,7 +1912,7 @@ class HathorWallet extends EventEmitter {
       this.storage,
       meltOptions,
     );
-    return await transactionUtils.prepareTransaction(
+    return transactionUtils.prepareTransaction(
       txData,
       pin,
       this.storage,
@@ -1933,7 +1969,7 @@ class HathorWallet extends EventEmitter {
    * @inner
    **/
   async prepareDelegateAuthorityData(tokenUid, type, destinationAddress, options = {}) {
-    if (await this.storage.isReadonly()) {
+    if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('delegateAuthority');
     }
     const newOptions = Object.assign({ createAnother: true, pinCode: null }, options);
@@ -1963,7 +1999,7 @@ class HathorWallet extends EventEmitter {
       createAnother,
     );
 
-    return await transactionUtils.prepareTransaction(txData, pin, this.storage);
+    return transactionUtils.prepareTransaction(txData, pin, this.storage);
   }
 
   /**
@@ -2009,7 +2045,7 @@ class HathorWallet extends EventEmitter {
    * @inner
    **/
   async prepareDestroyAuthorityData(tokenUid, type, count, options = {}) {
-    if (await this.storage.isReadonly()) {
+    if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('destroyAuthority');
     }
     const newOptions = Object.assign({ pinCode: null }, options);
@@ -2042,7 +2078,7 @@ class HathorWallet extends EventEmitter {
     }
 
     const txData = tokenUtils.prepareDestroyAuthorityTxData(data);
-    return await transactionUtils.prepareTransaction(txData, pin, this.storage);
+    return transactionUtils.prepareTransaction(txData, pin, this.storage);
   }
 
   /**
@@ -2322,10 +2358,10 @@ class HathorWallet extends EventEmitter {
    * addressPath: string,
    * }[]>} List of indexes and their associated address index
    */
-   async getWalletInputInfo(tx) {
+  async getWalletInputInfo(tx) {
     const walletInputs = [];
 
-    for await (const {tx: spentTx, input, index} of this.storage.getSpentTxs(tx.inputs)) {
+    for await (const { tx: spentTx, input, index } of this.storage.getSpentTxs(tx.inputs)) {
       const addressInfo = await this.storage.getAddressInfo(spentTx.outputs[input.index].decoded.address);
       if (addressInfo === null) {
         continue;
@@ -2355,34 +2391,24 @@ class HathorWallet extends EventEmitter {
    * }>} Input and signature information
    */
   async getSignatures(tx, { pinCode = null } = {}) {
-    if (await this.storage.isReadonly()) {
+    if (await this.isReadonly()) {
       throw new WalletFromXPubGuard('getSignatures');
     }
     const pin = pinCode || this.pinCode;
     if (!pin) {
       throw new Error(ERROR_MESSAGE_PIN_REQUIRED);
     }
-
-    const xprivkey = await this.storage.getMainXPrivKey(pin);
-    const key = HDPrivateKey(xprivkey);
-
-    const signatures = [];
-    const dataToSignHash = tx.getDataToSignHash();
-    for (const indexes of await this.getWalletInputInfo(tx)) {
-      const { addressIndex } = indexes;
-      // Derive key to addressIndex
-      const derivedKey = key.deriveNonCompliantChild(addressIndex);
-      const privateKey = derivedKey.privateKey;
-      // Get tx signature and populate transaction
-      const sigDER = transactionUtils.getSignature(dataToSignHash, privateKey);
-      signatures.push({
-        signature: sigDER.toString('hex'),
-        pubkey: privateKey.publicKey.toString(),
-        ...indexes,
+    const signatures = await this.storage.getTxSignatures(tx, pin);
+    const sigInfoArray = [];
+    for (const sigData of signatures) {
+      sigInfoArray.push({
+        ...sigData,
+        pubkey: sigData.pubkey.toString('hex'),
+        signature: sigData.signature.toString('hex'),
+        addressPath: await this.getAddressPathForIndex(sigData.addressIndex),
       });
     }
-
-    return signatures;
+    return sigInfoArray;
   }
 
   /**
@@ -2434,7 +2460,6 @@ class HathorWallet extends EventEmitter {
         .then(() => reject(new Error('API client did not use the callback')))
         .catch(err => reject(err));
     });
-
     if (!tx.success) {
       HathorWallet._txNotFoundGuard(tx);
 
@@ -2665,6 +2690,98 @@ class HathorWallet extends EventEmitter {
    */
   async isHardwareWallet() {
     return this.storage.isHardwareWallet();
+  }
+
+  /**
+   * Create and send a nano contract transaction
+   *
+   * @param {string} method Method of nano contract to have the transaction created
+   * @param {string} address Address that will be used to sign the nano contract transaction
+   * @param [data]
+   * @param {string | null} [data.blueprintId] ID of the blueprint to create the nano contract. Required if method is initialize
+   * @param {string | null} [data.ncId] ID of the nano contract to execute method. Required if method is not initialize
+   * @param {NanoContractAction[]} [data.actions] List of actions to execute in the nano contract transaction
+   * @param {any[]} [data.args] List of arguments for the method to be executed in the transaction
+   * @param [options]
+   * @param {string} [options.pinCode] PIN to decrypt the private key.
+   *                                   Optional but required if not set in this
+   *
+   * @returns {Promise<NanoContract>}
+   */
+  async createAndSendNanoContractTransaction(method, address, data, options = {}) {
+    if (await this.storage.isReadonly()) {
+      throw new WalletFromXPubGuard('createAndSendNanoContractTransaction');
+    }
+    const newOptions = Object.assign({ pinCode: null }, options);
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
+    }
+
+    // Get private key that will sign the nano contract transaction
+    let privateKey;
+    try {
+      privateKey = await this.getPrivateKeyFromAddress(address, options);
+    } catch (e) {
+      if (e instanceof AddressError) {
+        throw new NanoContractTransactionError('Address used to sign the transaction does not belong to the wallet.');
+      }
+      throw e;
+    }
+
+    // Build and send transaction
+    const builder = new NanoContractTransactionBuilder()
+                          .setMethod(method)
+                          .setWallet(this)
+                          .setBlueprintId(data.blueprintId)
+                          .setNcId(data.ncId)
+                          .setCaller(privateKey)
+                          .setActions(data.actions)
+                          .setArgs(data.args)
+
+    const nc = await builder.build();
+    return signAndPushNCTransaction(nc, privateKey, pin, this.storage);
+  }
+
+  /**
+   * Generate and return the PrivateKey for an address
+   *
+   * @param {string} address Address to get the PrivateKey from
+   * @param [options]
+   * @param {string} [options.pinCode] PIN to decrypt the private key.
+   *                                   Optional but required if not set in this
+   *
+   * @returns {Promise<HDPrivateKey>}
+   */
+  async getPrivateKeyFromAddress(address, options = {}) {
+    if (await this.storage.isReadonly()) {
+      throw new WalletFromXPubGuard('getPrivateKeyFromAddress');
+    }
+    const newOptions = Object.assign({ pinCode: null }, options);
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
+    }
+
+    const addressIndex = await this.getAddressIndex(address);
+    if (addressIndex === null) {
+      throw new AddressError('Address does not belong to the wallet.');
+    }
+
+    const xprivkey = await this.storage.getMainXPrivKey(pin);
+    const key = HDPrivateKey(xprivkey);
+    // Derive key to addressIndex
+    const derivedKey = key.deriveNonCompliantChild(addressIndex);
+    return derivedKey.privateKey;
+  }
+
+  /**
+   * Set the external tx signing method.
+   * @param {EcdsaTxSign|null} method
+   */
+  setExternalTxSigningMethod(method) {
+    this.isSignedExternally = !!method;
+    this.storage.setTxSignatureMethod(method);
   }
 }
 

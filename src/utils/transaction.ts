@@ -8,14 +8,25 @@
 import { Utxo } from '../wallet/types';
 import { UtxoError } from '../errors';
 import { HistoryTransactionOutput } from '../models/types';
-import {crypto as cryptoBL, PrivateKey, HDPrivateKey} from 'bitcore-lib'
-import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, TOKEN_MELT_MASK, HATHOR_TOKEN_CONFIG, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, DEFAULT_SIGNAL_BITS, BLOCK_VERSION, MERGED_MINED_BLOCK_VERSION } from '../constants';
+import {
+  TOKEN_AUTHORITY_MASK,
+  TOKEN_MINT_MASK,
+  TOKEN_MELT_MASK,
+  HATHOR_TOKEN_CONFIG,
+  CREATE_TOKEN_TX_VERSION,
+  DEFAULT_TX_VERSION,
+  DEFAULT_SIGNAL_BITS,
+  BLOCK_VERSION,
+  MERGED_MINED_BLOCK_VERSION,
+  NANO_CONTRACTS_VERSION
+} from '../constants';
+import { crypto as cryptoBL, PrivateKey, HDPrivateKey } from 'bitcore-lib'
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import Input from '../models/input';
 import Output from '../models/output';
 import Network from '../models/network';
-import { IBalance, IStorage, IHistoryTx, IDataOutput, IDataTx, isDataOutputCreateToken, IHistoryOutput, IUtxoId } from '../types';
+import { IBalance, IStorage, IHistoryTx, IDataOutput, IDataTx, isDataOutputCreateToken, IHistoryOutput, IUtxoId, IInputSignature } from '../types';
 import Address from '../models/address';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
@@ -117,18 +128,19 @@ const transaction = {
    * @inner
    */
   getSignature(dataToSignHash: Buffer, privateKey: PrivateKey): Buffer {
-    const signature = cryptoBL.ECDSA.sign(dataToSignHash, privateKey, 'little').set({
+    const signature = cryptoBL.ECDSA.sign(dataToSignHash, privateKey).set({
       nhashtype: cryptoBL.Signature.SIGHASH_ALL,
     });
     return signature.toDER();
   },
 
-  async signTransaction(tx: Transaction, storage: IStorage, pinCode: string): Promise<Transaction> {
+  async getSignatureForTx(tx: Transaction, storage: IStorage, pinCode: string): Promise<IInputSignature[]> {
     const xprivstr = await storage.getMainXPrivKey(pinCode);
     const xprivkey = HDPrivateKey.fromString(xprivstr);
     const dataToSignHash = tx.getDataToSignHash();
+    const signatures: IInputSignature[] = [];
 
-    for await (const {tx: spentTx, input} of storage.getSpentTxs(tx.inputs)) {
+    for await (const {tx: spentTx, input, index: inputIndex} of storage.getSpentTxs(tx.inputs)) {
       const spentOut = spentTx.outputs[input.index];
       if (!spentOut.decoded.address) {
         // This is not a wallet output
@@ -140,13 +152,27 @@ const transaction = {
         continue;
       }
       const xpriv = xprivkey.deriveNonCompliantChild(addressInfo.bip32AddressIndex);
+      signatures.push({
+        inputIndex,
+        addressIndex: addressInfo.bip32AddressIndex,
+        signature: this.getSignature(dataToSignHash, xpriv.privateKey),
+        pubkey: xpriv.publicKey.toDER(),
+      });
+    }
+
+    return signatures;
+  },
+
+  async signTransaction(tx: Transaction, storage: IStorage, pinCode: string): Promise<Transaction> {
+    const signatures = await storage.getTxSignatures(tx, pinCode);
+    for (const sigData of signatures) {
+      const input = tx.inputs[sigData.inputIndex];
       const inputData = this.createInputData(
-        this.getSignature(dataToSignHash, xpriv.privateKey),
-        xpriv.publicKey.toBuffer(),
+        sigData.signature,
+        sigData.pubkey,
       );
       input.setData(inputData);
     }
-
     return tx;
   },
 
@@ -566,7 +592,7 @@ const transaction = {
    *
    * @return {string} Type of the object
    *
-   * @memberof Helpers
+   * @memberof transaction
    * @inner
    */
   getTxType(tx: Pick<IHistoryTx, 'version'>): string {
@@ -581,6 +607,8 @@ const transaction = {
         return 'Transaction';
       } else if (tx.version === CREATE_TOKEN_TX_VERSION) {
         return 'Create Token Transaction';
+      } else if (tx.version === NANO_CONTRACTS_VERSION) {
+        return 'Nano Contract';
       }
     }
 

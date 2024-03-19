@@ -8,7 +8,16 @@
 import transaction from '../../src/utils/transaction';
 import { UtxoError } from '../../src/errors';
 import { PrivateKey, crypto } from 'bitcore-lib';
-import { BLOCK_VERSION, CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, MERGED_MINED_BLOCK_VERSION, TOKEN_AUTHORITY_MASK, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
+import {
+  BLOCK_VERSION,
+  CREATE_TOKEN_TX_VERSION,
+  DEFAULT_TX_VERSION,
+  MERGED_MINED_BLOCK_VERSION,
+  NANO_CONTRACTS_VERSION,
+  TOKEN_AUTHORITY_MASK,
+  TOKEN_MELT_MASK,
+  TOKEN_MINT_MASK
+} from '../../src/constants';
 import { MemoryStore, Storage } from '../../src/storage';
 import { HDPrivateKey } from 'bitcore-lib';
 import Input from '../../src/models/input';
@@ -58,7 +67,6 @@ test('getSignature', () => {
     hashdata,
     crypto.Signature.fromDER(signatureDER),
     privkey.toPublicKey(),
-    'little', // endianess
   )).toBe(true);
 });
 
@@ -81,8 +89,10 @@ test('signTransaction', async () => {
     }
   });
   async function* getSpentMock(inputs) {
+    let index = 0;
     for (const inp of inputs) {
       yield {
+        index,
         input: inp,
         tx: {
           outputs: [
@@ -92,6 +102,7 @@ test('signTransaction', async () => {
           ],
         }
       };
+      index += 1;
     }
   }
   jest.spyOn(storage, 'getSpentTxs').mockImplementation(getSpentMock);
@@ -108,7 +119,6 @@ test('signTransaction', async () => {
     hashdata,
     crypto.Signature.fromDER(sig1),
     xpriv.deriveChild(10).publicKey,
-    'little', // endianess
   )).toBe(true);
   expect(input2.data).toEqual(null);
 });
@@ -389,5 +399,6 @@ test('getTxType', () => {
   expect(transaction.getTxType({ version: DEFAULT_TX_VERSION })).toBe('Transaction');
   expect(transaction.getTxType({ version: CREATE_TOKEN_TX_VERSION })).toBe('Create Token Transaction');
   expect(transaction.getTxType({ version: MERGED_MINED_BLOCK_VERSION })).toBe('Merged Mining Block');
+  expect(transaction.getTxType({ version: NANO_CONTRACTS_VERSION })).toBe('Nano Contract');
   expect(transaction.getTxType({ version: 999 })).toBe('Unknown');
 });

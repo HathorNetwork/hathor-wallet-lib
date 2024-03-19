@@ -6,8 +6,22 @@
  */
 
 import { Config } from './config';
+import Transaction from './models/transaction';
 import Input from './models/input';
 import FullNodeConnection from './new/connection';
+
+export interface IInputSignature {
+  inputIndex: number,
+  addressIndex: number,
+  signature: Buffer,
+  pubkey: Buffer,
+}
+
+/**
+ * This is the method signature for a method that signs a transaction and
+ * returns an array with signature information.
+ */
+export type EcdsaTxSign = (tx: Transaction, storage: IStorage, pinCode: string) => Promise<IInputSignature[]>;
 
 export interface IAddressInfo {
   base58: string;
@@ -68,6 +82,11 @@ export interface IHistoryTx {
   tokens: string[];
   height?: number;
   processingStatus?: TxHistoryProcessingStatus;
+  nc_id?: string; // For nano contract
+  nc_blueprint_id?: string; // For nano contract
+  nc_method?: string; // For nano contract
+  nc_args?: string; // For nano contract. Args in hex
+  nc_pubkey?: string; // For nano contract. Pubkey in hex
 }
 
 export enum TxHistoryProcessingStatus {
@@ -373,6 +392,12 @@ export interface IStore {
   setScanningPolicyData(data: AddressScanPolicyData): Promise<void>;
   getScanningPolicyData(): Promise<AddressScanPolicyData>;
 
+  // Nano Contract methods
+  isNanoContractRegistered(ncId: string): Promise<boolean>;
+  getNanoContract(ncId: string): Promise<INcData | null>;
+  registerNanoContract(ncId: string, ncValue: INcData): Promise<void>;
+  unregisterNanoContract(ncId: string): Promise<void>;
+
   // Generic storage keys
   getItem(key: string): Promise<any>;
   setItem(key: string, value: any): Promise<void>;
@@ -387,10 +412,15 @@ export interface IStorage {
   config: Config;
   version: ApiVersion|null;
 
+  hasTxSignatureMethod(): boolean;
+  setTxSignatureMethod(txSign: EcdsaTxSign): void;
+  getTxSignatures(tx: Transaction, pinCode: string): Promise<IInputSignature[]>;
+
   // Address methods
   getAllAddresses(): AsyncGenerator<IAddressInfo & IAddressMetadata>;
   getAddressInfo(base58: string): Promise<(IAddressInfo & IAddressMetadata)|null>;
   getAddressAtIndex(index: number): Promise<IAddressInfo|null>;
+  getAddressPubkey(index: number): Promise<string>;
   saveAddress(info: IAddressInfo): Promise<void>;
   isAddressMine(base58: string): Promise<boolean>;
   getCurrentAddress(markAsUsed?: boolean): Promise<string>;
@@ -448,6 +478,12 @@ export interface IStorage {
   getScanningPolicy(): Promise<AddressScanPolicy>;
   getScanningPolicyData(): Promise<AddressScanPolicyData>;
   setScanningPolicyData(data: AddressScanPolicyData | null): Promise<void>;
+
+  // Nano Contract methods
+  isNanoContractRegistered(ncId: string): Promise<boolean>;
+  getNanoContract(ncId: string): Promise<INcData | null>;
+  registerNanoContract(ncId: string, ncValue: INcData): Promise<void>;
+  unregisterNanoContract(ncId: string): Promise<void>;
 }
 
 /**
@@ -540,4 +576,18 @@ export interface IKVWalletIndex extends IKVStoreIndex<void> {
 
   cleanAccessData(): Promise<void>;
   cleanWalletData(clear: boolean): Promise<void>;
+}
+
+export interface IKVNanoContractIndex extends IKVStoreIndex<void> {
+  isNanoContractRegistered(ncId: string): Promise<boolean>;
+  getNanoContract(ncId: string): Promise<INcData | null>;
+  registerNanoContract(ncId: string, ncValue: INcData): Promise<void>;
+  unregisterNanoContract(ncId: string): Promise<void>;
+  clear(): Promise<void>;
+}
+
+export interface INcData {
+  ncId: string;
+  blueprintId: string;
+  blueprintName: string;
 }
