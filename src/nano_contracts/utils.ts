@@ -8,15 +8,11 @@
 import { get } from 'lodash';
 import transactionUtils from '../utils/transaction';
 import { crypto } from 'bitcore-lib';
-import SendTransaction from '../new/sendTransaction';
 import HathorWallet from '../new/wallet';
-import NanoContract from './nano_contract';
-import Transaction from '../models/transaction';
 import Network from '../models/network';
 import ScriptData from '../models/script_data';
 import ncApi from '../api/nano';
-import { hexToBuffer, bufferToHex, unpackLen } from '../utils/buffer';
-import helpers from '../utils/helpers';
+import { hexToBuffer } from '../utils/buffer';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
 import Address from '../models/address';
@@ -26,37 +22,8 @@ import {
   WalletFromXPubGuard
 } from '../errors';
 import { OutputType } from '../wallet/types';
-import { IStorage } from '../types';
 import { parseScript } from '../utils/scripts';
-import { decryptData } from '../utils/crypto';
-import { PrivateKey } from 'bitcore-lib';
 import { MethodArgInfo } from './types';
-
-/**
- * Sign a transaction, create a send transaction object, mine and push
- *
- * @param {tx} Transaction to sign and send
- * @param {privateKey} Private key of the nano contract's tx signature
- * @param {pin} Pin to decrypt data
- * @param {storage} Wallet storage object
- */
-export const signAndPushNCTransaction = async (tx: NanoContract, privateKey: PrivateKey, pin: string, storage: IStorage): Promise<Transaction> => {
-  const dataToSignHash = tx.getDataToSignHash();
-  // Add nano signature
-  tx.signature = transactionUtils.getSignature(dataToSignHash, privateKey);
-  // Inputs signature, if there are any
-  await transactionUtils.signTransaction(tx, storage, pin);
-  tx.prepareToSend();
-
-  // Create send transaction object
-  const sendTransaction = new SendTransaction({
-    storage,
-    transaction: tx,
-    pin,
-  });
-
-  return sendTransaction.runFromMining();
-}
 
 /**
  * Get oracle buffer from oracle string (address in base58 or oracle data directly in hex)

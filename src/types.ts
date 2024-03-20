@@ -10,6 +10,11 @@ import Transaction from './models/transaction';
 import Input from './models/input';
 import FullNodeConnection from './new/connection';
 
+export interface ITxSignatureData {
+  inputSignatures: IInputSignature[],
+  ncCallerSignature: Buffer | null | undefined,
+}
+
 export interface IInputSignature {
   inputIndex: number,
   addressIndex: number,
@@ -21,7 +26,7 @@ export interface IInputSignature {
  * This is the method signature for a method that signs a transaction and
  * returns an array with signature information.
  */
-export type EcdsaTxSign = (tx: Transaction, storage: IStorage, pinCode: string) => Promise<IInputSignature[]>;
+export type EcdsaTxSign = (tx: Transaction, storage: IStorage, pinCode: string) => Promise<ITxSignatureData>;
 
 export interface IAddressInfo {
   base58: string;
@@ -414,7 +419,7 @@ export interface IStorage {
 
   hasTxSignatureMethod(): boolean;
   setTxSignatureMethod(txSign: EcdsaTxSign): void;
-  getTxSignatures(tx: Transaction, pinCode: string): Promise<IInputSignature[]>;
+  getTxSignatures(tx: Transaction, pinCode: string): Promise<ITxSignatureData>;
 
   // Address methods
   getAllAddresses(): AsyncGenerator<IAddressInfo & IAddressMetadata>;

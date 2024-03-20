@@ -2729,18 +2729,26 @@ class HathorWallet extends EventEmitter {
       throw e;
     }
 
+    const addressInfo = await this.storage.getAddressInfo(address);
+    if (!addressInfo) {
+      throw new NanoContractTransactionError('Address used to sign the transaction does not belong to the wallet.');
+    }
+    const publicKey = this.storage.getAddressPubkey(addressInfo.bip32AddressIndex);
+
     // Build and send transaction
     const builder = new NanoContractTransactionBuilder()
-                          .setMethod(method)
-                          .setWallet(this)
-                          .setBlueprintId(data.blueprintId)
-                          .setNcId(data.ncId)
-                          .setCaller(privateKey)
-                          .setActions(data.actions)
-                          .setArgs(data.args)
+      .setMethod(method)
+      .setWallet(this)
+      .setBlueprintId(data.blueprintId)
+      .setNcId(data.ncId)
+      .setCaller(publicKey)
+      .setActions(data.actions)
+      .setArgs(data.args);
 
     const nc = await builder.build();
-    return signAndPushNCTransaction(nc, privateKey, pin, this.storage);
+
+    await transactionUtils.signTransaction(nc, this.storage, pin);
+    return this.handleSendPreparedTransaction(nc);
   }
 
   /**

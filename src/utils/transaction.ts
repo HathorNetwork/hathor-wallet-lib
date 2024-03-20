@@ -26,7 +26,7 @@ import CreateTokenTransaction from '../models/create_token_transaction';
 import Input from '../models/input';
 import Output from '../models/output';
 import Network from '../models/network';
-import { IBalance, IStorage, IHistoryTx, IDataOutput, IDataTx, isDataOutputCreateToken, IHistoryOutput, IUtxoId, IInputSignature } from '../types';
+import { IBalance, IStorage, IHistoryTx, IDataOutput, IDataTx, isDataOutputCreateToken, IHistoryOutput, IUtxoId, IInputSignature, ITxSignatureData } from '../types';
 import Address from '../models/address';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
@@ -34,6 +34,8 @@ import ScriptData from '../models/script_data';
 import { ParseError } from '../errors';
 import helpers from './helpers';
 import { getAddressType } from './address';
+import NanoContract from '../nano_contracts/nano_contract';
+import { getAddressFromPubkey } from '../utils/address';
 
 const transaction = {
 
@@ -134,11 +136,12 @@ const transaction = {
     return signature.toDER();
   },
 
-  async getSignatureForTx(tx: Transaction, storage: IStorage, pinCode: string): Promise<IInputSignature[]> {
+  async getSignatureForTx(tx: Transaction, storage: IStorage, pinCode: string): Promise<ITxSignatureData> {
     const xprivstr = await storage.getMainXPrivKey(pinCode);
     const xprivkey = HDPrivateKey.fromString(xprivstr);
     const dataToSignHash = tx.getDataToSignHash();
     const signatures: IInputSignature[] = [];
+    let ncCallerSignature: Buffer | null = null;
 
     for await (const {tx: spentTx, input, index: inputIndex} of storage.getSpentTxs(tx.inputs)) {
       const spentOut = spentTx.outputs[input.index];
@@ -160,12 +163,32 @@ const transaction = {
       });
     }
 
-    return signatures;
+    if (tx.version === NANO_CONTRACTS_VERSION) {
+      const callerPubkey = (tx as NanoContract).pubkey;
+      const address = getAddressFromPubkey(callerPubkey.toString(), storage.config.getNetwork());
+      const addressInfo = await storage.getAddressInfo(address.base58);
+      if (!addressInfo) {
+        // Not a wallet address
+        throw new Error('Caller is not from wallet');
+      }
+      const xpriv = xprivkey.deriveNonCompliantChild(addressInfo.bip32AddressIndex);
+      ncCallerSignature = this.getSignature(dataToSignHash, xpriv.privateKey);
+    }
+
+    return {
+      inputSignatures: signatures,
+      ncCallerSignature,
+    };
   },
 
   async signTransaction(tx: Transaction, storage: IStorage, pinCode: string): Promise<Transaction> {
     const signatures = await storage.getTxSignatures(tx, pinCode);
-    for (const sigData of signatures) {
+
+    if (tx.version === NANO_CONTRACTS_VERSION) {
+      (tx as NanoContract).signature = signatures.ncCallerSignature;
+    }
+
+    for (const sigData of signatures.inputSignatures) {
       const input = tx.inputs[sigData.inputIndex];
       const inputData = this.createInputData(
         sigData.signature,

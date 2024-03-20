@@ -6,18 +6,15 @@
  */
 
 import Output from '../models/output';
-import P2PKH from '../models/p2pkh';
 import Input from '../models/input';
-import Address from '../models/address';
 import NanoContract from './nano_contract';
 import { createOutputScriptFromAddress } from '../utils/address';
-import { IDataOutput } from '../types';
 import {
     HATHOR_TOKEN_CONFIG,
     NANO_CONTRACTS_INITIALIZE_METHOD,
     NANO_CONTRACTS_VERSION } from '../constants';
 import Serializer from './serializer';
-import { HDPrivateKey } from 'bitcore-lib';
+import { PublicKey } from 'bitcore-lib';
 import HathorWallet from '../new/wallet';
 import { NanoContractTransactionError } from '../errors';
 import { concat, get } from 'lodash'
@@ -36,7 +33,7 @@ class NanoContractTransactionBuilder {
   ncId: string | null | undefined;
   method: string | null;
   actions: NanoContractAction[] | null;
-  caller: HDPrivateKey | null;
+  caller: PublicKey | null;
   args: any[] | null;
   transaction: NanoContract | null;
   wallet: HathorWallet | null;
@@ -103,13 +100,13 @@ class NanoContractTransactionBuilder {
   /**
    * Set object caller attribute
    *
-   * @param {caller} Caller private key
+   * @param {caller} caller public key
    *
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  setCaller(caller: HDPrivateKey) {
-    this.caller = caller;
+  setCaller(caller: string) {
+    this.caller = new PublicKey(caller);
     return this;
   }
 
@@ -340,7 +337,7 @@ class NanoContractTransactionBuilder {
       throw new Error('This should never happen.');
     }
 
-    return new NanoContract(inputs, outputs, tokens, ncId, this.method, serializedArgs, this.caller.publicKey.toBuffer(), null);
+    return new NanoContract(inputs, outputs, tokens, ncId, this.method, serializedArgs, this.caller.toBuffer(), null);
   }
 }
 
