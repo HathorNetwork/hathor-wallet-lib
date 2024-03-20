@@ -2400,7 +2400,7 @@ class HathorWallet extends EventEmitter {
     }
     const signatures = await this.storage.getTxSignatures(tx, pin);
     const sigInfoArray = [];
-    for (const sigData of signatures) {
+    for (const sigData of signatures.inputSignatures) {
       sigInfoArray.push({
         ...sigData,
         pubkey: sigData.pubkey.toString('hex'),
