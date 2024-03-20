@@ -12,7 +12,7 @@ import FullNodeConnection from './new/connection';
 
 export interface ITxSignatureData {
   inputSignatures: IInputSignature[],
-  ncCallerSignature: Buffer | null | undefined,
+  ncCallerSignature: Buffer | null,
 }
 
 export interface IInputSignature {
