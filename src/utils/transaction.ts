@@ -165,7 +165,7 @@ const transaction = {
 
     if (tx.version === NANO_CONTRACTS_VERSION) {
       const callerPubkey = (tx as NanoContract).pubkey;
-      const address = getAddressFromPubkey(callerPubkey.toString(), storage.config.getNetwork());
+      const address = getAddressFromPubkey(callerPubkey.toString('hex'), storage.config.getNetwork());
       const addressInfo = await storage.getAddressInfo(address.base58);
       if (!addressInfo) {
         // Not a wallet address
