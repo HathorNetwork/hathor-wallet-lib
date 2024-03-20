@@ -13,7 +13,6 @@ import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
 import versionApi from '../api/version';
 import { hexToBuffer } from '../utils/buffer';
-import { decryptData } from '../utils/crypto';
 import helpers from '../utils/helpers';
 import { createP2SHRedeemScript } from '../utils/scripts';
 import walletUtils from '../utils/wallet';
@@ -2722,7 +2721,7 @@ class HathorWallet extends EventEmitter {
     if (!addressInfo) {
       throw new NanoContractTransactionError('Address used to sign the transaction does not belong to the wallet.');
     }
-    const publicKey = this.storage.getAddressPubkey(addressInfo.bip32AddressIndex);
+    const publicKey = await this.storage.getAddressPubkey(addressInfo.bip32AddressIndex);
 
     // Build and send transaction
     const builder = new NanoContractTransactionBuilder()

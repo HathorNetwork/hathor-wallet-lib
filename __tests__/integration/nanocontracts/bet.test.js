@@ -2,10 +2,7 @@ import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import {
   generateMultisigWalletHelper,
   generateWalletHelper,
-  stopAllWallets,
   waitForTxReceived,
-  waitUntilNextTimestamp,
-  waitNextBlock,
   waitTxConfirmed
 } from '../helpers/wallet.helper';
 import {
@@ -13,9 +10,8 @@ import {
   NANO_CONTRACTS_INITIALIZE_METHOD
 } from '../../../src/constants';
 import ncApi from '../../../src/api/nano';
-import helpersUtils from '../../../src/utils/helpers';
 import dateFormatter from '../../../src/utils/date';
-import { bufferToHex, hexToBuffer } from '../../../src/utils/buffer';
+import { bufferToHex } from '../../../src/utils/buffer';
 import Address from '../../../src/models/address';
 import P2PKH from '../../../src/models/p2pkh';
 import { isEmpty } from 'lodash';
