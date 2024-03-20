@@ -17,7 +17,7 @@ import {
     NANO_CONTRACTS_INITIALIZE_METHOD,
     NANO_CONTRACTS_VERSION } from '../constants';
 import Serializer from './serializer';
-import { HDPrivateKey } from 'bitcore-lib';
+import { PublicKey } from 'bitcore-lib';
 import HathorWallet from '../new/wallet';
 import { NanoContractTransactionError } from '../errors';
 import { concat, get } from 'lodash'
@@ -36,7 +36,7 @@ class NanoContractTransactionBuilder {
   ncId: string | null | undefined;
   method: string | null;
   actions: NanoContractAction[] | null;
-  caller: HDPrivateKey | null;
+  caller: Buffer | null;
   args: any[] | null;
   transaction: NanoContract | null;
   wallet: HathorWallet | null;
@@ -55,7 +55,7 @@ class NanoContractTransactionBuilder {
   /**
    * Set object method attribute
    *
-   * @param {method} Method name
+   * @param method Method name
    *
    * @memberof NanoContractTransactionBuilder
    * @inner
@@ -68,7 +68,7 @@ class NanoContractTransactionBuilder {
   /**
    * Set object actions attribute
    *
-   * @param {actions} List of actions
+   * @param actions List of actions
    *
    * @memberof NanoContractTransactionBuilder
    * @inner
@@ -90,7 +90,7 @@ class NanoContractTransactionBuilder {
   /**
    * Set object args attribute
    *
-   * @param {args} List of arguments
+   * @param args List of arguments
    *
    * @memberof NanoContractTransactionBuilder
    * @inner
@@ -103,12 +103,12 @@ class NanoContractTransactionBuilder {
   /**
    * Set object caller attribute
    *
-   * @param {caller} Caller private key
+   * @param caller caller public key
    *
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  setCaller(caller: HDPrivateKey) {
+  setCaller(caller: Buffer) {
     this.caller = caller;
     return this;
   }
@@ -116,7 +116,7 @@ class NanoContractTransactionBuilder {
   /**
    * Set object blueprintId attribute
    *
-   * @param {blueprintId} Blueprint id
+   * @param blueprintId Blueprint id
    *
    * @memberof NanoContractTransactionBuilder
    * @inner
@@ -340,7 +340,7 @@ class NanoContractTransactionBuilder {
       throw new Error('This should never happen.');
     }
 
-    return new NanoContract(inputs, outputs, tokens, ncId, this.method, serializedArgs, this.caller.publicKey.toBuffer(), null);
+    return new NanoContract(inputs, outputs, tokens, ncId, this.method, serializedArgs, this.caller, null);
   }
 }
 

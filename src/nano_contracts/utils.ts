@@ -15,8 +15,7 @@ import Transaction from '../models/transaction';
 import Network from '../models/network';
 import ScriptData from '../models/script_data';
 import ncApi from '../api/nano';
-import { hexToBuffer, bufferToHex, unpackLen } from '../utils/buffer';
-import helpers from '../utils/helpers';
+import { hexToBuffer } from '../utils/buffer';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
 import Address from '../models/address';
@@ -28,22 +27,23 @@ import {
 import { OutputType } from '../wallet/types';
 import { IStorage } from '../types';
 import { parseScript } from '../utils/scripts';
-import { decryptData } from '../utils/crypto';
-import { PrivateKey } from 'bitcore-lib';
+import { HDPrivateKey } from 'bitcore-lib';
 import { MethodArgInfo } from './types';
 
 /**
  * Sign a transaction, create a send transaction object, mine and push
  *
- * @param {tx} Transaction to sign and send
- * @param {privateKey} Private key of the nano contract's tx signature
- * @param {pin} Pin to decrypt data
- * @param {storage} Wallet storage object
+ * @param tx Transaction to sign and send
+ * @param callerIndex address index of the caller address
+ * @param pin Pin to decrypt data
+ * @param storage Wallet storage object
  */
-export const signAndPushNCTransaction = async (tx: NanoContract, privateKey: PrivateKey, pin: string, storage: IStorage): Promise<Transaction> => {
+export const signAndPushNCTransaction = async (tx: NanoContract, callerIndex: number, pin: string, storage: IStorage): Promise<Transaction> => {
   const dataToSignHash = tx.getDataToSignHash();
+  const xprivkey = await storage.getMainXPrivKey(pin);
+  const privkey = new HDPrivateKey(xprivkey).deriveNonCompliantChild(callerIndex).privateKey;
   // Add nano signature
-  tx.signature = transactionUtils.getSignature(dataToSignHash, privateKey);
+  tx.signature = transactionUtils.getSignature(dataToSignHash, privkey);
   // Inputs signature, if there are any
   await transactionUtils.signTransaction(tx, storage, pin);
   tx.prepareToSend();
@@ -61,8 +61,8 @@ export const signAndPushNCTransaction = async (tx: NanoContract, privateKey: Pri
 /**
  * Get oracle buffer from oracle string (address in base58 or oracle data directly in hex)
  *
- * @param {oracle} Address in base58 or oracle data directly in hex
- * @param {network} Network to calculate the address
+ * @param oracle Address in base58 or oracle data directly in hex
+ * @param network Network to calculate the address
  */
 export const getOracleBuffer = (oracle: string, network: Network): Buffer => {
   const address = new Address(oracle, { network });

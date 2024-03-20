@@ -2400,7 +2400,7 @@ class HathorWallet extends EventEmitter {
     }
     const signatures = await this.storage.getTxSignatures(tx, pin);
     const sigInfoArray = [];
-    for (const sigData of signatures) {
+    for (const sigData of signatures.inputSignatures) {
       sigInfoArray.push({
         ...sigData,
         pubkey: sigData.pubkey.toString('hex'),
@@ -2718,29 +2718,25 @@ class HathorWallet extends EventEmitter {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
-    // Get private key that will sign the nano contract transaction
-    let privateKey;
-    try {
-      privateKey = await this.getPrivateKeyFromAddress(address, options);
-    } catch (e) {
-      if (e instanceof AddressError) {
-        throw new NanoContractTransactionError('Address used to sign the transaction does not belong to the wallet.');
-      }
-      throw e;
+    // Get caller pubkey
+    const addressInfo = await this.storage.getAddressInfo(address);
+    if (!addressInfo) {
+      throw new NanoContractTransactionError(`Address used to sign the transaction (${address}) does not belong to the wallet.`);
     }
+    const pubkeyStr = await this.storage.getAddressPubkey(addressInfo.bip32AddressIndex);
 
     // Build and send transaction
     const builder = new NanoContractTransactionBuilder()
-                          .setMethod(method)
-                          .setWallet(this)
-                          .setBlueprintId(data.blueprintId)
-                          .setNcId(data.ncId)
-                          .setCaller(privateKey)
-                          .setActions(data.actions)
-                          .setArgs(data.args)
+      .setMethod(method)
+      .setWallet(this)
+      .setBlueprintId(data.blueprintId)
+      .setNcId(data.ncId)
+      .setCaller(Buffer.from(pubkeyStr, 'hex'))
+      .setActions(data.actions)
+      .setArgs(data.args);
 
     const nc = await builder.build();
-    return signAndPushNCTransaction(nc, privateKey, pin, this.storage);
+    return signAndPushNCTransaction(nc, addressInfo.bip32AddressIndex, pin, this.storage);
   }
 
   /**

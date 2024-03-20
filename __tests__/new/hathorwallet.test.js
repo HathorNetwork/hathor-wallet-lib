@@ -217,20 +217,23 @@ test('getSignatures', async () => {
   const storage = new Storage(store);
   jest.spyOn(storage, 'isReadonly').mockReturnValue(Promise.resolve(false));
   jest.spyOn(storage, 'getWalletType').mockReturnValue(Promise.resolve(WalletType.P2PKH));
-  jest.spyOn(storage, 'getTxSignatures').mockReturnValue(Promise.resolve([
-    {
-      signature: Buffer.from('cafe', 'hex'),
-      pubkey: Buffer.from('abcd', 'hex'),
-      inputIndex: 0,
-      addressIndex: 1,
-    },
-    {
-      signature: Buffer.from('1234', 'hex'),
-      pubkey: Buffer.from('d00d', 'hex'),
-      inputIndex: 0,
-      addressIndex: 2,
-    },
-  ]));
+  jest.spyOn(storage, 'getTxSignatures').mockReturnValue(Promise.resolve({
+    ncCallerSignature: null,
+    inputSignatures: [
+      {
+        signature: Buffer.from('cafe', 'hex'),
+        pubkey: Buffer.from('abcd', 'hex'),
+        inputIndex: 0,
+        addressIndex: 1,
+      },
+      {
+        signature: Buffer.from('1234', 'hex'),
+        pubkey: Buffer.from('d00d', 'hex'),
+        inputIndex: 0,
+        addressIndex: 2,
+      },
+    ],
+  }));
 
   const hWallet = new FakeHathorWallet();
   hWallet.storage = storage;
