@@ -2718,17 +2718,6 @@ class HathorWallet extends EventEmitter {
       throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
     }
 
-    // Get private key that will sign the nano contract transaction
-    let privateKey;
-    try {
-      privateKey = await this.getPrivateKeyFromAddress(address, options);
-    } catch (e) {
-      if (e instanceof AddressError) {
-        throw new NanoContractTransactionError('Address used to sign the transaction does not belong to the wallet.');
-      }
-      throw e;
-    }
-
     const addressInfo = await this.storage.getAddressInfo(address);
     if (!addressInfo) {
       throw new NanoContractTransactionError('Address used to sign the transaction does not belong to the wallet.');
