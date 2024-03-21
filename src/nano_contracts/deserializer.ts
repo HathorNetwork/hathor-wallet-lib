@@ -119,7 +119,12 @@ class Deserializer {
    * @inner
    */
   toSigned(signedData: Buffer, type: string): string {
-    const valueType = type.slice(0, -1).split('[')[1];
+    // Get signed data type inside []
+    const match = type.match(/\[(.*?)\]/);
+    const valueType = match[1] ?? null;
+    if (!valueType) {
+      throw new Error('Unable to extract type');
+    }
 
     let signedBuffer: Buffer;
     let size: number;
