@@ -12,7 +12,7 @@ import { bufferToHex, unpackToFloat, unpackToInt } from '../utils/buffer';
 class Deserializer {
   /**
    * Helper method to deserialize any value from its type
-   * We receive these type from the full node, so we
+   * We receive these types from the full node, so we
    * use the python syntax
    *
    * @param {value} Value to deserialize
