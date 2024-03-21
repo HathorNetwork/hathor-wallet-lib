@@ -5,8 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import Config from '../config';
 import Address from '../models/address';
+import Network from '../models/network';
 import Deserializer from './deserializer';
 import ncApi from '../api/nano';
 import { Address as bitcoreAddress, PublicKey as bitcorePublicKey } from 'bitcore-lib';
@@ -39,8 +39,7 @@ class NanoContractTransactionParser {
    * @memberof NanoContractTransactionParser
    * @inner
    */
-  parseAddress() {
-    const network = Config.getNetwork();
+  parseAddress(network: Network) {
     const pubkeyBuffer = hexToBuffer(this.publicKey);
     const base58 = new bitcoreAddress(bitcorePublicKey(pubkeyBuffer), network.bitcoreNetwork).toString()
     this.address = new Address(base58, { network });
