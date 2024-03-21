@@ -10,7 +10,7 @@ import Network from '../models/network';
 import Deserializer from './deserializer';
 import ncApi from '../api/nano';
 import { Address as bitcoreAddress, PublicKey as bitcorePublicKey } from 'bitcore-lib';
-import { get } from 'lodash';
+import { get, has } from 'lodash';
 import { hexToBuffer, unpackToInt } from '../utils/buffer';
 import { NanoContractTransactionParseError } from '../errors';
 import { MethodArgInfo, NanoContractParsedArgument } from './types';
@@ -60,11 +60,12 @@ class NanoContractTransactionParser {
     const deserializer = new Deserializer();
     // Get the blueprint data from full node
     const blueprintInformation = await ncApi.getBlueprintInformation(this.blueprintId);
-    const methodArgs = get(blueprintInformation, `public_methods.${this.method}.args`, []) as MethodArgInfo[];
-    if (!methodArgs) {
+    if (!has(blueprintInformation, `public_methods.${this.method}`)) {
+      // If this.method is not in the blueprint information public methods, then there's an error
       throw new NanoContractTransactionParseError('Failed to parse nano contract transaction. Method not found.');
     }
 
+    const methodArgs = get(blueprintInformation, `public_methods.${this.method}.args`, []) as MethodArgInfo[];
     let argsBuffer = Buffer.from(this.args, 'hex');
     let size: number;
     for (const arg of methodArgs) {
