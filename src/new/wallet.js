@@ -2736,7 +2736,7 @@ class HathorWallet extends EventEmitter {
       .setArgs(data.args);
 
     const nc = await builder.build();
-    return signAndPushNCTransaction(nc, addressInfo.bip32AddressIndex, pin, this.storage);
+    return signAndPushNCTransaction(nc, pin, this.storage);
   }
 
   /**

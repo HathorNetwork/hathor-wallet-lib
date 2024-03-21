@@ -27,25 +27,26 @@ import {
 import { OutputType } from '../wallet/types';
 import { IStorage } from '../types';
 import { parseScript } from '../utils/scripts';
-import { HDPrivateKey } from 'bitcore-lib';
 import { MethodArgInfo } from './types';
 
 /**
  * Sign a transaction, create a send transaction object, mine and push
  *
  * @param tx Transaction to sign and send
- * @param callerIndex address index of the caller address
  * @param pin Pin to decrypt data
  * @param storage Wallet storage object
  */
-export const signAndPushNCTransaction = async (tx: NanoContract, callerIndex: number, pin: string, storage: IStorage): Promise<Transaction> => {
-  const dataToSignHash = tx.getDataToSignHash();
-  const xprivkey = await storage.getMainXPrivKey(pin);
-  const privkey = new HDPrivateKey(xprivkey).deriveNonCompliantChild(callerIndex).privateKey;
-  // Add nano signature
-  tx.signature = transactionUtils.getSignature(dataToSignHash, privkey);
-  // Inputs signature, if there are any
-  await transactionUtils.signTransaction(tx, storage, pin);
+export const signAndPushNCTransaction = async (tx: NanoContract, pin: string, storage: IStorage): Promise<Transaction> => {
+  const txSigData = await storage.getTxSignatures(tx, pin);
+  for (const sigData of txSigData.inputSignatures) {
+    const input = tx.inputs[sigData.inputIndex];
+    const inputData = transactionUtils.createInputData(
+      sigData.signature,
+      sigData.pubkey,
+    );
+    input.setData(inputData);
+  }
+  tx.signature = txSigData.ncCallerSignature;
   tx.prepareToSend();
 
   // Create send transaction object
@@ -94,9 +95,9 @@ export const getOracleBuffer = (oracle: string, network: Network): Buffer => {
 /**
  * Get oracle input data
  *
- * @param {oracleData} Oracle data
- * @param {resultSerialized} Result to sign with oracle data already serialized
- * @param {wallet} Hathor Wallet object
+ * @param oracleData Oracle data
+ * @param resultSerialized Result to sign with oracle data already serialized
+ * @param wallet Hathor Wallet object
  */
 export const getOracleInputData = async (oracleData: Buffer, resultSerialized: Buffer, wallet: HathorWallet): Promise<Buffer> => {
   // Parse oracle script to validate if it's an address of this wallet
@@ -126,9 +127,9 @@ export const getOracleInputData = async (oracleData: Buffer, resultSerialized: B
 /**
  * Validate if nano contracts arguments match the expected ones from the blueprint method
  *
- * @param {blueprintId} Blueprint ID
- * @param {method} Method name
- * @param {args} Arguments of the method to check if have the expected types
+ * @param blueprintId Blueprint ID
+ * @param method Method name
+ * @param args Arguments of the method to check if have the expected types
  *
  * @throws NanoContractTransactionError in case the arguments are not valid
  * @throws NanoRequest404Error in case the blueprint ID does not exist on the full node
