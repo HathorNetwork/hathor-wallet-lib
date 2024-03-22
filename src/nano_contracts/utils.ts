@@ -37,16 +37,7 @@ import { MethodArgInfo } from './types';
  * @param storage Wallet storage object
  */
 export const signAndPushNCTransaction = async (tx: NanoContract, pin: string, storage: IStorage): Promise<Transaction> => {
-  const txSigData = await storage.getTxSignatures(tx, pin);
-  for (const sigData of txSigData.inputSignatures) {
-    const input = tx.inputs[sigData.inputIndex];
-    const inputData = transactionUtils.createInputData(
-      sigData.signature,
-      sigData.pubkey,
-    );
-    input.setData(inputData);
-  }
-  tx.signature = txSigData.ncCallerSignature;
+  await transactionUtils.signTransaction(tx, storage, pin);
   tx.prepareToSend();
 
   // Create send transaction object

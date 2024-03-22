@@ -195,6 +195,10 @@ const transaction = {
       );
       input.setData(inputData);
     }
+
+    if (tx.version === NANO_CONTRACTS_VERSION) {
+      (tx as NanoContract).signature = signatures.ncCallerSignature;
+    }
     return tx;
   },
 
