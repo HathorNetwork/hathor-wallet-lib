@@ -149,6 +149,11 @@ const transaction = {
     let ncCallerSignature: Buffer|null = null;
 
     for await (const {tx: spentTx, input, index: inputIndex} of storage.getSpentTxs(tx.inputs)) {
+      if (input.data) {
+        // This input is already signed
+        continue;
+      }
+
       const spentOut = spentTx.outputs[input.index];
       if (!spentOut.decoded.address) {
         // This is not a wallet output
