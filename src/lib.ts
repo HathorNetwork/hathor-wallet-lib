@@ -51,6 +51,8 @@ import { AtomicSwapServiceConnection } from './swapService/swapConnection';
 import ncApi from './api/nano';
 import NanoContractSerializer from './nano_contracts/serializer';
 import * as nanoUtils from './nano_contracts/utils';
+import NanoContractDeserializer from './nano_contracts/deserializer';
+import NanoContractTransactionParser from './nano_contracts/parser';
 
 export {
   PartialTx,
@@ -107,4 +109,6 @@ export {
   ncApi,
   NanoContractSerializer,
   nanoUtils,
+  NanoContractDeserializer,
+  NanoContractTransactionParser,
 };
