@@ -12,6 +12,7 @@ import ncApi from '../api/nano';
 import { Address as bitcoreAddress, PublicKey as bitcorePublicKey } from 'bitcore-lib';
 import { get, has } from 'lodash';
 import { hexToBuffer, unpackToInt } from '../utils/buffer';
+import { getAddressFromPubkey } from '../utils/address';
 import { NanoContractTransactionParseError } from '../errors';
 import { MethodArgInfo, NanoContractParsedArgument } from './types';
 
@@ -34,15 +35,13 @@ class NanoContractTransactionParser {
   }
 
   /**
-   * Parse the nano public key to a base58 address
+   * Parse the nano public key to an address object
    *
    * @memberof NanoContractTransactionParser
    * @inner
    */
   parseAddress(network: Network) {
-    const pubkeyBuffer = hexToBuffer(this.publicKey);
-    const base58 = new bitcoreAddress(bitcorePublicKey(pubkeyBuffer), network.bitcoreNetwork).toString()
-    this.address = new Address(base58, { network });
+    this.address = getAddressFromPubkey(this.publicKey, network);
   }
 
   /**
