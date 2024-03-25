@@ -109,7 +109,7 @@ test('signTransaction', async () => {
   const input0 = new Input('cafe', 0);
   const input1 = new Input('d00d', 1);
   const input2 = new Input('babe', 2);
-  const input3 = new Input('F001', 3, { data: Buffer.from([1, 2, 3]) });
+  const input3 = new Input('F001', 3, { data: Buffer.from('010203', 'hex') });
   const tx = new Transaction([input0, input1, input2, input3], []);
 
   expect(await transaction.signTransaction(tx, storage, '123')).toBe(tx);
@@ -122,6 +122,7 @@ test('signTransaction', async () => {
     xpriv.deriveChild(10).publicKey,
   )).toBe(true);
   expect(input2.data).toEqual(null);
+  expect(input3.data).toEqual(Buffer.from('010203', 'hex'));
 });
 
 test('Utxo selection', () => {
