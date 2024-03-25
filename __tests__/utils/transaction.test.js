@@ -109,7 +109,8 @@ test('signTransaction', async () => {
   const input0 = new Input('cafe', 0);
   const input1 = new Input('d00d', 1);
   const input2 = new Input('babe', 2);
-  const tx = new Transaction([input0, input1, input2], []);
+  const input3 = new Input('F001', 3, { data: Buffer.from([1, 2, 3]) });
+  const tx = new Transaction([input0, input1, input2, input3], []);
 
   expect(await transaction.signTransaction(tx, storage, '123')).toBe(tx);
   const hashdata = tx.getDataToSignHash();
