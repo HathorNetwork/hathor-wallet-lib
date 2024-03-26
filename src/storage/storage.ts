@@ -33,7 +33,7 @@ import {
   SCANNING_POLICY,
   INcData,
   EcdsaTxSign,
-  IInputSignature,
+  ITxSignatureData,
 } from '../types';
 import transactionUtils from '../utils/transaction';
 import { processHistory, processUtxoUnlock } from '../utils/storage';
@@ -105,9 +105,9 @@ export class Storage implements IStorage {
    * Sign the transaction
    * @param {Transaction} tx The transaction to sign
    * @param {string} pinCode The pin code
-   * @returns {Promise<IInputSignature[]>} The signatures
+   * @returns {Promise<ITxSignatureData>} The signatures
    */
-  async getTxSignatures(tx: Transaction, pinCode: string): Promise<IInputSignature[]> {
+  async getTxSignatures(tx: Transaction, pinCode: string): Promise<ITxSignatureData> {
     if (this.txSignFunc) {
       return this.txSignFunc(tx, this, pinCode);
     }
