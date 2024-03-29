@@ -726,6 +726,7 @@ class HathorWallet extends EventEmitter {
    * @property {number} timestamp
    * @property {boolean} voided
    * @property {number} version
+   * @property {TxHistoryProcessingStatus} processingStatus
    * @property {string} [ncId] - Nano Contract transaction hash
    * @property {string} [ncMethod] - Nano Contract method called
    * @property {Address} [ncCaller] - Nano Contract transaction's signing address
@@ -766,6 +767,7 @@ class HathorWallet extends EventEmitter {
         voided: tx.is_voided,
         balance: txbalance[uid] || 0,
         version: tx.version,
+        processingStatus: tx.processingStatus,
         ncId: tx.nc_id,
         ncMethod: tx.nc_method,
         ncCaller: tx.nc_pubkey && getAddressFromPubkey(tx.nc_pubkey),
