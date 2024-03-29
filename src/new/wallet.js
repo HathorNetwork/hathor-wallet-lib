@@ -768,7 +768,7 @@ class HathorWallet extends EventEmitter {
         version: tx.version,
         ncId: tx.nc_id,
         ncMethod: tx.nc_method,
-        ncCaller: tx.nc_pubkey && getAddressFromPubkey(tx.nc_pubkey),
+        ncCaller: tx.nc_pubkey && getAddressFromPubkey(tx.nc_pubkey, this.getNetworkObject()),
       };
       txs.push(txHistory);
       count--;
