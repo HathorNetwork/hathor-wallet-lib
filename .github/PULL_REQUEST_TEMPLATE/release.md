@@ -6,4 +6,4 @@
 ### Description
 
 Start the release process for version `X.X.X`.
-This PR will merge any changes on `release-candidate` into `release` branch.
+This PR will merge any changes on `master` into `release` branch.
