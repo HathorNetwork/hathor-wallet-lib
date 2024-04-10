@@ -1,6 +1,4 @@
-### Acceptance Criteria
-- Include here all things that this PR should solve
+# Choose a pull request template
 
-
-### Security Checklist
-- [ ] Make sure you do not include new dependencies in the project unless strictly necessary and do not include dev-dependencies as production ones. More dependencies increase the possibility of one of them being hijacked and affecting us.
+- [feature PR](?template=feature.md&quick_pull=1)
+- [Release process](https://github.com/HathorNetwork/hathor-wallet-lib/compare/release...master?template=release.md&quick_pull=1)
