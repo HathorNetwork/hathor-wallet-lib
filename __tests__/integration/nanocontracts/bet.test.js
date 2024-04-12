@@ -302,9 +302,9 @@ describe('full cycle of bet nano contract', () => {
       expect(txIds).toContain(tx.hash);
     }
 
-    // Get tx history, it must be greater then zero
+    // Get tx history with success
     const txHistory = await wallet.getTxHistory();
-    expect(txHistory).not.toHaveLength(0);
+    expect(txHistory).toHaveLength(4);
   }
 
   it('bet deposit', async () => {
