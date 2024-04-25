@@ -32,8 +32,10 @@ jobs:
     - name: Test
       run: npm run test
     - name: Upload coverage
-      # https://github.com/codecov/codecov-action/releases/tag/v3.1.1
-      uses: codecov/codecov-action@d9f34f8cd5cb3b3eb79b3e4b5dae3a16df499a70
+      # https://github.com/codecov/codecov-action/releases/tag/v4.3.0
+      uses: codecov/codecov-action@84508663e988701840491b86de86b666e8a86bed
       if: ${{ matrix.node-version }} == 14.x
+      env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
       with:
         verbose: true
