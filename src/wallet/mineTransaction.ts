@@ -67,6 +67,9 @@ class MineTransaction extends EventEmitter {
 
     // Promise that resolves when push tx finishes with success
     // or rejects in case of an error
+    // TODO: If this promise is not handled properly we crash the client application with a
+    //       misleading error message. This should be refactored to a more stable solution with
+    //       better user experience
     this.promise = new Promise((resolve, reject) => {
       this.on('success', (data) => {
         resolve(data);
