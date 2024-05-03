@@ -729,6 +729,7 @@ class HathorWallet extends EventEmitter {
    * @property {string} [ncId] - Nano Contract transaction hash
    * @property {string} [ncMethod] - Nano Contract method called
    * @property {Address} [ncCaller] - Nano Contract transaction's signing address
+   * @property {string} [firstBlock] - Hash of the first block that validates the transaction
    */
 
   /**
@@ -769,6 +770,7 @@ class HathorWallet extends EventEmitter {
         ncId: tx.nc_id,
         ncMethod: tx.nc_method,
         ncCaller: tx.nc_pubkey && getAddressFromPubkey(tx.nc_pubkey, this.getNetworkObject()),
+        firstBlock: tx.first_block,
       };
       txs.push(txHistory);
       count--;
