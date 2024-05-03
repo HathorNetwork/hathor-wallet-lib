@@ -415,6 +415,6 @@ export default class LevelDBStore implements IStore {
    * @async
    */
   async unregisterNanoContract(ncId: string): Promise<void> {
-    this.nanoContractIndex.unregisterNanoContract(ncId);
+    return this.nanoContractIndex.unregisterNanoContract(ncId);
   }
 }
