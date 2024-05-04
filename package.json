@@ -3,6 +3,10 @@
   "version": "1.4.1",
   "description": "Library used by Hathor Wallet",
   "main": "lib/index.js",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
   "directories": {
     "lib": "lib"
   },
