@@ -7,7 +7,7 @@ module.exports = {
   testRunner: 'jest-circus/runner',
   clearMocks: true,
   coverageDirectory: 'coverage-integration',
-  testEnvironment: 'node',
+  testEnvironment: './CustomEnvironment.js',
   collectCoverage: true,
   collectCoverageFrom: ['<rootDir>/src/**/*.js', '<rootDir>/src/**/*.ts'],
   testMatch: [mainTestMatch],
