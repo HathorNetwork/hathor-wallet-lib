@@ -796,6 +796,7 @@ test('getTxHistory', async () => {
       nc_id: 'mock-nc-id',
       nc_method: 'mock-nc-method',
       nc_pubkey: fakePubkey,
+      first_block: 'mock-first-block-hash',
     };
   }
 
@@ -819,6 +820,7 @@ test('getTxHistory', async () => {
       ncId: 'mock-nc-id',
       ncMethod: 'mock-nc-method',
       ncCaller: { base58: 'mock-address' },
+      firstBlock: 'mock-first-block-hash',
     }]);
 
   await expect(hWallet.getTxHistory({ token_id: 'mock-token-uid2' }))
@@ -831,6 +833,7 @@ test('getTxHistory', async () => {
       ncId: 'mock-nc-id',
       ncMethod: 'mock-nc-method',
       ncCaller: { base58: 'mock-address' },
+      firstBlock: 'mock-first-block-hash',
     }]);
 
   expect(addrFromPubkey).toBeCalledTimes(2);
