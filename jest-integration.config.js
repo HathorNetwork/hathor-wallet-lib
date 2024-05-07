@@ -4,10 +4,10 @@ const mainTestMatch = process.env.SPECIFIC_INTEGRATION_TEST_FILE
   : '<rootDir>/__tests__/integration/**/*.test.js';
 
 module.exports = {
-  testRunner: "jest-jasmine2",
+  testRunner: 'jest-circus/runner',
   clearMocks: true,
   coverageDirectory: 'coverage-integration',
-  testEnvironment: 'node',
+  testEnvironment: './CustomEnvironment.js',
   collectCoverage: true,
   collectCoverageFrom: ['<rootDir>/src/**/*.js', '<rootDir>/src/**/*.ts'],
   testMatch: [mainTestMatch],

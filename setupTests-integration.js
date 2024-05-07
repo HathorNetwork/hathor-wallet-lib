@@ -6,7 +6,6 @@
  */
 
 /* eslint-disable global-require */
-import { parse } from 'path';
 import { loggers, LoggerUtil } from './__tests__/integration/utils/logger.util';
 import config from './src/config';
 import { TX_MINING_URL } from './__tests__/integration/configuration/test-constants';
@@ -18,23 +17,10 @@ import { waitNextBlock } from './__tests__/integration/helpers/wallet.helper';
 
 config.setTxMiningUrl(TX_MINING_URL);
 
-/**
- * Gets the name of the test being executed from a Jasmine's global variable.
- * @returns {string} Test name
- */
-function getTestNameFromGlobalJasmineInstance() {
-  // eslint-disable-next-line no-undef
-  const { testPath } = jasmine;
-  const testFileName = parse(testPath).name;
-  return testFileName.indexOf('.') > -1
-    ? testFileName.split('.')[0]
-    : testFileName;
-}
-
 // This function will run before each test file is executed
 beforeAll(async () => {
-  // Initializing the Transaction Logger with the test name
-  const testName = getTestNameFromGlobalJasmineInstance();
+  // Initializing the Transaction Logger with the test name obtained by our jest-circus Custom Env
+  const { testName } = global;
   const testLogger = new LoggerUtil(testName);
   testLogger.init({ filePrettyPrint: true });
   loggers.test = testLogger;
