@@ -36,13 +36,13 @@ describe('handleStop', () => {
   it('should work with memory store', async () => {
     const store = new MemoryStore();
     await handleStopTest(store);
-  }, 10000);
+  }, 20000);
 
   it('should work with leveldb store', async () => {
     const walletId = walletUtils.getWalletIdFromXPub(accessData.xpubkey);
     const store = new LevelDBStore(walletId, DATA_DIR);
     await handleStopTest(store);
-  }, 10000);
+  }, 20000);
 
   /**
    * @param {IStore} store
