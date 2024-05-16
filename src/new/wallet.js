@@ -1450,11 +1450,11 @@ class HathorWallet extends EventEmitter {
   /**
    * Close the connections and stop emitting events.
    */
-  async stop({ cleanStorage = true, cleanAddresses = false } = {}) {
+  async stop({ cleanStorage = true, cleanAddresses = false, cleanTokens = false } = {}) {
     this.setState(HathorWallet.CLOSED);
     this.removeAllListeners();
 
-    await this.storage.handleStop({connection: this.conn, cleanStorage, cleanAddresses});
+    await this.storage.handleStop({connection: this.conn, cleanStorage, cleanAddresses, cleanTokens});
 
     this.firstConnection = true;
     this.walletStopped = true;

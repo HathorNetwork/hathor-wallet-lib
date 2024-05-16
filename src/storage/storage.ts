@@ -814,10 +814,15 @@ export class Storage implements IStorage {
 
   /**
    * Handle storage operations for a wallet being stopped.
-   * @param {{connection?: FullNodeConnection, cleanStorage?: boolean, cleanAddresses?: boolean}} Options to handle stop
+   * @param {{
+   *   connection?: FullNodeConnection;
+   *   cleanStorage?: boolean;
+   *   cleanAddresses?: boolean;
+   *   cleanTokens?: boolean;
+   * }} Options to handle stop
    * @returns {Promise<void>}
    */
-  async handleStop({connection, cleanStorage = false, cleanAddresses = false}: {connection?: FullNodeConnection, cleanStorage?: boolean, cleanAddresses?: boolean} = {}): Promise<void> {
+  async handleStop({connection, cleanStorage = false, cleanAddresses = false, cleanTokens = false}: {connection?: FullNodeConnection, cleanStorage?: boolean, cleanAddresses?: boolean, cleanTokens?: boolean} = {}): Promise<void> {
     if (connection) {
       for await (const addressInfo of this.getAllAddresses()) {
         connection.unsubscribeAddress(addressInfo.base58);
@@ -825,8 +830,8 @@ export class Storage implements IStorage {
       connection.removeMetricsHandlers();
     }
     this.version = null;
-    if (cleanStorage || cleanAddresses) {
-      await this.cleanStorage(cleanStorage, cleanAddresses);
+    if (cleanStorage || cleanAddresses || cleanTokens) {
+      await this.cleanStorage(cleanStorage, cleanAddresses, cleanTokens);
     }
   }
 
