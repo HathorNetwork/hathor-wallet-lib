@@ -2,7 +2,8 @@ name: integration-test
 on:
   pull_request:
     branches:
-      - dev
+      - release
+      - release-candidate
       - master
 
 env:
@@ -10,12 +11,12 @@ env:
 
 jobs:
   itest:
-    runs-on: ubuntu-20.04
+    runs-on: 'ubuntu-latest'
     timeout-minutes: 40
 
     strategy:
       matrix:
-        node-version: [14.x, 16.x]
+        node-version: [20.x]
 
     steps:
         # https://github.com/actions/checkout/releases/tag/v3.5.0
@@ -41,11 +42,10 @@ jobs:
           name: test-transacion-logs
           path: tmp
       - name: Upload coverage
-        # https://github.com/codecov/codecov-action/releases/tag/v3.1.1
-        uses: codecov/codecov-action@d9f34f8cd5cb3b3eb79b3e4b5dae3a16df499a70
-        if: ${{ matrix.node-version }} == 14.x
-        with:
-          verbose: true
+        # https://github.com/codecov/codecov-action/releases/tag/v4.3.0
+        uses: codecov/codecov-action@84508663e988701840491b86de86b666e8a86bed
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
       - name: Collect docker logs on failure
         if: failure()
         # https://github.com/jwalton/gh-docker-logs/releases/tag/v2.2.1
