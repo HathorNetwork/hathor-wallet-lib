@@ -777,6 +777,9 @@ test('checkPinAndPassword', async () => {
 });
 
 test('getTxHistory', async () => {
+  const fakeNetwork = new Network('testnet');
+  const fakePubkey = Buffer.from('abcd', 'hex');
+
   const store = new MemoryStore();
   const storage = new Storage(store);
 
@@ -790,6 +793,10 @@ test('getTxHistory', async () => {
       version: 1,
       timestamp: 123,
       is_voided: false,
+      nc_id: 'mock-nc-id',
+      nc_method: 'mock-nc-method',
+      nc_pubkey: fakePubkey,
+      first_block: 'mock-first-block-hash',
     };
   }
 
@@ -798,6 +805,11 @@ test('getTxHistory', async () => {
   }));
   jest.spyOn(storage, 'tokenHistory').mockImplementation(historyMock);
 
+  hWallet.getNetworkObject = jest.fn().mockReturnValue(fakeNetwork);
+  const addrFromPubkey = jest.spyOn(addressUtils, 'getAddressFromPubkey').mockReturnValue(
+    { base58: 'mock-address' }
+  );
+
   await expect(hWallet.getTxHistory({ token_id: 'mock-token-uid' }))
     .resolves.toStrictEqual([{
       txId: 'mock-tx-id',
@@ -805,9 +817,10 @@ test('getTxHistory', async () => {
       voided: false,
       balance: 456,
       version: 1,
-      ncId: undefined,
-      ncMethod: undefined,
-      ncCaller: undefined,
+      ncId: 'mock-nc-id',
+      ncMethod: 'mock-nc-method',
+      ncCaller: { base58: 'mock-address' },
+      firstBlock: 'mock-first-block-hash',
     }]);
 
   await expect(hWallet.getTxHistory({ token_id: 'mock-token-uid2' }))
@@ -817,10 +830,14 @@ test('getTxHistory', async () => {
       voided: false,
       balance: 0,
       version: 1,
-      ncId: undefined,
-      ncMethod: undefined,
-      ncCaller: undefined,
+      ncId: 'mock-nc-id',
+      ncMethod: 'mock-nc-method',
+      ncCaller: { base58: 'mock-address' },
+      firstBlock: 'mock-first-block-hash',
     }]);
+
+  expect(addrFromPubkey).toBeCalledTimes(2);
+  expect(addrFromPubkey).toBeCalledWith(fakePubkey, fakeNetwork);
 });
 
 test('isHardwareWallet', async () => {

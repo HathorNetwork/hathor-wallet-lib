@@ -45,6 +45,12 @@ class Serializer {
    * @inner
    */
   serializeFromType(value: any, type: string): Buffer {
+    if (type.endsWith('?')) {
+      // This is an optional
+      const optionalType = type.slice(0, -1);
+      return this.fromOptional(value, optionalType);
+    }
+
     if (type.startsWith('SignedData[')) {
       return this.fromSigned(value as string);
     }
@@ -151,20 +157,22 @@ class Serializer {
   /**
    * Serialize an optional value
    *
-   * @param {isEmpty} If the optional has a value or not
-   * @param {value} Value to serialize (optional)
-   * @param {type} Type of the value to serialize (optional)
+   * If value is null, then it's a buffer with 0 only. If it's not null,
+   * we create a buffer with 1 in the first byte and the serialized value
+   * in the sequence.
+   *
+   * @param {value} Value to serialize. If not, the optional is empty
+   * @param {type} Type of the value to serialize
    *
    * @memberof Serializer
    * @inner
    */
-  fromOptional(isEmpty: boolean, value?: any, type?: string): Buffer {
-    // We are not supporting List optional for now
-    if (isEmpty) {
+  fromOptional(value: any, type: string): Buffer {
+    if (value === null) {
       return Buffer.from([0]);
     }
 
-    if (!value || !type) {
+    if (value === undefined || !type) {
       throw new Error('Missing value or type in non empty optional.');
     }
 

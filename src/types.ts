@@ -93,6 +93,7 @@ export interface IHistoryTx {
   nc_method?: string; // For nano contract
   nc_args?: string; // For nano contract. Args in hex
   nc_pubkey?: string; // For nano contract. Pubkey in hex
+  first_block?: string;
 }
 
 export enum TxHistoryProcessingStatus {

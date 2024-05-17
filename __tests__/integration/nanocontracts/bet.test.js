@@ -301,6 +301,10 @@ describe('full cycle of bet nano contract', () => {
     for (const tx of ncHistory2.history) {
       expect(txIds).toContain(tx.hash);
     }
+
+    // Get tx history with success
+    const txHistory = await wallet.getTxHistory();
+    expect(txHistory).toHaveLength(4);
   }
 
   it('bet deposit', async () => {

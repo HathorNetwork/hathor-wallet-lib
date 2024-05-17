@@ -3,12 +3,14 @@ on:
   push:
     branches:
     - master
-    - dev
+    - release
+    - release-candidate
     tags:
     - v*
   pull_request:
     branches:
-    - dev
+    - release
+    - release-candidate
     - master
 jobs:
   test:
@@ -16,7 +18,7 @@ jobs:
     timeout-minutes: 40  # default is 360
     strategy:
       matrix:
-        node-version: [12.x, 14.x]
+        node-version: [20.x]
     steps:
       # https://github.com/actions/checkout/releases/tag/v3.5.0
     - uses: actions/checkout@8f4b7f84864484a7bf31766abe9204da3cbe65b3
@@ -32,8 +34,7 @@ jobs:
     - name: Test
       run: npm run test
     - name: Upload coverage
-      # https://github.com/codecov/codecov-action/releases/tag/v3.1.1
-      uses: codecov/codecov-action@d9f34f8cd5cb3b3eb79b3e4b5dae3a16df499a70
-      if: ${{ matrix.node-version }} == 14.x
-      with:
-        verbose: true
+      # https://github.com/codecov/codecov-action/releases/tag/v4.3.0
+      uses: codecov/codecov-action@84508663e988701840491b86de86b666e8a86bed
+      env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

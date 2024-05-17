@@ -50,20 +50,20 @@ test('List', () => {
 
 test('Optional', () => {
   const serializer = new Serializer();
-  expect(serializer.fromOptional(true, undefined, 'int').equals(Buffer.from([0x00]))).toBe(true);
-  expect(serializer.fromOptional(false, 300, 'int').equals(Buffer.from([0x01, 0x00, 0x00, 0x01, 0x2c]))).toBe(true);
+  expect(serializer.fromOptional(null, 'int').equals(Buffer.from([0x00]))).toBe(true);
+  expect(serializer.fromOptional(300, 'int').equals(Buffer.from([0x01, 0x00, 0x00, 0x01, 0x2c]))).toBe(true);
 
-  expect(serializer.fromOptional(true, undefined, 'bool').equals(Buffer.from([0x00]))).toBe(true);
-  expect(serializer.fromOptional(false, true, 'bool').equals(Buffer.from([0x01, 0x01]))).toBe(true);
+  expect(serializer.fromOptional(null, 'bool').equals(Buffer.from([0x00]))).toBe(true);
+  expect(serializer.fromOptional(true, 'bool').equals(Buffer.from([0x01, 0x01]))).toBe(true);
 
-  expect(serializer.fromOptional(true, undefined, 'str').equals(Buffer.from([0x00]))).toBe(true);
-  expect(serializer.fromOptional(false, 'test', 'str').equals(Buffer.from([0x01, 0x74, 0x65, 0x73, 0x74]))).toBe(true);
+  expect(serializer.fromOptional(null, 'str').equals(Buffer.from([0x00]))).toBe(true);
+  expect(serializer.fromOptional('test', 'str').equals(Buffer.from([0x01, 0x74, 0x65, 0x73, 0x74]))).toBe(true);
 
-  expect(serializer.fromOptional(true, undefined, 'bytes').equals(Buffer.from([0x00]))).toBe(true);
-  expect(serializer.fromOptional(false, [0x74, 0x65, 0x73, 0x74], 'bytes').equals(Buffer.from([0x01, 0x74, 0x65, 0x73, 0x74]))).toBe(true);
+  expect(serializer.fromOptional(null, 'bytes').equals(Buffer.from([0x00]))).toBe(true);
+  expect(serializer.fromOptional([0x74, 0x65, 0x73, 0x74], 'bytes').equals(Buffer.from([0x01, 0x74, 0x65, 0x73, 0x74]))).toBe(true);
 
-  expect(serializer.fromOptional(true, undefined, 'float').equals(Buffer.from([0x00]))).toBe(true);
-  expect(serializer.fromOptional(false, 10.32134, 'float').equals(Buffer.from([0x01, 0x40, 0x24, 0xa4, 0x86, 0xad, 0x2d, 0xcb, 0x14]))).toBe(true);
+  expect(serializer.fromOptional(null, 'float').equals(Buffer.from([0x00]))).toBe(true);
+  expect(serializer.fromOptional(10.32134, 'float').equals(Buffer.from([0x01, 0x40, 0x24, 0xa4, 0x86, 0xad, 0x2d, 0xcb, 0x14]))).toBe(true);
 })
 
 test('Signed', () => {

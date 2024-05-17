@@ -729,6 +729,7 @@ class HathorWallet extends EventEmitter {
    * @property {string} [ncId] - Nano Contract transaction hash
    * @property {string} [ncMethod] - Nano Contract method called
    * @property {Address} [ncCaller] - Nano Contract transaction's signing address
+   * @property {string} [firstBlock] - Hash of the first block that validates the transaction
    */
 
   /**
@@ -768,7 +769,8 @@ class HathorWallet extends EventEmitter {
         version: tx.version,
         ncId: tx.nc_id,
         ncMethod: tx.nc_method,
-        ncCaller: tx.nc_pubkey && getAddressFromPubkey(tx.nc_pubkey),
+        ncCaller: tx.nc_pubkey && getAddressFromPubkey(tx.nc_pubkey, this.getNetworkObject()),
+        firstBlock: tx.first_block,
       };
       txs.push(txHistory);
       count--;
@@ -1448,11 +1450,11 @@ class HathorWallet extends EventEmitter {
   /**
    * Close the connections and stop emitting events.
    */
-  async stop({ cleanStorage = true, cleanAddresses = false } = {}) {
+  async stop({ cleanStorage = true, cleanAddresses = false, cleanTokens = false } = {}) {
     this.setState(HathorWallet.CLOSED);
     this.removeAllListeners();
 
-    await this.storage.handleStop({connection: this.conn, cleanStorage, cleanAddresses});
+    await this.storage.handleStop({connection: this.conn, cleanStorage, cleanAddresses, cleanTokens});
 
     this.firstConnection = true;
     this.walletStopped = true;
