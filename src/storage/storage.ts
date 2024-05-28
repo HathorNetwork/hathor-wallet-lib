@@ -986,6 +986,19 @@ export class Storage implements IStorage {
   }
 
   /**
+   * Iterate on all registered nano contracts of the wallet.
+   *
+   * @async
+   * @generator
+   * @returns {AsyncGenerator<INcData>}
+   */
+  async *getRegisteredNanoContracts(): AsyncGenerator<INcData> {
+    for await (const ncData of this.store.registeredNanoContractsIter()) {
+      yield ncData;
+    }
+  }
+
+  /**
    * Get nano contract data.
    * @param ncId Nano Contract ID.
    * @returns An instance of Nano Contract data.
