@@ -401,6 +401,7 @@ export interface IStore {
 
   // Nano Contract methods
   isNanoContractRegistered(ncId: string): Promise<boolean>;
+  registeredNanoContractsIter(): AsyncGenerator<INcData>;
   getNanoContract(ncId: string): Promise<INcData | null>;
   registerNanoContract(ncId: string, ncValue: INcData): Promise<void>;
   unregisterNanoContract(ncId: string): Promise<void>;
@@ -595,6 +596,7 @@ export interface IKVNanoContractIndex extends IKVStoreIndex<void> {
 
 export interface INcData {
   ncId: string;
+  address: string;
   blueprintId: string;
   blueprintName: string;
 }

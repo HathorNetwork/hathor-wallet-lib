@@ -908,6 +908,19 @@ export class MemoryStore implements IStore {
   }
 
   /**
+   * Iterate on registered nano contracts.
+   *
+   * @async
+   * @generator
+   * @returns {AsyncGenerator<INcData>}
+   */
+  async *registeredNanoContractsIter(): AsyncGenerator<INcData> {
+    for (const ncData of this.registeredNanoContracts.values()) {
+      yield ncData;
+    }
+  }
+
+  /**
    * Get a nano contract data on storage from the ncId.
    *
    * @param ncId Nano Contract ID.

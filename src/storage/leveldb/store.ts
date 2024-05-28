@@ -387,6 +387,19 @@ export default class LevelDBStore implements IStore {
   }
 
   /**
+   * Iterate over all registered nano contracts in the database
+   *
+   * @async
+   * @generator
+   * @returns {AsyncGenerator<INcData>}
+   */
+  async *registeredNanoContractsIter(): AsyncGenerator<INcData> {
+    for await (const ncData of this.nanoContractIndex.registeredNanoContractsIter()) {
+      yield ncData;
+    }
+  }
+
+  /**
    * Get a nano contract data on storage from the ncId.
    *
    * @param ncId Nano Contract Id.

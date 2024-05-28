@@ -64,6 +64,13 @@ describe('handleStop', () => {
       outputs: [],
     });
     await storage.registerToken(testToken);
+    const testNano = {
+      ncId: 'abc',
+      address: 'nanoAddress',
+      blueprintId: 'blueprintId',
+      blueprintName: 'blueprintName',
+    };
+    await storage.registerNanoContract('abc', testNano);
     // We have 1 transaction
     await expect(store.historyCount()).resolves.toEqual(1);
     // 20 addresses
@@ -72,6 +79,10 @@ describe('handleStop', () => {
     let tokens = await toArray(storage.getRegisteredTokens());
     expect(tokens).toHaveLength(1);
     expect(tokens[0]).toEqual(testToken);
+    // And 1 registered nano contract
+    let nanos = await toArray(storage.getRegisteredNanoContracts());
+    expect(nanos).toHaveLength(1);
+    expect(nanos[0]).toEqual(testNano);
 
     storage.version = 'something';
     // handleStop with defaults
@@ -82,9 +93,13 @@ describe('handleStop', () => {
     await expect(store.historyCount()).resolves.toEqual(1);
     await expect(store.addressCount()).resolves.toEqual(20);
     await expect(store.isTokenRegistered(testToken.uid)).resolves.toBeTruthy();
+    await expect(store.isNanoContractRegistered(testNano.ncId)).resolves.toBeTruthy();
     tokens = await toArray(storage.getRegisteredTokens());
     expect(tokens).toHaveLength(1);
     expect(tokens[0]).toEqual(testToken);
+    nanos = await toArray(storage.getRegisteredNanoContracts());
+    expect(nanos).toHaveLength(1);
+    expect(nanos[0]).toEqual(testNano);
 
     // handleStop with cleanStorage = true
     await storage.handleStop({ cleanStorage: true });
@@ -92,9 +107,13 @@ describe('handleStop', () => {
     await expect(store.historyCount()).resolves.toEqual(0);
     await expect(store.addressCount()).resolves.toEqual(20);
     await expect(store.isTokenRegistered(testToken.uid)).resolves.toBeTruthy();
+    await expect(store.isNanoContractRegistered(testNano.ncId)).resolves.toBeTruthy();
     tokens = await toArray(storage.getRegisteredTokens());
     expect(tokens).toHaveLength(1);
     expect(tokens[0]).toEqual(testToken);
+    nanos = await toArray(storage.getRegisteredNanoContracts());
+    expect(nanos).toHaveLength(1);
+    expect(nanos[0]).toEqual(testNano);
 
     await storage.addTx({
       tx_id: 'another-new-tx',
@@ -109,9 +128,13 @@ describe('handleStop', () => {
     await expect(store.historyCount()).resolves.toEqual(1);
     await expect(store.addressCount()).resolves.toEqual(0);
     await expect(store.isTokenRegistered(testToken.uid)).resolves.toBeTruthy();
+    await expect(store.isNanoContractRegistered(testNano.ncId)).resolves.toBeTruthy();
     tokens = await toArray(storage.getRegisteredTokens());
     expect(tokens).toHaveLength(1);
     expect(tokens[0]).toEqual(testToken);
+    nanos = await toArray(storage.getRegisteredNanoContracts());
+    expect(nanos).toHaveLength(1);
+    expect(nanos[0]).toEqual(testNano);
 
     // handleStop with cleanAddresses = true
     await loadAddresses(0, 20, storage);
@@ -120,6 +143,12 @@ describe('handleStop', () => {
     await expect(store.historyCount()).resolves.toEqual(1);
     await expect(store.addressCount()).resolves.toEqual(20);
     await expect(store.isTokenRegistered(testToken.uid)).resolves.toBeFalsy();
+    await expect(store.isNanoContractRegistered(testNano.ncId)).resolves.toBeFalsy();
+
+    tokens = await toArray(storage.getRegisteredTokens());
+    expect(tokens).toHaveLength(0);
+    nanos = await toArray(storage.getRegisteredNanoContracts());
+    expect(nanos).toHaveLength(0);
 
     // Access data is untouched when stopping the wallet
     // XXX: since we stringify to save on store, the optional undefined properties are removed

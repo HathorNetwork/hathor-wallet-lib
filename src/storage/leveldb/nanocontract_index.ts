@@ -69,6 +69,19 @@ export default class LevelNanoContractIndex implements IKVNanoContractIndex {
   }
 
   /**
+   * Iterate over all registered nano contracts in the database
+   *
+   * @async
+   * @generator
+   * @returns {AsyncGenerator<INcData>}
+   */
+  async *registeredNanoContractsIter(): AsyncGenerator<INcData> {
+    for await (const ncData of this.registeredDB.values()) {
+      yield ncData;
+    }
+  }
+
+  /**
    * Get a nano contract data on database from the ncId.
    *
    * @param ncId Nano Contract ID.
