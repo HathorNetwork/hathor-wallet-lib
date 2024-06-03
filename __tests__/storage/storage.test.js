@@ -84,6 +84,14 @@ describe('handleStop', () => {
     expect(nanos).toHaveLength(1);
     expect(nanos[0]).toEqual(testNano);
 
+    // Test address update
+    await expect(store.getNanoContract('abc')).resolves.toMatchObject({ address: 'nanoAddress' });
+    await storage.updateNanoContractRegisteredAddress('abc', 'nanoAddress2');
+    await expect(store.getNanoContract('abc')).resolves.toMatchObject({ address: 'nanoAddress2' });
+
+    // Go back to default address
+    await storage.updateNanoContractRegisteredAddress('abc', 'nanoAddress');
+
     storage.version = 'something';
     // handleStop with defaults
     await storage.handleStop()

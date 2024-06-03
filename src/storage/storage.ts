@@ -1023,4 +1023,13 @@ export class Storage implements IStorage {
   async unregisterNanoContract(ncId: string): Promise<void> {
     return this.store.unregisterNanoContract(ncId);
   }
+
+  /**
+   * Update nano contract registered address
+   * @param ncId Nano Contract ID.
+   * @param address New registered address
+   */
+  async updateNanoContractRegisteredAddress(ncId: string, address: string): Promise<void> {
+    return this.store.updateNanoContractRegisteredAddress(ncId, address);
+  }
 }
