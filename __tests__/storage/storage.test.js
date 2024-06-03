@@ -91,6 +91,8 @@ describe('handleStop', () => {
     await storage.updateNanoContractRegisteredAddress('abc', address1.base58);
     await expect(store.getNanoContract('abc')).resolves.toMatchObject({ address: address1.base58 });
 
+    await expect(storage.updateNanoContractRegisteredAddress('abc', 'abc')).rejects.toThrow(Error);
+
     // Go back to default address
     await storage.updateNanoContractRegisteredAddress('abc', address0.base58);
 
