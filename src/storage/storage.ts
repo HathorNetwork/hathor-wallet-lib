@@ -1030,6 +1030,9 @@ export class Storage implements IStorage {
    * @param address New registered address
    */
   async updateNanoContractRegisteredAddress(ncId: string, address: string): Promise<void> {
+    if (!await this.isAddressMine(address)) {
+      throw new Error('Registered address must belong to the wallet.');
+    }
     return this.store.updateNanoContractRegisteredAddress(ncId, address);
   }
 }

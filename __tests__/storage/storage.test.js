@@ -64,9 +64,11 @@ describe('handleStop', () => {
       outputs: [],
     });
     await storage.registerToken(testToken);
+    const address0 = await storage.getAddressAtIndex(0);
+    const address1 = await storage.getAddressAtIndex(1);
     const testNano = {
       ncId: 'abc',
-      address: 'nanoAddress',
+      address: address0.base58,
       blueprintId: 'blueprintId',
       blueprintName: 'blueprintName',
     };
@@ -85,12 +87,12 @@ describe('handleStop', () => {
     expect(nanos[0]).toEqual(testNano);
 
     // Test address update
-    await expect(store.getNanoContract('abc')).resolves.toMatchObject({ address: 'nanoAddress' });
-    await storage.updateNanoContractRegisteredAddress('abc', 'nanoAddress2');
-    await expect(store.getNanoContract('abc')).resolves.toMatchObject({ address: 'nanoAddress2' });
+    await expect(store.getNanoContract('abc')).resolves.toMatchObject({ address: address0.base58 });
+    await storage.updateNanoContractRegisteredAddress('abc', address1.base58);
+    await expect(store.getNanoContract('abc')).resolves.toMatchObject({ address: address1.base58 });
 
     // Go back to default address
-    await storage.updateNanoContractRegisteredAddress('abc', 'nanoAddress');
+    await storage.updateNanoContractRegisteredAddress('abc', address0.base58);
 
     storage.version = 'something';
     // handleStop with defaults
