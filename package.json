@@ -23,7 +23,7 @@
     "level": "8.0.0",
     "lodash": "4.17.21",
     "long": "4.0.0",
-    "ws": "7.5.9"
+    "ws": "8.17.0"
   },
   "scripts": {
     "test": "jest --env=node --forceExit",
