@@ -30,24 +30,22 @@ import { parseScript } from '../utils/scripts';
 import { MethodArgInfo } from './types';
 
 /**
- * Sign a transaction, create a send transaction object, mine and push
+ * Sign a transaction and create a send transaction object
  *
  * @param tx Transaction to sign and send
  * @param pin Pin to decrypt data
  * @param storage Wallet storage object
  */
-export const signAndPushNCTransaction = async (tx: NanoContract, pin: string, storage: IStorage): Promise<Transaction> => {
+export const signAndCreateSendTransaction = async (tx: NanoContract, pin: string, storage: IStorage): Promise<SendTransaction> => {
   await transactionUtils.signTransaction(tx, storage, pin);
   tx.prepareToSend();
 
-  // Create send transaction object
-  const sendTransaction = new SendTransaction({
+  // Create and return a send transaction object
+  return new SendTransaction({
     storage,
     transaction: tx,
     pin,
   });
-
-  return sendTransaction.runFromMining();
 }
 
 /**
