@@ -405,6 +405,7 @@ export interface IStore {
   getNanoContract(ncId: string): Promise<INcData | null>;
   registerNanoContract(ncId: string, ncValue: INcData): Promise<void>;
   unregisterNanoContract(ncId: string): Promise<void>;
+  updateNanoContractRegisteredAddress(ncId: string, address: string): Promise<void>;
 
   // Generic storage keys
   getItem(key: string): Promise<any>;
@@ -489,9 +490,11 @@ export interface IStorage {
 
   // Nano Contract methods
   isNanoContractRegistered(ncId: string): Promise<boolean>;
+  getRegisteredNanoContracts(): AsyncGenerator<INcData>;
   getNanoContract(ncId: string): Promise<INcData | null>;
   registerNanoContract(ncId: string, ncValue: INcData): Promise<void>;
   unregisterNanoContract(ncId: string): Promise<void>;
+  updateNanoContractRegisteredAddress(ncId: string, address: string): Promise<void>;
 }
 
 /**
@@ -591,6 +594,7 @@ export interface IKVNanoContractIndex extends IKVStoreIndex<void> {
   getNanoContract(ncId: string): Promise<INcData | null>;
   registerNanoContract(ncId: string, ncValue: INcData): Promise<void>;
   unregisterNanoContract(ncId: string): Promise<void>;
+  updateNanoContractRegisteredAddress(ncId: string, address: string): Promise<void>;
   clear(): Promise<void>;
 }
 

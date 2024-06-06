@@ -345,16 +345,19 @@ test('nano contract methods', async () => {
   await store.registerNanoContract('001', {
     ncId: '001',
     blueprintId: '001',
-    blueprintName: 'Bet'
+    blueprintName: 'Bet',
+    address: 'abc',
   });
   await expect(store.getNanoContract('001')).resolves.toBeDefined();
+  await expect(store.getNanoContract('001')).resolves.toMatchObject({ address: 'abc' });
   await expect(store.isNanoContractRegistered('001')).resolves.toBeTruthy();
   expect(store.registeredNanoContracts.size).toEqual(1);
 
   await store.registerNanoContract('002', {
     ncId: '002',
     blueprintId: '001',
-    blueprintName: 'Bet'
+    blueprintName: 'Bet',
+    address: 'abc',
   });
   await expect(store.getNanoContract('002')).resolves.toBeDefined();
   await expect(store.isNanoContractRegistered('002')).resolves.toBeTruthy();
@@ -365,6 +368,10 @@ test('nano contract methods', async () => {
   await expect(store.getNanoContract('002')).resolves.toBeNull();
   await expect(store.isNanoContractRegistered('002')).resolves.toBeFalsy();
   expect(store.registeredNanoContracts.size).toEqual(1);
+
+  // Test update address of registered nano contract
+  await store.updateNanoContractRegisteredAddress('001', 'def');
+  await expect(store.getNanoContract('001')).resolves.toMatchObject({ address: 'def' });
 
   // Asserts store is cleaned only when tokens are cleaned too
   await store.cleanStorage(false, false, false); // not cleaning tokens
