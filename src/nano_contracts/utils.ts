@@ -36,7 +36,7 @@ import { MethodArgInfo } from './types';
  * @param pin Pin to decrypt data
  * @param storage Wallet storage object
  */
-export const signAndCreateSendTransaction = async (tx: NanoContract, pin: string, storage: IStorage): Promise<SendTransaction> => {
+export const prepareNanoSendTransaction = async (tx: NanoContract, pin: string, storage: IStorage): Promise<SendTransaction> => {
   await transactionUtils.signTransaction(tx, storage, pin);
   tx.prepareToSend();
 

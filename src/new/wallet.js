@@ -42,7 +42,7 @@ import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../utils/address';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
-import { signAndCreateSendTransaction } from '../nano_contracts/utils';
+import { prepareNanoSendTransaction } from '../nano_contracts/utils';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 
@@ -2759,7 +2759,7 @@ class HathorWallet extends EventEmitter {
       .setArgs(data.args);
 
     const nc = await builder.build();
-    return signAndCreateSendTransaction(nc, pin, this.storage);
+    return prepareNanoSendTransaction(nc, pin, this.storage);
   }
 
   /**
