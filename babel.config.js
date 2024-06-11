@@ -14,6 +14,6 @@ module.exports = {
   ],
   plugins: [
     "@babel/plugin-transform-async-generator-functions",
-    "@babel/plugin-proposal-class-properties",
+    "@babel/plugin-transform-class-properties",
   ],
 };
