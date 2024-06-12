@@ -1,6 +1,6 @@
 import buffer from 'buffer';
 import Long from 'long';
-import { ParseError } from '../errors';
+import {ParseError} from '../errors';
 
 const isHexa = (value: string): boolean => {
   // test if value is string?
@@ -54,8 +54,8 @@ export function signedIntToBytes(value: number, bytes: number): Buffer {
     view.setInt32(0, value, false);
   } else if (bytes === 8) {
     // In case of 8 bytes I need to handle the int with a Long lib
-    let long = Long.fromNumber(value, false);
-    arr = long.toBytesBE();
+    const long = Long.fromNumber(value, false);
+    arr = new Uint8Array(long.toBytesBE()).buffer;
   }
   return buffer.Buffer.from(arr);
 }
