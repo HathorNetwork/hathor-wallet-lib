@@ -387,6 +387,19 @@ export default class LevelDBStore implements IStore {
   }
 
   /**
+   * Iterate over all registered nano contracts in the database
+   *
+   * @async
+   * @generator
+   * @returns {AsyncGenerator<INcData>}
+   */
+  async *registeredNanoContractsIter(): AsyncGenerator<INcData> {
+    for await (const ncData of this.nanoContractIndex.registeredNanoContractsIter()) {
+      yield ncData;
+    }
+  }
+
+  /**
    * Get a nano contract data on storage from the ncId.
    *
    * @param ncId Nano Contract Id.
@@ -416,5 +429,15 @@ export default class LevelDBStore implements IStore {
    */
   async unregisterNanoContract(ncId: string): Promise<void> {
     return this.nanoContractIndex.unregisterNanoContract(ncId);
+  }
+
+  /**
+   * Update nano contract registered address.
+   *
+   * @param ncId Nano Contract ID.
+   * @param address Nano Contract registered address.
+   */
+  async updateNanoContractRegisteredAddress(ncId: string, address: string): Promise<void> {
+    return this.nanoContractIndex.updateNanoContractRegisteredAddress(ncId, address);
   }
 }

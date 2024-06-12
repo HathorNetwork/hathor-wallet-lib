@@ -69,6 +69,19 @@ export default class LevelNanoContractIndex implements IKVNanoContractIndex {
   }
 
   /**
+   * Iterate over all registered nano contracts in the database
+   *
+   * @async
+   * @generator
+   * @returns {AsyncGenerator<INcData>}
+   */
+  async *registeredNanoContractsIter(): AsyncGenerator<INcData> {
+    for await (const ncData of this.registeredDB.values()) {
+      yield ncData;
+    }
+  }
+
+  /**
    * Get a nano contract data on database from the ncId.
    *
    * @param ncId Nano Contract ID.
@@ -106,5 +119,20 @@ export default class LevelNanoContractIndex implements IKVNanoContractIndex {
    */
   async unregisterNanoContract(ncId: string): Promise<void> {
     await this.registeredDB.del(ncId);
+  }
+
+
+  /**
+   * Update nano contract registered address.
+   *
+   * @param ncId Nano Contract ID.
+   * @param address Nano Contract registered address.
+   * @async
+   */
+  async updateNanoContractRegisteredAddress(ncId: string, address: string): Promise<void> {
+    const currentNanoContractData = await this.getNanoContract(ncId);
+    if (currentNanoContractData !== null) {
+      return this.registeredDB.put(ncId, Object.assign(currentNanoContractData, { address }));
+    }
   }
 }
