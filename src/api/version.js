@@ -24,11 +24,16 @@ const versionApi = {
    * @inner
    */
   getVersion(resolve) {
-    return createRequestInstance(resolve).get(`version`).then((res) => {
-      resolve(res.data);
-    }, (res) => {
-      return Promise.reject(res);
-    });
+    return createRequestInstance(resolve)
+      .get(`version`)
+      .then(
+        res => {
+          resolve(res.data);
+        },
+        res => {
+          return Promise.reject(res);
+        }
+      );
   },
 
   /**
@@ -40,13 +45,18 @@ const versionApi = {
    */
   async asyncGetVersion() {
     return new Promise((resolve, reject) => {
-      createRequestInstance(resolve).get(`version`).then((res) => {
-        resolve(res.data);
-      }, (err) => {
-        reject(err);
-      });
+      createRequestInstance(resolve)
+        .get(`version`)
+        .then(
+          res => {
+            resolve(res.data);
+          },
+          err => {
+            reject(err);
+          }
+        );
     });
-  }
+  },
 };
 
 export default versionApi;

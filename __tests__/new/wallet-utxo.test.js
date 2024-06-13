@@ -1,7 +1,12 @@
 import HathorWallet from '../../src/new/wallet';
 import txHistoryFixture from '../__fixtures__/tx_history';
 import { MemoryStore, Storage } from '../../src/storage';
-import { MAX_INPUTS, MAX_OUTPUTS, TOKEN_DEPOSIT_PERCENTAGE, TX_WEIGHT_CONSTANTS } from '../../src/constants';
+import {
+  MAX_INPUTS,
+  MAX_OUTPUTS,
+  TOKEN_DEPOSIT_PERCENTAGE,
+  TX_WEIGHT_CONSTANTS,
+} from '../../src/constants';
 import { HDPrivateKey } from 'bitcore-lib';
 import { encryptData } from '../../src/utils/crypto';
 import { WalletType } from '../../src/types';
@@ -36,31 +41,38 @@ class FakeHathorWallet {
       max_number_inputs: MAX_INPUTS,
       max_number_outputs: MAX_OUTPUTS,
     });
-    this.readyPromise = Promise.resolve()
-      .then(async () => {
-        const xpriv = new HDPrivateKey();
-        await storage.saveAccessData({
-          xpubkey: xpriv.xpubkey,
-          mainKey: encryptData(xpriv.xprivkey, '123'),
-          walletType: WalletType.P2PKH,
-          walletFlags: 0,
-        });
-        await storage.setCurrentHeight(10);
-        await storage.saveAddress({ base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0});
-        await storage.saveAddress({ base58: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp', bip32AddressIndex: 1});
-        for (const tx of txHistoryFixture) {
-          await storage.addTx(tx);
-        }
-        const getTokenApi = jest.spyOn(walletApi, 'getGeneralTokenInfo').mockImplementation((uid, resolve) => {
+    this.readyPromise = Promise.resolve().then(async () => {
+      const xpriv = new HDPrivateKey();
+      await storage.saveAccessData({
+        xpubkey: xpriv.xpubkey,
+        mainKey: encryptData(xpriv.xprivkey, '123'),
+        walletType: WalletType.P2PKH,
+        walletFlags: 0,
+      });
+      await storage.setCurrentHeight(10);
+      await storage.saveAddress({
+        base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
+        bip32AddressIndex: 0,
+      });
+      await storage.saveAddress({
+        base58: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
+        bip32AddressIndex: 1,
+      });
+      for (const tx of txHistoryFixture) {
+        await storage.addTx(tx);
+      }
+      const getTokenApi = jest
+        .spyOn(walletApi, 'getGeneralTokenInfo')
+        .mockImplementation((uid, resolve) => {
           resolve({
             success: true,
             name: 'Custom token',
             symbol: 'CTK',
           });
         });
-        await storage.processHistory();
-        getTokenApi.mockRestore();
-      });
+      await storage.processHistory();
+      getTokenApi.mockRestore();
+    });
     this.storage = storage;
   }
 }
@@ -154,15 +166,13 @@ describe('UTXO Consolidation', () => {
     expect(result.total_amount).toBe(2);
     expect(result.txId).toBe('123');
     expect(result.utxos).toHaveLength(2);
-    expect(result.utxos.some((utxo) => utxo.locked)).toBeFalsy();
+    expect(result.utxos.some(utxo => utxo.locked)).toBeFalsy();
     // assert single output
     expect(hathorWallet.sendManyOutputsTransaction.mock.calls[0][0]).toEqual([
       { address: destinationAddress, value: 2, token: '00' },
     ]);
     // assert 2 inputs only
-    expect(
-      hathorWallet.sendManyOutputsTransaction.mock.calls[0][1].inputs
-    ).toHaveLength(2);
+    expect(hathorWallet.sendManyOutputsTransaction.mock.calls[0][1].inputs).toHaveLength(2);
   });
 
   test('all HTR utxos locked by height', async () => {
@@ -180,8 +190,8 @@ describe('UTXO Consolidation', () => {
   });
 
   test('throw error for invalid destinationAddress', async () => {
-    await expect(
-      hathorWallet.consolidateUtxos(invalidDestinationAddress)
-    ).rejects.toEqual(new Error('Utxo consolidation to an address not owned by this wallet isn\'t allowed.'));
+    await expect(hathorWallet.consolidateUtxos(invalidDestinationAddress)).rejects.toEqual(
+      new Error("Utxo consolidation to an address not owned by this wallet isn't allowed.")
+    );
   });
 });

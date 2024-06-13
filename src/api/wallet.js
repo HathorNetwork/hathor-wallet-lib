@@ -27,15 +27,20 @@ const walletApi = {
    * @inner
    */
   getAddressHistory(addresses, hash, resolve) {
-    const data = {addresses, paginate: true};
+    const data = { addresses, paginate: true };
     if (hash) {
       data['hash'] = hash;
     }
-    return createRequestInstance(resolve).get('thin_wallet/address_history', {'params': data}).then((res) => {
-      resolve(res.data)
-    }, (res) => {
-      return Promise.reject(res);
-    });
+    return createRequestInstance(resolve)
+      .get('thin_wallet/address_history', { params: data })
+      .then(
+        res => {
+          resolve(res.data);
+        },
+        res => {
+          return Promise.reject(res);
+        }
+      );
   },
 
   /**
@@ -60,11 +65,11 @@ const walletApi = {
    * @inner
    */
   getAddressHistoryForAwait(addresses, hash) {
-    const data = {addresses, paginate: true};
+    const data = { addresses, paginate: true };
     if (hash) {
       data['hash'] = hash;
     }
-    return createRequestInstance().get('thin_wallet/address_history', {'params': data})
+    return createRequestInstance().get('thin_wallet/address_history', { params: data });
   },
 
   /**
@@ -79,11 +84,11 @@ const walletApi = {
    * @inner
    */
   getAddressHistoryForAwaitPOST(addresses, hash) {
-    const data = {addresses, paginate: true};
+    const data = { addresses, paginate: true };
     if (hash) {
       data['hash'] = hash;
     }
-    return createRequestInstance().post('thin_wallet/address_history', data)
+    return createRequestInstance().post('thin_wallet/address_history', data);
   },
 
   /**
@@ -97,12 +102,17 @@ const walletApi = {
    * @inner
    */
   sendTokens(txHex, resolve) {
-    const postData = {tx_hex: txHex};
-    return createRequestInstance(resolve, SEND_TOKENS_TIMEOUT).post('thin_wallet/send_tokens', postData).then((res) => {
-      resolve(res.data)
-    }, (res) => {
-      return Promise.reject(res);
-    });
+    const postData = { tx_hex: txHex };
+    return createRequestInstance(resolve, SEND_TOKENS_TIMEOUT)
+      .post('thin_wallet/send_tokens', postData)
+      .then(
+        res => {
+          resolve(res.data);
+        },
+        res => {
+          return Promise.reject(res);
+        }
+      );
   },
 
   /**
@@ -116,12 +126,17 @@ const walletApi = {
    * @inner
    */
   getGeneralTokenInfo(uid, resolve) {
-    const data = {id: uid};
-    return createRequestInstance(resolve).get('thin_wallet/token', {'params': data}).then((res) => {
-      resolve(res.data)
-    }, (res) => {
-      return Promise.reject(res);
-    });
+    const data = { id: uid };
+    return createRequestInstance(resolve)
+      .get('thin_wallet/token', { params: data })
+      .then(
+        res => {
+          resolve(res.data);
+        },
+        res => {
+          return Promise.reject(res);
+        }
+      );
   },
 
   /**
@@ -139,19 +154,24 @@ const walletApi = {
    * @inner
    */
   getTokenHistory(uid, count, hash, timestamp, page, resolve) {
-    const data = {id: uid, count};
+    const data = { id: uid, count };
 
     if (hash) {
-      data['hash'] = hash
-      data['timestamp'] = timestamp
-      data['page'] = page
+      data['hash'] = hash;
+      data['timestamp'] = timestamp;
+      data['page'] = page;
     }
 
-    return createRequestInstance(resolve).get('thin_wallet/token_history', {'params': data}).then((res) => {
-      resolve(res.data)
-    }, (res) => {
-      return Promise.reject(res);
-    });
+    return createRequestInstance(resolve)
+      .get('thin_wallet/token_history', { params: data })
+      .then(
+        res => {
+          resolve(res.data);
+        },
+        res => {
+          return Promise.reject(res);
+        }
+      );
   },
 
   /**
@@ -164,11 +184,16 @@ const walletApi = {
    * @inner
    */
   getMiningInfo(resolve) {
-    return createRequestInstance(resolve).get('getmininginfo').then((res) => {
-      resolve(res.data)
-    }, (res) => {
-      return Promise.reject(res);
-    });
+    return createRequestInstance(resolve)
+      .get('getmininginfo')
+      .then(
+        res => {
+          resolve(res.data);
+        },
+        res => {
+          return Promise.reject(res);
+        }
+      );
   },
 
   /**
@@ -181,11 +206,16 @@ const walletApi = {
    * @inner
    */
   getTokensList(resolve) {
-    return createRequestInstance(resolve).get('thin_wallet/token').then((res) => {
-      resolve(res.data)
-    }, (res) => {
-      return Promise.reject(res);
-    });
+    return createRequestInstance(resolve)
+      .get('thin_wallet/token')
+      .then(
+        res => {
+          resolve(res.data);
+        },
+        res => {
+          return Promise.reject(res);
+        }
+      );
   },
 
   /**
@@ -198,12 +228,17 @@ const walletApi = {
    * @inner
    */
   getAddressBalance(address, resolve) {
-    const data = {address};
-    return createRequestInstance(resolve).get('thin_wallet/address_balance', {'params': data}).then((res) => {
-      resolve(res.data)
-    }, (res) => {
-      return Promise.reject(res);
-    });
+    const data = { address };
+    return createRequestInstance(resolve)
+      .get('thin_wallet/address_balance', { params: data })
+      .then(
+        res => {
+          resolve(res.data);
+        },
+        res => {
+          return Promise.reject(res);
+        }
+      );
   },
 
   /**
@@ -220,7 +255,7 @@ const walletApi = {
    * @inner
    */
   getSearchAddress(address, count, hash, page, token, resolve) {
-    const data = {address, count};
+    const data = { address, count };
 
     if (hash) {
       data['hash'] = hash;
@@ -231,13 +266,17 @@ const walletApi = {
       data['token'] = token;
     }
 
-    return createRequestInstance(resolve).get('thin_wallet/address_search', {'params': data}).then((res) => {
-      resolve(res.data)
-    }, (res) => {
-      return Promise.reject(res);
-    });
+    return createRequestInstance(resolve)
+      .get('thin_wallet/address_search', { params: data })
+      .then(
+        res => {
+          resolve(res.data);
+        },
+        res => {
+          return Promise.reject(res);
+        }
+      );
   },
-
 };
 
 export default walletApi;

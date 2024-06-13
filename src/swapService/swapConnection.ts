@@ -5,12 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import {
-  ConnectionState,
-} from '../wallet/types';
+import { ConnectionState } from '../wallet/types';
 import GenericWebSocket from '../websocket';
 import { EventEmitter } from 'events';
-
 
 /**
  * This is a Websocket Connection with the Atomic Swap Service
@@ -29,13 +26,13 @@ export class AtomicSwapServiceConnection extends EventEmitter {
   websocket: GenericWebSocket;
   protected state: ConnectionState;
 
-  constructor(options: { wsURL: string, connectionTimeout?: number }) {
+  constructor(options: { wsURL: string; connectionTimeout?: number }) {
     super();
 
     // Initializing WebSocket
     const wsOptions = {
       wsURL: options.wsURL,
-    } as { wsURL: string, connectionTimeout?: number };
+    } as { wsURL: string; connectionTimeout?: number };
     if (options.connectionTimeout) {
       wsOptions.connectionTimeout = options.connectionTimeout;
     }
@@ -54,21 +51,21 @@ export class AtomicSwapServiceConnection extends EventEmitter {
       throw new Error('Websocket is not initialized');
     }
 
-    this.websocket.on('pong', (value) => {
+    this.websocket.on('pong', value => {
       this.emit('pong', value);
-    })
-
-    this.websocket.on('is_online', (value) => {
-      return this.onConnectionChange(value)
     });
 
-    this.websocket.on('proposal_updated', (data) => {
+    this.websocket.on('is_online', value => {
+      return this.onConnectionChange(value);
+    });
+
+    this.websocket.on('proposal_updated', data => {
       this.emit('update-atomic-swap-proposal', data);
     });
 
-    this.websocket.on('connection_error', (err) => {
+    this.websocket.on('connection_error', err => {
       console.error(`Atomic Swap Service Websocket error: ${err.message}`);
-    })
+    });
 
     this.setState(ConnectionState.CONNECTING);
     this.websocket.setup();

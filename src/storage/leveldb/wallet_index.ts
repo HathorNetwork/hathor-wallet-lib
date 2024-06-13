@@ -8,7 +8,18 @@
 import path from 'path';
 import { Level } from 'level';
 import { AbstractSublevel } from 'abstract-level';
-import { IKVWalletIndex, IWalletData, IWalletAccessData, AddressScanPolicy, AddressScanPolicyData, isGapLimitScanPolicy, isIndexLimitScanPolicy, IGapLimitAddressScanPolicy, IIndexLimitAddressScanPolicy, SCANNING_POLICY } from '../../types';
+import {
+  IKVWalletIndex,
+  IWalletData,
+  IWalletAccessData,
+  AddressScanPolicy,
+  AddressScanPolicyData,
+  isGapLimitScanPolicy,
+  isIndexLimitScanPolicy,
+  IGapLimitAddressScanPolicy,
+  IIndexLimitAddressScanPolicy,
+  SCANNING_POLICY,
+} from '../../types';
 import { GAP_LIMIT, DEFAULT_ADDRESS_SCANNING_POLICY } from '../../constants';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 import { checkLevelDbVersion } from './utils';
@@ -36,7 +47,9 @@ export default class LevelWalletIndex implements IKVWalletIndex {
   constructor(dbpath: string) {
     this.dbpath = path.join(dbpath, 'wallet');
     const db = new Level(this.dbpath);
-    this.accessDB = db.sublevel<string, IWalletAccessData>(ACCESS_PREFIX, { valueEncoding: 'json' });
+    this.accessDB = db.sublevel<string, IWalletAccessData>(ACCESS_PREFIX, {
+      valueEncoding: 'json',
+    });
     this.walletDB = db.sublevel(WALLET_PREFIX);
     this.genericDB = db.sublevel<string, any>(GENERIC_PREFIX, { valueEncoding: 'json' });
   }
@@ -68,7 +81,7 @@ export default class LevelWalletIndex implements IKVWalletIndex {
    * @param {string} key The key to fetch.
    * @returns {Promise<number|null>}
    */
-  async _getNumber(key: string): Promise<number|null> {
+  async _getNumber(key: string): Promise<number | null> {
     try {
       const tmp = await this.walletDB.get(key);
       return Number(`0x${tmp}`);
@@ -121,12 +134,12 @@ export default class LevelWalletIndex implements IKVWalletIndex {
    * @returns {Promise<Omit<IIndexLimitAddressScanPolicy, 'policy'> | null>}
    */
   async getIndexLimit(): Promise<Omit<IIndexLimitAddressScanPolicy, 'policy'> | null> {
-      const startIndex = await this._getNumber('startIndex') || 0;
-      const endIndex = await this._getNumber('endIndex') || 0;
-      return {
-        startIndex,
-        endIndex,
-      };
+    const startIndex = (await this._getNumber('startIndex')) || 0;
+    const endIndex = (await this._getNumber('endIndex')) || 0;
+    return {
+      startIndex,
+      endIndex,
+    };
   }
 
   /**
@@ -256,8 +269,8 @@ export default class LevelWalletIndex implements IKVWalletIndex {
     if (policy == SCANNING_POLICY.INDEX_LIMIT) {
       return {
         policy: SCANNING_POLICY.INDEX_LIMIT,
-        startIndex: await this._getNumber('startIndex') || 0,
-        endIndex: await this._getNumber('endIndex') || 0,
+        startIndex: (await this._getNumber('startIndex')) || 0,
+        endIndex: (await this._getNumber('endIndex')) || 0,
       } as IIndexLimitAddressScanPolicy;
     }
 

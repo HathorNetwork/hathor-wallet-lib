@@ -19,7 +19,8 @@ test('Script data', () => {
   const parsedData = parseScriptData(scriptData);
   expect(parsedData.data).toBe(data);
 
-  const bigData = 'This is a big string that will push OP_PUSHDATA1 to stack before pushing the data itself.';
+  const bigData =
+    'This is a big string that will push OP_PUSHDATA1 to stack before pushing the data itself.';
   const scriptBigDataObj = new ScriptData(bigData);
   const scriptBigData = scriptBigDataObj.createScript();
 
@@ -35,7 +36,7 @@ test('Script data', () => {
   }).toThrowError(ParseScriptError);
 
   // Remove last element from scriptData (OP_CHECKSIG), then should fail
-  const wrongData2 = scriptData.slice(scriptData.length - 1)
+  const wrongData2 = scriptData.slice(scriptData.length - 1);
   expect(() => {
     parseScriptData(wrongData2);
   }).toThrowError(ParseScriptError);

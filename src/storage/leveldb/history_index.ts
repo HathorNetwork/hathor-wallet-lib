@@ -15,8 +15,7 @@ import { checkLevelDbVersion } from './utils';
 export const HISTORY_PREFIX = 'history';
 export const TS_HISTORY_PREFIX = 'ts_history';
 
-
-function _ts_key(tx: Pick<IHistoryTx, 'timestamp'|'tx_id'>): string {
+function _ts_key(tx: Pick<IHistoryTx, 'timestamp' | 'tx_id'>): string {
   // .toString(16) will convert the number to a hex string
   // .padStart(8, '0') will pad the number to 4 bytes
   const hexTimestamp = tx.timestamp.toString(16).padStart(8, '0');
@@ -49,7 +48,9 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
     this.dbpath = path.join(dbpath, 'history');
     const db = new Level(this.dbpath);
     this.historyDB = db.sublevel<string, IHistoryTx>(HISTORY_PREFIX, { valueEncoding: 'json' });
-    this.tsHistoryDB = db.sublevel<string, IHistoryTx>(TS_HISTORY_PREFIX, { valueEncoding: 'json' });
+    this.tsHistoryDB = db.sublevel<string, IHistoryTx>(TS_HISTORY_PREFIX, {
+      valueEncoding: 'json',
+    });
     this.isValidated = false;
     this.size = 0;
   }
@@ -153,7 +154,7 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
    * @param {string|undefined} [tokenUid] Token uid to filter transactions. If undefined, returns all transactions.
    * @returns {AsyncGenerator<IHistoryTx>}
    */
-  async * historyIter(tokenUid?: string): AsyncGenerator<IHistoryTx> {
+  async *historyIter(tokenUid?: string): AsyncGenerator<IHistoryTx> {
     for await (const info of this.tsHistoryDB.values({ reverse: true })) {
       if (tokenUid === undefined) {
         yield info;

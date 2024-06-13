@@ -169,7 +169,8 @@ export default class LevelDBStore implements IStore {
     let maxIndex = await this.walletIndex.getLastUsedAddressIndex();
     for (const el of [...tx.inputs, ...tx.outputs]) {
       if (el.decoded.address && (await this.addressExists(el.decoded.address))) {
-        const index = (await this.addressIndex.getAddressInfo(el.decoded.address))!.bip32AddressIndex;
+        const index = (await this.addressIndex.getAddressInfo(el.decoded.address))!
+          .bip32AddressIndex;
         if (index > maxIndex) {
           maxIndex = index;
         }
@@ -178,7 +179,9 @@ export default class LevelDBStore implements IStore {
     // Address index should always be greater than or equal to 0
     if (maxIndex >= 0) {
       if ((await this.walletIndex.getCurrentAddressIndex()) < maxIndex) {
-        await this.walletIndex.setCurrentAddressIndex(Math.min(maxIndex + 1, await this.walletIndex.getLastLoadedAddressIndex()));
+        await this.walletIndex.setCurrentAddressIndex(
+          Math.min(maxIndex + 1, await this.walletIndex.getLastLoadedAddressIndex())
+        );
       }
       await this.walletIndex.setLastUsedAddressIndex(maxIndex);
     }
@@ -352,7 +355,11 @@ export default class LevelDBStore implements IStore {
     await this.walletIndex.setItem(key, value);
   }
 
-  async cleanStorage(cleanHistory: boolean = false, cleanAddresses: boolean = false, cleanTokens: boolean = false): Promise<void> {
+  async cleanStorage(
+    cleanHistory: boolean = false,
+    cleanAddresses: boolean = false,
+    cleanTokens: boolean = false
+  ): Promise<void> {
     // If both are false the method will be a no-op
     await this.tokenIndex.clear(cleanHistory, cleanTokens);
     if (cleanHistory) {

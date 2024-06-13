@@ -5,9 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-
 import { bufferToHex, unpackToFloat, unpackToInt } from '../utils/buffer';
-
 
 class Deserializer {
   /**

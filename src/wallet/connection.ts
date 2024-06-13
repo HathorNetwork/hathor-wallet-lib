@@ -7,14 +7,8 @@
 
 import WalletServiceWebSocket from './websocket';
 import config from '../config';
-import BaseConnection, {
-  DEFAULT_PARAMS,
-  ConnectionParams,
-} from '../connection';
-import {
-  WsTransaction,
-  ConnectionState,
-} from './types';
+import BaseConnection, { DEFAULT_PARAMS, ConnectionParams } from '../connection';
+import { WsTransaction, ConnectionState } from './types';
 
 export interface WalletServiceConnectionParams extends ConnectionParams {
   walletId: string;
@@ -37,12 +31,7 @@ export default class WalletServiceConnection extends BaseConnection {
   private walletId?: string;
 
   constructor(options?: WalletServiceConnectionParams) {
-    const {
-      network,
-      servers,
-      walletId,
-      connectionTimeout,
-    } = {
+    const { network, servers, walletId, connectionTimeout } = {
       ...DEFAULT_PARAMS,
       ...options,
     };
@@ -79,9 +68,9 @@ export default class WalletServiceConnection extends BaseConnection {
     };
 
     this.websocket = new WalletServiceWebSocket(wsOptions);
-    this.websocket.on('is_online', (online) => this.onConnectionChange(online));
-    this.websocket.on('new-tx', (payload) => this.emit('new-tx', payload.data as WsTransaction));
-    this.websocket.on('update-tx', (payload) => this.emit('update-tx', payload.data));
+    this.websocket.on('is_online', online => this.onConnectionChange(online));
+    this.websocket.on('new-tx', payload => this.emit('new-tx', payload.data as WsTransaction));
+    this.websocket.on('update-tx', payload => this.emit('update-tx', payload.data));
 
     this.setState(ConnectionState.CONNECTING);
     this.websocket.setup();

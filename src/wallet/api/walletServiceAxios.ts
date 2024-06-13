@@ -6,9 +6,7 @@
  */
 
 import axios from 'axios';
-import {
-    TIMEOUT,
-} from '../../constants';
+import { TIMEOUT } from '../../constants';
 import HathorWalletServiceWallet from '../wallet';
 import config from '../../config';
 
@@ -23,7 +21,11 @@ import config from '../../config';
  *
  * @param {number} timeout Timeout in milliseconds for the request
  */
-export const axiosInstance = async (wallet: HathorWalletServiceWallet, needsAuth: boolean, timeout: number = TIMEOUT) => {
+export const axiosInstance = async (
+  wallet: HathorWalletServiceWallet,
+  needsAuth: boolean,
+  timeout: number = TIMEOUT
+) => {
   // TODO How to allow 'Retry' request?
   const defaultOptions = {
     baseURL: config.getWalletServiceBaseUrl(),
@@ -33,11 +35,11 @@ export const axiosInstance = async (wallet: HathorWalletServiceWallet, needsAuth
     // or `undefined`), the promise will be resolved; otherwise, the promise will be
     // rejected. The default behaviour of axios is to reject anything different than 2xx
     // We need to handle some 400 manually (e.g. create wallet might already be loaded)
-    validateStatus: (status) => status >= 200 && status < 500,
+    validateStatus: status => status >= 200 && status < 500,
     headers: {
       'Content-Type': 'application/json',
     },
-  }
+  };
 
   if (needsAuth) {
     // Then we need the auth token
@@ -46,6 +48,6 @@ export const axiosInstance = async (wallet: HathorWalletServiceWallet, needsAuth
   }
 
   return axios.create(defaultOptions);
-}
+};
 
 export default axiosInstance;

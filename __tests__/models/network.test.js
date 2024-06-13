@@ -7,22 +7,21 @@
 
 import Network from '../../src/models/network';
 
-
 test('Get and set network', () => {
   const versionBytes = {
-    'mainnet': {
-      'p2pkh': 0x28,
-      'p2sh': 0x64,
-      'xpriv': 0x03523b05,
-      'xpub': 0x0488b21e,
+    mainnet: {
+      p2pkh: 0x28,
+      p2sh: 0x64,
+      xpriv: 0x03523b05,
+      xpub: 0x0488b21e,
     },
-    'testnet': {
-      'p2pkh': 0x49,
-      'p2sh': 0x87,
-      'xpriv': 0x0434c8c4,
-      'xpub': 0x0488b21e,
+    testnet: {
+      p2pkh: 0x49,
+      p2sh: 0x87,
+      xpriv: 0x0434c8c4,
+      xpub: 0x0488b21e,
     },
-  }
+  };
 
   // Default network is testnet
   const network = new Network('testnet');
@@ -41,20 +40,19 @@ test('Get and set network', () => {
     // Invalid network
     const network2 = new Network('abc');
   }).toThrowError();
-})
-
+});
 
 test('network.isVersionByteValid', () => {
   const versionBytes = {
-    'mainnet': {
-      'p2pkh': 0x28,
-      'p2sh': 0x64,
+    mainnet: {
+      p2pkh: 0x28,
+      p2sh: 0x64,
     },
-    'testnet': {
-      'p2pkh': 0x49,
-      'p2sh': 0x87,
+    testnet: {
+      p2pkh: 0x49,
+      p2sh: 0x87,
     },
-  }
+  };
 
   const testnet = new Network('testnet');
   // Valid version bytes for testnet

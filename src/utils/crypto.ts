@@ -28,8 +28,12 @@ bitcore.Message.MAGIC_BYTES = Buffer.from(HATHOR_MAGIC_BYTES);
  */
 export function hashData(
   data: string,
-  { salt, iterations = HASH_ITERATIONS, pbkdf2Hasher = 'sha1'}: {salt?: string, iterations?: number, pbkdf2Hasher?: string} = {},
-  ): {hash: string, salt: string, iterations: number, pbkdf2Hasher: string} {
+  {
+    salt,
+    iterations = HASH_ITERATIONS,
+    pbkdf2Hasher = 'sha1',
+  }: { salt?: string; iterations?: number; pbkdf2Hasher?: string } = {}
+): { hash: string; salt: string; iterations: number; pbkdf2Hasher: string } {
   const hashers = new Map<string, any>([
     ['sha1', CryptoJS.algo.SHA1],
     ['sha256', CryptoJS.algo.SHA256],
@@ -76,7 +80,7 @@ export function encryptData(
     salt,
     iterations = HASH_ITERATIONS,
     pbkdf2Hasher = 'sha1',
-  }: {salt?: string, iterations?: number, pbkdf2Hasher?: string} = {},
+  }: { salt?: string; iterations?: number; pbkdf2Hasher?: string } = {}
 ): IEncryptedData {
   const encrypted = CryptoJS.AES.encrypt(data, password);
   const hash = hashData(password, { salt, iterations, pbkdf2Hasher });
@@ -139,7 +143,11 @@ export function decryptData(data: IEncryptedData, password: string): string {
 export function validateHash(
   dataToValidate: string,
   hashedData: string,
-  { salt, iterations = HASH_ITERATIONS, pbkdf2Hasher = 'sha1'}: {salt?: string, iterations?: number, pbkdf2Hasher?: string} = {},
+  {
+    salt,
+    iterations = HASH_ITERATIONS,
+    pbkdf2Hasher = 'sha1',
+  }: { salt?: string; iterations?: number; pbkdf2Hasher?: string } = {}
 ): boolean {
   const hash = hashData(dataToValidate, { salt, iterations, pbkdf2Hasher });
   return hash.hash === hashedData;
@@ -168,10 +176,7 @@ export function checkPassword(data: IEncryptedData, password: string): boolean {
  *
  * @returns {string} Base64 encoded signature
  */
-export function signMessage(
-  message: string,
-  privateKey: bitcore.PrivateKey
-): string {
+export function signMessage(message: string, privateKey: bitcore.PrivateKey): string {
   const signature = bitcore.Message(message).sign(privateKey);
   return signature;
 }
@@ -185,11 +190,7 @@ export function signMessage(
  *
  * @returns {boolean}
  */
-export function verifyMessage(
-  message: string,
-  signature: string,
-  address: string,
-): boolean {
+export function verifyMessage(message: string, signature: string, address: string): boolean {
   const bitcoreLibMessage = new bitcore.Message(message);
 
   return bitcoreLibMessage.verify(new bitcore.Address(address), signature);

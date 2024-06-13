@@ -5,13 +5,12 @@ import {
   intToBytes,
   signedIntToBytes,
   unpackToFloat,
-  unpackToInt
+  unpackToInt,
 } from '../../src/utils/buffer';
 
-
-
 test('Buffer to hex', () => {
-  const hexString = '044f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa385b6b1b8ead809ca67454d9683fcf2ba03456d6fe2c4abe2b07f0fbdbb2f1c1';
+  const hexString =
+    '044f355bdcb7cc0af728ef3cceb9615d90684bb5b2ca5f859ab0f0b704075871aa385b6b1b8ead809ca67454d9683fcf2ba03456d6fe2c4abe2b07f0fbdbb2f1c1';
   const buff = hexToBuffer(hexString);
   expect(bufferToHex(buff)).toBe(hexString);
 });
@@ -43,7 +42,7 @@ test('Signed int to bytes', () => {
   let buf3 = signedIntToBytes(number3, 4);
   expect(unpackToInt(4, true, buf3)[0]).toBe(number3);
 
-  let number4 = 2**33;
+  let number4 = 2 ** 33;
   let buf4 = signedIntToBytes(number4, 8);
   expect(unpackToInt(8, true, buf4)[0]).toBe(number4);
 });

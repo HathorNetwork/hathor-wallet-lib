@@ -25,26 +25,22 @@ test('validateHash', () => {
   const data = 'a-valid-data';
   const hashedData = hashData(data);
 
-  expect(validateHash(
-    data,
-    hashedData.hash,
-    {
+  expect(
+    validateHash(data, hashedData.hash, {
       salt: hashedData.salt,
       iterations: hashedData.iterations,
       pbkdf2Hasher: hashedData.pbkdf2Hasher,
-    }
-  )).toBe(true);
+    })
+  ).toBe(true);
 
   const wrongSalt = CryptoJS.lib.WordArray.random(128 / 8).toString();
-  expect(validateHash(
-    data,
-    hashedData.hash,
-    {
+  expect(
+    validateHash(data, hashedData.hash, {
       salt: wrongSalt,
       iterations: hashedData.iterations,
       pbkdf2Hasher: hashedData.pbkdf2Hasher,
-    }
-  )).toBe(false);
+    })
+  ).toBe(false);
 });
 
 test('encryption test', () => {
@@ -53,19 +49,19 @@ test('encryption test', () => {
   const encrypted = encryptData(data, passwd);
 
   // Password will be hashed for password and pinCode validations
-  expect(validateHash(
-    passwd,
-    encrypted.hash,
-    {
+  expect(
+    validateHash(passwd, encrypted.hash, {
       salt: encrypted.salt,
       iterations: encrypted.iterations,
       pbkdf2Hasher: encrypted.pbkdf2Hasher,
-    },
-  )).toBe(true);
+    })
+  ).toBe(true);
 
   // Decryption should only work with the correct password and data
   expect(decryptData(encrypted, passwd)).toEqual('a-valid-data');
-  expect(() => { decryptData(encrypted, 'invalid-passwd') }).toThrowError(InvalidPasswdError);
+  expect(() => {
+    decryptData(encrypted, 'invalid-passwd');
+  }).toThrowError(InvalidPasswdError);
   const invalidData = {
     data: 'an-invalid-data',
     hash: encrypted.hash,
@@ -73,7 +69,9 @@ test('encryption test', () => {
     iterations: encrypted.iterations,
     pbkdf2Hasher: encrypted.pbkdf2Hasher,
   };
-  expect(() => { decryptData(invalidData, passwd) }).toThrowError(DecryptionError);
+  expect(() => {
+    decryptData(invalidData, passwd);
+  }).toThrowError(DecryptionError);
 });
 
 test('check password', () => {
@@ -82,14 +80,16 @@ test('check password', () => {
   const invalidPasswd = 'an-invalid-passwd';
   const encrypted = encryptData(data, passwd);
 
-  expect(checkPassword(encrypted, passwd)).toEqual(true)
-  expect(checkPassword(encrypted, invalidPasswd)).toEqual(false)
+  expect(checkPassword(encrypted, passwd)).toEqual(true);
+  expect(checkPassword(encrypted, invalidPasswd)).toEqual(false);
 });
 
 test('sign message', () => {
   const message = 'please sign me';
-  const xpriv = new bitcore.HDPrivateKey('tnpr4nfUjEyefVuczz8pYwkHUDD9Q96mP3q7jc3oDgdV6FEkTArttdZLrMWhCvRmvJ48jnKR5dHDrA13sk1qFwUujnzZt2ry9EgDzty3UjdhFsD');
-  const firstAddressHDPrivKey = xpriv.derive('m/44\'/280\'/0\'/0/0'); // first address
+  const xpriv = new bitcore.HDPrivateKey(
+    'tnpr4nfUjEyefVuczz8pYwkHUDD9Q96mP3q7jc3oDgdV6FEkTArttdZLrMWhCvRmvJ48jnKR5dHDrA13sk1qFwUujnzZt2ry9EgDzty3UjdhFsD'
+  );
+  const firstAddressHDPrivKey = xpriv.derive("m/44'/280'/0'/0/0"); // first address
   const { privateKey } = firstAddressHDPrivKey;
   const firstAddress = privateKey.toAddress().toString();
 
@@ -105,7 +105,7 @@ test('verify message', () => {
     'IH8LTK3IkGKVY/X+UNsvQGtp3wdqXZE9yRML3QoNGEPtSctLXQccnsIlzJOl0/CQicZeRozEf5n7e1zrYR6koJk=',
     'H55ZDirQLKtLedu/TAbkmjulUYpotl2O8hwiKKnReAepGXtgKljLxQ9Vj3TyeNTlYzokb9z7TAPAx+HZKjR2ChQ=',
     'H/fZfIVeMavGjiv5Sbo+KSzLyqG5Cgt56EKOaemkPqzgYQbhVMjWEtJ1y6fgBlJ1uva3hcz936tKyc/IZgXjZyI=',
-    'INPSv7XajbjmPEPJOIKpP8ZJksP4vRHTZ+W6Qt1VBEscRGlvTHXgcFf2UIf3B0M8+J90hU53bSivkHbWNVHNgQs='
+    'INPSv7XajbjmPEPJOIKpP8ZJksP4vRHTZ+W6Qt1VBEscRGlvTHXgcFf2UIf3B0M8+J90hU53bSivkHbWNVHNgQs=',
   ];
 
   const invalidSignatures = [

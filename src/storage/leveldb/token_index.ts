@@ -83,10 +83,10 @@ export default class LevelTokenIndex implements IKVTokenIndex {
    * Iterate over all tokens in the database
    * @returns {AsyncGenerator<ITokenData & Partial<ITokenMetadata>>}
    */
-  async * tokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>> {
+  async *tokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>> {
     for await (const token of this.tokenDB.values()) {
       const meta = await this.getTokenMetadata(token.uid);
-      yield {...token, ...meta};
+      yield { ...token, ...meta };
     }
   }
 
@@ -97,7 +97,7 @@ export default class LevelTokenIndex implements IKVTokenIndex {
   async *registeredTokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>> {
     for await (const token of this.registeredDB.values()) {
       const meta = await this.getTokenMetadata(token.uid);
-      yield {...token, ...meta};
+      yield { ...token, ...meta };
     }
   }
 
@@ -116,7 +116,7 @@ export default class LevelTokenIndex implements IKVTokenIndex {
    * @param {string} uid
    * @returns {Promise<(ITokenData & Partial<ITokenMetadata>)|null>}
    */
-  async getToken(uid: string): Promise<(ITokenData & Partial<ITokenMetadata>)|null> {
+  async getToken(uid: string): Promise<(ITokenData & Partial<ITokenMetadata>) | null> {
     let token: ITokenData;
     try {
       token = await this.tokenDB.get(uid);
@@ -136,10 +136,10 @@ export default class LevelTokenIndex implements IKVTokenIndex {
           mint: { unlocked: 0, locked: 0 },
           melt: { unlocked: 0, locked: 0 },
         },
-      }
+      },
     };
 
-    return {...token, ...DEFAULT_TOKEN_META, ...meta};
+    return { ...token, ...DEFAULT_TOKEN_META, ...meta };
   }
 
   /**

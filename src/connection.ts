@@ -49,10 +49,7 @@ abstract class Connection extends EventEmitter {
   constructor(options: ConnectionParams) {
     super();
 
-    const {
-      network,
-      servers,
-    } = {
+    const { network, servers } = {
       ...DEFAULT_PARAMS,
       ...options,
     };
@@ -105,7 +102,7 @@ abstract class Connection extends EventEmitter {
   /**
    * Connect to the server and start emitting events.
    **/
-  abstract start(): void
+  abstract start(): void;
 
   /**
    * Close the connections and stop emitting events.

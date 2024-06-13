@@ -14,9 +14,9 @@ test('createScript', () => {
   const mainnet = new Network('mainnet');
 
   // Testnet p2sh
-  const addr1 = new Address('wcFwC82mLoUudtgakZGMPyTL2aHcgSJgDZ', {network: testnet});
+  const addr1 = new Address('wcFwC82mLoUudtgakZGMPyTL2aHcgSJgDZ', { network: testnet });
   // Mainnet p2sh
-  const addr2 = new Address('hXRpjKbgVVGF1ioYtscCRavnzvGbsditXn', {network: mainnet});
+  const addr2 = new Address('hXRpjKbgVVGF1ioYtscCRavnzvGbsditXn', { network: mainnet });
 
   const timestamp = 775796400;
   const script = 'a914b6696aed0a1ef8fe7d604f5436ec6617e6ad92d387';
@@ -24,13 +24,13 @@ test('createScript', () => {
 
   // TESTNET
   const st1 = new P2SH(addr1);
-  const st2 = new P2SH(addr1, {timelock: 775796400});
+  const st2 = new P2SH(addr1, { timelock: 775796400 });
   expect(st1.createScript().toString('hex')).toBe(script);
   expect(st2.createScript().toString('hex')).toBe(scriptTimelocked);
 
   // MAINNET
   const sm1 = new P2SH(addr2);
-  const sm2 = new P2SH(addr2, {timelock: 775796400});
+  const sm2 = new P2SH(addr2, { timelock: 775796400 });
   expect(sm1.createScript().toString('hex')).toBe(script);
   expect(sm2.createScript().toString('hex')).toBe(scriptTimelocked);
 });

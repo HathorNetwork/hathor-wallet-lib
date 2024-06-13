@@ -5,19 +5,19 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { LevelDBStore, MemoryStore, Storage } from "../../src/storage";
-import { HDPrivateKey } from "bitcore-lib";
-import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, GAP_LIMIT } from "../../src/constants";
-import walletUtils from "../../src/utils/wallet";
+import { LevelDBStore, MemoryStore, Storage } from '../../src/storage';
+import { HDPrivateKey } from 'bitcore-lib';
+import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, GAP_LIMIT } from '../../src/constants';
+import walletUtils from '../../src/utils/wallet';
 
 const DATA_DIR = './testdata.leveldb';
 
-describe("locked utxo methods", () => {
-  const spyDate = jest.spyOn(Date, "now");
-  const tsFromDate = (date) => Math.floor(date.getTime() / 1000);
-  const tsBefore = new Date("2023-03-21T11:00:00");
-  const tsCurrent = new Date("2023-03-21T12:00:00");
-  const tsAfter = new Date("2023-03-21T13:00:00");
+describe('locked utxo methods', () => {
+  const spyDate = jest.spyOn(Date, 'now');
+  const tsFromDate = date => Math.floor(date.getTime() / 1000);
+  const tsBefore = new Date('2023-03-21T11:00:00');
+  const tsCurrent = new Date('2023-03-21T12:00:00');
+  const tsAfter = new Date('2023-03-21T13:00:00');
 
   beforeAll(async () => {
     spyDate.mockImplementation(() => tsCurrent);
@@ -72,7 +72,7 @@ describe("locked utxo methods", () => {
             token_data,
             token,
             spent_by: null,
-            decoded: { type: "P2PKH", address, timelock },
+            decoded: { type: 'P2PKH', address, timelock },
           },
         ],
       },
@@ -104,42 +104,42 @@ describe("locked utxo methods", () => {
     const lockedUtxos = [
       // utxo to be unlocked by time
       getLockedUtxo(
-        "tx01",
-        "WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ",
+        'tx01',
+        'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
         tsFromDate(tsBefore),
         null,
         100, // value
-        "00", // token
+        '00', // token
         0 // token_data
       ),
       // timelocked
       getLockedUtxo(
-        "tx02",
-        "WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ",
+        'tx02',
+        'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
         tsFromDate(tsAfter),
         null,
         100, // value
-        "00", // token
+        '00', // token
         0 // token_data
       ),
       // utxo to be unlocked by height
       getLockedUtxo(
-        "tx03",
-        "WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp",
+        'tx03',
+        'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
         tsFromDate(tsBefore),
         null,
         100, // value
-        "01", // token
+        '01', // token
         0 // token_data
       ),
       // heightlocked
       getLockedUtxo(
-        "tx04",
-        "WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp",
+        'tx04',
+        'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
         tsFromDate(tsBefore),
         null,
         TOKEN_MINT_MASK, // value, mint
-        "01", // token
+        '01', // token
         TOKEN_AUTHORITY_MASK | 1 // token_data
       ),
     ];

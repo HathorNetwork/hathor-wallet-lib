@@ -12,9 +12,8 @@ import { intToBytes } from '../utils/buffer';
 import Address from './address';
 
 type optionsType = {
-  timelock?: number | null | undefined,
+  timelock?: number | null | undefined;
 };
-
 
 class P2SH {
   // Address object of the value destination
@@ -23,9 +22,12 @@ class P2SH {
   timelock: number | null;
 
   constructor(address: Address, options: optionsType = {}) {
-    const newOptions = Object.assign({
-      timelock: null,
-    }, options);
+    const newOptions = Object.assign(
+      {
+        timelock: null,
+      },
+      options
+    );
     const { timelock } = newOptions;
 
     if (!address) {
@@ -94,7 +96,7 @@ class P2SH {
       if (buf.readUInt8(ptr++) !== 4) {
         return false;
       }
-      ptr += 4
+      ptr += 4;
       // next byte is OP_GREATERTHAN_TIMESTAMP
       if (buf.readUInt8(ptr++) !== op_greaterthan_timestamp) {
         return false;
@@ -109,7 +111,7 @@ class P2SH {
     if (buf.readUInt8(ptr++) !== 20) {
       return false;
     }
-    ptr += 20
+    ptr += 20;
     // OP_EQUAL
     if (buf.readUInt8(ptr++) !== op_equal) {
       return false;

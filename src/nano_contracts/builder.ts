@@ -13,22 +13,18 @@ import NanoContract from './nano_contract';
 import { createOutputScriptFromAddress } from '../utils/address';
 import { IDataOutput } from '../types';
 import {
-    HATHOR_TOKEN_CONFIG,
-    NANO_CONTRACTS_INITIALIZE_METHOD,
-    NANO_CONTRACTS_VERSION } from '../constants';
+  HATHOR_TOKEN_CONFIG,
+  NANO_CONTRACTS_INITIALIZE_METHOD,
+  NANO_CONTRACTS_VERSION,
+} from '../constants';
 import Serializer from './serializer';
 import { PublicKey } from 'bitcore-lib';
 import HathorWallet from '../new/wallet';
 import { NanoContractTransactionError } from '../errors';
-import { concat, get } from 'lodash'
-import {
-  NanoContractActionType,
-  NanoContractAction,
-  MethodArgInfo,
-} from './types';
+import { concat, get } from 'lodash';
+import { NanoContractActionType, NanoContractAction, MethodArgInfo } from './types';
 import ncApi from '../api/nano';
 import { validateBlueprintMethodArgs } from './utils';
-
 
 class NanoContractTransactionBuilder {
   blueprintId: string | null | undefined;
@@ -164,7 +160,9 @@ class NanoContractTransactionBuilder {
    */
   async executeDeposit(action: NanoContractAction, tokens: string[]): Promise<[Input[], Output[]]> {
     if (action.type !== NanoContractActionType.DEPOSIT) {
-      throw new NanoContractTransactionError('Can\'t execute a deposit with an action which type is differente than deposit.');
+      throw new NanoContractTransactionError(
+        "Can't execute a deposit with an action which type is differente than deposit."
+      );
     }
 
     if (!action.amount || !action.token) {
@@ -177,7 +175,7 @@ class NanoContractTransactionBuilder {
     }
 
     // Get the utxos with the amount of the deposit and create the inputs
-    const utxoOptions: { token: string, filter_address?: string | null } = { token: action.token };
+    const utxoOptions: { token: string; filter_address?: string | null } = { token: action.token };
     if (action.address) {
       utxoOptions.filter_address = action.address;
     }
@@ -191,18 +189,18 @@ class NanoContractTransactionBuilder {
     const network = this.wallet.getNetworkObject();
     // If there's a change amount left in the utxos, create the change output
     if (utxosData.changeAmount) {
-      const changeAddressStr = changeAddressParam || (await this.wallet.getCurrentAddress()).address;
+      const changeAddressStr =
+        changeAddressParam || (await this.wallet.getCurrentAddress()).address;
       // This will throw AddressError in case the adress is invalid
       // this handles p2pkh and p2sh scripts
       const outputScript = createOutputScriptFromAddress(changeAddressStr, network);
-      const tokenIndex = action.token === HATHOR_TOKEN_CONFIG.uid ? 0 : tokens.findIndex((token) => token === action.token) + 1;
-      const outputObj = new Output(
-        utxosData.changeAmount,
-        outputScript,
-        {
-          tokenData: tokenIndex
-        }
-      );
+      const tokenIndex =
+        action.token === HATHOR_TOKEN_CONFIG.uid
+          ? 0
+          : tokens.findIndex(token => token === action.token) + 1;
+      const outputObj = new Output(utxosData.changeAmount, outputScript, {
+        tokenData: tokenIndex,
+      });
       outputs.push(outputObj);
     }
 
@@ -221,26 +219,32 @@ class NanoContractTransactionBuilder {
    */
   executeWithdrawal(action: NanoContractAction, tokens: string[]): Output {
     if (action.type !== NanoContractActionType.WITHDRAWAL) {
-      throw new NanoContractTransactionError('Can\'t execute a withdrawal with an action which type is differente than withdrawal.');
+      throw new NanoContractTransactionError(
+        "Can't execute a withdrawal with an action which type is differente than withdrawal."
+      );
     }
 
     if (!action.address || !action.amount || !action.token) {
-      throw new NanoContractTransactionError('Address, amount and token are required for withdrawal action.');
+      throw new NanoContractTransactionError(
+        'Address, amount and token are required for withdrawal action.'
+      );
     }
     // Create the output with the withdrawal address and amount
 
     // This will throw AddressError in case the adress is invalid
     // this handles p2pkh and p2sh scripts
-    const outputScript = createOutputScriptFromAddress(action.address, this.wallet.getNetworkObject());
-
-    const tokenIndex = action.token === HATHOR_TOKEN_CONFIG.uid ? 0 : tokens.findIndex((token) => token === action.token) + 1;
-    const output = new Output(
-      action.amount,
-      outputScript,
-      {
-        tokenData: tokenIndex
-      }
+    const outputScript = createOutputScriptFromAddress(
+      action.address,
+      this.wallet.getNetworkObject()
     );
+
+    const tokenIndex =
+      action.token === HATHOR_TOKEN_CONFIG.uid
+        ? 0
+        : tokens.findIndex(token => token === action.token) + 1;
+    const output = new Output(action.amount, outputScript, {
+      tokenData: tokenIndex,
+    });
 
     return output;
   }
@@ -260,7 +264,9 @@ class NanoContractTransactionBuilder {
     if (this.method !== NANO_CONTRACTS_INITIALIZE_METHOD) {
       // Get the blueprint id from the nano transaction in the full node
       if (!this.ncId) {
-        throw new NanoContractTransactionError(`Nano contract ID cannot be null for method ${this.method}`);
+        throw new NanoContractTransactionError(
+          `Nano contract ID cannot be null for method ${this.method}`
+        );
       }
 
       let response;
@@ -268,11 +274,15 @@ class NanoContractTransactionBuilder {
         response = await this.wallet.getFullTxById(this.ncId);
       } catch {
         // Error getting nano contract transaction data from the full node
-        throw new NanoContractTransactionError(`Error getting nano contract transaction data with id ${this.ncId} from the full node`);
+        throw new NanoContractTransactionError(
+          `Error getting nano contract transaction data with id ${this.ncId} from the full node`
+        );
       }
 
       if (response.tx.version !== NANO_CONTRACTS_VERSION) {
-        throw new NanoContractTransactionError(`Transaction with id ${this.ncId} is not a nano contract transaction.`);
+        throw new NanoContractTransactionError(
+          `Transaction with id ${this.ncId} is not a nano contract transaction.`
+        );
       }
 
       this.blueprintId = response.tx.nc_blueprint_id;
@@ -318,13 +328,19 @@ class NanoContractTransactionBuilder {
     if (this.args) {
       const serializer = new Serializer();
       const blueprintInformation = await ncApi.getBlueprintInformation(this.blueprintId);
-      const methodArgs = get(blueprintInformation, `public_methods.${this.method}.args`, []) as MethodArgInfo[];
+      const methodArgs = get(
+        blueprintInformation,
+        `public_methods.${this.method}.args`,
+        []
+      ) as MethodArgInfo[];
       if (!methodArgs) {
         throw new NanoContractTransactionError(`Blueprint does not have method ${this.method}.`);
       }
 
       if (this.args.length !== methodArgs.length) {
-        throw new NanoContractTransactionError(`Method needs ${methodArgs.length} parameters but data has ${this.args.length}.`);
+        throw new NanoContractTransactionError(
+          `Method needs ${methodArgs.length} parameters but data has ${this.args.length}.`
+        );
       }
 
       for (const [index, arg] of methodArgs.entries()) {
@@ -340,7 +356,16 @@ class NanoContractTransactionBuilder {
       throw new Error('This should never happen.');
     }
 
-    return new NanoContract(inputs, outputs, tokens, ncId, this.method, serializedArgs, this.caller, null);
+    return new NanoContract(
+      inputs,
+      outputs,
+      tokens,
+      ncId,
+      this.method,
+      serializedArgs,
+      this.caller,
+      null
+    );
   }
 }
 

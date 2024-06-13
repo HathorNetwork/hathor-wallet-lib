@@ -8,7 +8,8 @@
 import P2SHSignature from '../../src/models/p2sh_signature';
 
 test('P2SHSignature', () => {
-  const pubkey = 'xpub6BnoFhDySfUAaJQveYx1YvB8YcLdnnGdz19twSXRh6byEfZSWS4ewinKVDVJcvp6m17mAkQiBuhUgytwS561AkyCFXTvSjRXatueS2E4s3K';
+  const pubkey =
+    'xpub6BnoFhDySfUAaJQveYx1YvB8YcLdnnGdz19twSXRh6byEfZSWS4ewinKVDVJcvp6m17mAkQiBuhUgytwS561AkyCFXTvSjRXatueS2E4s3K';
   const signatures = {
     0: '0123',
     1: '4567',

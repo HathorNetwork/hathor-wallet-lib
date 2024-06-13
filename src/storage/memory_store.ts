@@ -29,7 +29,6 @@ import { orderBy } from 'lodash';
 import transactionUtils from '../utils/transaction';
 import { cloneDeep } from 'lodash';
 
-
 const DEFAULT_ADDRESSES_WALLET_DATA = {
   lastLoadedAddressIndex: 0,
   lastUsedAddressIndex: -1,
@@ -39,7 +38,7 @@ const DEFAULT_ADDRESSES_WALLET_DATA = {
 const DEFAULT_SCAN_POLICY_DATA: AddressScanPolicyData = {
   policy: SCANNING_POLICY.GAP_LIMIT,
   gapLimit: GAP_LIMIT,
-}
+};
 
 const DEFAULT_WALLET_DATA = {
   bestBlockHeight: 0,
@@ -59,7 +58,7 @@ const DEFAULT_WALLET_DATA = {
  * // returns '5fbec5d0:abcdef'
  * getOrderingKey({ tx_id: 'abcdef', timestamp: 1606338000 });
  */
-function getOrderingKey(tx: Pick<IHistoryTx, 'timestamp'|'tx_id'>): string {
+function getOrderingKey(tx: Pick<IHistoryTx, 'timestamp' | 'tx_id'>): string {
   const buf = Buffer.alloc(4);
   buf.writeUInt32BE(tx.timestamp, 0);
   return `${buf.toString('hex')}:${tx.tx_id}`;
@@ -79,7 +78,7 @@ function getOrderingKey(tx: Pick<IHistoryTx, 'timestamp'|'tx_id'>): string {
  * // returns { timestamp: 1606338000, txId: 'abcdef' }
  * getPartsFromOrderingKey('5fbec5d0:abcdef');
  */
-function getPartsFromOrderingKey(key: string): { timestamp: number, txId: string } {
+function getPartsFromOrderingKey(key: string): { timestamp: number; txId: string } {
   const parts = key.split(':');
   const buf = Buffer.from(parts[0], 'hex');
   return {
@@ -291,7 +290,10 @@ export class MemoryStore implements IStore {
 
     if (markAsUsed) {
       // Will move the address index only if we have not reached the gap limit
-      this.walletData.currentAddressIndex = Math.min(this.walletData.lastLoadedAddressIndex, this.walletData.currentAddressIndex + 1);
+      this.walletData.currentAddressIndex = Math.min(
+        this.walletData.lastLoadedAddressIndex,
+        this.walletData.currentAddressIndex + 1
+      );
     }
     return addressInfo.base58;
   }
@@ -346,7 +348,11 @@ export class MemoryStore implements IStore {
       // If a tokenUid is passed, we only yield the transaction if it has the token in one of our addresses
       let found = false;
       for (const input of tx.inputs) {
-        if (input.decoded.address && this.addresses.has(input.decoded.address) && input.token === tokenUid) {
+        if (
+          input.decoded.address &&
+          this.addresses.has(input.decoded.address) &&
+          input.token === tokenUid
+        ) {
           found = true;
           break;
         }
@@ -356,7 +362,11 @@ export class MemoryStore implements IStore {
         continue;
       }
       for (const output of tx.outputs) {
-        if (output.decoded.address && this.addresses.has(output.decoded.address) && output.token === tokenUid) {
+        if (
+          output.decoded.address &&
+          this.addresses.has(output.decoded.address) &&
+          output.token === tokenUid
+        ) {
           found = true;
           break;
         }
@@ -409,7 +419,10 @@ export class MemoryStore implements IStore {
       }
     }
     if (this.walletData.currentAddressIndex < maxIndex) {
-      this.walletData.currentAddressIndex = Math.min(maxIndex + 1, this.walletData.lastLoadedAddressIndex);
+      this.walletData.currentAddressIndex = Math.min(
+        maxIndex + 1,
+        this.walletData.lastLoadedAddressIndex
+      );
     }
     this.walletData.lastUsedAddressIndex = maxIndex;
   }
@@ -457,7 +470,7 @@ export class MemoryStore implements IStore {
           mint: { unlocked: 0, locked: 0 },
           melt: { unlocked: 0, locked: 0 },
         },
-      }
+      },
     };
     const tokenMeta = this.tokensMetadata.get(tokenUid);
 
@@ -574,7 +587,7 @@ export class MemoryStore implements IStore {
   async *selectUtxos(options: IUtxoFilterOptions): AsyncGenerator<IUtxo> {
     const networkHeight = await this.getCurrentHeight();
     const nowTs = Math.floor(Date.now() / 1000);
-    const isTimeLocked = (timestamp: number) => (!!timestamp) && (nowTs < timestamp);
+    const isTimeLocked = (timestamp: number) => !!timestamp && nowTs < timestamp;
     const isHeightLocked = (utxo: IUtxo) => {
       if (!transactionUtils.isBlock({ version: utxo.type })) {
         // Only blocks can be reward locked
@@ -614,18 +627,18 @@ export class MemoryStore implements IStore {
         authority_match = (utxo.authorities & authorities) > 0;
       }
       if (
-        (options.filter_method && !options.filter_method(utxo))
-        || (options.amount_bigger_than && utxo.value <= options.amount_bigger_than)
-        || (options.amount_smaller_than && utxo.value >= options.amount_smaller_than)
-        || (options.filter_address && utxo.address !== options.filter_address)
-        || (!authority_match)
-        || (utxo.token !== token)
+        (options.filter_method && !options.filter_method(utxo)) ||
+        (options.amount_bigger_than && utxo.value <= options.amount_bigger_than) ||
+        (options.amount_smaller_than && utxo.value >= options.amount_smaller_than) ||
+        (options.filter_address && utxo.address !== options.filter_address) ||
+        !authority_match ||
+        utxo.token !== token
       ) {
         // This utxo has failed a filter constraint
         continue;
       }
 
-      if (options.max_amount && ((sumAmount + utxo.value) > options.max_amount)) {
+      if (options.max_amount && sumAmount + utxo.value > options.max_amount) {
         // If this utxo is returned we would pass the max_amount
         // We continue to ensure we have the closest to max_amount
         continue;
@@ -639,7 +652,10 @@ export class MemoryStore implements IStore {
         // both only count unlocked utxos.
         sumAmount += utxo.value;
       }
-      if ((options.target_amount && sumAmount >= options.target_amount) || (options.max_utxos && utxoNum >= options.max_utxos)) {
+      if (
+        (options.target_amount && sumAmount >= options.target_amount) ||
+        (options.max_utxos && utxoNum >= options.max_utxos)
+      ) {
         // We have reached either the target amount or the max number of utxos requested
         return;
       }
@@ -857,7 +873,11 @@ export class MemoryStore implements IStore {
    * @async
    * @returns {Promise<void>}
    */
-  async cleanStorage(cleanHistory: boolean = false, cleanAddresses: boolean = false, cleanTokens: boolean = false): Promise<void> {
+  async cleanStorage(
+    cleanHistory: boolean = false,
+    cleanAddresses: boolean = false,
+    cleanTokens: boolean = false
+  ): Promise<void> {
     if (cleanHistory) {
       this.tokens = new Map<string, ITokenData>();
       this.tokensMetadata = new Map<string, ITokenMetadata>();

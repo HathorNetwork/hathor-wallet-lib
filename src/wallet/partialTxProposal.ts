@@ -12,11 +12,7 @@ import P2PKH from '../models/p2pkh';
 import ScriptData from '../models/script_data';
 import Transaction from '../models/transaction';
 import { AddressError, InvalidPartialTxError } from '../errors';
-import {
-  HATHOR_TOKEN_CONFIG,
-  TOKEN_MELT_MASK,
-  TOKEN_MINT_MASK,
-} from '../constants';
+import { HATHOR_TOKEN_CONFIG, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../constants';
 
 import transactionUtils from '../utils/transaction';
 import dateFormatter from '../utils/date';
@@ -28,9 +24,9 @@ import { IStorage } from '../types';
 class PartialTxProposal {
   public partialTx: PartialTx;
 
-  public signatures: PartialTxInputData|null;
+  public signatures: PartialTxInputData | null;
 
-  public transaction: Transaction|null;
+  public transaction: Transaction | null;
 
   public storage: IStorage;
 
@@ -80,7 +76,7 @@ class PartialTxProposal {
       utxos = [],
       changeAddress = null,
       markAsSelected = true,
-    }: { utxos?: Utxo[]|null, changeAddress?: string|null, markAsSelected?: boolean } = {},
+    }: { utxos?: Utxo[] | null; changeAddress?: string | null; markAsSelected?: boolean } = {}
   ) {
     this.resetSignatures();
 
@@ -90,7 +86,7 @@ class PartialTxProposal {
       allUtxos = utxos;
     } else {
       allUtxos = [];
-      for await (const utxo of this.storage.selectUtxos({token, authorities: 0})) {
+      for await (const utxo of this.storage.selectUtxos({ token, authorities: 0 })) {
         allUtxos.push({
           txId: utxo.txId,
           index: utxo.index,
@@ -108,29 +104,24 @@ class PartialTxProposal {
 
     // Filter pool of utxos for only utxos from the token and not already in the partial tx
     const currentUtxos = this.partialTx.inputs.map(input => `${input.hash}-${input.index}`);
-    const utxosToUse = allUtxos.filter(utxo => utxo.tokenId === token && !currentUtxos.includes(`${utxo.txId}-${utxo.index}`));
+    const utxosToUse = allUtxos.filter(
+      utxo => utxo.tokenId === token && !currentUtxos.includes(`${utxo.txId}-${utxo.index}`)
+    );
 
     const utxosDetails = transactionUtils.selectUtxos(utxosToUse, value);
 
     for (const utxo of utxosDetails.utxos) {
-      this.addInput(
-        utxo.txId,
-        utxo.index,
-        utxo.value,
-        utxo.address,
-        { token: utxo.tokenId, authorities: utxo.authorities, markAsSelected },
-      );
+      this.addInput(utxo.txId, utxo.index, utxo.value, utxo.address, {
+        token: utxo.tokenId,
+        authorities: utxo.authorities,
+        markAsSelected,
+      });
     }
 
     // add change output if needed
     if (utxosDetails.changeAmount > 0) {
       const address: string = changeAddress || (await this.storage.getCurrentAddress());
-      this.addOutput(
-        token,
-        utxosDetails.changeAmount,
-        address,
-        { isChange: true },
-      );
+      this.addOutput(token, utxosDetails.changeAmount, address, { isChange: true });
     }
   }
 
@@ -147,12 +138,12 @@ class PartialTxProposal {
   async addReceive(
     token: string,
     value: number,
-    { timelock = null, address = null }: { timelock?: number|null, address?: string|null } = {},
+    { timelock = null, address = null }: { timelock?: number | null; address?: string | null } = {}
   ) {
     this.resetSignatures();
 
     // get an address of our wallet and add the output
-    const addr: string = address ? address : (await this.storage.getCurrentAddress());
+    const addr: string = address ? address : await this.storage.getCurrentAddress();
     this.addOutput(token, value, addr, { timelock });
   }
 
@@ -178,15 +169,15 @@ class PartialTxProposal {
       authorities = 0,
       markAsSelected = true,
     }: {
-      token?: string,
-      authorities?: number,
-      markAsSelected?: boolean,
-    } = {},
+      token?: string;
+      authorities?: number;
+      markAsSelected?: boolean;
+    } = {}
   ) {
     this.resetSignatures();
 
     if (markAsSelected) {
-      this.storage.utxoSelectAsInput({txId: hash, index}, true)
+      this.storage.utxoSelectAsInput({ txId: hash, index }, true);
     }
 
     this.partialTx.addInput(hash, index, value, address, { token, authorities });
@@ -212,8 +203,8 @@ class PartialTxProposal {
     {
       timelock = null,
       isChange = false,
-      authorities = 0
-    }: { timelock?: number|null, isChange?: boolean, authorities?: number } = {}
+      authorities = 0,
+    }: { timelock?: number | null; isChange?: boolean; authorities?: number } = {}
   ) {
     this.resetSignatures();
 
@@ -249,7 +240,7 @@ class PartialTxProposal {
     const tokenBalance: Record<string, Balance> = {};
 
     for (const input of this.partialTx.inputs) {
-      if (!await this.storage.isAddressMine(input.address)) continue;
+      if (!(await this.storage.isAddressMine(input.address))) continue;
 
       if (!tokenBalance[input.token]) {
         tokenBalance[input.token] = getEmptyBalance();
@@ -257,8 +248,10 @@ class PartialTxProposal {
 
       if (input.isAuthority()) {
         // calculate authority balance
-        tokenBalance[input.token].authority.unlocked.mint -= (input.value & TOKEN_MINT_MASK) > 0 ? 1 : 0;
-        tokenBalance[input.token].authority.unlocked.melt -= (input.value & TOKEN_MELT_MASK) > 0 ? 1 : 0;
+        tokenBalance[input.token].authority.unlocked.mint -=
+          (input.value & TOKEN_MINT_MASK) > 0 ? 1 : 0;
+        tokenBalance[input.token].authority.unlocked.melt -=
+          (input.value & TOKEN_MELT_MASK) > 0 ? 1 : 0;
       } else {
         // calculate token balance
         tokenBalance[input.token].balance.unlocked -= input.value;
@@ -266,12 +259,13 @@ class PartialTxProposal {
     }
 
     for (const output of this.partialTx.outputs) {
-      const decodedScript = output.decodedScript || output.parseScript(this.storage.config.getNetwork());
+      const decodedScript =
+        output.decodedScript || output.parseScript(this.storage.config.getNetwork());
 
       // Catch data output and non-standard scripts cases
       if (decodedScript instanceof ScriptData || !decodedScript) continue;
 
-      if (!await this.storage.isAddressMine(decodedScript.address.base58)) continue;
+      if (!(await this.storage.isAddressMine(decodedScript.address.base58))) continue;
 
       if (!tokenBalance[output.token]) {
         tokenBalance[output.token] = getEmptyBalance();
@@ -283,12 +277,16 @@ class PartialTxProposal {
          */
         if (isTimelocked(decodedScript.timelock)) {
           // Locked output
-          tokenBalance[output.token].authority.locked.mint += (output.value & TOKEN_MINT_MASK) > 0 ? 1 : 0;
-          tokenBalance[output.token].authority.locked.melt += (output.value & TOKEN_MELT_MASK) > 0 ? 1 : 0;
+          tokenBalance[output.token].authority.locked.mint +=
+            (output.value & TOKEN_MINT_MASK) > 0 ? 1 : 0;
+          tokenBalance[output.token].authority.locked.melt +=
+            (output.value & TOKEN_MELT_MASK) > 0 ? 1 : 0;
         } else {
           // Unlocked output
-          tokenBalance[output.token].authority.unlocked.mint += (output.value & TOKEN_MINT_MASK) > 0 ? 1 : 0;
-          tokenBalance[output.token].authority.unlocked.melt += (output.value & TOKEN_MELT_MASK) > 0 ? 1 : 0;
+          tokenBalance[output.token].authority.unlocked.mint +=
+            (output.value & TOKEN_MINT_MASK) > 0 ? 1 : 0;
+          tokenBalance[output.token].authority.unlocked.melt +=
+            (output.value & TOKEN_MELT_MASK) > 0 ? 1 : 0;
         }
       } else {
         /**
@@ -322,7 +320,7 @@ class PartialTxProposal {
    */
   unmarkAsSelected() {
     for (const input of this.partialTx.inputs) {
-      this.storage.utxoSelectAsInput({txId: input.hash, index: input.index}, false);
+      this.storage.utxoSelectAsInput({ txId: input.hash, index: input.index }, false);
     }
   }
 
@@ -332,7 +330,7 @@ class PartialTxProposal {
    * @returns {boolean}
    */
   isComplete(): boolean {
-    return (!!this.signatures) && this.partialTx.isComplete() && this.signatures.isComplete();
+    return !!this.signatures && this.partialTx.isComplete() && this.signatures.isComplete();
   }
 
   /**
@@ -353,10 +351,7 @@ class PartialTxProposal {
 
     const tx: Transaction = this.partialTx.getTx();
 
-    this.signatures = new PartialTxInputData(
-      tx.getDataToSign().toString('hex'),
-      tx.inputs.length
-    );
+    this.signatures = new PartialTxInputData(tx.getDataToSign().toString('hex'), tx.inputs.length);
 
     if (validate) {
       // The validation method populates the addresses
@@ -369,7 +364,7 @@ class PartialTxProposal {
     // sign inputs from the loaded wallet and save input data
     await transactionUtils.signTransaction(tx, this.storage, pin);
     for (const [index, input] of tx.inputs.entries()) {
-      if(input.data) {
+      if (input.data) {
         // add all signatures we know of this tx
         this.signatures.addData(index, input.data);
       }
@@ -396,13 +391,10 @@ class PartialTxProposal {
     }
 
     // Creating an empty signatures object
-    this.signatures = new PartialTxInputData(
-      tx.getDataToSign().toString('hex'),
-      tx.inputs.length
-    );
+    this.signatures = new PartialTxInputData(tx.getDataToSign().toString('hex'), tx.inputs.length);
 
     // Setting the signatures data from the parameters
-    this.signatures.addSignatures(serializedSignatures)
+    this.signatures.addSignatures(serializedSignatures);
   }
 
   /**

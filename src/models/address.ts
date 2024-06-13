@@ -13,14 +13,13 @@ import P2SH from './p2sh';
 import _ from 'lodash';
 import helpers from '../utils/helpers';
 
-
 class Address {
   // String with address as base58
   base58: string;
   // Network to validate the address
   network: Network;
 
-  constructor(base58: string, options = {network: new Network('testnet')}) {
+  constructor(base58: string, options = { network: new Network('testnet') }) {
     const { network } = options;
 
     if (!_.isString(base58)) {
@@ -40,7 +39,7 @@ class Address {
    */
   isValid(): boolean {
     try {
-      return this.validateAddress()
+      return this.validateAddress();
     } catch (e) {
       if (e instanceof AddressError) {
         return false;
@@ -83,7 +82,9 @@ class Address {
 
     // Validate address length
     if (addressBytes.length !== 25) {
-      throw new AddressError(`${errorMessage} Address has ${addressBytes.length} bytes and should have 25.`);
+      throw new AddressError(
+        `${errorMessage} Address has ${addressBytes.length} bytes and should have 25.`
+      );
     }
 
     // Validate address checksum
@@ -91,13 +92,17 @@ class Address {
     const addressSlice = addressBytes.slice(0, -4);
     const correctChecksum = helpers.getChecksum(addressSlice);
     if (!util.buffer.equals(checksum, correctChecksum)) {
-      throw new AddressError(`${errorMessage} Invalid checksum. Expected: ${correctChecksum} != Received: ${checksum}.`);
+      throw new AddressError(
+        `${errorMessage} Invalid checksum. Expected: ${correctChecksum} != Received: ${checksum}.`
+      );
     }
 
     // Validate version byte. Should be the p2pkh or p2sh
     const firstByte = addressBytes[0];
     if (!this.network.isVersionByteValid(firstByte)) {
-      throw new AddressError(`${errorMessage} Invalid network byte. Expected: ${this.network.versionBytes.p2pkh} or ${this.network.versionBytes.p2sh} and received ${firstByte}.`);
+      throw new AddressError(
+        `${errorMessage} Invalid network byte. Expected: ${this.network.versionBytes.p2pkh} or ${this.network.versionBytes.p2sh} and received ${firstByte}.`
+      );
     }
     return true;
   }

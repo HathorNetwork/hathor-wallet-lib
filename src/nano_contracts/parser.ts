@@ -16,7 +16,6 @@ import { getAddressFromPubkey } from '../utils/address';
 import { NanoContractTransactionParseError } from '../errors';
 import { MethodArgInfo, NanoContractParsedArgument } from './types';
 
-
 class NanoContractTransactionParser {
   blueprintId: string;
   method: string;
@@ -61,10 +60,16 @@ class NanoContractTransactionParser {
     const blueprintInformation = await ncApi.getBlueprintInformation(this.blueprintId);
     if (!has(blueprintInformation, `public_methods.${this.method}`)) {
       // If this.method is not in the blueprint information public methods, then there's an error
-      throw new NanoContractTransactionParseError('Failed to parse nano contract transaction. Method not found.');
+      throw new NanoContractTransactionParseError(
+        'Failed to parse nano contract transaction. Method not found.'
+      );
     }
 
-    const methodArgs = get(blueprintInformation, `public_methods.${this.method}.args`, []) as MethodArgInfo[];
+    const methodArgs = get(
+      blueprintInformation,
+      `public_methods.${this.method}.args`,
+      []
+    ) as MethodArgInfo[];
     let argsBuffer = Buffer.from(this.args, 'hex');
     let size: number;
     for (const arg of methodArgs) {

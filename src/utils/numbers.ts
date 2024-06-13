@@ -10,7 +10,7 @@ import { DECIMAL_PLACES } from '../constants';
  * @inner
  */
 export function prettyValue(value: number): string {
-  const fixedPlaces = (value/10**DECIMAL_PLACES).toFixed(DECIMAL_PLACES);
+  const fixedPlaces = (value / 10 ** DECIMAL_PLACES).toFixed(DECIMAL_PLACES);
   const integerPart = fixedPlaces.split('.')[0];
   const decimalPart = fixedPlaces.split('.')[1];
   return `${prettyIntegerValue(parseInt(integerPart))}.${decimalPart}`;

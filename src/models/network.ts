@@ -11,25 +11,25 @@ import { Networks } from 'bitcore-lib';
 // Mainnet: P2PKH will start with H and P2SH will start with h
 // Testnet: P2PKH will start with W and P2SH will start with w
 const versionBytes = {
-  'mainnet': {
-    'p2pkh': 0x28,
-    'p2sh': 0x64,
-    'xpriv': 0x03523b05, // htpr
-    'xpub': 0x0488b21e,  // xpub // 0x03523a9c -> htpb
+  mainnet: {
+    p2pkh: 0x28,
+    p2sh: 0x64,
+    xpriv: 0x03523b05, // htpr
+    xpub: 0x0488b21e, // xpub // 0x03523a9c -> htpb
   },
-  'testnet': {
-    'p2pkh': 0x49,
-    'p2sh': 0x87,
-    'xpriv': 0x0434c8c4, // tnpr
-    'xpub': 0x0488b21e,  // xpub // 0x0434c85b -> tnpb
+  testnet: {
+    p2pkh: 0x49,
+    p2sh: 0x87,
+    xpriv: 0x0434c8c4, // tnpr
+    xpub: 0x0488b21e, // xpub // 0x0434c85b -> tnpb
   },
-  'privatenet': {
-    'p2pkh': 0x49,
-    'p2sh': 0x87,
-    'xpriv': 0x0434c8c4, // tnpr
-    'xpub': 0x0488b21e,  // xpub // 0x0434c85b -> tnpb
+  privatenet: {
+    p2pkh: 0x49,
+    p2sh: 0x87,
+    xpriv: 0x0434c8c4, // tnpr
+    xpub: 0x0488b21e, // xpub // 0x0434c85b -> tnpb
   },
-}
+};
 
 /*Networks is an object of the bitcore-lib
   Some of it's parameters are not used by us (network parameters)
@@ -75,7 +75,7 @@ const mainnet = Networks.add({
   xprivkey: versionBytes['mainnet']['xpriv'],
   networkMagic: 0xf9beb4d9,
   port: 8333,
-  dnsSeeds: []
+  dnsSeeds: [],
 });
 
 const testnet = Networks.add({
@@ -89,7 +89,7 @@ const testnet = Networks.add({
   xprivkey: versionBytes['testnet']['xpriv'],
   networkMagic: 0xf9beb4d9,
   port: 8333,
-  dnsSeeds: []
+  dnsSeeds: [],
 });
 
 const privatenet = Networks.add({
@@ -103,20 +103,19 @@ const privatenet = Networks.add({
   xprivkey: versionBytes['privatenet']['xpriv'],
   networkMagic: 0xf9beb4d9,
   port: 8333,
-  dnsSeeds: []
-})
+  dnsSeeds: [],
+});
 
 const networkOptions = {
   testnet,
   mainnet,
-  privatenet
-}
+  privatenet,
+};
 
 type versionBytesType = {
-  p2pkh: number,
-  p2sh: number,
-}
-
+  p2pkh: number;
+  p2sh: number;
+};
 
 class Network {
   // Network name (currently supports only 'testnet' and 'mainnet')

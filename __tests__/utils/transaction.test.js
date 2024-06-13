@@ -16,7 +16,7 @@ import {
   NANO_CONTRACTS_VERSION,
   TOKEN_AUTHORITY_MASK,
   TOKEN_MELT_MASK,
-  TOKEN_MINT_MASK
+  TOKEN_MINT_MASK,
 } from '../../src/constants';
 import { MemoryStore, Storage } from '../../src/storage';
 import { HDPrivateKey } from 'bitcore-lib';
@@ -24,34 +24,52 @@ import Input from '../../src/models/input';
 import Transaction from '../../src/models/transaction';
 
 test('isAuthorityOutput', () => {
-  expect(transaction.isAuthorityOutput({token_data: TOKEN_AUTHORITY_MASK})).toBe(true);
-  expect(transaction.isAuthorityOutput({token_data: TOKEN_AUTHORITY_MASK|1})).toBe(true);
-  expect(transaction.isAuthorityOutput({token_data: TOKEN_AUTHORITY_MASK|126})).toBe(true);
-  expect(transaction.isAuthorityOutput({token_data: 0})).toBe(false);
-  expect(transaction.isAuthorityOutput({token_data: 1})).toBe(false);
-  expect(transaction.isAuthorityOutput({token_data: 126})).toBe(false);
+  expect(transaction.isAuthorityOutput({ token_data: TOKEN_AUTHORITY_MASK })).toBe(true);
+  expect(transaction.isAuthorityOutput({ token_data: TOKEN_AUTHORITY_MASK | 1 })).toBe(true);
+  expect(transaction.isAuthorityOutput({ token_data: TOKEN_AUTHORITY_MASK | 126 })).toBe(true);
+  expect(transaction.isAuthorityOutput({ token_data: 0 })).toBe(false);
+  expect(transaction.isAuthorityOutput({ token_data: 1 })).toBe(false);
+  expect(transaction.isAuthorityOutput({ token_data: 126 })).toBe(false);
 });
 
 test('isMint', () => {
-  expect(transaction.isMint({value: 0, token_data: TOKEN_AUTHORITY_MASK})).toBe(false);
-  expect(transaction.isMint({value: TOKEN_MINT_MASK, token_data: TOKEN_AUTHORITY_MASK})).toBe(true);
-  expect(transaction.isMint({value: TOKEN_MINT_MASK|TOKEN_MELT_MASK, token_data: TOKEN_AUTHORITY_MASK})).toBe(true);
-  expect(transaction.isMint({value: TOKEN_MINT_MASK, token_data: TOKEN_AUTHORITY_MASK|126})).toBe(true);
+  expect(transaction.isMint({ value: 0, token_data: TOKEN_AUTHORITY_MASK })).toBe(false);
+  expect(transaction.isMint({ value: TOKEN_MINT_MASK, token_data: TOKEN_AUTHORITY_MASK })).toBe(
+    true
+  );
+  expect(
+    transaction.isMint({
+      value: TOKEN_MINT_MASK | TOKEN_MELT_MASK,
+      token_data: TOKEN_AUTHORITY_MASK,
+    })
+  ).toBe(true);
+  expect(
+    transaction.isMint({ value: TOKEN_MINT_MASK, token_data: TOKEN_AUTHORITY_MASK | 126 })
+  ).toBe(true);
 
-  expect(transaction.isMint({value: TOKEN_MINT_MASK, token_data: 0})).toBe(false);
-  expect(transaction.isMint({value: 1, token_data: 1})).toBe(false);
-  expect(transaction.isMint({value: TOKEN_MINT_MASK|1000, token_data: 126})).toBe(false);
+  expect(transaction.isMint({ value: TOKEN_MINT_MASK, token_data: 0 })).toBe(false);
+  expect(transaction.isMint({ value: 1, token_data: 1 })).toBe(false);
+  expect(transaction.isMint({ value: TOKEN_MINT_MASK | 1000, token_data: 126 })).toBe(false);
 });
 
 test('isMelt', () => {
-  expect(transaction.isMelt({value: 0, token_data: TOKEN_AUTHORITY_MASK})).toBe(false);
-  expect(transaction.isMelt({value: TOKEN_MELT_MASK, token_data: TOKEN_AUTHORITY_MASK})).toBe(true);
-  expect(transaction.isMelt({value: TOKEN_MINT_MASK|TOKEN_MELT_MASK, token_data: TOKEN_AUTHORITY_MASK})).toBe(true);
-  expect(transaction.isMelt({value: TOKEN_MELT_MASK, token_data: TOKEN_AUTHORITY_MASK|126})).toBe(true);
+  expect(transaction.isMelt({ value: 0, token_data: TOKEN_AUTHORITY_MASK })).toBe(false);
+  expect(transaction.isMelt({ value: TOKEN_MELT_MASK, token_data: TOKEN_AUTHORITY_MASK })).toBe(
+    true
+  );
+  expect(
+    transaction.isMelt({
+      value: TOKEN_MINT_MASK | TOKEN_MELT_MASK,
+      token_data: TOKEN_AUTHORITY_MASK,
+    })
+  ).toBe(true);
+  expect(
+    transaction.isMelt({ value: TOKEN_MELT_MASK, token_data: TOKEN_AUTHORITY_MASK | 126 })
+  ).toBe(true);
 
-  expect(transaction.isMelt({value: TOKEN_MELT_MASK, token_data: 0})).toBe(false);
-  expect(transaction.isMelt({value: 1, token_data: 1})).toBe(false);
-  expect(transaction.isMelt({value: TOKEN_MELT_MASK|1000, token_data: 126})).toBe(false);
+  expect(transaction.isMelt({ value: TOKEN_MELT_MASK, token_data: 0 })).toBe(false);
+  expect(transaction.isMelt({ value: 1, token_data: 1 })).toBe(false);
+  expect(transaction.isMelt({ value: TOKEN_MELT_MASK | 1000, token_data: 126 })).toBe(false);
 });
 
 test('getSignature', () => {
@@ -63,11 +81,9 @@ test('getSignature', () => {
   const signatureDER = transaction.getSignature(hashdata, privkey);
 
   // A signature made with this util matches the public key
-  expect(crypto.ECDSA.verify(
-    hashdata,
-    crypto.Signature.fromDER(signatureDER),
-    privkey.toPublicKey(),
-  )).toBe(true);
+  expect(
+    crypto.ECDSA.verify(hashdata, crypto.Signature.fromDER(signatureDER), privkey.toPublicKey())
+  ).toBe(true);
 });
 
 test('signTransaction', async () => {
@@ -77,8 +93,8 @@ test('signTransaction', async () => {
   const ownAddr = 'address-is-mine';
   const notOwnAddr = 'address-is-not-mine';
   jest.spyOn(storage, 'getMainXPrivKey').mockReturnValue(Promise.resolve(xpriv.xprivkey));
-  jest.spyOn(storage, 'getAddressInfo').mockImplementation(async (addr) => {
-    switch(addr) {
+  jest.spyOn(storage, 'getAddressInfo').mockImplementation(async addr => {
+    switch (addr) {
       case ownAddr:
         return {
           base58: addr,
@@ -100,7 +116,7 @@ test('signTransaction', async () => {
             { decoded: { address: ownAddr } },
             { decoded: { data: 'not-address-output' } },
           ],
-        }
+        },
       };
       index += 1;
     }
@@ -115,47 +131,69 @@ test('signTransaction', async () => {
   expect(await transaction.signTransaction(tx, storage, '123')).toBe(tx);
   const hashdata = tx.getDataToSignHash();
   expect(input0.data).toEqual(null);
-  const sig1 = input1.data.slice(1, 1+input1.data[0]);
-  expect(crypto.ECDSA.verify(
-    hashdata,
-    crypto.Signature.fromDER(sig1),
-    xpriv.deriveChild(10).publicKey,
-  )).toBe(true);
+  const sig1 = input1.data.slice(1, 1 + input1.data[0]);
+  expect(
+    crypto.ECDSA.verify(hashdata, crypto.Signature.fromDER(sig1), xpriv.deriveChild(10).publicKey)
+  ).toBe(true);
   expect(input2.data).toEqual(null);
   expect(input3.data).toEqual(Buffer.from('010203', 'hex'));
 });
 
 test('Utxo selection', () => {
   const utxos = [
-    {address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi', value: 10, txId: '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2d', index: 5},
-    {address: 'Wmu3y4rWs6n4JJAdRtAz4mDn4d7GkTcqKc', value: 5, txId: '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e', index: 6},
+    {
+      address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
+      value: 10,
+      txId: '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2d',
+      index: 5,
+    },
+    {
+      address: 'Wmu3y4rWs6n4JJAdRtAz4mDn4d7GkTcqKc',
+      value: 5,
+      txId: '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e',
+      index: 6,
+    },
   ];
 
   const selectedUtxos = transaction.selectUtxos(utxos, 3);
   expect(selectedUtxos.utxos.length).toBe(1);
-  expect(selectedUtxos.utxos[0].txId).toBe('0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e');
+  expect(selectedUtxos.utxos[0].txId).toBe(
+    '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e'
+  );
   expect(selectedUtxos.changeAmount).toBe(2);
 
   const selectedUtxos2 = transaction.selectUtxos(utxos, 5);
   expect(selectedUtxos2.utxos.length).toBe(1);
-  expect(selectedUtxos2.utxos[0].txId).toBe('0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e');
+  expect(selectedUtxos2.utxos[0].txId).toBe(
+    '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e'
+  );
   expect(selectedUtxos2.changeAmount).toBe(0);
 
   const selectedUtxos3 = transaction.selectUtxos(utxos, 6);
   expect(selectedUtxos3.utxos.length).toBe(1);
-  expect(selectedUtxos3.utxos[0].txId).toBe('0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2d');
+  expect(selectedUtxos3.utxos[0].txId).toBe(
+    '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2d'
+  );
   expect(selectedUtxos3.changeAmount).toBe(4);
 
   const selectedUtxos4 = transaction.selectUtxos(utxos, 11);
   expect(selectedUtxos4.utxos.length).toBe(2);
-  expect(selectedUtxos4.utxos[0].txId).toBe('0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2d');
-  expect(selectedUtxos4.utxos[1].txId).toBe('0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e');
+  expect(selectedUtxos4.utxos[0].txId).toBe(
+    '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2d'
+  );
+  expect(selectedUtxos4.utxos[1].txId).toBe(
+    '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e'
+  );
   expect(selectedUtxos4.changeAmount).toBe(4);
 
   const selectedUtxos5 = transaction.selectUtxos(utxos, 15);
   expect(selectedUtxos5.utxos.length).toBe(2);
-  expect(selectedUtxos5.utxos[0].txId).toBe('0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2d');
-  expect(selectedUtxos5.utxos[1].txId).toBe('0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e');
+  expect(selectedUtxos5.utxos[0].txId).toBe(
+    '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2d'
+  );
+  expect(selectedUtxos5.utxos[1].txId).toBe(
+    '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e'
+  );
   expect(selectedUtxos5.changeAmount).toBe(0);
 
   expect(() => {
@@ -169,7 +207,7 @@ test('Utxo selection', () => {
   expect(() => {
     transaction.selectUtxos([], 10);
   }).toThrowError(UtxoError);
-})
+});
 
 test('utxo from history output', () => {
   const fake_txid = 'fake-txid';
@@ -186,19 +224,20 @@ test('utxo from history output', () => {
     },
   };
 
-  expect(transaction.utxoFromHistoryOutput(fake_txid, fake_index, txout1, { addressPath })).toEqual({
-    txId: fake_txid,
-    index: fake_index,
-    addressPath,
-    address: 'fake-address',
-    timelock: 10,
-    tokenId: '00',
-    value: 5,
-    authorities: 0,
-    heightlock: null, // heightlock is not checked on this method.
-    locked: false, // The method does not check the lock.
-  });
-
+  expect(transaction.utxoFromHistoryOutput(fake_txid, fake_index, txout1, { addressPath })).toEqual(
+    {
+      txId: fake_txid,
+      index: fake_index,
+      addressPath,
+      address: 'fake-address',
+      timelock: 10,
+      tokenId: '00',
+      value: 5,
+      authorities: 0,
+      heightlock: null, // heightlock is not checked on this method.
+      locked: false, // The method does not check the lock.
+    }
+  );
 
   // Custom token without timelock
   const txout2 = {
@@ -210,18 +249,20 @@ test('utxo from history output', () => {
     },
   };
 
-  expect(transaction.utxoFromHistoryOutput(fake_txid, fake_index, txout2, { addressPath })).toEqual({
-    txId: fake_txid,
-    index: fake_index,
-    addressPath,
-    address: 'fake-address-2',
-    timelock: null,
-    tokenId: 'custom-token',
-    value: 30,
-    authorities: 0,
-    heightlock: null, // heightlock is not checked on this method.
-    locked: false, // The method does not check the lock.
-  });
+  expect(transaction.utxoFromHistoryOutput(fake_txid, fake_index, txout2, { addressPath })).toEqual(
+    {
+      txId: fake_txid,
+      index: fake_index,
+      addressPath,
+      address: 'fake-address-2',
+      timelock: null,
+      tokenId: 'custom-token',
+      value: 30,
+      authorities: 0,
+      heightlock: null, // heightlock is not checked on this method.
+      locked: false, // The method does not check the lock.
+    }
+  );
 
   // Custom token authority
   const txout3 = {
@@ -233,50 +274,59 @@ test('utxo from history output', () => {
     },
   };
 
-  expect(transaction.utxoFromHistoryOutput(fake_txid, fake_index, txout3, { addressPath })).toEqual({
-    txId: fake_txid,
-    index: fake_index,
-    addressPath,
-    address: 'fake-address-2',
-    timelock: null,
-    tokenId: 'custom-token',
-    value: 2,
-    authorities: 2,
-    heightlock: null, // heightlock is not checked on this method.
-    locked: false, // The method does not check the lock.
-  });
+  expect(transaction.utxoFromHistoryOutput(fake_txid, fake_index, txout3, { addressPath })).toEqual(
+    {
+      txId: fake_txid,
+      index: fake_index,
+      addressPath,
+      address: 'fake-address-2',
+      timelock: null,
+      tokenId: 'custom-token',
+      value: 2,
+      authorities: 2,
+      heightlock: null, // heightlock is not checked on this method.
+      locked: false, // The method does not check the lock.
+    }
+  );
 });
 
 test('getTokenDataFromOutput', () => {
   const utxoMint = { type: 'mint', authorities: 0 };
-  expect(transaction.getTokenDataFromOutput(utxoMint, [])).toEqual(1)
+  expect(transaction.getTokenDataFromOutput(utxoMint, [])).toEqual(1);
   const utxoMintAuth = { type: 'mint', authorities: 1 };
-  expect(transaction.getTokenDataFromOutput(utxoMintAuth, [])).toEqual(1 | TOKEN_AUTHORITY_MASK)
+  expect(transaction.getTokenDataFromOutput(utxoMintAuth, [])).toEqual(1 | TOKEN_AUTHORITY_MASK);
   const utxoMintAuth2 = { type: 'mint', authorities: 123 };
-  expect(transaction.getTokenDataFromOutput(utxoMintAuth2, [])).toEqual(1 | TOKEN_AUTHORITY_MASK)
+  expect(transaction.getTokenDataFromOutput(utxoMintAuth2, [])).toEqual(1 | TOKEN_AUTHORITY_MASK);
 
   const utxoMelt = { type: 'melt', authorities: 0 };
-  expect(transaction.getTokenDataFromOutput(utxoMelt, [])).toEqual(1)
+  expect(transaction.getTokenDataFromOutput(utxoMelt, [])).toEqual(1);
   const utxoMeltAuth = { type: 'melt', authorities: 1 };
-  expect(transaction.getTokenDataFromOutput(utxoMeltAuth, [])).toEqual(1 | TOKEN_AUTHORITY_MASK)
+  expect(transaction.getTokenDataFromOutput(utxoMeltAuth, [])).toEqual(1 | TOKEN_AUTHORITY_MASK);
   const utxoMeltAuth2 = { type: 'melt', authorities: 123 };
-  expect(transaction.getTokenDataFromOutput(utxoMeltAuth2, [])).toEqual(1 | TOKEN_AUTHORITY_MASK)
+  expect(transaction.getTokenDataFromOutput(utxoMeltAuth2, [])).toEqual(1 | TOKEN_AUTHORITY_MASK);
 
   const utxoHTR = { type: 'p2pkh', token: '00', authorities: 0 };
-  expect(transaction.getTokenDataFromOutput(utxoHTR, ['02', '01', '03'])).toEqual(0)
+  expect(transaction.getTokenDataFromOutput(utxoHTR, ['02', '01', '03'])).toEqual(0);
   const utxoCustom = { type: 'p2pkh', token: '01', authorities: 0 };
-  expect(transaction.getTokenDataFromOutput(utxoCustom, ['02', '01', '03'])).toEqual(2)
+  expect(transaction.getTokenDataFromOutput(utxoCustom, ['02', '01', '03'])).toEqual(2);
   const utxoCustomAuth = { type: 'p2pkh', token: '01', authorities: 1 };
-  expect(transaction.getTokenDataFromOutput(utxoCustomAuth, ['03', '02', '01'])).toEqual(3 | TOKEN_AUTHORITY_MASK)
+  expect(transaction.getTokenDataFromOutput(utxoCustomAuth, ['03', '02', '01'])).toEqual(
+    3 | TOKEN_AUTHORITY_MASK
+  );
   const utxoCustomAuth2 = { type: 'p2pkh', token: '01', authorities: 2 };
-  expect(transaction.getTokenDataFromOutput(utxoCustomAuth2, ['02', '01'])).toEqual(2 | TOKEN_AUTHORITY_MASK)
+  expect(transaction.getTokenDataFromOutput(utxoCustomAuth2, ['02', '01'])).toEqual(
+    2 | TOKEN_AUTHORITY_MASK
+  );
 });
 
 test('authorities from output', () => {
-  const output = {token_data: 0, value: 123};
-  const outputMint = {token_data: TOKEN_AUTHORITY_MASK|1, value: TOKEN_MINT_MASK};
-  const outputMelt = {token_data: TOKEN_AUTHORITY_MASK|2, value: TOKEN_MELT_MASK};
-  const outputMintMelt = {token_data: TOKEN_AUTHORITY_MASK|3, value: TOKEN_MELT_MASK|TOKEN_MINT_MASK};
+  const output = { token_data: 0, value: 123 };
+  const outputMint = { token_data: TOKEN_AUTHORITY_MASK | 1, value: TOKEN_MINT_MASK };
+  const outputMelt = { token_data: TOKEN_AUTHORITY_MASK | 2, value: TOKEN_MELT_MASK };
+  const outputMintMelt = {
+    token_data: TOKEN_AUTHORITY_MASK | 3,
+    value: TOKEN_MELT_MASK | TOKEN_MINT_MASK,
+  };
   expect(transaction.authoritiesFromOutput(output)).toEqual(0);
   expect(transaction.authoritiesFromOutput(outputMint)).toEqual(1);
   expect(transaction.authoritiesFromOutput(outputMelt)).toEqual(2);
@@ -284,7 +334,7 @@ test('authorities from output', () => {
 });
 
 test('canUseUtxo', async () => {
-  const tsFromDate = (date) => Math.floor(date.getTime() / 1000);
+  const tsFromDate = date => Math.floor(date.getTime() / 1000);
   const t1 = new Date('2020-11-25T18:00:00');
   const t2 = new Date('2020-11-27T21:00:00');
   const t3 = new Date('2022-04-16T17:00:00');
@@ -295,7 +345,9 @@ test('canUseUtxo', async () => {
 
   jest.spyOn(storage, 'getCurrentHeight').mockReturnValue(Promise.resolve(10));
   const txSpy = jest.spyOn(storage, 'getTx');
-  const isSelSpy = jest.spyOn(storage, 'isUtxoSelectedAsInput').mockReturnValue(Promise.resolve(false));
+  const isSelSpy = jest
+    .spyOn(storage, 'isUtxoSelectedAsInput')
+    .mockReturnValue(Promise.resolve(false));
   storage.version = { reward_spend_min_blocks: 5 };
 
   jest.useFakeTimers();
@@ -308,12 +360,12 @@ test('canUseUtxo', async () => {
       {
         decoded: {
           timelock: tsFromDate(t1), // unlocked
-        }
+        },
       },
       {
         decoded: {
           timelock: tsFromDate(t4), // locked
-        }
+        },
       },
     ],
   };
@@ -339,12 +391,12 @@ test('canUseUtxo', async () => {
       {
         decoded: {
           timelock: tsFromDate(t2), // unlocked
-        }
+        },
       },
       {
         decoded: {
           timelock: tsFromDate(t4), // locked
-        }
+        },
       },
     ],
   };
@@ -368,12 +420,12 @@ test('canUseUtxo', async () => {
       {
         decoded: {
           timelock: tsFromDate(t2), // unlocked
-        }
+        },
       },
       {
         decoded: {
           timelock: tsFromDate(t4), // locked
-        }
+        },
       },
     ],
   };
@@ -399,8 +451,12 @@ test('isBlock', () => {
 test('getTxType', () => {
   expect(transaction.getTxType({ version: BLOCK_VERSION })).toBe('Block');
   expect(transaction.getTxType({ version: DEFAULT_TX_VERSION })).toBe('Transaction');
-  expect(transaction.getTxType({ version: CREATE_TOKEN_TX_VERSION })).toBe('Create Token Transaction');
-  expect(transaction.getTxType({ version: MERGED_MINED_BLOCK_VERSION })).toBe('Merged Mining Block');
+  expect(transaction.getTxType({ version: CREATE_TOKEN_TX_VERSION })).toBe(
+    'Create Token Transaction'
+  );
+  expect(transaction.getTxType({ version: MERGED_MINED_BLOCK_VERSION })).toBe(
+    'Merged Mining Block'
+  );
   expect(transaction.getTxType({ version: NANO_CONTRACTS_VERSION })).toBe('Nano Contract');
   expect(transaction.getTxType({ version: 999 })).toBe('Unknown');
 });

@@ -5,13 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import config from "../../config";
-import axios, { AxiosRequestConfig } from "axios";
-import { TIMEOUT, } from '../../constants';
+import config from '../../config';
+import axios, { AxiosRequestConfig } from 'axios';
+import { TIMEOUT } from '../../constants';
 import sha256 from 'crypto-js/sha256';
 import AES from 'crypto-js/aes';
 import CryptoJS from 'crypto-js';
-import { AtomicSwapProposal } from "../../models/types";
+import { AtomicSwapProposal } from '../../models/types';
 import { PartialTxPrefix } from '../../models/partial_tx';
 import { isNumber } from 'lodash';
 
@@ -20,12 +20,12 @@ import { isNumber } from 'lodash';
  * The results should be translated to an `AtomicSwapProposal` interface before being sent out of this service.
  */
 interface RawBackendProposal {
-  id: string,
-  partialTx: string,
-  signatures: string | null,
-  timestamp: string,
-  version: number,
-  history: { partialTx: string, timestamp: string }[]
+  id: string;
+  partialTx: string;
+  signatures: string | null;
+  timestamp: string;
+  version: number;
+  history: { partialTx: string; timestamp: string }[];
 }
 
 /**
@@ -77,7 +77,7 @@ export function hashPassword(password): string {
  * @param [timeout] Optional timeout, defaults to the lib's timeout constant
  * @param [network] Optional network. If not present, defaults connection to the lib's configured baseUrl
  */
-const axiosInstance = async (timeout: number = TIMEOUT, network?: 'mainnet'|'testnet') => {
+const axiosInstance = async (timeout: number = TIMEOUT, network?: 'mainnet' | 'testnet') => {
   const swapServiceBaseUrl = config.getSwapServiceBaseUrl(network);
   const defaultOptions = {
     baseURL: swapServiceBaseUrl,
@@ -101,10 +101,10 @@ const axiosInstance = async (timeout: number = TIMEOUT, network?: 'mainnet'|'tes
  */
 export const create = async (serializedPartialTx: string, password: string) => {
   if (!serializedPartialTx) {
-    throw new Error('Missing serializedPartialTx')
+    throw new Error('Missing serializedPartialTx');
   }
   if (!password) {
-    throw new Error('Missing password')
+    throw new Error('Missing password');
   }
 
   const swapAxios = await axiosInstance();
@@ -113,7 +113,7 @@ export const create = async (serializedPartialTx: string, password: string) => {
     authPassword: hashPassword(password),
   };
 
-  const { data } = await swapAxios.post<{ success: boolean, id: string }>('/', payload);
+  const { data } = await swapAxios.post<{ success: boolean; id: string }>('/', payload);
   return data;
 };
 
@@ -137,7 +137,7 @@ export const get = async (proposalId: string, password: string): Promise<AtomicS
 
   const swapAxios = await axiosInstance();
   const options = {
-    headers: { 'X-Auth-Password': hashPassword(password) }
+    headers: { 'X-Auth-Password': hashPassword(password) },
   } as AxiosRequestConfig;
 
   const { data } = await swapAxios.get<RawBackendProposal>(`/${proposalId}`, options);
@@ -153,7 +153,7 @@ export const get = async (proposalId: string, password: string): Promise<AtomicS
       history: data.history.map(r => ({
         partialTx: decryptString(r.partialTx, password),
         timestamp: r.timestamp,
-      }))
+      })),
     };
 
     // If the PartialTx does not have the correct prefix, it was not correctly decoded: incorrect password
@@ -169,7 +169,7 @@ export const get = async (proposalId: string, password: string): Promise<AtomicS
       throw err;
     }
     // If the failure was specifically on the decoding, our password was incorrect.
-    if (err.message === "Malformed UTF-8 data") {
+    if (err.message === 'Malformed UTF-8 data') {
       throw new Error('Incorrect password: could not decode the proposal');
     }
 
@@ -189,8 +189,7 @@ interface SwapUpdateParams {
 /**
  * Updates the proposal on the Atomic Swap Service with the parameters informed
  */
-export const update = async (params: SwapUpdateParams):
-  Promise<{ success: boolean }> => {
+export const update = async (params: SwapUpdateParams): Promise<{ success: boolean }> => {
   // Validates the input parameters and throws in case of errors
   validateParameters();
 
@@ -198,7 +197,7 @@ export const update = async (params: SwapUpdateParams):
 
   const swapAxios = await axiosInstance();
   const options = {
-    headers: { 'X-Auth-Password': hashPassword(password) }
+    headers: { 'X-Auth-Password': hashPassword(password) },
   } as AxiosRequestConfig;
 
   const payload = {
@@ -245,4 +244,3 @@ export const update = async (params: SwapUpdateParams):
     }
   }
 };
-

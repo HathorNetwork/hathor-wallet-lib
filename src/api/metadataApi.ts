@@ -14,13 +14,16 @@ import axios from 'axios';
 const metadataApi = {
   async getDagMetadata(id: string, network: string, options = {}) {
     type optionsType = {
-      retries: number,
-      retryInterval: number,
+      retries: number;
+      retryInterval: number;
     };
-    const newOptions: optionsType = Object.assign({
-      retries: METADATA_RETRY_LIMIT,
-      retryInterval: DOWNLOAD_METADATA_RETRY_INTERVAL,
-    }, options);
+    const newOptions: optionsType = Object.assign(
+      {
+        retries: METADATA_RETRY_LIMIT,
+        retryInterval: DOWNLOAD_METADATA_RETRY_INTERVAL,
+      },
+      options
+    );
 
     let { retries, retryInterval } = newOptions;
     while (retries >= 0) {
@@ -56,7 +59,7 @@ const metadataApi = {
         }
       }
     }
-  }
+  },
 };
 
 export default metadataApi;

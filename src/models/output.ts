@@ -11,22 +11,28 @@ import {
   TOKEN_AUTHORITY_MASK,
   TOKEN_INDEX_MASK,
   TOKEN_MELT_MASK,
-  TOKEN_MINT_MASK
-} from '../constants'
-import { OutputValueError, ParseError } from '../errors'
-import P2PKH from './p2pkh'
-import P2SH from './p2sh'
-import ScriptData from './script_data'
-import Network from './network'
-import { bytesToOutputValue, unpackLen, unpackToInt, intToBytes, signedIntToBytes } from '../utils/buffer';
+  TOKEN_MINT_MASK,
+} from '../constants';
+import { OutputValueError, ParseError } from '../errors';
+import P2PKH from './p2pkh';
+import P2SH from './p2sh';
+import ScriptData from './script_data';
+import Network from './network';
+import {
+  bytesToOutputValue,
+  unpackLen,
+  unpackToInt,
+  intToBytes,
+  signedIntToBytes,
+} from '../utils/buffer';
 import { prettyValue } from '../utils/numbers';
-import { parseScript as utilsParseScript } from '../utils/scripts'
-import _ from 'lodash'
+import { parseScript as utilsParseScript } from '../utils/scripts';
+import _ from 'lodash';
 
 type optionsType = {
-  tokenData?: number | undefined,
+  tokenData?: number | undefined;
   // FIXME: Timelock as an option is not used, it is extracted from the decoded script.
-  timelock?: number | null | undefined,
+  timelock?: number | null | undefined;
 };
 
 /**
@@ -113,7 +119,7 @@ class Output {
    * @inner
    */
   isMint(): boolean {
-    return this.isAuthority() && ((this.value & TOKEN_MINT_MASK) > 0);
+    return this.isAuthority() && (this.value & TOKEN_MINT_MASK) > 0;
   }
 
   /**
@@ -125,7 +131,7 @@ class Output {
    * @inner
    */
   isMelt(): boolean {
-    return this.isAuthority() && ((this.value & TOKEN_MELT_MASK) > 0);
+    return this.isAuthority() && (this.value & TOKEN_MELT_MASK) > 0;
   }
 
   /**
@@ -204,7 +210,7 @@ class Output {
 
     [script, outputBuffer] = unpackLen(scriptLen, outputBuffer);
 
-    const output = new Output(value, script, {tokenData});
+    const output = new Output(value, script, { tokenData });
     output.parseScript(network);
 
     return [output, outputBuffer];
@@ -233,7 +239,7 @@ class Output {
    * @inner
    */
   getType(network: Network): String {
-    const decodedScript = this.decodedScript || this.parseScript(network)
+    const decodedScript = this.decodedScript || this.parseScript(network);
     return decodedScript?.getType() || '';
   }
 }

@@ -10,10 +10,14 @@ import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
 import Network from '../models/network';
 import { hexToBuffer } from '../utils/buffer';
-import { Address as bitcoreAddress, PublicKey as bitcorePublicKey, Script, HDPublicKey } from 'bitcore-lib';
+import {
+  Address as bitcoreAddress,
+  PublicKey as bitcorePublicKey,
+  Script,
+  HDPublicKey,
+} from 'bitcore-lib';
 import { IMultisigData, IStorage, IAddressInfo } from '../types';
 import { createP2SHRedeemScript } from './scripts';
-
 
 /**
  * Parse address and return the address type
@@ -28,7 +32,11 @@ export function getAddressType(address: string, network: Network): 'p2pkh' | 'p2
   return addressObj.getType();
 }
 
-export function deriveAddressFromXPubP2PKH(xpubkey: string, index: number, networkName: string): IAddressInfo {
+export function deriveAddressFromXPubP2PKH(
+  xpubkey: string,
+  index: number,
+  networkName: string
+): IAddressInfo {
   const network = new Network(networkName);
   const hdpubkey = new HDPublicKey(xpubkey);
   const key = hdpubkey.deriveChild(index);
@@ -36,7 +44,7 @@ export function deriveAddressFromXPubP2PKH(xpubkey: string, index: number, netwo
     base58: new bitcoreAddress(key.publicKey, network.bitcoreNetwork).toString(),
     bip32AddressIndex: index,
     publicKey: key.publicKey.toString('hex'),
-  }
+  };
 }
 
 export async function deriveAddressP2PKH(index: number, storage: IStorage): Promise<IAddressInfo> {
@@ -44,17 +52,24 @@ export async function deriveAddressP2PKH(index: number, storage: IStorage): Prom
   if (accessData === null) {
     throw new Error('No access data');
   }
-  return deriveAddressFromXPubP2PKH(
-    accessData.xpubkey,
-    index,
-    storage.config.getNetwork().name,
-  );
+  return deriveAddressFromXPubP2PKH(accessData.xpubkey, index, storage.config.getNetwork().name);
 }
 
-export function deriveAddressFromDataP2SH(multisigData: IMultisigData, index: number, networkName: string): IAddressInfo {
+export function deriveAddressFromDataP2SH(
+  multisigData: IMultisigData,
+  index: number,
+  networkName: string
+): IAddressInfo {
   const network = new Network(networkName);
-  const redeemScript = createP2SHRedeemScript(multisigData.pubkeys, multisigData.numSignatures, index);
-  const address = new bitcoreAddress.payingTo(Script.fromBuffer(redeemScript), network.bitcoreNetwork);
+  const redeemScript = createP2SHRedeemScript(
+    multisigData.pubkeys,
+    multisigData.numSignatures,
+    index
+  );
+  const address = new bitcoreAddress.payingTo(
+    Script.fromBuffer(redeemScript),
+    network.bitcoreNetwork
+  );
   return {
     base58: address.toString(),
     bip32AddressIndex: index,
@@ -117,6 +132,9 @@ export function createOutputScriptFromAddress(address: string, network: Network)
  */
 export function getAddressFromPubkey(pubkey: string, network: Network): Address {
   const pubkeyBuffer = hexToBuffer(pubkey);
-  const base58 = new bitcoreAddress(bitcorePublicKey(pubkeyBuffer), network.bitcoreNetwork).toString()
+  const base58 = new bitcoreAddress(
+    bitcorePublicKey(pubkeyBuffer),
+    network.bitcoreNetwork
+  ).toString();
   return new Address(base58, { network });
 }

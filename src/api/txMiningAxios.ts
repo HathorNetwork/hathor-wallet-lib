@@ -9,7 +9,7 @@ import axiosWrapperCreateRequestInstance from './axiosWrapper';
 import config from '../config';
 
 /**
- * Create axios instance settings base URL and content type  
+ * Create axios instance settings base URL and content type
  * Besides that, it captures error to show modal error and save in Redux
  *
  * @module Axios
@@ -28,10 +28,10 @@ const txMiningRequestClient = (resolve: Function | null, timeout?: number | null
   const headers = {};
 
   if (txMiningApiKey) {
-    headers["apikey"] = txMiningApiKey;
+    headers['apikey'] = txMiningApiKey;
   }
 
   return axiosWrapperCreateRequestInstance(txMiningURL, resolve, timeout, headers);
-}
+};
 
 export default txMiningRequestClient;

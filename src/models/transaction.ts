@@ -15,9 +15,9 @@ import {
   MAX_OUTPUTS,
   MERGED_MINED_BLOCK_VERSION,
   TX_HASH_SIZE_BYTES,
-  TX_WEIGHT_CONSTANTS
-} from '../constants'
-import {crypto as cryptoBL, util} from 'bitcore-lib'
+  TX_WEIGHT_CONSTANTS,
+} from '../constants';
+import { crypto as cryptoBL, util } from 'bitcore-lib';
 import {
   bufferToHex,
   hexToBuffer,
@@ -25,15 +25,15 @@ import {
   unpackToHex,
   unpackToInt,
   intToBytes,
-  floatToBytes
+  floatToBytes,
 } from '../utils/buffer';
-import Input from './input'
-import Output from './output'
-import Network from './network'
-import {MaximumNumberInputsError, MaximumNumberOutputsError} from '../errors'
-import buffer from 'buffer'
-import {clone} from 'lodash'
-import crypto from 'crypto'
+import Input from './input';
+import Output from './output';
+import Network from './network';
+import { MaximumNumberInputsError, MaximumNumberOutputsError } from '../errors';
+import buffer from 'buffer';
+import { clone } from 'lodash';
+import crypto from 'crypto';
 
 enum txType {
   BLOCK = 'Block',
@@ -43,14 +43,14 @@ enum txType {
 }
 
 type optionsType = {
-  signalBits?: number,
-  version?: number,
-  weight?: number,
-  nonce?: number,
-  timestamp?: number | null,
-  parents?: string[],
-  tokens?: string[],
-  hash?: string | null,
+  signalBits?: number;
+  version?: number;
+  weight?: number;
+  nonce?: number;
+  timestamp?: number | null;
+  parents?: string[];
+  tokens?: string[];
+  hash?: string | null;
 };
 
 /**
@@ -114,7 +114,9 @@ class Transaction {
    *
    */
   getShortHash(): string {
-    return this.hash === null ? '' : `${this.hash.substring(0,12)}...${this.hash.substring(52,64)}`;
+    return this.hash === null
+      ? ''
+      : `${this.hash.substring(0, 12)}...${this.hash.substring(52, 64)}`;
   }
 
   /**
@@ -129,7 +131,7 @@ class Transaction {
       return this._dataToSignCache!;
     }
 
-    let arr: any[] = []
+    let arr: any[] = [];
 
     this.serializeFundsFields(arr, false);
 
@@ -149,13 +151,13 @@ class Transaction {
    */
   serializeFundsFields(array: Buffer[], addInputData: boolean) {
     // Signal bits
-    array.push(intToBytes(this.signalBits, 1))
+    array.push(intToBytes(this.signalBits, 1));
 
     // Tx version
-    array.push(intToBytes(this.version, 1))
+    array.push(intToBytes(this.version, 1));
 
     // Len tokens
-    array.push(intToBytes(this.tokens.length, 1))
+    array.push(intToBytes(this.tokens.length, 1));
 
     // Len of inputs and outputs
     this.serializeFundsFieldsLen(array);
@@ -188,10 +190,10 @@ class Transaction {
    */
   serializeFundsFieldsLen(array: Buffer[]) {
     // Len inputs
-    array.push(intToBytes(this.inputs.length, 1))
+    array.push(intToBytes(this.inputs.length, 1));
 
     // Len outputs
-    array.push(intToBytes(this.outputs.length, 1))
+    array.push(intToBytes(this.outputs.length, 1));
   }
 
   /**
@@ -222,16 +224,16 @@ class Transaction {
     // Weight is a float with 8 bytes
     array.push(floatToBytes(this.weight, 8));
     // Timestamp
-    array.push(intToBytes(this.timestamp!, 4))
+    array.push(intToBytes(this.timestamp!, 4));
 
     if (this.parents) {
-      array.push(intToBytes(this.parents.length, 1))
+      array.push(intToBytes(this.parents.length, 1));
       for (const parent of this.parents) {
         array.push(hexToBuffer(parent));
       }
     } else {
       // Len parents (parents will be calculated in the backend)
-      array.push(intToBytes(0, 1))
+      array.push(intToBytes(0, 1));
     }
   }
 
@@ -285,12 +287,15 @@ class Transaction {
 
     // We need to take into consideration the decimal places because it is inside the amount.
     // For instance, if one wants to transfer 20 HTRs, the amount will be 2000.
-    const amount = sumOutputs / (10 ** DECIMAL_PLACES);
+    const amount = sumOutputs / 10 ** DECIMAL_PLACES;
 
-    let weight = (TX_WEIGHT_CONSTANTS.txWeightCoefficient * Math.log2(txSize) + 4 / (1 + TX_WEIGHT_CONSTANTS.txMinWeightK / amount) + 4);
+    let weight =
+      TX_WEIGHT_CONSTANTS.txWeightCoefficient * Math.log2(txSize) +
+      4 / (1 + TX_WEIGHT_CONSTANTS.txMinWeightK / amount) +
+      4;
 
     // Make sure the calculated weight is at least the minimum
-    weight = Math.max(weight, TX_WEIGHT_CONSTANTS.txMinWeight)
+    weight = Math.max(weight, TX_WEIGHT_CONSTANTS.txMinWeight);
     // FIXME precision difference between backend and frontend (weight (17.76246721531992) is smaller than the minimum weight (17.762467215319923))
     // Even though it must be fixed, there is no practical effect when mining the transaction
     return weight + 1e-6;
@@ -307,7 +312,7 @@ class Transaction {
     let sumOutputs = 0;
     for (const output of this.outputs) {
       if (output.isAuthority()) {
-        continue
+        continue;
       }
       sumOutputs += output.value;
     }
@@ -322,7 +327,7 @@ class Transaction {
    * @inner
    */
   toBytes(): Buffer {
-    let arr: any = []
+    let arr: any = [];
     // Serialize first the funds part
     //
     this.serializeFundsFields(arr, true);
@@ -348,11 +353,15 @@ class Transaction {
    */
   validate() {
     if (this.inputs.length > MAX_INPUTS) {
-      throw new MaximumNumberInputsError(`Transaction has ${this.inputs.length} inputs and can have at most ${MAX_INPUTS}.`);
+      throw new MaximumNumberInputsError(
+        `Transaction has ${this.inputs.length} inputs and can have at most ${MAX_INPUTS}.`
+      );
     }
 
     if (this.outputs.length > MAX_OUTPUTS) {
-      throw new MaximumNumberOutputsError(`Transaction has ${this.outputs.length} outputs and can have at most ${MAX_OUTPUTS}.`);
+      throw new MaximumNumberOutputsError(
+        `Transaction has ${this.outputs.length} outputs and can have at most ${MAX_OUTPUTS}.`
+      );
     }
   }
 
@@ -463,21 +472,21 @@ class Transaction {
     [lenOutputs, buf] = unpackToInt(1, false, buf);
 
     // Tokens array
-    for (let i=0; i<lenTokens; i++) {
+    for (let i = 0; i < lenTokens; i++) {
       let tokenUid;
       [tokenUid, buf] = unpackToHex(TX_HASH_SIZE_BYTES, buf);
       this.tokens.push(tokenUid);
     }
 
     // Inputs array
-    for (let i=0; i<lenInputs; i++) {
+    for (let i = 0; i < lenInputs; i++) {
       let input;
       [input, buf] = Input.createFromBytes(buf);
       this.inputs.push(input);
     }
 
     // Outputs array
-    for (let i=0; i<lenOutputs; i++) {
+    for (let i = 0; i < lenOutputs; i++) {
       let output;
       [output, buf] = Output.createFromBytes(buf, network);
       this.outputs.push(output);
@@ -507,7 +516,7 @@ class Transaction {
     let parentsLen;
     [parentsLen, buf] = unpackToInt(1, false, buf);
 
-    for (let i=0; i<parentsLen; i++) {
+    for (let i = 0; i < parentsLen; i++) {
       let p;
       [p, buf] = unpackToHex(TX_HASH_SIZE_BYTES, buf);
       this.parents.push(p);
@@ -592,7 +601,7 @@ class Transaction {
     part1.update(fullNonceBytes);
 
     const part2 = crypto.createHash('sha256');
-    part2.update(part1.digest())
+    part2.update(part1.digest());
 
     return part2.digest().reverse();
   }

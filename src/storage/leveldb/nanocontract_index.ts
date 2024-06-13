@@ -1,7 +1,7 @@
 import path from 'path';
 import { Level } from 'level';
 import { AbstractSublevel } from 'abstract-level';
-import { IKVNanoContractIndex, INcData } from "src/types";
+import { IKVNanoContractIndex, INcData } from 'src/types';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 import { checkLevelDbVersion } from './utils';
 
@@ -120,7 +120,6 @@ export default class LevelNanoContractIndex implements IKVNanoContractIndex {
   async unregisterNanoContract(ncId: string): Promise<void> {
     await this.registeredDB.del(ncId);
   }
-
 
   /**
    * Update nano contract registered address.

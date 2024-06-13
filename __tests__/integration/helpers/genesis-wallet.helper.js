@@ -68,13 +68,9 @@ export class GenesisWalletHelper {
    */
   async _injectFunds(destinationWallet, address, value, options = {}) {
     try {
-      const result = await this.hWallet.sendTransaction(
-        address,
-        value,
-        {
-          changeAddress: WALLET_CONSTANTS.genesis.addresses[0]
-        }
-      );
+      const result = await this.hWallet.sendTransaction(address, value, {
+        changeAddress: WALLET_CONSTANTS.genesis.addresses[0],
+      });
 
       if (options.waitTimeout === 0) {
         return result;

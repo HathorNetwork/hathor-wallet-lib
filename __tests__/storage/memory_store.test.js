@@ -14,7 +14,6 @@ import { encryptData } from '../../src/utils/crypto';
 import { WalletType } from '../../src/types';
 import { processHistory } from '../../src/utils/storage';
 
-
 test('default values', async () => {
   const store = new MemoryStore();
   expect(store.walletData).toMatchObject({
@@ -79,8 +78,8 @@ test('addresses methods', async () => {
 
 test('history methods', async () => {
   const store = new MemoryStore();
-  await store.saveAddress({base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0});
-  await store.saveAddress({base58: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp', bip32AddressIndex: 1});
+  await store.saveAddress({ base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0 });
+  await store.saveAddress({ base58: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp', bip32AddressIndex: 1 });
   const storage = new Storage(store);
 
   for (const tx of tx_history) {
@@ -105,13 +104,15 @@ test('history methods', async () => {
   });
 
   store.walletData.bestBlockHeight = 11;
-  const getTokenApi = jest.spyOn(walletApi, 'getGeneralTokenInfo').mockImplementation((uid, resolve) => {
-    resolve({
-      success: true,
-      name: 'Custom token',
-      symbol: 'CTK',
+  const getTokenApi = jest
+    .spyOn(walletApi, 'getGeneralTokenInfo')
+    .mockImplementation((uid, resolve) => {
+      resolve({
+        success: true,
+        name: 'Custom token',
+        symbol: 'CTK',
+      });
     });
-  });
   await processHistory(storage, { rewardLock: 1 });
   expect(getTokenApi).not.toHaveBeenCalledWith('00', expect.anything());
   expect(getTokenApi).toHaveBeenCalledWith('01', expect.anything());
@@ -125,7 +126,7 @@ test('history methods', async () => {
         mint: { locked: 0, unlocked: 0 },
         melt: { locked: 0, unlocked: 0 },
       },
-    }
+    },
   });
   expect(store.tokensMetadata.get('01')).toMatchObject({
     numTransactions: 2,
@@ -135,7 +136,7 @@ test('history methods', async () => {
         mint: { locked: 1, unlocked: 0 },
         melt: { locked: 0, unlocked: 0 },
       },
-    }
+    },
   });
   expect(store.tokensMetadata.get('02')).toMatchObject({
     numTransactions: 3,
@@ -145,7 +146,7 @@ test('history methods', async () => {
         mint: { locked: 0, unlocked: 0 },
         melt: { locked: 0, unlocked: 0 },
       },
-    }
+    },
   });
   expect(store.addressesMetadata.get('WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ')).toMatchObject({
     numTransactions: 2,
@@ -164,12 +165,12 @@ test('token methods', async () => {
   expect(store.tokens.size).toEqual(1);
   expect(store.tokens.get('00')).toBeDefined();
 
-  await store.saveToken({ uid: '01', name: 'Token 01', symbol: 'TK01'});
+  await store.saveToken({ uid: '01', name: 'Token 01', symbol: 'TK01' });
   expect(store.tokens.size).toEqual(2);
   expect(store.tokens.get('01')).toBeDefined();
   expect(store.tokensMetadata.get('01')).toBeUndefined();
   await store.saveToken(
-    { uid: '02', name: 'Token 02', symbol: 'TK02'},
+    { uid: '02', name: 'Token 02', symbol: 'TK02' },
     {
       numTransactions: 1,
       balance: {
@@ -179,7 +180,7 @@ test('token methods', async () => {
           melt: { locked: 1, unlocked: 2 },
         },
       },
-    },
+    }
   );
   expect(store.tokens.size).toEqual(3);
   expect(store.tokens.get('02')).toBeDefined();
@@ -191,8 +192,8 @@ test('token methods', async () => {
   }
   expect(registered).toHaveLength(0);
 
-  await store.registerToken({ uid: '02', name: 'Token 02', symbol: 'TK02'});
-  await store.registerToken({ uid: '03', name: 'Token 03', symbol: 'TK03'});
+  await store.registerToken({ uid: '02', name: 'Token 02', symbol: 'TK02' });
+  await store.registerToken({ uid: '03', name: 'Token 03', symbol: 'TK03' });
 
   registered = [];
   for await (const token of store.registeredTokenIter()) {
@@ -207,7 +208,10 @@ test('token methods', async () => {
   }
   expect(registered).toHaveLength(1);
 
-  await store.editTokenMeta('00', { numTransactions: 10, balance: { tokens: { locked: 1, unlocked: 2 } } });
+  await store.editTokenMeta('00', {
+    numTransactions: 10,
+    balance: { tokens: { locked: 1, unlocked: 2 } },
+  });
   expect(store.tokensMetadata.get('00')).toMatchObject({
     numTransactions: 10,
     balance: expect.objectContaining({ tokens: { locked: 1, unlocked: 2 } }),
@@ -259,7 +263,7 @@ test('utxo methods', async () => {
 
   // Filter for custom token
   buf = [];
-  for await (const u of store.selectUtxos({token: '02'})) {
+  for await (const u of store.selectUtxos({ token: '02' })) {
     buf.push(u);
   }
   expect(buf).toHaveLength(1);
@@ -294,32 +298,32 @@ test('access data methods', async () => {
   await store.setItem('foo', 'bar');
   await expect(store.getItem('foo')).resolves.toEqual('bar');
 
-  expect(store.history.size).toEqual(0)
-  expect(store.addresses.size).toEqual(0)
+  expect(store.history.size).toEqual(0);
+  expect(store.addresses.size).toEqual(0);
   expect(store.registeredTokens.size).toEqual(0);
 
   // Clean storage but keep registered tokens
-  await store.saveAddress({base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0});
+  await store.saveAddress({ base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0 });
   await store.saveTx(tx_history[0]);
   await store.registerToken({ uid: 'testtoken', name: 'Test token', symbol: 'TST' });
   expect(store.history.size).toEqual(1);
   expect(store.addresses.size).toEqual(1);
   expect(store.registeredTokens.size).toEqual(1);
   await store.cleanStorage(true, true);
-  expect(store.history.size).toEqual(0)
-  expect(store.addresses.size).toEqual(0)
+  expect(store.history.size).toEqual(0);
+  expect(store.addresses.size).toEqual(0);
   expect(store.registeredTokens.size).toEqual(1);
 
   // Clean only registered tokens
-  await store.saveAddress({base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0});
+  await store.saveAddress({ base58: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ', bip32AddressIndex: 0 });
   await store.saveTx(tx_history[0]);
   await store.registerToken({ uid: 'testtoken', name: 'Test token', symbol: 'TST' });
   expect(store.history.size).toEqual(1);
   expect(store.addresses.size).toEqual(1);
   expect(store.registeredTokens.size).toEqual(1);
   await store.cleanStorage(false, false, true);
-  expect(store.history.size).toEqual(1)
-  expect(store.addresses.size).toEqual(1)
+  expect(store.history.size).toEqual(1);
+  expect(store.addresses.size).toEqual(1);
   expect(store.registeredTokens.size).toEqual(0);
 
   // Clean all
@@ -328,8 +332,8 @@ test('access data methods', async () => {
   expect(store.addresses.size).toEqual(1);
   expect(store.registeredTokens.size).toEqual(1);
   await store.cleanStorage(true, true, true);
-  expect(store.history.size).toEqual(0)
-  expect(store.addresses.size).toEqual(0)
+  expect(store.history.size).toEqual(0);
+  expect(store.addresses.size).toEqual(0);
   expect(store.registeredTokens.size).toEqual(0);
 });
 

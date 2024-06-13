@@ -5,16 +5,21 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { OP_GREATERTHAN_TIMESTAMP, OP_DUP, OP_HASH160, OP_EQUALVERIFY, OP_CHECKSIG } from '../opcodes';
+import {
+  OP_GREATERTHAN_TIMESTAMP,
+  OP_DUP,
+  OP_HASH160,
+  OP_EQUALVERIFY,
+  OP_CHECKSIG,
+} from '../opcodes';
 import { util } from 'bitcore-lib';
 import { intToBytes } from '../utils/buffer';
 import helpers from '../utils/helpers';
 import Address from './address';
 
 type optionsType = {
-  timelock?: number | null | undefined,
+  timelock?: number | null | undefined;
 };
-
 
 class P2PKH {
   // Address object of the value destination
@@ -100,7 +105,7 @@ class P2PKH {
       if (buf.readUInt8(ptr++) !== 4) {
         return false;
       }
-      ptr += 4
+      ptr += 4;
       // next byte is OP_GREATERTHAN_TIMESTAMP
       if (buf.readUInt8(ptr++) !== op_greaterthan_timestamp) {
         return false;
@@ -115,7 +120,7 @@ class P2PKH {
     if (buf.readUInt8(ptr++) !== 20) {
       return false;
     }
-    ptr += 20
+    ptr += 20;
     // OP_EQUALVERIFY OP_CHECKSIG
     if (buf.readUInt8(ptr++) !== op_equalverify || buf.readUInt8(ptr++) !== op_checksig) {
       return false;

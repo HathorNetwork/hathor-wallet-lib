@@ -10,13 +10,13 @@ import { OP_PUSHDATA1, OP_CHECKSIG } from '../opcodes';
 import { Script, HDPublicKey } from 'bitcore-lib';
 
 /**
-* Parse P2PKH output script
-*
-* @param {Buffer} buff Output script
-* @param {Network} network Network to get the address first byte parameter
-*
-* @return {P2PKH} P2PKH object
-*/
+ * Parse P2PKH output script
+ *
+ * @param {Buffer} buff Output script
+ * @param {Network} network Network to get the address first byte parameter
+ *
+ * @return {P2PKH} P2PKH object
+ */
 export const parseP2PKH = (buff: Buffer, network: Network): P2PKH => {
   let timelock: number | null = null;
   let offset = 0;
@@ -43,13 +43,13 @@ export const parseP2PKH = (buff: Buffer, network: Network): P2PKH => {
 };
 
 /**
-* Parse P2SH output script
-*
-* @param {Buffer} buff Output script
-* @param {Network} network Network to get the address first byte parameter
-*
-* @return {P2SH} P2PKH object
-*/
+ * Parse P2SH output script
+ *
+ * @param {Buffer} buff Output script
+ * @param {Network} network Network to get the address first byte parameter
+ *
+ * @return {P2SH} P2PKH object
+ */
 export const parseP2SH = (buff: Buffer, network: Network): P2SH => {
   let timelock: number | null = null;
   let offset = 0;
@@ -76,12 +76,12 @@ export const parseP2SH = (buff: Buffer, network: Network): P2SH => {
 };
 
 /**
-* Parse Data output script
-*
-* @param {Buffer} buff Output script
-*
-* @return {ScriptData} ScriptData object
-*/
+ * Parse Data output script
+ *
+ * @param {Buffer} buff Output script
+ *
+ * @return {ScriptData} ScriptData object
+ */
 export const parseScriptData = (buff: Buffer): ScriptData => {
   // We should clone the buffer being sent in order to never mutate
   // what comes from outside the library
@@ -110,7 +110,9 @@ export const parseScriptData = (buff: Buffer): ScriptData => {
 
   if (expectedLen !== scriptBuf.length) {
     // The script has different qty of bytes than expected
-    throw new ParseScriptError(`Invalid output script. Expected len ${expectedLen} and received len ${scriptBuf.length}.`);
+    throw new ParseScriptError(
+      `Invalid output script. Expected len ${expectedLen} and received len ${scriptBuf.length}.`
+    );
   }
 
   if (scriptBuf[expectedLen - 1] !== OP_CHECKSIG[0]) {
@@ -132,12 +134,12 @@ export const parseScriptData = (buff: Buffer): ScriptData => {
 };
 
 /**
-* Parse buffer to data decoding pushdata opcodes
-*
-* @param {Buffer} buff Buffer to get pushdata
-*
-* @return {Buffer} Data extracted from buffer
-*/
+ * Parse buffer to data decoding pushdata opcodes
+ *
+ * @param {Buffer} buff Buffer to get pushdata
+ *
+ * @return {Buffer} Data extracted from buffer
+ */
 export const getPushData = (buff: Buffer): Buffer => {
   // We should clone the buffer being sent in order to never mutate
   // what comes from outside the library
@@ -157,7 +159,7 @@ export const getPushData = (buff: Buffer): Buffer => {
     start = 1;
   }
   return scriptBuf.slice(start, start + lenData);
-}
+};
 
 /**
  * Create a P2SH MultiSig redeem script
@@ -170,34 +172,41 @@ export const getPushData = (buff: Buffer): Buffer => {
  * @return {Buffer} A buffer with the redeemScript
  * @throws {XPubError} In case any of the given xpubs are invalid
  */
-export function createP2SHRedeemScript(xpubs: string[], numSignatures: number, index: number): Buffer {
+export function createP2SHRedeemScript(
+  xpubs: string[],
+  numSignatures: number,
+  index: number
+): Buffer {
   let sortedXpubs: HDPublicKey[];
   try {
-    sortedXpubs = _.sortBy(xpubs.map(xp => new HDPublicKey(xp)), (xpub: HDPublicKey) => {
-      return xpub.publicKey.toString('hex');
-    });
+    sortedXpubs = _.sortBy(
+      xpubs.map(xp => new HDPublicKey(xp)),
+      (xpub: HDPublicKey) => {
+        return xpub.publicKey.toString('hex');
+      }
+    );
   } catch (e) {
     throw new XPubError('Invalid xpub');
   }
 
   // xpub comes derived to m/45'/280'/0'
   // Derive to m/45'/280'/0'/0/index
-  const pubkeys = sortedXpubs.map((xpub) => xpub.deriveChild(0).deriveChild(index).publicKey);
+  const pubkeys = sortedXpubs.map(xpub => xpub.deriveChild(0).deriveChild(index).publicKey);
 
   // bitcore-lib sorts the public keys by default before building the script
   // noSorting prevents that and keeps our order
-  const redeemScript = Script.buildMultisigOut(pubkeys, numSignatures, {noSorting: true});
+  const redeemScript = Script.buildMultisigOut(pubkeys, numSignatures, { noSorting: true });
   return redeemScript.toBuffer();
 }
 
 /**
-* Parse script to get an object corresponding to the script data
-*
-* @param {Buffer} script Output script to parse
-* @param {Network} network Network to get the address first byte parameter
-*
-* @return {P2PKH | P2SH | ScriptData | null} Parsed script object
-*/
+ * Parse script to get an object corresponding to the script data
+ *
+ * @param {Buffer} script Output script to parse
+ * @param {Network} network Network to get the address first byte parameter
+ *
+ * @return {P2PKH | P2SH | ScriptData | null} Parsed script object
+ */
 export const parseScript = (script: Buffer, network: Network): P2PKH | P2SH | ScriptData | null => {
   // It's still unsure how expensive it is to throw an exception in JavaScript. Some languages are really
   // inefficient when it comes to exceptions while others are totally efficient. If it is efficient,
@@ -225,4 +234,4 @@ export const parseScript = (script: Buffer, network: Network): P2PKH | P2SH | Sc
       throw error;
     }
   }
-}
+};

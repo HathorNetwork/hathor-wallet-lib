@@ -19,10 +19,12 @@ const noMinersError = 'There are no miners to resolve the proof of work of this 
 const unexpectedError = 'An unexpected error happened. Please try to send your transaction again.';
 
 // Error to be shown in case of a timeout
-const timeoutError = 'Timeout solving transaction\'s proof-of-work.\n\nAll transactions need to solve a proof-of-work as an anti spam mechanism. Currently, Hathor Labs provides this service for free, but their servers may be fully loaded right now.';
+const timeoutError =
+  "Timeout solving transaction's proof-of-work.\n\nAll transactions need to solve a proof-of-work as an anti spam mechanism. Currently, Hathor Labs provides this service for free, but their servers may be fully loaded right now.";
 
 // Error to be shown in case of rate limit exceeded
-const rateLimitExceededError = 'Too many transactions sent in a short time-span.\n\nAll transactions need to solve a proof-of-work as an anti spam mechanism. Currently, Hathor Labs provides a tx mining service for free, but there are limits to the number of transactions someone can mine using it to avoid abuse.\n\nPlease try again in a few seconds.';
+const rateLimitExceededError =
+  'Too many transactions sent in a short time-span.\n\nAll transactions need to solve a proof-of-work as an anti spam mechanism. Currently, Hathor Labs provides a tx mining service for free, but there are limits to the number of transactions someone can mine using it to avoid abuse.\n\nPlease try again in a few seconds.';
 
 /**
  * This is transaction mining class responsible for:
@@ -71,16 +73,16 @@ class MineTransaction extends EventEmitter {
     //       misleading error message. This should be refactored to a more stable solution with
     //       better user experience
     this.promise = new Promise((resolve, reject) => {
-      this.on('success', (data) => {
+      this.on('success', data => {
         resolve(data);
       });
 
-      this.on('error', (message) => {
+      this.on('error', message => {
         const err = new MineTxError(message);
         reject(err);
       });
 
-      this.on('unexpected-error', (message) => {
+      this.on('unexpected-error', message => {
         const err = new MineTxError(message);
         reject(err);
       });
@@ -88,8 +90,8 @@ class MineTransaction extends EventEmitter {
   }
 
   /**
-   * Used to handle errors in requests to the tx mining API 
-   * 
+   * Used to handle errors in requests to the tx mining API
+   *
    * @param error: The error that was received from the axiosInstance
    */
   handleRequestError(error: any) {
@@ -110,19 +112,21 @@ class MineTransaction extends EventEmitter {
     const txHex = this.transaction.toHex();
     this.countTxMiningAttempts++;
     // Send to be mined in tx mining API
-    txMiningApi.submitJob(txHex, false, true, null, (response) => {
-      if (response.expected_total_time === -1) {
-        // Error: there are no miners online
-        this.emit('error', noMinersError);
-      } else {
-        this.estimation = response.expected_total_time;
-        this.jobID = response.job_id;
-        this.emit('job-submitted', {estimation: this.estimation!, jobID: this.jobID});
-        this.handleJobStatus();
-      }
-    }).catch((e) => {
-      this.handleRequestError(e);
-    });
+    txMiningApi
+      .submitJob(txHex, false, true, null, response => {
+        if (response.expected_total_time === -1) {
+          // Error: there are no miners online
+          this.emit('error', noMinersError);
+        } else {
+          this.estimation = response.expected_total_time;
+          this.jobID = response.job_id;
+          this.emit('job-submitted', { estimation: this.estimation!, jobID: this.jobID });
+          this.handleJobStatus();
+        }
+      })
+      .catch(e => {
+        this.handleRequestError(e);
+      });
   }
 
   /**
@@ -132,38 +136,43 @@ class MineTransaction extends EventEmitter {
    */
   handleJobStatus() {
     // this.estimation and MIN_POLLING_INTERVAL are in seconds
-    const poll_time = Math.max(this.estimation! / 2, MIN_POLLING_INTERVAL)*1000;
+    const poll_time = Math.max(this.estimation! / 2, MIN_POLLING_INTERVAL) * 1000;
 
     setTimeout(() => {
-      txMiningApi.getJobStatus(this.jobID, (response) => {
-        if (response.status === 'done') {
-          this.emit('job-done', {jobID: this.jobID});
-          this.emit('success', {
-            nonce: parseInt(response.tx.nonce, 16),
-            parents: response.tx.parents,
-            timestamp: response.tx.timestamp,
-            weight: response.tx.weight
-          });
-        } else if (response.status === 'timeout') {
-          // Error: Timeout resolving pow
-          if (this.countTxMiningAttempts < this.maxTxMiningRetries) {
-            this.submitJob()
+      txMiningApi
+        .getJobStatus(this.jobID, response => {
+          if (response.status === 'done') {
+            this.emit('job-done', { jobID: this.jobID });
+            this.emit('success', {
+              nonce: parseInt(response.tx.nonce, 16),
+              parents: response.tx.parents,
+              timestamp: response.tx.timestamp,
+              weight: response.tx.weight,
+            });
+          } else if (response.status === 'timeout') {
+            // Error: Timeout resolving pow
+            if (this.countTxMiningAttempts < this.maxTxMiningRetries) {
+              this.submitJob();
+            } else {
+              this.emit('error', timeoutError);
+            }
           } else {
-            this.emit('error', timeoutError);
+            if (response.expected_total_time === -1) {
+              // Error: there are no miners online
+              this.emit('error', noMinersError);
+            } else {
+              this.estimation = response.expected_total_time;
+              this.emit('estimation-updated', {
+                jobID: this.jobID,
+                estimation: response.expected_total_time,
+              });
+              this.handleJobStatus();
+            }
           }
-        } else {
-          if (response.expected_total_time === -1) {
-            // Error: there are no miners online
-            this.emit('error', noMinersError);
-          } else {
-            this.estimation = response.expected_total_time;
-            this.emit('estimation-updated', {jobID: this.jobID, estimation: response.expected_total_time});
-            this.handleJobStatus();
-          }
-        }
-      }).catch((e) => {
-        this.handleRequestError(e);
-      });
+        })
+        .catch(e => {
+          this.handleRequestError(e);
+        });
     }, poll_time);
   }
 

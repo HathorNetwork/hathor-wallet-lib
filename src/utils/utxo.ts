@@ -10,7 +10,7 @@ import { IStorage, IUtxo, IUtxoFilterOptions, UtxoSelectionAlgorithm } from '../
 export enum UtxoSelection {
   FAST = 'fast',
   BEST = 'best',
-};
+}
 
 /**
  * Get the algorithm function from the enum value.
@@ -42,8 +42,8 @@ export function getAlgorithmFromEnum(algorithm: UtxoSelection): UtxoSelectionAlg
 export async function fastUtxoSelection(
   storage: IStorage,
   token: string,
-  amount: number,
-): Promise<{ utxos: IUtxo[], amount: number}> {
+  amount: number
+): Promise<{ utxos: IUtxo[]; amount: number }> {
   const utxos: IUtxo[] = [];
   let utxosAmount = 0;
 
@@ -86,11 +86,11 @@ export async function fastUtxoSelection(
 export async function bestUtxoSelection(
   storage: IStorage,
   token: string,
-  amount: number,
-): Promise<{ utxos: IUtxo[], amount: number}> {
+  amount: number
+): Promise<{ utxos: IUtxo[]; amount: number }> {
   const utxos: IUtxo[] = [];
   let utxosAmount = 0;
-  let selectedUtxo: IUtxo|null = null;
+  let selectedUtxo: IUtxo | null = null;
 
   const options: IUtxoFilterOptions = {
     token,

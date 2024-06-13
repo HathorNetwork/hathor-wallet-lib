@@ -7,15 +7,10 @@
 
 import GenericWebSocket from '../websocket';
 import helpers from '../utils/helpers';
-import BaseConnection, {
-  ConnectionParams,
-} from '../connection';
-import {
-  ConnectionState,
-} from '../wallet/types';
+import BaseConnection, { ConnectionParams } from '../connection';
+import { ConnectionState } from '../wallet/types';
 import { handleSubscribeAddress, handleWsDashboard } from '../utils/connection';
 import { IStorage } from '../types';
-
 
 /**
  * This is a Connection that may be shared by one or more wallets.
@@ -56,11 +51,11 @@ class WalletConnection extends BaseConnection {
     this.websocket.on('is_online', this.onConnectionChange);
     this.websocket.on('wallet', this.handleWalletMessage);
 
-    this.websocket.on('height_updated', (height) => {
+    this.websocket.on('height_updated', height => {
       this.emit('best-block-update', height);
     });
 
-    this.websocket.on('addresses_loaded', (data) => {
+    this.websocket.on('addresses_loaded', data => {
       this.emit('wallet-load-partial-update', data);
     });
 
@@ -84,7 +79,7 @@ class WalletConnection extends BaseConnection {
 
   unsubscribeAddress(address: string) {
     if (this.websocket) {
-      const msg = JSON.stringify({type: 'unsubscribe_address', address});
+      const msg = JSON.stringify({ type: 'unsubscribe_address', address });
       this.websocket.sendMessage(msg);
     }
   }

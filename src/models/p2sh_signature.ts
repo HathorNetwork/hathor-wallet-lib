@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-
 /**
  * This class purpose is serialization/deserialization of signatures from a MultiSig participant
  * The structure of the serialized signature string is:

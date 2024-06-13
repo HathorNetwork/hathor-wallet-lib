@@ -11,7 +11,7 @@ import {
   MAX_TOKEN_NAME_SIZE,
   MAX_TOKEN_SYMBOL_SIZE,
   DEFAULT_SIGNAL_BITS,
-} from '../constants'
+} from '../constants';
 import { unpackToInt, unpackLen, intToBytes } from '../utils/buffer';
 import Input from './input';
 import Output from './output';
@@ -20,25 +20,30 @@ import Network from './network';
 import { CreateTokenTxInvalid, InvalidOutputsError, NftValidationError } from '../errors';
 import buffer from 'buffer';
 import { clone } from 'lodash';
-import ScriptData from "./script_data";
-import {OutputType} from "../wallet/types";
+import ScriptData from './script_data';
+import { OutputType } from '../wallet/types';
 
 type optionsType = {
-  signalBits?: number,
-  weight?: number,
-  nonce?: number,
-  timestamp?: number | null,
-  parents?: string[],
-  tokens?: string[],
-  hash?: string | null,
+  signalBits?: number;
+  weight?: number;
+  nonce?: number;
+  timestamp?: number | null;
+  parents?: string[];
+  tokens?: string[];
+  hash?: string | null;
 };
-
 
 class CreateTokenTransaction extends Transaction {
   name: string;
   symbol: string;
 
-  constructor(name: string, symbol: string, inputs: Input[], outputs: Output[], options: optionsType = {}) {
+  constructor(
+    name: string,
+    symbol: string,
+    inputs: Input[],
+    outputs: Output[],
+    options: optionsType = {}
+  ) {
     const defaultOptions: optionsType = {
       signalBits: DEFAULT_SIGNAL_BITS,
       weight: 0,
@@ -68,10 +73,10 @@ class CreateTokenTransaction extends Transaction {
    */
   serializeFundsFields(array: Buffer[], addInputData: boolean) {
     // Signal bits
-    array.push(intToBytes(this.signalBits, 1))
+    array.push(intToBytes(this.signalBits, 1));
 
     // Tx version
-    array.push(intToBytes(this.version, 1))
+    array.push(intToBytes(this.version, 1));
 
     // Funds len and fields
     this.serializeFundsFieldsLen(array);
@@ -89,16 +94,22 @@ class CreateTokenTransaction extends Transaction {
    * @inner
    */
   serializeTokenInfo(array: Buffer[]) {
-    if (!(this.name) || !(this.symbol)) {
-      throw new CreateTokenTxInvalid('Token name and symbol are required when creating a new token');
+    if (!this.name || !this.symbol) {
+      throw new CreateTokenTxInvalid(
+        'Token name and symbol are required when creating a new token'
+      );
     }
 
     if (this.name.length > MAX_TOKEN_NAME_SIZE) {
-      throw new CreateTokenTxInvalid(`Token name size is ${this.name.length} but maximum size is ${MAX_TOKEN_NAME_SIZE}`);
+      throw new CreateTokenTxInvalid(
+        `Token name size is ${this.name.length} but maximum size is ${MAX_TOKEN_NAME_SIZE}`
+      );
     }
 
     if (this.symbol.length > MAX_TOKEN_SYMBOL_SIZE) {
-      throw new CreateTokenTxInvalid(`Token symbol size is ${this.symbol.length} but maximum size is ${MAX_TOKEN_SYMBOL_SIZE}`);
+      throw new CreateTokenTxInvalid(
+        `Token symbol size is ${this.symbol.length} but maximum size is ${MAX_TOKEN_SYMBOL_SIZE}`
+      );
     }
 
     const nameBytes = buffer.Buffer.from(this.name, 'utf8');
@@ -127,17 +138,20 @@ class CreateTokenTransaction extends Transaction {
     [lenName, buf] = unpackToInt(1, false, buf);
 
     if (lenName > MAX_TOKEN_NAME_SIZE) {
-      throw new CreateTokenTxInvalid(`Token name size is ${lenName} but maximum size is ${MAX_TOKEN_NAME_SIZE}`);
+      throw new CreateTokenTxInvalid(
+        `Token name size is ${lenName} but maximum size is ${MAX_TOKEN_NAME_SIZE}`
+      );
     }
 
     [bufName, buf] = unpackLen(lenName, buf);
     this.name = bufName.toString('utf-8');
 
-
     [lenSymbol, buf] = unpackToInt(1, false, buf);
 
     if (lenSymbol > MAX_TOKEN_SYMBOL_SIZE) {
-      throw new CreateTokenTxInvalid(`Token symbol size is ${lenSymbol} but maximum size is ${MAX_TOKEN_SYMBOL_SIZE}`);
+      throw new CreateTokenTxInvalid(
+        `Token symbol size is ${lenSymbol} but maximum size is ${MAX_TOKEN_SYMBOL_SIZE}`
+      );
     }
 
     [bufSymbol, buf] = unpackLen(lenSymbol, buf);
@@ -173,14 +187,14 @@ class CreateTokenTransaction extends Transaction {
     [lenOutputs, buf] = unpackToInt(1, false, buf);
 
     // Inputs array
-    for (let i=0; i<lenInputs; i++) {
+    for (let i = 0; i < lenInputs; i++) {
       let input;
       [input, buf] = Input.createFromBytes(buf);
       this.inputs.push(input);
     }
 
     // Outputs array
-    for (let i=0; i<lenOutputs; i++) {
+    for (let i = 0; i < lenOutputs; i++) {
       let output;
       [output, buf] = Output.createFromBytes(buf, network);
       this.outputs.push(output);
@@ -253,7 +267,7 @@ class CreateTokenTransaction extends Transaction {
     // Iterating on all but the first output for validation and counting authorities
     let mintOutputs = 0;
     let meltOutputs = 0;
-    for (let index=1; index < this.outputs.length; ++index) {
+    for (let index = 1; index < this.outputs.length; ++index) {
       const output = this.outputs[index];
 
       // Must have a valid length

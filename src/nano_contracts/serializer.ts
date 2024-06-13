@@ -5,17 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-
-import {
-  hexToBuffer,
-  intToBytes,
-  floatToBytes,
-  signedIntToBytes
-} from '../utils/buffer';
+import { hexToBuffer, intToBytes, floatToBytes, signedIntToBytes } from '../utils/buffer';
 
 // Number of bytes used to serialize the size of the value
 const SERIALIZATION_SIZE_LEN = 2;
-
 
 class Serializer {
   /**
@@ -92,7 +85,7 @@ class Serializer {
    * @inner
    */
   fromBytes(value: Buffer): Buffer {
-    return Buffer.from(value)
+    return Buffer.from(value);
   }
 
   /**

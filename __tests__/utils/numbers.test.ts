@@ -1,6 +1,5 @@
 import { prettyIntegerValue, prettyValue } from '../../src/utils/numbers';
 
-
 test('Pretty value', () => {
   expect(prettyValue(1000)).toBe('10.00');
   expect(prettyValue(100000)).toBe('1,000.00');

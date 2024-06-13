@@ -22,9 +22,9 @@ const dateFormatter = {
    * @memberof Date
    * @inner
    */
-  parseTimestamp(timestamp: number, timezone: string|null = null): string {
-    const d = new Date(timestamp*1000); // new Date in js expect milliseconds
-    const options = (timezone ? { timeZone: timezone } : {})
+  parseTimestamp(timestamp: number, timezone: string | null = null): string {
+    const d = new Date(timestamp * 1000); // new Date in js expect milliseconds
+    const options = timezone ? { timeZone: timezone } : {};
     return `${d.toLocaleDateString('en-US', options)} ${d.toLocaleTimeString('en-US', options)}`;
   },
 
@@ -48,7 +48,7 @@ const dateFormatter = {
     const minutes = Math.floor(uptime / 60);
     uptime = uptime % 60;
     const seconds = uptime;
-    const pad = (n) => (Math.abs(n) >= 10 ? n : '0' + n);
+    const pad = n => (Math.abs(n) >= 10 ? n : '0' + n);
     const uptime_str = days + ' days, ' + pad(hours) + ':' + pad(minutes) + ':' + pad(seconds);
     return uptime_str;
   },
@@ -65,8 +65,7 @@ const dateFormatter = {
    */
   dateToTimestamp(date: Date): number {
     return Math.floor(date.getTime() / 1000);
-  }
+  },
 };
-
 
 export default dateFormatter;

@@ -43,7 +43,7 @@ abstract class BaseWebSocket extends EventEmitter {
   // notice that it does not indicate that the connection has been established with
   // the server, which is what the `connected` flag indicates
   private started: boolean;
-  // Boolean to show when the websocket connection was established with the 
+  // Boolean to show when the websocket connection was established with the
   // server. This gets set to true on the onOpen event listener.
   private connected: boolean | null;
   // Boolean to show when the websocket is online
@@ -73,7 +73,7 @@ abstract class BaseWebSocket extends EventEmitter {
 
   constructor(options: WsOptions) {
     super();
-    
+
     const {
       wsURL,
       heartbeatInterval,
@@ -144,15 +144,15 @@ abstract class BaseWebSocket extends EventEmitter {
     this.latestSetupDate = new Date();
 
     this.ws.onopen = () => this.onOpen();
-    this.ws.onmessage = (evt) => this.onMessage(evt);
-    this.ws.onerror = (evt) => this.onError(evt);
+    this.ws.onmessage = evt => this.onMessage(evt);
+    this.ws.onerror = evt => this.onError(evt);
     this.ws.onclose = () => this.onClose();
 
     this.started = true;
   }
 
   /**
-   * Sets all event listeners to noops on the WebSocket instance 
+   * Sets all event listeners to noops on the WebSocket instance
    * and close it.
    **/
   closeWs() {
@@ -197,7 +197,7 @@ abstract class BaseWebSocket extends EventEmitter {
   /**
    * Handle message receiving from websocket
    */
-  abstract onMessage(evt)
+  abstract onMessage(evt);
 
   /**
    * Method called when websocket connection is opened
@@ -275,7 +275,7 @@ abstract class BaseWebSocket extends EventEmitter {
    */
   sendMessage(msg: string) {
     // The started flag means that the websocket instance has been
-    // instantiated, but it does not mean that the connection was 
+    // instantiated, but it does not mean that the connection was
     // successful yet, which is what the connected flags indicates.
     if (!this.started || !this.connected) {
       this.setIsOnline(false);
@@ -295,7 +295,7 @@ abstract class BaseWebSocket extends EventEmitter {
   /**
    * Should return a stringified ping message
    */
-  abstract getPingMessage(): string
+  abstract getPingMessage(): string;
 
   /**
    * Ping method to check if server is still alive
