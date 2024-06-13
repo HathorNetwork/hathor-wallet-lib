@@ -13,7 +13,7 @@ module.exports = {
   settings: {
     'import/resolver': {
       node: {
-        extensions: ['.js', '.jsx', '.ts', '.tsx'],
+        extensions: ['.js', '.ts'],
       },
       typescript: {}, // This loads <rootdir>/tsconfig.json to eslint
     },
@@ -59,15 +59,13 @@ module.exports = {
       'ignorePackages',
       {
         js: 'never',
-        jsx: 'never',
         ts: 'never',
-        tsx: 'never',
       },
     ],
   },
   overrides: [
     {
-      files: ['*.ts', '*.tsx'],
+      files: ['*.ts'],
       parserOptions: {
         project: ['./tsconfig.json'], // Specify it only for TypeScript files
       },
