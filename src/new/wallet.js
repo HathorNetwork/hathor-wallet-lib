@@ -42,7 +42,7 @@ import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../utils/address';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
-import { signAndPushNCTransaction } from '../nano_contracts/utils';
+import { prepareNanoSendTransaction } from '../nano_contracts/utils';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 
@@ -2711,8 +2711,29 @@ class HathorWallet extends EventEmitter {
    * @returns {Promise<NanoContract>}
    */
   async createAndSendNanoContractTransaction(method, address, data, options = {}) {
+    const sendTransaction = await this.createNanoContractTransaction(method, address, data, options);
+    return sendTransaction.runFromMining();
+  }
+
+  /**
+   * Create a nano contract transaction and return the SendTransaction object
+   *
+   * @param {string} method Method of nano contract to have the transaction created
+   * @param {string} address Address that will be used to sign the nano contract transaction
+   * @param [data]
+   * @param {string | null} [data.blueprintId] ID of the blueprint to create the nano contract. Required if method is initialize
+   * @param {string | null} [data.ncId] ID of the nano contract to execute method. Required if method is not initialize
+   * @param {NanoContractAction[]} [data.actions] List of actions to execute in the nano contract transaction
+   * @param {any[]} [data.args] List of arguments for the method to be executed in the transaction
+   * @param [options]
+   * @param {string} [options.pinCode] PIN to decrypt the private key.
+   *                                   Optional but required if not set in this
+   *
+   * @returns {Promise<SendTransaction>}
+   */
+  async createNanoContractTransaction(method, address, data, options = {}) {
     if (await this.storage.isReadonly()) {
-      throw new WalletFromXPubGuard('createAndSendNanoContractTransaction');
+      throw new WalletFromXPubGuard('createNanoContractTransaction');
     }
     const newOptions = Object.assign({ pinCode: null }, options);
     const pin = newOptions.pinCode || this.pinCode;
@@ -2738,7 +2759,7 @@ class HathorWallet extends EventEmitter {
       .setArgs(data.args);
 
     const nc = await builder.build();
-    return signAndPushNCTransaction(nc, pin, this.storage);
+    return prepareNanoSendTransaction(nc, pin, this.storage);
   }
 
   /**

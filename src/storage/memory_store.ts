@@ -908,6 +908,19 @@ export class MemoryStore implements IStore {
   }
 
   /**
+   * Iterate on registered nano contracts.
+   *
+   * @async
+   * @generator
+   * @returns {AsyncGenerator<INcData>}
+   */
+  async *registeredNanoContractsIter(): AsyncGenerator<INcData> {
+    for (const ncData of this.registeredNanoContracts.values()) {
+      yield ncData;
+    }
+  }
+
+  /**
    * Get a nano contract data on storage from the ncId.
    *
    * @param ncId Nano Contract ID.
@@ -936,5 +949,18 @@ export class MemoryStore implements IStore {
    */
   async unregisterNanoContract(ncId: string): Promise<void> {
     this.registeredNanoContracts.delete(ncId);
+  }
+
+  /**
+   * Update nano contract registered address.
+   *
+   * @param ncId Nano Contract ID.
+   * @param address Nano Contract registered address.
+   */
+  async updateNanoContractRegisteredAddress(ncId: string, address: string): Promise<void> {
+    const currentNanoContractData = await this.getNanoContract(ncId);
+    if (currentNanoContractData !== null) {
+      this.registeredNanoContracts.set(ncId, Object.assign(currentNanoContractData, { address }));
+    }
   }
 }

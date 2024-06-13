@@ -986,6 +986,19 @@ export class Storage implements IStorage {
   }
 
   /**
+   * Iterate on all registered nano contracts of the wallet.
+   *
+   * @async
+   * @generator
+   * @returns {AsyncGenerator<INcData>}
+   */
+  async *getRegisteredNanoContracts(): AsyncGenerator<INcData> {
+    for await (const ncData of this.store.registeredNanoContractsIter()) {
+      yield ncData;
+    }
+  }
+
+  /**
    * Get nano contract data.
    * @param ncId Nano Contract ID.
    * @returns An instance of Nano Contract data.
@@ -1009,5 +1022,17 @@ export class Storage implements IStorage {
    */
   async unregisterNanoContract(ncId: string): Promise<void> {
     return this.store.unregisterNanoContract(ncId);
+  }
+
+  /**
+   * Update nano contract registered address
+   * @param ncId Nano Contract ID.
+   * @param address New registered address
+   */
+  async updateNanoContractRegisteredAddress(ncId: string, address: string): Promise<void> {
+    if (!await this.isAddressMine(address)) {
+      throw new Error('Registered address must belong to the wallet.');
+    }
+    return this.store.updateNanoContractRegisteredAddress(ncId, address);
   }
 }
