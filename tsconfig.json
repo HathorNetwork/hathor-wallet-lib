@@ -15,6 +15,5 @@
     "emitDeclarationOnly": true,
     "isolatedModules": true
   },
-  "include": ["./src/**/*.ts", "./__tests__/**/*.ts"],
-  "exclude": ["node_modules", "lib", "dist"]
+  "include": ["./src/**/*.ts"]
 }
