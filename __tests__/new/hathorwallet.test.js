@@ -953,6 +953,66 @@ describe('prepare transactions without signature', () => {
     ]));
   });
 
+  test('prepareMintTokensData with data output', async () => {
+    // fake stuff to support the test
+    const fakeMintAuthority = [{
+      txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+      index: 0,
+      value: 1,
+      token: '01',
+      address: fakeAddress.base58,
+      authorities: TOKEN_MINT_MASK,
+      timelock: null,
+      locked: false,
+    }];
+
+    // wallet and mocks
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: false,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
+    });
+    jest.spyOn(hWallet, 'getMintAuthority').mockReturnValue(fakeMintAuthority);
+
+    // prepare mint
+    const txData = await hWallet.prepareMintTokensData('01', 100, {
+      address: fakeAddress.base58,
+      pinCode: '1234',
+      unshiftData: true,
+      data: ['foobar'],
+      signTx: false, // skip the signature
+    });
+
+    // assert the transaction is not signed
+    expect(txData.inputs).toHaveLength(2);
+    expect(txData.inputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        data: null,
+      }),
+      expect.objectContaining({
+        data: null,
+      }),
+    ]));
+    expect(txData.outputs).toHaveLength(3);
+    expect(txData.outputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        script: Buffer.from([6, 102, 111, 111, 98, 97, 114, 172]),
+        tokenData: 0,
+        value: 1,
+      }),
+      expect.objectContaining({
+        value: 100,
+        tokenData: 1,
+      }),
+      expect.objectContaining({
+        tokenData: 129,
+        value: 1,
+      }),
+    ]));
+
+  });
+
   test('prepareMeltTokensData', async () => {
     // fake stuff to support the test
     const fakeTokenToMeltUtxo = {
@@ -1000,6 +1060,153 @@ describe('prepare transactions without signature', () => {
       }),
       expect.objectContaining({
         data: null,
+      }),
+    ]));
+  });
+
+  test('prepareMeltTokensData with data outputs', async () => {
+    // fake stuff to support the test
+    const fakeTokenToMeltUtxo = {
+      txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+      index: 0,
+      value: 100,
+      token: '01',
+      address: fakeAddress.base58,
+      authorities: 0,
+      timelock: null,
+      locked: false,
+    };
+    const fakeMeltAuthority = [{
+      txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+      index: 0,
+      value: 1,
+      token: '01',
+      address: fakeAddress.base58,
+      authorities: TOKEN_MELT_MASK,
+      timelock: null,
+      locked: false,
+    }];
+
+    // wallet and mocks
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: false,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToMeltUtxo),
+    });
+    jest.spyOn(hWallet, 'getMeltAuthority').mockReturnValue(fakeMeltAuthority);
+
+    // prepare melt
+    const txData = await hWallet.prepareMeltTokensData('01', 100, {
+      address: fakeAddress.base58,
+      unshiftData: true,
+      data: ['foobar'],
+      pinCode: '1234',
+      signTx: false, // skip the signature
+    });
+
+    // assert the transaction is not signed
+    expect(txData.inputs).toHaveLength(2);
+    expect(txData.inputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        data: null,
+      }),
+      expect.objectContaining({
+        data: null,
+      }),
+    ]));
+    // outputs: data + authority
+    expect(txData.outputs).toHaveLength(2);
+    expect(txData.outputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        script: Buffer.from([6, 102, 111, 111, 98, 97, 114, 172]),
+        tokenData: 0,
+        value: 1,
+      }),
+      expect.objectContaining({
+        tokenData: 129,
+        value: 2,
+      }),
+    ]));
+  });
+
+  test('prepareMeltTokensData with data outputs and selecting utxos', async () => {
+    // fake stuff to support the test
+    const fakeTokenToMeltUtxo = {
+      txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+      index: 0,
+      value: 100,
+      token: '01',
+      address: fakeAddress.base58,
+      authorities: 0,
+      timelock: null,
+      locked: false,
+    };
+    const fakeMeltAuthority = [{
+      txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+      index: 0,
+      value: 1,
+      token: '01',
+      address: fakeAddress.base58,
+      authorities: TOKEN_MELT_MASK,
+      timelock: null,
+      locked: false,
+    }];
+
+    // wallet and mocks
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: false,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: jest.fn(),
+    });
+    hWallet.storage.selectUtxos.mockImplementationOnce(generateSelectUtxos(fakeTokenToMeltUtxo));
+    hWallet.storage.selectUtxos.mockImplementationOnce(generateSelectUtxos(fakeTokenToDepositUtxo));
+    jest.spyOn(hWallet, 'getMeltAuthority').mockReturnValue(fakeMeltAuthority);
+
+    // prepare melt
+    const txData = await hWallet.prepareMeltTokensData('01', 100, {
+      address: fakeAddress.base58,
+      unshiftData: true,
+      data: ['foobar1', 'foobar2'],
+      pinCode: '1234',
+      signTx: false, // skip the signature
+    });
+
+    // melt authority + HTR deposit for data output + token to melt
+    expect(txData.inputs).toHaveLength(3);
+    // assert the transaction is not signed
+    expect(txData.inputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        data: null,
+      }),
+      expect.objectContaining({
+        data: null,
+      }),
+      expect.objectContaining({
+        data: null,
+      }),
+    ]));
+    // outputs: data x2 + change + authority
+    expect(txData.outputs).toHaveLength(4);
+    expect(txData.outputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        script: Buffer.from([7, 102, 111, 111, 98, 97, 114, 50, 172]),
+        tokenData: 0,
+        value: 1,
+      }),
+      expect.objectContaining({
+        script: Buffer.from([7, 102, 111, 111, 98, 97, 114, 49, 172]),
+        tokenData: 0,
+        value: 1,
+      }),
+      expect.objectContaining({
+        tokenData: 0,
+        value: 1,
+      }),
+      expect.objectContaining({
+        tokenData: 129,
+        value: 2,
       }),
     ]));
   });
