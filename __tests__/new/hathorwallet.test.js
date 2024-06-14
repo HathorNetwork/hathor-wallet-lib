@@ -914,7 +914,7 @@ describe('prepare transactions without signature', () => {
 
   test('prepareMintTokensData', async () => {
     // fake stuff to support the test
-    const fakeMintAuthority = [{
+    const fakeMintAuthority = {
       txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
       index: 0,
       value: 1,
@@ -923,7 +923,7 @@ describe('prepare transactions without signature', () => {
       authorities: TOKEN_MINT_MASK,
       timelock: null,
       locked: false,
-    }];
+    };
 
     // wallet and mocks
     const hWallet = new FakeHathorWallet();
@@ -953,6 +953,69 @@ describe('prepare transactions without signature', () => {
     ]));
   });
 
+  test('prepareMintTokensData with data output', async () => {
+    // fake stuff to support the test
+    const fakeMintAuthority = {
+      txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+      index: 0,
+      value: 1,
+      token: '01',
+      address: fakeAddress.base58,
+      authorities: TOKEN_MINT_MASK,
+      timelock: null,
+      locked: false,
+    };
+
+    // wallet and mocks
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: false,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
+    });
+    jest.spyOn(hWallet, 'getMintAuthority').mockReturnValue(fakeMintAuthority);
+
+    // prepare mint
+    const txData = await hWallet.prepareMintTokensData('01', 100, {
+      address: fakeAddress.base58,
+      pinCode: '1234',
+      unshiftData: true,
+      data: ['foobar'],
+      signTx: false, // skip the signature
+    });
+
+    // assert the transaction is not signed
+    expect(txData.inputs).toHaveLength(2);
+    expect(txData.inputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        data: null,
+      }),
+      expect.objectContaining({
+        data: null,
+      }),
+    ]));
+    expect(txData.outputs).toHaveLength(3);
+    expect(txData.outputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'data',
+        data: 'foobar',
+        value: 1,
+        token: HATHOR_TOKEN_CONFIG.uid,
+        authorities: 0,
+      }),
+      expect.objectContaining({
+        type: 'mint',
+        value: 100,
+        authorities: 0,
+      }),
+      expect.objectContaining({
+        type: 'mint',
+        authorities: 1,
+      }),
+    ]));
+
+  });
+
   test('prepareMeltTokensData', async () => {
     // fake stuff to support the test
     const fakeTokenToMeltUtxo = {
@@ -965,7 +1028,7 @@ describe('prepare transactions without signature', () => {
       timelock: null,
       locked: false,
     };
-    const fakeMeltAuthority = [{
+    const fakeMeltAuthority = {
       txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
       index: 0,
       value: 1,
@@ -974,7 +1037,7 @@ describe('prepare transactions without signature', () => {
       authorities: TOKEN_MELT_MASK,
       timelock: null,
       locked: false,
-    }];
+    };
 
     // wallet and mocks
     const hWallet = new FakeHathorWallet();
@@ -1000,6 +1063,72 @@ describe('prepare transactions without signature', () => {
       }),
       expect.objectContaining({
         data: null,
+      }),
+    ]));
+  });
+
+  test('prepareMeltTokensData with data outputs', async () => {
+    // fake stuff to support the test
+    const fakeTokenToMeltUtxo = {
+      txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+      index: 0,
+      value: 100,
+      token: '01',
+      address: fakeAddress.base58,
+      authorities: 0,
+      timelock: null,
+      locked: false,
+    };
+    const fakeMeltAuthority = {
+      txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+      index: 0,
+      value: 1,
+      token: '01',
+      address: fakeAddress.base58,
+      authorities: TOKEN_MELT_MASK,
+      timelock: null,
+      locked: false,
+    };
+
+    // wallet and mocks
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: false,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToMeltUtxo),
+    });
+    jest.spyOn(hWallet, 'getMeltAuthority').mockReturnValue(fakeMeltAuthority);
+
+    // prepare melt
+    const txData = await hWallet.prepareMeltTokensData('01', 100, {
+      address: fakeAddress.base58,
+      unshiftData: true,
+      data: ['foobar'],
+      pinCode: '1234',
+      signTx: false, // skip the signature
+    });
+
+    // assert the transaction is not signed
+    expect(txData.inputs).toHaveLength(2);
+    expect(txData.inputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        data: null,
+      }),
+      expect.objectContaining({
+        data: null,
+      }),
+    ]));
+    expect(txData.outputs).toHaveLength(2);
+    expect(txData.outputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'data',
+        data: 'foobar',
+        value: 1,
+        token: HATHOR_TOKEN_CONFIG.uid,
+        authorities: 0,
+      }),
+      expect.objectContaining({
+        authorities: 2
       }),
     ]));
   });
