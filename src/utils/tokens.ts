@@ -622,13 +622,18 @@ const tokens = {
 
     if (createMelt) {
       const newAddress = meltAuthorityAddress || await storage.getCurrentAddress();
-      txData.outputs.push({
+      const meltAuthorityOutput = {
         type: 'melt',
         address: newAddress,
         value: TOKEN_MELT_MASK,
         timelock: null,
         authorities: 2,
-      });
+      } as IDataOutput;
+      if ((data !== null) && (data.length !== 0)) {
+        txData.outputs.splice(-data.length, 0, meltAuthorityOutput);
+      } else {
+        txData.outputs.push(meltAuthorityOutput);
+      }
     }
 
     // Set create token tx version value
