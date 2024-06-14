@@ -14,7 +14,7 @@ import {
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
 } from '../constants';
-import { OutputValueError, ParseError } from '../errors';
+import { OutputValueError } from '../errors';
 import P2PKH from './p2pkh';
 import P2SH from './p2sh';
 import ScriptData from './script_data';

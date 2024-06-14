@@ -35,6 +35,7 @@ export const buildSuccessTxByIdTokenDataResponse = (): string => {
     txTokens,
   });
 };
+// eslint-disable-next-line -- 'arrow-parens' rule conflicts with typescript syntax here
 export const buildWalletToAuthenticateApiCall = (overwrite?) => {
   const requestPassword = jest.fn();
   const network = new Network('testnet');

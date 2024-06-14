@@ -215,7 +215,7 @@ export const bufferToHex = (buff: Buffer): string => {
  * @return {[number, Buffer]} Output value and rest of buffer after unpacking
  */
 export const bytesToOutputValue = (buff: Buffer): [number, Buffer] => {
-  const [highByte, _] = unpackToInt(1, true, buff);
+  const [highByte] = unpackToInt(1, true, buff);
   let sign;
   let value;
   if (highByte < 0) {

@@ -6,7 +6,7 @@
  */
 
 import { EventEmitter } from 'events';
-import bitcore, { crypto, util, Address as bitcoreAddress } from 'bitcore-lib';
+import bitcore, { util } from 'bitcore-lib';
 import assert from 'assert';
 import {
   NATIVE_TOKEN_UID,
@@ -49,7 +49,6 @@ import {
   TransactionFullObject,
   IHathorWallet,
   WsTransaction,
-  TxOutput,
   CreateWalletAuthData,
   ConnectionState,
   TokenDetailsObject,

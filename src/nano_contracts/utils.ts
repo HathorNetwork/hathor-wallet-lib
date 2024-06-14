@@ -11,7 +11,6 @@ import transactionUtils from '../utils/transaction';
 import SendTransaction from '../new/sendTransaction';
 import HathorWallet from '../new/wallet';
 import NanoContract from './nano_contract';
-import Transaction from '../models/transaction';
 import Network from '../models/network';
 import ScriptData from '../models/script_data';
 import ncApi from '../api/nano';

@@ -237,6 +237,7 @@ const helpers = {
     const cloneBuffer = clone(bytes);
 
     // Get version
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- No use for signalBits in this context
     const [_signalBits, buf] = unpackToInt(1, false, cloneBuffer);
     const [version] = unpackToInt(1, false, buf);
 

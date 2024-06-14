@@ -13,7 +13,7 @@ import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
 import versionApi from '../api/version';
 import { hexToBuffer } from '../utils/buffer';
-import { decryptData, signMessage } from '../utils/crypto';
+import { signMessage } from '../utils/crypto';
 import helpers from '../utils/helpers';
 import { createP2SHRedeemScript } from '../utils/scripts';
 import walletUtils from '../utils/wallet';
@@ -29,12 +29,9 @@ import {
 } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
-import Address from '../models/address';
-import { IStorage, SCANNING_POLICY, TxHistoryProcessingStatus, WalletType } from '../types';
+import { SCANNING_POLICY, TxHistoryProcessingStatus, WalletType } from '../types';
 import transactionUtils from '../utils/transaction';
-import Transaction from '../models/transaction';
 import Queue from '../models/queue';
-import FullnodeConnection from './connection';
 import {
   syncHistory,
   reloadStorage,

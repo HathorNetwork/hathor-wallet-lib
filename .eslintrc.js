@@ -47,7 +47,14 @@ module.exports = {
     'no-undef': 2,
     'no-undef-init': 1,
     'no-use-before-define': 0,
-    'no-unused-vars': [1, { vars: 'all', args: 'none' }],
+    'no-unused-vars': 'off', // This must be disabled for the typescript rule below to work
+    '@typescript-eslint/no-unused-vars': [
+      'warn',
+      {
+        vars: 'all',
+        args: 'none', // We should change to args: after-used
+      },
+    ],
     'no-underscore-dangle': 0,
     'no-restricted-syntax': ['error', 'LabeledStatement', 'WithStatement'],
     'no-await-in-loop': 'off',
