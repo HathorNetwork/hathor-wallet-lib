@@ -208,6 +208,16 @@ const transaction = {
     };
   },
 
+  /**
+   * Signs a transaction using the provided storage and pin code.
+   *
+   * Warning: This function will mutate the transaction parameter
+   *
+   * @param tx - The transaction to be signed.
+   * @param storage - The storage of the target wallet.
+   * @param pinCode - The pin code used for retrieving signatures.
+   * @returns The transaction object updated with the signatures.
+   */
   async signTransaction(tx: Transaction, storage: IStorage, pinCode: string): Promise<Transaction> {
     const signatures = await storage.getTxSignatures(tx, pinCode);
     for (const sigData of signatures.inputSignatures) {
@@ -217,6 +227,7 @@ const transaction = {
     }
 
     if (tx.version === NANO_CONTRACTS_VERSION) {
+      // eslint-disable-next-line no-param-reassign
       (tx as NanoContract).signature = signatures.ncCallerSignature;
     }
     return tx;

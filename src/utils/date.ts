@@ -32,15 +32,15 @@ const dateFormatter = {
    * Get formatted seconds
    * From seconds transform into days, hours, minutes and seconds
    *
-   * @param {number} uptime Seconds of uptime
+   * @param _uptime Seconds of uptime
    *
-   * @return {string} Formatted uptime seconds
+   * @return Formatted uptime seconds
    *
    * @memberof Date
    * @inner
    */
-  uptimeFormat(uptime: number): string {
-    uptime = Math.floor(uptime);
+  uptimeFormat(_uptime: number): string {
+    let uptime = Math.floor(_uptime);
     const days = Math.floor(uptime / 3600 / 24);
     uptime %= 3600 * 24;
     const hours = Math.floor(uptime / 3600);

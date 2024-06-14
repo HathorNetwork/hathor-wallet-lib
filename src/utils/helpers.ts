@@ -518,6 +518,8 @@ const helpers = {
    * with circular structures: https://github.com/mzabriskie/axios/issues/370
    * Got this code from https://github.com/softonic/axios-retry/blob/master/es/index.mjs#L203
    *
+   * Warning: This function mutates the `config` parameter
+   *
    * @param {AxiosInstance} axios Axios instance
    * @param {AxiosRequestConfig} config New axios config
    *
@@ -526,12 +528,15 @@ const helpers = {
    */
   fixAxiosConfig(axios: AxiosInstance, config: AxiosRequestConfig) {
     if (axios.defaults.httpAgent === config.httpAgent) {
+      // eslint-disable-next-line no-param-reassign
       delete config.httpAgent;
     }
     if (axios.defaults.httpsAgent === config.httpsAgent) {
+      // eslint-disable-next-line no-param-reassign
       delete config.httpsAgent;
     }
 
+    // eslint-disable-next-line no-param-reassign
     config.transformRequest = [data => data];
   },
 

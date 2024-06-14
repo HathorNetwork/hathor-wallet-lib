@@ -18,18 +18,20 @@ import config from '../config';
 /**
  * Create an axios instance to be used when sending requests
  *
- * @param {String} url Base URL for the api requests
- * @param {callback} resolve Callback to be stored and used in case of a retry after a fail
- * @param {number} timeout Timeout in milliseconds for the request
- * @param {Object} additionalHeaders Headers to be sent with the request
+ * @param url Base URL for the api requests
+ * @param resolve (UNUSED) Callback to be stored and used in case of a retry after a fail
+ * @param _timeout Timeout in milliseconds for the request
+ * @param _additionalHeaders Headers to be sent with the request
  */
 export const axiosWrapperCreateRequestInstance = (
   url: string,
-  resolve?: Function | null,
-  timeout?: number | null,
-  additionalHeaders = {}
+  resolve?: undefined | null, // XXX: We should remove or use this parameter
+  _timeout?: number | null,
+  _additionalHeaders = {}
 ) => {
-  if (timeout === undefined) {
+  let timeout;
+  let additionalHeaders = { ..._additionalHeaders };
+  if (_timeout === undefined) {
     timeout = TIMEOUT;
   }
 

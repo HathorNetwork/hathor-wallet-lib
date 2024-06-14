@@ -125,6 +125,8 @@ export const getOracleInputData = async (
  * @param method Method name
  * @param args Arguments of the method to check if have the expected types
  *
+ * Warning: This method can mutate the `args` parameter during its validation
+ *
  * @throws NanoContractTransactionError in case the arguments are not valid
  * @throws NanoRequest404Error in case the blueprint ID does not exist on the full node
  */
@@ -162,6 +164,7 @@ export const validateBlueprintMethodArgs = async (blueprintId, method, args): Pr
       case 'bytes':
         // Bytes arguments are sent in hexadecimal
         try {
+          // eslint-disable-next-line no-param-reassign
           args[index] = hexToBuffer(args[index]);
         } catch {
           // Data sent is not a hex

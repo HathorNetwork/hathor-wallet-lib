@@ -127,12 +127,14 @@ class CreateTokenTransaction extends Transaction {
     array.push(symbolBytes);
   }
 
-  getTokenInfoFromBytes(buf: Buffer): Buffer {
+  getTokenInfoFromBytes(_buf: Buffer): Buffer {
     let tokenInfoVersion;
     let lenName;
     let lenSymbol;
     let bufName;
     let bufSymbol;
+    // Copies buffer locally, not to change the original parameter
+    let buf = Buffer.from(_buf);
 
     [tokenInfoVersion, buf] = unpackToInt(1, false, buf);
 
@@ -169,14 +171,17 @@ class CreateTokenTransaction extends Transaction {
    * Gets funds fields (signalBits, version, inputs, outputs) from bytes
    * and saves them in `this`
    *
-   * @param {Buffer} buf Buffer with bytes to get fields
-   * @param {Network} network Network to get output addresses first byte
+   * @param _buf Buffer with bytes to get fields
+   * @param network Network to get output addresses first byte
    *
-   * @return {Buffer} Rest of buffer after getting the fields
+   * @return Rest of buffer after getting the fields
    * @memberof CreateTokenTransaction
    * @inner
    */
-  getFundsFieldsFromBytes(buf: Buffer, network: Network): Buffer {
+  getFundsFieldsFromBytes(_buf: Buffer, network: Network): Buffer {
+    // Copies buffer locally, not to change the original parameter
+    let buf = Buffer.from(_buf);
+
     // Signal bits
     [this.signalBits, buf] = unpackToInt(1, false, buf);
 
