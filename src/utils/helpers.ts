@@ -521,23 +521,23 @@ const helpers = {
    * Warning: This function mutates the `config` parameter
    *
    * @param {AxiosInstance} axios Axios instance
-   * @param {AxiosRequestConfig} config New axios config
+   * @param {AxiosRequestConfig} configObj New axios config
    *
    * @memberof Helpers
    * @inner
    */
-  fixAxiosConfig(axios: AxiosInstance, config: AxiosRequestConfig) {
-    if (axios.defaults.httpAgent === config.httpAgent) {
+  fixAxiosConfig(axios: AxiosInstance, configObj: AxiosRequestConfig) {
+    if (axios.defaults.httpAgent === configObj.httpAgent) {
       // eslint-disable-next-line no-param-reassign
-      delete config.httpAgent;
+      delete configObj.httpAgent;
     }
-    if (axios.defaults.httpsAgent === config.httpsAgent) {
+    if (axios.defaults.httpsAgent === configObj.httpsAgent) {
       // eslint-disable-next-line no-param-reassign
-      delete config.httpsAgent;
+      delete configObj.httpsAgent;
     }
 
     // eslint-disable-next-line no-param-reassign
-    config.transformRequest = [data => data];
+    configObj.transformRequest = [data => data];
   },
 
   /**

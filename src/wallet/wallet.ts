@@ -1212,8 +1212,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async handleSendPreparedTransaction(transaction: Transaction): Promise<Transaction> {
-    const sendTransaction = new SendTransactionWalletService(this, { transaction });
+  async handleSendPreparedTransaction(transactionObj: Transaction): Promise<Transaction> {
+    const sendTransaction = new SendTransactionWalletService(this, { transaction: transactionObj });
     return sendTransaction.runFromMining();
   }
 

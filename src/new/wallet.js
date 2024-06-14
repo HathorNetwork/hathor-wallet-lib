@@ -2658,7 +2658,7 @@ class HathorWallet extends EventEmitter {
           return this.storage.getNativeTokenData();
         }
 
-        const token = fullTx.tx.tokens.find(token => token.uid === tokenUid);
+        const token = fullTx.tx.tokens.find(tokenElem => tokenElem.uid === tokenUid);
         if (!token) {
           throw new Error(`Token ${tokenUid} not found in tx`);
         }

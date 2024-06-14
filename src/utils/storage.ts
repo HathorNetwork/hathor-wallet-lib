@@ -94,14 +94,14 @@ export async function reloadStorage(
  * @param {number} count Number of addresses to load
  * @param {IStorage} storage The storage to load the addresses
  * @param {FullnodeConnection} connection Connection to the full node
- * @param {boolean} processHistory If we should process the history after loading it.
+ * @param {boolean} shouldProcessHistory If we should process the history after loading it.
  */
 export async function syncHistory(
   startIndex: number,
   count: number,
   storage: IStorage,
   connection: FullnodeConnection,
-  processHistory: boolean = false
+  shouldProcessHistory: boolean = false
 ) {
   let itStartIndex = startIndex;
   let itCount = count;
@@ -133,7 +133,7 @@ export async function syncHistory(
     itStartIndex = loadMoreAddresses.nextIndex;
     itCount = loadMoreAddresses.count;
   }
-  if (foundAnyTx && processHistory) {
+  if (foundAnyTx && shouldProcessHistory) {
     await storage.processHistory();
   }
 }

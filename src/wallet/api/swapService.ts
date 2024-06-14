@@ -220,19 +220,24 @@ export const update = async (params: SwapUpdateParams): Promise<{ success: boole
       throw new Error(`Missing mandatory parameters.`);
     }
 
-    const { proposalId, password, partialTx, version } = params;
+    const {
+      proposalId: paramProposalId,
+      password: paramPassword,
+      partialTx: paramPartialTx,
+      version: paramVersion,
+    } = params;
     // Checking for missing parameters
     const missingParameters: string[] = [];
-    if (!proposalId) {
+    if (!paramProposalId) {
       missingParameters.push('proposalId');
     }
-    if (!password) {
+    if (!paramPassword) {
       missingParameters.push('password');
     }
-    if (!partialTx) {
+    if (!paramPartialTx) {
       missingParameters.push('partialTx');
     }
-    if (version === undefined || version === null) {
+    if (paramVersion === undefined || paramVersion === null) {
       missingParameters.push('version');
     }
     if (missingParameters.length > 0) {
@@ -240,7 +245,7 @@ export const update = async (params: SwapUpdateParams): Promise<{ success: boole
     }
 
     // Checking for invalid parameters
-    if (!isNumber(version) || version < 0) {
+    if (!isNumber(paramVersion) || paramVersion < 0) {
       throw new Error('Invalid version number');
     }
   }

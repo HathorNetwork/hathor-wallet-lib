@@ -458,16 +458,16 @@ class Transaction {
    * Gets funds fields (signalBits, version, tokens, inputs, outputs) from bytes
    * and saves them in `this`
    *
-   * @param _buf Buffer with bytes to get fields
+   * @param srcBuf Buffer with bytes to get fields
    * @param network Network to get output addresses first byte
    *
    * @return Rest of buffer after getting the fields
    * @memberof Transaction
    * @inner
    */
-  getFundsFieldsFromBytes(_buf: Buffer, network: Network): Buffer {
+  getFundsFieldsFromBytes(srcBuf: Buffer, network: Network): Buffer {
     // Copies buffer locally, not to change the original parameter
-    let buf = Buffer.from(_buf);
+    let buf = Buffer.from(srcBuf);
 
     // Signal bits
     [this.signalBits, buf] = unpackToInt(1, false, buf);
@@ -519,15 +519,15 @@ class Transaction {
    * Gets graph fields (weight, timestamp, parents, nonce) from bytes
    * and saves them in `this`
    *
-   * @param _buf Buffer with bytes to get fields
+   * @param srcBuf Buffer with bytes to get fields
    *
    * @return Rest of buffer after getting the fields
    * @memberof Transaction
    * @inner
    */
-  getGraphFieldsFromBytes(_buf: Buffer): Buffer {
+  getGraphFieldsFromBytes(srcBuf: Buffer): Buffer {
     // Copies buffer locally, not to change the original parameter
-    let buf = Buffer.from(_buf);
+    let buf = Buffer.from(srcBuf);
 
     // Weight
     [this.weight, buf] = unpackToFloat(buf);

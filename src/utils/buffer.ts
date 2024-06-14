@@ -210,13 +210,13 @@ export const bufferToHex = (buff: Buffer): string => {
  * First we get the highByte value to check if it was a 8-byte or 4-byte value
  * Then we unpack the integer and multiply by the sign.
  *
- * @param _buff The buffer to unpack the value
+ * @param srcBuf The buffer to unpack the value
  *
  * @return Output value and rest of buffer after unpacking
  */
-export const bytesToOutputValue = (_buff: Buffer): [number, Buffer] => {
+export const bytesToOutputValue = (srcBuf: Buffer): [number, Buffer] => {
   // Copies buffer locally, not to change the original parameter
-  let buff = Buffer.from(_buff);
+  let buff = Buffer.from(srcBuf);
 
   const [highByte] = unpackToInt(1, true, buff);
   let sign;

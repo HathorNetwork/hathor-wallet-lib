@@ -127,14 +127,14 @@ class CreateTokenTransaction extends Transaction {
     array.push(symbolBytes);
   }
 
-  getTokenInfoFromBytes(_buf: Buffer): Buffer {
+  getTokenInfoFromBytes(srcBuf: Buffer): Buffer {
     let tokenInfoVersion;
     let lenName;
     let lenSymbol;
     let bufName;
     let bufSymbol;
     // Copies buffer locally, not to change the original parameter
-    let buf = Buffer.from(_buf);
+    let buf = Buffer.from(srcBuf);
 
     /* eslint-disable prefer-const -- To split these declarations into const + let would be confusing */
     [tokenInfoVersion, buf] = unpackToInt(1, false, buf);
@@ -173,16 +173,16 @@ class CreateTokenTransaction extends Transaction {
    * Gets funds fields (signalBits, version, inputs, outputs) from bytes
    * and saves them in `this`
    *
-   * @param _buf Buffer with bytes to get fields
+   * @param srcBuf Buffer with bytes to get fields
    * @param network Network to get output addresses first byte
    *
    * @return Rest of buffer after getting the fields
    * @memberof CreateTokenTransaction
    * @inner
    */
-  getFundsFieldsFromBytes(_buf: Buffer, network: Network): Buffer {
+  getFundsFieldsFromBytes(srcBuf: Buffer, network: Network): Buffer {
     // Copies buffer locally, not to change the original parameter
-    let buf = Buffer.from(_buf);
+    let buf = Buffer.from(srcBuf);
 
     // Signal bits
     [this.signalBits, buf] = unpackToInt(1, false, buf);
