@@ -149,6 +149,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @memberof SendTransactionWalletService
    * @inner
    */
+  // eslint-disable-next-line class-methods-use-this -- XXX: This method should be made static
   inputDataToModel(input: InputRequestObj): Input {
     return new Input(input.txId, input.index);
   }

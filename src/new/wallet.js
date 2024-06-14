@@ -245,6 +245,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
+  // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async getVersionData() {
     const versionData = await new Promise((resolve, reject) => {
       versionApi.getVersion(resolve).catch(error => reject(error));
@@ -2194,6 +2195,7 @@ class HathorWallet extends EventEmitter {
    *   },
    * }>} token details
    */
+  // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async getTokenDetails(tokenId) {
     const result = await new Promise(resolve => {
       return walletApi.getGeneralTokenInfo(tokenId, resolve);
@@ -2476,6 +2478,7 @@ class HathorWallet extends EventEmitter {
    *
    * @returns {FullNodeTxResponse} Transaction data in the fullnode
    */
+  // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async getFullTxById(txId) {
     const tx = await new Promise((resolve, reject) => {
       txApi
@@ -2501,6 +2504,7 @@ class HathorWallet extends EventEmitter {
    *
    * @returns {FullNodeTxConfirmationDataResponse} Transaction confirmation data
    */
+  // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async getTxConfirmationData(txId) {
     const confirmationData = await new Promise((resolve, reject) => {
       txApi

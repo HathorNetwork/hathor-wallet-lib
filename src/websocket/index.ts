@@ -51,6 +51,7 @@ class GenericWebSocket extends BaseWebSocket {
   /**
    * Returns a JSON stringified ping message
    */
+  // eslint-disable-next-line class-methods-use-this -- The method returns a hardcoded value
   getPingMessage() {
     return JSON.stringify({ type: 'ping' });
   }

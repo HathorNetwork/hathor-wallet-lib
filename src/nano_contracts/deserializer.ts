@@ -54,6 +54,7 @@ class Deserializer {
    * @memberof Deserializer
    * @inner
    */
+  // eslint-disable-next-line class-methods-use-this -- XXX: This method should be made static
   toString(value: Buffer): string {
     return value.toString('utf8');
   }
@@ -66,6 +67,7 @@ class Deserializer {
    * @memberof Deserializer
    * @inner
    */
+  // eslint-disable-next-line class-methods-use-this -- XXX: This method should be made static
   toBytes(value: Buffer): Buffer {
     return value;
   }
@@ -78,6 +80,7 @@ class Deserializer {
    * @memberof Deserializer
    * @inner
    */
+  // eslint-disable-next-line class-methods-use-this -- XXX: This method should be made static
   toInt(value: Buffer): number {
     return unpackToInt(4, true, value)[0];
   }
@@ -90,6 +93,7 @@ class Deserializer {
    * @memberof Deserializer
    * @inner
    */
+  // eslint-disable-next-line class-methods-use-this -- XXX: This method should be made static
   toFloat(value: Buffer): number {
     return unpackToFloat(value)[0];
   }
@@ -102,6 +106,7 @@ class Deserializer {
    * @memberof Deserializer
    * @inner
    */
+  // eslint-disable-next-line class-methods-use-this -- XXX: This method should be made static
   toBool(value: Buffer): boolean {
     if (value[0]) {
       return true;

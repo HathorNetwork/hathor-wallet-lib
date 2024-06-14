@@ -1025,6 +1025,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
+  // eslint-disable-next-line class-methods-use-this -- XXX: This method should be made static
   getInputData(xprivkey: string, dataToSignHash: Buffer, addressPath: number): Buffer {
     const xpriv = bitcore.HDPrivateKey(xprivkey);
     const derivedKey = xpriv.deriveNonCompliantChild(addressPath);
@@ -1163,26 +1164,32 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     return this.getCurrentAddress();
   }
 
+  // eslint-disable-next-line class-methods-use-this
   getAddressIndex(address: string) {
     throw new WalletError('Not implemented.');
   }
 
+  // eslint-disable-next-line class-methods-use-this
   isAddressMine(address: string) {
     throw new WalletError('Not implemented.');
   }
 
+  // eslint-disable-next-line class-methods-use-this
   getTx(id: string) {
     throw new WalletError('Not implemented.');
   }
 
+  // eslint-disable-next-line class-methods-use-this
   getAddressInfo(address: string, options = {}) {
     throw new WalletError('Not implemented.');
   }
 
+  // eslint-disable-next-line class-methods-use-this
   consolidateUtxos(destinationAddress: string, options = {}) {
     throw new WalletError('Not implemented.');
   }
 
+  // eslint-disable-next-line class-methods-use-this
   getFullHistory(): TransactionFullObject[] {
     throw new WalletError('Not implemented.');
   }
@@ -2109,6 +2116,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * Check if the wallet is a hardware wallet.
    * @returns {Promise<boolean>}
    */
+  // eslint-disable-next-line class-methods-use-this -- The method returns a hardcoded value
   async isHardwareWallet(): Promise<boolean> {
     // We currently do not have support for hardware wallets
     // in the wallet-service facade.

@@ -158,6 +158,7 @@ abstract class Connection extends EventEmitter {
     return this.network;
   }
 
+  // eslint-disable-next-line class-methods-use-this -- This method is a no-op
   startControlHandlers(options?: any) {}
 
   removeMetricsHandlers() {

@@ -29,6 +29,7 @@ class ScriptData {
    * @memberof ScriptData
    * @inner
    */
+  // eslint-disable-next-line class-methods-use-this -- This method returns a hardcoded constant
   getType(): string {
     return 'data';
   }

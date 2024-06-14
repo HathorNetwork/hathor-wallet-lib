@@ -51,6 +51,7 @@ class P2PKH {
    * @memberof P2PKH
    * @inner
    */
+  // eslint-disable-next-line class-methods-use-this -- This method returns a hardcoded constant
   getType(): 'p2pkh' {
     return 'p2pkh';
   }
