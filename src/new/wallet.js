@@ -1539,7 +1539,7 @@ class HathorWallet extends EventEmitter {
    * @param {string} [options.meltAuthorityAddress] the address to send the melt authority created
    * @param {boolean} [options.allowExternalMeltAuthorityAddress=false] allow the melt authority address
    *                                                                    to be from another wallet
-   * @param {string[]=null} [options.data] list of data strings using utf8 encoding to add each as a data script output
+   * @param {string[]|null} [options.data=null] list of data strings using utf8 encoding to add each as a data script output
    *
    * @param {boolean} [options.signTx] sign transaction instance (default true)
    * @param {boolean} [options.isCreateNFT=false] if the create token is an NFT creation call
@@ -1660,7 +1660,7 @@ class HathorWallet extends EventEmitter {
    * @param {string} [options.meltAuthorityAddress] the address to send the melt authority created
    * @param {boolean} [options.allowExternalMeltAuthorityAddress=false] allow the melt authority address
    *                                                                    to be from another wallet
-   * @param {string[]=null} [options.data] list of data strings using utf8 encoding to add each as a data script output
+   * @param {string[]|null} [options.data=null] list of data strings using utf8 encoding to add each as a data script output
    *
    * @return {Promise<CreateNewTokenResponse>}
    * @memberof HathorWallet
@@ -1749,7 +1749,7 @@ class HathorWallet extends EventEmitter {
    *   'mintAuthorityAddress': address to send the new mint authority created
    *   'allowExternalMintAuthorityAddress': boolean allow the mint authority address to be from another wallet (default false)
    *   'unshiftData': boolean to unshift the data script output
-   *   'data': string to add as a data script output
+   *   'data': list of string to add as a data script output
    *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
    *   'signTx': boolean to sign transaction instance (default true)
    *  }
@@ -1838,6 +1838,8 @@ class HathorWallet extends EventEmitter {
    * @param {string} [options.mintAuthorityAddress] address to send the new mint authority created
    * @param {boolean} [options.allowExternalMintAuthorityAddress=false] allow the mint authority address
    *                                                                    to be from another wallet
+   * @param {boolean} [options.unshiftData] whether to unshift the data script output
+   * @param {string[]|null} [options.data=null] list of data strings using utf8 encoding to add each as a data script output
    * @param {string} [options.pinCode] pin to decrypt xpriv information.
    *                                   Optional but required if not set in this
    *
@@ -1864,6 +1866,8 @@ class HathorWallet extends EventEmitter {
    *   'createAnotherMelt': boolean to create another melt authority or not for the wallet
    *   'meltAuthorityAddress': address to send the new melt authority created
    *   'allowExternalMeltAuthorityAddress': boolean allow the melt authority address to be from another wallet (default false)
+   *   'unshiftData': boolean to unshift the data script output
+   *   'data': list of string to add as a data script output
    *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
    *   'signTx': boolean to sign transaction instance (default true)
    *  }
@@ -1884,6 +1888,8 @@ class HathorWallet extends EventEmitter {
       createAnotherMelt: true,
       meltAuthorityAddress: null,
       allowExternalMeltAuthorityAddress: false,
+      unshiftData: false,
+      data: null,
       pinCode: null,
       signTx: true,
     }, options);
@@ -1911,6 +1917,8 @@ class HathorWallet extends EventEmitter {
       createAnotherMelt: newOptions.createAnotherMelt,
       meltAuthorityAddress: newOptions.meltAuthorityAddress,
       changeAddress: newOptions.changeAddress,
+      unshiftData: newOptions.unshiftData,
+      data: newOptions.data,
     };
     const txData = await tokenUtils.prepareMeltTxData(
       tokenUid,
@@ -1944,6 +1952,8 @@ class HathorWallet extends EventEmitter {
    * @param {boolean} [options.allowExternalMeltAuthorityAddress=false] allow the melt authority address
    *                                                                    to be from another wallet
    * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
+   * @param {boolean} [options.unshiftData=false] boolean to unshift the data script output
+   * @param {string[]|null} [options.data=null] list of data strings using utf8 encoding to add each as a data script output
    * @param {string} [options.pinCode] pin to decrypt xpriv information.
    *                                   Optional but required if not set in this
    *

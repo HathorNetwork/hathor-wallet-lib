@@ -379,9 +379,9 @@ const tokens = {
         // However, this will change after a new project is completed to better identify an NFT token
         // the method that validates the NFT is in src/models/CreateTokenTransaction.validateNft
         if (unshiftData) {
-          txData.outputs.unshift(outputData);
+          outputs.unshift(outputData);
         } else {
-          txData.outputs.push(outputData);
+          outputs.push(outputData);
         }
       }
     }
@@ -407,6 +407,8 @@ const tokens = {
    * @param {boolean} [options.createAnotherMelt=true] If should create another melt authority
    * @param {string | null} [options.meltAuthorityAddress=null] Address to send the new melt authority created
    * @param {string | null} [options.changeAddress=null] Address to send the change
+   * @param {boolean|null} [options.unshiftData=null] Whether to unshift the data script output.
+   * @param {string[]|null} [options.data=null] list of data strings using utf8 encoding to add each as a data script output
    * @param {function} [options.utxoSelection=bestUtxoSelection] Algorithm to select utxos. Use the best method by default
    * @returns {Promise<IDataTx>}
    */
@@ -420,11 +422,15 @@ const tokens = {
       createAnotherMelt = true,
       meltAuthorityAddress = null,
       changeAddress = null,
+      unshiftData = null,
+      data = null,
       utxoSelection = bestUtxoSelection,
     }: {
       createAnotherMelt?: boolean,
       meltAuthorityAddress?: string | null,
       changeAddress?: string | null,
+      unshiftData?: boolean | null,
+      data?: string[] | null,
       utxoSelection?: UtxoSelectionAlgorithm,
     } = {},
   ): Promise<IDataTx> {
@@ -436,6 +442,24 @@ const tokens = {
     const tokens = [authorityMeltInput.token];
     const depositPercent = storage.getTokenDepositPercentage();
     const withdrawAmount = this.getWithdrawAmount(amount, depositPercent);
+    // The deposit amount will be the quantity of data strings in the array
+    // multiplied by the fee or 0 if there are no data outputs
+    const depositAmount = data != null ? this.getDataScriptOutputFee() * data.length : 0;
+
+    // We only make these calculations if we are creating data outputs
+    if (depositAmount > 0) {
+      // If we are creating data outputs the withdrawal amount may be used to create the data outputs
+      // This may prevent finding HTR inputs to meet the deposit amount if we are creating HTR with the melt.
+      if (withdrawAmount >= depositAmount) {
+        // We can use part of the withdraw tokens as deposit
+        depositAmount = 0;
+        withdrawAmount -= depositAmount;
+      } else {
+        // Deposit is greater than withdraw, we will use all withdrawed tokens and still need to find utxos to meet deposit
+        depositAmount -= withdrawAmount;
+        withdrawAmount = 0;
+      }
+    }
 
     // get inputs that amount to requested melt amount
     const selectedUtxos = await utxoSelection(storage, token, amount);
@@ -463,6 +487,34 @@ const tokens = {
       });
     }
 
+    if (depositAmount > 0) {
+      // get HTR deposit inputs
+      const selectedUtxos = await utxoSelection(storage, HATHOR_TOKEN_CONFIG.uid, depositAmount);
+      const foundAmount = selectedUtxos.amount;
+      for (const utxo of selectedUtxos.utxos) {
+        inputs.push(helpers.getDataInputFromUtxo(utxo));
+      }
+
+      if (foundAmount < depositAmount) {
+        throw new InsufficientFundsError(`Not enough HTR tokens for deposit: ${depositAmount} required, ${foundAmount} available`);
+      }
+
+      // get output change
+      if (foundAmount > depositAmount) {
+        const cAddress = await storage.getChangeAddress({ changeAddress });
+
+        outputs.push({
+          type: getAddressType(cAddress, storage.config.getNetwork()),
+          address: cAddress,
+          value: foundAmount - depositAmount,
+          timelock: null,
+          token: HATHOR_TOKEN_CONFIG.uid,
+          authorities: 0,
+          isChange: true,
+        });
+      }
+    }
+
     if (createAnotherMelt) {
       const newAddress = meltAuthorityAddress || await storage.getCurrentAddress();
       outputs.push({
@@ -485,6 +537,28 @@ const tokens = {
         timelock: null,
         type: getAddressType(address, storage.config.getNetwork()),
       });
+    }
+
+    if (data !== null) {
+      for (const dataString of data) {
+        const outputData = {
+          type: 'data',
+          data: dataString,
+          value: 1,
+          token: HATHOR_TOKEN_CONFIG.uid,
+          authorities: 0,
+        } as IDataOutput;
+
+        // We currently have an external service that identifies NFT tokens with the first output as the data output
+        // that's why we are keeping like this
+        // However, this will change after a new project is completed to better identify an NFT token
+        // the method that validates the NFT is in src/models/CreateTokenTransaction.validateNft
+        if (unshiftData) {
+          outputs.unshift(outputData);
+        } else {
+          outputs.push(outputData);
+        }
+      }
     }
 
     return {
