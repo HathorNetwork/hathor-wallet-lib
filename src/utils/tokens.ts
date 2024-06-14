@@ -444,9 +444,9 @@ const tokens = {
     let withdrawAmount = this.getWithdrawAmount(amount, depositPercent);
     // The deposit amount will be the quantity of data strings in the array
     // multiplied by the fee or 0 if there are no data outputs
-    let depositAmount = data != null ? this.getDataScriptOutputFee() * data.length : 0;
+    let depositAmount = data !== null ? this.getDataScriptOutputFee() * data.length : 0;
 
-    // We only make these calculations if we are creating data outputs
+    // We only make these calculations if we are creating data outputs because the transaction needs to deposit the fee
     if (depositAmount > 0) {
       // If we are creating data outputs the withdrawal amount may be used to create the data outputs
       // This may prevent finding HTR inputs to meet the deposit amount if we are creating HTR with the melt.
@@ -455,7 +455,7 @@ const tokens = {
         withdrawAmount -= depositAmount;
         depositAmount = 0;
       } else {
-        // Deposit is greater than withdraw, we will use all withdrawed tokens and still need to find utxos to meet deposit
+        // Deposit is greater than withdraw, we will use all withdrawn tokens and still need to find utxos to meet deposit
         depositAmount -= withdrawAmount;
         withdrawAmount = 0;
       }
@@ -549,10 +549,6 @@ const tokens = {
           authorities: 0,
         } as IDataOutput;
 
-        // We currently have an external service that identifies NFT tokens with the first output as the data output
-        // that's why we are keeping like this
-        // However, this will change after a new project is completed to better identify an NFT token
-        // the method that validates the NFT is in src/models/CreateTokenTransaction.validateNft
         if (unshiftData) {
           outputs.unshift(outputData);
         } else {
