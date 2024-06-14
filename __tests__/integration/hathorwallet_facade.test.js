@@ -1970,6 +1970,40 @@ describe('mintTokens', () => {
     const tokenBalance4 = await hWallet.getBalance(tokenUid);
     const expectedAmount4 = expectedAmount2 + 100;
     expect(tokenBalance4[0]).toHaveProperty('balance.unlocked', expectedAmount4);
+
+    const mintResponse5 = await hWallet.mintTokens(tokenUid, 100, { data: ['foobar'] });
+    expect(mintResponse5.hash).toBeDefined();
+    await waitForTxReceived(hWallet, mintResponse5.hash);
+
+    // Validating there is a correct reference to the custom token
+    expect(mintResponse5).toHaveProperty('tokens.length', 1);
+    expect(mintResponse5.tokens[0]).toEqual(tokenUid);
+
+    // Validating custom token balance
+    const tokenBalance5 = await hWallet.getBalance(tokenUid);
+    const expectedAmount5 = expectedAmount4 + 100;
+    expect(tokenBalance5[0]).toHaveProperty('balance.unlocked', expectedAmount5);
+
+    const dataOutput5 = mintResponse5.outputs[mintResponse5.outputs.length - 1];
+    expect(dataOutput5).toHaveProperty('value', 1);
+    expect(dataOutput5).toHaveProperty('script', Buffer.from([6, 102, 111, 111, 98, 97, 114, 172]));
+
+    const mintResponse6 = await hWallet.mintTokens(tokenUid, 100, { unshiftData: true, data: ['foobar'] });
+    expect(mintResponse6.hash).toBeDefined();
+    await waitForTxReceived(hWallet, mintResponse6.hash);
+
+    // Validating there is a correct reference to the custom token
+    expect(mintResponse6).toHaveProperty('tokens.length', 1);
+    expect(mintResponse6.tokens[0]).toEqual(tokenUid);
+
+    // Validating custom token balance
+    const tokenBalance6 = await hWallet.getBalance(tokenUid);
+    const expectedAmount6 = expectedAmount5 + 100;
+    expect(tokenBalance6[0]).toHaveProperty('balance.unlocked', expectedAmount6);
+
+    const dataOutput6 = mintResponse6.outputs[0];
+    expect(dataOutput6).toHaveProperty('value', 1);
+    expect(dataOutput6).toHaveProperty('script', Buffer.from([6, 102, 111, 111, 98, 97, 114, 172]));
   });
 
   it('should deposit correct HTR values for minting', async () => {
@@ -2039,14 +2073,14 @@ describe('meltTokens', () => {
 
   it('should melt tokens', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10);
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 15);
 
     // Creating the token
     const { hash: tokenUid } = await createTokenHelper(
       hWallet,
       'Token to Melt',
       'TMELT',
-      300,
+      500,
     );
 
     // Should not melt more than there is available
@@ -2060,7 +2094,7 @@ describe('meltTokens', () => {
 
     // Validating custom token balance
     const tokenBalance = await hWallet.getBalance(tokenUid);
-    const expectedAmount = 300 - meltAmount;
+    const expectedAmount = 500 - meltAmount;
     expect(tokenBalance[0]).toHaveProperty('balance.unlocked', expectedAmount);
 
     // Melt tokens with defined melt authority address
@@ -2114,6 +2148,40 @@ describe('meltTokens', () => {
     const tokenBalance3 = await hWallet.getBalance(tokenUid);
     const expectedAmount3 = expectedAmount2 - 100;
     expect(tokenBalance3[0]).toHaveProperty('balance.unlocked', expectedAmount3);
+
+    const meltResponse4 = await hWallet.meltTokens(tokenUid, 100, { data: ['foobar'] });
+    expect(meltResponse4.hash).toBeDefined();
+    await waitForTxReceived(hWallet, meltResponse4.hash);
+
+    // Validating there is a correct reference to the custom token
+    expect(meltResponse4).toHaveProperty('tokens.length', 1);
+    expect(meltResponse4.tokens[0]).toEqual(tokenUid);
+
+    // Validating custom token balance
+    const tokenBalance4 = await hWallet.getBalance(tokenUid);
+    const expectedAmount4 = expectedAmount3 - 100;
+    expect(tokenBalance4[0]).toHaveProperty('balance.unlocked', expectedAmount4);
+
+    const dataOutput4 = meltResponse4.outputs[meltResponse4.outputs.length - 1];
+    expect(dataOutput4).toHaveProperty('value', 1);
+    expect(dataOutput4).toHaveProperty('script', Buffer.from([6, 102, 111, 111, 98, 97, 114, 172]));
+
+    const meltResponse5 = await hWallet.meltTokens(tokenUid, 100, { unshiftData: true, data: ['foobar'] });
+    expect(meltResponse5.hash).toBeDefined();
+    await waitForTxReceived(hWallet, meltResponse5.hash);
+
+    // Validating there is a correct reference to the custom token
+    expect(meltResponse5).toHaveProperty('tokens.length', 1);
+    expect(meltResponse5.tokens[0]).toEqual(tokenUid);
+
+    // Validating custom token balance
+    const tokenBalance5 = await hWallet.getBalance(tokenUid);
+    const expectedAmount5 = expectedAmount4 - 100;
+    expect(tokenBalance5[0]).toHaveProperty('balance.unlocked', expectedAmount5);
+
+    const dataOutput5 = meltResponse5.outputs[0];
+    expect(dataOutput5).toHaveProperty('value', 1);
+    expect(dataOutput5).toHaveProperty('script', Buffer.from([6, 102, 111, 111, 98, 97, 114, 172]));
   });
 
   it('should recover correct amount of HTR on melting', async () => {
