@@ -452,8 +452,8 @@ const tokens = {
       // This may prevent finding HTR inputs to meet the deposit amount if we are creating HTR with the melt.
       if (withdrawAmount >= depositAmount) {
         // We can use part of the withdraw tokens as deposit
-        depositAmount = 0;
         withdrawAmount -= depositAmount;
+        depositAmount = 0;
       } else {
         // Deposit is greater than withdraw, we will use all withdrawed tokens and still need to find utxos to meet deposit
         depositAmount -= withdrawAmount;

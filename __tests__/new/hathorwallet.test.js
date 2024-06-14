@@ -914,7 +914,7 @@ describe('prepare transactions without signature', () => {
 
   test('prepareMintTokensData', async () => {
     // fake stuff to support the test
-    const fakeMintAuthority = {
+    const fakeMintAuthority = [{
       txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
       index: 0,
       value: 1,
@@ -923,7 +923,7 @@ describe('prepare transactions without signature', () => {
       authorities: TOKEN_MINT_MASK,
       timelock: null,
       locked: false,
-    };
+    }];
 
     // wallet and mocks
     const hWallet = new FakeHathorWallet();
@@ -955,7 +955,7 @@ describe('prepare transactions without signature', () => {
 
   test('prepareMintTokensData with data output', async () => {
     // fake stuff to support the test
-    const fakeMintAuthority = {
+    const fakeMintAuthority = [{
       txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
       index: 0,
       value: 1,
@@ -964,7 +964,7 @@ describe('prepare transactions without signature', () => {
       authorities: TOKEN_MINT_MASK,
       timelock: null,
       locked: false,
-    };
+    }];
 
     // wallet and mocks
     const hWallet = new FakeHathorWallet();
@@ -997,20 +997,17 @@ describe('prepare transactions without signature', () => {
     expect(txData.outputs).toHaveLength(3);
     expect(txData.outputs).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        type: 'data',
-        data: 'foobar',
+        script: Buffer.from([6, 102, 111, 111, 98, 97, 114, 172]),
+        tokenData: 0,
         value: 1,
-        token: HATHOR_TOKEN_CONFIG.uid,
-        authorities: 0,
       }),
       expect.objectContaining({
-        type: 'mint',
         value: 100,
-        authorities: 0,
+        tokenData: 1,
       }),
       expect.objectContaining({
-        type: 'mint',
-        authorities: 1,
+        tokenData: 129,
+        value: 1,
       }),
     ]));
 
@@ -1028,7 +1025,7 @@ describe('prepare transactions without signature', () => {
       timelock: null,
       locked: false,
     };
-    const fakeMeltAuthority = {
+    const fakeMeltAuthority = [{
       txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
       index: 0,
       value: 1,
@@ -1037,7 +1034,7 @@ describe('prepare transactions without signature', () => {
       authorities: TOKEN_MELT_MASK,
       timelock: null,
       locked: false,
-    };
+    }];
 
     // wallet and mocks
     const hWallet = new FakeHathorWallet();
@@ -1079,7 +1076,7 @@ describe('prepare transactions without signature', () => {
       timelock: null,
       locked: false,
     };
-    const fakeMeltAuthority = {
+    const fakeMeltAuthority = [{
       txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
       index: 0,
       value: 1,
@@ -1088,7 +1085,7 @@ describe('prepare transactions without signature', () => {
       authorities: TOKEN_MELT_MASK,
       timelock: null,
       locked: false,
-    };
+    }];
 
     // wallet and mocks
     const hWallet = new FakeHathorWallet();
@@ -1118,17 +1115,17 @@ describe('prepare transactions without signature', () => {
         data: null,
       }),
     ]));
+    // outputs: data + authority
     expect(txData.outputs).toHaveLength(2);
     expect(txData.outputs).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        type: 'data',
-        data: 'foobar',
+        script: Buffer.from([6, 102, 111, 111, 98, 97, 114, 172]),
+        tokenData: 0,
         value: 1,
-        token: HATHOR_TOKEN_CONFIG.uid,
-        authorities: 0,
       }),
       expect.objectContaining({
-        authorities: 2
+        tokenData: 129,
+        value: 2,
       }),
     ]));
   });
