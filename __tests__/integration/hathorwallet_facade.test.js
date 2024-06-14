@@ -1972,7 +1972,7 @@ describe('mintTokens', () => {
     expect(tokenBalance4[0]).toHaveProperty('balance.unlocked', expectedAmount4);
 
     // Delegate mint back to wallet 1
-    const delegateResponse = await hWallet.delegateAuthority(tokenUid, 'mint', address0);
+    const delegateResponse = await hWallet2.delegateAuthority(tokenUid, 'mint', address0);
     expect(delegateResponse.hash).toBeDefined();
     await waitForTxReceived(hWallet, delegateResponse.hash);
     await waitForTxReceived(hWallet2, delegateResponse.hash);
@@ -2156,7 +2156,7 @@ describe('meltTokens', () => {
     expect(tokenBalance3[0]).toHaveProperty('balance.unlocked', expectedAmount3);
 
     // Delegate melt back to wallet 1
-    const delegateResponse = await hWallet.delegateAuthority(tokenUid, 'melt', address0);
+    const delegateResponse = await hWallet2.delegateAuthority(tokenUid, 'melt', address0);
     expect(delegateResponse.hash).toBeDefined();
     await waitForTxReceived(hWallet, delegateResponse.hash);
     await waitForTxReceived(hWallet2, delegateResponse.hash);
