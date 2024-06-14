@@ -441,10 +441,10 @@ const tokens = {
     const outputs: IDataOutput[] = [];
     const tokens = [authorityMeltInput.token];
     const depositPercent = storage.getTokenDepositPercentage();
-    const withdrawAmount = this.getWithdrawAmount(amount, depositPercent);
+    let withdrawAmount = this.getWithdrawAmount(amount, depositPercent);
     // The deposit amount will be the quantity of data strings in the array
     // multiplied by the fee or 0 if there are no data outputs
-    const depositAmount = data != null ? this.getDataScriptOutputFee() * data.length : 0;
+    let depositAmount = data != null ? this.getDataScriptOutputFee() * data.length : 0;
 
     // We only make these calculations if we are creating data outputs
     if (depositAmount > 0) {
