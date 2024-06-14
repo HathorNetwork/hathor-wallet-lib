@@ -1748,6 +1748,8 @@ class HathorWallet extends EventEmitter {
    *   'createAnotherMint': boolean to create another mint authority or not for the wallet
    *   'mintAuthorityAddress': address to send the new mint authority created
    *   'allowExternalMintAuthorityAddress': boolean allow the mint authority address to be from another wallet (default false)
+   *   'unshiftData': boolean to unshift the data script output
+   *   'data': string to add as a data script output
    *   'pinCode': pin to decrypt xpriv information. Optional but required if not set in this
    *   'signTx': boolean to sign transaction instance (default true)
    *  }
@@ -1768,6 +1770,8 @@ class HathorWallet extends EventEmitter {
       createAnotherMint: true,
       mintAuthorityAddress: null,
       allowExternalMintAuthorityAddress: false,
+      unshiftData: false,
+      data: null,
       pinCode: null,
       signTx: true,
     }, options);
@@ -1799,6 +1803,8 @@ class HathorWallet extends EventEmitter {
       createAnotherMint: newOptions.createAnotherMint,
       changeAddress: newOptions.changeAddress,
       mintAuthorityAddress: newOptions.mintAuthorityAddress,
+      unshiftData: newOptions.unshiftData,
+      data: newOptions.data,
     };
     const txData = await tokenUtils.prepareMintTxData(
       mintAddress,

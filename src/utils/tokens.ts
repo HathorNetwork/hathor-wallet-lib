@@ -273,6 +273,7 @@ const tokens = {
    * @param {boolean} [options.createAnotherMint=true] If a mint authority should be created on the transaction.
    * @param {string|null} [options.mintAuthorityAddress=null] The address to send the new mint authority created
    * @param {string|null} [options.changeAddress=null] The address to send any change output.
+   * @param {boolean|null} [options.unshiftData=null] Whether to unshift the data script output.
    * @param {string[]|null} [options.data=null] list of data strings using utf8 encoding to add each as a data script output
    * @param {function} [options.utxoSelection=bestUtxoSelection] Algorithm to select utxos. Use the best method by default
    *
@@ -287,6 +288,7 @@ const tokens = {
       mintInput = null,
       createAnotherMint = true,
       changeAddress = null,
+      unshiftData = null,
       data = null,
       mintAuthorityAddress = null,
       utxoSelection = bestUtxoSelection,
@@ -295,6 +297,7 @@ const tokens = {
       mintInput?: IDataInput | null,
       createAnotherMint?: boolean,
       changeAddress?: string | null,
+      unshiftData?: boolean | null,
       data?: string[] | null,
       mintAuthorityAddress?: string | null,
       utxoSelection?: UtxoSelectionAlgorithm,
@@ -359,6 +362,28 @@ const tokens = {
         timelock: null,
         authorities: 1,
       });
+    }
+
+    if (data !== null) {
+      for (const dataString of data) {
+        const outputData = {
+          type: 'data',
+          data: dataString,
+          value: 1,
+          token: HATHOR_TOKEN_CONFIG.uid,
+          authorities: 0,
+        } as IDataOutput;
+
+        // We currently have an external service that identifies NFT tokens with the first output as the data output
+        // that's why we are keeping like this
+        // However, this will change after a new project is completed to better identify an NFT token
+        // the method that validates the NFT is in src/models/CreateTokenTransaction.validateNft
+        if (unshiftData) {
+          txData.outputs.unshift(outputData);
+        } else {
+          txData.outputs.push(outputData);
+        }
+      }
     }
 
     const tokens = token !== null ? [token] : [];
@@ -515,6 +540,7 @@ const tokens = {
       createAnotherMint: createMint,
       mintAuthorityAddress,
       changeAddress,
+      unshiftData: isCreateNFT,
       data
     };
 
@@ -529,28 +555,6 @@ const tokens = {
         timelock: null,
         authorities: 2,
       });
-    }
-
-    if (data !== null) {
-      for (const dataString of data) {
-        const outputData = {
-          type: 'data',
-          data: dataString,
-          value: 1,
-          token: HATHOR_TOKEN_CONFIG.uid,
-          authorities: 0,
-        } as IDataOutput;
-
-        // We currently have an external service that identifies NFT tokens with the first output as the data output
-        // that's why we are keeping like this
-        // However, this will change after a new project is completed to better identify an NFT token
-        // the method that validates the NFT is in src/models/CreateTokenTransaction.validateNft
-        if (isCreateNFT) {
-          txData.outputs.unshift(outputData);
-        } else {
-          txData.outputs.push(outputData);
-        }
-      }
     }
 
     // Set create token tx version value
