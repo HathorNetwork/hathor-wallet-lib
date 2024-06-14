@@ -61,12 +61,13 @@ const ncApi = {
    * @param id Nano Contract ID
    * @param count Quantity of elements to return
    * @param after Used for pagination in the results
+   * @param before Used for pagination in the results
    *
    * @memberof ApiNanoContracts
    * @inner
    */
-  async getNanoContractHistory(id: string, count: number | null = null, after: string | null = null): Promise<NanoContractHistoryAPIResponse> {
-    const data = { id, count, after };
+  async getNanoContractHistory(id: string, count: number | null = null, after: string | null = null, before: string | null = null): Promise<NanoContractHistoryAPIResponse> {
+    const data = { id, count, after, before };
     const axiosInstance = await createRequestInstance();
     try {
       const response = await axiosInstance.get(`nano_contract/history`, {params: data});
