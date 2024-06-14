@@ -629,7 +629,7 @@ const tokens = {
         timelock: null,
         authorities: 2,
       } as IDataOutput;
-      if ((data !== null) && (data.length !== 0)) {
+      if ((data !== null) && (data.length !== 0) && !isCreateNFT) {
         txData.outputs.splice(-data.length, 0, meltAuthorityOutput);
       } else {
         txData.outputs.push(meltAuthorityOutput);
