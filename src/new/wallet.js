@@ -755,7 +755,8 @@ class HathorWallet extends EventEmitter {
       skip: 0,
       ...options,
     };
-    let { skip, count } = newOptions;
+    const { skip } = newOptions;
+    let { count } = newOptions;
     const uid = newOptions.token_id || this.token.uid;
 
     const txs = [];

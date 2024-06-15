@@ -30,7 +30,7 @@ export const axiosWrapperCreateRequestInstance = (
   _additionalHeaders = {}
 ) => {
   let timeout;
-  let additionalHeaders = { ..._additionalHeaders };
+  const additionalHeaders = { ..._additionalHeaders };
   if (_timeout === undefined) {
     timeout = TIMEOUT;
   }

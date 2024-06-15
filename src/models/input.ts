@@ -90,12 +90,15 @@ class Input {
     let data;
 
     // Hash
+    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [hash, inputBuffer] = unpackToHex(TX_HASH_SIZE_BYTES, inputBuffer);
 
     // Index
+    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [index, inputBuffer] = unpackToInt(1, false, inputBuffer);
 
     // Data
+    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [dataLen, inputBuffer] = unpackToInt(2, false, inputBuffer);
     if (dataLen) {
       [data, inputBuffer] = unpackLen(dataLen, inputBuffer);

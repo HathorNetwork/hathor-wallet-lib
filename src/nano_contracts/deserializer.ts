@@ -161,6 +161,7 @@ class Deserializer {
     let signedBuffer: Buffer;
     let size: number;
     // [len(serializedResult)][serializedResult][inputData]
+    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [size, signedBuffer] = unpackToInt(2, false, signedData);
     let parsed = this.deserializeFromType(signedBuffer.slice(0, size), valueType);
     if (valueType === 'bytes') {

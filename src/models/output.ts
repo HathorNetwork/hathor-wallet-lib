@@ -205,14 +205,18 @@ class Output {
     let script;
 
     // Value
+    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [value, outputBuffer] = bytesToOutputValue(outputBuffer);
 
     // Token data
+    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [tokenData, outputBuffer] = unpackToInt(1, false, outputBuffer);
 
     // Script
+    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [scriptLen, outputBuffer] = unpackToInt(2, false, outputBuffer);
 
+    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [script, outputBuffer] = unpackLen(scriptLen, outputBuffer);
 
     const output = new Output(value, script, { tokenData });

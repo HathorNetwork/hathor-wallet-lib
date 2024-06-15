@@ -480,12 +480,15 @@ class Transaction {
     let lenOutputs;
 
     // Len tokens
+    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [lenTokens, buf] = unpackToInt(1, false, buf);
 
     // Len inputs
+    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [lenInputs, buf] = unpackToInt(1, false, buf);
 
     // Len outputs
+    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [lenOutputs, buf] = unpackToInt(1, false, buf);
 
     // Tokens array
@@ -534,6 +537,7 @@ class Transaction {
 
     // Parents
     let parentsLen;
+    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [parentsLen, buf] = unpackToInt(1, false, buf);
 
     for (let i = 0; i < parentsLen; i++) {

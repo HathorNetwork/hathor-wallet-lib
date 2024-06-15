@@ -34,8 +34,7 @@ export const parseP2PKH = (buff: Buffer, network: Network): P2PKH => {
     throw new ParseScriptError('Invalid output script.');
   }
 
-  let addressHash;
-  [addressHash, scriptBuf] = unpackLen(20, scriptBuf.slice(3 + offset));
+  const [addressHash] = unpackLen(20, scriptBuf.slice(3 + offset));
 
   return new P2PKH(helpers.encodeAddress(addressHash, network), { timelock });
 };
@@ -65,8 +64,7 @@ export const parseP2SH = (buff: Buffer, network: Network): P2SH => {
     throw new ParseScriptError('Invalid output script.');
   }
 
-  let scriptHash;
-  [scriptHash, scriptBuf] = unpackLen(20, scriptBuf.slice(2 + offset));
+  const [scriptHash] = unpackLen(20, scriptBuf.slice(2 + offset));
 
   return new P2SH(helpers.encodeAddressP2SH(scriptHash, network), { timelock });
 };
