@@ -242,9 +242,10 @@ export async function scanPolicyStartAddresses(
   storage: IStorage
 ): Promise<IScanPolicyLoadAddresses> {
   const scanPolicy = await storage.getScanningPolicy();
+  let limits;
   switch (scanPolicy) {
     case SCANNING_POLICY.INDEX_LIMIT:
-      const limits = await storage.getIndexLimit();
+      limits = await storage.getIndexLimit();
       if (!limits) {
         // This should not happen but it enforces the limits type
         throw new Error('Index limit is not configured');
