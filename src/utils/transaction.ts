@@ -419,7 +419,7 @@ const transaction = {
         continue;
       }
 
-      if (output.token != token) continue;
+      if (output.token !== token) continue;
 
       if (output.authorities > 0) {
         // Authority output, add to mint or melt balance

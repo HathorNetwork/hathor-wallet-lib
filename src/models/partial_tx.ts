@@ -604,7 +604,7 @@ export class PartialTxInputData {
    */
   addSignatures(serialized: string) {
     const arr = serialized.split('|');
-    if (arr.length < 2 || arr[0] != PartialTxInputDataPrefix || arr[1] !== this.hash) {
+    if (arr.length < 2 || arr[0] !== PartialTxInputDataPrefix || arr[1] !== this.hash) {
       // Only the first 2 parts are required, the third onward are the signatures which can be empty
       // When collecting the input data from atomic-swap participants a participant may not have inputs to sign
       // allowing the empty input data array case will make this a noop instead of throwing an error.
