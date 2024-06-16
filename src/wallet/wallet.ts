@@ -925,16 +925,15 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
 
       await this.renewAuthToken(privKey, timestampNow);
-    } else {
+    } else if (usePassword) {
       // If we have received the user PIN, we should renew the token anyway
       // without blocking this method's promise
-      if (usePassword) {
-        const privKey = bitcore.HDPrivateKey.fromString(
-          await this.storage.getAuthPrivKey(usePassword)
-        );
 
-        this.renewAuthToken(privKey, timestampNow);
-      }
+      const privKey = bitcore.HDPrivateKey.fromString(
+        await this.storage.getAuthPrivKey(usePassword)
+      );
+
+      this.renewAuthToken(privKey, timestampNow);
     }
   }
 

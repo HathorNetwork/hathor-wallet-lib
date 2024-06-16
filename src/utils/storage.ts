@@ -629,11 +629,9 @@ export async function processNewTx(
         // So that later when it becomes unlocked we can update the balances with processUtxoUnlock
         await store.saveLockedUtxo({ tx, index });
       }
-    } else {
+    } else if (await storage.isUtxoSelectedAsInput({ txId: tx.tx_id, index })) {
       // If the output is spent we remove it from the utxos selected_as_inputs if it's there
-      if (await storage.isUtxoSelectedAsInput({ txId: tx.tx_id, index })) {
-        await storage.utxoSelectAsInput({ txId: tx.tx_id, index }, false);
-      }
+      await storage.utxoSelectAsInput({ txId: tx.tx_id, index }, false);
     }
 
     await store.editTokenMeta(output.token, tokenMeta);
