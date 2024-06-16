@@ -34,7 +34,7 @@ class Input {
       throw Error('You must provide a hash.');
     }
 
-    if (isNaN(index)) {
+    if (Number.isNaN(index)) {
       throw Error('You must provide an index.');
     }
 
