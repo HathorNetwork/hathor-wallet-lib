@@ -77,6 +77,7 @@ export function hashPassword(password): string {
  * @param [timeout] Optional timeout, defaults to the lib's timeout constant
  * @param [network] Optional network. If not present, defaults connection to the lib's configured baseUrl
  */
+// eslint-disable-next-line default-param-last -- XXX: This method should be refactored
 const axiosInstance = async (timeout: number = TIMEOUT, network?: 'mainnet' | 'testnet') => {
   const swapServiceBaseUrl = config.getSwapServiceBaseUrl(network);
   const defaultOptions = {
