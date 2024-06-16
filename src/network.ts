@@ -12,10 +12,6 @@ import Network from './models/network';
  * Extend the network to be able to set config when setNetwork is called on the singleton
  */
 class ExtendedNetwork extends Network {
-  constructor(name) {
-    super(name);
-  }
-
   /* Until we replace the network singleton with the new config singleton, we need to
    * maintain reverse compatibility as there are multiple use cases using the lib with
    * this network singleton
