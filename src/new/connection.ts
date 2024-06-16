@@ -25,6 +25,12 @@ import { IStorage } from '../types';
  * - wallet-update: Fired when a new wallet message arrive from the websocket.
  * */
 class WalletConnection extends BaseConnection {
+  static CLOSED: number = 0;
+
+  static CONNECTING: number = 1;
+
+  static CONNECTED: number = 2;
+
   constructor(options: ConnectionParams) {
     super(options);
 
@@ -94,13 +100,5 @@ class WalletConnection extends BaseConnection {
     }
   }
 }
-
-// TODO: This is to maintain compatibility until we migrate to typescript
-// @ts-ignore
-WalletConnection.CLOSED = 0;
-// @ts-ignore
-WalletConnection.CONNECTING = 1;
-// @ts-ignore
-WalletConnection.CONNECTED = 2;
 
 export default WalletConnection;
