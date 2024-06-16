@@ -254,8 +254,8 @@ export async function scanPolicyStartAddresses(
         nextIndex: limits.startIndex,
         count: limits.endIndex - limits.startIndex + 1,
       };
-    default:
     case SCANNING_POLICY.GAP_LIMIT:
+    default:
       return {
         nextIndex: 0,
         count: await storage.getGapLimit(),
