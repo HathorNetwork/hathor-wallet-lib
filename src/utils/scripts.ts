@@ -94,8 +94,10 @@ export const parseScriptData = (buff: Buffer): ScriptData => {
   // otherwise, the first byte already has the length of data
   if (scriptBuf[0] === OP_PUSHDATA1[0]) {
     expectedLen += 1;
+    // eslint-disable-next-line prefer-destructuring -- Destructuring would make this harder to read
     dataBytesLen = scriptBuf[1];
   } else {
+    // eslint-disable-next-line prefer-destructuring -- Destructuring would make this harder to read
     dataBytesLen = scriptBuf[0];
   }
 
@@ -147,9 +149,11 @@ export const getPushData = (buff: Buffer): Buffer => {
   let start;
 
   if (scriptBuf[0] > 75) {
+    // eslint-disable-next-line prefer-destructuring -- Destructuring would make this harder to read
     lenData = scriptBuf[1];
     start = 2;
   } else {
+    // eslint-disable-next-line prefer-destructuring -- Destructuring would make this harder to read
     lenData = scriptBuf[0];
     start = 1;
   }

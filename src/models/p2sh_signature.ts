@@ -57,6 +57,7 @@ class P2SHSignature {
     const signatures: Record<number, string> = {};
     for (const sig of arr.slice(1)) {
       const parts = sig.split(':');
+      // eslint-disable-next-line prefer-destructuring -- Destructuring would make this harder to read
       signatures[+parts[0]] = parts[1];
     }
     return new P2SHSignature(xpub, signatures);

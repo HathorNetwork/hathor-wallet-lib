@@ -212,6 +212,7 @@ class Serializer {
       value = splittedValue[1] === 'true';
     } else {
       // For the other types
+      // eslint-disable-next-line prefer-destructuring -- Destructuring would make this harder to read
       value = splittedValue[1];
     }
 
