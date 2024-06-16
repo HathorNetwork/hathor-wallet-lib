@@ -2109,7 +2109,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @returns {Promise<boolean>}
    */
   async checkPinAndPassword(pin: string, password: string): Promise<boolean> {
-    return (await this.checkPin(pin)) && (await this.checkPassword(password));
+    return (await this.checkPin(pin)) && this.checkPassword(password); // The promise from checkPassword will be returned
   }
 
   /**

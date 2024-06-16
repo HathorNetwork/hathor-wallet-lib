@@ -812,7 +812,7 @@ class HathorWallet extends EventEmitter {
    *                          Can be null if the wallet does not contain the tx.
    */
   async getTx(id) {
-    return await this.storage.getTx(id);
+    return this.storage.getTx(id);
   }
 
   /**
@@ -2711,7 +2711,7 @@ class HathorWallet extends EventEmitter {
    * @returns {Promise<boolean>}
    */
   async checkPinAndPassword(pin, password) {
-    return (await this.checkPin(pin)) && (await this.checkPassword(password));
+    return (await this.checkPin(pin)) && this.checkPassword(password); // The promise from checkPassword will be returned here
   }
 
   /**

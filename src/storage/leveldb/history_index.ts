@@ -136,7 +136,7 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
   async historyCount(): Promise<number> {
     if (!this.isValidated) {
       // Since we have not yet validated the index, we cannot trust the tx count
-      return await this.runHistoryCount();
+      return this.runHistoryCount();
     }
     return this.size;
   }
