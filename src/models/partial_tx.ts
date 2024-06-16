@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+// eslint-disable-next-line max-classes-per-file -- These classes are well organized within this file
 import { get } from 'lodash';
 
 import Input from './input';
