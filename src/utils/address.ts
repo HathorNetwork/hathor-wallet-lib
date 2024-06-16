@@ -6,7 +6,7 @@
  */
 
 import {
-  Address as bitcoreAddress,
+  Address as BitcoreAddress,
   PublicKey as bitcorePublicKey,
   Script,
   HDPublicKey,
@@ -41,7 +41,7 @@ export function deriveAddressFromXPubP2PKH(
   const hdpubkey = new HDPublicKey(xpubkey);
   const key = hdpubkey.deriveChild(index);
   return {
-    base58: new bitcoreAddress(key.publicKey, network.bitcoreNetwork).toString(),
+    base58: new BitcoreAddress(key.publicKey, network.bitcoreNetwork).toString(),
     bip32AddressIndex: index,
     publicKey: key.publicKey.toString('hex'),
   };
@@ -66,7 +66,8 @@ export function deriveAddressFromDataP2SH(
     multisigData.numSignatures,
     index
   );
-  const address = new bitcoreAddress.payingTo(
+  // eslint-disable-next-line new-cap -- Cannot change the dependency method name
+  const address = new BitcoreAddress.payingTo(
     Script.fromBuffer(redeemScript),
     network.bitcoreNetwork
   );
@@ -132,7 +133,7 @@ export function createOutputScriptFromAddress(address: string, network: Network)
  */
 export function getAddressFromPubkey(pubkey: string, network: Network): Address {
   const pubkeyBuffer = hexToBuffer(pubkey);
-  const base58 = new bitcoreAddress(
+  const base58 = new BitcoreAddress(
     bitcorePublicKey(pubkeyBuffer),
     network.bitcoreNetwork
   ).toString();
