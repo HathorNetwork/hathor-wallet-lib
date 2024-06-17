@@ -1162,7 +1162,7 @@ test('sendTransaction', async () => {
 
   // Assertions
   expect(SendTransactionWalletService).toHaveBeenCalledWith(expect.any(HathorWalletServiceWallet), {
-    changeAddress: null,
+    changeAddress: undefined,
     inputs: [],
     outputs: [
       { address: 'WYLW8ujPemSuLJwbeNvvH6y7nakaJ6cEwT', token: '00', type: 'p2pkh', value: 10 },

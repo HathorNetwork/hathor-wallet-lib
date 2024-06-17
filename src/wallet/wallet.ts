@@ -1010,7 +1010,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.failIfWalletNotReady();
     const newOptions = {
       token: '00',
-      changeAddress: null,
+      changeAddress: undefined,
       ...options,
     };
     const { token, changeAddress, pinCode } = newOptions;
