@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import buffer from 'buffer';
 import {
   CREATE_TOKEN_TX_VERSION,
   HATHOR_TOKEN_CONFIG,
@@ -14,7 +15,6 @@ import {
   TOKEN_INDEX_MASK,
 } from '../constants';
 import helpers from './helpers';
-import buffer from 'buffer';
 import {
   IDataInput,
   IDataOutput,
@@ -220,11 +220,10 @@ const tokens = {
     // Otherwise, it is always the array index + 1
     if (uid === HATHOR_TOKEN_CONFIG.uid) {
       return 0;
-    } else {
-      const tokensWithoutHathor = tokens.filter(token => token.uid !== HATHOR_TOKEN_CONFIG.uid);
-      const myIndex = tokensWithoutHathor.findIndex(token => token.uid === uid);
-      return myIndex + 1;
     }
+    const tokensWithoutHathor = tokens.filter(token => token.uid !== HATHOR_TOKEN_CONFIG.uid);
+    const myIndex = tokensWithoutHathor.findIndex(token => token.uid === uid);
+    return myIndex + 1;
   },
 
   /**
@@ -513,7 +512,7 @@ const tokens = {
         address: cAddress,
         value: foundAmount - amount,
         timelock: null,
-        token: token,
+        token,
         authorities: 0,
         isChange: true,
       });

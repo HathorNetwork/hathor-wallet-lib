@@ -169,6 +169,7 @@ export class WalletError extends Error {
  */
 export class WalletRequestError extends WalletError {
   cause: any = null;
+
   constructor(message: string, errorData: { cause: any } = { cause: null }) {
     super(message);
     this.cause = errorData.cause;
@@ -316,8 +317,11 @@ export class RequestError extends Error {
  */
 export class NanoRequestError extends RequestError {
   errorCode: string = ErrorMessages.NANO_REQUEST_ERROR;
+
   originError: unknown | null = null;
+
   response: any | null = null;
+
   constructor(message: string, originError: unknown | null = null, response: any | null = null) {
     super(message);
     this.originError = originError;

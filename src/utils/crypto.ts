@@ -108,7 +108,7 @@ function _decryptData(data: string, password: string): string {
  */
 export function decryptData(data: IEncryptedData, password: string): string {
   const keyData = data.data;
-  const hash = data.hash;
+  const { hash } = data;
   const options = {
     salt: data.salt,
     iterations: data.iterations,

@@ -5,8 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { crypto as cryptoBL, PrivateKey, HDPrivateKey } from 'bitcore-lib';
 import { Utxo } from '../wallet/types';
-import { UtxoError } from '../errors';
+import { UtxoError, ParseError } from '../errors';
 import { HistoryTransactionOutput } from '../models/types';
 import {
   TOKEN_AUTHORITY_MASK,
@@ -20,7 +21,6 @@ import {
   MERGED_MINED_BLOCK_VERSION,
   NANO_CONTRACTS_VERSION,
 } from '../constants';
-import { crypto as cryptoBL, PrivateKey, HDPrivateKey } from 'bitcore-lib';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import Input from '../models/input';
@@ -42,7 +42,6 @@ import Address from '../models/address';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
 import ScriptData from '../models/script_data';
-import { ParseError } from '../errors';
 import helpers from './helpers';
 import { getAddressType, getAddressFromPubkey } from './address';
 import NanoContract from '../nano_contracts/nano_contract';
@@ -192,7 +191,7 @@ const transaction = {
     }
 
     if (tx.version === NANO_CONTRACTS_VERSION) {
-      const pubkey = (tx as NanoContract).pubkey;
+      const { pubkey } = tx as NanoContract;
       const address = getAddressFromPubkey(pubkey.toString('hex'), storage.config.getNetwork());
       const addressInfo = await storage.getAddressInfo(address.base58);
       if (!addressInfo) {
@@ -323,7 +322,7 @@ const transaction = {
     const isHeightLocked = this.isHeightLocked(tx.height, nowHeight, rewardLock);
 
     for (const output of tx.outputs) {
-      const address = output.decoded.address;
+      const { address } = output.decoded;
       if (!(address && (await storage.isAddressMine(address)))) {
         continue;
       }
@@ -347,17 +346,15 @@ const transaction = {
             balance[output.token].authorities.melt.unlocked += 1;
           }
         }
+      } else if (isLocked) {
+        balance[output.token].tokens.locked += output.value;
       } else {
-        if (isLocked) {
-          balance[output.token].tokens.locked += output.value;
-        } else {
-          balance[output.token].tokens.unlocked += output.value;
-        }
+        balance[output.token].tokens.unlocked += output.value;
       }
     }
 
     for (const input of tx.inputs) {
-      const address = input.decoded.address;
+      const { address } = input.decoded;
       if (!(address && (await storage.isAddressMine(address)))) {
         continue;
       }
@@ -490,23 +487,24 @@ const transaction = {
       // Data script for NFT
       const scriptData = new ScriptData(output.data);
       return scriptData.createScript();
-    } else if (getAddressType(output.address, network) === 'p2sh') {
+    }
+    if (getAddressType(output.address, network) === 'p2sh') {
       // P2SH
       const address = new Address(output.address, { network });
       // This will throw AddressError in case the address is invalid
       address.validateAddress();
       const p2sh = new P2SH(address, { timelock: output.timelock });
       return p2sh.createScript();
-    } else if (getAddressType(output.address, network) === 'p2pkh') {
+    }
+    if (getAddressType(output.address, network) === 'p2pkh') {
       // P2PKH
       const address = new Address(output.address, { network });
       // This will throw AddressError in case the address is invalid
       address.validateAddress();
       const p2pkh = new P2PKH(address, { timelock: output.timelock });
       return p2pkh.createScript();
-    } else {
-      throw new Error('Invalid output for creating script.');
     }
+    throw new Error('Invalid output for creating script.');
   },
 
   /**
@@ -540,11 +538,11 @@ const transaction = {
     };
     if (options.version === CREATE_TOKEN_TX_VERSION) {
       return new CreateTokenTransaction(txData.name!, txData.symbol!, inputs, outputs, options);
-    } else if (options.version === DEFAULT_TX_VERSION) {
-      return new Transaction(inputs, outputs, options);
-    } else {
-      throw new ParseError('Invalid transaction version.');
     }
+    if (options.version === DEFAULT_TX_VERSION) {
+      return new Transaction(inputs, outputs, options);
+    }
+    throw new ParseError('Invalid transaction version.');
   },
 
   /**
@@ -563,12 +561,10 @@ const transaction = {
     storage: IStorage,
     options?: { signTx?: boolean }
   ): Promise<Transaction> {
-    const newOptions = Object.assign(
-      {
-        signTx: true,
-      },
-      options
-    );
+    const newOptions = {
+      signTx: true,
+      ...options,
+    };
     const network = storage.config.getNetwork();
     const tx = this.createTransactionFromData(txData, network);
     if (newOptions.signTx) {
@@ -587,7 +583,7 @@ const transaction = {
    * @returns {Buffer} Input data
    */
   createInputData(signature: Buffer, publicKey: Buffer): Buffer {
-    let arr = [];
+    const arr = [];
     helpers.pushDataToStack(arr, signature);
     helpers.pushDataToStack(arr, publicKey);
     return Buffer.concat(arr);
@@ -651,15 +647,18 @@ const transaction = {
     if (this.isBlock(tx)) {
       if (tx.version === BLOCK_VERSION) {
         return 'Block';
-      } else if (tx.version === MERGED_MINED_BLOCK_VERSION) {
+      }
+      if (tx.version === MERGED_MINED_BLOCK_VERSION) {
         return 'Merged Mining Block';
       }
     } else {
       if (tx.version === DEFAULT_TX_VERSION) {
         return 'Transaction';
-      } else if (tx.version === CREATE_TOKEN_TX_VERSION) {
+      }
+      if (tx.version === CREATE_TOKEN_TX_VERSION) {
         return 'Create Token Transaction';
-      } else if (tx.version === NANO_CONTRACTS_VERSION) {
+      }
+      if (tx.version === NANO_CONTRACTS_VERSION) {
         return 'Nano Contract';
       }
     }

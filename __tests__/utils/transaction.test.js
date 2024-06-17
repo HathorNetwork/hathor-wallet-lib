@@ -5,9 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { PrivateKey, crypto, HDPrivateKey } from 'bitcore-lib';
 import transaction from '../../src/utils/transaction';
 import { UtxoError } from '../../src/errors';
-import { PrivateKey, crypto } from 'bitcore-lib';
 import {
   BLOCK_VERSION,
   CREATE_TOKEN_TX_VERSION,
@@ -19,7 +19,6 @@ import {
   TOKEN_MINT_MASK,
 } from '../../src/constants';
 import { MemoryStore, Storage } from '../../src/storage';
-import { HDPrivateKey } from 'bitcore-lib';
 import Input from '../../src/models/input';
 import Transaction from '../../src/models/transaction';
 
@@ -198,15 +197,15 @@ test('Utxo selection', () => {
 
   expect(() => {
     transaction.selectUtxos(utxos, 16);
-  }).toThrowError(UtxoError);
+  }).toThrow(UtxoError);
 
   expect(() => {
     transaction.selectUtxos(utxos, -1);
-  }).toThrowError(UtxoError);
+  }).toThrow(UtxoError);
 
   expect(() => {
     transaction.selectUtxos([], 10);
-  }).toThrowError(UtxoError);
+  }).toThrow(UtxoError);
 });
 
 test('utxo from history output', () => {

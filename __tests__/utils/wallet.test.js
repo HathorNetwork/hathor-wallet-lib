@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import Mnemonic from 'bitcore-mnemonic';
+import { crypto, util, HDPrivateKey, HDPublicKey } from 'bitcore-lib';
 import wallet from '../../src/utils/wallet';
 import {
   XPubError,
@@ -13,9 +15,7 @@ import {
   InvalidPasswdError,
 } from '../../src/errors';
 import Network from '../../src/models/network';
-import Mnemonic from 'bitcore-mnemonic';
 import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE, P2SH_ACCT_PATH } from '../../src/constants';
-import { crypto, util, HDPrivateKey, HDPublicKey } from 'bitcore-lib';
 import { hexToBuffer } from '../../src/utils/buffer';
 import { WalletType, WALLET_FLAGS } from '../../src/types';
 import { checkPassword } from '../../src/utils/crypto';
@@ -31,7 +31,7 @@ test('Words', () => {
 
   // With 23 words become invalid
   const invalidArr = wordsArr.slice(0, 23);
-  expect(() => wallet.wordsValid(invalidArr.join(' '))).toThrowError(InvalidWords);
+  expect(() => wallet.wordsValid(invalidArr.join(' '))).toThrow(InvalidWords);
 
   // With 22 words and an invalid word, it's invalid and the invalid word will be on the error object
   const invalidArr2 = wordsArr.slice(0, 21);
@@ -47,7 +47,7 @@ test('Words', () => {
   // Wrong 24th word
   const wordToPush = lastWord === 'word' ? 'guitar' : 'word';
   invalidArr.push(wordToPush);
-  expect(() => wallet.wordsValid(invalidArr.join(' '))).toThrowError(InvalidWords);
+  expect(() => wallet.wordsValid(invalidArr.join(' '))).toThrow(InvalidWords);
 
   // If the wrong word does not belong to the mnemonic dictionary we return it in the list of invalidWords
   const invalidArr3 = invalidArr.slice(0, 23);
@@ -81,7 +81,7 @@ test('Xpriv and xpub', () => {
 
   expect(wallet.xpubDeriveChild(xpubAccount, 0)).toBe(derivedXpriv.xpubkey);
 
-  const chainCode = derivedXpriv._buffers.chainCode;
+  const { chainCode } = derivedXpriv._buffers;
   const fingerprint = derivedXpriv._buffers.parentFingerPrint;
   const derivedXpub = wallet.xpubFromData(
     derivedXpriv.publicKey.toBuffer(),
@@ -105,7 +105,7 @@ test('Xpriv and xpub', () => {
   expect(util.buffer.bufferToHex(compressedPubKey)).toBe(expectedCompressedPubKeyHex);
 
   // Invalid uncompressed public key must throw error
-  expect(() => wallet.toPubkeyCompressed(hexToBuffer(uncompressedPubKeyHex + 'ab'))).toThrowError(
+  expect(() => wallet.toPubkeyCompressed(hexToBuffer(`${uncompressedPubKeyHex}ab`))).toThrow(
     UncompressedPubKeyError
   );
 });
@@ -369,7 +369,7 @@ test('createP2SHRedeemScript', () => {
 });
 
 test('getP2SHInputData', () => {
-  let signature = Buffer.alloc(20);
+  const signature = Buffer.alloc(20);
 
   // Multisig 2/3
   const redeemScript0 =
@@ -474,12 +474,12 @@ test('access data from xpub', () => {
     return wallet.generateAccessDataFromXpub(xpubkeyChange, {
       multisig: { numSignatures: 2, pubkeys: [xpubkeyAcct, xpubkeyChange] },
     });
-  }).toThrowError('Cannot create a multisig wallet with a change path xpub');
+  }).toThrow('Cannot create a multisig wallet with a change path xpub');
 
   // Unsupported xpub derivation depth.
   expect(() => {
     return wallet.generateAccessDataFromXpub(xpubChange.derive(0).xpubkey);
-  }).toThrowError('Invalid xpub');
+  }).toThrow('Invalid xpub');
 });
 
 test('access data from xpriv', () => {

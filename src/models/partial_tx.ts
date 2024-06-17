@@ -35,8 +35,11 @@ import { IDataInput, IDataOutput, IDataTx } from '../types';
  */
 export class ProposalInput extends Input {
   token: string;
+
   authorities: number;
+
   value: number;
+
   address: string;
 
   constructor(
@@ -95,7 +98,9 @@ export class ProposalInput extends Input {
  */
 export class ProposalOutput extends Output {
   token: string;
+
   isChange: boolean;
+
   authorities: number;
 
   constructor(
@@ -177,7 +182,9 @@ export const PartialTxPrefix = 'PartialTx';
  */
 export class PartialTx {
   inputs: ProposalInput[];
+
   outputs: ProposalOutput[];
+
   network: Network;
 
   constructor(network: Network) {
@@ -522,7 +529,9 @@ export const PartialTxInputDataPrefix = 'PartialTxInputData';
  */
 export class PartialTxInputData {
   data: Record<number, Buffer>;
+
   hash: string;
+
   inputsLen: number;
 
   constructor(hash: string, inputsLen: number) {

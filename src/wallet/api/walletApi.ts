@@ -26,8 +26,7 @@ import {
   FullNodeTxConfirmationDataResponse,
 } from '../types';
 import HathorWalletServiceWallet from '../wallet';
-import { WalletRequestError } from '../../errors';
-import { TxNotFoundError } from '../../errors';
+import { WalletRequestError, TxNotFoundError } from '../../errors';
 
 /**
  * Api calls for wallet
@@ -39,24 +38,22 @@ const walletApi = {
   async getWalletStatus(wallet: HathorWalletServiceWallet): Promise<WalletStatusResponseData> {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get('wallet/status');
-    const data = response.data;
+    const { data } = response;
     if (response.status === 200 && data.success) {
       return data;
-    } else {
-      throw new WalletRequestError('Error getting wallet status.');
     }
+    throw new WalletRequestError('Error getting wallet status.');
   },
 
   async getVersionData(wallet: HathorWalletServiceWallet): Promise<FullNodeVersionData> {
     const axios = await axiosInstance(wallet, false);
     const response = await axios.get('version');
-    const data = response.data;
+    const { data } = response;
 
     if (response.status === 200 && data.success) {
       return data.data;
-    } else {
-      throw new WalletRequestError('Error getting fullnode data.');
     }
+    throw new WalletRequestError('Error getting fullnode data.');
   },
 
   async createWallet(
@@ -77,18 +74,18 @@ const walletApi = {
     };
 
     if (firstAddress) {
-      data['firstAddress'] = firstAddress;
+      data.firstAddress = firstAddress;
     }
     const axios = await axiosInstance(wallet, false);
     const response = await axios.post('wallet/init', data);
     if (response.status === 200 && response.data.success) {
       return response.data;
-    } else if (response.status === 400 && response.data.error === 'wallet-already-loaded') {
+    }
+    if (response.status === 400 && response.data.error === 'wallet-already-loaded') {
       // If it was already loaded, we have to check if it's ready
       return response.data;
-    } else {
-      throw new WalletRequestError('Error creating wallet.');
     }
+    throw new WalletRequestError('Error creating wallet.');
   },
 
   async getAddresses(
@@ -125,9 +122,8 @@ const walletApi = {
     const response = await axios.get('wallet/addresses/new');
     if (response.status === 200 && response.data.success === true) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error getting wallet addresses to use.');
     }
+    throw new WalletRequestError('Error getting wallet addresses to use.');
   },
 
   async getTokenDetails(
@@ -139,9 +135,8 @@ const walletApi = {
 
     if (response.status === 200 && response.data.success === true) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error getting token details.');
     }
+    throw new WalletRequestError('Error getting token details.');
   },
 
   async getBalances(
@@ -150,15 +145,14 @@ const walletApi = {
   ): Promise<BalanceResponseData> {
     const data = { params: {} };
     if (token) {
-      data['params']['token_id'] = token;
+      data.params.token_id = token;
     }
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get('wallet/balances', data);
     if (response.status === 200 && response.data.success === true) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error getting wallet balance.');
     }
+    throw new WalletRequestError('Error getting wallet balance.');
   },
 
   async getTokens(wallet: HathorWalletServiceWallet): Promise<TokensResponseData> {
@@ -166,9 +160,8 @@ const walletApi = {
     const response = await axios.get('wallet/tokens');
     if (response.status === 200 && response.data.success === true) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error getting list of tokens.');
     }
+    throw new WalletRequestError('Error getting list of tokens.');
   },
 
   async getHistory(wallet: HathorWalletServiceWallet, options = {}): Promise<HistoryResponseData> {
@@ -177,9 +170,8 @@ const walletApi = {
     const response = await axios.get('wallet/history', data);
     if (response.status === 200 && response.data.success === true) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error getting wallet history.');
     }
+    throw new WalletRequestError('Error getting wallet history.');
   },
 
   async getTxOutputs(
@@ -191,9 +183,8 @@ const walletApi = {
     const response = await axios.get('wallet/tx_outputs', data);
     if (response.status === 200 && response.data.success === true) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error requesting utxo.');
     }
+    throw new WalletRequestError('Error requesting utxo.');
   },
 
   async createTxProposal(
@@ -205,9 +196,8 @@ const walletApi = {
     const response = await axios.post('tx/proposal', data);
     if (response.status === 201) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error creating tx proposal.');
     }
+    throw new WalletRequestError('Error creating tx proposal.');
   },
 
   async updateTxProposal(
@@ -220,9 +210,8 @@ const walletApi = {
     const response = await axios.put(`tx/proposal/${id}`, data);
     if (response.status === 200) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error sending tx proposal.');
     }
+    throw new WalletRequestError('Error sending tx proposal.');
   },
 
   async deleteTxProposal(
@@ -233,9 +222,8 @@ const walletApi = {
     const response = await axios.delete(`tx/proposal/${id}`);
     if (response.status === 200) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error deleting tx proposal.');
     }
+    throw new WalletRequestError('Error deleting tx proposal.');
   },
 
   async createAuthToken(

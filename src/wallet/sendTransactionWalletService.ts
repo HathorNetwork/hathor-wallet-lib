@@ -6,6 +6,7 @@
  */
 
 import { EventEmitter } from 'events';
+import { shuffle } from 'lodash';
 import walletApi from './api/walletApi';
 import MineTransaction from './mineTransaction';
 import HathorWalletServiceWallet from './wallet';
@@ -16,7 +17,6 @@ import Output from '../models/output';
 import Input from '../models/input';
 import Address from '../models/address';
 import { HATHOR_TOKEN_CONFIG } from '../constants';
-import { shuffle } from 'lodash';
 import { SendTxError, UtxoError, WalletError, WalletRequestError } from '../errors';
 import {
   OutputSendTransaction,
@@ -38,14 +38,19 @@ type optionsType = {
 class SendTransactionWalletService extends EventEmitter implements ISendTransaction {
   // Wallet that is sending the transaction
   private wallet: HathorWalletServiceWallet;
+
   // Outputs to prepare the transaction
   private outputs: OutputSendTransaction[];
+
   // Optional inputs to prepare the transaction
   private inputs: InputRequestObj[];
+
   // Optional change address to prepare the transaction
   private changeAddress: string | null;
+
   // Transaction object to be used after it's already prepared
   private transaction: Transaction | null;
+
   // MineTransaction object
   private mineTransaction: MineTransaction | null;
 
@@ -55,15 +60,13 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
   constructor(wallet: HathorWalletServiceWallet, options: optionsType = {}) {
     super();
 
-    const newOptions: optionsType = Object.assign(
-      {
-        outputs: [],
-        inputs: [],
-        changeAddress: null,
-        transaction: null,
-      },
-      options
-    );
+    const newOptions: optionsType = {
+      outputs: [],
+      inputs: [],
+      changeAddress: null,
+      transaction: null,
+      ...options,
+    };
 
     this.wallet = wallet;
     this.outputs = newOptions.outputs!;
@@ -325,13 +328,11 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       startMiningTx: boolean;
       maxTxMiningRetries: number;
     };
-    const newOptions: mineOptionsType = Object.assign(
-      {
-        startMiningTx: true,
-        maxTxMiningRetries: 3,
-      },
-      options
-    );
+    const newOptions: mineOptionsType = {
+      startMiningTx: true,
+      maxTxMiningRetries: 3,
+      ...options,
+    };
 
     this.mineTransaction = new MineTransaction(this.transaction, {
       maxTxMiningRetries: newOptions.maxTxMiningRetries,
@@ -388,7 +389,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
 
     try {
       const responseData = await walletApi.createTxProposal(this.wallet, txHex);
-      const txProposalId = responseData.txProposalId;
+      const { txProposalId } = responseData;
       const sendData = await walletApi.updateTxProposal(this.wallet, txProposalId, txHex);
       this.transaction.updateHash();
       this.emit('send-tx-success', this.transaction);

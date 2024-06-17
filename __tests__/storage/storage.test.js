@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { HDPrivateKey } from 'bitcore-lib';
+import Mnemonic from 'bitcore-mnemonic';
 import walletApi from '../../src/api/wallet';
 import { MemoryStore, Storage, LevelDBStore } from '../../src/storage';
 import tx_history from '../__fixtures__/tx_history';
@@ -18,8 +20,6 @@ import {
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
   GAP_LIMIT,
 } from '../../src/constants';
-import { HDPrivateKey } from 'bitcore-lib';
-import Mnemonic from 'bitcore-mnemonic';
 import * as cryptoUtils from '../../src/utils/crypto';
 import { InvalidPasswdError } from '../../src/errors';
 import Network from '../../src/models/network';
@@ -214,7 +214,7 @@ test('store fetch methods', async () => {
   const storage = new Storage(store);
   await processHistory(storage);
 
-  let buf = [];
+  const buf = [];
   for await (const a of storage.getAllAddresses()) {
     buf.push(a);
   }
@@ -280,7 +280,7 @@ test('selecting utxos', async () => {
   const options = {
     filter_method: utxo => utxo.txId === wantedTx,
   };
-  let buf = [];
+  const buf = [];
   for await (const utxo of storage.selectUtxos(options)) {
     buf.push(utxo);
   }
@@ -304,7 +304,7 @@ test('utxos selected as inputs', async () => {
   );
 
   // Iterate on all utxos selected as input
-  let buf = [];
+  const buf = [];
   for await (const u of storage.utxoSelectedAsInputIter()) {
     buf.push(u);
   }

@@ -8,8 +8,8 @@
 import path from 'path';
 import { Level, ValueIteratorOptions } from 'level';
 import { AbstractSublevel } from 'abstract-level';
-import { IKVUtxoIndex, IUtxo, IUtxoFilterOptions, ILockedUtxo } from '../../types';
 import _ from 'lodash';
+import { IKVUtxoIndex, IUtxo, IUtxoFilterOptions, ILockedUtxo } from '../../types';
 import { HATHOR_TOKEN_CONFIG } from '../../constants';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 import transactionUtils from '../../utils/transaction';
@@ -39,7 +39,7 @@ function _token_address_utxo_key(utxo: IUtxo): string {
   return `${utxo.authorities}:${utxo.token}:${utxo.address}:${value}:${_utxo_id(utxo)}`;
 }
 
-function _int_to_hex(value: Number): string {
+function _int_to_hex(value: number): string {
   return value.toString(16).padStart(16, '0');
 }
 
@@ -54,30 +54,35 @@ function _token_utxo_key(utxo: IUtxo): string {
 
 export default class LevelUtxoIndex implements IKVUtxoIndex {
   dbpath: string;
+
   /**
    * Main utxo database
    * Key: tx_id:index
    * Value: IUtxo (json encoded)
    */
   utxoDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, IUtxo>;
+
   /**
    * Reverse search index for utxo database
    * Key: authorities:token:value:tx_id:index
    * Value: IUtxo (json encoded)
    */
   tokenUtxoDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, IUtxo>;
+
   /**
    * Reverse search index for utxo database
    * Key: authorities:token:address:value:tx_id:index
    * Value: IUtxo (json encoded)
    */
   tokenAddressUtxoDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, IUtxo>;
+
   /**
    * Locked utxo database
    * Key: tx_id:index
    * Value: ILockedUtxo (json encoded)
    */
   lockedUtxoDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, ILockedUtxo>;
+
   indexVersion: string = '0.0.1';
 
   constructor(dbpath: string) {
@@ -106,7 +111,7 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
    * @returns {Promise<void>}
    */
   async checkVersion(): Promise<void> {
-    const db = this.utxoDB.db;
+    const { db } = this.utxoDB;
     const instanceName = this.constructor.name;
     await checkLevelDbVersion(instanceName, db, this.indexVersion);
   }

@@ -6,6 +6,7 @@
  */
 
 import EventEmitter from 'events';
+import { shuffle } from 'lodash';
 import { SELECT_OUTPUTS_TIMEOUT, HATHOR_TOKEN_CONFIG } from '../constants';
 import transactionUtils from '../utils/transaction';
 import txApi from '../api/txApi';
@@ -26,7 +27,6 @@ import {
 } from '../types';
 import Transaction from '../models/transaction';
 import { bestUtxoSelection } from '../utils/utxo';
-import { shuffle } from 'lodash';
 
 export interface ISendInput {
   txId: string;
@@ -69,15 +69,22 @@ export type ISendOutput = ISendDataOutput | ISendTokenOutput;
  * 'send-success': after push tx succeeds;
  * 'send-error': if an error happens;
  * 'unexpected-error': if an unexpected error happens;
- **/
+ * */
 export default class SendTransaction extends EventEmitter {
   storage: IStorage | null;
+
   transaction: Transaction | null;
+
   outputs: ISendOutput[];
+
   inputs: ISendInput[];
+
   changeAddress: string | null;
+
   pin: string | null;
+
   fullTxData: IDataTx | null;
+
   mineTransaction: MineTransaction | null = null;
 
   /**
@@ -342,13 +349,11 @@ export default class SendTransaction extends EventEmitter {
 
     await this.updateOutputSelected(true);
 
-    const newOptions = Object.assign(
-      {
-        startMiningTx: true,
-        maxTxMiningRetries: 3,
-      },
-      options
-    );
+    const newOptions = {
+      startMiningTx: true,
+      maxTxMiningRetries: 3,
+      ...options,
+    };
 
     this.mineTransaction = new MineTransaction(this.transaction, {
       maxTxMiningRetries: newOptions.maxTxMiningRetries,
@@ -517,7 +522,7 @@ export default class SendTransaction extends EventEmitter {
    *
    * @param {boolean} selected If should set the selected parameter as true or false
    *
-   **/
+   * */
   async updateOutputSelected(selected: boolean) {
     if (this.transaction === null) {
       throw new WalletError(ErrorMessages.TRANSACTION_IS_NULL);
@@ -556,11 +561,11 @@ export async function prepareSendTokensData(
     const walletType = await storage.getWalletType();
     if (walletType === WalletType.P2PKH) {
       return 'p2pkh';
-    } else if (walletType === WalletType.MULTISIG) {
-      return 'p2sh';
-    } else {
-      throw new Error('Unsupported wallet type.');
     }
+    if (walletType === WalletType.MULTISIG) {
+      return 'p2sh';
+    }
+    throw new Error('Unsupported wallet type.');
   }
 
   const token = options.token || HATHOR_TOKEN_CONFIG.uid;

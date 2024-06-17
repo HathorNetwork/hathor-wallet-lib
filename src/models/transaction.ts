@@ -5,6 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { crypto as cryptoBL, util } from 'bitcore-lib';
+import buffer from 'buffer';
+import { clone } from 'lodash';
+import crypto from 'crypto';
 import {
   BLOCK_VERSION,
   DEFAULT_SIGNAL_BITS,
@@ -17,7 +21,6 @@ import {
   TX_HASH_SIZE_BYTES,
   TX_WEIGHT_CONSTANTS,
 } from '../constants';
-import { crypto as cryptoBL, util } from 'bitcore-lib';
 import {
   bufferToHex,
   hexToBuffer,
@@ -31,9 +34,6 @@ import Input from './input';
 import Output from './output';
 import Network from './network';
 import { MaximumNumberInputsError, MaximumNumberOutputsError } from '../errors';
-import buffer from 'buffer';
-import { clone } from 'lodash';
-import crypto from 'crypto';
 
 enum txType {
   BLOCK = 'Block',
@@ -64,15 +64,25 @@ type optionsType = {
  */
 class Transaction {
   inputs: Input[];
+
   outputs: Output[];
+
   signalBits: number;
+
   version: number;
+
   weight: number;
+
   nonce: number;
+
   timestamp: number | null;
+
   parents: string[];
+
   tokens: string[];
+
   hash: string | null;
+
   protected _dataToSignCache: Buffer | null;
 
   constructor(inputs: Input[], outputs: Output[], options: optionsType = {}) {
@@ -131,7 +141,7 @@ class Transaction {
       return this._dataToSignCache!;
     }
 
-    let arr: any[] = [];
+    const arr: any[] = [];
 
     this.serializeFundsFields(arr, false);
 
@@ -327,7 +337,7 @@ class Transaction {
    * @inner
    */
   toBytes(): Buffer {
-    let arr: any = [];
+    const arr: any = [];
     // Serialize first the funds part
     //
     this.serializeFundsFields(arr, true);
@@ -389,13 +399,15 @@ class Transaction {
     if (this.isBlock()) {
       if (this.version === BLOCK_VERSION) {
         return txType.BLOCK;
-      } else if (this.version === MERGED_MINED_BLOCK_VERSION) {
+      }
+      if (this.version === MERGED_MINED_BLOCK_VERSION) {
         return txType.MERGED_MINING_BLOCK;
       }
     } else {
       if (this.version === DEFAULT_TX_VERSION) {
         return txType.TRANSACTION;
-      } else if (this.version === CREATE_TOKEN_TX_VERSION) {
+      }
+      if (this.version === CREATE_TOKEN_TX_VERSION) {
         return txType.CREATE_TOKEN_TRANSACTION;
       }
     }
@@ -460,7 +472,9 @@ class Transaction {
     // Tx version
     [this.version, buf] = unpackToInt(1, false, buf);
 
-    let lenTokens, lenInputs, lenOutputs;
+    let lenTokens;
+    let lenInputs;
+    let lenOutputs;
 
     // Len tokens
     [lenTokens, buf] = unpackToInt(1, false, buf);

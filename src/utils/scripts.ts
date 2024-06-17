@@ -1,13 +1,13 @@
+import _ from 'lodash';
+import { Script, HDPublicKey } from 'bitcore-lib';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
 import ScriptData from '../models/script_data';
 import Network from '../models/network';
-import helpers from '../utils/helpers';
-import { unpackLen, unpackToInt } from '../utils/buffer';
-import _ from 'lodash';
+import helpers from './helpers';
+import { unpackLen, unpackToInt } from './buffer';
 import { ParseError, ParseScriptError, XPubError } from '../errors';
 import { OP_PUSHDATA1, OP_CHECKSIG } from '../opcodes';
-import { Script, HDPublicKey } from 'bitcore-lib';
 
 /**
  * Parse P2PKH output script
@@ -29,11 +29,9 @@ export const parseP2PKH = (buff: Buffer, network: Network): P2PKH => {
     // First byte is len, which is always 4 bytes
     [timelock, scriptBuf] = unpackToInt(4, false, scriptBuf.slice(1));
     offset = 1;
-  } else {
-    if (scriptBuf.length !== 25) {
-      // It's not a P2PKH
-      throw new ParseScriptError('Invalid output script.');
-    }
+  } else if (scriptBuf.length !== 25) {
+    // It's not a P2PKH
+    throw new ParseScriptError('Invalid output script.');
   }
 
   let addressHash;
@@ -62,11 +60,9 @@ export const parseP2SH = (buff: Buffer, network: Network): P2SH => {
     // First byte is len, which is always 4 bytes
     [timelock, scriptBuf] = unpackToInt(4, false, scriptBuf.slice(1));
     offset = 1;
-  } else {
-    if (scriptBuf.length !== 23) {
-      // It's not a P2PKH
-      throw new ParseScriptError('Invalid output script.');
-    }
+  } else if (scriptBuf.length !== 23) {
+    // It's not a P2PKH
+    throw new ParseScriptError('Invalid output script.');
   }
 
   let scriptHash;
@@ -85,7 +81,7 @@ export const parseP2SH = (buff: Buffer, network: Network): P2SH => {
 export const parseScriptData = (buff: Buffer): ScriptData => {
   // We should clone the buffer being sent in order to never mutate
   // what comes from outside the library
-  let scriptBuf = _.clone(buff);
+  const scriptBuf = _.clone(buff);
   if (scriptBuf.length < 2) {
     // At least 1 byte for len data and 1 byte for OP_CHECKSIG
     throw new ParseScriptError('Invalid output script. Script must have at least 2 bytes.');
@@ -143,13 +139,14 @@ export const parseScriptData = (buff: Buffer): ScriptData => {
 export const getPushData = (buff: Buffer): Buffer => {
   // We should clone the buffer being sent in order to never mutate
   // what comes from outside the library
-  let scriptBuf = _.clone(buff);
+  const scriptBuf = _.clone(buff);
 
   if (scriptBuf.length === 0) {
     throw new ParseError('Invalid buffer.');
   }
 
-  let lenData, start;
+  let lenData;
+  let start;
 
   if (scriptBuf[0] > 75) {
     lenData = scriptBuf[1];
@@ -230,8 +227,7 @@ export const parseScript = (script: Buffer, network: Network): P2PKH | P2SH | Sc
     if (error instanceof ParseError) {
       // We don't know how to parse this script
       return null;
-    } else {
-      throw error;
     }
+    throw error;
   }
 };

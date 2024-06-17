@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { get } from 'lodash';
 import Connection from '../../../src/new/connection';
 import {
   DEBUG_LOGGING,
@@ -20,7 +21,6 @@ import { delay } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 import { MemoryStore, Storage } from '../../../src/storage';
 import { TxHistoryProcessingStatus } from '../../../src/types';
-import { get } from 'lodash';
 
 /**
  * @typedef SendTxResponse

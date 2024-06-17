@@ -62,7 +62,7 @@ describe('locked utxos', () => {
    * then we should spend the utxo and check it has been "unselected"
    * @param {IStorage} storage The storage instance
    * @param {Object} walletData the pre-calculated wallet data to start a wallet
-   **/
+   * */
   async function testUnlockWhenSpent(storage, walletData) {
     const hwallet = await startWallet(storage, walletData);
     const address = await hwallet.getAddressAtIndex(0);

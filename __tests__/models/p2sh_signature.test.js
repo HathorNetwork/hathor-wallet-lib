@@ -16,7 +16,7 @@ test('P2SHSignature', () => {
     3: '89ab',
     4: 'cdef',
   };
-  const expected = pubkey + '|0:0123|1:4567|3:89ab|4:cdef';
+  const expected = `${pubkey}|0:0123|1:4567|3:89ab|4:cdef`;
 
   const p2shSig = new P2SHSignature(pubkey, signatures);
   expect(p2shSig.serialize()).toBe(expected);

@@ -21,9 +21,9 @@ import {
   SCANNING_POLICY,
 } from '../types';
 import walletApi from '../api/wallet';
-import helpers from '../utils/helpers';
-import transactionUtils from '../utils/transaction';
-import { deriveAddressP2PKH, deriveAddressP2SH } from '../utils/address';
+import helpers from './helpers';
+import transactionUtils from './transaction';
+import { deriveAddressP2PKH, deriveAddressP2SH } from './address';
 import { MAX_ADDRESSES_GET, LOAD_WALLET_MAX_RETRY, LOAD_WALLET_RETRY_SLEEP } from '../constants';
 
 /**
@@ -111,7 +111,7 @@ export async function syncHistory(
     const addresses = await loadAddresses(itStartIndex, itCount, storage);
     // subscribe to addresses
     connection.subscribeAddresses(addresses);
-    for await (let gotTx of loadAddressHistory(addresses, storage)) {
+    for await (const gotTx of loadAddressHistory(addresses, storage)) {
       if (gotTx) {
         // This will signal we have found a transaction when syncing the history
         foundAnyTx = true;
@@ -338,7 +338,7 @@ export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadA
       'Wallet is configured to use gap-limit but the scan policy data is not configured as gap-limit'
     );
   }
-  const gapLimit = scanPolicyData.gapLimit;
+  const { gapLimit } = scanPolicyData;
   if (lastUsedAddressIndex + gapLimit > lastLoadedAddressIndex) {
     // we need to generate more addresses to fill the gap limit
     return {
@@ -364,7 +364,7 @@ export async function processHistory(
   storage: IStorage,
   { rewardLock }: { rewardLock?: number } = {}
 ): Promise<void> {
-  const store = storage.store;
+  const { store } = storage;
   // We have an additive method to update metadata so we need to clean the current metadata before processing.
   await store.cleanMetadata();
 
@@ -406,7 +406,7 @@ async function updateTokensData(storage: IStorage, tokens: Set<string>): Promise
     while (retryCount <= 5) {
       try {
         // Fetch and return the api response
-        let result:
+        const result:
           | {
               success: true;
               name: string;
@@ -432,7 +432,7 @@ async function updateTokensData(storage: IStorage, tokens: Set<string>): Promise
     throw new Error(`Too many attempts at fetchTokenData for ${uid}`);
   }
 
-  const store = storage.store;
+  const { store } = storage;
   for (const uid of tokens) {
     const tokenInfo = await store.getToken(uid);
     if (!tokenInfo) {
@@ -462,7 +462,7 @@ async function updateWalletMetadataFromProcessedTxData(
   storage: IStorage,
   { maxIndexUsed, tokens }: { maxIndexUsed: number; tokens: Set<string> }
 ): Promise<void> {
-  const store = storage.store;
+  const { store } = storage;
   // Update wallet data
   const walletData = await store.getWalletData();
   if (maxIndexUsed > -1) {
@@ -518,7 +518,7 @@ export async function processNewTx(
     };
   }
 
-  const store = storage.store;
+  const { store } = storage;
 
   // We ignore voided transactions
   if (tx.is_voided)
@@ -593,14 +593,12 @@ export async function processNewTx(
           addressMeta.balance.get(output.token)!.authorities.melt.unlocked += 1;
         }
       }
+    } else if (isLocked) {
+      tokenMeta.balance.tokens.locked += output.value;
+      addressMeta.balance.get(output.token)!.tokens.locked += output.value;
     } else {
-      if (isLocked) {
-        tokenMeta.balance.tokens.locked += output.value;
-        addressMeta.balance.get(output.token)!.tokens.locked += output.value;
-      } else {
-        tokenMeta.balance.tokens.unlocked += output.value;
-        addressMeta.balance.get(output.token)!.tokens.unlocked += output.value;
-      }
+      tokenMeta.balance.tokens.unlocked += output.value;
+      addressMeta.balance.get(output.token)!.tokens.unlocked += output.value;
     }
 
     // Add utxo to the storage if unspent
@@ -735,9 +733,9 @@ export async function processUtxoUnlock(
     };
   }
 
-  const store = storage.store;
+  const { store } = storage;
 
-  const tx = lockedUtxo.tx;
+  const { tx } = lockedUtxo;
   const output = tx.outputs[lockedUtxo.index];
   // Skip data outputs since they do not have an address and do not "belong" in a wallet
   // This shouldn't happen, but we check it just in case

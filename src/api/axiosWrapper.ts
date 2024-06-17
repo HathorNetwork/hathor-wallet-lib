@@ -45,12 +45,10 @@ export const axiosWrapperCreateRequestInstance = (
     headers: Record<string, string>;
   } = {
     baseURL: url,
-    headers: Object.assign(
-      {
-        'Content-Type': 'application/json',
-      },
-      additionalHeaders
-    ),
+    headers: {
+      'Content-Type': 'application/json',
+      ...additionalHeaders,
+    },
   };
   if (timeout) {
     defaultOptions.timeout = timeout;

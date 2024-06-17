@@ -23,7 +23,7 @@ import { IStorage } from '../types';
  * You can subscribe for the following events:
  * - state: Fired when the state of the Wallet changes.
  * - wallet-update: Fired when a new wallet message arrive from the websocket.
- **/
+ * */
 class WalletConnection extends BaseConnection {
   constructor(options: ConnectionParams) {
     super(options);
@@ -33,7 +33,7 @@ class WalletConnection extends BaseConnection {
     const wsOptions = { wsURL: helpers.getWSServerURL(this.currentServer) };
 
     if (options.connectionTimeout) {
-      wsOptions['connectionTimeout'] = options.connectionTimeout;
+      wsOptions.connectionTimeout = options.connectionTimeout;
     }
 
     this.websocket = new GenericWebSocket(wsOptions);
@@ -41,7 +41,7 @@ class WalletConnection extends BaseConnection {
 
   /**
    * Connect to the server and start emitting events.
-   **/
+   * */
   start() {
     // This should never happen as the websocket is initialized on the constructor
     if (!this.websocket) {

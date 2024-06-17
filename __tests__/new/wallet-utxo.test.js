@@ -1,3 +1,4 @@
+import { HDPrivateKey } from 'bitcore-lib';
 import HathorWallet from '../../src/new/wallet';
 import txHistoryFixture from '../__fixtures__/tx_history';
 import { MemoryStore, Storage } from '../../src/storage';
@@ -7,7 +8,6 @@ import {
   TOKEN_DEPOSIT_PERCENTAGE,
   TX_WEIGHT_CONSTANTS,
 } from '../../src/constants';
-import { HDPrivateKey } from 'bitcore-lib';
 import { encryptData } from '../../src/utils/crypto';
 import { WalletType } from '../../src/types';
 import walletApi from '../../src/api/wallet';
@@ -161,7 +161,7 @@ describe('UTXO Consolidation', () => {
 
   test('correctly execute consolidateUtxos', async () => {
     const result = await hathorWallet.consolidateUtxos(destinationAddress);
-    expect(hathorWallet.sendManyOutputsTransaction).toBeCalled();
+    expect(hathorWallet.sendManyOutputsTransaction).toHaveBeenCalled();
     expect(result.total_utxos_consolidated).toBe(2);
     expect(result.total_amount).toBe(2);
     expect(result.txId).toBe('123');

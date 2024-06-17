@@ -59,11 +59,10 @@ const walletServiceClient = {
     const response = await axios.post<PushRegisterResponseData>('wallet/push/register', payload);
     if (response.status === 200 && response.data.success) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error registering device for push notification.', {
-        cause: response.data,
-      });
     }
+    throw new WalletRequestError('Error registering device for push notification.', {
+      cause: response.data,
+    });
   },
 
   async pushUpdate(
@@ -74,11 +73,10 @@ const walletServiceClient = {
     const response = await axios.put<PushUpdateResponseData>('wallet/push/update', payload);
     if (response.status === 200 && response.data.success) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error updating push notification settings for device.', {
-        cause: response.data,
-      });
     }
+    throw new WalletRequestError('Error updating push notification settings for device.', {
+      cause: response.data,
+    });
   },
 
   async pushUnregister(
@@ -89,11 +87,10 @@ const walletServiceClient = {
     const response = await axios.delete(`wallet/push/unregister/${deviceId}`);
     if (response.status === 200 && response.data.success) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error unregistering wallet from push notifications.', {
-        cause: response.data,
-      });
     }
+    throw new WalletRequestError('Error unregistering wallet from push notifications.', {
+      cause: response.data,
+    });
   },
 };
 

@@ -5,10 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { hexToBuffer } from '../utils/buffer';
-import { TX_HASH_SIZE_BYTES } from '../constants';
-import { unpackToInt, unpackToHex, unpackLen, intToBytes } from '../utils/buffer';
 import _ from 'lodash';
+import { hexToBuffer, unpackToInt, unpackToHex, unpackLen, intToBytes } from '../utils/buffer';
+import { TX_HASH_SIZE_BYTES } from '../constants';
 
 type optionsType = {
   data?: Buffer | null | undefined;
@@ -17,8 +16,10 @@ type optionsType = {
 class Input {
   // Hash of the transaction is being spent
   hash: string;
+
   // Index of the outputs array from the output being spent
   index: number;
+
   // Input signed data for P2PKH and redeemScript for P2SH
   data: Buffer | null;
 
@@ -83,7 +84,10 @@ class Input {
   static createFromBytes(buf: Buffer): [Input, Buffer] {
     // Cloning buffer so we don't mutate anything sent by the user
     let inputBuffer = _.clone(buf);
-    let hash, index, dataLen, data;
+    let hash;
+    let index;
+    let dataLen;
+    let data;
 
     // Hash
     [hash, inputBuffer] = unpackToHex(TX_HASH_SIZE_BYTES, inputBuffer);

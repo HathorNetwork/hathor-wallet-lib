@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { HDPublicKey } from 'bitcore-lib';
 import Input from '../models/input';
 import {
   ApiVersion,
@@ -49,7 +50,6 @@ import {
   TOKEN_DEPOSIT_PERCENTAGE,
 } from '../constants';
 import { UninitializedWalletError } from '../errors';
-import { HDPublicKey } from 'bitcore-lib';
 import Transaction from '../models/transaction';
 
 const DEFAULT_ADDRESS_META: IAddressMetadata = {
@@ -59,10 +59,15 @@ const DEFAULT_ADDRESS_META: IAddressMetadata = {
 
 export class Storage implements IStorage {
   store: IStore;
+
   utxosSelectedAsInput: Map<string, boolean>;
+
   config: Config;
+
   version: ApiVersion | null;
+
   txSignFunc: EcdsaTxSign | null;
+
   /**
    * This promise is used to chain the calls to process unlocked utxos.
    * This way we can avoid concurrent calls.
@@ -414,10 +419,9 @@ export class Storage implements IStorage {
       if (options.only_available_utxos) {
         // We need to check if the utxo is selected as an input since we only want available utxos.
         return selectedFilter && optionsFilter;
-      } else {
-        // Only check the filter method if we don't care about available utxos.
-        return optionsFilter;
       }
+      // Only check the filter method if we don't care about available utxos.
+      return optionsFilter;
     };
 
     const newOptions: IUtxoFilterOptions = {
@@ -516,7 +520,7 @@ export class Storage implements IStorage {
           newOutputs.push({
             type: getAddressType(changeAddress, this.config.getNetwork()),
             token,
-            authorities: authorities,
+            authorities,
             value: authorities,
             address: changeAddress,
             timelock: null,

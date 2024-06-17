@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { orderBy, cloneDeep } from 'lodash';
 import {
   IStore,
   IAddressInfo,
@@ -25,9 +26,7 @@ import {
   INcData,
 } from '../types';
 import { GAP_LIMIT, HATHOR_TOKEN_CONFIG } from '../constants';
-import { orderBy } from 'lodash';
 import transactionUtils from '../utils/transaction';
-import { cloneDeep } from 'lodash';
 
 const DEFAULT_ADDRESSES_WALLET_DATA = {
   lastLoadedAddressIndex: 0,
@@ -93,64 +92,77 @@ export class MemoryStore implements IStore {
    * where base58 is the address in base58
    */
   addresses: Map<string, IAddressInfo>;
+
   /**
    * Map<index, base58>
    * where index is the address index and base58 is the address in base58
    */
   addressIndexes: Map<number, string>;
+
   /**
    * Map<base58, IAddressMetadata>
    * where base58 is the address in base58
    */
   addressesMetadata: Map<string, IAddressMetadata>;
+
   /**
    * Map<uid, ITokenData>
    * where uid is the token uid in hex
    */
   tokens: Map<string, ITokenData>;
+
   /**
    * Map<uid, ITokenMetadata>
    * where uid is the token uid in hex
    */
   tokensMetadata: Map<string, ITokenMetadata>;
+
   /**
    * Map<uid, ITokenData>
    * where uid is the token uid in hex
    */
   registeredTokens: Map<string, ITokenData>;
+
   /**
    * Map<ncId, INcData>
    * where ncId is the nano contract id in hex
    */
   registeredNanoContracts: Map<string, INcData>;
+
   /**
    * Map<txId, IHistoryTx>
    * where txId is the transaction id in hex
    */
   history: Map<string, IHistoryTx>;
+
   /**
    * Array of `<timestamp>:<txId>` strings, which should be always sorted.
    * `timestamp` should be in uint32 representation
    * This will force the items to be ordered by timestamp.
    */
   historyTs: string[];
+
   /**
    * Map<utxoid, IUtxo>
    * where utxoid is the txId + index, a string representation of IUtxoId
    */
   utxos: Map<string, IUtxo>;
+
   /**
    * Wallet access data
    */
   accessData: IWalletAccessData | null;
+
   /**
    * Wallet metadata
    */
   walletData: IWalletData;
+
   /**
    * Generic storage for any other data
    */
   genericStorage: Record<string, any>;
+
   lockedUtxos: Map<string, ILockedUtxo>;
 
   constructor() {

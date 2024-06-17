@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import buffer from 'buffer';
+import { clone } from 'lodash';
 import {
   CREATE_TOKEN_TX_VERSION,
   TOKEN_INFO_VERSION,
@@ -18,8 +20,6 @@ import Output from './output';
 import Transaction from './transaction';
 import Network from './network';
 import { CreateTokenTxInvalid, InvalidOutputsError, NftValidationError } from '../errors';
-import buffer from 'buffer';
-import { clone } from 'lodash';
 import ScriptData from './script_data';
 import { OutputType } from '../wallet/types';
 
@@ -35,6 +35,7 @@ type optionsType = {
 
 class CreateTokenTransaction extends Transaction {
   name: string;
+
   symbol: string;
 
   constructor(
@@ -127,7 +128,11 @@ class CreateTokenTransaction extends Transaction {
   }
 
   getTokenInfoFromBytes(buf: Buffer): Buffer {
-    let tokenInfoVersion, lenName, lenSymbol, bufName, bufSymbol;
+    let tokenInfoVersion;
+    let lenName;
+    let lenSymbol;
+    let bufName;
+    let bufSymbol;
 
     [tokenInfoVersion, buf] = unpackToInt(1, false, buf);
 
@@ -178,7 +183,8 @@ class CreateTokenTransaction extends Transaction {
     // Tx version
     [this.version, buf] = unpackToInt(1, false, buf);
 
-    let lenInputs, lenOutputs;
+    let lenInputs;
+    let lenOutputs;
 
     // Len inputs
     [lenInputs, buf] = unpackToInt(1, false, buf);

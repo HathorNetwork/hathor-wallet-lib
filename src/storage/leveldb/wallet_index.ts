@@ -30,18 +30,22 @@ export const GENERIC_PREFIX = 'generic';
 
 export default class LevelWalletIndex implements IKVWalletIndex {
   dbpath: string;
+
   /**
    * Database to store wallet access data.
    */
   accessDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, IWalletAccessData>;
+
   /**
    * Database to store wallet data.
    */
   walletDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, string>;
+
   /**
    * Database to store generic wallet data.
    */
   genericDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, any>;
+
   indexVersion: string = '0.0.1';
 
   constructor(dbpath: string) {
@@ -99,7 +103,7 @@ export default class LevelWalletIndex implements IKVWalletIndex {
    * @returns {Promise<null>}
    */
   async checkVersion(): Promise<void> {
-    const db = this.accessDB.db;
+    const { db } = this.accessDB;
     const instanceName = this.constructor.name;
     await checkLevelDbVersion(instanceName, db, this.indexVersion);
   }

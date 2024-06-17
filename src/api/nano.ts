@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import axios, { AxiosError } from 'axios';
 import { createRequestInstance } from './axiosInstance';
 import { NanoRequest404Error, NanoRequestError } from '../errors';
 import {
@@ -12,7 +13,6 @@ import {
   NanoContractHistoryAPIResponse,
   NanoContractStateAPIResponse,
 } from '../nano_contracts/types';
-import axios, { AxiosError } from 'axios';
 
 /**
  * Api calls for nano contracts

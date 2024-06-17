@@ -5,12 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import buffer from 'buffer';
 import Output from '../../src/models/output';
 import Address from '../../src/models/address';
 import P2PKH from '../../src/models/p2pkh';
 import Network from '../../src/models/network';
 import { OutputValueError, ParseScriptError } from '../../src/errors';
-import buffer from 'buffer';
 import { parseP2PKH } from '../../src/utils/scripts';
 import {
   AUTHORITY_TOKEN_DATA,
@@ -31,19 +31,19 @@ test('Validate value', () => {
   const o2 = new Output(-1000, p2pkhScript);
   expect(() => {
     o2.valueToBytes();
-  }).toThrowError(OutputValueError);
+  }).toThrow(OutputValueError);
 
   // 0 value is invalid
   expect(() => {
     const o3 = new Output(0, p2pkhScript);
     o3.valueToBytes();
-  }).toThrowError(OutputValueError);
+  }).toThrow(OutputValueError);
 
   // Value bigger than the max is invalid
   const o4 = new Output(MAX_OUTPUT_VALUE + 1, p2pkhScript);
   expect(() => {
     o4.valueToBytes();
-  }).toThrowError(OutputValueError);
+  }).toThrow(OutputValueError);
 });
 
 test('Authorities', () => {
@@ -97,9 +97,9 @@ test('Script', () => {
 
   expect(() => {
     parseP2PKH(o1.script.slice(1), network);
-  }).toThrowError(ParseScriptError);
+  }).toThrow(ParseScriptError);
 
   expect(() => {
     parseP2PKH(o1.script.slice(10), network);
-  }).toThrowError(ParseScriptError);
+  }).toThrow(ParseScriptError);
 });

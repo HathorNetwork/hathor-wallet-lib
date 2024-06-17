@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { PublicKey } from 'bitcore-lib';
+import { concat, get } from 'lodash';
 import Output from '../models/output';
 import P2PKH from '../models/p2pkh';
 import Input from '../models/input';
@@ -18,23 +20,28 @@ import {
   NANO_CONTRACTS_VERSION,
 } from '../constants';
 import Serializer from './serializer';
-import { PublicKey } from 'bitcore-lib';
 import HathorWallet from '../new/wallet';
 import { NanoContractTransactionError } from '../errors';
-import { concat, get } from 'lodash';
 import { NanoContractActionType, NanoContractAction, MethodArgInfo } from './types';
 import ncApi from '../api/nano';
 import { validateBlueprintMethodArgs } from './utils';
 
 class NanoContractTransactionBuilder {
   blueprintId: string | null | undefined;
+
   // nano contract ID, null if initialize
   ncId: string | null | undefined;
+
   method: string | null;
+
   actions: NanoContractAction[] | null;
+
   caller: Buffer | null;
+
   args: any[] | null;
+
   transaction: NanoContract | null;
+
   wallet: HathorWallet | null;
 
   constructor() {

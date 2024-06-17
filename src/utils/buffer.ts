@@ -17,8 +17,8 @@ const isHexa = (value: string): boolean => {
  * @inner
  */
 export function intToBytes(value: number, bytes: number): Buffer {
-  let arr = new ArrayBuffer(bytes);
-  let view = new DataView(arr);
+  const arr = new ArrayBuffer(bytes);
+  const view = new DataView(arr);
   if (bytes === 1) {
     // byteOffset = 0;
     view.setUint8(0, value);
@@ -43,7 +43,7 @@ export function intToBytes(value: number, bytes: number): Buffer {
  */
 export function signedIntToBytes(value: number, bytes: number): Buffer {
   let arr = new ArrayBuffer(bytes);
-  let view = new DataView(arr);
+  const view = new DataView(arr);
   if (bytes === 1) {
     // byteOffset = 0
     view.setInt8(0, value);
@@ -70,8 +70,8 @@ export function signedIntToBytes(value: number, bytes: number): Buffer {
  * @inner
  */
 export function floatToBytes(value: number, bytes: number): Buffer {
-  let arr = new ArrayBuffer(bytes);
-  let view = new DataView(arr);
+  const arr = new ArrayBuffer(bytes);
+  const view = new DataView(arr);
   if (bytes === 8) {
     // byteOffset = 0; isLitteEndian = false
     view.setFloat64(0, value, false);
@@ -216,7 +216,8 @@ export const bufferToHex = (buff: Buffer): string => {
  */
 export const bytesToOutputValue = (buff: Buffer): [number, Buffer] => {
   const [highByte, _] = unpackToInt(1, true, buff);
-  let sign, value;
+  let sign;
+  let value;
   if (highByte < 0) {
     // 8 bytes
     sign = -1;

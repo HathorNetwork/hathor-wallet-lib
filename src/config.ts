@@ -20,13 +20,21 @@ export const SWAP_SERVICE_TESTNET_BASE_URL = 'https://atomic-swap-service.testne
 
 export class Config {
   TX_MINING_URL?: string;
+
   TX_MINING_API_KEY?: string;
+
   SWAP_SERVICE_BASE_URL?: string;
+
   WALLET_SERVICE_BASE_URL?: string;
+
   WALLET_SERVICE_BASE_WS_URL?: string;
+
   EXPLORER_SERVICE_BASE_URL?: string;
+
   SERVER_URL?: string;
+
   NETWORK?: string;
+
   USER_AGENT?: string;
 
   /**
@@ -53,13 +61,13 @@ export class Config {
     // Keeps the old behavior for cases that don't explicitly set a TX_MINING_URL
     if (networkInstance.name == 'mainnet') {
       return TX_MINING_MAINNET_URL;
-    } else if (networkInstance.name == 'testnet') {
-      return TX_MINING_TESTNET_URL;
-    } else {
-      throw new Error(
-        `Network ${networkInstance.name} doesn't have a correspondent tx mining service url. You should set it explicitly.`
-      );
     }
+    if (networkInstance.name == 'testnet') {
+      return TX_MINING_TESTNET_URL;
+    }
+    throw new Error(
+      `Network ${networkInstance.name} doesn't have a correspondent tx mining service url. You should set it explicitly.`
+    );
   }
 
   /**
@@ -130,13 +138,13 @@ export class Config {
     // Keeps the old behavior for cases that don't explicitly set a SWAP_SERVICE_BASE_URL
     if (network == 'mainnet') {
       return SWAP_SERVICE_MAINNET_BASE_URL;
-    } else if (network == 'testnet') {
-      return SWAP_SERVICE_TESTNET_BASE_URL;
-    } else {
-      throw new Error(
-        `Network ${network} doesn't have a correspondent Atomic Swap Service url. You should set it explicitly by calling setSwapServiceBaseUrl.`
-      );
     }
+    if (network == 'testnet') {
+      return SWAP_SERVICE_TESTNET_BASE_URL;
+    }
+    throw new Error(
+      `Network ${network} doesn't have a correspondent Atomic Swap Service url. You should set it explicitly by calling setSwapServiceBaseUrl.`
+    );
   }
 
   /**
@@ -205,13 +213,13 @@ export class Config {
     // Keeps the old behavior for cases that don't explicitly set a EXPLORER_SERVICE_BASE_URL
     if (network == 'mainnet') {
       return EXPLORER_SERVICE_MAINNET_BASE_URL;
-    } else if (network == 'testnet') {
-      return EXPLORER_SERVICE_TESTNET_BASE_URL;
-    } else {
-      throw new Error(
-        `Network ${network} doesn't have a correspondent explorer service url. You should set it explicitly.`
-      );
     }
+    if (network == 'testnet') {
+      return EXPLORER_SERVICE_TESTNET_BASE_URL;
+    }
+    throw new Error(
+      `Network ${network} doesn't have a correspondent explorer service url. You should set it explicitly.`
+    );
   }
 
   /**

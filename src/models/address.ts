@@ -5,17 +5,18 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { AddressError } from '../errors';
 import { encoding, util } from 'bitcore-lib';
+import _ from 'lodash';
+import { AddressError } from '../errors';
 import Network from './network';
 import P2PKH from './p2pkh';
 import P2SH from './p2sh';
-import _ from 'lodash';
 import helpers from '../utils/helpers';
 
 class Address {
   // String with address as base58
   base58: string;
+
   // Network to validate the address
   network: Network;
 
@@ -126,11 +127,11 @@ class Address {
     const firstByte = addressBytes[0];
     if (firstByte === this.network.versionBytes.p2pkh) {
       return 'p2pkh';
-    } else if (firstByte === this.network.versionBytes.p2sh) {
-      return 'p2sh';
-    } else {
-      throw new AddressError('Invalid address type.');
     }
+    if (firstByte === this.network.versionBytes.p2sh) {
+      return 'p2sh';
+    }
+    throw new AddressError('Invalid address type.');
   }
 
   /**
@@ -150,10 +151,9 @@ class Address {
     if (addressType === 'p2pkh') {
       const p2pkh = new P2PKH(this);
       return p2pkh.createScript();
-    } else {
-      const p2sh = new P2SH(this);
-      return p2sh.createScript();
     }
+    const p2sh = new P2SH(this);
+    return p2sh.createScript();
   }
 }
 

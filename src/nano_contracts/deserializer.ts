@@ -105,9 +105,8 @@ class Deserializer {
   toBool(value: Buffer): boolean {
     if (value[0]) {
       return true;
-    } else {
-      return false;
     }
+    return false;
   }
 
   /**

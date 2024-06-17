@@ -1,3 +1,4 @@
+import { isEmpty } from 'lodash';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import {
   generateMultisigWalletHelper,
@@ -15,7 +16,6 @@ import dateFormatter from '../../../src/utils/date';
 import { bufferToHex, hexToBuffer } from '../../../src/utils/buffer';
 import Address from '../../../src/models/address';
 import P2PKH from '../../../src/models/p2pkh';
-import { isEmpty } from 'lodash';
 import { getOracleBuffer, getOracleInputData } from '../../../src/nano_contracts/utils';
 import Serializer from '../../../src/nano_contracts/serializer';
 import { NanoContractTransactionError, NanoRequest404Error } from '../../../src/errors';

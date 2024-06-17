@@ -9,12 +9,14 @@ export const REGISTERED_PREFIX = 'registered';
 
 export default class LevelNanoContractIndex implements IKVNanoContractIndex {
   dbpath: string;
+
   /**
    * Registered Nano Contract database
    * Key: ncId
    * Value: INcData (json encoded)
    */
   registeredDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, INcData>;
+
   indexVersion: string = '0.0.1';
 
   constructor(dbpath: string) {
@@ -36,7 +38,7 @@ export default class LevelNanoContractIndex implements IKVNanoContractIndex {
    * @returns {Promise<void>}
    */
   async checkVersion(): Promise<void> {
-    const db = this.registeredDB.db;
+    const { db } = this.registeredDB;
     const instanceName = this.constructor.name;
     await checkLevelDbVersion(instanceName, db, this.indexVersion);
   }

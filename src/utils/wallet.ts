@@ -7,6 +7,7 @@
 
 import { crypto, util, HDPublicKey, HDPrivateKey, Script, PublicKey } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
+import _ from 'lodash';
 import {
   HD_WALLET_ENTROPY,
   HATHOR_BIP44_CODE,
@@ -17,7 +18,6 @@ import {
 import { OP_0 } from '../opcodes';
 import { XPubError, InvalidWords, UncompressedPubKeyError } from '../errors';
 import Network from '../models/network';
-import _ from 'lodash';
 import helpers from './helpers';
 
 import {
@@ -144,7 +144,7 @@ const wallet = {
       depth: 4,
       parentFingerPrint: fingerprint,
       childIndex: 0,
-      chainCode: chainCode,
+      chainCode,
       publicKey: pubkey,
     });
 
@@ -233,10 +233,12 @@ const wallet = {
     seed: string,
     options: { passphrase?: string; networkName?: string; accountDerivationIndex?: string } = {}
   ): string {
-    const methodOptions = Object.assign(
-      { passphrase: '', networkName: 'mainnet', accountDerivationIndex: "0'" },
-      options
-    );
+    const methodOptions = {
+      passphrase: '',
+      networkName: 'mainnet',
+      accountDerivationIndex: "0'",
+      ...options,
+    };
     const { accountDerivationIndex } = methodOptions;
 
     const xpriv = this.getXPrivKeyFromSeed(seed, methodOptions);
@@ -262,7 +264,7 @@ const wallet = {
     seed: string,
     options: { passphrase?: string; networkName?: string } = {}
   ): HDPrivateKey {
-    const methodOptions = Object.assign({ passphrase: '', networkName: 'mainnet' }, options);
+    const methodOptions = { passphrase: '', networkName: 'mainnet', ...options };
     const { passphrase, networkName } = methodOptions;
 
     const network = new Network(networkName);
@@ -410,7 +412,7 @@ const wallet = {
     seed: string,
     options: { passphrase?: string; networkName?: string } = {}
   ): string {
-    const methodOptions = Object.assign({ passphrase: '', networkName: 'mainnet' }, options);
+    const methodOptions = { passphrase: '', networkName: 'mainnet', ...options };
     const xpriv = this.getXPrivKeyFromSeed(seed, methodOptions);
     return this.getMultiSigXPubFromXPriv(xpriv);
   },
@@ -452,7 +454,7 @@ const wallet = {
 
     const argXpub = new HDPublicKey(xpubkey);
 
-    let multisigData: IMultisigData | undefined = undefined;
+    let multisigData: IMultisigData | undefined;
     let xpub: HDPublicKey;
 
     if (argXpub.depth === 3) {
@@ -591,7 +593,7 @@ const wallet = {
       accessData.authKey = authKey;
     }
 
-    if (!!(seed && password)) {
+    if (seed && password) {
       const encryptedWords = encryptData(seed, password);
       accessData.words = encryptedWords;
     }

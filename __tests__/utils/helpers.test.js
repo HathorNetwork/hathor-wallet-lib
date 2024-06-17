@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import buffer from 'buffer';
 import helpers from '../../src/utils/helpers';
 import Network from '../../src/models/network';
 import dateFormatter from '../../src/utils/date';
@@ -12,7 +13,6 @@ import Address from '../../src/models/address';
 import P2PKH from '../../src/models/p2pkh';
 import P2SH from '../../src/models/p2sh';
 import ScriptData from '../../src/models/script_data';
-import buffer from 'buffer';
 import { OP_PUSHDATA1 } from '../../src/opcodes';
 import { DEFAULT_TX_VERSION, CREATE_TOKEN_TX_VERSION } from '../../src/constants';
 import Transaction from '../../src/models/transaction';
@@ -50,15 +50,15 @@ test('Version check', () => {
 });
 
 test('Push data', () => {
-  let stack = [];
-  let buf = buffer.Buffer.alloc(5);
+  const stack = [];
+  const buf = buffer.Buffer.alloc(5);
   helpers.pushDataToStack(stack, buf);
   expect(stack.length).toBe(2);
   expect(stack[0].readUInt8(0)).toBe(5);
   expect(stack[1]).toBe(buf);
 
-  let newStack = [];
-  let newBuf = buffer.Buffer.alloc(100);
+  const newStack = [];
+  const newBuf = buffer.Buffer.alloc(100);
   helpers.pushDataToStack(newStack, newBuf);
   expect(newStack.length).toBe(3);
   expect(newStack[0]).toBe(OP_PUSHDATA1);
@@ -67,7 +67,7 @@ test('Push data', () => {
 });
 
 test('Push integer', () => {
-  let stack = [];
+  const stack = [];
   for (let i = 0; i < 17; i++) {
     helpers.pushIntToStack(stack, i);
     // Only added 1 item to stack
@@ -334,7 +334,7 @@ test('fixAxiosConfig', () => {
 });
 
 test('getShortHash', () => {
-  expect(
-    helpers.getShortHash('123456123456' + Array(40).fill(0).join('') + '654321654321')
-  ).toEqual('123456123456...654321654321');
+  expect(helpers.getShortHash(`123456123456${Array(40).fill(0).join('')}654321654321`)).toEqual(
+    '123456123456...654321654321'
+  );
 });

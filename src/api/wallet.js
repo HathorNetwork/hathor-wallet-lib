@@ -29,7 +29,7 @@ const walletApi = {
   getAddressHistory(addresses, hash, resolve) {
     const data = { addresses, paginate: true };
     if (hash) {
-      data['hash'] = hash;
+      data.hash = hash;
     }
     return createRequestInstance(resolve)
       .get('thin_wallet/address_history', { params: data })
@@ -67,7 +67,7 @@ const walletApi = {
   getAddressHistoryForAwait(addresses, hash) {
     const data = { addresses, paginate: true };
     if (hash) {
-      data['hash'] = hash;
+      data.hash = hash;
     }
     return createRequestInstance().get('thin_wallet/address_history', { params: data });
   },
@@ -86,7 +86,7 @@ const walletApi = {
   getAddressHistoryForAwaitPOST(addresses, hash) {
     const data = { addresses, paginate: true };
     if (hash) {
-      data['hash'] = hash;
+      data.hash = hash;
     }
     return createRequestInstance().post('thin_wallet/address_history', data);
   },
@@ -157,9 +157,9 @@ const walletApi = {
     const data = { id: uid, count };
 
     if (hash) {
-      data['hash'] = hash;
-      data['timestamp'] = timestamp;
-      data['page'] = page;
+      data.hash = hash;
+      data.timestamp = timestamp;
+      data.page = page;
     }
 
     return createRequestInstance(resolve)
@@ -258,12 +258,12 @@ const walletApi = {
     const data = { address, count };
 
     if (hash) {
-      data['hash'] = hash;
-      data['page'] = page;
+      data.hash = hash;
+      data.page = page;
     }
 
     if (token) {
-      data['token'] = token;
+      data.token = token;
     }
 
     return createRequestInstance(resolve)

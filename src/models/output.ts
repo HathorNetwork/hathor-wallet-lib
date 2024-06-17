@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import _ from 'lodash';
 import {
   MAX_OUTPUT_VALUE,
   MAX_OUTPUT_VALUE_32,
@@ -27,7 +28,6 @@ import {
 } from '../utils/buffer';
 import { prettyValue } from '../utils/numbers';
 import { parseScript as utilsParseScript } from '../utils/scripts';
-import _ from 'lodash';
 
 type optionsType = {
   tokenData?: number | undefined;
@@ -44,10 +44,13 @@ export const MAXIMUM_SCRIPT_LENGTH: number = 256;
 class Output {
   // Output value as an integer
   value: number;
+
   // tokenData of the output
   tokenData: number;
+
   // Output script
   script: Buffer;
+
   // Decoded output script
   decodedScript: P2PKH | P2SH | ScriptData | null;
 
@@ -93,9 +96,8 @@ class Output {
     }
     if (this.value > MAX_OUTPUT_VALUE_32) {
       return signedIntToBytes(-this.value, 8);
-    } else {
-      return signedIntToBytes(this.value, 4);
     }
+    return signedIntToBytes(this.value, 4);
   }
 
   /**
@@ -197,7 +199,10 @@ class Output {
   static createFromBytes(buf: Buffer, network: Network): [Output, Buffer] {
     // Cloning buffer so we don't mutate anything sent by the user
     let outputBuffer = _.clone(buf);
-    let value, tokenData, scriptLen, script;
+    let value;
+    let tokenData;
+    let scriptLen;
+    let script;
 
     // Value
     [value, outputBuffer] = bytesToOutputValue(outputBuffer);
@@ -238,7 +243,7 @@ class Output {
    * @memberof Output
    * @inner
    */
-  getType(network: Network): String {
+  getType(network: Network): string {
     const decodedScript = this.decodedScript || this.parseScript(network);
     return decodedScript?.getType() || '';
   }

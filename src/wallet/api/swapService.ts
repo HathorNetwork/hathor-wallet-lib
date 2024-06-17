@@ -5,15 +5,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import config from '../../config';
 import axios, { AxiosRequestConfig } from 'axios';
-import { TIMEOUT } from '../../constants';
 import sha256 from 'crypto-js/sha256';
 import AES from 'crypto-js/aes';
 import CryptoJS from 'crypto-js';
+import { isNumber } from 'lodash';
 import { AtomicSwapProposal } from '../../models/types';
 import { PartialTxPrefix } from '../../models/partial_tx';
-import { isNumber } from 'lodash';
+import { TIMEOUT } from '../../constants';
+import config from '../../config';
 
 /**
  * This interface represents the type returned on the HTTP response, with its untreated and encrypted data.
@@ -81,7 +81,7 @@ const axiosInstance = async (timeout: number = TIMEOUT, network?: 'mainnet' | 't
   const swapServiceBaseUrl = config.getSwapServiceBaseUrl(network);
   const defaultOptions = {
     baseURL: swapServiceBaseUrl,
-    timeout: timeout,
+    timeout,
     headers: {
       'Content-Type': 'application/json',
     },
@@ -221,7 +221,7 @@ export const update = async (params: SwapUpdateParams): Promise<{ success: boole
 
     const { proposalId, password, partialTx, version } = params;
     // Checking for missing parameters
-    const missingParameters: String[] = [];
+    const missingParameters: string[] = [];
     if (!proposalId) {
       missingParameters.push('proposalId');
     }

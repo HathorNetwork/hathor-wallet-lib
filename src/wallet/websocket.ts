@@ -26,8 +26,10 @@ const DEFAULT_JOIN_TIMEOUT = 5000;
 class WalletServiceWebSocket extends BaseWebSocket {
   // The walletId to subscribe to new events
   private walletId: string;
+
   // Timer used to detected when join wallet failed
   private joinTimeoutTimer: ReturnType<typeof setTimeout> | null;
+
   // The default timeout for the join wallet action
   private joinTimeout: number;
 

@@ -6,6 +6,8 @@
  */
 
 import { EventEmitter } from 'events';
+import bitcore, { crypto, util, Address as bitcoreAddress } from 'bitcore-lib';
+import assert from 'assert';
 import {
   HATHOR_TOKEN_CONFIG,
   TOKEN_MINT_MASK,
@@ -14,7 +16,6 @@ import {
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
 } from '../constants';
 import { signMessage } from '../utils/crypto';
-import { crypto, util, Address as bitcoreAddress } from 'bitcore-lib';
 import walletApi from './api/walletApi';
 import { deriveAddressFromXPubP2PKH } from '../utils/address';
 import walletUtils from '../utils/wallet';
@@ -31,10 +32,8 @@ import Address from '../models/address';
 import Network from '../models/network';
 import networkInstance from '../network';
 import { MemoryStore, Storage } from '../storage';
-import assert from 'assert';
 import WalletServiceConnection from './connection';
 import SendTransactionWalletService from './sendTransactionWalletService';
-import bitcore from 'bitcore-lib';
 import {
   AddressInfoObject,
   GetBalanceObject,
@@ -87,37 +86,53 @@ enum walletState {
 class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   // String with wallet passphrase
   passphrase: string;
+
   // Wallet id from the wallet service
   walletId: string | null;
+
   // Network in which the wallet is connected ('mainnet' or 'testnet')
   network: Network;
+
   // Method to request the password from the client
   private requestPassword: Function;
+
   // String with 24 words separated by space
   private seed: string | null;
+
   // Xpub of the wallet
   private xpub: string | null;
+
   // Xpriv of the wallet on the account derivation path
   private xpriv: string | null;
+
   // Xpriv of the auth derivation path
   private authPrivKey: bitcore.HDPrivateKey | null;
+
   // State of the wallet. One of the walletState enum options
   private state: string;
+
   // Variable to prevent start sending more than one tx concurrently
   private isSendingTx: boolean;
+
   // ID of tx proposal
   private txProposalId: string | null;
+
   // Auth token to be used in the wallet API requests to wallet service
   private authToken: string | null;
+
   // Wallet status interval
   // Variable to store the possible addresses to use that are after the last used address
   private newAddresses: AddressInfoObject[];
+
   // Index of the address to be used by the wallet
   private indexToUse: number;
+
   // WalletService-ready connection class
   private conn: WalletServiceConnection;
+
   // Flag to indicate if the wallet was already connected when the websocket conn is established
   private firstConnection: boolean;
+
   // Flag to indicate if the websocket connection is enabled
   private readonly _isWsEnabled: boolean;
 
@@ -258,7 +273,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * NOTICE: This won't remove data from memory immediately, we have to wait until javascript
    * garbage collect it. JavaScript currently does not provide a standard way to trigger
    * garbage collection
-   **/
+   * */
   clearSensitiveData() {
     this.seed = null;
     this.authPrivKey = null;
@@ -278,13 +293,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     seed: string,
     options: { passphrase?: string; networkName?: string } = {}
   ): string {
-    const methodOptions = Object.assign(
-      {
-        passphrase: '',
-        networkName: 'mainnet',
-      },
-      options
-    );
+    const methodOptions = {
+      passphrase: '',
+      networkName: 'mainnet',
+      ...options,
+    };
 
     const xpriv = walletUtils.getXPrivKeyFromSeed(seed, methodOptions);
     const privkey = HathorWalletServiceWallet.deriveAuthPrivateKey(xpriv);
@@ -425,7 +438,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
   /**
    * Returns version data from the connected fullnode
-   **/
+   * */
   async getVersionData(): Promise<FullNodeVersionData> {
     return walletApi.getVersionData(this);
   }
@@ -521,7 +534,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   async onNewTx(newTx: WsTransaction) {
-    const outputs: TxOutput[] = newTx.outputs;
+    const { outputs } = newTx;
     let shouldGetNewAddresses = false;
 
     for (const output of outputs) {
@@ -560,9 +573,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @param {Object} tx Transaction data with array of inputs and outputs
    *
    * @return {Object} Object with each token and it's balance in this tx for this wallet
-   **/
+   * */
   async getTxBalance(tx: WsTransaction, optionsParam = {}): Promise<{ [tokenId: string]: number }> {
-    const options = Object.assign({ includeAuthorities: false }, optionsParam);
+    const options = { includeAuthorities: false, ...optionsParam };
 
     const addresses: string[] = [];
 
@@ -628,7 +641,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         if (data.status.status === 'ready') {
           clearInterval(pollIntervalTimer);
           return resolve();
-        } else if (data.status.status !== 'creating') {
+        }
+        if (data.status.status !== 'creating') {
           // Only possible states are 'ready', 'creating' and 'error', if status
           // is not ready or creating, we should reject the promise
           clearInterval(pollIntervalTimer);
@@ -691,7 +705,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * to indicate that a reload is necessary.
    *
    * @param {Number} newState Enum of new state after change
-   **/
+   * */
   onConnectionChangedState(newState: ConnectionState) {
     if (newState === ConnectionState.CONNECTED) {
       // We don't need to reload data if this is the first
@@ -787,15 +801,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     if (utxos.length === 0) {
       // No utxo for this txId/index or is not from the requested wallet
       return null;
-    } else {
-      if (utxos.length > 1) {
-        throw new UtxoError(
-          `Expected to receive only one utxo for txId ${txId} and index ${index} but received ${utxos.length}.`
-        );
-      }
-
-      return utxos[0];
     }
+    if (utxos.length > 1) {
+      throw new UtxoError(
+        `Expected to receive only one utxo for txId ${txId} and index ${index} but received ${utxos.length}.`
+      );
+    }
+
+    return utxos[0];
   }
 
   /**
@@ -821,23 +834,21 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       count: number;
       ignoreLocked: boolean;
     };
-    const newOptions: optionsType = Object.assign(
-      {
-        tokenId: HATHOR_TOKEN_CONFIG.uid,
-        authority: null,
-        addresses: null,
-        totalAmount: null,
-        count: 1,
-      },
-      options
-    );
+    const newOptions: optionsType = {
+      tokenId: HATHOR_TOKEN_CONFIG.uid,
+      authority: null,
+      addresses: null,
+      totalAmount: null,
+      count: 1,
+      ...options,
+    };
 
     if (!newOptions.authority && !newOptions.totalAmount) {
       throw new UtxoError("We need the total amount of utxos if it's not an authority request.");
     }
 
-    newOptions['ignoreLocked'] = true;
-    newOptions['skipSpent'] = true; // We only want UTXOs
+    newOptions.ignoreLocked = true;
+    newOptions.skipSpent = true; // We only want UTXOs
 
     const data = await walletApi.getTxOutputs(this, newOptions);
     let changeAmount = 0;
@@ -908,7 +919,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
       if (!privKey) {
         // Request the client for the PIN
-        const password = usePassword ? usePassword : await this.requestPassword();
+        const password = usePassword || (await this.requestPassword());
 
         // Use it to get the words from the storage
         privKey = bitcore.HDPrivateKey.fromString(await this.storage.getAuthPrivKey(password));
@@ -959,16 +970,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     options: { inputs?: InputRequestObj[]; changeAddress?: string; pinCode?: string } = {}
   ): Promise<Transaction> {
     this.failIfWalletNotReady();
-    const newOptions = Object.assign(
-      {
-        inputs: [],
-        changeAddress: null,
-      },
-      options
-    );
+    const newOptions = {
+      inputs: [],
+      changeAddress: null,
+      ...options,
+    };
     const { inputs, changeAddress, pinCode } = newOptions;
     const sendTransactionOutputs = outputs.map(output => {
-      let typedOutput = output as OutputSendTransaction;
+      const typedOutput = output as OutputSendTransaction;
       if (typedOutput.type === OutputType.DATA) {
         typedOutput.value = 1;
         typedOutput.token = HATHOR_TOKEN_CONFIG.uid;
@@ -999,13 +1008,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     options: { token?: string; changeAddress?: string; pinCode?: string } = {}
   ): Promise<Transaction> {
     this.failIfWalletNotReady();
-    const newOptions = Object.assign(
-      {
-        token: '00',
-        changeAddress: null,
-      },
-      options
-    );
+    const newOptions = {
+      token: '00',
+      changeAddress: null,
+      ...options,
+    };
     const { token, changeAddress, pinCode } = newOptions;
     const outputs = [{ address, value, token }];
     return this.sendManyOutputsTransaction(outputs, { inputs: [], changeAddress, pinCode });
@@ -1022,7 +1029,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   getInputData(xprivkey: string, dataToSignHash: Buffer, addressPath: number): Buffer {
     const xpriv = bitcore.HDPrivateKey(xprivkey);
     const derivedKey = xpriv.deriveNonCompliantChild(addressPath);
-    const privateKey = derivedKey.privateKey;
+    const { privateKey } = derivedKey;
 
     const arr = [];
     helpers.pushDataToStack(arr, transaction.getSignature(dataToSignHash, privateKey));
@@ -1231,22 +1238,20 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       pinCode: string | null;
       signTx: boolean;
     };
-    const newOptions: optionsType = Object.assign(
-      {
-        address: null,
-        changeAddress: null,
-        createMintAuthority: true,
-        mintAuthorityAddress: null,
-        allowExternalMintAuthorityAddress: false,
-        createMeltAuthority: true,
-        meltAuthorityAddress: null,
-        allowExternalMeltAuthorityAddress: false,
-        nftData: null,
-        pinCode: null,
-        signTx: true,
-      },
-      options
-    );
+    const newOptions: optionsType = {
+      address: null,
+      changeAddress: null,
+      createMintAuthority: true,
+      mintAuthorityAddress: null,
+      allowExternalMintAuthorityAddress: false,
+      createMeltAuthority: true,
+      meltAuthorityAddress: null,
+      allowExternalMeltAuthorityAddress: false,
+      nftData: null,
+      pinCode: null,
+      signTx: true,
+      ...options,
+    };
 
     if (newOptions.mintAuthorityAddress && !newOptions.allowExternalMintAuthorityAddress) {
       // Validate that the mint authority address belongs to the wallet
@@ -1428,12 +1433,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    *
    * @return Promise that resolves with an Array of objects with {txId, index, address, authorities} of the authority output.
    * Returns an empty array in case there are no tx outputs for this type
-   **/
+   * */
   async getMintAuthority(
     tokenId: string,
     options: { many?: boolean; skipSpent?: boolean } = {}
   ): Promise<AuthorityTxOutput[]> {
-    const newOptions = Object.assign({ many: false, skipSpent: true }, options);
+    const newOptions = { many: false, skipSpent: true, ...options };
 
     return this._getAuthorityTxOutput({
       tokenId,
@@ -1456,12 +1461,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    *
    * @return Promise that resolves with an Array of objects with {txId, index, address, authorities} of the authority output.
    * Returns an empty array in case there are no tx outputs for this type
-   **/
+   * */
   async getMeltAuthority(
     tokenId: string,
     options: { many?: boolean; skipSpent?: boolean } = {}
   ): Promise<AuthorityTxOutput[]> {
-    const newOptions = Object.assign({ many: false, skipSpent: true }, options);
+    const newOptions = { many: false, skipSpent: true, ...options };
 
     return this._getAuthorityTxOutput({
       tokenId,
@@ -1505,18 +1510,16 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       pinCode: string | null;
       signTx: boolean;
     };
-    const newOptions: optionsType = Object.assign(
-      {
-        address: null,
-        changeAddress: null,
-        createAnotherMint: true,
-        mintAuthorityAddress: null,
-        allowExternalMintAuthorityAddress: false,
-        pinCode: null,
-        signTx: true,
-      },
-      options
-    );
+    const newOptions: optionsType = {
+      address: null,
+      changeAddress: null,
+      createAnotherMint: true,
+      mintAuthorityAddress: null,
+      allowExternalMintAuthorityAddress: false,
+      pinCode: null,
+      signTx: true,
+      ...options,
+    };
 
     if (newOptions.mintAuthorityAddress && !newOptions.allowExternalMintAuthorityAddress) {
       // Validate that the mint authority address belongs to the wallet
@@ -1649,7 +1652,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    */
   async getTokenDetails(tokenId: string): Promise<TokenDetailsObject> {
     const response = await walletApi.getTokenDetails(this, tokenId);
-    const details: TokenDetailsObject = response.details;
+    const { details } = response;
 
     return details;
   }
@@ -1671,18 +1674,16 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       pinCode: string | null;
       signTx: boolean;
     };
-    const newOptions: optionsType = Object.assign(
-      {
-        address: null,
-        changeAddress: null,
-        createAnotherMelt: true,
-        meltAuthorityAddress: null,
-        allowExternalMeltAuthorityAddress: false,
-        pinCode: null,
-        signTx: true,
-      },
-      options
-    );
+    const newOptions: optionsType = {
+      address: null,
+      changeAddress: null,
+      createAnotherMelt: true,
+      meltAuthorityAddress: null,
+      allowExternalMeltAuthorityAddress: false,
+      pinCode: null,
+      signTx: true,
+      ...options,
+    };
 
     if (newOptions.meltAuthorityAddress && !newOptions.allowExternalMeltAuthorityAddress) {
       // Validate that the melt authority address belongs to the wallet
@@ -2022,20 +2023,18 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       meltAuthorityAddress: string | null;
       allowExternalMeltAuthorityAddress: boolean | null;
     };
-    const newOptions: optionsType = Object.assign(
-      {
-        address: null,
-        changeAddress: null,
-        createMintAuthority: false,
-        mintAuthorityAddress: null,
-        allowExternalMintAuthorityAddress: false,
-        createMeltAuthority: false,
-        meltAuthorityAddress: null,
-        allowExternalMeltAuthorityAddress: false,
-      },
-      options
-    );
-    newOptions['nftData'] = data;
+    const newOptions: optionsType = {
+      address: null,
+      changeAddress: null,
+      createMintAuthority: false,
+      mintAuthorityAddress: null,
+      allowExternalMintAuthorityAddress: false,
+      createMeltAuthority: false,
+      meltAuthorityAddress: null,
+      allowExternalMeltAuthorityAddress: false,
+      ...options,
+    };
+    newOptions.nftData = data;
     const tx = await this.prepareCreateNewToken(name, symbol, amount, newOptions);
     return this.handleSendPreparedTransaction(tx);
   }

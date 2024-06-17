@@ -5,9 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { EventEmitter } from 'events';
 import { ConnectionState } from '../wallet/types';
 import GenericWebSocket from '../websocket';
-import { EventEmitter } from 'events';
 
 /**
  * This is a Websocket Connection with the Atomic Swap Service
@@ -21,9 +21,10 @@ import { EventEmitter } from 'events';
  * - update-atomic-swap-proposal: Fired when the state of a listened proposal changes
  * - state: Fired when the websocket connection state changes
  * - pong: Internal or debug use only. Fired when the health check is received from the backend
- **/
+ * */
 export class AtomicSwapServiceConnection extends EventEmitter {
   websocket: GenericWebSocket;
+
   protected state: ConnectionState;
 
   constructor(options: { wsURL: string; connectionTimeout?: number }) {
@@ -44,7 +45,7 @@ export class AtomicSwapServiceConnection extends EventEmitter {
 
   /**
    * Connect to the server and start emitting events.
-   **/
+   * */
   start() {
     // This should never happen as the websocket is initialized on the constructor
     if (!this.websocket) {
@@ -74,7 +75,7 @@ export class AtomicSwapServiceConnection extends EventEmitter {
   /**
    * Called when the connection to the websocket changes.
    * It is also called if the network is down.
-   **/
+   * */
   onConnectionChange(value: boolean) {
     if (value) {
       this.setState(ConnectionState.CONNECTED);

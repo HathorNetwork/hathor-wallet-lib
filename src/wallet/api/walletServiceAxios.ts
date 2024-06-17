@@ -29,7 +29,7 @@ export const axiosInstance = async (
   // TODO How to allow 'Retry' request?
   const defaultOptions = {
     baseURL: config.getWalletServiceBaseUrl(),
-    timeout: timeout,
+    timeout,
     // `validateStatus` defines whether to resolve or reject the promise for a given
     // HTTP response status code. If `validateStatus` returns `true` (or is set to `null`
     // or `undefined`), the promise will be resolved; otherwise, the promise will be
@@ -44,7 +44,7 @@ export const axiosInstance = async (
   if (needsAuth) {
     // Then we need the auth token
     await wallet.validateAndRenewAuthToken();
-    defaultOptions['headers']['Authorization'] = `Bearer ${wallet.getAuthToken()}`;
+    defaultOptions.headers.Authorization = `Bearer ${wallet.getAuthToken()}`;
   }
 
   return axios.create(defaultOptions);

@@ -1,3 +1,4 @@
+import Mnemonic from 'bitcore-mnemonic/lib/mnemonic';
 import { multisigWalletsData, precalculationHelpers } from './helpers/wallet-precalculation.helper';
 import { GenesisWalletHelper } from './helpers/genesis-wallet.helper';
 import { delay, getRandomInt } from './utils/core.util';
@@ -15,7 +16,12 @@ import {
   waitUntilNextTimestamp,
 } from './helpers/wallet.helper';
 import HathorWallet from '../../src/new/wallet';
-import { HATHOR_TOKEN_CONFIG, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
+import {
+  HATHOR_TOKEN_CONFIG,
+  TOKEN_MELT_MASK,
+  TOKEN_MINT_MASK,
+  P2PKH_ACCT_PATH,
+} from '../../src/constants';
 import { TOKEN_DATA, WALLET_CONSTANTS } from './configuration/test-constants';
 import dateFormatter from '../../src/utils/date';
 import { verifyMessage } from '../../src/utils/crypto';
@@ -24,8 +30,6 @@ import { NftValidationError, TxNotFoundError, WalletFromXPubGuard } from '../../
 import SendTransaction from '../../src/new/sendTransaction';
 import { ConnectionState } from '../../src/wallet/types';
 import transaction from '../../src/utils/transaction';
-import Mnemonic from 'bitcore-mnemonic/lib/mnemonic';
-import { P2PKH_ACCT_PATH } from '../../src/constants';
 import Network from '../../src/models/network';
 import { WalletType } from '../../src/types';
 import { parseScriptData } from '../../src/utils/scripts';
@@ -138,7 +142,7 @@ describe('getTxById', () => {
         inputs: [{ ...tx1.inputs[0], token_data: -1 }],
       },
     });
-    await expect(hWallet.getTxById(tx1.hash)).rejects.toThrowError(
+    await expect(hWallet.getTxById(tx1.hash)).rejects.toThrow(
       'Token undefined not found in tokens list'
     );
     jest.spyOn(hWallet, 'getFullTxById').mockRestore();
@@ -147,7 +151,7 @@ describe('getTxById', () => {
     jest.spyOn(hWallet, 'getTxBalance').mockResolvedValue({
       'unknown-token': 10,
     });
-    await expect(hWallet.getTxById(tx1.hash)).rejects.toThrowError(
+    await expect(hWallet.getTxById(tx1.hash)).rejects.toThrow(
       'Token unknown-token not found in tx'
     );
     jest.spyOn(hWallet, 'getTxBalance').mockRestore();
@@ -155,7 +159,7 @@ describe('getTxById', () => {
 
   it('should throw an error tx id is invalid', async () => {
     const hWallet = await generateWalletHelper();
-    await expect(hWallet.getTxById('invalid-tx-hash')).rejects.toThrowError(
+    await expect(hWallet.getTxById('invalid-tx-hash')).rejects.toThrow(
       'Invalid transaction invalid-tx-hash'
     );
   });
@@ -668,11 +672,11 @@ describe('start', () => {
       hWallet.sendManyOutputsTransaction([
         { address: await hWallet.getAddressAtIndex(1), value: 1 },
       ])
-    ).rejects.toThrowError('Pin');
+    ).rejects.toThrow('Pin');
 
-    await expect(hWallet.createNewToken('Pinless Token', 'PTT', 100)).rejects.toThrowError('Pin');
+    await expect(hWallet.createNewToken('Pinless Token', 'PTT', 100)).rejects.toThrow('Pin');
 
-    await expect(hWallet.mintTokens(fakeTokenUid, 100)).rejects.toThrowError('Pin');
+    await expect(hWallet.mintTokens(fakeTokenUid, 100)).rejects.toThrow('Pin');
 
     await expect(hWallet.meltTokens(fakeTokenUid, 100)).rejects.toThrow('Pin');
 
@@ -1186,7 +1190,7 @@ describe('getFullTxById', () => {
   });
 
   it('should throw an error if success is false on response', async () => {
-    await expect(gWallet.getFullTxById('invalid-tx-hash')).rejects.toThrowError(
+    await expect(gWallet.getFullTxById('invalid-tx-hash')).rejects.toThrow(
       `Invalid transaction invalid-tx-hash`
     );
   });
@@ -1194,7 +1198,7 @@ describe('getFullTxById', () => {
   it('should throw an error on valid but not found transaction', async () => {
     await expect(
       gWallet.getFullTxById('0011371a7c07f7e8017c52c0a4f5293ccf30c865d96255d1b515f96f7a6a6299')
-    ).rejects.toThrowError(TxNotFoundError);
+    ).rejects.toThrow(TxNotFoundError);
   });
 });
 
@@ -1231,7 +1235,7 @@ describe('getTxConfirmationData', () => {
   });
 
   it('should throw an error if success is false on response', async () => {
-    await expect(gWallet.getTxConfirmationData('invalid-tx-hash')).rejects.toThrowError(
+    await expect(gWallet.getTxConfirmationData('invalid-tx-hash')).rejects.toThrow(
       `Invalid transaction invalid-tx-hash`
     );
   });
@@ -1241,7 +1245,7 @@ describe('getTxConfirmationData', () => {
       gWallet.getTxConfirmationData(
         '000000000bc8c6fab1b3a5af184cc0e7ff7934c6ad982c8bea9ab5006ae1bafc'
       )
-    ).rejects.toThrowError(TxNotFoundError);
+    ).rejects.toThrow(TxNotFoundError);
   });
 });
 
@@ -1277,13 +1281,13 @@ describe('graphvizNeighborsQuery', () => {
       10
     );
 
-    await expect(hWallet.graphvizNeighborsQuery(tx1.hash)).rejects.toThrowError(
+    await expect(hWallet.graphvizNeighborsQuery(tx1.hash)).rejects.toThrow(
       'Request failed with status code 500'
     );
   });
 
   it('should throw an error if success is false on response', async () => {
-    await expect(gWallet.graphvizNeighborsQuery('invalid-tx-hash')).rejects.toThrowError(
+    await expect(gWallet.graphvizNeighborsQuery('invalid-tx-hash')).rejects.toThrow(
       `Invalid transaction invalid-tx-hash`
     );
   });
@@ -1293,7 +1297,7 @@ describe('graphvizNeighborsQuery', () => {
       gWallet.graphvizNeighborsQuery(
         '000000000bc8c6fab1b3a5af184cc0e7ff7934c6ad982c8bea9ab5006ae1bafc'
       )
-    ).rejects.toThrowError(TxNotFoundError);
+    ).rejects.toThrow(TxNotFoundError);
   });
 });
 

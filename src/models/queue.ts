@@ -17,8 +17,11 @@ type QueueNode<T> = {
  */
 export default class Queue<T = Object> {
   private head?: QueueNode<T>;
+
   private last?: QueueNode<T>;
+
   private length: number;
+
   constructor() {
     this.head;
     this.last;

@@ -27,7 +27,7 @@ const txMiningApi = {
    * @inner
    */
   submitJob(tx, propagate, add_parents, timeout, resolve) {
-    let postData = { tx, propagate, add_parents };
+    const postData = { tx, propagate, add_parents };
     if (timeout) {
       postData.timeout = timeout;
     }

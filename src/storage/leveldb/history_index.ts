@@ -24,24 +24,29 @@ function _ts_key(tx: Pick<IHistoryTx, 'timestamp' | 'tx_id'>): string {
 
 export default class LevelHistoryIndex implements IKVHistoryIndex {
   dbpath: string;
+
   /**
    * Main tx history database:
    * Key: tx_id
    * Value: IHistoryTx (json encoded)
    */
   historyDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, IHistoryTx>;
+
   /**
    * Timestamp index, used to iterate on transaction in order.
    * Key: timestamp:tx_id
    * Value: IHistoryTx (json encoded)
    */
   tsHistoryDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, IHistoryTx>;
+
   /**
    * Whether the index is validated or not
    * This is used to avoid using the tx count before we know it is valid.
    */
   isValidated: boolean;
+
   size: number;
+
   indexVersion: string = '0.0.1';
 
   constructor(dbpath: string) {
@@ -68,7 +73,7 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
    * @returns {Promise<void>}
    */
   async checkVersion(): Promise<void> {
-    const db = this.historyDB.db;
+    const { db } = this.historyDB;
     const instanceName = this.constructor.name;
     await checkLevelDbVersion(instanceName, db, this.indexVersion);
   }
@@ -82,7 +87,7 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
   async validate(): Promise<HistoryIndexValidateResponse> {
     await this.checkVersion();
 
-    let ret: HistoryIndexValidateResponse = {
+    const ret: HistoryIndexValidateResponse = {
       count: 0,
     };
     // Iterate on all txs and check that we have a corresponding entry on the timestamp index
@@ -143,7 +148,7 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
    */
   async runHistoryCount(): Promise<number> {
     let size = 0;
-    for await (let _ of this.historyDB.iterator()) {
+    for await (const _ of this.historyDB.iterator()) {
       size++;
     }
     return size;

@@ -123,9 +123,8 @@ class Serializer {
   fromBool(value: boolean): Buffer {
     if (value) {
       return Buffer.from([1]);
-    } else {
-      return Buffer.from([0]);
     }
+    return Buffer.from([0]);
   }
 
   /**

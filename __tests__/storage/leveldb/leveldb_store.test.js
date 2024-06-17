@@ -5,11 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { HDPrivateKey } from 'bitcore-lib';
 import { DEFAULT_ADDRESS_SCANNING_POLICY, HATHOR_TOKEN_CONFIG } from '../../../src/constants';
 import { LevelDBStore, Storage } from '../../../src/storage';
 import tx_history from '../../__fixtures__/tx_history';
 import walletApi from '../../../src/api/wallet';
-import { HDPrivateKey } from 'bitcore-lib';
 import { encryptData } from '../../../src/utils/crypto';
 import { WalletType } from '../../../src/types';
 import { processHistory } from '../../../src/utils/storage';

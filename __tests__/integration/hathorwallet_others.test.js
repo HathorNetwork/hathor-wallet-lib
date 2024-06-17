@@ -249,7 +249,7 @@ describe('getTxAddresses', () => {
 });
 
 describe('checkAddressesMine', () => {
-  it('should ', async () => {
+  it('should', async () => {
     const hWallet = await generateWalletHelper();
 
     const address1 = await hWallet.getAddressAtIndex(1);
@@ -378,7 +378,7 @@ describe('getAvailableUtxos', () => {
      * - The HTR change is listed
      */
     let utxoGenerator = await hWallet.getAvailableUtxos();
-    let utxoGenResult = await utxoGenerator.next();
+    const utxoGenResult = await utxoGenerator.next();
     expect(utxoGenResult.value).toMatchObject({
       txId: tokenUid,
       tokenId: HATHOR_TOKEN_CONFIG.uid,

@@ -5,11 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { HDPrivateKey } from 'bitcore-lib';
 import { GAP_LIMIT } from '../../src/constants';
 import { MemoryStore, Storage } from '../../src/storage';
 import tx_history from '../__fixtures__/tx_history';
 import walletApi from '../../src/api/wallet';
-import { HDPrivateKey } from 'bitcore-lib';
 import { encryptData } from '../../src/utils/crypto';
 import { WalletType } from '../../src/types';
 import { processHistory } from '../../src/utils/storage';

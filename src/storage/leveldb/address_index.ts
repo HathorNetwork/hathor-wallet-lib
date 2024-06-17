@@ -48,12 +48,14 @@ export default class LevelAddressIndex implements IKVAddressIndex {
    * Value: json encoded IAddressInfo
    */
   addressesDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, IAddressInfo>;
+
   /**
    * Index database
    * Key: index in uint32
    * Value: address in base58
    */
   addressesIndexDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, string>;
+
   /**
    * Address metadata database
    * Key: address in base58
@@ -65,12 +67,15 @@ export default class LevelAddressIndex implements IKVAddressIndex {
     string,
     IAddressMetadataAsRecord
   >;
+
   /**
    * Whether the index is validated or not
    * This is used to avoid using the address count before we know it is valid.
    */
   isValidated: boolean;
+
   indexVersion: string = '0.0.1';
+
   size: number;
 
   constructor(dbpath: string) {
@@ -99,7 +104,7 @@ export default class LevelAddressIndex implements IKVAddressIndex {
    * @returns {Promise<void>}
    */
   async checkVersion(): Promise<void> {
-    const db = this.addressesDB.db;
+    const { db } = this.addressesDB;
     const instanceName = this.constructor.name;
     await checkLevelDbVersion(instanceName, db, this.indexVersion);
   }
@@ -186,7 +191,7 @@ export default class LevelAddressIndex implements IKVAddressIndex {
    */
   async runAddressCount(): Promise<number> {
     let size = 0;
-    for await (let _ of this.addressesDB.iterator()) {
+    for await (const _ of this.addressesDB.iterator()) {
       size++;
     }
     return size;

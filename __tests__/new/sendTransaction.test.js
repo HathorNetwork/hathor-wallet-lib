@@ -5,8 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { TOKEN_AUTHORITY_MASK } from '../../src/constants';
-import { HATHOR_TOKEN_CONFIG } from '../../src/constants';
+import { TOKEN_AUTHORITY_MASK, HATHOR_TOKEN_CONFIG } from '../../src/constants';
 import SendTransaction, {
   ISendDataOutput,
   isDataOutput,
@@ -105,7 +104,7 @@ test('prepareTxData', async () => {
   };
   const inputs = [{ txId: 'spent-tx-id', index: 0 }];
   const outputs = [addrOutput, dataOutput];
-  let sendTransaction = new SendTransaction({
+  const sendTransaction = new SendTransaction({
     storage,
     outputs,
     inputs,

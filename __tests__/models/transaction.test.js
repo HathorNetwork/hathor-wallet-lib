@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import lodash from 'lodash';
 import Transaction from '../../src/models/transaction';
 import CreateTokenTransaction from '../../src/models/create_token_transaction';
 import Output from '../../src/models/output';
@@ -17,7 +18,6 @@ import helpers from '../../src/utils/helpers';
 import { DEFAULT_TX_VERSION, MAX_OUTPUTS, DEFAULT_SIGNAL_BITS } from '../../src/constants';
 import { MaximumNumberInputsError, MaximumNumberOutputsError, ParseError } from '../../src/errors';
 import { nftCreationTx } from '../__fixtures__/sample_txs';
-import lodash from 'lodash';
 
 const compareTxs = (tx, tx2) => {
   expect(tx2.version).toBe(tx.version);
@@ -119,12 +119,12 @@ test('New tx', () => {
   // Invalid version
   expect(() => {
     helpers.createTxFromHex(tx.toHex().slice(20), network);
-  }).toThrowError(ParseError);
+  }).toThrow(ParseError);
 
   // Invalid end part
   expect(() => {
     helpers.createTxFromHex(tx.toHex().slice(0, -20), network);
-  }).toThrowError(ParseError);
+  }).toThrow(ParseError);
 });
 
 test('Token tx', () => {
@@ -188,7 +188,7 @@ test('Tx validation', () => {
 
   expect(() => {
     tx.validate();
-  }).toThrowError(MaximumNumberOutputsError);
+  }).toThrow(MaximumNumberOutputsError);
 
   tx.outputs = [];
 
@@ -206,7 +206,7 @@ test('Tx validation', () => {
 
   expect(() => {
     tx.validate();
-  }).toThrowError(MaximumNumberInputsError);
+  }).toThrow(MaximumNumberInputsError);
 });
 
 test('Transaction type', () => {

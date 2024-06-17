@@ -35,39 +35,55 @@ abstract class BaseWebSocket extends EventEmitter {
   // connections. We don't directly use it from import, so the unittests
   // can replace it by a mock.
   private WebSocket: _WebSocket;
+
   // This is the websocket instance
   private ws: _WebSocket;
+
   // This is the URL of the websocket.
   private wsURL: string | Function;
+
   // Boolean that indicates that the websocket was instantiated. It's important to
   // notice that it does not indicate that the connection has been established with
   // the server, which is what the `connected` flag indicates
   private started: boolean;
+
   // Boolean to show when the websocket connection was established with the
   // server. This gets set to true on the onOpen event listener.
   private connected: boolean | null;
+
   // Boolean to show when the websocket is online
   private isOnline: boolean;
+
   // Heartbeat interval in milliseconds
   private heartbeatInterval: number;
+
   // Retry connection interval in milliseconds
   private retryConnectionInterval: number;
+
   // Open connection timeout in milliseconds
   private openConnectionTimeout: number;
+
   // Date of connection.
   private connectedDate: Date | null;
+
   // Date of latest setup call. The setup is the way to open a new connection.
   private latestSetupDate: Date | null;
+
   // Latest round trip time measured by PING/PONG.
   private latestRTT: number | null;
+
   // Heartbeat interval to send pings
   private heartbeat: ReturnType<typeof setTimeout> | null;
+
   // Date of latest ping.
   protected latestPingDate: Date | null;
+
   // Timer used to detected when connection is down.
   protected timeoutTimer: ReturnType<typeof setTimeout> | null;
+
   // Timer used to retry connection
   protected setupTimer: ReturnType<typeof setTimeout> | null;
+
   // Connection timeout in milliseconds
   protected connectionTimeout: number;
 
@@ -105,13 +121,12 @@ abstract class BaseWebSocket extends EventEmitter {
 
   /**
    * Return websocket url to connect to.
-   **/
+   * */
   getWSServerURL() {
     if (typeof this.wsURL === 'function') {
       return this.wsURL();
-    } else {
-      return this.wsURL;
     }
+    return this.wsURL;
   }
 
   /**
@@ -154,7 +169,7 @@ abstract class BaseWebSocket extends EventEmitter {
   /**
    * Sets all event listeners to noops on the WebSocket instance
    * and close it.
-   **/
+   * */
   closeWs() {
     if (!this.ws) {
       return;
@@ -176,7 +191,7 @@ abstract class BaseWebSocket extends EventEmitter {
 
   /**
    * Return connection uptime in seconds (or null if not connected).
-   **/
+   * */
   uptime() {
     if (!this.connectedDate) {
       return null;

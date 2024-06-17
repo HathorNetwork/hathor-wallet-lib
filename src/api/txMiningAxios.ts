@@ -28,7 +28,7 @@ const txMiningRequestClient = (resolve: Function | null, timeout?: number | null
   const headers = {};
 
   if (txMiningApiKey) {
-    headers['apikey'] = txMiningApiKey;
+    headers.apikey = txMiningApiKey;
   }
 
   return axiosWrapperCreateRequestInstance(txMiningURL, resolve, timeout, headers);

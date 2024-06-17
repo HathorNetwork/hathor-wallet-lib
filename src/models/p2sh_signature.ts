@@ -18,10 +18,11 @@
  * It also has all information needed to assemble the input data if you have enough participants' P2SHSignature serialized signatures.
  */
 class P2SHSignature {
-  pubkey: String;
-  signatures: Record<number, String>;
+  pubkey: string;
 
-  constructor(pubkey: String, signatures: Record<number, String>) {
+  signatures: Record<number, string>;
+
+  constructor(pubkey: string, signatures: Record<number, string>) {
     if (!pubkey) {
       throw Error('You must provide a pubkey.');
     }
@@ -50,10 +51,10 @@ class P2SHSignature {
    * @memberof P2SHSignature
    * @static
    */
-  static deserialize(p2shSig: String) {
+  static deserialize(p2shSig: string) {
     const arr = p2shSig.split('|');
     const xpub = arr[0];
-    const signatures: Record<number, String> = {};
+    const signatures: Record<number, string> = {};
     for (const sig of arr.slice(1)) {
       const parts = sig.split(':');
       signatures[+parts[0]] = parts[1];

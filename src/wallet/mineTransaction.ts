@@ -39,20 +39,26 @@ const rateLimitExceededError =
  * 'job-done': after job is finished;
  * 'error': if an error happens;
  * 'unexpected-error': if an unexpected error happens;
- **/
+ * */
 class MineTransaction extends EventEmitter {
   // Transaction to be mined
   transaction: Transaction;
+
   // Promise that will resolve when the mining is over or reject when an error is found
   promise: Promise<MineTxSuccessData>;
+
   // Mining time estimation
   private estimation: number | null;
+
   // Mining job ID
   private jobID: string | null;
+
   // Current mining attempt
   private countTxMiningAttempts: number;
+
   // Maximum number of mining retries
   private maxTxMiningRetries: number;
+
   constructor(transaction: Transaction, options = { maxTxMiningRetries: 3 }) {
     super();
 
@@ -156,18 +162,16 @@ class MineTransaction extends EventEmitter {
             } else {
               this.emit('error', timeoutError);
             }
+          } else if (response.expected_total_time === -1) {
+            // Error: there are no miners online
+            this.emit('error', noMinersError);
           } else {
-            if (response.expected_total_time === -1) {
-              // Error: there are no miners online
-              this.emit('error', noMinersError);
-            } else {
-              this.estimation = response.expected_total_time;
-              this.emit('estimation-updated', {
-                jobID: this.jobID,
-                estimation: response.expected_total_time,
-              });
-              this.handleJobStatus();
-            }
+            this.estimation = response.expected_total_time;
+            this.emit('estimation-updated', {
+              jobID: this.jobID,
+              estimation: response.expected_total_time,
+            });
+            this.handleJobStatus();
           }
         })
         .catch(e => {

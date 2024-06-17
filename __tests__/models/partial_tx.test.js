@@ -68,8 +68,8 @@ describe('PartialTx.getTxData', () => {
   });
 
   it('should map inputs and outputs to data.', () => {
-    let i = 0,
-      o = 10;
+    let i = 0;
+    let o = 10;
     spyInput.mockImplementation(() => i++); // 0, 1, 2, 3, 4
     spyOutput.mockImplementation(() => o--); // 10, 9, 8
 

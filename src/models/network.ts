@@ -31,7 +31,7 @@ const versionBytes = {
   },
 };
 
-/*Networks is an object of the bitcore-lib
+/* Networks is an object of the bitcore-lib
   Some of it's parameters are not used by us (network parameters)
   Parameters:
     name: network name
@@ -67,12 +67,12 @@ const versionBytes = {
 const mainnet = Networks.add({
   name: 'htr-mainnet',
   alias: 'production',
-  pubkeyhash: versionBytes['mainnet']['p2pkh'],
+  pubkeyhash: versionBytes.mainnet.p2pkh,
   privatekey: 0x80,
-  scripthash: versionBytes['mainnet']['p2sh'],
+  scripthash: versionBytes.mainnet.p2sh,
   bech32prefix: 'ht',
-  xpubkey: versionBytes['mainnet']['xpub'],
-  xprivkey: versionBytes['mainnet']['xpriv'],
+  xpubkey: versionBytes.mainnet.xpub,
+  xprivkey: versionBytes.mainnet.xpriv,
   networkMagic: 0xf9beb4d9,
   port: 8333,
   dnsSeeds: [],
@@ -81,12 +81,12 @@ const mainnet = Networks.add({
 const testnet = Networks.add({
   name: 'htr-testnet',
   alias: 'test',
-  pubkeyhash: versionBytes['testnet']['p2pkh'],
+  pubkeyhash: versionBytes.testnet.p2pkh,
   privatekey: 0x80,
-  scripthash: versionBytes['testnet']['p2sh'],
+  scripthash: versionBytes.testnet.p2sh,
   bech32prefix: 'tn',
-  xpubkey: versionBytes['testnet']['xpub'],
-  xprivkey: versionBytes['testnet']['xpriv'],
+  xpubkey: versionBytes.testnet.xpub,
+  xprivkey: versionBytes.testnet.xpriv,
   networkMagic: 0xf9beb4d9,
   port: 8333,
   dnsSeeds: [],
@@ -95,12 +95,12 @@ const testnet = Networks.add({
 const privatenet = Networks.add({
   name: 'htr-privatenet',
   alias: 'privatenet',
-  pubkeyhash: versionBytes['privatenet']['p2pkh'],
+  pubkeyhash: versionBytes.privatenet.p2pkh,
   privatekey: 0x80,
-  scripthash: versionBytes['privatenet']['p2sh'],
+  scripthash: versionBytes.privatenet.p2sh,
   bech32prefix: 'tn',
-  xpubkey: versionBytes['privatenet']['xpub'],
-  xprivkey: versionBytes['privatenet']['xpriv'],
+  xpubkey: versionBytes.privatenet.xpub,
+  xprivkey: versionBytes.privatenet.xpriv,
   networkMagic: 0xf9beb4d9,
   port: 8333,
   dnsSeeds: [],
@@ -162,7 +162,7 @@ class Network {
   /**
    * Method to check that a version byte is valid
    */
-  isVersionByteValid(version: number): Boolean {
+  isVersionByteValid(version: number): boolean {
     const versionBytes = this.getVersionBytes();
     return version == versionBytes.p2pkh || version == versionBytes.p2sh;
   }

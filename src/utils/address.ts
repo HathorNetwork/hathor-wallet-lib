@@ -5,17 +5,17 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import Address from '../models/address';
-import P2PKH from '../models/p2pkh';
-import P2SH from '../models/p2sh';
-import Network from '../models/network';
-import { hexToBuffer } from '../utils/buffer';
 import {
   Address as bitcoreAddress,
   PublicKey as bitcorePublicKey,
   Script,
   HDPublicKey,
 } from 'bitcore-lib';
+import Address from '../models/address';
+import P2PKH from '../models/p2pkh';
+import P2SH from '../models/p2sh';
+import Network from '../models/network';
+import { hexToBuffer } from './buffer';
 import { IMultisigData, IStorage, IAddressInfo } from '../types';
 import { createP2SHRedeemScript } from './scripts';
 
@@ -90,7 +90,7 @@ export async function deriveAddressP2SH(index: number, storage: IStorage): Promi
   if (accessData === null) {
     throw new Error('No access data');
   }
-  const multisigData = accessData.multisigData;
+  const { multisigData } = accessData;
   if (multisigData === undefined) {
     throw new Error('No multisig data');
   }
@@ -114,13 +114,13 @@ export function createOutputScriptFromAddress(address: string, network: Network)
     // P2SH
     const p2sh = new P2SH(addressObj);
     return p2sh.createScript();
-  } else if (addressType === 'p2pkh') {
+  }
+  if (addressType === 'p2pkh') {
     // P2PKH
     const p2pkh = new P2PKH(addressObj);
     return p2pkh.createScript();
-  } else {
-    throw new Error('Invalid address type');
   }
+  throw new Error('Invalid address type');
 }
 
 /**

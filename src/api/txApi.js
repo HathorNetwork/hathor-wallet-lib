@@ -54,9 +54,9 @@ const txApi = {
   getTransactions(type, count, timestamp, hash, page, resolve) {
     const data = { type, count };
     if (hash) {
-      data['hash'] = hash;
-      data['timestamp'] = timestamp;
-      data['page'] = page;
+      data.hash = hash;
+      data.timestamp = timestamp;
+      data.page = page;
     }
     return this.getTransactionBase(data, resolve);
   },

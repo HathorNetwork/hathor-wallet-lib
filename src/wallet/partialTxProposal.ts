@@ -143,7 +143,7 @@ class PartialTxProposal {
     this.resetSignatures();
 
     // get an address of our wallet and add the output
-    const addr: string = address ? address : await this.storage.getCurrentAddress();
+    const addr: string = address || (await this.storage.getCurrentAddress());
     this.addOutput(token, value, addr, { timelock });
   }
 

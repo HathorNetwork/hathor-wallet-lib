@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import path from 'path';
 import {
   AddressScanPolicy,
   AddressScanPolicyData,
@@ -22,7 +23,6 @@ import {
   IWalletAccessData,
   IWalletData,
 } from '../../types';
-import path from 'path';
 import LevelAddressIndex from './address_index';
 import LevelHistoryIndex from './history_index';
 import LevelUtxoIndex from './utxo_index';
@@ -32,11 +32,17 @@ import LevelNanoContractIndex from './nanocontract_index';
 
 export default class LevelDBStore implements IStore {
   addressIndex: LevelAddressIndex;
+
   historyIndex: LevelHistoryIndex;
+
   utxoIndex: LevelUtxoIndex;
+
   walletIndex: LevelWalletIndex;
+
   tokenIndex: LevelTokenIndex;
+
   nanoContractIndex: LevelNanoContractIndex;
+
   dbpath: string;
 
   constructor(dirpath: string, dbroot: string = 'hathor.data') {

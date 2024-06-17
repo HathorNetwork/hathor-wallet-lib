@@ -5,10 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { OP_PUSHDATA1 } from '../opcodes';
-import { DEFAULT_TX_VERSION, CREATE_TOKEN_TX_VERSION } from '../constants';
 import path from 'path';
 import buffer from 'buffer';
+import { crypto, encoding, Address as bitcoreAddress } from 'bitcore-lib';
+import { clone } from 'lodash';
+import { AxiosInstance, AxiosRequestConfig } from 'axios';
+import { OP_PUSHDATA1 } from '../opcodes';
+import { DEFAULT_TX_VERSION, CREATE_TOKEN_TX_VERSION } from '../constants';
 import Transaction from '../models/transaction';
 import { HistoryTransaction, HistoryTransactionOutput } from '../models/types';
 import P2PKH from '../models/p2pkh';
@@ -20,8 +23,6 @@ import Output from '../models/output';
 import Network from '../models/network';
 import Address from '../models/address';
 import { hexToBuffer, unpackToInt, intToBytes } from './buffer';
-import { crypto, encoding, Address as bitcoreAddress } from 'bitcore-lib';
-import { clone } from 'lodash';
 import {
   AddressError,
   OutputValueError,
@@ -31,7 +32,6 @@ import {
   MaximumNumberOutputsError,
   ParseError,
 } from '../errors';
-import { AxiosInstance, AxiosRequestConfig } from 'axios';
 
 import { ErrorMessages } from '../errorMessages';
 import config from '../config';
@@ -78,12 +78,13 @@ const helpers = {
 
     // Clean the version string to have an array of integers
     // Check for each value if the version is allowed
-    let versionTestArr = this.getCleanVersionArray(version);
-    let minVersionArr = this.getCleanVersionArray(minVersion);
+    const versionTestArr = this.getCleanVersionArray(version);
+    const minVersionArr = this.getCleanVersionArray(minVersion);
     for (let i = 0; i < minVersionArr.length; i++) {
       if (minVersionArr[i] > versionTestArr[i]) {
         return false;
-      } else if (minVersionArr[i] < versionTestArr[i]) {
+      }
+      if (minVersionArr[i] < versionTestArr[i]) {
         return true;
       }
     }
@@ -241,13 +242,13 @@ const helpers = {
 
     if (version === DEFAULT_TX_VERSION) {
       return Transaction.createFromBytes(cloneBuffer, network);
-    } else if (version === CREATE_TOKEN_TX_VERSION) {
-      return CreateTokenTransaction.createFromBytes(cloneBuffer, network);
-    } else {
-      throw new ParseError(
-        'We currently support only the Transaction and CreateTokenTransaction types. Other types will be supported in the future.'
-      );
     }
+    if (version === CREATE_TOKEN_TX_VERSION) {
+      return CreateTokenTransaction.createFromBytes(cloneBuffer, network);
+    }
+    throw new ParseError(
+      'We currently support only the Transaction and CreateTokenTransaction types. Other types will be supported in the future.'
+    );
   },
 
   /**
@@ -348,11 +349,11 @@ const helpers = {
 
     if (data.version === CREATE_TOKEN_TX_VERSION) {
       return new CreateTokenTransaction(data.name, data.symbol, inputs, outputs, options);
-    } else if (data.version === DEFAULT_TX_VERSION) {
-      return new Transaction(inputs, outputs, options);
-    } else {
-      throw new ParseError(ErrorMessages.UNSUPPORTED_TX_TYPE);
     }
+    if (data.version === DEFAULT_TX_VERSION) {
+      return new Transaction(inputs, outputs, options);
+    }
+    throw new ParseError(ErrorMessages.UNSUPPORTED_TX_TYPE);
   },
 
   /**
@@ -387,9 +388,8 @@ const helpers = {
         outputs,
         { ...historyTx }
       );
-    } else {
-      return new Transaction(inputs, outputs, { ...historyTx });
     }
+    return new Transaction(inputs, outputs, { ...historyTx });
   },
 
   /**
@@ -496,10 +496,9 @@ const helpers = {
       e instanceof MaximumNumberInputsError
     ) {
       return e.message;
-    } else {
-      // Unhandled error
-      throw e;
     }
+    // Unhandled error
+    throw e;
   },
 
   /**

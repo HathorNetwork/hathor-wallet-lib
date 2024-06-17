@@ -6,8 +6,8 @@
  */
 
 import { get } from 'lodash';
-import transactionUtils from '../utils/transaction';
 import { crypto } from 'bitcore-lib';
+import transactionUtils from '../utils/transaction';
 import SendTransaction from '../new/sendTransaction';
 import HathorWallet from '../new/wallet';
 import NanoContract from './nano_contract';
