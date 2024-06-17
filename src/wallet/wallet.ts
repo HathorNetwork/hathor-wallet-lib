@@ -94,7 +94,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   network: Network;
 
   // Method to request the password from the client
-  private requestPassword: Function;
+  private requestPassword: () => Promise<string>;
 
   // String with 24 words separated by space
   private seed: string | null;
@@ -149,7 +149,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     enableWs = true,
     storage = null,
   }: {
-    requestPassword: Function;
+    requestPassword: () => Promise<string>;
     seed?: string | null;
     xpriv?: string | null;
     authxpriv?: string | null;
@@ -832,7 +832,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       addresses: string[] | null;
       totalAmount: number | null;
       count: number;
-      ignoreLocked: boolean;
+      ignoreLocked: true;
+      skipSpent: true;
     };
     const newOptions: optionsType = {
       tokenId: HATHOR_TOKEN_CONFIG.uid,
@@ -841,14 +842,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       totalAmount: null,
       count: 1,
       ...options,
+      ignoreLocked: true,
+      skipSpent: true, // We only want UTXOs
     };
 
     if (!newOptions.authority && !newOptions.totalAmount) {
       throw new UtxoError("We need the total amount of utxos if it's not an authority request.");
     }
-
-    newOptions.ignoreLocked = true;
-    newOptions.skipSpent = true; // We only want UTXOs
 
     const data = await walletApi.getTxOutputs(this, newOptions);
     let changeAmount = 0;
@@ -2022,6 +2022,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       createMeltAuthority: boolean;
       meltAuthorityAddress: string | null;
       allowExternalMeltAuthorityAddress: boolean | null;
+      nftData?: string;
     };
     const newOptions: optionsType = {
       address: null,

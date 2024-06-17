@@ -65,7 +65,14 @@ const walletApi = {
     timestamp: number,
     firstAddress: string | null = null
   ): Promise<WalletStatusResponseData> {
-    const data = {
+    const data: {
+      authXpubkeySignature: string;
+      firstAddress?: string;
+      xpubkey: string;
+      authXpubkey: string;
+      xpubkeySignature: string;
+      timestamp: number;
+    } = {
       xpubkey,
       xpubkeySignature,
       authXpubkey,
@@ -143,7 +150,7 @@ const walletApi = {
     wallet: HathorWalletServiceWallet,
     token: string | null = null
   ): Promise<BalanceResponseData> {
-    const data = { params: {} };
+    const data: { params: { token_id?: string } } = { params: {} };
     if (token) {
       data.params.token_id = token;
     }

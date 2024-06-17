@@ -27,7 +27,15 @@ export const axiosInstance = async (
   timeout: number = TIMEOUT
 ) => {
   // TODO How to allow 'Retry' request?
-  const defaultOptions = {
+  const defaultOptions: {
+    headers: {
+      Authorization?: string;
+      'Content-Type': string;
+    };
+    baseURL: string;
+    validateStatus: (status) => boolean;
+    timeout: number;
+  } = {
     baseURL: config.getWalletServiceBaseUrl(),
     timeout,
     // `validateStatus` defines whether to resolve or reject the promise for a given

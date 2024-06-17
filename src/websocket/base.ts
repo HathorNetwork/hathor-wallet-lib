@@ -40,7 +40,7 @@ abstract class BaseWebSocket extends EventEmitter {
   private ws: _WebSocket;
 
   // This is the URL of the websocket.
-  private wsURL: string | Function;
+  private wsURL: string | (() => string);
 
   // Boolean that indicates that the websocket was instantiated. It's important to
   // notice that it does not indicate that the connection has been established with

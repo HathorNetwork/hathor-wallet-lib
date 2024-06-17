@@ -30,7 +30,10 @@ class WalletConnection extends BaseConnection {
 
     this.handleWalletMessage = this.handleWalletMessage.bind(this);
 
-    const wsOptions = { wsURL: helpers.getWSServerURL(this.currentServer) };
+    const wsOptions: {
+      connectionTimeout?: number;
+      wsURL: string;
+    } = { wsURL: helpers.getWSServerURL(this.currentServer) };
 
     if (options.connectionTimeout) {
       wsOptions.connectionTimeout = options.connectionTimeout;

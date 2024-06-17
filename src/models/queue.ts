@@ -15,7 +15,7 @@ type QueueNode<T> = {
  *
  * @template [T=Object]
  */
-export default class Queue<T = Object> {
+export default class Queue<T = unknown> {
   private head?: QueueNode<T>;
 
   private last?: QueueNode<T>;
