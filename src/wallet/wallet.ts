@@ -582,9 +582,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // We are not using for async (...) to maintain compatibility with older nodejs versions
     // if we ever deprecate older node versions, we can refactor this to the new, cleaner syntax
-    let nextAddress;
-    while (!(nextAddress = await generator.next()).done) {
+    let nextAddress = await generator.next();
+    while (!nextAddress.done) {
       addresses.push(nextAddress.value.address);
+      nextAddress = await generator.next();
     }
 
     const balance = {};
