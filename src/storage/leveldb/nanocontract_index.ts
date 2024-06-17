@@ -132,8 +132,10 @@ export default class LevelNanoContractIndex implements IKVNanoContractIndex {
    */
   async updateNanoContractRegisteredAddress(ncId: string, address: string): Promise<void> {
     const currentNanoContractData = await this.getNanoContract(ncId);
-    if (currentNanoContractData !== null) {
-      return this.registeredDB.put(ncId, Object.assign(currentNanoContractData, { address }));
+    if (currentNanoContractData === null) {
+      return;
     }
+
+    await this.registeredDB.put(ncId, Object.assign(currentNanoContractData, { address }));
   }
 }
