@@ -423,7 +423,7 @@ async function updateTokensData(storage: IStorage, tokens: Set<string>): Promise
               symbol: string;
             }
           | { success: false; message: string } = await new Promise(resolve => {
-          return walletApi.getGeneralTokenInfo(uid, resolve);
+          walletApi.getGeneralTokenInfo(uid, resolve);
         });
         return result;
       } catch (err: unknown) {
@@ -434,7 +434,9 @@ async function updateTokensData(storage: IStorage, tokens: Set<string>): Promise
         // Increase the retry counter and try again
         retryCount += 1;
         // Wait `delay` ms before another attempt
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise(resolve => {
+          setTimeout(resolve, delay);
+        });
         continue;
       }
     }
