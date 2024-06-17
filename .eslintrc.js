@@ -25,7 +25,7 @@ module.exports = {
     'import/prefer-default-export': 0,
     quotes: ['error', 'single', { avoidEscape: true, allowTemplateLiterals: true }],
     'comma-dangle': 0,
-    'object-curly-newline': ['error', { ObjectPattern: { multiline: true } }],
+    'object-curly-newline': 'off', // This rule is better handled by prettier
     eqeqeq: [1, 'allow-null'],
     'no-console': 'off',
     'no-continue': 0,
