@@ -161,7 +161,7 @@ export class MemoryStore implements IStore {
   /**
    * Generic storage for any other data
    */
-  genericStorage: Record<string, any>;
+  genericStorage: Record<string, unknown>;
 
   lockedUtxos: Map<string, ILockedUtxo>;
 
@@ -196,7 +196,7 @@ export class MemoryStore implements IStore {
    * @async
    * @returns {AsyncGenerator<IAddressInfo>}
    */
-  async *addressIter(): AsyncGenerator<IAddressInfo, any, unknown> {
+  async *addressIter(): AsyncGenerator<IAddressInfo, void, void> {
     for (const addrInfo of this.addresses.values()) {
       yield addrInfo;
     }
@@ -582,7 +582,7 @@ export class MemoryStore implements IStore {
    * @async
    * @returns {AsyncGenerator<IUtxo>}
    */
-  async *utxoIter(): AsyncGenerator<IUtxo, any, unknown> {
+  async *utxoIter(): AsyncGenerator<IUtxo, void, void> {
     for (const utxo of this.utxos.values()) {
       yield utxo;
     }
@@ -859,7 +859,7 @@ export class MemoryStore implements IStore {
    * @async
    * @returns {Promise<any>}
    */
-  async getItem(key: string): Promise<any> {
+  async getItem(key: string): Promise<unknown> {
     return this.genericStorage[key];
   }
 
@@ -871,7 +871,7 @@ export class MemoryStore implements IStore {
    * @async
    * @returns {Promise<void>}
    */
-  async setItem(key: string, value: any): Promise<void> {
+  async setItem(key: string, value: unknown): Promise<void> {
     this.genericStorage[key] = value;
   }
 

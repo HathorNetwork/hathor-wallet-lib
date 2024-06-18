@@ -169,9 +169,9 @@ export class WalletError extends Error {
  * @inner
  */
 export class WalletRequestError extends WalletError {
-  cause: any = null;
+  cause: unknown = null;
 
-  constructor(message: string, errorData: { cause: any } = { cause: null }) {
+  constructor(message: string, errorData: { cause: unknown } = { cause: null }) {
     super(message);
     this.cause = errorData.cause;
   }
@@ -192,7 +192,9 @@ export class UtxoError extends WalletError {}
  * @inner
  */
 export class SendTxError extends WalletError {
-  errorData: any = null;
+  // XXX: There are only two out of dozens of places where this object is used instead of a string.
+  //      This should be made consistently for strings
+  errorData: string | { txId: string; index: number } = '';
 }
 
 /**
