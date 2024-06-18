@@ -6,6 +6,7 @@
  */
 
 import { bufferToHex, unpackToFloat, unpackToInt } from '../utils/buffer';
+import { NanoContractArgumentType } from './types';
 
 class Deserializer {
   /**
@@ -19,7 +20,7 @@ class Deserializer {
    * @memberof Deserializer
    * @inner
    */
-  deserializeFromType(value: Buffer, type: string): any {
+  deserializeFromType(value: Buffer, type: string): NanoContractArgumentType | null {
     if (type.endsWith('?')) {
       // It's an optional
       const optionalType = type.slice(0, -1);
@@ -125,7 +126,7 @@ class Deserializer {
    * @memberof Deserializer
    * @inner
    */
-  toOptional(value: Buffer, type: string): any {
+  toOptional(value: Buffer, type: string): NanoContractArgumentType | null {
     if (value[0] === 0) {
       // It's an empty optional
       return null;
@@ -164,7 +165,7 @@ class Deserializer {
     let parsed = this.deserializeFromType(signedBuffer.slice(0, size), valueType);
     if (valueType === 'bytes') {
       // If the value is bytes, we should transform into hex to return the string
-      parsed = parsed.toString('hex');
+      parsed = (parsed as Buffer).toString('hex');
     }
     signedBuffer = signedBuffer.slice(size);
     return `${bufferToHex(signedBuffer)},${parsed},${valueType}`;

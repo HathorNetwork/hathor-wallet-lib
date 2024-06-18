@@ -93,7 +93,7 @@ class NanoContract extends Transaction {
    * @inner
    */
   toBytes(): Buffer {
-    const arr: any = [];
+    const arr: Buffer[] = [];
     // Serialize first the funds part
     //
     this.serializeFundsFields(arr, true);
