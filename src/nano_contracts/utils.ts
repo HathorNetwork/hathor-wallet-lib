@@ -189,6 +189,7 @@ export const validateBlueprintMethodArgs = async (blueprintId, method, args): Pr
         }
         break;
       default:
+        // eslint-disable-next-line valid-typeof -- This rule is not suited for dynamic comparisons such as this one
         if (arg.type !== typeof args[index]) {
           throw new NanoContractTransactionError(
             `Expects argument number ${index + 1} type ${arg.type} but received type ${typeof args[index]}.`
