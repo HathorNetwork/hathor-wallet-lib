@@ -11,6 +11,8 @@ export enum NanoContractActionType {
   WITHDRAWAL = 'withdrawal',
 }
 
+export type NanoContractArgumentType = string | Buffer | number | boolean;
+
 export interface NanoContractAction {
   type: NanoContractActionType.DEPOSIT | NanoContractActionType.WITHDRAWAL;
   token: string;
@@ -29,7 +31,7 @@ export interface NanoContractParsedArgument {
   // Argument type from hathor-core code
   type: string;
   // Parsed value
-  parsed: any;
+  parsed: NanoContractArgumentType;
 }
 
 export interface MethodArgInfo {
@@ -73,7 +75,7 @@ export interface NanoContractHistoryAPIResponse {
 
 interface StateValueSuccess {
   // State value return
-  value: any;
+  value: NanoContractArgumentType;
 }
 
 interface StateValueError {
