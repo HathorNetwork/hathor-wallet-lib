@@ -159,7 +159,7 @@ abstract class Connection extends EventEmitter {
   }
 
   // eslint-disable-next-line class-methods-use-this -- This method is a no-op
-  startControlHandlers(options?: any) {}
+  startControlHandlers(options?: unknown) {}
 
   removeMetricsHandlers() {
     if (this.websocket) {
@@ -168,7 +168,7 @@ abstract class Connection extends EventEmitter {
     }
   }
 
-  sendMessageWS(msg: any) {
+  sendMessageWS(msg: string) {
     if (this.websocket) {
       this.websocket.sendMessage(msg);
     }

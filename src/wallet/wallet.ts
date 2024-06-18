@@ -255,10 +255,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @inner
    */
   async getServerUrlsFromStorage(): Promise<WalletServiceServerUrls> {
-    const walletServiceBaseUrl = await this.storage.store.getItem(
+    const walletServiceBaseUrl = (await this.storage.store.getItem(
       'wallet:wallet_service:base_server'
-    );
-    const walletServiceWsUrl = await this.storage.store.getItem('wallet:wallet_service:ws_server');
+    )) as string;
+    const walletServiceWsUrl = (await this.storage.store.getItem(
+      'wallet:wallet_service:ws_server'
+    )) as string;
 
     return {
       walletServiceBaseUrl,

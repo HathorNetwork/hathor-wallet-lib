@@ -84,7 +84,12 @@ const tokens = {
     }
 
     // Validate if name and symbol match with the token info in the DAG
-    const response = await new Promise<any>(resolve => {
+    const response = await new Promise<{
+      success: boolean;
+      message: string;
+      name: string;
+      symbol: string;
+    }>(resolve => {
       return walletApi.getGeneralTokenInfo(tokenData.uid, resolve);
     });
 

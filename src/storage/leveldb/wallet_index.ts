@@ -44,7 +44,7 @@ export default class LevelWalletIndex implements IKVWalletIndex {
   /**
    * Database to store generic wallet data.
    */
-  genericDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, any>;
+  genericDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, unknown>;
 
   indexVersion: string = '0.0.1';
 
@@ -55,7 +55,7 @@ export default class LevelWalletIndex implements IKVWalletIndex {
       valueEncoding: 'json',
     });
     this.walletDB = db.sublevel(WALLET_PREFIX);
-    this.genericDB = db.sublevel<string, any>(GENERIC_PREFIX, { valueEncoding: 'json' });
+    this.genericDB = db.sublevel<string, unknown>(GENERIC_PREFIX, { valueEncoding: 'json' });
   }
 
   async close(): Promise<void> {
@@ -329,7 +329,7 @@ export default class LevelWalletIndex implements IKVWalletIndex {
    * @param key database key.
    * @returns {Promise<any>}
    */
-  async getItem(key: string): Promise<any> {
+  async getItem(key: string): Promise<unknown> {
     try {
       return await this.genericDB.get(key);
     } catch (err: unknown) {
@@ -345,7 +345,7 @@ export default class LevelWalletIndex implements IKVWalletIndex {
    * @param {string} key database key
    * @param {any} value database value
    */
-  async setItem(key: string, value: any): Promise<void> {
+  async setItem(key: string, value: unknown): Promise<void> {
     await this.genericDB.put(key, value);
   }
 
