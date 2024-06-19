@@ -8,8 +8,8 @@
 import path from 'path';
 import { Level, ValueIteratorOptions } from 'level';
 import { AbstractSublevel } from 'abstract-level';
-import { IKVUtxoIndex, IUtxo, IUtxoFilterOptions, ILockedUtxo } from '../../types';
 import _ from 'lodash';
+import { IKVUtxoIndex, IUtxo, IUtxoFilterOptions, ILockedUtxo } from '../../types';
 import { HATHOR_TOKEN_CONFIG } from '../../constants';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 import transactionUtils from '../../utils/transaction';
@@ -25,7 +25,7 @@ export const LOCKED_UTXO_PREFIX = 'locked:utxo';
  * @param {Pick<IUtxo, 'txId'|'index'>} utxo The utxo to calculate the id
  * @returns {string} a string representing the utxo id
  */
-function _utxo_id(utxo: Pick<IUtxo, 'txId'|'index'>): string {
+function _utxo_id(utxo: Pick<IUtxo, 'txId' | 'index'>): string {
   return `${utxo.txId}:${utxo.index}`;
 }
 
@@ -39,7 +39,7 @@ function _token_address_utxo_key(utxo: IUtxo): string {
   return `${utxo.authorities}:${utxo.token}:${utxo.address}:${value}:${_utxo_id(utxo)}`;
 }
 
-function _int_to_hex(value: Number): string {
+function _int_to_hex(value: number): string {
   return value.toString(16).padStart(16, '0');
 }
 
@@ -54,30 +54,35 @@ function _token_utxo_key(utxo: IUtxo): string {
 
 export default class LevelUtxoIndex implements IKVUtxoIndex {
   dbpath: string;
+
   /**
    * Main utxo database
    * Key: tx_id:index
    * Value: IUtxo (json encoded)
    */
   utxoDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, IUtxo>;
+
   /**
    * Reverse search index for utxo database
    * Key: authorities:token:value:tx_id:index
    * Value: IUtxo (json encoded)
    */
   tokenUtxoDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, IUtxo>;
+
   /**
    * Reverse search index for utxo database
    * Key: authorities:token:address:value:tx_id:index
    * Value: IUtxo (json encoded)
    */
   tokenAddressUtxoDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, IUtxo>;
+
   /**
    * Locked utxo database
    * Key: tx_id:index
    * Value: ILockedUtxo (json encoded)
    */
   lockedUtxoDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, ILockedUtxo>;
+
   indexVersion: string = '0.0.1';
 
   constructor(dbpath: string) {
@@ -85,8 +90,12 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
     const db = new Level(this.dbpath);
     this.utxoDB = db.sublevel<string, IUtxo>(UTXO_PREFIX, { valueEncoding: 'json' });
     this.tokenUtxoDB = db.sublevel<string, IUtxo>(TOKEN_UTXO_PREFIX, { valueEncoding: 'json' });
-    this.tokenAddressUtxoDB = db.sublevel<string, IUtxo>(TOKEN_ADDRESS_UTXO_PREFIX, { valueEncoding: 'json' });
-    this.lockedUtxoDB = db.sublevel<string, ILockedUtxo>(LOCKED_UTXO_PREFIX, { valueEncoding: 'json' });
+    this.tokenAddressUtxoDB = db.sublevel<string, IUtxo>(TOKEN_ADDRESS_UTXO_PREFIX, {
+      valueEncoding: 'json',
+    });
+    this.lockedUtxoDB = db.sublevel<string, ILockedUtxo>(LOCKED_UTXO_PREFIX, {
+      valueEncoding: 'json',
+    });
   }
 
   /**
@@ -102,7 +111,7 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
    * @returns {Promise<void>}
    */
   async checkVersion(): Promise<void> {
-    const db = this.utxoDB.db;
+    const { db } = this.utxoDB;
     const instanceName = this.constructor.name;
     await checkLevelDbVersion(instanceName, db, this.indexVersion);
   }
@@ -119,10 +128,9 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
       try {
         const tokenUtxo = await this.tokenUtxoDB.get(_token_utxo_key(value));
         if (!_.isEqual(tokenUtxo, value)) {
-          throw new Error('Inconsistent database')
+          throw new Error('Inconsistent database');
         }
-
-      } catch(err: unknown) {
+      } catch (err: unknown) {
         if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
           // Create if missing
           await this.tokenUtxoDB.put(_token_utxo_key(value), value);
@@ -134,9 +142,9 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
       try {
         const tokenAddrUtxo = await this.tokenAddressUtxoDB.get(_token_address_utxo_key(value));
         if (!_.isEqual(tokenAddrUtxo, value)) {
-          throw new Error('Inconsistent database')
+          throw new Error('Inconsistent database');
         }
-      } catch(err: unknown) {
+      } catch (err: unknown) {
         if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
           // Create if missing
           await this.tokenAddressUtxoDB.put(_token_address_utxo_key(value), value);
@@ -151,7 +159,7 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
    * Iterate on all utxos in the database.
    * @returns {AsyncGenerator<IUtxo>}
    */
-  async * utxoIter(): AsyncGenerator<IUtxo> {
+  async *utxoIter(): AsyncGenerator<IUtxo> {
     for await (const utxo of this.utxoDB.values()) {
       yield utxo;
     }
@@ -171,7 +179,7 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
    * @param {number|undefined} networkHeight Height of the network, used to check if the utxo is height locked
    * @returns {AsyncGenerator<IUtxo>}
    */
-  async * selectUtxos(options: IUtxoFilterOptions, networkHeight?: number): AsyncGenerator<IUtxo> {
+  async *selectUtxos(options: IUtxoFilterOptions, networkHeight?: number): AsyncGenerator<IUtxo> {
     const isHeightLocked = (utxo: IUtxo) => {
       if (!transactionUtils.isBlock({ version: utxo.type })) {
         // Only blocks can be reward locked
@@ -219,7 +227,9 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
       if (options.amount_smaller_than !== undefined) {
         maxkey = `${maxkey}${options.filter_address}:${_int_to_hex(options.amount_smaller_than + 1)}`;
       } else {
-        const lastChar = String.fromCharCode(options.filter_address.charCodeAt(options.filter_address.length - 1) + 1);
+        const lastChar = String.fromCharCode(
+          options.filter_address.charCodeAt(options.filter_address.length - 1) + 1
+        );
         const maxaddr = `${options.filter_address.slice(0, -1)}${lastChar}`;
         maxkey = `${maxkey}${maxaddr}:`;
       }
@@ -261,7 +271,7 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
       if (options.filter_method && !options.filter_method(utxo)) {
         continue;
       }
-      if (options.max_amount && ((sumAmount + utxo.value) > options.max_amount)) {
+      if (options.max_amount && sumAmount + utxo.value > options.max_amount) {
         continue;
       }
 
@@ -271,8 +281,8 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
       sumAmount += utxo.value;
 
       if (
-        (options.target_amount && sumAmount >= options.target_amount)
-        || (options.max_utxos && utxoNum >= options.max_utxos)
+        (options.target_amount && sumAmount >= options.target_amount) ||
+        (options.max_utxos && utxoNum >= options.max_utxos)
       ) {
         // We have reached either the target amount or the max number of utxos requested
         return;
@@ -299,7 +309,7 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
    * @returns {Promise<void>}
    */
   async saveLockedUtxo(lockedUtxo: ILockedUtxo): Promise<void> {
-    const utxoId = _utxo_id({txId: lockedUtxo.tx.tx_id, index: lockedUtxo.index});
+    const utxoId = _utxo_id({ txId: lockedUtxo.tx.tx_id, index: lockedUtxo.index });
     return this.lockedUtxoDB.put(utxoId, lockedUtxo);
   }
 
@@ -309,7 +319,7 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
    * @returns {Promise<void>}
    */
   async unlockUtxo(lockedUtxo: ILockedUtxo): Promise<void> {
-    const utxoId = _utxo_id({txId: lockedUtxo.tx.tx_id, index: lockedUtxo.index});
+    const utxoId = _utxo_id({ txId: lockedUtxo.tx.tx_id, index: lockedUtxo.index });
     return this.lockedUtxoDB.del(utxoId);
   }
 

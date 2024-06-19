@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { HDPublicKey } from 'bitcore-lib';
 import Input from '../models/input';
 import {
   ApiVersion,
@@ -42,9 +43,13 @@ import { decryptData, checkPassword } from '../utils/crypto';
 import FullNodeConnection from '../new/connection';
 import { getAddressType } from '../utils/address';
 import walletUtils from '../utils/wallet';
-import { HATHOR_TOKEN_CONFIG, MAX_INPUTS, MAX_OUTPUTS, TOKEN_DEPOSIT_PERCENTAGE } from '../constants';
+import {
+  HATHOR_TOKEN_CONFIG,
+  MAX_INPUTS,
+  MAX_OUTPUTS,
+  TOKEN_DEPOSIT_PERCENTAGE,
+} from '../constants';
 import { UninitializedWalletError } from '../errors';
-import { HDPublicKey } from 'bitcore-lib';
 import Transaction from '../models/transaction';
 
 const DEFAULT_ADDRESS_META: IAddressMetadata = {
@@ -54,10 +59,15 @@ const DEFAULT_ADDRESS_META: IAddressMetadata = {
 
 export class Storage implements IStorage {
   store: IStore;
+
   utxosSelectedAsInput: Map<string, boolean>;
+
   config: Config;
-  version: ApiVersion|null;
-  txSignFunc: EcdsaTxSign|null;
+
+  version: ApiVersion | null;
+
+  txSignFunc: EcdsaTxSign | null;
+
   /**
    * This promise is used to chain the calls to process unlocked utxos.
    * This way we can avoid concurrent calls.
@@ -139,7 +149,7 @@ export class Storage implements IStorage {
   async *getAllAddresses(): AsyncGenerator<IAddressInfo & IAddressMetadata> {
     for await (const address of this.store.addressIter()) {
       const meta = await this.store.getAddressMeta(address.base58);
-      yield {...address, ...DEFAULT_ADDRESS_META, ...meta};
+      yield { ...address, ...DEFAULT_ADDRESS_META, ...meta };
     }
   }
 
@@ -156,7 +166,7 @@ export class Storage implements IStorage {
       return null;
     }
     const meta = await this.store.getAddressMeta(base58);
-    return {...address, ...DEFAULT_ADDRESS_META, ...meta};
+    return { ...address, ...DEFAULT_ADDRESS_META, ...meta };
   }
 
   /**
@@ -226,10 +236,12 @@ export class Storage implements IStorage {
    * @param {string|null|undefined} [options.changeAddress=undefined] User provided change address to use
    * @returns {Promise<string>} The change address to use
    */
-  async getChangeAddress({ changeAddress }: { changeAddress?: string | null | undefined; } = {}): Promise<string> {
+  async getChangeAddress({
+    changeAddress,
+  }: { changeAddress?: string | null | undefined } = {}): Promise<string> {
     if (changeAddress) {
-      if (!await this.isAddressMine(changeAddress)) {
-        throw new Error("Change address is not from the wallet");
+      if (!(await this.isAddressMine(changeAddress))) {
+        throw new Error('Change address is not from the wallet');
       }
       return changeAddress;
     }
@@ -265,7 +277,7 @@ export class Storage implements IStorage {
    * @param {string} txId The transaction id to fetch
    * @returns {Promise<IHistoryTx | null>} The transaction or null if not on storage
    */
-  async getTx(txId: string): Promise<IHistoryTx|null> {
+  async getTx(txId: string): Promise<IHistoryTx | null> {
     return this.store.getTx(txId);
   }
 
@@ -275,12 +287,14 @@ export class Storage implements IStorage {
    * @param {Input[]} inputs A list of inputs
    * @returns {AsyncGenerator<{tx: IHistoryTx, input: Input, index: number}>}
    */
-  async *getSpentTxs(inputs: Input[]): AsyncGenerator<{tx: IHistoryTx, input: Input, index: number}> {
+  async *getSpentTxs(
+    inputs: Input[]
+  ): AsyncGenerator<{ tx: IHistoryTx; input: Input; index: number }> {
     for await (const [index, input] of inputs.entries()) {
       const tx = await this.getTx(input.hash);
       // Ignore unknown transactions
       if (tx === null) continue;
-      yield {tx, input, index};
+      yield { tx, input, index };
     }
   }
 
@@ -299,10 +313,7 @@ export class Storage implements IStorage {
    * @returns {Promise<void>}
    */
   async processHistory(): Promise<void> {
-    await processHistory(
-      this,
-      { rewardLock: this.version?.reward_spend_min_blocks },
-    );
+    await processHistory(this, { rewardLock: this.version?.reward_spend_min_blocks });
   }
 
   /**
@@ -333,7 +344,7 @@ export class Storage implements IStorage {
    * @param {string} token Token uid to fetch
    * @returns {Promise<(ITokenData & Partial<ITokenMetadata>)|null>}
    */
-  async getToken(token: string): Promise<(ITokenData & Partial<ITokenMetadata>)|null> {
+  async getToken(token: string): Promise<(ITokenData & Partial<ITokenMetadata>) | null> {
     return this.store.getToken(token);
   }
 
@@ -395,22 +406,23 @@ export class Storage implements IStorage {
    * @param {Omit<IUtxoFilterOptions, 'reward_lock'>} [options={}] Options to filter utxos and stop when the target is found.
    * @returns {AsyncGenerator<IUtxo, any, unknown>}
    */
-  async *selectUtxos(options: Omit<IUtxoFilterOptions, 'reward_lock'> = {}): AsyncGenerator<IUtxo, any, unknown> {
+  async *selectUtxos(
+    options: Omit<IUtxoFilterOptions, 'reward_lock'> = {}
+  ): AsyncGenerator<IUtxo, any, unknown> {
     const filterSelected = (utxo: IUtxo): boolean => {
       const utxoId = `${utxo.txId}:${utxo.index}`;
       return !this.utxosSelectedAsInput.has(utxoId);
-    }
+    };
     const newFilter = (utxo: IUtxo): boolean => {
-      const optionsFilter = (options.filter_method ? options.filter_method(utxo) : true);
+      const optionsFilter = options.filter_method ? options.filter_method(utxo) : true;
       const selectedFilter = filterSelected(utxo);
       if (options.only_available_utxos) {
         // We need to check if the utxo is selected as an input since we only want available utxos.
         return selectedFilter && optionsFilter;
-      } else {
-        // Only check the filter method if we don't care about available utxos.
-        return optionsFilter;
       }
-    }
+      // Only check the filter method if we don't care about available utxos.
+      return optionsFilter;
+    };
 
     const newOptions: IUtxoFilterOptions = {
       ...options,
@@ -440,8 +452,8 @@ export class Storage implements IStorage {
     token: string,
     authorities: number,
     changeAddress: string,
-    chooseInputs: boolean,
-  ): Promise<{inputs: IDataInput[], outputs: IDataOutput[]}> {
+    chooseInputs: boolean
+  ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }> {
     const newInputs: IDataInput[] = [];
     const newOutputs: IDataOutput[] = [];
 
@@ -460,7 +472,9 @@ export class Storage implements IStorage {
     if (singleBalance > 0) {
       if (!chooseInputs) {
         // We cannot choose inputs, so we fail
-        throw new Error(`Insufficient funds in the given inputs for ${token}, missing ${singleBalance} more tokens.`);
+        throw new Error(
+          `Insufficient funds in the given inputs for ${token}, missing ${singleBalance} more tokens.`
+        );
       }
       // We have a surplus of this token on the outputs, so we need to find utxos to match
       let foundAmount = 0;
@@ -506,7 +520,7 @@ export class Storage implements IStorage {
           newOutputs.push({
             type: getAddressType(changeAddress, this.config.getNetwork()),
             token,
-            authorities: authorities,
+            authorities,
             value: authorities,
             address: changeAddress,
             timelock: null,
@@ -524,7 +538,7 @@ export class Storage implements IStorage {
       }
     }
 
-    return {inputs: newInputs, outputs: newOutputs};
+    return { inputs: newInputs, outputs: newOutputs };
   }
 
   /**
@@ -541,24 +555,42 @@ export class Storage implements IStorage {
    */
   async matchTokenBalance(
     token: string,
-    balance: Record<'funds'|'mint'|'melt', number>,
-    { changeAddress, skipAuthorities = true, chooseInputs = true }: IFillTxOptions = {},
-  ): Promise<{inputs: IDataInput[], outputs: IDataOutput[]}> {
+    balance: Record<'funds' | 'mint' | 'melt', number>,
+    { changeAddress, skipAuthorities = true, chooseInputs = true }: IFillTxOptions = {}
+  ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }> {
     const addressForChange = changeAddress || (await this.getCurrentAddress());
     // balance holds the balance of all tokens on the transaction
     const newInputs: IDataInput[] = [];
     const newOutputs: IDataOutput[] = [];
     // match funds
-    const {inputs: fundsInputs, outputs: fundsOutputs} = await this.matchBalanceSelection(balance.funds, token, 0, addressForChange, chooseInputs);
+    const { inputs: fundsInputs, outputs: fundsOutputs } = await this.matchBalanceSelection(
+      balance.funds,
+      token,
+      0,
+      addressForChange,
+      chooseInputs
+    );
     newInputs.push(...fundsInputs);
     newOutputs.push(...fundsOutputs);
 
     if (!(skipAuthorities || token === HATHOR_TOKEN_CONFIG.uid)) {
       // Match authority balance (only possible for custom tokens)
       // match mint
-      const {inputs: mintInputs, outputs: mintOutputs} = await this.matchBalanceSelection(balance.mint, token, 1, addressForChange, chooseInputs);
+      const { inputs: mintInputs, outputs: mintOutputs } = await this.matchBalanceSelection(
+        balance.mint,
+        token,
+        1,
+        addressForChange,
+        chooseInputs
+      );
       // match melt
-      const {inputs: meltInputs, outputs: meltOutputs} = await this.matchBalanceSelection(balance.melt, token, 2, addressForChange, chooseInputs);
+      const { inputs: meltInputs, outputs: meltOutputs } = await this.matchBalanceSelection(
+        balance.melt,
+        token,
+        2,
+        addressForChange,
+        chooseInputs
+      );
 
       newInputs.push(...mintInputs, ...meltInputs);
       newOutputs.push(...mintOutputs, ...meltOutputs);
@@ -567,7 +599,7 @@ export class Storage implements IStorage {
     return {
       inputs: newInputs,
       outputs: newOutputs,
-    }
+    };
   }
 
   /**
@@ -580,21 +612,30 @@ export class Storage implements IStorage {
    * @async
    * @returns {Promise<void>}
    */
-  async fillTx(token:string, tx: IDataTx, options: IFillTxOptions = {}): Promise<{inputs: IDataInput[], outputs: IDataOutput[]}> {
+  async fillTx(
+    token: string,
+    tx: IDataTx,
+    options: IFillTxOptions = {}
+  ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }> {
     const tokenBalance = await transactionUtils.calculateTxBalanceToFillTx(token, tx);
-    const {inputs: newInputs, outputs: newOutputs} = await this.matchTokenBalance(token, tokenBalance, options);
+    const { inputs: newInputs, outputs: newOutputs } = await this.matchTokenBalance(
+      token,
+      tokenBalance,
+      options
+    );
 
     // Validate if we will add too many inputs/outputs
     const max_inputs = this.version?.max_number_inputs || MAX_INPUTS;
     const max_outputs = this.version?.max_number_outputs || MAX_OUTPUTS;
-    if (((tx.inputs.length + newInputs.length) > max_inputs)
-      || ((tx.outputs.length + newOutputs.length) > max_outputs)
+    if (
+      tx.inputs.length + newInputs.length > max_inputs ||
+      tx.outputs.length + newOutputs.length > max_outputs
     ) {
       // we have more inputs/outputs than what can be sent on the transaction
       throw new Error('When over the maximum amount of inputs/outputs');
     }
 
-    return {inputs: newInputs, outputs: newOutputs}
+    return { inputs: newInputs, outputs: newOutputs };
   }
 
   /**
@@ -609,11 +650,11 @@ export class Storage implements IStorage {
    */
   async utxoSelectAsInput(utxo: IUtxoId, markAs: boolean, ttl?: number): Promise<void> {
     const tx = await this.getTx(utxo.txId);
-    if ((!tx) || (!tx.outputs[utxo.index])) {
+    if (!tx || !tx.outputs[utxo.index]) {
       return;
     }
 
-    if (markAs && (tx.outputs[utxo.index].spent_by !== null)) {
+    if (markAs && tx.outputs[utxo.index].spent_by !== null) {
       // Already spent, no need to mark as selected_as_input
       return;
     }
@@ -822,7 +863,17 @@ export class Storage implements IStorage {
    * }} Options to handle stop
    * @returns {Promise<void>}
    */
-  async handleStop({connection, cleanStorage = false, cleanAddresses = false, cleanTokens = false}: {connection?: FullNodeConnection, cleanStorage?: boolean, cleanAddresses?: boolean, cleanTokens?: boolean} = {}): Promise<void> {
+  async handleStop({
+    connection,
+    cleanStorage = false,
+    cleanAddresses = false,
+    cleanTokens = false,
+  }: {
+    connection?: FullNodeConnection;
+    cleanStorage?: boolean;
+    cleanAddresses?: boolean;
+    cleanTokens?: boolean;
+  } = {}): Promise<void> {
     if (connection) {
       for await (const addressInfo of this.getAllAddresses()) {
         connection.unsubscribeAddress(addressInfo.base58);
@@ -843,7 +894,11 @@ export class Storage implements IStorage {
    * @param {boolean} [cleanTokens=false] If we should clean the registered tokens
    * @returns {Promise<void>}
    */
-  async cleanStorage(cleanHistory: boolean = false, cleanAddresses: boolean = false, cleanTokens: boolean = false): Promise<void> {
+  async cleanStorage(
+    cleanHistory: boolean = false,
+    cleanAddresses: boolean = false,
+    cleanTokens: boolean = false
+  ): Promise<void> {
     return this.store.cleanStorage(cleanHistory, cleanAddresses, cleanTokens);
   }
 
@@ -906,7 +961,11 @@ export class Storage implements IStorage {
   async changePassword(oldPassword: string, newPassword: string): Promise<void> {
     const accessData = await this._getValidAccessData();
 
-    const newAccessData = walletUtils.changeEncryptionPassword(accessData, oldPassword, newPassword);
+    const newAccessData = walletUtils.changeEncryptionPassword(
+      accessData,
+      oldPassword,
+      newPassword
+    );
 
     // Save the changes made
     await this.saveAccessData(newAccessData);
@@ -926,7 +985,7 @@ export class Storage implements IStorage {
    * @returns {Promise<number>}
    */
   async getGapLimit(): Promise<number> {
-    if (await this.getScanningPolicy() !== SCANNING_POLICY.GAP_LIMIT) {
+    if ((await this.getScanningPolicy()) !== SCANNING_POLICY.GAP_LIMIT) {
       throw new Error('Wallet is not configured to use gap limit');
     }
     return this.store.getGapLimit();
@@ -954,8 +1013,8 @@ export class Storage implements IStorage {
    * @returns {Promise<void>}
    */
   async setScanningPolicyData(data: AddressScanPolicyData | null): Promise<void> {
-      if (!data) return;
-      await this.store.setScanningPolicyData(data);
+    if (!data) return;
+    await this.store.setScanningPolicyData(data);
   }
 
   /**
@@ -1030,7 +1089,7 @@ export class Storage implements IStorage {
    * @param address New registered address
    */
   async updateNanoContractRegisteredAddress(ncId: string, address: string): Promise<void> {
-    if (!await this.isAddressMine(address)) {
+    if (!(await this.isAddressMine(address))) {
       throw new Error('Registered address must belong to the wallet.');
     }
     return this.store.updateNanoContractRegisteredAddress(ncId, address);

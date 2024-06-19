@@ -5,8 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { crypto as cryptoBL, PrivateKey, HDPrivateKey } from 'bitcore-lib';
 import { Utxo } from '../wallet/types';
-import { UtxoError } from '../errors';
+import { UtxoError, ParseError } from '../errors';
 import { HistoryTransactionOutput } from '../models/types';
 import {
   TOKEN_AUTHORITY_MASK,
@@ -18,26 +19,34 @@ import {
   DEFAULT_SIGNAL_BITS,
   BLOCK_VERSION,
   MERGED_MINED_BLOCK_VERSION,
-  NANO_CONTRACTS_VERSION
+  NANO_CONTRACTS_VERSION,
 } from '../constants';
-import { crypto as cryptoBL, PrivateKey, HDPrivateKey } from 'bitcore-lib'
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import Input from '../models/input';
 import Output from '../models/output';
 import Network from '../models/network';
-import { IBalance, IStorage, IHistoryTx, IDataOutput, IDataTx, isDataOutputCreateToken, IHistoryOutput, IUtxoId, IInputSignature, ITxSignatureData } from '../types';
+import {
+  IBalance,
+  IStorage,
+  IHistoryTx,
+  IDataOutput,
+  IDataTx,
+  isDataOutputCreateToken,
+  IHistoryOutput,
+  IUtxoId,
+  IInputSignature,
+  ITxSignatureData,
+} from '../types';
 import Address from '../models/address';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
 import ScriptData from '../models/script_data';
-import { ParseError } from '../errors';
 import helpers from './helpers';
 import { getAddressType, getAddressFromPubkey } from './address';
 import NanoContract from '../nano_contracts/nano_contract';
 
 const transaction = {
-
   /**
    * Return if a tx is a block or not.
    *
@@ -45,7 +54,7 @@ const transaction = {
    * @returns {boolean}
    */
   isBlock(tx: Pick<IHistoryTx, 'version'>): boolean {
-    return (tx.version === BLOCK_VERSION || tx.version === MERGED_MINED_BLOCK_VERSION);
+    return tx.version === BLOCK_VERSION || tx.version === MERGED_MINED_BLOCK_VERSION;
   },
 
   /**
@@ -65,7 +74,7 @@ const transaction = {
    * @returns {boolean} If the output is a mint authority output
    */
   isMint(output: Pick<HistoryTransactionOutput, 'token_data' | 'value'>): boolean {
-    return this.isAuthorityOutput(output) && ((output.value & TOKEN_MINT_MASK) > 0);
+    return this.isAuthorityOutput(output) && (output.value & TOKEN_MINT_MASK) > 0;
   },
 
   /**
@@ -75,7 +84,7 @@ const transaction = {
    * @returns {boolean} If the output is a melt authority output
    */
   isMelt(output: Pick<HistoryTransactionOutput, 'token_data' | 'value'>): boolean {
-    return this.isAuthorityOutput(output) && ((output.value & TOKEN_MELT_MASK) > 0);
+    return this.isAuthorityOutput(output) && (output.value & TOKEN_MELT_MASK) > 0;
   },
 
   /**
@@ -87,14 +96,14 @@ const transaction = {
    */
   isOutputLocked(
     output: Pick<HistoryTransactionOutput, 'decoded'>,
-    options: { refTs?: number } = {},
+    options: { refTs?: number } = {}
   ): boolean {
     // XXX: check reward lock: requires blockHeight, bestBlockHeight and reward_spend_min_blocks
     const refTs = options.refTs || Math.floor(Date.now() / 1000);
     return (
-      output.decoded.timelock !== undefined
-      && output.decoded.timelock !== null
-      && refTs < output.decoded.timelock
+      output.decoded.timelock !== undefined &&
+      output.decoded.timelock !== null &&
+      refTs < output.decoded.timelock
     );
   },
 
@@ -107,14 +116,18 @@ const transaction = {
    *
    * @returns {boolean} If the output is heightlocked
    */
-  isHeightLocked(blockHeight: number|undefined|null, currentHeight: number|undefined|null, rewardLock: number|undefined|null): boolean {
+  isHeightLocked(
+    blockHeight: number | undefined | null,
+    currentHeight: number | undefined | null,
+    rewardLock: number | undefined | null
+  ): boolean {
     if (!(blockHeight && currentHeight && rewardLock)) {
       // We do not have the details needed to consider this as locked
       return false;
     }
 
     // Heighlocked when current height is lower than block height + reward_spend_min_blocks of the network
-    return currentHeight < (blockHeight + rewardLock);
+    return currentHeight < blockHeight + rewardLock;
   },
 
   /**
@@ -141,14 +154,18 @@ const transaction = {
    * @param storage Storage of the wallet
    * @param pinCode Pin to unlock the mainKey for signatures
    */
-  async getSignatureForTx(tx: Transaction, storage: IStorage, pinCode: string): Promise<ITxSignatureData> {
+  async getSignatureForTx(
+    tx: Transaction,
+    storage: IStorage,
+    pinCode: string
+  ): Promise<ITxSignatureData> {
     const xprivstr = await storage.getMainXPrivKey(pinCode);
     const xprivkey = HDPrivateKey.fromString(xprivstr);
     const dataToSignHash = tx.getDataToSignHash();
     const signatures: IInputSignature[] = [];
-    let ncCallerSignature: Buffer|null = null;
+    let ncCallerSignature: Buffer | null = null;
 
-    for await (const {tx: spentTx, input, index: inputIndex} of storage.getSpentTxs(tx.inputs)) {
+    for await (const { tx: spentTx, input, index: inputIndex } of storage.getSpentTxs(tx.inputs)) {
       if (input.data) {
         // This input is already signed
         continue;
@@ -174,7 +191,7 @@ const transaction = {
     }
 
     if (tx.version === NANO_CONTRACTS_VERSION) {
-      const pubkey = (tx as NanoContract).pubkey;
+      const { pubkey } = tx as NanoContract;
       const address = getAddressFromPubkey(pubkey.toString('hex'), storage.config.getNetwork());
       const addressInfo = await storage.getAddressInfo(address.base58);
       if (!addressInfo) {
@@ -194,10 +211,7 @@ const transaction = {
     const signatures = await storage.getTxSignatures(tx, pinCode);
     for (const sigData of signatures.inputSignatures) {
       const input = tx.inputs[sigData.inputIndex];
-      const inputData = this.createInputData(
-        sigData.signature,
-        sigData.pubkey,
-      );
+      const inputData = this.createInputData(sigData.signature, sigData.pubkey);
       input.setData(inputData);
     }
 
@@ -217,13 +231,13 @@ const transaction = {
    * @memberof transaction
    * @inner
    */
-  selectUtxos(utxos: Utxo[], totalAmount: number): {utxos: Utxo[], changeAmount: number} {
+  selectUtxos(utxos: Utxo[], totalAmount: number): { utxos: Utxo[]; changeAmount: number } {
     if (totalAmount <= 0) {
       throw new UtxoError('Total amount must be a positive integer.');
     }
 
     if (utxos.length === 0) {
-      throw new UtxoError('Don\'t have enough utxos to fill total amount.');
+      throw new UtxoError("Don't have enough utxos to fill total amount.");
     }
 
     let utxosToUse: Utxo[] = [];
@@ -241,7 +255,7 @@ const transaction = {
       }
     }
     if (filledAmount < totalAmount) {
-      throw new UtxoError('Don\'t have enough utxos to fill total amount.');
+      throw new UtxoError("Don't have enough utxos to fill total amount.");
     }
 
     return {
@@ -267,7 +281,7 @@ const transaction = {
     txId: string,
     index: number,
     txout: HistoryTransactionOutput,
-    { addressPath = '' }: { addressPath?: string },
+    { addressPath = '' }: { addressPath?: string }
   ): Utxo {
     const isAuthority = this.isAuthorityOutput(txout);
 
@@ -275,8 +289,8 @@ const transaction = {
       txId,
       index,
       addressPath,
-      address: txout.decoded && txout.decoded.address || '',
-      timelock: txout.decoded && txout.decoded.timelock || null,
+      address: (txout.decoded && txout.decoded.address) || '',
+      timelock: (txout.decoded && txout.decoded.timelock) || null,
       tokenId: txout.token,
       value: txout.value,
       authorities: isAuthority ? txout.value : 0,
@@ -308,8 +322,8 @@ const transaction = {
     const isHeightLocked = this.isHeightLocked(tx.height, nowHeight, rewardLock);
 
     for (const output of tx.outputs) {
-      const address = output.decoded.address;
-      if (!(address && await storage.isAddressMine(address))) {
+      const { address } = output.decoded;
+      if (!(address && (await storage.isAddressMine(address)))) {
         continue;
       }
       if (!balance[output.token]) {
@@ -332,18 +346,16 @@ const transaction = {
             balance[output.token].authorities.melt.unlocked += 1;
           }
         }
+      } else if (isLocked) {
+        balance[output.token].tokens.locked += output.value;
       } else {
-        if (isLocked) {
-          balance[output.token].tokens.locked += output.value;
-        } else {
-          balance[output.token].tokens.unlocked += output.value;
-        }
+        balance[output.token].tokens.unlocked += output.value;
       }
     }
 
     for (const input of tx.inputs) {
-      const address = input.decoded.address;
-      if (!(address && await storage.isAddressMine(address))) {
+      const { address } = input.decoded;
+      if (!(address && (await storage.isAddressMine(address)))) {
         continue;
       }
       if (!balance[input.token]) {
@@ -382,8 +394,11 @@ const transaction = {
    * @param {IDataTx} tx The transaction we want to calculate the balance.
    * @returns {Promise<Record<'funds'|'mint'|'melt', number>>} The balance of the given token on the transaction.
    */
-  async calculateTxBalanceToFillTx(token: string, tx: IDataTx): Promise<Record<'funds'|'mint'|'melt', number>> {
-    const balance = {'funds': 0, 'mint': 0, 'melt': 0};
+  async calculateTxBalanceToFillTx(
+    token: string,
+    tx: IDataTx
+  ): Promise<Record<'funds' | 'mint' | 'melt', number>> {
+    const balance = { funds: 0, mint: 0, melt: 0 };
     for (const output of tx.outputs) {
       if (isDataOutputCreateToken(output)) {
         // This is a mint output
@@ -450,7 +465,7 @@ const transaction = {
     }
 
     // Token index of HTR is 0 and if it is a custom token it is its index on tokensWithoutHathor + 1
-    const tokensWithoutHathor = tokens.filter((token) => token !== HATHOR_TOKEN_CONFIG.uid);
+    const tokensWithoutHathor = tokens.filter(token => token !== HATHOR_TOKEN_CONFIG.uid);
     const tokenIndex = tokensWithoutHathor.indexOf(output.token) + 1;
     if (output.authorities === 0) {
       return tokenIndex;
@@ -472,23 +487,24 @@ const transaction = {
       // Data script for NFT
       const scriptData = new ScriptData(output.data);
       return scriptData.createScript();
-    } else if (getAddressType(output.address, network) === 'p2sh') {
+    }
+    if (getAddressType(output.address, network) === 'p2sh') {
       // P2SH
       const address = new Address(output.address, { network });
       // This will throw AddressError in case the address is invalid
       address.validateAddress();
       const p2sh = new P2SH(address, { timelock: output.timelock });
       return p2sh.createScript();
-    } else if (getAddressType(output.address, network) === 'p2pkh') {
+    }
+    if (getAddressType(output.address, network) === 'p2pkh') {
       // P2PKH
       const address = new Address(output.address, { network });
       // This will throw AddressError in case the address is invalid
       address.validateAddress();
       const p2pkh = new P2PKH(address, { timelock: output.timelock });
       return p2pkh.createScript();
-    } else {
-      throw new Error('Invalid output for creating script.');
     }
+    throw new Error('Invalid output for creating script.');
   },
 
   /**
@@ -522,11 +538,11 @@ const transaction = {
     };
     if (options.version === CREATE_TOKEN_TX_VERSION) {
       return new CreateTokenTransaction(txData.name!, txData.symbol!, inputs, outputs, options);
-    } else if (options.version === DEFAULT_TX_VERSION) {
-      return new Transaction(inputs, outputs, options);
-    } else {
-      throw new ParseError('Invalid transaction version.');
     }
+    if (options.version === DEFAULT_TX_VERSION) {
+      return new Transaction(inputs, outputs, options);
+    }
+    throw new ParseError('Invalid transaction version.');
   },
 
   /**
@@ -543,11 +559,12 @@ const transaction = {
     txData: IDataTx,
     pinCode: string,
     storage: IStorage,
-    options?: { signTx?: boolean },
+    options?: { signTx?: boolean }
   ): Promise<Transaction> {
-    const newOptions = Object.assign({
+    const newOptions = {
       signTx: true,
-    }, options);
+      ...options,
+    };
     const network = storage.config.getNetwork();
     const tx = this.createTransactionFromData(txData, network);
     if (newOptions.signTx) {
@@ -566,7 +583,7 @@ const transaction = {
    * @returns {Buffer} Input data
    */
   createInputData(signature: Buffer, publicKey: Buffer): Buffer {
-    let arr = [];
+    const arr = [];
     helpers.pushDataToStack(arr, signature);
     helpers.pushDataToStack(arr, publicKey);
     return Buffer.concat(arr);
@@ -578,7 +595,7 @@ const transaction = {
    * @param output History output
    * @returns {number} Authorities from output
    */
-  authoritiesFromOutput(output: Pick<IHistoryOutput, 'token_data'|'value'>): number {
+  authoritiesFromOutput(output: Pick<IHistoryOutput, 'token_data' | 'value'>): number {
     let authorities = 0;
     if (this.isMint(output)) {
       authorities |= TOKEN_MINT_MASK;
@@ -630,15 +647,18 @@ const transaction = {
     if (this.isBlock(tx)) {
       if (tx.version === BLOCK_VERSION) {
         return 'Block';
-      } else if (tx.version === MERGED_MINED_BLOCK_VERSION) {
+      }
+      if (tx.version === MERGED_MINED_BLOCK_VERSION) {
         return 'Merged Mining Block';
       }
     } else {
       if (tx.version === DEFAULT_TX_VERSION) {
         return 'Transaction';
-      } else if (tx.version === CREATE_TOKEN_TX_VERSION) {
+      }
+      if (tx.version === CREATE_TOKEN_TX_VERSION) {
         return 'Create Token Transaction';
-      } else if (tx.version === NANO_CONTRACTS_VERSION) {
+      }
+      if (tx.version === NANO_CONTRACTS_VERSION) {
         return 'Nano Contract';
       }
     }
@@ -646,6 +666,6 @@ const transaction = {
     // If there is no match
     return 'Unknown';
   },
-}
+};
 
 export default transaction;

@@ -44,7 +44,7 @@ describe('PartialTxInputData.isComplete', () => {
   it('should return false if incomplete', () => {
     const signatures = new PartialTxInputData('1', 3);
     expect(signatures.isComplete()).toBeFalsy();
-    for (let i = 0; i< 2; i++) {
+    for (let i = 0; i < 2; i++) {
       signatures.addData(i, Buffer.from('cafe', 'hex'));
       expect(signatures.isComplete()).toBeFalsy();
     }
@@ -52,13 +52,12 @@ describe('PartialTxInputData.isComplete', () => {
 
   it('should return true if complete', () => {
     const signatures = new PartialTxInputData('1', 3);
-    for (let i = 0; i< 3; i++) {
+    for (let i = 0; i < 3; i++) {
       signatures.addData(i, Buffer.from('cafe', 'hex'));
     }
     expect(signatures.isComplete()).toBeTruthy();
   });
 });
-
 
 describe('PartialTxInputData serialization', () => {
   it('should serialize correctly', () => {
@@ -73,7 +72,7 @@ describe('PartialTxInputData serialization', () => {
     sigs2.addData(0, Buffer.from('cafe00', 'hex'));
     sigs2.addData(1, Buffer.from('cafe01', 'hex'));
     sigs2.addData(2, Buffer.from('cafe02', 'hex'));
-    expect(sigs2.serialize()).toBe('PartialTxInputData|2|0:cafe00|1:cafe01|2:cafe02')
+    expect(sigs2.serialize()).toBe('PartialTxInputData|2|0:cafe00|1:cafe01|2:cafe02');
 
     // empty signatures
     const sigs3 = new PartialTxInputData('3', 3);
@@ -81,22 +80,19 @@ describe('PartialTxInputData serialization', () => {
   });
 
   it('should merge signatures correctly', () => {
-
     const sigs = new PartialTxInputData('d1', 2);
-    sigs.addSignatures('PartialTxInputData|d1|0:cafe00')
-    expect(sigs.serialize()).toBe('PartialTxInputData|d1|0:cafe00')
+    sigs.addSignatures('PartialTxInputData|d1|0:cafe00');
+    expect(sigs.serialize()).toBe('PartialTxInputData|d1|0:cafe00');
 
-    sigs.addSignatures('PartialTxInputData|d1|1:cafe01')
-    expect(sigs.serialize()).toBe('PartialTxInputData|d1|0:cafe00|1:cafe01')
+    sigs.addSignatures('PartialTxInputData|d1|1:cafe01');
+    expect(sigs.serialize()).toBe('PartialTxInputData|d1|0:cafe00|1:cafe01');
 
     // should overwrite
     sigs.addSignatures('PartialTxInputData|d1|1:cafafe51');
-    expect(sigs.serialize()).toBe('PartialTxInputData|d1|0:cafe00|1:cafafe51')
+    expect(sigs.serialize()).toBe('PartialTxInputData|d1|0:cafe00|1:cafafe51');
   });
 
-
   it('should throw when adding invalid signatures', () => {
-
     const sigs = new PartialTxInputData('a-transaction-id', 2);
     expect(() => {
       sigs.addSignatures('PartialTxInputInvalid|a-transaction-id|0:cafe');
@@ -114,4 +110,4 @@ describe('PartialTxInputData serialization', () => {
       sigs.addSignatures('PartialTxInputData|another-transaction-id|0:cafe00');
     }).toThrow(SyntaxError);
   });
-})
+});

@@ -5,9 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-
 import { bufferToHex, unpackToFloat, unpackToInt } from '../utils/buffer';
-
 
 class Deserializer {
   /**
@@ -107,9 +105,8 @@ class Deserializer {
   toBool(value: Buffer): boolean {
     if (value[0]) {
       return true;
-    } else {
-      return false;
     }
+    return false;
   }
 
   /**

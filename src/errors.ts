@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { ErrorMessages } from "./errorMessages";
+import { ErrorMessages } from './errorMessages';
 
 /**
  * Possible errors to be thrown in wallet
@@ -159,7 +159,7 @@ export class ParseScriptError extends ParseError {}
  */
 export class WalletError extends Error {
   errorCode: string = ErrorMessages.DEFAULT_WALLET_ERROR;
-};
+}
 
 /**
  * Error thrown when executing wallet requests
@@ -169,7 +169,8 @@ export class WalletError extends Error {
  */
 export class WalletRequestError extends WalletError {
   cause: any = null;
-  constructor(message: string, errorData: {cause: any} = {cause: null}) {
+
+  constructor(message: string, errorData: { cause: any } = { cause: null }) {
     super(message);
     this.cause = errorData.cause;
   }
@@ -280,14 +281,14 @@ export class UnsupportedScriptError extends PartialTxError {}
  * @memberof Errors
  * @inner
  */
-export class TxNotFoundError extends Error {};
+export class TxNotFoundError extends Error {}
 
 export class InvalidPasswdError extends WalletError {
   errorCode: string = ErrorMessages.INVALID_PASSWD;
 }
 
 export class DecryptionError extends Error {
-  errorCode: string = ErrorMessages.DECRYPTION_ERROR
+  errorCode: string = ErrorMessages.DECRYPTION_ERROR;
 }
 
 export class UnsupportedHasherError extends Error {
@@ -306,7 +307,7 @@ export class UninitializedWalletError extends WalletError {
  */
 export class RequestError extends Error {
   errorCode: string = ErrorMessages.REQUEST_ERROR;
-};
+}
 
 /**
  * Error thrown during nano API request
@@ -316,14 +317,17 @@ export class RequestError extends Error {
  */
 export class NanoRequestError extends RequestError {
   errorCode: string = ErrorMessages.NANO_REQUEST_ERROR;
+
   originError: unknown | null = null;
+
   response: any | null = null;
+
   constructor(message: string, originError: unknown | null = null, response: any | null = null) {
     super(message);
     this.originError = originError;
     this.response = response;
   }
-};
+}
 
 /**
  * Error thrown during nano API request for 404
@@ -333,7 +337,7 @@ export class NanoRequestError extends RequestError {
  */
 export class NanoRequest404Error extends NanoRequestError {
   errorCode: string = ErrorMessages.NANO_REQUEST_ERROR_404;
-};
+}
 
 /**
  * Error thrown when PIN is required in a method but it's not set
@@ -343,7 +347,7 @@ export class NanoRequest404Error extends NanoRequestError {
  */
 export class PinRequiredError extends Error {
   errorCode: string = ErrorMessages.PIN_REQUIRED;
-};
+}
 
 /**
  * Error thrown during the creation of a nano contract transaction
@@ -353,7 +357,7 @@ export class PinRequiredError extends Error {
  */
 export class NanoContractTransactionError extends Error {
   errorCode: string = ErrorMessages.NANO_TRANSACTION_CREATE_ERROR;
-};
+}
 
 /**
  * Error thrown when parsing a nano contract transaction
@@ -363,7 +367,7 @@ export class NanoContractTransactionError extends Error {
  */
 export class NanoContractTransactionParseError extends Error {
   errorCode: string = ErrorMessages.NANO_TRANSACTION_PARSE_ERROR;
-};
+}
 
 /**
  * Error thrown when parsing an oracle script
@@ -373,4 +377,4 @@ export class NanoContractTransactionParseError extends Error {
  */
 export class OracleParseError extends Error {
   errorCode: string = ErrorMessages.NANO_ORACLE_PARSE_ERROR;
-};
+}

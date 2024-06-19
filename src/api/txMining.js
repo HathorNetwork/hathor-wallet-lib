@@ -27,15 +27,20 @@ const txMiningApi = {
    * @inner
    */
   submitJob(tx, propagate, add_parents, timeout, resolve) {
-    let postData = {tx, propagate, add_parents};
+    const postData = { tx, propagate, add_parents };
     if (timeout) {
       postData.timeout = timeout;
     }
-    return txMiningRequestClient(resolve).post('submit-job', postData).then((res) => {
-      resolve(res.data)
-    }, (error) => {
-      return Promise.reject(error);
-    });
+    return txMiningRequestClient(resolve)
+      .post('submit-job', postData)
+      .then(
+        res => {
+          resolve(res.data);
+        },
+        error => {
+          return Promise.reject(error);
+        }
+      );
   },
 
   /**
@@ -48,12 +53,17 @@ const txMiningApi = {
    * @inner
    */
   getJobStatus(job, resolve) {
-    const data = {'job-id': job};
-    return txMiningRequestClient(resolve).get('job-status', {'params': data}).then((res) => {
-      resolve(res.data)
-    }, (error) => {
-      return Promise.reject(error);
-    });
+    const data = { 'job-id': job };
+    return txMiningRequestClient(resolve)
+      .get('job-status', { params: data })
+      .then(
+        res => {
+          resolve(res.data);
+        },
+        error => {
+          return Promise.reject(error);
+        }
+      );
   },
 
   /**
@@ -66,12 +76,17 @@ const txMiningApi = {
    * @inner
    */
   cancelJob(job, resolve) {
-    const data = {'job-id': job};
-    return txMiningRequestClient(resolve).post('cancel-job', data).then((res) => {
-      resolve(res.data)
-    }, (error) => {
-      return Promise.reject(error);
-    });
+    const data = { 'job-id': job };
+    return txMiningRequestClient(resolve)
+      .post('cancel-job', data)
+      .then(
+        res => {
+          resolve(res.data);
+        },
+        error => {
+          return Promise.reject(error);
+        }
+      );
   },
 
   /**
@@ -83,13 +98,18 @@ const txMiningApi = {
    */
   async getHealth() {
     return new Promise((resolve, reject) => {
-      txMiningRequestClient(resolve).get(`health`).then((res) => {
-        resolve(res.data);
-      }, (err) => {
-        reject(err);
-      });
+      txMiningRequestClient(resolve)
+        .get(`health`)
+        .then(
+          res => {
+            resolve(res.data);
+          },
+          err => {
+            reject(err);
+          }
+        );
     });
-  }
+  },
 };
 
 export default txMiningApi;

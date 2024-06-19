@@ -5,10 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { OP_PUSHDATA1 } from '../opcodes';
-import { DEFAULT_TX_VERSION, CREATE_TOKEN_TX_VERSION } from '../constants';
 import path from 'path';
 import buffer from 'buffer';
+import { crypto, encoding, Address as bitcoreAddress } from 'bitcore-lib';
+import { clone } from 'lodash';
+import { AxiosInstance, AxiosRequestConfig } from 'axios';
+import { OP_PUSHDATA1 } from '../opcodes';
+import { DEFAULT_TX_VERSION, CREATE_TOKEN_TX_VERSION } from '../constants';
 import Transaction from '../models/transaction';
 import { HistoryTransaction, HistoryTransactionOutput } from '../models/types';
 import P2PKH from '../models/p2pkh';
@@ -20,10 +23,15 @@ import Output from '../models/output';
 import Network from '../models/network';
 import Address from '../models/address';
 import { hexToBuffer, unpackToInt, intToBytes } from './buffer';
-import { crypto, encoding, Address as bitcoreAddress } from 'bitcore-lib';
-import { clone } from 'lodash';
-import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError, ParseError } from '../errors';
-import { AxiosInstance, AxiosRequestConfig } from 'axios';
+import {
+  AddressError,
+  OutputValueError,
+  ConstantNotSet,
+  CreateTokenTxInvalid,
+  MaximumNumberInputsError,
+  MaximumNumberOutputsError,
+  ParseError,
+} from '../errors';
 
 import { ErrorMessages } from '../errorMessages';
 import config from '../config';
@@ -36,7 +44,6 @@ import { IDataInput, IUtxo } from '../types';
  */
 
 const helpers = {
-
   /**
    * Round float to closest int
    *
@@ -48,7 +55,7 @@ const helpers = {
    * @inner
    */
   roundFloat(n: number): number {
-    return Math.round(n*100)/100
+    return Math.round(n * 100) / 100;
   },
 
   /**
@@ -71,12 +78,13 @@ const helpers = {
 
     // Clean the version string to have an array of integers
     // Check for each value if the version is allowed
-    let versionTestArr = this.getCleanVersionArray(version);
-    let minVersionArr = this.getCleanVersionArray(minVersion);
-    for (let i=0; i<minVersionArr.length; i++) {
+    const versionTestArr = this.getCleanVersionArray(version);
+    const minVersionArr = this.getCleanVersionArray(minVersion);
+    for (let i = 0; i < minVersionArr.length; i++) {
       if (minVersionArr[i] > versionTestArr[i]) {
         return false;
-      } else if (minVersionArr[i] < versionTestArr[i]) {
+      }
+      if (minVersionArr[i] < versionTestArr[i]) {
         return true;
       }
     }
@@ -139,7 +147,7 @@ const helpers = {
       throw new Error('Invalid OP_N, must be [0,16].');
     }
     // OP_0 is 0x50 (hex) or 80 (decimal), and OP_N is n + OP_0
-    stack.push(Buffer.from([value+80]));
+    stack.push(Buffer.from([value + 80]));
   },
 
   /**
@@ -179,7 +187,7 @@ const helpers = {
     const slicedAddress = buffer.Buffer.concat([addressVersionBytes, addressHash]);
     const checksum = this.getChecksum(slicedAddress);
     const addressBytes = buffer.Buffer.concat([slicedAddress, checksum]);
-    return new Address(encoding.Base58.encode(addressBytes), {network});
+    return new Address(encoding.Base58.encode(addressBytes), { network });
   },
 
   /**
@@ -200,7 +208,7 @@ const helpers = {
 
     const addr = bitcoreAddress.fromScriptHash(scriptHash, network.getNetwork());
 
-    return new Address(addr.toString(), {network});
+    return new Address(addr.toString(), { network });
   },
 
   /**
@@ -230,15 +238,17 @@ const helpers = {
 
     // Get version
     const [_signalBits, buf] = unpackToInt(1, false, cloneBuffer);
-    const [version,] = unpackToInt(1, false, buf);
+    const [version] = unpackToInt(1, false, buf);
 
     if (version === DEFAULT_TX_VERSION) {
       return Transaction.createFromBytes(cloneBuffer, network);
-    } else if (version === CREATE_TOKEN_TX_VERSION) {
-      return CreateTokenTransaction.createFromBytes(cloneBuffer, network);
-    } else {
-      throw new ParseError('We currently support only the Transaction and CreateTokenTransaction types. Other types will be supported in the future.');
     }
+    if (version === CREATE_TOKEN_TX_VERSION) {
+      return CreateTokenTransaction.createFromBytes(cloneBuffer, network);
+    }
+    throw new ParseError(
+      'We currently support only the Transaction and CreateTokenTransaction types. Other types will be supported in the future.'
+    );
   },
 
   /**
@@ -294,13 +304,9 @@ const helpers = {
   createTxFromData(data, network: Network): Transaction | CreateTokenTransaction {
     const inputs: Input[] = [];
     for (const input of data.inputs) {
-      const inputObj = new Input(
-        input.tx_id,
-        input.index,
-        {
-          data: input.data
-        }
-      );
+      const inputObj = new Input(input.tx_id, input.index, {
+        data: input.data,
+      });
       inputs.push(inputObj);
     }
 
@@ -316,12 +322,8 @@ const helpers = {
         // This will throw AddressError in case the adress is invalid
         address.validateAddress();
         const p2sh = new P2SH(address, { timelock: output.timelock || null });
-        const p2shScript = p2sh.createScript()
-        outputObj = new Output(
-          output.value,
-          p2shScript,
-          { tokenData: output.tokenData }
-        );
+        const p2shScript = p2sh.createScript();
+        outputObj = new Output(output.value, p2shScript, { tokenData: output.tokenData });
       } else if (output.type === 'p2pkh' || output.type === undefined) {
         // P2PKH
         // for compatibility reasons we will accept an output without type as p2pkh as fallback
@@ -329,12 +331,8 @@ const helpers = {
         // This will throw AddressError in case the adress is invalid
         address.validateAddress();
         const p2pkh = new P2PKH(address, { timelock: output.timelock || null });
-        const p2pkhScript = p2pkh.createScript()
-        outputObj = new Output(
-          output.value,
-          p2pkhScript,
-          { tokenData: output.tokenData }
-        );
+        const p2pkhScript = p2pkh.createScript();
+        outputObj = new Output(output.value, p2pkhScript, { tokenData: output.tokenData });
       } else {
         throw new Error('Invalid output type.');
       }
@@ -346,26 +344,16 @@ const helpers = {
       version: data.version,
       weight: data.weight,
       timestamp: data.timestamp,
-      tokens: data.tokens
-    }
+      tokens: data.tokens,
+    };
 
     if (data.version === CREATE_TOKEN_TX_VERSION) {
-      return new CreateTokenTransaction(
-        data.name,
-        data.symbol,
-        inputs,
-        outputs,
-        options
-      );
-    } else if (data.version === DEFAULT_TX_VERSION) {
-      return new Transaction(
-        inputs,
-        outputs,
-        options
-      );
-    } else {
-        throw new ParseError(ErrorMessages.UNSUPPORTED_TX_TYPE);
+      return new CreateTokenTransaction(data.name, data.symbol, inputs, outputs, options);
     }
+    if (data.version === DEFAULT_TX_VERSION) {
+      return new Transaction(inputs, outputs, options);
+    }
+    throw new ParseError(ErrorMessages.UNSUPPORTED_TX_TYPE);
   },
 
   /**
@@ -383,14 +371,14 @@ const helpers = {
    */
   createTxFromHistoryObject(historyTx: HistoryTransaction): Transaction | CreateTokenTransaction {
     // Processing a token creation transaction
-    const isCreateTokenTx = historyTx.version === CREATE_TOKEN_TX_VERSION
+    const isCreateTokenTx = historyTx.version === CREATE_TOKEN_TX_VERSION;
 
     if (isCreateTokenTx && (!historyTx?.token_name || !historyTx?.token_symbol)) {
-      throw new CreateTokenTxInvalid(`Missing token name or symbol`)
+      throw new CreateTokenTxInvalid(`Missing token name or symbol`);
     }
 
-    const inputs = historyTx.inputs.map(i => new Input(i.tx_id, i.index))
-    const outputs = historyTx.outputs.map(this.createOutputFromHistoryObject)
+    const inputs = historyTx.inputs.map(i => new Input(i.tx_id, i.index));
+    const outputs = historyTx.outputs.map(this.createOutputFromHistoryObject);
 
     if (isCreateTokenTx) {
       return new CreateTokenTransaction(
@@ -398,14 +386,10 @@ const helpers = {
         historyTx.token_symbol!,
         inputs,
         outputs,
-        {...historyTx})
-    } else {
-      return new Transaction(
-        inputs,
-        outputs,
-        {...historyTx}
-      )
+        { ...historyTx }
+      );
     }
+    return new Transaction(inputs, outputs, { ...historyTx });
   },
 
   /**
@@ -421,14 +405,10 @@ const helpers = {
    * const outputInstance = heleprs.createOutputFromHistoryObject(historyTx.outputs[0]);
    */
   createOutputFromHistoryObject(historyOutput: HistoryTransactionOutput): Output {
-    return new Output(
-      historyOutput.value,
-      Buffer.from(historyOutput.script, 'base64'),
-      {
-        timelock: historyOutput.decoded.timelock || null,
-        tokenData: historyOutput.token_data,
-      }
-    );
+    return new Output(historyOutput.value, Buffer.from(historyOutput.script, 'base64'), {
+      timelock: historyOutput.decoded.timelock || null,
+      tokenData: historyOutput.token_data,
+    });
   },
 
   /**
@@ -472,7 +452,7 @@ const helpers = {
    * @memberof Helpers
    * @inner
    */
-  getWSServerURL(url: string|null = null): string {
+  getWSServerURL(url: string | null = null): string {
     let serverURL: string;
     if (url === null) {
       serverURL = config.getServerUrl();
@@ -507,17 +487,18 @@ const helpers = {
    * @inner
    */
   handlePrepareDataError(e: unknown): string {
-    if (e instanceof AddressError ||
-        e instanceof OutputValueError ||
-        e instanceof ConstantNotSet ||
-        e instanceof CreateTokenTxInvalid ||
-        e instanceof MaximumNumberOutputsError ||
-        e instanceof MaximumNumberInputsError) {
+    if (
+      e instanceof AddressError ||
+      e instanceof OutputValueError ||
+      e instanceof ConstantNotSet ||
+      e instanceof CreateTokenTxInvalid ||
+      e instanceof MaximumNumberOutputsError ||
+      e instanceof MaximumNumberInputsError
+    ) {
       return e.message;
-    } else {
-      // Unhandled error
-      throw e;
     }
+    // Unhandled error
+    throw e;
   },
 
   /**
@@ -565,7 +546,7 @@ const helpers = {
    *
    */
   getShortHash(hash: string): string {
-    return `${hash.substring(0,12)}...${hash.substring(52,64)}`;
+    return `${hash.substring(0, 12)}...${hash.substring(52, 64)}`;
   },
 
   /**
@@ -588,6 +569,6 @@ const helpers = {
       address: utxo.address,
     } as IDataInput;
   },
-}
+};
 
 export default helpers;

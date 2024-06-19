@@ -23,13 +23,18 @@ const healthApi = {
    */
   async getHealth() {
     return new Promise((resolve, reject) => {
-      createRequestInstance(resolve).get(`health`).then((res) => {
-        resolve(res.data);
-      }, (err) => {
-        reject(err);
-      });
+      createRequestInstance(resolve)
+        .get(`health`)
+        .then(
+          res => {
+            resolve(res.data);
+          },
+          err => {
+            reject(err);
+          }
+        );
     });
-  }
+  },
 };
 
 export default healthApi;

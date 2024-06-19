@@ -9,11 +9,21 @@ import { chunk } from 'lodash';
 import axios, { AxiosError, AxiosResponse } from 'axios';
 
 import FullnodeConnection from '../new/connection';
-import { IStorage, IAddressInfo, IHistoryTx, IBalance, ILockedUtxo, isGapLimitScanPolicy, IScanPolicyLoadAddresses, isIndexLimitScanPolicy, SCANNING_POLICY } from '../types';
+import {
+  IStorage,
+  IAddressInfo,
+  IHistoryTx,
+  IBalance,
+  ILockedUtxo,
+  isGapLimitScanPolicy,
+  IScanPolicyLoadAddresses,
+  isIndexLimitScanPolicy,
+  SCANNING_POLICY,
+} from '../types';
 import walletApi from '../api/wallet';
-import helpers from '../utils/helpers';
-import transactionUtils from '../utils/transaction';
-import { deriveAddressP2PKH, deriveAddressP2SH } from '../utils/address';
+import helpers from './helpers';
+import transactionUtils from './transaction';
+import { deriveAddressP2PKH, deriveAddressP2SH } from './address';
 import { MAX_ADDRESSES_GET, LOAD_WALLET_MAX_RETRY, LOAD_WALLET_RETRY_SLEEP } from '../constants';
 
 /**
@@ -23,7 +33,11 @@ import { MAX_ADDRESSES_GET, LOAD_WALLET_MAX_RETRY, LOAD_WALLET_RETRY_SLEEP } fro
  * @param {IStorage} storage The storage to load the addresses
  * @returns {Promise<stringp[]>} List of loaded addresses in base58
  */
-export async function loadAddresses(startIndex: number, count: number, storage: IStorage): Promise<string[]> {
+export async function loadAddresses(
+  startIndex: number,
+  count: number,
+  storage: IStorage
+): Promise<string[]> {
   const addresses: string[] = [];
   const stopIndex = startIndex + count;
   for (let i = startIndex; i < stopIndex; i++) {
@@ -35,7 +49,7 @@ export async function loadAddresses(startIndex: number, count: number, storage: 
     }
     // derive address at index i
     let address: IAddressInfo;
-    if (await storage.getWalletType() === 'p2pkh') {
+    if ((await storage.getWalletType()) === 'p2pkh') {
       address = await deriveAddressP2PKH(i, storage);
     } else {
       address = await deriveAddressP2SH(i, storage);
@@ -53,7 +67,10 @@ export async function loadAddresses(startIndex: number, count: number, storage: 
  * @param {FullnodeConnection} connection Connection to be used to reload the storage
  * @returns {Promise<void>}
  */
-export async function reloadStorage(storage: IStorage, connection: FullnodeConnection): Promise<void> {
+export async function reloadStorage(
+  storage: IStorage,
+  connection: FullnodeConnection
+): Promise<void> {
   // unsub all addresses
   for await (const address of storage.getAllAddresses()) {
     connection.unsubscribeAddress(address.base58);
@@ -79,7 +96,13 @@ export async function reloadStorage(storage: IStorage, connection: FullnodeConne
  * @param {FullnodeConnection} connection Connection to the full node
  * @param {boolean} processHistory If we should process the history after loading it.
  */
-export async function syncHistory(startIndex: number, count: number, storage: IStorage, connection: FullnodeConnection, processHistory: boolean = false) {
+export async function syncHistory(
+  startIndex: number,
+  count: number,
+  storage: IStorage,
+  connection: FullnodeConnection,
+  processHistory: boolean = false
+) {
   let itStartIndex = startIndex;
   let itCount = count;
   let foundAnyTx = false;
@@ -88,7 +111,7 @@ export async function syncHistory(startIndex: number, count: number, storage: IS
     const addresses = await loadAddresses(itStartIndex, itCount, storage);
     // subscribe to addresses
     connection.subscribeAddresses(addresses);
-    for await (let gotTx of loadAddressHistory(addresses, storage)) {
+    for await (const gotTx of loadAddressHistory(addresses, storage)) {
       if (gotTx) {
         // This will signal we have found a transaction when syncing the history
         foundAnyTx = true;
@@ -123,28 +146,34 @@ export async function syncHistory(startIndex: number, count: number, storage: IS
  * @param {IStorage} storage The storage to load the addresses
  * @returns {AsyncGenerator<boolean>} If we found any transaction in the history
  */
-export async function *loadAddressHistory(addresses: string[], storage: IStorage): AsyncGenerator<boolean> {
+export async function* loadAddressHistory(
+  addresses: string[],
+  storage: IStorage
+): AsyncGenerator<boolean> {
   let foundAnyTx = false;
   // chunkify addresses
   const addressesChunks = chunk(addresses, MAX_ADDRESSES_GET);
   let retryCount = 0;
 
-  for (let i=0; i<addressesChunks.length; i++) {
+  for (let i = 0; i < addressesChunks.length; i++) {
     let hasMore = true;
-    let firstHash: string|null = null;
+    let firstHash: string | null = null;
     let addrsToSearch = addressesChunks[i];
 
     while (hasMore === true) {
-      let response: AxiosResponse<{
-        success: true,
-        history: IHistoryTx[],
-        has_more: boolean,
-        first_hash: string,
-        first_address: string,
-      } | { success: false, message: string }>;
+      let response: AxiosResponse<
+        | {
+            success: true;
+            history: IHistoryTx[];
+            has_more: boolean;
+            first_hash: string;
+            first_address: string;
+          }
+        | { success: false; message: string }
+      >;
       try {
         response = await walletApi.getAddressHistoryForAwait(addrsToSearch, firstHash);
-      } catch(e: any) {
+      } catch (e: any) {
         if (!axios.isAxiosError(e)) {
           // We only treat AxiosError
           throw e;
@@ -158,7 +187,11 @@ export async function *loadAddressHistory(addresses: string[], storage: IStorage
         // Besides that, there are some problems happening in newer axios versions (https://github.com/axios/axios/issues/2710)
         // One user that opened a PR for axios said he is checking the timeout error with the message includes condition
         // https://github.com/axios/axios/pull/2874#discussion_r403753852
-        if (err.code === 'ECONNABORTED' && err.response === undefined && err.message.toLowerCase().includes('timeout')) {
+        if (
+          err.code === 'ECONNABORTED' &&
+          err.response === undefined &&
+          err.message.toLowerCase().includes('timeout')
+        ) {
           // in this case we retry
           continue;
         }
@@ -205,7 +238,9 @@ export async function *loadAddressHistory(addresses: string[], storage: IStorage
  * @param {IStorage} storage The storage instance
  * @returns {Promise<IScanPolicyLoadAddresses>}
  */
-export async function scanPolicyStartAddresses(storage: IStorage): Promise<IScanPolicyLoadAddresses> {
+export async function scanPolicyStartAddresses(
+  storage: IStorage
+): Promise<IScanPolicyLoadAddresses> {
   const scanPolicy = await storage.getScanningPolicy();
   switch (scanPolicy) {
     case SCANNING_POLICY.INDEX_LIMIT:
@@ -233,7 +268,9 @@ export async function scanPolicyStartAddresses(storage: IStorage): Promise<IScan
  * @param {IStorage} storage The storage instance
  * @returns {Promise<IScanPolicyLoadAddresses|null>}
  */
-export async function checkScanningPolicy(storage: IStorage): Promise<IScanPolicyLoadAddresses|null> {
+export async function checkScanningPolicy(
+  storage: IStorage
+): Promise<IScanPolicyLoadAddresses | null> {
   const scanPolicy = await storage.getScanningPolicy();
   switch (scanPolicy) {
     case SCANNING_POLICY.INDEX_LIMIT:
@@ -241,7 +278,7 @@ export async function checkScanningPolicy(storage: IStorage): Promise<IScanPolic
     case SCANNING_POLICY.GAP_LIMIT:
       return checkGapLimit(storage);
     default:
-      return null
+      return null;
   }
 }
 
@@ -251,15 +288,17 @@ export async function checkScanningPolicy(storage: IStorage): Promise<IScanPolic
  * @param {IStorage} storage The storage instance
  * @returns {Promise<IScanPolicyLoadAddresses|null>}
  */
-export async function checkIndexLimit(storage: IStorage): Promise<IScanPolicyLoadAddresses|null> {
-  if (await storage.getScanningPolicy() !== SCANNING_POLICY.INDEX_LIMIT) {
+export async function checkIndexLimit(storage: IStorage): Promise<IScanPolicyLoadAddresses | null> {
+  if ((await storage.getScanningPolicy()) !== SCANNING_POLICY.INDEX_LIMIT) {
     // Since the wallet is not configured to use index-limit this is a no-op
     return null;
   }
   const { lastLoadedAddressIndex, scanPolicyData } = await storage.getWalletData();
   if (!isIndexLimitScanPolicy(scanPolicyData)) {
     // This error should never happen, but this enforces scanPolicyData typing
-    throw new Error('Wallet is configured to use index-limit but the scan policy data is not configured as index-limit');
+    throw new Error(
+      'Wallet is configured to use index-limit but the scan policy data is not configured as index-limit'
+    );
   }
 
   const limits = await storage.getIndexLimit();
@@ -285,8 +324,8 @@ export async function checkIndexLimit(storage: IStorage): Promise<IScanPolicyLoa
  * @param {IStorage} storage The storage instance
  * @returns {Promise<IScanPolicyLoadAddresses|null>}
  */
-export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadAddresses|null> {
-  if (await storage.getScanningPolicy() !== SCANNING_POLICY.GAP_LIMIT) {
+export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadAddresses | null> {
+  if ((await storage.getScanningPolicy()) !== SCANNING_POLICY.GAP_LIMIT) {
     // Since the wallet is not configured to use gap-limit this is a no-op
     return null;
   }
@@ -295,10 +334,12 @@ export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadA
   const scanPolicyData = await storage.getScanningPolicyData();
   if (!isGapLimitScanPolicy(scanPolicyData)) {
     // This error should never happen, but this enforces scanPolicyData typing
-    throw new Error('Wallet is configured to use gap-limit but the scan policy data is not configured as gap-limit');
+    throw new Error(
+      'Wallet is configured to use gap-limit but the scan policy data is not configured as gap-limit'
+    );
   }
-  const gapLimit = scanPolicyData.gapLimit;
-  if ((lastUsedAddressIndex + gapLimit) > lastLoadedAddressIndex) {
+  const { gapLimit } = scanPolicyData;
+  if (lastUsedAddressIndex + gapLimit > lastLoadedAddressIndex) {
     // we need to generate more addresses to fill the gap limit
     return {
       nextIndex: lastLoadedAddressIndex + 1,
@@ -319,8 +360,11 @@ export async function checkGapLimit(storage: IStorage): Promise<IScanPolicyLoadA
  * @async
  * @returns {Promise<void>}
  */
-export async function processHistory(storage: IStorage, { rewardLock }: { rewardLock?: number } = {}): Promise<void> {
-  const store = storage.store;
+export async function processHistory(
+  storage: IStorage,
+  { rewardLock }: { rewardLock?: number } = {}
+): Promise<void> {
+  const { store } = storage;
   // We have an additive method to update metadata so we need to clean the current metadata before processing.
   await store.cleanMetadata();
 
@@ -349,21 +393,26 @@ export async function processHistory(storage: IStorage, { rewardLock }: { reward
  * @returns {Promise<void>}
  */
 async function updateTokensData(storage: IStorage, tokens: Set<string>): Promise<void> {
-  async function fetchTokenData(uid: string): Promise<{
-    success: true,
-    name: string,
-    symbol: string,
-  } | { success: false, message: string }> {
+  async function fetchTokenData(uid: string): Promise<
+    | {
+        success: true;
+        name: string;
+        symbol: string;
+      }
+    | { success: false; message: string }
+  > {
     let retryCount = 0;
 
     while (retryCount <= 5) {
       try {
         // Fetch and return the api response
-        let result: {
-          success: true;
-          name: string;
-          symbol: string;
-        } | { success: false, message: string } = await new Promise((resolve) => {
+        const result:
+          | {
+              success: true;
+              name: string;
+              symbol: string;
+            }
+          | { success: false; message: string } = await new Promise(resolve => {
           return walletApi.getGeneralTokenInfo(uid, resolve);
         });
         return result;
@@ -371,7 +420,7 @@ async function updateTokensData(storage: IStorage, tokens: Set<string>): Promise
         console.error(err);
         // This delay will give us the exponential backoff intervals of
         // 500ms, 1s, 2s, 4s and 8s
-        const delay = 500 * (2 ** retryCount);
+        const delay = 500 * 2 ** retryCount;
         // Increase the retry counter and try again
         retryCount += 1;
         // Wait `delay` ms before another attempt
@@ -383,7 +432,7 @@ async function updateTokensData(storage: IStorage, tokens: Set<string>): Promise
     throw new Error(`Too many attempts at fetchTokenData for ${uid}`);
   }
 
-  const store = storage.store;
+  const { store } = storage;
   for (const uid of tokens) {
     const tokenInfo = await store.getToken(uid);
     if (!tokenInfo) {
@@ -409,15 +458,20 @@ async function updateTokensData(storage: IStorage, tokens: Set<string>): Promise
  * @param {number} options.maxIndexUsed The maximum index used in the processed txs
  * @param {Set<string>} options.tokens A set of tokens found in the processed txs
  */
-async function updateWalletMetadataFromProcessedTxData(storage: IStorage, { maxIndexUsed, tokens }: { maxIndexUsed: number, tokens: Set<string>}): Promise<void> {
-  const store = storage.store;
+async function updateWalletMetadataFromProcessedTxData(
+  storage: IStorage,
+  { maxIndexUsed, tokens }: { maxIndexUsed: number; tokens: Set<string> }
+): Promise<void> {
+  const { store } = storage;
   // Update wallet data
   const walletData = await store.getWalletData();
   if (maxIndexUsed > -1) {
     // If maxIndexUsed is -1 it means we didn't find any tx, so we don't need to update the wallet data
     if (walletData.lastUsedAddressIndex <= maxIndexUsed) {
       if (walletData.currentAddressIndex <= maxIndexUsed) {
-        await store.setCurrentAddressIndex(Math.min(maxIndexUsed + 1, walletData.lastLoadedAddressIndex));
+        await store.setCurrentAddressIndex(
+          Math.min(maxIndexUsed + 1, walletData.lastLoadedAddressIndex)
+        );
       }
       await store.setLastUsedAddressIndex(maxIndexUsed);
     }
@@ -445,10 +499,14 @@ async function updateWalletMetadataFromProcessedTxData(storage: IStorage, { maxI
 export async function processNewTx(
   storage: IStorage,
   tx: IHistoryTx,
-  { rewardLock, nowTs, currentHeight }: { rewardLock?: number, nowTs?: number, currentHeight?: number } = {},
+  {
+    rewardLock,
+    nowTs,
+    currentHeight,
+  }: { rewardLock?: number; nowTs?: number; currentHeight?: number } = {}
 ): Promise<{
-  maxAddressIndex: number,
-  tokens: Set<string>,
+  maxAddressIndex: number;
+  tokens: Set<string>;
 }> {
   function getEmptyBalance(): IBalance {
     return {
@@ -456,17 +514,18 @@ export async function processNewTx(
       authorities: {
         mint: { unlocked: 0, locked: 0 },
         melt: { unlocked: 0, locked: 0 },
-      }
+      },
     };
   }
 
-  const store = storage.store;
+  const { store } = storage;
 
   // We ignore voided transactions
-  if (tx.is_voided) return {
-    maxAddressIndex: -1,
-    tokens: new Set(),
-  };
+  if (tx.is_voided)
+    return {
+      maxAddressIndex: -1,
+      tokens: new Set(),
+    };
 
   const isHeightLocked = transactionUtils.isHeightLocked(tx.height, currentHeight, rewardLock);
   const txAddresses = new Set<string>();
@@ -534,14 +593,12 @@ export async function processNewTx(
           addressMeta.balance.get(output.token)!.authorities.melt.unlocked += 1;
         }
       }
+    } else if (isLocked) {
+      tokenMeta.balance.tokens.locked += output.value;
+      addressMeta.balance.get(output.token)!.tokens.locked += output.value;
     } else {
-      if (isLocked) {
-        tokenMeta.balance.tokens.locked += output.value;
-        addressMeta.balance.get(output.token)!.tokens.locked += output.value;
-      } else {
-        tokenMeta.balance.tokens.unlocked += output.value;
-        addressMeta.balance.get(output.token)!.tokens.unlocked += output.value;
-      }
+      tokenMeta.balance.tokens.unlocked += output.value;
+      addressMeta.balance.get(output.token)!.tokens.unlocked += output.value;
     }
 
     // Add utxo to the storage if unspent
@@ -642,7 +699,7 @@ export async function processNewTx(
   return {
     maxAddressIndex: maxIndexUsed,
     tokens: txTokens,
-  }
+  };
 }
 
 /**
@@ -660,7 +717,11 @@ export async function processNewTx(
 export async function processUtxoUnlock(
   storage: IStorage,
   lockedUtxo: ILockedUtxo,
-  { rewardLock, nowTs, currentHeight }: { rewardLock?: number, nowTs?: number, currentHeight?: number } = {},
+  {
+    rewardLock,
+    nowTs,
+    currentHeight,
+  }: { rewardLock?: number; nowTs?: number; currentHeight?: number } = {}
 ): Promise<void> {
   function getEmptyBalance(): IBalance {
     return {
@@ -668,13 +729,13 @@ export async function processUtxoUnlock(
       authorities: {
         mint: { unlocked: 0, locked: 0 },
         melt: { unlocked: 0, locked: 0 },
-      }
+      },
     };
   }
 
-  const store = storage.store;
+  const { store } = storage;
 
-  const tx = lockedUtxo.tx;
+  const { tx } = lockedUtxo;
   const output = tx.outputs[lockedUtxo.index];
   // Skip data outputs since they do not have an address and do not "belong" in a wallet
   // This shouldn't happen, but we check it just in case

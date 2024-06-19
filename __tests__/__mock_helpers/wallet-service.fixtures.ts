@@ -1,7 +1,8 @@
-import Network from "../../src/models/network";
-import HathorWalletServiceWallet from "../../src/wallet/wallet";
+import Network from '../../src/models/network';
+import HathorWalletServiceWallet from '../../src/wallet/wallet';
 
-export const defaultWalletSeed = 'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+export const defaultWalletSeed =
+  'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
 export const buildSuccessTxByIdTokenDataResponse = (): string => {
   const txTokens = [
     {
@@ -30,10 +31,10 @@ export const buildSuccessTxByIdTokenDataResponse = (): string => {
     },
   ];
   return JSON.stringify({
-      success: true,
-      txTokens
-    })
-}
+    success: true,
+    txTokens,
+  });
+};
 export const buildWalletToAuthenticateApiCall = (overwrite?) => {
   const requestPassword = jest.fn();
   const network = new Network('testnet');
@@ -46,6 +47,6 @@ export const buildWalletToAuthenticateApiCall = (overwrite?) => {
     passphrase: '',
     xpriv: null,
     xpub: null,
-    ...overwrite
+    ...overwrite,
   });
-}
+};

@@ -24,22 +24,16 @@ describe('partial tx proposal', () => {
     const hWallet2 = await generateWalletHelper();
 
     // Injecting funds and creating a new custom token
-    const txI = await GenesisWalletHelper.injectFunds(hWallet1, await hWallet1.getAddressAtIndex(0), 103);
-    const { hash: token1Uid } = await createTokenHelper(
+    const txI = await GenesisWalletHelper.injectFunds(
       hWallet1,
-      'Token1',
-      'TK1',
-      200,
+      await hWallet1.getAddressAtIndex(0),
+      103
     );
+    const { hash: token1Uid } = await createTokenHelper(hWallet1, 'Token1', 'TK1', 200);
 
     // Injecting funds and creating a new custom token
     await GenesisWalletHelper.injectFunds(hWallet2, await hWallet2.getAddressAtIndex(0), 10);
-    const { hash: token2Uid } = await createTokenHelper(
-      hWallet2,
-      'Token2',
-      'TK2',
-      1000,
-    );
+    const { hash: token2Uid } = await createTokenHelper(hWallet2, 'Token2', 'TK2', 1000);
 
     // Get the balance states before the exchange
     const w1HTRBefore = await hWallet1.getBalance(HATHOR_TOKEN_CONFIG.uid);

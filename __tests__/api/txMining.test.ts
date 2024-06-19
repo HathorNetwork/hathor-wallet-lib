@@ -25,7 +25,7 @@ describe('txMiningApi', () => {
       expect(result).toEqual(data);
 
       expect(mock.history.get.length).toBe(1);
-      expect(mock.history.get[0].params).toEqual({ "job-id": 'jobId' });
+      expect(mock.history.get[0].params).toEqual({ 'job-id': 'jobId' });
     });
 
     it('should allow capturing errors in case of network error', async () => {
@@ -58,7 +58,7 @@ describe('txMiningApi', () => {
       expect(result).toEqual(data);
 
       expect(mock.history.post.length).toBe(1);
-      expect(mock.history.post[0].data).toEqual(JSON.stringify({ "job-id": 'jobId' }));
+      expect(mock.history.post[0].data).toEqual(JSON.stringify({ 'job-id': 'jobId' }));
     });
 
     it('should allow capturing errors in case of network error', async () => {
@@ -119,12 +119,14 @@ describe('txMiningApi', () => {
       expect(result).toEqual(data);
 
       expect(mock.history.post.length).toBe(1);
-      expect(mock.history.post[0].data).toBe(JSON.stringify({
-          'tx': 'tx',
-          'propagate': true,
-          'add_parents': true,
-          'timeout': 10
-      }));
+      expect(mock.history.post[0].data).toBe(
+        JSON.stringify({
+          tx: 'tx',
+          propagate: true,
+          add_parents: true,
+          timeout: 10,
+        })
+      );
     });
 
     it('should allow capturing errors in case of network error', async () => {

@@ -6,6 +6,7 @@
  */
 
 import EventEmitter from 'events';
+import { shuffle } from 'lodash';
 import { SELECT_OUTPUTS_TIMEOUT, HATHOR_TOKEN_CONFIG } from '../constants';
 import transactionUtils from '../utils/transaction';
 import txApi from '../api/txApi';
@@ -15,21 +16,28 @@ import helpers from '../utils/helpers';
 import MineTransaction from '../wallet/mineTransaction';
 import Address from '../models/address';
 import { OutputType } from '../wallet/types';
-import { IStorage, IDataTx, IDataOutput, IDataInput, IUtxoSelectionOptions, isDataOutputCreateToken, WalletType } from '../types';
+import {
+  IStorage,
+  IDataTx,
+  IDataOutput,
+  IDataInput,
+  IUtxoSelectionOptions,
+  isDataOutputCreateToken,
+  WalletType,
+} from '../types';
 import Transaction from '../models/transaction';
 import { bestUtxoSelection } from '../utils/utxo';
-import { shuffle } from 'lodash';
 
 export interface ISendInput {
-  txId: string,
-  index: number,
-};
+  txId: string;
+  index: number;
+}
 
 export interface ISendDataOutput {
-  type: OutputType.DATA,
-  data: Buffer,
-  value?: number,
-  token?: string,
+  type: OutputType.DATA;
+  data: Buffer;
+  value?: number;
+  token?: string;
 }
 
 export function isDataOutput(output: ISendOutput): output is ISendDataOutput {
@@ -37,11 +45,11 @@ export function isDataOutput(output: ISendOutput): output is ISendDataOutput {
 }
 
 export interface ISendTokenOutput {
-  type: OutputType.P2PKH | OutputType.P2SH,
-  address: string,
-  value: number,
-  token: string,
-  timelock?: number | null,
+  type: OutputType.P2PKH | OutputType.P2SH;
+  address: string;
+  value: number;
+  token: string;
+  timelock?: number | null;
 }
 
 export type ISendOutput = ISendDataOutput | ISendTokenOutput;
@@ -61,15 +69,22 @@ export type ISendOutput = ISendDataOutput | ISendTokenOutput;
  * 'send-success': after push tx succeeds;
  * 'send-error': if an error happens;
  * 'unexpected-error': if an unexpected error happens;
- **/
+ * */
 export default class SendTransaction extends EventEmitter {
   storage: IStorage | null;
+
   transaction: Transaction | null;
+
   outputs: ISendOutput[];
+
   inputs: ISendInput[];
+
   changeAddress: string | null;
+
   pin: string | null;
+
   fullTxData: IDataTx | null;
+
   mineTransaction: MineTransaction | null = null;
 
   /**
@@ -83,22 +98,21 @@ export default class SendTransaction extends EventEmitter {
    * @param {string|null} [options.pin=null] Wallet pin
    * @param {IStorage|null} [options.network=null] Network object
    */
-  constructor(
-    {
-      storage = null,
-      transaction = null,
-      outputs = [],
-      inputs = [],
-      changeAddress = null,
-      pin = null,
-    }: {
-      storage?: IStorage | null,
-      transaction?: Transaction | null,
-      inputs?: ISendInput[],
-      outputs?: ISendOutput[],
-      changeAddress?: string | null,
-      pin?: string | null,
-    } = {}) {
+  constructor({
+    storage = null,
+    transaction = null,
+    outputs = [],
+    inputs = [],
+    changeAddress = null,
+    pin = null,
+  }: {
+    storage?: IStorage | null;
+    transaction?: Transaction | null;
+    inputs?: ISendInput[];
+    outputs?: ISendOutput[];
+    changeAddress?: string | null;
+    pin?: string | null;
+  } = {}) {
     super();
 
     this.storage = storage;
@@ -167,7 +181,7 @@ export default class SendTransaction extends EventEmitter {
 
     for (const input of this.inputs) {
       const inputTx = await this.storage.getTx(input.txId);
-      if (inputTx === null || (!inputTx.outputs[input.index])) {
+      if (inputTx === null || !inputTx.outputs[input.index]) {
         const err = new SendTxError(ErrorMessages.INVALID_INPUT);
         err.errorData = { txId: input.txId, index: input.index };
         throw err;
@@ -190,7 +204,7 @@ export default class SendTransaction extends EventEmitter {
       });
     }
 
-    const partialTxData: Pick<IDataTx, "outputs" | "inputs"> = {inputs: [], outputs: []};
+    const partialTxData: Pick<IDataTx, 'outputs' | 'inputs'> = { inputs: [], outputs: [] };
     for (const [token, chooseInputs] of tokenMap) {
       const options: IUtxoSelectionOptions = {
         token,
@@ -216,7 +230,7 @@ export default class SendTransaction extends EventEmitter {
       outputs = txData.outputs;
     } else {
       // Shuffle outputs, so we don't have change output always in the same index
-      outputs = shuffle([...txData.outputs, ...partialTxData.outputs])
+      outputs = shuffle([...txData.outputs, ...partialTxData.outputs]);
     }
 
     tokenMap.delete(HTR_UID);
@@ -245,7 +259,7 @@ export default class SendTransaction extends EventEmitter {
     if (!this.storage) {
       throw new SendTxError('Storage is not set.');
     }
-    const txData = this.fullTxData || await this.prepareTxData();
+    const txData = this.fullTxData || (await this.prepareTxData());
     try {
       if (!this.pin) {
         throw new Error('Pin is not set.');
@@ -254,7 +268,7 @@ export default class SendTransaction extends EventEmitter {
       // This will validate if the transaction has more than the max number of inputs and outputs.
       this.transaction.validate();
       return this.transaction;
-    } catch(e) {
+    } catch (e) {
       const message = helpers.handlePrepareDataError(e);
       throw new SendTxError(message);
     }
@@ -297,15 +311,20 @@ export default class SendTransaction extends EventEmitter {
       if (!addressInfo.publicKey) {
         throw new SendTxError('Missing public key for address');
       }
-      input.data = transactionUtils.createInputData(signature, Buffer.from(addressInfo.publicKey, 'hex')).toString('hex');
+      input.data = transactionUtils
+        .createInputData(signature, Buffer.from(addressInfo.publicKey, 'hex'))
+        .toString('hex');
     }
 
     // prepare and create transaction
     try {
-      this.transaction = transactionUtils.createTransactionFromData(this.fullTxData, this.storage.config.getNetwork());
+      this.transaction = transactionUtils.createTransactionFromData(
+        this.fullTxData,
+        this.storage.config.getNetwork()
+      );
       this.transaction.prepareToSend();
       return this.transaction;
-    } catch(e) {
+    } catch (e) {
       const message = helpers.handlePrepareDataError(e);
       throw new SendTxError(message);
     }
@@ -330,42 +349,45 @@ export default class SendTransaction extends EventEmitter {
 
     await this.updateOutputSelected(true);
 
-    const newOptions = Object.assign({
+    const newOptions = {
       startMiningTx: true,
       maxTxMiningRetries: 3,
-    }, options);
+      ...options,
+    };
 
-    this.mineTransaction = new MineTransaction(this.transaction, { maxTxMiningRetries: newOptions.maxTxMiningRetries });
+    this.mineTransaction = new MineTransaction(this.transaction, {
+      maxTxMiningRetries: newOptions.maxTxMiningRetries,
+    });
 
     this.mineTransaction.on('mining-started', () => {
       this.emit('mine-tx-started');
     });
 
-    this.mineTransaction.on('estimation-updated', (data) => {
+    this.mineTransaction.on('estimation-updated', data => {
       this.emit('estimation-updated', data);
-    })
+    });
 
-    this.mineTransaction.on('job-submitted', (data) => {
+    this.mineTransaction.on('job-submitted', data => {
       this.emit('job-submitted', data);
-    })
+    });
 
-    this.mineTransaction.on('job-done', (data) => {
+    this.mineTransaction.on('job-done', data => {
       this.emit('job-done', data);
-    })
+    });
 
-    this.mineTransaction.on('error', (message) => {
+    this.mineTransaction.on('error', message => {
       this.updateOutputSelected(false);
       this.emit('send-error', message);
-    })
+    });
 
-    this.mineTransaction.on('unexpected-error', (message) => {
+    this.mineTransaction.on('unexpected-error', message => {
       this.updateOutputSelected(false);
       this.emit('unexpected-error', message);
-    })
+    });
 
-    this.mineTransaction.on('success', (data) => {
+    this.mineTransaction.on('success', data => {
       this.emit('mine-tx-ended', data);
-    })
+    });
 
     if (newOptions.startMiningTx) {
       this.mineTransaction.start();
@@ -392,24 +414,26 @@ export default class SendTransaction extends EventEmitter {
       }
       this.emit('send-tx-start', this.transaction);
       const txHex = this.transaction.toHex();
-      txApi.pushTx(txHex, false, (response) => {
-        if (response.success) {
-          if (this.transaction === null) {
-            throw new WalletError(ErrorMessages.TRANSACTION_IS_NULL);
+      txApi
+        .pushTx(txHex, false, response => {
+          if (response.success) {
+            if (this.transaction === null) {
+              throw new WalletError(ErrorMessages.TRANSACTION_IS_NULL);
+            }
+            this.transaction.updateHash();
+            this.emit('send-tx-success', this.transaction);
+            resolve(this.transaction);
+          } else {
+            this.updateOutputSelected(false);
+            const err = new SendTxError(response.message);
+            reject(err);
           }
-          this.transaction.updateHash();
-          this.emit('send-tx-success', this.transaction);
-          resolve(this.transaction);
-        } else {
+        })
+        .catch(e => {
           this.updateOutputSelected(false);
-          const err = new SendTxError(response.message);
-          reject(err);
-        }
-      }).catch((e) => {
-        this.updateOutputSelected(false);
-        this.emit('send-error', e.message);
-        reject(e);
-      });
+          this.emit('send-error', e.message);
+          reject(e);
+        });
     });
 
     return promise;
@@ -498,7 +522,7 @@ export default class SendTransaction extends EventEmitter {
    *
    * @param {boolean} selected If should set the selected parameter as true or false
    *
-   **/
+   * */
   async updateOutputSelected(selected: boolean) {
     if (this.transaction === null) {
       throw new WalletError(ErrorMessages.TRANSACTION_IS_NULL);
@@ -511,7 +535,11 @@ export default class SendTransaction extends EventEmitter {
 
     // Mark all inputs as selected
     for (const input of this.transaction.inputs) {
-      await this.storage.utxoSelectAsInput({txId: input.hash, index: input.index}, selected, SELECT_OUTPUTS_TIMEOUT);
+      await this.storage.utxoSelectAsInput(
+        { txId: input.hash, index: input.index },
+        selected,
+        SELECT_OUTPUTS_TIMEOUT
+      );
     }
   }
 }
@@ -527,22 +555,22 @@ export default class SendTransaction extends EventEmitter {
 export async function prepareSendTokensData(
   storage: IStorage,
   dataTx: IDataTx,
-  options: IUtxoSelectionOptions = {},
-): Promise<Pick<IDataTx, 'inputs'|'outputs'>> {
-  async function getOutputTypeFromWallet(): Promise<'p2pkh'|'p2sh'> {
+  options: IUtxoSelectionOptions = {}
+): Promise<Pick<IDataTx, 'inputs' | 'outputs'>> {
+  async function getOutputTypeFromWallet(): Promise<'p2pkh' | 'p2sh'> {
     const walletType = await storage.getWalletType();
     if (walletType === WalletType.P2PKH) {
       return 'p2pkh';
-    } else if (walletType === WalletType.MULTISIG) {
-      return 'p2sh';
-    } else {
-      throw new Error('Unsupported wallet type.');
     }
+    if (walletType === WalletType.MULTISIG) {
+      return 'p2sh';
+    }
+    throw new Error('Unsupported wallet type.');
   }
 
   const token = options.token || HATHOR_TOKEN_CONFIG.uid;
   const utxoSelection = options.utxoSelectionMethod || bestUtxoSelection;
-  const newtxData: Pick<IDataTx, 'inputs'|'outputs'> = { inputs: [], outputs: [] };
+  const newtxData: Pick<IDataTx, 'inputs' | 'outputs'> = { inputs: [], outputs: [] };
   let outputAmount = 0;
 
   // Calculate balance for the token on the transaction
@@ -605,8 +633,10 @@ export async function prepareSendTokensData(
         throw new Error(`Token: ${token}. ${checkSpent.message}`);
       }
 
-      if (!await transactionUtils.canUseUtxo(input, storage)) {
-        throw new Error(`Token: ${token}. Output [${input.txId}, ${input.index}] is locked or being used`);
+      if (!(await transactionUtils.canUseUtxo(input, storage))) {
+        throw new Error(
+          `Token: ${token}. Output [${input.txId}, ${input.index}] is locked or being used`
+        );
       }
 
       inputAmount += input.value;
@@ -646,8 +676,8 @@ export async function prepareSendTokensData(
 export async function checkUnspentInput(
   storage: IStorage,
   input: IDataInput,
-  selectedToken: string,
-): Promise<{success: boolean, message: string}> {
+  selectedToken: string
+): Promise<{ success: boolean; message: string }> {
   const tx = await storage.getTx(input.txId);
   if (tx === null) {
     return { success: false, message: `Transaction [${input.txId}] does not exist in the wallet` };
@@ -656,7 +686,10 @@ export async function checkUnspentInput(
     return { success: false, message: `Transaction [${input.txId}] is voided` };
   }
   if (tx.outputs.length - 1 < input.index) {
-    return { success: false, message: `Transaction [${input.txId}] does not have this output [index=${input.index}]` };
+    return {
+      success: false,
+      message: `Transaction [${input.txId}] does not have this output [index=${input.index}]`,
+    };
   }
 
   const txout = tx.outputs[input.index];
@@ -664,27 +697,45 @@ export async function checkUnspentInput(
     /**
      * XXX: We are NOT enabling authority outputs for now.
      */
-    return { success: false, message: `Output [${input.index}] of transaction [${input.txId}] is an authority output` };
+    return {
+      success: false,
+      message: `Output [${input.index}] of transaction [${input.txId}] is an authority output`,
+    };
   }
 
   if (txout.decoded.address) {
     if (txout.decoded.address !== input.address) {
-      return { success: false, message: `Output [${input.index}] of transaction [${input.txId}] does not have the same address as the provided input` };
+      return {
+        success: false,
+        message: `Output [${input.index}] of transaction [${input.txId}] does not have the same address as the provided input`,
+      };
     }
-    if (!await storage.isAddressMine(txout.decoded.address)) {
-      return { success: false, message: `Output [${input.index}] of transaction [${input.txId}] is not from the wallet` };
+    if (!(await storage.isAddressMine(txout.decoded.address))) {
+      return {
+        success: false,
+        message: `Output [${input.index}] of transaction [${input.txId}] is not from the wallet`,
+      };
     }
   } else {
     // This output does not have an address, so it cannot be spent by us
-    return { success: false, message: `Output [${input.index}] of transaction [${input.txId}] cannot be spent since it does not belong to an address` };
+    return {
+      success: false,
+      message: `Output [${input.index}] of transaction [${input.txId}] cannot be spent since it does not belong to an address`,
+    };
   }
 
   if (txout.token !== input.token || input.token !== selectedToken) {
-    return { success: false, message: `Output [${input.index}] of transaction [${input.txId}] is not from selected token [${selectedToken}]`};
+    return {
+      success: false,
+      message: `Output [${input.index}] of transaction [${input.txId}] is not from selected token [${selectedToken}]`,
+    };
   }
 
   if (txout.spent_by) {
-    return { success: false, message: `Output [${input.index}] of transaction [${input.txId}] is already spent` };
+    return {
+      success: false,
+      message: `Output [${input.index}] of transaction [${input.txId}] is already spent`,
+    };
   }
 
   return { success: true, message: '' };

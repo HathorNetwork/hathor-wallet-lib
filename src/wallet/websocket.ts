@@ -5,15 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import BaseWebSocket, {
-  WsOptions,
-  DEFAULT_WS_OPTIONS,
-} from '../websocket/base';
+import BaseWebSocket, { WsOptions, DEFAULT_WS_OPTIONS } from '../websocket/base';
 
 export interface WalletServiceWebSocketOptions extends WsOptions {
   walletId: string;
   joinTimeout?: number;
-};
+}
 
 const DEFAULT_JOIN_TIMEOUT = 5000;
 
@@ -29,8 +26,10 @@ const DEFAULT_JOIN_TIMEOUT = 5000;
 class WalletServiceWebSocket extends BaseWebSocket {
   // The walletId to subscribe to new events
   private walletId: string;
+
   // Timer used to detected when join wallet failed
   private joinTimeoutTimer: ReturnType<typeof setTimeout> | null;
+
   // The default timeout for the join wallet action
   private joinTimeout: number;
 
@@ -68,7 +67,7 @@ class WalletServiceWebSocket extends BaseWebSocket {
    * @param {Object} evt Event that has data (evt.data) sent in the websocket
    */
   onMessage(evt) {
-    const payload = JSON.parse(evt.data)
+    const payload = JSON.parse(evt.data);
 
     if (payload.type === 'pong') {
       this.onPong();
@@ -130,8 +129,8 @@ class WalletServiceWebSocket extends BaseWebSocket {
   joinWallet() {
     // Subscribe to the current wallet id
     const msg = JSON.stringify({
-      'action': 'join',
-      'id': this.walletId,
+      action: 'join',
+      id: this.walletId,
     });
 
     this.sendMessage(msg);
@@ -142,7 +141,7 @@ class WalletServiceWebSocket extends BaseWebSocket {
    * Returns a JSON stringified ping message
    */
   getPingMessage() {
-    return JSON.stringify({'action': 'ping'})
+    return JSON.stringify({ action: 'ping' });
   }
 }
 

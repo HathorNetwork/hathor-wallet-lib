@@ -4,10 +4,16 @@ import {
   createTokenHelper,
   generateWalletHelper,
   stopAllWallets,
-  waitForTxReceived, waitUntilNextTimestamp,
+  waitForTxReceived,
+  waitUntilNextTimestamp,
 } from './helpers/wallet.helper';
 import { HATHOR_TOKEN_CONFIG, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
-import { FULLNODE_NETWORK_NAME, FULLNODE_URL, NETWORK_NAME, WALLET_CONSTANTS } from './configuration/test-constants';
+import {
+  FULLNODE_NETWORK_NAME,
+  FULLNODE_URL,
+  NETWORK_NAME,
+  WALLET_CONSTANTS,
+} from './configuration/test-constants';
 import dateFormatter from '../../src/utils/date';
 import { AddressError } from '../../src/errors';
 import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
@@ -81,8 +87,9 @@ describe('getAddressInfo', () => {
   });
 
   it('should throw for an address outside the wallet', async () => {
-    await expect(hWallet.getAddressInfo(WALLET_CONSTANTS.genesis.addresses[0]))
-      .rejects.toThrow(AddressError);
+    await expect(hWallet.getAddressInfo(WALLET_CONSTANTS.genesis.addresses[0])).rejects.toThrow(
+      AddressError
+    );
   });
 
   it('should display correct values for transactions with change', async () => {
@@ -121,28 +128,28 @@ describe('getAddressInfo', () => {
   it('should return correct values for locked utxos', async () => {
     const timelock1 = Date.now().valueOf() + 5000; // 5 seconds of locked resources
     const timelockTimestamp = dateFormatter.dateToTimestamp(new Date(timelock1));
-    const rawTimelockTx = await hWallet.sendManyOutputsTransaction(
-      [
-        {
-          address: await hWallet.getAddressAtIndex(0),
-          value: 7,
-          token: HATHOR_TOKEN_CONFIG.uid,
-        },
-        {
-          address: await hWallet.getAddressAtIndex(0),
-          value: 3,
-          token: HATHOR_TOKEN_CONFIG.uid,
-          timelock: timelockTimestamp,
-        }
-      ],
-    );
+    const rawTimelockTx = await hWallet.sendManyOutputsTransaction([
+      {
+        address: await hWallet.getAddressAtIndex(0),
+        value: 7,
+        token: HATHOR_TOKEN_CONFIG.uid,
+      },
+      {
+        address: await hWallet.getAddressAtIndex(0),
+        value: 3,
+        token: HATHOR_TOKEN_CONFIG.uid,
+        timelock: timelockTimestamp,
+      },
+    ]);
     await waitForTxReceived(hWallet, rawTimelockTx.hash);
 
     // Validating locked balance
-    await expect(hWallet.getAddressInfo(await hWallet.getAddressAtIndex(0))).resolves.toMatchObject({
-      total_amount_available: 7,
-      total_amount_locked: 3,
-    });
+    await expect(hWallet.getAddressInfo(await hWallet.getAddressAtIndex(0))).resolves.toMatchObject(
+      {
+        total_amount_available: 7,
+        total_amount_locked: 3,
+      }
+    );
   });
 
   it('should test custom token transactions', async () => {
@@ -170,7 +177,9 @@ describe('getAddressInfo', () => {
       token: HATHOR_TOKEN_CONFIG.uid,
       index: 0,
     });
-    await expect(hWalletCustom.getAddressInfo(addr0Custom, { token: tokenUid })).resolves.toMatchObject({
+    await expect(
+      hWalletCustom.getAddressInfo(addr0Custom, { token: tokenUid })
+    ).resolves.toMatchObject({
       total_amount_received: 100,
       total_amount_sent: 0,
       total_amount_available: 100,
@@ -182,14 +191,18 @@ describe('getAddressInfo', () => {
     // Validating address after 1 transaction
     const tx = await hWalletCustom.sendTransaction(addr1Custom, 40, { token: tokenUid });
     await waitForTxReceived(hWalletCustom, tx.hash);
-    await expect(hWalletCustom.getAddressInfo(addr0Custom, { token: tokenUid })).resolves.toMatchObject({
+    await expect(
+      hWalletCustom.getAddressInfo(addr0Custom, { token: tokenUid })
+    ).resolves.toMatchObject({
       total_amount_received: 100,
       total_amount_sent: 100,
       total_amount_available: 0,
       token: tokenUid,
       index: 0,
     });
-    await expect(hWalletCustom.getAddressInfo(addr1Custom, { token: tokenUid })).resolves.toMatchObject({
+    await expect(
+      hWalletCustom.getAddressInfo(addr1Custom, { token: tokenUid })
+    ).resolves.toMatchObject({
       total_amount_received: 40,
       total_amount_sent: 0,
       total_amount_available: 40,
@@ -205,45 +218,47 @@ describe('getTxAddresses', () => {
     const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
 
     // Generating a transaction with outputs to multiple addresses
-    const tx = await gWallet.sendManyOutputsTransaction([
-      { address: await hWallet.getAddressAtIndex(1), value: 1, token: HATHOR_TOKEN_CONFIG.uid },
-      { address: await hWallet.getAddressAtIndex(3), value: 3, token: HATHOR_TOKEN_CONFIG.uid },
-      { address: await hWallet.getAddressAtIndex(5), value: 5, token: HATHOR_TOKEN_CONFIG.uid },
-    ], {
-      changeAddress: WALLET_CONSTANTS.genesis.addresses[0]
-    });
+    const tx = await gWallet.sendManyOutputsTransaction(
+      [
+        { address: await hWallet.getAddressAtIndex(1), value: 1, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: await hWallet.getAddressAtIndex(3), value: 3, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: await hWallet.getAddressAtIndex(5), value: 5, token: HATHOR_TOKEN_CONFIG.uid },
+      ],
+      {
+        changeAddress: WALLET_CONSTANTS.genesis.addresses[0],
+      }
+    );
     await waitForTxReceived(hWallet, tx.hash);
     await waitForTxReceived(gWallet, tx.hash);
 
     // Validating the method results
     const decodedTx = await hWallet.getTx(tx.hash);
-    await expect(hWallet.getTxAddresses(decodedTx)).resolves.toStrictEqual(new Set([
-      await hWallet.getAddressAtIndex(1),
-      await hWallet.getAddressAtIndex(3),
-      await hWallet.getAddressAtIndex(5),
-    ]));
+    await expect(hWallet.getTxAddresses(decodedTx)).resolves.toStrictEqual(
+      new Set([
+        await hWallet.getAddressAtIndex(1),
+        await hWallet.getAddressAtIndex(3),
+        await hWallet.getAddressAtIndex(5),
+      ])
+    );
 
     // By convention, only the address 0 of the genesis wallet is used on the integration tests
-    await expect(gWallet.getTxAddresses(decodedTx)).resolves.toStrictEqual(new Set([
-      WALLET_CONSTANTS.genesis.addresses[0]
-    ]));
+    await expect(gWallet.getTxAddresses(decodedTx)).resolves.toStrictEqual(
+      new Set([WALLET_CONSTANTS.genesis.addresses[0]])
+    );
   });
 });
 
 describe('checkAddressesMine', () => {
-  it('should ', async () => {
+  it('should', async () => {
     const hWallet = await generateWalletHelper();
 
     const address1 = await hWallet.getAddressAtIndex(1);
     const address2 = await hWallet.getAddressAtIndex(2);
     const address3 = await hWallet.getAddressAtIndex(3);
 
-    expect(await hWallet.checkAddressesMine([
-      address1,
-      address2,
-      address3,
-      'invalid-address',
-    ])).toStrictEqual({
+    expect(
+      await hWallet.checkAddressesMine([address1, address2, address3, 'invalid-address'])
+    ).toStrictEqual({
       [address1]: true,
       [address2]: true,
       [address3]: true,
@@ -270,27 +285,30 @@ describe('getAvailableUtxos', () => {
     expect(utxoGenResult).toStrictEqual({ done: true, value: undefined });
 
     // Inject a transaction and validate the results
-    const tx1 = await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10);
+    const tx1 = await GenesisWalletHelper.injectFunds(
+      hWallet,
+      await hWallet.getAddressAtIndex(0),
+      10
+    );
 
     // Get correct results for a single transaction
     utxoGenerator = await hWallet.getAvailableUtxos();
     utxoGenResult = await utxoGenerator.next();
-    expect(utxoGenResult)
-      .toMatchObject({
-        done: false,
-        value: {
-          txId: tx1.hash,
-          index: expect.any(Number),
-          tokenId: HATHOR_TOKEN_CONFIG.uid,
-          address: await hWallet.getAddressAtIndex(0),
-          value: 10,
-          authorities: 0,
-          timelock: null,
-          heightlock: null,
-          locked: false,
-          addressPath: expect.stringMatching(/\/0$/), // Matches "m/44'/280'/0'/0/0", for example
-        }
-      });
+    expect(utxoGenResult).toMatchObject({
+      done: false,
+      value: {
+        txId: tx1.hash,
+        index: expect.any(Number),
+        tokenId: HATHOR_TOKEN_CONFIG.uid,
+        address: await hWallet.getAddressAtIndex(0),
+        value: 10,
+        authorities: 0,
+        timelock: null,
+        heightlock: null,
+        locked: false,
+        addressPath: expect.stringMatching(/\/0$/), // Matches "m/44'/280'/0'/0/0", for example
+      },
+    });
 
     // Expect the generator to have finished
     expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true });
@@ -301,11 +319,21 @@ describe('getAvailableUtxos', () => {
      * @type HathorWallet
      */
     const hWallet = await generateWalletHelper();
-    const tx1 = await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10);
-    const tx2 = await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(1), 5);
+    const tx1 = await GenesisWalletHelper.injectFunds(
+      hWallet,
+      await hWallet.getAddressAtIndex(0),
+      10
+    );
+    const tx2 = await GenesisWalletHelper.injectFunds(
+      hWallet,
+      await hWallet.getAddressAtIndex(1),
+      5
+    );
 
     // Validate that on the address that received tx1, the UTXO is listed
-    let utxoGenerator = await hWallet.getAvailableUtxos({ filter_address: await hWallet.getAddressAtIndex(0) });
+    let utxoGenerator = await hWallet.getAvailableUtxos({
+      filter_address: await hWallet.getAddressAtIndex(0),
+    });
     let utxoGenResult = await utxoGenerator.next();
     expect(utxoGenResult.value).toMatchObject({
       txId: tx1.hash,
@@ -314,7 +342,9 @@ describe('getAvailableUtxos', () => {
     expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true });
 
     // Validate that on the address that received tx2, the UTXO is listed
-    utxoGenerator = await hWallet.getAvailableUtxos({ filter_address: await hWallet.getAddressAtIndex(1) });
+    utxoGenerator = await hWallet.getAvailableUtxos({
+      filter_address: await hWallet.getAddressAtIndex(1),
+    });
     utxoGenResult = await utxoGenerator.next();
     expect(utxoGenResult.value).toMatchObject({
       txId: tx2.hash,
@@ -323,7 +353,9 @@ describe('getAvailableUtxos', () => {
     expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true });
 
     // Validate that on an address that did not receive any transaction, the results are empty
-    utxoGenerator = await hWallet.getAvailableUtxos({ filter_address: await hWallet.getAddressAtIndex(2) });
+    utxoGenerator = await hWallet.getAvailableUtxos({
+      filter_address: await hWallet.getAddressAtIndex(2),
+    });
     expect(await utxoGenerator.next()).toStrictEqual({ value: undefined, done: true });
   });
 
@@ -346,7 +378,7 @@ describe('getAvailableUtxos', () => {
      * - The HTR change is listed
      */
     let utxoGenerator = await hWallet.getAvailableUtxos();
-    let utxoGenResult = await utxoGenerator.next();
+    const utxoGenResult = await utxoGenerator.next();
     expect(utxoGenResult.value).toMatchObject({
       txId: tokenUid,
       tokenId: HATHOR_TOKEN_CONFIG.uid,
@@ -362,14 +394,16 @@ describe('getAvailableUtxos', () => {
       allResults.push(u);
     }
 
-    expect(allResults).toStrictEqual(expect.arrayContaining([
-      expect.objectContaining({
-        txId: tokenUid,
-        tokenId: tokenUid,
-        value: 100,
-        authorities: 0, // The custom token balance itself
-      }),
-    ]));
+    expect(allResults).toStrictEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          txId: tokenUid,
+          tokenId: tokenUid,
+          value: 100,
+          authorities: 0, // The custom token balance itself
+        }),
+      ])
+    );
 
     // List all authorities
     utxoGenerator = hWallet.getAvailableUtxos({ token: tokenUid, authorities: 3 });
@@ -378,20 +412,22 @@ describe('getAvailableUtxos', () => {
       allResults.push(u);
     }
 
-    expect(allResults).toStrictEqual(expect.arrayContaining([
-      expect.objectContaining({
-        txId: tokenUid,
-        tokenId: tokenUid,
-        value: TOKEN_MINT_MASK,
-        authorities: TOKEN_MINT_MASK
-      }),
-      expect.objectContaining({
-        txId: tokenUid,
-        tokenId: tokenUid,
-        value: TOKEN_MELT_MASK,
-        authorities: TOKEN_MELT_MASK
-      }),
-    ]));
+    expect(allResults).toStrictEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          txId: tokenUid,
+          tokenId: tokenUid,
+          value: TOKEN_MINT_MASK,
+          authorities: TOKEN_MINT_MASK,
+        }),
+        expect.objectContaining({
+          txId: tokenUid,
+          tokenId: tokenUid,
+          value: TOKEN_MELT_MASK,
+          authorities: TOKEN_MELT_MASK,
+        }),
+      ])
+    );
   });
 });
 
@@ -427,35 +463,40 @@ describe('getUtxosForAmount', () => {
     // No change amount
     await expect(hWallet.getUtxosForAmount(10)).resolves.toStrictEqual({
       changeAmount: 0,
-      utxos: [{
-        txId: fundTx1hash,
-        index: expect.any(Number),
-        tokenId: HATHOR_TOKEN_CONFIG.uid,
-        address: addr0,
-        value: 10,
-        authorities: 0,
-        timelock: null,
-        heightlock: null,
-        locked: false,
-        addressPath: expect.any(String),
-      }]
+      utxos: [
+        {
+          txId: fundTx1hash,
+          index: expect.any(Number),
+          tokenId: HATHOR_TOKEN_CONFIG.uid,
+          address: addr0,
+          value: 10,
+          authorities: 0,
+          timelock: null,
+          heightlock: null,
+          locked: false,
+          addressPath: expect.any(String),
+        },
+      ],
     });
 
     await expect(hWallet.getUtxosForAmount(6)).resolves.toStrictEqual({
       changeAmount: 4,
-      utxos: [expect.objectContaining({
-        address: addr0,
-        value: 10,
-      })]
+      utxos: [
+        expect.objectContaining({
+          address: addr0,
+          value: 10,
+        }),
+      ],
     });
 
     // Should filter by address
     await expect(hWallet.getUtxosForAmount(10, { filter_address: addr0 })).resolves.toStrictEqual({
       changeAmount: 0,
-      utxos: [expect.anything()]
+      utxos: [expect.anything()],
     });
-    await expect(hWallet.getUtxosForAmount(10, { filter_address: addr1 })).rejects
-      .toThrow('utxos to fill total amount');
+    await expect(hWallet.getUtxosForAmount(10, { filter_address: addr1 })).rejects.toThrow(
+      'utxos to fill total amount'
+    );
 
     // Should throw for an amount higher than available funds
     await expect(hWallet.getUtxosForAmount(31)).rejects.toThrow('utxos to fill total amount');
@@ -479,11 +520,13 @@ describe('getUtxosForAmount', () => {
     // Should select the least amount of utxos that can satisfy the amount
     await expect(hWallet.getUtxosForAmount(20)).resolves.toStrictEqual({
       changeAmount: 0,
-      utxos: [expect.objectContaining({
-        txId: tx2.hash,
-        address: addr1,
-        value: 20,
-      })]
+      utxos: [
+        expect.objectContaining({
+          txId: tx2.hash,
+          address: addr1,
+          value: 20,
+        }),
+      ],
     });
 
     // Should select more than one utxo to cover an amount
@@ -498,25 +541,29 @@ describe('getUtxosForAmount', () => {
           txId: tx2.hash,
           value: 20,
         }),
-      ])
+      ]),
     });
 
     // Should filter by address
     await expect(hWallet.getUtxosForAmount(10, { filter_address: addr0 })).resolves.toStrictEqual({
       changeAmount: 0,
-      utxos: [expect.objectContaining({
-        txId: fundTx1hash,
-        address: addr0,
-        value: 10,
-      })]
+      utxos: [
+        expect.objectContaining({
+          txId: fundTx1hash,
+          address: addr0,
+          value: 10,
+        }),
+      ],
     });
     await expect(hWallet.getUtxosForAmount(10, { filter_address: addr1 })).resolves.toStrictEqual({
       changeAmount: 10,
-      utxos: [expect.objectContaining({
-        txId: tx2.hash,
-        address: addr1,
-        value: 20,
-      })]
+      utxos: [
+        expect.objectContaining({
+          txId: tx2.hash,
+          address: addr1,
+          value: 20,
+        }),
+      ],
     });
 
     // Should throw for an amount higher than available funds
@@ -535,39 +582,44 @@ describe('getUtxosForAmount', () => {
     );
 
     // Should work only with the token filter
-    await expect(hWallet.getUtxosForAmount(6, { token: tokenUid }))
-      .resolves.toStrictEqual({
-        changeAmount: 194,
-        utxos: [expect.objectContaining({
+    await expect(hWallet.getUtxosForAmount(6, { token: tokenUid })).resolves.toStrictEqual({
+      changeAmount: 194,
+      utxos: [
+        expect.objectContaining({
           address: addr2,
           value: 200,
           tokenId: tokenUid,
-        })]
-      });
+        }),
+      ],
+    });
     // Explicitly filtering for HTR
-    await expect(hWallet.getUtxosForAmount(6, { token: HATHOR_TOKEN_CONFIG.uid }))
-      .resolves.toStrictEqual({
-        changeAmount: expect.any(Number),
-        utxos: [expect.objectContaining({ tokenId: HATHOR_TOKEN_CONFIG.uid })]
-      });
+    await expect(
+      hWallet.getUtxosForAmount(6, { token: HATHOR_TOKEN_CONFIG.uid })
+    ).resolves.toStrictEqual({
+      changeAmount: expect.any(Number),
+      utxos: [expect.objectContaining({ tokenId: HATHOR_TOKEN_CONFIG.uid })],
+    });
     // Implicitly filtering for HTR
-    await expect(hWallet.getUtxosForAmount(6))
-      .resolves.toStrictEqual({
-        changeAmount: expect.any(Number),
-        utxos: [expect.objectContaining({ tokenId: HATHOR_TOKEN_CONFIG.uid })]
-      });
+    await expect(hWallet.getUtxosForAmount(6)).resolves.toStrictEqual({
+      changeAmount: expect.any(Number),
+      utxos: [expect.objectContaining({ tokenId: HATHOR_TOKEN_CONFIG.uid })],
+    });
 
     // The token filter should work combined with the address filter
-    await expect(hWallet.getUtxosForAmount(6, { token: tokenUid, filter_address: addr2 }))
-      .resolves.toStrictEqual({
-        changeAmount: 194,
-        utxos: [expect.objectContaining({
+    await expect(
+      hWallet.getUtxosForAmount(6, { token: tokenUid, filter_address: addr2 })
+    ).resolves.toStrictEqual({
+      changeAmount: 194,
+      utxos: [
+        expect.objectContaining({
           address: addr2,
           value: 200,
-        })]
-      });
-    await expect(hWallet.getUtxosForAmount(6, { token: tokenUid, filter_address: addr3 }))
-      .rejects.toThrow('utxos to fill');
+        }),
+      ],
+    });
+    await expect(
+      hWallet.getUtxosForAmount(6, { token: tokenUid, filter_address: addr3 })
+    ).rejects.toThrow('utxos to fill');
   });
 
   it('should not retrieve utxos marked as selected', async () => {
@@ -580,9 +632,10 @@ describe('getUtxosForAmount', () => {
     await hWallet.markUtxoSelected(singleUtxoAddr1.tx_id, singleUtxoAddr1.index, true);
 
     // Validate that it will not be retrieved on getUtxosForAmount
-    await expect(hWallet.getUtxosForAmount(50, { filter_address: addr }))
-      .rejects.toThrow('utxos to fill');
-  })
+    await expect(hWallet.getUtxosForAmount(50, { filter_address: addr })).rejects.toThrow(
+      'utxos to fill'
+    );
+  });
 });
 
 describe('consolidateUtxos', () => {
@@ -602,13 +655,9 @@ describe('consolidateUtxos', () => {
     hWallet1 = await generateWalletHelper();
     hWallet2 = await generateWalletHelper();
     await GenesisWalletHelper.injectFunds(hWallet2, await hWallet2.getAddressAtIndex(0), 110);
-    const { hash: tokenUid } = await createTokenHelper(
-      hWallet2,
-      'Consolidate Token',
-      'CTK',
-      1000,
-      { address: await hWallet2.getAddressAtIndex(0) }
-    );
+    const { hash: tokenUid } = await createTokenHelper(hWallet2, 'Consolidate Token', 'CTK', 1000, {
+      address: await hWallet2.getAddressAtIndex(0),
+    });
     tokenHash = tokenUid;
   });
   afterAll(async () => {
@@ -640,8 +689,9 @@ describe('consolidateUtxos', () => {
   }
 
   it('should throw when consolidating on an empty wallet', async () => {
-    await expect(hWallet1.consolidateUtxos(await hWallet1.getAddressAtIndex(0)))
-      .rejects.toThrow('available utxo');
+    await expect(hWallet1.consolidateUtxos(await hWallet1.getAddressAtIndex(0))).rejects.toThrow(
+      'available utxo'
+    );
   });
 
   it('should throw when consolidating on an invalid address', async () => {
@@ -652,8 +702,9 @@ describe('consolidateUtxos', () => {
     await waitForTxReceived(hWallet1, fundTx.hash);
     await waitForTxReceived(hWallet2, fundTx.hash);
 
-    await expect(hWallet1.consolidateUtxos(hWallet2.getAddressAtIndex(0)))
-      .rejects.toThrow('not owned by this wallet');
+    await expect(hWallet1.consolidateUtxos(hWallet2.getAddressAtIndex(0))).rejects.toThrow(
+      'not owned by this wallet'
+    );
 
     await waitUntilNextTimestamp(hWallet1, fundTx.hash);
     await cleanWallet1(HATHOR_TOKEN_CONFIG.uid);
@@ -668,10 +719,9 @@ describe('consolidateUtxos', () => {
     await waitForTxReceived(hWallet2, fundTx.hash);
 
     // Sending transaction and validating the method response
-    const consolidateTx = await hWallet1.consolidateUtxos(
-      await hWallet1.getAddressAtIndex(2),
-      { token: HATHOR_TOKEN_CONFIG.uid }
-    );
+    const consolidateTx = await hWallet1.consolidateUtxos(await hWallet1.getAddressAtIndex(2), {
+      token: HATHOR_TOKEN_CONFIG.uid,
+    });
     expect(consolidateTx).toStrictEqual({
       total_utxos_consolidated: 2,
       total_amount: 9,
@@ -682,16 +732,16 @@ describe('consolidateUtxos', () => {
           amount: 4,
           tx_id: fundTx.hash,
           locked: false,
-          index: expect.any(Number)
+          index: expect.any(Number),
         },
         {
           address: await hWallet1.getAddressAtIndex(1),
           amount: 5,
           tx_id: fundTx.hash,
           locked: false,
-          index: expect.any(Number)
+          index: expect.any(Number),
         },
-      ])
+      ]),
     });
 
     // Validating the updated balance on the wallet
@@ -702,13 +752,15 @@ describe('consolidateUtxos', () => {
       total_utxos_available: 1,
       total_amount_locked: 0,
       total_utxos_locked: 0,
-      utxos: [{
-        address: await hWallet1.getAddressAtIndex(2),
-        amount: 9,
-        tx_id: consolidateTx.txId,
-        locked: false,
-        index: 0 // This has a single resulting utxo, so 1 output only
-      }]
+      utxos: [
+        {
+          address: await hWallet1.getAddressAtIndex(2),
+          amount: 9,
+          tx_id: consolidateTx.txId,
+          locked: false,
+          index: 0, // This has a single resulting utxo, so 1 output only
+        },
+      ],
     });
 
     await waitUntilNextTimestamp(hWallet1, consolidateTx.txId);
@@ -724,10 +776,9 @@ describe('consolidateUtxos', () => {
     await waitForTxReceived(hWallet2, fundTx.hash);
 
     // Sending transaction and validating the method response
-    const consolidateTx = await hWallet1.consolidateUtxos(
-      await hWallet1.getAddressAtIndex(5),
-      { token: tokenHash }
-    );
+    const consolidateTx = await hWallet1.consolidateUtxos(await hWallet1.getAddressAtIndex(5), {
+      token: tokenHash,
+    });
     expect(consolidateTx).toStrictEqual({
       total_utxos_consolidated: 2,
       total_amount: 90,
@@ -738,16 +789,16 @@ describe('consolidateUtxos', () => {
           amount: 40,
           tx_id: fundTx.hash,
           locked: false,
-          index: expect.any(Number)
+          index: expect.any(Number),
         },
         {
           address: await hWallet1.getAddressAtIndex(4),
           amount: 50,
           tx_id: fundTx.hash,
           locked: false,
-          index: expect.any(Number)
+          index: expect.any(Number),
         },
-      ])
+      ]),
     });
 
     // Validating the updated balance on the wallet
@@ -758,13 +809,15 @@ describe('consolidateUtxos', () => {
       total_utxos_available: 1,
       total_amount_locked: 0,
       total_utxos_locked: 0,
-      utxos: [{
-        address: await hWallet1.getAddressAtIndex(5),
-        amount: 90,
-        tx_id: consolidateTx.txId,
-        locked: false,
-        index: 0 // This has a single resulting utxo, so 1 output only
-      }]
+      utxos: [
+        {
+          address: await hWallet1.getAddressAtIndex(5),
+          amount: 90,
+          tx_id: consolidateTx.txId,
+          locked: false,
+          index: 0, // This has a single resulting utxo, so 1 output only
+        },
+      ],
     });
 
     await waitUntilNextTimestamp(hWallet1, consolidateTx.txId);
@@ -786,13 +839,10 @@ describe('consolidateUtxos', () => {
     await waitForTxReceived(hWallet2, fundTx.hash);
 
     // Sending transaction and validating the method response
-    const consolidateTx = await hWallet1.consolidateUtxos(
-      await hWallet1.getAddressAtIndex(3),
-      {
-        token: HATHOR_TOKEN_CONFIG.uid,
-        filter_address: addr2
-      }
-    );
+    const consolidateTx = await hWallet1.consolidateUtxos(await hWallet1.getAddressAtIndex(3), {
+      token: HATHOR_TOKEN_CONFIG.uid,
+      filter_address: addr2,
+    });
     expect(consolidateTx).toStrictEqual({
       total_utxos_consolidated: 3,
       total_amount: 5,
@@ -806,12 +856,15 @@ describe('consolidateUtxos', () => {
 
     // Validating the updated balance on the wallet
     await waitForTxReceived(hWallet1, consolidateTx.txId);
-    expect(await hWallet1.getAddressInfo(await hWallet1.getAddressAtIndex(1)))
-      .toMatchObject({ total_amount_available: 3 });
-    expect(await hWallet1.getAddressInfo(await hWallet1.getAddressAtIndex(2)))
-      .toMatchObject({ total_amount_available: 0 });
-    expect(await hWallet1.getAddressInfo(await hWallet1.getAddressAtIndex(3)))
-      .toMatchObject({ total_amount_available: 5 });
+    expect(await hWallet1.getAddressInfo(await hWallet1.getAddressAtIndex(1))).toMatchObject({
+      total_amount_available: 3,
+    });
+    expect(await hWallet1.getAddressInfo(await hWallet1.getAddressAtIndex(2))).toMatchObject({
+      total_amount_available: 0,
+    });
+    expect(await hWallet1.getAddressInfo(await hWallet1.getAddressAtIndex(3))).toMatchObject({
+      total_amount_available: 5,
+    });
 
     await waitUntilNextTimestamp(hWallet1, consolidateTx.txId);
     await cleanWallet1(HATHOR_TOKEN_CONFIG.uid);
@@ -831,13 +884,10 @@ describe('consolidateUtxos', () => {
     await waitForTxReceived(hWallet2, fundTx.hash);
 
     // Sending transaction and validating the method response
-    const consolidateTx = await hWallet1.consolidateUtxos(
-      await hWallet1.getAddressAtIndex(2),
-      {
-        token: HATHOR_TOKEN_CONFIG.uid,
-        amount_smaller_than: 3,
-      }
-    );
+    const consolidateTx = await hWallet1.consolidateUtxos(await hWallet1.getAddressAtIndex(2), {
+      token: HATHOR_TOKEN_CONFIG.uid,
+      amount_smaller_than: 3,
+    });
     expect(consolidateTx).toStrictEqual({
       total_utxos_consolidated: 2,
       total_amount: 3,
@@ -847,10 +897,12 @@ describe('consolidateUtxos', () => {
 
     // Validating the updated balance on the wallet
     await waitForTxReceived(hWallet1, consolidateTx.txId);
-    expect(await hWallet1.getAddressInfo(await hWallet1.getAddressAtIndex(1)))
-      .toMatchObject({ total_amount_available: 12 });
-    expect(await hWallet1.getAddressInfo(await hWallet1.getAddressAtIndex(2)))
-      .toMatchObject({ total_amount_available: 3 });
+    expect(await hWallet1.getAddressInfo(await hWallet1.getAddressAtIndex(1))).toMatchObject({
+      total_amount_available: 12,
+    });
+    expect(await hWallet1.getAddressInfo(await hWallet1.getAddressAtIndex(2))).toMatchObject({
+      total_amount_available: 3,
+    });
 
     await waitUntilNextTimestamp(hWallet1, consolidateTx.txId);
     await cleanWallet1(HATHOR_TOKEN_CONFIG.uid);
@@ -870,13 +922,10 @@ describe('consolidateUtxos', () => {
     await waitForTxReceived(hWallet2, fundTx.hash);
 
     // Sending transaction and validating the method response
-    const consolidateTx = await hWallet1.consolidateUtxos(
-      await hWallet1.getAddressAtIndex(4),
-      {
-        token: HATHOR_TOKEN_CONFIG.uid,
-        amount_bigger_than: 3,
-      }
-    );
+    const consolidateTx = await hWallet1.consolidateUtxos(await hWallet1.getAddressAtIndex(4), {
+      token: HATHOR_TOKEN_CONFIG.uid,
+      amount_bigger_than: 3,
+    });
     expect(consolidateTx).toStrictEqual({
       total_utxos_consolidated: 2,
       total_amount: 9,
@@ -886,10 +935,12 @@ describe('consolidateUtxos', () => {
 
     // Validating the updated balance on the wallet
     await waitForTxReceived(hWallet1, consolidateTx.txId);
-    expect(await hWallet1.getAddressInfo(await hWallet1.getAddressAtIndex(2)))
-      .toMatchObject({ total_amount_available: 6 });
-    expect(await hWallet1.getAddressInfo(await hWallet1.getAddressAtIndex(4)))
-      .toMatchObject({ total_amount_available: 9 });
+    expect(await hWallet1.getAddressInfo(await hWallet1.getAddressAtIndex(2))).toMatchObject({
+      total_amount_available: 6,
+    });
+    expect(await hWallet1.getAddressInfo(await hWallet1.getAddressAtIndex(4))).toMatchObject({
+      total_amount_available: 9,
+    });
 
     await waitUntilNextTimestamp(hWallet1, consolidateTx.txId);
     await cleanWallet1(HATHOR_TOKEN_CONFIG.uid);
@@ -909,14 +960,11 @@ describe('consolidateUtxos', () => {
     await waitForTxReceived(hWallet2, fundTx.hash);
 
     // Sending transaction and validating the method response
-    const consolidateTx = await hWallet1.consolidateUtxos(
-      await hWallet1.getAddressAtIndex(4),
-      {
-        token: HATHOR_TOKEN_CONFIG.uid,
-        amount_bigger_than: 2,
-        max_amount: 15,
-      }
-    );
+    const consolidateTx = await hWallet1.consolidateUtxos(await hWallet1.getAddressAtIndex(4), {
+      token: HATHOR_TOKEN_CONFIG.uid,
+      amount_bigger_than: 2,
+      max_amount: 15,
+    });
     // FIXME: This result is not consistent, sometimes it fetches only utxo "20".
     expect(consolidateTx).toStrictEqual({
       total_utxos_consolidated: 2,
@@ -925,15 +973,17 @@ describe('consolidateUtxos', () => {
       utxos: expect.arrayContaining([
         expect.objectContaining({ amount: 4 }),
         expect.objectContaining({ amount: 5 }),
-      ])
+      ]),
     });
 
     // Validating the updated balance on the wallet
     await waitForTxReceived(hWallet1, consolidateTx.txId);
-    expect(await hWallet1.getAddressInfo(await hWallet1.getAddressAtIndex(2)))
-      .toMatchObject({ total_amount_available: 61 });
-    expect(await hWallet1.getAddressInfo(await hWallet1.getAddressAtIndex(4)))
-      .toMatchObject({ total_amount_available: 9 });
+    expect(await hWallet1.getAddressInfo(await hWallet1.getAddressAtIndex(2))).toMatchObject({
+      total_amount_available: 61,
+    });
+    expect(await hWallet1.getAddressInfo(await hWallet1.getAddressAtIndex(4))).toMatchObject({
+      total_amount_available: 9,
+    });
 
     await waitUntilNextTimestamp(hWallet1, consolidateTx.txId);
     await cleanWallet1(HATHOR_TOKEN_CONFIG.uid);
@@ -951,7 +1001,10 @@ describe('consolidateUtxos', () => {
     await waitForTxReceived(hWallet2, fundTx.hash);
 
     // We should now have 4 utxos on wallet1 for this custom token
-    expect(await hWallet1.getUtxos({ token: tokenHash })).toHaveProperty('total_utxos_available', 4);
+    expect(await hWallet1.getUtxos({ token: tokenHash })).toHaveProperty(
+      'total_utxos_available',
+      4
+    );
 
     // Reducing the amount of maximum inputs allowed for the lib (not the fullnode)
     const oldMaxInputs = hWallet1.storage.version.max_number_inputs;
@@ -959,10 +1012,9 @@ describe('consolidateUtxos', () => {
 
     // Trying to consolidate all of them on a single utxo
     await waitUntilNextTimestamp(hWallet1, fundTx.hash);
-    const consolidateTx = await hWallet1.consolidateUtxos(
-      await hWallet1.getAddressAtIndex(4),
-      { token: tokenHash },
-    );
+    const consolidateTx = await hWallet1.consolidateUtxos(await hWallet1.getAddressAtIndex(4), {
+      token: tokenHash,
+    });
 
     // Reverting the amount of maximum outputs allowed by the lib
     hWallet1.storage.version.max_number_inputs = oldMaxInputs;
@@ -972,7 +1024,10 @@ describe('consolidateUtxos', () => {
     await waitForTxReceived(hWallet1, consolidateTx.txId);
 
     // Ensure the maximum possible amount of utxos was consolidated ( 1 consolidated + 2 remaining )
-    expect(await hWallet1.getUtxos({ token: tokenHash })).toHaveProperty('total_utxos_available', 3);
+    expect(await hWallet1.getUtxos({ token: tokenHash })).toHaveProperty(
+      'total_utxos_available',
+      3
+    );
   });
 });
 
@@ -993,8 +1048,9 @@ describe('getAuthorityUtxos', () => {
     // Testing the wrapper method
     expect(await hWallet.getAuthorityUtxos(fakeTokenUid, 'mint')).toStrictEqual([]);
     expect(await hWallet.getAuthorityUtxos(fakeTokenUid, 'melt')).toStrictEqual([]);
-    await expect(hWallet.getAuthorityUtxos(fakeTokenUid, 'invalid'))
-      .rejects.toThrow('This should never happen.'); // TODO: Improve this error message
+    await expect(hWallet.getAuthorityUtxos(fakeTokenUid, 'invalid')).rejects.toThrow(
+      'This should never happen.'
+    ); // TODO: Improve this error message
   });
 
   it('should find one authority utxo', async () => {
@@ -1004,13 +1060,13 @@ describe('getAuthorityUtxos', () => {
       hWallet,
       'getAuthorityUtxos Token',
       'GAUT',
-      100,
+      100
     );
     tokenHash = tokenUid;
 
     // Validating the wrapper method
-    expect(await hWallet.getAuthorityUtxos(tokenHash, 'mint'))
-      .toStrictEqual([{
+    expect(await hWallet.getAuthorityUtxos(tokenHash, 'mint')).toStrictEqual([
+      {
         txId: tokenHash,
         index: expect.any(Number),
         address: expect.any(String),
@@ -1020,9 +1076,10 @@ describe('getAuthorityUtxos', () => {
         height: null,
         timelock: null,
         type: expect.any(Number),
-      }]);
-    expect(await hWallet.getAuthorityUtxos(tokenHash, 'melt'))
-      .toStrictEqual([{
+      },
+    ]);
+    expect(await hWallet.getAuthorityUtxos(tokenHash, 'melt')).toStrictEqual([
+      {
         txId: tokenHash,
         index: expect.any(Number),
         address: expect.any(String),
@@ -1032,7 +1089,8 @@ describe('getAuthorityUtxos', () => {
         authorities: TOKEN_MELT_MASK,
         value: 2,
         type: expect.any(Number),
-      }]);
+      },
+    ]);
   });
 
   it('should find many "mint" authority utxos', async () => {
@@ -1046,13 +1104,14 @@ describe('getAuthorityUtxos', () => {
     await waitForTxReceived(hWallet, mintDelegationTx.hash);
 
     // Should not find the spent utxo
-    expect(await hWallet.getAuthorityUtxos(tokenHash, 'mint'))
-      .toMatchObject([{
+    expect(await hWallet.getAuthorityUtxos(tokenHash, 'mint')).toMatchObject([
+      {
         txId: mintDelegationTx.hash,
         index: expect.any(Number),
         address: expect.any(String),
         authorities: TOKEN_MINT_MASK,
-      }]);
+      },
+    ]);
   });
 
   it('should find many "melt" authority utxos', async () => {
@@ -1090,8 +1149,7 @@ describe('getAuthorityUtxos', () => {
         value: TOKEN_MELT_MASK,
       },
     ];
-    expect(await hWallet.getAuthorityUtxos(tokenHash, 'melt'))
-      .toStrictEqual(expectedMeltAuthUtxos);
+    expect(await hWallet.getAuthorityUtxos(tokenHash, 'melt')).toStrictEqual(expectedMeltAuthUtxos);
   });
 });
 
@@ -1134,8 +1192,8 @@ describe('internal methods', () => {
         name: expect.stringContaining(NETWORK_NAME),
         alias: 'test', // this is the alias for the testnet network
         pubkeyhash: 73,
-        scripthash: 135
-      }
+        scripthash: 135,
+      },
     });
 
     // GetVersionData fetching from the live fullnode server

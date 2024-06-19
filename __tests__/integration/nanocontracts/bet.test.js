@@ -1,3 +1,4 @@
+import { isEmpty } from 'lodash';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import {
   generateMultisigWalletHelper,
@@ -6,19 +7,15 @@ import {
   waitForTxReceived,
   waitUntilNextTimestamp,
   waitNextBlock,
-  waitTxConfirmed
+  waitTxConfirmed,
 } from '../helpers/wallet.helper';
-import {
-  HATHOR_TOKEN_CONFIG,
-  NANO_CONTRACTS_INITIALIZE_METHOD
-} from '../../../src/constants';
+import { HATHOR_TOKEN_CONFIG, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../src/constants';
 import ncApi from '../../../src/api/nano';
 import helpersUtils from '../../../src/utils/helpers';
 import dateFormatter from '../../../src/utils/date';
 import { bufferToHex, hexToBuffer } from '../../../src/utils/buffer';
 import Address from '../../../src/models/address';
 import P2PKH from '../../../src/models/p2pkh';
-import { isEmpty } from 'lodash';
 import { getOracleBuffer, getOracleInputData } from '../../../src/nano_contracts/utils';
 import Serializer from '../../../src/nano_contracts/serializer';
 import { NanoContractTransactionError, NanoRequest404Error } from '../../../src/errors';
@@ -35,7 +32,11 @@ describe('full cycle of bet nano contract', () => {
 
   beforeAll(async () => {
     hWallet = await generateWalletHelper();
-    fundsTx = await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 1000);
+    fundsTx = await GenesisWalletHelper.injectFunds(
+      hWallet,
+      await hWallet.getAddressAtIndex(0),
+      1000
+    );
 
     mhWallet = await generateMultisigWalletHelper({ walletIndex: 3 });
     await GenesisWalletHelper.injectFunds(mhWallet, await mhWallet.getAddressAtIndex(0), 1000);
@@ -57,9 +58,9 @@ describe('full cycle of bet nano contract', () => {
     const txAfterExecution = await wallet.getFullTxById(txId);
     expect(isEmpty(txAfterExecution.meta.voided_by)).toBe(true);
     expect(isEmpty(txAfterExecution.meta.first_block)).not.toBeNull();
-  }
+  };
 
-  const executeTests = async (wallet) => {
+  const executeTests = async wallet => {
     const address0 = await wallet.getAddressAtIndex(0);
     const address1 = await wallet.getAddressAtIndex(1);
     const dateLastBet = dateFormatter.dateToTimestamp(new Date()) + 6000;
@@ -78,17 +79,18 @@ describe('full cycle of bet nano contract', () => {
       address0,
       {
         blueprintId,
-        args: [
-          bufferToHex(oracleData),
-          HATHOR_TOKEN_CONFIG.uid,
-          dateLastBet
-        ]
+        args: [bufferToHex(oracleData), HATHOR_TOKEN_CONFIG.uid, dateLastBet],
       }
     );
     await checkTxValid(wallet, tx1.hash);
     const tx1Data = await wallet.getFullTxById(tx1.hash);
 
-    const tx1Parser = new NanoContractTransactionParser(blueprintId, NANO_CONTRACTS_INITIALIZE_METHOD, tx1Data.tx.nc_pubkey, tx1Data.tx.nc_args);
+    const tx1Parser = new NanoContractTransactionParser(
+      blueprintId,
+      NANO_CONTRACTS_INITIALIZE_METHOD,
+      tx1Data.tx.nc_pubkey,
+      tx1Data.tx.nc_args
+    );
     tx1Parser.parseAddress(network);
     await tx1Parser.parseArguments();
     expect(tx1Parser.address.base58).toBe(address0);
@@ -101,29 +103,27 @@ describe('full cycle of bet nano contract', () => {
     // Bet 100 to address 2
     const address2 = await wallet.getAddressAtIndex(2);
     const address2Obj = new Address(address2, { network });
-    const txBet = await wallet.createAndSendNanoContractTransaction(
-      'bet',
-      address2,
-      {
-        ncId: tx1.hash,
-        args: [
-          bufferToHex(address2Obj.decode()),
-          '1x0'
-        ],
-        actions: [
-          {
-            type: 'deposit',
-            token: HATHOR_TOKEN_CONFIG.uid,
-            amount: 100,
-            changeAddress: address0,
-          }
-        ],
-      }
-    );
+    const txBet = await wallet.createAndSendNanoContractTransaction('bet', address2, {
+      ncId: tx1.hash,
+      args: [bufferToHex(address2Obj.decode()), '1x0'],
+      actions: [
+        {
+          type: 'deposit',
+          token: HATHOR_TOKEN_CONFIG.uid,
+          amount: 100,
+          changeAddress: address0,
+        },
+      ],
+    });
     await checkTxValid(wallet, txBet.hash);
     const txBetData = await wallet.getFullTxById(txBet.hash);
 
-    const txBetParser = new NanoContractTransactionParser(blueprintId, 'bet', txBetData.tx.nc_pubkey, txBetData.tx.nc_args);
+    const txBetParser = new NanoContractTransactionParser(
+      blueprintId,
+      'bet',
+      txBetData.tx.nc_pubkey,
+      txBetData.tx.nc_args
+    );
     txBetParser.parseAddress(network);
     await txBetParser.parseArguments();
     expect(txBetParser.address.base58).toBe(address2);
@@ -142,28 +142,26 @@ describe('full cycle of bet nano contract', () => {
     // Bet 200 to address 3
     const address3 = await wallet.getAddressAtIndex(3);
     const address3Obj = new Address(address3, { network });
-    const txBet2 = await wallet.createAndSendNanoContractTransaction(
-      'bet',
-      address3,
-      {
-        ncId: tx1.hash,
-        args: [
-          bufferToHex(address3Obj.decode()),
-          '2x0'
-        ],
-        actions: [
-          {
-            type: 'deposit',
-            token: HATHOR_TOKEN_CONFIG.uid,
-            amount: 200
-          }
-        ],
-      }
-    );
+    const txBet2 = await wallet.createAndSendNanoContractTransaction('bet', address3, {
+      ncId: tx1.hash,
+      args: [bufferToHex(address3Obj.decode()), '2x0'],
+      actions: [
+        {
+          type: 'deposit',
+          token: HATHOR_TOKEN_CONFIG.uid,
+          amount: 200,
+        },
+      ],
+    });
     await checkTxValid(wallet, txBet2.hash);
     const txBet2Data = await wallet.getFullTxById(txBet2.hash);
 
-    const txBet2Parser = new NanoContractTransactionParser(blueprintId, 'bet', txBet2Data.tx.nc_pubkey, txBet2Data.tx.nc_args);
+    const txBet2Parser = new NanoContractTransactionParser(
+      blueprintId,
+      'bet',
+      txBet2Data.tx.nc_pubkey,
+      txBet2Data.tx.nc_args
+    );
     txBet2Parser.parseAddress(network);
     await txBet2Parser.parseArguments();
     expect(txBet2Parser.address.base58).toBe(address3);
@@ -181,20 +179,17 @@ describe('full cycle of bet nano contract', () => {
     }
 
     // Get NC state
-    const ncState = await ncApi.getNanoContractState(
-      tx1.hash,
-      [
-        'token_uid',
-        'total',
-        'final_result',
-        'oracle_script',
-        'date_last_offer',
-        `address_details.a'${address2}'`,
-        `withdrawals.a'${address2}'`,
-        `address_details.a'${address3}'`,
-        `withdrawals.a'${address3}'`
-      ]
-    );
+    const ncState = await ncApi.getNanoContractState(tx1.hash, [
+      'token_uid',
+      'total',
+      'final_result',
+      'oracle_script',
+      'date_last_offer',
+      `address_details.a'${address2}'`,
+      `withdrawals.a'${address2}'`,
+      `address_details.a'${address3}'`,
+      `withdrawals.a'${address3}'`,
+    ]);
     const addressObj1 = new Address(address1, { network });
     const outputScriptType = addressObj1.getType();
     let outputScript;
@@ -222,70 +217,71 @@ describe('full cycle of bet nano contract', () => {
     const result = '1x0';
     const resultSerialized = nanoSerializer.serializeFromType(result, 'str');
     const inputData = await getOracleInputData(oracleData, resultSerialized, wallet);
-    const txSetResult = await wallet.createAndSendNanoContractTransaction(
-      'set_result',
-      address1,
-      {
-        ncId: tx1.hash,
-        args: [
-          `${bufferToHex(inputData)},${result},str`
-        ],
-      }
-    );
+    const txSetResult = await wallet.createAndSendNanoContractTransaction('set_result', address1, {
+      ncId: tx1.hash,
+      args: [`${bufferToHex(inputData)},${result},str`],
+    });
     await checkTxValid(wallet, txSetResult.hash);
     txIds.push(txSetResult.hash);
     const txSetResultData = await wallet.getFullTxById(txSetResult.hash);
 
-    const txSetResultParser = new NanoContractTransactionParser(blueprintId, 'set_result', txSetResultData.tx.nc_pubkey, txSetResultData.tx.nc_args);
+    const txSetResultParser = new NanoContractTransactionParser(
+      blueprintId,
+      'set_result',
+      txSetResultData.tx.nc_pubkey,
+      txSetResultData.tx.nc_args
+    );
     txSetResultParser.parseAddress(network);
     await txSetResultParser.parseArguments();
     expect(txSetResultParser.address.base58).toBe(address1);
     expect(txSetResultParser.parsedArgs).toStrictEqual([
-      { name: 'result', type: 'SignedData[str]', parsed: `${bufferToHex(inputData)},${result},str` },
+      {
+        name: 'result',
+        type: 'SignedData[str]',
+        parsed: `${bufferToHex(inputData)},${result},str`,
+      },
     ]);
 
     // Try to withdraw to address 2, success
-    const txWithdrawal = await wallet.createAndSendNanoContractTransaction(
-      'withdraw',
-      address2,
-      {
-        ncId: tx1.hash,
-        actions: [
-          {
-            type: 'withdrawal',
-            token: HATHOR_TOKEN_CONFIG.uid,
-            amount: 300,
-            address: address2
-          }
-        ],
-      }
-    );
+    const txWithdrawal = await wallet.createAndSendNanoContractTransaction('withdraw', address2, {
+      ncId: tx1.hash,
+      actions: [
+        {
+          type: 'withdrawal',
+          token: HATHOR_TOKEN_CONFIG.uid,
+          amount: 300,
+          address: address2,
+        },
+      ],
+    });
     await checkTxValid(wallet, txWithdrawal.hash);
     txIds.push(txWithdrawal.hash);
 
     const txWithdrawalData = await wallet.getFullTxById(txWithdrawal.hash);
 
-    const txWithdrawalParser = new NanoContractTransactionParser(blueprintId, 'set_result', txWithdrawalData.tx.nc_pubkey, txWithdrawalData.tx.nc_args);
+    const txWithdrawalParser = new NanoContractTransactionParser(
+      blueprintId,
+      'set_result',
+      txWithdrawalData.tx.nc_pubkey,
+      txWithdrawalData.tx.nc_args
+    );
     txWithdrawalParser.parseAddress(network);
     await txWithdrawalParser.parseArguments();
     expect(txWithdrawalParser.address.base58).toBe(address2);
     expect(txWithdrawalParser.parsedArgs).toBe(null);
 
     // Get state again
-    const ncState2 = await ncApi.getNanoContractState(
-      tx1.hash,
-      [
-        'token_uid',
-        'total',
-        'final_result',
-        'oracle_script',
-        'date_last_offer',
-        `address_details.a'${address2}'`,
-        `withdrawals.a'${address2}'`,
-        `address_details.a'${address3}'`,
-        `withdrawals.a'${address3}'`
-      ]
-    );
+    const ncState2 = await ncApi.getNanoContractState(tx1.hash, [
+      'token_uid',
+      'total',
+      'final_result',
+      'oracle_script',
+      'date_last_offer',
+      `address_details.a'${address2}'`,
+      `withdrawals.a'${address2}'`,
+      `address_details.a'${address3}'`,
+      `withdrawals.a'${address3}'`,
+    ]);
     expect(ncState2.fields.token_uid.value).toBe(HATHOR_TOKEN_CONFIG.uid);
     expect(ncState2.fields.date_last_offer.value).toBe(dateLastBet);
     expect(ncState2.fields.oracle_script.value).toBe(bufferToHex(outputScriptBuffer1));
@@ -305,7 +301,7 @@ describe('full cycle of bet nano contract', () => {
     // Get tx history with success
     const txHistory = await wallet.getTxHistory();
     expect(txHistory).toHaveLength(4);
-  }
+  };
 
   it('bet deposit', async () => {
     await executeTests(hWallet);
@@ -326,148 +322,102 @@ describe('full cycle of bet nano contract', () => {
 
     // Initialize missing blueprintId
     const oracleData = getOracleBuffer(address1, network);
-    await expect(hWallet.createAndSendNanoContractTransaction(
-      NANO_CONTRACTS_INITIALIZE_METHOD,
-      address0,
-      {
-        args: [
-          bufferToHex(oracleData),
-          HATHOR_TOKEN_CONFIG.uid,
-          dateLastBet
-        ]
-      }
-    )).rejects.toThrow(NanoContractTransactionError);
+    await expect(
+      hWallet.createAndSendNanoContractTransaction(NANO_CONTRACTS_INITIALIZE_METHOD, address0, {
+        args: [bufferToHex(oracleData), HATHOR_TOKEN_CONFIG.uid, dateLastBet],
+      })
+    ).rejects.toThrow(NanoContractTransactionError);
 
     // Invalid blueprint id
-    await expect(hWallet.createAndSendNanoContractTransaction(
-      NANO_CONTRACTS_INITIALIZE_METHOD,
-      address0,
-      {
+    await expect(
+      hWallet.createAndSendNanoContractTransaction(NANO_CONTRACTS_INITIALIZE_METHOD, address0, {
         blueprintId: '1234',
-        args: [
-          bufferToHex(oracleData),
-          HATHOR_TOKEN_CONFIG.uid,
-          dateLastBet
-        ]
-      }
-    )).rejects.toThrow(NanoRequest404Error);
+        args: [bufferToHex(oracleData), HATHOR_TOKEN_CONFIG.uid, dateLastBet],
+      })
+    ).rejects.toThrow(NanoRequest404Error);
 
     // Missing last argument
-    await expect(hWallet.createAndSendNanoContractTransaction(
-      NANO_CONTRACTS_INITIALIZE_METHOD,
-      address0,
-      {
+    await expect(
+      hWallet.createAndSendNanoContractTransaction(NANO_CONTRACTS_INITIALIZE_METHOD, address0, {
         blueprintId,
-        args: [
-          bufferToHex(oracleData),
-          HATHOR_TOKEN_CONFIG.uid,
-        ]
-      }
-    )).rejects.toThrow(NanoContractTransactionError);
+        args: [bufferToHex(oracleData), HATHOR_TOKEN_CONFIG.uid],
+      })
+    ).rejects.toThrow(NanoContractTransactionError);
 
     // Address selected to sign does not belong to the wallet
     const hWallet2 = await generateWalletHelper();
     const addressNewWallet = await hWallet2.getAddressAtIndex(0);
-    await expect(hWallet.createAndSendNanoContractTransaction(
-      NANO_CONTRACTS_INITIALIZE_METHOD,
-      addressNewWallet,
-      {
-        blueprintId,
-        args: [
-          bufferToHex(oracleData),
-          HATHOR_TOKEN_CONFIG.uid,
-          dateLastBet
-        ]
-      }
-    )).rejects.toThrow(NanoContractTransactionError);
+    await expect(
+      hWallet.createAndSendNanoContractTransaction(
+        NANO_CONTRACTS_INITIALIZE_METHOD,
+        addressNewWallet,
+        {
+          blueprintId,
+          args: [bufferToHex(oracleData), HATHOR_TOKEN_CONFIG.uid, dateLastBet],
+        }
+      )
+    ).rejects.toThrow(NanoContractTransactionError);
 
     // Oracle data is expected to be a hexa
-    await expect(hWallet.createAndSendNanoContractTransaction(
-      NANO_CONTRACTS_INITIALIZE_METHOD,
-      address0,
-      {
+    await expect(
+      hWallet.createAndSendNanoContractTransaction(NANO_CONTRACTS_INITIALIZE_METHOD, address0, {
         blueprintId,
-        args: [
-          'error',
-          HATHOR_TOKEN_CONFIG.uid,
-          dateLastBet
-        ]
-      }
-    )).rejects.toThrow(NanoContractTransactionError);
+        args: ['error', HATHOR_TOKEN_CONFIG.uid, dateLastBet],
+      })
+    ).rejects.toThrow(NanoContractTransactionError);
 
     // Date last bet is expected to be an integer
-    await expect(hWallet.createAndSendNanoContractTransaction(
-      NANO_CONTRACTS_INITIALIZE_METHOD,
-      address0,
-      {
+    await expect(
+      hWallet.createAndSendNanoContractTransaction(NANO_CONTRACTS_INITIALIZE_METHOD, address0, {
         blueprintId,
-        args: [
-          '123',
-          HATHOR_TOKEN_CONFIG.uid,
-          'error'
-        ]
-      }
-    )).rejects.toThrow(NanoContractTransactionError);
+        args: ['123', HATHOR_TOKEN_CONFIG.uid, 'error'],
+      })
+    ).rejects.toThrow(NanoContractTransactionError);
 
     // Missing ncId for bet
     const address2 = await hWallet.getAddressAtIndex(2);
     const address2Obj = new Address(address2, { network });
-    await expect(hWallet.createAndSendNanoContractTransaction(
-      'bet',
-      address2,
-      {
-        args: [
-          bufferToHex(address2Obj.decode()),
-          '1x0'
-        ],
+    await expect(
+      hWallet.createAndSendNanoContractTransaction('bet', address2, {
+        args: [bufferToHex(address2Obj.decode()), '1x0'],
         actions: [
           {
             type: 'deposit',
             token: HATHOR_TOKEN_CONFIG.uid,
-            amount: 100
-          }
+            amount: 100,
+          },
         ],
-      }
-    )).rejects.toThrow(NanoContractTransactionError);
+      })
+    ).rejects.toThrow(NanoContractTransactionError);
 
     // Invalid ncId for bet
-    await expect(hWallet.createAndSendNanoContractTransaction(
-      'bet',
-      address2,
-      {
+    await expect(
+      hWallet.createAndSendNanoContractTransaction('bet', address2, {
         ncId: '1234',
-        args: [
-          bufferToHex(address2Obj.decode()),
-          '1x0'
-        ],
+        args: [bufferToHex(address2Obj.decode()), '1x0'],
         actions: [
           {
             type: 'deposit',
             token: HATHOR_TOKEN_CONFIG.uid,
-            amount: 100
-          }
+            amount: 100,
+          },
         ],
-      }
-    )).rejects.toThrow(NanoContractTransactionError);
+      })
+    ).rejects.toThrow(NanoContractTransactionError);
 
     // Invalid ncId for bet again
-    await expect(hWallet.createAndSendNanoContractTransaction(
-      'bet',
-      address2,
-      {
+    await expect(
+      hWallet.createAndSendNanoContractTransaction('bet', address2, {
         ncId: fundsTx.hash,
-        args: [
-          bufferToHex(address2Obj.decode()),
-          '1x0'
-        ],
+        args: [bufferToHex(address2Obj.decode()), '1x0'],
         actions: [
           {
             type: 'deposit',
             token: HATHOR_TOKEN_CONFIG.uid,
-            amount: 100
-          }
+            amount: 100,
+          },
         ],
-      }
-    )).rejects.toThrow(NanoContractTransactionError);
+      })
+    ).rejects.toThrow(NanoContractTransactionError);
   });
 });

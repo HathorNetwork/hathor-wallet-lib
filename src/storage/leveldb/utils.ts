@@ -1,5 +1,5 @@
-import { Level } from "level";
-import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from "./errors";
+import { Level } from 'level';
+import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 
 /**
  * Check that the index version matches the expected version.
@@ -9,11 +9,17 @@ import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from "./errors";
  * @param indexVersion Database index version
  * @async
  */
-export async function checkLevelDbVersion(instanceName: string, db: Level, indexVersion: string): Promise<void> {
+export async function checkLevelDbVersion(
+  instanceName: string,
+  db: Level,
+  indexVersion: string
+): Promise<void> {
   try {
     const dbVersion = await db.get('version');
     if (indexVersion !== dbVersion) {
-      throw new Error(`Database version mismatch for ${instanceName}: database version (${dbVersion}) expected version (${indexVersion})`);
+      throw new Error(
+        `Database version mismatch for ${instanceName}: database version (${dbVersion}) expected version (${indexVersion})`
+      );
     }
   } catch (err: unknown) {
     if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {

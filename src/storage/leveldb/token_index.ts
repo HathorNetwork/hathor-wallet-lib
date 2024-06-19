@@ -19,24 +19,28 @@ export const REGISTER_PREFIX = 'registered';
 
 export default class LevelTokenIndex implements IKVTokenIndex {
   dbpath: string;
+
   /**
    * Main token database
    * Key: uid
    * Value: ITokenData (json encoded)
    */
   tokenDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, ITokenData>;
+
   /**
    * Token metadata database
    * Key: uid
    * Value: ITokenMetadata (json encoded)
    */
   metadataDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, ITokenMetadata>;
+
   /**
    * Registered tokens database
    * Key: uid
    * Value: ITokenData (json encoded)
    */
   registeredDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, ITokenData>;
+
   indexVersion: string = '0.0.1';
 
   constructor(dbpath: string) {
@@ -63,7 +67,7 @@ export default class LevelTokenIndex implements IKVTokenIndex {
    * @returns {Promise<void>}
    */
   async checkVersion(): Promise<void> {
-    const db = this.tokenDB.db;
+    const { db } = this.tokenDB;
     const instanceName = this.constructor.name;
     await checkLevelDbVersion(instanceName, db, this.indexVersion);
   }
@@ -83,10 +87,10 @@ export default class LevelTokenIndex implements IKVTokenIndex {
    * Iterate over all tokens in the database
    * @returns {AsyncGenerator<ITokenData & Partial<ITokenMetadata>>}
    */
-  async * tokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>> {
+  async *tokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>> {
     for await (const token of this.tokenDB.values()) {
       const meta = await this.getTokenMetadata(token.uid);
-      yield {...token, ...meta};
+      yield { ...token, ...meta };
     }
   }
 
@@ -97,7 +101,7 @@ export default class LevelTokenIndex implements IKVTokenIndex {
   async *registeredTokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>> {
     for await (const token of this.registeredDB.values()) {
       const meta = await this.getTokenMetadata(token.uid);
-      yield {...token, ...meta};
+      yield { ...token, ...meta };
     }
   }
 
@@ -116,7 +120,7 @@ export default class LevelTokenIndex implements IKVTokenIndex {
    * @param {string} uid
    * @returns {Promise<(ITokenData & Partial<ITokenMetadata>)|null>}
    */
-  async getToken(uid: string): Promise<(ITokenData & Partial<ITokenMetadata>)|null> {
+  async getToken(uid: string): Promise<(ITokenData & Partial<ITokenMetadata>) | null> {
     let token: ITokenData;
     try {
       token = await this.tokenDB.get(uid);
@@ -127,7 +131,7 @@ export default class LevelTokenIndex implements IKVTokenIndex {
       throw err;
     }
 
-    let meta = await this.getTokenMetadata(uid);
+    const meta = await this.getTokenMetadata(uid);
     const DEFAULT_TOKEN_META: ITokenMetadata = {
       numTransactions: 0,
       balance: {
@@ -136,10 +140,10 @@ export default class LevelTokenIndex implements IKVTokenIndex {
           mint: { unlocked: 0, locked: 0 },
           melt: { unlocked: 0, locked: 0 },
         },
-      }
+      },
     };
 
-    return {...token, ...DEFAULT_TOKEN_META, ...meta};
+    return { ...token, ...DEFAULT_TOKEN_META, ...meta };
   }
 
   /**

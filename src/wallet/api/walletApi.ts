@@ -26,8 +26,7 @@ import {
   FullNodeTxConfirmationDataResponse,
 } from '../types';
 import HathorWalletServiceWallet from '../wallet';
-import { WalletRequestError } from '../../errors';
-import { TxNotFoundError } from '../../errors';
+import { WalletRequestError, TxNotFoundError } from '../../errors';
 
 /**
  * Api calls for wallet
@@ -39,24 +38,22 @@ const walletApi = {
   async getWalletStatus(wallet: HathorWalletServiceWallet): Promise<WalletStatusResponseData> {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get('wallet/status');
-    const data = response.data;
+    const { data } = response;
     if (response.status === 200 && data.success) {
       return data;
-    } else {
-      throw new WalletRequestError('Error getting wallet status.');
     }
+    throw new WalletRequestError('Error getting wallet status.');
   },
 
   async getVersionData(wallet: HathorWalletServiceWallet): Promise<FullNodeVersionData> {
     const axios = await axiosInstance(wallet, false);
     const response = await axios.get('version');
-    const data = response.data;
+    const { data } = response;
 
     if (response.status === 200 && data.success) {
       return data.data;
-    } else {
-      throw new WalletRequestError('Error getting fullnode data.');
     }
+    throw new WalletRequestError('Error getting fullnode data.');
   },
 
   async createWallet(
@@ -66,9 +63,16 @@ const walletApi = {
     authXpubkey: string,
     authXpubkeySignature: string,
     timestamp: number,
-    firstAddress: string | null = null,
+    firstAddress: string | null = null
   ): Promise<WalletStatusResponseData> {
-    const data = {
+    const data: {
+      authXpubkeySignature: string;
+      firstAddress?: string;
+      xpubkey: string;
+      authXpubkey: string;
+      xpubkeySignature: string;
+      timestamp: number;
+    } = {
       xpubkey,
       xpubkeySignature,
       authXpubkey,
@@ -77,23 +81,23 @@ const walletApi = {
     };
 
     if (firstAddress) {
-      data['firstAddress'] = firstAddress;
+      data.firstAddress = firstAddress;
     }
     const axios = await axiosInstance(wallet, false);
     const response = await axios.post('wallet/init', data);
     if (response.status === 200 && response.data.success) {
       return response.data;
-    } else if (response.status === 400 && response.data.error === 'wallet-already-loaded') {
+    }
+    if (response.status === 400 && response.data.error === 'wallet-already-loaded') {
       // If it was already loaded, we have to check if it's ready
       return response.data;
-    } else {
-      throw new WalletRequestError('Error creating wallet.');
     }
+    throw new WalletRequestError('Error creating wallet.');
   },
 
   async getAddresses(
     wallet: HathorWalletServiceWallet,
-    index?: number,
+    index?: number
   ): Promise<AddressesResponseData> {
     const axios = await axiosInstance(wallet, true);
     const path = isNumber(index) ? `?index=${index}` : '';
@@ -109,7 +113,7 @@ const walletApi = {
 
   async checkAddressesMine(
     wallet: HathorWalletServiceWallet,
-    addresses: string[],
+    addresses: string[]
   ): Promise<CheckAddressesMineResponseData> {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.post('wallet/addresses/check_mine', { addresses });
@@ -125,34 +129,37 @@ const walletApi = {
     const response = await axios.get('wallet/addresses/new');
     if (response.status === 200 && response.data.success === true) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error getting wallet addresses to use.');
     }
+    throw new WalletRequestError('Error getting wallet addresses to use.');
   },
 
-  async getTokenDetails(wallet: HathorWalletServiceWallet, tokenId: string): Promise<TokenDetailsResponseData> {
+  async getTokenDetails(
+    wallet: HathorWalletServiceWallet,
+    tokenId: string
+  ): Promise<TokenDetailsResponseData> {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get(`wallet/tokens/${tokenId}/details`);
 
     if (response.status === 200 && response.data.success === true) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error getting token details.');
     }
+    throw new WalletRequestError('Error getting token details.');
   },
 
-  async getBalances(wallet: HathorWalletServiceWallet, token: string | null = null): Promise<BalanceResponseData> {
-    const data = { params: {} };
+  async getBalances(
+    wallet: HathorWalletServiceWallet,
+    token: string | null = null
+  ): Promise<BalanceResponseData> {
+    const data: { params: { token_id?: string } } = { params: {} };
     if (token) {
-      data['params']['token_id'] = token;
+      data.params.token_id = token;
     }
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get('wallet/balances', data);
     if (response.status === 200 && response.data.success === true) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error getting wallet balance.');
     }
+    throw new WalletRequestError('Error getting wallet balance.');
   },
 
   async getTokens(wallet: HathorWalletServiceWallet): Promise<TokensResponseData> {
@@ -160,9 +167,8 @@ const walletApi = {
     const response = await axios.get('wallet/tokens');
     if (response.status === 200 && response.data.success === true) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error getting list of tokens.');
     }
+    throw new WalletRequestError('Error getting list of tokens.');
   },
 
   async getHistory(wallet: HathorWalletServiceWallet, options = {}): Promise<HistoryResponseData> {
@@ -171,59 +177,67 @@ const walletApi = {
     const response = await axios.get('wallet/history', data);
     if (response.status === 200 && response.data.success === true) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error getting wallet history.');
     }
+    throw new WalletRequestError('Error getting wallet history.');
   },
 
-  async getTxOutputs(wallet: HathorWalletServiceWallet, options = {}): Promise<TxOutputResponseData> {
-    const data = { params: options }
+  async getTxOutputs(
+    wallet: HathorWalletServiceWallet,
+    options = {}
+  ): Promise<TxOutputResponseData> {
+    const data = { params: options };
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get('wallet/tx_outputs', data);
     if (response.status === 200 && response.data.success === true) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error requesting utxo.');
     }
+    throw new WalletRequestError('Error requesting utxo.');
   },
 
-  async createTxProposal(wallet: HathorWalletServiceWallet, txHex: string): Promise<TxProposalCreateResponseData> {
+  async createTxProposal(
+    wallet: HathorWalletServiceWallet,
+    txHex: string
+  ): Promise<TxProposalCreateResponseData> {
     const data = { txHex };
     const axios = await axiosInstance(wallet, true);
     const response = await axios.post('tx/proposal', data);
     if (response.status === 201) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error creating tx proposal.');
     }
+    throw new WalletRequestError('Error creating tx proposal.');
   },
 
-  async updateTxProposal(wallet: HathorWalletServiceWallet, id: string, txHex: string): Promise<TxProposalUpdateResponseData> {
+  async updateTxProposal(
+    wallet: HathorWalletServiceWallet,
+    id: string,
+    txHex: string
+  ): Promise<TxProposalUpdateResponseData> {
     const data = { txHex };
     const axios = await axiosInstance(wallet, true);
     const response = await axios.put(`tx/proposal/${id}`, data);
     if (response.status === 200) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error sending tx proposal.');
     }
+    throw new WalletRequestError('Error sending tx proposal.');
   },
 
-  async deleteTxProposal(wallet: HathorWalletServiceWallet, id: string): Promise<TxProposalUpdateResponseData> {
+  async deleteTxProposal(
+    wallet: HathorWalletServiceWallet,
+    id: string
+  ): Promise<TxProposalUpdateResponseData> {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.delete(`tx/proposal/${id}`);
     if (response.status === 200) {
       return response.data;
-    } else {
-      throw new WalletRequestError('Error deleting tx proposal.');
     }
+    throw new WalletRequestError('Error deleting tx proposal.');
   },
 
   async createAuthToken(
     wallet: HathorWalletServiceWallet,
     timestamp: number,
     xpub: string,
-    sign: string,
+    sign: string
   ): Promise<AuthTokenResponseData> {
     const data = {
       ts: timestamp,
@@ -242,7 +256,7 @@ const walletApi = {
 
   async getTxById(
     wallet: HathorWalletServiceWallet,
-    txId: string,
+    txId: string
   ): Promise<TxByIdTokensResponseData> {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get(`wallet/transactions/${txId}`);
@@ -265,7 +279,7 @@ const walletApi = {
 
   async getFullTxById(
     wallet: HathorWalletServiceWallet,
-    txId: string,
+    txId: string
   ): Promise<FullNodeTxResponse> {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get(`wallet/proxy/transactions/${txId}`);
@@ -282,7 +296,7 @@ const walletApi = {
 
   async getTxConfirmationData(
     wallet: HathorWalletServiceWallet,
-    txId: string,
+    txId: string
   ): Promise<FullNodeTxConfirmationDataResponse> {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get(`wallet/proxy/transactions/${txId}/confirmation_data`);
@@ -292,19 +306,24 @@ const walletApi = {
 
     walletApi._txNotFoundGuard(response.data);
 
-    throw new WalletRequestError('Error getting transaction confirmation data by its id from the proxied fullnode.', {
-      cause: response.data,
-    });
+    throw new WalletRequestError(
+      'Error getting transaction confirmation data by its id from the proxied fullnode.',
+      {
+        cause: response.data,
+      }
+    );
   },
 
   async graphvizNeighborsQuery(
     wallet: HathorWalletServiceWallet,
     txId: string,
     graphType: string,
-    maxLevel: number,
+    maxLevel: number
   ): Promise<string> {
     const axios = await axiosInstance(wallet, true);
-    const response = await axios.get(`wallet/proxy/graphviz/neighbours?txId=${txId}&graphType=${graphType}&maxLevel=${maxLevel}`);
+    const response = await axios.get(
+      `wallet/proxy/graphviz/neighbours?txId=${txId}&graphType=${graphType}&maxLevel=${maxLevel}`
+    );
     if (response.status === 200) {
       // The service might answer a status code 200 but output an error message like
       // { success: false, message: '...' }, we need to handle it.
@@ -314,17 +333,23 @@ const walletApi = {
       if (Object.hasOwnProperty.call(response.data, 'success') && !response.data.success) {
         walletApi._txNotFoundGuard(response.data);
 
-        throw new WalletRequestError(`Error getting neighbors data for ${txId} from the proxied fullnode.`, {
-          cause: response.data.message,
-        });
+        throw new WalletRequestError(
+          `Error getting neighbors data for ${txId} from the proxied fullnode.`,
+          {
+            cause: response.data.message,
+          }
+        );
       }
 
       return response.data;
     }
 
-    throw new WalletRequestError(`Error getting neighbors data for ${txId} from the proxied fullnode.`, {
-      cause: response.data,
-    });
+    throw new WalletRequestError(
+      `Error getting neighbors data for ${txId} from the proxied fullnode.`,
+      {
+        cause: response.data,
+      }
+    );
   },
 };
 

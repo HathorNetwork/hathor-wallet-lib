@@ -35,12 +35,15 @@ export type ConnectionParams = {
  * You can subscribe for the following events:
  * - state: Fired when the state of the Wallet changes.
  * - wallet-update: Fired when a new wallet message arrive from the websocket.
- **/
+ * */
 abstract class Connection extends EventEmitter {
   // network: 'testnet' or 'mainnet'
   protected network: string;
+
   protected websocket: GenericWebSocket | WalletServiceWebSocket | null;
+
   protected currentServer: string;
+
   protected state: ConnectionState;
 
   /*
@@ -49,10 +52,7 @@ abstract class Connection extends EventEmitter {
   constructor(options: ConnectionParams) {
     super();
 
-    const {
-      network,
-      servers,
-    } = {
+    const { network, servers } = {
       ...DEFAULT_PARAMS,
       ...options,
     };
@@ -74,7 +74,7 @@ abstract class Connection extends EventEmitter {
   /**
    * Called when the connection to the websocket changes.
    * It is also called if the network is down.
-   **/
+   * */
   onConnectionChange(value: boolean) {
     if (value) {
       this.setState(ConnectionState.CONNECTED);
@@ -87,7 +87,7 @@ abstract class Connection extends EventEmitter {
    * Called when a new wallet message arrives from websocket.
    *
    * @param {Object} wsData Websocket message data
-   **/
+   * */
   handleWalletMessage(wsData) {
     this.emit('wallet-update', wsData);
   }
@@ -104,12 +104,12 @@ abstract class Connection extends EventEmitter {
 
   /**
    * Connect to the server and start emitting events.
-   **/
-  abstract start(): void
+   * */
+  abstract start(): void;
 
   /**
    * Close the connections and stop emitting events.
-   **/
+   * */
   stop() {
     // TODO Double check that we are properly cleaning things up.
     // See: https://github.com/HathorNetwork/hathor-wallet-headless/pull/1#discussion_r369859701
@@ -124,7 +124,7 @@ abstract class Connection extends EventEmitter {
   /**
    * Call websocket endConnection
    * Needed for compatibility with old src/wallet code
-   **/
+   * */
   endConnection() {
     if (this.websocket) {
       this.websocket.endConnection();
@@ -134,7 +134,7 @@ abstract class Connection extends EventEmitter {
   /**
    * Call websocket setup
    * Needed for compatibility with old src/wallet code
-   **/
+   * */
   setup() {
     // This should never happen as this.websocket is initialized on the constructor
     if (!this.websocket) {
@@ -158,9 +158,7 @@ abstract class Connection extends EventEmitter {
     return this.network;
   }
 
-  startControlHandlers(options?: any) {
-    return;
-  }
+  startControlHandlers(options?: any) {}
 
   removeMetricsHandlers() {
     if (this.websocket) {

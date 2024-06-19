@@ -5,8 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { AddressScanPolicy, SCANNING_POLICY } from "./types";
-
+import { AddressScanPolicy, SCANNING_POLICY } from './types';
 
 /**
  * Constants defined for the Hathor Wallet
@@ -112,36 +111,36 @@ export const MAX_OUTPUT_VALUE = 2 ** 43;
 /**
  * Entropy for the new HD wallet words
  */
-export const HD_WALLET_ENTROPY: number = 256
+export const HD_WALLET_ENTROPY: number = 256;
 
 /**
  * Mask to get token index from token data
  */
-export const TOKEN_INDEX_MASK: number = 0b01111111
+export const TOKEN_INDEX_MASK: number = 0b01111111;
 
 /**
  * Mask to check if it's authority output (first bit indicates it)
  * For further information: https://gitlab.com/HathorNetwork/rfcs/blob/master/text/0004-tokens.md
  */
-export const TOKEN_AUTHORITY_MASK: number = 0b10000000
+export const TOKEN_AUTHORITY_MASK: number = 0b10000000;
 
 /**
  * Mask to check if it's mint UTXO (last bit indicates it)
  * For further information: https://gitlab.com/HathorNetwork/rfcs/blob/master/text/0004-tokens.md
  */
-export const TOKEN_MINT_MASK: number = 0b00000001
+export const TOKEN_MINT_MASK: number = 0b00000001;
 
 /**
  * Mask to check if it's melt UTXO (second to last bit indicates it)
  * For further information: https://gitlab.com/HathorNetwork/rfcs/blob/master/text/0004-tokens.md
  */
-export const TOKEN_MELT_MASK: number = 0b00000010
+export const TOKEN_MELT_MASK: number = 0b00000010;
 
 /**
  * Token data for an authority output of the first token in a transaction.
  * As most transactions with authority outputs have only one token, it may be directly used, as a shortcut.
  */
-export const AUTHORITY_TOKEN_DATA = TOKEN_AUTHORITY_MASK | 1
+export const AUTHORITY_TOKEN_DATA = TOKEN_AUTHORITY_MASK | 1;
 
 /**
  * Hathor token config
@@ -149,7 +148,7 @@ export const AUTHORITY_TOKEN_DATA = TOKEN_AUTHORITY_MASK | 1
  * @property {'HTR'} symbol
  * @property {'00'} uid
  */
-export const HATHOR_TOKEN_CONFIG = {'name': 'Hathor', 'symbol': 'HTR', 'uid': '00'};
+export const HATHOR_TOKEN_CONFIG = { name: 'Hathor', symbol: 'HTR', uid: '00' };
 
 /**
  * Hathor token default index
@@ -201,7 +200,7 @@ export const MIN_POLLING_INTERVAL: number = 0.5;
 export const TX_WEIGHT_CONSTANTS = {
   txMinWeight: 14,
   txWeightCoefficient: 1.6,
-  txMinWeightK: 100
+  txMinWeightK: 100,
 };
 
 /**
@@ -217,7 +216,7 @@ export const MAX_OUTPUTS: number = 255;
 /**
  * Percentage of Hathor to deposit when creating a token
  */
-export const TOKEN_DEPOSIT_PERCENTAGE: number = 0.01
+export const TOKEN_DEPOSIT_PERCENTAGE: number = 0.01;
 
 /**
  * Timeout in milliseconds to call the method to set all selected outputs of a tx as 'selected': false

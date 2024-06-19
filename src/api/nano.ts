@@ -5,14 +5,14 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import axios, { AxiosError } from 'axios';
 import { createRequestInstance } from './axiosInstance';
 import { NanoRequest404Error, NanoRequestError } from '../errors';
 import {
-    NanoContractBlueprintInformationAPIResponse,
-    NanoContractHistoryAPIResponse,
-    NanoContractStateAPIResponse,
+  NanoContractBlueprintInformationAPIResponse,
+  NanoContractHistoryAPIResponse,
+  NanoContractStateAPIResponse,
 } from '../nano_contracts/types';
-import axios, { AxiosError } from 'axios';
 
 /**
  * Api calls for nano contracts
@@ -32,11 +32,16 @@ const ncApi = {
    * @memberof ApiNanoContracts
    * @inner
    */
-  async getNanoContractState(id: string, fields: string[], balances: string[], calls: string[]): Promise<NanoContractStateAPIResponse> {
+  async getNanoContractState(
+    id: string,
+    fields: string[],
+    balances: string[],
+    calls: string[]
+  ): Promise<NanoContractStateAPIResponse> {
     const data = { id, fields, balances, calls };
     const axiosInstance = await createRequestInstance();
     try {
-      const response = await axiosInstance.get(`nano_contract/state`, {params: data});
+      const response = await axiosInstance.get(`nano_contract/state`, { params: data });
       const responseData = response.data;
       if (response.status === 200 && responseData.success) {
         return responseData;
@@ -66,11 +71,16 @@ const ncApi = {
    * @memberof ApiNanoContracts
    * @inner
    */
-  async getNanoContractHistory(id: string, count: number | null = null, after: string | null = null, before: string | null = null): Promise<NanoContractHistoryAPIResponse> {
+  async getNanoContractHistory(
+    id: string,
+    count: number | null = null,
+    after: string | null = null,
+    before: string | null = null
+  ): Promise<NanoContractHistoryAPIResponse> {
     const data = { id, count, after, before };
     const axiosInstance = await createRequestInstance();
     try {
-      const response = await axiosInstance.get(`nano_contract/history`, {params: data});
+      const response = await axiosInstance.get(`nano_contract/history`, { params: data });
       const responseData = response.data;
       if (response.status === 200 && responseData.success) {
         return responseData;

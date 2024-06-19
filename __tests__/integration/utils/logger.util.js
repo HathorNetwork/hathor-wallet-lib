@@ -52,7 +52,8 @@ export class LoggerUtil {
      * Timestamp in a format like "20220224T084737" for easy human reading on a filename
      * @type {string}
      */
-    const humanReadableTimestamp = date.toISOString()
+    const humanReadableTimestamp = date
+      .toISOString()
       .replace(/-/g, '') // Remove date separator
       .replace(/:/g, '') // Remove hour separator
       .split('.')[0]; // Get only the seconds integer
@@ -76,22 +77,13 @@ export class LoggerUtil {
    */
   init(options = { filePrettyPrint: false }) {
     const consoleOptions = {
-      format: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.colorize(),
-      ),
+      format: winston.format.combine(winston.format.timestamp(), winston.format.colorize()),
       level: testConfig.consoleLevel || 'silly',
     };
     const fileOptions = {
       format: options.filePrettyPrint
-        ? winston.format.combine(
-          winston.format.timestamp(),
-          winston.format.prettyPrint()
-        )
-        : winston.format.combine(
-          winston.format.timestamp(),
-          winston.format.json(),
-        ),
+        ? winston.format.combine(winston.format.timestamp(), winston.format.prettyPrint())
+        : winston.format.combine(winston.format.timestamp(), winston.format.json()),
       filename: `${testConfig.logOutputFolder}${this.#instanceFilename}`,
       level: testConfig.consoleLevel || 'silly',
     };
@@ -100,8 +92,8 @@ export class LoggerUtil {
       defaultMeta: { service: 'txLogger', suite: this.#instanceFilename },
       transports: [
         new winston.transports.Console(consoleOptions),
-        new winston.transports.File(fileOptions)
-      ]
+        new winston.transports.File(fileOptions),
+      ],
     });
 
     this.#logger.info('Log initialized');

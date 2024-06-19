@@ -4,7 +4,7 @@
  */
 
 function getStringifiedLogObject(message, metadata) {
-  const timestamp = (new Date()).toISOString();
+  const timestamp = new Date().toISOString();
   const logObj = { timestamp, ...metadata, message };
   return JSON.stringify(logObj);
 }
@@ -19,8 +19,12 @@ export default class PlaceholderLoggerUtil {
   };
 
   static transports = {
-    Console: class FakeConsole { constructor() {} },
-    File: class FakeFile { constructor() {} },
+    Console: class FakeConsole {
+      constructor() {}
+    },
+    File: class FakeFile {
+      constructor() {}
+    },
   };
 
   static createLogger() {
@@ -36,7 +40,7 @@ export default class PlaceholderLoggerUtil {
       },
       error(message, metadata) {
         console.error(getStringifiedLogObject(message, metadata));
-      }
+      },
     };
   }
 }

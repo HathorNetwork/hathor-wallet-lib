@@ -5,10 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { OP_CHECKSIG } from '../opcodes';
 import { util } from 'bitcore-lib';
-import helpers from '../utils/helpers';
 import buffer from 'buffer';
+import { OP_CHECKSIG } from '../opcodes';
+import helpers from '../utils/helpers';
 
 class ScriptData {
   // String of data to store on the script
@@ -29,7 +29,7 @@ class ScriptData {
    * @memberof ScriptData
    * @inner
    */
-  getType(): String {
+  getType(): string {
     return 'data';
   }
 

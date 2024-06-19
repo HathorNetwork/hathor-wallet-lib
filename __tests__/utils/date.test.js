@@ -13,7 +13,7 @@ test('Parse timestamp', () => {
   const formatted = dateFormatter.parseTimestamp(timestamp, 'UTC');
   expect(formatted).toBe('5/8/2019 10:43:49 AM');
 
-  const d = new Date(timestamp*1000);
+  const d = new Date(timestamp * 1000);
   const calculatedTimestamp = dateFormatter.dateToTimestamp(d);
   expect(calculatedTimestamp).toBe(timestamp);
 });
@@ -21,7 +21,7 @@ test('Parse timestamp', () => {
 test('Date to timestamp', () => {
   // 2019-05-08 10:43:49 UTC
   const timestamp = 1557312229;
-  const d = new Date(timestamp*1000);
+  const d = new Date(timestamp * 1000);
   expect(dateFormatter.dateToTimestamp(d)).toEqual(timestamp);
 });
 
