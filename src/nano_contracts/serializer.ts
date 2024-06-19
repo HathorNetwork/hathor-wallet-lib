@@ -10,6 +10,7 @@ import { hexToBuffer, intToBytes, floatToBytes, signedIntToBytes } from '../util
 // Number of bytes used to serialize the size of the value
 const SERIALIZATION_SIZE_LEN = 2;
 
+/* eslint-disable class-methods-use-this -- XXX: Methods that do not use `this` should be made static */
 class Serializer {
   /**
    * Push an integer to buffer as the len of serialized element
@@ -22,7 +23,6 @@ class Serializer {
    * @memberof Serializer
    * @inner
    */
-  // eslint-disable-next-line class-methods-use-this -- XXX: This method should be made static
   pushLenValue(buf: Buffer[], len: number) {
     buf.push(intToBytes(len, SERIALIZATION_SIZE_LEN));
   }
@@ -73,7 +73,6 @@ class Serializer {
    * @memberof Serializer
    * @inner
    */
-  // eslint-disable-next-line class-methods-use-this -- XXX: This method should be made static
   fromString(value: string): Buffer {
     return Buffer.from(value, 'utf8');
   }
@@ -86,7 +85,6 @@ class Serializer {
    * @memberof Serializer
    * @inner
    */
-  // eslint-disable-next-line class-methods-use-this -- XXX: This method should be made static
   fromBytes(value: Buffer): Buffer {
     return Buffer.from(value);
   }
@@ -99,7 +97,6 @@ class Serializer {
    * @memberof Serializer
    * @inner
    */
-  // eslint-disable-next-line class-methods-use-this -- XXX: This method should be made static
   fromInt(value: number): Buffer {
     return signedIntToBytes(value, 4);
   }
@@ -112,7 +109,6 @@ class Serializer {
    * @memberof Serializer
    * @inner
    */
-  // eslint-disable-next-line class-methods-use-this -- XXX: This method should be made static
   fromFloat(value: number): Buffer {
     return floatToBytes(value, 8);
   }
@@ -125,7 +121,6 @@ class Serializer {
    * @memberof Serializer
    * @inner
    */
-  // eslint-disable-next-line class-methods-use-this -- XXX: This method should be made static
   fromBool(value: boolean): Buffer {
     if (value) {
       return Buffer.from([1]);
@@ -227,5 +222,6 @@ class Serializer {
     return Buffer.concat(ret);
   }
 }
+/* eslint-disable class-methods-use-this */
 
 export default Serializer;

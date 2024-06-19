@@ -136,14 +136,13 @@ class CreateTokenTransaction extends Transaction {
     // Copies buffer locally, not to change the original parameter
     let buf = Buffer.from(_buf);
 
-    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
+    /* eslint-disable prefer-const -- To split these declarations into const + let would be confusing */
     [tokenInfoVersion, buf] = unpackToInt(1, false, buf);
 
     if (tokenInfoVersion !== TOKEN_INFO_VERSION) {
       throw new CreateTokenTxInvalid(`Unknown token info version: ${tokenInfoVersion}`);
     }
 
-    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [lenName, buf] = unpackToInt(1, false, buf);
 
     if (lenName > MAX_TOKEN_NAME_SIZE) {
@@ -152,11 +151,9 @@ class CreateTokenTransaction extends Transaction {
       );
     }
 
-    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [bufName, buf] = unpackLen(lenName, buf);
     this.name = bufName.toString('utf-8');
 
-    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [lenSymbol, buf] = unpackToInt(1, false, buf);
 
     if (lenSymbol > MAX_TOKEN_SYMBOL_SIZE) {
@@ -165,9 +162,9 @@ class CreateTokenTransaction extends Transaction {
       );
     }
 
-    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [bufSymbol, buf] = unpackLen(lenSymbol, buf);
     this.symbol = bufSymbol.toString('utf-8');
+    /* eslint-enable prefer-const */
 
     return buf;
   }
