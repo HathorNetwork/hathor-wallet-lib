@@ -20,6 +20,7 @@ import {
   BLOCK_VERSION,
   MERGED_MINED_BLOCK_VERSION,
   NANO_CONTRACTS_VERSION,
+  POA_BLOCK_VERSION,
 } from '../constants';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
@@ -54,7 +55,7 @@ const transaction = {
    * @returns {boolean}
    */
   isBlock(tx: Pick<IHistoryTx, 'version'>): boolean {
-    return tx.version === BLOCK_VERSION || tx.version === MERGED_MINED_BLOCK_VERSION;
+    return tx.version === BLOCK_VERSION || tx.version === MERGED_MINED_BLOCK_VERSION || tx.version === POA_BLOCK_VERSION;
   },
 
   /**
@@ -650,6 +651,9 @@ const transaction = {
       }
       if (tx.version === MERGED_MINED_BLOCK_VERSION) {
         return 'Merged Mining Block';
+      }
+      if (tx.version === POA_BLOCK_VERSION) {
+        return 'Proof-of-Authority Block';
       }
     } else {
       if (tx.version === DEFAULT_TX_VERSION) {

@@ -79,6 +79,11 @@ export const MERGED_MINED_BLOCK_VERSION = 3;
 export const NANO_CONTRACTS_VERSION = 4;
 
 /**
+ * Proof-of-Authority block version field
+ */
+export const POA_BLOCK_VERSION = 5;
+
+/**
  * Nano Contracts information version
  * If we decide to change the serialization of nano information
  * data, then we can change this version, so we can
