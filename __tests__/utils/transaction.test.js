@@ -14,6 +14,7 @@ import {
   DEFAULT_TX_VERSION,
   MERGED_MINED_BLOCK_VERSION,
   NANO_CONTRACTS_VERSION,
+  POA_BLOCK_VERSION,
   TOKEN_AUTHORITY_MASK,
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
@@ -445,6 +446,7 @@ test('isBlock', () => {
   expect(transaction.isBlock({ version: DEFAULT_TX_VERSION })).toBe(false);
   expect(transaction.isBlock({ version: CREATE_TOKEN_TX_VERSION })).toBe(false);
   expect(transaction.isBlock({ version: MERGED_MINED_BLOCK_VERSION })).toBe(true);
+  expect(transaction.isBlock({ version: POA_BLOCK_VERSION })).toBe(true);
 });
 
 test('getTxType', () => {
@@ -457,5 +459,6 @@ test('getTxType', () => {
     'Merged Mining Block'
   );
   expect(transaction.getTxType({ version: NANO_CONTRACTS_VERSION })).toBe('Nano Contract');
+  expect(transaction.getTxType({ version: POA_BLOCK_VERSION })).toBe('Proof-of-Authority Block');
   expect(transaction.getTxType({ version: 999 })).toBe('Unknown');
 });
