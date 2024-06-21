@@ -7,7 +7,7 @@ import {
   waitForTxReceived,
 } from './helpers/wallet.helper';
 import { loggers } from './utils/logger.util';
-import { HATHOR_TOKEN_CONFIG } from '../../src/constants';
+import { NATIVE_TOKEN_UID } from '../../src/constants';
 import SendTransaction from '../../src/new/sendTransaction';
 import PartialTxProposal from '../../src/wallet/partialTxProposal';
 import { delay } from './utils/core.util';
@@ -36,11 +36,11 @@ describe('partial tx proposal', () => {
     const { hash: token2Uid } = await createTokenHelper(hWallet2, 'Token2', 'TK2', 1000);
 
     // Get the balance states before the exchange
-    const w1HTRBefore = await hWallet1.getBalance(HATHOR_TOKEN_CONFIG.uid);
+    const w1HTRBefore = await hWallet1.getBalance(NATIVE_TOKEN_UID);
     const w1Tk1Before = await hWallet1.getBalance(token1Uid);
     const w1Tk2Before = await hWallet1.getBalance(token2Uid);
 
-    const w2HTRBefore = await hWallet2.getBalance(HATHOR_TOKEN_CONFIG.uid);
+    const w2HTRBefore = await hWallet2.getBalance(NATIVE_TOKEN_UID);
     const w2Tk2Before = await hWallet2.getBalance(token2Uid);
     const w2Tk1Before = await hWallet2.getBalance(token1Uid);
     loggers.test.log('Balances before', {
@@ -64,7 +64,7 @@ describe('partial tx proposal', () => {
      */
     // Wallet1 side
     const proposal1 = new PartialTxProposal(hWallet1.storage);
-    await proposal1.addSend(HATHOR_TOKEN_CONFIG.uid, 100);
+    await proposal1.addSend(NATIVE_TOKEN_UID, 100);
     await proposal1.addSend(token1Uid, 100);
     await proposal1.addReceive(token2Uid, 1000);
     expect(proposal1.partialTx.isComplete()).toBeFalsy();
@@ -72,7 +72,7 @@ describe('partial tx proposal', () => {
     // Wallet2 side + sign
     const proposal2 = PartialTxProposal.fromPartialTx(serialized1, hWallet2.storage);
     await proposal2.addSend(token2Uid, 1000);
-    await proposal2.addReceive(HATHOR_TOKEN_CONFIG.uid, 100);
+    await proposal2.addReceive(NATIVE_TOKEN_UID, 100);
     await proposal2.addReceive(token1Uid, 100);
     expect(proposal2.partialTx.isComplete()).toBeTruthy();
     await proposal2.signData(DEFAULT_PIN_CODE, true);
@@ -96,11 +96,11 @@ describe('partial tx proposal', () => {
     await waitForTxReceived(hWallet2, tx.hash);
 
     // Get the balance states before the exchange
-    const w1HTRAfter = await hWallet1.getBalance(HATHOR_TOKEN_CONFIG.uid);
+    const w1HTRAfter = await hWallet1.getBalance(NATIVE_TOKEN_UID);
     const w1Tk1After = await hWallet1.getBalance(token1Uid);
     const w1Tk2After = await hWallet1.getBalance(token2Uid);
 
-    const w2HTRAfter = await hWallet2.getBalance(HATHOR_TOKEN_CONFIG.uid);
+    const w2HTRAfter = await hWallet2.getBalance(NATIVE_TOKEN_UID);
     const w2Tk2After = await hWallet2.getBalance(token2Uid);
     const w2Tk1After = await hWallet2.getBalance(token1Uid);
 

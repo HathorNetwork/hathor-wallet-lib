@@ -17,7 +17,7 @@ import {
 } from './helpers/wallet.helper';
 import HathorWallet from '../../src/new/wallet';
 import {
-  HATHOR_TOKEN_CONFIG,
+  NATIVE_TOKEN_UID,
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
   P2PKH_ACCT_PATH,
@@ -58,7 +58,7 @@ describe('getWalletInputInfo', () => {
         {
           address: await hWallet.getAddressAtIndex(2),
           value: 5,
-          token: HATHOR_TOKEN_CONFIG.uid,
+          token: NATIVE_TOKEN_UID,
         },
       ],
     });
@@ -214,7 +214,7 @@ describe('getTxById', () => {
     expect(result.txTokens).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          tokenId: HATHOR_TOKEN_CONFIG.uid,
+          tokenId: NATIVE_TOKEN_UID,
           balance: expect.any(Number),
         }),
         expect.objectContaining({
@@ -583,9 +583,9 @@ describe('start', () => {
     }
 
     // Validating balance and utxo methods
-    await expect(hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid)).resolves.toStrictEqual([
+    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toStrictEqual([
       expect.objectContaining({
-        token: expect.objectContaining({ id: HATHOR_TOKEN_CONFIG.uid }),
+        token: expect.objectContaining({ id: NATIVE_TOKEN_UID }),
         balance: { unlocked: 0, locked: 0 },
         transactions: 0,
       }),
@@ -595,9 +595,9 @@ describe('start', () => {
     // Generating a transaction and validating it shows correctly
     await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(1), 1);
 
-    await expect(hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid)).resolves.toMatchObject([
+    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toMatchObject([
       expect.objectContaining({
-        token: expect.objectContaining({ id: HATHOR_TOKEN_CONFIG.uid }),
+        token: expect.objectContaining({ id: NATIVE_TOKEN_UID }),
         balance: { unlocked: 1, locked: 0 },
         transactions: expect.any(Number),
       }),
@@ -858,10 +858,10 @@ describe('getBalance', () => {
     await expect(hWallet.getBalance()).rejects.toThrow();
 
     // Validating the return array has one entry on an empty wallet
-    const balance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
+    const balance = await hWallet.getBalance(NATIVE_TOKEN_UID);
     expect(balance).toHaveLength(1);
     expect(balance[0]).toMatchObject({
-      token: { id: HATHOR_TOKEN_CONFIG.uid },
+      token: { id: NATIVE_TOKEN_UID },
       balance: { unlocked: 0, locked: 0 },
       transactions: 0,
     });
@@ -875,7 +875,7 @@ describe('getBalance', () => {
     );
 
     // Validating the transaction effects
-    const balance1 = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
+    const balance1 = await hWallet.getBalance(NATIVE_TOKEN_UID);
     expect(balance1[0]).toMatchObject({
       balance: { unlocked: injectedValue, locked: 0 },
       transactions: expect.any(Number),
@@ -885,7 +885,7 @@ describe('getBalance', () => {
     // Transferring tokens inside the wallet should not change the balance
     const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(1), 2);
     await waitForTxReceived(hWallet, tx1.hash);
-    const balance2 = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
+    const balance2 = await hWallet.getBalance(NATIVE_TOKEN_UID);
     expect(balance2[0].balance).toEqual(balance1[0].balance);
   });
 
@@ -986,7 +986,7 @@ describe('getFullHistory', () => {
         tx_id: rawMoveTx.inputs[inputIndex].hash,
 
         // Decoded attributes are correct
-        token: HATHOR_TOKEN_CONFIG.uid,
+        token: NATIVE_TOKEN_UID,
         token_data: TOKEN_DATA.HTR,
         script: expect.any(String),
         value: 10,
@@ -1005,7 +1005,7 @@ describe('getFullHistory', () => {
         token_data: rawMoveTx.outputs[outputIndex].tokenData,
 
         // Decoded attributes are correct
-        token: HATHOR_TOKEN_CONFIG.uid,
+        token: NATIVE_TOKEN_UID,
         script: expect.any(String),
         decoded: {
           type: 'P2PKH',
@@ -1041,7 +1041,7 @@ describe('getFullHistory', () => {
       token_symbol: tokenSymbol,
       inputs: [
         {
-          token: HATHOR_TOKEN_CONFIG.uid,
+          token: NATIVE_TOKEN_UID,
           token_data: TOKEN_DATA.HTR,
           value: 10,
         },
@@ -1052,7 +1052,7 @@ describe('getFullHistory', () => {
     expect(createTx.outputs).toHaveLength(4);
     const changeOutput = createTx.outputs.find(o => o.value === 9);
     expect(changeOutput).toMatchObject({
-      token: HATHOR_TOKEN_CONFIG.uid,
+      token: NATIVE_TOKEN_UID,
       token_data: TOKEN_DATA.HTR,
     });
 
@@ -1098,7 +1098,7 @@ describe('getTxBalance', () => {
     const tx1 = await hWallet.getTx(tx1Hash);
     let txBalance = await hWallet.getTxBalance(tx1);
     expect(txBalance).toEqual({
-      [HATHOR_TOKEN_CONFIG.uid]: 10,
+      [NATIVE_TOKEN_UID]: 10,
     });
 
     // Validating tx balance for a transaction with two tokens (htr+custom)
@@ -1107,14 +1107,14 @@ describe('getTxBalance', () => {
     txBalance = await hWallet.getTxBalance(tokenCreationTx);
     expect(txBalance).toEqual({
       [tokenUid]: 100,
-      [HATHOR_TOKEN_CONFIG.uid]: -1,
+      [NATIVE_TOKEN_UID]: -1,
     });
 
     // Validating that the option to include authority tokens does not change the balance
     txBalance = await hWallet.getTxBalance(tokenCreationTx, { includeAuthorities: true });
     expect(txBalance).toEqual({
       [tokenUid]: 100,
-      [HATHOR_TOKEN_CONFIG.uid]: -1,
+      [NATIVE_TOKEN_UID]: -1,
     });
 
     // Validating delegate token transaction behavior
@@ -1140,7 +1140,7 @@ describe('getTxBalance', () => {
       {
         address: await hWallet.getAddressAtIndex(0),
         value: 5,
-        token: HATHOR_TOKEN_CONFIG.uid,
+        token: NATIVE_TOKEN_UID,
       },
       {
         address: await hWallet.getAddressAtIndex(1),
@@ -1153,7 +1153,7 @@ describe('getTxBalance', () => {
     const sameWalletTx = await hWallet.getTx(sameWalletTxHash);
     txBalance = await hWallet.getTxBalance(sameWalletTx);
     expect(Object.keys(txBalance)).toHaveLength(2);
-    expect(txBalance[HATHOR_TOKEN_CONFIG.uid]).toEqual(0);
+    expect(txBalance[NATIVE_TOKEN_UID]).toEqual(0);
     expect(txBalance).toHaveProperty(tokenUid, 0);
   });
 });
@@ -1329,7 +1329,7 @@ describe('sendTransaction', () => {
     });
 
     // Validating balance stays the same for internal transactions
-    let htrBalance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
+    let htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
     expect(htrBalance[0].balance.unlocked).toEqual(10);
 
     // Validating the correct addresses received the tokens
@@ -1355,7 +1355,7 @@ describe('sendTransaction', () => {
     await waitForTxReceived(hWallet, tx2Hash);
 
     // Balance was reduced
-    htrBalance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
+    htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
     expect(htrBalance[0].balance.unlocked).toEqual(2);
 
     // Change was moved to correct address
@@ -1465,7 +1465,7 @@ describe('sendTransaction', () => {
         {
           address: await mhWallet1.getAddressAtIndex(1),
           value: 10,
-          token: HATHOR_TOKEN_CONFIG.uid,
+          token: NATIVE_TOKEN_UID,
         },
       ],
     });
@@ -1528,7 +1528,7 @@ describe('sendManyOutputsTransaction', () => {
       {
         address: await hWallet.getAddressAtIndex(2),
         value: 100,
-        token: HATHOR_TOKEN_CONFIG.uid,
+        token: NATIVE_TOKEN_UID,
       },
     ]);
     expect(rawSimpleTx).toHaveProperty('hash');
@@ -1543,12 +1543,12 @@ describe('sendManyOutputsTransaction', () => {
       {
         address: await hWallet.getAddressAtIndex(5),
         value: 60,
-        token: HATHOR_TOKEN_CONFIG.uid,
+        token: NATIVE_TOKEN_UID,
       },
       {
         address: await hWallet.getAddressAtIndex(6),
         value: 40,
-        token: HATHOR_TOKEN_CONFIG.uid,
+        token: NATIVE_TOKEN_UID,
       },
     ]);
     await waitForTxReceived(hWallet, rawDoubleOutputTx.hash);
@@ -1564,19 +1564,19 @@ describe('sendManyOutputsTransaction', () => {
         {
           address: await hWallet.getAddressAtIndex(1),
           value: 5,
-          token: HATHOR_TOKEN_CONFIG.uid,
+          token: NATIVE_TOKEN_UID,
         },
         {
           address: await hWallet.getAddressAtIndex(2),
           value: 35,
-          token: HATHOR_TOKEN_CONFIG.uid,
+          token: NATIVE_TOKEN_UID,
         },
       ],
       {
         inputs: [
           {
             txId: decodedDoubleOutput.tx_id,
-            token: HATHOR_TOKEN_CONFIG.uid,
+            token: NATIVE_TOKEN_UID,
             index: largerOutputIndex,
           },
         ],
@@ -1607,7 +1607,7 @@ describe('sendManyOutputsTransaction', () => {
         address: await hWallet.getAddressAtIndex(1),
       },
       {
-        token: HATHOR_TOKEN_CONFIG.uid,
+        token: NATIVE_TOKEN_UID,
         value: 5,
         address: await hWallet.getAddressAtIndex(2),
       },
@@ -1623,13 +1623,13 @@ describe('sendManyOutputsTransaction', () => {
     expect(sendTx.outputs).toContainEqual(
       expect.objectContaining({
         value: 3,
-        token: HATHOR_TOKEN_CONFIG.uid,
+        token: NATIVE_TOKEN_UID,
       })
     );
     expect(sendTx.outputs).toContainEqual(
       expect.objectContaining({
         value: 5,
-        token: HATHOR_TOKEN_CONFIG.uid,
+        token: NATIVE_TOKEN_UID,
       })
     );
     expect(sendTx.outputs).toContainEqual(
@@ -1649,7 +1649,7 @@ describe('sendManyOutputsTransaction', () => {
     expect(sendTx.inputs).toContainEqual(
       expect.objectContaining({
         value: 8,
-        token: HATHOR_TOKEN_CONFIG.uid,
+        token: NATIVE_TOKEN_UID,
       })
     );
     expect(sendTx.inputs).toContainEqual(
@@ -1675,13 +1675,13 @@ describe('sendManyOutputsTransaction', () => {
       {
         address: await hWallet.getAddressAtIndex(1),
         value: 7,
-        token: HATHOR_TOKEN_CONFIG.uid,
+        token: NATIVE_TOKEN_UID,
         timelock: timelock1Timestamp,
       },
       {
         address: await hWallet.getAddressAtIndex(1),
         value: 3,
-        token: HATHOR_TOKEN_CONFIG.uid,
+        token: NATIVE_TOKEN_UID,
         timelock: timelock2Timestamp,
       },
     ]);
@@ -1693,7 +1693,7 @@ describe('sendManyOutputsTransaction', () => {
     expect(timelockTx.outputs.find(o => o.decoded.timelock === timelock2Timestamp)).toBeDefined();
 
     // Validating getBalance ( moment 0 )
-    let htrBalance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
+    let htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
     expect(htrBalance[0].balance).toStrictEqual({ locked: 10, unlocked: 0 });
 
     // Validating interfaces with only a partial lock of the resources
@@ -1708,7 +1708,7 @@ describe('sendManyOutputsTransaction', () => {
     await hWallet.storage.processHistory();
 
     // Validating getBalance ( moment 1 )
-    htrBalance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
+    htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
     expect(htrBalance[0].balance).toEqual({ locked: 3, unlocked: 7 });
 
     // Confirm that the balance is unavailable
@@ -1726,7 +1726,7 @@ describe('sendManyOutputsTransaction', () => {
     await hWallet.storage.processHistory();
 
     // Validating getBalance ( moment 2 )
-    htrBalance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
+    htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
     expect(htrBalance[0].balance).toStrictEqual({ locked: 0, unlocked: 10 });
 
     // Confirm that now the balance is available
@@ -2066,7 +2066,7 @@ describe('mintTokens', () => {
      * @returns {Promise<number>}
      */
     async function getHtrBalance(hWallet) {
-      const [htrBalance] = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
+      const [htrBalance] = await hWallet.getBalance(NATIVE_TOKEN_UID);
       return htrBalance.balance.unlocked;
     }
 
@@ -2245,7 +2245,7 @@ describe('meltTokens', () => {
      * @returns {Promise<number>}
      */
     async function getHtrBalance(hWallet) {
-      const [htrBalance] = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
+      const [htrBalance] = await hWallet.getBalance(NATIVE_TOKEN_UID);
       return htrBalance.balance.unlocked;
     }
 
@@ -2692,7 +2692,7 @@ describe('createNFT', () => {
     await waitForTxReceived(hWallet, nftTx.hash);
 
     // Validating HTR fee payment
-    const htrBalance = await hWallet.getBalance(HATHOR_TOKEN_CONFIG.uid);
+    const htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
     expect(htrBalance[0].balance.unlocked).toEqual(8); // 1 deposit, 1 fee
     let nftBalance = await hWallet.getBalance(nftTx.hash);
     expect(nftBalance[0].balance.unlocked).toEqual(1);
@@ -2874,13 +2874,13 @@ describe('getToken methods', () => {
     // Validating `getTokens` for no custom tokens
     let getTokensResponse = await hWallet.getTokens();
     expect(getTokensResponse).toHaveLength(1);
-    expect(getTokensResponse[0]).toEqual(HATHOR_TOKEN_CONFIG.uid);
+    expect(getTokensResponse[0]).toEqual(NATIVE_TOKEN_UID);
 
     const { hash: tokenUid } = await createTokenHelper(hWallet, 'Details Token', 'DTOK', 100);
 
     // Validating `getTokens` response for having custom tokens
     getTokensResponse = await hWallet.getTokens();
-    expect(getTokensResponse).toStrictEqual([HATHOR_TOKEN_CONFIG.uid, tokenUid]);
+    expect(getTokensResponse).toStrictEqual([NATIVE_TOKEN_UID, tokenUid]);
 
     // Validate `getTokenDetails` response for a valid token
     let details = await hWallet.getTokenDetails(tokenUid);
@@ -2925,7 +2925,7 @@ describe('getToken methods', () => {
 
     // Validating `getTokens` response has not changed
     getTokensResponse = await hWallet.getTokens();
-    expect(getTokensResponse).toStrictEqual([HATHOR_TOKEN_CONFIG.uid, tokenUid]);
+    expect(getTokensResponse).toStrictEqual([NATIVE_TOKEN_UID, tokenUid]);
   });
 });
 
@@ -2949,7 +2949,7 @@ describe('signTx', () => {
     let sendTransaction = new SendTransaction({
       storage: hWallet.storage,
       outputs: [
-        { address: await hWallet.getAddressAtIndex(5), value: 5, token: HATHOR_TOKEN_CONFIG.uid },
+        { address: await hWallet.getAddressAtIndex(5), value: 5, token: NATIVE_TOKEN_UID },
         { address: await hWallet.getAddressAtIndex(6), value: 100, token: tokenUid },
       ],
     });

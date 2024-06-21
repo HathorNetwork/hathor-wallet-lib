@@ -6,7 +6,7 @@
  */
 
 import tokens from '../../src/utils/tokens';
-import { HATHOR_TOKEN_CONFIG } from '../../src/constants';
+import { NATIVE_TOKEN_UID } from '../../src/constants';
 import walletApi from '../../src/api/wallet';
 import { MemoryStore, Storage } from '../../src/storage';
 import { TokenValidationError } from '../../src/errors';
@@ -139,12 +139,12 @@ test('Token index', () => {
     { uid: 'a', name: 'b', symbol: 'c' },
     { uid: 'd', name: 'e', symbol: 'f' },
   ];
-  expect(tokens.getTokenIndex(configs, HATHOR_TOKEN_CONFIG.uid)).toBe(0);
+  expect(tokens.getTokenIndex(configs, NATIVE_TOKEN_UID)).toBe(0);
   expect(tokens.getTokenIndex(configs, 'a')).toBe(1);
   expect(tokens.getTokenIndex(configs, 'd')).toBe(2);
 
   expect(tokens.isHathorToken('a')).toBe(false);
-  expect(tokens.isHathorToken(HATHOR_TOKEN_CONFIG.uid)).toBe(true);
+  expect(tokens.isHathorToken(NATIVE_TOKEN_UID)).toBe(true);
 });
 
 test('Token deposit', () => {

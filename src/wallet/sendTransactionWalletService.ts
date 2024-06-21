@@ -16,7 +16,7 @@ import Transaction from '../models/transaction';
 import Output from '../models/output';
 import Input from '../models/input';
 import Address from '../models/address';
-import { HATHOR_TOKEN_CONFIG } from '../constants';
+import { NATIVE_TOKEN_UID } from '../constants';
 import { SendTxError, UtxoError, WalletError, WalletRequestError } from '../errors';
 import {
   OutputSendTransaction,
@@ -118,7 +118,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     // if HTR appears in the array, we must remove it
     // because we don't add HTR to the transaction tokens array
     const tokens = Object.keys(tokenAmountMap);
-    const htrIndex = tokens.indexOf(HATHOR_TOKEN_CONFIG.uid);
+    const htrIndex = tokens.indexOf(NATIVE_TOKEN_UID);
     if (htrIndex > -1) {
       tokens.splice(htrIndex, 1);
     }

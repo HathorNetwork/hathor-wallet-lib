@@ -17,7 +17,7 @@ import dateFormatter from '../../src/utils/date';
 
 import { UnsupportedScriptError } from '../../src/errors';
 import {
-  HATHOR_TOKEN_CONFIG,
+  NATIVE_TOKEN_UID,
   DEFAULT_TX_VERSION,
   TOKEN_AUTHORITY_MASK,
   TOKEN_MINT_MASK,
@@ -48,7 +48,7 @@ describe('PartialTx.getTxData', () => {
   it('should support only P2SH and P2PKH', () => {
     const customScript = Buffer.from('data output script');
     const partialTx = new PartialTx(testnet);
-    partialTx.outputs.push(new ProposalOutput(1, customScript, { token: HATHOR_TOKEN_CONFIG.uid }));
+    partialTx.outputs.push(new ProposalOutput(1, customScript, { token: NATIVE_TOKEN_UID }));
 
     expect(() => partialTx.getTxData()).toThrow(UnsupportedScriptError);
   });
@@ -317,7 +317,7 @@ describe('PartialTx serialization', () => {
 
     const address = 'WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi';
     partialTx.inputs = [
-      new ProposalInput(txId1, 0, 27, address, { token: HATHOR_TOKEN_CONFIG.uid }),
+      new ProposalInput(txId1, 0, 27, address, { token: NATIVE_TOKEN_UID }),
       new ProposalInput(txId2, 4, 13, address, { token: testTokenConfig.uid }),
     ];
     partialTx.outputs = [
@@ -350,7 +350,7 @@ describe('PartialTx serialization', () => {
     expect(partialEmpty.serialize()).toEqual(partialTx.serialize());
 
     partialTx.inputs = [
-      new ProposalInput(txId1, 0, 27, address, { token: HATHOR_TOKEN_CONFIG.uid }),
+      new ProposalInput(txId1, 0, 27, address, { token: NATIVE_TOKEN_UID }),
       new ProposalInput(txId2, 4, 13, address, { token: testTokenConfig.uid }),
     ];
     const partialOnlyInputs = PartialTx.deserialize(partialTx.serialize(), testnet);
@@ -371,7 +371,7 @@ describe('PartialTx serialization', () => {
     expect(partialOnlyOutputs.serialize()).toEqual(partialTx.serialize());
 
     partialTx.inputs = [
-      new ProposalInput(txId1, 0, 27, address, { token: HATHOR_TOKEN_CONFIG.uid }),
+      new ProposalInput(txId1, 0, 27, address, { token: NATIVE_TOKEN_UID }),
       new ProposalInput(txId2, 4, 13, address, { token: testTokenConfig.uid }),
     ];
     const partialFull = PartialTx.deserialize(partialTx.serialize(), testnet);

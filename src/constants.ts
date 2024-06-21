@@ -148,6 +148,11 @@ export const TOKEN_MELT_MASK: number = 0b00000010;
 export const AUTHORITY_TOKEN_DATA = TOKEN_AUTHORITY_MASK | 1;
 
 /**
+ * Native token uid
+ */
+export const NATIVE_TOKEN_UID: string = '00';
+
+/**
  * Hathor token config
  * @property {'Hathor'} name
  * @property {'HTR'} symbol

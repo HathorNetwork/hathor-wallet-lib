@@ -13,7 +13,7 @@ import {
   TOKEN_AUTHORITY_MASK,
   TOKEN_MINT_MASK,
   TOKEN_MELT_MASK,
-  HATHOR_TOKEN_CONFIG,
+  NATIVE_TOKEN_UID,
   CREATE_TOKEN_TX_VERSION,
   DEFAULT_TX_VERSION,
   DEFAULT_SIGNAL_BITS,
@@ -466,7 +466,7 @@ const transaction = {
     }
 
     // Token index of HTR is 0 and if it is a custom token it is its index on tokensWithoutHathor + 1
-    const tokensWithoutHathor = tokens.filter(token => token !== HATHOR_TOKEN_CONFIG.uid);
+    const tokensWithoutHathor = tokens.filter(token => token !== NATIVE_TOKEN_UID);
     const tokenIndex = tokensWithoutHathor.indexOf(output.token) + 1;
     if (output.authorities === 0) {
       return tokenIndex;
