@@ -44,7 +44,7 @@ import FullNodeConnection from '../new/connection';
 import { getAddressType } from '../utils/address';
 import walletUtils from '../utils/wallet';
 import {
-  HATHOR_TOKEN_UID,
+  NATIVE_TOKEN_UID,
   MAX_INPUTS,
   MAX_OUTPUTS,
   TOKEN_DEPOSIT_PERCENTAGE,
@@ -266,7 +266,7 @@ export class Storage implements IStorage {
    * @returns {AsyncGenerator<IHistoryTx>}
    */
   async *tokenHistory(tokenUid?: string): AsyncGenerator<IHistoryTx> {
-    for await (const tx of this.store.historyIter(tokenUid || HATHOR_TOKEN_UID)) {
+    for await (const tx of this.store.historyIter(tokenUid || NATIVE_TOKEN_UID)) {
       yield tx;
     }
   }
@@ -573,7 +573,7 @@ export class Storage implements IStorage {
     newInputs.push(...fundsInputs);
     newOutputs.push(...fundsOutputs);
 
-    if (!(skipAuthorities || token === HATHOR_TOKEN_UID)) {
+    if (!(skipAuthorities || token === NATIVE_TOKEN_UID)) {
       // Match authority balance (only possible for custom tokens)
       // match mint
       const { inputs: mintInputs, outputs: mintOutputs } = await this.matchBalanceSelection(

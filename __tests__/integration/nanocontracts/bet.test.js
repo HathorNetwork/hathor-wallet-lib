@@ -9,7 +9,7 @@ import {
   waitNextBlock,
   waitTxConfirmed,
 } from '../helpers/wallet.helper';
-import { HATHOR_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../src/constants';
+import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../src/constants';
 import ncApi from '../../../src/api/nano';
 import helpersUtils from '../../../src/utils/helpers';
 import dateFormatter from '../../../src/utils/date';
@@ -79,7 +79,7 @@ describe('full cycle of bet nano contract', () => {
       address0,
       {
         blueprintId,
-        args: [bufferToHex(oracleData), HATHOR_TOKEN_UID, dateLastBet],
+        args: [bufferToHex(oracleData), NATIVE_TOKEN_UID, dateLastBet],
       }
     );
     await checkTxValid(wallet, tx1.hash);
@@ -96,7 +96,7 @@ describe('full cycle of bet nano contract', () => {
     expect(tx1Parser.address.base58).toBe(address0);
     expect(tx1Parser.parsedArgs).toStrictEqual([
       { name: 'oracle_script', type: 'bytes', parsed: oracleData },
-      { name: 'token_uid', type: 'bytes', parsed: Buffer.from([HATHOR_TOKEN_UID]) },
+      { name: 'token_uid', type: 'bytes', parsed: Buffer.from([NATIVE_TOKEN_UID]) },
       { name: 'date_last_offer', type: 'int', parsed: dateLastBet },
     ]);
 
@@ -109,7 +109,7 @@ describe('full cycle of bet nano contract', () => {
       actions: [
         {
           type: 'deposit',
-          token: HATHOR_TOKEN_UID,
+          token: NATIVE_TOKEN_UID,
           amount: 100,
           changeAddress: address0,
         },
@@ -148,7 +148,7 @@ describe('full cycle of bet nano contract', () => {
       actions: [
         {
           type: 'deposit',
-          token: HATHOR_TOKEN_UID,
+          token: NATIVE_TOKEN_UID,
           amount: 200,
         },
       ],
@@ -202,7 +202,7 @@ describe('full cycle of bet nano contract', () => {
     }
     const outputScriptBuffer1 = outputScript.createScript();
 
-    expect(ncState.fields.token_uid.value).toBe(HATHOR_TOKEN_UID);
+    expect(ncState.fields.token_uid.value).toBe(NATIVE_TOKEN_UID);
     expect(ncState.fields.date_last_offer.value).toBe(dateLastBet);
     expect(ncState.fields.oracle_script.value).toBe(bufferToHex(outputScriptBuffer1));
     expect(ncState.fields.final_result.value).toBeNull();
@@ -248,7 +248,7 @@ describe('full cycle of bet nano contract', () => {
       actions: [
         {
           type: 'withdrawal',
-          token: HATHOR_TOKEN_UID,
+          token: NATIVE_TOKEN_UID,
           amount: 300,
           address: address2,
         },
@@ -282,7 +282,7 @@ describe('full cycle of bet nano contract', () => {
       `address_details.a'${address3}'`,
       `withdrawals.a'${address3}'`,
     ]);
-    expect(ncState2.fields.token_uid.value).toBe(HATHOR_TOKEN_UID);
+    expect(ncState2.fields.token_uid.value).toBe(NATIVE_TOKEN_UID);
     expect(ncState2.fields.date_last_offer.value).toBe(dateLastBet);
     expect(ncState2.fields.oracle_script.value).toBe(bufferToHex(outputScriptBuffer1));
     expect(ncState2.fields.final_result.value).toBe('1x0');
@@ -324,7 +324,7 @@ describe('full cycle of bet nano contract', () => {
     const oracleData = getOracleBuffer(address1, network);
     await expect(
       hWallet.createAndSendNanoContractTransaction(NANO_CONTRACTS_INITIALIZE_METHOD, address0, {
-        args: [bufferToHex(oracleData), HATHOR_TOKEN_UID, dateLastBet],
+        args: [bufferToHex(oracleData), NATIVE_TOKEN_UID, dateLastBet],
       })
     ).rejects.toThrow(NanoContractTransactionError);
 
@@ -332,7 +332,7 @@ describe('full cycle of bet nano contract', () => {
     await expect(
       hWallet.createAndSendNanoContractTransaction(NANO_CONTRACTS_INITIALIZE_METHOD, address0, {
         blueprintId: '1234',
-        args: [bufferToHex(oracleData), HATHOR_TOKEN_UID, dateLastBet],
+        args: [bufferToHex(oracleData), NATIVE_TOKEN_UID, dateLastBet],
       })
     ).rejects.toThrow(NanoRequest404Error);
 
@@ -340,7 +340,7 @@ describe('full cycle of bet nano contract', () => {
     await expect(
       hWallet.createAndSendNanoContractTransaction(NANO_CONTRACTS_INITIALIZE_METHOD, address0, {
         blueprintId,
-        args: [bufferToHex(oracleData), HATHOR_TOKEN_UID],
+        args: [bufferToHex(oracleData), NATIVE_TOKEN_UID],
       })
     ).rejects.toThrow(NanoContractTransactionError);
 
@@ -353,7 +353,7 @@ describe('full cycle of bet nano contract', () => {
         addressNewWallet,
         {
           blueprintId,
-          args: [bufferToHex(oracleData), HATHOR_TOKEN_UID, dateLastBet],
+          args: [bufferToHex(oracleData), NATIVE_TOKEN_UID, dateLastBet],
         }
       )
     ).rejects.toThrow(NanoContractTransactionError);
@@ -362,7 +362,7 @@ describe('full cycle of bet nano contract', () => {
     await expect(
       hWallet.createAndSendNanoContractTransaction(NANO_CONTRACTS_INITIALIZE_METHOD, address0, {
         blueprintId,
-        args: ['error', HATHOR_TOKEN_UID, dateLastBet],
+        args: ['error', NATIVE_TOKEN_UID, dateLastBet],
       })
     ).rejects.toThrow(NanoContractTransactionError);
 
@@ -370,7 +370,7 @@ describe('full cycle of bet nano contract', () => {
     await expect(
       hWallet.createAndSendNanoContractTransaction(NANO_CONTRACTS_INITIALIZE_METHOD, address0, {
         blueprintId,
-        args: ['123', HATHOR_TOKEN_UID, 'error'],
+        args: ['123', NATIVE_TOKEN_UID, 'error'],
       })
     ).rejects.toThrow(NanoContractTransactionError);
 
@@ -383,7 +383,7 @@ describe('full cycle of bet nano contract', () => {
         actions: [
           {
             type: 'deposit',
-            token: HATHOR_TOKEN_UID,
+            token: NATIVE_TOKEN_UID,
             amount: 100,
           },
         ],
@@ -398,7 +398,7 @@ describe('full cycle of bet nano contract', () => {
         actions: [
           {
             type: 'deposit',
-            token: HATHOR_TOKEN_UID,
+            token: NATIVE_TOKEN_UID,
             amount: 100,
           },
         ],
@@ -413,7 +413,7 @@ describe('full cycle of bet nano contract', () => {
         actions: [
           {
             type: 'deposit',
-            token: HATHOR_TOKEN_UID,
+            token: NATIVE_TOKEN_UID,
             amount: 100,
           },
         ],

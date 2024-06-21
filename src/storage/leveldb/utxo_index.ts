@@ -10,7 +10,7 @@ import { Level, ValueIteratorOptions } from 'level';
 import { AbstractSublevel } from 'abstract-level';
 import _ from 'lodash';
 import { IKVUtxoIndex, IUtxo, IUtxoFilterOptions, ILockedUtxo } from '../../types';
-import { HATHOR_TOKEN_UID } from '../../constants';
+import { NATIVE_TOKEN_UID } from '../../constants';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 import transactionUtils from '../../utils/transaction';
 import { checkLevelDbVersion } from './utils';
@@ -197,7 +197,7 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
       return nowTs < utxo.timelock;
     };
 
-    const token = options.token || HATHOR_TOKEN_UID;
+    const token = options.token || NATIVE_TOKEN_UID;
     const authorities = options.authorities || 0;
 
     let db: typeof this.utxoDB;

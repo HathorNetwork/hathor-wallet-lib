@@ -8,7 +8,7 @@
 import buffer from 'buffer';
 import {
   CREATE_TOKEN_TX_VERSION,
-  HATHOR_TOKEN_UID,
+  NATIVE_TOKEN_UID,
   TOKEN_DEPOSIT_PERCENTAGE,
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
@@ -218,10 +218,10 @@ const tokens = {
   getTokenIndex(tokens: ITokenData[], uid: string): number {
     // If token is Hathor, index is always 0
     // Otherwise, it is always the array index + 1
-    if (uid === HATHOR_TOKEN_UID) {
+    if (uid === NATIVE_TOKEN_UID) {
       return 0;
     }
-    const tokensWithoutHathor = tokens.filter(token => token.uid !== HATHOR_TOKEN_UID);
+    const tokensWithoutHathor = tokens.filter(token => token.uid !== NATIVE_TOKEN_UID);
     const myIndex = tokensWithoutHathor.findIndex(token => token.uid === uid);
     return myIndex + 1;
   },
@@ -247,7 +247,7 @@ const tokens = {
    * @inner
    */
   isHathorToken(uid: string): boolean {
-    return uid === HATHOR_TOKEN_UID;
+    return uid === NATIVE_TOKEN_UID;
   },
 
   /**
@@ -341,7 +341,7 @@ const tokens = {
     }
 
     // get HTR deposit inputs
-    const selectedUtxos = await utxoSelection(storage, HATHOR_TOKEN_UID, depositAmount);
+    const selectedUtxos = await utxoSelection(storage, NATIVE_TOKEN_UID, depositAmount);
     const foundAmount = selectedUtxos.amount;
     for (const utxo of selectedUtxos.utxos) {
       inputs.push(helpers.getDataInputFromUtxo(utxo));
@@ -362,7 +362,7 @@ const tokens = {
         address: cAddress,
         value: foundAmount - depositAmount,
         timelock: null,
-        token: HATHOR_TOKEN_UID,
+        token: NATIVE_TOKEN_UID,
         authorities: 0,
         isChange: true,
       });
@@ -399,7 +399,7 @@ const tokens = {
           type: 'data',
           data: dataString,
           value: 1,
-          token: HATHOR_TOKEN_UID,
+          token: NATIVE_TOKEN_UID,
           authorities: 0,
         } as IDataOutput;
 
@@ -520,7 +520,7 @@ const tokens = {
 
     if (depositAmount > 0) {
       // get HTR deposit inputs
-      const selectedUtxos = await utxoSelection(storage, HATHOR_TOKEN_UID, depositAmount);
+      const selectedUtxos = await utxoSelection(storage, NATIVE_TOKEN_UID, depositAmount);
       const foundAmount = selectedUtxos.amount;
       for (const utxo of selectedUtxos.utxos) {
         inputs.push(helpers.getDataInputFromUtxo(utxo));
@@ -541,7 +541,7 @@ const tokens = {
           address: cAddress,
           value: foundAmount - depositAmount,
           timelock: null,
-          token: HATHOR_TOKEN_UID,
+          token: NATIVE_TOKEN_UID,
           authorities: 0,
           isChange: true,
         });
@@ -565,7 +565,7 @@ const tokens = {
       outputs.push({
         value: withdrawAmount,
         address,
-        token: HATHOR_TOKEN_UID,
+        token: NATIVE_TOKEN_UID,
         authorities: 0,
         timelock: null,
         type: getAddressType(address, storage.config.getNetwork()),
@@ -578,7 +578,7 @@ const tokens = {
           type: 'data',
           data: dataString,
           value: 1,
-          token: HATHOR_TOKEN_UID,
+          token: NATIVE_TOKEN_UID,
           authorities: 0,
         } as IDataOutput;
 

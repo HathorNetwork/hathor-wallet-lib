@@ -23,7 +23,7 @@ import txApi from '../api/txApi';
 import {
   DEFAULT_TX_VERSION,
   HATHOR_TOKEN_CONFIG,
-  HATHOR_TOKEN_UID,
+  NATIVE_TOKEN_UID,
   TOKEN_AUTHORITY_MASK,
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
@@ -49,7 +49,7 @@ export class ProposalInput extends Input {
     value: number,
     address: string,
     {
-      token = HATHOR_TOKEN_UID,
+      token = NATIVE_TOKEN_UID,
       authorities = 0,
     }: {
       token?: string;
@@ -109,7 +109,7 @@ export class ProposalOutput extends Output {
     script: Buffer,
     {
       isChange = false,
-      token = HATHOR_TOKEN_UID,
+      token = NATIVE_TOKEN_UID,
       authorities = 0,
     }: {
       token?: string;
@@ -121,7 +121,7 @@ export class ProposalOutput extends Output {
     if (authorities > 0) {
       tokenData |= TOKEN_AUTHORITY_MASK;
     }
-    if (token !== HATHOR_TOKEN_UID) {
+    if (token !== NATIVE_TOKEN_UID) {
       // We set this to avoid isTokenHTR from returning true
       tokenData |= 1;
     }
@@ -213,7 +213,7 @@ export class PartialTx {
     }
 
     // Remove HTR from tokens array
-    tokenSet.delete(HATHOR_TOKEN_UID);
+    tokenSet.delete(NATIVE_TOKEN_UID);
     const tokens = Array.from(tokenSet);
 
     const data = {
@@ -308,7 +308,7 @@ export class PartialTx {
     value: number,
     address: string,
     {
-      token = HATHOR_TOKEN_UID,
+      token = NATIVE_TOKEN_UID,
       authorities = 0,
     }: {
       token?: string;
@@ -335,7 +335,7 @@ export class PartialTx {
     value: number,
     script: Buffer,
     {
-      token = HATHOR_TOKEN_UID,
+      token = NATIVE_TOKEN_UID,
       authorities = 0,
       isChange = false,
     }: {
@@ -453,7 +453,7 @@ export class PartialTx {
       }
 
       const token = output.isTokenHTR()
-        ? HATHOR_TOKEN_UID
+        ? NATIVE_TOKEN_UID
         : tx.tokens[output.getTokenIndex()];
       instance.addOutput(output.value, output.script, {
         token,

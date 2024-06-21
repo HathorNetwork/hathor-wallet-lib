@@ -15,7 +15,7 @@ import NanoContract from './nano_contract';
 import { createOutputScriptFromAddress } from '../utils/address';
 import { IDataOutput } from '../types';
 import {
-  HATHOR_TOKEN_UID,
+  NATIVE_TOKEN_UID,
   NANO_CONTRACTS_INITIALIZE_METHOD,
   NANO_CONTRACTS_VERSION,
 } from '../constants';
@@ -202,7 +202,7 @@ class NanoContractTransactionBuilder {
       // this handles p2pkh and p2sh scripts
       const outputScript = createOutputScriptFromAddress(changeAddressStr, network);
       const tokenIndex =
-        action.token === HATHOR_TOKEN_UID
+        action.token === NATIVE_TOKEN_UID
           ? 0
           : tokens.findIndex(token => token === action.token) + 1;
       const outputObj = new Output(utxosData.changeAmount, outputScript, {
@@ -246,7 +246,7 @@ class NanoContractTransactionBuilder {
     );
 
     const tokenIndex =
-      action.token === HATHOR_TOKEN_UID
+      action.token === NATIVE_TOKEN_UID
         ? 0
         : tokens.findIndex(token => token === action.token) + 1;
     const output = new Output(action.amount, outputScript, {
@@ -310,7 +310,7 @@ class NanoContractTransactionBuilder {
       const tokenSet = new Set<string>();
       for (const action of this.actions) {
         // Get token list
-        if (action.token !== HATHOR_TOKEN_UID) {
+        if (action.token !== NATIVE_TOKEN_UID) {
           tokenSet.add(action.token);
         }
       }

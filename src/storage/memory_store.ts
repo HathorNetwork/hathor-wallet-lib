@@ -25,7 +25,7 @@ import {
   SCANNING_POLICY,
   INcData,
 } from '../types';
-import { GAP_LIMIT, HATHOR_TOKEN_CONFIG, HATHOR_TOKEN_UID } from '../constants';
+import { GAP_LIMIT, HATHOR_TOKEN_CONFIG, NATIVE_TOKEN_UID } from '../constants';
 import transactionUtils from '../utils/transaction';
 
 const DEFAULT_ADDRESSES_WALLET_DATA = {
@@ -183,7 +183,7 @@ export class MemoryStore implements IStore {
     this.walletData = cloneDeep({ ...DEFAULT_WALLET_DATA, ...DEFAULT_ADDRESSES_WALLET_DATA });
 
     // Add HTR to storage tokens
-    this.tokens.set(HATHOR_TOKEN_UID, HATHOR_TOKEN_CONFIG);
+    this.tokens.set(NATIVE_TOKEN_UID, HATHOR_TOKEN_CONFIG);
   }
 
   async validate(): Promise<void> {
@@ -608,7 +608,7 @@ export class MemoryStore implements IStore {
       return transactionUtils.isHeightLocked(utxo.height, networkHeight, options.reward_lock);
     };
     const isLocked = (utxo: IUtxo) => isTimeLocked(utxo.timelock || 0) || isHeightLocked(utxo);
-    const token = options.token || HATHOR_TOKEN_UID;
+    const token = options.token || NATIVE_TOKEN_UID;
     const authorities = options.authorities || 0;
     if (options.max_amount && options.target_amount) {
       throw new Error('invalid options');
