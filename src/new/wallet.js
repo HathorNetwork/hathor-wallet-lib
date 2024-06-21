@@ -8,7 +8,7 @@
 import { get } from 'lodash';
 import bitcore, { HDPrivateKey } from 'bitcore-lib';
 import EventEmitter from 'events';
-import { HATHOR_TOKEN_CONFIG, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
+import { HATHOR_TOKEN_CONFIG, HATHOR_TOKEN_UID, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
 import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
 import versionApi from '../api/version';
@@ -108,7 +108,7 @@ class HathorWallet extends EventEmitter {
 
     xpub,
 
-    tokenUid = HATHOR_TOKEN_CONFIG.uid,
+    tokenUid = HATHOR_TOKEN_UID,
 
     password = null,
     pinCode = null,
@@ -752,7 +752,7 @@ class HathorWallet extends EventEmitter {
    * */
   async getTxHistory(options = {}) {
     const newOptions = {
-      token_id: HATHOR_TOKEN_CONFIG.uid,
+      token_id: HATHOR_TOKEN_UID,
       count: 15,
       skip: 0,
       ...options,
@@ -841,7 +841,7 @@ class HathorWallet extends EventEmitter {
    *
    */
   async getAddressInfo(address, options = {}) {
-    const { token = HATHOR_TOKEN_CONFIG.uid } = options;
+    const { token = HATHOR_TOKEN_UID } = options;
 
     // Throws an error if the address does not belong to this wallet
     if (!(await this.storage.isAddressMine(address))) {
@@ -1038,7 +1038,7 @@ class HathorWallet extends EventEmitter {
    */
   async getUtxosForAmount(amount, options = {}) {
     const newOptions = {
-      token: HATHOR_TOKEN_CONFIG.uid,
+      token: HATHOR_TOKEN_UID,
       filter_address: null,
       ...options,
     };
@@ -1103,7 +1103,7 @@ class HathorWallet extends EventEmitter {
       {
         address: destinationAddress,
         value: total_amount,
-        token: options.token || HATHOR_TOKEN_CONFIG.uid,
+        token: options.token || HATHOR_TOKEN_UID,
       },
     ];
 
@@ -2153,7 +2153,7 @@ class HathorWallet extends EventEmitter {
   }
 
   getTokenData() {
-    if (this.tokenUid === HATHOR_TOKEN_CONFIG.uid) {
+    if (this.tokenUid === HATHOR_TOKEN_UID) {
       // Hathor token we don't get from the full node
       this.token = HATHOR_TOKEN_CONFIG;
     } else {
@@ -2608,7 +2608,7 @@ class HathorWallet extends EventEmitter {
       if (token_data === 0) {
         return {
           ...io,
-          token: HATHOR_TOKEN_CONFIG.uid,
+          token: HATHOR_TOKEN_UID,
         };
       }
 
@@ -2651,7 +2651,7 @@ class HathorWallet extends EventEmitter {
        * @returns {TokenInfo} Token config
        */
       const getToken = tokenUid => {
-        if (tokenUid === HATHOR_TOKEN_CONFIG.uid) {
+        if (tokenUid === HATHOR_TOKEN_UID) {
           return HATHOR_TOKEN_CONFIG;
         }
 

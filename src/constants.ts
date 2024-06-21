@@ -155,6 +155,8 @@ export const AUTHORITY_TOKEN_DATA = TOKEN_AUTHORITY_MASK | 1;
  */
 export const HATHOR_TOKEN_CONFIG = { name: 'Hathor', symbol: 'HTR', uid: '00' };
 
+export const HATHOR_TOKEN_UID = '00';
+
 /**
  * Hathor token default index
  */

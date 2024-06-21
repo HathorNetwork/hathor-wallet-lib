@@ -12,7 +12,7 @@ import P2PKH from '../models/p2pkh';
 import ScriptData from '../models/script_data';
 import Transaction from '../models/transaction';
 import { AddressError, InvalidPartialTxError } from '../errors';
-import { HATHOR_TOKEN_CONFIG, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../constants';
+import { HATHOR_TOKEN_UID, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../constants';
 
 import transactionUtils from '../utils/transaction';
 import dateFormatter from '../utils/date';
@@ -165,7 +165,7 @@ class PartialTxProposal {
     value: number,
     address: string,
     {
-      token = HATHOR_TOKEN_CONFIG.uid,
+      token = HATHOR_TOKEN_UID,
       authorities = 0,
       markAsSelected = true,
     }: {

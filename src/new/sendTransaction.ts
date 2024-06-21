@@ -7,7 +7,7 @@
 
 import EventEmitter from 'events';
 import { shuffle } from 'lodash';
-import { SELECT_OUTPUTS_TIMEOUT, HATHOR_TOKEN_CONFIG } from '../constants';
+import { SELECT_OUTPUTS_TIMEOUT, HATHOR_TOKEN_UID } from '../constants';
 import transactionUtils from '../utils/transaction';
 import txApi from '../api/txApi';
 import { WalletError, SendTxError } from '../errors';
@@ -139,7 +139,7 @@ export default class SendTransaction extends EventEmitter {
     if (!this.storage) {
       throw new SendTxError('Storage is not set.');
     }
-    const HTR_UID = HATHOR_TOKEN_CONFIG.uid;
+    const HTR_UID = HATHOR_TOKEN_UID;
     const network = this.storage.config.getNetwork();
     const txData: IDataTx = {
       inputs: [],
@@ -568,7 +568,7 @@ export async function prepareSendTokensData(
     throw new Error('Unsupported wallet type.');
   }
 
-  const token = options.token || HATHOR_TOKEN_CONFIG.uid;
+  const token = options.token || HATHOR_TOKEN_UID;
   const utxoSelection = options.utxoSelectionMethod || bestUtxoSelection;
   const newtxData: Pick<IDataTx, 'inputs' | 'outputs'> = { inputs: [], outputs: [] };
   let outputAmount = 0;
@@ -580,7 +580,7 @@ export async function prepareSendTokensData(
       // Since the current transaction is creating the token we can safely ignore it
       continue;
     }
-    const outputToken = output.token || HATHOR_TOKEN_CONFIG.uid;
+    const outputToken = output.token || HATHOR_TOKEN_UID;
     if (outputToken !== token) {
       // This output is not for the token we are looking for
       continue;

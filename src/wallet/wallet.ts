@@ -9,7 +9,7 @@ import { EventEmitter } from 'events';
 import bitcore, { crypto, util, Address as bitcoreAddress } from 'bitcore-lib';
 import assert from 'assert';
 import {
-  HATHOR_TOKEN_CONFIG,
+  HATHOR_TOKEN_UID,
   TOKEN_MINT_MASK,
   AUTHORITY_TOKEN_DATA,
   TOKEN_MELT_MASK,
@@ -836,7 +836,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       skipSpent: true;
     };
     const newOptions: optionsType = {
-      tokenId: HATHOR_TOKEN_CONFIG.uid,
+      tokenId: HATHOR_TOKEN_UID,
       authority: null,
       addresses: null,
       totalAmount: null,
@@ -980,7 +980,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       const typedOutput = output as OutputSendTransaction;
       if (typedOutput.type === OutputType.DATA) {
         typedOutput.value = 1;
-        typedOutput.token = HATHOR_TOKEN_CONFIG.uid;
+        typedOutput.token = HATHOR_TOKEN_UID;
       } else {
         typedOutput.type = helpers.getOutputTypeFromAddress(typedOutput.address!, this.network);
       }
@@ -1282,7 +1282,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // 2. Get utxos for HTR
     const { utxos, changeAmount } = await this.getUtxos({
-      tokenId: HATHOR_TOKEN_CONFIG.uid,
+      tokenId: HATHOR_TOKEN_UID,
       totalAmount: deposit,
     });
     if (utxos.length === 0) {
@@ -1535,7 +1535,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // 2. Get utxos for HTR
     const { utxos, changeAmount } = await this.getUtxos({
-      tokenId: HATHOR_TOKEN_CONFIG.uid,
+      tokenId: HATHOR_TOKEN_UID,
       totalAmount: deposit,
     });
     if (utxos.length === 0) {
