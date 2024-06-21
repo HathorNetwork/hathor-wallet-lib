@@ -15,7 +15,7 @@ import SendTransaction from '../../../src/new/sendTransaction';
 import { LevelDBStore, MemoryStore, Storage } from '../../../src/storage';
 import walletUtils from '../../../src/utils/wallet';
 import transactionUtils from '../../../src/utils/transaction';
-import { HATHOR_TOKEN_CONFIG } from '../../../src/constants';
+import { HATHOR_TOKEN_UID } from '../../../src/constants';
 
 const startedWallets = [];
 
@@ -75,7 +75,7 @@ describe('locked utxos', () => {
           type: 'p2pkh',
           address: await hwallet.getAddressAtIndex(1),
           value: 1,
-          token: HATHOR_TOKEN_CONFIG.uid,
+          token: HATHOR_TOKEN_UID,
         },
       ],
       pin: DEFAULT_PIN_CODE,

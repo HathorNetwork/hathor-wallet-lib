@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { TOKEN_AUTHORITY_MASK, HATHOR_TOKEN_CONFIG } from '../../src/constants';
+import { TOKEN_AUTHORITY_MASK, HATHOR_TOKEN_UID } from '../../src/constants';
 import SendTransaction, {
   ISendDataOutput,
   isDataOutput,
@@ -27,7 +27,7 @@ test('type methods', () => {
     type: OutputType.P2PKH,
     address: 'H-valid-address',
     value: 10,
-    token: HATHOR_TOKEN_CONFIG.uid,
+    token: HATHOR_TOKEN_UID,
   };
 
   /**
@@ -144,7 +144,7 @@ test('prepareTxData', async () => {
         data: 'abcd',
         value: 1,
         authorities: 0,
-        token: HATHOR_TOKEN_CONFIG.uid,
+        token: HATHOR_TOKEN_UID,
       },
       {
         address: 'W-change-address',

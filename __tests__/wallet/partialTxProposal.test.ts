@@ -20,7 +20,7 @@ import {
   PartialTxInputData,
 } from '../../src/models/partial_tx';
 import {
-  HATHOR_TOKEN_CONFIG,
+  HATHOR_TOKEN_UID,
   TOKEN_MINT_MASK,
   TOKEN_MELT_MASK,
   DEFAULT_TX_VERSION,
@@ -82,7 +82,7 @@ test('fromPartialTx', async () => {
   expect(proposal.partialTx).toMatchObject({
     inputs: [expect.objectContaining({ hash: FAKE_TXID, index: 0, value: 10, address: ADDR1 })],
     outputs: [
-      expect.objectContaining({ value: 5, token: HATHOR_TOKEN_CONFIG.uid }),
+      expect.objectContaining({ value: 5, token: HATHOR_TOKEN_UID }),
       expect.objectContaining({ value: 10, token: FAKE_UID }),
     ],
   });
@@ -246,9 +246,9 @@ test('addReceive', async () => {
   /**
    * Add 1 HTR output, giving the destination address
    */
-  await proposal.addReceive(HATHOR_TOKEN_CONFIG.uid, 180, { address: ADDR2 });
+  await proposal.addReceive(HATHOR_TOKEN_UID, 180, { address: ADDR2 });
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(spyOutput).toBeCalledWith(HATHOR_TOKEN_CONFIG.uid, 180, ADDR2, { timelock: null });
+  expect(spyOutput).toBeCalledWith(HATHOR_TOKEN_UID, 180, ADDR2, { timelock: null });
   expect(spyAddr).not.toHaveBeenCalled();
 
   // Remove mocks
@@ -274,7 +274,7 @@ test('addInput', async () => {
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(spyMark).toBeCalledWith({ txId: FAKE_TXID, index: 5 }, true);
   expect(spyInput).toBeCalledWith(FAKE_TXID, 5, 999, ADDR1, {
-    token: HATHOR_TOKEN_CONFIG.uid,
+    token: HATHOR_TOKEN_UID,
     authorities: 0,
   });
 
@@ -331,10 +331,10 @@ test('addOutput', async () => {
   /**
    * Add 1 HTR output to a MultiSig address
    */
-  proposal.addOutput(HATHOR_TOKEN_CONFIG.uid, 456, ADDR4, { isChange: true });
+  proposal.addOutput(HATHOR_TOKEN_UID, 456, ADDR4, { isChange: true });
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(spyOutput).toBeCalledWith(456, scriptFromAddressP2SH(ADDR4), {
-    token: HATHOR_TOKEN_CONFIG.uid,
+    token: HATHOR_TOKEN_UID,
     authorities: 0,
     isChange: true,
   });
@@ -508,7 +508,7 @@ test('calculateBalance', async () => {
    *
    */
   const expected = {
-    [HATHOR_TOKEN_CONFIG.uid]: {
+    [HATHOR_TOKEN_UID]: {
       balance: { unlocked: -10, locked: 2 },
       authority: {
         unlocked: { mint: 0, melt: 0 },
