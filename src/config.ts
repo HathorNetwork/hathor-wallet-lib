@@ -1,6 +1,8 @@
 import networkInstance from './network';
 import Network from './models/network';
 import { GetWalletServiceUrlError, GetWalletServiceWsUrlError } from './errors';
+import { ITokenData } from './types';
+import { NATIVE_TOKEN_UID } from './constants';
 
 // Default server and network user will connect when none have been chosen
 export const DEFAULT_SERVER = 'https://node1.mainnet.hathor.network/v1a/';
@@ -17,6 +19,11 @@ const EXPLORER_SERVICE_TESTNET_BASE_URL = 'https://explorer-service.testnet.hath
 // Atomic Swap Service URL
 export const SWAP_SERVICE_MAINNET_BASE_URL = 'https://atomic-swap-service.hathor.network/';
 export const SWAP_SERVICE_TESTNET_BASE_URL = 'https://atomic-swap-service.testnet.hathor.network/';
+
+export const HATHOR_TOKEN_CONFIG = {
+  name: 'Hathor',
+  symbol: 'HTR',
+};
 
 export class Config {
   TX_MINING_URL?: string;
@@ -36,6 +43,8 @@ export class Config {
   NETWORK?: string;
 
   USER_AGENT?: string;
+
+  NATIVE_TOKEN_CONFIG?: Omit<ITokenData, 'uid'>;
 
   /**
    * Sets the tx mining service url that will be returned by the config object.
@@ -292,6 +301,27 @@ export class Config {
    */
   getUserAgent(): string | undefined {
     return this.USER_AGENT;
+  }
+
+  /**
+   * Sets the native token config
+   */
+  setNativeTokenConfig(config: Omit<ITokenData, 'uid'>): void {
+    this.NATIVE_TOKEN_CONFIG = config;
+  }
+
+  /**
+   * Gets the native token config
+   *
+   * @return The native token config
+   */
+  getNativeTokenData(): ITokenData {
+    const tokenData = this.NATIVE_TOKEN_CONFIG || HATHOR_TOKEN_CONFIG;
+    return {
+      name: tokenData.name,
+      symbol: tokenData.symbol,
+      uid: NATIVE_TOKEN_UID,
+    };
   }
 }
 

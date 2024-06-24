@@ -22,7 +22,6 @@ import { IndexOOBError, UnsupportedScriptError } from '../errors';
 import txApi from '../api/txApi';
 import {
   DEFAULT_TX_VERSION,
-  HATHOR_TOKEN_CONFIG,
   NATIVE_TOKEN_UID,
   TOKEN_AUTHORITY_MASK,
   TOKEN_MELT_MASK,
@@ -482,10 +481,10 @@ export class PartialTx {
               return resolve(false);
             }
 
-            const token =
+            const tokenUid =
               utxo.token_data === 0
-                ? HATHOR_TOKEN_CONFIG
-                : get(data, `tx.tokens[${utxo.token_data - 1}]`);
+                ? NATIVE_TOKEN_UID
+                : get(data, `tx.tokens[${(utxo.token_data & TOKEN_AUTHORITY_MASK) - 1}].uid`);
 
             const isAuthority = (utxo.token_data & TOKEN_AUTHORITY_MASK) > 0;
             const isMint = isAuthority && (utxo.value & TOKEN_MINT_MASK) > 0;
@@ -498,7 +497,7 @@ export class PartialTx {
 
             return resolve(
               authorityCheck &&
-                input.token === token.uid &&
+                input.token === tokenUid &&
                 input.value === utxo.value &&
                 input.address === utxo.decoded.address
             );

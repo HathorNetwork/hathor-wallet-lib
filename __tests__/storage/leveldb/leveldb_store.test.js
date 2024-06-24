@@ -6,7 +6,7 @@
  */
 
 import { HDPrivateKey } from 'bitcore-lib';
-import { DEFAULT_ADDRESS_SCANNING_POLICY, HATHOR_TOKEN_CONFIG } from '../../../src/constants';
+import { DEFAULT_ADDRESS_SCANNING_POLICY } from '../../../src/constants';
 import { LevelDBStore, Storage } from '../../../src/storage';
 import tx_history from '../../__fixtures__/tx_history';
 import walletApi from '../../../src/api/wallet';
@@ -180,7 +180,7 @@ test('token methods', async () => {
   const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
   const store = new LevelDBStore(walletId, DATA_DIR);
 
-  store.tokenIndex.saveToken(HATHOR_TOKEN_CONFIG);
+  store.tokenIndex.saveToken({ uid: '00', name: 'Hathor', symbol: 'HTR' });
 
   await store.saveToken({ uid: '01', name: 'Token 01', symbol: 'TK01' });
   await expect(asyncGenToArray(store.tokenIndex.tokenDB.iterator())).resolves.toHaveLength(2);
