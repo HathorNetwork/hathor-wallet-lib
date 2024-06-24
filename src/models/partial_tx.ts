@@ -23,6 +23,7 @@ import txApi from '../api/txApi';
 import {
   DEFAULT_TX_VERSION,
   NATIVE_TOKEN_UID,
+  TOKEN_INDEX_MASK,
   TOKEN_AUTHORITY_MASK,
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
@@ -484,7 +485,7 @@ export class PartialTx {
             const tokenUid =
               utxo.token_data === 0
                 ? NATIVE_TOKEN_UID
-                : get(data, `tx.tokens[${(utxo.token_data & TOKEN_AUTHORITY_MASK) - 1}].uid`);
+                : get(data, `tx.tokens[${(utxo.token_data & TOKEN_INDEX_MASK) - 1}].uid`);
 
             const isAuthority = (utxo.token_data & TOKEN_AUTHORITY_MASK) > 0;
             const isMint = isAuthority && (utxo.value & TOKEN_MINT_MASK) > 0;

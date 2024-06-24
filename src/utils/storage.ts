@@ -24,7 +24,7 @@ import walletApi from '../api/wallet';
 import helpers from './helpers';
 import transactionUtils from './transaction';
 import { deriveAddressP2PKH, deriveAddressP2SH } from './address';
-import { MAX_ADDRESSES_GET, LOAD_WALLET_MAX_RETRY, LOAD_WALLET_RETRY_SLEEP } from '../constants';
+import { NATIVE_TOKEN_UID, MAX_ADDRESSES_GET, LOAD_WALLET_MAX_RETRY, LOAD_WALLET_RETRY_SLEEP } from '../constants';
 
 /**
  * Derive requested addresses (if not already loaded), save them on storage then return them.
@@ -402,6 +402,15 @@ async function updateTokensData(storage: IStorage, tokens: Set<string>): Promise
     | { success: false; message: string }
   > {
     let retryCount = 0;
+
+    if (uid === NATIVE_TOKEN_UID) {
+      const nativeToken = storage.config.getNativeTokenData();
+      return {
+        success: true,
+        name: nativeToken.name,
+        symbol: nativeToken.symbol,
+      };
+    }
 
     while (retryCount <= 5) {
       try {
