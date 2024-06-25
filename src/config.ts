@@ -1,7 +1,6 @@
 import networkInstance from './network';
 import Network from './models/network';
 import { GetWalletServiceUrlError, GetWalletServiceWsUrlError } from './errors';
-import { ITokenData } from './types';
 
 // Default server and network user will connect when none have been chosen
 export const DEFAULT_SERVER = 'https://node1.mainnet.hathor.network/v1a/';
