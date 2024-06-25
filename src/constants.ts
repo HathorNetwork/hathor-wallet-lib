@@ -155,7 +155,7 @@ export const NATIVE_TOKEN_UID: string = '00';
 /**
  * Default HTR token config
  */
-export const DEFAULT_TOKEN_CONFIG = {
+export const DEFAULT_NATIVE_TOKEN_CONFIG = {
   name: 'Hathor',
   symbol: 'HTR',
 };

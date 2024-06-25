@@ -48,7 +48,7 @@ import {
   MAX_INPUTS,
   MAX_OUTPUTS,
   TOKEN_DEPOSIT_PERCENTAGE,
-  DEFAULT_TOKEN_CONFIG,
+  DEFAULT_NATIVE_TOKEN_CONFIG,
 } from '../constants';
 import { UninitializedWalletError } from '../errors';
 import Transaction from '../models/transaction';
@@ -88,7 +88,7 @@ export class Storage implements IStorage {
     this.version = null;
     this.utxoUnlockWait = Promise.resolve();
     this.txSignFunc = null;
-    this.nativeTokenData = DEFAULT_TOKEN_CONFIG;
+    this.nativeTokenData = DEFAULT_NATIVE_TOKEN_CONFIG;
   }
 
   /**
@@ -107,7 +107,7 @@ export class Storage implements IStorage {
     if (tokenData) {
       this.nativeTokenData = tokenData;
     }
-    const nativeToken = tokenData ?? DEFAULT_TOKEN_CONFIG;
+    const nativeToken = tokenData ?? DEFAULT_NATIVE_TOKEN_CONFIG;
     await this.store.saveToken({
       ...nativeToken,
       uid: NATIVE_TOKEN_UID,
