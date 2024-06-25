@@ -48,6 +48,7 @@ import {
   MAX_INPUTS,
   MAX_OUTPUTS,
   TOKEN_DEPOSIT_PERCENTAGE,
+  DEFAULT_TOKEN_CONFIG,
 } from '../constants';
 import { UninitializedWalletError } from '../errors';
 import Transaction from '../models/transaction';
@@ -68,6 +69,8 @@ export class Storage implements IStorage {
 
   txSignFunc: EcdsaTxSign | null;
 
+  nativeTokenData: Omit<ITokenData, 'uid'>;
+
   /**
    * This promise is used to chain the calls to process unlocked utxos.
    * This way we can avoid concurrent calls.
@@ -85,6 +88,7 @@ export class Storage implements IStorage {
     this.version = null;
     this.utxoUnlockWait = Promise.resolve();
     this.txSignFunc = null;
+    this.nativeTokenData = DEFAULT_TOKEN_CONFIG;
   }
 
   /**
@@ -93,6 +97,30 @@ export class Storage implements IStorage {
    */
   setApiVersion(version: ApiVersion): void {
     this.version = version;
+  }
+
+  /**
+   * Set the native token config
+   * @param {Omit<ITokenData, 'uid'>} tokenData The native token config
+   */
+  async setNativeTokenData(tokenData: Omit<ITokenData, 'uid'>|null|undefined): Promise<void> {
+    if (tokenData) {
+      this.nativeTokenData = tokenData;
+    }
+    const nativeToken = tokenData ?? DEFAULT_TOKEN_CONFIG;
+    await this.store.saveToken({
+      ...nativeToken,
+      uid: NATIVE_TOKEN_UID,
+    });
+  }
+
+  /**
+   * Gets the native token config
+   *
+   * @return {ITokenData} The native token config
+   */
+  getNativeTokenData(): ITokenData {
+    return {...this.nativeTokenData, uid: NATIVE_TOKEN_UID};
   }
 
   /**

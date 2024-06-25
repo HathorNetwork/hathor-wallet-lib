@@ -437,6 +437,9 @@ export interface IStorage {
   config: Config;
   version: ApiVersion | null;
 
+  setNativeTokenData(tokenData: Omit<ITokenData, 'uid'>|null|undefined): Promise<void>;
+  getNativeTokenData(): ITokenData;
+
   hasTxSignatureMethod(): boolean;
   setTxSignatureMethod(txSign: EcdsaTxSign): void;
   getTxSignatures(tx: Transaction, pinCode: string): Promise<ITxSignatureData>;

@@ -404,7 +404,7 @@ async function updateTokensData(storage: IStorage, tokens: Set<string>): Promise
     let retryCount = 0;
 
     if (uid === NATIVE_TOKEN_UID) {
-      const nativeToken = storage.config.getNativeTokenData();
+      const nativeToken = storage.getNativeTokenData();
       return {
         success: true,
         name: nativeToken.name,

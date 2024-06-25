@@ -1450,6 +1450,7 @@ class HathorWallet extends EventEmitter {
     });
     if (info.network.indexOf(this.conn.network) >= 0) {
       this.storage.setApiVersion(info);
+      await this.storage.setNativeTokenData(info?.native_token);
       this.conn.start(); // XXX: maybe await?
     } else {
       this.setState(HathorWallet.CLOSED);
@@ -2155,7 +2156,7 @@ class HathorWallet extends EventEmitter {
   getTokenData() {
     if (this.tokenUid === NATIVE_TOKEN_UID) {
       // Hathor token we don't get from the full node
-      this.token = this.storage.config.getNativeTokenData();
+      this.token = this.storage.getNativeTokenData();
     } else {
       // XXX: This request is not awaited
       // Get token info from full node
@@ -2652,7 +2653,7 @@ class HathorWallet extends EventEmitter {
        */
       const getToken = tokenUid => {
         if (tokenUid === NATIVE_TOKEN_UID) {
-          return this.storage.config.getNativeTokenData();
+          return this.storage.getNativeTokenData();
         }
 
         const token = fullTx.tx.tokens.find(token => token.uid === tokenUid);
