@@ -48,6 +48,7 @@ import {
   MAX_INPUTS,
   MAX_OUTPUTS,
   TOKEN_DEPOSIT_PERCENTAGE,
+  DECIMAL_PLACES,
 } from '../constants';
 import { UninitializedWalletError } from '../errors';
 import Transaction from '../models/transaction';
@@ -93,6 +94,15 @@ export class Storage implements IStorage {
    */
   setApiVersion(version: ApiVersion): void {
     this.version = version;
+  }
+
+  /**
+   * Get the decimal places.
+   * If not configured, will return the default DECIMAL_PLACES (2)
+   * @returns {number}
+   */
+  getDecimalPlaces(): number {
+    return this.version?.decimal_places ?? DECIMAL_PLACES;
   }
 
   /**

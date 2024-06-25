@@ -4,6 +4,7 @@ test('Pretty value', () => {
   expect(prettyValue(1000)).toBe('10.00');
   expect(prettyValue(100000)).toBe('1,000.00');
   expect(prettyValue(100000000)).toBe('1,000,000.00');
+  expect(prettyValue(10000000000, 4)).toBe('1,000,0000.00');
   expect(prettyValue(-1000)).toBe('-10.00');
 });
 
