@@ -439,7 +439,7 @@ export interface IStorage {
   version: ApiVersion | null;
 
   setApiVersion(version: ApiVersion): void;
-  getDecimalPlaces(): Promise<number>;
+  getDecimalPlaces(): number;
 
   hasTxSignatureMethod(): boolean;
   setTxSignatureMethod(txSign: EcdsaTxSign): void;
