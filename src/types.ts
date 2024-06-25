@@ -438,6 +438,9 @@ export interface IStorage {
   config: Config;
   version: ApiVersion | null;
 
+  setApiVersion(version: ApiVersion): void;
+  getDecimalPlaces(): Promise<number>;
+
   hasTxSignatureMethod(): boolean;
   setTxSignatureMethod(txSign: EcdsaTxSign): void;
   getTxSignatures(tx: Transaction, pinCode: string): Promise<ITxSignatureData>;
@@ -493,7 +496,6 @@ export interface IStorage {
   getCurrentHeight(): Promise<number>;
   setCurrentHeight(height: number): Promise<void>;
   isReadonly(): Promise<boolean>;
-  setApiVersion(version: ApiVersion): void;
   changePin(oldPin: string, newPin: string): Promise<void>;
   changePassword(oldPassword: string, newPassword: string): Promise<void>;
   setGapLimit(value: number): Promise<void>;
