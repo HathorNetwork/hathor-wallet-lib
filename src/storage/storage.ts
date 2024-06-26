@@ -100,7 +100,9 @@ export class Storage implements IStorage {
    * Set the native token config on the store
    */
   async saveNativeToken(): Promise<void> {
-    await this.store.saveToken(this.getNativeTokenData());
+    if ((await this.store.getToken(NATIVE_TOKEN_UID)) === null) {
+      await this.store.saveToken(this.getNativeTokenData());
+    }
   }
 
   /**
