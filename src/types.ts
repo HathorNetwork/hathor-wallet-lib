@@ -354,7 +354,7 @@ export interface ApiVersion {
   reward_spend_min_blocks: number;
   max_number_inputs: number;
   max_number_outputs: number;
-  native_token: Omit<ITokenData, 'uid'>>|null|undefined;
+  native_token: Omit<ITokenData, 'uid'> | null | undefined;
 }
 
 export interface IStore {
