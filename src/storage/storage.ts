@@ -69,8 +69,6 @@ export class Storage implements IStorage {
 
   txSignFunc: EcdsaTxSign | null;
 
-  nativeTokenData: Omit<ITokenData, 'uid'>;
-
   /**
    * This promise is used to chain the calls to process unlocked utxos.
    * This way we can avoid concurrent calls.
@@ -88,7 +86,6 @@ export class Storage implements IStorage {
     this.version = null;
     this.utxoUnlockWait = Promise.resolve();
     this.txSignFunc = null;
-    this.nativeTokenData = DEFAULT_NATIVE_TOKEN_CONFIG;
   }
 
   /**
@@ -100,18 +97,10 @@ export class Storage implements IStorage {
   }
 
   /**
-   * Set the native token config
-   * @param {Omit<ITokenData, 'uid'>} tokenData The native token config
+   * Set the native token config on the store
    */
-  async setNativeTokenData(tokenData: Omit<ITokenData, 'uid'>|null|undefined): Promise<void> {
-    if (tokenData) {
-      this.nativeTokenData = tokenData;
-    }
-    const nativeToken = tokenData ?? DEFAULT_NATIVE_TOKEN_CONFIG;
-    await this.store.saveToken({
-      ...nativeToken,
-      uid: NATIVE_TOKEN_UID,
-    });
+  async saveNativeToken(): Promise<void> {
+    await this.store.saveToken(this.getNativeTokenData());
   }
 
   /**
@@ -120,7 +109,9 @@ export class Storage implements IStorage {
    * @return {ITokenData} The native token config
    */
   getNativeTokenData(): ITokenData {
-    return {...this.nativeTokenData, uid: NATIVE_TOKEN_UID};
+    const nativeToken = this.version?.native_token ?? DEFAULT_NATIVE_TOKEN_CONFIG;
+
+    return {...nativeToken, uid: NATIVE_TOKEN_UID};
   }
 
   /**
@@ -157,14 +148,11 @@ export class Storage implements IStorage {
    * @returns {number}
    */
   getTokenDepositPercentage(): number {
-    if (this.version && this.version.token_deposit_percentage) {
-      return this.version.token_deposit_percentage;
-    }
     /**
      *  When using wallet-service facade we do not update the version constants
      *  Since this data is important for the wallets UI we will return the default value here.
      */
-    return TOKEN_DEPOSIT_PERCENTAGE;
+    return this.version?.token_deposit_percentage ?? TOKEN_DEPOSIT_PERCENTAGE;
   }
 
   /**

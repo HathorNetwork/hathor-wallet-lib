@@ -1450,7 +1450,7 @@ class HathorWallet extends EventEmitter {
     });
     if (info.network.indexOf(this.conn.network) >= 0) {
       this.storage.setApiVersion(info);
-      await this.storage.setNativeTokenData(info?.native_token);
+      await this.storage.saveNativeToken();
       this.conn.start(); // XXX: maybe await?
     } else {
       this.setState(HathorWallet.CLOSED);

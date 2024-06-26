@@ -437,7 +437,7 @@ export interface IStorage {
   config: Config;
   version: ApiVersion | null;
 
-  setNativeTokenData(tokenData: Omit<ITokenData, 'uid'>|null|undefined): Promise<void>;
+  saveNativeToken(): Promise<void>;
   getNativeTokenData(): ITokenData;
 
   hasTxSignatureMethod(): boolean;
