@@ -16,7 +16,11 @@ import dateFormatter from '../../../src/utils/date';
 import { bufferToHex, hexToBuffer } from '../../../src/utils/buffer';
 import Address from '../../../src/models/address';
 import P2PKH from '../../../src/models/p2pkh';
-import { getOracleBuffer, getOracleInputData } from '../../../src/nano_contracts/utils';
+import {
+  getOracleBuffer,
+  getOracleInputData,
+  isNanoContractCreateTx,
+} from '../../../src/nano_contracts/utils';
 import Serializer from '../../../src/nano_contracts/serializer';
 import { NanoContractTransactionError, NanoRequest404Error } from '../../../src/errors';
 import { OutputType } from '../../../src/wallet/types';
@@ -84,6 +88,7 @@ describe('full cycle of bet nano contract', () => {
     );
     await checkTxValid(wallet, tx1.hash);
     const tx1Data = await wallet.getFullTxById(tx1.hash);
+    expect(isNanoContractCreateTx(tx1Data.tx)).toBe(true);
 
     const tx1Parser = new NanoContractTransactionParser(
       blueprintId,
@@ -117,6 +122,7 @@ describe('full cycle of bet nano contract', () => {
     });
     await checkTxValid(wallet, txBet.hash);
     const txBetData = await wallet.getFullTxById(txBet.hash);
+    expect(isNanoContractCreateTx(txBetData.tx)).toBe(false);
 
     const txBetParser = new NanoContractTransactionParser(
       blueprintId,
@@ -155,6 +161,7 @@ describe('full cycle of bet nano contract', () => {
     });
     await checkTxValid(wallet, txBet2.hash);
     const txBet2Data = await wallet.getFullTxById(txBet2.hash);
+    expect(isNanoContractCreateTx(txBet2Data.tx)).toBe(false);
 
     const txBet2Parser = new NanoContractTransactionParser(
       blueprintId,
@@ -224,6 +231,7 @@ describe('full cycle of bet nano contract', () => {
     await checkTxValid(wallet, txSetResult.hash);
     txIds.push(txSetResult.hash);
     const txSetResultData = await wallet.getFullTxById(txSetResult.hash);
+    expect(isNanoContractCreateTx(txSetResultData.tx)).toBe(false);
 
     const txSetResultParser = new NanoContractTransactionParser(
       blueprintId,
@@ -258,6 +266,7 @@ describe('full cycle of bet nano contract', () => {
     txIds.push(txWithdrawal.hash);
 
     const txWithdrawalData = await wallet.getFullTxById(txWithdrawal.hash);
+    expect(isNanoContractCreateTx(txWithdrawalData)).toBe(false);
 
     const txWithdrawalParser = new NanoContractTransactionParser(
       blueprintId,

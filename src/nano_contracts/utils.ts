@@ -20,9 +20,10 @@ import P2SH from '../models/p2sh';
 import Address from '../models/address';
 import { NanoContractTransactionError, OracleParseError, WalletFromXPubGuard } from '../errors';
 import { OutputType } from '../wallet/types';
-import { IStorage } from '../types';
+import { IHistoryTx, IStorage } from '../types';
 import { parseScript } from '../utils/scripts';
 import { MethodArgInfo } from './types';
+import { NANO_CONTRACTS_VERSION, NANO_CONTRACTS_INITIALIZE_METHOD } from '../constants';
 
 /**
  * Sign a transaction and create a send transaction object
@@ -197,4 +198,13 @@ export const validateBlueprintMethodArgs = async (blueprintId, method, args): Pr
         }
     }
   }
+};
+
+/**
+ * Checks if a transaction is a nano contract create transaction
+ *
+ * @param tx History object from hathor core to check if it's a nano create tx
+ */
+export const isNanoContractCreateTx = (tx: IHistoryTx): boolean => {
+  return tx.version === NANO_CONTRACTS_VERSION && tx.nc_method === NANO_CONTRACTS_INITIALIZE_METHOD;
 };
