@@ -224,6 +224,19 @@ describe('config version', () => {
     await storage.saveNativeToken();
     await expect(storage.getToken(NATIVE_TOKEN_UID)).resolves.toMatchObject({ name: 'Native', symbol: 'N', uid: NATIVE_TOKEN_UID });
   });
+
+  it('should not save native token over already saved native token', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    await expect(storage.getToken(NATIVE_TOKEN_UID)).resolves.toEqual(null);
+    await storage.saveNativeToken();
+    await expect(storage.getToken(NATIVE_TOKEN_UID)).resolves.toMatchObject({ ...DEFAULT_NATIVE_TOKEN_CONFIG, uid: NATIVE_TOKEN_UID });
+    // Should not save again, changing the server/network should clean the storage before continuing.
+    const version = { native_token: { name: 'Native', symbol: 'N' } };
+    storage.setApiVersion(version);
+    await storage.saveNativeToken();
+    await expect(storage.getToken(NATIVE_TOKEN_UID)).resolves.toMatchObject({ ...DEFAULT_NATIVE_TOKEN_CONFIG, uid: NATIVE_TOKEN_UID });
+  });
 });
 
 test('store fetch methods', async () => {
