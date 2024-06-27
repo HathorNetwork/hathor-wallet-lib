@@ -16,7 +16,14 @@ export function prettyValue(value: number, decimalPlaces = DECIMAL_PLACES): stri
   const fixedPlaces = (value / 10 ** decimalPlaces).toFixed(decimalPlaces);
   const integerPart = fixedPlaces.split('.')[0];
   const decimalPart = fixedPlaces.split('.')[1];
-  return `${prettyIntegerValue(parseInt(integerPart))}.${decimalPart}`;
+  let signal = '';
+  if ((parseInt(integerPart) === 0) && (value < 0)) {
+    // For negative numbers greater than -1 (e.g. -0.5) the prettyIntegerValue method receives
+    // 0 as argument, which makes the prettyValue method return a positive number.
+    // In this case we need to add a minus sign here.
+    signal = '-';
+  }
+  return `${signal}${prettyIntegerValue(parseInt(integerPart))}.${decimalPart}`;
 }
 
 /**
