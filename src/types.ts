@@ -354,6 +354,7 @@ export interface ApiVersion {
   reward_spend_min_blocks: number;
   max_number_inputs: number;
   max_number_outputs: number;
+  native_token: Omit<ITokenData, 'uid'> | null | undefined;
 }
 
 export interface IStore {
@@ -436,6 +437,9 @@ export interface IStorage {
   store: IStore;
   config: Config;
   version: ApiVersion | null;
+
+  saveNativeToken(): Promise<void>;
+  getNativeTokenData(): ITokenData;
 
   hasTxSignatureMethod(): boolean;
   setTxSignatureMethod(txSign: EcdsaTxSign): void;

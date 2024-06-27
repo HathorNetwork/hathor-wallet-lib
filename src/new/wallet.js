@@ -8,7 +8,7 @@
 import { get } from 'lodash';
 import bitcore, { HDPrivateKey } from 'bitcore-lib';
 import EventEmitter from 'events';
-import { HATHOR_TOKEN_CONFIG, NATIVE_TOKEN_UID, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
+import { NATIVE_TOKEN_UID, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
 import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
 import versionApi from '../api/version';
@@ -1450,6 +1450,7 @@ class HathorWallet extends EventEmitter {
     });
     if (info.network.indexOf(this.conn.network) >= 0) {
       this.storage.setApiVersion(info);
+      await this.storage.saveNativeToken();
       this.conn.start(); // XXX: maybe await?
     } else {
       this.setState(HathorWallet.CLOSED);
@@ -2155,7 +2156,7 @@ class HathorWallet extends EventEmitter {
   getTokenData() {
     if (this.tokenUid === NATIVE_TOKEN_UID) {
       // Hathor token we don't get from the full node
-      this.token = HATHOR_TOKEN_CONFIG;
+      this.token = this.storage.getNativeTokenData();
     } else {
       // XXX: This request is not awaited
       // Get token info from full node
@@ -2652,7 +2653,7 @@ class HathorWallet extends EventEmitter {
        */
       const getToken = tokenUid => {
         if (tokenUid === NATIVE_TOKEN_UID) {
-          return HATHOR_TOKEN_CONFIG;
+          return this.storage.getNativeTokenData();
         }
 
         const token = fullTx.tx.tokens.find(token => token.uid === tokenUid);

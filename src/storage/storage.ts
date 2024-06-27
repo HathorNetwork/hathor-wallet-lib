@@ -48,6 +48,7 @@ import {
   MAX_INPUTS,
   MAX_OUTPUTS,
   TOKEN_DEPOSIT_PERCENTAGE,
+  DEFAULT_NATIVE_TOKEN_CONFIG,
 } from '../constants';
 import { UninitializedWalletError } from '../errors';
 import Transaction from '../models/transaction';
@@ -96,6 +97,26 @@ export class Storage implements IStorage {
   }
 
   /**
+   * Set the native token config on the store
+   */
+  async saveNativeToken(): Promise<void> {
+    if ((await this.store.getToken(NATIVE_TOKEN_UID)) === null) {
+      await this.store.saveToken(this.getNativeTokenData());
+    }
+  }
+
+  /**
+   * Gets the native token config
+   *
+   * @return {ITokenData} The native token config
+   */
+  getNativeTokenData(): ITokenData {
+    const nativeToken = this.version?.native_token ?? DEFAULT_NATIVE_TOKEN_CONFIG;
+
+    return {...nativeToken, uid: NATIVE_TOKEN_UID};
+  }
+
+  /**
    * Check if the tx signing method is set
    * @returns {boolean}
    */
@@ -129,14 +150,11 @@ export class Storage implements IStorage {
    * @returns {number}
    */
   getTokenDepositPercentage(): number {
-    if (this.version && this.version.token_deposit_percentage) {
-      return this.version.token_deposit_percentage;
-    }
     /**
      *  When using wallet-service facade we do not update the version constants
      *  Since this data is important for the wallets UI we will return the default value here.
      */
-    return TOKEN_DEPOSIT_PERCENTAGE;
+    return this.version?.token_deposit_percentage ?? TOKEN_DEPOSIT_PERCENTAGE;
   }
 
   /**
