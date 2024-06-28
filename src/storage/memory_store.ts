@@ -25,7 +25,7 @@ import {
   SCANNING_POLICY,
   INcData,
 } from '../types';
-import { GAP_LIMIT, HATHOR_TOKEN_CONFIG, NATIVE_TOKEN_UID } from '../constants';
+import { GAP_LIMIT, NATIVE_TOKEN_UID } from '../constants';
 import transactionUtils from '../utils/transaction';
 
 const DEFAULT_ADDRESSES_WALLET_DATA = {
@@ -181,9 +181,6 @@ export class MemoryStore implements IStore {
     this.registeredNanoContracts = new Map<string, INcData>();
 
     this.walletData = cloneDeep({ ...DEFAULT_WALLET_DATA, ...DEFAULT_ADDRESSES_WALLET_DATA });
-
-    // Add HTR to storage tokens
-    this.tokens.set(NATIVE_TOKEN_UID, HATHOR_TOKEN_CONFIG);
   }
 
   async validate(): Promise<void> {

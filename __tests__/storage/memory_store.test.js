@@ -161,12 +161,11 @@ test('history methods', async () => {
 test('token methods', async () => {
   const store = new MemoryStore();
 
-  // Starts with HTR
-  expect(store.tokens.size).toEqual(1);
-  expect(store.tokens.get('00')).toBeDefined();
+  // Starts empty
+  expect(store.tokens.size).toEqual(0);
 
   await store.saveToken({ uid: '01', name: 'Token 01', symbol: 'TK01' });
-  expect(store.tokens.size).toEqual(2);
+  expect(store.tokens.size).toEqual(1);
   expect(store.tokens.get('01')).toBeDefined();
   expect(store.tokensMetadata.get('01')).toBeUndefined();
   await store.saveToken(
@@ -182,7 +181,7 @@ test('token methods', async () => {
       },
     }
   );
-  expect(store.tokens.size).toEqual(3);
+  expect(store.tokens.size).toEqual(2);
   expect(store.tokens.get('02')).toBeDefined();
   expect(store.tokensMetadata.get('02')).toBeDefined();
 
@@ -208,6 +207,7 @@ test('token methods', async () => {
   }
   expect(registered).toHaveLength(1);
 
+  await store.saveToken({ uid: '00', name: 'Hathor', symbol: 'HTR' });
   await store.editTokenMeta('00', {
     numTransactions: 10,
     balance: { tokens: { locked: 1, unlocked: 2 } },

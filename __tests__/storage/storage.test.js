@@ -19,6 +19,8 @@ import {
   TOKEN_MINT_MASK,
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
   GAP_LIMIT,
+  DEFAULT_NATIVE_TOKEN_CONFIG,
+  NATIVE_TOKEN_UID,
 } from '../../src/constants';
 import * as cryptoUtils from '../../src/utils/crypto';
 import { InvalidPasswdError } from '../../src/errors';
@@ -192,6 +194,48 @@ describe('config version', () => {
     expect(storage.getTokenDepositPercentage()).toEqual(0.5);
     storage.setApiVersion(null);
     expect(storage.getTokenDepositPercentage()).toEqual(TOKEN_DEPOSIT_PERCENTAGE);
+  });
+
+  it('should get native token from version', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    expect(storage.getNativeTokenData()).toEqual({ ...DEFAULT_NATIVE_TOKEN_CONFIG, uid: NATIVE_TOKEN_UID });
+    const version = { native_token: { name: 'Native', symbol: 'N' } };
+    storage.setApiVersion(version);
+    expect(storage.getNativeTokenData()).toEqual({ name: 'Native', symbol: 'N', uid: NATIVE_TOKEN_UID });
+    storage.setApiVersion(null);
+    expect(storage.getNativeTokenData()).toEqual({ ...DEFAULT_NATIVE_TOKEN_CONFIG, uid: NATIVE_TOKEN_UID });
+  });
+
+  it('should save HTR when no custom native token is on version', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    await expect(storage.getToken(NATIVE_TOKEN_UID)).resolves.toEqual(null);
+    await storage.saveNativeToken();
+    await expect(storage.getToken(NATIVE_TOKEN_UID)).resolves.toMatchObject({ ...DEFAULT_NATIVE_TOKEN_CONFIG, uid: NATIVE_TOKEN_UID });
+  });
+
+  it('should save native token from version', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    await expect(storage.getToken(NATIVE_TOKEN_UID)).resolves.toEqual(null);
+    const version = { native_token: { name: 'Native', symbol: 'N' } };
+    storage.setApiVersion(version);
+    await storage.saveNativeToken();
+    await expect(storage.getToken(NATIVE_TOKEN_UID)).resolves.toMatchObject({ name: 'Native', symbol: 'N', uid: NATIVE_TOKEN_UID });
+  });
+
+  it('should not save native token over already saved native token', async () => {
+    const store = new MemoryStore();
+    const storage = new Storage(store);
+    await expect(storage.getToken(NATIVE_TOKEN_UID)).resolves.toEqual(null);
+    await storage.saveNativeToken();
+    await expect(storage.getToken(NATIVE_TOKEN_UID)).resolves.toMatchObject({ ...DEFAULT_NATIVE_TOKEN_CONFIG, uid: NATIVE_TOKEN_UID });
+    // Should not save again, changing the server/network should clean the storage before continuing.
+    const version = { native_token: { name: 'Native', symbol: 'N' } };
+    storage.setApiVersion(version);
+    await storage.saveNativeToken();
+    await expect(storage.getToken(NATIVE_TOKEN_UID)).resolves.toMatchObject({ ...DEFAULT_NATIVE_TOKEN_CONFIG, uid: NATIVE_TOKEN_UID });
   });
 });
 

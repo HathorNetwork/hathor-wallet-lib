@@ -355,6 +355,7 @@ export interface ApiVersion {
   max_number_inputs: number;
   max_number_outputs: number;
   decimal_places: number;
+  native_token: Omit<ITokenData, 'uid'> | null | undefined;
 }
 
 export interface IStore {
@@ -440,6 +441,8 @@ export interface IStorage {
 
   setApiVersion(version: ApiVersion): void;
   getDecimalPlaces(): number;
+  saveNativeToken(): Promise<void>;
+  getNativeTokenData(): ITokenData;
 
   hasTxSignatureMethod(): boolean;
   setTxSignatureMethod(txSign: EcdsaTxSign): void;

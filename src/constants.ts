@@ -153,12 +153,12 @@ export const AUTHORITY_TOKEN_DATA = TOKEN_AUTHORITY_MASK | 1;
 export const NATIVE_TOKEN_UID: string = '00';
 
 /**
- * Hathor token config
- * @property {'Hathor'} name
- * @property {'HTR'} symbol
- * @property {'00'} uid
+ * Default HTR token config
  */
-export const HATHOR_TOKEN_CONFIG = { name: 'Hathor', symbol: 'HTR', uid: '00' };
+export const DEFAULT_NATIVE_TOKEN_CONFIG = {
+  name: 'Hathor',
+  symbol: 'HTR',
+};
 
 /**
  * Hathor token default index
