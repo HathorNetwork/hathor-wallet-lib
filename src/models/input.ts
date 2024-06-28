@@ -89,20 +89,20 @@ class Input {
     let dataLen;
     let data;
 
+    /* eslint-disable prefer-const -- To split these declarations would be confusing.
+     * In all of them the first parameter should be a const and the second a let. */
     // Hash
-    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [hash, inputBuffer] = unpackToHex(TX_HASH_SIZE_BYTES, inputBuffer);
 
     // Index
-    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [index, inputBuffer] = unpackToInt(1, false, inputBuffer);
 
     // Data
-    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [dataLen, inputBuffer] = unpackToInt(2, false, inputBuffer);
     if (dataLen) {
       [data, inputBuffer] = unpackLen(dataLen, inputBuffer);
     }
+    /* eslint-enable prefer-const */
 
     const input = new Input(hash, index, { data });
 

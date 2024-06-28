@@ -527,17 +527,16 @@ const helpers = {
    * @inner
    */
   fixAxiosConfig(axios: AxiosInstance, configObj: AxiosRequestConfig) {
+    /* eslint-disable no-param-reassign */
     if (axios.defaults.httpAgent === configObj.httpAgent) {
-      // eslint-disable-next-line no-param-reassign
       delete configObj.httpAgent;
     }
     if (axios.defaults.httpsAgent === configObj.httpsAgent) {
-      // eslint-disable-next-line no-param-reassign
       delete configObj.httpsAgent;
     }
 
-    // eslint-disable-next-line no-param-reassign
     configObj.transformRequest = [data => data];
+    /* eslint-enable no-param-reassign */
   },
 
   /**

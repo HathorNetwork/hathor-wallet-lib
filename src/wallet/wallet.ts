@@ -1163,35 +1163,31 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     return this.getCurrentAddress();
   }
 
-  // eslint-disable-next-line class-methods-use-this
+  /* eslint-disable class-methods-use-this -- Methods are not yet implemented */
   getAddressIndex(address: string) {
     throw new WalletError('Not implemented.');
   }
 
-  // eslint-disable-next-line class-methods-use-this
   isAddressMine(address: string) {
     throw new WalletError('Not implemented.');
   }
 
-  // eslint-disable-next-line class-methods-use-this
   getTx(id: string) {
     throw new WalletError('Not implemented.');
   }
 
-  // eslint-disable-next-line class-methods-use-this
   getAddressInfo(address: string, options = {}) {
     throw new WalletError('Not implemented.');
   }
 
-  // eslint-disable-next-line class-methods-use-this
   consolidateUtxos(destinationAddress: string, options = {}) {
     throw new WalletError('Not implemented.');
   }
 
-  // eslint-disable-next-line class-methods-use-this
   getFullHistory(): TransactionFullObject[] {
     throw new WalletError('Not implemented.');
   }
+  /* eslint-enable class-methods-use-this */
 
   /**
    * Checks if the given array of addresses belongs to the caller wallet

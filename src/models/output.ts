@@ -204,20 +204,19 @@ class Output {
     let scriptLen;
     let script;
 
+    /* eslint-disable prefer-const -- To split these declarations would be confusing.
+     * In all of them the first parameter should be a const and the second a let. */
     // Value
-    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [value, outputBuffer] = bytesToOutputValue(outputBuffer);
 
     // Token data
-    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [tokenData, outputBuffer] = unpackToInt(1, false, outputBuffer);
 
     // Script
-    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [scriptLen, outputBuffer] = unpackToInt(2, false, outputBuffer);
 
-    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [script, outputBuffer] = unpackLen(scriptLen, outputBuffer);
+    /* eslint-enable prefer-const */
 
     const output = new Output(value, script, { tokenData });
     output.parseScript(network);

@@ -479,17 +479,17 @@ class Transaction {
     let lenInputs;
     let lenOutputs;
 
+    /* eslint-disable prefer-const -- To split these declarations would be confusing.
+     * In all of them the first parameter should be a const and the second a let. */
     // Len tokens
-    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [lenTokens, buf] = unpackToInt(1, false, buf);
 
     // Len inputs
-    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [lenInputs, buf] = unpackToInt(1, false, buf);
 
     // Len outputs
-    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [lenOutputs, buf] = unpackToInt(1, false, buf);
+    /* eslint-enable prefer-const */
 
     // Tokens array
     for (let i = 0; i < lenTokens; i++) {
