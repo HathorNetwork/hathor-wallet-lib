@@ -19,26 +19,26 @@ import config from '../config';
  * Create an axios instance to be used when sending requests
  *
  * @param url Base URL for the api requests
- * @param resolve (UNUSED) Callback to be stored and used in case of a retry after a fail
- * @param _timeout Timeout in milliseconds for the request
- * @param _additionalHeaders Headers to be sent with the request
+ * @param _resolve (UNUSED) Callback to be stored and used in case of a retry after a fail
+ * @param timeout Timeout in milliseconds for the request
+ * @param additionalHeaders Headers to be sent with the request
  */
 export const axiosWrapperCreateRequestInstance = (
   url: string,
-  resolve?: undefined | null, // XXX: We should remove or use this parameter
-  _timeout?: number | null,
-  _additionalHeaders = {}
+  _resolve?: undefined | null, // XXX: We should remove or use this parameter
+  timeout?: number | null,
+  additionalHeaders = {}
 ) => {
-  let timeout;
-  const additionalHeaders = { ..._additionalHeaders };
-  if (_timeout === undefined) {
-    timeout = TIMEOUT;
+  let timeoutRef;
+  const additionalHeadersObj = { ...additionalHeaders };
+  if (timeout === undefined) {
+    timeoutRef = TIMEOUT;
   }
 
   // Any application using the lib may set in the config object a user agent to be set in all requests
   const userAgent = config.getUserAgent();
   if (userAgent) {
-    additionalHeaders['User-Agent'] = userAgent;
+    additionalHeadersObj['User-Agent'] = userAgent;
   }
 
   const defaultOptions: {
@@ -49,11 +49,11 @@ export const axiosWrapperCreateRequestInstance = (
     baseURL: url,
     headers: {
       'Content-Type': 'application/json',
-      ...additionalHeaders,
+      ...additionalHeadersObj,
     },
   };
-  if (timeout) {
-    defaultOptions.timeout = timeout;
+  if (timeoutRef) {
+    defaultOptions.timeout = timeoutRef;
   }
 
   return axios.create(defaultOptions);
