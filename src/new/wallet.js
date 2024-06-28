@@ -13,7 +13,7 @@ import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
 import versionApi from '../api/version';
 import { hexToBuffer } from '../utils/buffer';
-import { decryptData, signMessage } from '../utils/crypto';
+import { signMessage } from '../utils/crypto';
 import helpers from '../utils/helpers';
 import { createP2SHRedeemScript } from '../utils/scripts';
 import walletUtils from '../utils/wallet';
@@ -29,12 +29,9 @@ import {
 } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
-import Address from '../models/address';
-import { IStorage, SCANNING_POLICY, TxHistoryProcessingStatus, WalletType } from '../types';
+import { SCANNING_POLICY, TxHistoryProcessingStatus, WalletType } from '../types';
 import transactionUtils from '../utils/transaction';
-import Transaction from '../models/transaction';
 import Queue from '../models/queue';
-import FullnodeConnection from './connection';
 import {
   syncHistory,
   reloadStorage,
@@ -248,6 +245,7 @@ class HathorWallet extends EventEmitter {
    * @memberof HathorWallet
    * @inner
    * */
+  // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async getVersionData() {
     const versionData = await new Promise((resolve, reject) => {
       versionApi.getVersion(resolve).catch(error => reject(error));
@@ -757,7 +755,8 @@ class HathorWallet extends EventEmitter {
       skip: 0,
       ...options,
     };
-    let { skip, count } = newOptions;
+    const { skip } = newOptions;
+    let { count } = newOptions;
     const uid = newOptions.token_id || this.token.uid;
 
     const txs = [];
@@ -813,7 +812,7 @@ class HathorWallet extends EventEmitter {
    *                          Can be null if the wallet does not contain the tx.
    */
   async getTx(id) {
-    return await this.storage.getTx(id);
+    return this.storage.getTx(id);
   }
 
   /**
@@ -2197,6 +2196,7 @@ class HathorWallet extends EventEmitter {
    *   },
    * }>} token details
    */
+  // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async getTokenDetails(tokenId) {
     const result = await new Promise(resolve => {
       return walletApi.getGeneralTokenInfo(tokenId, resolve);
@@ -2479,6 +2479,7 @@ class HathorWallet extends EventEmitter {
    *
    * @returns {FullNodeTxResponse} Transaction data in the fullnode
    */
+  // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async getFullTxById(txId) {
     const tx = await new Promise((resolve, reject) => {
       txApi
@@ -2504,6 +2505,7 @@ class HathorWallet extends EventEmitter {
    *
    * @returns {FullNodeTxConfirmationDataResponse} Transaction confirmation data
    */
+  // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async getTxConfirmationData(txId) {
     const confirmationData = await new Promise((resolve, reject) => {
       txApi
@@ -2656,7 +2658,7 @@ class HathorWallet extends EventEmitter {
           return this.storage.getNativeTokenData();
         }
 
-        const token = fullTx.tx.tokens.find(token => token.uid === tokenUid);
+        const token = fullTx.tx.tokens.find(tokenElem => tokenElem.uid === tokenUid);
         if (!token) {
           throw new Error(`Token ${tokenUid} not found in tx`);
         }
@@ -2709,7 +2711,7 @@ class HathorWallet extends EventEmitter {
    * @returns {Promise<boolean>}
    */
   async checkPinAndPassword(pin, password) {
-    return (await this.checkPin(pin)) && (await this.checkPassword(password));
+    return (await this.checkPin(pin)) && this.checkPassword(password); // The promise from checkPassword will be returned here
   }
 
   /**

@@ -6,7 +6,7 @@
  */
 
 import { EventEmitter } from 'events';
-import bitcore, { crypto, util, Address as bitcoreAddress } from 'bitcore-lib';
+import bitcore, { util } from 'bitcore-lib';
 import assert from 'assert';
 import {
   NATIVE_TOKEN_UID,
@@ -49,7 +49,6 @@ import {
   TransactionFullObject,
   IHathorWallet,
   WsTransaction,
-  TxOutput,
   CreateWalletAuthData,
   ConnectionState,
   TokenDetailsObject,
@@ -926,16 +925,15 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
 
       await this.renewAuthToken(privKey, timestampNow);
-    } else {
+    } else if (usePassword) {
       // If we have received the user PIN, we should renew the token anyway
       // without blocking this method's promise
-      if (usePassword) {
-        const privKey = bitcore.HDPrivateKey.fromString(
-          await this.storage.getAuthPrivKey(usePassword)
-        );
 
-        this.renewAuthToken(privKey, timestampNow);
-      }
+      const privKey = bitcore.HDPrivateKey.fromString(
+        await this.storage.getAuthPrivKey(usePassword)
+      );
+
+      this.renewAuthToken(privKey, timestampNow);
     }
   }
 
@@ -1026,6 +1024,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
+  // eslint-disable-next-line class-methods-use-this -- XXX: This method should be made static
   getInputData(xprivkey: string, dataToSignHash: Buffer, addressPath: number): Buffer {
     const xpriv = bitcore.HDPrivateKey(xprivkey);
     const derivedKey = xpriv.deriveNonCompliantChild(addressPath);
@@ -1164,6 +1163,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     return this.getCurrentAddress();
   }
 
+  /* eslint-disable class-methods-use-this -- Methods are not yet implemented */
   getAddressIndex(address: string) {
     throw new WalletError('Not implemented.');
   }
@@ -1187,6 +1187,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   getFullHistory(): TransactionFullObject[] {
     throw new WalletError('Not implemented.');
   }
+  /* eslint-enable class-methods-use-this */
 
   /**
    * Checks if the given array of addresses belongs to the caller wallet
@@ -1207,8 +1208,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async handleSendPreparedTransaction(transaction: Transaction): Promise<Transaction> {
-    const sendTransaction = new SendTransactionWalletService(this, { transaction });
+  async handleSendPreparedTransaction(transactionObj: Transaction): Promise<Transaction> {
+    const sendTransaction = new SendTransactionWalletService(this, { transaction: transactionObj });
     return sendTransaction.runFromMining();
   }
 
@@ -2103,13 +2104,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @returns {Promise<boolean>}
    */
   async checkPinAndPassword(pin: string, password: string): Promise<boolean> {
-    return (await this.checkPin(pin)) && (await this.checkPassword(password));
+    return (await this.checkPin(pin)) && this.checkPassword(password); // The promise from checkPassword will be returned
   }
 
   /**
    * Check if the wallet is a hardware wallet.
    * @returns {Promise<boolean>}
    */
+  // eslint-disable-next-line class-methods-use-this -- The method returns a hardcoded value
   async isHardwareWallet(): Promise<boolean> {
     // We currently do not have support for hardware wallets
     // in the wallet-service facade.

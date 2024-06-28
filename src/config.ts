@@ -59,10 +59,10 @@ export class Config {
     }
 
     // Keeps the old behavior for cases that don't explicitly set a TX_MINING_URL
-    if (networkInstance.name == 'mainnet') {
+    if (networkInstance.name === 'mainnet') {
       return TX_MINING_MAINNET_URL;
     }
-    if (networkInstance.name == 'testnet') {
+    if (networkInstance.name === 'testnet') {
       return TX_MINING_TESTNET_URL;
     }
     throw new Error(
@@ -136,10 +136,10 @@ export class Config {
     }
 
     // Keeps the old behavior for cases that don't explicitly set a SWAP_SERVICE_BASE_URL
-    if (network == 'mainnet') {
+    if (network === 'mainnet') {
       return SWAP_SERVICE_MAINNET_BASE_URL;
     }
-    if (network == 'testnet') {
+    if (network === 'testnet') {
       return SWAP_SERVICE_TESTNET_BASE_URL;
     }
     throw new Error(
@@ -211,10 +211,10 @@ export class Config {
     }
 
     // Keeps the old behavior for cases that don't explicitly set a EXPLORER_SERVICE_BASE_URL
-    if (network == 'mainnet') {
+    if (network === 'mainnet') {
       return EXPLORER_SERVICE_MAINNET_BASE_URL;
     }
-    if (network == 'testnet') {
+    if (network === 'testnet') {
       return EXPLORER_SERVICE_TESTNET_BASE_URL;
     }
     throw new Error(

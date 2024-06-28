@@ -34,7 +34,7 @@ class Input {
       throw Error('You must provide a hash.');
     }
 
-    if (isNaN(index)) {
+    if (Number.isNaN(index)) {
       throw Error('You must provide an index.');
     }
 
@@ -89,6 +89,8 @@ class Input {
     let dataLen;
     let data;
 
+    /* eslint-disable prefer-const -- To split these declarations would be confusing.
+     * In all of them the first parameter should be a const and the second a let. */
     // Hash
     [hash, inputBuffer] = unpackToHex(TX_HASH_SIZE_BYTES, inputBuffer);
 
@@ -100,6 +102,7 @@ class Input {
     if (dataLen) {
       [data, inputBuffer] = unpackLen(dataLen, inputBuffer);
     }
+    /* eslint-enable prefer-const */
 
     const input = new Input(hash, index, { data });
 

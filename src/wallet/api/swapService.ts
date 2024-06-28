@@ -77,6 +77,7 @@ export function hashPassword(password): string {
  * @param [timeout] Optional timeout, defaults to the lib's timeout constant
  * @param [network] Optional network. If not present, defaults connection to the lib's configured baseUrl
  */
+// eslint-disable-next-line default-param-last -- XXX: This method should be refactored
 const axiosInstance = async (timeout: number = TIMEOUT, network?: 'mainnet' | 'testnet') => {
   const swapServiceBaseUrl = config.getSwapServiceBaseUrl(network);
   const defaultOptions = {
@@ -219,19 +220,24 @@ export const update = async (params: SwapUpdateParams): Promise<{ success: boole
       throw new Error(`Missing mandatory parameters.`);
     }
 
-    const { proposalId, password, partialTx, version } = params;
+    const {
+      proposalId: paramProposalId,
+      password: paramPassword,
+      partialTx: paramPartialTx,
+      version: paramVersion,
+    } = params;
     // Checking for missing parameters
     const missingParameters: string[] = [];
-    if (!proposalId) {
+    if (!paramProposalId) {
       missingParameters.push('proposalId');
     }
-    if (!password) {
+    if (!paramPassword) {
       missingParameters.push('password');
     }
-    if (!partialTx) {
+    if (!paramPartialTx) {
       missingParameters.push('partialTx');
     }
-    if (version === undefined || version === null) {
+    if (paramVersion === undefined || paramVersion === null) {
       missingParameters.push('version');
     }
     if (missingParameters.length > 0) {
@@ -239,7 +245,7 @@ export const update = async (params: SwapUpdateParams): Promise<{ success: boole
     }
 
     // Checking for invalid parameters
-    if (!isNumber(version) || version < 0) {
+    if (!isNumber(paramVersion) || paramVersion < 0) {
       throw new Error('Invalid version number');
     }
   }

@@ -458,14 +458,17 @@ class Transaction {
    * Gets funds fields (signalBits, version, tokens, inputs, outputs) from bytes
    * and saves them in `this`
    *
-   * @param {Buffer} buf Buffer with bytes to get fields
-   * @param {Network} network Network to get output addresses first byte
+   * @param srcBuf Buffer with bytes to get fields
+   * @param network Network to get output addresses first byte
    *
-   * @return {Buffer} Rest of buffer after getting the fields
+   * @return Rest of buffer after getting the fields
    * @memberof Transaction
    * @inner
    */
-  getFundsFieldsFromBytes(buf: Buffer, network: Network): Buffer {
+  getFundsFieldsFromBytes(srcBuf: Buffer, network: Network): Buffer {
+    // Copies buffer locally, not to change the original parameter
+    let buf = Buffer.from(srcBuf);
+
     // Signal bits
     [this.signalBits, buf] = unpackToInt(1, false, buf);
 
@@ -476,6 +479,8 @@ class Transaction {
     let lenInputs;
     let lenOutputs;
 
+    /* eslint-disable prefer-const -- To split these declarations would be confusing.
+     * In all of them the first parameter should be a const and the second a let. */
     // Len tokens
     [lenTokens, buf] = unpackToInt(1, false, buf);
 
@@ -484,6 +489,7 @@ class Transaction {
 
     // Len outputs
     [lenOutputs, buf] = unpackToInt(1, false, buf);
+    /* eslint-enable prefer-const */
 
     // Tokens array
     for (let i = 0; i < lenTokens; i++) {
@@ -513,13 +519,16 @@ class Transaction {
    * Gets graph fields (weight, timestamp, parents, nonce) from bytes
    * and saves them in `this`
    *
-   * @param {Buffer} buf Buffer with bytes to get fields
+   * @param srcBuf Buffer with bytes to get fields
    *
-   * @return {Buffer} Rest of buffer after getting the fields
+   * @return Rest of buffer after getting the fields
    * @memberof Transaction
    * @inner
    */
-  getGraphFieldsFromBytes(buf: Buffer): Buffer {
+  getGraphFieldsFromBytes(srcBuf: Buffer): Buffer {
+    // Copies buffer locally, not to change the original parameter
+    let buf = Buffer.from(srcBuf);
+
     // Weight
     [this.weight, buf] = unpackToFloat(buf);
 
@@ -528,6 +537,7 @@ class Transaction {
 
     // Parents
     let parentsLen;
+    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [parentsLen, buf] = unpackToInt(1, false, buf);
 
     for (let i = 0; i < parentsLen; i++) {

@@ -94,14 +94,14 @@ export async function reloadStorage(
  * @param {number} count Number of addresses to load
  * @param {IStorage} storage The storage to load the addresses
  * @param {FullnodeConnection} connection Connection to the full node
- * @param {boolean} processHistory If we should process the history after loading it.
+ * @param {boolean} shouldProcessHistory If we should process the history after loading it.
  */
 export async function syncHistory(
   startIndex: number,
   count: number,
   storage: IStorage,
   connection: FullnodeConnection,
-  processHistory: boolean = false
+  shouldProcessHistory: boolean = false
 ) {
   let itStartIndex = startIndex;
   let itCount = count;
@@ -133,7 +133,7 @@ export async function syncHistory(
     itStartIndex = loadMoreAddresses.nextIndex;
     itCount = loadMoreAddresses.count;
   }
-  if (foundAnyTx && processHistory) {
+  if (foundAnyTx && shouldProcessHistory) {
     await storage.processHistory();
   }
 }
@@ -242,9 +242,10 @@ export async function scanPolicyStartAddresses(
   storage: IStorage
 ): Promise<IScanPolicyLoadAddresses> {
   const scanPolicy = await storage.getScanningPolicy();
+  let limits;
   switch (scanPolicy) {
     case SCANNING_POLICY.INDEX_LIMIT:
-      const limits = await storage.getIndexLimit();
+      limits = await storage.getIndexLimit();
       if (!limits) {
         // This should not happen but it enforces the limits type
         throw new Error('Index limit is not configured');
@@ -253,8 +254,8 @@ export async function scanPolicyStartAddresses(
         nextIndex: limits.startIndex,
         count: limits.endIndex - limits.startIndex + 1,
       };
-    default:
     case SCANNING_POLICY.GAP_LIMIT:
+    default:
       return {
         nextIndex: 0,
         count: await storage.getGapLimit(),
@@ -629,11 +630,9 @@ export async function processNewTx(
         // So that later when it becomes unlocked we can update the balances with processUtxoUnlock
         await store.saveLockedUtxo({ tx, index });
       }
-    } else {
+    } else if (await storage.isUtxoSelectedAsInput({ txId: tx.tx_id, index })) {
       // If the output is spent we remove it from the utxos selected_as_inputs if it's there
-      if (await storage.isUtxoSelectedAsInput({ txId: tx.tx_id, index })) {
-        await storage.utxoSelectAsInput({ txId: tx.tx_id, index }, false);
-      }
+      await storage.utxoSelectAsInput({ txId: tx.tx_id, index }, false);
     }
 
     await store.editTokenMeta(output.token, tokenMeta);

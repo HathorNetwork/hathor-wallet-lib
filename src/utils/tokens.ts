@@ -207,7 +207,7 @@ const tokens = {
   /**
    * Gets the token index to be added to the tokenData in the output from tx
    *
-   * @param {Object} tokens Array of token configs
+   * @param {Object} tokensArray Array of token configs
    * @param {Object} uid Token uid to return the index
    *
    * @return {number} Index of token to be set as tokenData in output tx
@@ -215,13 +215,13 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  getTokenIndex(tokens: ITokenData[], uid: string): number {
+  getTokenIndex(tokensArray: ITokenData[], uid: string): number {
     // If token is Hathor, index is always 0
     // Otherwise, it is always the array index + 1
     if (uid === NATIVE_TOKEN_UID) {
       return 0;
     }
-    const tokensWithoutHathor = tokens.filter(token => token.uid !== NATIVE_TOKEN_UID);
+    const tokensWithoutHathor = tokensArray.filter(token => token.uid !== NATIVE_TOKEN_UID);
     const myIndex = tokensWithoutHathor.findIndex(token => token.uid === uid);
     return myIndex + 1;
   },
@@ -415,12 +415,12 @@ const tokens = {
       }
     }
 
-    const tokens = token !== null ? [token] : [];
+    const tokensArray = token !== null ? [token] : [];
 
     return {
       inputs,
       outputs,
-      tokens,
+      tokens: tokensArray,
     };
   },
 
@@ -468,7 +468,7 @@ const tokens = {
     }
     const inputs: IDataInput[] = [authorityMeltInput];
     const outputs: IDataOutput[] = [];
-    const tokens = [authorityMeltInput.token];
+    const tokensArray = [authorityMeltInput.token];
     const depositPercent = storage.getTokenDepositPercentage();
     let withdrawAmount = this.getWithdrawAmount(amount, depositPercent);
     // The deposit amount will be the quantity of data strings in the array
@@ -520,26 +520,26 @@ const tokens = {
 
     if (depositAmount > 0) {
       // get HTR deposit inputs
-      const selectedUtxos = await utxoSelection(storage, NATIVE_TOKEN_UID, depositAmount);
-      const foundAmount = selectedUtxos.amount;
-      for (const utxo of selectedUtxos.utxos) {
+      const depositSelectedUtxos = await utxoSelection(storage, NATIVE_TOKEN_UID, depositAmount);
+      const depositFoundAmount = depositSelectedUtxos.amount;
+      for (const utxo of depositSelectedUtxos.utxos) {
         inputs.push(helpers.getDataInputFromUtxo(utxo));
       }
 
-      if (foundAmount < depositAmount) {
+      if (depositFoundAmount < depositAmount) {
         throw new InsufficientFundsError(
-          `Not enough HTR tokens for deposit: ${depositAmount} required, ${foundAmount} available`
+          `Not enough HTR tokens for deposit: ${depositAmount} required, ${depositFoundAmount} available`
         );
       }
 
       // get output change
-      if (foundAmount > depositAmount) {
+      if (depositFoundAmount > depositAmount) {
         const cAddress = await storage.getChangeAddress({ changeAddress });
 
         outputs.push({
           type: getAddressType(cAddress, storage.config.getNetwork()),
           address: cAddress,
-          value: foundAmount - depositAmount,
+          value: depositFoundAmount - depositAmount,
           timelock: null,
           token: NATIVE_TOKEN_UID,
           authorities: 0,
@@ -593,7 +593,7 @@ const tokens = {
     return {
       inputs,
       outputs,
-      tokens,
+      tokens: tokensArray,
     };
   },
 

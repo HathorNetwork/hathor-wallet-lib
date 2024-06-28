@@ -34,8 +34,7 @@ export const parseP2PKH = (buff: Buffer, network: Network): P2PKH => {
     throw new ParseScriptError('Invalid output script.');
   }
 
-  let addressHash;
-  [addressHash, scriptBuf] = unpackLen(20, scriptBuf.slice(3 + offset));
+  const [addressHash] = unpackLen(20, scriptBuf.slice(3 + offset));
 
   return new P2PKH(helpers.encodeAddress(addressHash, network), { timelock });
 };
@@ -65,8 +64,7 @@ export const parseP2SH = (buff: Buffer, network: Network): P2SH => {
     throw new ParseScriptError('Invalid output script.');
   }
 
-  let scriptHash;
-  [scriptHash, scriptBuf] = unpackLen(20, scriptBuf.slice(2 + offset));
+  const [scriptHash] = unpackLen(20, scriptBuf.slice(2 + offset));
 
   return new P2SH(helpers.encodeAddressP2SH(scriptHash, network), { timelock });
 };
@@ -96,8 +94,10 @@ export const parseScriptData = (buff: Buffer): ScriptData => {
   // otherwise, the first byte already has the length of data
   if (scriptBuf[0] === OP_PUSHDATA1[0]) {
     expectedLen += 1;
+    // eslint-disable-next-line prefer-destructuring -- Destructuring would make this harder to read
     dataBytesLen = scriptBuf[1];
   } else {
+    // eslint-disable-next-line prefer-destructuring -- Destructuring would make this harder to read
     dataBytesLen = scriptBuf[0];
   }
 
@@ -149,9 +149,11 @@ export const getPushData = (buff: Buffer): Buffer => {
   let start;
 
   if (scriptBuf[0] > 75) {
+    // eslint-disable-next-line prefer-destructuring -- Destructuring would make this harder to read
     lenData = scriptBuf[1];
     start = 2;
   } else {
+    // eslint-disable-next-line prefer-destructuring -- Destructuring would make this harder to read
     lenData = scriptBuf[0];
     start = 1;
   }

@@ -288,17 +288,15 @@ class PartialTxProposal {
           tokenBalance[output.token].authority.unlocked.melt +=
             (output.value & TOKEN_MELT_MASK) > 0 ? 1 : 0;
         }
-      } else {
+      } else if (isTimelocked(decodedScript.timelock)) {
         /**
          * Calculate token balances
          */
-        if (isTimelocked(decodedScript.timelock)) {
-          // Locked output
-          tokenBalance[output.token].balance.locked += output.value;
-        } else {
-          // Unlocked output
-          tokenBalance[output.token].balance.unlocked += output.value;
-        }
+        // Locked output
+        tokenBalance[output.token].balance.locked += output.value;
+      } else {
+        // Unlocked output
+        tokenBalance[output.token].balance.unlocked += output.value;
       }
     }
 

@@ -237,6 +237,7 @@ const helpers = {
     const cloneBuffer = clone(bytes);
 
     // Get version
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- No use for signalBits in this context
     const [_signalBits, buf] = unpackToInt(1, false, cloneBuffer);
     const [version] = unpackToInt(1, false, buf);
 
@@ -517,21 +518,25 @@ const helpers = {
    * with circular structures: https://github.com/mzabriskie/axios/issues/370
    * Got this code from https://github.com/softonic/axios-retry/blob/master/es/index.mjs#L203
    *
+   * Warning: This function mutates the `config` parameter
+   *
    * @param {AxiosInstance} axios Axios instance
-   * @param {AxiosRequestConfig} config New axios config
+   * @param {AxiosRequestConfig} configObj New axios config
    *
    * @memberof Helpers
    * @inner
    */
-  fixAxiosConfig(axios: AxiosInstance, config: AxiosRequestConfig) {
-    if (axios.defaults.httpAgent === config.httpAgent) {
-      delete config.httpAgent;
+  fixAxiosConfig(axios: AxiosInstance, configObj: AxiosRequestConfig) {
+    /* eslint-disable no-param-reassign */
+    if (axios.defaults.httpAgent === configObj.httpAgent) {
+      delete configObj.httpAgent;
     }
-    if (axios.defaults.httpsAgent === config.httpsAgent) {
-      delete config.httpsAgent;
+    if (axios.defaults.httpsAgent === configObj.httpsAgent) {
+      delete configObj.httpsAgent;
     }
 
-    config.transformRequest = [data => data];
+    configObj.transformRequest = [data => data];
+    /* eslint-enable no-param-reassign */
   },
 
   /**

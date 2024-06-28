@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+// eslint-disable-next-line max-classes-per-file -- This file is supposed to export classes
 import { ErrorMessages } from './errorMessages';
 
 /**

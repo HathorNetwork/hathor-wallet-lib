@@ -73,11 +73,11 @@ const wallet = {
       .toLowerCase();
     const wordsArray = newWordsString.split(' ');
 
-    const getInvalidWords = (words: string[]): string[] => {
+    const getInvalidWords = (paramWords: string[]): string[] => {
       const wordlist = Mnemonic.Words.ENGLISH;
       const errorList: string[] = [];
 
-      for (const word of words) {
+      for (const word of paramWords) {
         if (wordlist.indexOf(word) < 0) {
           errorList.push(word);
         }

@@ -183,6 +183,7 @@ export class MemoryStore implements IStore {
     this.walletData = cloneDeep({ ...DEFAULT_WALLET_DATA, ...DEFAULT_ADDRESSES_WALLET_DATA });
   }
 
+  // eslint-disable-next-line class-methods-use-this
   async validate(): Promise<void> {
     // This is a noop since the memory store always starts clean.
   }

@@ -5,15 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { PublicKey } from 'bitcore-lib';
 import { concat, get } from 'lodash';
 import Output from '../models/output';
-import P2PKH from '../models/p2pkh';
 import Input from '../models/input';
-import Address from '../models/address';
 import NanoContract from './nano_contract';
 import { createOutputScriptFromAddress } from '../utils/address';
-import { IDataOutput } from '../types';
 import {
   NATIVE_TOKEN_UID,
   NANO_CONTRACTS_INITIALIZE_METHOD,

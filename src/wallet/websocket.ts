@@ -73,14 +73,12 @@ class WalletServiceWebSocket extends BaseWebSocket {
       this.onPong();
     } else if (payload.type === 'join-success') {
       this.onJoinSuccess();
-    } else {
+    } else if (this.timeoutTimer) {
       // The websoket might be exchanging many messages and end up getting the pong from the full node too late
       // in that case the websocket would be closed but we know the connection is not down because we are receiving
       // other messages. Because of that we just reset the timeoutTimer when we receive a message that is not a pong
-      if (this.timeoutTimer) {
-        clearTimeout(this.timeoutTimer);
-        this.timeoutTimer = setTimeout(() => this.onConnectionDown(), this.connectionTimeout);
-      }
+      clearTimeout(this.timeoutTimer);
+      this.timeoutTimer = setTimeout(() => this.onConnectionDown(), this.connectionTimeout);
     }
 
     this.emit(payload.type, payload);
@@ -140,6 +138,7 @@ class WalletServiceWebSocket extends BaseWebSocket {
   /**
    * Returns a JSON stringified ping message
    */
+  // eslint-disable-next-line class-methods-use-this -- The method returns a hardcoded value
   getPingMessage() {
     return JSON.stringify({ action: 'ping' });
   }

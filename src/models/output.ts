@@ -14,7 +14,7 @@ import {
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
 } from '../constants';
-import { OutputValueError, ParseError } from '../errors';
+import { OutputValueError } from '../errors';
 import P2PKH from './p2pkh';
 import P2SH from './p2sh';
 import ScriptData from './script_data';
@@ -204,6 +204,8 @@ class Output {
     let scriptLen;
     let script;
 
+    /* eslint-disable prefer-const -- To split these declarations would be confusing.
+     * In all of them the first parameter should be a const and the second a let. */
     // Value
     [value, outputBuffer] = bytesToOutputValue(outputBuffer);
 
@@ -214,6 +216,7 @@ class Output {
     [scriptLen, outputBuffer] = unpackToInt(2, false, outputBuffer);
 
     [script, outputBuffer] = unpackLen(scriptLen, outputBuffer);
+    /* eslint-enable prefer-const */
 
     const output = new Output(value, script, { tokenData });
     output.parseScript(network);

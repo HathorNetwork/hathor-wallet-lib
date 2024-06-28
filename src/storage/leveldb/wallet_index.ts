@@ -263,14 +263,14 @@ export default class LevelWalletIndex implements IKVWalletIndex {
 
   async getScanningPolicyData(): Promise<AddressScanPolicyData> {
     const policy = await this.getScanningPolicy();
-    if (policy == SCANNING_POLICY.GAP_LIMIT) {
+    if (policy === SCANNING_POLICY.GAP_LIMIT) {
       return {
         policy: SCANNING_POLICY.GAP_LIMIT,
         gapLimit: await this.getGapLimit(),
       } as IGapLimitAddressScanPolicy;
     }
 
-    if (policy == SCANNING_POLICY.INDEX_LIMIT) {
+    if (policy === SCANNING_POLICY.INDEX_LIMIT) {
       return {
         policy: SCANNING_POLICY.INDEX_LIMIT,
         startIndex: (await this._getNumber('startIndex')) || 0,
