@@ -179,7 +179,7 @@ export default class LevelAddressIndex implements IKVAddressIndex {
   async addressCount(): Promise<number> {
     if (!this.isValidated) {
       // Since we have not yet validated the index, we cannot trust the address count
-      return await this.runAddressCount();
+      return this.runAddressCount();
     }
     return this.size;
   }
@@ -191,6 +191,7 @@ export default class LevelAddressIndex implements IKVAddressIndex {
    */
   async runAddressCount(): Promise<number> {
     let size = 0;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- No use for the variable: just a counter
     for await (const _ of this.addressesDB.iterator()) {
       size++;
     }

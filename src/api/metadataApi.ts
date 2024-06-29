@@ -23,7 +23,8 @@ const metadataApi = {
       ...options,
     };
 
-    let { retries, retryInterval } = newOptions;
+    const { retryInterval } = newOptions;
+    let { retries } = newOptions;
     while (retries >= 0) {
       const client = await explorerServiceAxios(network);
       try {

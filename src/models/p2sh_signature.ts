@@ -56,8 +56,8 @@ class P2SHSignature {
     const xpub = arr[0];
     const signatures: Record<number, string> = {};
     for (const sig of arr.slice(1)) {
-      const parts = sig.split(':');
-      signatures[+parts[0]] = parts[1];
+      const [key, value] = sig.split(':');
+      signatures[+key] = value;
     }
     return new P2SHSignature(xpub, signatures);
   }

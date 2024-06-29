@@ -149,6 +149,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @memberof SendTransactionWalletService
    * @inner
    */
+  // eslint-disable-next-line class-methods-use-this -- XXX: This method should be made static
   inputDataToModel(input: InputRequestObj): Input {
     return new Input(input.txId, input.index);
   }
@@ -390,7 +391,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     try {
       const responseData = await walletApi.createTxProposal(this.wallet, txHex);
       const { txProposalId } = responseData;
-      const sendData = await walletApi.updateTxProposal(this.wallet, txProposalId, txHex);
+      await walletApi.updateTxProposal(this.wallet, txProposalId, txHex);
       this.transaction.updateHash();
       this.emit('send-tx-success', this.transaction);
       return this.transaction;

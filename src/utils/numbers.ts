@@ -4,6 +4,7 @@ import { DECIMAL_PLACES } from '../constants';
  * Get the formatted value with decimal places and thousand separators
  *
  * @param {number} value Amount to be formatted
+ * @param {number} [decimalPlaces=DECIMAL_PLACES] Number of decimal places
  *
  * @return {string} Formatted value
  *
@@ -23,7 +24,7 @@ export function prettyValue(value: number, decimalPlaces = DECIMAL_PLACES): stri
     // In this case we need to add a minus sign here.
     signal = '-';
   }
-  return `${signal}${prettyIntegerValue(parseInt(integerPart))}.${decimalPart}`;
+  return `${signal}${prettyIntegerValue(parseInt(integerPart, 10))}.${decimalPart}`;
 }
 
 /**

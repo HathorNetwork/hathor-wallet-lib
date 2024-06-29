@@ -273,8 +273,7 @@ abstract class BaseWebSocket extends EventEmitter {
     this.clearSetupTimer();
     this.clearPongTimeoutTimer();
     this.setupTimer = setTimeout(() => this.setup(), this.retryConnectionInterval);
-    // @ts-ignore
-    clearInterval(this.heartbeat);
+    clearInterval(this.heartbeat || undefined); // XXX: We should probably handle a missing heartbeat
   }
 
   /**
@@ -346,8 +345,7 @@ abstract class BaseWebSocket extends EventEmitter {
     this.started = false;
     this.connected = null;
     this.closeWs();
-    // @ts-ignore
-    clearInterval(this.heartbeat);
+    clearInterval(this.heartbeat || undefined); // XXX: We should probably handle a missing heartbeat
   }
 
   /**

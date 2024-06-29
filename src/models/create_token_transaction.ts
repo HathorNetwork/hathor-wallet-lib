@@ -127,13 +127,16 @@ class CreateTokenTransaction extends Transaction {
     array.push(symbolBytes);
   }
 
-  getTokenInfoFromBytes(buf: Buffer): Buffer {
+  getTokenInfoFromBytes(srcBuf: Buffer): Buffer {
     let tokenInfoVersion;
     let lenName;
     let lenSymbol;
     let bufName;
     let bufSymbol;
+    // Copies buffer locally, not to change the original parameter
+    let buf = Buffer.from(srcBuf);
 
+    /* eslint-disable prefer-const -- To split these declarations into const + let would be confusing */
     [tokenInfoVersion, buf] = unpackToInt(1, false, buf);
 
     if (tokenInfoVersion !== TOKEN_INFO_VERSION) {
@@ -161,6 +164,7 @@ class CreateTokenTransaction extends Transaction {
 
     [bufSymbol, buf] = unpackLen(lenSymbol, buf);
     this.symbol = bufSymbol.toString('utf-8');
+    /* eslint-enable prefer-const */
 
     return buf;
   }
@@ -169,14 +173,17 @@ class CreateTokenTransaction extends Transaction {
    * Gets funds fields (signalBits, version, inputs, outputs) from bytes
    * and saves them in `this`
    *
-   * @param {Buffer} buf Buffer with bytes to get fields
-   * @param {Network} network Network to get output addresses first byte
+   * @param srcBuf Buffer with bytes to get fields
+   * @param network Network to get output addresses first byte
    *
-   * @return {Buffer} Rest of buffer after getting the fields
+   * @return Rest of buffer after getting the fields
    * @memberof CreateTokenTransaction
    * @inner
    */
-  getFundsFieldsFromBytes(buf: Buffer, network: Network): Buffer {
+  getFundsFieldsFromBytes(srcBuf: Buffer, network: Network): Buffer {
+    // Copies buffer locally, not to change the original parameter
+    let buf = Buffer.from(srcBuf);
+
     // Signal bits
     [this.signalBits, buf] = unpackToInt(1, false, buf);
 
@@ -187,9 +194,11 @@ class CreateTokenTransaction extends Transaction {
     let lenOutputs;
 
     // Len inputs
+    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [lenInputs, buf] = unpackToInt(1, false, buf);
 
     // Len outputs
+    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [lenOutputs, buf] = unpackToInt(1, false, buf);
 
     // Inputs array

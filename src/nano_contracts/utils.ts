@@ -11,7 +11,6 @@ import transactionUtils from '../utils/transaction';
 import SendTransaction from '../new/sendTransaction';
 import HathorWallet from '../new/wallet';
 import NanoContract from './nano_contract';
-import Transaction from '../models/transaction';
 import Network from '../models/network';
 import ScriptData from '../models/script_data';
 import ncApi from '../api/nano';
@@ -126,6 +125,8 @@ export const getOracleInputData = async (
  * @param method Method name
  * @param args Arguments of the method to check if have the expected types
  *
+ * Warning: This method can mutate the `args` parameter during its validation
+ *
  * @throws NanoContractTransactionError in case the arguments are not valid
  * @throws NanoRequest404Error in case the blueprint ID does not exist on the full node
  */
@@ -163,6 +164,7 @@ export const validateBlueprintMethodArgs = async (blueprintId, method, args): Pr
       case 'bytes':
         // Bytes arguments are sent in hexadecimal
         try {
+          // eslint-disable-next-line no-param-reassign
           args[index] = hexToBuffer(args[index]);
         } catch {
           // Data sent is not a hex
@@ -187,6 +189,7 @@ export const validateBlueprintMethodArgs = async (blueprintId, method, args): Pr
         }
         break;
       default:
+        // eslint-disable-next-line valid-typeof -- This rule is not suited for dynamic comparisons such as this one
         if (arg.type !== typeof args[index]) {
           throw new NanoContractTransactionError(
             `Expects argument number ${index + 1} type ${arg.type} but received type ${typeof args[index]}.`

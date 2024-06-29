@@ -25,7 +25,7 @@ module.exports = {
     'import/prefer-default-export': 0,
     quotes: ['error', 'single', { avoidEscape: true, allowTemplateLiterals: true }],
     'comma-dangle': 0,
-    'object-curly-newline': ['error', { ObjectPattern: { multiline: true } }],
+    'object-curly-newline': 'off', // This rule is better handled by prettier
     eqeqeq: [1, 'allow-null'],
     'no-console': 'off',
     'no-continue': 0,
@@ -42,12 +42,20 @@ module.exports = {
     'no-fallthrough': 1,
     'no-lone-blocks': 1,
     'no-delete-var': 1,
-    'no-shadow': 1,
+    'no-shadow': 'off',
+    '@typescript-eslint/no-shadow': 'warn',
     'no-shadow-restricted-names': 1,
     'no-undef': 2,
     'no-undef-init': 1,
     'no-use-before-define': 0,
-    'no-unused-vars': [1, { vars: 'all', args: 'none' }],
+    'no-unused-vars': 'off', // This must be disabled for the typescript rule below to work
+    '@typescript-eslint/no-unused-vars': [
+      'warn',
+      {
+        vars: 'all',
+        args: 'none', // We should change to args: after-used
+      },
+    ],
     'no-underscore-dangle': 0,
     'no-restricted-syntax': ['error', 'LabeledStatement', 'WithStatement'],
     'no-await-in-loop': 'off',
