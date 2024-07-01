@@ -17,7 +17,7 @@ export function prettyValue(value: number, decimalPlaces = DECIMAL_PLACES): stri
   const fixedPlaces = (value / 10 ** decimalPlaces).toFixed(decimalPlaces);
   const [integerPart, decimalPart] = fixedPlaces.split('.');
   let signal = '';
-  if ((parseInt(integerPart, 10) === 0) && (value < 0)) {
+  if (parseInt(integerPart, 10) === 0 && value < 0) {
     // For negative numbers greater than -1 (e.g. -0.5) the prettyIntegerValue method receives
     // 0 as argument, which makes the prettyValue method return a positive number.
     // In this case we need to add a minus sign here.
