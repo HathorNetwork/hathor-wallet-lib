@@ -24,7 +24,12 @@ import walletApi from '../api/wallet';
 import helpers from './helpers';
 import transactionUtils from './transaction';
 import { deriveAddressP2PKH, deriveAddressP2SH } from './address';
-import { NATIVE_TOKEN_UID, MAX_ADDRESSES_GET, LOAD_WALLET_MAX_RETRY, LOAD_WALLET_RETRY_SLEEP } from '../constants';
+import {
+  NATIVE_TOKEN_UID,
+  MAX_ADDRESSES_GET,
+  LOAD_WALLET_MAX_RETRY,
+  LOAD_WALLET_RETRY_SLEEP,
+} from '../constants';
 
 /**
  * Derive requested addresses (if not already loaded), save them on storage then return them.

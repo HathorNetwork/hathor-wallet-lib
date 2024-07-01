@@ -453,9 +453,7 @@ export class PartialTx {
         authorities += TOKEN_MELT_MASK;
       }
 
-      const token = output.isTokenHTR()
-        ? NATIVE_TOKEN_UID
-        : tx.tokens[output.getTokenIndex()];
+      const token = output.isTokenHTR() ? NATIVE_TOKEN_UID : tx.tokens[output.getTokenIndex()];
       instance.addOutput(output.value, output.script, {
         token,
         authorities,
