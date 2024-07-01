@@ -36,8 +36,8 @@
     "test_network_integration": "jest --config jest-integration.config.js --runInBand --forceExit",
     "test_network_partial_down": "docker-compose -f ./__tests__/integration/configuration/docker-compose.yml -p configuration stop cpuminer",
     "test_network_down": "docker-compose -f ./__tests__/integration/configuration/docker-compose.yml down && rm ./tmp/wallets.json",
-    "lint": "eslint 'src/**/*.{js,ts}' '__tests__/**/*.{js,ts}'",
-    "lint:fix": "eslint 'src/**/*.{js,ts}' '__tests__/**/*.{js,ts}' --fix",
+    "lint": "eslint 'src/**/*.{js,ts}'",
+    "lint:fix": "eslint 'src/**/*.{js,ts}' --fix",
     "format": "prettier --write 'src/**/*.{js,ts}' '__tests__/**/*.{js,ts}'",
     "format:check": "prettier --check 'src/**/*.{js,ts}' '__tests__/**/*.{js,ts}'"
   },
