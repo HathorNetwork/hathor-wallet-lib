@@ -338,3 +338,10 @@ test('getShortHash', () => {
     '123456123456...654321654321'
   );
 });
+
+test('getNetworkFromFullNodeNetwork', () => {
+  expect(helpers.getNetworkFromFullNodeNetwork('mainnet')).toBe('mainnet');
+  expect(helpers.getNetworkFromFullNodeNetwork('testnet-bravo')).toBe('testnet');
+  expect(helpers.getNetworkFromFullNodeNetwork('nano-testnet-alpha')).toBe('testnet');
+  expect(helpers.getNetworkFromFullNodeNetwork('privatenet')).toBe('privatenet');
+});
