@@ -2199,7 +2199,7 @@ class HathorWallet extends EventEmitter {
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async getTokenDetails(tokenId) {
     const result = await new Promise(resolve => {
-      return walletApi.getGeneralTokenInfo(tokenId, resolve);
+      walletApi.getGeneralTokenInfo(tokenId, resolve);
     });
 
     if (!result.success) {
