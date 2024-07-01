@@ -247,9 +247,7 @@ class NanoContractTransactionBuilder {
     );
 
     const tokenIndex =
-      action.token === NATIVE_TOKEN_UID
-        ? 0
-        : tokens.findIndex(token => token === action.token) + 1;
+      action.token === NATIVE_TOKEN_UID ? 0 : tokens.findIndex(token => token === action.token) + 1;
     const output = new Output(action.amount, outputScript, {
       tokenData: tokenIndex,
     });

@@ -55,7 +55,11 @@ const transaction = {
    * @returns {boolean}
    */
   isBlock(tx: Pick<IHistoryTx, 'version'>): boolean {
-    return tx.version === BLOCK_VERSION || tx.version === MERGED_MINED_BLOCK_VERSION || tx.version === POA_BLOCK_VERSION;
+    return (
+      tx.version === BLOCK_VERSION ||
+      tx.version === MERGED_MINED_BLOCK_VERSION ||
+      tx.version === POA_BLOCK_VERSION
+    );
   },
 
   /**
