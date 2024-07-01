@@ -70,6 +70,12 @@ module.exports = {
         ts: 'never',
       },
     ],
+
+    /* These last rules would require a large effort and potentially cause breaking changes,
+     * So they will be left out for now and dealt with separately.
+     */
+    camelcase: 'off', // Conflicts with variables obtained directly from the fullnode endpoints
+    'import/no-cycle': 'off', // Needs more investigation to properly restructure the lib files
   },
   overrides: [
     {
