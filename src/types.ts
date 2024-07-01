@@ -354,6 +354,7 @@ export interface ApiVersion {
   reward_spend_min_blocks: number;
   max_number_inputs: number;
   max_number_outputs: number;
+  decimal_places: number;
   native_token: Omit<ITokenData, 'uid'> | null | undefined;
 }
 
@@ -438,6 +439,8 @@ export interface IStorage {
   config: Config;
   version: ApiVersion | null;
 
+  setApiVersion(version: ApiVersion): void;
+  getDecimalPlaces(): number;
   saveNativeToken(): Promise<void>;
   getNativeTokenData(): ITokenData;
 
@@ -496,7 +499,6 @@ export interface IStorage {
   getCurrentHeight(): Promise<number>;
   setCurrentHeight(height: number): Promise<void>;
   isReadonly(): Promise<boolean>;
-  setApiVersion(version: ApiVersion): void;
   changePin(oldPin: string, newPin: string): Promise<void>;
   changePassword(oldPassword: string, newPassword: string): Promise<void>;
   setGapLimit(value: number): Promise<void>;
