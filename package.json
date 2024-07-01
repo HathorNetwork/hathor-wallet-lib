@@ -14,6 +14,7 @@
     "/lib"
   ],
   "dependencies": {
+    "abstract-level": "1.0.4",
     "axios": "1.7.2",
     "bitcore-lib": "8.25.10",
     "bitcore-mnemonic": "8.25.10",
