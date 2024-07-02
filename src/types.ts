@@ -422,8 +422,8 @@ export interface IStore {
   updateNanoContractRegisteredAddress(ncId: string, address: string): Promise<void>;
 
   // Generic storage keys
-  getItem(key: string): Promise<any>;
-  setItem(key: string, value: any): Promise<void>;
+  getItem(key: string): Promise<unknown>;
+  setItem(key: string, value: unknown): Promise<void>;
 
   cleanStorage(
     cleanHistory?: boolean,
@@ -616,8 +616,8 @@ export interface IKVWalletIndex extends IKVStoreIndex<void> {
   setScanningPolicyData(data: AddressScanPolicyData): Promise<void>;
   getScanningPolicyData(): Promise<AddressScanPolicyData>;
 
-  getItem(key: string): Promise<any>;
-  setItem(key: string, value: any): Promise<void>;
+  getItem(key: string): Promise<unknown>;
+  setItem(key: string, value: unknown): Promise<void>;
 
   cleanAccessData(): Promise<void>;
   cleanWalletData(clear: boolean): Promise<void>;

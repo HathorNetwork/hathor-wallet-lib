@@ -8,9 +8,9 @@
 import { IStorage } from '../types';
 
 export function handleWsDashboard(storage: IStorage) {
-  return (data: any) => {
+  return (data: { best_block_height: number }) => {
     // update network height
-    const height = data.best_block_height as number;
+    const height = data.best_block_height;
     storage.getCurrentHeight().then(currentHeight => {
       if (height !== currentHeight) {
         storage.setCurrentHeight(height);
@@ -21,7 +21,7 @@ export function handleWsDashboard(storage: IStorage) {
 }
 
 export function handleSubscribeAddress() {
-  return (data: any) => {
+  return (data: { success?: boolean; message?: string }) => {
     if (data.success === false) {
       // If an address subscription fails we stop the service
       throw new Error(data.message);

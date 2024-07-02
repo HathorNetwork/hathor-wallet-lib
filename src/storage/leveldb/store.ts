@@ -160,7 +160,7 @@ export default class LevelDBStore implements IStore {
     return addressInfo.base58;
   }
 
-  async *historyIter(tokenUid?: string | undefined): AsyncGenerator<IHistoryTx, any, unknown> {
+  async *historyIter(tokenUid?: string | undefined): AsyncGenerator<IHistoryTx, void, void> {
     for await (const tx of this.historyIndex.historyIter(tokenUid)) {
       yield tx;
     }
@@ -198,7 +198,7 @@ export default class LevelDBStore implements IStore {
   }
 
   // TOKENS
-  async *tokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>, any, unknown> {
+  async *tokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>, void, void> {
     for await (const token of this.tokenIndex.tokenIter()) {
       yield token;
     }
@@ -219,7 +219,7 @@ export default class LevelDBStore implements IStore {
     }
   }
 
-  async *registeredTokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>, any, unknown> {
+  async *registeredTokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>, void, void> {
     for await (const token of this.tokenIndex.registeredTokenIter()) {
       yield token;
     }
@@ -353,11 +353,11 @@ export default class LevelDBStore implements IStore {
     return this.walletIndex.getWalletData();
   }
 
-  async getItem(key: string): Promise<any> {
+  async getItem(key: string): Promise<unknown> {
     return this.walletIndex.getItem(key);
   }
 
-  async setItem(key: string, value: any): Promise<void> {
+  async setItem(key: string, value: unknown): Promise<void> {
     await this.walletIndex.setItem(key, value);
   }
 

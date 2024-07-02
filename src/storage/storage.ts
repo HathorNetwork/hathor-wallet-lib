@@ -422,7 +422,7 @@ export class Storage implements IStorage {
    * Iterate on all utxos of the wallet.
    * @returns {AsyncGenerator<IUtxo, any, unknown>}
    */
-  async *getAllUtxos(): AsyncGenerator<IUtxo, any, unknown> {
+  async *getAllUtxos(): AsyncGenerator<IUtxo, void, void> {
     for await (const utxo of this.store.utxoIter()) {
       yield utxo;
     }
@@ -436,7 +436,7 @@ export class Storage implements IStorage {
    */
   async *selectUtxos(
     options: Omit<IUtxoFilterOptions, 'reward_lock'> = {}
-  ): AsyncGenerator<IUtxo, any, unknown> {
+  ): AsyncGenerator<IUtxo, void, void> {
     const filterSelected = (utxo: IUtxo): boolean => {
       const utxoId = `${utxo.txId}:${utxo.index}`;
       return !this.utxosSelectedAsInput.has(utxoId);
