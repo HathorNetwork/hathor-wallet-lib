@@ -11,15 +11,27 @@ import Input from '../models/input';
 import Output from '../models/output';
 import { hexToBuffer, intToBytes } from '../utils/buffer';
 
-
 class NanoContract extends Transaction {
   id: string;
+
   method: string;
+
   args: Buffer[];
+
   pubkey: Buffer;
+
   signature: Buffer | null;
 
-  constructor(inputs: Input[], outputs: Output[], tokens: string[], id: string, method: string, args: Buffer[], pubkey: Buffer, signature: Buffer | null = null) {
+  constructor(
+    inputs: Input[],
+    outputs: Output[],
+    tokens: string[],
+    id: string,
+    method: string,
+    args: Buffer[],
+    pubkey: Buffer,
+    signature: Buffer | null = null
+  ) {
     super(inputs, outputs, { tokens });
     this.version = NANO_CONTRACTS_VERSION;
 
@@ -81,7 +93,7 @@ class NanoContract extends Transaction {
    * @inner
    */
   toBytes(): Buffer {
-    let arr: any = []
+    const arr: any = [];
     // Serialize first the funds part
     //
     this.serializeFundsFields(arr, true);

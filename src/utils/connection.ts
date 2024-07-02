@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { IStorage } from "../types";
+import { IStorage } from '../types';
 
 export function handleWsDashboard(storage: IStorage) {
   return (data: any) => {
@@ -26,5 +26,5 @@ export function handleSubscribeAddress() {
       // If an address subscription fails we stop the service
       throw new Error(data.message);
     }
-  }
+  };
 }

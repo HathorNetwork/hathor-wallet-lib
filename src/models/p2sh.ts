@@ -5,27 +5,28 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { OP_GREATERTHAN_TIMESTAMP, OP_HASH160, OP_EQUAL } from '../opcodes';
 import { util } from 'bitcore-lib';
+import { OP_GREATERTHAN_TIMESTAMP, OP_HASH160, OP_EQUAL } from '../opcodes';
 import helpers from '../utils/helpers';
 import { intToBytes } from '../utils/buffer';
 import Address from './address';
 
 type optionsType = {
-  timelock?: number | null | undefined,
+  timelock?: number | null | undefined;
 };
-
 
 class P2SH {
   // Address object of the value destination
   address: Address;
+
   // Timestamp of the timelock of the output
   timelock: number | null;
 
   constructor(address: Address, options: optionsType = {}) {
-    const newOptions = Object.assign({
+    const newOptions = {
       timelock: null,
-    }, options);
+      ...options,
+    };
     const { timelock } = newOptions;
 
     if (!address) {
@@ -43,6 +44,7 @@ class P2SH {
    * @memberof P2SH
    * @inner
    */
+  // eslint-disable-next-line class-methods-use-this -- This method returns a hardcoded constant
   getType(): 'p2sh' {
     return 'p2sh';
   }
@@ -59,7 +61,7 @@ class P2SH {
     const addressBytes = this.address.decode();
     const addressHash = addressBytes.slice(1, -4);
     if (this.timelock) {
-      let timelockBytes = intToBytes(this.timelock, 4);
+      const timelockBytes = intToBytes(this.timelock, 4);
       helpers.pushDataToStack(arr, timelockBytes);
       arr.push(OP_GREATERTHAN_TIMESTAMP);
     }
@@ -80,7 +82,7 @@ class P2SH {
    * @memberof P2SH
    * @inner
    */
-  static identify(buf: Buffer): Boolean {
+  static identify(buf: Buffer): boolean {
     const op_greaterthan_timestamp = OP_GREATERTHAN_TIMESTAMP.readUInt8(0);
     const op_hash160 = OP_HASH160.readUInt8(0);
     const op_equal = OP_EQUAL.readUInt8(0);
@@ -94,7 +96,7 @@ class P2SH {
       if (buf.readUInt8(ptr++) !== 4) {
         return false;
       }
-      ptr += 4
+      ptr += 4;
       // next byte is OP_GREATERTHAN_TIMESTAMP
       if (buf.readUInt8(ptr++) !== op_greaterthan_timestamp) {
         return false;
@@ -109,7 +111,7 @@ class P2SH {
     if (buf.readUInt8(ptr++) !== 20) {
       return false;
     }
-    ptr += 20
+    ptr += 20;
     // OP_EQUAL
     if (buf.readUInt8(ptr++) !== op_equal) {
       return false;

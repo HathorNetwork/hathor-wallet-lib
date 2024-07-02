@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import path from 'path';
 import {
   AddressScanPolicy,
   AddressScanPolicyData,
@@ -22,7 +23,6 @@ import {
   IWalletAccessData,
   IWalletData,
 } from '../../types';
-import path from 'path';
 import LevelAddressIndex from './address_index';
 import LevelHistoryIndex from './history_index';
 import LevelUtxoIndex from './utxo_index';
@@ -32,11 +32,17 @@ import LevelNanoContractIndex from './nanocontract_index';
 
 export default class LevelDBStore implements IStore {
   addressIndex: LevelAddressIndex;
+
   historyIndex: LevelHistoryIndex;
+
   utxoIndex: LevelUtxoIndex;
+
   walletIndex: LevelWalletIndex;
+
   tokenIndex: LevelTokenIndex;
+
   nanoContractIndex: LevelNanoContractIndex;
+
   dbpath: string;
 
   constructor(dirpath: string, dbroot: string = 'hathor.data') {
@@ -169,7 +175,8 @@ export default class LevelDBStore implements IStore {
     let maxIndex = await this.walletIndex.getLastUsedAddressIndex();
     for (const el of [...tx.inputs, ...tx.outputs]) {
       if (el.decoded.address && (await this.addressExists(el.decoded.address))) {
-        const index = (await this.addressIndex.getAddressInfo(el.decoded.address))!.bip32AddressIndex;
+        const index = (await this.addressIndex.getAddressInfo(el.decoded.address))!
+          .bip32AddressIndex;
         if (index > maxIndex) {
           maxIndex = index;
         }
@@ -178,7 +185,9 @@ export default class LevelDBStore implements IStore {
     // Address index should always be greater than or equal to 0
     if (maxIndex >= 0) {
       if ((await this.walletIndex.getCurrentAddressIndex()) < maxIndex) {
-        await this.walletIndex.setCurrentAddressIndex(Math.min(maxIndex + 1, await this.walletIndex.getLastLoadedAddressIndex()));
+        await this.walletIndex.setCurrentAddressIndex(
+          Math.min(maxIndex + 1, await this.walletIndex.getLastLoadedAddressIndex())
+        );
       }
       await this.walletIndex.setLastUsedAddressIndex(maxIndex);
     }
@@ -352,7 +361,11 @@ export default class LevelDBStore implements IStore {
     await this.walletIndex.setItem(key, value);
   }
 
-  async cleanStorage(cleanHistory: boolean = false, cleanAddresses: boolean = false, cleanTokens: boolean = false): Promise<void> {
+  async cleanStorage(
+    cleanHistory: boolean = false,
+    cleanAddresses: boolean = false,
+    cleanTokens: boolean = false
+  ): Promise<void> {
     // If both are false the method will be a no-op
     await this.tokenIndex.clear(cleanHistory, cleanTokens);
     if (cleanHistory) {

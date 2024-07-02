@@ -6,7 +6,7 @@
  */
 
 import { MemoryStore, Storage } from '../../src/storage';
-import { handleSubscribeAddress, handleWsDashboard } from '../../src/utils/connection'; 
+import { handleSubscribeAddress, handleWsDashboard } from '../../src/utils/connection';
 
 test('handle ws dashboard', async () => {
   const store = new MemoryStore();
@@ -17,14 +17,18 @@ test('handle ws dashboard', async () => {
   expect(await storage.getCurrentHeight()).toEqual(0);
   handler({ best_block_height: 100 });
   // Await setCurrentHeight to run
-  await new Promise(resolve => { setTimeout(resolve, 0) });
+  await new Promise(resolve => {
+    setTimeout(resolve, 0);
+  });
   expect(storage.setCurrentHeight).toHaveBeenCalled();
   expect(await storage.getCurrentHeight()).toEqual(100);
 });
 
 test('handle subscribe address', () => {
   const handler = handleSubscribeAddress();
-  handler({success: true});
-  handler({data: 'anything'});
-  expect(() => { handler({success: false, message: 'a known error'}); }).toThrow('a known error');
+  handler({ success: true });
+  handler({ data: 'anything' });
+  expect(() => {
+    handler({ success: false, message: 'a known error' });
+  }).toThrow('a known error');
 });

@@ -7,15 +7,10 @@
 
 import GenericWebSocket from '../websocket';
 import helpers from '../utils/helpers';
-import BaseConnection, {
-  ConnectionParams,
-} from '../connection';
-import {
-  ConnectionState,
-} from '../wallet/types';
+import BaseConnection, { ConnectionParams } from '../connection';
+import { ConnectionState } from '../wallet/types';
 import { handleSubscribeAddress, handleWsDashboard } from '../utils/connection';
 import { IStorage } from '../types';
-
 
 /**
  * This is a Connection that may be shared by one or more wallets.
@@ -28,17 +23,26 @@ import { IStorage } from '../types';
  * You can subscribe for the following events:
  * - state: Fired when the state of the Wallet changes.
  * - wallet-update: Fired when a new wallet message arrive from the websocket.
- **/
+ * */
 class WalletConnection extends BaseConnection {
+  static CLOSED: number = 0;
+
+  static CONNECTING: number = 1;
+
+  static CONNECTED: number = 2;
+
   constructor(options: ConnectionParams) {
     super(options);
 
     this.handleWalletMessage = this.handleWalletMessage.bind(this);
 
-    const wsOptions = { wsURL: helpers.getWSServerURL(this.currentServer) };
+    const wsOptions: {
+      connectionTimeout?: number;
+      wsURL: string;
+    } = { wsURL: helpers.getWSServerURL(this.currentServer) };
 
     if (options.connectionTimeout) {
-      wsOptions['connectionTimeout'] = options.connectionTimeout;
+      wsOptions.connectionTimeout = options.connectionTimeout;
     }
 
     this.websocket = new GenericWebSocket(wsOptions);
@@ -46,7 +50,7 @@ class WalletConnection extends BaseConnection {
 
   /**
    * Connect to the server and start emitting events.
-   **/
+   * */
   start() {
     // This should never happen as the websocket is initialized on the constructor
     if (!this.websocket) {
@@ -56,11 +60,11 @@ class WalletConnection extends BaseConnection {
     this.websocket.on('is_online', this.onConnectionChange);
     this.websocket.on('wallet', this.handleWalletMessage);
 
-    this.websocket.on('height_updated', (height) => {
+    this.websocket.on('height_updated', height => {
       this.emit('best-block-update', height);
     });
 
-    this.websocket.on('addresses_loaded', (data) => {
+    this.websocket.on('addresses_loaded', data => {
       this.emit('wallet-load-partial-update', data);
     });
 
@@ -84,7 +88,7 @@ class WalletConnection extends BaseConnection {
 
   unsubscribeAddress(address: string) {
     if (this.websocket) {
-      const msg = JSON.stringify({type: 'unsubscribe_address', address});
+      const msg = JSON.stringify({ type: 'unsubscribe_address', address });
       this.websocket.sendMessage(msg);
     }
   }
@@ -96,13 +100,5 @@ class WalletConnection extends BaseConnection {
     }
   }
 }
-
-// TODO: This is to maintain compatibility until we migrate to typescript
-// @ts-ignore
-WalletConnection.CLOSED = 0;
-// @ts-ignore
-WalletConnection.CONNECTING = 1;
-// @ts-ignore
-WalletConnection.CONNECTED = 2;
 
 export default WalletConnection;

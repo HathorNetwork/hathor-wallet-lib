@@ -10,7 +10,7 @@ import { IStorage, IUtxo, IUtxoFilterOptions, UtxoSelectionAlgorithm } from '../
 export enum UtxoSelection {
   FAST = 'fast',
   BEST = 'best',
-};
+}
 
 /**
  * Get the algorithm function from the enum value.
@@ -42,8 +42,8 @@ export function getAlgorithmFromEnum(algorithm: UtxoSelection): UtxoSelectionAlg
 export async function fastUtxoSelection(
   storage: IStorage,
   token: string,
-  amount: number,
-): Promise<{ utxos: IUtxo[], amount: number}> {
+  amount: number
+): Promise<{ utxos: IUtxo[]; amount: number }> {
   const utxos: IUtxo[] = [];
   let utxosAmount = 0;
 
@@ -86,11 +86,11 @@ export async function fastUtxoSelection(
 export async function bestUtxoSelection(
   storage: IStorage,
   token: string,
-  amount: number,
-): Promise<{ utxos: IUtxo[], amount: number}> {
+  amount: number
+): Promise<{ utxos: IUtxo[]; amount: number }> {
   const utxos: IUtxo[] = [];
   let utxosAmount = 0;
-  let selectedUtxo: IUtxo|null = null;
+  let selectedUtxo: IUtxo | null = null;
 
   const options: IUtxoFilterOptions = {
     token,
@@ -103,7 +103,7 @@ export async function bestUtxoSelection(
     if (utxo.value === amount) {
       return {
         utxos: [utxo],
-        amount: amount,
+        amount,
       };
     }
 
@@ -138,22 +138,22 @@ export async function bestUtxoSelection(
       utxos: [selectedUtxo],
       amount: selectedUtxo.value,
     };
-  } else if (utxosAmount < amount) {
+  }
+  if (utxosAmount < amount) {
     // We don't have enough funds
     return {
       utxos: [],
       amount: 0,
     };
-  } else {
-    // We need to ensure we use the smallest number of utxos and avoid hitting the maximum number of inputs
-    // This can be done by ordering the utxos by value and selecting the highest values first until the amount is fulfilled
-    // But since the store ensures the utxos are ordered by value descending
-    // (Which is ensured by options.order_by_value = 'desc' on the selectUtxos method)
-    // And we stop selecting when the amount in the utxos array is greater than or equal to the requested amount
-    // We can just return the utxos selected during the loop above
-    return {
-      utxos,
-      amount: utxosAmount,
-    };
   }
+  // We need to ensure we use the smallest number of utxos and avoid hitting the maximum number of inputs
+  // This can be done by ordering the utxos by value and selecting the highest values first until the amount is fulfilled
+  // But since the store ensures the utxos are ordered by value descending
+  // (Which is ensured by options.order_by_value = 'desc' on the selectUtxos method)
+  // And we stop selecting when the amount in the utxos array is greater than or equal to the requested amount
+  // We can just return the utxos selected during the loop above
+  return {
+    utxos,
+    amount: utxosAmount,
+  };
 }

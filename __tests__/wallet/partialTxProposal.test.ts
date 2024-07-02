@@ -20,7 +20,7 @@ import {
   PartialTxInputData,
 } from '../../src/models/partial_tx';
 import {
-  HATHOR_TOKEN_CONFIG,
+  NATIVE_TOKEN_UID,
   TOKEN_MINT_MASK,
   TOKEN_MELT_MASK,
   DEFAULT_TX_VERSION,
@@ -53,7 +53,7 @@ const createPartialTx = (inputs, outputs) => {
   partialTx.outputs = outputs;
   return partialTx;
 };
-const scriptFromAddressP2PKH = (base58: string, timelock: number|null = null) => {
+const scriptFromAddressP2PKH = (base58: string, timelock: number | null = null) => {
   const p2pkh = new P2PKH(new Address(base58, { network: testnet }), { timelock });
   return p2pkh.createScript();
 };
@@ -63,12 +63,13 @@ const scriptFromAddressP2SH = base58 => {
 };
 
 test('fromPartialTx', async () => {
-  const partialTx = createPartialTx([
-    new ProposalInput(FAKE_TXID, 0, 10, ADDR1),
-  ], [
-    new ProposalOutput(5, scriptFromAddressP2PKH(ADDR2)),
-    new ProposalOutput(10, scriptFromAddressP2PKH(ADDR3), { token: FAKE_UID }),
-  ]);
+  const partialTx = createPartialTx(
+    [new ProposalInput(FAKE_TXID, 0, 10, ADDR1)],
+    [
+      new ProposalOutput(5, scriptFromAddressP2PKH(ADDR2)),
+      new ProposalOutput(10, scriptFromAddressP2PKH(ADDR3), { token: FAKE_UID }),
+    ]
+  );
 
   const serialized = partialTx.serialize();
   const store = new MemoryStore();
@@ -81,7 +82,7 @@ test('fromPartialTx', async () => {
   expect(proposal.partialTx).toMatchObject({
     inputs: [expect.objectContaining({ hash: FAKE_TXID, index: 0, value: 10, address: ADDR1 })],
     outputs: [
-      expect.objectContaining({ value: 5, token: HATHOR_TOKEN_CONFIG.uid }),
+      expect.objectContaining({ value: 5, token: NATIVE_TOKEN_UID }),
       expect.objectContaining({ value: 10, token: FAKE_UID }),
     ],
   });
@@ -90,38 +91,42 @@ test('fromPartialTx', async () => {
 });
 
 test('addSend', async () => {
-  const utxos: IUtxo[] = [{
-    txId: FAKE_TXID,
-    index: 1,
-    token: FAKE_UID,
-    address: ADDR1,
-    value: 10,
-    authorities: 0,
-    timelock: 100,
-    type: DEFAULT_TX_VERSION,
-    height: null,
-  }];
-  const utxosOld: Utxo[] = [{
-    txId: FAKE_TXID,
-    index: 1,
-    addressPath: '',
-    address: ADDR1,
-    timelock: 100,
-    tokenId: FAKE_UID,
-    value: 10,
-    authorities: 0,
-    heightlock: null,
-    locked: false,
-  }];
+  const utxos: IUtxo[] = [
+    {
+      txId: FAKE_TXID,
+      index: 1,
+      token: FAKE_UID,
+      address: ADDR1,
+      value: 10,
+      authorities: 0,
+      timelock: 100,
+      type: DEFAULT_TX_VERSION,
+      height: null,
+    },
+  ];
+  const utxosOld: Utxo[] = [
+    {
+      txId: FAKE_TXID,
+      index: 1,
+      addressPath: '',
+      address: ADDR1,
+      timelock: 100,
+      tokenId: FAKE_UID,
+      value: 10,
+      authorities: 0,
+      heightlock: null,
+      locked: false,
+    },
+  ];
 
   const store = new MemoryStore();
   const testStorage = new Storage(store);
   testStorage.config.setNetwork('testnet');
 
   const spyReset = jest.spyOn(PartialTxProposal.prototype, 'resetSignatures');
-  const spyInput = jest.spyOn(PartialTxProposal.prototype, 'addInput')
-    .mockImplementation(() => {});
-  const spyOutput = jest.spyOn(PartialTxProposal.prototype, 'addOutput')
+  const spyInput = jest.spyOn(PartialTxProposal.prototype, 'addInput').mockImplementation(() => {});
+  const spyOutput = jest
+    .spyOn(PartialTxProposal.prototype, 'addOutput')
     .mockImplementation(() => {});
 
   async function* utxoMock(options?: Parameters<typeof testStorage.selectUtxos>[0]) {
@@ -131,7 +136,9 @@ test('addSend', async () => {
   }
 
   const spyUtxos = jest.spyOn(testStorage, 'selectUtxos').mockImplementation(utxoMock);
-  const spyAddr = jest.spyOn(testStorage, 'getCurrentAddress').mockImplementation(() => Promise.resolve(ADDR2));
+  const spyAddr = jest
+    .spyOn(testStorage, 'getCurrentAddress')
+    .mockImplementation(() => Promise.resolve(ADDR2));
 
   const proposal = new PartialTxProposal(testStorage);
 
@@ -140,13 +147,11 @@ test('addSend', async () => {
    */
   await proposal.addSend(FAKE_UID, 10);
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(spyInput).toBeCalledWith(
-    FAKE_TXID,
-    1,
-    10,
-    ADDR1,
-    { token: FAKE_UID, authorities: 0, markAsSelected: true },
-  );
+  expect(spyInput).toBeCalledWith(FAKE_TXID, 1, 10, ADDR1, {
+    token: FAKE_UID,
+    authorities: 0,
+    markAsSelected: true,
+  });
   expect(spyOutput).not.toHaveBeenCalled();
   expect(spyUtxos).toBeCalledWith({ token: FAKE_UID, authorities: 0 });
   expect(spyAddr).not.toHaveBeenCalled();
@@ -163,18 +168,16 @@ test('addSend', async () => {
    */
   await proposal.addSend(FAKE_UID, 4, { utxos: utxosOld, changeAddress: ADDR3 });
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(spyInput).toBeCalledWith(
-    FAKE_TXID,
-    1,
-    10,
-    ADDR1,
-    { token: FAKE_UID, authorities: 0, markAsSelected: true },
-  );
+  expect(spyInput).toBeCalledWith(FAKE_TXID, 1, 10, ADDR1, {
+    token: FAKE_UID,
+    authorities: 0,
+    markAsSelected: true,
+  });
   expect(spyOutput).toBeCalledWith(
     FAKE_UID,
     6, // change 10 - 4 = 6
     ADDR3,
-    { isChange: true },
+    { isChange: true }
   );
   expect(spyAddr).not.toHaveBeenCalled();
   expect(spyUtxos).not.toHaveBeenCalled();
@@ -192,18 +195,16 @@ test('addSend', async () => {
   await proposal.addSend(FAKE_UID, 8, { markAsSelected: false });
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(spyUtxos).toBeCalledWith({ token: FAKE_UID, authorities: 0 });
-  expect(spyInput).toBeCalledWith(
-    FAKE_TXID,
-    1,
-    10,
-    ADDR1,
-    { token: FAKE_UID, authorities: 0, markAsSelected: false },
-  );
+  expect(spyInput).toBeCalledWith(FAKE_TXID, 1, 10, ADDR1, {
+    token: FAKE_UID,
+    authorities: 0,
+    markAsSelected: false,
+  });
   expect(spyOutput).toBeCalledWith(
     FAKE_UID,
     2, // change 10 - 8 = 2
     ADDR2,
-    { isChange: true },
+    { isChange: true }
   );
   expect(spyAddr).toHaveBeenCalled();
 
@@ -217,26 +218,24 @@ test('addSend', async () => {
 
 test('addReceive', async () => {
   const spyReset = jest.spyOn(PartialTxProposal.prototype, 'resetSignatures');
-  const spyOutput = jest.spyOn(PartialTxProposal.prototype, 'addOutput')
+  const spyOutput = jest
+    .spyOn(PartialTxProposal.prototype, 'addOutput')
     .mockImplementation(() => {});
 
   const store = new MemoryStore();
   const testStorage = new Storage(store);
   testStorage.config.setNetwork('testnet');
   const proposal = new PartialTxProposal(testStorage);
-  const spyAddr = jest.spyOn(testStorage, 'getCurrentAddress').mockImplementation(() => Promise.resolve(ADDR1));
+  const spyAddr = jest
+    .spyOn(testStorage, 'getCurrentAddress')
+    .mockImplementation(() => Promise.resolve(ADDR1));
 
   /**
    * Add 1 output of a custom token, get address from wallet
    */
   await proposal.addReceive(FAKE_UID, 99);
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(spyOutput).toBeCalledWith(
-    FAKE_UID,
-    99,
-    ADDR1,
-    { timelock: null },
-  );
+  expect(spyOutput).toBeCalledWith(FAKE_UID, 99, ADDR1, { timelock: null });
   expect(spyAddr).toHaveBeenCalled();
 
   // Mock cleanup
@@ -247,14 +246,9 @@ test('addReceive', async () => {
   /**
    * Add 1 HTR output, giving the destination address
    */
-  await proposal.addReceive(HATHOR_TOKEN_CONFIG.uid, 180, { address: ADDR2 });
+  await proposal.addReceive(NATIVE_TOKEN_UID, 180, { address: ADDR2 });
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(spyOutput).toBeCalledWith(
-    HATHOR_TOKEN_CONFIG.uid,
-    180,
-    ADDR2,
-    { timelock: null },
-  );
+  expect(spyOutput).toBeCalledWith(NATIVE_TOKEN_UID, 180, ADDR2, { timelock: null });
   expect(spyAddr).not.toHaveBeenCalled();
 
   // Remove mocks
@@ -278,8 +272,11 @@ test('addInput', async () => {
    */
   proposal.addInput(FAKE_TXID, 5, 999, ADDR1);
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(spyMark).toBeCalledWith({txId: FAKE_TXID, index: 5}, true);
-  expect(spyInput).toBeCalledWith(FAKE_TXID, 5, 999, ADDR1, { token: HATHOR_TOKEN_CONFIG.uid, authorities: 0 });
+  expect(spyMark).toBeCalledWith({ txId: FAKE_TXID, index: 5 }, true);
+  expect(spyInput).toBeCalledWith(FAKE_TXID, 5, 999, ADDR1, {
+    token: NATIVE_TOKEN_UID,
+    authorities: 0,
+  });
 
   // Mock cleanup
   spyReset.mockClear();
@@ -289,16 +286,17 @@ test('addInput', async () => {
   /**
    * Add 1 custom token authority input
    */
-  proposal.addInput(
-    FAKE_TXID,
-    20,
-    70,
-    ADDR2,
-    { token: FAKE_UID, authorities: TOKEN_MINT_MASK, markAsSelected: false },
-  );
+  proposal.addInput(FAKE_TXID, 20, 70, ADDR2, {
+    token: FAKE_UID,
+    authorities: TOKEN_MINT_MASK,
+    markAsSelected: false,
+  });
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(spyMark).not.toHaveBeenCalled();
-  expect(spyInput).toBeCalledWith(FAKE_TXID, 20, 70, ADDR2, { token: FAKE_UID, authorities: TOKEN_MINT_MASK });
+  expect(spyInput).toBeCalledWith(FAKE_TXID, 20, 70, ADDR2, {
+    token: FAKE_UID,
+    authorities: TOKEN_MINT_MASK,
+  });
 
   // Remove mocks
   spyReset.mockRestore();
@@ -308,8 +306,7 @@ test('addInput', async () => {
 
 test('addOutput', async () => {
   const spyReset = jest.spyOn(PartialTxProposal.prototype, 'resetSignatures');
-  const spyOutput = jest.spyOn(PartialTx.prototype, 'addOutput')
-    .mockImplementation(() => {});
+  const spyOutput = jest.spyOn(PartialTx.prototype, 'addOutput').mockImplementation(() => {});
 
   const store = new MemoryStore();
   const testStorage = new Storage(store);
@@ -321,11 +318,11 @@ test('addOutput', async () => {
    */
   proposal.addOutput(FAKE_UID, 999, ADDR1);
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(spyOutput).toBeCalledWith(
-    999,
-    scriptFromAddressP2PKH(ADDR1),
-    { token: FAKE_UID, authorities: 0, isChange: false },
-  );
+  expect(spyOutput).toBeCalledWith(999, scriptFromAddressP2PKH(ADDR1), {
+    token: FAKE_UID,
+    authorities: 0,
+    isChange: false,
+  });
 
   // Mock cleanup
   spyReset.mockClear();
@@ -334,13 +331,13 @@ test('addOutput', async () => {
   /**
    * Add 1 HTR output to a MultiSig address
    */
-  proposal.addOutput(HATHOR_TOKEN_CONFIG.uid, 456, ADDR4, { isChange: true });
+  proposal.addOutput(NATIVE_TOKEN_UID, 456, ADDR4, { isChange: true });
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(spyOutput).toBeCalledWith(
-    456,
-    scriptFromAddressP2SH(ADDR4),
-    { token: HATHOR_TOKEN_CONFIG.uid, authorities: 0, isChange: true },
-  );
+  expect(spyOutput).toBeCalledWith(456, scriptFromAddressP2SH(ADDR4), {
+    token: NATIVE_TOKEN_UID,
+    authorities: 0,
+    isChange: true,
+  });
 
   // Remove mocks
   spyReset.mockRestore();
@@ -370,18 +367,26 @@ test('setSignatures', async () => {
   const spyProposalTx = jest.spyOn(proposal.partialTx, 'getTx').mockImplementation(() => ({
     getDataToSign: () => 'hexHash',
     inputs: { length: 2 },
-    hash: 'hexHash'
+    hash: 'hexHash',
   }));
   let serializedSignatures = 'PartialTxInputData|wrongHash|0:cafe00|1:cafe01'; // Incorrect hash on serialized sig
-  const spyAdd = jest.spyOn(PartialTxInputData.prototype, 'addSignatures').mockImplementation(() => {});
+  const spyAdd = jest
+    .spyOn(PartialTxInputData.prototype, 'addSignatures')
+    .mockImplementation(() => {});
 
   // Ensure it throws on an incomplete partialTx
-  const spyComplete = jest.spyOn(proposal.partialTx, 'isComplete').mockImplementationOnce(() => false);
-  expect(() => proposal.setSignatures(serializedSignatures)).toThrowError('Cannot sign incomplete data');
+  const spyComplete = jest
+    .spyOn(proposal.partialTx, 'isComplete')
+    .mockImplementationOnce(() => false);
+  expect(() => proposal.setSignatures(serializedSignatures)).toThrowError(
+    'Cannot sign incomplete data'
+  );
 
   // Ensure it doesn't allow adding signatures for the wrong tx hash
   spyComplete.mockImplementationOnce(() => true);
-  expect(() => proposal.setSignatures(serializedSignatures)).toThrowError('Signatures do not match tx hash');
+  expect(() => proposal.setSignatures(serializedSignatures)).toThrowError(
+    'Signatures do not match tx hash'
+  );
 
   // Adds the serialized signatures on a complete partialTx for the correct tx
   serializedSignatures = serializedSignatures.replace('wrongHash', 'hexHash');
@@ -419,36 +424,60 @@ test('calculateBalance', async () => {
   const fakeUid3 = 'b4254615622c1add9fdbc3ac661463ce2e42ca8feec2b5e3651cccea7c117e9c';
   const fakeUid4 = 'a75c2c1a3cfe724fd3ca8a6542ac0a03b857139b3962a2fce5d79040e21b2930';
   const timelock = dateFormatter.dateToTimestamp(new Date()) + 9999;
-  const partialTx = createPartialTx([
-    new ProposalInput(FAKE_TXID, 0, 2, ADDR1, { token: FAKE_UID }),
-    new ProposalInput(FAKE_TXID, 1, 4, ADDR2, { token: fakeUid3 }),
-    new ProposalInput(FAKE_TXID, 2, 7, ADDR3),
-    new ProposalInput(FAKE_TXID, 3, 3, ADDR1),
-    // Authority
-    new ProposalInput(FAKE_TXID, 4, TOKEN_MELT_MASK, ADDR2, { token: fakeUid3, authorities: TOKEN_MELT_MASK }),
-    new ProposalInput(FAKE_TXID, 5, TOKEN_MELT_MASK, ADDR3, { token: fakeUid3, authorities: TOKEN_MELT_MASK }),
-    // Not from the wallet
-    new ProposalInput(FAKE_TXID, 6, 4, ADDR_OTHER, { token: fakeUid3 }),
-    new ProposalInput(FAKE_TXID, 7, 999, ADDR_OTHER, { token: fakeUid4 }),
-    new ProposalInput(FAKE_TXID, 8, TOKEN_MINT_MASK, ADDR_OTHER, { token: fakeUid3, authorities: TOKEN_MINT_MASK }),
-  ], [
-    new ProposalOutput(5, scriptFromAddressP2PKH(ADDR1), { token: FAKE_UID }),
-    new ProposalOutput(8, scriptFromAddressP2PKH(ADDR2), { token: fakeUid2 }),
-    new ProposalOutput(7, scriptFromAddressP2PKH(ADDR3), { token: fakeUid2 }),
-    // Locked
-    new ProposalOutput(1, scriptFromAddressP2PKH(ADDR1, timelock)),
-    new ProposalOutput(1, scriptFromAddressP2PKH(ADDR2, timelock)),
-    new ProposalOutput(3, scriptFromAddressP2PKH(ADDR3, timelock), { token: FAKE_UID }),
-    new ProposalOutput(4, scriptFromAddressP2PKH(ADDR1, timelock), { token: fakeUid2 }),
-    // Authority
-    new ProposalOutput(TOKEN_MINT_MASK, scriptFromAddressP2PKH(ADDR2), { token: FAKE_UID, authorities: TOKEN_MINT_MASK }),
-    // Authority locked
-    new ProposalOutput(TOKEN_MELT_MASK, scriptFromAddressP2PKH(ADDR3, timelock), { token: fakeUid2, authorities: TOKEN_MELT_MASK }),
-    new ProposalOutput(TOKEN_MINT_MASK, scriptFromAddressP2PKH(ADDR1, timelock), { token: fakeUid3, authorities: TOKEN_MINT_MASK }),
-    // Not from the wallet
-    new ProposalOutput(10, scriptFromAddressP2PKH(ADDR_OTHER)),
-    new ProposalOutput(TOKEN_MELT_MASK, scriptFromAddressP2PKH(ADDR_OTHER), { token: fakeUid2, authorities: TOKEN_MELT_MASK }),
-  ]);
+  const partialTx = createPartialTx(
+    [
+      new ProposalInput(FAKE_TXID, 0, 2, ADDR1, { token: FAKE_UID }),
+      new ProposalInput(FAKE_TXID, 1, 4, ADDR2, { token: fakeUid3 }),
+      new ProposalInput(FAKE_TXID, 2, 7, ADDR3),
+      new ProposalInput(FAKE_TXID, 3, 3, ADDR1),
+      // Authority
+      new ProposalInput(FAKE_TXID, 4, TOKEN_MELT_MASK, ADDR2, {
+        token: fakeUid3,
+        authorities: TOKEN_MELT_MASK,
+      }),
+      new ProposalInput(FAKE_TXID, 5, TOKEN_MELT_MASK, ADDR3, {
+        token: fakeUid3,
+        authorities: TOKEN_MELT_MASK,
+      }),
+      // Not from the wallet
+      new ProposalInput(FAKE_TXID, 6, 4, ADDR_OTHER, { token: fakeUid3 }),
+      new ProposalInput(FAKE_TXID, 7, 999, ADDR_OTHER, { token: fakeUid4 }),
+      new ProposalInput(FAKE_TXID, 8, TOKEN_MINT_MASK, ADDR_OTHER, {
+        token: fakeUid3,
+        authorities: TOKEN_MINT_MASK,
+      }),
+    ],
+    [
+      new ProposalOutput(5, scriptFromAddressP2PKH(ADDR1), { token: FAKE_UID }),
+      new ProposalOutput(8, scriptFromAddressP2PKH(ADDR2), { token: fakeUid2 }),
+      new ProposalOutput(7, scriptFromAddressP2PKH(ADDR3), { token: fakeUid2 }),
+      // Locked
+      new ProposalOutput(1, scriptFromAddressP2PKH(ADDR1, timelock)),
+      new ProposalOutput(1, scriptFromAddressP2PKH(ADDR2, timelock)),
+      new ProposalOutput(3, scriptFromAddressP2PKH(ADDR3, timelock), { token: FAKE_UID }),
+      new ProposalOutput(4, scriptFromAddressP2PKH(ADDR1, timelock), { token: fakeUid2 }),
+      // Authority
+      new ProposalOutput(TOKEN_MINT_MASK, scriptFromAddressP2PKH(ADDR2), {
+        token: FAKE_UID,
+        authorities: TOKEN_MINT_MASK,
+      }),
+      // Authority locked
+      new ProposalOutput(TOKEN_MELT_MASK, scriptFromAddressP2PKH(ADDR3, timelock), {
+        token: fakeUid2,
+        authorities: TOKEN_MELT_MASK,
+      }),
+      new ProposalOutput(TOKEN_MINT_MASK, scriptFromAddressP2PKH(ADDR1, timelock), {
+        token: fakeUid3,
+        authorities: TOKEN_MINT_MASK,
+      }),
+      // Not from the wallet
+      new ProposalOutput(10, scriptFromAddressP2PKH(ADDR_OTHER)),
+      new ProposalOutput(TOKEN_MELT_MASK, scriptFromAddressP2PKH(ADDR_OTHER), {
+        token: fakeUid2,
+        authorities: TOKEN_MELT_MASK,
+      }),
+    ]
+  );
   /**
    * Summary of the test fixture
    *
@@ -479,7 +508,7 @@ test('calculateBalance', async () => {
    *
    */
   const expected = {
-    [HATHOR_TOKEN_CONFIG.uid]: {
+    [NATIVE_TOKEN_UID]: {
       balance: { unlocked: -10, locked: 2 },
       authority: {
         unlocked: { mint: 0, melt: 0 },

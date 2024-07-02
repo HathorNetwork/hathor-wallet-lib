@@ -15,8 +15,7 @@ import { checkLevelDbVersion } from './utils';
 export const HISTORY_PREFIX = 'history';
 export const TS_HISTORY_PREFIX = 'ts_history';
 
-
-function _ts_key(tx: Pick<IHistoryTx, 'timestamp'|'tx_id'>): string {
+function _ts_key(tx: Pick<IHistoryTx, 'timestamp' | 'tx_id'>): string {
   // .toString(16) will convert the number to a hex string
   // .padStart(8, '0') will pad the number to 4 bytes
   const hexTimestamp = tx.timestamp.toString(16).padStart(8, '0');
@@ -25,31 +24,38 @@ function _ts_key(tx: Pick<IHistoryTx, 'timestamp'|'tx_id'>): string {
 
 export default class LevelHistoryIndex implements IKVHistoryIndex {
   dbpath: string;
+
   /**
    * Main tx history database:
    * Key: tx_id
    * Value: IHistoryTx (json encoded)
    */
   historyDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, IHistoryTx>;
+
   /**
    * Timestamp index, used to iterate on transaction in order.
    * Key: timestamp:tx_id
    * Value: IHistoryTx (json encoded)
    */
   tsHistoryDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, IHistoryTx>;
+
   /**
    * Whether the index is validated or not
    * This is used to avoid using the tx count before we know it is valid.
    */
   isValidated: boolean;
+
   size: number;
+
   indexVersion: string = '0.0.1';
 
   constructor(dbpath: string) {
     this.dbpath = path.join(dbpath, 'history');
     const db = new Level(this.dbpath);
     this.historyDB = db.sublevel<string, IHistoryTx>(HISTORY_PREFIX, { valueEncoding: 'json' });
-    this.tsHistoryDB = db.sublevel<string, IHistoryTx>(TS_HISTORY_PREFIX, { valueEncoding: 'json' });
+    this.tsHistoryDB = db.sublevel<string, IHistoryTx>(TS_HISTORY_PREFIX, {
+      valueEncoding: 'json',
+    });
     this.isValidated = false;
     this.size = 0;
   }
@@ -67,7 +73,7 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
    * @returns {Promise<void>}
    */
   async checkVersion(): Promise<void> {
-    const db = this.historyDB.db;
+    const { db } = this.historyDB;
     const instanceName = this.constructor.name;
     await checkLevelDbVersion(instanceName, db, this.indexVersion);
   }
@@ -81,7 +87,7 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
   async validate(): Promise<HistoryIndexValidateResponse> {
     await this.checkVersion();
 
-    let ret: HistoryIndexValidateResponse = {
+    const ret: HistoryIndexValidateResponse = {
       count: 0,
     };
     // Iterate on all txs and check that we have a corresponding entry on the timestamp index
@@ -130,7 +136,7 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
   async historyCount(): Promise<number> {
     if (!this.isValidated) {
       // Since we have not yet validated the index, we cannot trust the tx count
-      return await this.runHistoryCount();
+      return this.runHistoryCount();
     }
     return this.size;
   }
@@ -142,7 +148,8 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
    */
   async runHistoryCount(): Promise<number> {
     let size = 0;
-    for await (let _ of this.historyDB.iterator()) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- No use for the variable: just a counter
+    for await (const _ of this.historyDB.iterator()) {
       size++;
     }
     return size;
@@ -153,7 +160,7 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
    * @param {string|undefined} [tokenUid] Token uid to filter transactions. If undefined, returns all transactions.
    * @returns {AsyncGenerator<IHistoryTx>}
    */
-  async * historyIter(tokenUid?: string): AsyncGenerator<IHistoryTx> {
+  async *historyIter(tokenUid?: string): AsyncGenerator<IHistoryTx> {
     for await (const info of this.tsHistoryDB.values({ reverse: true })) {
       if (tokenUid === undefined) {
         yield info;

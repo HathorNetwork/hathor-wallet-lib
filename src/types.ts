@@ -10,24 +10,27 @@ import Transaction from './models/transaction';
 import Input from './models/input';
 import FullNodeConnection from './new/connection';
 
-
 export interface ITxSignatureData {
-  ncCallerSignature: Buffer | null,
-  inputSignatures: IInputSignature[],
+  ncCallerSignature: Buffer | null;
+  inputSignatures: IInputSignature[];
 }
 
 export interface IInputSignature {
-  inputIndex: number,
-  addressIndex: number,
-  signature: Buffer,
-  pubkey: Buffer,
+  inputIndex: number;
+  addressIndex: number;
+  signature: Buffer;
+  pubkey: Buffer;
 }
 
 /**
  * This is the method signature for a method that signs a transaction and
  * returns an array with signature information.
  */
-export type EcdsaTxSign = (tx: Transaction, storage: IStorage, pinCode: string) => Promise<ITxSignatureData>;
+export type EcdsaTxSign = (
+  tx: Transaction,
+  storage: IStorage,
+  pinCode: string
+) => Promise<ITxSignatureData>;
 
 export interface IAddressInfo {
   base58: string;
@@ -42,7 +45,7 @@ export interface IAddressMetadata {
 }
 
 export interface IAddressMetadataAsRecord {
-  numTransactions: number,
+  numTransactions: number;
   balance: Record<string, IBalance>;
 }
 
@@ -79,7 +82,7 @@ export interface IHistoryTx {
   weight: number;
   timestamp: number;
   is_voided: boolean;
-  nonce: number,
+  nonce: number;
   inputs: IHistoryInput[];
   outputs: IHistoryOutput[];
   parents: string[];
@@ -134,14 +137,14 @@ export interface IDataOutputData {
   value: number;
   authorities: number;
   data: string;
-};
+}
 
 export function isDataOutputData(output: IDataOutput): output is IDataOutputData {
   return output.type === 'data';
 }
 
 export interface IDataOutputAddress {
-  type: 'p2pkh'|'p2sh';
+  type: 'p2pkh' | 'p2sh';
   token: string;
   value: number;
   authorities: number;
@@ -158,7 +161,7 @@ export interface IDataOutputCreateToken {
   type: 'mint' | 'melt';
   value: number;
   address: string;
-  timelock: number|null;
+  timelock: number | null;
   authorities: number;
 }
 
@@ -170,7 +173,8 @@ export interface IDataOutputOptionals {
   isChange?: boolean;
 }
 
-export type IDataOutput = (IDataOutputData | IDataOutputAddress | IDataOutputCreateToken) & IDataOutputOptionals;
+export type IDataOutput = (IDataOutputData | IDataOutputAddress | IDataOutputCreateToken) &
+  IDataOutputOptionals;
 
 export interface IDataInput {
   txId: string;
@@ -185,8 +189,8 @@ export interface IDataInput {
 // XXX: This type is meant to be used as an intermediary for building transactions
 // It should have everything we need to build and push transactions.
 export interface IDataTx {
-  signalBits?: number,
-  version?: number,
+  signalBits?: number;
+  version?: number;
   inputs: IDataInput[];
   outputs: IDataOutput[];
   tokens: string[];
@@ -216,8 +220,8 @@ export interface IUtxo {
 }
 
 export interface ILockedUtxo {
-  tx: IHistoryTx,
-  index: number,
+  tx: IHistoryTx;
+  index: number;
 }
 
 export enum WalletType {
@@ -244,7 +248,7 @@ export interface IWalletAccessData {
 export enum SCANNING_POLICY {
   GAP_LIMIT = 'gap-limit',
   INDEX_LIMIT = 'index-limit',
-};
+}
 
 export interface IGapLimitAddressScanPolicy {
   policy: SCANNING_POLICY.GAP_LIMIT;
@@ -269,11 +273,15 @@ export type AddressScanPolicy = SCANNING_POLICY.GAP_LIMIT | SCANNING_POLICY.INDE
 
 export type AddressScanPolicyData = IGapLimitAddressScanPolicy | IIndexLimitAddressScanPolicy;
 
-export function isGapLimitScanPolicy(scanPolicyData: AddressScanPolicyData): scanPolicyData is IGapLimitAddressScanPolicy {
+export function isGapLimitScanPolicy(
+  scanPolicyData: AddressScanPolicyData
+): scanPolicyData is IGapLimitAddressScanPolicy {
   return scanPolicyData.policy === SCANNING_POLICY.GAP_LIMIT;
 }
 
-export function isIndexLimitScanPolicy(scanPolicyData: AddressScanPolicyData): scanPolicyData is IIndexLimitAddressScanPolicy {
+export function isIndexLimitScanPolicy(
+  scanPolicyData: AddressScanPolicyData
+): scanPolicyData is IIndexLimitAddressScanPolicy {
   return scanPolicyData.policy === SCANNING_POLICY.INDEX_LIMIT;
 }
 
@@ -310,25 +318,29 @@ export interface IUtxoFilterOptions {
   amount_bigger_than?: number;
   only_available_utxos?: boolean;
   filter_method?: (utxo: IUtxo) => boolean;
-  reward_lock?: number,
+  reward_lock?: number;
   // Will order utxos by value, asc or desc
   // If not set, will not order
   order_by_value?: 'asc' | 'desc';
 }
 
-export type UtxoSelectionAlgorithm = (storage: IStorage, token: string, amount: number) => Promise<{ utxos: IUtxo[], amount: number }>;
+export type UtxoSelectionAlgorithm = (
+  storage: IStorage,
+  token: string,
+  amount: number
+) => Promise<{ utxos: IUtxo[]; amount: number }>;
 
 export interface IUtxoSelectionOptions {
-  token?: string,
-  changeAddress?: string,
-  chooseInputs?: boolean,
-  utxoSelectionMethod?: UtxoSelectionAlgorithm,
+  token?: string;
+  changeAddress?: string;
+  chooseInputs?: boolean;
+  utxoSelectionMethod?: UtxoSelectionAlgorithm;
 }
 
 export interface IFillTxOptions {
-  changeAddress?: string,
-  skipAuthorities?: boolean,
-  chooseInputs?: boolean,
+  changeAddress?: string;
+  skipAuthorities?: boolean;
+  chooseInputs?: boolean;
 }
 
 export interface ApiVersion {
@@ -342,15 +354,17 @@ export interface ApiVersion {
   reward_spend_min_blocks: number;
   max_number_inputs: number;
   max_number_outputs: number;
+  decimal_places: number;
+  native_token: Omit<ITokenData, 'uid'> | null | undefined;
 }
 
 export interface IStore {
   validate(): Promise<void>;
   // Address methods
   addressIter(): AsyncGenerator<IAddressInfo>;
-  getAddress(base58: string): Promise<IAddressInfo|null>;
-  getAddressMeta(base58: string): Promise<IAddressMetadata|null>;
-  getAddressAtIndex(index: number): Promise<IAddressInfo|null>;
+  getAddress(base58: string): Promise<IAddressInfo | null>;
+  getAddressMeta(base58: string): Promise<IAddressMetadata | null>;
+  getAddressAtIndex(index: number): Promise<IAddressInfo | null>;
   saveAddress(info: IAddressInfo): Promise<void>;
   addressExists(base58: string): Promise<boolean>;
   addressCount(): Promise<number>;
@@ -359,7 +373,7 @@ export interface IStore {
   // tx history methods
   historyIter(tokenUid?: string): AsyncGenerator<IHistoryTx>;
   saveTx(tx: IHistoryTx): Promise<void>;
-  getTx(txId: string): Promise<IHistoryTx|null>;
+  getTx(txId: string): Promise<IHistoryTx | null>;
   historyCount(): Promise<number>;
 
   // Tokens methods
@@ -382,7 +396,7 @@ export interface IStore {
   unlockUtxo(lockedUtxo: ILockedUtxo): Promise<void>;
 
   // Wallet data
-  getAccessData(): Promise<IWalletAccessData|null>;
+  getAccessData(): Promise<IWalletAccessData | null>;
   saveAccessData(data: IWalletAccessData): Promise<void>;
   getWalletData(): Promise<IWalletData>;
   getLastLoadedAddressIndex(): Promise<number>;
@@ -411,7 +425,11 @@ export interface IStore {
   getItem(key: string): Promise<any>;
   setItem(key: string, value: any): Promise<void>;
 
-  cleanStorage(cleanHistory?: boolean, cleanAddresses?: boolean, cleanTokens?: boolean): Promise<void>;
+  cleanStorage(
+    cleanHistory?: boolean,
+    cleanAddresses?: boolean,
+    cleanTokens?: boolean
+  ): Promise<void>;
   cleanMetadata(): Promise<void>;
 }
 
@@ -419,7 +437,12 @@ export interface IStorage {
   // the actual storage of data
   store: IStore;
   config: Config;
-  version: ApiVersion|null;
+  version: ApiVersion | null;
+
+  setApiVersion(version: ApiVersion): void;
+  getDecimalPlaces(): number;
+  saveNativeToken(): Promise<void>;
+  getNativeTokenData(): ITokenData;
 
   hasTxSignatureMethod(): boolean;
   setTxSignatureMethod(txSign: EcdsaTxSign): void;
@@ -427,19 +450,19 @@ export interface IStorage {
 
   // Address methods
   getAllAddresses(): AsyncGenerator<IAddressInfo & IAddressMetadata>;
-  getAddressInfo(base58: string): Promise<(IAddressInfo & IAddressMetadata)|null>;
-  getAddressAtIndex(index: number): Promise<IAddressInfo|null>;
+  getAddressInfo(base58: string): Promise<(IAddressInfo & IAddressMetadata) | null>;
+  getAddressAtIndex(index: number): Promise<IAddressInfo | null>;
   getAddressPubkey(index: number): Promise<string>;
   saveAddress(info: IAddressInfo): Promise<void>;
   isAddressMine(base58: string): Promise<boolean>;
   getCurrentAddress(markAsUsed?: boolean): Promise<string>;
-  getChangeAddress(options?: {changeAddress?: null|string}): Promise<string>;
+  getChangeAddress(options?: { changeAddress?: null | string }): Promise<string>;
 
   // Transaction methods
   txHistory(): AsyncGenerator<IHistoryTx>;
   tokenHistory(tokenUid?: string): AsyncGenerator<IHistoryTx>;
-  getTx(txId: string): Promise<IHistoryTx|null>;
-  getSpentTxs(inputs: Input[]): AsyncGenerator<{tx: IHistoryTx, input: Input, index: number}>;
+  getTx(txId: string): Promise<IHistoryTx | null>;
+  getSpentTxs(inputs: Input[]): AsyncGenerator<{ tx: IHistoryTx; input: Input; index: number }>;
   addTx(tx: IHistoryTx): Promise<void>;
   processHistory(): Promise<void>;
 
@@ -454,7 +477,11 @@ export interface IStorage {
   // UTXOs
   getAllUtxos(): AsyncGenerator<IUtxo>;
   selectUtxos(options: Omit<IUtxoFilterOptions, 'reward_lock'>): AsyncGenerator<IUtxo>;
-  fillTx(token: string, tx: IDataTx, options: IFillTxOptions): Promise<{inputs: IDataInput[], outputs: IDataOutput[]}>;
+  fillTx(
+    token: string,
+    tx: IDataTx,
+    options: IFillTxOptions
+  ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }>;
   utxoSelectAsInput(utxo: IUtxoId, markAs: boolean, ttl?: number): Promise<void>;
   isUtxoSelectedAsInput(utxo: IUtxoId): Promise<boolean>;
   utxoSelectedAsInputIter(): AsyncGenerator<IUtxoId>;
@@ -462,7 +489,7 @@ export interface IStorage {
   processLockedUtxos(height: number): Promise<void>;
 
   // Wallet operations
-  getAccessData(): Promise<IWalletAccessData|null>;
+  getAccessData(): Promise<IWalletAccessData | null>;
   saveAccessData(data: IWalletAccessData): Promise<void>;
   getMainXPrivKey(pinCode: string): Promise<string>;
   getAcctPathXPrivKey(pinCode: string): Promise<string>;
@@ -472,14 +499,21 @@ export interface IStorage {
   getCurrentHeight(): Promise<number>;
   setCurrentHeight(height: number): Promise<void>;
   isReadonly(): Promise<boolean>;
-  setApiVersion(version: ApiVersion): void;
   changePin(oldPin: string, newPin: string): Promise<void>;
   changePassword(oldPassword: string, newPassword: string): Promise<void>;
   setGapLimit(value: number): Promise<void>;
   getGapLimit(): Promise<number>;
   getIndexLimit(): Promise<Omit<IIndexLimitAddressScanPolicy, 'policy'> | null>;
-  cleanStorage(cleanHistory?: boolean, cleanAddresses?: boolean, cleanTokens?: boolean): Promise<void>;
-  handleStop(options: {connection?: FullNodeConnection, cleanStorage?: boolean, cleanAddresses?: boolean}): Promise<void>;
+  cleanStorage(
+    cleanHistory?: boolean,
+    cleanAddresses?: boolean,
+    cleanTokens?: boolean
+  ): Promise<void>;
+  handleStop(options: {
+    connection?: FullNodeConnection;
+    cleanStorage?: boolean;
+    cleanAddresses?: boolean;
+  }): Promise<void>;
   getTokenDepositPercentage(): number;
   checkPin(pinCode: string): Promise<boolean>;
   checkPassword(password: string): Promise<boolean>;
@@ -517,7 +551,7 @@ export interface IKVAddressIndex extends IKVStoreIndex<AddressIndexValidateRespo
   addressIter(): AsyncGenerator<IAddressInfo>;
   setAddressMeta(uid: string, meta: IAddressMetadata): Promise<void>;
   getAddressMeta(base58: string): Promise<IAddressMetadata | null>;
-  getAddressAtIndex(index: number): Promise<string|null>;
+  getAddressAtIndex(index: number): Promise<string | null>;
   saveAddress(info: IAddressInfo): Promise<void>;
   addressCount(): Promise<number>;
   clearMeta(): Promise<void>;
@@ -525,12 +559,12 @@ export interface IKVAddressIndex extends IKVStoreIndex<AddressIndexValidateRespo
 }
 
 export interface HistoryIndexValidateResponse {
-  count: number,
+  count: number;
 }
 
 export interface IKVHistoryIndex extends IKVStoreIndex<HistoryIndexValidateResponse> {
   historyIter(tokenUid?: string): AsyncGenerator<IHistoryTx>;
-  getTx(txId: string): Promise<IHistoryTx|null>;
+  getTx(txId: string): Promise<IHistoryTx | null>;
   saveTx(tx: IHistoryTx): Promise<void>;
   historyCount(): Promise<number>;
   clear(): Promise<void>;
@@ -551,7 +585,7 @@ export interface IKVTokenIndex extends IKVStoreIndex<void> {
   registeredTokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>>;
   hasToken(tokenUid: string): Promise<boolean>;
   getToken(tokenUid: string): Promise<(ITokenData & Partial<ITokenMetadata>) | null>;
-  getTokenMetadata(tokenUid: string): Promise<ITokenMetadata|null>;
+  getTokenMetadata(tokenUid: string): Promise<ITokenMetadata | null>;
   saveToken(tokenConfig: ITokenData): Promise<void>;
   saveMetadata(uid: string, meta: ITokenMetadata): Promise<void>;
   registerToken(token: ITokenData): Promise<void>;
@@ -564,7 +598,7 @@ export interface IKVTokenIndex extends IKVStoreIndex<void> {
 }
 
 export interface IKVWalletIndex extends IKVStoreIndex<void> {
-  getAccessData(): Promise<IWalletAccessData|null>;
+  getAccessData(): Promise<IWalletAccessData | null>;
   saveAccessData(data: IWalletAccessData): Promise<void>;
   getWalletData(): Promise<IWalletData>;
   getLastLoadedAddressIndex(): Promise<number>;

@@ -1,7 +1,7 @@
 import path from 'path';
 import { Level } from 'level';
 import { AbstractSublevel } from 'abstract-level';
-import { IKVNanoContractIndex, INcData } from "src/types";
+import { IKVNanoContractIndex, INcData } from 'src/types';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 import { checkLevelDbVersion } from './utils';
 
@@ -9,12 +9,14 @@ export const REGISTERED_PREFIX = 'registered';
 
 export default class LevelNanoContractIndex implements IKVNanoContractIndex {
   dbpath: string;
+
   /**
    * Registered Nano Contract database
    * Key: ncId
    * Value: INcData (json encoded)
    */
   registeredDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, INcData>;
+
   indexVersion: string = '0.0.1';
 
   constructor(dbpath: string) {
@@ -36,7 +38,7 @@ export default class LevelNanoContractIndex implements IKVNanoContractIndex {
    * @returns {Promise<void>}
    */
   async checkVersion(): Promise<void> {
-    const db = this.registeredDB.db;
+    const { db } = this.registeredDB;
     const instanceName = this.constructor.name;
     await checkLevelDbVersion(instanceName, db, this.indexVersion);
   }
@@ -120,7 +122,6 @@ export default class LevelNanoContractIndex implements IKVNanoContractIndex {
   async unregisterNanoContract(ncId: string): Promise<void> {
     await this.registeredDB.del(ncId);
   }
-
 
   /**
    * Update nano contract registered address.

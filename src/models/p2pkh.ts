@@ -5,20 +5,26 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { OP_GREATERTHAN_TIMESTAMP, OP_DUP, OP_HASH160, OP_EQUALVERIFY, OP_CHECKSIG } from '../opcodes';
 import { util } from 'bitcore-lib';
+import {
+  OP_GREATERTHAN_TIMESTAMP,
+  OP_DUP,
+  OP_HASH160,
+  OP_EQUALVERIFY,
+  OP_CHECKSIG,
+} from '../opcodes';
 import { intToBytes } from '../utils/buffer';
 import helpers from '../utils/helpers';
 import Address from './address';
 
 type optionsType = {
-  timelock?: number | null | undefined,
+  timelock?: number | null | undefined;
 };
-
 
 class P2PKH {
   // Address object of the value destination
   address: Address;
+
   // Timestamp of the timelock of the output
   timelock: number | null;
 
@@ -45,6 +51,7 @@ class P2PKH {
    * @memberof P2PKH
    * @inner
    */
+  // eslint-disable-next-line class-methods-use-this -- This method returns a hardcoded constant
   getType(): 'p2pkh' {
     return 'p2pkh';
   }
@@ -61,7 +68,7 @@ class P2PKH {
     const addressBytes = this.address.decode();
     const addressHash = addressBytes.slice(1, -4);
     if (this.timelock) {
-      let timelockBytes = intToBytes(this.timelock, 4);
+      const timelockBytes = intToBytes(this.timelock, 4);
       helpers.pushDataToStack(arr, timelockBytes);
       arr.push(OP_GREATERTHAN_TIMESTAMP);
     }
@@ -84,7 +91,7 @@ class P2PKH {
    * @memberof P2PKH
    * @inner
    */
-  static identify(buf: Buffer): Boolean {
+  static identify(buf: Buffer): boolean {
     const op_greaterthan_timestamp = OP_GREATERTHAN_TIMESTAMP.readUInt8(0);
     const op_dup = OP_DUP.readUInt8(0);
     const op_hash160 = OP_HASH160.readUInt8(0);
@@ -100,7 +107,7 @@ class P2PKH {
       if (buf.readUInt8(ptr++) !== 4) {
         return false;
       }
-      ptr += 4
+      ptr += 4;
       // next byte is OP_GREATERTHAN_TIMESTAMP
       if (buf.readUInt8(ptr++) !== op_greaterthan_timestamp) {
         return false;
@@ -115,7 +122,7 @@ class P2PKH {
     if (buf.readUInt8(ptr++) !== 20) {
       return false;
     }
-    ptr += 20
+    ptr += 20;
     // OP_EQUALVERIFY OP_CHECKSIG
     if (buf.readUInt8(ptr++) !== op_equalverify || buf.readUInt8(ptr++) !== op_checksig) {
       return false;

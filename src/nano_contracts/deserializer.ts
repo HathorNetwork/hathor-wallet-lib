@@ -5,9 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-
 import { bufferToHex, unpackToFloat, unpackToInt } from '../utils/buffer';
-
 
 class Deserializer {
   /**
@@ -47,6 +45,8 @@ class Deserializer {
         throw new Error('Invalid type.');
     }
   }
+
+  /* eslint-disable class-methods-use-this -- XXX: Methods that don't use `this` should be made static */
 
   /**
    * Deserialize string value
@@ -107,10 +107,10 @@ class Deserializer {
   toBool(value: Buffer): boolean {
     if (value[0]) {
       return true;
-    } else {
-      return false;
     }
+    return false;
   }
+  /* eslint-enable class-methods-use-this */
 
   /**
    * Deserialize an optional value
@@ -159,6 +159,7 @@ class Deserializer {
     let signedBuffer: Buffer;
     let size: number;
     // [len(serializedResult)][serializedResult][inputData]
+    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
     [size, signedBuffer] = unpackToInt(2, false, signedData);
     let parsed = this.deserializeFromType(signedBuffer.slice(0, size), valueType);
     if (valueType === 'bytes') {

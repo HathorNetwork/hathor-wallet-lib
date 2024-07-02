@@ -258,35 +258,57 @@ export interface TransactionFullObject {
 
 export interface IStopWalletParams {
   cleanStorage?: boolean;
-};
+}
 
 export interface DelegateAuthorityOptions {
   anotherAuthorityAddress: string | null;
   createAnother: boolean;
   pinCode: string | null;
-};
+}
 
 export interface DestroyAuthorityOptions {
   pinCode: string | null;
 }
 
 export interface IHathorWallet {
-  start(options: { pinCode: string, password: string }): Promise<void>;
+  start(options: { pinCode: string; password: string }): Promise<void>;
   getAllAddresses(): AsyncGenerator<GetAddressesObject>;
   getBalance(token: string | null): Promise<GetBalanceObject[]>;
   getTokens(): Promise<string[]>;
-  getTxHistory(options: { token_id?: string, count?: number, skip?: number }): Promise<GetHistoryObject[]>;
-  sendManyOutputsTransaction(outputs: OutputRequestObj[], options: { inputs?: InputRequestObj[], changeAddress?: string }): Promise<Transaction>;
-  sendTransaction(address: string, value: number, options: { token?: string, changeAddress?: string }): Promise<Transaction>;
+  getTxHistory(options: {
+    token_id?: string;
+    count?: number;
+    skip?: number;
+  }): Promise<GetHistoryObject[]>;
+  sendManyOutputsTransaction(
+    outputs: OutputRequestObj[],
+    options: { inputs?: InputRequestObj[]; changeAddress?: string }
+  ): Promise<Transaction>;
+  sendTransaction(
+    address: string,
+    value: number,
+    options: { token?: string; changeAddress?: string }
+  ): Promise<Transaction>;
   stop(params?: IStopWalletParams): void;
   getAddressAtIndex(index: number): Promise<string>;
   getCurrentAddress(options: { markAsUsed: boolean }): AddressInfoObject;
   getNextAddress(): AddressInfoObject;
   getAddressPrivKey(pinCode: string, addressIndex: number): Promise<bitcore.PrivateKey>;
   signMessageWithAddress(message: string, index: number, pinCode: string): Promise<string>;
-  prepareCreateNewToken(name: string, symbol: string, amount: number, options): Promise<CreateTokenTransaction>;
+  prepareCreateNewToken(
+    name: string,
+    symbol: string,
+    amount: number,
+    options
+  ): Promise<CreateTokenTransaction>;
   createNewToken(name: string, symbol: string, amount: number, options): Promise<Transaction>;
-  createNFT(name: string, symbol: string, amount: number, data: string, options): Promise<Transaction>;
+  createNFT(
+    name: string,
+    symbol: string,
+    amount: number,
+    data: string,
+    options
+  ): Promise<Transaction>;
   prepareMintTokensData(token: string, amount: number, options): Promise<Transaction>;
   mintTokens(token: string, amount: number, options): Promise<Transaction>;
   prepareMeltTokensData(token: string, amount: number, options): Promise<Transaction>;
@@ -295,43 +317,35 @@ export interface IHathorWallet {
     token: string,
     type: string,
     address: string,
-    options: DelegateAuthorityOptions,
+    options: DelegateAuthorityOptions
   ): Promise<Transaction>;
   delegateAuthority(
     token: string,
     type: string,
     address: string,
-    options: DelegateAuthorityOptions,
+    options: DelegateAuthorityOptions
   ): Promise<Transaction>;
   prepareDestroyAuthorityData(
     token: string,
     type: string,
     count: number,
-    options: DestroyAuthorityOptions,
+    options: DestroyAuthorityOptions
   ): Promise<Transaction>;
   destroyAuthority(
     token: string,
     type: string,
     count: number,
-    options: DestroyAuthorityOptions,
+    options: DestroyAuthorityOptions
   ): Promise<Transaction>;
   getFullHistory(): TransactionFullObject[];
-  getTxBalance(tx: WsTransaction, optionsParams): Promise<{[tokenId: string]: number}>;
+  getTxBalance(tx: WsTransaction, optionsParams): Promise<{ [tokenId: string]: number }>;
   onConnectionChangedState(newState: ConnectionState): void;
   getTokenDetails(tokenId: string): Promise<TokenDetailsObject>;
   getVersionData(): Promise<FullNodeVersionData>;
   checkAddressesMine(addresses: string[]): Promise<WalletAddressMap>;
-  getFullTxById(
-    txId: string,
-  ): Promise<FullNodeTxResponse>;
-  getTxConfirmationData(
-    txId: string,
-  ): Promise<FullNodeTxConfirmationDataResponse>;
-  graphvizNeighborsQuery(
-    txId: string,
-    graphType: string,
-    maxLevel: number,
-  ): Promise<string>;
+  getFullTxById(txId: string): Promise<FullNodeTxResponse>;
+  getTxConfirmationData(txId: string): Promise<FullNodeTxConfirmationDataResponse>;
+  graphvizNeighborsQuery(txId: string, graphType: string, maxLevel: number): Promise<string>;
   checkPin(pin: string): Promise<boolean>;
   checkPassword(password: string): Promise<boolean>;
   checkPinAndPassword(pin: string, password: string): Promise<boolean>;
@@ -343,10 +357,10 @@ export interface ISendTransaction {
 }
 
 export interface MineTxSuccessData {
-  nonce: number,
-  weight: number,
-  timestamp: number,
-  parents: string[],
+  nonce: number;
+  weight: number;
+  timestamp: number;
+  parents: string[];
 }
 
 export interface DecodedOutput {
@@ -405,7 +419,7 @@ export interface CreateWalletAuthData {
   timestampNow: number;
   firstAddress: string;
   authDerivedPrivKey: bitcore.HDPrivateKey;
-};
+}
 
 export interface FullNodeVersionData {
   timestamp: number;
@@ -419,7 +433,7 @@ export interface FullNodeVersionData {
   rewardSpendMinBlocks: number;
   maxNumberInputs: number;
   maxNumberOutputs: number;
-};
+}
 
 export interface TxByIdTokenData {
   txId: string;
@@ -440,7 +454,7 @@ export type TxByIdTokensResponseData = TxByIdTokenData[];
 export interface WalletServiceServerUrls {
   walletServiceBaseUrl: string;
   walletServiceWsUrl: string;
-};
+}
 
 export enum ConnectionState {
   CLOSED = 0,

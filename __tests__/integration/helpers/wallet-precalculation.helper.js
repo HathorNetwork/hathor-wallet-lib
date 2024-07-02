@@ -26,7 +26,7 @@ export const precalculationHelpers = {
   /**
    * @type WalletPrecalculationHelper
    */
-  test: null
+  test: null,
 };
 
 export const multisigWalletsData = {
@@ -48,7 +48,7 @@ export const multisigWalletsData = {
     pubkeys: [],
     total: 5,
     minSignatures: 3,
-  }
+  },
 };
 multisigWalletsData.walletConfig.pubkeys = multisigWalletsData.pubkeys;
 
@@ -114,7 +114,7 @@ export class WalletPrecalculationHelper {
        * request for the Wallet Headless, we use this standard derivation index.
        * Future changes on this walletUtils method may cause this step to produce different results.
        */
-      const accountDerivationIndex = '0\'/0';
+      const accountDerivationIndex = "0'/0";
 
       // Common address calculation
       const xpubkey = walletUtils.getXPubKeyFromSeed(wordsInput, {
@@ -135,7 +135,7 @@ export class WalletPrecalculationHelper {
     const returnObject = {
       isUsed: false,
       words: wordsInput,
-      addresses: addressesArray
+      addresses: addressesArray,
     };
     if (params.multisig) {
       returnObject.multisigDebugData = multisigDebugData;
@@ -171,15 +171,10 @@ export class WalletPrecalculationHelper {
      * The main aim of this file structure is human readability for debugging.
      * The result must be a valid JSON, but with only one line per wallet.
      */
-    let strWalletsData = wallets
-      .map(w => `${JSON.stringify(w)}`)
-      .join(',\n');
+    let strWalletsData = wallets.map(w => `${JSON.stringify(w)}`).join(',\n');
     strWalletsData = `[\n${strWalletsData}\n]`;
 
-    await fs.writeFile(
-      this.WALLETS_FILENAME,
-      strWalletsData
-    );
+    await fs.writeFile(this.WALLETS_FILENAME, strWalletsData);
   }
 
   /**
@@ -215,8 +210,8 @@ export class WalletPrecalculationHelper {
         words: walletWords,
         multisig: {
           wordsArray: params.wordsArray,
-          minSignatures: params.minSignatures
-        }
+          minSignatures: params.minSignatures,
+        },
       });
       resultingWallets.push(multisigWallet);
     }

@@ -17,8 +17,8 @@ const isHexa = (value: string): boolean => {
  * @inner
  */
 export function intToBytes(value: number, bytes: number): Buffer {
-  let arr = new ArrayBuffer(bytes);
-  let view = new DataView(arr);
+  const arr = new ArrayBuffer(bytes);
+  const view = new DataView(arr);
   if (bytes === 1) {
     // byteOffset = 0;
     view.setUint8(0, value);
@@ -43,7 +43,7 @@ export function intToBytes(value: number, bytes: number): Buffer {
  */
 export function signedIntToBytes(value: number, bytes: number): Buffer {
   let arr = new ArrayBuffer(bytes);
-  let view = new DataView(arr);
+  const view = new DataView(arr);
   if (bytes === 1) {
     // byteOffset = 0
     view.setInt8(0, value);
@@ -54,8 +54,8 @@ export function signedIntToBytes(value: number, bytes: number): Buffer {
     view.setInt32(0, value, false);
   } else if (bytes === 8) {
     // In case of 8 bytes I need to handle the int with a Long lib
-    let long = Long.fromNumber(value, false);
-    arr = long.toBytesBE();
+    const long = Long.fromNumber(value, false);
+    arr = new Uint8Array(long.toBytesBE()).buffer;
   }
   return buffer.Buffer.from(arr);
 }
@@ -70,8 +70,8 @@ export function signedIntToBytes(value: number, bytes: number): Buffer {
  * @inner
  */
 export function floatToBytes(value: number, bytes: number): Buffer {
-  let arr = new ArrayBuffer(bytes);
-  let view = new DataView(arr);
+  const arr = new ArrayBuffer(bytes);
+  const view = new DataView(arr);
   if (bytes === 8) {
     // byteOffset = 0; isLitteEndian = false
     view.setFloat64(0, value, false);
@@ -81,7 +81,7 @@ export function floatToBytes(value: number, bytes: number): Buffer {
 
 export const hexToBuffer = (value: string): Buffer => {
   if (!isHexa(value)) {
-    throw new Error("hexToBuffer: argument must be a strict hex string.");
+    throw new Error('hexToBuffer: argument must be a strict hex string.');
   }
   return Buffer.from(value, 'hex');
 };
@@ -96,7 +96,9 @@ export const hexToBuffer = (value: string): Buffer => {
  */
 const validateLenToUnpack = (n: number, buff: Buffer) => {
   if (buff.length < n) {
-    throw new ParseError(`Don't have enough bytes to unpack. Requested ${n} and buffer has ${buff.length}`);
+    throw new ParseError(
+      `Don't have enough bytes to unpack. Requested ${n} and buffer has ${buff.length}`
+    );
   }
 };
 
@@ -111,10 +113,7 @@ const validateLenToUnpack = (n: number, buff: Buffer) => {
 export const unpackLen = (n: number, buff: Buffer): [Buffer, Buffer] => {
   validateLenToUnpack(n, buff);
 
-  return [
-    buff.slice(0, n),
-    buff.slice(n)
-  ];
+  return [buff.slice(0, n), buff.slice(n)];
 };
 
 /**
@@ -162,10 +161,7 @@ export const unpackToInt = (n: number, signed: boolean, buff: Buffer): [number, 
     throw new ParseError('Invalid value for n.');
   }
 
-  return [
-    retInt,
-    buff.slice(n)
-  ];
+  return [retInt, buff.slice(n)];
 };
 
 /**
@@ -180,10 +176,7 @@ export const unpackToFloat = (buff: Buffer): [number, Buffer] => {
   validateLenToUnpack(n, buff);
 
   const retFloat = buff.slice(0, n).readDoubleBE(0);
-  return [
-    retFloat,
-    buff.slice(n)
-  ];
+  return [retFloat, buff.slice(n)];
 };
 
 /**
@@ -198,10 +191,7 @@ export const unpackToHex = (n: number, buff: Buffer): [string, Buffer] => {
   const unpackedRet = unpackLen(n, buff);
   const unpackedHex = bufferToHex(unpackedRet[0]);
 
-  return [
-    unpackedHex,
-    unpackedRet[1]
-  ];
+  return [unpackedHex, unpackedRet[1]];
 };
 
 /**
@@ -220,13 +210,17 @@ export const bufferToHex = (buff: Buffer): string => {
  * First we get the highByte value to check if it was a 8-byte or 4-byte value
  * Then we unpack the integer and multiply by the sign.
  *
- * @param {Buffer} buff The buffer to unpack the value
+ * @param srcBuf The buffer to unpack the value
  *
- * @return {[number, Buffer]} Output value and rest of buffer after unpacking
+ * @return Output value and rest of buffer after unpacking
  */
-export const bytesToOutputValue = (buff: Buffer): [number, Buffer] => {
-  const [highByte, _] = unpackToInt(1, true, buff);
-  let sign, value;
+export const bytesToOutputValue = (srcBuf: Buffer): [number, Buffer] => {
+  // Copies buffer locally, not to change the original parameter
+  let buff = Buffer.from(srcBuf);
+
+  const [highByte] = unpackToInt(1, true, buff);
+  let sign;
+  let value;
   if (highByte < 0) {
     // 8 bytes
     sign = -1;
@@ -237,5 +231,5 @@ export const bytesToOutputValue = (buff: Buffer): [number, Buffer] => {
     [value, buff] = unpackToInt(4, true, buff);
   }
 
-  return [value*sign, buff];
+  return [value * sign, buff];
 };

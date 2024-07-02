@@ -30,7 +30,6 @@ import CreateTokenTransaction from './models/create_token_transaction';
 import Network from './models/network';
 import * as addressUtils from './utils/address';
 import * as cryptoUtils from './utils/crypto';
-import dateUtils from './utils/date';
 import tokensUtils from './utils/tokens';
 import walletUtils from './utils/wallet';
 import helpersUtils from './utils/helpers';
@@ -91,7 +90,7 @@ export {
   Network,
   addressUtils,
   cryptoUtils,
-  dateUtils,
+  dateFormatter as dateUtils,
   tokensUtils,
   walletUtils,
   numberUtils,

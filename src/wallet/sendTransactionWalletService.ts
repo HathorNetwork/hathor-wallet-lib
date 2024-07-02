@@ -6,6 +6,7 @@
  */
 
 import { EventEmitter } from 'events';
+import { shuffle } from 'lodash';
 import walletApi from './api/walletApi';
 import MineTransaction from './mineTransaction';
 import HathorWalletServiceWallet from './wallet';
@@ -15,30 +16,41 @@ import Transaction from '../models/transaction';
 import Output from '../models/output';
 import Input from '../models/input';
 import Address from '../models/address';
-import { HATHOR_TOKEN_CONFIG } from '../constants';
-import { shuffle } from 'lodash';
+import { NATIVE_TOKEN_UID } from '../constants';
 import { SendTxError, UtxoError, WalletError, WalletRequestError } from '../errors';
-import { OutputSendTransaction, InputRequestObj, TokenAmountMap, ISendTransaction, MineTxSuccessData, OutputType } from './types';
+import {
+  OutputSendTransaction,
+  InputRequestObj,
+  TokenAmountMap,
+  ISendTransaction,
+  MineTxSuccessData,
+  OutputType,
+} from './types';
 
 type optionsType = {
-  outputs?: OutputSendTransaction[],
-  inputs?: InputRequestObj[],
-  changeAddress?: string | null,
-  transaction?: Transaction | null,
-  pin?: string | null,
+  outputs?: OutputSendTransaction[];
+  inputs?: InputRequestObj[];
+  changeAddress?: string | null;
+  transaction?: Transaction | null;
+  pin?: string | null;
 };
 
 class SendTransactionWalletService extends EventEmitter implements ISendTransaction {
   // Wallet that is sending the transaction
   private wallet: HathorWalletServiceWallet;
+
   // Outputs to prepare the transaction
   private outputs: OutputSendTransaction[];
+
   // Optional inputs to prepare the transaction
   private inputs: InputRequestObj[];
+
   // Optional change address to prepare the transaction
   private changeAddress: string | null;
+
   // Transaction object to be used after it's already prepared
   private transaction: Transaction | null;
+
   // MineTransaction object
   private mineTransaction: MineTransaction | null;
 
@@ -48,12 +60,13 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
   constructor(wallet: HathorWalletServiceWallet, options: optionsType = {}) {
     super();
 
-    const newOptions: optionsType = Object.assign({
+    const newOptions: optionsType = {
       outputs: [],
       inputs: [],
       changeAddress: null,
       transaction: null,
-    }, options);
+      ...options,
+    };
 
     this.wallet = wallet;
     this.outputs = newOptions.outputs!;
@@ -71,9 +84,9 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @memberof SendTransactionWalletService
    * @inner
    */
-  async prepareTx(): Promise<{ transaction: Transaction, utxosAddressPath: string[] }> {
+  async prepareTx(): Promise<{ transaction: Transaction; utxosAddressPath: string[] }> {
     if (this.outputs.length === 0) {
-      throw new WalletError('Can\'t prepare transactions with no outputs.');
+      throw new WalletError("Can't prepare transactions with no outputs.");
     }
     this.emit('prepare-tx-start');
     // We get the full outputs amount for each token
@@ -105,7 +118,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     // if HTR appears in the array, we must remove it
     // because we don't add HTR to the transaction tokens array
     const tokens = Object.keys(tokenAmountMap);
-    const htrIndex = tokens.indexOf(HATHOR_TOKEN_CONFIG.uid);
+    const htrIndex = tokens.indexOf(NATIVE_TOKEN_UID);
     if (htrIndex > -1) {
       tokens.splice(htrIndex, 1);
     }
@@ -136,6 +149,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @memberof SendTransactionWalletService
    * @inner
    */
+  // eslint-disable-next-line class-methods-use-this -- XXX: This method should be made static
   inputDataToModel(input: InputRequestObj): Input {
     return new Input(input.txId, input.index);
   }
@@ -155,7 +169,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     if (!address.isValid()) {
       throw new SendTxError(`Address ${output.address!} is not valid.`);
     }
-    const tokenData = (tokens.indexOf(output.token) > -1) ? tokens.indexOf(output.token) + 1 : 0;
+    const tokenData = tokens.indexOf(output.token) > -1 ? tokens.indexOf(output.token) + 1 : 0;
     const outputOptions = { tokenData };
     const p2pkh = new P2PKH(address, { timelock: output.timelock || null });
     const p2pkhScript = p2pkh.createScript();
@@ -175,11 +189,15 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     for (const input of this.inputs) {
       const utxo = await this.wallet.getUtxoFromId(input.txId, input.index);
       if (utxo === null) {
-        throw new UtxoError(`Invalid input selection. Input ${input.txId} at index ${input.index}.`);
+        throw new UtxoError(
+          `Invalid input selection. Input ${input.txId} at index ${input.index}.`
+        );
       }
 
       if (!(utxo.tokenId in tokenAmountMap)) {
-        throw new SendTxError(`Invalid input selection. Input ${input.txId} at index ${input.index} has token ${utxo.tokenId} that is not on the outputs.`);
+        throw new SendTxError(
+          `Invalid input selection. Input ${input.txId} at index ${input.index} has token ${utxo.tokenId} that is not on the outputs.`
+        );
       }
 
       utxosAddressPath.push(utxo.addressPath);
@@ -193,17 +211,27 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
 
     for (const t in tokenAmountMap) {
       if (!(t in amountInputMap)) {
-        throw new SendTxError(`Invalid input selection. Token ${t} is in the outputs but there are no inputs for it.`);
+        throw new SendTxError(
+          `Invalid input selection. Token ${t} is in the outputs but there are no inputs for it.`
+        );
       }
 
       if (amountInputMap[t] < tokenAmountMap[t]) {
-        throw new SendTxError(`Invalid input selection. Sum of inputs for token ${t} is smaller than the sum of outputs.`);
+        throw new SendTxError(
+          `Invalid input selection. Sum of inputs for token ${t} is smaller than the sum of outputs.`
+        );
       }
 
       if (amountInputMap[t] > tokenAmountMap[t]) {
         const changeAmount = amountInputMap[t] - tokenAmountMap[t];
-        const changeAddress = this.changeAddress || this.wallet.getCurrentAddress({ markAsUsed: true }).address;
-        this.outputs.push({ address: changeAddress, value: changeAmount, token: t, type: helpers.getOutputTypeFromAddress(changeAddress, this.wallet.network) });
+        const changeAddress =
+          this.changeAddress || this.wallet.getCurrentAddress({ markAsUsed: true }).address;
+        this.outputs.push({
+          address: changeAddress,
+          value: changeAmount,
+          token: t,
+          type: helpers.getOutputTypeFromAddress(changeAddress, this.wallet.network),
+        });
         // If we add a change output, then we must shuffle it
         this.outputs = shuffle(this.outputs);
       }
@@ -222,9 +250,14 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
   async selectUtxosToUse(tokenAmountMap: TokenAmountMap): Promise<string[]> {
     const utxosAddressPath: string[] = [];
     for (const token in tokenAmountMap) {
-      const { utxos, changeAmount } = await this.wallet.getUtxos({ tokenId: token, totalAmount: tokenAmountMap[token] });
+      const { utxos, changeAmount } = await this.wallet.getUtxos({
+        tokenId: token,
+        totalAmount: tokenAmountMap[token],
+      });
       if (utxos.length === 0) {
-        throw new UtxoError(`No utxos available to fill the request. Token: ${token} - Amount: ${tokenAmountMap[token]}.`);
+        throw new UtxoError(
+          `No utxos available to fill the request. Token: ${token} - Amount: ${tokenAmountMap[token]}.`
+        );
       }
 
       for (const utxo of utxos) {
@@ -233,8 +266,14 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       }
 
       if (changeAmount) {
-        const changeAddress = this.changeAddress || this.wallet.getCurrentAddress({ markAsUsed: true }).address;
-        this.outputs.push({ address: changeAddress, value: changeAmount, token, type: helpers.getOutputTypeFromAddress(changeAddress, this.wallet.network) });
+        const changeAddress =
+          this.changeAddress || this.wallet.getCurrentAddress({ markAsUsed: true }).address;
+        this.outputs.push({
+          address: changeAddress,
+          value: changeAmount,
+          token,
+          type: helpers.getOutputTypeFromAddress(changeAddress, this.wallet.network),
+        });
         // If we add a change output, then we must shuffle it
         this.outputs = shuffle(this.outputs);
       }
@@ -251,7 +290,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    */
   async signTx(utxosAddressPath: string[]) {
     if (this.transaction === null) {
-      throw new WalletError('Can\'t sign transaction if it\'s null.');
+      throw new WalletError("Can't sign transaction if it's null.");
     }
     this.emit('sign-tx-start');
     const dataToSignHash = this.transaction.getDataToSignHash();
@@ -262,7 +301,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
         xprivkey,
         dataToSignHash,
         // the wallet service returns the full BIP44 path, but we only need the address path:
-        HathorWalletServiceWallet.getAddressIndexFromFullPath(utxosAddressPath[idx]),
+        HathorWalletServiceWallet.getAddressIndexFromFullPath(utxosAddressPath[idx])
       );
       inputObj.setData(inputData);
     }
@@ -284,46 +323,49 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    */
   mineTx(options = {}): Promise<MineTxSuccessData> {
     if (this.transaction === null) {
-      throw new WalletError('Can\'t mine transaction if it\'s null.');
+      throw new WalletError("Can't mine transaction if it's null.");
     }
     type mineOptionsType = {
-      startMiningTx: boolean,
-      maxTxMiningRetries: number,
+      startMiningTx: boolean;
+      maxTxMiningRetries: number;
     };
-    const newOptions: mineOptionsType = Object.assign({
+    const newOptions: mineOptionsType = {
       startMiningTx: true,
       maxTxMiningRetries: 3,
-    }, options);
+      ...options,
+    };
 
-    this.mineTransaction = new MineTransaction(this.transaction, { maxTxMiningRetries: newOptions.maxTxMiningRetries });
+    this.mineTransaction = new MineTransaction(this.transaction, {
+      maxTxMiningRetries: newOptions.maxTxMiningRetries,
+    });
 
     this.mineTransaction.on('mining-started', () => {
       this.emit('mine-tx-started');
     });
 
-    this.mineTransaction.on('estimation-updated', (data) => {
+    this.mineTransaction.on('estimation-updated', data => {
       this.emit('estimation-updated', data);
-    })
+    });
 
-    this.mineTransaction.on('job-submitted', (data) => {
+    this.mineTransaction.on('job-submitted', data => {
       this.emit('job-submitted', data);
-    })
+    });
 
-    this.mineTransaction.on('job-done', (data) => {
+    this.mineTransaction.on('job-done', data => {
       this.emit('job-done', data);
-    })
+    });
 
-    this.mineTransaction.on('error', (message) => {
+    this.mineTransaction.on('error', message => {
       this.emit('send-error', message);
-    })
+    });
 
-    this.mineTransaction.on('unexpected-error', (message) => {
+    this.mineTransaction.on('unexpected-error', message => {
       this.emit('send-error', message);
-    })
+    });
 
-    this.mineTransaction.on('success', (data) => {
+    this.mineTransaction.on('success', data => {
       this.emit('mine-tx-ended', data);
-    })
+    });
 
     if (newOptions.startMiningTx) {
       this.mineTransaction.start();
@@ -341,15 +383,15 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    */
   async handleSendTxProposal() {
     if (this.transaction === null) {
-      throw new WalletError('Can\'t push transaction if it\'s null.');
+      throw new WalletError("Can't push transaction if it's null.");
     }
     this.emit('send-tx-start', this.transaction);
     const txHex = this.transaction.toHex();
 
     try {
       const responseData = await walletApi.createTxProposal(this.wallet, txHex);
-      const txProposalId = responseData.txProposalId;
-      const sendData = await walletApi.updateTxProposal(this.wallet, txProposalId, txHex);
+      const { txProposalId } = responseData;
+      await walletApi.updateTxProposal(this.wallet, txProposalId, txHex);
       this.transaction.updateHash();
       this.emit('send-tx-success', this.transaction);
       return this.transaction;

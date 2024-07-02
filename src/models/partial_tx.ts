@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+// eslint-disable-next-line max-classes-per-file -- These classes are well organized within this file
 import { get } from 'lodash';
 
 import Input from './input';
@@ -22,7 +23,8 @@ import { IndexOOBError, UnsupportedScriptError } from '../errors';
 import txApi from '../api/txApi';
 import {
   DEFAULT_TX_VERSION,
-  HATHOR_TOKEN_CONFIG,
+  NATIVE_TOKEN_UID,
+  TOKEN_INDEX_MASK,
   TOKEN_AUTHORITY_MASK,
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
@@ -35,8 +37,11 @@ import { IDataInput, IDataOutput, IDataTx } from '../types';
  */
 export class ProposalInput extends Input {
   token: string;
+
   authorities: number;
+
   value: number;
+
   address: string;
 
   constructor(
@@ -45,12 +50,12 @@ export class ProposalInput extends Input {
     value: number,
     address: string,
     {
-      token = HATHOR_TOKEN_CONFIG.uid,
+      token = NATIVE_TOKEN_UID,
       authorities = 0,
     }: {
       token?: string;
-      authorities?: number,
-    } = {},
+      authorities?: number;
+    } = {}
   ) {
     super(hash, index);
     this.value = value;
@@ -95,7 +100,9 @@ export class ProposalInput extends Input {
  */
 export class ProposalOutput extends Output {
   token: string;
+
   isChange: boolean;
+
   authorities: number;
 
   constructor(
@@ -103,19 +110,19 @@ export class ProposalOutput extends Output {
     script: Buffer,
     {
       isChange = false,
-      token = HATHOR_TOKEN_CONFIG.uid,
+      token = NATIVE_TOKEN_UID,
       authorities = 0,
     }: {
-      token?: string,
-      isChange?: boolean,
-      authorities?: number,
-    } = {},
+      token?: string;
+      isChange?: boolean;
+      authorities?: number;
+    } = {}
   ) {
     let tokenData = 0;
     if (authorities > 0) {
       tokenData |= TOKEN_AUTHORITY_MASK;
     }
-    if (token !== HATHOR_TOKEN_CONFIG.uid) {
+    if (token !== NATIVE_TOKEN_UID) {
       // We set this to avoid isTokenHTR from returning true
       tokenData |= 1;
     }
@@ -176,9 +183,10 @@ export const PartialTxPrefix = 'PartialTx';
  * It is also used to serialize and deserialize the partial transaction state.
  */
 export class PartialTx {
-
   inputs: ProposalInput[];
+
   outputs: ProposalOutput[];
+
   network: Network;
 
   constructor(network: Network) {
@@ -206,7 +214,7 @@ export class PartialTx {
     }
 
     // Remove HTR from tokens array
-    tokenSet.delete(HATHOR_TOKEN_CONFIG.uid);
+    tokenSet.delete(NATIVE_TOKEN_UID);
     const tokens = Array.from(tokenSet);
 
     const data = {
@@ -239,11 +247,11 @@ export class PartialTx {
    * @memberof PartialTx
    * @inner
    */
-  calculateTokenBalance(): Record<string, {inputs: number, outputs: number}> {
-    const tokenBalance: Record<string, {inputs: number, outputs: number}> = {};
+  calculateTokenBalance(): Record<string, { inputs: number; outputs: number }> {
+    const tokenBalance: Record<string, { inputs: number; outputs: number }> = {};
     for (const input of this.inputs) {
       if (!tokenBalance[input.token]) {
-        tokenBalance[input.token] = {inputs: 0, outputs: 0};
+        tokenBalance[input.token] = { inputs: 0, outputs: 0 };
       }
 
       // Ignore authority inputs for token balance
@@ -254,7 +262,7 @@ export class PartialTx {
 
     for (const output of this.outputs) {
       if (!tokenBalance[output.token]) {
-        tokenBalance[output.token] = {inputs: 0, outputs: 0};
+        tokenBalance[output.token] = { inputs: 0, outputs: 0 };
       }
 
       // Ignore authority outputs for token balance
@@ -301,16 +309,15 @@ export class PartialTx {
     value: number,
     address: string,
     {
-      token = HATHOR_TOKEN_CONFIG.uid,
+      token = NATIVE_TOKEN_UID,
       authorities = 0,
     }: {
       token?: string;
       authorities?: number;
-    } = {},
+    } = {}
   ) {
     this.inputs.push(new ProposalInput(txId, index, value, address, { token, authorities }));
   }
-
 
   /**
    * Add an output to the PartialTx.
@@ -329,20 +336,16 @@ export class PartialTx {
     value: number,
     script: Buffer,
     {
-      token = HATHOR_TOKEN_CONFIG.uid,
+      token = NATIVE_TOKEN_UID,
       authorities = 0,
       isChange = false,
     }: {
-      token?: string,
-      isChange?: boolean,
-      authorities?: number,
-    } = {},
+      token?: string;
+      isChange?: boolean;
+      authorities?: number;
+    } = {}
   ) {
-    this.outputs.push(new ProposalOutput(
-      value,
-      script,
-      { token, authorities, isChange },
-    ));
+    this.outputs.push(new ProposalOutput(value, script, { token, authorities, isChange }));
   }
 
   /**
@@ -372,12 +375,9 @@ export class PartialTx {
       }
     });
     const tx = this.getTx();
-    const inputArr = this.inputs.map(i => [
-        i.address,
-        i.token,
-        i.authorities.toString(16),
-        i.value.toString(16),
-      ].join(','));
+    const inputArr = this.inputs.map(i =>
+      [i.address, i.token, i.authorities.toString(16), i.value.toString(16)].join(',')
+    );
     const arr = [
       PartialTxPrefix,
       tx.toHex(),
@@ -408,19 +408,22 @@ export class PartialTx {
       throw new SyntaxError('Invalid PartialTx');
     }
 
-    const inputArr = (dataArr[2] && dataArr[2].split(':').map(h => {
-      const parts = h.split(',');
-      const meta = {
-        address: parts[0],
-        token: parts[1],
-        authorities: parseInt(parts[2], 16),
-        value: parseInt(parts[3], 16)
-      };
-      if (Number.isNaN(meta.value) || Number.isNaN(meta.authorities)) {
-        throw new SyntaxError('Invalid PartialTx');
-      }
-      return meta;
-    })) || [];
+    const inputArr =
+      (dataArr[2] &&
+        dataArr[2].split(':').map(h => {
+          const parts = h.split(',');
+          const meta = {
+            address: parts[0],
+            token: parts[1],
+            authorities: parseInt(parts[2], 16),
+            value: parseInt(parts[3], 16),
+          };
+          if (Number.isNaN(meta.value) || Number.isNaN(meta.authorities)) {
+            throw new SyntaxError('Invalid PartialTx');
+          }
+          return meta;
+        })) ||
+      [];
     const changeOutputs = dataArr[3].split(':').map(x => parseInt(x, 16));
 
     const tx = helpers.createTxFromHex(txHex, network);
@@ -429,13 +432,10 @@ export class PartialTx {
 
     for (const [index, input] of tx.inputs.entries()) {
       const inputMeta = inputArr[index];
-      instance.addInput(
-        input.hash,
-        input.index,
-        inputMeta.value,
-        inputMeta.address,
-        { token: inputMeta.token, authorities: inputMeta.authorities },
-      );
+      instance.addInput(input.hash, input.index, inputMeta.value, inputMeta.address, {
+        token: inputMeta.token,
+        authorities: inputMeta.authorities,
+      });
     }
 
     for (const [index, output] of tx.outputs.entries()) {
@@ -454,13 +454,13 @@ export class PartialTx {
       }
 
       const token = output.isTokenHTR()
-        ? HATHOR_TOKEN_CONFIG.uid
+        ? NATIVE_TOKEN_UID
         : tx.tokens[output.getTokenIndex()];
-      instance.addOutput(
-        output.value,
-        output.script,
-        { token, authorities, isChange: changeOutputs.indexOf(index) > -1 },
-      );
+      instance.addOutput(output.value, output.script, {
+        token,
+        authorities,
+        isChange: changeOutputs.indexOf(index) > -1,
+      });
     }
 
     return instance;
@@ -476,34 +476,39 @@ export class PartialTx {
 
     for (const input of this.inputs) {
       const p: Promise<boolean> = new Promise((resolve, reject) => {
-        txApi.getTransaction(input.hash, data => {
-          const utxo = get(data, `tx.outputs[${input.index}]`);
-          if (!utxo) {
-            return resolve(false);
-          }
+        txApi
+          .getTransaction(input.hash, data => {
+            const utxo = get(data, `tx.outputs[${input.index}]`);
+            if (!utxo) {
+              return resolve(false);
+            }
 
-          const token = utxo.token_data === 0 ? HATHOR_TOKEN_CONFIG : get(data, `tx.tokens[${utxo.token_data - 1}]`);
+            const tokenUid =
+              utxo.token_data === 0
+                ? NATIVE_TOKEN_UID
+                : get(data, `tx.tokens[${(utxo.token_data & TOKEN_INDEX_MASK) - 1}].uid`);
 
-          const isAuthority = (utxo.token_data & TOKEN_AUTHORITY_MASK) > 0;
-          const isMint = isAuthority && ((utxo.value & TOKEN_MINT_MASK) > 0);
-          const isMelt = isAuthority && ((utxo.value & TOKEN_MELT_MASK) > 0);
+            const isAuthority = (utxo.token_data & TOKEN_AUTHORITY_MASK) > 0;
+            const isMint = isAuthority && (utxo.value & TOKEN_MINT_MASK) > 0;
+            const isMelt = isAuthority && (utxo.value & TOKEN_MELT_MASK) > 0;
 
-          const authorityCheck = (
-            isAuthority === (input.authorities > 0)
-            && isMint === ((input.authorities & TOKEN_MINT_MASK) > 0)
-            && isMelt === ((input.authorities & TOKEN_MELT_MASK) > 0)
-          );
+            const authorityCheck =
+              isAuthority === input.authorities > 0 &&
+              isMint === (input.authorities & TOKEN_MINT_MASK) > 0 &&
+              isMelt === (input.authorities & TOKEN_MELT_MASK) > 0;
 
-          return resolve((
-            authorityCheck
-            && input.token === token.uid
-            && input.value === utxo.value
-            && input.address === utxo.decoded.address
-          ));
-        }).then(result => {
-          // should have already resolved
-          reject(new Error('API client did not use the callback'));
-        }).catch(err => reject(err));
+            return resolve(
+              authorityCheck &&
+                input.token === tokenUid &&
+                input.value === utxo.value &&
+                input.address === utxo.decoded.address
+            );
+          })
+          .then(result => {
+            // should have already resolved
+            reject(new Error('API client did not use the callback'));
+          })
+          .catch(err => reject(err));
       });
       promises.push(p);
     }
@@ -526,7 +531,9 @@ export const PartialTxInputDataPrefix = 'PartialTxInputData';
  */
 export class PartialTxInputData {
   data: Record<number, Buffer>;
+
   hash: string;
+
   inputsLen: number;
 
   constructor(hash: string, inputsLen: number) {
@@ -598,7 +605,7 @@ export class PartialTxInputData {
    */
   addSignatures(serialized: string) {
     const arr = serialized.split('|');
-    if (arr.length < 2 || arr[0] != PartialTxInputDataPrefix || arr[1] !== this.hash) {
+    if (arr.length < 2 || arr[0] !== PartialTxInputDataPrefix || arr[1] !== this.hash) {
       // Only the first 2 parts are required, the third onward are the signatures which can be empty
       // When collecting the input data from atomic-swap participants a participant may not have inputs to sign
       // allowing the empty input data array case will make this a noop instead of throwing an error.
@@ -614,4 +621,4 @@ export class PartialTxInputData {
       this.data[+parts[0]] = Buffer.from(parts[1], 'hex');
     }
   }
-};
+}

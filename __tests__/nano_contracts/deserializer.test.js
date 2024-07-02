@@ -8,7 +8,6 @@
 import Serializer from '../../src/nano_contracts/serializer';
 import Deserializer from '../../src/nano_contracts/deserializer';
 
-
 test('Bool', () => {
   const serializer = new Serializer();
   const deserializer = new Deserializer();
@@ -22,7 +21,7 @@ test('Bool', () => {
   const serializedTrue = serializer.serializeFromType(valueTrue, 'bool');
   const deserializedTrue = deserializer.deserializeFromType(serializedTrue, 'bool');
   expect(deserializedTrue).toBe(valueTrue);
-})
+});
 
 test('String', () => {
   const serializer = new Serializer();
@@ -33,7 +32,7 @@ test('String', () => {
   const deserialized = deserializer.deserializeFromType(serialized, 'str');
 
   expect(value).toBe(deserialized);
-})
+});
 
 test('Int', () => {
   const serializer = new Serializer();
@@ -44,7 +43,7 @@ test('Int', () => {
   const deserialized = deserializer.deserializeFromType(serialized, 'int');
 
   expect(value).toBe(deserialized);
-})
+});
 
 test('Bytes', () => {
   const serializer = new Serializer();
@@ -55,7 +54,7 @@ test('Bytes', () => {
   const deserialized = deserializer.deserializeFromType(serialized, 'bytes');
 
   expect(value.equals(deserialized)).toBe(true);
-})
+});
 
 test('Float', () => {
   const serializer = new Serializer();
@@ -66,7 +65,7 @@ test('Float', () => {
   const deserialized = deserializer.deserializeFromType(serialized, 'float');
 
   expect(value).toBe(deserialized);
-})
+});
 
 test('Optional', () => {
   const serializer = new Serializer();
@@ -131,7 +130,7 @@ test('Optional', () => {
   const deserializedFloat = deserializer.deserializeFromType(serializedFloat, 'float?');
 
   expect(deserializedFloat).toBe(valueFloat);
-})
+});
 
 test('Signed', () => {
   const serializer = new Serializer();
@@ -163,13 +162,19 @@ test('Signed', () => {
 
   const valueBoolFalse = '74657374,false,bool';
   const serializedBoolFalse = serializer.serializeFromType(valueBoolFalse, 'SignedData[bool]');
-  const deserializedBoolFalse = deserializer.deserializeFromType(serializedBoolFalse, 'SignedData[bool]');
+  const deserializedBoolFalse = deserializer.deserializeFromType(
+    serializedBoolFalse,
+    'SignedData[bool]'
+  );
 
   expect(valueBoolFalse).toBe(deserializedBoolFalse);
 
   const valueBoolTrue = '74657374,true,bool';
   const serializedBoolTrue = serializer.serializeFromType(valueBoolTrue, 'SignedData[bool]');
-  const deserializedBoolTrue = deserializer.deserializeFromType(serializedBoolTrue, 'SignedData[bool]');
+  const deserializedBoolTrue = deserializer.deserializeFromType(
+    serializedBoolTrue,
+    'SignedData[bool]'
+  );
 
   expect(valueBoolTrue).toBe(deserializedBoolTrue);
-})
+});

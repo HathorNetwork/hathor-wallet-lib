@@ -25,11 +25,16 @@ const txApi = {
    * @inner
    */
   getTransactionBase(data, resolve) {
-    return createRequestInstance(resolve).get(`transaction`, {params: data}).then((res) => {
-      resolve(res.data);
-    }, (res) => {
-      return Promise.reject(res);
-    });
+    return createRequestInstance(resolve)
+      .get(`transaction`, { params: data })
+      .then(
+        res => {
+          resolve(res.data);
+        },
+        res => {
+          return Promise.reject(res);
+        }
+      );
   },
 
   /**
@@ -47,11 +52,11 @@ const txApi = {
    * @inner
    */
   getTransactions(type, count, timestamp, hash, page, resolve) {
-    const data = {type, count};
+    const data = { type, count };
     if (hash) {
-      data['hash'] = hash;
-      data['timestamp'] = timestamp;
-      data['page'] = page;
+      data.hash = hash;
+      data.timestamp = timestamp;
+      data.page = page;
     }
     return this.getTransactionBase(data, resolve);
   },
@@ -67,7 +72,7 @@ const txApi = {
    * @inner
    */
   getTransaction(id, resolve) {
-    const data = {id};
+    const data = { id };
     return this.getTransactionBase(data, resolve);
   },
 
@@ -83,11 +88,16 @@ const txApi = {
    */
   getConfirmationData(id, resolve) {
     const data = { id };
-    return createRequestInstance(resolve).get(`transaction_acc_weight`, { params: data }).then(res => {
-      resolve(res.data);
-    }, (res) => {
-      Promise.reject(res);
-    });
+    return createRequestInstance(resolve)
+      .get(`transaction_acc_weight`, { params: data })
+      .then(
+        res => {
+          resolve(res.data);
+        },
+        res => {
+          Promise.reject(res);
+        }
+      );
   },
 
   /**
@@ -101,12 +111,17 @@ const txApi = {
    * @inner
    */
   decodeTx(hex_tx, resolve) {
-    const data = {hex_tx}
-    return createRequestInstance(resolve).get(`decode_tx`, {params: data}).then((res) => {
-      resolve(res.data);
-    }, (res) => {
-      return Promise.reject(res);
-    });
+    const data = { hex_tx };
+    return createRequestInstance(resolve)
+      .get(`decode_tx`, { params: data })
+      .then(
+        res => {
+          resolve(res.data);
+        },
+        res => {
+          return Promise.reject(res);
+        }
+      );
   },
 
   /**
@@ -120,12 +135,17 @@ const txApi = {
    * @inner
    */
   pushTx(hex_tx, force, resolve) {
-    const data = {hex_tx, force}
-    return createRequestInstance(resolve).post(`push_tx`, data).then((res) => {
-      resolve(res.data);
-    }, (res) => {
-      return Promise.reject(res);
-    });
+    const data = { hex_tx, force };
+    return createRequestInstance(resolve)
+      .post(`push_tx`, data)
+      .then(
+        res => {
+          resolve(res.data);
+        },
+        res => {
+          return Promise.reject(res);
+        }
+      );
   },
 
   /**
@@ -140,12 +160,17 @@ const txApi = {
    * @inner
    */
   getDashboardTx(block, tx, resolve) {
-    const data = {block, tx}
-    return createRequestInstance(resolve).get(`dashboard_tx`, {params: data}).then(res => {
-      resolve(res.data);
-    }, (res) => {
-      return Promise.reject(res);
-    });
+    const data = { block, tx };
+    return createRequestInstance(resolve)
+      .get(`dashboard_tx`, { params: data })
+      .then(
+        res => {
+          resolve(res.data);
+        },
+        res => {
+          return Promise.reject(res);
+        }
+      );
   },
 
   /**
@@ -159,11 +184,16 @@ const txApi = {
    * @inner
    */
   getGraphviz(url, resolve) {
-    return createRequestInstance(resolve).get(url).then(res => {
-      resolve(res.data);
-    }, (res) => {
-      return Promise.reject(res);
-    });
+    return createRequestInstance(resolve)
+      .get(url)
+      .then(
+        res => {
+          resolve(res.data);
+        },
+        res => {
+          return Promise.reject(res);
+        }
+      );
   },
 };
 

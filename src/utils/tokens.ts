@@ -5,19 +5,30 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-
-import { CREATE_TOKEN_TX_VERSION, HATHOR_TOKEN_CONFIG, TOKEN_DEPOSIT_PERCENTAGE, TOKEN_MELT_MASK, TOKEN_MINT_MASK, TOKEN_INDEX_MASK } from '../constants';
-import helpers from './helpers';
 import buffer from 'buffer';
-import { IDataInput, IDataOutput, IDataTx, IStorage, ITokenData, UtxoSelectionAlgorithm } from '../types';
+import {
+  CREATE_TOKEN_TX_VERSION,
+  NATIVE_TOKEN_UID,
+  TOKEN_DEPOSIT_PERCENTAGE,
+  TOKEN_MELT_MASK,
+  TOKEN_MINT_MASK,
+  TOKEN_INDEX_MASK,
+} from '../constants';
+import helpers from './helpers';
+import {
+  IDataInput,
+  IDataOutput,
+  IDataTx,
+  IStorage,
+  ITokenData,
+  UtxoSelectionAlgorithm,
+} from '../types';
 import { getAddressType } from './address';
 import { InsufficientFundsError, TokenValidationError } from '../errors';
 import { bestUtxoSelection } from './utxo';
 import walletApi from '../api/wallet';
 
-
 const tokens = {
-
   /**
    * Validate the configuration string and if we should register the token in it.
    *
@@ -26,13 +37,19 @@ const tokens = {
    * @param {string | undefined} uid Check that the configuration string matches this uid.
    * @returns {Promise<ITokenData>}
    */
-  async validateTokenToAddByConfigurationString(config: string, storage?: IStorage, uid?: string): Promise<ITokenData> {
+  async validateTokenToAddByConfigurationString(
+    config: string,
+    storage?: IStorage,
+    uid?: string
+  ): Promise<ITokenData> {
     const tokenData = this.getTokenFromConfigurationString(config);
     if (!tokenData) {
       throw new TokenValidationError('Invalid configuration string');
     }
     if (uid && tokenData.uid !== uid) {
-      throw new TokenValidationError(`Configuration string uid does not match: ${uid} != ${tokenData.uid}`)
+      throw new TokenValidationError(
+        `Configuration string uid does not match: ${uid} != ${tokenData.uid}`
+      );
     }
 
     await this.validadateTokenToAddByData(tokenData, storage);
@@ -53,17 +70,21 @@ const tokens = {
   async validadateTokenToAddByData(tokenData: ITokenData, storage?: IStorage): Promise<void> {
     if (storage) {
       if (await storage.isTokenRegistered(tokenData.uid)) {
-        throw new TokenValidationError(`You already have this token: ${tokenData.uid} (${tokenData.name})`)
+        throw new TokenValidationError(
+          `You already have this token: ${tokenData.uid} (${tokenData.name})`
+        );
       }
 
       const isDuplicate = await this.checkDuplicateTokenInfo(tokenData, storage);
       if (isDuplicate) {
-        throw new TokenValidationError(`You already have a token with this ${isDuplicate.key}: ${isDuplicate.token.uid} - ${isDuplicate.token.name} (${isDuplicate.token.symbol})`);
+        throw new TokenValidationError(
+          `You already have a token with this ${isDuplicate.key}: ${isDuplicate.token.uid} - ${isDuplicate.token.name} (${isDuplicate.token.symbol})`
+        );
       }
     }
 
     // Validate if name and symbol match with the token info in the DAG
-    const response = await new Promise<any>((resolve) => {
+    const response = await new Promise<any>(resolve => {
       return walletApi.getGeneralTokenInfo(tokenData.uid, resolve);
     });
 
@@ -72,10 +93,14 @@ const tokens = {
     }
 
     if (response.name !== tokenData.name) {
-      throw new TokenValidationError(`Token name does not match with the real one. Added: ${tokenData.name}. Real: ${response.name}`);
+      throw new TokenValidationError(
+        `Token name does not match with the real one. Added: ${tokenData.name}. Real: ${response.name}`
+      );
     }
     if (response.symbol !== tokenData.symbol) {
-      throw new TokenValidationError(`Token symbol does not match with the real one. Added: ${tokenData.symbol}. Real: ${response.symbol}`);
+      throw new TokenValidationError(
+        `Token symbol does not match with the real one. Added: ${tokenData.symbol}. Real: ${response.symbol}`
+      );
     }
   },
 
@@ -86,7 +111,10 @@ const tokens = {
    * @param {ITokenData} tokenData token we are searching.
    * @returns {Promise<null | { token: ITokenData, key: string }>}
    */
-  async checkDuplicateTokenInfo(tokenData: ITokenData, storage: IStorage): Promise<null | { token: ITokenData, key: string }> {
+  async checkDuplicateTokenInfo(
+    tokenData: ITokenData,
+    storage: IStorage
+  ): Promise<null | { token: ITokenData; key: string }> {
     const cleanName = helpers.cleanupString(tokenData.name);
     const cleanSymbol = helpers.cleanupString(tokenData.symbol);
     for await (const registeredToken of storage.getRegisteredTokens()) {
@@ -173,13 +201,13 @@ const tokens = {
     const symbol = configArr.pop()!;
     // Assuming that the name might have : on it
     const name = configArr.join(':');
-    return {uid, name, symbol};
+    return { uid, name, symbol };
   },
 
   /**
    * Gets the token index to be added to the tokenData in the output from tx
    *
-   * @param {Object} tokens Array of token configs
+   * @param {Object} tokensArray Array of token configs
    * @param {Object} uid Token uid to return the index
    *
    * @return {number} Index of token to be set as tokenData in output tx
@@ -187,16 +215,15 @@ const tokens = {
    * @memberof Tokens
    * @inner
    */
-  getTokenIndex(tokens: ITokenData[], uid: string): number {
+  getTokenIndex(tokensArray: ITokenData[], uid: string): number {
     // If token is Hathor, index is always 0
     // Otherwise, it is always the array index + 1
-    if (uid === HATHOR_TOKEN_CONFIG.uid) {
+    if (uid === NATIVE_TOKEN_UID) {
       return 0;
-    } else {
-      const tokensWithoutHathor = tokens.filter((token) => token.uid !== HATHOR_TOKEN_CONFIG.uid);
-      const myIndex = tokensWithoutHathor.findIndex((token) => token.uid === uid);
-      return myIndex + 1;
     }
+    const tokensWithoutHathor = tokensArray.filter(token => token.uid !== NATIVE_TOKEN_UID);
+    const myIndex = tokensWithoutHathor.findIndex(token => token.uid === uid);
+    return myIndex + 1;
   },
 
   /**
@@ -220,7 +247,7 @@ const tokens = {
    * @inner
    */
   isHathorToken(uid: string): boolean {
-    return uid === HATHOR_TOKEN_CONFIG.uid;
+    return uid === NATIVE_TOKEN_UID;
   },
 
   /**
@@ -293,15 +320,15 @@ const tokens = {
       mintAuthorityAddress = null,
       utxoSelection = bestUtxoSelection,
     }: {
-      token?: string | null,
-      mintInput?: IDataInput | null,
-      createAnotherMint?: boolean,
-      changeAddress?: string | null,
-      unshiftData?: boolean | null,
-      data?: string[] | null,
-      mintAuthorityAddress?: string | null,
-      utxoSelection?: UtxoSelectionAlgorithm,
-    } = {},
+      token?: string | null;
+      mintInput?: IDataInput | null;
+      createAnotherMint?: boolean;
+      changeAddress?: string | null;
+      unshiftData?: boolean | null;
+      data?: string[] | null;
+      mintAuthorityAddress?: string | null;
+      utxoSelection?: UtxoSelectionAlgorithm;
+    } = {}
   ): Promise<IDataTx> {
     const inputs: IDataInput[] = [];
     const outputs: IDataOutput[] = [];
@@ -314,14 +341,16 @@ const tokens = {
     }
 
     // get HTR deposit inputs
-    const selectedUtxos = await utxoSelection(storage, HATHOR_TOKEN_CONFIG.uid, depositAmount);
+    const selectedUtxos = await utxoSelection(storage, NATIVE_TOKEN_UID, depositAmount);
     const foundAmount = selectedUtxos.amount;
     for (const utxo of selectedUtxos.utxos) {
       inputs.push(helpers.getDataInputFromUtxo(utxo));
     }
 
     if (foundAmount < depositAmount) {
-      throw new InsufficientFundsError(`Not enough HTR tokens for deposit: ${depositAmount} required, ${foundAmount} available`);
+      throw new InsufficientFundsError(
+        `Not enough HTR tokens for deposit: ${depositAmount} required, ${foundAmount} available`
+      );
     }
 
     // get output change
@@ -333,7 +362,7 @@ const tokens = {
         address: cAddress,
         value: foundAmount - depositAmount,
         timelock: null,
-        token: HATHOR_TOKEN_CONFIG.uid,
+        token: NATIVE_TOKEN_UID,
         authorities: 0,
         isChange: true,
       });
@@ -354,7 +383,7 @@ const tokens = {
     });
 
     if (createAnotherMint) {
-      const newAddress = mintAuthorityAddress || await storage.getCurrentAddress();
+      const newAddress = mintAuthorityAddress || (await storage.getCurrentAddress());
       outputs.push({
         type: 'mint',
         address: newAddress,
@@ -370,7 +399,7 @@ const tokens = {
           type: 'data',
           data: dataString,
           value: 1,
-          token: HATHOR_TOKEN_CONFIG.uid,
+          token: NATIVE_TOKEN_UID,
           authorities: 0,
         } as IDataOutput;
 
@@ -386,12 +415,12 @@ const tokens = {
       }
     }
 
-    const tokens = token !== null ? [token] : [];
+    const tokensArray = token !== null ? [token] : [];
 
     return {
       inputs,
       outputs,
-      tokens,
+      tokens: tokensArray,
     };
   },
 
@@ -426,20 +455,20 @@ const tokens = {
       data = null,
       utxoSelection = bestUtxoSelection,
     }: {
-      createAnotherMelt?: boolean,
-      meltAuthorityAddress?: string | null,
-      changeAddress?: string | null,
-      unshiftData?: boolean | null,
-      data?: string[] | null,
-      utxoSelection?: UtxoSelectionAlgorithm,
-    } = {},
+      createAnotherMelt?: boolean;
+      meltAuthorityAddress?: string | null;
+      changeAddress?: string | null;
+      unshiftData?: boolean | null;
+      data?: string[] | null;
+      utxoSelection?: UtxoSelectionAlgorithm;
+    } = {}
   ): Promise<IDataTx> {
-    if ((authorityMeltInput.token !== token) || (authorityMeltInput.authorities !== 2)) {
+    if (authorityMeltInput.token !== token || authorityMeltInput.authorities !== 2) {
       throw new Error('Melt authority input is not valid');
     }
     const inputs: IDataInput[] = [authorityMeltInput];
     const outputs: IDataOutput[] = [];
-    const tokens = [authorityMeltInput.token];
+    const tokensArray = [authorityMeltInput.token];
     const depositPercent = storage.getTokenDepositPercentage();
     let withdrawAmount = this.getWithdrawAmount(amount, depositPercent);
     // The deposit amount will be the quantity of data strings in the array
@@ -469,7 +498,9 @@ const tokens = {
     }
 
     if (foundAmount < amount) {
-      throw new InsufficientFundsError(`Not enough tokens to melt: ${amount} requested, ${foundAmount} available`);
+      throw new InsufficientFundsError(
+        `Not enough tokens to melt: ${amount} requested, ${foundAmount} available`
+      );
     }
 
     // get output change
@@ -481,7 +512,7 @@ const tokens = {
         address: cAddress,
         value: foundAmount - amount,
         timelock: null,
-        token: token,
+        token,
         authorities: 0,
         isChange: true,
       });
@@ -489,26 +520,28 @@ const tokens = {
 
     if (depositAmount > 0) {
       // get HTR deposit inputs
-      const selectedUtxos = await utxoSelection(storage, HATHOR_TOKEN_CONFIG.uid, depositAmount);
-      const foundAmount = selectedUtxos.amount;
-      for (const utxo of selectedUtxos.utxos) {
+      const depositSelectedUtxos = await utxoSelection(storage, NATIVE_TOKEN_UID, depositAmount);
+      const depositFoundAmount = depositSelectedUtxos.amount;
+      for (const utxo of depositSelectedUtxos.utxos) {
         inputs.push(helpers.getDataInputFromUtxo(utxo));
       }
 
-      if (foundAmount < depositAmount) {
-        throw new InsufficientFundsError(`Not enough HTR tokens for deposit: ${depositAmount} required, ${foundAmount} available`);
+      if (depositFoundAmount < depositAmount) {
+        throw new InsufficientFundsError(
+          `Not enough HTR tokens for deposit: ${depositAmount} required, ${depositFoundAmount} available`
+        );
       }
 
       // get output change
-      if (foundAmount > depositAmount) {
+      if (depositFoundAmount > depositAmount) {
         const cAddress = await storage.getChangeAddress({ changeAddress });
 
         outputs.push({
           type: getAddressType(cAddress, storage.config.getNetwork()),
           address: cAddress,
-          value: foundAmount - depositAmount,
+          value: depositFoundAmount - depositAmount,
           timelock: null,
-          token: HATHOR_TOKEN_CONFIG.uid,
+          token: NATIVE_TOKEN_UID,
           authorities: 0,
           isChange: true,
         });
@@ -516,7 +549,7 @@ const tokens = {
     }
 
     if (createAnotherMelt) {
-      const newAddress = meltAuthorityAddress || await storage.getCurrentAddress();
+      const newAddress = meltAuthorityAddress || (await storage.getCurrentAddress());
       outputs.push({
         type: getAddressType(newAddress, storage.config.getNetwork()),
         address: newAddress,
@@ -532,7 +565,7 @@ const tokens = {
       outputs.push({
         value: withdrawAmount,
         address,
-        token: HATHOR_TOKEN_CONFIG.uid,
+        token: NATIVE_TOKEN_UID,
         authorities: 0,
         timelock: null,
         type: getAddressType(address, storage.config.getNetwork()),
@@ -545,7 +578,7 @@ const tokens = {
           type: 'data',
           data: dataString,
           value: 1,
-          token: HATHOR_TOKEN_CONFIG.uid,
+          token: NATIVE_TOKEN_UID,
           authorities: 0,
         } as IDataOutput;
 
@@ -560,7 +593,7 @@ const tokens = {
     return {
       inputs,
       outputs,
-      tokens,
+      tokens: tokensArray,
     };
   },
 
@@ -597,27 +630,27 @@ const tokens = {
       data = null,
       isCreateNFT = false,
     }: {
-      changeAddress?: string | null,
-      createMint?: boolean,
-      mintAuthorityAddress?: string | null,
-      createMelt?: boolean,
-      meltAuthorityAddress?: string | null,
-      data?: string[] | null,
-      isCreateNFT?: boolean,
-    } = {},
+      changeAddress?: string | null;
+      createMint?: boolean;
+      mintAuthorityAddress?: string | null;
+      createMelt?: boolean;
+      meltAuthorityAddress?: string | null;
+      data?: string[] | null;
+      isCreateNFT?: boolean;
+    } = {}
   ): Promise<IDataTx> {
     const mintOptions = {
       createAnotherMint: createMint,
       mintAuthorityAddress,
       changeAddress,
       unshiftData: isCreateNFT,
-      data
+      data,
     };
 
     const txData = await this.prepareMintTxData(address, mintAmount, storage, mintOptions);
 
     if (createMelt) {
-      const newAddress = meltAuthorityAddress || await storage.getCurrentAddress();
+      const newAddress = meltAuthorityAddress || (await storage.getCurrentAddress());
       const meltAuthorityOutput = {
         type: 'melt',
         address: newAddress,
@@ -625,7 +658,7 @@ const tokens = {
         timelock: null,
         authorities: 2,
       } as IDataOutput;
-      if ((data !== null) && (data.length !== 0) && !isCreateNFT) {
+      if (data !== null && data.length !== 0 && !isCreateNFT) {
         txData.outputs.splice(-data.length, 0, meltAuthorityOutput);
       } else {
         txData.outputs.push(meltAuthorityOutput);
@@ -659,16 +692,18 @@ const tokens = {
     authorityInput: IDataInput, // Authority input
     address: string,
     storage: IStorage,
-    createAnother: boolean = true,
+    createAnother: boolean = true
   ): Promise<IDataTx> {
-    const outputs: IDataOutput[] = [{
-      type: getAddressType(address, storage.config.getNetwork()),
-      address,
-      token,
-      authorities: authorityInput.authorities,
-      value: authorityInput.value,
-      timelock: null,
-    }];
+    const outputs: IDataOutput[] = [
+      {
+        type: getAddressType(address, storage.config.getNetwork()),
+        address,
+        token,
+        authorities: authorityInput.authorities,
+        value: authorityInput.value,
+        timelock: null,
+      },
+    ];
 
     if (createAnother) {
       const newAddress = await storage.getCurrentAddress();
@@ -696,7 +731,7 @@ const tokens = {
    * @returns {IDataTx} Transaction data
    */
   prepareDestroyAuthorityTxData(
-    authorityInputs: IDataInput[], // Authority inputs
+    authorityInputs: IDataInput[] // Authority inputs
   ): IDataTx {
     return {
       inputs: authorityInputs,
@@ -704,6 +739,6 @@ const tokens = {
       tokens: [],
     };
   },
-}
+};
 
 export default tokens;
