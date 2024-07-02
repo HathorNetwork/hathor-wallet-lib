@@ -574,6 +574,29 @@ const helpers = {
       address: utxo.address,
     } as IDataInput;
   },
+
+  /**
+   * The library network must be 'mainnet', 'testnet', or 'privatenet'
+   * The full node has 'mainnet', 'testnet-bravo', 'nano-testnet-alpha' and
+   * we must translate it into library networks.
+   *
+   * @param {string} fullNodeNetwork The network from full node API
+   *
+   * @memberof Helpers
+   * @inner
+   *
+   */
+  getNetworkFromFullNodeNetwork(fullNodeNetwork: string): string {
+    if (fullNodeNetwork === 'mainnet') {
+      return fullNodeNetwork;
+    }
+
+    if (fullNodeNetwork.includes('testnet')) {
+      return 'testnet';
+    }
+
+    return 'privatenet';
+  },
 };
 
 export default helpers;
