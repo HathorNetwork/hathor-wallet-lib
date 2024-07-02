@@ -52,12 +52,14 @@ export default class Queue<T = unknown> {
    * @returns {T|undefined} The first element on the queue if there is any.
    */
   dequeue(): T | undefined {
-    if (this.head) {
-      const first: T = this.head.value;
-      this.head = this.head.next;
-      this.length--;
-      return first;
+    if (!this.head) {
+      return undefined;
     }
+
+    const first: T = this.head.value;
+    this.head = this.head.next;
+    this.length--;
+    return first;
   }
 
   /**

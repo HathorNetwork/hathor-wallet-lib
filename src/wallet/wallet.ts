@@ -634,6 +634,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    */
   async pollForWalletStatus(): Promise<void> {
     return new Promise((resolve, reject) => {
+      // eslint-disable-next-line consistent-return -- Polling function does not need to return always
       const pollIntervalTimer = setInterval(async () => {
         const data = await walletApi.getWalletStatus(this);
 

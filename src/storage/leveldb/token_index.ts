@@ -250,7 +250,8 @@ export default class LevelTokenIndex implements IKVTokenIndex {
    */
   async clear(cleanIndex: boolean = true, cleanRegisteredTokens: boolean = false): Promise<void> {
     if (cleanIndex && cleanRegisteredTokens) {
-      return this.tokenDB.db.clear();
+      await this.tokenDB.db.clear();
+      return;
     }
     if (cleanIndex) {
       await this.tokenDB.clear();
