@@ -7,14 +7,8 @@
 
 import WalletServiceWebSocket from './websocket';
 import config from '../config';
-import BaseConnection, {
-  DEFAULT_PARAMS,
-  ConnectionParams,
-} from '../connection';
-import {
-  WsTransaction,
-  ConnectionState,
-} from './types';
+import BaseConnection, { DEFAULT_PARAMS, ConnectionParams } from '../connection';
+import { WsTransaction, ConnectionState } from './types';
 
 export interface WalletServiceConnectionParams extends ConnectionParams {
   walletId: string;
@@ -31,18 +25,14 @@ export interface WalletServiceConnectionParams extends ConnectionParams {
  * You can subscribe for the following events:
  * - state: Fired when the state of the Wallet changes.
  * - wallet-update: Fired when a new wallet message arrive from the websocket.
- **/
+ * */
 export default class WalletServiceConnection extends BaseConnection {
   private connectionTimeout?: number;
+
   private walletId?: string;
 
   constructor(options?: WalletServiceConnectionParams) {
-    const {
-      network,
-      servers,
-      walletId,
-      connectionTimeout,
-    } = {
+    const { network, servers, walletId, connectionTimeout } = {
       ...DEFAULT_PARAMS,
       ...options,
     };
@@ -59,14 +49,14 @@ export default class WalletServiceConnection extends BaseConnection {
 
   /**
    * Sets the walletId for the current connection instance
-   **/
+   * */
   setWalletId(walletId: string) {
     this.walletId = walletId;
   }
 
   /**
    * Connect to the server and start emitting events.
-   **/
+   * */
   start() {
     if (!this.walletId) {
       throw new Error('Wallet id should be set before connection start.');
@@ -79,9 +69,9 @@ export default class WalletServiceConnection extends BaseConnection {
     };
 
     this.websocket = new WalletServiceWebSocket(wsOptions);
-    this.websocket.on('is_online', (online) => this.onConnectionChange(online));
-    this.websocket.on('new-tx', (payload) => this.emit('new-tx', payload.data as WsTransaction));
-    this.websocket.on('update-tx', (payload) => this.emit('update-tx', payload.data));
+    this.websocket.on('is_online', online => this.onConnectionChange(online));
+    this.websocket.on('new-tx', payload => this.emit('new-tx', payload.data as WsTransaction));
+    this.websocket.on('update-tx', payload => this.emit('update-tx', payload.data));
 
     this.setState(ConnectionState.CONNECTING);
     this.websocket.setup();

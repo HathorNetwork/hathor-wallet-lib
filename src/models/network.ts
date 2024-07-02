@@ -11,27 +11,27 @@ import { Networks } from 'bitcore-lib';
 // Mainnet: P2PKH will start with H and P2SH will start with h
 // Testnet: P2PKH will start with W and P2SH will start with w
 const versionBytes = {
-  'mainnet': {
-    'p2pkh': 0x28,
-    'p2sh': 0x64,
-    'xpriv': 0x03523b05, // htpr
-    'xpub': 0x0488b21e,  // xpub // 0x03523a9c -> htpb
+  mainnet: {
+    p2pkh: 0x28,
+    p2sh: 0x64,
+    xpriv: 0x03523b05, // htpr
+    xpub: 0x0488b21e, // xpub // 0x03523a9c -> htpb
   },
-  'testnet': {
-    'p2pkh': 0x49,
-    'p2sh': 0x87,
-    'xpriv': 0x0434c8c4, // tnpr
-    'xpub': 0x0488b21e,  // xpub // 0x0434c85b -> tnpb
+  testnet: {
+    p2pkh: 0x49,
+    p2sh: 0x87,
+    xpriv: 0x0434c8c4, // tnpr
+    xpub: 0x0488b21e, // xpub // 0x0434c85b -> tnpb
   },
-  'privatenet': {
-    'p2pkh': 0x49,
-    'p2sh': 0x87,
-    'xpriv': 0x0434c8c4, // tnpr
-    'xpub': 0x0488b21e,  // xpub // 0x0434c85b -> tnpb
+  privatenet: {
+    p2pkh: 0x49,
+    p2sh: 0x87,
+    xpriv: 0x0434c8c4, // tnpr
+    xpub: 0x0488b21e, // xpub // 0x0434c85b -> tnpb
   },
-}
+};
 
-/*Networks is an object of the bitcore-lib
+/* Networks is an object of the bitcore-lib
   Some of it's parameters are not used by us (network parameters)
   Parameters:
     name: network name
@@ -67,56 +67,55 @@ const versionBytes = {
 const mainnet = Networks.add({
   name: 'htr-mainnet',
   alias: 'production',
-  pubkeyhash: versionBytes['mainnet']['p2pkh'],
+  pubkeyhash: versionBytes.mainnet.p2pkh,
   privatekey: 0x80,
-  scripthash: versionBytes['mainnet']['p2sh'],
+  scripthash: versionBytes.mainnet.p2sh,
   bech32prefix: 'ht',
-  xpubkey: versionBytes['mainnet']['xpub'],
-  xprivkey: versionBytes['mainnet']['xpriv'],
+  xpubkey: versionBytes.mainnet.xpub,
+  xprivkey: versionBytes.mainnet.xpriv,
   networkMagic: 0xf9beb4d9,
   port: 8333,
-  dnsSeeds: []
+  dnsSeeds: [],
 });
 
 const testnet = Networks.add({
   name: 'htr-testnet',
   alias: 'test',
-  pubkeyhash: versionBytes['testnet']['p2pkh'],
+  pubkeyhash: versionBytes.testnet.p2pkh,
   privatekey: 0x80,
-  scripthash: versionBytes['testnet']['p2sh'],
+  scripthash: versionBytes.testnet.p2sh,
   bech32prefix: 'tn',
-  xpubkey: versionBytes['testnet']['xpub'],
-  xprivkey: versionBytes['testnet']['xpriv'],
+  xpubkey: versionBytes.testnet.xpub,
+  xprivkey: versionBytes.testnet.xpriv,
   networkMagic: 0xf9beb4d9,
   port: 8333,
-  dnsSeeds: []
+  dnsSeeds: [],
 });
 
 const privatenet = Networks.add({
   name: 'htr-privatenet',
   alias: 'privatenet',
-  pubkeyhash: versionBytes['privatenet']['p2pkh'],
+  pubkeyhash: versionBytes.privatenet.p2pkh,
   privatekey: 0x80,
-  scripthash: versionBytes['privatenet']['p2sh'],
+  scripthash: versionBytes.privatenet.p2sh,
   bech32prefix: 'tn',
-  xpubkey: versionBytes['privatenet']['xpub'],
-  xprivkey: versionBytes['privatenet']['xpriv'],
+  xpubkey: versionBytes.privatenet.xpub,
+  xprivkey: versionBytes.privatenet.xpriv,
   networkMagic: 0xf9beb4d9,
   port: 8333,
-  dnsSeeds: []
-})
+  dnsSeeds: [],
+});
 
 const networkOptions = {
   testnet,
   mainnet,
-  privatenet
-}
+  privatenet,
+};
 
 type versionBytesType = {
-  p2pkh: number,
-  p2sh: number,
-}
-
+  p2pkh: number;
+  p2sh: number;
+};
 
 class Network {
   // Network name (currently supports only 'testnet' and 'mainnet')
@@ -163,9 +162,9 @@ class Network {
   /**
    * Method to check that a version byte is valid
    */
-  isVersionByteValid(version: number): Boolean {
-    const versionBytes = this.getVersionBytes();
-    return version == versionBytes.p2pkh || version == versionBytes.p2sh;
+  isVersionByteValid(version: number): boolean {
+    const instanceVersionBytes = this.getVersionBytes();
+    return version === instanceVersionBytes.p2pkh || version === instanceVersionBytes.p2sh;
   }
 
   /**

@@ -8,7 +8,14 @@
 import path from 'path';
 import { Level } from 'level';
 import { AbstractSublevel } from 'abstract-level';
-import { IAddressInfo, IAddressMetadata, IKVAddressIndex, AddressIndexValidateResponse, IAddressMetadataAsRecord, IBalance } from '../../types';
+import {
+  IAddressInfo,
+  IAddressMetadata,
+  IKVAddressIndex,
+  AddressIndexValidateResponse,
+  IAddressMetadataAsRecord,
+  IBalance,
+} from '../../types';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 import { checkLevelDbVersion } from './utils';
 
@@ -40,34 +47,46 @@ export default class LevelAddressIndex implements IKVAddressIndex {
    * Key: address in base58
    * Value: json encoded IAddressInfo
    */
-  addressesDB: AbstractSublevel<Level, string|Buffer|Uint8Array, string, IAddressInfo>;
+  addressesDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, IAddressInfo>;
+
   /**
    * Index database
    * Key: index in uint32
    * Value: address in base58
    */
-  addressesIndexDB: AbstractSublevel<Level, string|Buffer|Uint8Array, string, string>;
+  addressesIndexDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, string>;
+
   /**
    * Address metadata database
    * Key: address in base58
    * Value: json encoded IAddressMetadata
    */
-  addressesMetaDB: AbstractSublevel<Level, string|Buffer|Uint8Array, string, IAddressMetadataAsRecord>;
+  addressesMetaDB: AbstractSublevel<
+    Level,
+    string | Buffer | Uint8Array,
+    string,
+    IAddressMetadataAsRecord
+  >;
+
   /**
    * Whether the index is validated or not
    * This is used to avoid using the address count before we know it is valid.
    */
   isValidated: boolean;
+
   indexVersion: string = '0.0.1';
+
   size: number;
 
   constructor(dbpath: string) {
     this.dbpath = path.join(dbpath, 'addresses');
     // Open addresses
     const db = new Level(this.dbpath);
-    this.addressesDB = db.sublevel<string, IAddressInfo>(ADDRESS_PREFIX, {valueEncoding: 'json'});
+    this.addressesDB = db.sublevel<string, IAddressInfo>(ADDRESS_PREFIX, { valueEncoding: 'json' });
     this.addressesIndexDB = db.sublevel(INDEX_PREFIX);
-    this.addressesMetaDB = db.sublevel<string, IAddressMetadataAsRecord>(ADDRESS_META_PREFIX, {valueEncoding: 'json'});
+    this.addressesMetaDB = db.sublevel<string, IAddressMetadataAsRecord>(ADDRESS_META_PREFIX, {
+      valueEncoding: 'json',
+    });
     this.isValidated = false;
     this.size = 0;
   }
@@ -85,7 +104,7 @@ export default class LevelAddressIndex implements IKVAddressIndex {
    * @returns {Promise<void>}
    */
   async checkVersion(): Promise<void> {
-    const db = this.addressesDB.db;
+    const { db } = this.addressesDB;
     const instanceName = this.constructor.name;
     await checkLevelDbVersion(instanceName, db, this.indexVersion);
   }
@@ -99,7 +118,7 @@ export default class LevelAddressIndex implements IKVAddressIndex {
     // Clear metadata since we cannot guarantee the validity
     await this.addressesMetaDB.clear();
 
-    const ret: AddressIndexValidateResponse = {firstIndex: Infinity, lastIndex: -1};
+    const ret: AddressIndexValidateResponse = { firstIndex: Infinity, lastIndex: -1 };
     let size = 0;
     // Iterate on all addresses and check that we have a corresponding index entry
     for await (const [key, value] of this.addressesDB.iterator()) {
@@ -117,11 +136,13 @@ export default class LevelAddressIndex implements IKVAddressIndex {
 
       // check that we have an index
       try {
-        const addressFromIndex = await this.addressesIndexDB.get(_index_key(value.bip32AddressIndex));
+        const addressFromIndex = await this.addressesIndexDB.get(
+          _index_key(value.bip32AddressIndex)
+        );
         if (value.base58 !== addressFromIndex) {
           throw new Error('Inconsistent database');
         }
-      } catch(err: unknown) {
+      } catch (err: unknown) {
         if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
           // Create if index is missing
           await this.addressesIndexDB.put(_index_key(value.bip32AddressIndex), value.base58);
@@ -158,7 +179,7 @@ export default class LevelAddressIndex implements IKVAddressIndex {
   async addressCount(): Promise<number> {
     if (!this.isValidated) {
       // Since we have not yet validated the index, we cannot trust the address count
-      return await this.runAddressCount();
+      return this.runAddressCount();
     }
     return this.size;
   }
@@ -170,7 +191,8 @@ export default class LevelAddressIndex implements IKVAddressIndex {
    */
   async runAddressCount(): Promise<number> {
     let size = 0;
-    for await (let _ of this.addressesDB.iterator()) {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- No use for the variable: just a counter
+    for await (const _ of this.addressesDB.iterator()) {
       size++;
     }
     return size;
@@ -184,7 +206,7 @@ export default class LevelAddressIndex implements IKVAddressIndex {
   async getAddressInfo(base58: string): Promise<IAddressInfo | null> {
     try {
       return await this.addressesDB.get(base58);
-    } catch(err: unknown) {
+    } catch (err: unknown) {
       if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
         return null;
       }
@@ -209,7 +231,7 @@ export default class LevelAddressIndex implements IKVAddressIndex {
    *
    * @returns {AsyncGenerator<IAddressInfo>}
    */
-  async * addressIter(): AsyncGenerator<IAddressInfo> {
+  async *addressIter(): AsyncGenerator<IAddressInfo> {
     for await (const address of this.addressesIndexDB.values()) {
       const info = await this.getAddressInfo(address);
       if (info === null) {
@@ -229,7 +251,7 @@ export default class LevelAddressIndex implements IKVAddressIndex {
    * @param {IAddressMetadata} meta metadata to store
    */
   async setAddressMeta(address: string, meta: IAddressMetadata): Promise<void> {
-    const dbMeta: IAddressMetadataAsRecord = {numTransactions: meta.numTransactions, balance: {}};
+    const dbMeta: IAddressMetadataAsRecord = { numTransactions: meta.numTransactions, balance: {} };
     for (const [uid, balance] of meta.balance.entries()) {
       dbMeta.balance[uid] = balance;
     }
@@ -269,7 +291,7 @@ export default class LevelAddressIndex implements IKVAddressIndex {
    * @param index Address bip32 index
    * @returns {Promise<string|null>}
    */
-  async getAddressAtIndex(index: number): Promise<string|null> {
+  async getAddressAtIndex(index: number): Promise<string | null> {
     if (index < 0) {
       return null;
     }

@@ -6,12 +6,11 @@
  */
 
 import { get } from 'lodash';
-import transactionUtils from '../utils/transaction';
 import { crypto } from 'bitcore-lib';
+import transactionUtils from '../utils/transaction';
 import SendTransaction from '../new/sendTransaction';
 import HathorWallet from '../new/wallet';
 import NanoContract from './nano_contract';
-import Transaction from '../models/transaction';
 import Network from '../models/network';
 import ScriptData from '../models/script_data';
 import ncApi from '../api/nano';
@@ -19,15 +18,12 @@ import { hexToBuffer } from '../utils/buffer';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
 import Address from '../models/address';
-import {
-  NanoContractTransactionError,
-  OracleParseError,
-  WalletFromXPubGuard
-} from '../errors';
+import { NanoContractTransactionError, OracleParseError, WalletFromXPubGuard } from '../errors';
 import { OutputType } from '../wallet/types';
-import { IStorage } from '../types';
+import { IHistoryTx, IStorage } from '../types';
 import { parseScript } from '../utils/scripts';
 import { MethodArgInfo } from './types';
+import { NANO_CONTRACTS_VERSION, NANO_CONTRACTS_INITIALIZE_METHOD } from '../constants';
 
 /**
  * Sign a transaction and create a send transaction object
@@ -36,7 +32,11 @@ import { MethodArgInfo } from './types';
  * @param pin Pin to decrypt data
  * @param storage Wallet storage object
  */
-export const prepareNanoSendTransaction = async (tx: NanoContract, pin: string, storage: IStorage): Promise<SendTransaction> => {
+export const prepareNanoSendTransaction = async (
+  tx: NanoContract,
+  pin: string,
+  storage: IStorage
+): Promise<SendTransaction> => {
   await transactionUtils.signTransaction(tx, storage, pin);
   tx.prepareToSend();
 
@@ -46,7 +46,7 @@ export const prepareNanoSendTransaction = async (tx: NanoContract, pin: string, 
     transaction: tx,
     pin,
   });
-}
+};
 
 /**
  * Get oracle buffer from oracle string (address in base58 or oracle data directly in hex)
@@ -79,7 +79,7 @@ export const getOracleBuffer = (oracle: string, network: Network): Buffer => {
     // Invalid hex
     throw new OracleParseError('Invalid hex value for oracle script.');
   }
-}
+};
 
 /**
  * Get oracle input data
@@ -88,7 +88,11 @@ export const getOracleBuffer = (oracle: string, network: Network): Buffer => {
  * @param resultSerialized Result to sign with oracle data already serialized
  * @param wallet Hathor Wallet object
  */
-export const getOracleInputData = async (oracleData: Buffer, resultSerialized: Buffer, wallet: HathorWallet): Promise<Buffer> => {
+export const getOracleInputData = async (
+  oracleData: Buffer,
+  resultSerialized: Buffer,
+  wallet: HathorWallet
+): Promise<Buffer> => {
   // Parse oracle script to validate if it's an address of this wallet
   const parsedOracleScript = parseScript(oracleData, wallet.getNetworkObject());
   if (parsedOracleScript && !(parsedOracleScript instanceof ScriptData)) {
@@ -103,15 +107,17 @@ export const getOracleInputData = async (oracleData: Buffer, resultSerialized: B
     }
     const oracleKey = await wallet.getPrivateKeyFromAddress(address);
 
-    const signatureOracle = transactionUtils.getSignature(crypto.Hash.sha256(resultSerialized), oracleKey);
+    const signatureOracle = transactionUtils.getSignature(
+      crypto.Hash.sha256(resultSerialized),
+      oracleKey
+    );
     const oraclePubKeyBuffer = oracleKey.publicKey.toBuffer();
     return transactionUtils.createInputData(signatureOracle, oraclePubKeyBuffer);
   }
 
   // If it's not an address, we use the oracleInputData as the inputData directly
   return oracleData;
-}
-
+};
 
 /**
  * Validate if nano contracts arguments match the expected ones from the blueprint method
@@ -120,6 +126,8 @@ export const getOracleInputData = async (oracleData: Buffer, resultSerialized: B
  * @param method Method name
  * @param args Arguments of the method to check if have the expected types
  *
+ * Warning: This method can mutate the `args` parameter during its validation
+ *
  * @throws NanoContractTransactionError in case the arguments are not valid
  * @throws NanoRequest404Error in case the blueprint ID does not exist on the full node
  */
@@ -127,7 +135,11 @@ export const validateBlueprintMethodArgs = async (blueprintId, method, args): Pr
   // Get the blueprint data from full node
   const blueprintInformation = await ncApi.getBlueprintInformation(blueprintId);
 
-  const methodArgs = get(blueprintInformation, `public_methods.${method}.args`, []) as MethodArgInfo[];
+  const methodArgs = get(
+    blueprintInformation,
+    `public_methods.${method}.args`,
+    []
+  ) as MethodArgInfo[];
   if (!methodArgs) {
     throw new NanoContractTransactionError(`Blueprint does not have method ${method}.`);
   }
@@ -135,7 +147,9 @@ export const validateBlueprintMethodArgs = async (blueprintId, method, args): Pr
   // Args may come as undefined
   const argsLen = args ? args.length : 0;
   if (argsLen !== methodArgs.length) {
-    throw new NanoContractTransactionError(`Method needs ${methodArgs.length} parameters but data has ${args.length}.`);
+    throw new NanoContractTransactionError(
+      `Method needs ${methodArgs.length} parameters but data has ${args.length}.`
+    );
   }
 
   // Here we validate that the arguments sent in the data array of args has
@@ -151,27 +165,46 @@ export const validateBlueprintMethodArgs = async (blueprintId, method, args): Pr
       case 'bytes':
         // Bytes arguments are sent in hexadecimal
         try {
+          // eslint-disable-next-line no-param-reassign
           args[index] = hexToBuffer(args[index]);
         } catch {
           // Data sent is not a hex
-          throw new NanoContractTransactionError(`Invalid hexadecimal for argument number ${index + 1}.`);
+          throw new NanoContractTransactionError(
+            `Invalid hexadecimal for argument number ${index + 1}.`
+          );
         }
         break;
       case 'int':
       case 'float':
         if (typeof args[index] !== 'number') {
-          throw new NanoContractTransactionError(`Expects argument number ${index + 1} type ${arg.type} but received type ${typeof args[index]}.`);
+          throw new NanoContractTransactionError(
+            `Expects argument number ${index + 1} type ${arg.type} but received type ${typeof args[index]}.`
+          );
         }
         break;
       case 'str':
         if (typeof args[index] !== 'string') {
-          throw new NanoContractTransactionError(`Expects argument number ${index + 1} type ${arg.type} but received type ${typeof args[index]}.`);
+          throw new NanoContractTransactionError(
+            `Expects argument number ${index + 1} type ${arg.type} but received type ${typeof args[index]}.`
+          );
         }
         break;
       default:
+        // eslint-disable-next-line valid-typeof -- This rule is not suited for dynamic comparisons such as this one
         if (arg.type !== typeof args[index]) {
-          throw new NanoContractTransactionError(`Expects argument number ${index + 1} type ${arg.type} but received type ${typeof args[index]}.`);
+          throw new NanoContractTransactionError(
+            `Expects argument number ${index + 1} type ${arg.type} but received type ${typeof args[index]}.`
+          );
         }
     }
   }
-}
+};
+
+/**
+ * Checks if a transaction is a nano contract create transaction
+ *
+ * @param tx History object from hathor core to check if it's a nano create tx
+ */
+export const isNanoContractCreateTx = (tx: IHistoryTx): boolean => {
+  return tx.version === NANO_CONTRACTS_VERSION && tx.nc_method === NANO_CONTRACTS_INITIALIZE_METHOD;
+};

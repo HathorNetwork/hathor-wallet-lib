@@ -6,9 +6,7 @@
  */
 
 import axiosWrapperCreateRequestInstance from './axiosWrapper';
-import {
-    TIMEOUT,
-} from '../constants';
+import { TIMEOUT } from '../constants';
 import config from '../config';
 
 /**
@@ -26,6 +24,6 @@ import config from '../config';
 export const axiosInstance = async (network: string, timeout: number = TIMEOUT) => {
   const baseURL = config.getExplorerServiceBaseUrl(network);
   return axiosWrapperCreateRequestInstance(baseURL, undefined, timeout);
-}
+};
 
 export default axiosInstance;

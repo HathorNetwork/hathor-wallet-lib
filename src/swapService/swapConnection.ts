@@ -5,12 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import {
-  ConnectionState,
-} from '../wallet/types';
-import GenericWebSocket from '../websocket';
 import { EventEmitter } from 'events';
-
+import { ConnectionState } from '../wallet/types';
+import GenericWebSocket from '../websocket';
 
 /**
  * This is a Websocket Connection with the Atomic Swap Service
@@ -24,18 +21,19 @@ import { EventEmitter } from 'events';
  * - update-atomic-swap-proposal: Fired when the state of a listened proposal changes
  * - state: Fired when the websocket connection state changes
  * - pong: Internal or debug use only. Fired when the health check is received from the backend
- **/
+ * */
 export class AtomicSwapServiceConnection extends EventEmitter {
   websocket: GenericWebSocket;
+
   protected state: ConnectionState;
 
-  constructor(options: { wsURL: string, connectionTimeout?: number }) {
+  constructor(options: { wsURL: string; connectionTimeout?: number }) {
     super();
 
     // Initializing WebSocket
     const wsOptions = {
       wsURL: options.wsURL,
-    } as { wsURL: string, connectionTimeout?: number };
+    } as { wsURL: string; connectionTimeout?: number };
     if (options.connectionTimeout) {
       wsOptions.connectionTimeout = options.connectionTimeout;
     }
@@ -47,28 +45,28 @@ export class AtomicSwapServiceConnection extends EventEmitter {
 
   /**
    * Connect to the server and start emitting events.
-   **/
+   * */
   start() {
     // This should never happen as the websocket is initialized on the constructor
     if (!this.websocket) {
       throw new Error('Websocket is not initialized');
     }
 
-    this.websocket.on('pong', (value) => {
+    this.websocket.on('pong', value => {
       this.emit('pong', value);
-    })
-
-    this.websocket.on('is_online', (value) => {
-      return this.onConnectionChange(value)
     });
 
-    this.websocket.on('proposal_updated', (data) => {
+    this.websocket.on('is_online', value => {
+      return this.onConnectionChange(value);
+    });
+
+    this.websocket.on('proposal_updated', data => {
       this.emit('update-atomic-swap-proposal', data);
     });
 
-    this.websocket.on('connection_error', (err) => {
+    this.websocket.on('connection_error', err => {
       console.error(`Atomic Swap Service Websocket error: ${err.message}`);
-    })
+    });
 
     this.setState(ConnectionState.CONNECTING);
     this.websocket.setup();
@@ -77,7 +75,7 @@ export class AtomicSwapServiceConnection extends EventEmitter {
   /**
    * Called when the connection to the websocket changes.
    * It is also called if the network is down.
-   **/
+   * */
   onConnectionChange(value: boolean) {
     if (value) {
       this.setState(ConnectionState.CONNECTED);

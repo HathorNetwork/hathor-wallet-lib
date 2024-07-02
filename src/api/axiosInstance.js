@@ -9,7 +9,7 @@ import config from '../config';
 import axiosWrapperCreateRequestInstance from './axiosWrapper';
 
 /**
- * Create axios instance settings base URL and content type  
+ * Create axios instance settings base URL and content type
  * Besides that, it captures error to show modal error and save in Redux
  *
  * @module Axios
@@ -23,14 +23,14 @@ import axiosWrapperCreateRequestInstance from './axiosWrapper';
  */
 export const defaultCreateRequestInstance = (resolve, timeout) => {
   return axiosWrapperCreateRequestInstance(config.getServerUrl(), resolve, timeout);
-}
+};
 
 let _createRequestInstance = defaultCreateRequestInstance;
 
-export const registerNewCreateRequestInstance = (fn) => {
+export const registerNewCreateRequestInstance = fn => {
   _createRequestInstance = fn;
-}
+};
 
 export const createRequestInstance = (resolve, timeout) => {
-    return _createRequestInstance(resolve, timeout);
-}
+  return _createRequestInstance(resolve, timeout);
+};

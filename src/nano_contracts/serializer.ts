@@ -5,18 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-
-import {
-  hexToBuffer,
-  intToBytes,
-  floatToBytes,
-  signedIntToBytes
-} from '../utils/buffer';
+import { hexToBuffer, intToBytes, floatToBytes, signedIntToBytes } from '../utils/buffer';
 
 // Number of bytes used to serialize the size of the value
 const SERIALIZATION_SIZE_LEN = 2;
 
-
+/* eslint-disable class-methods-use-this -- XXX: Methods that do not use `this` should be made static */
 class Serializer {
   /**
    * Push an integer to buffer as the len of serialized element
@@ -92,7 +86,7 @@ class Serializer {
    * @inner
    */
   fromBytes(value: Buffer): Buffer {
-    return Buffer.from(value)
+    return Buffer.from(value);
   }
 
   /**
@@ -130,9 +124,8 @@ class Serializer {
   fromBool(value: boolean): Buffer {
     if (value) {
       return Buffer.from([1]);
-    } else {
-      return Buffer.from([0]);
     }
+    return Buffer.from([0]);
   }
 
   /**
@@ -214,6 +207,7 @@ class Serializer {
       value = splittedValue[1] === 'true';
     } else {
       // For the other types
+      // eslint-disable-next-line prefer-destructuring -- Destructuring would make this harder to read
       value = splittedValue[1];
     }
 
@@ -228,5 +222,6 @@ class Serializer {
     return Buffer.concat(ret);
   }
 }
+/* eslint-disable class-methods-use-this */
 
 export default Serializer;

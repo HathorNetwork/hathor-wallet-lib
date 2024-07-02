@@ -22,7 +22,7 @@ const startedWallets = [];
  */
 async function stopWallets() {
   let hWallet;
-  while (hWallet = startedWallets.pop()) {
+  while ((hWallet = startedWallets.pop())) {
     try {
       await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
     } catch (e) {
@@ -41,7 +41,9 @@ describe('LevelDB persistent store', () => {
   it('should receive and send tokens', async () => {
     const DATA_DIR = './testdata.leveldb';
     const walletData = precalculationHelpers.test.getPrecalculatedWallet();
-    const xpubkey = walletUtils.getXPubKeyFromSeed(walletData.words, { accountDerivationIndex: '0\'/0' });
+    const xpubkey = walletUtils.getXPubKeyFromSeed(walletData.words, {
+      accountDerivationIndex: "0'/0",
+    });
     const walletId = walletUtils.getWalletIdFromXPub(xpubkey);
 
     const store = new LevelDBStore(walletId, DATA_DIR);

@@ -5,19 +5,29 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-
 import { crypto, util, HDPublicKey, HDPrivateKey, Script, PublicKey } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
-import { HD_WALLET_ENTROPY, HATHOR_BIP44_CODE, P2SH_ACCT_PATH, P2PKH_ACCT_PATH, WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../constants';
+import _ from 'lodash';
+import {
+  HD_WALLET_ENTROPY,
+  HATHOR_BIP44_CODE,
+  P2SH_ACCT_PATH,
+  P2PKH_ACCT_PATH,
+  WALLET_SERVICE_AUTH_DERIVATION_PATH,
+} from '../constants';
 import { OP_0 } from '../opcodes';
 import { XPubError, InvalidWords, UncompressedPubKeyError } from '../errors';
 import Network from '../models/network';
-import _ from 'lodash';
 import helpers from './helpers';
 
-import { IEncryptedData, IMultisigData, IWalletAccessData, WalletType, WALLET_FLAGS } from '../types';
+import {
+  IEncryptedData,
+  IMultisigData,
+  IWalletAccessData,
+  WalletType,
+  WALLET_FLAGS,
+} from '../types';
 import { encryptData, decryptData } from './crypto';
-
 
 const wallet = {
   /**
@@ -46,34 +56,38 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  wordsValid(words: string): {valid: boolean, words: string} {
+  wordsValid(words: string): { valid: boolean; words: string } {
     if (!_.isString(words)) {
       // Must be string
-      throw new InvalidWords('Words must be a string.')
+      throw new InvalidWords('Words must be a string.');
     }
 
     let newWordsString = '';
     // 1. Replace all non ascii chars by a single space
     // 2. Remove one or more spaces (or line breaks) before and after the 24 words
     // 3. Set text to lower case
-    newWordsString = words.replace(/[^A-Za-z0-9]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+    newWordsString = words
+      .replace(/[^A-Za-z0-9]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
     const wordsArray = newWordsString.split(' ');
 
-    const getInvalidWords = (words: string[]): string[] => {
+    const getInvalidWords = (paramWords: string[]): string[] => {
       const wordlist = Mnemonic.Words.ENGLISH;
       const errorList: string[] = [];
 
-      for (const word of words) {
+      for (const word of paramWords) {
         if (wordlist.indexOf(word) < 0) {
           errorList.push(word);
         }
       }
       return errorList;
-    }
+    };
 
     if (wordsArray.length !== 24) {
       // Must have 24 words
-      const err = new InvalidWords('Must have 24 words.')
+      const err = new InvalidWords('Must have 24 words.');
       err.invalidWords = getInvalidWords(wordsArray);
       throw err;
     } else if (!Mnemonic.isValid(newWordsString)) {
@@ -82,13 +96,13 @@ const wallet = {
       if (errorList.length > 0) {
         const err = new InvalidWords('Invalid words.');
         err.invalidWords = errorList;
-        throw err
+        throw err;
       } else {
         // Invalid sequence of words
-        throw new InvalidWords('Invalid sequence of words.')
+        throw new InvalidWords('Invalid sequence of words.');
       }
     }
-    return {'valid': true, 'words': newWordsString};
+    return { valid: true, words: newWordsString };
   },
 
   /**
@@ -118,15 +132,20 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  xpubFromData(pubkey: Buffer, chainCode: Buffer, fingerprint: Buffer, networkName: string = 'mainnet'): string {
+  xpubFromData(
+    pubkey: Buffer,
+    chainCode: Buffer,
+    fingerprint: Buffer,
+    networkName: string = 'mainnet'
+  ): string {
     const network = new Network(networkName);
     const hdpubkey = new HDPublicKey({
       network: network.bitcoreNetwork,
       depth: 4,
       parentFingerPrint: fingerprint,
       childIndex: 0,
-      chainCode: chainCode,
-      publicKey: pubkey
+      chainCode,
+      publicKey: pubkey,
     });
 
     return hdpubkey.xpubkey;
@@ -196,7 +215,7 @@ const wallet = {
    * @inner
    */
   getXPubKeyFromXPrivKey(xpriv: string): string {
-    const privateKey = HDPrivateKey(xpriv)
+    const privateKey = HDPrivateKey(xpriv);
     return privateKey.xpubkey;
   },
 
@@ -210,8 +229,16 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  getXPubKeyFromSeed(seed: string, options: { passphrase?: string, networkName?: string, accountDerivationIndex?: string } = {}): string {
-    const methodOptions = Object.assign({passphrase: '', networkName: 'mainnet', accountDerivationIndex: '0\''}, options);
+  getXPubKeyFromSeed(
+    seed: string,
+    options: { passphrase?: string; networkName?: string; accountDerivationIndex?: string } = {}
+  ): string {
+    const methodOptions = {
+      passphrase: '',
+      networkName: 'mainnet',
+      accountDerivationIndex: "0'",
+      ...options,
+    };
     const { accountDerivationIndex } = methodOptions;
 
     const xpriv = this.getXPrivKeyFromSeed(seed, methodOptions);
@@ -233,8 +260,11 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  getXPrivKeyFromSeed(seed: string, options: { passphrase?: string, networkName?: string} = {}): HDPrivateKey {
-    const methodOptions = Object.assign({passphrase: '', networkName: 'mainnet'}, options);
+  getXPrivKeyFromSeed(
+    seed: string,
+    options: { passphrase?: string; networkName?: string } = {}
+  ): HDPrivateKey {
+    const methodOptions = { passphrase: '', networkName: 'mainnet', ...options };
     const { passphrase, networkName } = methodOptions;
 
     const network = new Network(networkName);
@@ -311,17 +341,22 @@ const wallet = {
    * @inner
    */
   createP2SHRedeemScript(xpubs: string[], numSignatures: number, index: number): Buffer {
-    const sortedXpubs = _.sortBy(xpubs.map(xp => new HDPublicKey(xp)), (xpub: HDPublicKey) => {
-      return xpub.publicKey.toString('hex');
-    });
+    const sortedXpubs = _.sortBy(
+      xpubs.map(xp => new HDPublicKey(xp)),
+      (xpub: HDPublicKey) => {
+        return xpub.publicKey.toString('hex');
+      }
+    );
 
     // xpub comes derived to m/45'/280'/0'
     // Derive to m/45'/280'/0'/0/index
-    const pubkeys = sortedXpubs.map((xpub: HDPublicKey) => xpub.deriveChild(0).deriveChild(index).publicKey);
+    const pubkeys = sortedXpubs.map(
+      (xpub: HDPublicKey) => xpub.deriveChild(0).deriveChild(index).publicKey
+    );
 
     // bitcore-lib sorts the public keys by default before building the script
     // noSorting prevents that and keeps our order
-    const redeemScript = Script.buildMultisigOut(pubkeys, numSignatures, {noSorting: true});
+    const redeemScript = Script.buildMultisigOut(pubkeys, numSignatures, { noSorting: true });
     return redeemScript.toBuffer();
   },
 
@@ -373,8 +408,11 @@ const wallet = {
    * @memberof Wallet
    * @inner
    */
-  getMultiSigXPubFromWords(seed: string, options: { passphrase?: string, networkName?: string } = {}): string {
-    const methodOptions = Object.assign({passphrase: '', networkName: 'mainnet'}, options);
+  getMultiSigXPubFromWords(
+    seed: string,
+    options: { passphrase?: string; networkName?: string } = {}
+  ): string {
+    const methodOptions = { passphrase: '', networkName: 'mainnet', ...options };
     const xpriv = this.getXPrivKeyFromSeed(seed, methodOptions);
     return this.getMultiSigXPubFromXPriv(xpriv);
   },
@@ -399,7 +437,8 @@ const wallet = {
    */
   generateAccessDataFromXpub(
     xpubkey: string,
-    { multisig, hardware = false }: { multisig?: IMultisigData, hardware?: boolean} = {}): IWalletAccessData {
+    { multisig, hardware = false }: { multisig?: IMultisigData; hardware?: boolean } = {}
+  ): IWalletAccessData {
     let walletFlags = 0 | WALLET_FLAGS.READONLY;
     if (hardware) {
       walletFlags |= WALLET_FLAGS.HARDWARE;
@@ -415,7 +454,7 @@ const wallet = {
 
     const argXpub = new HDPublicKey(xpubkey);
 
-    let multisigData: IMultisigData|undefined = undefined;
+    let multisigData: IMultisigData | undefined;
     let xpub: HDPublicKey;
 
     if (argXpub.depth === 3) {
@@ -428,7 +467,7 @@ const wallet = {
         multisigData = {
           ...multisig,
           pubkey: argXpub.publicKey.toString('hex'),
-        }
+        };
       } else {
         multisigData = undefined;
       }
@@ -482,12 +521,12 @@ const wallet = {
       password,
       authXpriv,
     }: {
-      multisig?: IMultisigData,
-      pin: string,
-      seed?: string,
-      password?: string,
-      authXpriv?: string,
-    },
+      multisig?: IMultisigData;
+      pin: string;
+      seed?: string;
+      password?: string;
+      authXpriv?: string;
+    }
   ): IWalletAccessData {
     let walletType: WalletType;
     if (multisig === undefined) {
@@ -518,7 +557,7 @@ const wallet = {
 
     const encryptedMainKey = encryptData(xpriv.xprivkey, pin);
 
-    let multisigData: IMultisigData|undefined;
+    let multisigData: IMultisigData | undefined;
     if (multisig === undefined) {
       multisigData = undefined;
     } else {
@@ -554,7 +593,7 @@ const wallet = {
       accessData.authKey = authKey;
     }
 
-    if (!!(seed && password)) {
+    if (seed && password) {
       const encryptedWords = encryptData(seed, password);
       accessData.words = encryptedWords;
     }
@@ -566,11 +605,17 @@ const wallet = {
     words: string,
     {
       multisig,
-      passphrase='',
+      passphrase = '',
       pin,
       password,
       networkName,
-    }: {multisig?: IMultisigData, pin: string, password: string, passphrase?: string, networkName: string},
+    }: {
+      multisig?: IMultisigData;
+      pin: string;
+      password: string;
+      passphrase?: string;
+      networkName: string;
+    }
   ): IWalletAccessData {
     let walletType: WalletType;
     if (multisig === undefined) {
@@ -598,7 +643,7 @@ const wallet = {
     const encryptedAuthPathKey = encryptData(authXpriv.xprivkey, pin);
     const encryptedWords = encryptData(words, password);
 
-    let multisigData: IMultisigData|undefined;
+    let multisigData: IMultisigData | undefined;
     if (multisig === undefined) {
       multisigData = undefined;
     } else {
@@ -630,7 +675,11 @@ const wallet = {
    * @param {string} newPin Encrypt the fields with this pin.
    * @returns {IWalletAccessData} The access data with fields encrypted with `newPin`.
    */
-  changeEncryptionPin(accessData: IWalletAccessData, oldPin: string, newPin: string): IWalletAccessData {
+  changeEncryptionPin(
+    accessData: IWalletAccessData,
+    oldPin: string,
+    newPin: string
+  ): IWalletAccessData {
     const data = _.cloneDeep(accessData);
     if (!(data.mainKey || data.authKey || data.acctPathKey)) {
       throw new Error('No data to change');
@@ -666,7 +715,11 @@ const wallet = {
    * @param {string} newPassword Encrypt the seed with this password.
    * @returns {IWalletAccessData} The access data with fields encrypted with `newPassword`.
    */
-  changeEncryptionPassword(accessData: IWalletAccessData, oldPassword: string, newPassword: string): IWalletAccessData {
+  changeEncryptionPassword(
+    accessData: IWalletAccessData,
+    oldPassword: string,
+    newPassword: string
+  ): IWalletAccessData {
     const data = _.cloneDeep(accessData);
     if (!data.words) {
       throw new Error('No data to change');
@@ -678,6 +731,6 @@ const wallet = {
 
     return data;
   },
-}
+};
 
 export default wallet;

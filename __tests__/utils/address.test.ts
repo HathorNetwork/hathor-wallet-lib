@@ -18,10 +18,14 @@ import {
   getAddressFromPubkey,
 } from '../../src/utils/address';
 
-const seed = 'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
-const xprivkey = 'htpr58K5ktSehjML89C3uRicPQ9TrrJ7LAbD7Xp1C7AZULDaY75joGmSu7TWGWqb31noixGt9ehSyspRVdFBhCZiJpB1RiuSosUkFw7QezVbECo';
-const xpubkey = 'xpub6EvdxHF4vBs38uFrs6UuN8Zu78LDoqLrskMffXk531wy7xMFb7X9Ntxb9dGL2kbYdKJ1d83dqAifQS2Wzcq2DxJf7HPDPvMZMtNQxyBzAWn';
-const MULTISIG_XPUB = 'xpub6CvvCBtHqFfErbcW2Rv28TmZ3MqcFuWQVKGg8xDzLeAwEAHRz9LBTgSFSj7B99scSvZGbq6TxAyyATA9b6cnwsgduNs9NGKQJnEQr3PYtwK';
+const seed =
+  'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+const xprivkey =
+  'htpr58K5ktSehjML89C3uRicPQ9TrrJ7LAbD7Xp1C7AZULDaY75joGmSu7TWGWqb31noixGt9ehSyspRVdFBhCZiJpB1RiuSosUkFw7QezVbECo';
+const xpubkey =
+  'xpub6EvdxHF4vBs38uFrs6UuN8Zu78LDoqLrskMffXk531wy7xMFb7X9Ntxb9dGL2kbYdKJ1d83dqAifQS2Wzcq2DxJf7HPDPvMZMtNQxyBzAWn';
+const MULTISIG_XPUB =
+  'xpub6CvvCBtHqFfErbcW2Rv28TmZ3MqcFuWQVKGg8xDzLeAwEAHRz9LBTgSFSj7B99scSvZGbq6TxAyyATA9b6cnwsgduNs9NGKQJnEQr3PYtwK';
 const WALLET_DATA = {
   multisig: {
     seed,
@@ -84,7 +88,7 @@ const WALLET_DATA = {
       'Weg6WEncAEJs5qDbGUxcLTR3iycM3hrt4C',
       'WSVarF73e6UVccGwb44FvTtqFWsHQmjKCt',
     ],
-  }
+  },
 };
 
 test('Get address type', () => {

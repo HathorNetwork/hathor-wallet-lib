@@ -15,7 +15,7 @@ import SendTransaction from '../../../src/new/sendTransaction';
 import { LevelDBStore, MemoryStore, Storage } from '../../../src/storage';
 import walletUtils from '../../../src/utils/wallet';
 import transactionUtils from '../../../src/utils/transaction';
-import { HATHOR_TOKEN_CONFIG } from '../../../src/constants';
+import { NATIVE_TOKEN_UID } from '../../../src/constants';
 
 const startedWallets = [];
 
@@ -24,7 +24,7 @@ const startedWallets = [];
  */
 async function stopWallets() {
   let hWallet;
-  while (hWallet = startedWallets.pop()) {
+  while ((hWallet = startedWallets.pop())) {
     try {
       await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
     } catch (e) {
@@ -34,20 +34,20 @@ async function stopWallets() {
 }
 
 async function startWallet(storage, walletData) {
-    // Start the wallet
-    const walletConfig = {
-      seed: walletData.words,
-      connection: generateConnection(),
-      password: DEFAULT_PASSWORD,
-      pinCode: DEFAULT_PIN_CODE,
-      preCalculatedAddresses: walletData.addresses,
-      storage,
-    };
-    const hWallet = new HathorWallet(walletConfig);
-    await hWallet.start();
-    startedWallets.push(hWallet);
-    await waitForWalletReady(hWallet);
-    return hWallet;
+  // Start the wallet
+  const walletConfig = {
+    seed: walletData.words,
+    connection: generateConnection(),
+    password: DEFAULT_PASSWORD,
+    pinCode: DEFAULT_PIN_CODE,
+    preCalculatedAddresses: walletData.addresses,
+    storage,
+  };
+  const hWallet = new HathorWallet(walletConfig);
+  await hWallet.start();
+  startedWallets.push(hWallet);
+  await waitForWalletReady(hWallet);
+  return hWallet;
 }
 
 describe('locked utxos', () => {
@@ -62,7 +62,7 @@ describe('locked utxos', () => {
    * then we should spend the utxo and check it has been "unselected"
    * @param {IStorage} storage The storage instance
    * @param {Object} walletData the pre-calculated wallet data to start a wallet
-   **/
+   * */
   async function testUnlockWhenSpent(storage, walletData) {
     const hwallet = await startWallet(storage, walletData);
     const address = await hwallet.getAddressAtIndex(0);
@@ -70,12 +70,14 @@ describe('locked utxos', () => {
 
     const sendTx = new SendTransaction({
       storage: hwallet.storage,
-      outputs: [{
-        type: 'p2pkh',
-        address: await hwallet.getAddressAtIndex(1),
-        value: 1,
-        token: HATHOR_TOKEN_CONFIG.uid,
-      }],
+      outputs: [
+        {
+          type: 'p2pkh',
+          address: await hwallet.getAddressAtIndex(1),
+          value: 1,
+          token: NATIVE_TOKEN_UID,
+        },
+      ],
       pin: DEFAULT_PIN_CODE,
     });
     await sendTx.prepareTx();
@@ -91,7 +93,6 @@ describe('locked utxos', () => {
   }
 
   it('should unselect as input when spent', async () => {
-
     // memory store
     const walletDataMem = precalculationHelpers.test.getPrecalculatedWallet();
     const storeMem = new MemoryStore();
@@ -101,7 +102,9 @@ describe('locked utxos', () => {
     // LevelDB test
     const DATA_DIR = './testdata.leveldb';
     const walletDataLDB = precalculationHelpers.test.getPrecalculatedWallet();
-    const xpubkeyLDB = walletUtils.getXPubKeyFromSeed(walletDataLDB.words, { accountDerivationIndex: '0\'/0' });
+    const xpubkeyLDB = walletUtils.getXPubKeyFromSeed(walletDataLDB.words, {
+      accountDerivationIndex: "0'/0",
+    });
     const walletId = walletUtils.getWalletIdFromXPub(xpubkeyLDB);
     const storeLDB = new LevelDBStore(walletId, DATA_DIR);
     const storageLDB = new Storage(storeLDB);
@@ -121,7 +124,9 @@ describe('custom signature method', () => {
     await GenesisWalletHelper.injectFunds(hwallet, address, 10);
 
     expect(hwallet.storage.hasTxSignatureMethod()).toEqual(false);
-    const customSignFunc = jest.fn().mockImplementation(transactionUtils.getSignatureForTx.bind(transactionUtils));
+    const customSignFunc = jest
+      .fn()
+      .mockImplementation(transactionUtils.getSignatureForTx.bind(transactionUtils));
     hwallet.storage.setTxSignatureMethod(customSignFunc);
     expect(hwallet.storage.hasTxSignatureMethod()).toEqual(true);
   });
@@ -131,7 +136,9 @@ describe('custom signature method', () => {
     const address = await hwallet.getAddressAtIndex(0);
     await GenesisWalletHelper.injectFunds(hwallet, address, 10);
 
-    const customSignFunc = jest.fn().mockImplementation(transactionUtils.getSignatureForTx.bind(transactionUtils));
+    const customSignFunc = jest
+      .fn()
+      .mockImplementation(transactionUtils.getSignatureForTx.bind(transactionUtils));
     expect(hwallet.storage.hasTxSignatureMethod()).toEqual(false);
     hwallet.storage.setTxSignatureMethod(customSignFunc);
     expect(hwallet.storage.hasTxSignatureMethod()).toEqual(true);

@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import buffer from 'buffer';
 import helpers from '../../src/utils/helpers';
 import Network from '../../src/models/network';
 import dateFormatter from '../../src/utils/date';
@@ -12,13 +13,19 @@ import Address from '../../src/models/address';
 import P2PKH from '../../src/models/p2pkh';
 import P2SH from '../../src/models/p2sh';
 import ScriptData from '../../src/models/script_data';
-import buffer from 'buffer';
 import { OP_PUSHDATA1 } from '../../src/opcodes';
 import { DEFAULT_TX_VERSION, CREATE_TOKEN_TX_VERSION } from '../../src/constants';
 import Transaction from '../../src/models/transaction';
 import CreateTokenTransaction from '../../src/models/create_token_transaction';
 import config from '../../src/config';
-import { AddressError, OutputValueError, ConstantNotSet, CreateTokenTxInvalid, MaximumNumberInputsError, MaximumNumberOutputsError } from '../../src/errors';
+import {
+  AddressError,
+  OutputValueError,
+  ConstantNotSet,
+  CreateTokenTxInvalid,
+  MaximumNumberInputsError,
+  MaximumNumberOutputsError,
+} from '../../src/errors';
 
 test('Round float', () => {
   expect(helpers.roundFloat(1.23)).toBe(1.23);
@@ -38,20 +45,20 @@ test('Version check', () => {
   expect(helpers.isVersionAllowed('0.3.1', '0.3.0')).toBe(true);
   expect(helpers.isVersionAllowed('0.3.1', '0.3.2')).toBe(false);
 
-  expect(helpers.getCleanVersionArray('0.3.1')).toEqual(["0", "3", "1"]);
-  expect(helpers.getCleanVersionArray('0.3.2-beta')).toEqual(["0", "3", "2"]);
+  expect(helpers.getCleanVersionArray('0.3.1')).toEqual(['0', '3', '1']);
+  expect(helpers.getCleanVersionArray('0.3.2-beta')).toEqual(['0', '3', '2']);
 });
 
 test('Push data', () => {
-  let stack = [];
-  let buf = buffer.Buffer.alloc(5);
+  const stack = [];
+  const buf = buffer.Buffer.alloc(5);
   helpers.pushDataToStack(stack, buf);
   expect(stack.length).toBe(2);
   expect(stack[0].readUInt8(0)).toBe(5);
   expect(stack[1]).toBe(buf);
 
-  let newStack = [];
-  let newBuf = buffer.Buffer.alloc(100);
+  const newStack = [];
+  const newBuf = buffer.Buffer.alloc(100);
   helpers.pushDataToStack(newStack, newBuf);
   expect(newStack.length).toBe(3);
   expect(newStack[0]).toBe(OP_PUSHDATA1);
@@ -60,18 +67,18 @@ test('Push data', () => {
 });
 
 test('Push integer', () => {
-  let stack = [];
+  const stack = [];
   for (let i = 0; i < 17; i++) {
     helpers.pushIntToStack(stack, i);
     // Only added 1 item to stack
-    expect(stack.length).toBe(i+1);
+    expect(stack.length).toBe(i + 1);
     // Pushed int is the OP_N
-    expect(stack[i].readUInt8(0)).toBe(i+80);
+    expect(stack[i].readUInt8(0)).toBe(i + 80);
   }
 
   // Calling the method does not change any other part of the stack
   for (let i = 0; i < 17; i++) {
-    expect(stack[i].readUInt8(0)).toBe(i+80);
+    expect(stack[i].readUInt8(0)).toBe(i + 80);
   }
 
   expect(() => helpers.pushIntToStack(stack, -1)).toThrow();
@@ -79,7 +86,10 @@ test('Push integer', () => {
 });
 
 test('Checksum', () => {
-  const data = Buffer.from([0x28, 0xab, 0xca, 0x4e, 0xad, 0xc0, 0x59, 0xd3, 0x24, 0xce, 0x46, 0x99, 0x5c, 0x41, 0x06, 0x5d, 0x71, 0x86, 0x0a, 0xd7, 0xb0]);
+  const data = Buffer.from([
+    0x28, 0xab, 0xca, 0x4e, 0xad, 0xc0, 0x59, 0xd3, 0x24, 0xce, 0x46, 0x99, 0x5c, 0x41, 0x06, 0x5d,
+    0x71, 0x86, 0x0a, 0xd7, 0xb0,
+  ]);
   expect(helpers.getChecksum(data)).toEqual(Buffer.from([0x6b, 0x13, 0xb9, 0x78]));
 });
 
@@ -105,17 +115,29 @@ test('createTxFromBytes and Hex', () => {
   const errorTxBytes = Buffer.from('0000cafe', 'hex'); // Block
   const testnet = new Network('testnet');
   const spyTx = jest.spyOn(Transaction, 'createFromBytes').mockReturnValue('default-transaction');
-  const spyCreateTokenTx = jest.spyOn(CreateTokenTransaction, 'createFromBytes').mockReturnValue('create-token-transaction');
+  const spyCreateTokenTx = jest
+    .spyOn(CreateTokenTransaction, 'createFromBytes')
+    .mockReturnValue('create-token-transaction');
 
   // Testing fromBytes
   expect(helpers.createTxFromBytes(defaulttxbytes, testnet)).toEqual('default-transaction');
-  expect(helpers.createTxFromBytes(createTokentxbytes, testnet)).toEqual('create-token-transaction');
-  expect(() => {helpers.createTxFromBytes(errorTxBytes, testnet)}).toThrow();
+  expect(helpers.createTxFromBytes(createTokentxbytes, testnet)).toEqual(
+    'create-token-transaction'
+  );
+  expect(() => {
+    helpers.createTxFromBytes(errorTxBytes, testnet);
+  }).toThrow();
 
   // Testing fromHex
-  expect(helpers.createTxFromHex(defaulttxbytes.toString('hex'), testnet)).toEqual('default-transaction');
-  expect(helpers.createTxFromHex(createTokentxbytes.toString('hex'), testnet)).toEqual('create-token-transaction');
-  expect(() => {helpers.createTxFromHex(errorTxBytes.toString('hex'), testnet)}).toThrow();
+  expect(helpers.createTxFromHex(defaulttxbytes.toString('hex'), testnet)).toEqual(
+    'default-transaction'
+  );
+  expect(helpers.createTxFromHex(createTokentxbytes.toString('hex'), testnet)).toEqual(
+    'create-token-transaction'
+  );
+  expect(() => {
+    helpers.createTxFromHex(errorTxBytes.toString('hex'), testnet);
+  }).toThrow();
 
   spyTx.mockRestore();
   spyCreateTokenTx.mockRestore();
@@ -125,84 +147,84 @@ test('createTxFromData', () => {
   const testnet = new Network('testnet');
   // create token transaction
   const createTokenTx = {
-      'name': 'test token',
-      'symbol': 'TST',
-      'tokens': ['01'],
-      'timestamp': dateFormatter.dateToTimestamp(new Date()),
-      'weight': 22.719884359974895,
-      'version': CREATE_TOKEN_TX_VERSION,
-      'inputs': [
-        {
-          'tx_id': '0000000110eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e',
-          'index': 0,
-          'data': Buffer.alloc(70),
-        }
-      ],
-      'outputs': [
-        {
-          'type': 'p2pkh',
-          'address': 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo',
-          'value': 100,
-          'tokenData': 1,
-        }
-      ],
+    name: 'test token',
+    symbol: 'TST',
+    tokens: ['01'],
+    timestamp: dateFormatter.dateToTimestamp(new Date()),
+    weight: 22.719884359974895,
+    version: CREATE_TOKEN_TX_VERSION,
+    inputs: [
+      {
+        tx_id: '0000000110eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e',
+        index: 0,
+        data: Buffer.alloc(70),
+      },
+    ],
+    outputs: [
+      {
+        type: 'p2pkh',
+        address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo',
+        value: 100,
+        tokenData: 1,
+      },
+    ],
   };
   const createTx = helpers.createTxFromData(createTokenTx, testnet);
   expect(createTx.getType()).toBe('Create Token Transaction');
 
   // default tx
   const defaultTxData = {
-      'tokens': [],
-      'timestamp': dateFormatter.dateToTimestamp(new Date()),
-      'weight': 22.719884359974895,
-      'version': DEFAULT_TX_VERSION,
-      'inputs': [
-        {
-          'tx_id': '0000000110eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e',
-          'index': 0,
-          'data': Buffer.alloc(70),
-        }
-      ],
-      'outputs': [
-        {
-          'address': 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo',
-          'value': 100,
-          'tokenData': 0,
-        }
-      ],
+    tokens: [],
+    timestamp: dateFormatter.dateToTimestamp(new Date()),
+    weight: 22.719884359974895,
+    version: DEFAULT_TX_VERSION,
+    inputs: [
+      {
+        tx_id: '0000000110eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e',
+        index: 0,
+        data: Buffer.alloc(70),
+      },
+    ],
+    outputs: [
+      {
+        address: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo',
+        value: 100,
+        tokenData: 0,
+      },
+    ],
   };
   const p2pkh = new P2PKH(new Address('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo'));
   const defaultTx = helpers.createTxFromData(defaultTxData, testnet);
   expect(defaultTx.getType()).toBe('Transaction');
   defaultTx.outputs[0].parseScript(testnet);
   expect(defaultTx.outputs[0].decodedScript.getType()).toBe('p2pkh');
-  expect(defaultTx.outputs[0].script.toString('hex')).toBe(p2pkh.createScript().toString('hex'))
+  expect(defaultTx.outputs[0].script.toString('hex')).toBe(p2pkh.createScript().toString('hex'));
 
   // data and multisig outputs
   const extraTxData = {
-      'tokens': [],
-      'timestamp': dateFormatter.dateToTimestamp(new Date()),
-      'weight': 22.719884359974895,
-      'version': DEFAULT_TX_VERSION,
-      'inputs': [
-        {
-          'tx_id': '0000000110eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e',
-          'index': 0,
-          'data': Buffer.alloc(70),
-        }
-      ],
-      'outputs': [
-        {
-          'type': 'data',
-          'data': '123',
-        },
-        {
-          'type': 'p2sh',
-          'address': 'wcFwC82mLoUudtgakZGMPyTL2aHcgSJgDZ',
-          'value': 100,
-          'tokenData': 0,
-        }
-      ],
+    tokens: [],
+    timestamp: dateFormatter.dateToTimestamp(new Date()),
+    weight: 22.719884359974895,
+    version: DEFAULT_TX_VERSION,
+    inputs: [
+      {
+        tx_id: '0000000110eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e',
+        index: 0,
+        data: Buffer.alloc(70),
+      },
+    ],
+    outputs: [
+      {
+        type: 'data',
+        data: '123',
+      },
+      {
+        type: 'p2sh',
+        address: 'wcFwC82mLoUudtgakZGMPyTL2aHcgSJgDZ',
+        value: 100,
+        tokenData: 0,
+      },
+    ],
   };
   const p2sh = new P2SH(new Address('wcFwC82mLoUudtgakZGMPyTL2aHcgSJgDZ'));
   const scriptData = new ScriptData('123');
@@ -217,8 +239,8 @@ test('createTxFromData', () => {
 });
 
 test('getOutputTypeFromAddress', () => {
-  const mainnetNetwork = new Network('mainnet')
-  const testnetNetwork = new Network('testnet')
+  const mainnetNetwork = new Network('mainnet');
+  const testnetNetwork = new Network('testnet');
 
   // Testnet p2pkh
   const addr1 = 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo';
@@ -265,7 +287,9 @@ test('handlePrepareDataError', () => {
   expect(helpers.handlePrepareDataError(err5)).toEqual('err5');
   expect(helpers.handlePrepareDataError(err6)).toEqual('err6');
 
-  expect(() => { helpers.handlePrepareDataError(err) }).toThrow(err);
+  expect(() => {
+    helpers.handlePrepareDataError(err);
+  }).toThrow(err);
 });
 
 test('cleanupString', () => {
@@ -310,5 +334,7 @@ test('fixAxiosConfig', () => {
 });
 
 test('getShortHash', () => {
-  expect(helpers.getShortHash('123456123456' + Array(40).fill(0).join('') + '654321654321')).toEqual('123456123456...654321654321');
+  expect(helpers.getShortHash(`123456123456${Array(40).fill(0).join('')}654321654321`)).toEqual(
+    '123456123456...654321654321'
+  );
 });

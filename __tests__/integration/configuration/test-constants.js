@@ -11,7 +11,8 @@
 export const WALLET_CONSTANTS = {
   genesis: {
     walletId: 'genesiswallet',
-    words: 'avocado spot town typical traffic vault danger century property shallow divorce festival spend attack anchor afford rotate green audit adjust fade wagon depart level',
+    words:
+      'avocado spot town typical traffic vault danger century property shallow divorce festival spend attack anchor afford rotate green audit adjust fade wagon depart level',
     addresses: [
       'WPhehTyNHTPz954CskfuSgLEfuKXbXeK3f',
       'WY1URKUnqCTyiixW1Dw29vmeG99hNN4EW6', // Genesis funds, index 1
@@ -35,11 +36,12 @@ export const WALLET_CONSTANTS = {
       'WRenJ9f6yqrYRzBUwqbBFAxAY7JzwryKut',
       'WQozCB8X2FFM9QtEMoPjo6xERVTkiBw8Mj',
       'Wds8d4vy691GwVDdzKrw1LpnvBR283VTci',
-    ]
+    ],
   },
   miner: {
     walletId: 'miner-wallet',
-    words: 'scare more mobile text erupt flush paper snack despair goddess route solar keep search result author bounce pulp shine next butter unknown frozen trap',
+    words:
+      'scare more mobile text erupt flush paper snack despair goddess route solar keep search result author bounce pulp shine next butter unknown frozen trap',
     addresses: [
       'WTjhJXzQJETVx7BVXdyZmvk396DRRsubdw', // Miner rewards address
       'Wdf7xQtKDNefhd6KTS68Vna1u4wUAyHjLQ',
@@ -62,35 +64,35 @@ export const WALLET_CONSTANTS = {
       'Wb6792ceTDSJdySvQm7tikrNva4FRuVsUX',
       'WYZigDNfJ6x5T7VfVrgd1CtkKGfoBRRbyr',
       'WWGWrrUqpbP4ekx4zoNtBsrhCSEspxpDyA',
-      'WgWfrJqAgS3RwzXMMz8fywidQAUx6a5smc'
-    ]
+      'WgWfrJqAgS3RwzXMMz8fywidQAUx6a5smc',
+    ],
   },
   multisig: {
     addresses: [
-      "wgyUgNjqZ18uYr4YfE2ALW6tP5hd8MumH5",
-      "wbe2eJdyZVimA7nJjmBQnKYJSXmpnpMKgG",
-      "wQQWdSZwp2CEGKsTvvbJ7i8HfHuV2i5QVQ",
-      "wfrtq9cMe1YfixVgSKXQNQ5hjsmR4hpjP6",
-      "wQG7itjdtZBsNTk9TG4f1HrehyQiAEMN18",
-      "wfgSqHUHPtmj2GDy8YfasbPPcFh8L1GPMA",
-      "wgZbCEMHHnhftCAwj7CRBmfi5TgBhfMZbk",
-      "wdz9NeMac7jyVeP2WK4BJWsM1zpd9tgsBb",
-      "wPs7WaRCqwC89uHycLbctDGmWPgH9oZvjp",
-      "wWJJxvr6oSk7WZdE9rpSRMoE6ZqJ3i8VDc",
-      "wbuDJtmM7vg8at2h5o3pTCHE4SASEFYusr",
-      "wPNkywbiw8UHbRQkD3nZ3EHMQsjyTamh9u",
-      "wQBNidXXYpE943BgydUNtarAwNzk612Yip",
-      "wh2eCGzUK9rLThr5D6tyCfckHpBjS97ERA",
-      "wZvajxVp3LabcZiY3XPrivrXiSS6wphRu7",
-      "wgPbL1WzbrEntepHRC92UX6mA2EmaqfDqt",
-      "wbdx4g3rucX3WHmZRXjPEKtRfZ7XSnCGKf",
-      "wiKTnqSN11ukuCWEXRVrRTTPo2mw4fGue3",
-      "wQ4aQP4YqJqfwshLggR2w1Gg3UFhhKhVKs",
-      "wca2xk9S2MVn2UrKh78UScdwXz3xrTp8Ky",
-      "wcUZ6J7t2B1s8bqRYiyuZAftcdCGRSiiau",
-      "wV1S8wNka7SxLQbzDRP7NMKuCXfZCWgHhN"
-    ]
-  }
+      'wgyUgNjqZ18uYr4YfE2ALW6tP5hd8MumH5',
+      'wbe2eJdyZVimA7nJjmBQnKYJSXmpnpMKgG',
+      'wQQWdSZwp2CEGKsTvvbJ7i8HfHuV2i5QVQ',
+      'wfrtq9cMe1YfixVgSKXQNQ5hjsmR4hpjP6',
+      'wQG7itjdtZBsNTk9TG4f1HrehyQiAEMN18',
+      'wfgSqHUHPtmj2GDy8YfasbPPcFh8L1GPMA',
+      'wgZbCEMHHnhftCAwj7CRBmfi5TgBhfMZbk',
+      'wdz9NeMac7jyVeP2WK4BJWsM1zpd9tgsBb',
+      'wPs7WaRCqwC89uHycLbctDGmWPgH9oZvjp',
+      'wWJJxvr6oSk7WZdE9rpSRMoE6ZqJ3i8VDc',
+      'wbuDJtmM7vg8at2h5o3pTCHE4SASEFYusr',
+      'wPNkywbiw8UHbRQkD3nZ3EHMQsjyTamh9u',
+      'wQBNidXXYpE943BgydUNtarAwNzk612Yip',
+      'wh2eCGzUK9rLThr5D6tyCfckHpBjS97ERA',
+      'wZvajxVp3LabcZiY3XPrivrXiSS6wphRu7',
+      'wgPbL1WzbrEntepHRC92UX6mA2EmaqfDqt',
+      'wbdx4g3rucX3WHmZRXjPEKtRfZ7XSnCGKf',
+      'wiKTnqSN11ukuCWEXRVrRTTPo2mw4fGue3',
+      'wQ4aQP4YqJqfwshLggR2w1Gg3UFhhKhVKs',
+      'wca2xk9S2MVn2UrKh78UScdwXz3xrTp8Ky',
+      'wcUZ6J7t2B1s8bqRYiyuZAftcdCGRSiiau',
+      'wV1S8wNka7SxLQbzDRP7NMKuCXfZCWgHhN',
+    ],
+  },
 };
 
 export const TOKEN_DATA = {

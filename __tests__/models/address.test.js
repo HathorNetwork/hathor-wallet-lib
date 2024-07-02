@@ -10,7 +10,6 @@ import Network from '../../src/models/network';
 import P2PKH from '../../src/models/p2pkh';
 import P2SH from '../../src/models/p2sh';
 
-
 test('Validate address', () => {
   // Invalid address
   const addr1 = new Address('abc');
@@ -26,14 +25,14 @@ test('Validate address', () => {
   expect(addr3.isValid()).toBe(true);
 
   // Mainnet address with mainnet network
-  const mainnetNetwork = new Network('mainnet')
-  const addr4 = new Address('HNBUHhzkVuSFUNW21HrajUFNUiX8JrznSb', {network: mainnetNetwork});
+  const mainnetNetwork = new Network('mainnet');
+  const addr4 = new Address('HNBUHhzkVuSFUNW21HrajUFNUiX8JrznSb', { network: mainnetNetwork });
   expect(addr4.isValid()).toBe(true);
 
   // Invalid checksum
-  const addr5 = new Address('HNBUHhzkVuSFUNW21HrajUFNUiX8JrznSc', {network: mainnetNetwork});
+  const addr5 = new Address('HNBUHhzkVuSFUNW21HrajUFNUiX8JrznSc', { network: mainnetNetwork });
   expect(addr5.isValid()).toBe(false);
-})
+});
 
 test('Address getType', () => {
   // Testnet p2pkh
@@ -44,14 +43,14 @@ test('Address getType', () => {
   const addr2 = new Address('wcFwC82mLoUudtgakZGMPyTL2aHcgSJgDZ');
   expect(addr2.getType()).toBe('p2sh');
 
-  const mainnetNetwork = new Network('mainnet')
+  const mainnetNetwork = new Network('mainnet');
 
   // Mainnet p2pkh
-  const addr3 = new Address('HNBUHhzkVuSFUNW21HrajUFNUiX8JrznSb', {network: mainnetNetwork});
+  const addr3 = new Address('HNBUHhzkVuSFUNW21HrajUFNUiX8JrznSb', { network: mainnetNetwork });
   expect(addr3.getType()).toBe('p2pkh');
 
   // Mainnet p2sh
-  const addr4 = new Address('hXRpjKbgVVGF1ioYtscCRavnzvGbsditXn', {network: mainnetNetwork});
+  const addr4 = new Address('hXRpjKbgVVGF1ioYtscCRavnzvGbsditXn', { network: mainnetNetwork });
   expect(addr4.getType()).toBe('p2sh');
 });
 
@@ -60,8 +59,8 @@ test('Address script', () => {
   const p2sh = new P2SH(addr);
   expect(addr.getScript()).toStrictEqual(p2sh.createScript());
 
-  const mainnetNetwork = new Network('mainnet')
-  const addr2 = new Address('HNBUHhzkVuSFUNW21HrajUFNUiX8JrznSb', {network: mainnetNetwork});
+  const mainnetNetwork = new Network('mainnet');
+  const addr2 = new Address('HNBUHhzkVuSFUNW21HrajUFNUiX8JrznSb', { network: mainnetNetwork });
   const p2pkh = new P2PKH(addr2);
   expect(addr2.getScript()).toStrictEqual(p2pkh.createScript());
 });

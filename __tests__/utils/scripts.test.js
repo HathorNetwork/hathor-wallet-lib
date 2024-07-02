@@ -5,7 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import {createP2SHRedeemScript, parseP2PKH, parseP2SH, parseScriptData} from '../../src/utils/scripts';
+import {
+  createP2SHRedeemScript,
+  parseP2PKH,
+  parseP2SH,
+  parseScriptData,
+} from '../../src/utils/scripts';
 import Network from '../../src/models/network';
 
 test('parseP2PKH', () => {
@@ -74,7 +79,7 @@ test('parseScriptData', () => {
 });
 
 test('createP2SHRedeemScript', () => {
-  const multisig =  {
+  const multisig = {
     data: {
       numSignatures: 3,
       pubkeys: [
@@ -86,6 +91,9 @@ test('createP2SHRedeemScript', () => {
       ],
     },
   };
-  const scriptHex = '532102a847d31a64c190d2ec082c46eb23aff9c591c59f3be86e90404d45aa42841ac22103ee726ee90b034eb4dcfc4ee9cd7d0b743f41eb93de0c21d750e6110e46cf5986210339f5fa440e0f2754226e04ca5b1c3510416fc54739ba3101d03b3b99d8366e4121025e7c288c0e988f02c8c2b64bd4656743e279fa50c0b287c0985b3635fd85b8b9210383689a51fc5285188b19194ef2e3cf1ee752854f73ca186c9b1b99e0698805ef55ae';
-  expect(createP2SHRedeemScript(multisig.data.pubkeys, multisig.data.numSignatures, 0)).toMatchBuffer(Buffer.from(scriptHex, 'hex'));
+  const scriptHex =
+    '532102a847d31a64c190d2ec082c46eb23aff9c591c59f3be86e90404d45aa42841ac22103ee726ee90b034eb4dcfc4ee9cd7d0b743f41eb93de0c21d750e6110e46cf5986210339f5fa440e0f2754226e04ca5b1c3510416fc54739ba3101d03b3b99d8366e4121025e7c288c0e988f02c8c2b64bd4656743e279fa50c0b287c0985b3635fd85b8b9210383689a51fc5285188b19194ef2e3cf1ee752854f73ca186c9b1b99e0698805ef55ae';
+  expect(
+    createP2SHRedeemScript(multisig.data.pubkeys, multisig.data.numSignatures, 0)
+  ).toMatchBuffer(Buffer.from(scriptHex, 'hex'));
 });

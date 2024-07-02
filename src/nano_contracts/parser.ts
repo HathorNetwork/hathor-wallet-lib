@@ -5,24 +5,27 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { get, has } from 'lodash';
 import Address from '../models/address';
 import Network from '../models/network';
 import Deserializer from './deserializer';
 import ncApi from '../api/nano';
-import { Address as bitcoreAddress, PublicKey as bitcorePublicKey } from 'bitcore-lib';
-import { get, has } from 'lodash';
-import { hexToBuffer, unpackToInt } from '../utils/buffer';
+import { unpackToInt } from '../utils/buffer';
 import { getAddressFromPubkey } from '../utils/address';
 import { NanoContractTransactionParseError } from '../errors';
 import { MethodArgInfo, NanoContractParsedArgument } from './types';
 
-
 class NanoContractTransactionParser {
   blueprintId: string;
+
   method: string;
+
   publicKey: string;
+
   address: Address | null;
+
   args: string | null;
+
   parsedArgs: NanoContractParsedArgument[] | null;
 
   constructor(blueprintId: string, method: string, publicKey: string, args: string | null) {
@@ -61,10 +64,16 @@ class NanoContractTransactionParser {
     const blueprintInformation = await ncApi.getBlueprintInformation(this.blueprintId);
     if (!has(blueprintInformation, `public_methods.${this.method}`)) {
       // If this.method is not in the blueprint information public methods, then there's an error
-      throw new NanoContractTransactionParseError('Failed to parse nano contract transaction. Method not found.');
+      throw new NanoContractTransactionParseError(
+        'Failed to parse nano contract transaction. Method not found.'
+      );
     }
 
-    const methodArgs = get(blueprintInformation, `public_methods.${this.method}.args`, []) as MethodArgInfo[];
+    const methodArgs = get(
+      blueprintInformation,
+      `public_methods.${this.method}.args`,
+      []
+    ) as MethodArgInfo[];
     let argsBuffer = Buffer.from(this.args, 'hex');
     let size: number;
     for (const arg of methodArgs) {

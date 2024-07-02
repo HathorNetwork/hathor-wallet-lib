@@ -3,7 +3,8 @@ import Network from '../../../src/models/network';
 import HathorWalletServiceWallet from '../../../src/wallet/wallet';
 import config from '../../../src/config';
 
-const seed = 'connect sunny silent cabin leopard start turtle tortoise dial timber woman genre pave tuna rice indicate gown draft palm collect retreat meadow assume spray';
+const seed =
+  'connect sunny silent cabin leopard start turtle tortoise dial timber woman genre pave tuna rice indicate gown draft palm collect retreat meadow assume spray';
 
 test('use testnet tx mining when network is testnet', async () => {
   config.setWalletServiceBaseUrl('https://wallet-service.testnet.hathor.network/');
@@ -29,7 +30,7 @@ test('use mainnet tx mining when network is mainnet', async () => {
   const wallet = new HathorWalletServiceWallet({
     requestPassword,
     seed,
-    network
+    network,
   });
 
   const client = await axiosInstance(wallet, false);

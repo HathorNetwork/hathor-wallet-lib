@@ -5,12 +5,14 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { get } from 'lodash';
 import Connection from '../../../src/new/connection';
 import {
   DEBUG_LOGGING,
   FULLNODE_URL,
   NETWORK_NAME,
-  TX_TIMEOUT_DEFAULT, WALLET_CONSTANTS
+  TX_TIMEOUT_DEFAULT,
+  WALLET_CONSTANTS,
 } from '../configuration/test-constants';
 import HathorWallet from '../../../src/new/wallet';
 import walletUtils from '../../../src/utils/wallet';
@@ -19,7 +21,6 @@ import { delay } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 import { MemoryStore, Storage } from '../../../src/storage';
 import { TxHistoryProcessingStatus } from '../../../src/types';
-import { get } from 'lodash';
 
 /**
  * @typedef SendTxResponse
@@ -135,22 +136,16 @@ export async function generateWalletHelperRO(options) {
   // Only fetch a precalculated wallet if the input does not offer a specific one
   if (!options.xpub) {
     walletData = precalculationHelpers.test.getPrecalculatedWallet();
-    xpub = walletUtils.getXPubKeyFromSeed(
-      walletData.words,
-      { networkName: 'testnet' },
-    );
+    xpub = walletUtils.getXPubKeyFromSeed(walletData.words, { networkName: 'testnet' });
   } else {
     walletData.addresses = options.preCalculatedAddresses;
     xpub = options.xpub;
   }
 
-  const accessData = walletUtils.generateAccessDataFromXpub(
-    xpub,
-    {
-      multisig: options.multisig,
-      hardware: options.hardware,
-    }
-  );
+  const accessData = walletUtils.generateAccessDataFromXpub(xpub, {
+    multisig: options.multisig,
+    hardware: options.hardware,
+  });
   const store = new MemoryStore();
   await store.saveAccessData(accessData);
   const storage = new Storage(store);
@@ -195,11 +190,12 @@ export async function generateMultisigWalletHelper(parameters) {
     connection: generateConnection(),
     password: DEFAULT_PASSWORD,
     pinCode: DEFAULT_PIN_CODE,
-    preCalculatedAddresses: parameters.preCalculatedAddresses || WALLET_CONSTANTS.multisig.addresses,
+    preCalculatedAddresses:
+      parameters.preCalculatedAddresses || WALLET_CONSTANTS.multisig.addresses,
     multisig: {
       pubkeys: parameters.pubkeys || multisigWalletsData.pubkeys,
       numSignatures: parameters.numSignatures || 3,
-    }
+    },
   };
   const mhWallet = new HathorWallet(walletConfig);
   await mhWallet.start();
@@ -212,7 +208,7 @@ export async function generateMultisigWalletHelper(parameters) {
 export async function stopAllWallets() {
   let hWallet;
   // Stop all wallets that were started with this helper
-  while (hWallet = startedWallets.pop()) {
+  while ((hWallet = startedWallets.pop())) {
     try {
       await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
     } catch (e) {
@@ -237,12 +233,7 @@ export async function stopAllWallets() {
  * @return {Promise<CreateNewTokenResponse>}
  */
 export async function createTokenHelper(hWallet, name, symbol, amount, options) {
-  const newTokenResponse = await hWallet.createNewToken(
-    name,
-    symbol,
-    amount,
-    options,
-  );
+  const newTokenResponse = await hWallet.createNewToken(name, symbol, amount, options);
   const tokenUid = newTokenResponse.hash;
   await waitForTxReceived(hWallet, tokenUid);
   await waitUntilNextTimestamp(hWallet, tokenUid);
@@ -356,7 +347,7 @@ async function updateInputsSpentBy(hWallet, tx) {
 
     if (input.index > inputTx.outputs.length - 1) {
       // Invalid output index
-      throw new Error('Try to get output in an index that doesn\'t exist.');
+      throw new Error("Try to get output in an index that doesn't exist.");
     }
 
     const output = inputTx.outputs[input.index];
@@ -462,7 +453,7 @@ export async function waitTxConfirmed(hWallet, txId, timeout) {
     }
 
     try {
-      while (await getTxFirstBlock(hWallet, txId) === null) {
+      while ((await getTxFirstBlock(hWallet, txId)) === null) {
         await delay(1000);
       }
     } catch {
