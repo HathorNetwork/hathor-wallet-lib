@@ -639,15 +639,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
         if (data.status.status === 'ready') {
           clearInterval(pollIntervalTimer);
-          return resolve();
-        }
-        if (data.status.status !== 'creating') {
+          resolve();
+        } else if (data.status.status !== 'creating') {
           // Only possible states are 'ready', 'creating' and 'error', if status
           // is not ready or creating, we should reject the promise
           clearInterval(pollIntervalTimer);
-          return reject(
-            new WalletRequestError('Error getting wallet status.', { cause: data.status })
-          );
+          reject(new WalletRequestError('Error getting wallet status.', { cause: data.status }));
         }
       }, WALLET_STATUS_POLLING_INTERVAL);
     });

@@ -12,6 +12,7 @@ import { METADATA_RETRY_LIMIT, DOWNLOAD_METADATA_RETRY_INTERVAL } from '../const
 import { GetDagMetadataApiError } from '../errors';
 
 const metadataApi = {
+  // eslint-disable-next-line consistent-return -- The return is consistent, but too complex for the rule
   async getDagMetadata(id: string, network: string, options = {}) {
     type optionsType = {
       retries: number;
