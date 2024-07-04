@@ -98,8 +98,9 @@ class MineTransaction extends EventEmitter {
   /**
    * Used to handle errors in requests to the tx mining API
    *
-   * @param error: The error that was received from the axiosInstance
+   * @param error The error that was received from the axiosInstance
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- To fix this would require changing tests
   handleRequestError(error: any) {
     if (error.response && error.response.status === 429) {
       this.emit('error', rateLimitExceededError);

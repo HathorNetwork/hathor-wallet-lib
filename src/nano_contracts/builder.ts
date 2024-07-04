@@ -18,7 +18,12 @@ import {
 import Serializer from './serializer';
 import HathorWallet from '../new/wallet';
 import { NanoContractTransactionError } from '../errors';
-import { NanoContractActionType, NanoContractAction, MethodArgInfo } from './types';
+import {
+  NanoContractActionType,
+  NanoContractAction,
+  MethodArgInfo,
+  NanoContractArgumentApiInputType,
+} from './types';
 import ncApi from '../api/nano';
 import { validateBlueprintMethodArgs } from './utils';
 
@@ -34,7 +39,7 @@ class NanoContractTransactionBuilder {
 
   caller: Buffer | null;
 
-  args: any[] | null;
+  args: NanoContractArgumentApiInputType[] | null;
 
   transaction: NanoContract | null;
 
@@ -94,7 +99,7 @@ class NanoContractTransactionBuilder {
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  setArgs(args: any[]) {
+  setArgs(args: NanoContractArgumentApiInputType[]) {
     this.args = args;
     return this;
   }

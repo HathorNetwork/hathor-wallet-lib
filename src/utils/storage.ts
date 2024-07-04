@@ -173,7 +173,7 @@ export async function* loadAddressHistory(
       >;
       try {
         response = await walletApi.getAddressHistoryForAwait(addrsToSearch, firstHash);
-      } catch (e: any) {
+      } catch (e: unknown) {
         if (!axios.isAxiosError(e)) {
           // We only treat AxiosError
           throw e;

@@ -34,6 +34,7 @@ export function hashData(
     pbkdf2Hasher = 'sha1',
   }: { salt?: string; iterations?: number; pbkdf2Hasher?: string } = {}
 ): { hash: string; salt: string; iterations: number; pbkdf2Hasher: string } {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- HasherStatic type is not exported by its lib
   const hashers = new Map<string, any>([
     ['sha1', CryptoJS.algo.SHA1],
     ['sha256', CryptoJS.algo.SHA256],

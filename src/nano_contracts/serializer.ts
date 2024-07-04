@@ -6,6 +6,7 @@
  */
 
 import { hexToBuffer, intToBytes, floatToBytes, signedIntToBytes } from '../utils/buffer';
+import { NanoContractArgumentType } from './types';
 
 // Number of bytes used to serialize the size of the value
 const SERIALIZATION_SIZE_LEN = 2;
@@ -38,7 +39,7 @@ class Serializer {
    * @memberof Serializer
    * @inner
    */
-  serializeFromType(value: any, type: string): Buffer {
+  serializeFromType(value: NanoContractArgumentType, type: string): Buffer {
     if (type.endsWith('?')) {
       // This is an optional
       const optionalType = type.slice(0, -1);
@@ -51,15 +52,15 @@ class Serializer {
 
     switch (type) {
       case 'str':
-        return this.fromString(value);
+        return this.fromString(value as string);
       case 'bytes':
-        return this.fromBytes(value);
+        return this.fromBytes(value as Buffer);
       case 'int':
-        return this.fromInt(value);
+        return this.fromInt(value as number);
       case 'float':
-        return this.fromFloat(value);
+        return this.fromFloat(value as number);
       case 'bool':
-        return this.fromBool(value);
+        return this.fromBool(value as boolean);
       default:
         throw new Error(`Invalid type. ${type}.`);
     }
@@ -137,7 +138,7 @@ class Serializer {
    * @memberof Serializer
    * @inner
    */
-  fromList(value: any[], type: string): Buffer {
+  fromList(value: NanoContractArgumentType[], type: string): Buffer {
     const ret: Buffer[] = [];
     this.pushLenValue(ret, value.length);
     for (const v of value) {
@@ -160,7 +161,7 @@ class Serializer {
    * @memberof Serializer
    * @inner
    */
-  fromOptional(value: any, type: string): Buffer {
+  fromOptional(value: NanoContractArgumentType, type: string): Buffer {
     if (value === null) {
       return Buffer.from([0]);
     }
