@@ -23,8 +23,6 @@ export default class Queue<T = unknown> {
   private length: number;
 
   constructor() {
-    this.head;
-    this.last;
     this.length = 0;
   }
 
