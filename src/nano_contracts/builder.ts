@@ -22,7 +22,7 @@ import {
   NanoContractActionType,
   NanoContractAction,
   MethodArgInfo,
-  NanoContractArgumentType,
+  NanoContractArgumentApiInputType,
 } from './types';
 import ncApi from '../api/nano';
 import { validateBlueprintMethodArgs } from './utils';
@@ -39,7 +39,7 @@ class NanoContractTransactionBuilder {
 
   caller: Buffer | null;
 
-  args: NanoContractArgumentType[] | null;
+  args: NanoContractArgumentApiInputType[] | null;
 
   transaction: NanoContract | null;
 
@@ -99,7 +99,7 @@ class NanoContractTransactionBuilder {
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  setArgs(args: NanoContractArgumentType[]) {
+  setArgs(args: NanoContractArgumentApiInputType[]) {
     this.args = args;
     return this;
   }

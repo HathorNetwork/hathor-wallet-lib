@@ -11,7 +11,8 @@ export enum NanoContractActionType {
   WITHDRAWAL = 'withdrawal',
 }
 
-export type NanoContractArgumentType = string | Buffer | number | boolean;
+export type NanoContractArgumentApiInputType = string | number | boolean | null;
+export type NanoContractArgumentType = NanoContractArgumentApiInputType | Buffer;
 
 export interface NanoContractAction {
   type: NanoContractActionType.DEPOSIT | NanoContractActionType.WITHDRAWAL;
@@ -75,7 +76,7 @@ export interface NanoContractHistoryAPIResponse {
 
 interface StateValueSuccess {
   // State value return
-  value: NanoContractArgumentType;
+  value: NanoContractArgumentApiInputType;
 }
 
 interface StateValueError {
