@@ -393,7 +393,7 @@ export async function processHistory(
  * @param {Set<string>} tokens - set of tokens to fetch and save.
  * @returns {Promise<void>}
  */
-async function updateTokensData(storage: IStorage, tokens: Set<string>): Promise<void> {
+export async function _updateTokensData(storage: IStorage, tokens: Set<string>): Promise<void> {
   async function fetchTokenData(uid: string): Promise<
     | {
         success: true;
@@ -422,8 +422,8 @@ async function updateTokensData(storage: IStorage, tokens: Set<string>): Promise
               name: string;
               symbol: string;
             }
-          | { success: false; message: string } = await new Promise(resolve => {
-          return walletApi.getGeneralTokenInfo(uid, resolve);
+          | { success: false; message: string } = await new Promise((resolve, reject) => {
+          walletApi.getGeneralTokenInfo(uid, resolve).catch(err => reject(err));
         });
         return result;
       } catch (err: unknown) {
@@ -490,7 +490,7 @@ async function updateWalletMetadataFromProcessedTxData(
   // Update token config
   // Up until now we have updated the tokens metadata, but the token config may be missing
   // So we will check if we have each token found, if not we will fetch the token config from the api.
-  await updateTokensData(storage, tokens);
+  await _updateTokensData(storage, tokens);
 }
 
 /**
