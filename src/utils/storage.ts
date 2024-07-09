@@ -434,7 +434,9 @@ export async function _updateTokensData(storage: IStorage, tokens: Set<string>):
         // Increase the retry counter and try again
         retryCount += 1;
         // Wait `delay` ms before another attempt
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise(resolve => {
+          setTimeout(resolve, delay);
+        });
         continue;
       }
     }

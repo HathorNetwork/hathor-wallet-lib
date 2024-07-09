@@ -90,7 +90,7 @@ const tokens = {
       name: string;
       symbol: string;
     }>(resolve => {
-      return walletApi.getGeneralTokenInfo(tokenData.uid, resolve);
+      walletApi.getGeneralTokenInfo(tokenData.uid, resolve);
     });
 
     if (!response.success) {
