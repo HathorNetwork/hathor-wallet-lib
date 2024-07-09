@@ -5,15 +5,35 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import axios from 'axios';
+import { AxiosError } from 'axios';
 import explorerServiceAxios from './explorerServiceAxios';
 import helpers from '../utils/helpers';
 import { METADATA_RETRY_LIMIT, DOWNLOAD_METADATA_RETRY_INTERVAL } from '../constants';
 import { GetDagMetadataApiError } from '../errors';
 
+type MetadataApiResponse = {
+  id: string;
+  nft?: boolean;
+  banned?: boolean;
+  verified?: boolean;
+  reason?: string;
+  nft_media?: { file: string; type: string; loop: boolean; autoplay: boolean; mime_type?: string };
+};
+
 const metadataApi = {
-  // eslint-disable-next-line consistent-return -- The return is consistent, but too complex for the rule
-  async getDagMetadata(id: string, network: string, options = {}) {
+  /**
+   * Returns the Dag Metadata for a given transaction id
+   * @param id Tx Identifier
+   * @param network Network name
+   * @param options
+   * @param [options.retries] Number of retries that the method will attempt before rejecting
+   * @param [options.retryInterval] Interval, in miliseconds, between each attempt
+   */
+  async getDagMetadata(
+    id: string,
+    network: string,
+    options: { retries?: number; retryInterval?: number } = {}
+  ) {
     type optionsType = {
       retries: number;
       retryInterval: number;
@@ -26,21 +46,25 @@ const metadataApi = {
 
     const { retryInterval } = newOptions;
     let { retries } = newOptions;
+    let metaData: null | MetadataApiResponse = null;
     while (retries >= 0) {
       const client = await explorerServiceAxios(network);
       try {
         const response = await client.get('metadata/dag', { params: { id } });
         if (response.data) {
-          return response.data;
+          metaData = response.data;
+          break;
         }
         // Error downloading metadata
         // throw Error and the catch will handle it
         throw new GetDagMetadataApiError('Invalid metadata API response.');
       } catch (e) {
-        if (axios.isAxiosError(e) && e.response && e.response.status === 404) {
+        if ((e as AxiosError).response?.status === 404) {
+          // 404 is not flagged as an error by our current Axios configuration
           // No need to do anything, the metadata for this token was not found
           // There is no error here, we just return null
-          return null;
+          metaData = null;
+          break;
         }
         if (!(e instanceof Error)) {
           // This is for the typescript compiler, since it doesn't know that e is an Error
@@ -57,6 +81,7 @@ const metadataApi = {
         }
       }
     }
+    return metaData;
   },
 };
 
