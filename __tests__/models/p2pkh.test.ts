@@ -18,7 +18,6 @@ test('createScript', () => {
   // Mainnet p2pkh
   const addr2 = new Address('HNBUHhzkVuSFUNW21HrajUFNUiX8JrznSb', { network: mainnet });
 
-  const timestamp = 775796400;
   const scriptTestnet = '76a914729181c0f3f2e3f589cc10facbb9332e0c309a7788ac';
   const scriptTestnetTimelocked = '042e3db6b06f76a914729181c0f3f2e3f589cc10facbb9332e0c309a7788ac';
   const scriptMainnet = '76a914abca4eadc059d324ce46995c41065d71860ad7b088ac';

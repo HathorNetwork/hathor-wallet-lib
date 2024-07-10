@@ -7,7 +7,6 @@
 
 import { TOKEN_AUTHORITY_MASK, NATIVE_TOKEN_UID } from '../../src/constants';
 import SendTransaction, {
-  ISendDataOutput,
   isDataOutput,
   checkUnspentInput,
   prepareSendTokensData,

@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { HDPrivateKey } from 'bitcore-lib';
 import Address from '../../src/models/address';
 import HathorWallet from '../../src/new/wallet';
 import { TxNotFoundError, WalletFromXPubGuard } from '../../src/errors';
@@ -18,7 +17,6 @@ import {
   TOKEN_MINT_MASK,
   TOKEN_MELT_MASK,
 } from '../../src/constants';
-import transactionUtils from '../../src/utils/transaction';
 import { MemoryStore, Storage } from '../../src/storage';
 import Queue from '../../src/models/queue';
 import { WalletType } from '../../src/types';
@@ -709,9 +707,7 @@ test('start', async () => {
   const seed =
     'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
 
-  let accessData;
   async function saveAccessData(data) {
-    accessData = data;
     await store.saveAccessData(data);
   }
   storage.saveAccessData = saveAccessData;

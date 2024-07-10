@@ -55,6 +55,7 @@ module.exports = {
       {
         vars: 'all',
         args: 'none', // We should change to args: after-used
+        varsIgnorePattern: '^_$', // Allow `_` variables to be unused
       },
     ],
     'no-underscore-dangle': 0,
@@ -71,6 +72,7 @@ module.exports = {
         ts: 'never',
       },
     ],
+    'jest/no-disabled-tests': 'off', // It's useful to have skipped tests on our suites
 
     /* These last rules would require a large effort and potentially cause breaking changes,
      * So they will be left out for now and dealt with separately.

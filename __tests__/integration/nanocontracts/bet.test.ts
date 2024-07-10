@@ -3,19 +3,16 @@ import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import {
   generateMultisigWalletHelper,
   generateWalletHelper,
-  stopAllWallets,
   waitForTxReceived,
-  waitUntilNextTimestamp,
-  waitNextBlock,
   waitTxConfirmed,
 } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../src/constants';
 import ncApi from '../../../src/api/nano';
-import helpersUtils from '../../../src/utils/helpers';
 import dateFormatter from '../../../src/utils/date';
-import { bufferToHex, hexToBuffer } from '../../../src/utils/buffer';
+import { bufferToHex } from '../../../src/utils/buffer';
 import Address from '../../../src/models/address';
 import P2PKH from '../../../src/models/p2pkh';
+import P2SH from '../../../src/models/p2sh';
 import {
   getOracleBuffer,
   getOracleInputData,
@@ -327,7 +324,6 @@ describe('full cycle of bet nano contract', () => {
     const address1 = await hWallet.getAddressAtIndex(1);
     const dateLastBet = dateFormatter.dateToTimestamp(new Date()) + 6000;
     const network = hWallet.getNetworkObject();
-    const blueprintId = '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595';
 
     // Initialize missing blueprintId
     const oracleData = getOracleBuffer(address1, network);

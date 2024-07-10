@@ -25,7 +25,6 @@ import {
   TOKEN_MELT_MASK,
   DEFAULT_TX_VERSION,
 } from '../../src/constants';
-import { InvalidPartialTxError } from '../../src/errors.js';
 
 import { MemoryStore, Storage } from '../../src/storage';
 import { IUtxo } from '../../src/types';

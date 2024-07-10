@@ -114,7 +114,7 @@ test('getTxBalance', async () => {
     xpub: null,
   });
 
-  const getAllAddressesMock = async function* () {
+  async function* getAllAddressesMock() {
     const addresses: GetAddressesObject[] = [
       {
         address: 'address0',
@@ -136,9 +136,9 @@ test('getTxBalance', async () => {
     for (const address of addresses) {
       yield address;
     }
-  };
+  }
 
-  const spy = jest.spyOn(wallet, 'getAllAddresses').mockImplementation(getAllAddressesMock);
+  jest.spyOn(wallet, 'getAllAddresses').mockImplementation(getAllAddressesMock);
 
   let tx: WsTransaction = {
     ...MOCK_TX,
@@ -1597,11 +1597,6 @@ test('getAddressPrivKey', async () => {
   const seed = defaultWalletSeed;
   const store = new MemoryStore();
   const storage = new Storage(store);
-  const accessData = walletUtils.generateAccessDataFromSeed(seed, {
-    networkName: 'testnet',
-    password: '1234',
-    pin: '1234',
-  });
 
   jest
     .spyOn(HathorWalletServiceWallet.prototype, 'pollForWalletStatus')
@@ -1654,11 +1649,6 @@ test('signMessageWithAddress', async () => {
   const seed = defaultWalletSeed;
   const store = new MemoryStore();
   const storage = new Storage(store);
-  const accessData = walletUtils.generateAccessDataFromSeed(seed, {
-    networkName: 'testnet',
-    password: '1234',
-    pin: '1234',
-  });
 
   jest
     .spyOn(HathorWalletServiceWallet.prototype, 'pollForWalletStatus')
