@@ -6,10 +6,8 @@
  */
 
 import CryptoJS from 'crypto-js';
-import Mnemonic from 'bitcore-mnemonic';
 import bitcore from 'bitcore-lib';
 import { DecryptionError, InvalidPasswdError } from '../../src/errors';
-import { HD_WALLET_ENTROPY } from '../../src/constants';
 import {
   hashData,
   validateHash,
@@ -19,7 +17,6 @@ import {
   signMessage,
   verifyMessage,
 } from '../../src/utils/crypto';
-import Network from '../../src/models/network';
 
 test('validateHash', () => {
   const data = 'a-valid-data';

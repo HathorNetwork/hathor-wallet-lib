@@ -258,6 +258,7 @@ export interface TransactionFullObject {
 
 export interface IStopWalletParams {
   cleanStorage?: boolean;
+  cleanAddresses?: boolean;
 }
 
 export interface DelegateAuthorityOptions {

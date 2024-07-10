@@ -205,18 +205,6 @@ export async function generateMultisigWalletHelper(parameters) {
   return mhWallet;
 }
 
-export async function stopAllWallets() {
-  let hWallet;
-  // Stop all wallets that were started with this helper
-  while ((hWallet = startedWallets.pop())) {
-    try {
-      await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
-    } catch (e) {
-      loggers.test.error(e.stack);
-    }
-  }
-}
-
 /**
  * Creates a token and awaits for it to be processed by the wallet.
  * @param {HathorWallet} hWallet
@@ -276,11 +264,10 @@ export function waitForWalletReady(hWallet) {
  */
 export async function waitForTxReceived(hWallet, txId, timeout) {
   const startTime = Date.now().valueOf();
-  let timeoutHandler;
   let timeoutReached = false;
   const timeoutPeriod = timeout || TX_TIMEOUT_DEFAULT;
   // Timeout handler
-  timeoutHandler = setTimeout(() => {
+  const timeoutHandler = setTimeout(() => {
     timeoutReached = true;
   }, timeoutPeriod);
 
