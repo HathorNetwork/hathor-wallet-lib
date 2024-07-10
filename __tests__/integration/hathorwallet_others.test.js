@@ -593,9 +593,7 @@ describe('getUtxosForAmount', () => {
       ],
     });
     // Explicitly filtering for HTR
-    await expect(
-      hWallet.getUtxosForAmount(6, { token: NATIVE_TOKEN_UID })
-    ).resolves.toStrictEqual({
+    await expect(hWallet.getUtxosForAmount(6, { token: NATIVE_TOKEN_UID })).resolves.toStrictEqual({
       changeAmount: expect.any(Number),
       utxos: [expect.objectContaining({ tokenId: NATIVE_TOKEN_UID })],
     });
