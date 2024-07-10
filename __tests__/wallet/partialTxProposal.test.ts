@@ -147,13 +147,13 @@ test('addSend', async () => {
    */
   await proposal.addSend(FAKE_UID, 10);
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(spyInput).toBeCalledWith(FAKE_TXID, 1, 10, ADDR1, {
+  expect(spyInput).toHaveBeenCalledWith(FAKE_TXID, 1, 10, ADDR1, {
     token: FAKE_UID,
     authorities: 0,
     markAsSelected: true,
   });
   expect(spyOutput).not.toHaveBeenCalled();
-  expect(spyUtxos).toBeCalledWith({ token: FAKE_UID, authorities: 0 });
+  expect(spyUtxos).toHaveBeenCalledWith({ token: FAKE_UID, authorities: 0 });
   expect(spyAddr).not.toHaveBeenCalled();
 
   // Mock cleanup
@@ -168,12 +168,12 @@ test('addSend', async () => {
    */
   await proposal.addSend(FAKE_UID, 4, { utxos: utxosOld, changeAddress: ADDR3 });
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(spyInput).toBeCalledWith(FAKE_TXID, 1, 10, ADDR1, {
+  expect(spyInput).toHaveBeenCalledWith(FAKE_TXID, 1, 10, ADDR1, {
     token: FAKE_UID,
     authorities: 0,
     markAsSelected: true,
   });
-  expect(spyOutput).toBeCalledWith(
+  expect(spyOutput).toHaveBeenCalledWith(
     FAKE_UID,
     6, // change 10 - 4 = 6
     ADDR3,
@@ -194,13 +194,13 @@ test('addSend', async () => {
    */
   await proposal.addSend(FAKE_UID, 8, { markAsSelected: false });
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(spyUtxos).toBeCalledWith({ token: FAKE_UID, authorities: 0 });
-  expect(spyInput).toBeCalledWith(FAKE_TXID, 1, 10, ADDR1, {
+  expect(spyUtxos).toHaveBeenCalledWith({ token: FAKE_UID, authorities: 0 });
+  expect(spyInput).toHaveBeenCalledWith(FAKE_TXID, 1, 10, ADDR1, {
     token: FAKE_UID,
     authorities: 0,
     markAsSelected: false,
   });
-  expect(spyOutput).toBeCalledWith(
+  expect(spyOutput).toHaveBeenCalledWith(
     FAKE_UID,
     2, // change 10 - 8 = 2
     ADDR2,
@@ -235,7 +235,7 @@ test('addReceive', async () => {
    */
   await proposal.addReceive(FAKE_UID, 99);
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(spyOutput).toBeCalledWith(FAKE_UID, 99, ADDR1, { timelock: null });
+  expect(spyOutput).toHaveBeenCalledWith(FAKE_UID, 99, ADDR1, { timelock: null });
   expect(spyAddr).toHaveBeenCalled();
 
   // Mock cleanup
@@ -248,7 +248,7 @@ test('addReceive', async () => {
    */
   await proposal.addReceive(NATIVE_TOKEN_UID, 180, { address: ADDR2 });
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(spyOutput).toBeCalledWith(NATIVE_TOKEN_UID, 180, ADDR2, { timelock: null });
+  expect(spyOutput).toHaveBeenCalledWith(NATIVE_TOKEN_UID, 180, ADDR2, { timelock: null });
   expect(spyAddr).not.toHaveBeenCalled();
 
   // Remove mocks
@@ -272,8 +272,8 @@ test('addInput', async () => {
    */
   proposal.addInput(FAKE_TXID, 5, 999, ADDR1);
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(spyMark).toBeCalledWith({ txId: FAKE_TXID, index: 5 }, true);
-  expect(spyInput).toBeCalledWith(FAKE_TXID, 5, 999, ADDR1, {
+  expect(spyMark).toHaveBeenCalledWith({ txId: FAKE_TXID, index: 5 }, true);
+  expect(spyInput).toHaveBeenCalledWith(FAKE_TXID, 5, 999, ADDR1, {
     token: NATIVE_TOKEN_UID,
     authorities: 0,
   });
@@ -293,7 +293,7 @@ test('addInput', async () => {
   });
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(spyMark).not.toHaveBeenCalled();
-  expect(spyInput).toBeCalledWith(FAKE_TXID, 20, 70, ADDR2, {
+  expect(spyInput).toHaveBeenCalledWith(FAKE_TXID, 20, 70, ADDR2, {
     token: FAKE_UID,
     authorities: TOKEN_MINT_MASK,
   });
@@ -318,7 +318,7 @@ test('addOutput', async () => {
    */
   proposal.addOutput(FAKE_UID, 999, ADDR1);
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(spyOutput).toBeCalledWith(999, scriptFromAddressP2PKH(ADDR1), {
+  expect(spyOutput).toHaveBeenCalledWith(999, scriptFromAddressP2PKH(ADDR1), {
     token: FAKE_UID,
     authorities: 0,
     isChange: false,
@@ -333,7 +333,7 @@ test('addOutput', async () => {
    */
   proposal.addOutput(NATIVE_TOKEN_UID, 456, ADDR4, { isChange: true });
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(spyOutput).toBeCalledWith(456, scriptFromAddressP2SH(ADDR4), {
+  expect(spyOutput).toHaveBeenCalledWith(456, scriptFromAddressP2SH(ADDR4), {
     token: NATIVE_TOKEN_UID,
     authorities: 0,
     isChange: true,
@@ -378,13 +378,11 @@ test('setSignatures', async () => {
   const spyComplete = jest
     .spyOn(proposal.partialTx, 'isComplete')
     .mockImplementationOnce(() => false);
-  expect(() => proposal.setSignatures(serializedSignatures)).toThrowError(
-    'Cannot sign incomplete data'
-  );
+  expect(() => proposal.setSignatures(serializedSignatures)).toThrow('Cannot sign incomplete data');
 
   // Ensure it doesn't allow adding signatures for the wrong tx hash
   spyComplete.mockImplementationOnce(() => true);
-  expect(() => proposal.setSignatures(serializedSignatures)).toThrowError(
+  expect(() => proposal.setSignatures(serializedSignatures)).toThrow(
     'Signatures do not match tx hash'
   );
 

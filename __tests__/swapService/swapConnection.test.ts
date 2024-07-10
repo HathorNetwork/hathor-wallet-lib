@@ -4,7 +4,8 @@ import GenericWebSocket from '../../src/websocket';
 
 const atomicSwapServiceWs = 'http://localhost:3002'; // mock value
 
-let sendMessageSpy, setupSpy;
+let sendMessageSpy;
+let setupSpy;
 
 beforeAll(() => {
   sendMessageSpy = jest

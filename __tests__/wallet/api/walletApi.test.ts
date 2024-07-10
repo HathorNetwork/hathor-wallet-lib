@@ -35,7 +35,7 @@ test('getAddresses', async () => {
     ),
   });
 
-  await expect(walletApi.getAddresses(wallet, 0)).rejects.toThrowError(
+  await expect(walletApi.getAddresses(wallet, 0)).rejects.toThrow(
     'Error getting wallet addresses.'
   );
 
@@ -51,7 +51,7 @@ test('getAddresses', async () => {
     ),
   });
 
-  await expect(walletApi.getAddresses(wallet, 0)).rejects.toThrowError(
+  await expect(walletApi.getAddresses(wallet, 0)).rejects.toThrow(
     'Error getting wallet addresses.'
   );
 
