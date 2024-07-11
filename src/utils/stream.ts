@@ -7,17 +7,20 @@ import {
 
 interface IStreamSyncHistoryVertex {
   type: 'stream:history-xpub:vertex',
-  vertex: IHistoryTx,
+  id: string,
+  data: IHistoryTx,
 }
 
 interface IStreamSyncHistoryAddress {
   type: 'stream:history-xpub:address',
+  id: string,
   address: string,
-  path: string,
+  index: number,
 }
 
 interface IStreamSyncHistoryEnd {
   type: 'stream:history-xpub:end',
+  id: string,
 }
 
 type IStreamSyncHistoryData = IStreamSyncHistoryVertex | IStreamSyncHistoryAddress | IStreamSyncHistoryEnd;
@@ -68,19 +71,21 @@ export async function streamSyncHistory(
     };
 
     const listener = async (wsData: IStreamSyncHistoryData) => {
+      if (wsData.id !== 'cafe') {
+        // Check that the stream id is the same we sent
+        return;
+      }
       if (isStreamSyncHistoryVertex(wsData)) {
         // add to history
-        await storage.addTx(wsData.vertex);
+        await storage.addTx(wsData.data);
         await updateUI();
       }
       if (isStreamSyncHistoryAddress(wsData)) {
         // Register address on storage
         // The address will be subscribed on the server side
-        const pathSplit = wsData.path.split('/');
-        const index = parseInt(pathSplit[pathSplit.length - 1], 10);
         await storage.saveAddress({
           base58: wsData.address,
-          bip32AddressIndex: index,
+          bip32AddressIndex: wsData.index,
         });
         await updateUI();
       }
