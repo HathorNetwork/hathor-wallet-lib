@@ -32,12 +32,7 @@ import P2SHSignature from '../models/p2sh_signature';
 import { SCANNING_POLICY, TxHistoryProcessingStatus, WalletType } from '../types';
 import transactionUtils from '../utils/transaction';
 import Queue from '../models/queue';
-import {
-  syncHistory,
-  reloadStorage,
-  scanPolicyStartAddresses,
-  checkScanningPolicy,
-} from '../utils/storage';
+import { reloadStorage, scanPolicyStartAddresses, checkScanningPolicy } from '../utils/storage';
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../utils/address';
@@ -430,10 +425,9 @@ class HathorWallet extends EventEmitter {
         if (this.firstConnection) {
           this.firstConnection = false;
           const addressesToLoad = await scanPolicyStartAddresses(this.storage);
-          await syncHistory(
+          await this.storage.syncHistory(
             addressesToLoad.nextIndex,
             addressesToLoad.count,
-            this.storage,
             this.conn
           );
         } else {
@@ -1238,10 +1232,9 @@ class HathorWallet extends EventEmitter {
     // check address scanning policy and load more addresses if needed
     const loadMoreAddresses = await checkScanningPolicy(this.storage);
     if (loadMoreAddresses !== null) {
-      await syncHistory(
+      await this.storage.syncHistory(
         loadMoreAddresses.nextIndex,
         loadMoreAddresses.count,
-        this.storage,
         this.conn,
         processHistory
       );

@@ -31,10 +31,15 @@ class WalletConnection extends BaseConnection {
 
   static CONNECTED: number = 2;
 
+  currentStreamId: string | null = null;
+
+  streamAbortController: AbortController | null = null;
+
   constructor(options: ConnectionParams) {
     super(options);
 
     this.handleWalletMessage = this.handleWalletMessage.bind(this);
+    this.on('stream-end', this.streamEndHandler.bind(this));
 
     const wsOptions: {
       connectionTimeout?: number;
@@ -58,7 +63,8 @@ class WalletConnection extends BaseConnection {
     }
 
     this.websocket.on('is_online', this.onConnectionChange);
-    this.websocket.on('wallet', this.handleWalletMessage);
+    this.websocket.on('wallet', this.handleWalletMessage.bind(this));
+    this.websocket.on('stream', this.handleStreamMessage.bind(this));
 
     this.websocket.on('height_updated', height => {
       this.emit('best-block-update', height);
@@ -98,6 +104,77 @@ class WalletConnection extends BaseConnection {
       this.websocket.on('dashboard', handleWsDashboard(storage));
       this.websocket.on('subscribe_address', handleSubscribeAddress());
     }
+  }
+
+  streamEndHandler() {
+    this.currentStreamId = null;
+    this.streamAbortController?.abort();
+    this.streamAbortController = null;
+  }
+
+  lockStream(streamId: string): boolean {
+    if (this.currentStreamId === null) {
+      this.currentStreamId = streamId;
+      this.streamAbortController = new AbortController();
+      return true;
+    }
+    return false;
+  }
+
+  startStreamingHistory(id: string, xpubkey: string) {
+    if (this.currentStreamId !== id) {
+      throw new Error('There is an on-going stream, cannot start a second one');
+    }
+    if (this.websocket) {
+      const data = JSON.stringify({
+        id,
+        xpub: xpubkey,
+        type: 'request:history:xpub',
+      });
+      this.websocket.sendMessage(data);
+    }
+  }
+
+  sendManualStreamingHistory(id: string, addresses: [number, string][], first: boolean) {
+    if (this.currentStreamId !== id) {
+      throw new Error('There is an on-going stream, cannot start a second one');
+    }
+    if (this.websocket) {
+      const data = JSON.stringify({
+        id,
+        first,
+        addresses,
+        type: 'request:history:manual',
+      });
+      this.websocket.sendMessage(data);
+    }
+  }
+
+  async stopStream() {
+    if (this.currentStreamId === null) {
+      return;
+    }
+    await new Promise<void>((resolve, reject) => {
+      if (this.streamAbortController === null) {
+        // We cannot have an active stream an a null abort controller
+        reject();
+        return;
+      }
+      // Create a timeout so we do not wait indefinetely
+      // It it reaches here we should reject since something went wrong.
+      const timer = setTimeout(() => {
+        reject();
+      }, 10000);
+
+      // We have an active stream.
+      // We will wait for the stream to end then resolve.
+      this.once('stream-end', () => {
+        clearTimeout(timer);
+        resolve();
+      });
+      // Send the abort signal
+      this.streamAbortController.abort();
+    });
   }
 }
 

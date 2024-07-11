@@ -19,17 +19,37 @@ import {
   IScanPolicyLoadAddresses,
   isIndexLimitScanPolicy,
   SCANNING_POLICY,
+  HistorySyncMode,
+  HistorySyncFunction,
 } from '../types';
 import walletApi from '../api/wallet';
 import helpers from './helpers';
 import transactionUtils from './transaction';
 import { deriveAddressP2PKH, deriveAddressP2SH } from './address';
+import { xpubStreamSyncHistory, manualStreamSyncHistory } from './stream';
 import {
   NATIVE_TOKEN_UID,
   MAX_ADDRESSES_GET,
   LOAD_WALLET_MAX_RETRY,
   LOAD_WALLET_RETRY_SLEEP,
 } from '../constants';
+
+/**
+ * Get history sync method for a given mode
+ * @param {HistorySyncMode} mode The mode of the stream
+ * @returns {HistorySyncFunction}
+ */
+export function getHistorySyncMethod(mode: HistorySyncMode): HistorySyncFunction {
+  switch (mode) {
+    case HistorySyncMode.STREAM_MANUAL:
+      return manualStreamSyncHistory;
+    case HistorySyncMode.STREAM_XPUB:
+      return xpubStreamSyncHistory;
+    default:
+      // case HistorySyncMode.API
+      return apiSyncHistory;
+  }
+}
 
 /**
  * Derive requested addresses (if not already loaded), save them on storage then return them.
@@ -76,6 +96,9 @@ export async function reloadStorage(
   storage: IStorage,
   connection: FullnodeConnection
 ): Promise<void> {
+  // Stop a stream on this connection if one is running.
+  await connection.stopStream();
+
   // unsub all addresses
   for await (const address of storage.getAllAddresses()) {
     connection.unsubscribeAddress(address.base58);
@@ -88,7 +111,7 @@ export async function reloadStorage(
     await storage.saveAccessData(accessData);
   }
   const addressesToLoad = await scanPolicyStartAddresses(storage);
-  return syncHistory(addressesToLoad.nextIndex, addressesToLoad.count, storage, connection);
+  await storage.syncHistory(addressesToLoad.nextIndex, addressesToLoad.count, connection);
 }
 
 /**
@@ -101,7 +124,7 @@ export async function reloadStorage(
  * @param {FullnodeConnection} connection Connection to the full node
  * @param {boolean} shouldProcessHistory If we should process the history after loading it.
  */
-export async function syncHistory(
+export async function apiSyncHistory(
   startIndex: number,
   count: number,
   storage: IStorage,
