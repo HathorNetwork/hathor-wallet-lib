@@ -309,6 +309,7 @@ describe('full cycle of bet nano contract', () => {
     expect(txHistory).toHaveLength(4);
   };
 
+  /* eslint-disable jest/expect-expect -- All assertions are on the helper function */
   it('bet deposit', async () => {
     await executeTests(hWallet);
   });
@@ -318,6 +319,7 @@ describe('full cycle of bet nano contract', () => {
   it.skip('bet deposit with multisig wallet', async () => {
     await executeTests(mhWallet);
   });
+  /* eslint-enable jest/expect-expect */
 
   it('handle errors', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
