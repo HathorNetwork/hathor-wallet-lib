@@ -58,8 +58,8 @@ class WalletConnection extends BaseConnection {
     }
 
     this.websocket.on('is_online', this.onConnectionChange);
-    this.websocket.on('wallet', this.handleWalletMessage);
-    this.websocket.on('stream', this.handleStreamMessage);
+    this.websocket.on('wallet', this.handleWalletMessage.bind(this));
+    this.websocket.on('stream', this.handleStreamMessage.bind(this));
 
     this.websocket.on('height_updated', height => {
       this.emit('best-block-update', height);
@@ -103,7 +103,8 @@ class WalletConnection extends BaseConnection {
 
   startStreamingHistory(xpubkey: string) {
     if (this.websocket) {
-      this.websocket.sendMessage(JSON.stringify({ type: 'request:history:xpub', id: "cafe", xpub: xpubkey }));
+      const data = JSON.stringify({ type: 'request:history:xpub', id: "cafe", xpub: xpubkey });
+      this.websocket.sendMessage(data);
     }
   }
 }

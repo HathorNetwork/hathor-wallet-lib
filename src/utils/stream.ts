@@ -71,10 +71,10 @@ export async function streamSyncHistory(
     };
 
     const listener = async (wsData: IStreamSyncHistoryData) => {
-      if (wsData.id !== 'cafe') {
-        // Check that the stream id is the same we sent
-        return;
-      }
+      // if (wsData.id !== 'cafe') {
+      //   // Check that the stream id is the same we sent
+      //   return;
+      // }
       if (isStreamSyncHistoryVertex(wsData)) {
         // add to history
         await storage.addTx(wsData.data);
@@ -91,12 +91,14 @@ export async function streamSyncHistory(
       }
       if (isStreamSyncHistoryEnd(wsData)) {
         // cleanup and stop the method.
+        // console.log(`Stopping stream ${Date.now()}`);
         connection.removeListener('stream', listener);
         resolve();
       }
     };
 
     connection.on('stream', listener);
+
     connection.startStreamingHistory(accessData.xpubkey);
   });
 
