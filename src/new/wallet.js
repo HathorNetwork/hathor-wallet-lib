@@ -38,6 +38,7 @@ import {
   scanPolicyStartAddresses,
   checkScanningPolicy,
 } from '../utils/storage';
+import { streamSyncHistory } from '../utils/stream';
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../utils/address';
@@ -430,7 +431,9 @@ class HathorWallet extends EventEmitter {
         if (this.firstConnection) {
           this.firstConnection = false;
           const addressesToLoad = await scanPolicyStartAddresses(this.storage);
-          await syncHistory(
+          // XXX: stream
+          // await syncHistory(
+          await streamSyncHistory(
             addressesToLoad.nextIndex,
             addressesToLoad.count,
             this.storage,
@@ -1238,7 +1241,9 @@ class HathorWallet extends EventEmitter {
     // check address scanning policy and load more addresses if needed
     const loadMoreAddresses = await checkScanningPolicy(this.storage);
     if (loadMoreAddresses !== null) {
-      await syncHistory(
+      // XXX: stream
+      // await syncHistory(
+      await streamSyncHistory(
         loadMoreAddresses.nextIndex,
         loadMoreAddresses.count,
         this.storage,
