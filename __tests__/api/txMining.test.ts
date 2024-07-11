@@ -1,5 +1,5 @@
 import MockAdapter from 'axios-mock-adapter';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import txMiningApi from '../../src/api/txMining';
 
 describe('txMiningApi', () => {
@@ -37,12 +37,15 @@ describe('txMiningApi', () => {
     it('should allow capturing errors in case the server responds with 500', async () => {
       mock.onGet('job-status').reply(500);
 
+      let err: unknown;
       try {
         await txMiningApi.getJobStatus('jobId', () => {});
       } catch (e) {
-        expect(e.message).toEqual('Request failed with status code 500');
-        expect(e.response.status).toEqual(500);
+        err = e;
       }
+      expect(err).toBeInstanceOf(AxiosError);
+      expect((err as AxiosError).message).toEqual('Request failed with status code 500');
+      expect((err as AxiosError).response?.status).toEqual(500);
     });
   });
 
@@ -70,12 +73,14 @@ describe('txMiningApi', () => {
     it('should allow capturing errors in case the server responds with 500', async () => {
       mock.onPost('cancel-job').reply(500);
 
+      let err: unknown;
       try {
         await txMiningApi.cancelJob('jobId', () => {});
       } catch (e) {
-        expect(e.message).toEqual('Request failed with status code 500');
-        expect(e.response.status).toEqual(500);
+        err = e;
       }
+      expect((err as AxiosError).message).toEqual('Request failed with status code 500');
+      expect((err as AxiosError).response?.status).toEqual(500);
     });
   });
 
@@ -98,12 +103,14 @@ describe('txMiningApi', () => {
     it('should allow capturing errors in case the server responds with 500', async () => {
       mock.onGet('health').reply(500);
 
+      let err: unknown;
       try {
         await txMiningApi.getHealth();
       } catch (e) {
-        expect(e.message).toEqual('Request failed with status code 500');
-        expect(e.response.status).toEqual(500);
+        err = e;
       }
+      expect((err as AxiosError).message).toEqual('Request failed with status code 500');
+      expect((err as AxiosError).response?.status).toEqual(500);
     });
   });
 
@@ -138,12 +145,14 @@ describe('txMiningApi', () => {
     it('should allow capturing errors in case the server responds with 500', async () => {
       mock.onPost('submit-job').reply(500);
 
+      let err: unknown;
       try {
         await txMiningApi.submitJob('tx', true, true, 10, () => {});
       } catch (e) {
-        expect(e.message).toEqual('Request failed with status code 500');
-        expect(e.response.status).toEqual(500);
+        err = e;
       }
+      expect((err as AxiosError).message).toEqual('Request failed with status code 500');
+      expect((err as AxiosError).response?.status).toEqual(500);
     });
   });
 });
