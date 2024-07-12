@@ -1133,7 +1133,8 @@ test('instantiate a new wallet without web socket initialization', async () => {
   /**
    * Wallet change its state to ready
    */
-  const spyOnGetNewAddress = jest.spyOn(wallet as any, 'getNewAddresses').mockImplementation(() => {
+  // @ts-expect-error -- getNewAddress is a private method, so invisible for this typing
+  const spyOnGetNewAddress = jest.spyOn(wallet, 'getNewAddresses').mockImplementation(() => {
     return Promise.resolve();
   });
   const spyOnSetupConnection = jest.spyOn(wallet, 'setupConnection');
@@ -1141,7 +1142,8 @@ test('instantiate a new wallet without web socket initialization', async () => {
   // get original method implementation for the private method onWalletReady
   wallet.walletId = 'wallet-id';
   const onWalletReadyImplementation = jest
-    .spyOn(wallet as any, 'onWalletReady')
+    // @ts-expect-error -- onWalletReady is a private method that's invisible to the wallet type
+    .spyOn(wallet, 'onWalletReady')
     .getMockImplementation();
   // call method binding to the wallet instance
   await onWalletReadyImplementation?.call(wallet);
