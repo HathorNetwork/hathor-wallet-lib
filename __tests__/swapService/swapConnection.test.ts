@@ -29,8 +29,7 @@ describe('start', () => {
   it('should handle a websocket failure', () => {
     const atomicConnection = new AtomicSwapServiceConnection({ wsURL: atomicSwapServiceWs });
 
-    // Forcing an error
-    // @ts-ignore
+    // @ts-expect-error -- Forcing an error
     atomicConnection.websocket = null;
 
     expect(() => atomicConnection.start()).toThrow('Websocket is not initialized');
