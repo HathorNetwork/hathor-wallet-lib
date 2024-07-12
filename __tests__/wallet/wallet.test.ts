@@ -7,7 +7,7 @@
 
 import { Message } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
-import { mockAxiosAdapter } from '../__mocks__/wallet.mock';
+import { mockAxiosAdapter } from '../__mock_helpers/axios-adapter.mock';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import Network from '../../src/models/network';
 import { GetAddressesObject, WsTransaction, CreateWalletAuthData } from '../../src/wallet/types';

@@ -1,4 +1,4 @@
-import { mockAxiosAdapter } from './__mocks__/wallet.mock';
+import { mockAxiosAdapter } from './__mock_helpers/axios-adapter.mock';
 import { buildWalletToAuthenticateApiCall } from './__mock_helpers/wallet-service.fixtures';
 import { PushNotification, PushNotificationProvider } from '../src/pushNotification';
 import config from '../src/config';
