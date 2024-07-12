@@ -95,6 +95,9 @@ module.exports = {
       },
       plugins: ['jest'],
       extends: ['plugin:jest/recommended'], // Use recommended Jest rules
+      rules: {
+        'jest/no-disabled-tests': 'off', // It's useful to have skipped tests on our suites
+      },
     },
   ],
 };
