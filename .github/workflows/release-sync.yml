@@ -102,7 +102,7 @@ jobs:
           # The github repository contains the owner organization too: we need to get only the last part of it
           REPO_NAME=$(basename ${{ github.repository }})
 
-          # Executing graphql query
+          # Executing graphql query to fetch the Id of the card that links the PR to the Project
           QUERY="
             query {
               repository(owner: \"$ORG_NAME\", name: \"$REPO_NAME\") {
