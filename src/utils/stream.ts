@@ -4,6 +4,11 @@ import {
   // IAddressInfo,
   IHistoryTx,
 } from '../types';
+import {
+  Address as BitcoreAddress,
+  HDPublicKey,
+} from 'bitcore-lib';
+import Network from '../models/network';
 
 interface IStreamSyncHistoryVertex {
   type: 'stream:history:vertex',
@@ -131,7 +136,7 @@ export function loadAddressesCPUIntensive(
   count: number,
   xpubkey: string,
   networkName: string,
-): Promise<string[]> {
+): string[] {
   const addresses: string[] = [];
   const stopIndex = startIndex + count;
   const network = new Network(networkName);
@@ -169,7 +174,7 @@ export async function streamManualSyncHistory(
   let lastLoadedIndex = itStartIndex + itCount - 1;
   let lastReceivedIndex = -1;
 
-  const batchGenerationPromise = new Promise<void>((resolve) => {
+  let batchGenerationPromise = new Promise<void>((resolve) => {
     resolve();
   });
 
@@ -179,7 +184,7 @@ export async function streamManualSyncHistory(
       return;
     }
 
-    const batch = loadAddressesCPUIntensive(lastLoadedIndex + 1, ADDRESSES_PER_MESSAGE, storage, xpubkey, network);
+    const batch = loadAddressesCPUIntensive(lastLoadedIndex + 1, ADDRESSES_PER_MESSAGE, xpubkey, network);
     lastLoadedIndex += ADDRESSES_PER_MESSAGE;
     connection.startManualStreamingHistory('cafe', batch, true);
 
@@ -194,7 +199,7 @@ export async function streamManualSyncHistory(
   await new Promise<void>((resolve, reject) => {
     let canUpdateUI = true;
 
-    const executionQueue = new Promise<void>((resolve) => {
+    let executionQueue = new Promise<void>((resolve) => {
       resolve();
     });
 
