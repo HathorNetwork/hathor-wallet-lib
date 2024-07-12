@@ -112,14 +112,15 @@ class WalletConnection extends BaseConnection {
     }
   }
 
-  startManualStreamingHistory(id: string, addresses: string[], create: boolean) {
+  startManualStreamingHistory(id: string, addresses: string[], first: boolean) {
     if (this.websocket) {
       const data = JSON.stringify({
         id,
-        create,
+        first,
         addresses,
         type: 'request:history:manual',
       });
+      // console.log(data);
       this.websocket.sendMessage(data);
     }
   }

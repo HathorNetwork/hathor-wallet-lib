@@ -165,13 +165,12 @@ export async function streamManualSyncHistory(
   if (accessData === null) {
     throw new Error('No access data');
   }
+
   const xpubkey = accessData.xpubkey;
   const network = storage.config.getNetwork().name;
-  let itStartIndex = startIndex;
-  let itCount = MAX_WINDOW_SIZE;
   let foundAnyTx = false;
-  const addresses = loadAddressesCPUIntensive(itStartIndex, itCount, xpubkey, network);
-  let lastLoadedIndex = itStartIndex + itCount - 1;
+  const addresses = loadAddressesCPUIntensive(startIndex, ADDRESSES_PER_MESSAGE, xpubkey, network);
+  let lastLoadedIndex = startIndex + ADDRESSES_PER_MESSAGE - 1;
   let lastReceivedIndex = -1;
 
   let batchGenerationPromise = new Promise<void>((resolve) => {
@@ -186,7 +185,7 @@ export async function streamManualSyncHistory(
 
     const batch = loadAddressesCPUIntensive(lastLoadedIndex + 1, ADDRESSES_PER_MESSAGE, xpubkey, network);
     lastLoadedIndex += ADDRESSES_PER_MESSAGE;
-    connection.startManualStreamingHistory('cafe', batch, true);
+    connection.startManualStreamingHistory('cafe', batch, false);
 
     // Clear main loop and queue next batch
     setTimeout(() => {
@@ -253,11 +252,11 @@ export async function streamManualSyncHistory(
       }
       if (isStreamSyncHistoryEnd(wsData)) {
         // cleanup and stop the method.
-        // console.log(`Stopping stream ${Date.now()}`);
+        // console.log(`Stream end at ${Date.now()}`);
         connection.removeListener('stream', listener);
         resolve();
       }
-      if(isStreamSyncHistoryError(wsData)) {
+      if (isStreamSyncHistoryError(wsData)) {
         console.error(`Stream error: ${wsData.errmsg}`);
         connection.removeListener('stream', listener);
         reject(wsData.errmsg);
