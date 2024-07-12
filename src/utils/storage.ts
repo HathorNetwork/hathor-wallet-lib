@@ -24,7 +24,7 @@ import walletApi from '../api/wallet';
 import helpers from './helpers';
 import transactionUtils from './transaction';
 import { deriveAddressP2PKH, deriveAddressP2SH } from './address';
-import { streamSyncHistory } from './stream';
+import { streamSyncHistory, streamManualSyncHistory } from './stream';
 import {
   NATIVE_TOKEN_UID,
   MAX_ADDRESSES_GET,
@@ -89,9 +89,10 @@ export async function reloadStorage(
     await storage.saveAccessData(accessData);
   }
   const addressesToLoad = await scanPolicyStartAddresses(storage);
-  // XXX
+  // XXX: stream
   // return syncHistory(addressesToLoad.nextIndex, addressesToLoad.count, storage, connection);
-  return streamSyncHistory(addressesToLoad.nextIndex, addressesToLoad.count, storage, connection);
+  // return streamSyncHistory(addressesToLoad.nextIndex, addressesToLoad.count, storage, connection);
+  return streamManualSyncHistory(addressesToLoad.nextIndex, addressesToLoad.count, storage, connection);
 }
 
 /**

@@ -101,9 +101,25 @@ class WalletConnection extends BaseConnection {
     }
   }
 
-  startStreamingHistory(xpubkey: string) {
+  startStreamingHistory(id: string, xpubkey: string) {
     if (this.websocket) {
-      const data = JSON.stringify({ type: 'request:history:xpub', id: "cafe", xpub: xpubkey });
+      const data = JSON.stringify({
+        id,
+        xpub: xpubkey,
+        type: 'request:history:xpub',
+      });
+      this.websocket.sendMessage(data);
+    }
+  }
+
+  startManualStreamingHistory(id: string, addresses: string[], create: boolean) {
+    if (this.websocket) {
+      const data = JSON.stringify({
+        id,
+        create,
+        addresses,
+        type: 'request:history:manual',
+      });
       this.websocket.sendMessage(data);
     }
   }
