@@ -150,6 +150,10 @@ export function loadAddressesCPUIntensive(
   return addresses;
 }
 
+export generateStreamId = () => {
+  Math.random().toString(36).substring(2, 15);
+};
+
 
 export async function streamManualSyncHistory(
   startIndex: number,
@@ -160,6 +164,11 @@ export async function streamManualSyncHistory(
 ): Promise<void> {
   const MAX_WINDOW_SIZE = 600;
   const ADDRESSES_PER_MESSAGE = 40;
+
+  const streamId = generateStreamId();
+  if (connection.lockStream(streamId)) {
+    throw new Error('There is an on-going stream on this connection');
+  }
 
   const accessData = await storage.getAccessData();
   if (accessData === null) {
@@ -172,12 +181,15 @@ export async function streamManualSyncHistory(
   const addresses = loadAddressesCPUIntensive(startIndex, ADDRESSES_PER_MESSAGE, xpubkey, network);
   let lastLoadedIndex = startIndex + ADDRESSES_PER_MESSAGE - 1;
   let lastReceivedIndex = -1;
+  let wasAborted = false;
+  let errorMessage: string | null = null;
 
-  let batchGenerationPromise = new Promise<void>((resolve) => {
-    resolve();
-  });
+  let batchGenerationPromise = Promise.resolve();
 
   async function generateNextBatch(): Promise<void> {
+    if (wasAborted) {
+      return;
+    }
     const distance = lastLoadedIndex - lastReceivedIndex;
     if (distance > (MAX_WINDOW_SIZE - ADDRESSES_PER_MESSAGE)) {
       return;
@@ -185,7 +197,7 @@ export async function streamManualSyncHistory(
 
     const batch = loadAddressesCPUIntensive(lastLoadedIndex + 1, ADDRESSES_PER_MESSAGE, xpubkey, network);
     lastLoadedIndex += ADDRESSES_PER_MESSAGE;
-    connection.startManualStreamingHistory('cafe', batch, false);
+    connection.startManualStreamingHistory(streamId, batch, false);
 
     // Clear main loop and queue next batch
     setTimeout(() => {
@@ -195,12 +207,10 @@ export async function streamManualSyncHistory(
     }, 0);
   }
 
-  await new Promise<void>((resolve, reject) => {
+  await new Promise<void>(resolve => {
     let canUpdateUI = true;
 
-    let executionQueue = new Promise<void>((resolve) => {
-      resolve();
-    });
+    let executionQueue = Promise.resolve();
 
     /**
      * Send event to update UI.
@@ -208,6 +218,9 @@ export async function streamManualSyncHistory(
      * The UI will be updated in intervals of at least 1 second.
      */
     const updateUI = async () => {
+      if (wasAborted) {
+        return;
+      }
       if (canUpdateUI) {
         canUpdateUI = false;
         connection.emit('wallet-load-partial-update', {
@@ -220,8 +233,19 @@ export async function streamManualSyncHistory(
       }
     };
 
+    const handleEnd = (abort = false) => {
+      wasAborted = abort;
+      connection.removeListener('stream', listener);
+      connection.removeListener('stream-abort', abortListener);
+      resolve();
+    };
+
     const listener = (wsData: IStreamSyncHistoryData) => {
-      if (wsData.id !== 'cafe') {
+      if (wasAborted) {
+        return;
+      }
+      if (wsData.id !== streamId) {
+        console.log(`Wrong stream ${JSON.stringify(wsData)}`);
         // Check that the stream id is the same we sent
         return;
       }
@@ -253,22 +277,41 @@ export async function streamManualSyncHistory(
       if (isStreamSyncHistoryEnd(wsData)) {
         // cleanup and stop the method.
         // console.log(`Stream end at ${Date.now()}`);
-        connection.removeListener('stream', listener);
-        resolve();
+        handleEnd();
       }
       if (isStreamSyncHistoryError(wsData)) {
         console.error(`Stream error: ${wsData.errmsg}`);
-        connection.removeListener('stream', listener);
-        reject(wsData.errmsg);
+        errorMessage = wsData.errmsg;
+        handleEnd(true);
       }
     };
-
     connection.on('stream', listener);
 
-    connection.startManualStreamingHistory('cafe', addresses, true);
+    const abortListener = async () => {
+      console.log('Aborting stream');
+      handleEnd(true);
+    };
+    connection.on('stream-abort', abortListener);
+
+    connection.startManualStreamingHistory(streamId, addresses, true);
   });
+
+  // Wait for promise chains to finish
+  await executionQueue;
+  await batchGenerationPromise;
+
+  if (wasAborted) {
+    // Cleanup the connection before exiting.
+    // Will not attempt to process the history since some error or abortion happened
+    connection.emit('stream-end');
+    if (errorMessage) {
+      throw new Error(errorMessage);
+    }
+    return;
+  }
 
   if (foundAnyTx && shouldProcessHistory) {
     await storage.processHistory();
   }
+  connection.emit('stream-end');
 }

@@ -31,10 +31,13 @@ class WalletConnection extends BaseConnection {
 
   static CONNECTED: number = 2;
 
+  currentStreamId: string | null = null;
+
   constructor(options: ConnectionParams) {
     super(options);
 
     this.handleWalletMessage = this.handleWalletMessage.bind(this);
+    this.on('stream-end', this.streamEndHandler.bind(this));
 
     const wsOptions: {
       connectionTimeout?: number;
@@ -101,7 +104,22 @@ class WalletConnection extends BaseConnection {
     }
   }
 
+  streamEndHandler() {
+    this.currentStreamId = null;
+  }
+
+  lockStream(streamId: string): boolean {
+    if (this.currentStreamId === null) {
+      this.currentStreamId = streamId;
+      return true;
+    }
+    return false;
+  }
+
   startStreamingHistory(id: string, xpubkey: string) {
+    if (this.currentStreamId !== id) {
+      throw new Error('There is an on-going stream, cannot start a second one');
+    }
     if (this.websocket) {
       const data = JSON.stringify({
         id,
@@ -113,6 +131,9 @@ class WalletConnection extends BaseConnection {
   }
 
   startManualStreamingHistory(id: string, addresses: string[], first: boolean) {
+    if (this.currentStreamId !== id) {
+      throw new Error('There is an on-going stream, cannot start a second one');
+    }
     if (this.websocket) {
       const data = JSON.stringify({
         id,
@@ -123,6 +144,10 @@ class WalletConnection extends BaseConnection {
       // console.log(data);
       this.websocket.sendMessage(data);
     }
+  }
+
+  abortStream() {
+    this.emit('stream-abort');
   }
 }
 
