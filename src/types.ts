@@ -22,6 +22,12 @@ export interface IInputSignature {
   pubkey: Buffer;
 }
 
+export enum HistorySyncMode {
+  API = 'api',
+  STREAM_MANUAL = 'stream-manual',
+  STREAM_XPUB = 'stream-xpub',
+}
+
 /**
  * This is the method signature for a method that signs a transaction and
  * returns an array with signature information.
