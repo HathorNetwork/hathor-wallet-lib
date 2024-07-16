@@ -33,7 +33,6 @@ import { SCANNING_POLICY, TxHistoryProcessingStatus, WalletType } from '../types
 import transactionUtils from '../utils/transaction';
 import Queue from '../models/queue';
 import {
-  syncHistory,
   reloadStorage,
   scanPolicyStartAddresses,
   checkScanningPolicy,
@@ -431,13 +430,9 @@ class HathorWallet extends EventEmitter {
         if (this.firstConnection) {
           this.firstConnection = false;
           const addressesToLoad = await scanPolicyStartAddresses(this.storage);
-          // XXX: stream
-          // await syncHistory(
-          // await streamSyncHistory(
-          await streamManualSyncHistory(
+          await this.storage.syncHistory(
             addressesToLoad.nextIndex,
             addressesToLoad.count,
-            this.storage,
             this.conn
           );
         } else {
@@ -1242,13 +1237,9 @@ class HathorWallet extends EventEmitter {
     // check address scanning policy and load more addresses if needed
     const loadMoreAddresses = await checkScanningPolicy(this.storage);
     if (loadMoreAddresses !== null) {
-      // XXX: stream
-      // await syncHistory(
-      // await streamSyncHistory(
-      await streamManualSyncHistory(
+      await this.storage.syncHistory(
         loadMoreAddresses.nextIndex,
         loadMoreAddresses.count,
-        this.storage,
         this.conn,
         processHistory
       );

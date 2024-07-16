@@ -19,18 +19,36 @@ import {
   IScanPolicyLoadAddresses,
   isIndexLimitScanPolicy,
   SCANNING_POLICY,
+  HistorySyncMode,
 } from '../types';
 import walletApi from '../api/wallet';
 import helpers from './helpers';
 import transactionUtils from './transaction';
 import { deriveAddressP2PKH, deriveAddressP2SH } from './address';
-import { streamSyncHistory, streamManualSyncHistory } from './stream';
+import { xpubStreamSyncHistory, manualStreamSyncHistory } from './stream';
 import {
   NATIVE_TOKEN_UID,
   MAX_ADDRESSES_GET,
   LOAD_WALLET_MAX_RETRY,
   LOAD_WALLET_RETRY_SLEEP,
 } from '../constants';
+
+/**
+ * Get history sync method for a given mode
+ * @param {HistorySyncMode} mode The mode of the stream
+ * @returns {(...args: any[]) => Promise<void>}
+ */
+export function getHistorySyncMethod(mode: HistorySyncMode): (...args: any[]) => Promise<void> {
+  switch (mode) {
+    case HistorySyncMode.STREAM_MANUAL:
+      return manualStreamSyncHistory;
+    case HistorySyncMode.STREAM_XPUB:
+      return xpubStreamSyncHistory;
+    default:
+      // case HistorySyncMode.API
+      return apiSyncHistory;
+  }
+}
 
 /**
  * Derive requested addresses (if not already loaded), save them on storage then return them.
@@ -89,10 +107,7 @@ export async function reloadStorage(
     await storage.saveAccessData(accessData);
   }
   const addressesToLoad = await scanPolicyStartAddresses(storage);
-  // XXX: stream
-  // return syncHistory(addressesToLoad.nextIndex, addressesToLoad.count, storage, connection);
-  // return streamSyncHistory(addressesToLoad.nextIndex, addressesToLoad.count, storage, connection);
-  return streamManualSyncHistory(addressesToLoad.nextIndex, addressesToLoad.count, storage, connection);
+  await storage.syncHistory(addressesToLoad.nextIndex, addressesToLoad.count, connection);
 }
 
 /**
@@ -105,7 +120,7 @@ export async function reloadStorage(
  * @param {FullnodeConnection} connection Connection to the full node
  * @param {boolean} shouldProcessHistory If we should process the history after loading it.
  */
-export async function syncHistory(
+export async function apiSyncHistory(
   startIndex: number,
   count: number,
   storage: IStorage,

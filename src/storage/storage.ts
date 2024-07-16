@@ -35,9 +35,10 @@ import {
   INcData,
   EcdsaTxSign,
   ITxSignatureData,
+  HistorySyncMode,
 } from '../types';
 import transactionUtils from '../utils/transaction';
-import { processHistory, processUtxoUnlock } from '../utils/storage';
+import { processHistory, processUtxoUnlock, getHistorySyncMethod } from '../utils/storage';
 import config, { Config } from '../config';
 import { decryptData, checkPassword } from '../utils/crypto';
 import FullNodeConnection from '../new/connection';
@@ -70,6 +71,8 @@ export class Storage implements IStorage {
 
   txSignFunc: EcdsaTxSign | null;
 
+  historySyncMode: HistorySyncMode;
+
   /**
    * This promise is used to chain the calls to process unlocked utxos.
    * This way we can avoid concurrent calls.
@@ -87,6 +90,7 @@ export class Storage implements IStorage {
     this.version = null;
     this.utxoUnlockWait = Promise.resolve();
     this.txSignFunc = null;
+    this.historySyncMode = HistorySyncMode.API;
   }
 
   /**
@@ -95,6 +99,14 @@ export class Storage implements IStorage {
    */
   setApiVersion(version: ApiVersion): void {
     this.version = version;
+  }
+
+  /**
+   * Set the history sync mode.
+   * @param {HistorySyncMode} mode
+   */
+  setHistorySyncMode(mode: HistorySyncMode): void {
+    this.historySyncMode = mode;
   }
 
   /**
@@ -342,6 +354,21 @@ export class Storage implements IStorage {
    */
   async processHistory(): Promise<void> {
     await processHistory(this, { rewardLock: this.version?.reward_spend_min_blocks });
+  }
+
+  async syncHistory(
+    startIndex: number,
+    count: number,
+    connection: FullnodeConnection,
+    shouldProcessHistory: boolean = false,
+  ): Promise<void> {
+    if ([HistorySyncMode.STREAM_XPUB, HistorySyncMode.STREAM_MANUAL].includes(this.historySyncMode)) {
+      const walletType = await this.getWalletType();
+      if (walletType !== WalletType.P2PKH) {
+        throw new Error('Can only use stream history sync with P2PKH wallets');
+      }
+    }
+    await getHistorySyncMethod(this.historySyncMode)(startIndex, count, this, connection, shouldProcessHistory);
   }
 
   /**
