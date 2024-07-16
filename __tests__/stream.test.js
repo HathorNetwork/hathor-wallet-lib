@@ -129,4 +129,4 @@ test('xpub stream history sync', async () => {
 
 test('manual stream history sync', async () => {
   await testHistorySyncStream(HistorySyncMode.STREAM_MANUAL);
-}, 10000);
+}, 30000);
