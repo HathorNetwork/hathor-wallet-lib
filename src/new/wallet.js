@@ -32,12 +32,7 @@ import P2SHSignature from '../models/p2sh_signature';
 import { SCANNING_POLICY, TxHistoryProcessingStatus, WalletType } from '../types';
 import transactionUtils from '../utils/transaction';
 import Queue from '../models/queue';
-import {
-  reloadStorage,
-  scanPolicyStartAddresses,
-  checkScanningPolicy,
-} from '../utils/storage';
-import { streamSyncHistory, streamManualSyncHistory } from '../utils/stream';
+import { reloadStorage, scanPolicyStartAddresses, checkScanningPolicy } from '../utils/storage';
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../utils/address';

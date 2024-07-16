@@ -20,6 +20,7 @@ import {
   isIndexLimitScanPolicy,
   SCANNING_POLICY,
   HistorySyncMode,
+  HistorySyncFunction,
 } from '../types';
 import walletApi from '../api/wallet';
 import helpers from './helpers';
@@ -36,9 +37,9 @@ import {
 /**
  * Get history sync method for a given mode
  * @param {HistorySyncMode} mode The mode of the stream
- * @returns {(...args: any[]) => Promise<void>}
+ * @returns {HistorySyncFunction}
  */
-export function getHistorySyncMethod(mode: HistorySyncMode): (...args: any[]) => Promise<void> {
+export function getHistorySyncMethod(mode: HistorySyncMode): HistorySyncFunction {
   switch (mode) {
     case HistorySyncMode.STREAM_MANUAL:
       return manualStreamSyncHistory;

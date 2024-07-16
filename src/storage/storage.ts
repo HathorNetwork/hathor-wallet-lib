@@ -360,15 +360,23 @@ export class Storage implements IStorage {
     startIndex: number,
     count: number,
     connection: FullNodeConnection,
-    shouldProcessHistory: boolean = false,
+    shouldProcessHistory: boolean = false
   ): Promise<void> {
-    if ([HistorySyncMode.STREAM_XPUB, HistorySyncMode.STREAM_MANUAL].includes(this.historySyncMode)) {
+    if (
+      [HistorySyncMode.STREAM_XPUB, HistorySyncMode.STREAM_MANUAL].includes(this.historySyncMode)
+    ) {
       const walletType = await this.getWalletType();
       if (walletType !== WalletType.P2PKH) {
         throw new Error('Can only use stream history sync with P2PKH wallets');
       }
     }
-    await getHistorySyncMethod(this.historySyncMode)(startIndex, count, this, connection, shouldProcessHistory);
+    await getHistorySyncMethod(this.historySyncMode)(
+      startIndex,
+      count,
+      this,
+      connection,
+      shouldProcessHistory
+    );
   }
 
   /**

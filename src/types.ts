@@ -38,6 +38,14 @@ export type EcdsaTxSign = (
   pinCode: string
 ) => Promise<ITxSignatureData>;
 
+export type HistorySyncFunction = (
+  startIndex: number,
+  count: number,
+  storage: IStorage,
+  connection: FullNodeConnection,
+  shouldProcessHistory?: boolean
+) => Promise<void>;
+
 export interface IAddressInfo {
   base58: string;
   bip32AddressIndex: number;
@@ -476,7 +484,7 @@ export interface IStorage {
     startIndex: number,
     count: number,
     connection: FullNodeConnection,
-    shouldProcessHistory?: boolean,
+    shouldProcessHistory?: boolean
   ): Promise<void>;
 
   // Tokens

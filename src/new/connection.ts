@@ -32,6 +32,7 @@ class WalletConnection extends BaseConnection {
   static CONNECTED: number = 2;
 
   currentStreamId: string | null = null;
+
   streamAbortController: AbortController | null = null;
 
   constructor(options: ConnectionParams) {

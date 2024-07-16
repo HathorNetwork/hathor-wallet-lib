@@ -1,46 +1,45 @@
+import { Address as BitcoreAddress, HDPublicKey } from 'bitcore-lib';
 import FullnodeConnection from '../new/connection';
-import {
-  IStorage,
-  IHistoryTx,
-  HistorySyncMode
-} from '../types';
-import {
-  Address as BitcoreAddress,
-  HDPublicKey,
-} from 'bitcore-lib';
+import { IStorage, IHistoryTx, HistorySyncMode } from '../types';
 import Network from '../models/network';
 
 interface IStreamSyncHistoryVertex {
-  type: 'stream:history:vertex',
-  id: string,
-  data: IHistoryTx,
+  type: 'stream:history:vertex';
+  id: string;
+  data: IHistoryTx;
 }
 
 interface IStreamSyncHistoryAddress {
-  type: 'stream:history:address',
-  id: string,
-  address: string,
-  index: number,
+  type: 'stream:history:address';
+  id: string;
+  address: string;
+  index: number;
 }
 
 interface IStreamSyncHistoryEnd {
-  type: 'stream:history:end',
-  id: string,
+  type: 'stream:history:end';
+  id: string;
 }
 
 interface IStreamSyncHistoryError {
-  type: 'stream:history:error',
-  id: string,
-  errmsg: string,
+  type: 'stream:history:error';
+  id: string;
+  errmsg: string;
 }
 
-type IStreamSyncHistoryData = IStreamSyncHistoryVertex | IStreamSyncHistoryAddress | IStreamSyncHistoryEnd | IStreamSyncHistoryError;
+type IStreamSyncHistoryData =
+  | IStreamSyncHistoryVertex
+  | IStreamSyncHistoryAddress
+  | IStreamSyncHistoryEnd
+  | IStreamSyncHistoryError;
 
 function isStreamSyncHistoryVertex(data: IStreamSyncHistoryData): data is IStreamSyncHistoryVertex {
   return data.type === 'stream:history:vertex';
 }
 
-function isStreamSyncHistoryAddress(data: IStreamSyncHistoryData): data is IStreamSyncHistoryAddress {
+function isStreamSyncHistoryAddress(
+  data: IStreamSyncHistoryData
+): data is IStreamSyncHistoryAddress {
   return data.type === 'stream:history:address';
 }
 
@@ -60,7 +59,7 @@ export function loadAddressesCPUIntensive(
   startIndex: number,
   count: number,
   xpubkey: string,
-  networkName: string,
+  networkName: string
 ): string[] {
   const addresses: string[] = [];
   const stopIndex = startIndex + count;
@@ -77,16 +76,23 @@ export function loadAddressesCPUIntensive(
 
 export function generateStreamId() {
   return Math.random().toString(36).substring(2, 15);
-};
+}
 
 export async function xpubStreamSyncHistory(
   startIndex: number,
   count: number,
   storage: IStorage,
   connection: FullnodeConnection,
-  shouldProcessHistory: boolean = false,
+  shouldProcessHistory: boolean = false
 ) {
-  await streamSyncHistory(startIndex, count, storage, connection, shouldProcessHistory, HistorySyncMode.STREAM_XPUB);
+  await streamSyncHistory(
+    startIndex,
+    count,
+    storage,
+    connection,
+    shouldProcessHistory,
+    HistorySyncMode.STREAM_XPUB
+  );
 }
 
 export async function manualStreamSyncHistory(
@@ -94,9 +100,16 @@ export async function manualStreamSyncHistory(
   count: number,
   storage: IStorage,
   connection: FullnodeConnection,
-  shouldProcessHistory: boolean = false,
+  shouldProcessHistory: boolean = false
 ) {
-  await streamSyncHistory(startIndex, count, storage, connection, shouldProcessHistory, HistorySyncMode.STREAM_MANUAL);
+  await streamSyncHistory(
+    startIndex,
+    count,
+    storage,
+    connection,
+    shouldProcessHistory,
+    HistorySyncMode.STREAM_MANUAL
+  );
 }
 
 /**
@@ -115,8 +128,8 @@ export async function streamSyncHistory(
   _count: number,
   storage: IStorage,
   connection: FullnodeConnection,
-  shouldProcessHistory: boolean = false,
-  mode: HistorySyncMode,
+  shouldProcessHistory: boolean,
+  mode: HistorySyncMode
 ): Promise<void> {
   const MAX_WINDOW_SIZE = 600;
   const ADDRESSES_PER_MESSAGE = 40;
@@ -156,13 +169,17 @@ export async function streamSyncHistory(
    * This ensures the abort can be called and no received txs will be lost.
    */
   const abortController = new AbortController();
-  signal.addEventListener('abort', () => {
-    errorMessage = 'Stream aborted';
-    abortController.abort();
-  }, {
-    once: true,
-    signal: abortController.signal,
-  });
+  signal.addEventListener(
+    'abort',
+    () => {
+      errorMessage = 'Stream aborted';
+      abortController.abort();
+    },
+    {
+      once: true,
+      signal: abortController.signal,
+    }
+  );
 
   // This is a try..finally so that we can always call the signal abort function
   // This is meant to prevent memory leaks
@@ -181,16 +198,20 @@ export async function streamSyncHistory(
      * - An error happens in the fullnode.
      */
     await new Promise<void>(resolve => {
-      const xpubkey = accessData.xpubkey;
+      const { xpubkey } = accessData;
       const network = storage.config.getNetwork().name;
       let lastLoadedIndex = startIndex + ADDRESSES_PER_MESSAGE - 1;
       let lastReceivedIndex = -1;
       let canUpdateUI = true;
 
       // If the controller aborts we need to resolve and exit the promise.
-      abortController.signal.addEventListener('abort', () => {
-        resolve();
-      }, { once: true });
+      abortController.signal.addEventListener(
+        'abort',
+        () => {
+          resolve();
+        },
+        { once: true }
+      );
       // If it is already aborted for some reason, just exit
       if (abortController.signal.aborted) {
         resolve();
@@ -208,12 +229,17 @@ export async function streamSyncHistory(
           return;
         }
         const distance = lastLoadedIndex - lastReceivedIndex;
-        if (distance > (MAX_WINDOW_SIZE - ADDRESSES_PER_MESSAGE)) {
+        if (distance > MAX_WINDOW_SIZE - ADDRESSES_PER_MESSAGE) {
           return;
         }
 
         // This part is sync so that we block the main loop during the generation of the batch
-        const batch = loadAddressesCPUIntensive(lastLoadedIndex + 1, ADDRESSES_PER_MESSAGE, xpubkey, network);
+        const batch = loadAddressesCPUIntensive(
+          lastLoadedIndex + 1,
+          ADDRESSES_PER_MESSAGE,
+          xpubkey,
+          network
+        );
         lastLoadedIndex += ADDRESSES_PER_MESSAGE;
         connection.sendManualStreamingHistory(streamId, batch, false);
 
@@ -221,7 +247,7 @@ export async function streamSyncHistory(
         setTimeout(() => {
           batchGenerationPromise = batchGenerationPromise.then(async () => {
             await generateNextBatch();
-          })
+          });
         }, 0);
       }
 
@@ -301,17 +327,24 @@ export async function streamSyncHistory(
         }
       };
       connection.on('stream', listener);
-      abortController.signal.addEventListener('abort', () => {
-        connection.removeListener('stream', listener);
-      }, { once: true });
+      abortController.signal.addEventListener(
+        'abort',
+        () => {
+          connection.removeListener('stream', listener);
+        },
+        { once: true }
+      );
 
-      switch(mode) {
+      switch (mode) {
         case HistorySyncMode.STREAM_XPUB:
-          connection.startStreamingHistory(streamId, xpubkey)
+          connection.startStreamingHistory(streamId, xpubkey);
           break;
         case HistorySyncMode.STREAM_MANUAL:
-          const firstBatch = loadAddressesCPUIntensive(startIndex, ADDRESSES_PER_MESSAGE, xpubkey, network);
-          connection.sendManualStreamingHistory(streamId, firstBatch, true);
+          connection.sendManualStreamingHistory(
+            streamId,
+            loadAddressesCPUIntensive(startIndex, ADDRESSES_PER_MESSAGE, xpubkey, network),
+            true
+          );
           break;
         default:
           // Should never happen.
