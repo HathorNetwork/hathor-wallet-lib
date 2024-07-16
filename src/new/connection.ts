@@ -150,20 +150,24 @@ class WalletConnection extends BaseConnection {
   }
 
   async stopStream() {
-    await new Promise<void>((resolve, reject)) => {
-      if (this.currentStreamId) {
-        // We have an active stream.
-        // We will wait for the stream to end then resolve.
-        this.once('stream-end', () => {
-          resolve();
-        });
-        this.streamAbortController?.abort();
-        // Create a timeout so we do not wait indefinetely
-        // It it reaches here we should reject since something went wrong.
-        setTimeout(() => {
-          reject();
-        }, 10000);
-      }
+    if (this.currentStreamId === null || this.streamAbortController === null) {
+      return;
+    }
+    await new Promise<void>((resolve, reject) => {
+      // Create a timeout so we do not wait indefinetely
+      // It it reaches here we should reject since something went wrong.
+      const timer = setTimeout(() => {
+        reject();
+      }, 10000);
+
+      // We have an active stream.
+      // We will wait for the stream to end then resolve.
+      this.once('stream-end', () => {
+        clearTimeout(timer);
+        resolve();
+      });
+      // Send the abort signal
+      this.streamAbortController.abort();
     });
   }
 }

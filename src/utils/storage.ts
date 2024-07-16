@@ -95,6 +95,9 @@ export async function reloadStorage(
   storage: IStorage,
   connection: FullnodeConnection
 ): Promise<void> {
+  // Stop a stream on this connection if one is running.
+  await connection.stopStream();
+
   // unsub all addresses
   for await (const address of storage.getAllAddresses()) {
     connection.unsubscribeAddress(address.base58);
