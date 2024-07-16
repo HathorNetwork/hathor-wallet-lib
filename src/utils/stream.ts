@@ -255,7 +255,13 @@ export async function streamSyncHistory(
           network
         );
         lastLoadedIndex += ADDRESSES_PER_MESSAGE;
-        connection.sendManualStreamingHistory(streamId, lastLoadedIndex + 1, batch, false, gapLimit);
+        connection.sendManualStreamingHistory(
+          streamId,
+          lastLoadedIndex + 1,
+          batch,
+          false,
+          gapLimit
+        );
 
         // Free main loop to run other tasks and queue next batch
         setTimeout(() => {

@@ -137,7 +137,13 @@ class WalletConnection extends BaseConnection {
     }
   }
 
-  sendManualStreamingHistory(id: string, firstIndex: number, addresses: [number, string][], first: boolean, gapLimit: number = -1) {
+  sendManualStreamingHistory(
+    id: string,
+    firstIndex: number,
+    addresses: [number, string][],
+    first: boolean,
+    gapLimit: number = -1
+  ) {
     if (this.currentStreamId !== id) {
       throw new Error('There is an on-going stream, cannot start a second one');
     }
