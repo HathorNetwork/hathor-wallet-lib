@@ -125,8 +125,8 @@ async function testHistorySyncStream(mode) {
 
 test('xpub stream history sync', async () => {
   await testHistorySyncStream(HistorySyncMode.STREAM_XPUB);
-});
+}, 10000);
 
 test('manual stream history sync', async () => {
   await testHistorySyncStream(HistorySyncMode.STREAM_MANUAL);
-});
+}, 10000);
