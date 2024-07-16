@@ -210,7 +210,7 @@ export async function streamSyncHistory(
         // This part is sync so that we block the main loop during the generation of the batch
         const batch = loadAddressesCPUIntensive(lastLoadedIndex + 1, ADDRESSES_PER_MESSAGE, xpubkey, network);
         lastLoadedIndex += ADDRESSES_PER_MESSAGE;
-        connection.startManualStreamingHistory(streamId, batch, false);
+        connection.sendManualStreamingHistory(streamId, batch, false);
 
         // Free main loop to run other tasks and queue next batch
         setTimeout(() => {
@@ -305,7 +305,7 @@ export async function streamSyncHistory(
           break;
         case HistorySyncMode.STREAM_MANUAL:
           const firstBatch = loadAddressesCPUIntensive(startIndex, ADDRESSES_PER_MESSAGE, xpubkey, network);
-          connection.startManualStreamingHistory(streamId, firstBatch, true);
+          connection.sendManualStreamingHistory(streamId, firstBatch, true);
           break;
         default:
           // Should never happen.

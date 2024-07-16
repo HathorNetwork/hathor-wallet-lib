@@ -134,7 +134,7 @@ class WalletConnection extends BaseConnection {
     }
   }
 
-  startManualStreamingHistory(id: string, addresses: string[], first: boolean) {
+  sendManualStreamingHistory(id: string, addresses: string[], first: boolean) {
     if (this.currentStreamId !== id) {
       throw new Error('There is an on-going stream, cannot start a second one');
     }
@@ -145,13 +145,26 @@ class WalletConnection extends BaseConnection {
         addresses,
         type: 'request:history:manual',
       });
-      // console.log(data);
       this.websocket.sendMessage(data);
     }
   }
 
-  abortStream() {
-    this.streamAbortController?.abort();
+  async stopStream() {
+    await new Promise<void>((resolve, reject)) => {
+      if (this.currentStreamId) {
+        // We have an active stream.
+        // We will wait for the stream to end then resolve.
+        this.once('stream-end', () => {
+          resolve();
+        });
+        this.streamAbortController?.abort();
+        // Create a timeout so we do not wait indefinetely
+        // It it reaches here we should reject since something went wrong.
+        setTimeout(() => {
+          reject();
+        }, 10000);
+      }
+    });
   }
 }
 
