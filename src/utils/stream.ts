@@ -60,15 +60,15 @@ export function loadAddressesCPUIntensive(
   count: number,
   xpubkey: string,
   networkName: string
-): string[] {
-  const addresses: string[] = [];
+): [number, string][] {
+  const addresses: [number, string][] = [];
   const stopIndex = startIndex + count;
   const network = new Network(networkName);
   const hdpubkey = new HDPublicKey(xpubkey);
 
   for (let i = startIndex; i < stopIndex; i++) {
     const key = hdpubkey.deriveChild(i);
-    addresses.push(new BitcoreAddress(key.publicKey, network.bitcoreNetwork).toString());
+    addresses.push([i, new BitcoreAddress(key.publicKey, network.bitcoreNetwork).toString()]);
   }
 
   return addresses;
@@ -141,7 +141,7 @@ export async function streamSyncHistory(
 
   // Make sure this is the only stream running on this connection
   const streamId = generateStreamId();
-  if (connection.lockStream(streamId)) {
+  if (!connection.lockStream(streamId)) {
     throw new Error('There is an on-going stream on this connection');
   }
 
