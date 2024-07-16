@@ -69,7 +69,6 @@ function prepareMockServer(mockServer) {
         // Send the addresses and history then send end of stream event
         streamHistoryForSocket(jsonData.id, socket);
       } else if (jsonData.type === 'request:history:manual') {
-        console.log(`history:manual event ${data}`);
         // Send the addresses and history then send end of stream event
         // Only if first is true
         if (jsonData.first) {
