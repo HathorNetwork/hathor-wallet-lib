@@ -32,6 +32,7 @@ class WalletConnection extends BaseConnection {
   static CONNECTED: number = 2;
 
   currentStreamId: string | null = null;
+  streamAbortController: AbortController | null = null;
 
   constructor(options: ConnectionParams) {
     super(options);
@@ -106,11 +107,14 @@ class WalletConnection extends BaseConnection {
 
   streamEndHandler() {
     this.currentStreamId = null;
+    this.streamAbortController?.abort();
+    this.streamAbortController = null;
   }
 
   lockStream(streamId: string): boolean {
     if (this.currentStreamId === null) {
       this.currentStreamId = streamId;
+      this.streamAbortController = new AbortController();
       return true;
     }
     return false;
@@ -147,7 +151,7 @@ class WalletConnection extends BaseConnection {
   }
 
   abortStream() {
-    this.emit('stream-abort');
+    this.streamAbortController?.abort();
   }
 }
 
