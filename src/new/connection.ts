@@ -121,7 +121,7 @@ class WalletConnection extends BaseConnection {
     return false;
   }
 
-  startStreamingHistory(id: string, xpubkey: string) {
+  startStreamingHistory(id: string, firstIndex: number, xpubkey: string, gapLimit: number = -1) {
     if (this.currentStreamId !== id) {
       throw new Error('There is an on-going stream, cannot start a second one');
     }
@@ -130,12 +130,14 @@ class WalletConnection extends BaseConnection {
         id,
         xpub: xpubkey,
         type: 'request:history:xpub',
+        'first-index': firstIndex,
+        'gap-limit': gapLimit,
       });
       this.websocket.sendMessage(data);
     }
   }
 
-  sendManualStreamingHistory(id: string, addresses: [number, string][], first: boolean) {
+  sendManualStreamingHistory(id: string, firstIndex: number, addresses: [number, string][], first: boolean, gapLimit: number = -1) {
     if (this.currentStreamId !== id) {
       throw new Error('There is an on-going stream, cannot start a second one');
     }
@@ -145,6 +147,8 @@ class WalletConnection extends BaseConnection {
         first,
         addresses,
         type: 'request:history:manual',
+        'first-index': firstIndex,
+        'gap-limit': gapLimit,
       });
       this.websocket.sendMessage(data);
     }

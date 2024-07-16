@@ -1,6 +1,6 @@
 import { Address as BitcoreAddress, HDPublicKey } from 'bitcore-lib';
 import FullnodeConnection from '../new/connection';
-import { IStorage, IHistoryTx, HistorySyncMode } from '../types';
+import { IStorage, IHistoryTx, HistorySyncMode, isGapLimitScanPolicy } from '../types';
 import Network from '../models/network';
 
 interface IStreamSyncHistoryVertex {
@@ -80,14 +80,21 @@ export function generateStreamId() {
 
 export async function xpubStreamSyncHistory(
   startIndex: number,
-  count: number,
+  _count: number,
   storage: IStorage,
   connection: FullnodeConnection,
   shouldProcessHistory: boolean = false
 ) {
+  let firstIndex = startIndex;
+  const scanPolicyData = await storage.getScanningPolicyData();
+  if (isGapLimitScanPolicy(scanPolicyData)) {
+    if (startIndex !== 0) {
+      const { lastLoadedAddressIndex } = await storage.getWalletData();
+      firstIndex = lastLoadedAddressIndex + 1;
+    }
+  }
   await streamSyncHistory(
-    startIndex,
-    count,
+    firstIndex,
     storage,
     connection,
     shouldProcessHistory,
@@ -97,14 +104,21 @@ export async function xpubStreamSyncHistory(
 
 export async function manualStreamSyncHistory(
   startIndex: number,
-  count: number,
+  _count: number,
   storage: IStorage,
   connection: FullnodeConnection,
   shouldProcessHistory: boolean = false
 ) {
+  let firstIndex = startIndex;
+  const scanPolicyData = await storage.getScanningPolicyData();
+  if (isGapLimitScanPolicy(scanPolicyData)) {
+    if (startIndex !== 0) {
+      const { lastLoadedAddressIndex } = await storage.getWalletData();
+      firstIndex = lastLoadedAddressIndex + 1;
+    }
+  }
   await streamSyncHistory(
-    startIndex,
-    count,
+    firstIndex,
     storage,
     connection,
     shouldProcessHistory,
@@ -116,7 +130,6 @@ export async function manualStreamSyncHistory(
  * Start a stream to sync the history of the wallet on `storage`.
  * Since there is a lot of overlap between xpub and manual modes this method was created to accomodate both.
  * @param {number} startIndex Index to start loading addresses
- * @param {number} _count Number of addresses to load
  * @param {IStorage} storage The storage to load the addresses
  * @param {FullnodeConnection} connection Connection to the full node
  * @param {boolean} shouldProcessHistory If we should process the history after loading it.
@@ -125,7 +138,6 @@ export async function manualStreamSyncHistory(
  */
 export async function streamSyncHistory(
   startIndex: number,
-  _count: number,
   storage: IStorage,
   connection: FullnodeConnection,
   shouldProcessHistory: boolean,
@@ -188,6 +200,8 @@ export async function streamSyncHistory(
     if (accessData === null) {
       throw new Error('No access data');
     }
+    // This should not throw since this method currently only supports gap-limit wallets.
+    const gapLimit = await storage.getGapLimit();
 
     let foundAnyTx = false;
 
@@ -241,7 +255,7 @@ export async function streamSyncHistory(
           network
         );
         lastLoadedIndex += ADDRESSES_PER_MESSAGE;
-        connection.sendManualStreamingHistory(streamId, batch, false);
+        connection.sendManualStreamingHistory(streamId, lastLoadedIndex + 1, batch, false, gapLimit);
 
         // Free main loop to run other tasks and queue next batch
         setTimeout(() => {
@@ -301,10 +315,13 @@ export async function streamSyncHistory(
           // Register address on storage
           // The address will be subscribed on the server side
           executionQueue = executionQueue.then(async () => {
-            await storage.saveAddress({
-              base58: wsData.address,
-              bip32AddressIndex: wsData.index,
-            });
+            const alreadyExists = await storage.isAddressMine(wsData.address);
+            if (!alreadyExists) {
+              await storage.saveAddress({
+                base58: wsData.address,
+                bip32AddressIndex: wsData.index,
+              });
+            }
             await updateUI();
           });
           // Generate next batch if needed
@@ -337,13 +354,15 @@ export async function streamSyncHistory(
 
       switch (mode) {
         case HistorySyncMode.STREAM_XPUB:
-          connection.startStreamingHistory(streamId, xpubkey);
+          connection.startStreamingHistory(streamId, startIndex, xpubkey, gapLimit);
           break;
         case HistorySyncMode.STREAM_MANUAL:
           connection.sendManualStreamingHistory(
             streamId,
+            startIndex,
             loadAddressesCPUIntensive(startIndex, ADDRESSES_PER_MESSAGE, xpubkey, network),
-            true
+            true,
+            gapLimit
           );
           break;
         default:
