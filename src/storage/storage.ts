@@ -359,7 +359,7 @@ export class Storage implements IStorage {
   async syncHistory(
     startIndex: number,
     count: number,
-    connection: FullnodeConnection,
+    connection: FullNodeConnection,
     shouldProcessHistory: boolean = false,
   ): Promise<void> {
     if ([HistorySyncMode.STREAM_XPUB, HistorySyncMode.STREAM_MANUAL].includes(this.historySyncMode)) {

@@ -75,8 +75,8 @@ export function loadAddressesCPUIntensive(
   return addresses;
 }
 
-export generateStreamId = () => {
-  Math.random().toString(36).substring(2, 15);
+export function generateStreamId() {
+  return Math.random().toString(36).substring(2, 15);
 };
 
 export async function xpubStreamSyncHistory(
@@ -103,7 +103,7 @@ export async function manualStreamSyncHistory(
  * Start a stream to sync the history of the wallet on `storage`.
  * Since there is a lot of overlap between xpub and manual modes this method was created to accomodate both.
  * @param {number} startIndex Index to start loading addresses
- * @param {number} count Number of addresses to load
+ * @param {number} _count Number of addresses to load
  * @param {IStorage} storage The storage to load the addresses
  * @param {FullnodeConnection} connection Connection to the full node
  * @param {boolean} shouldProcessHistory If we should process the history after loading it.
@@ -137,7 +137,12 @@ export async function streamSyncHistory(
   let errorMessage: string | null = null;
 
   // If the abort controller of the connection aborts we need to abort the stream
-  const signal = connection.streamAbortController.signal;
+  const signal = connection.streamAbortController?.signal;
+  if (!signal) {
+    // Should not happen, but will cleanup just in case.
+    connection.streamEndHandler();
+    throw new Error('No abort controller on connection');
+  }
   /**
    * The abort controller will be used to stop the stream.
    * The signal will be used to:
@@ -183,9 +188,9 @@ export async function streamSyncHistory(
       let canUpdateUI = true;
 
       // If the controller aborts we need to resolve and exit the promise.
-      abortController.signal.once('abort', () => {
+      abortController.signal.addEventListener('abort', () => {
         resolve();
-      });
+      }, { once: true });
       // If it is already aborted for some reason, just exit
       if (abortController.signal.aborted) {
         resolve();
@@ -295,9 +300,10 @@ export async function streamSyncHistory(
           abortController.abort();
         }
       };
-      connection.addEventListener('stream', listener, {
-        signal: abortController.signal,
-      });
+      connection.on('stream', listener);
+      abortController.signal.addEventListener('abort', () => {
+        connection.removeListener('stream', listener);
+      }, { once: true });
 
       switch(mode) {
         case HistorySyncMode.STREAM_XPUB:

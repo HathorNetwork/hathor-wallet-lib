@@ -150,10 +150,15 @@ class WalletConnection extends BaseConnection {
   }
 
   async stopStream() {
-    if (this.currentStreamId === null || this.streamAbortController === null) {
+    if (this.currentStreamId === null) {
       return;
     }
     await new Promise<void>((resolve, reject) => {
+      if (this.streamAbortController === null) {
+        // We cannot have an active stream an a null abort controller
+        reject();
+        return;
+      }
       // Create a timeout so we do not wait indefinetely
       // It it reaches here we should reject since something went wrong.
       const timer = setTimeout(() => {

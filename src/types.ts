@@ -475,8 +475,8 @@ export interface IStorage {
   syncHistory(
     startIndex: number,
     count: number,
-    connection: FullnodeConnection,
-    shouldProcessHistory: boolean = false,
+    connection: FullNodeConnection,
+    shouldProcessHistory?: boolean,
   ): Promise<void>;
 
   // Tokens
