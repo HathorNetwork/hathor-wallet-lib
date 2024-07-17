@@ -6,12 +6,12 @@ import { Server, WebSocket } from 'mock-socket';
 
 const mock_tx = {
   tx_id: '00002f4c8d6516ee0c39437f30d9f20231f88652aacc263bc738f55c412cf5ee',
-  signal_bits: 0, // ???
+  signal_bits: 0,
   version: 1,
   weight: 16.8187644487092,
   timestamp: 1708302775,
   is_voided: false,
-  nonce: 5406, // was string?
+  nonce: 5406,
   inputs: [],
   outputs: [
     {
@@ -36,27 +36,46 @@ const mock_tx = {
   tokens: [],
 };
 
-function streamHistoryForSocket(streamId, socket) {
-  socket.send(
-    JSON.stringify({
-      id: streamId,
-      type: 'stream:history:address',
-      address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
-      index: 0,
-    })
-  );
-  socket.send(
-    JSON.stringify({
-      id: streamId,
-      type: 'stream:history:vertex',
-      data: mock_tx,
-    })
-  );
-  // End
-  socket.send(JSON.stringify({ id: streamId, type: 'stream:history:end' }));
+const SERVER_MOCK_TYPE = {
+  /**
+   * Will send 1 address and 1 tx then send an end event.
+   */
+  simple: 'simple',
+  /**
+   * Will send an address and tx then send an error.
+   */
+  error: 'error',
+  /**
+   * Will send an address and tx then not send anything.
+   * This is meant to give time for the client to abort.
+   */
+  abort: 'abort',
 }
 
-function prepareMockServer(mockServer) {
+function makeServerMock(mockServer, mockType) {
+  function streamHistoryForSocket(streamId, socket) {
+    socket.send(
+      JSON.stringify({
+        id: streamId,
+        type: 'stream:history:address',
+        address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
+        index: 0,
+      })
+    );
+    socket.send(
+      JSON.stringify({
+        id: streamId,
+        type: 'stream:history:vertex',
+        data: mock_tx,
+      })
+    );
+    if (mockType === 'simple') {
+      socket.send(JSON.stringify({ id: streamId, type: 'stream:history:end' }));
+    } else if (mockType === 'error') {
+      socket.send(JSON.stringify({ id: streamId, type: 'stream:history:error', errmsg: 'Boom!' }));
+    }
+  }
+
   mockServer.on('connection', socket => {
     socket.on('message', data => {
       let jsonData = JSON.parse(data);
@@ -79,9 +98,12 @@ function prepareMockServer(mockServer) {
   });
 }
 
-async function testHistorySyncStream(mode) {
-  const mockServer = new Server('ws://localhost:8080/v1a/ws/');
-  prepareMockServer(mockServer);
+/**
+ * Prepare a wallet for testing with a websocket server
+ * @param {HistorySyncMode} mode - History sync mode for the wallet
+ * @returns {Promise<HathorWallet>}
+ */
+async function startWalletFor(mode) {
   // Start a wallet with stream xpub history sync mode
   const seed =
     'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
@@ -104,29 +126,87 @@ async function testHistorySyncStream(mode) {
   };
   const hWallet = new HathorWallet(walletConfig);
   await hWallet.start();
-  while (true) {
-    if (hWallet.isReady()) {
-      break;
-    }
-    await new Promise(resolve => setTimeout(resolve, 100));
-  }
-  // Check balance
-  expect(hWallet.getBalance('00')).resolves.toEqual([
-    expect.objectContaining({
-      token: expect.objectContaining({ id: '00' }),
-      balance: { locked: 0, unlocked: 100 },
-      transactions: 1,
-    }),
-  ]);
-  // Stop wallet
-  await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
-  mockServer.stop();
+  return hWallet;
 }
 
-test('xpub stream history sync', async () => {
-  await testHistorySyncStream(HistorySyncMode.XPUB_STREAM_WS);
-}, 10000);
+describe('Websocket stream history sync', () => {
+  it('should stream the history with xpub stream mode', async () => {
+    const mockServer = new Server('ws://localhost:8080/v1a/ws/');
+    makeServerMock(mockServer, SERVER_MOCK_TYPE.simple);
+    const wallet = await startWalletFor(HistorySyncMode.XPUB_STREAM_WS);
+    try {
+      while (true) {
+        if (wallet.isReady()) {
+          break;
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      // Check balance
+      expect(wallet.getBalance('00')).resolves.toEqual([
+        expect.objectContaining({
+          token: expect.objectContaining({ id: '00' }),
+          balance: { locked: 0, unlocked: 100 },
+          transactions: 1,
+        }),
+      ]);
+    } finally {
+      // Stop wallet
+      await wallet.stop({ cleanStorage: true, cleanAddresses: true });
+      mockServer.stop();
+    }
+  }, 10000);
 
-test('manual stream history sync', async () => {
-  await testHistorySyncStream(HistorySyncMode.MANUAL_STREAM_WS);
-}, 30000);
+  it('should stream the history with manual stream mode', async () => {
+    const mockServer = new Server('ws://localhost:8080/v1a/ws/');
+    makeServerMock(mockServer, SERVER_MOCK_TYPE.simple);
+    const wallet = await startWalletFor(HistorySyncMode.MANUAL_STREAM_WS);
+    try {
+      while (true) {
+        if (wallet.isReady()) {
+          break;
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      // Check balance
+      expect(wallet.getBalance('00')).resolves.toEqual([
+        expect.objectContaining({
+          token: expect.objectContaining({ id: '00' }),
+          balance: { locked: 0, unlocked: 100 },
+          transactions: 1,
+        }),
+      ]);
+    } finally {
+      // Stop wallet
+      await wallet.stop({ cleanStorage: true, cleanAddresses: true });
+      mockServer.stop();
+    }
+  }, 30000);
+
+  it('should make the wallet go in error if the stream returns an error', async () => {
+    const mockServer = new Server('ws://localhost:8080/v1a/ws/');
+    makeServerMock(mockServer, SERVER_MOCK_TYPE.error);
+    const wallet = await startWalletFor(HistorySyncMode.XPUB_STREAM_WS);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      expect(wallet.state).toBe(HathorWallet.ERROR);
+    } finally {
+      await wallet.stop();
+      mockServer.stop();
+    }
+  }, 10000);
+
+  it('should make the wallet go in error if the stream is aborted', async () => {
+    const mockServer = new Server('ws://localhost:8080/v1a/ws/');
+    makeServerMock(mockServer, SERVER_MOCK_TYPE.abort);
+    const wallet = await startWalletFor(HistorySyncMode.XPUB_STREAM_WS);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      await wallet.conn.stopStream();
+      await new Promise(resolve => setTimeout(resolve, 100));
+      expect(wallet.state).toBe(HathorWallet.ERROR);
+    } finally {
+      await wallet.stop();
+      mockServer.stop();
+    }
+  }, 10000);
+});
