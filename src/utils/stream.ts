@@ -338,8 +338,8 @@ export async function streamSyncHistory(
         if (isStreamSyncHistoryEnd(wsData)) {
           // cleanup and stop the method.
           // console.log(`Stream end at ${Date.now()}`);
-          // This will resolve the promise and clean the listener on the connection
-          abortController.abort();
+          // This will resolve the promise
+          resolve();
         }
         // An error happened on the fullnode, we should stop the stream
         if (isStreamSyncHistoryError(wsData)) {
