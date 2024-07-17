@@ -46,7 +46,7 @@ export function getHistorySyncMethod(mode: HistorySyncMode): HistorySyncFunction
     case HistorySyncMode.XPUB_STREAM_WS:
       return xpubStreamSyncHistory;
     default:
-    // case HistorySyncMode.POLLING_HTTP_API
+      // case HistorySyncMode.POLLING_HTTP_API
       return apiSyncHistory;
   }
 }

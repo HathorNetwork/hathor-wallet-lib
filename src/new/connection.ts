@@ -4,6 +4,7 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
+/* eslint max-classes-per-file: ["error", 2] */
 
 import GenericWebSocket from '../websocket';
 import helpers from '../utils/helpers';
@@ -11,6 +12,15 @@ import BaseConnection, { ConnectionParams } from '../connection';
 import { ConnectionState } from '../wallet/types';
 import { handleSubscribeAddress, handleWsDashboard } from '../utils/connection';
 import { IStorage } from '../types';
+
+class StreamController extends AbortController {
+  streamId: string;
+
+  constructor(streamId: string) {
+    super();
+    this.streamId = streamId;
+  }
+}
 
 /**
  * This is a Connection that may be shared by one or more wallets.
@@ -31,9 +41,7 @@ class WalletConnection extends BaseConnection {
 
   static CONNECTED: number = 2;
 
-  currentStreamId: string | null = null;
-
-  streamAbortController: AbortController | null = null;
+  streamController: StreamController | null = null;
 
   constructor(options: ConnectionParams) {
     super(options);
@@ -107,22 +115,20 @@ class WalletConnection extends BaseConnection {
   }
 
   streamEndHandler() {
-    this.currentStreamId = null;
-    this.streamAbortController?.abort();
-    this.streamAbortController = null;
+    this.streamController?.abort();
+    this.streamController = null;
   }
 
   lockStream(streamId: string): boolean {
-    if (this.currentStreamId === null) {
-      this.currentStreamId = streamId;
-      this.streamAbortController = new AbortController();
+    if (this.streamController === null) {
+      this.streamController = new StreamController(streamId);
       return true;
     }
     return false;
   }
 
   startStreamingHistory(id: string, firstIndex: number, xpubkey: string, gapLimit: number = -1) {
-    if (this.currentStreamId !== id) {
+    if (this.streamController?.streamId !== id) {
       throw new Error('There is an on-going stream, cannot start a second one');
     }
     if (this.websocket) {
@@ -144,7 +150,7 @@ class WalletConnection extends BaseConnection {
     first: boolean,
     gapLimit: number = -1
   ) {
-    if (this.currentStreamId !== id) {
+    if (this.streamController?.streamId !== id) {
       throw new Error('There is an on-going stream, cannot start a second one');
     }
     if (this.websocket) {
@@ -161,13 +167,10 @@ class WalletConnection extends BaseConnection {
   }
 
   async stopStream() {
-    if (this.currentStreamId === null) {
-      return;
-    }
     await new Promise<void>((resolve, reject) => {
-      if (this.streamAbortController === null) {
-        // We cannot have an active stream an a null abort controller
-        reject();
+      if (this.streamController === null) {
+        // There is no active stream.
+        resolve();
         return;
       }
       // Create a timeout so we do not wait indefinetely
@@ -183,7 +186,7 @@ class WalletConnection extends BaseConnection {
         resolve();
       });
       // Send the abort signal
-      this.streamAbortController.abort();
+      this.streamController.abort();
     });
   }
 

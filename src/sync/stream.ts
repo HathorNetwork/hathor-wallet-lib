@@ -162,7 +162,7 @@ export async function streamSyncHistory(
   let errorMessage: string | null = null;
 
   // If the abort controller of the connection aborts we need to abort the stream
-  const signal = connection.streamAbortController?.signal;
+  const signal = connection.streamController?.signal;
   if (!signal) {
     // Should not happen, but will cleanup just in case.
     connection.streamEndHandler();

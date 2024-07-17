@@ -363,7 +363,9 @@ export class Storage implements IStorage {
     shouldProcessHistory: boolean = false
   ): Promise<void> {
     if (
-      [HistorySyncMode.XPUB_STREAM_WS, HistorySyncMode.MANUAL_STREAM_WS].includes(this.historySyncMode)
+      [HistorySyncMode.XPUB_STREAM_WS, HistorySyncMode.MANUAL_STREAM_WS].includes(
+        this.historySyncMode
+      )
     ) {
       const walletType = await this.getWalletType();
       if (walletType !== WalletType.P2PKH) {
