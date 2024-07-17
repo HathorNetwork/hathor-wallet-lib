@@ -186,6 +186,13 @@ class WalletConnection extends BaseConnection {
       this.streamAbortController.abort();
     });
   }
+
+  /**
+   * Handle cleanup in cases of wallet reloads.
+   */
+  async onReload() {
+    await this.stopStream();
+  }
 }
 
 export default WalletConnection;
