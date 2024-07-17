@@ -98,7 +98,7 @@ export async function xpubStreamSyncHistory(
     storage,
     connection,
     shouldProcessHistory,
-    HistorySyncMode.STREAM_XPUB
+    HistorySyncMode.XPUB_STREAM_WS
   );
 }
 
@@ -122,7 +122,7 @@ export async function manualStreamSyncHistory(
     storage,
     connection,
     shouldProcessHistory,
-    HistorySyncMode.STREAM_MANUAL
+    HistorySyncMode.MANUAL_STREAM_WS
   );
 }
 
@@ -147,7 +147,7 @@ export async function streamSyncHistory(
   const ADDRESSES_PER_MESSAGE = 40;
   const UI_UPDATE_INTERVAL = 500;
 
-  if (![HistorySyncMode.STREAM_MANUAL, HistorySyncMode.STREAM_XPUB].includes(mode)) {
+  if (![HistorySyncMode.MANUAL_STREAM_WS, HistorySyncMode.XPUB_STREAM_WS].includes(mode)) {
     throw new Error(`Unsupported stream mode ${mode}`);
   }
 
@@ -239,7 +239,7 @@ export async function streamSyncHistory(
        * This is only used for manual streams.
        */
       async function generateNextBatch(): Promise<void> {
-        if (abortController.signal.aborted || mode !== HistorySyncMode.STREAM_MANUAL) {
+        if (abortController.signal.aborted || mode !== HistorySyncMode.MANUAL_STREAM_WS) {
           return;
         }
         const distance = lastLoadedIndex - lastReceivedIndex;
@@ -338,7 +338,6 @@ export async function streamSyncHistory(
         if (isStreamSyncHistoryEnd(wsData)) {
           // cleanup and stop the method.
           // console.log(`Stream end at ${Date.now()}`);
-          // This will resolve the promise
           resolve();
         }
         // An error happened on the fullnode, we should stop the stream
@@ -359,10 +358,10 @@ export async function streamSyncHistory(
       );
 
       switch (mode) {
-        case HistorySyncMode.STREAM_XPUB:
+        case HistorySyncMode.XPUB_STREAM_WS:
           connection.startStreamingHistory(streamId, startIndex, xpubkey, gapLimit);
           break;
-        case HistorySyncMode.STREAM_MANUAL:
+        case HistorySyncMode.MANUAL_STREAM_WS:
           connection.sendManualStreamingHistory(
             streamId,
             startIndex,
