@@ -23,9 +23,9 @@ export interface IInputSignature {
 }
 
 export enum HistorySyncMode {
-  API = 'api',
-  STREAM_MANUAL = 'stream-manual',
-  STREAM_XPUB = 'stream-xpub',
+  POLLING_HTTP_API = 'polling-http-api',
+  MANUAL_STREAM_WS = 'manual-stream-ws',
+  XPUB_STREAM_WS = 'xpub-stream-ws',
 }
 
 /**

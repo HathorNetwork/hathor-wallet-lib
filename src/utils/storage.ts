@@ -26,7 +26,7 @@ import walletApi from '../api/wallet';
 import helpers from './helpers';
 import transactionUtils from './transaction';
 import { deriveAddressP2PKH, deriveAddressP2SH } from './address';
-import { xpubStreamSyncHistory, manualStreamSyncHistory } from './stream';
+import { xpubStreamSyncHistory, manualStreamSyncHistory } from '../sync/stream';
 import {
   NATIVE_TOKEN_UID,
   MAX_ADDRESSES_GET,
@@ -41,12 +41,12 @@ import {
  */
 export function getHistorySyncMethod(mode: HistorySyncMode): HistorySyncFunction {
   switch (mode) {
-    case HistorySyncMode.STREAM_MANUAL:
+    case HistorySyncMode.MANUAL_STREAM_WS:
       return manualStreamSyncHistory;
-    case HistorySyncMode.STREAM_XPUB:
+    case HistorySyncMode.XPUB_STREAM_WS:
       return xpubStreamSyncHistory;
     default:
-      // case HistorySyncMode.API
+    // case HistorySyncMode.POLLING_HTTP_API
       return apiSyncHistory;
   }
 }

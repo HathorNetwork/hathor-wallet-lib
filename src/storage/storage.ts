@@ -90,7 +90,7 @@ export class Storage implements IStorage {
     this.version = null;
     this.utxoUnlockWait = Promise.resolve();
     this.txSignFunc = null;
-    this.historySyncMode = HistorySyncMode.API;
+    this.historySyncMode = HistorySyncMode.POLLING_HTTP_API;
   }
 
   /**
@@ -363,7 +363,7 @@ export class Storage implements IStorage {
     shouldProcessHistory: boolean = false
   ): Promise<void> {
     if (
-      [HistorySyncMode.STREAM_XPUB, HistorySyncMode.STREAM_MANUAL].includes(this.historySyncMode)
+      [HistorySyncMode.XPUB_STREAM_WS, HistorySyncMode.MANUAL_STREAM_WS].includes(this.historySyncMode)
     ) {
       const walletType = await this.getWalletType();
       if (walletType !== WalletType.P2PKH) {
