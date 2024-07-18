@@ -367,7 +367,7 @@ export class Storage implements IStorage {
     connection: FullNodeConnection,
     shouldProcessHistory: boolean = false
   ): Promise<void> {
-    if (!getSupportedSyncMode(this).includes(this.historySyncMode)) {
+    if (!(await getSupportedSyncMode(this)).includes(this.historySyncMode)) {
       throw new Error('Trying to use an unsupported sync method for this wallet.');
     }
     await getHistorySyncMethod(this.historySyncMode)(
