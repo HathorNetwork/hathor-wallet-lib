@@ -200,8 +200,11 @@ describe('Websocket stream history sync', () => {
     makeServerMock(mockServer, SERVER_MOCK_TYPE.abort);
     const wallet = await startWalletFor(HistorySyncMode.XPUB_STREAM_WS);
     try {
+      // Await some time so the wallet can start the streamming.
       await new Promise(resolve => setTimeout(resolve, 1000));
+      // Abort the stream.
       await wallet.conn.stopStream();
+      // Await the stream to stop and the wallet to go into error.
       await new Promise(resolve => setTimeout(resolve, 100));
       expect(wallet.state).toBe(HathorWallet.ERROR);
     } finally {

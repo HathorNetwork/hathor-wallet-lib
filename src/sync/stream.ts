@@ -1,5 +1,5 @@
 import { Address as BitcoreAddress, HDPublicKey } from 'bitcore-lib';
-import FullnodeConnection from '../new/connection';
+import FullNodeConnection from '../new/connection';
 import { IStorage, IHistoryTx, HistorySyncMode, isGapLimitScanPolicy } from '../types';
 import Network from '../models/network';
 
@@ -82,7 +82,7 @@ export async function xpubStreamSyncHistory(
   startIndex: number,
   _count: number,
   storage: IStorage,
-  connection: FullnodeConnection,
+  connection: FullNodeConnection,
   shouldProcessHistory: boolean = false
 ) {
   let firstIndex = startIndex;
@@ -106,7 +106,7 @@ export async function manualStreamSyncHistory(
   startIndex: number,
   _count: number,
   storage: IStorage,
-  connection: FullnodeConnection,
+  connection: FullNodeConnection,
   shouldProcessHistory: boolean = false
 ) {
   let firstIndex = startIndex;
@@ -126,12 +126,248 @@ export async function manualStreamSyncHistory(
   );
 }
 
+export class StreamManager extends AbortController {
+  streamId: string;
+
+  MAX_WINDOW_SIZE = 600;
+  ADDRESSES_PER_MESSAGE = 40;
+  UI_UPDATE_INTERVAL = 500;
+
+  storage: IStorage;
+  connection: FullNodeConnection;
+  xpubkey: string;
+  gapLimit: number;
+  network: string;
+  lastLoadedIndex: number;
+  lastReceivedIndex: number;
+  canUpdateUI: boolean;
+  foundAnyTx: boolean;
+  mode: HistorySyncMode;
+  executionQueue: Promise<void>;
+  batchQueue: Promise<void>;
+
+  errorMessage: string | null;
+
+  constructor(
+    startIndex: number,
+    xpubkey: string,
+    gapLimit: number,
+    storage: IStorage,
+    connection: FullNodeConnection,
+    mode: HistorySyncMode,
+  ) {
+    super();
+    this.streamId = generateStreamId();
+    this.storage = storage;
+    this.connection = connection;
+    this.xpubkey = xpubkey;
+    this.gapLimit = gapLimit;
+    this.network = storage.config.getNetwork().name;
+    this.lastLoadedIndex = startIndex - 1;
+    this.lastReceivedIndex = -1;
+    this.canUpdateUI = true;
+    this.mode = mode;
+    this.errorMessage = null;
+    this.foundAnyTx = false;
+
+    this.executionQueue = Promise.resolve();
+    this.batchQueue = Promise.resolve();
+  }
+
+  setupStream() {
+    // Make sure this is the only stream running on this connection
+    if (!this.connection.lockStream(this.streamId)) {
+      throw new Error('There is an on-going stream on this connection');
+    }
+
+    // If the abort controller of the connection aborts we need to abort the stream
+    const signal = this.connection.streamController?.signal;
+    if (!signal) {
+      // Should not happen, but will cleanup just in case.
+      this.connection.streamEndHandler();
+      throw new Error('No abort controller on connection');
+    }
+
+    signal.addEventListener(
+      'abort',
+      () => {
+        this.abortWithError('Stream aborted');
+      },
+      {
+        once: true,
+        signal: this.signal,
+      }
+    );
+  }
+
+  abortWithError(error: string) {
+    this.errorMessage = error;
+    this.abort();
+  }
+
+  /**
+   * Generate the next batch of addresses to send to the fullnode.
+   * The batch will generate `ADDRESSES_PER_MESSAGE` addresses and send them to the fullnode.
+   * It will run again until the fullnode has `MAX_WINDOW_SIZE` addresses on its end.
+   * This is calculated by the distance between the highest index we sent to the fullnode minus the highest index we received from the fullnode.
+   * This is only used for manual streams.
+   */
+  generateNextBatch() {
+    this.batchQueue = this.batchQueue.then(async () => {
+      if (this.signal.aborted || this.mode !== HistorySyncMode.MANUAL_STREAM_WS) {
+        return;
+      }
+      const distance = this.lastLoadedIndex - this.lastReceivedIndex;
+      if (distance > this.MAX_WINDOW_SIZE - this.ADDRESSES_PER_MESSAGE) {
+        return;
+      }
+
+      // This part is sync so that we block the main loop during the generation of the batch
+      const batch = loadAddressesCPUIntensive(
+        this.lastLoadedIndex + 1,
+        this.ADDRESSES_PER_MESSAGE,
+        this.xpubkey,
+        this.network
+      );
+      this.lastLoadedIndex += this.ADDRESSES_PER_MESSAGE;
+      this.connection.sendManualStreamingHistory(
+        this.streamId,
+        this.lastLoadedIndex + 1,
+        batch,
+        false,
+        this.gapLimit
+      );
+
+      // Free main loop to run other tasks and queue next batch
+      setTimeout(() => {
+        this.generateNextBatch();
+      }, 0);
+    });
+  }
+
+  addTx(tx: IHistoryTx) {
+    this.foundAnyTx = true;
+    this.executionQueue = this.executionQueue.then(async () => {
+      await this.storage.addTx(tx);
+    });
+  }
+
+  addAddress(index: number, address: string) {
+    if (index > this.lastReceivedIndex) {
+      this.lastReceivedIndex = index;
+    }
+
+    this.executionQueue = this.executionQueue.then(async () => {
+      const alreadyExists = await this.storage.isAddressMine(address);
+      if (!alreadyExists) {
+        await this.storage.saveAddress({
+          base58: address,
+          bip32AddressIndex: index,
+        });
+      }
+    });
+  }
+
+  /**
+   * Send event to update UI.
+   * This should be throttled to avoid flooding the UI with events.
+   * The UI will be updated in intervals of at least `UI_UPDATE_INTERVAL`.
+   */
+  updateUI() {
+    // Queue the UI update to run after we process the event that
+    // generated this update.
+    this.executionQueue = this.executionQueue.then(async () => {
+      if (this.signal.aborted) {
+        return;
+      }
+      if (this.canUpdateUI) {
+        this.canUpdateUI = false;
+        this.connection.emit('wallet-load-partial-update', {
+          addressesFound: await this.storage.store.addressCount(),
+          historyLength: await this.storage.store.historyCount(),
+        });
+        setTimeout(() => {
+          this.canUpdateUI = true;
+        }, this.UI_UPDATE_INTERVAL);
+      }
+    });
+  };
+
+  sendStartMessage() {
+    switch (this.mode) {
+      case HistorySyncMode.XPUB_STREAM_WS:
+        this.connection.sendStartXPubStreamingHistory(this.streamId, this.lastLoadedIndex + 1, this.xpubkey, this.gapLimit);
+        break;
+      case HistorySyncMode.MANUAL_STREAM_WS:
+        this.connection.sendManualStreamingHistory(
+          this.streamId,
+          this.lastLoadedIndex + 1,
+          loadAddressesCPUIntensive(this.lastLoadedIndex + 1, this.ADDRESSES_PER_MESSAGE, this.xpubkey, this.network),
+          true,
+          this.gapLimit
+        );
+        this.lastLoadedIndex += this.ADDRESSES_PER_MESSAGE;
+        break;
+      default:
+        // Should never happen.
+        this.abortWithError('Unknown stream mode');
+        break;
+    }
+  }
+
+  async shutdown() {
+    await this.executionQueue;
+    await this.batchQueue;
+
+    if (this.errorMessage) {
+      throw new Error(this.errorMessage);
+    }
+  }
+}
+
+function buildListener(manager: StreamManager, resolve: () => void) {
+  return (wsData: IStreamSyncHistoryData) => {
+    // Early return if the stream is aborted
+    // This will prevent any tx or address from being added when we want to stop the stream.
+    if (manager.signal.aborted) {
+      return;
+    }
+    // Only process the message if it is from our stream, this error should not happen.
+    if (wsData.id !== manager.streamId) {
+      // Check that the stream id is the same we sent
+      console.log(`Wrong stream ${JSON.stringify(wsData)}`);
+      return;
+    }
+    // Vertex is a transaction in the history of the last address received
+    if (isStreamSyncHistoryVertex(wsData)) {
+      // foundAnyTx = true;
+      // add to history
+      manager.addTx(wsData.data);
+      manager.updateUI();
+    }
+    if (isStreamSyncHistoryAddress(wsData)) {
+      manager.addAddress(wsData.index, wsData.address);
+      manager.updateUI();
+      manager.generateNextBatch();
+    }
+    if (isStreamSyncHistoryEnd(wsData)) {
+      // cleanup and stop the method.
+      resolve();
+    }
+    // An error happened on the fullnode, we should stop the stream
+    if (isStreamSyncHistoryError(wsData)) {
+      console.error(`Stream error: ${wsData.errmsg}`);
+      manager.abortWithError(wsData.errmsg);
+    }
+  };
+}
+
 /**
  * Start a stream to sync the history of the wallet on `storage`.
  * Since there is a lot of overlap between xpub and manual modes this method was created to accomodate both.
  * @param {number} startIndex Index to start loading addresses
  * @param {IStorage} storage The storage to load the addresses
- * @param {FullnodeConnection} connection Connection to the full node
+ * @param {FullNodeConnection} connection Connection to the full node
  * @param {boolean} shouldProcessHistory If we should process the history after loading it.
  * @param {HistorySyncMode} mode The mode of the stream
  * @returns {Promise<void>}
@@ -139,35 +375,22 @@ export async function manualStreamSyncHistory(
 export async function streamSyncHistory(
   startIndex: number,
   storage: IStorage,
-  connection: FullnodeConnection,
+  connection: FullNodeConnection,
   shouldProcessHistory: boolean,
   mode: HistorySyncMode
 ): Promise<void> {
-  const MAX_WINDOW_SIZE = 600;
-  const ADDRESSES_PER_MESSAGE = 40;
-  const UI_UPDATE_INTERVAL = 500;
-
   if (![HistorySyncMode.MANUAL_STREAM_WS, HistorySyncMode.XPUB_STREAM_WS].includes(mode)) {
     throw new Error(`Unsupported stream mode ${mode}`);
   }
 
-  // Make sure this is the only stream running on this connection
-  const streamId = generateStreamId();
-  if (!connection.lockStream(streamId)) {
-    throw new Error('There is an on-going stream on this connection');
+  const accessData = await storage.getAccessData();
+  if (accessData === null) {
+    throw new Error('No access data');
   }
+  const { xpubkey } = accessData;
+  // Should not throw here since we only support gapLimit wallets
+  const gapLimit = await storage.getGapLimit();
 
-  let batchGenerationPromise = Promise.resolve();
-  let executionQueue = Promise.resolve();
-  let errorMessage: string | null = null;
-
-  // If the abort controller of the connection aborts we need to abort the stream
-  const signal = connection.streamController?.signal;
-  if (!signal) {
-    // Should not happen, but will cleanup just in case.
-    connection.streamEndHandler();
-    throw new Error('No abort controller on connection');
-  }
   /**
    * The abort controller will be used to stop the stream.
    * The signal will be used to:
@@ -180,31 +403,19 @@ export async function streamSyncHistory(
    * It will NOT be used to stop processing addresses and transactions, the `executionQueue` will not stop when abort is called.
    * This ensures the abort can be called and no received txs will be lost.
    */
-  const abortController = new AbortController();
-  signal.addEventListener(
-    'abort',
-    () => {
-      errorMessage = 'Stream aborted';
-      abortController.abort();
-    },
-    {
-      once: true,
-      signal: abortController.signal,
-    }
+  const manager = new StreamManager(
+    startIndex,
+    xpubkey,
+    gapLimit,
+    storage,
+    connection,
+    mode,
   );
+  manager.setupStream();
 
   // This is a try..finally so that we can always call the signal abort function
   // This is meant to prevent memory leaks
   try {
-    const accessData = await storage.getAccessData();
-    if (accessData === null) {
-      throw new Error('No access data');
-    }
-    // This should not throw since this method currently only supports gap-limit wallets.
-    const gapLimit = await storage.getGapLimit();
-
-    let foundAnyTx = false;
-
     /**
      * The promise will resolve when
      * - The stream is done.
@@ -212,144 +423,17 @@ export async function streamSyncHistory(
      * - An error happens in the fullnode.
      */
     await new Promise<void>(resolve => {
-      const { xpubkey } = accessData;
-      const network = storage.config.getNetwork().name;
-      let lastLoadedIndex = startIndex + ADDRESSES_PER_MESSAGE - 1;
-      let lastReceivedIndex = -1;
-      let canUpdateUI = true;
 
       // If the controller aborts we need to resolve and exit the promise.
-      abortController.signal.addEventListener(
-        'abort',
-        () => {
-          resolve();
-        },
-        { once: true }
-      );
+      manager.signal.addEventListener('abort', () => {resolve();}, { once: true });
       // If it is already aborted for some reason, just exit
-      if (abortController.signal.aborted) {
+      if (manager.signal.aborted) {
         resolve();
       }
 
-      /**
-       * Generate the next batch of addresses to send to the fullnode.
-       * The batch will generate `ADDRESSES_PER_MESSAGE` addresses and send them to the fullnode.
-       * It will run again until the fullnode has `MAX_WINDOW_SIZE` addresses on its end.
-       * This is calculated by the distance between the highest index we sent to the fullnode minus the highest index we received from the fullnode.
-       * This is only used for manual streams.
-       */
-      async function generateNextBatch(): Promise<void> {
-        if (abortController.signal.aborted || mode !== HistorySyncMode.MANUAL_STREAM_WS) {
-          return;
-        }
-        const distance = lastLoadedIndex - lastReceivedIndex;
-        if (distance > MAX_WINDOW_SIZE - ADDRESSES_PER_MESSAGE) {
-          return;
-        }
-
-        // This part is sync so that we block the main loop during the generation of the batch
-        const batch = loadAddressesCPUIntensive(
-          lastLoadedIndex + 1,
-          ADDRESSES_PER_MESSAGE,
-          xpubkey,
-          network
-        );
-        lastLoadedIndex += ADDRESSES_PER_MESSAGE;
-        connection.sendManualStreamingHistory(
-          streamId,
-          lastLoadedIndex + 1,
-          batch,
-          false,
-          gapLimit
-        );
-
-        // Free main loop to run other tasks and queue next batch
-        setTimeout(() => {
-          batchGenerationPromise = batchGenerationPromise.then(async () => {
-            await generateNextBatch();
-          });
-        }, 0);
-      }
-
-      /**
-       * Send event to update UI.
-       * This should be throttled to avoid flooding the UI with events.
-       * The UI will be updated in intervals of at least `UI_UPDATE_INTERVAL`.
-       */
-      const updateUI = async () => {
-        if (abortController.signal.aborted) {
-          return;
-        }
-        if (canUpdateUI) {
-          canUpdateUI = false;
-          connection.emit('wallet-load-partial-update', {
-            addressesFound: await storage.store.addressCount(),
-            historyLength: await storage.store.historyCount(),
-          });
-          setTimeout(() => {
-            canUpdateUI = true;
-          }, UI_UPDATE_INTERVAL);
-        }
-      };
-
-      // This listener will handle all the messages coming from the fullnode.
-      const listener = (wsData: IStreamSyncHistoryData) => {
-        // Early return if the stream is aborted
-        // This will prevent any tx or address from being added when we want to stop the stream.
-        if (abortController.signal.aborted) {
-          return;
-        }
-        // Only process the message if it is from our stream, this error should not happen.
-        if (wsData.id !== streamId) {
-          // Check that the stream id is the same we sent
-          console.log(`Wrong stream ${JSON.stringify(wsData)}`);
-          return;
-        }
-        // Vertex is a transaction in the history of the last address received
-        if (isStreamSyncHistoryVertex(wsData)) {
-          foundAnyTx = true;
-          // add to history
-          executionQueue = executionQueue.then(async () => {
-            await storage.addTx(wsData.data);
-            await updateUI();
-          });
-        }
-        if (isStreamSyncHistoryAddress(wsData)) {
-          if (wsData.index > lastReceivedIndex) {
-            lastReceivedIndex = wsData.index;
-          }
-          // Register address on storage
-          // The address will be subscribed on the server side
-          executionQueue = executionQueue.then(async () => {
-            const alreadyExists = await storage.isAddressMine(wsData.address);
-            if (!alreadyExists) {
-              await storage.saveAddress({
-                base58: wsData.address,
-                bip32AddressIndex: wsData.index,
-              });
-            }
-            await updateUI();
-          });
-          // Generate next batch if needed
-          batchGenerationPromise = batchGenerationPromise.then(async () => {
-            await generateNextBatch();
-          });
-        }
-        if (isStreamSyncHistoryEnd(wsData)) {
-          // cleanup and stop the method.
-          // console.log(`Stream end at ${Date.now()}`);
-          resolve();
-        }
-        // An error happened on the fullnode, we should stop the stream
-        if (isStreamSyncHistoryError(wsData)) {
-          console.error(`Stream error: ${wsData.errmsg}`);
-          errorMessage = wsData.errmsg;
-          // This will resolve the promise and clean the listener on the connection
-          abortController.abort();
-        }
-      };
+      const listener = buildListener(manager, resolve);
       connection.on('stream', listener);
-      abortController.signal.addEventListener(
+      manager.signal.addEventListener(
         'abort',
         () => {
           connection.removeListener('stream', listener);
@@ -357,42 +441,17 @@ export async function streamSyncHistory(
         { once: true }
       );
 
-      switch (mode) {
-        case HistorySyncMode.XPUB_STREAM_WS:
-          connection.sendStartXPubStreamingHistory(streamId, startIndex, xpubkey, gapLimit);
-          break;
-        case HistorySyncMode.MANUAL_STREAM_WS:
-          connection.sendManualStreamingHistory(
-            streamId,
-            startIndex,
-            loadAddressesCPUIntensive(startIndex, ADDRESSES_PER_MESSAGE, xpubkey, network),
-            true,
-            gapLimit
-          );
-          break;
-        default:
-          // Should never happen.
-          errorMessage = 'Unknown stream mode';
-          abortController.abort();
-          break;
-      }
+      manager.sendStartMessage();
     });
 
-    // Wait for promise chains to finish.
-    await executionQueue;
-    await batchGenerationPromise;
+    await manager.shutdown();
 
-    // Will not attempt to process the history since some error or abortion happened
-    if (errorMessage) {
-      throw new Error(errorMessage);
-    }
-
-    if (foundAnyTx && shouldProcessHistory) {
+    if (manager.foundAnyTx && shouldProcessHistory) {
       await storage.processHistory();
     }
   } finally {
     // Always abort on finally to avoid memory leaks
-    abortController.abort();
+    manager.abort();
     connection.emit('stream-end');
   }
 }
