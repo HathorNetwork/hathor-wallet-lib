@@ -93,13 +93,9 @@ export async function xpubStreamSyncHistory(
       firstIndex = lastLoadedAddressIndex + 1;
     }
   }
-  await streamSyncHistory(
-    firstIndex,
-    storage,
-    connection,
-    shouldProcessHistory,
-    HistorySyncMode.XPUB_STREAM_WS
-  );
+
+  const manager = new StreamManager(startIndex, storage, connection, modeHistorySyncMode.XPUB_STREAM_WS);
+  await streamSyncHistory(manager, shouldProcessHistory);
 }
 
 export async function manualStreamSyncHistory(
@@ -117,15 +113,20 @@ export async function manualStreamSyncHistory(
       firstIndex = lastLoadedAddressIndex + 1;
     }
   }
-  await streamSyncHistory(
-    firstIndex,
-    storage,
-    connection,
-    shouldProcessHistory,
-    HistorySyncMode.MANUAL_STREAM_WS
-  );
+
+  const manager = new StreamManager(startIndex, storage, connection, modeHistorySyncMode.MANUAL_STREAM_WS);
+  await streamSyncHistory(manager, shouldProcessHistory);
 }
 
+/**
+ * The StreamManager extends the AbortController because it will be used to stop the stream.
+ * The abort signal will be used to:
+ * - Stop generating more addresses since the fullnode will not receive them.
+ * - Stop updating the UI with events of new addresses and transactions.
+ * - Stop processing new events from the fullnode.
+ * - Once aborted the `stream` event listener will be removed from the connection.
+ * - Resolve the promise when aborted.
+ */
 export class StreamManager extends AbortController {
   streamId: string;
 
@@ -148,10 +149,14 @@ export class StreamManager extends AbortController {
 
   errorMessage: string | null;
 
+  /**
+   * @param {number} startIndex Index to start loading addresses
+   * @param {IStorage} storage The storage to load the addresses
+   * @param {FullNodeConnection} connection Connection to the full node
+   * @param {HistorySyncMode} mode The mode of the stream
+   */
   constructor(
     startIndex: number,
-    xpubkey: string,
-    gapLimit: number,
     storage: IStorage,
     connection: FullNodeConnection,
     mode: HistorySyncMode,
@@ -160,9 +165,9 @@ export class StreamManager extends AbortController {
     this.streamId = generateStreamId();
     this.storage = storage;
     this.connection = connection;
-    this.xpubkey = xpubkey;
-    this.gapLimit = gapLimit;
-    this.network = storage.config.getNetwork().name;
+    this.xpubkey = '';
+    this.gapLimit = 0;
+    this.network = '';
     this.lastLoadedIndex = startIndex - 1;
     this.lastReceivedIndex = -1;
     this.canUpdateUI = true;
@@ -174,7 +179,21 @@ export class StreamManager extends AbortController {
     this.batchQueue = Promise.resolve();
   }
 
-  setupStream() {
+  /**
+   * Make initial preparations and lock the stream on the connection.
+   */
+  async setupStream() {
+    const accessData = await storage.getAccessData();
+    if (accessData === null) {
+      throw new Error('No access data');
+    }
+    const { xpubkey } = accessData;
+    // Should not throw here since we only support gapLimit wallets
+    const gapLimit = await storage.getGapLimit();
+    this.xpubkey = xpubkey;
+    this.gapLimit = gapLimit;
+    this.network = storage.config.getNetwork().name;
+
     // Make sure this is the only stream running on this connection
     if (!this.connection.lockStream(this.streamId)) {
       throw new Error('There is an on-going stream on this connection');
@@ -200,6 +219,9 @@ export class StreamManager extends AbortController {
     );
   }
 
+  /**
+   * Abort the stream with an error.
+   */
   abortWithError(error: string) {
     this.errorMessage = error;
     this.abort();
@@ -373,85 +395,58 @@ function buildListener(manager: StreamManager, resolve: () => void) {
  * @returns {Promise<void>}
  */
 export async function streamSyncHistory(
-  startIndex: number,
-  storage: IStorage,
-  connection: FullNodeConnection,
+  manager: StreamManager,
   shouldProcessHistory: boolean,
-  mode: HistorySyncMode
 ): Promise<void> {
   if (![HistorySyncMode.MANUAL_STREAM_WS, HistorySyncMode.XPUB_STREAM_WS].includes(mode)) {
     throw new Error(`Unsupported stream mode ${mode}`);
   }
 
-  const accessData = await storage.getAccessData();
-  if (accessData === null) {
-    throw new Error('No access data');
-  }
-  const { xpubkey } = accessData;
-  // Should not throw here since we only support gapLimit wallets
-  const gapLimit = await storage.getGapLimit();
-
-  /**
-   * The abort controller will be used to stop the stream.
-   * The signal will be used to:
-   * - Stop generating more addresses since the fullnode will not receive them.
-   * - Stop updating the UI with events of new addresses and transactions.
-   * - Stop processing new events from the fullnode.
-   * - Once aborted the `stream` event listener will be removed from the connection.
-   * - Resolve the promise when aborted.
-   *
-   * It will NOT be used to stop processing addresses and transactions, the `executionQueue` will not stop when abort is called.
-   * This ensures the abort can be called and no received txs will be lost.
-   */
-  const manager = new StreamManager(
-    startIndex,
-    xpubkey,
-    gapLimit,
-    storage,
-    connection,
-    mode,
-  );
-  manager.setupStream();
+  await manager.setupStream();
 
   // This is a try..finally so that we can always call the signal abort function
   // This is meant to prevent memory leaks
   try {
     /**
-     * The promise will resolve when
+     * The promise will resolve when either:
      * - The stream is done.
      * - The stream is aborted.
      * - An error happens in the fullnode.
      */
     await new Promise<void>(resolve => {
 
-      // If the controller aborts we need to resolve and exit the promise.
+      // If the manager aborts we need to resolve and exit the promise.
       manager.signal.addEventListener('abort', () => {resolve();}, { once: true });
       // If it is already aborted for some reason, just exit
       if (manager.signal.aborted) {
         resolve();
       }
 
+      // Start listening for stream events
       const listener = buildListener(manager, resolve);
-      connection.on('stream', listener);
+      manager.connection.on('stream', listener);
+      // Cleanup the listener when the manager aborts
       manager.signal.addEventListener(
         'abort',
         () => {
-          connection.removeListener('stream', listener);
+          manager.connection.removeListener('stream', listener);
         },
         { once: true }
       );
 
+      // Send the start message to the fullnode
       manager.sendStartMessage();
     });
 
+    // Graceful shutdown and cleanup.
     await manager.shutdown();
 
     if (manager.foundAnyTx && shouldProcessHistory) {
-      await storage.processHistory();
+      await manager.storage.processHistory();
     }
   } finally {
     // Always abort on finally to avoid memory leaks
     manager.abort();
-    connection.emit('stream-end');
+    manager.connection.emit('stream-end');
   }
 }
