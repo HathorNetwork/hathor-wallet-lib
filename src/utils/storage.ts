@@ -60,10 +60,10 @@ export async function getSupportedSyncMode(storage: IStorage): Promise<HistorySy
       HistorySyncMode.POLLING_HTTP_API,
       HistorySyncMode.XPUB_STREAM_WS,
     ];
-  } else if (walletType === WalletType.P2PKH) {
+  }
+  if (walletType === WalletType.MULTISIG) {
     return [HistorySyncMode.POLLING_HTTP_API];
   }
-
   return [];
 }
 
