@@ -21,6 +21,7 @@ import {
   SCANNING_POLICY,
   HistorySyncMode,
   HistorySyncFunction,
+  WalletType,
 } from '../types';
 import walletApi from '../api/wallet';
 import helpers from './helpers';
@@ -45,10 +46,25 @@ export function getHistorySyncMethod(mode: HistorySyncMode): HistorySyncFunction
       return manualStreamSyncHistory;
     case HistorySyncMode.XPUB_STREAM_WS:
       return xpubStreamSyncHistory;
+    case HistorySyncMode.POLLING_HTTP_API:
     default:
-      // case HistorySyncMode.POLLING_HTTP_API
       return apiSyncHistory;
   }
+}
+
+export async function getSupportedSyncMode(storage: IStorage): Promise<HistorySyncMode[]> {
+  const walletType = await storage.getWalletType();
+  if (walletType === WalletType.P2PKH) {
+    return [
+      HistorySyncMode.MANUAL_STREAM_WS,
+      HistorySyncMode.POLLING_HTTP_API,
+      HistorySyncMode.XPUB_STREAM_WS,
+    ];
+  } else if (walletType === WalletType.P2PKH) {
+    return [HistorySyncMode.POLLING_HTTP_API];
+  }
+
+  return [];
 }
 
 /**

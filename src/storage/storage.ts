@@ -38,7 +38,12 @@ import {
   HistorySyncMode,
 } from '../types';
 import transactionUtils from '../utils/transaction';
-import { processHistory, processUtxoUnlock, getHistorySyncMethod } from '../utils/storage';
+import {
+  processHistory,
+  processUtxoUnlock,
+  getHistorySyncMethod,
+  getSupportedSyncMode,
+} from '../utils/storage';
 import config, { Config } from '../config';
 import { decryptData, checkPassword } from '../utils/crypto';
 import FullNodeConnection from '../new/connection';
@@ -362,15 +367,8 @@ export class Storage implements IStorage {
     connection: FullNodeConnection,
     shouldProcessHistory: boolean = false
   ): Promise<void> {
-    if (
-      [HistorySyncMode.XPUB_STREAM_WS, HistorySyncMode.MANUAL_STREAM_WS].includes(
-        this.historySyncMode
-      )
-    ) {
-      const walletType = await this.getWalletType();
-      if (walletType !== WalletType.P2PKH) {
-        throw new Error('Can only use stream history sync with P2PKH wallets');
-      }
+    if (!getSupportedSyncMode(this).includes(this.historySyncMode)) {
+      throw new Error('Trying to use an unsupported sync method for this wallet.');
     }
     await getHistorySyncMethod(this.historySyncMode)(
       startIndex,

@@ -50,7 +50,7 @@ const SERVER_MOCK_TYPE = {
    * This is meant to give time for the client to abort.
    */
   abort: 'abort',
-}
+};
 
 function makeServerMock(mockServer, mockType) {
   function streamHistoryForSocket(streamId, socket) {

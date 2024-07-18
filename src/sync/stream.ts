@@ -359,7 +359,7 @@ export async function streamSyncHistory(
 
       switch (mode) {
         case HistorySyncMode.XPUB_STREAM_WS:
-          connection.startStreamingHistory(streamId, startIndex, xpubkey, gapLimit);
+          connection.sendStartXPubStreamingHistory(streamId, startIndex, xpubkey, gapLimit);
           break;
         case HistorySyncMode.MANUAL_STREAM_WS:
           connection.sendManualStreamingHistory(

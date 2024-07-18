@@ -13,6 +13,8 @@ import { ConnectionState } from '../wallet/types';
 import { handleSubscribeAddress, handleWsDashboard } from '../utils/connection';
 import { IStorage } from '../types';
 
+const STREAM_ABORT_TIMEOUT = 10000; // 10s
+
 class StreamController extends AbortController {
   streamId: string;
 
@@ -127,20 +129,27 @@ class WalletConnection extends BaseConnection {
     return false;
   }
 
-  startStreamingHistory(id: string, firstIndex: number, xpubkey: string, gapLimit: number = -1) {
+  sendStartXPubStreamingHistory(
+    id: string,
+    firstIndex: number,
+    xpubkey: string,
+    gapLimit: number = -1
+  ) {
     if (this.streamController?.streamId !== id) {
       throw new Error('There is an on-going stream, cannot start a second one');
     }
-    if (this.websocket) {
-      const data = JSON.stringify({
-        id,
-        xpub: xpubkey,
-        type: 'request:history:xpub',
-        'first-index': firstIndex,
-        'gap-limit': gapLimit,
-      });
-      this.websocket.sendMessage(data);
+    if (!this.websocket) {
+      throw new Error('No websocket connection to send message.');
     }
+
+    const data = JSON.stringify({
+      id,
+      xpub: xpubkey,
+      type: 'request:history:xpub',
+      'first-index': firstIndex,
+      'gap-limit': gapLimit,
+    });
+    this.websocket.sendMessage(data);
   }
 
   sendManualStreamingHistory(
@@ -153,17 +162,19 @@ class WalletConnection extends BaseConnection {
     if (this.streamController?.streamId !== id) {
       throw new Error('There is an on-going stream, cannot start a second one');
     }
-    if (this.websocket) {
-      const data = JSON.stringify({
-        id,
-        first,
-        addresses,
-        type: 'request:history:manual',
-        'first-index': firstIndex,
-        'gap-limit': gapLimit,
-      });
-      this.websocket.sendMessage(data);
+    if (!this.websocket) {
+      throw new Error('No websocket connection to send message.');
     }
+
+    const data = JSON.stringify({
+      id,
+      first,
+      addresses,
+      type: 'request:history:manual',
+      'first-index': firstIndex,
+      'gap-limit': gapLimit,
+    });
+    this.websocket.sendMessage(data);
   }
 
   async stopStream() {
@@ -177,7 +188,7 @@ class WalletConnection extends BaseConnection {
       // It it reaches here we should reject since something went wrong.
       const timer = setTimeout(() => {
         reject();
-      }, 10000);
+      }, STREAM_ABORT_TIMEOUT);
 
       // We have an active stream.
       // We will wait for the stream to end then resolve.
