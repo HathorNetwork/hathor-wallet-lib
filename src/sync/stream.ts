@@ -424,11 +424,8 @@ function buildListener(manager: StreamManager, resolve: () => void) {
 /**
  * Start a stream to sync the history of the wallet on `storage`.
  * Since there is a lot of overlap between xpub and manual modes this method was created to accomodate both.
- * @param {number} startIndex Index to start loading addresses
- * @param {IStorage} storage The storage to load the addresses
- * @param {FullNodeConnection} connection Connection to the full node
+ * @param {StreamManager} manager stream manager instance.
  * @param {boolean} shouldProcessHistory If we should process the history after loading it.
- * @param {HistorySyncMode} mode The mode of the stream
  * @returns {Promise<void>}
  */
 export async function streamSyncHistory(
