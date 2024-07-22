@@ -103,33 +103,6 @@ export async function loadAddresses(
 }
 
 /**
- * Reload all addresses and transactions from the full node
- * @param {IStorage} storage Storage to be reloaded
- * @param {FullnodeConnection} connection Connection to be used to reload the storage
- * @returns {Promise<void>}
- */
-export async function reloadStorage(
-  storage: IStorage,
-  connection: FullnodeConnection
-): Promise<void> {
-  await connection.onReload();
-
-  // unsub all addresses
-  for await (const address of storage.getAllAddresses()) {
-    connection.unsubscribeAddress(address.base58);
-  }
-  const accessData = await storage.getAccessData();
-  if (accessData != null) {
-    // Clean entire storage
-    await storage.cleanStorage(true, true);
-    // Reset access data
-    await storage.saveAccessData(accessData);
-  }
-  const addressesToLoad = await scanPolicyStartAddresses(storage);
-  await storage.syncHistory(addressesToLoad.nextIndex, addressesToLoad.count, connection);
-}
-
-/**
  * Fetch the history of the addresses and save it on storage.
  * Optionally process the history after loading it.
  *

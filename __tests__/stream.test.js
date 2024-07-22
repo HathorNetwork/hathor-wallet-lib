@@ -109,7 +109,6 @@ async function startWalletFor(mode) {
     'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
   const store = new MemoryStore();
   const storage = new Storage(store);
-  storage.setHistorySyncMode(mode);
   const connection = new Connection({
     connectionTimeout: 30000,
     network: 'testnet',
@@ -125,6 +124,7 @@ async function startWalletFor(mode) {
     pinCode: '123',
   };
   const hWallet = new HathorWallet(walletConfig);
+  hWallet.setHistorySyncMode(mode);
   await hWallet.start();
   return hWallet;
 }

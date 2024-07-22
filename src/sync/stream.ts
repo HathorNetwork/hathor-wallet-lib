@@ -394,7 +394,6 @@ function buildListener(manager: StreamManager, resolve: () => void) {
     // Only process the message if it is from our stream, this error should not happen.
     if (wsData.id !== manager.streamId) {
       // Check that the stream id is the same we sent
-      console.log(`Wrong stream ${JSON.stringify(wsData)}`);
       return;
     }
     // Vertex is a transaction in the history of the last address received

@@ -454,7 +454,6 @@ export interface IStorage {
   version: ApiVersion | null;
 
   setApiVersion(version: ApiVersion): void;
-  setHistorySyncMode(mode: HistorySyncMode): void;
   getDecimalPlaces(): number;
   saveNativeToken(): Promise<void>;
   getNativeTokenData(): ITokenData;
@@ -480,12 +479,6 @@ export interface IStorage {
   getSpentTxs(inputs: Input[]): AsyncGenerator<{ tx: IHistoryTx; input: Input; index: number }>;
   addTx(tx: IHistoryTx): Promise<void>;
   processHistory(): Promise<void>;
-  syncHistory(
-    startIndex: number,
-    count: number,
-    connection: FullNodeConnection,
-    shouldProcessHistory?: boolean
-  ): Promise<void>;
 
   // Tokens
   isTokenRegistered(tokenUid: string): Promise<boolean>;

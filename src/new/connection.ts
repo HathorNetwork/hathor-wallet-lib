@@ -15,6 +15,9 @@ import { IStorage } from '../types';
 
 const STREAM_ABORT_TIMEOUT = 10000; // 10s
 
+/**
+ * Stream abort controller that carries the streamId it is managing.
+ */
 class StreamController extends AbortController {
   streamId: string;
 
