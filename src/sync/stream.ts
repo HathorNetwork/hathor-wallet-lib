@@ -394,7 +394,9 @@ function buildListener(manager: StreamManager, resolve: () => void) {
     // Only process the message if it is from our stream, this error should not happen.
     if (wsData.id !== manager.streamId) {
       // Check that the stream id is the same we sent
-      console.error(`Received stream event for id ${wsData.id} while expecting ${manager.streamId}`);
+      console.error(
+        `Received stream event for id ${wsData.id} while expecting ${manager.streamId}`
+      );
       return;
     }
     // Vertex is a transaction in the history of the last address received
@@ -416,7 +418,6 @@ function buildListener(manager: StreamManager, resolve: () => void) {
       manager.abortWithError(wsData.errmsg);
     } else {
       console.error(`Unknown event type ${wsData.type}`);
-      return;
     }
   };
 }
