@@ -417,7 +417,7 @@ function buildListener(manager: StreamManager, resolve: () => void) {
       console.error(`Stream error: ${wsData.errmsg}`);
       manager.abortWithError(wsData.errmsg);
     } else {
-      console.error(`Unknown event type ${wsData.type}`);
+      console.error(`Unknown event type ${wsData}`);
     }
   };
 }
