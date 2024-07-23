@@ -266,16 +266,16 @@ const tokens = {
    * @inner
    *
    */
-  getDepositAmount(mintAmount: number, depositPercent: number = TOKEN_DEPOSIT_PERCENTAGE): number {
-    return Math.ceil(depositPercent * mintAmount);
+  getDepositAmount(mintAmount: bigint, depositPercent: number = TOKEN_DEPOSIT_PERCENTAGE): bigint {
+    return BigInt(Math.ceil(depositPercent * Number(mintAmount)));
   },
 
   /**
    * Get the HTR value of the fee to add a data script output
-   * @returns {number} The fee to have a data script output
+   * @returns {bigint} The fee to have a data script output
    */
-  getDataScriptOutputFee(): number {
-    return 1;
+  getDataScriptOutputFee(): bigint {
+    return 1n;
   },
 
   /**
@@ -289,8 +289,8 @@ const tokens = {
    * @inner
    *
    */
-  getWithdrawAmount(meltAmount: number, depositPercent: number = TOKEN_DEPOSIT_PERCENTAGE): number {
-    return Math.floor(depositPercent * meltAmount);
+  getWithdrawAmount(meltAmount: bigint, depositPercent: number = TOKEN_DEPOSIT_PERCENTAGE): bigint {
+    return BigInt(Math.floor(depositPercent * Number(meltAmount)));
   },
 
   /**
@@ -313,7 +313,7 @@ const tokens = {
    */
   async prepareMintTxData(
     address: string,
-    amount: number,
+    amount: bigint,
     storage: IStorage,
     {
       token = null,
@@ -342,7 +342,7 @@ const tokens = {
     if (data) {
       // The deposit amount will be the quantity of data strings in the array
       // multiplied by the fee
-      depositAmount += this.getDataScriptOutputFee() * data.length;
+      depositAmount += this.getDataScriptOutputFee() * BigInt(data.length);
     }
 
     // get HTR deposit inputs
@@ -368,7 +368,7 @@ const tokens = {
         value: foundAmount - depositAmount,
         timelock: null,
         token: NATIVE_TOKEN_UID,
-        authorities: 0,
+        authorities: 0n,
         isChange: true,
       });
     }
@@ -403,9 +403,9 @@ const tokens = {
         const outputData = {
           type: 'data',
           data: dataString,
-          value: 1,
+          value: 1n,
           token: NATIVE_TOKEN_UID,
-          authorities: 0,
+          authorities: 0n,
         } as IDataOutput;
 
         // We currently have an external service that identifies NFT tokens with the first output as the data output
@@ -450,7 +450,7 @@ const tokens = {
     token: string,
     authorityMeltInput: IDataInput, // Authority melt
     address: string,
-    amount: number,
+    amount: bigint,
     storage: IStorage,
     {
       createAnotherMelt = true,
@@ -468,7 +468,7 @@ const tokens = {
       utxoSelection?: UtxoSelectionAlgorithm;
     } = {}
   ): Promise<IDataTx> {
-    if (authorityMeltInput.token !== token || authorityMeltInput.authorities !== 2) {
+    if (authorityMeltInput.token !== token || authorityMeltInput.authorities !== 2n) {
       throw new Error('Melt authority input is not valid');
     }
     const inputs: IDataInput[] = [authorityMeltInput];
@@ -478,7 +478,7 @@ const tokens = {
     let withdrawAmount = this.getWithdrawAmount(amount, depositPercent);
     // The deposit amount will be the quantity of data strings in the array
     // multiplied by the fee or 0 if there are no data outputs
-    let depositAmount = data !== null ? this.getDataScriptOutputFee() * data.length : 0;
+    let depositAmount = data !== null ? this.getDataScriptOutputFee() * BigInt(data.length) : 0n;
 
     // We only make these calculations if we are creating data outputs because the transaction needs to deposit the fee
     if (depositAmount > 0) {
@@ -487,11 +487,11 @@ const tokens = {
       if (withdrawAmount >= depositAmount) {
         // We can use part of the withdraw tokens as deposit
         withdrawAmount -= depositAmount;
-        depositAmount = 0;
+        depositAmount = 0n;
       } else {
         // Deposit is greater than withdraw, we will use all withdrawn tokens and still need to find utxos to meet deposit
         depositAmount -= withdrawAmount;
-        withdrawAmount = 0;
+        withdrawAmount = 0n;
       }
     }
 
@@ -518,7 +518,7 @@ const tokens = {
         value: foundAmount - amount,
         timelock: null,
         token,
-        authorities: 0,
+        authorities: 0n,
         isChange: true,
       });
     }
@@ -547,7 +547,7 @@ const tokens = {
           value: depositFoundAmount - depositAmount,
           timelock: null,
           token: NATIVE_TOKEN_UID,
-          authorities: 0,
+          authorities: 0n,
           isChange: true,
         });
       }
@@ -559,7 +559,7 @@ const tokens = {
         type: getAddressType(newAddress, storage.config.getNetwork()),
         address: newAddress,
         token,
-        authorities: 2,
+        authorities: 2n,
         value: TOKEN_MELT_MASK,
         timelock: null,
       });
@@ -571,7 +571,7 @@ const tokens = {
         value: withdrawAmount,
         address,
         token: NATIVE_TOKEN_UID,
-        authorities: 0,
+        authorities: 0n,
         timelock: null,
         type: getAddressType(address, storage.config.getNetwork()),
       });
@@ -582,9 +582,9 @@ const tokens = {
         const outputData = {
           type: 'data',
           data: dataString,
-          value: 1,
+          value: 1n,
           token: NATIVE_TOKEN_UID,
-          authorities: 0,
+          authorities: 0n,
         } as IDataOutput;
 
         if (unshiftData) {
@@ -624,7 +624,7 @@ const tokens = {
     address: string,
     name: string,
     symbol: string,
-    mintAmount: number,
+    mintAmount: bigint,
     storage: IStorage,
     {
       changeAddress = null,

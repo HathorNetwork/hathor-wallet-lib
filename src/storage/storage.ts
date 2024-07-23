@@ -476,9 +476,9 @@ export class Storage implements IStorage {
    * @internal
    */
   async matchBalanceSelection(
-    singleBalance: number,
+    singleBalance: bigint,
     token: string,
-    authorities: number,
+    authorities: bigint,
     changeAddress: string,
     chooseInputs: boolean
   ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }> {
@@ -492,7 +492,7 @@ export class Storage implements IStorage {
     };
     const isAuthority = authorities > 0;
     if (isAuthority) {
-      options.max_utxos = singleBalance;
+      options.max_utxos = Number(singleBalance);
     } else {
       options.target_amount = singleBalance;
     }
@@ -505,10 +505,10 @@ export class Storage implements IStorage {
         );
       }
       // We have a surplus of this token on the outputs, so we need to find utxos to match
-      let foundAmount = 0;
+      let foundAmount = 0n;
       for await (const utxo of this.selectUtxos(options)) {
         if (isAuthority) {
-          foundAmount += 1;
+          foundAmount += 1n;
         } else {
           foundAmount += utxo.value;
         }
@@ -534,7 +534,7 @@ export class Storage implements IStorage {
           newOutputs.push({
             type: getAddressType(changeAddress, this.config.getNetwork()),
             token,
-            authorities: 0,
+            authorities: 0n,
             value: foundAmount - singleBalance,
             address: changeAddress,
             timelock: null,
@@ -544,7 +544,7 @@ export class Storage implements IStorage {
     } else if (singleBalance < 0) {
       // We have a surplus of this token on the inputs, so we need to add a change output
       if (isAuthority) {
-        for (let i = 0; i < Math.abs(singleBalance); i++) {
+        for (let i = 0; i < -singleBalance; i++) {
           newOutputs.push({
             type: getAddressType(changeAddress, this.config.getNetwork()),
             token,
@@ -558,8 +558,8 @@ export class Storage implements IStorage {
         newOutputs.push({
           type: getAddressType(changeAddress, this.config.getNetwork()),
           token,
-          authorities: 0,
-          value: Math.abs(singleBalance),
+          authorities: 0n,
+          value: -singleBalance,
           address: changeAddress,
           timelock: null,
         });
@@ -583,7 +583,7 @@ export class Storage implements IStorage {
    */
   async matchTokenBalance(
     token: string,
-    balance: Record<'funds' | 'mint' | 'melt', number>,
+    balance: Record<'funds' | 'mint' | 'melt', bigint>,
     { changeAddress, skipAuthorities = true, chooseInputs = true }: IFillTxOptions = {}
   ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }> {
     const addressForChange = changeAddress || (await this.getCurrentAddress());
@@ -594,7 +594,7 @@ export class Storage implements IStorage {
     const { inputs: fundsInputs, outputs: fundsOutputs } = await this.matchBalanceSelection(
       balance.funds,
       token,
-      0,
+      0n,
       addressForChange,
       chooseInputs
     );
@@ -607,7 +607,7 @@ export class Storage implements IStorage {
       const { inputs: mintInputs, outputs: mintOutputs } = await this.matchBalanceSelection(
         balance.mint,
         token,
-        1,
+        1n,
         addressForChange,
         chooseInputs
       );
@@ -615,7 +615,7 @@ export class Storage implements IStorage {
       const { inputs: meltInputs, outputs: meltOutputs } = await this.matchBalanceSelection(
         balance.melt,
         token,
-        2,
+        2n,
         addressForChange,
         chooseInputs
       );

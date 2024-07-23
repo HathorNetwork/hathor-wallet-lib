@@ -64,16 +64,16 @@ describe('partial tx proposal', () => {
      */
     // Wallet1 side
     const proposal1 = new PartialTxProposal(hWallet1.storage);
-    await proposal1.addSend(NATIVE_TOKEN_UID, 100);
-    await proposal1.addSend(token1Uid, 100);
-    await proposal1.addReceive(token2Uid, 1000);
+    await proposal1.addSend(NATIVE_TOKEN_UID, 100n);
+    await proposal1.addSend(token1Uid, 100n);
+    await proposal1.addReceive(token2Uid, 1000n);
     expect(proposal1.partialTx.isComplete()).toBeFalsy();
     const serialized1 = proposal1.partialTx.serialize();
     // Wallet2 side + sign
     const proposal2 = PartialTxProposal.fromPartialTx(serialized1, hWallet2.storage);
-    await proposal2.addSend(token2Uid, 1000);
-    await proposal2.addReceive(NATIVE_TOKEN_UID, 100);
-    await proposal2.addReceive(token1Uid, 100);
+    await proposal2.addSend(token2Uid, 1000n);
+    await proposal2.addReceive(NATIVE_TOKEN_UID, 100n);
+    await proposal2.addReceive(token1Uid, 100n);
     expect(proposal2.partialTx.isComplete()).toBeTruthy();
     await proposal2.signData(DEFAULT_PIN_CODE, true);
     expect(proposal2.signatures.isComplete()).toBeFalsy();

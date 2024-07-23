@@ -8,7 +8,7 @@ export default [
     inputs: [],
     outputs: [
       {
-        value: 1,
+        value: 1n,
         token_data: 0,
         script: 'dqkUVTXZg887mKgf7wgS3RddNtu+EkiIrA==',
         decoded: {
@@ -37,7 +37,7 @@ export default [
     inputs: [],
     outputs: [
       {
-        value: 1,
+        value: 1n,
         token_data: 128,
         script: 'dqkUVTXZg887mKgf7wgS3RddNtu+EkiIrA==',
         decoded: {
@@ -66,7 +66,7 @@ export default [
     inputs: [],
     outputs: [
       {
-        value: 1,
+        value: 1n,
         token_data: 0,
         script: 'dqkUVTXZg887mKgf7wgS3RddNtu+EkiIrA==',
         decoded: {
@@ -95,7 +95,7 @@ export default [
     inputs: [],
     outputs: [
       {
-        value: 1,
+        value: 1n,
         token_data: 0,
         script: 'dqkUVTXZg887mKgf7wgS3RddNtu+EkiIrA==',
         decoded: {
@@ -124,7 +124,7 @@ export default [
     inputs: [],
     outputs: [
       {
-        value: 1,
+        value: 1n,
         token_data: 0,
         script: 'dqkUVTXZg887mKgf7wgS3RddNtu+EkiIrA==',
         decoded: {
@@ -153,7 +153,7 @@ export default [
     inputs: [],
     outputs: [
       {
-        value: 1,
+        value: 1n,
         token_data: 0,
         script: 'dqkUbhqK2qsf7gbzLzSsIW6+XOT6LmmIrA==',
         decoded: {
@@ -182,7 +182,7 @@ export default [
     inputs: [],
     outputs: [
       {
-        value: 1,
+        value: 1n,
         token_data: 0,
         script: 'dqkUbhqK2qsf7gbzLzSsIW6+XOT6LmmIrA==',
         decoded: {
@@ -211,7 +211,7 @@ export default [
     inputs: [],
     outputs: [
       {
-        value: 2,
+        value: 2n,
         token_data: 0,
         script: 'dqkUbhqK2qsf7gbzLzSsIW6+XOT6LmmIrA==',
         decoded: {
@@ -240,7 +240,7 @@ export default [
     inputs: [],
     outputs: [
       {
-        value: 3,
+        value: 3n,
         token_data: 0,
         script: 'dqkUbhqK2qsf7gbzLzSsIW6+XOT6LmmIrA==',
         decoded: {
@@ -269,7 +269,7 @@ export default [
     inputs: [],
     outputs: [
       {
-        value: 1,
+        value: 1n,
         token_data: 0,
         script: 'dqkUbhqK2qsf7gbzLzSsIW6+XOT6LmmIrA==',
         decoded: {
@@ -298,7 +298,7 @@ export default [
     inputs: [],
     outputs: [
       {
-        value: 1,
+        value: 1n,
         token_data: 0,
         script: 'dqkUbhqK2qsf7gbzLzSsIW6+XOT6LmmIrA==',
         decoded: {

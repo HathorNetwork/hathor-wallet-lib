@@ -35,11 +35,11 @@ function _utxo_id(utxo: Pick<IUtxo, 'txId' | 'index'>): string {
  * @returns {string}
  */
 function _token_address_utxo_key(utxo: IUtxo): string {
-  const value = _int_to_hex(utxo.value);
+  const value = _big_int_to_hex(utxo.value);
   return `${utxo.authorities}:${utxo.token}:${utxo.address}:${value}:${_utxo_id(utxo)}`;
 }
 
-function _int_to_hex(value: number): string {
+function _big_int_to_hex(value: bigint): string {
   return value.toString(16).padStart(16, '0');
 }
 
@@ -49,7 +49,7 @@ function _int_to_hex(value: number): string {
  * @returns {string}
  */
 function _token_utxo_key(utxo: IUtxo): string {
-  return `${utxo.authorities}:${utxo.token}:${_int_to_hex(utxo.value)}:${_utxo_id(utxo)}`;
+  return `${utxo.authorities}:${utxo.token}:${_big_int_to_hex(utxo.value)}:${_utxo_id(utxo)}`;
 }
 
 export default class LevelUtxoIndex implements IKVUtxoIndex {
@@ -222,10 +222,10 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
       let maxkey = `${authorities}:${token}:`;
 
       if (options.amount_bigger_than) {
-        minkey = `${minkey}${_int_to_hex(options.amount_bigger_than)}`;
+        minkey = `${minkey}${_big_int_to_hex(options.amount_bigger_than)}`;
       }
       if (options.amount_smaller_than !== undefined) {
-        maxkey = `${maxkey}${options.filter_address}:${_int_to_hex(options.amount_smaller_than + 1)}`;
+        maxkey = `${maxkey}${options.filter_address}:${_big_int_to_hex(options.amount_smaller_than + 1n)}`;
       } else {
         const lastChar = String.fromCharCode(
           options.filter_address.charCodeAt(options.filter_address.length - 1) + 1
@@ -246,10 +246,10 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
       let maxkey = `${authorities}:`;
 
       if (options.amount_bigger_than) {
-        minkey = `${minkey}${_int_to_hex(options.amount_bigger_than)}`;
+        minkey = `${minkey}${_big_int_to_hex(options.amount_bigger_than)}`;
       }
       if (options.amount_smaller_than !== undefined) {
-        maxkey = `${maxkey}${token}:${_int_to_hex(options.amount_smaller_than + 1)}`;
+        maxkey = `${maxkey}${token}:${_big_int_to_hex(options.amount_smaller_than + 1n)}`;
       } else {
         const lastChar = String.fromCharCode(token.charCodeAt(token.length - 1) + 1);
         const maxtoken = `${token.slice(0, -1)}${lastChar}`;
@@ -260,7 +260,7 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
       itOptions.lte = maxkey;
     }
 
-    let sumAmount = 0;
+    let sumAmount = 0n;
     let utxoNum = 0;
     for await (const utxo of db.values(itOptions)) {
       if (options.only_available_utxos) {

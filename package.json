@@ -23,7 +23,6 @@
     "isomorphic-ws": "5.0.0",
     "level": "8.0.1",
     "lodash": "4.17.21",
-    "long": "5.2.3",
     "ws": "8.17.0"
   },
   "scripts": {

@@ -139,7 +139,7 @@ test('Token tx', () => {
   const address1 = new Address('WR1i8USJWQuaU423fwuFQbezfevmT4vFWX');
   const p2pkh1 = new P2PKH(address1);
   const p2pkhScript1 = p2pkh1.createScript();
-  const output1 = new Output(1000, p2pkhScript1);
+  const output1 = new Output(1000n, p2pkhScript1);
   output1.parseScript(network);
   const inputDataHex =
     '4630440220317cd233801c1986c2de900bf8d344c6335d3c385e69d19d65e1fae7a0afd0af02207acddb824debf855798d79c45701cbe3a19aea00baad94bff5290c6f0b0acf8e210346cddff43dffab8e13398633ab7a7caf0d634551e89ae6fd563e282f6744b983';
@@ -415,11 +415,11 @@ describe('NFT Validation', () => {
     const txInstance = helpers.createTxFromHistoryObject(historyTx);
 
     // Wrong Value
-    txInstance.outputs[0].value = 2;
+    txInstance.outputs[0].value = 2n;
     expect(() => txInstance.validateNft(network)).toThrow('valid NFT data');
 
     // Wrong Token Data
-    txInstance.outputs[0].value = 1;
+    txInstance.outputs[0].value = 1n;
     txInstance.outputs[0].tokenData = 1;
     expect(() => txInstance.validateNft(network)).toThrow('valid NFT data');
 

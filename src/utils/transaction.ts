@@ -247,7 +247,7 @@ const transaction = {
    * @memberof transaction
    * @inner
    */
-  selectUtxos(utxos: Utxo[], totalAmount: number): { utxos: Utxo[]; changeAmount: number } {
+  selectUtxos(utxos: Utxo[], totalAmount: bigint): { utxos: Utxo[]; changeAmount: bigint } {
     if (totalAmount <= 0) {
       throw new UtxoError('Total amount must be a positive integer.');
     }
@@ -257,7 +257,7 @@ const transaction = {
     }
 
     let utxosToUse: Utxo[] = [];
-    let filledAmount = 0;
+    let filledAmount = 0n;
     for (const utxo of utxos) {
       if (utxo.value >= totalAmount) {
         utxosToUse = [utxo];
@@ -309,7 +309,7 @@ const transaction = {
       timelock: (txout.decoded && txout.decoded.timelock) || null,
       tokenId: txout.token,
       value: txout.value,
-      authorities: isAuthority ? txout.value : 0,
+      authorities: isAuthority ? txout.value : 0n,
       heightlock: null, // not enough info to determine this.
       locked: false,
     };
@@ -325,10 +325,10 @@ const transaction = {
   async getTxBalance(tx: IHistoryTx, storage: IStorage): Promise<Record<string, IBalance>> {
     const balance: Record<string, IBalance> = {};
     const getEmptyBalance = (): IBalance => ({
-      tokens: { locked: 0, unlocked: 0 },
+      tokens: { locked: 0n, unlocked: 0n },
       authorities: {
-        mint: { locked: 0, unlocked: 0 },
-        melt: { locked: 0, unlocked: 0 },
+        mint: { locked: 0n, unlocked: 0n },
+        melt: { locked: 0n, unlocked: 0n },
       },
     });
 
@@ -350,16 +350,16 @@ const transaction = {
       if (this.isAuthorityOutput(output)) {
         if (this.isMint(output)) {
           if (isLocked) {
-            balance[output.token].authorities.mint.locked += 1;
+            balance[output.token].authorities.mint.locked += 1n;
           } else {
-            balance[output.token].authorities.mint.unlocked += 1;
+            balance[output.token].authorities.mint.unlocked += 1n;
           }
         }
         if (this.isMelt(output)) {
           if (isLocked) {
-            balance[output.token].authorities.melt.locked += 1;
+            balance[output.token].authorities.melt.locked += 1n;
           } else {
-            balance[output.token].authorities.melt.unlocked += 1;
+            balance[output.token].authorities.melt.unlocked += 1n;
           }
         }
       } else if (isLocked) {
@@ -380,10 +380,10 @@ const transaction = {
 
       if (this.isAuthorityOutput(input)) {
         if (this.isMint(input)) {
-          balance[input.token].authorities.mint.unlocked -= 1;
+          balance[input.token].authorities.mint.unlocked -= 1n;
         }
         if (this.isMelt(input)) {
-          balance[input.token].authorities.melt.unlocked -= 1;
+          balance[input.token].authorities.melt.unlocked -= 1n;
         }
       } else {
         balance[input.token].tokens.unlocked -= input.value;
@@ -413,8 +413,8 @@ const transaction = {
   async calculateTxBalanceToFillTx(
     token: string,
     tx: IDataTx
-  ): Promise<Record<'funds' | 'mint' | 'melt', number>> {
-    const balance = { funds: 0, mint: 0, melt: 0 };
+  ): Promise<Record<'funds' | 'mint' | 'melt', bigint>> {
+    const balance = { funds: 0n, mint: 0n, melt: 0n };
     for (const output of tx.outputs) {
       if (isDataOutputCreateToken(output)) {
         // This is a mint output
@@ -428,12 +428,12 @@ const transaction = {
       if (output.authorities > 0) {
         // Authority output, add to mint or melt balance
         // Check for MINT authority
-        if ((output.authorities & 1) > 0) {
-          balance.mint += 1;
+        if ((output.authorities & 1n) > 0) {
+          balance.mint += 1n;
         }
         // Check for MELT authority
-        if ((output.authorities & 2) > 0) {
-          balance.melt += 1;
+        if ((output.authorities & 2n) > 0) {
+          balance.melt += 1n;
         }
       } else {
         // Fund output, add to the amount balance
@@ -447,12 +447,12 @@ const transaction = {
       if (input.authorities > 0) {
         // Authority input, remove from mint or melt balance
         // Check for MINT authority
-        if ((input.authorities & 1) > 0) {
-          balance.mint -= 1;
+        if ((input.authorities & 1n) > 0) {
+          balance.mint -= 1n;
         }
         // Check for MELT authority
-        if ((input.authorities & 2) > 0) {
-          balance.melt -= 1;
+        if ((input.authorities & 2n) > 0) {
+          balance.melt -= 1n;
         }
       } else {
         // Fund input, remove from the amount balance
@@ -483,7 +483,7 @@ const transaction = {
     // Token index of HTR is 0 and if it is a custom token it is its index on tokensWithoutHathor + 1
     const tokensWithoutHathor = tokens.filter(token => token !== NATIVE_TOKEN_UID);
     const tokenIndex = tokensWithoutHathor.indexOf(output.token) + 1;
-    if (output.authorities === 0) {
+    if (output.authorities === 0n) {
       return tokenIndex;
     }
     return tokenIndex | TOKEN_AUTHORITY_MASK;
@@ -611,8 +611,8 @@ const transaction = {
    * @param output History output
    * @returns {number} Authorities from output
    */
-  authoritiesFromOutput(output: Pick<IHistoryOutput, 'token_data' | 'value'>): number {
-    let authorities = 0;
+  authoritiesFromOutput(output: Pick<IHistoryOutput, 'token_data' | 'value'>): bigint {
+    let authorities = 0n;
     if (this.isMint(output)) {
       authorities |= TOKEN_MINT_MASK;
     }

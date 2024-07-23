@@ -131,10 +131,10 @@ export default class LevelTokenIndex implements IKVTokenIndex {
     const DEFAULT_TOKEN_META: ITokenMetadata = {
       numTransactions: 0,
       balance: {
-        tokens: { unlocked: 0, locked: 0 },
+        tokens: { unlocked: 0n, locked: 0n },
         authorities: {
-          mint: { unlocked: 0, locked: 0 },
-          melt: { unlocked: 0, locked: 0 },
+          mint: { unlocked: 0n, locked: 0n },
+          melt: { unlocked: 0n, locked: 0n },
         },
       },
     };

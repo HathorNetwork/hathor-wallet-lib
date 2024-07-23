@@ -484,7 +484,7 @@ describe('process locked utxos', () => {
         'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
         tsUnLocked,
         null,
-        100, // value
+        100n, // value
         '00', // token
         0 // token_data
       ),
@@ -494,7 +494,7 @@ describe('process locked utxos', () => {
         'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
         tsLocked,
         null,
-        100, // value
+        100n, // value
         '00', // token
         0 // token_data
       ),
@@ -504,7 +504,7 @@ describe('process locked utxos', () => {
         'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
         tsUnLocked,
         5,
-        100, // value
+        100n, // value
         '01', // token
         0 // token_data
       ),

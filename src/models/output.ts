@@ -24,9 +24,8 @@ import {
   unpackLen,
   unpackToInt,
   intToBytes,
-  signedIntToBytes,
+  bigUintToBytes,
 } from '../utils/buffer';
-import { prettyValue } from '../utils/numbers';
 import { parseScript as utilsParseScript } from '../utils/scripts';
 
 type optionsType = {
@@ -43,7 +42,7 @@ export const MAXIMUM_SCRIPT_LENGTH: number = 256;
 
 class Output {
   // Output value as an integer
-  value: number;
+  value: bigint;
 
   // tokenData of the output
   tokenData: number;
@@ -54,7 +53,7 @@ class Output {
   // Decoded output script
   decodedScript: P2PKH | P2SH | ScriptData | null;
 
-  constructor(value: number, script: Buffer, options: optionsType = {}) {
+  constructor(value: bigint, script: Buffer, options: optionsType = {}) {
     const defaultOptions = {
       tokenData: 0,
     };
@@ -92,12 +91,12 @@ class Output {
       throw new OutputValueError('Output value must be positive');
     }
     if (this.value > MAX_OUTPUT_VALUE) {
-      throw new OutputValueError(`Maximum value is ${prettyValue(MAX_OUTPUT_VALUE)}`);
+      throw new OutputValueError(`Maximum value is ${MAX_OUTPUT_VALUE}`);
     }
     if (this.value > MAX_OUTPUT_VALUE_32) {
-      return signedIntToBytes(-this.value, 8);
+      return bigUintToBytes(-this.value, 8);
     }
-    return signedIntToBytes(this.value, 4);
+    return bigUintToBytes(this.value, 4);
   }
 
   /**

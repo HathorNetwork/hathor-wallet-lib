@@ -9,7 +9,7 @@
  * An output object enriched by the wallet's history methods
  */
 export type HistoryTransactionOutput = {
-  value: number;
+  value: bigint;
   token_data: number;
   script: string;
   decoded: {
@@ -69,8 +69,8 @@ export interface Balance {
 }
 
 export interface TokenBalance {
-  unlocked: number;
-  locked: number;
+  unlocked: bigint;
+  locked: bigint;
 }
 
 export interface AuthorityBalance {

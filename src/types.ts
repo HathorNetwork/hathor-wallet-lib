@@ -66,8 +66,8 @@ export interface IBalance {
 }
 
 export interface ITokenBalance {
-  locked: number;
-  unlocked: number;
+  locked: bigint;
+  unlocked: bigint;
 }
 
 export interface IAuthoritiesBalance {
@@ -105,7 +105,7 @@ export enum TxHistoryProcessingStatus {
 }
 
 export interface IHistoryInput {
-  value: number;
+  value: bigint;
   token_data: number;
   script: string;
   decoded: IHistoryOutputDecoded;
@@ -123,7 +123,7 @@ export interface IHistoryOutputDecoded {
 }
 
 export interface IHistoryOutput {
-  value: number;
+  value: bigint;
   token_data: number;
   script: string;
   decoded: IHistoryOutputDecoded;
@@ -134,8 +134,8 @@ export interface IHistoryOutput {
 export interface IDataOutputData {
   type: 'data';
   token: string;
-  value: number;
-  authorities: number;
+  value: bigint;
+  authorities: bigint;
   data: string;
 }
 
@@ -146,8 +146,8 @@ export function isDataOutputData(output: IDataOutput): output is IDataOutputData
 export interface IDataOutputAddress {
   type: 'p2pkh' | 'p2sh';
   token: string;
-  value: number;
-  authorities: number;
+  value: bigint;
+  authorities: bigint;
   address: string;
   timelock: number | null;
 }
@@ -159,7 +159,7 @@ export function isDataOutputAddress(output: IDataOutput): output is IDataOutputA
 // This is for create token transactions, where we dont have a token uid yet
 export interface IDataOutputCreateToken {
   type: 'mint' | 'melt';
-  value: number;
+  value: bigint;
   address: string;
   timelock: number | null;
   authorities: number;
@@ -179,8 +179,8 @@ export type IDataOutput = (IDataOutputData | IDataOutputAddress | IDataOutputCre
 export interface IDataInput {
   txId: string;
   index: number;
-  value: number;
-  authorities: number;
+  value: bigint;
+  authorities: bigint;
   token: string;
   address: string;
   data?: string;
@@ -212,8 +212,8 @@ export interface IUtxo {
   index: number;
   token: string;
   address: string;
-  value: number;
-  authorities: number;
+  value: bigint;
+  authorities: bigint;
   timelock: number | null;
   type: number; // tx.version, is the value of the transaction version byte
   height: number | null; // only for block outputs
@@ -309,13 +309,13 @@ export interface IMultisigData {
 
 export interface IUtxoFilterOptions {
   token?: string; // default to HTR
-  authorities?: number; // default to 0 (funds)
+  authorities?: bigint; // default to 0 (funds)
   max_utxos?: number; // default to unlimited
   filter_address?: string;
-  target_amount?: number;
-  max_amount?: number;
-  amount_smaller_than?: number;
-  amount_bigger_than?: number;
+  target_amount?: bigint;
+  max_amount?: bigint;
+  amount_smaller_than?: bigint;
+  amount_bigger_than?: bigint;
   only_available_utxos?: boolean;
   filter_method?: (utxo: IUtxo) => boolean;
   reward_lock?: number;
@@ -327,8 +327,8 @@ export interface IUtxoFilterOptions {
 export type UtxoSelectionAlgorithm = (
   storage: IStorage,
   token: string,
-  amount: number
-) => Promise<{ utxos: IUtxo[]; amount: number }>;
+  amount: bigint
+) => Promise<{ utxos: IUtxo[]; amount: bigint }>;
 
 export interface IUtxoSelectionOptions {
   token?: string;

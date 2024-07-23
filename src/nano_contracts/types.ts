@@ -17,7 +17,7 @@ export type NanoContractArgumentType = NanoContractArgumentApiInputType | Buffer
 export interface NanoContractAction {
   type: NanoContractActionType.DEPOSIT | NanoContractActionType.WITHDRAWAL;
   token: string;
-  amount: number;
+  amount: bigint;
   // For withdrawal is required, which is address to send the output
   // For deposit is optional, and it's the address to filter the utxos
   address: string | null;

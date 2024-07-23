@@ -33,7 +33,7 @@ test('isAuthorityOutput', () => {
 });
 
 test('isMint', () => {
-  expect(transaction.isMint({ value: 0, token_data: TOKEN_AUTHORITY_MASK })).toBe(false);
+  expect(transaction.isMint({ value: 0n, token_data: TOKEN_AUTHORITY_MASK })).toBe(false);
   expect(transaction.isMint({ value: TOKEN_MINT_MASK, token_data: TOKEN_AUTHORITY_MASK })).toBe(
     true
   );
@@ -48,12 +48,12 @@ test('isMint', () => {
   ).toBe(true);
 
   expect(transaction.isMint({ value: TOKEN_MINT_MASK, token_data: 0 })).toBe(false);
-  expect(transaction.isMint({ value: 1, token_data: 1 })).toBe(false);
-  expect(transaction.isMint({ value: TOKEN_MINT_MASK | 1000, token_data: 126 })).toBe(false);
+  expect(transaction.isMint({ value: 1n, token_data: 1 })).toBe(false);
+  expect(transaction.isMint({ value: TOKEN_MINT_MASK | 1000n, token_data: 126 })).toBe(false);
 });
 
 test('isMelt', () => {
-  expect(transaction.isMelt({ value: 0, token_data: TOKEN_AUTHORITY_MASK })).toBe(false);
+  expect(transaction.isMelt({ value: 0n, token_data: TOKEN_AUTHORITY_MASK })).toBe(false);
   expect(transaction.isMelt({ value: TOKEN_MELT_MASK, token_data: TOKEN_AUTHORITY_MASK })).toBe(
     true
   );
@@ -68,8 +68,8 @@ test('isMelt', () => {
   ).toBe(true);
 
   expect(transaction.isMelt({ value: TOKEN_MELT_MASK, token_data: 0 })).toBe(false);
-  expect(transaction.isMelt({ value: 1, token_data: 1 })).toBe(false);
-  expect(transaction.isMelt({ value: TOKEN_MELT_MASK | 1000, token_data: 126 })).toBe(false);
+  expect(transaction.isMelt({ value: 1n, token_data: 1 })).toBe(false);
+  expect(transaction.isMelt({ value: TOKEN_MELT_MASK | 1000n, token_data: 126 })).toBe(false);
 });
 
 test('getSignature', () => {
@@ -143,40 +143,40 @@ test('Utxo selection', () => {
   const utxos = [
     {
       address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
-      value: 10,
+      value: 10n,
       txId: '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2d',
       index: 5,
     },
     {
       address: 'Wmu3y4rWs6n4JJAdRtAz4mDn4d7GkTcqKc',
-      value: 5,
+      value: 5n,
       txId: '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e',
       index: 6,
     },
   ];
 
-  const selectedUtxos = transaction.selectUtxos(utxos, 3);
+  const selectedUtxos = transaction.selectUtxos(utxos, 3n);
   expect(selectedUtxos.utxos.length).toBe(1);
   expect(selectedUtxos.utxos[0].txId).toBe(
     '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e'
   );
   expect(selectedUtxos.changeAmount).toBe(2);
 
-  const selectedUtxos2 = transaction.selectUtxos(utxos, 5);
+  const selectedUtxos2 = transaction.selectUtxos(utxos, 5n);
   expect(selectedUtxos2.utxos.length).toBe(1);
   expect(selectedUtxos2.utxos[0].txId).toBe(
     '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e'
   );
   expect(selectedUtxos2.changeAmount).toBe(0);
 
-  const selectedUtxos3 = transaction.selectUtxos(utxos, 6);
+  const selectedUtxos3 = transaction.selectUtxos(utxos, 6n);
   expect(selectedUtxos3.utxos.length).toBe(1);
   expect(selectedUtxos3.utxos[0].txId).toBe(
     '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2d'
   );
   expect(selectedUtxos3.changeAmount).toBe(4);
 
-  const selectedUtxos4 = transaction.selectUtxos(utxos, 11);
+  const selectedUtxos4 = transaction.selectUtxos(utxos, 11n);
   expect(selectedUtxos4.utxos.length).toBe(2);
   expect(selectedUtxos4.utxos[0].txId).toBe(
     '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2d'
@@ -186,7 +186,7 @@ test('Utxo selection', () => {
   );
   expect(selectedUtxos4.changeAmount).toBe(4);
 
-  const selectedUtxos5 = transaction.selectUtxos(utxos, 15);
+  const selectedUtxos5 = transaction.selectUtxos(utxos, 15n);
   expect(selectedUtxos5.utxos.length).toBe(2);
   expect(selectedUtxos5.utxos[0].txId).toBe(
     '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2d'
@@ -205,7 +205,7 @@ test('Utxo selection', () => {
   }).toThrow(UtxoError);
 
   expect(() => {
-    transaction.selectUtxos([], 10);
+    transaction.selectUtxos([], 10n);
   }).toThrow(UtxoError);
 });
 

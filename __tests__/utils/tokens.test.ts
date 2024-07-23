@@ -149,11 +149,10 @@ test('Token index', () => {
 
 test('Token deposit', () => {
   // considering HTR deposit is 1%
-  expect(tokens.getDepositAmount(100)).toBe(1);
-  expect(tokens.getDepositAmount(1)).toBe(1);
-  expect(tokens.getDepositAmount(0.1)).toBe(1);
-  expect(tokens.getDepositAmount(500)).toBe(5);
-  expect(tokens.getDepositAmount(550)).toBe(6);
+  expect(tokens.getDepositAmount(100n)).toBe(1);
+  expect(tokens.getDepositAmount(1n)).toBe(1);
+  expect(tokens.getDepositAmount(500n)).toBe(5);
+  expect(tokens.getDepositAmount(550n)).toBe(6);
 });
 
 test('Fee for data script output', () => {
@@ -162,8 +161,8 @@ test('Fee for data script output', () => {
 
 test('Token withdraw', () => {
   // considering HTR deposit is 1%
-  expect(tokens.getWithdrawAmount(100)).toBe(1);
-  expect(tokens.getWithdrawAmount(99)).toBe(0);
-  expect(tokens.getWithdrawAmount(500)).toBe(5);
-  expect(tokens.getWithdrawAmount(550)).toBe(5);
+  expect(tokens.getWithdrawAmount(100n)).toBe(1);
+  expect(tokens.getWithdrawAmount(99n)).toBe(0);
+  expect(tokens.getWithdrawAmount(500n)).toBe(5);
+  expect(tokens.getWithdrawAmount(550n)).toBe(5);
 });

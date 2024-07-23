@@ -24,35 +24,35 @@ const p2pkh = new P2PKH(address);
 const p2pkhScript = p2pkh.createScript();
 
 test('Validate value', () => {
-  const o1 = new Output(1000, p2pkhScript);
+  const o1 = new Output(1000n, p2pkhScript);
   expect(o1.valueToBytes()).toBeInstanceOf(buffer.Buffer);
 
   // Negative value is invalid
-  const o2 = new Output(-1000, p2pkhScript);
+  const o2 = new Output(-1000n, p2pkhScript);
   expect(() => {
     o2.valueToBytes();
   }).toThrow(OutputValueError);
 
   // 0 value is invalid
   expect(() => {
-    const o3 = new Output(0, p2pkhScript);
+    const o3 = new Output(0n, p2pkhScript);
     o3.valueToBytes();
   }).toThrow(OutputValueError);
 
   // Value bigger than the max is invalid
-  const o4 = new Output(MAX_OUTPUT_VALUE + 1, p2pkhScript);
+  const o4 = new Output(MAX_OUTPUT_VALUE + 1n, p2pkhScript);
   expect(() => {
     o4.valueToBytes();
   }).toThrow(OutputValueError);
 });
 
 test('Authorities', () => {
-  const o1 = new Output(1000, p2pkhScript);
+  const o1 = new Output(1000n, p2pkhScript);
   // By default is not authority because tokenData is 0
   expect(o1.tokenData).toBe(0);
   expect(o1.isAuthority()).toBe(false);
 
-  const o2 = new Output(1000, p2pkhScript, { tokenData: AUTHORITY_TOKEN_DATA });
+  const o2 = new Output(1000n, p2pkhScript, { tokenData: AUTHORITY_TOKEN_DATA });
   expect(o2.isAuthority()).toBe(true);
   expect(o2.getTokenIndex()).toBe(0);
   expect(o2.isMint()).toBe(false);
@@ -75,7 +75,7 @@ test('Authorities', () => {
 
 test('Script', () => {
   const network = new Network('testnet');
-  const o1 = new Output(1000, p2pkhScript);
+  const o1 = new Output(1000n, p2pkhScript);
   expect(o1.script).toBeInstanceOf(buffer.Buffer);
   expect(o1.script.length).toBe(25);
 
@@ -87,7 +87,7 @@ test('Script', () => {
   const timelock = 1601421717;
   const p2pkhWithTimelock = new P2PKH(address, { timelock });
   const p2pkhWithTimelockScript = p2pkhWithTimelock.createScript();
-  const o2 = new Output(1000, p2pkhWithTimelockScript);
+  const o2 = new Output(1000n, p2pkhWithTimelockScript);
   expect(o2.script).toBeInstanceOf(buffer.Buffer);
   expect(o2.script.length).toBe(31);
 

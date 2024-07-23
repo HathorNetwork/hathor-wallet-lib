@@ -71,7 +71,7 @@ class PartialTxProposal {
    */
   async addSend(
     token: string,
-    value: number,
+    value: bigint,
     {
       utxos = [],
       changeAddress = null,
@@ -86,14 +86,14 @@ class PartialTxProposal {
       allUtxos = utxos;
     } else {
       allUtxos = [];
-      for await (const utxo of this.storage.selectUtxos({ token, authorities: 0 })) {
+      for await (const utxo of this.storage.selectUtxos({ token, authorities: 0n })) {
         allUtxos.push({
           txId: utxo.txId,
           index: utxo.index,
           value: utxo.value,
           tokenId: utxo.token,
           address: utxo.address,
-          authorities: 0,
+          authorities: 0n,
           timelock: utxo.timelock,
           heightlock: null,
           locked: false,
@@ -137,7 +137,7 @@ class PartialTxProposal {
    */
   async addReceive(
     token: string,
-    value: number,
+    value: bigint,
     { timelock = null, address = null }: { timelock?: number | null; address?: string | null } = {}
   ) {
     this.resetSignatures();
@@ -162,15 +162,15 @@ class PartialTxProposal {
   addInput(
     hash: string,
     index: number,
-    value: number,
+    value: bigint,
     address: string,
     {
       token = NATIVE_TOKEN_UID,
-      authorities = 0,
+      authorities = 0n,
       markAsSelected = true,
     }: {
       token?: string;
-      authorities?: number;
+      authorities?: bigint;
       markAsSelected?: boolean;
     } = {}
   ) {
@@ -198,13 +198,13 @@ class PartialTxProposal {
    */
   addOutput(
     token: string,
-    value: number,
+    value: bigint,
     address: string,
     {
       timelock = null,
       isChange = false,
-      authorities = 0,
-    }: { timelock?: number | null; isChange?: boolean; authorities?: number } = {}
+      authorities = 0n,
+    }: { timelock?: number | null; isChange?: boolean; authorities?: bigint } = {}
   ) {
     this.resetSignatures();
 
@@ -233,7 +233,7 @@ class PartialTxProposal {
     const isTimelocked = timelock => currentTimestamp < timelock;
 
     const getEmptyBalance = () => ({
-      balance: { unlocked: 0, locked: 0 },
+      balance: { unlocked: 0n, locked: 0n },
       authority: { unlocked: { mint: 0, melt: 0 }, locked: { mint: 0, melt: 0 } },
     });
 

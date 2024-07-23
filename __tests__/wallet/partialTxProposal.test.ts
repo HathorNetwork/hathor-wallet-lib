@@ -64,10 +64,10 @@ const scriptFromAddressP2SH = base58 => {
 
 test('fromPartialTx', async () => {
   const partialTx = createPartialTx(
-    [new ProposalInput(FAKE_TXID, 0, 10, ADDR1)],
+    [new ProposalInput(FAKE_TXID, 0, 10n, ADDR1)],
     [
-      new ProposalOutput(5, scriptFromAddressP2PKH(ADDR2)),
-      new ProposalOutput(10, scriptFromAddressP2PKH(ADDR3), { token: FAKE_UID }),
+      new ProposalOutput(5n, scriptFromAddressP2PKH(ADDR2)),
+      new ProposalOutput(10n, scriptFromAddressP2PKH(ADDR3), { token: FAKE_UID }),
     ]
   );
 
@@ -97,8 +97,8 @@ test('addSend', async () => {
       index: 1,
       token: FAKE_UID,
       address: ADDR1,
-      value: 10,
-      authorities: 0,
+      value: 10n,
+      authorities: 0n,
       timelock: 100,
       type: DEFAULT_TX_VERSION,
       height: null,
@@ -112,8 +112,8 @@ test('addSend', async () => {
       address: ADDR1,
       timelock: 100,
       tokenId: FAKE_UID,
-      value: 10,
-      authorities: 0,
+      value: 10n,
+      authorities: 0n,
       heightlock: null,
       locked: false,
     },
@@ -145,7 +145,7 @@ test('addSend', async () => {
   /**
    * Add 1 input without change
    */
-  await proposal.addSend(FAKE_UID, 10);
+  await proposal.addSend(FAKE_UID, 10n);
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(spyInput).toHaveBeenCalledWith(FAKE_TXID, 1, 10, ADDR1, {
     token: FAKE_UID,
@@ -166,7 +166,7 @@ test('addSend', async () => {
   /**
    * Add 1 input with change passing utxos and address
    */
-  await proposal.addSend(FAKE_UID, 4, { utxos: utxosOld, changeAddress: ADDR3 });
+  await proposal.addSend(FAKE_UID, 4n, { utxos: utxosOld, changeAddress: ADDR3 });
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(spyInput).toHaveBeenCalledWith(FAKE_TXID, 1, 10, ADDR1, {
     token: FAKE_UID,
@@ -192,7 +192,7 @@ test('addSend', async () => {
   /**
    * Add 1 input with change without address and markAsSelected false
    */
-  await proposal.addSend(FAKE_UID, 8, { markAsSelected: false });
+  await proposal.addSend(FAKE_UID, 8n, { markAsSelected: false });
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(spyUtxos).toHaveBeenCalledWith({ token: FAKE_UID, authorities: 0 });
   expect(spyInput).toHaveBeenCalledWith(FAKE_TXID, 1, 10, ADDR1, {
@@ -233,7 +233,7 @@ test('addReceive', async () => {
   /**
    * Add 1 output of a custom token, get address from wallet
    */
-  await proposal.addReceive(FAKE_UID, 99);
+  await proposal.addReceive(FAKE_UID, 99n);
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(spyOutput).toHaveBeenCalledWith(FAKE_UID, 99, ADDR1, { timelock: null });
   expect(spyAddr).toHaveBeenCalled();
@@ -246,7 +246,7 @@ test('addReceive', async () => {
   /**
    * Add 1 HTR output, giving the destination address
    */
-  await proposal.addReceive(NATIVE_TOKEN_UID, 180, { address: ADDR2 });
+  await proposal.addReceive(NATIVE_TOKEN_UID, 180n, { address: ADDR2 });
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(spyOutput).toHaveBeenCalledWith(NATIVE_TOKEN_UID, 180, ADDR2, { timelock: null });
   expect(spyAddr).not.toHaveBeenCalled();
@@ -270,7 +270,7 @@ test('addInput', async () => {
   /**
    * Add 1 HTR input
    */
-  proposal.addInput(FAKE_TXID, 5, 999, ADDR1);
+  proposal.addInput(FAKE_TXID, 5, 999n, ADDR1);
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(spyMark).toHaveBeenCalledWith({ txId: FAKE_TXID, index: 5 }, true);
   expect(spyInput).toHaveBeenCalledWith(FAKE_TXID, 5, 999, ADDR1, {
@@ -286,7 +286,7 @@ test('addInput', async () => {
   /**
    * Add 1 custom token authority input
    */
-  proposal.addInput(FAKE_TXID, 20, 70, ADDR2, {
+  proposal.addInput(FAKE_TXID, 20, 70n, ADDR2, {
     token: FAKE_UID,
     authorities: TOKEN_MINT_MASK,
     markAsSelected: false,
@@ -316,7 +316,7 @@ test('addOutput', async () => {
   /**
    * Add 1 custom token output
    */
-  proposal.addOutput(FAKE_UID, 999, ADDR1);
+  proposal.addOutput(FAKE_UID, 999n, ADDR1);
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(spyOutput).toHaveBeenCalledWith(999, scriptFromAddressP2PKH(ADDR1), {
     token: FAKE_UID,
@@ -331,7 +331,7 @@ test('addOutput', async () => {
   /**
    * Add 1 HTR output to a MultiSig address
    */
-  proposal.addOutput(NATIVE_TOKEN_UID, 456, ADDR4, { isChange: true });
+  proposal.addOutput(NATIVE_TOKEN_UID, 456n, ADDR4, { isChange: true });
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(spyOutput).toHaveBeenCalledWith(456, scriptFromAddressP2SH(ADDR4), {
     token: NATIVE_TOKEN_UID,
@@ -424,10 +424,10 @@ test('calculateBalance', async () => {
   const timelock = dateFormatter.dateToTimestamp(new Date()) + 9999;
   const partialTx = createPartialTx(
     [
-      new ProposalInput(FAKE_TXID, 0, 2, ADDR1, { token: FAKE_UID }),
-      new ProposalInput(FAKE_TXID, 1, 4, ADDR2, { token: fakeUid3 }),
-      new ProposalInput(FAKE_TXID, 2, 7, ADDR3),
-      new ProposalInput(FAKE_TXID, 3, 3, ADDR1),
+      new ProposalInput(FAKE_TXID, 0, 2n, ADDR1, { token: FAKE_UID }),
+      new ProposalInput(FAKE_TXID, 1, 4n, ADDR2, { token: fakeUid3 }),
+      new ProposalInput(FAKE_TXID, 2, 7n, ADDR3),
+      new ProposalInput(FAKE_TXID, 3, 3n, ADDR1),
       // Authority
       new ProposalInput(FAKE_TXID, 4, TOKEN_MELT_MASK, ADDR2, {
         token: fakeUid3,
@@ -438,22 +438,22 @@ test('calculateBalance', async () => {
         authorities: TOKEN_MELT_MASK,
       }),
       // Not from the wallet
-      new ProposalInput(FAKE_TXID, 6, 4, ADDR_OTHER, { token: fakeUid3 }),
-      new ProposalInput(FAKE_TXID, 7, 999, ADDR_OTHER, { token: fakeUid4 }),
+      new ProposalInput(FAKE_TXID, 6, 4n, ADDR_OTHER, { token: fakeUid3 }),
+      new ProposalInput(FAKE_TXID, 7, 999n, ADDR_OTHER, { token: fakeUid4 }),
       new ProposalInput(FAKE_TXID, 8, TOKEN_MINT_MASK, ADDR_OTHER, {
         token: fakeUid3,
         authorities: TOKEN_MINT_MASK,
       }),
     ],
     [
-      new ProposalOutput(5, scriptFromAddressP2PKH(ADDR1), { token: FAKE_UID }),
-      new ProposalOutput(8, scriptFromAddressP2PKH(ADDR2), { token: fakeUid2 }),
-      new ProposalOutput(7, scriptFromAddressP2PKH(ADDR3), { token: fakeUid2 }),
+      new ProposalOutput(5n, scriptFromAddressP2PKH(ADDR1), { token: FAKE_UID }),
+      new ProposalOutput(8n, scriptFromAddressP2PKH(ADDR2), { token: fakeUid2 }),
+      new ProposalOutput(7n, scriptFromAddressP2PKH(ADDR3), { token: fakeUid2 }),
       // Locked
-      new ProposalOutput(1, scriptFromAddressP2PKH(ADDR1, timelock)),
-      new ProposalOutput(1, scriptFromAddressP2PKH(ADDR2, timelock)),
-      new ProposalOutput(3, scriptFromAddressP2PKH(ADDR3, timelock), { token: FAKE_UID }),
-      new ProposalOutput(4, scriptFromAddressP2PKH(ADDR1, timelock), { token: fakeUid2 }),
+      new ProposalOutput(1n, scriptFromAddressP2PKH(ADDR1, timelock)),
+      new ProposalOutput(1n, scriptFromAddressP2PKH(ADDR2, timelock)),
+      new ProposalOutput(3n, scriptFromAddressP2PKH(ADDR3, timelock), { token: FAKE_UID }),
+      new ProposalOutput(4n, scriptFromAddressP2PKH(ADDR1, timelock), { token: fakeUid2 }),
       // Authority
       new ProposalOutput(TOKEN_MINT_MASK, scriptFromAddressP2PKH(ADDR2), {
         token: FAKE_UID,
@@ -469,7 +469,7 @@ test('calculateBalance', async () => {
         authorities: TOKEN_MINT_MASK,
       }),
       // Not from the wallet
-      new ProposalOutput(10, scriptFromAddressP2PKH(ADDR_OTHER)),
+      new ProposalOutput(10n, scriptFromAddressP2PKH(ADDR_OTHER)),
       new ProposalOutput(TOKEN_MELT_MASK, scriptFromAddressP2PKH(ADDR_OTHER), {
         token: fakeUid2,
         authorities: TOKEN_MELT_MASK,

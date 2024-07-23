@@ -176,8 +176,8 @@ export interface Utxo {
   index: number; // output index
   tokenId: string; // output token
   address: string; // output address
-  value: number; // output value
-  authorities: number; // 0 for no authority, 1 for mint authority and 2 for melt authority
+  value: bigint; // output value
+  authorities: bigint; // 0 for no authority, 1 for mint authority and 2 for melt authority
   timelock: number | null; // output timelock
   heightlock: number | null; // output heightlock
   locked: boolean; // if output is locked
@@ -188,7 +188,7 @@ export interface AuthorityTxOutput {
   txId: string; // output transaction id
   index: number; // output index
   address: string; // output address
-  authorities: number; // output authorities
+  authorities: bigint; // output authorities
 }
 
 export interface AuthTokenResponseData {
@@ -211,7 +211,7 @@ export interface DataScriptOutputRequestObj {
 // This is the output object to be used in the SendTransactionWalletService class
 export interface OutputSendTransaction {
   type: string; // output type (in this case will be 'data')
-  value: number; // output value. Optional because we add fixed value of 1 to the output.
+  value: bigint; // output value. Optional because we add fixed value of 1 to the output.
   token: string; // output token. Optional because we add fixed value of HTR token to the output.
   address?: string; // output address. required for p2pkh or p2sh
   timelock?: number | null; // output timelock
@@ -243,7 +243,7 @@ export interface WalletAddressMap {
 }
 
 export interface TokenAmountMap {
-  [token: string]: number; // For each token we have the amount
+  [token: string]: bigint; // For each token we have the amount
 }
 
 export interface TransactionFullObject {
@@ -298,21 +298,21 @@ export interface IHathorWallet {
   prepareCreateNewToken(
     name: string,
     symbol: string,
-    amount: number,
+    amount: bigint,
     options
   ): Promise<CreateTokenTransaction>;
-  createNewToken(name: string, symbol: string, amount: number, options): Promise<Transaction>;
+  createNewToken(name: string, symbol: string, amount: bigint, options): Promise<Transaction>;
   createNFT(
     name: string,
     symbol: string,
-    amount: number,
+    amount: bigint,
     data: string,
     options
   ): Promise<Transaction>;
-  prepareMintTokensData(token: string, amount: number, options): Promise<Transaction>;
-  mintTokens(token: string, amount: number, options): Promise<Transaction>;
-  prepareMeltTokensData(token: string, amount: number, options): Promise<Transaction>;
-  meltTokens(token: string, amount: number, options): Promise<Transaction>;
+  prepareMintTokensData(token: string, amount: bigint, options): Promise<Transaction>;
+  mintTokens(token: string, amount: bigint, options): Promise<Transaction>;
+  prepareMeltTokensData(token: string, amount: bigint, options): Promise<Transaction>;
+  meltTokens(token: string, amount: bigint, options): Promise<Transaction>;
   prepareDelegateAuthorityData(
     token: string,
     type: string,
@@ -338,7 +338,7 @@ export interface IHathorWallet {
     options: DestroyAuthorityOptions
   ): Promise<Transaction>;
   getFullHistory(): TransactionFullObject[];
-  getTxBalance(tx: WsTransaction, optionsParams): Promise<{ [tokenId: string]: number }>;
+  getTxBalance(tx: WsTransaction, optionsParams): Promise<{ [tokenId: string]: bigint }>;
   onConnectionChangedState(newState: ConnectionState): void;
   getTokenDetails(tokenId: string): Promise<TokenDetailsObject>;
   getVersionData(): Promise<FullNodeVersionData>;
@@ -370,7 +370,7 @@ export interface DecodedOutput {
 }
 
 export interface TxOutput {
-  value: number;
+  value: bigint;
   script: string;
   token: string;
   decoded: DecodedOutput;
@@ -385,7 +385,7 @@ export interface TxInput {
   // eslint-disable-next-line camelcase
   tx_id: string;
   index: number;
-  value: number;
+  value: bigint;
   // eslint-disable-next-line camelcase
   token_data: number;
   script: string;

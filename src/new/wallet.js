@@ -945,10 +945,10 @@ class HathorWallet extends EventEmitter {
       only_available_utxos: options.only_available_utxos,
     };
     const utxoDetails = {
-      total_amount_available: 0,
-      total_utxos_available: 0,
-      total_amount_locked: 0,
-      total_utxos_locked: 0,
+      total_amount_available: 0n,
+      total_utxos_available: 0n,
+      total_amount_locked: 0n,
+      total_utxos_locked: 0n,
       utxos: [],
     };
     const nowTs = Math.floor(Date.now() / 1000);
@@ -972,10 +972,10 @@ class HathorWallet extends EventEmitter {
       utxoDetails.utxos.push(utxoInfo);
       if (isLocked) {
         utxoDetails.total_amount_locked += utxo.value;
-        utxoDetails.total_utxos_locked += 1;
+        utxoDetails.total_utxos_locked += 1n;
       } else {
         utxoDetails.total_amount_available += utxo.value;
-        utxoDetails.total_utxos_available += 1;
+        utxoDetails.total_utxos_available += 1n;
       }
     }
     return utxoDetails;
@@ -1084,7 +1084,7 @@ class HathorWallet extends EventEmitter {
     const utxoDetails = await this.getUtxos({ ...options, only_available_utxos: true });
     const inputs = [];
     const utxos = [];
-    let total_amount = 0;
+    let total_amount = 0n;
     for (let i = 0; i < utxoDetails.utxos.length; i++) {
       if (inputs.length === this.storage.version.max_number_inputs) {
         // Max number of inputs reached

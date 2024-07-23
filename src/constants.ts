@@ -109,9 +109,8 @@ export const MAX_OUTPUT_VALUE_32 = 2 ** 31 - 1;
 
 /**
  * Max accepted value for an output
- * Because of a precision problem in javascript we don't handle all 8 bytes of value
  */
-export const MAX_OUTPUT_VALUE = 2 ** 43;
+export const MAX_OUTPUT_VALUE = 2n ** 63n;
 
 /**
  * Entropy for the new HD wallet words
@@ -133,13 +132,13 @@ export const TOKEN_AUTHORITY_MASK: number = 0b10000000;
  * Mask to check if it's mint UTXO (last bit indicates it)
  * For further information: https://gitlab.com/HathorNetwork/rfcs/blob/master/text/0004-tokens.md
  */
-export const TOKEN_MINT_MASK: number = 0b00000001;
+export const TOKEN_MINT_MASK: bigint = 0b00000001n;
 
 /**
  * Mask to check if it's melt UTXO (second to last bit indicates it)
  * For further information: https://gitlab.com/HathorNetwork/rfcs/blob/master/text/0004-tokens.md
  */
-export const TOKEN_MELT_MASK: number = 0b00000010;
+export const TOKEN_MELT_MASK: bigint = 0b00000010n;
 
 /**
  * Token data for an authority output of the first token in a transaction.

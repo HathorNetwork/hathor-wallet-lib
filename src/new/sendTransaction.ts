@@ -47,7 +47,7 @@ export function isDataOutput(output: ISendOutput): output is ISendDataOutput {
 export interface ISendTokenOutput {
   type: OutputType.P2PKH | OutputType.P2SH;
   address: string;
-  value: number;
+  value: bigint;
   token: string;
   timelock?: number | null;
 }
@@ -158,8 +158,8 @@ export default class SendTransaction extends EventEmitter {
         txData.outputs.push({
           type: OutputType.DATA,
           data: output.data.toString('hex'),
-          value: 1,
-          authorities: 0,
+          value: 1n,
+          authorities: 0n,
           token: output.token,
         });
       } else {
@@ -172,7 +172,7 @@ export default class SendTransaction extends EventEmitter {
           address: output.address,
           value: output.value,
           timelock: output.timelock ? output.timelock : null,
-          authorities: 0,
+          authorities: 0n,
           token: output.token,
           type: addressObj.getType(),
         });
@@ -571,7 +571,7 @@ export async function prepareSendTokensData(
   const token = options.token || NATIVE_TOKEN_UID;
   const utxoSelection = options.utxoSelectionMethod || bestUtxoSelection;
   const newtxData: Pick<IDataTx, 'inputs' | 'outputs'> = { inputs: [], outputs: [] };
-  let outputAmount = 0;
+  let outputAmount = 0n;
 
   // Calculate balance for the token on the transaction
   for (const output of dataTx.outputs) {
@@ -589,7 +589,7 @@ export async function prepareSendTokensData(
   }
 
   if (options.chooseInputs) {
-    if (outputAmount === 0) {
+    if (outputAmount === 0n) {
       // We cannot process a target amount of 0 tokens.
       throw new Error('Invalid amount of tokens to send.');
     }
@@ -611,14 +611,14 @@ export async function prepareSendTokensData(
         token,
         value: newUtxos.amount - outputAmount,
         address: changeAddress,
-        authorities: 0,
+        authorities: 0n,
         timelock: null,
         isChange: true,
       };
       newtxData.outputs.push(changeOutput);
     }
   } else {
-    let inputAmount = 0;
+    let inputAmount = 0n;
     for (const input of dataTx.inputs) {
       if (input.token !== token) {
         // The input is not for the token we are checking
@@ -654,7 +654,7 @@ export async function prepareSendTokensData(
         token,
         value: inputAmount - outputAmount,
         address: changeAddress,
-        authorities: 0,
+        authorities: 0n,
         timelock: null,
         isChange: true,
       });

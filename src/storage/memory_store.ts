@@ -475,10 +475,10 @@ export class MemoryStore implements IStore {
     const DEFAULT_TOKEN_META: ITokenMetadata = {
       numTransactions: 0,
       balance: {
-        tokens: { unlocked: 0, locked: 0 },
+        tokens: { unlocked: 0n, locked: 0n },
         authorities: {
-          mint: { unlocked: 0, locked: 0 },
-          melt: { unlocked: 0, locked: 0 },
+          mint: { unlocked: 0n, locked: 0n },
+          melt: { unlocked: 0n, locked: 0n },
         },
       },
     };
@@ -612,7 +612,7 @@ export class MemoryStore implements IStore {
       throw new Error('invalid options');
     }
 
-    let sumAmount = 0;
+    let sumAmount = 0n;
     let utxoNum = 0;
 
     // Map.prototype.values() is an iterable but orderBy returns an array
@@ -632,7 +632,7 @@ export class MemoryStore implements IStore {
       }
       let authority_match: boolean;
       if (authorities === 0) {
-        authority_match = utxo.authorities === 0;
+        authority_match = utxo.authorities === 0n;
       } else {
         authority_match = (utxo.authorities & authorities) > 0;
       }
