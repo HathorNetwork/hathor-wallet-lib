@@ -16,6 +16,14 @@ import { IStorage } from '../types';
 const STREAM_ABORT_TIMEOUT = 10000; // 10s
 
 /**
+ * Event names for requesting stream from fullnode
+ */
+enum StreamRequestEvent {
+  REQUEST_HISTORY_XPUB = 'request:history:xpub',
+  REQUEST_HISTORY_MANUAL = 'request:history:manual',
+}
+
+/**
  * Stream abort controller that carries the streamId it is managing.
  */
 class StreamController extends AbortController {
@@ -148,7 +156,7 @@ class WalletConnection extends BaseConnection {
     const data = JSON.stringify({
       id,
       xpub: xpubkey,
-      type: 'request:history:xpub',
+      type: StreamRequestEvent.REQUEST_HISTORY_XPUB,
       'first-index': firstIndex,
       'gap-limit': gapLimit,
     });
@@ -173,7 +181,7 @@ class WalletConnection extends BaseConnection {
       id,
       first,
       addresses,
-      type: 'request:history:manual',
+      type: StreamRequestEvent.REQUEST_HISTORY_MANUAL,
       'first-index': firstIndex,
       'gap-limit': gapLimit,
     });
@@ -188,7 +196,7 @@ class WalletConnection extends BaseConnection {
         return;
       }
       // Create a timeout so we do not wait indefinetely
-      // It it reaches here we should reject since something went wrong.
+      // If it reaches here we should reject since something went wrong.
       const timer = setTimeout(() => {
         reject();
       }, STREAM_ABORT_TIMEOUT);
