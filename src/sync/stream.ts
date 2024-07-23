@@ -394,6 +394,7 @@ function buildListener(manager: StreamManager, resolve: () => void) {
     // Only process the message if it is from our stream, this error should not happen.
     if (wsData.id !== manager.streamId) {
       // Check that the stream id is the same we sent
+      console.error(`Received stream event for id ${wsData.id} while expecting ${manager.streamId}`);
       return;
     }
     // Vertex is a transaction in the history of the last address received
@@ -402,20 +403,20 @@ function buildListener(manager: StreamManager, resolve: () => void) {
       // add to history
       manager.addTx(wsData.data);
       manager.updateUI();
-    }
-    if (isStreamSyncHistoryAddress(wsData)) {
+    } else if (isStreamSyncHistoryAddress(wsData)) {
       manager.addAddress(wsData.index, wsData.address);
       manager.updateUI();
       manager.generateNextBatch();
-    }
-    if (isStreamSyncHistoryEnd(wsData)) {
+    } else if (isStreamSyncHistoryEnd(wsData)) {
       // cleanup and stop the method.
       resolve();
-    }
-    // An error happened on the fullnode, we should stop the stream
-    if (isStreamSyncHistoryError(wsData)) {
+    } else if (isStreamSyncHistoryError(wsData)) {
+      // An error happened on the fullnode, we should stop the stream
       console.error(`Stream error: ${wsData.errmsg}`);
       manager.abortWithError(wsData.errmsg);
+    } else {
+      console.error(`Unknown event type ${wsData.type}`);
+      return;
     }
   };
 }
