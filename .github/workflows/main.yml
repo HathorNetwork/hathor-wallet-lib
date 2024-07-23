@@ -12,6 +12,7 @@ on:
     - release
     - release-candidate
     - master
+    - refactor/ts-tests # TODO: REMOVE THIS
 jobs:
   test:
     runs-on: 'ubuntu-latest'

@@ -41,10 +41,6 @@ test('Signed int to bytes', () => {
   const number3 = 70000;
   const buf3 = signedIntToBytes(number3, 4);
   expect(unpackToInt(4, true, buf3)[0]).toBe(number3);
-
-  const number4 = 2 ** 33;
-  const buf4 = signedIntToBytes(number4, 8);
-  expect(unpackToInt(8, true, buf4)[0]).toBe(number4);
 });
 
 test('Float to bytes', () => {

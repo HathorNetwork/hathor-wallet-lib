@@ -5,11 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { OutputValueType } from '../types';
+
 /**
  * An output object enriched by the wallet's history methods
  */
 export type HistoryTransactionOutput = {
-  value: number;
+  value: OutputValueType;
   token_data: number;
   script: string;
   decoded: {
@@ -26,7 +28,7 @@ export type HistoryTransactionOutput = {
  * An input object enriched by the wallet's history methods
  */
 export type HistoryTransactionInput = {
-  value: number;
+  value: OutputValueType;
   token_data: number;
   script: string;
   decoded: {
@@ -69,8 +71,8 @@ export interface Balance {
 }
 
 export interface TokenBalance {
-  unlocked: number;
-  locked: number;
+  unlocked: OutputValueType;
+  locked: OutputValueType;
 }
 
 export interface AuthorityBalance {
@@ -79,8 +81,8 @@ export interface AuthorityBalance {
 }
 
 export interface Authority {
-  mint: number;
-  melt: number;
+  mint: OutputValueType;
+  melt: OutputValueType;
 }
 
 /**

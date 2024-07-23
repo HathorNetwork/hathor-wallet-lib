@@ -70,7 +70,7 @@ import {
   UninitializedWalletError,
 } from '../errors';
 import { ErrorMessages } from '../errorMessages';
-import { IStorage, IWalletAccessData } from '../types';
+import { IStorage, IWalletAccessData, OutputValueType } from '../types';
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
@@ -575,7 +575,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    *
    * @return {Object} Object with each token and it's balance in this tx for this wallet
    * */
-  async getTxBalance(tx: WsTransaction, optionsParam = {}): Promise<{ [tokenId: string]: number }> {
+  async getTxBalance(
+    tx: WsTransaction,
+    optionsParam = {}
+  ): Promise<{ [tokenId: string]: OutputValueType }> {
     const options = { includeAuthorities: false, ...optionsParam };
 
     const addresses: string[] = [];
@@ -590,19 +593,19 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       nextAddress = await generator.next();
     }
 
-    const balance = {};
+    const balance: { [tokenId: string]: OutputValueType } = {};
     for (const txout of tx.outputs) {
       if (transaction.isAuthorityOutput(txout)) {
         if (options.includeAuthorities) {
           if (!balance[txout.token]) {
-            balance[txout.token] = 0;
+            balance[txout.token] = 0n;
           }
         }
         continue;
       }
       if (txout.decoded && txout.decoded.address && addresses.includes(txout.decoded.address)) {
         if (!balance[txout.token]) {
-          balance[txout.token] = 0;
+          balance[txout.token] = 0n;
         }
         balance[txout.token] += txout.value;
       }
@@ -612,14 +615,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       if (transaction.isAuthorityOutput(txin)) {
         if (options.includeAuthorities) {
           if (!balance[txin.token]) {
-            balance[txin.token] = 0;
+            balance[txin.token] = 0n;
           }
         }
         continue;
       }
       if (txin.decoded && txin.decoded.address && addresses.includes(txin.decoded.address)) {
         if (!balance[txin.token]) {
-          balance[txin.token] = 0;
+          balance[txin.token] = 0n;
         }
         balance[txin.token] -= txin.value;
       }
@@ -819,17 +822,17 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async getUtxos(
     options: {
       tokenId?: string;
-      authority?: number;
+      authority?: OutputValueType;
       addresses?: string[];
-      totalAmount?: number;
+      totalAmount?: OutputValueType;
       count?: number;
     } = {}
-  ): Promise<{ utxos: Utxo[]; changeAmount: number }> {
+  ): Promise<{ utxos: Utxo[]; changeAmount: OutputValueType }> {
     type optionsType = {
       tokenId: string;
-      authority: number | null;
+      authority: OutputValueType | null;
       addresses: string[] | null;
-      totalAmount: number | null;
+      totalAmount: OutputValueType | null;
       count: number;
       ignoreLocked: true;
       skipSpent: true;
@@ -850,7 +853,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     const data = await walletApi.getTxOutputs(this, newOptions);
-    let changeAmount = 0;
+    let changeAmount = 0n;
     let utxos: Utxo[] = [];
     if (data.txOutputs.length === 0) {
       // No utxos available for the requested filter
@@ -977,7 +980,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const sendTransactionOutputs = outputs.map(output => {
       const typedOutput = output as OutputSendTransaction;
       if (typedOutput.type === OutputType.DATA) {
-        typedOutput.value = 1;
+        typedOutput.value = 1n;
         typedOutput.token = NATIVE_TOKEN_UID;
       } else {
         typedOutput.type = helpers.getOutputTypeFromAddress(typedOutput.address!, this.network);
@@ -1002,7 +1005,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    */
   async sendTransaction(
     address: string,
-    value: number,
+    value: OutputValueType,
     options: { token?: string; changeAddress?: string; pinCode?: string } = {}
   ): Promise<Transaction> {
     this.failIfWalletNotReady();
@@ -1222,7 +1225,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async prepareCreateNewToken(
     name: string,
     symbol: string,
-    amount: number,
+    amount: OutputValueType,
     options = {}
   ): Promise<CreateTokenTransaction> {
     this.failIfWalletNotReady();
@@ -1278,7 +1281,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     if (isNFT) {
       // For NFT we have a fee of 0.01 HTR, then the deposit utxo query must get an additional 1
-      deposit += 1;
+      deposit += 1n;
     }
 
     // 2. Get utxos for HTR
@@ -1407,7 +1410,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    */
   async _getAuthorityTxOutput(options: {
     tokenId: string;
-    authority: number;
+    authority: OutputValueType;
     skipSpent: boolean;
     maxOutputs?: number;
   }): Promise<AuthorityTxOutput[]> {
@@ -1486,7 +1489,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async createNewToken(
     name: string,
     symbol: string,
-    amount: number,
+    amount: OutputValueType,
     options = {}
   ): Promise<Transaction> {
     this.failIfWalletNotReady();
@@ -1500,7 +1503,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async prepareMintTokensData(token: string, amount: number, options = {}): Promise<Transaction> {
+  async prepareMintTokensData(
+    token: string,
+    amount: OutputValueType,
+    options = {}
+  ): Promise<Transaction> {
     this.failIfWalletNotReady();
     type optionsType = {
       address: string | null;
@@ -1637,7 +1644,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async mintTokens(token: string, amount: number, options = {}): Promise<Transaction> {
+  async mintTokens(token: string, amount: OutputValueType, options = {}): Promise<Transaction> {
     this.failIfWalletNotReady();
     const tx = await this.prepareMintTokensData(token, amount, options);
     return this.handleSendPreparedTransaction(tx);
@@ -1664,7 +1671,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async prepareMeltTokensData(token: string, amount: number, options = {}): Promise<Transaction> {
+  async prepareMeltTokensData(
+    token: string,
+    amount: OutputValueType,
+    options = {}
+  ): Promise<Transaction> {
     this.failIfWalletNotReady();
     type optionsType = {
       address: string | null;
@@ -1802,7 +1813,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async meltTokens(token: string, amount: number, options = {}): Promise<Transaction> {
+  async meltTokens(token: string, amount: OutputValueType, options = {}): Promise<Transaction> {
     this.failIfWalletNotReady();
     const tx = await this.prepareMeltTokensData(token, amount, options);
     return this.handleSendPreparedTransaction(tx);
@@ -1826,13 +1837,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   ): Promise<Transaction> {
     this.failIfWalletNotReady();
 
-    let authority: number;
-    let mask: number;
+    let authority: OutputValueType;
+    let mask: OutputValueType;
     if (type === 'mint') {
-      authority = 1;
+      authority = 1n;
       mask = TOKEN_MINT_MASK;
     } else if (type === 'melt') {
-      authority = 2;
+      authority = 2n;
       mask = TOKEN_MELT_MASK;
     } else {
       throw new WalletError('Type options are mint and melt for delegate authority method.');
@@ -1933,11 +1944,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   ): Promise<Transaction> {
     this.failIfWalletNotReady();
 
-    let authority: number;
+    let authority: OutputValueType;
     if (type === 'mint') {
-      authority = 1;
+      authority = 1n;
     } else if (type === 'melt') {
-      authority = 2;
+      authority = 2n;
     } else {
       throw new WalletError('Type options are mint and melt for destroy authority method.');
     }
@@ -2009,7 +2020,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async createNFT(
     name: string,
     symbol: string,
-    amount: number,
+    amount: OutputValueType,
     data: string,
     options = {}
   ): Promise<Transaction> {

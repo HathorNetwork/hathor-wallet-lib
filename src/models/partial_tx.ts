@@ -29,7 +29,7 @@ import {
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
 } from '../constants';
-import { IDataInput, IDataOutput, IDataTx } from '../types';
+import { IDataInput, IDataOutput, IDataTx, OutputValueType } from '../types';
 
 /**
  * Extended version of the Input class with extra data
@@ -38,23 +38,23 @@ import { IDataInput, IDataOutput, IDataTx } from '../types';
 export class ProposalInput extends Input {
   token: string;
 
-  authorities: number;
+  authorities: OutputValueType;
 
-  value: number;
+  value: OutputValueType;
 
   address: string;
 
   constructor(
     hash: string,
     index: number,
-    value: number,
+    value: OutputValueType,
     address: string,
     {
       token = NATIVE_TOKEN_UID,
-      authorities = 0,
+      authorities = 0n,
     }: {
       token?: string;
-      authorities?: number;
+      authorities?: OutputValueType;
     } = {}
   ) {
     super(hash, index);
@@ -103,19 +103,19 @@ export class ProposalOutput extends Output {
 
   isChange: boolean;
 
-  authorities: number;
+  authorities: OutputValueType;
 
   constructor(
-    value: number,
+    value: OutputValueType,
     script: Buffer,
     {
       isChange = false,
       token = NATIVE_TOKEN_UID,
-      authorities = 0,
+      authorities = 0n,
     }: {
       token?: string;
       isChange?: boolean;
-      authorities?: number;
+      authorities?: OutputValueType;
     } = {}
   ) {
     let tokenData = 0;
@@ -247,11 +247,11 @@ export class PartialTx {
    * @memberof PartialTx
    * @inner
    */
-  calculateTokenBalance(): Record<string, { inputs: number; outputs: number }> {
-    const tokenBalance: Record<string, { inputs: number; outputs: number }> = {};
+  calculateTokenBalance(): Record<string, { inputs: OutputValueType; outputs: OutputValueType }> {
+    const tokenBalance: Record<string, { inputs: OutputValueType; outputs: OutputValueType }> = {};
     for (const input of this.inputs) {
       if (!tokenBalance[input.token]) {
-        tokenBalance[input.token] = { inputs: 0, outputs: 0 };
+        tokenBalance[input.token] = { inputs: 0n, outputs: 0n };
       }
 
       // Ignore authority inputs for token balance
@@ -262,7 +262,7 @@ export class PartialTx {
 
     for (const output of this.outputs) {
       if (!tokenBalance[output.token]) {
-        tokenBalance[output.token] = { inputs: 0, outputs: 0 };
+        tokenBalance[output.token] = { inputs: 0n, outputs: 0n };
       }
 
       // Ignore authority outputs for token balance
@@ -295,7 +295,7 @@ export class PartialTx {
    * @param {string} txId The transaction id of the UTXO.
    * @param {number} index The index of the UTXO.
    * @param {number} value Value of the UTXO.
-   * @param {number} authorities The authority information of the utxo.
+   * @param {OutputValueType} authorities The authority information of the utxo.
    * @param {string} address base58 address
    * @param {Object} [options]
    * @param {string} [options.token='00'] The token UID.
@@ -306,14 +306,14 @@ export class PartialTx {
   addInput(
     txId: string,
     index: number,
-    value: number,
+    value: OutputValueType,
     address: string,
     {
       token = NATIVE_TOKEN_UID,
-      authorities = 0,
+      authorities = 0n,
     }: {
       token?: string;
-      authorities?: number;
+      authorities?: OutputValueType;
     } = {}
   ) {
     this.inputs.push(new ProposalInput(txId, index, value, address, { token, authorities }));
@@ -324,7 +324,7 @@ export class PartialTx {
    *
    * @param {number} value The amount of tokens on the output.
    * @param {Buffer} script The output script.
-   * @param {number} authorities The authority information of the output.
+   * @param {OutputValueType} authorities The authority information of the output.
    * @param {Object} [options]
    * @param {string} [options.token='00'] The token UID.
    * @param {boolean|null} [options.isChange=false] isChange If this is a change output.
@@ -333,16 +333,16 @@ export class PartialTx {
    * @inner
    */
   addOutput(
-    value: number,
+    value: OutputValueType,
     script: Buffer,
     {
       token = NATIVE_TOKEN_UID,
-      authorities = 0,
+      authorities = 0n,
       isChange = false,
     }: {
       token?: string;
       isChange?: boolean;
-      authorities?: number;
+      authorities?: OutputValueType;
     } = {}
   ) {
     this.outputs.push(new ProposalOutput(value, script, { token, authorities, isChange }));
@@ -415,8 +415,8 @@ export class PartialTx {
           const meta = {
             address: parts[0],
             token: parts[1],
-            authorities: parseInt(parts[2], 16),
-            value: parseInt(parts[3], 16),
+            authorities: BigInt(`0x${parts[2]}`),
+            value: BigInt(`0x${parts[3]}`),
           };
           if (Number.isNaN(meta.value) || Number.isNaN(meta.authorities)) {
             throw new SyntaxError('Invalid PartialTx');
@@ -445,7 +445,7 @@ export class PartialTx {
         throw new UnsupportedScriptError('Unsupported script type');
       }
 
-      let authorities = 0;
+      let authorities = 0n;
       if (output.isMint()) {
         authorities += TOKEN_MINT_MASK;
       }

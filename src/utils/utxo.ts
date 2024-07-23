@@ -5,7 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { IStorage, IUtxo, IUtxoFilterOptions, UtxoSelectionAlgorithm } from '../types';
+import {
+  IStorage,
+  IUtxo,
+  IUtxoFilterOptions,
+  OutputValueType,
+  UtxoSelectionAlgorithm,
+} from '../types';
 
 export enum UtxoSelection {
   FAST = 'fast',
@@ -36,20 +42,20 @@ export function getAlgorithmFromEnum(algorithm: UtxoSelection): UtxoSelectionAlg
  *
  * @param {IStorage} storage The wallet storage to select the utxos
  * @param {string} token The token uid to select the utxos
- * @param {number} amount The target amount of tokens required
+ * @param {OutputValueType} amount The target amount of tokens required
  * @returns {Promise<{ utxos: IUtxo[], utxosAmount: number}>
  */
 export async function fastUtxoSelection(
   storage: IStorage,
   token: string,
-  amount: number
-): Promise<{ utxos: IUtxo[]; amount: number }> {
+  amount: OutputValueType
+): Promise<{ utxos: IUtxo[]; amount: OutputValueType }> {
   const utxos: IUtxo[] = [];
-  let utxosAmount = 0;
+  let utxosAmount = 0n;
 
   const options: IUtxoFilterOptions = {
     token,
-    authorities: 0,
+    authorities: 0n,
     target_amount: amount,
     only_available_utxos: true,
     order_by_value: 'desc',
@@ -65,7 +71,7 @@ export async function fastUtxoSelection(
     // Not enough funds to fill the amount required.
     return {
       utxos: [],
-      amount: 0,
+      amount: 0n,
     };
   }
 
@@ -80,21 +86,21 @@ export async function fastUtxoSelection(
  *
  * @param {IStorage} storage The wallet storage to select the utxos
  * @param {string} token The token uid to select the utxos
- * @param {number} amount The target amount of tokens required
+ * @param {OutputValueType} amount The target amount of tokens required
  * @returns {Promise<{ utxos: IUtxo[], utxosAmount: number}>
  */
 export async function bestUtxoSelection(
   storage: IStorage,
   token: string,
-  amount: number
-): Promise<{ utxos: IUtxo[]; amount: number }> {
+  amount: OutputValueType
+): Promise<{ utxos: IUtxo[]; amount: OutputValueType }> {
   const utxos: IUtxo[] = [];
-  let utxosAmount = 0;
+  let utxosAmount = 0n;
   let selectedUtxo: IUtxo | null = null;
 
   const options: IUtxoFilterOptions = {
     token,
-    authorities: 0,
+    authorities: 0n,
     only_available_utxos: true,
     order_by_value: 'desc',
   };
@@ -143,7 +149,7 @@ export async function bestUtxoSelection(
     // We don't have enough funds
     return {
       utxos: [],
-      amount: 0,
+      amount: 0n,
     };
   }
   // We need to ensure we use the smallest number of utxos and avoid hitting the maximum number of inputs

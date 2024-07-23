@@ -2,13 +2,16 @@ export default [
   {
     tx_id: '0000000110eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e',
     version: 0,
+    signalBits: 0,
+    nonce: 0,
+    tokens: [],
     weight: 22.719884359974895,
     timestamp: 1613538740,
     is_voided: false,
     inputs: [],
     outputs: [
       {
-        value: 1,
+        value: 1n,
         token_data: 0,
         script: 'dqkUVTXZg887mKgf7wgS3RddNtu+EkiIrA==',
         decoded: {
@@ -31,13 +34,16 @@ export default [
   {
     tx_id: '0000000211673128a49ea700c7b3efbbbc4b3bfe5bf289bc5a1967f12d3c30b5',
     version: 0,
+    signalBits: 0,
+    nonce: 0,
+    tokens: [],
     weight: 21.911255937644835,
     timestamp: 1613519819,
     is_voided: false,
     inputs: [],
     outputs: [
       {
-        value: 1,
+        value: 1n,
         token_data: 128,
         script: 'dqkUVTXZg887mKgf7wgS3RddNtu+EkiIrA==',
         decoded: {
@@ -60,13 +66,16 @@ export default [
   {
     tx_id: '0000000292236abbb41a2201409b85084631389950f76f7da0d8734b51b31758',
     version: 0,
+    signalBits: 0,
+    nonce: 0,
+    tokens: [],
     weight: 22.255565408819944,
     timestamp: 1613524608,
     is_voided: false,
     inputs: [],
     outputs: [
       {
-        value: 1,
+        value: 1n,
         token_data: 0,
         script: 'dqkUVTXZg887mKgf7wgS3RddNtu+EkiIrA==',
         decoded: {
@@ -89,13 +98,16 @@ export default [
   {
     tx_id: '00000003508b2c24066365cffe23cd77896dad01a665c64cd4797654c6acab92',
     version: 0,
+    signalBits: 0,
+    nonce: 0,
+    tokens: [],
     weight: 21.7848190101318,
     timestamp: 1613529833,
     is_voided: true,
     inputs: [],
     outputs: [
       {
-        value: 1,
+        value: 1n,
         token_data: 0,
         script: 'dqkUVTXZg887mKgf7wgS3RddNtu+EkiIrA==',
         decoded: {
@@ -118,13 +130,16 @@ export default [
   {
     tx_id: '0000000419625e2587c225fb49f36278c9da681ec05e039125307b8aef3d3d30',
     version: 0,
+    signalBits: 0,
+    nonce: 0,
+    tokens: [],
     weight: 22.227347437740097,
     timestamp: 1613522627,
     is_voided: false,
     inputs: [],
     outputs: [
       {
-        value: 1,
+        value: 1n,
         token_data: 0,
         script: 'dqkUVTXZg887mKgf7wgS3RddNtu+EkiIrA==',
         decoded: {
@@ -147,13 +162,16 @@ export default [
   {
     tx_id: '0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1052',
     version: 0,
+    signalBits: 0,
+    nonce: 0,
+    tokens: [],
     weight: 26.450454121121226,
     timestamp: 1613678350,
     is_voided: false,
     inputs: [],
     outputs: [
       {
-        value: 1,
+        value: 1n,
         token_data: 0,
         script: 'dqkUbhqK2qsf7gbzLzSsIW6+XOT6LmmIrA==',
         decoded: {
@@ -176,13 +194,16 @@ export default [
   {
     tx_id: '0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1053',
     version: 0,
+    signalBits: 0,
+    nonce: 0,
+    tokens: [],
     weight: 26.450454121121226,
     timestamp: 1613678350,
     is_voided: false,
     inputs: [],
     outputs: [
       {
-        value: 1,
+        value: 1n,
         token_data: 0,
         script: 'dqkUbhqK2qsf7gbzLzSsIW6+XOT6LmmIrA==',
         decoded: {
@@ -205,13 +226,16 @@ export default [
   {
     tx_id: '0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1054',
     version: 0,
+    signalBits: 0,
+    nonce: 0,
+    tokens: [],
     weight: 26.450454121121226,
     timestamp: 1613678350,
     is_voided: false,
     inputs: [],
     outputs: [
       {
-        value: 2,
+        value: 2n,
         token_data: 0,
         script: 'dqkUbhqK2qsf7gbzLzSsIW6+XOT6LmmIrA==',
         decoded: {
@@ -234,13 +258,16 @@ export default [
   {
     tx_id: '0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1055',
     version: 0,
+    signalBits: 0,
+    nonce: 0,
+    tokens: [],
     weight: 26.450454121121226,
     timestamp: 1613678350,
     is_voided: false,
     inputs: [],
     outputs: [
       {
-        value: 3,
+        value: 3n,
         token_data: 0,
         script: 'dqkUbhqK2qsf7gbzLzSsIW6+XOT6LmmIrA==',
         decoded: {
@@ -263,13 +290,16 @@ export default [
   {
     tx_id: '0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1056',
     version: 0,
+    signalBits: 0,
+    nonce: 0,
+    tokens: [],
     weight: 26.450454121121226,
     timestamp: 1613678370,
     is_voided: false,
     inputs: [],
     outputs: [
       {
-        value: 1,
+        value: 1n,
         token_data: 0,
         script: 'dqkUbhqK2qsf7gbzLzSsIW6+XOT6LmmIrA==',
         decoded: {
@@ -292,13 +322,16 @@ export default [
   {
     tx_id: '0000000fa2157d34a56b89c08e1783cd1103f6e6807bb01ccff1d920b31d1057',
     version: 0,
+    signalBits: 0,
+    nonce: 0,
+    tokens: [],
     weight: 26.450454121121226,
     timestamp: 1613678370,
     is_voided: false,
     inputs: [],
     outputs: [
       {
-        value: 1,
+        value: 1n,
         token_data: 0,
         script: 'dqkUbhqK2qsf7gbzLzSsIW6+XOT6LmmIrA==',
         decoded: {
