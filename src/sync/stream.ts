@@ -3,6 +3,11 @@ import FullNodeConnection from '../new/connection';
 import { IStorage, IHistoryTx, HistorySyncMode, isGapLimitScanPolicy } from '../types';
 import Network from '../models/network';
 
+interface IStreamSyncHistoryBegin {
+  type: 'stream:history:begin';
+  id: string;
+}
+
 interface IStreamSyncHistoryVertex {
   type: 'stream:history:vertex';
   id: string;
@@ -28,10 +33,15 @@ interface IStreamSyncHistoryError {
 }
 
 type IStreamSyncHistoryData =
+  | IStreamSyncHistoryBegin
   | IStreamSyncHistoryVertex
   | IStreamSyncHistoryAddress
   | IStreamSyncHistoryEnd
   | IStreamSyncHistoryError;
+
+function isStreamSyncHistoryBegin(data: IStreamSyncHistoryData): data is IStreamSyncHistoryBegin {
+  return data.type === 'stream:history:begin';
+}
 
 function isStreamSyncHistoryVertex(data: IStreamSyncHistoryData): data is IStreamSyncHistoryVertex {
   return data.type === 'stream:history:vertex';
@@ -399,8 +409,10 @@ function buildListener(manager: StreamManager, resolve: () => void) {
       );
       return;
     }
-    // Vertex is a transaction in the history of the last address received
-    if (isStreamSyncHistoryVertex(wsData)) {
+    if (isStreamSyncHistoryBegin(wsData)) {
+      console.log('Begin stream event received.');
+    } else if (isStreamSyncHistoryVertex(wsData)) {
+      // Vertex is a transaction in the history of the last address received
       // foundAnyTx = true;
       // add to history
       manager.addTx(wsData.data);
@@ -417,7 +429,7 @@ function buildListener(manager: StreamManager, resolve: () => void) {
       console.error(`Stream error: ${wsData.errmsg}`);
       manager.abortWithError(wsData.errmsg);
     } else {
-      console.error(`Unknown event type ${wsData}`);
+      console.error(`Unknown event type ${JSON.stringify(wsData)}`);
     }
   };
 }
