@@ -234,7 +234,7 @@ class PartialTxProposal {
 
     const getEmptyBalance = () => ({
       balance: { unlocked: 0n, locked: 0n },
-      authority: { unlocked: { mint: 0, melt: 0 }, locked: { mint: 0, melt: 0 } },
+      authority: { unlocked: { mint: 0n, melt: 0n }, locked: { mint: 0n, melt: 0n } },
     });
 
     const tokenBalance: Record<string, Balance> = {};
@@ -249,9 +249,9 @@ class PartialTxProposal {
       if (input.isAuthority()) {
         // calculate authority balance
         tokenBalance[input.token].authority.unlocked.mint -=
-          (input.value & TOKEN_MINT_MASK) > 0 ? 1 : 0;
+          (input.value & TOKEN_MINT_MASK) > 0n ? 1n : 0n;
         tokenBalance[input.token].authority.unlocked.melt -=
-          (input.value & TOKEN_MELT_MASK) > 0 ? 1 : 0;
+          (input.value & TOKEN_MELT_MASK) > 0n ? 1n : 0n;
       } else {
         // calculate token balance
         tokenBalance[input.token].balance.unlocked -= input.value;
@@ -278,15 +278,15 @@ class PartialTxProposal {
         if (isTimelocked(decodedScript.timelock)) {
           // Locked output
           tokenBalance[output.token].authority.locked.mint +=
-            (output.value & TOKEN_MINT_MASK) > 0 ? 1 : 0;
+            (output.value & TOKEN_MINT_MASK) > 0n ? 1n : 0n;
           tokenBalance[output.token].authority.locked.melt +=
-            (output.value & TOKEN_MELT_MASK) > 0 ? 1 : 0;
+            (output.value & TOKEN_MELT_MASK) > 0n ? 1n : 0n;
         } else {
           // Unlocked output
           tokenBalance[output.token].authority.unlocked.mint +=
-            (output.value & TOKEN_MINT_MASK) > 0 ? 1 : 0;
+            (output.value & TOKEN_MINT_MASK) > 0n ? 1n : 0n;
           tokenBalance[output.token].authority.unlocked.melt +=
-            (output.value & TOKEN_MELT_MASK) > 0 ? 1 : 0;
+            (output.value & TOKEN_MELT_MASK) > 0n ? 1n : 0n;
         }
       } else if (isTimelocked(decodedScript.timelock)) {
         /**

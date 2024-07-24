@@ -11,7 +11,8 @@ import { AbstractSublevel } from 'abstract-level';
 import { IKVTokenIndex, ITokenData, ITokenMetadata } from '../../types';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 import { checkLevelDbVersion } from './utils';
-import { getJsonWithBigIntEncoding } from '../../utils/storage';
+import { jsonWithBigIntEncoding } from '../../utils/bigint';
+import { ITokenMetadataSchema } from '../../zod_schemas';
 
 export const TOKEN_PREFIX = 'token';
 export const META_PREFIX = 'meta';
@@ -48,7 +49,7 @@ export default class LevelTokenIndex implements IKVTokenIndex {
     const db = new Level(this.dbpath);
     this.tokenDB = db.sublevel<string, ITokenData>(TOKEN_PREFIX, { valueEncoding: 'json' });
     this.metadataDB = db.sublevel<string, ITokenMetadata>(META_PREFIX, {
-      valueEncoding: getJsonWithBigIntEncoding(),
+      valueEncoding: jsonWithBigIntEncoding(ITokenMetadataSchema),
     });
     this.registeredDB = db.sublevel<string, ITokenData>(REGISTER_PREFIX, { valueEncoding: 'json' });
   }

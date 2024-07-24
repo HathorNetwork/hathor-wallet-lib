@@ -474,7 +474,7 @@ const transaction = {
     if (isDataOutputCreateToken(output)) {
       // This output does not contain the token since it will be creating
       // But knowing this, we also know the token index of it.
-      if (output.authorities === 0) {
+      if (output.authorities === 0n) {
         return 1;
       }
       return 1 | TOKEN_AUTHORITY_MASK;
@@ -609,7 +609,7 @@ const transaction = {
    * Calculate the authorities data for an output
    *
    * @param output History output
-   * @returns {number} Authorities from output
+   * @returns {bigint} Authorities from output
    */
   authoritiesFromOutput(output: Pick<IHistoryOutput, 'token_data' | 'value'>): bigint {
     let authorities = 0n;

@@ -36,7 +36,7 @@ export function getAlgorithmFromEnum(algorithm: UtxoSelection): UtxoSelectionAlg
  *
  * @param {IStorage} storage The wallet storage to select the utxos
  * @param {string} token The token uid to select the utxos
- * @param {number} amount The target amount of tokens required
+ * @param {bigint} amount The target amount of tokens required
  * @returns {Promise<{ utxos: IUtxo[], utxosAmount: number}>
  */
 export async function fastUtxoSelection(
@@ -80,7 +80,7 @@ export async function fastUtxoSelection(
  *
  * @param {IStorage} storage The wallet storage to select the utxos
  * @param {string} token The token uid to select the utxos
- * @param {number} amount The target amount of tokens required
+ * @param {bigint} amount The target amount of tokens required
  * @returns {Promise<{ utxos: IUtxo[], utxosAmount: number}>
  */
 export async function bestUtxoSelection(

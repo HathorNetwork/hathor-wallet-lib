@@ -33,8 +33,8 @@ export interface TokenInfo {
 }
 
 export interface Balance {
-  unlocked: number; // Available amount
-  locked: number; // Locked amount
+  unlocked: bigint; // Available amount
+  locked: bigint; // Locked amount
 }
 
 export interface AuthoritiesBalance {
@@ -49,7 +49,7 @@ export interface Authority {
 
 export interface GetHistoryObject {
   txId: string; // Transaction ID
-  balance: number; // Balance of this tx in this wallet (can be negative)
+  balance: bigint; // Balance of this tx in this wallet (can be negative)
   timestamp: number; // Transaction timestamp
   voided: boolean; // If transaction is voided
   version: number; // Transaction version
@@ -109,7 +109,7 @@ export interface TokenDetailsAuthoritiesObject {
 
 export interface TokenDetailsObject {
   tokenInfo: TokenInfo;
-  totalSupply: number;
+  totalSupply: bigint;
   totalTransactions: number;
   authorities: TokenDetailsAuthoritiesObject;
 }
@@ -135,7 +135,7 @@ export interface TxProposalInputs {
 
 export interface TxProposalOutputs {
   address: string; // output address
-  value: number; // output value
+  value: bigint; // output value
   token: string; // output token
   timelock: number | null; // output timelock
 }
@@ -198,7 +198,7 @@ export interface AuthTokenResponseData {
 
 export interface OutputRequestObj {
   address: string; // output address
-  value: number; // output value
+  value: bigint; // output value
   token: string; // output token
   timelock?: number | null; // output timelock
 }
@@ -286,7 +286,7 @@ export interface IHathorWallet {
   ): Promise<Transaction>;
   sendTransaction(
     address: string,
-    value: number,
+    value: bigint,
     options: { token?: string; changeAddress?: string }
   ): Promise<Transaction>;
   stop(params?: IStopWalletParams): void;
@@ -479,7 +479,7 @@ export interface FullNodeDecodedInput {
   type: string;
   address: string;
   timelock?: number | null;
-  value: number;
+  value: bigint;
   token_data: number;
 }
 
@@ -487,12 +487,12 @@ export interface FullNodeDecodedOutput {
   type: string;
   address?: string;
   timelock?: number | null;
-  value: number;
+  value: bigint;
   token_data?: number;
 }
 
 export interface FullNodeInput {
-  value: number;
+  value: bigint;
   token_data: number;
   script: string;
   decoded: FullNodeDecodedInput;
@@ -503,7 +503,7 @@ export interface FullNodeInput {
 }
 
 export interface FullNodeOutput {
-  value: number;
+  value: bigint;
   token_data: number;
   script: string;
   decoded: FullNodeDecodedOutput;

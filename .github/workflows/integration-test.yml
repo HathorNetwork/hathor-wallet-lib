@@ -5,6 +5,7 @@ on:
       - release
       - release-candidate
       - master
+      - refactor/ts-tests # TODO: REMOVE THIS
 
 env:
   TEST_WALLET_START_TIMEOUT: '180000' # 3 minutes

@@ -384,7 +384,7 @@ const tokens = {
       address,
       value: amount,
       timelock: null,
-      authorities: 0,
+      authorities: 0n,
     });
 
     if (createAnotherMint) {
@@ -394,7 +394,7 @@ const tokens = {
         address: newAddress,
         value: TOKEN_MINT_MASK,
         timelock: null,
-        authorities: 1,
+        authorities: 1n,
       });
     }
 
@@ -435,7 +435,7 @@ const tokens = {
    * @param {string} token Token to melt
    * @param {IDataInput} authorityMeltInput Input with authority to melt
    * @param {string} address Address to send the melted HTR tokens
-   * @param {number} amount The amount of tokens to melt
+   * @param {bigint} amount The amount of tokens to melt
    * @param {IStorage} storage The storage object
    * @param {Object} [options={}] Options to create the melt transaction
    * @param {boolean} [options.createAnotherMelt=true] If should create another melt authority
@@ -661,7 +661,7 @@ const tokens = {
         address: newAddress,
         value: TOKEN_MELT_MASK,
         timelock: null,
-        authorities: 2,
+        authorities: 2n,
       } as IDataOutput;
       if (data !== null && data.length !== 0 && !isCreateNFT) {
         txData.outputs.splice(-data.length, 0, meltAuthorityOutput);

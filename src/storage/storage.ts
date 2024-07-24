@@ -469,7 +469,7 @@ export class Storage implements IStorage {
    *
    * @param {number} singleBalance The balance we want to match
    * @param {string} token The token uid
-   * @param {number} authorities The authorities we want to match
+   * @param {bigint} authorities The authorities we want to match
    * @param {string} changeAddress change address to use
    * @param {boolean} chooseInputs If we can add new inputs to the transaction
    * @returns {Promise<{inputs: IDataInput[], outputs: IDataOutput[]}>} The inputs and outputs that match the balance

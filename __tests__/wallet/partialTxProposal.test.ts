@@ -80,10 +80,10 @@ test('fromPartialTx', async () => {
   expect(proposal.partialTx.serialize()).toEqual(serialized);
 
   expect(proposal.partialTx).toMatchObject({
-    inputs: [expect.objectContaining({ hash: FAKE_TXID, index: 0, value: 10, address: ADDR1 })],
+    inputs: [expect.objectContaining({ hash: FAKE_TXID, index: 0, value: 10n, address: ADDR1 })],
     outputs: [
-      expect.objectContaining({ value: 5, token: NATIVE_TOKEN_UID }),
-      expect.objectContaining({ value: 10, token: FAKE_UID }),
+      expect.objectContaining({ value: 5n, token: NATIVE_TOKEN_UID }),
+      expect.objectContaining({ value: 10n, token: FAKE_UID }),
     ],
   });
 
@@ -147,13 +147,13 @@ test('addSend', async () => {
    */
   await proposal.addSend(FAKE_UID, 10n);
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(spyInput).toHaveBeenCalledWith(FAKE_TXID, 1, 10, ADDR1, {
+  expect(spyInput).toHaveBeenCalledWith(FAKE_TXID, 1, 10n, ADDR1, {
     token: FAKE_UID,
-    authorities: 0,
+    authorities: 0n,
     markAsSelected: true,
   });
   expect(spyOutput).not.toHaveBeenCalled();
-  expect(spyUtxos).toHaveBeenCalledWith({ token: FAKE_UID, authorities: 0 });
+  expect(spyUtxos).toHaveBeenCalledWith({ token: FAKE_UID, authorities: 0n });
   expect(spyAddr).not.toHaveBeenCalled();
 
   // Mock cleanup
@@ -168,14 +168,14 @@ test('addSend', async () => {
    */
   await proposal.addSend(FAKE_UID, 4n, { utxos: utxosOld, changeAddress: ADDR3 });
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(spyInput).toHaveBeenCalledWith(FAKE_TXID, 1, 10, ADDR1, {
+  expect(spyInput).toHaveBeenCalledWith(FAKE_TXID, 1, 10n, ADDR1, {
     token: FAKE_UID,
-    authorities: 0,
+    authorities: 0n,
     markAsSelected: true,
   });
   expect(spyOutput).toHaveBeenCalledWith(
     FAKE_UID,
-    6, // change 10 - 4 = 6
+    6n, // change 10 - 4 = 6
     ADDR3,
     { isChange: true }
   );
@@ -194,15 +194,15 @@ test('addSend', async () => {
    */
   await proposal.addSend(FAKE_UID, 8n, { markAsSelected: false });
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(spyUtxos).toHaveBeenCalledWith({ token: FAKE_UID, authorities: 0 });
-  expect(spyInput).toHaveBeenCalledWith(FAKE_TXID, 1, 10, ADDR1, {
+  expect(spyUtxos).toHaveBeenCalledWith({ token: FAKE_UID, authorities: 0n });
+  expect(spyInput).toHaveBeenCalledWith(FAKE_TXID, 1, 10n, ADDR1, {
     token: FAKE_UID,
-    authorities: 0,
+    authorities: 0n,
     markAsSelected: false,
   });
   expect(spyOutput).toHaveBeenCalledWith(
     FAKE_UID,
-    2, // change 10 - 8 = 2
+    2n, // change 10 - 8 = 2
     ADDR2,
     { isChange: true }
   );
@@ -235,7 +235,7 @@ test('addReceive', async () => {
    */
   await proposal.addReceive(FAKE_UID, 99n);
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(spyOutput).toHaveBeenCalledWith(FAKE_UID, 99, ADDR1, { timelock: null });
+  expect(spyOutput).toHaveBeenCalledWith(FAKE_UID, 99n, ADDR1, { timelock: null });
   expect(spyAddr).toHaveBeenCalled();
 
   // Mock cleanup
@@ -248,7 +248,7 @@ test('addReceive', async () => {
    */
   await proposal.addReceive(NATIVE_TOKEN_UID, 180n, { address: ADDR2 });
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(spyOutput).toHaveBeenCalledWith(NATIVE_TOKEN_UID, 180, ADDR2, { timelock: null });
+  expect(spyOutput).toHaveBeenCalledWith(NATIVE_TOKEN_UID, 180n, ADDR2, { timelock: null });
   expect(spyAddr).not.toHaveBeenCalled();
 
   // Remove mocks
@@ -273,9 +273,9 @@ test('addInput', async () => {
   proposal.addInput(FAKE_TXID, 5, 999n, ADDR1);
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(spyMark).toHaveBeenCalledWith({ txId: FAKE_TXID, index: 5 }, true);
-  expect(spyInput).toHaveBeenCalledWith(FAKE_TXID, 5, 999, ADDR1, {
+  expect(spyInput).toHaveBeenCalledWith(FAKE_TXID, 5, 999n, ADDR1, {
     token: NATIVE_TOKEN_UID,
-    authorities: 0,
+    authorities: 0n,
   });
 
   // Mock cleanup
@@ -293,7 +293,7 @@ test('addInput', async () => {
   });
   expect(spyReset).toHaveBeenCalledTimes(1);
   expect(spyMark).not.toHaveBeenCalled();
-  expect(spyInput).toHaveBeenCalledWith(FAKE_TXID, 20, 70, ADDR2, {
+  expect(spyInput).toHaveBeenCalledWith(FAKE_TXID, 20, 70n, ADDR2, {
     token: FAKE_UID,
     authorities: TOKEN_MINT_MASK,
   });
@@ -318,9 +318,9 @@ test('addOutput', async () => {
    */
   proposal.addOutput(FAKE_UID, 999n, ADDR1);
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(spyOutput).toHaveBeenCalledWith(999, scriptFromAddressP2PKH(ADDR1), {
+  expect(spyOutput).toHaveBeenCalledWith(999n, scriptFromAddressP2PKH(ADDR1), {
     token: FAKE_UID,
-    authorities: 0,
+    authorities: 0n,
     isChange: false,
   });
 
@@ -333,9 +333,9 @@ test('addOutput', async () => {
    */
   proposal.addOutput(NATIVE_TOKEN_UID, 456n, ADDR4, { isChange: true });
   expect(spyReset).toHaveBeenCalledTimes(1);
-  expect(spyOutput).toHaveBeenCalledWith(456, scriptFromAddressP2SH(ADDR4), {
+  expect(spyOutput).toHaveBeenCalledWith(456n, scriptFromAddressP2SH(ADDR4), {
     token: NATIVE_TOKEN_UID,
-    authorities: 0,
+    authorities: 0n,
     isChange: true,
   });
 
@@ -507,31 +507,31 @@ test('calculateBalance', async () => {
    */
   const expected = {
     [NATIVE_TOKEN_UID]: {
-      balance: { unlocked: -10, locked: 2 },
+      balance: { unlocked: -10n, locked: 2n },
       authority: {
-        unlocked: { mint: 0, melt: 0 },
-        locked: { mint: 0, melt: 0 },
+        unlocked: { mint: 0n, melt: 0n },
+        locked: { mint: 0n, melt: 0n },
       },
     },
     [FAKE_UID]: {
-      balance: { unlocked: 3, locked: 3 },
+      balance: { unlocked: 3n, locked: 3n },
       authority: {
-        unlocked: { mint: 1, melt: 0 },
-        locked: { mint: 0, melt: 0 },
+        unlocked: { mint: 1n, melt: 0n },
+        locked: { mint: 0n, melt: 0n },
       },
     },
     [fakeUid2]: {
-      balance: { unlocked: 15, locked: 4 },
+      balance: { unlocked: 15n, locked: 4n },
       authority: {
-        unlocked: { mint: 0, melt: 0 },
-        locked: { mint: 0, melt: 1 },
+        unlocked: { mint: 0n, melt: 0n },
+        locked: { mint: 0n, melt: 1n },
       },
     },
     [fakeUid3]: {
-      balance: { unlocked: -4, locked: 0 },
+      balance: { unlocked: -4n, locked: 0n },
       authority: {
-        unlocked: { mint: 0, melt: -2 },
-        locked: { mint: 1, melt: 0 },
+        unlocked: { mint: 0n, melt: -2n },
+        locked: { mint: 1n, melt: 0n },
       },
     },
   };

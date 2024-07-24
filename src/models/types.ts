@@ -26,7 +26,7 @@ export type HistoryTransactionOutput = {
  * An input object enriched by the wallet's history methods
  */
 export type HistoryTransactionInput = {
-  value: number;
+  value: bigint;
   token_data: number;
   script: string;
   decoded: {
@@ -79,8 +79,8 @@ export interface AuthorityBalance {
 }
 
 export interface Authority {
-  mint: number;
-  melt: number;
+  mint: bigint;
+  melt: bigint;
 }
 
 /**

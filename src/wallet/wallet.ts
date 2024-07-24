@@ -1002,7 +1002,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    */
   async sendTransaction(
     address: string,
-    value: number,
+    value: bigint,
     options: { token?: string; changeAddress?: string; pinCode?: string } = {}
   ): Promise<Transaction> {
     this.failIfWalletNotReady();

@@ -160,21 +160,21 @@ test('Utxo selection', () => {
   expect(selectedUtxos.utxos[0].txId).toBe(
     '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e'
   );
-  expect(selectedUtxos.changeAmount).toBe(2);
+  expect(selectedUtxos.changeAmount).toBe(2n);
 
   const selectedUtxos2 = transaction.selectUtxos(utxos, 5n);
   expect(selectedUtxos2.utxos.length).toBe(1);
   expect(selectedUtxos2.utxos[0].txId).toBe(
     '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e'
   );
-  expect(selectedUtxos2.changeAmount).toBe(0);
+  expect(selectedUtxos2.changeAmount).toBe(0n);
 
   const selectedUtxos3 = transaction.selectUtxos(utxos, 6n);
   expect(selectedUtxos3.utxos.length).toBe(1);
   expect(selectedUtxos3.utxos[0].txId).toBe(
     '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2d'
   );
-  expect(selectedUtxos3.changeAmount).toBe(4);
+  expect(selectedUtxos3.changeAmount).toBe(4n);
 
   const selectedUtxos4 = transaction.selectUtxos(utxos, 11n);
   expect(selectedUtxos4.utxos.length).toBe(2);
@@ -184,7 +184,7 @@ test('Utxo selection', () => {
   expect(selectedUtxos4.utxos[1].txId).toBe(
     '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e'
   );
-  expect(selectedUtxos4.changeAmount).toBe(4);
+  expect(selectedUtxos4.changeAmount).toBe(4n);
 
   const selectedUtxos5 = transaction.selectUtxos(utxos, 15n);
   expect(selectedUtxos5.utxos.length).toBe(2);
@@ -194,7 +194,7 @@ test('Utxo selection', () => {
   expect(selectedUtxos5.utxos[1].txId).toBe(
     '0000a8756b1585d772e852f2d364fb88fcc503421ea25d709e17b4f9613fcd2e'
   );
-  expect(selectedUtxos5.changeAmount).toBe(0);
+  expect(selectedUtxos5.changeAmount).toBe(0n);
 
   expect(() => {
     transaction.selectUtxos(utxos, 16);
@@ -217,7 +217,7 @@ test('utxo from history output', () => {
   const txout1 = {
     token: '00',
     token_data: 0,
-    value: 5,
+    value: 5n,
     decoded: {
       address: 'fake-address',
       timelock: 10,
@@ -232,8 +232,8 @@ test('utxo from history output', () => {
       address: 'fake-address',
       timelock: 10,
       tokenId: '00',
-      value: 5,
-      authorities: 0,
+      value: 5n,
+      authorities: 0n,
       heightlock: null, // heightlock is not checked on this method.
       locked: false, // The method does not check the lock.
     }
@@ -243,7 +243,7 @@ test('utxo from history output', () => {
   const txout2 = {
     token: 'custom-token',
     token_data: 5,
-    value: 30,
+    value: 30n,
     decoded: {
       address: 'fake-address-2',
     },
@@ -257,8 +257,8 @@ test('utxo from history output', () => {
       address: 'fake-address-2',
       timelock: null,
       tokenId: 'custom-token',
-      value: 30,
-      authorities: 0,
+      value: 30n,
+      authorities: 0n,
       heightlock: null, // heightlock is not checked on this method.
       locked: false, // The method does not check the lock.
     }
@@ -268,7 +268,7 @@ test('utxo from history output', () => {
   const txout3 = {
     token: 'custom-token',
     token_data: 132,
-    value: 2,
+    value: 2n,
     decoded: {
       address: 'fake-address-2',
     },
@@ -282,8 +282,8 @@ test('utxo from history output', () => {
       address: 'fake-address-2',
       timelock: null,
       tokenId: 'custom-token',
-      value: 2,
-      authorities: 2,
+      value: 2n,
+      authorities: 2n,
       heightlock: null, // heightlock is not checked on this method.
       locked: false, // The method does not check the lock.
     }
@@ -291,46 +291,46 @@ test('utxo from history output', () => {
 });
 
 test('getTokenDataFromOutput', () => {
-  const utxoMint = { type: 'mint', authorities: 0 };
+  const utxoMint = { type: 'mint', authorities: 0n };
   expect(transaction.getTokenDataFromOutput(utxoMint, [])).toEqual(1);
-  const utxoMintAuth = { type: 'mint', authorities: 1 };
+  const utxoMintAuth = { type: 'mint', authorities: 1n };
   expect(transaction.getTokenDataFromOutput(utxoMintAuth, [])).toEqual(1 | TOKEN_AUTHORITY_MASK);
-  const utxoMintAuth2 = { type: 'mint', authorities: 123 };
+  const utxoMintAuth2 = { type: 'mint', authorities: 123n };
   expect(transaction.getTokenDataFromOutput(utxoMintAuth2, [])).toEqual(1 | TOKEN_AUTHORITY_MASK);
 
-  const utxoMelt = { type: 'melt', authorities: 0 };
+  const utxoMelt = { type: 'melt', authorities: 0n };
   expect(transaction.getTokenDataFromOutput(utxoMelt, [])).toEqual(1);
-  const utxoMeltAuth = { type: 'melt', authorities: 1 };
+  const utxoMeltAuth = { type: 'melt', authorities: 1n };
   expect(transaction.getTokenDataFromOutput(utxoMeltAuth, [])).toEqual(1 | TOKEN_AUTHORITY_MASK);
-  const utxoMeltAuth2 = { type: 'melt', authorities: 123 };
+  const utxoMeltAuth2 = { type: 'melt', authorities: 123n };
   expect(transaction.getTokenDataFromOutput(utxoMeltAuth2, [])).toEqual(1 | TOKEN_AUTHORITY_MASK);
 
-  const utxoHTR = { type: 'p2pkh', token: '00', authorities: 0 };
+  const utxoHTR = { type: 'p2pkh', token: '00', authorities: 0n };
   expect(transaction.getTokenDataFromOutput(utxoHTR, ['02', '01', '03'])).toEqual(0);
-  const utxoCustom = { type: 'p2pkh', token: '01', authorities: 0 };
+  const utxoCustom = { type: 'p2pkh', token: '01', authorities: 0n };
   expect(transaction.getTokenDataFromOutput(utxoCustom, ['02', '01', '03'])).toEqual(2);
-  const utxoCustomAuth = { type: 'p2pkh', token: '01', authorities: 1 };
+  const utxoCustomAuth = { type: 'p2pkh', token: '01', authorities: 1n };
   expect(transaction.getTokenDataFromOutput(utxoCustomAuth, ['03', '02', '01'])).toEqual(
     3 | TOKEN_AUTHORITY_MASK
   );
-  const utxoCustomAuth2 = { type: 'p2pkh', token: '01', authorities: 2 };
+  const utxoCustomAuth2 = { type: 'p2pkh', token: '01', authorities: 2n };
   expect(transaction.getTokenDataFromOutput(utxoCustomAuth2, ['02', '01'])).toEqual(
     2 | TOKEN_AUTHORITY_MASK
   );
 });
 
 test('authorities from output', () => {
-  const output = { token_data: 0, value: 123 };
+  const output = { token_data: 0, value: 123n };
   const outputMint = { token_data: TOKEN_AUTHORITY_MASK | 1, value: TOKEN_MINT_MASK };
   const outputMelt = { token_data: TOKEN_AUTHORITY_MASK | 2, value: TOKEN_MELT_MASK };
   const outputMintMelt = {
     token_data: TOKEN_AUTHORITY_MASK | 3,
     value: TOKEN_MELT_MASK | TOKEN_MINT_MASK,
   };
-  expect(transaction.authoritiesFromOutput(output)).toEqual(0);
-  expect(transaction.authoritiesFromOutput(outputMint)).toEqual(1);
-  expect(transaction.authoritiesFromOutput(outputMelt)).toEqual(2);
-  expect(transaction.authoritiesFromOutput(outputMintMelt)).toEqual(3);
+  expect(transaction.authoritiesFromOutput(output)).toEqual(0n);
+  expect(transaction.authoritiesFromOutput(outputMint)).toEqual(1n);
+  expect(transaction.authoritiesFromOutput(outputMelt)).toEqual(2n);
+  expect(transaction.authoritiesFromOutput(outputMintMelt)).toEqual(3n);
 });
 
 test('canUseUtxo', async () => {

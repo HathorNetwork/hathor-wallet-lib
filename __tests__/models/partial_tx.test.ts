@@ -280,7 +280,7 @@ describe('PartialTx.addOutput', () => {
         isChange: false,
         value: 72n,
         script: expect.toMatchBuffer(Buffer.from([1, 2, 3])),
-        authorities: 0,
+        authorities: 0n,
       })
     );
     partialTx.addOutput(72n, Buffer.from([1, 2, 3]), { token: '2' });
@@ -395,7 +395,7 @@ describe('PartialTx.validate', () => {
 
   const utxos = {
     [txId1]: {
-      outputs: [{ token_data: 0, value: 27, decoded: { address: addr1 } }],
+      outputs: [{ token_data: 0, value: 27n, decoded: { address: addr1 } }],
     },
     [txId2]: {
       tokens: [testTokenConfig],
@@ -404,7 +404,7 @@ describe('PartialTx.validate', () => {
         'fake-utxo1',
         'fake-utxo2',
         'fake-utxo3',
-        { token_data: 1, value: 13, decoded: { address: addr2 } },
+        { token_data: 1, value: 13n, decoded: { address: addr2 } },
       ],
     },
   };

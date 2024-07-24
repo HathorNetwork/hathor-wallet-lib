@@ -25,7 +25,7 @@ import {
 import * as cryptoUtils from '../../src/utils/crypto';
 import { InvalidPasswdError } from '../../src/errors';
 import Network from '../../src/models/network';
-import { WALLET_FLAGS } from '../../src/types';
+import { ILockedUtxo, IUtxo, IUtxoId, WALLET_FLAGS } from '../../src/types';
 
 const DATA_DIR = './testdata.leveldb';
 
@@ -68,6 +68,13 @@ describe('handleStop', () => {
       timestamp: 123,
       inputs: [],
       outputs: [],
+      is_voided: false,
+      nonce: 0,
+      parents: [],
+      signalBits: 0,
+      tokens: [],
+      version: 0,
+      weight: 0,
     });
     await storage.registerToken(testToken);
     const address0 = await storage.getAddressAtIndex(0);
@@ -138,6 +145,13 @@ describe('handleStop', () => {
       timestamp: 1234,
       inputs: [],
       outputs: [],
+      is_voided: false,
+      nonce: 0,
+      parents: [],
+      signalBits: 0,
+      tokens: [],
+      version: 0,
+      weight: 0,
     });
 
     // handleStop with cleanAddresses = true
@@ -417,13 +431,18 @@ describe('process locked utxos', () => {
     await processLockedUtxoTest(store);
   });
 
-  function getLockedUtxo(txId, address, timelock, height, value, token, token_data) {
+  function getLockedUtxo(txId, address, timelock, height, value, token, token_data): ILockedUtxo {
     return {
       index: 0,
       tx: {
         tx_id: txId,
         height,
         version: 1,
+        signalBits: 0,
+        weight: 0,
+        nonce: 0,
+        parents: [],
+        tokens: [],
         timestamp: timelock,
         is_voided: false,
         inputs: [],
@@ -438,13 +457,14 @@ describe('process locked utxos', () => {
               address,
               timelock,
             },
+            script: '',
           },
         ],
       },
     };
   }
 
-  function getUtxoFromLocked(lutxo) {
+  function getUtxoFromLocked(lutxo: ILockedUtxo): IUtxo {
     const { tx, index } = lutxo;
     const { outputs } = tx;
     const output = outputs[index];
@@ -483,7 +503,7 @@ describe('process locked utxos', () => {
         'tx01',
         'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
         tsUnLocked,
-        null,
+        undefined,
         100n, // value
         '00', // token
         0 // token_data
@@ -493,7 +513,7 @@ describe('process locked utxos', () => {
         'tx02',
         'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
         tsLocked,
-        null,
+        undefined,
         100n, // value
         '00', // token
         0 // token_data
@@ -533,8 +553,8 @@ describe('process locked utxos', () => {
         [
           '00',
           {
-            tokens: { locked: 200, unlocked: 0 },
-            authorities: { mint: { locked: 0, unlocked: 0 }, melt: { locked: 0, unlocked: 0 } },
+            tokens: { locked: 200n, unlocked: 0n },
+            authorities: { mint: { locked: 0n, unlocked: 0n }, melt: { locked: 0n, unlocked: 0n } },
           },
         ],
       ]),
@@ -545,8 +565,8 @@ describe('process locked utxos', () => {
         [
           '01',
           {
-            tokens: { locked: 100, unlocked: 0 },
-            authorities: { mint: { locked: 1, unlocked: 0 }, melt: { locked: 0, unlocked: 0 } },
+            tokens: { locked: 100n, unlocked: 0n },
+            authorities: { mint: { locked: 1n, unlocked: 0n }, melt: { locked: 0n, unlocked: 0n } },
           },
         ],
       ]),
@@ -919,8 +939,8 @@ describe('utxo selection in all stores', () => {
         index: 1,
         token: '00',
         address: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
-        value: 10,
-        authorities: 0,
+        value: 10n,
+        authorities: 0n,
         timelock: null,
         type: 0,
         height: 250,
@@ -930,8 +950,8 @@ describe('utxo selection in all stores', () => {
         index: 2,
         token: '00',
         address: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
-        value: 20,
-        authorities: 0,
+        value: 20n,
+        authorities: 0n,
         timelock: null,
         type: 0,
         height: 100,
@@ -941,8 +961,8 @@ describe('utxo selection in all stores', () => {
         index: 3,
         token: '1',
         address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
-        value: 30,
-        authorities: 0,
+        value: 30n,
+        authorities: 0n,
         timelock: Math.floor(dateLocked.getTime() / 1000),
         type: 1,
         height: null,
@@ -952,8 +972,8 @@ describe('utxo selection in all stores', () => {
         index: 4,
         token: '00',
         address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
-        value: 40,
-        authorities: 0,
+        value: 40n,
+        authorities: 0n,
         timelock: null,
         type: 1,
         height: null,
@@ -963,8 +983,8 @@ describe('utxo selection in all stores', () => {
         index: 5,
         token: '00',
         address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
-        value: 30,
-        authorities: 0,
+        value: 30n,
+        authorities: 0n,
         timelock: null,
         type: 2,
         height: null,
@@ -974,8 +994,8 @@ describe('utxo selection in all stores', () => {
         index: 6,
         token: '2',
         address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
-        value: 30,
-        authorities: 0,
+        value: 30n,
+        authorities: 0n,
         timelock: Math.floor(dateLocked.getTime() / 1000),
         type: 2,
         height: null,
@@ -985,8 +1005,8 @@ describe('utxo selection in all stores', () => {
         index: 7,
         token: '00',
         address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
-        value: 40,
-        authorities: 0,
+        value: 40n,
+        authorities: 0n,
         timelock: null,
         type: 3,
         height: 200,
@@ -996,8 +1016,8 @@ describe('utxo selection in all stores', () => {
         index: 8,
         token: '00',
         address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
-        value: 40,
-        authorities: 0,
+        value: 40n,
+        authorities: 0n,
         timelock: null,
         type: 3,
         height: 50,

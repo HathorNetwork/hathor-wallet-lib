@@ -21,6 +21,9 @@ describe('bestUtxoSelection', () => {
       token: '00',
       address: 'addr1',
       authorities: 0n,
+      timelock: null,
+      type: 0,
+      height: null,
     },
     {
       txId: 'tx2',
@@ -29,6 +32,9 @@ describe('bestUtxoSelection', () => {
       token: '00',
       address: 'addr2',
       authorities: 0n,
+      timelock: null,
+      type: 0,
+      height: null,
     },
     {
       txId: 'tx3',
@@ -37,6 +43,9 @@ describe('bestUtxoSelection', () => {
       token: '00',
       address: 'addr3',
       authorities: 0n,
+      timelock: null,
+      type: 0,
+      height: null,
     },
     {
       txId: 'tx4',
@@ -45,6 +54,9 @@ describe('bestUtxoSelection', () => {
       token: '01',
       address: 'addr4',
       authorities: 0n,
+      timelock: null,
+      type: 0,
+      height: null,
     },
     {
       txId: 'tx5',
@@ -53,6 +65,9 @@ describe('bestUtxoSelection', () => {
       token: '01',
       address: 'addr5',
       authorities: 0n,
+      timelock: null,
+      type: 0,
+      height: null,
     },
     {
       txId: 'tx6',
@@ -61,10 +76,13 @@ describe('bestUtxoSelection', () => {
       token: '01',
       address: 'addr6',
       authorities: 0n,
+      timelock: null,
+      type: 0,
+      height: null,
     },
   ];
 
-  async function addUtxosToStore(store) {
+  async function addUtxosToStore(store: LevelDBStore) {
     for (const utxo of utxos) {
       await store.saveUtxo(utxo);
     }

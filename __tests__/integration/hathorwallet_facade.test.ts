@@ -50,14 +50,14 @@ describe('getWalletInputInfo', () => {
     const address = await hWallet.getAddressAtIndex(1);
 
     const network = hWallet.getNetworkObject();
-    await GenesisWalletHelper.injectFunds(hWallet, address, 10);
+    await GenesisWalletHelper.injectFunds(hWallet, address, 10n);
 
     const sendTransaction = new SendTransaction({
       storage: hWallet.storage,
       outputs: [
         {
           address: await hWallet.getAddressAtIndex(2),
-          value: 5,
+          value: 5n,
           token: NATIVE_TOKEN_UID,
         },
       ],
@@ -90,7 +90,7 @@ describe('getTxById', () => {
 
     // Injecting some funds on this wallet
     const fundDestinationAddress = await hWallet.getAddressAtIndex(0);
-    const tx1 = await GenesisWalletHelper.injectFunds(hWallet, fundDestinationAddress, 10);
+    const tx1 = await GenesisWalletHelper.injectFunds(hWallet, fundDestinationAddress, 10n);
     // Validating the full history increased in one
     expect(Object.keys(await hWallet.getFullHistory())).toHaveLength(1);
 
@@ -131,7 +131,7 @@ describe('getTxById', () => {
     expect(firstTokenDetails.tokenId).toStrictEqual('00');
     expect(firstTokenDetails.tokenName).toStrictEqual('Hathor');
     expect(firstTokenDetails.tokenSymbol).toStrictEqual('HTR');
-    expect(firstTokenDetails.balance).toStrictEqual(10);
+    expect(firstTokenDetails.balance).toStrictEqual(10n);
 
     // throw error if token uid not found in tokens list
     jest.spyOn(hWallet, 'getFullTxById').mockResolvedValue({
@@ -149,7 +149,7 @@ describe('getTxById', () => {
 
     // thorw error if token not found in tx
     jest.spyOn(hWallet, 'getTxBalance').mockResolvedValue({
-      'unknown-token': 10,
+      'unknown-token': 10n,
     });
     await expect(hWallet.getTxById(tx1.hash)).rejects.toThrow(
       'Token unknown-token not found in tx'
@@ -174,16 +174,16 @@ describe('getTxById', () => {
     // Assert the balance is zero
     expect(emptyBalance[0]).toMatchObject({
       token: { id: fakeTokenUid },
-      balance: { unlocked: 0, locked: 0 },
+      balance: { unlocked: 0n, locked: 0n },
       transactions: 0,
     });
 
     // Test case: custom token with funds
     const address = await hWallet.getAddressAtIndex(0);
     // Inject 10 HTR into the wallet
-    await GenesisWalletHelper.injectFunds(hWallet, address, 10);
+    await GenesisWalletHelper.injectFunds(hWallet, address, 10n);
     // Generate a random amount of new tokens
-    const newTokenAmount = getRandomInt(1000, 10);
+    const newTokenAmount = BigInt(getRandomInt(1000, 10));
     // Create a new custom token with the generated amount
     const { hash: tokenUid } = await createTokenHelper(
       hWallet,
@@ -199,7 +199,7 @@ describe('getTxById', () => {
     // Assert the balance is equal to the amount generated
     expect(tknBalance[0]).toMatchObject({
       token: { id: tokenUid },
-      balance: { unlocked: newTokenAmount, locked: 0 },
+      balance: { unlocked: newTokenAmount, locked: 0n },
       transactions: expect.any(Number),
       /**
        * TODO: The amount of transactions is often 8 but should be 1. Ref #397
@@ -215,7 +215,7 @@ describe('getTxById', () => {
       expect.arrayContaining([
         expect.objectContaining({
           tokenId: NATIVE_TOKEN_UID,
-          balance: expect.any(Number),
+          balance: expect.any(BigInt),
         }),
         expect.objectContaining({
           tokenId: tokenUid,
@@ -230,7 +230,7 @@ describe('getTxById', () => {
     expect(genesisTknBalance).toHaveLength(1);
     expect(genesisTknBalance[0]).toMatchObject({
       token: { id: tokenUid },
-      balance: { unlocked: 0, locked: 0 },
+      balance: { unlocked: 0n, locked: 0n },
       transactions: 0,
     });
   });
@@ -385,7 +385,7 @@ describe('start', () => {
     // Since we start and load the wallet after the transaction is sent to the full node
     // we don't need to worry for it to be received in the websocket
     const injectAddress = walletData.addresses[0];
-    const injectValue = getRandomInt(10, 1);
+    const injectValue = BigInt(getRandomInt(10, 1));
     const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
     const injectionTx = await gWallet.sendTransaction(injectAddress, injectValue);
 
@@ -480,12 +480,12 @@ describe('start', () => {
       seed: walletData.words,
       preCalculatedAddresses: walletData.addresses,
     });
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 2);
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 2n);
     const { hash: tokenUid } = await createTokenHelper(
       hWallet,
       'Dedicated Wallet Token',
       'DWT',
-      100
+      100n
     );
 
     await delay(1000);
@@ -511,19 +511,19 @@ describe('start', () => {
           symbol: 'DWT',
         },
         balance: {
-          unlocked: 100,
-          locked: 0,
+          unlocked: 100n,
+          locked: 0n,
         },
         transactions: 1,
         lockExpires: null,
         tokenAuthorities: {
           unlocked: {
-            mint: 1,
-            melt: 1,
+            mint: 1n,
+            melt: 1n,
           },
           locked: {
-            mint: 0,
-            melt: 0,
+            mint: 0n,
+            melt: 0n,
           },
         },
       },
@@ -586,23 +586,23 @@ describe('start', () => {
     await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toStrictEqual([
       expect.objectContaining({
         token: expect.objectContaining({ id: NATIVE_TOKEN_UID }),
-        balance: { unlocked: 0, locked: 0 },
+        balance: { unlocked: 0n, locked: 0n },
         transactions: 0,
       }),
     ]);
-    await expect(hWallet.getUtxos()).resolves.toHaveProperty('total_utxos_available', 0);
+    await expect(hWallet.getUtxos()).resolves.toHaveProperty('total_utxos_available', 0n);
 
     // Generating a transaction and validating it shows correctly
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(1), 1);
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(1), 1n);
 
     await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toMatchObject([
       expect.objectContaining({
         token: expect.objectContaining({ id: NATIVE_TOKEN_UID }),
-        balance: { unlocked: 1, locked: 0 },
+        balance: { unlocked: 1n, locked: 0n },
         transactions: expect.any(Number),
       }),
     ]);
-    await expect(hWallet.getUtxos()).resolves.toHaveProperty('total_utxos_available', 1);
+    await expect(hWallet.getUtxos()).resolves.toHaveProperty('total_utxos_available', 1n);
   });
 
   it('should start an externally signed wallet', async () => {
@@ -658,7 +658,7 @@ describe('start', () => {
     });
 
     // Adding funds to it
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10);
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
 
     /*
      * XXX: The code branches that require a PIN would not be achievable without this hack that
@@ -676,9 +676,9 @@ describe('start', () => {
 
     await expect(hWallet.createNewToken('Pinless Token', 'PTT', 100)).rejects.toThrow('Pin');
 
-    await expect(hWallet.mintTokens(fakeTokenUid, 100)).rejects.toThrow('Pin');
+    await expect(hWallet.mintTokens(fakeTokenUid, 100n)).rejects.toThrow('Pin');
 
-    await expect(hWallet.meltTokens(fakeTokenUid, 100)).rejects.toThrow('Pin');
+    await expect(hWallet.meltTokens(fakeTokenUid, 100n)).rejects.toThrow('Pin');
 
     await expect(
       hWallet.delegateAuthority(fakeTokenUid, 'mint', await hWallet.getAddressAtIndex(1))
@@ -768,7 +768,7 @@ describe('addresses methods', () => {
 
     // Expect the "current address" to change when a transaction arrives at the current one
     currentAddress = await hWallet.getCurrentAddress();
-    await GenesisWalletHelper.injectFunds(hWallet, currentAddress.address, 1);
+    await GenesisWalletHelper.injectFunds(hWallet, currentAddress.address, 1n);
     const currentAfterTx = await hWallet.getCurrentAddress();
     expect(currentAfterTx).toMatchObject({
       index: currentAddress.index + 1,
@@ -862,12 +862,12 @@ describe('getBalance', () => {
     expect(balance).toHaveLength(1);
     expect(balance[0]).toMatchObject({
       token: { id: NATIVE_TOKEN_UID },
-      balance: { unlocked: 0, locked: 0 },
+      balance: { unlocked: 0n, locked: 0n },
       transactions: 0,
     });
 
     // Generating one transaction to validate its effects
-    const injectedValue = getRandomInt(10, 2);
+    const injectedValue = BigInt(getRandomInt(10, 2));
     await GenesisWalletHelper.injectFunds(
       hWallet,
       await hWallet.getAddressAtIndex(0),
@@ -877,13 +877,13 @@ describe('getBalance', () => {
     // Validating the transaction effects
     const balance1 = await hWallet.getBalance(NATIVE_TOKEN_UID);
     expect(balance1[0]).toMatchObject({
-      balance: { unlocked: injectedValue, locked: 0 },
+      balance: { unlocked: injectedValue, locked: 0n },
       transactions: expect.any(Number),
       // transactions: 1, // TODO: The amount of transactions is often 2 but should be 1. Ref #397
     });
 
     // Transferring tokens inside the wallet should not change the balance
-    const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(1), 2);
+    const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(1), 2n);
     await waitForTxReceived(hWallet, tx1.hash);
     const balance2 = await hWallet.getBalance(NATIVE_TOKEN_UID);
     expect(balance2[0].balance).toEqual(balance1[0].balance);
@@ -897,13 +897,13 @@ describe('getBalance', () => {
     expect(emptyBalance).toHaveLength(1);
     expect(emptyBalance[0]).toMatchObject({
       token: { id: fakeTokenUid },
-      balance: { unlocked: 0, locked: 0 },
+      balance: { unlocked: 0n, locked: 0n },
       transactions: 0,
     });
 
     // Creating a new custom token
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10);
-    const newTokenAmount = getRandomInt(1000, 10);
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
+    const newTokenAmount = BigInt(getRandomInt(1000, 10));
     const { hash: tokenUid } = await createTokenHelper(
       hWallet,
       'BalanceToken',
@@ -913,7 +913,7 @@ describe('getBalance', () => {
 
     const tknBalance = await hWallet.getBalance(tokenUid);
     expect(tknBalance[0]).toMatchObject({
-      balance: { unlocked: newTokenAmount, locked: 0 },
+      balance: { unlocked: newTokenAmount, locked: 0n },
       transactions: expect.any(Number),
       // transactions: 1, // TODO: The amount of transactions is often 8 but should be 1. Ref #397
     });
@@ -924,7 +924,7 @@ describe('getBalance', () => {
     expect(genesisTknBalance).toHaveLength(1);
     expect(genesisTknBalance[0]).toMatchObject({
       token: { id: tokenUid },
-      balance: { unlocked: 0, locked: 0 },
+      balance: { unlocked: 0n, locked: 0n },
       transactions: 0,
     });
   });
@@ -947,7 +947,7 @@ describe('getFullHistory', () => {
     const { hash: fundTxId } = await GenesisWalletHelper.injectFunds(
       hWallet,
       fundDestinationAddress,
-      10
+      10n
     );
 
     // Validating the full history increased in one
@@ -956,7 +956,7 @@ describe('getFullHistory', () => {
     // Moving the funds inside this wallet so that we have every information about the tx
     const txDestinationAddress = await hWallet.getAddressAtIndex(5);
     const txChangeAddress = await hWallet.getAddressAtIndex(8);
-    const txValue = 6;
+    const txValue = 6n;
     const rawMoveTx = await hWallet.sendTransaction(txDestinationAddress, txValue, {
       changeAddress: txChangeAddress,
     });
@@ -989,7 +989,7 @@ describe('getFullHistory', () => {
         token: NATIVE_TOKEN_UID,
         token_data: TOKEN_DATA.HTR,
         script: expect.any(String),
-        value: 10,
+        value: 10n,
         decoded: { type: 'P2PKH', address: fundDestinationAddress },
       });
     }
@@ -1023,10 +1023,10 @@ describe('getFullHistory', () => {
 
   it('should return full history (custom token)', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10);
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
     const tokenName = 'Full History Token';
     const tokenSymbol = 'FHT';
-    const { hash: tokenUid } = await createTokenHelper(hWallet, tokenName, tokenSymbol, 100);
+    const { hash: tokenUid } = await createTokenHelper(hWallet, tokenName, tokenSymbol, 100n);
 
     const history = await hWallet.getFullHistory();
     expect(Object.keys(history)).toHaveLength(2);
@@ -1043,20 +1043,20 @@ describe('getFullHistory', () => {
         {
           token: NATIVE_TOKEN_UID,
           token_data: TOKEN_DATA.HTR,
-          value: 10,
+          value: 10n,
         },
       ],
     });
 
     // Validating outputs
     expect(createTx.outputs).toHaveLength(4);
-    const changeOutput = createTx.outputs.find(o => o.value === 9);
+    const changeOutput = createTx.outputs.find(o => o.value === 9n);
     expect(changeOutput).toMatchObject({
       token: NATIVE_TOKEN_UID,
       token_data: TOKEN_DATA.HTR,
     });
 
-    const tokenOutput = createTx.outputs.find(o => o.value === 100);
+    const tokenOutput = createTx.outputs.find(o => o.value === 100n);
     expect(tokenOutput).toMatchObject({
       token: tokenUid,
       token_data: TOKEN_DATA.TOKEN,
@@ -1091,30 +1091,30 @@ describe('getTxBalance', () => {
     const { hash: tx1Hash } = await GenesisWalletHelper.injectFunds(
       hWallet,
       await hWallet.getAddressAtIndex(0),
-      10
+      10n
     );
 
     // Validating tx balance for a transaction with a single token (htr)
     const tx1 = await hWallet.getTx(tx1Hash);
     let txBalance = await hWallet.getTxBalance(tx1);
     expect(txBalance).toEqual({
-      [NATIVE_TOKEN_UID]: 10,
+      [NATIVE_TOKEN_UID]: 10n,
     });
 
     // Validating tx balance for a transaction with two tokens (htr+custom)
-    const { hash: tokenUid } = await createTokenHelper(hWallet, 'txBalance Token', 'TXBT', 100);
+    const { hash: tokenUid } = await createTokenHelper(hWallet, 'txBalance Token', 'TXBT', 100n);
     const tokenCreationTx = await hWallet.getTx(tokenUid);
     txBalance = await hWallet.getTxBalance(tokenCreationTx);
     expect(txBalance).toEqual({
-      [tokenUid]: 100,
-      [NATIVE_TOKEN_UID]: -1,
+      [tokenUid]: 100n,
+      [NATIVE_TOKEN_UID]: -1n,
     });
 
     // Validating that the option to include authority tokens does not change the balance
     txBalance = await hWallet.getTxBalance(tokenCreationTx, { includeAuthorities: true });
     expect(txBalance).toEqual({
-      [tokenUid]: 100,
-      [NATIVE_TOKEN_UID]: -1,
+      [tokenUid]: 100n,
+      [NATIVE_TOKEN_UID]: -1n,
     });
 
     // Validating delegate token transaction behavior
@@ -1132,19 +1132,19 @@ describe('getTxBalance', () => {
     // When the "includeAuthorities" parameter is added, the balance should be zero
     txBalance = await hWallet.getTxBalance(delegateTx, { includeAuthorities: true });
     expect(Object.keys(txBalance)).toHaveLength(1);
-    expect(txBalance).toHaveProperty(tokenUid, 0);
+    expect(txBalance).toHaveProperty(tokenUid, 0n);
 
     // Validating that transactions inside a wallet have zero txBalance
     await waitUntilNextTimestamp(hWallet, delegateTxHash);
     const { hash: sameWalletTxHash } = await hWallet.sendManyOutputsTransaction([
       {
         address: await hWallet.getAddressAtIndex(0),
-        value: 5,
+        value: 5n,
         token: NATIVE_TOKEN_UID,
       },
       {
         address: await hWallet.getAddressAtIndex(1),
-        value: 50,
+        value: 50n,
         token: tokenUid,
       },
     ]);
@@ -1153,8 +1153,8 @@ describe('getTxBalance', () => {
     const sameWalletTx = await hWallet.getTx(sameWalletTxHash);
     txBalance = await hWallet.getTxBalance(sameWalletTx);
     expect(Object.keys(txBalance)).toHaveLength(2);
-    expect(txBalance[NATIVE_TOKEN_UID]).toEqual(0);
-    expect(txBalance).toHaveProperty(tokenUid, 0);
+    expect(txBalance[NATIVE_TOKEN_UID]).toEqual(0n);
+    expect(txBalance).toHaveProperty(tokenUid, 0n);
   });
 });
 
@@ -1176,7 +1176,7 @@ describe('getFullTxById', () => {
     const tx1 = await GenesisWalletHelper.injectFunds(
       hWallet,
       await hWallet.getAddressAtIndex(0),
-      10
+      10n
     );
 
     const fullTx = await hWallet.getFullTxById(tx1.hash);
@@ -1220,7 +1220,7 @@ describe('getTxConfirmationData', () => {
     const tx1 = await GenesisWalletHelper.injectFunds(
       hWallet,
       await hWallet.getAddressAtIndex(0),
-      10
+      10n
     );
 
     const confirmationData = await hWallet.getTxConfirmationData(tx1.hash);
@@ -1266,7 +1266,7 @@ describe('graphvizNeighborsQuery', () => {
     const tx1 = await GenesisWalletHelper.injectFunds(
       hWallet,
       await hWallet.getAddressAtIndex(0),
-      10
+      10n
     );
     const neighborsData = await hWallet.graphvizNeighborsQuery(tx1.hash, 'funds', 1);
 
@@ -1278,7 +1278,7 @@ describe('graphvizNeighborsQuery', () => {
     const tx1 = await GenesisWalletHelper.injectFunds(
       hWallet,
       await hWallet.getAddressAtIndex(0),
-      10
+      10n
     );
 
     await expect(hWallet.graphvizNeighborsQuery(tx1.hash)).rejects.toThrow(
@@ -1309,10 +1309,10 @@ describe('sendTransaction', () => {
 
   it('should send HTR transactions', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10);
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
 
     // Sending a transaction inside the same wallet
-    const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(2), 6);
+    const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(2), 6n);
 
     // Validating all fields
     await waitForTxReceived(hWallet, tx1.hash);
@@ -1330,7 +1330,7 @@ describe('sendTransaction', () => {
 
     // Validating balance stays the same for internal transactions
     let htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
-    expect(htrBalance[0].balance.unlocked).toEqual(10);
+    expect(htrBalance[0].balance.unlocked).toEqual(10n);
 
     // Validating the correct addresses received the tokens
     expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(0))).toHaveProperty(
@@ -1349,14 +1349,18 @@ describe('sendTransaction', () => {
     // Sending a transaction to outside the wallet ( returning funds to genesis )
     const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
     await waitUntilNextTimestamp(hWallet, tx1.hash);
-    const { hash: tx2Hash } = await hWallet.sendTransaction(await gWallet.getAddressAtIndex(0), 8, {
-      changeAddress: await hWallet.getAddressAtIndex(5),
-    });
+    const { hash: tx2Hash } = await hWallet.sendTransaction(
+      await gWallet.getAddressAtIndex(0),
+      8n,
+      {
+        changeAddress: await hWallet.getAddressAtIndex(5),
+      }
+    );
     await waitForTxReceived(hWallet, tx2Hash);
 
     // Balance was reduced
     htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
-    expect(htrBalance[0].balance.unlocked).toEqual(2);
+    expect(htrBalance[0].balance.unlocked).toEqual(2n);
 
     // Change was moved to correct address
     expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(0))).toHaveProperty(
@@ -1391,10 +1395,10 @@ describe('sendTransaction', () => {
 
   it('should send custom token transactions', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10);
-    const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to Send', 'TTS', 100);
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
+    const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to Send', 'TTS', 100n);
 
-    const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(5), 30, {
+    const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(5), 30n, {
       token: tokenUid,
       changeAddress: await hWallet.getAddressAtIndex(6),
     });
@@ -1402,7 +1406,7 @@ describe('sendTransaction', () => {
 
     // Validating balance stays the same for internal transactions
     let htrBalance = await hWallet.getBalance(tokenUid);
-    expect(htrBalance[0].balance.unlocked).toEqual(100);
+    expect(htrBalance[0].balance.unlocked).toEqual(100n);
 
     expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(5))).toHaveProperty(
       'numTransactions',
@@ -1418,7 +1422,7 @@ describe('sendTransaction', () => {
     await waitUntilNextTimestamp(hWallet, tx1.hash);
     const { hash: tx2Hash } = await hWallet.sendTransaction(
       await gWallet.getAddressAtIndex(0),
-      80,
+      80n,
       {
         token: tokenUid,
         changeAddress: await hWallet.getAddressAtIndex(12),
@@ -1429,7 +1433,7 @@ describe('sendTransaction', () => {
 
     // Balance was reduced
     htrBalance = await hWallet.getBalance(tokenUid);
-    expect(htrBalance[0].balance.unlocked).toEqual(20);
+    expect(htrBalance[0].balance.unlocked).toEqual(20n);
 
     expect(await hWallet.storage.getAddressInfo(await hWallet.getAddressAtIndex(5))).toHaveProperty(
       'numTransactions',
@@ -1449,7 +1453,7 @@ describe('sendTransaction', () => {
     const mhWallet1 = await generateMultisigWalletHelper({ walletIndex: 0 });
     const mhWallet2 = await generateMultisigWalletHelper({ walletIndex: 1 });
     const mhWallet3 = await generateMultisigWalletHelper({ walletIndex: 2 });
-    await GenesisWalletHelper.injectFunds(mhWallet1, await mhWallet1.getAddressAtIndex(0), 10);
+    await GenesisWalletHelper.injectFunds(mhWallet1, await mhWallet1.getAddressAtIndex(0), 10n);
 
     /*
      * Building tx proposal:
@@ -1464,7 +1468,7 @@ describe('sendTransaction', () => {
       outputs: [
         {
           address: await mhWallet1.getAddressAtIndex(1),
-          value: 10,
+          value: 10n,
           token: NATIVE_TOKEN_UID,
         },
       ],
@@ -1506,7 +1510,7 @@ describe('sendTransaction', () => {
       inputs: [
         expect.objectContaining({
           tx_id: inputTxId,
-          value: 10,
+          value: 10n,
         }),
       ],
     });
@@ -1521,13 +1525,13 @@ describe('sendManyOutputsTransaction', () => {
 
   it('should send simple HTR transactions', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 100);
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 100n);
 
     // Single input and single output
     const rawSimpleTx = await hWallet.sendManyOutputsTransaction([
       {
         address: await hWallet.getAddressAtIndex(2),
-        value: 100,
+        value: 100n,
         token: NATIVE_TOKEN_UID,
       },
     ]);
@@ -1542,12 +1546,12 @@ describe('sendManyOutputsTransaction', () => {
     const rawDoubleOutputTx = await hWallet.sendManyOutputsTransaction([
       {
         address: await hWallet.getAddressAtIndex(5),
-        value: 60,
+        value: 60n,
         token: NATIVE_TOKEN_UID,
       },
       {
         address: await hWallet.getAddressAtIndex(6),
-        value: 40,
+        value: 40n,
         token: NATIVE_TOKEN_UID,
       },
     ]);
@@ -1555,7 +1559,7 @@ describe('sendManyOutputsTransaction', () => {
     const decodedDoubleOutput = await hWallet.getTx(rawDoubleOutputTx.hash);
     expect(decodedDoubleOutput.inputs).toHaveLength(1);
     expect(decodedDoubleOutput.outputs).toHaveLength(2);
-    const largerOutputIndex = decodedDoubleOutput.outputs.findIndex(o => o.value === 60);
+    const largerOutputIndex = decodedDoubleOutput.outputs.findIndex(o => o.value === 60n);
 
     // Explicit input and three outputs
     await waitUntilNextTimestamp(hWallet, rawDoubleOutputTx.hash);
@@ -1563,12 +1567,12 @@ describe('sendManyOutputsTransaction', () => {
       [
         {
           address: await hWallet.getAddressAtIndex(1),
-          value: 5,
+          value: 5n,
           token: NATIVE_TOKEN_UID,
         },
         {
           address: await hWallet.getAddressAtIndex(2),
-          value: 35,
+          value: 35n,
           token: NATIVE_TOKEN_UID,
         },
       ],
@@ -1588,27 +1592,27 @@ describe('sendManyOutputsTransaction', () => {
     expect(explicitInput.outputs).toHaveLength(3);
 
     // Expect our explicit outputs and an automatic one to complete the 60 HTR input
-    expect(explicitInput.outputs).toContainEqual(expect.objectContaining({ value: 5 }));
-    expect(explicitInput.outputs).toContainEqual(expect.objectContaining({ value: 35 }));
+    expect(explicitInput.outputs).toContainEqual(expect.objectContaining({ value: 5n }));
+    expect(explicitInput.outputs).toContainEqual(expect.objectContaining({ value: 35n }));
     // Validate change output
-    expect(explicitInput.outputs).toContainEqual(expect.objectContaining({ value: 20 }));
+    expect(explicitInput.outputs).toContainEqual(expect.objectContaining({ value: 20n }));
   });
 
   it('should send transactions with multiple tokens', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10);
-    const { hash: tokenUid } = await createTokenHelper(hWallet, 'Multiple Tokens Tk', 'MTTK', 200);
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
+    const { hash: tokenUid } = await createTokenHelper(hWallet, 'Multiple Tokens Tk', 'MTTK', 200n);
 
     // Generating tx
     const rawSendTx = await hWallet.sendManyOutputsTransaction([
       {
         token: tokenUid,
-        value: 110,
+        value: 110n,
         address: await hWallet.getAddressAtIndex(1),
       },
       {
         token: NATIVE_TOKEN_UID,
-        value: 5,
+        value: 5n,
         address: await hWallet.getAddressAtIndex(2),
       },
     ]);
@@ -1622,25 +1626,25 @@ describe('sendManyOutputsTransaction', () => {
     // Validating that each of the outputs has the values we expect
     expect(sendTx.outputs).toContainEqual(
       expect.objectContaining({
-        value: 3,
+        value: 3n,
         token: NATIVE_TOKEN_UID,
       })
     );
     expect(sendTx.outputs).toContainEqual(
       expect.objectContaining({
-        value: 5,
+        value: 5n,
         token: NATIVE_TOKEN_UID,
       })
     );
     expect(sendTx.outputs).toContainEqual(
       expect.objectContaining({
-        value: 90,
+        value: 90n,
         token: tokenUid,
       })
     );
     expect(sendTx.outputs).toContainEqual(
       expect.objectContaining({
-        value: 110,
+        value: 110n,
         token: tokenUid,
       })
     );
@@ -1648,13 +1652,13 @@ describe('sendManyOutputsTransaction', () => {
     // Validating that each of the inputs has the values we expect
     expect(sendTx.inputs).toContainEqual(
       expect.objectContaining({
-        value: 8,
+        value: 8n,
         token: NATIVE_TOKEN_UID,
       })
     );
     expect(sendTx.inputs).toContainEqual(
       expect.objectContaining({
-        value: 200,
+        value: 200n,
         token: tokenUid,
       })
     );
@@ -1662,7 +1666,7 @@ describe('sendManyOutputsTransaction', () => {
 
   it('should respect timelocks', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10);
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
 
     // Defining timelocks (milliseconds) and timestamps (seconds)
     const startTime = Date.now().valueOf();
@@ -1674,13 +1678,13 @@ describe('sendManyOutputsTransaction', () => {
     const rawTimelockTx = await hWallet.sendManyOutputsTransaction([
       {
         address: await hWallet.getAddressAtIndex(1),
-        value: 7,
+        value: 7n,
         token: NATIVE_TOKEN_UID,
         timelock: timelock1Timestamp,
       },
       {
         address: await hWallet.getAddressAtIndex(1),
-        value: 3,
+        value: 3n,
         token: NATIVE_TOKEN_UID,
         timelock: timelock2Timestamp,
       },
@@ -1694,7 +1698,7 @@ describe('sendManyOutputsTransaction', () => {
 
     // Validating getBalance ( moment 0 )
     let htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
-    expect(htrBalance[0].balance).toStrictEqual({ locked: 10, unlocked: 0 });
+    expect(htrBalance[0].balance).toStrictEqual({ locked: 10n, unlocked: 0n });
 
     // Validating interfaces with only a partial lock of the resources
     const waitFor1 = timelock1 - Date.now().valueOf() + 1000;
@@ -1709,10 +1713,10 @@ describe('sendManyOutputsTransaction', () => {
 
     // Validating getBalance ( moment 1 )
     htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
-    expect(htrBalance[0].balance).toEqual({ locked: 3, unlocked: 7 });
+    expect(htrBalance[0].balance).toEqual({ locked: 3n, unlocked: 7n });
 
     // Confirm that the balance is unavailable
-    await expect(hWallet.sendTransaction(await hWallet.getAddressAtIndex(3), 8)).rejects.toThrow(
+    await expect(hWallet.sendTransaction(await hWallet.getAddressAtIndex(3), 8n)).rejects.toThrow(
       'Insufficient'
     );
     // XXX: Error message should show the token identification, not "Token undefined"
@@ -1727,10 +1731,10 @@ describe('sendManyOutputsTransaction', () => {
 
     // Validating getBalance ( moment 2 )
     htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
-    expect(htrBalance[0].balance).toStrictEqual({ locked: 0, unlocked: 10 });
+    expect(htrBalance[0].balance).toStrictEqual({ locked: 0n, unlocked: 10n });
 
     // Confirm that now the balance is available
-    const sendTx = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(4), 8);
+    const sendTx = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(4), 8n);
     expect(sendTx).toHaveProperty('hash');
   });
 });
@@ -1745,10 +1749,10 @@ describe('createNewToken', () => {
     // Creating the wallet with the funds
     const hWallet = await generateWalletHelper();
     const addr0 = await hWallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hWallet, addr0, 10);
+    await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
 
     // Creating the new token
-    const newTokenResponse = await hWallet.createNewToken('TokenName', 'TKN', 100);
+    const newTokenResponse = await hWallet.createNewToken('TokenName', 'TKN', 100n);
 
     // Validating the creation tx
     expect(newTokenResponse).toMatchObject({
@@ -1762,19 +1766,19 @@ describe('createNewToken', () => {
     // Validating wallet balance is updated with this new token
     await waitForTxReceived(hWallet, tokenUid);
     const tknBalance = await hWallet.getBalance(tokenUid);
-    expect(tknBalance[0].balance.unlocked).toBe(100);
+    expect(tknBalance[0].balance.unlocked).toBe(100n);
   });
 
   it('should create a new token on the correct addresses', async () => {
     // Creating the wallet with the funds
     const hWallet = await generateWalletHelper();
     const addr0 = await hWallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hWallet, addr0, 10);
+    await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
 
     // Creating the new token
     const destinationAddress = await hWallet.getAddressAtIndex(4);
     const changeAddress = await hWallet.getAddressAtIndex(8);
-    const { hash: tokenUid } = await hWallet.createNewToken('NewToken Name', 'NTKN', 100, {
+    const { hash: tokenUid } = await hWallet.createNewToken('NewToken Name', 'NTKN', 100n, {
       address: destinationAddress,
       changeAddress,
     });
@@ -1782,21 +1786,23 @@ describe('createNewToken', () => {
     // Validating the tokens are on the correct addresses
     const { utxos: utxosTokens } = await hWallet.getUtxos({ token: tokenUid });
     expect(utxosTokens).toContainEqual(
-      expect.objectContaining({ address: destinationAddress, amount: 100 })
+      expect.objectContaining({ address: destinationAddress, amount: 100n })
     );
 
     const { utxos: utxosHtr } = await hWallet.getUtxos();
-    expect(utxosHtr).toContainEqual(expect.objectContaining({ address: changeAddress, amount: 9 }));
+    expect(utxosHtr).toContainEqual(
+      expect.objectContaining({ address: changeAddress, amount: 9n })
+    );
   });
 
   it('should create a new token without mint/melt authorities', async () => {
     // Creating the wallet with the funds
     const hWallet = await generateWalletHelper();
     const addr0 = await hWallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hWallet, addr0, 1);
+    await GenesisWalletHelper.injectFunds(hWallet, addr0, 1n);
 
     // Creating the new token
-    const newTokenResponse = await hWallet.createNewToken('Immutable Token', 'ITKN', 100, {
+    const newTokenResponse = await hWallet.createNewToken('Immutable Token', 'ITKN', 100n, {
       createMint: false,
       createMelt: false,
     });
@@ -1816,10 +1822,10 @@ describe('createNewToken', () => {
     const addr0 = await hWallet.getAddressAtIndex(0);
     const addr10 = await hWallet.getAddressAtIndex(10);
     const addr11 = await hWallet.getAddressAtIndex(11);
-    await GenesisWalletHelper.injectFunds(hWallet, addr0, 1);
+    await GenesisWalletHelper.injectFunds(hWallet, addr0, 1n);
 
     // Creating the new token
-    const newTokenResponse = await hWallet.createNewToken('New Token', 'NTKN', 100, {
+    const newTokenResponse = await hWallet.createNewToken('New Token', 'NTKN', 100n, {
       createMint: true,
       mintAuthorityAddress: addr10,
       createMelt: true,
@@ -1847,7 +1853,7 @@ describe('createNewToken', () => {
 
     // Validating custom token balance
     const tokenBalance = await hWallet.getBalance(newTokenResponse.hash);
-    const expectedAmount = 100;
+    const expectedAmount = 100n;
     expect(tokenBalance[0]).toHaveProperty('balance.unlocked', expectedAmount);
   });
 
@@ -1858,25 +1864,25 @@ describe('createNewToken', () => {
     const addr0 = await hWallet.getAddressAtIndex(0);
     const addr2_0 = await hWallet2.getAddressAtIndex(0);
     const addr2_1 = await hWallet2.getAddressAtIndex(1);
-    await GenesisWalletHelper.injectFunds(hWallet, addr0, 1);
+    await GenesisWalletHelper.injectFunds(hWallet, addr0, 1n);
 
     // Error creating token with external address
     await expect(
-      hWallet.createNewToken('New Token', 'NTKN', 100, {
+      hWallet.createNewToken('New Token', 'NTKN', 100n, {
         createMint: true,
         mintAuthorityAddress: addr2_0,
       })
     ).rejects.toThrow('must belong to your wallet');
 
     await expect(
-      hWallet.createNewToken('New Token', 'NTKN', 100, {
+      hWallet.createNewToken('New Token', 'NTKN', 100n, {
         createMelt: true,
         meltAuthorityAddress: addr2_1,
       })
     ).rejects.toThrow('must belong to your wallet');
 
     // Creating the new token allowing external address
-    const newTokenResponse = await hWallet.createNewToken('New Token', 'NTKN', 100, {
+    const newTokenResponse = await hWallet.createNewToken('New Token', 'NTKN', 100n, {
       createMint: true,
       mintAuthorityAddress: addr2_0,
       allowExternalMintAuthorityAddress: true,
@@ -1907,7 +1913,7 @@ describe('createNewToken', () => {
 
     // Validating custom token balance
     const tokenBalance = await hWallet.getBalance(newTokenResponse.hash);
-    const expectedAmount = 100;
+    const expectedAmount = 100n;
     expect(tokenBalance[0]).toHaveProperty('balance.unlocked', expectedAmount);
   });
 });
@@ -1921,14 +1927,14 @@ describe('mintTokens', () => {
   it('should mint new tokens', async () => {
     // Setting up the custom token
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10);
-    const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to Mint', 'TMINT', 100);
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
+    const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to Mint', 'TMINT', 100n);
 
     // Should not mint more tokens than the HTR funds allow
-    await expect(hWallet.mintTokens(tokenUid, 9000)).rejects.toThrow('HTR tokens');
+    await expect(hWallet.mintTokens(tokenUid, 9000n)).rejects.toThrow('HTR tokens');
 
     // Minting more of the tokens
-    const mintAmount = getRandomInt(100, 50);
+    const mintAmount = BigInt(getRandomInt(100, 50));
     const mintResponse = await hWallet.mintTokens(tokenUid, mintAmount);
     expect(mintResponse.hash).toBeDefined();
     await waitForTxReceived(hWallet, mintResponse.hash);
@@ -1946,13 +1952,13 @@ describe('mintTokens', () => {
 
     // Validating custom token balance
     const tokenBalance = await hWallet.getBalance(tokenUid);
-    const expectedAmount = 100 + mintAmount;
+    const expectedAmount = 100n + mintAmount;
     expect(tokenBalance[0]).toHaveProperty('balance.unlocked', expectedAmount);
 
     // Mint tokens with defined mint authority address
     const address0 = await hWallet.getAddressAtIndex(0);
 
-    const mintResponse2 = await hWallet.mintTokens(tokenUid, 100, {
+    const mintResponse2 = await hWallet.mintTokens(tokenUid, 100n, {
       mintAuthorityAddress: address0,
     });
     expect(mintResponse2.hash).toBeDefined();
@@ -1975,7 +1981,7 @@ describe('mintTokens', () => {
 
     // Validating custom token balance
     const tokenBalance2 = await hWallet.getBalance(tokenUid);
-    const expectedAmount2 = expectedAmount + 100;
+    const expectedAmount2 = expectedAmount + 100n;
     expect(tokenBalance2[0]).toHaveProperty('balance.unlocked', expectedAmount2);
 
     // Mint tokens with external address should return error by default
@@ -1987,7 +1993,7 @@ describe('mintTokens', () => {
     ).rejects.toThrow('must belong to your wallet');
 
     // Mint tokens with external address but allowing it
-    const mintResponse4 = await hWallet.mintTokens(tokenUid, 100, {
+    const mintResponse4 = await hWallet.mintTokens(tokenUid, 100n, {
       mintAuthorityAddress: externalAddress,
       allowExternalMintAuthorityAddress: true,
     });
@@ -2012,7 +2018,7 @@ describe('mintTokens', () => {
 
     // Validating custom token balance
     const tokenBalance4 = await hWallet.getBalance(tokenUid);
-    const expectedAmount4 = expectedAmount2 + 100;
+    const expectedAmount4 = expectedAmount2 + 100n;
     expect(tokenBalance4[0]).toHaveProperty('balance.unlocked', expectedAmount4);
 
     // Delegate mint back to wallet 1
@@ -2021,7 +2027,7 @@ describe('mintTokens', () => {
     await waitForTxReceived(hWallet, delegateResponse.hash);
     await waitForTxReceived(hWallet2, delegateResponse.hash);
 
-    const mintResponse5 = await hWallet.mintTokens(tokenUid, 100, { data: ['foobar'] });
+    const mintResponse5 = await hWallet.mintTokens(tokenUid, 100n, { data: ['foobar'] });
     expect(mintResponse5.hash).toBeDefined();
     await waitForTxReceived(hWallet, mintResponse5.hash);
 
@@ -2031,14 +2037,14 @@ describe('mintTokens', () => {
 
     // Validating custom token balance
     const tokenBalance5 = await hWallet.getBalance(tokenUid);
-    const expectedAmount5 = expectedAmount4 + 100;
+    const expectedAmount5 = expectedAmount4 + 100n;
     expect(tokenBalance5[0]).toHaveProperty('balance.unlocked', expectedAmount5);
 
     const dataOutput5 = mintResponse5.outputs[mintResponse5.outputs.length - 1];
-    expect(dataOutput5).toHaveProperty('value', 1);
+    expect(dataOutput5).toHaveProperty('value', 1n);
     expect(dataOutput5).toHaveProperty('script', Buffer.from([6, 102, 111, 111, 98, 97, 114, 172]));
 
-    const mintResponse6 = await hWallet.mintTokens(tokenUid, 100, {
+    const mintResponse6 = await hWallet.mintTokens(tokenUid, 100n, {
       unshiftData: true,
       data: ['foobar'],
     });
@@ -2051,11 +2057,11 @@ describe('mintTokens', () => {
 
     // Validating custom token balance
     const tokenBalance6 = await hWallet.getBalance(tokenUid);
-    const expectedAmount6 = expectedAmount5 + 100;
+    const expectedAmount6 = expectedAmount5 + 100n;
     expect(tokenBalance6[0]).toHaveProperty('balance.unlocked', expectedAmount6);
 
     const dataOutput6 = mintResponse6.outputs[0];
-    expect(dataOutput6).toHaveProperty('value', 1);
+    expect(dataOutput6).toHaveProperty('value', 1n);
     expect(dataOutput6).toHaveProperty('script', Buffer.from([6, 102, 111, 111, 98, 97, 114, 172]));
   });
 
@@ -2072,42 +2078,42 @@ describe('mintTokens', () => {
 
     // Setting up scenario
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10);
-    const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to Mint', 'TMINT', 100);
-    let expectedHtrFunds = 9;
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
+    const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to Mint', 'TMINT', 100n);
+    let expectedHtrFunds = 9n;
 
     // Minting less than 1.00 tokens consumes 0.01 HTR
     let mintResponse;
-    mintResponse = await hWallet.mintTokens(tokenUid, 1);
-    expectedHtrFunds -= 1;
+    mintResponse = await hWallet.mintTokens(tokenUid, 1n);
+    expectedHtrFunds -= 1n;
     await waitForTxReceived(hWallet, mintResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Minting exactly 1.00 tokens consumes 0.01 HTR
     await waitUntilNextTimestamp(hWallet, mintResponse.hash);
-    mintResponse = await hWallet.mintTokens(tokenUid, 100);
-    expectedHtrFunds -= 1;
+    mintResponse = await hWallet.mintTokens(tokenUid, 100n);
+    expectedHtrFunds -= 1n;
     await waitForTxReceived(hWallet, mintResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Minting between 1.00 and 2.00 tokens consumes 0.02 HTR
     await waitUntilNextTimestamp(hWallet, mintResponse.hash);
-    mintResponse = await hWallet.mintTokens(tokenUid, 101);
-    expectedHtrFunds -= 2;
+    mintResponse = await hWallet.mintTokens(tokenUid, 101n);
+    expectedHtrFunds -= 2n;
     await waitForTxReceived(hWallet, mintResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Minting exactly 2.00 tokens consumes 0.02 HTR
     await waitUntilNextTimestamp(hWallet, mintResponse.hash);
-    mintResponse = await hWallet.mintTokens(tokenUid, 200);
-    expectedHtrFunds -= 2;
+    mintResponse = await hWallet.mintTokens(tokenUid, 200n);
+    expectedHtrFunds -= 2n;
     await waitForTxReceived(hWallet, mintResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Minting between 2.00 and 3.00 tokens consumes 0.03 HTR
     await waitUntilNextTimestamp(hWallet, mintResponse.hash);
-    mintResponse = await hWallet.mintTokens(tokenUid, 201);
-    expectedHtrFunds -= 3;
+    mintResponse = await hWallet.mintTokens(tokenUid, 201n);
+    expectedHtrFunds -= 3n;
     await waitForTxReceived(hWallet, mintResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
   });
@@ -2121,27 +2127,27 @@ describe('meltTokens', () => {
 
   it('should melt tokens', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 15);
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 15n);
 
     // Creating the token
-    const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to Melt', 'TMELT', 500);
+    const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to Melt', 'TMELT', 500n);
 
     // Should not melt more than there is available
-    await expect(hWallet.meltTokens(tokenUid, 999)).rejects.toThrow('Not enough tokens to melt');
+    await expect(hWallet.meltTokens(tokenUid, 999n)).rejects.toThrow('Not enough tokens to melt');
 
     // Melting some tokens
-    const meltAmount = getRandomInt(99, 10);
+    const meltAmount = BigInt(getRandomInt(99, 10));
     const { hash } = await hWallet.meltTokens(tokenUid, meltAmount);
     await waitForTxReceived(hWallet, hash);
 
     // Validating custom token balance
     const tokenBalance = await hWallet.getBalance(tokenUid);
-    const expectedAmount = 500 - meltAmount;
+    const expectedAmount = 500n - meltAmount;
     expect(tokenBalance[0]).toHaveProperty('balance.unlocked', expectedAmount);
 
     // Melt tokens with defined melt authority address
     const address0 = await hWallet.getAddressAtIndex(0);
-    const meltResponse = await hWallet.meltTokens(tokenUid, 100, {
+    const meltResponse = await hWallet.meltTokens(tokenUid, 100n, {
       meltAuthorityAddress: address0,
     });
     await waitForTxReceived(hWallet, meltResponse.hash);
@@ -2159,7 +2165,7 @@ describe('meltTokens', () => {
 
     // Validating custom token balance
     const tokenBalance2 = await hWallet.getBalance(tokenUid);
-    const expectedAmount2 = expectedAmount - 100;
+    const expectedAmount2 = expectedAmount - 100n;
     expect(tokenBalance2[0]).toHaveProperty('balance.unlocked', expectedAmount2);
 
     // Melt tokens with external address should return error
@@ -2167,11 +2173,11 @@ describe('meltTokens', () => {
     const externalAddress = await hWallet2.getAddressAtIndex(0);
 
     await expect(
-      hWallet.meltTokens(tokenUid, 100, { meltAuthorityAddress: externalAddress })
+      hWallet.meltTokens(tokenUid, 100n, { meltAuthorityAddress: externalAddress })
     ).rejects.toThrow('must belong to your wallet');
 
     // Melt tokens with external address but allowing it
-    const meltResponse3 = await hWallet.meltTokens(tokenUid, 100, {
+    const meltResponse3 = await hWallet.meltTokens(tokenUid, 100n, {
       meltAuthorityAddress: externalAddress,
       allowExternalMeltAuthorityAddress: true,
     });
@@ -2191,7 +2197,7 @@ describe('meltTokens', () => {
 
     // Validating custom token balance
     const tokenBalance3 = await hWallet.getBalance(tokenUid);
-    const expectedAmount3 = expectedAmount2 - 100;
+    const expectedAmount3 = expectedAmount2 - 100n;
     expect(tokenBalance3[0]).toHaveProperty('balance.unlocked', expectedAmount3);
 
     // Delegate melt back to wallet 1
@@ -2200,7 +2206,7 @@ describe('meltTokens', () => {
     await waitForTxReceived(hWallet, delegateResponse.hash);
     await waitForTxReceived(hWallet2, delegateResponse.hash);
 
-    const meltResponse4 = await hWallet.meltTokens(tokenUid, 100, { data: ['foobar'] });
+    const meltResponse4 = await hWallet.meltTokens(tokenUid, 100n, { data: ['foobar'] });
     expect(meltResponse4.hash).toBeDefined();
     await waitForTxReceived(hWallet, meltResponse4.hash);
 
@@ -2210,14 +2216,14 @@ describe('meltTokens', () => {
 
     // Validating custom token balance
     const tokenBalance4 = await hWallet.getBalance(tokenUid);
-    const expectedAmount4 = expectedAmount3 - 100;
+    const expectedAmount4 = expectedAmount3 - 100n;
     expect(tokenBalance4[0]).toHaveProperty('balance.unlocked', expectedAmount4);
 
     const dataOutput4 = meltResponse4.outputs[meltResponse4.outputs.length - 1];
-    expect(dataOutput4).toHaveProperty('value', 1);
+    expect(dataOutput4).toHaveProperty('value', 1n);
     expect(dataOutput4).toHaveProperty('script', Buffer.from([6, 102, 111, 111, 98, 97, 114, 172]));
 
-    const meltResponse5 = await hWallet.meltTokens(tokenUid, 100, {
+    const meltResponse5 = await hWallet.meltTokens(tokenUid, 100n, {
       unshiftData: true,
       data: ['foobar'],
     });
@@ -2230,11 +2236,11 @@ describe('meltTokens', () => {
 
     // Validating custom token balance
     const tokenBalance5 = await hWallet.getBalance(tokenUid);
-    const expectedAmount5 = expectedAmount4 - 100;
+    const expectedAmount5 = expectedAmount4 - 100n;
     expect(tokenBalance5[0]).toHaveProperty('balance.unlocked', expectedAmount5);
 
     const dataOutput5 = meltResponse5.outputs[0];
-    expect(dataOutput5).toHaveProperty('value', 1);
+    expect(dataOutput5).toHaveProperty('value', 1n);
     expect(dataOutput5).toHaveProperty('script', Buffer.from([6, 102, 111, 111, 98, 97, 114, 172]));
   });
 
@@ -2251,41 +2257,41 @@ describe('meltTokens', () => {
 
     // Setting up scenario
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 20);
-    const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to Melt', 'TMELT', 1900);
-    let expectedHtrFunds = 1;
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 20n);
+    const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to Melt', 'TMELT', 1900n);
+    let expectedHtrFunds = 1n;
 
     let meltResponse;
     // Melting less than 1.00 tokens recovers 0 HTR
-    meltResponse = await hWallet.meltTokens(tokenUid, 99);
+    meltResponse = await hWallet.meltTokens(tokenUid, 99n);
     await waitForTxReceived(hWallet, meltResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Melting exactly 1.00 tokens recovers 0.01 HTR
     await waitUntilNextTimestamp(hWallet, meltResponse.hash);
-    meltResponse = await hWallet.meltTokens(tokenUid, 100);
-    expectedHtrFunds += 1;
+    meltResponse = await hWallet.meltTokens(tokenUid, 100n);
+    expectedHtrFunds += 1n;
     await waitForTxReceived(hWallet, meltResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Melting between 1.00 and 2.00 tokens recovers 0.01 HTR
     await waitUntilNextTimestamp(hWallet, meltResponse.hash);
-    meltResponse = await hWallet.meltTokens(tokenUid, 199);
-    expectedHtrFunds += 1;
+    meltResponse = await hWallet.meltTokens(tokenUid, 199n);
+    expectedHtrFunds += 1n;
     await waitForTxReceived(hWallet, meltResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Melting exactly 2.00 tokens recovers 0.02 HTR
     await waitUntilNextTimestamp(hWallet, meltResponse.hash);
-    meltResponse = await hWallet.meltTokens(tokenUid, 200);
-    expectedHtrFunds += 2;
+    meltResponse = await hWallet.meltTokens(tokenUid, 200n);
+    expectedHtrFunds += 2n;
     await waitForTxReceived(hWallet, meltResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
 
     // Melting between 2.00 and 3.00 tokens recovers 0.02 HTR
     await waitUntilNextTimestamp(hWallet, meltResponse.hash);
-    meltResponse = await hWallet.meltTokens(tokenUid, 299);
-    expectedHtrFunds += 2;
+    meltResponse = await hWallet.meltTokens(tokenUid, 299n);
+    expectedHtrFunds += 2n;
     await waitForTxReceived(hWallet, meltResponse.hash);
     expect(await getHtrBalance(hWallet)).toBe(expectedHtrFunds);
   });
@@ -2312,8 +2318,8 @@ describe('delegateAuthority', () => {
 
   it('should delegate authority between wallets', async () => {
     // Creating a Custom Token on wallet 1
-    await GenesisWalletHelper.injectFunds(hWallet1, await hWallet1.getAddressAtIndex(0), 10);
-    const { hash: tokenUid } = await createTokenHelper(hWallet1, 'Delegate Token', 'DTK', 100);
+    await GenesisWalletHelper.injectFunds(hWallet1, await hWallet1.getAddressAtIndex(0), 10n);
+    const { hash: tokenUid } = await createTokenHelper(hWallet1, 'Delegate Token', 'DTK', 100n);
 
     // Should handle trying to delegate without the authority
     await expect(
@@ -2372,8 +2378,8 @@ describe('delegateAuthority', () => {
 
   it('should delegate authority to another wallet without keeping one', async () => {
     // Creating a Custom Token on wallet 1
-    await GenesisWalletHelper.injectFunds(hWallet1, await hWallet1.getAddressAtIndex(0), 10);
-    const { hash: tokenUid } = await createTokenHelper(hWallet1, 'Delegate Token', 'DTK', 100);
+    await GenesisWalletHelper.injectFunds(hWallet1, await hWallet1.getAddressAtIndex(0), 10n);
+    const { hash: tokenUid } = await createTokenHelper(hWallet1, 'Delegate Token', 'DTK', 100n);
 
     // Delegate mint authority without keeping one on wallet 1
     const { hash: giveAwayMintTx } = await hWallet1.delegateAuthority(
@@ -2387,12 +2393,12 @@ describe('delegateAuthority', () => {
 
     // Validating error on mint tokens from Wallet 1
     await waitUntilNextTimestamp(hWallet1, giveAwayMintTx);
-    await expect(hWallet1.mintTokens(tokenUid, 100)).rejects.toThrow();
+    await expect(hWallet1.mintTokens(tokenUid, 100n)).rejects.toThrow();
     // TODO: The type of errors on mint and melt are different. They should have a standard.
 
     // Validating success on mint tokens from Wallet 2
-    await GenesisWalletHelper.injectFunds(hWallet2, await hWallet2.getAddressAtIndex(0), 10);
-    const mintTxWallet2 = await hWallet2.mintTokens(tokenUid, 100);
+    await GenesisWalletHelper.injectFunds(hWallet2, await hWallet2.getAddressAtIndex(0), 10n);
+    const mintTxWallet2 = await hWallet2.mintTokens(tokenUid, 100n);
     expect(mintTxWallet2).toHaveProperty('hash');
     await waitForTxReceived(hWallet2, mintTxWallet2.hash);
 
@@ -2408,16 +2414,16 @@ describe('delegateAuthority', () => {
 
     // Validating error on mint tokens from Wallet 1
     await waitUntilNextTimestamp(hWallet1, giveAwayMeltTx);
-    await expect(hWallet1.meltTokens(tokenUid, 100)).rejects.toThrow('authority output');
+    await expect(hWallet1.meltTokens(tokenUid, 100n)).rejects.toThrow('authority output');
 
     // Validating success on melt tokens from Wallet 2
-    await expect(hWallet2.meltTokens(tokenUid, 50)).resolves.toHaveProperty('hash');
+    await expect(hWallet2.meltTokens(tokenUid, 50n)).resolves.toHaveProperty('hash');
   });
 
   it('should delegate mint authority to another wallet while keeping one', async () => {
     // Creating a Custom Token on wallet 1
-    await GenesisWalletHelper.injectFunds(hWallet1, await hWallet1.getAddressAtIndex(0), 10);
-    const { hash: tokenUid } = await createTokenHelper(hWallet1, 'Delegate Token 2', 'DTK2', 100);
+    await GenesisWalletHelper.injectFunds(hWallet1, await hWallet1.getAddressAtIndex(0), 10n);
+    const { hash: tokenUid } = await createTokenHelper(hWallet1, 'Delegate Token 2', 'DTK2', 100n);
 
     // Creating another mint authority token on the same wallet
     const { hash: duplicateMintAuth } = await hWallet1.delegateAuthority(
@@ -2480,8 +2486,8 @@ describe('delegateAuthority', () => {
 
   it('should delegate melt authority to another wallet while keeping one', async () => {
     // Creating a Custom Token on wallet 1
-    await GenesisWalletHelper.injectFunds(hWallet1, await hWallet1.getAddressAtIndex(0), 10);
-    const { hash: tokenUid } = await createTokenHelper(hWallet1, 'Delegate Token 2', 'DTK2', 100);
+    await GenesisWalletHelper.injectFunds(hWallet1, await hWallet1.getAddressAtIndex(0), 10n);
+    const { hash: tokenUid } = await createTokenHelper(hWallet1, 'Delegate Token 2', 'DTK2', 100n);
 
     // Creating another melt authority token on the same wallet
     const { hash: duplicateMeltAuth } = await hWallet1.delegateAuthority(
@@ -2551,12 +2557,12 @@ describe('destroyAuthority', () => {
 
   it('should destroy mint authorities', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10);
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
     const { hash: tokenUid } = await createTokenHelper(
       hWallet,
       'Token for MintDestroy',
       'DMINT',
-      100
+      100n
     );
 
     // Adding another mint authority
@@ -2590,17 +2596,17 @@ describe('destroyAuthority', () => {
 
     // Trying to mint and validating its error object
     await waitUntilNextTimestamp(hWallet, destroyAllMintTx);
-    await expect(hWallet.mintTokens(tokenUid, 100)).rejects.toThrow('authority output');
+    await expect(hWallet.mintTokens(tokenUid, 100n)).rejects.toThrow('authority output');
   });
 
   it('should destroy melt authorities', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10);
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
     const { hash: tokenUid } = await createTokenHelper(
       hWallet,
       'Token for MeltDestroy',
       'DMELT',
-      100
+      100n
     );
 
     // Adding another melt authority
@@ -2633,7 +2639,7 @@ describe('destroyAuthority', () => {
     expect(meltAuthorities).toHaveLength(0);
 
     // Trying to melt and validating its error object
-    await expect(hWallet.meltTokens(tokenUid, 100)).rejects.toThrow('authority output');
+    await expect(hWallet.meltTokens(tokenUid, 100n)).rejects.toThrow('authority output');
   });
 });
 
@@ -2645,20 +2651,20 @@ describe('create token with data outputs', () => {
 
   it('should create a token with data outputs', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10);
-    const tx = await createTokenHelper(hWallet, 'Token with data outputs', 'DOUT', 100, {
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
+    const tx = await createTokenHelper(hWallet, 'Token with data outputs', 'DOUT', 100n, {
       data: ['test1', 'test2'],
     });
 
     // Make sure the last 2 outputs are the data outputs
     const lastOutput = tx.outputs[tx.outputs.length - 1];
-    expect(lastOutput.value).toBe(1);
+    expect(lastOutput.value).toBe(1n);
     expect(lastOutput.tokenData).toBe(0);
     const lastOutputScript = parseScriptData(lastOutput.script);
     expect(lastOutputScript.data).toBe('test2');
 
     const outputBeforeLast = tx.outputs[tx.outputs.length - 2];
-    expect(outputBeforeLast.value).toBe(1);
+    expect(outputBeforeLast.value).toBe(1n);
     expect(outputBeforeLast.tokenData).toBe(0);
     const outputBeforeLastScript = parseScriptData(outputBeforeLast.script);
     expect(outputBeforeLastScript.data).toBe('test1');
@@ -2677,10 +2683,10 @@ describe('createNFT', () => {
 
   it('should create an NFT with mint/melt authorities', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10);
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
 
     // Creating one NFT with default authorities
-    const nftTx = await hWallet.createNFT('New NFT', 'NNFT', 1, sampleNftData, {
+    const nftTx = await hWallet.createNFT('New NFT', 'NNFT', 1n, sampleNftData, {
       createMint: true,
       createMelt: true,
     });
@@ -2693,9 +2699,9 @@ describe('createNFT', () => {
 
     // Validating HTR fee payment
     const htrBalance = await hWallet.getBalance(NATIVE_TOKEN_UID);
-    expect(htrBalance[0].balance.unlocked).toEqual(8); // 1 deposit, 1 fee
+    expect(htrBalance[0].balance.unlocked).toEqual(8n); // 1 deposit, 1 fee
     let nftBalance = await hWallet.getBalance(nftTx.hash);
-    expect(nftBalance[0].balance.unlocked).toEqual(1);
+    expect(nftBalance[0].balance.unlocked).toEqual(1n);
 
     // Validating mint authority
     let mintAuth = await hWallet.getMintAuthority(nftTx.hash, { many: true });
@@ -2704,11 +2710,11 @@ describe('createNFT', () => {
 
     // Minting new NFT tokens and not creating new authorities
     await waitUntilNextTimestamp(hWallet, nftTx.hash);
-    const rawMintTx = await hWallet.mintTokens(nftTx.hash, 10, { createAnotherMint: false });
+    const rawMintTx = await hWallet.mintTokens(nftTx.hash, 10n, { createAnotherMint: false });
     expect(rawMintTx).toHaveProperty('hash');
     await waitForTxReceived(hWallet, rawMintTx.hash);
     nftBalance = await hWallet.getBalance(nftTx.hash);
-    expect(nftBalance[0].balance.unlocked).toEqual(11);
+    expect(nftBalance[0].balance.unlocked).toEqual(11n);
 
     // There should be no mint authority anymore
     mintAuth = await hWallet.getMintAuthority(nftTx.hash, { many: true });
@@ -2721,11 +2727,11 @@ describe('createNFT', () => {
 
     // Melting NFT tokens and not creating new authorities
     await waitUntilNextTimestamp(hWallet, rawMintTx.hash);
-    const htrMelt = await hWallet.meltTokens(nftTx.hash, 5, { createAnotherMelt: false });
+    const htrMelt = await hWallet.meltTokens(nftTx.hash, 5n, { createAnotherMelt: false });
     expect(htrMelt).toHaveProperty('hash');
     await waitForTxReceived(hWallet, htrMelt.hash);
     nftBalance = await hWallet.getBalance(nftTx.hash);
-    expect(nftBalance[0].balance.unlocked).toEqual(6);
+    expect(nftBalance[0].balance.unlocked).toEqual(6n);
 
     // There should be no melt authority anymore
     meltAuth = await hWallet.getMeltAuthority(nftTx.hash, { many: true });
@@ -2734,10 +2740,10 @@ describe('createNFT', () => {
 
   it('should create an NFT without authorities', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10);
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
 
     // Creating one NFT without authorities, and with a specific destination address
-    const nftTx = await hWallet.createNFT('New NFT 2', 'NNFT2', 1, sampleNftData, {
+    const nftTx = await hWallet.createNFT('New NFT 2', 'NNFT2', 1n, sampleNftData, {
       createMint: false,
       createMelt: false,
       address: await hWallet.getAddressAtIndex(3),
@@ -2762,10 +2768,10 @@ describe('createNFT', () => {
     const addr0 = await hWallet.getAddressAtIndex(0);
     const addr10 = await hWallet.getAddressAtIndex(10);
     const addr11 = await hWallet.getAddressAtIndex(11);
-    await GenesisWalletHelper.injectFunds(hWallet, addr0, 10);
+    await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
 
     // Creating the new token
-    const newTokenResponse = await hWallet.createNFT('New Token', 'NTKN', 100, sampleNftData, {
+    const newTokenResponse = await hWallet.createNFT('New Token', 'NTKN', 100n, sampleNftData, {
       createMint: true,
       mintAuthorityAddress: addr10,
       createMelt: true,
@@ -2793,7 +2799,7 @@ describe('createNFT', () => {
 
     // Validating custom token balance
     const tokenBalance = await hWallet.getBalance(newTokenResponse.hash);
-    const expectedAmount = 100;
+    const expectedAmount = 100n;
     expect(tokenBalance[0]).toHaveProperty('balance.unlocked', expectedAmount);
   });
 
@@ -2804,25 +2810,25 @@ describe('createNFT', () => {
     const addr0 = await hWallet.getAddressAtIndex(0);
     const addr2_0 = await hWallet2.getAddressAtIndex(0);
     const addr2_1 = await hWallet2.getAddressAtIndex(1);
-    await GenesisWalletHelper.injectFunds(hWallet, addr0, 10);
+    await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
 
     // Error creating token with external address
     await expect(
-      hWallet.createNFT('New Token', 'NTKN', 100, sampleNftData, {
+      hWallet.createNFT('New Token', 'NTKN', 100n, sampleNftData, {
         createMint: true,
         mintAuthorityAddress: addr2_0,
       })
     ).rejects.toThrow('must belong to your wallet');
 
     await expect(
-      hWallet.createNFT('New Token', 'NTKN', 100, sampleNftData, {
+      hWallet.createNFT('New Token', 'NTKN', 100n, sampleNftData, {
         createMelt: true,
         meltAuthorityAddress: addr2_1,
       })
     ).rejects.toThrow('must belong to your wallet');
 
     // Creating the new token allowing external address
-    const newTokenResponse = await hWallet.createNFT('New Token', 'NTKN', 100, sampleNftData, {
+    const newTokenResponse = await hWallet.createNFT('New Token', 'NTKN', 100n, sampleNftData, {
       createMint: true,
       mintAuthorityAddress: addr2_0,
       allowExternalMintAuthorityAddress: true,
@@ -2853,7 +2859,7 @@ describe('createNFT', () => {
 
     // Validating custom token balance
     const tokenBalance = await hWallet.getBalance(newTokenResponse.hash);
-    const expectedAmount = 100;
+    const expectedAmount = 100n;
     expect(tokenBalance[0]).toHaveProperty('balance.unlocked', expectedAmount);
   });
 });
@@ -2866,7 +2872,7 @@ describe('getToken methods', () => {
 
   it('should get the correct responses for a valid token', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10);
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
 
     // Validating `getTokenDetails` for custom token not in this wallet
     await expect(hWallet.getTokenDetails(fakeTokenUid)).rejects.toThrow('Unknown token');
@@ -2876,7 +2882,7 @@ describe('getToken methods', () => {
     expect(getTokensResponse).toHaveLength(1);
     expect(getTokensResponse[0]).toEqual(NATIVE_TOKEN_UID);
 
-    const { hash: tokenUid } = await createTokenHelper(hWallet, 'Details Token', 'DTOK', 100);
+    const { hash: tokenUid } = await createTokenHelper(hWallet, 'Details Token', 'DTOK', 100n);
 
     // Validating `getTokens` response for having custom tokens
     getTokensResponse = await hWallet.getTokens();
@@ -2885,20 +2891,20 @@ describe('getToken methods', () => {
     // Validate `getTokenDetails` response for a valid token
     let details = await hWallet.getTokenDetails(tokenUid);
     expect(details).toStrictEqual({
-      totalSupply: 100,
+      totalSupply: 100n,
       totalTransactions: 1,
       tokenInfo: { name: 'Details Token', symbol: 'DTOK' },
       authorities: { mint: true, melt: true },
     });
 
     // Emptying the custom token
-    const { hash: meltTx } = await hWallet.meltTokens(tokenUid, 100);
+    const { hash: meltTx } = await hWallet.meltTokens(tokenUid, 100n);
     await waitForTxReceived(hWallet, meltTx);
 
     // Validating `getTokenDetails` response
     details = await hWallet.getTokenDetails(tokenUid);
     expect(details).toMatchObject({
-      totalSupply: 0,
+      totalSupply: 0n,
       totalTransactions: 2,
       authorities: { mint: true, melt: true },
     });
@@ -2940,17 +2946,17 @@ describe('signTx', () => {
     const hWallet = await generateWalletHelper();
 
     const addr0 = await hWallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hWallet, addr0, 10);
+    await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
 
-    const { hash: tokenUid } = await createTokenHelper(hWallet, 'Signatures token', 'SIGT', 100);
+    const { hash: tokenUid } = await createTokenHelper(hWallet, 'Signatures token', 'SIGT', 100n);
 
     const network = hWallet.getNetworkObject();
     // Build a Transaction to sign
     let sendTransaction = new SendTransaction({
       storage: hWallet.storage,
       outputs: [
-        { address: await hWallet.getAddressAtIndex(5), value: 5, token: NATIVE_TOKEN_UID },
-        { address: await hWallet.getAddressAtIndex(6), value: 100, token: tokenUid },
+        { address: await hWallet.getAddressAtIndex(5), value: 5n, token: NATIVE_TOKEN_UID },
+        { address: await hWallet.getAddressAtIndex(6), value: 100n, token: tokenUid },
       ],
     });
     const txData = await sendTransaction.prepareTxData();
@@ -2996,7 +3002,7 @@ describe('getTxHistory', () => {
     const tx1 = await GenesisWalletHelper.injectFunds(
       hWallet,
       await hWallet.getAddressAtIndex(0),
-      10
+      10n
     );
     txHistory = await hWallet.getTxHistory();
     expect(txHistory).toStrictEqual([
@@ -3006,14 +3012,14 @@ describe('getTxHistory', () => {
     ]);
 
     // HTR internal transfer
-    const tx2 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(1), 4);
+    const tx2 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(1), 4n);
     await waitForTxReceived(hWallet, tx2.hash);
     txHistory = await hWallet.getTxHistory();
     expect(txHistory).toHaveLength(2);
 
     // HTR external transfer
     await waitUntilNextTimestamp(hWallet, tx2.hash);
-    const tx3 = await hWallet.sendTransaction(await gWallet.getAddressAtIndex(0), 3);
+    const tx3 = await hWallet.sendTransaction(await gWallet.getAddressAtIndex(0), 3n);
     await waitForTxReceived(hWallet, tx3.hash);
     await waitForTxReceived(gWallet, tx3.hash);
     txHistory = await hWallet.getTxHistory();
@@ -3037,14 +3043,14 @@ describe('getTxHistory', () => {
 
   it('should show custom token transactions in correct order', async () => {
     const hWallet = await generateWalletHelper();
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10);
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 10n);
 
     let txHistory = await hWallet.getTxHistory({
       token_id: fakeTokenUid,
     });
     expect(txHistory).toHaveLength(0);
 
-    const { hash: tokenUid } = await createTokenHelper(hWallet, 'txHistory Token', 'TXHT', 100);
+    const { hash: tokenUid } = await createTokenHelper(hWallet, 'txHistory Token', 'TXHT', 100n);
 
     // Custom token creation
     txHistory = await hWallet.getTxHistory({ token_id: tokenUid });
@@ -3054,7 +3060,7 @@ describe('getTxHistory', () => {
     // Custom token internal transfer
     const { hash: tx1Hash } = await hWallet.sendTransaction(
       await hWallet.getAddressAtIndex(0),
-      10,
+      10n,
       { token: tokenUid }
     );
     await waitForTxReceived(hWallet, tx1Hash);
@@ -3065,7 +3071,7 @@ describe('getTxHistory', () => {
     await waitUntilNextTimestamp(hWallet, tx1Hash);
     const { hash: tx2Hash } = await hWallet.sendTransaction(
       await gWallet.getAddressAtIndex(0),
-      10,
+      10n,
       { token: tokenUid }
     );
     await waitForTxReceived(hWallet, tx2Hash);
@@ -3075,14 +3081,14 @@ describe('getTxHistory', () => {
 
     // Custom token melting
     await waitUntilNextTimestamp(hWallet, tx2Hash);
-    const { hash: tx3Hash } = await hWallet.meltTokens(tokenUid, 20);
+    const { hash: tx3Hash } = await hWallet.meltTokens(tokenUid, 20n);
     await waitForTxReceived(hWallet, tx3Hash);
     txHistory = await hWallet.getTxHistory({ token_id: tokenUid });
     expect(txHistory).toHaveLength(4);
 
     // Custom token minting
     await waitUntilNextTimestamp(hWallet, tx3Hash);
-    const { hash: tx4Hash } = await hWallet.mintTokens(tokenUid, 30);
+    const { hash: tx4Hash } = await hWallet.mintTokens(tokenUid, 30n);
     await waitForTxReceived(hWallet, tx4Hash);
     txHistory = await hWallet.getTxHistory({ token_id: tokenUid });
     expect(txHistory).toHaveLength(5);

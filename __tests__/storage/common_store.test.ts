@@ -9,6 +9,7 @@ import { HDPrivateKey } from 'bitcore-lib';
 import { LevelDBStore, MemoryStore, Storage } from '../../src/storage';
 import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, GAP_LIMIT } from '../../src/constants';
 import walletUtils from '../../src/utils/wallet';
+import { ILockedUtxo, IUtxo } from '../../src/types';
 
 const DATA_DIR = './testdata.leveldb';
 
@@ -41,7 +42,7 @@ describe('locked utxo methods', () => {
 
   // helper functions
 
-  async function countUtxos(store) {
+  async function countUtxos(store: LevelDBStore) {
     let utxoCount = 0;
     let lutxoCount = 0;
     for await (const _ of store.utxoIter()) {
@@ -56,13 +57,18 @@ describe('locked utxo methods', () => {
     };
   }
 
-  function getLockedUtxo(txId, address, timelock, height, value, token, token_data) {
+  function getLockedUtxo(txId, address, timelock, height, value, token, token_data): ILockedUtxo {
     return {
       index: 0,
       tx: {
         tx_id: txId,
         height,
         version: 1,
+        signalBits: 0,
+        weight: 0,
+        nonce: 0,
+        parents: [],
+        tokens: [],
         timestamp: tsFromDate(tsBefore),
         is_voided: false,
         inputs: [],
@@ -73,13 +79,14 @@ describe('locked utxo methods', () => {
             token,
             spent_by: null,
             decoded: { type: 'P2PKH', address, timelock },
+            script: '',
           },
         ],
       },
     };
   }
 
-  function getUtxoFromLocked(lutxo) {
+  function getUtxoFromLocked(lutxo: ILockedUtxo): IUtxo {
     const { tx, index } = lutxo;
     const { outputs } = tx;
     const output = outputs[index];
@@ -94,21 +101,21 @@ describe('locked utxo methods', () => {
       authorities: 0,
       timelock,
       type: tx.version,
-      height: tx.height,
+      height: tx.height || null,
     };
   }
 
   // actual test body
 
-  async function testLockedUtxoMethods(store) {
+  async function testLockedUtxoMethods(store: LevelDBStore) {
     const lockedUtxos = [
       // utxo to be unlocked by time
       getLockedUtxo(
         'tx01',
         'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
         tsFromDate(tsBefore),
-        null,
-        100, // value
+        undefined,
+        100n, // value
         '00', // token
         0 // token_data
       ),
@@ -117,8 +124,8 @@ describe('locked utxo methods', () => {
         'tx02',
         'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
         tsFromDate(tsAfter),
-        null,
-        100, // value
+        undefined,
+        100n, // value
         '00', // token
         0 // token_data
       ),
@@ -127,8 +134,8 @@ describe('locked utxo methods', () => {
         'tx03',
         'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
         tsFromDate(tsBefore),
-        null,
-        100, // value
+        undefined,
+        100n, // value
         '01', // token
         0 // token_data
       ),
@@ -137,7 +144,7 @@ describe('locked utxo methods', () => {
         'tx04',
         'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
         tsFromDate(tsBefore),
-        null,
+        undefined,
         TOKEN_MINT_MASK, // value, mint
         '01', // token
         TOKEN_AUTHORITY_MASK | 1 // token_data

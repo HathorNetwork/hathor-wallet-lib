@@ -8,7 +8,6 @@
 import { chunk } from 'lodash';
 import axios, { AxiosError, AxiosResponse } from 'axios';
 
-import { IEncoding } from 'level-transcoder';
 import FullnodeConnection from '../new/connection';
 import {
   IStorage,
@@ -31,6 +30,7 @@ import {
   LOAD_WALLET_MAX_RETRY,
   LOAD_WALLET_RETRY_SLEEP,
 } from '../constants';
+import { AddressHistorySchema, GeneralTokenInfoSchema } from '../api/schemas/wallet';
 
 /**
  * Derive requested addresses (if not already loaded), save them on storage then return them.
@@ -167,16 +167,7 @@ export async function* loadAddressHistory(
     let addrsToSearch = addressesChunks[i];
 
     while (hasMore === true) {
-      let response: AxiosResponse<
-        | {
-            success: true;
-            history: IHistoryTx[];
-            has_more: boolean;
-            first_hash: string;
-            first_address: string;
-          }
-        | { success: false; message: string }
-      >;
+      let response: AxiosResponse<AddressHistorySchema>;
       try {
         response = await walletApi.getAddressHistoryForAwait(addrsToSearch, firstHash);
       } catch (e: unknown) {
@@ -222,8 +213,8 @@ export async function* loadAddressHistory(
         hasMore = result.has_more;
         if (hasMore) {
           // prepare next page parameters
-          firstHash = result.first_hash;
-          const addrIndex = addrsToSearch.indexOf(result.first_address);
+          firstHash = result.first_hash || null;
+          const addrIndex = addrsToSearch.indexOf(result.first_address || '');
           if (addrIndex === -1) {
             throw Error('Invalid address returned from the server.');
           }
@@ -400,14 +391,9 @@ export async function processHistory(
  * @returns {Promise<void>}
  */
 export async function _updateTokensData(storage: IStorage, tokens: Set<string>): Promise<void> {
-  async function fetchTokenData(uid: string): Promise<
-    | {
-        success: true;
-        name: string;
-        symbol: string;
-      }
-    | { success: false; message: string }
-  > {
+  async function fetchTokenData(
+    uid: string
+  ): Promise<GeneralTokenInfoSchema | { success: true; name: string; symbol: string }> {
     let retryCount = 0;
 
     if (uid === NATIVE_TOKEN_UID) {
@@ -422,13 +408,7 @@ export async function _updateTokensData(storage: IStorage, tokens: Set<string>):
     while (retryCount <= 5) {
       try {
         // Fetch and return the api response
-        const result:
-          | {
-              success: true;
-              name: string;
-              symbol: string;
-            }
-          | { success: false; message: string } = await new Promise((resolve, reject) => {
+        const result: GeneralTokenInfoSchema = await new Promise((resolve, reject) => {
           walletApi.getGeneralTokenInfo(uid, resolve).catch(err => reject(err));
         });
         return result;
@@ -820,30 +800,4 @@ export async function processUtxoUnlock(
   await store.editAddressMeta(output.decoded.address, addressMeta);
   // Remove utxo from locked utxos so that it is not processed again
   await store.unlockUtxo(lockedUtxo);
-}
-
-function bigIntReplacer(_key: unknown, value: unknown): unknown {
-  return typeof value === 'bigint' ? { $bigint: value.toString() } : value;
-}
-
-function bigIntReviver(_key: unknown, value: unknown): unknown {
-  return value !== null &&
-    typeof value === 'object' &&
-    '$bigint' in value &&
-    typeof value.$bigint === 'string'
-    ? BigInt(value.$bigint)
-    : value;
-}
-
-export function getJsonWithBigIntEncoding<T>(): IEncoding<T, string, T> {
-  return {
-    name: 'json_bigint',
-    format: 'utf8',
-    encode(data: T): string {
-      return JSON.stringify(data, bigIntReplacer);
-    },
-    decode(payload: string): T {
-      return JSON.parse(payload, bigIntReviver);
-    },
-  };
 }

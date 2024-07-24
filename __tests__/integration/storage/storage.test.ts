@@ -66,7 +66,7 @@ describe('locked utxos', () => {
   async function testUnlockWhenSpent(storage, walletData) {
     const hwallet = await startWallet(storage, walletData);
     const address = await hwallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hwallet, address, 1);
+    await GenesisWalletHelper.injectFunds(hwallet, address, 1n);
 
     const sendTx = new SendTransaction({
       storage: hwallet.storage,
@@ -74,7 +74,7 @@ describe('locked utxos', () => {
         {
           type: 'p2pkh',
           address: await hwallet.getAddressAtIndex(1),
-          value: 1,
+          value: 1n,
           token: NATIVE_TOKEN_UID,
         },
       ],
@@ -121,7 +121,7 @@ describe('custom signature method', () => {
   it('should check that we have an external signature method', async () => {
     const hwallet = await generateWalletHelper();
     const address = await hwallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hwallet, address, 10);
+    await GenesisWalletHelper.injectFunds(hwallet, address, 10n);
 
     expect(hwallet.storage.hasTxSignatureMethod()).toEqual(false);
     const customSignFunc = jest
@@ -134,7 +134,7 @@ describe('custom signature method', () => {
   it('should sign transactions with custom signature method', async () => {
     const hwallet = await generateWalletHelper();
     const address = await hwallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hwallet, address, 10);
+    await GenesisWalletHelper.injectFunds(hwallet, address, 10n);
 
     const customSignFunc = jest
       .fn()
@@ -143,7 +143,7 @@ describe('custom signature method', () => {
     hwallet.storage.setTxSignatureMethod(customSignFunc);
     expect(hwallet.storage.hasTxSignatureMethod()).toEqual(true);
     const address2 = await hwallet.getAddressAtIndex(2);
-    await hwallet.sendTransaction(address2, 10);
+    await hwallet.sendTransaction(address2, 10n);
 
     expect(customSignFunc).toHaveBeenCalled();
   });

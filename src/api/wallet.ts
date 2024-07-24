@@ -5,8 +5,16 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { AxiosResponse } from 'axios';
 import { createRequestInstance } from './axiosInstance';
 import { SEND_TOKENS_TIMEOUT } from '../constants';
+import { transformJsonBigIntResponse } from '../utils/bigint';
+import {
+  AddressHistorySchema,
+  addressHistorySchema,
+  GeneralTokenInfoSchema,
+  generalTokenInfoSchema,
+} from './schemas/wallet';
 
 /**
  * Api calls for wallet
@@ -26,13 +34,17 @@ const walletApi = {
    * @memberof ApiWallet
    * @inner
    */
-  getAddressHistory(addresses, hash, resolve) {
-    const data = { addresses, paginate: true };
+  getAddressHistory(addresses, hash, resolve): Promise<void | AxiosResponse<AddressHistorySchema>> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data: any = { addresses, paginate: true };
     if (hash) {
       data.hash = hash;
     }
     return createRequestInstance(resolve)
-      .get('thin_wallet/address_history', { params: data })
+      .get('thin_wallet/address_history', {
+        params: data,
+        transformResponse: res => transformJsonBigIntResponse(res, addressHistorySchema),
+      })
       .then(
         res => {
           resolve(res.data);
@@ -64,12 +76,16 @@ const walletApi = {
    * @memberof ApiWallet
    * @inner
    */
-  getAddressHistoryForAwait(addresses, hash) {
-    const data = { addresses, paginate: true };
+  getAddressHistoryForAwait(addresses, hash): Promise<AxiosResponse<AddressHistorySchema>> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data: any = { addresses, paginate: true };
     if (hash) {
       data.hash = hash;
     }
-    return createRequestInstance().get('thin_wallet/address_history', { params: data });
+    return createRequestInstance().get('thin_wallet/address_history', {
+      params: data,
+      transformResponse: res => transformJsonBigIntResponse(res, addressHistorySchema),
+    });
   },
 
   /**
@@ -83,12 +99,15 @@ const walletApi = {
    * @memberof ApiWallet
    * @inner
    */
-  getAddressHistoryForAwaitPOST(addresses, hash) {
-    const data = { addresses, paginate: true };
+  getAddressHistoryForAwaitPOST(addresses, hash): Promise<AxiosResponse<AddressHistorySchema>> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data: any = { addresses, paginate: true };
     if (hash) {
       data.hash = hash;
     }
-    return createRequestInstance().post('thin_wallet/address_history', data);
+    return createRequestInstance().post('thin_wallet/address_history', data, {
+      transformResponse: res => transformJsonBigIntResponse(res, addressHistorySchema),
+    });
   },
 
   /**
@@ -125,10 +144,13 @@ const walletApi = {
    * @memberof ApiWallet
    * @inner
    */
-  getGeneralTokenInfo(uid, resolve) {
+  getGeneralTokenInfo(uid, resolve): Promise<void | AxiosResponse<GeneralTokenInfoSchema>> {
     const data = { id: uid };
     return createRequestInstance(resolve)
-      .get('thin_wallet/token', { params: data })
+      .get('thin_wallet/token', {
+        params: data,
+        transformResponse: res => transformJsonBigIntResponse(res, generalTokenInfoSchema),
+      })
       .then(
         res => {
           resolve(res.data);
@@ -154,7 +176,8 @@ const walletApi = {
    * @inner
    */
   getTokenHistory(uid, count, hash, timestamp, page, resolve) {
-    const data = { id: uid, count };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data: any = { id: uid, count };
 
     if (hash) {
       data.hash = hash;
@@ -255,7 +278,8 @@ const walletApi = {
    * @inner
    */
   getSearchAddress(address, count, hash, page, token, resolve) {
-    const data = { address, count };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data: any = { address, count };
 
     if (hash) {
       data.hash = hash;

@@ -215,7 +215,13 @@ test('token methods', async () => {
 
   await store.editTokenMeta('00', {
     numTransactions: 10,
-    balance: { tokens: { locked: 1n, unlocked: 2n } },
+    balance: {
+      tokens: { locked: 1n, unlocked: 2n },
+      authorities: {
+        mint: { locked: 1n, unlocked: 2n },
+        melt: { locked: 1n, unlocked: 2n },
+      },
+    },
   });
   await expect(store.tokenIndex.getTokenMetadata('00')).resolves.toMatchObject({
     numTransactions: 10,

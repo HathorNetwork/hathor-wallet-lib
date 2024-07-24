@@ -295,7 +295,7 @@ export class PartialTx {
    * @param {string} txId The transaction id of the UTXO.
    * @param {number} index The index of the UTXO.
    * @param {number} value Value of the UTXO.
-   * @param {number} authorities The authority information of the utxo.
+   * @param {bigint} authorities The authority information of the utxo.
    * @param {string} address base58 address
    * @param {Object} [options]
    * @param {string} [options.token='00'] The token UID.
@@ -324,7 +324,7 @@ export class PartialTx {
    *
    * @param {number} value The amount of tokens on the output.
    * @param {Buffer} script The output script.
-   * @param {number} authorities The authority information of the output.
+   * @param {bigint} authorities The authority information of the output.
    * @param {Object} [options]
    * @param {string} [options.token='00'] The token UID.
    * @param {boolean|null} [options.isChange=false] isChange If this is a change output.
