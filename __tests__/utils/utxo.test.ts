@@ -17,50 +17,50 @@ describe('bestUtxoSelection', () => {
     {
       txId: 'tx1',
       index: 0,
-      value: 100,
+      value: 100n,
       token: '00',
       address: 'addr1',
-      authorities: 0,
+      authorities: 0n,
     },
     {
       txId: 'tx2',
       index: 0,
-      value: 200,
+      value: 200n,
       token: '00',
       address: 'addr2',
-      authorities: 0,
+      authorities: 0n,
     },
     {
       txId: 'tx3',
       index: 0,
-      value: 300,
+      value: 300n,
       token: '00',
       address: 'addr3',
-      authorities: 0,
+      authorities: 0n,
     },
     {
       txId: 'tx4',
       index: 0,
-      value: 400,
+      value: 400n,
       token: '01',
       address: 'addr4',
-      authorities: 0,
+      authorities: 0n,
     },
     {
       txId: 'tx5',
       index: 0,
-      value: 500,
+      value: 500n,
       token: '01',
       address: 'addr5',
-      authorities: 0,
+      authorities: 0n,
     },
     {
       txId: 'tx6',
       index: 0,
-      value: 600,
+      value: 600n,
       token: '01',
       address: 'addr6',
-      authorities: 0,
+      authorities: 0n,
     },
   ];
 
@@ -94,6 +94,7 @@ describe('bestUtxoSelection', () => {
     });
 
     // Trying to select the available amount will return all utxos of that token
+    const x = await bestUtxoSelection(storage, '00', 600n);
     await expect(bestUtxoSelection(storage, '00', 600n)).resolves.toMatchObject({
       utxos: [utxos[2], utxos[1], utxos[0]],
       amount: 600n,
@@ -194,84 +195,84 @@ describe('bestUtxoSelection', () => {
     // Trying to select more than available will return no utxos
     await expect(fastUtxoSelection(storage, '00', 601n)).resolves.toMatchObject({
       utxos: [],
-      amount: 0,
+      amount: 0n,
     });
     await expect(fastUtxoSelection(storage, '01', 1501n)).resolves.toMatchObject({
       utxos: [],
-      amount: 0,
+      amount: 0n,
     });
 
     // Trying to select the available amount will return all utxos of that token, sorted by value descending
     await expect(fastUtxoSelection(storage, '00', 600n)).resolves.toMatchObject({
       utxos: [utxos[2], utxos[1], utxos[0]],
-      amount: 600,
+      amount: 600n,
     });
     await expect(fastUtxoSelection(storage, '01', 1500n)).resolves.toMatchObject({
       utxos: [utxos[5], utxos[4], utxos[3]],
-      amount: 1500,
+      amount: 1500n,
     });
 
     // Selection will always return the highest utxos first until the amount is fulfilled
     await expect(fastUtxoSelection(storage, '00', 100n)).resolves.toMatchObject({
       utxos: [utxos[2]],
-      amount: 300,
+      amount: 300n,
     });
     await expect(fastUtxoSelection(storage, '00', 200n)).resolves.toMatchObject({
       utxos: [utxos[2]],
-      amount: 300,
+      amount: 300n,
     });
     await expect(fastUtxoSelection(storage, '00', 300n)).resolves.toMatchObject({
       utxos: [utxos[2]],
-      amount: 300,
+      amount: 300n,
     });
     await expect(fastUtxoSelection(storage, '01', 400n)).resolves.toMatchObject({
       utxos: [utxos[5]],
-      amount: 600,
+      amount: 600n,
     });
     await expect(fastUtxoSelection(storage, '01', 500n)).resolves.toMatchObject({
       utxos: [utxos[5]],
-      amount: 600,
+      amount: 600n,
     });
     await expect(fastUtxoSelection(storage, '01', 600n)).resolves.toMatchObject({
       utxos: [utxos[5]],
-      amount: 600,
+      amount: 600n,
     });
 
     // Trying to select an amount that can be fulfilled with 1 utxo will select the biggest utxo that can fulfill it
     await expect(fastUtxoSelection(storage, '00', 101n)).resolves.toMatchObject({
       utxos: [utxos[2]],
-      amount: 300,
+      amount: 300n,
     });
     await expect(fastUtxoSelection(storage, '00', 201n)).resolves.toMatchObject({
       utxos: [utxos[2]],
-      amount: 300,
+      amount: 300n,
     });
     await expect(fastUtxoSelection(storage, '01', 300n)).resolves.toMatchObject({
       utxos: [utxos[5]],
-      amount: 600,
+      amount: 600n,
     });
     await expect(fastUtxoSelection(storage, '01', 401n)).resolves.toMatchObject({
       utxos: [utxos[5]],
-      amount: 600,
+      amount: 600n,
     });
 
     // Trying to select any amount will select the smallest number of utxos that can fulfill it
     // Since we use the highest utxos first, we will always select the highest utxos first
     await expect(fastUtxoSelection(storage, '00', 301n)).resolves.toMatchObject({
       utxos: [utxos[2], utxos[1]],
-      amount: 500,
+      amount: 500n,
     });
     await expect(fastUtxoSelection(storage, '00', 501n)).resolves.toMatchObject({
       utxos: [utxos[2], utxos[1], utxos[0]],
-      amount: 600,
+      amount: 600n,
     });
     await expect(fastUtxoSelection(storage, '01', 601n)).resolves.toMatchObject({
       utxos: [utxos[5], utxos[4]],
-      amount: 1100,
+      amount: 1100n,
     });
     await expect(fastUtxoSelection(storage, '01', 1101n)).resolves.toMatchObject({
       utxos: [utxos[5], utxos[4], utxos[3]],
-      amount: 1500,
+      amount: 1500n,
     });
   }
 

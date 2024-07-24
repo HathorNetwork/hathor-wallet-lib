@@ -561,17 +561,17 @@ describe('process locked utxos', () => {
     expect(Object.fromEntries(firstAddrMeta.balance)).toMatchObject({
       '00': {
         tokens: {
-          locked: 100,
-          unlocked: 100,
+          locked: 100n,
+          unlocked: 100n,
         },
         authorities: {
           mint: {
-            locked: 0,
-            unlocked: 0,
+            locked: 0n,
+            unlocked: 0n,
           },
           melt: {
-            locked: 0,
-            unlocked: 0,
+            locked: 0n,
+            unlocked: 0n,
           },
         },
       },
@@ -579,17 +579,17 @@ describe('process locked utxos', () => {
     expect(Object.fromEntries(secondAddrMeta.balance)).toMatchObject({
       '01': {
         tokens: {
-          locked: 100,
-          unlocked: 0,
+          locked: 100n,
+          unlocked: 0n,
         },
         authorities: {
           mint: {
-            locked: 1,
-            unlocked: 0,
+            locked: 1n,
+            unlocked: 0n,
           },
           melt: {
-            locked: 0,
-            unlocked: 0,
+            locked: 0n,
+            unlocked: 0n,
           },
         },
       },
@@ -604,17 +604,17 @@ describe('process locked utxos', () => {
     expect(Object.fromEntries(firstAddrMeta.balance)).toMatchObject({
       '00': {
         tokens: {
-          locked: 100,
-          unlocked: 100,
+          locked: 100n,
+          unlocked: 100n,
         },
         authorities: {
           mint: {
-            locked: 0,
-            unlocked: 0,
+            locked: 0n,
+            unlocked: 0n,
           },
           melt: {
-            locked: 0,
-            unlocked: 0,
+            locked: 0n,
+            unlocked: 0n,
           },
         },
       },
@@ -622,17 +622,17 @@ describe('process locked utxos', () => {
     expect(Object.fromEntries(secondAddrMeta.balance)).toMatchObject({
       '01': {
         tokens: {
-          locked: 0,
-          unlocked: 100,
+          locked: 0n,
+          unlocked: 100n,
         },
         authorities: {
           mint: {
-            locked: 1,
-            unlocked: 0,
+            locked: 1n,
+            unlocked: 0n,
           },
           melt: {
-            locked: 0,
-            unlocked: 0,
+            locked: 0n,
+            unlocked: 0n,
           },
         },
       },

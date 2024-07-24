@@ -8,6 +8,7 @@
 import { chunk } from 'lodash';
 import axios, { AxiosError, AxiosResponse } from 'axios';
 
+import { IEncoding } from 'level-transcoder';
 import FullnodeConnection from '../new/connection';
 import {
   IStorage,
@@ -819,4 +820,30 @@ export async function processUtxoUnlock(
   await store.editAddressMeta(output.decoded.address, addressMeta);
   // Remove utxo from locked utxos so that it is not processed again
   await store.unlockUtxo(lockedUtxo);
+}
+
+function bigIntReplacer(_key: unknown, value: unknown): unknown {
+  return typeof value === 'bigint' ? { $bigint: value.toString() } : value;
+}
+
+function bigIntReviver(_key: unknown, value: unknown): unknown {
+  return value !== null &&
+    typeof value === 'object' &&
+    '$bigint' in value &&
+    typeof value.$bigint === 'string'
+    ? BigInt(value.$bigint)
+    : value;
+}
+
+export function getJsonWithBigIntEncoding<T>(): IEncoding<T, string, T> {
+  return {
+    name: 'json_bigint',
+    format: 'utf8',
+    encode(data: T): string {
+      return JSON.stringify(data, bigIntReplacer);
+    },
+    decode(payload: string): T {
+      return JSON.parse(payload, bigIntReviver);
+    },
+  };
 }

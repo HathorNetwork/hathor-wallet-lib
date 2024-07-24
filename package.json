@@ -22,6 +22,7 @@
     "crypto-js": "4.2.0",
     "isomorphic-ws": "5.0.0",
     "level": "8.0.1",
+    "level-transcoder": "^1.0.1",
     "lodash": "4.17.21",
     "ws": "8.17.0"
   },

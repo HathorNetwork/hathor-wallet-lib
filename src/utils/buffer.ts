@@ -1,4 +1,4 @@
-import buffer from 'buffer';
+import buffer, { Buffer } from 'buffer';
 import { ParseError } from '../errors';
 
 const isHexa = (value: string): boolean => {
@@ -159,20 +159,23 @@ export const unpackToInt = (n: number, signed: boolean, buff: Buffer): [number, 
     } else {
       retInt = slicedBuff.readUInt32BE(0);
     }
-  } else if (n === 8) {
-    // We have only signed ints here
-    // readBigInt64BE exists only in node versions > 8
-    // the else block is used for versions <= 8 and usage in web browsers
-    if (slicedBuff.readBigInt64BE) {
-      retInt = Number(slicedBuff.readBigInt64BE());
-    } else {
-      retInt = slicedBuff.readIntBE(0, 8);
-    }
   } else {
     throw new ParseError('Invalid value for n.');
   }
 
   return [retInt, buff.slice(n)];
+};
+
+export const unpackToBigInt = (n: 8, signed: boolean, buff: Buffer): [bigint, Buffer] => {
+  validateLenToUnpack(n, buff);
+  const [buf, rest] = [buff.subarray(0, n), buff.subarray(n)];
+
+  if (n !== 8) {
+    throw new Error(`invalid bytes size: ${n}`);
+  }
+
+  const value = signed ? buf.readBigInt64BE(0) : buf.readBigUInt64BE(0);
+  return [value, rest];
 };
 
 /**
@@ -225,21 +228,23 @@ export const bufferToHex = (buff: Buffer): string => {
  *
  * @return Output value and rest of buffer after unpacking
  */
-export const bytesToOutputValue = (srcBuf: Buffer): [number, Buffer] => {
+export const bytesToOutputValue = (srcBuf: Buffer): [bigint, Buffer] => {
   // Copies buffer locally, not to change the original parameter
   let buff = Buffer.from(srcBuf);
 
   const [highByte] = unpackToInt(1, true, buff);
-  let sign;
-  let value;
+  let sign: bigint;
+  let value: bigint;
   if (highByte < 0) {
     // 8 bytes
-    sign = -1;
-    [value, buff] = unpackToInt(8, true, buff);
+    sign = -1n;
+    [value, buff] = unpackToBigInt(8, true, buff);
   } else {
     // 4 bytes
-    sign = 1;
-    [value, buff] = unpackToInt(4, true, buff);
+    sign = 1n;
+    let numberValue: number;
+    [numberValue, buff] = unpackToInt(4, true, buff);
+    value = BigInt(numberValue);
   }
 
   return [value * sign, buff];

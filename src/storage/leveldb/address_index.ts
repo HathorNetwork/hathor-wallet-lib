@@ -18,6 +18,7 @@ import {
 } from '../../types';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 import { checkLevelDbVersion } from './utils';
+import { getJsonWithBigIntEncoding } from '../../utils/storage';
 
 export const ADDRESS_PREFIX = 'address';
 export const INDEX_PREFIX = 'index';
@@ -85,7 +86,7 @@ export default class LevelAddressIndex implements IKVAddressIndex {
     this.addressesDB = db.sublevel<string, IAddressInfo>(ADDRESS_PREFIX, { valueEncoding: 'json' });
     this.addressesIndexDB = db.sublevel(INDEX_PREFIX);
     this.addressesMetaDB = db.sublevel<string, IAddressMetadataAsRecord>(ADDRESS_META_PREFIX, {
-      valueEncoding: 'json',
+      valueEncoding: getJsonWithBigIntEncoding(),
     });
     this.isValidated = false;
     this.size = 0;

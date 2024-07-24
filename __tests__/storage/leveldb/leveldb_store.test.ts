@@ -130,30 +130,30 @@ test('history methods', async () => {
   await expect(store.tokenIndex.getTokenMetadata('00')).resolves.toMatchObject({
     numTransactions: 4,
     balance: {
-      tokens: { locked: 2, unlocked: 2 },
+      tokens: { locked: 2n, unlocked: 2n },
       authorities: {
-        mint: { locked: 0, unlocked: 0 },
-        melt: { locked: 0, unlocked: 0 },
+        mint: { locked: 0n, unlocked: 0n },
+        melt: { locked: 0n, unlocked: 0n },
       },
     },
   });
   await expect(store.tokenIndex.getTokenMetadata('01')).resolves.toMatchObject({
     numTransactions: 2,
     balance: {
-      tokens: { locked: 0, unlocked: 1 },
+      tokens: { locked: 0n, unlocked: 1n },
       authorities: {
-        mint: { locked: 1, unlocked: 0 },
-        melt: { locked: 0, unlocked: 0 },
+        mint: { locked: 1n, unlocked: 0n },
+        melt: { locked: 0n, unlocked: 0n },
       },
     },
   });
   await expect(store.tokenIndex.getTokenMetadata('02')).resolves.toMatchObject({
     numTransactions: 3,
     balance: {
-      tokens: { locked: 0, unlocked: 6 },
+      tokens: { locked: 0n, unlocked: 6n },
       authorities: {
-        mint: { locked: 0, unlocked: 0 },
-        melt: { locked: 0, unlocked: 0 },
+        mint: { locked: 0n, unlocked: 0n },
+        melt: { locked: 0n, unlocked: 0n },
       },
     },
   });
@@ -220,7 +220,7 @@ test('token methods', async () => {
   await expect(store.tokenIndex.getTokenMetadata('00')).resolves.toMatchObject({
     numTransactions: 10,
     balance: {
-      tokens: { locked: 1, unlocked: 2 },
+      tokens: { locked: 1n, unlocked: 2n },
     },
   });
 
@@ -239,8 +239,8 @@ test('utxo methods', async () => {
       index: 20,
       token: '00',
       address: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
-      value: 100,
-      authorities: 0,
+      value: 100n,
+      authorities: 0n,
       timelock: null,
       type: 1,
       height: null,
@@ -250,8 +250,8 @@ test('utxo methods', async () => {
       index: 30,
       token: '02',
       address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
-      value: 10,
-      authorities: 0,
+      value: 10n,
+      authorities: 0n,
       timelock: null,
       type: 1,
       height: null,
@@ -261,8 +261,8 @@ test('utxo methods', async () => {
       index: 40,
       token: '00',
       address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
-      value: 100,
-      authorities: 0,
+      value: 100n,
+      authorities: 0n,
       timelock: Math.floor(dateLocked.getTime() / 1000),
       type: 1,
       height: null,
