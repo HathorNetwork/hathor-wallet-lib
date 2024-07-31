@@ -222,7 +222,7 @@ export async function stopAllWallets() {
  * @param {HathorWallet} hWallet
  * @param {string} name Name of the token
  * @param {string} symbol Symbol of the token
- * @param {bigint} amount Quantity of the token to be minted
+ * @param {OutputValueType} amount Quantity of the token to be minted
  * @param [options] Options parameters
  * @param {string} [options.address] address of the minted token
  * @param {string} [options.changeAddress] address of the change output

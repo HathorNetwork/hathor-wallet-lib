@@ -19,7 +19,7 @@ import dateFormatter from '../utils/date';
 
 import { OutputType, Utxo } from './types';
 import { Balance } from '../models/types';
-import { IStorage } from '../types';
+import { IStorage, OutputValueType } from '../types';
 
 class PartialTxProposal {
   public partialTx: PartialTx;
@@ -71,7 +71,7 @@ class PartialTxProposal {
    */
   async addSend(
     token: string,
-    value: bigint,
+    value: OutputValueType,
     {
       utxos = [],
       changeAddress = null,
@@ -137,7 +137,7 @@ class PartialTxProposal {
    */
   async addReceive(
     token: string,
-    value: bigint,
+    value: OutputValueType,
     { timelock = null, address = null }: { timelock?: number | null; address?: string | null } = {}
   ) {
     this.resetSignatures();
@@ -162,7 +162,7 @@ class PartialTxProposal {
   addInput(
     hash: string,
     index: number,
-    value: bigint,
+    value: OutputValueType,
     address: string,
     {
       token = NATIVE_TOKEN_UID,
@@ -170,7 +170,7 @@ class PartialTxProposal {
       markAsSelected = true,
     }: {
       token?: string;
-      authorities?: bigint;
+      authorities?: OutputValueType;
       markAsSelected?: boolean;
     } = {}
   ) {
@@ -198,13 +198,13 @@ class PartialTxProposal {
    */
   addOutput(
     token: string,
-    value: bigint,
+    value: OutputValueType,
     address: string,
     {
       timelock = null,
       isChange = false,
       authorities = 0n,
-    }: { timelock?: number | null; isChange?: boolean; authorities?: bigint } = {}
+    }: { timelock?: number | null; isChange?: boolean; authorities?: OutputValueType } = {}
   ) {
     this.resetSignatures();
 

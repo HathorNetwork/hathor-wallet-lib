@@ -989,7 +989,7 @@ class HathorWallet extends EventEmitter {
    * @property {string} tokenId
    * @property {string} address
    * @property {string} value
-   * @property {bigint} authorities
+   * @property {OutputValueType} authorities
    * @property {number|null} timelock
    * @property {number|null} heightlock
    * @property {boolean} locked
@@ -1034,7 +1034,7 @@ class HathorWallet extends EventEmitter {
    * @param {string} [options.token='00'] - Search for UTXOs of this token UID.
    * @param {string|null} [options.filter_address=null] - Address to filter the utxos.
    *
-   * @return {Promise<{utxos: Utxo[], changeAmount: bigint}>} Utxos and change information.
+   * @return {Promise<{utxos: Utxo[], changeAmount: OutputValueType}>} Utxos and change information.
    */
   async getUtxosForAmount(amount, options = {}) {
     const newOptions = {
@@ -1069,7 +1069,7 @@ class HathorWallet extends EventEmitter {
    * Prepare all required data to consolidate utxos.
    *
    * @typedef {Object} PrepareConsolidateUtxosDataResult
-   * @property {{ address: string, value: bigint }[]} outputs - Destiny of the consolidated utxos
+   * @property {{ address: string, value: OutputValueType }[]} outputs - Destiny of the consolidated utxos
    * @property {{ hash: string, index: number }[]} inputs - Inputs for the consolidation transaction
    * @property {{ uid: string, name: string, symbol: string }} token - HTR or custom token
    * @property {{ address: string, amount: number, tx_id: string, locked: boolean, index: number }[]} utxos - Array of utxos that will be consolidated
@@ -1168,7 +1168,7 @@ class HathorWallet extends EventEmitter {
    * @property {number} timestamp
    * @property {boolean} is_voided
    * @property {{
-   *   value: bigint,
+   *   value: OutputValueType,
    *   token_data: number,
    *   script: string,
    *   decoded: { type: string, address: string, timelock: number|null },
@@ -1177,7 +1177,7 @@ class HathorWallet extends EventEmitter {
    *   index: number
    * }[]} inputs
    * @property {{
-   *   value: bigint,
+   *   value: OutputValueType,
    *   token_data: number,
    *   script: string,
    *   decoded: { type: string, address: string, timelock: number|null },
@@ -1332,7 +1332,7 @@ class HathorWallet extends EventEmitter {
    *
    * @param {{
    *   address: string,
-   *   value: bigint,
+   *   value: OutputValueType,
    *   timelock?: number,
    *   token: string
    * }[]} outputs Array of proposed outputs
@@ -1538,7 +1538,7 @@ class HathorWallet extends EventEmitter {
    *
    * @param {string} name Name of the token
    * @param {string} symbol Symbol of the token
-   * @param {bigint} amount Quantity of the token to be minted
+   * @param {OutputValueType} amount Quantity of the token to be minted
    * @param [options] Options parameters
    * @param {string} [options.address] address of the minted token,
    * @param {string} [options.changeAddress] address of the change output,
@@ -1654,7 +1654,7 @@ class HathorWallet extends EventEmitter {
    *
    * @param {string} name Name of the token
    * @param {string} symbol Symbol of the token
-   * @param {bigint} amount Quantity of the token to be minted
+   * @param {OutputValueType} amount Quantity of the token to be minted
    * @param [options] Options parameters
    * @param {string} [options.address] address of the minted token
    * @param {string} [options.changeAddress] address of the change output
@@ -1691,7 +1691,7 @@ class HathorWallet extends EventEmitter {
    *   txId: string,
    *   index: number,
    *   address: string,
-   *   authorities: bigint
+   *   authorities: OutputValueType
    * }[]>} Promise that resolves with an Array of objects with properties of the authority output.
    *       The "authorities" field actually contains the output value with the authority masks.
    *       Returns an empty array in case there are no tx_outupts for this type.
@@ -1723,7 +1723,7 @@ class HathorWallet extends EventEmitter {
    *   txId: string,
    *   index: number,
    *   address: string,
-   *   authorities: bigint
+   *   authorities: OutputValueType
    * }[]>} Promise that resolves with an Array of objects with properties of the authority output.
    *       The "authorities" field actually contains the output value with the authority masks.
    *       Returns an empty array in case there are no tx_outupts for this type.
@@ -1748,7 +1748,7 @@ class HathorWallet extends EventEmitter {
    * Prepare mint transaction before mining
    *
    * @param {string} tokenUid UID of the token to mint
-   * @param {bigint} amount Quantity to mint
+   * @param {OutputValueType} amount Quantity to mint
    * @param {Object} options Options parameters
    *  {
    *   'address': destination address of the minted token
@@ -1831,7 +1831,7 @@ class HathorWallet extends EventEmitter {
    * Mint tokens
    *
    * @param {string} tokenUid UID of the token to mint
-   * @param {bigint} amount Quantity to mint
+   * @param {OutputValueType} amount Quantity to mint
    * @param [options] Options parameters
    * @param {string} [options.address] destination address of the minted token
    *                                   (if not sent we choose the next available address to use)
@@ -1863,7 +1863,7 @@ class HathorWallet extends EventEmitter {
    * Prepare melt transaction before mining
    *
    * @param {string} tokenUid UID of the token to melt
-   * @param {bigint} amount Quantity to melt
+   * @param {OutputValueType} amount Quantity to melt
    * @param {Object} options Options parameters
    *  {
    *   'address': address of the HTR deposit back
@@ -1943,7 +1943,7 @@ class HathorWallet extends EventEmitter {
    * Melt tokens
    *
    * @param {string} tokenUid UID of the token to melt
-   * @param {bigint} amount Quantity to melt
+   * @param {OutputValueType} amount Quantity to melt
    * @param [options] Options parameters
    * @param {string} [options.address]: address of the HTR deposit back
    * @param {string} [options.changeAddress] address of the change output
@@ -2140,7 +2140,7 @@ class HathorWallet extends EventEmitter {
    * @param {string} tokenUid UID of the token to delegate the authority
    * @param {"mint"|"melt"} type Type of the authority to search for: 'mint' or 'melt'
    *
-   * @return {{tx_id: string, index: number, address: string, authorities: bigint}[]}
+   * @return {{tx_id: string, index: number, address: string, authorities: OutputValueType}[]}
    *    Array of the authority outputs.
    * */
   async getAuthorityUtxos(tokenUid, type) {
@@ -2324,7 +2324,7 @@ class HathorWallet extends EventEmitter {
    *
    * @param {string} name Name of the token
    * @param {string} symbol Symbol of the token
-   * @param {bigint} amount Quantity of the token to be minted
+   * @param {OutputValueType} amount Quantity of the token to be minted
    * @param {string} data NFT data string using utf8 encoding
    * @param [options] Options parameters
    * @param {string} [options.address] address of the minted token,

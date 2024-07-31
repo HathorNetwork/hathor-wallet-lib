@@ -11,6 +11,7 @@ import HathorWallet from '../../../src/new/wallet';
 import { waitForTxReceived, waitForWalletReady, waitUntilNextTimestamp } from './wallet.helper';
 import { loggers } from '../utils/logger.util';
 import { delay } from '../utils/core.util';
+import { OutputValueType } from '../../../src/types';
 
 /**
  * @type {?GenesisWalletHelper}
@@ -66,7 +67,7 @@ export class GenesisWalletHelper {
    * @returns {Promise<BaseTransactionResponse>}
    * @private
    */
-  async _injectFunds(destinationWallet, address, value: bigint, options = {}) {
+  async _injectFunds(destinationWallet, address, value: OutputValueType, options = {}) {
     try {
       const result = await this.hWallet.sendTransaction(address, value, {
         changeAddress: WALLET_CONSTANTS.genesis.addresses[0],
@@ -107,13 +108,13 @@ export class GenesisWalletHelper {
    * An easy way to send HTR to another wallet's address for testing.
    * @param {HathorWallet} destinationWallet Wallet object that we are sending the funds to
    * @param {string} address
-   * @param {bigint} value
+   * @param {OutputValueType} value
    * @param [options]
    * @param {number} [options.waitTimeout] Optional timeout for the websocket confirmation.
    *                                       Passing 0 here skips this waiting.
    * @returns {Promise<BaseTransactionResponse>}
    */
-  static async injectFunds(destinationWallet, address, value: bigint, options) {
+  static async injectFunds(destinationWallet, address, value: OutputValueType, options) {
     const instance = await GenesisWalletHelper.getSingleton();
     return instance._injectFunds(destinationWallet, address, value, options);
   }

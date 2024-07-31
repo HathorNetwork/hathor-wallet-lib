@@ -5,7 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { IStorage, IUtxo, IUtxoFilterOptions, UtxoSelectionAlgorithm } from '../types';
+import {
+  IStorage,
+  IUtxo,
+  IUtxoFilterOptions,
+  OutputValueType,
+  UtxoSelectionAlgorithm,
+} from '../types';
 
 export enum UtxoSelection {
   FAST = 'fast',
@@ -36,14 +42,14 @@ export function getAlgorithmFromEnum(algorithm: UtxoSelection): UtxoSelectionAlg
  *
  * @param {IStorage} storage The wallet storage to select the utxos
  * @param {string} token The token uid to select the utxos
- * @param {bigint} amount The target amount of tokens required
+ * @param {OutputValueType} amount The target amount of tokens required
  * @returns {Promise<{ utxos: IUtxo[], utxosAmount: number}>
  */
 export async function fastUtxoSelection(
   storage: IStorage,
   token: string,
-  amount: bigint
-): Promise<{ utxos: IUtxo[]; amount: bigint }> {
+  amount: OutputValueType
+): Promise<{ utxos: IUtxo[]; amount: OutputValueType }> {
   const utxos: IUtxo[] = [];
   let utxosAmount = 0n;
 
@@ -80,14 +86,14 @@ export async function fastUtxoSelection(
  *
  * @param {IStorage} storage The wallet storage to select the utxos
  * @param {string} token The token uid to select the utxos
- * @param {bigint} amount The target amount of tokens required
+ * @param {OutputValueType} amount The target amount of tokens required
  * @returns {Promise<{ utxos: IUtxo[], utxosAmount: number}>
  */
 export async function bestUtxoSelection(
   storage: IStorage,
   token: string,
-  amount: bigint
-): Promise<{ utxos: IUtxo[]; amount: bigint }> {
+  amount: OutputValueType
+): Promise<{ utxos: IUtxo[]; amount: OutputValueType }> {
   const utxos: IUtxo[] = [];
   let utxosAmount = 0n;
   let selectedUtxo: IUtxo | null = null;

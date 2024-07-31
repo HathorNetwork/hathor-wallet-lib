@@ -1,5 +1,6 @@
 import buffer, { Buffer } from 'buffer';
 import { ParseError } from '../errors';
+import { OutputValueType } from '../types';
 
 const isHexa = (value: string): boolean => {
   // test if value is string?
@@ -228,13 +229,13 @@ export const bufferToHex = (buff: Buffer): string => {
  *
  * @return Output value and rest of buffer after unpacking
  */
-export const bytesToOutputValue = (srcBuf: Buffer): [bigint, Buffer] => {
+export const bytesToOutputValue = (srcBuf: Buffer): [OutputValueType, Buffer] => {
   // Copies buffer locally, not to change the original parameter
   let buff = Buffer.from(srcBuf);
 
   const [highByte] = unpackToInt(1, true, buff);
-  let sign: bigint;
-  let value: bigint;
+  let sign: OutputValueType;
+  let value: OutputValueType;
   if (highByte < 0) {
     // 8 bytes
     sign = -1n;

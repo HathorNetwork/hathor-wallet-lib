@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { AddressScanPolicy, SCANNING_POLICY } from './types';
+import { AddressScanPolicy, OutputValueType, SCANNING_POLICY } from './types';
 
 /**
  * Constants defined for the Hathor Wallet
@@ -132,13 +132,13 @@ export const TOKEN_AUTHORITY_MASK: number = 0b10000000;
  * Mask to check if it's mint UTXO (last bit indicates it)
  * For further information: https://gitlab.com/HathorNetwork/rfcs/blob/master/text/0004-tokens.md
  */
-export const TOKEN_MINT_MASK: bigint = 0b00000001n;
+export const TOKEN_MINT_MASK: OutputValueType = 0b00000001n;
 
 /**
  * Mask to check if it's melt UTXO (second to last bit indicates it)
  * For further information: https://gitlab.com/HathorNetwork/rfcs/blob/master/text/0004-tokens.md
  */
-export const TOKEN_MELT_MASK: bigint = 0b00000010n;
+export const TOKEN_MELT_MASK: OutputValueType = 0b00000010n;
 
 /**
  * Token data for an authority output of the first token in a transaction.

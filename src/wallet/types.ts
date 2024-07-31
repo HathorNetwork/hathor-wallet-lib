@@ -11,6 +11,7 @@ import CreateTokenTransaction from '../models/create_token_transaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
 import Input from '../models/input';
 import Output from '../models/output';
+import { OutputValueType } from '../types';
 
 export interface GetAddressesObject {
   address: string; // Address in base58
@@ -33,8 +34,8 @@ export interface TokenInfo {
 }
 
 export interface Balance {
-  unlocked: bigint; // Available amount
-  locked: bigint; // Locked amount
+  unlocked: OutputValueType; // Available amount
+  locked: OutputValueType; // Locked amount
 }
 
 export interface AuthoritiesBalance {
@@ -49,7 +50,7 @@ export interface Authority {
 
 export interface GetHistoryObject {
   txId: string; // Transaction ID
-  balance: bigint; // Balance of this tx in this wallet (can be negative)
+  balance: OutputValueType; // Balance of this tx in this wallet (can be negative)
   timestamp: number; // Transaction timestamp
   voided: boolean; // If transaction is voided
   version: number; // Transaction version
@@ -109,7 +110,7 @@ export interface TokenDetailsAuthoritiesObject {
 
 export interface TokenDetailsObject {
   tokenInfo: TokenInfo;
-  totalSupply: bigint;
+  totalSupply: OutputValueType;
   totalTransactions: number;
   authorities: TokenDetailsAuthoritiesObject;
 }
@@ -135,7 +136,7 @@ export interface TxProposalInputs {
 
 export interface TxProposalOutputs {
   address: string; // output address
-  value: bigint; // output value
+  value: OutputValueType; // output value
   token: string; // output token
   timelock: number | null; // output timelock
 }
@@ -176,8 +177,8 @@ export interface Utxo {
   index: number; // output index
   tokenId: string; // output token
   address: string; // output address
-  value: bigint; // output value
-  authorities: bigint; // 0 for no authority, 1 for mint authority and 2 for melt authority
+  value: OutputValueType; // output value
+  authorities: OutputValueType; // 0 for no authority, 1 for mint authority and 2 for melt authority
   timelock: number | null; // output timelock
   heightlock: number | null; // output heightlock
   locked: boolean; // if output is locked
@@ -188,7 +189,7 @@ export interface AuthorityTxOutput {
   txId: string; // output transaction id
   index: number; // output index
   address: string; // output address
-  authorities: bigint; // output authorities
+  authorities: OutputValueType; // output authorities
 }
 
 export interface AuthTokenResponseData {
@@ -198,7 +199,7 @@ export interface AuthTokenResponseData {
 
 export interface OutputRequestObj {
   address: string; // output address
-  value: bigint; // output value
+  value: OutputValueType; // output value
   token: string; // output token
   timelock?: number | null; // output timelock
 }
@@ -211,7 +212,7 @@ export interface DataScriptOutputRequestObj {
 // This is the output object to be used in the SendTransactionWalletService class
 export interface OutputSendTransaction {
   type: string; // output type (in this case will be 'data')
-  value: bigint; // output value. Optional because we add fixed value of 1 to the output.
+  value: OutputValueType; // output value. Optional because we add fixed value of 1 to the output.
   token: string; // output token. Optional because we add fixed value of HTR token to the output.
   address?: string; // output address. required for p2pkh or p2sh
   timelock?: number | null; // output timelock
@@ -243,7 +244,7 @@ export interface WalletAddressMap {
 }
 
 export interface TokenAmountMap {
-  [token: string]: bigint; // For each token we have the amount
+  [token: string]: OutputValueType; // For each token we have the amount
 }
 
 export interface TransactionFullObject {
@@ -286,7 +287,7 @@ export interface IHathorWallet {
   ): Promise<Transaction>;
   sendTransaction(
     address: string,
-    value: bigint,
+    value: OutputValueType,
     options: { token?: string; changeAddress?: string }
   ): Promise<Transaction>;
   stop(params?: IStopWalletParams): void;
@@ -298,21 +299,26 @@ export interface IHathorWallet {
   prepareCreateNewToken(
     name: string,
     symbol: string,
-    amount: bigint,
+    amount: OutputValueType,
     options
   ): Promise<CreateTokenTransaction>;
-  createNewToken(name: string, symbol: string, amount: bigint, options): Promise<Transaction>;
+  createNewToken(
+    name: string,
+    symbol: string,
+    amount: OutputValueType,
+    options
+  ): Promise<Transaction>;
   createNFT(
     name: string,
     symbol: string,
-    amount: bigint,
+    amount: OutputValueType,
     data: string,
     options
   ): Promise<Transaction>;
-  prepareMintTokensData(token: string, amount: bigint, options): Promise<Transaction>;
-  mintTokens(token: string, amount: bigint, options): Promise<Transaction>;
-  prepareMeltTokensData(token: string, amount: bigint, options): Promise<Transaction>;
-  meltTokens(token: string, amount: bigint, options): Promise<Transaction>;
+  prepareMintTokensData(token: string, amount: OutputValueType, options): Promise<Transaction>;
+  mintTokens(token: string, amount: OutputValueType, options): Promise<Transaction>;
+  prepareMeltTokensData(token: string, amount: OutputValueType, options): Promise<Transaction>;
+  meltTokens(token: string, amount: OutputValueType, options): Promise<Transaction>;
   prepareDelegateAuthorityData(
     token: string,
     type: string,
@@ -338,7 +344,7 @@ export interface IHathorWallet {
     options: DestroyAuthorityOptions
   ): Promise<Transaction>;
   getFullHistory(): TransactionFullObject[];
-  getTxBalance(tx: WsTransaction, optionsParams): Promise<{ [tokenId: string]: bigint }>;
+  getTxBalance(tx: WsTransaction, optionsParams): Promise<{ [tokenId: string]: OutputValueType }>;
   onConnectionChangedState(newState: ConnectionState): void;
   getTokenDetails(tokenId: string): Promise<TokenDetailsObject>;
   getVersionData(): Promise<FullNodeVersionData>;
@@ -370,7 +376,7 @@ export interface DecodedOutput {
 }
 
 export interface TxOutput {
-  value: bigint;
+  value: OutputValueType;
   script: string;
   token: string;
   decoded: DecodedOutput;
@@ -385,7 +391,7 @@ export interface TxInput {
   // eslint-disable-next-line camelcase
   tx_id: string;
   index: number;
-  value: bigint;
+  value: OutputValueType;
   // eslint-disable-next-line camelcase
   token_data: number;
   script: string;
@@ -479,7 +485,7 @@ export interface FullNodeDecodedInput {
   type: string;
   address: string;
   timelock?: number | null;
-  value: bigint;
+  value: OutputValueType;
   token_data: number;
 }
 
@@ -487,12 +493,12 @@ export interface FullNodeDecodedOutput {
   type: string;
   address?: string;
   timelock?: number | null;
-  value: bigint;
+  value: OutputValueType;
   token_data?: number;
 }
 
 export interface FullNodeInput {
-  value: bigint;
+  value: OutputValueType;
   token_data: number;
   script: string;
   decoded: FullNodeDecodedInput;
@@ -503,7 +509,7 @@ export interface FullNodeInput {
 }
 
 export interface FullNodeOutput {
-  value: bigint;
+  value: OutputValueType;
   token_data: number;
   script: string;
   decoded: FullNodeDecodedOutput;

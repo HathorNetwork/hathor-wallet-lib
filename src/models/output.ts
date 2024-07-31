@@ -27,6 +27,7 @@ import {
   bigUintToBytes,
 } from '../utils/buffer';
 import { parseScript as utilsParseScript } from '../utils/scripts';
+import { OutputValueType } from '../types';
 
 type optionsType = {
   tokenData?: number | undefined;
@@ -42,7 +43,7 @@ export const MAXIMUM_SCRIPT_LENGTH: number = 256;
 
 class Output {
   // Output value as an integer
-  value: bigint;
+  value: OutputValueType;
 
   // tokenData of the output
   tokenData: number;
@@ -53,7 +54,7 @@ class Output {
   // Decoded output script
   decodedScript: P2PKH | P2SH | ScriptData | null;
 
-  constructor(value: bigint, script: Buffer, options: optionsType = {}) {
+  constructor(value: OutputValueType, script: Buffer, options: optionsType = {}) {
     const defaultOptions = {
       tokenData: 0,
     };

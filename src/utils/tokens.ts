@@ -21,6 +21,7 @@ import {
   IDataTx,
   IStorage,
   ITokenData,
+  OutputValueType,
   UtxoSelectionAlgorithm,
 } from '../types';
 import { getAddressType } from './address';
@@ -266,15 +267,18 @@ const tokens = {
    * @inner
    *
    */
-  getDepositAmount(mintAmount: bigint, depositPercent: number = TOKEN_DEPOSIT_PERCENTAGE): bigint {
+  getDepositAmount(
+    mintAmount: OutputValueType,
+    depositPercent: number = TOKEN_DEPOSIT_PERCENTAGE
+  ): OutputValueType {
     return BigInt(Math.ceil(depositPercent * Number(mintAmount)));
   },
 
   /**
    * Get the HTR value of the fee to add a data script output
-   * @returns {bigint} The fee to have a data script output
+   * @returns {OutputValueType} The fee to have a data script output
    */
-  getDataScriptOutputFee(): bigint {
+  getDataScriptOutputFee(): OutputValueType {
     return 1n;
   },
 
@@ -289,7 +293,10 @@ const tokens = {
    * @inner
    *
    */
-  getWithdrawAmount(meltAmount: bigint, depositPercent: number = TOKEN_DEPOSIT_PERCENTAGE): bigint {
+  getWithdrawAmount(
+    meltAmount: OutputValueType,
+    depositPercent: number = TOKEN_DEPOSIT_PERCENTAGE
+  ): OutputValueType {
     return BigInt(Math.floor(depositPercent * Number(meltAmount)));
   },
 
@@ -313,7 +320,7 @@ const tokens = {
    */
   async prepareMintTxData(
     address: string,
-    amount: bigint,
+    amount: OutputValueType,
     storage: IStorage,
     {
       token = null,
@@ -435,7 +442,7 @@ const tokens = {
    * @param {string} token Token to melt
    * @param {IDataInput} authorityMeltInput Input with authority to melt
    * @param {string} address Address to send the melted HTR tokens
-   * @param {bigint} amount The amount of tokens to melt
+   * @param {OutputValueType} amount The amount of tokens to melt
    * @param {IStorage} storage The storage object
    * @param {Object} [options={}] Options to create the melt transaction
    * @param {boolean} [options.createAnotherMelt=true] If should create another melt authority
@@ -450,7 +457,7 @@ const tokens = {
     token: string,
     authorityMeltInput: IDataInput, // Authority melt
     address: string,
-    amount: bigint,
+    amount: OutputValueType,
     storage: IStorage,
     {
       createAnotherMelt = true,
@@ -624,7 +631,7 @@ const tokens = {
     address: string,
     name: string,
     symbol: string,
-    mintAmount: bigint,
+    mintAmount: OutputValueType,
     storage: IStorage,
     {
       changeAddress = null,
