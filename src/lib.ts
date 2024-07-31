@@ -42,7 +42,7 @@ import walletServiceApi from './wallet/api/walletApi';
 import SendTransactionWalletService from './wallet/sendTransactionWalletService';
 import config from './config';
 import * as PushNotification from './pushNotification';
-import { WalletType } from './types';
+import { WalletType, HistorySyncMode } from './types';
 import { PartialTx, PartialTxInputData } from './models/partial_tx';
 import PartialTxProposal from './wallet/partialTxProposal';
 import * as swapService from './wallet/api/swapService';
@@ -105,6 +105,7 @@ export {
   PushNotification,
   swapService,
   WalletType,
+  HistorySyncMode,
   ncApi,
   NanoContractSerializer,
   nanoUtils,

@@ -7,12 +7,17 @@
 
 import MockAdapter from 'axios-mock-adapter';
 import axios from 'axios';
+import { HistorySyncMode, WalletType } from '../../src/types';
 import { MemoryStore, Storage } from '../../src/storage';
 import {
   scanPolicyStartAddresses,
   checkScanningPolicy,
   _updateTokensData,
+  getSupportedSyncMode,
+  getHistorySyncMethod,
+  apiSyncHistory,
 } from '../../src/utils/storage';
+import { manualStreamSyncHistory, xpubStreamSyncHistory } from '../../src/sync/stream';
 
 describe('scanning policy methods', () => {
   it('start addresses', async () => {
@@ -325,4 +330,26 @@ describe('_updateTokensData', () => {
     // Verify
     expect(axiosMock.history.get).toHaveLength(6);
   });
+});
+
+test('getSupportedSyncMode', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  storage.getWalletType = jest.fn().mockReturnValue(Promise.resolve(WalletType.P2PKH));
+  await expect(getSupportedSyncMode(storage)).resolves.toEqual([
+    HistorySyncMode.MANUAL_STREAM_WS,
+    HistorySyncMode.POLLING_HTTP_API,
+    HistorySyncMode.XPUB_STREAM_WS,
+  ]);
+  storage.getWalletType = jest.fn().mockReturnValue(Promise.resolve(WalletType.MULTISIG));
+  await expect(getSupportedSyncMode(storage)).resolves.toEqual([HistorySyncMode.POLLING_HTTP_API]);
+
+  storage.getWalletType = jest.fn().mockReturnValue(Promise.resolve(''));
+  await expect(getSupportedSyncMode(storage)).resolves.toEqual([]);
+});
+
+test('getHistorySyyncMethod', () => {
+  expect(getHistorySyncMethod(HistorySyncMode.POLLING_HTTP_API)).toEqual(apiSyncHistory);
+  expect(getHistorySyncMethod(HistorySyncMode.MANUAL_STREAM_WS)).toEqual(manualStreamSyncHistory);
+  expect(getHistorySyncMethod(HistorySyncMode.XPUB_STREAM_WS)).toEqual(xpubStreamSyncHistory);
 });

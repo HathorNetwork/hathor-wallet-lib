@@ -19,17 +19,53 @@ import {
   IScanPolicyLoadAddresses,
   isIndexLimitScanPolicy,
   SCANNING_POLICY,
+  HistorySyncMode,
+  HistorySyncFunction,
+  WalletType,
 } from '../types';
 import walletApi from '../api/wallet';
 import helpers from './helpers';
 import transactionUtils from './transaction';
 import { deriveAddressP2PKH, deriveAddressP2SH } from './address';
+import { xpubStreamSyncHistory, manualStreamSyncHistory } from '../sync/stream';
 import {
   NATIVE_TOKEN_UID,
   MAX_ADDRESSES_GET,
   LOAD_WALLET_MAX_RETRY,
   LOAD_WALLET_RETRY_SLEEP,
 } from '../constants';
+
+/**
+ * Get history sync method for a given mode
+ * @param {HistorySyncMode} mode The mode of the stream
+ * @returns {HistorySyncFunction}
+ */
+export function getHistorySyncMethod(mode: HistorySyncMode): HistorySyncFunction {
+  switch (mode) {
+    case HistorySyncMode.MANUAL_STREAM_WS:
+      return manualStreamSyncHistory;
+    case HistorySyncMode.XPUB_STREAM_WS:
+      return xpubStreamSyncHistory;
+    case HistorySyncMode.POLLING_HTTP_API:
+    default:
+      return apiSyncHistory;
+  }
+}
+
+export async function getSupportedSyncMode(storage: IStorage): Promise<HistorySyncMode[]> {
+  const walletType = await storage.getWalletType();
+  if (walletType === WalletType.P2PKH) {
+    return [
+      HistorySyncMode.MANUAL_STREAM_WS,
+      HistorySyncMode.POLLING_HTTP_API,
+      HistorySyncMode.XPUB_STREAM_WS,
+    ];
+  }
+  if (walletType === WalletType.MULTISIG) {
+    return [HistorySyncMode.POLLING_HTTP_API];
+  }
+  return [];
+}
 
 /**
  * Derive requested addresses (if not already loaded), save them on storage then return them.
@@ -67,31 +103,6 @@ export async function loadAddresses(
 }
 
 /**
- * Reload all addresses and transactions from the full node
- * @param {IStorage} storage Storage to be reloaded
- * @param {FullnodeConnection} connection Connection to be used to reload the storage
- * @returns {Promise<void>}
- */
-export async function reloadStorage(
-  storage: IStorage,
-  connection: FullnodeConnection
-): Promise<void> {
-  // unsub all addresses
-  for await (const address of storage.getAllAddresses()) {
-    connection.unsubscribeAddress(address.base58);
-  }
-  const accessData = await storage.getAccessData();
-  if (accessData != null) {
-    // Clean entire storage
-    await storage.cleanStorage(true, true);
-    // Reset access data
-    await storage.saveAccessData(accessData);
-  }
-  const addressesToLoad = await scanPolicyStartAddresses(storage);
-  return syncHistory(addressesToLoad.nextIndex, addressesToLoad.count, storage, connection);
-}
-
-/**
  * Fetch the history of the addresses and save it on storage.
  * Optionally process the history after loading it.
  *
@@ -101,7 +112,7 @@ export async function reloadStorage(
  * @param {FullnodeConnection} connection Connection to the full node
  * @param {boolean} shouldProcessHistory If we should process the history after loading it.
  */
-export async function syncHistory(
+export async function apiSyncHistory(
   startIndex: number,
   count: number,
   storage: IStorage,

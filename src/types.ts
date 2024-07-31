@@ -22,6 +22,12 @@ export interface IInputSignature {
   pubkey: Buffer;
 }
 
+export enum HistorySyncMode {
+  POLLING_HTTP_API = 'polling-http-api',
+  MANUAL_STREAM_WS = 'manual-stream-ws',
+  XPUB_STREAM_WS = 'xpub-stream-ws',
+}
+
 /**
  * This is the method signature for a method that signs a transaction and
  * returns an array with signature information.
@@ -31,6 +37,14 @@ export type EcdsaTxSign = (
   storage: IStorage,
   pinCode: string
 ) => Promise<ITxSignatureData>;
+
+export type HistorySyncFunction = (
+  startIndex: number,
+  count: number,
+  storage: IStorage,
+  connection: FullNodeConnection,
+  shouldProcessHistory?: boolean
+) => Promise<void>;
 
 export interface IAddressInfo {
   base58: string;

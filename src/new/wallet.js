@@ -29,14 +29,14 @@ import {
 } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
-import { SCANNING_POLICY, TxHistoryProcessingStatus, WalletType } from '../types';
+import { SCANNING_POLICY, TxHistoryProcessingStatus, WalletType, HistorySyncMode } from '../types';
 import transactionUtils from '../utils/transaction';
 import Queue from '../models/queue';
 import {
-  syncHistory,
-  reloadStorage,
   scanPolicyStartAddresses,
   checkScanningPolicy,
+  getHistorySyncMethod,
+  getSupportedSyncMode,
 } from '../utils/storage';
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
@@ -212,6 +212,8 @@ class HathorWallet extends EventEmitter {
 
     this.scanPolicy = scanPolicy;
     this.isSignedExternally = this.storage.hasTxSignatureMethod();
+
+    this.historySyncMode = HistorySyncMode.POLLING_HTTP_API;
   }
 
   /**
@@ -430,17 +432,12 @@ class HathorWallet extends EventEmitter {
         if (this.firstConnection) {
           this.firstConnection = false;
           const addressesToLoad = await scanPolicyStartAddresses(this.storage);
-          await syncHistory(
-            addressesToLoad.nextIndex,
-            addressesToLoad.count,
-            this.storage,
-            this.conn
-          );
+          await this.syncHistory(addressesToLoad.nextIndex, addressesToLoad.count);
         } else {
           if (this.beforeReloadCallback) {
             this.beforeReloadCallback();
           }
-          await reloadStorage(this.storage, this.conn);
+          await this.reloadStorage();
         }
         this.setState(HathorWallet.PROCESSING);
       } catch (error) {
@@ -1238,13 +1235,7 @@ class HathorWallet extends EventEmitter {
     // check address scanning policy and load more addresses if needed
     const loadMoreAddresses = await checkScanningPolicy(this.storage);
     if (loadMoreAddresses !== null) {
-      await syncHistory(
-        loadMoreAddresses.nextIndex,
-        loadMoreAddresses.count,
-        this.storage,
-        this.conn,
-        processHistory
-      );
+      await this.syncHistory(loadMoreAddresses.nextIndex, loadMoreAddresses.count, processHistory);
     }
   }
 
@@ -2836,6 +2827,54 @@ class HathorWallet extends EventEmitter {
   setExternalTxSigningMethod(method) {
     this.isSignedExternally = !!method;
     this.storage.setTxSignatureMethod(method);
+  }
+
+  /**
+   * Set the history sync mode.
+   * @param {HistorySyncMode} mode
+   */
+  setHistorySyncMode(mode) {
+    this.historySyncMode = mode;
+  }
+
+  /**
+   * @param {number} startIndex
+   * @param {number} count
+   * @param {boolean} [shouldProcessHistory=false]
+   * @returns {Promise<void>}
+   */
+  async syncHistory(startIndex, count, shouldProcessHistory = false) {
+    if (!(await getSupportedSyncMode(this.storage)).includes(this.historySyncMode)) {
+      throw new Error('Trying to use an unsupported sync method for this wallet.');
+    }
+    await getHistorySyncMethod(this.historySyncMode)(
+      startIndex,
+      count,
+      this.storage,
+      this.conn,
+      shouldProcessHistory
+    );
+  }
+
+  /**
+   * Reload all addresses and transactions from the full node
+   */
+  async reloadStorage() {
+    await this.conn.onReload();
+
+    // unsub all addresses
+    for await (const address of this.storage.getAllAddresses()) {
+      this.conn.unsubscribeAddress(address.base58);
+    }
+    const accessData = await this.storage.getAccessData();
+    if (accessData != null) {
+      // Clean entire storage
+      await this.storage.cleanStorage(true, true);
+      // Reset access data
+      await this.storage.saveAccessData(accessData);
+    }
+    const addressesToLoad = await scanPolicyStartAddresses(this.storage);
+    await this.syncHistory(addressesToLoad.nextIndex, addressesToLoad.count);
   }
 }
 

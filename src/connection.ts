@@ -92,6 +92,10 @@ abstract class Connection extends EventEmitter {
     this.emit('wallet-update', wsData);
   }
 
+  handleStreamMessage(wsData) {
+    this.emit('stream', wsData);
+  }
+
   /**
    * Update class state
    *
