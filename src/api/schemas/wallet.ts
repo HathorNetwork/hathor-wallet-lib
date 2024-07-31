@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod';
-import { IHistoryTxSchema } from '../../zod_schemas';
+import { IHistoryTxSchema } from '../../schemas';
 import { bigIntCoercibleSchema } from '../../utils/bigint';
 
 export const addressHistorySchema = z.discriminatedUnion('success', [

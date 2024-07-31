@@ -12,7 +12,7 @@ import { IKVHistoryIndex, IHistoryTx, HistoryIndexValidateResponse } from '../..
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 import { checkLevelDbVersion } from './utils';
 import { jsonWithBigIntEncoding } from '../../utils/bigint';
-import { IHistoryTxSchema } from '../../zod_schemas';
+import { IHistoryTxSchema } from '../../schemas';
 
 export const HISTORY_PREFIX = 'history';
 export const TS_HISTORY_PREFIX = 'ts_history';

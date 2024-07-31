@@ -19,7 +19,7 @@ import {
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 import { checkLevelDbVersion } from './utils';
 import { jsonWithBigIntEncoding } from '../../utils/bigint';
-import { IAddressMetadataAsRecordSchema } from '../../zod_schemas';
+import { IAddressMetadataAsRecordSchema } from '../../schemas';
 
 export const ADDRESS_PREFIX = 'address';
 export const INDEX_PREFIX = 'index';

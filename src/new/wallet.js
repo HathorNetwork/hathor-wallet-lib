@@ -43,7 +43,7 @@ import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../utils/address';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction } from '../nano_contracts/utils';
-import { IHistoryTxSchema } from '../zod_schemas';
+import { IHistoryTxSchema } from '../schemas';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 

@@ -9,7 +9,7 @@ import { IEncoding } from 'level-transcoder';
 import configureJsonBigInt from 'json-bigint';
 import { z } from 'zod';
 
-import { ZodSchema } from '../zod_schemas';
+import { ZodSchema } from '../schemas';
 
 export const JSONBigInt = configureJsonBigInt({ useNativeBigInt: true });
 

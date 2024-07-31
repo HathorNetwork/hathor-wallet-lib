@@ -15,7 +15,7 @@ import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 import transactionUtils from '../../utils/transaction';
 import { checkLevelDbVersion } from './utils';
 import { jsonWithBigIntEncoding } from '../../utils/bigint';
-import { ILockedUtxoSchema, IUtxoSchema } from '../../zod_schemas';
+import { ILockedUtxoSchema, IUtxoSchema } from '../../schemas';
 
 export const UTXO_PREFIX = 'utxo';
 export const TOKEN_ADDRESS_UTXO_PREFIX = 'token:address:utxo';

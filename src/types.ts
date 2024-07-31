@@ -10,6 +10,8 @@ import Transaction from './models/transaction';
 import Input from './models/input';
 import FullNodeConnection from './new/connection';
 
+export type OutputValueType = bigint;
+
 export interface ITxSignatureData {
   ncCallerSignature: Buffer | null;
   inputSignatures: IInputSignature[];

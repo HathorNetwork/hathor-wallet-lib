@@ -22,7 +22,7 @@ import {
 } from './types';
 import { bigIntCoercibleSchema } from './utils/bigint';
 
-export type ZodSchema<T> = z.ZodType<T, z.ZodTypeDef, unknown>;
+export type ZodSchema<T> = z.ZodSchema<T, z.ZodTypeDef, unknown>;
 
 export const ITokenBalanceSchema: ZodSchema<ITokenBalance> = z
   .object({

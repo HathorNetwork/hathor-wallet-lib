@@ -12,7 +12,7 @@ import { IKVTokenIndex, ITokenData, ITokenMetadata } from '../../types';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 import { checkLevelDbVersion } from './utils';
 import { jsonWithBigIntEncoding } from '../../utils/bigint';
-import { ITokenMetadataSchema } from '../../zod_schemas';
+import { ITokenMetadataSchema } from '../../schemas';
 
 export const TOKEN_PREFIX = 'token';
 export const META_PREFIX = 'meta';
