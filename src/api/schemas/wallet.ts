@@ -18,8 +18,8 @@ export const addressHistorySchema = z.discriminatedUnion('success', [
       first_hash: z.string().nullish(),
       first_address: z.string().nullish(),
     })
-    .strict(),
-  z.object({ success: z.literal(false), message: z.string() }).strict(),
+    .passthrough(),
+  z.object({ success: z.literal(false), message: z.string() }).passthrough(),
 ]);
 
 export type AddressHistorySchema = z.infer<typeof addressHistorySchema>;
@@ -29,7 +29,7 @@ export const mintMeltUtxoSchema = z
     tx_id: z.string(),
     index: z.number(),
   })
-  .strict();
+  .passthrough();
 
 export const generalTokenInfoSchema = z.discriminatedUnion('success', [
   z
@@ -42,8 +42,8 @@ export const generalTokenInfoSchema = z.discriminatedUnion('success', [
       total: bigIntCoercibleSchema,
       transactions_count: z.number(),
     })
-    .strict(),
-  z.object({ success: z.literal(false), message: z.string() }).strict(),
+    .passthrough(),
+  z.object({ success: z.literal(false), message: z.string() }).passthrough(),
 ]);
 
 export type GeneralTokenInfoSchema = z.infer<typeof generalTokenInfoSchema>;

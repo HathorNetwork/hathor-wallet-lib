@@ -29,35 +29,35 @@ export const ITokenBalanceSchema: ZodSchema<ITokenBalance> = z
     locked: bigIntCoercibleSchema,
     unlocked: bigIntCoercibleSchema,
   })
-  .strict();
+  .passthrough();
 
 export const IAuthoritiesBalanceSchema: ZodSchema<IAuthoritiesBalance> = z
   .object({
     mint: ITokenBalanceSchema,
     melt: ITokenBalanceSchema,
   })
-  .strict();
+  .passthrough();
 
 export const IBalanceSchema: ZodSchema<IBalance> = z
   .object({
     tokens: ITokenBalanceSchema,
     authorities: IAuthoritiesBalanceSchema,
   })
-  .strict();
+  .passthrough();
 
 export const IAddressMetadataAsRecordSchema: ZodSchema<IAddressMetadataAsRecord> = z
   .object({
     numTransactions: z.number(),
     balance: z.record(IBalanceSchema),
   })
-  .strict();
+  .passthrough();
 
 export const ITokenMetadataSchema: ZodSchema<ITokenMetadata> = z
   .object({
     numTransactions: z.number(),
     balance: IBalanceSchema,
   })
-  .strict();
+  .passthrough();
 
 export const IHistoryOutputDecodedSchema: ZodSchema<IHistoryOutputDecoded> = z
   .object({
@@ -66,7 +66,7 @@ export const IHistoryOutputDecodedSchema: ZodSchema<IHistoryOutputDecoded> = z
     timelock: z.number().nullish().optional(),
     data: z.string().optional(),
   })
-  .strict();
+  .passthrough();
 
 export const IHistoryInputSchema: ZodSchema<IHistoryInput> = z
   .object({
@@ -78,7 +78,7 @@ export const IHistoryInputSchema: ZodSchema<IHistoryInput> = z
     tx_id: z.string(),
     index: z.number(),
   })
-  .strict();
+  .passthrough();
 
 export const IHistoryOutputSchema: ZodSchema<IHistoryOutput> = z
   .object({
@@ -90,7 +90,7 @@ export const IHistoryOutputSchema: ZodSchema<IHistoryOutput> = z
     spent_by: z.string().nullable(),
     selected_as_input: z.boolean().optional(),
   })
-  .strict();
+  .passthrough();
 
 export const IHistoryTxSchema: ZodSchema<IHistoryTx> = z
   .object({
@@ -116,7 +116,7 @@ export const IHistoryTxSchema: ZodSchema<IHistoryTx> = z
     nc_pubkey: z.string().optional(),
     first_block: z.string().optional(),
   })
-  .strict();
+  .passthrough();
 
 export const IUtxoSchema: ZodSchema<IUtxo> = z
   .object({
@@ -130,11 +130,11 @@ export const IUtxoSchema: ZodSchema<IUtxo> = z
     type: z.number(),
     height: z.number().nullable(),
   })
-  .strict();
+  .passthrough();
 
 export const ILockedUtxoSchema: ZodSchema<ILockedUtxo> = z
   .object({
     tx: IHistoryTxSchema,
     index: z.number(),
   })
-  .strict();
+  .passthrough();

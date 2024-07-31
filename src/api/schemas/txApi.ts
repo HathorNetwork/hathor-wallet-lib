@@ -39,13 +39,13 @@ export const transactionSchema = z.discriminatedUnion('success', [
                   value: bigIntCoercibleSchema,
                   token_data: z.number(),
                 })
-                .strict(),
+                .passthrough(),
               tx_id: z.string(),
               index: z.number(),
               token: z.string().nullish(),
               spent_by: z.string().nullish(),
             })
-            .strict()
+            .passthrough()
             .array(),
           outputs: z
             .object({
@@ -60,11 +60,11 @@ export const transactionSchema = z.discriminatedUnion('success', [
                   value: bigIntCoercibleSchema,
                   token_data: z.number().optional(),
                 })
-                .strict(),
+                .passthrough(),
               token: z.string().nullish(),
               spent_by: z.string().nullish(),
             })
-            .strict()
+            .passthrough()
             .array(),
           tokens: z
             .object({
@@ -72,13 +72,13 @@ export const transactionSchema = z.discriminatedUnion('success', [
               name: z.string().nullable(),
               symbol: z.string().nullable(),
             })
-            .strict()
+            .passthrough()
             .array(),
           token_name: z.string().nullish(),
           token_symbol: z.string().nullish(),
           raw: z.string(),
         })
-        .strict(),
+        .passthrough(),
       meta: z
         .object({
           hash: z.string(),
@@ -97,11 +97,11 @@ export const transactionSchema = z.discriminatedUnion('success', [
           validation: z.string().nullish(),
           first_block_height: z.number().nullish(),
         })
-        .strict(),
+        .passthrough(),
       spent_outputs: z.record(z.coerce.number(), z.string()),
     })
-    .strict(),
-  z.object({ success: z.literal(false), message: z.string().nullish() }).strict(),
+    .passthrough(),
+  z.object({ success: z.literal(false), message: z.string().nullish() }).passthrough(),
 ]);
 
 export type TransactionSchema = z.infer<typeof transactionSchema>;
