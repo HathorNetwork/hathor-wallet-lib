@@ -61,7 +61,7 @@ test('encryption test', () => {
   expect(decryptData(encrypted, passwd)).toEqual('a-valid-data');
   expect(() => {
     decryptData(encrypted, 'invalid-passwd');
-  }).toThrowError(InvalidPasswdError);
+  }).toThrow(InvalidPasswdError);
   const invalidData = {
     data: 'an-invalid-data',
     hash: encrypted.hash,
@@ -71,7 +71,7 @@ test('encryption test', () => {
   };
   expect(() => {
     decryptData(invalidData, passwd);
-  }).toThrowError(DecryptionError);
+  }).toThrow(DecryptionError);
 });
 
 test('check password', () => {

@@ -40,7 +40,7 @@ test('registerDevice', async () => {
     enablePush: true,
   });
 
-  await expect(invalidCall).rejects.toThrowError('Error registering device for push notification.');
+  await expect(invalidCall).rejects.toThrow('Error registering device for push notification.');
 });
 
 test('updateDevice', async () => {
@@ -79,7 +79,7 @@ test('updateDevice', async () => {
     enableShowAmounts: true,
   });
 
-  await expect(invalidCall).rejects.toThrowError(
+  await expect(invalidCall).rejects.toThrow(
     'Error updating push notification settings for device.'
   );
 });
@@ -112,7 +112,5 @@ test('unregisterDevice', async () => {
 
   const invalidCall = PushNotification.unregisterDevice(wallet, '123');
 
-  await expect(invalidCall).rejects.toThrowError(
-    'Error unregistering wallet from push notifications.'
-  );
+  await expect(invalidCall).rejects.toThrow('Error unregistering wallet from push notifications.');
 });
