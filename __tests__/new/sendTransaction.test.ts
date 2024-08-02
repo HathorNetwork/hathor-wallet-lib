@@ -26,7 +26,7 @@ test('type methods', () => {
   const addrOutput = {
     type: OutputType.P2PKH,
     address: 'H-valid-address',
-    value: 10,
+    value: 10n,
     token: NATIVE_TOKEN_UID,
   };
 
@@ -52,10 +52,10 @@ test('prepareTxData', async () => {
       yield {
         txId: 'another-spent-tx-id',
         index: 0,
-        value: 2,
+        value: 2n,
         token: '00',
         address: 'another-spent-utxo-address',
-        authorities: 0,
+        authorities: 0n,
       };
     }
   }
@@ -67,7 +67,7 @@ test('prepareTxData', async () => {
     Promise.resolve({
       outputs: [
         {
-          value: 11,
+          value: 11n,
           token: '01',
           decoded: {
             address: 'spent-utxo-address',
@@ -91,7 +91,7 @@ test('prepareTxData', async () => {
   const addrOutput = {
     type: OutputType.P2PKH,
     address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
-    value: 10,
+    value: 10n,
     token: '01',
   };
 
@@ -114,18 +114,18 @@ test('prepareTxData', async () => {
       {
         txId: 'spent-tx-id',
         index: 0,
-        value: 11,
+        value: 11n,
         token: '01',
         address: 'spent-utxo-address',
-        authorities: 0,
+        authorities: 0n,
       },
       {
         address: 'another-spent-utxo-address',
-        authorities: 0,
+        authorities: 0n,
         index: 0,
         token: '00',
         txId: 'another-spent-tx-id',
-        value: 2,
+        value: 2n,
       },
     ],
     // We use array containing because the order of the outputs is not guaranteed
@@ -133,36 +133,36 @@ test('prepareTxData', async () => {
     outputs: expect.arrayContaining([
       {
         address: 'WgKrTAfyjtNK5aQzx9YeQda686y7nm3DLi',
-        value: 10,
+        value: 10n,
         timelock: null,
         token: '01',
-        authorities: 0,
+        authorities: 0n,
         type: 'p2pkh',
       },
       {
         type: 'data',
         data: 'abcd',
-        value: 1,
-        authorities: 0,
+        value: 1n,
+        authorities: 0n,
         token: NATIVE_TOKEN_UID,
       },
       {
         address: 'W-change-address',
-        authorities: 0,
+        authorities: 0n,
         isChange: true,
         timelock: null,
         token: '00',
         type: 'p2pkh',
-        value: 1,
+        value: 1n,
       },
       {
         address: 'W-change-address',
-        authorities: 0,
+        authorities: 0n,
         isChange: true,
         timelock: null,
         token: '01',
         type: 'p2pkh',
-        value: 1,
+        value: 1n,
       },
     ]),
     tokens: ['01'],
@@ -322,16 +322,16 @@ test('prepareSendTokensData', async () => {
       { txId: 'tx-id', index: 1, address: 'addr1', token: '01' },
     ],
     outputs: [
-      { address: 'addr2', value: 1, token: '00' },
-      { address: 'addr3', value: 2, token: '01' },
-      { type: 'mint', address: 'addr4', value: 2, token: '01' }, // will be ignored
+      { address: 'addr2', value: 1n, token: '00' },
+      { address: 'addr3', value: 2n, token: '01' },
+      { type: 'mint', address: 'addr4', value: 2n, token: '01' }, // will be ignored
     ],
   };
 
   const utxoSelection = jest.fn().mockReturnValue(
     Promise.resolve({
       utxos: [],
-      amount: 0,
+      amount: 0n,
     })
   );
 
@@ -349,12 +349,12 @@ test('prepareSendTokensData', async () => {
           txId: 'tx-id',
           index: 0,
           address: 'addr-utxo',
-          value: 3,
-          authorities: 0,
+          value: 3n,
+          authorities: 0n,
           token: '01',
         },
       ],
-      amount: 3,
+      amount: 3n,
     })
   );
   await expect(
@@ -366,15 +366,15 @@ test('prepareSendTokensData', async () => {
     })
   ).resolves.toMatchObject({
     inputs: [
-      { txId: 'tx-id', index: 0, address: 'addr-utxo', token: '01', value: 3, authorities: 0 },
+      { txId: 'tx-id', index: 0, address: 'addr-utxo', token: '01', value: 3n, authorities: 0n },
     ],
     outputs: [
       {
         type: 'p2pkh',
         address: 'addr-change',
-        value: 1,
+        value: 1n,
         token: '01',
-        authorities: 0,
+        authorities: 0n,
         timelock: null,
         isChange: true,
       },
@@ -387,8 +387,8 @@ test('prepareSendTokensData', async () => {
     Promise.resolve({
       is_voided: false,
       outputs: [
-        { token_data: 1, value: 1, token: '01', decoded: { address: 'addr0', token: '01' } },
-        { token_data: 1, value: 2, token: '01', decoded: { address: 'addr1', token: '01' } },
+        { token_data: 1, value: 1n, token: '01', decoded: { address: 'addr0', token: '01' } },
+        { token_data: 1, value: 2n, token: '01', decoded: { address: 'addr1', token: '01' } },
         // Since the last output is skipped we do not need it on the tx
         // { token_data:0, value: 1, decoded: { address: 'addr2', token: '00' } },
       ],
@@ -396,14 +396,14 @@ test('prepareSendTokensData', async () => {
   );
   const tx1 = {
     inputs: [
-      { txId: 'tx-id', index: 0, value: 1, address: 'addr0', token: '01' },
-      { txId: 'tx-id', index: 1, value: 2, address: 'addr1', token: '01' },
-      { txId: 'tx-id', index: 2, value: 1, address: 'addr2', token: '00' }, // Should be skipped
+      { txId: 'tx-id', index: 0, value: 1n, address: 'addr0', token: '01' },
+      { txId: 'tx-id', index: 1, value: 2n, address: 'addr1', token: '01' },
+      { txId: 'tx-id', index: 2, value: 1n, address: 'addr2', token: '00' }, // Should be skipped
     ],
     outputs: [
-      { address: 'addr2', value: 1, token: '00' },
-      { address: 'addr3', value: 2, token: '01' },
-      { type: 'mint', address: 'addr4', value: 2, token: '01' }, // will be ignored
+      { address: 'addr2', value: 1n, token: '00' },
+      { address: 'addr3', value: 2n, token: '01' },
+      { type: 'mint', address: 'addr4', value: 2n, token: '01' }, // will be ignored
     ],
   };
 
@@ -421,9 +421,9 @@ test('prepareSendTokensData', async () => {
       {
         type: 'p2pkh',
         address: 'addr-change',
-        value: 1,
+        value: 1n,
         token: '01',
-        authorities: 0,
+        authorities: 0n,
         timelock: null,
         isChange: true,
       },

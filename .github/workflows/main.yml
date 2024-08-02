@@ -12,6 +12,7 @@ on:
     - release
     - release-candidate
     - master
+    - feat/bigint-functions # TODO: REMOVE THIS
 jobs:
   test:
     runs-on: 'ubuntu-latest'

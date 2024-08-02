@@ -144,7 +144,7 @@ test('getTxBalance', async () => {
     ...MOCK_TX,
     inputs: [
       {
-        value: 500,
+        value: 500n,
         token_data: 1,
         script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
         token: 'token1',
@@ -159,7 +159,7 @@ test('getTxBalance', async () => {
     ],
     outputs: [
       {
-        value: 200,
+        value: 200n,
         token_data: 1,
         token: 'token1',
         script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
@@ -171,7 +171,7 @@ test('getTxBalance', async () => {
         },
       },
       {
-        value: 300,
+        value: 300n,
         token_data: 1,
         token: 'token1',
         script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
@@ -187,13 +187,13 @@ test('getTxBalance', async () => {
 
   let balance = await wallet.getTxBalance(tx);
 
-  expect(balance.token1).toStrictEqual(-300);
+  expect(balance.token1).toStrictEqual(-300n);
 
   tx = {
     ...MOCK_TX,
     inputs: [
       {
-        value: 500,
+        value: 500n,
         token_data: 1,
         script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
         token: 'token1',
@@ -208,7 +208,7 @@ test('getTxBalance', async () => {
     ],
     outputs: [
       {
-        value: 200,
+        value: 200n,
         token_data: 1,
         token: 'token1',
         script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
@@ -220,7 +220,7 @@ test('getTxBalance', async () => {
         },
       },
       {
-        value: 300,
+        value: 300n,
         token_data: 1,
         token: 'token1',
         script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
@@ -235,14 +235,14 @@ test('getTxBalance', async () => {
   };
 
   balance = await wallet.getTxBalance(tx);
-  expect(balance.token1).toStrictEqual(0);
+  expect(balance.token1).toStrictEqual(0n);
 
   // multiple tokens in the same transaction
   tx = {
     ...MOCK_TX,
     inputs: [
       {
-        value: 500,
+        value: 500n,
         token_data: 1,
         script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
         token: 'token1',
@@ -255,7 +255,7 @@ test('getTxBalance', async () => {
         index: 0,
       },
       {
-        value: 10,
+        value: 10n,
         token_data: 1,
         script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
         token: 'token2',
@@ -270,7 +270,7 @@ test('getTxBalance', async () => {
     ],
     outputs: [
       {
-        value: 200,
+        value: 200n,
         token_data: 1,
         token: 'token1',
         script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
@@ -282,7 +282,7 @@ test('getTxBalance', async () => {
         },
       },
       {
-        value: 300,
+        value: 300n,
         token_data: 1,
         token: 'token1',
         script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
@@ -295,7 +295,7 @@ test('getTxBalance', async () => {
       },
       {
         // change
-        value: 5,
+        value: 5n,
         token_data: 1,
         token: 'token2',
         script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
@@ -307,7 +307,7 @@ test('getTxBalance', async () => {
         },
       },
       {
-        value: 5,
+        value: 5n,
         token_data: 1,
         token: 'token2',
         script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
@@ -322,8 +322,8 @@ test('getTxBalance', async () => {
   };
 
   balance = await wallet.getTxBalance(tx);
-  expect(balance.token1).toStrictEqual(0);
-  expect(balance.token2).toStrictEqual(-5);
+  expect(balance.token1).toStrictEqual(0n);
+  expect(balance.token2).toStrictEqual(-5n);
 });
 
 test('checkAddressesMine', async () => {
@@ -503,15 +503,15 @@ test('prepareMintTokens', async () => {
             index: 0,
             tokenId: '00',
             address: addresses[0],
-            value: 1,
-            authorities: 0,
+            value: 1n,
+            authorities: 0n,
             timelock: null,
             heightlock: null,
             locked: false,
             addressPath,
           },
         ],
-        changeAmount: 0,
+        changeAmount: 0n,
       };
     }
     return {
@@ -521,7 +521,7 @@ test('prepareMintTokens', async () => {
           index: 0,
           tokenId: '01',
           address: addresses[0],
-          value: 1,
+          value: 1n,
           authorities: TOKEN_MINT_MASK,
           timelock: null,
           heightlock: null,
@@ -529,7 +529,7 @@ test('prepareMintTokens', async () => {
           addressPath,
         },
       ],
-      changeAmount: 0,
+      changeAmount: 0n,
     };
   };
   const getInputDataMock = (xp: string, dtsh: Buffer) => Buffer.alloc(0);
@@ -542,7 +542,7 @@ test('prepareMintTokens', async () => {
 
   // error because of wrong authority output address
   await expect(
-    wallet.prepareMintTokensData('01', 100, {
+    wallet.prepareMintTokensData('01', 100n, {
       address: addresses[1],
       createAnotherMint: true,
       mintAuthorityAddress: 'abc',
@@ -552,7 +552,7 @@ test('prepareMintTokens', async () => {
 
   // error because of wrong authority output address
   await expect(
-    wallet.prepareMintTokensData('01', 100, {
+    wallet.prepareMintTokensData('01', 100n, {
       address: addresses[1],
       createAnotherMint: true,
       mintAuthorityAddress: 'abc',
@@ -562,7 +562,7 @@ test('prepareMintTokens', async () => {
   ).rejects.toThrow(SendTxError);
 
   // mint data without sign the transaction
-  const mintDataNotSigned = await wallet.prepareMintTokensData('01', 100, {
+  const mintDataNotSigned = await wallet.prepareMintTokensData('01', 100n, {
     address: addresses[1],
     mintAuthorityAddress: addresses[2],
     pinCode: '123456',
@@ -578,7 +578,7 @@ test('prepareMintTokens', async () => {
   ]);
 
   // mint data with correct address for authority output
-  const mintData = await wallet.prepareMintTokensData('01', 100, {
+  const mintData = await wallet.prepareMintTokensData('01', 100n, {
     address: addresses[1],
     createAnotherMint: true,
     mintAuthorityAddress: addresses[2],
@@ -653,7 +653,7 @@ test('prepareMeltTokens', async () => {
             index: 0,
             tokenId: '01',
             address: addresses[0],
-            value: 1,
+            value: 1n,
             authorities: TOKEN_MELT_MASK,
             timelock: null,
             heightlock: null,
@@ -661,7 +661,7 @@ test('prepareMeltTokens', async () => {
             addressPath,
           },
         ],
-        changeAmount: 0,
+        changeAmount: 0n,
       };
     }
     return {
@@ -671,15 +671,15 @@ test('prepareMeltTokens', async () => {
           index: 0,
           tokenId: '01',
           address: addresses[0],
-          value: 1,
-          authorities: 0,
+          value: 1n,
+          authorities: 0n,
           timelock: null,
           heightlock: null,
           locked: false,
           addressPath,
         },
       ],
-      changeAmount: 0,
+      changeAmount: 0n,
     };
   };
   const getInputDataMock = (xp: string, dtsh: Buffer) => Buffer.alloc(0);
@@ -692,7 +692,7 @@ test('prepareMeltTokens', async () => {
 
   // error because of wrong authority output address
   await expect(
-    wallet.prepareMeltTokensData('01', 1, {
+    wallet.prepareMeltTokensData('01', 1n, {
       address: addresses[1],
       createAnotherMelt: true,
       meltAuthorityAddress: 'abc',
@@ -702,7 +702,7 @@ test('prepareMeltTokens', async () => {
 
   // error because of wrong authority output address
   await expect(
-    wallet.prepareMeltTokensData('01', 1, {
+    wallet.prepareMeltTokensData('01', 1n, {
       address: addresses[1],
       createAnotherMelt: true,
       meltAuthorityAddress: 'abc',
@@ -712,7 +712,7 @@ test('prepareMeltTokens', async () => {
   ).rejects.toThrow(SendTxError);
 
   // melt data without sign the transaction
-  const meltDataNotSigned = await wallet.prepareMeltTokensData('01', 100, {
+  const meltDataNotSigned = await wallet.prepareMeltTokensData('01', 100n, {
     address: addresses[1],
     meltAuthorityAddress: addresses[2],
     pinCode: '123456',
@@ -728,7 +728,7 @@ test('prepareMeltTokens', async () => {
   ]);
 
   // melt data with correct address for authority output
-  const meltData = await wallet.prepareMeltTokensData('01', 1, {
+  const meltData = await wallet.prepareMeltTokensData('01', 1n, {
     address: addresses[1],
     createAnotherMelt: true,
     meltAuthorityAddress: addresses[2],
@@ -794,15 +794,15 @@ test('prepareDelegateAuthorityData', async () => {
         index: 0,
         tokenId: '00',
         address: addresses[0],
-        value: 1,
-        authorities: 1,
+        value: 1n,
+        authorities: 1n,
         timelock: null,
         heightlock: null,
         locked: false,
         addressPath,
       },
     ],
-    changeAmount: 4,
+    changeAmount: 4n,
   });
   const getInputDataMock = (xp: string, dtsh: Buffer) => Buffer.alloc(0);
 
@@ -933,15 +933,15 @@ test('prepareDestroyAuthority', async () => {
         index: 0,
         tokenId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
         address: addresses[0],
-        value: 1,
-        authorities: 1,
+        value: 1n,
+        authorities: 1n,
         timelock: null,
         heightlock: null,
         locked: false,
         addressPath,
       },
     ],
-    changeAmount: 4,
+    changeAmount: 4n,
   });
   const getInputDataMock = () => Buffer.from([]);
 
@@ -1210,15 +1210,15 @@ test('createTokens', async () => {
           index: 0,
           tokenId: '00',
           address: addresses[0],
-          value: 1,
-          authorities: 0,
+          value: 1n,
+          authorities: 0n,
           timelock: null,
           heightlock: null,
           locked: false,
           addressPath,
         },
       ],
-      changeAmount: 0,
+      changeAmount: 0n,
     };
   };
   const getInputDataMock = (xp: string, dtsh: Buffer) => Buffer.alloc(0);
@@ -1240,7 +1240,7 @@ test('createTokens', async () => {
 
   // error because of wrong authority output address
   await expect(
-    wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
+    wallet.prepareCreateNewToken('Test Token', 'TST', 100n, {
       address: addresses[1],
       createMintAuthority: true,
       mintAuthorityAddress: 'abc',
@@ -1250,7 +1250,7 @@ test('createTokens', async () => {
 
   // error because of wrong authority output address
   await expect(
-    wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
+    wallet.prepareCreateNewToken('Test Token', 'TST', 100n, {
       address: addresses[1],
       createMeltAuthority: true,
       meltAuthorityAddress: 'abc',
@@ -1260,7 +1260,7 @@ test('createTokens', async () => {
 
   // error because of invalid external authority output address
   await expect(
-    wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
+    wallet.prepareCreateNewToken('Test Token', 'TST', 100n, {
       address: addresses[1],
       createMintAuthority: true,
       mintAuthorityAddress: 'abc',
@@ -1271,7 +1271,7 @@ test('createTokens', async () => {
 
   // error because of invalid external authority output address
   await expect(
-    wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
+    wallet.prepareCreateNewToken('Test Token', 'TST', 100n, {
       address: addresses[1],
       createMeltAuthority: true,
       meltAuthorityAddress: 'abc',
@@ -1281,7 +1281,7 @@ test('createTokens', async () => {
   ).rejects.toThrow(SendTxError);
 
   // create token without sign the transaction
-  const tokenDataNotSigned = await wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
+  const tokenDataNotSigned = await wallet.prepareCreateNewToken('Test Token', 'TST', 100n, {
     address: addresses[1],
     mintAuthorityAddress: addresses[2],
     pinCode: '123456',
@@ -1294,7 +1294,7 @@ test('createTokens', async () => {
   ]);
 
   // create token with correct address for authority output
-  const tokenData = await wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
+  const tokenData = await wallet.prepareCreateNewToken('Test Token', 'TST', 100n, {
     address: addresses[1],
     createMintAuthority: true,
     mintAuthorityAddress: addresses[2],
@@ -1321,7 +1321,7 @@ test('createTokens', async () => {
   expect(p2pkh.address.base58).toEqual(addresses[2]);
 
   // create token with correct address for authority output
-  const tokenData2 = await wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
+  const tokenData2 = await wallet.prepareCreateNewToken('Test Token', 'TST', 100n, {
     address: addresses[1],
     createMintAuthority: false,
     meltAuthorityAddress: addresses[2],
@@ -1388,15 +1388,15 @@ test('createNFTs', async () => {
           index: 0,
           tokenId: '00',
           address: addresses[0],
-          value: 1,
-          authorities: 0,
+          value: 1n,
+          authorities: 0n,
           timelock: null,
           heightlock: null,
           locked: false,
           addressPath,
         },
       ],
-      changeAmount: 0,
+      changeAmount: 0n,
     };
   };
   const getInputDataMock = (xp: string, dtsh: Buffer) => Buffer.alloc(0);
@@ -1416,7 +1416,7 @@ test('createNFTs', async () => {
 
   // error because of wrong authority output address
   await expect(
-    wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
+    wallet.prepareCreateNewToken('Test Token', 'TST', 100n, {
       address: addresses[1],
       createMintAuthority: true,
       mintAuthorityAddress: 'abc',
@@ -1427,7 +1427,7 @@ test('createNFTs', async () => {
 
   // error because of wrong authority output address
   await expect(
-    wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
+    wallet.prepareCreateNewToken('Test Token', 'TST', 100n, {
       address: addresses[1],
       createMintAuthority: true,
       mintAuthorityAddress: 'abc',
@@ -1437,7 +1437,7 @@ test('createNFTs', async () => {
   ).rejects.toThrow(SendTxError);
 
   // create token with correct address for authority output
-  const tokenData = await wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
+  const tokenData = await wallet.prepareCreateNewToken('Test Token', 'TST', 100n, {
     address: addresses[1],
     createMintAuthority: true,
     mintAuthorityAddress: addresses[2],
@@ -1462,7 +1462,7 @@ test('createNFTs', async () => {
   expect(p2pkh.address.base58).toEqual(addresses[2]);
 
   // create token with correct address for authority output
-  const tokenData2 = await wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
+  const tokenData2 = await wallet.prepareCreateNewToken('Test Token', 'TST', 100n, {
     address: addresses[1],
     createMintAuthority: false,
     createMeltAuthority: true,

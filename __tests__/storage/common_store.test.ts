@@ -123,7 +123,7 @@ describe('locked utxo methods', () => {
         'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
         tsFromDate(tsBefore),
         undefined,
-        100, // value
+        100n, // value
         '00', // token
         0 // token_data
       ),
@@ -133,7 +133,7 @@ describe('locked utxo methods', () => {
         'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
         tsFromDate(tsAfter),
         undefined,
-        100, // value
+        100n, // value
         '00', // token
         0 // token_data
       ),
@@ -143,7 +143,7 @@ describe('locked utxo methods', () => {
         'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
         tsFromDate(tsBefore),
         undefined,
-        100, // value
+        100n, // value
         '01', // token
         0 // token_data
       ),
