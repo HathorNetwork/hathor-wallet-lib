@@ -11,6 +11,8 @@ import { AbstractSublevel } from 'abstract-level';
 import { IKVHistoryIndex, IHistoryTx, HistoryIndexValidateResponse } from '../../types';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 import { checkLevelDbVersion } from './utils';
+import { jsonBigIntEncoding } from '../../utils/bigint';
+import { IHistoryTxSchema } from '../../schemas';
 
 export const HISTORY_PREFIX = 'history';
 export const TS_HISTORY_PREFIX = 'ts_history';
@@ -52,10 +54,9 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
   constructor(dbpath: string) {
     this.dbpath = path.join(dbpath, 'history');
     const db = new Level(this.dbpath);
-    this.historyDB = db.sublevel<string, IHistoryTx>(HISTORY_PREFIX, { valueEncoding: 'json' });
-    this.tsHistoryDB = db.sublevel<string, IHistoryTx>(TS_HISTORY_PREFIX, {
-      valueEncoding: 'json',
-    });
+    const valueEncoding = jsonBigIntEncoding(IHistoryTxSchema);
+    this.historyDB = db.sublevel<string, IHistoryTx>(HISTORY_PREFIX, { valueEncoding });
+    this.tsHistoryDB = db.sublevel<string, IHistoryTx>(TS_HISTORY_PREFIX, { valueEncoding });
     this.isValidated = false;
     this.size = 0;
   }

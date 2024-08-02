@@ -14,6 +14,8 @@ import { NATIVE_TOKEN_UID } from '../../constants';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 import transactionUtils from '../../utils/transaction';
 import { checkLevelDbVersion } from './utils';
+import { jsonBigIntEncoding } from '../../utils/bigint';
+import { ILockedUtxoSchema, IUtxoSchema } from '../../schemas';
 
 export const UTXO_PREFIX = 'utxo';
 export const TOKEN_ADDRESS_UTXO_PREFIX = 'token:address:utxo';
@@ -88,13 +90,16 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
   constructor(dbpath: string) {
     this.dbpath = path.join(dbpath, 'utxos');
     const db = new Level(this.dbpath);
-    this.utxoDB = db.sublevel<string, IUtxo>(UTXO_PREFIX, { valueEncoding: 'json' });
-    this.tokenUtxoDB = db.sublevel<string, IUtxo>(TOKEN_UTXO_PREFIX, { valueEncoding: 'json' });
+    const utxoEncoding = jsonBigIntEncoding(IUtxoSchema);
+    this.utxoDB = db.sublevel<string, IUtxo>(UTXO_PREFIX, { valueEncoding: utxoEncoding });
+    this.tokenUtxoDB = db.sublevel<string, IUtxo>(TOKEN_UTXO_PREFIX, {
+      valueEncoding: utxoEncoding,
+    });
     this.tokenAddressUtxoDB = db.sublevel<string, IUtxo>(TOKEN_ADDRESS_UTXO_PREFIX, {
-      valueEncoding: 'json',
+      valueEncoding: utxoEncoding,
     });
     this.lockedUtxoDB = db.sublevel<string, ILockedUtxo>(LOCKED_UTXO_PREFIX, {
-      valueEncoding: 'json',
+      valueEncoding: jsonBigIntEncoding(ILockedUtxoSchema),
     });
   }
 
