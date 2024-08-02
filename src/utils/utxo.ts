@@ -51,11 +51,11 @@ export async function fastUtxoSelection(
   amount: OutputValueType
 ): Promise<{ utxos: IUtxo[]; amount: OutputValueType }> {
   const utxos: IUtxo[] = [];
-  let utxosAmount = 0;
+  let utxosAmount = 0n;
 
   const options: IUtxoFilterOptions = {
     token,
-    authorities: 0,
+    authorities: 0n,
     target_amount: amount,
     only_available_utxos: true,
     order_by_value: 'desc',
@@ -71,7 +71,7 @@ export async function fastUtxoSelection(
     // Not enough funds to fill the amount required.
     return {
       utxos: [],
-      amount: 0,
+      amount: 0n,
     };
   }
 
@@ -95,12 +95,12 @@ export async function bestUtxoSelection(
   amount: OutputValueType
 ): Promise<{ utxos: IUtxo[]; amount: OutputValueType }> {
   const utxos: IUtxo[] = [];
-  let utxosAmount = 0;
+  let utxosAmount = 0n;
   let selectedUtxo: IUtxo | null = null;
 
   const options: IUtxoFilterOptions = {
     token,
-    authorities: 0,
+    authorities: 0n,
     only_available_utxos: true,
     order_by_value: 'desc',
   };
@@ -149,7 +149,7 @@ export async function bestUtxoSelection(
     // We don't have enough funds
     return {
       utxos: [],
-      amount: 0,
+      amount: 0n,
     };
   }
   // We need to ensure we use the smallest number of utxos and avoid hitting the maximum number of inputs

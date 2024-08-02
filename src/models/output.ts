@@ -26,7 +26,6 @@ import {
   intToBytes,
   bigIntToBytes,
 } from '../utils/buffer';
-import { prettyValue } from '../utils/numbers';
 import { parseScript as utilsParseScript } from '../utils/scripts';
 import { OutputValueType } from '../types';
 
@@ -93,12 +92,12 @@ class Output {
       throw new OutputValueError('Output value must be positive');
     }
     if (this.value > MAX_OUTPUT_VALUE) {
-      throw new OutputValueError(`Maximum value is ${prettyValue(MAX_OUTPUT_VALUE)}`);
+      throw new OutputValueError(`Maximum value is ${MAX_OUTPUT_VALUE}`);
     }
     if (this.value > MAX_OUTPUT_VALUE_32) {
-      return bigIntToBytes(BigInt(-this.value), 8);
+      return bigIntToBytes(-this.value, 8);
     }
-    return bigIntToBytes(BigInt(this.value), 4);
+    return bigIntToBytes(this.value, 4);
   }
 
   /**
