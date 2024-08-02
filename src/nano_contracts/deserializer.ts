@@ -5,10 +5,18 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { bufferToHex, unpackToFloat, unpackToInt } from '../utils/buffer';
+import { bufferToHex, hexToBuffer, unpackToFloat, unpackToInt } from '../utils/buffer';
+import helpersUtils from '../utils/helpers';
+import Network from '../models/network';
 import { NanoContractArgumentType } from './types';
 
 class Deserializer {
+  network: Network;
+
+  constructor(network: Network) {
+    this.network = network;
+  }
+
   /**
    * Helper method to deserialize any value from its type
    * We receive these types from the full node, so we
@@ -35,8 +43,15 @@ class Deserializer {
       case 'str':
         return this.toString(value);
       case 'bytes':
+      case 'TxOutputScript':
+      case 'TokenUid':
+      case 'VertexId':
         return this.toBytes(value);
+      case 'Address':
+        return this.toAddress(value);
       case 'int':
+      case 'Timestamp':
+      case 'Amount':
         return this.toInt(value);
       case 'float':
         return this.toFloat(value);
@@ -169,6 +184,20 @@ class Deserializer {
     }
     signedBuffer = signedBuffer.slice(size);
     return `${bufferToHex(signedBuffer)},${parsed},${valueType}`;
+  }
+
+  /**
+   * Deserialize a value decoded in bytes to a base58 string
+   *
+   * @param {value} Value to deserialize
+   *
+   * @memberof Deserializer
+   * @inner
+   */
+  toAddress(value: Buffer): string {
+    // First we get the 20 bytes of the address without the version byte and checksum
+    const addressBytes = value.slice(1, 21);
+    return helpersUtils.encodeAddress(addressBytes, this.network).base58;
   }
 }
 
