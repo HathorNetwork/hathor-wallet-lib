@@ -4,7 +4,7 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-import { IHistoryTx } from '../types';
+import { IHistoryTx, OutputValueType } from '../types';
 
 export enum NanoContractActionType {
   DEPOSIT = 'deposit',
@@ -17,7 +17,7 @@ export type NanoContractArgumentType = NanoContractArgumentApiInputType | Buffer
 export interface NanoContractAction {
   type: NanoContractActionType.DEPOSIT | NanoContractActionType.WITHDRAWAL;
   token: string;
-  amount: number;
+  amount: OutputValueType;
   // For withdrawal is required, which is address to send the output
   // For deposit is optional, and it's the address to filter the utxos
   address: string | null;

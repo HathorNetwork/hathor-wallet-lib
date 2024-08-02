@@ -21,6 +21,7 @@ import {
   IDataTx,
   IStorage,
   ITokenData,
+  OutputValueType,
   UtxoSelectionAlgorithm,
 } from '../types';
 import { getAddressType } from './address';
@@ -258,7 +259,7 @@ const tokens = {
   /**
    * Calculate deposit value for the given token mint amount
    *
-   * @param {number} mintAmount Amount of tokens being minted
+   * @param {OutputValueType} mintAmount Amount of tokens being minted
    * @param {number} [depositPercent=TOKEN_DEPOSIT_PERCENTAGE] token deposit percentage.
    *
    * @return {number}
@@ -266,22 +267,25 @@ const tokens = {
    * @inner
    *
    */
-  getDepositAmount(mintAmount: number, depositPercent: number = TOKEN_DEPOSIT_PERCENTAGE): number {
+  getDepositAmount(
+    mintAmount: OutputValueType,
+    depositPercent: number = TOKEN_DEPOSIT_PERCENTAGE
+  ): OutputValueType {
     return Math.ceil(depositPercent * mintAmount);
   },
 
   /**
    * Get the HTR value of the fee to add a data script output
-   * @returns {number} The fee to have a data script output
+   * @returns {OutputValueType} The fee to have a data script output
    */
-  getDataScriptOutputFee(): number {
+  getDataScriptOutputFee(): OutputValueType {
     return 1;
   },
 
   /**
    * Calculate withdraw value for the given token melt amount
    *
-   * @param {number} meltAmount Amount of tokens being melted
+   * @param {OutputValueType} meltAmount Amount of tokens being melted
    * @param {number} [depositPercent=TOKEN_DEPOSIT_PERCENTAGE] token deposit percentage.
    *
    * @return {number}
@@ -289,7 +293,10 @@ const tokens = {
    * @inner
    *
    */
-  getWithdrawAmount(meltAmount: number, depositPercent: number = TOKEN_DEPOSIT_PERCENTAGE): number {
+  getWithdrawAmount(
+    meltAmount: OutputValueType,
+    depositPercent: number = TOKEN_DEPOSIT_PERCENTAGE
+  ): OutputValueType {
     return Math.floor(depositPercent * meltAmount);
   },
 
@@ -313,7 +320,7 @@ const tokens = {
    */
   async prepareMintTxData(
     address: string,
-    amount: number,
+    amount: OutputValueType,
     storage: IStorage,
     {
       token = null,
@@ -435,7 +442,7 @@ const tokens = {
    * @param {string} token Token to melt
    * @param {IDataInput} authorityMeltInput Input with authority to melt
    * @param {string} address Address to send the melted HTR tokens
-   * @param {number} amount The amount of tokens to melt
+   * @param {OutputValueType} amount The amount of tokens to melt
    * @param {IStorage} storage The storage object
    * @param {Object} [options={}] Options to create the melt transaction
    * @param {boolean} [options.createAnotherMelt=true] If should create another melt authority
@@ -450,7 +457,7 @@ const tokens = {
     token: string,
     authorityMeltInput: IDataInput, // Authority melt
     address: string,
-    amount: number,
+    amount: OutputValueType,
     storage: IStorage,
     {
       createAnotherMelt = true,
@@ -608,7 +615,7 @@ const tokens = {
    * @param {string} address Address to create the token
    * @param {string} name Name of the token being created
    * @param {string} symbol Symbol of the token being created
-   * @param {number} mintAmount Amount of tokens to mint
+   * @param {OutputValueType} mintAmount Amount of tokens to mint
    * @param {IStorage} storage Storage to get necessary data
    * @param {Object} [options={}] options to create the token
    * @param {string|null} [options.changeAddress=null] Address to send the change
@@ -624,7 +631,7 @@ const tokens = {
     address: string,
     name: string,
     symbol: string,
-    mintAmount: number,
+    mintAmount: OutputValueType,
     storage: IStorage,
     {
       changeAddress = null,

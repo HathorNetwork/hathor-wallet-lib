@@ -38,6 +38,7 @@ import {
   IUtxoId,
   IInputSignature,
   ITxSignatureData,
+  OutputValueType,
 } from '../types';
 import Address from '../models/address';
 import P2PKH from '../models/p2pkh';
@@ -247,7 +248,10 @@ const transaction = {
    * @memberof transaction
    * @inner
    */
-  selectUtxos(utxos: Utxo[], totalAmount: number): { utxos: Utxo[]; changeAmount: number } {
+  selectUtxos(
+    utxos: Utxo[],
+    totalAmount: OutputValueType
+  ): { utxos: Utxo[]; changeAmount: OutputValueType } {
     if (totalAmount <= 0) {
       throw new UtxoError('Total amount must be a positive integer.');
     }
@@ -413,7 +417,7 @@ const transaction = {
   async calculateTxBalanceToFillTx(
     token: string,
     tx: IDataTx
-  ): Promise<Record<'funds' | 'mint' | 'melt', number>> {
+  ): Promise<Record<'funds' | 'mint' | 'melt', OutputValueType>> {
     const balance = { funds: 0, mint: 0, melt: 0 };
     for (const output of tx.outputs) {
       if (isDataOutputCreateToken(output)) {
@@ -609,9 +613,9 @@ const transaction = {
    * Calculate the authorities data for an output
    *
    * @param output History output
-   * @returns {number} Authorities from output
+   * @returns {OutputValueType} Authorities from output
    */
-  authoritiesFromOutput(output: Pick<IHistoryOutput, 'token_data' | 'value'>): number {
+  authoritiesFromOutput(output: Pick<IHistoryOutput, 'token_data' | 'value'>): OutputValueType {
     let authorities = 0;
     if (this.isMint(output)) {
       authorities |= TOKEN_MINT_MASK;

@@ -28,6 +28,7 @@ import {
 } from '../utils/buffer';
 import { prettyValue } from '../utils/numbers';
 import { parseScript as utilsParseScript } from '../utils/scripts';
+import { OutputValueType } from '../types';
 
 type optionsType = {
   tokenData?: number | undefined;
@@ -43,7 +44,7 @@ export const MAXIMUM_SCRIPT_LENGTH: number = 256;
 
 class Output {
   // Output value as an integer
-  value: number;
+  value: OutputValueType;
 
   // tokenData of the output
   tokenData: number;
@@ -54,7 +55,7 @@ class Output {
   // Decoded output script
   decodedScript: P2PKH | P2SH | ScriptData | null;
 
-  constructor(value: number, script: Buffer, options: optionsType = {}) {
+  constructor(value: OutputValueType, script: Buffer, options: optionsType = {}) {
     const defaultOptions = {
       tokenData: 0,
     };
