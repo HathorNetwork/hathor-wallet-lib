@@ -21,7 +21,7 @@ import axiosWrapperCreateRequestInstance from './axiosWrapper';
  * @param {callback} resolve Callback to be stored and used in case of a retry after a fail
  * @param {number} timeout Timeout in milliseconds for the request
  */
-export const defaultCreateRequestInstance = (resolve, timeout) => {
+export const defaultCreateRequestInstance = (resolve?: null, timeout?: number) => {
   return axiosWrapperCreateRequestInstance(config.getServerUrl(), resolve, timeout);
 };
 
@@ -31,6 +31,6 @@ export const registerNewCreateRequestInstance = fn => {
   _createRequestInstance = fn;
 };
 
-export const createRequestInstance = (resolve, timeout) => {
+export const createRequestInstance = (resolve?: null, timeout?: number) => {
   return _createRequestInstance(resolve, timeout);
 };

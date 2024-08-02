@@ -52,7 +52,8 @@ const txApi = {
    * @inner
    */
   getTransactions(type, count, timestamp, hash, page, resolve) {
-    const data = { type, count };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data: any = { type, count };
     if (hash) {
       data.hash = hash;
       data.timestamp = timestamp;
