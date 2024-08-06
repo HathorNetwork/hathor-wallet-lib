@@ -2,7 +2,6 @@ name: Sync Release with Master
 
 # Triggered when a new version is released publicly
 on:
-  workflow_dispatch:
   release:
     types: [ released ]
 
