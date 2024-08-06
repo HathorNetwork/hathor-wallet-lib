@@ -39,7 +39,6 @@ describe('handleStop', () => {
     networkName: 'testnet',
   });
 
-  /* eslint-disable jest/expect-expect -- All expect assertions are inside the helper function */
   it('should work with memory store', async () => {
     const store = new MemoryStore();
     await handleStopTest(store);
@@ -50,7 +49,6 @@ describe('handleStop', () => {
     const store = new LevelDBStore(walletId, DATA_DIR);
     await handleStopTest(store);
   }, 20000);
-  /* eslint-enable jest/expect-expect */
 
   /**
    * @param {IStore} store
@@ -408,7 +406,6 @@ test('utxos selected as inputs', async () => {
 });
 
 describe('process locked utxos', () => {
-  /* eslint-disable jest/expect-expect -- All expect assertions are inside the helper function */
   it('should work with memory store', async () => {
     const store = new MemoryStore();
     await processLockedUtxoTest(store);
@@ -420,7 +417,6 @@ describe('process locked utxos', () => {
     const store = new LevelDBStore(walletId, DATA_DIR);
     await processLockedUtxoTest(store);
   });
-  /* eslint-enable jest/expect-expect */
 
   function getLockedUtxo(txId, address, timelock, height, value, token, token_data) {
     return {
@@ -646,7 +642,6 @@ describe('process locked utxos', () => {
 });
 
 describe('getChangeAddress', () => {
-  /* eslint-disable jest/expect-expect -- All expect assertions are inside the helper function */
   it('should work with memory store', async () => {
     const store = new MemoryStore();
     await getChangeAddressTest(store);
@@ -658,7 +653,6 @@ describe('getChangeAddress', () => {
     const store = new LevelDBStore(walletId, DATA_DIR);
     await getChangeAddressTest(store);
   });
-  /* eslint-enable jest/expect-expect */
 
   async function getChangeAddressTest(store) {
     const storage = new Storage(store);
@@ -682,7 +676,6 @@ describe('getChangeAddress', () => {
 });
 
 describe('getAcctPathXpriv', () => {
-  /* eslint-disable jest/expect-expect -- All expect assertions are inside the helper function */
   it('should work with memory store', async () => {
     const store = new MemoryStore();
     await getAcctXprivTest(store);
@@ -694,7 +687,6 @@ describe('getAcctPathXpriv', () => {
     const store = new LevelDBStore(walletId, DATA_DIR);
     await getAcctXprivTest(store);
   });
-  /* eslint-enable jest/expect-expect */
 
   /**
    * Test the method to get account path xpriv on any IStore
@@ -739,7 +731,6 @@ describe('access data methods', () => {
   const acctKey = rootXpriv.deriveNonCompliantChild(P2PKH_ACCT_PATH);
   const mainKey = acctKey.deriveNonCompliantChild(0);
 
-  /* eslint-disable jest/expect-expect -- All expect assertions are inside the helper function */
   it('should work with memory store', async () => {
     const store = new MemoryStore();
     await accessDataTest(store);
@@ -750,7 +741,6 @@ describe('access data methods', () => {
     const store = new LevelDBStore(walletId, DATA_DIR);
     await accessDataTest(store);
   });
-  /* eslint-enable jest/expect-expect */
 
   async function accessDataTest(store) {
     await store.saveAccessData(accessData);
@@ -818,7 +808,6 @@ describe('checkPin and checkPassword', () => {
   const PINCODE = '1234';
   const PASSWD = 'passwd';
 
-  /* eslint-disable jest/expect-expect -- All expect assertions are inside the helper functions */
   it('should work with memory store', async () => {
     const seed = walletUtils.generateWalletWords();
     const accessData = walletUtils.generateAccessDataFromSeed(seed, {
@@ -845,7 +834,6 @@ describe('checkPin and checkPassword', () => {
     await checkPinTest(store);
     await checkPasswdTest(store);
   });
-  /* eslint-enable jest/expect-expect */
 
   async function checkPinTest(store) {
     const storage = new Storage(store);
@@ -909,7 +897,6 @@ test('isHardware', async () => {
 });
 
 describe('utxo selection in all stores', () => {
-  /* eslint-disable jest/expect-expect -- All expect assertions are inside the helper function */
   it('should work with memory store', async () => {
     const store = new MemoryStore();
     await testSelectUtxos(store);
@@ -921,7 +908,6 @@ describe('utxo selection in all stores', () => {
     const store = new LevelDBStore(walletId, DATA_DIR);
     await testSelectUtxos(store);
   });
-  /* eslint-enable jest/expect-expect */
 
   async function testSelectUtxos(store) {
     const storage = new Storage(store);
@@ -1081,7 +1067,6 @@ describe('utxo selection in all stores', () => {
 });
 
 describe('scanning policy methods', () => {
-  /* eslint-disable jest/expect-expect -- All expect assertions are inside the helper function */
   it('should work with memory store', async () => {
     const store = new MemoryStore();
     await testScanningPolicy(store);
@@ -1093,7 +1078,6 @@ describe('scanning policy methods', () => {
     const store = new LevelDBStore(walletId, DATA_DIR);
     await testScanningPolicy(store);
   });
-  /* eslint-enable jest/expect-expect */
 
   async function testScanningPolicy(store) {
     const storage = new Storage(store);

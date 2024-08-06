@@ -95,7 +95,6 @@ describe('locked utxos', () => {
     await expect(hwallet.storage.isUtxoSelectedAsInput(utxoId)).resolves.toBe(false);
   }
 
-  // eslint-disable-next-line jest/expect-expect -- All tests are inside the helper function
   it('should unselect as input when spent', async () => {
     // memory store
     const walletDataMem = precalculationHelpers.test.getPrecalculatedWallet();

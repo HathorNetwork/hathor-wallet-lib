@@ -27,7 +27,6 @@ describe('locked utxo methods', () => {
     spyDate.mockRestore();
   });
 
-  /* eslint-disable jest/expect-expect -- All expect assertions are inside the helper function */
   it('should work with memory store', async () => {
     const store = new MemoryStore();
     await testLockedUtxoMethods(store);
@@ -39,7 +38,6 @@ describe('locked utxo methods', () => {
     const store = new LevelDBStore(walletId, DATA_DIR);
     await testLockedUtxoMethods(store);
   });
-  /* eslint-enable jest/expect-expect */
 
   // helper functions
 
@@ -172,7 +170,6 @@ describe('locked utxo methods', () => {
 });
 
 describe('registered tokens', () => {
-  /* eslint-disable jest/expect-expect -- All expect assertions are inside the helper function */
   it('should work with memory store', async () => {
     const store = new MemoryStore();
     await testRegisteredTokens(store);
@@ -184,7 +181,6 @@ describe('registered tokens', () => {
     const store = new LevelDBStore(walletId, DATA_DIR);
     await testRegisteredTokens(store);
   });
-  /* eslint-enable jest/expect-expect */
 
   async function testRegisteredTokens(store) {
     const storage = new Storage(store);
@@ -195,7 +191,6 @@ describe('registered tokens', () => {
 });
 
 describe('scanning policy methods', () => {
-  /* eslint-disable jest/expect-expect -- All expect assertions are inside the helper function */
   it('should work with memory store', async () => {
     const store = new MemoryStore();
     await testScanningPolicies(store);
@@ -207,7 +202,6 @@ describe('scanning policy methods', () => {
     const store = new LevelDBStore(walletId, DATA_DIR);
     await testScanningPolicies(store);
   });
-  /* eslint-enable jest/expect-expect */
 
   async function testScanningPolicies(store) {
     const storage = new Storage(store);

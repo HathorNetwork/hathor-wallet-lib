@@ -166,7 +166,6 @@ describe('bestUtxoSelection', () => {
     });
   }
 
-  /* eslint-disable jest/expect-expect -- All expect assertions are inside the helper function */
   test('bestUtxoSelection with memory store', async () => {
     const store = new MemoryStore();
     await testBestUtxoSelection(store);
@@ -178,7 +177,6 @@ describe('bestUtxoSelection', () => {
     const store = new LevelDBStore(walletId, DATA_DIR);
     await testBestUtxoSelection(store);
   });
-  /* eslint-enable jest/expect-expect */
 
   /**
    * Should select the highest utxos until the amount is fulfilled
@@ -277,7 +275,6 @@ describe('bestUtxoSelection', () => {
     });
   }
 
-  /* eslint-disable jest/expect-expect -- All expect assertions are inside the helper function */
   test('fastUtxoSelection with memory store', async () => {
     const store = new MemoryStore();
     await testFastUtxoSelection(store);
@@ -289,5 +286,4 @@ describe('bestUtxoSelection', () => {
     const store = new LevelDBStore(walletId, DATA_DIR);
     await testFastUtxoSelection(store);
   });
-  /* eslint-enable jest/expect-expect */
 });
