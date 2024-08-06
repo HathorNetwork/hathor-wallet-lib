@@ -712,6 +712,7 @@ describe('addresses methods', () => {
 
       // Validating gap limit
       if (i === 22) {
+        // eslint-disable-next-line jest/no-conditional-expect -- This is already the simplest way to test the gap limit
         expect(genResults).toStrictEqual({
           done: true,
           value: undefined,

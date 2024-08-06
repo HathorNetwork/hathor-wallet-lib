@@ -3,7 +3,7 @@ import Network from '../../src/models/network';
 import helpers from '../../src/utils/helpers';
 import MineTransaction from '../../src/wallet/mineTransaction';
 
-test('Handle Rate Limit', done => {
+test('Handle Rate Limit', async () => {
   global.mock.onPost('submit-job').replyOnce(() => {
     return [429];
   });
@@ -15,25 +15,24 @@ test('Handle Rate Limit', done => {
 
   const network = new Network('testnet');
   const tx = helpers.createTxFromHex(rawTx, network);
-  const messagesValidated = {};
-  function validateErrorMessages(source: string) {
-    messagesValidated[source] = true;
 
-    // We should wait until both handlers receive the error with the correct message
-    if (Object.keys(messagesValidated).length === 2) {
-      done();
-    }
-  }
-
+  // Build the mining promise
+  let mainPromiseErr: unknown;
+  let eventErr: unknown;
   const mineTransaction = new MineTransaction(tx, { maxTxMiningRetries: 1 });
-  mineTransaction.promise.catch(e => {
-    expect(e?.message).toBe(expectedErrorMessage);
-    validateErrorMessages('promise');
+  const mineTxPromise = mineTransaction.promise;
+
+  // Setup the event error message validation
+  mineTransaction.on('error', (message: string) => {
+    eventErr = { message };
   });
-  mineTransaction.on('error', message => {
-    expect(message).toBe(expectedErrorMessage);
-    validateErrorMessages('error_event');
+  mineTransaction.start();
+
+  // Handling the MineTransaction object internal promise ( failure to do so would crash the test )
+  await mineTxPromise.catch(e => {
+    mainPromiseErr = e;
   });
 
-  mineTransaction.start();
+  expect(mainPromiseErr).toHaveProperty('message', expectedErrorMessage);
+  expect(eventErr).toHaveProperty('message', expectedErrorMessage);
 });
