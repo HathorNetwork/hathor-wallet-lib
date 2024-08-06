@@ -2,6 +2,7 @@
  * This file is a placeholder logger to replace winston while we discuss if we
  * want to have it as a dev-dependency or not.
  */
+/* eslint-disable max-classes-per-file */
 
 function getStringifiedLogObject(message, metadata) {
   const timestamp = new Date().toISOString();
@@ -18,6 +19,7 @@ export default class PlaceholderLoggerUtil {
     json: () => {},
   };
 
+  /* eslint-disable no-useless-constructor,no-empty-function -- These are just mock functions */
   static transports = {
     Console: class FakeConsole {
       constructor() {}
@@ -26,6 +28,7 @@ export default class PlaceholderLoggerUtil {
       constructor() {}
     },
   };
+  /* eslint-enable no-useless-constructor,no-empty-function */
 
   static createLogger() {
     return {

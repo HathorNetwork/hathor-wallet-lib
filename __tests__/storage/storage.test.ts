@@ -301,6 +301,7 @@ test('store fetch methods', async () => {
   await expect(storage.isAddressMine('WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ')).resolves.toBe(true);
   await expect(storage.isAddressMine('WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAA')).resolves.toBe(false);
 
+  // eslint-disable-next-line no-empty-function -- This is just a mock function
   async function* emptyIter() {}
   const historySpy = jest.spyOn(store, 'historyIter').mockImplementation(emptyIter);
   for await (const _ of storage.txHistory()) {

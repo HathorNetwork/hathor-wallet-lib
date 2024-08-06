@@ -276,11 +276,10 @@ export function waitForWalletReady(hWallet) {
  */
 export async function waitForTxReceived(hWallet, txId, timeout) {
   const startTime = Date.now().valueOf();
-  let timeoutHandler;
   let timeoutReached = false;
   const timeoutPeriod = timeout || TX_TIMEOUT_DEFAULT;
   // Timeout handler
-  timeoutHandler = setTimeout(() => {
+  const timeoutHandler = setTimeout(() => {
     timeoutReached = true;
   }, timeoutPeriod);
 

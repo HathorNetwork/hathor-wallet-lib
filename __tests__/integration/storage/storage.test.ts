@@ -16,6 +16,7 @@ import { LevelDBStore, MemoryStore, Storage } from '../../../src/storage';
 import walletUtils from '../../../src/utils/wallet';
 import transactionUtils from '../../../src/utils/transaction';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
+import { IHathorWallet } from '../../../src/wallet/types';
 
 const startedWallets = [];
 
@@ -23,10 +24,12 @@ const startedWallets = [];
  * Helper to stop wallets started manually in this test file.
  */
 async function stopWallets() {
-  let hWallet;
-  while ((hWallet = startedWallets.pop())) {
+  while (startedWallets.length > 0) {
+    const hWallet = startedWallets.pop() as unknown as IHathorWallet;
     try {
-      await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
+      if (hWallet) {
+        await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
+      }
     } catch (e) {
       loggers.test.error(e.stack);
     }
