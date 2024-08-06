@@ -363,7 +363,7 @@ test('setSignatures', async () => {
   testStorage.config.setNetwork('testnet');
 
   const proposal = new PartialTxProposal(testStorage);
-  // @ts-ignore
+  // @ts-expect-error -- Testing invalid inputs
   const spyProposalTx = jest.spyOn(proposal.partialTx, 'getTx').mockImplementation(() => ({
     getDataToSign: () => 'hexHash',
     inputs: { length: 2 },

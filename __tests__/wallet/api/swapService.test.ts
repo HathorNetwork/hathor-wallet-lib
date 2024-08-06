@@ -24,14 +24,14 @@ describe('hashing and encrypting', () => {
   it('should reject calls with missing parameters', () => {
     const originalString = 'PartialTx|123123||';
 
-    // @ts-ignore
+    // @ts-expect-error -- Testing invalid inputs
     expect(() => encryptString()).toThrow('Missing encrypted string');
-    // @ts-ignore
+    // @ts-expect-error -- Testing invalid inputs
     expect(() => encryptString(originalString)).toThrow('Missing password');
 
-    // @ts-ignore
+    // @ts-expect-error -- Testing invalid inputs
     expect(() => decryptString()).toThrow('Missing encrypted string');
-    // @ts-ignore
+    // @ts-expect-error -- Testing invalid inputs
     expect(() => decryptString(originalString)).toThrow('Missing password');
   });
 
@@ -67,7 +67,7 @@ describe('base url configuration', () => {
   });
 
   it('should throw when an invalid network is requested', () => {
-    // @ts-ignore
+    // @ts-expect-error -- Testing invalid inputs
     expect(() => config.getSwapServiceBaseUrl('invalid')).toThrow(
       `Network invalid doesn't have a correspondent Atomic Swap Service url. You should set it explicitly by calling setSwapServiceBaseUrl.`
     );
@@ -81,10 +81,10 @@ describe('base url configuration', () => {
 
 describe('create api', () => {
   it('should throw missing parameter errors', async () => {
-    // @ts-ignore
+    // @ts-expect-error -- Testing invalid inputs
     await expect(create()).rejects.toThrow('Missing serializedPartialTx');
-    // @ts-ignore
     await expect(
+      // @ts-expect-error -- Testing invalid inputs
       create('PartialTx|0001000000000000000000000063f78c0e0000000000||')
     ).rejects.toThrow('Missing password');
   });
@@ -114,9 +114,9 @@ describe('create api', () => {
 
 describe('get api', () => {
   it('should throw missing parameter errors', async () => {
-    // @ts-ignore
+    // @ts-expect-error -- Testing invalid inputs
     await expect(get()).rejects.toThrow('Missing proposalId');
-    // @ts-ignore
+    // @ts-expect-error -- Testing invalid inputs
     await expect(get('b4a5b077-c599-41e8-a791-85e08efcb1da')).rejects.toThrow('Missing password');
   });
 
@@ -286,37 +286,37 @@ describe('get api', () => {
 
 describe('update api', () => {
   it('should throw missing parameter errors', async () => {
-    // @ts-ignore
+    // @ts-expect-error -- Testing invalid inputs
     await expect(update()).rejects.toThrow('Missing mandatory parameters');
-    // @ts-ignore
+    // @ts-expect-error -- Testing invalid inputs
     await expect(update({})).rejects.toThrow('proposalId');
-    // @ts-ignore
     await expect(
+      // @ts-expect-error -- Testing invalid inputs
       update({
         proposalId: 'abc',
       })
     ).rejects.toThrow('password');
-    // @ts-ignore
     await expect(
+      // @ts-expect-error -- Testing invalid inputs
       update({
         proposalId: 'abc',
         password: '123',
       })
     ).rejects.toThrow('partialTx');
-    // @ts-ignore
     await expect(
+      // @ts-expect-error -- Testing invalid inputs
       update({
         proposalId: 'abc',
         password: '123',
         partialTx: 'abc123',
       })
     ).rejects.toThrow('version');
-    // @ts-ignore
     await expect(
       update({
         proposalId: 'abc',
         password: '123',
         partialTx: 'abc123',
+        // @ts-expect-error -- Testing invalid inputs
         version: 'a',
       })
     ).rejects.toThrow('Invalid version number');
