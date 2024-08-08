@@ -1,8 +1,8 @@
+import { Server, WebSocket } from 'mock-socket';
 import HathorWallet from '../src/new/wallet';
 import Connection from '../src/new/connection';
 import { MemoryStore, Storage } from '../src/storage';
 import { HistorySyncMode } from '../src/types';
-import { Server, WebSocket } from 'mock-socket';
 
 const mock_tx = {
   tx_id: '00002f4c8d6516ee0c39437f30d9f20231f88652aacc263bc738f55c412cf5ee',
@@ -78,7 +78,7 @@ function makeServerMock(mockServer, mockType) {
 
   mockServer.on('connection', socket => {
     socket.on('message', data => {
-      let jsonData = JSON.parse(data);
+      const jsonData = JSON.parse(data);
       if (jsonData.type === 'subscribe_address') {
         // Only for testing purposes
         socket.send(JSON.stringify({ type: 'subscribe_success', address: jsonData.address }));
@@ -139,10 +139,12 @@ describe('Websocket stream history sync', () => {
         if (wallet.isReady()) {
           break;
         }
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => {
+          setTimeout(resolve, 100);
+        });
       }
       // Check balance
-      expect(wallet.getBalance('00')).resolves.toEqual([
+      await expect(wallet.getBalance('00')).resolves.toEqual([
         expect.objectContaining({
           token: expect.objectContaining({ id: '00' }),
           balance: { locked: 0, unlocked: 100 },
@@ -165,10 +167,12 @@ describe('Websocket stream history sync', () => {
         if (wallet.isReady()) {
           break;
         }
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => {
+          setTimeout(resolve, 100);
+        });
       }
       // Check balance
-      expect(wallet.getBalance('00')).resolves.toEqual([
+      await expect(wallet.getBalance('00')).resolves.toEqual([
         expect.objectContaining({
           token: expect.objectContaining({ id: '00' }),
           balance: { locked: 0, unlocked: 100 },
@@ -187,7 +191,9 @@ describe('Websocket stream history sync', () => {
     makeServerMock(mockServer, SERVER_MOCK_TYPE.error);
     const wallet = await startWalletFor(HistorySyncMode.XPUB_STREAM_WS);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => {
+        setTimeout(resolve, 1000);
+      });
       expect(wallet.state).toBe(HathorWallet.ERROR);
     } finally {
       await wallet.stop();
@@ -201,11 +207,15 @@ describe('Websocket stream history sync', () => {
     const wallet = await startWalletFor(HistorySyncMode.XPUB_STREAM_WS);
     try {
       // Await some time so the wallet can start the streamming.
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => {
+        setTimeout(resolve, 1000);
+      });
       // Abort the stream.
       await wallet.conn.stopStream();
       // Await the stream to stop and the wallet to go into error.
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => {
+        setTimeout(resolve, 100);
+      });
       expect(wallet.state).toBe(HathorWallet.ERROR);
     } finally {
       await wallet.stop();
