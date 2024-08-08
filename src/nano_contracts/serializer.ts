@@ -54,8 +54,14 @@ class Serializer {
       case 'str':
         return this.fromString(value as string);
       case 'bytes':
+      case 'Address':
+      case 'VertexId':
+      case 'TxOutputScript':
+      case 'TokenUid':
         return this.fromBytes(value as Buffer);
       case 'int':
+      case 'Amount':
+      case 'Timestamp':
         return this.fromInt(value as number);
       case 'float':
         return this.fromFloat(value as number);
