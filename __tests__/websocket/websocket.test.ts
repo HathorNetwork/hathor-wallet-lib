@@ -46,9 +46,11 @@ describe('onMessage', () => {
 
   it('should receive messages after initializing the timeoutTimer', () => {
     const wsInstance = new GenericWebSocket(baseWsOptions);
+    const msgSpy = jest.spyOn(wsInstance, 'onMessage').mockImplementation(jest.fn());
 
     wsInstance.sendPing();
     wsInstance.onMessage({ data: JSON.stringify({ type: 'other' }) });
+    expect(msgSpy).toHaveBeenCalled();
   });
 
   it('should re-emit messages with their same type', () => {

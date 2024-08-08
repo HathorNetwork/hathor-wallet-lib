@@ -95,6 +95,32 @@ module.exports = {
       },
       plugins: ['jest'],
       extends: ['plugin:jest/recommended'], // Use recommended Jest rules
+      rules: {
+        "jest/expect-expect": [
+          'error',
+          {
+            assertFunctionNames: [
+              'expect',
+              'executeTests', // from NanoContracts bet tests
+              'testUnlockWhenSpent', // from Nano contracts Storage tests
+              'testLockedUtxoMethods', // from Common Store tests
+              'testRegisteredTokens', // from Common Store tests
+              'testScanningPolicies', // from Common Store tests
+              'testBestUtxoSelection', // from utxo test
+              'testFastUtxoSelection', // from utxo test
+              'handleStopTest', // from storage test
+              'processLockedUtxoTest', // from storage test
+              'getChangeAddressTest', // from storage test
+              'getAcctXprivTest', // from storage test
+              'accessDataTest', // from storage test
+              'checkPinTest', // from storage test
+              'checkPasswdTest', // from storage test
+              'testSelectUtxos', // from storage test
+              'testScanningPolicy', // from storage test
+            ],
+          },
+        ],
+      },
     },
   ],
 };
