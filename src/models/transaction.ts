@@ -34,6 +34,7 @@ import Input from './input';
 import Output from './output';
 import Network from './network';
 import { MaximumNumberInputsError, MaximumNumberOutputsError } from '../errors';
+import { OutputValueType } from '../types';
 
 enum txType {
   BLOCK = 'Block',
@@ -318,7 +319,7 @@ class Transaction {
    * @memberof Transaction
    * @inner
    */
-  getOutputsSum(): number {
+  getOutputsSum(): OutputValueType {
     let sumOutputs = 0;
     for (const output of this.outputs) {
       if (output.isAuthority()) {

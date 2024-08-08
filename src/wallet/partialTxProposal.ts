@@ -19,7 +19,7 @@ import dateFormatter from '../utils/date';
 
 import { OutputType, Utxo } from './types';
 import { Balance } from '../models/types';
-import { IStorage } from '../types';
+import { IStorage, OutputValueType } from '../types';
 
 class PartialTxProposal {
   public partialTx: PartialTx;
@@ -63,7 +63,7 @@ class PartialTxProposal {
    * Add inputs sending the amount of tokens specified, may add a change output.
    *
    * @param {string} token UID of token that is being sent
-   * @param {number} value Quantity of tokens being sent
+   * @param {OutputValueType} value Quantity of tokens being sent
    * @param {Object} [options]
    * @param {Utxo[]|null} [options.utxos=[]] utxos to add to the partial transaction.
    * @param {string|null} [options.changeAddress=null] If we add change, use this address instead of getting a new one from the wallet.
@@ -71,7 +71,7 @@ class PartialTxProposal {
    */
   async addSend(
     token: string,
-    value: number,
+    value: OutputValueType,
     {
       utxos = [],
       changeAddress = null,
@@ -129,7 +129,7 @@ class PartialTxProposal {
    * Add outputs receiving the amount of tokens specified.
    *
    * @param {string} token UID of token that is being sent
-   * @param {number} value Quantity of tokens being sent
+   * @param {OutputValueType} value Quantity of tokens being sent
    * @param {Object} [options]
    * @param {number|null} [options.timelock=null] UNIX timestamp of the timelock.
    * @param {string|null} [options.address=null] Output address to receive the tokens.
@@ -137,7 +137,7 @@ class PartialTxProposal {
    */
   async addReceive(
     token: string,
-    value: number,
+    value: OutputValueType,
     { timelock = null, address = null }: { timelock?: number | null; address?: string | null } = {}
   ) {
     this.resetSignatures();
@@ -152,17 +152,17 @@ class PartialTxProposal {
    *
    * @param {string} hash Transaction hash
    * @param {number} index UTXO index on the outputs of the transaction.
-   * @param {number} value UTXO value.
+   * @param {OutputValueType} value UTXO value.
    * @param {Object} [options]
    * @param {string} [options.token='00'] Token UID in hex format.
-   * @param {number} [options.authorities=0] Authority information of the UTXO.
+   * @param {OutputValueType} [options.authorities=0] Authority information of the UTXO.
    * @param {string|null} [options.address=null] Address that owns the UTXO.
    * @param {boolean} [options.markAsSelected=true] Mark the utxo with `selected_as_input`.
    */
   addInput(
     hash: string,
     index: number,
-    value: number,
+    value: OutputValueType,
     address: string,
     {
       token = NATIVE_TOKEN_UID,
@@ -170,7 +170,7 @@ class PartialTxProposal {
       markAsSelected = true,
     }: {
       token?: string;
-      authorities?: number;
+      authorities?: OutputValueType;
       markAsSelected?: boolean;
     } = {}
   ) {
@@ -187,24 +187,24 @@ class PartialTxProposal {
    * Add an output to the partial data.
    *
    * @param {string} token UID of token that is being sent.
-   * @param {number} value Quantity of tokens being sent.
+   * @param {OutputValueType} value Quantity of tokens being sent.
    * @param {string} address Create the output script for this address.
    * @param {Object} [options]
    * @param {number|null} [options.timelock=null] UNIX timestamp of the timelock.
    * @param {boolean} [options.isChange=false] If the output should be considered as change.
-   * @param {number} [options.authorities=0] Authority information of the Output.
+   * @param {OutputValueType} [options.authorities=0] Authority information of the Output.
    *
    * @throws AddressError
    */
   addOutput(
     token: string,
-    value: number,
+    value: OutputValueType,
     address: string,
     {
       timelock = null,
       isChange = false,
       authorities = 0,
-    }: { timelock?: number | null; isChange?: boolean; authorities?: number } = {}
+    }: { timelock?: number | null; isChange?: boolean; authorities?: OutputValueType } = {}
   ) {
     this.resetSignatures();
 

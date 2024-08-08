@@ -24,6 +24,7 @@ import {
   IUtxoSelectionOptions,
   isDataOutputCreateToken,
   WalletType,
+  OutputValueType,
 } from '../types';
 import Transaction from '../models/transaction';
 import { bestUtxoSelection } from '../utils/utxo';
@@ -47,7 +48,7 @@ export function isDataOutput(output: ISendOutput): output is ISendDataOutput {
 export interface ISendTokenOutput {
   type: OutputType.P2PKH | OutputType.P2SH;
   address: string;
-  value: number;
+  value: OutputValueType;
   token: string;
   timelock?: number | null;
 }

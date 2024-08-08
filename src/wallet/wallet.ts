@@ -70,7 +70,7 @@ import {
   UninitializedWalletError,
 } from '../errors';
 import { ErrorMessages } from '../errorMessages';
-import { IStorage, IWalletAccessData } from '../types';
+import { IStorage, IWalletAccessData, OutputValueType } from '../types';
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
@@ -575,7 +575,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    *
    * @return {Object} Object with each token and it's balance in this tx for this wallet
    * */
-  async getTxBalance(tx: WsTransaction, optionsParam = {}): Promise<{ [tokenId: string]: number }> {
+  async getTxBalance(
+    tx: WsTransaction,
+    optionsParam = {}
+  ): Promise<{ [tokenId: string]: OutputValueType }> {
     const options = { includeAuthorities: false, ...optionsParam };
 
     const addresses: string[] = [];
@@ -590,7 +593,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       nextAddress = await generator.next();
     }
 
-    const balance = {};
+    const balance: { [tokenId: string]: OutputValueType } = {};
     for (const txout of tx.outputs) {
       if (transaction.isAuthorityOutput(txout)) {
         if (options.includeAuthorities) {
@@ -819,17 +822,17 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async getUtxos(
     options: {
       tokenId?: string;
-      authority?: number;
+      authority?: OutputValueType;
       addresses?: string[];
-      totalAmount?: number;
+      totalAmount?: OutputValueType;
       count?: number;
     } = {}
-  ): Promise<{ utxos: Utxo[]; changeAmount: number }> {
+  ): Promise<{ utxos: Utxo[]; changeAmount: OutputValueType }> {
     type optionsType = {
       tokenId: string;
-      authority: number | null;
+      authority: OutputValueType | null;
       addresses: string[] | null;
-      totalAmount: number | null;
+      totalAmount: OutputValueType | null;
       count: number;
       ignoreLocked: true;
       skipSpent: true;
@@ -1002,7 +1005,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    */
   async sendTransaction(
     address: string,
-    value: number,
+    value: OutputValueType,
     options: { token?: string; changeAddress?: string; pinCode?: string } = {}
   ): Promise<Transaction> {
     this.failIfWalletNotReady();
@@ -1222,7 +1225,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async prepareCreateNewToken(
     name: string,
     symbol: string,
-    amount: number,
+    amount: OutputValueType,
     options = {}
   ): Promise<CreateTokenTransaction> {
     this.failIfWalletNotReady();
@@ -1407,7 +1410,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    */
   async _getAuthorityTxOutput(options: {
     tokenId: string;
-    authority: number;
+    authority: OutputValueType;
     skipSpent: boolean;
     maxOutputs?: number;
   }): Promise<AuthorityTxOutput[]> {
@@ -1486,7 +1489,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async createNewToken(
     name: string,
     symbol: string,
-    amount: number,
+    amount: OutputValueType,
     options = {}
   ): Promise<Transaction> {
     this.failIfWalletNotReady();
@@ -1500,7 +1503,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async prepareMintTokensData(token: string, amount: number, options = {}): Promise<Transaction> {
+  async prepareMintTokensData(
+    token: string,
+    amount: OutputValueType,
+    options = {}
+  ): Promise<Transaction> {
     this.failIfWalletNotReady();
     type optionsType = {
       address: string | null;
@@ -1637,7 +1644,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async mintTokens(token: string, amount: number, options = {}): Promise<Transaction> {
+  async mintTokens(token: string, amount: OutputValueType, options = {}): Promise<Transaction> {
     this.failIfWalletNotReady();
     const tx = await this.prepareMintTokensData(token, amount, options);
     return this.handleSendPreparedTransaction(tx);
@@ -1664,7 +1671,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async prepareMeltTokensData(token: string, amount: number, options = {}): Promise<Transaction> {
+  async prepareMeltTokensData(
+    token: string,
+    amount: OutputValueType,
+    options = {}
+  ): Promise<Transaction> {
     this.failIfWalletNotReady();
     type optionsType = {
       address: string | null;
@@ -1802,7 +1813,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async meltTokens(token: string, amount: number, options = {}): Promise<Transaction> {
+  async meltTokens(token: string, amount: OutputValueType, options = {}): Promise<Transaction> {
     this.failIfWalletNotReady();
     const tx = await this.prepareMeltTokensData(token, amount, options);
     return this.handleSendPreparedTransaction(tx);
@@ -1826,8 +1837,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   ): Promise<Transaction> {
     this.failIfWalletNotReady();
 
-    let authority: number;
-    let mask: number;
+    let authority: OutputValueType;
+    let mask: OutputValueType;
     if (type === 'mint') {
       authority = 1;
       mask = TOKEN_MINT_MASK;
@@ -1933,7 +1944,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   ): Promise<Transaction> {
     this.failIfWalletNotReady();
 
-    let authority: number;
+    let authority: OutputValueType;
     if (type === 'mint') {
       authority = 1;
     } else if (type === 'melt') {
@@ -2009,7 +2020,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async createNFT(
     name: string,
     symbol: string,
-    amount: number,
+    amount: OutputValueType,
     data: string,
     options = {}
   ): Promise<Transaction> {
