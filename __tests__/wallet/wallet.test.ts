@@ -7,7 +7,7 @@
 
 import { Message } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
-import { mockAxiosAdapter } from '../__mocks__/wallet.mock';
+import { mockAxiosAdapter } from '../__mock_helpers__/axios-adapter.mock';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import Network from '../../src/models/network';
 import { GetAddressesObject, WsTransaction, CreateWalletAuthData } from '../../src/wallet/types';
@@ -16,7 +16,7 @@ import {
   buildSuccessTxByIdTokenDataResponse,
   buildWalletToAuthenticateApiCall,
   defaultWalletSeed,
-} from '../__mock_helpers/wallet-service.fixtures';
+} from '../__mock_helpers__/wallet-service.fixtures';
 import { TxNotFoundError, SendTxError } from '../../src/errors';
 import SendTransactionWalletService from '../../src/wallet/sendTransactionWalletService';
 import transaction from '../../src/utils/transaction';
