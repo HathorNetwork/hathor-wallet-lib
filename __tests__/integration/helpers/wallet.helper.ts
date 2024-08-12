@@ -206,14 +206,16 @@ export async function generateMultisigWalletHelper(parameters) {
 }
 
 export async function stopAllWallets() {
-  let hWallet;
+  let hWallet = startedWallets.pop();
+
   // Stop all wallets that were started with this helper
-  while ((hWallet = startedWallets.pop())) {
+  while (hWallet) {
     try {
       await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
     } catch (e) {
       loggers.test.error(e.stack);
     }
+    hWallet = startedWallets.pop();
   }
 }
 
