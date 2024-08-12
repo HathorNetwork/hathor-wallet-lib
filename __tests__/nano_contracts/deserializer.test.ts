@@ -7,6 +7,8 @@
 
 import Serializer from '../../src/nano_contracts/serializer';
 import Deserializer from '../../src/nano_contracts/deserializer';
+import Address from '../../src/models/address';
+import Network from '../../src/models/network';
 
 test('Bool', () => {
   const serializer = new Serializer();
@@ -177,4 +179,16 @@ test('Signed', () => {
   );
 
   expect(valueBoolTrue).toBe(deserializedBoolTrue);
+});
+
+test('Address', () => {
+  const network = new Network('testnet');
+  const deserializer = new Deserializer(network);
+
+  const address = 'WfthPUEecMNRs6eZ2m2EQBpVH6tbqQxYuU';
+  const addressBuffer = new Address(address).decode();
+
+  const deserialized = deserializer.deserializeFromType(addressBuffer, 'Address');
+
+  expect(deserialized).toBe(address);
 });

@@ -91,23 +91,23 @@ describe('full cycle of bet nano contract', () => {
       blueprintId,
       NANO_CONTRACTS_INITIALIZE_METHOD,
       tx1Data.tx.nc_pubkey,
+      network,
       tx1Data.tx.nc_args
     );
     tx1Parser.parseAddress(network);
     await tx1Parser.parseArguments();
     expect(tx1Parser.address.base58).toBe(address0);
     expect(tx1Parser.parsedArgs).toStrictEqual([
-      { name: 'oracle_script', type: 'bytes', parsed: oracleData },
-      { name: 'token_uid', type: 'bytes', parsed: Buffer.from([NATIVE_TOKEN_UID]) },
-      { name: 'date_last_offer', type: 'int', parsed: dateLastBet },
+      { name: 'oracle_script', type: 'TxOutputScript', parsed: oracleData },
+      { name: 'token_uid', type: 'TokenUid', parsed: Buffer.from([NATIVE_TOKEN_UID]) },
+      { name: 'date_last_bet', type: 'Timestamp', parsed: dateLastBet },
     ]);
 
     // Bet 100 to address 2
     const address2 = await wallet.getAddressAtIndex(2);
-    const address2Obj = new Address(address2, { network });
     const txBet = await wallet.createAndSendNanoContractTransaction('bet', address2, {
       ncId: tx1.hash,
-      args: [bufferToHex(address2Obj.decode()), '1x0'],
+      args: [address2, '1x0'],
       actions: [
         {
           type: 'deposit',
@@ -125,13 +125,14 @@ describe('full cycle of bet nano contract', () => {
       blueprintId,
       'bet',
       txBetData.tx.nc_pubkey,
+      network,
       txBetData.tx.nc_args
     );
     txBetParser.parseAddress(network);
     await txBetParser.parseArguments();
     expect(txBetParser.address.base58).toBe(address2);
     expect(txBetParser.parsedArgs).toStrictEqual([
-      { name: 'address', type: 'bytes', parsed: address2Obj.decode() },
+      { name: 'address', type: 'Address', parsed: address2 },
       { name: 'score', type: 'str', parsed: '1x0' },
     ]);
 
@@ -144,10 +145,9 @@ describe('full cycle of bet nano contract', () => {
 
     // Bet 200 to address 3
     const address3 = await wallet.getAddressAtIndex(3);
-    const address3Obj = new Address(address3, { network });
     const txBet2 = await wallet.createAndSendNanoContractTransaction('bet', address3, {
       ncId: tx1.hash,
-      args: [bufferToHex(address3Obj.decode()), '2x0'],
+      args: [address3, '2x0'],
       actions: [
         {
           type: 'deposit',
@@ -164,13 +164,14 @@ describe('full cycle of bet nano contract', () => {
       blueprintId,
       'bet',
       txBet2Data.tx.nc_pubkey,
+      network,
       txBet2Data.tx.nc_args
     );
     txBet2Parser.parseAddress(network);
     await txBet2Parser.parseArguments();
     expect(txBet2Parser.address.base58).toBe(address3);
     expect(txBet2Parser.parsedArgs).toStrictEqual([
-      { name: 'address', type: 'bytes', parsed: address3Obj.decode() },
+      { name: 'address', type: 'Address', parsed: address3 },
       { name: 'score', type: 'str', parsed: '2x0' },
     ]);
 
@@ -188,7 +189,7 @@ describe('full cycle of bet nano contract', () => {
       'total',
       'final_result',
       'oracle_script',
-      'date_last_offer',
+      'date_last_bet',
       `address_details.a'${address2}'`,
       `withdrawals.a'${address2}'`,
       `address_details.a'${address3}'`,
@@ -207,7 +208,7 @@ describe('full cycle of bet nano contract', () => {
     const outputScriptBuffer1 = outputScript.createScript();
 
     expect(ncState.fields.token_uid.value).toBe(NATIVE_TOKEN_UID);
-    expect(ncState.fields.date_last_offer.value).toBe(dateLastBet);
+    expect(ncState.fields.date_last_bet.value).toBe(dateLastBet);
     expect(ncState.fields.oracle_script.value).toBe(bufferToHex(outputScriptBuffer1));
     expect(ncState.fields.final_result.value).toBeNull();
     expect(ncState.fields.total.value).toBe(300);
@@ -234,6 +235,7 @@ describe('full cycle of bet nano contract', () => {
       blueprintId,
       'set_result',
       txSetResultData.tx.nc_pubkey,
+      network,
       txSetResultData.tx.nc_args
     );
     txSetResultParser.parseAddress(network);
@@ -269,6 +271,7 @@ describe('full cycle of bet nano contract', () => {
       blueprintId,
       'set_result',
       txWithdrawalData.tx.nc_pubkey,
+      network,
       txWithdrawalData.tx.nc_args
     );
     txWithdrawalParser.parseAddress(network);
@@ -282,14 +285,14 @@ describe('full cycle of bet nano contract', () => {
       'total',
       'final_result',
       'oracle_script',
-      'date_last_offer',
+      'date_last_bet',
       `address_details.a'${address2}'`,
       `withdrawals.a'${address2}'`,
       `address_details.a'${address3}'`,
       `withdrawals.a'${address3}'`,
     ]);
     expect(ncState2.fields.token_uid.value).toBe(NATIVE_TOKEN_UID);
-    expect(ncState2.fields.date_last_offer.value).toBe(dateLastBet);
+    expect(ncState2.fields.date_last_bet.value).toBe(dateLastBet);
     expect(ncState2.fields.oracle_script.value).toBe(bufferToHex(outputScriptBuffer1));
     expect(ncState2.fields.final_result.value).toBe('1x0');
     expect(ncState2.fields.total.value).toBe(300);
@@ -381,10 +384,9 @@ describe('full cycle of bet nano contract', () => {
 
     // Missing ncId for bet
     const address2 = await hWallet.getAddressAtIndex(2);
-    const address2Obj = new Address(address2, { network });
     await expect(
       hWallet.createAndSendNanoContractTransaction('bet', address2, {
-        args: [bufferToHex(address2Obj.decode()), '1x0'],
+        args: [address2, '1x0'],
         actions: [
           {
             type: 'deposit',
@@ -399,7 +401,7 @@ describe('full cycle of bet nano contract', () => {
     await expect(
       hWallet.createAndSendNanoContractTransaction('bet', address2, {
         ncId: '1234',
-        args: [bufferToHex(address2Obj.decode()), '1x0'],
+        args: [address2, '1x0'],
         actions: [
           {
             type: 'deposit',
@@ -414,7 +416,7 @@ describe('full cycle of bet nano contract', () => {
     await expect(
       hWallet.createAndSendNanoContractTransaction('bet', address2, {
         ncId: fundsTx.hash,
-        args: [bufferToHex(address2Obj.decode()), '1x0'],
+        args: [address2, '1x0'],
         actions: [
           {
             type: 'deposit',
