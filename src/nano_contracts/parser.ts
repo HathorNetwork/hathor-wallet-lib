@@ -30,7 +30,13 @@ class NanoContractTransactionParser {
 
   parsedArgs: NanoContractParsedArgument[] | null;
 
-  constructor(blueprintId: string, method: string, publicKey: string, network: Network, args: string | null) {
+  constructor(
+    blueprintId: string,
+    method: string,
+    publicKey: string,
+    network: Network,
+    args: string | null
+  ) {
     this.blueprintId = blueprintId;
     this.method = method;
     this.publicKey = publicKey;

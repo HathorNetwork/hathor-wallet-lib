@@ -134,7 +134,11 @@ export const getOracleInputData = async (
  * @throws NanoContractTransactionError in case the arguments are not valid
  * @throws NanoRequest404Error in case the blueprint ID does not exist on the full node
  */
-export const validateAndUpdateBlueprintMethodArgs = async (blueprintId: string, method: string, args: NanoContractArgumentType[] | null): Promise<void> => {
+export const validateAndUpdateBlueprintMethodArgs = async (
+  blueprintId: string,
+  method: string,
+  args: NanoContractArgumentType[] | null
+): Promise<void> => {
   // Get the blueprint data from full node
   const blueprintInformation = await ncApi.getBlueprintInformation(blueprintId);
 
