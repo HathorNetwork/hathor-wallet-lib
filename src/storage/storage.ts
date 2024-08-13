@@ -35,6 +35,7 @@ import {
   INcData,
   EcdsaTxSign,
   ITxSignatureData,
+  OutputValueType,
 } from '../types';
 import transactionUtils from '../utils/transaction';
 import { processHistory, processUtxoUnlock } from '../utils/storage';
@@ -467,18 +468,18 @@ export class Storage implements IStorage {
   /**
    * Match the selected balance for the given authority and token.
    *
-   * @param {number} singleBalance The balance we want to match
+   * @param {OutputValueType} singleBalance The balance we want to match
    * @param {string} token The token uid
-   * @param {number} authorities The authorities we want to match
+   * @param {OutputValueType} authorities The authorities we want to match
    * @param {string} changeAddress change address to use
    * @param {boolean} chooseInputs If we can add new inputs to the transaction
    * @returns {Promise<{inputs: IDataInput[], outputs: IDataOutput[]}>} The inputs and outputs that match the balance
    * @internal
    */
   async matchBalanceSelection(
-    singleBalance: number,
+    singleBalance: OutputValueType,
     token: string,
-    authorities: number,
+    authorities: OutputValueType,
     changeAddress: string,
     chooseInputs: boolean
   ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }> {
@@ -583,7 +584,7 @@ export class Storage implements IStorage {
    */
   async matchTokenBalance(
     token: string,
-    balance: Record<'funds' | 'mint' | 'melt', number>,
+    balance: Record<'funds' | 'mint' | 'melt', OutputValueType>,
     { changeAddress, skipAuthorities = true, chooseInputs = true }: IFillTxOptions = {}
   ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }> {
     const addressForChange = changeAddress || (await this.getCurrentAddress());
