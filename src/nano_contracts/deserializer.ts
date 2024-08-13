@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { bufferToHex, hexToBuffer, unpackToFloat, unpackToInt } from '../utils/buffer';
+import { bufferToHex, unpackToFloat, unpackToInt } from '../utils/buffer';
 import helpersUtils from '../utils/helpers';
 import Network from '../models/network';
 import { NanoContractArgumentType } from './types';

@@ -152,7 +152,16 @@ export const validateAndUpdateBlueprintMethodArgs = async (
   }
 
   // Args may come as undefined or null
-  args = args ?? [];
+  if (args == null) {
+    if (methodArgs.length !== 0) {
+      throw new NanoContractTransactionError(
+        `Method needs ${methodArgs.length} parameters but no arguments were received.`
+      );
+    }
+
+    return;
+  }
+
   const argsLen = args.length;
   if (argsLen !== methodArgs.length) {
     throw new NanoContractTransactionError(
@@ -206,7 +215,9 @@ export const validateAndUpdateBlueprintMethodArgs = async (
           );
         }
         break;
-      case 'Address':
+      // Creating a block {} in the case below
+      // because we can't create a variable without it (linter - no-case-declarations)
+      case 'Address': {
         const argValue = args[index];
         if (typeof argValue !== 'string') {
           throw new NanoContractTransactionError(
@@ -217,6 +228,7 @@ export const validateAndUpdateBlueprintMethodArgs = async (
         try {
           const address = new Address(argValue as string);
           address.validateAddress();
+          // eslint-disable-next-line no-param-reassign
           args[index] = address.decode();
         } catch {
           // Argument value is not a valid address
@@ -225,6 +237,7 @@ export const validateAndUpdateBlueprintMethodArgs = async (
           );
         }
         break;
+      }
       default:
         // eslint-disable-next-line valid-typeof -- This rule is not suited for dynamic comparisons such as this one
         if (arg.type !== typeof args[index]) {
