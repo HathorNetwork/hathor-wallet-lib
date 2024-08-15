@@ -190,5 +190,8 @@ test('Address', () => {
 
   const deserialized = deserializer.deserializeFromType(addressBuffer, 'Address');
 
-  expect(deserialized).toBe(address);
+  const wrongNetworkAddress = 'HDeadDeadDeadDeadDeadDeadDeagTPgmn';
+  const wrongNetworkAddressBuffer = new Address(wrongNetworkAddress).decode();
+
+  expect(() => deserializer.deserializeFromType(wrongNetworkAddressBuffer, 'Address')).toThrow();
 });
