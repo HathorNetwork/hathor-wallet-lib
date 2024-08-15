@@ -9,6 +9,7 @@ import { bufferToHex, unpackToFloat, unpackToInt } from '../utils/buffer';
 import helpersUtils from '../utils/helpers';
 import Network from '../models/network';
 import { NanoContractArgumentType } from './types';
+import { OutputValueType } from '../types';
 
 class Deserializer {
   network: Network;
@@ -51,8 +52,9 @@ class Deserializer {
         return this.toAddress(value);
       case 'int':
       case 'Timestamp':
-      case 'Amount':
         return this.toInt(value);
+      case 'Amount':
+        return this.toAmount(value);
       case 'float':
         return this.toFloat(value);
       case 'bool':
@@ -98,6 +100,18 @@ class Deserializer {
    */
   toInt(value: Buffer): number {
     return unpackToInt(4, true, value)[0];
+  }
+
+  /**
+   * Deserialize amount value
+   *
+   * @param {value} Value to deserialize
+   *
+   * @memberof Deserializer
+   * @inner
+   */
+  toAmount(value: Buffer): OutputValueType {
+    return this.toInt(value);
   }
 
   /**
