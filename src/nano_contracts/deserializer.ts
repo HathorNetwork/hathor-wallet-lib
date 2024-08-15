@@ -214,7 +214,9 @@ class Deserializer {
     const address = helpersUtils.encodeAddress(addressBytes, this.network);
     const decoded = address.decode();
     if (decoded[0] !== value[0]) {
-      throw new Error(`Asked to deserialize an address with version byte ${value[0]} but the network from the deserializer object has version byte ${decoded[0]}.`);
+      throw new Error(
+        `Asked to deserialize an address with version byte ${value[0]} but the network from the deserializer object has version byte ${decoded[0]}.`
+      );
     }
     return address.base58;
   }
