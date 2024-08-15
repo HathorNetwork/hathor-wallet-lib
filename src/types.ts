@@ -93,18 +93,18 @@ export interface IAuthoritiesBalance {
 
 export interface IHistoryTx {
   tx_id: string;
-  signalBits: number;
+  signalBits?: number;
   version: number;
   weight: number;
   timestamp: number;
   is_voided: boolean;
-  nonce: number;
+  nonce?: number;
   inputs: IHistoryInput[];
   outputs: IHistoryOutput[];
   parents: string[];
   token_name?: string; // For create token transaction
   token_symbol?: string; // For create token transaction
-  tokens: string[];
+  tokens?: string[];
   height?: number;
   processingStatus?: TxHistoryProcessingStatus;
   nc_id?: string; // For nano contract
@@ -145,6 +145,7 @@ export interface IHistoryOutput {
   decoded: IHistoryOutputDecoded;
   token: string;
   spent_by: string | null;
+  selected_as_input?: boolean;
 }
 
 export interface IDataOutputData {
