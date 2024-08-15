@@ -103,8 +103,39 @@ describe('full cycle of bet nano contract', () => {
       { name: 'date_last_bet', type: 'Timestamp', parsed: dateLastBet },
     ]);
 
-    // Bet 100 to address 2
+    // First validate some bet arguments error handling
     const address2 = await wallet.getAddressAtIndex(2);
+
+    // Address must be a string
+    await expect(wallet.createAndSendNanoContractTransaction('bet', address2, {
+      ncId: tx1.hash,
+      args: [1234, '1x0'],
+      actions: [
+        {
+          type: 'deposit',
+          token: NATIVE_TOKEN_UID,
+          amount: 100,
+          changeAddress: address0,
+        },
+      ],
+    })).rejects.toThrow(NanoContractTransactionError);
+
+    // Invalid address
+    await expect(wallet.createAndSendNanoContractTransaction('bet', address2, {
+      ncId: tx1.hash,
+      args: ['1234', '1x0'],
+      actions: [
+        {
+          type: 'deposit',
+          token: NATIVE_TOKEN_UID,
+          amount: 100,
+          changeAddress: address0,
+        },
+      ],
+    })).rejects.toThrow(NanoContractTransactionError);
+
+
+    // Bet 100 to address 2
     const txBet = await wallet.createAndSendNanoContractTransaction('bet', address2, {
       ncId: tx1.hash,
       args: [address2, '1x0'],
@@ -349,6 +380,14 @@ describe('full cycle of bet nano contract', () => {
       hWallet.createAndSendNanoContractTransaction(NANO_CONTRACTS_INITIALIZE_METHOD, address0, {
         blueprintId,
         args: [bufferToHex(oracleData), NATIVE_TOKEN_UID],
+      })
+    ).rejects.toThrow(NanoContractTransactionError);
+
+    // Args as null
+    await expect(
+      hWallet.createAndSendNanoContractTransaction(NANO_CONTRACTS_INITIALIZE_METHOD, address0, {
+        blueprintId,
+        args: null,
       })
     ).rejects.toThrow(NanoContractTransactionError);
 
