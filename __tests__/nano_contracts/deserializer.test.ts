@@ -7,6 +7,8 @@
 
 import Serializer from '../../src/nano_contracts/serializer';
 import Deserializer from '../../src/nano_contracts/deserializer';
+import Address from '../../src/models/address';
+import Network from '../../src/models/network';
 
 test('Bool', () => {
   const serializer = new Serializer();
@@ -41,6 +43,17 @@ test('Int', () => {
   const value = 300;
   const serialized = serializer.serializeFromType(value, 'int');
   const deserialized = deserializer.deserializeFromType(serialized, 'int');
+
+  expect(value).toBe(deserialized);
+});
+
+test('Amount', () => {
+  const serializer = new Serializer();
+  const deserializer = new Deserializer();
+
+  const value = 300;
+  const serialized = serializer.serializeFromType(value, 'Amount');
+  const deserialized = deserializer.deserializeFromType(serialized, 'Amount');
 
   expect(value).toBe(deserialized);
 });
@@ -177,4 +190,20 @@ test('Signed', () => {
   );
 
   expect(valueBoolTrue).toBe(deserializedBoolTrue);
+});
+
+test('Address', () => {
+  const network = new Network('testnet');
+  const deserializer = new Deserializer(network);
+
+  const address = 'WfthPUEecMNRs6eZ2m2EQBpVH6tbqQxYuU';
+  const addressBuffer = new Address(address).decode();
+
+  const deserialized = deserializer.deserializeFromType(addressBuffer, 'Address');
+  expect(deserialized).toBe(address);
+
+  const wrongNetworkAddress = 'HDeadDeadDeadDeadDeadDeadDeagTPgmn';
+  const wrongNetworkAddressBuffer = new Address(wrongNetworkAddress).decode();
+
+  expect(() => deserializer.deserializeFromType(wrongNetworkAddressBuffer, 'Address')).toThrow();
 });
