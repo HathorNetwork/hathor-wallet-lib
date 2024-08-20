@@ -47,6 +47,17 @@ test('Int', () => {
   expect(value).toBe(deserialized);
 });
 
+test('Amount', () => {
+  const serializer = new Serializer();
+  const deserializer = new Deserializer();
+
+  const value = 300;
+  const serialized = serializer.serializeFromType(value, 'Amount');
+  const deserialized = deserializer.deserializeFromType(serialized, 'Amount');
+
+  expect(value).toBe(deserialized);
+});
+
 test('Bytes', () => {
   const serializer = new Serializer();
   const deserializer = new Deserializer();
