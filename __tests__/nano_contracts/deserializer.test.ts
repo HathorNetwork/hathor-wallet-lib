@@ -67,6 +67,26 @@ test('Bytes', () => {
   const deserialized = deserializer.deserializeFromType(serialized, 'bytes');
 
   expect(value.equals(deserialized)).toBe(true);
+
+  const serializedVertex = serializer.serializeFromType(value, 'VertexId');
+  const deserializedVertex = deserializer.deserializeFromType(serialized, 'VertexId');
+
+  expect(value.equals(deserializedVertex)).toBe(true);
+
+  const serializedToken = serializer.serializeFromType(value, 'TokenUid');
+  const deserializedToken = deserializer.deserializeFromType(serialized, 'TokenUid');
+
+  expect(value.equals(deserializedToken)).toBe(true);
+
+  const serializedScript = serializer.serializeFromType(value, 'TxOutputScript');
+  const deserializedScript = deserializer.deserializeFromType(serialized, 'TxOutputScript');
+
+  expect(value.equals(deserializedScript)).toBe(true);
+
+  const serializedContract = serializer.serializeFromType(value, 'ContractId');
+  const deserializedContract = deserializer.deserializeFromType(serialized, 'ContractId');
+
+  expect(value.equals(deserializedContract)).toBe(true);
 });
 
 test('Float', () => {

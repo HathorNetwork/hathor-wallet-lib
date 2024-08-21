@@ -46,6 +46,7 @@ class Deserializer {
       case 'bytes':
       case 'TxOutputScript':
       case 'TokenUid':
+      case 'ContractId':
       case 'VertexId':
         return this.toBytes(value);
       case 'Address':
