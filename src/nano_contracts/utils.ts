@@ -186,6 +186,7 @@ export const validateAndUpdateBlueprintMethodArgs = async (
       case 'bytes':
       case 'TxOutputScript':
       case 'TokenUid':
+      case 'ContractId':
       case 'VertexId':
         // Bytes arguments are sent in hexadecimal
         try {

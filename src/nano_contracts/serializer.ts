@@ -57,6 +57,7 @@ class Serializer {
       case 'bytes':
       case 'Address':
       case 'VertexId':
+      case 'ContractId':
       case 'TxOutputScript':
       case 'TokenUid':
         return this.fromBytes(value as Buffer);
