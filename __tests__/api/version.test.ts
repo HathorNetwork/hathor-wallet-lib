@@ -1,5 +1,5 @@
 import MockAdapter from 'axios-mock-adapter';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import versionApi from '../../src/api/version';
 
 describe('versionApi', () => {
@@ -34,12 +34,14 @@ describe('versionApi', () => {
     it('should allow capturing errors in case the server responds with 500', async () => {
       mock.onGet('/version').reply(500);
 
+      let err: unknown;
       try {
         await versionApi.getVersion(() => {});
       } catch (e) {
-        expect(e.message).toEqual('Request failed with status code 500');
-        expect(e.response.status).toEqual(500);
+        err = e;
       }
+      expect((err as AxiosError).message).toEqual('Request failed with status code 500');
+      expect((err as AxiosError).response?.status).toEqual(500);
     });
   });
 
@@ -62,12 +64,14 @@ describe('versionApi', () => {
     it('should allow capturing errors in case the server responds with 500', async () => {
       mock.onGet('/version').reply(500);
 
+      let err: unknown;
       try {
         await versionApi.asyncGetVersion();
       } catch (e) {
-        expect(e.message).toEqual('Request failed with status code 500');
-        expect(e.response.status).toEqual(500);
+        err = e;
       }
+      expect((err as AxiosError).message).toEqual('Request failed with status code 500');
+      expect((err as AxiosError).response?.status).toEqual(500);
     });
   });
 });

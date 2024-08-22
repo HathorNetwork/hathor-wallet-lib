@@ -112,7 +112,7 @@ const ncApi = {
     const data = { blueprint_id: id };
     const axiosInstance = await createRequestInstance();
     try {
-      const response = await axiosInstance.get(`nano_contract/blueprint`, { params: data });
+      const response = await axiosInstance.get(`nano_contract/blueprint/info`, { params: data });
       const responseData = response.data;
       if (response.status === 200) {
         return responseData;

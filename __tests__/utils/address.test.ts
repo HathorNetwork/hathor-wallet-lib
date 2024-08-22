@@ -18,6 +18,7 @@ import {
   getAddressFromPubkey,
 } from '../../src/utils/address';
 
+/* eslint-disable @typescript-eslint/no-unused-vars -- These variables also serve as a documentation, even if unused */
 const seed =
   'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
 const xprivkey =
@@ -90,6 +91,7 @@ const WALLET_DATA = {
     ],
   },
 };
+/* eslint-enable @typescript-eslint/no-unused-vars */
 
 test('Get address type', () => {
   const testnet = new Network('testnet');

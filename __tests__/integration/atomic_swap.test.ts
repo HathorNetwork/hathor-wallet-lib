@@ -10,7 +10,6 @@ import { loggers } from './utils/logger.util';
 import { NATIVE_TOKEN_UID } from '../../src/constants';
 import SendTransaction from '../../src/new/sendTransaction';
 import PartialTxProposal from '../../src/wallet/partialTxProposal';
-import { delay } from './utils/core.util';
 
 describe('partial tx proposal', () => {
   afterEach(async () => {
@@ -24,11 +23,7 @@ describe('partial tx proposal', () => {
     const hWallet2 = await generateWalletHelper();
 
     // Injecting funds and creating a new custom token
-    const txI = await GenesisWalletHelper.injectFunds(
-      hWallet1,
-      await hWallet1.getAddressAtIndex(0),
-      103
-    );
+    await GenesisWalletHelper.injectFunds(hWallet1, await hWallet1.getAddressAtIndex(0), 103);
     const { hash: token1Uid } = await createTokenHelper(hWallet1, 'Token1', 'TK1', 200);
 
     // Injecting funds and creating a new custom token

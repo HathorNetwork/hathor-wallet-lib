@@ -27,7 +27,8 @@ const walletApi = {
    * @inner
    */
   getAddressHistory(addresses, hash, resolve) {
-    const data = { addresses, paginate: true };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data: any = { addresses, paginate: true };
     if (hash) {
       data.hash = hash;
     }
@@ -65,7 +66,8 @@ const walletApi = {
    * @inner
    */
   getAddressHistoryForAwait(addresses, hash) {
-    const data = { addresses, paginate: true };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data: any = { addresses, paginate: true };
     if (hash) {
       data.hash = hash;
     }
@@ -84,7 +86,8 @@ const walletApi = {
    * @inner
    */
   getAddressHistoryForAwaitPOST(addresses, hash) {
-    const data = { addresses, paginate: true };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data: any = { addresses, paginate: true };
     if (hash) {
       data.hash = hash;
     }
@@ -154,7 +157,8 @@ const walletApi = {
    * @inner
    */
   getTokenHistory(uid, count, hash, timestamp, page, resolve) {
-    const data = { id: uid, count };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data: any = { id: uid, count };
 
     if (hash) {
       data.hash = hash;
@@ -255,7 +259,8 @@ const walletApi = {
    * @inner
    */
   getSearchAddress(address, count, hash, page, token, resolve) {
-    const data = { address, count };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const data: any = { address, count };
 
     if (hash) {
       data.hash = hash;

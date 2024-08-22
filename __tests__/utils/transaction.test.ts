@@ -102,6 +102,8 @@ test('signTransaction', async () => {
         };
       case notOwnAddr:
         return null;
+      default:
+        throw new Error(`Unexpected`);
     }
   });
   async function* getSpentMock(inputs) {

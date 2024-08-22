@@ -8,12 +8,12 @@ import {
   waitForTxReceived,
   waitForWalletReady,
 } from '../helpers/wallet.helper';
-import { delay } from '../utils/core.util';
 
 import { LevelDBStore, Storage } from '../../../src/storage';
 import walletUtils from '../../../src/utils/wallet';
 import HathorWallet from '../../../src/new/wallet';
 import { loggers } from '../utils/logger.util';
+import { IHathorWallet } from '../../../src/wallet/types';
 
 const startedWallets = [];
 
@@ -21,10 +21,12 @@ const startedWallets = [];
  * Helper to stop wallets started manually in this test file.
  */
 async function stopWallets() {
-  let hWallet;
-  while ((hWallet = startedWallets.pop())) {
+  while (startedWallets.length > 0) {
+    const hWallet = startedWallets.pop() as unknown as IHathorWallet;
     try {
-      await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
+      if (hWallet) {
+        await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
+      }
     } catch (e) {
       loggers.test.error(e.stack);
     }

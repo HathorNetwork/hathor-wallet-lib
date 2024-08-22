@@ -38,7 +38,7 @@ test('Get and set network', () => {
   // Test constructor parameter
   expect(() => {
     // Invalid network
-    const network2 = new Network('abc');
+    const _ = new Network('abc');
   }).toThrow();
 });
 

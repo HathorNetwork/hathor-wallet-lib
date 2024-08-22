@@ -7,6 +7,8 @@
 
 import Serializer from '../../src/nano_contracts/serializer';
 import Deserializer from '../../src/nano_contracts/deserializer';
+import Address from '../../src/models/address';
+import Network from '../../src/models/network';
 
 test('Bool', () => {
   const serializer = new Serializer();
@@ -45,6 +47,17 @@ test('Int', () => {
   expect(value).toBe(deserialized);
 });
 
+test('Amount', () => {
+  const serializer = new Serializer();
+  const deserializer = new Deserializer();
+
+  const value = 300;
+  const serialized = serializer.serializeFromType(value, 'Amount');
+  const deserialized = deserializer.deserializeFromType(serialized, 'Amount');
+
+  expect(value).toBe(deserialized);
+});
+
 test('Bytes', () => {
   const serializer = new Serializer();
   const deserializer = new Deserializer();
@@ -54,6 +67,26 @@ test('Bytes', () => {
   const deserialized = deserializer.deserializeFromType(serialized, 'bytes');
 
   expect(value.equals(deserialized)).toBe(true);
+
+  const serializedVertex = serializer.serializeFromType(value, 'VertexId');
+  const deserializedVertex = deserializer.deserializeFromType(serializedVertex, 'VertexId');
+
+  expect(value.equals(deserializedVertex)).toBe(true);
+
+  const serializedToken = serializer.serializeFromType(value, 'TokenUid');
+  const deserializedToken = deserializer.deserializeFromType(serializedToken, 'TokenUid');
+
+  expect(value.equals(deserializedToken)).toBe(true);
+
+  const serializedScript = serializer.serializeFromType(value, 'TxOutputScript');
+  const deserializedScript = deserializer.deserializeFromType(serializedScript, 'TxOutputScript');
+
+  expect(value.equals(deserializedScript)).toBe(true);
+
+  const serializedContract = serializer.serializeFromType(value, 'ContractId');
+  const deserializedContract = deserializer.deserializeFromType(serializedContract, 'ContractId');
+
+  expect(value.equals(deserializedContract)).toBe(true);
 });
 
 test('Float', () => {
@@ -177,4 +210,20 @@ test('Signed', () => {
   );
 
   expect(valueBoolTrue).toBe(deserializedBoolTrue);
+});
+
+test('Address', () => {
+  const network = new Network('testnet');
+  const deserializer = new Deserializer(network);
+
+  const address = 'WfthPUEecMNRs6eZ2m2EQBpVH6tbqQxYuU';
+  const addressBuffer = new Address(address).decode();
+
+  const deserialized = deserializer.deserializeFromType(addressBuffer, 'Address');
+  expect(deserialized).toBe(address);
+
+  const wrongNetworkAddress = 'HDeadDeadDeadDeadDeadDeadDeagTPgmn';
+  const wrongNetworkAddressBuffer = new Address(wrongNetworkAddress).decode();
+
+  expect(() => deserializer.deserializeFromType(wrongNetworkAddressBuffer, 'Address')).toThrow();
 });

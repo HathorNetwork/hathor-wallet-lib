@@ -130,6 +130,10 @@ describe('_updateTokensData', () => {
       success: true,
       name: mockToken.name,
       symbol: mockToken.symbol,
+      mint: [],
+      melt: [],
+      total: 0,
+      transactions_count: 0,
     });
 
     // Execute
@@ -174,6 +178,10 @@ describe('_updateTokensData', () => {
         success: true,
         name: mockToken.name,
         symbol: mockToken.symbol,
+        mint: [],
+        melt: [],
+        total: 0,
+        transactions_count: 0,
       });
 
     // Execute

@@ -16,39 +16,39 @@ test('Buffer to hex', () => {
 });
 
 test('Unsigned int to bytes', () => {
-  let number1 = 10;
-  let buf1 = intToBytes(number1, 1);
+  const number1 = 10;
+  const buf1 = intToBytes(number1, 1);
   expect(unpackToInt(1, false, buf1)[0]).toBe(number1);
 
-  let number2 = 300;
-  let buf2 = intToBytes(number2, 2);
+  const number2 = 300;
+  const buf2 = intToBytes(number2, 2);
   expect(unpackToInt(2, false, buf2)[0]).toBe(number2);
 
-  let number3 = 70000;
-  let buf3 = intToBytes(number3, 4);
+  const number3 = 70000;
+  const buf3 = intToBytes(number3, 4);
   expect(unpackToInt(4, false, buf3)[0]).toBe(number3);
 });
 
 test('Signed int to bytes', () => {
-  let number1 = 10;
-  let buf1 = signedIntToBytes(number1, 1);
+  const number1 = 10;
+  const buf1 = signedIntToBytes(number1, 1);
   expect(unpackToInt(1, true, buf1)[0]).toBe(number1);
 
-  let number2 = 300;
-  let buf2 = signedIntToBytes(number2, 2);
+  const number2 = 300;
+  const buf2 = signedIntToBytes(number2, 2);
   expect(unpackToInt(2, true, buf2)[0]).toBe(number2);
 
-  let number3 = 70000;
-  let buf3 = signedIntToBytes(number3, 4);
+  const number3 = 70000;
+  const buf3 = signedIntToBytes(number3, 4);
   expect(unpackToInt(4, true, buf3)[0]).toBe(number3);
 
-  let number4 = 2 ** 33;
-  let buf4 = signedIntToBytes(number4, 8);
+  const number4 = 2 ** 33;
+  const buf4 = signedIntToBytes(number4, 8);
   expect(unpackToInt(8, true, buf4)[0]).toBe(number4);
 });
 
 test('Float to bytes', () => {
-  let number = 10.5;
-  let buffer = floatToBytes(number, 8);
+  const number = 10.5;
+  const buffer = floatToBytes(number, 8);
   expect(unpackToFloat(buffer)[0]).toBe(number);
 });

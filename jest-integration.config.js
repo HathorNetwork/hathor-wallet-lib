@@ -1,7 +1,7 @@
 // Minor helper for test development. Allows for specific file testing.
 const mainTestMatch = process.env.SPECIFIC_INTEGRATION_TEST_FILE
-  ? `<rootDir>/__tests__/integration/**/${process.env.SPECIFIC_INTEGRATION_TEST_FILE}.test.js`
-  : '<rootDir>/__tests__/integration/**/*.test.js';
+  ? `<rootDir>/__tests__/integration/**/${process.env.SPECIFIC_INTEGRATION_TEST_FILE}.test.ts`
+  : '<rootDir>/__tests__/integration/**/*.test.ts';
 
 module.exports = {
   testRunner: 'jest-circus/runner',
@@ -20,14 +20,14 @@ module.exports = {
       statements: 42,
       branches: 30,
       functions: 40,
-      lines: 42
+      lines: 42,
     },
     // We need a high coverage for the HathorWallet class
     './src/new/wallet.js': {
       statements: 92,
       branches: 85,
       functions: 90,
-      lines: 92
-    }
+      lines: 92,
+    },
   },
 };

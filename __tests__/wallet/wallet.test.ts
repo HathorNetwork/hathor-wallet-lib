@@ -5,8 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { mockAxiosAdapter } from '../__mocks__/wallet.mock';
 import { Message } from 'bitcore-lib';
+import Mnemonic from 'bitcore-mnemonic';
+import { mockAxiosAdapter } from '../__mock_helpers__/axios-adapter.mock';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import Network from '../../src/models/network';
 import { GetAddressesObject, WsTransaction, CreateWalletAuthData } from '../../src/wallet/types';
@@ -15,17 +16,19 @@ import {
   buildSuccessTxByIdTokenDataResponse,
   buildWalletToAuthenticateApiCall,
   defaultWalletSeed,
-} from '../__mock_helpers/wallet-service.fixtures';
-import Mnemonic from 'bitcore-mnemonic';
+} from '../__mock_helpers__/wallet-service.fixtures';
 import { TxNotFoundError, SendTxError } from '../../src/errors';
 import SendTransactionWalletService from '../../src/wallet/sendTransactionWalletService';
 import transaction from '../../src/utils/transaction';
-import { TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../src/constants';
+import {
+  TOKEN_MELT_MASK,
+  TOKEN_MINT_MASK,
+  WALLET_SERVICE_AUTH_DERIVATION_PATH,
+} from '../../src/constants';
 import { MemoryStore, Storage } from '../../src/storage';
 import walletApi from '../../src/wallet/api/walletApi';
 import walletUtils from '../../src/utils/wallet';
 import { decryptData, verifyMessage } from '../../src/utils/crypto';
-import { WALLET_SERVICE_AUTH_DERIVATION_PATH } from '../../src/constants';
 
 // Mock SendTransactionWalletService class so we don't try to send actual transactions
 // TODO: We should refactor the way we use classes from inside other classes. Using dependency injection would facilitate unit tests a lot and avoid mocks like this.
@@ -95,7 +98,7 @@ test('getAddressAtIndex', async () => {
     })
   );
 
-  await expect(wallet.getAddressAtIndex(0)).rejects.toThrowError('Error getting wallet addresses.');
+  await expect(wallet.getAddressAtIndex(0)).rejects.toThrow('Error getting wallet addresses.');
 });
 
 test('getTxBalance', async () => {
@@ -111,7 +114,7 @@ test('getTxBalance', async () => {
     xpub: null,
   });
 
-  const getAllAddressesMock = async function* () {
+  async function* getAllAddressesMock() {
     const addresses: GetAddressesObject[] = [
       {
         address: 'address0',
@@ -133,9 +136,9 @@ test('getTxBalance', async () => {
     for (const address of addresses) {
       yield address;
     }
-  };
+  }
 
-  const spy = jest.spyOn(wallet, 'getAllAddresses').mockImplementation(getAllAddressesMock);
+  jest.spyOn(wallet, 'getAllAddresses').mockImplementation(getAllAddressesMock);
 
   let tx: WsTransaction = {
     ...MOCK_TX,
@@ -184,7 +187,7 @@ test('getTxBalance', async () => {
 
   let balance = await wallet.getTxBalance(tx);
 
-  expect(balance['token1']).toStrictEqual(-300);
+  expect(balance.token1).toStrictEqual(-300);
 
   tx = {
     ...MOCK_TX,
@@ -232,7 +235,7 @@ test('getTxBalance', async () => {
   };
 
   balance = await wallet.getTxBalance(tx);
-  expect(balance['token1']).toStrictEqual(0);
+  expect(balance.token1).toStrictEqual(0);
 
   // multiple tokens in the same transaction
   tx = {
@@ -319,8 +322,8 @@ test('getTxBalance', async () => {
   };
 
   balance = await wallet.getTxBalance(tx);
-  expect(balance['token1']).toStrictEqual(0);
-  expect(balance['token2']).toStrictEqual(-5);
+  expect(balance.token1).toStrictEqual(0);
+  expect(balance.token2).toStrictEqual(-5);
 });
 
 test('checkAddressesMine', async () => {
@@ -359,9 +362,9 @@ test('checkAddressesMine', async () => {
     success: false,
   });
 
-  await expect(
-    wallet.checkAddressesMine(['address1', 'address2', 'address3'])
-  ).rejects.toThrowError('Error checking wallet addresses.');
+  await expect(wallet.checkAddressesMine(['address1', 'address2', 'address3'])).rejects.toThrow(
+    'Error checking wallet addresses.'
+  );
 });
 
 test('generateCreateWalletAuthData should return correct auth data', async () => {
@@ -456,7 +459,7 @@ test('getTxById', async () => {
 
   const invalidCall = wallet.getTxById('123');
 
-  await expect(invalidCall).rejects.toThrowError('Error getting transaction by its id.');
+  await expect(invalidCall).rejects.toThrow('Error getting transaction by its id.');
 });
 
 test('prepareMintTokens', async () => {
@@ -510,25 +513,24 @@ test('prepareMintTokens', async () => {
         ],
         changeAmount: 0,
       };
-    } else {
-      return {
-        utxos: [
-          {
-            txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
-            index: 0,
-            tokenId: '01',
-            address: addresses[0],
-            value: 1,
-            authorities: TOKEN_MINT_MASK,
-            timelock: null,
-            heightlock: null,
-            locked: false,
-            addressPath,
-          },
-        ],
-        changeAmount: 0,
-      };
     }
+    return {
+      utxos: [
+        {
+          txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+          index: 0,
+          tokenId: '01',
+          address: addresses[0],
+          value: 1,
+          authorities: TOKEN_MINT_MASK,
+          timelock: null,
+          heightlock: null,
+          locked: false,
+          addressPath,
+        },
+      ],
+      changeAmount: 0,
+    };
   };
   const getInputDataMock = (xp: string, dtsh: Buffer) => Buffer.alloc(0);
 
@@ -546,7 +548,7 @@ test('prepareMintTokens', async () => {
       mintAuthorityAddress: 'abc',
       pinCode: '123456',
     })
-  ).rejects.toThrowError(SendTxError);
+  ).rejects.toThrow(SendTxError);
 
   // error because of wrong authority output address
   await expect(
@@ -557,7 +559,7 @@ test('prepareMintTokens', async () => {
       allowExternalMintAuthorityAddress: true,
       pinCode: '123456',
     })
-  ).rejects.toThrowError(SendTxError);
+  ).rejects.toThrow(SendTxError);
 
   // mint data without sign the transaction
   const mintDataNotSigned = await wallet.prepareMintTokensData('01', 100, {
@@ -661,25 +663,24 @@ test('prepareMeltTokens', async () => {
         ],
         changeAmount: 0,
       };
-    } else {
-      return {
-        utxos: [
-          {
-            txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5d',
-            index: 0,
-            tokenId: '01',
-            address: addresses[0],
-            value: 1,
-            authorities: 0,
-            timelock: null,
-            heightlock: null,
-            locked: false,
-            addressPath,
-          },
-        ],
-        changeAmount: 0,
-      };
     }
+    return {
+      utxos: [
+        {
+          txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5d',
+          index: 0,
+          tokenId: '01',
+          address: addresses[0],
+          value: 1,
+          authorities: 0,
+          timelock: null,
+          heightlock: null,
+          locked: false,
+          addressPath,
+        },
+      ],
+      changeAmount: 0,
+    };
   };
   const getInputDataMock = (xp: string, dtsh: Buffer) => Buffer.alloc(0);
 
@@ -697,7 +698,7 @@ test('prepareMeltTokens', async () => {
       meltAuthorityAddress: 'abc',
       pinCode: '123456',
     })
-  ).rejects.toThrowError(SendTxError);
+  ).rejects.toThrow(SendTxError);
 
   // error because of wrong authority output address
   await expect(
@@ -708,7 +709,7 @@ test('prepareMeltTokens', async () => {
       allowExternalMeltAuthorityAddress: true,
       pinCode: '123456',
     })
-  ).rejects.toThrowError(SendTxError);
+  ).rejects.toThrow(SendTxError);
 
   // melt data without sign the transaction
   const meltDataNotSigned = await wallet.prepareMeltTokensData('01', 100, {
@@ -835,7 +836,7 @@ test('prepareDelegateAuthorityData', async () => {
       createAnother: true,
       pinCode: '123456',
     })
-  ).rejects.toThrowError('Address invalid-address is not valid.');
+  ).rejects.toThrow('Address invalid-address is not valid.');
 
   await expect(
     wallet.prepareDelegateAuthorityData('00', 'mint', addresses[1], {
@@ -843,7 +844,7 @@ test('prepareDelegateAuthorityData', async () => {
       createAnother: false,
       pinCode: null,
     })
-  ).rejects.toThrowError('PIN not specified in prepareDelegateAuthorityData options');
+  ).rejects.toThrow('PIN not specified in prepareDelegateAuthorityData options');
 
   // Clear mocks
   spy1.mockRestore();
@@ -874,7 +875,7 @@ test('prepareDelegateAuthorityData should fail if type is invalid', async () => 
       createAnother: true,
       pinCode: '123456',
     })
-  ).rejects.toThrowError('Type options are mint and melt for delegate authority method.');
+  ).rejects.toThrow('Type options are mint and melt for delegate authority method.');
 });
 
 test('delegateAuthority should throw if wallet is not ready', async () => {
@@ -897,7 +898,7 @@ test('delegateAuthority should throw if wallet is not ready', async () => {
       anotherAuthorityAddress: null,
       pinCode: '123456',
     })
-  ).rejects.toThrowError('Wallet not ready');
+  ).rejects.toThrow('Wallet not ready');
 });
 
 test('prepareDestroyAuthority', async () => {
@@ -985,7 +986,7 @@ test('destroyAuthority should throw if wallet is not ready', async () => {
     wallet.destroyAuthority('00', 'mint', 1, {
       pinCode: '123456',
     })
-  ).rejects.toThrowError('Wallet not ready');
+  ).rejects.toThrow('Wallet not ready');
 });
 
 test('getFullTxById', async () => {
@@ -1016,14 +1017,14 @@ test('getFullTxById', async () => {
   expect(proxiedTx.tx.hash).toStrictEqual('tx1');
 
   mockAxiosAdapter.onGet('wallet/proxy/transactions/tx2').reply(400, {});
-  await expect(wallet.getFullTxById('tx2')).rejects.toThrowError(
+  await expect(wallet.getFullTxById('tx2')).rejects.toThrow(
     'Error getting transaction by its id from the proxied fullnode.'
   );
 
   mockAxiosAdapter
     .onGet('wallet/proxy/transactions/tx3')
     .reply(200, { success: false, message: 'Transaction not found' });
-  await expect(wallet.getFullTxById('tx3')).rejects.toThrowError(TxNotFoundError);
+  await expect(wallet.getFullTxById('tx3')).rejects.toThrow(TxNotFoundError);
 });
 
 test('getTxConfirmationData', async () => {
@@ -1058,14 +1059,14 @@ test('getTxConfirmationData', async () => {
   expect(proxiedConfirmationData).toStrictEqual(mockData);
 
   mockAxiosAdapter.onGet('wallet/proxy/transactions/tx1/confirmation_data').reply(400, '');
-  await expect(wallet.getTxConfirmationData('tx1')).rejects.toThrowError(
+  await expect(wallet.getTxConfirmationData('tx1')).rejects.toThrow(
     'Error getting transaction confirmation data by its id from the proxied fullnode.'
   );
 
   mockAxiosAdapter
     .onGet('wallet/proxy/transactions/tx2/confirmation_data')
     .reply(200, { success: false, message: 'Transaction not found' });
-  await expect(wallet.getTxConfirmationData('tx2')).rejects.toThrowError(TxNotFoundError);
+  await expect(wallet.getTxConfirmationData('tx2')).rejects.toThrow(TxNotFoundError);
 });
 
 test('graphvizNeighborsQuery', async () => {
@@ -1099,16 +1100,14 @@ test('graphvizNeighborsQuery', async () => {
     .onGet('wallet/proxy/graphviz/neighbours?txId=tx1&graphType=test&maxLevel=1')
     .reply(500, '');
   // Axios will throw on 500 status code
-  await expect(wallet.graphvizNeighborsQuery('tx1', 'test', 1)).rejects.toThrowError(
+  await expect(wallet.graphvizNeighborsQuery('tx1', 'test', 1)).rejects.toThrow(
     'Request failed with status code 500'
   );
 
   mockAxiosAdapter
     .onGet('wallet/proxy/graphviz/neighbours?txId=tx2&graphType=test&maxLevel=1')
     .reply(200, { success: false, message: 'Transaction not found' });
-  await expect(wallet.graphvizNeighborsQuery('tx2', 'test', 1)).rejects.toThrowError(
-    TxNotFoundError
-  );
+  await expect(wallet.graphvizNeighborsQuery('tx2', 'test', 1)).rejects.toThrow(TxNotFoundError);
 });
 
 test('instantiate a new wallet without web socket initialization', async () => {
@@ -1134,7 +1133,8 @@ test('instantiate a new wallet without web socket initialization', async () => {
   /**
    * Wallet change its state to ready
    */
-  const spyOnGetNewAddress = jest.spyOn(wallet as any, 'getNewAddresses').mockImplementation(() => {
+  // @ts-expect-error -- getNewAddress is a private method, so invisible for this typing
+  const spyOnGetNewAddress = jest.spyOn(wallet, 'getNewAddresses').mockImplementation(() => {
     return Promise.resolve();
   });
   const spyOnSetupConnection = jest.spyOn(wallet, 'setupConnection');
@@ -1142,13 +1142,14 @@ test('instantiate a new wallet without web socket initialization', async () => {
   // get original method implementation for the private method onWalletReady
   wallet.walletId = 'wallet-id';
   const onWalletReadyImplementation = jest
-    .spyOn(wallet as any, 'onWalletReady')
+    // @ts-expect-error -- onWalletReady is a private method that's invisible to the wallet type
+    .spyOn(wallet, 'onWalletReady')
     .getMockImplementation();
   // call method binding to the wallet instance
   await onWalletReadyImplementation?.call(wallet);
 
-  expect(spyOnGetNewAddress).toBeCalledTimes(1);
-  expect(spyOnSetupConnection).toBeCalledTimes(0);
+  expect(spyOnGetNewAddress).toHaveBeenCalledTimes(1);
+  expect(spyOnSetupConnection).toHaveBeenCalledTimes(0);
   expect(wallet.isReady()).toBeTruthy();
 });
 
@@ -1247,7 +1248,7 @@ test('createTokens', async () => {
       mintAuthorityAddress: 'abc',
       pinCode: '123456',
     })
-  ).rejects.toThrowError(SendTxError);
+  ).rejects.toThrow(SendTxError);
 
   // error because of wrong authority output address
   await expect(
@@ -1257,7 +1258,7 @@ test('createTokens', async () => {
       meltAuthorityAddress: 'abc',
       pinCode: '123456',
     })
-  ).rejects.toThrowError(SendTxError);
+  ).rejects.toThrow(SendTxError);
 
   // error because of invalid external authority output address
   await expect(
@@ -1268,7 +1269,7 @@ test('createTokens', async () => {
       allowExternalMintAuthorityAddress: true,
       pinCode: '123456',
     })
-  ).rejects.toThrowError(SendTxError);
+  ).rejects.toThrow(SendTxError);
 
   // error because of invalid external authority output address
   await expect(
@@ -1279,7 +1280,7 @@ test('createTokens', async () => {
       allowExternalMeltAuthorityAddress: true,
       pinCode: '123456',
     })
-  ).rejects.toThrowError(SendTxError);
+  ).rejects.toThrow(SendTxError);
 
   // create token without sign the transaction
   const tokenDataNotSigned = await wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
@@ -1402,9 +1403,9 @@ test('createNFTs', async () => {
   };
   const getInputDataMock = (xp: string, dtsh: Buffer) => Buffer.alloc(0);
 
-  const getCurrentAddressDataMock = async () => {
-    address: addresses[0];
-  };
+  const getCurrentAddressDataMock = async () => ({
+    address: addresses[0],
+  });
 
   const spy1 = jest.spyOn(wallet, 'getUtxos').mockImplementation(getUtxosMock);
   const spy2 = jest
@@ -1424,7 +1425,7 @@ test('createNFTs', async () => {
       pinCode: '123456',
       nftData: 'data',
     })
-  ).rejects.toThrowError(SendTxError);
+  ).rejects.toThrow(SendTxError);
 
   // error because of wrong authority output address
   await expect(
@@ -1435,7 +1436,7 @@ test('createNFTs', async () => {
       pinCode: '123456',
       nftData: 'data',
     })
-  ).rejects.toThrowError(SendTxError);
+  ).rejects.toThrow(SendTxError);
 
   // create token with correct address for authority output
   const tokenData = await wallet.prepareCreateNewToken('Test Token', 'TST', 100, {
@@ -1596,13 +1597,8 @@ test('getAddressPrivKey', async () => {
   const requestPassword = jest.fn();
   const network = new Network('testnet');
   const seed = defaultWalletSeed;
-  let store = new MemoryStore();
-  let storage = new Storage(store);
-  const accessData = walletUtils.generateAccessDataFromSeed(seed, {
-    networkName: 'testnet',
-    password: '1234',
-    pin: '1234',
-  });
+  const store = new MemoryStore();
+  const storage = new Storage(store);
 
   jest
     .spyOn(HathorWalletServiceWallet.prototype, 'pollForWalletStatus')
@@ -1625,7 +1621,7 @@ test('getAddressPrivKey', async () => {
     })
   );
 
-  let wallet = new HathorWalletServiceWallet({
+  const wallet = new HathorWalletServiceWallet({
     requestPassword,
     seed,
     network,
@@ -1653,13 +1649,8 @@ test('signMessageWithAddress', async () => {
   const requestPassword = jest.fn();
   const network = new Network('testnet');
   const seed = defaultWalletSeed;
-  let store = new MemoryStore();
-  let storage = new Storage(store);
-  const accessData = walletUtils.generateAccessDataFromSeed(seed, {
-    networkName: 'testnet',
-    password: '1234',
-    pin: '1234',
-  });
+  const store = new MemoryStore();
+  const storage = new Storage(store);
 
   jest
     .spyOn(HathorWalletServiceWallet.prototype, 'pollForWalletStatus')
@@ -1682,7 +1673,7 @@ test('signMessageWithAddress', async () => {
     })
   );
 
-  let wallet = new HathorWalletServiceWallet({
+  const wallet = new HathorWalletServiceWallet({
     requestPassword,
     seed,
     network,

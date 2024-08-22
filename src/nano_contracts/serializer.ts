@@ -7,6 +7,7 @@
 
 import { hexToBuffer, intToBytes, floatToBytes, signedIntToBytes } from '../utils/buffer';
 import { NanoContractArgumentType } from './types';
+import { OutputValueType } from '../types';
 
 // Number of bytes used to serialize the size of the value
 const SERIALIZATION_SIZE_LEN = 2;
@@ -54,9 +55,17 @@ class Serializer {
       case 'str':
         return this.fromString(value as string);
       case 'bytes':
+      case 'Address':
+      case 'VertexId':
+      case 'ContractId':
+      case 'TxOutputScript':
+      case 'TokenUid':
         return this.fromBytes(value as Buffer);
       case 'int':
+      case 'Timestamp':
         return this.fromInt(value as number);
+      case 'Amount':
+        return this.fromAmount(value as OutputValueType);
       case 'float':
         return this.fromFloat(value as number);
       case 'bool':
@@ -100,6 +109,21 @@ class Serializer {
    */
   fromInt(value: number): Buffer {
     return signedIntToBytes(value, 4);
+  }
+
+  /**
+   * Serialize amount value
+   *
+   * @param {value} Value to serialize
+   *
+   * @memberof Serializer
+   * @inner
+   */
+  fromAmount(value: OutputValueType): Buffer {
+    // For now, this method is the same as fromInt
+    // but we are making it clear that it should be handled
+    // as an OutputValueType when we refactor it
+    return this.fromInt(value);
   }
 
   /**

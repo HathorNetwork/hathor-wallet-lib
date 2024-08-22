@@ -22,17 +22,26 @@ class NanoContractTransactionParser {
 
   publicKey: string;
 
+  network: Network;
+
   address: Address | null;
 
   args: string | null;
 
   parsedArgs: NanoContractParsedArgument[] | null;
 
-  constructor(blueprintId: string, method: string, publicKey: string, args: string | null) {
+  constructor(
+    blueprintId: string,
+    method: string,
+    publicKey: string,
+    network: Network,
+    args: string | null
+  ) {
     this.blueprintId = blueprintId;
     this.method = method;
     this.publicKey = publicKey;
     this.args = args;
+    this.network = network;
     this.address = null;
     this.parsedArgs = null;
   }
@@ -43,8 +52,8 @@ class NanoContractTransactionParser {
    * @memberof NanoContractTransactionParser
    * @inner
    */
-  parseAddress(network: Network) {
-    this.address = getAddressFromPubkey(this.publicKey, network);
+  parseAddress() {
+    this.address = getAddressFromPubkey(this.publicKey, this.network);
   }
 
   /**
@@ -59,7 +68,7 @@ class NanoContractTransactionParser {
       return;
     }
 
-    const deserializer = new Deserializer();
+    const deserializer = new Deserializer(this.network);
     // Get the blueprint data from full node
     const blueprintInformation = await ncApi.getBlueprintInformation(this.blueprintId);
     if (!has(blueprintInformation, `public_methods.${this.method}`)) {

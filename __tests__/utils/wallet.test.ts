@@ -37,12 +37,14 @@ test('Words', () => {
   const invalidArr2 = wordsArr.slice(0, 21);
   invalidArr2.push('i');
   invalidArr2.push('x');
+  let err: unknown;
   try {
     wallet.wordsValid(invalidArr2.join(' '));
   } catch (error) {
-    expect(error).toBeInstanceOf(InvalidWords);
-    expect(error.invalidWords).toStrictEqual(['i', 'x']);
+    err = error;
   }
+  expect(err).toBeInstanceOf(InvalidWords);
+  expect((err as InvalidWords).invalidWords).toStrictEqual(['i', 'x']);
 
   // Wrong 24th word
   const wordToPush = lastWord === 'word' ? 'guitar' : 'word';
@@ -55,9 +57,10 @@ test('Words', () => {
   try {
     wallet.wordsValid(invalidArr3.join(' '));
   } catch (error) {
-    expect(error).toBeInstanceOf(InvalidWords);
-    expect(error.invalidWords).toStrictEqual(['abc']);
+    err = error;
   }
+  expect(err).toBeInstanceOf(InvalidWords);
+  expect((err as InvalidWords).invalidWords).toStrictEqual(['abc']);
 
   // The separator may have breakline and multiples spaces
   const testWords = wordsArr.join('  \n');

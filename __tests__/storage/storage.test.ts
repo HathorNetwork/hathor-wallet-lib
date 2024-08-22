@@ -25,7 +25,7 @@ import {
 import * as cryptoUtils from '../../src/utils/crypto';
 import { InvalidPasswdError } from '../../src/errors';
 import Network from '../../src/models/network';
-import { WALLET_FLAGS } from '../../src/types';
+import { ILockedUtxo, IUtxo, OutputValueType, WALLET_FLAGS } from '../../src/types';
 
 const DATA_DIR = './testdata.leveldb';
 
@@ -68,6 +68,13 @@ describe('handleStop', () => {
       timestamp: 123,
       inputs: [],
       outputs: [],
+      is_voided: false,
+      nonce: 0,
+      parents: [],
+      signalBits: 0,
+      tokens: [],
+      version: 0,
+      weight: 0,
     });
     await storage.registerToken(testToken);
     const address0 = await storage.getAddressAtIndex(0);
@@ -138,6 +145,13 @@ describe('handleStop', () => {
       timestamp: 1234,
       inputs: [],
       outputs: [],
+      is_voided: false,
+      nonce: 0,
+      parents: [],
+      signalBits: 0,
+      tokens: [],
+      version: 0,
+      weight: 0,
     });
 
     // handleStop with cleanAddresses = true
@@ -301,6 +315,7 @@ test('store fetch methods', async () => {
   await expect(storage.isAddressMine('WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ')).resolves.toBe(true);
   await expect(storage.isAddressMine('WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAA')).resolves.toBe(false);
 
+  // eslint-disable-next-line no-empty-function -- This is just a mock function
   async function* emptyIter() {}
   const historySpy = jest.spyOn(store, 'historyIter').mockImplementation(emptyIter);
   for await (const _ of storage.txHistory()) {
@@ -417,13 +432,26 @@ describe('process locked utxos', () => {
     await processLockedUtxoTest(store);
   });
 
-  function getLockedUtxo(txId, address, timelock, height, value, token, token_data) {
+  function getLockedUtxo(
+    txId,
+    address,
+    timelock,
+    height,
+    value: OutputValueType,
+    token,
+    token_data
+  ): ILockedUtxo {
     return {
       index: 0,
       tx: {
         tx_id: txId,
         height,
         version: 1,
+        signalBits: 0,
+        weight: 0,
+        nonce: 0,
+        parents: [],
+        tokens: [],
         timestamp: timelock,
         is_voided: false,
         inputs: [],
@@ -438,13 +466,14 @@ describe('process locked utxos', () => {
               address,
               timelock,
             },
+            script: '',
           },
         ],
       },
     };
   }
 
-  function getUtxoFromLocked(lutxo) {
+  function getUtxoFromLocked(lutxo: ILockedUtxo): IUtxo {
     const { tx, index } = lutxo;
     const { outputs } = tx;
     const output = outputs[index];
@@ -483,7 +512,7 @@ describe('process locked utxos', () => {
         'tx01',
         'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
         tsUnLocked,
-        null,
+        undefined,
         100, // value
         '00', // token
         0 // token_data
@@ -493,7 +522,7 @@ describe('process locked utxos', () => {
         'tx02',
         'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
         tsLocked,
-        null,
+        undefined,
         100, // value
         '00', // token
         0 // token_data
