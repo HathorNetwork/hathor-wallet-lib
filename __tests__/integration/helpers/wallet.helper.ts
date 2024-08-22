@@ -206,14 +206,16 @@ export async function generateMultisigWalletHelper(parameters) {
 }
 
 export async function stopAllWallets() {
-  let hWallet;
+  let hWallet = startedWallets.pop();
+
   // Stop all wallets that were started with this helper
-  while ((hWallet = startedWallets.pop())) {
+  while (hWallet) {
     try {
       await hWallet.stop({ cleanStorage: true, cleanAddresses: true });
     } catch (e) {
       loggers.test.error(e.stack);
     }
+    hWallet = startedWallets.pop();
   }
 }
 
@@ -222,7 +224,7 @@ export async function stopAllWallets() {
  * @param {HathorWallet} hWallet
  * @param {string} name Name of the token
  * @param {string} symbol Symbol of the token
- * @param {number} amount Quantity of the token to be minted
+ * @param {OutputValueType} amount Quantity of the token to be minted
  * @param [options] Options parameters
  * @param {string} [options.address] address of the minted token
  * @param {string} [options.changeAddress] address of the change output
@@ -276,11 +278,10 @@ export function waitForWalletReady(hWallet) {
  */
 export async function waitForTxReceived(hWallet, txId, timeout) {
   const startTime = Date.now().valueOf();
-  let timeoutHandler;
   let timeoutReached = false;
   const timeoutPeriod = timeout || TX_TIMEOUT_DEFAULT;
   // Timeout handler
-  timeoutHandler = setTimeout(() => {
+  const timeoutHandler = setTimeout(() => {
     timeoutReached = true;
   }, timeoutPeriod);
 
@@ -436,37 +437,50 @@ export async function waitNextBlock(storage) {
  * It does not return any content, only delivers the code processing back to the caller at the
  * desired time.
  *
- * @param {HathorWallet} hWallet
- * @param {String} txId
- * @param {number | null | undefined} timeout
+ * @param hWallet
+ * @param txId
+ * @param timeout
  * @returns {Promise<void>}
  */
-export async function waitTxConfirmed(hWallet, txId, timeout) {
-  // Only return the positive response after the tx has a first block
-  return new Promise(async (resolve, reject) => {
-    let timeoutHandler;
-    if (timeout) {
-      // Timeout handler
-      timeoutHandler = setTimeout(async () => {
-        reject(new Error(`Timeout of ${timeout}ms without confirming the transaction`));
-      }, timeout);
-    }
+export async function waitTxConfirmed(
+  hWallet: HathorWallet,
+  txId: string,
+  timeout: number | null | undefined
+): Promise<void> {
+  let timeoutHandler: ReturnType<typeof setTimeout> | undefined;
+  let timeoutErrorFlag = false;
 
-    try {
-      while ((await getTxFirstBlock(hWallet, txId)) === null) {
-        await delay(1000);
+  // Initializing timeout handler, if requested
+  if (timeout) {
+    timeoutHandler = setTimeout(async () => {
+      timeoutErrorFlag = true;
+    }, timeout);
+  }
+
+  try {
+    // Only return the positive response after the tx has a first block
+    while ((await getTxFirstBlock(hWallet, txId)) === null) {
+      await delay(1000);
+
+      // If we've reached the requested timeout, break the while loop
+      if (timeoutErrorFlag) {
+        break;
       }
-    } catch {
-      // Get API request might fail, so we reject the promise
-      reject(new Error('Error getting transaction first block.'));
     }
+  } catch {
+    // Get API request might fail, so we reject the promise
+    throw new Error('Error getting transaction first block.');
+  }
 
-    if (timeoutHandler) {
-      clearTimeout(timeoutHandler);
-    }
+  // Throw the timeout error if the loop aborted because of it
+  if (timeoutErrorFlag) {
+    throw new Error(`Timeout of ${timeout}ms without confirming the transaction`);
+  }
 
-    resolve();
-  });
+  // If no errors happened it means the first block was found: clearing the timeout and returning void.
+  if (timeoutHandler) {
+    clearTimeout(timeoutHandler);
+  }
 }
 
 /**

@@ -9,6 +9,7 @@ module.exports = {
   parserOptions: {
     ecmaVersion: 2023, // Allows for the parsing of modern ECMAScript features
     sourceType: 'module', // Allows for the use of imports
+    project: ['./tsconfig.json', './tsconfig.test.json'],
   },
   settings: {
     'import/resolver': {
@@ -54,6 +55,7 @@ module.exports = {
       {
         vars: 'all',
         args: 'none', // We should change to args: after-used
+        varsIgnorePattern: '^_', // Allow variables starting with _ to be unused
       },
     ],
     'no-underscore-dangle': 0,
@@ -70,6 +72,7 @@ module.exports = {
         ts: 'never',
       },
     ],
+    'jest/no-disabled-tests': 'off', // It's useful to have skipped tests on our suites
 
     /* These last rules would require a large effort and potentially cause breaking changes,
      * So they will be left out for now and dealt with separately.
@@ -92,6 +95,33 @@ module.exports = {
       },
       plugins: ['jest'],
       extends: ['plugin:jest/recommended'], // Use recommended Jest rules
+      rules: {
+        'jest/no-disabled-tests': 'off', // It's useful to have skipped tests on our suites
+        "jest/expect-expect": [
+          'error',
+          {
+            assertFunctionNames: [
+              'expect',
+              'executeTests', // from NanoContracts bet tests
+              'testUnlockWhenSpent', // from Nano contracts Storage tests
+              'testLockedUtxoMethods', // from Common Store tests
+              'testRegisteredTokens', // from Common Store tests
+              'testScanningPolicies', // from Common Store tests
+              'testBestUtxoSelection', // from utxo test
+              'testFastUtxoSelection', // from utxo test
+              'handleStopTest', // from storage test
+              'processLockedUtxoTest', // from storage test
+              'getChangeAddressTest', // from storage test
+              'getAcctXprivTest', // from storage test
+              'accessDataTest', // from storage test
+              'checkPinTest', // from storage test
+              'checkPasswdTest', // from storage test
+              'testSelectUtxos', // from storage test
+              'testScanningPolicy', // from storage test
+            ],
+          },
+        ],
+      },
     },
   ],
 };

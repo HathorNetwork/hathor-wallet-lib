@@ -23,9 +23,10 @@ import {
   NanoContractAction,
   MethodArgInfo,
   NanoContractArgumentApiInputType,
+  NanoContractArgumentType,
 } from './types';
 import ncApi from '../api/nano';
-import { validateBlueprintMethodArgs } from './utils';
+import { validateAndUpdateBlueprintMethodArgs } from './utils';
 
 class NanoContractTransactionBuilder {
   blueprintId: string | null | undefined;
@@ -39,7 +40,7 @@ class NanoContractTransactionBuilder {
 
   caller: Buffer | null;
 
-  args: NanoContractArgumentApiInputType[] | null;
+  args: NanoContractArgumentType[] | null;
 
   transaction: NanoContract | null;
 
@@ -299,7 +300,7 @@ class NanoContractTransactionBuilder {
     }
 
     // Validate if the arguments match the expected method arguments
-    await validateBlueprintMethodArgs(this.blueprintId, this.method, this.args);
+    await validateAndUpdateBlueprintMethodArgs(this.blueprintId, this.method, this.args);
 
     // Transform actions into inputs and outputs
     let inputs: Input[] = [];

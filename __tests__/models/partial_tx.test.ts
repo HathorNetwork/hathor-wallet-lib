@@ -5,12 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import {
-  PartialTx,
-  PartialTxInputData,
-  ProposalInput,
-  ProposalOutput,
-} from '../../src/models/partial_tx';
+import { PartialTx, ProposalInput, ProposalOutput } from '../../src/models/partial_tx';
 import Network from '../../src/models/network';
 import Address from '../../src/models/address';
 import dateFormatter from '../../src/utils/date';
@@ -19,11 +14,9 @@ import { UnsupportedScriptError } from '../../src/errors';
 import {
   NATIVE_TOKEN_UID,
   DEFAULT_TX_VERSION,
-  TOKEN_AUTHORITY_MASK,
   TOKEN_MINT_MASK,
   TOKEN_MELT_MASK,
 } from '../../src/constants';
-import helpers from '../../src/utils/helpers';
 import txApi from '../../src/api/txApi';
 import P2PKH from '../../src/models/p2pkh';
 import transaction from '../../src/utils/transaction';
@@ -446,6 +439,7 @@ describe('PartialTx.validate', () => {
     spy.mockImplementation(async (txId, cb) => {
       return new Promise((resolve, reject) => {
         process.nextTick(() => {
+          // eslint-disable-next-line prefer-promise-reject-errors -- This line tests an invalid error obj
           reject('txApiError');
         });
       });

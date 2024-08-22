@@ -1,3 +1,7 @@
+import MockAdapter from 'axios-mock-adapter';
+import axios from 'axios';
+import AES from 'crypto-js/aes';
+import config from '../../../src/config';
 import {
   decryptString,
   encryptString,
@@ -6,10 +10,6 @@ import {
   get,
   update,
 } from '../../../src/wallet/api/swapService';
-import config from '../../../src/config';
-import MockAdapter from 'axios-mock-adapter';
-import axios from 'axios';
-import AES from 'crypto-js/aes';
 
 const mockAxiosAdapter = new MockAdapter(axios);
 
@@ -24,15 +24,15 @@ describe('hashing and encrypting', () => {
   it('should reject calls with missing parameters', () => {
     const originalString = 'PartialTx|123123||';
 
-    // @ts-ignore
-    expect(() => encryptString()).toThrowError('Missing encrypted string');
-    // @ts-ignore
-    expect(() => encryptString(originalString)).toThrowError('Missing password');
+    // @ts-expect-error -- Testing invalid inputs
+    expect(() => encryptString()).toThrow('Missing encrypted string');
+    // @ts-expect-error -- Testing invalid inputs
+    expect(() => encryptString(originalString)).toThrow('Missing password');
 
-    // @ts-ignore
-    expect(() => decryptString()).toThrowError('Missing encrypted string');
-    // @ts-ignore
-    expect(() => decryptString(originalString)).toThrowError('Missing password');
+    // @ts-expect-error -- Testing invalid inputs
+    expect(() => decryptString()).toThrow('Missing encrypted string');
+    // @ts-expect-error -- Testing invalid inputs
+    expect(() => decryptString(originalString)).toThrow('Missing password');
   });
 
   it('should correctly encrypt and decrypt a string', () => {
@@ -49,7 +49,7 @@ describe('hashing and encrypting', () => {
 
 describe('base url configuration', () => {
   it('should throw when no url parameter was offered', () => {
-    expect(() => config.getSwapServiceBaseUrl()).toThrowError(
+    expect(() => config.getSwapServiceBaseUrl()).toThrow(
       'You should either provide a network or call setSwapServiceBaseUrl before calling this.'
     );
   });
@@ -67,8 +67,8 @@ describe('base url configuration', () => {
   });
 
   it('should throw when an invalid network is requested', () => {
-    // @ts-ignore
-    expect(() => config.getSwapServiceBaseUrl('invalid')).toThrowError(
+    // @ts-expect-error -- Testing invalid inputs
+    expect(() => config.getSwapServiceBaseUrl('invalid')).toThrow(
       `Network invalid doesn't have a correspondent Atomic Swap Service url. You should set it explicitly by calling setSwapServiceBaseUrl.`
     );
   });
@@ -81,12 +81,12 @@ describe('base url configuration', () => {
 
 describe('create api', () => {
   it('should throw missing parameter errors', async () => {
-    // @ts-ignore
-    await expect(create()).rejects.toThrowError('Missing serializedPartialTx');
-    // @ts-ignore
+    // @ts-expect-error -- Testing invalid inputs
+    await expect(create()).rejects.toThrow('Missing serializedPartialTx');
     await expect(
+      // @ts-expect-error -- Testing invalid inputs
       create('PartialTx|0001000000000000000000000063f78c0e0000000000||')
-    ).rejects.toThrowError('Missing password');
+    ).rejects.toThrow('Missing password');
   });
 
   it('should handle backend errors', async () => {
@@ -95,7 +95,7 @@ describe('create api', () => {
     mockAxiosAdapter.onPost('/').reply(503);
     await expect(
       create('PartialTx|0001000000000000000000000063f78c0e0000000000||', 'abc')
-    ).rejects.toThrowError('Request failed with status code 503');
+    ).rejects.toThrow('Request failed with status code 503');
   });
 
   it('should return the backend results on a successful post', async () => {
@@ -114,19 +114,17 @@ describe('create api', () => {
 
 describe('get api', () => {
   it('should throw missing parameter errors', async () => {
-    // @ts-ignore
-    await expect(get()).rejects.toThrowError('Missing proposalId');
-    // @ts-ignore
-    await expect(get('b4a5b077-c599-41e8-a791-85e08efcb1da')).rejects.toThrowError(
-      'Missing password'
-    );
+    // @ts-expect-error -- Testing invalid inputs
+    await expect(get()).rejects.toThrow('Missing proposalId');
+    // @ts-expect-error -- Testing invalid inputs
+    await expect(get('b4a5b077-c599-41e8-a791-85e08efcb1da')).rejects.toThrow('Missing password');
   });
 
   it('should handle backend errors', async () => {
     config.setSwapServiceBaseUrl('http://mock-swap-url/');
 
     mockAxiosAdapter.onGet('/b4a5b077-c599-41e8-a791-85e08efcb1da').reply(503);
-    await expect(get('b4a5b077-c599-41e8-a791-85e08efcb1da', 'abc')).rejects.toThrowError(
+    await expect(get('b4a5b077-c599-41e8-a791-85e08efcb1da', 'abc')).rejects.toThrow(
       'Request failed with status code 503'
     );
   });
@@ -150,9 +148,9 @@ describe('get api', () => {
     const decryptMock = jest.spyOn(AES, 'decrypt').mockImplementationOnce(() => {
       throw new Error('Malformed UTF-8 data');
     });
-    await expect(
-      get('b4a5b077-c599-41e8-a791-85e08efcb1da', incorrectPassword)
-    ).rejects.toThrowError('Incorrect password: could not decode the proposal');
+    await expect(get('b4a5b077-c599-41e8-a791-85e08efcb1da', incorrectPassword)).rejects.toThrow(
+      'Incorrect password: could not decode the proposal'
+    );
     decryptMock.mockRestore();
   });
 
@@ -173,9 +171,9 @@ describe('get api', () => {
 
     mockAxiosAdapter.onGet('/b4a5b077-c599-41e8-a791-85e08efcb1da').reply(200, rawHttpBody);
     const decryptMock = jest.spyOn(AES, 'decrypt').mockImplementationOnce(() => 'invalid string');
-    await expect(
-      get('b4a5b077-c599-41e8-a791-85e08efcb1da', incorrectPassword)
-    ).rejects.toThrowError('Incorrect password: could not decode the proposal');
+    await expect(get('b4a5b077-c599-41e8-a791-85e08efcb1da', incorrectPassword)).rejects.toThrow(
+      'Incorrect password: could not decode the proposal'
+    );
     decryptMock.mockRestore();
   });
 
@@ -288,40 +286,40 @@ describe('get api', () => {
 
 describe('update api', () => {
   it('should throw missing parameter errors', async () => {
-    // @ts-ignore
-    await expect(update()).rejects.toThrowError('Missing mandatory parameters');
-    // @ts-ignore
-    await expect(update({})).rejects.toThrowError('proposalId');
-    // @ts-ignore
+    // @ts-expect-error -- Testing invalid inputs
+    await expect(update()).rejects.toThrow('Missing mandatory parameters');
+    // @ts-expect-error -- Testing invalid inputs
+    await expect(update({})).rejects.toThrow('proposalId');
     await expect(
+      // @ts-expect-error -- Testing invalid inputs
       update({
         proposalId: 'abc',
       })
-    ).rejects.toThrowError('password');
-    // @ts-ignore
+    ).rejects.toThrow('password');
     await expect(
+      // @ts-expect-error -- Testing invalid inputs
       update({
         proposalId: 'abc',
         password: '123',
       })
-    ).rejects.toThrowError('partialTx');
-    // @ts-ignore
+    ).rejects.toThrow('partialTx');
+    await expect(
+      // @ts-expect-error -- Testing invalid inputs
+      update({
+        proposalId: 'abc',
+        password: '123',
+        partialTx: 'abc123',
+      })
+    ).rejects.toThrow('version');
     await expect(
       update({
         proposalId: 'abc',
         password: '123',
         partialTx: 'abc123',
-      })
-    ).rejects.toThrowError('version');
-    // @ts-ignore
-    await expect(
-      update({
-        proposalId: 'abc',
-        password: '123',
-        partialTx: 'abc123',
+        // @ts-expect-error -- Testing invalid inputs
         version: 'a',
       })
-    ).rejects.toThrowError('Invalid version number');
+    ).rejects.toThrow('Invalid version number');
   });
 
   it('should handle backend errors', async () => {
@@ -335,7 +333,7 @@ describe('update api', () => {
         partialTx: 'PartialTx|0001000000000000000000000063f78c0e0000000000||',
         version: 0,
       })
-    ).rejects.toThrowError('Request failed with status code 503');
+    ).rejects.toThrow('Request failed with status code 503');
   });
 
   it('should handle backend unsuccess', async () => {

@@ -4,7 +4,8 @@ import GenericWebSocket from '../../src/websocket';
 
 const atomicSwapServiceWs = 'http://localhost:3002'; // mock value
 
-let sendMessageSpy, setupSpy;
+let sendMessageSpy;
+let setupSpy;
 
 beforeAll(() => {
   sendMessageSpy = jest
@@ -28,8 +29,7 @@ describe('start', () => {
   it('should handle a websocket failure', () => {
     const atomicConnection = new AtomicSwapServiceConnection({ wsURL: atomicSwapServiceWs });
 
-    // Forcing an error
-    // @ts-ignore
+    // @ts-expect-error -- Forcing an error
     atomicConnection.websocket = null;
 
     expect(() => atomicConnection.start()).toThrow('Websocket is not initialized');
