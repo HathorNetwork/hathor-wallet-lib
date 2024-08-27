@@ -43,7 +43,7 @@ abstract class Connection extends EventEmitter {
   // network: 'testnet' or 'mainnet'
   protected network: string;
 
-  protected websocket: GenericWebSocket | WalletServiceWebSocket | null;
+  public websocket: GenericWebSocket | WalletServiceWebSocket | null;
 
   protected currentServer: string;
 

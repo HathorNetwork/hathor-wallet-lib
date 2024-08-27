@@ -37,7 +37,7 @@ abstract class BaseWebSocket extends EventEmitter {
   // This is the class of the Websocket. It is used to open new WebSocket
   // connections. We don't directly use it from import, so the unittests
   // can replace it by a mock.
-  private WebSocket: _WebSocket;
+  public WebSocket: _WebSocket;
 
   // This is the websocket instance
   private ws: _WebSocket;

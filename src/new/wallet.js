@@ -156,6 +156,7 @@ class HathorWallet extends EventEmitter {
       }
     }
 
+    this.logger = logger || getDefaultLogger();
     if (storage) {
       /**
        * @type {import('../types').IStorage}
@@ -169,7 +170,7 @@ class HathorWallet extends EventEmitter {
        */
       this.storage = new Storage(store);
     }
-    this.storage.setLogger(logger);
+    this.storage.setLogger(this.logger);
     this.conn = connection;
     this.conn.startControlHandlers(this.storage);
 
@@ -223,12 +224,6 @@ class HathorWallet extends EventEmitter {
     this.isSignedExternally = this.storage.hasTxSignatureMethod();
 
     this.historySyncMode = HistorySyncMode.POLLING_HTTP_API;
-
-    if (logger) {
-      this.logger = logger;
-    } else {
-      this.logger = getDefaultLogger();
-    }
   }
 
   /**
