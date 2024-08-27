@@ -30,7 +30,7 @@ export class AtomicSwapServiceConnection extends EventEmitter {
 
   protected logger: ILogger;
 
-  constructor(options: { wsURL: string; connectionTimeout?: number, logger?: ILogger }) {
+  constructor(options: { wsURL: string; connectionTimeout?: number; logger?: ILogger }) {
     super();
 
     const logger = options.logger || getDefaultLogger();
@@ -39,7 +39,7 @@ export class AtomicSwapServiceConnection extends EventEmitter {
     const wsOptions = {
       logger,
       wsURL: options.wsURL,
-    } as { wsURL: string; connectionTimeout?: number, logger: ILogger };
+    } as { wsURL: string; connectionTimeout?: number; logger: ILogger };
     if (options.connectionTimeout) {
       wsOptions.connectionTimeout = options.connectionTimeout;
     }

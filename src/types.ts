@@ -14,16 +14,16 @@ import FullNodeConnection from './new/connection';
  * Logger interface where each method is a leveled log method.
  */
 export interface ILogger {
-  log: Function,
-  debug: Function,
-  warn: Function,
-  error: Function,
-};
+  log: (...args) => void;
+  debug: (...args) => void;
+  warn: (...args) => void;
+  error: (...args) => void;
+}
 
 /**
  * Get the default logger instance, the console
  */
-export function getDefaultLogger() : ILogger {
+export function getDefaultLogger(): ILogger {
   return console as ILogger;
 }
 

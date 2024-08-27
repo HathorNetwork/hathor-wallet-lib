@@ -24,7 +24,7 @@ export type ConnectionParams = {
   network?: string;
   servers?: string[];
   connectionTimeout?: number;
-  logger: ILogger,
+  logger: ILogger;
 };
 
 /**

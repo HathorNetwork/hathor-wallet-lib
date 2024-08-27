@@ -65,7 +65,7 @@ class WalletConnection extends BaseConnection {
     const wsOptions: {
       connectionTimeout?: number;
       wsURL: string;
-      logger: ILogger,
+      logger: ILogger;
     } = { wsURL: helpers.getWSServerURL(this.currentServer), logger: options.logger };
 
     if (options.connectionTimeout) {

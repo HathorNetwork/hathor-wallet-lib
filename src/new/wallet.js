@@ -29,7 +29,13 @@ import {
 } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
-import { SCANNING_POLICY, TxHistoryProcessingStatus, WalletType, HistorySyncMode, IStorage, ILogger, getDefaultLogger } from '../types';
+import {
+  SCANNING_POLICY,
+  TxHistoryProcessingStatus,
+  WalletType,
+  HistorySyncMode,
+  getDefaultLogger,
+} from '../types';
 import transactionUtils from '../utils/transaction';
 import Queue from '../models/queue';
 import {
@@ -80,7 +86,7 @@ class HathorWallet extends EventEmitter {
   /**
    * @param {Object} param
    * @param {FullnodeConnection} param.connection A connection to the server
-   * @param {IStorage} param.storage A storage
+   * @param {import('../types').IStorage} param.storage A storage
    * @param {string} param.seed 24 words separated by space
    * @param {string} [param.passphrase=''] Wallet passphrase
    * @param {string} [param.xpriv]
@@ -92,7 +98,7 @@ class HathorWallet extends EventEmitter {
    * @param {{pubkeys:string[],numSignatures:number}} [param.multisig]
    * @param {string[]} [param.preCalculatedAddresses] An array of pre-calculated addresses
    * @param {import('../types').AddressScanPolicyData} [param.scanPolicy] config specific to
-   * @param {ILogger} [param.logger] The logger instance to use
+   * @param {import('../types').ILogger} [param.logger] The logger instance to use
    * the address scan policy.
    */
   constructor({
@@ -152,14 +158,14 @@ class HathorWallet extends EventEmitter {
 
     if (storage) {
       /**
-       * @type {IStorage}
+       * @type {import('../types').IStorage}
        */
       this.storage = storage;
     } else {
       // Default to a memory store
       const store = new MemoryStore();
       /**
-       * @type {IStorage}
+       * @type {import('../types').IStorage}
        */
       this.storage = new Storage(store);
     }

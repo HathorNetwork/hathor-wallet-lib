@@ -24,7 +24,7 @@ export type WsOptions = {
   connectionTimeout?: number;
   retryConnectionInterval?: number;
   openConnectionTimeout?: number;
-  logger: ILogger,
+  logger: ILogger;
 };
 
 /**
