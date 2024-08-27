@@ -11,7 +11,7 @@ import helpers from '../utils/helpers';
 import BaseConnection, { ConnectionParams } from '../connection';
 import { ConnectionState } from '../wallet/types';
 import { handleSubscribeAddress, handleWsDashboard } from '../utils/connection';
-import { IStorage } from '../types';
+import { IStorage, ILogger } from '../types';
 
 const STREAM_ABORT_TIMEOUT = 10000; // 10s
 
@@ -65,7 +65,8 @@ class WalletConnection extends BaseConnection {
     const wsOptions: {
       connectionTimeout?: number;
       wsURL: string;
-    } = { wsURL: helpers.getWSServerURL(this.currentServer) };
+      logger: ILogger,
+    } = { wsURL: helpers.getWSServerURL(this.currentServer), logger: options.logger };
 
     if (options.connectionTimeout) {
       wsOptions.connectionTimeout = options.connectionTimeout;

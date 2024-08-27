@@ -7,6 +7,7 @@
 
 import { EventEmitter } from 'events';
 import _WebSocket from 'isomorphic-ws';
+import { ILogger, getDefaultLogger } from '../types';
 
 export const DEFAULT_WS_OPTIONS = {
   wsURL: 'wss://node1.mainnet.hathor.network/v1a/',
@@ -14,6 +15,7 @@ export const DEFAULT_WS_OPTIONS = {
   connectionTimeout: 5000,
   retryConnectionInterval: 1000,
   openConnectionTimeout: 20000,
+  logger: getDefaultLogger(),
 };
 
 export type WsOptions = {
@@ -22,6 +24,7 @@ export type WsOptions = {
   connectionTimeout?: number;
   retryConnectionInterval?: number;
   openConnectionTimeout?: number;
+  logger: ILogger,
 };
 
 /**
@@ -87,6 +90,8 @@ abstract class BaseWebSocket extends EventEmitter {
   // Connection timeout in milliseconds
   protected connectionTimeout: number;
 
+  protected logger: ILogger;
+
   constructor(options: WsOptions) {
     super();
 
@@ -96,6 +101,7 @@ abstract class BaseWebSocket extends EventEmitter {
       connectionTimeout,
       retryConnectionInterval,
       openConnectionTimeout,
+      logger,
     } = {
       ...DEFAULT_WS_OPTIONS,
       ...options,
@@ -117,6 +123,7 @@ abstract class BaseWebSocket extends EventEmitter {
     this.timeoutTimer = null;
     this.setupTimer = null;
     this.heartbeat = null;
+    this.logger = logger;
   }
 
   /**
@@ -329,7 +336,7 @@ abstract class BaseWebSocket extends EventEmitter {
    * Event received when the websocket connection is down.
    */
   onConnectionDown() {
-    console.warn('Ping timeout. Connection is down...', {
+    this.logger.warn('Ping timeout. Connection is down...', {
       uptime: this.uptime(),
       connectionTimeout: this.connectionTimeout,
     });

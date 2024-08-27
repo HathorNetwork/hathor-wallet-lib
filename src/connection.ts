@@ -11,17 +11,20 @@ import config from './config';
 import GenericWebSocket from './websocket';
 import WalletServiceWebSocket from './wallet/websocket';
 import { ConnectionState } from './wallet/types';
+import { ILogger, getDefaultLogger } from './types';
 
 export const DEFAULT_PARAMS = {
   network: 'mainnet',
   servers: [],
   connectionTimeout: 5000,
+  logger: getDefaultLogger(),
 };
 
 export type ConnectionParams = {
   network?: string;
   servers?: string[];
   connectionTimeout?: number;
+  logger: ILogger,
 };
 
 /**
@@ -46,6 +49,8 @@ abstract class Connection extends EventEmitter {
 
   protected state: ConnectionState;
 
+  protected logger: ILogger;
+
   /*
    * servers {Array} List of servers for the wallet to connect to, e.g. http://localhost:8080/v1a/
    */
@@ -69,6 +74,7 @@ abstract class Connection extends EventEmitter {
     this.network = network;
     this.state = ConnectionState.CLOSED;
     this.currentServer = servers[0] || config.getServerUrl();
+    this.logger = options.logger;
   }
 
   /**

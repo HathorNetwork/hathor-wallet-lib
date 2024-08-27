@@ -443,7 +443,7 @@ export async function _updateTokensData(storage: IStorage, tokens: Set<string>):
         });
         return result;
       } catch (err: unknown) {
-        console.error(err);
+        storage.logger.error(err);
         // This delay will give us the exponential backoff intervals of
         // 500ms, 1s, 2s, 4s and 8s
         const delay = 500 * 2 ** retryCount;

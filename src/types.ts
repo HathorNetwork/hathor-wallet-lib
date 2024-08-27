@@ -10,6 +10,22 @@ import Transaction from './models/transaction';
 import Input from './models/input';
 import FullNodeConnection from './new/connection';
 
+/**
+ */
+export interface ILogger {
+  log: Function,
+  debug: Function,
+  warn: Function,
+  error: Function,
+};
+
+/**
+ * Get the default logger instance, the console
+ */
+export function getDefaultLogger() : ILogger {
+  return console as ILogger;
+}
+
 export type OutputValueType = number;
 
 export interface ITxSignatureData {
@@ -455,11 +471,13 @@ export interface IStorage {
   store: IStore;
   config: Config;
   version: ApiVersion | null;
+  logger: ILogger;
 
   setApiVersion(version: ApiVersion): void;
   getDecimalPlaces(): number;
   saveNativeToken(): Promise<void>;
   getNativeTokenData(): ITokenData;
+  setLogger(logger: ILogger): void;
 
   hasTxSignatureMethod(): boolean;
   setTxSignatureMethod(txSign: EcdsaTxSign): void;

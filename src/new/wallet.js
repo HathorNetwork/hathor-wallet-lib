@@ -29,7 +29,7 @@ import {
 } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import P2SHSignature from '../models/p2sh_signature';
-import { SCANNING_POLICY, TxHistoryProcessingStatus, WalletType, HistorySyncMode } from '../types';
+import { SCANNING_POLICY, TxHistoryProcessingStatus, WalletType, HistorySyncMode, IStorage, ILogger, getDefaultLogger } from '../types';
 import transactionUtils from '../utils/transaction';
 import Queue from '../models/queue';
 import {
@@ -92,6 +92,7 @@ class HathorWallet extends EventEmitter {
    * @param {{pubkeys:string[],numSignatures:number}} [param.multisig]
    * @param {string[]} [param.preCalculatedAddresses] An array of pre-calculated addresses
    * @param {import('../types').AddressScanPolicyData} [param.scanPolicy] config specific to
+   * @param {ILogger} [param.logger] The logger instance to use
    * the address scan policy.
    */
   constructor({
@@ -117,6 +118,7 @@ class HathorWallet extends EventEmitter {
     multisig = null,
     preCalculatedAddresses = null,
     scanPolicy = null,
+    logger = null,
   } = {}) {
     super();
 
@@ -161,6 +163,7 @@ class HathorWallet extends EventEmitter {
        */
       this.storage = new Storage(store);
     }
+    this.storage.setLogger(logger);
     this.conn = connection;
     this.conn.startControlHandlers(this.storage);
 
@@ -214,6 +217,12 @@ class HathorWallet extends EventEmitter {
     this.isSignedExternally = this.storage.hasTxSignatureMethod();
 
     this.historySyncMode = HistorySyncMode.POLLING_HTTP_API;
+
+    if (logger) {
+      this.logger = logger;
+    } else {
+      this.logger = getDefaultLogger();
+    }
   }
 
   /**
@@ -442,7 +451,7 @@ class HathorWallet extends EventEmitter {
         this.setState(HathorWallet.PROCESSING);
       } catch (error) {
         this.setState(HathorWallet.ERROR);
-        console.error('Error loading wallet', { error });
+        this.logger.error('Error loading wallet', { error });
       }
     } else if (this.walletStopped) {
       this.setState(HathorWallet.CLOSED);
@@ -1258,7 +1267,7 @@ class HathorWallet extends EventEmitter {
     if (state === HathorWallet.PROCESSING && state !== this.state) {
       // XXX: will not await this so we can process history on background.
       this.onEnterStateProcessing().catch(e => {
-        console.error(e);
+        this.logger.error(e);
         this.setState(HathorWallet.ERROR);
       });
     }
