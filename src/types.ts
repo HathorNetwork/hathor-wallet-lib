@@ -11,6 +11,7 @@ import Input from './models/input';
 import FullNodeConnection from './new/connection';
 
 /**
+ * Logger interface where each method is a leveled log method.
  */
 export interface ILogger {
   log: Function,
