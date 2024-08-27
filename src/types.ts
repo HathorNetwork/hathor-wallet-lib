@@ -14,8 +14,8 @@ import FullNodeConnection from './new/connection';
  * Logger interface where each method is a leveled log method.
  */
 export interface ILogger {
-  log: (...args) => void;
   debug: (...args) => void;
+  info: (...args) => void;
   warn: (...args) => void;
   error: (...args) => void;
 }
