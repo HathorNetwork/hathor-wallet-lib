@@ -8,6 +8,7 @@
 import { EventEmitter } from 'events';
 import { ConnectionState } from '../wallet/types';
 import GenericWebSocket from '../websocket';
+import { ILogger, getDefaultLogger } from '../types';
 
 /**
  * This is a Websocket Connection with the Atomic Swap Service
@@ -27,20 +28,27 @@ export class AtomicSwapServiceConnection extends EventEmitter {
 
   protected state: ConnectionState;
 
-  constructor(options: { wsURL: string; connectionTimeout?: number }) {
+  protected logger: ILogger;
+
+  constructor(options: { wsURL: string; connectionTimeout?: number; logger?: ILogger }) {
     super();
+
+    const logger = options.logger || getDefaultLogger();
 
     // Initializing WebSocket
     const wsOptions = {
+      logger,
       wsURL: options.wsURL,
-    } as { wsURL: string; connectionTimeout?: number };
+    } as { wsURL: string; connectionTimeout?: number; logger: ILogger };
     if (options.connectionTimeout) {
       wsOptions.connectionTimeout = options.connectionTimeout;
     }
+
     this.websocket = new GenericWebSocket(wsOptions);
 
     // Remaining properties initialization
     this.state = ConnectionState.CLOSED;
+    this.logger = logger;
   }
 
   /**
@@ -65,7 +73,7 @@ export class AtomicSwapServiceConnection extends EventEmitter {
     });
 
     this.websocket.on('connection_error', err => {
-      console.error(`Atomic Swap Service Websocket error: ${err.message}`);
+      this.logger.error(`Atomic Swap Service Websocket error: ${err.message}`);
     });
 
     this.setState(ConnectionState.CONNECTING);

@@ -40,6 +40,7 @@ class WalletServiceWebSocket extends BaseWebSocket {
       connectionTimeout,
       retryConnectionInterval,
       openConnectionTimeout,
+      logger,
       walletId,
       joinTimeout,
     } = {
@@ -54,6 +55,7 @@ class WalletServiceWebSocket extends BaseWebSocket {
       connectionTimeout,
       retryConnectionInterval,
       openConnectionTimeout,
+      logger,
     });
 
     this.walletId = walletId;

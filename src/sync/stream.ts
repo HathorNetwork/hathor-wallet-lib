@@ -1,6 +1,6 @@
 import { Address as BitcoreAddress, HDPublicKey } from 'bitcore-lib';
 import FullNodeConnection from '../new/connection';
-import { IStorage, IHistoryTx, HistorySyncMode, isGapLimitScanPolicy } from '../types';
+import { IStorage, IHistoryTx, HistorySyncMode, isGapLimitScanPolicy, ILogger } from '../types';
 import Network from '../models/network';
 
 interface IStreamSyncHistoryVertex {
@@ -172,6 +172,8 @@ export class StreamManager extends AbortController {
 
   errorMessage: string | null;
 
+  logger: ILogger;
+
   /**
    * @param {number} startIndex Index to start loading addresses
    * @param {IStorage} storage The storage to load the addresses
@@ -200,6 +202,7 @@ export class StreamManager extends AbortController {
 
     this.executionQueue = Promise.resolve();
     this.batchQueue = Promise.resolve();
+    this.logger = storage.logger;
   }
 
   /**
@@ -394,7 +397,7 @@ function buildListener(manager: StreamManager, resolve: () => void) {
     // Only process the message if it is from our stream, this error should not happen.
     if (wsData.id !== manager.streamId) {
       // Check that the stream id is the same we sent
-      console.error(
+      manager.logger.error(
         `Received stream event for id ${wsData.id} while expecting ${manager.streamId}`
       );
       return;
@@ -414,10 +417,10 @@ function buildListener(manager: StreamManager, resolve: () => void) {
       resolve();
     } else if (isStreamSyncHistoryError(wsData)) {
       // An error happened on the fullnode, we should stop the stream
-      console.error(`Stream error: ${wsData.errmsg}`);
+      manager.logger.error(`Stream error: ${wsData.errmsg}`);
       manager.abortWithError(wsData.errmsg);
     } else {
-      console.error(`Unknown event type ${wsData}`);
+      manager.logger.error(`Unknown event type ${wsData}`);
     }
   };
 }
