@@ -394,7 +394,7 @@ export interface ApiVersion {
 
 export interface IStore {
   validate(): Promise<void>;
-  preProcess(): Promise<void>;
+  preProcessHistory(): Promise<void>;
   // Address methods
   addressIter(): AsyncGenerator<IAddressInfo>;
   getAddress(base58: string): Promise<IAddressInfo | null>;

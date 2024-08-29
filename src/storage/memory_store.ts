@@ -191,7 +191,7 @@ export class MemoryStore implements IStore {
   /**
    * Prepare the store for history processing.
    */
-  async preProcess(): Promise<void> {
+  async preProcessHistory(): Promise<void> {
     this.historyTs.sort();
   }
 

@@ -88,7 +88,7 @@ export default class LevelDBStore implements IStore {
   }
 
   // eslint-disable-next-line class-methods-use-this
-  async preProcess(): Promise<void> {
+  async preProcessHistory(): Promise<void> {
     // This is a noop since there are no pre-processing operations to do.
   }
 
