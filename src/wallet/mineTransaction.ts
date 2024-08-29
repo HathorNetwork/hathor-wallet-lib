@@ -105,6 +105,7 @@ class MineTransaction extends EventEmitter {
     if (error.response && error.response.status === 429) {
       this.emit('error', rateLimitExceededError);
     } else {
+      // eslint-disable-next-line no-console
       console.error(error);
       this.emit('unexpected-error', unexpectedError);
     }

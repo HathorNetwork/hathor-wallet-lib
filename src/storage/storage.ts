@@ -36,6 +36,8 @@ import {
   EcdsaTxSign,
   ITxSignatureData,
   OutputValueType,
+  ILogger,
+  getDefaultLogger,
 } from '../types';
 import transactionUtils from '../utils/transaction';
 import { processHistory, processUtxoUnlock } from '../utils/storage';
@@ -81,6 +83,8 @@ export class Storage implements IStorage {
    */
   utxoUnlockWait: Promise<void>;
 
+  logger: ILogger;
+
   constructor(store: IStore) {
     this.store = store;
     this.utxosSelectedAsInput = new Map<string, boolean>();
@@ -88,6 +92,7 @@ export class Storage implements IStorage {
     this.version = null;
     this.utxoUnlockWait = Promise.resolve();
     this.txSignFunc = null;
+    this.logger = getDefaultLogger();
   }
 
   /**
@@ -125,6 +130,13 @@ export class Storage implements IStorage {
     const nativeToken = this.version?.native_token ?? DEFAULT_NATIVE_TOKEN_CONFIG;
 
     return { ...nativeToken, uid: NATIVE_TOKEN_UID };
+  }
+
+  /**
+   * Set the logger instance to use.
+   */
+  setLogger(logger: ILogger) {
+    this.logger = logger;
   }
 
   /**

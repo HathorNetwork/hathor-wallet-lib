@@ -2,7 +2,7 @@ import { Server, WebSocket } from 'mock-socket';
 import HathorWallet from '../src/new/wallet';
 import Connection from '../src/new/connection';
 import { MemoryStore, Storage } from '../src/storage';
-import { HistorySyncMode } from '../src/types';
+import { HistorySyncMode, getDefaultLogger } from '../src/types';
 
 const mock_tx = {
   tx_id: '00002f4c8d6516ee0c39437f30d9f20231f88652aacc263bc738f55c412cf5ee',
@@ -113,7 +113,11 @@ async function startWalletFor(mode) {
     connectionTimeout: 30000,
     network: 'testnet',
     servers: ['http://localhost:8080/v1a'],
+    logger: getDefaultLogger(),
   });
+  if (connection.websocket === null) {
+    throw new Error('Invalid websocket instance');
+  }
   connection.websocket.WebSocket = WebSocket;
 
   const walletConfig = {

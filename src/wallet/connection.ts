@@ -32,7 +32,7 @@ export default class WalletServiceConnection extends BaseConnection {
   private walletId?: string;
 
   constructor(options?: WalletServiceConnectionParams) {
-    const { network, servers, walletId, connectionTimeout } = {
+    const { network, servers, logger, walletId, connectionTimeout } = {
       ...DEFAULT_PARAMS,
       ...options,
     };
@@ -40,6 +40,7 @@ export default class WalletServiceConnection extends BaseConnection {
     super({
       network,
       servers,
+      logger,
       connectionTimeout,
     });
 
@@ -66,6 +67,7 @@ export default class WalletServiceConnection extends BaseConnection {
       wsURL: config.getWalletServiceBaseWsUrl(),
       walletId: this.walletId,
       connectionTimeout: this.connectionTimeout,
+      logger: this.logger,
     };
 
     this.websocket = new WalletServiceWebSocket(wsOptions);

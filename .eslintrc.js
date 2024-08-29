@@ -82,6 +82,13 @@ module.exports = {
   },
   overrides: [
     {
+      // Rules specific for source files
+      files: ['src/**'],
+      rules: {
+        'no-console': 'error',
+      }
+    },
+    {
       files: ['*.ts'],
       parserOptions: {
         project: ['./tsconfig.json'], // Specify it only for TypeScript files
