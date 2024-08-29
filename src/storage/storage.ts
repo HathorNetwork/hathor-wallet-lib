@@ -354,6 +354,7 @@ export class Storage implements IStorage {
    * @returns {Promise<void>}
    */
   async processHistory(): Promise<void> {
+    await this.store.preProcess();
     await processHistory(this, { rewardLock: this.version?.reward_spend_min_blocks });
   }
 

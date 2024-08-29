@@ -188,6 +188,13 @@ export class MemoryStore implements IStore {
     // This is a noop since the memory store always starts clean.
   }
 
+  /**
+   * Prepare the store for history processing.
+   */
+  async preProcess(): Promise<void> {
+    this.historyTs.sort();
+  }
+
   /** ADDRESSES */
 
   /**
@@ -407,14 +414,12 @@ export class MemoryStore implements IStore {
     // Protect ordering list from updates on the same transaction
     // We can check the historyTs but it's O(n) and this check is O(1).
     if (!this.history.has(tx.tx_id)) {
-      // Add transaction to the ordering list and sort it
+      // Add transaction to the ordering list
       // Wallets expect to show users the transactions in order of descending timestamp
       // This is so wallets can show the most recent transactions to users
-      // XXX: If this becomes a performance bottleneck we can either allow wallets to skip ordering
-      // or have the ordering be done during history processing so that
-      // we don't have to sort the list every time we add a new transaction
+      // The historyTs should be sorted to ensure the history order but this is not
+      // done here due to the performance bottleneck it creates on big wallets.
       this.historyTs.push(getOrderingKey(tx));
-      this.historyTs.sort();
     }
 
     this.history.set(tx.tx_id, tx);
