@@ -14,7 +14,7 @@ import { handleSubscribeAddress, handleWsDashboard } from '../utils/connection';
 import { IStorage, ILogger, getDefaultLogger } from '../types';
 
 const STREAM_ABORT_TIMEOUT = 10000; // 10s
-const STREAM_WINDOW_SIZE = 1000;
+const STREAM_WINDOW_SIZE: number | string = 'inf';
 
 /**
  * Event names for requesting stream from fullnode
@@ -59,7 +59,7 @@ class WalletConnection extends BaseConnection {
 
   streamController: StreamController | null = null;
 
-  streamWindowSize: number;
+  streamWindowSize: number | string;
 
   constructor(options: ConnectionParams & { streamWindowSize?: number }) {
     super(options);

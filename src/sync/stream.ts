@@ -95,12 +95,14 @@ class StreamStatsManager {
 
   inTimer?: ReturnType<typeof setTimeout>;
   outTimer?: ReturnType<typeof setTimeout>;
+  qTimer?: ReturnType<typeof setTimeout>;
 
   logger: ILogger;
 
+  q: Queue;
   dt: number;
 
-  constructor(logger: ILogger) {
+  constructor(queue: Queue, logger: ILogger) {
     this.recvCounter = 0;
     this.procCounter = 0;
     this.ackCounter = 0;
@@ -108,6 +110,22 @@ class StreamStatsManager {
 
     this.logger = logger;
     this.dt = 2000;
+    this.q = queue;
+    this.qTimer = setInterval(() => {
+      this.logger.debug(`[*] queue_size: ${queue.size()}`);
+    }, this.dt);
+  }
+
+  clean() {
+    if (this.inTimer) {
+      clearTimeout(this.inTimer);
+    }
+    if (this.outTimer) {
+      clearTimeout(this.outTimer);
+    }
+    if (this.qTimer) {
+      clearInterval(this.qTimer);
+    }
   }
 
   ack(seq: number, queueSize: number) {
@@ -314,7 +332,7 @@ export class StreamManager extends AbortController {
     this.itemQueue = new Queue();
     this.isProcessingQueue = false;
 
-    this.stats = new StreamStatsManager(this.logger);
+    this.stats = new StreamStatsManager(this.itemQueue, this.logger);
   }
 
   /**
@@ -446,6 +464,9 @@ export class StreamManager extends AbortController {
       } else if (isStreamItemVertex(item)) {
         await this.storage.addTx(item.vertex);
       }
+      await new Promise(resolve => {
+        setImmediate(resolve);
+      });
     }
 
     this.isProcessingQueue = false;
@@ -563,6 +584,7 @@ export class StreamManager extends AbortController {
         clearTimeout(timer);
       }
     }
+    this.stats.clean();
 
     if (this.errorMessage) {
       throw new Error(this.errorMessage);
