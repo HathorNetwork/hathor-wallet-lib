@@ -87,6 +87,11 @@ export default class LevelDBStore implements IStore {
     await this.nanoContractIndex.validate();
   }
 
+  // eslint-disable-next-line class-methods-use-this
+  async preProcessHistory(): Promise<void> {
+    // This is a noop since there are no pre-processing operations to do.
+  }
+
   async *addressIter(): AsyncGenerator<IAddressInfo> {
     for await (const info of this.addressIndex.addressIter()) {
       yield info;

@@ -420,7 +420,7 @@ function buildListener(manager: StreamManager, resolve: () => void) {
       manager.logger.error(`Stream error: ${wsData.errmsg}`);
       manager.abortWithError(wsData.errmsg);
     } else {
-      manager.logger.error(`Unknown event type ${wsData}`);
+      manager.logger.error(`Unknown event type ${JSON.stringify(wsData)}`);
     }
   };
 }
