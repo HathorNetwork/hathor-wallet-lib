@@ -1,6 +1,13 @@
 import { Address as BitcoreAddress, HDPublicKey } from 'bitcore-lib';
 import FullNodeConnection from '../new/connection';
-import { IStorage, IHistoryTx, HistorySyncMode, isGapLimitScanPolicy, IAddressInfo, ILogger } from '../types';
+import {
+  IStorage,
+  IHistoryTx,
+  HistorySyncMode,
+  isGapLimitScanPolicy,
+  IAddressInfo,
+  ILogger,
+} from '../types';
 import Network from '../models/network';
 import Queue from '../models/queue';
 
@@ -11,7 +18,7 @@ interface IStreamSyncHistoryVertex {
   type: 'stream:history:vertex';
   id: string;
   data: IHistoryTx;
-  seq: number,
+  seq: number;
 }
 
 interface IStreamSyncHistoryAddress {
@@ -19,7 +26,7 @@ interface IStreamSyncHistoryAddress {
   id: string;
   address: string;
   index: number;
-  seq: number,
+  seq: number;
 }
 
 interface IStreamSyncHistoryEnd {
@@ -59,13 +66,13 @@ function isStreamSyncHistoryError(data: IStreamSyncHistoryData): data is IStream
 
 interface IStreamItemVertex {
   seq: number;
-  type: 'vertex'
+  type: 'vertex';
   vertex: IHistoryTx;
 }
 
 interface IStreamItemAddress {
   seq: number;
-  type: 'address',
+  type: 'address';
   address: IAddressInfo;
 }
 
@@ -339,7 +346,7 @@ export class StreamManager extends AbortController {
 
   isQueueDone() {
     // Must not be processing the queue and the queue must be empty
-    return !(this.isProcessingQueue && this.itemQueue.size() !== 0)
+    return !(this.isProcessingQueue && this.itemQueue.size() !== 0);
   }
 
   async processQueue() {
@@ -347,13 +354,13 @@ export class StreamManager extends AbortController {
       return;
     }
     this.isProcessingQueue = true;
-    while(true) {
+    while (true) {
       if (this.signal.aborted) {
         // Abort processing the queue
         break;
       }
       const item = this.itemQueue.dequeue();
-      if ((this.itemQueue.size() <= MIN_QUEUE_SIZE_FOR_ACK) && (this.lastAcked <= this.lastProcSeq)) {
+      if (this.itemQueue.size() <= MIN_QUEUE_SIZE_FOR_ACK && this.lastAcked <= this.lastProcSeq) {
         // Send the ACK for the end of the queue
         this.lastAcked = this.lastSeenSeq;
         this.connection.sendStreamHistoryAck(this.streamId, this.lastSeenSeq);
@@ -465,23 +472,27 @@ export class StreamManager extends AbortController {
     await this.batchQueue;
     await this.processQueue();
     if (this.isProcessingQueue) {
-      // Wait to finish processing queue
-      await new Promise<void>(async (res) => {
-        // Limit wait period as to not wait forever
-        const timer = setTimeout(() => {
-          this.logger.error(`Stream shutdown reached ${QUEUE_GRACEFUL_SHUTDOWN_LIMIT}ms limit`);
-          this.errorMessage = `Stream could not gracefully shutdown due to timeout.`;
-          res();
-        }, QUEUE_GRACEFUL_SHUTDOWN_LIMIT);
-        // Check every 0.1s
-        while(this.isProcessingQueue) {
-          await new Promise<void>(resolve => {
-            setTimeout(resolve, 100);
-          });
+      let shutdownTimedout = false;
+      // Limit wait period as to not wait forever
+      const timer = setTimeout(() => {
+        this.logger.error(`Stream shutdown reached ${QUEUE_GRACEFUL_SHUTDOWN_LIMIT}ms limit`);
+        this.errorMessage = `Stream could not gracefully shutdown due to timeout.`;
+        shutdownTimedout = true;
+      }, QUEUE_GRACEFUL_SHUTDOWN_LIMIT);
+
+      // Check every 0.1s
+      while (this.isProcessingQueue) {
+        if (shutdownTimedout) {
+          break;
         }
+        await new Promise<void>(resolve => {
+          setTimeout(resolve, 100);
+        });
+      }
+      // Clear timer to avoid unnecessary error
+      if (!shutdownTimedout) {
         clearTimeout(timer);
-        res();
-      });
+      }
     }
 
     if (this.errorMessage) {

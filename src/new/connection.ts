@@ -170,7 +170,7 @@ class WalletConnection extends BaseConnection {
       type: StreamRequestEvent.REQUEST_HISTORY_XPUB,
       'first-index': firstIndex,
       'gap-limit': gapLimit,
-      'window_size': this.streamWindowSize,
+      window_size: this.streamWindowSize,
     });
     this.websocket.sendMessage(data);
   }
@@ -196,7 +196,7 @@ class WalletConnection extends BaseConnection {
       type: StreamRequestEvent.REQUEST_HISTORY_MANUAL,
       'first-index': firstIndex,
       'gap-limit': gapLimit,
-      'window_size': this.streamWindowSize,
+      window_size: this.streamWindowSize,
     });
     this.websocket.sendMessage(data);
   }
@@ -205,10 +205,7 @@ class WalletConnection extends BaseConnection {
    * Send an ACK message to the fullnode to confirm we received all events up to
    * the event of sequence number `ack`.
    */
-  sendStreamHistoryAck(
-    id: string,
-    ack: number,
-  ) {
+  sendStreamHistoryAck(id: string, ack: number) {
     if (this.streamController?.streamId !== id) {
       throw new Error('There is an on-going stream, cannot start a second one');
     }
