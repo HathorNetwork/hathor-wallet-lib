@@ -14,6 +14,7 @@ import { handleSubscribeAddress, handleWsDashboard } from '../utils/connection';
 import { IStorage, ILogger, getDefaultLogger } from '../types';
 
 const STREAM_ABORT_TIMEOUT = 10000; // 10s
+const STREAM_WINDOW_SIZE = 1000;
 
 /**
  * Event names for requesting stream from fullnode
@@ -22,6 +23,8 @@ enum StreamRequestEvent {
   REQUEST_HISTORY_XPUB = 'request:history:xpub',
   REQUEST_HISTORY_MANUAL = 'request:history:manual',
 }
+
+const STREAM_HISTORY_ACK_EVENT = 'request:history:ack';
 
 /**
  * Stream abort controller that carries the streamId it is managing.
@@ -56,7 +59,9 @@ class WalletConnection extends BaseConnection {
 
   streamController: StreamController | null = null;
 
-  constructor(options: ConnectionParams) {
+  streamWindowSize: number;
+
+  constructor(options: ConnectionParams & { streamWindowSize?: number }) {
     super(options);
 
     this.handleWalletMessage = this.handleWalletMessage.bind(this);
@@ -74,6 +79,8 @@ class WalletConnection extends BaseConnection {
     if (options.connectionTimeout) {
       wsOptions.connectionTimeout = options.connectionTimeout;
     }
+
+    this.streamWindowSize = options.streamWindowSize || STREAM_WINDOW_SIZE;
 
     this.websocket = new GenericWebSocket(wsOptions);
   }
@@ -163,6 +170,7 @@ class WalletConnection extends BaseConnection {
       type: StreamRequestEvent.REQUEST_HISTORY_XPUB,
       'first-index': firstIndex,
       'gap-limit': gapLimit,
+      'window_size': this.streamWindowSize,
     });
     this.websocket.sendMessage(data);
   }
@@ -188,7 +196,27 @@ class WalletConnection extends BaseConnection {
       type: StreamRequestEvent.REQUEST_HISTORY_MANUAL,
       'first-index': firstIndex,
       'gap-limit': gapLimit,
+      'window_size': this.streamWindowSize,
     });
+    this.websocket.sendMessage(data);
+  }
+
+  /**
+   * Send an ACK message to the fullnode to confirm we received all events up to
+   * the event of sequence number `ack`.
+   */
+  sendStreamHistoryAck(
+    id: string,
+    ack: number,
+  ) {
+    if (this.streamController?.streamId !== id) {
+      throw new Error('There is an on-going stream, cannot start a second one');
+    }
+    if (!this.websocket) {
+      throw new Error('No websocket connection to send message.');
+    }
+
+    const data = JSON.stringify({ id, ack, type: STREAM_HISTORY_ACK_EVENT });
     this.websocket.sendMessage(data);
   }
 

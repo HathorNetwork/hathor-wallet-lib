@@ -1,12 +1,17 @@
 import { Address as BitcoreAddress, HDPublicKey } from 'bitcore-lib';
 import FullNodeConnection from '../new/connection';
-import { IStorage, IHistoryTx, HistorySyncMode, isGapLimitScanPolicy, ILogger } from '../types';
+import { IStorage, IHistoryTx, HistorySyncMode, isGapLimitScanPolicy, IAddressInfo, ILogger } from '../types';
 import Network from '../models/network';
+import Queue from '../models/queue';
+
+const QUEUE_GRACEFUL_SHUTDOWN_LIMIT = 10000;
+const MIN_QUEUE_SIZE_FOR_ACK = 100;
 
 interface IStreamSyncHistoryVertex {
   type: 'stream:history:vertex';
   id: string;
   data: IHistoryTx;
+  seq: number,
 }
 
 interface IStreamSyncHistoryAddress {
@@ -14,6 +19,7 @@ interface IStreamSyncHistoryAddress {
   id: string;
   address: string;
   index: number;
+  seq: number,
 }
 
 interface IStreamSyncHistoryEnd {
@@ -49,6 +55,28 @@ function isStreamSyncHistoryEnd(data: IStreamSyncHistoryData): data is IStreamSy
 
 function isStreamSyncHistoryError(data: IStreamSyncHistoryData): data is IStreamSyncHistoryError {
   return data.type === 'stream:history:error';
+}
+
+interface IStreamItemVertex {
+  seq: number;
+  type: 'vertex'
+  vertex: IHistoryTx;
+}
+
+interface IStreamItemAddress {
+  seq: number;
+  type: 'address',
+  address: IAddressInfo;
+}
+
+type IStreamItem = IStreamItemAddress | IStreamItemVertex;
+
+function isStreamItemVertex(item: IStreamItem): item is IStreamItemVertex {
+  return item.type === 'vertex';
+}
+
+function isStreamItemAddress(item: IStreamItem): item is IStreamItemAddress {
+  return item.type === 'address';
 }
 
 /**
@@ -166,13 +194,21 @@ export class StreamManager extends AbortController {
 
   mode: HistorySyncMode;
 
-  executionQueue: Promise<void>;
-
   batchQueue: Promise<void>;
+
+  itemQueue: Queue<IStreamItem>;
 
   errorMessage: string | null;
 
   logger: ILogger;
+
+  isProcessingQueue: boolean;
+
+  lastAcked: number;
+
+  lastSeenSeq: number;
+
+  lastProcSeq: number;
 
   /**
    * @param {number} startIndex Index to start loading addresses
@@ -199,10 +235,14 @@ export class StreamManager extends AbortController {
     this.mode = mode;
     this.errorMessage = null;
     this.foundAnyTx = false;
+    this.lastAcked = -1;
+    this.lastSeenSeq = -1;
+    this.lastProcSeq = -1;
 
-    this.executionQueue = Promise.resolve();
     this.batchQueue = Promise.resolve();
     this.logger = storage.logger;
+    this.itemQueue = new Queue();
+    this.isProcessingQueue = false;
   }
 
   /**
@@ -297,27 +337,71 @@ export class StreamManager extends AbortController {
     });
   }
 
-  addTx(tx: IHistoryTx) {
-    this.foundAnyTx = true;
-    this.executionQueue = this.executionQueue.then(async () => {
-      await this.storage.addTx(tx);
-    });
+  isQueueDone() {
+    // Must not be processing the queue and the queue must be empty
+    return !(this.isProcessingQueue && this.itemQueue.size() !== 0)
   }
 
-  addAddress(index: number, address: string) {
+  async processQueue() {
+    if (this.isProcessingQueue) {
+      return;
+    }
+    this.isProcessingQueue = true;
+    while(true) {
+      if (this.signal.aborted) {
+        // Abort processing the queue
+        break;
+      }
+      const item = this.itemQueue.dequeue();
+      if ((this.itemQueue.size() <= MIN_QUEUE_SIZE_FOR_ACK) && (this.lastAcked <= this.lastProcSeq)) {
+        // Send the ACK for the end of the queue
+        this.lastAcked = this.lastSeenSeq;
+        this.connection.sendStreamHistoryAck(this.streamId, this.lastSeenSeq);
+      }
+      if (!item) {
+        // Queue is empty
+        break;
+      }
+      this.lastProcSeq = item.seq;
+      if (isStreamItemAddress(item)) {
+        const addr = item.address;
+        const alreadyExists = await this.storage.isAddressMine(addr.base58);
+        if (!alreadyExists) {
+          await this.storage.saveAddress(addr);
+        }
+      } else if (isStreamItemVertex(item)) {
+        await this.storage.addTx(item.vertex);
+      }
+    }
+
+    this.isProcessingQueue = false;
+  }
+
+  addTx(seq: number, tx: IHistoryTx) {
+    this.foundAnyTx = true;
+    this.lastSeenSeq = seq;
+    this.itemQueue.enqueue({
+      seq,
+      vertex: tx,
+      type: 'vertex',
+    });
+    this.processQueue();
+  }
+
+  addAddress(seq: number, index: number, address: string) {
     if (index > this.lastReceivedIndex) {
       this.lastReceivedIndex = index;
     }
-
-    this.executionQueue = this.executionQueue.then(async () => {
-      const alreadyExists = await this.storage.isAddressMine(address);
-      if (!alreadyExists) {
-        await this.storage.saveAddress({
-          base58: address,
-          bip32AddressIndex: index,
-        });
-      }
+    this.lastSeenSeq = seq;
+    this.itemQueue.enqueue({
+      seq,
+      type: 'address',
+      address: {
+        base58: address,
+        bip32AddressIndex: index,
+      },
     });
+    this.processQueue();
   }
 
   /**
@@ -328,21 +412,21 @@ export class StreamManager extends AbortController {
   updateUI() {
     // Queue the UI update to run after we process the event that
     // generated this update.
-    this.executionQueue = this.executionQueue.then(async () => {
-      if (this.signal.aborted) {
-        return;
-      }
-      if (this.canUpdateUI) {
-        this.canUpdateUI = false;
+    if (this.signal.aborted) {
+      return;
+    }
+    if (this.canUpdateUI) {
+      this.canUpdateUI = false;
+      (async () => {
         this.connection.emit('wallet-load-partial-update', {
           addressesFound: await this.storage.store.addressCount(),
           historyLength: await this.storage.store.historyCount(),
         });
-        setTimeout(() => {
-          this.canUpdateUI = true;
-        }, this.UI_UPDATE_INTERVAL);
-      }
-    });
+      })();
+      setTimeout(() => {
+        this.canUpdateUI = true;
+      }, this.UI_UPDATE_INTERVAL);
+    }
   }
 
   sendStartMessage() {
@@ -378,8 +462,27 @@ export class StreamManager extends AbortController {
   }
 
   async shutdown() {
-    await this.executionQueue;
     await this.batchQueue;
+    await this.processQueue();
+    if (this.isProcessingQueue) {
+      // Wait to finish processing queue
+      await new Promise<void>(async (res) => {
+        // Limit wait period as to not wait forever
+        const timer = setTimeout(() => {
+          this.logger.error(`Stream shutdown reached ${QUEUE_GRACEFUL_SHUTDOWN_LIMIT}ms limit`);
+          this.errorMessage = `Stream could not gracefully shutdown due to timeout.`;
+          res();
+        }, QUEUE_GRACEFUL_SHUTDOWN_LIMIT);
+        // Check every 0.1s
+        while(this.isProcessingQueue) {
+          await new Promise<void>(resolve => {
+            setTimeout(resolve, 100);
+          });
+        }
+        clearTimeout(timer);
+        res();
+      });
+    }
 
     if (this.errorMessage) {
       throw new Error(this.errorMessage);
@@ -406,10 +509,10 @@ function buildListener(manager: StreamManager, resolve: () => void) {
     if (isStreamSyncHistoryVertex(wsData)) {
       // foundAnyTx = true;
       // add to history
-      manager.addTx(wsData.data);
+      manager.addTx(wsData.seq, wsData.data);
       manager.updateUI();
     } else if (isStreamSyncHistoryAddress(wsData)) {
-      manager.addAddress(wsData.index, wsData.address);
+      manager.addAddress(wsData.seq, wsData.index, wsData.address);
       manager.updateUI();
       manager.generateNextBatch();
     } else if (isStreamSyncHistoryEnd(wsData)) {
