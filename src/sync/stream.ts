@@ -10,6 +10,7 @@ import {
 } from '../types';
 import Network from '../models/network';
 import Queue from '../models/queue';
+/* eslint max-classes-per-file: ["error", 2] */
 
 const QUEUE_GRACEFUL_SHUTDOWN_LIMIT = 10000;
 const MIN_QUEUE_SIZE_FOR_ACK = 100;
@@ -87,19 +88,24 @@ function isStreamItemAddress(item: IStreamItem): item is IStreamItemAddress {
 }
 
 class StreamStatsManager {
-
   recvCounter: number;
+
   procCounter: number;
+
   ackCounter: number;
+
   emptyCounter: number;
 
   inTimer?: ReturnType<typeof setTimeout>;
+
   outTimer?: ReturnType<typeof setTimeout>;
+
   qTimer?: ReturnType<typeof setTimeout>;
 
   logger: ILogger;
 
   q: Queue;
+
   dt: number;
 
   constructor(queue: Queue, logger: ILogger) {
@@ -130,13 +136,15 @@ class StreamStatsManager {
 
   ack(seq: number, queueSize: number) {
     this.ackCounter += 1;
-    this.logger.debug(`[*] ACKed ${seq} with queue at ${queueSize}. Sent ACK ${this.ackCounter} times`)
+    this.logger.debug(
+      `[*] ACKed ${seq} with queue at ${queueSize}. Sent ACK ${this.ackCounter} times`
+    );
   }
 
   recv() {
     if (!this.inTimer) {
       this.inTimer = setTimeout(() => {
-        this.logger.debug(`[+] => in_rate: ${1000 * this.recvCounter/this.dt} items/s`)
+        this.logger.debug(`[+] => in_rate: ${(1000 * this.recvCounter) / this.dt} items/s`);
         this.inTimer = undefined;
         this.recvCounter = -1;
         this.recv();
@@ -148,7 +156,7 @@ class StreamStatsManager {
   proc() {
     if (!this.outTimer) {
       this.outTimer = setTimeout(() => {
-        this.logger.debug(`[+] <= out_rate: ${1000 * this.procCounter/this.dt} items/s`)
+        this.logger.debug(`[+] <= out_rate: ${(1000 * this.procCounter) / this.dt} items/s`);
         this.outTimer = undefined;
         this.procCounter = -1;
         this.proc();
@@ -399,7 +407,11 @@ export class StreamManager extends AbortController {
    */
   generateNextBatch() {
     this.batchQueue = this.batchQueue.then(async () => {
-      if (this.signal.aborted || this.hasReceivedEndStream || this.mode !== HistorySyncMode.MANUAL_STREAM_WS) {
+      if (
+        this.signal.aborted ||
+        this.hasReceivedEndStream ||
+        this.mode !== HistorySyncMode.MANUAL_STREAM_WS
+      ) {
         return;
       }
       const distance = this.lastLoadedIndex - this.lastReceivedIndex;
