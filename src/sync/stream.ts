@@ -296,6 +296,8 @@ export class StreamManager extends AbortController {
 
   lastProcSeq: number;
 
+  hasReceivedEndStream: boolean;
+
   stats: StreamStatsManager;
 
   /**
@@ -326,6 +328,7 @@ export class StreamManager extends AbortController {
     this.lastAcked = -1;
     this.lastSeenSeq = -1;
     this.lastProcSeq = -1;
+    this.hasReceivedEndStream = false;
 
     this.batchQueue = Promise.resolve();
     this.logger = storage.logger;
@@ -396,7 +399,7 @@ export class StreamManager extends AbortController {
    */
   generateNextBatch() {
     this.batchQueue = this.batchQueue.then(async () => {
-      if (this.signal.aborted || this.mode !== HistorySyncMode.MANUAL_STREAM_WS) {
+      if (this.signal.aborted || this.hasReceivedEndStream || this.mode !== HistorySyncMode.MANUAL_STREAM_WS) {
         return;
       }
       const distance = this.lastLoadedIndex - this.lastReceivedIndex;
@@ -444,9 +447,12 @@ export class StreamManager extends AbortController {
       }
       const item = this.itemQueue.dequeue();
       if (this.itemQueue.size() <= MIN_QUEUE_SIZE_FOR_ACK && this.lastAcked <= this.lastProcSeq) {
-        // Send the ACK for the end of the queue
-        this.lastAcked = this.lastSeenSeq;
-        this.connection.sendStreamHistoryAck(this.streamId, this.lastSeenSeq);
+        if (!this.hasReceivedEndStream) {
+          // Send the ACK for the end of the queue
+          this.lastAcked = this.lastSeenSeq;
+          this.stats.ack(this.lastSeenSeq, this.itemQueue.size());
+          this.connection.sendStreamHistoryAck(this.streamId, this.lastSeenSeq);
+        }
       }
       if (!item) {
         // Queue is empty
@@ -558,6 +564,11 @@ export class StreamManager extends AbortController {
     }
   }
 
+  endStream() {
+    this.logger.debug('Received end-of-stream event.');
+    this.hasReceivedEndStream = true;
+  }
+
   async shutdown() {
     await this.batchQueue;
     await this.processQueue();
@@ -619,6 +630,7 @@ function buildListener(manager: StreamManager, resolve: () => void) {
       manager.generateNextBatch();
     } else if (isStreamSyncHistoryEnd(wsData)) {
       // cleanup and stop the method.
+      manager.endStream();
       resolve();
     } else if (isStreamSyncHistoryError(wsData)) {
       // An error happened on the fullnode, we should stop the stream
