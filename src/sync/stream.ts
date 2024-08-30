@@ -86,6 +86,67 @@ function isStreamItemAddress(item: IStreamItem): item is IStreamItemAddress {
   return item.type === 'address';
 }
 
+class StreamStatsManager {
+
+  recvCounter: number;
+  procCounter: number;
+  ackCounter: number;
+  emptyCounter: number;
+
+  inTimer?: ReturnType<typeof setTimeout>;
+  outTimer?: ReturnType<typeof setTimeout>;
+
+  logger: ILogger;
+
+  dt: number;
+
+  constructor(logger: ILogger) {
+    this.recvCounter = 0;
+    this.procCounter = 0;
+    this.ackCounter = 0;
+    this.emptyCounter = 0;
+
+    this.logger = logger;
+    this.dt = 2000;
+  }
+
+  ack(seq: number, queueSize: number) {
+    this.ackCounter += 1;
+    this.logger.debug(`[*] ACKed ${seq} with queue at ${queueSize}. Sent ACK ${this.ackCounter} times`)
+  }
+
+  recv() {
+    if (!this.inTimer) {
+      this.inTimer = setTimeout(() => {
+        this.logger.debug(`[+] => in_rate: ${1000 * this.recvCounter/this.dt} items/s`)
+        this.inTimer = undefined;
+        this.recvCounter = -1;
+        this.recv();
+      }, this.dt);
+    }
+    this.recvCounter += 1;
+  }
+
+  proc() {
+    if (!this.outTimer) {
+      this.outTimer = setTimeout(() => {
+        this.logger.debug(`[+] <= out_rate: ${1000 * this.procCounter/this.dt} items/s`)
+        this.outTimer = undefined;
+        this.procCounter = -1;
+        this.proc();
+      }, this.dt);
+    }
+    this.procCounter += 1;
+  }
+
+  queueEmpty() {
+    this.emptyCounter += 1;
+    if (this.emptyCounter % 100 === 0) {
+      this.logger.debug(`[-] queue has been empty ${this.emptyCounter} times`);
+    }
+  }
+}
+
 /**
  * Load addresses in a CPU intensive way
  * This only contemplates P2PKH addresses for now.
@@ -217,6 +278,8 @@ export class StreamManager extends AbortController {
 
   lastProcSeq: number;
 
+  stats: StreamStatsManager;
+
   /**
    * @param {number} startIndex Index to start loading addresses
    * @param {IStorage} storage The storage to load the addresses
@@ -250,6 +313,8 @@ export class StreamManager extends AbortController {
     this.logger = storage.logger;
     this.itemQueue = new Queue();
     this.isProcessingQueue = false;
+
+    this.stats = new StreamStatsManager(this.logger);
   }
 
   /**
@@ -367,8 +432,10 @@ export class StreamManager extends AbortController {
       }
       if (!item) {
         // Queue is empty
+        this.stats.queueEmpty();
         break;
       }
+      this.stats.proc();
       this.lastProcSeq = item.seq;
       if (isStreamItemAddress(item)) {
         const addr = item.address;
@@ -385,6 +452,7 @@ export class StreamManager extends AbortController {
   }
 
   addTx(seq: number, tx: IHistoryTx) {
+    this.stats.recv();
     this.foundAnyTx = true;
     this.lastSeenSeq = seq;
     this.itemQueue.enqueue({
@@ -396,6 +464,7 @@ export class StreamManager extends AbortController {
   }
 
   addAddress(seq: number, index: number, address: string) {
+    this.stats.recv();
     if (index > this.lastReceivedIndex) {
       this.lastReceivedIndex = index;
     }
