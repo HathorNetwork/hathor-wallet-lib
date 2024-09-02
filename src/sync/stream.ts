@@ -500,9 +500,6 @@ export class StreamManager extends AbortController {
         await this.storage.addTx(item.vertex);
       }
       this.stats.proc();
-      await new Promise(resolve => {
-        setImmediate(resolve);
-      });
     }
 
     this.isProcessingQueue = false;
