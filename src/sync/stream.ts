@@ -87,6 +87,10 @@ function isStreamItemAddress(item: IStreamItem): item is IStreamItemAddress {
   return item.type === 'address';
 }
 
+/**
+ * Stream statistics manager.
+ * Will provide insight on the rates of the stream and how the client is performing.
+ */
 class StreamStatsManager {
   // Counter for received events
   recvCounter: number;
@@ -132,6 +136,10 @@ class StreamStatsManager {
     }, this.dt);
   }
 
+  /**
+   * Perform any cleanup necessary when the queue is done processing.
+   * For instance, stop the timers processing the io rates.
+   */
   clean() {
     if (this.inTimer) {
       clearTimeout(this.inTimer);
@@ -144,6 +152,9 @@ class StreamStatsManager {
     }
   }
 
+  /**
+   * Mark an ACK message sent to the fullnode.
+   */
   ack(seq: number) {
     this.ackCounter += 1;
     this.logger.debug(
@@ -151,6 +162,10 @@ class StreamStatsManager {
     );
   }
 
+  /**
+   * Mark that an item has been received by the queue.
+   * This also manages the inTimer, which calculates the rate of received items.
+   */
   recv() {
     if (!this.inTimer) {
       this.inTimer = setTimeout(() => {
@@ -163,6 +178,10 @@ class StreamStatsManager {
     this.recvCounter += 1;
   }
 
+  /**
+   * Mark that an item has been processed from the queue.
+   * This also manages the outTimer, which calculates the rate of processed items.
+   */
   proc() {
     if (!this.outTimer) {
       this.outTimer = setTimeout(() => {
@@ -175,6 +194,10 @@ class StreamStatsManager {
     this.procCounter += 1;
   }
 
+  /**
+   * Mark that the queue processed all items ready.
+   * This will onlt log once out of every 100 calls to avoid verbosity.
+   */
   queueEmpty() {
     this.emptyCounter += 1;
     if (this.emptyCounter % 100 === 0) {
