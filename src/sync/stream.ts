@@ -88,24 +88,34 @@ function isStreamItemAddress(item: IStreamItem): item is IStreamItemAddress {
 }
 
 class StreamStatsManager {
+  // Counter for received events
   recvCounter: number;
 
+  // Counter for processed events
   procCounter: number;
 
+  // Counter for ack messages sent
   ackCounter: number;
 
+  // Counter for the number of times the queue has been empty.
   emptyCounter: number;
 
+  // Timer to process in_rate, which is number of received events per second.
   inTimer?: ReturnType<typeof setTimeout>;
 
+  // Timer to process out_rate, which is the number of processed events per second.
   outTimer?: ReturnType<typeof setTimeout>;
 
+  // Simple timer to log the number of events on queue.
   qTimer?: ReturnType<typeof setTimeout>;
 
+  // Custom logger to log in the desired format.
   logger: ILogger;
 
+  // Reference to the item queue we are processing.
   q: Queue;
 
+  // Interval to use when calculating rates.
   dt: number;
 
   constructor(queue: Queue, logger: ILogger) {
