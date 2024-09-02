@@ -57,6 +57,12 @@ function makeServerMock(mockServer, mockType) {
     socket.send(
       JSON.stringify({
         id: streamId,
+        type: 'stream:history:begin',
+      })
+    );
+    socket.send(
+      JSON.stringify({
+        id: streamId,
         type: 'stream:history:address',
         address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
         index: 0,
