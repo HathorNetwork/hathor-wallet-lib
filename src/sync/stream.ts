@@ -134,10 +134,10 @@ class StreamStatsManager {
     }
   }
 
-  ack(seq: number, queueSize: number) {
+  ack(seq: number) {
     this.ackCounter += 1;
     this.logger.debug(
-      `[*] ACKed ${seq} with queue at ${queueSize}. Sent ACK ${this.ackCounter} times`
+      `[*] ACKed ${seq} with queue at ${this.q.size()}. Sent ACK ${this.ackCounter} times`
     );
   }
 
@@ -462,7 +462,7 @@ export class StreamManager extends AbortController {
         if (!this.hasReceivedEndStream) {
           // Send the ACK for the end of the queue
           this.lastAcked = this.lastSeenSeq;
-          this.stats.ack(this.lastSeenSeq, this.itemQueue.size());
+          this.stats.ack(this.lastSeenSeq);
           this.connection.sendStreamHistoryAck(this.streamId, this.lastSeenSeq);
         }
       }
