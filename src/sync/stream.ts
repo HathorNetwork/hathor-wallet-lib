@@ -480,10 +480,12 @@ export class StreamManager extends AbortController {
    * @returns {boolean} if we should send an ack message to the server.
    */
   shouldACK(): boolean {
-    return (!this.hasReceivedEndStream)
-      && (!this.signal.aborted)
-      && (this.lastAcked <= this.lastProcSeq)
-      && (this.itemQueue.size() <= MIN_QUEUE_SIZE_FOR_ACK);
+    return (
+      !this.hasReceivedEndStream &&
+      !this.signal.aborted &&
+      this.lastAcked <= this.lastProcSeq &&
+      this.itemQueue.size() <= MIN_QUEUE_SIZE_FOR_ACK
+    );
   }
 
   /**
