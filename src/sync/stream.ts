@@ -442,6 +442,31 @@ export class StreamManager extends AbortController {
     });
   }
 
+  /**
+   * This controls the ACK strategy.
+   * @returns {boolean} if we should send an ack message to the server.
+   */
+  shouldACK(): boolean {
+    return (!this.hasReceivedEndStream)
+      && (!this.signal.aborted)
+      && (this.lastAcked <= this.lastProcSeq)
+      && (this.itemQueue.size() <= MIN_QUEUE_SIZE_FOR_ACK);
+  }
+
+  /**
+   * Ack the stream messages.
+   */
+  ack() {
+    if (!this.shouldACK()) {
+      return;
+    }
+
+    // Send the ACK for the end of the queue
+    this.lastAcked = this.lastSeenSeq;
+    this.stats.ack(this.lastSeenSeq);
+    this.connection.sendStreamHistoryAck(this.streamId, this.lastSeenSeq);
+  }
+
   isQueueDone() {
     // Must not be processing the queue and the queue must be empty
     return !(this.isProcessingQueue && this.itemQueue.size() !== 0);
@@ -458,20 +483,12 @@ export class StreamManager extends AbortController {
         break;
       }
       const item = this.itemQueue.dequeue();
-      if (this.itemQueue.size() <= MIN_QUEUE_SIZE_FOR_ACK && this.lastAcked <= this.lastProcSeq) {
-        if (!this.hasReceivedEndStream) {
-          // Send the ACK for the end of the queue
-          this.lastAcked = this.lastSeenSeq;
-          this.stats.ack(this.lastSeenSeq);
-          this.connection.sendStreamHistoryAck(this.streamId, this.lastSeenSeq);
-        }
-      }
+      this.ack();
       if (!item) {
         // Queue is empty
         this.stats.queueEmpty();
         break;
       }
-      this.stats.proc();
       this.lastProcSeq = item.seq;
       if (isStreamItemAddress(item)) {
         const addr = item.address;
@@ -482,6 +499,7 @@ export class StreamManager extends AbortController {
       } else if (isStreamItemVertex(item)) {
         await this.storage.addTx(item.vertex);
       }
+      this.stats.proc();
       await new Promise(resolve => {
         setImmediate(resolve);
       });
