@@ -49,6 +49,7 @@ import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../utils/address';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction } from '../nano_contracts/utils';
+import { addTask } from '../sync/gll';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 
@@ -2857,13 +2858,16 @@ class HathorWallet extends EventEmitter {
     if (!(await getSupportedSyncMode(this.storage)).includes(this.historySyncMode)) {
       throw new Error('Trying to use an unsupported sync method for this wallet.');
     }
-    await getHistorySyncMethod(this.historySyncMode)(
-      startIndex,
-      count,
-      this.storage,
-      this.conn,
-      shouldProcessHistory
-    );
+    const syncMethod = getHistorySyncMethod(this.historySyncMode);
+    await addTask(async () => {
+      await syncMethod(
+        startIndex,
+        count,
+        this.storage,
+        this.conn,
+        shouldProcessHistory
+      );
+    }, this.logger);
   }
 
   /**
