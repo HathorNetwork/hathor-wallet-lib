@@ -2860,13 +2860,7 @@ class HathorWallet extends EventEmitter {
     }
     const syncMethod = getHistorySyncMethod(this.historySyncMode);
     await addTask(async () => {
-      await syncMethod(
-        startIndex,
-        count,
-        this.storage,
-        this.conn,
-        shouldProcessHistory
-      );
+      await syncMethod(startIndex, count, this.storage, this.conn, shouldProcessHistory);
     }, this.logger);
   }
 
