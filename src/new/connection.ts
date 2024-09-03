@@ -14,7 +14,6 @@ import { handleSubscribeAddress, handleWsDashboard } from '../utils/connection';
 import { IStorage, ILogger, getDefaultLogger } from '../types';
 
 const STREAM_ABORT_TIMEOUT = 10000; // 10s
-const STREAM_WINDOW_SIZE: number | string = 'inf';
 
 /**
  * Event names for requesting stream from fullnode
@@ -59,7 +58,7 @@ class WalletConnection extends BaseConnection {
 
   streamController: StreamController | null = null;
 
-  streamWindowSize: number | string;
+  streamWindowSize: number | undefined;
 
   constructor(options: ConnectionParams & { streamWindowSize?: number }) {
     super(options);
@@ -80,7 +79,7 @@ class WalletConnection extends BaseConnection {
       wsOptions.connectionTimeout = options.connectionTimeout;
     }
 
-    this.streamWindowSize = options.streamWindowSize || STREAM_WINDOW_SIZE;
+    this.streamWindowSize = options.streamWindowSize;
 
     this.websocket = new GenericWebSocket(wsOptions);
   }
@@ -170,8 +169,10 @@ class WalletConnection extends BaseConnection {
       type: StreamRequestEvent.REQUEST_HISTORY_XPUB,
       'first-index': firstIndex,
       'gap-limit': gapLimit,
-      window_size: this.streamWindowSize,
     });
+    if (this.streamWindowSize) {
+      data['window-size'] = this.streamWindowSize;
+    }
     this.websocket.sendMessage(data);
   }
 
@@ -196,8 +197,10 @@ class WalletConnection extends BaseConnection {
       type: StreamRequestEvent.REQUEST_HISTORY_MANUAL,
       'first-index': firstIndex,
       'gap-limit': gapLimit,
-      window_size: this.streamWindowSize,
     });
+    if (this.streamWindowSize) {
+      data['window-size'] = this.streamWindowSize;
+    }
     this.websocket.sendMessage(data);
   }
 
