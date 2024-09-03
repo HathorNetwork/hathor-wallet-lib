@@ -387,7 +387,7 @@ export class OracleParseError extends Error {
   errorCode: string = ErrorMessages.NANO_ORACLE_PARSE_ERROR;
 }
 
-export class GllTaskError extends Error {
+export class GlobalLoadLockTaskError extends Error {
   taskId: string;
 
   innerError: Error;
