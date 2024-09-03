@@ -1,7 +1,7 @@
 import PQueue from 'queue-promise';
 import { ILogger } from '../types';
 
-let GLL = new PQueue({ concurrent: 2 });
+let GLL = new PQueue({ concurrent: 5 });
 
 export function setConcurrency(value: number) {
   GLL = new PQueue({ concurrent: value });
@@ -39,29 +39,3 @@ export function addTask(task: () => Promise<void>, logger: ILogger) {
 
   return promise;
 }
-
-// export async function gll() {
-//   const p1 = addTask(async () => {
-//     console.log('p1 started!');
-//     return new Promise(resolve => {
-//       setTimeout(resolve, 2000);
-//     });
-//   });
-
-//   const p2 = addTask(async () => {
-//     console.log('p2 started!');
-//     return new Promise(resolve => {
-//       setTimeout(resolve, 2000);
-//     });
-//   });
-
-//   const p3 = addTask(async () => {
-//     console.log('p3 started!');
-//     return new Promise(resolve => {
-//       setTimeout(resolve, 2000);
-//     });
-//   });
-
-//   await Promise.all([p1, p2, p3]);
-//   console.log('finished');
-// }
