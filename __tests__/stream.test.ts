@@ -50,10 +50,22 @@ const SERVER_MOCK_TYPE = {
    * This is meant to give time for the client to abort.
    */
   abort: 'abort',
+  /**
+   * Sends an event from the wrong stream to test how
+   * the client reacts to this error.
+   */
+  unknownId: 'unknown_id',
 };
 
 function makeServerMock(mockServer, mockType) {
   function streamHistoryForSocket(streamId, socket) {
+    // Begin event marks the start of a stream
+    socket.send(
+      JSON.stringify({
+        id: streamId,
+        type: 'stream:history:begin',
+      })
+    );
     socket.send(
       JSON.stringify({
         id: streamId,
@@ -69,10 +81,21 @@ function makeServerMock(mockServer, mockType) {
         data: mock_tx,
       })
     );
-    if (mockType === 'simple') {
+    if (mockType === SERVER_MOCK_TYPE.simple) {
       socket.send(JSON.stringify({ id: streamId, type: 'stream:history:end' }));
-    } else if (mockType === 'error') {
+    } else if (mockType === SERVER_MOCK_TYPE.error) {
       socket.send(JSON.stringify({ id: streamId, type: 'stream:history:error', errmsg: 'Boom!' }));
+    } else if (mockType === SERVER_MOCK_TYPE.unknownId) {
+      // Send an event from an unknown stream
+      socket.send(
+        JSON.stringify({
+          id: 'unknown-stream-id',
+          type: 'stream:history:address',
+          address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
+          index: 0,
+        })
+      );
+      socket.send(JSON.stringify({ id: streamId, type: 'stream:history:end' }));
     }
   }
 
@@ -223,6 +246,34 @@ describe('Websocket stream history sync', () => {
       expect(wallet.state).toBe(HathorWallet.ERROR);
     } finally {
       await wallet.stop();
+      mockServer.stop();
+    }
+  }, 10000);
+
+  it('should ignore unknown stream ids', async () => {
+    const mockServer = new Server('ws://localhost:8080/v1a/ws/');
+    makeServerMock(mockServer, SERVER_MOCK_TYPE.unknownId);
+    const wallet = await startWalletFor(HistorySyncMode.XPUB_STREAM_WS);
+    try {
+      while (true) {
+        if (wallet.isReady()) {
+          break;
+        }
+        await new Promise(resolve => {
+          setTimeout(resolve, 100);
+        });
+      }
+      // Check balance
+      await expect(wallet.getBalance('00')).resolves.toEqual([
+        expect.objectContaining({
+          token: expect.objectContaining({ id: '00' }),
+          balance: { locked: 0, unlocked: 100 },
+          transactions: 1,
+        }),
+      ]);
+    } finally {
+      // Stop wallet
+      await wallet.stop({ cleanStorage: true, cleanAddresses: true });
       mockServer.stop();
     }
   }, 10000);

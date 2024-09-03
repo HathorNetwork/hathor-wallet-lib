@@ -15,6 +15,11 @@ import Queue from '../models/queue';
 const QUEUE_GRACEFUL_SHUTDOWN_LIMIT = 10000;
 const MIN_QUEUE_SIZE_FOR_ACK = 100;
 
+interface IStreamSyncHistoryBegin {
+  type: 'stream:history:begin';
+  id: string;
+}
+
 interface IStreamSyncHistoryVertex {
   type: 'stream:history:vertex';
   id: string;
@@ -42,10 +47,15 @@ interface IStreamSyncHistoryError {
 }
 
 type IStreamSyncHistoryData =
+  | IStreamSyncHistoryBegin
   | IStreamSyncHistoryVertex
   | IStreamSyncHistoryAddress
   | IStreamSyncHistoryEnd
   | IStreamSyncHistoryError;
+
+function isStreamSyncHistoryBegin(data: IStreamSyncHistoryData): data is IStreamSyncHistoryBegin {
+  return data.type === 'stream:history:begin';
+}
 
 function isStreamSyncHistoryVertex(data: IStreamSyncHistoryData): data is IStreamSyncHistoryVertex {
   return data.type === 'stream:history:vertex';
@@ -680,8 +690,10 @@ function buildListener(manager: StreamManager, resolve: () => void) {
       );
       return;
     }
-    // Vertex is a transaction in the history of the last address received
-    if (isStreamSyncHistoryVertex(wsData)) {
+    if (isStreamSyncHistoryBegin(wsData)) {
+      manager.logger.info('Begin stream event received.');
+    } else if (isStreamSyncHistoryVertex(wsData)) {
+      // Vertex is a transaction in the history of the last address received
       // foundAnyTx = true;
       // add to history
       manager.addTx(wsData.seq, wsData.data);
