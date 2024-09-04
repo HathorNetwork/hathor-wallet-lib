@@ -178,7 +178,9 @@ class StreamStatsManager {
   recv() {
     if (!this.inTimer) {
       this.inTimer = setTimeout(() => {
-        this.logger.debug(`[+] => in_rate: ${(1000 * this.recvCounter) / this.sampleInterval} items/s`);
+        this.logger.debug(
+          `[+] => in_rate: ${(1000 * this.recvCounter) / this.sampleInterval} items/s`
+        );
         this.inTimer = undefined;
         this.recvCounter = -1;
         this.recv();
@@ -194,7 +196,9 @@ class StreamStatsManager {
   proc() {
     if (!this.outTimer) {
       this.outTimer = setTimeout(() => {
-        this.logger.debug(`[+] <= out_rate: ${(1000 * this.procCounter) / this.sampleInterval} items/s`);
+        this.logger.debug(
+          `[+] <= out_rate: ${(1000 * this.procCounter) / this.sampleInterval} items/s`
+        );
         this.outTimer = undefined;
         this.procCounter = -1;
         this.proc();
