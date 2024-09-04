@@ -74,7 +74,7 @@ abstract class Connection extends EventEmitter {
     this.network = network;
     this.state = ConnectionState.CLOSED;
     this.currentServer = servers[0] || config.getServerUrl();
-    this.logger = options.logger;
+    this.logger = options.logger || getDefaultLogger();
   }
 
   /**

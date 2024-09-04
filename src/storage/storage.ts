@@ -40,7 +40,7 @@ import {
   getDefaultLogger,
 } from '../types';
 import transactionUtils from '../utils/transaction';
-import { processHistory, processUtxoUnlock } from '../utils/storage';
+import { processHistory as processHistoryUtil, processUtxoUnlock } from '../utils/storage';
 import config, { Config } from '../config';
 import { decryptData, checkPassword } from '../utils/crypto';
 import FullNodeConnection from '../new/connection';
@@ -354,7 +354,8 @@ export class Storage implements IStorage {
    * @returns {Promise<void>}
    */
   async processHistory(): Promise<void> {
-    await processHistory(this, { rewardLock: this.version?.reward_spend_min_blocks });
+    await this.store.preProcessHistory();
+    await processHistoryUtil(this, { rewardLock: this.version?.reward_spend_min_blocks });
   }
 
   /**

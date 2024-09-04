@@ -11,7 +11,7 @@ import helpers from '../utils/helpers';
 import BaseConnection, { ConnectionParams } from '../connection';
 import { ConnectionState } from '../wallet/types';
 import { handleSubscribeAddress, handleWsDashboard } from '../utils/connection';
-import { IStorage, ILogger } from '../types';
+import { IStorage, ILogger, getDefaultLogger } from '../types';
 
 const STREAM_ABORT_TIMEOUT = 10000; // 10s
 
@@ -22,6 +22,8 @@ enum StreamRequestEvent {
   REQUEST_HISTORY_XPUB = 'request:history:xpub',
   REQUEST_HISTORY_MANUAL = 'request:history:manual',
 }
+
+const STREAM_HISTORY_ACK_EVENT = 'request:history:ack';
 
 /**
  * Stream abort controller that carries the streamId it is managing.
@@ -56,7 +58,9 @@ class WalletConnection extends BaseConnection {
 
   streamController: StreamController | null = null;
 
-  constructor(options: ConnectionParams) {
+  streamWindowSize: number | undefined;
+
+  constructor(options: ConnectionParams & { streamWindowSize?: number }) {
     super(options);
 
     this.handleWalletMessage = this.handleWalletMessage.bind(this);
@@ -66,11 +70,16 @@ class WalletConnection extends BaseConnection {
       connectionTimeout?: number;
       wsURL: string;
       logger: ILogger;
-    } = { wsURL: helpers.getWSServerURL(this.currentServer), logger: options.logger };
+    } = {
+      wsURL: helpers.getWSServerURL(this.currentServer),
+      logger: options.logger || getDefaultLogger(),
+    };
 
     if (options.connectionTimeout) {
       wsOptions.connectionTimeout = options.connectionTimeout;
     }
+
+    this.streamWindowSize = options.streamWindowSize;
 
     this.websocket = new GenericWebSocket(wsOptions);
   }
@@ -154,14 +163,17 @@ class WalletConnection extends BaseConnection {
       throw new Error('No websocket connection to send message.');
     }
 
-    const data = JSON.stringify({
+    const data = {
       id,
       xpub: xpubkey,
       type: StreamRequestEvent.REQUEST_HISTORY_XPUB,
       'first-index': firstIndex,
       'gap-limit': gapLimit,
-    });
-    this.websocket.sendMessage(data);
+    };
+    if (this.streamWindowSize) {
+      data['window-size'] = this.streamWindowSize;
+    }
+    this.websocket.sendMessage(JSON.stringify(data));
   }
 
   sendManualStreamingHistory(
@@ -178,14 +190,33 @@ class WalletConnection extends BaseConnection {
       throw new Error('No websocket connection to send message.');
     }
 
-    const data = JSON.stringify({
+    const data = {
       id,
       first,
       addresses,
       type: StreamRequestEvent.REQUEST_HISTORY_MANUAL,
       'first-index': firstIndex,
       'gap-limit': gapLimit,
-    });
+    };
+    if (this.streamWindowSize) {
+      data['window-size'] = this.streamWindowSize;
+    }
+    this.websocket.sendMessage(JSON.stringify(data));
+  }
+
+  /**
+   * Send an ACK message to the fullnode to confirm we received all events up to
+   * the event of sequence number `ack`.
+   */
+  sendStreamHistoryAck(id: string, ack: number) {
+    if (this.streamController?.streamId !== id) {
+      throw new Error('There is an on-going stream, cannot start a second one');
+    }
+    if (!this.websocket) {
+      throw new Error('No websocket connection to send message.');
+    }
+
+    const data = JSON.stringify({ id, ack, type: STREAM_HISTORY_ACK_EVENT });
     this.websocket.sendMessage(data);
   }
 
