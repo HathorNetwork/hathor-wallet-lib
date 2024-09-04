@@ -13,7 +13,6 @@ import Queue from '../models/queue';
 /* eslint max-classes-per-file: ["error", 2] */
 
 const QUEUE_GRACEFUL_SHUTDOWN_LIMIT = 10000;
-const MIN_QUEUE_SIZE_FOR_ACK = 100;
 
 interface IStreamSyncHistoryBegin {
   type: 'stream:history:begin';
@@ -490,11 +489,17 @@ export class StreamManager extends AbortController {
    * @returns {boolean} if we should send an ack message to the server.
    */
   shouldACK(): boolean {
+    if (!this.connection.streamWindowSize) {
+      // Window size is not configured so we should not ack.
+      return false;
+    }
+    const minQueueSize = (this.connection.streamWindowSize) / 2;
     return (
       !this.hasReceivedEndStream &&
       !this.signal.aborted &&
-      this.lastAcked <= this.lastProcSeq &&
-      this.itemQueue.size() <= MIN_QUEUE_SIZE_FOR_ACK
+      this.lastAcked < this.lastSeenSeq &&
+      this.lastAcked < this.lastProcSeq &&
+      this.itemQueue.size() <= minQueueSize
     );
   }
 

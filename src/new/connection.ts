@@ -163,17 +163,17 @@ class WalletConnection extends BaseConnection {
       throw new Error('No websocket connection to send message.');
     }
 
-    const data = JSON.stringify({
+    const data = {
       id,
       xpub: xpubkey,
       type: StreamRequestEvent.REQUEST_HISTORY_XPUB,
       'first-index': firstIndex,
       'gap-limit': gapLimit,
-    });
+    };
     if (this.streamWindowSize) {
       data['window-size'] = this.streamWindowSize;
     }
-    this.websocket.sendMessage(data);
+    this.websocket.sendMessage(JSON.stringify(data));
   }
 
   sendManualStreamingHistory(
@@ -190,18 +190,18 @@ class WalletConnection extends BaseConnection {
       throw new Error('No websocket connection to send message.');
     }
 
-    const data = JSON.stringify({
+    const data = {
       id,
       first,
       addresses,
       type: StreamRequestEvent.REQUEST_HISTORY_MANUAL,
       'first-index': firstIndex,
       'gap-limit': gapLimit,
-    });
+    };
     if (this.streamWindowSize) {
       data['window-size'] = this.streamWindowSize;
     }
-    this.websocket.sendMessage(data);
+    this.websocket.sendMessage(JSON.stringify(data));
   }
 
   /**
