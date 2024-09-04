@@ -386,3 +386,15 @@ export class NanoContractTransactionParseError extends Error {
 export class OracleParseError extends Error {
   errorCode: string = ErrorMessages.NANO_ORACLE_PARSE_ERROR;
 }
+
+export class GlobalLoadLockTaskError extends Error {
+  taskId: string;
+
+  innerError: Error;
+
+  constructor(taskId: string, innerError: Error) {
+    super(`${taskId} has failed with ${innerError}`);
+    this.taskId = taskId;
+    this.innerError = innerError;
+  }
+}
