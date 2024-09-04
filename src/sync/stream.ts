@@ -493,13 +493,13 @@ export class StreamManager extends AbortController {
       // Window size is not configured so we should not ack.
       return false;
     }
-    const minQueueSize = (this.connection.streamWindowSize) / 2;
+    const minSize = (this.connection.streamWindowSize) / 2;
     return (
       !this.hasReceivedEndStream &&
       !this.signal.aborted &&
-      this.lastAcked < this.lastSeenSeq &&
-      this.lastAcked < this.lastProcSeq &&
-      this.itemQueue.size() <= minQueueSize
+      (this.lastSeenSeq - this.lastAcked) > minSize &&
+      (this.lastProcSeq - this.lastAcked) > minSize &&
+      this.itemQueue.size() <= minSize
     );
   }
 
