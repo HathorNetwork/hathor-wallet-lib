@@ -26,7 +26,7 @@ export function addTask(task: () => Promise<void>, logger: ILogger) {
   const startTime = Date.now();
   // This promise will resolve or reject when the task does, so the caller can know his task has ended.
   const promise = new Promise<void>((resolve, reject) => {
-   GLLEvents.once(taskId, (success, error) => {
+    GLLEvents.once(taskId, (success, error) => {
       if (success) {
         resolve();
       } else {
