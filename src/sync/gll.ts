@@ -1,10 +1,20 @@
+import { EventEmitter } from 'events';
 import PQueue from 'queue-promise';
 import { ILogger } from '../types';
 import { GlobalLoadLockTaskError } from '../errors';
 
-const MAX_CONCURRENT_LOAD_TASKS = 5;
+const MAX_CONCURRENT_LOAD_TASKS = 3;
 
 const GLL = new PQueue({ concurrent: MAX_CONCURRENT_LOAD_TASKS });
+const GLLEvents = new EventEmitter();
+
+GLL.on('resolve', data => {
+  GLLEvents.emit(data, true);
+});
+
+GLL.on('reject', data => {
+  GLLEvents.emit(data.taskId, false, data.innerError);
+});
 
 /**
  * Add task to the GLL and return a promise that will resolve or reject when the task resolves or rejects.
@@ -16,15 +26,11 @@ export function addTask(task: () => Promise<void>, logger: ILogger) {
   const startTime = Date.now();
   // This promise will resolve or reject when the task does, so the caller can know his task has ended.
   const promise = new Promise<void>((resolve, reject) => {
-    GLL.on('resolve', data => {
-      if (data === taskId) {
+   GLLEvents.once(taskId, (success, error) => {
+      if (success) {
         resolve();
-      }
-    });
-
-    GLL.on('reject', data => {
-      if (data.taskId === taskId) {
-        reject(data.innerError);
+      } else {
+        reject(error);
       }
     });
   });
