@@ -17,6 +17,7 @@ const QUEUE_GRACEFUL_SHUTDOWN_LIMIT = 10000;
 interface IStreamSyncHistoryBegin {
   type: 'stream:history:begin';
   id: string;
+  seq: number;
 }
 
 interface IStreamSyncHistoryVertex {
@@ -37,6 +38,7 @@ interface IStreamSyncHistoryAddress {
 interface IStreamSyncHistoryEnd {
   type: 'stream:history:end';
   id: string;
+  seq: number;
 }
 
 interface IStreamSyncHistoryError {
@@ -645,9 +647,10 @@ export class StreamManager extends AbortController {
     }
   }
 
-  endStream() {
+  endStream(seq: number) {
     this.logger.debug('Received end-of-stream event.');
     this.hasReceivedEndStream = true;
+    this.connection.sendStreamHistoryAck(this.streamId, seq);
   }
 
   async shutdown() {
@@ -713,7 +716,7 @@ function buildListener(manager: StreamManager, resolve: () => void) {
       manager.generateNextBatch();
     } else if (isStreamSyncHistoryEnd(wsData)) {
       // cleanup and stop the method.
-      manager.endStream();
+      manager.endStream(wsData.seq);
       resolve();
     } else if (isStreamSyncHistoryError(wsData)) {
       // An error happened on the fullnode, we should stop the stream
