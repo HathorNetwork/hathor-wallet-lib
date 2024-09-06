@@ -8,10 +8,20 @@ const MAX_CONCURRENT_LOAD_TASKS = 3;
 const GLL = new PQueue({ concurrent: MAX_CONCURRENT_LOAD_TASKS });
 const GLLEvents = new EventEmitter();
 
+/**
+ * PQueue will emit a `resolve` event when a task is resolved.
+ * The data will be the taskId since our tasks always resolve with the taskId.
+ * We then emit another event on GLLEvents specially for this taskId.
+ */
 GLL.on('resolve', data => {
   GLLEvents.emit(data, true);
 });
 
+/**
+ * PQueue will emit a `reject` event when a task is rejected.
+ * The data will be the taskId and the error since our tasks always reject with them.
+ * We then emit another event on GLLEvents specially for this taskId.
+ */
 GLL.on('reject', data => {
   GLLEvents.emit(data.taskId, false, data.innerError);
 });
