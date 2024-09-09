@@ -1452,7 +1452,7 @@ class HathorWallet extends EventEmitter {
     if (info.network.indexOf(this.conn.network) >= 0) {
       this.storage.setApiVersion(info);
       await this.storage.saveNativeToken();
-      this.conn.start(); // XXX: maybe await?
+      this.conn.start();
     } else {
       this.setState(HathorWallet.CLOSED);
       throw new Error(`Wrong network. server=${info.network} expected=${this.conn.network}`);

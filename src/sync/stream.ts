@@ -1,4 +1,5 @@
 import { Address as BitcoreAddress, HDPublicKey } from 'bitcore-lib';
+import queueMicrotask from 'queue-microtask';
 import FullNodeConnection from '../new/connection';
 import {
   IStorage,
@@ -424,6 +425,12 @@ export class StreamManager extends AbortController {
       throw new Error('No abort controller on connection');
     }
 
+    // The connection with the fullnode may have been lost during the time waiting to sync
+    if(signal.aborted) {
+      this.abort();
+      throw new Error('The connection already aborted this stream');
+    }
+
     signal.addEventListener(
       'abort',
       () => {
@@ -554,6 +561,16 @@ export class StreamManager extends AbortController {
         await this.storage.addTx(item.vertex);
       }
       this.stats.proc();
+
+      /**
+       * This promise will resolve after the JS task queue current run.
+       * This means that we will free IO tasks like receiving events from the WS
+       * and other async code to run before we continue processing our event queue.
+       * @see https://www.npmjs.com/package/queue-microtask
+       */
+      new Promise<void>(resolve => {
+        queueMicrotask(resolve);
+      });
     }
 
     this.isProcessingQueue = false;
