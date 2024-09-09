@@ -36,6 +36,7 @@ jobs:
           echo $REF_TAG
           echo "Finding author of release $TAG"
           AUTHOR=$(gh release view $TAG --json author -q '.author.login')
+          echo "release author: $AUTHOR"
 
           # This just checks that the user exists, if the release could not be found the AUTHOR
           # would be "release not found" which is a non-existant user.
@@ -62,13 +63,13 @@ jobs:
         id: proj_columns
         run: |
           FIELD_QUERY=".fields[] | select(.name\"$COLUMN_FIELD\") | .id"
-          FIELD_ID=$(gh project field-list $PROJECT_NUMBER --owner $ORG_NAME --format json -q $FIELD_QUERY)
+          FIELD_ID=$(gh project field-list $PROJECT_NUMBER --owner $ORG_NAME --format json -q "$FIELD_QUERY")
 
           OPTION_QUERY=".fields[] | select(.name==\"$COLUMN_FIELD\") | .options[] | select(.name==\"$COLUMN_NAME\") | .id"
-          OPTION_ID=$(gh project field-list $PROJECT_NUMBER --owner $ORG_NAME --format json -q $OPTION_QUERY)
+          OPTION_ID=$(gh project field-list $PROJECT_NUMBER --owner $ORG_NAME --format json -q "$OPTION_QUERY")
 
           PROJECT_QUERY=".projects[] | select(.number==$PROJECT_NUMBER) | .id"
-          PROJECT_ID=$(gh project list --owner $ORG_NAME --format json -q $PROJECT_QUERY)
+          PROJECT_ID=$(gh project list --owner $ORG_NAME --format json -q "$PROJECT_QUERY")
 
           # Store values in step output
           echo "PROJECT_ID=$PROJECT_ID" >> "$GITHUB_OUTPUT"
