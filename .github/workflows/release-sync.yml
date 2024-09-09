@@ -42,6 +42,7 @@ jobs:
           [$(gh api -X GET search/users -f q=$AUTHOR) == "0"] && echo "Could not find author" && exit 1;
 
           echo "Creating chore/sync-release-$TAG from release branch"
+          git fetch origin $TO_BRANCH:$TO_BRANCH $FROM_BRANCH:$FROM_BRANCH
           git checkout $FROM_BRANCH
           git checkout -b chore/sync-release-$TAG
           git push -u origin chore/sync-release-$TAG
