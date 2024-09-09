@@ -62,7 +62,7 @@ jobs:
       - name: Fetch project and column data
         id: proj_columns
         run: |
-          FIELD_QUERY=".fields[] | select(.name\"$COLUMN_FIELD\") | .id"
+          FIELD_QUERY=".fields[] | select(.name==\"$COLUMN_FIELD\") | .id"
           FIELD_ID=$(gh project field-list $PROJECT_NUMBER --owner $ORG_NAME --format json -q "$FIELD_QUERY")
 
           OPTION_QUERY=".fields[] | select(.name==\"$COLUMN_FIELD\") | .options[] | select(.name==\"$COLUMN_NAME\") | .id"
