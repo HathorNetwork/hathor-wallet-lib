@@ -29,11 +29,9 @@ jobs:
 
       - name: Create Pull Request
         env:
-          REF_TAG: ${{ github.ref_name }}
-          TAG: v1.10.0
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         id: create_pull
         run: |
-          echo $REF_TAG
           echo "Finding author of release $TAG"
           AUTHOR=$(gh release view $TAG --json author -q '.author.login')
           echo "release author: $AUTHOR"
