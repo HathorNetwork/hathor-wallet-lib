@@ -4,6 +4,9 @@ name: Sync Release with Master
 on:
   release:
     types: [ released ]
+  pull_request:
+    branches:
+    - master
 
 jobs:
   create-sync-pull-request:
@@ -13,7 +16,10 @@ jobs:
       GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
       ORG_NAME: HathorNetwork
       PROJECT_NUMBER: 15
+      COLUMN_FIELD: "Status"
       COLUMN_NAME: "In Progress (Done)"
+      FROM_BRANCH: "release"
+      TO_BRANCH: "master"
 
     steps:
       - name: Checkout
@@ -22,135 +28,63 @@ jobs:
         uses: actions/checkout@a5ac7e51b41094c92402da3b24376905380afc29
 
       - name: Create Pull Request
+        env:
+          REF_TAG: ${{ github.ref_name }}
+          TAG: v1.12.0
         id: create_pull
         run: |
+          echo $REF_TAG
+          echo "Finding author of release $TAG"
+          AUTHOR=$(gh release view $TAG --json author -q '.author.login')
+
+          # This just checks that the user exists, if the release could not be found the AUTHOR
+          # would be "release not found" which is a non-existant user.
+          [$(gh api -X GET search/users -f q=$AUTHOR) == "0"] && echo "Could not find author" && exit 1;
+
+          echo "Creating chore/sync-release-$TAG from release branch"
+          git checkout $FROM_BRANCH
+          git checkout -b chore/sync-release-$TAG
+          git push -u origin chore/sync-release-$TAG
+
           # The assignee will be the user that manually published the release
           PR_URL=$(gh pr create \
             --title "chore: [${{ github.ref_name }}] Merge release into master" \
             --body "Automated PR to merge `release` branch into `master` based on release event." \
-            --base "master" \
-            --head "release" \
-            --assignee "@me")
-
-          # Obtaining the PR number from its URL
-          PR_NUMBER=$(echo $PR_URL | grep -oP '/pull/\K\d+')
+            --base "$TO_BRANCH" \
+            --head "chore/sync-release-$TAG" \
+            --assignee "$AUTHOR")
 
           # Store values in step output
           echo "PR_URL=$PR_URL" >> "$GITHUB_OUTPUT"
-          echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_OUTPUT"
-
-      - name: Associate PR with project
-        env:
-          PR_URL: ${{ steps.create_pull.outputs.PR_URL }}
-        run: |
-          gh project item-add $PROJECT_NUMBER \
-            --owner $ORG_NAME \
-            --url "$PR_URL" \
 
       - name: Fetch project and column data
         id: proj_columns
-        # There is no direct command to move a card inside a project. Here we start gathering id data about the project
-        # to do this operation through the API
         run: |
-          QUERY="
-          query {
-            organization(login: \"$ORG_NAME\") {
-              projectV2(number: $PROJECT_NUMBER) {
-                id
-                field(name: \"Status\") {
-                  __typename
-                  ...on ProjectV2SingleSelectField {
-                    id
-                    options {
-                      id
-                      name
-                    }
-                  }
-                }
-              }
-            }
-          }
-          "
-          PROJ_RESPONSE=$(gh api graphql -f query="$QUERY")
+          FIELD_QUERY=".fields[] | select(.name\"$COLUMN_FIELD\") | .id"
+          FIELD_ID=$(gh project field-list $PROJECT_NUMBER --owner $ORG_NAME --format json -q $FIELD_QUERY)
 
-          # Parse json response and fetch necessary data identifiers from it
-          PROJ_DATA=$(echo "$PROJ_RESPONSE" | jq -r --arg column_name "$COLUMN_NAME" '
-            .data.organization.projectV2.id as $projectId |
-            .data.organization.projectV2.field.id as $fieldId |
-            .data.organization.projectV2.field.options[] |
-            select(.name == $column_name) |
-            {
-              projectId: $projectId,
-              fieldId: $fieldId,
-              optionId: .id
-            }')
-          PROJECT_ID=$(echo "$PROJ_DATA" | jq -r '.projectId')
-          FIELD_ID=$(echo "$PROJ_DATA" | jq -r '.fieldId')
-          OPTION_ID=$(echo "$PROJ_DATA" | jq -r '.optionId')
+          OPTION_QUERY=".fields[] | select(.name==\"$COLUMN_FIELD\") | .options[] | select(.name==\"$COLUMN_NAME\") | .id"
+          OPTION_ID=$(gh project field-list $PROJECT_NUMBER --owner $ORG_NAME --format json -q $OPTION_QUERY)
+
+          PROJECT_QUERY=".projects[] | select(.number==$PROJECT_NUMBER) | .id"
+          PROJECT_ID=$(gh project list --owner $ORG_NAME --format json -q $PROJECT_QUERY)
 
           # Store values in step output
           echo "PROJECT_ID=$PROJECT_ID" >> "$GITHUB_OUTPUT"
           echo "FIELD_ID=$FIELD_ID" >> "$GITHUB_OUTPUT"
           echo "OPTION_ID=$OPTION_ID" >> "$GITHUB_OUTPUT"
 
-      - name: Fetch PR card Id
-        id: proj_cardId
+      - name: Associate PR with project
         env:
-          PR_NUMBER: ${{ steps.create_pull.outputs.PR_NUMBER }}
-        run: |
-          # The github repository contains the owner organization too: we need to get only the last part of it
-          REPO_NAME=$(basename ${{ github.repository }})
-
-          # Executing graphql query to fetch the Id of the card that links the PR to the Project
-          QUERY="
-            query {
-              repository(owner: \"$ORG_NAME\", name: \"$REPO_NAME\") {
-                pullRequest(number: $PR_NUMBER) {
-                  id
-                  projectItems(first: 100) {
-                    ... on ProjectV2ItemConnection {
-                      nodes {
-                      ... on ProjectV2Item {
-                        id
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }"
-          PROJ_RESPONSE=$(gh api graphql -f query="$QUERY")
-
-          # Fetching the id of the project card related to this PR
-          CARD_ID=$(echo "$PROJ_RESPONSE" | jq -r '.data.repository.pullRequest.projectItems.nodes[0].id')
-
-          # Store value in step output
-          echo "CARD_ID=$CARD_ID" >> "$GITHUB_OUTPUT"
-
-      - name: Move card to correct column
-        id: mutateCard
-        env:
+          PR_URL: ${{ steps.create_pull.outputs.PR_URL }}
           PROJECT_ID: ${{ steps.proj_columns.outputs.PROJECT_ID }}
           FIELD_ID: ${{ steps.proj_columns.outputs.FIELD_ID }}
           OPTION_ID: ${{ steps.proj_columns.outputs.OPTION_ID }}
-          CARD_ID: ${{ steps.proj_cardId.outputs.CARD_ID }}
         run: |
-          QUERY="
-          mutation {
-            updateProjectV2ItemFieldValue(
-              input: {
-                projectId: \"$PROJECT_ID\",
-                itemId: \"$CARD_ID\",
-                fieldId: \"$FIELD_ID\",
-                value: {
-                  singleSelectOptionId: \"$OPTION_ID\"
-                }
-              }
-            ) {
-              projectV2Item {
-                id
-              }
-            }
-          }
-          "
-          PROJ_RESPONSE=$(gh api graphql -f query="$QUERY")
+          ITEM_ID=$(gh project item-add $PROJECT_NUMBER \
+            --owner $ORG_NAME \
+            --url "$PR_URL" \
+            --format json \
+            -q '.id' )
+
+          gh project item-edit --project-id $PROJECT_ID --id $ITEM_ID --field-id $FIELD_ID --single-select-option-id $OPTION_ID
