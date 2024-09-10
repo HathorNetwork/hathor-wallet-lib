@@ -428,7 +428,7 @@ export class StreamManager extends AbortController {
     }
 
     // The connection with the fullnode may have been lost during the time waiting to sync
-    if(signal.aborted) {
+    if (signal.aborted) {
       this.abort();
       throw new Error('The connection already aborted this stream');
     }
@@ -570,7 +570,7 @@ export class StreamManager extends AbortController {
        * and other async code to run before we continue processing our event queue.
        * @see https://www.npmjs.com/package/queue-microtask
        */
-      new Promise<void>(resolve => {
+      await new Promise<void>(resolve => {
         queueMicrotask(resolve);
       });
     }

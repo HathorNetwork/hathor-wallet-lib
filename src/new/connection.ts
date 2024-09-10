@@ -117,7 +117,7 @@ class WalletConnection extends BaseConnection {
   /**
    * Handle the capabilities event from the websocket.
    */
-  handleCapabilities(data: { type: string, capabilities: FullnodeCapability[]}) {
+  handleCapabilities(data: { type: string; capabilities: FullnodeCapability[] }) {
     this.logger.debug(`Fullnode has capabilities: ${JSON.stringify(data.capabilities)}`);
     const { capabilities } = data;
     if (!capabilities) {
