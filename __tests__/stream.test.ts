@@ -138,6 +138,7 @@ async function startWalletFor(mode) {
     servers: ['http://localhost:8080/v1a'],
     logger: getDefaultLogger(),
   });
+  connection.capabilities = ['history-streaming'];
   if (connection.websocket === null) {
     throw new Error('Invalid websocket instance');
   }
