@@ -127,10 +127,23 @@ class WalletConnection extends BaseConnection {
   }
 
   /**
+   * If the fullnode has not sent the capabilities yet wait a while.
+   */
+  async waitCapabilities() {
+    if (this.capabilities === undefined) {
+      // Wait 2s so the fullnode has some time to send the capabilities envent
+      await new Promise<void>(resolve => {
+        setTimeout(resolve, 2000);
+      });
+    }
+  }
+
+  /**
    * Check if the connected fullnode has the desired capability.
    * Will return false if the fullnode has not yet sent the capability list.
    */
-  hasCapability(flag: FullnodeCapability) {
+  async hasCapability(flag: FullnodeCapability) {
+    await this.waitCapabilities();
     if (!this.capabilities) {
       return false;
     }

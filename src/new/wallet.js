@@ -172,6 +172,9 @@ class HathorWallet extends EventEmitter {
       this.storage = new Storage(store);
     }
     this.storage.setLogger(this.logger);
+    /**
+     * @type {import('./connection').default}
+     */
     this.conn = connection;
     this.conn.startControlHandlers(this.storage);
 
@@ -2858,7 +2861,19 @@ class HathorWallet extends EventEmitter {
     if (!(await getSupportedSyncMode(this.storage)).includes(this.historySyncMode)) {
       throw new Error('Trying to use an unsupported sync method for this wallet.');
     }
-    const syncMethod = getHistorySyncMethod(this.historySyncMode);
+    let syncMode = this.historySyncMode;
+    if ([
+      HistorySyncMode.MANUAL_STREAM_WS,
+      HistorySyncMode.XPUB_STREAM_WS,
+    ].includes(this.historySyncMode)
+    && !(await this.conn.hasCapability('history-streaming'))) {
+      // History sync mode is streaming but fullnode is not streaming capable.
+      // We revert to the http polling default.
+      this.logger.debug('Either fullnode does not support history-streaming or has not sent a capabilities event');
+      this.logger.debug('Falling back to http polling API');
+      syncMode = HistorySyncMode.POLLING_HTTP_API;
+    }
+    const syncMethod = getHistorySyncMethod(syncMode);
     await addTask(async () => {
       await syncMethod(startIndex, count, this.storage, this.conn, shouldProcessHistory);
     }, this.logger);
