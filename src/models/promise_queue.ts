@@ -1,17 +1,17 @@
 import EventEmitter from 'events';
 import PriorityQueue from './priority_queue';
 
-type TaskOptions = { signal?: AbortSignal; };
+type TaskOptions = { signal?: AbortSignal };
 
 type Task<TaskResultType> =
-	| ((options?: TaskOptions) => PromiseLike<TaskResultType>)
-	| ((options?: TaskOptions) => TaskResultType);
+  | ((options?: TaskOptions) => PromiseLike<TaskResultType>)
+  | ((options?: TaskOptions) => TaskResultType);
 
 type AddTaskOptions = {
   priority?: number;
   signal?: AbortSignal;
-}
-	
+};
+
 export default class PromiseQueue extends EventEmitter {
   #queue: PriorityQueue<() => Promise<void>>;
 
@@ -22,7 +22,7 @@ export default class PromiseQueue extends EventEmitter {
 
   #isPaused = false;
 
-  #intervalId: ReturnType<typeof setInterval>|null = null;
+  #intervalId: ReturnType<typeof setInterval> | null = null;
 
   constructor() {
     super();
@@ -61,7 +61,7 @@ export default class PromiseQueue extends EventEmitter {
   }
 
   #next() {
-    this.emit('next')
+    this.emit('next');
     this.#jobsRunning--;
     this.#tryToStartNextJob();
   }
@@ -105,47 +105,54 @@ export default class PromiseQueue extends EventEmitter {
     return false;
   }
 
-	static async throwOnAbort(signal: AbortSignal): Promise<never> {
-		return new Promise((_resolve, reject) => {
-			signal.addEventListener('abort', () => {
-				reject(signal.reason);
-			}, {once: true});
-		});
-	}
+  static async throwOnAbort(signal: AbortSignal): Promise<never> {
+    return new Promise((_resolve, reject) => {
+      signal.addEventListener(
+        'abort',
+        () => {
+          reject(signal.reason);
+        },
+        { once: true }
+      );
+    });
+  }
 
-	/**
-	 * Try to start jobs until the concurrency limit is reached.
-	 */
-	processQueue(): void {
-		while (this.#tryToStartNextJob()) {}
-	}
+  /**
+   * Try to start jobs until the concurrency limit is reached.
+   */
+  processQueue(): void {
+    // eslint-disable-next-line no-empty
+    while (this.#tryToStartNextJob()) {}
+  }
 
   async add<TaskResultType>(task: Task<TaskResultType>, options?: AddTaskOptions) {
     this.emit('new_job');
     return new Promise((resolve, reject) => {
-      this.#queue.push(PriorityQueue.makeNode(options?.priority || 0, async () => {
-        this.#jobsRunning++;
-        try {
-          // Throw if the operation was aborted and don't run.
-          options?.signal?.throwIfAborted();
+      this.#queue.push(
+        PriorityQueue.makeNode(options?.priority || 0, async () => {
+          this.#jobsRunning++;
+          try {
+            // Throw if the operation was aborted and don't run.
+            options?.signal?.throwIfAborted();
 
-          // Run the task until completion or until the task aborts.
-          let operation = task({signal: options?.signal});
-          // If a signal was passed, we may abort the operation from the outside.
-          // This does not abort internally the task, it has to also manage the abort signal.
-          if (options?.signal) {
-            operation = Promise.race([operation, PromiseQueue.throwOnAbort(options.signal)]);
+            // Run the task until completion or until the task aborts.
+            let operation = task({ signal: options?.signal });
+            // If a signal was passed, we may abort the operation from the outside.
+            // This does not abort internally the task, it has to also manage the abort signal.
+            if (options?.signal) {
+              operation = Promise.race([operation, PromiseQueue.throwOnAbort(options.signal)]);
+            }
+            const result = await operation;
+            resolve(result);
+            // Completed task
+          } catch (error: unknown) {
+            reject(error);
+          } finally {
+            this.emit('finished_job');
+            this.#next();
           }
-          const result = await operation;
-          resolve(result);
-          // Completed task
-        } catch (error: unknown) {
-          reject(error);
-        } finally {
-          this.emit('finished_job');
-          this.#next();
-        }
-      }));
+        })
+      );
     });
   }
 }
