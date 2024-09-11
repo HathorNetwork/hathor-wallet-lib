@@ -26,8 +26,8 @@ test('PriorityQueue operations', () => {
   // method: add
   const elements = [
     { priority: 10, value: 'foo' },
-    { priority: 1,  value: 'baz' },
-    { priority: 5,  value: 'bar' },
+    { priority: 1, value: 'baz' },
+    { priority: 5, value: 'bar' },
   ].map(el => PriorityQueue.makeNode(el.priority, el.value));
   q.add(...elements);
   expect(q.size).toEqual(3);
@@ -44,4 +44,3 @@ test('PriorityQueue operations', () => {
   expect(q.size).toEqual(0);
   expect(q.isEmpty()).toBeTruthy();
 });
-
