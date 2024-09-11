@@ -1,3 +1,9 @@
+/**
+ * Copyright (c) Hathor Labs and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
 import EventEmitter from 'events';
 import PriorityQueue from './priority_queue';
 
@@ -22,7 +28,7 @@ export default class PromiseQueue extends EventEmitter {
 
   #isPaused = false;
 
-  #intervalId: ReturnType<typeof setInterval> | null = null;
+  #intervalId: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     super();
@@ -32,9 +38,13 @@ export default class PromiseQueue extends EventEmitter {
   }
 
   #startInterval() {
-    this.#clearInterval();
-    this.#intervalId = setInterval(() => {
-      this.processQueue();
+    this.processQueue();
+    this.#intervalId = setTimeout(() => {
+      if (this.#isPaused) {
+        this.#clearInterval();
+        return;
+      }
+      this.#startInterval();
     }, 1000);
   }
 
@@ -45,19 +55,22 @@ export default class PromiseQueue extends EventEmitter {
     }
   }
 
-  get isPaused() {
+  public get isPaused() {
     return this.#isPaused;
   }
 
-  stop() {
+  public stop() {
     this.#isPaused = true;
     this.#clearInterval();
   }
 
-  continue() {
+  public continue() {
     this.#isPaused = false;
-    this.processQueue();
     this.#startInterval();
+  }
+
+  public get jobsRunning() {
+    return this.#jobsRunning;
   }
 
   #next() {
@@ -70,11 +83,11 @@ export default class PromiseQueue extends EventEmitter {
     return this.#jobsRunning < this.concurrent;
   }
 
-  get concurrent() {
+  public get concurrent() {
     return this.#allowedConcurrentJobs;
   }
 
-  set concurrent(value) {
+  public set concurrent(value) {
     if (value < 1) {
       throw new Error('Cannot have less than 1 job running.');
     }
@@ -82,6 +95,9 @@ export default class PromiseQueue extends EventEmitter {
   }
 
   #tryToStartNextJob(): boolean {
+    if (this.#isPaused) {
+      return false;
+    }
     if (this.#queue.isEmpty()) {
       // No more tasks to run
       this.emit('queue_empty');
@@ -153,6 +169,8 @@ export default class PromiseQueue extends EventEmitter {
           }
         })
       );
+      // Try to start the job we enqueued and any other we can start
+      this.processQueue();
     });
   }
 }
