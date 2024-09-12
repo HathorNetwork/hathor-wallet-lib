@@ -57,7 +57,7 @@ const SERVER_MOCK_TYPE = {
   unknownId: 'unknown_id',
 };
 
-function makeServerMock(mockServer, mockType) {
+function makeServerMock(mockServer, mockType, sendCapabilities = true) {
   function streamHistoryForSocket(streamId, socket) {
     // Begin event marks the start of a stream
     socket.send(
@@ -100,6 +100,9 @@ function makeServerMock(mockServer, mockType) {
   }
 
   mockServer.on('connection', socket => {
+    if (sendCapabilities) {
+      socket.send(JSON.stringify({ type: 'capabilities', capabilities: ['history-streaming'] }));
+    }
     socket.on('message', data => {
       const jsonData = JSON.parse(data);
       if (jsonData.type === 'subscribe_address') {
@@ -138,7 +141,6 @@ async function startWalletFor(mode) {
     servers: ['http://localhost:8080/v1a'],
     logger: getDefaultLogger(),
   });
-  connection.capabilities = ['history-streaming'];
   if (connection.websocket === null) {
     throw new Error('Invalid websocket instance');
   }
@@ -272,6 +274,36 @@ describe('Websocket stream history sync', () => {
           transactions: 1,
         }),
       ]);
+    } finally {
+      // Stop wallet
+      await wallet.stop({ cleanStorage: true, cleanAddresses: true });
+      mockServer.stop();
+    }
+  }, 10000);
+
+  it('should default to POLLING_HTTP_API without capabilities', async () => {
+    const mockServer = new Server('ws://localhost:8080/v1a/ws/');
+    makeServerMock(mockServer, SERVER_MOCK_TYPE.simple, false);
+    const wallet = await startWalletFor(HistorySyncMode.MANUAL_STREAM_WS);
+    wallet.conn.on('stream', data => {
+      // Any stream event should fail the test
+      fail(`Received a stream event: ${JSON.stringify(data)}`);
+    });
+    wallet.on('state', state => {
+      // If the sync fails, fail the test
+      if (state === HathorWallet.ERROR) {
+        fail('Wallet reached an error state');
+      }
+    });
+    try {
+      while (true) {
+        if (wallet.isReady()) {
+          break;
+        }
+        await new Promise(resolve => {
+          setTimeout(resolve, 100);
+        });
+      }
     } finally {
       // Stop wallet
       await wallet.stop({ cleanStorage: true, cleanAddresses: true });
