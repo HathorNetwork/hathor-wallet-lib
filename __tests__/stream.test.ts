@@ -287,12 +287,12 @@ describe('Websocket stream history sync', () => {
     const wallet = await startWalletFor(HistorySyncMode.MANUAL_STREAM_WS);
     wallet.conn.on('stream', data => {
       // Any stream event should fail the test
-      fail(`Received a stream event: ${JSON.stringify(data)}`);
+      throw new Error(`Received a stream event: ${JSON.stringify(data)}`);
     });
     wallet.on('state', state => {
       // If the sync fails, fail the test
       if (state === HathorWallet.ERROR) {
-        fail('Wallet reached an error state');
+        throw new Error('Wallet reached an error state');
       }
     });
     try {
@@ -309,5 +309,9 @@ describe('Websocket stream history sync', () => {
       await wallet.stop({ cleanStorage: true, cleanAddresses: true });
       mockServer.stop();
     }
+
+    await expect(wallet.getAddressAtIndex(0)).resolves.toEqual(
+      'WewDeXWyvHP7jJTs7tjLoQfoB72LLxJQqN'
+    );
   }, 10000);
 });
