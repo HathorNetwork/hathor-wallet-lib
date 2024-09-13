@@ -83,9 +83,9 @@ export default class PriorityQueue<T = unknown> {
   /**
    * Add multiple values to the priority queue while maintaining the priority order.
    */
-  public add(...values: PriorityQueueNode<T>[]) {
-    values.forEach(value => {
-      this.push(value);
+  public add(...nodes: PriorityQueueNode<T>[]) {
+    nodes.forEach(node => {
+      this.push(node);
     });
     return this.size;
   }
