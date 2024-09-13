@@ -166,7 +166,7 @@ export default class PriorityQueue<T = unknown> {
   private _siftDown() {
     // Start from the top index and work our way down the heap
     let node = this.#top;
-    // If a child is in the heap and has higher prioroty, swap with parent and go down
+    // If a child is in the heap and has higher priority, swap with parent and go down
     while (
       (this.left(node) < this.size && this._greater(this.left(node), node)) ||
       (this.right(node) < this.size && this._greater(this.right(node), node))
