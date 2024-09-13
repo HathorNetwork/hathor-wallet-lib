@@ -18,6 +18,19 @@ type AddTaskOptions = {
   signal?: AbortSignal;
 };
 
+/**
+ * PromiseQueue is a task executor that allows a certain number of concurrent
+ * tasks to run at any time.
+ * When a task is added it returns a promise that resolves when the underlying task resolves.
+ *
+ * PromiseQueue is also an EventEmitter for the events:
+ * - new_job: When a new job is added to the queue.
+ * - finished_job: When a job is finished.
+ * - next: When we try to start the next job.
+ * - queue_empty: When the last job on queue start running.
+ * - idle: When all jobs are done and there is no more jobs to run.
+ * - job_start: When we start running a new job.
+ */
 export default class PromiseQueue extends EventEmitter {
   #queue: PriorityQueue<() => Promise<void>>;
 
@@ -37,6 +50,10 @@ export default class PromiseQueue extends EventEmitter {
     this.#startInterval();
   }
 
+  /**
+   * Try to start any jobs we can and set a timeout for the next interval.
+   * Will stop the interval if the PromiseQueue is paused.
+   */
   #startInterval() {
     this.processQueue();
     this.#intervalId = setTimeout(() => {
@@ -48,6 +65,9 @@ export default class PromiseQueue extends EventEmitter {
     }, 1000);
   }
 
+  /**
+   * If there is an interval scheduled to run, stop and clear internal state.
+   */
   #clearInterval() {
     if (this.#intervalId) {
       clearInterval(this.#intervalId);
@@ -55,38 +75,63 @@ export default class PromiseQueue extends EventEmitter {
     }
   }
 
+  /**
+   * Check idf the PromiseQueue is paused.
+   */
   public get isPaused() {
     return this.#isPaused;
   }
 
+  /**
+   * Pause or stop processing the tasks.
+   * Does not stop any running tasks.
+   */
   public stop() {
     this.#isPaused = true;
     this.#clearInterval();
   }
 
+  /**
+   * Unpause or continue processing tasks.
+   */
   public continue() {
     this.#isPaused = false;
     this.#startInterval();
   }
 
+  /**
+   * Getter for how many jobs are currently running.
+   */
   public get jobsRunning() {
     return this.#jobsRunning;
   }
 
+  /**
+   * Called after a task is done, will try to start a new task.
+   */
   #next() {
     this.emit('next');
     this.#jobsRunning--;
     this.#tryToStartNextJob();
   }
 
+  /**
+   * Whether we can start a new job.
+   */
   get #canStartJob() {
     return this.#jobsRunning < this.concurrent;
   }
 
+  /**
+   * Getter for how many concurrent jobs can run.
+   */
   public get concurrent() {
     return this.#allowedConcurrentJobs;
   }
 
+  /**
+   * Setter for concurrent jobs.
+   */
   public set concurrent(value) {
     if (value < 1) {
       throw new Error('Cannot have less than 1 job running.');
@@ -94,6 +139,9 @@ export default class PromiseQueue extends EventEmitter {
     this.#allowedConcurrentJobs = value;
   }
 
+  /**
+   * Check if we can start a new job and start it.
+   */
   #tryToStartNextJob(): boolean {
     if (this.#isPaused) {
       return false;
@@ -121,6 +169,9 @@ export default class PromiseQueue extends EventEmitter {
     return false;
   }
 
+  /**
+   * When the signal emits an abort event we should reject with the same reason.
+   */
   static async throwOnAbort(signal: AbortSignal): Promise<never> {
     return new Promise((_resolve, reject) => {
       signal.addEventListener(
@@ -141,6 +192,12 @@ export default class PromiseQueue extends EventEmitter {
     while (this.#tryToStartNextJob()) {}
   }
 
+  /**
+   * Add a new task to the queue, the returned promise will resolve when the task resolves.
+   * @param task The underlying job to run.
+   * @param options.priority The task priority, the higher it is the sooner the task will run.
+   * @param option.signal The `AbortSignal` that can be used to abort the task from the caller.
+   */
   async add<TaskResultType>(task: Task<TaskResultType>, options?: AddTaskOptions) {
     this.emit('new_job');
     return new Promise((resolve, reject) => {
