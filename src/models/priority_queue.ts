@@ -94,11 +94,12 @@ export default class PriorityQueue<T = unknown> {
    * Get the node with highest priority and remove it from the priority queue.
    */
   public pop() {
-    const poppedValue = this.peek();
-    // Check if poppedValue is null or undefined, meaning the queue is empty
-    if (!(poppedValue ?? false)) {
+    if (this.isEmpty()) {
+      // Queue is empty
       return undefined;
     }
+    // This may be undefined if the queue is empty, but we already checked for that.
+    const poppedValue = this.peek();
     const bottom = this.size - 1;
     if (bottom > this.#top) {
       this._swap(this.#top, bottom);
