@@ -76,7 +76,7 @@ export default class PromiseQueue extends EventEmitter {
   }
 
   /**
-   * Check idf the PromiseQueue is paused.
+   * Check if the PromiseQueue is paused.
    */
   public get isPaused() {
     return this.#isPaused;
