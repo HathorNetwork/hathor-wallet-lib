@@ -49,7 +49,7 @@ import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../utils/address';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction } from '../nano_contracts/utils';
-import { addTask } from '../sync/gll';
+import GLL from '../sync/gll';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 
@@ -2203,8 +2203,8 @@ class HathorWallet extends EventEmitter {
    */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async getTokenDetails(tokenId) {
-    const result = await new Promise(resolve => {
-      walletApi.getGeneralTokenInfo(tokenId, resolve);
+    const result = await new Promise((resolve, reject) => {
+      walletApi.getGeneralTokenInfo(tokenId, resolve).catch(error => reject(error));
     });
 
     if (!result.success) {
@@ -2877,9 +2877,11 @@ class HathorWallet extends EventEmitter {
       syncMode = HistorySyncMode.POLLING_HTTP_API;
     }
     const syncMethod = getHistorySyncMethod(syncMode);
+    // This will add the task to the GLL queue and return a promise that
+    // resolves when the task finishes executing
     await addTask(async () => {
       await syncMethod(startIndex, count, this.storage, this.conn, shouldProcessHistory);
-    }, this.logger);
+    });
   }
 
   /**
