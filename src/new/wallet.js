@@ -2879,7 +2879,7 @@ class HathorWallet extends EventEmitter {
     const syncMethod = getHistorySyncMethod(syncMode);
     // This will add the task to the GLL queue and return a promise that
     // resolves when the task finishes executing
-    await addTask(async () => {
+    await GLL.add(async () => {
       await syncMethod(startIndex, count, this.storage, this.conn, shouldProcessHistory);
     });
   }
