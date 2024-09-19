@@ -1,4 +1,5 @@
 import { Address as BitcoreAddress, HDPublicKey } from 'bitcore-lib';
+import queueMicrotask from 'queue-microtask';
 import FullNodeConnection from '../new/connection';
 import {
   IStorage,
@@ -556,6 +557,16 @@ export class StreamManager extends AbortController {
         await this.storage.addTx(item.vertex);
       }
       this.stats.proc();
+
+      /**
+       * This promise will resolve after the JS task queue current run.
+       * This means that we will free IO tasks like receiving events from the WS
+       * and other async code to run before we continue processing our event queue.
+       * @see https://www.npmjs.com/package/queue-microtask
+       */
+      await new Promise<void>(resolve => {
+        queueMicrotask(resolve);
+      });
     }
 
     this.isProcessingQueue = false;

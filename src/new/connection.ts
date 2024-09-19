@@ -14,6 +14,7 @@ import { handleSubscribeAddress, handleWsDashboard } from '../utils/connection';
 import { IStorage, ILogger, getDefaultLogger } from '../types';
 
 const STREAM_ABORT_TIMEOUT = 10000; // 10s
+const CAPABILITIES_WAIT_TIMEOUT = 2000; // 2s
 
 /**
  * Event names for requesting stream from fullnode
@@ -24,6 +25,8 @@ enum StreamRequestEvent {
 }
 
 const STREAM_HISTORY_ACK_EVENT = 'request:history:ack';
+
+type FullnodeCapability = 'history-streaming';
 
 /**
  * Stream abort controller that carries the streamId it is managing.
@@ -59,6 +62,8 @@ class WalletConnection extends BaseConnection {
   streamController: StreamController | null = null;
 
   streamWindowSize: number | undefined;
+
+  capabilities?: FullnodeCapability[];
 
   constructor(options: ConnectionParams & { streamWindowSize?: number }) {
     super(options);
@@ -96,6 +101,7 @@ class WalletConnection extends BaseConnection {
     this.websocket.on('is_online', this.onConnectionChange);
     this.websocket.on('wallet', this.handleWalletMessage.bind(this));
     this.websocket.on('stream', this.handleStreamMessage.bind(this));
+    this.websocket.on('capabilities', this.handleCapabilities.bind(this));
 
     this.websocket.on('height_updated', height => {
       this.emit('best-block-update', height);
@@ -107,6 +113,42 @@ class WalletConnection extends BaseConnection {
 
     this.setState(ConnectionState.CONNECTING);
     this.websocket.setup();
+  }
+
+  /**
+   * Handle the capabilities event from the websocket.
+   */
+  handleCapabilities(data: { type: string; capabilities: FullnodeCapability[] }) {
+    this.logger.debug(`Fullnode has capabilities: ${JSON.stringify(data.capabilities)}`);
+    const { capabilities } = data;
+    if (!capabilities) {
+      return;
+    }
+    this.capabilities = capabilities;
+  }
+
+  /**
+   * If the fullnode has not sent the capabilities yet wait a while.
+   */
+  async waitCapabilities() {
+    if (this.capabilities === undefined) {
+      // Wait 2s so the fullnode has some time to send the capabilities envent
+      await new Promise<void>(resolve => {
+        setTimeout(resolve, CAPABILITIES_WAIT_TIMEOUT);
+      });
+    }
+  }
+
+  /**
+   * Check if the connected fullnode has the desired capability.
+   * Will return false if the fullnode has not yet sent the capability list.
+   */
+  async hasCapability(flag: FullnodeCapability) {
+    await this.waitCapabilities();
+    if (!this.capabilities) {
+      return false;
+    }
+    return this.capabilities?.includes(flag) || false;
   }
 
   startControlHandlers(storage: IStorage) {
