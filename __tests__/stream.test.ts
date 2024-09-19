@@ -57,7 +57,7 @@ const SERVER_MOCK_TYPE = {
   unknownId: 'unknown_id',
 };
 
-function makeServerMock(mockServer, mockType) {
+function makeServerMock(mockServer, mockType, sendCapabilities = true) {
   function streamHistoryForSocket(streamId, socket) {
     // Begin event marks the start of a stream
     socket.send(
@@ -100,6 +100,9 @@ function makeServerMock(mockServer, mockType) {
   }
 
   mockServer.on('connection', socket => {
+    if (sendCapabilities) {
+      socket.send(JSON.stringify({ type: 'capabilities', capabilities: ['history-streaming'] }));
+    }
     socket.on('message', data => {
       const jsonData = JSON.parse(data);
       if (jsonData.type === 'subscribe_address') {
@@ -276,5 +279,39 @@ describe('Websocket stream history sync', () => {
       await wallet.stop({ cleanStorage: true, cleanAddresses: true });
       mockServer.stop();
     }
+  }, 10000);
+
+  it('should default to POLLING_HTTP_API without capabilities', async () => {
+    const mockServer = new Server('ws://localhost:8080/v1a/ws/');
+    makeServerMock(mockServer, SERVER_MOCK_TYPE.simple, false);
+    const wallet = await startWalletFor(HistorySyncMode.MANUAL_STREAM_WS);
+    wallet.conn.on('stream', data => {
+      // Any stream event should fail the test
+      throw new Error(`Received a stream event: ${JSON.stringify(data)}`);
+    });
+    wallet.on('state', state => {
+      // If the sync fails, fail the test
+      if (state === HathorWallet.ERROR) {
+        throw new Error('Wallet reached an error state');
+      }
+    });
+    try {
+      while (true) {
+        if (wallet.isReady()) {
+          break;
+        }
+        await new Promise(resolve => {
+          setTimeout(resolve, 100);
+        });
+      }
+    } finally {
+      // Stop wallet
+      await wallet.stop({ cleanStorage: true, cleanAddresses: true });
+      mockServer.stop();
+    }
+
+    await expect(wallet.getAddressAtIndex(0)).resolves.toEqual(
+      'WewDeXWyvHP7jJTs7tjLoQfoB72LLxJQqN'
+    );
   }, 10000);
 });
