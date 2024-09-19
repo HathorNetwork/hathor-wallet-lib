@@ -25,7 +25,14 @@ import {
 import * as cryptoUtils from '../../src/utils/crypto';
 import { InvalidPasswdError } from '../../src/errors';
 import Network from '../../src/models/network';
-import { IHistoryTx, ILockedUtxo, IUtxo, IUtxoId, OutputValueType, WALLET_FLAGS } from '../../src/types';
+import {
+  IHistoryTx,
+  ILockedUtxo,
+  IUtxo,
+  IUtxoId,
+  OutputValueType,
+  WALLET_FLAGS,
+} from '../../src/types';
 
 const DATA_DIR = './testdata.leveldb';
 
@@ -381,9 +388,7 @@ test('utxos selected as inputs', async () => {
   // Should check if the utxo is selected as input
   await expect(storage.isUtxoSelectedAsInput({ txId: 'a-tx-id1', index: 0 })).resolves.toBe(true);
   await expect(storage.isUtxoSelectedAsInput({ txId: 'a-tx-id2', index: 0 })).resolves.toBe(true);
-  await expect(storage.isUtxoSelectedAsInput({ txId: 'a-tx-id3', index: 0 })).resolves.toBe(
-    false
-  );
+  await expect(storage.isUtxoSelectedAsInput({ txId: 'a-tx-id3', index: 0 })).resolves.toBe(false);
 
   // Iterate on all utxos selected as input
   const buf: IUtxoId[] = [];
@@ -395,10 +400,9 @@ test('utxos selected as inputs', async () => {
   expect(buf).toContainEqual({ txId: 'a-tx-id2', index: 0 });
 
   const tx = { txId: 'a-tx-id3', outputs: [{ value: 10, token: '00', spent_by: null }] };
-  const getTxSpy = jest.spyOn(storage, 'getTx').mockImplementation(
-    async _txId => {
-      return tx as unknown as IHistoryTx;
-    });
+  const getTxSpy = jest.spyOn(storage, 'getTx').mockImplementation(async _txId => {
+    return tx as unknown as IHistoryTx;
+  });
   // no timeout, mark as selected: true
   await storage.utxoSelectAsInput({ txId: 'a-tx-id3', index: 0 }, true);
   expect(storage.utxosSelectedAsInput.get('a-tx-id3:0')).toBe(true);
