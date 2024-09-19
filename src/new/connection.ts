@@ -14,7 +14,7 @@ import { handleSubscribeAddress, handleWsDashboard } from '../utils/connection';
 import { IStorage, ILogger, getDefaultLogger } from '../types';
 
 const STREAM_ABORT_TIMEOUT = 10000; // 10s
-const CAPABILITIES_WAIT_TIMEOUT = 2000 // 2s
+const CAPABILITIES_WAIT_TIMEOUT = 2000; // 2s
 
 /**
  * Event names for requesting stream from fullnode
