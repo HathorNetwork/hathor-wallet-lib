@@ -25,7 +25,14 @@ import {
 import * as cryptoUtils from '../../src/utils/crypto';
 import { InvalidPasswdError } from '../../src/errors';
 import Network from '../../src/models/network';
-import { ILockedUtxo, IUtxo, OutputValueType, WALLET_FLAGS } from '../../src/types';
+import {
+  IHistoryTx,
+  ILockedUtxo,
+  IUtxo,
+  IUtxoId,
+  OutputValueType,
+  WALLET_FLAGS,
+} from '../../src/types';
 
 const DATA_DIR = './testdata.leveldb';
 
@@ -362,7 +369,7 @@ test('selecting utxos', async () => {
   const options = {
     filter_method: utxo => utxo.txId === wantedTx,
   };
-  const buf = [];
+  const buf: IUtxo[] = [];
   for await (const utxo of storage.selectUtxos(options)) {
     buf.push(utxo);
   }
@@ -379,14 +386,12 @@ test('utxos selected as inputs', async () => {
   storage.utxosSelectedAsInput.set('a-tx-id2:0', true);
 
   // Should check if the utxo is selected as input
-  await expect(storage.isUtxoSelectedAsInput({ txId: 'a-tx-id1', index: '0' })).resolves.toBe(true);
-  await expect(storage.isUtxoSelectedAsInput({ txId: 'a-tx-id2', index: '0' })).resolves.toBe(true);
-  await expect(storage.isUtxoSelectedAsInput({ txId: 'a-tx-id3', index: '0' })).resolves.toBe(
-    false
-  );
+  await expect(storage.isUtxoSelectedAsInput({ txId: 'a-tx-id1', index: 0 })).resolves.toBe(true);
+  await expect(storage.isUtxoSelectedAsInput({ txId: 'a-tx-id2', index: 0 })).resolves.toBe(true);
+  await expect(storage.isUtxoSelectedAsInput({ txId: 'a-tx-id3', index: 0 })).resolves.toBe(false);
 
   // Iterate on all utxos selected as input
-  const buf = [];
+  const buf: IUtxoId[] = [];
   for await (const u of storage.utxoSelectedAsInputIter()) {
     buf.push(u);
   }
@@ -395,7 +400,9 @@ test('utxos selected as inputs', async () => {
   expect(buf).toContainEqual({ txId: 'a-tx-id2', index: 0 });
 
   const tx = { txId: 'a-tx-id3', outputs: [{ value: 10, token: '00', spent_by: null }] };
-  const getTxSpy = jest.spyOn(storage, 'getTx').mockImplementation(async () => tx);
+  const getTxSpy = jest.spyOn(storage, 'getTx').mockImplementation(async _txId => {
+    return tx as unknown as IHistoryTx;
+  });
   // no timeout, mark as selected: true
   await storage.utxoSelectAsInput({ txId: 'a-tx-id3', index: 0 }, true);
   expect(storage.utxosSelectedAsInput.get('a-tx-id3:0')).toBe(true);
@@ -411,12 +418,27 @@ test('utxos selected as inputs', async () => {
   await storage.utxoSelectAsInput({ txId: 'a-tx-id4', index: 0 }, true);
   expect(storage.utxosSelectedAsInput.get('a-tx-id4:0')).toBeUndefined();
   // Or with a spent output
-  getTxSpy.mockImplementation(async () => ({
-    txId: 'a-tx-id3',
-    outputs: [{ value: 10, token: '00', spent_by: 'a-tx-id5' }],
-  }));
+  getTxSpy.mockImplementation(async _txId => {
+    return {
+      txId: 'a-tx-id3',
+      outputs: [{ value: 10, token: '00', spent_by: 'a-tx-id5' }],
+    } as unknown as IHistoryTx;
+  });
   await storage.utxoSelectAsInput({ txId: 'a-tx-id3', index: 0 }, true);
   expect(storage.utxosSelectedAsInput.get('a-tx-id3:0')).toBeUndefined();
+
+  getTxSpy.mockImplementation(async _txId => {
+    return {
+      txId: 'a-tx-id4',
+      outputs: [{ value: 10, token: '00', spent_by: null }],
+    } as unknown as IHistoryTx;
+  });
+  await storage.utxoSelectAsInput({ txId: 'a-tx-id4', index: 0 }, true, 500);
+  expect(storage.utxosSelectedAsInput.get('a-tx-id4:0')).toBe(true);
+  await new Promise<void>(resolve => {
+    setTimeout(resolve, 1000);
+  });
+  expect(storage.utxosSelectedAsInput.get('a-tx-id4:0')).not.toBe(true);
 });
 
 describe('process locked utxos', () => {

@@ -707,10 +707,8 @@ export class Storage implements IStorage {
       // if a ttl is given, we should reverse
       if (ttl) {
         setTimeout(() => {
-          if (!markAs) {
-            if (this.utxosSelectedAsInput.has(utxoId)) {
-              this.utxosSelectedAsInput.delete(utxoId);
-            }
+          if (this.utxosSelectedAsInput.has(utxoId)) {
+            this.utxosSelectedAsInput.delete(utxoId);
           }
         }, ttl);
       }
