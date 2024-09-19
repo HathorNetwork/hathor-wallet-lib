@@ -427,12 +427,6 @@ export class StreamManager extends AbortController {
       throw new Error('No abort controller on connection');
     }
 
-    // The connection with the fullnode may have been lost during the time waiting to sync
-    if (signal.aborted) {
-      this.abort();
-      throw new Error('The connection already aborted this stream');
-    }
-
     signal.addEventListener(
       'abort',
       () => {
