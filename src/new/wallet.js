@@ -1070,9 +1070,10 @@ class HathorWallet extends EventEmitter {
    * @param {string} txId Transaction id of the UTXO
    * @param {number} index Output index of the UTXO
    * @param {boolean} [value=true] The value to set the utxos.
+   * @param {number?} [ttl=null]
    */
-  async markUtxoSelected(txId, index, value = true) {
-    await this.storage.utxoSelectAsInput({ txId, index }, value);
+  async markUtxoSelected(txId, index, value = true, ttl = null) {
+    await this.storage.utxoSelectAsInput({ txId, index }, value, ttl);
   }
 
   /**
