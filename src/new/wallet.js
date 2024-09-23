@@ -49,7 +49,7 @@ import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../utils/address';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction } from '../nano_contracts/utils';
-import { addTask } from '../sync/gll';
+import GLL from '../sync/gll';
 
 const ERROR_MESSAGE_PIN_REQUIRED = 'Pin is required.';
 
@@ -172,6 +172,9 @@ class HathorWallet extends EventEmitter {
       this.storage = new Storage(store);
     }
     this.storage.setLogger(this.logger);
+    /**
+     * @type {import('./connection').default}
+     */
     this.conn = connection;
     this.conn.startControlHandlers(this.storage);
 
@@ -1067,9 +1070,10 @@ class HathorWallet extends EventEmitter {
    * @param {string} txId Transaction id of the UTXO
    * @param {number} index Output index of the UTXO
    * @param {boolean} [value=true] The value to set the utxos.
+   * @param {number?} [ttl=null]
    */
-  async markUtxoSelected(txId, index, value = true) {
-    await this.storage.utxoSelectAsInput({ txId, index }, value);
+  async markUtxoSelected(txId, index, value = true, ttl = null) {
+    await this.storage.utxoSelectAsInput({ txId, index }, value, ttl);
   }
 
   /**
@@ -1452,7 +1456,7 @@ class HathorWallet extends EventEmitter {
     if (info.network.indexOf(this.conn.network) >= 0) {
       this.storage.setApiVersion(info);
       await this.storage.saveNativeToken();
-      this.conn.start(); // XXX: maybe await?
+      this.conn.start();
     } else {
       this.setState(HathorWallet.CLOSED);
       throw new Error(`Wrong network. server=${info.network} expected=${this.conn.network}`);
@@ -2200,8 +2204,8 @@ class HathorWallet extends EventEmitter {
    */
   // eslint-disable-next-line class-methods-use-this -- The server address is fetched directly from the configs
   async getTokenDetails(tokenId) {
-    const result = await new Promise(resolve => {
-      walletApi.getGeneralTokenInfo(tokenId, resolve);
+    const result = await new Promise((resolve, reject) => {
+      walletApi.getGeneralTokenInfo(tokenId, resolve).catch(error => reject(error));
     });
 
     if (!result.success) {
@@ -2858,10 +2862,27 @@ class HathorWallet extends EventEmitter {
     if (!(await getSupportedSyncMode(this.storage)).includes(this.historySyncMode)) {
       throw new Error('Trying to use an unsupported sync method for this wallet.');
     }
-    const syncMethod = getHistorySyncMethod(this.historySyncMode);
-    await addTask(async () => {
+    let syncMode = this.historySyncMode;
+    if (
+      [HistorySyncMode.MANUAL_STREAM_WS, HistorySyncMode.XPUB_STREAM_WS].includes(
+        this.historySyncMode
+      ) &&
+      !(await this.conn.hasCapability('history-streaming'))
+    ) {
+      // History sync mode is streaming but fullnode is not streaming capable.
+      // We revert to the http polling default.
+      this.logger.debug(
+        'Either fullnode does not support history-streaming or has not sent a capabilities event'
+      );
+      this.logger.debug('Falling back to http polling API');
+      syncMode = HistorySyncMode.POLLING_HTTP_API;
+    }
+    const syncMethod = getHistorySyncMethod(syncMode);
+    // This will add the task to the GLL queue and return a promise that
+    // resolves when the task finishes executing
+    await GLL.add(async () => {
       await syncMethod(startIndex, count, this.storage, this.conn, shouldProcessHistory);
-    }, this.logger);
+    });
   }
 
   /**
