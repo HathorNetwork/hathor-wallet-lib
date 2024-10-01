@@ -1458,7 +1458,7 @@ class HathorWallet extends EventEmitter {
    * @return {Promise<Transaction>} Promise that resolves when transaction is sent
    */
   async sendManyOutputsTransaction(outputs, options = {}) {
-    const sendTransaction = this.sendManyOutputsSendTransaction(outputs, options);
+    const sendTransaction = await this.sendManyOutputsSendTransaction(outputs, options);
     return sendTransaction.run();
   }
 
