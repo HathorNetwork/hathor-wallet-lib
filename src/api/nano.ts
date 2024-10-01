@@ -36,9 +36,20 @@ const ncApi = {
     id: string,
     fields: string[],
     balances: string[],
-    calls: string[]
+    calls: string[],
+    block_hash: string | null = null,
+    block_height: number | null = null
   ): Promise<NanoContractStateAPIResponse> {
     const data = { id, fields, balances, calls };
+
+    if (block_hash) {
+      data['block_hash'] = block_hash
+    }
+
+    if (block_height) {
+      data['block_height'] = block_height
+    }
+
     const axiosInstance = await createRequestInstance();
     try {
       const response = await axiosInstance.get(`nano_contract/state`, { params: data });
