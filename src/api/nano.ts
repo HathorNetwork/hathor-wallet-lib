@@ -12,6 +12,7 @@ import {
   NanoContractBlueprintInformationAPIResponse,
   NanoContractHistoryAPIResponse,
   NanoContractStateAPIResponse,
+  NanoContractStateAPIParameters,
 } from '../nano_contracts/types';
 
 /**
@@ -28,6 +29,8 @@ const ncApi = {
    * @param fields Array of fields to get state
    * @param balances Array of balances to get state
    * @param calls Array of private method calls to execute in the nano contract and get the result
+   * @param block_hash Hash of the block to get the state of the nano
+   * @param block_height Height of the block to get the state of the nano
    *
    * @memberof ApiNanoContracts
    * @inner
@@ -40,7 +43,7 @@ const ncApi = {
     block_hash: string | null = null,
     block_height: number | null = null
   ): Promise<NanoContractStateAPIResponse> {
-    const data = { id, fields, balances, calls };
+    const data: NanoContractStateAPIParameters = { id, fields, balances, calls };
 
     if (block_hash) {
       data.block_hash = block_hash;
