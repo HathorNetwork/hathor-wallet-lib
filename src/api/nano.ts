@@ -43,11 +43,11 @@ const ncApi = {
     const data = { id, fields, balances, calls };
 
     if (block_hash) {
-      data['block_hash'] = block_hash
+      data.block_hash = block_hash;
     }
 
     if (block_height) {
-      data['block_height'] = block_height
+      data.block_height = block_height;
     }
 
     const axiosInstance = await createRequestInstance();
