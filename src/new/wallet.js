@@ -935,14 +935,14 @@ class HathorWallet extends EventEmitter {
    * @property {boolean} [only_available_utxos] - Use only available utxos (not locked)
    */
 
-   /**
-    * @typedef UtxoInfo
-    * @property {string} address - Address that owns the UTXO.
-    * @property {number} amount - Amount of tokens.
-    * @property {string} tx_id - Original transaction id.
-    * @property {boolean} locked - If the output is currently locked.
-    * @property {number} index - Index on the output array of the original tx.
-    */
+  /**
+   * @typedef UtxoInfo
+   * @property {string} address - Address that owns the UTXO.
+   * @property {number} amount - Amount of tokens.
+   * @property {string} tx_id - Original transaction id.
+   * @property {boolean} locked - If the output is currently locked.
+   * @property {number} index - Index on the output array of the original tx.
+   */
 
   /**
    * @typedef UtxoDetails
@@ -1201,12 +1201,8 @@ class HathorWallet extends EventEmitter {
    *
    */
   async consolidateUtxos(destinationAddress, options = {}) {
-    const {
-      total_utxos_consolidated,
-      total_amount,
-      sendTx,
-      utxos,
-    } = await this.consolidateUtxosSendTransaction(destinationAddress, options);
+    const { total_utxos_consolidated, total_amount, sendTx, utxos } =
+      await this.consolidateUtxosSendTransaction(destinationAddress, options);
 
     const tx = await sendTx.run();
 
@@ -1411,13 +1407,13 @@ class HathorWallet extends EventEmitter {
    * @property {string} token
    */
 
-   /**
-    * @typedef {Object} SendManyOutputsOptions
-    * @property {ProposedInput[]?} inputs Array of proposed inputs
-    * @property  {string?} [changeAddress] address of the change output
-    * @property  {boolean?} [startMiningTx=true] to trigger start mining
-    * @property  {string?} [pinCode] pin to decrypt xpriv information.
-    */
+  /**
+   * @typedef {Object} SendManyOutputsOptions
+   * @property {ProposedInput[]?} inputs Array of proposed inputs
+   * @property  {string?} [changeAddress] address of the change output
+   * @property  {boolean?} [startMiningTx=true] to trigger start mining
+   * @property  {string?} [pinCode] pin to decrypt xpriv information.
+   */
 
   /**
    * Create a SendTransaction instance to send a transaction with possibly multiple outputs.
@@ -1964,7 +1960,7 @@ class HathorWallet extends EventEmitter {
    * */
   async mintTokensSendTransaction(tokenUid, amount, options = {}) {
     const transaction = await this.prepareMintTokensData(tokenUid, amount, options);
-    return new SendTransaction({ storage: this.storage, transaction })
+    return new SendTransaction({ storage: this.storage, transaction });
   }
 
   /**
@@ -2170,7 +2166,12 @@ class HathorWallet extends EventEmitter {
    * @inner
    * */
   async delegateAuthoritySendTransaction(tokenUid, type, destinationAddress, options = {}) {
-    const transaction = await this.prepareDelegateAuthorityData(tokenUid, type, destinationAddress, options);
+    const transaction = await this.prepareDelegateAuthorityData(
+      tokenUid,
+      type,
+      destinationAddress,
+      options
+    );
     return new SendTransaction({ storage: this.storage, transaction });
   }
 
@@ -2188,7 +2189,12 @@ class HathorWallet extends EventEmitter {
    * @inner
    * */
   async delegateAuthority(tokenUid, type, destinationAddress, options = {}) {
-    const sendTx = await this.delegateAuthoritySendTransaction(tokenUid, type, destinationAddress, options);
+    const sendTx = await this.delegateAuthoritySendTransaction(
+      tokenUid,
+      type,
+      destinationAddress,
+      options
+    );
     return sendTx.runFromMining();
   }
 
