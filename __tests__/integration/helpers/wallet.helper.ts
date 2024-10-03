@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { get } from 'lodash';
+import { get, includes } from 'lodash';
 import Connection from '../../../src/new/connection';
 import {
   DEBUG_LOGGING,
@@ -459,7 +459,9 @@ export async function waitTxConfirmed(
 
   try {
     // Only return the positive response after the tx has a first block
-    while ((await getTxFirstBlock(hWallet, txId)) === null) {
+    // the nano contract txs are executing the method as soon as they arrive in the node
+    // and adding the first_block as mempool so we shouldn't consider this as a valid first block for confirmation
+    while (includes([null, 'mempool'], await getTxFirstBlock(hWallet, txId))) {
       await delay(1000);
 
       // If we've reached the requested timeout, break the while loop
