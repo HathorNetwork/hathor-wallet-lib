@@ -53,9 +53,6 @@ import GLL from '../sync/gll';
 
 /**
  * @typedef {import('../models/create_token_transaction').default} CreateTokenTransaction
- */
-
-/**
  * @typedef {import('../models/transaction').default} Transaction
  */
 
