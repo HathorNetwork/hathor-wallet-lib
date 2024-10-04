@@ -1,0 +1,48 @@
+name: tests
+on:
+  push:
+    branches:
+    - master
+    - release
+    - release-candidate
+    tags:
+    - v*
+  pull_request:
+    branches:
+    - release
+    - release-candidate
+    - master
+jobs:
+  test:
+    runs-on: 'ubuntu-latest'
+    timeout-minutes: 40  # default is 360
+    strategy:
+      matrix:
+        node-version: [20.x]
+    steps:
+    - name: Checkout
+      # https://github.com/actions/checkout/releases/tag/v4.1.7
+      uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
+
+    - name: Use Node.js ${{ matrix.node-version }}
+      # https://github.com/actions/setup-node/releases/tag/v4.0.2
+      uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8
+      with:
+        node-version: ${{ matrix.node-version }}
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Build
+      run: npm run build
+
+    - name: Test
+      run: npm run test
+
+    - name: Upload coverage
+      # https://github.com/codecov/codecov-action/releases/tag/v4.5.0
+      uses: codecov/codecov-action@e28ff129e5465c2c0dcc6f003fc735cb6ae0c673
+      with:
+        fail_ci_if_error: true
+      env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

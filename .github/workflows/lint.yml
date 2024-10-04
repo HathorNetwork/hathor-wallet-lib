@@ -1,4 +1,4 @@
-name: tests
+name: linter
 on:
   push:
     branches:
@@ -13,7 +13,7 @@ on:
     - release-candidate
     - master
 jobs:
-  test:
+  linter:
     runs-on: 'ubuntu-latest'
     timeout-minutes: 40  # default is 360
     strategy:
@@ -38,14 +38,3 @@ jobs:
 
     - name: Lint and format
       run: npm run format:check && npm run lint
-
-    - name: Test
-      run: npm run test
-
-    - name: Upload coverage
-      # https://github.com/codecov/codecov-action/releases/tag/v4.5.0
-      uses: codecov/codecov-action@e28ff129e5465c2c0dcc6f003fc735cb6ae0c673
-      with:
-        fail_ci_if_error: true
-      env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
