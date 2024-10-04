@@ -344,6 +344,84 @@ describe('full cycle of bet nano contract', () => {
     // Get tx history with success
     const txHistory = await wallet.getTxHistory();
     expect(txHistory).toHaveLength(4);
+
+    // Now test getting nano state in a past block, after the second bet
+    const bet2TxData = await wallet.getFullTxById(txBet2.hash);
+    const firstBlock = bet2TxData.meta.first_block;
+    const firstBlockHeight = bet2TxData.meta.first_block_height;
+
+    // Get NC state in the past, using txBet2 first block
+    const ncStateFirstBlock = await ncApi.getNanoContractState(
+      tx1.hash,
+      [
+        'token_uid',
+        'total',
+        'final_result',
+        'oracle_script',
+        'date_last_bet',
+        `address_details.a'${address2}'`,
+        `withdrawals.a'${address2}'`,
+        `address_details.a'${address3}'`,
+        `withdrawals.a'${address3}'`,
+      ],
+      [],
+      [],
+      firstBlock
+    );
+
+    expect(ncStateFirstBlock.fields.token_uid.value).toBe(NATIVE_TOKEN_UID);
+    expect(ncStateFirstBlock.fields.date_last_bet.value).toBe(dateLastBet);
+    expect(ncStateFirstBlock.fields.oracle_script.value).toBe(bufferToHex(outputScriptBuffer1));
+    expect(ncStateFirstBlock.fields.final_result.value).toBeNull();
+    expect(ncStateFirstBlock.fields.total.value).toBe(300);
+    expect(ncStateFirstBlock.fields[`address_details.a'${address2}'`].value).toHaveProperty(
+      '1x0',
+      100
+    );
+    expect(ncStateFirstBlock.fields[`withdrawals.a'${address2}'`].value).toBeUndefined();
+    expect(ncStateFirstBlock.fields[`address_details.a'${address3}'`].value).toHaveProperty(
+      '2x0',
+      200
+    );
+    expect(ncStateFirstBlock.fields[`withdrawals.a'${address3}'`].value).toBeUndefined();
+
+    // Get NC state in the past, using txBet2 first block height
+    const ncStateFirstBlockHeight = await ncApi.getNanoContractState(
+      tx1.hash,
+      [
+        'token_uid',
+        'total',
+        'final_result',
+        'oracle_script',
+        'date_last_bet',
+        `address_details.a'${address2}'`,
+        `withdrawals.a'${address2}'`,
+        `address_details.a'${address3}'`,
+        `withdrawals.a'${address3}'`,
+      ],
+      [],
+      [],
+      null,
+      firstBlockHeight
+    );
+
+    expect(ncStateFirstBlockHeight.fields.token_uid.value).toBe(NATIVE_TOKEN_UID);
+    expect(ncStateFirstBlockHeight.fields.date_last_bet.value).toBe(dateLastBet);
+    expect(ncStateFirstBlockHeight.fields.oracle_script.value).toBe(
+      bufferToHex(outputScriptBuffer1)
+    );
+    expect(ncStateFirstBlockHeight.fields.final_result.value).toBeNull();
+    expect(ncStateFirstBlockHeight.fields.total.value).toBe(300);
+    expect(ncStateFirstBlockHeight.fields[`address_details.a'${address2}'`].value).toHaveProperty(
+      '1x0',
+      100
+    );
+    expect(ncStateFirstBlockHeight.fields[`withdrawals.a'${address2}'`].value).toBeUndefined();
+    expect(ncStateFirstBlockHeight.fields[`address_details.a'${address3}'`].value).toHaveProperty(
+      '2x0',
+      200
+    );
+    expect(ncStateFirstBlockHeight.fields[`withdrawals.a'${address3}'`].value).toBeUndefined();
   };
 
   it('bet deposit', async () => {
