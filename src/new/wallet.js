@@ -1825,6 +1825,7 @@ class HathorWallet extends EventEmitter {
    * @property {boolean?} [allowExternalMintAuthorityAddress=false] allow the mint authority address to be from another wallet
    * @property {boolean?} [unshiftData] whether to unshift the data script output
    * @property {string[]|null?} [data=null] list of data strings using utf8 encoding to add each as a data script output
+   * @property {boolean?} [signTx=true] sign transaction instance
    * @property {string?} [pinCode] pin to decrypt xpriv information.
    */
 
