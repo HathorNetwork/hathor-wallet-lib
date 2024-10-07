@@ -1642,23 +1642,7 @@ class HathorWallet extends EventEmitter {
    * @param {string} name Name of the token
    * @param {string} symbol Symbol of the token
    * @param {OutputValueType} amount Quantity of the token to be minted
-   * @param [options] Options parameters
-   * @param {string} [options.address] address of the minted token,
-   * @param {string} [options.changeAddress] address of the change output,
-   * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
-   * @param {string} [options.pinCode] pin to decrypt xpriv information. Optional but required if not set in this
-   * @param {boolean} [options.createMint=true] if should create mint authority with the token
-   * @param {string} [options.mintAuthorityAddress] the address to send the mint authority created
-   * @param {boolean} [options.allowExternalMintAuthorityAddress=false] allow the mint authority address
-   *                                                                    to be from another wallet
-   * @param {boolean} [options.createMelt=true] if should create melt authority with the token
-   * @param {string} [options.meltAuthorityAddress] the address to send the melt authority created
-   * @param {boolean} [options.allowExternalMeltAuthorityAddress=false] allow the melt authority address
-   *                                                                    to be from another wallet
-   * @param {string[]|null} [options.data=null] list of data strings using utf8 encoding to add each as a data script output
-   *
-   * @param {boolean} [options.signTx] sign transaction instance (default true)
-   * @param {boolean} [options.isCreateNFT=false] if the create token is an NFT creation call
+   * @param {CreateTokenOptions} [options] Options parameters
    *
    * @return {Promise<CreateTokenTransaction>} Promise that resolves with transaction object if succeeds
    * or with error message if it fails
@@ -1732,26 +1716,12 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Create a new token for this wallet
+   * Builds a SendTransaction instance that will create a new token for this wallet
    *
    * @param {string} name Name of the token
    * @param {string} symbol Symbol of the token
    * @param {OutputValueType} amount Quantity of the token to be minted
-   * @param [options] Options parameters
-   * @param {string} [options.address] address of the minted token
-   * @param {string} [options.changeAddress] address of the change output
-   * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
-   * @param {string} [options.pinCode] pin to decrypt xpriv information.
-   *                                   Optional but required if not set in this
-   * @param {boolean} [options.createMint=true] should create mint authority
-   * @param {string} [options.mintAuthorityAddress] the address to send the mint authority created
-   * @param {boolean} [options.allowExternalMintAuthorityAddress=false] allow the mint authority address
-   *                                                                    to be from another wallet
-   * @param {boolean} [options.createMelt=true] should create melt authority
-   * @param {string} [options.meltAuthorityAddress] the address to send the melt authority created
-   * @param {boolean} [options.allowExternalMeltAuthorityAddress=false] allow the melt authority address
-   *                                                                    to be from another wallet
-   * @param {string[]|null} [options.data=null] list of data strings using utf8 encoding to add each as a data script output
+   * @param {CreateTokenOptions} [options] Options parameters
    *
    * @return {Promise<SendTransaction>}
    * @memberof HathorWallet
@@ -1768,21 +1738,7 @@ class HathorWallet extends EventEmitter {
    * @param {string} name Name of the token
    * @param {string} symbol Symbol of the token
    * @param {OutputValueType} amount Quantity of the token to be minted
-   * @param [options] Options parameters
-   * @param {string} [options.address] address of the minted token
-   * @param {string} [options.changeAddress] address of the change output
-   * @param {boolean} [options.startMiningTx=true] boolean to trigger start mining (default true)
-   * @param {string} [options.pinCode] pin to decrypt xpriv information.
-   *                                   Optional but required if not set in this
-   * @param {boolean} [options.createMint=true] should create mint authority
-   * @param {string} [options.mintAuthorityAddress] the address to send the mint authority created
-   * @param {boolean} [options.allowExternalMintAuthorityAddress=false] allow the mint authority address
-   *                                                                    to be from another wallet
-   * @param {boolean} [options.createMelt=true] should create melt authority
-   * @param {string} [options.meltAuthorityAddress] the address to send the melt authority created
-   * @param {boolean} [options.allowExternalMeltAuthorityAddress=false] allow the melt authority address
-   *                                                                    to be from another wallet
-   * @param {string[]|null} [options.data=null] list of data strings using utf8 encoding to add each as a data script output
+   * @param {CreateTokenOptions} [options] Options parameters
    *
    * @return {Promise<CreateTokenTransaction>}
    * @memberof HathorWallet
@@ -1859,17 +1815,17 @@ class HathorWallet extends EventEmitter {
 
   /**
    * @typedef {Object} MintTokensOptions
-   * @property {string} [address] destination address of the minted token
+   * @property {string?} [address] destination address of the minted token
    *                                   (if not sent we choose the next available address to use)
-   * @property {string} [changeAddress] address of the change output
+   * @property {string?} [changeAddress] address of the change output
    *                                   (if not sent we choose the next available address to use)
-   * @property {boolean} [startMiningTx=true] boolean to trigger start mining (default true)
-   * @property {boolean} [createAnotherMint] boolean to create another mint authority or not for the wallet
-   * @property {string} [mintAuthorityAddress] address to send the new mint authority created
-   * @property {boolean} [allowExternalMintAuthorityAddress=false] allow the mint authority address to be from another wallet
-   * @property {boolean} [unshiftData] whether to unshift the data script output
-   * @property {string[]|null} [data=null] list of data strings using utf8 encoding to add each as a data script output
-   * @property {string} [pinCode] pin to decrypt xpriv information.
+   * @property {boolean?} [startMiningTx=true] boolean to trigger start mining (default true)
+   * @property {boolean?} [createAnotherMint] boolean to create another mint authority or not for the wallet
+   * @property {string?} [mintAuthorityAddress] address to send the new mint authority created
+   * @property {boolean?} [allowExternalMintAuthorityAddress=false] allow the mint authority address to be from another wallet
+   * @property {boolean?} [unshiftData] whether to unshift the data script output
+   * @property {string[]|null?} [data=null] list of data strings using utf8 encoding to add each as a data script output
+   * @property {string?} [pinCode] pin to decrypt xpriv information.
    */
 
   /**
@@ -2105,7 +2061,7 @@ class HathorWallet extends EventEmitter {
    * Prepare delegate authority transaction before mining
    *
    * @param {string} tokenUid UID of the token to delegate the authority
-   * @param {string} type Type of the authority to delegate mint' or 'melt'
+   * @param {string} type Type of the authority to delegate 'mint' or 'melt'
    * @param {string} destinationAddress Destination address of the delegated authority
    * @param {DelegateAuthorityOptions} [options] Options parameters
    *
