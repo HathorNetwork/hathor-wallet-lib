@@ -2053,9 +2053,9 @@ class HathorWallet extends EventEmitter {
 
   /**
    * @typedef {Object} DelegateAuthorityOptions
-   * @property {boolean} [options.createAnother=true] Should create another authority for the wallet.
-   * @property {boolean} [options.startMiningTx=true] boolean to trigger start mining.
-   * @property {string} [options.pinCode] pin to decrypt xpriv information.
+   * @property {boolean?} [options.createAnother=true] Should create another authority for the wallet.
+   * @property {boolean?} [options.startMiningTx=true] boolean to trigger start mining.
+   * @property {string?} [options.pinCode] pin to decrypt xpriv information.
    */
 
   /**
@@ -2154,8 +2154,8 @@ class HathorWallet extends EventEmitter {
 
   /**
    * @typedef {Object} DestroyAuthorityOptions
-   * @param {boolean} [startMiningTx=true] trigger start mining
-   * @param {string} [pinCode] pin to decrypt xpriv information.
+   * @param {boolean?} [startMiningTx=true] trigger start mining
+   * @param {string?} [pinCode] pin to decrypt xpriv information.
    */
 
   /**
@@ -2443,17 +2443,7 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * @typedef {Object} CreateNFTOptions
-   * @property {string?} [address] address of the minted token,
-   * @property {string?} [changeAddress] address of the change output,
-   * @property {boolean?} [startMiningTx=true] boolean to trigger start mining
-   * @property {string?} [pinCode] pin to decrypt xpriv information.
-   * @property {boolean?} [createMint=false] should create mint authority
-   * @property {string?} [mintAuthorityAddress] the address to send the mint authority created
-   * @property {boolean?} [allowExternalMintAuthorityAddress=false] allow the mint authority address to be from another wallet
-   * @property {boolean?} [createMelt=false] should create melt authority
-   * @property {string?} [meltAuthorityAddress] the address to send the melt authority created
-   * @property {boolean?} [allowExternalMeltAuthorityAddress=false] allow the melt authority address to be from another wallet
+   * @typedef {Omit<CreateTokenOptions, 'data'|'isCreateNFT'>} CreateNFTOptions
    */
 
   /**
