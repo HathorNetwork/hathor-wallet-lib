@@ -98,3 +98,12 @@ export interface NanoContractStateAPIResponse {
   // Calls requested
   calls: Map<string, StateValueSuccess | StateValueError>;
 }
+
+export interface NanoContractStateAPIParameters {
+  id: string;
+  fields: string[];
+  balances: string[];
+  calls: string[];
+  block_hash?: string;
+  block_height?: number;
+}
