@@ -1753,8 +1753,9 @@ class HathorWallet extends EventEmitter {
    * Get mint authorities
    *
    * @param {string} tokenUid UID of the token to select the authority utxo
-   * @param [options] Object with custom options.
+   * @param {Object} [options] Object with custom options.
    * @param {boolean} [options.many=false] if should return many utxos or just one (default false)
+   * @param {boolean} [options.only_available_utxos=false] If we should filter for available utxos.
    *
    * @return {Promise<{
    *   txId: string,
@@ -1769,6 +1770,7 @@ class HathorWallet extends EventEmitter {
     const newOptions = {
       token: tokenUid,
       authorities: 1, // mint authority
+      only_available_utxos: options.only_available_utxos ?? false,
     };
     if (!options.many) {
       // limit number of utxos to select if many is false
@@ -1785,8 +1787,9 @@ class HathorWallet extends EventEmitter {
    * Get melt authorities
    *
    * @param {string} tokenUid UID of the token to select the authority utxo
-   * @param [options] Object with custom options.
+   * @param {Object} [options] Object with custom options.
    * @param {boolean} [options.many=false] if should return many utxos or just one (default false)
+   * @param {boolean} [options.only_available_utxos=false] If we should filter for available utxos.
    *
    * @return {Promise<{
    *   txId: string,
@@ -1801,6 +1804,7 @@ class HathorWallet extends EventEmitter {
     const newOptions = {
       token: tokenUid,
       authorities: 2, // melt authority
+      only_available_utxos: options.only_available_utxos ?? false,
     };
     if (!options.many) {
       // limit number of utxos to select if many is false
@@ -1873,7 +1877,10 @@ class HathorWallet extends EventEmitter {
 
     const mintAddress = newOptions.address || (await this.getCurrentAddress()).address;
 
-    const mintInput = await this.getMintAuthority(tokenUid, { many: false });
+    const mintInput = await this.getMintAuthority(tokenUid, {
+      many: false,
+      only_available_utxos: true,
+    });
 
     if (!mintInput || mintInput.length === 0) {
       throw new Error("Don't have mint authority output available.");
@@ -1990,7 +1997,10 @@ class HathorWallet extends EventEmitter {
       }
     }
 
-    const meltInput = await this.getMeltAuthority(tokenUid, { many: false });
+    const meltInput = await this.getMeltAuthority(tokenUid, {
+      many: false,
+      only_available_utxos: true,
+    });
 
     if (!meltInput || meltInput.length === 0) {
       throw new Error("Don't have melt authority output available.");
@@ -2083,9 +2093,15 @@ class HathorWallet extends EventEmitter {
     const { createAnother } = newOptions;
     let delegateInput;
     if (type === 'mint') {
-      delegateInput = await this.getMintAuthority(tokenUid, { many: false });
+      delegateInput = await this.getMintAuthority(tokenUid, {
+        many: false,
+        only_available_utxos: true,
+      });
     } else if (type === 'melt') {
-      delegateInput = await this.getMeltAuthority(tokenUid, { many: false });
+      delegateInput = await this.getMeltAuthority(tokenUid, {
+        many: false,
+        only_available_utxos: true,
+      });
     } else {
       throw new Error('This should never happen.');
     }
@@ -2182,9 +2198,15 @@ class HathorWallet extends EventEmitter {
     }
     let destroyInputs;
     if (type === 'mint') {
-      destroyInputs = await this.getMintAuthority(tokenUid, { many: true });
+      destroyInputs = await this.getMintAuthority(tokenUid, {
+        many: true,
+        only_available_utxos: true,
+      });
     } else if (type === 'melt') {
-      destroyInputs = await this.getMeltAuthority(tokenUid, { many: true });
+      destroyInputs = await this.getMeltAuthority(tokenUid, {
+        many: true,
+        only_available_utxos: true,
+      });
     } else {
       throw new Error('This should never happen.');
     }
