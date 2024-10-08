@@ -1753,7 +1753,9 @@ describe('authority utxo selection', () => {
     await hWallet.markUtxoSelected(mintInput.txId, mintInput.index, true);
 
     // getMintAuthority should return even if the utxo is already selected_as_input
-    await expect(hWallet.getMintAuthority(tokenUid, { many: false })).resolves.toStrictEqual([mintInput]);
+    await expect(hWallet.getMintAuthority(tokenUid, { many: false })).resolves.toStrictEqual([
+      mintInput,
+    ]);
     await expect(
       hWallet.getMintAuthority(tokenUid, { many: false, only_available_utxos: false })
     ).resolves.toStrictEqual([mintInput]);
@@ -1775,7 +1777,9 @@ describe('authority utxo selection', () => {
     await hWallet.markUtxoSelected(meltInput.txId, meltInput.index, true);
 
     // getMeltAuthority should return even if the utxo is already selected_as_input
-    await expect(hWallet.getMeltAuthority(tokenUid, { many: false })).resolves.toStrictEqual([meltInput]);
+    await expect(hWallet.getMeltAuthority(tokenUid, { many: false })).resolves.toStrictEqual([
+      meltInput,
+    ]);
     await expect(
       hWallet.getMeltAuthority(tokenUid, { many: false, only_available_utxos: false })
     ).resolves.toStrictEqual([meltInput]);
