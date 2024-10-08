@@ -1689,8 +1689,9 @@ class HathorWallet extends EventEmitter {
    * Get mint authorities
    *
    * @param {string} tokenUid UID of the token to select the authority utxo
-   * @param [options] Object with custom options.
+   * @param {Object} [options] Object with custom options.
    * @param {boolean} [options.many=false] if should return many utxos or just one (default false)
+   * @param {boolean} [options.only_available_utxos=true] If we should filter for available utxos.
    *
    * @return {Promise<{
    *   txId: string,
@@ -1705,6 +1706,7 @@ class HathorWallet extends EventEmitter {
     const newOptions = {
       token: tokenUid,
       authorities: 1, // mint authority
+      only_available_utxos: options.only_available_utxos ?? true,
     };
     if (!options.many) {
       // limit number of utxos to select if many is false
@@ -1723,6 +1725,7 @@ class HathorWallet extends EventEmitter {
    * @param {string} tokenUid UID of the token to select the authority utxo
    * @param [options] Object with custom options.
    * @param {boolean} [options.many=false] if should return many utxos or just one (default false)
+   * @param {boolean} [options.only_available_utxos=true] If we should filter for available utxos.
    *
    * @return {Promise<{
    *   txId: string,
@@ -1737,6 +1740,7 @@ class HathorWallet extends EventEmitter {
     const newOptions = {
       token: tokenUid,
       authorities: 2, // melt authority
+      only_available_utxos: options.only_available_utxos ?? true,
     };
     if (!options.many) {
       // limit number of utxos to select if many is false
