@@ -1736,6 +1736,61 @@ describe('sendManyOutputsTransaction', () => {
   });
 });
 
+describe('authority utxo selection', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
+  });
+
+  it('getMintAuthority', async () => {
+    // Setting up the custom token
+    const hWallet = await generateWalletHelper();
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 1);
+    const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to test', 'ATST', 100);
+
+    // Mark mint authority as selected_as_input
+    const [mintInput] = await hWallet.getMintAuthority(tokenUid, { many: false });
+    await hWallet.markUtxoSelected(mintInput.txId, mintInput.index, true);
+
+    // getMintAuthority should return even if the utxo is already selected_as_input
+    await expect(hWallet.getMintAuthority(tokenUid, { many: false })).resolves.toStrictEqual([
+      mintInput,
+    ]);
+    await expect(
+      hWallet.getMintAuthority(tokenUid, { many: false, only_available_utxos: false })
+    ).resolves.toStrictEqual([mintInput]);
+
+    // getMintAuthority should not return selected_as_input utxos if only_available_utxos is true
+    await expect(
+      hWallet.getMintAuthority(tokenUid, { many: false, only_available_utxos: true })
+    ).resolves.toStrictEqual([]);
+  });
+
+  it('getMeltAuthority', async () => {
+    // Setting up the custom token
+    const hWallet = await generateWalletHelper();
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(0), 1);
+    const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to test', 'ATST', 100);
+
+    // Mark melt authority as selected_as_input
+    const [meltInput] = await hWallet.getMeltAuthority(tokenUid, { many: false });
+    await hWallet.markUtxoSelected(meltInput.txId, meltInput.index, true);
+
+    // getMeltAuthority should return even if the utxo is already selected_as_input
+    await expect(hWallet.getMeltAuthority(tokenUid, { many: false })).resolves.toStrictEqual([
+      meltInput,
+    ]);
+    await expect(
+      hWallet.getMeltAuthority(tokenUid, { many: false, only_available_utxos: false })
+    ).resolves.toStrictEqual([meltInput]);
+
+    // getMeltAuthority should not return selected_as_input utxos if only_available_utxos is true
+    await expect(
+      hWallet.getMeltAuthority(tokenUid, { many: false, only_available_utxos: true })
+    ).resolves.toStrictEqual([]);
+  });
+});
+
 describe('createNewToken', () => {
   afterEach(async () => {
     await stopAllWallets();
