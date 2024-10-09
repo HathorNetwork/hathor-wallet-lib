@@ -1066,6 +1066,40 @@ describe('prepare transactions without signature', () => {
     );
   });
 
+  test('prepareMintTokensData with over available tokens amount', async () => {
+    const amountAvailable = 1;
+    const amountOverAvailable = 1000;
+    // fake stuff to support the test
+    const fakeMintAuthority = [
+      {
+        txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+        index: 0,
+        value: 1,
+        token: '01',
+        address: fakeAddress.base58,
+        authorities: TOKEN_MINT_MASK,
+        timelock: null,
+        locked: false,
+      },
+    ];
+
+    // wallet and mocks
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: false,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos({ ...fakeTokenToDepositUtxo, value: amountAvailable }),
+    });
+    jest.spyOn(hWallet, 'getMintAuthority').mockReturnValue(fakeMintAuthority);
+
+    // prepare mint
+    await expect(hWallet.prepareMintTokensData('01', amountOverAvailable, {
+      address: fakeAddress.base58,
+      pinCode: '1234',
+      signTx: false, // skip the signature
+    })).rejects.toThrow('Not enough HTR tokens for deposit: 10 required, 1 available');
+  });
+
   test('prepareMeltTokensData', async () => {
     // fake stuff to support the test
     const fakeTokenToMeltUtxo = {
@@ -1278,6 +1312,50 @@ describe('prepare transactions without signature', () => {
         }),
       ])
     );
+  });
+
+  test('prepareMeltTokensData with over available tokens amount', async () => {
+    const availableToken = 10;
+    const amountOverAvailable = 100;
+    // fake stuff to support the test
+    const fakeTokenToMeltUtxo = {
+      txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+      index: 0,
+      value: availableToken,
+      token: '01',
+      address: fakeAddress.base58,
+      authorities: 0,
+      timelock: null,
+      locked: false,
+    };
+    const fakeMeltAuthority = [
+      {
+        txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+        index: 0,
+        value: 1,
+        token: '01',
+        address: fakeAddress.base58,
+        authorities: TOKEN_MELT_MASK,
+        timelock: null,
+        locked: false,
+      },
+    ];
+
+    // wallet and mocks
+    const hWallet = new FakeHathorWallet();
+    hWallet.storage = getStorage({
+      readOnly: false,
+      currentAddress: fakeAddress.base58,
+      selectUtxos: generateSelectUtxos(fakeTokenToMeltUtxo),
+    });
+    jest.spyOn(hWallet, 'getMeltAuthority').mockReturnValue(fakeMeltAuthority);
+
+    // prepare melt
+    await expect(hWallet.prepareMeltTokensData('01', amountOverAvailable, {
+      address: fakeAddress.base58,
+      pinCode: '1234',
+      signTx: false, // skip the signature
+    })).rejects.toThrow('Not enough tokens to melt: 100 requested, 10 available');
   });
 });
 

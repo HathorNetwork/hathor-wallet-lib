@@ -49,7 +49,7 @@ export async function fastUtxoSelection(
   storage: IStorage,
   token: string,
   amount: OutputValueType
-): Promise<{ utxos: IUtxo[]; amount: OutputValueType }> {
+): Promise<{ utxos: IUtxo[]; amount: OutputValueType; available?: OutputValueType }> {
   const utxos: IUtxo[] = [];
   let utxosAmount = 0;
 
@@ -72,6 +72,7 @@ export async function fastUtxoSelection(
     return {
       utxos: [],
       amount: 0,
+      available: utxosAmount,
     };
   }
 
@@ -93,7 +94,7 @@ export async function bestUtxoSelection(
   storage: IStorage,
   token: string,
   amount: OutputValueType
-): Promise<{ utxos: IUtxo[]; amount: OutputValueType }> {
+): Promise<{ utxos: IUtxo[]; amount: OutputValueType; available?: OutputValueType }> {
   const utxos: IUtxo[] = [];
   let utxosAmount = 0;
   let selectedUtxo: IUtxo | null = null;
@@ -150,6 +151,7 @@ export async function bestUtxoSelection(
     return {
       utxos: [],
       amount: 0,
+      available: utxosAmount,
     };
   }
   // We need to ensure we use the smallest number of utxos and avoid hitting the maximum number of inputs
