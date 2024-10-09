@@ -1981,8 +1981,9 @@ describe('mintTokens', () => {
     const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to Mint', 'TMINT', 100);
 
     // Should not mint more tokens than the HTR funds allow
-    await expect(hWallet.mintTokens(tokenUid, 9000))
-      .rejects.toThrow(/^Not enough HTR tokens for deposit: 90 required, \d+ available$/);
+    await expect(hWallet.mintTokens(tokenUid, 9000)).rejects.toThrow(
+      /^Not enough HTR tokens for deposit: 90 required, \d+ available$/
+    );
 
     // Minting more of the tokens
     const mintAmount = getRandomInt(100, 50);
@@ -2184,8 +2185,9 @@ describe('meltTokens', () => {
     const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to Melt', 'TMELT', 500);
 
     // Should not melt more than there is available
-    await expect(hWallet.meltTokens(tokenUid, 999))
-      .rejects.toThrow('Not enough tokens to melt: 999 requested, 500 available');
+    await expect(hWallet.meltTokens(tokenUid, 999)).rejects.toThrow(
+      'Not enough tokens to melt: 999 requested, 500 available'
+    );
 
     // Melting some tokens
     const meltAmount = getRandomInt(99, 10);
