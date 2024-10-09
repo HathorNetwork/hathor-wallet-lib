@@ -1093,11 +1093,13 @@ describe('prepare transactions without signature', () => {
     jest.spyOn(hWallet, 'getMintAuthority').mockReturnValue(fakeMintAuthority);
 
     // prepare mint
-    await expect(hWallet.prepareMintTokensData('01', amountOverAvailable, {
-      address: fakeAddress.base58,
-      pinCode: '1234',
-      signTx: false, // skip the signature
-    })).rejects.toThrow('Not enough HTR tokens for deposit: 10 required, 1 available');
+    await expect(
+      hWallet.prepareMintTokensData('01', amountOverAvailable, {
+        address: fakeAddress.base58,
+        pinCode: '1234',
+        signTx: false, // skip the signature
+      })
+    ).rejects.toThrow('Not enough HTR tokens for deposit: 10 required, 1 available');
   });
 
   test('prepareMeltTokensData', async () => {
@@ -1351,11 +1353,13 @@ describe('prepare transactions without signature', () => {
     jest.spyOn(hWallet, 'getMeltAuthority').mockReturnValue(fakeMeltAuthority);
 
     // prepare melt
-    await expect(hWallet.prepareMeltTokensData('01', amountOverAvailable, {
-      address: fakeAddress.base58,
-      pinCode: '1234',
-      signTx: false, // skip the signature
-    })).rejects.toThrow('Not enough tokens to melt: 100 requested, 10 available');
+    await expect(
+      hWallet.prepareMeltTokensData('01', amountOverAvailable, {
+        address: fakeAddress.base58,
+        pinCode: '1234',
+        signTx: false, // skip the signature
+      })
+    ).rejects.toThrow('Not enough tokens to melt: 100 requested, 10 available');
   });
 });
 
