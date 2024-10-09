@@ -23,9 +23,9 @@ class FakeHathorWallet {
       this[method] = jest.fn().mockImplementation(HathorWallet.prototype[method].bind(this));
     }
 
-    this.sendManyOutputsTransaction.mockImplementation(() => {
-      return Promise.resolve({ hash: '123' });
-    });
+    this.sendManyOutputsSendTransaction.mockImplementation(() => ({
+      run: jest.fn().mockReturnValue(Promise.resolve({ hash: '123' })),
+    }));
 
     // Prepare storage
     const store = new MemoryStore();
@@ -161,18 +161,18 @@ describe('UTXO Consolidation', () => {
 
   test('correctly execute consolidateUtxos', async () => {
     const result = await hathorWallet.consolidateUtxos(destinationAddress);
-    expect(hathorWallet.sendManyOutputsTransaction).toHaveBeenCalled();
+    expect(hathorWallet.sendManyOutputsSendTransaction).toHaveBeenCalled();
     expect(result.total_utxos_consolidated).toBe(2);
     expect(result.total_amount).toBe(2);
     expect(result.txId).toBe('123');
     expect(result.utxos).toHaveLength(2);
     expect(result.utxos.some(utxo => utxo.locked)).toBeFalsy();
     // assert single output
-    expect(hathorWallet.sendManyOutputsTransaction.mock.calls[0][0]).toEqual([
+    expect(hathorWallet.sendManyOutputsSendTransaction.mock.calls[0][0]).toEqual([
       { address: destinationAddress, value: 2, token: '00' },
     ]);
     // assert 2 inputs only
-    expect(hathorWallet.sendManyOutputsTransaction.mock.calls[0][1].inputs).toHaveLength(2);
+    expect(hathorWallet.sendManyOutputsSendTransaction.mock.calls[0][1].inputs).toHaveLength(2);
   });
 
   test('all HTR utxos locked by height', async () => {

@@ -532,9 +532,12 @@ const transaction = {
    *
    * @param {IDataTx} txData Tx data to create the transaction
    * @param {Network} network network to use
-   * @returns {Transaction}
+   * @returns {Transaction|CreateTokenTransaction}
    */
-  createTransactionFromData(txData: IDataTx, network: Network): Transaction {
+  createTransactionFromData(
+    txData: IDataTx,
+    network: Network
+  ): Transaction | CreateTokenTransaction {
     const inputs: Input[] = txData.inputs.map(input => {
       const inputObj = new Input(input.txId, input.index);
       if (input.data) {
@@ -573,14 +576,14 @@ const transaction = {
    * @param storage Storage to get the mainKey
    * @param {Object} [options]
    * @param {boolean} [options.signTx=true] sign transaction instance
-   * @returns {Promise<Transaction>} Prepared transaction
+   * @returns {Promise<Transaction|CreateTokenTransaction>} Prepared transaction
    */
   async prepareTransaction(
     txData: IDataTx,
     pinCode: string,
     storage: IStorage,
     options?: { signTx?: boolean }
-  ): Promise<Transaction> {
+  ): Promise<Transaction | CreateTokenTransaction> {
     const newOptions = {
       signTx: true,
       ...options,
