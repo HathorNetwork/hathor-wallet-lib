@@ -360,7 +360,7 @@ const tokens = {
     }
 
     if (foundAmount < depositAmount) {
-      const availableAmount = selectedUtxos.available;
+      const availableAmount = selectedUtxos.available ?? 0;
       throw new InsufficientFundsError(
         `Not enough HTR tokens for deposit: ${depositAmount} required, ${availableAmount} available`
       );
@@ -511,7 +511,7 @@ const tokens = {
     }
 
     if (foundAmount < amount) {
-      const availableAmount = selectedUtxos.available;
+      const availableAmount = selectedUtxos.available ?? 0;
       throw new InsufficientFundsError(
         `Not enough tokens to melt: ${amount} requested, ${availableAmount} available`
       );
