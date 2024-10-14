@@ -362,7 +362,7 @@ export type UtxoSelectionAlgorithm = (
   storage: IStorage,
   token: string,
   amount: OutputValueType
-) => Promise<{ utxos: IUtxo[]; amount: OutputValueType }>;
+) => Promise<{ utxos: IUtxo[]; amount: OutputValueType; available?: OutputValueType }>;
 
 export interface IUtxoSelectionOptions {
   token?: string;
