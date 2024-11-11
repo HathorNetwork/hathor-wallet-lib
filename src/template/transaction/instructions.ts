@@ -1,0 +1,192 @@
+/**
+ * Copyright (c) Hathor Labs and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+export type InstructionTypes = 'input/utxo'
+    | 'input/raw'
+    | 'output/raw'
+    | 'output/token'
+    | 'output/data'
+    | 'action/shuffle'
+    | 'action/change'
+    | 'action/config'
+    | 'action/setvar';
+
+export const INSTRUCTION_TYPES = [
+  'input/utxo',
+  'input/raw',
+  'output/raw',
+  'output/token',
+  'output/data',
+  'action/shuffle',
+  'action/change',
+  'action/config',
+  'action/setvar',
+];
+
+export interface BaseTemplateInstruction {
+  readonly type: InstructionTypes;
+}
+
+export type TemplateVarValue = string|number;
+export type TemplateVarName = string;
+export type TemplateVarRef = `{${TemplateVarName}}`;
+export const TEMPLATE_VAR_REF_RE = /^{(.+)}$/;
+export type TemplateVar<T extends TemplateVarValue> = TemplateVarRef|T;
+
+/**
+ * If the key matches a template reference (i.e. `{name}`) it returns the variable of that name.
+ * If not the key should be the actual value.
+ */
+export function getVariable<T extends TemplateVarValue>(ref: TemplateVar<T>, vars: Record<TemplateVarName, TemplateVarValue>): T {
+  if (typeof ref === 'string') {
+    const match = ref.match(TEMPLATE_VAR_REF_RE);
+    if (match !== null) {
+      const key = match[1];
+      if (!vars[key]) {
+        throw new Error(`Variable ${key} not found in available variables`);
+      }
+      return vars[key] as T;
+    }
+  }
+
+  return ref as T;
+}
+
+export interface RawInputInstruction extends BaseTemplateInstruction {
+  readonly type: 'input/raw';
+  position?: number;
+  txId: TemplateVar<string>;
+  index: TemplateVar<number>;
+}
+
+export function isRawInputInstruction(x: any): x is RawInputInstruction {
+  return 'type' in x && x.type === 'input/raw';
+}
+
+export interface UtxoSelectInstruction extends BaseTemplateInstruction {
+  readonly type: 'input/utxo';
+  position: number;
+  fill: TemplateVar<number>;
+  token?: TemplateVar<string>;
+  authority?: 'mint' | 'melt';
+  address?: TemplateVar<string>;
+  autoChange?: boolean;
+}
+
+export function isUtxoSelectInstruction(x: any): x is UtxoSelectInstruction {
+  return 'type' in x && x.type === 'input/utxo';
+}
+
+export interface RawOutputInstruction extends BaseTemplateInstruction {
+  readonly type: 'output/raw';
+  position: number;
+  amount?: TemplateVar<number>;
+  script: TemplateVar<string>; // base64 or hex?
+  token?: TemplateVar<string>;
+  timelock?: TemplateVar<number>;
+  authority?: 'mint' | 'melt',
+}
+
+export function isRawOutputInstruction(x: any): x is RawOutputInstruction {
+  return 'type' in x && x.type === 'output/raw';
+}
+
+export interface DataOutputInstruction extends BaseTemplateInstruction {
+  readonly type: 'output/data',
+  position: number;
+  data: TemplateVar<string>;
+}
+
+export function isDataOutputInstruction(x: any): x is DataOutputInstruction {
+  return 'type' in x && x.type === 'output/data';
+}
+
+export interface TokenOutputInstruction extends BaseTemplateInstruction {
+  readonly type: 'output/token';
+  position: number;
+  amount: TemplateVar<number>;
+  token?: TemplateVar<string>;
+  address?: TemplateVar<string>;
+  timelock?: TemplateVar<number>;
+  checkAddress?: boolean;
+}
+
+export function isTokenOutputInstruction(x: any): x is TokenOutputInstruction {
+  return 'type' in x && x.type === 'output/token';
+}
+
+export interface ShuffleInstruction extends BaseTemplateInstruction {
+  readonly type: 'action/shuffle';
+  target: 'inputs' | 'outputs' | 'all';
+}
+
+export function isShuffleInstruction(x: any): x is ShuffleInstruction {
+  return 'type' in x && x.type === 'action/shuffle';
+}
+
+export interface ChangeInstruction extends BaseTemplateInstruction {
+  readonly type: 'action/change';
+  token?: TemplateVar<string>;
+  address?: TemplateVar<string>;
+  timelock?: TemplateVar<number>;
+}
+
+export function isChangeInstruction(x: any): x is ChangeInstruction {
+  return 'type' in x && x.type === 'action/change';
+}
+
+export interface ConfigInstruction extends BaseTemplateInstruction {
+  readonly type: 'action/config';
+  version?: TemplateVar<number>;
+  signalBits?: TemplateVar<number>;
+  tokenName?: TemplateVar<string>;
+  tokenSymbol?: TemplateVar<string>;
+}
+
+export function isConfigInstruction(x: any): x is ConfigInstruction {
+  return 'type' in x && x.type === 'action/config';
+}
+
+export type SetVarCommand = 'get_wallet_address' | 'get_wallet_balance';
+
+export type SetVarGetWalletAddressOpts = {
+  unused?: boolean;
+  withBalance?: number;
+  withAuthority?: 'mint' | 'melt';
+  token?: string;
+};
+
+export type SetVarGetWalletBalanceOpts = {
+  token?: string;
+};
+
+export type SetVarOptions = SetVarGetWalletAddressOpts | SetVarGetWalletBalanceOpts;
+
+export interface SetVarInstruction extends BaseTemplateInstruction {
+  readonly type: 'action/setvar';
+  name: TemplateVarName;
+  value?: TemplateVarValue;
+  action?: SetVarCommand;
+  options?: SetVarOptions;
+}
+
+export function isSetVarInstruction(x: any): x is SetVarInstruction {
+  return 'type' in x && x.type === 'action/setvar';
+}
+
+export type TxTemplateInstruction =
+  | RawInputInstruction
+  | UtxoSelectInstruction
+  | RawOutputInstruction
+  | TokenOutputInstruction
+  | DataOutputInstruction
+  | ShuffleInstruction
+  | ChangeInstruction
+  | ConfigInstruction
+  | SetVarInstruction;
+
+export type TransactionTemplate = TxTemplateInstruction[];
