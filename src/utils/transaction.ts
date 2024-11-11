@@ -6,7 +6,7 @@
  */
 
 import { crypto as cryptoBL, PrivateKey, HDPrivateKey } from 'bitcore-lib';
-import { Utxo } from '../wallet/types';
+import { FullNodeTx, Utxo } from '../wallet/types';
 import { UtxoError, ParseError } from '../errors';
 import { HistoryTransactionOutput } from '../models/types';
 import {
@@ -39,6 +39,7 @@ import {
   IInputSignature,
   ITxSignatureData,
   OutputValueType,
+  IHistoryInput,
 } from '../types';
 import Address from '../models/address';
 import P2PKH from '../models/p2pkh';
@@ -692,6 +693,48 @@ const transaction = {
     // If there is no match
     return 'Unknown';
   },
+
+  convertFullNodeTxToHistoryTx(tx: FullNodeTx) {
+    const resp = {} as IHistoryTx;
+    resp.tx_id = tx.hash;
+    resp.version = tx.version;
+    resp.weight = tx.weight;
+    resp.parents = tx.parents;
+    resp.timestamp = tx.timestamp;
+    resp.token_name = tx.token_name ?? undefined;
+    resp.token_symbol = tx.token_symbol ?? undefined;
+    // resp.nonce = tx.nonce; // number = string, should we convert?
+    // resp.height, resp.first_block, resp.nc_* missing.
+    resp.tokens = tx.tokens.map(token => token.uid);
+    resp.inputs = tx.inputs.map(i => ({
+      value: i.value,
+      token_data: i.token_data,
+      script: i.script,
+      token: i.token,
+      tx_id: i.tx_id,
+      index: i.index,
+      decoded: {
+        type: i.decoded.type,
+        address: i.decoded.address,
+        timelock: i.decoded.timelock,
+        // data: i.decoded.data // data does not exist on FullNodeDecodedInput
+      },
+    } as IHistoryInput));
+    resp.outputs = tx.outputs.map(o => ({
+      value: o.value,
+      token_data: o.token_data,
+      script: o.script,
+      token: o.token,
+      spent_by: o.spent_by,
+      decoded: {
+        type: o.decoded.type,
+        address: o.decoded.address,
+        timelock: o.decoded.timelock,
+        // data: i.decoded.data // data does not exist on FullNodeDecodedInput
+      },
+    } as IHistoryOutput));
+    return resp;
+  }
 };
 
 export default transaction;
