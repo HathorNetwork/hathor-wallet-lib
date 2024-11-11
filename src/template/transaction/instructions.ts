@@ -5,188 +5,197 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-export type InstructionTypes = 'input/utxo'
-    | 'input/raw'
-    | 'output/raw'
-    | 'output/token'
-    | 'output/data'
-    | 'action/shuffle'
-    | 'action/change'
-    | 'action/config'
-    | 'action/setvar';
+import { NATIVE_TOKEN_UID } from '../../constants';
+import { z } from 'zod';
 
-export const INSTRUCTION_TYPES = [
-  'input/utxo',
-  'input/raw',
-  'output/raw',
-  'output/token',
-  'output/data',
-  'action/shuffle',
-  'action/change',
-  'action/config',
-  'action/setvar',
-];
-
-export interface BaseTemplateInstruction {
-  readonly type: InstructionTypes;
-}
-
-export type TemplateVarValue = string|number;
-export type TemplateVarName = string;
-export type TemplateVarRef = `{${TemplateVarName}}`;
-export const TEMPLATE_VAR_REF_RE = /^{(.+)}$/;
-export type TemplateVar<T extends TemplateVarValue> = TemplateVarRef|T;
+const TEMPLATE_REFERENCE_RE = /\{([\w\d]+)\}/;
+export const TemplateRef = z.string().regex(TEMPLATE_REFERENCE_RE);
 
 /**
  * If the key matches a template reference (i.e. `{name}`) it returns the variable of that name.
- * If not the key should be the actual value.
+ * If not the ref should be the actual value.
+ * This is validated by the `schema` argument which is a ZodType that parses either:
+ *   - A `TemplateRef` or;
+ *   - A ZodType that outputs `S`;
+ *
+ * The generic system allows with just the first argument a validation that the
+ * schema will parse to the expected type and that `ref` is `string | S`.
+ * This way changes on validation affect the executors and the value from vars
+ * will be of the expected type.
+ * The goal of this system is to avoid too much verbosity while keeping strong cohesive typing.
+ *
+ * @example
+ * ```
+ * const TokenSchema = TemplateRef.or(z.string().regex(/^[A-F0-9]{64}&1/));
+ * const AmountSchema = TemplateRef.or(z.bigint());
+ * const IndexSchema = TemplateRef.or(z.number().min(0));
+ *
+ * const token: string = getVariable<string>(ref1, {foo: 'bar'}, TokenSchema);
+ * const amount: bigint = getVariable<bigint>(ref2, {foo: 10n}, AmountSchema);
+ * const token: string = getVariable<number>(ref3, {foo: 27}, IndexSchema);
+ * ```
  */
-export function getVariable<T extends TemplateVarValue>(ref: TemplateVar<T>, vars: Record<TemplateVarName, TemplateVarValue>): T {
-  if (typeof ref === 'string') {
-    const match = ref.match(TEMPLATE_VAR_REF_RE);
+export function getVariable<S, T extends z.ZodUnion<[typeof TemplateRef, z.ZodType<S, z.ZodTypeDef, any>]> = z.ZodUnion<[typeof TemplateRef, z.ZodType<S, z.ZodTypeDef, any>]>>(
+  ref: z.infer<T>,
+  vars: Record<string, unknown>,
+  schema: T,
+): S {
+  let val = ref; // type should be: string | S
+  const parsed = TemplateRef.safeParse(ref);
+  if (parsed.success) {
+    const match = parsed.data.match(TEMPLATE_REFERENCE_RE);
     if (match !== null) {
       const key = match[1];
       if (!vars[key]) {
         throw new Error(`Variable ${key} not found in available variables`);
       }
-      return vars[key] as T;
+      // We assume that the variable in the context is of type S and we validate this.
+      // The case where a `{...}` string is saved is not possible since we do not
+      // allow this type of string as variable.
+      val = vars[key] as S;
     }
   }
 
-  return ref as T;
+  return schema.parse(val) as S;
 }
 
-export interface RawInputInstruction extends BaseTemplateInstruction {
-  readonly type: 'input/raw';
-  position?: number;
-  txId: TemplateVar<string>;
-  index: TemplateVar<number>;
-}
+// Transaction IDs and Custom Tokens are sha256 hex encoded
+export const Sha256HexSchema = z.string().regex(/^[a-fA-F0-9]{64}$/);
+export const TxIdSchema = Sha256HexSchema;
+export const CustomTokenSchema = Sha256HexSchema;
+// If we want to represent all tokens we need to include the native token uid 00
+export const TokenSchema = z.string().regex(/^[a-fA-F0-9]{64}|00$/);
+// Addresses are base58 with length 34, may be 35 depending on the choice of version byte
+export const AddressSchema = z.string().regex(/^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{34,35}$/);
 
-export function isRawInputInstruction(x: any): x is RawInputInstruction {
-  return 'type' in x && x.type === 'input/raw';
-}
+export const RawInputInstruction = z.object({
+  type: z.literal('input/raw'),
+  position: z.number().default(-1),
+  index: TemplateRef.or(z.coerce.number()),
+  txId: TemplateRef.or(TxIdSchema),
+});
 
-export interface UtxoSelectInstruction extends BaseTemplateInstruction {
-  readonly type: 'input/utxo';
-  position: number;
-  fill: TemplateVar<number>;
-  token?: TemplateVar<string>;
-  authority?: 'mint' | 'melt';
-  address?: TemplateVar<string>;
-  autoChange?: boolean;
-}
+export const UtxoSelectInstruction = z.object({
+  type: z.literal('input/utxo'),
+  position: z.number().default(-1),
+  fill: TemplateRef.or(z.coerce.bigint()),
+  token: TemplateRef.or(TokenSchema.default(NATIVE_TOKEN_UID)),
+  address: TemplateRef.or(AddressSchema.optional()),
+  autoChange: z.boolean().default(true),
+  changeAddress: TemplateRef.or(AddressSchema.optional()),
+});
 
-export function isUtxoSelectInstruction(x: any): x is UtxoSelectInstruction {
-  return 'type' in x && x.type === 'input/utxo';
-}
+export const AuthoritySelectInstruction = z.object({
+  type: z.literal('input/authority'),
+  position: z.number().default(-1),
+  authority: z.enum(['mint', 'melt']),
+  token: TemplateRef.or(CustomTokenSchema),
+  count: TemplateRef.or(z.coerce.number().default(1)),
+  address: TemplateRef.or(AddressSchema.optional()),
+});
 
-export interface RawOutputInstruction extends BaseTemplateInstruction {
-  readonly type: 'output/raw';
-  position: number;
-  amount?: TemplateVar<number>;
-  script: TemplateVar<string>; // base64 or hex?
-  token?: TemplateVar<string>;
-  timelock?: TemplateVar<number>;
-  authority?: 'mint' | 'melt',
-}
+export const RawOutputInstruction = z.object({
+  type: z.literal('output/raw'),
+  position: z.number().default(-1),
+  amount: TemplateRef.or(z.coerce.bigint().optional()),
+  script: TemplateRef.or(z.string()),
+  token: TemplateRef.or(TokenSchema.default('00')),
+  timelock: TemplateRef.or(z.coerce.number().optional()),
+  authority: z.enum(['mint', 'melt']).optional(),
+});
 
-export function isRawOutputInstruction(x: any): x is RawOutputInstruction {
-  return 'type' in x && x.type === 'output/raw';
-}
+export const TokenOutputInstruction = z.object({
+  type: z.literal('output/token'),
+  position: z.number().default(-1),
+  amount: TemplateRef.or(z.coerce.bigint()),
+  token: TemplateRef.or(TokenSchema.default('00')),
+  address: TemplateRef.or(AddressSchema),
+  timelock: TemplateRef.or(z.coerce.number().optional()),
+  checkAddress: z.boolean().optional(),
+});
 
-export interface DataOutputInstruction extends BaseTemplateInstruction {
-  readonly type: 'output/data',
-  position: number;
-  data: TemplateVar<string>;
-}
+export const AuthorityOutputInstruction = z.object({
+  type: z.literal('output/authority'),
+  position: z.number().default(-1),
+  count: TemplateRef.or(z.coerce.number().default(1)),
+  token: TemplateRef.or(CustomTokenSchema),
+  authority: z.enum(['mint', 'melt']),
+  address: TemplateRef.or(AddressSchema),
+  timelock: TemplateRef.or(z.coerce.number().optional()),
+  checkAddress: z.boolean().optional(),
+});
 
-export function isDataOutputInstruction(x: any): x is DataOutputInstruction {
-  return 'type' in x && x.type === 'output/data';
-}
+export const DataOutputInstruction = z.object({
+  type: z.literal('output/data'),
+  position: z.number().default(-1),
+  data: TemplateRef.or(z.string()),
+  token: TemplateRef.or(TokenSchema.default(NATIVE_TOKEN_UID)),
+});
 
-export interface TokenOutputInstruction extends BaseTemplateInstruction {
-  readonly type: 'output/token';
-  position: number;
-  amount: TemplateVar<number>;
-  token?: TemplateVar<string>;
-  address?: TemplateVar<string>;
-  timelock?: TemplateVar<number>;
-  checkAddress?: boolean;
-}
+export const ShuffleInstruction = z.object({
+  type: z.literal('action/shuffle'),
+  target: z.enum(['inputs', 'outputs', 'all']),
+});
 
-export function isTokenOutputInstruction(x: any): x is TokenOutputInstruction {
-  return 'type' in x && x.type === 'output/token';
-}
+export const ChangeInstruction = z.object({
+  type: z.literal('action/change'),
+  token: TemplateRef.or(TokenSchema.optional()),
+  address: TemplateRef.or(AddressSchema.optional()),
+  timelock: TemplateRef.or(z.coerce.number().optional()),
+});
 
-export interface ShuffleInstruction extends BaseTemplateInstruction {
-  readonly type: 'action/shuffle';
-  target: 'inputs' | 'outputs' | 'all';
-}
+export const CompleteTxInstruction = z.object({
+  type: z.literal('action/complete'),
+  token: TemplateRef.or(TokenSchema.optional()),
+  address: TemplateRef.or(z.string().optional()),
+  changeAddress: TemplateRef.or(AddressSchema.optional()),
+  timelock: TemplateRef.or(z.coerce.number()).optional(),
+});
 
-export function isShuffleInstruction(x: any): x is ShuffleInstruction {
-  return 'type' in x && x.type === 'action/shuffle';
-}
+export const ConfigInstruction = z.object({
+  type: z.literal('action/config'),
+  version: TemplateRef.or(z.number().optional()),
+  signalBits: TemplateRef.or(z.number().optional()),
+  tokenName: TemplateRef.or(z.string().optional()),
+  tokenSymbol: TemplateRef.or(z.string().optional()),
+});
 
-export interface ChangeInstruction extends BaseTemplateInstruction {
-  readonly type: 'action/change';
-  token?: TemplateVar<string>;
-  address?: TemplateVar<string>;
-  timelock?: TemplateVar<number>;
-}
+export const SetVarGetWalletAddressOpts = z.object({
+  unused: z.boolean().optional(),
+  withBalance: z.number().optional(),
+  authority: z.enum(['mint', 'melt']).optional(),
+  token: TemplateRef.or(TokenSchema.default(NATIVE_TOKEN_UID)),
+});
 
-export function isChangeInstruction(x: any): x is ChangeInstruction {
-  return 'type' in x && x.type === 'action/change';
-}
+export const SetVarGetWalletBalanceOpts = z.object({
+  token: TemplateRef.or(TokenSchema.default('00')),
+});
 
-export interface ConfigInstruction extends BaseTemplateInstruction {
-  readonly type: 'action/config';
-  version?: TemplateVar<number>;
-  signalBits?: TemplateVar<number>;
-  tokenName?: TemplateVar<string>;
-  tokenSymbol?: TemplateVar<string>;
-}
+export const SetVarOptions = z.union([SetVarGetWalletAddressOpts, SetVarGetWalletBalanceOpts]);
 
-export function isConfigInstruction(x: any): x is ConfigInstruction {
-  return 'type' in x && x.type === 'action/config';
-}
+export const SetVarInstruction = z.object({
+  type: z.literal('action/setvar'),
+  name: z.string().regex(/[\d\w]+/),
+  value: z.any().optional(),
+  action: z.enum(['get_wallet_address', 'get_wallet_balance']).optional(),
+  options: SetVarOptions.optional(),
+});
 
-export type SetVarCommand = 'get_wallet_address' | 'get_wallet_balance';
+export const TxTemplateInstruction = z.discriminatedUnion('type', [
+  RawInputInstruction,
+  UtxoSelectInstruction,
+  AuthoritySelectInstruction,
+  RawOutputInstruction,
+  DataOutputInstruction,
+  TokenOutputInstruction,
+  AuthorityOutputInstruction,
+  ShuffleInstruction,
+  ChangeInstruction,
+  CompleteTxInstruction,
+  ConfigInstruction,
+  SetVarInstruction,
+]);
+export type TxTemplateInstructionType = z.infer<typeof TxTemplateInstruction>;
 
-export type SetVarGetWalletAddressOpts = {
-  unused?: boolean;
-  withBalance?: number;
-  withAuthority?: 'mint' | 'melt';
-  token?: string;
-};
-
-export type SetVarGetWalletBalanceOpts = {
-  token?: string;
-};
-
-export type SetVarOptions = SetVarGetWalletAddressOpts | SetVarGetWalletBalanceOpts;
-
-export interface SetVarInstruction extends BaseTemplateInstruction {
-  readonly type: 'action/setvar';
-  name: TemplateVarName;
-  value?: TemplateVarValue;
-  action?: SetVarCommand;
-  options?: SetVarOptions;
-}
-
-export function isSetVarInstruction(x: any): x is SetVarInstruction {
-  return 'type' in x && x.type === 'action/setvar';
-}
-
-export type TxTemplateInstruction =
-  | RawInputInstruction
-  | UtxoSelectInstruction
-  | RawOutputInstruction
-  | TokenOutputInstruction
-  | DataOutputInstruction
-  | ShuffleInstruction
-  | ChangeInstruction
-  | ConfigInstruction
-  | SetVarInstruction;
-
-export type TransactionTemplate = TxTemplateInstruction[];
+export const TransactionTemplate = z.array(TxTemplateInstruction);
+export type TransactionTemplateType = z.infer<typeof TransactionTemplate>;
