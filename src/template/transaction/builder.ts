@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { RawInputInstruction, TemplateVar, TxTemplateInstruction } from './instructions';
+import { TemplateVar, TxTemplateInstruction, TransactionTemplate } from './instructions';
 
 export class TransactionTemplateBuilder {
   instructions: TxTemplateInstruction[];
@@ -38,7 +38,12 @@ export class TransactionTemplateBuilder {
     return this;
   }
 
-  addRawOutput(amount: TemplateVar<number>, script: TemplateVar<string>, token: TemplateVar<string>, position: number = -1) {
+  addRawOutput(
+    amount: TemplateVar<number>,
+    script: TemplateVar<string>,
+    token: TemplateVar<string>,
+    position: number = -1
+  ) {
     this.instructions.push({
       type: 'output/raw',
       position,
@@ -50,7 +55,7 @@ export class TransactionTemplateBuilder {
     return this;
   }
 
-  export() {
+  export(): TransactionTemplate {
     return this.instructions;
   }
 }

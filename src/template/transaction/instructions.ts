@@ -5,15 +5,16 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-export type InstructionTypes = 'input/utxo'
-    | 'input/raw'
-    | 'output/raw'
-    | 'output/token'
-    | 'output/data'
-    | 'action/shuffle'
-    | 'action/change'
-    | 'action/config'
-    | 'action/setvar';
+export type InstructionTypes =
+  | 'input/utxo'
+  | 'input/raw'
+  | 'output/raw'
+  | 'output/token'
+  | 'output/data'
+  | 'action/shuffle'
+  | 'action/change'
+  | 'action/config'
+  | 'action/setvar';
 
 export const INSTRUCTION_TYPES = [
   'input/utxo',
@@ -31,17 +32,20 @@ export interface BaseTemplateInstruction {
   readonly type: InstructionTypes;
 }
 
-export type TemplateVarValue = string|number;
+export type TemplateVarValue = string | number;
 export type TemplateVarName = string;
 export type TemplateVarRef = `{${TemplateVarName}}`;
 export const TEMPLATE_VAR_REF_RE = /^{(.+)}$/;
-export type TemplateVar<T extends TemplateVarValue> = TemplateVarRef|T;
+export type TemplateVar<T extends TemplateVarValue> = TemplateVarRef | T;
 
 /**
  * If the key matches a template reference (i.e. `{name}`) it returns the variable of that name.
  * If not the key should be the actual value.
  */
-export function getVariable<T extends TemplateVarValue>(ref: TemplateVar<T>, vars: Record<TemplateVarName, TemplateVarValue>): T {
+export function getVariable<T extends TemplateVarValue>(
+  ref: TemplateVar<T>,
+  vars: Record<TemplateVarName, TemplateVarValue>
+): T {
   if (typeof ref === 'string') {
     const match = ref.match(TEMPLATE_VAR_REF_RE);
     if (match !== null) {
@@ -63,7 +67,7 @@ export interface RawInputInstruction extends BaseTemplateInstruction {
   index: TemplateVar<number>;
 }
 
-export function isRawInputInstruction(x: any): x is RawInputInstruction {
+export function isRawInputInstruction(x: TxTemplateInstruction): x is RawInputInstruction {
   return 'type' in x && x.type === 'input/raw';
 }
 
@@ -77,7 +81,7 @@ export interface UtxoSelectInstruction extends BaseTemplateInstruction {
   autoChange?: boolean;
 }
 
-export function isUtxoSelectInstruction(x: any): x is UtxoSelectInstruction {
+export function isUtxoSelectInstruction(x: TxTemplateInstruction): x is UtxoSelectInstruction {
   return 'type' in x && x.type === 'input/utxo';
 }
 
@@ -88,20 +92,20 @@ export interface RawOutputInstruction extends BaseTemplateInstruction {
   script: TemplateVar<string>; // base64 or hex?
   token?: TemplateVar<string>;
   timelock?: TemplateVar<number>;
-  authority?: 'mint' | 'melt',
+  authority?: 'mint' | 'melt';
 }
 
-export function isRawOutputInstruction(x: any): x is RawOutputInstruction {
+export function isRawOutputInstruction(x: TxTemplateInstruction): x is RawOutputInstruction {
   return 'type' in x && x.type === 'output/raw';
 }
 
 export interface DataOutputInstruction extends BaseTemplateInstruction {
-  readonly type: 'output/data',
+  readonly type: 'output/data';
   position: number;
   data: TemplateVar<string>;
 }
 
-export function isDataOutputInstruction(x: any): x is DataOutputInstruction {
+export function isDataOutputInstruction(x: TxTemplateInstruction): x is DataOutputInstruction {
   return 'type' in x && x.type === 'output/data';
 }
 
@@ -115,7 +119,7 @@ export interface TokenOutputInstruction extends BaseTemplateInstruction {
   checkAddress?: boolean;
 }
 
-export function isTokenOutputInstruction(x: any): x is TokenOutputInstruction {
+export function isTokenOutputInstruction(x: TxTemplateInstruction): x is TokenOutputInstruction {
   return 'type' in x && x.type === 'output/token';
 }
 
@@ -124,7 +128,7 @@ export interface ShuffleInstruction extends BaseTemplateInstruction {
   target: 'inputs' | 'outputs' | 'all';
 }
 
-export function isShuffleInstruction(x: any): x is ShuffleInstruction {
+export function isShuffleInstruction(x: TxTemplateInstruction): x is ShuffleInstruction {
   return 'type' in x && x.type === 'action/shuffle';
 }
 
@@ -135,7 +139,7 @@ export interface ChangeInstruction extends BaseTemplateInstruction {
   timelock?: TemplateVar<number>;
 }
 
-export function isChangeInstruction(x: any): x is ChangeInstruction {
+export function isChangeInstruction(x: TxTemplateInstruction): x is ChangeInstruction {
   return 'type' in x && x.type === 'action/change';
 }
 
@@ -147,7 +151,7 @@ export interface ConfigInstruction extends BaseTemplateInstruction {
   tokenSymbol?: TemplateVar<string>;
 }
 
-export function isConfigInstruction(x: any): x is ConfigInstruction {
+export function isConfigInstruction(x: TxTemplateInstruction): x is ConfigInstruction {
   return 'type' in x && x.type === 'action/config';
 }
 
@@ -174,7 +178,7 @@ export interface SetVarInstruction extends BaseTemplateInstruction {
   options?: SetVarOptions;
 }
 
-export function isSetVarInstruction(x: any): x is SetVarInstruction {
+export function isSetVarInstruction(x: TxTemplateInstruction): x is SetVarInstruction {
   return 'type' in x && x.type === 'action/setvar';
 }
 

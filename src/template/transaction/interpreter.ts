@@ -5,144 +5,40 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { RawInputInstruction, RawOutputInstruction, TemplateVarName, TemplateVarValue, TxTemplateInstruction, UtxoSelectInstruction, getVariable, isRawInputInstruction, isRawOutputInstruction, isUtxoSelectInstruction } from './instructions';
+import { IHistoryTx } from '../../types';
+import {
+  FullNodeInput,
+  FullNodeOutput,
+  FullNodeToken,
+  FullNodeTxResponse,
+} from '../../wallet/types';
+import { TxTemplateContext } from './context';
+import {
+  RawInputInstruction,
+  RawOutputInstruction,
+  TxTemplateInstruction,
+  UtxoSelectInstruction,
+  getVariable,
+  isRawInputInstruction,
+  isRawOutputInstruction,
+  isUtxoSelectInstruction,
+} from './instructions';
 import Input from '../../models/input';
 import Output from '../../models/output';
 import Transaction from '../../models/transaction';
 import HathorWallet from '../../new/wallet';
-// import { IHathorWallet } from '../../wallet/types';
-// import {  } from '../../types';
-import { DEFAULT_TX_VERSION, NATIVE_TOKEN_UID, TOKEN_AUTHORITY_MASK, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../constants';
-import { IHistoryTx } from 'src/types';
+import {
+  NATIVE_TOKEN_UID,
+  TOKEN_AUTHORITY_MASK,
+  TOKEN_MELT_MASK,
+  TOKEN_MINT_MASK,
+} from '../../constants';
 import transactionUtils from '../../utils/transaction';
 import tokenUtils from '../../utils/tokens';
-import { FullNodeInput, FullNodeOutput, FullNodeToken, FullNodeTxResponse } from 'src/wallet/types';
-
-export interface TokenBalance {
-  tokens: number;
-  mint_authorities: number;
-  melt_authorities: number;
-}
-
-export class TxBalance {
-  balance: Record<string, TokenBalance>
-
-  constructor() {
-    this.balance = {};
-  }
-
-  getTokenBalance(token: string): TokenBalance {
-    if (!this.balance[token]) {
-      this.balance[token] = {
-        tokens: 0,
-        mint_authorities: 0,
-        melt_authorities: 0,
-      };
-    }
-
-    return this.balance[token];
-  }
-
-  setTokenBalance(token: string, balance: TokenBalance) {
-    this.balance[token] = balance;
-  }
-
-  addInput(tx: IHistoryTx, index: number) {
-    console.log(index);
-    console.log(JSON.stringify(tx, null, 2));
-    console.log(`${tx.outputs.length} > ${index}`);
-    if (tx.outputs.length <= index) {
-      throw new Error('Index does not exist on tx outputs');
-    }
-    const output = tx.outputs[index];
-    const token = output.token;
-    const balance = this.getTokenBalance(token);
-    
-    if (transactionUtils.isAuthorityOutput(output)) {
-      if (transactionUtils.isMint(output)) {
-        balance.mint_authorities += 1;
-      }
-
-      if (transactionUtils.isMelt(output)) {
-        balance.melt_authorities += 1;
-      }
-    } else {
-      balance.tokens += output.value;
-    }
-
-    this.setTokenBalance(token, balance);
-  }
-
-  addOutput(amount: number, token: string, authority: 'mint' | 'melt' | undefined) {
-    const balance = this.getTokenBalance(token);
-    if (authority === undefined) {
-      balance.tokens -= amount;
-    }
-    if (authority === 'mint') {
-      balance.mint_authorities -= amount;
-    }
-    if (authority === 'melt') {
-      balance.melt_authorities -= amount;
-    }
-    this.setTokenBalance(token, balance);
-  }
-}
-
-export class TxTemplateContext {
-  version: number;
-  signalBits: number;
-  inputs: Input[];
-  outputs: Output[]
-  tokens: string[]; // use token data?
-  balance: TxBalance
-  tokenName?: string;
-  tokenSymbol?: string;
-  vars: Record<TemplateVarName, TemplateVarValue>;
-  
-  constructor() {
-    this.inputs = [];
-    this.outputs = [];
-    this.tokens = [];
-    this.version = DEFAULT_TX_VERSION;
-    this.signalBits = 0;
-    this.balance = new TxBalance();
-    this.vars = {};
-  }
-
-  addToken(token: string) {
-    if (token === NATIVE_TOKEN_UID) {
-      return -1;
-    }
-    const index = this.tokens.indexOf(token);
-    if (index > -1) {
-      // Token is already on the list.
-      return index;
-    }
-    this.tokens.push(token);
-    return this.tokens.length - 1;
-  }
-
-  addInput(position: number, ...inputs: Input[]) {
-    if (position === -1) {
-      this.inputs.push(...inputs);
-      return;
-    }
-
-    this.inputs.splice(position, 0, ...inputs);
-  }
-
-  addOutput(position: number, ...outputs: Output[]) {
-    if (position === -1) {
-      this.outputs.push(...outputs);
-      return;
-    }
-
-    this.outputs.splice(position, 0, ...outputs);
-  }
-}
 
 export class WalletTxTemplateInterpreter {
   wallet: HathorWallet;
+
   txCache: Record<string, IHistoryTx>;
 
   constructor(wallet: HathorWallet) {
@@ -152,7 +48,7 @@ export class WalletTxTemplateInterpreter {
 
   async build(instructions: TxTemplateInstruction[]): Promise<Transaction> {
     const context = new TxTemplateContext();
-    
+
     for (const ins of instructions) {
       await runInstruction(this, context, ins);
     }
@@ -171,7 +67,10 @@ export class WalletTxTemplateInterpreter {
       return this.txCache[txId];
     }
 
-    function hidrateIOWithToken<T extends FullNodeInput|FullNodeOutput>(io: T, tokens: FullNodeToken[]) {
+    function hidrateIOWithToken<T extends FullNodeInput | FullNodeOutput>(
+      io: T,
+      tokens: FullNodeToken[]
+    ) {
       const { token_data } = io;
       if (token_data === 0) {
         return {
@@ -189,9 +88,9 @@ export class WalletTxTemplateInterpreter {
       return { ...io, token: tokenUid } as T;
     }
 
-    const resp = await this.wallet.getFullTxById(txId) as FullNodeTxResponse;
+    const resp = (await this.wallet.getFullTxById(txId)) as FullNodeTxResponse;
     // We can assume the wallet handles any network errors
-    const tx = resp.tx;
+    const { tx } = resp;
     tx.inputs = tx.inputs.map(i => hidrateIOWithToken<FullNodeInput>(i, tx.tokens));
     tx.outputs = tx.outputs.map(o => hidrateIOWithToken<FullNodeOutput>(o, tx.tokens));
     const normalizedTx = transactionUtils.convertFullNodeTxToHistoryTx(tx);
@@ -200,7 +99,11 @@ export class WalletTxTemplateInterpreter {
   }
 }
 
-export async function runInstruction(interpreter: WalletTxTemplateInterpreter, ctx: TxTemplateContext, ins: TxTemplateInstruction) {
+export async function runInstruction(
+  interpreter: WalletTxTemplateInterpreter,
+  ctx: TxTemplateContext,
+  ins: TxTemplateInstruction
+) {
   if (isRawInputInstruction(ins)) {
     await execRawInputInstruction(interpreter, ctx, ins);
     return;
@@ -210,11 +113,14 @@ export async function runInstruction(interpreter: WalletTxTemplateInterpreter, c
   }
   if (isRawOutputInstruction(ins)) {
     await execRawOutputInstruction(interpreter, ctx, ins);
-    return;
   }
 }
 
-export async function execRawInputInstruction(interpreter: WalletTxTemplateInterpreter, ctx: TxTemplateContext, ins: RawInputInstruction) {
+export async function execRawInputInstruction(
+  interpreter: WalletTxTemplateInterpreter,
+  ctx: TxTemplateContext,
+  ins: RawInputInstruction
+) {
   const position = ins.position ?? -1;
   const txId = getVariable<string>(ins.txId, ctx.vars);
   const index = getVariable<number>(ins.index, ctx.vars);
@@ -228,20 +134,24 @@ export async function execRawInputInstruction(interpreter: WalletTxTemplateInter
   ctx.addInput(position, input);
 }
 
-export async function execUtxoSelectInstruction(interpreter: WalletTxTemplateInterpreter, ctx: TxTemplateContext, ins: UtxoSelectInstruction) {
+export async function execUtxoSelectInstruction(
+  interpreter: WalletTxTemplateInterpreter,
+  ctx: TxTemplateContext,
+  ins: UtxoSelectInstruction
+) {
   const position = ins.position ?? -1;
   const fill = getVariable<number>(ins.fill, ctx.vars);
   const token = ins.token ? getVariable<string>(ins.token, ctx.vars) : NATIVE_TOKEN_UID;
   const address = ins.address ? getVariable<string>(ins.address, ctx.vars) : null;
-  const authority = ins.authority;
-  
+  const { authority } = ins;
+
   const autoChange = ins.autoChange ?? true;
 
   // Find utxos
   // XXX: create Utxo selection method
-  const { amount, utxos } = { amount: 0, utxos: [{txId: '', index: 0}] } // interpreter.getUtxos(...);
+  const { amount, utxos } = { amount: 0, utxos: [{ txId: '', index: 0 }] }; // interpreter.getUtxos(...);
 
-  const inputs = utxos.map(u => (new Input(u.txId, u.index)));
+  const inputs = utxos.map(u => new Input(u.txId, u.index));
   // add each input to the balance
   for (const input of inputs) {
     const origTx = await interpreter.getTx(input.hash);
@@ -250,32 +160,36 @@ export async function execUtxoSelectInstruction(interpreter: WalletTxTemplateInt
 
   // Add inputs to the array
   ctx.addInput(position, ...inputs);
-  
+
   // XXX: Create change address selection
   // XXX: handle authority selection?
-  if (autoChange && (amount > fill)) {
+  if (autoChange && amount > fill) {
     // Token should only be on the array if present on the outputs
     const tokenIndex = ctx.addToken(token);
-    let tokenData = tokenIndex;
+    const tokenData = tokenIndex;
     // Get a wallet address from interpreter
     // const address = interpreter.getWalletAddress();
     // Create script for address?
     const script = Buffer.from('cafe', 'hex');
-    const output = new Output(amount - fill, script,  { tokenData });
+    const output = new Output(amount - fill, script, { tokenData });
     ctx.addOutput(-1, output);
   }
 }
 
-export async function execRawOutputInstruction(_interpreter: WalletTxTemplateInterpreter, ctx: TxTemplateContext, ins: RawOutputInstruction) {
+export async function execRawOutputInstruction(
+  _interpreter: WalletTxTemplateInterpreter,
+  ctx: TxTemplateContext,
+  ins: RawOutputInstruction
+) {
   const position = ins.position ?? -1;
   const scriptStr = getVariable<string>(ins.script, ctx.vars);
   const script = Buffer.from(scriptStr, 'hex');
   const token = ins.token ? getVariable<string>(ins.token, ctx.vars) : NATIVE_TOKEN_UID;
-  let timelock: number|undefined = undefined;
+  let timelock: number | undefined;
   if (ins.timelock) {
     timelock = getVariable<number>(ins.timelock, ctx.vars);
   }
-  const authority = ins.authority;
+  const { authority } = ins;
 
   // Add token to tokens array
   const tokenIndex = ctx.addToken(token);
