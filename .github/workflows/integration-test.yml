@@ -23,7 +23,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [20.x]
+        node-version: [20.x, 22.x]
 
     steps:
       - name: Checkout
@@ -47,10 +47,11 @@ jobs:
         # https://github.com/actions/upload-artifact/releases/tag/v4.3.6
         uses: actions/upload-artifact@834a144ee995460fba8ed112a2fc961b36a5ec5a
         with:
-          name: test-transacion-logs
+          name: test-transaction-logs-${{ matrix.node-version }}
           path: tmp
 
       - name: Upload coverage
+        if: ${{ matrix.node-version == '22.x' }}
         # https://github.com/codecov/codecov-action/releases/tag/v4.5.0
         uses: codecov/codecov-action@e28ff129e5465c2c0dcc6f003fc735cb6ae0c673
         with:
@@ -63,16 +64,16 @@ jobs:
         # https://github.com/jwalton/gh-docker-logs/releases/tag/v2.2.1
         uses: jwalton/gh-docker-logs@59c9656cd3cb7542525f3dce7ae2f44c0ff85d66
         with:
-          dest: './docker-logs'
+          dest: ./docker-logs-${{ matrix.node-version }}
 
       - name: Tar logs
         if: failure()
-        run: tar cvzf ./docker-logs.tgz ./docker-logs
+        run: tar cvzf ./docker-logs-${{ matrix.node-version }}.tgz ./docker-logs-${{ matrix.node-version }}
 
       - name: Upload logs to GitHub
         if: failure()
         # https://github.com/actions/upload-artifact/releases/tag/v4.3.6
         uses: actions/upload-artifact@834a144ee995460fba8ed112a2fc961b36a5ec5a
         with:
-          name: logs.tgz
-          path: ./docker-logs.tgz
+          name: logs-${{ matrix.node-version }}.tgz
+          path: ./docker-logs-${{ matrix.node-version }}.tgz
