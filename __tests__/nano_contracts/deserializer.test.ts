@@ -51,7 +51,7 @@ test('Amount', () => {
   const serializer = new Serializer();
   const deserializer = new Deserializer();
 
-  const value = 300;
+  const value = 300n;
   const serialized = serializer.serializeFromType(value, 'Amount');
   const deserialized = deserializer.deserializeFromType(serialized, 'Amount');
 

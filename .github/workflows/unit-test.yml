@@ -12,6 +12,7 @@ on:
     - release
     - release-candidate
     - master
+    - chore/remove-node-v20 # TODO: REMOVE THIS
 jobs:
   test:
     runs-on: 'ubuntu-latest'

@@ -271,7 +271,7 @@ class CreateTokenTransaction extends Transaction {
     const firstOutput = this.outputs[0];
 
     // NFT creation DataScript output must have value 1 and must be of HTR
-    if (firstOutput.value !== 1 || !firstOutput.isTokenHTR()) {
+    if (firstOutput.value !== 1n || !firstOutput.isTokenHTR()) {
       throw new NftValidationError(`First output is not a valid NFT data output`);
     }
     // NFT creation Datascript must be of type data

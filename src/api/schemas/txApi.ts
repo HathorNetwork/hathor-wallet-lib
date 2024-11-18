@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod';
+import { bigIntCoercibleSchema } from '../../utils/bigint';
 
 export const transactionSchema = z.discriminatedUnion('success', [
   z
@@ -27,7 +28,7 @@ export const transactionSchema = z.discriminatedUnion('success', [
           nc_blueprint_id: z.string().nullish(),
           inputs: z
             .object({
-              value: z.number(),
+              value: bigIntCoercibleSchema,
               token_data: z.number(),
               script: z.string(),
               decoded: z
@@ -35,7 +36,7 @@ export const transactionSchema = z.discriminatedUnion('success', [
                   type: z.string(),
                   address: z.string(),
                   timelock: z.number().nullish(),
-                  value: z.number(),
+                  value: bigIntCoercibleSchema,
                   token_data: z.number(),
                 })
                 .passthrough(),
@@ -48,7 +49,7 @@ export const transactionSchema = z.discriminatedUnion('success', [
             .array(),
           outputs: z
             .object({
-              value: z.number(),
+              value: bigIntCoercibleSchema,
               token_data: z.number(),
               script: z.string(),
               decoded: z
@@ -56,7 +57,7 @@ export const transactionSchema = z.discriminatedUnion('success', [
                   type: z.string(),
                   address: z.string().optional(),
                   timelock: z.number().nullish(),
-                  value: z.number(),
+                  value: bigIntCoercibleSchema,
                   token_data: z.number().optional(),
                 })
                 .passthrough(),
