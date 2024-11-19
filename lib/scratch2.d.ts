@@ -1,0 +1,1 @@
+//# sourceMappingURL=scratch2.d.ts.map

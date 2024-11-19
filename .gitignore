@@ -2,8 +2,6 @@ node_modules
 coverage
 coverage-integration
 
-lib
-
 *.swp
 *.swo
 
