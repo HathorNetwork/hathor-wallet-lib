@@ -1066,6 +1066,7 @@ class HathorWallet extends EventEmitter {
       token: NATIVE_TOKEN_UID,
       filter_address: null,
       ...options,
+      order_by_value: 'desc',
     };
 
     const utxos = [];

@@ -5,31 +5,37 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-export type InstructionTypes =
-  | 'input/utxo'
-  | 'input/raw'
-  | 'output/raw'
-  | 'output/token'
-  | 'output/data'
-  | 'action/shuffle'
-  | 'action/change'
-  | 'action/config'
-  | 'action/setvar';
+// export const enum INSTRUCTION_TYPES {
+//   InputUtxo = 'input/utxo',
+//   InputAuthority = 'input/authority',
+//   InputRaw = 'input/raw',
+//   OutputRaw = 'output/raw',
+//   OutputToken = 'output/token',
+//   OutputData = 'output/data',
+//   ActionShuffle = 'action/shuffle',
+//   ActionChange = 'action/change',
+//   ActionConfig = 'action/config',
+//   ActionSetvar = 'action/setvar',
+// };
 
-export const INSTRUCTION_TYPES = [
-  'input/utxo',
-  'input/raw',
-  'output/raw',
-  'output/token',
-  'output/data',
-  'action/shuffle',
-  'action/change',
-  'action/config',
-  'action/setvar',
-];
+export const INSTRUCTION_TYPES = {
+  InputUtxo:       'input/utxo',
+  InputAuthority:  'input/authority',
+  InputRaw:        'input/raw',
+  OutputRaw:       'output/raw',
+  OutputToken:     'output/token',
+  OutputAuthority: 'output/authority',
+  OutputData:      'output/data',
+  ActionShuffle:   'action/shuffle',
+  ActionChange:    'action/change',
+  ActionConfig:    'action/config',
+  ActionSetvar:    'action/setvar',
+};
+
+export type InstructionType = typeof INSTRUCTION_TYPES[keyof typeof INSTRUCTION_TYPES];
 
 export interface BaseTemplateInstruction {
-  readonly type: InstructionTypes;
+  readonly type: InstructionType;
 }
 
 export type TemplateVarValue = string | number;
@@ -76,13 +82,25 @@ export interface UtxoSelectInstruction extends BaseTemplateInstruction {
   position: number;
   fill: TemplateVar<number>;
   token?: TemplateVar<string>;
-  authority?: 'mint' | 'melt';
   address?: TemplateVar<string>;
   autoChange?: boolean;
 }
 
 export function isUtxoSelectInstruction(x: TxTemplateInstruction): x is UtxoSelectInstruction {
   return 'type' in x && x.type === 'input/utxo';
+}
+
+export interface AuthoritySelectInstruction extends BaseTemplateInstruction {
+  readonly type: 'input/authority';
+  position: number;
+  authority: 'mint' | 'melt';
+  token: TemplateVar<string>;
+  amount?: TemplateVar<number>;
+  address?: TemplateVar<string>;
+}
+
+export function isAuthoritySelectInstruction(x: TxTemplateInstruction): x is AuthoritySelectInstruction {
+  return 'type' in x && x.type === 'input/authority';
 }
 
 export interface RawOutputInstruction extends BaseTemplateInstruction {
@@ -121,6 +139,21 @@ export interface TokenOutputInstruction extends BaseTemplateInstruction {
 
 export function isTokenOutputInstruction(x: TxTemplateInstruction): x is TokenOutputInstruction {
   return 'type' in x && x.type === 'output/token';
+}
+
+export interface AuthorityOutputInstruction extends BaseTemplateInstruction {
+  readonly type: 'output/authority';
+  position: number;
+  amount: TemplateVar<number>;
+  token: TemplateVar<string>;
+  authority: 'mint' | 'melt';
+  address?: TemplateVar<string>;
+  timelock?: TemplateVar<number>;
+  checkAddress?: boolean;
+}
+
+export function isAuthorityOutputInstruction(x: TxTemplateInstruction): x is AuthorityOutputInstruction {
+  return 'type' in x && x.type === 'output/authority';
 }
 
 export interface ShuffleInstruction extends BaseTemplateInstruction {
@@ -185,8 +218,10 @@ export function isSetVarInstruction(x: TxTemplateInstruction): x is SetVarInstru
 export type TxTemplateInstruction =
   | RawInputInstruction
   | UtxoSelectInstruction
+  | AuthoritySelectInstruction
   | RawOutputInstruction
   | TokenOutputInstruction
+  | AuthorityOutputInstruction
   | DataOutputInstruction
   | ShuffleInstruction
   | ChangeInstruction

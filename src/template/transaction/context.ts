@@ -65,7 +65,7 @@ export class TxBalance {
     this.setTokenBalance(token, balance);
   }
 
-  addOutput(amount: number, token: string, authority: 'mint' | 'melt' | undefined) {
+  addOutput(amount: number, token: string, authority?: 'mint' | 'melt' | undefined) {
     const balance = this.getTokenBalance(token);
     if (authority === undefined) {
       balance.tokens -= amount;
