@@ -2191,7 +2191,9 @@ describe('meltTokens', () => {
     const { hash: tokenUid } = await createTokenHelper(hWallet, 'Token to Melt', 'TMELT', 500n);
 
     // Should not melt more than there is available
-    await expect(hWallet.meltTokens(tokenUid, 999n)).rejects.toThrow('Not enough tokens to melt');
+    await expect(hWallet.meltTokens(tokenUid, 999n)).rejects.toThrow(
+      'Not enough tokens to melt: 999 requested, 500 available'
+    );
 
     // Melting some tokens
     const meltAmount = BigInt(getRandomInt(99, 10));
