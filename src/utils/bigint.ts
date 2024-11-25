@@ -7,6 +7,7 @@
 
 import { IEncoding } from 'level-transcoder';
 import { z } from 'zod';
+import { getDefaultLogger } from '../types';
 
 /**
  * An object equivalent to the native global JSON, providing `parse()` and `stringify()` functions with compatible signatures, except
@@ -100,9 +101,8 @@ export function parseSchema<T>(data: unknown, schema: ZodSchema<T>): T {
   const result = schema.safeParse(data);
 
   if (!result.success) {
-    // TODO: How to log correctly?
-    // eslint-disable-next-line no-console
-    console.error(`error: ${result.error.message}\ncaused by input: ${data}`);
+    const logger = getDefaultLogger();
+    logger.error(`error: ${result.error.message}\ncaused by input: ${data}`);
     throw result.error;
   }
 

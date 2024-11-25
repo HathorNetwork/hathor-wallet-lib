@@ -61,7 +61,7 @@ export const IHistoryOutputDecodedSchema: ZodSchema<IHistoryOutputDecoded> = z
   .object({
     type: z.string().optional(),
     address: z.string().optional(),
-    timelock: z.number().nullish().optional(),
+    timelock: z.number().nullish(),
     data: z.string().optional(),
   })
   .passthrough();

@@ -1323,7 +1323,12 @@ class HathorWallet extends EventEmitter {
   }
 
   async onNewTx(wsData) {
-    const newTx = IHistoryTxSchema.parse(wsData.history);
+    const parseResult = IHistoryTxSchema.safeParse(wsData.history);
+    if (!parseResult.success) {
+      this.logger.error(parseResult.error);
+      return;
+    }
+    const newTx = parseResult.data;
     const storageTx = await this.storage.getTx(newTx.tx_id);
     const isNewTx = storageTx === null;
 
