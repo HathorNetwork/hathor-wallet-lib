@@ -143,7 +143,7 @@ describe('getTxById', () => {
       },
     });
     await expect(hWallet.getTxById(tx1.hash)).rejects.toThrow(
-      'Token undefined not found in tokens list'
+      'Invalid token_data undefined, token not found in tokens list'
     );
     jest.spyOn(hWallet, 'getFullTxById').mockRestore();
 
