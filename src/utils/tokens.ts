@@ -271,6 +271,10 @@ const tokens = {
     mintAmount: OutputValueType,
     depositPercent: number = TOKEN_DEPOSIT_PERCENTAGE
   ): OutputValueType {
+    // This conversion from mintAmount to Number may cause loss of precision for large amounts,
+    // but this is fully equivalent to the reference Python implementation, which does the same.
+    // It'll never be a problem for mainnet as no values can reach the precision boundary, but
+    // it may happen in custom networks.
     return BigInt(Math.ceil(depositPercent * Number(mintAmount)));
   },
 
