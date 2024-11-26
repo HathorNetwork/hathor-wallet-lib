@@ -220,9 +220,9 @@ export type TxTemplateInstruction =
   | UtxoSelectInstruction
   | AuthoritySelectInstruction
   | RawOutputInstruction
+  | DataOutputInstruction
   | TokenOutputInstruction
   | AuthorityOutputInstruction
-  | DataOutputInstruction
   | ShuffleInstruction
   | ChangeInstruction
   | ConfigInstruction

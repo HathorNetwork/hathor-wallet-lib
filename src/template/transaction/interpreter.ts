@@ -29,8 +29,16 @@ import {
   TxTemplateInstruction,
   UtxoSelectInstruction,
   getVariable,
+  isAuthorityOutputInstruction,
+  isAuthoritySelectInstruction,
+  isChangeInstruction,
+  isConfigInstruction,
+  isDataOutputInstruction,
   isRawInputInstruction,
   isRawOutputInstruction,
+  isSetVarInstruction,
+  isShuffleInstruction,
+  isTokenOutputInstruction,
   isUtxoSelectInstruction,
 } from './instructions';
 import Input from '../../models/input';
@@ -95,7 +103,7 @@ export class WalletTxTemplateInterpreter {
    * XXX: maybe we can save the change address chosen on the context.
    * This way the same change address would be used throughout the transaction
    */
-  async getChangeAddress(ctx: TxTemplateContext) {
+  async getChangeAddress(_ctx: TxTemplateContext) {
     return await this.wallet.getCurrentAddress();
   }
 
@@ -165,16 +173,50 @@ export async function runInstruction(
   ctx: TxTemplateContext,
   ins: TxTemplateInstruction
 ) {
+  const instructionExecutor = findInstructionExecution(ins);
+  await instructionExecutor(interpreter, ctx, ins);
+}
+
+export function findInstructionExecution(ins: TxTemplateInstruction): (
+  interpreter: WalletTxTemplateInterpreter,
+  ctx: TxTemplateContext,
+  ins: any
+) => Promise<void> {
   if (isRawInputInstruction(ins)) {
-    await execRawInputInstruction(interpreter, ctx, ins);
-    return;
+    return execRawInputInstruction;
   }
   if (isUtxoSelectInstruction(ins)) {
-    await execUtxoSelectInstruction(interpreter, ctx, ins);
+    return execUtxoSelectInstruction;
+  }
+  if (isAuthoritySelectInstruction(ins)) {
+    return execAuthoritySelectInstruction;
   }
   if (isRawOutputInstruction(ins)) {
-    await execRawOutputInstruction(interpreter, ctx, ins);
+    return execRawOutputInstruction;
   }
+  if (isDataOutputInstruction(ins)) {
+    return execDataOutputInstruction;
+  }
+  if (isTokenOutputInstruction(ins)) {
+    return execTokenOutputInstruction;
+  }
+  if (isAuthorityOutputInstruction(ins)) {
+    return execAuthorityOutputInstruction;
+  }
+  if (isShuffleInstruction(ins)) {
+    return execShuffleInstruction;
+  }
+  if (isChangeInstruction(ins)) {
+    return execChangeInstruction;
+  }
+  if (isConfigInstruction(ins)) {
+    return execConfigInstruction;
+  }
+  if (isSetVarInstruction(ins)) {
+    return execSetVarInstruction;
+  }
+
+  throw new Error('Cannot determine the instruction to run');
 }
 
 /**
