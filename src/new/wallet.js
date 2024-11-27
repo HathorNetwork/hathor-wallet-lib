@@ -791,7 +791,7 @@ class HathorWallet extends EventEmitter {
         txId: tx.tx_id,
         timestamp: tx.timestamp,
         voided: tx.is_voided,
-        balance: txbalance[uid] || 0,
+        balance: txbalance[uid] || 0n,
         version: tx.version,
         ncId: tx.nc_id,
         ncMethod: tx.nc_method,

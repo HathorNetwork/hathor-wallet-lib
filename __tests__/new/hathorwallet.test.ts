@@ -869,7 +869,7 @@ test('getTxHistory', async () => {
       txId: 'mock-tx-id',
       timestamp: 123,
       voided: false,
-      balance: 0,
+      balance: 0n,
       version: 1,
       ncId: 'mock-nc-id',
       ncMethod: 'mock-nc-method',

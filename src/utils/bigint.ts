@@ -26,8 +26,8 @@ export const JSONBigInt = {
 
       let { source } = context;
       if (source.includes('e') || source.includes('E')) {
-        // We explicitly prohibit JSONs with exponential notation (such as 10e2) as they cannot be parsed to BigInt.
-        throw Error(`exponential notation is not supported in "${text}"`);
+        // Values with exponential notation (such as 10e2) are always Number.
+        return value;
       }
 
       if (source.includes('.')) {
