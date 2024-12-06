@@ -26,11 +26,12 @@ import {
 import walletApi from '../api/wallet';
 import helpers from './helpers';
 import transactionUtils from './transaction';
-import { deriveAddressP2PKH, deriveAddressP2SH } from './address';
+import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from './address';
 import { xpubStreamSyncHistory, manualStreamSyncHistory } from '../sync/stream';
 import {
   NATIVE_TOKEN_UID,
   MAX_ADDRESSES_GET,
+  NANO_CONTRACTS_VERSION,
   LOAD_WALLET_MAX_RETRY,
   LOAD_WALLET_RETRY_SLEEP,
 } from '../constants';
@@ -707,6 +708,23 @@ export async function processNewTx(
     // save address and token metadata
     await store.editTokenMeta(input.token, tokenMeta);
     await store.editAddressMeta(input.decoded.address, addressMeta);
+  }
+
+  // Nano contract transactions have the address used to sign the tx
+  // and we must consider this to the address metadata
+  if (tx.version === NANO_CONTRACTS_VERSION) {
+    const caller = getAddressFromPubkey(tx.nc_pubkey!, storage.config.getNetwork())
+    const callerAddressInfo = await store.getAddress(caller.base58);
+    // if address is not in wallet, ignore
+    if (callerAddressInfo) {
+      // create metadata for address if it does not exist
+      let addressMeta = await store.getAddressMeta(caller.base58);
+      if (!addressMeta) {
+        addressMeta = { numTransactions: 0, balance: new Map<string, IBalance>() };
+        await store.editAddressMeta(caller.base58, addressMeta);
+      }
+      txAddresses.add(caller.base58);
+    }
   }
 
   for (const token of txTokens) {
