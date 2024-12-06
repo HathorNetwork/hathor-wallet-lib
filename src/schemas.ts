@@ -20,12 +20,12 @@ import {
   IUtxo,
   TxHistoryProcessingStatus,
 } from './types';
-import { ZodSchema } from './utils/bigint';
+import { bigIntCoercibleSchema, ZodSchema } from './utils/bigint';
 
 export const ITokenBalanceSchema: ZodSchema<ITokenBalance> = z
   .object({
-    locked: z.number(),
-    unlocked: z.number(),
+    locked: bigIntCoercibleSchema,
+    unlocked: bigIntCoercibleSchema,
   })
   .passthrough();
 
@@ -68,7 +68,7 @@ export const IHistoryOutputDecodedSchema: ZodSchema<IHistoryOutputDecoded> = z
 
 export const IHistoryInputSchema: ZodSchema<IHistoryInput> = z
   .object({
-    value: z.number(),
+    value: bigIntCoercibleSchema,
     token_data: z.number(),
     script: z.string(),
     decoded: IHistoryOutputDecodedSchema,
@@ -80,7 +80,7 @@ export const IHistoryInputSchema: ZodSchema<IHistoryInput> = z
 
 export const IHistoryOutputSchema: ZodSchema<IHistoryOutput> = z
   .object({
-    value: z.number(),
+    value: bigIntCoercibleSchema,
     token_data: z.number(),
     script: z.string(),
     decoded: IHistoryOutputDecodedSchema,
@@ -122,8 +122,8 @@ export const IUtxoSchema: ZodSchema<IUtxo> = z
     index: z.number(),
     token: z.string(),
     address: z.string(),
-    value: z.number(),
-    authorities: z.number(),
+    value: bigIntCoercibleSchema,
+    authorities: bigIntCoercibleSchema,
     timelock: z.number().nullable(),
     type: z.number(),
     height: z.number().nullable(),

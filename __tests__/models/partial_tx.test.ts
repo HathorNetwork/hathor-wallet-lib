@@ -41,7 +41,7 @@ describe('PartialTx.getTxData', () => {
   it('should support only P2SH and P2PKH', () => {
     const customScript = Buffer.from('data output script');
     const partialTx = new PartialTx(testnet);
-    partialTx.outputs.push(new ProposalOutput(1, customScript, { token: NATIVE_TOKEN_UID }));
+    partialTx.outputs.push(new ProposalOutput(1n, customScript, { token: NATIVE_TOKEN_UID }));
 
     expect(() => partialTx.getTxData()).toThrow(UnsupportedScriptError);
   });
@@ -67,8 +67,8 @@ describe('PartialTx.getTxData', () => {
     spyOutput.mockImplementation(() => o--); // 10, 9, 8
 
     const partialTx = new PartialTx(testnet);
-    partialTx.inputs = Array(5).fill(new ProposalInput('hash', 1, 1, 'W...'));
-    partialTx.outputs = Array(3).fill(new ProposalOutput(1, Buffer.from([])));
+    partialTx.inputs = Array(5).fill(new ProposalInput('hash', 1, 1n, 'W...'));
+    partialTx.outputs = Array(3).fill(new ProposalOutput(1n, Buffer.from([])));
 
     const data = partialTx.getTxData();
 
@@ -122,24 +122,24 @@ describe('PartialTx.isComplete', () => {
     const partialTx = new PartialTx(testnet);
 
     partialTx.inputs = [
-      new ProposalInput('hash1', 0, 100, 'W'),
-      new ProposalInput('hash2', 0, 1, 'W', { token: '1' }),
-      new ProposalInput('hash3', 0, 2, 'W', { token: '2' }),
+      new ProposalInput('hash1', 0, 100n, 'W'),
+      new ProposalInput('hash2', 0, 1n, 'W', { token: '1' }),
+      new ProposalInput('hash3', 0, 2n, 'W', { token: '2' }),
     ];
     partialTx.outputs = [
-      new ProposalOutput(100, Buffer.from([])),
-      new ProposalOutput(1, Buffer.from([]), { token: '1' }),
+      new ProposalOutput(100n, Buffer.from([])),
+      new ProposalOutput(1n, Buffer.from([]), { token: '1' }),
     ];
 
     // Missing token from outputs
     expect(partialTx.isComplete()).toBe(false);
 
     // Outputs have less than inputs for 1 token
-    partialTx.outputs.push(new ProposalOutput(1, Buffer.from([]), { token: '1' }));
+    partialTx.outputs.push(new ProposalOutput(1n, Buffer.from([]), { token: '1' }));
     expect(partialTx.isComplete()).toBe(false);
 
     // Outputs have more than inputs for 1 token
-    partialTx.outputs.push(new ProposalOutput(2, Buffer.from([]), { token: '2' }));
+    partialTx.outputs.push(new ProposalOutput(2n, Buffer.from([]), { token: '2' }));
     expect(partialTx.isComplete()).toBe(false);
 
     // Missing token from inputs
@@ -151,16 +151,16 @@ describe('PartialTx.isComplete', () => {
     const partialTx = new PartialTx(testnet);
 
     partialTx.inputs = [
-      new ProposalInput('hash1', 0, 1, 'W123', { token: '1' }),
-      new ProposalInput('hash2', 0, 2, 'W123', { token: '2' }),
-      new ProposalInput('hash3', 0, 3, 'W123'),
+      new ProposalInput('hash1', 0, 1n, 'W123', { token: '1' }),
+      new ProposalInput('hash2', 0, 2n, 'W123', { token: '2' }),
+      new ProposalInput('hash3', 0, 3n, 'W123'),
     ];
     partialTx.outputs = [
-      new ProposalOutput(2, Buffer.from([])),
-      new ProposalOutput(1, Buffer.from([]), { token: '2' }),
-      new ProposalOutput(1, Buffer.from([]), { token: '1' }),
-      new ProposalOutput(1, Buffer.from([])),
-      new ProposalOutput(1, Buffer.from([]), { token: '2' }),
+      new ProposalOutput(2n, Buffer.from([])),
+      new ProposalOutput(1n, Buffer.from([]), { token: '2' }),
+      new ProposalOutput(1n, Buffer.from([]), { token: '1' }),
+      new ProposalOutput(1n, Buffer.from([])),
+      new ProposalOutput(1n, Buffer.from([]), { token: '2' }),
     ];
 
     expect(partialTx.isComplete()).toBe(true);
@@ -170,18 +170,18 @@ describe('PartialTx.isComplete', () => {
     const partialTx = new PartialTx(testnet);
 
     partialTx.inputs = [
-      new ProposalInput('hash1', 0, 1, 'W123', { token: '1' }),
-      new ProposalInput('hash2', 0, 2, 'W123', { token: '2' }),
-      new ProposalInput('hash3', 0, 3, 'W123'),
+      new ProposalInput('hash1', 0, 1n, 'W123', { token: '1' }),
+      new ProposalInput('hash2', 0, 2n, 'W123', { token: '2' }),
+      new ProposalInput('hash3', 0, 3n, 'W123'),
     ];
     partialTx.outputs = [
-      new ProposalOutput(2, Buffer.from([])),
-      new ProposalOutput(1, Buffer.from([]), { token: '2' }),
-      new ProposalOutput(1, Buffer.from([]), { token: '1' }),
-      new ProposalOutput(1, Buffer.from([])),
-      new ProposalOutput(1, Buffer.from([]), { token: '2' }),
+      new ProposalOutput(2n, Buffer.from([])),
+      new ProposalOutput(1n, Buffer.from([]), { token: '2' }),
+      new ProposalOutput(1n, Buffer.from([]), { token: '1' }),
+      new ProposalOutput(1n, Buffer.from([])),
+      new ProposalOutput(1n, Buffer.from([]), { token: '2' }),
       // Add authority output for token 2
-      new ProposalOutput(1, Buffer.from([]), { token: '2', authorities: TOKEN_MINT_MASK }),
+      new ProposalOutput(1n, Buffer.from([]), { token: '2', authorities: TOKEN_MINT_MASK }),
     ];
 
     expect(partialTx.isComplete()).toBe(true);
@@ -201,12 +201,12 @@ describe('PartialTx.addInput', () => {
         hash: 'hash1',
         index: 0,
         token: '1',
-        authorities: 0,
-        value: 1,
+        authorities: 0n,
+        value: 1n,
         address: 'W123',
       })
     );
-    partialTx.addInput('hash1', 0, 1, 'W123', { token: '1', authorities: 0 });
+    partialTx.addInput('hash1', 0, 1n, 'W123', { token: '1', authorities: 0n });
     expect(partialTx.inputs).toEqual(expected);
 
     // Default options, HTR
@@ -215,12 +215,12 @@ describe('PartialTx.addInput', () => {
         hash: 'hash2',
         index: 1,
         token: '00',
-        authorities: 0,
-        value: 27,
+        authorities: 0n,
+        value: 27n,
         address: 'Wabc',
       })
     );
-    partialTx.addInput('hash2', 1, 27, 'Wabc');
+    partialTx.addInput('hash2', 1, 27n, 'Wabc');
     expect(partialTx.inputs).toEqual(expected);
 
     // Authority input
@@ -230,11 +230,11 @@ describe('PartialTx.addInput', () => {
         index: 10,
         token: '1',
         authorities: TOKEN_MINT_MASK | TOKEN_MELT_MASK,
-        value: 1056,
+        value: 1056n,
         address: 'W1b3',
       })
     );
-    partialTx.addInput('hash3', 10, 1056, 'W1b3', {
+    partialTx.addInput('hash3', 10, 1056n, 'W1b3', {
       token: '1',
       authorities: TOKEN_MINT_MASK | TOKEN_MELT_MASK,
     });
@@ -255,12 +255,12 @@ describe('PartialTx.addOutput', () => {
       expect.objectContaining({
         token: '1',
         isChange: true,
-        value: 27,
+        value: 27n,
         script: expect.toMatchBuffer(Buffer.from([230, 148, 32])),
         authorities: TOKEN_MELT_MASK,
       })
     );
-    partialTx.addOutput(27, Buffer.from([230, 148, 32]), {
+    partialTx.addOutput(27n, Buffer.from([230, 148, 32]), {
       token: '1',
       authorities: TOKEN_MELT_MASK,
       isChange: true,
@@ -271,12 +271,12 @@ describe('PartialTx.addOutput', () => {
       expect.objectContaining({
         token: '2',
         isChange: false,
-        value: 72,
+        value: 72n,
         script: expect.toMatchBuffer(Buffer.from([1, 2, 3])),
-        authorities: 0,
+        authorities: 0n,
       })
     );
-    partialTx.addOutput(72, Buffer.from([1, 2, 3]), { token: '2' });
+    partialTx.addOutput(72n, Buffer.from([1, 2, 3]), { token: '2' });
     expect(partialTx.outputs).toEqual(expected);
   });
 });
@@ -310,16 +310,16 @@ describe('PartialTx serialization', () => {
 
     const address = 'WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi';
     partialTx.inputs = [
-      new ProposalInput(txId1, 0, 27, address, { token: NATIVE_TOKEN_UID }),
-      new ProposalInput(txId2, 4, 13, address, { token: testTokenConfig.uid }),
+      new ProposalInput(txId1, 0, 27n, address, { token: NATIVE_TOKEN_UID }),
+      new ProposalInput(txId2, 4, 13n, address, { token: testTokenConfig.uid }),
     ];
     partialTx.outputs = [
-      new ProposalOutput(15, scriptFromAddressP2PKH('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo')),
-      new ProposalOutput(13, scriptFromAddressP2PKH('WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp'), {
+      new ProposalOutput(15n, scriptFromAddressP2PKH('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo')),
+      new ProposalOutput(13n, scriptFromAddressP2PKH('WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp'), {
         token: testTokenConfig.uid,
         isChange: true,
       }),
-      new ProposalOutput(12, scriptFromAddressP2PKH('WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi'), {
+      new ProposalOutput(12n, scriptFromAddressP2PKH('WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi'), {
         isChange: true,
       }),
     ];
@@ -343,20 +343,20 @@ describe('PartialTx serialization', () => {
     expect(partialEmpty.serialize()).toEqual(partialTx.serialize());
 
     partialTx.inputs = [
-      new ProposalInput(txId1, 0, 27, address, { token: NATIVE_TOKEN_UID }),
-      new ProposalInput(txId2, 4, 13, address, { token: testTokenConfig.uid }),
+      new ProposalInput(txId1, 0, 27n, address, { token: NATIVE_TOKEN_UID }),
+      new ProposalInput(txId2, 4, 13n, address, { token: testTokenConfig.uid }),
     ];
     const partialOnlyInputs = PartialTx.deserialize(partialTx.serialize(), testnet);
     expect(partialOnlyInputs.serialize()).toEqual(partialTx.serialize());
 
     partialTx.inputs = [];
     partialTx.outputs = [
-      new ProposalOutput(15, scriptFromAddressP2PKH('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo')),
-      new ProposalOutput(13, scriptFromAddressP2PKH('WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp'), {
+      new ProposalOutput(15n, scriptFromAddressP2PKH('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo')),
+      new ProposalOutput(13n, scriptFromAddressP2PKH('WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp'), {
         token: testTokenConfig.uid,
         isChange: true,
       }),
-      new ProposalOutput(12, scriptFromAddressP2PKH('WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi'), {
+      new ProposalOutput(12n, scriptFromAddressP2PKH('WVGxdgZMHkWo2Hdrb1sEFedNdjTXzjvjPi'), {
         isChange: true,
       }),
     ];
@@ -364,8 +364,8 @@ describe('PartialTx serialization', () => {
     expect(partialOnlyOutputs.serialize()).toEqual(partialTx.serialize());
 
     partialTx.inputs = [
-      new ProposalInput(txId1, 0, 27, address, { token: NATIVE_TOKEN_UID }),
-      new ProposalInput(txId2, 4, 13, address, { token: testTokenConfig.uid }),
+      new ProposalInput(txId1, 0, 27n, address, { token: NATIVE_TOKEN_UID }),
+      new ProposalInput(txId2, 4, 13n, address, { token: testTokenConfig.uid }),
     ];
     const partialFull = PartialTx.deserialize(partialTx.serialize(), testnet);
     expect(partialFull.serialize()).toEqual(partialTx.serialize());
@@ -388,7 +388,7 @@ describe('PartialTx.validate', () => {
 
   const utxos = {
     [txId1]: {
-      outputs: [{ token_data: 0, value: 27, decoded: { address: addr1 } }],
+      outputs: [{ token_data: 0, value: 27n, decoded: { address: addr1 } }],
     },
     [txId2]: {
       tokens: [testTokenConfig],
@@ -397,7 +397,7 @@ describe('PartialTx.validate', () => {
         'fake-utxo1',
         'fake-utxo2',
         'fake-utxo3',
-        { token_data: 1, value: 13, decoded: { address: addr2 } },
+        { token_data: 1, value: 13n, decoded: { address: addr2 } },
       ],
     },
   };
@@ -429,7 +429,7 @@ describe('PartialTx.validate', () => {
     });
 
     const partialTx = new PartialTx(testnet);
-    partialTx.inputs = [new ProposalInput(txId1, 0, 27, addr1)];
+    partialTx.inputs = [new ProposalInput(txId1, 0, 27n, addr1)];
     await partialTx.validate();
 
     expect(spy).toHaveBeenCalled();
@@ -446,7 +446,7 @@ describe('PartialTx.validate', () => {
     });
 
     const partialTx = new PartialTx(testnet);
-    partialTx.inputs = [new ProposalInput(txId1, 0, 27, addr1)];
+    partialTx.inputs = [new ProposalInput(txId1, 0, 27n, addr1)];
     await expect(partialTx.validate()).rejects.toEqual('txApiError');
   });
 
@@ -463,16 +463,16 @@ describe('PartialTx.validate', () => {
 
     const partialTx = new PartialTx(testnet);
     partialTx.inputs = [
-      new ProposalInput(txId1, 0, 27, addr1),
-      new ProposalInput(txId2, 4, 13, addr2, { token: testTokenConfig.uid }),
+      new ProposalInput(txId1, 0, 27n, addr1),
+      new ProposalInput(txId2, 4, 13n, addr2, { token: testTokenConfig.uid }),
     ];
     partialTx.outputs = [
-      new ProposalOutput(15, scriptFromAddressP2PKH(addr2)),
-      new ProposalOutput(13, scriptFromAddressP2PKH(addr2), {
+      new ProposalOutput(15n, scriptFromAddressP2PKH(addr2)),
+      new ProposalOutput(13n, scriptFromAddressP2PKH(addr2), {
         token: testTokenConfig.uid,
         isChange: true,
       }),
-      new ProposalOutput(12, scriptFromAddressP2PKH(addr1), { isChange: true }),
+      new ProposalOutput(12n, scriptFromAddressP2PKH(addr1), { isChange: true }),
     ];
 
     await expect(partialTx.validate()).resolves.toEqual(true);
@@ -492,32 +492,32 @@ describe('PartialTx.validate', () => {
     const partialTx = new PartialTx(testnet);
     // Address of inputs[1] is wrong
     partialTx.inputs = [
-      new ProposalInput(txId1, 0, 27, addr1),
-      new ProposalInput(txId2, 4, 13, addr1, { token: testTokenConfig.uid }),
+      new ProposalInput(txId1, 0, 27n, addr1),
+      new ProposalInput(txId2, 4, 13n, addr1, { token: testTokenConfig.uid }),
     ];
     partialTx.outputs = [
-      new ProposalOutput(15, scriptFromAddressP2PKH(addr2)),
-      new ProposalOutput(13, scriptFromAddressP2PKH(addr2), {
+      new ProposalOutput(15n, scriptFromAddressP2PKH(addr2)),
+      new ProposalOutput(13n, scriptFromAddressP2PKH(addr2), {
         token: testTokenConfig.uid,
         isChange: true,
       }),
-      new ProposalOutput(12, scriptFromAddressP2PKH(addr1), { isChange: true }),
+      new ProposalOutput(12n, scriptFromAddressP2PKH(addr1), { isChange: true }),
     ];
 
     await expect(partialTx.validate()).resolves.toEqual(false);
 
     // Value of inputs[0] is wrong
     partialTx.inputs = [
-      new ProposalInput(txId1, 0, 28, addr1),
-      new ProposalInput(txId2, 4, 13, addr2, { token: testTokenConfig.uid }),
+      new ProposalInput(txId1, 0, 28n, addr1),
+      new ProposalInput(txId2, 4, 13n, addr2, { token: testTokenConfig.uid }),
     ];
 
     await expect(partialTx.validate()).resolves.toEqual(false);
 
     // TokenData of inputs[1] is wrong
     partialTx.inputs = [
-      new ProposalInput(txId1, 0, 27, addr1),
-      new ProposalInput(txId2, 4, 13, addr2, {
+      new ProposalInput(txId1, 0, 27n, addr1),
+      new ProposalInput(txId2, 4, 13n, addr2, {
         token: testTokenConfig.uid,
         authorities: TOKEN_MELT_MASK,
       }),
@@ -527,8 +527,8 @@ describe('PartialTx.validate', () => {
 
     // Token of inputs[0] is wrong
     partialTx.inputs = [
-      new ProposalInput(txId1, 0, 27, addr1, { token: testTokenConfig }),
-      new ProposalInput(txId2, 4, 13, addr2, { token: testTokenConfig.uid }),
+      new ProposalInput(txId1, 0, 27n, addr1, { token: testTokenConfig }),
+      new ProposalInput(txId2, 4, 13n, addr2, { token: testTokenConfig.uid }),
     ];
 
     await expect(partialTx.validate()).resolves.toEqual(false);
