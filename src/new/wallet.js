@@ -49,6 +49,7 @@ import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../utils/address';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction } from '../nano_contracts/utils';
+import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
 
 /**
@@ -1322,7 +1323,12 @@ class HathorWallet extends EventEmitter {
   }
 
   async onNewTx(wsData) {
-    const newTx = wsData.history;
+    const parseResult = IHistoryTxSchema.safeParse(wsData.history);
+    if (!parseResult.success) {
+      this.logger.error(parseResult.error);
+      return;
+    }
+    const newTx = parseResult.data;
     const storageTx = await this.storage.getTx(newTx.tx_id);
     const isNewTx = storageTx === null;
 

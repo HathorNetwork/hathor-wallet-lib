@@ -24,7 +24,7 @@ import {
   unpackLen,
   unpackToInt,
   intToBytes,
-  signedIntToBytes,
+  bigIntToBytes,
 } from '../utils/buffer';
 import { prettyValue } from '../utils/numbers';
 import { parseScript as utilsParseScript } from '../utils/scripts';
@@ -96,9 +96,9 @@ class Output {
       throw new OutputValueError(`Maximum value is ${prettyValue(MAX_OUTPUT_VALUE)}`);
     }
     if (this.value > MAX_OUTPUT_VALUE_32) {
-      return signedIntToBytes(-this.value, 8);
+      return bigIntToBytes(BigInt(-this.value), 8);
     }
-    return signedIntToBytes(this.value, 4);
+    return bigIntToBytes(BigInt(this.value), 4);
   }
 
   /**

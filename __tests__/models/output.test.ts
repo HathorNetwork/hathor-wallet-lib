@@ -17,6 +17,7 @@ import {
   TOKEN_MINT_MASK,
   TOKEN_MELT_MASK,
   MAX_OUTPUT_VALUE,
+  MAX_OUTPUT_VALUE_32,
 } from '../../src/constants';
 
 const address = new Address('WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo');
@@ -24,25 +25,48 @@ const p2pkh = new P2PKH(address);
 const p2pkhScript = p2pkh.createScript();
 
 test('Validate value', () => {
-  const o1 = new Output(1000, p2pkhScript);
-  expect(o1.valueToBytes()).toBeInstanceOf(buffer.Buffer);
-
   // Negative value is invalid
-  const o2 = new Output(-1000, p2pkhScript);
+  const o1 = new Output(-1000, p2pkhScript);
   expect(() => {
-    o2.valueToBytes();
+    o1.valueToBytes();
   }).toThrow(OutputValueError);
 
   // 0 value is invalid
   expect(() => {
-    const o3 = new Output(0, p2pkhScript);
-    o3.valueToBytes();
+    const o2 = new Output(0, p2pkhScript);
+    o2.valueToBytes();
   }).toThrow(OutputValueError);
 
+  // Value smaller than 32 bytes max
+  const o3 = new Output(MAX_OUTPUT_VALUE_32 - 1, p2pkhScript);
+  expect(o3.valueToBytes()).toStrictEqual(buffer.Buffer.from([0x7f, 0xff, 0xff, 0xfe]));
+
+  // Value equal to 32 bytes max
+  const o4 = new Output(MAX_OUTPUT_VALUE_32, p2pkhScript);
+  expect(o4.valueToBytes()).toStrictEqual(buffer.Buffer.from([0x7f, 0xff, 0xff, 0xff]));
+
+  // Value greater than 32 bytes max
+  const o5 = new Output(MAX_OUTPUT_VALUE_32 + 1, p2pkhScript);
+  expect(o5.valueToBytes()).toStrictEqual(
+    buffer.Buffer.from([0xff, 0xff, 0xff, 0xff, 0x80, 0x0, 0x0, 0x0])
+  );
+
+  // Value smaller than max
+  const o6 = new Output(MAX_OUTPUT_VALUE - 1, p2pkhScript);
+  expect(o6.valueToBytes()).toStrictEqual(
+    buffer.Buffer.from([0xff, 0xff, 0xf8, 0x0, 0x0, 0x0, 0x0, 0x1])
+  );
+
+  // Value equal to max
+  const o7 = new Output(MAX_OUTPUT_VALUE, p2pkhScript);
+  expect(o7.valueToBytes()).toStrictEqual(
+    buffer.Buffer.from([0xff, 0xff, 0xf8, 0x0, 0x0, 0x0, 0x0, 0x0])
+  );
+
   // Value bigger than the max is invalid
-  const o4 = new Output(MAX_OUTPUT_VALUE + 1, p2pkhScript);
+  const o9 = new Output(MAX_OUTPUT_VALUE + 1, p2pkhScript);
   expect(() => {
-    o4.valueToBytes();
+    o9.valueToBytes();
   }).toThrow(OutputValueError);
 });
 

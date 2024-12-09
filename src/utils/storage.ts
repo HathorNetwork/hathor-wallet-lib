@@ -35,6 +35,7 @@ import {
   LOAD_WALLET_MAX_RETRY,
   LOAD_WALLET_RETRY_SLEEP,
 } from '../constants';
+import { AddressHistorySchema, GeneralTokenInfoSchema } from '../api/schemas/wallet';
 
 /**
  * Get history sync method for a given mode
@@ -178,16 +179,7 @@ export async function* loadAddressHistory(
     let addrsToSearch = addressesChunks[i];
 
     while (hasMore === true) {
-      let response: AxiosResponse<
-        | {
-            success: true;
-            history: IHistoryTx[];
-            has_more: boolean;
-            first_hash: string;
-            first_address: string;
-          }
-        | { success: false; message: string }
-      >;
+      let response: AxiosResponse<AddressHistorySchema>;
       try {
         response = await walletApi.getAddressHistoryForAwait(addrsToSearch, firstHash);
       } catch (e: unknown) {
@@ -233,8 +225,8 @@ export async function* loadAddressHistory(
         hasMore = result.has_more;
         if (hasMore) {
           // prepare next page parameters
-          firstHash = result.first_hash;
-          const addrIndex = addrsToSearch.indexOf(result.first_address);
+          firstHash = result.first_hash || null;
+          const addrIndex = addrsToSearch.indexOf(result.first_address || '');
           if (addrIndex === -1) {
             throw Error('Invalid address returned from the server.');
           }
@@ -411,14 +403,9 @@ export async function processHistory(
  * @returns {Promise<void>}
  */
 export async function _updateTokensData(storage: IStorage, tokens: Set<string>): Promise<void> {
-  async function fetchTokenData(uid: string): Promise<
-    | {
-        success: true;
-        name: string;
-        symbol: string;
-      }
-    | { success: false; message: string }
-  > {
+  async function fetchTokenData(
+    uid: string
+  ): Promise<GeneralTokenInfoSchema | { success: true; name: string; symbol: string }> {
     let retryCount = 0;
 
     if (uid === NATIVE_TOKEN_UID) {
@@ -433,13 +420,7 @@ export async function _updateTokensData(storage: IStorage, tokens: Set<string>):
     while (retryCount <= 5) {
       try {
         // Fetch and return the api response
-        const result:
-          | {
-              success: true;
-              name: string;
-              symbol: string;
-            }
-          | { success: false; message: string } = await new Promise((resolve, reject) => {
+        const result: GeneralTokenInfoSchema = await new Promise((resolve, reject) => {
           walletApi.getGeneralTokenInfo(uid, resolve).catch(err => reject(err));
         });
         return result;
