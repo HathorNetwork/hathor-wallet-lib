@@ -36,11 +36,11 @@ describe('full cycle of bet nano contract', () => {
     fundsTx = await GenesisWalletHelper.injectFunds(
       hWallet,
       await hWallet.getAddressAtIndex(0),
-      1000
+      1000n
     );
 
     mhWallet = await generateMultisigWalletHelper({ walletIndex: 3 });
-    await GenesisWalletHelper.injectFunds(mhWallet, await mhWallet.getAddressAtIndex(0), 1000);
+    await GenesisWalletHelper.injectFunds(mhWallet, await mhWallet.getAddressAtIndex(0), 1000n);
   });
 
   afterAll(async () => {
@@ -71,7 +71,7 @@ describe('full cycle of bet nano contract', () => {
     // We must have one utxo in the address 0 of 1000 HTR
     expect(utxos.utxos.length).toBe(1);
     expect(utxos.utxos[0].address).toBe(address0);
-    expect(utxos.utxos[0].amount).toBe(1000);
+    expect(utxos.utxos[0].amount).toBe(1000n);
 
     // We must have one transaction in the address0
     const address0Meta = await wallet.storage.store.getAddressMeta(address0);
@@ -154,7 +154,7 @@ describe('full cycle of bet nano contract', () => {
         {
           type: 'deposit',
           token: NATIVE_TOKEN_UID,
-          amount: 100,
+          amount: 100n,
           changeAddress: address0,
         },
       ],
@@ -191,7 +191,7 @@ describe('full cycle of bet nano contract', () => {
     // this validates that the change address parameter worked fine
     expect(utxos2.utxos.length).toBe(1);
     expect(utxos2.utxos[0].address).toBe(address0);
-    expect(utxos2.utxos[0].amount).toBe(900);
+    expect(utxos2.utxos[0].amount).toBe(900n);
 
     // Bet 200 to address 3
     const address3 = await wallet.getAddressAtIndex(3);
@@ -202,7 +202,7 @@ describe('full cycle of bet nano contract', () => {
         {
           type: 'deposit',
           token: NATIVE_TOKEN_UID,
-          amount: 200,
+          amount: 200n,
           changeAddress: address0,
         },
       ],
@@ -319,7 +319,7 @@ describe('full cycle of bet nano contract', () => {
         {
           type: 'withdrawal',
           token: NATIVE_TOKEN_UID,
-          amount: 300,
+          amount: 300n,
           address: address2,
         },
       ],
@@ -544,7 +544,7 @@ describe('full cycle of bet nano contract', () => {
           {
             type: 'deposit',
             token: NATIVE_TOKEN_UID,
-            amount: 100,
+            amount: 100n,
           },
         ],
       })
@@ -559,7 +559,7 @@ describe('full cycle of bet nano contract', () => {
           {
             type: 'deposit',
             token: NATIVE_TOKEN_UID,
-            amount: 100,
+            amount: 100n,
           },
         ],
       })
@@ -574,7 +574,7 @@ describe('full cycle of bet nano contract', () => {
           {
             type: 'deposit',
             token: NATIVE_TOKEN_UID,
-            amount: 100,
+            amount: 100n,
           },
         ],
       })

@@ -27,8 +27,8 @@ export const JSONBigInt = {
 
       let { source } = context;
       if (source.includes('e') || source.includes('E')) {
-        // We explicitly prohibit JSONs with exponential notation (such as 10e2) as they cannot be parsed to BigInt.
-        throw Error(`exponential notation is not supported in "${text}"`);
+        // Values with exponential notation (such as 10e2) are always Number.
+        return value;
       }
 
       if (source.includes('.')) {
@@ -59,13 +59,13 @@ export const JSONBigInt = {
   },
 
   stringify(value: any, space?: string | number): string {
-    function bigIntReplacer(_key: string, value_: any): any {
-      // If the value is a BigInt, we simply return its string representation.
-      // @ts-expect-error TypeScript hasn't been updated with the `rawJSON` function from Node v22.
-      return typeof value_ === 'bigint' ? JSON.rawJSON(value_.toString()) : value_;
-    }
+    return JSON.stringify(value, this.bigIntReplacer, space);
+  },
 
-    return JSON.stringify(value, bigIntReplacer, space);
+  bigIntReplacer(_key: string, value_: any): any {
+    // If the value is a BigInt, we simply return its string representation.
+    // @ts-expect-error TypeScript hasn't been updated with the `rawJSON` function from Node v22.
+    return typeof value_ === 'bigint' ? JSON.rawJSON(value_.toString()) : value_;
   },
   /* eslint-enable @typescript-eslint/no-explicit-any */
 };
@@ -92,7 +92,7 @@ export function parseSchema<T>(data: unknown, schema: ZodSchema<T>): T {
 
   if (!result.success) {
     const logger = getDefaultLogger();
-    logger.error(`error: ${result.error.message}\ncaused by input: ${data}`);
+    logger.error(`error: ${result.error.message}\ncaused by input: ${JSONBigInt.stringify(data)}`);
     throw result.error;
   }
 
