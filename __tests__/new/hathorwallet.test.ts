@@ -421,19 +421,19 @@ test('getTxBalance', async () => {
       {
         token: 'A',
         token_data: 1,
-        value: 2,
+        value: 2n,
         decoded: { address: 'Addr1' },
       },
       {
         token: 'B',
         token_data: 2,
-        value: 5,
+        value: 5n,
         decoded: { address: 'Addr1' },
       },
       {
         token: 'C',
         token_data: 130,
-        value: 2,
+        value: 2n,
         decoded: { address: 'Addr1' },
       },
     ],
@@ -441,34 +441,34 @@ test('getTxBalance', async () => {
       {
         token: 'A',
         token_data: 1,
-        value: 1,
+        value: 1n,
         decoded: { address: 'Addr1' },
       },
       {
         token: 'A',
         token_data: 129,
-        value: 1,
+        value: 1n,
         decoded: { address: 'Addr1' },
       },
       {
         token: 'B',
         token_data: 2,
-        value: 10,
+        value: 10n,
         decoded: { address: 'Addr1' },
       },
     ],
   };
 
   expect(await hWallet.getTxBalance(tx)).toStrictEqual({
-    A: 1,
-    B: -5,
-    C: 0,
+    A: 1n,
+    B: -5n,
+    C: 0n,
   });
 
   expect(await hWallet.getTxBalance(tx, { includeAuthorities: true })).toStrictEqual({
-    A: 1,
-    B: -5,
-    C: 0,
+    A: 1n,
+    B: -5n,
+    C: 0n,
   });
 });
 
@@ -869,7 +869,7 @@ test('getTxHistory', async () => {
       txId: 'mock-tx-id',
       timestamp: 123,
       voided: false,
-      balance: 0,
+      balance: 0n,
       version: 1,
       ncId: 'mock-nc-id',
       ncMethod: 'mock-nc-method',
@@ -924,10 +924,10 @@ describe('prepare transactions without signature', () => {
   const fakeTokenToDepositUtxo = {
     txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
     index: 0,
-    value: 2,
+    value: 2n,
     token: '00',
     address: fakeAddress.base58,
-    authorities: 0,
+    authorities: 0n,
   };
 
   test('prepareCreateNewToken', async () => {
@@ -939,7 +939,7 @@ describe('prepare transactions without signature', () => {
     });
 
     // prepare create token
-    const txData = await hWallet.prepareCreateNewToken('01', 'my01', 100, {
+    const txData = await hWallet.prepareCreateNewToken('01', 'my01', 100n, {
       address: fakeAddress.base58,
       pinCode: '1234',
       signTx: false, // skip the signature
@@ -962,7 +962,7 @@ describe('prepare transactions without signature', () => {
       {
         txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
         index: 0,
-        value: 1,
+        value: 1n,
         token: '01',
         address: fakeAddress.base58,
         authorities: TOKEN_MINT_MASK,
@@ -981,7 +981,7 @@ describe('prepare transactions without signature', () => {
     jest.spyOn(hWallet, 'getMintAuthority').mockReturnValue(fakeMintAuthority);
 
     // prepare mint
-    const txData = await hWallet.prepareMintTokensData('01', 100, {
+    const txData = await hWallet.prepareMintTokensData('01', 100n, {
       address: fakeAddress.base58,
       pinCode: '1234',
       signTx: false, // skip the signature
@@ -1026,7 +1026,7 @@ describe('prepare transactions without signature', () => {
     jest.spyOn(hWallet, 'getMintAuthority').mockReturnValue(fakeMintAuthority);
 
     // prepare mint
-    const txData = await hWallet.prepareMintTokensData('01', 100, {
+    const txData = await hWallet.prepareMintTokensData('01', 100n, {
       address: fakeAddress.base58,
       pinCode: '1234',
       unshiftData: true,
@@ -1052,29 +1052,29 @@ describe('prepare transactions without signature', () => {
         expect.objectContaining({
           script: Buffer.from([6, 102, 111, 111, 98, 97, 114, 172]),
           tokenData: 0,
-          value: 1,
+          value: 1n,
         }),
         expect.objectContaining({
-          value: 100,
+          value: 100n,
           tokenData: 1,
         }),
         expect.objectContaining({
           tokenData: 129,
-          value: 1,
+          value: 1n,
         }),
       ])
     );
   });
 
   test('prepareMintTokensData with over available tokens amount', async () => {
-    const amountAvailable = 1;
-    const amountOverAvailable = 1000;
+    const amountAvailable = 1n;
+    const amountOverAvailable = 1000n;
     // fake stuff to support the test
     const fakeMintAuthority = [
       {
         txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
         index: 0,
-        value: 1,
+        value: 1n,
         token: '01',
         address: fakeAddress.base58,
         authorities: TOKEN_MINT_MASK,
@@ -1219,11 +1219,11 @@ describe('prepare transactions without signature', () => {
         expect.objectContaining({
           script: Buffer.from([6, 102, 111, 111, 98, 97, 114, 172]),
           tokenData: 0,
-          value: 1,
+          value: 1n,
         }),
         expect.objectContaining({
           tokenData: 129,
-          value: 2,
+          value: 2n,
         }),
       ])
     );
@@ -1297,28 +1297,28 @@ describe('prepare transactions without signature', () => {
         expect.objectContaining({
           script: Buffer.from([7, 102, 111, 111, 98, 97, 114, 50, 172]),
           tokenData: 0,
-          value: 1,
+          value: 1n,
         }),
         expect.objectContaining({
           script: Buffer.from([7, 102, 111, 111, 98, 97, 114, 49, 172]),
           tokenData: 0,
-          value: 1,
+          value: 1n,
         }),
         expect.objectContaining({
           tokenData: 0,
-          value: 1,
+          value: 1n,
         }),
         expect.objectContaining({
           tokenData: 129,
-          value: 2,
+          value: 2n,
         }),
       ])
     );
   });
 
   test('prepareMeltTokensData with over available tokens amount', async () => {
-    const availableToken = 10;
-    const amountOverAvailable = 100;
+    const availableToken = 10n;
+    const amountOverAvailable = 100n;
     // fake stuff to support the test
     const fakeTokenToMeltUtxo = {
       txId: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',

@@ -6,6 +6,21 @@
  */
 
 import { z } from 'zod';
+import { bigIntCoercibleSchema } from '../../utils/bigint';
+
+// TODO: This should be unified with IHistoryOutputDecodedSchema
+const decodedSchema = z.union([
+  z
+    .object({
+      type: z.string(),
+      address: z.string().optional(),
+      timelock: z.number().nullish(),
+      value: bigIntCoercibleSchema,
+      token_data: z.number().optional(),
+    })
+    .passthrough(),
+  z.object({}).passthrough(), // custom scripts, such as data outputs, don't provide decoded info
+]);
 
 export const transactionSchema = z.discriminatedUnion('success', [
   z
@@ -27,18 +42,10 @@ export const transactionSchema = z.discriminatedUnion('success', [
           nc_blueprint_id: z.string().nullish(),
           inputs: z
             .object({
-              value: z.number(),
+              value: bigIntCoercibleSchema,
               token_data: z.number(),
               script: z.string(),
-              decoded: z
-                .object({
-                  type: z.string(),
-                  address: z.string(),
-                  timelock: z.number().nullish(),
-                  value: z.number(),
-                  token_data: z.number(),
-                })
-                .passthrough(),
+              decoded: decodedSchema,
               tx_id: z.string(),
               index: z.number(),
               token: z.string().nullish(),
@@ -48,18 +55,10 @@ export const transactionSchema = z.discriminatedUnion('success', [
             .array(),
           outputs: z
             .object({
-              value: z.number(),
+              value: bigIntCoercibleSchema,
               token_data: z.number(),
               script: z.string(),
-              decoded: z
-                .object({
-                  type: z.string(),
-                  address: z.string().optional(),
-                  timelock: z.number().nullish(),
-                  value: z.number(),
-                  token_data: z.number().optional(),
-                })
-                .passthrough(),
+              decoded: decodedSchema,
               token: z.string().nullish(),
               spent_by: z.string().nullish(),
             })

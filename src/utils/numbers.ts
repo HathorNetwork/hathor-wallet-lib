@@ -1,42 +1,30 @@
 import { DECIMAL_PLACES } from '../constants';
 
+const formatter = new Intl.NumberFormat('en-US');
+
 /**
  * Get the formatted value with decimal places and thousand separators
  *
- * @param {number} value Amount to be formatted
+ * @param {bigint} value Amount to be formatted
  * @param {number} [decimalPlaces=DECIMAL_PLACES] Number of decimal places
  *
  * @return {string} Formatted value
  *
  * @inner
  */
-export function prettyValue(value: number, decimalPlaces = DECIMAL_PLACES): string {
+export function prettyValue(value: bigint, decimalPlaces = DECIMAL_PLACES): string {
+  if (typeof value !== 'bigint') {
+    throw Error(`value ${value} should be a bigint`);
+  }
   if (decimalPlaces === 0) {
-    return prettyIntegerValue(value);
+    return formatter.format(value);
   }
-  const fixedPlaces = (value / 10 ** decimalPlaces).toFixed(decimalPlaces);
-  const [integerPart, decimalPart] = fixedPlaces.split('.');
-  let signal = '';
-  if (parseInt(integerPart, 10) === 0 && value < 0) {
-    // For negative numbers greater than -1 (e.g. -0.5) the prettyIntegerValue method receives
-    // 0 as argument, which makes the prettyValue method return a positive number.
-    // In this case we need to add a minus sign here.
-    signal = '-';
-  }
-  return `${signal}${prettyIntegerValue(parseInt(integerPart, 10))}.${decimalPart}`;
-}
-
-/**
- * Get the formatted value for an integer number
- *
- * @param {number} value Amount to be formatted
- *
- * @return {string} Formatted value
- *
- * @inner
- */
-export function prettyIntegerValue(value: number): string {
-  const integerFormated = new Intl.NumberFormat('en-US').format(Math.abs(value));
+  const absValue = value >= 0 ? value : -value;
+  const decimalDivisor = 10n ** BigInt(decimalPlaces);
+  const integerPart = absValue / decimalDivisor;
+  const decimalPart = absValue % decimalDivisor;
   const signal = value < 0 ? '-' : '';
-  return `${signal}${integerFormated}`;
+  const integerString = formatter.format(integerPart);
+  const decimalString = decimalPart.toString().padStart(decimalPlaces, '0');
+  return `${signal}${integerString}.${decimalString}`;
 }

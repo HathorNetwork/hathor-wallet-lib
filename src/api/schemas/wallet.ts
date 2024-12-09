@@ -7,6 +7,7 @@
 
 import { z } from 'zod';
 import { IHistoryTxSchema } from '../../schemas';
+import { bigIntCoercibleSchema } from '../../utils/bigint';
 
 export const addressHistorySchema = z.discriminatedUnion('success', [
   z
@@ -38,7 +39,7 @@ export const generalTokenInfoSchema = z.discriminatedUnion('success', [
       symbol: z.string(),
       mint: mintMeltUtxoSchema.array(),
       melt: mintMeltUtxoSchema.array(),
-      total: z.number(),
+      total: bigIntCoercibleSchema,
       transactions_count: z.number(),
     })
     .passthrough(),
