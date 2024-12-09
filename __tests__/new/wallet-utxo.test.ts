@@ -89,10 +89,10 @@ describe('UTXO Consolidation', () => {
   test('filter only HTR utxos', async () => {
     const utxoDetails = await hathorWallet.getUtxos();
     expect(utxoDetails.utxos).toHaveLength(3);
-    expect(utxoDetails.total_amount_available).toBe(2);
-    expect(utxoDetails.total_utxos_available).toBe(2);
-    expect(utxoDetails.total_amount_locked).toBe(1);
-    expect(utxoDetails.total_utxos_locked).toBe(1);
+    expect(utxoDetails.total_amount_available).toBe(2n);
+    expect(utxoDetails.total_utxos_available).toBe(2n);
+    expect(utxoDetails.total_amount_locked).toBe(1n);
+    expect(utxoDetails.total_utxos_locked).toBe(1n);
   });
 
   test('filter by custom token', async () => {
@@ -100,10 +100,10 @@ describe('UTXO Consolidation', () => {
       token: '01',
     });
     expect(utxoDetails.utxos).toHaveLength(1);
-    expect(utxoDetails.total_amount_available).toBe(1);
-    expect(utxoDetails.total_utxos_available).toBe(1);
-    expect(utxoDetails.total_amount_locked).toBe(0);
-    expect(utxoDetails.total_utxos_locked).toBe(0);
+    expect(utxoDetails.total_amount_available).toBe(1n);
+    expect(utxoDetails.total_utxos_available).toBe(1n);
+    expect(utxoDetails.total_amount_locked).toBe(0n);
+    expect(utxoDetails.total_utxos_locked).toBe(0n);
   });
 
   test('filter by max_utxos', async () => {
@@ -118,10 +118,10 @@ describe('UTXO Consolidation', () => {
       filter_address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
     });
     expect(utxoDetails.utxos).toHaveLength(1);
-    expect(utxoDetails.total_amount_available).toBe(1);
-    expect(utxoDetails.total_utxos_available).toBe(1);
-    expect(utxoDetails.total_amount_locked).toBe(0);
-    expect(utxoDetails.total_utxos_locked).toBe(0);
+    expect(utxoDetails.total_amount_available).toBe(1n);
+    expect(utxoDetails.total_utxos_available).toBe(1n);
+    expect(utxoDetails.total_amount_locked).toBe(0n);
+    expect(utxoDetails.total_utxos_locked).toBe(0n);
   });
 
   test('filter by max_amount', async () => {
@@ -129,10 +129,10 @@ describe('UTXO Consolidation', () => {
       max_amount: 2,
     });
     expect(utxoDetails.utxos).toHaveLength(3);
-    expect(utxoDetails.total_amount_available).toBe(2);
-    expect(utxoDetails.total_utxos_available).toBe(2);
-    expect(utxoDetails.total_amount_locked).toBe(1);
-    expect(utxoDetails.total_utxos_locked).toBe(1);
+    expect(utxoDetails.total_amount_available).toBe(2n);
+    expect(utxoDetails.total_utxos_available).toBe(2n);
+    expect(utxoDetails.total_amount_locked).toBe(1n);
+    expect(utxoDetails.total_utxos_locked).toBe(1n);
   });
 
   test('filter by amount_bigger_than', async () => {
@@ -141,10 +141,10 @@ describe('UTXO Consolidation', () => {
       amount_bigger_than: 2.5,
     });
     expect(utxoDetails.utxos).toHaveLength(1);
-    expect(utxoDetails.total_amount_available).toBe(3);
-    expect(utxoDetails.total_utxos_available).toBe(1);
-    expect(utxoDetails.total_amount_locked).toBe(0);
-    expect(utxoDetails.total_utxos_locked).toBe(0);
+    expect(utxoDetails.total_amount_available).toBe(3n);
+    expect(utxoDetails.total_utxos_available).toBe(1n);
+    expect(utxoDetails.total_amount_locked).toBe(0n);
+    expect(utxoDetails.total_utxos_locked).toBe(0n);
   });
 
   test('filter by amount_smaller_than', async () => {
@@ -153,23 +153,23 @@ describe('UTXO Consolidation', () => {
       amount_smaller_than: 1.5,
     });
     expect(utxoDetails.utxos).toHaveLength(1);
-    expect(utxoDetails.total_amount_available).toBe(1);
-    expect(utxoDetails.total_utxos_available).toBe(1);
-    expect(utxoDetails.total_amount_locked).toBe(0);
-    expect(utxoDetails.total_utxos_locked).toBe(0);
+    expect(utxoDetails.total_amount_available).toBe(1n);
+    expect(utxoDetails.total_utxos_available).toBe(1n);
+    expect(utxoDetails.total_amount_locked).toBe(0n);
+    expect(utxoDetails.total_utxos_locked).toBe(0n);
   });
 
   test('correctly execute consolidateUtxos', async () => {
     const result = await hathorWallet.consolidateUtxos(destinationAddress);
     expect(hathorWallet.sendManyOutputsSendTransaction).toHaveBeenCalled();
     expect(result.total_utxos_consolidated).toBe(2);
-    expect(result.total_amount).toBe(2);
+    expect(result.total_amount).toBe(2n);
     expect(result.txId).toBe('123');
     expect(result.utxos).toHaveLength(2);
     expect(result.utxos.some(utxo => utxo.locked)).toBeFalsy();
     // assert single output
     expect(hathorWallet.sendManyOutputsSendTransaction.mock.calls[0][0]).toEqual([
-      { address: destinationAddress, value: 2, token: '00' },
+      { address: destinationAddress, value: 2n, token: '00' },
     ]);
     // assert 2 inputs only
     expect(hathorWallet.sendManyOutputsSendTransaction.mock.calls[0][1].inputs).toHaveLength(2);
@@ -179,7 +179,7 @@ describe('UTXO Consolidation', () => {
     hathorWallet.storage.version.reward_spend_min_blocks = 10;
     const utxoDetails = await hathorWallet.getUtxos();
     expect(utxoDetails.utxos).toHaveLength(3);
-    expect(utxoDetails.total_utxos_locked).toEqual(3);
+    expect(utxoDetails.total_utxos_locked).toEqual(3n);
     hathorWallet.storage.version.reward_spend_min_blocks = 0;
   });
 

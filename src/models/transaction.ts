@@ -292,7 +292,10 @@ class Transaction {
       txSize += 64;
     }
 
-    let sumOutputs = this.getOutputsSum();
+    // Here we have to explicitly convert a bigint to a number (a double), which loses precision,
+    // but is exactly compatible with the reference Python implementation because of the calculations below.
+    let sumOutputs = Number(this.getOutputsSum());
+
     // Preventing division by 0 when handling authority methods that have no outputs
     sumOutputs = Math.max(1, sumOutputs);
 
@@ -320,7 +323,7 @@ class Transaction {
    * @inner
    */
   getOutputsSum(): OutputValueType {
-    let sumOutputs = 0;
+    let sumOutputs = 0n;
     for (const output of this.outputs) {
       if (output.isAuthority()) {
         continue;

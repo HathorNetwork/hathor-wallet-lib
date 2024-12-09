@@ -60,15 +60,11 @@ describe('test JSONBigInt', () => {
     expect(JSONBigInt.parse('1.000000000000')).toStrictEqual(1);
     expect(JSONBigInt.parse('12345678901234567890')).toStrictEqual(12345678901234567890n);
     expect(JSONBigInt.parse('12345678901234567890.000')).toStrictEqual(12345678901234567890n);
+    expect(JSONBigInt.parse('1e2')).toStrictEqual(100);
+    expect(JSONBigInt.parse('1E2')).toStrictEqual(100);
 
     expect(() => JSONBigInt.parse('12345678901234567890.1')).toThrow(
       Error('large float will lose precision! in "12345678901234567890.1"')
-    );
-    expect(() => JSONBigInt.parse('1e2')).toThrow(
-      Error('exponential notation is not supported in "1e2"')
-    );
-    expect(() => JSONBigInt.parse('1E2')).toThrow(
-      Error('exponential notation is not supported in "1E2"')
     );
   });
 

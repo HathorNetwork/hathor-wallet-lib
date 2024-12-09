@@ -520,10 +520,10 @@ export async function processNewTx(
 }> {
   function getEmptyBalance(): IBalance {
     return {
-      tokens: { unlocked: 0, locked: 0 },
+      tokens: { unlocked: 0n, locked: 0n },
       authorities: {
-        mint: { unlocked: 0, locked: 0 },
-        melt: { unlocked: 0, locked: 0 },
+        mint: { unlocked: 0n, locked: 0n },
+        melt: { unlocked: 0n, locked: 0n },
       },
     };
   }
@@ -586,21 +586,21 @@ export async function processNewTx(
     if (isAuthority) {
       if (isLocked) {
         if (transactionUtils.isMint(output)) {
-          tokenMeta.balance.authorities.mint.locked += 1;
-          addressMeta.balance.get(output.token)!.authorities.mint.locked += 1;
+          tokenMeta.balance.authorities.mint.locked += 1n;
+          addressMeta.balance.get(output.token)!.authorities.mint.locked += 1n;
         }
         if (transactionUtils.isMelt(output)) {
-          tokenMeta.balance.authorities.melt.locked += 1;
-          addressMeta.balance.get(output.token)!.authorities.melt.locked += 1;
+          tokenMeta.balance.authorities.melt.locked += 1n;
+          addressMeta.balance.get(output.token)!.authorities.melt.locked += 1n;
         }
       } else {
         if (transactionUtils.isMint(output)) {
-          tokenMeta.balance.authorities.mint.unlocked += 1;
-          addressMeta.balance.get(output.token)!.authorities.mint.unlocked += 1;
+          tokenMeta.balance.authorities.mint.unlocked += 1n;
+          addressMeta.balance.get(output.token)!.authorities.mint.unlocked += 1n;
         }
         if (transactionUtils.isMelt(output)) {
-          tokenMeta.balance.authorities.melt.unlocked += 1;
-          addressMeta.balance.get(output.token)!.authorities.melt.unlocked += 1;
+          tokenMeta.balance.authorities.melt.unlocked += 1n;
+          addressMeta.balance.get(output.token)!.authorities.melt.unlocked += 1n;
         }
       }
     } else if (isLocked) {
@@ -618,7 +618,7 @@ export async function processNewTx(
         txId: tx.tx_id,
         index,
         type: tx.version,
-        authorities: transactionUtils.isAuthorityOutput(output) ? output.value : 0,
+        authorities: transactionUtils.isAuthorityOutput(output) ? output.value : 0n,
         address: output.decoded.address,
         token: output.token,
         value: output.value,
@@ -674,12 +674,12 @@ export async function processNewTx(
 
     if (isAuthority) {
       if (transactionUtils.isMint(input)) {
-        tokenMeta.balance.authorities.mint.unlocked -= 1;
-        addressMeta.balance.get(input.token)!.authorities.mint.unlocked -= 1;
+        tokenMeta.balance.authorities.mint.unlocked -= 1n;
+        addressMeta.balance.get(input.token)!.authorities.mint.unlocked -= 1n;
       }
       if (transactionUtils.isMelt(input)) {
-        tokenMeta.balance.authorities.melt.unlocked -= 1;
-        addressMeta.balance.get(input.token)!.authorities.melt.unlocked -= 1;
+        tokenMeta.balance.authorities.melt.unlocked -= 1n;
+        addressMeta.balance.get(input.token)!.authorities.melt.unlocked -= 1n;
       }
     } else {
       tokenMeta.balance.tokens.unlocked -= input.value;
@@ -750,10 +750,10 @@ export async function processUtxoUnlock(
 ): Promise<void> {
   function getEmptyBalance(): IBalance {
     return {
-      tokens: { unlocked: 0, locked: 0 },
+      tokens: { unlocked: 0n, locked: 0n },
       authorities: {
-        mint: { unlocked: 0, locked: 0 },
-        melt: { unlocked: 0, locked: 0 },
+        mint: { unlocked: 0n, locked: 0n },
+        melt: { unlocked: 0n, locked: 0n },
       },
     };
   }
@@ -802,19 +802,19 @@ export async function processUtxoUnlock(
   if (isAuthority) {
     if (transactionUtils.isMint(output)) {
       // remove from locked balance
-      tokenMeta.balance.authorities.mint.locked -= 1;
-      addressMeta.balance.get(output.token)!.authorities.mint.locked -= 1;
+      tokenMeta.balance.authorities.mint.locked -= 1n;
+      addressMeta.balance.get(output.token)!.authorities.mint.locked -= 1n;
       // Add to the unlocked balance
-      tokenMeta.balance.authorities.mint.unlocked += 1;
-      addressMeta.balance.get(output.token)!.authorities.mint.unlocked += 1;
+      tokenMeta.balance.authorities.mint.unlocked += 1n;
+      addressMeta.balance.get(output.token)!.authorities.mint.unlocked += 1n;
     }
     if (transactionUtils.isMelt(output)) {
       // remove from locked balance
-      tokenMeta.balance.authorities.melt.locked -= 1;
-      addressMeta.balance.get(output.token)!.authorities.melt.locked -= 1;
+      tokenMeta.balance.authorities.melt.locked -= 1n;
+      addressMeta.balance.get(output.token)!.authorities.melt.locked -= 1n;
       // Add to the unlocked balance
-      tokenMeta.balance.authorities.melt.unlocked += 1;
-      addressMeta.balance.get(output.token)!.authorities.melt.unlocked += 1;
+      tokenMeta.balance.authorities.melt.unlocked += 1n;
+      addressMeta.balance.get(output.token)!.authorities.melt.unlocked += 1n;
     }
   } else {
     // remove from locked balance

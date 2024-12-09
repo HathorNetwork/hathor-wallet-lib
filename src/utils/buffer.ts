@@ -259,14 +259,14 @@ export const bytesToOutputValue = (srcBuf: Buffer): [OutputValueType, Buffer] =>
   let value: OutputValueType;
   if (highByte < 0) {
     // 8 bytes
-    sign = -1;
-    let bigintValue: bigint;
-    [bigintValue, buff] = unpackToBigInt(8, true, buff);
-    value = Number(bigintValue);
+    sign = -1n;
+    [value, buff] = unpackToBigInt(8, true, buff);
   } else {
     // 4 bytes
-    sign = 1;
-    [value, buff] = unpackToInt(4, true, buff);
+    sign = 1n;
+    let numberValue: number;
+    [numberValue, buff] = unpackToInt(4, true, buff);
+    value = BigInt(numberValue);
   }
 
   return [value * sign, buff];
