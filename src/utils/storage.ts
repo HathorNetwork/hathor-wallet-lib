@@ -713,7 +713,7 @@ export async function processNewTx(
   // Nano contract transactions have the address used to sign the tx
   // and we must consider this to the address metadata
   if (tx.version === NANO_CONTRACTS_VERSION) {
-    const caller = getAddressFromPubkey(tx.nc_pubkey!, storage.config.getNetwork())
+    const caller = getAddressFromPubkey(tx.nc_pubkey!, storage.config.getNetwork());
     const callerAddressInfo = await store.getAddress(caller.base58);
     // if address is not in wallet, ignore
     if (callerAddressInfo) {
