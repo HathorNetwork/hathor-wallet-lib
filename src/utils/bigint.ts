@@ -55,7 +55,7 @@ export const JSONBigInt = {
     }
 
     // @ts-expect-error TypeScript hasn't been updated with the `context` argument from Node v22.
-    return JSON.parse(text, this.isAvailable() ? bigIntReviver : undefined);
+    return JSON.parse(text, bigIntReviver);
   },
 
   stringify(value: any, space?: string | number): string {
@@ -65,19 +65,9 @@ export const JSONBigInt = {
       return typeof value_ === 'bigint' ? JSON.rawJSON(value_.toString()) : value_;
     }
 
-    return JSON.stringify(value, this.isAvailable() ? bigIntReplacer : undefined, space);
+    return JSON.stringify(value, bigIntReplacer, space);
   },
   /* eslint-enable @typescript-eslint/no-explicit-any */
-
-  /**
-   * Utility function for checking if JSONBigInt is available. We shouldn't allow it to be used if it's not available,
-   * however we temporarily keep Node v20 in our CI, so we have to allow it for tests.
-   * After QA is done to test Node v22 and we remove v20 from CI, we may remove this function.
-   */
-  isAvailable(): boolean {
-    const major = process.versions.node.split('.')[0];
-    return Number(major) >= 22;
-  },
 };
 
 /**
