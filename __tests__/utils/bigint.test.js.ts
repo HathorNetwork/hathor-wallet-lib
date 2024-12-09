@@ -58,11 +58,6 @@ describe('test JSONBigInt', () => {
     expect(JSONBigInt.parse('123.456')).toStrictEqual(123.456);
     expect(JSONBigInt.parse('1.0')).toStrictEqual(1);
     expect(JSONBigInt.parse('1.000000000000')).toStrictEqual(1);
-
-    if (!JSONBigInt.isAvailable()) {
-      return;
-    }
-
     expect(JSONBigInt.parse('12345678901234567890')).toStrictEqual(12345678901234567890n);
     expect(JSONBigInt.parse('12345678901234567890.000')).toStrictEqual(12345678901234567890n);
 
@@ -86,16 +81,10 @@ describe('test JSONBigInt', () => {
   });
 
   test('should parse bigint', () => {
-    if (!JSONBigInt.isAvailable()) {
-      return;
-    }
     expect(JSONBigInt.parse(bigIntJson)).toStrictEqual(bigIntObj);
   });
 
   test('should stringify bigint', () => {
-    if (!JSONBigInt.isAvailable()) {
-      return;
-    }
     expect(JSONBigInt.stringify(bigIntObj)).toStrictEqual(bigIntJson);
   });
 });
@@ -106,9 +95,6 @@ describe('test parseJsonBigInt', () => {
   });
 
   test('should parse object with small and large bigints', () => {
-    if (!JSONBigInt.isAvailable()) {
-      return;
-    }
     expect(parseJsonBigInt(bigIntJson, bigIntObjSchema)).toStrictEqual(bigIntCoercedObj);
   });
 });
