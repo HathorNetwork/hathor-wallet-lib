@@ -34,10 +34,6 @@ export const INSTRUCTION_TYPES = {
 
 export type InstructionType = typeof INSTRUCTION_TYPES[keyof typeof INSTRUCTION_TYPES];
 
-export interface BaseTemplateInstruction {
-  readonly type: InstructionType;
-}
-
 export type TemplateVarValue = string | number;
 export type TemplateVarName = string;
 export type TemplateVarRef = `{${TemplateVarName}}`;
@@ -66,7 +62,7 @@ export function getVariable<T extends TemplateVarValue>(
   return ref as T;
 }
 
-export interface RawInputInstruction extends BaseTemplateInstruction {
+export interface RawInputInstruction {
   readonly type: 'input/raw';
   position?: number;
   txId: TemplateVar<string>;
@@ -77,7 +73,7 @@ export function isRawInputInstruction(x: TxTemplateInstruction): x is RawInputIn
   return 'type' in x && x.type === 'input/raw';
 }
 
-export interface UtxoSelectInstruction extends BaseTemplateInstruction {
+export interface UtxoSelectInstruction {
   readonly type: 'input/utxo';
   position: number;
   fill: TemplateVar<number>;
@@ -90,7 +86,7 @@ export function isUtxoSelectInstruction(x: TxTemplateInstruction): x is UtxoSele
   return 'type' in x && x.type === 'input/utxo';
 }
 
-export interface AuthoritySelectInstruction extends BaseTemplateInstruction {
+export interface AuthoritySelectInstruction {
   readonly type: 'input/authority';
   position: number;
   authority: 'mint' | 'melt';
@@ -103,7 +99,7 @@ export function isAuthoritySelectInstruction(x: TxTemplateInstruction): x is Aut
   return 'type' in x && x.type === 'input/authority';
 }
 
-export interface RawOutputInstruction extends BaseTemplateInstruction {
+export interface RawOutputInstruction {
   readonly type: 'output/raw';
   position: number;
   amount?: TemplateVar<number>;
@@ -117,7 +113,7 @@ export function isRawOutputInstruction(x: TxTemplateInstruction): x is RawOutput
   return 'type' in x && x.type === 'output/raw';
 }
 
-export interface DataOutputInstruction extends BaseTemplateInstruction {
+export interface DataOutputInstruction {
   readonly type: 'output/data';
   position: number;
   data: TemplateVar<string>;
@@ -127,7 +123,7 @@ export function isDataOutputInstruction(x: TxTemplateInstruction): x is DataOutp
   return 'type' in x && x.type === 'output/data';
 }
 
-export interface TokenOutputInstruction extends BaseTemplateInstruction {
+export interface TokenOutputInstruction {
   readonly type: 'output/token';
   position: number;
   amount: TemplateVar<number>;
@@ -141,7 +137,7 @@ export function isTokenOutputInstruction(x: TxTemplateInstruction): x is TokenOu
   return 'type' in x && x.type === 'output/token';
 }
 
-export interface AuthorityOutputInstruction extends BaseTemplateInstruction {
+export interface AuthorityOutputInstruction {
   readonly type: 'output/authority';
   position: number;
   amount: TemplateVar<number>;
@@ -156,7 +152,7 @@ export function isAuthorityOutputInstruction(x: TxTemplateInstruction): x is Aut
   return 'type' in x && x.type === 'output/authority';
 }
 
-export interface ShuffleInstruction extends BaseTemplateInstruction {
+export interface ShuffleInstruction {
   readonly type: 'action/shuffle';
   target: 'inputs' | 'outputs' | 'all';
 }
@@ -165,7 +161,7 @@ export function isShuffleInstruction(x: TxTemplateInstruction): x is ShuffleInst
   return 'type' in x && x.type === 'action/shuffle';
 }
 
-export interface ChangeInstruction extends BaseTemplateInstruction {
+export interface ChangeInstruction {
   readonly type: 'action/change';
   token?: TemplateVar<string>;
   address?: TemplateVar<string>;
@@ -176,7 +172,7 @@ export function isChangeInstruction(x: TxTemplateInstruction): x is ChangeInstru
   return 'type' in x && x.type === 'action/change';
 }
 
-export interface ConfigInstruction extends BaseTemplateInstruction {
+export interface ConfigInstruction {
   readonly type: 'action/config';
   version?: TemplateVar<number>;
   signalBits?: TemplateVar<number>;
@@ -203,7 +199,7 @@ export type SetVarGetWalletBalanceOpts = {
 
 export type SetVarOptions = SetVarGetWalletAddressOpts | SetVarGetWalletBalanceOpts;
 
-export interface SetVarInstruction extends BaseTemplateInstruction {
+export interface SetVarInstruction {
   readonly type: 'action/setvar';
   name: TemplateVarName;
   value?: TemplateVarValue;
