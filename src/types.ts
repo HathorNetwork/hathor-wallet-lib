@@ -27,7 +27,7 @@ export function getDefaultLogger(): ILogger {
   return console as ILogger;
 }
 
-export type OutputValueType = number;
+export type OutputValueType = bigint;
 
 export interface ITxSignatureData {
   ncCallerSignature: Buffer | null;

@@ -69,12 +69,12 @@ describe('LevelDB persistent store', () => {
     expect(Object.keys(hWallet.getFullHistory())).toHaveLength(0);
 
     // Injecting some funds on this wallet
-    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(1), 10);
+    await GenesisWalletHelper.injectFunds(hWallet, await hWallet.getAddressAtIndex(1), 10n);
 
     // Validating the full history increased in one
     expect(Object.keys(await hWallet.getFullHistory())).toHaveLength(1);
 
-    const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(3), 5);
+    const tx1 = await hWallet.sendTransaction(await hWallet.getAddressAtIndex(3), 5n);
     await waitForTxReceived(hWallet, tx1.hash);
     expect(Object.keys(await hWallet.getFullHistory())).toHaveLength(2);
 

@@ -123,20 +123,20 @@ test('bytes to output value', () => {
   const p2pkhScript = p2pkh.createScript();
 
   // Value smaller than 32 bytes max
-  const o3 = new Output(MAX_OUTPUT_VALUE_32 - 1, p2pkhScript);
-  expect(bytesToOutputValue(o3.valueToBytes())[0]).toStrictEqual(MAX_OUTPUT_VALUE_32 - 1);
+  const o3 = new Output(MAX_OUTPUT_VALUE_32 - 1n, p2pkhScript);
+  expect(bytesToOutputValue(o3.valueToBytes())[0]).toStrictEqual(MAX_OUTPUT_VALUE_32 - 1n);
 
   // Value equal to 32 bytes max
   const o4 = new Output(MAX_OUTPUT_VALUE_32, p2pkhScript);
   expect(bytesToOutputValue(o4.valueToBytes())[0]).toStrictEqual(MAX_OUTPUT_VALUE_32);
 
   // Value greater than 32 bytes max
-  const o5 = new Output(MAX_OUTPUT_VALUE_32 + 1, p2pkhScript);
-  expect(bytesToOutputValue(o5.valueToBytes())[0]).toStrictEqual(MAX_OUTPUT_VALUE_32 + 1);
+  const o5 = new Output(MAX_OUTPUT_VALUE_32 + 1n, p2pkhScript);
+  expect(bytesToOutputValue(o5.valueToBytes())[0]).toStrictEqual(MAX_OUTPUT_VALUE_32 + 1n);
 
   // Value smaller than max
-  const o6 = new Output(MAX_OUTPUT_VALUE - 1, p2pkhScript);
-  expect(bytesToOutputValue(o6.valueToBytes())[0]).toStrictEqual(MAX_OUTPUT_VALUE - 1);
+  const o6 = new Output(MAX_OUTPUT_VALUE - 1n, p2pkhScript);
+  expect(bytesToOutputValue(o6.valueToBytes())[0]).toStrictEqual(MAX_OUTPUT_VALUE - 1n);
 
   // Value equal to max
   const o7 = new Output(MAX_OUTPUT_VALUE, p2pkhScript);

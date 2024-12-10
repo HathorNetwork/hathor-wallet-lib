@@ -62,17 +62,17 @@ describe('_updateTokensData', () => {
     balance: {
       authorities: {
         melt: {
-          locked: 0,
-          unlocked: 0,
+          locked: 0n,
+          unlocked: 0n,
         },
         mint: {
-          locked: 0,
-          unlocked: 0,
+          locked: 0n,
+          unlocked: 0n,
         },
       },
       tokens: {
-        locked: 0,
-        unlocked: 0,
+        locked: 0n,
+        unlocked: 0n,
       },
     },
     name: '',
