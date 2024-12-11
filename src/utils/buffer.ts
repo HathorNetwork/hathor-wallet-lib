@@ -1,5 +1,4 @@
 import buffer from 'buffer';
-import Long from 'long';
 import { ParseError } from '../errors';
 import { OutputValueType } from '../types';
 
@@ -43,7 +42,7 @@ export function intToBytes(value: number, bytes: number): Buffer {
  * @inner
  */
 export function signedIntToBytes(value: number, bytes: number): Buffer {
-  let arr = new ArrayBuffer(bytes);
+  const arr = new ArrayBuffer(bytes);
   const view = new DataView(arr);
   if (bytes === 1) {
     // byteOffset = 0
@@ -53,10 +52,34 @@ export function signedIntToBytes(value: number, bytes: number): Buffer {
     view.setInt16(0, value, false);
   } else if (bytes === 4) {
     view.setInt32(0, value, false);
-  } else if (bytes === 8) {
-    // In case of 8 bytes I need to handle the int with a Long lib
-    const long = Long.fromNumber(value, false);
-    arr = new Uint8Array(long.toBytesBE()).buffer;
+  }
+  return buffer.Buffer.from(arr);
+}
+
+/**
+ * Transform a signed `bigint` to bytes (4 or 8 bytes).
+ *
+ * @param {bigint} value BigInt to be transformed to bytes
+ * @param {number} bytes How many bytes this number uses
+ */
+export function bigIntToBytes(value: bigint, bytes: 4 | 8): Buffer {
+  const arr = new ArrayBuffer(bytes);
+  const view = new DataView(arr);
+  switch (bytes) {
+    case 4:
+      if (value < -(2n ** 31n) || 2n ** 31n - 1n < value) {
+        throw new Error(`value too large for 4 bytes: ${value}`);
+      }
+      view.setInt32(0, Number(value), false);
+      break;
+    case 8:
+      if (value < -(2n ** 63n) || 2n ** 63n - 1n < value) {
+        throw new Error(`value too large for 8 bytes: ${value}`);
+      }
+      view.setBigInt64(0, value, false);
+      break;
+    default:
+      throw new Error(`invalid bytes size: ${bytes}`);
   }
   return buffer.Buffer.from(arr);
 }
@@ -149,20 +172,32 @@ export const unpackToInt = (n: number, signed: boolean, buff: Buffer): [number, 
     } else {
       retInt = slicedBuff.readUInt32BE(0);
     }
-  } else if (n === 8) {
-    // We have only signed ints here
-    // readBigInt64BE exists only in node versions > 8
-    // the else block is used for versions <= 8 and usage in web browsers
-    if (slicedBuff.readBigInt64BE) {
-      retInt = Number(slicedBuff.readBigInt64BE());
-    } else {
-      retInt = slicedBuff.readIntBE(0, 8);
-    }
   } else {
     throw new ParseError('Invalid value for n.');
   }
 
   return [retInt, buff.slice(n)];
+};
+
+/**
+ * Unpacks a `bigint` from a buffer, used for 64-bit integers.
+ *
+ * @param {8} n The size of the number in bytes, should always be 8
+ * @param {boolean} signed If the number is signed
+ * @param {Buffer} buff The buffer to unpack
+ *
+ * @return {[bigint, Buffer]} The unpacked `bigint` followed by the rest of the buffer
+ */
+export const unpackToBigInt = (n: 8, signed: boolean, buff: Buffer): [bigint, Buffer] => {
+  validateLenToUnpack(n, buff);
+  const [buf, rest] = [buff.subarray(0, n), buff.subarray(n)];
+
+  if (n !== 8) {
+    throw new Error(`invalid bytes size: ${n}`);
+  }
+
+  const value = signed ? buf.readBigInt64BE(0) : buf.readBigUInt64BE(0);
+  return [value, rest];
 };
 
 /**
@@ -224,12 +259,14 @@ export const bytesToOutputValue = (srcBuf: Buffer): [OutputValueType, Buffer] =>
   let value: OutputValueType;
   if (highByte < 0) {
     // 8 bytes
-    sign = -1;
-    [value, buff] = unpackToInt(8, true, buff);
+    sign = -1n;
+    [value, buff] = unpackToBigInt(8, true, buff);
   } else {
     // 4 bytes
-    sign = 1;
-    [value, buff] = unpackToInt(4, true, buff);
+    sign = 1n;
+    let numberValue: number;
+    [numberValue, buff] = unpackToInt(4, true, buff);
+    value = BigInt(numberValue);
   }
 
   return [value * sign, buff];

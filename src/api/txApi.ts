@@ -5,7 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { AxiosResponse } from 'axios';
 import { createRequestInstance } from './axiosInstance';
+import { transformJsonBigIntResponse } from '../utils/bigint';
+import { TransactionSchema, transactionSchema } from './schemas/txApi';
 
 /**
  * Api calls for transaction
@@ -24,9 +27,12 @@ const txApi = {
    * @memberof ApiTransaction
    * @inner
    */
-  getTransactionBase(data, resolve) {
+  getTransactionBase(data, resolve, schema?) {
     return createRequestInstance(resolve)
-      .get(`transaction`, { params: data })
+      .get(`transaction`, {
+        params: data,
+        transformResponse: res => (schema ? transformJsonBigIntResponse(res, schema) : res),
+      })
       .then(
         res => {
           resolve(res.data);
@@ -72,9 +78,9 @@ const txApi = {
    * @memberof ApiTransaction
    * @inner
    */
-  getTransaction(id, resolve) {
+  getTransaction(id, resolve): Promise<void | AxiosResponse<TransactionSchema>> {
     const data = { id };
-    return this.getTransactionBase(data, resolve);
+    return this.getTransactionBase(data, resolve, transactionSchema);
   },
 
   /**

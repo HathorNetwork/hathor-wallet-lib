@@ -6,6 +6,7 @@
  */
 
 import BaseWebSocket, { WsOptions } from './base';
+import { JSONBigInt } from '../utils/bigint';
 
 /**
  * Handles websocket connections and message transmission
@@ -32,7 +33,7 @@ class GenericWebSocket extends BaseWebSocket {
    * @param {Object} evt Event that has data (evt.data) sent in the websocket
    */
   onMessage(evt) {
-    const message = JSON.parse(evt.data);
+    const message = JSONBigInt.parse(evt.data);
     const _type = this.splitMessageType ? message.type.split(':')[0] : message.type;
     if (_type === 'pong') {
       this.onPong();

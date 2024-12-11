@@ -4,7 +4,7 @@
   "description": "Library used by Hathor Wallet",
   "main": "lib/index.js",
   "engines": {
-    "node": ">=20.0.0",
+    "node": ">=22.0.0",
     "npm": ">=10.0.0"
   },
   "directories": {
@@ -15,17 +15,18 @@
   ],
   "dependencies": {
     "abstract-level": "1.0.4",
-    "axios": "1.7.2",
+    "axios": "1.7.7",
     "bitcore-lib": "8.25.10",
     "bitcore-mnemonic": "8.25.10",
     "buffer": "6.0.3",
     "crypto-js": "4.2.0",
     "isomorphic-ws": "5.0.0",
     "level": "8.0.1",
+    "level-transcoder": "1.0.1",
     "lodash": "4.17.21",
-    "long": "5.2.3",
     "queue-microtask": "1.2.3",
-    "ws": "8.17.1"
+    "ws": "8.17.1",
+    "zod": "3.23.8"
   },
   "scripts": {
     "test": "jest --env=node --forceExit",

@@ -431,7 +431,7 @@ const helpers = {
   createDataScriptOutput(data: string): Output {
     const scriptData = new ScriptData(data);
     // Value 1 and token HTR
-    return new Output(1, scriptData.createScript());
+    return new Output(1n, scriptData.createScript());
   },
 
   /**

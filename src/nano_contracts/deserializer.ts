@@ -112,7 +112,9 @@ class Deserializer {
    * @inner
    */
   toAmount(value: Buffer): OutputValueType {
-    return this.toInt(value);
+    // Nano `Amount` currently only supports up to 4 bytes, so we simply use the `number` value converted to `BigInt`.
+    // If we change Nano to support up to 8 bytes, we must update this.
+    return BigInt(this.toInt(value));
   }
 
   /**

@@ -52,6 +52,7 @@ import NanoContractSerializer from './nano_contracts/serializer';
 import * as nanoUtils from './nano_contracts/utils';
 import NanoContractDeserializer from './nano_contracts/deserializer';
 import NanoContractTransactionParser from './nano_contracts/parser';
+import * as bigIntUtils from './utils/bigint';
 
 export {
   PartialTx,
@@ -111,4 +112,5 @@ export {
   nanoUtils,
   NanoContractDeserializer,
   NanoContractTransactionParser,
+  bigIntUtils,
 };

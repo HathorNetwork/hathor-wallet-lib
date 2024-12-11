@@ -11,6 +11,7 @@ import {
 } from '../types';
 import Network from '../models/network';
 import Queue from '../models/queue';
+import { IHistoryTxSchema } from '../schemas';
 /* eslint max-classes-per-file: ["error", 2] */
 
 const QUEUE_GRACEFUL_SHUTDOWN_LIMIT = 10000;
@@ -719,7 +720,8 @@ function buildListener(manager: StreamManager, resolve: () => void) {
       // Vertex is a transaction in the history of the last address received
       // foundAnyTx = true;
       // add to history
-      manager.addTx(wsData.seq, wsData.data);
+      const vertex = IHistoryTxSchema.parse(wsData.data);
+      manager.addTx(wsData.seq, vertex);
       manager.updateUI();
     } else if (isStreamSyncHistoryAddress(wsData)) {
       manager.addAddress(wsData.seq, wsData.index, wsData.address);

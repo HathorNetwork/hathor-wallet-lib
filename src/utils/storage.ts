@@ -26,14 +26,16 @@ import {
 import walletApi from '../api/wallet';
 import helpers from './helpers';
 import transactionUtils from './transaction';
-import { deriveAddressP2PKH, deriveAddressP2SH } from './address';
+import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from './address';
 import { xpubStreamSyncHistory, manualStreamSyncHistory } from '../sync/stream';
 import {
   NATIVE_TOKEN_UID,
   MAX_ADDRESSES_GET,
+  NANO_CONTRACTS_VERSION,
   LOAD_WALLET_MAX_RETRY,
   LOAD_WALLET_RETRY_SLEEP,
 } from '../constants';
+import { AddressHistorySchema, GeneralTokenInfoSchema } from '../api/schemas/wallet';
 
 /**
  * Get history sync method for a given mode
@@ -177,16 +179,7 @@ export async function* loadAddressHistory(
     let addrsToSearch = addressesChunks[i];
 
     while (hasMore === true) {
-      let response: AxiosResponse<
-        | {
-            success: true;
-            history: IHistoryTx[];
-            has_more: boolean;
-            first_hash: string;
-            first_address: string;
-          }
-        | { success: false; message: string }
-      >;
+      let response: AxiosResponse<AddressHistorySchema>;
       try {
         response = await walletApi.getAddressHistoryForAwait(addrsToSearch, firstHash);
       } catch (e: unknown) {
@@ -232,8 +225,8 @@ export async function* loadAddressHistory(
         hasMore = result.has_more;
         if (hasMore) {
           // prepare next page parameters
-          firstHash = result.first_hash;
-          const addrIndex = addrsToSearch.indexOf(result.first_address);
+          firstHash = result.first_hash || null;
+          const addrIndex = addrsToSearch.indexOf(result.first_address || '');
           if (addrIndex === -1) {
             throw Error('Invalid address returned from the server.');
           }
@@ -410,14 +403,9 @@ export async function processHistory(
  * @returns {Promise<void>}
  */
 export async function _updateTokensData(storage: IStorage, tokens: Set<string>): Promise<void> {
-  async function fetchTokenData(uid: string): Promise<
-    | {
-        success: true;
-        name: string;
-        symbol: string;
-      }
-    | { success: false; message: string }
-  > {
+  async function fetchTokenData(
+    uid: string
+  ): Promise<GeneralTokenInfoSchema | { success: true; name: string; symbol: string }> {
     let retryCount = 0;
 
     if (uid === NATIVE_TOKEN_UID) {
@@ -432,13 +420,7 @@ export async function _updateTokensData(storage: IStorage, tokens: Set<string>):
     while (retryCount <= 5) {
       try {
         // Fetch and return the api response
-        const result:
-          | {
-              success: true;
-              name: string;
-              symbol: string;
-            }
-          | { success: false; message: string } = await new Promise((resolve, reject) => {
+        const result: GeneralTokenInfoSchema = await new Promise((resolve, reject) => {
           walletApi.getGeneralTokenInfo(uid, resolve).catch(err => reject(err));
         });
         return result;
@@ -538,10 +520,10 @@ export async function processNewTx(
 }> {
   function getEmptyBalance(): IBalance {
     return {
-      tokens: { unlocked: 0, locked: 0 },
+      tokens: { unlocked: 0n, locked: 0n },
       authorities: {
-        mint: { unlocked: 0, locked: 0 },
-        melt: { unlocked: 0, locked: 0 },
+        mint: { unlocked: 0n, locked: 0n },
+        melt: { unlocked: 0n, locked: 0n },
       },
     };
   }
@@ -604,21 +586,21 @@ export async function processNewTx(
     if (isAuthority) {
       if (isLocked) {
         if (transactionUtils.isMint(output)) {
-          tokenMeta.balance.authorities.mint.locked += 1;
-          addressMeta.balance.get(output.token)!.authorities.mint.locked += 1;
+          tokenMeta.balance.authorities.mint.locked += 1n;
+          addressMeta.balance.get(output.token)!.authorities.mint.locked += 1n;
         }
         if (transactionUtils.isMelt(output)) {
-          tokenMeta.balance.authorities.melt.locked += 1;
-          addressMeta.balance.get(output.token)!.authorities.melt.locked += 1;
+          tokenMeta.balance.authorities.melt.locked += 1n;
+          addressMeta.balance.get(output.token)!.authorities.melt.locked += 1n;
         }
       } else {
         if (transactionUtils.isMint(output)) {
-          tokenMeta.balance.authorities.mint.unlocked += 1;
-          addressMeta.balance.get(output.token)!.authorities.mint.unlocked += 1;
+          tokenMeta.balance.authorities.mint.unlocked += 1n;
+          addressMeta.balance.get(output.token)!.authorities.mint.unlocked += 1n;
         }
         if (transactionUtils.isMelt(output)) {
-          tokenMeta.balance.authorities.melt.unlocked += 1;
-          addressMeta.balance.get(output.token)!.authorities.melt.unlocked += 1;
+          tokenMeta.balance.authorities.melt.unlocked += 1n;
+          addressMeta.balance.get(output.token)!.authorities.melt.unlocked += 1n;
         }
       }
     } else if (isLocked) {
@@ -636,7 +618,7 @@ export async function processNewTx(
         txId: tx.tx_id,
         index,
         type: tx.version,
-        authorities: transactionUtils.isAuthorityOutput(output) ? output.value : 0,
+        authorities: transactionUtils.isAuthorityOutput(output) ? output.value : 0n,
         address: output.decoded.address,
         token: output.token,
         value: output.value,
@@ -692,12 +674,12 @@ export async function processNewTx(
 
     if (isAuthority) {
       if (transactionUtils.isMint(input)) {
-        tokenMeta.balance.authorities.mint.unlocked -= 1;
-        addressMeta.balance.get(input.token)!.authorities.mint.unlocked -= 1;
+        tokenMeta.balance.authorities.mint.unlocked -= 1n;
+        addressMeta.balance.get(input.token)!.authorities.mint.unlocked -= 1n;
       }
       if (transactionUtils.isMelt(input)) {
-        tokenMeta.balance.authorities.melt.unlocked -= 1;
-        addressMeta.balance.get(input.token)!.authorities.melt.unlocked -= 1;
+        tokenMeta.balance.authorities.melt.unlocked -= 1n;
+        addressMeta.balance.get(input.token)!.authorities.melt.unlocked -= 1n;
       }
     } else {
       tokenMeta.balance.tokens.unlocked -= input.value;
@@ -707,6 +689,23 @@ export async function processNewTx(
     // save address and token metadata
     await store.editTokenMeta(input.token, tokenMeta);
     await store.editAddressMeta(input.decoded.address, addressMeta);
+  }
+
+  // Nano contract transactions have the address used to sign the tx
+  // and we must consider this to the address metadata
+  if (tx.version === NANO_CONTRACTS_VERSION) {
+    const caller = getAddressFromPubkey(tx.nc_pubkey!, storage.config.getNetwork());
+    const callerAddressInfo = await store.getAddress(caller.base58);
+    // if address is not in wallet, ignore
+    if (callerAddressInfo) {
+      // create metadata for address if it does not exist
+      let addressMeta = await store.getAddressMeta(caller.base58);
+      if (!addressMeta) {
+        addressMeta = { numTransactions: 0, balance: new Map<string, IBalance>() };
+        await store.editAddressMeta(caller.base58, addressMeta);
+      }
+      txAddresses.add(caller.base58);
+    }
   }
 
   for (const token of txTokens) {
@@ -751,10 +750,10 @@ export async function processUtxoUnlock(
 ): Promise<void> {
   function getEmptyBalance(): IBalance {
     return {
-      tokens: { unlocked: 0, locked: 0 },
+      tokens: { unlocked: 0n, locked: 0n },
       authorities: {
-        mint: { unlocked: 0, locked: 0 },
-        melt: { unlocked: 0, locked: 0 },
+        mint: { unlocked: 0n, locked: 0n },
+        melt: { unlocked: 0n, locked: 0n },
       },
     };
   }
@@ -803,19 +802,19 @@ export async function processUtxoUnlock(
   if (isAuthority) {
     if (transactionUtils.isMint(output)) {
       // remove from locked balance
-      tokenMeta.balance.authorities.mint.locked -= 1;
-      addressMeta.balance.get(output.token)!.authorities.mint.locked -= 1;
+      tokenMeta.balance.authorities.mint.locked -= 1n;
+      addressMeta.balance.get(output.token)!.authorities.mint.locked -= 1n;
       // Add to the unlocked balance
-      tokenMeta.balance.authorities.mint.unlocked += 1;
-      addressMeta.balance.get(output.token)!.authorities.mint.unlocked += 1;
+      tokenMeta.balance.authorities.mint.unlocked += 1n;
+      addressMeta.balance.get(output.token)!.authorities.mint.unlocked += 1n;
     }
     if (transactionUtils.isMelt(output)) {
       // remove from locked balance
-      tokenMeta.balance.authorities.melt.locked -= 1;
-      addressMeta.balance.get(output.token)!.authorities.melt.locked -= 1;
+      tokenMeta.balance.authorities.melt.locked -= 1n;
+      addressMeta.balance.get(output.token)!.authorities.melt.locked -= 1n;
       // Add to the unlocked balance
-      tokenMeta.balance.authorities.melt.unlocked += 1;
-      addressMeta.balance.get(output.token)!.authorities.melt.unlocked += 1;
+      tokenMeta.balance.authorities.melt.unlocked += 1n;
+      addressMeta.balance.get(output.token)!.authorities.melt.unlocked += 1n;
     }
   } else {
     // remove from locked balance
