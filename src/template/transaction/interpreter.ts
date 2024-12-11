@@ -6,30 +6,7 @@
  */
 
 import {
-  AuthorityOutputInstruction,
-  AuthoritySelectInstruction,
-  ChangeInstruction,
-  ConfigInstruction,
-  DataOutputInstruction,
-  RawInputInstruction,
-  RawOutputInstruction,
-  SetVarInstruction,
-  ShuffleInstruction,
-  TokenOutputInstruction,
-  TxTemplateInstruction,
-  UtxoSelectInstruction,
-  getVariable,
-  isAuthorityOutputInstruction,
-  isAuthoritySelectInstruction,
-  isChangeInstruction,
-  isConfigInstruction,
-  isDataOutputInstruction,
-  isRawInputInstruction,
-  isRawOutputInstruction,
-  isSetVarInstruction,
-  isShuffleInstruction,
-  isTokenOutputInstruction,
-  isUtxoSelectInstruction,
+  TxTemplateInstructionType,
 } from './instructions';
 import {
   execAuthorityOutputInstruction,
@@ -73,7 +50,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
     this.txCache = {};
   }
 
-  async build(instructions: TxTemplateInstruction[]): Promise<Transaction> {
+  async build(instructions: TxTemplateInstructionType[]): Promise<Transaction> {
     const context = new TxTemplateContext();
 
     for (const ins of instructions) {
@@ -161,50 +138,50 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
 }
 
 export async function runInstruction(
-  interpreter: WalletTxTemplateInterpreter,
+  interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: TxTemplateInstruction
+  ins: TxTemplateInstructionType
 ) {
   const instructionExecutor = findInstructionExecution(ins);
   await instructionExecutor(interpreter, ctx, ins);
 }
 
-export function findInstructionExecution(ins: TxTemplateInstruction): (
-  interpreter: WalletTxTemplateInterpreter,
+export function findInstructionExecution(ins: TxTemplateInstructionType): (
+  interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
   ins: any
 ) => Promise<void> {
-  if (isRawInputInstruction(ins)) {
+  if (ins.type === 'input/raw') {
     return execRawInputInstruction;
   }
-  if (isUtxoSelectInstruction(ins)) {
+  if (ins.type === 'input/utxo') {
     return execUtxoSelectInstruction;
   }
-  if (isAuthoritySelectInstruction(ins)) {
+  if (ins.type === 'input/authority') {
     return execAuthoritySelectInstruction;
   }
-  if (isRawOutputInstruction(ins)) {
+  if (ins.type === 'output/raw') {
     return execRawOutputInstruction;
   }
-  if (isDataOutputInstruction(ins)) {
+  if (ins.type === 'output/data') {
     return execDataOutputInstruction;
   }
-  if (isTokenOutputInstruction(ins)) {
+  if (ins.type === 'output/token') {
     return execTokenOutputInstruction;
   }
-  if (isAuthorityOutputInstruction(ins)) {
+  if (ins.type === 'output/authority') {
     return execAuthorityOutputInstruction;
   }
-  if (isShuffleInstruction(ins)) {
+  if (ins.type === 'action/shuffle') {
     return execShuffleInstruction;
   }
-  if (isChangeInstruction(ins)) {
+  if (ins.type === 'action/change') {
     return execChangeInstruction;
   }
-  if (isConfigInstruction(ins)) {
+  if (ins.type === 'action/config') {
     return execConfigInstruction;
   }
-  if (isSetVarInstruction(ins)) {
+  if (ins.type === 'action/setvar') {
     return execSetVarInstruction;
   }
 

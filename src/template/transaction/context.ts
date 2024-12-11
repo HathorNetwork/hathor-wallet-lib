@@ -7,7 +7,6 @@
 /* eslint max-classes-per-file: ["error", 2] */
 
 import { IHistoryTx } from '../../types';
-import { TemplateVarName, TemplateVarValue } from './instructions';
 import Input from '../../models/input';
 import Output from '../../models/output';
 import transactionUtils from '../../utils/transaction';
@@ -65,16 +64,19 @@ export class TxBalance {
     this.setTokenBalance(token, balance);
   }
 
-  addOutput(amount: number, token: string, authority?: 'mint' | 'melt' | undefined) {
+  addOutput(amount: number, token: string) {
     const balance = this.getTokenBalance(token);
-    if (authority === undefined) {
-      balance.tokens -= amount;
-    }
+    balance.tokens -= amount;
+    this.setTokenBalance(token, balance);
+  }
+
+  addOutputAuthority(count: number, token: string, authority: 'mint'|'melt') {
+    const balance = this.getTokenBalance(token);
     if (authority === 'mint') {
-      balance.mint_authorities -= amount;
+      balance.mint_authorities -= count;
     }
     if (authority === 'melt') {
-      balance.melt_authorities -= amount;
+      balance.melt_authorities -= count;
     }
     this.setTokenBalance(token, balance);
   }
@@ -97,7 +99,7 @@ export class TxTemplateContext {
 
   tokenSymbol?: string;
 
-  vars: Record<TemplateVarName, TemplateVarValue>;
+  vars: Record<string, any>;
 
   constructor() {
     this.inputs = [];

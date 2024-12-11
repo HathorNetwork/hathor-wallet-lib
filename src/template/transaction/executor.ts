@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { z } from 'zod';
 import { shuffle } from 'lodash';
 import {
   AuthorityOutputInstruction,
@@ -40,11 +41,11 @@ import { getWalletAddress, getWalletBalance } from './setvarcommands';
 export async function execRawInputInstruction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: RawInputInstruction
+  ins: z.infer<typeof RawInputInstruction>
 ) {
-  const position = ins.position ?? -1;
-  const txId = getVariable<string>(ins.txId, ctx.vars);
-  const index = getVariable<number>(ins.index, ctx.vars);
+  const position = ins.position;
+  const txId = getVariable<string>(ins.txId, ctx.vars, RawInputInstruction.shape.txId);
+  const index = getVariable<number>(ins.index, ctx.vars, RawInputInstruction.shape.index);
 
   // Find the original transaction from the input
   const origTx = await interpreter.getTx(txId);
@@ -61,14 +62,14 @@ export async function execRawInputInstruction(
 export async function execUtxoSelectInstruction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: UtxoSelectInstruction
+  ins: z.infer<typeof UtxoSelectInstruction>
 ) {
-  const position = ins.position ?? -1;
-  const fill = getVariable<number>(ins.fill, ctx.vars);
-  const token = ins.token ? getVariable<string>(ins.token, ctx.vars) : NATIVE_TOKEN_UID;
-  const address = ins.address ? getVariable<string>(ins.address, ctx.vars) : null;
+  const position = ins.position;
+  const fill = getVariable<bigint>(ins.fill, ctx.vars, UtxoSelectInstruction.shape.fill);
+  const token = getVariable<string>(ins.token, ctx.vars, UtxoSelectInstruction.shape.token);
+  const address = getVariable<string|undefined>(ins.address, ctx.vars, UtxoSelectInstruction.shape.address);
 
-  const autoChange = ins.autoChange ?? true;
+  const autoChange = ins.autoChange;
 
   // Find utxos
   const options: IGetUtxosOptions = { token };
@@ -89,14 +90,16 @@ export async function execUtxoSelectInstruction(
   ctx.addInput(position, ...inputs);
 
   if (autoChange && changeAmount) {
-    // Token should only be on the array if present on the outputs
-    const tokenIndex = ctx.addToken(token);
-    const tokenData = tokenIndex;
     // get change address
-    const changeAddress = await interpreter.getChangeAddress(ctx);
-    // XXX: add network? maybe in interpreter
+    let changeAddress = getVariable<string|undefined>(ins.changeAddress, ctx.vars, UtxoSelectInstruction.shape.changeAddress);
+    if (!changeAddress) {
+      changeAddress = await interpreter.getChangeAddress(ctx);
+    }
+    // Token should only be on the array if present on the outputs
+    const tokenData = ctx.addToken(token);
     const script = createOutputScriptFromAddress(changeAddress, interpreter.getNetwork());
     const output = new Output(changeAmount, script, { tokenData });
+    ctx.balance.addOutput(changeAmount, token);
     ctx.addOutput(-1, output);
   }
 }
@@ -107,13 +110,13 @@ export async function execUtxoSelectInstruction(
 export async function execAuthoritySelectInstruction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: AuthoritySelectInstruction
+  ins: z.infer<typeof AuthoritySelectInstruction>
 ) {
   const position = ins.position ?? -1;
   const authority = ins.authority;
-  const token = ins.token ? getVariable<string>(ins.token, ctx.vars) : NATIVE_TOKEN_UID;
-  const amount = ins.amount ? getVariable<number>(ins.amount, ctx.vars) : 1;
-  const address = ins.address ? getVariable<string>(ins.address, ctx.vars) : null;
+  const token = getVariable<string>(ins.token, ctx.vars, AuthoritySelectInstruction.shape.token);
+  const count = getVariable<number>(ins.count, ctx.vars,AuthoritySelectInstruction.shape.count);
+  const address = getVariable<string|undefined>(ins.address, ctx.vars,AuthoritySelectInstruction.shape.address);
 
   let authoritiesInt = 0;
   if (authority === 'mint') {
@@ -131,7 +134,7 @@ export async function execAuthoritySelectInstruction(
   if (address) {
     options.filter_address = address;
   }
-  const utxos = await interpreter.getAuthorities(amount, options);
+  const utxos = await interpreter.getAuthorities(count, options);
 
   // Add utxos as inputs on the transaction
   const inputs = utxos.map(u => new Input(u.txId, u.index));
@@ -151,38 +154,43 @@ export async function execAuthoritySelectInstruction(
 export async function execRawOutputInstruction(
   _interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: RawOutputInstruction
+  ins: z.infer<typeof RawOutputInstruction>
 ) {
-  const position = ins.position ?? -1;
-  const scriptStr = getVariable<string>(ins.script, ctx.vars);
+  const { position, authority } = ins;
+  const scriptStr = getVariable<string>(ins.script, ctx.vars,RawOutputInstruction.shape.script);
   const script = Buffer.from(scriptStr, 'hex');
-  const token = ins.token ? getVariable<string>(ins.token, ctx.vars) : NATIVE_TOKEN_UID;
-  let timelock: number | undefined;
-  if (ins.timelock) {
-    timelock = getVariable<number>(ins.timelock, ctx.vars);
-  }
-  const { authority } = ins;
+  const token = getVariable<string>(ins.token, ctx.vars,RawOutputInstruction.shape.token);
+  const timelock = getVariable<number|undefined>(ins.timelock, ctx.vars, RawOutputInstruction.shape.timelock);
 
   // Add token to tokens array
   const tokenIndex = ctx.addToken(token);
   let tokenData = tokenIndex;
 
   let amount = 0;
-  if (authority === 'mint') {
-    amount = TOKEN_MINT_MASK;
-    tokenData &= TOKEN_AUTHORITY_MASK;
-  } else if (authority === 'melt') {
-    amount = TOKEN_MELT_MASK;
-    tokenData &= TOKEN_AUTHORITY_MASK;
-  } else {
-    if (!ins.amount) {
-      throw new Error('Raw token output missing amount');
+  switch (authority) {
+    case 'mint':
+      amount = TOKEN_MINT_MASK;
+      tokenData &= TOKEN_AUTHORITY_MASK;
+      break;
+    case 'melt':
+      amount = TOKEN_MELT_MASK;
+      tokenData &= TOKEN_AUTHORITY_MASK;
+      break;
+    default: {
+      amount = getVariable<bigint|undefined>(ins.amount, ctx.vars,RawOutputInstruction.shape.amount);
     }
-    amount = getVariable<number>(ins.amount, ctx.vars);
+
+  }
+  if (!amount) {
+    throw new Error('Raw token output missing amount');
   }
 
   // Add balance to the ctx.balance
-  ctx.balance.addOutput(amount, token, authority);
+  if (authority) {
+    ctx.balance.addOutputAuthority(1, token, authority);
+  } else {
+    ctx.balance.addOutput(amount, token);
+  }
 
   const output = new Output(amount, script, { timelock, tokenData });
   ctx.addOutput(position, output);
@@ -194,17 +202,21 @@ export async function execRawOutputInstruction(
 export async function execDataOutputInstruction(
   _interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: DataOutputInstruction
+  ins: z.infer<typeof DataOutputInstruction>
 ) {
-  const position = ins.position ?? -1;
-  const data = getVariable<string>(ins.data, ctx.vars);
+  const position = ins.position;
+  const data = getVariable<string>(ins.data, ctx.vars,DataOutputInstruction.shape.data);
+  const token = getVariable<string>(ins.token, ctx.vars,DataOutputInstruction.shape.token);
+
+  // Add token to tokens array
+  const tokenData = ctx.addToken(token);
 
   // Add balance to the ctx.balance
-  ctx.balance.addOutput(1, NATIVE_TOKEN_UID);
+  ctx.balance.addOutput(1, token);
 
   const dataScript = new ScriptData(data);
   const script = dataScript.createScript();
-  const output = new Output(1, script);
+  const output = new Output(1, script, { tokenData });
   ctx.addOutput(position, output);
 }
 
@@ -214,22 +226,16 @@ export async function execDataOutputInstruction(
 export async function execTokenOutputInstruction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: TokenOutputInstruction
+  ins: z.infer<typeof TokenOutputInstruction>
 ) {
-  const position = ins.position ?? -1;
-  const token = ins.token ? getVariable<string>(ins.token, ctx.vars) : NATIVE_TOKEN_UID;
-  const address = ins.address
-    ? getVariable<string>(ins.address, ctx.vars)
-    : await interpreter.getAddress();
-  let timelock: number | undefined;
-  if (ins.timelock) {
-    timelock = getVariable<number>(ins.timelock, ctx.vars);
-  }
-  const amount = getVariable<number>(ins.amount, ctx.vars);
+  const position = ins.position;
+  const token = getVariable<string>(ins.token, ctx.vars,TokenOutputInstruction.shape.token);
+  const address = getVariable<string>(ins.address, ctx.vars,TokenOutputInstruction.shape.address);
+  const timelock = getVariable<number|undefined>(ins.timelock, ctx.vars, TokenOutputInstruction.shape.timelock);
+  const amount = getVariable<bigint>(ins.amount, ctx.vars, TokenOutputInstruction.shape.amount);
 
   // Add token to tokens array
-  const tokenIndex = ctx.addToken(token);
-  const tokenData = tokenIndex;
+  const tokenData = ctx.addToken(token);
 
   // Add balance to the ctx.balance
   ctx.balance.addOutput(amount, token);
@@ -245,38 +251,34 @@ export async function execTokenOutputInstruction(
 export async function execAuthorityOutputInstruction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: AuthorityOutputInstruction
+  ins: z.infer<typeof AuthorityOutputInstruction>
 ) {
-  const position = ins.position ?? -1;
-  const token = getVariable<string>(ins.token, ctx.vars);
-  const address = ins.address
-    ? getVariable<string>(ins.address, ctx.vars)
-    : await interpreter.getAddress();
-  const count = getVariable<number>(ins.amount, ctx.vars);
-  let timelock: number | undefined;
-  if (ins.timelock) {
-    timelock = getVariable<number>(ins.timelock, ctx.vars);
-  }
-
-  const { authority } = ins;
+  const { authority, position } = ins;
+  const token = getVariable<string>(ins.token, ctx.vars, AuthorityOutputInstruction.shape.token);
+  const address = getVariable<string>(ins.address, ctx.vars,AuthorityOutputInstruction.shape.address);
+  const timelock = getVariable<number|undefined>(ins.timelock, ctx.vars, AuthorityOutputInstruction.shape.timelock);
+  const count = getVariable<number>(ins.count, ctx.vars, AuthorityOutputInstruction.shape.count);
 
   // Add token to tokens array
   const tokenIndex = ctx.addToken(token);
   let tokenData = tokenIndex;
 
   let amount = 0;
-  if (authority === 'mint') {
-    amount = TOKEN_MINT_MASK;
-    tokenData &= TOKEN_AUTHORITY_MASK;
-  } else if (authority === 'melt') {
-    amount = TOKEN_MELT_MASK;
-    tokenData &= TOKEN_AUTHORITY_MASK;
-  } else {
-    throw new Error('Authority token output missing `authority`');
+  switch(authority) {
+    case 'mint':
+      amount = TOKEN_MINT_MASK;
+      tokenData &= TOKEN_AUTHORITY_MASK;
+      break;
+    case 'melt':
+      amount = TOKEN_MELT_MASK;
+      tokenData &= TOKEN_AUTHORITY_MASK;
+      break;
+    default:
+      throw new Error('Authority token output missing `authority`');
   }
 
   // Add balance to the ctx.balance
-  ctx.balance.addOutput(count, token, authority);
+  ctx.balance.addOutputAuthority(count, token, authority);
 
   const script = createOutputScriptFromAddress(address, interpreter.getNetwork());
   const output = new Output(amount, script, { timelock, tokenData });
@@ -290,9 +292,12 @@ export async function execAuthorityOutputInstruction(
 export async function execShuffleInstruction(
   _interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: ShuffleInstruction
+  ins: z.infer<typeof ShuffleInstruction>
 ) {
   const target = ins.target;
+
+  // The token array should never be shuffled since outputs have a "pointer" to the token position
+  // on the token array, so shuffling would make the outputs target different outputs.
 
   if (target === 'inputs' || target === 'all') {
     ctx.inputs = shuffle(ctx.inputs);
@@ -309,7 +314,7 @@ export async function execShuffleInstruction(
 export async function execChangeInstruction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: ChangeInstruction
+  ins: z.infer<typeof ChangeInstruction>
 ) {
   const token = ins.token ? getVariable<string>(ins.token, ctx.vars) : null;
   const address = ins.address
@@ -371,7 +376,7 @@ export async function execChangeInstruction(
 export async function execConfigInstruction(
   _interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: ConfigInstruction
+  ins: z.infer<typeof ConfigInstruction>
 ) {
   if (ins.version) {
     ctx.version = getVariable<number>(ins.version, ctx.vars);
@@ -393,7 +398,7 @@ export async function execConfigInstruction(
 export async function execSetVarInstruction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: SetVarInstruction
+  ins: z.infer<typeof SetVarInstruction>
 ) {
   if (ins.action) {
     if (ins.action === 'get_wallet_address') {
