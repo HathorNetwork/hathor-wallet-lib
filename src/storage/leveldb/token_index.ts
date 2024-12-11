@@ -11,6 +11,8 @@ import { AbstractSublevel } from 'abstract-level';
 import { IKVTokenIndex, ITokenData, ITokenMetadata } from '../../types';
 import { errorCodeOrNull, KEY_NOT_FOUND_CODE } from './errors';
 import { checkLevelDbVersion } from './utils';
+import { jsonBigIntEncoding } from '../../utils/bigint';
+import { ITokenMetadataSchema } from '../../schemas';
 
 export const TOKEN_PREFIX = 'token';
 export const META_PREFIX = 'meta';
@@ -46,7 +48,9 @@ export default class LevelTokenIndex implements IKVTokenIndex {
     this.dbpath = path.join(dbpath, 'tokens');
     const db = new Level(this.dbpath);
     this.tokenDB = db.sublevel<string, ITokenData>(TOKEN_PREFIX, { valueEncoding: 'json' });
-    this.metadataDB = db.sublevel<string, ITokenMetadata>(META_PREFIX, { valueEncoding: 'json' });
+    this.metadataDB = db.sublevel<string, ITokenMetadata>(META_PREFIX, {
+      valueEncoding: jsonBigIntEncoding(ITokenMetadataSchema),
+    });
     this.registeredDB = db.sublevel<string, ITokenData>(REGISTER_PREFIX, { valueEncoding: 'json' });
   }
 
@@ -131,10 +135,10 @@ export default class LevelTokenIndex implements IKVTokenIndex {
     const DEFAULT_TOKEN_META: ITokenMetadata = {
       numTransactions: 0,
       balance: {
-        tokens: { unlocked: 0, locked: 0 },
+        tokens: { unlocked: 0n, locked: 0n },
         authorities: {
-          mint: { unlocked: 0, locked: 0 },
-          melt: { unlocked: 0, locked: 0 },
+          mint: { unlocked: 0n, locked: 0n },
+          melt: { unlocked: 0n, locked: 0n },
         },
       },
     };

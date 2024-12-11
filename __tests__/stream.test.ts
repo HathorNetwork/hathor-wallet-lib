@@ -3,6 +3,7 @@ import HathorWallet from '../src/new/wallet';
 import Connection from '../src/new/connection';
 import { MemoryStore, Storage } from '../src/storage';
 import { HistorySyncMode, getDefaultLogger } from '../src/types';
+import { JSONBigInt } from '../src/utils/bigint';
 
 const mock_tx = {
   tx_id: '00002f4c8d6516ee0c39437f30d9f20231f88652aacc263bc738f55c412cf5ee',
@@ -15,7 +16,7 @@ const mock_tx = {
   inputs: [],
   outputs: [
     {
-      value: 100,
+      value: 100n,
       token_data: 0,
       script: 'dqkUVTXZg887mKgf7wgS3RddNtu',
       token: '00',
@@ -24,7 +25,7 @@ const mock_tx = {
         type: 'P2PKH',
         address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
         timelock: null,
-        value: 100,
+        value: 100n,
         token_data: 0,
       },
     },
@@ -75,7 +76,7 @@ function makeServerMock(mockServer, mockType, sendCapabilities = true) {
       })
     );
     socket.send(
-      JSON.stringify({
+      JSONBigInt.stringify({
         id: streamId,
         type: 'stream:history:vertex',
         data: mock_tx,
@@ -177,7 +178,7 @@ describe('Websocket stream history sync', () => {
       await expect(wallet.getBalance('00')).resolves.toEqual([
         expect.objectContaining({
           token: expect.objectContaining({ id: '00' }),
-          balance: { locked: 0, unlocked: 100 },
+          balance: { locked: 0n, unlocked: 100n },
           transactions: 1,
         }),
       ]);
@@ -205,7 +206,7 @@ describe('Websocket stream history sync', () => {
       await expect(wallet.getBalance('00')).resolves.toEqual([
         expect.objectContaining({
           token: expect.objectContaining({ id: '00' }),
-          balance: { locked: 0, unlocked: 100 },
+          balance: { locked: 0n, unlocked: 100n },
           transactions: 1,
         }),
       ]);
@@ -270,7 +271,7 @@ describe('Websocket stream history sync', () => {
       await expect(wallet.getBalance('00')).resolves.toEqual([
         expect.objectContaining({
           token: expect.objectContaining({ id: '00' }),
-          balance: { locked: 0, unlocked: 100 },
+          balance: { locked: 0n, unlocked: 100n },
           transactions: 1,
         }),
       ]);

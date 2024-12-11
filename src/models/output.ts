@@ -24,11 +24,11 @@ import {
   unpackLen,
   unpackToInt,
   intToBytes,
-  signedIntToBytes,
+  bigIntToBytes,
 } from '../utils/buffer';
-import { prettyValue } from '../utils/numbers';
 import { parseScript as utilsParseScript } from '../utils/scripts';
 import { OutputValueType } from '../types';
+import { prettyValue } from '../utils/numbers';
 
 type optionsType = {
   tokenData?: number | undefined;
@@ -96,9 +96,9 @@ class Output {
       throw new OutputValueError(`Maximum value is ${prettyValue(MAX_OUTPUT_VALUE)}`);
     }
     if (this.value > MAX_OUTPUT_VALUE_32) {
-      return signedIntToBytes(-this.value, 8);
+      return bigIntToBytes(-this.value, 8);
     }
-    return signedIntToBytes(this.value, 4);
+    return bigIntToBytes(this.value, 4);
   }
 
   /**

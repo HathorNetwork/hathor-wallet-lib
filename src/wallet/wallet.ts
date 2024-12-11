@@ -598,14 +598,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       if (transaction.isAuthorityOutput(txout)) {
         if (options.includeAuthorities) {
           if (!balance[txout.token]) {
-            balance[txout.token] = 0;
+            balance[txout.token] = 0n;
           }
         }
         continue;
       }
       if (txout.decoded && txout.decoded.address && addresses.includes(txout.decoded.address)) {
         if (!balance[txout.token]) {
-          balance[txout.token] = 0;
+          balance[txout.token] = 0n;
         }
         balance[txout.token] += txout.value;
       }
@@ -615,14 +615,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       if (transaction.isAuthorityOutput(txin)) {
         if (options.includeAuthorities) {
           if (!balance[txin.token]) {
-            balance[txin.token] = 0;
+            balance[txin.token] = 0n;
           }
         }
         continue;
       }
       if (txin.decoded && txin.decoded.address && addresses.includes(txin.decoded.address)) {
         if (!balance[txin.token]) {
-          balance[txin.token] = 0;
+          balance[txin.token] = 0n;
         }
         balance[txin.token] -= txin.value;
       }
@@ -853,7 +853,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     const data = await walletApi.getTxOutputs(this, newOptions);
-    let changeAmount = 0;
+    let changeAmount = 0n;
     let utxos: Utxo[] = [];
     if (data.txOutputs.length === 0) {
       // No utxos available for the requested filter
@@ -980,7 +980,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const sendTransactionOutputs = outputs.map(output => {
       const typedOutput = output as OutputSendTransaction;
       if (typedOutput.type === OutputType.DATA) {
-        typedOutput.value = 1;
+        typedOutput.value = 1n;
         typedOutput.token = NATIVE_TOKEN_UID;
       } else {
         typedOutput.type = helpers.getOutputTypeFromAddress(typedOutput.address!, this.network);
@@ -1281,7 +1281,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     if (isNFT) {
       // For NFT we have a fee of 0.01 HTR, then the deposit utxo query must get an additional 1
-      deposit += 1;
+      deposit += 1n;
     }
 
     // 2. Get utxos for HTR
@@ -1840,10 +1840,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     let authority: OutputValueType;
     let mask: OutputValueType;
     if (type === 'mint') {
-      authority = 1;
+      authority = 1n;
       mask = TOKEN_MINT_MASK;
     } else if (type === 'melt') {
-      authority = 2;
+      authority = 2n;
       mask = TOKEN_MELT_MASK;
     } else {
       throw new WalletError('Type options are mint and melt for delegate authority method.');
@@ -1946,9 +1946,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     let authority: OutputValueType;
     if (type === 'mint') {
-      authority = 1;
+      authority = 1n;
     } else if (type === 'melt') {
-      authority = 2;
+      authority = 2n;
     } else {
       throw new WalletError('Type options are mint and melt for destroy authority method.');
     }

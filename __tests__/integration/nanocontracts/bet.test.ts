@@ -36,11 +36,11 @@ describe('full cycle of bet nano contract', () => {
     fundsTx = await GenesisWalletHelper.injectFunds(
       hWallet,
       await hWallet.getAddressAtIndex(0),
-      1000
+      1000n
     );
 
     mhWallet = await generateMultisigWalletHelper({ walletIndex: 3 });
-    await GenesisWalletHelper.injectFunds(mhWallet, await mhWallet.getAddressAtIndex(0), 1000);
+    await GenesisWalletHelper.injectFunds(mhWallet, await mhWallet.getAddressAtIndex(0), 1000n);
   });
 
   afterAll(async () => {
@@ -71,7 +71,11 @@ describe('full cycle of bet nano contract', () => {
     // We must have one utxo in the address 0 of 1000 HTR
     expect(utxos.utxos.length).toBe(1);
     expect(utxos.utxos[0].address).toBe(address0);
-    expect(utxos.utxos[0].amount).toBe(1000);
+    expect(utxos.utxos[0].amount).toBe(1000n);
+
+    // We must have one transaction in the address0
+    const address0Meta = await wallet.storage.store.getAddressMeta(address0);
+    expect(address0Meta.numTransactions).toBe(1);
 
     // Create NC
     const oracleData = getOracleBuffer(address1, network);
@@ -86,6 +90,10 @@ describe('full cycle of bet nano contract', () => {
     await checkTxValid(wallet, tx1.hash);
     const tx1Data = await wallet.getFullTxById(tx1.hash);
     expect(isNanoContractCreateTx(tx1Data.tx)).toBe(true);
+
+    // We must have two transactions in the address0
+    const address0Meta2 = await wallet.storage.store.getAddressMeta(address0);
+    expect(address0Meta2.numTransactions).toBe(2);
 
     const tx1Parser = new NanoContractTransactionParser(
       blueprintId,
@@ -146,7 +154,7 @@ describe('full cycle of bet nano contract', () => {
         {
           type: 'deposit',
           token: NATIVE_TOKEN_UID,
-          amount: 100,
+          amount: 100n,
           changeAddress: address0,
         },
       ],
@@ -154,6 +162,14 @@ describe('full cycle of bet nano contract', () => {
     await checkTxValid(wallet, txBet.hash);
     const txBetData = await wallet.getFullTxById(txBet.hash);
     expect(isNanoContractCreateTx(txBetData.tx)).toBe(false);
+
+    // We must have three transactions in the address0 and one in address2
+    // the input and change output of this tx is from address0 and the caller is address2
+    const address0Meta3 = await wallet.storage.store.getAddressMeta(address0);
+    expect(address0Meta3.numTransactions).toBe(3);
+
+    const address2Meta = await wallet.storage.store.getAddressMeta(address2);
+    expect(address2Meta.numTransactions).toBe(1);
 
     const txBetParser = new NanoContractTransactionParser(
       blueprintId,
@@ -175,7 +191,7 @@ describe('full cycle of bet nano contract', () => {
     // this validates that the change address parameter worked fine
     expect(utxos2.utxos.length).toBe(1);
     expect(utxos2.utxos[0].address).toBe(address0);
-    expect(utxos2.utxos[0].amount).toBe(900);
+    expect(utxos2.utxos[0].amount).toBe(900n);
 
     // Bet 200 to address 3
     const address3 = await wallet.getAddressAtIndex(3);
@@ -186,13 +202,22 @@ describe('full cycle of bet nano contract', () => {
         {
           type: 'deposit',
           token: NATIVE_TOKEN_UID,
-          amount: 200,
+          amount: 200n,
+          changeAddress: address0,
         },
       ],
     });
     await checkTxValid(wallet, txBet2.hash);
     const txBet2Data = await wallet.getFullTxById(txBet2.hash);
     expect(isNanoContractCreateTx(txBet2Data.tx)).toBe(false);
+
+    // We must have four transactions in the address0 and one in address3
+    // the input of this tx is from address0 and the caller is address3
+    const address0Meta4 = await wallet.storage.store.getAddressMeta(address0);
+    expect(address0Meta4.numTransactions).toBe(4);
+
+    const address3Meta = await wallet.storage.store.getAddressMeta(address3);
+    expect(address3Meta.numTransactions).toBe(1);
 
     const txBet2Parser = new NanoContractTransactionParser(
       blueprintId,
@@ -265,6 +290,10 @@ describe('full cycle of bet nano contract', () => {
     const txSetResultData = await wallet.getFullTxById(txSetResult.hash);
     expect(isNanoContractCreateTx(txSetResultData.tx)).toBe(false);
 
+    // We must have one transaction in the address1
+    const address1Meta = await wallet.storage.store.getAddressMeta(address1);
+    expect(address1Meta.numTransactions).toBe(1);
+
     const txSetResultParser = new NanoContractTransactionParser(
       blueprintId,
       'set_result',
@@ -290,7 +319,7 @@ describe('full cycle of bet nano contract', () => {
         {
           type: 'withdrawal',
           token: NATIVE_TOKEN_UID,
-          amount: 300,
+          amount: 300n,
           address: address2,
         },
       ],
@@ -300,6 +329,10 @@ describe('full cycle of bet nano contract', () => {
 
     const txWithdrawalData = await wallet.getFullTxById(txWithdrawal.hash);
     expect(isNanoContractCreateTx(txWithdrawalData)).toBe(false);
+
+    // We must have two transactions in the address2
+    const address2Meta2 = await wallet.storage.store.getAddressMeta(address2);
+    expect(address2Meta2.numTransactions).toBe(2);
 
     const txWithdrawalParser = new NanoContractTransactionParser(
       blueprintId,
@@ -511,7 +544,7 @@ describe('full cycle of bet nano contract', () => {
           {
             type: 'deposit',
             token: NATIVE_TOKEN_UID,
-            amount: 100,
+            amount: 100n,
           },
         ],
       })
@@ -526,7 +559,7 @@ describe('full cycle of bet nano contract', () => {
           {
             type: 'deposit',
             token: NATIVE_TOKEN_UID,
-            amount: 100,
+            amount: 100n,
           },
         ],
       })
@@ -541,7 +574,7 @@ describe('full cycle of bet nano contract', () => {
           {
             type: 'deposit',
             token: NATIVE_TOKEN_UID,
-            amount: 100,
+            amount: 100n,
           },
         ],
       })

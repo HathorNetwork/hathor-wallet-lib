@@ -49,6 +49,7 @@ import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../utils/address';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction } from '../nano_contracts/utils';
+import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
 
 /**
@@ -704,10 +705,10 @@ class HathorWallet extends EventEmitter {
         uid,
         numTransactions: 0,
         balance: {
-          tokens: { unlocked: 0, locked: 0 },
+          tokens: { unlocked: 0n, locked: 0n },
           authorities: {
-            mint: { unlocked: 0, locked: 0 },
-            melt: { unlocked: 0, locked: 0 },
+            mint: { unlocked: 0n, locked: 0n },
+            melt: { unlocked: 0n, locked: 0n },
           },
         },
       };
@@ -790,7 +791,7 @@ class HathorWallet extends EventEmitter {
         txId: tx.tx_id,
         timestamp: tx.timestamp,
         voided: tx.is_voided,
-        balance: txbalance[uid] || 0,
+        balance: txbalance[uid] || 0n,
         version: tx.version,
         ncId: tx.nc_id,
         ncMethod: tx.nc_method,
@@ -869,10 +870,10 @@ class HathorWallet extends EventEmitter {
 
     // Address information that will be calculated below
     const addressInfo = {
-      total_amount_received: 0,
-      total_amount_sent: 0,
-      total_amount_available: 0,
-      total_amount_locked: 0,
+      total_amount_received: 0n,
+      total_amount_sent: 0n,
+      total_amount_available: 0n,
+      total_amount_locked: 0n,
       token,
       index,
     };
@@ -971,10 +972,10 @@ class HathorWallet extends EventEmitter {
     };
     /** @type {UtxoDetails} */
     const utxoDetails = {
-      total_amount_available: 0,
-      total_utxos_available: 0,
-      total_amount_locked: 0,
-      total_utxos_locked: 0,
+      total_amount_available: 0n,
+      total_utxos_available: 0n,
+      total_amount_locked: 0n,
+      total_utxos_locked: 0n,
       utxos: [],
     };
     const nowTs = Math.floor(Date.now() / 1000);
@@ -998,10 +999,10 @@ class HathorWallet extends EventEmitter {
       utxoDetails.utxos.push(utxoInfo);
       if (isLocked) {
         utxoDetails.total_amount_locked += utxo.value;
-        utxoDetails.total_utxos_locked += 1;
+        utxoDetails.total_utxos_locked += 1n;
       } else {
         utxoDetails.total_amount_available += utxo.value;
-        utxoDetails.total_utxos_available += 1;
+        utxoDetails.total_utxos_available += 1n;
       }
     }
     return utxoDetails;
@@ -1074,7 +1075,7 @@ class HathorWallet extends EventEmitter {
     }
 
     return transactionUtils.selectUtxos(
-      utxos.filter(utxo => utxo.authorities === 0),
+      utxos.filter(utxo => utxo.authorities === 0n),
       amount
     );
   }
@@ -1111,7 +1112,7 @@ class HathorWallet extends EventEmitter {
     const utxoDetails = await this.getUtxos({ ...options, only_available_utxos: true });
     const inputs = [];
     const utxos = [];
-    let total_amount = 0;
+    let total_amount = 0n;
     for (let i = 0; i < utxoDetails.utxos.length; i++) {
       if (inputs.length === this.storage.version.max_number_inputs) {
         // Max number of inputs reached
@@ -1322,7 +1323,12 @@ class HathorWallet extends EventEmitter {
   }
 
   async onNewTx(wsData) {
-    const newTx = wsData.history;
+    const parseResult = IHistoryTxSchema.safeParse(wsData.history);
+    if (!parseResult.success) {
+      this.logger.error(parseResult.error);
+      return;
+    }
+    const newTx = parseResult.data;
     const storageTx = await this.storage.getTx(newTx.tx_id);
     const isNewTx = storageTx === null;
 
@@ -1769,7 +1775,7 @@ class HathorWallet extends EventEmitter {
   async getMintAuthority(tokenUid, options = {}) {
     const newOptions = {
       token: tokenUid,
-      authorities: 1, // mint authority
+      authorities: 1n, // mint authority
       only_available_utxos: options.only_available_utxos ?? false,
     };
     if (!options.many) {
@@ -1803,7 +1809,7 @@ class HathorWallet extends EventEmitter {
   async getMeltAuthority(tokenUid, options = {}) {
     const newOptions = {
       token: tokenUid,
-      authorities: 2, // melt authority
+      authorities: 2n, // melt authority
       only_available_utxos: options.only_available_utxos ?? false,
     };
     if (!options.many) {

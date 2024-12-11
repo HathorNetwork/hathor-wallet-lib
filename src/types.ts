@@ -27,7 +27,7 @@ export function getDefaultLogger(): ILogger {
   return console as ILogger;
 }
 
-export type OutputValueType = number;
+export type OutputValueType = bigint;
 
 export interface ITxSignatureData {
   ncCallerSignature: Buffer | null;
@@ -129,7 +129,7 @@ export interface IHistoryTx {
   nc_method?: string; // For nano contract
   nc_args?: string; // For nano contract. Args in hex
   nc_pubkey?: string; // For nano contract. Pubkey in hex
-  first_block?: string;
+  first_block?: string | null;
 }
 
 export enum TxHistoryProcessingStatus {

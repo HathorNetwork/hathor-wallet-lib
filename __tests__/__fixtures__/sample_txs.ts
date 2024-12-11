@@ -6,7 +6,7 @@ export const nftCreationTx = {
   is_voided: false,
   inputs: [
     {
-      value: 100,
+      value: 100n,
       token_data: 0,
       script: 'dqkUaf+xVJ8uAPML/AzwuSB+2W9/M7qIrA==',
       decoded: {
@@ -21,7 +21,7 @@ export const nftCreationTx = {
   ],
   outputs: [
     {
-      value: 1,
+      value: 1n,
       token_data: 0,
       // Decoded script: 5ipfs://QmPCSXNDyPdhU9oQFpxFsNN3nTjg9ZoqESKY5n9Gp1XSJc
       script: 'NWlwZnM6Ly9RbVBDU1hORHlQZGhVOW9RRnB4RnNOTjNuVGpnOVpvcUVTS1k1bjlHcDFYU0pjrA==',
@@ -31,7 +31,7 @@ export const nftCreationTx = {
       selected_as_input: false,
     },
     {
-      value: 98,
+      value: 98n,
       token_data: 0,
       script: 'dqkUQcQx/3rV1s5VZXqZPc1dkQbPo6eIrA==',
       decoded: {
@@ -44,7 +44,7 @@ export const nftCreationTx = {
       selected_as_input: false,
     },
     {
-      value: 1,
+      value: 1n,
       token_data: 1,
       script: 'dqkUQcQx/3rV1s5VZXqZPc1dkQbPo6eIrA==',
       decoded: {
@@ -57,7 +57,7 @@ export const nftCreationTx = {
       selected_as_input: false,
     },
     {
-      value: 1,
+      value: 1n,
       token_data: 129,
       script: 'dqkU1YP+t130UoYD+3ys9MYt1zkWeY6IrA==',
       decoded: {
@@ -70,7 +70,7 @@ export const nftCreationTx = {
       selected_as_input: false,
     },
     {
-      value: 2,
+      value: 2n,
       token_data: 129,
       script: 'dqkULlcsARvA+pQS8qytBr6Ryjc/SLeIrA==',
       decoded: {
