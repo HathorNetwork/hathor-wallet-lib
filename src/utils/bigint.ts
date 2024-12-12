@@ -19,47 +19,43 @@ import { getDefaultLogger } from '../types';
 export const JSONBigInt = {
   /* eslint-disable @typescript-eslint/no-explicit-any */
   parse(text: string): any {
-    function bigIntReviver(_key: string, value: any, context: { source: string }): any {
-      if (!Number.isInteger(value)) {
-        // No special handling needed for non-integer values.
-        return value;
-      }
-
-      let { source } = context;
-      if (source.includes('e') || source.includes('E')) {
-        // Values with exponential notation (such as 10e2) are always Number.
-        return value;
-      }
-
-      if (source.includes('.')) {
-        // If value is an integer and contains a '.', it must be like '123.0', so we extract the integer part only.
-        let zeroes: string;
-        [source, zeroes] = source.split('.');
-
-        if (zeroes.split('').some(char => char !== '0')) {
-          // This case shouldn't happen but we'll prohibit it to be safe. For example, if the source is
-          // '12345678901234567890.1', JS will parse it as an integer with loss of precision, `12345678901234567000`.
-          throw Error(`large float will lose precision! in "${text}"`);
-        }
-      }
-
-      const bigIntValue = BigInt(source);
-      if (bigIntValue !== BigInt(value)) {
-        // If the parsed value is an integer and its BigInt representation is a different value,
-        // it means we lost precision, so we return the BigInt.
-        return bigIntValue;
-      }
-
-      // No special handling needed.
-      return value;
-    }
-
     // @ts-expect-error TypeScript hasn't been updated with the `context` argument from Node v22.
-    return JSON.parse(text, bigIntReviver);
+    return JSON.parse(text, this.bigIntReviver);
   },
 
   stringify(value: any, space?: string | number): string {
     return JSON.stringify(value, this.bigIntReplacer, space);
+  },
+
+  bigIntReviver(_key: string, value: any, context: { source: string }): any {
+    if (typeof value !== 'number') {
+      // No special handling needed for non-number values.
+      return value;
+    }
+
+    try {
+      const bigIntValue = BigInt(context.source);
+      if (bigIntValue < Number.MIN_SAFE_INTEGER || bigIntValue > Number.MAX_SAFE_INTEGER) {
+        // We only return the value as a BigInt if it's in the unsafe range.
+        return bigIntValue;
+      }
+
+      // Otherwise, we can keep it as a Number.
+      return value;
+    } catch (e) {
+      if (
+        e instanceof SyntaxError &&
+        e.message === `Cannot convert ${context.source} to a BigInt`
+      ) {
+        // When this error happens, it means the number cannot be converted to a BigInt,
+        // so it's a double, for example '123.456' or '1e2'.
+        return value;
+      }
+      // This should never happen, any other error thrown by BigInt() is unexpected.
+      const logger = getDefaultLogger();
+      logger.error(`unexpected error in bigIntReviver: ${e}`);
+      throw e;
+    }
   },
 
   bigIntReplacer(_key: string, value_: any): any {
