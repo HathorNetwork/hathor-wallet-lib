@@ -5,18 +5,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { TransactionTemplate } from './instructions';
+import { TransactionTemplateType } from './instructions';
 import { TxTemplateContext } from './context';
 import { IHistoryTx, OutputValueType } from '../../types';
 import Transaction from '../../models/transaction';
 import Network from '../../models/network';
-import {
-  FullNodeInput,
-  FullNodeOutput,
-  FullNodeToken,
-  FullNodeTxResponse,
-  Utxo,
-} from '../../wallet/types';
+import { Utxo } from '../../wallet/types';
 
 export interface IGetUtxosOptions {
   token?: string,
@@ -39,15 +33,15 @@ export interface IGetUtxosOptions {
 
 export interface IGetUtxoResponse {
   utxos: Utxo[],
-  changeAmount: number,
+  changeAmount: OutputValueType,
 }
 
 export interface ITxTemplateInterpreter {
-  build(instructions: TransactionTemplate): Promise<Transaction>;
+  build(instructions: TransactionTemplateType): Promise<Transaction>;
   getAddress(markAsUsed?: boolean): Promise<string>;
   getChangeAddress(ctx: TxTemplateContext): Promise<string>;
   getUtxos(amount: OutputValueType, options: IGetUtxosOptions): Promise<IGetUtxoResponse>;
-  getAuthorities(amount: OutputValueType, options: IGetUtxosOptions): Promise<Utxo[]>;
+  getAuthorities(count: number, options: IGetUtxosOptions): Promise<Utxo[]>;
   getTx(txId: string): Promise<IHistoryTx>;
   getNetwork(): Network;
 }

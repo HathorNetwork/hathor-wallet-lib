@@ -8,31 +8,7 @@
 import { NATIVE_TOKEN_UID } from '../../constants';
 import { z } from 'zod';
 
-
-// export const INSTRUCTION_TYPES = {
-//   InputUtxo:       'input/utxo',
-//   InputAuthority:  'input/authority',
-//   InputRaw:        'input/raw',
-//   OutputRaw:       'output/raw',
-//   OutputToken:     'output/token',
-//   OutputAuthority: 'output/authority',
-//   OutputData:      'output/data',
-//   ActionShuffle:   'action/shuffle',
-//   ActionChange:    'action/change',
-//   ActionConfig:    'action/config',
-//   ActionSetvar:    'action/setvar',
-// };
-
-// export type InstructionType = typeof INSTRUCTION_TYPES[keyof typeof INSTRUCTION_TYPES];
-
-// export type TemplateVarValue = string | number;
-// export type TemplateVarName = string;
-// export type TemplateVarRef = `{${TemplateVarName}}`;
-// export const TEMPLATE_VAR_REF_RE = /^{(.+)}$/;
-// export type ins.type === 'input/rawemplateVar<T extends TemplateVarValue> = TemplateVarRef | T;
-
 const TEMPLATE_REFERENCE_RE = /\{[\w\d]+\}/;
-
 export const TemplateRef = z.string().regex(TEMPLATE_REFERENCE_RE);
 
 /**
@@ -201,7 +177,7 @@ export const SetVarInstruction = z.object({
   type: z.literal('action/setvar'),
   name: z.string().regex(/[\d\w]+/),
   value: z.any().optional(),
-  action: z.enum(['get_wallet_address', 'get_wallet_balance']),
+  action: z.enum(['get_wallet_address', 'get_wallet_balance']).optional(),
   options: SetVarOptions.optional(),
 });
 
@@ -222,3 +198,4 @@ export const TxTemplateInstruction = z.discriminatedUnion('type', [
 export type TxTemplateInstructionType = z.infer<typeof TxTemplateInstruction>;
 
 export const TransactionTemplate = z.array(TxTemplateInstruction);
+export type TransactionTemplateType = z.infer<typeof TransactionTemplate>;

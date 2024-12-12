@@ -77,10 +77,10 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
     return await this.wallet.getUtxosForAmount(amount, options);
   }
 
-  async getAuthorities(amount: OutputValueType, options: IGetUtxosOptions): Promise<Utxo[]> {
+  async getAuthorities(count: number, options: IGetUtxosOptions): Promise<Utxo[]> {
     const newOptions = {
       ...options,
-      max_utxos: amount,
+      max_utxos: count,
     };
     let utxos: Utxo[] = [];
     // XXX: This may throw, but maybe we should let it.

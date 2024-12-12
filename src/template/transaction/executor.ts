@@ -15,6 +15,8 @@ import {
   DataOutputInstruction,
   RawInputInstruction,
   RawOutputInstruction,
+  SetVarGetWalletAddressOpts,
+  SetVarGetWalletBalanceOpts,
   SetVarInstruction,
   ShuffleInstruction,
   TokenOutputInstruction,
@@ -34,6 +36,7 @@ import {
 import { createOutputScriptFromAddress } from '../../utils/address';
 import ScriptData from '../../models/script_data';
 import { getWalletAddress, getWalletBalance } from './setvarcommands';
+import { OutputValueType } from 'src/types';
 
 /**
  * Execution for RawInputInstruction
@@ -118,12 +121,12 @@ export async function execAuthoritySelectInstruction(
   const count = getVariable<number>(ins.count, ctx.vars,AuthoritySelectInstruction.shape.count);
   const address = getVariable<string|undefined>(ins.address, ctx.vars,AuthoritySelectInstruction.shape.address);
 
-  let authoritiesInt = 0;
+  let authoritiesInt = 0n;
   if (authority === 'mint') {
-    authoritiesInt += 1;
+    authoritiesInt += 1n;
   }
   if (authority === 'melt') {
-    authoritiesInt += 2;
+    authoritiesInt += 2n;
   }
 
   // Find utxos
@@ -166,7 +169,7 @@ export async function execRawOutputInstruction(
   const tokenIndex = ctx.addToken(token);
   let tokenData = tokenIndex;
 
-  let amount = 0;
+  let amount: OutputValueType|undefined = 0n;
   switch (authority) {
     case 'mint':
       amount = TOKEN_MINT_MASK;
@@ -178,6 +181,7 @@ export async function execRawOutputInstruction(
       break;
     default: {
       amount = getVariable<bigint|undefined>(ins.amount, ctx.vars,RawOutputInstruction.shape.amount);
+      break;
     }
 
   }
@@ -212,11 +216,11 @@ export async function execDataOutputInstruction(
   const tokenData = ctx.addToken(token);
 
   // Add balance to the ctx.balance
-  ctx.balance.addOutput(1, token);
+  ctx.balance.addOutput(1n, token);
 
   const dataScript = new ScriptData(data);
   const script = dataScript.createScript();
-  const output = new Output(1, script, { tokenData });
+  const output = new Output(1n, script, { tokenData });
   ctx.addOutput(position, output);
 }
 
@@ -263,7 +267,7 @@ export async function execAuthorityOutputInstruction(
   const tokenIndex = ctx.addToken(token);
   let tokenData = tokenIndex;
 
-  let amount = 0;
+  let amount: OutputValueType|undefined = 0n;
   switch(authority) {
     case 'mint':
       amount = TOKEN_MINT_MASK;
@@ -294,7 +298,7 @@ export async function execShuffleInstruction(
   ctx: TxTemplateContext,
   ins: z.infer<typeof ShuffleInstruction>
 ) {
-  const target = ins.target;
+  const { target } = ins;
 
   // The token array should never be shuffled since outputs have a "pointer" to the token position
   // on the token array, so shuffling would make the outputs target different outputs.
@@ -316,11 +320,9 @@ export async function execChangeInstruction(
   ctx: TxTemplateContext,
   ins: z.infer<typeof ChangeInstruction>
 ) {
-  const token = ins.token ? getVariable<string>(ins.token, ctx.vars) : null;
-  const address = ins.address
-    ? getVariable<string>(ins.address, ctx.vars)
-    : await interpreter.getChangeAddress(ctx);
-  const timelock = ins.timelock ? getVariable<number>(ins.timelock, ctx.vars) : null;
+  const token = getVariable<string|undefined>(ins.token, ctx.vars,ChangeInstruction.shape.token);
+  const address = getVariable<string|undefined>(ins.address, ctx.vars,ChangeInstruction.shape.address) ?? await interpreter.getChangeAddress(ctx);
+  const timelock = getVariable<number|undefined>(ins.timelock, ctx.vars, ChangeInstruction.shape.timelock);
 
   const tokensToCheck: string[] = [];
   if (token) {
@@ -351,7 +353,7 @@ export async function execChangeInstruction(
     if (balance.mint_authorities > 0) {
       // Need to create a token output
       // Add balance to the ctx.balance
-      ctx.balance.addOutput(balance.mint_authorities, tokenUid, 'mint');
+      ctx.balance.addOutputAuthority(balance.mint_authorities, tokenUid, 'mint');
 
       // Creates an output with the value of the outstanding balance
       const output = new Output(TOKEN_MINT_MASK, script, { timelock, tokenData });
@@ -361,7 +363,7 @@ export async function execChangeInstruction(
     if (balance.melt_authorities > 0) {
       // Need to create a token output
       // Add balance to the ctx.balance
-      ctx.balance.addOutput(balance.melt_authorities, tokenUid, 'melt');
+      ctx.balance.addOutputAuthority(balance.melt_authorities, tokenUid, 'melt');
 
       // Creates an output with the value of the outstanding balance
       const output = new Output(TOKEN_MELT_MASK, script, { timelock, tokenData });
@@ -378,17 +380,22 @@ export async function execConfigInstruction(
   ctx: TxTemplateContext,
   ins: z.infer<typeof ConfigInstruction>
 ) {
-  if (ins.version) {
-    ctx.version = getVariable<number>(ins.version, ctx.vars);
+  const version = getVariable<number|undefined>(ins.version, ctx.vars, ConfigInstruction.shape.version);
+  const signalBits = getVariable<number|undefined>(ins.signalBits, ctx.vars, ConfigInstruction.shape.signalBits);
+  const tokenName = getVariable<string|undefined>(ins.tokenName, ctx.vars, ConfigInstruction.shape.tokenName);
+  const tokenSymbol = getVariable<string|undefined>(ins.tokenSymbol, ctx.vars, ConfigInstruction.shape.tokenSymbol);
+
+  if (version) {
+    ctx.version = version;
   }
-  if (ins.signalBits) {
-    ctx.signalBits = getVariable<number>(ins.signalBits, ctx.vars);
+  if (signalBits) {
+    ctx.signalBits = signalBits;
   }
-  if (ins.tokenName) {
-    ctx.tokenName = getVariable<string>(ins.tokenName, ctx.vars);
+  if (tokenName) {
+    ctx.tokenName = tokenName;
   }
-  if (ins.tokenSymbol) {
-    ctx.tokenSymbol = getVariable<string>(ins.tokenSymbol, ctx.vars);
+  if (tokenSymbol) {
+    ctx.tokenSymbol = tokenSymbol;
   }
 }
 
@@ -400,28 +407,30 @@ export async function execSetVarInstruction(
   ctx: TxTemplateContext,
   ins: z.infer<typeof SetVarInstruction>
 ) {
-  if (ins.action) {
-    if (ins.action === 'get_wallet_address') {
-      // Call action passing ins.options
-      const newOptions = ins.options ?? {};
-      const address = await getWalletAddress(interpreter, ctx, newOptions);
-      ctx.vars[ins.name] = address;
-      return;
-    }
-    if (ins.action === 'get_wallet_balance') {
-      // Call action passing ins.options
-      const newOptions = ins.options ?? {};
-      const balance = await getWalletBalance(interpreter, ctx, newOptions);
-      ctx.vars[ins.name] = balance;
-      return;
-    }
-    throw new Error('Invalid setvar command');
-  }
-
-  if (ins.value) {
+  if (!ins.action) {
     ctx.vars[ins.name] = ins.value;
     return;
   }
 
-  throw new Error('Invalid SetVar command');
+  if (ins.action === 'get_wallet_address') {
+    // Validate options and get token variable
+    const options = SetVarGetWalletAddressOpts.default({}).parse(ins.options);
+    const token = getVariable<string>(options.token, ctx.vars, SetVarGetWalletAddressOpts.shape.token);
+    options.token = token;
+    // Call action with valid options
+    const address = await getWalletAddress(interpreter, ctx, options);
+    ctx.vars[ins.name] = address;
+    return;
+  }
+  if (ins.action === 'get_wallet_balance') {
+    // Validate options and get token variable
+    const options = SetVarGetWalletBalanceOpts.default({}).parse(ins.options);
+    const token = getVariable<string>(options.token, ctx.vars, SetVarGetWalletBalanceOpts.shape.token);
+    options.token = token;
+    // Call action with valid options
+    const balance = await getWalletBalance(interpreter, ctx, options);
+    ctx.vars[ins.name] = balance;
+    return;
+  }
+  throw new Error('Invalid setvar command');
 }

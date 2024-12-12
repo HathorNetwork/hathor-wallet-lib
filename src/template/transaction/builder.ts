@@ -5,229 +5,180 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { z } from 'zod';
 import {
-  TemplateVar,
   TxTemplateInstruction,
   TransactionTemplate,
-  TemplateVarName,
-  TemplateVarValue,
-  SetVarCommand,
-  SetVarOptions,
+  TransactionTemplateType,
+  TxTemplateInstructionType,
+  RawInputInstruction,
+  UtxoSelectInstruction,
+  AuthoritySelectInstruction,
+  RawOutputInstruction,
+  DataOutputInstruction,
+  TokenOutputInstruction,
+  AuthorityOutputInstruction,
+  ShuffleInstruction,
+  ChangeInstruction,
+  CompleteTxInstruction,
+  ConfigInstruction,
+  SetVarInstruction,
 } from './instructions';
 
+// Helper schemas to validate the arguments of each command in the builder args
+const RawInputInsArgs = RawInputInstruction.omit({ type: true });
+const UtxoSelectInsArgs = UtxoSelectInstruction.omit({type: true});
+const AuthoritySelectInsArgs = AuthoritySelectInstruction.omit({type: true});
+const RawOutputInsArgs = RawOutputInstruction.omit({type: true});
+const DataOutputInsArgs = DataOutputInstruction.omit({type: true});
+const TokenOutputInsArgs = TokenOutputInstruction.omit({type: true});
+const AuthorityOutputInsArgs = AuthorityOutputInstruction.omit({type: true});
+const ShuffleInsArgs = ShuffleInstruction.omit({type: true});
+const ChangeInsArgs = ChangeInstruction.omit({type: true});
+const CompleteTxInsArgs = CompleteTxInstruction.omit({type: true});
+const ConfigInsArgs = ConfigInstruction.omit({type: true});
+const SetVarInsArgs = SetVarInstruction.omit({type: true});
+
 export class TransactionTemplateBuilder {
-  instructions: TxTemplateInstruction[];
+  template: TransactionTemplateType;
 
   constructor() {
-    this.instructions = [];
+    this.template = [];
   }
 
-  static from(instructions: TxTemplateInstruction[]): TransactionTemplateBuilder {
+  static from(instructions: TransactionTemplateType): TransactionTemplateBuilder {
+    const parsedTemplate = TransactionTemplate.parse(instructions);
     const tt = new TransactionTemplateBuilder();
-    tt.instructions = instructions;
+    tt.template = parsedTemplate;
     return tt;
   }
 
-  addInstruction(ins: TxTemplateInstruction): TransactionTemplateBuilder {
-    this.instructions.push(ins);
+  build(): TransactionTemplateType {
+    return this.template;
+  }
+
+  addInstruction(ins: TxTemplateInstructionType): TransactionTemplateBuilder {
+    this.template.push(TxTemplateInstruction.parse(ins));
     return this;
   }
 
-  // TODO: other adders
-
-  addRawInput(txId: TemplateVar<string>, index: TemplateVar<number>, position: number = -1) {
-    this.instructions.push({
+  addRawInput(ins: z.infer<typeof RawInputInsArgs>) {
+    const parsedIns = RawInputInstruction.parse({
       type: 'input/raw',
-      position,
-      txId,
-      index,
+      ...ins,
     });
+    this.template.push(parsedIns);
 
     return this;
   }
 
-  addUtxoSelect(
-    fill: TemplateVar<number>,
-    token?: TemplateVar<string>,
-    address?: TemplateVar<string>,
-    autoChange?: boolean,
-    position: number = -1,
-  ) {
-    const ins: TxTemplateInstruction = {
+  addUtxoSelect(ins: z.infer<typeof UtxoSelectInsArgs>) {
+    const parsedIns = UtxoSelectInstruction.parse({
       type: 'input/utxo',
-      fill,
-      position,
-    };
-    if (token) ins.token = token;
-    if (address) ins.address = address;
-    if (autoChange) ins.autoChange = autoChange;
-
-    this.instructions.push(ins);
-    return this;
-  }
-
-  addAuthoritySelect(
-    authority: 'mint'|'melt',
-    token: TemplateVar<string>,
-    amount?: TemplateVar<number>,
-    address?: TemplateVar<string>,
-    position: number = -1,
-  ) {
-    const ins: TxTemplateInstruction = {
-      type: 'input/authority',
-      authority,
-      token,
-      position,
-    };
-    if (amount) ins.amount = amount;
-    if (address) ins.address = address;
-
-    this.instructions.push(ins);
-    return this;
-  }
-
-  addRawOutput(
-    amount: TemplateVar<number>,
-    script: TemplateVar<string>,
-    token: TemplateVar<string>,
-    position: number = -1
-  ) {
-    this.instructions.push({
-      type: 'output/raw',
-      position,
-      amount,
-      script,
-      token,
+      ...ins
     });
 
+    this.template.push(parsedIns);
     return this;
   }
 
-  addDataOutput(
-    data: TemplateVar<string>,
-    position: number = -1,
-  ) {
-    const ins: TxTemplateInstruction = {
+  addAuthoritySelect(ins: z.infer<typeof AuthoritySelectInsArgs>) {
+    const parsedIns = AuthoritySelectInstruction.parse({
+      type: 'input/authority',
+      ...ins,
+    });
+    this.template.push(parsedIns);
+
+    return this;
+  }
+
+  addRawOutput(ins: z.infer<typeof RawOutputInsArgs>) {
+    const parsedIns = RawOutputInstruction.parse({
+      type: 'output/raw',
+      ...ins,
+    });
+    this.template.push(parsedIns);
+
+    return this;
+  }
+
+  addDataOutput(ins: z.infer<typeof DataOutputInsArgs>) {
+    const parsedIns = DataOutputInstruction.parse({
       type: 'output/data',
-      data,
-      position,
-    };
+      ...ins,
+    });
+    this.template.push(parsedIns);
 
-    this.instructions.push(ins);
     return this;
   }
 
-  addTokenOutput(
-    amount: TemplateVar<number>,
-    token?: TemplateVar<string>,
-    address?: TemplateVar<string>,
-    timelock?: TemplateVar<number>,
-    checkAddress?: boolean,
-    position: number = -1,
-  ) {
-    const ins: TxTemplateInstruction = {
+  addTokenOutput(ins: z.infer<typeof TokenOutputInsArgs>) {
+    const parsedIns = TokenOutputInstruction.parse({
       type: 'output/token',
-      amount,
-      position,
-    };
-    if (token) ins.token = token;
-    if (address) ins.address = address;
-    if (timelock) ins.timelock = timelock;
-    if (checkAddress) ins.checkAddress = checkAddress;
+      ...ins,
+    });
+    this.template.push(parsedIns);
 
-    this.instructions.push(ins);
     return this;
   }
 
-  addAuthorityOutput(
-    amount: TemplateVar<number>,
-    token: TemplateVar<string>,
-    authority: 'mint'|'melt',
-    address?: TemplateVar<string>,
-    timelock?: TemplateVar<number>,
-    checkAddress?: boolean,
-    position: number = -1,
-  ) {
-    const ins: TxTemplateInstruction = {
+  addAuthorityOutput(ins: z.infer<typeof AuthorityOutputInsArgs>) {
+    const parsedIns = AuthorityOutputInstruction.parse({
       type: 'output/authority',
-      amount,
-      token,
-      authority,
-      position,
-    };
-    if (address) ins.address = address;
-    if (timelock) ins.timelock = timelock;
-    if (checkAddress) ins.checkAddress = checkAddress;
+      ...ins,
+    });
+    this.template.push(parsedIns);
 
-    this.instructions.push(ins);
     return this;
   }
 
-  addShuffleAction(
-    target: 'inputs' | 'outputs' | 'all',
-  ) {
-    const ins: TxTemplateInstruction = {
+  addShuffleAction(ins: z.infer<typeof ShuffleInsArgs>) {
+    const parsedIns = ShuffleInstruction.parse({
       type: 'action/shuffle',
-      target,
-    };
+      ...ins,
+    });
+    this.template.push(parsedIns);
 
-    this.instructions.push(ins);
     return this;
   }
 
-  addChangeAction(
-    token?: TemplateVar<string>,
-    address?: TemplateVar<string>,
-    timelock?: TemplateVar<number>,
-  ) {
-    const ins: TxTemplateInstruction = {
+  addChangeAction(ins: z.infer<typeof ChangeInsArgs>) {
+    const parsedIns = ChangeInstruction.parse({
       type: 'action/change',
-    };
-    if (token) ins.token = token;
-    if (address) ins.address = address;
-    if (timelock) ins.timelock = timelock;
+      ...ins,
+    });
+    this.template.push(parsedIns);
 
-    this.instructions.push(ins);
     return this;
   }
 
-  addConfigAction(
-    version?: TemplateVar<number>,
-    signalBits?: TemplateVar<number>,
-    tokenName?: TemplateVar<string>,
-    tokenSymbol?: TemplateVar<string>,
-  ) {
-    const ins: TxTemplateInstruction = {
+  addCompleteAction(ins: z.infer<typeof CompleteTxInsArgs>) {
+    const parsedIns = CompleteTxInstruction.parse({
+      type: 'action/change',
+      ...ins,
+    });
+    this.template.push(parsedIns);
+
+    return this;
+  }
+
+  addConfigAction(ins: z.infer<typeof ConfigInsArgs>) {
+    const parsedIns = ConfigInstruction.parse({
       type: 'action/config',
-    };
-    if (version) ins.version = version;
-    if (signalBits) ins.signalBits = signalBits;
-    if (tokenName) ins.tokenName = tokenName;
-    if (tokenSymbol) ins.tokenSymbol = tokenSymbol;
+      ...ins,
+    });
+    this.template.push(parsedIns);
 
-    this.instructions.push(ins);
     return this;
   }
 
-  addSetVarAction(
-    name: TemplateVarName,
-    value?: TemplateVarValue,
-    action?: SetVarCommand,
-    options?: SetVarOptions,
-  ) {
-    const ins: TxTemplateInstruction = {
+  addSetVarAction(ins: z.infer<typeof SetVarInsArgs>) {
+    const parsedIns = SetVarInstruction.parse({
       type: 'action/setvar',
-      name,
-    };
-    if (value) ins.value = value;
-    if (action) ins.action = action;
-    if (options) ins.options = options;
+      ...ins,
+    });
+    this.template.push(parsedIns);
 
-    this.instructions.push(ins);
     return this;
-  }
-
-  export(): TransactionTemplate {
-    return this.instructions;
   }
 }

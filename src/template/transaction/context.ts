@@ -6,14 +6,14 @@
  */
 /* eslint max-classes-per-file: ["error", 2] */
 
-import { IHistoryTx } from '../../types';
+import { IHistoryTx, OutputValueType } from '../../types';
 import Input from '../../models/input';
 import Output from '../../models/output';
 import transactionUtils from '../../utils/transaction';
 import { DEFAULT_TX_VERSION, NATIVE_TOKEN_UID } from '../../constants';
 
 export interface TokenBalance {
-  tokens: number;
+  tokens: OutputValueType;
   mint_authorities: number;
   melt_authorities: number;
 }
@@ -28,7 +28,7 @@ export class TxBalance {
   getTokenBalance(token: string): TokenBalance {
     if (!this.balance[token]) {
       this.balance[token] = {
-        tokens: 0,
+        tokens: 0n,
         mint_authorities: 0,
         melt_authorities: 0,
       };
@@ -64,7 +64,7 @@ export class TxBalance {
     this.setTokenBalance(token, balance);
   }
 
-  addOutput(amount: number, token: string) {
+  addOutput(amount: OutputValueType, token: string) {
     const balance = this.getTokenBalance(token);
     balance.tokens -= amount;
     this.setTokenBalance(token, balance);
