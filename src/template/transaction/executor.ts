@@ -158,7 +158,7 @@ export async function execAuthoritySelectInstruction(
   // Add utxos as inputs on the transaction
   const inputs: Input[] = [];
   for (const utxo of utxos) {
-    ctx.log(`Found authority utxo ${utxo.authorities} of ${utxo.tokenId}`);
+    ctx.log(`Found authority utxo ${utxo.authorities} of ${token}`);
     ctx.log(`Create input ${utxo.index} / ${utxo.txId}`);
     inputs.push(new Input(utxo.txId, utxo.index));
   }
