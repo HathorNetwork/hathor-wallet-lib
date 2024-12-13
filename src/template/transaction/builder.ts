@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod';
+import { JSONBigInt } from '../../utils/bigint';
 import {
   TxTemplateInstruction,
   TransactionTemplate,
@@ -57,12 +58,16 @@ export class TransactionTemplateBuilder {
     return this.template;
   }
 
+  export(space:number = 2): string {
+    return JSONBigInt.stringify(this.template, space);
+  }
+
   addInstruction(ins: TxTemplateInstructionType): TransactionTemplateBuilder {
     this.template.push(TxTemplateInstruction.parse(ins));
     return this;
   }
 
-  addRawInput(ins: z.infer<typeof RawInputInsArgs>) {
+  addRawInput(ins: z.input<typeof RawInputInsArgs>) {
     const parsedIns = RawInputInstruction.parse({
       type: 'input/raw',
       ...ins,
@@ -72,7 +77,7 @@ export class TransactionTemplateBuilder {
     return this;
   }
 
-  addUtxoSelect(ins: z.infer<typeof UtxoSelectInsArgs>) {
+  addUtxoSelect(ins: z.input<typeof UtxoSelectInsArgs>) {
     const parsedIns = UtxoSelectInstruction.parse({
       type: 'input/utxo',
       ...ins
@@ -82,7 +87,7 @@ export class TransactionTemplateBuilder {
     return this;
   }
 
-  addAuthoritySelect(ins: z.infer<typeof AuthoritySelectInsArgs>) {
+  addAuthoritySelect(ins: z.input<typeof AuthoritySelectInsArgs>) {
     const parsedIns = AuthoritySelectInstruction.parse({
       type: 'input/authority',
       ...ins,
@@ -92,7 +97,7 @@ export class TransactionTemplateBuilder {
     return this;
   }
 
-  addRawOutput(ins: z.infer<typeof RawOutputInsArgs>) {
+  addRawOutput(ins: z.input<typeof RawOutputInsArgs>) {
     const parsedIns = RawOutputInstruction.parse({
       type: 'output/raw',
       ...ins,
@@ -102,7 +107,7 @@ export class TransactionTemplateBuilder {
     return this;
   }
 
-  addDataOutput(ins: z.infer<typeof DataOutputInsArgs>) {
+  addDataOutput(ins: z.input<typeof DataOutputInsArgs>) {
     const parsedIns = DataOutputInstruction.parse({
       type: 'output/data',
       ...ins,
@@ -112,7 +117,7 @@ export class TransactionTemplateBuilder {
     return this;
   }
 
-  addTokenOutput(ins: z.infer<typeof TokenOutputInsArgs>) {
+  addTokenOutput(ins: z.input<typeof TokenOutputInsArgs>) {
     const parsedIns = TokenOutputInstruction.parse({
       type: 'output/token',
       ...ins,
@@ -122,7 +127,7 @@ export class TransactionTemplateBuilder {
     return this;
   }
 
-  addAuthorityOutput(ins: z.infer<typeof AuthorityOutputInsArgs>) {
+  addAuthorityOutput(ins: z.input<typeof AuthorityOutputInsArgs>) {
     const parsedIns = AuthorityOutputInstruction.parse({
       type: 'output/authority',
       ...ins,
@@ -132,7 +137,7 @@ export class TransactionTemplateBuilder {
     return this;
   }
 
-  addShuffleAction(ins: z.infer<typeof ShuffleInsArgs>) {
+  addShuffleAction(ins: z.input<typeof ShuffleInsArgs>) {
     const parsedIns = ShuffleInstruction.parse({
       type: 'action/shuffle',
       ...ins,
@@ -142,7 +147,7 @@ export class TransactionTemplateBuilder {
     return this;
   }
 
-  addChangeAction(ins: z.infer<typeof ChangeInsArgs>) {
+  addChangeAction(ins: z.input<typeof ChangeInsArgs>) {
     const parsedIns = ChangeInstruction.parse({
       type: 'action/change',
       ...ins,
@@ -152,7 +157,7 @@ export class TransactionTemplateBuilder {
     return this;
   }
 
-  addCompleteAction(ins: z.infer<typeof CompleteTxInsArgs>) {
+  addCompleteAction(ins: z.input<typeof CompleteTxInsArgs>) {
     const parsedIns = CompleteTxInstruction.parse({
       type: 'action/change',
       ...ins,
@@ -162,7 +167,7 @@ export class TransactionTemplateBuilder {
     return this;
   }
 
-  addConfigAction(ins: z.infer<typeof ConfigInsArgs>) {
+  addConfigAction(ins: z.input<typeof ConfigInsArgs>) {
     const parsedIns = ConfigInstruction.parse({
       type: 'action/config',
       ...ins,
@@ -172,7 +177,7 @@ export class TransactionTemplateBuilder {
     return this;
   }
 
-  addSetVarAction(ins: z.infer<typeof SetVarInsArgs>) {
+  addSetVarAction(ins: z.input<typeof SetVarInsArgs>) {
     const parsedIns = SetVarInstruction.parse({
       type: 'action/setvar',
       ...ins,

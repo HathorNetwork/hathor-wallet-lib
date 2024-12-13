@@ -37,7 +37,7 @@ export interface IGetUtxoResponse {
 }
 
 export interface ITxTemplateInterpreter {
-  build(instructions: TransactionTemplateType): Promise<Transaction>;
+  build(instructions: TransactionTemplateType, debug: boolean): Promise<Transaction>;
   getAddress(markAsUsed?: boolean): Promise<string>;
   getChangeAddress(ctx: TxTemplateContext): Promise<string>;
   getUtxos(amount: OutputValueType, options: IGetUtxosOptions): Promise<IGetUtxoResponse>;

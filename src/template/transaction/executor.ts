@@ -34,6 +34,7 @@ import {
   TOKEN_MINT_MASK,
 } from '../../constants';
 import { createOutputScriptFromAddress } from '../../utils/address';
+import { JSONBigInt } from '../../utils/bigint';
 import ScriptData from '../../models/script_data';
 import { getWalletAddress, getWalletBalance } from './setvarcommands';
 import { OutputValueType } from 'src/types';
@@ -46,9 +47,11 @@ export async function execRawInputInstruction(
   ctx: TxTemplateContext,
   ins: z.infer<typeof RawInputInstruction>
 ) {
+  ctx.log(`Begin RawInputInstruction: ${JSONBigInt.stringify(ins)}`);
   const position = ins.position;
   const txId = getVariable<string>(ins.txId, ctx.vars, RawInputInstruction.shape.txId);
   const index = getVariable<number>(ins.index, ctx.vars, RawInputInstruction.shape.index);
+  ctx.log(`index(${index}), txId(${txId})`);
 
   // Find the original transaction from the input
   const origTx = await interpreter.getTx(txId);
@@ -67,10 +70,12 @@ export async function execUtxoSelectInstruction(
   ctx: TxTemplateContext,
   ins: z.infer<typeof UtxoSelectInstruction>
 ) {
+  ctx.log(`Begin UtxoSelectInstruction: ${JSONBigInt.stringify(ins)}`);
   const position = ins.position;
   const fill = getVariable<bigint>(ins.fill, ctx.vars, UtxoSelectInstruction.shape.fill);
   const token = getVariable<string>(ins.token, ctx.vars, UtxoSelectInstruction.shape.token);
   const address = getVariable<string|undefined>(ins.address, ctx.vars, UtxoSelectInstruction.shape.address);
+  ctx.log(`fill(${fill}), address(${address}), token(${token})`);
 
   const autoChange = ins.autoChange;
 
@@ -82,7 +87,13 @@ export async function execUtxoSelectInstruction(
   const { changeAmount, utxos } = await interpreter.getUtxos(fill, options);
 
   // Add utxos as inputs on the transaction
-  const inputs = utxos.map(u => new Input(u.txId, u.index));
+  const inputs: Input[] = [];
+  for (const utxo of utxos) {
+    ctx.log(`Found utxo with ${utxo.value} of ${utxo.tokenId}`);
+    ctx.log(`Create input ${utxo.index} / ${utxo.txId}`);
+    inputs.push(new Input(utxo.txId, utxo.index));
+  }
+
   // First, update balance
   for (const input of inputs) {
     const origTx = await interpreter.getTx(input.hash);
@@ -92,12 +103,15 @@ export async function execUtxoSelectInstruction(
   // Then add inputs to context
   ctx.addInput(position, ...inputs);
 
+  ctx.log(`changeAmount: ${changeAmount}`);
+
   if (autoChange && changeAmount) {
     // get change address
     let changeAddress = getVariable<string|undefined>(ins.changeAddress, ctx.vars, UtxoSelectInstruction.shape.changeAddress);
     if (!changeAddress) {
       changeAddress = await interpreter.getChangeAddress(ctx);
     }
+    ctx.log(`Creating change for address: ${changeAddress}`);
     // Token should only be on the array if present on the outputs
     const tokenData = ctx.addToken(token);
     const script = createOutputScriptFromAddress(changeAddress, interpreter.getNetwork());
@@ -115,11 +129,13 @@ export async function execAuthoritySelectInstruction(
   ctx: TxTemplateContext,
   ins: z.infer<typeof AuthoritySelectInstruction>
 ) {
+  ctx.log(`Begin AuthoritySelectInstruction: ${JSONBigInt.stringify(ins)}`);
   const position = ins.position ?? -1;
   const authority = ins.authority;
   const token = getVariable<string>(ins.token, ctx.vars, AuthoritySelectInstruction.shape.token);
   const count = getVariable<number>(ins.count, ctx.vars,AuthoritySelectInstruction.shape.count);
   const address = getVariable<string|undefined>(ins.address, ctx.vars,AuthoritySelectInstruction.shape.address);
+  ctx.log(`count(${count}), address(${address}), token(${token})`);
 
   let authoritiesInt = 0n;
   if (authority === 'mint') {
@@ -140,7 +156,12 @@ export async function execAuthoritySelectInstruction(
   const utxos = await interpreter.getAuthorities(count, options);
 
   // Add utxos as inputs on the transaction
-  const inputs = utxos.map(u => new Input(u.txId, u.index));
+  const inputs: Input[] = [];
+  for (const utxo of utxos) {
+    ctx.log(`Found authority utxo ${utxo.authorities} of ${utxo.tokenId}`);
+    ctx.log(`Create input ${utxo.index} / ${utxo.txId}`);
+    inputs.push(new Input(utxo.txId, utxo.index));
+  }
   // First, update balance
   for (const input of inputs) {
     const origTx = await interpreter.getTx(input.hash);
@@ -159,6 +180,7 @@ export async function execRawOutputInstruction(
   ctx: TxTemplateContext,
   ins: z.infer<typeof RawOutputInstruction>
 ) {
+  ctx.log(`Begin RawOutputInstruction: ${JSONBigInt.stringify(ins)}`);
   const { position, authority } = ins;
   const scriptStr = getVariable<string>(ins.script, ctx.vars,RawOutputInstruction.shape.script);
   const script = Buffer.from(scriptStr, 'hex');
@@ -173,11 +195,11 @@ export async function execRawOutputInstruction(
   switch (authority) {
     case 'mint':
       amount = TOKEN_MINT_MASK;
-      tokenData &= TOKEN_AUTHORITY_MASK;
+      tokenData |= TOKEN_AUTHORITY_MASK;
       break;
     case 'melt':
       amount = TOKEN_MELT_MASK;
-      tokenData &= TOKEN_AUTHORITY_MASK;
+      tokenData |= TOKEN_AUTHORITY_MASK;
       break;
     default: {
       amount = getVariable<bigint|undefined>(ins.amount, ctx.vars,RawOutputInstruction.shape.amount);
@@ -185,14 +207,17 @@ export async function execRawOutputInstruction(
     }
 
   }
+  ctx.log(`amount(${amount}) timelock(${timelock}) script(${script}) token(${token})`);
   if (!amount) {
     throw new Error('Raw token output missing amount');
   }
 
   // Add balance to the ctx.balance
   if (authority) {
+    ctx.log(`Creating authority output`);
     ctx.balance.addOutputAuthority(1, token, authority);
   } else {
+    ctx.log(`Creating token output`);
     ctx.balance.addOutput(amount, token);
   }
 
@@ -208,9 +233,11 @@ export async function execDataOutputInstruction(
   ctx: TxTemplateContext,
   ins: z.infer<typeof DataOutputInstruction>
 ) {
+  ctx.log(`Begin DataOutputInstruction: ${JSONBigInt.stringify(ins)}`);
   const position = ins.position;
   const data = getVariable<string>(ins.data, ctx.vars,DataOutputInstruction.shape.data);
   const token = getVariable<string>(ins.token, ctx.vars,DataOutputInstruction.shape.token);
+  ctx.log(`Creating data(${data}) output of token(${token})`);
 
   // Add token to tokens array
   const tokenData = ctx.addToken(token);
@@ -232,11 +259,13 @@ export async function execTokenOutputInstruction(
   ctx: TxTemplateContext,
   ins: z.infer<typeof TokenOutputInstruction>
 ) {
+  ctx.log(`Begin TokenOutputInstruction: ${JSONBigInt.stringify(ins)}`);
   const position = ins.position;
   const token = getVariable<string>(ins.token, ctx.vars,TokenOutputInstruction.shape.token);
   const address = getVariable<string>(ins.address, ctx.vars,TokenOutputInstruction.shape.address);
   const timelock = getVariable<number|undefined>(ins.timelock, ctx.vars, TokenOutputInstruction.shape.timelock);
   const amount = getVariable<bigint>(ins.amount, ctx.vars, TokenOutputInstruction.shape.amount);
+  ctx.log(`Creating token output with amount(${amount}) address(${address}) timelock(${timelock}) token(${token})`);
 
   // Add token to tokens array
   const tokenData = ctx.addToken(token);
@@ -257,25 +286,26 @@ export async function execAuthorityOutputInstruction(
   ctx: TxTemplateContext,
   ins: z.infer<typeof AuthorityOutputInstruction>
 ) {
+  ctx.log(`Begin AuthorityOutputInstruction: ${JSONBigInt.stringify(ins)}`);
   const { authority, position } = ins;
   const token = getVariable<string>(ins.token, ctx.vars, AuthorityOutputInstruction.shape.token);
   const address = getVariable<string>(ins.address, ctx.vars,AuthorityOutputInstruction.shape.address);
   const timelock = getVariable<number|undefined>(ins.timelock, ctx.vars, AuthorityOutputInstruction.shape.timelock);
   const count = getVariable<number>(ins.count, ctx.vars, AuthorityOutputInstruction.shape.count);
+  ctx.log(`Creating count(${count}) ${authority} authority outputs with address(${address}) timelock(${timelock}) token(${token})`);
 
   // Add token to tokens array
-  const tokenIndex = ctx.addToken(token);
-  let tokenData = tokenIndex;
+  let tokenData = ctx.addToken(token);
 
   let amount: OutputValueType|undefined = 0n;
   switch(authority) {
     case 'mint':
       amount = TOKEN_MINT_MASK;
-      tokenData &= TOKEN_AUTHORITY_MASK;
+      tokenData |= TOKEN_AUTHORITY_MASK;
       break;
     case 'melt':
       amount = TOKEN_MELT_MASK;
-      tokenData &= TOKEN_AUTHORITY_MASK;
+      tokenData |= TOKEN_AUTHORITY_MASK;
       break;
     default:
       throw new Error('Authority token output missing `authority`');
@@ -298,6 +328,7 @@ export async function execShuffleInstruction(
   ctx: TxTemplateContext,
   ins: z.infer<typeof ShuffleInstruction>
 ) {
+  ctx.log(`Begin ShuffleInstruction: ${JSONBigInt.stringify(ins)}`);
   const { target } = ins;
 
   // The token array should never be shuffled since outputs have a "pointer" to the token position
@@ -320,9 +351,11 @@ export async function execChangeInstruction(
   ctx: TxTemplateContext,
   ins: z.infer<typeof ChangeInstruction>
 ) {
+  ctx.log(`Begin ChangeInstruction: ${JSONBigInt.stringify(ins)}`);
   const token = getVariable<string|undefined>(ins.token, ctx.vars,ChangeInstruction.shape.token);
   const address = getVariable<string|undefined>(ins.address, ctx.vars,ChangeInstruction.shape.address) ?? await interpreter.getChangeAddress(ctx);
   const timelock = getVariable<number|undefined>(ins.timelock, ctx.vars, ChangeInstruction.shape.timelock);
+  ctx.log(`address(${address}) timelock(${timelock}) token(${token})`);
 
   const tokensToCheck: string[] = [];
   if (token) {
@@ -380,10 +413,12 @@ export async function execConfigInstruction(
   ctx: TxTemplateContext,
   ins: z.infer<typeof ConfigInstruction>
 ) {
+  ctx.log(`Begin ConfigInstruction: ${JSONBigInt.stringify(ins)}`);
   const version = getVariable<number|undefined>(ins.version, ctx.vars, ConfigInstruction.shape.version);
   const signalBits = getVariable<number|undefined>(ins.signalBits, ctx.vars, ConfigInstruction.shape.signalBits);
   const tokenName = getVariable<string|undefined>(ins.tokenName, ctx.vars, ConfigInstruction.shape.tokenName);
   const tokenSymbol = getVariable<string|undefined>(ins.tokenSymbol, ctx.vars, ConfigInstruction.shape.tokenSymbol);
+  ctx.log(`version(${version}) signalBits(${signalBits}) tokenName(${tokenName}) tokenSymbol(${tokenSymbol})`);
 
   if (version) {
     ctx.version = version;
@@ -407,7 +442,9 @@ export async function execSetVarInstruction(
   ctx: TxTemplateContext,
   ins: z.infer<typeof SetVarInstruction>
 ) {
+  ctx.log(`Begin SetVarInstruction: ${JSONBigInt.stringify(ins)}`);
   if (!ins.action) {
+    ctx.log(`Setting ${ins.name} with ${ins.value}`);
     ctx.vars[ins.name] = ins.value;
     return;
   }
@@ -419,6 +456,7 @@ export async function execSetVarInstruction(
     options.token = token;
     // Call action with valid options
     const address = await getWalletAddress(interpreter, ctx, options);
+    ctx.log(`Setting ${ins.name} with ${address}`);
     ctx.vars[ins.name] = address;
     return;
   }
@@ -430,6 +468,7 @@ export async function execSetVarInstruction(
     // Call action with valid options
     const balance = await getWalletBalance(interpreter, ctx, options);
     ctx.vars[ins.name] = balance;
+    ctx.log(`Setting ${ins.name} with ${balance}`);
     return;
   }
   throw new Error('Invalid setvar command');

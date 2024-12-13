@@ -6,7 +6,7 @@
  */
 /* eslint max-classes-per-file: ["error", 2] */
 
-import { IHistoryTx, OutputValueType } from '../../types';
+import { IHistoryTx, ILogger, OutputValueType, getDefaultLogger } from '../../types';
 import Input from '../../models/input';
 import Output from '../../models/output';
 import transactionUtils from '../../utils/transaction';
@@ -101,7 +101,13 @@ export class TxTemplateContext {
 
   vars: Record<string, any>;
 
-  constructor() {
+  _logs: string[];
+
+  _logger: ILogger;
+
+  debug: boolean;
+
+  constructor(logger?: ILogger, debug: boolean = false) {
     this.inputs = [];
     this.outputs = [];
     this.tokens = [];
@@ -109,19 +115,34 @@ export class TxTemplateContext {
     this.signalBits = 0;
     this.balance = new TxBalance();
     this.vars = {};
+    this._logs = [];
+    this._logger = logger ?? getDefaultLogger();
+    this.debug = debug;
+  }
+
+  log(message: string): void {
+    this._logs.push(message);
+    if (this.debug) {
+      this._logger.info(message);
+    }
+  }
+
+  get logArray(): string[] {
+    return this._logs;
   }
 
   addToken(token: string) {
     if (token === NATIVE_TOKEN_UID) {
-      return -1;
+      return 0;
     }
     const index = this.tokens.indexOf(token);
     if (index > -1) {
       // Token is already on the list.
-      return index;
+      return index + 1;
     }
+    // Token is not on the list, adding now
     this.tokens.push(token);
-    return this.tokens.length - 1;
+    return this.tokens.length;
   }
 
   addInput(position: number, ...inputs: Input[]) {

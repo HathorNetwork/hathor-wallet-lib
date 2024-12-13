@@ -50,18 +50,23 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
     this.txCache = {};
   }
 
-  async build(instructions: TxTemplateInstructionType[]): Promise<Transaction> {
-    const context = new TxTemplateContext();
+  async build(instructions: TxTemplateInstructionType[], debug: boolean = false): Promise<Transaction> {
+    const context = new TxTemplateContext(this.wallet.logger, debug);
 
     for (const ins of instructions) {
       await runInstruction(this, context, ins);
     }
 
-    return new Transaction(context.inputs, context.outputs);
+    return new Transaction(context.inputs, context.outputs, {
+      signalBits: context.signalBits,
+      version: context.version,
+      tokens: context.tokens,
+    });
   }
 
   async getAddress(markAsUsed: boolean = false): Promise<string> {
-    return await this.wallet.getCurrentAddress({ markAsUsed });
+    const addr = await this.wallet.getCurrentAddress({ markAsUsed });
+    return addr.address;
   }
 
   /**
@@ -69,7 +74,8 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
    * This way the same change address would be used throughout the transaction
    */
   async getChangeAddress(_ctx: TxTemplateContext) {
-    return await this.wallet.getCurrentAddress();
+    const addr = await this.wallet.getCurrentAddress();
+    return addr.address;
   }
 
   async getUtxos(amount: OutputValueType, options: IGetUtxosOptions): Promise<IGetUtxoResponse> {

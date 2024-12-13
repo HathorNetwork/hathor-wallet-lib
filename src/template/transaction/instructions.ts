@@ -8,7 +8,7 @@
 import { NATIVE_TOKEN_UID } from '../../constants';
 import { z } from 'zod';
 
-const TEMPLATE_REFERENCE_RE = /\{[\w\d]+\}/;
+const TEMPLATE_REFERENCE_RE = /\{([\w\d]+)\}/;
 export const TemplateRef = z.string().regex(TEMPLATE_REFERENCE_RE);
 
 /**
@@ -117,7 +117,7 @@ export const TokenOutputInstruction = z.object({
 export const AuthorityOutputInstruction = z.object({
   type: z.literal('output/authority'),
   position: z.number().default(-1),
-  count: TemplateRef.or(z.coerce.number()),
+  count: TemplateRef.or(z.coerce.number().default(1)),
   token: TemplateRef.or(CustomTokenSchema),
   authority: z.enum(['mint', 'melt']),
   address: TemplateRef.or(AddressSchema),
