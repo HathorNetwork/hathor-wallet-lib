@@ -181,15 +181,20 @@ export async function execRawOutputInstruction(
   ins: z.infer<typeof RawOutputInstruction>
 ) {
   ctx.log(`Begin RawOutputInstruction: ${JSONBigInt.stringify(ins)}`);
-  const { position, authority } = ins;
+  const { position, authority, useCreatedToken } = ins;
   const scriptStr = getVariable<string>(ins.script, ctx.vars,RawOutputInstruction.shape.script);
   const script = Buffer.from(scriptStr, 'hex');
   const token = getVariable<string>(ins.token, ctx.vars,RawOutputInstruction.shape.token);
   const timelock = getVariable<number|undefined>(ins.timelock, ctx.vars, RawOutputInstruction.shape.timelock);
 
-  // Add token to tokens array
-  const tokenIndex = ctx.addToken(token);
-  let tokenData = tokenIndex;
+  let tokenData: number;
+  if (useCreatedToken) {
+    ctx.useCreateTxContext()
+    tokenData = 1;
+  } else {
+    // Add token to tokens array
+    tokenData = ctx.addToken(token);
+  }
 
   let amount: OutputValueType|undefined = 0n;
   switch (authority) {
@@ -234,13 +239,21 @@ export async function execDataOutputInstruction(
   ins: z.infer<typeof DataOutputInstruction>
 ) {
   ctx.log(`Begin DataOutputInstruction: ${JSONBigInt.stringify(ins)}`);
-  const position = ins.position;
+  const { position, useCreatedToken } = ins;
   const data = getVariable<string>(ins.data, ctx.vars,DataOutputInstruction.shape.data);
   const token = getVariable<string>(ins.token, ctx.vars,DataOutputInstruction.shape.token);
-  ctx.log(`Creating data(${data}) output of token(${token})`);
+  ctx.log(`Creating data(${data}) output`);
 
-  // Add token to tokens array
-  const tokenData = ctx.addToken(token);
+  let tokenData: number;
+  if (useCreatedToken) {
+    ctx.log(`Using created token`);
+    ctx.useCreateTxContext()
+    tokenData = 1;
+  } else {
+    ctx.log(`Using token(${token})`);
+    // Add token to tokens array
+    tokenData = ctx.addToken(token);
+  }
 
   // Add balance to the ctx.balance
   ctx.balance.addOutput(1n, token);
@@ -260,15 +273,23 @@ export async function execTokenOutputInstruction(
   ins: z.infer<typeof TokenOutputInstruction>
 ) {
   ctx.log(`Begin TokenOutputInstruction: ${JSONBigInt.stringify(ins)}`);
-  const position = ins.position;
+  const { position, useCreatedToken } = ins;
   const token = getVariable<string>(ins.token, ctx.vars,TokenOutputInstruction.shape.token);
   const address = getVariable<string>(ins.address, ctx.vars,TokenOutputInstruction.shape.address);
   const timelock = getVariable<number|undefined>(ins.timelock, ctx.vars, TokenOutputInstruction.shape.timelock);
   const amount = getVariable<bigint>(ins.amount, ctx.vars, TokenOutputInstruction.shape.amount);
-  ctx.log(`Creating token output with amount(${amount}) address(${address}) timelock(${timelock}) token(${token})`);
+  ctx.log(`Creating token output with amount(${amount}) address(${address}) timelock(${timelock})`);
 
-  // Add token to tokens array
-  const tokenData = ctx.addToken(token);
+  let tokenData: number;
+  if (useCreatedToken) {
+    ctx.log(`Using created token`);
+    ctx.useCreateTxContext()
+    tokenData = 1;
+  } else {
+    ctx.log(`Using token(${token})`);
+    // Add token to tokens array
+    tokenData = ctx.addToken(token);
+  }
 
   // Add balance to the ctx.balance
   ctx.balance.addOutput(amount, token);
@@ -287,15 +308,23 @@ export async function execAuthorityOutputInstruction(
   ins: z.infer<typeof AuthorityOutputInstruction>
 ) {
   ctx.log(`Begin AuthorityOutputInstruction: ${JSONBigInt.stringify(ins)}`);
-  const { authority, position } = ins;
+  const { authority, position, useCreatedToken } = ins;
   const token = getVariable<string>(ins.token, ctx.vars, AuthorityOutputInstruction.shape.token);
   const address = getVariable<string>(ins.address, ctx.vars,AuthorityOutputInstruction.shape.address);
   const timelock = getVariable<number|undefined>(ins.timelock, ctx.vars, AuthorityOutputInstruction.shape.timelock);
   const count = getVariable<number>(ins.count, ctx.vars, AuthorityOutputInstruction.shape.count);
-  ctx.log(`Creating count(${count}) ${authority} authority outputs with address(${address}) timelock(${timelock}) token(${token})`);
+  ctx.log(`Creating count(${count}) "${authority}" authority outputs with address(${address}) timelock(${timelock})`);
 
-  // Add token to tokens array
-  let tokenData = ctx.addToken(token);
+  let tokenData: number;
+  if (useCreatedToken) {
+    ctx.log(`Using created token`);
+    ctx.useCreateTxContext()
+    tokenData = 1;
+  } else {
+    ctx.log(`Using token(${token})`);
+    // Add token to tokens array
+    tokenData = ctx.addToken(token);
+  }
 
   let amount: OutputValueType|undefined = 0n;
   switch(authority) {

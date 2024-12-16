@@ -102,6 +102,7 @@ export const RawOutputInstruction = z.object({
   token: TemplateRef.or(TokenSchema.default('00')),
   timelock: TemplateRef.or(z.coerce.number().optional()),
   authority: z.enum(['mint', 'melt']).optional(),
+  useCreatedToken: z.boolean().default(false),
 });
 
 export const TokenOutputInstruction = z.object({
@@ -112,6 +113,7 @@ export const TokenOutputInstruction = z.object({
   address: TemplateRef.or(AddressSchema),
   timelock: TemplateRef.or(z.coerce.number().optional()),
   checkAddress: z.boolean().optional(),
+  useCreatedToken: z.boolean().default(false),
 });
 
 export const AuthorityOutputInstruction = z.object({
@@ -123,6 +125,7 @@ export const AuthorityOutputInstruction = z.object({
   address: TemplateRef.or(AddressSchema),
   timelock: TemplateRef.or(z.coerce.number().optional()),
   checkAddress: z.boolean().optional(),
+  useCreatedToken: z.boolean().default(false),
 });
 
 export const DataOutputInstruction = z.object({
@@ -130,6 +133,7 @@ export const DataOutputInstruction = z.object({
   position: z.number().default(-1),
   data: TemplateRef.or(z.string()),
   token: TemplateRef.or(TokenSchema.default(NATIVE_TOKEN_UID)),
+  useCreatedToken: z.boolean().default(false),
 });
 
 export const ShuffleInstruction = z.object({

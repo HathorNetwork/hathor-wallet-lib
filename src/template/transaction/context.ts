@@ -10,7 +10,7 @@ import { IHistoryTx, ILogger, OutputValueType, getDefaultLogger } from '../../ty
 import Input from '../../models/input';
 import Output from '../../models/output';
 import transactionUtils from '../../utils/transaction';
-import { DEFAULT_TX_VERSION, NATIVE_TOKEN_UID } from '../../constants';
+import { CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, NATIVE_TOKEN_UID } from '../../constants';
 
 export interface TokenBalance {
   tokens: OutputValueType;
@@ -131,9 +131,27 @@ export class TxTemplateContext {
     return this._logs;
   }
 
+  useCreateTxContext() {
+    if (this.tokens.length !== 0) {
+      throw new Error(`Trying to build a create token tx with ${this.tokens.length} tokens on the array`);
+    }
+    this.version = CREATE_TOKEN_TX_VERSION;
+  }
+
+  getTokenDataFor(token: string, useCreatedToken: boolean) {
+    if (useCreatedToken) {
+      this.useCreateTxContext();
+      return 1;
+    }
+    return this.addToken(token);
+  }
+
   addToken(token: string) {
     if (token === NATIVE_TOKEN_UID) {
       return 0;
+    }
+    if (this.version === CREATE_TOKEN_TX_VERSION) {
+      throw new Error(`Cannot add a custom token to a CREATE_TOKEN_TX`);
     }
     const index = this.tokens.indexOf(token);
     if (index > -1) {
