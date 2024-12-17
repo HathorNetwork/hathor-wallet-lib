@@ -20,9 +20,11 @@ export interface TokenBalance {
 
 export class TxBalance {
   balance: Record<string, TokenBalance>;
+  createdTokenBalance: null|TokenBalance;
 
   constructor() {
     this.balance = {};
+    this.createdTokenBalance = null;
   }
 
   getTokenBalance(token: string): TokenBalance {
@@ -37,8 +39,23 @@ export class TxBalance {
     return this.balance[token];
   }
 
+  getCreatedTokenBalance(): TokenBalance {
+    if (!this.createdTokenBalance) {
+      this.createdTokenBalance = {
+        tokens: 0n,
+        mint_authorities: 0,
+        melt_authorities: 0,
+      };
+    }
+    return this.createdTokenBalance;
+  }
+
   setTokenBalance(token: string, balance: TokenBalance) {
     this.balance[token] = balance;
+  }
+
+  setCreatedTokenBalance(balance: TokenBalance) {
+    this.createdTokenBalance = balance;
   }
 
   addInput(tx: IHistoryTx, index: number) {
@@ -70,6 +87,12 @@ export class TxBalance {
     this.setTokenBalance(token, balance);
   }
 
+  addCreatedTokenOutput(amount: OutputValueType) {
+    const balance = this.getCreatedTokenBalance();
+    balance.tokens -= amount;
+    this.setCreatedTokenBalance(balance);
+  }
+
   addOutputAuthority(count: number, token: string, authority: 'mint'|'melt') {
     const balance = this.getTokenBalance(token);
     if (authority === 'mint') {
@@ -79,6 +102,17 @@ export class TxBalance {
       balance.melt_authorities -= count;
     }
     this.setTokenBalance(token, balance);
+  }
+
+  addCreatedTokenOutputAuthority(count: number, authority: 'mint'|'melt') {
+    const balance = this.getCreatedTokenBalance();
+    if (authority === 'mint') {
+      balance.mint_authorities -= count;
+    }
+    if (authority === 'melt') {
+      balance.melt_authorities -= count;
+    }
+    this.setCreatedTokenBalance(balance);
   }
 }
 
