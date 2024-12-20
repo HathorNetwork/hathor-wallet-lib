@@ -8,6 +8,7 @@
 import { NATIVE_TOKEN_UID } from '../../constants';
 import { z } from 'zod';
 
+const TEMPLATE_REFERENCE_NAME_RE = /[\w\d]+/;
 const TEMPLATE_REFERENCE_RE = /\{([\w\d]+)\}/;
 export const TemplateRef = z.string().regex(TEMPLATE_REFERENCE_RE);
 
@@ -46,7 +47,7 @@ export function getVariable<S, T extends z.ZodUnion<[typeof TemplateRef, z.ZodTy
     const match = parsed.data.match(TEMPLATE_REFERENCE_RE);
     if (match !== null) {
       const key = match[1];
-      if (!vars[key]) {
+      if (!(key in vars)) {
         throw new Error(`Variable ${key} not found in available variables`);
       }
       // We assume that the variable in the context is of type S and we validate this.
@@ -64,21 +65,49 @@ export const Sha256HexSchema = z.string().regex(/^[a-fA-F0-9]{64}$/);
 export const TxIdSchema = Sha256HexSchema;
 export const CustomTokenSchema = Sha256HexSchema;
 // If we want to represent all tokens we need to include the native token uid 00
-export const TokenSchema = z.string().regex(/^[a-fA-F0-9]{64}|00$/);
+export const TokenSchema = z.string().regex(/^[a-fA-F0-9]{64}$|^00$/);
 // Addresses are base58 with length 34, may be 35 depending on the choice of version byte
 export const AddressSchema = z.string().regex(/^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{34,35}$/);
+
+/**
+ * This schema is necessary because `z.coerce.bigint().optional()` throws
+ * with `undefined` input due to how coerce works (this happens even with safeParse)
+ * so we need a custom bigint that can receive number or string as input and be optional.
+ **/
+export const AmountSchema = z
+  .union([
+    z.bigint(),
+    z.number(),
+    z.string().regex(/^\d+$/),
+  ])
+  .pipe(z.coerce.bigint())
+  .refine(val => val > 0n, 'Amount must be positive non-zero');
+
+export const CountSchema = z
+  .union([
+    z.number(),
+    z.string().regex(/^\d+$/),
+  ])
+  .pipe(z.coerce.number().gte(1).lte(0xFF));
+
+export const TxIndexSchema = z
+  .union([
+    z.number(),
+    z.string().regex(/^\d+$/),
+  ])
+  .pipe(z.coerce.number().gte(0).lte(0xFF));
 
 export const RawInputInstruction = z.object({
   type: z.literal('input/raw'),
   position: z.number().default(-1),
-  index: TemplateRef.or(z.coerce.number()),
+  index: TemplateRef.or(TxIndexSchema),
   txId: TemplateRef.or(TxIdSchema),
 });
 
 export const UtxoSelectInstruction = z.object({
   type: z.literal('input/utxo'),
   position: z.number().default(-1),
-  fill: TemplateRef.or(z.coerce.bigint()),
+  fill: TemplateRef.or(AmountSchema),
   token: TemplateRef.or(TokenSchema.default(NATIVE_TOKEN_UID)),
   address: TemplateRef.or(AddressSchema.optional()),
   autoChange: z.boolean().default(true),
@@ -90,17 +119,17 @@ export const AuthoritySelectInstruction = z.object({
   position: z.number().default(-1),
   authority: z.enum(['mint', 'melt']),
   token: TemplateRef.or(CustomTokenSchema),
-  count: TemplateRef.or(z.coerce.number().default(1)),
+  count: TemplateRef.or(CountSchema.default(1)),
   address: TemplateRef.or(AddressSchema.optional()),
 });
 
 export const RawOutputInstruction = z.object({
   type: z.literal('output/raw'),
   position: z.number().default(-1),
-  amount: TemplateRef.or(z.coerce.bigint().optional()),
+  amount: TemplateRef.or(AmountSchema.optional()),
   script: TemplateRef.or(z.string()),
-  token: TemplateRef.or(TokenSchema.default('00')),
-  timelock: TemplateRef.or(z.coerce.number().optional()),
+  token: TemplateRef.or(TokenSchema.default(NATIVE_TOKEN_UID)),
+  timelock: TemplateRef.or(z.number().gte(0).optional()),
   authority: z.enum(['mint', 'melt']).optional(),
   useCreatedToken: z.boolean().default(false),
 });
@@ -108,10 +137,10 @@ export const RawOutputInstruction = z.object({
 export const TokenOutputInstruction = z.object({
   type: z.literal('output/token'),
   position: z.number().default(-1),
-  amount: TemplateRef.or(z.coerce.bigint()),
-  token: TemplateRef.or(TokenSchema.default('00')),
+  amount: TemplateRef.or(AmountSchema),
+  token: TemplateRef.or(TokenSchema.default(NATIVE_TOKEN_UID)),
   address: TemplateRef.or(AddressSchema),
-  timelock: TemplateRef.or(z.coerce.number().optional()),
+  timelock: TemplateRef.or(z.number().gte(0).optional()),
   checkAddress: z.boolean().optional(),
   useCreatedToken: z.boolean().default(false),
 });
@@ -119,11 +148,11 @@ export const TokenOutputInstruction = z.object({
 export const AuthorityOutputInstruction = z.object({
   type: z.literal('output/authority'),
   position: z.number().default(-1),
-  count: TemplateRef.or(z.coerce.number().default(1)),
+  count: TemplateRef.or(CountSchema.default(1)),
   token: TemplateRef.or(CustomTokenSchema),
   authority: z.enum(['mint', 'melt']),
   address: TemplateRef.or(AddressSchema),
-  timelock: TemplateRef.or(z.coerce.number().optional()),
+  timelock: TemplateRef.or(z.number().gte(0).optional()),
   checkAddress: z.boolean().optional(),
   useCreatedToken: z.boolean().default(false),
 });
@@ -145,7 +174,7 @@ export const ChangeInstruction = z.object({
   type: z.literal('action/change'),
   token: TemplateRef.or(TokenSchema.optional()),
   address: TemplateRef.or(AddressSchema.optional()),
-  timelock: TemplateRef.or(z.coerce.number().optional()),
+  timelock: TemplateRef.or(z.number().gte(0).optional()),
 });
 
 export const CompleteTxInstruction = z.object({
@@ -153,15 +182,15 @@ export const CompleteTxInstruction = z.object({
   token: TemplateRef.or(TokenSchema.optional()),
   address: TemplateRef.or(z.string().optional()),
   changeAddress: TemplateRef.or(AddressSchema.optional()),
-  timelock: TemplateRef.or(z.coerce.number()).optional(),
+  timelock: TemplateRef.or(z.number().gte(0).optional()),
 });
 
 export const ConfigInstruction = z.object({
   type: z.literal('action/config'),
-  version: TemplateRef.or(z.number().optional()),
+  version: TemplateRef.or(z.number().gte(0).lte(0xFF).optional()),
   signalBits: TemplateRef.or(z.number().optional()),
-  tokenName: TemplateRef.or(z.string().optional()),
-  tokenSymbol: TemplateRef.or(z.string().optional()),
+  tokenName: TemplateRef.or(z.string().nonempty().max(30).optional()),
+  tokenSymbol: TemplateRef.or(z.string().nonempty().max(5).optional()),
 });
 
 export const SetVarGetWalletAddressOpts = z.object({
@@ -179,7 +208,7 @@ export const SetVarOptions = z.union([SetVarGetWalletAddressOpts, SetVarGetWalle
 
 export const SetVarInstruction = z.object({
   type: z.literal('action/setvar'),
-  name: z.string().regex(/[\d\w]+/),
+  name: z.string().regex(TEMPLATE_REFERENCE_NAME_RE),
   value: z.any().optional(),
   action: z.enum(['get_wallet_address', 'get_wallet_balance']).optional(),
   options: SetVarOptions.optional(),
