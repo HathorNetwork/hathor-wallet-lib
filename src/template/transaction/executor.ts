@@ -11,6 +11,7 @@ import {
   AuthorityOutputInstruction,
   AuthoritySelectInstruction,
   ChangeInstruction,
+  CompleteTxInstruction,
   ConfigInstruction,
   DataOutputInstruction,
   RawInputInstruction,
@@ -442,6 +443,153 @@ export async function execChangeInstruction(
 }
 
 /**
+ * Execution for CompleteTxInstruction
+ */
+export async function execCompleteTxInstruction(
+  interpreter: ITxTemplateInterpreter,
+  ctx: TxTemplateContext,
+  ins: z.infer<typeof CompleteTxInstruction>,
+) {
+  ctx.log(`Begin CompleteTxInstruction: ${JSONBigInt.stringify(ins)}`);
+  const token = getVariable<string | undefined>(ins.token, ctx.vars, CompleteTxInstruction.shape.token);
+  const changeAddress = getVariable<string | undefined>(ins.changeAddress, ctx.vars, CompleteTxInstruction.shape.changeAddress) ?? await interpreter.getChangeAddress(ctx);
+  const address = getVariable<string | undefined>(ins.address, ctx.vars, CompleteTxInstruction.shape.address);
+  const timelock = getVariable<number | undefined>(ins.timelock, ctx.vars, CompleteTxInstruction.shape.timelock);
+  ctx.log(`changeAddress(${changeAddress}) address(${address}) timelock(${timelock}) token(${token})`);
+
+  const tokensToCheck: string[] = [];
+  if (token) {
+    tokensToCheck.push(token);
+  } else {
+    // Check HTR and all tokens on the transaction
+    tokensToCheck.push(NATIVE_TOKEN_UID);
+    ctx.tokens.forEach(tk => { tokensToCheck.push(tk) });
+  }
+
+  // const script = createOutputScriptFromAddress(address, interpreter.getNetwork());
+  const changeScript = createOutputScriptFromAddress(changeAddress, interpreter.getNetwork());
+
+  for (const tokenUid of tokensToCheck) {
+    ctx.log(`Completing tx for token ${tokenUid}`);
+    // Check balances for token.
+    const balance = ctx.balance.getTokenBalance(tokenUid);
+    const tokenData = ctx.addToken(tokenUid);
+    if (balance.tokens > 0) {
+      // Surplus of token on the inputs, need to add a change output
+      ctx.log(`Creating a change output for ${balance.tokens}`);
+      // Add balance to the ctx.balance
+      ctx.balance.addOutput(balance.tokens, tokenUid);
+
+      // Creates an output with the value of the outstanding balance
+      const output = new Output(balance.tokens, changeScript, { timelock, tokenData });
+      ctx.addOutput(-1, output);
+    } else if (balance.tokens < 0) {
+      // Surplus of tokens on the outputs, need to select tokens and add inputs
+      const options: IGetUtxosOptions = { token: tokenUid };
+      if (address) {
+        options.filter_address = address;
+      }
+      const { changeAmount, utxos } = await interpreter.getUtxos(-balance.tokens, options);
+
+      // Add utxos as inputs on the transaction
+      const inputs: Input[] = [];
+      for (const utxo of utxos) {
+        ctx.log(`Found utxo with ${utxo.value} of ${utxo.tokenId}`);
+        ctx.log(`Create input ${utxo.index} / ${utxo.txId}`);
+        inputs.push(new Input(utxo.txId, utxo.index));
+      }
+
+      // Update balance
+      for (const input of inputs) {
+        const origTx = await interpreter.getTx(input.hash);
+        ctx.balance.addInput(origTx, input.index);
+      }
+
+      // Then add inputs to context
+      ctx.addInput(-1, ...inputs);
+
+      if (changeAmount) {
+        ctx.log(`Creating change with ${changeAmount} for address: ${changeAddress}`);
+        const tokenData = ctx.addToken(tokenUid);
+        const output = new Output(changeAmount, changeScript, { tokenData });
+        ctx.balance.addOutput(changeAmount, tokenUid);
+        ctx.addOutput(-1, output);
+      }
+    }
+
+    if (balance.mint_authorities > 0) {
+      // Need to create a token output
+      // Add balance to the ctx.balance
+      ctx.balance.addOutputAuthority(balance.mint_authorities, tokenUid, 'mint');
+
+      // Creates an output with the value of the outstanding balance
+      const output = new Output(TOKEN_MINT_MASK, changeScript, { timelock, tokenData });
+      ctx.addOutput(-1, ...Array(balance.mint_authorities).fill(output));
+    } else if (balance.mint_authorities < 0) {
+      // Need to find authorities to fill balance
+      const utxos = await interpreter.getAuthorities(
+        -balance.mint_authorities,
+        {
+          token: tokenUid,
+          authorities: 1n, // Mint
+        }
+      );
+
+      // Add utxos as inputs on the transaction
+      const inputs: Input[] = [];
+      for (const utxo of utxos) {
+        ctx.log(`Found authority utxo ${utxo.authorities} of ${token}`);
+        ctx.log(`Create input ${utxo.index} / ${utxo.txId}`);
+        inputs.push(new Input(utxo.txId, utxo.index));
+      }
+      // First, update balance
+      for (const input of inputs) {
+        const origTx = await interpreter.getTx(input.hash);
+        ctx.balance.addInput(origTx, input.index);
+      }
+
+      // Then add inputs to context
+      ctx.addInput(-1, ...inputs);
+    }
+
+    if (balance.melt_authorities > 0) {
+      // Need to create a token output
+      // Add balance to the ctx.balance
+      ctx.balance.addOutputAuthority(balance.melt_authorities, tokenUid, 'melt');
+
+      // Creates an output with the value of the outstanding balance
+      const output = new Output(TOKEN_MELT_MASK, changeScript, { timelock, tokenData });
+      ctx.addOutput(-1, ...Array(balance.melt_authorities).fill(output));
+    } else if (balance.melt_authorities < 0) {
+      // Need to find authorities to fill balance
+      const utxos = await interpreter.getAuthorities(
+        -balance.melt_authorities,
+        {
+          token: tokenUid,
+          authorities: 2n, // Melt
+        }
+      );
+
+      // Add utxos as inputs on the transaction
+      const inputs: Input[] = [];
+      for (const utxo of utxos) {
+        ctx.log(`Found authority utxo ${utxo.authorities} of ${token}`);
+        ctx.log(`Create input ${utxo.index} / ${utxo.txId}`);
+        inputs.push(new Input(utxo.txId, utxo.index));
+      }
+      // First, update balance
+      for (const input of inputs) {
+        const origTx = await interpreter.getTx(input.hash);
+        ctx.balance.addInput(origTx, input.index);
+      }
+
+      // Then add inputs to context
+      ctx.addInput(-1, ...inputs);
+    }
+  }
+}
+
+/**
  * Execution for ConfigInstruction
  */
 export async function execConfigInstruction(
@@ -488,8 +636,6 @@ export async function execSetVarInstruction(
   if (ins.action === 'get_wallet_address') {
     // Validate options and get token variable
     const options = SetVarGetWalletAddressOpts.default({}).parse(ins.options);
-    const token = getVariable<string>(options.token, ctx.vars, SetVarGetWalletAddressOpts.shape.token);
-    options.token = token;
     // Call action with valid options
     const address = await getWalletAddress(interpreter, ctx, options);
     ctx.log(`Setting ${ins.name} with ${address}`);

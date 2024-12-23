@@ -7,7 +7,7 @@
 
 import { TransactionTemplateType } from './instructions';
 import { TxTemplateContext } from './context';
-import { IHistoryTx, OutputValueType } from '../../types';
+import { IHistoryTx, ITokenBalance, ITokenData, OutputValueType } from '../../types';
 import Transaction from '../../models/transaction';
 import Network from '../../models/network';
 import { Utxo } from '../../wallet/types';
@@ -36,9 +36,21 @@ export interface IGetUtxoResponse {
   changeAmount: OutputValueType,
 }
 
+export interface IWalletBalanceData {
+  token: ITokenData,
+  balance: ITokenBalance,
+  transactions: number,
+  tokenAuthorities: {
+    unlocked: {mint: number, melt: number},
+    locked: {mint: number, melt: number}
+  },
+};
+
 export interface ITxTemplateInterpreter {
   build(instructions: TransactionTemplateType, debug: boolean): Promise<Transaction>;
   getAddress(markAsUsed?: boolean): Promise<string>;
+  getAddressAtIndex(index: number): Promise<string>;
+  getBalance(token: string): Promise<IWalletBalanceData>;
   getChangeAddress(ctx: TxTemplateContext): Promise<string>;
   getUtxos(amount: OutputValueType, options: IGetUtxosOptions): Promise<IGetUtxoResponse>;
   getAuthorities(count: number, options: IGetUtxosOptions): Promise<Utxo[]>;

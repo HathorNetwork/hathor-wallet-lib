@@ -189,19 +189,17 @@ export const ConfigInstruction = z.object({
   type: z.literal('action/config'),
   version: TemplateRef.or(z.number().gte(0).lte(0xFF).optional()),
   signalBits: TemplateRef.or(z.number().optional()),
-  tokenName: TemplateRef.or(z.string().nonempty().max(30).optional()),
-  tokenSymbol: TemplateRef.or(z.string().nonempty().max(5).optional()),
+  tokenName: TemplateRef.or(z.string().min(1).max(30).optional()),
+  tokenSymbol: TemplateRef.or(z.string().min(1).max(5).optional()),
 });
 
 export const SetVarGetWalletAddressOpts = z.object({
-  unused: z.boolean().optional(),
-  withBalance: z.number().optional(),
-  authority: z.enum(['mint', 'melt']).optional(),
-  token: TemplateRef.or(TokenSchema.default(NATIVE_TOKEN_UID)),
+  index: z.number().optional(),
 });
 
 export const SetVarGetWalletBalanceOpts = z.object({
   token: TemplateRef.or(TokenSchema.default('00')),
+  authority: z.enum(['mint', 'melt']).optional(),
 });
 
 export const SetVarOptions = z.union([SetVarGetWalletAddressOpts, SetVarGetWalletBalanceOpts]);

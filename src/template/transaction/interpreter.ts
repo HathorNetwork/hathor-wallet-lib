@@ -6,6 +6,7 @@
  */
 
 import {
+  TxTemplateInstruction,
   TxTemplateInstructionType,
 } from './instructions';
 import {
@@ -22,7 +23,7 @@ import {
   execUtxoSelectInstruction,
 } from './executor';
 import { TxTemplateContext } from './context';
-import { ITxTemplateInterpreter, IGetUtxosOptions, IGetUtxoResponse } from './types';
+import { ITxTemplateInterpreter, IGetUtxosOptions, IGetUtxoResponse, IWalletBalanceData } from './types';
 import { IHistoryTx, OutputValueType } from '../../types';
 import {
   FullNodeInput,
@@ -67,6 +68,14 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
   async getAddress(markAsUsed: boolean = false): Promise<string> {
     const addr = await this.wallet.getCurrentAddress({ markAsUsed });
     return addr.address;
+  }
+
+  async getAddressAtIndex(index: number): Promise<string> {
+    return await this.wallet.getAddressAtIndex(index);
+  }
+
+  async getBalance(token: string): Promise<IWalletBalanceData> {
+    return await this.wallet.getBalance(token);
   }
 
   /**
@@ -157,38 +166,29 @@ export function findInstructionExecution(ins: TxTemplateInstructionType): (
   ctx: TxTemplateContext,
   ins: any
 ) => Promise<void> {
-  if (ins.type === 'input/raw') {
-    return execRawInputInstruction;
-  }
-  if (ins.type === 'input/utxo') {
-    return execUtxoSelectInstruction;
-  }
-  if (ins.type === 'input/authority') {
-    return execAuthoritySelectInstruction;
-  }
-  if (ins.type === 'output/raw') {
-    return execRawOutputInstruction;
-  }
-  if (ins.type === 'output/data') {
-    return execDataOutputInstruction;
-  }
-  if (ins.type === 'output/token') {
-    return execTokenOutputInstruction;
-  }
-  if (ins.type === 'output/authority') {
-    return execAuthorityOutputInstruction;
-  }
-  if (ins.type === 'action/shuffle') {
-    return execShuffleInstruction;
-  }
-  if (ins.type === 'action/change') {
-    return execChangeInstruction;
-  }
-  if (ins.type === 'action/config') {
-    return execConfigInstruction;
-  }
-  if (ins.type === 'action/setvar') {
-    return execSetVarInstruction;
+  switch (TxTemplateInstruction.parse(ins).type) {
+    case 'input/raw':
+      return execRawInputInstruction;
+    case 'input/utxo':
+      return execUtxoSelectInstruction;
+    case 'input/authority':
+      return execAuthoritySelectInstruction;
+    case 'output/raw':
+      return execRawOutputInstruction;
+    case 'output/data':
+      return execDataOutputInstruction;
+    case 'output/token':
+      return execTokenOutputInstruction;
+    case 'output/authority':
+      return execAuthorityOutputInstruction;
+    case 'action/shuffle':
+      return execShuffleInstruction;
+    case 'action/change':
+      return execChangeInstruction;
+    case 'action/config':
+      return execConfigInstruction;
+    case 'action/setvar':
+      return execSetVarInstruction;
   }
 
   throw new Error('Cannot determine the instruction to run');

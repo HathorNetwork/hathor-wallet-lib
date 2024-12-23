@@ -6,23 +6,33 @@
  */
 
 import { z } from 'zod';
-import { ITxTemplateInterpreter, IGetUtxosOptions } from './types';
+import { ITxTemplateInterpreter } from './types';
 import { TxTemplateContext } from './context';
 import { SetVarGetWalletAddressOpts, SetVarGetWalletBalanceOpts } from './instructions';
 
 export async function getWalletAddress(
   interpreter: ITxTemplateInterpreter,
-  ctx: TxTemplateContext,
+  _ctx: TxTemplateContext,
   options: z.infer<typeof SetVarGetWalletAddressOpts>,
 ): Promise<string> {
-  // TODO: Find address based on options?
+  if (options.index) {
+    return interpreter.getAddressAtIndex(options.index);
+  }
   return interpreter.getAddress();
 }
 
 export async function getWalletBalance(
   interpreter: ITxTemplateInterpreter,
-  ctx: TxTemplateContext,
-  options: z.infer<typeof SetVarGetWalletAddressOpts>,
-): Promise<number> {
-  return 0;
+  _ctx: TxTemplateContext,
+  options: z.infer<typeof SetVarGetWalletBalanceOpts>,
+): Promise<number|bigint> {
+  const data = await interpreter.getBalance(options.token);
+  switch (options.authority) {
+    case 'mint':
+      return data.tokenAuthorities.unlocked.mint;
+    case 'melt':
+      return data.tokenAuthorities.unlocked.melt;
+    default:
+      return data.balance.unlocked;
+  }
 }
