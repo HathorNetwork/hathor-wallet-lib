@@ -13,6 +13,7 @@ import {
   execAuthorityOutputInstruction,
   execAuthoritySelectInstruction,
   execChangeInstruction,
+  execCompleteTxInstruction,
   execConfigInstruction,
   execDataOutputInstruction,
   execRawInputInstruction,
@@ -185,6 +186,8 @@ export function findInstructionExecution(ins: TxTemplateInstructionType): (
       return execShuffleInstruction;
     case 'action/change':
       return execChangeInstruction;
+    case 'action/complete':
+      return execCompleteTxInstruction;
     case 'action/config':
       return execConfigInstruction;
     case 'action/setvar':
