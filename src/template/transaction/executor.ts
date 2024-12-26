@@ -21,6 +21,8 @@ import {
   SetVarInstruction,
   ShuffleInstruction,
   TokenOutputInstruction,
+  TxTemplateInstruction,
+  TxTemplateInstructionType,
   UtxoSelectInstruction,
   getVariable,
 } from './instructions';
@@ -39,6 +41,56 @@ import { JSONBigInt } from '../../utils/bigint';
 import ScriptData from '../../models/script_data';
 import { getWalletAddress, getWalletBalance } from './setvarcommands';
 import { OutputValueType } from 'src/types';
+
+/**
+ * Find and run the executor function for the instruction.
+ */
+export async function runInstruction(
+  interpreter: ITxTemplateInterpreter,
+  ctx: TxTemplateContext,
+  ins: TxTemplateInstructionType
+) {
+  const instructionExecutor = findInstructionExecution(ins);
+  await instructionExecutor(interpreter, ctx, ins);
+}
+
+/**
+ * Get the executor function for a specific instruction.
+ */
+export function findInstructionExecution(ins: TxTemplateInstructionType): (
+  interpreter: ITxTemplateInterpreter,
+  ctx: TxTemplateContext,
+  ins: any
+) => Promise<void> {
+  switch (TxTemplateInstruction.parse(ins).type) {
+    case 'input/raw':
+      return execRawInputInstruction;
+    case 'input/utxo':
+      return execUtxoSelectInstruction;
+    case 'input/authority':
+      return execAuthoritySelectInstruction;
+    case 'output/raw':
+      return execRawOutputInstruction;
+    case 'output/data':
+      return execDataOutputInstruction;
+    case 'output/token':
+      return execTokenOutputInstruction;
+    case 'output/authority':
+      return execAuthorityOutputInstruction;
+    case 'action/shuffle':
+      return execShuffleInstruction;
+    case 'action/change':
+      return execChangeInstruction;
+    case 'action/complete':
+      return execCompleteTxInstruction;
+    case 'action/config':
+      return execConfigInstruction;
+    case 'action/setvar':
+      return execSetVarInstruction;
+  }
+
+  throw new Error('Cannot determine the instruction to run');
+}
 
 /**
  * Execution for RawInputInstruction
@@ -104,7 +156,7 @@ export async function execUtxoSelectInstruction(
   // Then add inputs to context
   ctx.addInput(position, ...inputs);
 
-  ctx.log(`changeAmount: ${changeAmount}`);
+  ctx.log(`changeAmount: ${changeAmount} autoChange(${autoChange})`);
 
   if (autoChange && changeAmount) {
     // get change address

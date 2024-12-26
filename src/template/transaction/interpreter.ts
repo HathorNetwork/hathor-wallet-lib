@@ -6,23 +6,9 @@
  */
 
 import {
-  TxTemplateInstruction,
-  TxTemplateInstructionType,
+  TransactionTemplateType,
 } from './instructions';
-import {
-  execAuthorityOutputInstruction,
-  execAuthoritySelectInstruction,
-  execChangeInstruction,
-  execCompleteTxInstruction,
-  execConfigInstruction,
-  execDataOutputInstruction,
-  execRawInputInstruction,
-  execRawOutputInstruction,
-  execSetVarInstruction,
-  execShuffleInstruction,
-  execTokenOutputInstruction,
-  execUtxoSelectInstruction,
-} from './executor';
+import { runInstruction } from './executor';
 import { TxTemplateContext } from './context';
 import { ITxTemplateInterpreter, IGetUtxosOptions, IGetUtxoResponse, IWalletBalanceData } from './types';
 import { IHistoryTx, OutputValueType } from '../../types';
@@ -52,7 +38,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
     this.txCache = {};
   }
 
-  async build(instructions: TxTemplateInstructionType[], debug: boolean = false): Promise<Transaction> {
+  async build(instructions: TransactionTemplateType, debug: boolean = false): Promise<Transaction> {
     const context = new TxTemplateContext(this.wallet.logger, debug);
 
     for (const ins of instructions) {
@@ -151,48 +137,4 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
   getNetwork(): Network {
     return this.wallet.getNetworkObject();
   }
-}
-
-export async function runInstruction(
-  interpreter: ITxTemplateInterpreter,
-  ctx: TxTemplateContext,
-  ins: TxTemplateInstructionType
-) {
-  const instructionExecutor = findInstructionExecution(ins);
-  await instructionExecutor(interpreter, ctx, ins);
-}
-
-export function findInstructionExecution(ins: TxTemplateInstructionType): (
-  interpreter: ITxTemplateInterpreter,
-  ctx: TxTemplateContext,
-  ins: any
-) => Promise<void> {
-  switch (TxTemplateInstruction.parse(ins).type) {
-    case 'input/raw':
-      return execRawInputInstruction;
-    case 'input/utxo':
-      return execUtxoSelectInstruction;
-    case 'input/authority':
-      return execAuthoritySelectInstruction;
-    case 'output/raw':
-      return execRawOutputInstruction;
-    case 'output/data':
-      return execDataOutputInstruction;
-    case 'output/token':
-      return execTokenOutputInstruction;
-    case 'output/authority':
-      return execAuthorityOutputInstruction;
-    case 'action/shuffle':
-      return execShuffleInstruction;
-    case 'action/change':
-      return execChangeInstruction;
-    case 'action/complete':
-      return execCompleteTxInstruction;
-    case 'action/config':
-      return execConfigInstruction;
-    case 'action/setvar':
-      return execSetVarInstruction;
-  }
-
-  throw new Error('Cannot determine the instruction to run');
 }

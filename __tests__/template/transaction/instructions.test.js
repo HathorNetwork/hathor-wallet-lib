@@ -579,8 +579,8 @@ describe('should parse template instructions', () => {
   it('should parse ConfigInstruction', () => {
     expect(ConfigInstruction.safeParse({
       type: 'action/config',
-      version: 123,
-      signalBits: 456,
+      version: 202,
+      signalBits: 254,
       tokenName: 'foo',
       tokenSymbol: 'bar',
     }).success).toBe(true);

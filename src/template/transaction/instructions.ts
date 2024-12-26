@@ -127,7 +127,7 @@ export const RawOutputInstruction = z.object({
   type: z.literal('output/raw'),
   position: z.number().default(-1),
   amount: TemplateRef.or(AmountSchema.optional()),
-  script: TemplateRef.or(z.string()),
+  script: TemplateRef.or(z.string().regex(/^([a-fA-F0-9]{2})+$/)),
   token: TemplateRef.or(TokenSchema.default(NATIVE_TOKEN_UID)),
   timelock: TemplateRef.or(z.number().gte(0).optional()),
   authority: z.enum(['mint', 'melt']).optional(),
@@ -188,7 +188,7 @@ export const CompleteTxInstruction = z.object({
 export const ConfigInstruction = z.object({
   type: z.literal('action/config'),
   version: TemplateRef.or(z.number().gte(0).lte(0xFF).optional()),
-  signalBits: TemplateRef.or(z.number().optional()),
+  signalBits: TemplateRef.or(z.number().gte(0).lte(0xFF).optional()),
   tokenName: TemplateRef.or(z.string().min(1).max(30).optional()),
   tokenSymbol: TemplateRef.or(z.string().min(1).max(5).optional()),
 });
