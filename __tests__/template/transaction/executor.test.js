@@ -29,7 +29,11 @@ import Network from '../../../src/models/network';
 import Output from '../../../src/models/output';
 import Input from '../../../src/models/input';
 
-const DEBUG = true;
+/**
+ * This DEBUG constant will enable or disable "build time" debug logs
+ * this can make understanding what is happening during the template execution.
+ */
+const DEBUG = false;
 
 const address = 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ';
 const token = '0000000110eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e';
@@ -184,310 +188,372 @@ describe('findInstructionExecution', () => {
   });
 });
 
-describe('execute instruction', () => {
-  it('should execute RawInputInstruction', async () => {
-    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
-    const interpreter = {
-      getTx: jest.fn().mockReturnValue(Promise.resolve({
-        outputs: [{
-          value: 123n,
+const RawInputExecutorTest = async (executor) => {
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+  const interpreter = {
+    getTx: jest.fn().mockReturnValue(Promise.resolve({
+      outputs: [{
+        value: 123n,
+        token,
+        token_data: 1,
+      }],
+    })),
+  };
+  const ins = RawInputInstruction.parse(CASES.GOOD['input/raw']);
+  await executor(interpreter, ctx, ins);
+
+  expect(interpreter.getTx).toHaveBeenCalledTimes(1);
+  expect(ctx.inputs).toHaveLength(1);
+  expect(ctx.inputs[0].hash).toStrictEqual(txId);
+  expect(ctx.inputs[0].index).toStrictEqual(0);
+  expect(Object.keys(ctx.balance.balance)).toHaveLength(1);
+  expect(ctx.balance.balance[token]).toMatchObject({
+    tokens: 123n,
+    mint_authorities: 0,
+    melt_authorities: 0,
+  });
+};
+
+const UtxoSelectExecutorTest = async (executor) => {
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+  const interpreter = {
+    getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
+    getChangeAddress: jest.fn().mockResolvedValue(address),
+    getTx: jest.fn().mockResolvedValue({
+      outputs: [
+        {
+          value: 20n,
           token,
           token_data: 1,
-        }],
-      })),
-    };
-    const ins = RawInputInstruction.parse(CASES.GOOD['input/raw']);
-    await execRawInputInstruction(interpreter, ctx, ins);
-
-    expect(interpreter.getTx).toHaveBeenCalledTimes(1);
-    expect(ctx.inputs).toHaveLength(1);
-    expect(ctx.inputs[0].hash).toStrictEqual(txId);
-    expect(ctx.inputs[0].index).toStrictEqual(0);
-    expect(Object.keys(ctx.balance.balance)).toHaveLength(1);
-    expect(ctx.balance.balance[token]).toMatchObject({
-      tokens: 123n,
-      mint_authorities: 0,
-      melt_authorities: 0,
-    });
-  });
-
-  it('should execute UtxoSelectInstruction', async () => {
-    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
-    const interpreter = {
-      getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
-      getChangeAddress: jest.fn().mockResolvedValue(address),
-      getTx: jest.fn().mockResolvedValue({
-        outputs: [
-          {
-            value: 20n,
-            token,
-            token_data: 1,
-          },
-          {
-            value: 20n,
-            token,
-            token_data: 1,
-          },
-        ],
-      }),
-      getUtxos: jest.fn().mockResolvedValue({
-        changeAmount: 10n,
-        utxos: [
-          {
-            txId,
-            index: 0,
-            tokenId: token,
-            address,
-            value: 20n,
-            authorities: 0n,
-          },
-          {
-            txId,
-            index: 1,
-            tokenId: token,
-            address,
-            value: 20n,
-            authorities: 0n,
-          },
-        ],
-      }),
-    };
-    const ins = UtxoSelectInstruction.parse({type: 'input/utxo', fill: 30, token});
-    await execUtxoSelectInstruction(interpreter, ctx, ins);
-
-    expect(interpreter.getTx).toHaveBeenCalledTimes(2);
-    expect(interpreter.getUtxos).toHaveBeenCalledTimes(1);
-    expect(interpreter.getNetwork).toHaveBeenCalledTimes(1);
-    expect(interpreter.getChangeAddress).toHaveBeenCalledTimes(1);
-
-    // Will add 2 inputs (from getUtxos) with 40n and a change output of 10n
-
-    expect(ctx.inputs).toHaveLength(2);
-    expect(ctx.inputs[0].hash).toStrictEqual(txId);
-    expect(ctx.inputs[0].index).toStrictEqual(0);
-    expect(ctx.inputs[1].hash).toStrictEqual(txId);
-    expect(ctx.inputs[1].index).toStrictEqual(1);
-
-    expect(ctx.outputs).toHaveLength(1);
-    expect(ctx.outputs[0].value).toStrictEqual(10n);
-    expect(ctx.outputs[0].tokenData).toStrictEqual(1);
-
-    expect(ctx.tokens).toHaveLength(1);
-    expect(ctx.tokens[0]).toStrictEqual(token);
-
-    expect(Object.keys(ctx.balance.balance)).toHaveLength(1);
-    expect(ctx.balance.balance[token]).toMatchObject({
-      tokens: 30n,
-      mint_authorities: 0,
-      melt_authorities: 0,
-    });
-  });
-
-  it('should execute AuthoritySelectInstruction', async () => {
-    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
-    const interpreter = {
-      getTx: jest.fn().mockResolvedValue({
-        outputs: [
-          {
-            value: 1n,
-            token,
-            token_data: 129,
-          },
-        ],
-      }),
-      getAuthorities: jest.fn().mockResolvedValue([
+        },
+        {
+          value: 20n,
+          token,
+          token_data: 1,
+        },
+      ],
+    }),
+    getUtxos: jest.fn().mockResolvedValue({
+      changeAmount: 10n,
+      utxos: [
         {
           txId,
           index: 0,
           tokenId: token,
           address,
-          value: 1n,
-          authorities: 1n,
+          value: 20n,
+          authorities: 0n,
         },
-      ]),
-    };
-    const inputIns = { type: 'input/authority', token, authority: 'mint' };
-    const ins = AuthoritySelectInstruction.parse(inputIns);
-    await execAuthoritySelectInstruction(interpreter, ctx, ins);
+        {
+          txId,
+          index: 1,
+          tokenId: token,
+          address,
+          value: 20n,
+          authorities: 0n,
+        },
+      ],
+    }),
+  };
 
-    expect(interpreter.getTx).toHaveBeenCalledTimes(1);
-    expect(interpreter.getAuthorities).toHaveBeenCalledTimes(1);
+  const insData = {type: 'input/utxo', fill: 30, token};
+  const ins = UtxoSelectInstruction.parse(insData);
+  await executor(interpreter, ctx, ins);
 
-    expect(ctx.inputs).toHaveLength(1);
-    expect(ctx.inputs[0].hash).toStrictEqual(txId);
-    expect(ctx.inputs[0].index).toStrictEqual(0);
+  expect(interpreter.getTx).toHaveBeenCalledTimes(2);
+  expect(interpreter.getUtxos).toHaveBeenCalledTimes(1);
+  expect(interpreter.getNetwork).toHaveBeenCalledTimes(1);
+  expect(interpreter.getChangeAddress).toHaveBeenCalledTimes(1);
 
-    expect(ctx.outputs).toHaveLength(0);
-    expect(ctx.tokens).toHaveLength(0);
+  // Will add 2 inputs (from getUtxos) with 40n and a change output of 10n
 
-    expect(Object.keys(ctx.balance.balance)).toHaveLength(1);
-    expect(ctx.balance.balance[token]).toMatchObject({
-      tokens: 0n,
-      mint_authorities: 1,
-      melt_authorities: 0,
-    });
+  expect(ctx.inputs).toHaveLength(2);
+  expect(ctx.inputs[0].hash).toStrictEqual(txId);
+  expect(ctx.inputs[0].index).toStrictEqual(0);
+  expect(ctx.inputs[1].hash).toStrictEqual(txId);
+  expect(ctx.inputs[1].index).toStrictEqual(1);
+
+  expect(ctx.outputs).toHaveLength(1);
+  expect(ctx.outputs[0].value).toStrictEqual(10n);
+  expect(ctx.outputs[0].tokenData).toStrictEqual(1);
+
+  expect(ctx.tokens).toHaveLength(1);
+  expect(ctx.tokens[0]).toStrictEqual(token);
+
+  expect(Object.keys(ctx.balance.balance)).toHaveLength(1);
+  expect(ctx.balance.balance[token]).toMatchObject({
+    tokens: 30n,
+    mint_authorities: 0,
+    melt_authorities: 0,
+  });
+};
+
+const AuthoritySelectExecutorTest = async (executor) => {
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+  const interpreter = {
+    getTx: jest.fn().mockResolvedValue({
+      outputs: [
+        {
+          value: 1n,
+          token,
+          token_data: 129,
+        },
+      ],
+    }),
+    getAuthorities: jest.fn().mockResolvedValue([
+      {
+        txId,
+        index: 0,
+        tokenId: token,
+        address,
+        value: 1n,
+        authorities: 1n,
+      },
+    ]),
+  };
+  const inputIns = { type: 'input/authority', token, authority: 'mint' };
+  const ins = AuthoritySelectInstruction.parse(inputIns);
+  await executor(interpreter, ctx, ins);
+
+  expect(interpreter.getTx).toHaveBeenCalledTimes(1);
+  expect(interpreter.getAuthorities).toHaveBeenCalledTimes(1);
+
+  expect(ctx.inputs).toHaveLength(1);
+  expect(ctx.inputs[0].hash).toStrictEqual(txId);
+  expect(ctx.inputs[0].index).toStrictEqual(0);
+
+  expect(ctx.outputs).toHaveLength(0);
+  expect(ctx.tokens).toHaveLength(0);
+
+  expect(Object.keys(ctx.balance.balance)).toHaveLength(1);
+  expect(ctx.balance.balance[token]).toMatchObject({
+    tokens: 0n,
+    mint_authorities: 1,
+    melt_authorities: 0,
+  });
+};
+
+const RawOutputExecutorTest = async (executor) => {
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+  const interpreter = {}; // interpreter is not used on raw output instruction
+  const ins = RawOutputInstruction.parse({
+    type: 'output/raw',
+    script: 'cafe',
+    amount: 11,
+  });
+  await executor(interpreter, ctx, ins);
+
+  expect(ctx.inputs).toHaveLength(0);
+  expect(ctx.tokens).toHaveLength(0);
+
+  expect(ctx.outputs).toHaveLength(1);
+  expect(ctx.outputs[0].value).toStrictEqual(11n);
+  expect(ctx.outputs[0].tokenData).toStrictEqual(0);
+  expect(ctx.outputs[0].script.toString('hex')).toStrictEqual('cafe');
+
+  expect(Object.keys(ctx.balance.balance)).toHaveLength(1);
+  expect(ctx.balance.balance['00']).toMatchObject({
+    tokens: -11n,
+    mint_authorities: 0,
+    melt_authorities: 0,
+  });
+};
+
+const RawOutputExecutorTestForAuthority = async (executor) => {
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+  const interpreter = {}; // interpreter is not used on raw output instruction
+  const ins = RawOutputInstruction.parse({
+    type: 'output/raw',
+    script: 'cafe',
+    authority: 'mint',
+    token,
+  });
+  await executor(interpreter, ctx, ins);
+
+  expect(ctx.inputs).toHaveLength(0);
+  expect(ctx.tokens).toHaveLength(1);
+
+  expect(ctx.outputs).toHaveLength(1);
+  expect(ctx.outputs[0].value).toStrictEqual(1n);
+  expect(ctx.outputs[0].tokenData).toStrictEqual(129);
+  expect(ctx.outputs[0].script.toString('hex')).toStrictEqual('cafe');
+
+  expect(Object.keys(ctx.balance.balance)).toHaveLength(1);
+  expect(ctx.balance.balance[token]).toMatchObject({
+    tokens: 0n,
+    mint_authorities: -1,
+    melt_authorities: 0,
+  });
+};
+
+const DataOutputExecutorTest = async (executor) => {
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+  const interpreter = {}; // interpreter is not used on data output instruction
+  const ins = DataOutputInstruction.parse({
+    type: 'output/data',
+    data: 'foobar',
+    token,
+  });
+  await executor(interpreter, ctx, ins);
+
+  expect(ctx.inputs).toHaveLength(0);
+  expect(ctx.tokens).toHaveLength(1);
+
+  expect(ctx.outputs).toHaveLength(1);
+  expect(ctx.outputs[0].value).toStrictEqual(1n);
+  expect(ctx.outputs[0].tokenData).toStrictEqual(1);
+  expect(ctx.outputs[0].parseScript(new Network('testnet')).data).toStrictEqual('foobar');
+
+  expect(Object.keys(ctx.balance.balance)).toHaveLength(1);
+  expect(ctx.balance.balance[token]).toMatchObject({
+    tokens: -1n,
+    mint_authorities: 0,
+    melt_authorities: 0,
+  });
+};
+
+const TokenOutputExecutorTest = async (executor) => {
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+  const interpreter = {
+    getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
+  };
+  const ins = TokenOutputInstruction.parse({
+    type: 'output/token',
+    amount: 23,
+    address,
+    token,
+  });
+  await executor(interpreter, ctx, ins);
+
+  expect(interpreter.getNetwork).toHaveBeenCalledTimes(1);
+
+  expect(ctx.inputs).toHaveLength(0);
+  expect(ctx.tokens).toHaveLength(1);
+
+  expect(ctx.outputs).toHaveLength(1);
+  expect(ctx.outputs[0].value).toStrictEqual(23n);
+  expect(ctx.outputs[0].tokenData).toStrictEqual(1);
+  expect(ctx.outputs[0].parseScript(new Network('testnet')).address.base58).toStrictEqual(address);
+
+  expect(Object.keys(ctx.balance.balance)).toHaveLength(1);
+  expect(ctx.balance.balance[token]).toMatchObject({
+    tokens: -23n,
+    mint_authorities: 0,
+    melt_authorities: 0,
+  });
+};
+
+const AuthorityOutputExecutorTest = async (executor) => {
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+  const interpreter = {
+    getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
+  };
+  const ins = AuthorityOutputInstruction.parse({
+    type: 'output/authority',
+    authority: 'melt',
+    token,
+    address,
+  });
+  await executor(interpreter, ctx, ins);
+
+  expect(interpreter.getNetwork).toHaveBeenCalledTimes(1);
+
+  expect(ctx.inputs).toHaveLength(0);
+  expect(ctx.tokens).toHaveLength(1);
+
+  expect(ctx.outputs).toHaveLength(1);
+  expect(ctx.outputs[0].value).toStrictEqual(2n);
+  expect(ctx.outputs[0].tokenData).toStrictEqual(129);
+  expect(ctx.outputs[0].parseScript(new Network('testnet')).address.base58).toStrictEqual(address);
+
+  expect(Object.keys(ctx.balance.balance)).toHaveLength(1);
+  expect(ctx.balance.balance[token]).toMatchObject({
+    tokens: 0n,
+    mint_authorities: 0,
+    melt_authorities: -1,
+  });
+};
+
+const ShuffleExecutorTest = async (executor) => {
+  const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
+  const interpreter = {};
+  const ins = ShuffleInstruction.parse({
+    type: 'action/shuffle',
+    target: 'all',
+  });
+  const arr = [];
+  for (let i = 1n; i < 10; i++) {
+    ctx.addOutput(-1, new Output(i, Buffer.alloc(1)))
+    ctx.addInput(-1, new Input(txId, i));
+    arr.push(i);
+  }
+  await executor(interpreter, ctx, ins);
+
+  expect(ctx.outputs.map(o => o.value)).not.toStrictEqual(arr);
+  expect(ctx.inputs.map(i => i.index)).not.toStrictEqual(arr);
+};
+
+describe('execute instruction from executor', () => {
+  it('should execute RawInputInstruction', async () => {
+    // Using the executor
+    await RawInputExecutorTest(execRawInputInstruction);
+    // Using runInstruction
+    await RawInputExecutorTest(runInstruction);
+  });
+
+  it('should execute UtxoSelectInstruction', async () => {
+    // Using the executor
+    await UtxoSelectExecutorTest(execUtxoSelectInstruction);
+    // Using runInstruction
+    await UtxoSelectExecutorTest(runInstruction);
+  });
+
+  it('should execute AuthoritySelectInstruction', async () => {
+    // Using the executor
+    await AuthoritySelectExecutorTest(execAuthoritySelectInstruction);
+    // Using runInstruction
+    await AuthoritySelectExecutorTest(runInstruction);
   });
 
   it('should execute RawOutputInstruction', async () => {
-    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
-    const interpreter = {}; // interpreter is not used on raw output instruction
-    const ins = RawOutputInstruction.parse({
-      type: 'output/raw',
-      script: 'cafe',
-      amount: 11,
-    });
-    await execRawOutputInstruction(interpreter, ctx, ins);
-
-    expect(ctx.inputs).toHaveLength(0);
-    expect(ctx.tokens).toHaveLength(0);
-
-    expect(ctx.outputs).toHaveLength(1);
-    expect(ctx.outputs[0].value).toStrictEqual(11n);
-    expect(ctx.outputs[0].tokenData).toStrictEqual(0);
-    expect(ctx.outputs[0].script.toString('hex')).toStrictEqual('cafe');
-
-    expect(Object.keys(ctx.balance.balance)).toHaveLength(1);
-    expect(ctx.balance.balance['00']).toMatchObject({
-      tokens: -11n,
-      mint_authorities: 0,
-      melt_authorities: 0,
-    });
+    // Using the executor
+    await RawOutputExecutorTest(execRawOutputInstruction);
+    // Using runInstruction
+    await RawOutputExecutorTest(runInstruction);
   });
 
   it('should execute RawOutputInstruction for authority', async () => {
-    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
-    const interpreter = {}; // interpreter is not used on raw output instruction
-    const ins = RawOutputInstruction.parse({
-      type: 'output/raw',
-      script: 'cafe',
-      authority: 'mint',
-      token,
-    });
-    await execRawOutputInstruction(interpreter, ctx, ins);
-
-    expect(ctx.inputs).toHaveLength(0);
-    expect(ctx.tokens).toHaveLength(1);
-
-    expect(ctx.outputs).toHaveLength(1);
-    expect(ctx.outputs[0].value).toStrictEqual(1n);
-    expect(ctx.outputs[0].tokenData).toStrictEqual(129);
-    expect(ctx.outputs[0].script.toString('hex')).toStrictEqual('cafe');
-
-    expect(Object.keys(ctx.balance.balance)).toHaveLength(1);
-    expect(ctx.balance.balance[token]).toMatchObject({
-      tokens: 0n,
-      mint_authorities: -1,
-      melt_authorities: 0,
-    });
+    // Using the executor
+    await RawOutputExecutorTestForAuthority(execRawOutputInstruction);
+    // Using runInstruction
+    await RawOutputExecutorTestForAuthority(runInstruction);
   });
 
   it('should execute DataOutputInstruction', async () => {
-    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
-    const interpreter = {}; // interpreter is not used on data output instruction
-    const ins = DataOutputInstruction.parse({
-      type: 'output/data',
-      data: 'foobar',
-      token,
-    });
-    await execDataOutputInstruction(interpreter, ctx, ins);
-
-    expect(ctx.inputs).toHaveLength(0);
-    expect(ctx.tokens).toHaveLength(1);
-
-    expect(ctx.outputs).toHaveLength(1);
-    expect(ctx.outputs[0].value).toStrictEqual(1n);
-    expect(ctx.outputs[0].tokenData).toStrictEqual(1);
-    expect(ctx.outputs[0].parseScript(new Network('testnet')).data).toStrictEqual('foobar');
-
-    expect(Object.keys(ctx.balance.balance)).toHaveLength(1);
-    expect(ctx.balance.balance[token]).toMatchObject({
-      tokens: -1n,
-      mint_authorities: 0,
-      melt_authorities: 0,
-    });
+    // Using the executor
+    await DataOutputExecutorTest(execDataOutputInstruction);
+    // Using runInstruction
+    await DataOutputExecutorTest(runInstruction);
   });
 
-
   it('should execute TokenOutputInstruction', async () => {
-    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
-    const interpreter = {
-      getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
-    };
-    const ins = TokenOutputInstruction.parse({
-      type: 'output/token',
-      amount: 23,
-      address,
-      token,
-    });
-    await execTokenOutputInstruction(interpreter, ctx, ins);
-
-    expect(interpreter.getNetwork).toHaveBeenCalledTimes(1);
-
-    expect(ctx.inputs).toHaveLength(0);
-    expect(ctx.tokens).toHaveLength(1);
-
-    expect(ctx.outputs).toHaveLength(1);
-    expect(ctx.outputs[0].value).toStrictEqual(23n);
-    expect(ctx.outputs[0].tokenData).toStrictEqual(1);
-    expect(ctx.outputs[0].parseScript(new Network('testnet')).address.base58).toStrictEqual(address);
-
-    expect(Object.keys(ctx.balance.balance)).toHaveLength(1);
-    expect(ctx.balance.balance[token]).toMatchObject({
-      tokens: -23n,
-      mint_authorities: 0,
-      melt_authorities: 0,
-    });
+    // Using the executor
+    await TokenOutputExecutorTest(execTokenOutputInstruction);
+    // Using runInstruction
+    await TokenOutputExecutorTest(runInstruction);
   });
 
   it('should execute AuthorityOutputInstruction', async () => {
-    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
-    const interpreter = {
-      getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
-    };
-    const ins = AuthorityOutputInstruction.parse({
-      type: 'output/authority',
-      authority: 'melt',
-      token,
-      address,
-    });
-    await execAuthorityOutputInstruction(interpreter, ctx, ins);
-
-    expect(interpreter.getNetwork).toHaveBeenCalledTimes(1);
-
-    expect(ctx.inputs).toHaveLength(0);
-    expect(ctx.tokens).toHaveLength(1);
-
-    expect(ctx.outputs).toHaveLength(1);
-    expect(ctx.outputs[0].value).toStrictEqual(2n);
-    expect(ctx.outputs[0].tokenData).toStrictEqual(129);
-    expect(ctx.outputs[0].parseScript(new Network('testnet')).address.base58).toStrictEqual(address);
-
-    expect(Object.keys(ctx.balance.balance)).toHaveLength(1);
-    expect(ctx.balance.balance[token]).toMatchObject({
-      tokens: 0n,
-      mint_authorities: 0,
-      melt_authorities: -1,
-    });
+    // Using the executor
+    await AuthorityOutputExecutorTest(execAuthorityOutputInstruction);
+    // Using runInstruction
+    await AuthorityOutputExecutorTest(runInstruction);
   });
-
 
   it('should execute ShuffleInstruction', async () => {
-    const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
-    const interpreter = {};
-    const ins = ShuffleInstruction.parse({
-      type: 'action/shuffle',
-      target: 'all',
-    });
-    const arr = [];
-    for (let i = 1n; i < 10; i++) {
-      ctx.addOutput(-1, new Output(i, Buffer.alloc(1)))
-      ctx.addInput(-1, new Input(txId, i));
-      arr.push(i);
-    }
-    await execShuffleInstruction(interpreter, ctx, ins);
-
-    expect(ctx.outputs.map(o => o.value)).not.toStrictEqual(arr);
-    expect(ctx.inputs.map(i => i.index)).not.toStrictEqual(arr);
+    // Using the executor
+    await ShuffleExecutorTest(execShuffleInstruction);
+    // Using runInstruction
+    await ShuffleExecutorTest(runInstruction);
   });
-
 });
