@@ -55,13 +55,13 @@ describe('Template execution', () => {
 
     expect(tx.outputs).toHaveLength(12);
 
-    // Created token
-    expect(tx.outputs[0].tokenData).toBe(1);
-    expect(tx.outputs[0].value).toBe(100n);
-
     // HTR change
-    expect(tx.outputs[1].tokenData).toBe(0);
-    expect(tx.outputs[1].value).toBe(9n);
+    expect(tx.outputs[0].tokenData).toBe(0);
+    expect(tx.outputs[0].value).toBe(9n);
+
+    // Created token
+    expect(tx.outputs[1].tokenData).toBe(1);
+    expect(tx.outputs[1].value).toBe(100n);
 
     // 5 mint authorities
     expect(tx.outputs[2].tokenData).toBe(129);
@@ -98,25 +98,33 @@ describe('Template execution', () => {
     await sendTx.runFromMining();
     await waitForTxReceived(hWallet, tx.hash, null);
 
-    expect(tx.outputs).toHaveLength(5);
+    expect(tx.outputs).toHaveLength(7);
 
     // HTR
     expect(tx.outputs[0].tokenData).toBe(0);
     expect(tx.outputs[0].value).toBe(2n);
 
+    // HTR Change
+    expect(tx.outputs[1].tokenData).toBe(0);
+    expect(tx.outputs[1].value).toBe(7n);
+
     // Custom token
-    expect(tx.outputs[1].tokenData).toBe(1);
-    expect(tx.outputs[1].value).toBe(3n);
+    expect(tx.outputs[2].tokenData).toBe(1);
+    expect(tx.outputs[2].value).toBe(3n);
+
+    // Custom token change
+    expect(tx.outputs[3].tokenData).toBe(1);
+    expect(tx.outputs[3].value).toBe(3n);
 
     // mint authority
-    expect(tx.outputs[2].tokenData).toBe(129);
-    expect(tx.outputs[2].value).toBe(1n);
+    expect(tx.outputs[4].tokenData).toBe(129);
+    expect(tx.outputs[4].value).toBe(1n);
 
     // melt authorities
-    expect(tx.outputs[3].tokenData).toBe(129);
-    expect(tx.outputs[3].value).toBe(2n);
-    expect(tx.outputs[4].tokenData).toBe(129);
-    expect(tx.outputs[4].value).toBe(2n);
+    expect(tx.outputs[5].tokenData).toBe(129);
+    expect(tx.outputs[5].value).toBe(2n);
+    expect(tx.outputs[6].tokenData).toBe(129);
+    expect(tx.outputs[6].value).toBe(2n);
   });
 
   it('should be able to destroy authorities', async () => {
@@ -154,8 +162,9 @@ describe('Template execution', () => {
     await sendTx.runFromMining();
     await waitForTxReceived(hWallet, tx.hash, null);
 
-    expect(tx.outputs[0].tokenData).toBe(1);
-    expect(tx.outputs[0].value).toBe(100n);
+    expect(tx.outputs[0].tokenData).toBe(0);
+    expect(tx.outputs[1].tokenData).toBe(1);
+    expect(tx.outputs[1].value).toBe(100n);
   });
 
   it('should be able to melt tokens', async () => {
