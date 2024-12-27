@@ -24,10 +24,11 @@ import {
 } from '../../wallet/types';
 import Transaction from '../../models/transaction';
 import HathorWallet from '../../new/wallet';
-import { NATIVE_TOKEN_UID } from '../../constants';
+import { CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, NATIVE_TOKEN_UID } from '../../constants';
 import transactionUtils from '../../utils/transaction';
 import tokenUtils from '../../utils/tokens';
 import Network from '../../models/network';
+import CreateTokenTransaction from '../../models/create_token_transaction';
 
 export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
   wallet: HathorWallet;
@@ -46,11 +47,26 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
       await runInstruction(this, context, ins);
     }
 
-    return new Transaction(context.inputs, context.outputs, {
-      signalBits: context.signalBits,
-      version: context.version,
-      tokens: context.tokens,
-    });
+    if (context.version === DEFAULT_TX_VERSION) {
+      return new Transaction(context.inputs, context.outputs, {
+        signalBits: context.signalBits,
+        version: context.version,
+        tokens: context.tokens,
+      });
+    }
+    if (context.version === CREATE_TOKEN_TX_VERSION) {
+      if (!context.tokenName || !context.tokenSymbol) {
+        throw new Error('Cannot create a token without a name or symbol');
+      }
+      return new CreateTokenTransaction(
+        context.tokenName,
+        context.tokenSymbol,
+        context.inputs,
+        context.outputs,
+        { signalBits: context.signalBits }
+      );
+    }
+    throw new Error('Unsupported Version byte provided');
   }
 
   async getAddress(markAsUsed: boolean = false): Promise<string> {
