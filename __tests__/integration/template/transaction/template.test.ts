@@ -100,13 +100,13 @@ describe('Template execution', () => {
 
     expect(tx.outputs).toHaveLength(7);
 
-    // HTR
-    expect(tx.outputs[0].tokenData).toBe(0);
-    expect(tx.outputs[0].value).toBe(2n);
-
     // HTR Change
+    expect(tx.outputs[0].tokenData).toBe(0);
+    expect(tx.outputs[0].value).toBe(7n);
+
+    // HTR
     expect(tx.outputs[1].tokenData).toBe(0);
-    expect(tx.outputs[1].value).toBe(7n);
+    expect(tx.outputs[1].value).toBe(2n);
 
     // Custom token
     expect(tx.outputs[2].tokenData).toBe(1);
