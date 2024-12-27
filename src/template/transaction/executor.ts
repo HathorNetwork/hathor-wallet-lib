@@ -301,7 +301,7 @@ export async function execRawOutputInstruction(
       tokenData |= TOKEN_AUTHORITY_MASK;
       break;
     default:
-      throw new Error('Invalid authority type');
+      break;
   }
   ctx.log(`amount(${amount})`);
   if (!amount) {

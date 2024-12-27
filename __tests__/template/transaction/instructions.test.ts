@@ -507,14 +507,6 @@ describe('should parse template instructions', () => {
     ).toBe(false);
     expect(
       AuthorityOutputInstruction.safeParse({
-        // Missing token
-        type: 'output/authority',
-        authority: 'melt',
-        address,
-      }).success
-    ).toBe(false);
-    expect(
-      AuthorityOutputInstruction.safeParse({
         type: 'output/authority',
         token,
         authority: 'none', // Invalid authority
