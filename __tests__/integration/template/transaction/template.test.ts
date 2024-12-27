@@ -23,7 +23,7 @@ describe('Template execution', () => {
     hWallet = await generateWalletHelper(null);
     interpreter = new WalletTxTemplateInterpreter(hWallet);
     const address = await hWallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hWallet, address, 10n, null);
+    await GenesisWalletHelper.injectFunds(hWallet, address, 10n, {});
   });
 
   afterAll(async () => {
