@@ -41,7 +41,10 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
     this.txCache = {};
   }
 
-  async build(instructions: z.infer<typeof TransactionTemplate>, debug: boolean = false): Promise<Transaction> {
+  async build(
+    instructions: z.infer<typeof TransactionTemplate>,
+    debug: boolean = false
+  ): Promise<Transaction> {
     const context = new TxTemplateContext(this.wallet.logger, debug);
 
     for (const ins of TransactionTemplate.parse(instructions)) {

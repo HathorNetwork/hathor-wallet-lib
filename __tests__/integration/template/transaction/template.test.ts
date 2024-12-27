@@ -190,4 +190,48 @@ describe('Template execution', () => {
     expect(tx.outputs[1].tokenData).toBe(129);
     expect(tx.outputs[1].value).toBe(2n);
   });
+
+  /* eslint-disable jest/expect-expect */
+  it('should be able to complete a transaction inputs', async () => {
+    const address = await hWallet.getAddressAtIndex(25);
+    const template = new TransactionTemplateBuilder()
+      .addSetVarAction({ name: 'addr', value: address })
+      .addSetVarAction({ name: 'token', value: tokenUid })
+      .addSetVarAction({
+        name: 'tk_balance',
+        action: 'get_wallet_balance',
+        options: { token: '{token}' },
+      })
+      .addTokenOutput({ address: '{addr}', amount: '{tk_balance}', token: '{token}' })
+      .addCompleteAction({})
+      .addShuffleAction({ target: 'all' })
+      .build();
+
+    const tx = await interpreter.build(template, DEBUG);
+    await transactionUtils.signTransaction(tx, hWallet.storage, DEFAULT_PIN_CODE);
+    tx.prepareToSend();
+    const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
+    await sendTx.runFromMining();
+    await waitForTxReceived(hWallet, tx.hash, null);
+  });
+
+  it('should be able to complete change', async () => {
+    const address = await hWallet.getAddressAtIndex(25);
+    const template = new TransactionTemplateBuilder()
+      .addSetVarAction({ name: 'addr', value: address })
+      .addSetVarAction({ name: 'token', value: tokenUid })
+      .addUtxoSelect({ fill: 100, token: '{token}' })
+      .addTokenOutput({ address: '{addr}', amount: 1, token: '{token}' })
+      .addDataOutput({ data: 'cafe', token: '{token}' })
+      .addChangeAction({})
+      .build();
+
+    const tx = await interpreter.build(template, DEBUG);
+    await transactionUtils.signTransaction(tx, hWallet.storage, DEFAULT_PIN_CODE);
+    tx.prepareToSend();
+    const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
+    await sendTx.runFromMining();
+    await waitForTxReceived(hWallet, tx.hash, null);
+  });
+  /* eslint-enable jest/expect-expect */
 });

@@ -5,13 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { z } from 'zod';
 import { TransactionTemplate } from './instructions';
 import { TxTemplateContext } from './context';
 import { IHistoryTx, ITokenBalance, ITokenData, OutputValueType } from '../../types';
 import Transaction from '../../models/transaction';
 import Network from '../../models/network';
 import { Utxo } from '../../wallet/types';
-import { z } from 'zod';
 
 export interface IGetUtxosOptions {
   token?: string;
