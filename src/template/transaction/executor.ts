@@ -23,7 +23,6 @@ import {
   ShuffleInstruction,
   TokenOutputInstruction,
   TxTemplateInstruction,
-  TxTemplateInstructionType,
   UtxoSelectInstruction,
   getVariable,
 } from './instructions';
@@ -48,7 +47,7 @@ import { getWalletAddress, getWalletBalance } from './setvarcommands';
 export async function runInstruction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  ins: TxTemplateInstructionType
+  ins: z.infer<typeof TxTemplateInstruction>
 ) {
   const instructionExecutor = findInstructionExecution(ins);
   await instructionExecutor(interpreter, ctx, ins);

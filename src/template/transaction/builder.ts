@@ -10,8 +10,6 @@ import { JSONBigInt } from '../../utils/bigint';
 import {
   TxTemplateInstruction,
   TransactionTemplate,
-  TransactionTemplateType,
-  TxTemplateInstructionType,
   RawInputInstruction,
   UtxoSelectInstruction,
   AuthoritySelectInstruction,
@@ -41,20 +39,20 @@ const ConfigInsArgs = ConfigInstruction.omit({ type: true });
 const SetVarInsArgs = SetVarInstruction.omit({ type: true });
 
 export class TransactionTemplateBuilder {
-  template: TransactionTemplateType;
+  template: z.infer<typeof TransactionTemplate>;
 
   constructor() {
     this.template = [];
   }
 
-  static from(instructions: TransactionTemplateType): TransactionTemplateBuilder {
+  static from(instructions: z.input<typeof TransactionTemplate>): TransactionTemplateBuilder {
     const parsedTemplate = TransactionTemplate.parse(instructions);
     const tt = new TransactionTemplateBuilder();
     tt.template = parsedTemplate;
     return tt;
   }
 
-  build(): TransactionTemplateType {
+  build(): z.infer<typeof TransactionTemplate> {
     return this.template;
   }
 
@@ -62,7 +60,7 @@ export class TransactionTemplateBuilder {
     return JSONBigInt.stringify(this.template, space);
   }
 
-  addInstruction(ins: TxTemplateInstructionType): TransactionTemplateBuilder {
+  addInstruction(ins: z.input<typeof TxTemplateInstruction>): TransactionTemplateBuilder {
     this.template.push(TxTemplateInstruction.parse(ins));
     return this;
   }

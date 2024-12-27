@@ -221,7 +221,5 @@ export const TxTemplateInstruction = z.discriminatedUnion('type', [
   ConfigInstruction,
   SetVarInstruction,
 ]);
-export type TxTemplateInstructionType = z.infer<typeof TxTemplateInstruction>;
 
 export const TransactionTemplate = z.array(TxTemplateInstruction);
-export type TransactionTemplateType = z.infer<typeof TransactionTemplate>;

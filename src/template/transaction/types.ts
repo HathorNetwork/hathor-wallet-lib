@@ -5,12 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { TransactionTemplateType } from './instructions';
+import { TransactionTemplate } from './instructions';
 import { TxTemplateContext } from './context';
 import { IHistoryTx, ITokenBalance, ITokenData, OutputValueType } from '../../types';
 import Transaction from '../../models/transaction';
 import Network from '../../models/network';
 import { Utxo } from '../../wallet/types';
+import { z } from 'zod';
 
 export interface IGetUtxosOptions {
   token?: string;
@@ -47,7 +48,7 @@ export interface IWalletBalanceData {
 }
 
 export interface ITxTemplateInterpreter {
-  build(instructions: TransactionTemplateType, debug: boolean): Promise<Transaction>;
+  build(instructions: z.infer<typeof TransactionTemplate>, debug: boolean): Promise<Transaction>;
   getAddress(markAsUsed?: boolean): Promise<string>;
   getAddressAtIndex(index: number): Promise<string>;
   getBalance(token: string): Promise<IWalletBalanceData>;

@@ -5,7 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { TransactionTemplateType } from './instructions';
+import { z } from 'zod';
+import { TransactionTemplate } from './instructions';
 import { runInstruction } from './executor';
 import { TxTemplateContext } from './context';
 import {
@@ -40,10 +41,10 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
     this.txCache = {};
   }
 
-  async build(instructions: TransactionTemplateType, debug: boolean = false): Promise<Transaction> {
+  async build(instructions: z.infer<typeof TransactionTemplate>, debug: boolean = false): Promise<Transaction> {
     const context = new TxTemplateContext(this.wallet.logger, debug);
 
-    for (const ins of instructions) {
+    for (const ins of TransactionTemplate.parse(instructions)) {
       await runInstruction(this, context, ins);
     }
 
