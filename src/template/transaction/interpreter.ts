@@ -5,12 +5,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import {
-  TransactionTemplateType,
-} from './instructions';
+import { TransactionTemplateType } from './instructions';
 import { runInstruction } from './executor';
 import { TxTemplateContext } from './context';
-import { ITxTemplateInterpreter, IGetUtxosOptions, IGetUtxoResponse, IWalletBalanceData } from './types';
+import {
+  ITxTemplateInterpreter,
+  IGetUtxosOptions,
+  IGetUtxoResponse,
+  IWalletBalanceData,
+} from './types';
 import { IHistoryTx, OutputValueType } from '../../types';
 import {
   FullNodeInput,
@@ -21,9 +24,7 @@ import {
 } from '../../wallet/types';
 import Transaction from '../../models/transaction';
 import HathorWallet from '../../new/wallet';
-import {
-  NATIVE_TOKEN_UID,
-} from '../../constants';
+import { NATIVE_TOKEN_UID } from '../../constants';
 import transactionUtils from '../../utils/transaction';
 import tokenUtils from '../../utils/tokens';
 import Network from '../../models/network';
@@ -58,11 +59,11 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
   }
 
   async getAddressAtIndex(index: number): Promise<string> {
-    return await this.wallet.getAddressAtIndex(index);
+    return this.wallet.getAddressAtIndex(index);
   }
 
   async getBalance(token: string): Promise<IWalletBalanceData> {
-    return await this.wallet.getBalance(token);
+    return this.wallet.getBalance(token);
   }
 
   /**
@@ -76,7 +77,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
 
   async getUtxos(amount: OutputValueType, options: IGetUtxosOptions): Promise<IGetUtxoResponse> {
     // XXX: This may throw, but maybe we should let it.
-    return await this.wallet.getUtxosForAmount(amount, options);
+    return this.wallet.getUtxosForAmount(amount, options);
   }
 
   async getAuthorities(count: number, options: IGetUtxosOptions): Promise<Utxo[]> {
@@ -84,7 +85,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
       ...options,
       max_utxos: count,
     };
-    let utxos: Utxo[] = [];
+    const utxos: Utxo[] = [];
     // XXX: This may throw, but maybe we should let it.
     for await (const utxo of this.wallet.storage.selectUtxos(newOptions)) {
       utxos.push(utxo);

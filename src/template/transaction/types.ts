@@ -13,9 +13,9 @@ import Network from '../../models/network';
 import { Utxo } from '../../wallet/types';
 
 export interface IGetUtxosOptions {
-  token?: string,
-  authorities?: OutputValueType,
-  filter_address?: string,
+  token?: string;
+  authorities?: OutputValueType;
+  filter_address?: string;
 
   // Dont know if we need these yet
   // max_utxos?: number,
@@ -32,19 +32,19 @@ export interface IGetUtxosOptions {
 }
 
 export interface IGetUtxoResponse {
-  utxos: Utxo[],
-  changeAmount: OutputValueType,
+  utxos: Utxo[];
+  changeAmount: OutputValueType;
 }
 
 export interface IWalletBalanceData {
-  token: ITokenData,
-  balance: ITokenBalance,
-  transactions: number,
+  token: ITokenData;
+  balance: ITokenBalance;
+  transactions: number;
   tokenAuthorities: {
-    unlocked: {mint: number, melt: number},
-    locked: {mint: number, melt: number}
-  },
-};
+    unlocked: { mint: number; melt: number };
+    locked: { mint: number; melt: number };
+  };
+}
 
 export interface ITxTemplateInterpreter {
   build(instructions: TransactionTemplateType, debug: boolean): Promise<Transaction>;

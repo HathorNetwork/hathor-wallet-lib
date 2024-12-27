@@ -13,7 +13,7 @@ import { SetVarGetWalletAddressOpts, SetVarGetWalletBalanceOpts } from './instru
 export async function getWalletAddress(
   interpreter: ITxTemplateInterpreter,
   _ctx: TxTemplateContext,
-  options: z.infer<typeof SetVarGetWalletAddressOpts>,
+  options: z.infer<typeof SetVarGetWalletAddressOpts>
 ): Promise<string> {
   if (options.index) {
     return interpreter.getAddressAtIndex(options.index);
@@ -24,8 +24,8 @@ export async function getWalletAddress(
 export async function getWalletBalance(
   interpreter: ITxTemplateInterpreter,
   _ctx: TxTemplateContext,
-  options: z.infer<typeof SetVarGetWalletBalanceOpts>,
-): Promise<number|bigint> {
+  options: z.infer<typeof SetVarGetWalletBalanceOpts>
+): Promise<number | bigint> {
   const data = await interpreter.getBalance(options.token);
   switch (options.authority) {
     case 'mint':

@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { z } from 'zod';
 import {
   execAuthorityOutputInstruction,
   execAuthoritySelectInstruction,
@@ -24,7 +23,16 @@ import {
 } from '../../../src/template/transaction/executor';
 import { TxTemplateContext } from '../../../src/template/transaction/context';
 import { getDefaultLogger } from '../../../src/types';
-import { AuthorityOutputInstruction, AuthoritySelectInstruction, DataOutputInstruction, RawInputInstruction, RawOutputInstruction, ShuffleInstruction, TokenOutputInstruction, UtxoSelectInstruction } from '../../../src/template/transaction/instructions';
+import {
+  AuthorityOutputInstruction,
+  AuthoritySelectInstruction,
+  DataOutputInstruction,
+  RawInputInstruction,
+  RawOutputInstruction,
+  ShuffleInstruction,
+  TokenOutputInstruction,
+  UtxoSelectInstruction,
+} from '../../../src/template/transaction/instructions';
 import Network from '../../../src/models/network';
 import Output from '../../../src/models/output';
 import Input from '../../../src/models/input';
@@ -38,168 +46,200 @@ const DEBUG = false;
 const address = 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ';
 const token = '0000000110eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e';
 const txId = '0000000110eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e';
-const CASES = {
-  GOOD: {
-    'input/raw': {
-      type: 'input/raw',
-      index: 0,
-      txId,
-    },
-    'input/utxo': {
-      type: 'input/utxo',
-      fill: 40,
-    },
-    'input/authority': {
-      type: 'input/authority',
-      authority: 'mint',
-      token,
-    },
-    'output/raw': {
-      type: 'output/raw',
-      script: 'cafe',
-      amount: 10,
-    },
-    'output/token': {
-      type: 'output/token',
-      amount: 23,
-      address,
-    },
-    'output/authority': {
-      type: 'output/authority',
-      authority: 'mint',
-      token,
-      address,
-    },
-    'output/data': {
-      type: 'output/data',
-      data: 'cafe',
-    },
-    'action/shuffle': {
-      type: 'action/shuffle',
-      target: 'all',
-    },
-    'action/change': {
-      type: 'action/change',
-    },
-    'action/complete': {
-      type: 'action/complete',
-    },
-    'action/config': {
-      type: 'action/config',
-      version: 5,
-      signalBits: 12,
-      tokenName: 'foo',
-      tokenSymbol: 'bar',
-    },
-    'action/setvar': {
-      type: 'action/setvar',
-      name: 'foo',
-      value: 'bar',
-    },
-  },
-  BAD: {
-    'input/raw': {
-      type: 'input/raw',
-      index: 300,
-      txId,
-    },
-    'input/utxo': {
-      type: 'input/utxo',
-      fill: '11g',
-    },
-    'input/authority': {
-      type: 'input/authority',
-      authority: 'none',
-      token,
-    },
-    'output/raw': {
-      type: 'output/raw',
-      script: 'caf',
-      amount: 10,
-    },
-    'output/token': {
-      type: 'output/token',
-      amount: '23g',
-      address,
-    },
-    'output/authority': {
-      type: 'output/authority',
-      authority: 'none',
-      token,
-    },
-    'output/data': {
-      type: 'output/data',
-      data: { foo: 'bar' },
-    },
-    'action/shuffle': {
-      type: 'action/shuffle',
-      target: 'none',
-    },
-    'action/change': {
-      type: 'action/change',
-      token: 4556,
-    },
-    'action/complete': {
-      type: 'action/complete',
-      token: 123,
-    },
-    'action/config': {
-      type: 'action/config',
-      version: 300,
-      signalBits: 8001,
-      tokenName: '',
-      tokenSymbol: 'foobar',
-    },
-    'action/setvar': {
-      type: 'action/setvar',
-    },
-  }
-}
 
 describe('findInstructionExecution', () => {
   it('should find the correct executor', () => {
-    expect(findInstructionExecution(CASES.GOOD['input/raw'])).toBe(execRawInputInstruction);
-    expect(findInstructionExecution(CASES.GOOD['input/utxo'])).toBe(execUtxoSelectInstruction);
-    expect(findInstructionExecution(CASES.GOOD['input/authority'])).toBe(execAuthoritySelectInstruction);
-    expect(findInstructionExecution(CASES.GOOD['output/raw'])).toBe(execRawOutputInstruction);
-    expect(findInstructionExecution(CASES.GOOD['output/token'])).toBe(execTokenOutputInstruction);
-    expect(findInstructionExecution(CASES.GOOD['output/authority'])).toBe(execAuthorityOutputInstruction);
-    expect(findInstructionExecution(CASES.GOOD['output/data'])).toBe(execDataOutputInstruction);
-    expect(findInstructionExecution(CASES.GOOD['action/shuffle'])).toBe(execShuffleInstruction);
-    expect(findInstructionExecution(CASES.GOOD['action/change'])).toBe(execChangeInstruction);
-    expect(findInstructionExecution(CASES.GOOD['action/complete'])).toBe(execCompleteTxInstruction);
-    expect(findInstructionExecution(CASES.GOOD['action/config'])).toBe(execConfigInstruction);
-    expect(findInstructionExecution(CASES.GOOD['action/setvar'])).toBe(execSetVarInstruction);
+    expect(
+      findInstructionExecution({
+        type: 'input/raw',
+        index: 0,
+        txId,
+      })
+    ).toBe(execRawInputInstruction);
+
+    expect(
+      findInstructionExecution({
+        type: 'input/utxo',
+        fill: 40,
+      })
+    ).toBe(execUtxoSelectInstruction);
+
+    expect(
+      findInstructionExecution({
+        type: 'input/authority',
+        authority: 'mint',
+        token,
+      })
+    ).toBe(execAuthoritySelectInstruction);
+
+    expect(
+      findInstructionExecution({
+        type: 'output/raw',
+        script: 'cafe',
+        amount: 10,
+      })
+    ).toBe(execRawOutputInstruction);
+
+    expect(
+      findInstructionExecution({
+        type: 'output/token',
+        amount: 23,
+        address,
+      })
+    ).toBe(execTokenOutputInstruction);
+
+    expect(
+      findInstructionExecution({
+        type: 'output/authority',
+        authority: 'mint',
+        token,
+        address,
+      })
+    ).toBe(execAuthorityOutputInstruction);
+
+    expect(
+      findInstructionExecution({
+        type: 'output/data',
+        data: 'cafe',
+      })
+    ).toBe(execDataOutputInstruction);
+
+    expect(
+      findInstructionExecution({
+        type: 'action/shuffle',
+        target: 'all',
+      })
+    ).toBe(execShuffleInstruction);
+
+    expect(
+      findInstructionExecution({
+        type: 'action/change',
+      })
+    ).toBe(execChangeInstruction);
+
+    expect(
+      findInstructionExecution({
+        type: 'action/complete',
+      })
+    ).toBe(execCompleteTxInstruction);
+
+    expect(
+      findInstructionExecution({
+        type: 'action/config',
+        version: 5,
+        tokenName: 'foo',
+        tokenSymbol: 'bar',
+      })
+    ).toBe(execConfigInstruction);
+
+    expect(
+      findInstructionExecution({
+        type: 'action/setvar',
+        name: 'foo',
+        value: 'bar',
+      })
+    ).toBe(execSetVarInstruction);
   });
 
   it('should throw with an invalid instruction', () => {
-    expect(() => (findInstructionExecution(CASES.BAD['input/raw']))).toThrow();
-    expect(() => (findInstructionExecution(CASES.BAD['input/utxo']))).toThrow();
-    expect(() => (findInstructionExecution(CASES.BAD['input/authority']))).toThrow();
-    expect(() => (findInstructionExecution(CASES.BAD['output/raw']))).toThrow();
-    expect(() => (findInstructionExecution(CASES.BAD['output/token']))).toThrow();
-    expect(() => (findInstructionExecution(CASES.BAD['output/authority']))).toThrow();
-    expect(() => (findInstructionExecution(CASES.BAD['output/data']))).toThrow();
-    expect(() => (findInstructionExecution(CASES.BAD['action/shuffle']))).toThrow();
-    expect(() => (findInstructionExecution(CASES.BAD['action/change']))).toThrow();
-    expect(() => (findInstructionExecution(CASES.BAD['action/complete']))).toThrow();
-    expect(() => (findInstructionExecution(CASES.BAD['action/config']))).toThrow();
-    expect(() => (findInstructionExecution(CASES.BAD['action/setvar']))).toThrow();
+    expect(() =>
+      findInstructionExecution({
+        type: 'input/raw',
+        index: 300,
+        txId,
+      })
+    ).toThrow();
+    expect(() =>
+      findInstructionExecution({
+        type: 'input/utxo',
+        fill: '11g',
+      })
+    ).toThrow();
+    expect(() =>
+      findInstructionExecution({
+        type: 'input/authority',
+        authority: 'none',
+        token,
+      })
+    ).toThrow();
+    expect(() =>
+      findInstructionExecution({
+        type: 'output/raw',
+        script: 'caf',
+        amount: 10,
+      })
+    ).toThrow();
+    expect(() =>
+      findInstructionExecution({
+        type: 'output/token',
+        amount: '23g',
+        address,
+      })
+    ).toThrow();
+    expect(() =>
+      findInstructionExecution({
+        type: 'output/authority',
+        authority: 'none',
+        token,
+      })
+    ).toThrow();
+    expect(() =>
+      findInstructionExecution({
+        type: 'output/data',
+        data: { foo: 'bar' },
+      })
+    ).toThrow();
+    expect(() =>
+      findInstructionExecution({
+        type: 'action/shuffle',
+        target: 'none',
+      })
+    ).toThrow();
+    expect(() =>
+      findInstructionExecution({
+        type: 'action/change',
+        token: 4556,
+      })
+    ).toThrow();
+    expect(() =>
+      findInstructionExecution({
+        type: 'action/complete',
+        token: 123,
+      })
+    ).toThrow();
+    expect(() =>
+      findInstructionExecution({
+        type: 'action/config',
+        version: 300,
+        signalBits: 8001,
+        tokenName: '',
+        tokenSymbol: 'foobar',
+      })
+    ).toThrow();
+    expect(() =>
+      findInstructionExecution({
+        type: 'action/setvar',
+      })
+    ).toThrow();
   });
 });
 
-const RawInputExecutorTest = async (executor) => {
+const RawInputExecutorTest = async executor => {
   const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {
-    getTx: jest.fn().mockReturnValue(Promise.resolve({
-      outputs: [{
-        value: 123n,
-        token,
-        token_data: 1,
-      }],
-    })),
+    getTx: jest.fn().mockReturnValue(
+      Promise.resolve({
+        outputs: [
+          {
+            value: 123n,
+            token,
+            token_data: 1,
+          },
+        ],
+      })
+    ),
   };
-  const ins = RawInputInstruction.parse(CASES.GOOD['input/raw']);
+  const ins = RawInputInstruction.parse({ type: 'input/raw', index: 0, txId });
   await executor(interpreter, ctx, ins);
 
   expect(interpreter.getTx).toHaveBeenCalledTimes(1);
@@ -214,7 +254,7 @@ const RawInputExecutorTest = async (executor) => {
   });
 };
 
-const UtxoSelectExecutorTest = async (executor) => {
+const UtxoSelectExecutorTest = async executor => {
   const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {
     getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
@@ -256,7 +296,7 @@ const UtxoSelectExecutorTest = async (executor) => {
     }),
   };
 
-  const insData = {type: 'input/utxo', fill: 30, token};
+  const insData = { type: 'input/utxo', fill: 30, token };
   const ins = UtxoSelectInstruction.parse(insData);
   await executor(interpreter, ctx, ins);
 
@@ -288,7 +328,7 @@ const UtxoSelectExecutorTest = async (executor) => {
   });
 };
 
-const AuthoritySelectExecutorTest = async (executor) => {
+const AuthoritySelectExecutorTest = async executor => {
   const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {
     getTx: jest.fn().mockResolvedValue({
@@ -333,7 +373,7 @@ const AuthoritySelectExecutorTest = async (executor) => {
   });
 };
 
-const RawOutputExecutorTest = async (executor) => {
+const RawOutputExecutorTest = async executor => {
   const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {}; // interpreter is not used on raw output instruction
   const ins = RawOutputInstruction.parse({
@@ -359,7 +399,7 @@ const RawOutputExecutorTest = async (executor) => {
   });
 };
 
-const RawOutputExecutorTestForAuthority = async (executor) => {
+const RawOutputExecutorTestForAuthority = async executor => {
   const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {}; // interpreter is not used on raw output instruction
   const ins = RawOutputInstruction.parse({
@@ -386,7 +426,7 @@ const RawOutputExecutorTestForAuthority = async (executor) => {
   });
 };
 
-const DataOutputExecutorTest = async (executor) => {
+const DataOutputExecutorTest = async executor => {
   const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {}; // interpreter is not used on data output instruction
   const ins = DataOutputInstruction.parse({
@@ -402,7 +442,13 @@ const DataOutputExecutorTest = async (executor) => {
   expect(ctx.outputs).toHaveLength(1);
   expect(ctx.outputs[0].value).toStrictEqual(1n);
   expect(ctx.outputs[0].tokenData).toStrictEqual(1);
-  expect(ctx.outputs[0].parseScript(new Network('testnet')).data).toStrictEqual('foobar');
+  const script = ctx.outputs[0].parseScript(new Network('testnet'));
+  expect(script?.getType()).toStrictEqual('data');
+  if (script && 'data' in script) {
+    expect(script.data).toStrictEqual('foobar');
+  } else {
+    throw new Error('unexpected script');
+  }
 
   expect(Object.keys(ctx.balance.balance)).toHaveLength(1);
   expect(ctx.balance.balance[token]).toMatchObject({
@@ -412,7 +458,7 @@ const DataOutputExecutorTest = async (executor) => {
   });
 };
 
-const TokenOutputExecutorTest = async (executor) => {
+const TokenOutputExecutorTest = async executor => {
   const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {
     getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
@@ -433,7 +479,12 @@ const TokenOutputExecutorTest = async (executor) => {
   expect(ctx.outputs).toHaveLength(1);
   expect(ctx.outputs[0].value).toStrictEqual(23n);
   expect(ctx.outputs[0].tokenData).toStrictEqual(1);
-  expect(ctx.outputs[0].parseScript(new Network('testnet')).address.base58).toStrictEqual(address);
+  const script = ctx.outputs[0].parseScript(new Network('testnet'));
+  if (script && 'address' in script) {
+    expect(script.address.base58).toStrictEqual(address);
+  } else {
+    throw new Error('unexpected script');
+  }
 
   expect(Object.keys(ctx.balance.balance)).toHaveLength(1);
   expect(ctx.balance.balance[token]).toMatchObject({
@@ -443,7 +494,7 @@ const TokenOutputExecutorTest = async (executor) => {
   });
 };
 
-const AuthorityOutputExecutorTest = async (executor) => {
+const AuthorityOutputExecutorTest = async executor => {
   const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {
     getNetwork: jest.fn().mockReturnValue(new Network('testnet')),
@@ -464,7 +515,12 @@ const AuthorityOutputExecutorTest = async (executor) => {
   expect(ctx.outputs).toHaveLength(1);
   expect(ctx.outputs[0].value).toStrictEqual(2n);
   expect(ctx.outputs[0].tokenData).toStrictEqual(129);
-  expect(ctx.outputs[0].parseScript(new Network('testnet')).address.base58).toStrictEqual(address);
+  const script = ctx.outputs[0].parseScript(new Network('testnet'));
+  if (script && 'address' in script) {
+    expect(script.address.base58).toStrictEqual(address);
+  } else {
+    throw new Error('unexpected script');
+  }
 
   expect(Object.keys(ctx.balance.balance)).toHaveLength(1);
   expect(ctx.balance.balance[token]).toMatchObject({
@@ -474,25 +530,26 @@ const AuthorityOutputExecutorTest = async (executor) => {
   });
 };
 
-const ShuffleExecutorTest = async (executor) => {
+const ShuffleExecutorTest = async executor => {
   const ctx = new TxTemplateContext(getDefaultLogger(), DEBUG);
   const interpreter = {};
   const ins = ShuffleInstruction.parse({
     type: 'action/shuffle',
     target: 'all',
   });
-  const arr = [];
+  const arr: bigint[] = [];
   for (let i = 1n; i < 10; i++) {
-    ctx.addOutput(-1, new Output(i, Buffer.alloc(1)))
-    ctx.addInput(-1, new Input(txId, i));
+    ctx.addOutput(-1, new Output(i, Buffer.alloc(1)));
+    ctx.addInput(-1, new Input(txId, Number(i)));
     arr.push(i);
   }
   await executor(interpreter, ctx, ins);
 
   expect(ctx.outputs.map(o => o.value)).not.toStrictEqual(arr);
-  expect(ctx.inputs.map(i => i.index)).not.toStrictEqual(arr);
+  expect(ctx.inputs.map(i => i.index)).not.toStrictEqual(arr.map(i => Number(i)));
 };
 
+/* eslint-disable jest/expect-expect */
 describe('execute instruction from executor', () => {
   it('should execute RawInputInstruction', async () => {
     // Using the executor
@@ -557,3 +614,4 @@ describe('execute instruction from executor', () => {
     await ShuffleExecutorTest(runInstruction);
   });
 });
+/* eslint-enable jest/expect-expect */

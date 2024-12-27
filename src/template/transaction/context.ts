@@ -20,7 +20,8 @@ export interface TokenBalance {
 
 export class TxBalance {
   balance: Record<string, TokenBalance>;
-  createdTokenBalance: null|TokenBalance;
+
+  createdTokenBalance: null | TokenBalance;
 
   constructor() {
     this.balance = {};
@@ -93,7 +94,7 @@ export class TxBalance {
     this.setCreatedTokenBalance(balance);
   }
 
-  addOutputAuthority(count: number, token: string, authority: 'mint'|'melt') {
+  addOutputAuthority(count: number, token: string, authority: 'mint' | 'melt') {
     const balance = this.getTokenBalance(token);
     if (authority === 'mint') {
       balance.mint_authorities -= count;
@@ -104,7 +105,7 @@ export class TxBalance {
     this.setTokenBalance(token, balance);
   }
 
-  addCreatedTokenOutputAuthority(count: number, authority: 'mint'|'melt') {
+  addCreatedTokenOutputAuthority(count: number, authority: 'mint' | 'melt') {
     const balance = this.getCreatedTokenBalance();
     if (authority === 'mint') {
       balance.mint_authorities -= count;
@@ -133,6 +134,7 @@ export class TxTemplateContext {
 
   tokenSymbol?: string;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vars: Record<string, any>;
 
   _logs: string[];
@@ -167,7 +169,9 @@ export class TxTemplateContext {
 
   useCreateTxContext() {
     if (this.tokens.length !== 0) {
-      throw new Error(`Trying to build a create token tx with ${this.tokens.length} tokens on the array`);
+      throw new Error(
+        `Trying to build a create token tx with ${this.tokens.length} tokens on the array`
+      );
     }
     this.version = CREATE_TOKEN_TX_VERSION;
   }

@@ -5,8 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { NATIVE_TOKEN_UID } from '../../constants';
 import { z } from 'zod';
+import { NATIVE_TOKEN_UID } from '../../constants';
 
 const TEMPLATE_REFERENCE_NAME_RE = /[\w\d]+/;
 const TEMPLATE_REFERENCE_RE = /\{([\w\d]+)\}/;
@@ -36,11 +36,14 @@ export const TemplateRef = z.string().regex(TEMPLATE_REFERENCE_RE);
  * const token: string = getVariable<number>(ref3, {foo: 27}, IndexSchema);
  * ```
  */
-export function getVariable<S, T extends z.ZodUnion<[typeof TemplateRef, z.ZodType<S, z.ZodTypeDef, any>]> = z.ZodUnion<[typeof TemplateRef, z.ZodType<S, z.ZodTypeDef, any>]>>(
-  ref: z.infer<T>,
-  vars: Record<string, unknown>,
-  schema: T,
-): S {
+export function getVariable<
+  S,
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  T extends z.ZodUnion<[typeof TemplateRef, z.ZodType<S, z.ZodTypeDef, any>]> = z.ZodUnion<
+    [typeof TemplateRef, z.ZodType<S, z.ZodTypeDef, any>]
+  >,
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+>(ref: z.infer<T>, vars: Record<string, unknown>, schema: T): S {
   let val = ref; // type should be: string | S
   const parsed = TemplateRef.safeParse(ref);
   if (parsed.success) {
@@ -67,35 +70,27 @@ export const CustomTokenSchema = Sha256HexSchema;
 // If we want to represent all tokens we need to include the native token uid 00
 export const TokenSchema = z.string().regex(/^[a-fA-F0-9]{64}$|^00$/);
 // Addresses are base58 with length 34, may be 35 depending on the choice of version byte
-export const AddressSchema = z.string().regex(/^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{34,35}$/);
+export const AddressSchema = z
+  .string()
+  .regex(/^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{34,35}$/);
 
 /**
  * This schema is necessary because `z.coerce.bigint().optional()` throws
  * with `undefined` input due to how coerce works (this happens even with safeParse)
  * so we need a custom bigint that can receive number or string as input and be optional.
- **/
+ * */
 export const AmountSchema = z
-  .union([
-    z.bigint(),
-    z.number(),
-    z.string().regex(/^\d+$/),
-  ])
+  .union([z.bigint(), z.number(), z.string().regex(/^\d+$/)])
   .pipe(z.coerce.bigint())
   .refine(val => val > 0n, 'Amount must be positive non-zero');
 
 export const CountSchema = z
-  .union([
-    z.number(),
-    z.string().regex(/^\d+$/),
-  ])
-  .pipe(z.coerce.number().gte(1).lte(0xFF));
+  .union([z.number(), z.string().regex(/^\d+$/)])
+  .pipe(z.coerce.number().gte(1).lte(0xff));
 
 export const TxIndexSchema = z
-  .union([
-    z.number(),
-    z.string().regex(/^\d+$/),
-  ])
-  .pipe(z.coerce.number().gte(0).lte(0xFF));
+  .union([z.number(), z.string().regex(/^\d+$/)])
+  .pipe(z.coerce.number().gte(0).lte(0xff));
 
 export const RawInputInstruction = z.object({
   type: z.literal('input/raw'),
@@ -149,7 +144,7 @@ export const AuthorityOutputInstruction = z.object({
   type: z.literal('output/authority'),
   position: z.number().default(-1),
   count: TemplateRef.or(CountSchema.default(1)),
-  token: TemplateRef.or(CustomTokenSchema),
+  token: TemplateRef.or(CustomTokenSchema.optional()),
   authority: z.enum(['mint', 'melt']),
   address: TemplateRef.or(AddressSchema),
   timelock: TemplateRef.or(z.number().gte(0).optional()),
@@ -187,8 +182,8 @@ export const CompleteTxInstruction = z.object({
 
 export const ConfigInstruction = z.object({
   type: z.literal('action/config'),
-  version: TemplateRef.or(z.number().gte(0).lte(0xFF).optional()),
-  signalBits: TemplateRef.or(z.number().gte(0).lte(0xFF).optional()),
+  version: TemplateRef.or(z.number().gte(0).lte(0xff).optional()),
+  signalBits: TemplateRef.or(z.number().gte(0).lte(0xff).optional()),
   tokenName: TemplateRef.or(z.string().min(1).max(30).optional()),
   tokenSymbol: TemplateRef.or(z.string().min(1).max(5).optional()),
 });

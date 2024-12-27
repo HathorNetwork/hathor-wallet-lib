@@ -28,17 +28,17 @@ import {
 
 // Helper schemas to validate the arguments of each command in the builder args
 const RawInputInsArgs = RawInputInstruction.omit({ type: true });
-const UtxoSelectInsArgs = UtxoSelectInstruction.omit({type: true});
-const AuthoritySelectInsArgs = AuthoritySelectInstruction.omit({type: true});
-const RawOutputInsArgs = RawOutputInstruction.omit({type: true});
-const DataOutputInsArgs = DataOutputInstruction.omit({type: true});
-const TokenOutputInsArgs = TokenOutputInstruction.omit({type: true});
-const AuthorityOutputInsArgs = AuthorityOutputInstruction.omit({type: true});
-const ShuffleInsArgs = ShuffleInstruction.omit({type: true});
-const ChangeInsArgs = ChangeInstruction.omit({type: true});
-const CompleteTxInsArgs = CompleteTxInstruction.omit({type: true});
-const ConfigInsArgs = ConfigInstruction.omit({type: true});
-const SetVarInsArgs = SetVarInstruction.omit({type: true});
+const UtxoSelectInsArgs = UtxoSelectInstruction.omit({ type: true });
+const AuthoritySelectInsArgs = AuthoritySelectInstruction.omit({ type: true });
+const RawOutputInsArgs = RawOutputInstruction.omit({ type: true });
+const DataOutputInsArgs = DataOutputInstruction.omit({ type: true });
+const TokenOutputInsArgs = TokenOutputInstruction.omit({ type: true });
+const AuthorityOutputInsArgs = AuthorityOutputInstruction.omit({ type: true });
+const ShuffleInsArgs = ShuffleInstruction.omit({ type: true });
+const ChangeInsArgs = ChangeInstruction.omit({ type: true });
+const CompleteTxInsArgs = CompleteTxInstruction.omit({ type: true });
+const ConfigInsArgs = ConfigInstruction.omit({ type: true });
+const SetVarInsArgs = SetVarInstruction.omit({ type: true });
 
 export class TransactionTemplateBuilder {
   template: TransactionTemplateType;
@@ -58,7 +58,7 @@ export class TransactionTemplateBuilder {
     return this.template;
   }
 
-  export(space:number = 2): string {
+  export(space: number = 2): string {
     return JSONBigInt.stringify(this.template, space);
   }
 
@@ -80,7 +80,7 @@ export class TransactionTemplateBuilder {
   addUtxoSelect(ins: z.input<typeof UtxoSelectInsArgs>) {
     const parsedIns = UtxoSelectInstruction.parse({
       type: 'input/utxo',
-      ...ins
+      ...ins,
     });
 
     this.template.push(parsedIns);

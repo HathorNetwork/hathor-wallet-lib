@@ -10,22 +10,20 @@ import HathorWallet from '../../../../src/new/wallet';
 import SendTransaction from '../../../../src/new/sendTransaction';
 import transactionUtils from '../../../../src/utils/transaction';
 import { TransactionTemplateBuilder } from '../../../../src/template/transaction/builder';
-import { WalletTxTemplateInterpreter } from '../../../../lib/template/transaction/interpreter';
+import { WalletTxTemplateInterpreter } from '../../../../src/template/transaction/interpreter';
 
 const DEBUG = true;
 
-describe('Template execution', async () => {
-  /** @type HathorWallet */
-  let hWallet;
-  /** @type WalletTxTemplateInterpreter */
-  let interpreter;
-  let tokenUid;
+describe('Template execution', () => {
+  let hWallet: HathorWallet;
+  let interpreter: WalletTxTemplateInterpreter;
+  let tokenUid: string;
 
   beforeAll(async () => {
-    hWallet = await generateWalletHelper();
-    interpreter = WalletTxTemplateInterpreter(hWallet);
+    hWallet = await generateWalletHelper(null);
+    interpreter = new WalletTxTemplateInterpreter(hWallet);
     const address = await hWallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hWallet, address, 10n);
+    await GenesisWalletHelper.injectFunds(hWallet, address, 10n, null);
   });
 
   afterAll(async () => {
@@ -36,7 +34,7 @@ describe('Template execution', async () => {
 
   it('should be able to create a custom token', async () => {
     const template = new TransactionTemplateBuilder()
-      .addConfigAction({ tokenName: 'Tmpl Test Token 01', tokenSymbol: 'TTT01'})
+      .addConfigAction({ tokenName: 'Tmpl Test Token 01', tokenSymbol: 'TTT01' })
       .addSetVarAction({ name: 'addr', action: 'get_wallet_address' })
       .addUtxoSelect({ fill: 1 })
       .addTokenOutput({ address: '{addr}', amount: 100, useCreatedToken: true })
@@ -47,10 +45,13 @@ describe('Template execution', async () => {
     const tx = await interpreter.build(template, DEBUG);
     await transactionUtils.signTransaction(tx, hWallet.storage, DEFAULT_PIN_CODE);
     tx.prepareToSend();
-    const sendTx = SendTransaction({ storage: hWallet.storage, transaction: tx });
+    const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
     await sendTx.runFromMining();
+    if (tx.hash === null) {
+      throw new Error('Transaction does not have a hash');
+    }
     tokenUid = tx.hash;
-    await waitForTxReceived(hWallet, tx.hash);
+    await waitForTxReceived(hWallet, tx.hash, null);
 
     expect(tx.outputs).toHaveLength(12);
 
@@ -85,17 +86,17 @@ describe('Template execution', async () => {
       .addUtxoSelect({ fill: 3, token: '{token}' })
       .addTokenOutput({ address: '{addr}', amount: 3, token: '{token}' })
       .addAuthoritySelect({ authority: 'mint', token: '{token}', count: 1 })
-      .addAuthorityOutput({ address: '{addr}', authority: 'mint', count: 1, token: '{token}'})
+      .addAuthorityOutput({ address: '{addr}', authority: 'mint', count: 1, token: '{token}' })
       .addAuthoritySelect({ authority: 'melt', token: '{token}', count: 2 })
-      .addAuthorityOutput({ address: '{addr}', authority: 'melt', count: 2, token: '{token}'})
+      .addAuthorityOutput({ address: '{addr}', authority: 'melt', count: 2, token: '{token}' })
       .build();
 
     const tx = await interpreter.build(template, DEBUG);
     await transactionUtils.signTransaction(tx, hWallet.storage, DEFAULT_PIN_CODE);
     tx.prepareToSend();
-    const sendTx = SendTransaction({ storage: hWallet.storage, transaction: tx });
+    const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
     await sendTx.runFromMining();
-    await waitForTxReceived(hWallet, tx.hash);
+    await waitForTxReceived(hWallet, tx.hash, null);
 
     expect(tx.outputs).toHaveLength(5);
 
@@ -128,9 +129,9 @@ describe('Template execution', async () => {
     const tx = await interpreter.build(template, DEBUG);
     await transactionUtils.signTransaction(tx, hWallet.storage, DEFAULT_PIN_CODE);
     tx.prepareToSend();
-    const sendTx = SendTransaction({ storage: hWallet.storage, transaction: tx });
+    const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
     await sendTx.runFromMining();
-    await waitForTxReceived(hWallet, tx.hash);
+    await waitForTxReceived(hWallet, tx.hash, null);
 
     expect(tx.outputs).toHaveLength(0);
   });
@@ -143,15 +144,15 @@ describe('Template execution', async () => {
       .addUtxoSelect({ fill: 1 })
       .addAuthoritySelect({ authority: 'mint', token: '{token}' })
       .addTokenOutput({ address: '{addr}', amount: 100, token: '{token}' })
-      .addAuthorityOutput({ address: '{addr}', authority: 'mint', token: '{token}'})
+      .addAuthorityOutput({ address: '{addr}', authority: 'mint', token: '{token}' })
       .build();
 
     const tx = await interpreter.build(template, DEBUG);
     await transactionUtils.signTransaction(tx, hWallet.storage, DEFAULT_PIN_CODE);
     tx.prepareToSend();
-    const sendTx = SendTransaction({ storage: hWallet.storage, transaction: tx });
+    const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
     await sendTx.runFromMining();
-    await waitForTxReceived(hWallet, tx.hash);
+    await waitForTxReceived(hWallet, tx.hash, null);
 
     expect(tx.outputs[0].tokenData).toBe(1);
     expect(tx.outputs[0].value).toBe(100n);
@@ -165,20 +166,19 @@ describe('Template execution', async () => {
       .addUtxoSelect({ fill: 100, token: '{token}' })
       .addAuthoritySelect({ authority: 'melt', token: '{token}' })
       .addTokenOutput({ address: '{addr}', amount: 1 })
-      .addAuthorityOutput({ address: '{addr}', authority: 'melt', token: '{token}'})
+      .addAuthorityOutput({ address: '{addr}', authority: 'melt', token: '{token}' })
       .build();
 
     const tx = await interpreter.build(template, DEBUG);
     await transactionUtils.signTransaction(tx, hWallet.storage, DEFAULT_PIN_CODE);
     tx.prepareToSend();
-    const sendTx = SendTransaction({ storage: hWallet.storage, transaction: tx });
+    const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
     await sendTx.runFromMining();
-    await waitForTxReceived(hWallet, tx.hash);
+    await waitForTxReceived(hWallet, tx.hash, null);
 
     expect(tx.outputs[0].tokenData).toBe(0);
     expect(tx.outputs[0].value).toBe(1n);
     expect(tx.outputs[1].tokenData).toBe(129);
     expect(tx.outputs[1].value).toBe(2n);
   });
-  
 });
