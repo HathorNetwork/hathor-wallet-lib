@@ -108,11 +108,11 @@ describe('Template execution', () => {
     expect(tx.outputs[1].tokenData).toBe(0);
     expect(tx.outputs[1].value).toBe(2n);
 
-    // Custom token
-    expect(tx.outputs[2].tokenData).toBe(1);
-    expect(tx.outputs[2].value).toBe(3n);
-
     // Custom token change
+    expect(tx.outputs[2].tokenData).toBe(1);
+    expect(tx.outputs[2].value).toBe(97n);
+
+    // Custom token
     expect(tx.outputs[3].tokenData).toBe(1);
     expect(tx.outputs[3].value).toBe(3n);
 
