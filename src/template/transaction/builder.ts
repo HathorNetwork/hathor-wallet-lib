@@ -157,7 +157,7 @@ export class TransactionTemplateBuilder {
 
   addCompleteAction(ins: z.input<typeof CompleteTxInsArgs>) {
     const parsedIns = CompleteTxInstruction.parse({
-      type: 'action/change',
+      type: 'action/complete',
       ...ins,
     });
     this.template.push(parsedIns);
