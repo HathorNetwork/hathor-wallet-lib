@@ -759,7 +759,7 @@ describe('should parse template instructions', () => {
       SetVarInstruction.safeParse({
         type: 'action/setvar',
         name: 'foo',
-        action: 'get_wallet_address',
+        call: { method: 'get_wallet_address' },
       }).success
     ).toBe(true);
 
@@ -767,8 +767,7 @@ describe('should parse template instructions', () => {
       SetVarInstruction.safeParse({
         type: 'action/setvar',
         name: 'foo',
-        action: 'get_wallet_balance',
-        options: { token },
+        call: { method: 'get_wallet_balance', token },
       }).success
     ).toBe(true);
   });

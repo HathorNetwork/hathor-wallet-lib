@@ -35,7 +35,7 @@ describe('Template execution', () => {
   it('should be able to create a custom token', async () => {
     const template = new TransactionTemplateBuilder()
       .addConfigAction({ tokenName: 'Tmpl Test Token 01', tokenSymbol: 'TTT01' })
-      .addSetVarAction({ name: 'addr', action: 'get_wallet_address' })
+      .addSetVarAction({ name: 'addr', call: { method: 'get_wallet_address' } })
       .addUtxoSelect({ fill: 1 })
       .addTokenOutput({ address: '{addr}', amount: 100, useCreatedToken: true })
       .addAuthorityOutput({ authority: 'mint', address: '{addr}', useCreatedToken: true, count: 5 })
@@ -191,7 +191,6 @@ describe('Template execution', () => {
     expect(tx.outputs[1].value).toBe(2n);
   });
 
-  /* eslint-disable jest/expect-expect */
   it('should be able to complete a transaction inputs', async () => {
     const address = await hWallet.getAddressAtIndex(25);
     const template = new TransactionTemplateBuilder()
@@ -199,10 +198,11 @@ describe('Template execution', () => {
       .addSetVarAction({ name: 'token', value: tokenUid })
       .addSetVarAction({
         name: 'tk_balance',
-        action: 'get_wallet_balance',
-        options: { token: '{token}' },
+        call: { method: 'get_wallet_balance', token: '{token}' },
       })
       .addTokenOutput({ address: '{addr}', amount: '{tk_balance}', token: '{token}' })
+      .addAuthorityOutput({ address: '{addr}', authority: 'mint', token: '{token}' })
+      .addAuthorityOutput({ address: '{addr}', authority: 'mint', token: '{token}' })
       .addCompleteAction({})
       .addShuffleAction({ target: 'all' })
       .build();
@@ -213,6 +213,32 @@ describe('Template execution', () => {
     const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
     await sendTx.runFromMining();
     await waitForTxReceived(hWallet, tx.hash, null);
+    expect(tx.hash).toBeDefined();
+  });
+
+  it('should be able to complete a transaction change', async () => {
+    const address = await hWallet.getAddressAtIndex(25);
+    const template = new TransactionTemplateBuilder()
+      .addSetVarAction({ name: 'addr', value: address })
+      .addSetVarAction({ name: 'token', value: tokenUid })
+      .addSetVarAction({
+        name: 'tk_balance',
+        call: { method: 'get_wallet_balance', token: '{token}' },
+      })
+      .addUtxoSelect({ fill: '{tk_balance}', token: '{token}', autoChange: false })
+      .addAuthoritySelect({ token: '{token}', authority: 'mint' })
+      .addAuthoritySelect({ token: '{token}', authority: 'melt' })
+      .addTokenOutput({ address: '{addr}', amount: 1, token: '{token}' })
+      .addCompleteAction({})
+      .build();
+
+    const tx = await interpreter.build(template, DEBUG);
+    await transactionUtils.signTransaction(tx, hWallet.storage, DEFAULT_PIN_CODE);
+    tx.prepareToSend();
+    const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
+    await sendTx.runFromMining();
+    await waitForTxReceived(hWallet, tx.hash, null);
+    expect(tx.hash).toBeDefined();
   });
 
   it('should be able to complete change', async () => {
@@ -220,7 +246,7 @@ describe('Template execution', () => {
     const template = new TransactionTemplateBuilder()
       .addSetVarAction({ name: 'addr', value: address })
       .addSetVarAction({ name: 'token', value: tokenUid })
-      .addUtxoSelect({ fill: 100, token: '{token}' })
+      .addUtxoSelect({ fill: 100, token: '{token}', autoChange: false })
       .addTokenOutput({ address: '{addr}', amount: 1, token: '{token}' })
       .addDataOutput({ data: 'cafe', token: '{token}' })
       .addChangeAction({})
@@ -232,6 +258,6 @@ describe('Template execution', () => {
     const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
     await sendTx.runFromMining();
     await waitForTxReceived(hWallet, tx.hash, null);
+    expect(tx.hash).toBeDefined();
   });
-  /* eslint-enable jest/expect-expect */
 });

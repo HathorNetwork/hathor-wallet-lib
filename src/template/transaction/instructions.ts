@@ -189,22 +189,26 @@ export const ConfigInstruction = z.object({
 });
 
 export const SetVarGetWalletAddressOpts = z.object({
+  method: z.literal('get_wallet_address'),
   index: z.number().optional(),
 });
 
 export const SetVarGetWalletBalanceOpts = z.object({
+  method: z.literal('get_wallet_balance'),
   token: TemplateRef.or(TokenSchema.default('00')),
   authority: z.enum(['mint', 'melt']).optional(),
 });
 
-export const SetVarOptions = z.union([SetVarGetWalletAddressOpts, SetVarGetWalletBalanceOpts]);
+export const SetVarCallArgs = z.discriminatedUnion('method', [
+  SetVarGetWalletAddressOpts,
+  SetVarGetWalletBalanceOpts,
+]);
 
 export const SetVarInstruction = z.object({
   type: z.literal('action/setvar'),
   name: z.string().regex(TEMPLATE_REFERENCE_NAME_RE),
   value: z.any().optional(),
-  action: z.enum(['get_wallet_address', 'get_wallet_balance']).optional(),
-  options: SetVarOptions.optional(),
+  call: SetVarCallArgs.optional(),
 });
 
 export const TxTemplateInstruction = z.discriminatedUnion('type', [

@@ -83,7 +83,8 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
   }
 
   async getBalance(token: string): Promise<IWalletBalanceData> {
-    return this.wallet.getBalance(token);
+    const balance = await this.wallet.getBalance(token);
+    return balance[0];
   }
 
   /**
