@@ -30,7 +30,7 @@ describe('Wallet tx-template interpreter', () => {
 
   it('should get balance from wallet', async () => {
     const wallet = {
-      getBalance: jest.fn().mockResolvedValue('mocked-balance'),
+      getBalance: jest.fn().mockResolvedValue(['mocked-balance']),
     } as unknown as HathorWallet;
     const interpreter = new WalletTxTemplateInterpreter(wallet);
     await expect(interpreter.getBalance('a-token-uid')).resolves.toStrictEqual('mocked-balance');
