@@ -14,6 +14,7 @@ import {
   IGetUtxosOptions,
   IGetUtxoResponse,
   IWalletBalanceData,
+  TxInstance,
 } from './types';
 import { IHistoryTx, OutputValueType } from '../../types';
 import {
@@ -44,7 +45,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
   async build(
     instructions: z.infer<typeof TransactionTemplate>,
     debug: boolean = false
-  ): Promise<Transaction> {
+  ): Promise<TxInstance> {
     const context = new TxTemplateContext(this.wallet.logger, debug);
 
     for (const ins of TransactionTemplate.parse(instructions)) {

@@ -12,6 +12,9 @@ import { IHistoryTx, ITokenBalance, ITokenData, OutputValueType } from '../../ty
 import Transaction from '../../models/transaction';
 import Network from '../../models/network';
 import { Utxo } from '../../wallet/types';
+import CreateTokenTransaction from '../../models/create_token_transaction';
+
+export type TxInstance = Transaction | CreateTokenTransaction;
 
 export interface IGetUtxosOptions {
   token?: string;
@@ -48,7 +51,7 @@ export interface IWalletBalanceData {
 }
 
 export interface ITxTemplateInterpreter {
-  build(instructions: z.infer<typeof TransactionTemplate>, debug: boolean): Promise<Transaction>;
+  build(instructions: z.infer<typeof TransactionTemplate>, debug: boolean): Promise<TxInstance>;
   getAddress(markAsUsed?: boolean): Promise<string>;
   getAddressAtIndex(index: number): Promise<string>;
   getBalance(token: string): Promise<IWalletBalanceData>;

@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { z } from 'zod';
 import Address from '../../src/models/address';
 import HathorWallet from '../../src/new/wallet';
 import { TxNotFoundError, WalletFromXPubGuard } from '../../src/errors';
@@ -24,6 +25,7 @@ import txApi from '../../src/api/txApi';
 import * as addressUtils from '../../src/utils/address';
 import versionApi from '../../src/api/version';
 import { decryptData, verifyMessage } from '../../src/utils/crypto';
+import { WalletTxTemplateInterpreter, TransactionTemplate } from '../../src/template/transaction';
 
 class FakeHathorWallet {
   constructor() {
@@ -1370,4 +1372,62 @@ test('setExternalTxSigningMethod', async () => {
   hwallet.storage = storage;
   hwallet.setExternalTxSigningMethod(async () => {});
   expect(hwallet.isSignedExternally).toBe(true);
+});
+
+test('build transaction template', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  jest.spyOn(storage, 'getTxSignatures').mockReturnValue(
+    Promise.resolve({
+      ncCallerSignature: null,
+      inputSignatures: [
+        {
+          signature: Buffer.from('cafe', 'hex'),
+          pubkey: Buffer.from('abcd', 'hex'),
+          inputIndex: 0,
+          addressIndex: 1,
+        },
+      ],
+    })
+  );
+
+  const input = new Input('d00d', 0);
+  const dataSpy = jest.spyOn(input, 'setData');
+  const preMadeTx = new Transaction([input], []);
+
+  const hwallet = (new FakeHathorWallet()) as HathorWallet;
+  hwallet.storage = storage;
+  const interpreter = {
+    build: jest.fn().mockImplementation(
+      async (
+        _instructions: z.infer<typeof TransactionTemplate>,
+        _debug: boolean,
+      ) => (preMadeTx)
+    ),
+  } as unknown as WalletTxTemplateInterpreter;
+  hwallet.txTemplateInterpreter = interpreter;
+  hwallet.debug = true;
+
+  const tx = await hwallet.buildTxTemplate(
+    [{ type: "action/change" }],
+    '123',
+  );
+  expect(tx).toBe(preMadeTx);
+  expect(interpreter.build).toHaveBeenCalledTimes(1);
+  expect(interpreter.build).toHaveBeenCalledWith([{ type: "action/change" }], true);
+  expect(dataSpy).toHaveBeenCalledTimes(1);
+});
+
+test('runTxTemplate', async () => {
+  const hwallet = new FakeHathorWallet();
+  const tx = 'a-transaction';
+  hwallet.buildTxTemplate.mockImplementation(async () => tx);
+  hwallet.handleSendPreparedTransaction.mockImplementation(async () => tx);
+
+  const pushedTx = await hwallet.runTxTemplate('a-template', 'pin');
+  expect(pushedTx).toBe(tx);
+  expect(hwallet.buildTxTemplate).toHaveBeenCalled();
+  expect(hwallet.buildTxTemplate).toHaveBeenCalledWith('a-template', 'pin');
+  expect(hwallet.handleSendPreparedTransaction).toHaveBeenCalled();
+  expect(hwallet.handleSendPreparedTransaction).toHaveBeenCalledWith(tx);
 });

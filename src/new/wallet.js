@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { z } from 'zod';
 import { get } from 'lodash';
 import bitcore, { HDPrivateKey } from 'bitcore-lib';
 import EventEmitter from 'events';
@@ -51,6 +52,7 @@ import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction } from '../nano_contracts/utils';
 import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
+import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/transaction';
 
 /**
  * @typedef {import('../models/create_token_transaction').default} CreateTokenTransaction
@@ -234,6 +236,8 @@ class HathorWallet extends EventEmitter {
     this.isSignedExternally = this.storage.hasTxSignatureMethod();
 
     this.historySyncMode = HistorySyncMode.POLLING_HTTP_API;
+
+    this.txTemplateInterpreter = new WalletTxTemplateInterpreter(this);
   }
 
   /**
@@ -1612,7 +1616,7 @@ class HathorWallet extends EventEmitter {
    *
    * @param {Transaction} transaction Transaction object to be mined and pushed to the network
    *
-   * @return {Promise<Transaction>} Promise that resolves with transaction object if succeeds
+   * @return {Promise<Transaction|CreateTokenTransaction>} Promise that resolves with transaction object if succeeds
    * or with error message if it fails
    *
    * @memberof HathorWallet
@@ -3064,6 +3068,33 @@ class HathorWallet extends EventEmitter {
     }
     const addressesToLoad = await scanPolicyStartAddresses(this.storage);
     await this.syncHistory(addressesToLoad.nextIndex, addressesToLoad.count);
+  }
+
+  /**
+   * Build a transaction from a template.
+   *
+   * @param {z.input<typeof TransactionTemplate>} template
+   * @param {string} pin
+   * @returns {Promise<Transaction|CreateTokenTransaction>}
+   */
+  async buildTxTemplate(template, pin) {
+    const instructions = TransactionTemplate.parse(template);
+    const tx = await this.txTemplateInterpreter.build(instructions, this.debug);
+    await transactionUtils.signTransaction(tx, this.storage, pin || this.pinCode);
+    tx.prepareToSend();
+    return tx;
+  }
+
+  /**
+   * Run a transaction template and send the transaction.
+   *
+   * @param {z.input<typeof TransactionTemplate>} template
+   * @param {string} pin
+   * @returns {Promise<Transaction|CreateTokenTransaction>}
+   */
+  async runTxTemplate(template, pin) {
+    const transaction = await this.buildTxTemplate(template, pin);
+    return this.handleSendPreparedTransaction(transaction);
   }
 }
 
