@@ -1395,26 +1395,22 @@ test('build transaction template', async () => {
   const dataSpy = jest.spyOn(input, 'setData');
   const preMadeTx = new Transaction([input], []);
 
-  const hwallet = (new FakeHathorWallet()) as HathorWallet;
+  const hwallet = new FakeHathorWallet() as HathorWallet;
   hwallet.storage = storage;
   const interpreter = {
-    build: jest.fn().mockImplementation(
-      async (
-        _instructions: z.infer<typeof TransactionTemplate>,
-        _debug: boolean,
-      ) => (preMadeTx)
-    ),
+    build: jest
+      .fn()
+      .mockImplementation(
+        async (_instructions: z.infer<typeof TransactionTemplate>, _debug: boolean) => preMadeTx
+      ),
   } as unknown as WalletTxTemplateInterpreter;
   hwallet.txTemplateInterpreter = interpreter;
   hwallet.debug = true;
 
-  const tx = await hwallet.buildTxTemplate(
-    [{ type: "action/change" }],
-    '123',
-  );
+  const tx = await hwallet.buildTxTemplate([{ type: 'action/change' }], '123');
   expect(tx).toBe(preMadeTx);
   expect(interpreter.build).toHaveBeenCalledTimes(1);
-  expect(interpreter.build).toHaveBeenCalledWith([{ type: "action/change" }], true);
+  expect(interpreter.build).toHaveBeenCalledWith([{ type: 'action/change' }], true);
   expect(dataSpy).toHaveBeenCalledTimes(1);
 });
 
