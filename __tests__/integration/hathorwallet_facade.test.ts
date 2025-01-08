@@ -40,6 +40,56 @@ const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d71
 const sampleNftData =
   'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg';
 
+describe('template methods', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
+  });
+
+  it('should build transactions from the template transaction', async () => {
+    const hWallet = await generateWalletHelper();
+    const address = await hWallet.getAddressAtIndex(1);
+
+    await GenesisWalletHelper.injectFunds(hWallet, address, 10n);
+
+    const template = new TransactionTemplateBuilder()
+      .addConfigAction({ tokenName: 'Tmpl Token', tokenSymbol: 'TT' })
+      .addSetVarAction({ name: 'addr', call: { method: 'get_wallet_address' } })
+      .addUtxoSelect({ fill: 1 })
+      .addTokenOutput({ address: '{addr}', amount: 100, useCreatedToken: true })
+      .build();
+
+    const tx = await hWallet.buildTxTemplate(template, DEFAULT_PIN_CODE);
+    expect(tx.version).toEqual(3); // Create token transaction
+    expect(tx.inputs).toHaveLength(1);
+    expect(tx.inputs[0].data).not.toBeFalsy(); // Tx is signed
+    // Transaction is not mined yet
+    expect(tx.hash).toBeNull();
+    expect(tx.nonce).toEqual(0);
+  });
+
+  it('should send transactions from the template transaction', async () => {
+    const hWallet = await generateWalletHelper();
+    const address = await hWallet.getAddressAtIndex(1);
+
+    await GenesisWalletHelper.injectFunds(hWallet, address, 10n);
+
+    const template = new TransactionTemplateBuilder()
+      .addConfigAction({ tokenName: 'Tmpl Token', tokenSymbol: 'TT' })
+      .addSetVarAction({ name: 'addr', call: { method: 'get_wallet_address' } })
+      .addUtxoSelect({ fill: 1 })
+      .addTokenOutput({ address: '{addr}', amount: 100, useCreatedToken: true })
+      .build();
+
+    const tx = await hWallet.runTxTemplate(template, DEFAULT_PIN_CODE);
+    expect(tx.version).toEqual(3); // Create token transaction
+    expect(tx.inputs).toHaveLength(1);
+    expect(tx.inputs[0].data).not.toBeFalsy(); // Tx is signed
+    // Transaction is mined and pushed
+    expect(tx.hash).not.toBeNull();
+  });
+});
+
 describe('getWalletInputInfo', () => {
   afterEach(async () => {
     await stopAllWallets();
@@ -3214,48 +3264,5 @@ describe('storage methods', () => {
 
     const hWalletRO = await generateWalletHelperRO({ hardware: true });
     await expect(hWalletRO.isHardwareWallet()).resolves.toBe(true);
-  });
-
-  it('should build transactions from the template transaction', async () => {
-    const hWallet = await generateWalletHelper();
-    const address = await hWallet.getAddressAtIndex(1);
-
-    await GenesisWalletHelper.injectFunds(hWallet, address, 10n);
-
-    const template = new TransactionTemplateBuilder()
-      .addConfigAction({ tokenName: 'Tmpl Token', tokenSymbol: 'TT' })
-      .addSetVarAction({ name: 'addr', call: { method: 'get_wallet_address' } })
-      .addUtxoSelect({ fill: 1 })
-      .addTokenOutput({ address: '{addr}', amount: 100, useCreatedToken: true })
-      .build();
-
-    const tx = await hWallet.buildTxTemplate(template, DEFAULT_PIN_CODE);
-    expect(tx.version).toEqual(3); // Create token transaction
-    expect(tx.inputs).toHaveLength(1);
-    expect(tx.inputs[0].data).not.toBeFalsy(); // Tx is signed
-    // Transaction is not mined yet
-    expect(tx.hash).toBeNull();
-    expect(tx.nonce).toEqual(0);
-  });
-
-  it('should send transactions from the template transaction', async () => {
-    const hWallet = await generateWalletHelper();
-    const address = await hWallet.getAddressAtIndex(1);
-
-    await GenesisWalletHelper.injectFunds(hWallet, address, 10n);
-
-    const template = new TransactionTemplateBuilder()
-      .addConfigAction({ tokenName: 'Tmpl Token', tokenSymbol: 'TT' })
-      .addSetVarAction({ name: 'addr', call: { method: 'get_wallet_address' } })
-      .addUtxoSelect({ fill: 1 })
-      .addTokenOutput({ address: '{addr}', amount: 100, useCreatedToken: true })
-      .build();
-
-    const tx = await hWallet.runTxTemplate(template, DEFAULT_PIN_CODE);
-    expect(tx.version).toEqual(3); // Create token transaction
-    expect(tx.inputs).toHaveLength(1);
-    expect(tx.inputs[0].data).not.toBeFalsy(); // Tx is signed
-    // Transaction is mined and pushed
-    expect(tx.hash).not.toBeNull();
   });
 });
