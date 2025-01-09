@@ -51,6 +51,7 @@ import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction } from '../nano_contracts/utils';
 import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
+import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/transaction';
 
 /**
  * @typedef {import('../models/create_token_transaction').default} CreateTokenTransaction
@@ -234,6 +235,8 @@ class HathorWallet extends EventEmitter {
     this.isSignedExternally = this.storage.hasTxSignatureMethod();
 
     this.historySyncMode = HistorySyncMode.POLLING_HTTP_API;
+
+    this.txTemplateInterpreter = new WalletTxTemplateInterpreter(this);
   }
 
   /**
@@ -1067,6 +1070,7 @@ class HathorWallet extends EventEmitter {
       token: NATIVE_TOKEN_UID,
       filter_address: null,
       ...options,
+      order_by_value: 'desc',
     };
 
     const utxos = [];
@@ -1611,7 +1615,7 @@ class HathorWallet extends EventEmitter {
    *
    * @param {Transaction} transaction Transaction object to be mined and pushed to the network
    *
-   * @return {Promise<Transaction>} Promise that resolves with transaction object if succeeds
+   * @return {Promise<Transaction|CreateTokenTransaction>} Promise that resolves with transaction object if succeeds
    * or with error message if it fails
    *
    * @memberof HathorWallet
@@ -2781,7 +2785,7 @@ class HathorWallet extends EventEmitter {
       const tokenIdx = tokenUtils.getTokenIndexFromData(token_data);
       const tokenUid = tokens[tokenIdx - 1]?.uid;
       if (!tokenUid) {
-        throw new Error(`Token ${tokenUid} not found in tokens list`);
+        throw new Error(`Invalid token_data ${token_data}, token not found in tokens list`);
       }
 
       return {
@@ -3063,6 +3067,45 @@ class HathorWallet extends EventEmitter {
     }
     const addressesToLoad = await scanPolicyStartAddresses(this.storage);
     await this.syncHistory(addressesToLoad.nextIndex, addressesToLoad.count);
+  }
+
+  /**
+   * Build a transaction from a template.
+   *
+   * @param {z.input<typeof TransactionTemplate>} template
+   * @param [options]
+   * @param {boolean} [options.signTx] If the transaction should be signed.
+   * @param {string} [options.pinCode] PIN to decrypt the private key.
+   * @returns {Promise<Transaction|CreateTokenTransaction>}
+   */
+  async buildTxTemplate(template, options) {
+    const newOptions = {
+      signTx: false,
+      pinCode: null,
+      ...options,
+    };
+    const instructions = TransactionTemplate.parse(template);
+    const tx = await this.txTemplateInterpreter.build(instructions, this.debug);
+    if (newOptions.signTx) {
+      await transactionUtils.signTransaction(tx, this.storage, newOptions.pinCode || this.pinCode);
+      tx.prepareToSend();
+    }
+    return tx;
+  }
+
+  /**
+   * Run a transaction template and send the transaction.
+   *
+   * @param {z.input<typeof TransactionTemplate>} template
+   * @param {string|undefined} pinCode
+   * @returns {Promise<Transaction|CreateTokenTransaction>}
+   */
+  async runTxTemplate(template, pinCode) {
+    const transaction = await this.buildTxTemplate(template, {
+      signTx: true,
+      pinCode,
+    });
+    return this.handleSendPreparedTransaction(transaction);
   }
 }
 
