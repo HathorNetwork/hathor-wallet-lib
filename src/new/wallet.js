@@ -3097,11 +3097,14 @@ class HathorWallet extends EventEmitter {
    * Run a transaction template and send the transaction.
    *
    * @param {z.input<typeof TransactionTemplate>} template
-   * @param {string} pin
+   * @param {string|undefined} pinCode
    * @returns {Promise<Transaction|CreateTokenTransaction>}
    */
-  async runTxTemplate(template, pin) {
-    const transaction = await this.buildTxTemplate(template, pin);
+  async runTxTemplate(template, pinCode) {
+    const transaction = await this.buildTxTemplate(template, {
+      signTx: true,
+      pinCode,
+    });
     return this.handleSendPreparedTransaction(transaction);
   }
 }

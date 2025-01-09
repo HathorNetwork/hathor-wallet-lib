@@ -1449,7 +1449,10 @@ test('runTxTemplate', async () => {
   const pushedTx = await hwallet.runTxTemplate('a-template', 'pin');
   expect(pushedTx).toBe(tx);
   expect(hwallet.buildTxTemplate).toHaveBeenCalled();
-  expect(hwallet.buildTxTemplate).toHaveBeenCalledWith('a-template', 'pin');
+  expect(hwallet.buildTxTemplate).toHaveBeenCalledWith('a-template', {
+    signTx: true,
+    pinCode: 'pin',
+  });
   expect(hwallet.handleSendPreparedTransaction).toHaveBeenCalled();
   expect(hwallet.handleSendPreparedTransaction).toHaveBeenCalledWith(tx);
 });
