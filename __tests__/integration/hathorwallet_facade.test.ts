@@ -59,7 +59,7 @@ describe('template methods', () => {
       .addTokenOutput({ address: '{addr}', amount: 100, useCreatedToken: true })
       .build();
 
-    const tx = await hWallet.buildTxTemplate(template, DEFAULT_PIN_CODE);
+    const tx = await hWallet.buildTxTemplate(template, { signTx: true, pinCode: DEFAULT_PIN_CODE });
     expect(tx.version).toEqual(2); // Create token transaction
     expect(tx.inputs).toHaveLength(1);
     expect(tx.inputs[0].data).not.toBeFalsy(); // Tx is signed

@@ -1375,6 +1375,29 @@ test('setExternalTxSigningMethod', async () => {
 });
 
 test('build transaction template', async () => {
+  const input = new Input('d00d', 0);
+  const dataSpy = jest.spyOn(input, 'setData');
+  const preMadeTx = new Transaction([input], []);
+
+  const hwallet = new FakeHathorWallet() as HathorWallet;
+  const interpreter = {
+    build: jest
+      .fn()
+      .mockImplementation(
+        async (_instructions: z.infer<typeof TransactionTemplate>, _debug: boolean) => preMadeTx
+      ),
+  } as unknown as WalletTxTemplateInterpreter;
+  hwallet.txTemplateInterpreter = interpreter;
+  hwallet.debug = true;
+
+  const tx = await hwallet.buildTxTemplate([{ type: 'action/change' }]);
+  expect(tx).toBe(preMadeTx);
+  expect(interpreter.build).toHaveBeenCalledTimes(1);
+  expect(interpreter.build).toHaveBeenCalledWith([{ type: 'action/change' }], true);
+  expect(dataSpy).not.toHaveBeenCalled();
+});
+
+test('build transaction template with signature', async () => {
   const store = new MemoryStore();
   const storage = new Storage(store);
   jest.spyOn(storage, 'getTxSignatures').mockReturnValue(
@@ -1407,7 +1430,10 @@ test('build transaction template', async () => {
   hwallet.txTemplateInterpreter = interpreter;
   hwallet.debug = true;
 
-  const tx = await hwallet.buildTxTemplate([{ type: 'action/change' }], '123');
+  const tx = await hwallet.buildTxTemplate([{ type: 'action/change' }], {
+    signTx: true,
+    pinCode: '123',
+  });
   expect(tx).toBe(preMadeTx);
   expect(interpreter.build).toHaveBeenCalledTimes(1);
   expect(interpreter.build).toHaveBeenCalledWith([{ type: 'action/change' }], true);

@@ -3073,14 +3073,23 @@ class HathorWallet extends EventEmitter {
    * Build a transaction from a template.
    *
    * @param {z.input<typeof TransactionTemplate>} template
-   * @param {string} pin
+   * @param [options]
+   * @param {boolean} [options.signTx] If the transaction should be signed.
+   * @param {string} [options.pinCode] PIN to decrypt the private key.
    * @returns {Promise<Transaction|CreateTokenTransaction>}
    */
-  async buildTxTemplate(template, pin) {
+  async buildTxTemplate(template, options) {
+    const newOptions = {
+      signTx: false,
+      pinCode: null,
+      ...options,
+    };
     const instructions = TransactionTemplate.parse(template);
     const tx = await this.txTemplateInterpreter.build(instructions, this.debug);
-    await transactionUtils.signTransaction(tx, this.storage, pin || this.pinCode);
-    tx.prepareToSend();
+    if (newOptions.signTx) {
+      await transactionUtils.signTransaction(tx, this.storage, newOptions.pinCode || this.pinCode);
+      tx.prepareToSend();
+    }
     return tx;
   }
 
