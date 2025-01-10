@@ -1348,11 +1348,9 @@ class HathorWallet extends EventEmitter {
     if (metadataChanged) {
       // Save the transaction in the storage
       await this.storage.processHistory();
-    } else {
-      if (isNewTx) {
-        // Save the transaction in the storage and process it.
-        await this.storage.processNewTx(newTx);
-      }
+    } else if (isNewTx) {
+      // Save the transaction in the storage and process it.
+      await this.storage.processNewTx(newTx);
     }
     // restore previous state
     this.state = previousState;

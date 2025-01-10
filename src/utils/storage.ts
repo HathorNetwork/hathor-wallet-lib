@@ -400,7 +400,7 @@ export async function processHistory(
 export async function processSingleTx(
   storage: IStorage,
   tx: IHistoryTx,
-  { rewardLock }: { rewardLock?: number } = {},
+  { rewardLock }: { rewardLock?: number } = {}
 ): Promise<void> {
   const { store } = storage;
   const nowTs = Math.floor(Date.now() / 1000);

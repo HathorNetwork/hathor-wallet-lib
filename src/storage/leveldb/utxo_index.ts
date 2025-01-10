@@ -306,6 +306,7 @@ export default class LevelUtxoIndex implements IKVUtxoIndex {
     await this.tokenAddressUtxoDB.put(_token_address_utxo_key(utxo), utxo);
     await this.tokenUtxoDB.put(_token_utxo_key(utxo), utxo);
   }
+
   /**
    * Remove an utxo from the database.
    * @param {IUtxo} utxo utxo to be deleted

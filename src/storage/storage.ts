@@ -40,7 +40,11 @@ import {
   getDefaultLogger,
 } from '../types';
 import transactionUtils from '../utils/transaction';
-import { processHistory as processHistoryUtil, processSingleTx as processSingleTxUtil, processUtxoUnlock } from '../utils/storage';
+import {
+  processHistory as processHistoryUtil,
+  processSingleTx as processSingleTxUtil,
+  processUtxoUnlock,
+} from '../utils/storage';
 import config, { Config } from '../config';
 import { decryptData, checkPassword } from '../utils/crypto';
 import FullNodeConnection from '../new/connection';

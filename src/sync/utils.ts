@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { IHistoryTx, IStorage } from "../types";
+import { IHistoryTx, IStorage } from '../types';
 
 /**
  * Currently we only need to check that a transaction has been voided or un-voided.
