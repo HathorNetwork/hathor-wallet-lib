@@ -51,6 +51,7 @@ import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction } from '../nano_contracts/utils';
 import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
+import { checkTxMetadataChanged } from '../sync/utils';
 
 /**
  * @typedef {import('../models/create_token_transaction').default} CreateTokenTransaction
@@ -1334,12 +1335,27 @@ class HathorWallet extends EventEmitter {
 
     newTx.processingStatus = TxHistoryProcessingStatus.PROCESSING;
 
-    // Save the transaction in the storage
+    // Metadata changed MUST be before addTx because we compare the stored tx with the new one.
+    // So overwriting the stored tx before this would make the check invalid.
+    const metadataChanged = await checkTxMetadataChanged(newTx, this.storage);
     await this.storage.addTx(newTx);
-
     await this.scanAddressesToLoad();
+
+    // set state to processing and save current state.
+    const previousState = this.state;
+    this.state = HathorWallet.PROCESSING;
     // Process history to update metadatas
-    await this.storage.processHistory();
+    if (metadataChanged) {
+      // Save the transaction in the storage
+      await this.storage.processHistory();
+    } else {
+      if (isNewTx) {
+        // Save the transaction in the storage and process it.
+        await this.storage.processNewTx(newTx);
+      }
+    }
+    // restore previous state
+    this.state = previousState;
 
     newTx.processingStatus = TxHistoryProcessingStatus.FINISHED;
     // Save the transaction in the storage

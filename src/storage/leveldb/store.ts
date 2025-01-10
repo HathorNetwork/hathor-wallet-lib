@@ -268,6 +268,10 @@ export default class LevelDBStore implements IStore {
     return this.utxoIndex.saveUtxo(utxo);
   }
 
+  async deleteUtxo(utxo: IUtxo): Promise<void> {
+    await this.utxoIndex.deleteUtxo(utxo);
+  }
+
   /**
    * Save a locked utxo to the database.
    * Used when a new utxo is received but it is either time locked or height locked.

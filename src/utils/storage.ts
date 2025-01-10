@@ -22,6 +22,7 @@ import {
   HistorySyncMode,
   HistorySyncFunction,
   WalletType,
+  IUtxo,
 } from '../types';
 import walletApi from '../api/wallet';
 import helpers from './helpers';
@@ -390,6 +391,59 @@ export async function processHistory(
     for (const token of processedData.tokens) {
       tokens.add(token);
     }
+  }
+
+  // Update wallet data
+  await updateWalletMetadataFromProcessedTxData(storage, { maxIndexUsed, tokens });
+}
+
+export async function processSingleTx(
+  storage: IStorage,
+  tx: IHistoryTx,
+  { rewardLock }: { rewardLock?: number } = {},
+): Promise<void> {
+  const { store } = storage;
+  const nowTs = Math.floor(Date.now() / 1000);
+  const currentHeight = await store.getCurrentHeight();
+
+  const tokens = new Set<string>();
+  const processedData = await processNewTx(storage, tx, { rewardLock, nowTs, currentHeight });
+  const maxIndexUsed = processedData.maxAddressIndex;
+  for (const token of processedData.tokens) {
+    tokens.add(token);
+  }
+
+  for (const input of tx.inputs) {
+    const origTx = await storage.getTx(input.tx_id);
+    if (!origTx) {
+      // The tx being spent is not from the wallet.
+      continue;
+    }
+    if (origTx.outputs.length <= input.index) {
+      throw new Error('Spending an unexistent output');
+    }
+    const output = origTx.outputs[input.index];
+    if (!output.decoded.address) {
+      // Tx is ours but output is not from an address.
+      continue;
+    }
+    if (!(await storage.isAddressMine(output.decoded.address))) {
+      // Address is not ours.
+      continue;
+    }
+    const utxo: IUtxo = {
+      txId: input.tx_id,
+      index: input.index,
+      token: output.token,
+      address: output.decoded.address,
+      authorities: transactionUtils.isAuthorityOutput(output) ? output.value : 0n,
+      value: output.value,
+      timelock: output.decoded?.timelock ?? null,
+      type: origTx.version,
+      height: origTx.height ?? null,
+    };
+    // Delete utxo if it is being spent
+    await store.deleteUtxo(utxo);
   }
 
   // Update wallet data

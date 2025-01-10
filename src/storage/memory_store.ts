@@ -593,6 +593,10 @@ export class MemoryStore implements IStore {
     }
   }
 
+  async deleteUtxo(utxo: IUtxo): Promise<void> {
+    this.utxos.delete(`${utxo.txId}:${utxo.index}`);
+  }
+
   /**
    * Fetch utxos based on a selection criteria
    * @param {IUtxoFilterOptions} options Options to filter utxos
