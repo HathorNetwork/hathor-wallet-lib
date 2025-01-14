@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { get } from 'lodash';
+import { cloneDeep, get } from 'lodash';
 import bitcore, { HDPrivateKey } from 'bitcore-lib';
 import EventEmitter from 'events';
 import { NATIVE_TOKEN_UID, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
@@ -699,7 +699,9 @@ class HathorWallet extends EventEmitter {
       throw new WalletError('Not implemented.');
     }
     const uid = token || this.token.uid;
-    let tokenData = await this.storage.getToken(uid);
+    // Using clone deep so the balance returned will not be updated in case
+    // we change the storage
+    let tokenData = cloneDeep(await this.storage.getToken(uid));
     if (tokenData === null) {
       // We don't have the token on storage, so we need to return an empty default response
       tokenData = {
