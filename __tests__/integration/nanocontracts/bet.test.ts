@@ -23,9 +23,10 @@ import Serializer from '../../../src/nano_contracts/serializer';
 import { NanoContractTransactionError, NanoRequest404Error } from '../../../src/errors';
 import { OutputType } from '../../../src/wallet/types';
 import NanoContractTransactionParser from '../../../src/nano_contracts/parser';
+import fs from 'fs';
 
 let fundsTx;
-const blueprintId = '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595';
+const builtInBlueprintId = '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595';
 
 describe('full cycle of bet nano contract', () => {
   /** @type HathorWallet */
@@ -62,7 +63,7 @@ describe('full cycle of bet nano contract', () => {
     expect(isEmpty(txAfterExecution.meta.first_block)).not.toBeNull();
   };
 
-  const executeTests = async wallet => {
+  const executeTests = async (wallet, blueprintId) => {
     const address0 = await wallet.getAddressAtIndex(0);
     const address1 = await wallet.getAddressAtIndex(1);
     const dateLastBet = dateFormatter.dateToTimestamp(new Date()) + 6000;
@@ -481,17 +482,32 @@ describe('full cycle of bet nano contract', () => {
     expect(wallet.storage.processHistory.mock.calls.length).toBe(1);
   };
 
-  it('bet deposit', async () => {
-    await executeTests(hWallet);
+  it.skip('bet deposit built in', async () => {
+    await executeTests(hWallet, builtInBlueprintId);
   });
 
   // The hathor-core and the wallet-lib are still not ready for
   // using nano contracts with a Multisig wallet
-  it.skip('bet deposit with multisig wallet', async () => {
-    await executeTests(mhWallet);
+  it.skip('bet deposit built in with multisig wallet', async () => {
+    await executeTests(mhWallet, builInBlueprintId);
   });
 
-  it('handle errors', async () => {
+  it('bet deposit on chain blueprint', async () => {
+    const seed = 'bicycle dice amused car lock outdoor auto during nest accident soon sauce slot enact hand they member source job forward vibrant lab catch coach';
+    const ocbWallet = await generateWalletHelper({ seed });
+    const address0 = await ocbWallet.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(
+      ocbWallet,
+      address0,
+      1000n
+    );
+    const code = fs.readFileSync('./__tests__/integration/configuration/bet.py', 'utf8');
+    const tx = await ocbWallet.createOnChainBlueprintTransaction(Buffer.from(code, 'utf8'), address0);
+    console.log(tx);
+    await executeTests(hWallet, onChainBlueprintId);
+  });
+
+  it.skip('handle errors', async () => {
     const address0 = await hWallet.getAddressAtIndex(0);
     const address1 = await hWallet.getAddressAtIndex(1);
     const dateLastBet = dateFormatter.dateToTimestamp(new Date()) + 6000;

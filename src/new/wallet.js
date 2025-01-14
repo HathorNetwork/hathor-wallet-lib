@@ -50,6 +50,7 @@ import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../utils/address';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction } from '../nano_contracts/utils';
+import OnChainBlueprint, { Code, CodeKind } from '../nano_contracts/on_chain_blueprint';
 import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
 import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/transaction';
@@ -3128,6 +3129,41 @@ class HathorWallet extends EventEmitter {
       pinCode,
     });
     return this.handleSendPreparedTransaction(transaction);
+  }
+
+  /**
+   * @typedef {Object} CreateNanoTxOptions
+   * @property {string?} [pinCode] PIN to decrypt the private key.
+   */
+
+  async createOnChainBlueprintTransaction(code, address, options) {
+    if (await this.storage.isReadonly()) {
+      throw new WalletFromXPubGuard('createOnChainBlueprintTransaction');
+    }
+    const newOptions = { pinCode: null, ...options };
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
+    }
+
+    // Get caller pubkey
+    const addressInfo = await this.storage.getAddressInfo(address);
+    if (!addressInfo) {
+      throw new NanoContractTransactionError(
+        `Address used to sign the transaction (${address}) does not belong to the wallet.`
+      );
+    }
+    const pubkeyStr = await this.storage.getAddressPubkey(addressInfo.bip32AddressIndex);
+    const pubkey = Buffer.from(pubkeyStr, 'hex');
+    const codeContent = Buffer.from(code, 'hex');
+    const codeObj = new Code(CodeKind.PYTHON_GZIP, codeContent);
+
+    const tx = new OnChainBlueprint(codeObj, pubkey);
+    console.log('ocb', tx);
+
+    const sendTransaction = await prepareNanoSendTransaction(tx, pin, this.storage);
+    console.log(sendTransaction);
+    return sendTransaction.runFromMining();
   }
 }
 
