@@ -367,8 +367,6 @@ export class Storage implements IStorage {
    * @returns {Promise<void>}
    */
   async processNewTx(tx: IHistoryTx): Promise<void> {
-    // Add tx to storage
-    await this.addTx(tx);
     // Keep tx-timestamp index sorted
     await this.store.preProcessHistory();
     // Process the single tx we received

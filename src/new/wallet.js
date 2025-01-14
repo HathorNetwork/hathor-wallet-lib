@@ -1348,10 +1348,15 @@ class HathorWallet extends EventEmitter {
     this.state = HathorWallet.PROCESSING;
     // Process history to update metadatas
     if (metadataChanged) {
-      // Save the transaction in the storage
+      // Process the full history because
+      // this tx changed the voided state
+      // XXX in the future we should be able to handle this
+      // voidness alone, without processing everything
+      // but for now it's an isolated case and it's easier
       await this.storage.processHistory();
     } else if (isNewTx) {
-      // Save the transaction in the storage and process it.
+      // Process this single transaction.
+      // Handling new metadatas and deleting utxos that are not available anymore
       await this.storage.processNewTx(newTx);
     }
     // restore previous state

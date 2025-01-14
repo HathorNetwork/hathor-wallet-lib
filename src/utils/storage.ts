@@ -419,18 +419,23 @@ export async function processSingleTx(
       // The tx being spent is not from the wallet.
       continue;
     }
+
     if (origTx.outputs.length <= input.index) {
       throw new Error('Spending an unexistent output');
     }
+
     const output = origTx.outputs[input.index];
     if (!output.decoded.address) {
       // Tx is ours but output is not from an address.
       continue;
     }
+
     if (!(await storage.isAddressMine(output.decoded.address))) {
       // Address is not ours.
       continue;
     }
+
+    // Now we get the utxo object to be deleted from the store
     const utxo: IUtxo = {
       txId: input.tx_id,
       index: input.index,
@@ -442,11 +447,12 @@ export async function processSingleTx(
       type: origTx.version,
       height: origTx.height ?? null,
     };
-    // Delete utxo if it is being spent
+
+    // Delete utxo
     await store.deleteUtxo(utxo);
   }
 
-  // Update wallet data
+  // Update wallet data in the store
   await updateWalletMetadataFromProcessedTxData(storage, { maxIndexUsed, tokens });
 }
 
