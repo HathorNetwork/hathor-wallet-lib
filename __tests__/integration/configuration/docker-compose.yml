@@ -6,7 +6,7 @@ services:
 
   fullnode:
     image:
-      ${HATHOR_LIB_INTEGRATION_TESTS_FULLNODE_IMAGE:-hathornetwork/hathor-core:experimental-nano-testnet-v1.7.0}
+      local-test-core-ocb
     command: [
       "run_node",
       "--listen", "tcp:40404",
@@ -37,7 +37,7 @@ services:
 
   tx-mining-service:
     image:
-      ${HATHOR_LIB_INTEGRATION_TESTS_TXMINING_IMAGE:-hathornetwork/tx-mining-service}
+      local-test-ocb
     depends_on:
       fullnode:
         condition: service_healthy
