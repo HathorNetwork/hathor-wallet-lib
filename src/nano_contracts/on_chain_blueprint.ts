@@ -71,7 +71,7 @@ class OnChainBlueprint extends Transaction {
    * @memberof OnChainBlueprint
    * @inner
    */
-  serializeFundsFields(array: Buffer[]) {
+  serializeFundsFields(array: Buffer[], addInputData: boolean) {
     super.serializeFundsFields(array);
 
     // Info version
@@ -86,7 +86,7 @@ class OnChainBlueprint extends Transaction {
     array.push(intToBytes(this.pubkey.length, 1));
     array.push(this.pubkey);
 
-    if (this.signature !== null) {
+    if (this.signature !== null && addInputData) {
       array.push(intToBytes(this.signature.length, 1));
       array.push(this.signature);
     } else {
@@ -104,7 +104,7 @@ class OnChainBlueprint extends Transaction {
     const arr: Buffer[] = [];
     // Serialize first the funds part
     //
-    this.serializeFundsFields(arr);
+    this.serializeFundsFields(arr, true);
 
     // Graph fields
     this.serializeGraphFields(arr);

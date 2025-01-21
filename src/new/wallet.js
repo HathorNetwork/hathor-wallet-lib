@@ -3155,14 +3155,12 @@ class HathorWallet extends EventEmitter {
     }
     const pubkeyStr = await this.storage.getAddressPubkey(addressInfo.bip32AddressIndex);
     const pubkey = Buffer.from(pubkeyStr, 'hex');
-    const codeContent = Buffer.from(code, 'hex');
+    const codeContent = Buffer.from(code, 'utf8');
     const codeObj = new Code(CodeKind.PYTHON_GZIP, codeContent);
 
     const tx = new OnChainBlueprint(codeObj, pubkey);
-    console.log('ocb', tx);
 
     const sendTransaction = await prepareNanoSendTransaction(tx, pin, this.storage);
-    console.log(sendTransaction);
     return sendTransaction.runFromMining();
   }
 }
