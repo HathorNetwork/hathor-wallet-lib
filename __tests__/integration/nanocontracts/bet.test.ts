@@ -503,7 +503,9 @@ describe('full cycle of bet nano contract', () => {
     );
     const code = fs.readFileSync('./__tests__/integration/configuration/bet.py', 'utf8');
     const tx = await ocbWallet.createOnChainBlueprintTransaction(code, address0);
-    //await executeTests(hWallet, onChainBlueprintId);
+    console.log(tx);
+    await waitTxConfirmed(ocbWallet, tx.hash);
+    await executeTests(ocbWallet, tx.hash);
   });
 
   it.skip('handle errors', async () => {
