@@ -1070,6 +1070,7 @@ class HathorWallet extends EventEmitter {
       token: NATIVE_TOKEN_UID,
       filter_address: null,
       ...options,
+      order_by_value: 'desc',
     };
 
     const utxos = [];
@@ -2802,7 +2803,7 @@ class HathorWallet extends EventEmitter {
       const tokenIdx = tokenUtils.getTokenIndexFromData(token_data);
       const tokenUid = tokens[tokenIdx - 1]?.uid;
       if (!tokenUid) {
-        throw new Error(`Token ${tokenUid} not found in tokens list`);
+        throw new Error(`Invalid token_data ${token_data}, token not found in tokens list`);
       }
 
       return {
