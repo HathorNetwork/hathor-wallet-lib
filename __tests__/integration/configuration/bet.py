@@ -229,4 +229,4 @@ class Bet(Blueprint):
         percentage = address_total / result_total
         return Amount(floor(percentage * self.total))
 
-__blueprint__ = 'Bet'
+__blueprint__ = Bet
