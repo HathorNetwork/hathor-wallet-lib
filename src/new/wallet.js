@@ -3132,10 +3132,19 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * @typedef {Object} CreateNanoTxOptions
+   * @typedef {Object} CreateOnChainBlueprintTxOptions
    * @property {string?} [pinCode] PIN to decrypt the private key.
    */
 
+  /**
+   * Create a nano contract transaction and return the SendTransaction object
+   *
+   * @param {string} code Blueprint code in utf-8
+   * @param {string} address Address that will be used to sign the on chain blueprint transaction
+   * @param {CreateOnChainBlueprintTxOptions} [options]
+   *
+   * @returns {Promise<OnChainBlueprint>}
+   */
   async createOnChainBlueprintTransaction(code, address, options) {
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('createOnChainBlueprintTransaction');
@@ -3155,6 +3164,8 @@ class HathorWallet extends EventEmitter {
     }
     const pubkeyStr = await this.storage.getAddressPubkey(addressInfo.bip32AddressIndex);
     const pubkey = Buffer.from(pubkeyStr, 'hex');
+
+    // Create code object from code data
     const codeContent = Buffer.from(code, 'utf8');
     const codeObj = new Code(CodeKind.PYTHON_GZIP, codeContent);
 
