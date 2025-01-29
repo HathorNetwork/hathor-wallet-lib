@@ -239,7 +239,7 @@ const transaction = {
       input.setData(inputData);
     }
 
-    if (tx.version === NANO_CONTRACTS_VERSION | tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
+    if (tx.version === NANO_CONTRACTS_VERSION || tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
       // eslint-disable-next-line no-param-reassign
       (tx as NanoContract | OnChainBlueprint).signature = signatures.ncCallerSignature;
     }
