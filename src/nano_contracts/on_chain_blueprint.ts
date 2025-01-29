@@ -1,3 +1,5 @@
+/* eslint-disable max-classes-per-file */
+
 /**
  * Copyright (c) Hathor Labs and its affiliates.
  *
@@ -5,13 +7,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import zlib from 'zlib';
 import { ON_CHAIN_BLUEPRINTS_INFO_VERSION, ON_CHAIN_BLUEPRINTS_VERSION } from '../constants';
 import Transaction from '../models/transaction';
-import Input from '../models/input';
-import Output from '../models/output';
-import { hexToBuffer, intToBytes } from '../utils/buffer';
-import zlib from 'zlib';
-
+import { intToBytes } from '../utils/buffer';
 
 export enum CodeKind {
   PYTHON_GZIP = 'python+gzip',
@@ -49,11 +48,7 @@ class OnChainBlueprint extends Transaction {
 
   signature: Buffer | null;
 
-  constructor(
-    code: Code,
-    pubkey: Buffer,
-    signature: Buffer | null = null
-  ) {
+  constructor(code: Code, pubkey: Buffer, signature: Buffer | null = null) {
     super([], []);
     this.version = ON_CHAIN_BLUEPRINTS_VERSION;
 
