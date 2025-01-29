@@ -1,3 +1,4 @@
+import fs from 'fs';
 import { isEmpty } from 'lodash';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import {
@@ -23,7 +24,6 @@ import Serializer from '../../../src/nano_contracts/serializer';
 import { NanoContractTransactionError, NanoRequest404Error } from '../../../src/errors';
 import { OutputType } from '../../../src/wallet/types';
 import NanoContractTransactionParser from '../../../src/nano_contracts/parser';
-import fs from 'fs';
 
 let fundsTx;
 const builtInBlueprintId = '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595';
@@ -489,20 +489,17 @@ describe('full cycle of bet nano contract', () => {
   // The hathor-core and the wallet-lib are still not ready for
   // using nano contracts with a Multisig wallet
   it.skip('bet deposit built in with multisig wallet', async () => {
-    await executeTests(mhWallet, builInBlueprintId);
+    await executeTests(mhWallet, builtInBlueprintId);
   });
 
   it('bet deposit on chain blueprint', async () => {
     // For now the on chain blueprints needs a signature from a specific address
     // so we must always generate the same seed
-    const seed = 'bicycle dice amused car lock outdoor auto during nest accident soon sauce slot enact hand they member source job forward vibrant lab catch coach';
+    const seed =
+      'bicycle dice amused car lock outdoor auto during nest accident soon sauce slot enact hand they member source job forward vibrant lab catch coach';
     const ocbWallet = await generateWalletHelper({ seed });
     const address0 = await ocbWallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(
-      ocbWallet,
-      address0,
-      1000n
-    );
+    await GenesisWalletHelper.injectFunds(ocbWallet, address0, 1000n);
     // Use the bet blueprint code
     const code = fs.readFileSync('./__tests__/integration/configuration/bet.py', 'utf8');
     const tx = await ocbWallet.createOnChainBlueprintTransaction(code, address0);
