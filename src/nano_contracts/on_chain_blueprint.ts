@@ -67,12 +67,13 @@ class OnChainBlueprint extends Transaction {
    * Add the serialized fields to the array parameter
    *
    * @param {array} Array of buffer to push the serialized fields
+   * @param {addInputData} If should add input data or signature when serializing it
    *
    * @memberof OnChainBlueprint
    * @inner
    */
   serializeFundsFields(array: Buffer[], addInputData: boolean) {
-    super.serializeFundsFields(array);
+    super.serializeFundsFields(array, addInputData);
 
     // Info version
     array.push(intToBytes(ON_CHAIN_BLUEPRINTS_INFO_VERSION, 1));
