@@ -3137,13 +3137,27 @@ class HathorWallet extends EventEmitter {
    */
 
   /**
-   * Create a nano contract transaction and return the SendTransaction object
+   * Create and send an on chain blueprint transaction
    *
    * @param {string} code Blueprint code in utf-8
    * @param {string} address Address that will be used to sign the on chain blueprint transaction
    * @param {CreateOnChainBlueprintTxOptions} [options]
    *
    * @returns {Promise<OnChainBlueprint>}
+   */
+  async createAndSendOnChainBlueprintTransaction(code, address, options = {}) {
+    const sendTransaction = await this.createOnChainBlueprintTransaction(code, address, options);
+    return sendTransaction.runFromMining();
+  }
+
+  /**
+   * Create an on chain blueprint transaction and return the SendTransaction object
+   *
+   * @param {string} code Blueprint code in utf-8
+   * @param {string} address Address that will be used to sign the on chain blueprint transaction
+   * @param {CreateOnChainBlueprintTxOptions} [options]
+   *
+   * @returns {Promise<SendTransaction>}
    */
   async createOnChainBlueprintTransaction(code, address, options) {
     if (await this.storage.isReadonly()) {
@@ -3171,8 +3185,7 @@ class HathorWallet extends EventEmitter {
 
     const tx = new OnChainBlueprint(codeObj, pubkey);
 
-    const sendTransaction = await prepareNanoSendTransaction(tx, pin, this.storage);
-    return sendTransaction.runFromMining();
+    return prepareNanoSendTransaction(tx, pin, this.storage);
   }
 }
 
