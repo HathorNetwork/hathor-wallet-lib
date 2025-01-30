@@ -502,7 +502,7 @@ describe('full cycle of bet nano contract', () => {
     await GenesisWalletHelper.injectFunds(ocbWallet, address0, 1000n);
     // Use the bet blueprint code
     const code = fs.readFileSync('./__tests__/integration/configuration/bet.py', 'utf8');
-    const tx = await ocbWallet.createOnChainBlueprintTransaction(code, address0);
+    const tx = await ocbWallet.createAndSendOnChainBlueprintTransaction(code, address0);
     // Wait for the tx to be confirmed, so we can use the on chain blueprint
     await waitTxConfirmed(ocbWallet, tx.hash);
     // Execute the bet blueprint tests
