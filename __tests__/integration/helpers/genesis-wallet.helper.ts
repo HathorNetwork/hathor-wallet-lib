@@ -12,11 +12,12 @@ import { waitForTxReceived, waitForWalletReady, waitUntilNextTimestamp } from '.
 import { loggers } from '../utils/logger.util';
 import { delay } from '../utils/core.util';
 import { OutputValueType } from '../../../src/types';
+import Transaction from '../../../src/models/transaction';
 
 /**
- * @type {?GenesisWalletHelper}
+ * @type {GenesisWalletHelper}
  */
-let singleton = null;
+let singleton: GenesisWalletHelper | null = null;
 
 export class GenesisWalletHelper {
   /**
@@ -64,10 +65,10 @@ export class GenesisWalletHelper {
    * @param [options]
    * @param {number} [options.waitTimeout] Optional timeout for the websocket confirmation.
    *                                       Passing 0 here skips this waiting.
-   * @returns {Promise<BaseTransactionResponse>}
+   * @returns {Promise<Transaction>}
    * @private
    */
-  async _injectFunds(destinationWallet, address, value: OutputValueType, options = {}) {
+  async _injectFunds(destinationWallet: HathorWallet, address: string, value: OutputValueType, options = {}): Promise<Transaction> {
     try {
       const result = await this.hWallet.sendTransaction(address, value, {
         changeAddress: WALLET_CONSTANTS.genesis.addresses[0],
@@ -89,9 +90,8 @@ export class GenesisWalletHelper {
 
   /**
    * Preferred way to instantiate the GenesisWalletHelper
-   * @returns {Promise<GenesisWalletHelper>}
    */
-  static async getSingleton() {
+  static async getSingleton(): Promise<GenesisWalletHelper> {
     if (singleton) {
       return singleton;
     }
@@ -112,9 +112,9 @@ export class GenesisWalletHelper {
    * @param [options]
    * @param {number} [options.waitTimeout] Optional timeout for the websocket confirmation.
    *                                       Passing 0 here skips this waiting.
-   * @returns {Promise<BaseTransactionResponse>}
+   * @returns {Promise<Transaction>}
    */
-  static async injectFunds(destinationWallet, address, value: OutputValueType, options) {
+  static async injectFunds(destinationWallet: HathorWallet, address: string, value: OutputValueType, options = {}): Promise<Transaction> {
     const instance = await GenesisWalletHelper.getSingleton();
     return instance._injectFunds(destinationWallet, address, value, options);
   }
@@ -124,7 +124,7 @@ export class GenesisWalletHelper {
    * Useful when a test run finishes, to ensure there are no leaks.
    * @return {Promise<void>}
    */
-  static async clearListeners() {
+  static async clearListeners(): Promise<void> {
     const { hWallet: gWallet } = await GenesisWalletHelper.getSingleton();
     gWallet.removeAllListeners('new-tx');
   }

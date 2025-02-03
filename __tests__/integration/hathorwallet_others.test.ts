@@ -18,6 +18,8 @@ import dateFormatter from '../../src/utils/date';
 import { AddressError } from '../../src/errors';
 import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
 import { ConnectionState } from '../../src/wallet/types';
+import HathorWallet from '../../src/new/wallet';
+import { cloneDeep } from 'lodash';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 
@@ -1282,5 +1284,80 @@ describe('index-limit address scanning policy', () => {
     // Setting below current loaded index will be a no-op
     await hWallet.indexLimitSetEndIndex(5);
     await expect(hWallet.storage.store.addressCount()).resolves.toEqual(25);
+  });
+});
+
+describe('processing transaction metadata changes', () => {
+  let hWallet: HathorWallet;
+  let walletData: { words: string, addresses: string[] };
+
+  beforeAll(async () => {
+    walletData = precalculationHelpers.test.getPrecalculatedWallet();
+  });
+
+  beforeEach(async () => {
+    hWallet = await generateWalletHelper({
+      seed: walletData.words,
+      addresses: walletData.addresses,
+    });
+  });
+
+  afterEach(async () => {
+    await hWallet.stop();
+  });
+
+  it('should process entire history and balance when a tx is voided', async () => {
+    const addr0 = await hWallet.getAddressAtIndex(0);
+    const wsSpy: jest.SpiedFunction<typeof hWallet.onNewTx> = jest.spyOn(hWallet, 'onNewTx');
+    const procSpy: jest.SpiedFunction<typeof hWallet.storage.processHistory> = jest.spyOn(hWallet.storage, 'processHistory');
+
+    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toMatchObject({
+      uid: NATIVE_TOKEN_UID,
+      numTransactions: 0,
+      balance: expect.objectContaining({
+        tokens: { unlocked: 0n, locked: 0n },
+      }),
+    });
+
+    const injectedTx = await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
+    if (!injectedTx.hash) {
+      throw new Error('Could not inject funds into wallet');
+    }
+    await waitForTxReceived(hWallet, injectedTx.hash);
+
+    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toMatchObject({
+      uid: NATIVE_TOKEN_UID,
+      numTransactions: 1,
+      balance: expect.objectContaining({
+        tokens: { unlocked: 10n, locked: 0n },
+      }),
+    });
+
+    expect(wsSpy).toHaveBeenCalled();
+
+    const lastCall = wsSpy.mock.lastCall;
+    expect(lastCall).toBeDefined();
+    if (!lastCall) {
+      throw new Error('Unexpected error');
+    }
+    // Get a copy of the transaction received via websocket
+    const wsTx = cloneDeep(lastCall[0]);
+    // Mark tx as voided
+    wsTx.history.is_voided = true;
+
+    // Simulate the wallet receiving a void update
+    procSpy.mockClear();
+    await hWallet.onNewTx(wsTx);
+    expect(procSpy).toHaveBeenCalled();
+
+    // Since the only transaction on the wallet has been voided it should
+    // register as empty with 1 transaction
+    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toMatchObject({
+      uid: NATIVE_TOKEN_UID,
+      numTransactions: 1,
+      balance: expect.objectContaining({
+        tokens: { unlocked: 0n, locked: 0n },
+      }),
+    });
   });
 });
