@@ -39,6 +39,7 @@ import {
   IInputSignature,
   ITxSignatureData,
   OutputValueType,
+  IHistoryInput,
 } from '../types';
 import Address from '../models/address';
 import P2PKH from '../models/p2pkh';
@@ -566,6 +567,71 @@ const transaction = {
       return new Transaction(inputs, outputs, options);
     }
     throw new ParseError('Invalid transaction version.');
+  },
+
+  async convertTransactionToHistoryTx(tx: Transaction|CreateTokenTransaction|NanoContract, storage: IStorage): Promise<IHistoryTx> {
+    if (!tx.hash) {
+      throw new Error('To be a history tx a calculated hash is required');
+    }
+
+    const inputs: IHistoryInput[] = [];
+    const outputs: IHistoryOutput[] = [];
+
+    for (const input of tx.inputs) {
+      let spentTx = await storage.getTx(input.hash);
+      if (!spentTx) {
+        // Get from API?
+        spentTx = {} as IHistoryTx;
+      }
+      const spentOut = spentTx.outputs[input.index];
+      inputs.push({
+        tx_id: input.hash,
+        index: input.index,
+        script: spentOut.script,
+        decoded: spentOut.decoded,
+        token_data: spentOut.token_data,
+        token: spentOut.token,
+        value: spentOut.value,
+      });
+    }
+    for (const output of tx.outputs) {
+      const script = output.parseScript(storage.config.getNetwork());
+      outputs.push({
+        value: output.value,
+        token_data: output.tokenData,
+        script: output.script.toString('hex'),
+        decoded: script?.toData() ?? {},
+        token: output.isTokenHTR() ? NATIVE_TOKEN_UID : tx.tokens[output.getTokenIndex()],
+        spent_by: null, // Cannot reconstruct this field
+      });
+    }
+    const histTx: IHistoryTx = {
+      tx_id: tx.hash,
+      signalBits: tx.signalBits,
+      version: tx.version,
+      weight: tx.weight,
+      timestamp: tx.timestamp ?? 0,
+      is_voided: false, // tx.voided?
+      nonce: tx.nonce,
+      inputs,
+      outputs,
+      parents: tx.parents,
+      tokens: tx.tokens,
+    };
+
+    if (tx.version === CREATE_TOKEN_TX_VERSION) {
+      histTx.token_name = (tx as CreateTokenTransaction).name;
+      histTx.token_symbol = (tx as CreateTokenTransaction).symbol;
+    }
+
+    if (tx.version === NANO_CONTRACTS_VERSION) {
+      histTx.nc_id = (tx as NanoContract).id;
+      histTx.nc_args = (tx as NanoContract).args.map(a => a.toString('hex')).join('');
+      histTx.nc_pubkey = (tx as NanoContract).pubkey.toString('hex');
+      // histTx.nc_blueprint_id // is this required?
+    }
+
+    return histTx;
   },
 
   /**

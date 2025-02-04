@@ -9,6 +9,7 @@ import { util } from 'bitcore-lib';
 import buffer from 'buffer';
 import { OP_CHECKSIG } from '../opcodes';
 import helpers from '../utils/helpers';
+import { IHistoryOutputDecoded } from '../types';
 
 class ScriptData {
   // String of data to store on the script
@@ -32,6 +33,17 @@ class ScriptData {
   // eslint-disable-next-line class-methods-use-this -- This method returns a hardcoded constant
   getType(): string {
     return 'data';
+  }
+
+
+  /**
+   * Build the original decoded script
+   */
+  toData(): IHistoryOutputDecoded {
+    return {
+      type: this.getType(),
+      data: this.data,
+    }
   }
 
   /**

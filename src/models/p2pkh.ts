@@ -16,6 +16,7 @@ import {
 import { intToBytes } from '../utils/buffer';
 import helpers from '../utils/helpers';
 import Address from './address';
+import { IHistoryOutputDecoded } from '../types';
 
 type optionsType = {
   timelock?: number | null | undefined;
@@ -80,6 +81,17 @@ class P2PKH {
     arr.push(OP_EQUALVERIFY);
     arr.push(OP_CHECKSIG);
     return util.buffer.concat(arr);
+  }
+
+  /**
+   * Build the original decoded script
+   */
+  toData(): IHistoryOutputDecoded {
+    return {
+      type: this.getType(),
+      address: this.address.base58,
+      timelock: this.timelock,
+    }
   }
 
   /**
