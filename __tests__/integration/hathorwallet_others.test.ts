@@ -1314,13 +1314,13 @@ describe('processing transaction metadata changes', () => {
       'processHistory'
     );
 
-    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toContain(
-      expect.objectContaining({
+    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toBe([
+      {
         token: expect.objectContaining({ id: NATIVE_TOKEN_UID }),
         transactions: 0,
         balance: { unlocked: 0n, locked: 0n },
-      })
-    );
+      },
+    ]);
 
     const injectedTx = await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
     if (!injectedTx.hash) {
@@ -1328,13 +1328,13 @@ describe('processing transaction metadata changes', () => {
     }
     await waitForTxReceived(hWallet, injectedTx.hash);
 
-    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toContain(
-      expect.objectContaining({
+    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toBe([
+      {
         token: expect.objectContaining({ id: NATIVE_TOKEN_UID }),
         transactions: 1,
         balance: { unlocked: 10n, locked: 0n },
-      })
-    );
+      },
+    ]);
 
     expect(wsSpy).toHaveBeenCalled();
 
@@ -1355,12 +1355,12 @@ describe('processing transaction metadata changes', () => {
 
     // Since the only transaction on the wallet has been voided it should
     // register as empty with 1 transaction
-    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toContain(
-      expect.objectContaining({
+    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toBe([
+      {
         token: expect.objectContaining({ id: NATIVE_TOKEN_UID }),
         transactions: 1,
         balance: { unlocked: 0n, locked: 0n },
-      })
-    );
+      },
+    ]);
   });
 });
