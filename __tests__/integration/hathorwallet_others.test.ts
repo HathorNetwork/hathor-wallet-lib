@@ -1314,7 +1314,7 @@ describe('processing transaction metadata changes', () => {
       'processHistory'
     );
 
-    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toBe([
+    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toEqual([
       expect.objectContaining({
         token: expect.objectContaining({ id: NATIVE_TOKEN_UID }),
         transactions: 0,
@@ -1328,7 +1328,7 @@ describe('processing transaction metadata changes', () => {
     }
     await waitForTxReceived(hWallet, injectedTx.hash);
 
-    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toBe([
+    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toEqual([
       expect.objectContaining({
         token: expect.objectContaining({ id: NATIVE_TOKEN_UID }),
         transactions: 1,
@@ -1355,7 +1355,7 @@ describe('processing transaction metadata changes', () => {
 
     // Since the only transaction on the wallet has been voided it should
     // register as empty with 1 transaction
-    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toBe([
+    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toEqual([
       expect.objectContaining({
         token: expect.objectContaining({ id: NATIVE_TOKEN_UID }),
         transactions: 1,
