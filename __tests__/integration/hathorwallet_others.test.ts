@@ -90,11 +90,11 @@ describe('processing transaction metadata changes', () => {
     expect(procSpy).toHaveBeenCalled();
 
     // Since the only transaction on the wallet has been voided it should
-    // register as empty with 1 transaction
+    // register as empty with 0 transactions
     await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toEqual([
       expect.objectContaining({
         token: expect.objectContaining({ id: NATIVE_TOKEN_UID }),
-        transactions: 1,
+        transactions: 0,
         balance: { unlocked: 0n, locked: 0n },
       }),
     ]);
