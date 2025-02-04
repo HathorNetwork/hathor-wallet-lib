@@ -1319,7 +1319,7 @@ describe('processing transaction metadata changes', () => {
         token: expect.objectContaining({ id: NATIVE_TOKEN_UID }),
         transactions: 0,
         balance: { unlocked: 0n, locked: 0n },
-      })
+      }),
     ]);
 
     const injectedTx = await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
@@ -1333,7 +1333,7 @@ describe('processing transaction metadata changes', () => {
         token: expect.objectContaining({ id: NATIVE_TOKEN_UID }),
         transactions: 1,
         balance: { unlocked: 10n, locked: 0n },
-      })
+      }),
     ]);
 
     expect(wsSpy).toHaveBeenCalled();
@@ -1360,7 +1360,7 @@ describe('processing transaction metadata changes', () => {
         token: expect.objectContaining({ id: NATIVE_TOKEN_UID }),
         transactions: 1,
         balance: { unlocked: 0n, locked: 0n },
-      })
+      }),
     ]);
   });
 });
