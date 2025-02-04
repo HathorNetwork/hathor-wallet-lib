@@ -276,7 +276,11 @@ export function waitForWalletReady(hWallet) {
  * @param {number} [timeout] Timeout in milisseconds. Default value defined on test-constants.
  * @returns {Promise<IHistoryTx>}
  */
-export async function waitForTxReceived(hWallet: HathorWallet, txId: string, timeout: number = 0): Promise<IHistoryTx> {
+export async function waitForTxReceived(
+  hWallet: HathorWallet,
+  txId: string,
+  timeout: number = 0
+): Promise<IHistoryTx> {
   const startTime = Date.now().valueOf();
   let timeoutReached = false;
   const timeoutPeriod = timeout || TX_TIMEOUT_DEFAULT;

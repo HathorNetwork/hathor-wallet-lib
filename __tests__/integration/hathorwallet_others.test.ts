@@ -1,3 +1,4 @@
+import { cloneDeep } from 'lodash';
 import { GenesisWalletHelper } from './helpers/genesis-wallet.helper';
 import { delay } from './utils/core.util';
 import {
@@ -19,7 +20,6 @@ import { AddressError } from '../../src/errors';
 import { precalculationHelpers } from './helpers/wallet-precalculation.helper';
 import { ConnectionState } from '../../src/wallet/types';
 import HathorWallet from '../../src/new/wallet';
-import { cloneDeep } from 'lodash';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 
@@ -1289,7 +1289,7 @@ describe('index-limit address scanning policy', () => {
 
 describe('processing transaction metadata changes', () => {
   let hWallet: HathorWallet;
-  let walletData: { words: string, addresses: string[] };
+  let walletData: { words: string; addresses: string[] };
 
   beforeAll(async () => {
     walletData = precalculationHelpers.test.getPrecalculatedWallet();
@@ -1309,15 +1309,18 @@ describe('processing transaction metadata changes', () => {
   it('should process entire history and balance when a tx is voided', async () => {
     const addr0 = await hWallet.getAddressAtIndex(0);
     const wsSpy: jest.SpiedFunction<typeof hWallet.onNewTx> = jest.spyOn(hWallet, 'onNewTx');
-    const procSpy: jest.SpiedFunction<typeof hWallet.storage.processHistory> = jest.spyOn(hWallet.storage, 'processHistory');
+    const procSpy: jest.SpiedFunction<typeof hWallet.storage.processHistory> = jest.spyOn(
+      hWallet.storage,
+      'processHistory'
+    );
 
-    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toMatchObject({
-      uid: NATIVE_TOKEN_UID,
-      numTransactions: 0,
-      balance: expect.objectContaining({
-        tokens: { unlocked: 0n, locked: 0n },
-      }),
-    });
+    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toContain(
+      expect.objectContaining({
+        token: expect.objectContaining({ id: NATIVE_TOKEN_UID }),
+        transactions: 0,
+        balance: { unlocked: 0n, locked: 0n },
+      })
+    );
 
     const injectedTx = await GenesisWalletHelper.injectFunds(hWallet, addr0, 10n);
     if (!injectedTx.hash) {
@@ -1325,17 +1328,17 @@ describe('processing transaction metadata changes', () => {
     }
     await waitForTxReceived(hWallet, injectedTx.hash);
 
-    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toMatchObject({
-      uid: NATIVE_TOKEN_UID,
-      numTransactions: 1,
-      balance: expect.objectContaining({
-        tokens: { unlocked: 10n, locked: 0n },
-      }),
-    });
+    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toContain(
+      expect.objectContaining({
+        token: expect.objectContaining({ id: NATIVE_TOKEN_UID }),
+        transactions: 1,
+        balance: { unlocked: 10n, locked: 0n },
+      })
+    );
 
     expect(wsSpy).toHaveBeenCalled();
 
-    const lastCall = wsSpy.mock.lastCall;
+    const { lastCall } = wsSpy.mock;
     expect(lastCall).toBeDefined();
     if (!lastCall) {
       throw new Error('Unexpected error');
@@ -1352,12 +1355,12 @@ describe('processing transaction metadata changes', () => {
 
     // Since the only transaction on the wallet has been voided it should
     // register as empty with 1 transaction
-    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toMatchObject({
-      uid: NATIVE_TOKEN_UID,
-      numTransactions: 1,
-      balance: expect.objectContaining({
-        tokens: { unlocked: 0n, locked: 0n },
-      }),
-    });
+    await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toContain(
+      expect.objectContaining({
+        token: expect.objectContaining({ id: NATIVE_TOKEN_UID }),
+        transactions: 1,
+        balance: { unlocked: 0n, locked: 0n },
+      })
+    );
   });
 });

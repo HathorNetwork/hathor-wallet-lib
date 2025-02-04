@@ -68,7 +68,12 @@ export class GenesisWalletHelper {
    * @returns {Promise<Transaction>}
    * @private
    */
-  async _injectFunds(destinationWallet: HathorWallet, address: string, value: OutputValueType, options = {}): Promise<Transaction> {
+  async _injectFunds(
+    destinationWallet: HathorWallet,
+    address: string,
+    value: OutputValueType,
+    options = {}
+  ): Promise<Transaction> {
     try {
       const result = await this.hWallet.sendTransaction(address, value, {
         changeAddress: WALLET_CONSTANTS.genesis.addresses[0],
@@ -114,7 +119,12 @@ export class GenesisWalletHelper {
    *                                       Passing 0 here skips this waiting.
    * @returns {Promise<Transaction>}
    */
-  static async injectFunds(destinationWallet: HathorWallet, address: string, value: OutputValueType, options = {}): Promise<Transaction> {
+  static async injectFunds(
+    destinationWallet: HathorWallet,
+    address: string,
+    value: OutputValueType,
+    options = {}
+  ): Promise<Transaction> {
     const instance = await GenesisWalletHelper.getSingleton();
     return instance._injectFunds(destinationWallet, address, value, options);
   }
