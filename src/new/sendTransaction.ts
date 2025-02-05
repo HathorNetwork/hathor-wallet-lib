@@ -424,15 +424,14 @@ export default class SendTransaction extends EventEmitter {
             this.transaction.updateHash();
             if (this.storage) {
               // Add transaction to storage and process storage
-              (async () => {
-                if (!(this.storage && this.transaction)) {
-                  return;
-                }
-                const historyTx = await transactionUtils.convertTransactionToHistoryTx(this.transaction, this.storage);
-                await this.storage.addTx(historyTx)
-                // scan addresses?
-                await this.storage.processNewTx(historyTx);
-              })();
+              (async (storage: IStorage, transaction: Transaction) => {
+                // Get the transaction as a history object
+                const historyTx = await transactionUtils.convertTransactionToHistoryTx(transaction, storage);
+                // Add transaction to storage
+                await storage.addTx(historyTx)
+                // Process new transaction
+                await storage.processNewTx(historyTx);
+              })(this.storage, this.transaction);
             }
             this.emit('send-tx-success', this.transaction);
             resolve(this.transaction);
