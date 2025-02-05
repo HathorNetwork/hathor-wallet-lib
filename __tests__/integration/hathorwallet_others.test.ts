@@ -98,6 +98,8 @@ describe('processing transaction metadata changes', () => {
         balance: { unlocked: 0n, locked: 0n },
       }),
     ]);
+
+    await expect(hWallet.storage.getTx(injectedTx.hash)).resolves.toBeDefined();
   });
 });
 
