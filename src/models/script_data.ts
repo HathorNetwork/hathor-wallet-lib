@@ -35,7 +35,6 @@ class ScriptData {
     return 'data';
   }
 
-
   /**
    * Build the original decoded script
    */
@@ -43,7 +42,7 @@ class ScriptData {
     return {
       type: this.getType(),
       data: this.data,
-    }
+    };
   }
 
   /**

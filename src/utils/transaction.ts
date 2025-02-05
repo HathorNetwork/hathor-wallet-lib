@@ -569,7 +569,10 @@ const transaction = {
     throw new ParseError('Invalid transaction version.');
   },
 
-  async convertTransactionToHistoryTx(tx: Transaction|CreateTokenTransaction|NanoContract, storage: IStorage): Promise<IHistoryTx> {
+  async convertTransactionToHistoryTx(
+    tx: Transaction | CreateTokenTransaction | NanoContract,
+    storage: IStorage
+  ): Promise<IHistoryTx> {
     if (!tx.hash) {
       throw new Error('To be a history tx a calculated hash is required');
     }

@@ -426,9 +426,12 @@ export default class SendTransaction extends EventEmitter {
               // Add transaction to storage and process storage
               (async (storage: IStorage, transaction: Transaction) => {
                 // Get the transaction as a history object
-                const historyTx = await transactionUtils.convertTransactionToHistoryTx(transaction, storage);
+                const historyTx = await transactionUtils.convertTransactionToHistoryTx(
+                  transaction,
+                  storage
+                );
                 // Add transaction to storage
-                await storage.addTx(historyTx)
+                await storage.addTx(historyTx);
                 // Process new transaction
                 await storage.processNewTx(historyTx);
               })(this.storage, this.transaction);

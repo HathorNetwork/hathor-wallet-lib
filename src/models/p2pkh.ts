@@ -91,7 +91,7 @@ class P2PKH {
       type: this.getType(),
       address: this.address.base58,
       timelock: this.timelock,
-    }
+    };
   }
 
   /**

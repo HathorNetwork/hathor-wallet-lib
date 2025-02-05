@@ -58,7 +58,7 @@ class P2SH {
       type: this.getType(),
       address: this.address.base58,
       timelock: this.timelock,
-    }
+    };
   }
 
   /**
