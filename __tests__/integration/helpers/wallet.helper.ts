@@ -20,7 +20,7 @@ import { multisigWalletsData, precalculationHelpers } from './wallet-precalculat
 import { delay } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 import { MemoryStore, Storage } from '../../../src/storage';
-import { TxHistoryProcessingStatus } from '../../../src/types';
+import { TxHistoryProcessingStatus, IHistoryTx } from '../../../src/types';
 
 /**
  * @typedef SendTxResponse
@@ -276,7 +276,11 @@ export function waitForWalletReady(hWallet) {
  * @param {number} [timeout] Timeout in milisseconds. Default value defined on test-constants.
  * @returns {Promise<IHistoryTx>}
  */
-export async function waitForTxReceived(hWallet, txId, timeout) {
+export async function waitForTxReceived(
+  hWallet: HathorWallet,
+  txId: string,
+  timeout: number = 0
+): Promise<IHistoryTx> {
   const startTime = Date.now().valueOf();
   let timeoutReached = false;
   const timeoutPeriod = timeout || TX_TIMEOUT_DEFAULT;
@@ -307,6 +311,10 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
   if (timeoutReached) {
     // Throw error in case of timeout
     throw new Error(`Timeout of ${timeoutPeriod}ms without receiving the tx with id ${txId}`);
+  }
+
+  if (!storageTx) {
+    throw new Error('Unexpected error waiting for tx, we found it but it is null');
   }
 
   const timeDiff = Date.now().valueOf() - startTime;
