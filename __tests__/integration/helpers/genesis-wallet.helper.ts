@@ -13,10 +13,7 @@ import { loggers } from '../utils/logger.util';
 import { delay } from '../utils/core.util';
 import { OutputValueType } from '../../../src/types';
 
-/**
- * @type {?GenesisWalletHelper}
- */
-let singleton = null;
+let singleton: GenesisWalletHelper | null = null;
 
 export class GenesisWalletHelper {
   /**
@@ -91,7 +88,7 @@ export class GenesisWalletHelper {
    * Preferred way to instantiate the GenesisWalletHelper
    * @returns {Promise<GenesisWalletHelper>}
    */
-  static async getSingleton() {
+  static async getSingleton(): Promise<GenesisWalletHelper> {
     if (singleton) {
       return singleton;
     }
