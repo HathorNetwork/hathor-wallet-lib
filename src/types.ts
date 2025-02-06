@@ -506,6 +506,7 @@ export interface IStorage {
   processNewTx(tx: IHistoryTx): Promise<void>;
 
   // Tokens
+  addToken(data: ITokenData): Promise<void>;
   isTokenRegistered(tokenUid: string): Promise<boolean>;
   registerToken(token: ITokenData): Promise<void>;
   unregisterToken(tokenUid: string): Promise<void>;
