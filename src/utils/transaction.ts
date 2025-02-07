@@ -569,6 +569,9 @@ const transaction = {
     throw new ParseError('Invalid transaction version.');
   },
 
+  /**
+   * Convert a Transaction instance to the history object.
+   */
   async convertTransactionToHistoryTx(
     tx: Transaction | CreateTokenTransaction | NanoContract,
     storage: IStorage
@@ -599,12 +602,25 @@ const transaction = {
     }
     for (const output of tx.outputs) {
       const script = output.parseScript(storage.config.getNetwork());
+      let token = NATIVE_TOKEN_UID;
+      if (!output.isTokenHTR()) {
+        if (tx.version === CREATE_TOKEN_TX_VERSION) {
+          token = tx.hash;
+        } else {
+          const index = output.getTokenIndex();
+          if (tx.tokens.length <= index) {
+            throw new Error('Fetching a token that is not l')
+          }
+          token = tx.tokens[index];
+        }
+      }
+
       outputs.push({
         value: output.value,
         token_data: output.tokenData,
         script: output.script.toString('hex'),
         decoded: script?.toData() ?? {},
-        token: output.isTokenHTR() ? NATIVE_TOKEN_UID : tx.tokens[output.getTokenIndex()],
+        token,
         spent_by: null, // Cannot reconstruct this field
       });
     }
