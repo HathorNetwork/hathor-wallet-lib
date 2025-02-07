@@ -278,7 +278,7 @@ export function waitForWalletReady(hWallet) {
 export async function waitForTxReceived(
   hWallet: HathorWallet,
   txId: string,
-  timeout: number | null = null
+  timeout: number = 0
 ): Promise<IHistoryTx> {
   const startTime = Date.now().valueOf();
   let timeoutReached = false;
@@ -310,6 +310,10 @@ export async function waitForTxReceived(
   if (timeoutReached) {
     // Throw error in case of timeout
     throw new Error(`Timeout of ${timeoutPeriod}ms without receiving the tx with id ${txId}`);
+  }
+
+  if (!storageTx) {
+    throw new Error('Unexpected error waiting for tx, we found it but it is null');
   }
 
   const timeDiff = Date.now().valueOf() - startTime;
