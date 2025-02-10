@@ -48,6 +48,7 @@ import ScriptData from '../models/script_data';
 import helpers from './helpers';
 import { getAddressType, getAddressFromPubkey } from './address';
 import NanoContract from '../nano_contracts/nano_contract';
+import txApi from '../api/txApi';
 
 const transaction = {
   /**
@@ -585,11 +586,51 @@ const transaction = {
 
     for (const input of tx.inputs) {
       let spentTx = await storage.getTx(input.hash);
+      let spentOut: IHistoryOutput;
       if (!spentTx) {
-        // Get from API?
-        spentTx = {} as IHistoryTx;
+        // Get from API
+        spentOut = await new Promise((resolve, reject) => {
+          txApi.getTransaction(input.hash, response => {
+            if (!response.success) {
+              return reject();
+            }
+
+            if (response.tx.outputs.length >= input.index) {
+              return reject("Index outsite of tx output array bounds");
+            }
+            const out = response.tx.outputs[input.index];
+            const outRet = {
+              value: out.value,
+              token_data: out.token_data,
+              script: out.script,
+              spent_by: out.spent_by,
+              decoded: {},
+            } as IHistoryOutput;
+            if (out.token) {
+              outRet.token = out.token;
+            }
+            if (out.decoded.address) {
+              outRet.decoded.type = (out.decoded.type as string).toLocaleLowerCase();
+              outRet.decoded.address = out.decoded.address as string;
+              outRet.decoded.timelock = out.decoded.timelock as number;
+            }
+            // XXX: should we cover nano and other types?
+
+            resolve(outRet);
+          }).catch(err => reject(err));
+        });
+
+        // If we could not get tx from api or any other error happened
+        if (!spentOut) {
+          throw new Error(`Could not fetch tx ${tx.hash} from fullnode`);
+        }
+      } else {
+        if (spentTx.outputs.length >= input.index) {
+          throw new Error('Index outside of transaction output array bounds');
+        }
+        spentOut = spentTx.outputs[input.index];
       }
-      const spentOut = spentTx.outputs[input.index];
+
       inputs.push({
         tx_id: input.hash,
         index: input.index,
@@ -600,6 +641,7 @@ const transaction = {
         value: spentOut.value,
       });
     }
+
     for (const output of tx.outputs) {
       const script = output.parseScript(storage.config.getNetwork());
       let token = NATIVE_TOKEN_UID;
@@ -624,6 +666,7 @@ const transaction = {
         spent_by: null, // Cannot reconstruct this field
       });
     }
+
     const histTx: IHistoryTx = {
       tx_id: tx.hash,
       signalBits: tx.signalBits,

@@ -78,7 +78,7 @@ const txApi = {
    * @memberof ApiTransaction
    * @inner
    */
-  getTransaction(id, resolve): Promise<void | AxiosResponse<TransactionSchema>> {
+  getTransaction(id: string, resolve: (response: TransactionSchema) => void): Promise<void> {
     const data = { id };
     return this.getTransactionBase(data, resolve, transactionSchema);
   },
