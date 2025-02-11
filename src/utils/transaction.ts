@@ -589,7 +589,7 @@ const transaction = {
       let spentOut: IHistoryOutput;
 
       if (spentTx) {
-        if (spentTx.outputs.length >= input.index) {
+        if (input.index >= spentTx.outputs.length) {
           throw new Error(
             `Index (${input.index}) outside of transaction output array bounds (${spentTx.outputs.length})`
           );
@@ -604,7 +604,7 @@ const transaction = {
                 return reject(new Error(response.message ?? ''));
               }
 
-              if (response.tx.outputs.length >= input.index) {
+              if (input.index >= response.tx.outputs.length) {
                 return reject(new Error('Index outsite of tx output array bounds'));
               }
               const out = response.tx.outputs[input.index];
