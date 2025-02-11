@@ -587,7 +587,15 @@ const transaction = {
     for (const input of tx.inputs) {
       const spentTx = await storage.getTx(input.hash);
       let spentOut: IHistoryOutput;
-      if (!spentTx) {
+
+      if (spentTx) {
+        if (spentTx.outputs.length >= input.index) {
+          throw new Error(
+            `Index (${input.index}) outside of transaction output array bounds (${spentTx.outputs.length})`
+          );
+        }
+        spentOut = spentTx.outputs[input.index];
+      } else {
         // Get from API
         spentOut = await new Promise((resolve, reject) => {
           txApi
@@ -626,11 +634,6 @@ const transaction = {
         if (!spentOut) {
           throw new Error(`Could not fetch tx ${tx.hash} from fullnode`);
         }
-      } else {
-        if (spentTx.outputs.length >= input.index) {
-          throw new Error('Index outside of transaction output array bounds');
-        }
-        spentOut = spentTx.outputs[input.index];
       }
 
       inputs.push({
