@@ -12,6 +12,7 @@ on:
     - release
     - release-candidate
     - master
+    - test/void-tx-utxos
 jobs:
   test:
     runs-on: 'ubuntu-latest'

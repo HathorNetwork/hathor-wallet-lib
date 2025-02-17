@@ -12,6 +12,7 @@ on:
       - release
       - release-candidate
       - master
+      - test/void-tx-utxos
 
 env:
   TEST_WALLET_START_TIMEOUT: '180000' # 3 minutes
