@@ -143,7 +143,7 @@ describe('processing transaction metadata changes', () => {
 
     wsSpy.mockClear();
     // Send a tx from the wallet to itself
-    const txSent = await hWallet.sendTransaction(addr5, 5);
+    const txSent = await hWallet.sendTransaction(addr5, 5n);
     expect(txSent.hash).toBeDefined();
     if (!txSent.hash) {
       throw new Error('undefined hash for tx sent, should not happen.');
@@ -254,7 +254,7 @@ describe('processing transaction metadata changes', () => {
     wsSpy.mockClear();
 
     // Send a tx from the wallet to genesis
-    const txSent = await hWallet.sendTransaction(addrExt, 5);
+    const txSent = await hWallet.sendTransaction(addrExt, 5n);
     expect(txSent.hash).toBeDefined();
     if (!txSent.hash) {
       throw new Error('undefined hash for tx sent, should not happen.');
@@ -357,7 +357,7 @@ describe('processing transaction metadata changes', () => {
 
     wsSpy.mockClear();
     // Create a token
-    const tokenTx = await hWallet.createNewToken('Create Void test', 'CVT01', 100);
+    const tokenTx = await hWallet.createNewToken('Create Void test', 'CVT01', 100n);
     expect(tokenTx.hash).toBeDefined();
     if (!tokenTx.hash) {
       throw new Error('undefined hash for tx sent, should not happen.');

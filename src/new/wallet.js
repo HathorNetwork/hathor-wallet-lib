@@ -683,10 +683,10 @@ class HathorWallet extends EventEmitter {
    *
    * @return {Promise<{
    *   token: {id:string, name:string, symbol:string},
-   *   balance: {unlocked:number, locked:number},
+   *   balance: {unlocked:bigint, locked:bigint},
    *   transactions:number,
    *   lockExpires:number|null,
-   *   tokenAuthorities: {unlocked: {mint:number,melt:number}, locked: {mint:number,melt:number}}
+   *   tokenAuthorities: {unlocked: {mint:bigint,melt:bigint}, locked: {mint:bigint,melt:bigint}}
    * }[]>} Array of balance for each token
    *
    * @memberof HathorWallet
@@ -842,11 +842,11 @@ class HathorWallet extends EventEmitter {
 
   /**
    * @typedef AddressInfo
-   * @property {number} total_amount_received Sum of the amounts received
-   * @property {number} total_amount_sent Sum of the amounts sent
-   * @property {number} total_amount_available Amount available to transfer
-   * @property {number} total_amount_locked Amount locked and thus no available to transfer
-   * @property {number} token Token used to calculate the amounts received, sent, available and locked
+   * @property {bigint} total_amount_received Sum of the amounts bigint
+   * @property {bigint} total_amount_sent Sum of the amounts bigint
+   * @property {bigint} total_amount_available Amount bigint to bigint
+   * @property {bigint} total_amount_locked Amount locked andbigintthus nobigint to transfer
+   * @property {number} token Token used to calculate the amounts bigint, sent, available and locked
    * @property {number} index Derivation path for the given address
    */
 
@@ -930,16 +930,16 @@ class HathorWallet extends EventEmitter {
    * @property {string} [token] - Token to filter the utxos. If not sent, we select only HTR utxos.
    * @property {number} [authorities] - Authorities to filter the utxos. If not sent, we select only non authority utxos.
    * @property {string} [filter_address] - Address to filter the utxos.
-   * @property {number} [amount_smaller_than] - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00.
-   * @property {number} [amount_bigger_than] - Minimum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount bigger than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00.
-   * @property {number} [max_amount] - Limit the maximum total amount to consolidate summing all utxos. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {bigint} [amount_smaller_than] - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {bigint} [amount_bigger_than] - Minimum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount bigger than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {bigint} [max_amount] - Limit the maximum total amount to consolidate summing all utxos. Integer representation of decimals, i.e. 100 = 1.00.
    * @property {boolean} [only_available_utxos] - Use only available utxos (not locked)
    */
 
   /**
    * @typedef UtxoInfo
    * @property {string} address - Address that owns the UTXO.
-   * @property {number} amount - Amount of tokens.
+   * @property {bigint} amount - Amount of tokens.
    * @property {string} tx_id - Original transaction id.
    * @property {boolean} locked - If the output is currently locked.
    * @property {number} index - Index on the output array of the original tx.
@@ -947,10 +947,10 @@ class HathorWallet extends EventEmitter {
 
   /**
    * @typedef UtxoDetails
-   * @property {number} total_amount_available - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
-   * @property {number} total_utxos_available - Token to filter the utxos. If not sent, we select only HTR utxos.
-   * @property {number} total_amount_locked - Address to filter the utxos.
-   * @property {number} total_utxos_locked - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than this value. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {bigint} total_amount_available - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
+   * @property {bigint} total_utxos_available - Token to filter the utxos. If not sent, we select only HTR utxos.
+   * @property {bigint} total_amount_locked - Address to filter the utxos.
+   * @property {bigint} total_utxos_locked - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than this value. Integer representation of decimals, i.e. 100 = 1.00.
    * @property {UtxoInfo[]} utxos - Array of utxos
    */
 
@@ -1103,7 +1103,7 @@ class HathorWallet extends EventEmitter {
    * @property {{ hash: string, index: number }[]} inputs - Inputs for the consolidation transaction
    * @property {{ uid: string, name: string, symbol: string }} token - HTR or custom token
    * @property {UtxoInfo[]} utxos - Array of utxos that will be consolidated
-   * @property {number} total_amount - Amount to be consolidated
+   * @property {bigint} total_amount - Amount to be consolidated
    *
    * @param {string} destinationAddress Address of the consolidated utxos
    * @param {UtxoOptions} options Utxo filtering options
@@ -1143,7 +1143,7 @@ class HathorWallet extends EventEmitter {
   /**
    * @typedef ConsolidationResultSendTx
    * @property {number} total_utxos_consolidated - Number of utxos consolidated
-   * @property {number} total_amount - Consolidated amount
+   * @property {bigint} total_amount - Consolidated amount
    * @property {SendTransaction} sendTx - instance that will send the transaction.
    * @property {UtxoInfo[]} utxos - Array of consolidated utxos
    */
@@ -1187,7 +1187,7 @@ class HathorWallet extends EventEmitter {
   /**
    * @typedef ConsolidationResult
    * @property {number} total_utxos_consolidated - Number of utxos consolidated
-   * @property {number} total_amount - Consolidated amount
+   * @property {bigint} total_amount - Consolidated amount
    * @property {string} txId - Consolidated transaction id
    * @property {UtxoInfo[]} utxos - Array of consolidated utxos
    */
@@ -1380,7 +1380,7 @@ class HathorWallet extends EventEmitter {
    * Send a transaction with a single output
    *
    * @param {string} address Output address
-   * @param {Number} value Output value
+   * @param {bigint} value Output value
    * @param [options] Options parameters
    * @param {string} [options.changeAddress] address of the change output
    * @param {string} [options.token] token uid
@@ -1406,7 +1406,7 @@ class HathorWallet extends EventEmitter {
    * Send a transaction with a single output
    *
    * @param {string} address Output address
-   * @param {Number} value Output value
+   * @param {bigint} value Output value
    * @param [options] Options parameters
    * @param {string} [options.changeAddress] address of the change output
    * @param {string} [options.token] token uid
@@ -2360,7 +2360,7 @@ class HathorWallet extends EventEmitter {
    * @param tokenId Token uid to get the token details
    *
    * @return {Promise<{
-   *   totalSupply: number,
+   *   totalSupply: bigint,
    *   totalTransactions: number,
    *   tokenInfo: {
    *     name: string,
@@ -2455,7 +2455,7 @@ class HathorWallet extends EventEmitter {
    * @param [optionsParam]
    * @param {boolean} [optionsParam.includeAuthorities=false] Retrieve authority balances if true
    *
-   * @return {Promise<Record<string,number>>} Promise that resolves with an object with each token
+   * @return {Promise<Record<string,bigint>>} Promise that resolves with an object with each token
    *                                          and it's balance in this tx for this wallet
    *
    * @example
@@ -2753,7 +2753,7 @@ class HathorWallet extends EventEmitter {
    *     weight: number,
    *     tokenName: string,
    *     tokenSymbol: string,
-   *     balance: number
+   *     balance: bigint
    *   }>
    * }>} Array of token details
    * @example
