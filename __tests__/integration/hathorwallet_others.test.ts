@@ -135,9 +135,11 @@ describe('processing transaction metadata changes', () => {
       }),
     ]);
     expect(store.utxos.size).toStrictEqual(1);
-    expect(Array.from(store.utxos.values())).toEqual([expect.objectContaining({
-      txId: injectedTx.hash,
-    })]);
+    expect(Array.from(store.utxos.values())).toEqual([
+      expect.objectContaining({
+        txId: injectedTx.hash,
+      }),
+    ]);
 
     wsSpy.mockClear();
     // Send a tx from the wallet to itself
@@ -202,9 +204,11 @@ describe('processing transaction metadata changes', () => {
     await expect(hWallet.storage.getTx(txSent.hash)).resolves.toBeDefined();
     expect(store.utxos.size).toStrictEqual(1);
     // utxos go back to being from the injected tx
-    expect(Array.from(store.utxos.values())).toEqual([expect.objectContaining({
-      txId: injectedTx.hash,
-    })]);
+    expect(Array.from(store.utxos.values())).toEqual([
+      expect.objectContaining({
+        txId: injectedTx.hash,
+      }),
+    ]);
   });
 
   it('should process history when a tx sent by the wallet to another wallet is voided', async () => {
@@ -241,9 +245,11 @@ describe('processing transaction metadata changes', () => {
       }),
     ]);
     expect(store.utxos.size).toStrictEqual(1);
-    expect(Array.from(store.utxos.values())).toEqual([expect.objectContaining({
-      txId: injectedTx.hash,
-    })]);
+    expect(Array.from(store.utxos.values())).toEqual([
+      expect.objectContaining({
+        txId: injectedTx.hash,
+      }),
+    ]);
 
     wsSpy.mockClear();
 
@@ -303,15 +309,16 @@ describe('processing transaction metadata changes', () => {
     await expect(hWallet.storage.getTx(txSent.hash)).resolves.toBeDefined();
     expect(store.utxos.size).toStrictEqual(1);
     // utxos go back to being from the injected tx
-    expect(Array.from(store.utxos.values())).toEqual([expect.objectContaining({
-      txId: injectedTx.hash,
-    })]);
+    expect(Array.from(store.utxos.values())).toEqual([
+      expect.objectContaining({
+        txId: injectedTx.hash,
+      }),
+    ]);
   });
 
   it('should process history when create token tx is voided', async () => {
     const store = hWallet.storage.store as MemoryStore;
     const addr0 = await hWallet.getAddressAtIndex(0);
-    const addr5 = await hWallet.getAddressAtIndex(5);
     const wsSpy: jest.SpiedFunction<typeof hWallet.onNewTx> = jest.spyOn(hWallet, 'onNewTx');
     const procSpy: jest.SpiedFunction<typeof hWallet.storage.processHistory> = jest.spyOn(
       hWallet.storage,
@@ -341,9 +348,11 @@ describe('processing transaction metadata changes', () => {
       }),
     ]);
     expect(store.utxos.size).toStrictEqual(1);
-    expect(Array.from(store.utxos.values())).toEqual([expect.objectContaining({
-      txId: injectedTx.hash,
-    })]);
+    expect(Array.from(store.utxos.values())).toEqual([
+      expect.objectContaining({
+        txId: injectedTx.hash,
+      }),
+    ]);
     expect(store.tokens.size).toStrictEqual(1); // HTR
 
     wsSpy.mockClear();
@@ -369,9 +378,9 @@ describe('processing transaction metadata changes', () => {
         transactions: 1,
         balance: { unlocked: 100n, locked: 0n },
         tokenAuthorities: {
-          unlocked: { mint: 1, melt: 1},
-          locked: { mint: 0, melt: 0},
-        }
+          unlocked: { mint: 1, melt: 1 },
+          locked: { mint: 0, melt: 0 },
+        },
       }),
     ]);
     expect(store.utxos.size).toStrictEqual(4); // token + change + 2 authorities
@@ -418,15 +427,17 @@ describe('processing transaction metadata changes', () => {
         tokenAuthorities: {
           unlocked: { mint: 0, melt: 0 },
           locked: { mint: 0, melt: 0 },
-        }
+        },
       }),
     ]);
     expect(store.utxos.size).toStrictEqual(1);
     expect(store.tokens.size).toStrictEqual(1); // HTR
     // utxos go back to being from the injected tx
-    expect(Array.from(store.utxos.values())).toEqual([expect.objectContaining({
-      txId: injectedTx.hash,
-    })]);
+    expect(Array.from(store.utxos.values())).toEqual([
+      expect.objectContaining({
+        txId: injectedTx.hash,
+      }),
+    ]);
   });
 });
 
