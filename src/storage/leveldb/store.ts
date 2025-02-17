@@ -196,10 +196,20 @@ export default class LevelDBStore implements IStore {
       }
       await this.walletIndex.setLastUsedAddressIndex(maxIndex);
     }
+
+    await this.voidTx(tx.tx_id, tx.is_voided ?? false);
   }
 
   async getTx(txId: string): Promise<IHistoryTx | null> {
     return this.historyIndex.getTx(txId);
+  }
+
+  async voidTx(txId: string, voided: boolean): Promise<void> {
+    await this.historyIndex.voidTx(txId, voided);
+  }
+
+  async isTxVoided(txId: string): Promise<boolean> {
+    return this.historyIndex.isTxVoided(txId);
   }
 
   // TOKENS

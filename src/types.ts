@@ -410,6 +410,8 @@ export interface IStore {
   saveTx(tx: IHistoryTx): Promise<void>;
   getTx(txId: string): Promise<IHistoryTx | null>;
   historyCount(): Promise<number>;
+  voidTx(txId: string, voided: boolean): Promise<void>;
+  isTxVoided(txId: string): Promise<boolean>;
 
   // Tokens methods
   tokenIter(): AsyncGenerator<ITokenData & Partial<ITokenMetadata>>;
@@ -607,6 +609,8 @@ export interface IKVHistoryIndex extends IKVStoreIndex<HistoryIndexValidateRespo
   saveTx(tx: IHistoryTx): Promise<void>;
   historyCount(): Promise<number>;
   clear(): Promise<void>;
+  voidTx(txId: string, voided: boolean): Promise<void>;
+  isTxVoided(txId: string): Promise<boolean>;
 }
 
 export interface IKVUtxoIndex extends IKVStoreIndex<void> {

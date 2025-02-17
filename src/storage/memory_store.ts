@@ -165,6 +165,11 @@ export class MemoryStore implements IStore {
 
   lockedUtxos: Map<string, ILockedUtxo>;
 
+  /**
+   * Index of voided transactions from the wallet.
+   */
+  voidedTxs: Map<string, boolean>;
+
   constructor() {
     this.addresses = new Map<string, IAddressInfo>();
     this.addressIndexes = new Map<number, string>();
@@ -179,8 +184,23 @@ export class MemoryStore implements IStore {
     this.genericStorage = {};
     this.lockedUtxos = new Map<string, ILockedUtxo>();
     this.registeredNanoContracts = new Map<string, INcData>();
+    this.voidedTxs = new Map<string, boolean>();
 
     this.walletData = cloneDeep({ ...DEFAULT_WALLET_DATA, ...DEFAULT_ADDRESSES_WALLET_DATA });
+  }
+
+  /**
+   * Set the tx as voided.
+   */
+  async voidTx(txId: string, voided: boolean = true): Promise<void> {
+    this.voidedTxs.set(txId, voided);
+  }
+
+  /**
+   * Return if the storage knows that a transaction is voided.
+   */
+  async isTxVoided(txId: string): Promise<boolean> {
+    return this.voidedTxs.get(txId) ?? false;
   }
 
   // eslint-disable-next-line class-methods-use-this
@@ -440,6 +460,8 @@ export class MemoryStore implements IStore {
       );
     }
     this.walletData.lastUsedAddressIndex = maxIndex;
+
+    await this.voidTx(tx.tx_id, tx.is_voided ?? false);
   }
 
   /**

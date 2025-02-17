@@ -16,6 +16,7 @@ import { IHistoryTxSchema } from '../../schemas';
 
 export const HISTORY_PREFIX = 'history';
 export const TS_HISTORY_PREFIX = 'ts_history';
+export const VOIDED_TXS_PREFIX = 'voided_txs';
 
 function _ts_key(tx: Pick<IHistoryTx, 'timestamp' | 'tx_id'>): string {
   // .toString(16) will convert the number to a hex string
@@ -42,6 +43,13 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
   tsHistoryDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, IHistoryTx>;
 
   /**
+   * Voided txs index, used to save the voided state of the wallet txs.
+   * Key: timestamp:tx_id
+   * Value: boolean (json encoded)
+   */
+  voidedTxDB: AbstractSublevel<Level, string | Buffer | Uint8Array, string, string>;
+
+  /**
    * Whether the index is validated or not
    * This is used to avoid using the tx count before we know it is valid.
    */
@@ -57,6 +65,8 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
     const valueEncoding = jsonBigIntEncoding(IHistoryTxSchema);
     this.historyDB = db.sublevel<string, IHistoryTx>(HISTORY_PREFIX, { valueEncoding });
     this.tsHistoryDB = db.sublevel<string, IHistoryTx>(TS_HISTORY_PREFIX, { valueEncoding });
+    this.voidedTxDB = db.sublevel<string, string>(VOIDED_TXS_PREFIX, { valueEncoding: 'utf-8' });
+
     this.isValidated = false;
     this.size = 0;
   }
@@ -205,6 +215,29 @@ export default class LevelHistoryIndex implements IKVHistoryIndex {
     await this.historyDB.put(tx.tx_id, tx);
     await this.tsHistoryDB.put(_ts_key(tx), tx);
     this.size++;
+  }
+
+  /**
+   * Save tx as voided.
+   */
+  async voidTx(txId: string, voided: boolean): Promise<void> {
+    await this.voidedTxDB.put(txId, String(voided));
+  }
+
+  /**
+   * Check if the storage knows that a tx is voided.
+   */
+  async isTxVoided(txId: string): Promise<boolean> {
+    try {
+      const value = await this.voidedTxDB.get(txId);
+      return value === 'true';
+    } catch (err: unknown) {
+      if (errorCodeOrNull(err) === KEY_NOT_FOUND_CODE) {
+        // Tx is not in index, so we do not know if it is voided
+        return false;
+      }
+      throw err;
+    }
   }
 
   /**

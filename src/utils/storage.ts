@@ -671,9 +671,9 @@ export async function processNewTx(
       addressMeta.balance.get(output.token)!.tokens.unlocked += output.value;
     }
 
-    // Add utxo to the storage if unspent
+    // Add utxo to the storage if it is either unspent or spent by a voided tx.
     // This is idempotent so it's safe to call it multiple times
-    if (output.spent_by === null) {
+    if (output.spent_by === null || (await store.isTxVoided(output.spent_by))) {
       await store.saveUtxo({
         txId: tx.tx_id,
         index,
