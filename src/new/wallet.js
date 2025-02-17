@@ -1325,6 +1325,9 @@ class HathorWallet extends EventEmitter {
     this.emit('state', state);
   }
 
+  /**
+   * @param {{ history: import('../types').IHistoryTx }} wsData
+   */
   async onNewTx(wsData) {
     const parseResult = IHistoryTxSchema.safeParse(wsData.history);
     if (!parseResult.success) {
