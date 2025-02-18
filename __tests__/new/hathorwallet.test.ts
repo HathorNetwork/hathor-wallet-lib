@@ -1402,11 +1402,13 @@ test('getUtxosForAmount - should always get the best utxos', async () => {
     });
   }
 
-  expect(hwallet.getUtxosForAmount(6n)).resolves.toEqual({
+  await expect(hwallet.getUtxosForAmount(6n)).resolves.toEqual({
     changeAmount: 0n,
-    utxos: [expect.objectContaining({
-      index: 6,
-      value: 6n,
-    })],
+    utxos: [
+      expect.objectContaining({
+        index: 6,
+        value: 6n,
+      }),
+    ],
   });
 });
