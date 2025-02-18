@@ -431,7 +431,10 @@ describe('processing transaction metadata changes', () => {
       }),
     ]);
     expect(store.utxos.size).toStrictEqual(1);
-    expect(store.tokens.size).toStrictEqual(1); // HTR
+    // XXX: token remains on storage, this is not an issue since it is unusable.
+    // the unique id makes sure that this cannot be used again and the wallet
+    // will clean this on restart.
+    expect(store.tokens.size).toStrictEqual(2);
     // utxos go back to being from the injected tx
     expect(Array.from(store.utxos.values())).toEqual([
       expect.objectContaining({
