@@ -43,6 +43,7 @@ import {
   checkScanningPolicy,
   getHistorySyncMethod,
   getSupportedSyncMode,
+  processMetadataChanged,
 } from '../utils/storage';
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
@@ -1361,6 +1362,9 @@ class HathorWallet extends EventEmitter {
       // Process this single transaction.
       // Handling new metadatas and deleting utxos that are not available anymore
       await this.storage.processNewTx(newTx);
+    } else {
+      // Simple metadata changed.
+      await processMetadataChanged(this.storage, newTx);
     }
     // restore previous state
     this.state = previousState;

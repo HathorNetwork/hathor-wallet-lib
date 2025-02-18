@@ -452,10 +452,86 @@ export async function processSingleTx(
     await store.deleteUtxo(utxo);
   }
 
+  let outputIndex = -1;
+  for (const output of tx.outputs) {
+    outputIndex++;
+
+    if (!output.decoded.address) {
+      // Tx is ours but output is not from an address.
+      continue;
+    }
+
+    if (!(await storage.isAddressMine(output.decoded.address))) {
+      // Address is not ours.
+      continue;
+    }
+
+    if (output.spent_by === null) {
+      await store.saveUtxo({
+        txId: tx.tx_id,
+        index: outputIndex,
+        type: tx.version,
+        authorities: transactionUtils.isAuthorityOutput(output) ? output.value : 0n,
+        address: output.decoded.address,
+        token: output.token,
+        value: output.value,
+        timelock: output.decoded.timelock || null,
+        height: tx.height || null,
+      });
+    } else if (await storage.isUtxoSelectedAsInput({ txId: tx.tx_id, index: outputIndex })) {
+      // If the output is spent we remove it from the utxos selected_as_inputs if it's there
+      await storage.utxoSelectAsInput({ txId: tx.tx_id, index: outputIndex }, false);
+    }
+  }
+
   // Update wallet data in the store
   await updateWalletMetadataFromProcessedTxData(storage, { maxIndexUsed, tokens });
 }
 
+/**
+ * Some metadata changed and may need processing.
+ * void txs are not treated here.
+ * Only idempodent changes should be processed here since this can be called multiple times.
+ */
+export async function processMetadataChanged(
+  storage: IStorage,
+  tx: IHistoryTx,
+  { rewardLock }: { rewardLock?: number } = {}
+): Promise<void> {
+  const { store } = storage;
+
+  let outputIndex = -1;
+  for (const output of tx.outputs) {
+    outputIndex++;
+
+    if (!output.decoded.address) {
+      // Tx is ours but output is not from an address.
+      continue;
+    }
+
+    if (!(await storage.isAddressMine(output.decoded.address))) {
+      // Address is not ours.
+      continue;
+    }
+
+    if (output.spent_by === null) {
+      await store.saveUtxo({
+        txId: tx.tx_id,
+        index: outputIndex,
+        type: tx.version,
+        authorities: transactionUtils.isAuthorityOutput(output) ? output.value : 0n,
+        address: output.decoded.address,
+        token: output.token,
+        value: output.value,
+        timelock: output.decoded.timelock || null,
+        height: tx.height || null,
+      });
+    } else if (await storage.isUtxoSelectedAsInput({ txId: tx.tx_id, index: outputIndex })) {
+      // If the output is spent we remove it from the utxos selected_as_inputs if it's there
+      await storage.utxoSelectAsInput({ txId: tx.tx_id, index: outputIndex }, false);
+    }
+  }
+}
 /**
  * Fetch and save the data of the token set on the storage
  * @param {IStorage} storage - Storage to save the tokens.
