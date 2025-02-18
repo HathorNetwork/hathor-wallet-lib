@@ -1,4 +1,4 @@
-import { cloneDeep } from 'lodash';
+import { cloneDeep, reverse } from 'lodash';
 import { GenesisWalletHelper } from './helpers/genesis-wallet.helper';
 import { delay } from './utils/core.util';
 import {
@@ -35,6 +35,19 @@ describe('processing transaction metadata changes', () => {
   afterEach(async () => {
     await hWallet.stop();
   });
+
+  function findLastCallFor(
+    txId: string,
+    wsSpy: jest.SpiedFunction<typeof HathorWallet.prototype.onNewTx>
+  ): { history: IHistoryTx } | undefined {
+    for (const call of reverse(cloneDeep(wsSpy.mock.calls))) {
+      if (call[0].history.tx_id === txId) {
+        return call[0];
+      }
+    }
+
+    return undefined;
+  }
 
   it('should process entire history and balance when a tx sent to the wallet is voided', async () => {
     const store = hWallet.storage.store as MemoryStore;
@@ -141,6 +154,13 @@ describe('processing transaction metadata changes', () => {
       }),
     ]);
 
+    // This is the unspent injected tx
+    const wsTxInjected = findLastCallFor(injectedTx.hash, wsSpy);
+    expect(wsTxInjected).toBeDefined();
+    if (!wsTxInjected) {
+      throw new Error('undefined hash for injected tx, should not happen.');
+    }
+
     wsSpy.mockClear();
     // Send a tx from the wallet to itself
     const txSent = await hWallet.sendTransaction(addr5, 5n);
@@ -170,17 +190,14 @@ describe('processing transaction metadata changes', () => {
 
     expect(wsSpy).toHaveBeenCalled();
 
-    // Get lastCall for the txSent
-    let lastCall: { history: IHistoryTx }[] = [];
-    for (const call of wsSpy.mock.calls) {
-      if (call[0].history.tx_id === txSent.hash) {
-        lastCall = call;
-        break;
-      }
-    }
-    expect(lastCall).toHaveLength(1);
     // Get a copy of the transaction received via websocket
-    const wsTx = cloneDeep(lastCall[0]);
+    const wsTx = findLastCallFor(txSent.hash, wsSpy);
+    expect(wsTx).toBeDefined();
+    if (!wsTx) {
+      // This is to comply with ts typing, function should have aborted on the
+      // line above if it was undefined.
+      throw new Error('wsTx should be defined here.');
+    }
     expect(wsTx.history.tx_id).toStrictEqual(txSent.hash);
     // Mark tx as voided
     wsTx.history.is_voided = true;
@@ -189,6 +206,9 @@ describe('processing transaction metadata changes', () => {
     procSpy.mockClear();
     await hWallet.onNewTx(wsTx);
     expect(procSpy).toHaveBeenCalled();
+
+    // Send the unspent injected tx to simulate the metadata change event.
+    await hWallet.onNewTx(wsTxInjected);
 
     // Since the only transaction on the wallet has been voided it should
     // register as empty with 0 transactions
@@ -251,6 +271,13 @@ describe('processing transaction metadata changes', () => {
       }),
     ]);
 
+    // This is the unspent injected tx
+    const wsTxInjected = findLastCallFor(injectedTx.hash, wsSpy);
+    expect(wsTxInjected).toBeDefined();
+    if (!wsTxInjected) {
+      throw new Error('undefined hash for injected tx, should not happen.');
+    }
+
     wsSpy.mockClear();
 
     // Send a tx from the wallet to genesis
@@ -276,18 +303,15 @@ describe('processing transaction metadata changes', () => {
     ]);
 
     expect(wsSpy).toHaveBeenCalled();
-
-    // Get lastCall for the txSent
-    let lastCall: { history: IHistoryTx }[] = [];
-    for (const call of wsSpy.mock.calls) {
-      if (call[0].history.tx_id === txSent.hash) {
-        lastCall = call;
-        break;
-      }
-    }
-    expect(lastCall).toHaveLength(1);
     // Get a copy of the transaction received via websocket
-    const wsTx = cloneDeep(lastCall[0]);
+    const wsTx = findLastCallFor(txSent.hash, wsSpy);
+    expect(wsTx).toBeDefined();
+    if (!wsTx) {
+      // This is to comply with ts typing, function should have aborted on the
+      // line above if it was undefined.
+      throw new Error('wsTx should be defined here.');
+    }
+
     expect(wsTx.history.tx_id).toStrictEqual(txSent.hash);
     // Mark tx as voided
     wsTx.history.is_voided = true;
@@ -296,6 +320,9 @@ describe('processing transaction metadata changes', () => {
     procSpy.mockClear();
     await hWallet.onNewTx(wsTx);
     expect(procSpy).toHaveBeenCalled();
+
+    // Send the unspent injected tx to simulate the metadata change event.
+    await hWallet.onNewTx(wsTxInjected);
 
     await expect(hWallet.getBalance(NATIVE_TOKEN_UID)).resolves.toEqual([
       expect.objectContaining({
@@ -355,6 +382,13 @@ describe('processing transaction metadata changes', () => {
     ]);
     expect(store.tokens.size).toStrictEqual(1); // HTR
 
+    // This is the unspent injected tx
+    const wsTxInjected = findLastCallFor(injectedTx.hash, wsSpy);
+    expect(wsTxInjected).toBeDefined();
+    if (!wsTxInjected) {
+      throw new Error('undefined hash for injected tx, should not happen.');
+    }
+
     wsSpy.mockClear();
     // Create a token
     const tokenTx = await hWallet.createNewToken('Create Void test', 'CVT01', 100n);
@@ -378,8 +412,8 @@ describe('processing transaction metadata changes', () => {
         transactions: 1,
         balance: { unlocked: 100n, locked: 0n },
         tokenAuthorities: {
-          unlocked: { mint: 1, melt: 1 },
-          locked: { mint: 0, melt: 0 },
+          unlocked: { mint: 1n, melt: 1n },
+          locked: { mint: 0n, melt: 0n },
         },
       }),
     ]);
@@ -388,17 +422,15 @@ describe('processing transaction metadata changes', () => {
 
     expect(wsSpy).toHaveBeenCalled();
 
-    // Get lastCall for the txSent
-    let lastCall: { history: IHistoryTx }[] = [];
-    for (const call of wsSpy.mock.calls) {
-      if (call[0].history.tx_id === tokenTx.hash) {
-        lastCall = call;
-        break;
-      }
-    }
-    expect(lastCall).toHaveLength(1);
     // Get a copy of the transaction received via websocket
-    const wsTx = cloneDeep(lastCall[0]);
+    const wsTx = findLastCallFor(tokenTx.hash, wsSpy);
+    expect(wsTx).toBeDefined();
+    if (!wsTx) {
+      // This is to comply with ts typing, function should have aborted on the
+      // line above if it was undefined.
+      throw new Error('wsTx should be defined here.');
+    }
+
     expect(wsTx.history.tx_id).toStrictEqual(tokenTx.hash);
     // Mark tx as voided
     wsTx.history.is_voided = true;
@@ -407,6 +439,9 @@ describe('processing transaction metadata changes', () => {
     procSpy.mockClear();
     await hWallet.onNewTx(wsTx);
     expect(procSpy).toHaveBeenCalled();
+
+    // Send the unspent injected tx to simulate the metadata change event.
+    await hWallet.onNewTx(wsTxInjected);
 
     // tokenTx is still on storage but not its utxos
     await expect(hWallet.storage.getTx(tokenTx.hash)).resolves.toBeDefined();
@@ -425,13 +460,13 @@ describe('processing transaction metadata changes', () => {
         transactions: 0,
         balance: { unlocked: 0n, locked: 0n },
         tokenAuthorities: {
-          unlocked: { mint: 0, melt: 0 },
-          locked: { mint: 0, melt: 0 },
+          unlocked: { mint: 0n, melt: 0n },
+          locked: { mint: 0n, melt: 0n },
         },
       }),
     ]);
     expect(store.utxos.size).toStrictEqual(1);
-    expect(store.tokens.size).toStrictEqual(1); // HTR
+    expect(store.tokens.size).toStrictEqual(2);
     // utxos go back to being from the injected tx
     expect(Array.from(store.utxos.values())).toEqual([
       expect.objectContaining({
