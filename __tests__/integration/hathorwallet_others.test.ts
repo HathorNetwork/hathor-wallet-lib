@@ -378,8 +378,8 @@ describe('processing transaction metadata changes', () => {
         transactions: 1,
         balance: { unlocked: 100n, locked: 0n },
         tokenAuthorities: {
-          unlocked: { mint: 1, melt: 1 },
-          locked: { mint: 0, melt: 0 },
+          unlocked: { mint: 1n, melt: 1n },
+          locked: { mint: 0n, melt: 0n },
         },
       }),
     ]);
