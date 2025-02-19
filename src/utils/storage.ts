@@ -464,9 +464,8 @@ export async function processSingleTx(
 export async function processMetadataChanged(storage: IStorage, tx: IHistoryTx): Promise<void> {
   const { store } = storage;
 
-  let outputIndex = -1;
-  for (const output of tx.outputs) {
-    outputIndex++;
+  for (const outputIndex in tx.outputs) {
+    const output = tx.outputs[outputIndex];
 
     if (!output.decoded.address) {
       // Tx is ours but output is not from an address.
