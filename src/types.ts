@@ -429,6 +429,7 @@ export interface IStore {
   saveLockedUtxo(lockedUtxo: ILockedUtxo): Promise<void>;
   iterateLockedUtxos(): AsyncGenerator<ILockedUtxo>;
   unlockUtxo(lockedUtxo: ILockedUtxo): Promise<void>;
+  deleteUtxo(utxoId: IUtxo): Promise<void>;
 
   // Wallet data
   getAccessData(): Promise<IWalletAccessData | null>;
@@ -502,6 +503,7 @@ export interface IStorage {
   getSpentTxs(inputs: Input[]): AsyncGenerator<{ tx: IHistoryTx; input: Input; index: number }>;
   addTx(tx: IHistoryTx): Promise<void>;
   processHistory(): Promise<void>;
+  processNewTx(tx: IHistoryTx): Promise<void>;
 
   // Tokens
   isTokenRegistered(tokenUid: string): Promise<boolean>;

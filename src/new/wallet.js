@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { get } from 'lodash';
+import { cloneDeep, get } from 'lodash';
 import bitcore, { HDPrivateKey } from 'bitcore-lib';
 import EventEmitter from 'events';
 import { NATIVE_TOKEN_UID, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
@@ -52,6 +52,7 @@ import { prepareNanoSendTransaction } from '../nano_contracts/utils';
 import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
 import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/transaction';
+import { checkTxMetadataChanged } from '../sync/utils';
 
 /**
  * @typedef {import('../models/create_token_transaction').default} CreateTokenTransaction
@@ -701,7 +702,9 @@ class HathorWallet extends EventEmitter {
       throw new WalletError('Not implemented.');
     }
     const uid = token || this.token.uid;
-    let tokenData = await this.storage.getToken(uid);
+    // Using clone deep so the balance returned will not be updated in case
+    // we change the storage
+    let tokenData = cloneDeep(await this.storage.getToken(uid));
     if (tokenData === null) {
       // We don't have the token on storage, so we need to return an empty default response
       tokenData = {
@@ -1338,12 +1341,30 @@ class HathorWallet extends EventEmitter {
 
     newTx.processingStatus = TxHistoryProcessingStatus.PROCESSING;
 
-    // Save the transaction in the storage
+    // Metadata changed MUST be before addTx because we compare the stored tx with the new one.
+    // So overwriting the stored tx before this would make the check invalid.
+    const metadataChanged = await checkTxMetadataChanged(newTx, this.storage);
     await this.storage.addTx(newTx);
-
     await this.scanAddressesToLoad();
+
+    // set state to processing and save current state.
+    const previousState = this.state;
+    this.state = HathorWallet.PROCESSING;
     // Process history to update metadatas
-    await this.storage.processHistory();
+    if (metadataChanged) {
+      // Process the full history because
+      // this tx changed the voided state
+      // XXX in the future we should be able to handle this
+      // voidness alone, without processing everything
+      // but for now it's an isolated case and it's easier
+      await this.storage.processHistory();
+    } else if (isNewTx) {
+      // Process this single transaction.
+      // Handling new metadatas and deleting utxos that are not available anymore
+      await this.storage.processNewTx(newTx);
+    }
+    // restore previous state
+    this.state = previousState;
 
     newTx.processingStatus = TxHistoryProcessingStatus.FINISHED;
     // Save the transaction in the storage

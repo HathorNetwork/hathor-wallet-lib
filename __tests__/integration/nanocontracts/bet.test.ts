@@ -4,6 +4,7 @@ import {
   generateMultisigWalletHelper,
   generateWalletHelper,
   waitForTxReceived,
+  waitNextBlock,
   waitTxConfirmed,
 } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../src/constants';
@@ -455,6 +456,29 @@ describe('full cycle of bet nano contract', () => {
       200
     );
     expect(ncStateFirstBlockHeight.fields[`withdrawals.a'${address3}'`].value).toBeUndefined();
+
+    // Test a tx that becomes voided after the nano execution
+    const txWithdrawal2 = await wallet.createAndSendNanoContractTransaction('withdraw', address2, {
+      ncId: tx1.hash,
+      actions: [
+        {
+          type: 'withdrawal',
+          token: NATIVE_TOKEN_UID,
+          amount: 400n,
+          address: address2,
+        },
+      ],
+    });
+
+    jest.spyOn(wallet.storage, 'processHistory');
+    expect(wallet.storage.processHistory.mock.calls.length).toBe(0);
+    await waitNextBlock(wallet.storage);
+    const txWithdrawal2Data = await wallet.getFullTxById(txWithdrawal2.hash);
+
+    // The tx became voided after the block because of the nano execution
+    // This voidness called the full processHistory method
+    expect(isEmpty(txWithdrawal2Data.meta.voided_by)).toBe(false);
+    expect(wallet.storage.processHistory.mock.calls.length).toBe(1);
   };
 
   it('bet deposit', async () => {
