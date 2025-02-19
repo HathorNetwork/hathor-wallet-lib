@@ -464,8 +464,8 @@ export async function processSingleTx(
 export async function processMetadataChanged(storage: IStorage, tx: IHistoryTx): Promise<void> {
   const { store } = storage;
 
-  for (const outputIndex in tx.outputs) {
-    const output = tx.outputs[outputIndex];
+  for (let index = 0; index < tx.outputs.length; index++) {
+    const output = tx.outputs[index];
 
     if (!output.decoded.address) {
       // Tx is ours but output is not from an address.
@@ -480,7 +480,7 @@ export async function processMetadataChanged(storage: IStorage, tx: IHistoryTx):
     if (output.spent_by === null) {
       await store.saveUtxo({
         txId: tx.tx_id,
-        index: outputIndex,
+        index,
         type: tx.version,
         authorities: transactionUtils.isAuthorityOutput(output) ? output.value : 0n,
         address: output.decoded.address,
@@ -489,9 +489,9 @@ export async function processMetadataChanged(storage: IStorage, tx: IHistoryTx):
         timelock: output.decoded.timelock || null,
         height: tx.height || null,
       });
-    } else if (await storage.isUtxoSelectedAsInput({ txId: tx.tx_id, index: outputIndex })) {
+    } else if (await storage.isUtxoSelectedAsInput({ txId: tx.tx_id, index })) {
       // If the output is spent we remove it from the utxos selected_as_inputs if it's there
-      await storage.utxoSelectAsInput({ txId: tx.tx_id, index: outputIndex }, false);
+      await storage.utxoSelectAsInput({ txId: tx.tx_id, index }, false);
     }
   }
 }
