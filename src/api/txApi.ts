@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { AxiosResponse } from 'axios';
 import { createRequestInstance } from './axiosInstance';
 import { transformJsonBigIntResponse } from '../utils/bigint';
 import { FullNodeTxApiResponse, transactionApiSchema } from './schemas/txApi';

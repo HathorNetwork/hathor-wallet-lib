@@ -5,8 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { z } from 'zod';
 import { crypto as cryptoBL, PrivateKey, HDPrivateKey } from 'bitcore-lib';
-import { FullNodeTx, Utxo } from '../wallet/types';
+import { transactionApiSchema } from '../api/schemas/txApi';
+import { Utxo } from '../wallet/types';
 import { UtxoError, ParseError } from '../errors';
 import { HistoryTransactionOutput } from '../models/types';
 import {
@@ -48,6 +50,7 @@ import ScriptData from '../models/script_data';
 import helpers from './helpers';
 import { getAddressType, getAddressFromPubkey } from './address';
 import NanoContract from '../nano_contracts/nano_contract';
+import tokenUtils from './tokens';
 
 const transaction = {
   /**
@@ -694,56 +697,66 @@ const transaction = {
     return 'Unknown';
   },
 
+  hydrateIOWithToken<IO extends { token_data: number }, T extends { uid: string }>(
+    io: IO,
+    tokens: T[]
+  ) {
+    const { token_data } = io;
+    if (token_data === 0) {
+      return {
+        ...io,
+        token: NATIVE_TOKEN_UID,
+      };
+    }
+
+    const tokenIdx = tokenUtils.getTokenIndexFromData(token_data);
+    const tokenUid = tokens[tokenIdx - 1]?.uid;
+    if (!tokenUid) {
+      throw new Error(`Invalid token_data ${token_data}, token not found in tokens list`);
+    }
+
+    return { ...io, token: tokenUid } as IO;
+  },
+
   /**
-   * Convert the FullNodeTx type received via tx api to the IHistoryTx
-   * interface received via websocket.
+   * Convert the transaction type from the tx api to the IHistoryTx which is
+   * the interface of transactions received via websocket.
    */
-  convertFullNodeTxToHistoryTx(tx: FullNodeTx): IHistoryTx {
-    const resp = {} as IHistoryTx;
-    resp.tx_id = tx.hash;
-    resp.version = tx.version;
-    resp.weight = tx.weight;
-    resp.parents = tx.parents;
-    resp.timestamp = tx.timestamp;
-    resp.token_name = tx.token_name ?? undefined;
-    resp.token_symbol = tx.token_symbol ?? undefined;
-    // resp.nonce = tx.nonce; // number = string, should we convert?
-    // resp.height, resp.first_block, resp.nc_* missing.
-    resp.tokens = tx.tokens.map(token => token.uid);
-    resp.inputs = tx.inputs.map(
-      i =>
-        ({
-          value: i.value,
-          token_data: i.token_data,
-          script: i.script,
-          token: i.token,
-          tx_id: i.tx_id,
-          index: i.index,
-          decoded: {
-            type: i.decoded.type,
-            address: i.decoded.address,
-            timelock: i.decoded.timelock,
-            // data: i.decoded.data // data does not exist on FullNodeDecodedInput
-          },
-        }) as IHistoryInput
-    );
-    resp.outputs = tx.outputs.map(
-      o =>
-        ({
-          value: o.value,
-          token_data: o.token_data,
-          script: o.script,
-          token: o.token,
-          spent_by: o.spent_by,
-          decoded: {
-            type: o.decoded.type,
-            address: o.decoded.address,
-            timelock: o.decoded.timelock,
-            // data: i.decoded.data // data does not exist on FullNodeDecodedInput
-          },
-        }) as IHistoryOutput
-    );
-    return resp;
+  convertFullNodeTxToHistoryTx(txResponse: z.infer<typeof transactionApiSchema>): IHistoryTx {
+    if (txResponse.success === false) {
+      throw new Error(`trying to convert a tx from a failed api request: ${txResponse.message}`);
+    }
+    const { tx, meta } = txResponse;
+    const inputs: IHistoryInput[] = tx.inputs.map(i => {
+      const hydratedInput = this.hydrateIOWithToken(i, tx.tokens);
+      return hydratedInput as IHistoryInput;
+    });
+    const outputs: IHistoryOutput[] = tx.outputs.map(o => {
+      const hydratedoutput = this.hydrateIOWithToken(o, tx.tokens);
+      return hydratedoutput as IHistoryOutput;
+    });
+    return {
+      tx_id: tx.hash,
+      signalBits: tx.signal_bits,
+      version: tx.version,
+      weight: tx.weight,
+      timestamp: tx.timestamp,
+      is_voided: meta.voided_by.length > 0,
+      // nonce: tx.nonce,
+      inputs,
+      outputs,
+      parents: tx.parents,
+      token_name: tx.token_name ?? undefined,
+      token_symbol: tx.token_symbol ?? undefined,
+      tokens: tx.tokens.map(token => token.uid),
+      height: meta.height,
+      nc_id: tx.nc_id ?? undefined,
+      nc_blueprint_id: tx.nc_blueprint_id,
+      nc_method: tx.nc_method,
+      nc_args: tx.nc_args,
+      nc_pubkey: tx.nc_pubkey,
+      first_block: meta.first_block,
+    } as IHistoryTx;
   },
 };
 

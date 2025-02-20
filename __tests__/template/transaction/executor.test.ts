@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { cloneDeep } from 'lodash';
 import {
   execAuthorityOutputInstruction,
   execAuthoritySelectInstruction,
@@ -539,14 +540,26 @@ const ShuffleExecutorTest = async executor => {
   });
   const arr: bigint[] = [];
   for (let i = 1n; i < 10; i++) {
-    ctx.addOutput(-1, new Output(i, Buffer.alloc(1)));
-    ctx.addInput(-1, new Input(txId, Number(i)));
+    ctx.addOutputs(-1, new Output(i, Buffer.alloc(1)));
+    ctx.addInputs(-1, new Input(txId, Number(i)));
     arr.push(i);
   }
+  const balanceBefore = cloneDeep(ctx.balance.balance);
+  const outputsBefore = cloneDeep(ctx.outputs);
+  const inputsBefore = cloneDeep(ctx.inputs);
   await executor(interpreter, ctx, ins);
 
   expect(ctx.outputs.map(o => o.value)).not.toStrictEqual(arr);
   expect(ctx.inputs.map(i => i.index)).not.toStrictEqual(arr.map(i => Number(i)));
+
+  // Check that the balance remains the same
+  expect(ctx.balance.balance).toStrictEqual(balanceBefore);
+  // Check that the outputs are the same, ignoring order
+  expect(ctx.outputs).toEqual(expect.arrayContaining(outputsBefore));
+  expect(ctx.outputs.length).toEqual(outputsBefore.length);
+  // Check that the inputs are the same, ignoring order
+  expect(ctx.inputs).toEqual(expect.arrayContaining(inputsBefore));
+  expect(ctx.inputs.length).toEqual(inputsBefore.length);
 };
 
 /* eslint-disable jest/expect-expect */

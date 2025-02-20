@@ -6,6 +6,7 @@
  */
 
 import { z } from 'zod';
+import { FullNodeTxApiResponse } from 'src/api/schemas/txApi';
 import { TransactionTemplate } from './instructions';
 import { runInstruction } from './executor';
 import { TxTemplateContext } from './context';
@@ -17,18 +18,11 @@ import {
   TxInstance,
 } from './types';
 import { IHistoryTx, OutputValueType } from '../../types';
-import {
-  FullNodeInput,
-  FullNodeOutput,
-  FullNodeToken,
-  FullNodeTxResponse,
-  Utxo,
-} from '../../wallet/types';
+import { Utxo } from '../../wallet/types';
 import Transaction from '../../models/transaction';
 import HathorWallet from '../../new/wallet';
-import { CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, NATIVE_TOKEN_UID } from '../../constants';
+import { CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION } from '../../constants';
 import transactionUtils from '../../utils/transaction';
-import tokenUtils from '../../utils/tokens';
 import Network from '../../models/network';
 import CreateTokenTransaction from '../../models/create_token_transaction';
 
@@ -115,27 +109,6 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
     return utxos;
   }
 
-  _hidrateIOWithToken<T extends FullNodeInput | FullNodeOutput>(
-      io: T,
-      tokens: FullNodeToken[]
-    ) {
-    const { token_data } = io;
-    if (token_data === 0) {
-      return {
-        ...io,
-        token: NATIVE_TOKEN_UID,
-      };
-    }
-
-    const tokenIdx = tokenUtils.getTokenIndexFromData(token_data);
-    const tokenUid = tokens[tokenIdx - 1]?.uid;
-    if (!tokenUid) {
-      throw new Error(`Invalid token_data ${token_data}, token not found in tokens list`);
-    }
-
-    return { ...io, token: tokenUid } as T;
-  }
-
   async getTx(txId: string): Promise<IHistoryTx> {
     if (this.txCache[txId]) {
       return this.txCache[txId];
@@ -147,12 +120,9 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
       return this.txCache[txId];
     }
 
-    const resp = (await this.wallet.getFullTxById(txId)) as FullNodeTxResponse;
+    const resp = (await this.wallet.getFullTxById(txId)) as FullNodeTxApiResponse;
     // We can assume the wallet handles any network errors
-    const { tx } = resp;
-    tx.inputs = tx.inputs.map(i => this._hidrateIOWithToken<FullNodeInput>(i, tx.tokens));
-    tx.outputs = tx.outputs.map(o => this._hidrateIOWithToken<FullNodeOutput>(o, tx.tokens));
-    const normalizedTx = transactionUtils.convertFullNodeTxToHistoryTx(tx);
+    const normalizedTx = transactionUtils.convertFullNodeTxToHistoryTx(resp);
     this.txCache[txId] = normalizedTx;
     return this.txCache[txId];
   }

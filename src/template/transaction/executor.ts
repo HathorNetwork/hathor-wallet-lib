@@ -204,10 +204,10 @@ export async function execAuthoritySelectInstruction(
 
   let authoritiesInt = 0n;
   if (authority === 'mint') {
-    authoritiesInt += 1n;
+    authoritiesInt += TOKEN_MINT_MASK;
   }
   if (authority === 'melt') {
-    authoritiesInt += 2n;
+    authoritiesInt += TOKEN_MELT_MASK;
   }
 
   // Find utxos
@@ -261,6 +261,9 @@ export async function execRawOutputInstruction(
     RawOutputInstruction.shape.amount
   );
   ctx.log(`amount(${amount}) timelock(${timelock}) script(${script}) token(${token})`);
+  if (!(authority || amount)) {
+    throw new Error('Raw token output missing amount');
+  }
 
   // get tokenData and update token balance on the context
   let tokenData: number;
@@ -302,7 +305,6 @@ export async function execRawOutputInstruction(
     default:
       break;
   }
-  ctx.log(`amount(${amount})`);
   if (!amount) {
     throw new Error('Raw token output missing amount');
   }

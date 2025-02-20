@@ -24,19 +24,44 @@ const p2shDecodedScriptSchema = z.object({
   token_data: z.number(),
 });
 
-const unknownDecodedScriptSchema = z.object({
-  type: z.undefined(),
-}).passthrough();
+const unknownDecodedScriptSchema = z
+  .object({
+    type: z.undefined(),
+  })
+  .passthrough();
 
 // TODO: This should be unified with IHistoryOutputDecodedSchema
-export const decodedSchema = z.discriminatedUnion(
-  'type',
-  [
-    p2pkhDecodedScriptSchema,
-    p2shDecodedScriptSchema,
-    unknownDecodedScriptSchema,
-  ]
-);
+export const decodedSchema = z.discriminatedUnion('type', [
+  p2pkhDecodedScriptSchema,
+  p2shDecodedScriptSchema,
+  unknownDecodedScriptSchema,
+]);
+
+export const fullnodeTxApiInputSchema = z.object({
+  value: bigIntCoercibleSchema,
+  token_data: z.number(),
+  script: z.string(),
+  decoded: decodedSchema,
+  tx_id: z.string(),
+  index: z.number(),
+  token: z.string().nullish(),
+  spent_by: z.string().nullish(),
+});
+
+export const fullnodeTxApiOutputSchema = z.object({
+  value: bigIntCoercibleSchema,
+  token_data: z.number(),
+  script: z.string(),
+  decoded: decodedSchema,
+  token: z.string().nullish(),
+  spent_by: z.string().nullish(),
+});
+
+export const fullnodeTxApiTokenSchema = z.object({
+  uid: z.string(),
+  name: z.string().nullable(),
+  symbol: z.string().nullable(),
+});
 
 export const fullnodeTxApiTxSchema = z.object({
   hash: z.string(),
@@ -51,35 +76,9 @@ export const fullnodeTxApiTxSchema = z.object({
   nc_pubkey: z.string().nullish(),
   nc_args: z.string().nullish(),
   nc_blueprint_id: z.string().nullish(),
-  inputs: z
-    .object({
-      value: bigIntCoercibleSchema,
-      token_data: z.number(),
-      script: z.string(),
-      decoded: decodedSchema,
-      tx_id: z.string(),
-      index: z.number(),
-      token: z.string().nullish(),
-      spent_by: z.string().nullish(),
-    })
-    .array(),
-  outputs: z
-    .object({
-      value: bigIntCoercibleSchema,
-      token_data: z.number(),
-      script: z.string(),
-      decoded: decodedSchema,
-      token: z.string().nullish(),
-      spent_by: z.string().nullish(),
-    })
-    .array(),
-  tokens: z
-    .object({
-      uid: z.string(),
-      name: z.string().nullable(),
-      symbol: z.string().nullable(),
-    })
-    .array(),
+  inputs: fullnodeTxApiInputSchema.array(),
+  outputs: fullnodeTxApiOutputSchema.array(),
+  tokens: fullnodeTxApiTokenSchema.array(),
   token_name: z.string().nullish(),
   token_symbol: z.string().nullish(),
   raw: z.string(),
@@ -104,13 +103,12 @@ export const fullnodeTxApiMetaSchema = z.object({
 });
 
 export const transactionApiSchema = z.discriminatedUnion('success', [
-  z
-    .object({
-      success: z.literal(true),
-      tx: fullnodeTxApiTxSchema.passthrough(),
-      meta: fullnodeTxApiMetaSchema.passthrough(),
-      spent_outputs: z.record(z.coerce.number(), z.string()),
-    }),
+  z.object({
+    success: z.literal(true),
+    tx: fullnodeTxApiTxSchema.passthrough(),
+    meta: fullnodeTxApiMetaSchema.passthrough(),
+    spent_outputs: z.record(z.coerce.number(), z.string()),
+  }),
   z.object({ success: z.literal(false), message: z.string().nullish() }),
 ]);
 

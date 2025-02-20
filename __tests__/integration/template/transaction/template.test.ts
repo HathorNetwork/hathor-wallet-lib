@@ -216,7 +216,7 @@ describe('Template execution', () => {
     expect(tx.hash).toBeDefined();
   });
 
-  it('should be able to complete a transaction change', async () => {
+  it('should be able to complete a transaction change using the complete instruction', async () => {
     const address = await hWallet.getAddressAtIndex(25);
     const template = new TransactionTemplateBuilder()
       .addSetVarAction({ name: 'addr', value: address })
@@ -241,7 +241,7 @@ describe('Template execution', () => {
     expect(tx.hash).toBeDefined();
   });
 
-  it('should be able to complete change', async () => {
+  it('should be able to add change with the change instruction', async () => {
     const address = await hWallet.getAddressAtIndex(25);
     const template = new TransactionTemplateBuilder()
       .addSetVarAction({ name: 'addr', value: address })
