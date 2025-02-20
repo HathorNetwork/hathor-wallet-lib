@@ -52,7 +52,6 @@ import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction } from '../nano_contracts/utils';
 import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
-import { checkTxMetadataChanged } from '../sync/utils';
 
 /**
  * @typedef {import('../models/create_token_transaction').default} CreateTokenTransaction
@@ -843,11 +842,11 @@ class HathorWallet extends EventEmitter {
 
   /**
    * @typedef AddressInfo
-   * @property {bigint} total_amount_received Sum of the amounts bigint
-   * @property {bigint} total_amount_sent Sum of the amounts bigint
-   * @property {bigint} total_amount_available Amount bigint to bigint
-   * @property {bigint} total_amount_locked Amount locked andbigintthus nobigint to transfer
-   * @property {number} token Token used to calculate the amounts bigint, sent, available and locked
+   * @property {bigint} total_amount_received Sum of the amounts received
+   * @property {bigint} total_amount_sent Sum of the amounts sent
+   * @property {bigint} total_amount_available Amount available to transfer
+   * @property {bigint} total_amount_locked Amount locked and thus no available to transfer
+   * @property {number} token Token used to calculate the amounts received, sent, available and locked
    * @property {number} index Derivation path for the given address
    */
 
@@ -1337,34 +1336,29 @@ class HathorWallet extends EventEmitter {
       return;
     }
     const newTx = parseResult.data;
-    const storageTx = await this.storage.getTx(newTx.tx_id);
+    // Later we will compare the storageTx and the received tx.
+    // To avoid reference issues we clone the current storageTx.
+    const storageTx = cloneDeep(await this.storage.getTx(newTx.tx_id));
     const isNewTx = storageTx === null;
 
     newTx.processingStatus = TxHistoryProcessingStatus.PROCESSING;
 
-    // Metadata changed MUST be before addTx because we compare the stored tx with the new one.
-    // So overwriting the stored tx before this would make the check invalid.
-    const metadataChanged = await checkTxMetadataChanged(newTx, this.storage);
     await this.storage.addTx(newTx);
     await this.scanAddressesToLoad();
 
     // set state to processing and save current state.
     const previousState = this.state;
     this.state = HathorWallet.PROCESSING;
-    // Process history to update metadatas
-    if (metadataChanged) {
-      // Process the full history because
-      // this tx changed the voided state
-      // XXX in the future we should be able to handle this
-      // voidness alone, without processing everything
-      // but for now it's an isolated case and it's easier
-      await this.storage.processHistory();
-    } else if (isNewTx) {
+    if (isNewTx) {
       // Process this single transaction.
       // Handling new metadatas and deleting utxos that are not available anymore
       await this.storage.processNewTx(newTx);
+    } else if (storageTx.is_voided !== newTx.is_voided) {
+      // This is a voided transaction update event.
+      // voided transactions require a full history reprocess.
+      await this.storage.processHistory();
     } else {
-      // Simple metadata changed.
+      // Process other types of metadata updates.
       await processMetadataChanged(this.storage, newTx);
     }
     // restore previous state
