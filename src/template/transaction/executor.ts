@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod';
-import { shuffle } from 'lodash';
+import { clone, shuffle } from 'lodash';
 import { OutputValueType } from 'src/types';
 import {
   AuthorityOutputInstruction,
@@ -268,7 +268,7 @@ export async function execRawOutputInstruction(
   // get tokenData and update token balance on the context
   let tokenData: number;
   if (useCreatedToken) {
-    ctx.useCreateTxContext();
+    ctx.useCreateTokenTxContext();
     tokenData = 1;
     if (authority) {
       ctx.log(`Creating authority output`);
@@ -330,7 +330,7 @@ export async function execDataOutputInstruction(
   let tokenData: number;
   if (useCreatedToken) {
     ctx.log(`Using created token`);
-    ctx.useCreateTxContext();
+    ctx.useCreateTokenTxContext();
     tokenData = 1;
     ctx.balance.addCreatedTokenOutput(1n);
   } else {
@@ -369,7 +369,7 @@ export async function execTokenOutputInstruction(
   let tokenData: number;
   if (useCreatedToken) {
     ctx.log(`Using created token`);
-    ctx.useCreateTxContext();
+    ctx.useCreateTokenTxContext();
     tokenData = 1;
     ctx.balance.addCreatedTokenOutput(amount);
   } else {
@@ -417,7 +417,7 @@ export async function execAuthorityOutputInstruction(
   let tokenData: number;
   if (useCreatedToken) {
     ctx.log(`Using created token`);
-    ctx.useCreateTxContext();
+    ctx.useCreateTokenTxContext();
     tokenData = 1;
     ctx.balance.addCreatedTokenOutputAuthority(count, authority);
   } else {
@@ -522,36 +522,6 @@ export async function execChangeInstruction(
       const output = new Output(value, script, { timelock, tokenData });
       ctx.addOutputs(-1, output);
     }
-
-    if (balance.mint_authorities > 0) {
-      const count = balance.mint_authorities;
-      ctx.log(`Adding ${count} mint authority change outputs / ${tokenUid}`);
-      // Need to create a token output
-      // Add balance to the ctx.balance
-      ctx.balance.addOutputAuthority(count, tokenUid, 'mint');
-
-      // Creates an output with the value of the outstanding balance
-      const output = new Output(TOKEN_MINT_MASK, script, {
-        timelock,
-        tokenData: tokenData | TOKEN_AUTHORITY_MASK,
-      });
-      ctx.addOutputs(-1, ...Array(count).fill(output));
-    }
-
-    if (balance.melt_authorities > 0) {
-      const count = balance.mint_authorities;
-      ctx.log(`Adding ${count} melt authority change outputs / ${tokenUid}`);
-      // Need to create a token output
-      // Add balance to the ctx.balance
-      ctx.balance.addOutputAuthority(count, tokenUid, 'melt');
-
-      // Creates an output with the value of the outstanding balance
-      const output = new Output(TOKEN_MELT_MASK, script, {
-        timelock,
-        tokenData: tokenData | TOKEN_AUTHORITY_MASK,
-      });
-      ctx.addOutputs(-1, ...Array(count).fill(output));
-    }
   }
 }
 
@@ -600,7 +570,6 @@ export async function execCompleteTxInstruction(
     });
   }
 
-  // const script = createOutputScriptFromAddress(address, interpreter.getNetwork());
   const changeScript = createOutputScriptFromAddress(changeAddress, interpreter.getNetwork());
 
   for (const tokenUid of tokensToCheck) {
@@ -634,12 +603,9 @@ export async function execCompleteTxInstruction(
         ctx.log(`Found utxo with ${utxo.value} of ${utxo.tokenId}`);
         ctx.log(`Create input ${utxo.index} / ${utxo.txId}`);
         inputs.push(new Input(utxo.txId, utxo.index));
-      }
-
-      // Update balance
-      for (const input of inputs) {
-        const origTx = await interpreter.getTx(input.hash);
-        ctx.balance.addBalanceFromUtxo(origTx, input.index);
+        // Update balance
+        const origTx = await interpreter.getTx(utxo.txId);
+        ctx.balance.addBalanceFromUtxo(origTx, utxo.index);
       }
 
       // Then add inputs to context
@@ -812,8 +778,8 @@ export async function execSetVarInstruction(
       ctx.vars,
       SetVarGetWalletBalanceOpts.shape.token
     );
-    callArgs.token = token;
-    const newOptions = { ...callArgs, token };
+    const newOptions = clone(callArgs);
+    newOptions.token = token;
     // Call action with valid options
     const balance = await getWalletBalance(interpreter, ctx, newOptions);
     ctx.vars[ins.name] = balance;

@@ -28,6 +28,9 @@ export class TxBalance {
     this.createdTokenBalance = null;
   }
 
+  /**
+   * Get the current balance of the given token.
+   */
   getTokenBalance(token: string): TokenBalance {
     if (!this.balance[token]) {
       this.balance[token] = {
@@ -40,6 +43,10 @@ export class TxBalance {
     return this.balance[token];
   }
 
+  /**
+   * Get the current balance of the token being created.
+   * Obs: only valid for create token transactions.
+   */
   getCreatedTokenBalance(): TokenBalance {
     if (!this.createdTokenBalance) {
       this.createdTokenBalance = {
@@ -51,10 +58,16 @@ export class TxBalance {
     return this.createdTokenBalance;
   }
 
+  /**
+   * Set the balance of a token.
+   */
   setTokenBalance(token: string, balance: TokenBalance) {
     this.balance[token] = balance;
   }
 
+  /**
+   * Set the balance of the created token.
+   */
   setCreatedTokenBalance(balance: TokenBalance) {
     this.createdTokenBalance = balance;
   }
@@ -85,18 +98,27 @@ export class TxBalance {
     this.setTokenBalance(token, balance);
   }
 
+  /**
+   * Remove the balance given from the token balance.
+   */
   addOutput(amount: OutputValueType, token: string) {
     const balance = this.getTokenBalance(token);
     balance.tokens -= amount;
     this.setTokenBalance(token, balance);
   }
 
+  /**
+   * Remove the balance from the token being created.
+   */
   addCreatedTokenOutput(amount: OutputValueType) {
     const balance = this.getCreatedTokenBalance();
     balance.tokens -= amount;
     this.setCreatedTokenBalance(balance);
   }
 
+  /**
+   * Remove the specified authority from the balance of the given token.
+   */
   addOutputAuthority(count: number, token: string, authority: 'mint' | 'melt') {
     const balance = this.getTokenBalance(token);
     if (authority === 'mint') {
@@ -108,6 +130,9 @@ export class TxBalance {
     this.setTokenBalance(token, balance);
   }
 
+  /**
+   * Remove the authority from the balance of the token being created.
+   */
   addCreatedTokenOutputAuthority(count: number, authority: 'mint' | 'melt') {
     const balance = this.getCreatedTokenBalance();
     if (authority === 'mint') {
@@ -158,6 +183,10 @@ export class TxTemplateContext {
     this.debug = debug;
   }
 
+  /**
+   * Add the line to the log array.
+   * Optionally use the logger to show the logs as they are being created.
+   */
   log(message: string): void {
     this._logs.push(message);
     if (this.debug) {
@@ -169,7 +198,10 @@ export class TxTemplateContext {
     return this._logs;
   }
 
-  useCreateTxContext() {
+  /**
+   * Make the current context
+   */
+  useCreateTokenTxContext() {
     if (this.tokens.length !== 0) {
       throw new Error(
         `Trying to build a create token tx with ${this.tokens.length} tokens on the array`
@@ -205,6 +237,9 @@ export class TxTemplateContext {
     return this.tokens.length;
   }
 
+  /**
+   * Add inputs to the context.
+   */
   addInputs(position: number, ...inputs: Input[]) {
     if (position === -1) {
       this.inputs.push(...inputs);
@@ -214,6 +249,9 @@ export class TxTemplateContext {
     this.inputs.splice(position, 0, ...inputs);
   }
 
+  /**
+   * Add outputs to the context.
+   */
   addOutputs(position: number, ...outputs: Output[]) {
     if (position === -1) {
       this.outputs.push(...outputs);
