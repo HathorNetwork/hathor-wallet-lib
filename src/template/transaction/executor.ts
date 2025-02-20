@@ -109,10 +109,10 @@ export async function execRawInputInstruction(
   // Find the original transaction from the input
   const origTx = await interpreter.getTx(txId);
   // Add balance to the ctx.balance
-  ctx.balance.addInput(origTx, index);
+  ctx.balance.addBalanceFromUtxo(origTx, index);
 
   const input = new Input(txId, index);
-  ctx.addInput(position, input);
+  ctx.addInputs(position, input);
 }
 
 /**
@@ -154,11 +154,11 @@ export async function execUtxoSelectInstruction(
   // First, update balance
   for (const input of inputs) {
     const origTx = await interpreter.getTx(input.hash);
-    ctx.balance.addInput(origTx, input.index);
+    ctx.balance.addBalanceFromUtxo(origTx, input.index);
   }
 
   // Then add inputs to context
-  ctx.addInput(position, ...inputs);
+  ctx.addInputs(position, ...inputs);
 
   ctx.log(`changeAmount: ${changeAmount} autoChange(${autoChange})`);
 
@@ -178,7 +178,7 @@ export async function execUtxoSelectInstruction(
     const script = createOutputScriptFromAddress(changeAddress, interpreter.getNetwork());
     const output = new Output(changeAmount, script, { tokenData });
     ctx.balance.addOutput(changeAmount, token);
-    ctx.addOutput(-1, output);
+    ctx.addOutputs(-1, output);
   }
 }
 
@@ -230,11 +230,11 @@ export async function execAuthoritySelectInstruction(
   // First, update balance
   for (const input of inputs) {
     const origTx = await interpreter.getTx(input.hash);
-    ctx.balance.addInput(origTx, input.index);
+    ctx.balance.addBalanceFromUtxo(origTx, input.index);
   }
 
   // Then add inputs to context
-  ctx.addInput(position, ...inputs);
+  ctx.addInputs(position, ...inputs);
 }
 
 /**
@@ -308,7 +308,7 @@ export async function execRawOutputInstruction(
   }
 
   const output = new Output(amount, script, { timelock, tokenData });
-  ctx.addOutput(position, output);
+  ctx.addOutputs(position, output);
 }
 
 /**
@@ -341,7 +341,7 @@ export async function execDataOutputInstruction(
   const dataScript = new ScriptData(data);
   const script = dataScript.createScript();
   const output = new Output(1n, script, { tokenData });
-  ctx.addOutput(position, output);
+  ctx.addOutputs(position, output);
 }
 
 /**
@@ -379,7 +379,7 @@ export async function execTokenOutputInstruction(
 
   const script = createOutputScriptFromAddress(address, interpreter.getNetwork());
   const output = new Output(amount, script, { timelock, tokenData });
-  ctx.addOutput(position, output);
+  ctx.addOutputs(position, output);
 }
 
 /**
@@ -446,7 +446,7 @@ export async function execAuthorityOutputInstruction(
   const script = createOutputScriptFromAddress(address, interpreter.getNetwork());
   const output = new Output(amount, script, { timelock, tokenData });
   // Creates `count` outputs that are copies of the `output`
-  ctx.addOutput(position, ...Array(count).fill(output));
+  ctx.addOutputs(position, ...Array(count).fill(output));
 }
 
 /**
@@ -518,7 +518,7 @@ export async function execChangeInstruction(
 
       // Creates an output with the value of the outstanding balance
       const output = new Output(value, script, { timelock, tokenData });
-      ctx.addOutput(-1, output);
+      ctx.addOutputs(-1, output);
     }
 
     if (balance.mint_authorities > 0) {
@@ -533,7 +533,7 @@ export async function execChangeInstruction(
         timelock,
         tokenData: tokenData | TOKEN_AUTHORITY_MASK,
       });
-      ctx.addOutput(-1, ...Array(count).fill(output));
+      ctx.addOutputs(-1, ...Array(count).fill(output));
     }
 
     if (balance.melt_authorities > 0) {
@@ -548,7 +548,7 @@ export async function execChangeInstruction(
         timelock,
         tokenData: tokenData | TOKEN_AUTHORITY_MASK,
       });
-      ctx.addOutput(-1, ...Array(count).fill(output));
+      ctx.addOutputs(-1, ...Array(count).fill(output));
     }
   }
 }
@@ -615,7 +615,7 @@ export async function execCompleteTxInstruction(
 
       // Creates an output with the value of the outstanding balance
       const output = new Output(value, changeScript, { timelock, tokenData });
-      ctx.addOutput(-1, output);
+      ctx.addOutputs(-1, output);
     } else if (balance.tokens < 0) {
       const value = -balance.tokens;
       ctx.log(`Finding inputs for ${value} / ${tokenUid}`);
@@ -637,17 +637,17 @@ export async function execCompleteTxInstruction(
       // Update balance
       for (const input of inputs) {
         const origTx = await interpreter.getTx(input.hash);
-        ctx.balance.addInput(origTx, input.index);
+        ctx.balance.addBalanceFromUtxo(origTx, input.index);
       }
 
       // Then add inputs to context
-      ctx.addInput(-1, ...inputs);
+      ctx.addInputs(-1, ...inputs);
 
       if (changeAmount) {
         ctx.log(`Creating change with ${changeAmount} for address: ${changeAddress}`);
         const output = new Output(changeAmount, changeScript, { tokenData });
         ctx.balance.addOutput(changeAmount, tokenUid);
-        ctx.addOutput(-1, output);
+        ctx.addOutputs(-1, output);
       }
     }
 
@@ -663,7 +663,7 @@ export async function execCompleteTxInstruction(
         timelock,
         tokenData: tokenData | TOKEN_AUTHORITY_MASK,
       });
-      ctx.addOutput(-1, ...Array(count).fill(output));
+      ctx.addOutputs(-1, ...Array(count).fill(output));
     } else if (balance.mint_authorities < 0) {
       const count = -balance.mint_authorities;
       ctx.log(`Finding inputs for ${count} mint authorities / ${tokenUid}`);
@@ -683,11 +683,11 @@ export async function execCompleteTxInstruction(
       // First, update balance
       for (const input of inputs) {
         const origTx = await interpreter.getTx(input.hash);
-        ctx.balance.addInput(origTx, input.index);
+        ctx.balance.addBalanceFromUtxo(origTx, input.index);
       }
 
       // Then add inputs to context
-      ctx.addInput(-1, ...inputs);
+      ctx.addInputs(-1, ...inputs);
     }
 
     if (balance.melt_authorities > 0) {
@@ -702,7 +702,7 @@ export async function execCompleteTxInstruction(
         timelock,
         tokenData: tokenData | TOKEN_AUTHORITY_MASK,
       });
-      ctx.addOutput(-1, ...Array(count).fill(output));
+      ctx.addOutputs(-1, ...Array(count).fill(output));
     } else if (balance.melt_authorities < 0) {
       const count = -balance.melt_authorities;
       ctx.log(`Finding inputs for ${count} melt authorities / ${tokenUid}`);
@@ -722,11 +722,11 @@ export async function execCompleteTxInstruction(
       // First, update balance
       for (const input of inputs) {
         const origTx = await interpreter.getTx(input.hash);
-        ctx.balance.addInput(origTx, input.index);
+        ctx.balance.addBalanceFromUtxo(origTx, input.index);
       }
 
       // Then add inputs to context
-      ctx.addInput(-1, ...inputs);
+      ctx.addInputs(-1, ...inputs);
     }
   }
 }

@@ -38,11 +38,9 @@ export const TemplateRef = z.string().regex(TEMPLATE_REFERENCE_RE);
  */
 export function getVariable<
   S,
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  T extends z.ZodUnion<[typeof TemplateRef, z.ZodType<S, z.ZodTypeDef, any>]> = z.ZodUnion<
-    [typeof TemplateRef, z.ZodType<S, z.ZodTypeDef, any>]
+  T extends z.ZodUnion<[typeof TemplateRef, z.ZodType<S, z.ZodTypeDef, unknown>]> = z.ZodUnion<
+    [typeof TemplateRef, z.ZodType<S, z.ZodTypeDef, unknown>]
   >,
-  /* eslint-enable @typescript-eslint/no-explicit-any */
 >(ref: z.infer<T>, vars: Record<string, unknown>, schema: T): S {
   let val = ref; // type should be: string | S
   const parsed = TemplateRef.safeParse(ref);

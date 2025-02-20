@@ -694,7 +694,11 @@ const transaction = {
     return 'Unknown';
   },
 
-  convertFullNodeTxToHistoryTx(tx: FullNodeTx) {
+  /**
+   * Convert the FullNodeTx type received via tx api to the IHistoryTx
+   * interface received via websocket.
+   */
+  convertFullNodeTxToHistoryTx(tx: FullNodeTx): IHistoryTx {
     const resp = {} as IHistoryTx;
     resp.tx_id = tx.hash;
     resp.version = tx.version;

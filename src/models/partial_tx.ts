@@ -476,10 +476,14 @@ export class PartialTx {
       const p: Promise<boolean> = new Promise((resolve, reject) => {
         txApi
           .getTransaction(input.hash, data => {
-            const utxo = get(data, `tx.outputs[${input.index}]`);
-            if (!utxo) {
+            if (!data.success) {
               return resolve(false);
             }
+
+            if (data.tx.outputs.length <= input.index) {
+              return resolve(false);
+            }
+            const utxo = data.tx.outputs[input.index];
 
             const tokenUid =
               utxo.token_data === 0
@@ -502,7 +506,7 @@ export class PartialTx {
                 input.address === utxo.decoded.address
             );
           })
-          .then(result => {
+          .then(_ => {
             // should have already resolved
             reject(new Error('API client did not use the callback'));
           })

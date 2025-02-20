@@ -59,7 +59,10 @@ export class TxBalance {
     this.createdTokenBalance = balance;
   }
 
-  addInput(tx: IHistoryTx, index: number) {
+  /**
+   * Add balance from utxo of the given transaction.
+   */
+  addBalanceFromUtxo(tx: IHistoryTx, index: number) {
     if (tx.outputs.length <= index) {
       throw new Error('Index does not exist on tx outputs');
     }
@@ -126,7 +129,7 @@ export class TxTemplateContext {
 
   outputs: Output[];
 
-  tokens: string[]; // use token data?
+  tokens: string[];
 
   balance: TxBalance;
 
@@ -134,8 +137,7 @@ export class TxTemplateContext {
 
   tokenSymbol?: string;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  vars: Record<string, any>;
+  vars: Record<string, unknown>;
 
   _logs: string[];
 
@@ -176,15 +178,17 @@ export class TxTemplateContext {
     this.version = CREATE_TOKEN_TX_VERSION;
   }
 
-  getTokenDataFor(token: string, useCreatedToken: boolean) {
-    if (useCreatedToken) {
-      this.useCreateTxContext();
-      return 1;
-    }
-    return this.addToken(token);
-  }
-
-  addToken(token: string) {
+  /**
+   * Add a token to the transaction and return its token_data.
+   * The token array order will be preserved so the token_data is final.
+   *
+   * If the transaction is a CREATE_TOKEN_TX it does not have a token array,
+   * only HTR (token_data=0) and the created token(token_data=1)
+   *
+   * @param token Token UID.
+   * @returns token_data for the requested token.
+   */
+  addToken(token: string): number {
     if (token === NATIVE_TOKEN_UID) {
       return 0;
     }
@@ -201,7 +205,7 @@ export class TxTemplateContext {
     return this.tokens.length;
   }
 
-  addInput(position: number, ...inputs: Input[]) {
+  addInputs(position: number, ...inputs: Input[]) {
     if (position === -1) {
       this.inputs.push(...inputs);
       return;
@@ -210,7 +214,7 @@ export class TxTemplateContext {
     this.inputs.splice(position, 0, ...inputs);
   }
 
-  addOutput(position: number, ...outputs: Output[]) {
+  addOutputs(position: number, ...outputs: Output[]) {
     if (position === -1) {
       this.outputs.push(...outputs);
       return;
