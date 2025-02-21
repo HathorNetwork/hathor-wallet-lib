@@ -22,6 +22,7 @@ import Queue from '../../src/models/queue';
 import { WalletType } from '../../src/types';
 import txApi from '../../src/api/txApi';
 import * as addressUtils from '../../src/utils/address';
+import walletUtils from '../../src/utils/wallet';
 import versionApi from '../../src/api/version';
 import { decryptData, verifyMessage } from '../../src/utils/crypto';
 
@@ -1370,4 +1371,44 @@ test('setExternalTxSigningMethod', async () => {
   hwallet.storage = storage;
   hwallet.setExternalTxSigningMethod(async () => {});
   expect(hwallet.isSignedExternally).toBe(true);
+});
+
+test('getUtxosForAmount - should always get the best utxos', async () => {
+  const seed =
+    'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+  const accessData = walletUtils.generateAccessDataFromSeed(seed, {
+    pin: '123',
+    password: '456',
+    networkName: 'testnet',
+  });
+  const store = new MemoryStore();
+  await store.saveAccessData(accessData);
+  const storage = new Storage(store);
+  const hwallet = new FakeHathorWallet();
+  hwallet.storage = storage;
+  // When selecting 6n we should always get the 6n output, even if the sum of
+  // the first 3 may solve the required 6n.
+  for (const amount of [3n, 1n, 2n, 4n, 6n]) {
+    await storage.store.saveUtxo({
+      txId: 'tx1',
+      index: Number(amount),
+      value: amount,
+      address: 'addr',
+      authorities: 0n,
+      height: 0,
+      timelock: null,
+      token: '00',
+      type: 1,
+    });
+  }
+
+  await expect(hwallet.getUtxosForAmount(6n)).resolves.toEqual({
+    changeAmount: 0n,
+    utxos: [
+      expect.objectContaining({
+        index: 6,
+        value: 6n,
+      }),
+    ],
+  });
 });
