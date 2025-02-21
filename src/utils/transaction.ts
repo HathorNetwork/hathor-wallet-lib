@@ -49,6 +49,7 @@ import helpers from './helpers';
 import { getAddressType, getAddressFromPubkey } from './address';
 import NanoContract from '../nano_contracts/nano_contract';
 import txApi from '../api/txApi';
+import { TransactionSchema } from '../api/schemas/txApi';
 
 const transaction = {
   /**
@@ -572,6 +573,8 @@ const transaction = {
 
   /**
    * Convert a Transaction instance to the history object.
+   * May call the fullnode transaction api to get information on the tx spent
+   * by the inputs.
    */
   async convertTransactionToHistoryTx(
     tx: Transaction | CreateTokenTransaction | NanoContract,
@@ -599,7 +602,7 @@ const transaction = {
         // Get from API
         spentOut = await new Promise((resolve, reject) => {
           txApi
-            .getTransaction(input.hash, response => {
+            .getTransaction(input.hash, (response: TransactionSchema) => {
               if (!response.success) {
                 return reject(new Error(response.message ?? ''));
               }
@@ -607,33 +610,27 @@ const transaction = {
               if (input.index >= response.tx.outputs.length) {
                 return reject(new Error('Index outsite of tx output array bounds'));
               }
-              const out = response.tx.outputs[input.index];
-              const outRet = {
-                value: out.value,
-                token_data: out.token_data,
-                script: out.script,
-                spent_by: out.spent_by,
-                decoded: {},
+              const spentApiOutput = response.tx.outputs[input.index];
+              const spentHistoryOutput = {
+                value: spentApiOutput.value,
+                token_data: spentApiOutput.token_data,
+                script: spentApiOutput.script,
+                spent_by: spentApiOutput.spent_by ?? null,
+                decoded: {}, // XXX: should use the hydrateIOWithToken util
               } as IHistoryOutput;
-              if (out.token) {
-                outRet.token = out.token;
+              if (spentApiOutput.token) {
+                spentHistoryOutput.token = spentApiOutput.token;
               }
-              if (out.decoded.address) {
-                outRet.decoded.type = (out.decoded.type as string).toLocaleLowerCase();
-                outRet.decoded.address = out.decoded.address as string;
-                outRet.decoded.timelock = out.decoded.timelock as number;
+              if (spentApiOutput.decoded.address) {
+                spentHistoryOutput.decoded.type = (spentApiOutput.decoded.type as string).toLocaleLowerCase();
+                spentHistoryOutput.decoded.address = spentApiOutput.decoded.address as string;
+                spentHistoryOutput.decoded.timelock = spentApiOutput.decoded.timelock as number;
               }
-              // XXX: should we cover nano and other types?
 
-              return resolve(outRet);
+              return resolve(spentHistoryOutput);
             })
             .catch(err => reject(err));
         });
-
-        // If we could not get tx from api or any other error happened
-        if (!spentOut) {
-          throw new Error(`Could not fetch tx ${tx.hash} from fullnode`);
-        }
       }
 
       inputs.push({
@@ -656,7 +653,7 @@ const transaction = {
         } else {
           const index = output.getTokenIndex();
           if (tx.tokens.length <= index) {
-            throw new Error('Fetching a token that is not l');
+            throw new Error('Fetching a token that is not in the token array');
           }
           token = tx.tokens[index];
         }
@@ -678,12 +675,15 @@ const transaction = {
       version: tx.version,
       weight: tx.weight,
       timestamp: tx.timestamp ?? 0,
-      is_voided: false, // tx.voided?
+      is_voided: false,
       nonce: tx.nonce,
       inputs,
       outputs,
       parents: tx.parents,
       tokens: tx.tokens,
+      // The missing fields below are metadata that cannot be inferred from the
+      // Transaction instance.
+      // height, first_block
     };
 
     if (tx.version === CREATE_TOKEN_TX_VERSION) {
@@ -693,9 +693,11 @@ const transaction = {
 
     if (tx.version === NANO_CONTRACTS_VERSION) {
       histTx.nc_id = (tx as NanoContract).id;
+      histTx.nc_method = (tx as NanoContract).method;
       histTx.nc_args = (tx as NanoContract).args.map(a => a.toString('hex')).join('');
       histTx.nc_pubkey = (tx as NanoContract).pubkey.toString('hex');
-      // histTx.nc_blueprint_id // is this required?
+      // XXX: is the nc_blueprint_id required?
+      // histTx.nc_blueprint_id
     }
 
     return histTx;

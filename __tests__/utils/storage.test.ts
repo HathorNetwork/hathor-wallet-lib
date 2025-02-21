@@ -16,8 +16,12 @@ import {
   getSupportedSyncMode,
   getHistorySyncMethod,
   apiSyncHistory,
+  addCreatedTokenFromTx,
 } from '../../src/utils/storage';
 import { manualStreamSyncHistory, xpubStreamSyncHistory } from '../../src/sync/stream';
+import CreateTokenTransaction from '../../src/models/create_token_transaction';
+import Transaction from '../../src/models/transaction';
+import { MaximumNumberOutputsError } from '../../src/errors';
 
 describe('scanning policy methods', () => {
   it('start addresses', async () => {
@@ -356,8 +360,34 @@ test('getSupportedSyncMode', async () => {
   await expect(getSupportedSyncMode(storage)).resolves.toEqual([]);
 });
 
-test('getHistorySyyncMethod', () => {
+test('getHistorySyncMethod', () => {
   expect(getHistorySyncMethod(HistorySyncMode.POLLING_HTTP_API)).toEqual(apiSyncHistory);
   expect(getHistorySyncMethod(HistorySyncMode.MANUAL_STREAM_WS)).toEqual(manualStreamSyncHistory);
   expect(getHistorySyncMethod(HistorySyncMode.XPUB_STREAM_WS)).toEqual(xpubStreamSyncHistory);
+});
+
+test('addCreatedTokenFromTx', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  const spy = jest.spyOn(storage, 'addToken');
+  const tx = new CreateTokenTransaction("Token A", "tkA", [], []);
+  const notCreateTokenTx = new Transaction([], []);
+
+  // If we force a transaction without the correct version it should do nothing.
+  await addCreatedTokenFromTx(notCreateTokenTx as CreateTokenTransaction, storage);
+  expect(spy).not.toHaveBeenCalled();
+
+  // Tx without hash means we do not know the UID.
+  await expect(addCreatedTokenFromTx(tx, storage)).rejects.toThrow();
+  expect(spy).not.toHaveBeenCalled();
+
+  // A working test
+  tx.hash = "d00d";
+  await addCreatedTokenFromTx(tx, storage);
+  expect(spy).toHaveBeenCalledWith({
+    uid: 'd00d',
+    name: 'Token A',
+    symbol: 'tkA',
+  });
+  await expect(storage.getToken('d00d')).resolves.not.toBeNull();
 });

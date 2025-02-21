@@ -898,6 +898,10 @@ export async function processUtxoUnlock(
   await store.unlockUtxo(lockedUtxo);
 }
 
+/**
+ * Extracts the ITokenData from the CreateTokenTransaction instance and save
+ * the token on the storage.
+ */
 export async function addCreatedTokenFromTx(
   tx: CreateTokenTransaction,
   storage: IStorage
