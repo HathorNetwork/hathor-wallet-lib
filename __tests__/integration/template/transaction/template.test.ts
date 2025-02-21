@@ -287,28 +287,30 @@ describe('Template execution', () => {
     }
     await waitForTxReceived(hWallet, tx.hash, undefined);
 
-    expect(tx.outputs).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        tokenData: 0,
-        value: 2n,
-      }),
-      expect.objectContaining({
-        tokenData: 1,
-        value: 3n,
-      }),
-      expect.objectContaining({
-        tokenData: TOKEN_AUTHORITY_MASK + 1,
-        value: TOKEN_MINT_MASK,
-      }),
-      expect.objectContaining({
-        tokenData: TOKEN_AUTHORITY_MASK + 1,
-        value: TOKEN_MELT_MASK,
-      }),
-      expect.objectContaining({
-        tokenData: TOKEN_AUTHORITY_MASK + 1,
-        value: TOKEN_MELT_MASK,
-      }),
-    ]));
+    expect(tx.outputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tokenData: 0,
+          value: 2n,
+        }),
+        expect.objectContaining({
+          tokenData: 1,
+          value: 3n,
+        }),
+        expect.objectContaining({
+          tokenData: TOKEN_AUTHORITY_MASK + 1,
+          value: TOKEN_MINT_MASK,
+        }),
+        expect.objectContaining({
+          tokenData: TOKEN_AUTHORITY_MASK + 1,
+          value: TOKEN_MELT_MASK,
+        }),
+        expect.objectContaining({
+          tokenData: TOKEN_AUTHORITY_MASK + 1,
+          value: TOKEN_MELT_MASK,
+        }),
+      ])
+    );
   });
 
   it('should be able to mint new tokens without using template variables', async () => {
@@ -332,11 +334,13 @@ describe('Template execution', () => {
     }
     await waitForTxReceived(hWallet, tx.hash, undefined);
 
-    expect(tx.outputs).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        tokenData: 1,
-        value: 100n,
-      }),
-    ]));
+    expect(tx.outputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tokenData: 1,
+          value: 100n,
+        }),
+      ])
+    );
   });
 });
