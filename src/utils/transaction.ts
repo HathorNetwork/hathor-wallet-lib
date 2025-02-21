@@ -39,6 +39,7 @@ import {
   IInputSignature,
   ITxSignatureData,
   OutputValueType,
+  IHistoryInput,
 } from '../types';
 import Address from '../models/address';
 import P2PKH from '../models/p2pkh';
@@ -47,6 +48,8 @@ import ScriptData from '../models/script_data';
 import helpers from './helpers';
 import { getAddressType, getAddressFromPubkey } from './address';
 import NanoContract from '../nano_contracts/nano_contract';
+import txApi from '../api/txApi';
+import { TransactionSchema } from '../api/schemas/txApi';
 
 const transaction = {
   /**
@@ -566,6 +569,138 @@ const transaction = {
       return new Transaction(inputs, outputs, options);
     }
     throw new ParseError('Invalid transaction version.');
+  },
+
+  /**
+   * Convert a Transaction instance to the history object.
+   * May call the fullnode transaction api to get information on the tx spent
+   * by the inputs.
+   */
+  async convertTransactionToHistoryTx(
+    tx: Transaction | CreateTokenTransaction | NanoContract,
+    storage: IStorage
+  ): Promise<IHistoryTx> {
+    if (!tx.hash) {
+      throw new Error('To be a history tx a calculated hash is required');
+    }
+
+    const inputs: IHistoryInput[] = [];
+    const outputs: IHistoryOutput[] = [];
+
+    for (const input of tx.inputs) {
+      const spentTx = await storage.getTx(input.hash);
+      let spentOut: IHistoryOutput;
+
+      if (spentTx) {
+        if (input.index >= spentTx.outputs.length) {
+          throw new Error(
+            `Index (${input.index}) outside of transaction output array bounds (${spentTx.outputs.length})`
+          );
+        }
+        spentOut = spentTx.outputs[input.index];
+      } else {
+        // Get from API
+        spentOut = await new Promise((resolve, reject) => {
+          txApi
+            .getTransaction(input.hash, (response: TransactionSchema) => {
+              if (!response.success) {
+                return reject(new Error(response.message ?? ''));
+              }
+
+              if (input.index >= response.tx.outputs.length) {
+                return reject(new Error('Index outsite of tx output array bounds'));
+              }
+              const spentApiOutput = response.tx.outputs[input.index];
+              const spentHistoryOutput = {
+                value: spentApiOutput.value,
+                token_data: spentApiOutput.token_data,
+                script: spentApiOutput.script,
+                spent_by: spentApiOutput.spent_by ?? null,
+                decoded: {}, // XXX: should use the hydrateIOWithToken util
+              } as IHistoryOutput;
+              if (spentApiOutput.token) {
+                spentHistoryOutput.token = spentApiOutput.token;
+              }
+              if (spentApiOutput.decoded.address) {
+                spentHistoryOutput.decoded.type = (spentApiOutput.decoded.type as string).toLocaleLowerCase();
+                spentHistoryOutput.decoded.address = spentApiOutput.decoded.address as string;
+                spentHistoryOutput.decoded.timelock = spentApiOutput.decoded.timelock as number;
+              }
+
+              return resolve(spentHistoryOutput);
+            })
+            .catch(err => reject(err));
+        });
+      }
+
+      inputs.push({
+        tx_id: input.hash,
+        index: input.index,
+        script: spentOut.script,
+        decoded: spentOut.decoded,
+        token_data: spentOut.token_data,
+        token: spentOut.token,
+        value: spentOut.value,
+      });
+    }
+
+    for (const output of tx.outputs) {
+      const script = output.parseScript(storage.config.getNetwork());
+      let token = NATIVE_TOKEN_UID;
+      if (!output.isTokenHTR()) {
+        if (tx.version === CREATE_TOKEN_TX_VERSION) {
+          token = tx.hash;
+        } else {
+          const index = output.getTokenIndex();
+          if (tx.tokens.length <= index) {
+            throw new Error('Fetching a token that is not in the token array');
+          }
+          token = tx.tokens[index];
+        }
+      }
+
+      outputs.push({
+        value: output.value,
+        token_data: output.tokenData,
+        script: output.script.toString('hex'),
+        decoded: script?.toData() ?? {},
+        token,
+        spent_by: null, // Cannot reconstruct this field
+      });
+    }
+
+    const histTx: IHistoryTx = {
+      tx_id: tx.hash,
+      signalBits: tx.signalBits,
+      version: tx.version,
+      weight: tx.weight,
+      timestamp: tx.timestamp ?? 0,
+      is_voided: false,
+      nonce: tx.nonce,
+      inputs,
+      outputs,
+      parents: tx.parents,
+      tokens: tx.tokens,
+      // The missing fields below are metadata that cannot be inferred from the
+      // Transaction instance.
+      // height, first_block
+    };
+
+    if (tx.version === CREATE_TOKEN_TX_VERSION) {
+      histTx.token_name = (tx as CreateTokenTransaction).name;
+      histTx.token_symbol = (tx as CreateTokenTransaction).symbol;
+    }
+
+    if (tx.version === NANO_CONTRACTS_VERSION) {
+      histTx.nc_id = (tx as NanoContract).id;
+      histTx.nc_method = (tx as NanoContract).method;
+      histTx.nc_args = (tx as NanoContract).args.map(a => a.toString('hex')).join('');
+      histTx.nc_pubkey = (tx as NanoContract).pubkey.toString('hex');
+      // XXX: is the nc_blueprint_id required?
+      // histTx.nc_blueprint_id
+    }
+
+    return histTx;
   },
 
   /**

@@ -28,6 +28,8 @@ import {
 } from '../types';
 import Transaction from '../models/transaction';
 import { bestUtxoSelection } from '../utils/utxo';
+import { addCreatedTokenFromTx } from '../utils/storage';
+import CreateTokenTransaction from '../models/create_token_transaction';
 
 export interface ISendInput {
   txId: string;
@@ -422,6 +424,23 @@ export default class SendTransaction extends EventEmitter {
               throw new WalletError(ErrorMessages.TRANSACTION_IS_NULL);
             }
             this.transaction.updateHash();
+            if (this.storage) {
+              // Add transaction to storage and process storage
+              (async (storage: IStorage, transaction: Transaction) => {
+                // Get the transaction as a history object
+                const historyTx = await transactionUtils.convertTransactionToHistoryTx(
+                  transaction,
+                  storage
+                );
+                // Add transaction to storage
+                await storage.addTx(historyTx);
+                // Add token from a create token transaction to the storage
+                // This just returns if the transaction is not a CREATE_TOKEN_TX
+                await addCreatedTokenFromTx(transaction as CreateTokenTransaction, storage);
+                // Process new transaction
+                await storage.processNewTx(historyTx);
+              })(this.storage, this.transaction);
+            }
             this.emit('send-tx-success', this.transaction);
             resolve(this.transaction);
           } else {
