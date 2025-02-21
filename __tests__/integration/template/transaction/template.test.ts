@@ -11,6 +11,7 @@ import SendTransaction from '../../../../src/new/sendTransaction';
 import transactionUtils from '../../../../src/utils/transaction';
 import { TransactionTemplateBuilder } from '../../../../src/template/transaction/builder';
 import { WalletTxTemplateInterpreter } from '../../../../src/template/transaction/interpreter';
+import { TOKEN_AUTHORITY_MASK, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../../../src/constants';
 
 const DEBUG = true;
 
@@ -259,5 +260,83 @@ describe('Template execution', () => {
     await sendTx.runFromMining();
     await waitForTxReceived(hWallet, tx.hash, null);
     expect(tx.hash).toBeDefined();
+  });
+
+  it('should be able to send tokens and authorities without using template variables', async () => {
+    const address = await hWallet.getAddressAtIndex(10);
+    const template = new TransactionTemplateBuilder()
+      .addUtxoSelect({ fill: 2 })
+      .addTokenOutput({ address, amount: 2 })
+      .addUtxoSelect({ fill: 3, token: tokenUid })
+      .addTokenOutput({ address, amount: 3, token: tokenUid })
+      .addAuthoritySelect({ authority: 'mint', token: tokenUid, count: 1 })
+      .addAuthorityOutput({ address, authority: 'mint', count: 1, token: tokenUid })
+      .addAuthoritySelect({ authority: 'melt', token: tokenUid, count: 2 })
+      .addAuthorityOutput({ address, authority: 'melt', count: 2, token: tokenUid })
+      .build();
+
+    const tx = await interpreter.build(template, DEBUG);
+    await transactionUtils.signTransaction(tx, hWallet.storage, DEFAULT_PIN_CODE);
+    tx.prepareToSend();
+    const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
+    await sendTx.runFromMining();
+
+    expect(tx.hash).toBeDefined();
+    if (!tx.hash) {
+      throw new Error('tx hash should be defined');
+    }
+    await waitForTxReceived(hWallet, tx.hash, undefined);
+
+    expect(tx.outputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        tokenData: 0,
+        value: 2n,
+      }),
+      expect.objectContaining({
+        tokenData: 1,
+        value: 3n,
+      }),
+      expect.objectContaining({
+        tokenData: TOKEN_AUTHORITY_MASK + 1,
+        value: TOKEN_MINT_MASK,
+      }),
+      expect.objectContaining({
+        tokenData: TOKEN_AUTHORITY_MASK + 1,
+        value: TOKEN_MELT_MASK,
+      }),
+      expect.objectContaining({
+        tokenData: TOKEN_AUTHORITY_MASK + 1,
+        value: TOKEN_MELT_MASK,
+      }),
+    ]));
+  });
+
+  it('should be able to mint new tokens without using template variables', async () => {
+    const address = await hWallet.getAddressAtIndex(15);
+    const template = new TransactionTemplateBuilder()
+      .addUtxoSelect({ fill: 1 })
+      .addAuthoritySelect({ authority: 'mint', token: tokenUid })
+      .addTokenOutput({ address, amount: 100, token: tokenUid })
+      .addAuthorityOutput({ address, authority: 'mint', token: tokenUid })
+      .build();
+
+    const tx = await interpreter.build(template, DEBUG);
+    await transactionUtils.signTransaction(tx, hWallet.storage, DEFAULT_PIN_CODE);
+    tx.prepareToSend();
+    const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
+    await sendTx.runFromMining();
+
+    expect(tx.hash).toBeDefined();
+    if (!tx.hash) {
+      throw new Error('tx hash should be defined');
+    }
+    await waitForTxReceived(hWallet, tx.hash, undefined);
+
+    expect(tx.outputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        tokenData: 1,
+        value: 100n,
+      }),
+    ]));
   });
 });
