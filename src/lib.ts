@@ -53,6 +53,11 @@ import * as nanoUtils from './nano_contracts/utils';
 import NanoContractDeserializer from './nano_contracts/deserializer';
 import NanoContractTransactionParser from './nano_contracts/parser';
 import * as bigIntUtils from './utils/bigint';
+import {
+  TransactionTemplate,
+  TransactionTemplateBuilder,
+  WalletTxTemplateInterpreter,
+} from './template/transaction';
 
 export {
   PartialTx,
@@ -113,4 +118,7 @@ export {
   NanoContractDeserializer,
   NanoContractTransactionParser,
   bigIntUtils,
+  TransactionTemplate,
+  TransactionTemplateBuilder,
+  WalletTxTemplateInterpreter,
 };
