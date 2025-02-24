@@ -370,7 +370,7 @@ test('addCreatedTokenFromTx', async () => {
   const store = new MemoryStore();
   const storage = new Storage(store);
   const spy = jest.spyOn(storage, 'addToken');
-  const tx = new CreateTokenTransaction("Token A", "tkA", [], []);
+  const tx = new CreateTokenTransaction('Token A', 'tkA', [], []);
   const notCreateTokenTx = new Transaction([], []);
 
   // If we force a transaction without the correct version it should do nothing.
@@ -382,7 +382,7 @@ test('addCreatedTokenFromTx', async () => {
   expect(spy).not.toHaveBeenCalled();
 
   // A working test
-  tx.hash = "d00d";
+  tx.hash = 'd00d';
   await addCreatedTokenFromTx(tx, storage);
   expect(spy).toHaveBeenCalledWith({
     uid: 'd00d',
