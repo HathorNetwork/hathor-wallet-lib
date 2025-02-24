@@ -11,6 +11,7 @@ import transactionUtils from '../utils/transaction';
 import SendTransaction from '../new/sendTransaction';
 import HathorWallet from '../new/wallet';
 import NanoContract from './nano_contract';
+import OnChainBlueprint from './on_chain_blueprint';
 import Network from '../models/network';
 import ScriptData from '../models/script_data';
 import ncApi from '../api/nano';
@@ -33,7 +34,7 @@ import { NANO_CONTRACTS_VERSION, NANO_CONTRACTS_INITIALIZE_METHOD } from '../con
  * @param storage Wallet storage object
  */
 export const prepareNanoSendTransaction = async (
-  tx: NanoContract,
+  tx: NanoContract | OnChainBlueprint,
   pin: string,
   storage: IStorage
 ): Promise<SendTransaction> => {

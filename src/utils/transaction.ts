@@ -21,6 +21,7 @@ import {
   MERGED_MINED_BLOCK_VERSION,
   NANO_CONTRACTS_VERSION,
   POA_BLOCK_VERSION,
+  ON_CHAIN_BLUEPRINTS_VERSION,
 } from '../constants';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
@@ -47,6 +48,7 @@ import ScriptData from '../models/script_data';
 import helpers from './helpers';
 import { getAddressType, getAddressFromPubkey } from './address';
 import NanoContract from '../nano_contracts/nano_contract';
+import OnChainBlueprint from '../nano_contracts/on_chain_blueprint';
 
 const transaction = {
   /**
@@ -196,8 +198,8 @@ const transaction = {
       });
     }
 
-    if (tx.version === NANO_CONTRACTS_VERSION) {
-      const { pubkey } = tx as NanoContract;
+    if (tx.version === NANO_CONTRACTS_VERSION || tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
+      const { pubkey } = tx as NanoContract | OnChainBlueprint;
       const address = getAddressFromPubkey(pubkey.toString('hex'), storage.config.getNetwork());
       const addressInfo = await storage.getAddressInfo(address.base58);
       if (!addressInfo) {
@@ -231,9 +233,9 @@ const transaction = {
       input.setData(inputData);
     }
 
-    if (tx.version === NANO_CONTRACTS_VERSION) {
+    if (tx.version === NANO_CONTRACTS_VERSION || tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
       // eslint-disable-next-line no-param-reassign
-      (tx as NanoContract).signature = signatures.ncCallerSignature;
+      (tx as NanoContract | OnChainBlueprint).signature = signatures.ncCallerSignature;
     }
     return tx;
   },
