@@ -460,6 +460,46 @@ export async function processSingleTx(
 }
 
 /**
+ * Some metadata changed and may need processing.
+ * void txs are not treated here.
+ * Only idempodent changes should be processed here since this can be called multiple times.
+ */
+export async function processMetadataChanged(storage: IStorage, tx: IHistoryTx): Promise<void> {
+  const { store } = storage;
+
+  for (let index = 0; index < tx.outputs.length; index++) {
+    const output = tx.outputs[index];
+
+    if (!output.decoded.address) {
+      // Tx is ours but output is not from an address.
+      continue;
+    }
+
+    if (!(await storage.isAddressMine(output.decoded.address))) {
+      // Address is not ours.
+      continue;
+    }
+
+    if (output.spent_by === null) {
+      await store.saveUtxo({
+        txId: tx.tx_id,
+        index,
+        type: tx.version,
+        authorities: transactionUtils.isAuthorityOutput(output) ? output.value : 0n,
+        address: output.decoded.address,
+        token: output.token,
+        value: output.value,
+        timelock: output.decoded.timelock || null,
+        height: tx.height || null,
+      });
+    } else if (await storage.isUtxoSelectedAsInput({ txId: tx.tx_id, index })) {
+      // If the output is spent we remove it from the utxos selected_as_inputs if it's there
+      await storage.utxoSelectAsInput({ txId: tx.tx_id, index }, false);
+    }
+  }
+}
+
+/**
  * Fetch and save the data of the token set on the storage
  * @param {IStorage} storage - Storage to save the tokens.
  * @param {Set<string>} tokens - set of tokens to fetch and save.
