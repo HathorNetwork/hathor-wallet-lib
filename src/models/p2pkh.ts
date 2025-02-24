@@ -88,7 +88,7 @@ class P2PKH {
    */
   toData(): IHistoryOutputDecoded {
     return {
-      type: this.getType(),
+      type: this.getType().toUpperCase(),
       address: this.address.base58,
       timelock: this.timelock,
     };

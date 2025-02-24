@@ -21,7 +21,6 @@ import {
 import { manualStreamSyncHistory, xpubStreamSyncHistory } from '../../src/sync/stream';
 import CreateTokenTransaction from '../../src/models/create_token_transaction';
 import Transaction from '../../src/models/transaction';
-import { MaximumNumberOutputsError } from '../../src/errors';
 
 describe('scanning policy methods', () => {
   it('start addresses', async () => {

@@ -40,7 +40,7 @@ class ScriptData {
    */
   toData(): IHistoryOutputDecoded {
     return {
-      type: this.getType(),
+      type: this.getType().toUpperCase(),
       data: this.data,
     };
   }

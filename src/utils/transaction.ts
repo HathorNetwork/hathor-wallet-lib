@@ -622,9 +622,7 @@ const transaction = {
                 spentHistoryOutput.token = spentApiOutput.token;
               }
               if (spentApiOutput.decoded.address) {
-                spentHistoryOutput.decoded.type = (
-                  spentApiOutput.decoded.type as string
-                ).toLocaleLowerCase();
+                spentHistoryOutput.decoded.type = spentApiOutput.decoded.type as string;
                 spentHistoryOutput.decoded.address = spentApiOutput.decoded.address as string;
                 spentHistoryOutput.decoded.timelock = spentApiOutput.decoded.timelock as number;
               }

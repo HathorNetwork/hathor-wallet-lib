@@ -19,9 +19,13 @@ import {
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
 } from '../../src/constants';
+import txApi from '../../src/api/txApi';
 import { MemoryStore, Storage } from '../../src/storage';
 import Input from '../../src/models/input';
 import Transaction from '../../src/models/transaction';
+import Output from '../../src/models/output';
+import P2PKH from '../../src/models/p2pkh';
+import Address from '../../src/models/address';
 
 test('isAuthorityOutput', () => {
   expect(transaction.isAuthorityOutput({ token_data: TOKEN_AUTHORITY_MASK })).toBe(true);
@@ -463,4 +467,165 @@ test('getTxType', () => {
   expect(transaction.getTxType({ version: NANO_CONTRACTS_VERSION })).toBe('Nano Contract');
   expect(transaction.getTxType({ version: POA_BLOCK_VERSION })).toBe('Proof-of-Authority Block');
   expect(transaction.getTxType({ version: 999 })).toBe('Unknown');
+});
+
+test('convertTransactionToHistoryTx', async () => {
+  const p2pkh = new P2PKH(new Address('WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp'));
+  const script = p2pkh.createScript();
+  const store = new MemoryStore();
+  await store.saveTx({
+    tx_id: 'from-storage-tx1',
+    inputs: [],
+    outputs: [
+      {
+        script: script.toString('hex'),
+        decoded: { address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp' },
+        spent_by: null,
+        token: 'token-C',
+        token_data: 2,
+        value: 123n,
+        selected_as_input: false,
+      },
+      {
+        script: script.toString('hex'),
+        decoded: { address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp' },
+        spent_by: null,
+        token: 'token-A',
+        token_data: 1,
+        value: 1n,
+        selected_as_input: false,
+      },
+    ],
+    tokens: [],
+    is_voided: false,
+    nonce: 456,
+    parents: [],
+    timestamp: 123,
+    version: 1,
+    weight: 18,
+  });
+
+  const storage = new Storage(store);
+  storage.config.setNetwork('testnet');
+  const getTxSpy = jest.spyOn(txApi, 'getTransaction');
+  const tx = new Transaction([], [], {
+    hash: '',
+    parents: ['parent-1', 'parent-2'],
+    nonce: 123,
+    timestamp: 456,
+    tokens: ['token-A', 'token-B'],
+    version: 1,
+    signalBits: 5,
+    weight: 18,
+  });
+
+  getTxSpy.mockImplementation(async (txId, resolve) => {
+    switch (txId) {
+      case 'resolve-fail':
+        resolve({ success: false, message: 'failed api call' });
+        break;
+      case 'no-outputs':
+        resolve({
+          success: true,
+          tx: { outputs: [] },
+        });
+        break;
+      case 'fail':
+        throw new Error('Boom!');
+      case 'from-api-tx1':
+        resolve({
+          success: true,
+          tx: {
+            outputs: [
+              {
+                value: 2n,
+                token_data: 129,
+                script: script.toString('hex'),
+                token: 'token-B',
+                decoded: {
+                  type: 'P2PKH',
+                  address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
+                  timelock: undefined,
+                },
+              },
+            ],
+          },
+        });
+        break;
+      default:
+        throw new Error('Unknown test case');
+    }
+  });
+
+  try {
+    tx.hash = 'resolve-fail-case';
+    tx.inputs = [new Input('resolve-fail', 0)];
+    await expect(transaction.convertTransactionToHistoryTx(tx, storage)).rejects.toThrow(
+      'failed api call'
+    );
+    tx.hash = 'no-outputs-case';
+    tx.inputs = [new Input('no-outputs', 0)];
+    await expect(transaction.convertTransactionToHistoryTx(tx, storage)).rejects.toThrow(
+      'Index outsite of tx output array bounds'
+    );
+
+    tx.hash = 'fail-case';
+    tx.inputs = [new Input('fail', 0)];
+    await expect(transaction.convertTransactionToHistoryTx(tx, storage)).rejects.toThrow('Boom!');
+
+    tx.hash = 'success-case';
+    tx.inputs = [new Input('from-storage-tx1', 1), new Input('from-api-tx1', 0)];
+    tx.outputs = [new Output(3n, script)];
+    await expect(transaction.convertTransactionToHistoryTx(tx, storage)).resolves.toEqual({
+      tx_id: 'success-case',
+      parents: ['parent-1', 'parent-2'],
+      nonce: 123,
+      timestamp: 456,
+      tokens: ['token-A', 'token-B'],
+      version: 1,
+      signalBits: 5,
+      weight: 18,
+      is_voided: false,
+      inputs: [
+        {
+          tx_id: 'from-storage-tx1',
+          index: 1,
+          script: script.toString('hex'),
+          decoded: { address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp' },
+          token_data: 1,
+          token: 'token-A',
+          value: 1n,
+        },
+        {
+          tx_id: 'from-api-tx1',
+          index: 0,
+          script: script.toString('hex'),
+          decoded: {
+            type: 'P2PKH',
+            address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
+            timelock: undefined,
+          },
+          token_data: 129,
+          token: 'token-B',
+          value: 2n,
+        },
+      ],
+      outputs: [
+        {
+          value: 3n,
+          token_data: 0,
+          script: script.toString('hex'),
+          decoded: {
+            type: 'P2PKH',
+            address: 'WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp',
+            timelock: null,
+          },
+          token: '00',
+          spent_by: null,
+        },
+      ],
+    });
+  } finally {
+    getTxSpy.mockRestore();
+  }
 });
