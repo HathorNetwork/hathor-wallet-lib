@@ -66,6 +66,11 @@ describe('template methods', () => {
     // Transaction is not mined yet
     expect(tx.hash).toBeNull();
     expect(tx.nonce).toEqual(0);
+
+    // Send transaction
+    const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
+    await sendTx.runFromMining();
+    expect(tx.nonce).toBeGreaterThan(0);
   });
 
   it('should send transactions from the template transaction', async () => {
@@ -87,6 +92,17 @@ describe('template methods', () => {
     expect(tx.inputs[0].data).not.toBeFalsy(); // Tx is signed
     // Transaction is mined and pushed
     expect(tx.hash).not.toBeNull();
+    // Outputs will have 100 minted tokens and 9 HTR as change
+    expect(tx.outputs).toEqual(expect.arrayContaining([
+      {
+        value: 100n,
+        tokenData: 1,
+      },
+      {
+        value: 9n,
+        tokenData: 0,
+      },
+    ]));
   });
 });
 

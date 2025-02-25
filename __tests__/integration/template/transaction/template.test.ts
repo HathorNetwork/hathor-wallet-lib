@@ -48,11 +48,12 @@ describe('Template execution', () => {
     tx.prepareToSend();
     const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
     await sendTx.runFromMining();
+    expect(tx.hash).not.toBeNull();
     if (tx.hash === null) {
       throw new Error('Transaction does not have a hash');
     }
     tokenUid = tx.hash;
-    await waitForTxReceived(hWallet, tx.hash, null);
+    await waitForTxReceived(hWallet, tx.hash, undefined);
 
     expect(tx.outputs).toHaveLength(12);
 
@@ -143,6 +144,7 @@ describe('Template execution', () => {
     await waitForTxReceived(hWallet, tx.hash, null);
 
     expect(tx.outputs).toHaveLength(0);
+    expect(tx.inputs).toHaveLength(8);
   });
 
   it('should be able to mint new tokens', async () => {
@@ -213,8 +215,12 @@ describe('Template execution', () => {
     tx.prepareToSend();
     const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
     await sendTx.runFromMining();
-    await waitForTxReceived(hWallet, tx.hash, null);
     expect(tx.hash).toBeDefined();
+    if (tx.hash === null) {
+      throw new Error('tx hash should be defined');
+    }
+    await waitForTxReceived(hWallet, tx.hash, undefined);
+    expect(tx.outputs).toHaveLength(3);
   });
 
   it('should be able to complete a transaction change using the complete instruction', async () => {
@@ -238,8 +244,12 @@ describe('Template execution', () => {
     tx.prepareToSend();
     const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
     await sendTx.runFromMining();
-    await waitForTxReceived(hWallet, tx.hash, null);
     expect(tx.hash).toBeDefined();
+    if (tx.hash === null) {
+      throw new Error('tx hash should be defined');
+    }
+    await waitForTxReceived(hWallet, tx.hash, undefined);
+    expect(tx.outputs).toHaveLength(4);
   });
 
   it('should be able to add change with the change instruction', async () => {
@@ -258,8 +268,12 @@ describe('Template execution', () => {
     tx.prepareToSend();
     const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
     await sendTx.runFromMining();
-    await waitForTxReceived(hWallet, tx.hash, null);
     expect(tx.hash).toBeDefined();
+    if (tx.hash === null) {
+      throw new Error('tx hash should be defined');
+    }
+    await waitForTxReceived(hWallet, tx.hash, undefined);
+    expect(tx.outputs).toHaveLength(3);
   });
 
   it('should be able to send tokens and authorities without using template variables', async () => {
