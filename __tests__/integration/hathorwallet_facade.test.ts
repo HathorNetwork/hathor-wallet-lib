@@ -95,14 +95,14 @@ describe('template methods', () => {
     // Outputs will have 100 minted tokens and 9 HTR as change
     expect(tx.outputs).toEqual(
       expect.arrayContaining([
-        {
+        expect.objectContaining({
           value: 100n,
           tokenData: 1,
-        },
-        {
+        }),
+        expect.objectContaining({
           value: 9n,
           tokenData: 0,
-        },
+        }),
       ])
     );
   });
