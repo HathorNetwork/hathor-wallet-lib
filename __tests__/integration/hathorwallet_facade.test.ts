@@ -93,16 +93,18 @@ describe('template methods', () => {
     // Transaction is mined and pushed
     expect(tx.hash).not.toBeNull();
     // Outputs will have 100 minted tokens and 9 HTR as change
-    expect(tx.outputs).toEqual(expect.arrayContaining([
-      {
-        value: 100n,
-        tokenData: 1,
-      },
-      {
-        value: 9n,
-        tokenData: 0,
-      },
-    ]));
+    expect(tx.outputs).toEqual(
+      expect.arrayContaining([
+        {
+          value: 100n,
+          tokenData: 1,
+        },
+        {
+          value: 9n,
+          tokenData: 0,
+        },
+      ])
+    );
   });
 });
 
