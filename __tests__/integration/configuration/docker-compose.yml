@@ -15,7 +15,7 @@ services:
       "--wallet-index",
       "--allow-mining-without-peers",
       "--unsafe-mode", "nano-testnet-alpha",
-      "--data", "./tmp"
+      "--data", "./tmp",
       "--nc-history-index",
     ]
     environment:
