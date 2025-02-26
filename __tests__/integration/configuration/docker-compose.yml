@@ -30,7 +30,7 @@ services:
     networks:
       - hathor-privnet
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/v1a/status')"]
+      test: ["CMD", "python", "-c", "import urllib.request; import json; r = urllib.request.urlopen('http://localhost:8080/v1a/status'); body = json.loads(r.read()); assert body['server']['state'] == 'READY'"]
       interval: 5s
       timeout: 10s
       retries: 10
