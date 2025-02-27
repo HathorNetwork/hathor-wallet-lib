@@ -50,7 +50,7 @@ import helpers from './helpers';
 import { getAddressType, getAddressFromPubkey } from './address';
 import NanoContract from '../nano_contracts/nano_contract';
 import txApi from '../api/txApi';
-import { TransactionSchema, transactionApiSchema } from '../api/schemas/txApi';
+import { FullNodeTxApiResponse, transactionApiSchema } from '../api/schemas/txApi';
 import tokenUtils from './tokens';
 
 const transaction = {
@@ -604,7 +604,7 @@ const transaction = {
         // Get from API
         spentOut = await new Promise((resolve, reject) => {
           txApi
-            .getTransaction(input.hash, (response: TransactionSchema) => {
+            .getTransaction(input.hash, (response: FullNodeTxApiResponse) => {
               if (!response.success) {
                 return reject(new Error(response.message ?? ''));
               }
