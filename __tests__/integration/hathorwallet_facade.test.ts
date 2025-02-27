@@ -34,10 +34,79 @@ import Network from '../../src/models/network';
 import { WalletType } from '../../src/types';
 import { parseScriptData } from '../../src/utils/scripts';
 import { MemoryStore, Storage } from '../../src/storage';
+import { TransactionTemplateBuilder } from '../../src/template/transaction';
 
 const fakeTokenUid = '008a19f84f2ae284f19bf3d03386c878ddd15b8b0b604a3a3539aa9d714686e1';
 const sampleNftData =
   'ipfs://bafybeiccfclkdtucu6y4yc5cpr6y3yuinr67svmii46v5cfcrkp47ihehy/albums/QXBvbGxvIDEwIE1hZ2F6aW5lIDI3L04=/21716695748_7390815218_o.jpg';
+
+describe('template methods', () => {
+  afterEach(async () => {
+    await stopAllWallets();
+    await GenesisWalletHelper.clearListeners();
+  });
+
+  it('should build transactions from the template transaction', async () => {
+    const hWallet = await generateWalletHelper();
+    const address = await hWallet.getAddressAtIndex(1);
+
+    await GenesisWalletHelper.injectFunds(hWallet, address, 10n);
+
+    const template = new TransactionTemplateBuilder()
+      .addConfigAction({ tokenName: 'Tmpl Token', tokenSymbol: 'TT' })
+      .addSetVarAction({ name: 'addr', call: { method: 'get_wallet_address' } })
+      .addUtxoSelect({ fill: 1 })
+      .addTokenOutput({ address: '{addr}', amount: 100, useCreatedToken: true })
+      .build();
+
+    const tx = await hWallet.buildTxTemplate(template, { signTx: true, pinCode: DEFAULT_PIN_CODE });
+    expect(tx.version).toEqual(2); // Create token transaction
+    expect(tx.inputs).toHaveLength(1);
+    expect(tx.inputs[0].data).not.toBeFalsy(); // Tx is signed
+    // Transaction is not mined yet
+    expect(tx.hash).toBeNull();
+    expect(tx.nonce).toEqual(0);
+
+    // Send transaction
+    const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
+    await sendTx.runFromMining();
+    expect(tx.nonce).toBeGreaterThan(0);
+  });
+
+  it('should send transactions from the template transaction', async () => {
+    const hWallet = await generateWalletHelper();
+    const address = await hWallet.getAddressAtIndex(1);
+
+    await GenesisWalletHelper.injectFunds(hWallet, address, 10n);
+
+    const template = new TransactionTemplateBuilder()
+      .addConfigAction({ tokenName: 'Tmpl Token', tokenSymbol: 'TT' })
+      .addSetVarAction({ name: 'addr', call: { method: 'get_wallet_address' } })
+      .addUtxoSelect({ fill: 1 })
+      .addTokenOutput({ address: '{addr}', amount: 100, useCreatedToken: true })
+      .build();
+
+    const tx = await hWallet.runTxTemplate(template, DEFAULT_PIN_CODE);
+    expect(tx.version).toEqual(2); // Create token transaction
+    expect(tx.inputs).toHaveLength(1);
+    expect(tx.inputs[0].data).not.toBeFalsy(); // Tx is signed
+    // Transaction is mined and pushed
+    expect(tx.hash).not.toBeNull();
+    // Outputs will have 100 minted tokens and 9 HTR as change
+    expect(tx.outputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          value: 100n,
+          tokenData: 1,
+        }),
+        expect.objectContaining({
+          value: 9n,
+          tokenData: 0,
+        }),
+      ])
+    );
+  });
+});
 
 describe('getWalletInputInfo', () => {
   afterEach(async () => {
@@ -143,7 +212,7 @@ describe('getTxById', () => {
       },
     });
     await expect(hWallet.getTxById(tx1.hash)).rejects.toThrow(
-      'Token undefined not found in tokens list'
+      'Invalid token_data undefined, token not found in tokens list'
     );
     jest.spyOn(hWallet, 'getFullTxById').mockRestore();
 
