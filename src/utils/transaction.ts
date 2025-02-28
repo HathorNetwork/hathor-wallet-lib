@@ -642,7 +642,10 @@ const transaction = {
       });
     }
 
-    const tokensArray = tx.tokens.map(tk => ({ uid: tk }));
+    const tokensArray =
+      tx.version === CREATE_TOKEN_TX_VERSION
+        ? [{ uid: tx.hash }]
+        : tx.tokens.map(tk => ({ uid: tk }));
     for (const output of tx.outputs) {
       const script = output.parseScript(storage.config.getNetwork());
       const out = {
