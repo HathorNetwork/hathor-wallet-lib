@@ -559,11 +559,7 @@ export async function _updateTokensData(storage: IStorage, tokens: Set<string>):
       const { name, symbol } = response;
       const tokenData = { uid, name, symbol };
 
-      const storeToken = await store.getToken(uid);
-      if (storeToken === null) {
-        // saveToken will ignore the meta and save only the token config
-        await store.saveToken(tokenData);
-      }
+      await storage.addToken(tokenData);
     }
   }
 }
