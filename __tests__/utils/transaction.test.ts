@@ -566,7 +566,7 @@ test('convertTransactionToHistoryTx', async () => {
     tx.hash = 'no-outputs-case';
     tx.inputs = [new Input('no-outputs', 0)];
     await expect(transaction.convertTransactionToHistoryTx(tx, storage)).rejects.toThrow(
-      'Index outsite of tx output array bounds'
+      'Index outside of tx output array bounds'
     );
 
     tx.hash = 'fail-case';
