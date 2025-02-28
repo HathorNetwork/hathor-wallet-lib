@@ -23,6 +23,7 @@ import {
   HistorySyncFunction,
   WalletType,
   IUtxo,
+  ITokenData,
 } from '../types';
 import walletApi from '../api/wallet';
 import helpers from './helpers';
@@ -35,8 +36,10 @@ import {
   NANO_CONTRACTS_VERSION,
   LOAD_WALLET_MAX_RETRY,
   LOAD_WALLET_RETRY_SLEEP,
+  CREATE_TOKEN_TX_VERSION,
 } from '../constants';
 import { AddressHistorySchema, GeneralTokenInfoSchema } from '../api/schemas/wallet';
+import CreateTokenTransaction from '../models/create_token_transaction';
 
 /**
  * Get history sync method for a given mode
@@ -555,8 +558,8 @@ export async function _updateTokensData(storage: IStorage, tokens: Set<string>):
 
       const { name, symbol } = response;
       const tokenData = { uid, name, symbol };
-      // saveToken will ignore the meta and save only the token config
-      await store.saveToken(tokenData);
+
+      await storage.addToken(tokenData);
     }
   }
 }
@@ -929,4 +932,29 @@ export async function processUtxoUnlock(
   await store.editAddressMeta(output.decoded.address, addressMeta);
   // Remove utxo from locked utxos so that it is not processed again
   await store.unlockUtxo(lockedUtxo);
+}
+
+/**
+ * Extracts the ITokenData from the CreateTokenTransaction instance and save
+ * the token on the storage.
+ */
+export async function addCreatedTokenFromTx(
+  tx: CreateTokenTransaction,
+  storage: IStorage
+): Promise<void> {
+  if (tx.version !== CREATE_TOKEN_TX_VERSION) {
+    return;
+  }
+
+  if (!tx.hash) {
+    throw new Error('Cannot infer UID from transaction without hash');
+  }
+
+  const tokenInfo: ITokenData = {
+    uid: tx.hash,
+    name: tx.name,
+    symbol: tx.symbol,
+  };
+
+  await storage.addToken(tokenInfo);
 }
