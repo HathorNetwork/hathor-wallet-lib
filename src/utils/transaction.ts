@@ -7,6 +7,7 @@
 
 import { z } from 'zod';
 import { crypto as cryptoBL, PrivateKey, HDPrivateKey } from 'bitcore-lib';
+import { cloneDeep } from 'lodash';
 import { Utxo } from '../wallet/types';
 import { UtxoError, ParseError } from '../errors';
 import { HistoryTransactionOutput } from '../models/types';
@@ -588,53 +589,48 @@ const transaction = {
 
     const inputs: IHistoryInput[] = [];
     const outputs: IHistoryOutput[] = [];
+    const txCache: Record<string, IHistoryTx> = {};
 
     for (const input of tx.inputs) {
-      const spentTx = await storage.getTx(input.hash);
-      let spentOut: IHistoryOutput;
+      let spentTx = await storage.getTx(input.hash);
+      if (!spentTx) {
+        // Try cache first
+        if (txCache[input.hash]) {
+          spentTx = txCache[input.hash];
+        } else {
+          // Get from API
+          spentTx = await new Promise((resolve, reject) => {
+            txApi
+              .getTransaction(input.hash, (response: FullNodeTxApiResponse) => {
+                if (!response.success) {
+                  return reject(new Error(response.message ?? ''));
+                }
 
-      if (spentTx) {
-        if (input.index >= spentTx.outputs.length) {
-          throw new Error(
-            `Index (${input.index}) outside of transaction output array bounds (${spentTx.outputs.length})`
-          );
+                if (input.index >= response.tx.outputs.length) {
+                  return reject(new Error('Index outside of tx output array bounds'));
+                }
+                return resolve(this.convertFullNodeTxToHistoryTx(response));
+              })
+              .catch(err => reject(err));
+          });
+
+          if (!spentTx) {
+            // This should not happen since any errors should be treated already.
+            // This if statement is to ensure typing since spentTx starts as IHistoryTx | null.
+            throw new Error('Could not find the spent transaction');
+          }
+          // Update cache
+          txCache[input.hash] = cloneDeep(spentTx);
         }
-        spentOut = spentTx.outputs[input.index];
-      } else {
-        // Get from API
-        spentOut = await new Promise((resolve, reject) => {
-          txApi
-            .getTransaction(input.hash, (response: FullNodeTxApiResponse) => {
-              if (!response.success) {
-                return reject(new Error(response.message ?? ''));
-              }
-
-              if (input.index >= response.tx.outputs.length) {
-                return reject(new Error('Index outsite of tx output array bounds'));
-              }
-              const spentApiOutput = response.tx.outputs[input.index];
-              const spentHistoryOutput = {
-                value: spentApiOutput.value,
-                token_data: spentApiOutput.token_data,
-                script: spentApiOutput.script,
-                spent_by: spentApiOutput.spent_by ?? null,
-                decoded: {}, // XXX: should use the hydrateIOWithToken util
-              } as IHistoryOutput;
-              if (spentApiOutput.token) {
-                spentHistoryOutput.token = spentApiOutput.token;
-              }
-              if (spentApiOutput.decoded.address) {
-                spentHistoryOutput.decoded.type = spentApiOutput.decoded.type as string;
-                spentHistoryOutput.decoded.address = spentApiOutput.decoded.address as string;
-                spentHistoryOutput.decoded.timelock = spentApiOutput.decoded.timelock as number;
-              }
-
-              return resolve(spentHistoryOutput);
-            })
-            .catch(err => reject(err));
-        });
       }
 
+      if (input.index >= spentTx.outputs.length) {
+        throw new Error(
+          `Index (${input.index}) outside of transaction output array bounds (${spentTx.outputs.length})`
+        );
+      }
+
+      const spentOut = spentTx.outputs[input.index];
       inputs.push({
         tx_id: input.hash,
         index: input.index,
@@ -646,29 +642,17 @@ const transaction = {
       });
     }
 
+    const tokensArray = tx.tokens.map(tk => ({ uid: tk }));
     for (const output of tx.outputs) {
       const script = output.parseScript(storage.config.getNetwork());
-      let token = NATIVE_TOKEN_UID;
-      if (!output.isTokenHTR()) {
-        if (tx.version === CREATE_TOKEN_TX_VERSION) {
-          token = tx.hash;
-        } else {
-          const index = output.getTokenIndex();
-          if (tx.tokens.length <= index) {
-            throw new Error('Fetching a token that is not in the token array');
-          }
-          token = tx.tokens[index];
-        }
-      }
-
-      outputs.push({
+      const out = {
         value: output.value,
         token_data: output.tokenData,
         script: output.script.toString('hex'),
         decoded: script?.toData() ?? {},
-        token,
         spent_by: null, // Cannot reconstruct this field
-      });
+      };
+      outputs.push(this.hydrateIOWithToken(out, tokensArray));
     }
 
     const histTx: IHistoryTx = {
@@ -830,10 +814,13 @@ const transaction = {
     return 'Unknown';
   },
 
+  /**
+   * From a `token_data` and the tokens array we can add the token uid to the input/output.
+   */
   hydrateIOWithToken<IO extends { token_data: number }, T extends { uid: string }>(
     io: IO,
     tokens: T[]
-  ) {
+  ): IO & { token: string } {
     const { token_data } = io;
     if (token_data === 0) {
       return {
@@ -848,7 +835,7 @@ const transaction = {
       throw new Error(`Invalid token_data ${token_data}, token not found in tokens list`);
     }
 
-    return { ...io, token: tokenUid } as IO;
+    return { ...io, token: tokenUid };
   },
 
   /**
@@ -868,14 +855,14 @@ const transaction = {
       const hydratedoutput = this.hydrateIOWithToken(o, tx.tokens);
       return hydratedoutput as IHistoryOutput;
     });
-    return {
+    const histTx: IHistoryTx = {
       tx_id: tx.hash,
       signalBits: tx.signal_bits,
       version: tx.version,
       weight: tx.weight,
       timestamp: tx.timestamp,
       is_voided: meta.voided_by.length > 0,
-      // nonce: tx.nonce,
+      nonce: Number.parseInt(tx.nonce ?? '0', 10),
       inputs,
       outputs,
       parents: tx.parents,
@@ -883,13 +870,16 @@ const transaction = {
       token_symbol: tx.token_symbol ?? undefined,
       tokens: tx.tokens.map(token => token.uid),
       height: meta.height,
-      nc_id: tx.nc_id ?? undefined,
-      nc_blueprint_id: tx.nc_blueprint_id,
-      nc_method: tx.nc_method,
-      nc_args: tx.nc_args,
-      nc_pubkey: tx.nc_pubkey,
       first_block: meta.first_block,
-    } as IHistoryTx;
+    };
+
+    if (tx.nc_id) histTx.nc_id = tx.nc_id;
+    if (tx.nc_blueprint_id) histTx.nc_blueprint_id = tx.nc_blueprint_id;
+    if (tx.nc_method) histTx.nc_method = tx.nc_method;
+    if (tx.nc_args) histTx.nc_args = tx.nc_args;
+    if (tx.nc_pubkey) histTx.nc_pubkey = tx.nc_pubkey;
+
+    return histTx;
   },
 };
 

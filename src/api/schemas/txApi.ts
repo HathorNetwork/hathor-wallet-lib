@@ -45,7 +45,6 @@ export const fullnodeTxApiInputSchema = z.object({
   tx_id: z.string(),
   index: z.number(),
   token: z.string().nullish(),
-  spent_by: z.string().nullish(),
 });
 
 export const fullnodeTxApiOutputSchema = z.object({
@@ -54,7 +53,7 @@ export const fullnodeTxApiOutputSchema = z.object({
   script: z.string(),
   decoded: decodedSchema,
   token: z.string().nullish(),
-  spent_by: z.string().nullish(),
+  spent_by: z.string().nullable().default(null),
 });
 
 export const fullnodeTxApiTokenSchema = z.object({
