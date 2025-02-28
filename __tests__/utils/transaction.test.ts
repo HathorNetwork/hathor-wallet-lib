@@ -552,7 +552,7 @@ test('convertTransactionToHistoryTx', async () => {
                 spent_by: null,
               },
             ],
-            tokens: [{uid: 'token-B', name: "Token B", symbol: "TKB"}],
+            tokens: [{ uid: 'token-B', name: 'Token B', symbol: 'TKB' }],
             inputs: [],
             nonce: '',
             timestamp: 0,
