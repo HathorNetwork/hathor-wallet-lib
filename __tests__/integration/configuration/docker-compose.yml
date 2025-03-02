@@ -6,7 +6,7 @@ services:
 
   fullnode:
     image:
-      ${HATHOR_LIB_INTEGRATION_TESTS_FULLNODE_IMAGE:-hathornetwork/hathor-core:experimental-nano-preview-20250220}
+      ${HATHOR_LIB_INTEGRATION_TESTS_FULLNODE_IMAGE:-hathornetwork/hathor-core:experimental-nano-preview-20250228}
     command: [
       "run_node",
       "--listen", "tcp:40404",
@@ -16,7 +16,7 @@ services:
       "--allow-mining-without-peers",
       "--unsafe-mode", "nano-testnet-alpha",
       "--data", "./tmp",
-      "--nc-history-index",
+      "--nc-indices",
     ]
     environment:
       HATHOR_CONFIG_YAML: privnet/conf/privnet.yml
