@@ -30,6 +30,7 @@ import Transaction from '../models/transaction';
 import { bestUtxoSelection } from '../utils/utxo';
 import { addCreatedTokenFromTx } from '../utils/storage';
 import CreateTokenTransaction from '../models/create_token_transaction';
+import HathorWallet from './wallet';
 
 export interface ISendInput {
   txId: string;
@@ -74,6 +75,8 @@ export type ISendOutput = ISendDataOutput | ISendTokenOutput;
  * 'unexpected-error': if an unexpected error happens;
  * */
 export default class SendTransaction extends EventEmitter {
+  wallet: HathorWallet;
+
   storage: IStorage | null;
 
   transaction: Transaction | null;
@@ -102,6 +105,7 @@ export default class SendTransaction extends EventEmitter {
    * @param {IStorage|null} [options.network=null] Network object
    */
   constructor({
+    wallet = null,
     storage = null,
     transaction = null,
     outputs = [],
@@ -109,6 +113,7 @@ export default class SendTransaction extends EventEmitter {
     changeAddress = null,
     pin = null,
   }: {
+    wallet?: HathorWallet | null;
     storage?: IStorage | null;
     transaction?: Transaction | null;
     inputs?: ISendInput[];
@@ -118,7 +123,12 @@ export default class SendTransaction extends EventEmitter {
   } = {}) {
     super();
 
-    this.storage = storage;
+    this.wallet = wallet;
+    if (wallet) {
+      this.storage = wallet.storage;
+    } else {
+      this.storage = storage;
+    }
     this.transaction = transaction;
     this.outputs = outputs;
     this.inputs = inputs;
@@ -424,22 +434,20 @@ export default class SendTransaction extends EventEmitter {
               throw new WalletError(ErrorMessages.TRANSACTION_IS_NULL);
             }
             this.transaction.updateHash();
-            if (this.storage) {
+            if (this.wallet && this.storage) {
               // Add transaction to storage and process storage
-              (async (storage: IStorage, transaction: Transaction) => {
+              (async (wallet: HathorWallet, storage: IStorage, transaction: Transaction) => {
                 // Get the transaction as a history object
                 const historyTx = await transactionUtils.convertTransactionToHistoryTx(
                   transaction,
                   storage
                 );
-                // Add transaction to storage
-                await storage.addTx(historyTx);
                 // Add token from a create token transaction to the storage
                 // This just returns if the transaction is not a CREATE_TOKEN_TX
                 await addCreatedTokenFromTx(transaction as CreateTokenTransaction, storage);
-                // Process new transaction
-                await storage.processNewTx(historyTx);
-              })(this.storage, this.transaction);
+                // Add new transaction to the wallet's storage.
+                await wallet.onNewTx({ history: historyTx });
+              })(this.wallet, this.storage, this.transaction);
             }
             this.emit('send-tx-success', this.transaction);
             resolve(this.transaction);
