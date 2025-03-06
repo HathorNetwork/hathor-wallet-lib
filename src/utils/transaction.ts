@@ -685,7 +685,7 @@ const transaction = {
       histTx.nc_method = (tx as NanoContract).method;
       histTx.nc_args = (tx as NanoContract).args.map(a => a.toString('hex')).join('');
       histTx.nc_pubkey = (tx as NanoContract).pubkey.toString('hex');
-      // Cannot fetch histTx.the nc_blueprint_id with the current data
+      // Cannot fetch histTx.nc_blueprint_id with the current data
     }
 
     return histTx;
