@@ -95,6 +95,7 @@ export default class SendTransaction extends EventEmitter {
 
   /**
    *
+   * @param {HathorWallet} wallet Wallet instance
    * @param {IStorage} storage Storage object
    * @param {Object} [options={}] Options to initialize the facade
    * @param {Transaction|null} [options.transaction=null] Full tx data
