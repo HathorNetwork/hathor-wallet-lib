@@ -108,7 +108,6 @@ class OnChainBlueprint extends Transaction {
   toBytes(): Buffer {
     const arr: Buffer[] = [];
     // Serialize first the funds part
-    //
     this.serializeFundsFields(arr, true);
 
     // Graph fields
