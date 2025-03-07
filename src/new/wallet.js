@@ -50,6 +50,7 @@ import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../utils/address';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction } from '../nano_contracts/utils';
+import OnChainBlueprint, { Code, CodeKind } from '../nano_contracts/on_chain_blueprint';
 import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
 import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/transaction';
@@ -3128,6 +3129,63 @@ class HathorWallet extends EventEmitter {
       pinCode,
     });
     return this.handleSendPreparedTransaction(transaction);
+  }
+
+  /**
+   * @typedef {Object} CreateOnChainBlueprintTxOptions
+   * @property {string?} [pinCode] PIN to decrypt the private key.
+   */
+
+  /**
+   * Create and send an on chain blueprint transaction
+   *
+   * @param {string} code Blueprint code in utf-8
+   * @param {string} address Address that will be used to sign the on chain blueprint transaction
+   * @param {CreateOnChainBlueprintTxOptions} [options]
+   *
+   * @returns {Promise<OnChainBlueprint>}
+   */
+  async createAndSendOnChainBlueprintTransaction(code, address, options = {}) {
+    const sendTransaction = await this.createOnChainBlueprintTransaction(code, address, options);
+    return sendTransaction.runFromMining();
+  }
+
+  /**
+   * Create an on chain blueprint transaction and return the SendTransaction object
+   *
+   * @param {string} code Blueprint code in utf-8
+   * @param {string} address Address that will be used to sign the on chain blueprint transaction
+   * @param {CreateOnChainBlueprintTxOptions} [options]
+   *
+   * @returns {Promise<SendTransaction>}
+   */
+  async createOnChainBlueprintTransaction(code, address, options) {
+    if (await this.storage.isReadonly()) {
+      throw new WalletFromXPubGuard('createOnChainBlueprintTransaction');
+    }
+    const newOptions = { pinCode: null, ...options };
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
+    }
+
+    // Get caller pubkey
+    const addressInfo = await this.storage.getAddressInfo(address);
+    if (!addressInfo) {
+      throw new NanoContractTransactionError(
+        `Address used to sign the transaction (${address}) does not belong to the wallet.`
+      );
+    }
+    const pubkeyStr = await this.storage.getAddressPubkey(addressInfo.bip32AddressIndex);
+    const pubkey = Buffer.from(pubkeyStr, 'hex');
+
+    // Create code object from code data
+    const codeContent = Buffer.from(code, 'utf8');
+    const codeObj = new Code(CodeKind.PYTHON_GZIP, codeContent);
+
+    const tx = new OnChainBlueprint(codeObj, pubkey);
+
+    return prepareNanoSendTransaction(tx, pin, this.storage);
   }
 }
 

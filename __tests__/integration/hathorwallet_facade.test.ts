@@ -645,6 +645,7 @@ describe('start', () => {
       WalletFromXPubGuard
     );
     await expect(hWallet.getPrivateKeyFromAddress()).rejects.toThrow(WalletFromXPubGuard);
+    await expect(hWallet.createOnChainBlueprintTransaction()).rejects.toThrow(WalletFromXPubGuard);
 
     // Validating that the address generation works as intended
     for (let i = 0; i < 20; ++i) {
