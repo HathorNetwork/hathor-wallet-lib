@@ -41,6 +41,14 @@ export class Code {
   }
 }
 
+/**
+ * The OnChainBlueprint class inherits the Transaction class, so it has all its attributes.
+ *
+ * We currently don't have support for creating an ocb object with inputs/outputs, so we receive as
+ * parameters in the constructor only the data related to the ocb class itself.
+ *
+ * The code and the public key that will be used as caller to sign the transaction (just like the nano contract class).
+ */
 class OnChainBlueprint extends Transaction {
   // Code object with content
   code: Code;
