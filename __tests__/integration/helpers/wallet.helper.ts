@@ -234,7 +234,7 @@ export async function stopAllWallets() {
  *
  * @return {Promise<CreateNewTokenResponse>}
  */
-export async function createTokenHelper(hWallet, name, symbol, amount, options) {
+export async function createTokenHelper(hWallet, name, symbol, amount, options = {}) {
   const newTokenResponse = await hWallet.createNewToken(name, symbol, amount, options);
   const tokenUid = newTokenResponse.hash;
   await waitForTxReceived(hWallet, tokenUid);
@@ -271,10 +271,9 @@ export function waitForWalletReady(hWallet) {
  * Waits for the wallet to receive the transaction from a websocket message
  * and process the history
  *
- * @param {HathorWallet} hWallet
- * @param {string} txId
- * @param {number} [timeout] Timeout in milisseconds. Default value defined on test-constants.
- * @returns {Promise<IHistoryTx>}
+ * @param hWallet
+ * @param txId
+ * @param [timeout] Timeout in milisseconds. Default value defined on test-constants.
  */
 export async function waitForTxReceived(
   hWallet: HathorWallet,
@@ -289,7 +288,7 @@ export async function waitForTxReceived(
     timeoutReached = true;
   }, timeoutPeriod);
 
-  let storageTx = await hWallet.getTx(txId);
+  let storageTx = (await hWallet.getTx(txId)) as IHistoryTx;
 
   // We consider that the tx was received after it's in the storage
   // and the history processing is finished
@@ -300,7 +299,7 @@ export async function waitForTxReceived(
 
     // Tx not found, wait 1s before trying again
     await delay(1000);
-    storageTx = await hWallet.getTx(txId);
+    storageTx = (await hWallet.getTx(txId)) as IHistoryTx;
   }
 
   // Clean timeout handler

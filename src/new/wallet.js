@@ -1470,7 +1470,7 @@ class HathorWallet extends EventEmitter {
     }
     const { inputs, changeAddress } = newOptions;
     return new SendTransaction({
-      storage: this.storage,
+      wallet: this,
       outputs,
       inputs,
       changeAddress,
@@ -1645,7 +1645,7 @@ class HathorWallet extends EventEmitter {
    * @deprecated
    */
   async handleSendPreparedTransaction(transaction) {
-    const sendTransaction = new SendTransaction({ storage: this.storage, transaction });
+    const sendTransaction = new SendTransaction({ wallet: this, transaction });
     return sendTransaction.runFromMining();
   }
 
@@ -1761,7 +1761,7 @@ class HathorWallet extends EventEmitter {
    * */
   async createNewTokenSendTransaction(name, symbol, amount, options = {}) {
     const transaction = await this.prepareCreateNewToken(name, symbol, amount, options);
-    return new SendTransaction({ storage: this.storage, transaction });
+    return new SendTransaction({ wallet: this, transaction });
   }
 
   /**
@@ -1953,7 +1953,7 @@ class HathorWallet extends EventEmitter {
    * */
   async mintTokensSendTransaction(tokenUid, amount, options = {}) {
     const transaction = await this.prepareMintTokensData(tokenUid, amount, options);
-    return new SendTransaction({ storage: this.storage, transaction });
+    return new SendTransaction({ wallet: this, transaction });
   }
 
   /**
@@ -2073,7 +2073,7 @@ class HathorWallet extends EventEmitter {
    * */
   async meltTokensSendTransaction(tokenUid, amount, options = {}) {
     const transaction = await this.prepareMeltTokensData(tokenUid, amount, options);
-    return new SendTransaction({ storage: this.storage, transaction });
+    return new SendTransaction({ wallet: this, transaction });
   }
 
   /**
@@ -2174,7 +2174,7 @@ class HathorWallet extends EventEmitter {
       destinationAddress,
       options
     );
-    return new SendTransaction({ storage: this.storage, transaction });
+    return new SendTransaction({ wallet: this, transaction });
   }
 
   /**
@@ -2278,7 +2278,7 @@ class HathorWallet extends EventEmitter {
    * */
   async destroyAuthoritySendTransaction(tokenUid, type, count, options = {}) {
     const transaction = await this.prepareDestroyAuthorityData(tokenUid, type, count, options);
-    return new SendTransaction({ storage: this.storage, transaction });
+    return new SendTransaction({ wallet: this, transaction });
   }
 
   /**
@@ -2532,7 +2532,7 @@ class HathorWallet extends EventEmitter {
     newOptions.data = [data];
     newOptions.isCreateNFT = true;
     const transaction = await this.prepareCreateNewToken(name, symbol, amount, newOptions);
-    return new SendTransaction({ storage: this.storage, transaction });
+    return new SendTransaction({ wallet: this, transaction });
   }
 
   /**

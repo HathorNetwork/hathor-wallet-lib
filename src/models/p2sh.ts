@@ -10,6 +10,7 @@ import { OP_GREATERTHAN_TIMESTAMP, OP_HASH160, OP_EQUAL } from '../opcodes';
 import helpers from '../utils/helpers';
 import { intToBytes } from '../utils/buffer';
 import Address from './address';
+import { IHistoryOutputDecoded } from '../types';
 
 type optionsType = {
   timelock?: number | null | undefined;
@@ -47,6 +48,17 @@ class P2SH {
   // eslint-disable-next-line class-methods-use-this -- This method returns a hardcoded constant
   getType(): 'p2sh' {
     return 'p2sh';
+  }
+
+  /**
+   * Build the original decoded script
+   */
+  toData(): IHistoryOutputDecoded {
+    return {
+      type: this.getType().toUpperCase(),
+      address: this.address.base58,
+      timelock: this.timelock,
+    };
   }
 
   /**

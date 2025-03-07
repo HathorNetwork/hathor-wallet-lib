@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 import { crypto as cryptoBL, PrivateKey, HDPrivateKey } from 'bitcore-lib';
-import { transactionApiSchema } from '../api/schemas/txApi';
+import { cloneDeep } from 'lodash';
 import { Utxo } from '../wallet/types';
 import { UtxoError, ParseError } from '../errors';
 import { HistoryTransactionOutput } from '../models/types';
@@ -50,6 +50,8 @@ import ScriptData from '../models/script_data';
 import helpers from './helpers';
 import { getAddressType, getAddressFromPubkey } from './address';
 import NanoContract from '../nano_contracts/nano_contract';
+import txApi from '../api/txApi';
+import { FullNodeTxApiResponse, transactionApiSchema } from '../api/schemas/txApi';
 import tokenUtils from './tokens';
 
 const transaction = {
@@ -573,6 +575,123 @@ const transaction = {
   },
 
   /**
+   * Convert a Transaction instance to the history object.
+   * May call the fullnode transaction api to get information on the tx spent
+   * by the inputs.
+   */
+  async convertTransactionToHistoryTx(
+    tx: Transaction | CreateTokenTransaction | NanoContract,
+    storage: IStorage
+  ): Promise<IHistoryTx> {
+    if (!tx.hash) {
+      throw new Error('To be a history tx a calculated hash is required');
+    }
+
+    const inputs: IHistoryInput[] = [];
+    const outputs: IHistoryOutput[] = [];
+    const txCache: Record<string, IHistoryTx> = {};
+
+    for (const input of tx.inputs) {
+      let spentTx = await storage.getTx(input.hash);
+      if (!spentTx) {
+        // Try cache first
+        if (txCache[input.hash]) {
+          spentTx = txCache[input.hash];
+        } else {
+          // Get from API
+          spentTx = await new Promise((resolve, reject) => {
+            txApi
+              .getTransaction(input.hash, (response: FullNodeTxApiResponse) => {
+                if (!response.success) {
+                  return reject(new Error(response.message ?? ''));
+                }
+
+                if (input.index >= response.tx.outputs.length) {
+                  return reject(new Error('Index outside of tx output array bounds'));
+                }
+                return resolve(this.convertFullNodeTxToHistoryTx(response));
+              })
+              .catch(err => reject(err));
+          });
+
+          if (!spentTx) {
+            // This should not happen since any errors should be treated already.
+            // This if statement is to ensure typing since spentTx starts as IHistoryTx | null.
+            throw new Error('Could not find the spent transaction');
+          }
+          // Update cache
+          txCache[input.hash] = cloneDeep(spentTx);
+        }
+      }
+
+      if (input.index >= spentTx.outputs.length) {
+        throw new Error(
+          `Index (${input.index}) outside of transaction output array bounds (${spentTx.outputs.length})`
+        );
+      }
+
+      const spentOut = spentTx.outputs[input.index];
+      inputs.push({
+        tx_id: input.hash,
+        index: input.index,
+        script: spentOut.script,
+        decoded: spentOut.decoded,
+        token_data: spentOut.token_data,
+        token: spentOut.token,
+        value: spentOut.value,
+      });
+    }
+
+    const tokensArray =
+      tx.version === CREATE_TOKEN_TX_VERSION
+        ? [{ uid: tx.hash }]
+        : tx.tokens.map(tk => ({ uid: tk }));
+    for (const output of tx.outputs) {
+      const script = output.parseScript(storage.config.getNetwork());
+      const out = {
+        value: output.value,
+        token_data: output.tokenData,
+        script: output.script.toString('hex'),
+        decoded: script?.toData() ?? {},
+        spent_by: null, // Cannot reconstruct this field
+      };
+      outputs.push(this.hydrateIOWithToken(out, tokensArray));
+    }
+
+    const histTx: IHistoryTx = {
+      tx_id: tx.hash,
+      signalBits: tx.signalBits,
+      version: tx.version,
+      weight: tx.weight,
+      timestamp: tx.timestamp ?? 0,
+      is_voided: false,
+      nonce: tx.nonce,
+      inputs,
+      outputs,
+      parents: tx.parents,
+      tokens: tx.tokens,
+      // The missing fields below are metadata that cannot be inferred from the
+      // Transaction instance.
+      // height, first_block
+    };
+
+    if (tx.version === CREATE_TOKEN_TX_VERSION) {
+      histTx.token_name = (tx as CreateTokenTransaction).name;
+      histTx.token_symbol = (tx as CreateTokenTransaction).symbol;
+    }
+
+    if (tx.version === NANO_CONTRACTS_VERSION) {
+      histTx.nc_id = (tx as NanoContract).id;
+      histTx.nc_method = (tx as NanoContract).method;
+      histTx.nc_args = (tx as NanoContract).args.map(a => a.toString('hex')).join('');
+      histTx.nc_pubkey = (tx as NanoContract).pubkey.toString('hex');
+      // Cannot fetch histTx.nc_blueprint_id with the current data
+    }
+
+    return histTx;
+  },
+
+  /**
    * Prepare a Transaction instance from the transaction data and storage
    *
    * @param tx tx data to be prepared
@@ -697,10 +816,13 @@ const transaction = {
     return 'Unknown';
   },
 
+  /**
+   * From a `token_data` and the tokens array we can add the token uid to the input/output.
+   */
   hydrateIOWithToken<IO extends { token_data: number }, T extends { uid: string }>(
     io: IO,
     tokens: T[]
-  ) {
+  ): IO & { token: string } {
     const { token_data } = io;
     if (token_data === 0) {
       return {
@@ -715,7 +837,7 @@ const transaction = {
       throw new Error(`Invalid token_data ${token_data}, token not found in tokens list`);
     }
 
-    return { ...io, token: tokenUid } as IO;
+    return { ...io, token: tokenUid };
   },
 
   /**
@@ -735,14 +857,14 @@ const transaction = {
       const hydratedoutput = this.hydrateIOWithToken(o, tx.tokens);
       return hydratedoutput as IHistoryOutput;
     });
-    return {
+    const histTx: IHistoryTx = {
       tx_id: tx.hash,
       signalBits: tx.signal_bits,
       version: tx.version,
       weight: tx.weight,
       timestamp: tx.timestamp,
       is_voided: meta.voided_by.length > 0,
-      // nonce: tx.nonce,
+      nonce: Number.parseInt(tx.nonce ?? '0', 10),
       inputs,
       outputs,
       parents: tx.parents,
@@ -750,13 +872,16 @@ const transaction = {
       token_symbol: tx.token_symbol ?? undefined,
       tokens: tx.tokens.map(token => token.uid),
       height: meta.height,
-      nc_id: tx.nc_id ?? undefined,
-      nc_blueprint_id: tx.nc_blueprint_id,
-      nc_method: tx.nc_method,
-      nc_args: tx.nc_args,
-      nc_pubkey: tx.nc_pubkey,
       first_block: meta.first_block,
-    } as IHistoryTx;
+    };
+
+    if (tx.nc_id) histTx.nc_id = tx.nc_id;
+    if (tx.nc_blueprint_id) histTx.nc_blueprint_id = tx.nc_blueprint_id;
+    if (tx.nc_method) histTx.nc_method = tx.nc_method;
+    if (tx.nc_args) histTx.nc_args = tx.nc_args;
+    if (tx.nc_pubkey) histTx.nc_pubkey = tx.nc_pubkey;
+
+    return histTx;
   },
 };
 
