@@ -21,7 +21,7 @@ import {
   isNanoContractCreateTx,
 } from '../../../src/nano_contracts/utils';
 import Serializer from '../../../src/nano_contracts/serializer';
-import { NanoContractTransactionError, NanoRequest404Error } from '../../../src/errors';
+import { NanoContractTransactionError, NanoRequest404Error, PinRequiredError } from '../../../src/errors';
 import { OutputType } from '../../../src/wallet/types';
 import NanoContractTransactionParser from '../../../src/nano_contracts/parser';
 
@@ -621,5 +621,28 @@ describe('full cycle of bet nano contract', () => {
         ],
       })
     ).rejects.toThrow(NanoContractTransactionError);
+
+    // Test ocb errors
+    const seed = WALLET_CONSTANTS.ocb.seed;
+    const ocbWallet = await generateWalletHelper({ seed });
+
+    const code = fs.readFileSync('./__tests__/integration/configuration/bet.py', 'utf8');
+    // Use an address that is not from the ocbWallet
+    await expect(
+      ocbWallet.createAndSendOnChainBlueprintTransaction(code, address0)
+    ).rejects.toThrow(NanoContractTransactionError);
+
+    // If we remove the pin from the wallet object, it should throw error
+    const oldPin = ocbWallet.pinCode;
+    ocbWallet.pinCode = '';
+    await expect(
+      ocbWallet.createAndSendOnChainBlueprintTransaction(code, address0)
+    ).rejects.toThrow(PinRequiredError);
+
+    // Add the pin back in case there are more tests here
+    ocbWallet.pinCode = oldPin;
+
+
+
   });
 });
