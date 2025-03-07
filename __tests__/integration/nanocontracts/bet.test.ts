@@ -1,6 +1,7 @@
 import fs from 'fs';
 import { isEmpty } from 'lodash';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
+import { WALLET_CONSTANTS } from '../configuration/test-constants';
 import {
   generateMultisigWalletHelper,
   generateWalletHelper,
@@ -495,8 +496,7 @@ describe('full cycle of bet nano contract', () => {
   it('bet deposit on chain blueprint', async () => {
     // For now the on chain blueprints needs a signature from a specific address
     // so we must always generate the same seed
-    const seed =
-      'bicycle dice amused car lock outdoor auto during nest accident soon sauce slot enact hand they member source job forward vibrant lab catch coach';
+    const seed = WALLET_CONSTANTS.ocb.seed;
     const ocbWallet = await generateWalletHelper({ seed });
     const address0 = await ocbWallet.getAddressAtIndex(0);
     await GenesisWalletHelper.injectFunds(ocbWallet, address0, 1000n);
