@@ -27,6 +27,7 @@ export class Code {
   }
 
   serialize(): Buffer {
+    // Code serialization format: [kind:variable bytes][null byte][data:variable bytes]
     const arr: Buffer[] = [];
     if (this.kind !== CodeKind.PYTHON_GZIP) {
       throw new Error('Invalid code kind value');
