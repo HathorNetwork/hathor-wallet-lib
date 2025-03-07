@@ -22,7 +22,11 @@ import {
   isNanoContractCreateTx,
 } from '../../../src/nano_contracts/utils';
 import Serializer from '../../../src/nano_contracts/serializer';
-import { NanoContractTransactionError, NanoRequest404Error, PinRequiredError } from '../../../src/errors';
+import {
+  NanoContractTransactionError,
+  NanoRequest404Error,
+  PinRequiredError,
+} from '../../../src/errors';
 import { OutputType } from '../../../src/wallet/types';
 import NanoContractTransactionParser from '../../../src/nano_contracts/parser';
 
@@ -496,7 +500,7 @@ describe('full cycle of bet nano contract', () => {
   it('bet deposit on chain blueprint', async () => {
     // For now the on chain blueprints needs a signature from a specific address
     // so we must always generate the same seed
-    const seed = WALLET_CONSTANTS.ocb.seed;
+    const { seed } = WALLET_CONSTANTS.ocb;
     const ocbWallet = await generateWalletHelper({ seed });
     const address0 = await ocbWallet.getAddressAtIndex(0);
     await GenesisWalletHelper.injectFunds(ocbWallet, address0, 1000n);
@@ -623,7 +627,7 @@ describe('full cycle of bet nano contract', () => {
     ).rejects.toThrow(NanoContractTransactionError);
 
     // Test ocb errors
-    const seed = WALLET_CONSTANTS.ocb.seed;
+    const { seed } = WALLET_CONSTANTS.ocb;
     const ocbWallet = await generateWalletHelper({ seed });
 
     const code = fs.readFileSync('./__tests__/integration/configuration/bet.py', 'utf8');
@@ -641,8 +645,5 @@ describe('full cycle of bet nano contract', () => {
 
     // Add the pin back in case there are more tests here
     ocbWallet.pinCode = oldPin;
-
-
-
   });
 });
