@@ -37,6 +37,7 @@ import {
   LOAD_WALLET_MAX_RETRY,
   LOAD_WALLET_RETRY_SLEEP,
   CREATE_TOKEN_TX_VERSION,
+  ON_CHAIN_BLUEPRINTS_VERSION,
 } from '../constants';
 import { AddressHistorySchema, GeneralTokenInfoSchema } from '../api/schemas/wallet';
 import CreateTokenTransaction from '../models/create_token_transaction';
@@ -794,9 +795,9 @@ export async function processNewTx(
     await store.editAddressMeta(input.decoded.address, addressMeta);
   }
 
-  // Nano contract transactions have the address used to sign the tx
+  // Nano contract and ocb transactions have the address used to sign the tx
   // and we must consider this to the address metadata
-  if (tx.version === NANO_CONTRACTS_VERSION) {
+  if (tx.version === NANO_CONTRACTS_VERSION || tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
     const caller = getAddressFromPubkey(tx.nc_pubkey!, storage.config.getNetwork());
     const callerAddressInfo = await store.getAddress(caller.base58);
     // if address is not in wallet, ignore
