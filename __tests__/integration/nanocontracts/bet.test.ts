@@ -502,13 +502,25 @@ describe('full cycle of bet nano contract', () => {
     // so we must always generate the same seed
     const { seed } = WALLET_CONSTANTS.ocb;
     const ocbWallet = await generateWalletHelper({ seed });
+    // We use the address0 to inject funds because they are needed for the nano tests execution
     const address0 = await ocbWallet.getAddressAtIndex(0);
+    // We use the address10 as caller of the ocb tx
+    // so we don't mess with the number of transactions for address0 tests
+    const address10 = await ocbWallet.getAddressAtIndex(10);
+
+    // Add funds and validate address meta
     await GenesisWalletHelper.injectFunds(ocbWallet, address0, 1000n);
+    const address0Meta = await ocbWallet.storage.store.getAddressMeta(address0);
+    expect(address0Meta.numTransactions).toBe(1);
+
     // Use the bet blueprint code
     const code = fs.readFileSync('./__tests__/integration/configuration/bet.py', 'utf8');
-    const tx = await ocbWallet.createAndSendOnChainBlueprintTransaction(code, address0);
+    const tx = await ocbWallet.createAndSendOnChainBlueprintTransaction(code, address10);
     // Wait for the tx to be confirmed, so we can use the on chain blueprint
     await waitTxConfirmed(ocbWallet, tx.hash);
+    // We must have one transaction in the address10 now
+    const newAddress10Meta = await ocbWallet.storage.store.getAddressMeta(address10);
+    expect(newAddress10Meta.numTransactions).toBe(1);
     // Execute the bet blueprint tests
     await executeTests(ocbWallet, tx.hash);
   });
