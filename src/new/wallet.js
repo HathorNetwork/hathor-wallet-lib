@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { get } from 'lodash';
+import { cloneDeep, get } from 'lodash';
 import bitcore, { HDPrivateKey } from 'bitcore-lib';
 import EventEmitter from 'events';
 import { NATIVE_TOKEN_UID, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
@@ -43,14 +43,17 @@ import {
   checkScanningPolicy,
   getHistorySyncMethod,
   getSupportedSyncMode,
+  processMetadataChanged,
 } from '../utils/storage';
 import txApi from '../api/txApi';
 import { MemoryStore, Storage } from '../storage';
 import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../utils/address';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction } from '../nano_contracts/utils';
+import OnChainBlueprint, { Code, CodeKind } from '../nano_contracts/on_chain_blueprint';
 import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
+import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/transaction';
 
 /**
  * @typedef {import('../models/create_token_transaction').default} CreateTokenTransaction
@@ -234,6 +237,8 @@ class HathorWallet extends EventEmitter {
     this.isSignedExternally = this.storage.hasTxSignatureMethod();
 
     this.historySyncMode = HistorySyncMode.POLLING_HTTP_API;
+
+    this.txTemplateInterpreter = new WalletTxTemplateInterpreter(this);
   }
 
   /**
@@ -682,10 +687,10 @@ class HathorWallet extends EventEmitter {
    *
    * @return {Promise<{
    *   token: {id:string, name:string, symbol:string},
-   *   balance: {unlocked:number, locked:number},
+   *   balance: {unlocked:bigint, locked:bigint},
    *   transactions:number,
    *   lockExpires:number|null,
-   *   tokenAuthorities: {unlocked: {mint:number,melt:number}, locked: {mint:number,melt:number}}
+   *   tokenAuthorities: {unlocked: {mint:bigint,melt:bigint}, locked: {mint:bigint,melt:bigint}}
    * }[]>} Array of balance for each token
    *
    * @memberof HathorWallet
@@ -698,7 +703,9 @@ class HathorWallet extends EventEmitter {
       throw new WalletError('Not implemented.');
     }
     const uid = token || this.token.uid;
-    let tokenData = await this.storage.getToken(uid);
+    // Using clone deep so the balance returned will not be updated in case
+    // we change the storage
+    let tokenData = cloneDeep(await this.storage.getToken(uid));
     if (tokenData === null) {
       // We don't have the token on storage, so we need to return an empty default response
       tokenData = {
@@ -839,10 +846,10 @@ class HathorWallet extends EventEmitter {
 
   /**
    * @typedef AddressInfo
-   * @property {number} total_amount_received Sum of the amounts received
-   * @property {number} total_amount_sent Sum of the amounts sent
-   * @property {number} total_amount_available Amount available to transfer
-   * @property {number} total_amount_locked Amount locked and thus no available to transfer
+   * @property {bigint} total_amount_received Sum of the amounts received
+   * @property {bigint} total_amount_sent Sum of the amounts sent
+   * @property {bigint} total_amount_available Amount available to transfer
+   * @property {bigint} total_amount_locked Amount locked and thus no available to transfer
    * @property {number} token Token used to calculate the amounts received, sent, available and locked
    * @property {number} index Derivation path for the given address
    */
@@ -927,16 +934,16 @@ class HathorWallet extends EventEmitter {
    * @property {string} [token] - Token to filter the utxos. If not sent, we select only HTR utxos.
    * @property {number} [authorities] - Authorities to filter the utxos. If not sent, we select only non authority utxos.
    * @property {string} [filter_address] - Address to filter the utxos.
-   * @property {number} [amount_smaller_than] - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00.
-   * @property {number} [amount_bigger_than] - Minimum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount bigger than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00.
-   * @property {number} [max_amount] - Limit the maximum total amount to consolidate summing all utxos. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {bigint} [amount_smaller_than] - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {bigint} [amount_bigger_than] - Minimum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount bigger than or equal to this value. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {bigint} [max_amount] - Limit the maximum total amount to consolidate summing all utxos. Integer representation of decimals, i.e. 100 = 1.00.
    * @property {boolean} [only_available_utxos] - Use only available utxos (not locked)
    */
 
   /**
    * @typedef UtxoInfo
    * @property {string} address - Address that owns the UTXO.
-   * @property {number} amount - Amount of tokens.
+   * @property {bigint} amount - Amount of tokens.
    * @property {string} tx_id - Original transaction id.
    * @property {boolean} locked - If the output is currently locked.
    * @property {number} index - Index on the output array of the original tx.
@@ -944,10 +951,10 @@ class HathorWallet extends EventEmitter {
 
   /**
    * @typedef UtxoDetails
-   * @property {number} total_amount_available - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
-   * @property {number} total_utxos_available - Token to filter the utxos. If not sent, we select only HTR utxos.
-   * @property {number} total_amount_locked - Address to filter the utxos.
-   * @property {number} total_utxos_locked - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than this value. Integer representation of decimals, i.e. 100 = 1.00.
+   * @property {bigint} total_amount_available - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
+   * @property {bigint} total_utxos_available - Token to filter the utxos. If not sent, we select only HTR utxos.
+   * @property {bigint} total_amount_locked - Address to filter the utxos.
+   * @property {bigint} total_utxos_locked - Maximum limit of utxo amount to filter the utxos list. We will consolidate only utxos that have an amount lower than this value. Integer representation of decimals, i.e. 100 = 1.00.
    * @property {UtxoInfo[]} utxos - Array of utxos
    */
 
@@ -1067,6 +1074,7 @@ class HathorWallet extends EventEmitter {
       token: NATIVE_TOKEN_UID,
       filter_address: null,
       ...options,
+      order_by_value: 'desc',
     };
 
     const utxos = [];
@@ -1100,7 +1108,7 @@ class HathorWallet extends EventEmitter {
    * @property {{ hash: string, index: number }[]} inputs - Inputs for the consolidation transaction
    * @property {{ uid: string, name: string, symbol: string }} token - HTR or custom token
    * @property {UtxoInfo[]} utxos - Array of utxos that will be consolidated
-   * @property {number} total_amount - Amount to be consolidated
+   * @property {bigint} total_amount - Amount to be consolidated
    *
    * @param {string} destinationAddress Address of the consolidated utxos
    * @param {UtxoOptions} options Utxo filtering options
@@ -1140,7 +1148,7 @@ class HathorWallet extends EventEmitter {
   /**
    * @typedef ConsolidationResultSendTx
    * @property {number} total_utxos_consolidated - Number of utxos consolidated
-   * @property {number} total_amount - Consolidated amount
+   * @property {bigint} total_amount - Consolidated amount
    * @property {SendTransaction} sendTx - instance that will send the transaction.
    * @property {UtxoInfo[]} utxos - Array of consolidated utxos
    */
@@ -1184,7 +1192,7 @@ class HathorWallet extends EventEmitter {
   /**
    * @typedef ConsolidationResult
    * @property {number} total_utxos_consolidated - Number of utxos consolidated
-   * @property {number} total_amount - Consolidated amount
+   * @property {bigint} total_amount - Consolidated amount
    * @property {string} txId - Consolidated transaction id
    * @property {UtxoInfo[]} utxos - Array of consolidated utxos
    */
@@ -1322,6 +1330,9 @@ class HathorWallet extends EventEmitter {
     this.emit('state', state);
   }
 
+  /**
+   * @param {{ history: import('../types').IHistoryTx }} wsData
+   */
   async onNewTx(wsData) {
     const parseResult = IHistoryTxSchema.safeParse(wsData.history);
     if (!parseResult.success) {
@@ -1329,17 +1340,33 @@ class HathorWallet extends EventEmitter {
       return;
     }
     const newTx = parseResult.data;
-    const storageTx = await this.storage.getTx(newTx.tx_id);
+    // Later we will compare the storageTx and the received tx.
+    // To avoid reference issues we clone the current storageTx.
+    const storageTx = cloneDeep(await this.storage.getTx(newTx.tx_id));
     const isNewTx = storageTx === null;
 
     newTx.processingStatus = TxHistoryProcessingStatus.PROCESSING;
 
-    // Save the transaction in the storage
     await this.storage.addTx(newTx);
-
     await this.scanAddressesToLoad();
-    // Process history to update metadatas
-    await this.storage.processHistory();
+
+    // set state to processing and save current state.
+    const previousState = this.state;
+    this.state = HathorWallet.PROCESSING;
+    if (isNewTx) {
+      // Process this single transaction.
+      // Handling new metadatas and deleting utxos that are not available anymore
+      await this.storage.processNewTx(newTx);
+    } else if (storageTx.is_voided !== newTx.is_voided) {
+      // This is a voided transaction update event.
+      // voided transactions require a full history reprocess.
+      await this.storage.processHistory();
+    } else {
+      // Process other types of metadata updates.
+      await processMetadataChanged(this.storage, newTx);
+    }
+    // restore previous state
+    this.state = previousState;
 
     newTx.processingStatus = TxHistoryProcessingStatus.FINISHED;
     // Save the transaction in the storage
@@ -1356,7 +1383,7 @@ class HathorWallet extends EventEmitter {
    * Send a transaction with a single output
    *
    * @param {string} address Output address
-   * @param {Number} value Output value
+   * @param {bigint} value Output value
    * @param [options] Options parameters
    * @param {string} [options.changeAddress] address of the change output
    * @param {string} [options.token] token uid
@@ -1382,7 +1409,7 @@ class HathorWallet extends EventEmitter {
    * Send a transaction with a single output
    *
    * @param {string} address Output address
-   * @param {Number} value Output value
+   * @param {bigint} value Output value
    * @param [options] Options parameters
    * @param {string} [options.changeAddress] address of the change output
    * @param {string} [options.token] token uid
@@ -1444,7 +1471,7 @@ class HathorWallet extends EventEmitter {
     }
     const { inputs, changeAddress } = newOptions;
     return new SendTransaction({
-      storage: this.storage,
+      wallet: this,
       outputs,
       inputs,
       changeAddress,
@@ -1611,7 +1638,7 @@ class HathorWallet extends EventEmitter {
    *
    * @param {Transaction} transaction Transaction object to be mined and pushed to the network
    *
-   * @return {Promise<Transaction>} Promise that resolves with transaction object if succeeds
+   * @return {Promise<Transaction|CreateTokenTransaction>} Promise that resolves with transaction object if succeeds
    * or with error message if it fails
    *
    * @memberof HathorWallet
@@ -1619,7 +1646,7 @@ class HathorWallet extends EventEmitter {
    * @deprecated
    */
   async handleSendPreparedTransaction(transaction) {
-    const sendTransaction = new SendTransaction({ storage: this.storage, transaction });
+    const sendTransaction = new SendTransaction({ wallet: this, transaction });
     return sendTransaction.runFromMining();
   }
 
@@ -1735,7 +1762,7 @@ class HathorWallet extends EventEmitter {
    * */
   async createNewTokenSendTransaction(name, symbol, amount, options = {}) {
     const transaction = await this.prepareCreateNewToken(name, symbol, amount, options);
-    return new SendTransaction({ storage: this.storage, transaction });
+    return new SendTransaction({ wallet: this, transaction });
   }
 
   /**
@@ -1927,7 +1954,7 @@ class HathorWallet extends EventEmitter {
    * */
   async mintTokensSendTransaction(tokenUid, amount, options = {}) {
     const transaction = await this.prepareMintTokensData(tokenUid, amount, options);
-    return new SendTransaction({ storage: this.storage, transaction });
+    return new SendTransaction({ wallet: this, transaction });
   }
 
   /**
@@ -2047,7 +2074,7 @@ class HathorWallet extends EventEmitter {
    * */
   async meltTokensSendTransaction(tokenUid, amount, options = {}) {
     const transaction = await this.prepareMeltTokensData(tokenUid, amount, options);
-    return new SendTransaction({ storage: this.storage, transaction });
+    return new SendTransaction({ wallet: this, transaction });
   }
 
   /**
@@ -2148,7 +2175,7 @@ class HathorWallet extends EventEmitter {
       destinationAddress,
       options
     );
-    return new SendTransaction({ storage: this.storage, transaction });
+    return new SendTransaction({ wallet: this, transaction });
   }
 
   /**
@@ -2252,7 +2279,7 @@ class HathorWallet extends EventEmitter {
    * */
   async destroyAuthoritySendTransaction(tokenUid, type, count, options = {}) {
     const transaction = await this.prepareDestroyAuthorityData(tokenUid, type, count, options);
-    return new SendTransaction({ storage: this.storage, transaction });
+    return new SendTransaction({ wallet: this, transaction });
   }
 
   /**
@@ -2336,7 +2363,7 @@ class HathorWallet extends EventEmitter {
    * @param tokenId Token uid to get the token details
    *
    * @return {Promise<{
-   *   totalSupply: number,
+   *   totalSupply: bigint,
    *   totalTransactions: number,
    *   tokenInfo: {
    *     name: string,
@@ -2431,7 +2458,7 @@ class HathorWallet extends EventEmitter {
    * @param [optionsParam]
    * @param {boolean} [optionsParam.includeAuthorities=false] Retrieve authority balances if true
    *
-   * @return {Promise<Record<string,number>>} Promise that resolves with an object with each token
+   * @return {Promise<Record<string,bigint>>} Promise that resolves with an object with each token
    *                                          and it's balance in this tx for this wallet
    *
    * @example
@@ -2506,7 +2533,7 @@ class HathorWallet extends EventEmitter {
     newOptions.data = [data];
     newOptions.isCreateNFT = true;
     const transaction = await this.prepareCreateNewToken(name, symbol, amount, newOptions);
-    return new SendTransaction({ storage: this.storage, transaction });
+    return new SendTransaction({ wallet: this, transaction });
   }
 
   /**
@@ -2729,7 +2756,7 @@ class HathorWallet extends EventEmitter {
    *     weight: number,
    *     tokenName: string,
    *     tokenSymbol: string,
-   *     balance: number
+   *     balance: bigint
    *   }>
    * }>} Array of token details
    * @example
@@ -2781,7 +2808,7 @@ class HathorWallet extends EventEmitter {
       const tokenIdx = tokenUtils.getTokenIndexFromData(token_data);
       const tokenUid = tokens[tokenIdx - 1]?.uid;
       if (!tokenUid) {
-        throw new Error(`Token ${tokenUid} not found in tokens list`);
+        throw new Error(`Invalid token_data ${token_data}, token not found in tokens list`);
       }
 
       return {
@@ -3063,6 +3090,102 @@ class HathorWallet extends EventEmitter {
     }
     const addressesToLoad = await scanPolicyStartAddresses(this.storage);
     await this.syncHistory(addressesToLoad.nextIndex, addressesToLoad.count);
+  }
+
+  /**
+   * Build a transaction from a template.
+   *
+   * @param {z.input<typeof TransactionTemplate>} template
+   * @param [options]
+   * @param {boolean} [options.signTx] If the transaction should be signed.
+   * @param {string} [options.pinCode] PIN to decrypt the private key.
+   * @returns {Promise<Transaction|CreateTokenTransaction>}
+   */
+  async buildTxTemplate(template, options) {
+    const newOptions = {
+      signTx: false,
+      pinCode: null,
+      ...options,
+    };
+    const instructions = TransactionTemplate.parse(template);
+    const tx = await this.txTemplateInterpreter.build(instructions, this.debug);
+    if (newOptions.signTx) {
+      await transactionUtils.signTransaction(tx, this.storage, newOptions.pinCode || this.pinCode);
+      tx.prepareToSend();
+    }
+    return tx;
+  }
+
+  /**
+   * Run a transaction template and send the transaction.
+   *
+   * @param {z.input<typeof TransactionTemplate>} template
+   * @param {string|undefined} pinCode
+   * @returns {Promise<Transaction|CreateTokenTransaction>}
+   */
+  async runTxTemplate(template, pinCode) {
+    const transaction = await this.buildTxTemplate(template, {
+      signTx: true,
+      pinCode,
+    });
+    return this.handleSendPreparedTransaction(transaction);
+  }
+
+  /**
+   * @typedef {Object} CreateOnChainBlueprintTxOptions
+   * @property {string?} [pinCode] PIN to decrypt the private key.
+   */
+
+  /**
+   * Create and send an on chain blueprint transaction
+   *
+   * @param {string} code Blueprint code in utf-8
+   * @param {string} address Address that will be used to sign the on chain blueprint transaction
+   * @param {CreateOnChainBlueprintTxOptions} [options]
+   *
+   * @returns {Promise<OnChainBlueprint>}
+   */
+  async createAndSendOnChainBlueprintTransaction(code, address, options = {}) {
+    const sendTransaction = await this.createOnChainBlueprintTransaction(code, address, options);
+    return sendTransaction.runFromMining();
+  }
+
+  /**
+   * Create an on chain blueprint transaction and return the SendTransaction object
+   *
+   * @param {string} code Blueprint code in utf-8
+   * @param {string} address Address that will be used to sign the on chain blueprint transaction
+   * @param {CreateOnChainBlueprintTxOptions} [options]
+   *
+   * @returns {Promise<SendTransaction>}
+   */
+  async createOnChainBlueprintTransaction(code, address, options) {
+    if (await this.storage.isReadonly()) {
+      throw new WalletFromXPubGuard('createOnChainBlueprintTransaction');
+    }
+    const newOptions = { pinCode: null, ...options };
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
+    }
+
+    // Get caller pubkey
+    const addressInfo = await this.storage.getAddressInfo(address);
+    if (!addressInfo) {
+      throw new NanoContractTransactionError(
+        `Address used to sign the transaction (${address}) does not belong to the wallet.`
+      );
+    }
+    const pubkeyStr = await this.storage.getAddressPubkey(addressInfo.bip32AddressIndex);
+    const pubkey = Buffer.from(pubkeyStr, 'hex');
+
+    // Create code object from code data
+    const codeContent = Buffer.from(code, 'utf8');
+    const codeObj = new Code(CodeKind.PYTHON_GZIP, codeContent);
+
+    const tx = new OnChainBlueprint(codeObj, pubkey);
+
+    return prepareNanoSendTransaction(tx, pin, this.storage);
   }
 }
 

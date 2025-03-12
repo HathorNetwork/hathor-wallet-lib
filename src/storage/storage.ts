@@ -40,7 +40,11 @@ import {
   getDefaultLogger,
 } from '../types';
 import transactionUtils from '../utils/transaction';
-import { processHistory as processHistoryUtil, processUtxoUnlock } from '../utils/storage';
+import {
+  processHistory as processHistoryUtil,
+  processSingleTx as processSingleTxUtil,
+  processUtxoUnlock,
+} from '../utils/storage';
 import config, { Config } from '../config';
 import { decryptData, checkPassword } from '../utils/crypto';
 import FullNodeConnection from '../new/connection';
@@ -116,8 +120,15 @@ export class Storage implements IStorage {
    * Set the native token config on the store
    */
   async saveNativeToken(): Promise<void> {
-    if ((await this.store.getToken(NATIVE_TOKEN_UID)) === null) {
-      await this.store.saveToken(this.getNativeTokenData());
+    await this.addToken(this.getNativeTokenData());
+  }
+
+  /**
+   * Adds a new token to the storage.
+   */
+  async addToken(data: ITokenData): Promise<void> {
+    if ((await this.store.getToken(data.uid)) === null) {
+      await this.store.saveToken(data);
     }
   }
 
@@ -356,6 +367,17 @@ export class Storage implements IStorage {
   async processHistory(): Promise<void> {
     await this.store.preProcessHistory();
     await processHistoryUtil(this, { rewardLock: this.version?.reward_spend_min_blocks });
+  }
+
+  /**
+   * Process the transaction history to calculate the metadata.
+   * @returns {Promise<void>}
+   */
+  async processNewTx(tx: IHistoryTx): Promise<void> {
+    // Keep tx-timestamp index sorted
+    await this.store.preProcessHistory();
+    // Process the single tx we received
+    await processSingleTxUtil(this, tx, { rewardLock: this.version?.reward_spend_min_blocks });
   }
 
   /**

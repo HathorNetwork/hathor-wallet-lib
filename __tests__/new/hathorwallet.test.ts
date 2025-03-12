@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { z } from 'zod';
 import Address from '../../src/models/address';
 import HathorWallet from '../../src/new/wallet';
 import { TxNotFoundError, WalletFromXPubGuard } from '../../src/errors';
@@ -22,8 +23,10 @@ import Queue from '../../src/models/queue';
 import { WalletType } from '../../src/types';
 import txApi from '../../src/api/txApi';
 import * as addressUtils from '../../src/utils/address';
+import walletUtils from '../../src/utils/wallet';
 import versionApi from '../../src/api/version';
 import { decryptData, verifyMessage } from '../../src/utils/crypto';
+import { WalletTxTemplateInterpreter, TransactionTemplate } from '../../src/template/transaction';
 
 class FakeHathorWallet {
   constructor() {
@@ -1370,4 +1373,127 @@ test('setExternalTxSigningMethod', async () => {
   hwallet.storage = storage;
   hwallet.setExternalTxSigningMethod(async () => {});
   expect(hwallet.isSignedExternally).toBe(true);
+});
+
+test('build transaction template', async () => {
+  const input = new Input('d00d', 0);
+  const dataSpy = jest.spyOn(input, 'setData');
+  const preMadeTx = new Transaction([input], []);
+
+  const hwallet = new FakeHathorWallet() as HathorWallet;
+  const interpreter = {
+    build: jest
+      .fn()
+      .mockImplementation(
+        async (_instructions: z.infer<typeof TransactionTemplate>, _debug: boolean) => preMadeTx
+      ),
+  } as unknown as WalletTxTemplateInterpreter;
+  hwallet.txTemplateInterpreter = interpreter;
+  hwallet.debug = true;
+
+  const tx = await hwallet.buildTxTemplate([{ type: 'action/change' }]);
+  expect(tx).toBe(preMadeTx);
+  expect(interpreter.build).toHaveBeenCalledTimes(1);
+  expect(interpreter.build).toHaveBeenCalledWith([{ type: 'action/change' }], true);
+  expect(dataSpy).not.toHaveBeenCalled();
+});
+
+test('build transaction template with signature', async () => {
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+  jest.spyOn(storage, 'getTxSignatures').mockReturnValue(
+    Promise.resolve({
+      ncCallerSignature: null,
+      inputSignatures: [
+        {
+          signature: Buffer.from('cafe', 'hex'),
+          pubkey: Buffer.from('abcd', 'hex'),
+          inputIndex: 0,
+          addressIndex: 1,
+        },
+      ],
+    })
+  );
+
+  const input = new Input('d00d', 0);
+  const dataSpy = jest.spyOn(input, 'setData');
+  const preMadeTx = new Transaction([input], []);
+
+  const hwallet = new FakeHathorWallet() as HathorWallet;
+  hwallet.storage = storage;
+  const interpreter = {
+    build: jest
+      .fn()
+      .mockImplementation(
+        async (_instructions: z.infer<typeof TransactionTemplate>, _debug: boolean) => preMadeTx
+      ),
+  } as unknown as WalletTxTemplateInterpreter;
+  hwallet.txTemplateInterpreter = interpreter;
+  hwallet.debug = true;
+
+  const tx = await hwallet.buildTxTemplate([{ type: 'action/change' }], {
+    signTx: true,
+    pinCode: '123',
+  });
+  expect(tx).toBe(preMadeTx);
+  expect(interpreter.build).toHaveBeenCalledTimes(1);
+  expect(interpreter.build).toHaveBeenCalledWith([{ type: 'action/change' }], true);
+  expect(dataSpy).toHaveBeenCalledTimes(1);
+});
+
+test('runTxTemplate', async () => {
+  const hwallet = new FakeHathorWallet();
+  const tx = 'a-transaction';
+  hwallet.buildTxTemplate.mockImplementation(async () => tx);
+  hwallet.handleSendPreparedTransaction.mockImplementation(async () => tx);
+
+  const pushedTx = await hwallet.runTxTemplate('a-template', 'pin');
+  expect(pushedTx).toBe(tx);
+  expect(hwallet.buildTxTemplate).toHaveBeenCalled();
+  expect(hwallet.buildTxTemplate).toHaveBeenCalledWith('a-template', {
+    signTx: true,
+    pinCode: 'pin',
+  });
+  expect(hwallet.handleSendPreparedTransaction).toHaveBeenCalled();
+  expect(hwallet.handleSendPreparedTransaction).toHaveBeenCalledWith(tx);
+});
+
+test('getUtxosForAmount - should always get the best utxos', async () => {
+  const seed =
+    'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+  const accessData = walletUtils.generateAccessDataFromSeed(seed, {
+    pin: '123',
+    password: '456',
+    networkName: 'testnet',
+  });
+  const store = new MemoryStore();
+  await store.saveAccessData(accessData);
+  const storage = new Storage(store);
+  const hwallet = new FakeHathorWallet();
+  hwallet.storage = storage;
+  // When selecting 6n we should always get the 6n output, even if the sum of
+  // the first 3 may solve the required 6n.
+  for (const amount of [3n, 1n, 2n, 4n, 6n]) {
+    await storage.store.saveUtxo({
+      txId: 'tx1',
+      index: Number(amount),
+      value: amount,
+      address: 'addr',
+      authorities: 0n,
+      height: 0,
+      timelock: null,
+      token: '00',
+      type: 1,
+    });
+  }
+
+  await expect(hwallet.getUtxosForAmount(6n)).resolves.toEqual({
+    changeAmount: 0n,
+    utxos: [
+      expect.objectContaining({
+        index: 6,
+        value: 6n,
+      }),
+    ],
+  });
 });

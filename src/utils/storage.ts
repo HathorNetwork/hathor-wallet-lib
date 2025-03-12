@@ -22,6 +22,8 @@ import {
   HistorySyncMode,
   HistorySyncFunction,
   WalletType,
+  IUtxo,
+  ITokenData,
 } from '../types';
 import walletApi from '../api/wallet';
 import helpers from './helpers';
@@ -34,8 +36,11 @@ import {
   NANO_CONTRACTS_VERSION,
   LOAD_WALLET_MAX_RETRY,
   LOAD_WALLET_RETRY_SLEEP,
+  CREATE_TOKEN_TX_VERSION,
+  ON_CHAIN_BLUEPRINTS_VERSION,
 } from '../constants';
 import { AddressHistorySchema, GeneralTokenInfoSchema } from '../api/schemas/wallet';
+import CreateTokenTransaction from '../models/create_token_transaction';
 
 /**
  * Get history sync method for a given mode
@@ -396,6 +401,105 @@ export async function processHistory(
   await updateWalletMetadataFromProcessedTxData(storage, { maxIndexUsed, tokens });
 }
 
+export async function processSingleTx(
+  storage: IStorage,
+  tx: IHistoryTx,
+  { rewardLock }: { rewardLock?: number } = {}
+): Promise<void> {
+  const { store } = storage;
+  const nowTs = Math.floor(Date.now() / 1000);
+  const currentHeight = await store.getCurrentHeight();
+
+  const tokens = new Set<string>();
+  const processedData = await processNewTx(storage, tx, { rewardLock, nowTs, currentHeight });
+  const maxIndexUsed = processedData.maxAddressIndex;
+  for (const token of processedData.tokens) {
+    tokens.add(token);
+  }
+
+  for (const input of tx.inputs) {
+    const origTx = await storage.getTx(input.tx_id);
+    if (!origTx) {
+      // The tx being spent is not from the wallet.
+      continue;
+    }
+
+    if (origTx.outputs.length <= input.index) {
+      throw new Error('Spending an unexistent output');
+    }
+
+    const output = origTx.outputs[input.index];
+    if (!output.decoded.address) {
+      // Tx is ours but output is not from an address.
+      continue;
+    }
+
+    if (!(await storage.isAddressMine(output.decoded.address))) {
+      // Address is not ours.
+      continue;
+    }
+
+    // Now we get the utxo object to be deleted from the store
+    const utxo: IUtxo = {
+      txId: input.tx_id,
+      index: input.index,
+      token: output.token,
+      address: output.decoded.address,
+      authorities: transactionUtils.isAuthorityOutput(output) ? output.value : 0n,
+      value: output.value,
+      timelock: output.decoded?.timelock ?? null,
+      type: origTx.version,
+      height: origTx.height ?? null,
+    };
+
+    // Delete utxo
+    await store.deleteUtxo(utxo);
+  }
+
+  // Update wallet data in the store
+  await updateWalletMetadataFromProcessedTxData(storage, { maxIndexUsed, tokens });
+}
+
+/**
+ * Some metadata changed and may need processing.
+ * void txs are not treated here.
+ * Only idempodent changes should be processed here since this can be called multiple times.
+ */
+export async function processMetadataChanged(storage: IStorage, tx: IHistoryTx): Promise<void> {
+  const { store } = storage;
+
+  for (let index = 0; index < tx.outputs.length; index++) {
+    const output = tx.outputs[index];
+
+    if (!output.decoded.address) {
+      // Tx is ours but output is not from an address.
+      continue;
+    }
+
+    if (!(await storage.isAddressMine(output.decoded.address))) {
+      // Address is not ours.
+      continue;
+    }
+
+    if (output.spent_by === null) {
+      await store.saveUtxo({
+        txId: tx.tx_id,
+        index,
+        type: tx.version,
+        authorities: transactionUtils.isAuthorityOutput(output) ? output.value : 0n,
+        address: output.decoded.address,
+        token: output.token,
+        value: output.value,
+        timelock: output.decoded.timelock || null,
+        height: tx.height || null,
+      });
+    } else if (await storage.isUtxoSelectedAsInput({ txId: tx.tx_id, index })) {
+      // If the output is spent we remove it from the utxos selected_as_inputs if it's there
+      await storage.utxoSelectAsInput({ txId: tx.tx_id, index }, false);
+    }
+  }
+}
+
 /**
  * Fetch and save the data of the token set on the storage
  * @param {IStorage} storage - Storage to save the tokens.
@@ -455,8 +559,8 @@ export async function _updateTokensData(storage: IStorage, tokens: Set<string>):
 
       const { name, symbol } = response;
       const tokenData = { uid, name, symbol };
-      // saveToken will ignore the meta and save only the token config
-      await store.saveToken(tokenData);
+
+      await storage.addToken(tokenData);
     }
   }
 }
@@ -691,9 +795,9 @@ export async function processNewTx(
     await store.editAddressMeta(input.decoded.address, addressMeta);
   }
 
-  // Nano contract transactions have the address used to sign the tx
+  // Nano contract and ocb transactions have the address used to sign the tx
   // and we must consider this to the address metadata
-  if (tx.version === NANO_CONTRACTS_VERSION) {
+  if (tx.version === NANO_CONTRACTS_VERSION || tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
     const caller = getAddressFromPubkey(tx.nc_pubkey!, storage.config.getNetwork());
     const callerAddressInfo = await store.getAddress(caller.base58);
     // if address is not in wallet, ignore
@@ -829,4 +933,29 @@ export async function processUtxoUnlock(
   await store.editAddressMeta(output.decoded.address, addressMeta);
   // Remove utxo from locked utxos so that it is not processed again
   await store.unlockUtxo(lockedUtxo);
+}
+
+/**
+ * Extracts the ITokenData from the CreateTokenTransaction instance and save
+ * the token on the storage.
+ */
+export async function addCreatedTokenFromTx(
+  tx: CreateTokenTransaction,
+  storage: IStorage
+): Promise<void> {
+  if (tx.version !== CREATE_TOKEN_TX_VERSION) {
+    return;
+  }
+
+  if (!tx.hash) {
+    throw new Error('Cannot infer UID from transaction without hash');
+  }
+
+  const tokenInfo: ITokenData = {
+    uid: tx.hash,
+    name: tx.name,
+    symbol: tx.symbol,
+  };
+
+  await storage.addToken(tokenInfo);
 }

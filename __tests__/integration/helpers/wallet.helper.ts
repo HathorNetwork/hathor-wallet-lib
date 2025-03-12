@@ -20,7 +20,7 @@ import { multisigWalletsData, precalculationHelpers } from './wallet-precalculat
 import { delay } from '../utils/core.util';
 import { loggers } from '../utils/logger.util';
 import { MemoryStore, Storage } from '../../../src/storage';
-import { TxHistoryProcessingStatus } from '../../../src/types';
+import { TxHistoryProcessingStatus, IHistoryTx } from '../../../src/types';
 
 /**
  * @typedef SendTxResponse
@@ -234,7 +234,7 @@ export async function stopAllWallets() {
  *
  * @return {Promise<CreateNewTokenResponse>}
  */
-export async function createTokenHelper(hWallet, name, symbol, amount, options) {
+export async function createTokenHelper(hWallet, name, symbol, amount, options = {}) {
   const newTokenResponse = await hWallet.createNewToken(name, symbol, amount, options);
   const tokenUid = newTokenResponse.hash;
   await waitForTxReceived(hWallet, tokenUid);
@@ -271,12 +271,15 @@ export function waitForWalletReady(hWallet) {
  * Waits for the wallet to receive the transaction from a websocket message
  * and process the history
  *
- * @param {HathorWallet} hWallet
- * @param {string} txId
- * @param {number} [timeout] Timeout in milisseconds. Default value defined on test-constants.
- * @returns {Promise<IHistoryTx>}
+ * @param hWallet
+ * @param txId
+ * @param [timeout] Timeout in milisseconds. Default value defined on test-constants.
  */
-export async function waitForTxReceived(hWallet, txId, timeout) {
+export async function waitForTxReceived(
+  hWallet: HathorWallet,
+  txId: string,
+  timeout: number = 0
+): Promise<IHistoryTx> {
   const startTime = Date.now().valueOf();
   let timeoutReached = false;
   const timeoutPeriod = timeout || TX_TIMEOUT_DEFAULT;
@@ -285,7 +288,7 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
     timeoutReached = true;
   }, timeoutPeriod);
 
-  let storageTx = await hWallet.getTx(txId);
+  let storageTx = (await hWallet.getTx(txId)) as IHistoryTx;
 
   // We consider that the tx was received after it's in the storage
   // and the history processing is finished
@@ -296,7 +299,7 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
 
     // Tx not found, wait 1s before trying again
     await delay(1000);
-    storageTx = await hWallet.getTx(txId);
+    storageTx = (await hWallet.getTx(txId)) as IHistoryTx;
   }
 
   // Clean timeout handler
@@ -307,6 +310,10 @@ export async function waitForTxReceived(hWallet, txId, timeout) {
   if (timeoutReached) {
     // Throw error in case of timeout
     throw new Error(`Timeout of ${timeoutPeriod}ms without receiving the tx with id ${txId}`);
+  }
+
+  if (!storageTx) {
+    throw new Error('Unexpected error waiting for tx, we found it but it is null');
   }
 
   const timeDiff = Date.now().valueOf() - startTime;
