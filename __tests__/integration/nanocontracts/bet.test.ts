@@ -6,7 +6,6 @@ import {
   generateMultisigWalletHelper,
   generateWalletHelper,
   waitForTxReceived,
-  waitNextBlock,
   waitTxConfirmed,
 } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../src/constants';
