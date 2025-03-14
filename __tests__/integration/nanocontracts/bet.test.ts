@@ -6,7 +6,6 @@ import {
   generateMultisigWalletHelper,
   generateWalletHelper,
   waitForTxReceived,
-  waitNextBlock,
   waitTxConfirmed,
 } from '../helpers/wallet.helper';
 import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../src/constants';
@@ -478,7 +477,7 @@ describe('full cycle of bet nano contract', () => {
 
     jest.spyOn(wallet.storage, 'processHistory');
     expect(wallet.storage.processHistory.mock.calls.length).toBe(0);
-    await waitNextBlock(wallet.storage);
+    await waitTxConfirmed(wallet, txWithdrawal2.hash);
     const txWithdrawal2Data = await wallet.getFullTxById(txWithdrawal2.hash);
 
     // The tx became voided after the block because of the nano execution
