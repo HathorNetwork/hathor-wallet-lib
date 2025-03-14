@@ -1585,6 +1585,17 @@ describe('sendTransaction', () => {
         }),
       ],
     });
+
+    const fullNodeTx = await mhWallet1.getFullTxById(sentTx.hash);
+    expect(fullNodeTx.tx).toMatchObject({
+      hash: partiallyAssembledTx.hash,
+      inputs: [
+        expect.objectContaining({
+          tx_id: inputTxId,
+          value: 10n,
+        }),
+      ],
+    });
   });
 });
 
