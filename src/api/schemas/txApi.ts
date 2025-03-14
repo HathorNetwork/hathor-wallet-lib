@@ -17,7 +17,7 @@ const p2pkhDecodedScriptSchema = z.object({
 });
 
 const p2shDecodedScriptSchema = z.object({
-  type: z.literal('P2SH'),
+  type: z.literal('MultiSig'),
   address: z.string(),
   timelock: z.number().nullish(),
   value: bigIntCoercibleSchema,
