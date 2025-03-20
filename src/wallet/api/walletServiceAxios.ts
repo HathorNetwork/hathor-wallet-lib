@@ -9,6 +9,7 @@ import axios from 'axios';
 import { TIMEOUT } from '../../constants';
 import HathorWalletServiceWallet from '../wallet';
 import config from '../../config';
+import { JSONBigInt } from '../../utils/bigint';
 
 /**
  * Method that creates an axios instance
@@ -35,6 +36,7 @@ export const axiosInstance = async (
     baseURL: string;
     validateStatus: (status) => boolean;
     timeout: number;
+    transformResponse: [(data: any) => any];
   } = {
     baseURL: config.getWalletServiceBaseUrl(),
     timeout,
@@ -47,10 +49,24 @@ export const axiosInstance = async (
     headers: {
       'Content-Type': 'application/json',
     },
+    // Transform response data to handle bigint values properly
+    transformResponse: [
+      data => {
+        // If data is a string (JSON response), parse it with JSONBigInt
+        if (typeof data === 'string') {
+          try {
+            return JSONBigInt.parse(data);
+          } catch (e) {
+            // If parsing fails, return the original data
+            return data;
+          }
+        }
+        return data;
+      }
+    ],
   };
 
   if (needsAuth) {
-    // Then we need the auth token
     await wallet.validateAndRenewAuthToken();
     defaultOptions.headers.Authorization = `Bearer ${wallet.getAuthToken()}`;
   }
