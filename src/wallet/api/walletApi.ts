@@ -39,6 +39,12 @@ import {
   fullNodeVersionDataSchema,
   fullNodeTxResponseSchema,
   fullNodeTxConfirmationDataResponseSchema,
+  walletStatusResponseSchema,
+  tokensResponseSchema,
+  historyResponseSchema,
+  txOutputResponseSchema,
+  authTokenResponseSchema,
+  txByIdResponseSchema,
 } from './schemas/walletApi';
 
 /**
@@ -53,7 +59,7 @@ const walletApi = {
     const response = await axios.get('wallet/status');
     const { data } = response;
     if (response.status === 200 && data.success) {
-      return data;
+      return parseSchema(data, walletStatusResponseSchema);
     }
     throw new WalletRequestError('Error getting wallet status.');
   },
@@ -99,11 +105,11 @@ const walletApi = {
     const axios = await axiosInstance(wallet, false);
     const response = await axios.post('wallet/init', data);
     if (response.status === 200 && response.data.success) {
-      return response.data;
+      return parseSchema(response.data, walletStatusResponseSchema);
     }
     if (response.status === 400 && response.data.error === 'wallet-already-loaded') {
       // If it was already loaded, we have to check if it's ready
-      return response.data;
+      return parseSchema(response.data, walletStatusResponseSchema);
     }
     throw new WalletRequestError('Error creating wallet.');
   },
@@ -179,7 +185,7 @@ const walletApi = {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get('wallet/tokens');
     if (response.status === 200 && response.data.success === true) {
-      return response.data;
+      return parseSchema(response.data, tokensResponseSchema);
     }
     throw new WalletRequestError('Error getting list of tokens.');
   },
@@ -189,7 +195,7 @@ const walletApi = {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get('wallet/history', data);
     if (response.status === 200 && response.data.success === true) {
-      return response.data;
+      return parseSchema(response.data, historyResponseSchema);
     }
     throw new WalletRequestError('Error getting wallet history.');
   },
@@ -202,7 +208,7 @@ const walletApi = {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get('wallet/tx_outputs', data);
     if (response.status === 200 && response.data.success === true) {
-      return response.data;
+      return parseSchema(response.data, txOutputResponseSchema);
     }
     throw new WalletRequestError('Error requesting utxo.');
   },
@@ -261,7 +267,7 @@ const walletApi = {
     const axios = await axiosInstance(wallet, false);
     const response = await axios.post('auth/token', data);
     if (response.status === 200 && response.data.success === true) {
-      return response.data;
+      return parseSchema(response.data, authTokenResponseSchema);
     }
 
     throw new WalletRequestError('Error requesting auth token.');
@@ -274,7 +280,7 @@ const walletApi = {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get(`wallet/transactions/${txId}`);
     if (response.status === 200 && response.data.success) {
-      return response.data;
+      return parseSchema(response.data, txByIdResponseSchema);
     }
 
     throw new WalletRequestError('Error getting transaction by its id.', {

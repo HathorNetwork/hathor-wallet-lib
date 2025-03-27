@@ -306,6 +306,132 @@ export const fullNodeTxConfirmationDataResponseSchema = baseResponseSchema.exten
 });
 
 /**
+ * Response schema for wallet status.
+ * Contains information about the wallet's current state.
+ */
+export const walletStatusResponseSchema = baseResponseSchema.extend({
+  status: z.string(),
+  network: z.string(),
+  serverUrl: z.string(),
+  serverInfo: z.object({
+    version: z.string(),
+    network: z.string(),
+    minWeight: z.number(),
+    minTxWeight: z.number(),
+    minTxWeightCoefficient: z.number(),
+    minTxWeightK: z.number(),
+    tokenDepositPercentage: z.number(),
+    rewardSpendMinBlocks: z.number(),
+    maxNumberInputs: z.number(),
+    maxNumberOutputs: z.number(),
+  }),
+});
+
+/**
+ * Response schema for token list.
+ * Contains an array of token information.
+ */
+export const tokensResponseSchema = baseResponseSchema.extend({
+  tokens: z.array(
+    z.object({
+      uid: z.string(),
+      name: z.string(),
+      symbol: z.string(),
+      amount: bigIntCoercibleSchema,
+    })
+  ),
+});
+
+/**
+ * Response schema for transaction history.
+ * Contains an array of transaction information.
+ */
+export const historyResponseSchema = baseResponseSchema.extend({
+  history: z.array(
+    z.object({
+      txId: z.string(),
+      timestamp: z.number(),
+      balance: z.record(z.string(), bigIntCoercibleSchema),
+      tokens: z.array(
+        z.object({
+          uid: z.string(),
+          name: z.string(),
+          symbol: z.string(),
+          amount: bigIntCoercibleSchema,
+        })
+      ),
+    })
+  ),
+});
+
+/**
+ * Response schema for transaction outputs.
+ * Contains an array of unspent transaction outputs.
+ */
+export const txOutputResponseSchema = baseResponseSchema.extend({
+  outputs: z.array(
+    z.object({
+      txId: z.string(),
+      index: z.number(),
+      address: z.string(),
+      value: bigIntCoercibleSchema,
+      token: z.string(),
+      timelock: z.number().nullable(),
+    })
+  ),
+});
+
+/**
+ * Response schema for authentication token.
+ * Contains the authentication token and its expiration.
+ */
+export const authTokenResponseSchema = baseResponseSchema.extend({
+  token: z.string(),
+  expiresAt: z.number(),
+});
+
+/**
+ * Response schema for transaction by ID.
+ * Contains detailed information about a specific transaction.
+ */
+export const txByIdResponseSchema = baseResponseSchema.extend({
+  tx: z.object({
+    txId: z.string(),
+    timestamp: z.number(),
+    version: z.number(),
+    weight: z.number(),
+    parents: z.array(z.string()),
+    inputs: z.array(
+      z.object({
+        txId: z.string(),
+        index: z.number(),
+        address: z.string(),
+        value: bigIntCoercibleSchema,
+        token: z.string(),
+        timelock: z.number().nullable(),
+      })
+    ),
+    outputs: z.array(
+      z.object({
+        index: z.number(),
+        address: z.string(),
+        value: bigIntCoercibleSchema,
+        token: z.string(),
+        timelock: z.number().nullable(),
+      })
+    ),
+    tokens: z.array(
+      z.object({
+        uid: z.string(),
+        name: z.string(),
+        symbol: z.string(),
+        amount: bigIntCoercibleSchema,
+      })
+    ),
+  }),
+});
+
+/**
  * Collection of all wallet API schemas.
  * Used for type validation and documentation of the wallet API.
  */
@@ -320,4 +446,10 @@ export const walletApiSchemas = {
   fullNodeVersionData: fullNodeVersionDataSchema,
   fullNodeTxResponse: fullNodeTxResponseSchema,
   fullNodeTxConfirmationDataResponse: fullNodeTxConfirmationDataResponseSchema,
+  walletStatusResponse: walletStatusResponseSchema,
+  tokensResponse: tokensResponseSchema,
+  historyResponse: historyResponseSchema,
+  txOutputResponse: txOutputResponseSchema,
+  authTokenResponse: authTokenResponseSchema,
+  txByIdResponse: txByIdResponseSchema,
 };
