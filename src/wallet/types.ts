@@ -124,8 +124,6 @@ export interface TxProposalCreateResponseData {
   success: boolean;
   txProposalId: string; // Id of the tx proposal
   inputs: TxProposalInputs[]; // Inputs data of the tx proposal
-  outputs: TxProposalOutputs[]; // Outputs data of the tx proposal
-  tokens: string[];
 }
 
 export interface TxProposalInputs {
@@ -378,14 +376,17 @@ export interface DecodedOutput {
 
 export interface TxOutput {
   value: OutputValueType;
-  script: string;
+  script: {
+    type: 'Buffer';
+    data: number[];
+  };
   token: string;
   decoded: DecodedOutput;
-  // eslint-disable-next-line camelcase
-  spent_by: string | null;
-  // eslint-disable-next-line camelcase
   token_data: number;
-  locked?: boolean;
+  locked: boolean;
+  index: number;
+  tokenData: number;
+  decodedScript: null;
 }
 
 export interface TxInput {
@@ -395,7 +396,10 @@ export interface TxInput {
   value: OutputValueType;
   // eslint-disable-next-line camelcase
   token_data: number;
-  script: string;
+  script: {
+    type: 'Buffer';
+    data: number[];
+  };
   token: string;
   decoded: DecodedOutput;
 }
@@ -405,7 +409,8 @@ export interface WsTransaction {
   tx_id: string;
   nonce: number;
   timestamp: number;
-  signalBits: number;
+  // eslint-disable-next-line camelcase
+  signal_bits: number;
   version: number;
   weight: number;
   parents: string[];
