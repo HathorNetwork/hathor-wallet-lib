@@ -310,21 +310,15 @@ export const fullNodeTxConfirmationDataResponseSchema = baseResponseSchema.exten
  * Contains information about the wallet's current state.
  */
 export const walletStatusResponseSchema = baseResponseSchema.extend({
-  status: z.string(),
-  network: z.string(),
-  serverUrl: z.string(),
-  serverInfo: z.object({
-    version: z.string(),
-    network: z.string(),
-    minWeight: z.number(),
-    minTxWeight: z.number(),
-    minTxWeightCoefficient: z.number(),
-    minTxWeightK: z.number(),
-    tokenDepositPercentage: z.number(),
-    rewardSpendMinBlocks: z.number(),
-    maxNumberInputs: z.number(),
-    maxNumberOutputs: z.number(),
+  status: z.object({
+    walletId: z.string(),
+    xpubkey: z.string(),
+    status: z.string(),
+    maxGap: z.number(),
+    createdAt: z.number(),
+    readyAt: z.number().nullable(),
   }),
+  error: z.string().optional(),
 });
 
 /**
@@ -332,14 +326,7 @@ export const walletStatusResponseSchema = baseResponseSchema.extend({
  * Contains an array of token information.
  */
 export const tokensResponseSchema = baseResponseSchema.extend({
-  tokens: z.array(
-    z.object({
-      uid: z.string(),
-      name: z.string(),
-      symbol: z.string(),
-      amount: bigIntCoercibleSchema,
-    })
-  ),
+  tokens: z.array(z.string()),
 });
 
 /**
@@ -350,16 +337,10 @@ export const historyResponseSchema = baseResponseSchema.extend({
   history: z.array(
     z.object({
       txId: z.string(),
+      balance: bigIntCoercibleSchema,
       timestamp: z.number(),
-      balance: z.record(z.string(), bigIntCoercibleSchema),
-      tokens: z.array(
-        z.object({
-          uid: z.string(),
-          name: z.string(),
-          symbol: z.string(),
-          amount: bigIntCoercibleSchema,
-        })
-      ),
+      voided: z.number().transform(val => val === 1),
+      version: z.number(),
     })
   ),
 });
@@ -369,67 +350,52 @@ export const historyResponseSchema = baseResponseSchema.extend({
  * Contains an array of unspent transaction outputs.
  */
 export const txOutputResponseSchema = baseResponseSchema.extend({
-  outputs: z.array(
+  txOutputs: z.array(
     z.object({
       txId: z.string(),
       index: z.number(),
+      tokenId: z.string(),
       address: z.string(),
       value: bigIntCoercibleSchema,
-      token: z.string(),
+      authorities: bigIntCoercibleSchema,
       timelock: z.number().nullable(),
+      heightlock: z.number().nullable(),
+      locked: z.boolean(),
+      addressPath: z.string(),
     })
   ),
 });
 
 /**
  * Response schema for authentication token.
- * Contains the authentication token and its expiration.
+ * Contains the authentication token.
  */
 export const authTokenResponseSchema = baseResponseSchema.extend({
   token: z.string(),
-  expiresAt: z.number(),
 });
 
 /**
  * Response schema for transaction by ID.
  * Contains detailed information about a specific transaction.
  */
-export const txByIdResponseSchema = baseResponseSchema.extend({
-  tx: z.object({
+export const txByIdResponseSchema = z.array(
+  z.object({
     txId: z.string(),
     timestamp: z.number(),
     version: z.number(),
+    voided: z.boolean(),
+    height: z.number().nullable(),
     weight: z.number(),
-    parents: z.array(z.string()),
-    inputs: z.array(
-      z.object({
-        txId: z.string(),
-        index: z.number(),
-        address: z.string(),
-        value: bigIntCoercibleSchema,
-        token: z.string(),
-        timelock: z.number().nullable(),
-      })
-    ),
-    outputs: z.array(
-      z.object({
-        index: z.number(),
-        address: z.string(),
-        value: bigIntCoercibleSchema,
-        token: z.string(),
-        timelock: z.number().nullable(),
-      })
-    ),
-    tokens: z.array(
-      z.object({
-        uid: z.string(),
-        name: z.string(),
-        symbol: z.string(),
-        amount: bigIntCoercibleSchema,
-      })
-    ),
-  }),
-});
+    balance: z.object({
+      unlocked: bigIntCoercibleSchema,
+      locked: bigIntCoercibleSchema,
+    }),
+    tokenId: z.string(),
+    walletId: z.string(),
+    tokenName: z.string(),
+    tokenSymbol: z.string(),
+  })
+);
 
 /**
  * Collection of all wallet API schemas.
