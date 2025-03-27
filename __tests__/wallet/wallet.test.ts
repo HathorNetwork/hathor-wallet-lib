@@ -434,7 +434,7 @@ test('getTxById', async () => {
         txId: 'txId1',
         timestamp: 10,
         version: 3,
-        balance: 10,
+        balance: 10n,
         height: 1,
         tokenId: 'token1',
         tokenName: 'Token 1',
@@ -443,7 +443,7 @@ test('getTxById', async () => {
         weight: 65.4321,
       },
       {
-        balance: 7,
+        balance: 7n,
         height: 1,
         timestamp: 10,
         tokenId: 'token2',
@@ -1008,8 +1008,36 @@ test('getFullTxById', async () => {
 
   mockAxiosAdapter.onGet('wallet/proxy/transactions/tx1').reply(200, {
     success: true,
-    tx: { hash: 'tx1' },
-    meta: {},
+    tx: {
+      hash: 'tx1',
+      nonce: '0',
+      timestamp: 1234567890,
+      version: 1,
+      weight: 1,
+      parents: [],
+      inputs: [],
+      outputs: [],
+      tokens: [],
+      token_name: null,
+      token_symbol: null,
+      raw: '0x',
+    },
+    meta: {
+      hash: 'tx1',
+      received_by: [],
+      children: [],
+      conflict_with: [],
+      first_block: null,
+      height: 0,
+      voided_by: [],
+      spent_outputs: [],
+      received_timestamp: null,
+      is_voided: false,
+      verification_status: 'verified',
+      twins: [],
+      accumulated_weight: 0,
+      score: 0,
+    },
   });
 
   const proxiedTx = await wallet.getFullTxById('tx1');
