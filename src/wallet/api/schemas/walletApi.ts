@@ -159,8 +159,6 @@ export const txProposalOutputsSchema = z.object({
 export const txProposalCreateResponseSchema = baseResponseSchema.extend({
   txProposalId: z.string(),
   inputs: z.array(txProposalInputsSchema),
-  outputs: z.array(txProposalOutputsSchema),
-  tokens: z.array(z.string()),
 });
 
 /**
