@@ -9,6 +9,8 @@ import WalletServiceWebSocket from './websocket';
 import config from '../config';
 import BaseConnection, { DEFAULT_PARAMS, ConnectionParams } from '../connection';
 import { WsTransaction, ConnectionState } from './types';
+import { parseSchema } from '../utils/bigint';
+import { wsTransactionSchema } from './api/schemas/walletApi';
 
 export interface WalletServiceConnectionParams extends ConnectionParams {
   walletId: string;
@@ -72,8 +74,14 @@ export default class WalletServiceConnection extends BaseConnection {
 
     this.websocket = new WalletServiceWebSocket(wsOptions);
     this.websocket.on('is_online', online => this.onConnectionChange(online));
-    this.websocket.on('new-tx', payload => this.emit('new-tx', payload.data as WsTransaction));
-    this.websocket.on('update-tx', payload => this.emit('update-tx', payload.data));
+    this.websocket.on('new-tx', payload => {
+      const validatedTx = parseSchema(payload.data, wsTransactionSchema);
+      this.emit('new-tx', validatedTx as WsTransaction);
+    });
+    this.websocket.on('update-tx', payload => {
+      const validatedTx = parseSchema(payload.data, wsTransactionSchema);
+      this.emit('update-tx', validatedTx as WsTransaction);
+    });
 
     this.setState(ConnectionState.CONNECTING);
     this.websocket.setup();
