@@ -279,7 +279,13 @@ const walletApi = {
   ): Promise<TxByIdTokensResponseData> {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get(`wallet/transactions/${txId}`);
-    if (response.status === 200 && response.data.success) {
+    if (response.status === 200 && response.data) {
+      if (!response.data.success) {
+        walletApi._txNotFoundGuard(response.data);
+        throw new WalletRequestError('Error getting transaction by its id.', {
+          cause: response.data,
+        });
+      }
       return parseSchema(response.data, txByIdResponseSchema);
     }
 

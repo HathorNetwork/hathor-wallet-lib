@@ -34,7 +34,7 @@ import { decryptData, verifyMessage } from '../../src/utils/crypto';
 // TODO: We should refactor the way we use classes from inside other classes. Using dependency injection would facilitate unit tests a lot and avoid mocks like this.
 jest.mock('../../src/wallet/sendTransactionWalletService', () => {
   return jest.fn().mockImplementation(() => {
-    return { run: () => {} };
+    return { run: () => { } };
   });
 });
 
@@ -431,14 +431,14 @@ test('getTxById', async () => {
     success: true,
     txTokens: [
       {
+        txId: 'txId1',
+        timestamp: 10,
+        version: 3,
         balance: 10,
         height: 1,
-        timestamp: 10,
         tokenId: 'token1',
         tokenName: 'Token 1',
         tokenSymbol: 'T1',
-        txId: 'txId1',
-        version: 3,
         voided: false,
         weight: 65.4321,
       },
