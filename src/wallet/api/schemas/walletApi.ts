@@ -49,7 +49,8 @@ export const addressInfoObjectSchema = z.object({
   index: z.number(),
   addressPath: z.string(),
   info: z.string().optional(),
-});
+})
+.strict();
 
 /**
  * Response schema for generating new addresses.
@@ -373,27 +374,26 @@ export const authTokenResponseSchema = baseResponseSchema.extend({
 });
 
 /**
- * Response schema for transaction by ID.
+ * Schema for transaction by ID response.
  * Contains detailed information about a specific transaction.
  */
-export const txByIdResponseSchema = z.array(
-  z.object({
-    txId: z.string(),
-    timestamp: z.number(),
-    version: z.number(),
-    voided: z.boolean(),
-    height: z.number().nullable(),
-    weight: z.number(),
-    balance: z.object({
-      unlocked: bigIntCoercibleSchema,
-      locked: bigIntCoercibleSchema,
-    }),
-    tokenId: z.string(),
-    walletId: z.string(),
-    tokenName: z.string(),
-    tokenSymbol: z.string(),
-  })
-);
+export const txByIdResponseSchema = baseResponseSchema.extend({
+  txTokens: z.array(
+    z.object({
+      txId: z.string(),
+      timestamp: z.number(),
+      version: z.number(),
+      voided: z.boolean(),
+      height: z.number().nullable(),
+      weight: z.number(),
+      balance: z.union([z.string(), z.number(), z.bigint()]),
+      tokenId: z.string(),
+      walletId: z.string(),
+      tokenName: z.string(),
+      tokenSymbol: z.string(),
+    })
+  ),
+});
 
 /**
  * Schema for transaction input.
