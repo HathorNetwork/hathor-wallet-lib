@@ -59,7 +59,8 @@ export interface GetHistoryObject {
 export interface AddressInfoObject {
   address: string; // Address in base58
   index: number; // derivation index of the address
-  transactions: number; // quantity of transactions
+  addressPath: string; // Path of the address
+  info?: string | undefined; // Optional extra info when getting address info
 }
 
 export interface WalletStatusResponseData {
