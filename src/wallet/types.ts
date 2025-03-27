@@ -456,12 +456,14 @@ export interface TxByIdTokenData {
   weight: number;
   balance: Balance;
   tokenId: string;
-  walletId: string;
   tokenName: string;
   tokenSymbol: string;
 }
 
-export type TxByIdTokensResponseData = TxByIdTokenData[];
+export interface TxByIdTokensResponseData {
+  success: boolean;
+  txTokens: TxByIdTokenData[];
+}
 
 export interface WalletServiceServerUrls {
   walletServiceBaseUrl: string;

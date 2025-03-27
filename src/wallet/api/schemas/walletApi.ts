@@ -44,13 +44,14 @@ export const checkAddressesMineResponseSchema = baseResponseSchema.extend({
 /**
  * Schema for address information used in new address generation.
  */
-export const addressInfoObjectSchema = z.object({
-  address: z.string(),
-  index: z.number(),
-  addressPath: z.string(),
-  info: z.string().optional(),
-})
-.strict();
+export const addressInfoObjectSchema = z
+  .object({
+    address: z.string(),
+    index: z.number(),
+    addressPath: z.string(),
+    info: z.string().optional(),
+  })
+  .strict();
 
 /**
  * Response schema for generating new addresses.
@@ -386,9 +387,8 @@ export const txByIdResponseSchema = baseResponseSchema.extend({
       voided: z.boolean(),
       height: z.number().nullable(),
       weight: z.number(),
-      balance: z.union([z.string(), z.number(), z.bigint()]),
+      balance: bigIntCoercibleSchema,
       tokenId: z.string(),
-      walletId: z.string(),
       tokenName: z.string(),
       tokenSymbol: z.string(),
     })
