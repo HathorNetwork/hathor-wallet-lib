@@ -62,15 +62,19 @@ export const newAddressesResponseSchema = baseResponseSchema.extend({
  * Contains information about a token's name, symbol, total supply, and authorities.
  */
 export const tokenDetailsResponseSchema = baseResponseSchema.extend({
-  name: z.string(),
-  symbol: z.string(),
-  total: bigIntCoercibleSchema,
-  transactionsCount: z.number(),
-  authorities: z.object({
-    mint: z.boolean(),
-    melt: z.boolean(),
+  details: z.object({
+    tokenInfo: z.object({
+      id: z.string(),
+      name: z.string(),
+      symbol: z.string(),
+    }),
+    totalSupply: bigIntCoercibleSchema,
+    totalTransactions: z.number(),
+    authorities: z.object({
+      mint: z.boolean(),
+      melt: z.boolean(),
+    }),
   }),
-  details: z.any(),
 });
 
 /**
@@ -97,12 +101,12 @@ export const balanceSchema = z.object({
  */
 export const authorityBalanceSchema = z.object({
   unlocked: z.object({
-    mint: bigIntCoercibleSchema,
-    melt: bigIntCoercibleSchema,
+    mint: z.boolean(),
+    melt: z.boolean(),
   }),
   locked: z.object({
-    mint: bigIntCoercibleSchema,
-    melt: bigIntCoercibleSchema,
+    mint: z.boolean(),
+    melt: z.boolean(),
   }),
 });
 
@@ -212,6 +216,15 @@ export const fullNodeInputSchema = z.object({
  */
 export const fullNodeOutputSchema = z.object({
   value: bigIntCoercibleSchema,
+  token_data: z.number(),
+  script: z.string(),
+  decoded: z.object({
+    type: z.string(),
+    address: z.string(),
+    timelock: z.number().nullable().optional(),
+    value: bigIntCoercibleSchema,
+    token_data: z.number(),
+  }),
   address: z.string(),
   token: z.string(),
   authorities: bigIntCoercibleSchema,
@@ -253,10 +266,20 @@ export const fullNodeTxSchema = z.object({
  * Contains additional information about a transaction's status and relationships.
  */
 export const fullNodeMetaSchema = z.object({
-  first_block: z.number().nullable(),
-  height: z.number().nullable(),
+  hash: z.string(),
+  received_by: z.array(z.string()),
+  children: z.array(z.string()),
+  conflict_with: z.array(z.string()),
+  first_block: z.string().nullable(),
+  height: z.number(),
   voided_by: z.array(z.string()),
-  spent_outputs: z.record(z.string()),
+  spent_outputs: z.array(z.tuple([z.number(), z.array(z.string())])),
+  received_timestamp: z.number().nullable(),
+  is_voided: z.boolean(),
+  verification_status: z.string(),
+  twins: z.array(z.string()),
+  accumulated_weight: z.number(),
+  score: z.number(),
 });
 
 /**
