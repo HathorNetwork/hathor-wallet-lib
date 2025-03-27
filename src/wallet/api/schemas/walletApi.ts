@@ -396,6 +396,97 @@ export const txByIdResponseSchema = z.array(
 );
 
 /**
+ * Schema for transaction input.
+ * Represents a transaction input with its decoded data.
+ */
+export const txInputSchema = z.object({
+  tx_id: z.string(),
+  index: z.number(),
+  value: bigIntCoercibleSchema,
+  token_data: z.number(),
+  script: z.string(),
+  decoded: z.object({
+    type: z.string(),
+    address: z.string(),
+    timelock: z.number().nullable().optional(),
+    value: bigIntCoercibleSchema,
+    token_data: z.number(),
+  }),
+});
+
+/**
+ * Schema for transaction output.
+ * Represents a transaction output with its decoded data.
+ */
+export const txOutputSchema = z.object({
+  index: z.number(),
+  value: bigIntCoercibleSchema,
+  token_data: z.number(),
+  script: z.string(),
+  decoded: z.object({
+    type: z.string(),
+    address: z.string().optional(),
+    timelock: z.number().nullable().optional(),
+    value: bigIntCoercibleSchema,
+    token_data: z.number().optional(),
+  }),
+});
+
+/**
+ * Schema for websocket transaction events.
+ * Represents the structure of transactions received via websocket.
+ */
+export const wsTransactionSchema = z.object({
+  tx_id: z.string(),
+  nonce: z.number(),
+  timestamp: z.number(),
+  signalBits: z.number(),
+  version: z.number(),
+  weight: z.number(),
+  parents: z.array(z.string()),
+  inputs: z.array(
+    z.object({
+      tx_id: z.string(),
+      index: z.number(),
+      value: bigIntCoercibleSchema,
+      token_data: z.number(),
+      script: z.string(),
+      token: z.string(),
+      decoded: z.object({
+        type: z.string(),
+        address: z.string(),
+        timelock: z.number().nullable().optional(),
+        value: bigIntCoercibleSchema,
+        token_data: z.number(),
+      }),
+    })
+  ),
+  outputs: z.array(
+    z.object({
+      value: bigIntCoercibleSchema,
+      token_data: z.number(),
+      script: z.string(),
+      token: z.string(),
+      decoded: z.object({
+        type: z.string(),
+        address: z.string(),
+        timelock: z.number().nullable().optional(),
+        value: bigIntCoercibleSchema,
+        token_data: z.number(),
+      }),
+      spent_by: z.string().nullable(),
+      address: z.string(),
+      authorities: bigIntCoercibleSchema,
+      timelock: z.number().nullable(),
+      locked: z.boolean().optional(),
+    })
+  ),
+  height: z.number().optional(),
+  token_name: z.string().optional(),
+  token_symbol: z.string().optional(),
+});
+
+/**
  * Collection of all wallet API schemas.
  * Used for type validation and documentation of the wallet API.
  */
@@ -416,4 +507,5 @@ export const walletApiSchemas = {
   txOutputResponse: txOutputResponseSchema,
   authTokenResponse: authTokenResponseSchema,
   txByIdResponse: txByIdResponseSchema,
+  wsTransaction: wsTransactionSchema,
 };
