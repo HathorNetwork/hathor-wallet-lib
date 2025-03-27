@@ -27,6 +27,20 @@ import {
 } from '../types';
 import HathorWalletServiceWallet from '../wallet';
 import { WalletRequestError, TxNotFoundError } from '../../errors';
+import { parseSchema } from '../../utils/bigint';
+import {
+  walletApiSchemas,
+  addressesResponseSchema,
+  checkAddressesMineResponseSchema,
+  newAddressesResponseSchema,
+  tokenDetailsResponseSchema,
+  balanceResponseSchema,
+  txProposalCreateResponseSchema,
+  txProposalUpdateResponseSchema,
+  fullNodeVersionDataSchema,
+  fullNodeTxResponseSchema,
+  fullNodeTxConfirmationDataResponseSchema,
+} from './schemas/walletApi';
 
 /**
  * Api calls for wallet
@@ -51,7 +65,7 @@ const walletApi = {
     const { data } = response;
 
     if (response.status === 200 && data.success) {
-      return data.data;
+      return parseSchema(data.data, fullNodeVersionDataSchema);
     }
     throw new WalletRequestError('Error getting fullnode data.');
   },
@@ -105,7 +119,7 @@ const walletApi = {
     const response = await axios.get(url);
 
     if (response.status === 200 && response.data.success === true) {
-      return response.data;
+      return parseSchema(response.data, addressesResponseSchema);
     }
 
     throw new WalletRequestError('Error getting wallet addresses.');
@@ -118,7 +132,7 @@ const walletApi = {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.post('wallet/addresses/check_mine', { addresses });
     if (response.status === 200 && response.data.success === true) {
-      return response.data;
+      return parseSchema(response.data, checkAddressesMineResponseSchema);
     }
 
     throw new WalletRequestError('Error checking wallet addresses.');
@@ -128,7 +142,7 @@ const walletApi = {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get('wallet/addresses/new');
     if (response.status === 200 && response.data.success === true) {
-      return response.data;
+      return parseSchema(response.data, newAddressesResponseSchema);
     }
     throw new WalletRequestError('Error getting wallet addresses to use.');
   },
@@ -141,7 +155,7 @@ const walletApi = {
     const response = await axios.get(`wallet/tokens/${tokenId}/details`);
 
     if (response.status === 200 && response.data.success === true) {
-      return response.data;
+      return parseSchema(response.data, tokenDetailsResponseSchema);
     }
     throw new WalletRequestError('Error getting token details.');
   },
@@ -157,7 +171,7 @@ const walletApi = {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get('wallet/balances', data);
     if (response.status === 200 && response.data.success === true) {
-      return response.data;
+      return parseSchema(response.data, balanceResponseSchema);
     }
     throw new WalletRequestError('Error getting wallet balance.');
   },
@@ -202,7 +216,7 @@ const walletApi = {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.post('tx/proposal', data);
     if (response.status === 201) {
-      return response.data;
+      return parseSchema(response.data, txProposalCreateResponseSchema);
     }
     throw new WalletRequestError('Error creating tx proposal.');
   },
@@ -216,7 +230,7 @@ const walletApi = {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.put(`tx/proposal/${id}`, data);
     if (response.status === 200) {
-      return response.data;
+      return parseSchema(response.data, txProposalUpdateResponseSchema);
     }
     throw new WalletRequestError('Error sending tx proposal.');
   },
@@ -228,7 +242,7 @@ const walletApi = {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.delete(`tx/proposal/${id}`);
     if (response.status === 200) {
-      return response.data;
+      return parseSchema(response.data, txProposalUpdateResponseSchema);
     }
     throw new WalletRequestError('Error deleting tx proposal.');
   },
@@ -284,7 +298,7 @@ const walletApi = {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get(`wallet/proxy/transactions/${txId}`);
     if (response.status === 200 && response.data.success) {
-      return response.data;
+      return parseSchema(response.data, fullNodeTxResponseSchema);
     }
 
     walletApi._txNotFoundGuard(response.data);
@@ -301,7 +315,7 @@ const walletApi = {
     const axios = await axiosInstance(wallet, true);
     const response = await axios.get(`wallet/proxy/transactions/${txId}/confirmation_data`);
     if (response.status === 200 && response.data.success) {
-      return response.data;
+      return parseSchema(response.data, fullNodeTxConfirmationDataResponseSchema);
     }
 
     walletApi._txNotFoundGuard(response.data);
