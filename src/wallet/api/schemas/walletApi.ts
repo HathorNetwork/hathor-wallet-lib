@@ -47,7 +47,8 @@ export const checkAddressesMineResponseSchema = baseResponseSchema.extend({
 export const addressInfoObjectSchema = z.object({
   address: z.string(),
   index: z.number(),
-  transactions: z.number(),
+  addressPath: z.string(),
+  info: z.string().optional(),
 });
 
 /**
@@ -70,6 +71,16 @@ export const tokenDetailsResponseSchema = baseResponseSchema.extend({
     mint: z.boolean(),
     melt: z.boolean(),
   }),
+  details: z.any(),
+});
+
+/**
+ * Schema for token information.
+ */
+export const tokenInfoSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  symbol: z.string(),
 });
 
 /**
@@ -97,16 +108,23 @@ export const authorityBalanceSchema = z.object({
 });
 
 /**
+ * Schema for balance object.
+ * Contains token info, balance, authorities, and transaction count.
+ */
+export const getBalanceObjectSchema = z.object({
+  token: tokenInfoSchema,
+  balance: balanceSchema,
+  tokenAuthorities: authorityBalanceSchema,
+  transactions: z.number(),
+  lockExpires: z.number().nullable(),
+});
+
+/**
  * Response schema for token balances.
- * Maps token IDs to their respective balance and authority information.
+ * Contains an array of balance objects for each token.
  */
 export const balanceResponseSchema = baseResponseSchema.extend({
-  balances: z.record(
-    z.object({
-      balance: balanceSchema,
-      authority: authorityBalanceSchema,
-    })
-  ),
+  balances: z.array(getBalanceObjectSchema),
 });
 
 /**
@@ -116,10 +134,7 @@ export const balanceResponseSchema = baseResponseSchema.extend({
 export const txProposalInputsSchema = z.object({
   txId: z.string(),
   index: z.number(),
-  value: bigIntCoercibleSchema,
-  address: z.string(),
-  token: z.string(),
-  authorities: bigIntCoercibleSchema,
+  addressPath: z.string(),
 });
 
 /**
@@ -176,12 +191,20 @@ export const fullNodeVersionDataSchema = z.object({
  * Represents the inputs of a transaction as seen by the full node.
  */
 export const fullNodeInputSchema = z.object({
-  txId: z.string(),
-  index: z.number(),
   value: bigIntCoercibleSchema,
-  address: z.string(),
-  token: z.string(),
-  authorities: bigIntCoercibleSchema,
+  token_data: z.number(),
+  script: z.string(),
+  decoded: z.object({
+    type: z.string(),
+    address: z.string(),
+    timelock: z.number().nullable().optional(),
+    value: bigIntCoercibleSchema,
+    token_data: z.number(),
+  }),
+  tx_id: z.string(),
+  index: z.number(),
+  token: z.string().nullable().optional(),
+  spent_by: z.string().nullable().optional(),
 });
 
 /**
