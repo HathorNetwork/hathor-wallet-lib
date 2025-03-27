@@ -454,7 +454,7 @@ export interface TxByIdTokenData {
   voided: boolean;
   height?: number | null;
   weight: number;
-  balance: Balance;
+  balance: bigint;
   tokenId: string;
   tokenName: string;
   tokenSymbol: string;
