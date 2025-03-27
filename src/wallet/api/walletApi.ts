@@ -29,7 +29,6 @@ import HathorWalletServiceWallet from '../wallet';
 import { WalletRequestError, TxNotFoundError } from '../../errors';
 import { parseSchema } from '../../utils/bigint';
 import {
-  walletApiSchemas,
   addressesResponseSchema,
   checkAddressesMineResponseSchema,
   newAddressesResponseSchema,
