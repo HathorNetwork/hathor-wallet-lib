@@ -440,8 +440,8 @@ export const wsTransactionSchema = z.object({
   tx_id: z.string(),
   nonce: z.number(),
   timestamp: z.number(),
-  signalBits: z.number(),
   version: z.number(),
+  voided: z.boolean(),
   weight: z.number(),
   parents: z.array(z.string()),
   inputs: z.array(
@@ -450,40 +450,42 @@ export const wsTransactionSchema = z.object({
       index: z.number(),
       value: bigIntCoercibleSchema,
       token_data: z.number(),
-      script: z.string(),
+      script: z.object({
+        type: z.literal('Buffer'),
+        data: z.array(z.number()),
+      }),
       token: z.string(),
       decoded: z.object({
         type: z.string(),
         address: z.string(),
-        timelock: z.number().nullable().optional(),
-        value: bigIntCoercibleSchema,
-        token_data: z.number(),
+        timelock: z.number().nullable(),
       }),
     })
   ),
   outputs: z.array(
     z.object({
       value: bigIntCoercibleSchema,
-      token_data: z.number(),
-      script: z.string(),
+      script: z.object({
+        type: z.literal('Buffer'),
+        data: z.array(z.number()),
+      }),
+      tokenData: z.number(),
+      decodedScript: z.null(),
       token: z.string(),
+      locked: z.boolean(),
+      index: z.number(),
       decoded: z.object({
         type: z.string(),
         address: z.string(),
-        timelock: z.number().nullable().optional(),
-        value: bigIntCoercibleSchema,
-        token_data: z.number(),
+        timelock: z.number().nullable(),
       }),
-      spent_by: z.string().nullable(),
-      address: z.string(),
-      authorities: bigIntCoercibleSchema,
-      timelock: z.number().nullable(),
-      locked: z.boolean().optional(),
+      token_data: z.number(),
     })
   ),
-  height: z.number().optional(),
-  token_name: z.string().optional(),
-  token_symbol: z.string().optional(),
+  height: z.number(),
+  token_name: z.string().nullable(),
+  token_symbol: z.string().nullable(),
+  signal_bits: z.number(),
 });
 
 /**
