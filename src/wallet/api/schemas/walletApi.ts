@@ -47,8 +47,7 @@ export const checkAddressesMineResponseSchema = baseResponseSchema.extend({
 export const addressInfoObjectSchema = z.object({
   address: z.string(),
   index: z.number(),
-  addressPath: z.string(),
-  info: z.string().optional(),
+  transactions: z.number(),
 });
 
 /**
