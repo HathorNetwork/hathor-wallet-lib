@@ -59,7 +59,6 @@ import {
   WalletTxTemplateInterpreter,
 } from './template/transaction';
 
-export * from './nano_contracts/types';
 export {
   PartialTx,
   PartialTxInputData,
@@ -123,3 +122,6 @@ export {
   TransactionTemplateBuilder,
   WalletTxTemplateInterpreter,
 };
+
+export * from './nano_contracts/types';
+export * from './models/types';
