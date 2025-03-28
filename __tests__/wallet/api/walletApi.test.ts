@@ -1,5 +1,4 @@
 import { AxiosInstance, AxiosResponse } from 'axios';
-import * as walletServiceAxios from '../../../src/wallet/api/walletServiceAxios';
 import walletApi from '../../../src/wallet/api/walletApi';
 import Network from '../../../src/models/network';
 import HathorWalletServiceWallet from '../../../src/wallet/wallet';
