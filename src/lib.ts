@@ -122,3 +122,6 @@ export {
   TransactionTemplateBuilder,
   WalletTxTemplateInterpreter,
 };
+
+export * from './nano_contracts/types';
+export * from './models/types';
