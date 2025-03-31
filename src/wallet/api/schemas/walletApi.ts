@@ -9,6 +9,25 @@ import { z } from 'zod';
 import { bigIntCoercibleSchema } from '../../../utils/bigint';
 
 /**
+ * Schema for validating Hathor addresses.
+ * Addresses are base58 encoded and must be 34-35 characters long.
+ * They can only contain characters from the base58 alphabet.
+ */
+export const AddressSchema = z
+  .string()
+  .regex(/^[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{34,35}$/);
+
+/**
+ * Schema for validating BIP44 derivation paths.
+ * Must start with 'm' followed by zero or more segments.
+ * Each segment starts with '/' followed by numbers and may end with a single quote (').
+ * Example: m/44'/280'/0'/0/0
+ */
+export const AddressPathSchema = z
+  .string()
+  .regex(/^m(\/\d+'?)*$/, 'Invalid BIP44 derivation path format');
+
+/**
  * Base response schema that all API responses extend from.
  * Contains a success flag indicating if the operation was successful.
  */
@@ -21,7 +40,7 @@ const baseResponseSchema = z.object({
  * Represents a single address in the wallet with its derivation index and transaction count.
  */
 export const getAddressesObjectSchema = z.object({
-  address: z.string(), // Address in base58
+  address: AddressSchema, // Address in base58
   index: z.number(), // derivation index of the address
   transactions: z.number(), // quantity of transactions
 });
@@ -38,7 +57,7 @@ export const addressesResponseSchema = baseResponseSchema.extend({
  * Maps addresses to boolean values indicating ownership.
  */
 export const checkAddressesMineResponseSchema = baseResponseSchema.extend({
-  addresses: z.record(z.boolean()), // WalletAddressMap
+  addresses: z.record(AddressSchema, z.boolean()), // WalletAddressMap with validated address keys
 });
 
 /**
@@ -46,9 +65,9 @@ export const checkAddressesMineResponseSchema = baseResponseSchema.extend({
  */
 export const addressInfoObjectSchema = z
   .object({
-    address: z.string(),
+    address: AddressSchema,
     index: z.number(),
-    addressPath: z.string(),
+    addressPath: AddressPathSchema,
     info: z.string().optional(),
   })
   .strict();
@@ -61,16 +80,21 @@ export const newAddressesResponseSchema = baseResponseSchema.extend({
 });
 
 /**
+ * Schema for token information.
+ */
+export const tokenInfoSchema = z.object({
+  id: z.string().regex(/^[a-fA-F0-9]{64}$|^00$/),
+  name: z.string(),
+  symbol: z.string(),
+});
+
+/**
  * Response schema for token details.
  * Contains information about a token's name, symbol, total supply, and authorities.
  */
 export const tokenDetailsResponseSchema = baseResponseSchema.extend({
   details: z.object({
-    tokenInfo: z.object({
-      id: z.string(),
-      name: z.string(),
-      symbol: z.string(),
-    }),
+    tokenInfo: tokenInfoSchema,
     totalSupply: bigIntCoercibleSchema,
     totalTransactions: z.number(),
     authorities: z.object({
@@ -78,15 +102,6 @@ export const tokenDetailsResponseSchema = baseResponseSchema.extend({
       melt: z.boolean(),
     }),
   }),
-});
-
-/**
- * Schema for token information.
- */
-export const tokenInfoSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  symbol: z.string(),
 });
 
 /**
@@ -140,7 +155,7 @@ export const balanceResponseSchema = baseResponseSchema.extend({
 export const txProposalInputsSchema = z.object({
   txId: z.string(),
   index: z.number(),
-  addressPath: z.string(),
+  addressPath: AddressPathSchema,
 });
 
 /**
@@ -176,19 +191,21 @@ export const txProposalUpdateResponseSchema = baseResponseSchema.extend({
  * Schema for full node version data.
  * Contains network parameters and configuration values.
  */
-export const fullNodeVersionDataSchema = z.object({
-  timestamp: z.number(),
-  version: z.string(),
-  network: z.string(),
-  minWeight: z.number(),
-  minTxWeight: z.number(),
-  minTxWeightCoefficient: z.number(),
-  minTxWeightK: z.number(),
-  tokenDepositPercentage: z.number(),
-  rewardSpendMinBlocks: z.number(),
-  maxNumberInputs: z.number(),
-  maxNumberOutputs: z.number(),
-});
+export const fullNodeVersionDataSchema = z
+  .object({
+    timestamp: z.number(),
+    version: z.string(),
+    network: z.string(),
+    minWeight: z.number(),
+    minTxWeight: z.number(),
+    minTxWeightCoefficient: z.number(),
+    minTxWeightK: z.number(),
+    tokenDepositPercentage: z.number(),
+    rewardSpendMinBlocks: z.number(),
+    maxNumberInputs: z.number(),
+    maxNumberOutputs: z.number(),
+  })
+  .passthrough();
 
 /**
  * Schema for full node transaction inputs.
@@ -361,7 +378,7 @@ export const txOutputResponseSchema = baseResponseSchema.extend({
       timelock: z.number().nullable(),
       heightlock: z.number().nullable(),
       locked: z.boolean(),
-      addressPath: z.string(),
+      addressPath: AddressPathSchema,
     })
   ),
 });
