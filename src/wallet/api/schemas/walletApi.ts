@@ -190,6 +190,8 @@ export const txProposalUpdateResponseSchema = baseResponseSchema.extend({
 /**
  * Schema for full node version data.
  * Contains network parameters and configuration values.
+ * Uses passthrough() to allow additional fields in the response without breaking validation,
+ * as the full node may add new fields in future versions without changing the API version.
  */
 export const fullNodeVersionDataSchema = z
   .object({
