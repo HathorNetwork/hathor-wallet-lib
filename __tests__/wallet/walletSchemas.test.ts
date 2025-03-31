@@ -16,16 +16,16 @@ import {
   authTokenResponseSchema,
   txByIdResponseSchema,
   wsTransactionSchema,
-} from '../src/wallet/api/schemas/walletApi';
+} from '../../src/wallet/api/schemas/walletApi';
 
 // Test variables
-const addr1 = 'addr1';
-const addr2 = 'addr2';
-const path1 = 'path1';
-const path2 = 'path2';
+const addr1 = 'HNJ6craHLHMyqE1eXvwmxbR1LruHCKqLqR';
+const addr2 = 'HNJ6craHLHMyqE1eXvwmxbR1LruHCKqLqS';
+const path1 = 'm/44\'/280\'/0\'/0/0';
+const path2 = 'm/44\'/280\'/0\'/0/1';
 const info1 = 'info1';
-const token1 = 'token1';
-const tx1 = 'tx1';
+const token1 = '0000034e42c9f2a7a7ab720e2f34bc6767d0198bfdba9334fe61f033b6c3ec16';
+const tx1 = '0000034e42c9f2a7a7ab720e2f34bc6767d0198bfdba9334fe61f033b6c3ec17';
 const wallet1 = 'wallet1';
 const xpub1 = 'xpub1';
 const proposal1 = 'proposal1';
@@ -59,8 +59,8 @@ describe('Wallet API Schemas', () => {
       const validData = {
         success: true,
         addresses: {
-          addr1: true,
-          addr2: false,
+          [addr1]: true,
+          [addr2]: false,
         },
       };
       expect(() => checkAddressesMineResponseSchema.parse(validData)).not.toThrow();
@@ -70,7 +70,7 @@ describe('Wallet API Schemas', () => {
       const invalidData = {
         success: true,
         addresses: {
-          addr1: 'true', // should be boolean
+          [addr1]: 'true', // should be boolean
         },
       };
       expect(() => checkAddressesMineResponseSchema.parse(invalidData)).toThrow();
