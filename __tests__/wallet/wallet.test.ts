@@ -24,11 +24,14 @@ import {
   TOKEN_MELT_MASK,
   TOKEN_MINT_MASK,
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
+  P2PKH_ACCT_PATH,
+  P2SH_ACCT_PATH,
 } from '../../src/constants';
 import { MemoryStore, Storage } from '../../src/storage';
 import walletApi from '../../src/wallet/api/walletApi';
 import walletUtils from '../../src/utils/wallet';
 import { decryptData, verifyMessage } from '../../src/utils/crypto';
+import { WalletType } from '../../src/types';
 
 // Mock SendTransactionWalletService class so we don't try to send actual transactions
 // TODO: We should refactor the way we use classes from inside other classes. Using dependency injection would facilitate unit tests a lot and avoid mocks like this.
@@ -1707,4 +1710,57 @@ test('signMessageWithAddress', async () => {
   const signedMessage = await wallet.signMessageWithAddress(message, addressIndex, '1234');
 
   expect(verifyMessage(message, signedMessage, address)).toBeTruthy();
+});
+
+test('getAddressPathForIndex', async () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = defaultWalletSeed;
+  const store = new MemoryStore();
+  const storage = new Storage(store);
+
+  jest
+    .spyOn(HathorWalletServiceWallet.prototype, 'pollForWalletStatus')
+    .mockImplementation(() => Promise.resolve());
+  jest.spyOn(HathorWalletServiceWallet.prototype, 'setupConnection').mockImplementation(jest.fn());
+  jest
+    .spyOn(walletApi, 'getNewAddresses')
+    .mockImplementation(() => Promise.resolve({ success: true, addresses: [] }));
+  jest.spyOn(walletApi, 'createWallet').mockImplementation(() =>
+    Promise.resolve({
+      success: true,
+      status: {
+        walletId: 'id',
+        xpubkey: 'xpub',
+        status: 'creating',
+        maxGap: 20,
+        createdAt: 0,
+        readyAt: 0,
+      },
+    })
+  );
+
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    storage,
+  });
+
+  await wallet.start({ pinCode: '1234', password: '1234' });
+
+  // Test P2PKH wallet type
+  jest.spyOn(storage, 'getWalletType').mockResolvedValue(WalletType.P2PKH);
+  const p2pkhPath = await wallet.getAddressPathForIndex(1);
+  expect(p2pkhPath).toBe(`${P2PKH_ACCT_PATH}/0/1`);
+
+  // Test multisig wallet type
+  jest.spyOn(storage, 'getWalletType').mockResolvedValue(WalletType.MULTISIG);
+  const multisigPath = await wallet.getAddressPathForIndex(1);
+  expect(multisigPath).toBe(`${P2SH_ACCT_PATH}/0/1`);
+
+  // Test with index 0
+  jest.spyOn(storage, 'getWalletType').mockResolvedValue(WalletType.P2PKH);
+  const zeroIndexPath = await wallet.getAddressPathForIndex(0);
+  expect(zeroIndexPath).toBe(`${P2PKH_ACCT_PATH}/0/0`);
 });
