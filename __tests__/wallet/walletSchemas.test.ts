@@ -21,8 +21,8 @@ import {
 // Test variables
 const addr1 = 'HNJ6craHLHMyqE1eXvwmxbR1LruHCKqLqR';
 const addr2 = 'HNJ6craHLHMyqE1eXvwmxbR1LruHCKqLqS';
-const path1 = 'm/44\'/280\'/0\'/0/0';
-const path2 = 'm/44\'/280\'/0\'/0/1';
+const path1 = "m/44'/280'/0'/0/0";
+const path2 = "m/44'/280'/0'/0/1";
 const info1 = 'info1';
 const token1 = '0000034e42c9f2a7a7ab720e2f34bc6767d0198bfdba9334fe61f033b6c3ec16';
 const tx1 = '0000034e42c9f2a7a7ab720e2f34bc6767d0198bfdba9334fe61f033b6c3ec17';
@@ -97,6 +97,63 @@ describe('Wallet API Schemas', () => {
         ],
       };
       expect(() => newAddressesResponseSchema.parse(invalidData)).toThrow();
+    });
+
+    it('should validate various valid BIP44 paths', () => {
+      const validPaths = [
+        "m/44'/280'/0'/0/0", // Standard path
+        "m/44'/280'/0'/0/1", // Different index
+        "m/44'/280'/0'/0/999", // Large index
+        "m/44'/280'/1'/0/0", // Different account
+        "m/44'/280'/0'/1/0", // Different change
+      ];
+
+      for (const path of validPaths) {
+        const data = {
+          success: true,
+          addresses: [{ address: addr1, index: 0, addressPath: path }],
+        };
+        expect(() => newAddressesResponseSchema.parse(data)).not.toThrow();
+      }
+    });
+
+    it('should reject various invalid BIP44 paths', () => {
+      const invalidPaths = [
+        "n/44'/280'/0'/0/0", // Wrong starting letter
+        "/44'/280'/0'/0/0", // Missing 'm'
+        "m44'/280'/0'/0/0", // Missing first slash
+        "m//44'/280'/0'/0/0", // Double slash
+        "m/44'/280'/0'/0/a", // Non-numeric character
+        "m/44'/280'/0'/0/0/", // Trailing slash
+        "m/44'/280'/0'/0/0//", // Double trailing slash
+        "m/44'/280'/0'/0/0x", // Hex number
+        "m/44'/280'/0'/0/ ", // Space in path
+        " m/44'/280'/0'/0/0", // Leading space
+        "m/44'/280'/0'/0/0 ", // Trailing space
+        "m/44'/280'/0'/0/'", // Quote without number
+        "m/44'/280'/0'/0/''", // Double quote
+      ];
+
+      for (const path of invalidPaths) {
+        const data = {
+          success: true,
+          addresses: [{ address: addr1, index: 0, addressPath: path }],
+        };
+        expect(() => newAddressesResponseSchema.parse(data)).toThrow();
+      }
+    });
+
+    it('should validate multiple addresses with different paths', () => {
+      const data = {
+        success: true,
+        addresses: [
+          { address: addr1, index: 0, addressPath: "m/44'/280'/0'/0/0" },
+          { address: addr2, index: 1, addressPath: "m/44'/280'/0'/0/1" },
+          { address: addr1, index: 2, addressPath: "m/44'/280'/1'/0/0" },
+          { address: addr2, index: 3, addressPath: "m/44'/280'/0'/1/0" },
+        ],
+      };
+      expect(() => newAddressesResponseSchema.parse(data)).not.toThrow();
     });
   });
 
