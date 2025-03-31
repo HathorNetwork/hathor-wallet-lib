@@ -327,42 +327,33 @@ test('getTxBalance', async () => {
 });
 
 test('checkAddressesMine', async () => {
-  const requestPassword = jest.fn();
-  const network = new Network('testnet');
-  const seed = defaultWalletSeed;
-  const wallet = new HathorWalletServiceWallet({
-    requestPassword,
-    seed,
-    network,
-    passphrase: '',
-    xpriv: null,
-    xpub: null,
-  });
+  const wallet = buildWalletToAuthenticateApiCall();
+  jest.spyOn(wallet, 'isReady').mockReturnValue(true);
 
-  jest.spyOn(wallet, 'validateAndRenewAuthToken').mockImplementation(jest.fn());
-
-  config.setWalletServiceBaseUrl('https://wallet-service.testnet.hathor.network/');
+  const addr1 = 'WdSD7aytFEZ5Hp8quhqu3wUCsyyGqcneMu';
+  const addr2 = 'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM';
+  const addr3 = 'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX';
 
   mockAxiosAdapter.onPost('wallet/addresses/check_mine').reply(200, {
     success: true,
     addresses: {
-      address1: true,
-      address2: false,
-      address3: false,
+      [addr1]: true,
+      [addr2]: false,
+      [addr3]: false,
     },
   });
 
-  const walletAddressMap = await wallet.checkAddressesMine(['address1', 'address2', 'address3']);
+  const walletAddressMap = await wallet.checkAddressesMine([addr1, addr2, addr3]);
 
-  expect(walletAddressMap.address1).toStrictEqual(true);
-  expect(walletAddressMap.address2).toStrictEqual(false);
-  expect(walletAddressMap.address3).toStrictEqual(false);
+  expect(walletAddressMap[addr1]).toStrictEqual(true);
+  expect(walletAddressMap[addr2]).toStrictEqual(false);
+  expect(walletAddressMap[addr3]).toStrictEqual(false);
 
   mockAxiosAdapter.onPost('wallet/addresses/check_mine').reply(400, {
     success: false,
   });
 
-  await expect(wallet.checkAddressesMine(['address1', 'address2', 'address3'])).rejects.toThrow(
+  await expect(wallet.checkAddressesMine([addr1, addr2, addr3])).rejects.toThrow(
     'Error checking wallet addresses.'
   );
 });
