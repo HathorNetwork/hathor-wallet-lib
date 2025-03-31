@@ -322,6 +322,31 @@ describe('Wallet API Schemas', () => {
       expect(() => fullNodeVersionDataSchema.parse(validData)).not.toThrow();
     });
 
+    it('should allow additional fields due to passthrough', () => {
+      const validDataWithExtra = {
+        timestamp: 1234567890,
+        version: '1.0.0',
+        network: 'mainnet',
+        minWeight: 1,
+        minTxWeight: 1,
+        minTxWeightCoefficient: 1,
+        minTxWeightK: 1,
+        tokenDepositPercentage: 1,
+        rewardSpendMinBlocks: 1,
+        maxNumberInputs: 1,
+        maxNumberOutputs: 1,
+        // Additional fields that should be allowed
+        newFeatureFlag: true,
+        customSetting: 'value',
+        extraNumber: 42,
+        complexObject: {
+          nested: true,
+          data: [1, 2, 3]
+        }
+      };
+      expect(() => fullNodeVersionDataSchema.parse(validDataWithExtra)).not.toThrow();
+    });
+
     it('should reject invalid full node version data', () => {
       const invalidData = {
         timestamp: '1234567890', // should be number
