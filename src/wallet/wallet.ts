@@ -14,6 +14,8 @@ import {
   AUTHORITY_TOKEN_DATA,
   TOKEN_MELT_MASK,
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
+  P2SH_ACCT_PATH,
+  P2PKH_ACCT_PATH,
 } from '../constants';
 import { signMessage } from '../utils/crypto';
 import walletApi from './api/walletApi';
@@ -70,7 +72,7 @@ import {
   UninitializedWalletError,
 } from '../errors';
 import { ErrorMessages } from '../errorMessages';
-import { IStorage, IWalletAccessData, OutputValueType } from '../types';
+import { IStorage, IWalletAccessData, OutputValueType, WalletType } from '../types';
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
@@ -2127,6 +2129,27 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // We currently do not have support for hardware wallets
     // in the wallet-service facade.
     return false;
+  }
+
+  /**
+   * Get address path from specific derivation index
+   *
+   * @param {number} index Address path index
+   *
+   * @return {Promise<string>} Address path for the given index
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async getAddressPathForIndex(index: number): Promise<string> {
+    const walletType = await this.storage.getWalletType();
+    if (walletType === WalletType.MULTISIG) {
+      // P2SH
+      return `${P2SH_ACCT_PATH}/0/${index}`;
+    }
+
+    // P2PKH
+    return `${P2PKH_ACCT_PATH}/0/${index}`;
   }
 }
 
