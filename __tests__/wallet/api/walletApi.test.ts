@@ -64,7 +64,7 @@ describe('walletApi', () => {
       success: true,
       addresses: [
         {
-          address: 'address1',
+          address: 'WdSD7aytFEZ5Hp8quhqu3wUCsyyGqcneMu',
           index: 0,
           transactions: 1,
         },
@@ -162,7 +162,7 @@ describe('walletApi', () => {
       success: true,
       addresses: [
         {
-          address: 'addr1',
+          address: 'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM',
           index: 0,
           addressPath: "m/44'/280'/0'/0/0",
         },
@@ -190,7 +190,7 @@ describe('walletApi', () => {
       success: true,
       details: {
         tokenInfo: {
-          id: 'token1',
+          id: '0000000000000000000000000000000000000000000000000000000000000001',
           name: 'Token 1',
           symbol: 'TK1',
         },
@@ -225,7 +225,7 @@ describe('walletApi', () => {
       balances: [
         {
           token: {
-            id: 'token1',
+            id: '0000000000000000000000000000000000000000000000000000000000000002',
             name: 'Token 1',
             symbol: 'TK1',
           },
