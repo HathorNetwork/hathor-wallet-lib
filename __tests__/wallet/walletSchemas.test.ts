@@ -341,8 +341,8 @@ describe('Wallet API Schemas', () => {
         extraNumber: 42,
         complexObject: {
           nested: true,
-          data: [1, 2, 3]
-        }
+          data: [1, 2, 3],
+        },
       };
       expect(() => fullNodeVersionDataSchema.parse(validDataWithExtra)).not.toThrow();
     });
