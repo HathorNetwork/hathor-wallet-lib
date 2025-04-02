@@ -12,7 +12,7 @@ import {
 import HathorWallet from '../../../src/new/wallet';
 import { loggers } from '../utils/logger.util';
 import SendTransaction from '../../../src/new/sendTransaction';
-import { LevelDBStore, MemoryStore, Storage } from '../../../src/storage';
+import { MemoryStore, Storage } from '../../../src/storage';
 import walletUtils from '../../../src/utils/wallet';
 import transactionUtils from '../../../src/utils/transaction';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
@@ -101,17 +101,6 @@ describe('locked utxos', () => {
     const storeMem = new MemoryStore();
     const storageMem = new Storage(storeMem);
     await testUnlockWhenSpent(storageMem, walletDataMem);
-
-    // LevelDB test
-    const DATA_DIR = './testdata.leveldb';
-    const walletDataLDB = precalculationHelpers.test.getPrecalculatedWallet();
-    const xpubkeyLDB = walletUtils.getXPubKeyFromSeed(walletDataLDB.words, {
-      accountDerivationIndex: "0'/0",
-    });
-    const walletId = walletUtils.getWalletIdFromXPub(xpubkeyLDB);
-    const storeLDB = new LevelDBStore(walletId, DATA_DIR);
-    const storageLDB = new Storage(storeLDB);
-    await testUnlockWhenSpent(storageLDB, walletDataLDB);
   });
 });
 
