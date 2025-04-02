@@ -7,13 +7,11 @@
 
 import { Storage } from './storage';
 import { MemoryStore } from './memory_store';
-import LevelDBStore from './leveldb/store';
 
 const store = new MemoryStore();
 const storage = new Storage(store);
 
 export { Storage };
 export { MemoryStore };
-export { LevelDBStore };
 
 export default storage;
