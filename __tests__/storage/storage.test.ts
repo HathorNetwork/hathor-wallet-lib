@@ -8,7 +8,7 @@
 import { HDPrivateKey } from 'bitcore-lib';
 import Mnemonic from 'bitcore-mnemonic';
 import walletApi from '../../src/api/wallet';
-import { MemoryStore, Storage, LevelDBStore } from '../../src/storage';
+import { MemoryStore, Storage } from '../../src/storage';
 import tx_history from '../__fixtures__/tx_history';
 import { processHistory, loadAddresses } from '../../src/utils/storage';
 import walletUtils from '../../src/utils/wallet';
@@ -34,8 +34,6 @@ import {
   WALLET_FLAGS,
 } from '../../src/types';
 
-const DATA_DIR = './testdata.leveldb';
-
 describe('handleStop', () => {
   const PIN = '0000';
   const PASSWD = '0000';
@@ -48,12 +46,6 @@ describe('handleStop', () => {
 
   it('should work with memory store', async () => {
     const store = new MemoryStore();
-    await handleStopTest(store);
-  }, 20000);
-
-  it('should work with leveldb store', async () => {
-    const walletId = walletUtils.getWalletIdFromXPub(accessData.xpubkey);
-    const store = new LevelDBStore(walletId, DATA_DIR);
     await handleStopTest(store);
   }, 20000);
 
@@ -447,13 +439,6 @@ describe('process locked utxos', () => {
     await processLockedUtxoTest(store);
   });
 
-  it('should work with leveldb store', async () => {
-    const xpriv = HDPrivateKey();
-    const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
-    const store = new LevelDBStore(walletId, DATA_DIR);
-    await processLockedUtxoTest(store);
-  });
-
   function getLockedUtxo(
     txId,
     address,
@@ -697,13 +682,6 @@ describe('getChangeAddress', () => {
     await getChangeAddressTest(store);
   });
 
-  it('should work with leveldb store', async () => {
-    const xpriv = HDPrivateKey();
-    const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
-    const store = new LevelDBStore(walletId, DATA_DIR);
-    await getChangeAddressTest(store);
-  });
-
   async function getChangeAddressTest(store) {
     const storage = new Storage(store);
     const addr0 = 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ';
@@ -728,13 +706,6 @@ describe('getChangeAddress', () => {
 describe('getAcctPathXpriv', () => {
   it('should work with memory store', async () => {
     const store = new MemoryStore();
-    await getAcctXprivTest(store);
-  });
-
-  it('should work with leveldb store', async () => {
-    const xpriv = HDPrivateKey();
-    const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
-    const store = new LevelDBStore(walletId, DATA_DIR);
     await getAcctXprivTest(store);
   });
 
@@ -783,12 +754,6 @@ describe('access data methods', () => {
 
   it('should work with memory store', async () => {
     const store = new MemoryStore();
-    await accessDataTest(store);
-  });
-
-  it('should work with leveldb store', async () => {
-    const walletId = walletUtils.getWalletIdFromXPub(mainKey.xpubkey);
-    const store = new LevelDBStore(walletId, DATA_DIR);
     await accessDataTest(store);
   });
 
@@ -871,20 +836,6 @@ describe('checkPin and checkPassword', () => {
     await checkPasswdTest(store);
   });
 
-  it('should work with leveldb store', async () => {
-    const seed = walletUtils.generateWalletWords();
-    const accessData = walletUtils.generateAccessDataFromSeed(seed, {
-      pin: PINCODE,
-      password: PASSWD,
-      networkName: 'testnet',
-    });
-    const walletId = walletUtils.getWalletIdFromXPub(accessData.xpubkey);
-    const store = new LevelDBStore(walletId, DATA_DIR);
-    await store.saveAccessData(accessData);
-    await checkPinTest(store);
-    await checkPasswdTest(store);
-  });
-
   async function checkPinTest(store) {
     const storage = new Storage(store);
     await expect(storage.checkPin(PINCODE)).resolves.toEqual(true);
@@ -949,13 +900,6 @@ test('isHardware', async () => {
 describe('utxo selection in all stores', () => {
   it('should work with memory store', async () => {
     const store = new MemoryStore();
-    await testSelectUtxos(store);
-  });
-
-  it('should work with leveldb store', async () => {
-    const xpriv = new HDPrivateKey();
-    const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
-    const store = new LevelDBStore(walletId, DATA_DIR);
     await testSelectUtxos(store);
   });
 
@@ -1119,13 +1063,6 @@ describe('utxo selection in all stores', () => {
 describe('scanning policy methods', () => {
   it('should work with memory store', async () => {
     const store = new MemoryStore();
-    await testScanningPolicy(store);
-  });
-
-  it('should work with leveldb store', async () => {
-    const xpriv = new HDPrivateKey();
-    const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
-    const store = new LevelDBStore(walletId, DATA_DIR);
     await testScanningPolicy(store);
   });
 
