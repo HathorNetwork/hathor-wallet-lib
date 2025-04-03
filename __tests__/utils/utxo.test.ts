@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { HDPrivateKey } from 'bitcore-lib';
 import { MemoryStore, Storage } from '../../src/storage';
 import { bestUtxoSelection, fastUtxoSelection } from '../../src/utils/utxo';
 import { IStore } from '../../src/types';

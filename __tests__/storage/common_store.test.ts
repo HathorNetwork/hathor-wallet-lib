@@ -5,10 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { HDPrivateKey } from 'bitcore-lib';
 import { MemoryStore, Storage } from '../../src/storage';
 import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, GAP_LIMIT } from '../../src/constants';
-import walletUtils from '../../src/utils/wallet';
 import { ILockedUtxo, IStore, IUtxo, OutputValueType } from '../../src/types';
 
 describe('locked utxo methods', () => {

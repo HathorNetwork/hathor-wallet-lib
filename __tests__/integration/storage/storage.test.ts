@@ -13,7 +13,6 @@ import HathorWallet from '../../../src/new/wallet';
 import { loggers } from '../utils/logger.util';
 import SendTransaction from '../../../src/new/sendTransaction';
 import { MemoryStore, Storage } from '../../../src/storage';
-import walletUtils from '../../../src/utils/wallet';
 import transactionUtils from '../../../src/utils/transaction';
 import { NATIVE_TOKEN_UID } from '../../../src/constants';
 import { IHathorWallet } from '../../../src/wallet/types';
