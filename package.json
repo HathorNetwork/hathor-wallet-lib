@@ -14,15 +14,12 @@
     "/lib"
   ],
   "dependencies": {
-    "abstract-level": "1.0.4",
     "axios": "1.7.7",
     "bitcore-lib": "8.25.10",
     "bitcore-mnemonic": "8.25.10",
     "buffer": "6.0.3",
     "crypto-js": "4.2.0",
     "isomorphic-ws": "5.0.0",
-    "level": "8.0.1",
-    "level-transcoder": "1.0.1",
     "lodash": "4.17.21",
     "queue-microtask": "1.2.3",
     "ws": "8.17.1",
@@ -56,7 +53,6 @@
     "@babel/preset-typescript": "7.24.7",
     "@types/crypto-js": "4.2.2",
     "@types/jest": "29.5.12",
-    "@types/level": "6.0.3",
     "@types/lodash": "4.17.5",
     "@types/node": "20.14.2",
     "@typescript-eslint/eslint-plugin": "7.13.0",
