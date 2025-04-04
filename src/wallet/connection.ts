@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { getDefaultLogger } from 'src/types';
+import { getDefaultLogger } from '../types';
 import WalletServiceWebSocket from './websocket';
 import config from '../config';
 import BaseConnection, { DEFAULT_PARAMS, ConnectionParams } from '../connection';

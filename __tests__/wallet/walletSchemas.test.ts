@@ -707,40 +707,16 @@ describe('Wallet API Schemas', () => {
         parents: ['parent1'],
         inputs: [
           {
-            tx_id: tx1,
-            index: 0,
-            value: '100',
-            token_data: 0,
-            script: {
-              type: 'Buffer',
-              data: [1, 2, 3],
-            },
-            token: token1,
-            decoded: {
-              type: 'p2pkh',
-              address: addr1,
-              timelock: null,
-            },
+            address: addr1,
+            timelock: null,
+            type: 'P2PKH',
           },
         ],
         outputs: [
           {
-            value: '100',
-            script: {
-              type: 'Buffer',
-              data: [1, 2, 3],
-            },
-            tokenData: 0,
-            decodedScript: null,
-            token: token1,
-            locked: false,
-            index: 0,
-            decoded: {
-              type: 'p2pkh',
-              address: addr1,
-              timelock: null,
-            },
-            token_data: 0,
+            address: addr2,
+            timelock: null,
+            type: 'P2PKH',
           },
         ],
         height: 1,
@@ -762,40 +738,16 @@ describe('Wallet API Schemas', () => {
         parents: ['parent1'],
         inputs: [
           {
-            tx_id: tx1,
-            index: 0,
-            value: '100',
-            token_data: 0,
-            script: {
-              type: 'Buffer',
-              data: [1, 2, 3],
-            },
-            token: token1,
-            decoded: {
-              type: 'p2pkh',
-              address: addr1,
-              timelock: null,
-            },
+            address: addr1,
+            timelock: null,
+            type: 'P2PKH',
           },
         ],
         outputs: [
           {
-            value: '100',
-            script: {
-              type: 'Buffer',
-              data: [1, 2, 3],
-            },
-            tokenData: 0,
-            decodedScript: null,
-            token: token1,
-            locked: false,
-            index: 0,
-            decoded: {
-              type: 'p2pkh',
-              address: addr1,
-              timelock: null,
-            },
-            token_data: 0,
+            address: addr2,
+            timelock: null,
+            type: 'P2PKH',
           },
         ],
         height: 1,

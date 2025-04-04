@@ -376,10 +376,7 @@ export interface DecodedOutput {
 
 export interface TxOutput {
   value: OutputValueType;
-  script: {
-    type: 'Buffer';
-    data: number[];
-  };
+  script: string;
   token: string;
   decoded: DecodedOutput;
   token_data: number;
@@ -396,13 +393,17 @@ export interface TxInput {
   value: OutputValueType;
   // eslint-disable-next-line camelcase
   token_data: number;
-  script: {
-    type: 'Buffer';
-    data: number[];
-  };
   token: string;
   decoded: DecodedOutput;
 }
+
+export type WsTxInput = {
+  address: string;
+  timelock?: number | null;
+  type: string;
+};
+
+export type WsTxOutput = WsTxInput;
 
 export interface WsTransaction {
   // eslint-disable-next-line camelcase
@@ -414,8 +415,8 @@ export interface WsTransaction {
   version: number;
   weight: number;
   parents: string[];
-  inputs: TxInput[];
-  outputs: TxOutput[];
+  inputs: WsTxInput[];
+  outputs: WsTxOutput[];
   height?: number;
   // eslint-disable-next-line camelcase
   token_name?: string;

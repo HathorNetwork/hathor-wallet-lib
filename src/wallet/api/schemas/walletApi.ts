@@ -465,40 +465,16 @@ export const wsTransactionSchema = z.object({
   parents: z.array(z.string()),
   inputs: z.array(
     z.object({
-      tx_id: z.string(),
-      index: z.number(),
-      value: bigIntCoercibleSchema,
-      token_data: z.number(),
-      script: z.object({
-        type: z.literal('Buffer'),
-        data: z.array(z.number()),
-      }),
-      token: z.string(),
-      decoded: z.object({
-        type: z.string(),
-        address: z.string(),
-        timelock: z.number().nullable(),
-      }),
+      address: z.string(),
+      timelock: z.number().nullable(),
+      type: z.string(),
     })
   ),
   outputs: z.array(
     z.object({
-      value: bigIntCoercibleSchema,
-      script: z.object({
-        type: z.literal('Buffer'),
-        data: z.array(z.number()),
-      }),
-      tokenData: z.number(),
-      decodedScript: z.null(),
-      token: z.string(),
-      locked: z.boolean(),
-      index: z.number(),
-      decoded: z.object({
-        type: z.string(),
-        address: z.string(),
-        timelock: z.number().nullable(),
-      }),
-      token_data: z.number(),
+      address: z.string(),
+      timelock: z.number().nullable(),
+      type: z.string(),
     })
   ),
   height: z.number(),
