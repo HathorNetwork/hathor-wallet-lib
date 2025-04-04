@@ -1,12 +1,13 @@
 import Network from '../../src/models/network';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
+import { JSONBigInt } from '../../src/utils/bigint';
 
 export const defaultWalletSeed =
   'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
 export const buildSuccessTxByIdTokenDataResponse = (): string => {
   const txTokens = [
     {
-      balance: 10,
+      balance: 10n,
       height: 1,
       timestamp: 10,
       tokenId: 'token1',
@@ -18,7 +19,7 @@ export const buildSuccessTxByIdTokenDataResponse = (): string => {
       weight: 65.4321,
     },
     {
-      balance: 7,
+      balance: 7n,
       height: 1,
       timestamp: 10,
       tokenId: 'token2',
@@ -30,7 +31,7 @@ export const buildSuccessTxByIdTokenDataResponse = (): string => {
       weight: 65.4321,
     },
   ];
-  return JSON.stringify({
+  return JSONBigInt.stringify({
     success: true,
     txTokens,
   });

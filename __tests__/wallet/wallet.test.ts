@@ -327,42 +327,33 @@ test('getTxBalance', async () => {
 });
 
 test('checkAddressesMine', async () => {
-  const requestPassword = jest.fn();
-  const network = new Network('testnet');
-  const seed = defaultWalletSeed;
-  const wallet = new HathorWalletServiceWallet({
-    requestPassword,
-    seed,
-    network,
-    passphrase: '',
-    xpriv: null,
-    xpub: null,
-  });
+  const wallet = buildWalletToAuthenticateApiCall();
+  jest.spyOn(wallet, 'isReady').mockReturnValue(true);
 
-  jest.spyOn(wallet, 'validateAndRenewAuthToken').mockImplementation(jest.fn());
-
-  config.setWalletServiceBaseUrl('https://wallet-service.testnet.hathor.network/');
+  const addr1 = 'WdSD7aytFEZ5Hp8quhqu3wUCsyyGqcneMu';
+  const addr2 = 'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM';
+  const addr3 = 'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX';
 
   mockAxiosAdapter.onPost('wallet/addresses/check_mine').reply(200, {
     success: true,
     addresses: {
-      address1: true,
-      address2: false,
-      address3: false,
+      [addr1]: true,
+      [addr2]: false,
+      [addr3]: false,
     },
   });
 
-  const walletAddressMap = await wallet.checkAddressesMine(['address1', 'address2', 'address3']);
+  const walletAddressMap = await wallet.checkAddressesMine([addr1, addr2, addr3]);
 
-  expect(walletAddressMap.address1).toStrictEqual(true);
-  expect(walletAddressMap.address2).toStrictEqual(false);
-  expect(walletAddressMap.address3).toStrictEqual(false);
+  expect(walletAddressMap[addr1]).toStrictEqual(true);
+  expect(walletAddressMap[addr2]).toStrictEqual(false);
+  expect(walletAddressMap[addr3]).toStrictEqual(false);
 
   mockAxiosAdapter.onPost('wallet/addresses/check_mine').reply(400, {
     success: false,
   });
 
-  await expect(wallet.checkAddressesMine(['address1', 'address2', 'address3'])).rejects.toThrow(
+  await expect(wallet.checkAddressesMine([addr1, addr2, addr3])).rejects.toThrow(
     'Error checking wallet addresses.'
   );
 });
@@ -431,19 +422,19 @@ test('getTxById', async () => {
     success: true,
     txTokens: [
       {
-        balance: 10,
-        height: 1,
+        txId: 'txId1',
         timestamp: 10,
+        version: 3,
+        balance: 10n,
+        height: 1,
         tokenId: 'token1',
         tokenName: 'Token 1',
         tokenSymbol: 'T1',
-        txId: 'txId1',
-        version: 3,
         voided: false,
         weight: 65.4321,
       },
       {
-        balance: 7,
+        balance: 7n,
         height: 1,
         timestamp: 10,
         tokenId: 'token2',
@@ -1008,8 +999,36 @@ test('getFullTxById', async () => {
 
   mockAxiosAdapter.onGet('wallet/proxy/transactions/tx1').reply(200, {
     success: true,
-    tx: { hash: 'tx1' },
-    meta: {},
+    tx: {
+      hash: 'tx1',
+      nonce: '0',
+      timestamp: 1234567890,
+      version: 1,
+      weight: 1,
+      parents: [],
+      inputs: [],
+      outputs: [],
+      tokens: [],
+      token_name: null,
+      token_symbol: null,
+      raw: '0x',
+    },
+    meta: {
+      hash: 'tx1',
+      received_by: [],
+      children: [],
+      conflict_with: [],
+      first_block: null,
+      height: 0,
+      voided_by: [],
+      spent_outputs: [],
+      received_timestamp: null,
+      is_voided: false,
+      verification_status: 'verified',
+      twins: [],
+      accumulated_weight: 0,
+      score: 0,
+    },
   });
 
   const proxiedTx = await wallet.getFullTxById('tx1');

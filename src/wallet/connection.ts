@@ -5,10 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { getDefaultLogger } from '../types';
 import WalletServiceWebSocket from './websocket';
 import config from '../config';
 import BaseConnection, { DEFAULT_PARAMS, ConnectionParams } from '../connection';
 import { WsTransaction, ConnectionState } from './types';
+import { parseSchema } from '../utils/bigint';
+import { wsTransactionSchema } from './api/schemas/walletApi';
 
 export interface WalletServiceConnectionParams extends ConnectionParams {
   walletId: string;
@@ -59,6 +62,8 @@ export default class WalletServiceConnection extends BaseConnection {
    * Connect to the server and start emitting events.
    * */
   start() {
+    const logger = getDefaultLogger();
+
     if (!this.walletId) {
       throw new Error('Wallet id should be set before connection start.');
     }
@@ -72,8 +77,26 @@ export default class WalletServiceConnection extends BaseConnection {
 
     this.websocket = new WalletServiceWebSocket(wsOptions);
     this.websocket.on('is_online', online => this.onConnectionChange(online));
-    this.websocket.on('new-tx', payload => this.emit('new-tx', payload.data as WsTransaction));
-    this.websocket.on('update-tx', payload => this.emit('update-tx', payload.data));
+    this.websocket.on('new-tx', payload => {
+      try {
+        const validatedTx = parseSchema(payload.data, wsTransactionSchema);
+        this.emit('new-tx', validatedTx as WsTransaction);
+      } catch (e) {
+        // parseSchema already logs the validation error, so no need to log it
+        // again here.
+        logger.error('Received a new transaction but schema validation failed.');
+      }
+    });
+    this.websocket.on('update-tx', payload => {
+      try {
+        const validatedTx = parseSchema(payload.data, wsTransactionSchema);
+        this.emit('update-tx', validatedTx as WsTransaction);
+      } catch (e) {
+        // parseSchema already logs the validation error, so no need to log it
+        // again here.
+        logger.error('Received a new transaction update but schema validation failed.');
+      }
+    });
 
     this.setState(ConnectionState.CONNECTING);
     this.websocket.setup();
