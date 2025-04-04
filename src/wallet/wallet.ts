@@ -70,7 +70,7 @@ import {
   UninitializedWalletError,
 } from '../errors';
 import { ErrorMessages } from '../errorMessages';
-import { IStorage, IWalletAccessData, OutputValueType } from '../types';
+import { IStorage, IWalletAccessData, OutputValueType, IHistoryTx } from '../types';
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
@@ -539,7 +539,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     let shouldGetNewAddresses = false;
 
     for (const output of outputs) {
-      if (this.newAddresses.find(newAddress => newAddress.address === output.decoded.address)) {
+      if (this.newAddresses.find(newAddress => newAddress.address === output.address)) {
         // break early
         shouldGetNewAddresses = true;
         break;
@@ -576,7 +576,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @return {Object} Object with each token and it's balance in this tx for this wallet
    * */
   async getTxBalance(
-    tx: WsTransaction,
+    tx: IHistoryTx,
     optionsParam = {}
   ): Promise<{ [tokenId: string]: OutputValueType }> {
     const options = { includeAuthorities: false, ...optionsParam };

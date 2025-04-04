@@ -11,7 +11,7 @@ import CreateTokenTransaction from '../models/create_token_transaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
 import Input from '../models/input';
 import Output from '../models/output';
-import { OutputValueType } from '../types';
+import { OutputValueType, IHistoryTx } from '../types';
 
 export interface GetAddressesObject {
   address: string; // Address in base58
@@ -343,7 +343,7 @@ export interface IHathorWallet {
     options: DestroyAuthorityOptions
   ): Promise<Transaction>;
   getFullHistory(): TransactionFullObject[];
-  getTxBalance(tx: WsTransaction, optionsParams): Promise<{ [tokenId: string]: OutputValueType }>;
+  getTxBalance(tx: IHistoryTx, optionsParams): Promise<{ [tokenId: string]: OutputValueType }>;
   onConnectionChangedState(newState: ConnectionState): void;
   getTokenDetails(tokenId: string): Promise<TokenDetailsObject>;
   getVersionData(): Promise<FullNodeVersionData>;
