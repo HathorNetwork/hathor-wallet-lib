@@ -29,6 +29,7 @@ import { MemoryStore, Storage } from '../../src/storage';
 import walletApi from '../../src/wallet/api/walletApi';
 import walletUtils from '../../src/utils/wallet';
 import { decryptData, verifyMessage } from '../../src/utils/crypto';
+import { IHistoryTx } from '../../src/types';
 
 // Mock SendTransactionWalletService class so we don't try to send actual transactions
 // TODO: We should refactor the way we use classes from inside other classes. Using dependency injection would facilitate unit tests a lot and avoid mocks like this.
@@ -324,6 +325,86 @@ test('getTxBalance', async () => {
   balance = await wallet.getTxBalance(tx);
   expect(balance.token1).toStrictEqual(0n);
   expect(balance.token2).toStrictEqual(-5n);
+});
+
+test('getTxBalance with authority outputs', async () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = defaultWalletSeed;
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+
+  async function* getAllAddressesMock() {
+    const addresses: GetAddressesObject[] = [
+      {
+        address: 'address0',
+        index: 0,
+        transactions: 0,
+      },
+      {
+        address: 'address1',
+        index: 1,
+        transactions: 0,
+      },
+    ];
+
+    for (const address of addresses) {
+      yield address;
+    }
+  }
+
+  jest.spyOn(wallet, 'getAllAddresses').mockImplementation(getAllAddressesMock);
+
+  const tx: IHistoryTx = {
+    tx_id: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+    version: 1,
+    weight: 1,
+    timestamp: 1234567890,
+    is_voided: false,
+    inputs: [
+      {
+        tx_id: '002abde4018935e1bbde9600ef79c637adf42385fb1816ec284d702b7bb9ef5f',
+        index: 0,
+        token: 'token1',
+        token_data: 129, // Melt authority
+        script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
+        decoded: {
+          type: 'P2PKH',
+          address: 'address0',
+        },
+        value: 1n,
+      },
+    ],
+    outputs: [
+      {
+        token: 'token1',
+        token_data: 130, // Mint authority
+        script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
+        value: 1n,
+        decoded: {
+          type: 'P2PKH',
+          address: 'address1',
+        },
+        spent_by: null,
+      },
+    ],
+    parents: [],
+    height: undefined,
+  };
+
+  // Without includeAuthorities, balance should be empty
+  let balance = await wallet.getTxBalance(tx);
+  expect(balance).toStrictEqual({});
+
+  // With includeAuthorities, balance should be 0 (mint authority gained, melt authority lost)
+  balance = await wallet.getTxBalance(tx, { includeAuthorities: true });
+  expect(balance.token1).toStrictEqual(0n);
 });
 
 test('checkAddressesMine', async () => {

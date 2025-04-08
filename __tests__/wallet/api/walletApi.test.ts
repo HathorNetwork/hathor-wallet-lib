@@ -11,7 +11,8 @@ const seed =
 // Create a mock axios instance with jest.Mock type
 const mockAxiosInstance = {
   get: jest.fn(),
-} as jest.Mocked<Pick<AxiosInstance, 'get'>>;
+  post: jest.fn(),
+} as jest.Mocked<Pick<AxiosInstance, 'get' | 'post'>>;
 
 // Mock the axiosInstance function to return our mock instance
 jest.mock('../../../src/wallet/api/walletServiceAxios', () => ({
@@ -404,5 +405,62 @@ describe('walletApi', () => {
     } as AxiosResponse);
 
     await expect(walletApi.getFullTxById(wallet, 'tx1')).rejects.toThrow(WalletRequestError);
+  });
+
+  test('createWallet - wallet already loaded', async () => {
+    const mockWalletStatus = {
+      success: true,
+      status: {
+        walletId: 'test-id',
+        xpubkey: 'test-xpub',
+        status: 'ready',
+        maxGap: 20,
+        createdAt: 123456789,
+        readyAt: 123456790,
+      },
+      error: 'wallet-already-loaded',
+    };
+
+    mockAxiosInstance.post.mockResolvedValueOnce({
+      status: 400,
+      data: mockWalletStatus,
+    });
+
+    const result = await walletApi.createWallet(
+      wallet,
+      'xpubkey',
+      'xpubsig',
+      'authxpub',
+      'authxpubsig',
+      Date.now()
+    );
+
+    expect(result).toEqual(mockWalletStatus);
+    expect(mockAxiosInstance.post).toHaveBeenCalledWith('wallet/init', {
+      xpubkey: 'xpubkey',
+      xpubkeySignature: 'xpubsig',
+      authXpubkey: 'authxpub',
+      authXpubkeySignature: 'authxpubsig',
+      timestamp: expect.any(Number),
+    });
+
+    // Test with invalid schema response
+    const invalidMockResponse = {
+      success: true,
+      status: {
+        // Missing required fields
+        walletId: 'test-id',
+      },
+      error: 'wallet-already-loaded',
+    };
+
+    mockAxiosInstance.post.mockResolvedValueOnce({
+      status: 400,
+      data: invalidMockResponse,
+    });
+
+    await expect(
+      walletApi.createWallet(wallet, 'xpubkey', 'xpubsig', 'authxpub', 'authxpubsig', Date.now())
+    ).rejects.toThrow();
   });
 });
