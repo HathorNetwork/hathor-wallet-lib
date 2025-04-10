@@ -315,7 +315,7 @@ describe('walletApi', () => {
           {
             tx_id: 'tx1',
             index: 0,
-            token: 'token1',
+            token: '00003693ebadd6e32d5dae134e1f801d3943d5916010b87d4f9ed4447d1f1825',
             token_data: 0,
             value: 100n,
             script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
@@ -331,7 +331,7 @@ describe('walletApi', () => {
         outputs: [
           {
             value: 100n,
-            token: 'token1',
+            token: '00003693ebadd6e32d5dae134e1f801d3943d5916010b87d4f9ed4447d1f1825',
             token_data: 0,
             script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
             decoded: {
@@ -348,7 +348,7 @@ describe('walletApi', () => {
         ],
         tokens: [
           {
-            uid: 'token1',
+            uid: '00003693ebadd6e32d5dae134e1f801d3943d5916010b87d4f9ed4447d1f1825',
             name: 'Token 1',
             symbol: 'TK1',
             amount: 100n,

@@ -80,10 +80,15 @@ export const newAddressesResponseSchema = baseResponseSchema.extend({
 });
 
 /**
+ * TokenId schema
+ */
+export const tokenIdSchema = z.string().regex(/^[a-fA-F0-9]{64}$|^00$/);
+
+/**
  * Schema for token information.
  */
 export const tokenInfoSchema = z.object({
-  id: z.string().regex(/^[a-fA-F0-9]{64}$|^00$/),
+  id: tokenIdSchema,
   name: z.string(),
   symbol: z.string(),
 });
@@ -165,7 +170,7 @@ export const txProposalInputsSchema = z.object({
 export const txProposalOutputsSchema = z.object({
   address: z.string(),
   value: bigIntCoercibleSchema,
-  token: z.string(),
+  token: tokenIdSchema,
   timelock: z.number().nullable(),
 });
 
@@ -230,7 +235,7 @@ export const fullNodeInputSchema = z.object({
   }),
   tx_id: z.string(),
   index: z.number(),
-  token: z.string().nullable().optional(),
+  token: tokenIdSchema.nullable().optional(),
   spent_by: z.string().nullable().optional(),
 });
 
@@ -250,7 +255,7 @@ export const fullNodeOutputSchema = z.object({
     token_data: z.number(),
   }),
   address: z.string(),
-  token: z.string(),
+  token: tokenIdSchema.nullable().optional(),
   authorities: bigIntCoercibleSchema,
   timelock: z.number().nullable(),
 });
@@ -394,7 +399,7 @@ export const txOutputResponseSchema = baseResponseSchema.extend({
  * Contains the authentication token.
  */
 export const authTokenResponseSchema = baseResponseSchema.extend({
-  token: z.string(),
+  token: tokenIdSchema,
 });
 
 /**
