@@ -491,19 +491,19 @@ export interface FullNodeToken {
 }
 
 export interface FullNodeDecodedInput {
-  type: string;
-  address: string;
+  type?: string | null;
+  address?: string | null;
   timelock?: number | null;
-  value: OutputValueType;
-  token_data: number;
+  value?: OutputValueType | null;
+  token_data?: number | null;
 }
 
 export interface FullNodeDecodedOutput {
-  type: string;
-  address?: string;
+  type?: string | null;
+  address?: string | null;
   timelock?: number | null;
-  value: OutputValueType;
-  token_data?: number;
+  value?: OutputValueType | null;
+  token_data?: number | null;
 }
 
 export interface FullNodeInput {

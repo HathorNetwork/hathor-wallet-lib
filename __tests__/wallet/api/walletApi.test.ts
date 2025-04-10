@@ -320,7 +320,7 @@ describe('walletApi', () => {
             script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
             decoded: {
               type: 'P2PKH',
-              address: 'address1',
+              address: 'HH5As5aLtzFkcbmbXZmE65wSd22GqPWq2T',
               timelock: null,
               value: 100n,
               token_data: 0,
@@ -334,12 +334,12 @@ describe('walletApi', () => {
             script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
             decoded: {
               type: 'P2PKH',
-              address: 'address1',
+              address: 'HH5As5aLtzFkcbmbXZmE65wSd22GqPWq2T',
               timelock: null,
               value: 100n,
               token_data: 0,
             },
-            address: 'address1',
+            address: 'HH5As5aLtzFkcbmbXZmE65wSd22GqPWq2T',
             authorities: 0n,
             timelock: null,
           },

@@ -55,14 +55,14 @@ describe('WalletConnection', () => {
       parents: ['parent1', 'parent2'],
       inputs: [
         {
-          address: 'input-address',
+          address: 'HH5As5aLtzFkcbmbXZmE65wSd22GqPWq2T',
           timelock: null,
           type: 'P2PKH',
         },
       ],
       outputs: [
         {
-          address: 'output-address',
+          address: 'HH5As5aLtzFkcbmbXZmE65wSd22GqPWq2T',
           timelock: null,
           type: 'P2PKH',
         },

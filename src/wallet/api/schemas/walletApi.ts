@@ -168,7 +168,7 @@ export const txProposalInputsSchema = z.object({
  * Represents the outputs that will be created in a transaction.
  */
 export const txProposalOutputsSchema = z.object({
-  address: z.string(),
+  address: AddressSchema,
   value: bigIntCoercibleSchema,
   token: tokenIdSchema,
   timelock: z.number().nullable(),
@@ -228,7 +228,7 @@ export const fullNodeInputSchema = z.object({
   script: z.string(),
   decoded: z.object({
     type: z.string().nullable().optional(),
-    address: z.string().nullable().optional(),
+    address: AddressSchema.nullable().optional(),
     timelock: z.number().nullable().optional(),
     value: bigIntCoercibleSchema.nullable().optional(),
     token_data: z.number().nullable().optional(),
@@ -249,12 +249,12 @@ export const fullNodeOutputSchema = z.object({
   script: z.string(),
   decoded: z.object({
     type: z.string().nullable().optional(),
-    address: z.string().nullable().optional(),
+    address: AddressSchema.nullable().optional(),
     timelock: z.number().nullable().optional(),
     value: bigIntCoercibleSchema.nullable().optional(),
     token_data: z.number().nullable().optional(),
   }),
-  address: z.string(),
+  address: AddressSchema.nullable().optional(),
   token: tokenIdSchema.nullable().optional(),
   authorities: bigIntCoercibleSchema,
   timelock: z.number().nullable(),
@@ -383,7 +383,7 @@ export const txOutputResponseSchema = baseResponseSchema.extend({
       txId: z.string(),
       index: z.number(),
       tokenId: z.string(),
-      address: z.string(),
+      address: AddressSchema,
       value: bigIntCoercibleSchema,
       authorities: bigIntCoercibleSchema,
       timelock: z.number().nullable(),
@@ -435,7 +435,7 @@ export const txInputSchema = z.object({
   script: z.string(),
   decoded: z.object({
     type: z.string(),
-    address: z.string(),
+    address: AddressSchema,
     timelock: z.number().nullable().optional(),
     value: bigIntCoercibleSchema,
     token_data: z.number(),
@@ -452,8 +452,8 @@ export const txOutputSchema = z.object({
   token_data: z.number(),
   script: z.string(),
   decoded: z.object({
-    type: z.string(),
-    address: z.string().optional(),
+    type: z.string().nullable().optional(),
+    address: AddressSchema.optional(),
     timelock: z.number().nullable().optional(),
     value: bigIntCoercibleSchema,
     token_data: z.number().optional(),
@@ -474,14 +474,14 @@ export const wsTransactionSchema = z.object({
   parents: z.array(z.string()),
   inputs: z.array(
     z.object({
-      address: z.string(),
+      address: AddressSchema,
       timelock: z.number().nullable(),
       type: z.string(),
     })
   ),
   outputs: z.array(
     z.object({
-      address: z.string(),
+      address: AddressSchema,
       timelock: z.number().nullable(),
       type: z.string(),
     })
