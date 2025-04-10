@@ -206,6 +206,10 @@ export const fullNodeVersionDataSchema = z
     rewardSpendMinBlocks: z.number(),
     maxNumberInputs: z.number(),
     maxNumberOutputs: z.number(),
+    decimalPlaces: z.number().nullable().optional(),
+    genesisBlockHash: z.string().nullable().optional(),
+    genesisTx1Hash: z.string().nullable().optional(),
+    genesisTx2Hash: z.string().nullable().optional(),
   })
   .passthrough();
 
