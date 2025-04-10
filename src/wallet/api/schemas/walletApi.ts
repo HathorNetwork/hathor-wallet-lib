@@ -6,6 +6,8 @@
  */
 
 import { z } from 'zod';
+import { NATIVE_TOKEN_UID } from '../../../constants';
+import { txIdSchema } from '../../../schemas';
 import { bigIntCoercibleSchema } from '../../../utils/bigint';
 
 /**
@@ -82,7 +84,7 @@ export const newAddressesResponseSchema = baseResponseSchema.extend({
 /**
  * TokenId schema
  */
-export const tokenIdSchema = z.string().regex(/^[a-fA-F0-9]{64}$|^00$/);
+export const tokenIdSchema = z.union([txIdSchema, z.literal(NATIVE_TOKEN_UID)]);
 
 /**
  * Schema for token information.
@@ -233,7 +235,7 @@ export const fullNodeInputSchema = z.object({
     value: bigIntCoercibleSchema.nullable().optional(),
     token_data: z.number().nullable().optional(),
   }),
-  tx_id: z.string(),
+  tx_id: txIdSchema,
   index: z.number(),
   token: tokenIdSchema.nullable().optional(),
   spent_by: z.string().nullable().optional(),
@@ -428,7 +430,7 @@ export const txByIdResponseSchema = baseResponseSchema.extend({
  * Represents a transaction input with its decoded data.
  */
 export const txInputSchema = z.object({
-  tx_id: z.string(),
+  tx_id: txIdSchema,
   index: z.number(),
   value: bigIntCoercibleSchema,
   token_data: z.number(),
@@ -465,7 +467,7 @@ export const txOutputSchema = z.object({
  * Represents the structure of transactions received via websocket.
  */
 export const wsTransactionSchema = z.object({
-  tx_id: z.string(),
+  tx_id: txIdSchema,
   nonce: z.number(),
   timestamp: z.number(),
   version: z.number(),

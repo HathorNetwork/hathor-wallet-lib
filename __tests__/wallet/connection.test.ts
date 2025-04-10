@@ -47,7 +47,7 @@ describe('WalletConnection', () => {
 
   describe('websocket transaction events', () => {
     const validTransaction = {
-      tx_id: 'valid-tx-id',
+      tx_id: '00003eeb2ce22e80e0fa72d8afb0b8b01f8919faac94cb3a3b4900782d0f399f',
       nonce: 123,
       timestamp: Date.now(),
       version: 1,
@@ -76,7 +76,7 @@ describe('WalletConnection', () => {
 
     const invalidTransaction = {
       // Missing required fields
-      tx_id: 'invalid-tx',
+      tx_id: '00003eeb2ce22e80e0fa72d8afb0b8b01f8919faac94cb3a3b4900782d0f399f',
     };
 
     test('should continue working after receiving invalid data', async () => {

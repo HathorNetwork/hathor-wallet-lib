@@ -313,7 +313,7 @@ describe('walletApi', () => {
         parents: ['parent1', 'parent2'],
         inputs: [
           {
-            tx_id: 'tx1',
+            tx_id: '00003eeb2ce22e80e0fa72d8afb0b8b01f8919faac94cb3a3b4900782d0f399f',
             index: 0,
             token_data: 0,
             value: 100n,
