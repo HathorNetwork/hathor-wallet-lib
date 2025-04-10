@@ -315,7 +315,6 @@ describe('walletApi', () => {
           {
             tx_id: 'tx1',
             index: 0,
-            token: '00003693ebadd6e32d5dae134e1f801d3943d5916010b87d4f9ed4447d1f1825',
             token_data: 0,
             value: 100n,
             script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
@@ -331,7 +330,6 @@ describe('walletApi', () => {
         outputs: [
           {
             value: 100n,
-            token: '00003693ebadd6e32d5dae134e1f801d3943d5916010b87d4f9ed4447d1f1825',
             token_data: 0,
             script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
             decoded: {
@@ -382,6 +380,7 @@ describe('walletApi', () => {
     } as AxiosResponse);
 
     const result = await walletApi.getFullTxById(wallet, 'tx1');
+
     expect(result).toEqual(mockResponse);
 
     // Should throw on invalid schema (missing required fields)
