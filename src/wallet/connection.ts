@@ -70,7 +70,7 @@ export default class WalletServiceConnection extends BaseConnection {
     } catch (e) {
       // parseSchema already logs the validation error, so no need to log it
       // again here.
-      logger.error('Received a new transaction update but schema validation failed.');
+      logger.error(`Received a new websocket message (${type}) but schema validation failed.`);
     }
   }
 
