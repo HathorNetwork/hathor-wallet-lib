@@ -22,6 +22,11 @@ import {
 } from './types';
 import { bigIntCoercibleSchema, ZodSchema } from './utils/bigint';
 
+/**
+ * TxId schema
+ */
+export const txIdSchema = z.string().regex(/^[a-fA-F0-9]{64}$/);
+
 export const ITokenBalanceSchema: ZodSchema<ITokenBalance> = z
   .object({
     locked: bigIntCoercibleSchema,
@@ -73,7 +78,7 @@ export const IHistoryInputSchema: ZodSchema<IHistoryInput> = z
     script: z.string(),
     decoded: IHistoryOutputDecodedSchema,
     token: z.string(),
-    tx_id: z.string(),
+    tx_id: txIdSchema,
     index: z.number(),
   })
   .passthrough();
@@ -92,7 +97,7 @@ export const IHistoryOutputSchema: ZodSchema<IHistoryOutput> = z
 
 export const IHistoryTxSchema: ZodSchema<IHistoryTx> = z
   .object({
-    tx_id: z.string(),
+    tx_id: txIdSchema,
     signalBits: z.number().optional(),
     version: z.number(),
     weight: z.number(),
@@ -118,7 +123,7 @@ export const IHistoryTxSchema: ZodSchema<IHistoryTx> = z
 
 export const IUtxoSchema: ZodSchema<IUtxo> = z
   .object({
-    txId: z.string(),
+    txId: txIdSchema,
     index: z.number(),
     token: z.string(),
     address: z.string(),

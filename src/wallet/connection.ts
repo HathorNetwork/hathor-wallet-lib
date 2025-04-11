@@ -5,10 +5,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { getDefaultLogger } from '../types';
 import WalletServiceWebSocket from './websocket';
 import config from '../config';
 import BaseConnection, { DEFAULT_PARAMS, ConnectionParams } from '../connection';
 import { WsTransaction, ConnectionState } from './types';
+import { parseSchema } from '../utils/bigint';
+import { wsTransactionSchema } from './api/schemas/walletApi';
 
 export interface WalletServiceConnectionParams extends ConnectionParams {
   walletId: string;
@@ -56,6 +59,22 @@ export default class WalletServiceConnection extends BaseConnection {
   }
 
   /**
+   * Handle received websocket messages, validating their schemas
+   * */
+  onWsMessage(type: string, payload) {
+    const logger = getDefaultLogger();
+
+    try {
+      const validatedTx = parseSchema(payload.data, wsTransactionSchema);
+      this.emit(type, validatedTx as WsTransaction);
+    } catch (e) {
+      // parseSchema already logs the validation error, so no need to log it
+      // again here.
+      logger.error(`Received a new websocket message (${type}) but schema validation failed.`);
+    }
+  }
+
+  /**
    * Connect to the server and start emitting events.
    * */
   start() {
@@ -72,8 +91,8 @@ export default class WalletServiceConnection extends BaseConnection {
 
     this.websocket = new WalletServiceWebSocket(wsOptions);
     this.websocket.on('is_online', online => this.onConnectionChange(online));
-    this.websocket.on('new-tx', payload => this.emit('new-tx', payload.data as WsTransaction));
-    this.websocket.on('update-tx', payload => this.emit('update-tx', payload.data));
+    this.websocket.on('new-tx', payload => this.onWsMessage('new-tx', payload));
+    this.websocket.on('update-tx', payload => this.onWsMessage('update-tx', payload));
 
     this.setState(ConnectionState.CONNECTING);
     this.websocket.setup();

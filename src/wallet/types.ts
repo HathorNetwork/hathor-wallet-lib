@@ -11,7 +11,7 @@ import CreateTokenTransaction from '../models/create_token_transaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
 import Input from '../models/input';
 import Output from '../models/output';
-import { OutputValueType } from '../types';
+import { OutputValueType, IHistoryTx } from '../types';
 
 export interface GetAddressesObject {
   address: string; // Address in base58
@@ -60,7 +60,7 @@ export interface AddressInfoObject {
   address: string; // Address in base58
   index: number; // derivation index of the address
   addressPath: string; // Path of the address
-  info: string | undefined; // Optional extra info when getting address info
+  info?: string | undefined; // Optional extra info when getting address info
 }
 
 export interface WalletStatusResponseData {
@@ -124,8 +124,6 @@ export interface TxProposalCreateResponseData {
   success: boolean;
   txProposalId: string; // Id of the tx proposal
   inputs: TxProposalInputs[]; // Inputs data of the tx proposal
-  outputs: TxProposalOutputs[]; // Outputs data of the tx proposal
-  tokens: string[];
 }
 
 export interface TxProposalInputs {
@@ -345,7 +343,7 @@ export interface IHathorWallet {
     options: DestroyAuthorityOptions
   ): Promise<Transaction>;
   getFullHistory(): TransactionFullObject[];
-  getTxBalance(tx: WsTransaction, optionsParams): Promise<{ [tokenId: string]: OutputValueType }>;
+  getTxBalance(tx: IHistoryTx, optionsParams): Promise<{ [tokenId: string]: OutputValueType }>;
   onConnectionChangedState(newState: ConnectionState): void;
   getTokenDetails(tokenId: string): Promise<TokenDetailsObject>;
   getVersionData(): Promise<FullNodeVersionData>;
@@ -381,11 +379,11 @@ export interface TxOutput {
   script: string;
   token: string;
   decoded: DecodedOutput;
-  // eslint-disable-next-line camelcase
-  spent_by: string | null;
-  // eslint-disable-next-line camelcase
   token_data: number;
-  locked?: boolean;
+  locked: boolean;
+  index: number;
+  tokenData: number;
+  decodedScript: null;
 }
 
 export interface TxInput {
@@ -395,22 +393,30 @@ export interface TxInput {
   value: OutputValueType;
   // eslint-disable-next-line camelcase
   token_data: number;
-  script: string;
   token: string;
   decoded: DecodedOutput;
 }
+
+export type WsTxInput = {
+  address: string;
+  timelock?: number | null;
+  type: string;
+};
+
+export type WsTxOutput = WsTxInput;
 
 export interface WsTransaction {
   // eslint-disable-next-line camelcase
   tx_id: string;
   nonce: number;
   timestamp: number;
-  signalBits: number;
+  // eslint-disable-next-line camelcase
+  signal_bits: number;
   version: number;
   weight: number;
   parents: string[];
-  inputs: TxInput[];
-  outputs: TxOutput[];
+  inputs: WsTxInput[];
+  outputs: WsTxOutput[];
   height?: number;
   // eslint-disable-next-line camelcase
   token_name?: string;
@@ -449,14 +455,16 @@ export interface TxByIdTokenData {
   voided: boolean;
   height?: number | null;
   weight: number;
-  balance: Balance;
+  balance: bigint;
   tokenId: string;
-  walletId: string;
   tokenName: string;
   tokenSymbol: string;
 }
 
-export type TxByIdTokensResponseData = TxByIdTokenData[];
+export interface TxByIdTokensResponseData {
+  success: boolean;
+  txTokens: TxByIdTokenData[];
+}
 
 export interface WalletServiceServerUrls {
   walletServiceBaseUrl: string;
@@ -483,19 +491,19 @@ export interface FullNodeToken {
 }
 
 export interface FullNodeDecodedInput {
-  type: string;
-  address: string;
+  type?: string | null;
+  address?: string | null;
   timelock?: number | null;
-  value: OutputValueType;
-  token_data: number;
+  value?: OutputValueType | null;
+  token_data?: number | null;
 }
 
 export interface FullNodeDecodedOutput {
-  type: string;
-  address?: string;
+  type?: string | null;
+  address?: string | null;
   timelock?: number | null;
-  value: OutputValueType;
-  token_data?: number;
+  value?: OutputValueType | null;
+  token_data?: number | null;
 }
 
 export interface FullNodeInput {

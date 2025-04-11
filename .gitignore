@@ -10,4 +10,5 @@ lib
 tsconfig.tsbuildinfo
 
 // Generated test database files
-*.leveldb
+*.leveldb*
+tmp/
