@@ -403,7 +403,7 @@ export const txOutputResponseSchema = baseResponseSchema.extend({
 export const authTokenResponseSchema = baseResponseSchema.extend({
   token: z
     .string()
-    .regex(/^[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.?[A-Za-z0-9-_.+/=]*$/, 'Invalid JWT token format'),
+    .regex(/^[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+$/, 'Invalid JWT token format'),
 });
 
 /**

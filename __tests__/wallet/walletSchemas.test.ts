@@ -633,18 +633,34 @@ describe('Wallet API Schemas', () => {
   });
 
   describe('authTokenResponseSchema', () => {
-    it('should validate valid auth token response', () => {
+    it('should validate valid JWT token response', () => {
       const validData = {
         success: true,
-        token: token1,
+        token:
+          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c',
       };
       expect(() => authTokenResponseSchema.parse(validData)).not.toThrow();
     });
 
-    it('should reject invalid auth token response', () => {
+    it('should reject invalid JWT token response', () => {
       const invalidData = {
         success: true,
-        token: 123, // should be string
+        token: 'invalid.token', // Not a valid JWT format
+      };
+      expect(() => authTokenResponseSchema.parse(invalidData)).toThrow('Invalid JWT token format');
+    });
+
+    it('should reject response without token', () => {
+      const invalidData = {
+        success: true,
+      };
+      expect(() => authTokenResponseSchema.parse(invalidData)).toThrow();
+    });
+
+    it('should reject response with non-string token', () => {
+      const invalidData = {
+        success: true,
+        token: 12345, // Token should be a string
       };
       expect(() => authTokenResponseSchema.parse(invalidData)).toThrow();
     });
