@@ -667,7 +667,7 @@ describe('Wallet API Schemas', () => {
   });
 
   describe('txByIdResponseSchema', () => {
-    it('should validate valid tx by id response', () => {
+    it('should validate valid tx by id response with height present', () => {
       const validData = {
         success: true,
         txTokens: [
@@ -676,7 +676,7 @@ describe('Wallet API Schemas', () => {
             timestamp: 1234567890,
             version: 1,
             voided: false,
-            height: 1,
+            height: 1, // height is present and a number
             weight: 1,
             balance: 100n,
             tokenId: token1,
@@ -688,7 +688,71 @@ describe('Wallet API Schemas', () => {
       expect(() => txByIdResponseSchema.parse(validData)).not.toThrow();
     });
 
-    it('should reject invalid tx by id response', () => {
+    it('should validate valid tx by id response with height null', () => {
+      const validData = {
+        success: true,
+        txTokens: [
+          {
+            txId: tx1,
+            timestamp: 1234567890,
+            version: 1,
+            voided: false,
+            height: null, // height is present and null
+            weight: 1,
+            balance: 100n,
+            tokenId: token1,
+            tokenName: 'Token 1',
+            tokenSymbol: 'T1',
+          },
+        ],
+      };
+      expect(() => txByIdResponseSchema.parse(validData)).not.toThrow();
+    });
+
+    it('should validate valid tx by id response with height omitted', () => {
+      const validData = {
+        success: true,
+        txTokens: [
+          {
+            txId: tx1,
+            timestamp: 1234567890,
+            version: 1,
+            voided: false,
+            // height is omitted (optional)
+            weight: 1,
+            balance: 100n,
+            tokenId: token1,
+            tokenName: 'Token 1',
+            tokenSymbol: 'T1',
+          },
+        ],
+      };
+      expect(() => txByIdResponseSchema.parse(validData)).not.toThrow();
+    });
+
+    it('should reject invalid tx by id response with invalid height type', () => {
+      const invalidData = {
+        success: true,
+        txTokens: [
+          {
+            txId: tx1,
+            timestamp: 1234567890,
+            version: 1,
+            voided: false,
+            height: '1', // height should be number or null, not string
+            weight: 1,
+            balance: 283n,
+            tokenId: token1,
+            tokenName: 'Token 1',
+            tokenSymbol: 'T1',
+          },
+        ],
+      };
+      expect(() => txByIdResponseSchema.parse(invalidData)).toThrow();
+    });
+
+    it('should reject invalid tx by id response due to other fields', () => {
+      // Keep a test for general invalidity unrelated to height
       const invalidData = {
         success: true,
         txTokens: [

@@ -417,7 +417,7 @@ export const txByIdResponseSchema = baseResponseSchema.extend({
       timestamp: z.number(),
       version: z.number(),
       voided: z.boolean(),
-      height: z.number().nullable(),
+      height: z.number().nullable().optional(),
       weight: z.number(),
       balance: bigIntCoercibleSchema,
       tokenId: z.string(),
