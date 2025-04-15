@@ -1115,6 +1115,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     return addressHDPrivKey;
   }
 
+  getNetwork() {
+    return this.getNetworkObject().name;
+  }
+
   /**
    * Gets the network model object
    *
