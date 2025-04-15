@@ -152,6 +152,42 @@ const wallet = {
   },
 
   /**
+   * Get xpriv from data
+   *
+   * @param {Buffer} privateKey Compressed private key
+   * @param {Buffer} chainCode HDPublic key chaincode
+   * @param {Number} fingerprint parent fingerprint
+   * @param {Number} depth Depth derivation of the private key
+   * @param {Number} childIndex Child index of the private key
+   * @param {string} networkName Network to use
+   *
+   * @return {String} xpriv
+   *
+   * @memberof Wallet
+   * @inner
+   */
+  xprivFromData(
+    privateKey: Buffer,
+    chainCode: Buffer,
+    fingerprint: Number,
+    depth: Number,
+    childIndex: Number,
+    networkName: string
+  ): string {
+    const network = new Network(networkName);
+    const hdprivkey = new HDPrivateKey({
+      network: network.bitcoreNetwork,
+      depth,
+      parentFingerPrint: fingerprint,
+      childIndex,
+      chainCode,
+      privateKey,
+    });
+
+    return hdprivkey.xprivkey;
+  },
+
+  /**
    * Get compressed public key from uncompressed
    *
    * @param {Buffer} pubkey Uncompressed public key
