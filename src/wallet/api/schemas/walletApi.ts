@@ -401,7 +401,9 @@ export const txOutputResponseSchema = baseResponseSchema.extend({
  * Contains the authentication token.
  */
 export const authTokenResponseSchema = baseResponseSchema.extend({
-  token: tokenIdSchema,
+  token: z
+    .string()
+    .regex(/^[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+$/, 'Invalid JWT token format'),
 });
 
 /**
@@ -415,7 +417,7 @@ export const txByIdResponseSchema = baseResponseSchema.extend({
       timestamp: z.number(),
       version: z.number(),
       voided: z.boolean(),
-      height: z.number().nullable(),
+      height: z.number().nullable().optional(),
       weight: z.number(),
       balance: bigIntCoercibleSchema,
       tokenId: z.string(),
