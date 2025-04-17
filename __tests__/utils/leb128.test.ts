@@ -62,22 +62,7 @@ test('leb128 should work with fullnode docstring examples', () => {
 });
 
 test('leb128 should work with DWARF 5 examples', () => {
-  /**
-   * Examples from the DWARF 5 standard, section 7.6, table 7.8.
-   * https://dwarfstd.org/doc/DWARF5.pdf
-   */
-  const tests = [
-    [2n, Buffer.from([2])],
-    [-2n, Buffer.from([0x7e])],
-    [127n, Buffer.from([127 + 0x80, 0])],
-    [-127n, Buffer.from([1 + 0x80, 0x7f])],
-    [128n, Buffer.from([0 + 0x80, 1])],
-    [-128n, Buffer.from([0 + 0x80, 0x7f])],
-    [129n, Buffer.from([1 + 0x80, 1])],
-    [-129n, Buffer.from([0x7f + 0x80, 0x7e])],
-  ];
-
-  for (const value of tests) {
+  for (const value of DWARF5TestCases) {
     const encoded = encodeSigned(value[0] as bigint);
     expect(encoded).toEqual(value[1]);
 
@@ -88,22 +73,7 @@ test('leb128 should work with DWARF 5 examples', () => {
 });
 
 test('leb128 should fail if maxBytes is lower than required', () => {
-  /**
-   * Examples from the DWARF 5 standard, section 7.6, table 7.8.
-   * https://dwarfstd.org/doc/DWARF5.pdf
-   */
-  const tests = [
-    [2n, Buffer.from([2])],
-    [-2n, Buffer.from([0x7e])],
-    [127n, Buffer.from([127 + 0x80, 0])],
-    [-127n, Buffer.from([1 + 0x80, 0x7f])],
-    [128n, Buffer.from([0 + 0x80, 1])],
-    [-128n, Buffer.from([0 + 0x80, 0x7f])],
-    [129n, Buffer.from([1 + 0x80, 1])],
-    [-129n, Buffer.from([0x7f + 0x80, 0x7e])],
-  ];
-
-  for (const value of tests) {
+  for (const value of DWARF5TestCases) {
     const expectedLen = (value[1] as Buffer).length;
     const val = value[0] as bigint;
     // Encode should throw if maxBytes is expectedLen-1
