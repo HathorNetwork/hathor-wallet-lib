@@ -238,7 +238,8 @@ class CreateTokenTransaction extends Transaction {
 
     txBuffer = tx.getFundsFieldsFromBytes(txBuffer, network);
     txBuffer = tx.getTokenInfoFromBytes(txBuffer);
-    tx.getGraphFieldsFromBytes(txBuffer);
+    txBuffer = tx.getGraphFieldsFromBytes(txBuffer);
+    tx.getHeadersFromBytes(txBuffer);
 
     tx.updateHash();
 

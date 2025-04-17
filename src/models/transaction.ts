@@ -52,6 +52,7 @@ type optionsType = {
   parents?: string[];
   tokens?: string[];
   hash?: string | null;
+  headers: Header[];
 };
 
 /**
@@ -84,6 +85,8 @@ class Transaction {
 
   hash: string | null;
 
+  headers: Header[];
+
   protected _dataToSignCache: Buffer | null;
 
   constructor(inputs: Input[], outputs: Output[], options: optionsType = {}) {
@@ -96,9 +99,10 @@ class Transaction {
       parents: [],
       tokens: [],
       hash: null,
+      headers: []
     };
     const newOptions = Object.assign(defaultOptions, options);
-    const { signalBits, version, weight, nonce, timestamp, parents, tokens, hash } = newOptions;
+    const { signalBits, version, weight, nonce, timestamp, parents, tokens, hash, headers } = newOptions;
 
     this.inputs = inputs;
     this.outputs = outputs;
@@ -110,6 +114,7 @@ class Transaction {
     this.parents = parents!;
     this.tokens = tokens!;
     this.hash = hash!;
+    this.headers = headers!;
 
     // All inputs sign the same data, so we cache it in the first getDataToSign method call
     this._dataToSignCache = null;
@@ -145,6 +150,9 @@ class Transaction {
     const arr: Buffer[] = [];
 
     this.serializeFundsFields(arr, false);
+
+    for (const header of this.headers):
+      header.serializeSighash(arr);
 
     this._dataToSignCache = util.buffer.concat(arr);
     return this._dataToSignCache!;
@@ -261,6 +269,12 @@ class Transaction {
     array.push(intToBytes(this.nonce, 4));
   }
 
+  serializeHeaders(array: Buffer[]) {
+    for (const h of this.headers) {
+      h.serialize(array);
+    }
+  }
+
   /*
    * Execute hash of the data to sign
    *
@@ -351,6 +365,9 @@ class Transaction {
 
     // Nonce
     this.serializeNonce(arr);
+
+    // Headers
+    this.serializeHeaders(arr);
 
     return util.buffer.concat(arr);
   }
@@ -556,6 +573,25 @@ class Transaction {
     return buf;
   }
 
+  getHeadersFromBytes(srcBuf: Buffer): Buffer {
+    if (srcBuf.length <= 1) {
+      // We need 1 byte for the header type and more for the header itself
+      return;
+    }
+
+    // Copies buffer locally, not to change the original parameter
+    let buf = Buffer.from(srcBuf);
+
+    let headerId, headerClass, header;
+    [headerId, buf] = [buf.subarray(0, 1), buff.subarray(1)];
+
+    headerClass = HeaderParser.getHeader(headerId);
+    [header, buf] = headerClass.deserialize(buf);
+
+    this.headers.push(header);
+    return buf;
+  }
+
   /**
    * Create transaction object from bytes
    *
@@ -575,11 +611,44 @@ class Transaction {
     let txBuffer = clone(buf);
 
     txBuffer = tx.getFundsFieldsFromBytes(txBuffer, network);
-    tx.getGraphFieldsFromBytes(txBuffer);
+    txBuffer = tx.getGraphFieldsFromBytes(txBuffer);
+
+    tx.getHeadersFromBytes(txBuffer);
 
     tx.updateHash();
 
     return tx;
+  }
+
+  getFundsHash() {
+    const arrFunds = [];
+    this.serializeFundsFields(arrFunds, true);
+    const fundsHash = crypto.createHash('sha256');
+    fundsHash.update(buffer.Buffer.concat(arrFunds));
+    return fundsHash.digest();
+  }
+
+  getGraphHash() {
+    const arrGraph = [];
+    this.serializeGraphFields(arrGraph);
+    const graphHash = crypto.createHash('sha256');
+    graphHash.update(buffer.Buffer.concat(arrGraph));
+    return graphHash.digest();
+  }
+
+  getHeadersHash() {
+    if (this.headers.length === 0) {
+      // The hathor-core method returns b'' here if there are no headers
+      // The method crypto.createHash.digest returns a Buffer
+      // so I must return this emtpy Buffer here
+      return Buffer.alloc(0);
+    }
+
+    const arrHeaders = [];
+    this.serializeHeaders(arrHeaders);
+    const headersHash = crypto.createHash('sha256');
+    headersHash.update(buffer.Buffer.concat(arrHeaders));
+    return headersHash.digest();
   }
 
   /**
@@ -591,19 +660,11 @@ class Transaction {
    * @inner
    */
   calculateHashPart1(): crypto.Hash {
-    const arrFunds = [];
-    this.serializeFundsFields(arrFunds, true);
-    const fundsHash = crypto.createHash('sha256');
-    fundsHash.update(buffer.Buffer.concat(arrFunds));
-    const digestedFunds = fundsHash.digest();
+    const digestedFunds = this.getFundsHash();
+    const digestedGraph = this.getGraphHash();
+    const digestedHeaders = this.getHeadersHash();
 
-    const arrGraph = [];
-    this.serializeGraphFields(arrGraph);
-    const graphHash = crypto.createHash('sha256');
-    graphHash.update(buffer.Buffer.concat(arrGraph));
-    const digestedGraph = graphHash.digest();
-
-    const bufferPart1 = buffer.Buffer.concat([digestedFunds, digestedGraph]);
+    const bufferPart1 = buffer.Buffer.concat([digestedFunds, digestedGraph, digestedHeaders]);
 
     const part1 = crypto.createHash('sha256');
     part1.update(bufferPart1);
