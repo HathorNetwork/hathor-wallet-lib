@@ -146,6 +146,20 @@ class Deserializer {
     }
     return false;
   }
+
+  /**
+   * Deserialize a variable integer encoded as a leb128 buffer to a bigint.
+   *
+   * @param {Buffer} value Value to deserialize
+   * @returns {bigint}
+   *
+   * @memberof Deserializer
+   */
+  toVarInt(value: Buffer): bigint {
+    const decoded = leb128DecodeSigned(value);
+    return decoded.value;
+  }
+
   /* eslint-enable class-methods-use-this */
 
   /**
@@ -225,19 +239,6 @@ class Deserializer {
       );
     }
     return address.base58;
-  }
-
-  /**
-   * Deserialize a variable integer encoded as a leb128 buffer to a bigint.
-   *
-   * @param {Buffer} value Value to deserialize
-   * @returns {bigint}
-   *
-   * @memberof Deserializer
-   */
-  toVarInt(value: Buffer): bigint {
-    const decoded = leb128DecodeSigned(value);
-    return decoded.value;
   }
 }
 

@@ -11,7 +11,13 @@ export enum NanoContractActionType {
   WITHDRAWAL = 'withdrawal',
 }
 
-export type NanoContractArgumentApiInputType = string | number | bigint | OutputValueType | boolean | null;
+export type NanoContractArgumentApiInputType =
+  | string
+  | number
+  | bigint
+  | OutputValueType
+  | boolean
+  | null;
 export type NanoContractArgumentType = NanoContractArgumentApiInputType | Buffer;
 
 export interface NanoContractAction {

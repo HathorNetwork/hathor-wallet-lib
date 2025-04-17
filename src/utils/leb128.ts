@@ -6,8 +6,8 @@
  */
 
 export interface Leb128DecodeResult {
-  value: bigint,
-  rest: Buffer,
+  value: bigint;
+  rest: Buffer;
 }
 
 export function encodeSigned(value: bigint | number, maxBytes: number | null = null): Buffer {
@@ -15,8 +15,11 @@ export function encodeSigned(value: bigint | number, maxBytes: number | null = n
   const result: bigint[] = [];
   while (true) {
     const byte = val & 0b0111_1111n;
-    val = val >> 7n;
-    if ((val === 0n && (byte & 0b0100_0000n) === 0n) || (val === -1n && (byte & 0b0100_0000n) !== 0n)) {
+    val >>= 7n;
+    if (
+      (val === 0n && (byte & 0b0100_0000n) === 0n) ||
+      (val === -1n && (byte & 0b0100_0000n) !== 0n)
+    ) {
       result.push(byte);
       if (maxBytes !== null && result.length > maxBytes) {
         throw new Error(`Cannot encode more than ${maxBytes} bytes`);
@@ -35,7 +38,7 @@ export function encodeSigned(value: bigint | number, maxBytes: number | null = n
 }
 
 export function decodeSigned(buf: Buffer, maxBytes: number | null = null): Leb128DecodeResult {
-  let byte_list = Array.from(buf.values()).map(v => BigInt(v));
+  const byte_list = Array.from(buf.values()).map(v => BigInt(v));
   let result = 0n;
   let shift = 0n;
   while (true) {
@@ -43,12 +46,13 @@ export function decodeSigned(buf: Buffer, maxBytes: number | null = null): Leb12
     if (byte === undefined) {
       throw new Error('Buffer is not valid leb128, cannot read from empty buffer');
     }
-    result = result | (byte & 0b0111_1111n) << shift;
+    result |= (byte & 0b0111_1111n) << shift;
     shift += 7n;
     // assert shift % 7n === 0
-    if (shift % 7n !== 0n) throw new Error(`AssertionError: shift is ${shift} and is not divisible by 7`);
+    if (shift % 7n !== 0n)
+      throw new Error(`AssertionError: shift is ${shift} and is not divisible by 7`);
 
-    if (maxBytes !== null && (shift / 7n > maxBytes)) {
+    if (maxBytes !== null && shift / 7n > maxBytes) {
       throw new Error(`Cannot decode more than the max ${maxBytes} bytes`);
     }
 
@@ -65,7 +69,7 @@ export function decodeSigned(buf: Buffer, maxBytes: number | null = null): Leb12
       return {
         value: result,
         rest: Buffer.from(byte_list.map(b => Number(b))),
-      }
+      };
     }
   }
 }
