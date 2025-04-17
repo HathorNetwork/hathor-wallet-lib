@@ -11,7 +11,6 @@ export interface Leb128DecodeResult {
 }
 
 export function encodeSigned(value: bigint | number, maxBytes: number | null = null): Buffer {
-  const errMessage = `Cannot encode more than ${maxBytes} bytes`;
   let val = BigInt(value);
   const result: bigint[] = [];
   while (true) {
@@ -20,7 +19,7 @@ export function encodeSigned(value: bigint | number, maxBytes: number | null = n
     if ((val === 0n && (byte & 0b0100_0000n) === 0n) || (val === -1n && (byte & 0b0100_0000n) !== 0n)) {
       result.push(byte);
       if (maxBytes !== null && result.length > maxBytes) {
-        throw new Error(errMessage);
+        throw new Error(`Cannot encode more than ${maxBytes} bytes`);
       }
       // Need to convert the bigint values of `result` into Number to use with Buffer.
       // This is a safe operation since the value of the elements can only go up to 0xFF
@@ -30,7 +29,7 @@ export function encodeSigned(value: bigint | number, maxBytes: number | null = n
     // Add 7 bits + first bit indicating the existence of the next block.
     result.push(byte | 0b1000_0000n);
     if (maxBytes !== null && result.length > maxBytes) {
-      throw new Error(errMessage);
+      throw new Error(`Cannot encode more than ${maxBytes} bytes`);
     }
   }
 }
@@ -42,15 +41,15 @@ export function decodeSigned(buf: Buffer, maxBytes: number | null = null): Leb12
   while (true) {
     const byte = byte_list.shift();
     if (byte === undefined) {
-      throw new Error('finished buffer and have no data to read anymore');
+      throw new Error('Buffer is not valid leb128, cannot read from empty buffer');
     }
     result = result | (byte & 0b0111_1111n) << shift;
     shift += 7n;
     // assert shift % 7n === 0
-    if (shift % 7n !== 0n) throw new Error();
+    if (shift % 7n !== 0n) throw new Error(`AssertionError: shift is ${shift} and is not divisible by 7`);
 
     if (maxBytes !== null && (shift / 7n > maxBytes)) {
-      throw new Error('Passed max bytes');
+      throw new Error(`Cannot decode more than the max ${maxBytes} bytes`);
     }
 
     if ((byte & 0b1000_0000n) === 0n) {
