@@ -7,6 +7,7 @@
 
 import { bufferToHex, unpackToFloat, unpackToInt } from '../utils/buffer';
 import helpersUtils from '../utils/helpers';
+import { decodeSigned as leb128DecodeSigned } from '../utils/leb128';
 import Network from '../models/network';
 import { NanoContractArgumentType } from './types';
 import { OutputValueType } from '../types';
@@ -60,6 +61,8 @@ class Deserializer {
         return this.toFloat(value);
       case 'bool':
         return this.toBool(value);
+      case 'VarInt':
+        return this.toVarInt(value);
       default:
         throw new Error('Invalid type.');
     }
@@ -222,6 +225,19 @@ class Deserializer {
       );
     }
     return address.base58;
+  }
+
+  /**
+   * Deserialize a variable integer encoded as a leb128 buffer to a bigint.
+   *
+   * @param {Buffer} value Value to deserialize
+   * @returns {bigint}
+   *
+   * @memberof Deserializer
+   */
+  toVarInt(value: Buffer): bigint {
+    const decoded = leb128DecodeSigned(value);
+    return decoded.value;
   }
 }
 
