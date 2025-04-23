@@ -467,7 +467,9 @@ test('getTxType', () => {
   );
   expect(transaction.getTxType({ version: NANO_CONTRACTS_VERSION })).toBe('Nano Contract');
   expect(transaction.getTxType({ version: POA_BLOCK_VERSION })).toBe('Proof-of-Authority Block');
-  expect(transaction.getTxType({ version: ON_CHAIN_BLUEPRINTS_VERSION })).toBe('On-Chain Blueprint');
+  expect(transaction.getTxType({ version: ON_CHAIN_BLUEPRINTS_VERSION })).toBe(
+    'On-Chain Blueprint'
+  );
   expect(transaction.getTxType({ version: 999 })).toBe('Unknown');
 });
 
