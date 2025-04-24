@@ -302,3 +302,8 @@ export const HATHOR_MAGIC_BYTES = 'Hathor Signed Message:\n';
  * Default address scanning policy
  */
 export const DEFAULT_ADDRESS_SCANNING_POLICY: AddressScanPolicy = SCANNING_POLICY.GAP_LIMIT;
+
+/**
+ * Max argument length in bytes (64Kib)
+ */
+export const NC_ARGS_MAX_BYTES_LENGTH = 2n ** 16n;

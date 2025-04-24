@@ -5,11 +5,18 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { bufferToHex, unpackToFloat, unpackToInt } from '../utils/buffer';
+import { bufferToHex, unpackToInt } from '../utils/buffer';
 import helpersUtils from '../utils/helpers';
+import leb128Util from '../utils/leb128';
 import Network from '../models/network';
 import { NanoContractArgumentType } from './types';
 import { OutputValueType } from '../types';
+import { NC_ARGS_MAX_BYTES_LENGTH } from 'src/constants';
+
+interface DeserializeResult<T> {
+  value: T;
+  bytesRead: number;
+}
 
 class Deserializer {
   network: Network;
@@ -23,43 +30,42 @@ class Deserializer {
    * We receive these types from the full node, so we
    * use the python syntax
    *
-   * @param {value} Value to deserialize
-   * @param {type} Type of the value to be deserialized
+   * @param {Buffer} buf Value to deserialize
+   * @param {string} type Type of the value to be deserialized
    *
    * @memberof Deserializer
    * @inner
    */
-  deserializeFromType(value: Buffer, type: string): NanoContractArgumentType | null {
+  deserializeFromType(buf: Buffer, type: string): DeserializeResult<NanoContractArgumentType | null> {
     if (type.endsWith('?')) {
       // It's an optional
       const optionalType = type.slice(0, -1);
-      return this.toOptional(value, optionalType);
+      return this.toOptional(buf, optionalType);
     }
 
     if (type.startsWith('SignedData[')) {
-      return this.toSigned(value, type);
+      return this.toSigned(buf, type);
     }
 
     switch (type) {
       case 'str':
-        return this.toString(value);
+        return this.toString(buf);
       case 'bytes':
-      case 'TxOutputScript':
-      case 'TokenUid':
+      case 'BlueprintId':
       case 'ContractId':
+      case 'TokenUid':
+      case 'TxOutputScript':
       case 'VertexId':
-        return this.toBytes(value);
+        return this.toBytes(buf);
       case 'Address':
-        return this.toAddress(value);
+        return this.toAddress(buf);
       case 'int':
       case 'Timestamp':
-        return this.toInt(value);
+        return this.toInt(buf);
       case 'Amount':
-        return this.toAmount(value);
-      case 'float':
-        return this.toFloat(value);
+        return this.toAmount(buf);
       case 'bool':
-        return this.toBool(value);
+        return this.toBool(buf);
       default:
         throw new Error('Invalid type.');
     }
@@ -70,78 +76,101 @@ class Deserializer {
   /**
    * Deserialize string value
    *
-   * @param {value} Value to deserialize
+   * @param {Buffer} buf Value to deserialize
    *
    * @memberof Deserializer
    * @inner
    */
-  toString(value: Buffer): string {
-    return value.toString('utf8');
+  toString(buf: Buffer): DeserializeResult<string> {
+    // XXX: maybe add a limit to the size of the leb128 integer that we can read.
+    const { value: lengthBN, rest, bytesRead: bytesReadForLength } = leb128Util.decodeSigned(buf);
+    if(lengthBN > BigInt(NC_ARGS_MAX_BYTES_LENGTH)) {
+      // XXX: Should this be an error?
+      throw new Error('String length in bytes is higher than max allowed');
+    }
+    // If lengthBN is lower than 64 KiB than its safe to convert to Number
+    const length = Number(lengthBN);
+    return {
+      value: rest.subarray(0, length).toString('utf8'),
+      bytesRead: length + bytesReadForLength,
+    };
   }
 
   /**
    * Deserialize bytes value
    *
-   * @param {value} Value to deserialize
+   * @param {Buffer} buf Value to deserialize
    *
    * @memberof Deserializer
    * @inner
    */
-  toBytes(value: Buffer): Buffer {
-    return value;
+  toBytes(buf: Buffer): DeserializeResult<Buffer> {
+    // XXX: maybe add a limit to the size of the leb128 integer that we can read.
+    const { value: lengthBN, rest, bytesRead: bytesReadForLength } = leb128Util.decodeSigned(buf);
+    if(lengthBN > BigInt(NC_ARGS_MAX_BYTES_LENGTH)) {
+      // XXX: Should this be an error?
+      throw new Error('String length in bytes is higher than max allowed');
+    }
+    // If lengthBN is lower than 64 KiB than its safe to convert to Number
+    const length = Number(lengthBN);
+    return {
+      value: rest.subarray(0, length),
+      bytesRead: length + bytesReadForLength,
+    };
   }
 
   /**
    * Deserialize int value
    *
-   * @param {value} Value to deserialize
+   * @param {Buffer} buf Value to deserialize
    *
    * @memberof Deserializer
    * @inner
    */
-  toInt(value: Buffer): number {
-    return unpackToInt(4, true, value)[0];
+  toInt(buf: Buffer): DeserializeResult<number> {
+    return {
+      value: unpackToInt(4, true, buf)[0],
+      bytesRead: 4,
+    };
   }
 
   /**
    * Deserialize amount value
    *
-   * @param {value} Value to deserialize
+   * @param {Buffer} buf Value to deserialize
    *
    * @memberof Deserializer
    * @inner
    */
-  toAmount(value: Buffer): OutputValueType {
+  toAmount(buf: Buffer): DeserializeResult<OutputValueType> {
     // Nano `Amount` currently only supports up to 4 bytes, so we simply use the `number` value converted to `BigInt`.
     // If we change Nano to support up to 8 bytes, we must update this.
-    return BigInt(this.toInt(value));
-  }
-
-  /**
-   * Deserialize float value
-   *
-   * @param {value} Value to deserialize
-   *
-   * @memberof Deserializer
-   * @inner
-   */
-  toFloat(value: Buffer): number {
-    return unpackToFloat(value)[0];
+    const { value, bytesRead } = this.toInt(buf);
+    return {
+      value: BigInt(value),
+      bytesRead,
+    };
   }
 
   /**
    * Deserialize boolean value
    *
-   * @param {value} Value to deserialize
+   * @param {Buffer} buf Value to deserialize
    *
    * @memberof Deserializer
    * @inner
    */
-  toBool(value: Buffer): boolean {
-    if (value[0]) {
-      return true;
+  toBool(buf: Buffer): DeserializeResult<boolean> {
+    if (buf[0]) {
+      return {
+        value: true,
+        bytesRead: 1,
+      };
     }
-    return false;
+    return {
+      value: false,
+      bytesRead: 1,
+    };
   }
   /* eslint-enable class-methods-use-this */
 
@@ -152,21 +181,28 @@ class Deserializer {
    *
    * Otherwise, we deserialize the rest of the buffer to the type.
    *
-   * @param {value} Buffer with the optional value
-   * @param {type} Type of the optional without the ?
+   * @param {Buffer} buf Buffer with the optional value
+   * @param {string} type Type of the optional without the ?
    *
    * @memberof Deserializer
    * @inner
    */
-  toOptional(value: Buffer, type: string): NanoContractArgumentType | null {
-    if (value[0] === 0) {
+  toOptional(buf: Buffer, type: string): DeserializeResult<NanoContractArgumentType | null> {
+    if (buf[0] === 0) {
       // It's an empty optional
-      return null;
+      return {
+        value: null,
+        bytesRead: 1,
+      };
     }
 
     // Remove the first byte to deserialize the value, since it's not empty
-    const valueToDeserialize = value.slice(1);
-    return this.deserializeFromType(valueToDeserialize, type);
+    const valueToDeserialize = buf.subarray(1);
+    const result = this.deserializeFromType(valueToDeserialize, type);
+    return {
+      value: result.value,
+      bytesRead: result.bytesRead + 1,
+    };
   }
 
   /**
@@ -175,53 +211,72 @@ class Deserializer {
    * The signedData what will be deserialized is
    * [len(serializedValue)][serializedValue][inputData]
    *
-   * @param {signedData} Buffer with serialized signed value
-   * @param {type} Type of the signed value, with the subtype, e.g., SignedData[str]
+   * @param signedData Buffer with serialized signed value
+   * @param type Type of the signed value, with the subtype, e.g., SignedData[str]
    *
    * @memberof Deserializer
    * @inner
    */
-  toSigned(signedData: Buffer, type: string): string {
+  toSigned(signedData: Buffer, type: string): DeserializeResult<string> {
     // Get signed data type inside []
     const match = type.match(/\[(.*?)\]/);
     const valueType = match ? match[1] : null;
     if (!valueType) {
       throw new Error('Unable to extract type');
     }
+    // Should we check that the valueType is valid?
 
-    let signedBuffer: Buffer;
-    let size: number;
-    // [len(serializedResult)][serializedResult][inputData]
-    // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
-    [size, signedBuffer] = unpackToInt(2, false, signedData);
-    let parsed = this.deserializeFromType(signedBuffer.slice(0, size), valueType);
+    // SignData[T] is serialized as Serialize(T)+Serialize(sign(T)) where sign() returns a byte str
+    // Which means we can parse the T argument, then read the bytes after.
+
+    // Reading argument
+    const parseResult = this.deserializeFromType(signedData, valueType);
+    let parsed = parseResult.value;
+    const bytesReadFromValue = parseResult.bytesRead;
+
     if (valueType === 'bytes') {
       // If the value is bytes, we should transform into hex to return the string
-      parsed = (parsed as Buffer).toString('hex');
+      parsed = bufferToHex(parsed as Buffer);
     }
-    signedBuffer = signedBuffer.slice(size);
-    return `${bufferToHex(signedBuffer)},${parsed},${valueType}`;
+
+    if (valueType === 'bool') {
+      parsed = parsed as boolean ? 'true' : 'false';
+    }
+
+    // Reading signature
+    const {
+      value: parsedSignature,
+      bytesRead: bytesReadFromSignature,
+    } = this.deserializeFromType(signedData, 'bytes');
+
+    return {
+      value: `${bufferToHex(parsedSignature as Buffer)},${parsed},${valueType}`,
+      bytesRead: bytesReadFromValue + bytesReadFromSignature,
+    };
   }
 
   /**
    * Deserialize a value decoded in bytes to a base58 string
    *
-   * @param {value} Value to deserialize
+   * @param {Buffer} buf Value to deserialize
    *
    * @memberof Deserializer
    * @inner
    */
-  toAddress(value: Buffer): string {
+  toAddress(buf: Buffer): DeserializeResult<string> {
     // First we get the 20 bytes of the address without the version byte and checksum
-    const addressBytes = value.slice(1, 21);
+    const addressBytes = buf.subarray(1, 21);
     const address = helpersUtils.encodeAddress(addressBytes, this.network);
     const decoded = address.decode();
-    if (decoded[0] !== value[0]) {
+    if (decoded[0] !== buf[0]) {
       throw new Error(
-        `Asked to deserialize an address with version byte ${value[0]} but the network from the deserializer object has version byte ${decoded[0]}.`
+        `Asked to deserialize an address with version byte ${buf[0]} but the network from the deserializer object has version byte ${decoded[0]}.`
       );
     }
-    return address.base58;
+    return {
+      value: address.base58,
+      bytesRead: 21,
+    };
   }
 }
 

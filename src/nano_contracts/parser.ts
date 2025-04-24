@@ -13,7 +13,7 @@ import ncApi from '../api/nano';
 import { unpackToInt } from '../utils/buffer';
 import { getAddressFromPubkey } from '../utils/address';
 import { NanoContractTransactionParseError } from '../errors';
-import { MethodArgInfo, NanoContractParsedArgument } from './types';
+import { MethodArgInfo, NanoContractArgumentType, NanoContractParsedArgument } from './types';
 
 class NanoContractTransactionParser {
   blueprintId: string;
@@ -84,18 +84,20 @@ class NanoContractTransactionParser {
       []
     ) as MethodArgInfo[];
     let argsBuffer = Buffer.from(this.args, 'hex');
-    let size: number;
     for (const arg of methodArgs) {
-      [size, argsBuffer] = unpackToInt(2, false, argsBuffer);
-      let parsed;
+      let parsed: NanoContractArgumentType;
+      let size: number;
       try {
-        parsed = deserializer.deserializeFromType(argsBuffer.slice(0, size), arg.type);
+        const parseResult = deserializer.deserializeFromType(argsBuffer, arg.type);
+        parsed = parseResult.value;
+        size = parseResult.bytesRead;
       } catch {
         throw new NanoContractTransactionParseError(`Failed to deserialize argument ${arg.type} .`);
       }
       parsedArgs.push({ ...arg, parsed });
-      argsBuffer = argsBuffer.slice(size);
+      argsBuffer = argsBuffer.subarray(size);
     }
+    // XXX: argsBuffer should be empty since we parsed all arguments
 
     this.parsedArgs = parsedArgs;
   }

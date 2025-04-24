@@ -67,7 +67,6 @@ class NanoContract extends Transaction {
 
     const argsArray: Buffer[] = [];
     for (const arg of this.args) {
-      argsArray.push(intToBytes(arg.length, 2));
       argsArray.push(arg);
     }
 
