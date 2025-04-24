@@ -10,7 +10,9 @@ import { NanoContractActionHeader } from './types';
 import Transaction from '../models/transaction';
 import Input from '../models/input';
 import Output from '../models/output';
+import { outputValueToBytes } from '../utils/transaction';
 import { hexToBuffer, intToBytes } from '../utils/buffer';
+import { VertexHeaderId } from '../header/types';
 
 class NanoContractHeader {
   // Transaction that has this header included
@@ -29,6 +31,7 @@ class NanoContractHeader {
   // Serialized arguments to the method being called
   args: Buffer[];
 
+  // List of actions for this nano
   actions: NanoContractActionHeader[];
 
   // Pubkey and signature of the transaction owner / caller
@@ -60,21 +63,19 @@ class NanoContractHeader {
    * Add the serialized fields to the array parameter
    *
    * @param {array} Array of buffer to push the serialized fields
-   * @param {addInputData} If should add input data when serializing it
+   * @param {addSignature} If should add signature when serializing it
    *
    * @memberof NanoContract
    * @inner
    */
-  serializeFundsFields(array: Buffer[], addInputData: boolean) {
-    super.serializeFundsFields(array, addInputData);
-
+  serializeFields(array: Buffer[], addSignature: boolean) {
     // Info version
     array.push(intToBytes(NANO_CONTRACTS_INFO_VERSION, 1));
 
     // nano contract id
     array.push(hexToBuffer(this.id));
 
-    const methodBytes = Buffer.from(this.method, 'utf8');
+    const methodBytes = Buffer.from(this.method, 'ascii');
     array.push(intToBytes(methodBytes.length, 1));
     array.push(methodBytes);
 
@@ -87,6 +88,14 @@ class NanoContractHeader {
     const argsConcat: Buffer = Buffer.concat(argsArray);
     array.push(intToBytes(argsConcat.length, 2));
     array.push(argsConcat);
+
+    array.push(intToBytes(this.actions.length), 1);
+    for (const action of this.actions) {
+      const arrAction = [];
+      arrAction.push(intToBytes(action.type, 1));
+      arrAction.push(intToBytes(action.tokenIndex, 1));
+      arrAction.push(outputValueToBytes(action.amount));
+    }
 
     array.push(intToBytes(this.pubkey.length, 1));
     array.push(this.pubkey);
@@ -107,15 +116,12 @@ class NanoContractHeader {
    */
   toBytes(): Buffer {
     const arr: Buffer[] = [];
-    // Serialize first the funds part
-    //
-    this.serializeFundsFields(arr, true);
 
-    // Graph fields
-    this.serializeGraphFields(arr);
+    // First add the header ID
+    arr.push(VertexHeaderId.NANO_HEADER);
 
-    // Nonce
-    this.serializeNonce(arr);
+    // Then the serialized header
+    this.serializeFields(arr, true);
 
     return Buffer.concat(arr);
   }

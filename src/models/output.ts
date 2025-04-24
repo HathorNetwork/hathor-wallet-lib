@@ -7,8 +7,6 @@
 
 import _ from 'lodash';
 import {
-  MAX_OUTPUT_VALUE,
-  MAX_OUTPUT_VALUE_32,
   TOKEN_AUTHORITY_MASK,
   TOKEN_INDEX_MASK,
   TOKEN_MELT_MASK,
@@ -26,9 +24,9 @@ import {
   intToBytes,
   bigIntToBytes,
 } from '../utils/buffer';
+import { outputValueToBytes } from '../utils/transaction';
 import { parseScript as utilsParseScript } from '../utils/scripts';
 import { OutputValueType } from '../types';
-import { prettyValue } from '../utils/numbers';
 
 type optionsType = {
   tokenData?: number | undefined;
@@ -89,16 +87,7 @@ class Output {
    * @inner
    */
   valueToBytes(): Buffer {
-    if (this.value <= 0) {
-      throw new OutputValueError('Output value must be positive');
-    }
-    if (this.value > MAX_OUTPUT_VALUE) {
-      throw new OutputValueError(`Maximum value is ${prettyValue(MAX_OUTPUT_VALUE)}`);
-    }
-    if (this.value > MAX_OUTPUT_VALUE_32) {
-      return bigIntToBytes(-this.value, 8);
-    }
-    return bigIntToBytes(this.value, 4);
+    return outputValueToBytes(this.value);
   }
 
   /**

@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { crypto as cryptoBL, PrivateKey, HDPrivateKey } from 'bitcore-lib';
 import { cloneDeep } from 'lodash';
 import { Utxo } from '../wallet/types';
-import { UtxoError, ParseError } from '../errors';
+import { UtxoError, ParseError, OutputValueError } from '../errors';
 import { HistoryTransactionOutput } from '../models/types';
 import {
   TOKEN_AUTHORITY_MASK,
@@ -20,6 +20,8 @@ import {
   DEFAULT_TX_VERSION,
   DEFAULT_SIGNAL_BITS,
   BLOCK_VERSION,
+  MAX_OUTPUT_VALUE,
+  MAX_OUTPUT_VALUE_32,
   MERGED_MINED_BLOCK_VERSION,
   NANO_CONTRACTS_VERSION,
   POA_BLOCK_VERSION,
@@ -55,6 +57,8 @@ import txApi from '../api/txApi';
 import { FullNodeTxApiResponse, transactionApiSchema } from '../api/schemas/txApi';
 import tokenUtils from './tokens';
 import OnChainBlueprint from '../nano_contracts/on_chain_blueprint';
+import { bigIntToBytes } from '../utils/buffer';
+import { prettyValue } from '../utils/numbers';
 
 const transaction = {
   /**
@@ -887,6 +891,27 @@ const transaction = {
     if (tx.nc_pubkey) histTx.nc_pubkey = tx.nc_pubkey;
 
     return histTx;
+  },
+
+  /**
+   * Get the bytes from the value
+   * If value is above the maximum for 32 bits we get from 8 bytes, otherwise only 4 bytes
+   *
+   * @throws {OutputValueError} Will throw an error if output value is invalid
+   *
+   * @return {Buffer}
+   */
+  outputValueToBytes(value: OutputValueType): Buffer {
+    if (value <= 0) {
+      throw new OutputValueError('Output value must be positive');
+    }
+    if (value > MAX_OUTPUT_VALUE) {
+      throw new OutputValueError(`Maximum value is ${prettyValue(MAX_OUTPUT_VALUE)}`);
+    }
+    if (value > MAX_OUTPUT_VALUE_32) {
+      return bigIntToBytes(-value, 8);
+    }
+    return bigIntToBytes(value, 4);
   },
 };
 
