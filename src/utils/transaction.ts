@@ -52,13 +52,10 @@ import P2SH from '../models/p2sh';
 import ScriptData from '../models/script_data';
 import helpers from './helpers';
 import { getAddressType, getAddressFromPubkey } from './address';
-import NanoContract from '../nano_contracts/nano_contract';
 import txApi from '../api/txApi';
 import { FullNodeTxApiResponse, transactionApiSchema } from '../api/schemas/txApi';
 import tokenUtils from './tokens';
 import OnChainBlueprint from '../nano_contracts/on_chain_blueprint';
-import { bigIntToBytes } from '../utils/buffer';
-import { prettyValue } from '../utils/numbers';
 
 const transaction = {
   /**
@@ -208,8 +205,20 @@ const transaction = {
       });
     }
 
-    if (tx.version === NANO_CONTRACTS_VERSION || tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
-      const { pubkey } = tx as NanoContract | OnChainBlueprint;
+    let pubkey: Buffer | null = null;
+
+    if (tx.isNanoContract()) {
+      // Get pubkey from nano header
+      const nanoHeader = tx.getNanoHeader();
+      ({ pubkey } = nanoHeader);
+    }
+
+    if (tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
+      // Get pubkey from ocb tx
+      ({ pubkey } = tx as OnChainBlueprint);
+    }
+
+    if (pubkey) {
       const address = getAddressFromPubkey(pubkey.toString('hex'), storage.config.getNetwork());
       const addressInfo = await storage.getAddressInfo(address.base58);
       if (!addressInfo) {
@@ -243,9 +252,15 @@ const transaction = {
       input.setData(inputData);
     }
 
-    if (tx.version === NANO_CONTRACTS_VERSION || tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
+    if (tx.isNanoContract()) {
+      // Get pubkey from nano header
+      const nanoHeader = tx.getNanoHeader();
+      nanoHeader.signature = signatures.ncCallerSignature;
+    }
+
+    if (tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
       // eslint-disable-next-line no-param-reassign
-      (tx as NanoContract | OnChainBlueprint).signature = signatures.ncCallerSignature;
+      (tx as OnChainBlueprint).signature = signatures.ncCallerSignature;
     }
     return tx;
   },
@@ -586,7 +601,7 @@ const transaction = {
    * by the inputs.
    */
   async convertTransactionToHistoryTx(
-    tx: Transaction | CreateTokenTransaction | NanoContract,
+    tx: Transaction | CreateTokenTransaction,
     storage: IStorage
   ): Promise<IHistoryTx> {
     if (!tx.hash) {
@@ -686,11 +701,12 @@ const transaction = {
       histTx.token_symbol = (tx as CreateTokenTransaction).symbol;
     }
 
-    if (tx.version === NANO_CONTRACTS_VERSION) {
-      histTx.nc_id = (tx as NanoContract).id;
-      histTx.nc_method = (tx as NanoContract).method;
-      histTx.nc_args = (tx as NanoContract).args.map(a => a.toString('hex')).join('');
-      histTx.nc_pubkey = (tx as NanoContract).pubkey.toString('hex');
+    if (tx.isNanoContract()) {
+      const nanoHeader = tx.getNanoHeader()
+      histTx.nc_id = nanoHeader.id;
+      histTx.nc_method = nanoHeader.method;
+      histTx.nc_args = nanoHeader.args.map(a => a.toString('hex')).join('');
+      histTx.nc_pubkey = nanoHeader.pubkey.toString('hex');
       // Cannot fetch histTx.nc_blueprint_id with the current data
     }
 
@@ -891,27 +907,6 @@ const transaction = {
     if (tx.nc_pubkey) histTx.nc_pubkey = tx.nc_pubkey;
 
     return histTx;
-  },
-
-  /**
-   * Get the bytes from the value
-   * If value is above the maximum for 32 bits we get from 8 bytes, otherwise only 4 bytes
-   *
-   * @throws {OutputValueError} Will throw an error if output value is invalid
-   *
-   * @return {Buffer}
-   */
-  outputValueToBytes(value: OutputValueType): Buffer {
-    if (value <= 0) {
-      throw new OutputValueError('Output value must be positive');
-    }
-    if (value > MAX_OUTPUT_VALUE) {
-      throw new OutputValueError(`Maximum value is ${prettyValue(MAX_OUTPUT_VALUE)}`);
-    }
-    if (value > MAX_OUTPUT_VALUE_32) {
-      return bigIntToBytes(-value, 8);
-    }
-    return bigIntToBytes(value, 4);
   },
 };
 

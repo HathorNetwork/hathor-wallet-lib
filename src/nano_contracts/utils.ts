@@ -10,7 +10,6 @@ import { crypto } from 'bitcore-lib';
 import transactionUtils from '../utils/transaction';
 import SendTransaction from '../new/sendTransaction';
 import HathorWallet from '../new/wallet';
-import NanoContract from './nano_contract';
 import OnChainBlueprint from './on_chain_blueprint';
 import Network from '../models/network';
 import ScriptData from '../models/script_data';
@@ -19,12 +18,13 @@ import { hexToBuffer } from '../utils/buffer';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
 import Address from '../models/address';
+import Transaction from '../models/transaction';
 import { NanoContractTransactionError, OracleParseError, WalletFromXPubGuard } from '../errors';
 import { OutputType } from '../wallet/types';
 import { IHistoryTx, IStorage } from '../types';
 import { parseScript } from '../utils/scripts';
 import { MethodArgInfo, NanoContractArgumentType } from './types';
-import { NANO_CONTRACTS_VERSION, NANO_CONTRACTS_INITIALIZE_METHOD } from '../constants';
+import { NANO_CONTRACTS_INITIALIZE_METHOD } from '../constants';
 
 /**
  * Sign a transaction and create a send transaction object
@@ -34,7 +34,7 @@ import { NANO_CONTRACTS_VERSION, NANO_CONTRACTS_INITIALIZE_METHOD } from '../con
  * @param storage Wallet storage object
  */
 export const prepareNanoSendTransaction = async (
-  tx: NanoContract | OnChainBlueprint,
+  tx: Transaction,
   pin: string,
   storage: IStorage
 ): Promise<SendTransaction> => {
@@ -257,5 +257,5 @@ export const validateAndUpdateBlueprintMethodArgs = async (
  * @param tx History object from hathor core to check if it's a nano create tx
  */
 export const isNanoContractCreateTx = (tx: IHistoryTx): boolean => {
-  return tx.version === NANO_CONTRACTS_VERSION && tx.nc_method === NANO_CONTRACTS_INITIALIZE_METHOD;
+  return tx.nc_method === NANO_CONTRACTS_INITIALIZE_METHOD;
 };

@@ -7,5 +7,5 @@
 
 
 export enum VertexHeaderId {
-  NANO_HEADER = Buffer.from('10', 'hex')
+  NANO_HEADER = '10'
 }

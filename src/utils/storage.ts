@@ -33,7 +33,6 @@ import { xpubStreamSyncHistory, manualStreamSyncHistory } from '../sync/stream';
 import {
   NATIVE_TOKEN_UID,
   MAX_ADDRESSES_GET,
-  NANO_CONTRACTS_VERSION,
   LOAD_WALLET_MAX_RETRY,
   LOAD_WALLET_RETRY_SLEEP,
   CREATE_TOKEN_TX_VERSION,
@@ -797,7 +796,10 @@ export async function processNewTx(
 
   // Nano contract and ocb transactions have the address used to sign the tx
   // and we must consider this to the address metadata
-  if (tx.version === NANO_CONTRACTS_VERSION || tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
+  // XXX the IHistoryTx comes from the hathor core, I will double check
+  // how it's returning header data but so far we can't use
+  // Transaction object methods
+  if (tx.nc_id || tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
     const caller = getAddressFromPubkey(tx.nc_pubkey!, storage.config.getNetwork());
     const callerAddressInfo = await store.getAddress(caller.base58);
     // if address is not in wallet, ignore

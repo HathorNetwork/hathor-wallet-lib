@@ -8,25 +8,29 @@
 import { concat, get } from 'lodash';
 import Output from '../models/output';
 import Input from '../models/input';
-import NanoContract from './nano_contract';
+import Transaction from '../models/transaction';
 import { createOutputScriptFromAddress } from '../utils/address';
+import tokensUtils from '../utils/tokens';
 import {
   NATIVE_TOKEN_UID,
   NANO_CONTRACTS_INITIALIZE_METHOD,
-  NANO_CONTRACTS_VERSION,
 } from '../constants';
 import Serializer from './serializer';
 import HathorWallet from '../new/wallet';
 import { NanoContractTransactionError } from '../errors';
 import {
+  NanoContractActionHeaderType,
+  NanoContractActionHeader,
   NanoContractActionType,
   NanoContractAction,
   MethodArgInfo,
   NanoContractArgumentApiInputType,
   NanoContractArgumentType,
 } from './types';
+import { ITokenData } from '../types';
 import ncApi from '../api/nano';
 import { validateAndUpdateBlueprintMethodArgs } from './utils';
+import NanoContractHeader from './header';
 
 class NanoContractTransactionBuilder {
   blueprintId: string | null | undefined;
@@ -42,7 +46,7 @@ class NanoContractTransactionBuilder {
 
   args: NanoContractArgumentType[] | null;
 
-  transaction: NanoContract | null;
+  transaction: Transaction | null;
 
   wallet: HathorWallet | null;
 
@@ -262,7 +266,7 @@ class NanoContractTransactionBuilder {
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  async build(): Promise<NanoContract> {
+  async build(): Promise<Transaction> {
     if (this.method === NANO_CONTRACTS_INITIALIZE_METHOD && !this.blueprintId) {
       // Initialize needs the blueprint ID
       throw new NanoContractTransactionError('Missing blueprint id. Parameter blueprintId in data');
@@ -286,11 +290,14 @@ class NanoContractTransactionBuilder {
         );
       }
 
+      /*
+       * XXX Check how is the full node return data with nano contract header
       if (response.tx.version !== NANO_CONTRACTS_VERSION) {
         throw new NanoContractTransactionError(
           `Transaction with id ${this.ncId} is not a nano contract transaction.`
         );
       }
+      */
 
       this.blueprintId = response.tx.nc_blueprint_id;
     }
@@ -363,16 +370,42 @@ class NanoContractTransactionBuilder {
       throw new Error('This should never happen.');
     }
 
-    return new NanoContract(
-      inputs,
-      outputs,
-      tokens,
-      ncId,
-      this.method,
-      serializedArgs,
-      this.caller,
-      null
-    );
+    const tx = new Transaction(inputs, outputs, { tokens });
+
+    let nanoHeaderActions: NanoContractActionHeader[] = [];
+
+    if (this.actions) {
+      nanoHeaderActions = this.actions.map(action => {
+        let headerActionType;
+        if (action.type === NanoContractActionType.DEPOSIT) {
+          headerActionType = NanoContractActionHeaderType.DEPOSIT;
+        }
+
+        if (action.type === NanoContractActionType.WITHDRAWAL) {
+          headerActionType = NanoContractActionHeaderType.WITHDRAWAL;
+        }
+
+        const mappedTokens: ITokenData[] = tokens.map(token => {
+          return {
+            uid: token,
+            name: '',
+            symbol: '',
+          }
+        });
+
+        return {
+          type: headerActionType,
+          amount: action.amount,
+          tokenIndex: tokensUtils.getTokenIndex(mappedTokens, action.token)
+        }
+      });
+    }
+
+    const nanoHeader = new NanoContractHeader(tx, ncId, this.method, serializedArgs, nanoHeaderActions, this.caller, null);
+
+    tx.headers.push(nanoHeader);
+
+    return tx;
   }
 }
 

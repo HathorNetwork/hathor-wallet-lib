@@ -5,21 +5,21 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import VertexHeaderId from './types';
-import Header from './base';
+import { VertexHeaderId } from './types';
+import Header, { HeaderStaticType } from './base';
 import NanoContractHeader from '../nano_contracts/header';
 
-class HeaderParser {
-  static getSupportedHeaders(): Record<VertexHeaderId, Header> {
+export default class HeaderParser {
+  static getSupportedHeaders(): Record<VertexHeaderId, HeaderStaticType> {
     return {
-      [VertexHeaderId.NANO_HEADER: VertexHeaderId]: NanoContractHeader
+      [VertexHeaderId.NANO_HEADER]: NanoContractHeader
     };
   }
 
-  static getHeader(id: Buffer): Header {
-    headers = HeaderParser.getSupportedHeaders();
+  static getHeader(id: string): Header {
+    const headers = HeaderParser.getSupportedHeaders();
     if (!(id in headers)) {
-      throw new Error(`Header id not supported: ${headers.toString('hex')}`);
+      throw new Error(`Header id not supported: ${id}`);
     }
 
     return headers[id];

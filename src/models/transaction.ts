@@ -33,8 +33,11 @@ import {
 import Input from './input';
 import Output from './output';
 import Network from './network';
-import { MaximumNumberInputsError, MaximumNumberOutputsError } from '../errors';
+import { NanoHeaderNotFound, MaximumNumberInputsError, MaximumNumberOutputsError } from '../errors';
 import { OutputValueType } from '../types';
+import type Header from '../headers/base';
+import type NanoContractHeader from '../nano_contracts/header';
+import HeaderParser from '../headers/parser';
 
 enum txType {
   BLOCK = 'Block',
@@ -52,7 +55,7 @@ type optionsType = {
   parents?: string[];
   tokens?: string[];
   hash?: string | null;
-  headers: Header[];
+  headers?: Header[];
 };
 
 /**
@@ -151,8 +154,9 @@ class Transaction {
 
     this.serializeFundsFields(arr, false);
 
-    for (const header of this.headers):
+    for (const header of this.headers) {
       header.serializeSighash(arr);
+    }
 
     this._dataToSignCache = util.buffer.concat(arr);
     return this._dataToSignCache!;
@@ -574,18 +578,19 @@ class Transaction {
   }
 
   getHeadersFromBytes(srcBuf: Buffer): Buffer {
-    if (srcBuf.length <= 1) {
-      // We need 1 byte for the header type and more for the header itself
-      return;
-    }
-
     // Copies buffer locally, not to change the original parameter
     let buf = Buffer.from(srcBuf);
 
-    let headerId, headerClass, header;
-    [headerId, buf] = [buf.subarray(0, 1), buff.subarray(1)];
+    if (srcBuf.length <= 1) {
+      // We need 1 byte for the header type and more for the header itself
+      return buf;
+    }
 
-    headerClass = HeaderParser.getHeader(headerId);
+    let headerId, headerClass, header;
+    [headerId, buf] = [buf.subarray(0, 1), buf.subarray(1)];
+
+    const headerIdHex = headerId.toString('hex')
+    headerClass = HeaderParser.getHeader(headerIdHex);
     [header, buf] = headerClass.deserialize(buf);
 
     this.headers.push(header);
@@ -718,6 +723,28 @@ class Transaction {
    */
   updateHash() {
     this.hash = this.calculateHash();
+  }
+
+  isNanoContract(): boolean {
+    try {
+      this.getNanoHeader();
+    } catch (e) {
+      if (e instanceof NanoHeaderNotFound) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  getNanoHeader(): NanoContractHeader {
+    for (const header of this.headers) {
+      if (header instanceof NanoContractHeader) {
+        return header;
+      }
+    }
+
+    throw new NanoHeaderNotFound('Nano contract header not found.');
   }
 }
 

@@ -23,8 +23,8 @@ import {
   unpackToInt,
   intToBytes,
   bigIntToBytes,
+  outputValueToBytes
 } from '../utils/buffer';
-import { outputValueToBytes } from '../utils/transaction';
 import { parseScript as utilsParseScript } from '../utils/scripts';
 import { OutputValueType } from '../types';
 

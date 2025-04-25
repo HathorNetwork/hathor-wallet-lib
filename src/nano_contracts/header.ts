@@ -5,14 +5,15 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { NANO_CONTRACTS_INFO_VERSION, NANO_CONTRACTS_VERSION } from '../constants';
+import { NANO_CONTRACTS_INFO_VERSION } from '../constants';
 import { NanoContractActionHeader } from './types';
 import Transaction from '../models/transaction';
 import Input from '../models/input';
 import Output from '../models/output';
-import { outputValueToBytes } from '../utils/transaction';
+import transactionUtils from '../utils/transaction';
 import { hexToBuffer, intToBytes } from '../utils/buffer';
-import { VertexHeaderId } from '../header/types';
+import { VertexHeaderId } from '../headers/types';
+import Header from '../headers/base';
 
 class NanoContractHeader {
   // Transaction that has this header included
@@ -89,18 +90,18 @@ class NanoContractHeader {
     array.push(intToBytes(argsConcat.length, 2));
     array.push(argsConcat);
 
-    array.push(intToBytes(this.actions.length), 1);
+    array.push(intToBytes(this.actions.length, 1));
     for (const action of this.actions) {
-      const arrAction = [];
+      const arrAction: Buffer[] = [];
       arrAction.push(intToBytes(action.type, 1));
       arrAction.push(intToBytes(action.tokenIndex, 1));
-      arrAction.push(outputValueToBytes(action.amount));
+      arrAction.push(transactionUtils.outputValueToBytes(action.amount));
     }
 
     array.push(intToBytes(this.pubkey.length, 1));
     array.push(this.pubkey);
 
-    if (addInputData && this.signature !== null) {
+    if (addSignature && this.signature !== null) {
       array.push(intToBytes(this.signature.length, 1));
       array.push(this.signature);
     } else {
@@ -108,22 +109,30 @@ class NanoContractHeader {
     }
   }
 
+  serializeSighash(array: Buffer[]) {
+    this.serializeFields(array, false);
+  }
+
   /**
-   * Serialize tx to bytes
+   * Serialize header to bytes
    *
-   * @memberof NanoContract
+   * @memberof NanoContractHeader
    * @inner
    */
-  toBytes(): Buffer {
+  serialize(): Buffer {
     const arr: Buffer[] = [];
 
     // First add the header ID
-    arr.push(VertexHeaderId.NANO_HEADER);
+    arr.push(Buffer.from(VertexHeaderId.NANO_HEADER, 'hex'));
 
     // Then the serialized header
     this.serializeFields(arr, true);
 
     return Buffer.concat(arr);
+  }
+
+  static deserialize(buf: Buffer): [Header, Buffer] {
+    throw new Error("Not implemented: deserialize must be implemented in subclass");
   }
 }
 

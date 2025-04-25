@@ -5,11 +5,17 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-abstract class Header {
-  abstract serialize(array: Buffer[]): void;
+export interface HeaderStaticType {
+  deserialize(buf: Buffer): [Header, Buffer];
+}
 
+export default abstract class Header {
+  abstract serialize(array: Buffer[]): void;
+  
   abstract serializeSighash(array: Buffer[]): void;
 
   // XXX In typescript we can't have an abstract and static method
-  static deserialize(buf: Buffer): [Header, Buffer];
+  static deserialize(buf: Buffer): [Header, Buffer] {
+    throw new Error("Not implemented: deserialize must be implemented in subclass");
+  }
 }
