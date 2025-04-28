@@ -1,4 +1,4 @@
-import featureApi, {getBlockFeaturesSchema, getFeaturesSchema} from '../../src/api/featuresApi';
+import featureApi, { getBlockFeaturesSchema, getFeaturesSchema } from '../../src/api/featuresApi';
 
 describe('Feature api', () => {
   it('should be able to call the features api', async () => {
@@ -9,9 +9,11 @@ describe('Feature api', () => {
     expect(() => getFeaturesSchema.parse(response)).not.toThrow();
 
     expect(response.features).toEqual(
-      expect.arrayContaining([expect.objectContaining({
-        name: 'INCREASE_MAX_MERKLE_PATH_LENGTH',
-      })])
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'INCREASE_MAX_MERKLE_PATH_LENGTH',
+        }),
+      ])
     );
   });
 
