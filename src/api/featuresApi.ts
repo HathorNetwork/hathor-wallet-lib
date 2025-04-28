@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { createRequestInstance } from './axiosInstance';
 import { transformJsonBigIntResponse } from '../utils/bigint';
 
-const featureActivationSchema = z
+export const featureActivationSchema = z
   .object({
     name: z.string(),
     state: z.string(),
@@ -23,7 +23,7 @@ const featureActivationSchema = z
   })
   .passthrough();
 
-const getFeaturesSchema = z
+export const getFeaturesSchema = z
   .object({
     block_hash: z.string(),
     block_height: z.number().min(0),
@@ -31,12 +31,12 @@ const getFeaturesSchema = z
   })
   .passthrough();
 
-const errorSchema = z.object({
+export const errorSchema = z.object({
   success: z.literal(false),
   error: z.string(),
 });
 
-const getBlockFeatureSignalBitSchema = z
+export const getBlockFeatureSignalBitSchema = z
   .object({
     bit: z.number(),
     signal: z.number(),
@@ -45,13 +45,13 @@ const getBlockFeatureSignalBitSchema = z
   })
   .passthrough();
 
-const getBlockFeaturesSuccessSchema = z
+export const getBlockFeaturesSuccessSchema = z
   .object({
     signal_bits: z.array(getBlockFeatureSignalBitSchema),
   })
   .passthrough();
 
-const getBlockFeaturesSchema = z.union([getBlockFeaturesSuccessSchema, errorSchema]);
+export const getBlockFeaturesSchema = z.union([getBlockFeaturesSuccessSchema, errorSchema]);
 
 const featuresApi = {
   /**
