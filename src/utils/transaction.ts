@@ -812,6 +812,9 @@ const transaction = {
       if (tx.version === NANO_CONTRACTS_VERSION) {
         return 'Nano Contract';
       }
+      if (tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
+        return 'On-Chain Blueprint';
+      }
     }
 
     // If there is no match
