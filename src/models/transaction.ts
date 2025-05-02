@@ -36,7 +36,7 @@ import Network from './network';
 import { NanoHeaderNotFound, MaximumNumberInputsError, MaximumNumberOutputsError } from '../errors';
 import { OutputValueType } from '../types';
 import type Header from '../headers/base';
-import type NanoContractHeader from '../nano_contracts/header';
+import NanoContractHeader from '../nano_contracts/header';
 import HeaderParser from '../headers/parser';
 
 enum txType {
@@ -633,27 +633,20 @@ class Transaction {
     return fundsHash.digest();
   }
 
-  getGraphHash() {
+  getGraphAndHeadersHash() {
     const arrGraph = [];
     this.serializeGraphFields(arrGraph);
-    const graphHash = crypto.createHash('sha256');
-    graphHash.update(buffer.Buffer.concat(arrGraph));
-    return graphHash.digest();
-  }
+    const hash = crypto.createHash('sha256');
+    hash.update(buffer.Buffer.concat(arrGraph));
 
-  getHeadersHash() {
-    if (this.headers.length === 0) {
+    if (this.headers.length !== 0) {
       // The hathor-core method returns b'' here if there are no headers
-      // The method crypto.createHash.digest returns a Buffer
-      // so I must return this emtpy Buffer here
-      return Buffer.alloc(0);
+      const arrHeaders = [];
+      this.serializeHeaders(arrHeaders);
+      hash.update(buffer.Buffer.concat(arrHeaders));
     }
 
-    const arrHeaders = [];
-    this.serializeHeaders(arrHeaders);
-    const headersHash = crypto.createHash('sha256');
-    headersHash.update(buffer.Buffer.concat(arrHeaders));
-    return headersHash.digest();
+    return hash.digest();
   }
 
   /**
@@ -666,10 +659,9 @@ class Transaction {
    */
   calculateHashPart1(): crypto.Hash {
     const digestedFunds = this.getFundsHash();
-    const digestedGraph = this.getGraphHash();
-    const digestedHeaders = this.getHeadersHash();
+    const digestedGraphAndHeaders = this.getGraphAndHeadersHash();
 
-    const bufferPart1 = buffer.Buffer.concat([digestedFunds, digestedGraph, digestedHeaders]);
+    const bufferPart1 = buffer.Buffer.concat([digestedFunds, digestedGraphAndHeaders]);
 
     const part1 = crypto.createHash('sha256');
     part1.update(bufferPart1);

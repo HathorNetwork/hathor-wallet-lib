@@ -7,11 +7,10 @@
 
 import { NANO_CONTRACTS_INFO_VERSION } from '../constants';
 import { NanoContractActionHeader } from './types';
-import Transaction from '../models/transaction';
+import type Transaction from '../models/transaction';
 import Input from '../models/input';
 import Output from '../models/output';
-import transactionUtils from '../utils/transaction';
-import { hexToBuffer, intToBytes } from '../utils/buffer';
+import { hexToBuffer, intToBytes, outputValueToBytes } from '../utils/buffer';
 import { VertexHeaderId } from '../headers/types';
 import Header from '../headers/base';
 
@@ -71,7 +70,7 @@ class NanoContractHeader {
    */
   serializeFields(array: Buffer[], addSignature: boolean) {
     // Info version
-    array.push(intToBytes(NANO_CONTRACTS_INFO_VERSION, 1));
+    array.push(intToBytes(this.nc_info_version, 1));
 
     // nano contract id
     array.push(hexToBuffer(this.id));
@@ -95,7 +94,8 @@ class NanoContractHeader {
       const arrAction: Buffer[] = [];
       arrAction.push(intToBytes(action.type, 1));
       arrAction.push(intToBytes(action.tokenIndex, 1));
-      arrAction.push(transactionUtils.outputValueToBytes(action.amount));
+      arrAction.push(outputValueToBytes(action.amount));
+      array.push(Buffer.concat(arrAction));
     }
 
     array.push(intToBytes(this.pubkey.length, 1));
@@ -119,16 +119,12 @@ class NanoContractHeader {
    * @memberof NanoContractHeader
    * @inner
    */
-  serialize(): Buffer {
-    const arr: Buffer[] = [];
-
+  serialize(array: Buffer[]) {
     // First add the header ID
-    arr.push(Buffer.from(VertexHeaderId.NANO_HEADER, 'hex'));
+    array.push(Buffer.from(VertexHeaderId.NANO_HEADER, 'hex'));
 
     // Then the serialized header
-    this.serializeFields(arr, true);
-
-    return Buffer.concat(arr);
+    this.serializeFields(array, true);
   }
 
   static deserialize(buf: Buffer): [Header, Buffer] {
