@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { crypto as cryptoBL, PrivateKey, HDPrivateKey } from 'bitcore-lib';
 import { cloneDeep } from 'lodash';
 import { Utxo } from '../wallet/types';
-import { UtxoError, ParseError, OutputValueError } from '../errors';
+import { UtxoError, ParseError } from '../errors';
 import { HistoryTransactionOutput } from '../models/types';
 import {
   TOKEN_AUTHORITY_MASK,
@@ -20,8 +20,6 @@ import {
   DEFAULT_TX_VERSION,
   DEFAULT_SIGNAL_BITS,
   BLOCK_VERSION,
-  MAX_OUTPUT_VALUE,
-  MAX_OUTPUT_VALUE_32,
   MERGED_MINED_BLOCK_VERSION,
   NANO_CONTRACTS_VERSION,
   POA_BLOCK_VERSION,
@@ -702,7 +700,7 @@ const transaction = {
     }
 
     if (tx.isNanoContract()) {
-      const nanoHeader = tx.getNanoHeader()
+      const nanoHeader = tx.getNanoHeader();
       histTx.nc_id = nanoHeader.id;
       histTx.nc_method = nanoHeader.method;
       histTx.nc_args = nanoHeader.args.map(a => a.toString('hex')).join('');

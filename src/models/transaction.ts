@@ -102,10 +102,11 @@ class Transaction {
       parents: [],
       tokens: [],
       hash: null,
-      headers: []
+      headers: [],
     };
     const newOptions = Object.assign(defaultOptions, options);
-    const { signalBits, version, weight, nonce, timestamp, parents, tokens, hash, headers } = newOptions;
+    const { signalBits, version, weight, nonce, timestamp, parents, tokens, hash, headers } =
+      newOptions;
 
     this.inputs = inputs;
     this.outputs = outputs;
@@ -586,11 +587,20 @@ class Transaction {
       return buf;
     }
 
-    let headerId, headerClass, header;
+    let headerId;
+    // If I don't disable the linter in the next line
+    // it complains that headerId can be a const
+    // But buf can't, so I would need to create an aux buf
+    // eslint-disable-next-line prefer-const
     [headerId, buf] = [buf.subarray(0, 1), buf.subarray(1)];
 
-    const headerIdHex = headerId.toString('hex')
-    headerClass = HeaderParser.getHeader(headerIdHex);
+    const headerIdHex = headerId.toString('hex');
+    const headerClass = HeaderParser.getHeader(headerIdHex);
+    let header;
+    // If I don't disable the linter in the next line
+    // it complains that header can be a const
+    // But buf can't, so I would need to create an aux buf
+    // eslint-disable-next-line prefer-const
     [header, buf] = headerClass.deserialize(buf);
 
     this.headers.push(header);

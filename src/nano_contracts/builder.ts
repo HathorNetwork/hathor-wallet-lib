@@ -11,10 +11,7 @@ import Input from '../models/input';
 import Transaction from '../models/transaction';
 import { createOutputScriptFromAddress } from '../utils/address';
 import tokensUtils from '../utils/tokens';
-import {
-  NATIVE_TOKEN_UID,
-  NANO_CONTRACTS_INITIALIZE_METHOD,
-} from '../constants';
+import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../constants';
 import Serializer from './serializer';
 import HathorWallet from '../new/wallet';
 import { NanoContractTransactionError } from '../errors';
@@ -390,18 +387,26 @@ class NanoContractTransactionBuilder {
             uid: token,
             name: '',
             symbol: '',
-          }
+          };
         });
 
         return {
           type: headerActionType,
           amount: action.amount,
-          tokenIndex: tokensUtils.getTokenIndex(mappedTokens, action.token)
-        }
+          tokenIndex: tokensUtils.getTokenIndex(mappedTokens, action.token),
+        };
       });
     }
 
-    const nanoHeader = new NanoContractHeader(tx, ncId, this.method, serializedArgs, nanoHeaderActions, this.caller, null);
+    const nanoHeader = new NanoContractHeader(
+      tx,
+      ncId,
+      this.method,
+      serializedArgs,
+      nanoHeaderActions,
+      this.caller,
+      null
+    );
 
     tx.headers.push(nanoHeader);
 

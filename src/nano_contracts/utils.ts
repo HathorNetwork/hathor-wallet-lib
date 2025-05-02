@@ -10,7 +10,6 @@ import { crypto } from 'bitcore-lib';
 import transactionUtils from '../utils/transaction';
 import SendTransaction from '../new/sendTransaction';
 import HathorWallet from '../new/wallet';
-import OnChainBlueprint from './on_chain_blueprint';
 import Network from '../models/network';
 import ScriptData from '../models/script_data';
 import ncApi from '../api/nano';

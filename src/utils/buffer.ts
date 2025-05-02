@@ -2,7 +2,7 @@ import buffer from 'buffer';
 import { OutputValueError, ParseError } from '../errors';
 import { OutputValueType } from '../types';
 import { MAX_OUTPUT_VALUE, MAX_OUTPUT_VALUE_32 } from '../constants';
-import { prettyValue } from '../utils/numbers';
+import { prettyValue } from './numbers';
 
 const isHexa = (value: string): boolean => {
   // test if value is string?
@@ -273,7 +273,6 @@ export const bytesToOutputValue = (srcBuf: Buffer): [OutputValueType, Buffer] =>
 
   return [value * sign, buff];
 };
-
 
 /**
  * Get the bytes from the value

@@ -12,7 +12,7 @@ import NanoContractHeader from '../nano_contracts/header';
 export default class HeaderParser {
   static getSupportedHeaders(): Record<VertexHeaderId, HeaderStaticType> {
     return {
-      [VertexHeaderId.NANO_HEADER]: NanoContractHeader
+      [VertexHeaderId.NANO_HEADER]: NanoContractHeader,
     };
   }
 

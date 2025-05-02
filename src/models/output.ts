@@ -22,8 +22,7 @@ import {
   unpackLen,
   unpackToInt,
   intToBytes,
-  bigIntToBytes,
-  outputValueToBytes
+  outputValueToBytes,
 } from '../utils/buffer';
 import { parseScript as utilsParseScript } from '../utils/scripts';
 import { OutputValueType } from '../types';

@@ -8,8 +8,6 @@
 import { NANO_CONTRACTS_INFO_VERSION } from '../constants';
 import { NanoContractActionHeader } from './types';
 import type Transaction from '../models/transaction';
-import Input from '../models/input';
-import Output from '../models/output';
 import { hexToBuffer, intToBytes, outputValueToBytes } from '../utils/buffer';
 import { VertexHeaderId } from '../headers/types';
 import Header from '../headers/base';
@@ -36,6 +34,7 @@ class NanoContractHeader {
 
   // Pubkey and signature of the transaction owner / caller
   pubkey: Buffer;
+
   signature: Buffer | null;
 
   constructor(
@@ -47,7 +46,6 @@ class NanoContractHeader {
     pubkey: Buffer,
     signature: Buffer | null = null
   ) {
-
     this.tx = tx;
     this.nc_info_version = NANO_CONTRACTS_INFO_VERSION;
     this.id = id;
@@ -128,7 +126,7 @@ class NanoContractHeader {
   }
 
   static deserialize(buf: Buffer): [Header, Buffer] {
-    throw new Error("Not implemented: deserialize must be implemented in subclass");
+    throw new Error('Not implemented: deserialize must be implemented in subclass');
   }
 }
 

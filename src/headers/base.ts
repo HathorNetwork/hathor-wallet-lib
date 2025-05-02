@@ -11,11 +11,11 @@ export interface HeaderStaticType {
 
 export default abstract class Header {
   abstract serialize(array: Buffer[]): void;
-  
+
   abstract serializeSighash(array: Buffer[]): void;
 
   // XXX In typescript we can't have an abstract and static method
   static deserialize(buf: Buffer): [Header, Buffer] {
-    throw new Error("Not implemented: deserialize must be implemented in subclass");
+    throw new Error('Not implemented: deserialize must be implemented in subclass');
   }
 }
