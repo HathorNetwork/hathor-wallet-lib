@@ -20,7 +20,7 @@
               category = "tests";
               name = "unit_tests";
               help = "Run unit tests";
-              command = "make test";
+              command = "npm run test";
             }
             {
               category = "build";
