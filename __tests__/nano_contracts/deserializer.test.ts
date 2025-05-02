@@ -242,8 +242,6 @@ test('VarInt', () => {
     [-129n, Buffer.from([0x7f + 0x80, 0x7e])],
   ];
   for (const testCase of DWARF5TestCases) {
-    expect(
-      deserializer.toVarInt(testCase[1] as Buffer)
-    ).toEqual(testCase[0] as bigint);
+    expect(deserializer.toVarInt(testCase[1] as Buffer)).toEqual(testCase[0] as bigint);
   }
 });

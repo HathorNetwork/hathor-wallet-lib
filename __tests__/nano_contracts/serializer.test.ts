@@ -27,7 +27,9 @@ test('Int', () => {
 test('Bytes', () => {
   const serializer = new Serializer();
   expect(
-    serializer.fromBytes(Buffer.from([0x74, 0x65, 0x73, 0x74])).equals(Buffer.from([0x74, 0x65, 0x73, 0x74]))
+    serializer
+      .fromBytes(Buffer.from([0x74, 0x65, 0x73, 0x74]))
+      .equals(Buffer.from([0x74, 0x65, 0x73, 0x74]))
   ).toBe(true);
 });
 
@@ -67,10 +69,7 @@ test('List', () => {
   expect(
     serializer
       .fromList(
-        [
-          Buffer.from([0x74, 0x65, 0x73, 0x74]),
-          Buffer.from([0x74, 0x65, 0x73, 0x74]),
-        ],
+        [Buffer.from([0x74, 0x65, 0x73, 0x74]), Buffer.from([0x74, 0x65, 0x73, 0x74])],
         'bytes'
       )
       .equals(Buffer.from([0x00, 0x02, 0x74, 0x65, 0x73, 0x74, 0x74, 0x65, 0x73, 0x74]))
@@ -173,8 +172,6 @@ test('VarInt', () => {
   ];
   const serializer = new Serializer();
   for (const testCase of DWARF5TestCases) {
-    expect(
-      serializer.fromVarInt(testCase[0] as bigint)
-    ).toEqual(testCase[1] as Buffer);
+    expect(serializer.fromVarInt(testCase[0] as bigint)).toEqual(testCase[1] as Buffer);
   }
 });
