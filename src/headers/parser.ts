@@ -6,7 +6,7 @@
  */
 
 import { VertexHeaderId } from './types';
-import Header, { HeaderStaticType } from './base';
+import { HeaderStaticType } from './base';
 import NanoContractHeader from '../nano_contracts/header';
 
 export default class HeaderParser {
