@@ -16,7 +16,7 @@ export default class HeaderParser {
     };
   }
 
-  static getHeader(id: string): Header {
+  static getHeader(id: string): HeaderStaticType {
     const headers = HeaderParser.getSupportedHeaders();
     if (!(id in headers)) {
       throw new Error(`Header id not supported: ${id}`);
