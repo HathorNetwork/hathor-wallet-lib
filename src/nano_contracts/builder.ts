@@ -287,14 +287,11 @@ class NanoContractTransactionBuilder {
         );
       }
 
-      /*
-       * XXX Check how is the full node return data with nano contract header
-      if (response.tx.version !== NANO_CONTRACTS_VERSION) {
+      if (!response.tx.nc_id) {
         throw new NanoContractTransactionError(
           `Transaction with id ${this.ncId} is not a nano contract transaction.`
         );
       }
-      */
 
       this.blueprintId = response.tx.nc_blueprint_id;
     }

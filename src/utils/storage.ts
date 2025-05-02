@@ -796,9 +796,8 @@ export async function processNewTx(
 
   // Nano contract and ocb transactions have the address used to sign the tx
   // and we must consider this to the address metadata
-  // XXX the IHistoryTx comes from the hathor core, I will double check
-  // how it's returning header data but so far we can't use
-  // Transaction object methods
+  // The IHistoryTx object has data from the full node that doesn't have the headers
+  // only the nano parameters in the data
   if (tx.nc_id || tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
     const caller = getAddressFromPubkey(tx.nc_pubkey!, storage.config.getNetwork());
     const callerAddressInfo = await store.getAddress(caller.base58);
