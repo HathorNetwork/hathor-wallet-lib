@@ -6,6 +6,8 @@
  */
 import { IHistoryTx, OutputValueType } from '../types';
 
+export type NanoContractArgumentApiInputType = string | number | OutputValueType | boolean | null;
+
 export enum NanoContractActionType {
   DEPOSIT = 'deposit',
   WITHDRAWAL = 'withdrawal',
@@ -24,6 +26,14 @@ export enum NanoContractActionHeaderType {
   DEPOSIT = 1,
   WITHDRAWAL = 2,
 }
+
+export const ActionTypeToActionHeaderType: Record<
+  NanoContractActionType,
+  NanoContractActionHeaderType
+> = {
+  [NanoContractActionType.DEPOSIT]: NanoContractActionHeaderType.DEPOSIT,
+  [NanoContractActionType.WITHDRAWAL]: NanoContractActionHeaderType.WITHDRAWAL,
+};
 
 // The action in the header is serialized/deserialized in the class
 // and it's used only to help calculate the token balance

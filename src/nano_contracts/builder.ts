@@ -16,7 +16,7 @@ import Serializer from './serializer';
 import HathorWallet from '../new/wallet';
 import { NanoContractTransactionError } from '../errors';
 import {
-  NanoContractActionHeaderType,
+  ActionTypeToActionHeaderType,
   NanoContractActionHeader,
   NanoContractActionType,
   NanoContractAction,
@@ -370,14 +370,7 @@ class NanoContractTransactionBuilder {
 
     if (this.actions) {
       nanoHeaderActions = this.actions.map(action => {
-        let headerActionType;
-        if (action.type === NanoContractActionType.DEPOSIT) {
-          headerActionType = NanoContractActionHeaderType.DEPOSIT;
-        }
-
-        if (action.type === NanoContractActionType.WITHDRAWAL) {
-          headerActionType = NanoContractActionHeaderType.WITHDRAWAL;
-        }
+        const headerActionType = ActionTypeToActionHeaderType[action.type];
 
         const mappedTokens: ITokenData[] = tokens.map(token => {
           return {

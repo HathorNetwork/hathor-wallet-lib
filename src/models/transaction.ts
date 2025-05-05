@@ -274,6 +274,14 @@ class Transaction {
     array.push(intToBytes(this.nonce, 4));
   }
 
+  /**
+   * Serializes transaction headers
+   *
+   * @param {Buffer[]} array Array of buffer to push serialized headers
+   *
+   * @memberof Transaction
+   * @inner
+   */
   serializeHeaders(array: Buffer[]) {
     for (const h of this.headers) {
       h.serialize(array);
@@ -578,33 +586,35 @@ class Transaction {
     return buf;
   }
 
-  getHeadersFromBytes(srcBuf: Buffer): Buffer {
+  /**
+   * Gets headers objects from bytes
+   * and pushes them in `this.headers`
+   *
+   * @param srcBuf Buffer with bytes to get headers data
+   *
+   * @return Rest of buffer after getting the fields
+   * @memberof Transaction
+   * @inner
+   */
+  getHeadersFromBytes(srcBuf: Buffer): void {
     // Copies buffer locally, not to change the original parameter
     let buf = Buffer.from(srcBuf);
 
     if (srcBuf.length <= 1) {
       // We need 1 byte for the header type and more for the header itself
-      return buf;
+      return;
     }
 
-    let headerId;
-    // If I don't disable the linter in the next line
-    // it complains that headerId can be a const
-    // But buf can't, so I would need to create an aux buf
-    // eslint-disable-next-line prefer-const
-    [headerId, buf] = [buf.subarray(0, 1), buf.subarray(1)];
+    while (buf.length > 0) {
+      const headerId = buf.subarray(0, 1);
+      const headerIdHex = headerId.toString('hex');
+      const headerClass = HeaderParser.getHeader(headerIdHex);
+      let header;
+      // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
+      [header, buf] = headerClass.deserialize(this, buf);
 
-    const headerIdHex = headerId.toString('hex');
-    const headerClass = HeaderParser.getHeader(headerIdHex);
-    let header;
-    // If I don't disable the linter in the next line
-    // it complains that header can be a const
-    // But buf can't, so I would need to create an aux buf
-    // eslint-disable-next-line prefer-const
-    [header, buf] = headerClass.deserialize(buf);
-
-    this.headers.push(header);
-    return buf;
+      this.headers.push(header);
+    }
   }
 
   /**
@@ -635,7 +645,14 @@ class Transaction {
     return tx;
   }
 
-  getFundsHash() {
+  /**
+   * Get funds fields hash to be used when calculating the tx hash
+   *
+   * @return The sha256 hash digest
+   * @memberof Transaction
+   * @inner
+   */
+  getFundsHash(): Buffer {
     const arrFunds = [];
     this.serializeFundsFields(arrFunds, true);
     const fundsHash = crypto.createHash('sha256');
@@ -643,6 +660,13 @@ class Transaction {
     return fundsHash.digest();
   }
 
+  /**
+   * Get graph and headers fields hash to be used when calculating the tx hash
+   *
+   * @return The sha256 hash digest
+   * @memberof Transaction
+   * @inner
+   */
   getGraphAndHeadersHash() {
     const arrGraph = [];
     this.serializeGraphFields(arrGraph);
@@ -727,6 +751,14 @@ class Transaction {
     this.hash = this.calculateHash();
   }
 
+  /**
+   * Return if the tx is a nano contract (if it has nano header)
+   *
+   * @return If the transaction object is a nano contract
+   *
+   * @memberof Transaction
+   * @inner
+   */
   isNanoContract(): boolean {
     try {
       this.getNanoHeader();
@@ -739,6 +771,16 @@ class Transaction {
     return true;
   }
 
+  /**
+   * Get the nano contract header from the list of headers.
+   *
+   * @throws NanoHeaderNotFound in case the tx does not have a nano header
+   *
+   * @return The nano header object
+   *
+   * @memberof Transaction
+   * @inner
+   */
   getNanoHeader(): NanoContractHeader {
     for (const header of this.headers) {
       if (header instanceof NanoContractHeader) {

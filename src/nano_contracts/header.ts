@@ -8,7 +8,14 @@
 import { NANO_CONTRACTS_INFO_VERSION } from '../constants';
 import { NanoContractActionHeader } from './types';
 import type Transaction from '../models/transaction';
-import { hexToBuffer, intToBytes, outputValueToBytes } from '../utils/buffer';
+import {
+  bytesToOutputValue,
+  hexToBuffer,
+  intToBytes,
+  outputValueToBytes,
+  unpackLen,
+  unpackToInt,
+} from '../utils/buffer';
 import { VertexHeaderId } from '../headers/types';
 import Header from '../headers/base';
 
@@ -107,6 +114,12 @@ class NanoContractHeader {
     }
   }
 
+  /**
+   * Serialize sighash data to bytes
+   *
+   * @memberof NanoContractHeader
+   * @inner
+   */
   serializeSighash(array: Buffer[]) {
     this.serializeFields(array, false);
   }
@@ -125,8 +138,102 @@ class NanoContractHeader {
     this.serializeFields(array, true);
   }
 
-  static deserialize(buf: Buffer): [Header, Buffer] {
-    throw new Error('Not implemented: deserialize must be implemented in subclass');
+  /**
+   * Deserialize buffer to Header object and
+   * return the rest of the buffer data
+   *
+   * @return Header object deserialized and the rest of buffer data
+   *
+   * @memberof NanoContractHeader
+   * @inner
+   */
+  static deserialize(tx: Transaction, srcBuf: Buffer): [Header, Buffer] {
+    // Copies buffer locally, not to change the original parameter
+    let buf = Buffer.from(srcBuf);
+
+    /* eslint-disable prefer-const -- To split these declarations would be confusing.
+     * In all of them the first parameter should be a const and the second a let. */
+    let headerId;
+    [headerId, buf] = [buf.subarray(0, 1), buf.subarray(1)];
+
+    const headerIdHex = headerId.toString('hex');
+    if (headerIdHex !== VertexHeaderId.NANO_HEADER) {
+      throw new Error('Invalid vertex header id for nano header.');
+    }
+
+    // Create empty header to fill with the deserialization
+    const header = new NanoContractHeader(tx, '', '', [], [], Buffer.from([]));
+
+    // nc info version
+    [header.nc_info_version, buf] = unpackToInt(1, false, buf);
+
+    if (header.nc_info_version !== NANO_CONTRACTS_INFO_VERSION) {
+      throw new Error('Invalid info version for nano header.');
+    }
+
+    // NC ID is 32 bytes in hex
+    let ncIdBuffer;
+    [ncIdBuffer, buf] = unpackLen(32, buf);
+    header.id = ncIdBuffer.toString('hex');
+
+    // nc method
+    let methodLen;
+    let methodBuffer;
+    [methodLen, buf] = unpackToInt(1, false, buf);
+
+    [methodBuffer, buf] = unpackLen(methodLen, buf);
+    header.method = methodBuffer.toString('ascii');
+
+    // nc args
+    let argsLen;
+    let args: Buffer[] = [];
+    let argsBuf;
+    [argsLen, buf] = unpackToInt(2, false, buf);
+    [argsBuf, buf] = unpackLen(argsLen, buf);
+
+    while (argsBuf.length > 0) {
+      let argElementLen;
+      let argElement;
+      [argElementLen, argsBuf] = unpackToInt(2, false, argsBuf);
+      [argElement, argsBuf] = unpackLen(argElementLen, argsBuf);
+      args.push(argElement);
+    }
+
+    header.args = args;
+
+    // nc actions
+    let actionsLen;
+    [actionsLen, buf] = unpackToInt(1, false, buf);
+
+    for (let i = 0; i < actionsLen; i++) {
+      let actionTypeBytes;
+      let actionType;
+      let tokenIndex;
+      let amount;
+      [actionTypeBytes, buf] = [buf.subarray(0, 1), buf.subarray(1)];
+      [actionType] = unpackToInt(1, false, actionTypeBytes);
+      [tokenIndex, buf] = unpackToInt(1, false, buf);
+      [amount, buf] = bytesToOutputValue(buf);
+
+      header.actions.push({ type: actionType, tokenIndex, amount });
+    }
+
+    // nc pubkey
+    let pubkeyLen;
+    [pubkeyLen, buf] = unpackToInt(1, false, buf);
+    [header.pubkey, buf] = unpackLen(pubkeyLen, buf);
+
+    // nc signature
+    let signatureLen;
+    [signatureLen, buf] = unpackToInt(1, false, buf);
+
+    if (signatureLen !== 0) {
+      // signature might be null
+      [header.signature, buf] = unpackLen(signatureLen, buf);
+    }
+    /* eslint-enable prefer-const */
+
+    return [header, buf];
   }
 }
 
