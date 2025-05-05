@@ -110,12 +110,6 @@ export const NANO_CONTRACTS_INITIALIZE_METHOD = 'initialize';
 export const ON_CHAIN_BLUEPRINTS_INFO_VERSION = 1;
 
 /**
- * Create token information version
- * so far we expect name and symbol
- */
-export const TOKEN_INFO_VERSION = 1;
-
-/**
  * Max value (inclusive) before having to use 8 bytes: 2147483648 ~= 2.14748e+09
  */
 export const MAX_OUTPUT_VALUE_32: OutputValueType = 2n ** 31n - 1n;
@@ -170,6 +164,7 @@ export const NATIVE_TOKEN_UID: string = '00';
 export const DEFAULT_NATIVE_TOKEN_CONFIG = {
   name: 'Hathor',
   symbol: 'HTR',
+  version: undefined,
 };
 
 /**
@@ -302,3 +297,8 @@ export const HATHOR_MAGIC_BYTES = 'Hathor Signed Message:\n';
  * Default address scanning policy
  */
 export const DEFAULT_ADDRESS_SCANNING_POLICY: AddressScanPolicy = SCANNING_POLICY.GAP_LIMIT;
+
+/**
+ * Fee per output
+ */
+export const FEE_PER_OUTPUT: number = 1;

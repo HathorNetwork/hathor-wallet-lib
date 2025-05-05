@@ -28,6 +28,7 @@ import { getAddressType } from './address';
 import { InsufficientFundsError, TokenValidationError } from '../errors';
 import { bestUtxoSelection } from './utxo';
 import walletApi from '../api/wallet';
+import { TokenInfoVersion } from '../models/enum/token_info_version';
 
 const tokens = {
   /**
@@ -79,7 +80,7 @@ const tokens = {
       const isDuplicate = await this.checkDuplicateTokenInfo(tokenData, storage);
       if (isDuplicate) {
         throw new TokenValidationError(
-          `You already have a token with this ${isDuplicate.key}: ${isDuplicate.token.uid} - ${isDuplicate.token.name} (${isDuplicate.token.symbol})`
+          `You already have a token with this ${isDuplicate.key}: ${isDuplicate.token.uid} - ${isDuplicate.token.name} (${isDuplicate.token.symbol}) - ${isDuplicate.token.version ?? TokenInfoVersion.DEPOSIT}`
         );
       }
     }
@@ -175,11 +176,11 @@ const tokens = {
   /**
    * Returns token from configuration string
    * Configuration string has the following format:
-   * [name:symbol:uid:checksum]
+   * `[name:symbol:uid:version?:checksum]`
    *
    * @param {string} config Configuration string with token data plus a checksum
    *
-   * @return {Object} token {'uid', 'name', 'symbol'} or null in case config is invalid
+   * @return {ITokenData} token {'uid', 'name', 'symbol', 'version'} or null in case config is invalid
    *
    * @memberof Tokens
    * @inner
@@ -203,11 +204,48 @@ const tokens = {
     if (correctChecksum.toString('hex') !== checksum[0]) {
       return null;
     }
+    // if the config has 4 elements, it means that it is a token created before
+    // we allowed the token versions
+    let version = this.getDefaultTokenVersion();
+    if (configArr.length === 5) {
+      version = Number(configArr.pop()!);
+    }
     const uid = configArr.pop()!;
     const symbol = configArr.pop()!;
     // Assuming that the name might have : on it
     const name = configArr.join(':');
-    return { uid, name, symbol };
+    return { uid, name, symbol, version };
+  },
+
+  /**
+   * Gets the default token version. Before the token versioning system was implemented,
+   * all tokens were created with the same version (DEPOSIT).
+   * @returns {TokenInfoVersion} The default token version to be used when creating a token
+   * @memberof Tokens
+   * @inner
+   */
+  getDefaultTokenVersion(): TokenInfoVersion {
+    return TokenInfoVersion.DEPOSIT;
+  },
+
+  /**
+   * Receive a tokenData without an version and set it to the default version.
+   * **NOTE**: HTR tokens doesn't have a version, so we don't set it.
+   * @returns {ITokenData} The tokenData with the default version set.
+   * @memberof Tokens
+   * @inner
+   */
+  setDefaultTokenVersion(tokenData: ITokenData): ITokenData {
+    if (!tokenData.uid) {
+      throw new Error('Token uid is required to set the default token version');
+    }
+    if (!this.isHathorToken(tokenData.uid) && !tokenData.version) {
+      return {
+        ...tokenData,
+        version: this.getDefaultTokenVersion(),
+      } satisfies ITokenData;
+    }
+    return tokenData;
   },
 
   /**
