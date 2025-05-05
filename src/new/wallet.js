@@ -675,7 +675,7 @@ class HathorWallet extends EventEmitter {
         // So we will enqueue this message to be processed later
         this.wsTxQueue.enqueue(wsData);
       } else {
-        this.newTxPromise = this.newTxPromise.then(() => this.onNewTx(wsData));
+        this.enqueueOnNewTx(wsData);
       }
     }
   }
@@ -1328,6 +1328,14 @@ class HathorWallet extends EventEmitter {
     }
     this.state = state;
     this.emit('state', state);
+  }
+
+  /**
+   * Enqueue the call for onNewTx with the given data.
+   * @param {{ history: import('../types').IHistoryTx }} wsData
+   */
+  enqueueOnNewTx(wsData) {
+    this.newTxPromise = this.newTxPromise.then(() => this.onNewTx(wsData));
   }
 
   /**
