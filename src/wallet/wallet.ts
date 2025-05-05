@@ -71,6 +71,8 @@ import {
 } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import { IStorage, IWalletAccessData, OutputValueType, IHistoryTx } from '../types';
+import { TokenInfoVersion } from '../models/enum/token_info_version';
+import { Fee } from '../models/fee';
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
@@ -1241,6 +1243,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       nftData: string | null;
       pinCode: string | null;
       signTx: boolean;
+      tokenInfoVersion: TokenInfoVersion | null;
     };
     const newOptions: optionsType = {
       address: null,
@@ -1254,6 +1257,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       nftData: null,
       pinCode: null,
       signTx: true,
+      tokenInfoVersion: TokenInfoVersion.DEPOSIT,
       ...options,
     };
 
@@ -1272,35 +1276,20 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         throw new SendTxError('The melt authority address must belong to your wallet.');
       }
     }
-
+    const tokenInfoVersion = newOptions.tokenInfoVersion || TokenInfoVersion.DEPOSIT;
     const isNFT = newOptions.nftData !== null;
 
     const depositPercent = this.storage.getTokenDepositPercentage();
     // 1. Calculate HTR deposit needed
-    let deposit = tokens.getDepositAmount(amount, depositPercent);
+    let deposit = 0n;
+    if (tokenInfoVersion === TokenInfoVersion.DEPOSIT) {
+      deposit = tokens.getDepositAmount(amount, depositPercent);
 
-    if (isNFT) {
-      // For NFT we have a fee of 0.01 HTR, then the deposit utxo query must get an additional 1
-      deposit += 1n;
-    }
-
-    // 2. Get utxos for HTR
-    const { utxos, changeAmount } = await this.getUtxos({
-      tokenId: NATIVE_TOKEN_UID,
-      totalAmount: deposit,
-    });
-    if (utxos.length === 0) {
-      throw new UtxoError(
-        `No utxos available to fill the request. Token: HTR - Amount: ${deposit}.`
-      );
-    }
-
-    const utxosAddressPath: string[] = [];
-    // 3. Create the transaction object with the inputs and outputs (new token amount, change address with HTR, mint/melt authorities - depending on parameters)
-    const inputsObj: Input[] = [];
-    for (const utxo of utxos) {
-      inputsObj.push(new Input(utxo.txId, utxo.index));
-      utxosAddressPath.push(utxo.addressPath);
+      // we only require a deposit for NFTs created with the deposit version
+      if (isNFT) {
+        // For NFT we have a fee of 0.01 HTR, then the deposit utxo query must get an additional 1
+        deposit += 1n;
+      }
     }
 
     // Create outputs
@@ -1349,6 +1338,28 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       );
     }
 
+    // 2. Calculate the fee, we are using a simplified fee calculation since in this method we only have outputs related to the token creation
+    const fee = Fee.calculateTokenCreationTxFee(outputsObj);
+
+    // 3. Get utxos for HTR
+    const { utxos, changeAmount } = await this.getUtxos({
+      tokenId: NATIVE_TOKEN_UID,
+      totalAmount: deposit + BigInt(fee),
+    });
+    if (utxos.length === 0) {
+      throw new UtxoError(
+        `No utxos available to fill the request. Token: HTR - Amount: ${deposit}.`
+      );
+    }
+
+    const utxosAddressPath: string[] = [];
+    // 2. Create the transaction object with the inputs and outputs (new token amount, change address with HTR, mint/melt authorities - depending on parameters)
+    const inputsObj: Input[] = [];
+    for (const utxo of utxos) {
+      inputsObj.push(new Input(utxo.txId, utxo.index));
+      utxosAddressPath.push(utxo.addressPath);
+    }
+
     if (changeAmount) {
       // d. HTR change output
       const changeAddressStr =
@@ -1362,7 +1373,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       outputsObj.push(new Output(changeAmount, p2pkhChangeScript));
     }
 
-    const tx = new CreateTokenTransaction(name, symbol, inputsObj, outputsObj);
+    const tx = new CreateTokenTransaction(name, symbol, inputsObj, outputsObj, {
+      tokenInfoVersion,
+    });
 
     // Sign transaction
     if (newOptions.signTx) {

@@ -20,6 +20,7 @@ import {
   MERGED_MINED_BLOCK_VERSION,
   TX_HASH_SIZE_BYTES,
   TX_WEIGHT_CONSTANTS,
+  NATIVE_TOKEN_UID,
 } from '../constants';
 import {
   bufferToHex,
@@ -657,6 +658,19 @@ class Transaction {
    */
   updateHash() {
     this.hash = this.calculateHash();
+  }
+
+  /**
+   * Returns the token uid with corresponding index from the tx token uid list
+   *
+   * @param {number} tokenIndex Index of the token uid list
+   * @returns the token uid
+   */
+  getTokenUid(index: number): string {
+    if (index === 0) {
+      return NATIVE_TOKEN_UID;
+    }
+    return this.tokens[index - 1];
   }
 }
 

@@ -955,6 +955,7 @@ export async function addCreatedTokenFromTx(
     uid: tx.hash,
     name: tx.name,
     symbol: tx.symbol,
+    version: tx.tokenInfoVersion,
   };
 
   await storage.addToken(tokenInfo);

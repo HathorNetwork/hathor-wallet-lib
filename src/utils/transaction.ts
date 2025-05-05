@@ -566,6 +566,7 @@ const transaction = {
       timestamp: txData.timestamp || null,
       parents: txData.parents || [],
       tokens: txData.tokens || [],
+      tokenInfoVersion: txData.tokenInfoVersion,
     };
     if (options.version === CREATE_TOKEN_TX_VERSION) {
       return new CreateTokenTransaction(txData.name!, txData.symbol!, inputs, outputs, options);
