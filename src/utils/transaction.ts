@@ -55,6 +55,7 @@ import txApi from '../api/txApi';
 import { FullNodeTxApiResponse, transactionApiSchema } from '../api/schemas/txApi';
 import tokenUtils from './tokens';
 import OnChainBlueprint from '../nano_contracts/on_chain_blueprint';
+import { TokenInfoVersion } from 'src/models/enum/token_info_version';
 
 const transaction = {
   /**
@@ -566,6 +567,7 @@ const transaction = {
       timestamp: txData.timestamp || null,
       parents: txData.parents || [],
       tokens: txData.tokens || [],
+      tokenInfoVersion: txData.tokenInfoVersion,
     };
     if (options.version === CREATE_TOKEN_TX_VERSION) {
       return new CreateTokenTransaction(txData.name!, txData.symbol!, inputs, outputs, options);
