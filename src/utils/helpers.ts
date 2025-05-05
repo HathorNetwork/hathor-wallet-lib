@@ -36,6 +36,7 @@ import {
 import { ErrorMessages } from '../errorMessages';
 import config from '../config';
 import { IDataInput, IUtxo } from '../types';
+import { Utxo } from '../wallet/types';
 
 /**
  * Helper methods
@@ -346,6 +347,7 @@ const helpers = {
       weight: data.weight,
       timestamp: data.timestamp,
       tokens: data.tokens,
+      tokenInfoVersion: data.tokenInfoVersion,
     };
 
     if (data.version === CREATE_TOKEN_TX_VERSION) {
@@ -596,6 +598,15 @@ const helpers = {
     }
 
     return 'privatenet';
+  },
+
+  /**
+   * Parse a Utxo to an Input without filling the options.
+   * @param utxo utxo to be parsed
+   * @returns {Input} Input object
+   */
+  parseToInput(utxo: IUtxo | Utxo): Input {
+    return new Input(utxo.txId, utxo.index);
   },
 };
 

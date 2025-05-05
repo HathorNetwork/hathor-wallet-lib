@@ -27,7 +27,7 @@ import {
   bigIntToBytes,
 } from '../utils/buffer';
 import { parseScript as utilsParseScript } from '../utils/scripts';
-import { OutputValueType } from '../types';
+import { IDataOutputWithToken, OutputValueType } from '../types';
 import { prettyValue } from '../utils/numbers';
 
 type optionsType = {

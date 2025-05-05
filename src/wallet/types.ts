@@ -12,6 +12,7 @@ import SendTransactionWalletService from './sendTransactionWalletService';
 import Input from '../models/input';
 import Output from '../models/output';
 import { OutputValueType, IHistoryTx } from '../types';
+import { TokenInfoVersion } from '../models/enum/token_info_version';
 
 export interface GetAddressesObject {
   address: string; // Address in base58
@@ -31,6 +32,7 @@ export interface TokenInfo {
   id: string; // Token id
   name: string; // Token name
   symbol: string; // Token symbol
+  version?: TokenInfoVersion; // HTR doesn't have a version
 }
 
 export interface Balance {

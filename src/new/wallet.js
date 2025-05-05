@@ -54,6 +54,7 @@ import OnChainBlueprint, { Code, CodeKind } from '../nano_contracts/on_chain_blu
 import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
 import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/transaction';
+import { TokenInfoVersion } from '../models/enum/token_info_version';
 
 /**
  * @typedef {import('../models/create_token_transaction').default} CreateTokenTransaction
@@ -1667,6 +1668,7 @@ class HathorWallet extends EventEmitter {
    * @property {string[]?} [data=null] list of data strings using utf8 encoding to add each as a data script output
    * @property {boolean?} [signTx=true] sign transaction instance
    * @property {boolean?} [isCreateNFT=false] if the create token is an NFT creation call
+   * @property {TokenInfoVersion?} [TokenInfoVersion=TokenInfoVersion.DEPOSIT] version of the token to be created
    */
 
   /**
@@ -1701,6 +1703,7 @@ class HathorWallet extends EventEmitter {
       data: null,
       isCreateNFT: false,
       signTx: true,
+      TokenInfoVersion: TokenInfoVersion.DEPOSIT,
       ...options,
     };
 
