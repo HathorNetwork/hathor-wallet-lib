@@ -16,7 +16,11 @@ import {
   unpackLen,
   unpackToInt,
 } from '../utils/buffer';
-import { getVertexHeaderIdBuffer, VertexHeaderId } from '../headers/types';
+import {
+  getVertexHeaderIdBuffer,
+  getVertexHeaderIdFromBuffer,
+  VertexHeaderId,
+} from '../headers/types';
 import Header from '../headers/base';
 
 class NanoContractHeader extends Header {
@@ -152,8 +156,7 @@ class NanoContractHeader extends Header {
     let headerId;
     [headerId, buf] = [buf.subarray(0, 1), buf.subarray(1)];
 
-    const headerIdHex = headerId.toString('hex');
-    if (headerIdHex !== VertexHeaderId.NANO_HEADER) {
+    if (getVertexHeaderIdFromBuffer(headerId) !== VertexHeaderId.NANO_HEADER) {
       throw new Error('Invalid vertex header id for nano header.');
     }
 

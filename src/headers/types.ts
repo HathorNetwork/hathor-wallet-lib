@@ -14,6 +14,16 @@ export const enum VertexHeaderId {
   NANO_HEADER = '10',
 }
 
-export function getVertexHeaderIdBuffer(id: VertexHeaderId) {
+export function getVertexHeaderIdBuffer(id: VertexHeaderId): Buffer {
   return Buffer.from(id, 'hex');
+}
+
+export function getVertexHeaderIdFromBuffer(buf: Buffer): VertexHeaderId {
+  const vertexId = buf.readUInt8().toString(16);
+  switch (vertexId) {
+    case VertexHeaderId.NANO_HEADER:
+      return VertexHeaderId.NANO_HEADER;
+    default:
+      throw new Error('Invalid VertexHeaderId');
+  }
 }
