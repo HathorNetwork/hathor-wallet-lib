@@ -605,6 +605,9 @@ class Transaction {
       return;
     }
 
+    // The header serialization doesn't have the headers length
+    // so we must exhaust the buffer until it's empty
+    // or we will throw an error
     while (buf.length > 0) {
       const headerId = buf.subarray(0, 1);
       const headerIdHex = headerId.toString('hex');
@@ -638,6 +641,9 @@ class Transaction {
     txBuffer = tx.getFundsFieldsFromBytes(txBuffer, network);
     txBuffer = tx.getGraphFieldsFromBytes(txBuffer);
 
+    // The header serialization doesn't have the headers length
+    // so we must exhaust the buffer until it's empty
+    // or we will throw an error
     tx.getHeadersFromBytes(txBuffer);
 
     tx.updateHash();
