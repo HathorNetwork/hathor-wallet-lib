@@ -10,7 +10,12 @@ import Mnemonic from 'bitcore-mnemonic';
 import { mockAxiosAdapter } from '../__mock_helpers__/axios-adapter.mock';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import Network from '../../src/models/network';
-import { GetAddressesObject, WsTransaction, CreateWalletAuthData, AddressInfoObject } from '../../src/wallet/types';
+import {
+  GetAddressesObject,
+  WsTransaction,
+  CreateWalletAuthData,
+  AddressInfoObject,
+} from '../../src/wallet/types';
 import config from '../../src/config';
 import {
   buildSuccessTxByIdTokenDataResponse,
@@ -115,9 +120,15 @@ describe('onNewTx', () => {
     });
 
     const testAddress = 'testAddress1';
-    (wallet as any).newAddresses = [{ address: testAddress, index: 0, addressPath: "m/0'/0/0" }] as AddressInfoObject[];
+    // @ts-expect-error: Monkey-patching wallet instance
+    wallet.newAddresses = [
+      { address: testAddress, index: 0, addressPath: "m/0'/0/0" },
+    ] as AddressInfoObject[];
 
-    const getNewAddressesSpy = jest.spyOn(wallet as any, 'getNewAddresses').mockResolvedValue(undefined);
+    const getNewAddressesSpy = jest
+      // @ts-expect-error: Monkey-patching wallet instance
+      .spyOn(wallet, 'getNewAddresses')
+      .mockResolvedValue(undefined);
 
     const newTx: WsTransaction = {
       tx_id: 'tx1',
@@ -157,9 +168,12 @@ describe('onNewTx', () => {
       network,
     });
 
-    (wallet as any).newAddresses = [{ address: 'otherAddress', index: 0, addressPath: "m/0'/0/0" }] as AddressInfoObject[];
+    // @ts-expect-error: Monkey-patching newAddresses
+    wallet.newAddresses = [
+      { address: 'otherAddress', index: 0, addressPath: "m/0'/0/0" },
+    ] as AddressInfoObject[];
 
-    const getNewAddressesSpy = jest.spyOn(wallet as any, 'getNewAddresses').mockResolvedValue(undefined);
+    const getNewAddressesSpy = jest.spyOn(wallet, 'getNewAddresses').mockResolvedValue(undefined);
 
     const newTx: WsTransaction = {
       tx_id: 'tx2',

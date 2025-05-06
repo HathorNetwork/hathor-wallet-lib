@@ -849,7 +849,7 @@ describe('Wallet API Schemas', () => {
     });
 
     it('should validate websocket transaction with omitted height', () => {
-      const { height, ...dataWithoutHeight } = validWsTxData;
+      const { height: _height, ...dataWithoutHeight } = validWsTxData;
       expect(() => wsTransactionSchema.parse(dataWithoutHeight)).not.toThrow();
     });
 
