@@ -13,3 +13,7 @@
 export enum VertexHeaderId {
   NANO_HEADER = '10',
 }
+
+export function getVertexHeaderIdBuffer(id: VertexHeaderId) {
+  return Buffer.from(id, 'hex');
+}

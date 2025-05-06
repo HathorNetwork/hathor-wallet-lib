@@ -16,7 +16,7 @@ import {
   unpackLen,
   unpackToInt,
 } from '../utils/buffer';
-import { VertexHeaderId } from '../headers/types';
+import { getVertexHeaderIdBuffer, VertexHeaderId } from '../headers/types';
 import Header from '../headers/base';
 
 class NanoContractHeader extends Header {
@@ -128,7 +128,7 @@ class NanoContractHeader extends Header {
    */
   serialize(array: Buffer[]) {
     // First add the header ID
-    array.push(Buffer.from(VertexHeaderId.NANO_HEADER, 'hex'));
+    array.push(getVertexHeaderIdBuffer(VertexHeaderId.NANO_HEADER));
 
     // Then the serialized header
     this.serializeFields(array, true);
