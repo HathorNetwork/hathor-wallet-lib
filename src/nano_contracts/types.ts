@@ -6,13 +6,6 @@
  */
 import { IHistoryTx, OutputValueType } from '../types';
 
-export type NanoContractArgumentApiInputType = string | number | OutputValueType | boolean | null;
-
-export enum NanoContractActionType {
-  DEPOSIT = 'deposit',
-  WITHDRAWAL = 'withdrawal',
-}
-
 export type NanoContractArgumentApiInputType =
   | string
   | number
@@ -21,6 +14,11 @@ export type NanoContractArgumentApiInputType =
   | boolean
   | null;
 export type NanoContractArgumentType = NanoContractArgumentApiInputType | Buffer;
+
+export enum NanoContractActionType {
+  DEPOSIT = 'deposit',
+  WITHDRAWAL = 'withdrawal',
+}
 
 export enum NanoContractHeaderActionType {
   DEPOSIT = 1,
