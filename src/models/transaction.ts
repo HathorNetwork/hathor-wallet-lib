@@ -156,6 +156,7 @@ class Transaction {
     this.serializeFundsFields(arr, false);
 
     for (const header of this.headers) {
+      // For the dataToSign we use only the sighash serialization
       header.serializeSighash(arr);
     }
 
