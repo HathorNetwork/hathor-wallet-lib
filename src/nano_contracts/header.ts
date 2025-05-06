@@ -19,10 +19,7 @@ import {
 import { VertexHeaderId } from '../headers/types';
 import Header from '../headers/base';
 
-class NanoContractHeader {
-  // Transaction that has this header included
-  tx: Transaction;
-
+class NanoContractHeader extends Header {
   // Used to create serialization versioning (hard coded as NANO_CONTRACTS_INFO_VERSION for now)
   nc_info_version: number;
 
@@ -53,7 +50,7 @@ class NanoContractHeader {
     pubkey: Buffer,
     signature: Buffer | null = null
   ) {
-    this.tx = tx;
+    super();
     this.nc_info_version = NANO_CONTRACTS_INFO_VERSION;
     this.id = id;
     this.method = method;
