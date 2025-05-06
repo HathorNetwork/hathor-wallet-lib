@@ -10,7 +10,7 @@ import Mnemonic from 'bitcore-mnemonic';
 import { mockAxiosAdapter } from '../__mock_helpers__/axios-adapter.mock';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import Network from '../../src/models/network';
-import { GetAddressesObject, WsTransaction, CreateWalletAuthData } from '../../src/wallet/types';
+import { GetAddressesObject, WsTransaction, CreateWalletAuthData, AddressInfoObject } from '../../src/wallet/types';
 import config from '../../src/config';
 import {
   buildSuccessTxByIdTokenDataResponse,
@@ -100,6 +100,97 @@ test('getAddressAtIndex', async () => {
   );
 
   await expect(wallet.getAddressAtIndex(0)).rejects.toThrow('Error getting wallet addresses.');
+});
+
+describe('onNewTx', () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = defaultWalletSeed;
+
+  it('should call getNewAddresses if an output address is in newAddresses', async () => {
+    const wallet = new HathorWalletServiceWallet({
+      requestPassword,
+      seed,
+      network,
+    });
+
+    const testAddress = 'testAddress1';
+    (wallet as any).newAddresses = [{ address: testAddress, index: 0, addressPath: "m/0'/0/0" }] as AddressInfoObject[];
+
+    const getNewAddressesSpy = jest.spyOn(wallet as any, 'getNewAddresses').mockResolvedValue(undefined);
+
+    const newTx: WsTransaction = {
+      tx_id: 'tx1',
+      nonce: 0,
+      timestamp: 0,
+      signal_bits: 0,
+      version: 1,
+      weight: 1,
+      parents: [],
+      inputs: [],
+      outputs: [
+        {
+          value: 100n,
+          token_data: 0,
+          script: { type: 'Buffer', data: [] },
+          token: 'HTR',
+          decoded: {
+            type: 'P2PKH',
+            address: testAddress,
+            timelock: null,
+          },
+          locked: false,
+          index: 0,
+        },
+      ],
+    };
+
+    await wallet.onNewTx(newTx);
+
+    expect(getNewAddressesSpy).toHaveBeenCalled();
+  });
+
+  it('should not call getNewAddresses if no output address is in newAddresses', async () => {
+    const wallet = new HathorWalletServiceWallet({
+      requestPassword,
+      seed,
+      network,
+    });
+
+    (wallet as any).newAddresses = [{ address: 'otherAddress', index: 0, addressPath: "m/0'/0/0" }] as AddressInfoObject[];
+
+    const getNewAddressesSpy = jest.spyOn(wallet as any, 'getNewAddresses').mockResolvedValue(undefined);
+
+    const newTx: WsTransaction = {
+      tx_id: 'tx2',
+      nonce: 0,
+      timestamp: 0,
+      signal_bits: 0,
+      version: 1,
+      weight: 1,
+      parents: [],
+      inputs: [],
+      outputs: [
+        {
+          value: 100n,
+          token_data: 0,
+          script: { type: 'Buffer', data: [] },
+          token: 'HTR',
+          decoded: {
+            type: 'P2PKH',
+            address: 'someRandomAddress',
+            timelock: null,
+          },
+          locked: false,
+          index: 0,
+        },
+      ],
+    };
+
+    await wallet.onNewTx(newTx);
+
+    expect(getNewAddressesSpy).not.toHaveBeenCalled();
+  });
 });
 
 test('getTxBalance', async () => {
