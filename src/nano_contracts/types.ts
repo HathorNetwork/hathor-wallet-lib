@@ -22,24 +22,24 @@ export type NanoContractArgumentApiInputType =
   | null;
 export type NanoContractArgumentType = NanoContractArgumentApiInputType | Buffer;
 
-export enum NanoContractActionHeaderType {
+export enum NanoContractHeaderActionType {
   DEPOSIT = 1,
   WITHDRAWAL = 2,
 }
 
 export const ActionTypeToActionHeaderType: Record<
   NanoContractActionType,
-  NanoContractActionHeaderType
+  NanoContractHeaderActionType
 > = {
-  [NanoContractActionType.DEPOSIT]: NanoContractActionHeaderType.DEPOSIT,
-  [NanoContractActionType.WITHDRAWAL]: NanoContractActionHeaderType.WITHDRAWAL,
+  [NanoContractActionType.DEPOSIT]: NanoContractHeaderActionType.DEPOSIT,
+  [NanoContractActionType.WITHDRAWAL]: NanoContractHeaderActionType.WITHDRAWAL,
 };
 
 // The action in the header is serialized/deserialized in the class
 // and it's used only to help calculate the token balance
 // That's why it's simple and with less fields
 export interface NanoContractActionHeader {
-  type: NanoContractActionHeaderType;
+  type: NanoContractHeaderActionType;
   tokenIndex: number;
   amount: OutputValueType;
 }
