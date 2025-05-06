@@ -23,8 +23,40 @@ import { NanoContractTransactionError, OracleParseError, WalletFromXPubGuard } f
 import { OutputType } from '../wallet/types';
 import { IHistoryTx, IStorage } from '../types';
 import { parseScript } from '../utils/scripts';
-import { MethodArgInfo, NanoContractArgumentType } from './types';
+import { MethodArgInfo, NanoContractArgumentType, NanoContractArgumentContainerType } from './types';
 import { NANO_CONTRACTS_VERSION, NANO_CONTRACTS_INITIALIZE_METHOD } from '../constants';
+
+export function getContainerInternalType(type: string): [NanoContractArgumentContainerType, string] {
+  if (type.endsWith('?')) {
+    // Optional value
+    return ['Optional', type.slice(0, -1)];
+  }
+
+  if (type.startsWith('SignedData[')) {
+    // SignedData[internalType]
+    const match = type.match(/\[(.*?)\]/);
+    const internalType = match ? match[1] : null;
+    if (!internalType) {
+      throw new Error('Unable to extract type');
+    }
+    return ['SignedData', internalType];
+  }
+
+  throw new Error('Not a ContainerType');
+}
+
+export function getContainerType(type: string): NanoContractArgumentContainerType|null {
+  try {
+    const [containerType, _internalType] = getContainerInternalType(type);
+    return containerType;
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === 'Not a ContainerType') {
+      return null;
+    }
+    // Re-raise unexpected error
+    throw err;
+  }
+}
 
 /**
  * Sign a transaction and create a send transaction object

@@ -11,7 +11,8 @@ import leb128Util from '../utils/leb128';
 import Network from '../models/network';
 import { NanoContractArgumentType } from './types';
 import { OutputValueType } from '../types';
-import { NC_ARGS_MAX_BYTES_LENGTH } from 'src/constants';
+import { NC_ARGS_MAX_BYTES_LENGTH } from '../constants';
+import { getContainerInternalType, getContainerType } from './utils';
 
 interface DeserializeResult<T> {
   value: T;
@@ -37,14 +38,9 @@ class Deserializer {
    * @inner
    */
   deserializeFromType(buf: Buffer, type: string): DeserializeResult<NanoContractArgumentType | null> {
-    if (type.endsWith('?')) {
-      // It's an optional
-      const optionalType = type.slice(0, -1);
-      return this.toOptional(buf, optionalType);
-    }
-
-    if (type.startsWith('SignedData[')) {
-      return this.toSigned(buf, type);
+    const isContainerType = getContainerType(type) !== null;
+    if (isContainerType) {
+      return this.deserializeContainerType(buf, type);
     }
 
     switch (type) {
@@ -73,6 +69,19 @@ class Deserializer {
     }
   }
 
+  deserializeContainerType(buf: Buffer, type: string): DeserializeResult<NanoContractArgumentType | null> {
+    const [containerType, internalType] = getContainerInternalType(type);
+
+    switch(containerType) {
+      case 'Optional':
+        return this.toOptional(buf, internalType);
+      case 'SignedData':
+        return this.toSigned(buf, type); // XXX: change to internalType?
+      default:
+        throw new Error('Invalid type.');
+    }
+  }
+
   /* eslint-disable class-methods-use-this -- XXX: Methods that don't use `this` should be made static */
 
   /**
@@ -84,14 +93,18 @@ class Deserializer {
    * @inner
    */
   toString(buf: Buffer): DeserializeResult<string> {
-    // XXX: maybe add a limit to the size of the leb128 integer that we can read.
-    const { value: lengthBN, rest, bytesRead: bytesReadForLength } = leb128Util.decodeSigned(buf);
-    if(lengthBN > BigInt(NC_ARGS_MAX_BYTES_LENGTH)) {
-      // XXX: Should this be an error?
+    // INFO: maxBytes is set to 3 becuase the max allowed length in bytes for a string is
+    // NC_ARGS_MAX_BYTES_LENGTH which is encoded as 3 bytes in leb128 unsigned.
+    // If we read a fourth byte we are definetely reading a higher number than allowed.
+    const { value: lengthBN, rest, bytesRead: bytesReadForLength } = leb128Util.decodeUnsigned(buf, 3);
+    if (lengthBN > NC_ARGS_MAX_BYTES_LENGTH) {
       throw new Error('String length in bytes is higher than max allowed');
     }
     // If lengthBN is lower than 64 KiB than its safe to convert to Number
     const length = Number(lengthBN);
+    if (rest.length < length) {
+      throw new Error('Do not have enough bytes to read the expected length');
+    }
     return {
       value: rest.subarray(0, length).toString('utf8'),
       bytesRead: length + bytesReadForLength,
@@ -107,14 +120,18 @@ class Deserializer {
    * @inner
    */
   toBytes(buf: Buffer): DeserializeResult<Buffer> {
-    // XXX: maybe add a limit to the size of the leb128 integer that we can read.
-    const { value: lengthBN, rest, bytesRead: bytesReadForLength } = leb128Util.decodeSigned(buf);
+    // INFO: maxBytes is set to 3 becuase the max allowed length in bytes for a string is
+    // NC_ARGS_MAX_BYTES_LENGTH which is encoded as 3 bytes in leb128 unsigned.
+    // If we read a fourth byte we are definetely reading a higher number than allowed.
+    const { value: lengthBN, rest, bytesRead: bytesReadForLength } = leb128Util.decodeUnsigned(buf, 3);
     if(lengthBN > BigInt(NC_ARGS_MAX_BYTES_LENGTH)) {
-      // XXX: Should this be an error?
       throw new Error('String length in bytes is higher than max allowed');
     }
     // If lengthBN is lower than 64 KiB than its safe to convert to Number
     const length = Number(lengthBN);
+    if (rest.length < length) {
+      throw new Error('Do not have enough bytes to read the expected length');
+    }
     return {
       value: rest.subarray(0, length),
       bytesRead: length + bytesReadForLength,
@@ -178,14 +195,13 @@ class Deserializer {
   /**
    * Deserialize a variable integer encoded as a leb128 buffer to a bigint.
    *
-   * @param {Buffer} value Value to deserialize
-   * @returns {bigint}
+   * @param buf Value to deserialize
    *
    * @memberof Deserializer
    */
-  toVarInt(value: Buffer): bigint {
-    const decoded = leb128Util.decodeSigned(value);
-    return decoded.value;
+  toVarInt(buf: Buffer): DeserializeResult<bigint> {
+    const { value, bytesRead } = leb128Util.decodeSigned(buf);
+    return { value, bytesRead };
   }
 
   /* eslint-enable class-methods-use-this */
@@ -234,10 +250,11 @@ class Deserializer {
    * @inner
    */
   toSigned(signedData: Buffer, type: string): DeserializeResult<string> {
-    // Get signed data type inside []
-    const match = type.match(/\[(.*?)\]/);
-    const valueType = match ? match[1] : null;
-    if (!valueType) {
+    const [containerType, internalType] = getContainerInternalType(type);
+    if (containerType !== 'SignedData') {
+      throw new Error('Type is not SignedData');
+    }
+    if (!internalType) {
       throw new Error('Unable to extract type');
     }
     // Should we check that the valueType is valid?
@@ -246,16 +263,16 @@ class Deserializer {
     // Which means we can parse the T argument, then read the bytes after.
 
     // Reading argument
-    const parseResult = this.deserializeFromType(signedData, valueType);
+    const parseResult = this.deserializeFromType(signedData, internalType);
     let parsed = parseResult.value;
     const bytesReadFromValue = parseResult.bytesRead;
 
-    if (valueType === 'bytes') {
+    if (internalType === 'bytes') {
       // If the value is bytes, we should transform into hex to return the string
       parsed = bufferToHex(parsed as Buffer);
     }
 
-    if (valueType === 'bool') {
+    if (internalType === 'bool') {
       parsed = parsed as boolean ? 'true' : 'false';
     }
 
@@ -263,10 +280,10 @@ class Deserializer {
     const {
       value: parsedSignature,
       bytesRead: bytesReadFromSignature,
-    } = this.deserializeFromType(signedData, 'bytes');
+    } = this.deserializeFromType(signedData.subarray(bytesReadFromValue), 'bytes');
 
     return {
-      value: `${bufferToHex(parsedSignature as Buffer)},${parsed},${valueType}`,
+      value: `${bufferToHex(parsedSignature as Buffer)},${parsed},${internalType}`,
       bytesRead: bytesReadFromValue + bytesReadFromSignature,
     };
   }

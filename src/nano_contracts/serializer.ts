@@ -11,7 +11,6 @@ import {
   signedIntToBytes,
   bigIntToBytes,
 } from '../utils/buffer';
-import { encodeSigned as leb128EncodeSigned } from '../utils/leb128';
 import { NanoContractArgumentType } from './types';
 import { OutputValueType } from '../types';
 import leb128Util from '../utils/leb128';
@@ -227,13 +226,15 @@ class Serializer {
     // First value must be a Buffer but comes as hex
     const inputData = hexToBuffer(splittedValue[0]);
     const type = splittedValue[2];
-    let value: Buffer | string | boolean;
+    let value: Buffer | string | boolean | number;
     if (type === 'bytes') {
       // If the result is expected as bytes, it will come here in the args as hex value
       value = hexToBuffer(splittedValue[1]);
     } else if (type === 'bool') {
       // If the result is expected as boolean, it will come here as a string true/false
       value = splittedValue[1] === 'true';
+    } else if (type === 'int') {
+      value = Number.parseInt(splittedValue[1], 10);
     } else {
       // For the other types
       value = splittedValue[1];
@@ -258,7 +259,7 @@ class Serializer {
    * @memberof Serializer
    */
   fromVarInt(value: bigint): Buffer {
-    return leb128EncodeSigned(value);
+    return leb128Util.encodeSigned(value);
   }
 }
 /* eslint-disable class-methods-use-this */

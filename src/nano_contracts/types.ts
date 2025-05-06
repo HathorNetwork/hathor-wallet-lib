@@ -20,6 +20,8 @@ export type NanoContractArgumentApiInputType =
   | null;
 export type NanoContractArgumentType = NanoContractArgumentApiInputType | Buffer;
 
+export type NanoContractArgumentContainerType = 'Optional' | 'SignedData';
+
 export interface NanoContractAction {
   type: NanoContractActionType.DEPOSIT | NanoContractActionType.WITHDRAWAL;
   token: string;
