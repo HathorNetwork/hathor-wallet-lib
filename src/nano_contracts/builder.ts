@@ -389,7 +389,6 @@ class NanoContractTransactionBuilder {
     }
 
     const nanoHeader = new NanoContractHeader(
-      tx,
       ncId,
       this.method,
       serializedArgs,

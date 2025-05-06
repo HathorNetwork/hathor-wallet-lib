@@ -42,7 +42,6 @@ class NanoContractHeader extends Header {
   signature: Buffer | null;
 
   constructor(
-    tx: Transaction,
     id: string,
     method: string,
     args: Buffer[],
@@ -144,7 +143,7 @@ class NanoContractHeader extends Header {
    * @memberof NanoContractHeader
    * @inner
    */
-  static deserialize(tx: Transaction, srcBuf: Buffer): [Header, Buffer] {
+  static deserialize(srcBuf: Buffer): [Header, Buffer] {
     // Copies buffer locally, not to change the original parameter
     let buf = Buffer.from(srcBuf);
 
@@ -159,7 +158,7 @@ class NanoContractHeader extends Header {
     }
 
     // Create empty header to fill with the deserialization
-    const header = new NanoContractHeader(tx, '', '', [], [], Buffer.from([]));
+    const header = new NanoContractHeader('', '', [], [], Buffer.from([]));
 
     // nc info version
     [header.nc_info_version, buf] = unpackToInt(1, false, buf);

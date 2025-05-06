@@ -614,7 +614,7 @@ class Transaction {
       const headerClass = HeaderParser.getHeader(headerIdHex);
       let header;
       // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
-      [header, buf] = headerClass.deserialize(this, buf);
+      [header, buf] = headerClass.deserialize(buf);
 
       this.headers.push(header);
     }
