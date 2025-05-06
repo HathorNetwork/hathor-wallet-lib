@@ -66,6 +66,8 @@ class Deserializer {
         return this.toAmount(buf);
       case 'bool':
         return this.toBool(buf);
+      case 'VarInt':
+        return this.toVarInt(buf);
       default:
         throw new Error('Invalid type.');
     }
@@ -99,7 +101,7 @@ class Deserializer {
   /**
    * Deserialize bytes value
    *
-   * @param {Buffer} buf Value to deserialize
+   * @param buf Value to deserialize
    *
    * @memberof Deserializer
    * @inner
@@ -172,6 +174,20 @@ class Deserializer {
       bytesRead: 1,
     };
   }
+
+  /**
+   * Deserialize a variable integer encoded as a leb128 buffer to a bigint.
+   *
+   * @param {Buffer} value Value to deserialize
+   * @returns {bigint}
+   *
+   * @memberof Deserializer
+   */
+  toVarInt(value: Buffer): bigint {
+    const decoded = leb128Util.decodeSigned(value);
+    return decoded.value;
+  }
+
   /* eslint-enable class-methods-use-this */
 
   /**

@@ -227,3 +227,21 @@ test('Address', () => {
 
   expect(() => deserializer.deserializeFromType(wrongNetworkAddressBuffer, 'Address')).toThrow();
 });
+
+test('VarInt', () => {
+  const network = new Network('testnet');
+  const deserializer = new Deserializer(network);
+  const DWARF5TestCases = [
+    [2n, Buffer.from([2])],
+    [-2n, Buffer.from([0x7e])],
+    [127n, Buffer.from([127 + 0x80, 0])],
+    [-127n, Buffer.from([1 + 0x80, 0x7f])],
+    [128n, Buffer.from([0 + 0x80, 1])],
+    [-128n, Buffer.from([0 + 0x80, 0x7f])],
+    [129n, Buffer.from([1 + 0x80, 1])],
+    [-129n, Buffer.from([0x7f + 0x80, 0x7e])],
+  ];
+  for (const testCase of DWARF5TestCases) {
+    expect(deserializer.toVarInt(testCase[1] as Buffer)).toEqual(testCase[0] as bigint);
+  }
+});
