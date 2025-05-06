@@ -597,8 +597,8 @@ class Transaction {
    * @inner
    */
   getHeadersFromBytes(srcBuf: Buffer): void {
-    // Copies buffer locally, not to change the original parameter
-    let buf = Buffer.from(srcBuf);
+    // Creates a new subarray buffer not to change anything of the source buffer
+    let buf = srcBuf.subarray();
 
     if (srcBuf.length <= 1) {
       // We need 1 byte for the header type and more for the header itself
