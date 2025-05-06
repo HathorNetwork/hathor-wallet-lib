@@ -279,8 +279,6 @@ export const bytesToOutputValue = (srcBuf: Buffer): [OutputValueType, Buffer] =>
  * If value is above the maximum for 32 bits we get from 8 bytes, otherwise only 4 bytes
  *
  * @throws {OutputValueError} Will throw an error if output value is invalid
- *
- * @return {Buffer}
  */
 export const outputValueToBytes = (value: OutputValueType): Buffer => {
   if (value <= 0) {
