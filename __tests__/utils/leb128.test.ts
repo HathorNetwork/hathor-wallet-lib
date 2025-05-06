@@ -110,7 +110,7 @@ test('leb128 unsigned should work with DWARF 5 positive examples', () => {
 
 test('leb128 signed should fail if maxBytes is lower than required', () => {
   for (const value of DWARF5SignedTestCases) {
-    const expectedLen = (value[1]).length;
+    const expectedLen = value[1].length;
     const val = value[0];
     // Encode should throw if maxBytes is expectedLen-1
     expect(() => {
@@ -126,7 +126,7 @@ test('leb128 signed should fail if maxBytes is lower than required', () => {
 
 test('leb128 unsigned should fail if maxBytes is lower than required', () => {
   for (const value of DWARF5UnsignedTestCases) {
-    const expectedLen = (value[1]).length;
+    const expectedLen = value[1].length;
     const val = value[0];
     if (val < 0n) {
       // Skip negative cases

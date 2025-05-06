@@ -17,7 +17,11 @@ export interface Leb128DecodeResult {
  * @param [signed=true] Differentiate signed and unsigned encoded numbers.
  * @param [maxBytes=null] Max allowed size of the output buffer.
  */
-export function encodeLeb128(value: bigint | number, signed: boolean = true, maxBytes: number | null = null) {
+export function encodeLeb128(
+  value: bigint | number,
+  signed: boolean = true,
+  maxBytes: number | null = null
+) {
   let val = BigInt(value);
   if (!signed && value < 0) {
     throw new Error('Cannot encode an unsigned negative value');
@@ -29,13 +33,12 @@ export function encodeLeb128(value: bigint | number, signed: boolean = true, max
     let isLastByte = false;
     if (signed) {
       // signed check for last byte
-      isLastByte = (
+      isLastByte =
         (val === 0n && (byte & 0b0100_0000n) === 0n) ||
-        (val === -1n && (byte & 0b0100_0000n) !== 0n)
-      );
+        (val === -1n && (byte & 0b0100_0000n) !== 0n);
     } else {
       // unsigned check for last byte
-      isLastByte = (val == 0n && (byte & 0b1000_0000n) == 0n);
+      isLastByte = val === 0n && (byte & 0b1000_0000n) === 0n;
     }
     if (isLastByte) {
       result.push(byte);
@@ -61,7 +64,11 @@ export function encodeLeb128(value: bigint | number, signed: boolean = true, max
  * @param [signed=true] Differentiate signed and unsigned encoded numbers.
  * @param [maxBytes=null] Max allowed size of the output buffer.
  */
-export function decodeLeb128(buf: Buffer, signed: boolean = true, maxBytes: number | null = null): Leb128DecodeResult {
+export function decodeLeb128(
+  buf: Buffer,
+  signed: boolean = true,
+  maxBytes: number | null = null
+): Leb128DecodeResult {
   const byte_list = Array.from(buf.values()).map(v => BigInt(v));
   let result = 0n;
   let shift = 0n;
@@ -83,7 +90,7 @@ export function decodeLeb128(buf: Buffer, signed: boolean = true, maxBytes: numb
 
     if ((byte & 0b1000_0000n) === 0n) {
       // Last byte
-      if (signed && ((byte & 0b0100_0000n) !== 0n)) {
+      if (signed && (byte & 0b0100_0000n) !== 0n) {
         // Negative sign
         return {
           value: result | -(1n << shift),
