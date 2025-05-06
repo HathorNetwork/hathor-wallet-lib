@@ -38,6 +38,7 @@ import { OutputValueType } from '../types';
 import type Header from '../headers/base';
 import NanoContractHeader from '../nano_contracts/header';
 import HeaderParser from '../headers/parser';
+import { getVertexHeaderIdFromBuffer } from '../headers/types';
 
 enum txType {
   BLOCK = 'Block',
@@ -610,9 +611,8 @@ class Transaction {
     // so we must exhaust the buffer until it's empty
     // or we will throw an error
     while (buf.length > 0) {
-      const headerId = buf.subarray(0, 1);
-      const headerIdHex = headerId.toString('hex');
-      const headerClass = HeaderParser.getHeader(headerIdHex);
+      const headerId = getVertexHeaderIdFromBuffer(buf);
+      const headerClass = HeaderParser.getHeader(headerId);
       let header;
       // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
       [header, buf] = headerClass.deserialize(buf);

@@ -151,18 +151,17 @@ class NanoContractHeader extends Header {
     // Copies buffer locally, not to change the original parameter
     let buf = Buffer.from(srcBuf);
 
-    /* eslint-disable prefer-const -- To split these declarations would be confusing.
-     * In all of them the first parameter should be a const and the second a let. */
-    let headerId;
-    [headerId, buf] = [buf.subarray(0, 1), buf.subarray(1)];
-
-    if (getVertexHeaderIdFromBuffer(headerId) !== VertexHeaderId.NANO_HEADER) {
+    if (getVertexHeaderIdFromBuffer(buf) !== VertexHeaderId.NANO_HEADER) {
       throw new Error('Invalid vertex header id for nano header.');
     }
+
+    buf = buf.subarray(1);
 
     // Create empty header to fill with the deserialization
     const header = new NanoContractHeader('', '', [], [], Buffer.from([]));
 
+    /* eslint-disable prefer-const -- To split these declarations would be confusing.
+     * In all of them the first parameter should be a const and the second a let. */
     // nc info version
     [header.nc_info_version, buf] = unpackToInt(1, false, buf);
 
