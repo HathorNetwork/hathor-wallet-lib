@@ -10,7 +10,7 @@
  * In typescript this is not easy to manipulate so I decided
  * to have the same enum but with hex values instead.
  */
-export enum VertexHeaderId {
+export const enum VertexHeaderId {
   NANO_HEADER = '10',
 }
 
