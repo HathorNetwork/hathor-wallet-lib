@@ -18,12 +18,14 @@ import helpers from '../../src/utils/helpers';
 import { DEFAULT_TX_VERSION, MAX_OUTPUTS, DEFAULT_SIGNAL_BITS } from '../../src/constants';
 import { MaximumNumberInputsError, MaximumNumberOutputsError, ParseError } from '../../src/errors';
 import { nftCreationTx } from '../__fixtures__/sample_txs';
+import { TokenInfoVersion } from '../../src/models/enum/token_info_version';
 
 const compareTxs = (tx, tx2) => {
   expect(tx2.version).toBe(tx.version);
   expect(tx2.tokens.length).toBe(tx.tokens.length);
   expect(tx2.inputs.length).toBe(tx.inputs.length);
   expect(tx2.outputs.length).toBe(tx.outputs.length);
+  expect(tx2.token_info_version).toBe(tx.token_info_version);
 
   for (let i = 0; i < tx.tokens.length; i++) {
     expect(tx2.tokens[i]).toBe(tx.tokens[i]);
@@ -129,8 +131,8 @@ test('New tx', () => {
 
 test('Token tx', () => {
   const network = new Network('testnet');
-  const tx = new CreateTokenTransaction('Test', 'TST', [], []);
-  const info = [];
+  const tx = CreateTokenTransaction.createEmpty();
+  const info: Buffer[] = [];
   tx.serializeTokenInfo(info);
   expect(info.length).toBe(5);
   expect(info[2].toString('hex')).toBe('54657374');
@@ -157,7 +159,8 @@ test('Token tx', () => {
   ];
   tx.hash = '723ca83484495bcbb4cf849a835800a28cfac5440a8f517fffb095c52c461858';
 
-  const tx2 = helpers.createTxFromHex(tx.toHex(), network);
+  const tx2 = helpers.createTxFromHex(tx.toHex(), network) as CreateTokenTransaction;
+  expect(tx2).toBeInstanceOf(CreateTokenTransaction);
   compareTxs(tx, tx2);
 
   expect(tx2.name).toBe('Test');
@@ -174,7 +177,7 @@ test('Tx validation', () => {
   const p2pkh1 = new P2PKH(address1);
   const p2pkhScript1 = p2pkh1.createScript();
   const output1 = new Output(1000n, p2pkhScript1);
-  const outputs = [];
+  const outputs: Output[] = [];
   for (let i = 0; i < 255; i++) {
     outputs.push(output1);
   }
@@ -192,7 +195,7 @@ test('Tx validation', () => {
 
   tx.outputs = [];
 
-  const inputs = [];
+  const inputs: Input[] = [];
   const input1 = new Input('abc', 0);
   for (let i = 0; i < 255; i++) {
     inputs.push(input1);
@@ -213,13 +216,13 @@ test('Transaction type', () => {
   const address1 = new Address('1PtH3rBmiYDiUuomQyoxMREicrxjg3LA5q');
   const p2pkh1 = new P2PKH(address1);
   const p2pkhScript1 = p2pkh1.createScript();
-  const outputs1 = [new Output(100, p2pkhScript1), new Output(300, p2pkhScript1)];
+  const outputs1 = [new Output(100n, p2pkhScript1), new Output(300n, p2pkhScript1)];
   const tx1 = new Transaction([], outputs1, {
     version: 1,
     hash: '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e',
   });
 
-  const outputs2 = [new Output(100, p2pkhScript1), new Output(300, p2pkhScript1)];
+  const outputs2 = [new Output(100n, p2pkhScript1), new Output(300n, p2pkhScript1)];
   const inputs2 = [
     new Input('00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295e', 0),
   ];
@@ -228,7 +231,7 @@ test('Transaction type', () => {
     hash: '00034a15973117852c45520af9e4296c68adb9d39dc99a0342e23cd6686b295d',
   });
 
-  const outputs3 = [new Output(2000, p2pkhScript1)];
+  const outputs3 = [new Output(2000n, p2pkhScript1)];
   const tx3 = new Transaction([], outputs3, {
     version: 0,
     hash: '000164e1e7ec7700a18750f9f50a1a9b63f6c7268637c072ae9ee181e58eb01b',
@@ -262,13 +265,13 @@ test('Known transactions hash', () => {
   );
   expect(tx.inputs[0].index).toBe(1);
   expect(tx.outputs[0].value).toBe(100n);
-  expect(tx.outputs[0].decodedScript.timelock).toBeNull();
+  expect(tx.outputs[0].decodedScript?.timelock).toBeNull();
   expect(tx.outputs[0].tokenData).toBe(0);
-  expect(tx.outputs[0].decodedScript.address.base58).toBe('WURpMuhenPHPC7yLWk2LX9Hsuwr5r5JvdR');
+  expect(tx.outputs[0].decodedScript?.address.base58).toBe('WURpMuhenPHPC7yLWk2LX9Hsuwr5r5JvdR');
   expect(tx.outputs[1].value).toBe(23n);
-  expect(tx.outputs[1].decodedScript.timelock).toBeNull();
+  expect(tx.outputs[1].decodedScript?.timelock).toBeNull();
   expect(tx.outputs[1].tokenData).toBe(0);
-  expect(tx.outputs[1].decodedScript.address.base58).toBe('WURpMuhenPHPC7yLWk2LX9Hsuwr5r5JvdR');
+  expect(tx.outputs[1].decodedScript?.address.base58).toBe('WURpMuhenPHPC7yLWk2LX9Hsuwr5r5JvdR');
   expect(tx.weight).toBe(8.000001);
   expect(tx.timestamp).toBe(1625080359);
   expect(tx.parents.length).toBe(2);
@@ -375,9 +378,11 @@ describe('NFT Validation', () => {
 
   it('should validate a NFT creation tx', () => {
     expect.assertions(1);
-    const historyTx = cloneNftSample();
+    const historyTx = {
+      ...cloneNftSample(),
+    };
 
-    const txInstance = helpers.createTxFromHistoryObject(historyTx);
+    const txInstance = helpers.createTxFromHistoryObject(historyTx) as CreateTokenTransaction;
 
     expect(() => txInstance.validateNft(network)).not.toThrow();
   });
@@ -388,7 +393,7 @@ describe('NFT Validation', () => {
 
     // Removing all outputs from index 1 onwards
     historyTx.outputs.length = 1;
-    const txInstance = helpers.createTxFromHistoryObject(historyTx);
+    const txInstance = helpers.createTxFromHistoryObject(historyTx) as CreateTokenTransaction;
 
     expect(() => txInstance.validateNft(network)).toThrow('minimum');
   });
@@ -396,7 +401,7 @@ describe('NFT Validation', () => {
   it('should validate maximum outputs of a transaction', () => {
     expect.assertions(2);
     const historyTx = cloneNftSample();
-    const txInstance = helpers.createTxFromHistoryObject(historyTx);
+    const txInstance = helpers.createTxFromHistoryObject(historyTx) as CreateTokenTransaction;
 
     // Adding outputs within allowed limit
     for (let i = 1; i < MAX_OUTPUTS; ++i) {

@@ -71,6 +71,7 @@ import {
 } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import { IStorage, IWalletAccessData, OutputValueType, IHistoryTx } from '../types';
+import { TokenInfoVersion } from 'src/models/enum/token_info_version';
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
@@ -1241,6 +1242,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       nftData: string | null;
       pinCode: string | null;
       signTx: boolean;
+      tokenInfoVersion: TokenInfoVersion | null;
     };
     const newOptions: optionsType = {
       address: null,
@@ -1254,6 +1256,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       nftData: null,
       pinCode: null,
       signTx: true,
+      tokenInfoVersion: TokenInfoVersion.DEPOSIT,
       ...options,
     };
 

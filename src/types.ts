@@ -220,9 +220,15 @@ export interface IDataInput {
   data?: string;
 }
 
+interface IDataTokenCreationTx {
+  name: string;
+  symbol: string;
+  tokenInfoVersion: number;
+}
+
 // XXX: This type is meant to be used as an intermediary for building transactions
 // It should have everything we need to build and push transactions.
-export interface IDataTx {
+export interface IDataTx extends Partial<IDataTokenCreationTx> {
   signalBits?: number;
   version?: number;
   inputs: IDataInput[];
@@ -232,8 +238,6 @@ export interface IDataTx {
   nonce?: number;
   timestamp?: number;
   parents?: string[];
-  name?: string; // For create token transaction
-  symbol?: string; // For create token transaction
 }
 
 export interface IUtxoId {

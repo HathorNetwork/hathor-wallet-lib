@@ -21,6 +21,7 @@ import {
 import { manualStreamSyncHistory, xpubStreamSyncHistory } from '../../src/sync/stream';
 import CreateTokenTransaction from '../../src/models/create_token_transaction';
 import Transaction from '../../src/models/transaction';
+import { TokenInfoVersion } from '../../src/models/enum/token_info_version';
 
 describe('scanning policy methods', () => {
   it('start addresses', async () => {
@@ -369,7 +370,7 @@ test('addCreatedTokenFromTx', async () => {
   const store = new MemoryStore();
   const storage = new Storage(store);
   const spy = jest.spyOn(storage, 'addToken');
-  const tx = new CreateTokenTransaction('Token A', 'tkA', [], []);
+  const tx = CreateTokenTransaction.createEmpty();
   const notCreateTokenTx = new Transaction([], []);
 
   // If we force a transaction without the correct version it should do nothing.
