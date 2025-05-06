@@ -203,17 +203,11 @@ const transaction = {
       });
     }
 
-    let pubkey: Buffer | null = null;
+    let pubkey: Buffer | null = this.getNanoContractPubkey(tx);
 
-    if (tx.isNanoContract()) {
-      // Get pubkey from nano header
-      const nanoHeader = tx.getNanoHeader();
-      ({ pubkey } = nanoHeader);
-    }
-
-    if (tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
+    if (pubkey === null && tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
       // Get pubkey from ocb tx
-      ({ pubkey } = tx as OnChainBlueprint);
+      pubkey = (tx as OnChainBlueprint).pubkey;
     }
 
     if (pubkey) {
@@ -230,6 +224,25 @@ const transaction = {
       inputSignatures: signatures,
       ncCallerSignature,
     };
+  },
+
+  /**
+   * Gets the pubkey of the nano header from a tx.
+   *
+   * Returns null if it's not a nano tx.
+   *
+   * @param tx - The transaction to try to get the nano pubkey from
+   */
+  getNanoContractPubkey(tx: Transaction): Buffer | null {
+    if (tx.isNanoContract()) {
+      // Get pubkey from nano header
+      const nanoHeader = tx.getNanoHeaders()[0];
+      // XXX this code won't work if we have more than one
+      // nano header for the same tx in the future
+      return nanoHeader.pubkey;
+    }
+
+    return null;
   },
 
   /**
@@ -251,9 +264,11 @@ const transaction = {
     }
 
     if (tx.isNanoContract()) {
-      // Get pubkey from nano header
-      const nanoHeader = tx.getNanoHeader();
-      nanoHeader.signature = signatures.ncCallerSignature;
+      // Store signature in nano header
+      const nanoHeaders = tx.getNanoHeaders();
+      for (const nanoHeader of nanoHeaders) {
+        nanoHeader.signature = signatures.ncCallerSignature;
+      }
     }
 
     if (tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
@@ -700,7 +715,9 @@ const transaction = {
     }
 
     if (tx.isNanoContract()) {
-      const nanoHeader = tx.getNanoHeader();
+      const nanoHeader = tx.getNanoHeaders()[0];
+      // XXX this code won't work if we have more than one
+      // nano header for the same tx in the future
       histTx.nc_id = nanoHeader.id;
       histTx.nc_method = nanoHeader.method;
       histTx.nc_args = nanoHeader.args.map(a => a.toString('hex')).join('');

@@ -33,7 +33,7 @@ import {
 import Input from './input';
 import Output from './output';
 import Network from './network';
-import { NanoHeaderNotFound, MaximumNumberInputsError, MaximumNumberOutputsError } from '../errors';
+import { MaximumNumberInputsError, MaximumNumberOutputsError } from '../errors';
 import { OutputValueType } from '../types';
 import type Header from '../headers/base';
 import NanoContractHeader from '../nano_contracts/header';
@@ -766,13 +766,9 @@ class Transaction {
    * @inner
    */
   isNanoContract(): boolean {
-    try {
-      this.getNanoHeader();
-    } catch (e) {
-      if (e instanceof NanoHeaderNotFound) {
-        return false;
-      }
-    }
+    const nanoHeaders = this.getNanoHeaders();
+
+    if (nanoHeaders.length === 0) return false;
 
     return true;
   }
@@ -787,14 +783,8 @@ class Transaction {
    * @memberof Transaction
    * @inner
    */
-  getNanoHeader(): NanoContractHeader {
-    for (const header of this.headers) {
-      if (header instanceof NanoContractHeader) {
-        return header;
-      }
-    }
-
-    throw new NanoHeaderNotFound('Nano contract header not found.');
+  getNanoHeaders(): NanoContractHeader[] {
+    return NanoContractHeader.getHeadersFromTx(this);
   }
 }
 

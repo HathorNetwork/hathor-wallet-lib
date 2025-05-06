@@ -235,6 +235,25 @@ class NanoContractHeader {
 
     return [header, buf];
   }
+
+  /**
+   * Get the nano contract header from the list of headers.
+   *
+   * @return The nano header object
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  static getHeadersFromTx(tx: Transaction): NanoContractHeader[] {
+    const headers: NanoContractHeader[] = [];
+    for (const header of tx.headers) {
+      if (header instanceof NanoContractHeader) {
+        headers.push(header);
+      }
+    }
+
+    return headers;
+  }
 }
 
 export default NanoContractHeader;
