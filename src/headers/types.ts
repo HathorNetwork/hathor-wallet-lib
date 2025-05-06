@@ -5,6 +5,11 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+/**
+ * The hathor-core has a similar enum that maps to bytes.
+ * In typescript this is not easy to manipulate so I decided
+ * to have the same enum but with hex values instead.
+ */
 export enum VertexHeaderId {
   NANO_HEADER = '10',
 }
