@@ -5,12 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import {
-  hexToBuffer,
-  intToBytes,
-  signedIntToBytes,
-  bigIntToBytes,
-} from '../utils/buffer';
+import { hexToBuffer, intToBytes, signedIntToBytes, bigIntToBytes } from '../utils/buffer';
 import { NanoContractArgumentType } from './types';
 import { OutputValueType } from '../types';
 import leb128Util from '../utils/leb128';
@@ -94,10 +89,7 @@ class Serializer {
    */
   fromString(value: string): Buffer {
     const buf = Buffer.from(value, 'utf8');
-    return Buffer.concat([
-      leb128Util.encodeUnsigned(buf.length),
-      buf,
-    ]);
+    return Buffer.concat([leb128Util.encodeUnsigned(buf.length), buf]);
   }
 
   /**
@@ -109,10 +101,7 @@ class Serializer {
    * @inner
    */
   fromBytes(value: Buffer): Buffer {
-    return Buffer.concat([
-      leb128Util.encodeUnsigned(value.length),
-      Buffer.from(value),
-    ]);
+    return Buffer.concat([leb128Util.encodeUnsigned(value.length), Buffer.from(value)]);
   }
 
   /**
@@ -218,6 +207,7 @@ class Serializer {
       value = BigInt(splittedValue[1]);
     } else {
       // For the other types
+      // eslint-disable-next-line prefer-destructuring
       value = splittedValue[1];
     }
 

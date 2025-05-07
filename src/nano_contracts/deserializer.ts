@@ -37,7 +37,10 @@ class Deserializer {
    * @memberof Deserializer
    * @inner
    */
-  deserializeFromType(buf: Buffer, type: string): DeserializeResult<NanoContractArgumentType | null> {
+  deserializeFromType(
+    buf: Buffer,
+    type: string
+  ): DeserializeResult<NanoContractArgumentType | null> {
     const isContainerType = getContainerType(type) !== null;
     if (isContainerType) {
       return this.deserializeContainerType(buf, type);
@@ -69,10 +72,13 @@ class Deserializer {
     }
   }
 
-  deserializeContainerType(buf: Buffer, type: string): DeserializeResult<NanoContractArgumentType | null> {
+  deserializeContainerType(
+    buf: Buffer,
+    type: string
+  ): DeserializeResult<NanoContractArgumentType | null> {
     const [containerType, internalType] = getContainerInternalType(type);
 
-    switch(containerType) {
+    switch (containerType) {
       case 'Optional':
         return this.toOptional(buf, internalType);
       case 'SignedData':
@@ -96,7 +102,11 @@ class Deserializer {
     // INFO: maxBytes is set to 3 becuase the max allowed length in bytes for a string is
     // NC_ARGS_MAX_BYTES_LENGTH which is encoded as 3 bytes in leb128 unsigned.
     // If we read a fourth byte we are definetely reading a higher number than allowed.
-    const { value: lengthBN, rest, bytesRead: bytesReadForLength } = leb128Util.decodeUnsigned(buf, 3);
+    const {
+      value: lengthBN,
+      rest,
+      bytesRead: bytesReadForLength,
+    } = leb128Util.decodeUnsigned(buf, 3);
     if (lengthBN > NC_ARGS_MAX_BYTES_LENGTH) {
       throw new Error('String length in bytes is higher than max allowed');
     }
@@ -123,8 +133,12 @@ class Deserializer {
     // INFO: maxBytes is set to 3 becuase the max allowed length in bytes for a string is
     // NC_ARGS_MAX_BYTES_LENGTH which is encoded as 3 bytes in leb128 unsigned.
     // If we read a fourth byte we are definetely reading a higher number than allowed.
-    const { value: lengthBN, rest, bytesRead: bytesReadForLength } = leb128Util.decodeUnsigned(buf, 3);
-    if(lengthBN > BigInt(NC_ARGS_MAX_BYTES_LENGTH)) {
+    const {
+      value: lengthBN,
+      rest,
+      bytesRead: bytesReadForLength,
+    } = leb128Util.decodeUnsigned(buf, 3);
+    if (lengthBN > BigInt(NC_ARGS_MAX_BYTES_LENGTH)) {
       throw new Error('String length in bytes is higher than max allowed');
     }
     // If lengthBN is lower than 64 KiB than its safe to convert to Number
@@ -273,14 +287,14 @@ class Deserializer {
     }
 
     if (internalType === 'bool') {
-      parsed = parsed as boolean ? 'true' : 'false';
+      parsed = (parsed as boolean) ? 'true' : 'false';
     }
 
     // Reading signature
-    const {
-      value: parsedSignature,
-      bytesRead: bytesReadFromSignature,
-    } = this.deserializeFromType(signedData.subarray(bytesReadFromValue), 'bytes');
+    const { value: parsedSignature, bytesRead: bytesReadFromSignature } = this.deserializeFromType(
+      signedData.subarray(bytesReadFromValue),
+      'bytes'
+    );
 
     return {
       value: `${bufferToHex(parsedSignature as Buffer)},${parsed},${internalType}`,

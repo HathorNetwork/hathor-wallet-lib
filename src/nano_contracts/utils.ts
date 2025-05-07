@@ -22,10 +22,16 @@ import { NanoContractTransactionError, OracleParseError, WalletFromXPubGuard } f
 import { OutputType } from '../wallet/types';
 import { IHistoryTx, IStorage } from '../types';
 import { parseScript } from '../utils/scripts';
-import { MethodArgInfo, NanoContractArgumentType, NanoContractArgumentContainerType } from './types';
+import {
+  MethodArgInfo,
+  NanoContractArgumentType,
+  NanoContractArgumentContainerType,
+} from './types';
 import { NANO_CONTRACTS_INITIALIZE_METHOD } from '../constants';
 
-export function getContainerInternalType(type: string): [NanoContractArgumentContainerType, string] {
+export function getContainerInternalType(
+  type: string
+): [NanoContractArgumentContainerType, string] {
   if (type.endsWith('?')) {
     // Optional value
     return ['Optional', type.slice(0, -1)];
@@ -44,7 +50,7 @@ export function getContainerInternalType(type: string): [NanoContractArgumentCon
   throw new Error('Not a ContainerType');
 }
 
-export function getContainerType(type: string): NanoContractArgumentContainerType|null {
+export function getContainerType(type: string): NanoContractArgumentContainerType | null {
   try {
     const [containerType, _internalType] = getContainerInternalType(type);
     return containerType;

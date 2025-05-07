@@ -15,12 +15,18 @@ test('Bool', () => {
   const deserializer = new Deserializer(new Network('testnet'));
 
   const serializedFalse = serializer.serializeFromType(false, 'bool');
-  const { value: deserializedFalse, bytesRead: bytesFalse } = deserializer.deserializeFromType(serializedFalse, 'bool');
+  const { value: deserializedFalse, bytesRead: bytesFalse } = deserializer.deserializeFromType(
+    serializedFalse,
+    'bool'
+  );
   expect(deserializedFalse).toStrictEqual(false);
   expect(bytesFalse).toStrictEqual(1);
 
   const serializedTrue = serializer.serializeFromType(true, 'bool');
-  const { value: deserializedTrue, bytesRead: bytesTrue } = deserializer.deserializeFromType(serializedTrue, 'bool');
+  const { value: deserializedTrue, bytesRead: bytesTrue } = deserializer.deserializeFromType(
+    serializedTrue,
+    'bool'
+  );
   expect(deserializedTrue).toStrictEqual(true);
   expect(bytesTrue).toStrictEqual(1);
 });
@@ -64,35 +70,44 @@ test('Bytes', () => {
 
   const value = Buffer.from([0x74, 0x65, 0x73, 0x74]);
   const serialized = serializer.serializeFromType(value, 'bytes');
-  const { value: deserialized, bytesRead: bytesReadBytes } = deserializer.deserializeFromType(serialized, 'bytes');
+  const { value: deserialized, bytesRead: bytesReadBytes } = deserializer.deserializeFromType(
+    serialized,
+    'bytes'
+  );
 
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   expect(deserialized).toMatchBuffer(value);
   expect(bytesReadBytes).toStrictEqual(5); // 1 byte of length + 4 bytes of value
 
   const serializedVertex = serializer.serializeFromType(value, 'VertexId');
-  const { value: deserializedVertex, bytesRead: bytesReadVertex } = deserializer.deserializeFromType(serializedVertex, 'VertexId');
+  const { value: deserializedVertex, bytesRead: bytesReadVertex } =
+    deserializer.deserializeFromType(serializedVertex, 'VertexId');
 
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   expect(deserializedVertex).toMatchBuffer(value);
   expect(bytesReadVertex).toStrictEqual(5); // 1 byte of length + 4 bytes of value
 
   const serializedToken = serializer.serializeFromType(value, 'TokenUid');
-  const { value: deserializedToken, bytesRead: bytesReadToken } = deserializer.deserializeFromType(serializedToken, 'TokenUid');
+  const { value: deserializedToken, bytesRead: bytesReadToken } = deserializer.deserializeFromType(
+    serializedToken,
+    'TokenUid'
+  );
 
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   expect(deserializedToken).toMatchBuffer(value);
   expect(bytesReadToken).toStrictEqual(5); // 1 byte of length + 4 bytes of value
 
   const serializedScript = serializer.serializeFromType(value, 'TxOutputScript');
-  const { value: deserializedScript, bytesRead: bytesReadScript } = deserializer.deserializeFromType(serializedScript, 'TxOutputScript');
+  const { value: deserializedScript, bytesRead: bytesReadScript } =
+    deserializer.deserializeFromType(serializedScript, 'TxOutputScript');
 
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   expect(deserializedScript).toMatchBuffer(value);
   expect(bytesReadScript).toStrictEqual(5); // 1 byte of length + 4 bytes of value
 
   const serializedContract = serializer.serializeFromType(value, 'ContractId');
-  const { value: deserializedContract, bytesRead: bytesReadContract } = deserializer.deserializeFromType(serializedContract, 'ContractId');
+  const { value: deserializedContract, bytesRead: bytesReadContract } =
+    deserializer.deserializeFromType(serializedContract, 'ContractId');
 
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   expect(deserializedContract).toMatchBuffer(value);
@@ -105,7 +120,10 @@ test('Optional', () => {
 
   const valueEmptyInt = null;
   const serializedEmptyInt = serializer.serializeFromType(valueEmptyInt, 'int?');
-  const { value: deserializedEmptyInt } = deserializer.deserializeFromType(serializedEmptyInt, 'int?');
+  const { value: deserializedEmptyInt } = deserializer.deserializeFromType(
+    serializedEmptyInt,
+    'int?'
+  );
 
   expect(deserializedEmptyInt).toBe(valueEmptyInt);
 
@@ -117,7 +135,10 @@ test('Optional', () => {
 
   const valueEmptyBool = null;
   const serializedEmptyBool = serializer.serializeFromType(valueEmptyBool, 'bool?');
-  const { value: deserializedEmptyBool } = deserializer.deserializeFromType(serializedEmptyBool, 'bool?');
+  const { value: deserializedEmptyBool } = deserializer.deserializeFromType(
+    serializedEmptyBool,
+    'bool?'
+  );
 
   expect(deserializedEmptyBool).toBe(valueEmptyBool);
 
@@ -129,7 +150,10 @@ test('Optional', () => {
 
   const valueEmptyStr = null;
   const serializedEmptyStr = serializer.serializeFromType(valueEmptyStr, 'str?');
-  const { value: deserializedEmptyStr } = deserializer.deserializeFromType(serializedEmptyStr, 'str?');
+  const { value: deserializedEmptyStr } = deserializer.deserializeFromType(
+    serializedEmptyStr,
+    'str?'
+  );
 
   expect(deserializedEmptyStr).toBe(valueEmptyStr);
 
@@ -141,7 +165,10 @@ test('Optional', () => {
 
   const valueEmptyBytes = null;
   const serializedEmptyBytes = serializer.serializeFromType(valueEmptyBytes, 'bytes?');
-  const { value: deserializedEmptyBytes } = deserializer.deserializeFromType(serializedEmptyBytes, 'bytes?');
+  const { value: deserializedEmptyBytes } = deserializer.deserializeFromType(
+    serializedEmptyBytes,
+    'bytes?'
+  );
 
   expect(deserializedEmptyBytes).toBe(valueEmptyBytes);
 
@@ -159,19 +186,28 @@ test('Signed', () => {
 
   const valueInt = '74657374,300,int';
   const serializedInt = serializer.serializeFromType(valueInt, 'SignedData[int]');
-  const { value: deserializedInt } = deserializer.deserializeFromType(serializedInt, 'SignedData[int]');
+  const { value: deserializedInt } = deserializer.deserializeFromType(
+    serializedInt,
+    'SignedData[int]'
+  );
 
   expect(deserializedInt).toBe(valueInt);
 
   const valueStr = '74657374,test,str';
   const serializedStr = serializer.serializeFromType(valueStr, 'SignedData[str]');
-  const { value: deserializedStr } = deserializer.deserializeFromType(serializedStr, 'SignedData[str]');
+  const { value: deserializedStr } = deserializer.deserializeFromType(
+    serializedStr,
+    'SignedData[str]'
+  );
 
   expect(deserializedStr).toBe(valueStr);
 
   const valueBytes = '74657374,74657374,bytes';
   const serializedBytes = serializer.serializeFromType(valueBytes, 'SignedData[bytes]');
-  const { value: deserializedBytes } = deserializer.deserializeFromType(serializedBytes, 'SignedData[bytes]');
+  const { value: deserializedBytes } = deserializer.deserializeFromType(
+    serializedBytes,
+    'SignedData[bytes]'
+  );
 
   expect(deserializedBytes).toBe(valueBytes);
 

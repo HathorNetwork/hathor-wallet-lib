@@ -25,10 +25,12 @@ test('String', () => {
   const bigStr = Array(2048).fill('A').join('');
   const bigUtf8 = Buffer.from(bigStr, 'utf-8');
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect(serializer.fromString(bigStr)).toMatchBuffer(Buffer.concat([
-    Buffer.from([0x80, 0x10]), // 2048 in unsigned leb128
-    bigUtf8,
-  ]));
+  expect(serializer.fromString(bigStr)).toMatchBuffer(
+    Buffer.concat([
+      Buffer.from([0x80, 0x10]), // 2048 in unsigned leb128
+      bigUtf8,
+    ])
+  );
 });
 
 test('Int', () => {
@@ -40,15 +42,19 @@ test('Int', () => {
 test('Bytes', () => {
   const serializer = new Serializer();
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect(serializer.fromBytes(Buffer.from([0x74, 0x65, 0x73, 0x74]))).toMatchBuffer(Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]));
+  expect(serializer.fromBytes(Buffer.from([0x74, 0x65, 0x73, 0x74]))).toMatchBuffer(
+    Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74])
+  );
 
   // Encoding a big string
   const bigBuffer = Buffer.from(Array(2048).fill('A').join(''), 'utf-8');
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect(serializer.fromBytes(bigBuffer)).toMatchBuffer(Buffer.concat([
-    Buffer.from([0x80, 0x10]), // 2048 in unsigned leb128
-    bigBuffer,
-  ]));
+  expect(serializer.fromBytes(bigBuffer)).toMatchBuffer(
+    Buffer.concat([
+      Buffer.from([0x80, 0x10]), // 2048 in unsigned leb128
+      bigBuffer,
+    ])
+  );
 });
 
 test('Optional', () => {
@@ -56,7 +62,9 @@ test('Optional', () => {
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   expect(serializer.fromOptional(null, 'int')).toMatchBuffer(Buffer.from([0x00]));
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect(serializer.fromOptional(300, 'int')).toMatchBuffer(Buffer.from([0x01, 0x00, 0x00, 0x01, 0x2c]));
+  expect(serializer.fromOptional(300, 'int')).toMatchBuffer(
+    Buffer.from([0x01, 0x00, 0x00, 0x01, 0x2c])
+  );
 
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   expect(serializer.fromOptional(null, 'bool')).toMatchBuffer(Buffer.from([0x00]));
@@ -66,33 +74,49 @@ test('Optional', () => {
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   expect(serializer.fromOptional(null, 'str')).toMatchBuffer(Buffer.from([0x00]));
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect(serializer.fromOptional('test', 'str')).toMatchBuffer(Buffer.from([0x01, 0x04, 0x74, 0x65, 0x73, 0x74]));
+  expect(serializer.fromOptional('test', 'str')).toMatchBuffer(
+    Buffer.from([0x01, 0x04, 0x74, 0x65, 0x73, 0x74])
+  );
 
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   expect(serializer.fromOptional(null, 'bytes')).toMatchBuffer(Buffer.from([0x00]));
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect(serializer.fromOptional(Buffer.from([0x74, 0x65, 0x73, 0x74]), 'bytes')).toMatchBuffer(Buffer.from([0x01, 0x04, 0x74, 0x65, 0x73, 0x74]));
+  expect(serializer.fromOptional(Buffer.from([0x74, 0x65, 0x73, 0x74]), 'bytes')).toMatchBuffer(
+    Buffer.from([0x01, 0x04, 0x74, 0x65, 0x73, 0x74])
+  );
 });
 
 test('Signed', () => {
   const serializer = new Serializer();
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect(serializer.fromSigned('74657374,300,int')).toMatchBuffer(Buffer.from([0x00, 0x00, 0x01, 0x2c, 0x04, 0x74, 0x65, 0x73, 0x74]));
+  expect(serializer.fromSigned('74657374,300,int')).toMatchBuffer(
+    Buffer.from([0x00, 0x00, 0x01, 0x2c, 0x04, 0x74, 0x65, 0x73, 0x74])
+  );
 
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect(serializer.fromSigned('74657374,300,VarInt')).toMatchBuffer(Buffer.from([0xac, 0x02, 0x04, 0x74, 0x65, 0x73, 0x74]));
+  expect(serializer.fromSigned('74657374,300,VarInt')).toMatchBuffer(
+    Buffer.from([0xac, 0x02, 0x04, 0x74, 0x65, 0x73, 0x74])
+  );
 
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect(serializer.fromSigned('74657374,test,str')).toMatchBuffer(Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74, 0x04, 0x74, 0x65, 0x73, 0x74]));
+  expect(serializer.fromSigned('74657374,test,str')).toMatchBuffer(
+    Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74, 0x04, 0x74, 0x65, 0x73, 0x74])
+  );
 
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect(serializer.fromSigned('74657374,74657374,bytes')).toMatchBuffer(Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74, 0x04, 0x74, 0x65, 0x73, 0x74]));
+  expect(serializer.fromSigned('74657374,74657374,bytes')).toMatchBuffer(
+    Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74, 0x04, 0x74, 0x65, 0x73, 0x74])
+  );
 
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect(serializer.fromSigned('74657374,false,bool')).toMatchBuffer(Buffer.from([0x00, 0x04, 0x74, 0x65, 0x73, 0x74]));
+  expect(serializer.fromSigned('74657374,false,bool')).toMatchBuffer(
+    Buffer.from([0x00, 0x04, 0x74, 0x65, 0x73, 0x74])
+  );
 
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect(serializer.fromSigned('74657374,true,bool')).toMatchBuffer(Buffer.from([0x01, 0x04, 0x74, 0x65, 0x73, 0x74]));
+  expect(serializer.fromSigned('74657374,true,bool')).toMatchBuffer(
+    Buffer.from([0x01, 0x04, 0x74, 0x65, 0x73, 0x74])
+  );
 });
 
 test('VarInt', () => {

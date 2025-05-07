@@ -10,7 +10,6 @@ import Address from '../models/address';
 import Network from '../models/network';
 import Deserializer from './deserializer';
 import ncApi from '../api/nano';
-import { unpackToInt } from '../utils/buffer';
 import { getAddressFromPubkey } from '../utils/address';
 import { NanoContractTransactionParseError } from '../errors';
 import { MethodArgInfo, NanoContractArgumentType, NanoContractParsedArgument } from './types';
