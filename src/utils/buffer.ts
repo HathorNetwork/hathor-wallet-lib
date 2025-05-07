@@ -1,6 +1,8 @@
 import buffer from 'buffer';
-import { ParseError } from '../errors';
+import { OutputValueError, ParseError } from '../errors';
 import { OutputValueType } from '../types';
+import { MAX_OUTPUT_VALUE, MAX_OUTPUT_VALUE_32 } from '../constants';
+import { prettyValue } from './numbers';
 
 const isHexa = (value: string): boolean => {
   // test if value is string?
@@ -270,4 +272,23 @@ export const bytesToOutputValue = (srcBuf: Buffer): [OutputValueType, Buffer] =>
   }
 
   return [value * sign, buff];
+};
+
+/**
+ * Get the bytes from the value
+ * If value is above the maximum for 32 bits we get from 8 bytes, otherwise only 4 bytes
+ *
+ * @throws {OutputValueError} Will throw an error if output value is invalid
+ */
+export const outputValueToBytes = (value: OutputValueType): Buffer => {
+  if (value <= 0) {
+    throw new OutputValueError('Output value must be positive');
+  }
+  if (value > MAX_OUTPUT_VALUE) {
+    throw new OutputValueError(`Maximum value is ${prettyValue(MAX_OUTPUT_VALUE)}`);
+  }
+  if (value > MAX_OUTPUT_VALUE_32) {
+    return bigIntToBytes(-value, 8);
+  }
+  return bigIntToBytes(value, 4);
 };
