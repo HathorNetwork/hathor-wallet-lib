@@ -22,6 +22,7 @@ import Network from './network';
 import { CreateTokenTxInvalid, InvalidOutputsError, NftValidationError } from '../errors';
 import ScriptData from './script_data';
 import { OutputType } from '../wallet/types';
+import type Header from '../headers/base';
 
 type optionsType = {
   signalBits?: number;
@@ -31,6 +32,7 @@ type optionsType = {
   parents?: string[];
   tokens?: string[];
   hash?: string | null;
+  headers?: Header[];
 };
 
 class CreateTokenTransaction extends Transaction {
@@ -53,6 +55,7 @@ class CreateTokenTransaction extends Transaction {
       parents: [],
       tokens: [],
       hash: null,
+      headers: [],
     };
     const newOptions = Object.assign(defaultOptions, options);
 
@@ -238,7 +241,8 @@ class CreateTokenTransaction extends Transaction {
 
     txBuffer = tx.getFundsFieldsFromBytes(txBuffer, network);
     txBuffer = tx.getTokenInfoFromBytes(txBuffer);
-    tx.getGraphFieldsFromBytes(txBuffer);
+    txBuffer = tx.getGraphFieldsFromBytes(txBuffer);
+    tx.getHeadersFromBytes(txBuffer);
 
     tx.updateHash();
 

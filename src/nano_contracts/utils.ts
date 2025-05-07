@@ -10,8 +10,6 @@ import { crypto } from 'bitcore-lib';
 import transactionUtils from '../utils/transaction';
 import SendTransaction from '../new/sendTransaction';
 import HathorWallet from '../new/wallet';
-import NanoContract from './nano_contract';
-import OnChainBlueprint from './on_chain_blueprint';
 import Network from '../models/network';
 import ScriptData from '../models/script_data';
 import ncApi from '../api/nano';
@@ -19,12 +17,13 @@ import { hexToBuffer } from '../utils/buffer';
 import P2PKH from '../models/p2pkh';
 import P2SH from '../models/p2sh';
 import Address from '../models/address';
+import Transaction from '../models/transaction';
 import { NanoContractTransactionError, OracleParseError, WalletFromXPubGuard } from '../errors';
 import { OutputType } from '../wallet/types';
 import { IHistoryTx, IStorage } from '../types';
 import { parseScript } from '../utils/scripts';
 import { MethodArgInfo, NanoContractArgumentType, NanoContractArgumentContainerType } from './types';
-import { NANO_CONTRACTS_VERSION, NANO_CONTRACTS_INITIALIZE_METHOD } from '../constants';
+import { NANO_CONTRACTS_INITIALIZE_METHOD } from '../constants';
 
 export function getContainerInternalType(type: string): [NanoContractArgumentContainerType, string] {
   if (type.endsWith('?')) {
@@ -66,7 +65,7 @@ export function getContainerType(type: string): NanoContractArgumentContainerTyp
  * @param storage Wallet storage object
  */
 export const prepareNanoSendTransaction = async (
-  tx: NanoContract | OnChainBlueprint,
+  tx: Transaction,
   pin: string,
   storage: IStorage
 ): Promise<SendTransaction> => {
@@ -289,5 +288,5 @@ export const validateAndUpdateBlueprintMethodArgs = async (
  * @param tx History object from hathor core to check if it's a nano create tx
  */
 export const isNanoContractCreateTx = (tx: IHistoryTx): boolean => {
-  return tx.version === NANO_CONTRACTS_VERSION && tx.nc_method === NANO_CONTRACTS_INITIALIZE_METHOD;
+  return tx.nc_method === NANO_CONTRACTS_INITIALIZE_METHOD;
 };
