@@ -63,6 +63,9 @@ test('Signed', () => {
   expect(serializer.fromSigned('74657374,300,int')).toMatchBuffer(Buffer.from([0x00, 0x00, 0x01, 0x2c, 0x04, 0x74, 0x65, 0x73, 0x74]));
 
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect(serializer.fromSigned('74657374,300,VarInt')).toMatchBuffer(Buffer.from([0xac, 0x02, 0x04, 0x74, 0x65, 0x73, 0x74]));
+
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   expect(serializer.fromSigned('74657374,test,str')).toMatchBuffer(Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74, 0x04, 0x74, 0x65, 0x73, 0x74]));
 
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.

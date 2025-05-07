@@ -192,6 +192,15 @@ test('Signed', () => {
   );
 
   expect(deserializedBoolTrue).toBe(valueBoolTrue);
+
+  const valueVarInt = '74657374,300,VarInt';
+  const serializedVarInt = serializer.serializeFromType(valueVarInt, 'SignedData[VarInt]');
+  const { value: deserializedVarInt } = deserializer.deserializeFromType(
+    serializedVarInt,
+    'SignedData[VarInt]'
+  );
+
+  expect(deserializedVarInt).toBe(valueVarInt);
 });
 
 test('Address', () => {

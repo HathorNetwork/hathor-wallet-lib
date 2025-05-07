@@ -157,25 +157,6 @@ class Serializer {
   }
 
   /**
-   * Serialize a list of values
-   *
-   * @param value List of values to serialize
-   * @param type Type of the elements on the list
-   *
-   * @memberof Serializer
-   * @inner
-   */
-  fromList(value: NanoContractArgumentType[], type: string): Buffer {
-    const ret: Buffer[] = [];
-    this.pushLenValue(ret, value.length);
-    for (const v of value) {
-      const serialized = this.serializeFromType(v, type);
-      ret.push(serialized);
-    }
-    return Buffer.concat(ret);
-  }
-
-  /**
    * Serialize an optional value
    *
    * If value is null, then it's a buffer with 0 only. If it's not null,
@@ -226,7 +207,7 @@ class Serializer {
     // First value must be a Buffer but comes as hex
     const inputData = hexToBuffer(splittedValue[0]);
     const type = splittedValue[2];
-    let value: Buffer | string | boolean | number;
+    let value: Buffer | string | boolean | number | bigint;
     if (type === 'bytes') {
       // If the result is expected as bytes, it will come here in the args as hex value
       value = hexToBuffer(splittedValue[1]);
@@ -235,6 +216,8 @@ class Serializer {
       value = splittedValue[1] === 'true';
     } else if (type === 'int') {
       value = Number.parseInt(splittedValue[1], 10);
+    } else if (type === 'VarInt') {
+      value = BigInt(splittedValue[1]);
     } else {
       // For the other types
       value = splittedValue[1];
