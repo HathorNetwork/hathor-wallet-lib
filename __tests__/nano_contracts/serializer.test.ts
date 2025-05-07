@@ -20,6 +20,15 @@ test('String', () => {
   const serializer = new Serializer();
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   expect(serializer.fromString('test')).toMatchBuffer(Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]));
+
+  // Encoding a big string
+  const bigStr = Array(2048).fill('A').join('');
+  const bigUtf8 = Buffer.from(bigStr, 'utf-8');
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect(serializer.fromString(bigStr)).toMatchBuffer(Buffer.concat([
+    Buffer.from([0x80, 0x10]), // 2048 in unsigned leb128
+    bigUtf8,
+  ]));
 });
 
 test('Int', () => {
@@ -32,6 +41,14 @@ test('Bytes', () => {
   const serializer = new Serializer();
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   expect(serializer.fromBytes(Buffer.from([0x74, 0x65, 0x73, 0x74]))).toMatchBuffer(Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]));
+
+  // Encoding a big string
+  const bigBuffer = Buffer.from(Array(2048).fill('A').join(''), 'utf-8');
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect(serializer.fromBytes(bigBuffer)).toMatchBuffer(Buffer.concat([
+    Buffer.from([0x80, 0x10]), // 2048 in unsigned leb128
+    bigBuffer,
+  ]));
 });
 
 test('Optional', () => {

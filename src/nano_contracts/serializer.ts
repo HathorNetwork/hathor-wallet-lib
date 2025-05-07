@@ -95,7 +95,7 @@ class Serializer {
   fromString(value: string): Buffer {
     const buf = Buffer.from(value, 'utf8');
     return Buffer.concat([
-      leb128Util.encodeSigned(buf.length),
+      leb128Util.encodeUnsigned(buf.length),
       buf,
     ]);
   }
@@ -110,7 +110,7 @@ class Serializer {
    */
   fromBytes(value: Buffer): Buffer {
     return Buffer.concat([
-      leb128Util.encodeSigned(value.length),
+      leb128Util.encodeUnsigned(value.length),
       Buffer.from(value),
     ]);
   }
@@ -178,12 +178,10 @@ class Serializer {
       throw new Error('Missing value or type in non empty optional.');
     }
 
-    const ret: Buffer[] = [];
-    ret.push(Buffer.from([1]));
-
-    const serialized = this.serializeFromType(value, type);
-    ret.push(serialized);
-    return Buffer.concat(ret);
+    return Buffer.concat([
+      Buffer.from([1]), // Indicator of having value
+      this.serializeFromType(value, type), // Actual value serialized
+    ]);
   }
 
   /**
