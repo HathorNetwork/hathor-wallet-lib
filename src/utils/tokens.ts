@@ -319,6 +319,7 @@ const tokens = {
    * @param {boolean|null} [options.unshiftData=null] Whether to unshift the data script output.
    * @param {string[]|null} [options.data=null] list of data strings using utf8 encoding to add each as a data script output
    * @param {function} [options.utxoSelection=bestUtxoSelection] Algorithm to select utxos. Use the best method by default
+   * @param {boolean} [options.skipDepositFee=false] if it should skip utxo selection for token deposit fee
    *
    * @returns {Promise<IDataTx>} The transaction data
    */
@@ -335,6 +336,7 @@ const tokens = {
       data = null,
       mintAuthorityAddress = null,
       utxoSelection = bestUtxoSelection,
+      skipDepositFee = false,
     }: {
       token?: string | null;
       mintInput?: IDataInput | null;
@@ -344,45 +346,55 @@ const tokens = {
       data?: string[] | null;
       mintAuthorityAddress?: string | null;
       utxoSelection?: UtxoSelectionAlgorithm;
+      skipDepositFee?: boolean;
     } = {}
   ): Promise<IDataTx> {
     const inputs: IDataInput[] = [];
     const outputs: IDataOutput[] = [];
-    const depositPercent = storage.getTokenDepositPercentage();
-    let depositAmount = this.getDepositAmount(amount, depositPercent);
+
+    let depositAmount = 0n;
+    // We might have transactions where the nano contract will pay for deposit fees
+    // so we must consider the skipDepositFee flag to skip the utxo selection
+    if (!skipDepositFee) {
+      const depositPercent = storage.getTokenDepositPercentage();
+      depositAmount += this.getDepositAmount(amount, depositPercent);
+    }
+
     if (data) {
       // The deposit amount will be the quantity of data strings in the array
       // multiplied by the fee
       depositAmount += this.getDataScriptOutputFee() * BigInt(data.length);
     }
 
-    // get HTR deposit inputs
-    const selectedUtxos = await utxoSelection(storage, NATIVE_TOKEN_UID, depositAmount);
-    const foundAmount = selectedUtxos.amount;
-    for (const utxo of selectedUtxos.utxos) {
-      inputs.push(helpers.getDataInputFromUtxo(utxo));
-    }
+    if (depositAmount) {
+      // get HTR deposit inputs
+      const selectedUtxos = await utxoSelection(storage, NATIVE_TOKEN_UID, depositAmount);
+      const foundAmount = selectedUtxos.amount;
+      for (const utxo of selectedUtxos.utxos) {
+        inputs.push(helpers.getDataInputFromUtxo(utxo));
+      }
 
-    if (foundAmount < depositAmount) {
-      const availableAmount = selectedUtxos.available ?? 0;
-      throw new InsufficientFundsError(
-        `Not enough HTR tokens for deposit: ${depositAmount} required, ${availableAmount} available`
-      );
-    }
+      if (foundAmount < depositAmount) {
+        const availableAmount = selectedUtxos.available ?? 0;
+        throw new InsufficientFundsError(
+          `Not enough HTR tokens for deposit: ${depositAmount} required, ${availableAmount} available`
+        );
+      }
 
-    // get output change
-    if (foundAmount > depositAmount) {
-      const cAddress = await storage.getChangeAddress({ changeAddress });
+      // get output change
+      if (foundAmount > depositAmount) {
+        const cAddress = await storage.getChangeAddress({ changeAddress });
 
-      outputs.push({
-        type: getAddressType(cAddress, storage.config.getNetwork()),
-        address: cAddress,
-        value: foundAmount - depositAmount,
-        timelock: null,
-        token: NATIVE_TOKEN_UID,
-        authorities: 0n,
-        isChange: true,
-      });
+        outputs.push({
+          type: getAddressType(cAddress, storage.config.getNetwork()),
+          address: cAddress,
+          value: foundAmount - depositAmount,
+          timelock: null,
+          token: NATIVE_TOKEN_UID,
+          authorities: 0n,
+          isChange: true,
+        });
+      }
     }
 
     if (mintInput !== null) {
@@ -631,6 +643,7 @@ const tokens = {
    * @param {string} [options.meltAuthorityAddress] the address to send the melt authority created
    * @param {string[]|null} [options.data=null] list of data strings using utf8 encoding to add each as a data script output
    * @param {boolean} [options.isCreateNFT=false] if the create token is an NFT creation call
+   * @param {boolean} [options.skipDepositFee=false] if it should skip utxo selection for token deposit fee
    * @returns {Promise<IDataTx>} The transaction data to create the token
    */
   async prepareCreateTokenData(
@@ -647,6 +660,7 @@ const tokens = {
       meltAuthorityAddress = null,
       data = null,
       isCreateNFT = false,
+      skipDepositFee = false,
     }: {
       changeAddress?: string | null;
       createMint?: boolean;
@@ -655,6 +669,7 @@ const tokens = {
       meltAuthorityAddress?: string | null;
       data?: string[] | null;
       isCreateNFT?: boolean;
+      skipDepositFee?: boolean;
     } = {}
   ): Promise<IDataTx> {
     const mintOptions = {
@@ -663,6 +678,7 @@ const tokens = {
       changeAddress,
       unshiftData: isCreateNFT,
       data,
+      skipDepositFee,
     };
 
     const txData = await this.prepareMintTxData(address, mintAmount, storage, mintOptions);
