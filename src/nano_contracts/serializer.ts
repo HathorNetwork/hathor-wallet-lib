@@ -5,16 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import {
-  hexToBuffer,
-  intToBytes,
-  floatToBytes,
-  signedIntToBytes,
-  bigIntToBytes,
-} from '../utils/buffer';
-import { encodeSigned as leb128EncodeSigned } from '../utils/leb128';
+import { hexToBuffer, intToBytes, signedIntToBytes, bigIntToBytes } from '../utils/buffer';
 import { NanoContractArgumentType } from './types';
 import { OutputValueType } from '../types';
+import leb128Util from '../utils/leb128';
 
 // Number of bytes used to serialize the size of the value
 const SERIALIZATION_SIZE_LEN = 2;
@@ -62,19 +56,18 @@ class Serializer {
       case 'str':
         return this.fromString(value as string);
       case 'bytes':
-      case 'Address':
-      case 'VertexId':
+      case 'BlueprintId':
       case 'ContractId':
-      case 'TxOutputScript':
       case 'TokenUid':
+      case 'TxOutputScript':
+      case 'VertexId':
+      case 'Address':
         return this.fromBytes(value as Buffer);
       case 'int':
       case 'Timestamp':
         return this.fromInt(value as number);
       case 'Amount':
         return this.fromAmount(value as OutputValueType);
-      case 'float':
-        return this.fromFloat(value as number);
       case 'bool':
         return this.fromBool(value as boolean);
       case 'VarInt':
@@ -85,33 +78,36 @@ class Serializer {
   }
 
   /**
-   * Serialize string value
+   * Serialize string value.
+   * - length (leb128 integer)
+   * - string in utf8
    *
-   * @param {value} Value to serialize
+   * @param value Value to serialize
    *
    * @memberof Serializer
    * @inner
    */
   fromString(value: string): Buffer {
-    return Buffer.from(value, 'utf8');
+    const buf = Buffer.from(value, 'utf8');
+    return Buffer.concat([leb128Util.encodeUnsigned(buf.length), buf]);
   }
 
   /**
    * Serialize bytes value
    *
-   * @param {value} Value to serialize
+   * @param value Value to serialize
    *
    * @memberof Serializer
    * @inner
    */
   fromBytes(value: Buffer): Buffer {
-    return Buffer.from(value);
+    return Buffer.concat([leb128Util.encodeUnsigned(value.length), Buffer.from(value)]);
   }
 
   /**
    * Serialize integer value
    *
-   * @param {value} Value to serialize
+   * @param value Value to serialize
    *
    * @memberof Serializer
    * @inner
@@ -123,7 +119,7 @@ class Serializer {
   /**
    * Serialize amount value
    *
-   * @param {value} Value to serialize
+   * @param value Value to serialize
    *
    * @memberof Serializer
    * @inner
@@ -135,21 +131,9 @@ class Serializer {
   }
 
   /**
-   * Serialize float value
-   *
-   * @param {value} Value to serialize
-   *
-   * @memberof Serializer
-   * @inner
-   */
-  fromFloat(value: number): Buffer {
-    return floatToBytes(value, 8);
-  }
-
-  /**
    * Serialize boolean value
    *
-   * @param {value} Value to serialize
+   * @param value Value to serialize
    *
    * @memberof Serializer
    * @inner
@@ -162,33 +146,14 @@ class Serializer {
   }
 
   /**
-   * Serialize a list of values
-   *
-   * @param {value} List of values to serialize
-   * @param {type} Type of the elements on the list
-   *
-   * @memberof Serializer
-   * @inner
-   */
-  fromList(value: NanoContractArgumentType[], type: string): Buffer {
-    const ret: Buffer[] = [];
-    this.pushLenValue(ret, value.length);
-    for (const v of value) {
-      const serialized = this.serializeFromType(v, type);
-      ret.push(serialized);
-    }
-    return Buffer.concat(ret);
-  }
-
-  /**
    * Serialize an optional value
    *
    * If value is null, then it's a buffer with 0 only. If it's not null,
    * we create a buffer with 1 in the first byte and the serialized value
    * in the sequence.
    *
-   * @param {value} Value to serialize. If not, the optional is empty
-   * @param {type} Type of the value to serialize
+   * @param value Value to serialize. If not, the optional is empty
+   * @param type Type of the value to serialize
    *
    * @memberof Serializer
    * @inner
@@ -202,12 +167,10 @@ class Serializer {
       throw new Error('Missing value or type in non empty optional.');
     }
 
-    const ret: Buffer[] = [];
-    ret.push(Buffer.from([1]));
-
-    const serialized = this.serializeFromType(value, type);
-    ret.push(serialized);
-    return Buffer.concat(ret);
+    return Buffer.concat([
+      Buffer.from([1]), // Indicator of having value
+      this.serializeFromType(value, type), // Actual value serialized
+    ]);
   }
 
   /**
@@ -218,7 +181,7 @@ class Serializer {
    * The serialization will be
    * [len(serializedValue)][serializedValue][inputData]
    *
-   * @param {signedValue} String value with inputData, value, and type separated by comma
+   * @param signedValue String value with inputData, value, and type separated by comma
    *
    * @memberof Serializer
    * @inner
@@ -231,27 +194,30 @@ class Serializer {
     // First value must be a Buffer but comes as hex
     const inputData = hexToBuffer(splittedValue[0]);
     const type = splittedValue[2];
-    let value: Buffer | string | boolean;
+    let value: Buffer | string | boolean | number | bigint;
     if (type === 'bytes') {
       // If the result is expected as bytes, it will come here in the args as hex value
       value = hexToBuffer(splittedValue[1]);
     } else if (type === 'bool') {
       // If the result is expected as boolean, it will come here as a string true/false
       value = splittedValue[1] === 'true';
+    } else if (type === 'int') {
+      value = Number.parseInt(splittedValue[1], 10);
+    } else if (type === 'VarInt') {
+      value = BigInt(splittedValue[1]);
     } else {
       // For the other types
-      // eslint-disable-next-line prefer-destructuring -- Destructuring would make this harder to read
+      // eslint-disable-next-line prefer-destructuring
       value = splittedValue[1];
     }
 
     const ret: Buffer[] = [];
 
-    // [len(serializedValue)][serializedValue][inputData]
     const serialized = this.serializeFromType(value, type);
-    this.pushLenValue(ret, serialized.length);
     ret.push(serialized);
+    const signature = this.serializeFromType(inputData, 'bytes');
+    ret.push(signature);
 
-    ret.push(this.fromBytes(inputData));
     return Buffer.concat(ret);
   }
 
@@ -264,7 +230,7 @@ class Serializer {
    * @memberof Serializer
    */
   fromVarInt(value: bigint): Buffer {
-    return leb128EncodeSigned(value);
+    return leb128Util.encodeSigned(value);
   }
 }
 /* eslint-disable class-methods-use-this */

@@ -15,6 +15,8 @@ export type NanoContractArgumentApiInputType =
   | null;
 export type NanoContractArgumentType = NanoContractArgumentApiInputType | Buffer;
 
+export type NanoContractArgumentContainerType = 'Optional' | 'SignedData';
+
 export enum NanoContractActionType {
   DEPOSIT = 'deposit',
   WITHDRAWAL = 'withdrawal',

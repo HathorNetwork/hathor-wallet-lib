@@ -59,12 +59,12 @@ expect.extend({
     }
     if (pass) {
       return {
-        message: () => `expected Buffer(${received.toString('hex')}) to not match Buffer(${expected.toString('hex')})`,
+        message: () => `expected Buffer(${received && received.toString('hex')}) to not match Buffer(${expected.toString('hex')})`,
         pass: true,
       }
     } else {
       return {
-        message: () => `expected Buffer(${received.toString('hex')}) to match Buffer(${expected.toString('hex')})`,
+        message: () => `expected Buffer(${received && received.toString('hex')}) to match Buffer(${expected.toString('hex')})`,
         pass: false,
       }
     }
