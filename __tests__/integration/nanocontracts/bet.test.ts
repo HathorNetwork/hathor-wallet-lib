@@ -8,7 +8,11 @@ import {
   waitForTxReceived,
   waitTxConfirmed,
 } from '../helpers/wallet.helper';
-import { CREATE_TOKEN_TX_VERSION, NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../src/constants';
+import {
+  CREATE_TOKEN_TX_VERSION,
+  NATIVE_TOKEN_UID,
+  NANO_CONTRACTS_INITIALIZE_METHOD,
+} from '../../../src/constants';
 import ncApi from '../../../src/api/nano';
 import dateFormatter from '../../../src/utils/date';
 import { bufferToHex } from '../../../src/utils/buffer';
