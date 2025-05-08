@@ -8,7 +8,7 @@ import {
   waitForTxReceived,
   waitTxConfirmed,
 } from '../helpers/wallet.helper';
-import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../src/constants';
+import { CREATE_TOKEN_TX_VERSION, NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../src/constants';
 import ncApi from '../../../src/api/nano';
 import dateFormatter from '../../../src/utils/date';
 import { bufferToHex } from '../../../src/utils/buffer';
@@ -328,22 +328,54 @@ describe('full cycle of bet nano contract', () => {
     ]);
 
     // Try to withdraw to address 2, success
-    const txWithdrawal = await wallet.createAndSendNanoContractTransaction('withdraw', address2, {
-      ncId: tx1.hash,
-      actions: [
-        {
-          type: 'withdrawal',
-          token: NATIVE_TOKEN_UID,
-          amount: 300n,
-          address: address2,
-        },
-      ],
-    });
+    const txWithdrawal = await wallet.createAndSendNanoContractCreateTokenTransaction(
+      'withdraw',
+      address2,
+      {
+        ncId: tx1.hash,
+        actions: [
+          {
+            type: 'withdrawal',
+            token: NATIVE_TOKEN_UID,
+            amount: 300n,
+            address: address2,
+          },
+        ],
+      },
+      {
+        mintAddress: address0,
+        name: 'Withdrawal Token',
+        symbol: 'WTK',
+        amount: 10000n,
+        changeAddress: null,
+        createMint: false,
+        mintAuthorityAddress: null,
+        createMelt: false,
+        meltAuthorityAddress: null,
+        data: null,
+        isCreateNFT: false,
+        contractPaysTokenDeposit: true,
+      }
+    );
     await checkTxValid(wallet, txWithdrawal);
     txIds.push(txWithdrawal.hash);
 
     const txWithdrawalData = await wallet.getFullTxById(txWithdrawal.hash);
     expect(isNanoContractCreateTx(txWithdrawalData)).toBe(false);
+
+    expect(txWithdrawalData.tx.nc_id).toBe(tx1.hash);
+    expect(txWithdrawalData.tx.nc_method).toBe('withdraw');
+    expect(txWithdrawalData.tx.version).toBe(CREATE_TOKEN_TX_VERSION);
+    expect(txWithdrawalData.tx.token_name).toBe('Withdrawal Token');
+    expect(txWithdrawalData.tx.token_symbol).toBe('WTK');
+    expect(txWithdrawalData.tx.outputs.length).toBe(2);
+    // First the created token output with 10000n amount
+    expect(txWithdrawalData.tx.outputs[0].value).toBe(10000n);
+    expect(txWithdrawalData.tx.outputs[0].token_data).toBe(1);
+    // Then what's left of the withdrawal, after paying 100n
+    // in deposit fee for the token creation
+    expect(txWithdrawalData.tx.outputs[1].value).toBe(200n);
+    expect(txWithdrawalData.tx.outputs[1].token_data).toBe(0);
 
     // We must have two transactions in the address2
     const address2Meta2 = await wallet.storage.store.getAddressMeta(address2);
