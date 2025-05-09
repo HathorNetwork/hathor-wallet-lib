@@ -644,6 +644,9 @@ describe('start', () => {
     await expect(hWallet.createAndSendNanoContractTransaction()).rejects.toThrow(
       WalletFromXPubGuard
     );
+    await expect(hWallet.createAndSendNanoContractCreateTokenTransaction()).rejects.toThrow(
+      WalletFromXPubGuard
+    );
     await expect(hWallet.getPrivateKeyFromAddress()).rejects.toThrow(WalletFromXPubGuard);
     await expect(hWallet.createOnChainBlueprintTransaction()).rejects.toThrow(WalletFromXPubGuard);
 
