@@ -23,7 +23,7 @@ export function encodeLeb128(
   maxBytes: number | null = null
 ) {
   let val = BigInt(value);
-  if (!signed && value < 0) {
+  if (!signed && val < 0n) {
     throw new Error('Cannot encode an unsigned negative value');
   }
   const result: bigint[] = [];
