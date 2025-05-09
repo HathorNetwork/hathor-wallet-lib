@@ -331,35 +331,83 @@ describe('full cycle of bet nano contract', () => {
       },
     ]);
 
+    const withdrawalData = {
+      ncId: tx1.hash,
+      actions: [
+        {
+          type: 'withdrawal',
+          token: NATIVE_TOKEN_UID,
+          amount: 300n,
+          address: address2,
+        },
+      ],
+    };
+
+    const withdrawalCreateTokenOptions = {
+      mintAddress: address0,
+      name: 'Withdrawal Token',
+      symbol: 'WTK',
+      amount: 10000n,
+      changeAddress: null,
+      createMint: false,
+      mintAuthorityAddress: null,
+      createMelt: false,
+      meltAuthorityAddress: null,
+      data: null,
+      isCreateNFT: false,
+      contractPaysTokenDeposit: true,
+    };
+
+    // Error with invalid address
+    await expect(
+      wallet.createAndSendNanoContractCreateTokenTransaction(
+        'withdraw',
+        'abc',
+        withdrawalData,
+        withdrawalCreateTokenOptions
+      )
+    ).rejects.toThrow(NanoContractTransactionError);
+
+    // Error with invalid mint authority address
+    await expect(
+      wallet.createAndSendNanoContractCreateTokenTransaction(
+        'withdraw',
+        address2,
+        withdrawalData,
+        { ...withdrawalCreateTokenOptions, mintAuthorityAddress: 'abc' }
+      )
+    ).rejects.toThrow(NanoContractTransactionError);
+
+    // Error with invalid melt authority address
+    await expect(
+      wallet.createAndSendNanoContractCreateTokenTransaction(
+        'withdraw',
+        address2,
+        withdrawalData,
+        { ...withdrawalCreateTokenOptions, meltAuthorityAddress: 'abc' }
+      )
+    ).rejects.toThrow(NanoContractTransactionError);
+
+    // If we remove the pin from the wallet object, it should throw error
+    const oldPin = wallet.pinCode;
+    wallet.pinCode = '';
+    await expect(
+      wallet.createAndSendNanoContractCreateTokenTransaction(
+        'withdraw',
+        address2,
+        withdrawalData,
+        withdrawalCreateTokenOptions
+      )
+    ).rejects.toThrow(PinRequiredError);
+    // Add the pin back for the other tests
+    wallet.pinCode = oldPin;
+
     // Try to withdraw to address 2, success
     const txWithdrawal = await wallet.createAndSendNanoContractCreateTokenTransaction(
       'withdraw',
       address2,
-      {
-        ncId: tx1.hash,
-        actions: [
-          {
-            type: 'withdrawal',
-            token: NATIVE_TOKEN_UID,
-            amount: 300n,
-            address: address2,
-          },
-        ],
-      },
-      {
-        mintAddress: address0,
-        name: 'Withdrawal Token',
-        symbol: 'WTK',
-        amount: 10000n,
-        changeAddress: null,
-        createMint: false,
-        mintAuthorityAddress: null,
-        createMelt: false,
-        meltAuthorityAddress: null,
-        data: null,
-        isCreateNFT: false,
-        contractPaysTokenDeposit: true,
-      }
+      withdrawalData,
+      withdrawalCreateTokenOptions
     );
     await checkTxValid(wallet, txWithdrawal);
     txIds.push(txWithdrawal.hash);
