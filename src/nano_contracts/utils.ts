@@ -222,9 +222,10 @@ export const validateAndUpdateBlueprintMethodArgs = async (
     }
     switch (typeToCheck) {
       case 'bytes':
-      case 'TxOutputScript':
-      case 'TokenUid':
+      case 'BlueprintId':
       case 'ContractId':
+      case 'TokenUid':
+      case 'TxOutputScript':
       case 'VertexId':
         // Bytes arguments are sent in hexadecimal
         try {
@@ -237,9 +238,14 @@ export const validateAndUpdateBlueprintMethodArgs = async (
           );
         }
         break;
-      case 'int':
-      case 'float':
       case 'Amount':
+        if (typeof args[index] !== 'bigint') {
+          throw new NanoContractTransactionError(
+            `Expects argument number ${index + 1} type ${arg.type} (bigint) but received type ${typeof args[index]}.`
+          );
+        }
+        break;
+      case 'int':
       case 'Timestamp':
         if (typeof args[index] !== 'number') {
           throw new NanoContractTransactionError(

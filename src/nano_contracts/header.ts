@@ -36,7 +36,7 @@ class NanoContractHeader extends Header {
   method: string;
 
   // Serialized arguments to the method being called
-  args: Buffer[];
+  args: Buffer;
 
   // List of actions for this nano
   actions: NanoContractActionHeader[];
@@ -49,7 +49,7 @@ class NanoContractHeader extends Header {
   constructor(
     id: string,
     method: string,
-    args: Buffer[],
+    args: Buffer,
     actions: NanoContractActionHeader[],
     pubkey: Buffer,
     signature: Buffer | null = null
@@ -85,9 +85,8 @@ class NanoContractHeader extends Header {
     array.push(intToBytes(methodBytes.length, 1));
     array.push(methodBytes);
 
-    const argsConcat: Buffer = Buffer.concat(this.args);
-    array.push(intToBytes(argsConcat.length, 2));
-    array.push(argsConcat);
+    array.push(intToBytes(this.args.length, 2));
+    array.push(this.args);
 
     array.push(intToBytes(this.actions.length, 1));
     for (const action of this.actions) {
@@ -153,7 +152,7 @@ class NanoContractHeader extends Header {
     buf = buf.subarray(1);
 
     // Create empty header to fill with the deserialization
-    const header = new NanoContractHeader('', '', [], [], Buffer.from([]));
+    const header = new NanoContractHeader('', '', Buffer.alloc(0), [], Buffer.alloc(0));
 
     /* eslint-disable prefer-const -- To split these declarations would be confusing.
      * In all of them the first parameter should be a const and the second a let. */
@@ -179,20 +178,10 @@ class NanoContractHeader extends Header {
 
     // nc args
     let argsLen: number;
-    let args: Buffer[] = [];
     let argsBuf: Buffer;
     [argsLen, buf] = unpackToInt(2, false, buf);
     [argsBuf, buf] = unpackLen(argsLen, buf);
-
-    while (argsBuf.length > 0) {
-      let argElementLen: number;
-      let argElement: Buffer;
-      [argElementLen, argsBuf] = unpackToInt(2, false, argsBuf);
-      [argElement, argsBuf] = unpackLen(argElementLen, argsBuf);
-      args.push(argElement);
-    }
-
-    header.args = args;
+    header.args = argsBuf;
 
     // nc actions
     let actionsLen: number;

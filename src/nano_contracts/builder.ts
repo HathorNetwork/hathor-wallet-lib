@@ -391,7 +391,7 @@ class NanoContractTransactionBuilder {
     const nanoHeader = new NanoContractHeader(
       ncId,
       this.method,
-      serializedArgs,
+      Buffer.concat(serializedArgs),
       nanoHeaderActions,
       this.caller,
       null
