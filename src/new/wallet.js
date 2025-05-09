@@ -3094,7 +3094,9 @@ class HathorWallet extends EventEmitter {
       // Validate that the mint authority address belongs to the wallet
       const isAddressMine = await this.isAddressMine(newCreateTokenOptions.mintAuthorityAddress);
       if (!isAddressMine) {
-        throw new NanoContractTransactionError('The mint authority address must belong to your wallet.');
+        throw new NanoContractTransactionError(
+          'The mint authority address must belong to your wallet.'
+        );
       }
     }
 
@@ -3105,7 +3107,9 @@ class HathorWallet extends EventEmitter {
       // Validate that the melt authority address belongs to the wallet
       const isAddressMine = await this.isAddressMine(newCreateTokenOptions.meltAuthorityAddress);
       if (!isAddressMine) {
-        throw new NanoContractTransactionError('The melt authority address must belong to your wallet.');
+        throw new NanoContractTransactionError(
+          'The melt authority address must belong to your wallet.'
+        );
       }
     }
 
