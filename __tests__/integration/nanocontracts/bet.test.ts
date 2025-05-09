@@ -370,37 +370,19 @@ describe('full cycle of bet nano contract', () => {
 
     // Error with invalid mint authority address
     await expect(
-      wallet.createAndSendNanoContractCreateTokenTransaction(
-        'withdraw',
-        address2,
-        withdrawalData,
-        { ...withdrawalCreateTokenOptions, mintAuthorityAddress: 'abc' }
-      )
+      wallet.createAndSendNanoContractCreateTokenTransaction('withdraw', address2, withdrawalData, {
+        ...withdrawalCreateTokenOptions,
+        mintAuthorityAddress: 'abc',
+      })
     ).rejects.toThrow(NanoContractTransactionError);
 
     // Error with invalid melt authority address
     await expect(
-      wallet.createAndSendNanoContractCreateTokenTransaction(
-        'withdraw',
-        address2,
-        withdrawalData,
-        { ...withdrawalCreateTokenOptions, meltAuthorityAddress: 'abc' }
-      )
+      wallet.createAndSendNanoContractCreateTokenTransaction('withdraw', address2, withdrawalData, {
+        ...withdrawalCreateTokenOptions,
+        meltAuthorityAddress: 'abc',
+      })
     ).rejects.toThrow(NanoContractTransactionError);
-
-    // If we remove the pin from the wallet object, it should throw error
-    const oldPin = wallet.pinCode;
-    wallet.pinCode = '';
-    await expect(
-      wallet.createAndSendNanoContractCreateTokenTransaction(
-        'withdraw',
-        address2,
-        withdrawalData,
-        withdrawalCreateTokenOptions
-      )
-    ).rejects.toThrow(PinRequiredError);
-    // Add the pin back for the other tests
-    wallet.pinCode = oldPin;
 
     // Try to withdraw to address 2, success
     const txWithdrawal = await wallet.createAndSendNanoContractCreateTokenTransaction(
@@ -730,6 +712,19 @@ describe('full cycle of bet nano contract', () => {
       })
     ).rejects.toThrow(NanoContractTransactionError);
 
+    // If we remove the pin from the wallet object, it should throw error
+    const oldPin = hWallet.pinCode;
+    hWallet.pinCode = '';
+    await expect(
+      hWallet.createAndSendNanoContractTransaction('withdraw', address2, {})
+    ).rejects.toThrow(PinRequiredError);
+
+    await expect(
+      hWallet.createAndSendNanoContractCreateTokenTransaction('withdraw', address2, {}, {})
+    ).rejects.toThrow(PinRequiredError);
+    // Add the pin back for the other tests
+    hWallet.pinCode = oldPin;
+
     // Test ocb errors
     const { seed } = WALLET_CONSTANTS.ocb;
     const ocbWallet = await generateWalletHelper({ seed });
@@ -741,13 +736,13 @@ describe('full cycle of bet nano contract', () => {
     ).rejects.toThrow(NanoContractTransactionError);
 
     // If we remove the pin from the wallet object, it should throw error
-    const oldPin = ocbWallet.pinCode;
+    const oldOcbPin = ocbWallet.pinCode;
     ocbWallet.pinCode = '';
     await expect(
       ocbWallet.createAndSendOnChainBlueprintTransaction(code, address0)
     ).rejects.toThrow(PinRequiredError);
 
     // Add the pin back in case there are more tests here
-    ocbWallet.pinCode = oldPin;
+    ocbWallet.pinCode = oldOcbPin;
   });
 });
