@@ -8,7 +8,11 @@ import {
   waitForTxReceived,
   waitTxConfirmed,
 } from '../helpers/wallet.helper';
-import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../src/constants';
+import {
+  CREATE_TOKEN_TX_VERSION,
+  NATIVE_TOKEN_UID,
+  NANO_CONTRACTS_INITIALIZE_METHOD,
+} from '../../../src/constants';
 import ncApi from '../../../src/api/nano';
 import dateFormatter from '../../../src/utils/date';
 import { bufferToHex } from '../../../src/utils/buffer';
@@ -327,8 +331,7 @@ describe('full cycle of bet nano contract', () => {
       },
     ]);
 
-    // Try to withdraw to address 2, success
-    const txWithdrawal = await wallet.createAndSendNanoContractTransaction('withdraw', address2, {
+    const withdrawalData = {
       ncId: tx1.hash,
       actions: [
         {
@@ -338,12 +341,75 @@ describe('full cycle of bet nano contract', () => {
           address: address2,
         },
       ],
-    });
+    };
+
+    const withdrawalCreateTokenOptions = {
+      mintAddress: address0,
+      name: 'Withdrawal Token',
+      symbol: 'WTK',
+      amount: 10000n,
+      changeAddress: null,
+      createMint: false,
+      mintAuthorityAddress: null,
+      createMelt: false,
+      meltAuthorityAddress: null,
+      data: null,
+      isCreateNFT: false,
+      contractPaysTokenDeposit: true,
+    };
+
+    // Error with invalid address
+    await expect(
+      wallet.createAndSendNanoContractCreateTokenTransaction(
+        'withdraw',
+        'abc',
+        withdrawalData,
+        withdrawalCreateTokenOptions
+      )
+    ).rejects.toThrow(NanoContractTransactionError);
+
+    // Error with invalid mint authority address
+    await expect(
+      wallet.createAndSendNanoContractCreateTokenTransaction('withdraw', address2, withdrawalData, {
+        ...withdrawalCreateTokenOptions,
+        mintAuthorityAddress: 'abc',
+      })
+    ).rejects.toThrow(NanoContractTransactionError);
+
+    // Error with invalid melt authority address
+    await expect(
+      wallet.createAndSendNanoContractCreateTokenTransaction('withdraw', address2, withdrawalData, {
+        ...withdrawalCreateTokenOptions,
+        meltAuthorityAddress: 'abc',
+      })
+    ).rejects.toThrow(NanoContractTransactionError);
+
+    // Try to withdraw to address 2, success
+    const txWithdrawal = await wallet.createAndSendNanoContractCreateTokenTransaction(
+      'withdraw',
+      address2,
+      withdrawalData,
+      withdrawalCreateTokenOptions
+    );
     await checkTxValid(wallet, txWithdrawal);
     txIds.push(txWithdrawal.hash);
 
     const txWithdrawalData = await wallet.getFullTxById(txWithdrawal.hash);
     expect(isNanoContractCreateTx(txWithdrawalData)).toBe(false);
+
+    expect(txWithdrawalData.tx.nc_id).toBe(tx1.hash);
+    expect(txWithdrawalData.tx.nc_method).toBe('withdraw');
+    expect(txWithdrawalData.tx.version).toBe(CREATE_TOKEN_TX_VERSION);
+    expect(txWithdrawalData.tx.token_name).toBe('Withdrawal Token');
+    expect(txWithdrawalData.tx.token_symbol).toBe('WTK');
+    expect(txWithdrawalData.tx.outputs.length).toBe(2);
+    // First the created token output with 10000n amount
+    expect(txWithdrawalData.tx.outputs[0].value).toBe(10000n);
+    expect(txWithdrawalData.tx.outputs[0].token_data).toBe(1);
+    // Then what's left of the withdrawal, after paying 100n
+    // in deposit fee for the token creation
+    expect(txWithdrawalData.tx.outputs[1].value).toBe(200n);
+    expect(txWithdrawalData.tx.outputs[1].token_data).toBe(0);
 
     // We must have two transactions in the address2
     const address2Meta2 = await wallet.storage.store.getAddressMeta(address2);
@@ -646,6 +712,19 @@ describe('full cycle of bet nano contract', () => {
       })
     ).rejects.toThrow(NanoContractTransactionError);
 
+    // If we remove the pin from the wallet object, it should throw error
+    const oldPin = hWallet.pinCode;
+    hWallet.pinCode = '';
+    await expect(
+      hWallet.createAndSendNanoContractTransaction('withdraw', address2, {})
+    ).rejects.toThrow(PinRequiredError);
+
+    await expect(
+      hWallet.createAndSendNanoContractCreateTokenTransaction('withdraw', address2, {}, {})
+    ).rejects.toThrow(PinRequiredError);
+    // Add the pin back for the other tests
+    hWallet.pinCode = oldPin;
+
     // Test ocb errors
     const { seed } = WALLET_CONSTANTS.ocb;
     const ocbWallet = await generateWalletHelper({ seed });
@@ -657,13 +736,13 @@ describe('full cycle of bet nano contract', () => {
     ).rejects.toThrow(NanoContractTransactionError);
 
     // If we remove the pin from the wallet object, it should throw error
-    const oldPin = ocbWallet.pinCode;
+    const oldOcbPin = ocbWallet.pinCode;
     ocbWallet.pinCode = '';
     await expect(
       ocbWallet.createAndSendOnChainBlueprintTransaction(code, address0)
     ).rejects.toThrow(PinRequiredError);
 
     // Add the pin back in case there are more tests here
-    ocbWallet.pinCode = oldPin;
+    ocbWallet.pinCode = oldOcbPin;
   });
 });
