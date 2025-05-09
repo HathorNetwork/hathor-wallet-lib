@@ -2942,7 +2942,7 @@ class HathorWallet extends EventEmitter {
    * @param {CreateNanoTxData} [data]
    * @param {CreateNanoTxOptions} [options]
    *
-   * @returns {Promise<NanoContract>}
+   * @returns {Promise<Transaction>}
    */
   async createAndSendNanoContractTransaction(method, address, data, options = {}) {
     const sendTransaction = await this.createNanoContractTransaction(

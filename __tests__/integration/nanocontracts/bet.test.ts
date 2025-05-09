@@ -12,6 +12,7 @@ import { NATIVE_TOKEN_UID, NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../src
 import ncApi from '../../../src/api/nano';
 import dateFormatter from '../../../src/utils/date';
 import { bufferToHex } from '../../../src/utils/buffer';
+import helpersUtils from '../../../src/utils/helpers';
 import Address from '../../../src/models/address';
 import P2PKH from '../../../src/models/p2pkh';
 import P2SH from '../../../src/models/p2sh';
@@ -55,7 +56,15 @@ describe('full cycle of bet nano contract', () => {
     await GenesisWalletHelper.clearListeners();
   });
 
-  const checkTxValid = async (wallet, txId) => {
+  const checkTxValid = async (wallet, tx) => {
+    const txId = tx.hash;
+    // Check that serialization and deserialization match
+    const network = wallet.getNetworkObject();
+    const txBytes = tx.toBytes();
+    const deserializedTx = helpersUtils.createTxFromBytes(txBytes, network);
+    const deserializedTxBytes = deserializedTx.toBytes();
+    expect(bufferToHex(txBytes)).toBe(bufferToHex(deserializedTxBytes));
+
     expect(txId).toBeDefined();
     await waitForTxReceived(wallet, txId);
     // We need to wait for the tx to get a first block, so we guarantee it was executed
@@ -93,7 +102,7 @@ describe('full cycle of bet nano contract', () => {
         args: [bufferToHex(oracleData), NATIVE_TOKEN_UID, dateLastBet],
       }
     );
-    await checkTxValid(wallet, tx1.hash);
+    await checkTxValid(wallet, tx1);
     const tx1Data = await wallet.getFullTxById(tx1.hash);
     expect(isNanoContractCreateTx(tx1Data.tx)).toBe(true);
 
@@ -165,7 +174,7 @@ describe('full cycle of bet nano contract', () => {
         },
       ],
     });
-    await checkTxValid(wallet, txBet.hash);
+    await checkTxValid(wallet, txBet);
     const txBetData = await wallet.getFullTxById(txBet.hash);
     expect(isNanoContractCreateTx(txBetData.tx)).toBe(false);
 
@@ -213,7 +222,7 @@ describe('full cycle of bet nano contract', () => {
         },
       ],
     });
-    await checkTxValid(wallet, txBet2.hash);
+    await checkTxValid(wallet, txBet2);
     const txBet2Data = await wallet.getFullTxById(txBet2.hash);
     expect(isNanoContractCreateTx(txBet2Data.tx)).toBe(false);
 
@@ -291,7 +300,7 @@ describe('full cycle of bet nano contract', () => {
       ncId: tx1.hash,
       args: [`${bufferToHex(inputData)},${result},str`],
     });
-    await checkTxValid(wallet, txSetResult.hash);
+    await checkTxValid(wallet, txSetResult);
     txIds.push(txSetResult.hash);
     const txSetResultData = await wallet.getFullTxById(txSetResult.hash);
     expect(isNanoContractCreateTx(txSetResultData.tx)).toBe(false);
@@ -330,7 +339,7 @@ describe('full cycle of bet nano contract', () => {
         },
       ],
     });
-    await checkTxValid(wallet, txWithdrawal.hash);
+    await checkTxValid(wallet, txWithdrawal);
     txIds.push(txWithdrawal.hash);
 
     const txWithdrawalData = await wallet.getFullTxById(txWithdrawal.hash);
