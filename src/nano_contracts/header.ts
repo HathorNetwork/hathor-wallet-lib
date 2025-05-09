@@ -22,6 +22,7 @@ import {
   VertexHeaderId,
 } from '../headers/types';
 import Header from '../headers/base';
+import { OutputValueType } from '../types';
 
 class NanoContractHeader extends Header {
   // Used to create serialization versioning (hard coded as NANO_CONTRACTS_INFO_VERSION for now)
@@ -84,13 +85,7 @@ class NanoContractHeader extends Header {
     array.push(intToBytes(methodBytes.length, 1));
     array.push(methodBytes);
 
-    const argsArray: Buffer[] = [];
-    for (const arg of this.args) {
-      argsArray.push(intToBytes(arg.length, 2));
-      argsArray.push(arg);
-    }
-
-    const argsConcat: Buffer = Buffer.concat(argsArray);
+    const argsConcat: Buffer = Buffer.concat(this.args);
     array.push(intToBytes(argsConcat.length, 2));
     array.push(argsConcat);
 
@@ -170,28 +165,28 @@ class NanoContractHeader extends Header {
     }
 
     // NC ID is 32 bytes in hex
-    let ncIdBuffer;
+    let ncIdBuffer: Buffer;
     [ncIdBuffer, buf] = unpackLen(32, buf);
     header.id = ncIdBuffer.toString('hex');
 
     // nc method
-    let methodLen;
-    let methodBuffer;
+    let methodLen: number;
+    let methodBuffer: Buffer;
     [methodLen, buf] = unpackToInt(1, false, buf);
 
     [methodBuffer, buf] = unpackLen(methodLen, buf);
     header.method = methodBuffer.toString('ascii');
 
     // nc args
-    let argsLen;
+    let argsLen: number;
     let args: Buffer[] = [];
-    let argsBuf;
+    let argsBuf: Buffer;
     [argsLen, buf] = unpackToInt(2, false, buf);
     [argsBuf, buf] = unpackLen(argsLen, buf);
 
     while (argsBuf.length > 0) {
-      let argElementLen;
-      let argElement;
+      let argElementLen: number;
+      let argElement: Buffer;
       [argElementLen, argsBuf] = unpackToInt(2, false, argsBuf);
       [argElement, argsBuf] = unpackLen(argElementLen, argsBuf);
       args.push(argElement);
@@ -200,14 +195,14 @@ class NanoContractHeader extends Header {
     header.args = args;
 
     // nc actions
-    let actionsLen;
+    let actionsLen: number;
     [actionsLen, buf] = unpackToInt(1, false, buf);
 
     for (let i = 0; i < actionsLen; i++) {
-      let actionTypeBytes;
-      let actionType;
-      let tokenIndex;
-      let amount;
+      let actionTypeBytes: Buffer;
+      let actionType: number;
+      let tokenIndex: number;
+      let amount: OutputValueType;
       [actionTypeBytes, buf] = [buf.subarray(0, 1), buf.subarray(1)];
       [actionType] = unpackToInt(1, false, actionTypeBytes);
       [tokenIndex, buf] = unpackToInt(1, false, buf);
@@ -217,12 +212,12 @@ class NanoContractHeader extends Header {
     }
 
     // nc pubkey
-    let pubkeyLen;
+    let pubkeyLen: number;
     [pubkeyLen, buf] = unpackToInt(1, false, buf);
     [header.pubkey, buf] = unpackLen(pubkeyLen, buf);
 
     // nc signature
-    let signatureLen;
+    let signatureLen: number;
     [signatureLen, buf] = unpackToInt(1, false, buf);
 
     if (signatureLen !== 0) {
