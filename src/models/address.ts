@@ -89,8 +89,8 @@ class Address {
     }
 
     // Validate address checksum
-    const checksum = addressBytes.slice(-4);
-    const addressSlice = addressBytes.slice(0, -4);
+    const checksum = addressBytes.subarray(-4);
+    const addressSlice = addressBytes.subarray(0, -4);
     const correctChecksum = helpers.getChecksum(addressSlice);
     if (!util.buffer.equals(checksum, correctChecksum)) {
       throw new AddressError(

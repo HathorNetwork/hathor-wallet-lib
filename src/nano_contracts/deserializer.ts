@@ -311,18 +311,30 @@ class Deserializer {
    * @inner
    */
   toAddress(buf: Buffer): DeserializeResult<string> {
+    const lenReadResult = leb128Util.decodeUnsigned(buf, 1);
+    if (lenReadResult.value !== 25n) {
+      // Address should be exactly 25 bytes long
+      throw new Error('Address should be 25 bytes long');
+    }
     // First we get the 20 bytes of the address without the version byte and checksum
-    const addressBytes = buf.subarray(1, 21);
+    const addressBytes = buf.subarray(2, 22);
     const address = helpersUtils.encodeAddress(addressBytes, this.network);
+    address.validateAddress();
     const decoded = address.decode();
-    if (decoded[0] !== buf[0]) {
+    if (decoded[0] !== buf[1]) {
       throw new Error(
         `Asked to deserialize an address with version byte ${buf[0]} but the network from the deserializer object has version byte ${decoded[0]}.`
       );
     }
+    if (decoded.subarray(21, 25).toString('hex') !== buf.subarray(22, 26).toString('hex')) {
+      // Checksum value generated does not match value from fullnode
+      throw new Error(
+        `When parsing and Address(${address.base58}) we calculated checksum(${decoded.subarray(21, 25).toString('hex')}) but it does not match the checksum it came with ${buf.subarray(22, 26).toString('hex')}.`
+      );
+    }
     return {
       value: address.base58,
-      bytesRead: 21,
+      bytesRead: 26, // 1 for length + 25 address bytes
     };
   }
 }

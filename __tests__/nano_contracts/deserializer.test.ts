@@ -11,7 +11,7 @@ import Address from '../../src/models/address';
 import Network from '../../src/models/network';
 
 test('Bool', () => {
-  const serializer = new Serializer();
+  const serializer = new Serializer(new Network('testnet'));
   const deserializer = new Deserializer(new Network('testnet'));
 
   const serializedFalse = serializer.serializeFromType(false, 'bool');
@@ -32,7 +32,7 @@ test('Bool', () => {
 });
 
 test('String', () => {
-  const serializer = new Serializer();
+  const serializer = new Serializer(new Network('testnet'));
   const deserializer = new Deserializer(new Network('testnet'));
 
   const value = 'test';
@@ -43,7 +43,7 @@ test('String', () => {
 });
 
 test('Int', () => {
-  const serializer = new Serializer();
+  const serializer = new Serializer(new Network('testnet'));
   const deserializer = new Deserializer(new Network('testnet'));
 
   const value = 300;
@@ -54,7 +54,7 @@ test('Int', () => {
 });
 
 test('Amount', () => {
-  const serializer = new Serializer();
+  const serializer = new Serializer(new Network('testnet'));
   const deserializer = new Deserializer(new Network('testnet'));
 
   const value = 300n;
@@ -65,7 +65,7 @@ test('Amount', () => {
 });
 
 test('Bytes', () => {
-  const serializer = new Serializer();
+  const serializer = new Serializer(new Network('testnet'));
   const deserializer = new Deserializer(new Network('testnet'));
 
   const value = Buffer.from([0x74, 0x65, 0x73, 0x74]);
@@ -115,7 +115,7 @@ test('Bytes', () => {
 });
 
 test('Optional', () => {
-  const serializer = new Serializer();
+  const serializer = new Serializer(new Network('testnet'));
   const deserializer = new Deserializer(new Network('testnet'));
 
   const valueEmptyInt = null;
@@ -180,8 +180,8 @@ test('Optional', () => {
   expect(deserializedBytes).toMatchBuffer(valueBytes);
 });
 
-test('Signed', () => {
-  const serializer = new Serializer();
+test('SignedData', () => {
+  const serializer = new Serializer(new Network('testnet'));
   const deserializer = new Deserializer(new Network('testnet'));
 
   const valueInt = '74657374,300,int';

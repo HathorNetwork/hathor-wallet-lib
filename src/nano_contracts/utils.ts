@@ -37,17 +37,22 @@ export function getContainerInternalType(
     return ['Optional', type.slice(0, -1)];
   }
 
-  if (type.startsWith('SignedData[')) {
-    // SignedData[internalType]
-    const match = type.match(/\[(.*?)\]/);
-    const internalType = match ? match[1] : null;
-    if (!internalType) {
-      throw new Error('Unable to extract type');
-    }
-    return ['SignedData', internalType];
+  // ContainerType[internalType]
+  const match = type.match(/^(.*?)\[(.*)\]/);
+  const containerType = match ? match[1] : null;
+  const internalType = match ? match[2] : null;
+  if ((!internalType) || (!containerType)) {
+    throw new Error('Unable to extract type');
   }
-
-  throw new Error('Not a ContainerType');
+  // Only some values are allowed for containerType
+  switch (containerType) {
+    case 'Tuple':
+    case 'SignedData':
+    case 'RawSignedData':
+      return [containerType, internalType]
+    default:
+      throw new Error('Not a ContainerType');
+  }
 }
 
 export function getContainerType(type: string): NanoContractArgumentContainerType | null {
@@ -273,8 +278,6 @@ export const validateAndUpdateBlueprintMethodArgs = async (
         try {
           const address = new Address(argValue as string);
           address.validateAddress();
-          // eslint-disable-next-line no-param-reassign
-          args[index] = address.decode();
         } catch {
           // Argument value is not a valid address
           throw new NanoContractTransactionError(

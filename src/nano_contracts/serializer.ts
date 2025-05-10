@@ -5,6 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import Address from '../models/address';
+import Network from '../models/network';
 import { hexToBuffer, intToBytes, signedIntToBytes, bigIntToBytes } from '../utils/buffer';
 import { NanoContractArgumentType } from './types';
 import { OutputValueType } from '../types';
@@ -15,6 +17,12 @@ const SERIALIZATION_SIZE_LEN = 2;
 
 /* eslint-disable class-methods-use-this -- XXX: Methods that do not use `this` should be made static */
 class Serializer {
+  network: Network;
+
+  constructor(network: Network) {
+    this.network = network;
+  }
+
   /**
    * Push an integer to buffer as the len of serialized element
    * Use SERIALIZATION_SIZE_LEN as the quantity of bytes to serialize
@@ -61,8 +69,9 @@ class Serializer {
       case 'TokenUid':
       case 'TxOutputScript':
       case 'VertexId':
-      case 'Address':
         return this.fromBytes(value as Buffer);
+      case 'Address':
+        return this.fromAddress(value as string);
       case 'int':
       case 'Timestamp':
         return this.fromInt(value as number);
@@ -90,6 +99,20 @@ class Serializer {
   fromString(value: string): Buffer {
     const buf = Buffer.from(value, 'utf8');
     return Buffer.concat([leb128Util.encodeUnsigned(buf.length), buf]);
+  }
+
+  /**
+   * Serialize base58 address into bytes.
+   *
+   * @param value base58 address to serialize
+   *
+   * @memberof Serializer
+   * @inner
+   */
+  fromAddress(value: string): Buffer {
+    const address = new Address(value, { network: this.network});
+    address.validateAddress();
+    return this.fromBytes(address.decode());
   }
 
   /**

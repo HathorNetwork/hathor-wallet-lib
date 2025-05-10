@@ -13,6 +13,7 @@ import ncApi from '../api/nano';
 import { getAddressFromPubkey } from '../utils/address';
 import { NanoContractTransactionParseError } from '../errors';
 import { MethodArgInfo, NanoContractArgumentType, NanoContractParsedArgument } from './types';
+import leb128 from '../utils/leb128';
 
 class NanoContractTransactionParser {
   blueprintId: string;
@@ -83,6 +84,16 @@ class NanoContractTransactionParser {
       []
     ) as MethodArgInfo[];
     let argsBuffer = Buffer.from(this.args, 'hex');
+
+    // Number of arguments
+    const numArgsReadResult = leb128.decodeUnsigned(argsBuffer);
+    const numArgs = Number(numArgsReadResult.value);
+    argsBuffer = numArgsReadResult.rest;
+
+    if (numArgs !== methodArgs.length) {
+      throw new NanoContractTransactionParseError(`Number of arguments do not match blueprint.`);
+    }
+
     for (const arg of methodArgs) {
       let parsed: NanoContractArgumentType;
       let size: number;
@@ -90,8 +101,9 @@ class NanoContractTransactionParser {
         const parseResult = deserializer.deserializeFromType(argsBuffer, arg.type);
         parsed = parseResult.value;
         size = parseResult.bytesRead;
-      } catch {
-        throw new NanoContractTransactionParseError(`Failed to deserialize argument ${arg.type} .`);
+      } catch (err: unknown) {
+        console.error(err);
+        throw new NanoContractTransactionParseError(`Failed to deserialize argument ${arg.type}.`);
       }
       parsedArgs.push({ ...arg, parsed });
       argsBuffer = argsBuffer.subarray(size);

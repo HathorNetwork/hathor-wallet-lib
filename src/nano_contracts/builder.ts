@@ -28,6 +28,7 @@ import { ITokenData } from '../types';
 import ncApi from '../api/nano';
 import { validateAndUpdateBlueprintMethodArgs } from './utils';
 import NanoContractHeader from './header';
+import leb128 from '../utils/leb128';
 
 class NanoContractTransactionBuilder {
   blueprintId: string | null | undefined;
@@ -332,9 +333,9 @@ class NanoContractTransactionBuilder {
     }
 
     // Serialize the method arguments
-    const serializedArgs: Buffer[] = [];
+    const serializedArgs: Buffer[] = [leb128.encodeUnsigned(this.args?.length ?? 0)];
     if (this.args) {
-      const serializer = new Serializer();
+      const serializer = new Serializer(this.wallet.getNetworkObject());
       const blueprintInformation = await ncApi.getBlueprintInformation(this.blueprintId);
       const methodArgs = get(
         blueprintInformation,

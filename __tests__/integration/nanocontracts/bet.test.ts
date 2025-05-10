@@ -292,7 +292,7 @@ describe('full cycle of bet nano contract', () => {
     expect(ncState.fields[`withdrawals.a'${address3}'`].value).toBeUndefined();
 
     // Set result to '1x0'
-    const nanoSerializer = new Serializer();
+    const nanoSerializer = new Serializer(network);
     const result = '1x0';
     const resultSerialized = nanoSerializer.serializeFromType(result, 'str');
     const inputData = await getOracleInputData(oracleData, resultSerialized, wallet);
