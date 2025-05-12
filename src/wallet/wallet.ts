@@ -539,7 +539,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     let shouldGetNewAddresses = false;
 
     for (const output of outputs) {
-      if (this.newAddresses.find(newAddress => newAddress.address === output.address)) {
+      // Check if the output's decoded address matches any of the wallet's new addresses
+      if (
+        output.decoded &&
+        output.decoded.address &&
+        this.newAddresses.find(newAddress => newAddress.address === output.decoded.address)
+      ) {
         // break early
         shouldGetNewAddresses = true;
         break;

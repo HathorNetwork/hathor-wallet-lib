@@ -465,6 +465,49 @@ export const txOutputSchema = z.object({
 });
 
 /**
+ * Schema for Buffer-like scripts
+ */
+const bufferScriptSchema = z.object({
+  type: z.literal('Buffer'),
+  data: z.array(z.number()),
+});
+
+/**
+ * Schema for websocket transaction input.
+ */
+const wsTxInputSchema = z.object({
+  tx_id: txIdSchema,
+  index: z.number(),
+  value: bigIntCoercibleSchema,
+  token_data: z.number(),
+  script: bufferScriptSchema,
+  token: tokenIdSchema,
+  decoded: z.object({
+    type: z.string(),
+    address: AddressSchema,
+    timelock: z.number().nullable().optional(),
+  }),
+});
+
+/**
+ * Schema for websocket transaction output.
+ */
+const wsTxOutputSchema = z.object({
+  value: bigIntCoercibleSchema,
+  token_data: z.number(),
+  script: bufferScriptSchema,
+  decodedScript: z.any().nullable().optional(),
+  token: tokenIdSchema,
+  locked: z.boolean(),
+  index: z.number(),
+  decoded: z.object({
+    type: z.string().nullable().optional(),
+    address: AddressSchema.optional(),
+    timelock: z.number().nullable().optional(),
+  }),
+});
+
+/**
  * Schema for websocket transaction events.
  * Represents the structure of transactions received via websocket.
  */
@@ -476,21 +519,9 @@ export const wsTransactionSchema = z.object({
   voided: z.boolean(),
   weight: z.number(),
   parents: z.array(z.string()),
-  inputs: z.array(
-    z.object({
-      address: AddressSchema,
-      timelock: z.number().nullable(),
-      type: z.string(),
-    })
-  ),
-  outputs: z.array(
-    z.object({
-      address: AddressSchema,
-      timelock: z.number().nullable(),
-      type: z.string(),
-    })
-  ),
-  height: z.number(),
+  inputs: z.array(wsTxInputSchema),
+  outputs: z.array(wsTxOutputSchema),
+  height: z.number().nullable().optional(),
   token_name: z.string().nullable(),
   token_symbol: z.string().nullable(),
   signal_bits: z.number(),
