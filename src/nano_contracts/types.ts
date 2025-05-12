@@ -6,6 +6,10 @@
  */
 import { IHistoryTx, OutputValueType } from '../types';
 
+/**
+ * There are the types that can be received via api
+ * when querying for a nano contract value.
+ */
 export type NanoContractArgumentApiInputType =
   | string
   | number
@@ -13,8 +17,51 @@ export type NanoContractArgumentApiInputType =
   | OutputValueType
   | boolean
   | null;
-export type NanoContractArgumentType = NanoContractArgumentApiInputType | Buffer;
 
+/**
+ * These are the possible `Single` types after parsing
+ * We include Buffer since some types are decoded as Buffer (e.g. bytes, TokenUid, ContractId)
+ */
+export type NanoContractArgumentSingleType = NanoContractArgumentApiInputType | Buffer;
+
+/**
+ * A `SignedData` value is the tuple `[ContractId, Value]`
+ * which is parsed as `[Buffer, NanoContractArgumentSingleType]`
+ */
+export type NanoContractSignedDataInnerType = [Buffer, NanoContractArgumentSingleType];
+
+/**
+ * NanoContract SignedData method argument type
+ */
+export type NanoContractSignedData = {
+  type: string;
+  value: NanoContractSignedDataInnerType;
+  signature: Buffer;
+}
+
+/**
+ * NanoContract RawSignedData method argument type
+ */
+export type NanoContractRawSignedData = {
+  type: string;
+  value: NanoContractArgumentSingleType;
+  signature: Buffer;
+}
+
+/**
+ * Intermediate type for all possible Nano contract argument type
+ * that do not include tuple/arrays/repetition
+ */
+type _NanoContractArgumentType1 = NanoContractArgumentSingleType | NanoContractSignedData | NanoContractRawSignedData;
+
+/**
+ * Nano Contract method argument type as a native TS type
+ */
+export type NanoContractArgumentType = _NanoContractArgumentType1 | _NanoContractArgumentType1[];
+
+/**
+ * Container type names
+ */
 export type NanoContractArgumentContainerType = 'Optional' | 'SignedData' | 'RawSignedData' | 'Tuple';
 
 export enum NanoContractActionType {
@@ -136,4 +183,9 @@ export interface NanoContractStateAPIParameters {
   calls: string[];
   block_hash?: string;
   block_height?: number;
+}
+
+export type BufferROExtract<T = any> = {
+  value: T;
+  bytesRead: number;
 }

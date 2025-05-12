@@ -14,6 +14,7 @@ import { getAddressFromPubkey } from '../utils/address';
 import { NanoContractTransactionParseError } from '../errors';
 import { MethodArgInfo, NanoContractArgumentType, NanoContractParsedArgument } from './types';
 import leb128 from '../utils/leb128';
+import { NanoContractMethodArgument } from './methodArg';
 
 class NanoContractTransactionParser {
   blueprintId: string;
@@ -28,7 +29,7 @@ class NanoContractTransactionParser {
 
   args: string | null;
 
-  parsedArgs: NanoContractParsedArgument[] | null;
+  parsedArgs: NanoContractMethodArgument[] | null;
 
   constructor(
     blueprintId: string,
@@ -63,7 +64,7 @@ class NanoContractTransactionParser {
    * @inner
    */
   async parseArguments() {
-    const parsedArgs: NanoContractParsedArgument[] = [];
+    const parsedArgs: NanoContractMethodArgument[] = [];
     if (!this.args) {
       return;
     }
@@ -95,17 +96,22 @@ class NanoContractTransactionParser {
     }
 
     for (const arg of methodArgs) {
-      let parsed: NanoContractArgumentType;
+      let parsed: NanoContractMethodArgument;
       let size: number;
       try {
-        const parseResult = deserializer.deserializeFromType(argsBuffer, arg.type);
+        const parseResult = NanoContractMethodArgument.fromSerialized(
+          arg.name,
+          arg.type,
+          argsBuffer,
+          deserializer,
+        );
         parsed = parseResult.value;
         size = parseResult.bytesRead;
       } catch (err: unknown) {
         console.error(err);
         throw new NanoContractTransactionParseError(`Failed to deserialize argument ${arg.type}.`);
       }
-      parsedArgs.push({ ...arg, parsed });
+      parsedArgs.push(parsed);
       argsBuffer = argsBuffer.subarray(size);
     }
     // XXX: argsBuffer should be empty since we parsed all arguments
