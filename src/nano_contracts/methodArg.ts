@@ -15,7 +15,6 @@ import {
 } from './types';
 import Serializer from './serializer';
 import Deserializer from './deserializer';
-import { getContainerInternalType } from './utils';
 
 export class NanoContractMethodArgument {
   name: string;
