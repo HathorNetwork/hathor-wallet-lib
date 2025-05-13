@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { z } from 'zod';
 import {
   NanoContractArgumentSingleType,
   NanoContractArgumentType,
@@ -18,81 +19,89 @@ import {
 import Serializer from './serializer';
 import Deserializer from './deserializer';
 import { getContainerInternalType, getContainerType } from './utils';
-import { z } from 'zod';
 
 /**
  * Refinement method meant to validate, parse and return the transformed type.
  * User input will be parsed, validated and converted to the actual internal TS type.
  * Issues are added to the context so zod can show parse errors safely.
  */
-function refineSingleValue(ctx: z.RefinementCtx, inputVal: NanoContractArgumentApiInputType, type: string) {
-    if (['int', 'Timestamp'].includes(type)) {
-      const parse = z.coerce.number().safeParse(inputVal);
-      if (!parse.success) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Value is invalid ${type}: ${parse.error}`,
-          fatal: true,
-        });
-      } else {
-        return parse.data;
-      }
-    } else if (type === 'VarInt') {
-      const parse = z.coerce.bigint().safeParse(inputVal);
-      if (!parse.success) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Value is invalid VarInt: ${parse.error}`,
-          fatal: true,
-        });
-      } else {
-        return parse.data;
-      }
-    } else if (['bytes', 'BlueprintId', 'ContractId', 'TokenUid', 'TxOutputScript', 'VertexId'].includes(type)) {
-      const parse = z.string().regex(/[0-9A-Fa-f]+/g).transform(val => Buffer.from(val, 'hex')).safeParse(inputVal);
-      if (!parse.success) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Value is invalid ${type}: ${parse.error}`,
-          fatal: true,
-        });
-      } else {
-        return parse.data;
-      }
-    } else if (type === 'bool') {
-      const parse = z
-        .boolean()
-        .or(
-          z.union([z.literal('true'), z.literal('false')]).transform(val => val === 'true')
-        ).safeParse(inputVal);
-      if (!parse.success) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Value is invalid bool: ${parse.error}`,
-          fatal: true,
-        });
-      } else {
-        return parse.data;
-      }
-    } else if (['str', 'Address'].includes(type)) {
-      const parse = z.string().safeParse(inputVal);
-      if (!parse.success) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Value is invalid str: ${parse.error}`,
-          fatal: true,
-        });
-      } else {
-        return parse.data;
-      }
-    } else {
-      // No known types match the given type
+function refineSingleValue(
+  ctx: z.RefinementCtx,
+  inputVal: NanoContractArgumentApiInputType,
+  type: string
+) {
+  if (['int', 'Timestamp'].includes(type)) {
+    const parse = z.coerce.number().safeParse(inputVal);
+    if (!parse.success) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: `Type(${type}) is not supported as a 'single' type`,
+        message: `Value is invalid ${type}: ${parse.error}`,
         fatal: true,
       });
+    } else {
+      return parse.data;
     }
+  } else if (type === 'VarInt') {
+    const parse = z.coerce.bigint().safeParse(inputVal);
+    if (!parse.success) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Value is invalid VarInt: ${parse.error}`,
+        fatal: true,
+      });
+    } else {
+      return parse.data;
+    }
+  } else if (
+    ['bytes', 'BlueprintId', 'ContractId', 'TokenUid', 'TxOutputScript', 'VertexId'].includes(type)
+  ) {
+    const parse = z
+      .string()
+      .regex(/[0-9A-Fa-f]+/g)
+      .transform(val => Buffer.from(val, 'hex'))
+      .safeParse(inputVal);
+    if (!parse.success) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Value is invalid ${type}: ${parse.error}`,
+        fatal: true,
+      });
+    } else {
+      return parse.data;
+    }
+  } else if (type === 'bool') {
+    const parse = z
+      .boolean()
+      .or(z.union([z.literal('true'), z.literal('false')]).transform(val => val === 'true'))
+      .safeParse(inputVal);
+    if (!parse.success) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Value is invalid bool: ${parse.error}`,
+        fatal: true,
+      });
+    } else {
+      return parse.data;
+    }
+  } else if (['str', 'Address'].includes(type)) {
+    const parse = z.string().safeParse(inputVal);
+    if (!parse.success) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Value is invalid str: ${parse.error}`,
+        fatal: true,
+      });
+    } else {
+      return parse.data;
+    }
+  } else {
+    // No known types match the given type
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: `Type(${type}) is not supported as a 'single' type`,
+      fatal: true,
+    });
+  }
 
   // Meant to keep the typing correct
   return z.NEVER;
@@ -109,7 +118,7 @@ const SingleValueApiInputScheme = z
   ])
   .transform((value, ctx) => {
     return refineSingleValue(ctx, value[1], value[0]);
-  })
+  });
 
 /**
  * Type and value validation for Optional types.
@@ -124,11 +133,10 @@ const OptionalApiInputScheme = z
     const parse = z.null().safeParse(value[1]);
     if (parse.success) {
       return parse.data;
-    } else {
-      // value is not null, should transform based on the type
-      return refineSingleValue(ctx, value[1], value[0]);
     }
-  })
+    // value is not null, should transform based on the type
+    return refineSingleValue(ctx, value[1], value[0]);
+  });
 
 /**
  * Type and value validation for SignedData types.
@@ -136,19 +144,21 @@ const OptionalApiInputScheme = z
  */
 const SignedDataApiInputScheme = z
   .string()
-  .transform(value => (value.split(',')))
-  .pipe(z.tuple([
-    z.string().regex(/[0-9A-Fa-f]+/g),
-    z.string().regex(/[0-9A-Fa-f]+/g),
-    z.string(),
-    z.string(),
-  ]))
+  .transform(value => value.split(','))
+  .pipe(
+    z.tuple([
+      z.string().regex(/[0-9A-Fa-f]+/g),
+      z.string().regex(/[0-9A-Fa-f]+/g),
+      z.string(),
+      z.string(),
+    ])
+  )
   .transform((value, ctx) => {
     const signature = Buffer.from(value[0], 'hex');
     const ncID = Buffer.from(value[1], 'hex');
     const type = value[3];
     const refinedValue = refineSingleValue(ctx, value[2], type);
-    let ret: NanoContractSignedData = {
+    const ret: NanoContractSignedData = {
       signature,
       type,
       value: [ncID, refinedValue],
@@ -162,17 +172,13 @@ const SignedDataApiInputScheme = z
  */
 const RawSignedDataApiInputScheme = z
   .string()
-  .transform(value => (value.split(',')))
-  .pipe(z.tuple([
-    z.string().regex(/[0-9A-Fa-f]+/g),
-    z.string(),
-    z.string(),
-  ]))
+  .transform(value => value.split(','))
+  .pipe(z.tuple([z.string().regex(/[0-9A-Fa-f]+/g), z.string(), z.string()]))
   .transform((value, ctx) => {
     const signature = Buffer.from(value[0], 'hex');
     const type = value[2];
     const refinedValue = refineSingleValue(ctx, value[1], type);
-    let ret: NanoContractRawSignedData = {
+    const ret: NanoContractRawSignedData = {
       signature,
       type,
       value: refinedValue,
@@ -250,11 +256,13 @@ export class NanoContractMethodArgument {
           throw new Error();
         }
         return new NanoContractMethodArgument(name, type, data);
-      } else if (containerType === 'RawSignedData') {
+      }
+      if (containerType === 'RawSignedData') {
         // Parse string RawSignedData into NanoContractRawSignedData
         const data = RawSignedDataApiInputScheme.parse(value);
         return new NanoContractMethodArgument(name, type, data);
-      } else if (containerType === 'Optional') {
+      }
+      if (containerType === 'Optional') {
         const data = OptionalApiInputScheme.parse([innerType, value]);
         return new NanoContractMethodArgument(name, type, data);
       }
@@ -270,10 +278,16 @@ export class NanoContractMethodArgument {
   toApiInput(): NanoContractParsedArgument {
     function prepSingleValue(type: string, value: NanoContractArgumentSingleType) {
       if (type === 'bool') {
-          return (value as boolean) ? 'true' : 'false';
-      } else if (['bytes', 'BlueprintId', 'ContractId', 'TokenUid', 'TxOutputScript', 'VertexId'].includes(type)) {
-          return (value as Buffer).toString('hex');
-      } else if (type === 'VarInt') {
+        return (value as boolean) ? 'true' : 'false';
+      }
+      if (
+        ['bytes', 'BlueprintId', 'ContractId', 'TokenUid', 'TxOutputScript', 'VertexId'].includes(
+          type
+        )
+      ) {
+        return (value as Buffer).toString('hex');
+      }
+      if (type === 'VarInt') {
         return String(value as bigint);
       }
       return value;
@@ -309,7 +323,7 @@ export class NanoContractMethodArgument {
     return {
       name: this.name,
       type: this.type,
-      parsed: prepSingleValue(this.type, (this.value as NanoContractArgumentSingleType)),
+      parsed: prepSingleValue(this.type, this.value as NanoContractArgumentSingleType),
     };
   }
 }

@@ -191,10 +191,16 @@ describe('fromApiInput', () => {
   });
 
   it('should read bool values', () => {
-    expect(NanoContractMethodArgument.fromApiInput('a-test', 'bool', true))
-      .toMatchObject({ name: 'a-test', type: 'bool', value: true });
-    expect(NanoContractMethodArgument.fromApiInput('a-test', 'bool', false))
-      .toMatchObject({ name: 'a-test', type: 'bool', value: false });
+    expect(NanoContractMethodArgument.fromApiInput('a-test', 'bool', true)).toMatchObject({
+      name: 'a-test',
+      type: 'bool',
+      value: true,
+    });
+    expect(NanoContractMethodArgument.fromApiInput('a-test', 'bool', false)).toMatchObject({
+      name: 'a-test',
+      type: 'bool',
+      value: false,
+    });
   });
 
   it('should read ContractId values', () => {
@@ -222,8 +228,11 @@ describe('fromApiInput', () => {
     const arg = NanoContractMethodArgument.fromApiInput('a-test', 'Optional[int]', 300);
     expect(arg).toMatchObject({ name: 'a-test', type: 'Optional[int]', value: 300 });
 
-    expect(NanoContractMethodArgument.fromApiInput('a-test', 'Optional[int]', null))
-      .toMatchObject({ name: 'a-test', type: 'Optional[int]', value: null });
+    expect(NanoContractMethodArgument.fromApiInput('a-test', 'Optional[int]', null)).toMatchObject({
+      name: 'a-test',
+      type: 'Optional[int]',
+      value: null,
+    });
   });
 
   it('should read Optional[VarInt] values', () => {
@@ -232,48 +241,69 @@ describe('fromApiInput', () => {
   });
 
   it('should read Optional[bool] values', () => {
-    expect(NanoContractMethodArgument.fromApiInput('a-test', 'Optional[bool]', true))
-      .toMatchObject({ name: 'a-test', type: 'Optional[bool]', value: true });
-    expect(NanoContractMethodArgument.fromApiInput('a-test', 'Optional[bool]', false))
-      .toMatchObject({ name: 'a-test', type: 'Optional[bool]', value: false });
-    expect(NanoContractMethodArgument.fromApiInput('a-test', 'Optional[bool]', null))
-      .toMatchObject({ name: 'a-test', type: 'Optional[bool]', value: null });
+    expect(NanoContractMethodArgument.fromApiInput('a-test', 'Optional[bool]', true)).toMatchObject(
+      { name: 'a-test', type: 'Optional[bool]', value: true }
+    );
+    expect(
+      NanoContractMethodArgument.fromApiInput('a-test', 'Optional[bool]', false)
+    ).toMatchObject({ name: 'a-test', type: 'Optional[bool]', value: false });
+    expect(NanoContractMethodArgument.fromApiInput('a-test', 'Optional[bool]', null)).toMatchObject(
+      { name: 'a-test', type: 'Optional[bool]', value: null }
+    );
   });
 
   it('should read Optional[ContractId] values', () => {
-    const arg = NanoContractMethodArgument.fromApiInput('a-test', 'Optional[ContractId]', '74657374');
-    expect(arg).toMatchObject({ name: 'a-test', type: 'Optional[ContractId]', value: expect.anything() });
+    const arg = NanoContractMethodArgument.fromApiInput(
+      'a-test',
+      'Optional[ContractId]',
+      '74657374'
+    );
+    expect(arg).toMatchObject({
+      name: 'a-test',
+      type: 'Optional[ContractId]',
+      value: expect.anything(),
+    });
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
     expect(arg.value).toMatchBuffer(Buffer.from('74657374', 'hex'));
 
-    expect(NanoContractMethodArgument.fromApiInput('a-test', 'Optional[ContractId]', null))
-      .toMatchObject({ name: 'a-test', type: 'Optional[ContractId]', value: null });
+    expect(
+      NanoContractMethodArgument.fromApiInput('a-test', 'Optional[ContractId]', null)
+    ).toMatchObject({ name: 'a-test', type: 'Optional[ContractId]', value: null });
   });
 
   it('should read Optional[TokenUid] values', () => {
     const arg = NanoContractMethodArgument.fromApiInput('a-test', 'Optional[TokenUid]', '74657374');
-    expect(arg).toMatchObject({ name: 'a-test', type: 'Optional[TokenUid]', value: expect.anything() });
+    expect(arg).toMatchObject({
+      name: 'a-test',
+      type: 'Optional[TokenUid]',
+      value: expect.anything(),
+    });
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
     expect(arg.value).toMatchBuffer(Buffer.from('74657374', 'hex'));
 
-    expect(NanoContractMethodArgument.fromApiInput('a-test', 'Optional[TokenUid]', null))
-      .toMatchObject({ name: 'a-test', type: 'Optional[TokenUid]', value: null });
+    expect(
+      NanoContractMethodArgument.fromApiInput('a-test', 'Optional[TokenUid]', null)
+    ).toMatchObject({ name: 'a-test', type: 'Optional[TokenUid]', value: null });
   });
 
   it('should read Optional[Address] values', () => {
     const arg = NanoContractMethodArgument.fromApiInput('a-test', 'Optional[Address]', 'test');
     expect(arg).toMatchObject({ name: 'a-test', type: 'Optional[Address]', value: 'test' });
 
-    expect(NanoContractMethodArgument.fromApiInput('a-test', 'Optional[Address]', null))
-      .toMatchObject({ name: 'a-test', type: 'Optional[Address]', value: null });
+    expect(
+      NanoContractMethodArgument.fromApiInput('a-test', 'Optional[Address]', null)
+    ).toMatchObject({ name: 'a-test', type: 'Optional[Address]', value: null });
   });
 
   it('should read int? values', () => {
     const arg = NanoContractMethodArgument.fromApiInput('a-test', 'int?', 300);
     expect(arg).toMatchObject({ name: 'a-test', type: 'int?', value: 300 });
 
-    expect(NanoContractMethodArgument.fromApiInput('a-test', 'int?', null))
-      .toMatchObject({ name: 'a-test', type: 'int?', value: null });
+    expect(NanoContractMethodArgument.fromApiInput('a-test', 'int?', null)).toMatchObject({
+      name: 'a-test',
+      type: 'int?',
+      value: null,
+    });
   });
 
   it('should read VarInt? values', () => {
@@ -282,12 +312,21 @@ describe('fromApiInput', () => {
   });
 
   it('should read bool? values', () => {
-    expect(NanoContractMethodArgument.fromApiInput('a-test', 'bool?', true))
-      .toMatchObject({ name: 'a-test', type: 'bool?', value: true });
-    expect(NanoContractMethodArgument.fromApiInput('a-test', 'bool?', false))
-      .toMatchObject({ name: 'a-test', type: 'bool?', value: false });
-    expect(NanoContractMethodArgument.fromApiInput('a-test', 'bool?', null))
-      .toMatchObject({ name: 'a-test', type: 'bool?', value: null });
+    expect(NanoContractMethodArgument.fromApiInput('a-test', 'bool?', true)).toMatchObject({
+      name: 'a-test',
+      type: 'bool?',
+      value: true,
+    });
+    expect(NanoContractMethodArgument.fromApiInput('a-test', 'bool?', false)).toMatchObject({
+      name: 'a-test',
+      type: 'bool?',
+      value: false,
+    });
+    expect(NanoContractMethodArgument.fromApiInput('a-test', 'bool?', null)).toMatchObject({
+      name: 'a-test',
+      type: 'bool?',
+      value: null,
+    });
   });
 
   it('should read ContractId? values', () => {
@@ -296,8 +335,11 @@ describe('fromApiInput', () => {
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
     expect(arg.value).toMatchBuffer(Buffer.from('74657374', 'hex'));
 
-    expect(NanoContractMethodArgument.fromApiInput('a-test', 'ContractId?', null))
-      .toMatchObject({ name: 'a-test', type: 'ContractId?', value: null });
+    expect(NanoContractMethodArgument.fromApiInput('a-test', 'ContractId?', null)).toMatchObject({
+      name: 'a-test',
+      type: 'ContractId?',
+      value: null,
+    });
   });
 
   it('should read TokenUid? values', () => {
@@ -306,15 +348,21 @@ describe('fromApiInput', () => {
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
     expect(arg.value).toMatchBuffer(Buffer.from('74657374', 'hex'));
 
-    expect(NanoContractMethodArgument.fromApiInput('a-test', 'TokenUid?', null))
-      .toMatchObject({ name: 'a-test', type: 'TokenUid?', value: null });
+    expect(NanoContractMethodArgument.fromApiInput('a-test', 'TokenUid?', null)).toMatchObject({
+      name: 'a-test',
+      type: 'TokenUid?',
+      value: null,
+    });
   });
 
   it('should read Address? values', () => {
     const arg = NanoContractMethodArgument.fromApiInput('a-test', 'Address?', 'test');
     expect(arg).toMatchObject({ name: 'a-test', type: 'Address?', value: 'test' });
 
-    expect(NanoContractMethodArgument.fromApiInput('a-test', 'Address?', null))
-      .toMatchObject({ name: 'a-test', type: 'Address?', value: null });
+    expect(NanoContractMethodArgument.fromApiInput('a-test', 'Address?', null)).toMatchObject({
+      name: 'a-test',
+      type: 'Address?',
+      value: null,
+    });
   });
 });

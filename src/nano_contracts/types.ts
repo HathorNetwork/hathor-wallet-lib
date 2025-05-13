@@ -92,7 +92,9 @@ export const NanoContractArgumentSingleTypeNameSchema = z.enum([
   'VarInt',
   'VertexId',
 ]);
-export type NanoContractArgumentSingleTypeName = z.output<typeof NanoContractArgumentSingleTypeNameSchema>;
+export type NanoContractArgumentSingleTypeName = z.output<
+  typeof NanoContractArgumentSingleTypeNameSchema
+>;
 
 /**
  * Container type names
@@ -103,7 +105,9 @@ export const NanoContractArgumentContainerTypeNameSchema = z.enum([
   'RawSignedData',
   'Tuple',
 ]);
-export type NanoContractArgumentContainerType = z.output<typeof NanoContractArgumentContainerTypeNameSchema>;
+export type NanoContractArgumentContainerType = z.output<
+  typeof NanoContractArgumentContainerTypeNameSchema
+>;
 
 export enum NanoContractActionType {
   DEPOSIT = 'deposit',
