@@ -353,7 +353,11 @@ class NanoContractTransactionBuilder {
       }
 
       for (const [index, arg] of methodArgs.entries()) {
-        const methodArg = NanoContractMethodArgument.fromApiInput(arg.name, arg.type, this.args[index]);
+        const methodArg = NanoContractMethodArgument.fromApiInput(
+          arg.name,
+          arg.type,
+          this.args[index]
+        );
         const serialized = methodArg.serialize(serializer);
         serializedArgs.push(serialized);
       }

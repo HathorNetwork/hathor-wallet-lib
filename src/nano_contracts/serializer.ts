@@ -8,7 +8,11 @@
 import Address from '../models/address';
 import Network from '../models/network';
 import { signedIntToBytes, bigIntToBytes } from '../utils/buffer';
-import { NanoContractArgumentType, NanoContractRawSignedData, NanoContractSignedData } from './types';
+import {
+  NanoContractArgumentType,
+  NanoContractRawSignedData,
+  NanoContractSignedData,
+} from './types';
 import { OutputValueType } from '../types';
 import leb128Util from '../utils/leb128';
 import { getContainerInternalType, getContainerType } from './utils';
@@ -231,7 +235,6 @@ class Serializer {
 
     return Buffer.concat(ret);
   }
-
 
   /**
    * Serialize a signed value

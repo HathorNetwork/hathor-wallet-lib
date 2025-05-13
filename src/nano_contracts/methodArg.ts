@@ -73,18 +73,22 @@ export class NanoContractMethodArgument {
    *
    * While the value should be the NanoContractRawSignedDataSchema
    */
-  static fromApiInput(name: string, type: string, value: NanoContractArgumentApiInputType): NanoContractMethodArgument {
+  static fromApiInput(
+    name: string,
+    type: string,
+    value: NanoContractArgumentApiInputType
+  ): NanoContractMethodArgument {
     const isContainerType = getContainerType(type) !== null;
     if (isContainerType) {
       const [containerType, innerType] = getContainerInternalType(type);
       if (containerType === 'SignedData') {
         // Parse string SignedData into NanoContractSignedData
         const splittedValue = (value as string).split(',');
-        if (splittedValue.length != 4) {
+        if (splittedValue.length !== 4) {
           throw new Error();
         }
         const [signature, ncId, val, valType] = splittedValue;
-        if (valType.trim() != innerType.trim()) {
+        if (valType.trim() !== innerType.trim()) {
           throw new Error();
         }
 
@@ -107,16 +111,17 @@ export class NanoContractMethodArgument {
           type: innerType,
           value: [Buffer.from(ncId, 'hex'), finalValue],
           signature: Buffer.from(signature, 'hex'),
-        }
+        };
         return new NanoContractMethodArgument(name, type, data);
-      } else if (containerType === 'RawSignedData') {
+      }
+      if (containerType === 'RawSignedData') {
         // Parse string RawSignedData into NanoContractRawSignedData
         const splittedValue = (value as string).split(',');
-        if (splittedValue.length != 3) {
+        if (splittedValue.length !== 3) {
           throw new Error();
         }
         const [signature, val, valType] = splittedValue;
-        if (valType.trim() != innerType.trim()) {
+        if (valType.trim() !== innerType.trim()) {
           throw new Error();
         }
 
@@ -127,19 +132,19 @@ export class NanoContractMethodArgument {
           // If the result is expected as boolean, it will come here as a string true/false
           finalValue = val === 'true';
         } else if (innerType === 'int') {
-          value = Number.parseInt(val, 10);
+          finalValue = Number.parseInt(val, 10);
         } else if (innerType === 'VarInt') {
-          value = BigInt(val);
+          finalValue = BigInt(val);
         } else {
           // For the other types
-          value = val;
+          finalValue = val;
         }
 
         const data: NanoContractRawSignedData = {
           type: innerType,
           value: finalValue,
           signature: Buffer.from(signature, 'hex'),
-        }
+        };
         return new NanoContractMethodArgument(name, type, data);
       }
       // XXX: Should we have a special case for Optional, Tuple?

@@ -12,7 +12,7 @@ import Deserializer from './deserializer';
 import ncApi from '../api/nano';
 import { getAddressFromPubkey } from '../utils/address';
 import { NanoContractTransactionParseError } from '../errors';
-import { MethodArgInfo, NanoContractArgumentType, NanoContractParsedArgument } from './types';
+import { MethodArgInfo } from './types';
 import leb128 from '../utils/leb128';
 import { NanoContractMethodArgument } from './methodArg';
 
@@ -108,7 +108,6 @@ class NanoContractTransactionParser {
         parsed = parseResult.value;
         size = parseResult.bytesRead;
       } catch (err: unknown) {
-        console.error(err);
         throw new NanoContractTransactionParseError(`Failed to deserialize argument ${arg.type}.`);
       }
       parsedArgs.push(parsed);

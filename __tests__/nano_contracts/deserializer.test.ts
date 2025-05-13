@@ -235,7 +235,9 @@ test('SignedData', () => {
 
   expect((deserializedBytes as NanoContractSignedData).type).toEqual(valueBytes.type);
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect((deserializedBytes as NanoContractSignedData).signature).toMatchBuffer(valueBytes.signature);
+  expect((deserializedBytes as NanoContractSignedData).signature).toMatchBuffer(
+    valueBytes.signature
+  );
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   expect((deserializedBytes as NanoContractSignedData).value[0]).toMatchBuffer(valueBytes.value[0]);
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
@@ -254,10 +256,16 @@ test('SignedData', () => {
 
   expect((deserializedBoolFalse as NanoContractSignedData).type).toEqual(valueBoolFalse.type);
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect((deserializedBoolFalse as NanoContractSignedData).signature).toMatchBuffer(valueBoolFalse.signature);
+  expect((deserializedBoolFalse as NanoContractSignedData).signature).toMatchBuffer(
+    valueBoolFalse.signature
+  );
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect((deserializedBoolFalse as NanoContractSignedData).value[0]).toMatchBuffer(valueBoolFalse.value[0]);
-  expect((deserializedBoolFalse as NanoContractSignedData).value[1]).toEqual(valueBoolFalse.value[1]);
+  expect((deserializedBoolFalse as NanoContractSignedData).value[0]).toMatchBuffer(
+    valueBoolFalse.value[0]
+  );
+  expect((deserializedBoolFalse as NanoContractSignedData).value[1]).toEqual(
+    valueBoolFalse.value[1]
+  );
 
   const valueBoolTrue: NanoContractSignedData = {
     type: 'bool',
@@ -272,9 +280,13 @@ test('SignedData', () => {
 
   expect((deserializedBoolTrue as NanoContractSignedData).type).toEqual(valueBoolTrue.type);
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect((deserializedBoolTrue as NanoContractSignedData).signature).toMatchBuffer(valueBoolTrue.signature);
+  expect((deserializedBoolTrue as NanoContractSignedData).signature).toMatchBuffer(
+    valueBoolTrue.signature
+  );
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect((deserializedBoolTrue as NanoContractSignedData).value[0]).toMatchBuffer(valueBoolTrue.value[0]);
+  expect((deserializedBoolTrue as NanoContractSignedData).value[0]).toMatchBuffer(
+    valueBoolTrue.value[0]
+  );
   expect((deserializedBoolTrue as NanoContractSignedData).value[1]).toEqual(valueBoolTrue.value[1]);
 
   const valueVarInt: NanoContractSignedData = {
@@ -290,9 +302,13 @@ test('SignedData', () => {
 
   expect((deserializedVarInt as NanoContractSignedData).type).toEqual(valueVarInt.type);
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect((deserializedVarInt as NanoContractSignedData).signature).toMatchBuffer(valueVarInt.signature);
+  expect((deserializedVarInt as NanoContractSignedData).signature).toMatchBuffer(
+    valueVarInt.signature
+  );
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect((deserializedVarInt as NanoContractSignedData).value[0]).toMatchBuffer(valueVarInt.value[0]);
+  expect((deserializedVarInt as NanoContractSignedData).value[0]).toMatchBuffer(
+    valueVarInt.value[0]
+  );
   expect((deserializedVarInt as NanoContractSignedData).value[1]).toEqual(valueVarInt.value[1]);
 });
 
@@ -305,19 +321,22 @@ test('Address', () => {
 
   const { value: deserialized } = deserializer.deserializeFromType(
     Buffer.concat([leb128.encodeUnsigned(addressBuffer.length), addressBuffer]),
-    'Address');
+    'Address'
+  );
   expect(deserialized).toBe(address);
 
   const wrongNetworkAddress = 'HDeadDeadDeadDeadDeadDeadDeagTPgmn';
   const wrongNetworkAddressBuffer = new Address(wrongNetworkAddress).decode();
 
-  expect(() => deserializer.deserializeFromType(
-    Buffer.concat([
-      leb128.encodeUnsigned(wrongNetworkAddressBuffer.length),
-      wrongNetworkAddressBuffer,
-    ]),
-    'Address',
-  )).toThrow();
+  expect(() =>
+    deserializer.deserializeFromType(
+      Buffer.concat([
+        leb128.encodeUnsigned(wrongNetworkAddressBuffer.length),
+        wrongNetworkAddressBuffer,
+      ]),
+      'Address'
+    )
+  ).toThrow();
 });
 
 test('VarInt', () => {

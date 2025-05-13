@@ -364,7 +364,7 @@ class Deserializer {
    * @memberof Deserializer
    * @inner
    */
-  toTuple(buf: Buffer, type: string): BufferROExtract<Array<any>> {
+  toTuple(buf: Buffer, type: string): BufferROExtract<Array<unknown>> {
     const typeArr = type.split(',').map(s => s.trim());
     const tupleValues: NanoContractArgumentType[] = [];
     let bytesReadTotal = 0;

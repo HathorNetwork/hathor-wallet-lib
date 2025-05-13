@@ -89,78 +89,92 @@ test('Optional', () => {
 
 test('SignedData', () => {
   const serializer = new Serializer(new Network('testnet'));
-  expect(serializer.fromSignedData(
-    {
-      signature: Buffer.from('74657374', 'hex'),
-      type: 'int',
-      value: [Buffer.from('6e634944', 'hex'), 300],
-    },
-    'int',
-  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  )).toMatchBuffer(
+  expect(
+    serializer.fromSignedData(
+      {
+        signature: Buffer.from('74657374', 'hex'),
+        type: 'int',
+        value: [Buffer.from('6e634944', 'hex'), 300],
+      },
+      'int'
+      // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+    )
+  ).toMatchBuffer(
     // 4 + ncId + value + 4 + test
-    Buffer.from([0x04, 0x6e, 0x63, 0x49, 0x44, 0x00, 0x00, 0x01, 0x2c, 0x04, 0x74, 0x65, 0x73, 0x74])
+    Buffer.from([
+      0x04, 0x6e, 0x63, 0x49, 0x44, 0x00, 0x00, 0x01, 0x2c, 0x04, 0x74, 0x65, 0x73, 0x74,
+    ])
   );
 
-  expect(serializer.fromSignedData(
-    {
-      signature: Buffer.from('74657374', 'hex'),
-      type: 'VarInt',
-      value: [Buffer.from('6e634944', 'hex'), 300n],
-    },
-    'VarInt',
-  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  )).toMatchBuffer(
+  expect(
+    serializer.fromSignedData(
+      {
+        signature: Buffer.from('74657374', 'hex'),
+        type: 'VarInt',
+        value: [Buffer.from('6e634944', 'hex'), 300n],
+      },
+      'VarInt'
+      // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+    )
+  ).toMatchBuffer(
     Buffer.from([0x04, 0x6e, 0x63, 0x49, 0x44, 0xac, 0x02, 0x04, 0x74, 0x65, 0x73, 0x74])
   );
 
-  expect(serializer.fromSignedData(
-    {
-      signature: Buffer.from('74657374', 'hex'),
-      type: 'str',
-      value: [Buffer.from('6e634944', 'hex'), 'test'],
-    },
-    'str',
-  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  )).toMatchBuffer(
-    Buffer.from([0x04, 0x6e, 0x63, 0x49, 0x44, 0x04, 0x74, 0x65, 0x73, 0x74, 0x04, 0x74, 0x65, 0x73, 0x74])
+  expect(
+    serializer.fromSignedData(
+      {
+        signature: Buffer.from('74657374', 'hex'),
+        type: 'str',
+        value: [Buffer.from('6e634944', 'hex'), 'test'],
+      },
+      'str'
+      // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+    )
+  ).toMatchBuffer(
+    Buffer.from([
+      0x04, 0x6e, 0x63, 0x49, 0x44, 0x04, 0x74, 0x65, 0x73, 0x74, 0x04, 0x74, 0x65, 0x73, 0x74,
+    ])
   );
 
-  expect(serializer.fromSignedData(
-    {
-      signature: Buffer.from('74657374', 'hex'),
-      type: 'bytes',
-      value: [Buffer.from('6e634944', 'hex'), Buffer.from('74657374', 'hex')],
-    },
-    'bytes',
-  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  )).toMatchBuffer(
-    Buffer.from([0x04, 0x6e, 0x63, 0x49, 0x44, 0x04, 0x74, 0x65, 0x73, 0x74, 0x04, 0x74, 0x65, 0x73, 0x74])
+  expect(
+    serializer.fromSignedData(
+      {
+        signature: Buffer.from('74657374', 'hex'),
+        type: 'bytes',
+        value: [Buffer.from('6e634944', 'hex'), Buffer.from('74657374', 'hex')],
+      },
+      'bytes'
+      // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+    )
+  ).toMatchBuffer(
+    Buffer.from([
+      0x04, 0x6e, 0x63, 0x49, 0x44, 0x04, 0x74, 0x65, 0x73, 0x74, 0x04, 0x74, 0x65, 0x73, 0x74,
+    ])
   );
 
-  expect(serializer.fromSignedData(
-    {
-      signature: Buffer.from('74657374', 'hex'),
-      type: 'bool',
-      value: [Buffer.from('6e634944', 'hex'), false],
-    },
-    'bool',
-  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  )).toMatchBuffer(
-    Buffer.from([0x04, 0x6e, 0x63, 0x49, 0x44, 0x00, 0x04, 0x74, 0x65, 0x73, 0x74])
-  );
+  expect(
+    serializer.fromSignedData(
+      {
+        signature: Buffer.from('74657374', 'hex'),
+        type: 'bool',
+        value: [Buffer.from('6e634944', 'hex'), false],
+      },
+      'bool'
+      // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+    )
+  ).toMatchBuffer(Buffer.from([0x04, 0x6e, 0x63, 0x49, 0x44, 0x00, 0x04, 0x74, 0x65, 0x73, 0x74]));
 
-  expect(serializer.fromSignedData(
-    {
-      signature: Buffer.from('74657374', 'hex'),
-      type: 'bool',
-      value: [Buffer.from('6e634944', 'hex'), true],
-    },
-    'bool',
-  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  )).toMatchBuffer(
-    Buffer.from([0x04, 0x6e, 0x63, 0x49, 0x44, 0x01, 0x04, 0x74, 0x65, 0x73, 0x74])
-  );
+  expect(
+    serializer.fromSignedData(
+      {
+        signature: Buffer.from('74657374', 'hex'),
+        type: 'bool',
+        value: [Buffer.from('6e634944', 'hex'), true],
+      },
+      'bool'
+      // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+    )
+  ).toMatchBuffer(Buffer.from([0x04, 0x6e, 0x63, 0x49, 0x44, 0x01, 0x04, 0x74, 0x65, 0x73, 0x74]));
 });
 
 test('VarInt', () => {

@@ -4,8 +4,8 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-import { IHistoryTx, OutputValueType } from '../types';
 import { z } from 'zod';
+import { IHistoryTx, OutputValueType } from '../types';
 
 /**
  * There are the types that can be received via api
@@ -24,7 +24,10 @@ export type NanoContractArgumentApiInputType = z.output<typeof NanoContractArgum
  * These are the possible `Single` types after parsing
  * We include Buffer since some types are decoded as Buffer (e.g. bytes, TokenUid, ContractId)
  */
-export const NanoContractArgumentSingleSchema = z.union([NanoContractArgumentApiInputSchema, z.instanceof(Buffer)]);
+export const NanoContractArgumentSingleSchema = z.union([
+  NanoContractArgumentApiInputSchema,
+  z.instanceof(Buffer),
+]);
 export type NanoContractArgumentSingleType = z.output<typeof NanoContractArgumentSingleSchema>;
 
 /**
@@ -57,12 +60,19 @@ export type NanoContractRawSignedData = z.output<typeof NanoContractRawSignedDat
  * Intermediate schema for all possible Nano contract argument type
  * that do not include tuple/arrays/repetition
  */
-const _NanoContractArgumentType1Schema = z.union([NanoContractArgumentSingleSchema, NanoContractSignedDataSchema, NanoContractRawSignedDataSchema])
+const _NanoContractArgumentType1Schema = z.union([
+  NanoContractArgumentSingleSchema,
+  NanoContractSignedDataSchema,
+  NanoContractRawSignedDataSchema,
+]);
 
 /**
  * Nano Contract method argument type as a native TS type
  */
-export const NanoContractArgumentSchema = z.union([_NanoContractArgumentType1Schema, z.array(_NanoContractArgumentType1Schema)]);
+export const NanoContractArgumentSchema = z.union([
+  _NanoContractArgumentType1Schema,
+  z.array(_NanoContractArgumentType1Schema),
+]);
 export type NanoContractArgumentType = z.output<typeof NanoContractArgumentSchema>;
 
 /**
@@ -195,7 +205,7 @@ export interface NanoContractStateAPIParameters {
   block_height?: number;
 }
 
-export type BufferROExtract<T = any> = {
+export type BufferROExtract<T = unknown> = {
   value: T;
   bytesRead: number;
 };
