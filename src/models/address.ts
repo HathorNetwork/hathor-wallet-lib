@@ -99,7 +99,7 @@ class Address {
     }
 
     if (skipNetwork) {
-      return true
+      return true;
     }
 
     // Validate version byte. Should be the p2pkh or p2sh

@@ -218,8 +218,16 @@ describe('fromApiInput', () => {
   });
 
   it('should read Address values', () => {
-    const arg = NanoContractMethodArgument.fromApiInput('a-test', 'Address', 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo');
-    expect(arg).toMatchObject({ name: 'a-test', type: 'Address', value: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo' });
+    const arg = NanoContractMethodArgument.fromApiInput(
+      'a-test',
+      'Address',
+      'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo'
+    );
+    expect(arg).toMatchObject({
+      name: 'a-test',
+      type: 'Address',
+      value: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo',
+    });
   });
 
   // Optional
@@ -287,8 +295,16 @@ describe('fromApiInput', () => {
   });
 
   it('should read Optional[Address] values', () => {
-    const arg = NanoContractMethodArgument.fromApiInput('a-test', 'Optional[Address]', 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo');
-    expect(arg).toMatchObject({ name: 'a-test', type: 'Optional[Address]', value: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo' });
+    const arg = NanoContractMethodArgument.fromApiInput(
+      'a-test',
+      'Optional[Address]',
+      'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo'
+    );
+    expect(arg).toMatchObject({
+      name: 'a-test',
+      type: 'Optional[Address]',
+      value: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo',
+    });
 
     expect(
       NanoContractMethodArgument.fromApiInput('a-test', 'Optional[Address]', null)
@@ -356,8 +372,16 @@ describe('fromApiInput', () => {
   });
 
   it('should read Address? values', () => {
-    const arg = NanoContractMethodArgument.fromApiInput('a-test', 'Address?', 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo');
-    expect(arg).toMatchObject({ name: 'a-test', type: 'Address?', value: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo' });
+    const arg = NanoContractMethodArgument.fromApiInput(
+      'a-test',
+      'Address?',
+      'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo'
+    );
+    expect(arg).toMatchObject({
+      name: 'a-test',
+      type: 'Address?',
+      value: 'WZ7pDnkPnxbs14GHdUFivFzPbzitwNtvZo',
+    });
 
     expect(NanoContractMethodArgument.fromApiInput('a-test', 'Address?', null)).toMatchObject({
       name: 'a-test',
