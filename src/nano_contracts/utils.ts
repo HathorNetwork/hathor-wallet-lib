@@ -49,6 +49,7 @@ export function getContainerInternalType(
     case 'Tuple':
     case 'SignedData':
     case 'RawSignedData':
+    case 'Optional':
       return [containerType, internalType];
     default:
       throw new Error('Not a ContainerType');

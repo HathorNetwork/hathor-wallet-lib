@@ -76,13 +76,34 @@ export const NanoContractArgumentSchema = z.union([
 export type NanoContractArgumentType = z.output<typeof NanoContractArgumentSchema>;
 
 /**
+ * Single type names
+ */
+export const NanoContractArgumentSingleTypeNameSchema = z.enum([
+  'bool',
+  'bytes',
+  'int',
+  'str',
+  'Address',
+  'BlueprintId',
+  'ContractId',
+  'Timestamp',
+  'TokenUid',
+  'TxOutputScript',
+  'VarInt',
+  'VertexId',
+]);
+export type NanoContractArgumentSingleTypeName = z.output<typeof NanoContractArgumentSingleTypeNameSchema>;
+
+/**
  * Container type names
  */
-export type NanoContractArgumentContainerType =
-  | 'Optional'
-  | 'SignedData'
-  | 'RawSignedData'
-  | 'Tuple';
+export const NanoContractArgumentContainerTypeNameSchema = z.enum([
+  'Optional',
+  'SignedData',
+  'RawSignedData',
+  'Tuple',
+]);
+export type NanoContractArgumentContainerType = z.output<typeof NanoContractArgumentContainerTypeNameSchema>;
 
 export enum NanoContractActionType {
   DEPOSIT = 'deposit',

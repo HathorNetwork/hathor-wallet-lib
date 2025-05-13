@@ -13,10 +13,172 @@ import {
   NanoContractSignedData,
   BufferROExtract,
   NanoContractArgumentApiInputType,
+  NanoContractArgumentApiInputSchema,
 } from './types';
 import Serializer from './serializer';
 import Deserializer from './deserializer';
 import { getContainerInternalType, getContainerType } from './utils';
+import { z } from 'zod';
+
+/**
+ * Refinement method meant to validate, parse and return the transformed type.
+ * User input will be parsed, validated and converted to the actual internal TS type.
+ * Issues are added to the context so zod can show parse errors safely.
+ */
+function refineSingleValue(ctx: z.RefinementCtx, inputVal: NanoContractArgumentApiInputType, type: string) {
+    if (['int', 'Timestamp'].includes(type)) {
+      const parse = z.coerce.number().safeParse(inputVal);
+      if (!parse.success) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Value is invalid ${type}: ${parse.error}`,
+          fatal: true,
+        });
+      } else {
+        return parse.data;
+      }
+    } else if (type === 'VarInt') {
+      const parse = z.coerce.bigint().safeParse(inputVal);
+      if (!parse.success) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Value is invalid VarInt: ${parse.error}`,
+          fatal: true,
+        });
+      } else {
+        return parse.data;
+      }
+    } else if (['bytes', 'BlueprintId', 'ContractId', 'TokenUid', 'TxOutputScript', 'VertexId'].includes(type)) {
+      const parse = z.string().regex(/[0-9A-Fa-f]+/g).transform(val => Buffer.from(val, 'hex')).safeParse(inputVal);
+      if (!parse.success) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Value is invalid ${type}: ${parse.error}`,
+          fatal: true,
+        });
+      } else {
+        return parse.data;
+      }
+    } else if (type === 'bool') {
+      const parse = z
+        .boolean()
+        .or(
+          z.union([z.literal('true'), z.literal('false')]).transform(val => val === 'true')
+        ).safeParse(inputVal);
+      if (!parse.success) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Value is invalid bool: ${parse.error}`,
+          fatal: true,
+        });
+      } else {
+        return parse.data;
+      }
+    } else if (['str', 'Address'].includes(type)) {
+      const parse = z.string().safeParse(inputVal);
+      if (!parse.success) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Value is invalid str: ${parse.error}`,
+          fatal: true,
+        });
+      } else {
+        return parse.data;
+      }
+    } else {
+      // No known types match the given type
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Type(${type}) is not supported as a 'single' type`,
+        fatal: true,
+      });
+    }
+
+  // Meant to keep the typing correct
+  return z.NEVER;
+}
+
+/**
+ * Type and value validation for non-container types.
+ * Returns the internal TS type for the argument given.
+ */
+const SingleValueApiInputScheme = z
+  .tuple([
+    z.string(), // type
+    NanoContractArgumentApiInputSchema, // value
+  ])
+  .transform((value, ctx) => {
+    return refineSingleValue(ctx, value[1], value[0]);
+  })
+
+/**
+ * Type and value validation for Optional types.
+ * Returns the internal TS type for the argument given.
+ */
+const OptionalApiInputScheme = z
+  .tuple([
+    z.string(), // Inner type
+    NanoContractArgumentApiInputSchema, // value
+  ])
+  .transform((value, ctx) => {
+    const parse = z.null().safeParse(value[1]);
+    if (parse.success) {
+      return parse.data;
+    } else {
+      // value is not null, should transform based on the type
+      return refineSingleValue(ctx, value[1], value[0]);
+    }
+  })
+
+/**
+ * Type and value validation for SignedData types.
+ * returns an instance of NanoContractSignedData
+ */
+const SignedDataApiInputScheme = z
+  .string()
+  .transform(value => (value.split(',')))
+  .pipe(z.tuple([
+    z.string().regex(/[0-9A-Fa-f]+/g),
+    z.string().regex(/[0-9A-Fa-f]+/g),
+    z.string(),
+    z.string(),
+  ]))
+  .transform((value, ctx) => {
+    const signature = Buffer.from(value[0], 'hex');
+    const ncID = Buffer.from(value[1], 'hex');
+    const type = value[3];
+    const refinedValue = refineSingleValue(ctx, value[2], type);
+    let ret: NanoContractSignedData = {
+      signature,
+      type,
+      value: [ncID, refinedValue],
+    };
+    return ret;
+  });
+
+/**
+ * Type and value validation for RawSignedData types.
+ * returns an instance of NanoContractRawSignedData
+ */
+const RawSignedDataApiInputScheme = z
+  .string()
+  .transform(value => (value.split(',')))
+  .pipe(z.tuple([
+    z.string().regex(/[0-9A-Fa-f]+/g),
+    z.string(),
+    z.string(),
+  ]))
+  .transform((value, ctx) => {
+    const signature = Buffer.from(value[0], 'hex');
+    const type = value[2];
+    const refinedValue = refineSingleValue(ctx, value[1], type);
+    let ret: NanoContractRawSignedData = {
+      signature,
+      type,
+      value: refinedValue,
+    };
+    return ret;
+  });
 
 export class NanoContractMethodArgument {
   name: string;
@@ -83,86 +245,38 @@ export class NanoContractMethodArgument {
       const [containerType, innerType] = getContainerInternalType(type);
       if (containerType === 'SignedData') {
         // Parse string SignedData into NanoContractSignedData
-        const splittedValue = (value as string).split(',');
-        if (splittedValue.length !== 4) {
+        const data = SignedDataApiInputScheme.parse(value);
+        if (data.type !== innerType.trim()) {
           throw new Error();
         }
-        const [signature, ncId, val, valType] = splittedValue;
-        if (valType.trim() !== innerType.trim()) {
-          throw new Error();
-        }
-
-        let finalValue: NanoContractArgumentSingleType = val;
-        if (innerType === 'bytes') {
-          finalValue = Buffer.from(val, 'hex');
-        } else if (innerType === 'bool') {
-          // If the result is expected as boolean, it will come here as a string true/false
-          finalValue = val === 'true';
-        } else if (innerType === 'int') {
-          finalValue = Number.parseInt(val, 10);
-        } else if (innerType === 'VarInt') {
-          finalValue = BigInt(val);
-        } else {
-          // For the other types
-          finalValue = val;
-        }
-
-        const data: NanoContractSignedData = {
-          type: innerType,
-          value: [Buffer.from(ncId, 'hex'), finalValue],
-          signature: Buffer.from(signature, 'hex'),
-        };
         return new NanoContractMethodArgument(name, type, data);
-      }
-      if (containerType === 'RawSignedData') {
+      } else if (containerType === 'RawSignedData') {
         // Parse string RawSignedData into NanoContractRawSignedData
-        const splittedValue = (value as string).split(',');
-        if (splittedValue.length !== 3) {
-          throw new Error();
-        }
-        const [signature, val, valType] = splittedValue;
-        if (valType.trim() !== innerType.trim()) {
-          throw new Error();
-        }
-
-        let finalValue: NanoContractArgumentSingleType = val;
-        if (innerType === 'bytes') {
-          finalValue = Buffer.from(val, 'hex');
-        } else if (innerType === 'bool') {
-          // If the result is expected as boolean, it will come here as a string true/false
-          finalValue = val === 'true';
-        } else if (innerType === 'int') {
-          finalValue = Number.parseInt(val, 10);
-        } else if (innerType === 'VarInt') {
-          finalValue = BigInt(val);
-        } else {
-          // For the other types
-          finalValue = val;
-        }
-
-        const data: NanoContractRawSignedData = {
-          type: innerType,
-          value: finalValue,
-          signature: Buffer.from(signature, 'hex'),
-        };
+        const data = RawSignedDataApiInputScheme.parse(value);
+        return new NanoContractMethodArgument(name, type, data);
+      } else if (containerType === 'Optional') {
+        const data = OptionalApiInputScheme.parse([innerType, value]);
         return new NanoContractMethodArgument(name, type, data);
       }
-      // XXX: Should we have a special case for Optional, Tuple?
-    }
+      // XXX: add special case for Tuple
 
-    return new NanoContractMethodArgument(name, type, value);
+      throw new Error(`ContainerType(${containerType}) is not supported as api input.`);
+    }
+    // This is a single value type and should
+    const data = SingleValueApiInputScheme.parse([type, value]);
+    return new NanoContractMethodArgument(name, type, data);
   }
 
   toApiInput(): NanoContractParsedArgument {
     function prepSingleValue(type: string, value: NanoContractArgumentSingleType) {
-      switch (type) {
-        case 'bytes':
-          return (value as Buffer).toString('hex');
-        case 'bool':
+      if (type === 'bool') {
           return (value as boolean) ? 'true' : 'false';
-        default:
-          return value;
+      } else if (['bytes', 'BlueprintId', 'ContractId', 'TokenUid', 'TxOutputScript', 'VertexId'].includes(type)) {
+          return (value as Buffer).toString('hex');
+      } else if (type === 'VarInt') {
+        return String(value as bigint);
       }
+      return value;
     }
 
     if (this.type.startsWith('SignedData')) {
@@ -195,7 +309,7 @@ export class NanoContractMethodArgument {
     return {
       name: this.name,
       type: this.type,
-      parsed: this.value,
+      parsed: prepSingleValue(this.type, (this.value as NanoContractArgumentSingleType)),
     };
   }
 }
