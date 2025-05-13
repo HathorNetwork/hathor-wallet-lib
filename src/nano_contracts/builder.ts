@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { concat, get } from 'lodash';
+import { concat } from 'lodash';
 import Output from '../models/output';
 import Input from '../models/input';
 import Transaction from '../models/transaction';
@@ -20,15 +20,12 @@ import {
   NanoContractActionHeader,
   NanoContractActionType,
   NanoContractAction,
-  MethodArgInfo,
   NanoContractArgumentApiInputType,
 } from './types';
 import { ITokenData } from '../types';
-import ncApi from '../api/nano';
-import { validateAndUpdateBlueprintMethodArgs } from './utils';
+import { validateAndParseBlueprintMethodArgs } from './utils';
 import NanoContractHeader from './header';
 import leb128 from '../utils/leb128';
-import { NanoContractMethodArgument } from './methodArg';
 
 class NanoContractTransactionBuilder {
   blueprintId: string | null | undefined;
@@ -302,7 +299,11 @@ class NanoContractTransactionBuilder {
     }
 
     // Validate if the arguments match the expected method arguments
-    await validateAndUpdateBlueprintMethodArgs(this.blueprintId, this.method, this.args);
+    const parsedArgs = await validateAndParseBlueprintMethodArgs(
+      this.blueprintId,
+      this.method,
+      this.args
+    );
 
     // Transform actions into inputs and outputs
     let inputs: Input[] = [];
@@ -333,33 +334,11 @@ class NanoContractTransactionBuilder {
     }
 
     // Serialize the method arguments
-    const serializedArgs: Buffer[] = [leb128.encodeUnsigned(this.args?.length ?? 0)];
-    if (this.args) {
+    const serializedArgs: Buffer[] = [leb128.encodeUnsigned(parsedArgs?.length ?? 0)];
+    if (parsedArgs) {
       const serializer = new Serializer(this.wallet.getNetworkObject());
-      const blueprintInformation = await ncApi.getBlueprintInformation(this.blueprintId);
-      const methodArgs = get(
-        blueprintInformation,
-        `public_methods.${this.method}.args`,
-        []
-      ) as MethodArgInfo[];
-      if (!methodArgs) {
-        throw new NanoContractTransactionError(`Blueprint does not have method ${this.method}.`);
-      }
-
-      if (this.args.length !== methodArgs.length) {
-        throw new NanoContractTransactionError(
-          `Method needs ${methodArgs.length} parameters but data has ${this.args.length}.`
-        );
-      }
-
-      for (const [index, arg] of methodArgs.entries()) {
-        const methodArg = NanoContractMethodArgument.fromApiInput(
-          arg.name,
-          arg.type,
-          this.args[index]
-        );
-        const serialized = methodArg.serialize(serializer);
-        serializedArgs.push(serialized);
+      for (const arg of parsedArgs) {
+        serializedArgs.push(arg.serialize(serializer));
       }
     }
 

@@ -19,6 +19,7 @@ import {
 import Serializer from './serializer';
 import Deserializer from './deserializer';
 import { getContainerInternalType, getContainerType } from './utils';
+import Address from '../models/address';
 
 /**
  * Refinement method meant to validate, parse and return the transformed type.
@@ -83,7 +84,7 @@ function refineSingleValue(
     } else {
       return parse.data;
     }
-  } else if (['str', 'Address'].includes(type)) {
+  } else if (type === 'str') {
     const parse = z.string().safeParse(inputVal);
     if (!parse.success) {
       ctx.addIssue({
@@ -93,6 +94,27 @@ function refineSingleValue(
       });
     } else {
       return parse.data;
+    }
+  } else if (type === 'Address') {
+    const parse = z.string().safeParse(inputVal);
+    if (!parse.success) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `Value is invalid Address: ${parse.error}`,
+        fatal: true,
+      });
+    } else {
+      const address = new Address(parse.data);
+      try {
+        address.validateAddress({ skipNetwork: true });
+        return parse.data;
+      } catch (err) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Value is invalid Address: ${err instanceof Error ? err.message : String(err)}`,
+          fatal: true,
+        });
+      }
     }
   } else {
     // No known types match the given type

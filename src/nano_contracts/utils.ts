@@ -7,6 +7,7 @@
 
 import { get } from 'lodash';
 import { crypto } from 'bitcore-lib';
+import { z } from 'zod';
 import transactionUtils from '../utils/transaction';
 import SendTransaction from '../new/sendTransaction';
 import HathorWallet from '../new/wallet';
@@ -24,10 +25,11 @@ import { IHistoryTx, IStorage } from '../types';
 import { parseScript } from '../utils/scripts';
 import {
   MethodArgInfo,
-  NanoContractArgumentType,
   NanoContractArgumentContainerType,
+  NanoContractArgumentApiInputType,
 } from './types';
 import { NANO_CONTRACTS_INITIALIZE_METHOD } from '../constants';
+import { NanoContractMethodArgument } from './methodArg';
 
 export function getContainerInternalType(
   type: string
@@ -169,16 +171,13 @@ export const getOracleInputData = async (
  * @param method Method name
  * @param args Arguments of the method to check if have the expected types
  *
- * Warning: This method can mutate the `args` parameter during its validation
- *
- * @throws NanoContractTransactionError in case the arguments are not valid
  * @throws NanoRequest404Error in case the blueprint ID does not exist on the full node
  */
-export const validateAndUpdateBlueprintMethodArgs = async (
+export const validateAndParseBlueprintMethodArgs = async (
   blueprintId: string,
   method: string,
-  args: NanoContractArgumentType[] | null
-): Promise<void> => {
+  args: NanoContractArgumentApiInputType[] | null
+): Promise<NanoContractMethodArgument[] | null> => {
   // Get the blueprint data from full node
   const blueprintInformation = await ncApi.getBlueprintInformation(blueprintId);
 
@@ -199,7 +198,7 @@ export const validateAndUpdateBlueprintMethodArgs = async (
       );
     }
 
-    return;
+    return null;
   }
 
   const argsLen = args.length;
@@ -209,88 +208,18 @@ export const validateAndUpdateBlueprintMethodArgs = async (
     );
   }
 
-  // Here we validate that the arguments sent in the data array of args has
-  // the expected type for each parameter of the blueprint method
-  // Besides that, there are arguments that come from the clients in a different way
-  // that we expect, e.g. the bytes arguments come as hexadecimal, and the address
-  // arguments come as base58 strings, so we converts them and update the original
-  // array of arguments with the expected type
-  for (const [index, arg] of methodArgs.entries()) {
-    let typeToCheck = arg.type;
-    if (typeToCheck.startsWith('SignedData')) {
-      // Signed data will always be an hexadecimal with the
-      // signature len, signature, and the data itself
-      typeToCheck = 'str';
+  try {
+    const parsedArgs: NanoContractMethodArgument[] = [];
+    for (const [index, arg] of methodArgs.entries()) {
+      const parsedArg = NanoContractMethodArgument.fromApiInput(arg.name, arg.type, args[index]);
+      parsedArgs.push(parsedArg);
     }
-    switch (typeToCheck) {
-      case 'bytes':
-      case 'BlueprintId':
-      case 'ContractId':
-      case 'TokenUid':
-      case 'TxOutputScript':
-      case 'VertexId':
-        // Bytes arguments are sent in hexadecimal
-        try {
-          // eslint-disable-next-line no-param-reassign
-          args[index] = hexToBuffer(args[index] as string);
-        } catch {
-          // Data sent is not a hex
-          throw new NanoContractTransactionError(
-            `Invalid hexadecimal for argument number ${index + 1} for type ${arg.type}.`
-          );
-        }
-        break;
-      case 'Amount':
-        if (typeof args[index] !== 'bigint') {
-          throw new NanoContractTransactionError(
-            `Expects argument number ${index + 1} type ${arg.type} (bigint) but received type ${typeof args[index]}.`
-          );
-        }
-        break;
-      case 'int':
-      case 'Timestamp':
-        if (typeof args[index] !== 'number') {
-          throw new NanoContractTransactionError(
-            `Expects argument number ${index + 1} type ${arg.type} but received type ${typeof args[index]}.`
-          );
-        }
-        break;
-      case 'str':
-        if (typeof args[index] !== 'string') {
-          throw new NanoContractTransactionError(
-            `Expects argument number ${index + 1} type ${arg.type} but received type ${typeof args[index]}.`
-          );
-        }
-        break;
-      // Creating a block {} in the case below
-      // because we can't create a variable without it (linter - no-case-declarations)
-      case 'Address': {
-        const argValue = args[index];
-        if (typeof argValue !== 'string') {
-          throw new NanoContractTransactionError(
-            `Expects argument number ${index + 1} type ${arg.type} but received type ${typeof argValue}.`
-          );
-        }
-
-        try {
-          const address = new Address(argValue as string);
-          address.validateAddress();
-        } catch {
-          // Argument value is not a valid address
-          throw new NanoContractTransactionError(
-            `Argument ${argValue} is not a valid base58 address.`
-          );
-        }
-        break;
-      }
-      default:
-        // eslint-disable-next-line valid-typeof -- This rule is not suited for dynamic comparisons such as this one
-        if (arg.type !== typeof args[index]) {
-          throw new NanoContractTransactionError(
-            `Expects argument number ${index + 1} type ${arg.type} but received type ${typeof args[index]}.`
-          );
-        }
+    return parsedArgs;
+  } catch (err: unknown) {
+    if (err instanceof z.ZodError || err instanceof Error) {
+      throw new NanoContractTransactionError(err.message);
     }
+    throw err;
   }
 };
 

@@ -327,7 +327,7 @@ describe('full cycle of bet nano contract', () => {
     const inputData = await getOracleInputData(oracleData, resultSerialized, wallet);
     const txSetResult = await wallet.createAndSendNanoContractTransaction('set_result', address1, {
       ncId: tx1.hash,
-      args: [`${bufferToHex(inputData)},${result},str`],
+      args: [`${bufferToHex(inputData)},${bufferToHex(tx1.hash)},${result},str`],
     });
     await checkTxValid(wallet, txSetResult);
     txIds.push(txSetResult.hash);
