@@ -126,13 +126,20 @@ describe('full cycle of bet nano contract', () => {
       throw new Error('Could not parse args');
     }
     expect(tx1Parser.parsedArgs).toHaveLength(3);
-    expect(tx1Parser.parsedArgs[0]).toMatchObject({ name: 'oracle_script', type: 'TxOutputScript'});
-    // @ts-expect-error
+    expect(tx1Parser.parsedArgs[0]).toMatchObject({
+      name: 'oracle_script',
+      type: 'TxOutputScript',
+    });
+    // @ts-expect-error toMatchBuffer is defined in setupTests.js
     expect(tx1Parser.parsedArgs[0].value).toMatchBuffer(oracleData);
-    expect(tx1Parser.parsedArgs[1]).toMatchObject({ name: 'token_uid', type: 'TokenUid'});
-    // @ts-expect-error
+    expect(tx1Parser.parsedArgs[1]).toMatchObject({ name: 'token_uid', type: 'TokenUid' });
+    // @ts-expect-error toMatchBuffer is defined in setupTests.js
     expect(tx1Parser.parsedArgs[1].value).toMatchBuffer(Buffer.from(NATIVE_TOKEN_UID, 'hex'));
-    expect(tx1Parser.parsedArgs[2]).toMatchObject({ name: 'date_last_bet', type: 'Timestamp', value: dateLastBet});
+    expect(tx1Parser.parsedArgs[2]).toMatchObject({
+      name: 'date_last_bet',
+      type: 'Timestamp',
+      value: dateLastBet,
+    });
 
     // First validate some bet arguments error handling
     const address2 = await wallet.getAddressAtIndex(2);
@@ -209,8 +216,12 @@ describe('full cycle of bet nano contract', () => {
       throw new Error('Could not parse args');
     }
     expect(txBetParser.parsedArgs).toHaveLength(2);
-    expect(txBetParser.parsedArgs[0]).toMatchObject({ name: 'address', type: 'Address', value: address2 });
-    expect(txBetParser.parsedArgs[1]).toMatchObject({ name: 'score', type: 'str', value: '1x0'});
+    expect(txBetParser.parsedArgs[0]).toMatchObject({
+      name: 'address',
+      type: 'Address',
+      value: address2,
+    });
+    expect(txBetParser.parsedArgs[1]).toMatchObject({ name: 'score', type: 'str', value: '1x0' });
 
     const utxos2 = await wallet.getUtxos();
     // We must have one utxo in the address 0 of 900 HTR
@@ -260,8 +271,12 @@ describe('full cycle of bet nano contract', () => {
       throw new Error('Could not parse args');
     }
     expect(txBet2Parser.parsedArgs).toHaveLength(2);
-    expect(txBet2Parser.parsedArgs[0]).toMatchObject({ name: 'address', type: 'Address', value: address3 });
-    expect(txBet2Parser.parsedArgs[1]).toMatchObject({ name: 'score', type: 'str', value: '2x0'});
+    expect(txBet2Parser.parsedArgs[0]).toMatchObject({
+      name: 'address',
+      type: 'Address',
+      value: address3,
+    });
+    expect(txBet2Parser.parsedArgs[1]).toMatchObject({ name: 'score', type: 'str', value: '2x0' });
 
     // Get nc history
     const txIds = [tx1.hash, txBet.hash, txBet2.hash];
@@ -295,11 +310,11 @@ describe('full cycle of bet nano contract', () => {
     }
     const outputScriptBuffer1 = outputScript.createScript();
 
-    expect(ncState.fields['token_uid'].value).toBe(NATIVE_TOKEN_UID);
-    expect(ncState.fields['date_last_bet'].value).toBe(dateLastBet);
-    expect(ncState.fields['oracle_script'].value).toBe(bufferToHex(outputScriptBuffer1));
-    expect(ncState.fields['final_result'].value).toBeNull();
-    expect(ncState.fields['total'].value).toBe(300);
+    expect(ncState.fields.token_uid.value).toBe(NATIVE_TOKEN_UID);
+    expect(ncState.fields.date_last_bet.value).toBe(dateLastBet);
+    expect(ncState.fields.oracle_script.value).toBe(bufferToHex(outputScriptBuffer1));
+    expect(ncState.fields.final_result.value).toBeNull();
+    expect(ncState.fields.total.value).toBe(300);
     expect(ncState.fields[`address_details.a'${address2}'`].value).toHaveProperty('1x0', 100);
     expect(ncState.fields[`withdrawals.a'${address2}'`].value).toBeUndefined();
     expect(ncState.fields[`address_details.a'${address3}'`].value).toHaveProperty('2x0', 200);
@@ -345,11 +360,22 @@ describe('full cycle of bet nano contract', () => {
       throw new Error('Could not parse args');
     }
     expect(txSetResultParser.parsedArgs).toHaveLength(1);
-    expect(txSetResultParser.parsedArgs[0]).toMatchObject({ name: 'result', type: 'SignedData[str]'});
+    expect(txSetResultParser.parsedArgs[0]).toMatchObject({
+      name: 'result',
+      type: 'SignedData[str]',
+    });
     expect((txSetResultParser.parsedArgs[0].value as NanoContractSignedData).type).toEqual('str');
-    expect((txSetResultParser.parsedArgs[0].value as NanoContractSignedData).signature).toMatchBuffer(inputData);
-    expect((txSetResultParser.parsedArgs[0].value as NanoContractSignedData).value[0]).toMatchBuffer(Buffer.from(tx1.hash, 'hex'));
-    expect((txSetResultParser.parsedArgs[0].value as NanoContractSignedData).value[1]).toEqual(result);
+    expect(
+      (txSetResultParser.parsedArgs[0].value as NanoContractSignedData).signature
+      // @ts-expect-error toMatchBuffer is defined in setupTests.js
+    ).toMatchBuffer(inputData);
+    expect(
+      (txSetResultParser.parsedArgs[0].value as NanoContractSignedData).value[0]
+      // @ts-expect-error toMatchBuffer is defined in setupTests.js
+    ).toMatchBuffer(Buffer.from(tx1.hash, 'hex'));
+    expect((txSetResultParser.parsedArgs[0].value as NanoContractSignedData).value[1]).toEqual(
+      result
+    );
 
     // Try to withdraw to address 2, success
     const txWithdrawal = await wallet.createAndSendNanoContractTransaction('withdraw', address2, {
@@ -397,11 +423,11 @@ describe('full cycle of bet nano contract', () => {
       `address_details.a'${address3}'`,
       `withdrawals.a'${address3}'`,
     ]);
-    expect(ncState2.fields['token_uid'].value).toBe(NATIVE_TOKEN_UID);
-    expect(ncState2.fields['date_last_bet'].value).toBe(dateLastBet);
-    expect(ncState2.fields['oracle_script'].value).toBe(bufferToHex(outputScriptBuffer1));
-    expect(ncState2.fields['final_result'].value).toBe('1x0');
-    expect(ncState2.fields['total'].value).toBe(300);
+    expect(ncState2.fields.token_uid.value).toBe(NATIVE_TOKEN_UID);
+    expect(ncState2.fields.date_last_bet.value).toBe(dateLastBet);
+    expect(ncState2.fields.oracle_script.value).toBe(bufferToHex(outputScriptBuffer1));
+    expect(ncState2.fields.final_result.value).toBe('1x0');
+    expect(ncState2.fields.total.value).toBe(300);
     expect(ncState2.fields[`address_details.a'${address2}'`].value).toHaveProperty('1x0', 100);
     expect(ncState2.fields[`withdrawals.a'${address2}'`].value).toBe(300);
     expect(ncState2.fields[`address_details.a'${address3}'`].value).toHaveProperty('2x0', 200);
@@ -441,11 +467,11 @@ describe('full cycle of bet nano contract', () => {
       firstBlock
     );
 
-    expect(ncStateFirstBlock.fields['token_uid'].value).toBe(NATIVE_TOKEN_UID);
-    expect(ncStateFirstBlock.fields['date_last_bet'].value).toBe(dateLastBet);
-    expect(ncStateFirstBlock.fields['oracle_script'].value).toBe(bufferToHex(outputScriptBuffer1));
-    expect(ncStateFirstBlock.fields['final_result'].value).toBeNull();
-    expect(ncStateFirstBlock.fields['total'].value).toBe(300);
+    expect(ncStateFirstBlock.fields.token_uid.value).toBe(NATIVE_TOKEN_UID);
+    expect(ncStateFirstBlock.fields.date_last_bet.value).toBe(dateLastBet);
+    expect(ncStateFirstBlock.fields.oracle_script.value).toBe(bufferToHex(outputScriptBuffer1));
+    expect(ncStateFirstBlock.fields.final_result.value).toBeNull();
+    expect(ncStateFirstBlock.fields.total.value).toBe(300);
     expect(ncStateFirstBlock.fields[`address_details.a'${address2}'`].value).toHaveProperty(
       '1x0',
       100
@@ -477,13 +503,13 @@ describe('full cycle of bet nano contract', () => {
       firstBlockHeight
     );
 
-    expect(ncStateFirstBlockHeight.fields['token_uid'].value).toBe(NATIVE_TOKEN_UID);
-    expect(ncStateFirstBlockHeight.fields['date_last_bet'].value).toBe(dateLastBet);
-    expect(ncStateFirstBlockHeight.fields['oracle_script'].value).toBe(
+    expect(ncStateFirstBlockHeight.fields.token_uid.value).toBe(NATIVE_TOKEN_UID);
+    expect(ncStateFirstBlockHeight.fields.date_last_bet.value).toBe(dateLastBet);
+    expect(ncStateFirstBlockHeight.fields.oracle_script.value).toBe(
       bufferToHex(outputScriptBuffer1)
     );
-    expect(ncStateFirstBlockHeight.fields['final_result'].value).toBeNull();
-    expect(ncStateFirstBlockHeight.fields['total'].value).toBe(300);
+    expect(ncStateFirstBlockHeight.fields.final_result.value).toBeNull();
+    expect(ncStateFirstBlockHeight.fields.total.value).toBe(300);
     expect(ncStateFirstBlockHeight.fields[`address_details.a'${address2}'`].value).toHaveProperty(
       '1x0',
       100
