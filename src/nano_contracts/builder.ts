@@ -480,38 +480,42 @@ class NanoContractTransactionBuilder {
       );
     }
 
-    if (this.createTokenOptions === null) {
-      throw new NanoContractTransactionError(
-        "Create token options can't be null when creating a create token transaction."
+    if (this.vertexType === NanoContractVertexType.CREATE_TOKEN_TRANSACTION) {
+      if (this.createTokenOptions === null) {
+        throw new NanoContractTransactionError(
+          'Create token options can\'t be null when creating a create token transaction.'
+        );
+      }
+
+      // It's a token creation transaction
+      // then we get the token creation data from the utils method
+      // and concatenate the nano actions inputs/outputs/tokens
+      const data = await tokensUtils.prepareCreateTokenData(
+        this.createTokenOptions.mintAddress,
+        this.createTokenOptions.name,
+        this.createTokenOptions.symbol,
+        this.createTokenOptions.amount,
+        this.wallet.storage,
+        {
+          changeAddress: this.createTokenOptions.changeAddress,
+          createMint: this.createTokenOptions.createMint,
+          mintAuthorityAddress: this.createTokenOptions.mintAuthorityAddress,
+          createMelt: this.createTokenOptions.createMelt,
+          meltAuthorityAddress: this.createTokenOptions.meltAuthorityAddress,
+          data: this.createTokenOptions.data,
+          isCreateNFT: this.createTokenOptions.isCreateNFT,
+          skipDepositFee: this.createTokenOptions.contractPaysTokenDeposit,
+        }
       );
+
+      data.inputs = concat(data.inputs, inputs);
+      data.outputs = concat(data.outputs, outputs);
+      data.tokens = uniq(concat(data.tokens, tokens));
+
+      return transactionUtils.createTransactionFromData(data, this.wallet.getNetworkObject());
     }
 
-    // It's a token creation transaction
-    // then we get the token creation data from the utils method
-    // and concatenate the nano actions inputs/outputs/tokens
-    const data = await tokensUtils.prepareCreateTokenData(
-      this.createTokenOptions.mintAddress,
-      this.createTokenOptions.name,
-      this.createTokenOptions.symbol,
-      this.createTokenOptions.amount,
-      this.wallet.storage,
-      {
-        changeAddress: this.createTokenOptions.changeAddress,
-        createMint: this.createTokenOptions.createMint,
-        mintAuthorityAddress: this.createTokenOptions.mintAuthorityAddress,
-        createMelt: this.createTokenOptions.createMelt,
-        meltAuthorityAddress: this.createTokenOptions.meltAuthorityAddress,
-        data: this.createTokenOptions.data,
-        isCreateNFT: this.createTokenOptions.isCreateNFT,
-        skipDepositFee: this.createTokenOptions.contractPaysTokenDeposit,
-      }
-    );
-
-    data.inputs = concat(data.inputs, inputs);
-    data.outputs = concat(data.outputs, outputs);
-    data.tokens = uniq(concat(data.tokens, tokens));
-
-    return transactionUtils.createTransactionFromData(data, this.wallet.getNetworkObject());
+    throw new NanoContractTransactionError('Invalid vertex type.');
   }
 
   /**
