@@ -58,7 +58,7 @@ function refineSingleValue(
   ) {
     const parse = z
       .string()
-      .regex(/[0-9A-Fa-f]+/g)
+      .regex(/^[0-9A-Fa-f]+$/)
       .transform(val => Buffer.from(val, 'hex'))
       .safeParse(inputVal);
     if (!parse.success) {
@@ -169,8 +169,8 @@ const SignedDataApiInputScheme = z
   .transform(value => value.split(','))
   .pipe(
     z.tuple([
-      z.string().regex(/[0-9A-Fa-f]+/g),
-      z.string().regex(/[0-9A-Fa-f]+/g),
+      z.string().regex(/^[0-9A-Fa-f]+$/),
+      z.string().regex(/^[0-9A-Fa-f]+$/),
       z.string(),
       z.string(),
     ])
@@ -195,7 +195,7 @@ const SignedDataApiInputScheme = z
 const RawSignedDataApiInputScheme = z
   .string()
   .transform(value => value.split(','))
-  .pipe(z.tuple([z.string().regex(/[0-9A-Fa-f]+/g), z.string(), z.string()]))
+  .pipe(z.tuple([z.string().regex(/^[0-9A-Fa-f]+$/), z.string(), z.string()]))
   .transform((value, ctx) => {
     const signature = Buffer.from(value[0], 'hex');
     const type = value[2];
