@@ -5,24 +5,27 @@
  * LICENSE file in the root directory of this source tree.
  */
 import { IHistoryTx, OutputValueType } from '../types';
+import { z } from 'zod';
 
 /**
  * There are the types that can be received via api
  * when querying for a nano contract value.
  */
-export type NanoContractArgumentApiInputType =
-  | string
-  | number
-  | bigint
-  | OutputValueType
-  | boolean
-  | null;
+export const NanoContractArgumentApiInputSchema = z.union([
+  z.string(),
+  z.number(),
+  z.bigint(),
+  z.boolean(),
+  z.null(),
+]);
+export type NanoContractArgumentApiInputType = z.output<typeof NanoContractArgumentApiInputSchema>;
 
 /**
  * These are the possible `Single` types after parsing
  * We include Buffer since some types are decoded as Buffer (e.g. bytes, TokenUid, ContractId)
  */
-export type NanoContractArgumentSingleType = NanoContractArgumentApiInputType | Buffer;
+export const NanoContractArgumentSingleSchema = z.union([NanoContractArgumentApiInputSchema, z.instanceof(Buffer)]);
+export type NanoContractArgumentSingleType = z.output<typeof NanoContractArgumentSingleSchema>;
 
 /**
  * A `SignedData` value is the tuple `[ContractId, Value]`
@@ -33,36 +36,43 @@ export type NanoContractSignedDataInnerType = [Buffer, NanoContractArgumentSingl
 /**
  * NanoContract SignedData method argument type
  */
-export type NanoContractSignedData = {
-  type: string;
-  value: NanoContractSignedDataInnerType;
-  signature: Buffer;
-}
+export const NanoContractSignedDataSchema = z.object({
+  type: z.string(),
+  signature: z.instanceof(Buffer),
+  value: z.tuple([z.instanceof(Buffer), NanoContractArgumentSingleSchema]),
+});
+export type NanoContractSignedData = z.output<typeof NanoContractSignedDataSchema>;
 
 /**
  * NanoContract RawSignedData method argument type
  */
-export type NanoContractRawSignedData = {
-  type: string;
-  value: NanoContractArgumentSingleType;
-  signature: Buffer;
-}
+export const NanoContractRawSignedDataSchema = z.object({
+  type: z.string(),
+  signature: z.instanceof(Buffer),
+  value: NanoContractArgumentSingleSchema,
+});
+export type NanoContractRawSignedData = z.output<typeof NanoContractRawSignedDataSchema>;
 
 /**
- * Intermediate type for all possible Nano contract argument type
+ * Intermediate schema for all possible Nano contract argument type
  * that do not include tuple/arrays/repetition
  */
-type _NanoContractArgumentType1 = NanoContractArgumentSingleType | NanoContractSignedData | NanoContractRawSignedData;
+const _NanoContractArgumentType1Schema = z.union([NanoContractArgumentSingleSchema, NanoContractSignedDataSchema, NanoContractRawSignedDataSchema])
 
 /**
  * Nano Contract method argument type as a native TS type
  */
-export type NanoContractArgumentType = _NanoContractArgumentType1 | _NanoContractArgumentType1[];
+export const NanoContractArgumentSchema = z.union([_NanoContractArgumentType1Schema, z.array(_NanoContractArgumentType1Schema)]);
+export type NanoContractArgumentType = z.output<typeof NanoContractArgumentSchema>;
 
 /**
  * Container type names
  */
-export type NanoContractArgumentContainerType = 'Optional' | 'SignedData' | 'RawSignedData' | 'Tuple';
+export type NanoContractArgumentContainerType =
+  | 'Optional'
+  | 'SignedData'
+  | 'RawSignedData'
+  | 'Tuple';
 
 export enum NanoContractActionType {
   DEPOSIT = 'deposit',
@@ -188,4 +198,4 @@ export interface NanoContractStateAPIParameters {
 export type BufferROExtract<T = any> = {
   value: T;
   bytesRead: number;
-}
+};

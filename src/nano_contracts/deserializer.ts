@@ -5,11 +5,17 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { bufferToHex, unpackToInt } from '../utils/buffer';
+import { unpackToInt } from '../utils/buffer';
 import helpersUtils from '../utils/helpers';
 import leb128Util from '../utils/leb128';
 import Network from '../models/network';
-import { NanoContractArgumentType, BufferROExtract, NanoContractSignedData, NanoContractArgumentSingleType, NanoContractRawSignedData } from './types';
+import {
+  NanoContractArgumentType,
+  BufferROExtract,
+  NanoContractSignedData,
+  NanoContractArgumentSingleType,
+  NanoContractRawSignedData,
+} from './types';
 import { OutputValueType } from '../types';
 import { NC_ARGS_MAX_BYTES_LENGTH } from '../constants';
 import { getContainerInternalType, getContainerType } from './utils';
@@ -32,10 +38,7 @@ class Deserializer {
    * @memberof Deserializer
    * @inner
    */
-  deserializeFromType(
-    buf: Buffer,
-    type: string
-  ): BufferROExtract<NanoContractArgumentType | null> {
+  deserializeFromType(buf: Buffer, type: string): BufferROExtract<NanoContractArgumentType | null> {
     const isContainerType = getContainerType(type) !== null;
     if (isContainerType) {
       return this.deserializeContainerType(buf, type);
@@ -87,7 +90,6 @@ class Deserializer {
   }
 
   /* eslint-disable class-methods-use-this -- XXX: Methods that don't use `this` should be made static */
-
 
   /**
    * Deserialize string value
@@ -291,14 +293,14 @@ class Deserializer {
 
     // Reading ContractId
     const ncIdResult = this.deserializeFromType(signedData, 'ContractId');
-    const ncId = (ncIdResult.value as Buffer);
+    const ncId = ncIdResult.value as Buffer;
     const bytesReadFromContractId = ncIdResult.bytesRead;
 
-    let buf = signedData.subarray(bytesReadFromContractId);
+    const buf = signedData.subarray(bytesReadFromContractId);
 
     // Reading argument
     const parseResult = this.deserializeFromType(buf, type);
-    let parsed = parseResult.value;
+    const parsed = parseResult.value;
     const bytesReadFromValue = parseResult.bytesRead;
 
     // Reading signature as bytes
@@ -335,7 +337,7 @@ class Deserializer {
 
     // Reading argument
     const parseResult = this.deserializeFromType(signedData, type);
-    let parsed = parseResult.value;
+    const parsed = parseResult.value;
     const bytesReadFromValue = parseResult.bytesRead;
 
     // Reading signature
@@ -364,7 +366,7 @@ class Deserializer {
    */
   toTuple(buf: Buffer, type: string): BufferROExtract<Array<any>> {
     const typeArr = type.split(',').map(s => s.trim());
-    const tupleValues: NanoContractArgumentType[] = []
+    const tupleValues: NanoContractArgumentType[] = [];
     let bytesReadTotal = 0;
     let tupleBuf = buf.subarray();
     for (const t of typeArr) {
@@ -376,7 +378,7 @@ class Deserializer {
     return {
       value: tupleValues,
       bytesRead: bytesReadTotal,
-    }
+    };
   }
 }
 

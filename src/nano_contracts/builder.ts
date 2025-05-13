@@ -22,13 +22,13 @@ import {
   NanoContractAction,
   MethodArgInfo,
   NanoContractArgumentApiInputType,
-  NanoContractArgumentType,
 } from './types';
 import { ITokenData } from '../types';
 import ncApi from '../api/nano';
 import { validateAndUpdateBlueprintMethodArgs } from './utils';
 import NanoContractHeader from './header';
 import leb128 from '../utils/leb128';
+import { NanoContractMethodArgument } from './methodArg';
 
 class NanoContractTransactionBuilder {
   blueprintId: string | null | undefined;
@@ -42,7 +42,7 @@ class NanoContractTransactionBuilder {
 
   caller: Buffer | null;
 
-  args: NanoContractArgumentType[] | null;
+  args: NanoContractArgumentApiInputType[] | null;
 
   transaction: Transaction | null;
 
@@ -353,7 +353,8 @@ class NanoContractTransactionBuilder {
       }
 
       for (const [index, arg] of methodArgs.entries()) {
-        const serialized = serializer.serializeFromType(this.args[index], arg.type);
+        const methodArg = NanoContractMethodArgument.fromApiInput(arg.name, arg.type, this.args[index]);
+        const serialized = methodArg.serialize(serializer);
         serializedArgs.push(serialized);
       }
     }

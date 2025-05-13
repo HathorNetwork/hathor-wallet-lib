@@ -103,7 +103,7 @@ class NanoContractTransactionParser {
           arg.name,
           arg.type,
           argsBuffer,
-          deserializer,
+          deserializer
         );
         parsed = parseResult.value;
         size = parseResult.bytesRead;

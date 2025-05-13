@@ -41,7 +41,7 @@ export function getContainerInternalType(
   const match = type.match(/^(.*?)\[(.*)\]/);
   const containerType = match ? match[1] : null;
   const internalType = match ? match[2] : null;
-  if ((!internalType) || (!containerType)) {
+  if (!internalType || !containerType) {
     throw new Error('Unable to extract type');
   }
   // Only some values are allowed for containerType
@@ -49,7 +49,7 @@ export function getContainerInternalType(
     case 'Tuple':
     case 'SignedData':
     case 'RawSignedData':
-      return [containerType, internalType]
+      return [containerType, internalType];
     default:
       throw new Error('Not a ContainerType');
   }
@@ -60,11 +60,7 @@ export function getContainerType(type: string): NanoContractArgumentContainerTyp
     const [containerType, _internalType] = getContainerInternalType(type);
     return containerType;
   } catch (err: unknown) {
-    if (err instanceof Error && err.message === 'Not a ContainerType') {
-      return null;
-    }
-    // Re-raise unexpected error
-    throw err;
+    return null;
   }
 }
 

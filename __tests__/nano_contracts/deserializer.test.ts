@@ -9,6 +9,8 @@ import Serializer from '../../src/nano_contracts/serializer';
 import Deserializer from '../../src/nano_contracts/deserializer';
 import Address from '../../src/models/address';
 import Network from '../../src/models/network';
+import leb128 from '../../src/utils/leb128';
+import { NanoContractSignedData } from '../../src/nano_contracts/types';
 
 test('Bool', () => {
   const serializer = new Serializer(new Network('testnet'));
@@ -184,59 +186,114 @@ test('SignedData', () => {
   const serializer = new Serializer(new Network('testnet'));
   const deserializer = new Deserializer(new Network('testnet'));
 
-  const valueInt = '74657374,300,int';
+  const valueInt: NanoContractSignedData = {
+    type: 'int',
+    value: [Buffer.from('6e634944', 'hex'), 300],
+    signature: Buffer.from('74657374', 'hex'),
+  };
   const serializedInt = serializer.serializeFromType(valueInt, 'SignedData[int]');
   const { value: deserializedInt } = deserializer.deserializeFromType(
     serializedInt,
     'SignedData[int]'
   );
 
-  expect(deserializedInt).toBe(valueInt);
+  expect((deserializedInt as NanoContractSignedData).type).toEqual(valueInt.type);
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect((deserializedInt as NanoContractSignedData).signature).toMatchBuffer(valueInt.signature);
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect((deserializedInt as NanoContractSignedData).value[0]).toMatchBuffer(valueInt.value[0]);
+  expect((deserializedInt as NanoContractSignedData).value[1]).toEqual(valueInt.value[1]);
 
-  const valueStr = '74657374,test,str';
+  const valueStr: NanoContractSignedData = {
+    type: 'str',
+    value: [Buffer.from('6e634944', 'hex'), 'test'],
+    signature: Buffer.from('74657374', 'hex'),
+  };
   const serializedStr = serializer.serializeFromType(valueStr, 'SignedData[str]');
   const { value: deserializedStr } = deserializer.deserializeFromType(
     serializedStr,
     'SignedData[str]'
   );
 
-  expect(deserializedStr).toBe(valueStr);
+  expect((deserializedStr as NanoContractSignedData).type).toEqual(valueStr.type);
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect((deserializedStr as NanoContractSignedData).signature).toMatchBuffer(valueStr.signature);
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect((deserializedStr as NanoContractSignedData).value[0]).toMatchBuffer(valueStr.value[0]);
+  expect((deserializedStr as NanoContractSignedData).value[1]).toEqual(valueStr.value[1]);
 
-  const valueBytes = '74657374,74657374,bytes';
+  const valueBytes: NanoContractSignedData = {
+    type: 'bytes',
+    value: [Buffer.from('6e634944', 'hex'), Buffer.from('74657374', 'hex')],
+    signature: Buffer.from('74657374', 'hex'),
+  };
   const serializedBytes = serializer.serializeFromType(valueBytes, 'SignedData[bytes]');
   const { value: deserializedBytes } = deserializer.deserializeFromType(
     serializedBytes,
     'SignedData[bytes]'
   );
 
-  expect(deserializedBytes).toBe(valueBytes);
+  expect((deserializedBytes as NanoContractSignedData).type).toEqual(valueBytes.type);
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect((deserializedBytes as NanoContractSignedData).signature).toMatchBuffer(valueBytes.signature);
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect((deserializedBytes as NanoContractSignedData).value[0]).toMatchBuffer(valueBytes.value[0]);
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect((deserializedBytes as NanoContractSignedData).value[1]).toMatchBuffer(valueBytes.value[1]);
 
-  const valueBoolFalse = '74657374,false,bool';
+  const valueBoolFalse: NanoContractSignedData = {
+    type: 'bool',
+    value: [Buffer.from('6e634944', 'hex'), false],
+    signature: Buffer.from('74657374', 'hex'),
+  };
   const serializedBoolFalse = serializer.serializeFromType(valueBoolFalse, 'SignedData[bool]');
   const { value: deserializedBoolFalse } = deserializer.deserializeFromType(
     serializedBoolFalse,
     'SignedData[bool]'
   );
 
-  expect(deserializedBoolFalse).toBe(valueBoolFalse);
+  expect((deserializedBoolFalse as NanoContractSignedData).type).toEqual(valueBoolFalse.type);
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect((deserializedBoolFalse as NanoContractSignedData).signature).toMatchBuffer(valueBoolFalse.signature);
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect((deserializedBoolFalse as NanoContractSignedData).value[0]).toMatchBuffer(valueBoolFalse.value[0]);
+  expect((deserializedBoolFalse as NanoContractSignedData).value[1]).toEqual(valueBoolFalse.value[1]);
 
-  const valueBoolTrue = '74657374,true,bool';
+  const valueBoolTrue: NanoContractSignedData = {
+    type: 'bool',
+    value: [Buffer.from('6e634944', 'hex'), true],
+    signature: Buffer.from('74657374', 'hex'),
+  };
   const serializedBoolTrue = serializer.serializeFromType(valueBoolTrue, 'SignedData[bool]');
   const { value: deserializedBoolTrue } = deserializer.deserializeFromType(
     serializedBoolTrue,
     'SignedData[bool]'
   );
 
-  expect(deserializedBoolTrue).toBe(valueBoolTrue);
+  expect((deserializedBoolTrue as NanoContractSignedData).type).toEqual(valueBoolTrue.type);
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect((deserializedBoolTrue as NanoContractSignedData).signature).toMatchBuffer(valueBoolTrue.signature);
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect((deserializedBoolTrue as NanoContractSignedData).value[0]).toMatchBuffer(valueBoolTrue.value[0]);
+  expect((deserializedBoolTrue as NanoContractSignedData).value[1]).toEqual(valueBoolTrue.value[1]);
 
-  const valueVarInt = '74657374,300,VarInt';
+  const valueVarInt: NanoContractSignedData = {
+    type: 'VarInt',
+    value: [Buffer.from('6e634944', 'hex'), 300n],
+    signature: Buffer.from('74657374', 'hex'),
+  };
   const serializedVarInt = serializer.serializeFromType(valueVarInt, 'SignedData[VarInt]');
   const { value: deserializedVarInt } = deserializer.deserializeFromType(
     serializedVarInt,
     'SignedData[VarInt]'
   );
 
-  expect(deserializedVarInt).toBe(valueVarInt);
+  expect((deserializedVarInt as NanoContractSignedData).type).toEqual(valueVarInt.type);
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect((deserializedVarInt as NanoContractSignedData).signature).toMatchBuffer(valueVarInt.signature);
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect((deserializedVarInt as NanoContractSignedData).value[0]).toMatchBuffer(valueVarInt.value[0]);
+  expect((deserializedVarInt as NanoContractSignedData).value[1]).toEqual(valueVarInt.value[1]);
 });
 
 test('Address', () => {
@@ -246,13 +303,21 @@ test('Address', () => {
   const address = 'WfthPUEecMNRs6eZ2m2EQBpVH6tbqQxYuU';
   const addressBuffer = new Address(address).decode();
 
-  const { value: deserialized } = deserializer.deserializeFromType(addressBuffer, 'Address');
+  const { value: deserialized } = deserializer.deserializeFromType(
+    Buffer.concat([leb128.encodeUnsigned(addressBuffer.length), addressBuffer]),
+    'Address');
   expect(deserialized).toBe(address);
 
   const wrongNetworkAddress = 'HDeadDeadDeadDeadDeadDeadDeagTPgmn';
   const wrongNetworkAddressBuffer = new Address(wrongNetworkAddress).decode();
 
-  expect(() => deserializer.deserializeFromType(wrongNetworkAddressBuffer, 'Address')).toThrow();
+  expect(() => deserializer.deserializeFromType(
+    Buffer.concat([
+      leb128.encodeUnsigned(wrongNetworkAddressBuffer.length),
+      wrongNetworkAddressBuffer,
+    ]),
+    'Address',
+  )).toThrow();
 });
 
 test('VarInt', () => {
