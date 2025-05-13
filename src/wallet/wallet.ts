@@ -1123,6 +1123,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
+   * Gets the current network name
+   * @return {string} The network name. Ex.: 'mainnet', 'testnet'
+   */
+  getNetwork(): string {
+    return this.network.name;
+  }
+
+  /**
    * Get the current address to be used
    *
    * @memberof HathorWalletServiceWallet

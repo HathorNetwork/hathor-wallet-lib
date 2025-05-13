@@ -104,6 +104,35 @@ test('getAddressAtIndex', async () => {
   await expect(wallet.getAddressAtIndex(0)).rejects.toThrow('Error getting wallet addresses.');
 });
 
+test('getNetwork', () => {
+  const requestPassword = jest.fn();
+  const network = new Network('testnet');
+  const seed = defaultWalletSeed;
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+
+  // Should return the network name from the network object
+  expect(wallet.getNetwork()).toBe('testnet');
+
+  // Test with a different network
+  const mainnetWallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network: new Network('mainnet'),
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+
+  expect(mainnetWallet.getNetwork()).toBe('mainnet');
+});
+
 test('getTxBalance', async () => {
   const requestPassword = jest.fn();
   const network = new Network('testnet');
