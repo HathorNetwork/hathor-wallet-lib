@@ -6,6 +6,7 @@ on:
     - release
     - release-candidate
     - feat/nc-args-serialization
+    - feat/nc-args-class
     tags:
     - v*
   pull_request:
@@ -14,6 +15,7 @@ on:
     - release-candidate
     - master
     - feat/nc-args-serialization
+    - feat/nc-args-class
 jobs:
   linter:
     runs-on: 'ubuntu-latest'
