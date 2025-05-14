@@ -95,6 +95,7 @@ describe('full cycle of bet nano contract', () => {
 
     // Create NC
     const oracleData = getOracleBuffer(address1, network);
+    console.debug('Call to initialize');
     const tx1 = await wallet.createAndSendNanoContractTransaction(
       NANO_CONTRACTS_INITIALIZE_METHOD,
       address0,
@@ -177,6 +178,7 @@ describe('full cycle of bet nano contract', () => {
     ).rejects.toThrow(NanoContractTransactionError);
 
     // Bet 100 to address 2
+    console.debug('First call to bet');
     const txBet = await wallet.createAndSendNanoContractTransaction('bet', address2, {
       ncId: tx1.hash,
       args: [address2, '1x0'],
@@ -232,6 +234,7 @@ describe('full cycle of bet nano contract', () => {
 
     // Bet 200 to address 3
     const address3 = await wallet.getAddressAtIndex(3);
+    console.debug('Second call to bet');
     const txBet2 = await wallet.createAndSendNanoContractTransaction('bet', address3, {
       ncId: tx1.hash,
       args: [address3, '2x0'],
@@ -324,10 +327,11 @@ describe('full cycle of bet nano contract', () => {
     const nanoSerializer = new Serializer(network);
     const result = '1x0';
     const resultSerialized = nanoSerializer.serializeFromType(result, 'str');
-    const inputData = await getOracleInputData(oracleData, Buffer.from(tx1.hash, 'hex'), resultSerialized, wallet);
+    const inputData = await getOracleInputData(oracleData, tx1.hash, resultSerialized, wallet);
+    console.debug('Call to set_result');
     const txSetResult = await wallet.createAndSendNanoContractTransaction('set_result', address1, {
       ncId: tx1.hash,
-      args: [`${bufferToHex(inputData)},${bufferToHex(tx1.hash)},${result},str`],
+      args: [`${bufferToHex(inputData)},${result},str`],
     });
     await checkTxValid(wallet, txSetResult);
     txIds.push(txSetResult.hash);
@@ -373,11 +377,10 @@ describe('full cycle of bet nano contract', () => {
       (txSetResultParser.parsedArgs[0].value as NanoContractSignedData).ncId
       // @ts-expect-error toMatchBuffer is defined in setupTests.js
     ).toMatchBuffer(Buffer.from(tx1.hash, 'hex'));
-    expect((txSetResultParser.parsedArgs[0].value as NanoContractSignedData).value).toEqual(
-      result
-    );
+    expect((txSetResultParser.parsedArgs[0].value as NanoContractSignedData).value).toEqual(result);
 
     // Try to withdraw to address 2, success
+    console.debug('Call to withdraw');
     const txWithdrawal = await wallet.createAndSendNanoContractTransaction('withdraw', address2, {
       ncId: tx1.hash,
       actions: [

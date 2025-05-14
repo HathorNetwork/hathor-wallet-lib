@@ -10,7 +10,6 @@ import {
   NanoContractArgumentSingleType,
   NanoContractArgumentType,
   NanoContractParsedArgument,
-  NanoContractRawSignedData,
   NanoContractSignedData,
   BufferROExtract,
   NanoContractArgumentApiInputType,
@@ -167,41 +166,12 @@ const OptionalApiInputScheme = z
 const SignedDataApiInputScheme = z
   .string()
   .transform(value => value.split(','))
-  .pipe(
-    z.tuple([
-      z.string().regex(/^[0-9A-Fa-f]+$/),
-      z.string().regex(/^[0-9A-Fa-f]+$/),
-      z.string(),
-      z.string(),
-    ])
-  )
-  .transform((value, ctx) => {
-    const signature = Buffer.from(value[0], 'hex');
-    const ncId = Buffer.from(value[1], 'hex');
-    const type = value[3];
-    const refinedValue = refineSingleValue(ctx, value[2], type);
-    const ret: NanoContractSignedData = {
-      signature,
-      type,
-      ncId,
-      value: refinedValue,
-    };
-    return ret;
-  });
-
-/**
- * Type and value validation for RawSignedData types.
- * returns an instance of NanoContractRawSignedData
- */
-const RawSignedDataApiInputScheme = z
-  .string()
-  .transform(value => value.split(','))
   .pipe(z.tuple([z.string().regex(/^[0-9A-Fa-f]+$/), z.string(), z.string()]))
   .transform((value, ctx) => {
     const signature = Buffer.from(value[0], 'hex');
     const type = value[2];
     const refinedValue = refineSingleValue(ctx, value[1], type);
-    const ret: NanoContractRawSignedData = {
+    const ret: NanoContractSignedData = {
       signature,
       type,
       value: refinedValue,
@@ -249,20 +219,14 @@ export class NanoContractMethodArgument {
   /**
    * User input and api serialized input may not be encoded in the actual value type.
    *
-   * ## SignedData
-   * We expect the value as a string separated by comma (,) with 4 elements
-   * (signature, ncID, value, type)
+   * ## SignedData and RawSignedData
+   * We expect the value as a string separated by comma (,) with 3 elements
+   * (signature, value, type)
    * Since the value is encoded as a string some special cases apply:
    * - bool: 'true' or 'false'.
    * - bytes (and any bytes encoded value): hex encoded string of the byte value.
    *
    * While the value should be the NanoContractSignedDataSchema
-   *
-   * ## RawSignedData
-   * We expect the value as a string separated by comma (,) with 3 elements
-   * (signature, value, type)
-   *
-   * While the value should be the NanoContractRawSignedDataSchema
    */
   static fromApiInput(
     name: string,
@@ -272,17 +236,12 @@ export class NanoContractMethodArgument {
     const isContainerType = getContainerType(type) !== null;
     if (isContainerType) {
       const [containerType, innerType] = getContainerInternalType(type);
-      if (containerType === 'SignedData') {
+      if (containerType === 'SignedData' || containerType === 'RawSignedData') {
         // Parse string SignedData into NanoContractSignedData
         const data = SignedDataApiInputScheme.parse(value);
         if (data.type !== innerType.trim()) {
-          throw new Error();
+          throw new Error('Invalid signed data type');
         }
-        return new NanoContractMethodArgument(name, type, data);
-      }
-      if (containerType === 'RawSignedData') {
-        // Parse string RawSignedData into NanoContractRawSignedData
-        const data = RawSignedDataApiInputScheme.parse(value);
         return new NanoContractMethodArgument(name, type, data);
       }
       if (containerType === 'Optional') {
@@ -316,22 +275,8 @@ export class NanoContractMethodArgument {
       return value;
     }
 
-    if (this.type.startsWith('SignedData')) {
+    if (this.type.startsWith('SignedData') || this.type.startsWith('RawSignedData')) {
       const data = this.value as NanoContractSignedData;
-      return {
-        name: this.name,
-        type: this.type,
-        parsed: [
-          data.signature.toString('hex'),
-          data.ncId.toString('hex'),
-          prepSingleValue(data.type, data.value),
-          this.type,
-        ].join(','),
-      };
-    }
-
-    if (this.type.startsWith('RawSignedData')) {
-      const data = this.value as NanoContractRawSignedData;
       return {
         name: this.name,
         type: this.type,

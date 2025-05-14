@@ -14,7 +14,6 @@ import {
   BufferROExtract,
   NanoContractSignedData,
   NanoContractArgumentSingleType,
-  NanoContractRawSignedData,
 } from './types';
 import { OutputValueType } from '../types';
 import { NC_ARGS_MAX_BYTES_LENGTH } from '../constants';
@@ -79,9 +78,9 @@ class Deserializer {
     switch (containerType) {
       case 'Optional':
         return this.toOptional(buf, internalType);
+      case 'RawSignedData':
       case 'SignedData':
         return this.toSignedData(buf, internalType);
-      case 'RawSignedData':
       case 'Tuple':
         throw new Error('Not implemented yet');
       default:
@@ -288,38 +287,6 @@ class Deserializer {
     };
   }
 
-  toSignedData(signedData: Buffer, type: string): BufferROExtract<NanoContractSignedData> {
-    // The SignedData is serialized as `ContractId+data+Signature`
-
-    // Reading ContractId
-    const ncIdResult = this.deserializeFromType(signedData, 'ContractId');
-    const ncId = ncIdResult.value as Buffer;
-    const bytesReadFromContractId = ncIdResult.bytesRead;
-
-    const buf = signedData.subarray(bytesReadFromContractId);
-
-    // Reading argument
-    const parseResult = this.deserializeFromType(buf, type);
-    const parsed = parseResult.value;
-    const bytesReadFromValue = parseResult.bytesRead;
-
-    // Reading signature as bytes
-    const { value: parsedSignature, bytesRead: bytesReadFromSignature } = this.deserializeFromType(
-      buf.subarray(bytesReadFromValue),
-      'bytes'
-    );
-
-    return {
-      value: {
-        type,
-        ncId,
-        value: parsed as NanoContractArgumentSingleType,
-        signature: parsedSignature as Buffer,
-      },
-      bytesRead: bytesReadFromContractId + bytesReadFromValue + bytesReadFromSignature,
-    };
-  }
-
   /**
    * Deserialize a signed value
    *
@@ -332,18 +299,19 @@ class Deserializer {
    * @memberof Deserializer
    * @inner
    */
-  toRawSignedData(signedData: Buffer, type: string): BufferROExtract<NanoContractRawSignedData> {
-    // RawSignData[T] is serialized as Serialize(T)+Serialize(sign(T)) where sign() returns a byte str
-    // Which means we can parse the T argument, then read the bytes after.
+  toSignedData(signedData: Buffer, type: string): BufferROExtract<NanoContractSignedData> {
+    // The SignedData is serialized as `ContractId+data+Signature`
 
     // Reading argument
     const parseResult = this.deserializeFromType(signedData, type);
     const parsed = parseResult.value;
     const bytesReadFromValue = parseResult.bytesRead;
 
-    // Reading signature
+    const buf = signedData.subarray(bytesReadFromValue);
+
+    // Reading signature as bytes
     const { value: parsedSignature, bytesRead: bytesReadFromSignature } = this.deserializeFromType(
-      signedData.subarray(bytesReadFromValue),
+      buf,
       'bytes'
     );
 

@@ -43,19 +43,9 @@ export const NanoContractSignedDataSchema = z.object({
   type: z.string(),
   signature: z.instanceof(Buffer),
   value: NanoContractArgumentSingleSchema,
-  ncId: z.instanceof(Buffer),
+  ncId: z.instanceof(Buffer).nullish(),
 });
 export type NanoContractSignedData = z.output<typeof NanoContractSignedDataSchema>;
-
-/**
- * NanoContract RawSignedData method argument type
- */
-export const NanoContractRawSignedDataSchema = z.object({
-  type: z.string(),
-  signature: z.instanceof(Buffer),
-  value: NanoContractArgumentSingleSchema,
-});
-export type NanoContractRawSignedData = z.output<typeof NanoContractRawSignedDataSchema>;
 
 /**
  * Intermediate schema for all possible Nano contract argument type
@@ -64,7 +54,6 @@ export type NanoContractRawSignedData = z.output<typeof NanoContractRawSignedDat
 const _NanoContractArgumentType1Schema = z.union([
   NanoContractArgumentSingleSchema,
   NanoContractSignedDataSchema,
-  NanoContractRawSignedDataSchema,
 ]);
 
 /**

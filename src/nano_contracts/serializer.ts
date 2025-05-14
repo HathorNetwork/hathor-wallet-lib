@@ -8,11 +8,7 @@
 import Address from '../models/address';
 import Network from '../models/network';
 import { signedIntToBytes, bigIntToBytes } from '../utils/buffer';
-import {
-  NanoContractArgumentType,
-  NanoContractRawSignedData,
-  NanoContractSignedData,
-} from './types';
+import { NanoContractArgumentType, NanoContractSignedData } from './types';
 import { OutputValueType } from '../types';
 import leb128Util from '../utils/leb128';
 import { getContainerInternalType, getContainerType } from './utils';
@@ -74,12 +70,11 @@ class Serializer {
     switch (containerType) {
       case 'Optional':
         return this.fromOptional(value, innerType);
+      case 'RawSignedData':
       case 'SignedData':
         return this.fromSignedData(value as NanoContractSignedData, innerType);
       case 'Tuple':
         return this.fromTuple(value as NanoContractArgumentType[], innerType);
-      case 'RawSignedData':
-        throw new Error('Not implemented');
       default:
         throw new Error('Invalid type');
     }
@@ -227,36 +222,6 @@ class Serializer {
       throw new Error('type mismatch');
     }
 
-    const serialized = this.serializeFromType(
-      [signedValue.ncId, signedValue.value],
-      `Tuple[ContractId, ${type}]`,
-    );
-    ret.push(serialized);
-    const signature = this.serializeFromType(signedValue.signature, 'bytes');
-    ret.push(signature);
-
-    return Buffer.concat(ret);
-  }
-
-  /**
-   * Serialize a signed value
-   * We expect the value as a string separated by comma (,)
-   * with 3 elements (inputData, value, type)
-   *
-   * The serialization will be
-   * [len(serializedValue)][serializedValue][inputData]
-   *
-   * @param signedValue String value with inputData, value, and type separated by comma
-   *
-   * @memberof Serializer
-   * @inner
-   */
-  fromRawSignedData(signedValue: NanoContractRawSignedData, type: string): Buffer {
-    const ret: Buffer[] = [];
-    if (signedValue.type !== type) {
-      throw new Error('type mismatch');
-    }
-
     const serialized = this.serializeFromType(signedValue.value, signedValue.type);
     ret.push(serialized);
     const signature = this.serializeFromType(signedValue.signature, 'bytes');
@@ -269,7 +234,7 @@ class Serializer {
     const typeArr = typeStr.split(',').map(t => t.trim());
     const serialized: Buffer[] = [];
     if (typeArr.length !== value.length) {
-      throw new Error('Tuple value with length mismatch, required ')
+      throw new Error('Tuple value with length mismatch, required ');
     }
     for (const [index, type] of typeArr.entries()) {
       serialized.push(this.serializeFromType(value[index], type));

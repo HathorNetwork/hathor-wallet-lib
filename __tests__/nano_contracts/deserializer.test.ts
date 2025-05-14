@@ -189,7 +189,6 @@ test('SignedData', () => {
   const valueInt: NanoContractSignedData = {
     type: 'int',
     value: 300,
-    ncId: Buffer.from('6e634944', 'hex'),
     signature: Buffer.from('74657374', 'hex'),
   };
   const serializedInt = serializer.serializeFromType(valueInt, 'SignedData[int]');
@@ -201,13 +200,10 @@ test('SignedData', () => {
   expect((deserializedInt as NanoContractSignedData).type).toEqual(valueInt.type);
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   expect((deserializedInt as NanoContractSignedData).signature).toMatchBuffer(valueInt.signature);
-  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect((deserializedInt as NanoContractSignedData).ncId).toMatchBuffer(valueInt.ncId);
   expect((deserializedInt as NanoContractSignedData).value).toEqual(valueInt.value);
 
   const valueStr: NanoContractSignedData = {
     type: 'str',
-    ncId: Buffer.from('6e634944', 'hex'),
     value: 'test',
     signature: Buffer.from('74657374', 'hex'),
   };
@@ -220,13 +216,10 @@ test('SignedData', () => {
   expect((deserializedStr as NanoContractSignedData).type).toEqual(valueStr.type);
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   expect((deserializedStr as NanoContractSignedData).signature).toMatchBuffer(valueStr.signature);
-  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect((deserializedStr as NanoContractSignedData).ncId).toMatchBuffer(valueStr.ncId);
   expect((deserializedStr as NanoContractSignedData).value).toEqual(valueStr.value);
 
   const valueBytes: NanoContractSignedData = {
     type: 'bytes',
-    ncId: Buffer.from('6e634944', 'hex'),
     value: Buffer.from('74657374', 'hex'),
     signature: Buffer.from('74657374', 'hex'),
   };
@@ -242,13 +235,10 @@ test('SignedData', () => {
     valueBytes.signature
   );
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect((deserializedBytes as NanoContractSignedData).ncId).toMatchBuffer(valueBytes.ncId);
-  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   expect((deserializedBytes as NanoContractSignedData).value).toMatchBuffer(valueBytes.value);
 
   const valueBoolFalse: NanoContractSignedData = {
     type: 'bool',
-    ncId: Buffer.from('6e634944', 'hex'),
     value: false,
     signature: Buffer.from('74657374', 'hex'),
   };
@@ -263,17 +253,10 @@ test('SignedData', () => {
   expect((deserializedBoolFalse as NanoContractSignedData).signature).toMatchBuffer(
     valueBoolFalse.signature
   );
-  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect((deserializedBoolFalse as NanoContractSignedData).ncId).toMatchBuffer(
-    valueBoolFalse.ncId
-  );
-  expect((deserializedBoolFalse as NanoContractSignedData).value).toEqual(
-    valueBoolFalse.value
-  );
+  expect((deserializedBoolFalse as NanoContractSignedData).value).toEqual(valueBoolFalse.value);
 
   const valueBoolTrue: NanoContractSignedData = {
     type: 'bool',
-    ncId: Buffer.from('6e634944', 'hex'),
     value: true,
     signature: Buffer.from('74657374', 'hex'),
   };
@@ -288,15 +271,10 @@ test('SignedData', () => {
   expect((deserializedBoolTrue as NanoContractSignedData).signature).toMatchBuffer(
     valueBoolTrue.signature
   );
-  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect((deserializedBoolTrue as NanoContractSignedData).ncId).toMatchBuffer(
-    valueBoolTrue.ncId
-  );
   expect((deserializedBoolTrue as NanoContractSignedData).value).toEqual(valueBoolTrue.value);
 
   const valueVarInt: NanoContractSignedData = {
     type: 'VarInt',
-    ncId: Buffer.from('6e634944', 'hex'),
     value: 300n,
     signature: Buffer.from('74657374', 'hex'),
   };
@@ -310,10 +288,6 @@ test('SignedData', () => {
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   expect((deserializedVarInt as NanoContractSignedData).signature).toMatchBuffer(
     valueVarInt.signature
-  );
-  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect((deserializedVarInt as NanoContractSignedData).ncId).toMatchBuffer(
-    valueVarInt.ncId
   );
   expect((deserializedVarInt as NanoContractSignedData).value).toEqual(valueVarInt.value);
 });

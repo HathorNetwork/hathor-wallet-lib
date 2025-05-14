@@ -133,15 +133,12 @@ export const getOracleBuffer = (oracle: string, network: Network): Buffer => {
  */
 export const getOracleInputData = async (
   oracleData: Buffer,
-  contractId: Buffer,
+  contractId: string,
   resultSerialized: Buffer,
   wallet: HathorWallet
 ) => {
-  const actualValue = Buffer.concat([
-    leb128.encodeUnsigned(contractId.length),
-    contractId,
-    resultSerialized,
-  ]);
+  const ncId = Buffer.from(contractId, 'hex');
+  const actualValue = Buffer.concat([leb128.encodeUnsigned(ncId.length), ncId, resultSerialized]);
   return unsafeGetOracleInputData(oracleData, actualValue, wallet);
 };
 
