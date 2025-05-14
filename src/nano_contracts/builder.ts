@@ -483,7 +483,7 @@ class NanoContractTransactionBuilder {
     if (this.vertexType === NanoContractVertexType.CREATE_TOKEN_TRANSACTION) {
       if (this.createTokenOptions === null) {
         throw new NanoContractTransactionError(
-          'Create token options can\'t be null when creating a create token transaction.'
+          'Create token options cannot be null when creating a create token transaction.'
         );
       }
 
