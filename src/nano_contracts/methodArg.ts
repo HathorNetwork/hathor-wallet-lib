@@ -177,13 +177,14 @@ const SignedDataApiInputScheme = z
   )
   .transform((value, ctx) => {
     const signature = Buffer.from(value[0], 'hex');
-    const ncID = Buffer.from(value[1], 'hex');
+    const ncId = Buffer.from(value[1], 'hex');
     const type = value[3];
     const refinedValue = refineSingleValue(ctx, value[2], type);
     const ret: NanoContractSignedData = {
       signature,
       type,
-      value: [ncID, refinedValue],
+      ncId,
+      value: refinedValue,
     };
     return ret;
   });
@@ -322,8 +323,8 @@ export class NanoContractMethodArgument {
         type: this.type,
         parsed: [
           data.signature.toString('hex'),
-          data.value[0].toString('hex'),
-          prepSingleValue(data.type, data.value[1]),
+          data.ncId.toString('hex'),
+          prepSingleValue(data.type, data.value),
           this.type,
         ].join(','),
       };

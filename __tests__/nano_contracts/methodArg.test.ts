@@ -29,10 +29,10 @@ describe('fromApiInput', () => {
       Buffer.from([0x74, 0x65, 0x73, 0x74])
     );
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-    expect((arg.value as NanoContractSignedData).value[0]).toMatchBuffer(
+    expect((arg.value as NanoContractSignedData).ncId).toMatchBuffer(
       Buffer.from([0x6e, 0x63, 0x49, 0x44])
     );
-    expect((arg.value as NanoContractSignedData).value[1]).toEqual(300);
+    expect((arg.value as NanoContractSignedData).value).toEqual(300);
   });
 
   it('should read SignedData[VarInt]', () => {
@@ -55,10 +55,10 @@ describe('fromApiInput', () => {
       Buffer.from([0x74, 0x65, 0x73, 0x74])
     );
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-    expect((arg.value as NanoContractSignedData).value[0]).toMatchBuffer(
+    expect((arg.value as NanoContractSignedData).ncId).toMatchBuffer(
       Buffer.from([0x6e, 0x63, 0x49, 0x44])
     );
-    expect((arg.value as NanoContractSignedData).value[1]).toEqual(300n);
+    expect((arg.value as NanoContractSignedData).value).toEqual(300n);
   });
 
   it('should read SignedData[str]', () => {
@@ -81,10 +81,10 @@ describe('fromApiInput', () => {
       Buffer.from([0x74, 0x65, 0x73, 0x74])
     );
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-    expect((arg.value as NanoContractSignedData).value[0]).toMatchBuffer(
+    expect((arg.value as NanoContractSignedData).ncId).toMatchBuffer(
       Buffer.from([0x6e, 0x63, 0x49, 0x44])
     );
-    expect((arg.value as NanoContractSignedData).value[1]).toEqual('test');
+    expect((arg.value as NanoContractSignedData).value).toEqual('test');
   });
 
   it('should read SignedData[bytes]', () => {
@@ -107,11 +107,11 @@ describe('fromApiInput', () => {
       Buffer.from([0x74, 0x65, 0x73, 0x74])
     );
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-    expect((arg.value as NanoContractSignedData).value[0]).toMatchBuffer(
+    expect((arg.value as NanoContractSignedData).ncId).toMatchBuffer(
       Buffer.from([0x6e, 0x63, 0x49, 0x44])
     );
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-    expect((arg.value as NanoContractSignedData).value[1]).toMatchBuffer(
+    expect((arg.value as NanoContractSignedData).value).toMatchBuffer(
       Buffer.from([0x74, 0x65, 0x73, 0x74])
     );
   });
@@ -136,10 +136,10 @@ describe('fromApiInput', () => {
       Buffer.from([0x74, 0x65, 0x73, 0x74])
     );
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-    expect((arg.value as NanoContractSignedData).value[0]).toMatchBuffer(
+    expect((arg.value as NanoContractSignedData).ncId).toMatchBuffer(
       Buffer.from([0x6e, 0x63, 0x49, 0x44])
     );
-    expect((arg.value as NanoContractSignedData).value[1]).toEqual(true);
+    expect((arg.value as NanoContractSignedData).value).toEqual(true);
   });
 
   it('should read false SignedData[bool]', () => {
@@ -162,10 +162,10 @@ describe('fromApiInput', () => {
       Buffer.from([0x74, 0x65, 0x73, 0x74])
     );
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-    expect((arg.value as NanoContractSignedData).value[0]).toMatchBuffer(
+    expect((arg.value as NanoContractSignedData).ncId).toMatchBuffer(
       Buffer.from([0x6e, 0x63, 0x49, 0x44])
     );
-    expect((arg.value as NanoContractSignedData).value[1]).toEqual(false);
+    expect((arg.value as NanoContractSignedData).value).toEqual(false);
   });
 
   it('should read str values', () => {

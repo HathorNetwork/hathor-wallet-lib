@@ -76,8 +76,9 @@ class Serializer {
         return this.fromOptional(value, innerType);
       case 'SignedData':
         return this.fromSignedData(value as NanoContractSignedData, innerType);
-      case 'RawSignedData':
       case 'Tuple':
+        return this.fromTuple(value as NanoContractArgumentType[], innerType);
+      case 'RawSignedData':
         throw new Error('Not implemented');
       default:
         throw new Error('Invalid type');
@@ -226,9 +227,10 @@ class Serializer {
       throw new Error('type mismatch');
     }
 
-    const ncId = this.serializeFromType(signedValue.value[0], 'bytes');
-    ret.push(ncId);
-    const serialized = this.serializeFromType(signedValue.value[1], signedValue.type);
+    const serialized = this.serializeFromType(
+      [signedValue.ncId, signedValue.value],
+      `Tuple[ContractId, ${type}]`,
+    );
     ret.push(serialized);
     const signature = this.serializeFromType(signedValue.signature, 'bytes');
     ret.push(signature);
@@ -261,6 +263,18 @@ class Serializer {
     ret.push(signature);
 
     return Buffer.concat(ret);
+  }
+
+  fromTuple(value: NanoContractArgumentType[], typeStr: string): Buffer {
+    const typeArr = typeStr.split(',').map(t => t.trim());
+    const serialized: Buffer[] = [];
+    if (typeArr.length !== value.length) {
+      throw new Error('Tuple value with length mismatch, required ')
+    }
+    for (const [index, type] of typeArr.entries()) {
+      serialized.push(this.serializeFromType(value[index], type));
+    }
+    return Buffer.concat(serialized);
   }
 }
 

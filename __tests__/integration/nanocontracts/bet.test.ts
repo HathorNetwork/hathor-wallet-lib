@@ -324,7 +324,7 @@ describe('full cycle of bet nano contract', () => {
     const nanoSerializer = new Serializer(network);
     const result = '1x0';
     const resultSerialized = nanoSerializer.serializeFromType(result, 'str');
-    const inputData = await getOracleInputData(oracleData, resultSerialized, wallet);
+    const inputData = await getOracleInputData(oracleData, Buffer.from(tx1.hash, 'hex'), resultSerialized, wallet);
     const txSetResult = await wallet.createAndSendNanoContractTransaction('set_result', address1, {
       ncId: tx1.hash,
       args: [`${bufferToHex(inputData)},${bufferToHex(tx1.hash)},${result},str`],
@@ -370,10 +370,10 @@ describe('full cycle of bet nano contract', () => {
       // @ts-expect-error toMatchBuffer is defined in setupTests.js
     ).toMatchBuffer(inputData);
     expect(
-      (txSetResultParser.parsedArgs[0].value as NanoContractSignedData).value[0]
+      (txSetResultParser.parsedArgs[0].value as NanoContractSignedData).ncId
       // @ts-expect-error toMatchBuffer is defined in setupTests.js
     ).toMatchBuffer(Buffer.from(tx1.hash, 'hex'));
-    expect((txSetResultParser.parsedArgs[0].value as NanoContractSignedData).value[1]).toEqual(
+    expect((txSetResultParser.parsedArgs[0].value as NanoContractSignedData).value).toEqual(
       result
     );
 

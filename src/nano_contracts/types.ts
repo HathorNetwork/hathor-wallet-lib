@@ -42,7 +42,8 @@ export type NanoContractSignedDataInnerType = [Buffer, NanoContractArgumentSingl
 export const NanoContractSignedDataSchema = z.object({
   type: z.string(),
   signature: z.instanceof(Buffer),
-  value: z.tuple([z.instanceof(Buffer), NanoContractArgumentSingleSchema]),
+  value: NanoContractArgumentSingleSchema,
+  ncId: z.instanceof(Buffer),
 });
 export type NanoContractSignedData = z.output<typeof NanoContractSignedDataSchema>;
 

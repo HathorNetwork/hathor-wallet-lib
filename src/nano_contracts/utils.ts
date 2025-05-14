@@ -30,6 +30,7 @@ import {
 } from './types';
 import { NANO_CONTRACTS_INITIALIZE_METHOD } from '../constants';
 import { NanoContractMethodArgument } from './methodArg';
+import leb128 from '../utils/leb128';
 
 export function getContainerInternalType(
   type: string
@@ -131,6 +132,20 @@ export const getOracleBuffer = (oracle: string, network: Network): Buffer => {
  * @param wallet Hathor Wallet object
  */
 export const getOracleInputData = async (
+  oracleData: Buffer,
+  contractId: Buffer,
+  resultSerialized: Buffer,
+  wallet: HathorWallet
+) => {
+  const actualValue = Buffer.concat([
+    leb128.encodeUnsigned(contractId.length),
+    contractId,
+    resultSerialized,
+  ]);
+  return unsafeGetOracleInputData(oracleData, actualValue, wallet);
+};
+
+export const unsafeGetOracleInputData = async (
   oracleData: Buffer,
   resultSerialized: Buffer,
   wallet: HathorWallet

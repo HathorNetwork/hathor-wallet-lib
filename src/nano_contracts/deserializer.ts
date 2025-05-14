@@ -312,7 +312,8 @@ class Deserializer {
     return {
       value: {
         type,
-        value: [ncId, parsed as NanoContractArgumentSingleType],
+        ncId,
+        value: parsed as NanoContractArgumentSingleType,
         signature: parsedSignature as Buffer,
       },
       bytesRead: bytesReadFromContractId + bytesReadFromValue + bytesReadFromSignature,
