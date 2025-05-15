@@ -352,13 +352,6 @@ describe('full cycle of bet nano contract', () => {
     txSetResultParser.parseAddress();
     await txSetResultParser.parseArguments();
     expect(txSetResultParser.address?.base58).toBe(address1);
-    expect(txSetResultParser.parsedArgs).toStrictEqual([
-      {
-        name: 'result',
-        type: 'SignedData[str]',
-        parsed: `${bufferToHex(inputData)},${result},str`,
-      },
-    ]);
     expect(txSetResultParser.parsedArgs).not.toBeNull();
     if (txSetResultParser.parsedArgs === null) {
       throw new Error('Could not parse args');
@@ -371,12 +364,8 @@ describe('full cycle of bet nano contract', () => {
     expect((txSetResultParser.parsedArgs[0].value as NanoContractSignedData).type).toEqual('str');
     expect(
       (txSetResultParser.parsedArgs[0].value as NanoContractSignedData).signature
-      // @ts-expect-error toMatchBuffer is defined in setupTests.js
+    // @ts-expect-error toMatchBuffer is defined in setupTests.js
     ).toMatchBuffer(inputData);
-    expect(
-      (txSetResultParser.parsedArgs[0].value as NanoContractSignedData).ncId
-      // @ts-expect-error toMatchBuffer is defined in setupTests.js
-    ).toMatchBuffer(Buffer.from(tx1.hash, 'hex'));
     expect((txSetResultParser.parsedArgs[0].value as NanoContractSignedData).value).toEqual(result);
 
     // Try to withdraw to address 2, success
@@ -404,7 +393,7 @@ describe('full cycle of bet nano contract', () => {
 
     const txWithdrawalParser = new NanoContractTransactionParser(
       blueprintId,
-      'set_result',
+      'withdraw',
       txWithdrawalData.tx.nc_pubkey,
       network,
       txWithdrawalData.tx.nc_args

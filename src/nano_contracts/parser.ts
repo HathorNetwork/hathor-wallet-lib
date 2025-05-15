@@ -95,6 +95,10 @@ class NanoContractTransactionParser {
       throw new NanoContractTransactionParseError(`Number of arguments do not match blueprint.`);
     }
 
+    if (methodArgs.length === 0) {
+      return;
+    }
+
     for (const arg of methodArgs) {
       let parsed: NanoContractMethodArgument;
       let size: number;

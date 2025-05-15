@@ -31,12 +31,6 @@ export const NanoContractArgumentSingleSchema = z.union([
 export type NanoContractArgumentSingleType = z.output<typeof NanoContractArgumentSingleSchema>;
 
 /**
- * A `SignedData` value is the tuple `[ContractId, Value]`
- * which is parsed as `[Buffer, NanoContractArgumentSingleType]`
- */
-export type NanoContractSignedDataInnerType = [Buffer, NanoContractArgumentSingleType];
-
-/**
  * NanoContract SignedData method argument type
  */
 export const NanoContractSignedDataSchema = z.object({
