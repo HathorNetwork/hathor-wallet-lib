@@ -6,6 +6,8 @@
  */
 
 import { z } from 'zod';
+import { NATIVE_TOKEN_UID } from '../../../constants';
+import { txIdSchema } from '../../../schemas';
 import { bigIntCoercibleSchema } from '../../../utils/bigint';
 
 /**
@@ -80,10 +82,15 @@ export const newAddressesResponseSchema = baseResponseSchema.extend({
 });
 
 /**
+ * TokenId schema
+ */
+export const tokenIdSchema = z.union([txIdSchema, z.literal(NATIVE_TOKEN_UID)]);
+
+/**
  * Schema for token information.
  */
 export const tokenInfoSchema = z.object({
-  id: z.string().regex(/^[a-fA-F0-9]{64}$|^00$/),
+  id: tokenIdSchema,
   name: z.string(),
   symbol: z.string(),
 });
@@ -163,9 +170,9 @@ export const txProposalInputsSchema = z.object({
  * Represents the outputs that will be created in a transaction.
  */
 export const txProposalOutputsSchema = z.object({
-  address: z.string(),
+  address: AddressSchema,
   value: bigIntCoercibleSchema,
-  token: z.string(),
+  token: tokenIdSchema,
   timelock: z.number().nullable(),
 });
 
@@ -206,6 +213,10 @@ export const fullNodeVersionDataSchema = z
     rewardSpendMinBlocks: z.number(),
     maxNumberInputs: z.number(),
     maxNumberOutputs: z.number(),
+    decimalPlaces: z.number().nullable().optional(),
+    genesisBlockHash: z.string().nullable().optional(),
+    genesisTx1Hash: z.string().nullable().optional(),
+    genesisTx2Hash: z.string().nullable().optional(),
   })
   .passthrough();
 
@@ -218,15 +229,15 @@ export const fullNodeInputSchema = z.object({
   token_data: z.number(),
   script: z.string(),
   decoded: z.object({
-    type: z.string(),
-    address: z.string(),
+    type: z.string().nullable().optional(),
+    address: AddressSchema.nullable().optional(),
     timelock: z.number().nullable().optional(),
-    value: bigIntCoercibleSchema,
-    token_data: z.number(),
+    value: bigIntCoercibleSchema.nullable().optional(),
+    token_data: z.number().nullable().optional(),
   }),
-  tx_id: z.string(),
+  tx_id: txIdSchema,
   index: z.number(),
-  token: z.string().nullable().optional(),
+  token: tokenIdSchema.nullable().optional(),
   spent_by: z.string().nullable().optional(),
 });
 
@@ -239,14 +250,14 @@ export const fullNodeOutputSchema = z.object({
   token_data: z.number(),
   script: z.string(),
   decoded: z.object({
-    type: z.string(),
-    address: z.string(),
+    type: z.string().nullable().optional(),
+    address: AddressSchema.nullable().optional(),
     timelock: z.number().nullable().optional(),
-    value: bigIntCoercibleSchema,
-    token_data: z.number(),
+    value: bigIntCoercibleSchema.nullable().optional(),
+    token_data: z.number().nullable().optional(),
   }),
-  address: z.string(),
-  token: z.string(),
+  address: AddressSchema.nullable().optional(),
+  token: tokenIdSchema.nullable().optional(),
   authorities: bigIntCoercibleSchema,
   timelock: z.number().nullable(),
 });
@@ -374,7 +385,7 @@ export const txOutputResponseSchema = baseResponseSchema.extend({
       txId: z.string(),
       index: z.number(),
       tokenId: z.string(),
-      address: z.string(),
+      address: AddressSchema,
       value: bigIntCoercibleSchema,
       authorities: bigIntCoercibleSchema,
       timelock: z.number().nullable(),
@@ -390,7 +401,9 @@ export const txOutputResponseSchema = baseResponseSchema.extend({
  * Contains the authentication token.
  */
 export const authTokenResponseSchema = baseResponseSchema.extend({
-  token: z.string(),
+  token: z
+    .string()
+    .regex(/^[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+\.[A-Za-z0-9-_=]+$/, 'Invalid JWT token format'),
 });
 
 /**
@@ -404,7 +417,7 @@ export const txByIdResponseSchema = baseResponseSchema.extend({
       timestamp: z.number(),
       version: z.number(),
       voided: z.boolean(),
-      height: z.number().nullable(),
+      height: z.number().nullable().optional(),
       weight: z.number(),
       balance: bigIntCoercibleSchema,
       tokenId: z.string(),
@@ -419,14 +432,14 @@ export const txByIdResponseSchema = baseResponseSchema.extend({
  * Represents a transaction input with its decoded data.
  */
 export const txInputSchema = z.object({
-  tx_id: z.string(),
+  tx_id: txIdSchema,
   index: z.number(),
   value: bigIntCoercibleSchema,
   token_data: z.number(),
   script: z.string(),
   decoded: z.object({
     type: z.string(),
-    address: z.string(),
+    address: AddressSchema,
     timelock: z.number().nullable().optional(),
     value: bigIntCoercibleSchema,
     token_data: z.number(),
@@ -443,11 +456,54 @@ export const txOutputSchema = z.object({
   token_data: z.number(),
   script: z.string(),
   decoded: z.object({
-    type: z.string(),
-    address: z.string().optional(),
+    type: z.string().nullable().optional(),
+    address: AddressSchema.optional(),
     timelock: z.number().nullable().optional(),
     value: bigIntCoercibleSchema,
     token_data: z.number().optional(),
+  }),
+});
+
+/**
+ * Schema for Buffer-like scripts
+ */
+const bufferScriptSchema = z.object({
+  type: z.literal('Buffer'),
+  data: z.array(z.number()),
+});
+
+/**
+ * Schema for websocket transaction input.
+ */
+const wsTxInputSchema = z.object({
+  tx_id: txIdSchema,
+  index: z.number(),
+  value: bigIntCoercibleSchema,
+  token_data: z.number(),
+  script: bufferScriptSchema,
+  token: tokenIdSchema,
+  decoded: z.object({
+    type: z.string(),
+    address: AddressSchema,
+    timelock: z.number().nullable().optional(),
+  }),
+});
+
+/**
+ * Schema for websocket transaction output.
+ */
+const wsTxOutputSchema = z.object({
+  value: bigIntCoercibleSchema,
+  token_data: z.number(),
+  script: bufferScriptSchema,
+  decodedScript: z.any().nullable().optional(),
+  token: tokenIdSchema,
+  locked: z.boolean(),
+  index: z.number(),
+  decoded: z.object({
+    type: z.string().nullable().optional(),
+    address: AddressSchema.optional(),
+    timelock: z.number().nullable().optional(),
   }),
 });
 
@@ -456,52 +512,16 @@ export const txOutputSchema = z.object({
  * Represents the structure of transactions received via websocket.
  */
 export const wsTransactionSchema = z.object({
-  tx_id: z.string(),
+  tx_id: txIdSchema,
   nonce: z.number(),
   timestamp: z.number(),
   version: z.number(),
   voided: z.boolean(),
   weight: z.number(),
   parents: z.array(z.string()),
-  inputs: z.array(
-    z.object({
-      tx_id: z.string(),
-      index: z.number(),
-      value: bigIntCoercibleSchema,
-      token_data: z.number(),
-      script: z.object({
-        type: z.literal('Buffer'),
-        data: z.array(z.number()),
-      }),
-      token: z.string(),
-      decoded: z.object({
-        type: z.string(),
-        address: z.string(),
-        timelock: z.number().nullable(),
-      }),
-    })
-  ),
-  outputs: z.array(
-    z.object({
-      value: bigIntCoercibleSchema,
-      script: z.object({
-        type: z.literal('Buffer'),
-        data: z.array(z.number()),
-      }),
-      tokenData: z.number(),
-      decodedScript: z.null(),
-      token: z.string(),
-      locked: z.boolean(),
-      index: z.number(),
-      decoded: z.object({
-        type: z.string(),
-        address: z.string(),
-        timelock: z.number().nullable(),
-      }),
-      token_data: z.number(),
-    })
-  ),
-  height: z.number(),
+  inputs: z.array(wsTxInputSchema),
+  outputs: z.array(wsTxOutputSchema),
+  height: z.number().nullable().optional(),
   token_name: z.string().nullable(),
   token_symbol: z.string().nullable(),
   signal_bits: z.number(),

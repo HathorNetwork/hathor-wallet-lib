@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+import { getDefaultLogger } from '../types';
 import WalletServiceWebSocket from './websocket';
 import config from '../config';
 import BaseConnection, { DEFAULT_PARAMS, ConnectionParams } from '../connection';
@@ -55,6 +56,22 @@ export default class WalletServiceConnection extends BaseConnection {
    * */
   setWalletId(walletId: string) {
     this.walletId = walletId;
+  }
+
+  /**
+   * Handle received websocket messages, validating their schemas
+   * */
+  onWsMessage(type: string, payload) {
+    const logger = getDefaultLogger();
+
+    try {
+      const validatedTx = parseSchema(payload.data, wsTransactionSchema);
+      this.emit(type, validatedTx as WsTransaction);
+    } catch (e) {
+      // parseSchema already logs the validation error, so no need to log it
+      // again here.
+      logger.error(`Received a new websocket message (${type}) but schema validation failed.`);
+    }
   }
 
   /**

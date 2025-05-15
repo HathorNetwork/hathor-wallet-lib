@@ -10,8 +10,8 @@ import healthApi from './api/health';
 import versionApi from './api/version';
 import * as axios from './api/axiosInstance';
 import metadataApi from './api/metadataApi';
+import featuresApi from './api/featuresApi';
 import { Storage } from './storage/storage';
-import LevelDBStore from './storage/leveldb/store';
 import { MemoryStore } from './storage/memory_store';
 import network from './network';
 import HathorWallet from './new/wallet';
@@ -71,12 +71,12 @@ export {
   healthApi,
   versionApi,
   metadataApi,
+  featuresApi,
   errors,
   ErrorMessages,
   constants,
   axios,
   Storage,
-  LevelDBStore,
   MemoryStore,
   network,
   HathorWallet,
@@ -122,3 +122,6 @@ export {
   TransactionTemplateBuilder,
   WalletTxTemplateInterpreter,
 };
+
+export * from './nano_contracts/types';
+export * from './models/types';

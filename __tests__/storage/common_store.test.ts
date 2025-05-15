@@ -5,13 +5,9 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { HDPrivateKey } from 'bitcore-lib';
-import { LevelDBStore, MemoryStore, Storage } from '../../src/storage';
+import { MemoryStore, Storage } from '../../src/storage';
 import { TOKEN_AUTHORITY_MASK, TOKEN_MINT_MASK, GAP_LIMIT } from '../../src/constants';
-import walletUtils from '../../src/utils/wallet';
-import { ILockedUtxo, IUtxo, OutputValueType } from '../../src/types';
-
-const DATA_DIR = './testdata.leveldb';
+import { ILockedUtxo, IStore, IUtxo, OutputValueType } from '../../src/types';
 
 describe('locked utxo methods', () => {
   const spyDate = jest.spyOn(Date, 'now');
@@ -33,16 +29,9 @@ describe('locked utxo methods', () => {
     await testLockedUtxoMethods(store);
   });
 
-  it('should work with leveldb store', async () => {
-    const xpriv = new HDPrivateKey();
-    const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
-    const store = new LevelDBStore(walletId, DATA_DIR);
-    await testLockedUtxoMethods(store);
-  });
-
   // helper functions
 
-  async function countUtxos(store: LevelDBStore) {
+  async function countUtxos(store: IStore) {
     let utxoCount = 0;
     let lutxoCount = 0;
     for await (const _ of store.utxoIter()) {
@@ -115,7 +104,7 @@ describe('locked utxo methods', () => {
 
   // actual test body
 
-  async function testLockedUtxoMethods(store: LevelDBStore) {
+  async function testLockedUtxoMethods(store: IStore) {
     const lockedUtxos = [
       // utxo to be unlocked by time
       getLockedUtxo(
@@ -190,13 +179,6 @@ describe('registered tokens', () => {
     await testRegisteredTokens(store);
   });
 
-  it('should work with leveldb store', async () => {
-    const xpriv = new HDPrivateKey();
-    const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
-    const store = new LevelDBStore(walletId, DATA_DIR);
-    await testRegisteredTokens(store);
-  });
-
   async function testRegisteredTokens(store) {
     const storage = new Storage(store);
     await storage.registerToken({ uid: 'abc1', name: 'test token 1', symbol: 'TST1' });
@@ -208,13 +190,6 @@ describe('registered tokens', () => {
 describe('scanning policy methods', () => {
   it('should work with memory store', async () => {
     const store = new MemoryStore();
-    await testScanningPolicies(store);
-  });
-
-  it('should work with leveldb store', async () => {
-    const xpriv = new HDPrivateKey();
-    const walletId = walletUtils.getWalletIdFromXPub(xpriv.xpubkey);
-    const store = new LevelDBStore(walletId, DATA_DIR);
     await testScanningPolicies(store);
   });
 

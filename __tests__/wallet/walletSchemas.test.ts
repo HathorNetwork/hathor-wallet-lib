@@ -633,25 +633,41 @@ describe('Wallet API Schemas', () => {
   });
 
   describe('authTokenResponseSchema', () => {
-    it('should validate valid auth token response', () => {
+    it('should validate valid JWT token response', () => {
       const validData = {
         success: true,
-        token: token1,
+        token:
+          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c',
       };
       expect(() => authTokenResponseSchema.parse(validData)).not.toThrow();
     });
 
-    it('should reject invalid auth token response', () => {
+    it('should reject invalid JWT token response', () => {
       const invalidData = {
         success: true,
-        token: 123, // should be string
+        token: 'invalid.token', // Not a valid JWT format
+      };
+      expect(() => authTokenResponseSchema.parse(invalidData)).toThrow('Invalid JWT token format');
+    });
+
+    it('should reject response without token', () => {
+      const invalidData = {
+        success: true,
+      };
+      expect(() => authTokenResponseSchema.parse(invalidData)).toThrow();
+    });
+
+    it('should reject response with non-string token', () => {
+      const invalidData = {
+        success: true,
+        token: 12345, // Token should be a string
       };
       expect(() => authTokenResponseSchema.parse(invalidData)).toThrow();
     });
   });
 
   describe('txByIdResponseSchema', () => {
-    it('should validate valid tx by id response', () => {
+    it('should validate valid tx by id response with height present', () => {
       const validData = {
         success: true,
         txTokens: [
@@ -660,7 +676,7 @@ describe('Wallet API Schemas', () => {
             timestamp: 1234567890,
             version: 1,
             voided: false,
-            height: 1,
+            height: 1, // height is present and a number
             weight: 1,
             balance: 100n,
             tokenId: token1,
@@ -672,7 +688,71 @@ describe('Wallet API Schemas', () => {
       expect(() => txByIdResponseSchema.parse(validData)).not.toThrow();
     });
 
-    it('should reject invalid tx by id response', () => {
+    it('should validate valid tx by id response with height null', () => {
+      const validData = {
+        success: true,
+        txTokens: [
+          {
+            txId: tx1,
+            timestamp: 1234567890,
+            version: 1,
+            voided: false,
+            height: null, // height is present and null
+            weight: 1,
+            balance: 100n,
+            tokenId: token1,
+            tokenName: 'Token 1',
+            tokenSymbol: 'T1',
+          },
+        ],
+      };
+      expect(() => txByIdResponseSchema.parse(validData)).not.toThrow();
+    });
+
+    it('should validate valid tx by id response with height omitted', () => {
+      const validData = {
+        success: true,
+        txTokens: [
+          {
+            txId: tx1,
+            timestamp: 1234567890,
+            version: 1,
+            voided: false,
+            // height is omitted (optional)
+            weight: 1,
+            balance: 100n,
+            tokenId: token1,
+            tokenName: 'Token 1',
+            tokenSymbol: 'T1',
+          },
+        ],
+      };
+      expect(() => txByIdResponseSchema.parse(validData)).not.toThrow();
+    });
+
+    it('should reject invalid tx by id response with invalid height type', () => {
+      const invalidData = {
+        success: true,
+        txTokens: [
+          {
+            txId: tx1,
+            timestamp: 1234567890,
+            version: 1,
+            voided: false,
+            height: '1', // height should be number or null, not string
+            weight: 1,
+            balance: 283n,
+            tokenId: token1,
+            tokenName: 'Token 1',
+            tokenSymbol: 'T1',
+          },
+        ],
+      };
+      expect(() => txByIdResponseSchema.parse(invalidData)).toThrow();
+    });
+
+    it('should reject invalid tx by id response due to other fields', () => {
+      // Keep a test for general invalidity unrelated to height
       const invalidData = {
         success: true,
         txTokens: [
@@ -696,112 +776,130 @@ describe('Wallet API Schemas', () => {
   });
 
   describe('wsTransactionSchema', () => {
+    const validWsTxData = {
+      tx_id: '00000e0e193894909fc85dad8a778a8e7904de30362f53b4839e93cc315648e6',
+      nonce: 16488190,
+      timestamp: 1745940424,
+      version: 2,
+      voided: false,
+      weight: 17.43270481128759,
+      parents: [
+        '000000003a90c27be4093663ef1e1eb1564aa5462f282d86fc062add717b059a',
+        '0000762414270482d75b7c759d1b8bc7341a884084004042fb70eafe11a01eb6',
+      ],
+      inputs: [
+        {
+          tx_id: '0000762414270482d75b7c759d1b8bc7341a884084004042fb70eafe11a01eb6',
+          index: 0,
+          value: 1n, // Use BigInt notation
+          token_data: 0,
+          script: {
+            type: 'Buffer',
+            data: [
+              118, 169, 20, 107, 97, 132, 123, 120, 0, 1, 243, 13, 222, 197, 107, 73, 138, 22, 138,
+              241, 2, 209, 72, 136, 172,
+            ],
+          },
+          token: '00',
+          decoded: {
+            type: 'P2PKH',
+            address: 'HGJuWWGgRQ2roCfcmt5MCBJZx3yMYRz8dq',
+            timelock: null,
+          },
+        },
+      ],
+      outputs: [
+        {
+          value: 100n, // Use BigInt notation
+          token_data: 1,
+          script: {
+            type: 'Buffer',
+            data: [
+              118, 169, 20, 69, 227, 122, 171, 130, 223, 106, 158, 121, 173, 64, 26, 133, 156, 27,
+              199, 10, 82, 191, 81, 136, 172,
+            ],
+          },
+          decodedScript: null,
+          token: '00000e0e193894909fc85dad8a778a8e7904de30362f53b4839e93cc315648e6',
+          locked: false,
+          index: 0,
+          decoded: {
+            type: 'P2PKH',
+            address: 'HCtfX7Pz98ihXjPKCEugFHduVeuHgSXRcy',
+            timelock: null,
+          },
+        },
+      ],
+      height: 0,
+      token_name: 'Test',
+      token_symbol: 'TST',
+      signal_bits: 0,
+    };
+
     it('should validate valid websocket transaction', () => {
-      const validData = {
-        tx_id: tx1,
-        nonce: 1,
-        timestamp: 1234567890,
-        version: 1,
-        voided: false,
-        weight: 1,
-        parents: ['parent1'],
-        inputs: [
-          {
-            tx_id: tx1,
-            index: 0,
-            value: '100',
-            token_data: 0,
-            script: {
-              type: 'Buffer',
-              data: [1, 2, 3],
-            },
-            token: token1,
-            decoded: {
-              type: 'p2pkh',
-              address: addr1,
-              timelock: null,
-            },
-          },
-        ],
-        outputs: [
-          {
-            value: '100',
-            script: {
-              type: 'Buffer',
-              data: [1, 2, 3],
-            },
-            tokenData: 0,
-            decodedScript: null,
-            token: token1,
-            locked: false,
-            index: 0,
-            decoded: {
-              type: 'p2pkh',
-              address: addr1,
-              timelock: null,
-            },
-            token_data: 0,
-          },
-        ],
-        height: 1,
-        token_name: 'Token 1',
-        token_symbol: 'T1',
-        signal_bits: 0,
-      };
-      expect(() => wsTransactionSchema.parse(validData)).not.toThrow();
+      expect(() => wsTransactionSchema.parse(validWsTxData)).not.toThrow();
     });
 
-    it('should reject invalid websocket transaction', () => {
+    it('should validate websocket transaction with null height', () => {
+      const dataWithNullHeight = {
+        ...validWsTxData,
+        height: null,
+      };
+      expect(() => wsTransactionSchema.parse(dataWithNullHeight)).not.toThrow();
+    });
+
+    it('should validate websocket transaction with omitted height', () => {
+      const { height: _height, ...dataWithoutHeight } = validWsTxData;
+      expect(() => wsTransactionSchema.parse(dataWithoutHeight)).not.toThrow();
+    });
+
+    it('should reject invalid websocket transaction (bad input structure)', () => {
       const invalidData = {
-        tx_id: tx1,
-        nonce: '1', // should be number
-        timestamp: 1234567890,
-        version: 1,
-        voided: false,
-        weight: 1,
-        parents: ['parent1'],
+        ...validWsTxData,
         inputs: [
           {
-            tx_id: tx1,
-            index: 0,
-            value: '100',
-            token_data: 0,
-            script: {
-              type: 'Buffer',
-              data: [1, 2, 3],
-            },
-            token: token1,
-            decoded: {
-              type: 'p2pkh',
-              address: addr1,
-              timelock: null,
-            },
+            // Missing many required fields from wsTxInputSchema
+            address: addr1,
+            timelock: null,
+            type: 'P2PKH',
           },
         ],
+      };
+      expect(() => wsTransactionSchema.parse(invalidData)).toThrow();
+    });
+
+    it('should reject invalid websocket transaction (bad output structure)', () => {
+      const invalidData = {
+        ...validWsTxData,
         outputs: [
           {
-            value: '100',
-            script: {
-              type: 'Buffer',
-              data: [1, 2, 3],
-            },
-            tokenData: 0,
-            decodedScript: null,
-            token: token1,
-            locked: false,
-            index: 0,
-            decoded: {
-              type: 'p2pkh',
-              address: addr1,
-              timelock: null,
-            },
-            token_data: 0,
+            // Missing many required fields from wsTxOutputSchema
+            address: addr2,
+            timelock: null,
+            type: 'P2PKH',
           },
         ],
-        height: 1,
-        token_name: 'Token 1',
-        token_symbol: 'T1',
-        signal_bits: 0,
+      };
+      expect(() => wsTransactionSchema.parse(invalidData)).toThrow();
+    });
+
+    it('should reject invalid websocket transaction (bad nonce type)', () => {
+      const invalidData = {
+        ...validWsTxData,
+        nonce: '16488190', // Nonce should be number
+      };
+      expect(() => wsTransactionSchema.parse(invalidData)).toThrow();
+    });
+
+    it('should reject invalid websocket transaction (invalid token id in output)', () => {
+      const invalidData = {
+        ...validWsTxData,
+        outputs: [
+          {
+            ...validWsTxData.outputs[0],
+            token: 'invalid-token-id', // Invalid token ID format
+          },
+        ],
       };
       expect(() => wsTransactionSchema.parse(invalidData)).toThrow();
     });

@@ -12,6 +12,7 @@ import {
   signedIntToBytes,
   bigIntToBytes,
 } from '../utils/buffer';
+import { encodeSigned as leb128EncodeSigned } from '../utils/leb128';
 import { NanoContractArgumentType } from './types';
 import { OutputValueType } from '../types';
 
@@ -76,6 +77,8 @@ class Serializer {
         return this.fromFloat(value as number);
       case 'bool':
         return this.fromBool(value as boolean);
+      case 'VarInt':
+        return this.fromVarInt(value as bigint);
       default:
         throw new Error(`Invalid type. ${type}.`);
     }
@@ -250,6 +253,18 @@ class Serializer {
 
     ret.push(this.fromBytes(inputData));
     return Buffer.concat(ret);
+  }
+
+  /**
+   * Serialize a bigint value as a variable length integer.
+   * The serialization will use leb128.
+   *
+   * @param {bigint} value
+   *
+   * @memberof Serializer
+   */
+  fromVarInt(value: bigint): Buffer {
+    return leb128EncodeSigned(value);
   }
 }
 /* eslint-disable class-methods-use-this */

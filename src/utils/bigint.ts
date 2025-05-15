@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { IEncoding } from 'level-transcoder';
 import { z } from 'zod';
 import { getDefaultLogger } from '../types';
 
@@ -121,26 +120,6 @@ export function parseJsonBigInt<T>(text: string, schema: ZodSchema<T>): T {
     .pipe(schema);
 
   return parseSchema(text, jsonSchema);
-}
-
-/**
- * A custom JSON encoding for LevelDB with support for `bigint` properties, powered by Zod schemas.
- *
- * If the resulting JSON contains large integers that would lose precision with the `number` type, they're parsed as `bigint`s.
- * This means that `z.bigint()` properties would fail for small integers, as they would be parsed as `number`s.
- * To mitigate this, use the `bigIntCoercibleSchema` utility, which will coerce the property to a `bigint` output.
- */
-export function jsonBigIntEncoding<T>(schema: ZodSchema<T>): IEncoding<T, string, T> {
-  return {
-    name: 'json_bigint',
-    format: 'utf8',
-    encode(data: T): string {
-      return JSONBigInt.stringify(data);
-    },
-    decode(text: string): T {
-      return parseJsonBigInt(text, schema);
-    },
-  };
 }
 
 /**

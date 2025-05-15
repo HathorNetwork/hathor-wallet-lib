@@ -76,7 +76,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     this.mineTransaction = null;
     this.pin = newOptions.pin!;
 
-    console.log('TRANSACTION', this.transaction);
+    console.log('TRANSACTION', JSON.stringify(this.transaction));
   }
 
   /**

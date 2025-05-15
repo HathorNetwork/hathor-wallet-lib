@@ -11,7 +11,7 @@ import CreateTokenTransaction from '../models/create_token_transaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
 import Input from '../models/input';
 import Output from '../models/output';
-import { OutputValueType } from '../types';
+import { OutputValueType, IHistoryTx } from '../types';
 
 export interface GetAddressesObject {
   address: string; // Address in base58
@@ -343,7 +343,7 @@ export interface IHathorWallet {
     options: DestroyAuthorityOptions
   ): Promise<Transaction>;
   getFullHistory(): TransactionFullObject[];
-  getTxBalance(tx: WsTransaction, optionsParams): Promise<{ [tokenId: string]: OutputValueType }>;
+  getTxBalance(tx: IHistoryTx, optionsParams): Promise<{ [tokenId: string]: OutputValueType }>;
   onConnectionChangedState(newState: ConnectionState): void;
   getTokenDetails(tokenId: string): Promise<TokenDetailsObject>;
   getVersionData(): Promise<FullNodeVersionData>;
@@ -376,10 +376,7 @@ export interface DecodedOutput {
 
 export interface TxOutput {
   value: OutputValueType;
-  script: {
-    type: 'Buffer';
-    data: number[];
-  };
+  script: string;
   token: string;
   decoded: DecodedOutput;
   token_data: number;
@@ -396,13 +393,62 @@ export interface TxInput {
   value: OutputValueType;
   // eslint-disable-next-line camelcase
   token_data: number;
-  script: {
-    type: 'Buffer';
-    data: number[];
-  };
   token: string;
   decoded: DecodedOutput;
 }
+
+/**
+ * Represents the Buffer-like script object in websocket transactions.
+ */
+export type WsBufferScript = {
+  type: 'Buffer';
+  data: number[];
+};
+
+/**
+ * Represents the decoded part of a websocket transaction input.
+ */
+export type WsTxInputDecoded = {
+  type: string;
+  address: string;
+  timelock?: number | null;
+};
+
+/**
+ * Represents a websocket transaction input.
+ */
+export type WsTxInput = {
+  tx_id: string;
+  index: number;
+  value: bigint;
+  token_data: number;
+  script: WsBufferScript;
+  token: string;
+  decoded: WsTxInputDecoded;
+};
+
+/**
+ * Represents the decoded part of a websocket transaction output.
+ */
+export type WsTxOutputDecoded = {
+  type?: string | null;
+  address?: string;
+  timelock?: number | null;
+};
+
+/**
+ * Represents a websocket transaction output.
+ */
+export type WsTxOutput = {
+  value: bigint;
+  token_data: number;
+  script: WsBufferScript;
+  decodedScript?: unknown | null; // Use 'unknown' as type-safe alternative to any
+  token: string;
+  locked: boolean;
+  index: number;
+  decoded: WsTxOutputDecoded;
+};
 
 export interface WsTransaction {
   // eslint-disable-next-line camelcase
@@ -414,13 +460,13 @@ export interface WsTransaction {
   version: number;
   weight: number;
   parents: string[];
-  inputs: TxInput[];
-  outputs: TxOutput[];
-  height?: number;
+  inputs: WsTxInput[];
+  outputs: WsTxOutput[];
+  height?: number | null;
   // eslint-disable-next-line camelcase
-  token_name?: string;
+  token_name?: string | null;
   // eslint-disable-next-line camelcase
-  token_symbol?: string;
+  token_symbol?: string | null;
 }
 
 export interface CreateWalletAuthData {
@@ -490,19 +536,19 @@ export interface FullNodeToken {
 }
 
 export interface FullNodeDecodedInput {
-  type: string;
-  address: string;
+  type?: string | null;
+  address?: string | null;
   timelock?: number | null;
-  value: OutputValueType;
-  token_data: number;
+  value?: OutputValueType | null;
+  token_data?: number | null;
 }
 
 export interface FullNodeDecodedOutput {
-  type: string;
-  address?: string;
+  type?: string | null;
+  address?: string | null;
   timelock?: number | null;
-  value: OutputValueType;
-  token_data?: number;
+  value?: OutputValueType | null;
+  token_data?: number | null;
 }
 
 export interface FullNodeInput {

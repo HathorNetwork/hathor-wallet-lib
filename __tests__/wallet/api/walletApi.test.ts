@@ -11,7 +11,8 @@ const seed =
 // Create a mock axios instance with jest.Mock type
 const mockAxiosInstance = {
   get: jest.fn(),
-} as jest.Mocked<Pick<AxiosInstance, 'get'>>;
+  post: jest.fn(),
+} as jest.Mocked<Pick<AxiosInstance, 'get' | 'post'>>;
 
 // Mock the axiosInstance function to return our mock instance
 jest.mock('../../../src/wallet/api/walletServiceAxios', () => ({
@@ -312,15 +313,14 @@ describe('walletApi', () => {
         parents: ['parent1', 'parent2'],
         inputs: [
           {
-            tx_id: 'tx1',
+            tx_id: '00003eeb2ce22e80e0fa72d8afb0b8b01f8919faac94cb3a3b4900782d0f399f',
             index: 0,
-            token: 'token1',
             token_data: 0,
             value: 100n,
             script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
             decoded: {
               type: 'P2PKH',
-              address: 'address1',
+              address: 'HH5As5aLtzFkcbmbXZmE65wSd22GqPWq2T',
               timelock: null,
               value: 100n,
               token_data: 0,
@@ -330,24 +330,23 @@ describe('walletApi', () => {
         outputs: [
           {
             value: 100n,
-            token: 'token1',
             token_data: 0,
             script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
             decoded: {
               type: 'P2PKH',
-              address: 'address1',
+              address: 'HH5As5aLtzFkcbmbXZmE65wSd22GqPWq2T',
               timelock: null,
               value: 100n,
               token_data: 0,
             },
-            address: 'address1',
+            address: 'HH5As5aLtzFkcbmbXZmE65wSd22GqPWq2T',
             authorities: 0n,
             timelock: null,
           },
         ],
         tokens: [
           {
-            uid: 'token1',
+            uid: '00003693ebadd6e32d5dae134e1f801d3943d5916010b87d4f9ed4447d1f1825',
             name: 'Token 1',
             symbol: 'TK1',
             amount: 100n,
@@ -381,6 +380,7 @@ describe('walletApi', () => {
     } as AxiosResponse);
 
     const result = await walletApi.getFullTxById(wallet, 'tx1');
+
     expect(result).toEqual(mockResponse);
 
     // Should throw on invalid schema (missing required fields)
@@ -404,5 +404,62 @@ describe('walletApi', () => {
     } as AxiosResponse);
 
     await expect(walletApi.getFullTxById(wallet, 'tx1')).rejects.toThrow(WalletRequestError);
+  });
+
+  test('createWallet - wallet already loaded', async () => {
+    const mockWalletStatus = {
+      success: true,
+      status: {
+        walletId: 'test-id',
+        xpubkey: 'test-xpub',
+        status: 'ready',
+        maxGap: 20,
+        createdAt: 123456789,
+        readyAt: 123456790,
+      },
+      error: 'wallet-already-loaded',
+    };
+
+    mockAxiosInstance.post.mockResolvedValueOnce({
+      status: 400,
+      data: mockWalletStatus,
+    });
+
+    const result = await walletApi.createWallet(
+      wallet,
+      'xpubkey',
+      'xpubsig',
+      'authxpub',
+      'authxpubsig',
+      Date.now()
+    );
+
+    expect(result).toEqual(mockWalletStatus);
+    expect(mockAxiosInstance.post).toHaveBeenCalledWith('wallet/init', {
+      xpubkey: 'xpubkey',
+      xpubkeySignature: 'xpubsig',
+      authXpubkey: 'authxpub',
+      authXpubkeySignature: 'authxpubsig',
+      timestamp: expect.any(Number),
+    });
+
+    // Test with invalid schema response
+    const invalidMockResponse = {
+      success: true,
+      status: {
+        // Missing required fields
+        walletId: 'test-id',
+      },
+      error: 'wallet-already-loaded',
+    };
+
+    mockAxiosInstance.post.mockResolvedValueOnce({
+      status: 400,
+      data: invalidMockResponse,
+    });
+
+    await expect(
+      walletApi.createWallet(wallet, 'xpubkey', 'xpubsig', 'authxpub', 'authxpubsig', Date.now())
+    ).rejects.toThrow();
   });
 });

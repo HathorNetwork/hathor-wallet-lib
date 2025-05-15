@@ -77,11 +77,10 @@ import {
   PinRequiredError,
 } from '../errors';
 import { ErrorMessages } from '../errorMessages';
-import { IStorage, IWalletAccessData, OutputValueType, WalletType } from '../types';
+import { IStorage, IWalletAccessData, OutputValueType, WalletType, IHistoryTx } from '../types';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction } from '../nano_contracts/utils';
 import { NanoContractAction, NanoContractArgumentApiInputType } from '../nano_contracts/types';
-import transactionUtils from '../utils/transaction';
 import NanoContract from '../nano_contracts/nano_contract';
 import OnChainBlueprint from '../nano_contracts/on_chain_blueprint';
 
@@ -552,7 +551,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     let shouldGetNewAddresses = false;
 
     for (const output of outputs) {
-      if (this.newAddresses.find(newAddress => newAddress.address === output.decoded.address)) {
+      // Check if the output's decoded address matches any of the wallet's new addresses
+      if (
+        output.decoded &&
+        output.decoded.address &&
+        this.newAddresses.find(newAddress => newAddress.address === output.decoded.address)
+      ) {
         // break early
         shouldGetNewAddresses = true;
         break;
@@ -589,7 +593,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @return {Object} Object with each token and it's balance in this tx for this wallet
    * */
   async getTxBalance(
-    tx: WsTransaction,
+    tx: IHistoryTx,
     optionsParam = {}
   ): Promise<{ [tokenId: string]: OutputValueType }> {
     const options = { includeAuthorities: false, ...optionsParam };
@@ -2226,26 +2230,19 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @param txId Transaction ID to retrieve
    * @returns Promise with compatible fullnode transaction response
    */
-  async getFullTxByIdForNanoContract(txId: string): Promise<any> {
+  async getFullTxByIdForNanoContract(txId: string): Promise<unknown> {
     this.failIfWalletNotReady();
-    console.log('getFullTxByIdForNanoContract called with txId:', txId);
-
     // Use the existing wallet service method
     const data = await walletApi.getFullTxById(this, txId);
-    console.log('Transaction data received from full node, tx version:', data.tx?.version);
-
     // Transform the response format if necessary to match what NanoContractTransactionBuilder expects
     // The key field it looks for is nc_blueprint_id for nano contract transactions
     if (data.tx && data.tx.version === NANO_CONTRACTS_VERSION) {
       // Add nc_blueprint_id field to match the expected format
-      const tx = data.tx as any;
-      console.log('Transaction is a nano contract, nc_id:', tx.nc_id);
+      const tx = data.tx as unknown as Record<string, unknown>;
       if (!tx.nc_blueprint_id && tx.nc_id) {
-        console.log('Adding nc_blueprint_id based on nc_id');
         tx.nc_blueprint_id = tx.nc_id;
       }
     }
-
     return data;
   }
 
@@ -2262,48 +2259,40 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     pin: string,
     storage: IStorage
   ): Promise<SendTransactionWalletService> {
-    console.log('Starting prepareNanoSendTransactionAdapter');
-    // Sign the transaction using wallet-service methods
-    try {
-      console.log('Signing nano contract transaction...');
-      await transactionUtils.signTransaction(nc, storage, pin);
-      console.log('Transaction signed successfully');
-      nc.prepareToSend();
-      console.log('Transaction prepared to send');
-
-      // Create a SendTransactionWalletService instead of SendTransaction
-      const sendTx = new SendTransactionWalletService(this, {
-        outputs: nc.outputs.map(output => {
-          try {
-            const script = output.parseScript(this.network);
-            console.log('Output script parsed:', script ? 'success' : 'null');
-            const address = script
-              ? (script as any).getAddress?.() || (script as any).address?.base58 || ''
-              : '';
-            console.log('Output address resolved:', address);
-            return {
-              address,
-              value: output.value,
-              token: (output as any).token || '00',
-              type: 'p2pkh',
-            };
-          } catch (error) {
-            console.error('Error processing output:', error);
-            throw error;
-          }
-        }),
-        inputs: nc.inputs.map(input => ({
-          txId: input.hash,
-          index: input.index,
-        })),
-        pin,
-      });
-      console.log('SendTransactionWalletService created successfully');
-      return sendTx;
-    } catch (error) {
-      console.error('Error in prepareNanoSendTransactionAdapter:', error);
-      throw error;
-    }
+    await transaction.signTransaction(nc, storage, pin);
+    nc.prepareToSend();
+    // Create a SendTransactionWalletService instead of SendTransaction
+    const sendTx = new SendTransactionWalletService(this, {
+      outputs: nc.outputs.map(output => {
+        const script = output.parseScript(this.network);
+        const address = script
+          ? (
+              script as {
+                getAddress?: () => string;
+                address?: { base58?: string };
+              }
+            ).getAddress?.() ||
+            (
+              script as {
+                address?: { base58?: string };
+              }
+            ).address?.base58 ||
+            ''
+          : '';
+        return {
+          address,
+          value: output.value,
+          token: (output as unknown as { token?: string }).token || '00',
+          type: 'p2pkh',
+        };
+      }),
+      inputs: nc.inputs.map(input => ({
+        txId: input.hash,
+        index: input.index,
+      })),
+      pin,
+    });
+    return sendTx;
   }
 
   /**
@@ -2342,9 +2331,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   ): Promise<SendTransactionWalletService> {
     this.failIfWalletNotReady();
 
-    console.log('Starting createNanoContractTransaction', { method, address });
-    console.log('Data received:', JSON.stringify(data, null, 2));
-
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('createNanoContractTransaction');
     }
@@ -2357,7 +2343,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // Verify address belongs to wallet and get its index
     const addressIndex = this.getAddressIndex(address);
-    console.log('Address index:', addressIndex);
     if (addressIndex === undefined) {
       throw new NanoContractTransactionError(
         `Address used to sign the transaction (${address}) does not belong to the wallet.`
@@ -2367,8 +2352,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // Get the address public key
     const addressPrivKey = await this.getAddressPrivKey(pin, addressIndex);
     const pubkeyStr = addressPrivKey.publicKey.toString('hex');
-    console.log('Public key (hex):', pubkeyStr);
-    console.log('Public key is valid hex:', /^[0-9a-fA-F]*$/.test(pubkeyStr));
 
     // Create a wrapper around this wallet to override getFullTxById
     const wrappedWallet = {
@@ -2377,94 +2360,73 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     };
 
     // Build and send transaction
-    try {
-      const builder = new NanoContractTransactionBuilder()
-        .setMethod(method)
-        .setWallet(wrappedWallet);
-
-      if (data.blueprintId) {
-        builder.setBlueprintId(data.blueprintId);
+    const actions = data.actions || [];
+    const args = data.args || [];
+    // Process arguments to handle serialized Buffer objects
+    const processedArgs = args.map(arg => {
+      // Check if this is a serialized Buffer object
+      if (
+        arg &&
+        typeof arg === 'object' &&
+        arg !== null &&
+        'data' in arg &&
+        'type' in arg &&
+        (arg as { type?: string }).type === 'Buffer' &&
+        Array.isArray((arg as { data?: unknown }).data)
+      ) {
+        // Convert back to a real Buffer
+        return Buffer.from((arg as { data: number[] }).data);
       }
+      return arg;
+    });
 
-      if (data.ncId) {
-        builder.setNcId(data.ncId);
-      }
+    const builder = new NanoContractTransactionBuilder()
+      .setMethod(method)
+      .setWallet(wrappedWallet)
+      .setBlueprintId(data.blueprintId as string)
+      .setNcId(data.ncId as string)
+      .setCaller(Buffer.from(pubkeyStr, 'hex'))
+      .setActions(actions)
+      .setArgs(processedArgs as NanoContractArgumentApiInputType[]);
 
-      builder.setCaller(Buffer.from(pubkeyStr, 'hex'));
+    const nc = await builder.build();
+    // Sign and prepare the transaction using the wallet's own logic
+    await this.signAndPrepareNanoContractTx(nc as NanoContract, address, pin);
 
-      const actions = data.actions || [];
-      builder.setActions(actions);
+    // Create a SendTransactionWalletService with the finalized transaction
+    const sendTx = new SendTransactionWalletService(this, {
+      outputs: nc.outputs.map(output => {
+        const script = output.parseScript(this.network);
+        const address = script
+          ? (
+              script as {
+                getAddress?: () => string;
+                address?: { base58?: string };
+              }
+            ).getAddress?.() ||
+            (
+              script as {
+                address?: { base58?: string };
+              }
+            ).address?.base58 ||
+            ''
+          : '';
+        return {
+          address,
+          value: output.value,
+          token: (output as unknown as { token?: string }).token || '00',
+          type: 'p2pkh',
+        };
+      }),
+      inputs: nc.inputs.map(input => ({
+        txId: input.hash,
+        index: input.index,
+      })),
+      pin,
+      transaction: nc, // Pass the nano contract transaction directly to ensure version is preserved
+    });
 
-      const args = data.args || [];
-      // Process arguments to handle serialized Buffer objects
-      const processedArgs = args.map(arg => {
-        // Check if this is a serialized Buffer object
-        if (
-          arg &&
-          typeof arg === 'object' &&
-          arg !== null &&
-          'data' in arg &&
-          'type' in arg &&
-          (arg as any).type === 'Buffer' &&
-          Array.isArray((arg as any).data)
-        ) {
-          // Convert back to a real Buffer
-          return Buffer.from((arg as any).data);
-        }
-        return arg;
-      });
-
-      // Cast the processed args back to the expected type
-      builder.setArgs(processedArgs as NanoContractArgumentApiInputType[]);
-      const nc = await builder.build();
-
-      // Get data to sign hash
-      const dataToSignHash = nc.getDataToSignHash();
-
-      // Sign with the private key we already have
-      const signature = transactionUtils.getSignature(dataToSignHash, addressPrivKey.privateKey);
-
-      // Manually set the signature on the nano contract
-      nc.signature = signature;
-
-      // Prepare to send
-      nc.prepareToSend();
-
-      console.log('Here is the tx', JSON.stringify(nc));
-
-      // Create a SendTransactionWalletService with prepared transaction
-      const sendTx = new SendTransactionWalletService(this, {
-        outputs: nc.outputs.map(output => {
-          try {
-            const script = output.parseScript(this.network);
-            const _address = script
-              ? (script as any).getAddress?.() || (script as any).address?.base58 || ''
-              : '';
-            return {
-              address: _address,
-              value: output.value,
-              token: (output as any).token || '00',
-              type: 'p2pkh',
-            };
-          } catch (error) {
-            console.error('Error processing output:', error);
-            throw error;
-          }
-        }),
-        inputs: nc.inputs.map(input => ({
-          txId: input.hash,
-          index: input.index,
-        })),
-        pin,
-        transaction: nc, // Pass the nano contract transaction directly to ensure version is preserved
-      });
-
-      console.log('SendTransactionWalletService created successfully');
-      return sendTx;
-    } catch (error) {
-      console.error('Error building nano contract transaction:', error);
-      throw error;
-    }
+    return sendTx;
   }
 
   /**
@@ -2499,6 +2461,43 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       throw new Error('Failed to send nano contract transaction');
     }
     return result;
+  }
+
+  /**
+   * Utility to sign and prepare a nano contract transaction using the wallet's own key derivation logic.
+   *
+   * @param nc Nano contract transaction to sign
+   * @param address Address to use for signing (must belong to this wallet)
+   * @param pinCode PIN code to decrypt the private key
+   * @returns The signed and prepared nano contract transaction
+   */
+  async signAndPrepareNanoContractTx(
+    this: HathorWalletServiceWallet,
+    nc: NanoContract,
+    address: string,
+    pinCode: string
+  ): Promise<NanoContract> {
+    // Get the index for the address
+    const addressIndex = this.getAddressIndex(address);
+    if (addressIndex === undefined) {
+      throw new NanoContractTransactionError(
+        `Address used to sign the transaction (${address}) does not belong to the wallet.`
+      );
+    }
+    // Derive the private key for the address
+    const addressPrivKey = await this.getAddressPrivKey(pinCode, addressIndex);
+    // Get the data to sign
+    const dataToSignHash = nc.getDataToSignHash();
+    // Sign the data
+    const signature = transaction.getSignature(dataToSignHash, addressPrivKey.privateKey);
+    // Set the signature in the nano contract header(s)
+    const nanoHeaders = nc.getNanoHeaders();
+    for (const nanoHeader of nanoHeaders) {
+      nanoHeader.signature = signature;
+    }
+    // Finalize the transaction
+    nc.prepareToSend();
+    return nc;
   }
 }
 
