@@ -364,7 +364,7 @@ describe('full cycle of bet nano contract', () => {
     expect((txSetResultParser.parsedArgs[0].value as NanoContractSignedData).type).toEqual('str');
     expect(
       (txSetResultParser.parsedArgs[0].value as NanoContractSignedData).signature
-    // @ts-expect-error toMatchBuffer is defined in setupTests.js
+      // @ts-expect-error toMatchBuffer is defined in setupTests.js
     ).toMatchBuffer(inputData);
     expect((txSetResultParser.parsedArgs[0].value as NanoContractSignedData).value).toEqual(result);
 
