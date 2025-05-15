@@ -128,6 +128,7 @@ export const getOracleBuffer = (oracle: string, network: Network): Buffer => {
  * Get oracle input data
  *
  * @param oracleData Oracle data
+ * @param contractId Id of the nano contract being invoked
  * @param resultSerialized Result to sign with oracle data already serialized
  * @param wallet Hathor Wallet object
  */
@@ -139,9 +140,18 @@ export const getOracleInputData = async (
 ) => {
   const ncId = Buffer.from(contractId, 'hex');
   const actualValue = Buffer.concat([leb128.encodeUnsigned(ncId.length), ncId, resultSerialized]);
+  console.log(`[oracle data to sign for inputData]: ${actualValue.toString('hex')}`);
   return unsafeGetOracleInputData(oracleData, actualValue, wallet);
 };
 
+/**
+ * [unsafe] Get oracle input data, signs received data raw.
+ * This is meant to be used for RawSignedData
+ *
+ * @param oracleData Oracle data
+ * @param resultSerialized Result to sign with oracle data already serialized
+ * @param wallet Hathor Wallet object
+ */
 export const unsafeGetOracleInputData = async (
   oracleData: Buffer,
   resultSerialized: Buffer,

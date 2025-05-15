@@ -230,6 +230,24 @@ class Serializer {
     return Buffer.concat(ret);
   }
 
+  /**
+   * Serialize a tuple of values
+   *
+   * @param value List of values to serialize
+   * @param typeStr Comma separated list of types e.g. `str,int,VarInt`
+   *
+   * @example
+   * ```
+   * const serializer = Serializer(new Network('testnet'));
+   *
+   * const type = 'Tuple[str,int]';
+   * const typeStr = 'str,int';
+   * const buf = serializer.fromTuple(['1x0', 5], typeStr);
+   * ```
+   *
+   * @memberof Serializer
+   * @inner
+   */
   fromTuple(value: NanoContractArgumentType[], typeStr: string): Buffer {
     const typeArr = typeStr.split(',').map(t => t.trim());
     const serialized: Buffer[] = [];

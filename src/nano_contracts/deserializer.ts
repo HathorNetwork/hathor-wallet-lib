@@ -82,7 +82,7 @@ class Deserializer {
       case 'SignedData':
         return this.toSignedData(buf, internalType);
       case 'Tuple':
-        throw new Error('Not implemented yet');
+        return this.toTuple(buf, internalType);
       default:
         throw new Error('Invalid type.');
     }
@@ -326,21 +326,23 @@ class Deserializer {
   }
 
   /**
-   * Deserialize string value
+   * Deserialize tuple of values.
+   * It does not support chained container types, meaning Tuple[Dict[str,str]] should not happen.
    *
-   * @param {Buffer} buf Value to deserialize
+   * @param buf Value to deserialize
+   * @param type Comma separated types, e.g. `str,int,VarInt`
    *
    * @memberof Deserializer
    * @inner
    */
-  toTuple(buf: Buffer, type: string): BufferROExtract<Array<unknown>> {
+  toTuple(buf: Buffer, type: string): BufferROExtract<NanoContractArgumentSingleType[]> {
     const typeArr = type.split(',').map(s => s.trim());
-    const tupleValues: NanoContractArgumentType[] = [];
+    const tupleValues: NanoContractArgumentSingleType[] = [];
     let bytesReadTotal = 0;
     let tupleBuf = buf.subarray();
     for (const t of typeArr) {
       const result = this.deserializeFromType(tupleBuf, t);
-      tupleValues.push(result.value);
+      tupleValues.push(result.value as NanoContractArgumentSingleType);
       bytesReadTotal += result.bytesRead;
       tupleBuf = tupleBuf.subarray(result.bytesRead);
     }
