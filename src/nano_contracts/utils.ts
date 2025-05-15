@@ -140,7 +140,6 @@ export const getOracleInputData = async (
 ) => {
   const ncId = Buffer.from(contractId, 'hex');
   const actualValue = Buffer.concat([leb128.encodeUnsigned(ncId.length), ncId, resultSerialized]);
-  console.log(`[oracle data to sign for inputData]: ${actualValue.toString('hex')}`);
   return unsafeGetOracleInputData(oracleData, actualValue, wallet);
 };
 
