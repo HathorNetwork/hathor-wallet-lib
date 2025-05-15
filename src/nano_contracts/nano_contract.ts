@@ -106,6 +106,72 @@ class NanoContract extends Transaction {
 
     return Buffer.concat(arr);
   }
+
+  /**
+   * Prepare transaction to be sent
+   * Update timestamp, calculate weight
+   * Override Transaction's prepareToSend to add detailed logging
+   *
+   * @memberof NanoContract
+   * @inner
+   */
+  prepareToSend() {
+    console.log('NanoContract prepareToSend called');
+    try {
+      // Ensure version is set to NANO_CONTRACTS_VERSION
+      if (this.version !== NANO_CONTRACTS_VERSION) {
+        console.log(`Setting version to NANO_CONTRACTS_VERSION (${NANO_CONTRACTS_VERSION})`);
+        this.version = NANO_CONTRACTS_VERSION;
+      }
+      
+      // Call parent method for timestamp and weight updates
+      super.prepareToSend();
+      
+      // Now create the raw transaction for debugging
+      try {
+        const arr: Buffer[] = [];
+        
+        console.log('Serializing funds fields');
+        this.serializeFundsFields(arr, true);
+        console.log('Funds fields serialized successfully');
+
+        console.log('Serializing graph fields');
+        this.serializeGraphFields(arr);
+        console.log('Graph fields serialized successfully');
+
+        console.log('Serializing nonce');
+        this.serializeNonce(arr);
+        console.log('Nonce serialized successfully');
+
+        // Just print the detailed information about outputs for debugging
+        console.log(`Outputs count: ${this.outputs.length}`);
+        for (let i = 0; i < this.outputs.length; i++) {
+          const output = this.outputs[i];
+          console.log(`Output #${i} details:`, {
+            value: output.value.toString(),
+            scriptLength: output.script ? output.script.length : 0
+          });
+
+          if (output.script) {
+            // Try to log the hex representation safely
+            try {
+              const scriptHex = output.script.toString('hex');
+              console.log(`Output #${i} script hex: ${scriptHex}`);
+            } catch (err) {
+              console.error(`Error getting script hex for output #${i}:`, err);
+            }
+          }
+        }
+
+        // For clarity, we're not modifying the transaction here, just logging
+      } catch (error) {
+        console.error('Error during NanoContract debug serialization:', error);
+      }
+    } catch (error) {
+      console.error('Error in NanoContract prepareToSend:', error);
+      throw error;
+    }
+  }
 }
 
 export default NanoContract;

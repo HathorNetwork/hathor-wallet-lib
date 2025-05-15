@@ -16,7 +16,7 @@ import Transaction from '../models/transaction';
 import Output from '../models/output';
 import Input from '../models/input';
 import Address from '../models/address';
-import { NATIVE_TOKEN_UID } from '../constants';
+import { NATIVE_TOKEN_UID, NANO_CONTRACTS_VERSION } from '../constants';
 import { SendTxError, UtxoError, WalletError, WalletRequestError } from '../errors';
 import {
   OutputSendTransaction,
@@ -75,6 +75,8 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     this.transaction = newOptions.transaction!;
     this.mineTransaction = null;
     this.pin = newOptions.pin!;
+
+    console.log('TRANSACTION', this.transaction);
   }
 
   /**
@@ -85,9 +87,9 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @inner
    */
   async prepareTx(): Promise<{ transaction: Transaction; utxosAddressPath: string[] }> {
-    if (this.outputs.length === 0) {
+    /* if (this.outputs.length === 0) {
       throw new WalletError("Can't prepare transactions with no outputs.");
-    }
+    } */
     this.emit('prepare-tx-start');
     // We get the full outputs amount for each token
     // This is useful for (i) getting the utxos for each one
@@ -396,6 +398,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       this.emit('send-tx-success', this.transaction);
       return this.transaction;
     } catch (err) {
+      console.log('filh od aputa', err);
       if (err instanceof WalletRequestError) {
         const errMessage = 'Error sending tx proposal.';
         this.emit('send-error', errMessage);
