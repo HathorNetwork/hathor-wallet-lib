@@ -59,22 +59,26 @@ export const NanoContractArgumentSchema = z.union([
 ]);
 export type NanoContractArgumentType = z.output<typeof NanoContractArgumentSchema>;
 
+export const NanoContractArgumentByteTypes = z.enum([
+  'bytes',
+  'Address',
+  'BlueprintId',
+  'ContractId',
+  'TokenUid',
+  'TxOutputScript',
+  'VertexId',
+]);
+
 /**
  * Single type names
  */
 export const NanoContractArgumentSingleTypeNameSchema = z.enum([
   'bool',
-  'bytes',
   'int',
   'str',
-  'Address',
-  'BlueprintId',
-  'ContractId',
   'Timestamp',
-  'TokenUid',
-  'TxOutputScript',
   'VarInt',
-  'VertexId',
+  ...NanoContractArgumentByteTypes.options,
 ]);
 export type NanoContractArgumentSingleTypeName = z.output<
   typeof NanoContractArgumentSingleTypeNameSchema

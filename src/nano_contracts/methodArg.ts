@@ -14,6 +14,7 @@ import {
   BufferROExtract,
   NanoContractArgumentApiInputType,
   NanoContractArgumentApiInputSchema,
+  NanoContractArgumentByteTypes,
 } from './types';
 import Serializer from './serializer';
 import Deserializer from './deserializer';
@@ -52,9 +53,7 @@ function refineSingleValue(
     } else {
       return parse.data;
     }
-  } else if (
-    ['bytes', 'BlueprintId', 'ContractId', 'TokenUid', 'TxOutputScript', 'VertexId'].includes(type)
-  ) {
+  } else if (NanoContractArgumentByteTypes.safeParse(type).success) {
     const parse = z
       .string()
       .regex(/^[0-9A-Fa-f]+$/)
@@ -130,7 +129,7 @@ function refineSingleValue(
 
 /**
  * Type and value validation for non-container types.
- * Returns the internal TS type for the argument given.
+ * Returns the internal parsed value for the argument given.
  */
 const SingleValueApiInputScheme = z
   .tuple([
@@ -262,11 +261,7 @@ export class NanoContractMethodArgument {
       if (type === 'bool') {
         return (value as boolean) ? 'true' : 'false';
       }
-      if (
-        ['bytes', 'BlueprintId', 'ContractId', 'TokenUid', 'TxOutputScript', 'VertexId'].includes(
-          type
-        )
-      ) {
+      if (NanoContractArgumentByteTypes.safeParse(type).success) {
         return (value as Buffer).toString('hex');
       }
       if (type === 'VarInt') {
