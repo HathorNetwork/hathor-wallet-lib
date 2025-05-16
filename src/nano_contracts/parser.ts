@@ -108,7 +108,9 @@ class NanoContractTransactionParser {
       parsedArgs.push({ ...arg, parsed });
       argsBuffer = argsBuffer.subarray(size);
     }
-    // XXX: argsBuffer should be empty since we parsed all arguments
+    if (argsBuffer.length !== 0) {
+      throw new Error(`${argsBuffer.length} bytes left after parsing all arguments.`);
+    }
 
     this.parsedArgs = parsedArgs;
   }

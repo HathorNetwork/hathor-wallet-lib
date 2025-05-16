@@ -31,8 +31,8 @@ class Deserializer {
    * We receive these types from the full node, so we
    * use the python syntax
    *
-   * @param {Buffer} buf Value to deserialize
-   * @param {string} type Type of the value to be deserialized
+   * @param buf Value to deserialize
+   * @param type Type of the value to be deserialized
    *
    * @memberof Deserializer
    * @inner
