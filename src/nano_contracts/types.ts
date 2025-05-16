@@ -37,7 +37,6 @@ export const NanoContractSignedDataSchema = z.object({
   type: z.string(),
   signature: z.instanceof(Buffer),
   value: NanoContractArgumentSingleSchema,
-  ncId: z.instanceof(Buffer).nullish(),
 });
 export type NanoContractSignedData = z.output<typeof NanoContractSignedDataSchema>;
 
