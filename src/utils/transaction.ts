@@ -213,6 +213,7 @@ const transaction = {
     if (pubkey) {
       const address = getAddressFromPubkey(pubkey.toString('hex'), storage.config.getNetwork());
       const addressInfo = await storage.getAddressInfo(address.base58);
+      console.log('Address Info: ', addressInfo);
       if (!addressInfo) {
         throw new Error('No address info found');
       }
