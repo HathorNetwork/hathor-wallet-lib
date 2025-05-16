@@ -31,8 +31,8 @@ class Deserializer {
    * We receive these types from the full node, so we
    * use the python syntax
    *
-   * @param {Buffer} buf Value to deserialize
-   * @param {string} type Type of the value to be deserialized
+   * @param buf Value to deserialize
+   * @param type Type of the value to be deserialized
    *
    * @memberof Deserializer
    * @inner
@@ -99,25 +99,10 @@ class Deserializer {
    * @inner
    */
   toString(buf: Buffer): BufferROExtract<string> {
-    // INFO: maxBytes is set to 3 becuase the max allowed length in bytes for a string is
-    // NC_ARGS_MAX_BYTES_LENGTH which is encoded as 3 bytes in leb128 unsigned.
-    // If we read a fourth byte we are definetely reading a higher number than allowed.
-    const {
-      value: lengthBN,
-      rest,
-      bytesRead: bytesReadForLength,
-    } = leb128Util.decodeUnsigned(buf, 3);
-    if (lengthBN > NC_ARGS_MAX_BYTES_LENGTH) {
-      throw new Error('String length in bytes is higher than max allowed');
-    }
-    // If lengthBN is lower than 64 KiB than its safe to convert to Number
-    const length = Number(lengthBN);
-    if (rest.length < length) {
-      throw new Error('Do not have enough bytes to read the expected length');
-    }
+    const parsed = this.toBytes(buf);
     return {
-      value: rest.subarray(0, length).toString('utf8'),
-      bytesRead: length + bytesReadForLength,
+      value: parsed.value.toString('utf8'),
+      bytesRead: parsed.bytesRead,
     };
   }
 
@@ -130,7 +115,7 @@ class Deserializer {
    * @inner
    */
   toBytes(buf: Buffer): BufferROExtract<Buffer> {
-    // INFO: maxBytes is set to 3 becuase the max allowed length in bytes for a string is
+    // INFO: maxBytes is set to 3 because the max allowed length in bytes for a string is
     // NC_ARGS_MAX_BYTES_LENGTH which is encoded as 3 bytes in leb128 unsigned.
     // If we read a fourth byte we are definetely reading a higher number than allowed.
     const {
@@ -139,7 +124,7 @@ class Deserializer {
       bytesRead: bytesReadForLength,
     } = leb128Util.decodeUnsigned(buf, 3);
     if (lengthBN > BigInt(NC_ARGS_MAX_BYTES_LENGTH)) {
-      throw new Error('String length in bytes is higher than max allowed');
+      throw new Error('length in bytes is higher than max allowed');
     }
     // If lengthBN is lower than 64 KiB than its safe to convert to Number
     const length = Number(lengthBN);
@@ -222,6 +207,12 @@ class Deserializer {
 
   /**
    * Deserialize a value decoded in bytes to a base58 string
+   * An Address is serialized as:
+   * - leb128 unsigned length (should always be 25, using 1 byte)
+   * - 1 Network version byte
+   * - 20 bytes for hash160 (hash of either pubkey[P2PKH] or script[P2SH])
+   * - 4 bytes of checksum
+   * Totaling 26 bytes.
    *
    * @param {Buffer} buf Value to deserialize
    *
@@ -234,20 +225,27 @@ class Deserializer {
       // Address should be exactly 25 bytes long
       throw new Error('Address should be 25 bytes long');
     }
-    // First we get the 20 bytes of the address without the version byte and checksum
-    const addressBytes = buf.subarray(2, 22);
-    const address = helpersUtils.encodeAddress(addressBytes, this.network);
+    // The actual address bytes are the 25 bytes after the initial length
+    const addressBytes = buf.subarray(1);
+    // First we get the 20 bytes (hash) of the address without the version byte and checksum
+    const hashBytes = addressBytes.subarray(1, 21);
+    const address = helpersUtils.encodeAddress(hashBytes, this.network);
     address.validateAddress();
     const decoded = address.decode();
-    if (decoded[0] !== buf[1]) {
+    // We need to check that the metadata of the address received match the one we generated
+    // Check network version
+    if (decoded[0] !== addressBytes[0]) {
       throw new Error(
-        `Asked to deserialize an address with version byte ${buf[0]} but the network from the deserializer object has version byte ${decoded[0]}.`
+        `Asked to deserialize an address with version byte ${addressBytes[0]} but the network from the deserializer object has version byte ${decoded[0]}.`
       );
     }
-    if (decoded.subarray(21, 25).toString('hex') !== buf.subarray(22, 26).toString('hex')) {
+    // Check checksum bytes
+    if (!decoded.subarray(21, 25).equals(addressBytes.subarray(21, 25))) {
       // Checksum value generated does not match value from fullnode
+      const calcChecksum = decoded.subarray(21, 25).toString('hex');
+      const recvChecksum = addressBytes.subarray(21, 25).toString('hex');
       throw new Error(
-        `When parsing and Address(${address.base58}) we calculated checksum(${decoded.subarray(21, 25).toString('hex')}) but it does not match the checksum it came with ${buf.subarray(22, 26).toString('hex')}.`
+        `When parsing and Address(${address.base58}) we calculated checksum(${calcChecksum}) but it does not match the checksum it came with ${recvChecksum}.`
       );
     }
     return {
