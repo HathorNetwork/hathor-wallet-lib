@@ -398,7 +398,6 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       this.emit('send-tx-success', this.transaction);
       return this.transaction;
     } catch (err) {
-      console.log('filh od aputa', err);
       if (err instanceof WalletRequestError) {
         const errMessage = 'Error sending tx proposal.';
         this.emit('send-error', errMessage);
