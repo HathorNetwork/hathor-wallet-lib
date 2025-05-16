@@ -16,7 +16,7 @@ import Transaction from '../models/transaction';
 import Output from '../models/output';
 import Input from '../models/input';
 import Address from '../models/address';
-import { NATIVE_TOKEN_UID, NANO_CONTRACTS_VERSION } from '../constants';
+import { NATIVE_TOKEN_UID } from '../constants';
 import { SendTxError, UtxoError, WalletError, WalletRequestError } from '../errors';
 import {
   OutputSendTransaction,

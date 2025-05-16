@@ -80,9 +80,11 @@ import { ErrorMessages } from '../errorMessages';
 import { IStorage, IWalletAccessData, OutputValueType, WalletType, IHistoryTx } from '../types';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction } from '../nano_contracts/utils';
-import { NanoContractAction, NanoContractArgumentApiInputType } from '../nano_contracts/types';
-import NanoContract from '../nano_contracts/nano_contract';
-import OnChainBlueprint from '../nano_contracts/on_chain_blueprint';
+import {
+  NanoContractAction,
+  NanoContractArgumentApiInputType,
+  NanoContractVertexType,
+} from '../nano_contracts/types';
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
@@ -2255,44 +2257,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @returns SendTransactionWalletService instance
    */
   async prepareNanoSendTransactionAdapter(
-    nc: NanoContract | OnChainBlueprint,
+    nc: unknown,
     pin: string,
     storage: IStorage
   ): Promise<SendTransactionWalletService> {
-    await transaction.signTransaction(nc, storage, pin);
-    nc.prepareToSend();
-    // Create a SendTransactionWalletService instead of SendTransaction
-    const sendTx = new SendTransactionWalletService(this, {
-      outputs: nc.outputs.map(output => {
-        const script = output.parseScript(this.network);
-        const address = script
-          ? (
-              script as {
-                getAddress?: () => string;
-                address?: { base58?: string };
-              }
-            ).getAddress?.() ||
-            (
-              script as {
-                address?: { base58?: string };
-              }
-            ).address?.base58 ||
-            ''
-          : '';
-        return {
-          address,
-          value: output.value,
-          token: (output as unknown as { token?: string }).token || '00',
-          type: 'p2pkh',
-        };
-      }),
-      inputs: nc.inputs.map(input => ({
-        txId: input.hash,
-        index: input.index,
-      })),
-      pin,
-    });
-    return sendTx;
+    await transaction.signTransaction(nc as Transaction, storage, pin);
+    (nc as Transaction).prepareToSend();
+    return new SendTransactionWalletService(this, { transaction: nc as Transaction, pin });
   }
 
   /**
@@ -2344,7 +2315,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // Verify address belongs to wallet and get its index
     const addressIndex = this.getAddressIndex(address);
     if (addressIndex === undefined) {
-      throw new NanoContractTransactionError(
+      throw new Error(
         `Address used to sign the transaction (${address}) does not belong to the wallet.`
       );
     }
@@ -2357,6 +2328,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const wrappedWallet = {
       ...this,
       getFullTxById: this.getFullTxByIdForNanoContract.bind(this),
+      getNetworkObject: this.getNetworkObject.bind(this),
     };
 
     // Build and send transaction
@@ -2387,46 +2359,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       .setNcId(data.ncId as string)
       .setCaller(Buffer.from(pubkeyStr, 'hex'))
       .setActions(actions)
-      .setArgs(processedArgs as NanoContractArgumentApiInputType[]);
+      .setArgs(processedArgs as NanoContractArgumentApiInputType[])
+      .setVertexType(NanoContractVertexType.TRANSACTION);
 
-    const nc = await builder.build();
-    // Sign and prepare the transaction using the wallet's own logic
-    await this.signAndPrepareNanoContractTx(nc as NanoContract, address, pin);
-
-    // Create a SendTransactionWalletService with the finalized transaction
-    const sendTx = new SendTransactionWalletService(this, {
-      outputs: nc.outputs.map(output => {
-        const script = output.parseScript(this.network);
-        const address = script
-          ? (
-              script as {
-                getAddress?: () => string;
-                address?: { base58?: string };
-              }
-            ).getAddress?.() ||
-            (
-              script as {
-                address?: { base58?: string };
-              }
-            ).address?.base58 ||
-            ''
-          : '';
-        return {
-          address,
-          value: output.value,
-          token: (output as unknown as { token?: string }).token || '00',
-          type: 'p2pkh',
-        };
-      }),
-      inputs: nc.inputs.map(input => ({
-        txId: input.hash,
-        index: input.index,
-      })),
-      pin,
-      transaction: nc, // Pass the nano contract transaction directly to ensure version is preserved
-    });
-
-    return sendTx;
+    const tx = await builder.build();
+    // Use the standard utility to sign and prepare the transaction
+    return this.prepareNanoSendTransactionWalletService(tx, address, pin);
   }
 
   /**
@@ -2464,40 +2402,40 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
-   * Utility to sign and prepare a nano contract transaction using the wallet's own key derivation logic.
+   * Custom nano contract transaction preparation for wallet-service facade
+   * Signs the nano contract transaction using the wallet's own key derivation logic
    *
-   * @param nc Nano contract transaction to sign
+   * @param tx Nano contract transaction to sign
    * @param address Address to use for signing (must belong to this wallet)
    * @param pinCode PIN code to decrypt the private key
-   * @returns The signed and prepared nano contract transaction
+   * @returns SendTransactionWalletService instance with the signed and prepared transaction
    */
-  async signAndPrepareNanoContractTx(
-    this: HathorWalletServiceWallet,
-    nc: NanoContract,
+  async prepareNanoSendTransactionWalletService(
+    tx: Transaction,
     address: string,
     pinCode: string
-  ): Promise<NanoContract> {
+  ): Promise<SendTransactionWalletService> {
     // Get the index for the address
     const addressIndex = this.getAddressIndex(address);
     if (addressIndex === undefined) {
-      throw new NanoContractTransactionError(
+      throw new Error(
         `Address used to sign the transaction (${address}) does not belong to the wallet.`
       );
     }
     // Derive the private key for the address
     const addressPrivKey = await this.getAddressPrivKey(pinCode, addressIndex);
     // Get the data to sign
-    const dataToSignHash = nc.getDataToSignHash();
+    const dataToSignHash = tx.getDataToSignHash();
     // Sign the data
     const signature = transaction.getSignature(dataToSignHash, addressPrivKey.privateKey);
     // Set the signature in the nano contract header(s)
-    const nanoHeaders = nc.getNanoHeaders();
+    const nanoHeaders = tx.getNanoHeaders();
     for (const nanoHeader of nanoHeaders) {
       nanoHeader.signature = signature;
     }
     // Finalize the transaction
-    nc.prepareToSend();
-    return nc;
+    tx.prepareToSend();
+    return new SendTransactionWalletService(this, { transaction: tx, pin: pinCode });
   }
 }
 
