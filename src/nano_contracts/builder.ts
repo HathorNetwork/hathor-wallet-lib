@@ -16,13 +16,12 @@ import {
   NATIVE_TOKEN_UID,
   NANO_CONTRACTS_INITIALIZE_METHOD,
   TOKEN_MINT_MASK,
-  TOKEN_MELT_MASK
+  TOKEN_MELT_MASK,
 } from '../constants';
 import Serializer from './serializer';
 import HathorWallet from '../new/wallet';
 import { NanoContractTransactionError, UtxoError } from '../errors';
 import {
-  ActionTypeToActionHeaderType,
   NanoContractActionHeader,
   NanoContractActionType,
   NanoContractAction,
@@ -30,8 +29,8 @@ import {
   NanoContractBuilderCreateTokenOptions,
   NanoContractVertexType,
 } from './types';
-import { validateAndParseBlueprintMethodArgs } from './utils';
-import { IDataInput, IDataOutput, ITokenData } from '../types';
+import { mapActionToActionHeader, validateAndParseBlueprintMethodArgs } from './utils';
+import { IDataInput, IDataOutput } from '../types';
 import NanoContractHeader from './header';
 import Address from '../models/address';
 import leb128 from '../utils/leb128';
@@ -353,7 +352,9 @@ class NanoContractTransactionBuilder {
     }
 
     if (!action.authority || !action.token) {
-      throw new NanoContractTransactionError('Authority and token are required for grant authority action.');
+      throw new NanoContractTransactionError(
+        'Authority and token are required for grant authority action.'
+      );
     }
 
     const authorityAddressParam = action.authorityAddress;
@@ -362,10 +363,16 @@ class NanoContractTransactionBuilder {
     }
 
     // Get the utxos with the authority of the action and create the input
-    const utxos = await this.wallet.getAuthorityUtxo(action.token, action.authority, { many: false, only_available_utxos: true, filter_address: action.address });
+    const utxos = await this.wallet.getAuthorityUtxo(action.token, action.authority, {
+      many: false,
+      only_available_utxos: true,
+      filter_address: action.address,
+    });
 
     if (!utxos || utxos.length === 0) {
-      throw new NanoContractTransactionError('Not enough authority utxos to execute the grant authority.');
+      throw new NanoContractTransactionError(
+        'Not enough authority utxos to execute the grant authority.'
+      );
     }
 
     const inputs: IDataInput[] = [];
@@ -537,17 +544,35 @@ class NanoContractTransactionBuilder {
       tokens = Array.from(tokenSet);
       for (const action of this.actions) {
         // Call action
-        if (action.type === NanoContractActionType.DEPOSIT) {
-          const ret = await this.executeDeposit(action, tokens);
-          inputs = concat(inputs, ret[0]);
-          outputs = concat(outputs, ret[1]);
-        } else if (action.type === NanoContractActionType.WITHDRAWAL) {
-          const output = this.executeWithdrawal(action, tokens);
-          if (output) {
-            outputs = concat(outputs, output);
+        switch (action.type) {
+          case NanoContractActionType.DEPOSIT: {
+            const retDeposit = await this.executeDeposit(action);
+            inputs = concat(inputs, retDeposit[0]);
+            outputs = concat(outputs, retDeposit[1]);
+            break;
           }
-        } else {
-          throw new Error('Invalid type for nano contract action.');
+          case NanoContractActionType.WITHDRAWAL: {
+            const outputWithdrawal = this.executeWithdrawal(action);
+            if (outputWithdrawal) {
+              outputs = concat(outputs, outputWithdrawal);
+            }
+            break;
+          }
+          case NanoContractActionType.GRANT_AUTHORITY: {
+            const retGrant = await this.executeGrantAuthority(action);
+            inputs = concat(inputs, retGrant[0]);
+            outputs = concat(outputs, retGrant[1]);
+            break;
+          }
+          case NanoContractActionType.INVOKE_AUTHORITY: {
+            const outputInvoke = this.executeInvokeAuthority(action);
+            if (outputInvoke) {
+              outputs = concat(outputs, outputInvoke);
+            }
+            break;
+          }
+          default:
+            throw new Error('Invalid type for nano contract action.');
         }
       }
     }
@@ -650,21 +675,7 @@ class NanoContractTransactionBuilder {
 
     if (this.actions) {
       nanoHeaderActions = this.actions.map(action => {
-        const headerActionType = ActionTypeToActionHeaderType[action.type];
-
-        const mappedTokens: ITokenData[] = tokens.map(token => {
-          return {
-            uid: token,
-            name: '',
-            symbol: '',
-          };
-        });
-
-        return {
-          type: headerActionType,
-          amount: action.amount,
-          tokenIndex: tokensUtils.getTokenIndex(mappedTokens, action.token),
-        };
+        return mapActionToActionHeader(action, tokens);
       });
     }
 
