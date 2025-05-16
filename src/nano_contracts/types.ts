@@ -125,7 +125,7 @@ export enum NanoContractActionType {
   DEPOSIT = 'deposit',
   WITHDRAWAL = 'withdrawal',
   GRANT_AUTHORITY = 'grant_authority',
-  INVOKE_AUTHORITY = 'invoke_authority'
+  INVOKE_AUTHORITY = 'invoke_authority',
 }
 
 export enum NanoContractHeaderActionType {
