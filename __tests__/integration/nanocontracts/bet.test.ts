@@ -43,7 +43,7 @@ describe('full cycle of bet nano contract', () => {
   let mhWallet;
 
   beforeAll(async () => {
-    hWallet = await generateWalletHelper();
+    hWallet = await generateWalletHelper(null);
     fundsTx = await GenesisWalletHelper.injectFunds(
       hWallet,
       await hWallet.getAddressAtIndex(0),
@@ -72,7 +72,7 @@ describe('full cycle of bet nano contract', () => {
     expect(txId).toBeDefined();
     await waitForTxReceived(wallet, txId);
     // We need to wait for the tx to get a first block, so we guarantee it was executed
-    await waitTxConfirmed(wallet, txId);
+    await waitTxConfirmed(wallet, txId, null);
     // Now we query the transaction from the full node to double check it's still valid after the nano execution
     // and it already has a first block, so it was really executed
     const txAfterExecution = await wallet.getFullTxById(txId);
@@ -121,12 +121,12 @@ describe('full cycle of bet nano contract', () => {
       network,
       tx1Data.tx.nc_args
     );
-    tx1Parser.parseAddress(network);
+    tx1Parser.parseAddress();
     await tx1Parser.parseArguments();
-    expect(tx1Parser.address.base58).toBe(address0);
+    expect(tx1Parser.address?.base58).toBe(address0);
     expect(tx1Parser.parsedArgs).toStrictEqual([
       { name: 'oracle_script', type: 'TxOutputScript', parsed: oracleData },
-      { name: 'token_uid', type: 'TokenUid', parsed: Buffer.from([NATIVE_TOKEN_UID]) },
+      { name: 'token_uid', type: 'TokenUid', parsed: Buffer.from(NATIVE_TOKEN_UID, 'hex') },
       { name: 'date_last_bet', type: 'Timestamp', parsed: dateLastBet },
     ]);
 
@@ -197,9 +197,9 @@ describe('full cycle of bet nano contract', () => {
       network,
       txBetData.tx.nc_args
     );
-    txBetParser.parseAddress(network);
+    txBetParser.parseAddress();
     await txBetParser.parseArguments();
-    expect(txBetParser.address.base58).toBe(address2);
+    expect(txBetParser.address?.base58).toBe(address2);
     expect(txBetParser.parsedArgs).toStrictEqual([
       { name: 'address', type: 'Address', parsed: address2 },
       { name: 'score', type: 'str', parsed: '1x0' },
@@ -245,9 +245,9 @@ describe('full cycle of bet nano contract', () => {
       network,
       txBet2Data.tx.nc_args
     );
-    txBet2Parser.parseAddress(network);
+    txBet2Parser.parseAddress();
     await txBet2Parser.parseArguments();
-    expect(txBet2Parser.address.base58).toBe(address3);
+    expect(txBet2Parser.address?.base58).toBe(address3);
     expect(txBet2Parser.parsedArgs).toStrictEqual([
       { name: 'address', type: 'Address', parsed: address3 },
       { name: 'score', type: 'str', parsed: '2x0' },
@@ -296,7 +296,7 @@ describe('full cycle of bet nano contract', () => {
     expect(ncState.fields[`withdrawals.a'${address3}'`].value).toBeUndefined();
 
     // Set result to '1x0'
-    const nanoSerializer = new Serializer();
+    const nanoSerializer = new Serializer(network);
     const result = '1x0';
     const resultSerialized = nanoSerializer.serializeFromType(result, 'str');
     const inputData = await getOracleInputData(oracleData, resultSerialized, wallet);

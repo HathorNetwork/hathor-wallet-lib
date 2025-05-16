@@ -15,6 +15,8 @@ export type NanoContractArgumentApiInputType =
   | null;
 export type NanoContractArgumentType = NanoContractArgumentApiInputType | Buffer;
 
+export type NanoContractArgumentContainerType = 'Optional' | 'SignedData' | 'RawSignedData' | 'Tuple';
+
 export enum NanoContractVertexType {
   TRANSACTION = 'transaction',
   CREATE_TOKEN_TRANSACTION = 'createTokenTransaction',

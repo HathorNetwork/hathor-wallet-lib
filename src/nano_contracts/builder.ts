@@ -34,6 +34,7 @@ import { IDataInput, IDataOutput, ITokenData } from '../types';
 import ncApi from '../api/nano';
 import { validateAndUpdateBlueprintMethodArgs } from './utils';
 import NanoContractHeader from './header';
+import leb128 from '../utils/leb128';
 
 class NanoContractTransactionBuilder {
   blueprintId: string | null | undefined;
@@ -386,7 +387,7 @@ class NanoContractTransactionBuilder {
    * @inner
    */
   async serializeArgs() {
-    this.serializedArgs = [];
+    const serializedArray: Buffer[] = [leb128.encodeUnsigned(this.args?.length ?? 0)];
     if (this.args) {
       const serializer = new Serializer();
       const blueprintInformation = await ncApi.getBlueprintInformation(this.blueprintId!);
@@ -407,8 +408,9 @@ class NanoContractTransactionBuilder {
 
       for (const [index, arg] of methodArgs.entries()) {
         const serialized = serializer.serializeFromType(this.args[index], arg.type);
-        this.serializedArgs.push(serialized);
+        serializedArray.push(serialized);
       }
+      this.serializedArgs = Buffer.concat(serializedArray);
     }
   }
 

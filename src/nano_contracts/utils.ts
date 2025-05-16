@@ -22,8 +22,51 @@ import { NanoContractTransactionError, OracleParseError, WalletFromXPubGuard } f
 import { OutputType } from '../wallet/types';
 import { IHistoryTx, IStorage } from '../types';
 import { parseScript } from '../utils/scripts';
-import { MethodArgInfo, NanoContractArgumentType } from './types';
+import {
+  MethodArgInfo,
+  NanoContractArgumentType,
+  NanoContractArgumentContainerType,
+} from './types';
 import { NANO_CONTRACTS_INITIALIZE_METHOD } from '../constants';
+
+export function getContainerInternalType(
+  type: string
+): [NanoContractArgumentContainerType, string] {
+  if (type.endsWith('?')) {
+    // Optional value
+    return ['Optional', type.slice(0, -1)];
+  }
+
+  // ContainerType[internalType]
+  const match = type.match(/^(.*?)\[(.*)\]/);
+  const containerType = match ? match[1] : null;
+  const internalType = match ? match[2] : null;
+  if ((!internalType) || (!containerType)) {
+    throw new Error('Unable to extract type');
+  }
+  // Only some values are allowed for containerType
+  switch (containerType) {
+    case 'Tuple':
+    case 'SignedData':
+    case 'RawSignedData':
+      return [containerType, internalType]
+    default:
+      throw new Error('Not a ContainerType');
+  }
+}
+
+export function getContainerType(type: string): NanoContractArgumentContainerType | null {
+  try {
+    const [containerType, _internalType] = getContainerInternalType(type);
+    return containerType;
+  } catch (err: unknown) {
+    if (err instanceof Error && err.message === 'Not a ContainerType') {
+      return null;
+    }
+    // Re-raise unexpected error
+    throw err;
+  }
+}
 
 /**
  * Sign a transaction and create a send transaction object
@@ -184,9 +227,10 @@ export const validateAndUpdateBlueprintMethodArgs = async (
     }
     switch (typeToCheck) {
       case 'bytes':
-      case 'TxOutputScript':
-      case 'TokenUid':
+      case 'BlueprintId':
       case 'ContractId':
+      case 'TokenUid':
+      case 'TxOutputScript':
       case 'VertexId':
         // Bytes arguments are sent in hexadecimal
         try {
@@ -199,9 +243,14 @@ export const validateAndUpdateBlueprintMethodArgs = async (
           );
         }
         break;
-      case 'int':
-      case 'float':
       case 'Amount':
+        if (typeof args[index] !== 'bigint') {
+          throw new NanoContractTransactionError(
+            `Expects argument number ${index + 1} type ${arg.type} (bigint) but received type ${typeof args[index]}.`
+          );
+        }
+        break;
+      case 'int':
       case 'Timestamp':
         if (typeof args[index] !== 'number') {
           throw new NanoContractTransactionError(
@@ -229,8 +278,6 @@ export const validateAndUpdateBlueprintMethodArgs = async (
         try {
           const address = new Address(argValue as string);
           address.validateAddress();
-          // eslint-disable-next-line no-param-reassign
-          args[index] = address.decode();
         } catch {
           // Argument value is not a valid address
           throw new NanoContractTransactionError(

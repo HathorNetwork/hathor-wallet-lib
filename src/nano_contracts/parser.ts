@@ -10,10 +10,10 @@ import Address from '../models/address';
 import Network from '../models/network';
 import Deserializer from './deserializer';
 import ncApi from '../api/nano';
-import { unpackToInt } from '../utils/buffer';
 import { getAddressFromPubkey } from '../utils/address';
 import { NanoContractTransactionParseError } from '../errors';
-import { MethodArgInfo, NanoContractParsedArgument } from './types';
+import { MethodArgInfo, NanoContractArgumentType, NanoContractParsedArgument } from './types';
+import leb128 from '../utils/leb128';
 
 class NanoContractTransactionParser {
   blueprintId: string;
@@ -84,17 +84,32 @@ class NanoContractTransactionParser {
       []
     ) as MethodArgInfo[];
     let argsBuffer = Buffer.from(this.args, 'hex');
-    let size: number;
+
+    // Number of arguments
+    const numArgsReadResult = leb128.decodeUnsigned(argsBuffer);
+    const numArgs = Number(numArgsReadResult.value);
+    argsBuffer = numArgsReadResult.rest;
+
+    if (numArgs !== methodArgs.length) {
+      throw new NanoContractTransactionParseError(`Number of arguments do not match blueprint.`);
+    }
+
     for (const arg of methodArgs) {
-      [size, argsBuffer] = unpackToInt(2, false, argsBuffer);
-      let parsed;
+      let parsed: NanoContractArgumentType;
+      let size: number;
       try {
-        parsed = deserializer.deserializeFromType(argsBuffer.slice(0, size), arg.type);
-      } catch {
-        throw new NanoContractTransactionParseError(`Failed to deserialize argument ${arg.type} .`);
+        const parseResult = deserializer.deserializeFromType(argsBuffer, arg.type);
+        parsed = parseResult.value;
+        size = parseResult.bytesRead;
+      } catch (err: unknown) {
+        console.error(err);
+        throw new NanoContractTransactionParseError(`Failed to deserialize argument ${arg.type}.`);
       }
       parsedArgs.push({ ...arg, parsed });
-      argsBuffer = argsBuffer.slice(size);
+      argsBuffer = argsBuffer.subarray(size);
+    }
+    if (argsBuffer.length !== 0) {
+      throw new Error(`${argsBuffer.length} bytes left after parsing all arguments.`);
     }
 
     this.parsedArgs = parsedArgs;
