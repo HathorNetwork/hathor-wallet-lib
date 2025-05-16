@@ -240,12 +240,12 @@ class Deserializer {
       );
     }
     // Check checksum bytes
-    if (!decoded.subarray(21, 25).equals(addressBytes.subarray(21, 25))) {
+    const calcChecksum = decoded.subarray(21, 25);
+    const recvChecksum = addressBytes.subarray(21, 25);
+    if (!calcChecksum.equals(recvChecksum)) {
       // Checksum value generated does not match value from fullnode
-      const calcChecksum = decoded.subarray(21, 25).toString('hex');
-      const recvChecksum = addressBytes.subarray(21, 25).toString('hex');
       throw new Error(
-        `When parsing and Address(${address.base58}) we calculated checksum(${calcChecksum}) but it does not match the checksum it came with ${recvChecksum}.`
+        `When parsing and Address(${address.base58}) we calculated checksum(${calcChecksum.toString('hex')}) but it does not match the checksum it came with ${recvChecksum.toString('hex')}.`
       );
     }
     return {
