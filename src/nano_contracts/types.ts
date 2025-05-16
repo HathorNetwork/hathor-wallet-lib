@@ -96,6 +96,11 @@ export type NanoContractArgumentContainerType = z.output<
   typeof NanoContractArgumentContainerTypeNameSchema
 >;
 
+export enum NanoContractVertexType {
+  TRANSACTION = 'transaction',
+  CREATE_TOKEN_TRANSACTION = 'createTokenTransaction',
+}
+
 export enum NanoContractActionType {
   DEPOSIT = 'deposit',
   WITHDRAWAL = 'withdrawal',
@@ -127,7 +132,7 @@ export interface NanoContractAction {
   type: NanoContractActionType;
   token: string;
   amount: OutputValueType;
-  // For withdrawal is required, which is address to send the output
+  // For withdrawal is optional, which is address to send the output, in case one is created
   // For deposit is optional, and it's the address to filter the utxos
   address: string | null;
   // For deposit action is the change address used by the change output after selecting the utxos
@@ -221,3 +226,30 @@ export type BufferROExtract<T = unknown> = {
   value: T;
   bytesRead: number;
 };
+
+export interface NanoContractBuilderCreateTokenOptions {
+  // Token name
+  name: string;
+  // Token symbol
+  symbol: string;
+  // Token mint amount
+  amount: OutputValueType;
+  // Address to send the minted tokens
+  mintAddress: string;
+  // If the contract will pay for the token deposit fee
+  contractPaysTokenDeposit: boolean;
+  // Change address to send change values
+  changeAddress: string | null;
+  // If should create a mint authority output
+  createMint: boolean;
+  // The address to send the mint authority output to
+  mintAuthorityAddress: string | null;
+  // If should create a melt authority output
+  createMelt: boolean;
+  // The address to send the melt authority output to
+  meltAuthorityAddress: string | null;
+  // List of data strings to create data outputs
+  data: string[] | null;
+  // If this token is an NFT
+  isCreateNFT: boolean;
+}
