@@ -17,6 +17,7 @@ services:
       "--unsafe-mode", "nano-testnet-alpha",
       "--data", "./tmp",
       "--nc-indices",
+      "--nc-exec-logs", "all",
     ]
     environment:
       HATHOR_CONFIG_YAML: privnet/conf/privnet.yml

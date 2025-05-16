@@ -7,13 +7,11 @@
 
 import Address from '../models/address';
 import Network from '../models/network';
-import { hexToBuffer, intToBytes, signedIntToBytes, bigIntToBytes } from '../utils/buffer';
-import { NanoContractArgumentType } from './types';
+import { signedIntToBytes, bigIntToBytes } from '../utils/buffer';
+import { NanoContractArgumentType, NanoContractSignedData } from './types';
 import { OutputValueType } from '../types';
 import leb128Util from '../utils/leb128';
-
-// Number of bytes used to serialize the size of the value
-const SERIALIZATION_SIZE_LEN = 2;
+import { getContainerInternalType, getContainerType } from './utils';
 
 /* eslint-disable class-methods-use-this -- XXX: Methods that do not use `this` should be made static */
 class Serializer {
@@ -24,40 +22,20 @@ class Serializer {
   }
 
   /**
-   * Push an integer to buffer as the len of serialized element
-   * Use SERIALIZATION_SIZE_LEN as the quantity of bytes to serialize
-   * the integer
-   *
-   * @param {buf} Array of buffer to push the serialized integer
-   * @param {len} Integer to serialize
-   *
-   * @memberof Serializer
-   * @inner
-   */
-  pushLenValue(buf: Buffer[], len: number) {
-    buf.push(intToBytes(len, SERIALIZATION_SIZE_LEN));
-  }
-
-  /**
    * Helper method to serialize any value from its type
    * We receive these type from the full node, so we
    * use the python syntax
    *
-   * @param {value} Value to serialize
-   * @param {type} Type of the value to be serialized
+   * @param value Value to serialize
+   * @param type Type of the value to be serialized
    *
    * @memberof Serializer
    * @inner
    */
   serializeFromType(value: NanoContractArgumentType, type: string): Buffer {
-    if (type.endsWith('?')) {
-      // This is an optional
-      const optionalType = type.slice(0, -1);
-      return this.fromOptional(value, optionalType);
-    }
-
-    if (type.startsWith('SignedData[')) {
-      return this.fromSigned(value as string);
+    const isContainerType = getContainerType(type) !== null;
+    if (isContainerType) {
+      return this.serializeContainerType(value, type);
     }
 
     switch (type) {
@@ -86,6 +64,22 @@ class Serializer {
     }
   }
 
+  serializeContainerType(value: NanoContractArgumentType, type: string) {
+    const [containerType, innerType] = getContainerInternalType(type);
+
+    switch (containerType) {
+      case 'Optional':
+        return this.fromOptional(value, innerType);
+      case 'RawSignedData':
+      case 'SignedData':
+        return this.fromSignedData(value as NanoContractSignedData, innerType);
+      case 'Tuple':
+        return this.fromTuple(value as NanoContractArgumentType[], innerType);
+      default:
+        throw new Error('Invalid type');
+    }
+  }
+
   /**
    * Serialize string value.
    * - length (leb128 integer)
@@ -110,7 +104,7 @@ class Serializer {
    * @inner
    */
   fromAddress(value: string): Buffer {
-    const address = new Address(value, { network: this.network});
+    const address = new Address(value, { network: this.network });
     address.validateAddress();
     return this.fromBytes(address.decode());
   }
@@ -169,6 +163,19 @@ class Serializer {
   }
 
   /**
+   * Serialize a bigint value as a variable length integer.
+   * The serialization will use leb128.
+   *
+   * @param {bigint} value
+   *
+   * @memberof Serializer
+   */
+  fromVarInt(value: bigint): Buffer {
+    return leb128Util.encodeSigned(value);
+  }
+  /* eslint-disable class-methods-use-this */
+
+  /**
    * Serialize an optional value
    *
    * If value is null, then it's a buffer with 0 only. If it's not null,
@@ -209,53 +216,49 @@ class Serializer {
    * @memberof Serializer
    * @inner
    */
-  fromSigned(signedValue: string): Buffer {
-    const splittedValue = signedValue.split(',');
-    if (splittedValue.length !== 3) {
-      throw new Error('Signed data requires 3 parameters.');
-    }
-    // First value must be a Buffer but comes as hex
-    const inputData = hexToBuffer(splittedValue[0]);
-    const type = splittedValue[2];
-    let value: Buffer | string | boolean | number | bigint;
-    if (type === 'bytes') {
-      // If the result is expected as bytes, it will come here in the args as hex value
-      value = hexToBuffer(splittedValue[1]);
-    } else if (type === 'bool') {
-      // If the result is expected as boolean, it will come here as a string true/false
-      value = splittedValue[1] === 'true';
-    } else if (type === 'int') {
-      value = Number.parseInt(splittedValue[1], 10);
-    } else if (type === 'VarInt') {
-      value = BigInt(splittedValue[1]);
-    } else {
-      // For the other types
-      // eslint-disable-next-line prefer-destructuring
-      value = splittedValue[1];
-    }
-
+  fromSignedData(signedValue: NanoContractSignedData, type: string): Buffer {
     const ret: Buffer[] = [];
+    if (signedValue.type !== type) {
+      throw new Error('type mismatch');
+    }
 
-    const serialized = this.serializeFromType(value, type);
+    const serialized = this.serializeFromType(signedValue.value, signedValue.type);
     ret.push(serialized);
-    const signature = this.serializeFromType(inputData, 'bytes');
+    const signature = this.serializeFromType(signedValue.signature, 'bytes');
     ret.push(signature);
 
     return Buffer.concat(ret);
   }
 
   /**
-   * Serialize a bigint value as a variable length integer.
-   * The serialization will use leb128.
+   * Serialize a tuple of values
    *
-   * @param {bigint} value
+   * @param value List of values to serialize
+   * @param typeStr Comma separated list of types e.g. `str,int,VarInt`
+   *
+   * @example
+   * ```
+   * const serializer = Serializer(new Network('testnet'));
+   *
+   * const type = 'Tuple[str,int]';
+   * const typeStr = 'str,int';
+   * const buf = serializer.fromTuple(['1x0', 5], typeStr);
+   * ```
    *
    * @memberof Serializer
+   * @inner
    */
-  fromVarInt(value: bigint): Buffer {
-    return leb128Util.encodeSigned(value);
+  fromTuple(value: NanoContractArgumentType[], typeStr: string): Buffer {
+    const typeArr = typeStr.split(',').map(t => t.trim());
+    const serialized: Buffer[] = [];
+    if (typeArr.length !== value.length) {
+      throw new Error('Tuple value with length mismatch, required ');
+    }
+    for (const [index, type] of typeArr.entries()) {
+      serialized.push(this.serializeFromType(value[index], type));
+    }
+    return Buffer.concat(serialized);
   }
 }
-/* eslint-disable class-methods-use-this */
 
 export default Serializer;
