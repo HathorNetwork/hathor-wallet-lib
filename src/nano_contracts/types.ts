@@ -124,11 +124,15 @@ export enum NanoContractVertexType {
 export enum NanoContractActionType {
   DEPOSIT = 'deposit',
   WITHDRAWAL = 'withdrawal',
+  GRANT_AUTHORITY = 'grant_authority',
+  INVOKE_AUTHORITY = 'invoke_authority'
 }
 
 export enum NanoContractHeaderActionType {
   DEPOSIT = 1,
   WITHDRAWAL = 2,
+  GRANT_AUTHORITY = 3,
+  INVOKE_AUTHORITY = 4,
 }
 
 export const ActionTypeToActionHeaderType: Record<
@@ -137,6 +141,8 @@ export const ActionTypeToActionHeaderType: Record<
 > = {
   [NanoContractActionType.DEPOSIT]: NanoContractHeaderActionType.DEPOSIT,
   [NanoContractActionType.WITHDRAWAL]: NanoContractHeaderActionType.WITHDRAWAL,
+  [NanoContractActionType.GRANT_AUTHORITY]: NanoContractHeaderActionType.GRANT_AUTHORITY,
+  [NanoContractActionType.INVOKE_AUTHORITY]: NanoContractHeaderActionType.INVOKE_AUTHORITY,
 };
 
 // The action in the header is serialized/deserialized in the class
@@ -151,12 +157,18 @@ export interface NanoContractActionHeader {
 export interface NanoContractAction {
   type: NanoContractActionType;
   token: string;
-  amount: OutputValueType;
-  // For withdrawal is optional, which is address to send the output, in case one is created
-  // For deposit is optional, and it's the address to filter the utxos
+  // For withdrawal/deposit is required but authority actions
+  // will receive its information from the authority field
+  amount: OutputValueType | null;
+  // For withdrawal and create authority is required, which is address to send the output
+  // For deposit or grant authority actions is optional, and it's the address to filter the utxos
   address: string | null;
   // For deposit action is the change address used by the change output after selecting the utxos
   changeAddress: string | null;
+  // In case of an authority action, it specifies which authority
+  authority: 'mint' | 'melt' | null;
+  // For grant authority action, it's the address to create the authority output, if the user wants to keep it
+  authorityAddress: string | null;
 }
 
 // Arguments for blueprint methods

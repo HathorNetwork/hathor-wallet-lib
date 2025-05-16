@@ -15,10 +15,12 @@ import {
   DEFAULT_TX_VERSION,
   NATIVE_TOKEN_UID,
   NANO_CONTRACTS_INITIALIZE_METHOD,
+  TOKEN_MINT_MASK,
+  TOKEN_MELT_MASK
 } from '../constants';
 import Serializer from './serializer';
 import HathorWallet from '../new/wallet';
-import { NanoContractTransactionError } from '../errors';
+import { NanoContractTransactionError, UtxoError } from '../errors';
 import {
   ActionTypeToActionHeaderType,
   NanoContractActionHeader,
@@ -199,18 +201,14 @@ class NanoContractTransactionBuilder {
    * Create inputs (and maybe change outputs) to complete the deposit
    *
    * @param {action} Action to be completed (must be a deposit type)
-   * @param {tokens} Array of tokens to get the token data correctly
    *
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  async executeDeposit(
-    action: NanoContractAction,
-    tokens: string[]
-  ): Promise<[IDataInput[], IDataOutput[]]> {
+  async executeDeposit(action: NanoContractAction): Promise<[IDataInput[], IDataOutput[]]> {
     if (action.type !== NanoContractActionType.DEPOSIT) {
       throw new NanoContractTransactionError(
-        "Can't execute a deposit with an action which type is differente than deposit."
+        "Can't execute a deposit with an action which type is different than deposit."
       );
     }
 
@@ -228,8 +226,17 @@ class NanoContractTransactionBuilder {
     if (action.address) {
       utxoOptions.filter_address = action.address;
     }
-    const utxosData = await this.wallet.getUtxosForAmount(action.amount, utxoOptions);
-    // XXX What if I don't have enough funds? Validate it!
+
+    let utxosData;
+    try {
+      utxosData = await this.wallet.getUtxosForAmount(action.amount, utxoOptions);
+    } catch (e) {
+      if (e instanceof UtxoError) {
+        throw new NanoContractTransactionError('Not enough utxos to execute the deposit.');
+      }
+
+      throw e;
+    }
     const inputs: IDataInput[] = [];
     for (const utxo of utxosData.utxos) {
       inputs.push({
@@ -269,21 +276,20 @@ class NanoContractTransactionBuilder {
    * then creates the output only of the difference
    *
    * @param {action} Action to be completed (must be a withdrawal type)
-   * @param {tokens} Array of tokens to get the token data correctly
    *
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  executeWithdrawal(action: NanoContractAction, tokens: string[]): IDataOutput | null {
+  executeWithdrawal(action: NanoContractAction): IDataOutput | null {
     if (action.type !== NanoContractActionType.WITHDRAWAL) {
       throw new NanoContractTransactionError(
-        "Can't execute a withdrawal with an action which type is differente than withdrawal."
+        "Can't execute a withdrawal with an action which type is different than withdrawal."
       );
     }
 
     if (!action.amount || !action.token) {
       throw new NanoContractTransactionError(
-        'Address, amount and token are required for withdrawal action.'
+        'Amount and token are required for withdrawal action.'
       );
     }
 
@@ -327,6 +333,98 @@ class NanoContractTransactionBuilder {
       timelock: null,
       token: action.token,
       authorities: 0n,
+    };
+  }
+
+  /**
+   * Execute a grant authority action
+   * Create inputs (and maybe change output) to complete the action
+   *
+   * @param {action} Action to be completed (must be a grant authority type)
+   *
+   * @memberof NanoContractTransactionBuilder
+   * @inner
+   */
+  async executeGrantAuthority(action: NanoContractAction): Promise<[IDataInput[], IDataOutput[]]> {
+    if (action.type !== NanoContractActionType.GRANT_AUTHORITY) {
+      throw new NanoContractTransactionError(
+        "Can't execute a grant authority with an action which type is different than grant authority."
+      );
+    }
+
+    if (!action.authority || !action.token) {
+      throw new NanoContractTransactionError('Authority and token are required for grant authority action.');
+    }
+
+    const authorityAddressParam = action.authorityAddress;
+    if (authorityAddressParam && !(await this.wallet.isAddressMine(authorityAddressParam))) {
+      throw new NanoContractTransactionError('Authority address must belong to the same wallet.');
+    }
+
+    // Get the utxos with the authority of the action and create the input
+    const utxos = await this.wallet.getAuthorityUtxo(action.token, action.authority, { many: false, only_available_utxos: true, filter_address: action.address });
+
+    if (!utxos || utxos.length === 0) {
+      throw new NanoContractTransactionError('Not enough authority utxos to execute the grant authority.');
+    }
+
+    const inputs: IDataInput[] = [];
+    // The method gets only one utxo
+    const utxo = utxos[0];
+    inputs.push({
+      txId: utxo.txId,
+      index: utxo.index,
+      value: utxo.value,
+      authorities: utxo.authorities,
+      token: utxo.token,
+      address: utxo.address,
+    });
+
+    const outputs: IDataOutput[] = [];
+    // If there's the authorityAddress param, then we must create another authority output for this address
+    if (action.authorityAddress) {
+      outputs.push({
+        type: getAddressType(action.authorityAddress, this.wallet.getNetworkObject()),
+        address: action.authorityAddress,
+        value: action.authority === 'mint' ? TOKEN_MINT_MASK : TOKEN_MELT_MASK,
+        timelock: null,
+        token: action.token,
+        authorities: action.authority === 'mint' ? 1n : 2n,
+      });
+    }
+
+    return [inputs, outputs];
+  }
+
+  /**
+   * Execute an invoke authority action
+   *
+   * @param {action} Action to be completed (must be an invoke authority type)
+   *
+   * @memberof NanoContractTransactionBuilder
+   * @inner
+   */
+  executeInvokeAuthority(action: NanoContractAction): IDataOutput | null {
+    if (action.type !== NanoContractActionType.INVOKE_AUTHORITY) {
+      throw new NanoContractTransactionError(
+        "Can't execute an invoke authority with an action which type is different than invoke authority."
+      );
+    }
+
+    if (!action.address || !action.authority || !action.token) {
+      throw new NanoContractTransactionError(
+        'Address, authority, and token are required for invoke authority action.'
+      );
+    }
+
+    // Create the output with the authority of the action
+    return {
+      type: getAddressType(action.address, this.wallet.getNetworkObject()),
+      address: action.address,
+      value: action.authority === 'mint' ? TOKEN_MINT_MASK : TOKEN_MELT_MASK,
+      timelock: null,
+      token: action.token,
+      authorities: action.authority === 'mint' ? 1n : 2n,
     };
   }
 
