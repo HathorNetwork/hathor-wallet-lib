@@ -61,7 +61,6 @@ export type NanoContractArgumentType = z.output<typeof NanoContractArgumentSchem
 
 export const NanoContractArgumentByteTypes = z.enum([
   'bytes',
-  'Address',
   'BlueprintId',
   'ContractId',
   'TokenUid',
@@ -76,6 +75,7 @@ export const NanoContractArgumentSingleTypeNameSchema = z.enum([
   'bool',
   'int',
   'str',
+  'Address',
   'Timestamp',
   'VarInt',
   ...NanoContractArgumentByteTypes.options,
