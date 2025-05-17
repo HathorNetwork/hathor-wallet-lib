@@ -108,6 +108,44 @@ export interface IAuthoritiesBalance {
   melt: ITokenBalance;
 }
 
+export interface IHistoryNanoContractActionWithdraw {
+    type: 'WITHDRAW';
+    token_uid: string;
+    amount: OutputValueType;
+}
+
+export interface IHistoryNanoContractActionDeposit {
+    type: 'DEPOSIT';
+    token_uid: string;
+    amount: OutputValueType;
+}
+
+export interface IHistoryNanoContractActionGrantAuthority {
+    type: 'GRANT_AUTHORITY';
+    token_uid: string;
+    mint: boolean;
+    melt: boolean;
+}
+
+export interface IHistoryNanoContractActionInvokeAuthority {
+    type: 'INVOKE_AUTHORITY';
+    token_uid: string;
+    mint: boolean;
+    melt: boolean;
+}
+
+export type IHistoryNanoContractAction = 
+  | IHistoryNanoContractActionDeposit
+  | IHistoryNanoContractActionWithdraw
+  | IHistoryNanoContractActionGrantAuthority
+  | IHistoryNanoContractActionInvokeAuthority
+
+export interface IHistoryNanoContractContext {
+  actions: IHistoryNanoContractAction[];
+  address: string;
+  timestamp: number;
+}
+
 export interface IHistoryTx {
   tx_id: string;
   signalBits?: number;
@@ -128,7 +166,8 @@ export interface IHistoryTx {
   nc_blueprint_id?: string; // For nano contract
   nc_method?: string; // For nano contract
   nc_args?: string; // For nano contract. Args in hex
-  nc_pubkey?: string; // For nano contract. Pubkey in hex
+  nc_address?: string; // For nano contract. Pubkey in hex
+  nc_context?: IHistoryNanoContractContext;
   first_block?: string | null;
 }
 

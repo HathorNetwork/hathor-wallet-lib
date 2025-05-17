@@ -117,11 +117,10 @@ describe('full cycle of bet nano contract', () => {
     const tx1Parser = new NanoContractTransactionParser(
       blueprintId,
       NANO_CONTRACTS_INITIALIZE_METHOD,
-      tx1Data.tx.nc_pubkey,
+      tx1Data.tx.nc_address,
       network,
       tx1Data.tx.nc_args
     );
-    tx1Parser.parseAddress(network);
     await tx1Parser.parseArguments();
     expect(tx1Parser.address.base58).toBe(address0);
     expect(tx1Parser.parsedArgs).toStrictEqual([
@@ -193,11 +192,10 @@ describe('full cycle of bet nano contract', () => {
     const txBetParser = new NanoContractTransactionParser(
       blueprintId,
       'bet',
-      txBetData.tx.nc_pubkey,
+      txBetData.tx.nc_address,
       network,
       txBetData.tx.nc_args
     );
-    txBetParser.parseAddress(network);
     await txBetParser.parseArguments();
     expect(txBetParser.address.base58).toBe(address2);
     expect(txBetParser.parsedArgs).toStrictEqual([
@@ -241,11 +239,10 @@ describe('full cycle of bet nano contract', () => {
     const txBet2Parser = new NanoContractTransactionParser(
       blueprintId,
       'bet',
-      txBet2Data.tx.nc_pubkey,
+      txBet2Data.tx.nc_address,
       network,
       txBet2Data.tx.nc_args
     );
-    txBet2Parser.parseAddress(network);
     await txBet2Parser.parseArguments();
     expect(txBet2Parser.address.base58).toBe(address3);
     expect(txBet2Parser.parsedArgs).toStrictEqual([
@@ -316,11 +313,10 @@ describe('full cycle of bet nano contract', () => {
     const txSetResultParser = new NanoContractTransactionParser(
       blueprintId,
       'set_result',
-      txSetResultData.tx.nc_pubkey,
+      txSetResultData.tx.nc_address,
       network,
       txSetResultData.tx.nc_args
     );
-    txSetResultParser.parseAddress(network);
     await txSetResultParser.parseArguments();
     expect(txSetResultParser.address.base58).toBe(address1);
     expect(txSetResultParser.parsedArgs).toStrictEqual([
@@ -418,11 +414,10 @@ describe('full cycle of bet nano contract', () => {
     const txWithdrawalParser = new NanoContractTransactionParser(
       blueprintId,
       'set_result',
-      txWithdrawalData.tx.nc_pubkey,
+      txWithdrawalData.tx.nc_address,
       network,
       txWithdrawalData.tx.nc_args
     );
-    txWithdrawalParser.parseAddress(network);
     await txWithdrawalParser.parseArguments();
     expect(txWithdrawalParser.address.base58).toBe(address2);
     expect(txWithdrawalParser.parsedArgs).toBe(null);

@@ -95,6 +95,50 @@ export const IHistoryOutputSchema: ZodSchema<IHistoryOutput> = z
   })
   .passthrough();
 
+export const IHistoryNanoContractActionWithdrawSchema = z
+  .object({
+    type: z.literal('WITHDRAW'),
+    token_uid: z.string(),
+    amount: bigIntCoercibleSchema,
+  }).passthrough();
+
+export const IHistoryNanoContractActionDepositSchema = z
+  .object({
+    type: z.literal('DEPOSIT'),
+    token_uid: z.string(),
+    amount: bigIntCoercibleSchema,
+  }).passthrough();
+
+export const IHistoryNanoContractActionGrantAuthoritySchema = z
+  .object({
+    type: z.literal('GRANT_AUTHORITY'),
+    token_uid: z.string(),
+    mint: z.boolean(),
+    melt: z.boolean(),
+  }).passthrough();
+
+export const IHistoryNanoContractActionInvokeAuthoritySchema = z
+  .object({
+    type: z.literal('INVOKE_AUTHORITY'),
+    token_uid: z.string(),
+    mint: z.boolean(),
+    melt: z.boolean(),
+  }).passthrough();
+
+export const IHistoryNanoContractActionSchema = z.discriminatedUnion('type', [
+  IHistoryNanoContractActionDepositSchema,
+  IHistoryNanoContractActionWithdrawSchema,
+  IHistoryNanoContractActionGrantAuthoritySchema,
+  IHistoryNanoContractActionInvokeAuthoritySchema,
+]);
+
+export const IHistoryNanoContractContextSchema = z
+  .object({
+    actions: IHistoryNanoContractActionSchema.array(),
+    address: z.string(),
+    timestamp: z.number(),
+  }).passthrough();
+
 export const IHistoryTxSchema: ZodSchema<IHistoryTx> = z
   .object({
     tx_id: txIdSchema,
@@ -116,7 +160,8 @@ export const IHistoryTxSchema: ZodSchema<IHistoryTx> = z
     nc_blueprint_id: z.string().optional(),
     nc_method: z.string().optional(),
     nc_args: z.string().optional(),
-    nc_pubkey: z.string().optional(),
+    nc_address: z.string().optional(),
+    nc_context: IHistoryNanoContractContextSchema,
     first_block: z.string().nullish(),
   })
   .passthrough();
