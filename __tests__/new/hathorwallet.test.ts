@@ -819,7 +819,7 @@ test('checkPinAndPassword', async () => {
 
 test('getTxHistory', async () => {
   const fakeNetwork = new Network('testnet');
-  const fakePubkey = Buffer.from('abcd', 'hex');
+  const fakeAddress = 'mock-address';
 
   const store = new MemoryStore();
   const storage = new Storage(store);
@@ -836,7 +836,7 @@ test('getTxHistory', async () => {
       is_voided: false,
       nc_id: 'mock-nc-id',
       nc_method: 'mock-nc-method',
-      nc_pubkey: fakePubkey,
+      nc_address: fakeAddress,
       first_block: 'mock-first-block-hash',
     };
   }
@@ -849,9 +849,6 @@ test('getTxHistory', async () => {
   jest.spyOn(storage, 'tokenHistory').mockImplementation(historyMock);
 
   hWallet.getNetworkObject = jest.fn().mockReturnValue(fakeNetwork);
-  const addrFromPubkey = jest
-    .spyOn(addressUtils, 'getAddressFromPubkey')
-    .mockReturnValue({ base58: 'mock-address' });
 
   await expect(hWallet.getTxHistory({ token_id: 'mock-token-uid' })).resolves.toStrictEqual([
     {
@@ -862,7 +859,7 @@ test('getTxHistory', async () => {
       version: 1,
       ncId: 'mock-nc-id',
       ncMethod: 'mock-nc-method',
-      ncCaller: { base58: 'mock-address' },
+      ncCaller: expect.objectContaining({ base58: 'mock-address' }),
       firstBlock: 'mock-first-block-hash',
     },
   ]);
@@ -876,13 +873,10 @@ test('getTxHistory', async () => {
       version: 1,
       ncId: 'mock-nc-id',
       ncMethod: 'mock-nc-method',
-      ncCaller: { base58: 'mock-address' },
+      ncCaller: expect.objectContaining({ base58: 'mock-address' }),
       firstBlock: 'mock-first-block-hash',
     },
   ]);
-
-  expect(addrFromPubkey).toHaveBeenCalledTimes(2);
-  expect(addrFromPubkey).toHaveBeenCalledWith(fakePubkey, fakeNetwork);
 });
 
 test('isHardwareWallet', async () => {

@@ -16,12 +16,15 @@ import {
   unpackLen,
   unpackToInt,
 } from '../utils/buffer';
+import helpersUtils from '../utils/helpers';
 import {
   getVertexHeaderIdBuffer,
   getVertexHeaderIdFromBuffer,
   VertexHeaderId,
 } from '../headers/types';
 import Header from '../headers/base';
+import Address from '../models/address';
+import Network from '../models/network';
 
 class NanoContractHeader extends Header {
   // Used to create serialization versioning (hard coded as NANO_CONTRACTS_INFO_VERSION for now)
@@ -40,18 +43,22 @@ class NanoContractHeader extends Header {
   // List of actions for this nano
   actions: NanoContractActionHeader[];
 
-  // Pubkey and signature of the transaction owner / caller
-  pubkey: Buffer;
+  // Address if the transaction owner(s)/caller(s)
+  address: Address | null;
 
-  signature: Buffer | null;
+  /**
+   * script with signature(s) of the transaction owner(s)/caller(s).
+   * Supports P2PKH and P2SH
+   */
+  script: Buffer | null;
 
   constructor(
     id: string,
     method: string,
     args: Buffer[],
     actions: NanoContractActionHeader[],
-    pubkey: Buffer,
-    signature: Buffer | null = null
+    address: Address | null,
+    script: Buffer | null = null
   ) {
     super();
     this.nc_info_version = NANO_CONTRACTS_INFO_VERSION;
@@ -59,21 +66,21 @@ class NanoContractHeader extends Header {
     this.method = method;
     this.args = args;
     this.actions = actions;
-    this.pubkey = pubkey;
-    this.signature = signature;
+    this.address = address;
+    this.script = script;
   }
 
   /**
    * Serialize funds fields
    * Add the serialized fields to the array parameter
    *
-   * @param {array} Array of buffer to push the serialized fields
-   * @param {addSignature} If should add signature when serializing it
+   * @param array Array of buffer to push the serialized fields
+   * @param addScript If should add the script with the signature(s) when serializing it
    *
    * @memberof NanoContract
    * @inner
    */
-  serializeFields(array: Buffer[], addSignature: boolean) {
+  serializeFields(array: Buffer[], addScript: boolean) {
     // Info version
     array.push(intToBytes(this.nc_info_version, 1));
 
@@ -103,12 +110,15 @@ class NanoContractHeader extends Header {
       array.push(Buffer.concat(arrAction));
     }
 
-    array.push(intToBytes(this.pubkey.length, 1));
-    array.push(this.pubkey);
+    if (!this.address) {
+      throw new Error('Header caller address was not provided');
+    }
+    const addressBytes = this.address.decode();
+    array.push(addressBytes);
 
-    if (addSignature && this.signature !== null) {
-      array.push(intToBytes(this.signature.length, 1));
-      array.push(this.signature);
+    if (addScript && this.script !== null) {
+      array.push(intToBytes(this.script.length, 2));
+      array.push(this.script);
     } else {
       array.push(intToBytes(0, 1));
     }
@@ -147,7 +157,7 @@ class NanoContractHeader extends Header {
    * @memberof NanoContractHeader
    * @inner
    */
-  static deserialize(srcBuf: Buffer): [Header, Buffer] {
+  static deserialize(srcBuf: Buffer, network: Network): [Header, Buffer] {
     // Copies buffer locally, not to change the original parameter
     let buf = Buffer.from(srcBuf);
 
@@ -158,7 +168,7 @@ class NanoContractHeader extends Header {
     buf = buf.subarray(1);
 
     // Create empty header to fill with the deserialization
-    const header = new NanoContractHeader('', '', [], [], Buffer.from([]));
+    const header = new NanoContractHeader('', '', [], [], null);
 
     /* eslint-disable prefer-const -- To split these declarations would be confusing.
      * In all of them the first parameter should be a const and the second a let. */
@@ -200,14 +210,14 @@ class NanoContractHeader extends Header {
     header.args = args;
 
     // nc actions
-    let actionsLen;
+    let actionsLen: number;
     [actionsLen, buf] = unpackToInt(1, false, buf);
 
     for (let i = 0; i < actionsLen; i++) {
-      let actionTypeBytes;
-      let actionType;
-      let tokenIndex;
-      let amount;
+      let actionTypeBytes: Buffer;
+      let actionType: number;
+      let tokenIndex: number;
+      let amount: bigint;
       [actionTypeBytes, buf] = [buf.subarray(0, 1), buf.subarray(1)];
       [actionType] = unpackToInt(1, false, actionTypeBytes);
       [tokenIndex, buf] = unpackToInt(1, false, buf);
@@ -216,18 +226,18 @@ class NanoContractHeader extends Header {
       header.actions.push({ type: actionType, tokenIndex, amount });
     }
 
-    // nc pubkey
-    let pubkeyLen;
-    [pubkeyLen, buf] = unpackToInt(1, false, buf);
-    [header.pubkey, buf] = unpackLen(pubkeyLen, buf);
+    // nc address
+    let addressBytes: Buffer;
+    [addressBytes, buf] = unpackLen(25, buf);
+    header.address = helpersUtils.validateAddressBytes(addressBytes, network);
 
-    // nc signature
-    let signatureLen;
-    [signatureLen, buf] = unpackToInt(1, false, buf);
+    // nc script
+    let scriptLen: number;
+    [scriptLen, buf] = unpackToInt(2, false, buf);
 
-    if (signatureLen !== 0) {
-      // signature might be null
-      [header.signature, buf] = unpackLen(signatureLen, buf);
+    if (scriptLen !== 0) {
+      // script might be null
+      [header.script, buf] = unpackLen(scriptLen, buf);
     }
     /* eslint-enable prefer-const */
 

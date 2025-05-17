@@ -593,12 +593,13 @@ class Transaction {
    * and pushes them in `this.headers`
    *
    * @param srcBuf Buffer with bytes to get headers data
+   * @param network Network used to deserialize headers
    *
    * @return Rest of buffer after getting the fields
    * @memberof Transaction
    * @inner
    */
-  getHeadersFromBytes(srcBuf: Buffer): void {
+  getHeadersFromBytes(srcBuf: Buffer, network: Network): void {
     // Creates a new subarray buffer not to change anything of the source buffer
     let buf = srcBuf.subarray();
 
@@ -615,7 +616,7 @@ class Transaction {
       const headerClass = HeaderParser.getHeader(headerId);
       let header;
       // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
-      [header, buf] = headerClass.deserialize(buf);
+      [header, buf] = headerClass.deserialize(buf, network);
 
       this.headers.push(header);
     }
@@ -645,7 +646,7 @@ class Transaction {
     // The header serialization doesn't have the headers length
     // so we must exhaust the buffer until it's empty
     // or we will throw an error
-    tx.getHeadersFromBytes(txBuffer);
+    tx.getHeadersFromBytes(txBuffer, network);
 
     tx.updateHash();
 

@@ -28,7 +28,7 @@ import {
 import walletApi from '../api/wallet';
 import helpers from './helpers';
 import transactionUtils from './transaction';
-import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from './address';
+import { deriveAddressP2PKH, deriveAddressP2SH } from './address';
 import { xpubStreamSyncHistory, manualStreamSyncHistory } from '../sync/stream';
 import {
   NATIVE_TOKEN_UID,
@@ -799,17 +799,20 @@ export async function processNewTx(
   // The IHistoryTx object has data from the full node that doesn't have the headers
   // only the nano parameters in the data
   if (tx.nc_id || tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
-    const caller = getAddressFromPubkey(tx.nc_pubkey!, storage.config.getNetwork());
-    const callerAddressInfo = await store.getAddress(caller.base58);
+    if (!tx.nc_address) {
+      throw new Error(`Nano contract tx(${tx.tx_id}) with caller address ${tx.nc_address}`);
+    }
+    const caller = tx.nc_address;
+    const callerAddressInfo = await store.getAddress(caller);
     // if address is not in wallet, ignore
     if (callerAddressInfo) {
       // create metadata for address if it does not exist
-      let addressMeta = await store.getAddressMeta(caller.base58);
+      let addressMeta = await store.getAddressMeta(caller);
       if (!addressMeta) {
         addressMeta = { numTransactions: 0, balance: new Map<string, IBalance>() };
-        await store.editAddressMeta(caller.base58, addressMeta);
+        await store.editAddressMeta(caller, addressMeta);
       }
-      txAddresses.add(caller.base58);
+      txAddresses.add(caller);
     }
   }
 
