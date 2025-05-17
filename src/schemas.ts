@@ -166,7 +166,7 @@ export const IHistoryTxSchema: ZodSchema<IHistoryTx> = z
     nc_method: z.string().optional(),
     nc_args: z.string().optional(),
     nc_address: z.string().optional(),
-    nc_context: IHistoryNanoContractContextSchema,
+    nc_context: IHistoryNanoContractContextSchema.optional(),
     first_block: z.string().nullish(),
   })
   .passthrough();
