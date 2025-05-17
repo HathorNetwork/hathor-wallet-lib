@@ -109,36 +109,36 @@ export interface IAuthoritiesBalance {
 }
 
 export interface IHistoryNanoContractActionWithdraw {
-    type: 'WITHDRAW';
-    token_uid: string;
-    amount: OutputValueType;
+  type: 'WITHDRAW';
+  token_uid: string;
+  amount: OutputValueType;
 }
 
 export interface IHistoryNanoContractActionDeposit {
-    type: 'DEPOSIT';
-    token_uid: string;
-    amount: OutputValueType;
+  type: 'DEPOSIT';
+  token_uid: string;
+  amount: OutputValueType;
 }
 
 export interface IHistoryNanoContractActionGrantAuthority {
-    type: 'GRANT_AUTHORITY';
-    token_uid: string;
-    mint: boolean;
-    melt: boolean;
+  type: 'GRANT_AUTHORITY';
+  token_uid: string;
+  mint: boolean;
+  melt: boolean;
 }
 
 export interface IHistoryNanoContractActionInvokeAuthority {
-    type: 'INVOKE_AUTHORITY';
-    token_uid: string;
-    mint: boolean;
-    melt: boolean;
+  type: 'INVOKE_AUTHORITY';
+  token_uid: string;
+  mint: boolean;
+  melt: boolean;
 }
 
-export type IHistoryNanoContractAction = 
+export type IHistoryNanoContractAction =
   | IHistoryNanoContractActionDeposit
   | IHistoryNanoContractActionWithdraw
   | IHistoryNanoContractActionGrantAuthority
-  | IHistoryNanoContractActionInvokeAuthority
+  | IHistoryNanoContractActionInvokeAuthority;
 
 export interface IHistoryNanoContractContext {
   actions: IHistoryNanoContractAction[];

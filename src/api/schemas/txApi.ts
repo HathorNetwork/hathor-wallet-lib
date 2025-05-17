@@ -67,14 +67,16 @@ export const fullnodeTxApiNcActionWithdrawSchema = z
     type: z.literal('WITHDRAW'),
     token_uid: z.string(),
     amount: bigIntCoercibleSchema,
-  }).passthrough();
+  })
+  .passthrough();
 
 export const fullnodeTxApiNcActionDepositSchema = z
   .object({
     type: z.literal('DEPOSIT'),
     token_uid: z.string(),
     amount: bigIntCoercibleSchema,
-  }).passthrough();
+  })
+  .passthrough();
 
 export const fullnodeTxApiNcActionGrantAuthoritySchema = z
   .object({
@@ -82,7 +84,8 @@ export const fullnodeTxApiNcActionGrantAuthoritySchema = z
     token_uid: z.string(),
     mint: z.boolean(),
     melt: z.boolean(),
-  }).passthrough();
+  })
+  .passthrough();
 
 export const fullnodeTxApiNcActionInvokeAuthoritySchema = z
   .object({
@@ -90,7 +93,8 @@ export const fullnodeTxApiNcActionInvokeAuthoritySchema = z
     token_uid: z.string(),
     mint: z.boolean(),
     melt: z.boolean(),
-  }).passthrough();
+  })
+  .passthrough();
 
 export const fullnodeTxApiNcActionSchema = z.discriminatedUnion('type', [
   fullnodeTxApiNcActionDepositSchema,
@@ -104,7 +108,8 @@ export const fullnodeTxApiNcContextSchema = z
     actions: fullnodeTxApiNcActionSchema.array(),
     address: z.string(),
     timestamp: z.number(),
-  }).passthrough();
+  })
+  .passthrough();
 
 export const fullnodeTxApiTxSchema = z.object({
   hash: z.string(),
