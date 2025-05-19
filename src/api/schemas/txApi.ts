@@ -73,6 +73,7 @@ export const fullnodeTxApiTxSchema = z.object({
   parents: z.string().array(),
   nc_id: z.string().nullish(),
   nc_method: z.string().nullish(),
+  nc_pubkey: z.string().nullish(),
   nc_address: z.string().nullish(),
   nc_context: IHistoryNanoContractContextSchema.nullish(),
   nc_args: z.string().nullish(),

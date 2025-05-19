@@ -165,6 +165,7 @@ export const IHistoryTxSchema: ZodSchema<IHistoryTx> = z
     nc_blueprint_id: z.string().optional(),
     nc_method: z.string().optional(),
     nc_args: z.string().optional(),
+    nc_pubkey: z.string().regex(/^[a-fA-F0-9]*$/).optional(), // for on-chain-blueprints
     nc_address: z.string().optional(),
     nc_context: IHistoryNanoContractContextSchema.optional(),
     first_block: z.string().nullish(),

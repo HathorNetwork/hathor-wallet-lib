@@ -618,7 +618,7 @@ const transaction = {
    * by the inputs.
    */
   async convertTransactionToHistoryTx(
-    tx: Transaction | CreateTokenTransaction,
+    tx: Transaction | CreateTokenTransaction | OnChainBlueprint,
     storage: IStorage
   ): Promise<IHistoryTx> {
     if (!tx.hash) {
@@ -716,6 +716,10 @@ const transaction = {
     if (tx.version === CREATE_TOKEN_TX_VERSION) {
       histTx.token_name = (tx as CreateTokenTransaction).name;
       histTx.token_symbol = (tx as CreateTokenTransaction).symbol;
+    }
+
+    if (tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
+      histTx.nc_pubkey = (tx as OnChainBlueprint).pubkey.toString('hex');
     }
 
     if (tx.isNanoContract()) {
@@ -926,6 +930,7 @@ const transaction = {
     if (tx.nc_args) histTx.nc_args = tx.nc_args;
     if (tx.nc_address) histTx.nc_address = tx.nc_address;
     if (tx.nc_context) histTx.nc_context = tx.nc_context;
+    if (tx.nc_pubkey) histTx.nc_pubkey = tx.nc_pubkey;
 
     return histTx;
   },

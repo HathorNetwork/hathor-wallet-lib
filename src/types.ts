@@ -167,6 +167,7 @@ export interface IHistoryTx {
   nc_method?: string; // For nano contract
   nc_args?: string; // For nano contract. Args in hex
   nc_address?: string; // For nano contract. address in base58
+  nc_pubkey?: string; // For on-chain-blueprints. pubkey DER encoded as hex
   nc_context?: IHistoryNanoContractContext;
   first_block?: string | null;
 }
