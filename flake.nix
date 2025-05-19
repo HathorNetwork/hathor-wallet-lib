@@ -29,16 +29,34 @@
               command = "npm run build";
             }
             {
-              category = "build";
+              category = "check";
               name = "lint_check";
               help = "Run lint checker";
               command = "npm run lint";
             }
             {
-              category = "build";
+              category = "check";
               name = "lint_fix";
               help = "Run lint and fix if possible";
               command = "npm run lint:fix";
+            }
+            {
+              category = "tests";
+              name = "integration_up";
+              help = "Start integration tests infra";
+              command = "npm run test_network_up";
+            }
+            {
+              category = "tests";
+              name = "integration_down";
+              help = "Cleanup integration tests infra";
+              command = "npm run test_network_down";
+            }
+            {
+              category = "tests";
+              name = "integration_tests";
+              help = "Run integration tests (network should be running)";
+              command = "npm run test_network_integration";
             }
           ];
           packages = with pkgs; [
