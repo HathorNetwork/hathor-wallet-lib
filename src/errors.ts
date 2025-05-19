@@ -398,3 +398,5 @@ export class GlobalLoadLockTaskError extends Error {
     this.innerError = innerError;
   }
 }
+
+export class NanoHeaderNotFound extends Error {}

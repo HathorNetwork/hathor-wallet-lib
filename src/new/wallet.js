@@ -51,6 +51,7 @@ import { deriveAddressP2PKH, deriveAddressP2SH, getAddressFromPubkey } from '../
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import { prepareNanoSendTransaction } from '../nano_contracts/utils';
 import OnChainBlueprint, { Code, CodeKind } from '../nano_contracts/on_chain_blueprint';
+import { NanoContractVertexType } from '../nano_contracts/types';
 import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
 import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/transaction';
@@ -675,7 +676,7 @@ class HathorWallet extends EventEmitter {
         // So we will enqueue this message to be processed later
         this.wsTxQueue.enqueue(wsData);
       } else {
-        this.newTxPromise = this.newTxPromise.then(() => this.onNewTx(wsData));
+        this.enqueueOnNewTx(wsData);
       }
     }
   }
@@ -1328,6 +1329,14 @@ class HathorWallet extends EventEmitter {
     }
     this.state = state;
     this.emit('state', state);
+  }
+
+  /**
+   * Enqueue the call for onNewTx with the given data.
+   * @param {{ history: import('../types').IHistoryTx }} wsData
+   */
+  enqueueOnNewTx(wsData) {
+    this.newTxPromise = this.newTxPromise.then(() => this.onNewTx(wsData));
   }
 
   /**
@@ -2927,14 +2936,14 @@ class HathorWallet extends EventEmitter {
    */
 
   /**
-   * Create and send a nano contract transaction
+   * Create and send a Transaction with nano header
    *
    * @param {string} method Method of nano contract to have the transaction created
    * @param {string} address Address that will be used to sign the nano contract transaction
    * @param {CreateNanoTxData} [data]
    * @param {CreateNanoTxOptions} [options]
    *
-   * @returns {Promise<NanoContract>}
+   * @returns {Promise<Transaction>}
    */
   async createAndSendNanoContractTransaction(method, address, data, options = {}) {
     const sendTransaction = await this.createNanoContractTransaction(
@@ -2947,7 +2956,7 @@ class HathorWallet extends EventEmitter {
   }
 
   /**
-   * Create a nano contract transaction and return the SendTransaction object
+   * Create a Transaction with nano header and return the SendTransaction object
    *
    * @param {string} method Method of nano contract to have the transaction created
    * @param {string} address Address that will be used to sign the nano contract transaction
@@ -2983,7 +2992,149 @@ class HathorWallet extends EventEmitter {
       .setNcId(data.ncId)
       .setCaller(Buffer.from(pubkeyStr, 'hex'))
       .setActions(data.actions)
-      .setArgs(data.args);
+      .setArgs(data.args)
+      .setVertexType(NanoContractVertexType.TRANSACTION);
+
+    const nc = await builder.build();
+    return prepareNanoSendTransaction(nc, pin, this.storage);
+  }
+
+  /**
+   * @typedef {Object} CreateTokenTxOptions
+   * @property {string} [name] Token name
+   * @property {string} [symbol] Token symbol
+   * @property {OutputValueType} [amount] Token mint amount
+   * @property {boolean} [contractPaysTokenDeposit] If the contract will pay for the token deposit fee
+   * @property {string?} [mintAddress] Address to send the minted tokens
+   * @property {string?} [changeAddress] Change address to send change values
+   * @property {boolean?} [createMint] If should create a mint authority output
+   * @property {string?} [mintAuthorityAddress] The address to send the mint authority output to
+   * @property {boolean?} [allowExternalMintAuthorityAddress] If should accept an external mint authority address
+   * @property {boolean?} [createMelt] If should create a melt authority output
+   * @property {string?} [meltAuthorityAddress] The address to send the melt authority output to
+   * @property {boolean?} [allowExternalMeltAuthorityAddress] If should accept an external melt authority address
+   * @property {string[]?} [data] List of data strings to create data outputs
+   * @property {boolean?} [isCreateNFT] If this token is an NFT
+   */
+
+  /**
+   * Create and send a Create Token Transaction with nano header
+   *
+   * @param {string} method Method of nano contract to have the transaction created
+   * @param {string} address Address that will be used to sign the nano contract transaction
+   * @param {CreateNanoTxData} [data]
+   * @param {CreateNanoTxData} [data]
+   * @param {CreateTokenTxOptions} [createTokenOptions]
+   * @param {CreateNanoTxOptions} [options]
+   *
+   * @returns {Promise<Transaction>}
+   */
+  async createAndSendNanoContractCreateTokenTransaction(
+    method,
+    address,
+    data,
+    createTokenOptions,
+    options = {}
+  ) {
+    const sendTransaction = await this.createNanoContractCreateTokenTransaction(
+      method,
+      address,
+      data,
+      createTokenOptions,
+      options
+    );
+    return sendTransaction.runFromMining();
+  }
+
+  /**
+   * Create a Create Token Transaction with nano header and return the SendTransaction object
+   *
+   * @param {string} method Method of nano contract to have the transaction created
+   * @param {string} address Address that will be used to sign the nano contract transaction
+   * @param {CreateNanoTxData} [data]
+   * @param {CreateTokenTxOptions} [createTokenOptions]
+   * @param {CreateNanoTxOptions} [options]
+   *
+   * @returns {Promise<SendTransaction>}
+   */
+  async createNanoContractCreateTokenTransaction(
+    method,
+    address,
+    data,
+    createTokenOptions,
+    options = {}
+  ) {
+    if (await this.storage.isReadonly()) {
+      throw new WalletFromXPubGuard('createNanoContractCreateTokenTransaction');
+    }
+    const newOptions = { pinCode: null, ...options };
+    const pin = newOptions.pinCode || this.pinCode;
+    if (!pin) {
+      throw new PinRequiredError(ERROR_MESSAGE_PIN_REQUIRED);
+    }
+
+    const newCreateTokenOptions = {
+      mintAddress: null,
+      changeAddress: null,
+      createMint: true,
+      mintAuthorityAddress: null,
+      allowExternalMintAuthorityAddress: false,
+      createMelt: true,
+      meltAuthorityAddress: null,
+      allowExternalMeltAuthorityAddress: false,
+      data: null,
+      isCreateNFT: false,
+      ...createTokenOptions,
+    };
+
+    if (
+      newCreateTokenOptions.mintAuthorityAddress &&
+      !newCreateTokenOptions.allowExternalMintAuthorityAddress
+    ) {
+      // Validate that the mint authority address belongs to the wallet
+      const isAddressMine = await this.isAddressMine(newCreateTokenOptions.mintAuthorityAddress);
+      if (!isAddressMine) {
+        throw new NanoContractTransactionError(
+          'The mint authority address must belong to your wallet.'
+        );
+      }
+    }
+
+    if (
+      newCreateTokenOptions.meltAuthorityAddress &&
+      !newCreateTokenOptions.allowExternalMeltAuthorityAddress
+    ) {
+      // Validate that the melt authority address belongs to the wallet
+      const isAddressMine = await this.isAddressMine(newCreateTokenOptions.meltAuthorityAddress);
+      if (!isAddressMine) {
+        throw new NanoContractTransactionError(
+          'The melt authority address must belong to your wallet.'
+        );
+      }
+    }
+
+    newCreateTokenOptions.mintAddress =
+      newCreateTokenOptions.mintAddress || (await this.getCurrentAddress()).address;
+
+    // Get caller pubkey
+    const addressInfo = await this.storage.getAddressInfo(address);
+    if (!addressInfo) {
+      throw new NanoContractTransactionError(
+        `Address used to sign the transaction (${address}) does not belong to the wallet.`
+      );
+    }
+    const pubkeyStr = await this.storage.getAddressPubkey(addressInfo.bip32AddressIndex);
+
+    // Build and send transaction
+    const builder = new NanoContractTransactionBuilder()
+      .setMethod(method)
+      .setWallet(this)
+      .setBlueprintId(data.blueprintId)
+      .setNcId(data.ncId)
+      .setCaller(Buffer.from(pubkeyStr, 'hex'))
+      .setActions(data.actions)
+      .setArgs(data.args)
+      .setVertexType(NanoContractVertexType.CREATE_TOKEN_TRANSACTION, createTokenOptions);
 
     const nc = await builder.build();
     return prepareNanoSendTransaction(nc, pin, this.storage);

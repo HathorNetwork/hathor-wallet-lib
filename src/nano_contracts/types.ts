@@ -4,21 +4,135 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
+import { z } from 'zod';
 import { IHistoryTx, OutputValueType } from '../types';
+
+/**
+ * There are the types that can be received via api
+ * when querying for a nano contract value.
+ */
+export const NanoContractArgumentApiInputSchema = z.union([
+  z.string(),
+  z.number(),
+  z.bigint(),
+  z.boolean(),
+  z.null(),
+]);
+export type NanoContractArgumentApiInputType = z.output<typeof NanoContractArgumentApiInputSchema>;
+
+/**
+ * These are the possible `Single` types after parsing
+ * We include Buffer since some types are decoded as Buffer (e.g. bytes, TokenUid, ContractId)
+ */
+export const NanoContractArgumentSingleSchema = z.union([
+  NanoContractArgumentApiInputSchema,
+  z.instanceof(Buffer),
+]);
+export type NanoContractArgumentSingleType = z.output<typeof NanoContractArgumentSingleSchema>;
+
+/**
+ * NanoContract SignedData method argument type
+ */
+export const NanoContractSignedDataSchema = z.object({
+  type: z.string(),
+  signature: z.instanceof(Buffer),
+  value: NanoContractArgumentSingleSchema,
+});
+export type NanoContractSignedData = z.output<typeof NanoContractSignedDataSchema>;
+
+/**
+ * Intermediate schema for all possible Nano contract argument type
+ * that do not include tuple/arrays/repetition
+ */
+const _NanoContractArgumentType1Schema = z.union([
+  NanoContractArgumentSingleSchema,
+  NanoContractSignedDataSchema,
+]);
+
+/**
+ * Nano Contract method argument type as a native TS type
+ */
+export const NanoContractArgumentSchema = z.union([
+  _NanoContractArgumentType1Schema,
+  z.array(_NanoContractArgumentType1Schema),
+]);
+export type NanoContractArgumentType = z.output<typeof NanoContractArgumentSchema>;
+
+export const NanoContractArgumentByteTypes = z.enum([
+  'bytes',
+  'BlueprintId',
+  'ContractId',
+  'TokenUid',
+  'TxOutputScript',
+  'VertexId',
+]);
+
+/**
+ * Single type names
+ */
+export const NanoContractArgumentSingleTypeNameSchema = z.enum([
+  'bool',
+  'int',
+  'str',
+  'Address',
+  'Timestamp',
+  'VarInt',
+  ...NanoContractArgumentByteTypes.options,
+]);
+export type NanoContractArgumentSingleTypeName = z.output<
+  typeof NanoContractArgumentSingleTypeNameSchema
+>;
+
+/**
+ * Container type names
+ */
+export const NanoContractArgumentContainerTypeNameSchema = z.enum([
+  'Optional',
+  'SignedData',
+  'RawSignedData',
+  'Tuple',
+]);
+export type NanoContractArgumentContainerType = z.output<
+  typeof NanoContractArgumentContainerTypeNameSchema
+>;
+
+export enum NanoContractVertexType {
+  TRANSACTION = 'transaction',
+  CREATE_TOKEN_TRANSACTION = 'createTokenTransaction',
+}
 
 export enum NanoContractActionType {
   DEPOSIT = 'deposit',
   WITHDRAWAL = 'withdrawal',
 }
 
-export type NanoContractArgumentApiInputType = string | number | OutputValueType | boolean | null;
-export type NanoContractArgumentType = NanoContractArgumentApiInputType | Buffer;
+export enum NanoContractHeaderActionType {
+  DEPOSIT = 1,
+  WITHDRAWAL = 2,
+}
+
+export const ActionTypeToActionHeaderType: Record<
+  NanoContractActionType,
+  NanoContractHeaderActionType
+> = {
+  [NanoContractActionType.DEPOSIT]: NanoContractHeaderActionType.DEPOSIT,
+  [NanoContractActionType.WITHDRAWAL]: NanoContractHeaderActionType.WITHDRAWAL,
+};
+
+// The action in the header is serialized/deserialized in the class
+// and it's used only to help calculate the token balance
+// That's why it's simple and with less fields
+export interface NanoContractActionHeader {
+  type: NanoContractHeaderActionType;
+  tokenIndex: number;
+  amount: OutputValueType;
+}
 
 export interface NanoContractAction {
-  type: NanoContractActionType.DEPOSIT | NanoContractActionType.WITHDRAWAL;
+  type: NanoContractActionType;
   token: string;
   amount: OutputValueType;
-  // For withdrawal is required, which is address to send the output
+  // For withdrawal is optional, which is address to send the output, in case one is created
   // For deposit is optional, and it's the address to filter the utxos
   address: string | null;
   // For deposit action is the change address used by the change output after selecting the utxos
@@ -106,4 +220,42 @@ export interface NanoContractStateAPIParameters {
   calls: string[];
   block_hash?: string;
   block_height?: number;
+}
+
+/**
+ * Buffer Read Only (RO) Extract value.
+ * For methods that read a value from a buffer without altering the input buffer (read-only).
+ * The method should return the value (T) extracted and the number of bytes read.
+ * This way the caller has full control of the buffer since the method does not alter the inputs.
+ */
+export type BufferROExtract<T = unknown> = {
+  value: T;
+  bytesRead: number;
+};
+
+export interface NanoContractBuilderCreateTokenOptions {
+  // Token name
+  name: string;
+  // Token symbol
+  symbol: string;
+  // Token mint amount
+  amount: OutputValueType;
+  // Address to send the minted tokens
+  mintAddress: string;
+  // If the contract will pay for the token deposit fee
+  contractPaysTokenDeposit: boolean;
+  // Change address to send change values
+  changeAddress: string | null;
+  // If should create a mint authority output
+  createMint: boolean;
+  // The address to send the mint authority output to
+  mintAuthorityAddress: string | null;
+  // If should create a melt authority output
+  createMelt: boolean;
+  // The address to send the melt authority output to
+  meltAuthorityAddress: string | null;
+  // List of data strings to create data outputs
+  data: string[] | null;
+  // If this token is an NFT
+  isCreateNFT: boolean;
 }
