@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { concat, get, uniq } from 'lodash';
+import { concat, uniq } from 'lodash';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import { getAddressType } from '../utils/address';
@@ -24,16 +24,15 @@ import {
   NanoContractActionHeader,
   NanoContractActionType,
   NanoContractAction,
-  MethodArgInfo,
   NanoContractArgumentApiInputType,
-  NanoContractArgumentType,
   NanoContractBuilderCreateTokenOptions,
   NanoContractVertexType,
 } from './types';
+import { validateAndParseBlueprintMethodArgs } from './utils';
 import { IDataInput, IDataOutput, ITokenData } from '../types';
-import ncApi from '../api/nano';
-import { validateAndUpdateBlueprintMethodArgs } from './utils';
 import NanoContractHeader from './header';
+import leb128 from '../utils/leb128';
+import { NanoContractMethodArgument } from './methodArg';
 
 class NanoContractTransactionBuilder {
   blueprintId: string | null | undefined;
@@ -47,9 +46,11 @@ class NanoContractTransactionBuilder {
 
   caller: Buffer | null;
 
-  args: NanoContractArgumentType[] | null;
+  args: NanoContractArgumentApiInputType[] | null;
 
-  serializedArgs: Buffer[] | null;
+  parsedArgs: NanoContractMethodArgument[] | null;
+
+  serializedArgs: Buffer | null;
 
   wallet: HathorWallet | null;
 
@@ -67,6 +68,7 @@ class NanoContractTransactionBuilder {
     this.actions = null;
     this.caller = null;
     this.args = null;
+    this.parsedArgs = null;
     this.serializedArgs = null;
     this.wallet = null;
     this.vertexType = null;
@@ -373,7 +375,11 @@ class NanoContractTransactionBuilder {
     }
 
     // Validate if the arguments match the expected method arguments
-    await validateAndUpdateBlueprintMethodArgs(this.blueprintId, this.method, this.args);
+    this.parsedArgs = await validateAndParseBlueprintMethodArgs(
+      this.blueprintId,
+      this.method,
+      this.args
+    );
   }
 
   /**
@@ -386,30 +392,20 @@ class NanoContractTransactionBuilder {
    * @inner
    */
   async serializeArgs() {
-    this.serializedArgs = [];
+    if (!this.parsedArgs) {
+      throw new NanoContractTransactionError(
+        'Arguments should be parsed and validated before serialization.'
+      );
+    }
+    const serializedArray: Buffer[] = [leb128.encodeUnsigned(this.parsedArgs?.length ?? 0)];
     if (this.args) {
-      const serializer = new Serializer();
-      const blueprintInformation = await ncApi.getBlueprintInformation(this.blueprintId!);
-      const methodArgs = get(
-        blueprintInformation,
-        `public_methods.${this.method}.args`,
-        []
-      ) as MethodArgInfo[];
-      if (!methodArgs) {
-        throw new NanoContractTransactionError(`Blueprint does not have method ${this.method}.`);
-      }
+      const serializer = new Serializer(this.wallet.getNetworkObject());
 
-      if (this.args.length !== methodArgs.length) {
-        throw new NanoContractTransactionError(
-          `Method needs ${methodArgs.length} parameters but data has ${this.args.length}.`
-        );
-      }
-
-      for (const [index, arg] of methodArgs.entries()) {
-        const serialized = serializer.serializeFromType(this.args[index], arg.type);
-        this.serializedArgs.push(serialized);
+      for (const arg of this.parsedArgs) {
+        serializedArray.push(arg.serialize(serializer));
       }
     }
+    this.serializedArgs = Buffer.concat(serializedArray);
   }
 
   /**
