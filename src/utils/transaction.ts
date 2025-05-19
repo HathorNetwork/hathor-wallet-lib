@@ -724,7 +724,7 @@ const transaction = {
       // nano header for the same tx in the future
       histTx.nc_id = nanoHeader.id;
       histTx.nc_method = nanoHeader.method;
-      histTx.nc_args = nanoHeader.args.map(a => a.toString('hex')).join('');
+      histTx.nc_args = nanoHeader.args.toString('hex');
       histTx.nc_address = nanoHeader.address!.base58;
       // XXX: should we build nc_context from nanoHeader information?
       // Cannot fetch histTx.nc_blueprint_id with the current data

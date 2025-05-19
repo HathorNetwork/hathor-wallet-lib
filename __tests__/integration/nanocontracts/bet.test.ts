@@ -33,6 +33,7 @@ import {
 } from '../../../src/errors';
 import { OutputType } from '../../../src/wallet/types';
 import NanoContractTransactionParser from '../../../src/nano_contracts/parser';
+import { NanoContractSignedData } from '../../../src/nano_contracts/types';
 
 let fundsTx;
 const builtInBlueprintId = '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595';
@@ -43,7 +44,7 @@ describe('full cycle of bet nano contract', () => {
   let mhWallet;
 
   beforeAll(async () => {
-    hWallet = await generateWalletHelper();
+    hWallet = await generateWalletHelper(null);
     fundsTx = await GenesisWalletHelper.injectFunds(
       hWallet,
       await hWallet.getAddressAtIndex(0),
@@ -72,7 +73,7 @@ describe('full cycle of bet nano contract', () => {
     expect(txId).toBeDefined();
     await waitForTxReceived(wallet, txId);
     // We need to wait for the tx to get a first block, so we guarantee it was executed
-    await waitTxConfirmed(wallet, txId);
+    await waitTxConfirmed(wallet, txId, null);
     // Now we query the transaction from the full node to double check it's still valid after the nano execution
     // and it already has a first block, so it was really executed
     const txAfterExecution = await wallet.getFullTxById(txId);
@@ -122,12 +123,26 @@ describe('full cycle of bet nano contract', () => {
       tx1Data.tx.nc_args
     );
     await tx1Parser.parseArguments();
-    expect(tx1Parser.address.base58).toBe(address0);
-    expect(tx1Parser.parsedArgs).toStrictEqual([
-      { name: 'oracle_script', type: 'TxOutputScript', parsed: oracleData },
-      { name: 'token_uid', type: 'TokenUid', parsed: Buffer.from([NATIVE_TOKEN_UID]) },
-      { name: 'date_last_bet', type: 'Timestamp', parsed: dateLastBet },
-    ]);
+    expect(tx1Parser.address?.base58).toBe(address0);
+    expect(tx1Parser.parsedArgs).not.toBeNull();
+    if (tx1Parser.parsedArgs === null) {
+      throw new Error('Could not parse args');
+    }
+    expect(tx1Parser.parsedArgs).toHaveLength(3);
+    expect(tx1Parser.parsedArgs[0]).toMatchObject({
+      name: 'oracle_script',
+      type: 'TxOutputScript',
+    });
+    // @ts-expect-error toMatchBuffer is defined in setupTests.js
+    expect(tx1Parser.parsedArgs[0].value).toMatchBuffer(oracleData);
+    expect(tx1Parser.parsedArgs[1]).toMatchObject({ name: 'token_uid', type: 'TokenUid' });
+    // @ts-expect-error toMatchBuffer is defined in setupTests.js
+    expect(tx1Parser.parsedArgs[1].value).toMatchBuffer(Buffer.from(NATIVE_TOKEN_UID, 'hex'));
+    expect(tx1Parser.parsedArgs[2]).toMatchObject({
+      name: 'date_last_bet',
+      type: 'Timestamp',
+      value: dateLastBet,
+    });
 
     // First validate some bet arguments error handling
     const address2 = await wallet.getAddressAtIndex(2);
@@ -197,11 +212,18 @@ describe('full cycle of bet nano contract', () => {
       txBetData.tx.nc_args
     );
     await txBetParser.parseArguments();
-    expect(txBetParser.address.base58).toBe(address2);
-    expect(txBetParser.parsedArgs).toStrictEqual([
-      { name: 'address', type: 'Address', parsed: address2 },
-      { name: 'score', type: 'str', parsed: '1x0' },
-    ]);
+    expect(txBetParser.address?.base58).toBe(address2);
+    expect(txBetParser.parsedArgs).not.toBeNull();
+    if (txBetParser.parsedArgs === null) {
+      throw new Error('Could not parse args');
+    }
+    expect(txBetParser.parsedArgs).toHaveLength(2);
+    expect(txBetParser.parsedArgs[0]).toMatchObject({
+      name: 'address',
+      type: 'Address',
+      value: address2,
+    });
+    expect(txBetParser.parsedArgs[1]).toMatchObject({ name: 'score', type: 'str', value: '1x0' });
 
     const utxos2 = await wallet.getUtxos();
     // We must have one utxo in the address 0 of 900 HTR
@@ -244,11 +266,18 @@ describe('full cycle of bet nano contract', () => {
       txBet2Data.tx.nc_args
     );
     await txBet2Parser.parseArguments();
-    expect(txBet2Parser.address.base58).toBe(address3);
-    expect(txBet2Parser.parsedArgs).toStrictEqual([
-      { name: 'address', type: 'Address', parsed: address3 },
-      { name: 'score', type: 'str', parsed: '2x0' },
-    ]);
+    expect(txBet2Parser.address?.base58).toBe(address3);
+    expect(txBet2Parser.parsedArgs).not.toBeNull();
+    if (txBet2Parser.parsedArgs === null) {
+      throw new Error('Could not parse args');
+    }
+    expect(txBet2Parser.parsedArgs).toHaveLength(2);
+    expect(txBet2Parser.parsedArgs[0]).toMatchObject({
+      name: 'address',
+      type: 'Address',
+      value: address3,
+    });
+    expect(txBet2Parser.parsedArgs[1]).toMatchObject({ name: 'score', type: 'str', value: '2x0' });
 
     // Get nc history
     const txIds = [tx1.hash, txBet.hash, txBet2.hash];
@@ -293,10 +322,10 @@ describe('full cycle of bet nano contract', () => {
     expect(ncState.fields[`withdrawals.a'${address3}'`].value).toBeUndefined();
 
     // Set result to '1x0'
-    const nanoSerializer = new Serializer();
+    const nanoSerializer = new Serializer(network);
     const result = '1x0';
     const resultSerialized = nanoSerializer.serializeFromType(result, 'str');
-    const inputData = await getOracleInputData(oracleData, resultSerialized, wallet);
+    const inputData = await getOracleInputData(oracleData, tx1.hash, resultSerialized, wallet);
     const txSetResult = await wallet.createAndSendNanoContractTransaction('set_result', address1, {
       ncId: tx1.hash,
       args: [`${bufferToHex(inputData)},${result},str`],
@@ -318,14 +347,22 @@ describe('full cycle of bet nano contract', () => {
       txSetResultData.tx.nc_args
     );
     await txSetResultParser.parseArguments();
-    expect(txSetResultParser.address.base58).toBe(address1);
-    expect(txSetResultParser.parsedArgs).toStrictEqual([
-      {
-        name: 'result',
-        type: 'SignedData[str]',
-        parsed: `${bufferToHex(inputData)},${result},str`,
-      },
-    ]);
+    expect(txSetResultParser.address?.base58).toBe(address1);
+    expect(txSetResultParser.parsedArgs).not.toBeNull();
+    if (txSetResultParser.parsedArgs === null) {
+      throw new Error('Could not parse args');
+    }
+    expect(txSetResultParser.parsedArgs).toHaveLength(1);
+    expect(txSetResultParser.parsedArgs[0]).toMatchObject({
+      name: 'result',
+      type: 'SignedData[str]',
+    });
+    expect((txSetResultParser.parsedArgs[0].value as NanoContractSignedData).type).toEqual('str');
+    expect(
+      (txSetResultParser.parsedArgs[0].value as NanoContractSignedData).signature
+      // @ts-expect-error toMatchBuffer is defined in setupTests.js
+    ).toMatchBuffer(inputData);
+    expect((txSetResultParser.parsedArgs[0].value as NanoContractSignedData).value).toEqual(result);
 
     const withdrawalData = {
       ncId: tx1.hash,
@@ -413,13 +450,13 @@ describe('full cycle of bet nano contract', () => {
 
     const txWithdrawalParser = new NanoContractTransactionParser(
       blueprintId,
-      'set_result',
+      'withdraw',
       txWithdrawalData.tx.nc_address,
       network,
       txWithdrawalData.tx.nc_args
     );
     await txWithdrawalParser.parseArguments();
-    expect(txWithdrawalParser.address.base58).toBe(address2);
+    expect(txWithdrawalParser.address?.base58).toBe(address2);
     expect(txWithdrawalParser.parsedArgs).toBe(null);
 
     // Get state again
@@ -547,7 +584,7 @@ describe('full cycle of bet nano contract', () => {
 
     jest.spyOn(wallet.storage, 'processHistory');
     expect(wallet.storage.processHistory.mock.calls.length).toBe(0);
-    await waitTxConfirmed(wallet, txWithdrawal2.hash);
+    await waitTxConfirmed(wallet, txWithdrawal2.hash, null);
     const txWithdrawal2Data = await wallet.getFullTxById(txWithdrawal2.hash);
 
     // The tx became voided after the block because of the nano execution
@@ -580,27 +617,21 @@ describe('full cycle of bet nano contract', () => {
     // Add funds and validate address meta
     await GenesisWalletHelper.injectFunds(ocbWallet, address0, 1000n);
     const address0Meta = await ocbWallet.storage.store.getAddressMeta(address0);
-    expect(address0Meta.numTransactions).toBe(1);
+    expect(address0Meta?.numTransactions).toBe(1);
 
     // Use the bet blueprint code
     const code = fs.readFileSync('./__tests__/integration/configuration/bet.py', 'utf8');
     const tx = await ocbWallet.createAndSendOnChainBlueprintTransaction(code, address10);
     // Wait for the tx to be confirmed, so we can use the on chain blueprint
-    await waitTxConfirmed(ocbWallet, tx.hash);
+    await waitTxConfirmed(ocbWallet, tx.hash!, null);
     // We must have one transaction in the address10 now
     const newAddress10Meta = await ocbWallet.storage.store.getAddressMeta(address10);
-    expect(newAddress10Meta.numTransactions).toBe(1);
+    expect(newAddress10Meta?.numTransactions).toBe(1);
     // Execute the bet blueprint tests
     await executeTests(ocbWallet, tx.hash);
   });
 
   it('handle errors', async () => {
-    const address0 = await hWallet.getAddressAtIndex(0);
-    const address1 = await hWallet.getAddressAtIndex(1);
-    const dateLastBet = dateFormatter.dateToTimestamp(new Date()) + 6000;
-    const network = hWallet.getNetworkObject();
-
-    // Initialize missing blueprintId
     const oracleData = getOracleBuffer(address1, network);
     await expect(
       hWallet.createAndSendNanoContractTransaction(NANO_CONTRACTS_INITIALIZE_METHOD, address0, {
