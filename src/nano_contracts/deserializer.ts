@@ -292,13 +292,13 @@ class Deserializer {
    * [len(serializedValue)][serializedValue][inputData]
    *
    * @param signedData Buffer with serialized signed value
-   * @param type Type of the signed value, with the subtype, e.g., SignedData[str]
+   * @param type Type of the signed value, e.g., For SignedData[str] this would receive str
    *
    * @memberof Deserializer
    * @inner
    */
   toSignedData(signedData: Buffer, type: string): BufferROExtract<NanoContractSignedData> {
-    // The SignedData is serialized as `ContractId+data+Signature`
+    // The SignedData is serialized as `data+Signature`
 
     // Reading argument
     const parseResult = this.deserializeFromType(signedData, type);

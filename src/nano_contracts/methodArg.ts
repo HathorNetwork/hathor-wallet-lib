@@ -194,6 +194,9 @@ export class NanoContractMethodArgument {
     this._serialized = Buffer.alloc(0);
   }
 
+  /**
+   * Serialize the argument into bytes
+   */
   serialize(serializer: Serializer): Buffer {
     if (this._serialized.length === 0) {
       this._serialized = serializer.serializeFromType(this.value, this.type);
@@ -202,6 +205,9 @@ export class NanoContractMethodArgument {
     return this._serialized;
   }
 
+  /**
+   * Deserialize value from buffer and create an instance of NanoContractMethodArgument
+   */
   static fromSerialized(
     name: string,
     type: string,
@@ -251,11 +257,14 @@ export class NanoContractMethodArgument {
 
       throw new Error(`ContainerType(${containerType}) is not supported as api input.`);
     }
-    // This is a single value type and should
+    // This is a single value type
     const data = SingleValueApiInputScheme.parse([type, value]);
     return new NanoContractMethodArgument(name, type, data);
   }
 
+  /**
+   * This is a helper method, so we can create the api input representation of the arg value.
+   */
   toApiInput(): NanoContractParsedArgument {
     function prepSingleValue(type: string, value: NanoContractArgumentSingleType) {
       if (type === 'bool') {

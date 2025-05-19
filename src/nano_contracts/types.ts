@@ -222,6 +222,12 @@ export interface NanoContractStateAPIParameters {
   block_height?: number;
 }
 
+/**
+ * Buffer Read Only (RO) Extract value.
+ * For methods that read a value from a buffer without altering the input buffer (read-only).
+ * The method should return the value (T) extracted and the number of bytes read.
+ * This way the caller has full control of the buffer since the method does not alter the inputs.
+ */
 export type BufferROExtract<T = unknown> = {
   value: T;
   bytesRead: number;
