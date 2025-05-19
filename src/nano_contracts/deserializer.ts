@@ -5,19 +5,19 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { bufferToHex, unpackToInt } from '../utils/buffer';
+import { unpackToInt } from '../utils/buffer';
 import helpersUtils from '../utils/helpers';
 import leb128Util from '../utils/leb128';
 import Network from '../models/network';
-import { NanoContractArgumentType } from './types';
+import {
+  NanoContractArgumentType,
+  BufferROExtract,
+  NanoContractSignedData,
+  NanoContractArgumentSingleType,
+} from './types';
 import { OutputValueType } from '../types';
 import { NC_ARGS_MAX_BYTES_LENGTH } from '../constants';
 import { getContainerInternalType, getContainerType } from './utils';
-
-interface DeserializeResult<T> {
-  value: T;
-  bytesRead: number;
-}
 
 class Deserializer {
   network: Network;
@@ -37,10 +37,7 @@ class Deserializer {
    * @memberof Deserializer
    * @inner
    */
-  deserializeFromType(
-    buf: Buffer,
-    type: string
-  ): DeserializeResult<NanoContractArgumentType | null> {
+  deserializeFromType(buf: Buffer, type: string): BufferROExtract<NanoContractArgumentType | null> {
     const isContainerType = getContainerType(type) !== null;
     if (isContainerType) {
       return this.deserializeContainerType(buf, type);
@@ -75,14 +72,17 @@ class Deserializer {
   deserializeContainerType(
     buf: Buffer,
     type: string
-  ): DeserializeResult<NanoContractArgumentType | null> {
+  ): BufferROExtract<NanoContractArgumentType | null> {
     const [containerType, internalType] = getContainerInternalType(type);
 
     switch (containerType) {
       case 'Optional':
         return this.toOptional(buf, internalType);
+      case 'RawSignedData':
       case 'SignedData':
-        return this.toSigned(buf, type); // XXX: change to internalType?
+        return this.toSignedData(buf, internalType);
+      case 'Tuple':
+        return this.toTuple(buf, internalType);
       default:
         throw new Error('Invalid type.');
     }
@@ -98,7 +98,7 @@ class Deserializer {
    * @memberof Deserializer
    * @inner
    */
-  toString(buf: Buffer): DeserializeResult<string> {
+  toString(buf: Buffer): BufferROExtract<string> {
     const parsed = this.toBytes(buf);
     return {
       value: parsed.value.toString('utf8'),
@@ -114,7 +114,7 @@ class Deserializer {
    * @memberof Deserializer
    * @inner
    */
-  toBytes(buf: Buffer): DeserializeResult<Buffer> {
+  toBytes(buf: Buffer): BufferROExtract<Buffer> {
     // INFO: maxBytes is set to 3 because the max allowed length in bytes for a string is
     // NC_ARGS_MAX_BYTES_LENGTH which is encoded as 3 bytes in leb128 unsigned.
     // If we read a fourth byte we are definetely reading a higher number than allowed.
@@ -145,7 +145,7 @@ class Deserializer {
    * @memberof Deserializer
    * @inner
    */
-  toInt(buf: Buffer): DeserializeResult<number> {
+  toInt(buf: Buffer): BufferROExtract<number> {
     return {
       value: unpackToInt(4, true, buf)[0],
       bytesRead: 4,
@@ -160,7 +160,7 @@ class Deserializer {
    * @memberof Deserializer
    * @inner
    */
-  toAmount(buf: Buffer): DeserializeResult<OutputValueType> {
+  toAmount(buf: Buffer): BufferROExtract<OutputValueType> {
     // Nano `Amount` currently only supports up to 4 bytes, so we simply use the `number` value converted to `BigInt`.
     // If we change Nano to support up to 8 bytes, we must update this.
     const { value, bytesRead } = this.toInt(buf);
@@ -178,7 +178,7 @@ class Deserializer {
    * @memberof Deserializer
    * @inner
    */
-  toBool(buf: Buffer): DeserializeResult<boolean> {
+  toBool(buf: Buffer): BufferROExtract<boolean> {
     if (buf[0]) {
       return {
         value: true,
@@ -198,94 +198,12 @@ class Deserializer {
    *
    * @memberof Deserializer
    */
-  toVarInt(buf: Buffer): DeserializeResult<bigint> {
+  toVarInt(buf: Buffer): BufferROExtract<bigint> {
     const { value, bytesRead } = leb128Util.decodeSigned(buf);
     return { value, bytesRead };
   }
 
   /* eslint-enable class-methods-use-this */
-
-  /**
-   * Deserialize an optional value
-   *
-   * First we check the first byte. If it's 0, then we return null.
-   *
-   * Otherwise, we deserialize the rest of the buffer to the type.
-   *
-   * @param {Buffer} buf Buffer with the optional value
-   * @param {string} type Type of the optional without the ?
-   *
-   * @memberof Deserializer
-   * @inner
-   */
-  toOptional(buf: Buffer, type: string): DeserializeResult<NanoContractArgumentType | null> {
-    if (buf[0] === 0) {
-      // It's an empty optional
-      return {
-        value: null,
-        bytesRead: 1,
-      };
-    }
-
-    // Remove the first byte to deserialize the value, since it's not empty
-    const valueToDeserialize = buf.subarray(1);
-    const result = this.deserializeFromType(valueToDeserialize, type);
-    return {
-      value: result.value,
-      bytesRead: result.bytesRead + 1,
-    };
-  }
-
-  /**
-   * Deserialize a signed value
-   *
-   * The signedData what will be deserialized is
-   * [len(serializedValue)][serializedValue][inputData]
-   *
-   * @param signedData Buffer with serialized signed value
-   * @param type Type of the signed value, with the subtype, e.g., SignedData[str]
-   *
-   * @memberof Deserializer
-   * @inner
-   */
-  toSigned(signedData: Buffer, type: string): DeserializeResult<string> {
-    const [containerType, internalType] = getContainerInternalType(type);
-    if (containerType !== 'SignedData') {
-      throw new Error('Type is not SignedData');
-    }
-    if (!internalType) {
-      throw new Error('Unable to extract type');
-    }
-    // Should we check that the valueType is valid?
-
-    // SignData[T] is serialized as Serialize(T)+Serialize(sign(T)) where sign() returns a byte str
-    // Which means we can parse the T argument, then read the bytes after.
-
-    // Reading argument
-    const parseResult = this.deserializeFromType(signedData, internalType);
-    let parsed = parseResult.value;
-    const bytesReadFromValue = parseResult.bytesRead;
-
-    if (internalType === 'bytes') {
-      // If the value is bytes, we should transform into hex to return the string
-      parsed = bufferToHex(parsed as Buffer);
-    }
-
-    if (internalType === 'bool') {
-      parsed = (parsed as boolean) ? 'true' : 'false';
-    }
-
-    // Reading signature
-    const { value: parsedSignature, bytesRead: bytesReadFromSignature } = this.deserializeFromType(
-      signedData.subarray(bytesReadFromValue),
-      'bytes'
-    );
-
-    return {
-      value: `${bufferToHex(parsedSignature as Buffer)},${parsed},${internalType}`,
-      bytesRead: bytesReadFromValue + bytesReadFromSignature,
-    };
-  }
 
   /**
    * Deserialize a value decoded in bytes to a base58 string
@@ -296,12 +214,12 @@ class Deserializer {
    * - 4 bytes of checksum
    * Totaling 26 bytes.
    *
-   * @param buf Value to deserialize
+   * @param {Buffer} buf Value to deserialize
    *
    * @memberof Deserializer
    * @inner
    */
-  toAddress(buf: Buffer): DeserializeResult<string> {
+  toAddress(buf: Buffer): BufferROExtract<string> {
     const lenReadResult = leb128Util.decodeUnsigned(buf, 1);
     if (lenReadResult.value !== 25n) {
       // Address should be exactly 25 bytes long
@@ -333,6 +251,102 @@ class Deserializer {
     return {
       value: address.base58,
       bytesRead: 26, // 1 for length + 25 address bytes
+    };
+  }
+
+  /**
+   * Deserialize an optional value
+   *
+   * First we check the first byte. If it's 0, then we return null.
+   *
+   * Otherwise, we deserialize the rest of the buffer to the type.
+   *
+   * @param {Buffer} buf Buffer with the optional value
+   * @param {string} type Type of the optional without the ?
+   *
+   * @memberof Deserializer
+   * @inner
+   */
+  toOptional(buf: Buffer, type: string): BufferROExtract<NanoContractArgumentType> {
+    if (buf[0] === 0) {
+      // It's an empty optional
+      return {
+        value: null,
+        bytesRead: 1,
+      };
+    }
+
+    // Remove the first byte to deserialize the value, since it's not empty
+    const valueToDeserialize = buf.subarray(1);
+    const result = this.deserializeFromType(valueToDeserialize, type);
+    return {
+      value: result.value,
+      bytesRead: result.bytesRead + 1,
+    };
+  }
+
+  /**
+   * Deserialize a signed value
+   *
+   * The signedData what will be deserialized is
+   * [len(serializedValue)][serializedValue][inputData]
+   *
+   * @param signedData Buffer with serialized signed value
+   * @param type Type of the signed value, e.g., For SignedData[str] this would receive str
+   *
+   * @memberof Deserializer
+   * @inner
+   */
+  toSignedData(signedData: Buffer, type: string): BufferROExtract<NanoContractSignedData> {
+    // The SignedData is serialized as `data+Signature`
+
+    // Reading argument
+    const parseResult = this.deserializeFromType(signedData, type);
+    const parsed = parseResult.value;
+    const bytesReadFromValue = parseResult.bytesRead;
+
+    const buf = signedData.subarray(bytesReadFromValue);
+
+    // Reading signature as bytes
+    const { value: parsedSignature, bytesRead: bytesReadFromSignature } = this.deserializeFromType(
+      buf,
+      'bytes'
+    );
+
+    return {
+      value: {
+        type,
+        value: parsed as NanoContractArgumentSingleType,
+        signature: parsedSignature as Buffer,
+      },
+      bytesRead: bytesReadFromValue + bytesReadFromSignature,
+    };
+  }
+
+  /**
+   * Deserialize tuple of values.
+   * It does not support chained container types, meaning Tuple[Dict[str,str]] should not happen.
+   *
+   * @param buf Value to deserialize
+   * @param type Comma separated types, e.g. `str,int,VarInt`
+   *
+   * @memberof Deserializer
+   * @inner
+   */
+  toTuple(buf: Buffer, type: string): BufferROExtract<NanoContractArgumentSingleType[]> {
+    const typeArr = type.split(',').map(s => s.trim());
+    const tupleValues: NanoContractArgumentSingleType[] = [];
+    let bytesReadTotal = 0;
+    let tupleBuf = buf.subarray();
+    for (const t of typeArr) {
+      const result = this.deserializeFromType(tupleBuf, t);
+      tupleValues.push(result.value as NanoContractArgumentSingleType);
+      bytesReadTotal += result.bytesRead;
+      tupleBuf = tupleBuf.subarray(result.bytesRead);
+    }
+    return {
+      value: tupleValues,
+      bytesRead: bytesReadTotal,
     };
   }
 }

@@ -77,7 +77,7 @@ class Address {
    * @memberof Address
    * @inner
    */
-  validateAddress(): boolean {
+  validateAddress({ skipNetwork }: { skipNetwork: boolean } = { skipNetwork: false }): boolean {
     const addressBytes = this.decode();
     const errorMessage = `Invalid address: ${this.base58}.`;
 
@@ -96,6 +96,10 @@ class Address {
       throw new AddressError(
         `${errorMessage} Invalid checksum. Expected: ${correctChecksum} != Received: ${checksum}.`
       );
+    }
+
+    if (skipNetwork) {
+      return true;
     }
 
     // Validate version byte. Should be the p2pkh or p2sh
