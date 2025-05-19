@@ -21,11 +21,13 @@ from hathor.nanocontracts.exception import NCFail
 from hathor.nanocontracts.types import (
     Address,
     NCAction,
-    NCActionType,
+    NCDepositAction,
+    NCWithdrawalAction,
     SignedData,
     Timestamp,
     TokenUid,
     TxOutputScript,
+    is_action_type,
     public,
     view,
 )
@@ -158,7 +160,7 @@ class Bet(Blueprint):
     def bet(self, ctx: Context, address: Address, score: str) -> None:
         """Make a bet."""
         action = self._get_action(ctx)
-        if action.type != NCActionType.DEPOSIT:
+        if not is_action_type(action, NCDepositAction):
             raise WithdrawalNotAllowed('must be deposit')
         self.fail_if_result_is_available()
         self.fail_if_invalid_token(action)
@@ -188,7 +190,7 @@ class Bet(Blueprint):
     def set_result(self, ctx: Context, result: SignedData[Result]) -> None:
         """Set final result. This method is called by the oracle."""
         self.fail_if_result_is_available()
-        if not result.checksig(self.oracle_script):
+        if not result.checksig(self.syscall.get_contract_id(), self.oracle_script):
             raise InvalidOracleSignature
         self.final_result = result.data
 
@@ -196,7 +198,7 @@ class Bet(Blueprint):
     def withdraw(self, ctx: Context) -> None:
         """Withdraw tokens after the final result is set."""
         action = self._get_action(ctx)
-        if action.type != NCActionType.WITHDRAWAL:
+        if not is_action_type(action, NCWithdrawalAction):
             raise DepositNotAllowed('action must be withdrawal')
         self.fail_if_result_is_not_available()
         self.fail_if_invalid_token(action)
@@ -228,5 +230,3 @@ class Bet(Blueprint):
         address_total = self.bets_address.get((self.final_result, address), 0)
         percentage = address_total / result_total
         return Amount(floor(percentage * self.total))
-
-__blueprint__ = Bet
