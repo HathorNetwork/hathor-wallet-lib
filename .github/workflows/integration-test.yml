@@ -5,8 +5,6 @@ on:
       - master
       - release
       - release-candidate
-      - feat/nc-args-serialization
-      - feat/nc-args-class
     tags:
       - v*
   pull_request:
@@ -14,8 +12,6 @@ on:
       - release
       - release-candidate
       - master
-      - feat/nc-args-serialization
-      - feat/nc-args-class
 
 env:
   TEST_WALLET_START_TIMEOUT: '180000' # 3 minutes
