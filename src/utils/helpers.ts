@@ -169,7 +169,7 @@ const helpers = {
    *
    * @returns address read from bytes
    */
-  validateAddressBytes(addressBytes: Buffer, network: Network): Address {
+  getAddressFromBytes(addressBytes: Buffer, network: Network): Address {
     if (addressBytes.length !== 25) {
       throw new Error('Address bytes should be 25 bytes long');
     }

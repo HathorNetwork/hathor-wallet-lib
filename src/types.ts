@@ -108,8 +108,8 @@ export interface IAuthoritiesBalance {
   melt: ITokenBalance;
 }
 
-export interface IHistoryNanoContractActionWithdraw {
-  type: 'WITHDRAW';
+export interface IHistoryNanoContractActionWithdrawal {
+  type: 'WITHDRAWAL';
   token_uid: string;
   amount: OutputValueType;
 }
@@ -136,7 +136,7 @@ export interface IHistoryNanoContractActionInvokeAuthority {
 
 export type IHistoryNanoContractAction =
   | IHistoryNanoContractActionDeposit
-  | IHistoryNanoContractActionWithdraw
+  | IHistoryNanoContractActionWithdrawal
   | IHistoryNanoContractActionGrantAuthority
   | IHistoryNanoContractActionInvokeAuthority;
 

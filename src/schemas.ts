@@ -95,9 +95,9 @@ export const IHistoryOutputSchema: ZodSchema<IHistoryOutput> = z
   })
   .passthrough();
 
-export const IHistoryNanoContractActionWithdrawSchema = z
+export const IHistoryNanoContractActionWithdrawalSchema = z
   .object({
-    type: z.literal('WITHDRAW'),
+    type: z.literal('WITHDRAWAL'),
     token_uid: z.string(),
     amount: bigIntCoercibleSchema,
   })
@@ -131,7 +131,7 @@ export const IHistoryNanoContractActionInvokeAuthoritySchema = z
 
 export const IHistoryNanoContractActionSchema = z.discriminatedUnion('type', [
   IHistoryNanoContractActionDepositSchema,
-  IHistoryNanoContractActionWithdrawSchema,
+  IHistoryNanoContractActionWithdrawalSchema,
   IHistoryNanoContractActionGrantAuthoritySchema,
   IHistoryNanoContractActionInvokeAuthoritySchema,
 ]);

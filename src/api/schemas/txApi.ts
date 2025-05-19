@@ -7,6 +7,7 @@
 
 import { z } from 'zod';
 import { bigIntCoercibleSchema } from '../../utils/bigint';
+import { IHistoryNanoContractContextSchema } from '../../schemas';
 
 const p2pkhDecodedScriptSchema = z.object({
   type: z.literal('P2PKH'),
@@ -62,55 +63,6 @@ export const fullnodeTxApiTokenSchema = z.object({
   symbol: z.string().nullable(),
 });
 
-export const fullnodeTxApiNcActionWithdrawSchema = z
-  .object({
-    type: z.literal('WITHDRAW'),
-    token_uid: z.string(),
-    amount: bigIntCoercibleSchema,
-  })
-  .passthrough();
-
-export const fullnodeTxApiNcActionDepositSchema = z
-  .object({
-    type: z.literal('DEPOSIT'),
-    token_uid: z.string(),
-    amount: bigIntCoercibleSchema,
-  })
-  .passthrough();
-
-export const fullnodeTxApiNcActionGrantAuthoritySchema = z
-  .object({
-    type: z.literal('GRANT_AUTHORITY'),
-    token_uid: z.string(),
-    mint: z.boolean(),
-    melt: z.boolean(),
-  })
-  .passthrough();
-
-export const fullnodeTxApiNcActionInvokeAuthoritySchema = z
-  .object({
-    type: z.literal('INVOKE_AUTHORITY'),
-    token_uid: z.string(),
-    mint: z.boolean(),
-    melt: z.boolean(),
-  })
-  .passthrough();
-
-export const fullnodeTxApiNcActionSchema = z.discriminatedUnion('type', [
-  fullnodeTxApiNcActionDepositSchema,
-  fullnodeTxApiNcActionWithdrawSchema,
-  fullnodeTxApiNcActionGrantAuthoritySchema,
-  fullnodeTxApiNcActionInvokeAuthoritySchema,
-]);
-
-export const fullnodeTxApiNcContextSchema = z
-  .object({
-    actions: fullnodeTxApiNcActionSchema.array(),
-    address: z.string(),
-    timestamp: z.number(),
-  })
-  .passthrough();
-
 export const fullnodeTxApiTxSchema = z.object({
   hash: z.string(),
   nonce: z.string(),
@@ -122,7 +74,7 @@ export const fullnodeTxApiTxSchema = z.object({
   nc_id: z.string().nullish(),
   nc_method: z.string().nullish(),
   nc_address: z.string().nullish(),
-  nc_context: fullnodeTxApiNcContextSchema.nullish(),
+  nc_context: IHistoryNanoContractContextSchema.nullish(),
   nc_args: z.string().nullish(),
   nc_blueprint_id: z.string().nullish(),
   inputs: fullnodeTxApiInputSchema.array(),

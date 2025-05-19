@@ -45,7 +45,7 @@ class NanoContractHeader extends Header {
   actions: NanoContractActionHeader[];
 
   // Address of the transaction owner(s)/caller(s)
-  address: Address | null;
+  address: Address;
 
   /**
    * script with signature(s) of the transaction owner(s)/caller(s).
@@ -58,7 +58,7 @@ class NanoContractHeader extends Header {
     method: string,
     args: Buffer,
     actions: NanoContractActionHeader[],
-    address: Address | null,
+    address: Address,
     script: Buffer | null = null
   ) {
     super();
@@ -161,22 +161,26 @@ class NanoContractHeader extends Header {
 
     buf = buf.subarray(1);
 
-    // Create empty header to fill with the deserialization
-    const header = new NanoContractHeader('', '', Buffer.alloc(0), [], null, null);
+    let nc_info_version: number;
+    let ncId: string;
+    let method: string;
+    let args: Buffer;
+    const actions: NanoContractActionHeader[] = [];
+    let address: Address;
 
     /* eslint-disable prefer-const -- To split these declarations would be confusing.
      * In all of them the first parameter should be a const and the second a let. */
     // nc info version
-    [header.nc_info_version, buf] = unpackToInt(1, false, buf);
+    [nc_info_version, buf] = unpackToInt(1, false, buf);
 
-    if (header.nc_info_version !== NANO_CONTRACTS_INFO_VERSION) {
+    if (nc_info_version !== NANO_CONTRACTS_INFO_VERSION) {
       throw new Error('Invalid info version for nano header.');
     }
 
     // NC ID is 32 bytes in hex
     let ncIdBuffer: Buffer;
     [ncIdBuffer, buf] = unpackLen(32, buf);
-    header.id = ncIdBuffer.toString('hex');
+    ncId = ncIdBuffer.toString('hex');
 
     // nc method
     let methodLen: number;
@@ -184,14 +188,12 @@ class NanoContractHeader extends Header {
     [methodLen, buf] = unpackToInt(1, false, buf);
 
     [methodBuffer, buf] = unpackLen(methodLen, buf);
-    header.method = methodBuffer.toString('ascii');
+    method = methodBuffer.toString('ascii');
 
     // nc args
     let argsLen: number;
-    let argsBuf: Buffer;
     [argsLen, buf] = unpackToInt(2, false, buf);
-    [argsBuf, buf] = unpackLen(argsLen, buf);
-    header.args = argsBuf;
+    [args, buf] = unpackLen(argsLen, buf);
 
     // nc actions
     let actionsLen: number;
@@ -207,17 +209,19 @@ class NanoContractHeader extends Header {
       [tokenIndex, buf] = unpackToInt(1, false, buf);
       [amount, buf] = bytesToOutputValue(buf);
 
-      header.actions.push({ type: actionType, tokenIndex, amount });
+      actions.push({ type: actionType, tokenIndex, amount });
     }
 
     // nc address
     let addressBytes: Buffer;
     [addressBytes, buf] = unpackLen(25, buf);
-    header.address = helpersUtils.validateAddressBytes(addressBytes, network);
+    address = helpersUtils.getAddressFromBytes(addressBytes, network);
 
     // nc script
     let scriptLen: number;
     [scriptLen, buf] = unpackToInt(2, false, buf);
+
+    const header = new NanoContractHeader(ncId, method, args, actions, address);
 
     if (scriptLen !== 0) {
       // script might be null
