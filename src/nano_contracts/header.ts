@@ -43,7 +43,7 @@ class NanoContractHeader extends Header {
   // List of actions for this nano
   actions: NanoContractActionHeader[];
 
-  // Address if the transaction owner(s)/caller(s)
+  // Address of the transaction owner(s)/caller(s)
   address: Address | null;
 
   /**
