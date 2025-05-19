@@ -632,6 +632,11 @@ describe('full cycle of bet nano contract', () => {
   });
 
   it('handle errors', async () => {
+    const address0 = await hWallet.getAddressAtIndex(0);
+    const address1 = await hWallet.getAddressAtIndex(1);
+    const dateLastBet = dateFormatter.dateToTimestamp(new Date()) + 6000;
+    const network = hWallet.getNetworkObject();
+
     const oracleData = getOracleBuffer(address1, network);
     await expect(
       hWallet.createAndSendNanoContractTransaction(NANO_CONTRACTS_INITIALIZE_METHOD, address0, {
