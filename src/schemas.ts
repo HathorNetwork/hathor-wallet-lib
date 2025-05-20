@@ -52,6 +52,7 @@ export const IAddressMetadataAsRecordSchema: ZodSchema<IAddressMetadataAsRecord>
   .object({
     numTransactions: z.number(),
     balance: z.record(IBalanceSchema),
+    seqnum: z.number(),
   })
   .passthrough();
 
