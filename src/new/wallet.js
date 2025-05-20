@@ -8,7 +8,12 @@
 import { cloneDeep, get } from 'lodash';
 import bitcore, { HDPrivateKey } from 'bitcore-lib';
 import EventEmitter from 'events';
-import { NATIVE_TOKEN_UID, P2SH_ACCT_PATH, P2PKH_ACCT_PATH, ON_CHAIN_BLUEPRINTS_VERSION } from '../constants';
+import {
+  NATIVE_TOKEN_UID,
+  P2SH_ACCT_PATH,
+  P2PKH_ACCT_PATH,
+  ON_CHAIN_BLUEPRINTS_VERSION,
+} from '../constants';
 import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
 import versionApi from '../api/version';
@@ -808,7 +813,8 @@ class HathorWallet extends EventEmitter {
         firstBlock: tx.first_block,
       };
       if (tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
-        txHistory.ncCaller = tx.nc_pubkey && getAddressFromPubkey(tx.nc_pubkey, this.getNetworkObject());
+        txHistory.ncCaller =
+          tx.nc_pubkey && getAddressFromPubkey(tx.nc_pubkey, this.getNetworkObject());
       }
       txs.push(txHistory);
       count--;
