@@ -225,7 +225,7 @@ const transaction = {
       if (tx.isNanoContract()) {
         // Nano contract
         const signature = this.getSignature(dataToSignHash, xpriv.privateKey);
-        ncCallerSignature = this.createInputData(signature, xpriv.publicKey);
+        ncCallerSignature = this.createInputData(signature, xpriv.publicKey.toDER());
       } else {
         // On-chain blueprint
         ncCallerSignature = this.getSignature(dataToSignHash, xpriv.privateKey);
