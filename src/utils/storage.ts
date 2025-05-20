@@ -40,6 +40,7 @@ import {
 } from '../constants';
 import { AddressHistorySchema, GeneralTokenInfoSchema } from '../api/schemas/wallet';
 import CreateTokenTransaction from '../models/create_token_transaction';
+import { DEFAULT_ADDRESS_META } from '../storage/storage';
 
 /**
  * Get history sync method for a given mode
@@ -632,6 +633,8 @@ export async function processNewTx(
   }
 
   const { store } = storage;
+  // XXX Can I ignore the seqnum of a voided tx?
+  // No, I need to consider if the tx has first block
 
   // We ignore voided transactions
   if (tx.is_voided)
@@ -667,7 +670,7 @@ export async function processNewTx(
 
     // create metadata for address and token if it does not exist
     if (!addressMeta) {
-      addressMeta = { numTransactions: 0, balance: new Map<string, IBalance>() };
+      addressMeta = DEFAULT_ADDRESS_META;
     }
     if (!tokenMeta) {
       tokenMeta = { numTransactions: 0, balance: getEmptyBalance() };
@@ -761,7 +764,7 @@ export async function processNewTx(
 
     // create metadata for address and token if it does not exist
     if (!addressMeta) {
-      addressMeta = { numTransactions: 0, balance: new Map<string, IBalance>() };
+      addressMeta = DEFAULT_ADDRESS_META;
     }
     if (!tokenMeta) {
       tokenMeta = { numTransactions: 0, balance: getEmptyBalance() };
@@ -819,9 +822,16 @@ export async function processNewTx(
       // create metadata for address if it does not exist
       let addressMeta = await store.getAddressMeta(caller);
       if (!addressMeta) {
-        addressMeta = { numTransactions: 0, balance: new Map<string, IBalance>() };
-        await store.editAddressMeta(caller, addressMeta);
+        addressMeta = DEFAULT_ADDRESS_META;
       }
+
+      if (tx.nc_id) {
+        if (tx.nc_seqnum > addressMeta.seqnum) {
+          addressMeta.seqnum = tx.nc_seqnum;
+        }
+      }
+
+      await store.editAddressMeta(caller, addressMeta);
       txAddresses.add(caller);
     }
   }
@@ -902,7 +912,7 @@ export async function processUtxoUnlock(
   // create metadata for address and token if it does not exist
   // This should not happen, but we check so that typescript compiler can guarantee the type
   if (!addressMeta) {
-    addressMeta = { numTransactions: 0, balance: new Map<string, IBalance>() };
+    addressMeta = DEFAULT_ADDRESS_META;
   }
   if (!tokenMeta) {
     tokenMeta = { numTransactions: 0, balance: getEmptyBalance() };

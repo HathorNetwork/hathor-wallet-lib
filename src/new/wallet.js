@@ -3367,6 +3367,18 @@ class HathorWallet extends EventEmitter {
 
     return prepareNanoSendTransaction(tx, pin, this.storage);
   }
+
+  /**
+   * Get the seqnum to be used in a nano header for the address
+   *
+   * @param {string} address Address that will be the nano header caller
+   *
+   * @returns {Promise<number>}
+   */
+  async getNanoHeaderSeqnum(address) {
+    const addressInfo = await this.storage.getAddressInfo(address);
+    return addressInfo.seqnum + 1;
+  }
 }
 
 // State constants.
