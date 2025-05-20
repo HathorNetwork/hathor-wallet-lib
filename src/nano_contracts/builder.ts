@@ -119,8 +119,8 @@ class NanoContractTransactionBuilder {
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  setArgs(args: NanoContractArgumentApiInputType[]) {
-    this.args = args;
+  setArgs(args: NanoContractArgumentApiInputType[] | undefined | null) {
+    this.args = args ?? [];
     return this;
   }
 

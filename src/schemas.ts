@@ -97,7 +97,7 @@ export const IHistoryOutputSchema: ZodSchema<IHistoryOutput> = z
 
 export const IHistoryNanoContractActionWithdrawalSchema = z
   .object({
-    type: z.literal('WITHDRAWAL'),
+    type: z.literal('withdrawal'),
     token_uid: z.string(),
     amount: bigIntCoercibleSchema,
   })
@@ -105,7 +105,7 @@ export const IHistoryNanoContractActionWithdrawalSchema = z
 
 export const IHistoryNanoContractActionDepositSchema = z
   .object({
-    type: z.literal('DEPOSIT'),
+    type: z.literal('deposit'),
     token_uid: z.string(),
     amount: bigIntCoercibleSchema,
   })
@@ -113,7 +113,7 @@ export const IHistoryNanoContractActionDepositSchema = z
 
 export const IHistoryNanoContractActionGrantAuthoritySchema = z
   .object({
-    type: z.literal('GRANT_AUTHORITY'),
+    type: z.literal('grant_authority'),
     token_uid: z.string(),
     mint: z.boolean(),
     melt: z.boolean(),
@@ -122,7 +122,7 @@ export const IHistoryNanoContractActionGrantAuthoritySchema = z
 
 export const IHistoryNanoContractActionInvokeAuthoritySchema = z
   .object({
-    type: z.literal('INVOKE_AUTHORITY'),
+    type: z.literal('invoke_authority'),
     token_uid: z.string(),
     mint: z.boolean(),
     melt: z.boolean(),

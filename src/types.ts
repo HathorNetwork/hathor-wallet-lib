@@ -109,26 +109,26 @@ export interface IAuthoritiesBalance {
 }
 
 export interface IHistoryNanoContractActionWithdrawal {
-  type: 'WITHDRAWAL';
+  type: 'withdrawal';
   token_uid: string;
   amount: OutputValueType;
 }
 
 export interface IHistoryNanoContractActionDeposit {
-  type: 'DEPOSIT';
+  type: 'deposit';
   token_uid: string;
   amount: OutputValueType;
 }
 
 export interface IHistoryNanoContractActionGrantAuthority {
-  type: 'GRANT_AUTHORITY';
+  type: 'grant_authority';
   token_uid: string;
   mint: boolean;
   melt: boolean;
 }
 
 export interface IHistoryNanoContractActionInvokeAuthority {
-  type: 'INVOKE_AUTHORITY';
+  type: 'invoke_authority';
   token_uid: string;
   mint: boolean;
   melt: boolean;
