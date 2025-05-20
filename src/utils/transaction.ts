@@ -221,7 +221,15 @@ const transaction = {
         throw new Error('No address info found');
       }
       const xpriv = xprivkey.deriveNonCompliantChild(addressInfo.bip32AddressIndex);
-      ncCallerSignature = this.getSignature(dataToSignHash, xpriv.privateKey);
+
+      if (tx.isNanoContract()) {
+        // Nano contract
+        const signature = this.getSignature(dataToSignHash, xpriv.privateKey);
+        ncCallerSignature = this.createInputData(signature, xpriv.publicKey);
+      } else {
+        // On-chain blueprint
+        ncCallerSignature = this.getSignature(dataToSignHash, xpriv.privateKey);
+      }
     }
 
     return {
