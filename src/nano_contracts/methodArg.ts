@@ -170,7 +170,13 @@ const OptionalApiInputScheme = z
 const SignedDataApiInputScheme = z
   .string()
   .transform(value => value.split(','))
-  .pipe(z.tuple([z.string().regex(/^[0-9A-Fa-f]+$/), z.string(), NanoContractArgumentSingleTypeNameSchema]))
+  .pipe(
+    z.tuple([
+      z.string().regex(/^[0-9A-Fa-f]+$/),
+      z.string(),
+      NanoContractArgumentSingleTypeNameSchema,
+    ])
+  )
   .transform((value, ctx) => {
     const signature = Buffer.from(value[0], 'hex');
     const type = value[2];
@@ -281,7 +287,10 @@ export class NanoContractMethodArgument {
   /**
    * Prepare value for ApiInput, converting single types to NanoContractArgumentApiInputType
    */
-  static prepSingleValue(value: NanoContractArgumentSingleType, type: NanoContractArgumentSingleTypeName): NanoContractArgumentApiInputType {
+  static prepSingleValue(
+    value: NanoContractArgumentSingleType,
+    type: NanoContractArgumentSingleTypeName
+  ): NanoContractArgumentApiInputType {
     if (type === 'bool') {
       return (value as boolean) ? 'true' : 'false';
     }
@@ -302,7 +311,10 @@ export class NanoContractMethodArgument {
    * Prepare value for ApiInput, converting any type to NanoContractArgumentApiInputType
    * Works for container values, converting the inner value as well if needed
    */
-  static prepValue(value: NanoContractArgumentType, type: NanoContractArgumentTypeName): NanoContractArgumentApiInputType {
+  static prepValue(
+    value: NanoContractArgumentType,
+    type: NanoContractArgumentTypeName
+  ): NanoContractArgumentApiInputType {
     const isContainerType = getContainerType(type) !== null;
     if (isContainerType) {
       const [containerType, innerType] = getContainerInternalType(type);
@@ -316,7 +328,13 @@ export class NanoContractMethodArgument {
       }
 
       if (containerType === 'Optional') {
-        return value && NanoContractMethodArgument.prepSingleValue(value as NanoContractArgumentSingleType, innerType);
+        return (
+          value &&
+          NanoContractMethodArgument.prepSingleValue(
+            value as NanoContractArgumentSingleType,
+            innerType
+          )
+        );
       }
 
       throw new Error(`Untreated container type(${type}) for value ${value}`);
@@ -324,7 +342,7 @@ export class NanoContractMethodArgument {
 
     return NanoContractMethodArgument.prepSingleValue(
       NanoContractArgumentSingleSchema.parse(value),
-      NanoContractArgumentSingleTypeNameSchema.parse(type),
+      NanoContractArgumentSingleTypeNameSchema.parse(type)
     );
   }
 }
