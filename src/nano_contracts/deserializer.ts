@@ -339,7 +339,7 @@ class Deserializer {
    * It does not support chained container types, meaning Tuple[Dict[str,str]] should not happen.
    *
    * @param buf Value to deserialize
-   * @param typeArr Comma separated types, e.g. `str,int,VarInt`
+   * @param typeArr List of types to read from buffer, e.g. `['str', 'int', 'VarInt']`
    *
    * @memberof Deserializer
    * @inner

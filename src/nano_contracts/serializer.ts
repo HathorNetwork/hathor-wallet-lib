@@ -245,14 +245,14 @@ class Serializer {
    * Serialize a tuple of values
    *
    * @param value List of values to serialize
-   * @param typeArr Comma separated list of types e.g. `str,int,VarInt`
+   * @param typeArr List of types to serialize the values
    *
    * @example
    * ```
    * const serializer = Serializer(new Network('testnet'));
    *
    * const type = 'Tuple[str,int]';
-   * const typeStr = 'str,int';
+   * const typeArr = ['str', 'int'];
    * const buf = serializer.fromTuple(['1x0', 5], typeStr);
    * ```
    *
