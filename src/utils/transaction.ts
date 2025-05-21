@@ -21,7 +21,6 @@ import {
   DEFAULT_SIGNAL_BITS,
   BLOCK_VERSION,
   MERGED_MINED_BLOCK_VERSION,
-  NANO_CONTRACTS_VERSION,
   POA_BLOCK_VERSION,
   ON_CHAIN_BLUEPRINTS_VERSION,
 } from '../constants';
@@ -860,9 +859,6 @@ const transaction = {
       }
       if (tx.version === CREATE_TOKEN_TX_VERSION) {
         return 'Create Token Transaction';
-      }
-      if (tx.version === NANO_CONTRACTS_VERSION) {
-        return 'Nano Contract';
       }
       if (tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
         return 'On-Chain Blueprint';

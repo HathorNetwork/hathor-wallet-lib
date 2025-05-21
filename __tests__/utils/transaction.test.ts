@@ -13,7 +13,6 @@ import {
   CREATE_TOKEN_TX_VERSION,
   DEFAULT_TX_VERSION,
   MERGED_MINED_BLOCK_VERSION,
-  NANO_CONTRACTS_VERSION,
   ON_CHAIN_BLUEPRINTS_VERSION,
   POA_BLOCK_VERSION,
   TOKEN_AUTHORITY_MASK,
@@ -465,7 +464,6 @@ test('getTxType', () => {
   expect(transaction.getTxType({ version: MERGED_MINED_BLOCK_VERSION })).toBe(
     'Merged Mining Block'
   );
-  expect(transaction.getTxType({ version: NANO_CONTRACTS_VERSION })).toBe('Nano Contract');
   expect(transaction.getTxType({ version: POA_BLOCK_VERSION })).toBe('Proof-of-Authority Block');
   expect(transaction.getTxType({ version: ON_CHAIN_BLUEPRINTS_VERSION })).toBe(
     'On-Chain Blueprint'
