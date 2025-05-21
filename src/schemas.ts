@@ -95,39 +95,36 @@ export const IHistoryOutputSchema: ZodSchema<IHistoryOutput> = z
   })
   .passthrough();
 
-export const IHistoryNanoContractActionWithdrawalSchema = z
-  .object({
+export const IHistoryNanoContractBaseAction = z.object({
+  token_uid: z.string(),
+});
+
+export const IHistoryNanoContractBaseTokenAction = IHistoryNanoContractBaseAction.extend({
+  amount: bigIntCoercibleSchema,
+});
+
+export const IHistoryNanoContractBaseAuthorityAction = IHistoryNanoContractBaseAction.extend({
+  mint: z.boolean(),
+  melt: z.boolean(),
+});
+export const IHistoryNanoContractActionWithdrawalSchema =
+  IHistoryNanoContractBaseTokenAction.extend({
     type: z.literal('withdrawal'),
-    token_uid: z.string(),
-    amount: bigIntCoercibleSchema,
-  })
-  .passthrough();
+  }).passthrough();
 
-export const IHistoryNanoContractActionDepositSchema = z
-  .object({
-    type: z.literal('deposit'),
-    token_uid: z.string(),
-    amount: bigIntCoercibleSchema,
-  })
-  .passthrough();
+export const IHistoryNanoContractActionDepositSchema = IHistoryNanoContractBaseTokenAction.extend({
+  type: z.literal('deposit'),
+}).passthrough();
 
-export const IHistoryNanoContractActionGrantAuthoritySchema = z
-  .object({
+export const IHistoryNanoContractActionGrantAuthoritySchema =
+  IHistoryNanoContractBaseAuthorityAction.extend({
     type: z.literal('grant_authority'),
-    token_uid: z.string(),
-    mint: z.boolean(),
-    melt: z.boolean(),
-  })
-  .passthrough();
+  }).passthrough();
 
-export const IHistoryNanoContractActionInvokeAuthoritySchema = z
-  .object({
+export const IHistoryNanoContractActionInvokeAuthoritySchema =
+  IHistoryNanoContractBaseAuthorityAction.extend({
     type: z.literal('invoke_authority'),
-    token_uid: z.string(),
-    mint: z.boolean(),
-    melt: z.boolean(),
-  })
-  .passthrough();
+  }).passthrough();
 
 export const IHistoryNanoContractActionSchema = z.discriminatedUnion('type', [
   IHistoryNanoContractActionDepositSchema,
