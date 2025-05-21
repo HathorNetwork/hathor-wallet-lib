@@ -36,7 +36,7 @@ function refineSingleValue(
   inputVal: NanoContractArgumentApiInputType,
   type: NanoContractArgumentSingleTypeName
 ) {
-  if (['int', 'Timestamp'].includes(type)) {
+  if (type === 'int' || type === 'Timestamp') {
     const parse = z.coerce.number().safeParse(inputVal);
     if (!parse.success) {
       ctx.addIssue({
@@ -47,12 +47,12 @@ function refineSingleValue(
     } else {
       return parse.data;
     }
-  } else if (type === 'VarInt') {
+  } else if (type === 'VarInt' || type === 'Amount') {
     const parse = z.coerce.bigint().safeParse(inputVal);
     if (!parse.success) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: `Value is invalid VarInt: ${parse.error}`,
+        message: `Value is invalid ${type}: ${parse.error}`,
         fatal: true,
       });
     } else {
@@ -255,7 +255,7 @@ export class NanoContractMethodArgument {
       if (containerType === 'SignedData' || containerType === 'RawSignedData') {
         // Parse string SignedData into NanoContractSignedData
         const data = SignedDataApiInputScheme.parse(value);
-        if (data.type !== innerType.trim()) {
+        if (data.type !== innerType) {
           throw new Error('Invalid signed data type');
         }
         return new NanoContractMethodArgument(name, type, data);
@@ -301,7 +301,7 @@ export class NanoContractMethodArgument {
       // Should not happen since all bytes values were caught, this is to satisfy typing
       return value.toString('hex');
     }
-    if (type === 'VarInt') {
+    if (type === 'VarInt' || type === 'Amount') {
       return String(value as bigint);
     }
     return value;
@@ -323,17 +323,17 @@ export class NanoContractMethodArgument {
         return [
           data.signature.toString('hex'),
           NanoContractMethodArgument.prepSingleValue(data.value, data.type),
-          type,
+          innerType,
         ].join(',');
       }
 
       if (containerType === 'Optional') {
-        return (
-          value &&
-          NanoContractMethodArgument.prepSingleValue(
-            value as NanoContractArgumentSingleType,
-            innerType
-          )
+        if (value === null) {
+          return null;
+        }
+        return NanoContractMethodArgument.prepSingleValue(
+          value as NanoContractArgumentSingleType,
+          NanoContractArgumentSingleTypeNameSchema.parse(innerType)
         );
       }
 

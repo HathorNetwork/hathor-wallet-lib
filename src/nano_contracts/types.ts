@@ -25,6 +25,7 @@ export const NanoContractArgumentSingleTypeNameSchema = z.enum([
   'str',
   'Address',
   'Timestamp',
+  'Amount',
   'VarInt',
   ...NanoContractArgumentByteTypes.options,
 ]);
@@ -45,9 +46,22 @@ export type NanoContractArgumentContainerType = z.output<
   typeof NanoContractArgumentContainerTypeNameSchema
 >;
 
-export const NanoContractArgumentTypeNameSchema = z.enum([
-  ...NanoContractArgumentSingleTypeNameSchema.options,
-  ...NanoContractArgumentContainerTypeNameSchema.options,
+/**
+ * Will match any `Container[subtype]` as long as Container is a valid ContainerType.
+ * Also works with optional `InnerType?` as long as InnerType is a valid single type
+ */
+export const NanoContractArgumentFullContainerTypeNameSchema = z.string().refine(val => {
+  if (val.endsWith('?')) {
+    return NanoContractArgumentSingleTypeNameSchema.safeParse(val.slice(0, -1)).success;
+  }
+  const match = val.match(/^(.*?)\[(.*)\]/);
+  if (match === null) return false;
+  return NanoContractArgumentContainerTypeNameSchema.safeParse(match[1]).success;
+}, 'Invalid Container type');
+
+export const NanoContractArgumentTypeNameSchema = z.union([
+  NanoContractArgumentSingleTypeNameSchema,
+  NanoContractArgumentFullContainerTypeNameSchema,
 ]);
 export type NanoContractArgumentTypeName = z.output<typeof NanoContractArgumentTypeNameSchema>;
 

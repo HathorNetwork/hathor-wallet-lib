@@ -36,7 +36,10 @@ import leb128 from '../utils/leb128';
 
 export function getContainerInternalType(
   type: string
-): [NanoContractArgumentContainerType, NanoContractArgumentSingleTypeName] {
+): [
+  NanoContractArgumentContainerType,
+  NanoContractArgumentSingleTypeName | NanoContractArgumentSingleTypeName[],
+] {
   if (type.endsWith('?')) {
     // Optional value
     const innerType = type.slice(0, -1);
@@ -52,11 +55,14 @@ export function getContainerInternalType(
   }
   // Only some values are allowed for containerType
   switch (containerType) {
-    case 'Tuple':
     case 'SignedData':
     case 'RawSignedData':
-    case 'Optional':
       return [containerType, NanoContractArgumentSingleTypeNameSchema.parse(internalType)];
+    case 'Tuple':
+      return [
+        containerType,
+        internalType.split(',').map(t => NanoContractArgumentSingleTypeNameSchema.parse(t.trim())),
+      ];
     default:
       throw new Error('Not a ContainerType');
   }
