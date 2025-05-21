@@ -75,11 +75,15 @@ export interface IAddressInfo {
 export interface IAddressMetadata {
   numTransactions: number;
   balance: Map<string, IBalance>;
+  // Sequential number used when creating nano header in a transaction
+  // each address has this sequence and we get the next number of the caller
+  seqnum: number;
 }
 
 export interface IAddressMetadataAsRecord {
   numTransactions: number;
   balance: Record<string, IBalance>;
+  seqnum: number;
 }
 
 export interface ITokenData {

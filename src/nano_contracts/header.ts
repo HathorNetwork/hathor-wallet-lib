@@ -16,6 +16,7 @@ import {
   unpackLen,
   unpackToInt,
 } from '../utils/buffer';
+import leb128Util from '../utils/leb128';
 import {
   getVertexHeaderIdBuffer,
   getVertexHeaderIdFromBuffer,
@@ -41,6 +42,9 @@ class NanoContractHeader extends Header {
   // List of actions for this nano
   actions: NanoContractActionHeader[];
 
+  // Sequential number for the nano header
+  seqnum: number;
+
   // Pubkey and signature of the transaction owner / caller
   pubkey: Buffer;
 
@@ -51,6 +55,7 @@ class NanoContractHeader extends Header {
     method: string,
     args: Buffer,
     actions: NanoContractActionHeader[],
+    seqnum: number,
     pubkey: Buffer,
     signature: Buffer | null = null
   ) {
@@ -60,6 +65,7 @@ class NanoContractHeader extends Header {
     this.method = method;
     this.args = args;
     this.actions = actions;
+    this.seqnum = seqnum;
     this.pubkey = pubkey;
     this.signature = signature;
   }
@@ -80,6 +86,9 @@ class NanoContractHeader extends Header {
 
     // nano contract id
     array.push(hexToBuffer(this.id));
+
+    // Seqnum
+    array.push(encodeUnsigned(this.seqnum));
 
     const methodBytes = Buffer.from(this.method, 'ascii');
     array.push(intToBytes(methodBytes.length, 1));
@@ -167,6 +176,13 @@ class NanoContractHeader extends Header {
     let ncIdBuffer: Buffer;
     [ncIdBuffer, buf] = unpackLen(32, buf);
     header.id = ncIdBuffer.toString('hex');
+
+    // Seqnum has variable length with maximum of 8 bytes
+    const {
+      value: seqnum,
+      rest: buf,
+    } = leb128Util.decodeUnsigned(buf, 8);
+    header.seqnum = seqnum;
 
     // nc method
     let methodLen: number;
