@@ -14,6 +14,8 @@ import {
   BufferROExtract,
   NanoContractSignedData,
   NanoContractArgumentSingleType,
+  NanoContractArgumentSingleTypeName,
+  NanoContractArgumentSingleTypeNameSchema,
 } from './types';
 import { OutputValueType } from '../types';
 import { NC_ARGS_MAX_BYTES_LENGTH } from '../constants';
@@ -267,7 +269,7 @@ class Deserializer {
    * @memberof Deserializer
    * @inner
    */
-  toOptional(buf: Buffer, type: string): BufferROExtract<NanoContractArgumentType> {
+  toOptional(buf: Buffer, type: NanoContractArgumentSingleTypeName): BufferROExtract<NanoContractArgumentType> {
     if (buf[0] === 0) {
       // It's an empty optional
       return {
@@ -297,7 +299,7 @@ class Deserializer {
    * @memberof Deserializer
    * @inner
    */
-  toSignedData(signedData: Buffer, type: string): BufferROExtract<NanoContractSignedData> {
+  toSignedData(signedData: Buffer, type: NanoContractArgumentSingleTypeName): BufferROExtract<NanoContractSignedData> {
     // The SignedData is serialized as `data+Signature`
 
     // Reading argument
@@ -334,7 +336,7 @@ class Deserializer {
    * @inner
    */
   toTuple(buf: Buffer, type: string): BufferROExtract<NanoContractArgumentSingleType[]> {
-    const typeArr = type.split(',').map(s => s.trim());
+    const typeArr = type.split(',').map(s => NanoContractArgumentSingleTypeNameSchema.parse(s.trim()));
     const tupleValues: NanoContractArgumentSingleType[] = [];
     let bytesReadTotal = 0;
     let tupleBuf = buf.subarray();

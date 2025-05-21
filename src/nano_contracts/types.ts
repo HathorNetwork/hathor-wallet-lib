@@ -7,57 +7,6 @@
 import { z } from 'zod';
 import { IHistoryTx, OutputValueType } from '../types';
 
-/**
- * There are the types that can be received via api
- * when querying for a nano contract value.
- */
-export const NanoContractArgumentApiInputSchema = z.union([
-  z.string(),
-  z.number(),
-  z.bigint(),
-  z.boolean(),
-  z.null(),
-]);
-export type NanoContractArgumentApiInputType = z.output<typeof NanoContractArgumentApiInputSchema>;
-
-/**
- * These are the possible `Single` types after parsing
- * We include Buffer since some types are decoded as Buffer (e.g. bytes, TokenUid, ContractId)
- */
-export const NanoContractArgumentSingleSchema = z.union([
-  NanoContractArgumentApiInputSchema,
-  z.instanceof(Buffer),
-]);
-export type NanoContractArgumentSingleType = z.output<typeof NanoContractArgumentSingleSchema>;
-
-/**
- * NanoContract SignedData method argument type
- */
-export const NanoContractSignedDataSchema = z.object({
-  type: z.string(),
-  signature: z.instanceof(Buffer),
-  value: NanoContractArgumentSingleSchema,
-});
-export type NanoContractSignedData = z.output<typeof NanoContractSignedDataSchema>;
-
-/**
- * Intermediate schema for all possible Nano contract argument type
- * that do not include tuple/arrays/repetition
- */
-const _NanoContractArgumentType1Schema = z.union([
-  NanoContractArgumentSingleSchema,
-  NanoContractSignedDataSchema,
-]);
-
-/**
- * Nano Contract method argument type as a native TS type
- */
-export const NanoContractArgumentSchema = z.union([
-  _NanoContractArgumentType1Schema,
-  z.array(_NanoContractArgumentType1Schema),
-]);
-export type NanoContractArgumentType = z.output<typeof NanoContractArgumentSchema>;
-
 export const NanoContractArgumentByteTypes = z.enum([
   'bytes',
   'BlueprintId',
@@ -95,6 +44,63 @@ export const NanoContractArgumentContainerTypeNameSchema = z.enum([
 export type NanoContractArgumentContainerType = z.output<
   typeof NanoContractArgumentContainerTypeNameSchema
 >;
+
+export const NanoContractArgumentTypeNameSchema = z.enum([
+  ...NanoContractArgumentSingleTypeNameSchema.options,
+  ...NanoContractArgumentContainerTypeNameSchema.options,
+]);
+export type NanoContractArgumentTypeName = z.output<typeof NanoContractArgumentTypeNameSchema>;
+
+/**
+ * There are the types that can be received via api
+ * when querying for a nano contract value.
+ */
+export const NanoContractArgumentApiInputSchema = z.union([
+  z.string(),
+  z.number(),
+  z.bigint(),
+  z.boolean(),
+  z.null(),
+]);
+export type NanoContractArgumentApiInputType = z.output<typeof NanoContractArgumentApiInputSchema>;
+
+/**
+ * These are the possible `Single` types after parsing
+ * We include Buffer since some types are decoded as Buffer (e.g. bytes, TokenUid, ContractId)
+ */
+export const NanoContractArgumentSingleSchema = z.union([
+  NanoContractArgumentApiInputSchema,
+  z.instanceof(Buffer),
+]);
+export type NanoContractArgumentSingleType = z.output<typeof NanoContractArgumentSingleSchema>;
+
+/**
+ * NanoContract SignedData method argument type
+ */
+export const NanoContractSignedDataSchema = z.object({
+  type: NanoContractArgumentSingleTypeNameSchema,
+  signature: z.instanceof(Buffer),
+  value: NanoContractArgumentSingleSchema,
+});
+export type NanoContractSignedData = z.output<typeof NanoContractSignedDataSchema>;
+
+/**
+ * Intermediate schema for all possible Nano contract argument type
+ * that do not include tuple/arrays/repetition
+ */
+const _NanoContractArgumentType1Schema = z.union([
+  NanoContractArgumentSingleSchema,
+  NanoContractSignedDataSchema,
+]);
+
+/**
+ * Nano Contract method argument type as a native TS type
+ */
+export const NanoContractArgumentSchema = z.union([
+  _NanoContractArgumentType1Schema,
+  z.array(_NanoContractArgumentType1Schema),
+]);
+export type NanoContractArgumentType = z.output<typeof NanoContractArgumentSchema>;
 
 export enum NanoContractVertexType {
   TRANSACTION = 'transaction',
