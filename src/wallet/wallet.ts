@@ -8,7 +8,6 @@
 import { EventEmitter } from 'events';
 import bitcore, { util } from 'bitcore-lib';
 import assert from 'assert';
-import { SendTransaction } from 'src/lib';
 import {
   NATIVE_TOKEN_UID,
   TOKEN_MINT_MASK,
@@ -72,18 +71,17 @@ import {
   WalletRequestError,
   WalletError,
   UninitializedWalletError,
-  NanoContractTransactionError,
   WalletFromXPubGuard,
   PinRequiredError,
 } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import { IStorage, IWalletAccessData, OutputValueType, WalletType, IHistoryTx } from '../types';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
-import { prepareNanoSendTransaction } from '../nano_contracts/utils';
 import {
-  NanoContractAction,
   NanoContractArgumentApiInputType,
   NanoContractVertexType,
+  NanoContractBuilderCreateTokenOptions,
+  CreateNanoTxData,
 } from '../nano_contracts/types';
 
 // Time in milliseconds berween each polling to check wallet status
@@ -2267,19 +2265,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
-   * @typedef {Object} CreateNanoTxOptions
-   * @property {string?} [pinCode] PIN to decrypt the private key.
-   */
-
-  /**
-   * @typedef {Object} CreateNanoTxData
-   * @property {string?} [blueprintId=null] ID of the blueprint to create the nano contract. Required if method is initialize.
-   * @property {string?} [ncId=null] ID of the nano contract to execute method. Required if method is not initialize
-   * @property {NanoContractAction[]?} [actions] List of actions to execute in the nano contract transaction
-   * @property {any[]} [args] List of arguments for the method to be executed in the transaction
-   */
-
-  /**
    * Create a nano contract transaction and return the SendTransaction object
    *
    * @param {string} method Method of nano contract to have the transaction created
@@ -2292,12 +2277,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async createNanoContractTransaction(
     method: string,
     address: string,
-    data: {
-      blueprintId?: string;
-      ncId?: string;
-      actions?: NanoContractAction[];
-      args?: NanoContractArgumentApiInputType[];
-    },
+    data: CreateNanoTxData,
     options: { pinCode?: string } = {}
   ): Promise<SendTransactionWalletService> {
     this.failIfWalletNotReady();
@@ -2380,12 +2360,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async createAndSendNanoContractTransaction(
     method: string,
     address: string,
-    data: {
-      blueprintId?: string;
-      ncId?: string;
-      actions?: NanoContractAction[];
-      args?: NanoContractArgumentApiInputType[];
-    },
+    data: CreateNanoTxData,
     options: { pinCode?: string } = {}
   ): Promise<Transaction> {
     const sendTransaction = await this.createNanoContractTransaction(
@@ -2436,6 +2411,98 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // Finalize the transaction
     tx.prepareToSend();
     return new SendTransactionWalletService(this, { transaction: tx, pin: pinCode });
+  }
+
+  /**
+   * Create a Create Token Transaction with nano header and return the SendTransaction object
+   *
+   * @param {string} method Method of nano contract to have the transaction created
+   * @param {string} address Address that will be used to sign the nano contract transaction
+   * @param {object} data Nano contract data (blueprintId, ncId, actions, args)
+   * @param {object} createTokenOptions Options for token creation (mint/melt authorities, NFT, etc)
+   * @param {object} options Options (pinCode)
+   *
+   * @returns {Promise<SendTransactionWalletService>}
+   */
+  async createNanoContractCreateTokenTransaction(
+    method: string,
+    address: string,
+    data: CreateNanoTxData,
+    createTokenOptions: Partial<NanoContractBuilderCreateTokenOptions> = {},
+    options: { pinCode?: string } = {}
+  ): Promise<SendTransactionWalletService> {
+    this.failIfWalletNotReady();
+    if (await this.storage.isReadonly()) {
+      throw new WalletFromXPubGuard('createNanoContractCreateTokenTransaction');
+    }
+    const newOptions = { pinCode: null, ...options };
+    const pin = newOptions.pinCode;
+    if (!pin) {
+      throw new PinRequiredError('Pin is required.');
+    }
+    // Validate address belongs to wallet and get its index
+    const addressIndex = this.getAddressIndex(address);
+    if (addressIndex === undefined) {
+      throw new Error(
+        `Address used to sign the transaction (${address}) does not belong to the wallet.`
+      );
+    }
+    // Get the address public key
+    const addressPrivKey = await this.getAddressPrivKey(pin, addressIndex);
+    const pubkeyStr = addressPrivKey.publicKey.toString('hex');
+
+    // Create a wrapper around this wallet to override getFullTxById
+    const wrappedWallet = {
+      ...this,
+      getFullTxById: this.getFullTxByIdForNanoContract.bind(this),
+      getNetworkObject: this.getNetworkObject.bind(this),
+    };
+    // Build and send transaction
+    const actions = data.actions || [];
+    const args = data.args || [];
+    // Process arguments to handle serialized Buffer objects
+    const processedArgs = args.map(arg => {
+      if (
+        arg &&
+        typeof arg === 'object' &&
+        arg !== null &&
+        'data' in arg &&
+        'type' in arg &&
+        (arg as { type?: string }).type === 'Buffer' &&
+        Array.isArray((arg as { data?: unknown }).data)
+      ) {
+        return Buffer.from((arg as { data: number[] }).data);
+      }
+      return arg;
+    });
+    // Defaults below match wallet.js (see lines 3077-3087)
+    const mergedCreateTokenOptions: NanoContractBuilderCreateTokenOptions = {
+      mintAddress: null,
+      changeAddress: null,
+      createMint: true,
+      mintAuthorityAddress: null,
+      allowExternalMintAuthorityAddress: false,
+      createMelt: true,
+      meltAuthorityAddress: null,
+      allowExternalMeltAuthorityAddress: false,
+      data: null,
+      isCreateNFT: false,
+      ...createTokenOptions,
+    } as NanoContractBuilderCreateTokenOptions;
+
+    const builder = new NanoContractTransactionBuilder()
+      .setMethod(method)
+      .setWallet(wrappedWallet)
+      .setBlueprintId(data.blueprintId as string)
+      .setNcId(data.ncId as string)
+      .setCaller(Buffer.from(pubkeyStr, 'hex'))
+      .setActions(actions)
+      .setArgs(processedArgs as NanoContractArgumentApiInputType[])
+      .setVertexType(NanoContractVertexType.CREATE_TOKEN_TRANSACTION, mergedCreateTokenOptions);
+
+    const tx = await builder.build();
+
+    return this.prepareNanoSendTransactionWalletService(tx, address, pin);
   }
 }
 
