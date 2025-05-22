@@ -31,6 +31,7 @@ import {
 import { validateAndParseBlueprintMethodArgs } from './utils';
 import { IDataInput, IDataOutput, ITokenData } from '../types';
 import NanoContractHeader from './header';
+import Address from '../models/address';
 import leb128 from '../utils/leb128';
 import { NanoContractMethodArgument } from './methodArg';
 
@@ -44,7 +45,7 @@ class NanoContractTransactionBuilder {
 
   actions: NanoContractAction[] | null;
 
-  caller: Buffer | null;
+  caller: Address | null;
 
   args: NanoContractArgumentApiInputType[] | null;
 
@@ -118,20 +119,20 @@ class NanoContractTransactionBuilder {
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  setArgs(args: NanoContractArgumentApiInputType[]) {
-    this.args = args;
+  setArgs(args: NanoContractArgumentApiInputType[] | undefined | null) {
+    this.args = args ?? [];
     return this;
   }
 
   /**
    * Set object caller attribute
    *
-   * @param caller caller public key
+   * @param caller Caller address
    *
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  setCaller(caller: Buffer) {
+  setCaller(caller: Address) {
     this.caller = caller;
     return this;
   }
@@ -372,6 +373,13 @@ class NanoContractTransactionBuilder {
 
     if (!this.blueprintId || !this.method || !this.caller) {
       throw new NanoContractTransactionError('Must have blueprint id, method and caller.');
+    }
+
+    try {
+      this.caller.validateAddress();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Could not validate caller address';
+      throw new NanoContractTransactionError(message);
     }
 
     // Validate if the arguments match the expected method arguments

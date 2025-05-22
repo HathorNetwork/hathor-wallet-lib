@@ -74,19 +74,14 @@ export const CREATE_TOKEN_TX_VERSION = 2;
 export const MERGED_MINED_BLOCK_VERSION = 3;
 
 /**
- * Nano Contracts transaction version field
+ * On chain blueprints transaction version field
  */
-export const NANO_CONTRACTS_VERSION = 4;
+export const ON_CHAIN_BLUEPRINTS_VERSION = 6;
 
 /**
  * Proof-of-Authority block version field
  */
 export const POA_BLOCK_VERSION = 5;
-
-/**
- * On chain blueprints transaction version field
- */
-export const ON_CHAIN_BLUEPRINTS_VERSION = 6;
 
 /**
  * Nano Contracts information version
