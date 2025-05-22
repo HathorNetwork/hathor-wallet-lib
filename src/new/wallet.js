@@ -8,7 +8,12 @@
 import { cloneDeep, get } from 'lodash';
 import bitcore, { HDPrivateKey } from 'bitcore-lib';
 import EventEmitter from 'events';
-import { NATIVE_TOKEN_UID, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
+import {
+  NATIVE_TOKEN_UID,
+  P2SH_ACCT_PATH,
+  P2PKH_ACCT_PATH,
+  ON_CHAIN_BLUEPRINTS_VERSION,
+} from '../constants';
 import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
 import versionApi from '../api/version';
@@ -55,6 +60,7 @@ import { NanoContractVertexType } from '../nano_contracts/types';
 import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
 import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/transaction';
+import Address from '../models/address';
 
 /**
  * @typedef {import('../models/create_token_transaction').default} CreateTokenTransaction
@@ -772,7 +778,7 @@ class HathorWallet extends EventEmitter {
    *
    * @memberof HathorWallet
    * @inner
-   * */
+   */
   async getTxHistory(options = {}) {
     const newOptions = {
       token_id: NATIVE_TOKEN_UID,
@@ -803,9 +809,13 @@ class HathorWallet extends EventEmitter {
         version: tx.version,
         ncId: tx.nc_id,
         ncMethod: tx.nc_method,
-        ncCaller: tx.nc_pubkey && getAddressFromPubkey(tx.nc_pubkey, this.getNetworkObject()),
+        ncCaller: tx.nc_address && new Address(tx.nc_address, { network: this.getNetworkObject() }),
         firstBlock: tx.first_block,
       };
+      if (tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
+        txHistory.ncCaller =
+          tx.nc_pubkey && getAddressFromPubkey(tx.nc_pubkey, this.getNetworkObject());
+      }
       txs.push(txHistory);
       count--;
     }
@@ -2982,7 +2992,6 @@ class HathorWallet extends EventEmitter {
         `Address used to sign the transaction (${address}) does not belong to the wallet.`
       );
     }
-    const pubkeyStr = await this.storage.getAddressPubkey(addressInfo.bip32AddressIndex);
 
     // Build and send transaction
     const builder = new NanoContractTransactionBuilder()
@@ -2990,7 +2999,7 @@ class HathorWallet extends EventEmitter {
       .setWallet(this)
       .setBlueprintId(data.blueprintId)
       .setNcId(data.ncId)
-      .setCaller(Buffer.from(pubkeyStr, 'hex'))
+      .setCaller(new Address(address, { network: this.getNetworkObject() }))
       .setActions(data.actions)
       .setArgs(data.args)
       .setVertexType(NanoContractVertexType.TRANSACTION);
@@ -3123,15 +3132,13 @@ class HathorWallet extends EventEmitter {
         `Address used to sign the transaction (${address}) does not belong to the wallet.`
       );
     }
-    const pubkeyStr = await this.storage.getAddressPubkey(addressInfo.bip32AddressIndex);
-
     // Build and send transaction
     const builder = new NanoContractTransactionBuilder()
       .setMethod(method)
       .setWallet(this)
       .setBlueprintId(data.blueprintId)
       .setNcId(data.ncId)
-      .setCaller(Buffer.from(pubkeyStr, 'hex'))
+      .setCaller(new Address(address, { network: this.getNetworkObject() }))
       .setActions(data.actions)
       .setArgs(data.args)
       .setVertexType(NanoContractVertexType.CREATE_TOKEN_TRANSACTION, createTokenOptions);

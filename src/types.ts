@@ -108,6 +108,44 @@ export interface IAuthoritiesBalance {
   melt: ITokenBalance;
 }
 
+export interface IHistoryNanoContractActionWithdrawal {
+  type: 'withdrawal';
+  token_uid: string;
+  amount: OutputValueType;
+}
+
+export interface IHistoryNanoContractActionDeposit {
+  type: 'deposit';
+  token_uid: string;
+  amount: OutputValueType;
+}
+
+export interface IHistoryNanoContractActionGrantAuthority {
+  type: 'grant_authority';
+  token_uid: string;
+  mint: boolean;
+  melt: boolean;
+}
+
+export interface IHistoryNanoContractActionInvokeAuthority {
+  type: 'invoke_authority';
+  token_uid: string;
+  mint: boolean;
+  melt: boolean;
+}
+
+export type IHistoryNanoContractAction =
+  | IHistoryNanoContractActionDeposit
+  | IHistoryNanoContractActionWithdrawal
+  | IHistoryNanoContractActionGrantAuthority
+  | IHistoryNanoContractActionInvokeAuthority;
+
+export interface IHistoryNanoContractContext {
+  actions: IHistoryNanoContractAction[];
+  address: string;
+  timestamp: number;
+}
+
 export interface IHistoryTx {
   tx_id: string;
   signalBits?: number;
@@ -128,7 +166,9 @@ export interface IHistoryTx {
   nc_blueprint_id?: string; // For nano contract
   nc_method?: string; // For nano contract
   nc_args?: string; // For nano contract. Args in hex
-  nc_pubkey?: string; // For nano contract. Pubkey in hex
+  nc_address?: string; // For nano contract. address in base58
+  nc_pubkey?: string; // For on-chain-blueprints. pubkey DER encoded as hex
+  nc_context?: IHistoryNanoContractContext;
   first_block?: string | null;
 }
 

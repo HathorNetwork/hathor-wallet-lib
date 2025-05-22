@@ -220,15 +220,8 @@ export const validateAndParseBlueprintMethodArgs = async (
     throw new NanoContractTransactionError(`Blueprint does not have method ${method}.`);
   }
 
-  // Args may come as undefined or null
   if (args == null) {
-    if (methodArgs.length !== 0) {
-      throw new NanoContractTransactionError(
-        `Method needs ${methodArgs.length} parameters but no arguments were received.`
-      );
-    }
-
-    return null;
+    throw new NanoContractTransactionError(`No arguments were received.`);
   }
 
   const argsLen = args.length;

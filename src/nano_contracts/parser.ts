@@ -10,7 +10,6 @@ import Address from '../models/address';
 import Network from '../models/network';
 import Deserializer from './deserializer';
 import ncApi from '../api/nano';
-import { getAddressFromPubkey } from '../utils/address';
 import { NanoContractTransactionParseError } from '../errors';
 import { MethodArgInfo } from './types';
 import leb128 from '../utils/leb128';
@@ -21,11 +20,9 @@ class NanoContractTransactionParser {
 
   method: string;
 
-  publicKey: string;
-
   network: Network;
 
-  address: Address | null;
+  address: Address;
 
   args: string | null;
 
@@ -34,27 +31,16 @@ class NanoContractTransactionParser {
   constructor(
     blueprintId: string,
     method: string,
-    publicKey: string,
+    address: string,
     network: Network,
     args: string | null
   ) {
     this.blueprintId = blueprintId;
     this.method = method;
-    this.publicKey = publicKey;
     this.args = args;
     this.network = network;
-    this.address = null;
+    this.address = new Address(address, { network: this.network });
     this.parsedArgs = null;
-  }
-
-  /**
-   * Parse the nano public key to an address object
-   *
-   * @memberof NanoContractTransactionParser
-   * @inner
-   */
-  parseAddress() {
-    this.address = getAddressFromPubkey(this.publicKey, this.network);
   }
 
   /**
