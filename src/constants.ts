@@ -76,7 +76,7 @@ export const MERGED_MINED_BLOCK_VERSION = 3;
 /**
  * On chain blueprints transaction version field
  */
-export const ON_CHAIN_BLUEPRINTS_VERSION = 6;
+export const ON_CHAIN_BLUEPRINTS_VERSION = 4;
 
 /**
  * Proof-of-Authority block version field
