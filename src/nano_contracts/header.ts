@@ -114,6 +114,7 @@ class NanoContractHeader extends Header {
       array.push(intToBytes(this.script.length, 2));
       array.push(this.script);
     } else {
+      // Script with length 0 indicates there is no script.
       array.push(intToBytes(0, 2));
     }
   }
