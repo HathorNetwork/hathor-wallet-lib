@@ -27,6 +27,8 @@ import {
   MethodArgInfo,
   NanoContractArgumentContainerType,
   NanoContractArgumentApiInputType,
+  NanoContractArgumentSingleTypeName,
+  NanoContractArgumentSingleTypeNameSchema,
 } from './types';
 import { NANO_CONTRACTS_INITIALIZE_METHOD } from '../constants';
 import { NanoContractMethodArgument } from './methodArg';
@@ -34,10 +36,14 @@ import leb128 from '../utils/leb128';
 
 export function getContainerInternalType(
   type: string
-): [NanoContractArgumentContainerType, string] {
+): [
+  NanoContractArgumentContainerType,
+  NanoContractArgumentSingleTypeName | NanoContractArgumentSingleTypeName[],
+] {
   if (type.endsWith('?')) {
     // Optional value
-    return ['Optional', type.slice(0, -1)];
+    const innerType = type.slice(0, -1);
+    return ['Optional', NanoContractArgumentSingleTypeNameSchema.parse(innerType)];
   }
 
   // ContainerType[internalType]
@@ -49,11 +55,14 @@ export function getContainerInternalType(
   }
   // Only some values are allowed for containerType
   switch (containerType) {
-    case 'Tuple':
     case 'SignedData':
     case 'RawSignedData':
-    case 'Optional':
-      return [containerType, internalType];
+      return [containerType, NanoContractArgumentSingleTypeNameSchema.parse(internalType)];
+    case 'Tuple':
+      return [
+        containerType,
+        internalType.split(',').map(t => NanoContractArgumentSingleTypeNameSchema.parse(t.trim())),
+      ];
     default:
       throw new Error('Not a ContainerType');
   }

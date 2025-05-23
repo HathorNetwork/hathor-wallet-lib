@@ -15,6 +15,11 @@ import {
   NanoContractArgumentApiInputType,
   NanoContractArgumentApiInputSchema,
   NanoContractArgumentByteTypes,
+  NanoContractArgumentTypeName,
+  NanoContractArgumentSingleTypeName,
+  NanoContractArgumentSingleSchema,
+  NanoContractArgumentSingleTypeNameSchema,
+  NanoContractArgumentTypeNameSchema,
 } from './types';
 import Serializer from './serializer';
 import Deserializer from './deserializer';
@@ -29,9 +34,9 @@ import Address from '../models/address';
 function refineSingleValue(
   ctx: z.RefinementCtx,
   inputVal: NanoContractArgumentApiInputType,
-  type: string
+  type: NanoContractArgumentSingleTypeName
 ) {
-  if (['int', 'Timestamp'].includes(type)) {
+  if (type === 'int' || type === 'Timestamp') {
     const parse = z.coerce.number().safeParse(inputVal);
     if (!parse.success) {
       ctx.addIssue({
@@ -42,12 +47,12 @@ function refineSingleValue(
     } else {
       return parse.data;
     }
-  } else if (type === 'VarInt') {
+  } else if (type === 'VarInt' || type === 'Amount') {
     const parse = z.coerce.bigint().safeParse(inputVal);
     if (!parse.success) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: `Value is invalid VarInt: ${parse.error}`,
+        message: `Value is invalid ${type}: ${parse.error}`,
         fatal: true,
       });
     } else {
@@ -133,7 +138,7 @@ function refineSingleValue(
  */
 const SingleValueApiInputScheme = z
   .tuple([
-    z.string(), // type
+    NanoContractArgumentSingleTypeNameSchema, // type
     NanoContractArgumentApiInputSchema, // value
   ])
   .transform((value, ctx) => {
@@ -146,7 +151,7 @@ const SingleValueApiInputScheme = z
  */
 const OptionalApiInputScheme = z
   .tuple([
-    z.string(), // Inner type
+    NanoContractArgumentSingleTypeNameSchema, // Inner type
     NanoContractArgumentApiInputSchema, // value
   ])
   .transform((value, ctx) => {
@@ -165,7 +170,13 @@ const OptionalApiInputScheme = z
 const SignedDataApiInputScheme = z
   .string()
   .transform(value => value.split(','))
-  .pipe(z.tuple([z.string().regex(/^[0-9A-Fa-f]+$/), z.string(), z.string()]))
+  .pipe(
+    z.tuple([
+      z.string().regex(/^[0-9A-Fa-f]+$/),
+      z.string(),
+      NanoContractArgumentSingleTypeNameSchema,
+    ])
+  )
   .transform((value, ctx) => {
     const signature = Buffer.from(value[0], 'hex');
     const type = value[2];
@@ -181,7 +192,7 @@ const SignedDataApiInputScheme = z
 export class NanoContractMethodArgument {
   name: string;
 
-  type: string;
+  type: NanoContractArgumentTypeName;
 
   value: NanoContractArgumentType;
 
@@ -189,7 +200,7 @@ export class NanoContractMethodArgument {
 
   constructor(name: string, type: string, value: NanoContractArgumentType) {
     this.name = name;
-    this.type = type;
+    this.type = NanoContractArgumentTypeNameSchema.parse(type);
     this.value = value;
     this._serialized = Buffer.alloc(0);
   }
@@ -244,7 +255,7 @@ export class NanoContractMethodArgument {
       if (containerType === 'SignedData' || containerType === 'RawSignedData') {
         // Parse string SignedData into NanoContractSignedData
         const data = SignedDataApiInputScheme.parse(value);
-        if (data.type !== innerType.trim()) {
+        if (data.type !== innerType) {
           throw new Error('Invalid signed data type');
         }
         return new NanoContractMethodArgument(name, type, data);
@@ -266,36 +277,72 @@ export class NanoContractMethodArgument {
    * This is a helper method, so we can create the api input representation of the arg value.
    */
   toApiInput(): NanoContractParsedArgument {
-    function prepSingleValue(type: string, value: NanoContractArgumentSingleType) {
-      if (type === 'bool') {
-        return (value as boolean) ? 'true' : 'false';
-      }
-      if (NanoContractArgumentByteTypes.safeParse(type).success) {
-        return (value as Buffer).toString('hex');
-      }
-      if (type === 'VarInt') {
-        return String(value as bigint);
-      }
-      return value;
-    }
-
-    if (this.type.startsWith('SignedData') || this.type.startsWith('RawSignedData')) {
-      const data = this.value as NanoContractSignedData;
-      return {
-        name: this.name,
-        type: this.type,
-        parsed: [
-          data.signature.toString('hex'),
-          prepSingleValue(data.type, data.value),
-          this.type,
-        ].join(','),
-      };
-    }
-
     return {
       name: this.name,
       type: this.type,
-      parsed: prepSingleValue(this.type, this.value as NanoContractArgumentSingleType),
+      parsed: NanoContractMethodArgument.prepValue(this.value, this.type),
     };
+  }
+
+  /**
+   * Prepare value for ApiInput, converting single types to NanoContractArgumentApiInputType
+   */
+  static prepSingleValue(
+    value: NanoContractArgumentSingleType,
+    type: NanoContractArgumentSingleTypeName
+  ): NanoContractArgumentApiInputType {
+    if (type === 'bool') {
+      return (value as boolean) ? 'true' : 'false';
+    }
+    if (NanoContractArgumentByteTypes.safeParse(type).success) {
+      return (value as Buffer).toString('hex');
+    }
+    if (value instanceof Buffer) {
+      // Should not happen since all bytes values were caught, this is to satisfy typing
+      return value.toString('hex');
+    }
+    if (type === 'VarInt' || type === 'Amount') {
+      return String(value as bigint);
+    }
+    return value;
+  }
+
+  /**
+   * Prepare value for ApiInput, converting any type to NanoContractArgumentApiInputType
+   * Works for container values, converting the inner value as well if needed
+   */
+  static prepValue(
+    value: NanoContractArgumentType,
+    type: NanoContractArgumentTypeName
+  ): NanoContractArgumentApiInputType {
+    const isContainerType = getContainerType(type) !== null;
+    if (isContainerType) {
+      const [containerType, innerType] = getContainerInternalType(type);
+      if (containerType === 'SignedData' || containerType === 'RawSignedData') {
+        const data = value as NanoContractSignedData;
+        return [
+          data.signature.toString('hex'),
+          NanoContractMethodArgument.prepSingleValue(data.value, data.type),
+          innerType,
+        ].join(',');
+      }
+
+      if (containerType === 'Optional') {
+        if (value === null) {
+          return null;
+        }
+        return NanoContractMethodArgument.prepSingleValue(
+          value as NanoContractArgumentSingleType,
+          NanoContractArgumentSingleTypeNameSchema.parse(innerType)
+        );
+      }
+
+      throw new Error(`Untreated container type(${type}) for value ${value}`);
+    }
+
+    return NanoContractMethodArgument.prepSingleValue(
+      NanoContractArgumentSingleSchema.parse(value),
+      NanoContractArgumentSingleTypeNameSchema.parse(type)
+    );
   }
 }

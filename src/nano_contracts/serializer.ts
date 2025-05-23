@@ -8,7 +8,12 @@
 import Address from '../models/address';
 import Network from '../models/network';
 import { signedIntToBytes, bigIntToBytes } from '../utils/buffer';
-import { NanoContractArgumentType, NanoContractSignedData } from './types';
+import {
+  NanoContractArgumentSingleTypeName,
+  NanoContractArgumentSingleTypeNameSchema,
+  NanoContractArgumentType,
+  NanoContractSignedData,
+} from './types';
 import { OutputValueType } from '../types';
 import leb128Util from '../utils/leb128';
 import { getContainerInternalType, getContainerType } from './utils';
@@ -38,7 +43,7 @@ class Serializer {
       return this.serializeContainerType(value, type);
     }
 
-    switch (type) {
+    switch (NanoContractArgumentSingleTypeNameSchema.parse(type)) {
       case 'str':
         return this.fromString(value as string);
       case 'bytes':
@@ -69,12 +74,18 @@ class Serializer {
 
     switch (containerType) {
       case 'Optional':
-        return this.fromOptional(value, innerType);
+        return this.fromOptional(value, NanoContractArgumentSingleTypeNameSchema.parse(innerType));
       case 'RawSignedData':
       case 'SignedData':
-        return this.fromSignedData(value as NanoContractSignedData, innerType);
+        return this.fromSignedData(
+          value as NanoContractSignedData,
+          NanoContractArgumentSingleTypeNameSchema.parse(innerType)
+        );
       case 'Tuple':
-        return this.fromTuple(value as NanoContractArgumentType[], innerType);
+        return this.fromTuple(
+          value as NanoContractArgumentType[],
+          NanoContractArgumentSingleTypeNameSchema.array().parse(innerType)
+        );
       default:
         throw new Error('Invalid type');
     }
@@ -188,7 +199,7 @@ class Serializer {
    * @memberof Serializer
    * @inner
    */
-  fromOptional(value: NanoContractArgumentType, type: string): Buffer {
+  fromOptional(value: NanoContractArgumentType, type: NanoContractArgumentSingleTypeName): Buffer {
     if (value === null) {
       return Buffer.from([0]);
     }
@@ -234,22 +245,24 @@ class Serializer {
    * Serialize a tuple of values
    *
    * @param value List of values to serialize
-   * @param typeStr Comma separated list of types e.g. `str,int,VarInt`
+   * @param typeArr List of types to serialize the values
    *
    * @example
    * ```
    * const serializer = Serializer(new Network('testnet'));
    *
    * const type = 'Tuple[str,int]';
-   * const typeStr = 'str,int';
+   * const typeArr = ['str', 'int'];
    * const buf = serializer.fromTuple(['1x0', 5], typeStr);
    * ```
    *
    * @memberof Serializer
    * @inner
    */
-  fromTuple(value: NanoContractArgumentType[], typeStr: string): Buffer {
-    const typeArr = typeStr.split(',').map(t => t.trim());
+  fromTuple(
+    value: NanoContractArgumentType[],
+    typeArr: NanoContractArgumentSingleTypeName[]
+  ): Buffer {
     const serialized: Buffer[] = [];
     if (typeArr.length !== value.length) {
       throw new Error('Tuple value with length mismatch, required ');

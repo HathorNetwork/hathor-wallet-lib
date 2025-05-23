@@ -14,6 +14,8 @@ import {
   BufferROExtract,
   NanoContractSignedData,
   NanoContractArgumentSingleType,
+  NanoContractArgumentSingleTypeName,
+  NanoContractArgumentSingleTypeNameSchema,
 } from './types';
 import { OutputValueType } from '../types';
 import { NC_ARGS_MAX_BYTES_LENGTH } from '../constants';
@@ -43,7 +45,7 @@ class Deserializer {
       return this.deserializeContainerType(buf, type);
     }
 
-    switch (type) {
+    switch (NanoContractArgumentSingleTypeNameSchema.parse(type)) {
       case 'str':
         return this.toString(buf);
       case 'bytes':
@@ -77,12 +79,15 @@ class Deserializer {
 
     switch (containerType) {
       case 'Optional':
-        return this.toOptional(buf, internalType);
+        return this.toOptional(buf, NanoContractArgumentSingleTypeNameSchema.parse(internalType));
       case 'RawSignedData':
       case 'SignedData':
-        return this.toSignedData(buf, internalType);
+        return this.toSignedData(buf, NanoContractArgumentSingleTypeNameSchema.parse(internalType));
       case 'Tuple':
-        return this.toTuple(buf, internalType);
+        return this.toTuple(
+          buf,
+          NanoContractArgumentSingleTypeNameSchema.array().parse(internalType)
+        );
       default:
         throw new Error('Invalid type.');
     }
@@ -267,7 +272,10 @@ class Deserializer {
    * @memberof Deserializer
    * @inner
    */
-  toOptional(buf: Buffer, type: string): BufferROExtract<NanoContractArgumentType> {
+  toOptional(
+    buf: Buffer,
+    type: NanoContractArgumentSingleTypeName
+  ): BufferROExtract<NanoContractArgumentType> {
     if (buf[0] === 0) {
       // It's an empty optional
       return {
@@ -297,7 +305,10 @@ class Deserializer {
    * @memberof Deserializer
    * @inner
    */
-  toSignedData(signedData: Buffer, type: string): BufferROExtract<NanoContractSignedData> {
+  toSignedData(
+    signedData: Buffer,
+    type: NanoContractArgumentSingleTypeName
+  ): BufferROExtract<NanoContractSignedData> {
     // The SignedData is serialized as `data+Signature`
 
     // Reading argument
@@ -328,13 +339,15 @@ class Deserializer {
    * It does not support chained container types, meaning Tuple[Dict[str,str]] should not happen.
    *
    * @param buf Value to deserialize
-   * @param type Comma separated types, e.g. `str,int,VarInt`
+   * @param typeArr List of types to read from buffer, e.g. `['str', 'int', 'VarInt']`
    *
    * @memberof Deserializer
    * @inner
    */
-  toTuple(buf: Buffer, type: string): BufferROExtract<NanoContractArgumentSingleType[]> {
-    const typeArr = type.split(',').map(s => s.trim());
+  toTuple(
+    buf: Buffer,
+    typeArr: NanoContractArgumentSingleTypeName[]
+  ): BufferROExtract<NanoContractArgumentSingleType[]> {
     const tupleValues: NanoContractArgumentSingleType[] = [];
     let bytesReadTotal = 0;
     let tupleBuf = buf.subarray();

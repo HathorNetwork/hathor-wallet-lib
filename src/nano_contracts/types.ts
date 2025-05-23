@@ -7,6 +7,64 @@
 import { z } from 'zod';
 import { IHistoryTx, OutputValueType } from '../types';
 
+export const NanoContractArgumentByteTypes = z.enum([
+  'bytes',
+  'BlueprintId',
+  'ContractId',
+  'TokenUid',
+  'TxOutputScript',
+  'VertexId',
+]);
+
+/**
+ * Single type names
+ */
+export const NanoContractArgumentSingleTypeNameSchema = z.enum([
+  'bool',
+  'int',
+  'str',
+  'Address',
+  'Timestamp',
+  'Amount',
+  'VarInt',
+  ...NanoContractArgumentByteTypes.options,
+]);
+export type NanoContractArgumentSingleTypeName = z.output<
+  typeof NanoContractArgumentSingleTypeNameSchema
+>;
+
+/**
+ * Container type names
+ */
+export const NanoContractArgumentContainerTypeNameSchema = z.enum([
+  'Optional',
+  'SignedData',
+  'RawSignedData',
+  'Tuple',
+]);
+export type NanoContractArgumentContainerType = z.output<
+  typeof NanoContractArgumentContainerTypeNameSchema
+>;
+
+/**
+ * Will match any `Container[subtype]` as long as Container is a valid ContainerType.
+ * Also works with optional `InnerType?` as long as InnerType is a valid single type
+ */
+export const NanoContractArgumentFullContainerTypeNameSchema = z.string().refine(val => {
+  if (val.endsWith('?')) {
+    return NanoContractArgumentSingleTypeNameSchema.safeParse(val.slice(0, -1)).success;
+  }
+  const match = val.match(/^(.*?)\[(.*)\]/);
+  if (match === null) return false;
+  return NanoContractArgumentContainerTypeNameSchema.safeParse(match[1]).success;
+}, 'Invalid Container type');
+
+export const NanoContractArgumentTypeNameSchema = z.union([
+  NanoContractArgumentSingleTypeNameSchema,
+  NanoContractArgumentFullContainerTypeNameSchema,
+]);
+export type NanoContractArgumentTypeName = z.output<typeof NanoContractArgumentTypeNameSchema>;
+
 /**
  * There are the types that can be received via api
  * when querying for a nano contract value.
@@ -34,7 +92,7 @@ export type NanoContractArgumentSingleType = z.output<typeof NanoContractArgumen
  * NanoContract SignedData method argument type
  */
 export const NanoContractSignedDataSchema = z.object({
-  type: z.string(),
+  type: NanoContractArgumentSingleTypeNameSchema,
   signature: z.instanceof(Buffer),
   value: NanoContractArgumentSingleSchema,
 });
@@ -57,44 +115,6 @@ export const NanoContractArgumentSchema = z.union([
   z.array(_NanoContractArgumentType1Schema),
 ]);
 export type NanoContractArgumentType = z.output<typeof NanoContractArgumentSchema>;
-
-export const NanoContractArgumentByteTypes = z.enum([
-  'bytes',
-  'BlueprintId',
-  'ContractId',
-  'TokenUid',
-  'TxOutputScript',
-  'VertexId',
-]);
-
-/**
- * Single type names
- */
-export const NanoContractArgumentSingleTypeNameSchema = z.enum([
-  'bool',
-  'int',
-  'str',
-  'Address',
-  'Timestamp',
-  'VarInt',
-  ...NanoContractArgumentByteTypes.options,
-]);
-export type NanoContractArgumentSingleTypeName = z.output<
-  typeof NanoContractArgumentSingleTypeNameSchema
->;
-
-/**
- * Container type names
- */
-export const NanoContractArgumentContainerTypeNameSchema = z.enum([
-  'Optional',
-  'SignedData',
-  'RawSignedData',
-  'Tuple',
-]);
-export type NanoContractArgumentContainerType = z.output<
-  typeof NanoContractArgumentContainerTypeNameSchema
->;
 
 export enum NanoContractVertexType {
   TRANSACTION = 'transaction',
