@@ -85,9 +85,9 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @inner
    */
   async prepareTx(): Promise<{ transaction: Transaction; utxosAddressPath: string[] }> {
-    if (this.outputs.length === 0) {
+    /* if (this.outputs.length === 0) {
       throw new WalletError("Can't prepare transactions with no outputs.");
-    }
+    } */
     this.emit('prepare-tx-start');
     // We get the full outputs amount for each token
     // This is useful for (i) getting the utxos for each one
