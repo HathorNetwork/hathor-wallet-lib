@@ -160,7 +160,7 @@ export interface NanoContractAction {
   // For withdrawal/deposit is required but authority actions
   // will receive its information from the authority field
   amount: OutputValueType | null;
-  // For withdrawal and create authority is required, which is address to send the output
+  // For withdrawal and invoke authority is required, which is address to send the output
   // For deposit or grant authority actions is optional, and it's the address to filter the utxos
   address: string | null;
   // For deposit action is the change address used by the change output after selecting the utxos

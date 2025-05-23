@@ -118,12 +118,12 @@ export const IHistoryNanoContractActionDepositSchema = IHistoryNanoContractBaseT
 
 export const IHistoryNanoContractActionGrantAuthoritySchema =
   IHistoryNanoContractBaseAuthorityAction.extend({
-    type: z.literal('grant_authority'),
+    type: z.literal('GRANT_AUTHORITY'),
   }).passthrough();
 
 export const IHistoryNanoContractActionInvokeAuthoritySchema =
   IHistoryNanoContractBaseAuthorityAction.extend({
-    type: z.literal('invoke_authority'),
+    type: z.literal('INVOKE_AUTHORITY'),
   }).passthrough();
 
 export const IHistoryNanoContractActionSchema = z.discriminatedUnion('type', [
