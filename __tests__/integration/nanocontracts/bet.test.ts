@@ -156,7 +156,7 @@ describe('full cycle of bet nano contract', () => {
           {
             type: 'deposit',
             token: NATIVE_TOKEN_UID,
-            amount: 100,
+            amount: 100n,
             changeAddress: address0,
           },
         ],
@@ -172,7 +172,23 @@ describe('full cycle of bet nano contract', () => {
           {
             type: 'deposit',
             token: NATIVE_TOKEN_UID,
-            amount: 100,
+            amount: 100n,
+            changeAddress: address0,
+          },
+        ],
+      })
+    ).rejects.toThrow(NanoContractTransactionError);
+
+    // Not enough funds for the deposit
+    await expect(
+      wallet.createAndSendNanoContractTransaction('bet', address2, {
+        ncId: tx1.hash,
+        args: [address2, '1x0'],
+        actions: [
+          {
+            type: 'deposit',
+            token: NATIVE_TOKEN_UID,
+            amount: 1001n,
             changeAddress: address0,
           },
         ],

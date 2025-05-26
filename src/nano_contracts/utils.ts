@@ -9,6 +9,7 @@ import { get } from 'lodash';
 import { crypto } from 'bitcore-lib';
 import { z } from 'zod';
 import transactionUtils from '../utils/transaction';
+import tokensUtils from '../utils/tokens';
 import SendTransaction from '../new/sendTransaction';
 import HathorWallet from '../new/wallet';
 import Network from '../models/network';
@@ -21,7 +22,7 @@ import Address from '../models/address';
 import Transaction from '../models/transaction';
 import { NanoContractTransactionError, OracleParseError, WalletFromXPubGuard } from '../errors';
 import { OutputType } from '../wallet/types';
-import { IHistoryTx, IStorage } from '../types';
+import { IHistoryTx, IStorage, ITokenData } from '../types';
 import { parseScript } from '../utils/scripts';
 import {
   MethodArgInfo,
@@ -29,8 +30,12 @@ import {
   NanoContractArgumentApiInputType,
   NanoContractArgumentSingleTypeName,
   NanoContractArgumentSingleTypeNameSchema,
+  ActionTypeToActionHeaderType,
+  NanoContractAction,
+  NanoContractActionHeader,
+  NanoContractActionType,
 } from './types';
-import { NANO_CONTRACTS_INITIALIZE_METHOD } from '../constants';
+import { NANO_CONTRACTS_INITIALIZE_METHOD, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../constants';
 import { NanoContractMethodArgument } from './methodArg';
 import leb128 from '../utils/leb128';
 
@@ -253,4 +258,48 @@ export const validateAndParseBlueprintMethodArgs = async (
  */
 export const isNanoContractCreateTx = (tx: IHistoryTx): boolean => {
   return tx.nc_method === NANO_CONTRACTS_INITIALIZE_METHOD;
+};
+
+/**
+ * Map a NanoContractAction object to NanoContractActionHeader
+ *
+ * @param action The action object to be mapped
+ * @param tokens The tokens array to be used in the mapping
+ *
+ * @return The mapped action header object
+ */
+export const mapActionToActionHeader = (
+  action: NanoContractAction,
+  tokens: string[]
+): NanoContractActionHeader => {
+  const headerActionType = ActionTypeToActionHeaderType[action.type];
+
+  const mappedTokens: ITokenData[] = tokens.map(token => {
+    return {
+      uid: token,
+      name: '',
+      symbol: '',
+    };
+  });
+
+  let amount;
+  if (
+    action.type === NanoContractActionType.GRANT_AUTHORITY ||
+    action.type === NanoContractActionType.INVOKE_AUTHORITY
+  ) {
+    amount = action.authority === 'mint' ? TOKEN_MINT_MASK : TOKEN_MELT_MASK;
+  } else if (
+    action.type === NanoContractActionType.DEPOSIT ||
+    action.type === NanoContractActionType.WITHDRAWAL
+  ) {
+    amount = action.amount;
+  } else {
+    throw new Error('Invalid nano contract action type');
+  }
+
+  return {
+    type: headerActionType,
+    amount,
+    tokenIndex: tokensUtils.getTokenIndex(mappedTokens, action.token),
+  };
 };
