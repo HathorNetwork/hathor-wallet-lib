@@ -5,6 +5,7 @@ import * as errors from './errors';
 import * as ErrorMessages from './errorMessages';
 import walletApi from './api/wallet';
 import txApi from './api/txApi';
+import * as txApiSchemas from './api/schemas/txApi';
 import txMiningApi from './api/txMining';
 import healthApi from './api/health';
 import versionApi from './api/version';
@@ -67,6 +68,7 @@ export {
   websocket,
   walletApi,
   txApi,
+  txApiSchemas,
   txMiningApi,
   healthApi,
   versionApi,
