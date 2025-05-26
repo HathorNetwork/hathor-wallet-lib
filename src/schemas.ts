@@ -133,47 +133,6 @@ export const IHistoryNanoContractActionSchema = z.discriminatedUnion('type', [
   IHistoryNanoContractActionInvokeAuthoritySchema,
 ]);
 
-export const INanoContractActionBase = z.object({
-  token: z.string(),
-});
-
-export const INanoContractActionTokenBase = INanoContractActionBase.extend({
-  amount: bigIntCoercibleSchema,
-});
-
-export const INanoContractActionAuthorityBase = INanoContractActionBase.extend({
-  authority: z.string(),
-});
-
-export const INanoContractActionWithdrawalSchema = INanoContractActionTokenBase.extend({
-  type: z.literal('withdrawal'),
-  address: z.string(),
-}).passthrough();
-
-export const INanoContractActionDepositSchema = INanoContractActionTokenBase.extend({
-  type: z.literal('deposit'),
-  address: z.string().optional(),
-  changeAddress: z.string().optional(),
-}).passthrough();
-
-export const INanoContractActionGrantAuthoritySchema = INanoContractActionAuthorityBase.extend({
-  type: z.literal('grant_authority'),
-  address: z.string().optional(),
-  authorityAddress: z.string().optional(),
-}).passthrough();
-
-export const INanoContractActionInvokeAuthoritySchema = INanoContractActionAuthorityBase.extend({
-  type: z.literal('invoke_authority'),
-  address: z.string(),
-}).passthrough();
-
-export const INanoContractActionSchema = z.discriminatedUnion('type', [
-  INanoContractActionWithdrawalSchema,
-  INanoContractActionDepositSchema,
-  INanoContractActionGrantAuthoritySchema,
-  INanoContractActionInvokeAuthoritySchema,
-]);
-
 export const IHistoryNanoContractContextSchema = z
   .object({
     actions: IHistoryNanoContractActionSchema.array(),

@@ -6,6 +6,7 @@
  */
 import { z } from 'zod';
 import { IHistoryTx, OutputValueType } from '../types';
+import { bigIntCoercibleSchema } from '../utils/bigint';
 
 export const NanoContractArgumentByteTypes = z.enum([
   'bytes',
@@ -154,48 +155,48 @@ export interface NanoContractActionHeader {
   amount: OutputValueType;
 }
 
-export interface NanoContractActionWithdrawal {
-  type: NanoContractActionType.WITHDRAWAL;
-  token: string;
-  amount: OutputValueType;
-  address: string;
-}
+export const INanoContractActionBase = z.object({
+  token: z.string(),
+});
 
-export interface NanoContractActionDeposit {
-  type: NanoContractActionType.DEPOSIT;
-  token: string;
-  amount: OutputValueType;
-  // Optional address to filter the utxos
-  address: string | null;
-  // Optional change address after selecting the utxos
-  changeAddress: string | null;
-}
+export const INanoContractActionTokenBase = INanoContractActionBase.extend({
+  amount: bigIntCoercibleSchema,
+});
 
-export interface NanoContractActionGrantAuthority {
-  type: NanoContractActionType.GRANT_AUTHORITY;
-  token: string;
-  // Optional address to filter the utxos
-  address: string | null;
-  // Which authority to grant
-  authority: 'mint' | 'melt';
-  // Optional address to create the authority output, if the user wants to keep it
-  authorityAddress: string | null;
-}
+export const INanoContractActionAuthorityBase = INanoContractActionBase.extend({
+  authority: z.string(),
+});
 
-export interface NanoContractActionInvokeAuthority {
-  type: NanoContractActionType.INVOKE_AUTHORITY;
-  token: string;
-  // Address to send the output
-  address: string;
-  // Which authority to grant
-  authority: 'mint' | 'melt';
-}
+export const INanoContractActionWithdrawalSchema = INanoContractActionTokenBase.extend({
+  type: z.literal('withdrawal'),
+  address: z.string(),
+}).passthrough();
 
-export type NanoContractAction =
-  | NanoContractActionWithdrawal
-  | NanoContractActionDeposit
-  | NanoContractActionGrantAuthority
-  | NanoContractActionInvokeAuthority;
+export const INanoContractActionDepositSchema = INanoContractActionTokenBase.extend({
+  type: z.literal('deposit'),
+  address: z.string().optional(),
+  changeAddress: z.string().optional(),
+}).passthrough();
+
+export const INanoContractActionGrantAuthoritySchema = INanoContractActionAuthorityBase.extend({
+  type: z.literal('grant_authority'),
+  address: z.string().optional(),
+  authorityAddress: z.string().optional(),
+}).passthrough();
+
+export const INanoContractActionInvokeAuthoritySchema = INanoContractActionAuthorityBase.extend({
+  type: z.literal('invoke_authority'),
+  address: z.string(),
+}).passthrough();
+
+export const INanoContractActionSchema = z.discriminatedUnion('type', [
+  INanoContractActionWithdrawalSchema,
+  INanoContractActionDepositSchema,
+  INanoContractActionGrantAuthoritySchema,
+  INanoContractActionInvokeAuthoritySchema,
+]);
+
+export type NanoContractAction = z.output<typeof INanoContractActionSchema>;
 
 // Arguments for blueprint methods
 export interface NanoContractParsedArgument {

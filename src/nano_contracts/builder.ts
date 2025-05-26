@@ -28,6 +28,7 @@ import {
   NanoContractArgumentApiInputType,
   NanoContractBuilderCreateTokenOptions,
   NanoContractVertexType,
+  INanoContractActionSchema,
 } from './types';
 import { mapActionToActionHeader, validateAndParseBlueprintMethodArgs } from './utils';
 import { IDataInput, IDataOutput } from '../types';
@@ -35,7 +36,6 @@ import NanoContractHeader from './header';
 import Address from '../models/address';
 import leb128 from '../utils/leb128';
 import { NanoContractMethodArgument } from './methodArg';
-import { INanoContractActionSchema } from '../schemas';
 
 class NanoContractTransactionBuilder {
   blueprintId: string | null | undefined;
@@ -99,7 +99,7 @@ class NanoContractTransactionBuilder {
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  setActions(actions: NanoContractAction[]) {
+  setActions(actions: NanoContractAction[] | null | undefined) {
     if (!actions) {
       return this;
     }
