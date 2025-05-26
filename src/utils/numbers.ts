@@ -12,7 +12,10 @@ const formatter = new Intl.NumberFormat('en-US');
  *
  * @inner
  */
-export function prettyValue(inputValue: bigint|number|string, decimalPlaces = DECIMAL_PLACES): string {
+export function prettyValue(
+  inputValue: bigint | number | string,
+  decimalPlaces = DECIMAL_PLACES
+): string {
   const value = BigInt(inputValue);
   if (typeof value !== 'bigint') {
     throw Error(`value ${value} should be a bigint`);
