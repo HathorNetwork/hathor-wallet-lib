@@ -287,7 +287,7 @@ describe('Authority actions blueprint test', () => {
     expect(tokenDetail2.authorities.mint).toBe(false);
     expect(tokenDetail2.authorities.melt).toBe(true);
 
-    // Mint 200 tokens in the contract
+    // Mint 2000 tokens in the contract
     const txMint = await wallet.createAndSendNanoContractTransaction('mint', address0, {
       ncId: txInitialize.hash,
       args: [txCreateToken.hash, 2000],
@@ -310,7 +310,7 @@ describe('Authority actions blueprint test', () => {
     expect(ncStateMint.balances[txCreateToken.hash].can_mint).toBe(true);
     expect(ncStateMint.balances[txCreateToken.hash].can_melt).toBe(true);
 
-    // Melt 100 tokens in the contract
+    // Melt 1000 tokens in the contract
     const txMelt = await wallet.createAndSendNanoContractTransaction('melt', address0, {
       ncId: txInitialize.hash,
       args: [txCreateToken.hash, 1000],
