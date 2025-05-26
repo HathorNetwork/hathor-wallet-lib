@@ -31,7 +31,8 @@ import {
   NanoContractArgumentSingleTypeName,
   NanoContractArgumentSingleTypeNameSchema,
   ActionTypeToActionHeaderType,
-  NanoContractAction, NanoContractActionHeader,
+  NanoContractAction,
+  NanoContractActionHeader,
   NanoContractActionType,
 } from './types';
 import { NANO_CONTRACTS_INITIALIZE_METHOD, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../constants';

@@ -204,7 +204,9 @@ class NanoContractTransactionBuilder {
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  async executeDeposit(action: NanoContractAction): Promise<[IDataInput[], IDataOutput[]]> {
+  async executeDeposit(
+    action: NanoContractAction
+  ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }> {
     if (action.type !== NanoContractActionType.DEPOSIT) {
       throw new NanoContractTransactionError(
         "Can't execute a deposit with an action which type is different than deposit."
@@ -264,7 +266,7 @@ class NanoContractTransactionBuilder {
       });
     }
 
-    return [inputs, outputs];
+    return { inputs, outputs };
   }
 
   /**
@@ -344,7 +346,9 @@ class NanoContractTransactionBuilder {
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  async executeGrantAuthority(action: NanoContractAction): Promise<[IDataInput[], IDataOutput[]]> {
+  async executeGrantAuthority(
+    action: NanoContractAction
+  ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }> {
     if (action.type !== NanoContractActionType.GRANT_AUTHORITY) {
       throw new NanoContractTransactionError(
         "Can't execute a grant authority with an action which type is different than grant authority."
@@ -400,7 +404,7 @@ class NanoContractTransactionBuilder {
       });
     }
 
-    return [inputs, outputs];
+    return { inputs, outputs };
   }
 
   /**
@@ -529,7 +533,11 @@ class NanoContractTransactionBuilder {
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  async buildInputsOutputs(): Promise<[IDataInput[], IDataOutput[], string[]]> {
+  async buildInputsOutputs(): Promise<{
+    inputs: IDataInput[];
+    outputs: IDataOutput[];
+    tokens: string[];
+  }> {
     let inputs: IDataInput[] = [];
     let outputs: IDataOutput[] = [];
     let tokens: string[] = [];
@@ -546,9 +554,10 @@ class NanoContractTransactionBuilder {
         // Call action
         switch (action.type) {
           case NanoContractActionType.DEPOSIT: {
-            const retDeposit = await this.executeDeposit(action);
-            inputs = concat(inputs, retDeposit[0]);
-            outputs = concat(outputs, retDeposit[1]);
+            const { inputs: depositInputs, outputs: depositOutputs } =
+              await this.executeDeposit(action);
+            inputs = concat(inputs, depositInputs);
+            outputs = concat(outputs, depositOutputs);
             break;
           }
           case NanoContractActionType.WITHDRAWAL: {
@@ -559,9 +568,10 @@ class NanoContractTransactionBuilder {
             break;
           }
           case NanoContractActionType.GRANT_AUTHORITY: {
-            const retGrant = await this.executeGrantAuthority(action);
-            inputs = concat(inputs, retGrant[0]);
-            outputs = concat(outputs, retGrant[1]);
+            const { inputs: grantInputs, outputs: grantOutputs } =
+              await this.executeGrantAuthority(action);
+            inputs = concat(inputs, grantInputs);
+            outputs = concat(outputs, grantOutputs);
             break;
           }
           case NanoContractActionType.INVOKE_AUTHORITY: {
@@ -577,7 +587,7 @@ class NanoContractTransactionBuilder {
       }
     }
 
-    return [inputs, outputs, tokens];
+    return { inputs, outputs, tokens };
   }
 
   /**
@@ -657,7 +667,7 @@ class NanoContractTransactionBuilder {
     await this.verify();
 
     // Transform actions into inputs and outputs
-    const [inputs, outputs, tokens] = await this.buildInputsOutputs();
+    const { inputs, outputs, tokens } = await this.buildInputsOutputs();
 
     // Serialize the method arguments
     await this.serializeArgs();
