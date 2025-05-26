@@ -396,7 +396,7 @@ class NanoContractTransactionBuilder {
         value: action.authority === 'mint' ? TOKEN_MINT_MASK : TOKEN_MELT_MASK,
         timelock: null,
         token: action.token,
-        authorities: action.authority === 'mint' ? 1n : 2n,
+        authorities: action.authority === 'mint' ? TOKEN_MINT_MASK : TOKEN_MELT_MASK,
       });
     }
 
@@ -431,7 +431,7 @@ class NanoContractTransactionBuilder {
       value: action.authority === 'mint' ? TOKEN_MINT_MASK : TOKEN_MELT_MASK,
       timelock: null,
       token: action.token,
-      authorities: action.authority === 'mint' ? 1n : 2n,
+      authorities: action.authority === 'mint' ? TOKEN_MINT_MASK : TOKEN_MELT_MASK,
     };
   }
 
