@@ -3141,7 +3141,7 @@ class HathorWallet extends EventEmitter {
       .setCaller(new Address(address, { network: this.getNetworkObject() }))
       .setActions(data.actions)
       .setArgs(data.args)
-      .setVertexType(NanoContractVertexType.CREATE_TOKEN_TRANSACTION, createTokenOptions);
+      .setVertexType(NanoContractVertexType.CREATE_TOKEN_TRANSACTION, newCreateTokenOptions);
 
     const nc = await builder.build();
     return prepareNanoSendTransaction(nc, pin, this.storage);
