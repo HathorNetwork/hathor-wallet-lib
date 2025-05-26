@@ -110,7 +110,7 @@ class NanoContractTransactionBuilder {
         `Invalid actions. Error: ${parseResult.error.message}.`
       );
     }
-    const parsedActions = parseResult.data as NanoContractAction[];
+    const parsedActions = parseResult.data;
     // Check if there's only one action for each token
     if (parsedActions) {
       const tokens = parsedActions.map(action => action.token);
