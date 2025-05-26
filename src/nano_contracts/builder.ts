@@ -35,6 +35,7 @@ import NanoContractHeader from './header';
 import Address from '../models/address';
 import leb128 from '../utils/leb128';
 import { NanoContractMethodArgument } from './methodArg';
+import { INanoContractActionSchema } from '../schemas';
 
 class NanoContractTransactionBuilder {
   blueprintId: string | null | undefined;
@@ -99,16 +100,27 @@ class NanoContractTransactionBuilder {
    * @inner
    */
   setActions(actions: NanoContractAction[]) {
+    if (!actions) {
+      return this;
+    }
+
+    const parseResult = INanoContractActionSchema.array().safeParse(actions);
+    if (!parseResult.success) {
+      throw new NanoContractTransactionError(
+        `Invalid actions. Error: ${parseResult.error.message}.`
+      );
+    }
+    const parsedActions = parseResult.data as NanoContractAction[];
     // Check if there's only one action for each token
-    if (actions) {
-      const tokens = actions.map(action => action.token);
+    if (parsedActions) {
+      const tokens = parsedActions.map(action => action.token);
       const tokensSet = new Set(tokens);
       if (tokens.length !== tokensSet.size) {
-        throw new Error('More than one action per token is not allowed.');
+        throw new NanoContractTransactionError('More than one action per token is not allowed.');
       }
     }
 
-    this.actions = actions;
+    this.actions = parsedActions;
     return this;
   }
 

@@ -154,22 +154,48 @@ export interface NanoContractActionHeader {
   amount: OutputValueType;
 }
 
-export interface NanoContractAction {
-  type: NanoContractActionType;
+export interface NanoContractActionWithdrawal {
+  type: NanoContractActionType.WITHDRAWAL;
   token: string;
-  // For withdrawal/deposit is required but authority actions
-  // will receive its information from the authority field
-  amount: OutputValueType | null;
-  // For withdrawal and invoke authority is required, which is address to send the output
-  // For deposit or grant authority actions is optional, and it's the address to filter the utxos
+  amount: OutputValueType;
+  address: string;
+}
+
+export interface NanoContractActionDeposit {
+  type: NanoContractActionType.DEPOSIT;
+  token: string;
+  amount: OutputValueType;
+  // Optional address to filter the utxos
   address: string | null;
-  // For deposit action is the change address used by the change output after selecting the utxos
+  // Optional change address after selecting the utxos
   changeAddress: string | null;
-  // In case of an authority action, it specifies which authority
-  authority: 'mint' | 'melt' | null;
-  // For grant authority action, it's the address to create the authority output, if the user wants to keep it
+}
+
+export interface NanoContractActionGrantAuthority {
+  type: NanoContractActionType.GRANT_AUTHORITY;
+  token: string;
+  // Optional address to filter the utxos
+  address: string | null;
+  // Which authority to grant
+  authority: 'mint' | 'melt';
+  // Optional address to create the authority output, if the user wants to keep it
   authorityAddress: string | null;
 }
+
+export interface NanoContractActionInvokeAuthority {
+  type: NanoContractActionType.INVOKE_AUTHORITY;
+  token: string;
+  // Address to send the output
+  address: string;
+  // Which authority to grant
+  authority: 'mint' | 'melt';
+}
+
+export type NanoContractAction =
+  | NanoContractActionWithdrawal
+  | NanoContractActionDeposit
+  | NanoContractActionGrantAuthority
+  | NanoContractActionInvokeAuthority;
 
 // Arguments for blueprint methods
 export interface NanoContractParsedArgument {
