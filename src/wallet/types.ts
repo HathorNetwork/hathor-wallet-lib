@@ -397,13 +397,58 @@ export interface TxInput {
   decoded: DecodedOutput;
 }
 
-export type WsTxInput = {
-  address: string;
-  timelock?: number | null;
-  type: string;
+/**
+ * Represents the Buffer-like script object in websocket transactions.
+ */
+export type WsBufferScript = {
+  type: 'Buffer';
+  data: number[];
 };
 
-export type WsTxOutput = WsTxInput;
+/**
+ * Represents the decoded part of a websocket transaction input.
+ */
+export type WsTxInputDecoded = {
+  type: string;
+  address: string;
+  timelock?: number | null;
+};
+
+/**
+ * Represents a websocket transaction input.
+ */
+export type WsTxInput = {
+  tx_id: string;
+  index: number;
+  value: bigint;
+  token_data: number;
+  script: WsBufferScript;
+  token: string;
+  decoded: WsTxInputDecoded;
+};
+
+/**
+ * Represents the decoded part of a websocket transaction output.
+ */
+export type WsTxOutputDecoded = {
+  type?: string | null;
+  address?: string;
+  timelock?: number | null;
+};
+
+/**
+ * Represents a websocket transaction output.
+ */
+export type WsTxOutput = {
+  value: bigint;
+  token_data: number;
+  script: WsBufferScript;
+  decodedScript?: unknown | null; // Use 'unknown' as type-safe alternative to any
+  token: string;
+  locked: boolean;
+  index: number;
+  decoded: WsTxOutputDecoded;
+};
 
 export interface WsTransaction {
   // eslint-disable-next-line camelcase
@@ -417,11 +462,11 @@ export interface WsTransaction {
   parents: string[];
   inputs: WsTxInput[];
   outputs: WsTxOutput[];
-  height?: number;
+  height?: number | null;
   // eslint-disable-next-line camelcase
-  token_name?: string;
+  token_name?: string | null;
   // eslint-disable-next-line camelcase
-  token_symbol?: string;
+  token_symbol?: string | null;
 }
 
 export interface CreateWalletAuthData {

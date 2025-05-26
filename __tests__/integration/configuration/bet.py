@@ -21,11 +21,13 @@ from hathor.nanocontracts.exception import NCFail
 from hathor.nanocontracts.types import (
     Address,
     NCAction,
-    NCActionType,
+    NCDepositAction,
+    NCWithdrawalAction,
     SignedData,
     Timestamp,
     TokenUid,
     TxOutputScript,
+    is_action_type,
     public,
     view,
 )
@@ -43,14 +45,6 @@ class ResultAlreadySet(NCFail):
 
 
 class ResultNotAvailable(NCFail):
-    pass
-
-
-class WithdrawalNotAllowed(NCFail):
-    pass
-
-
-class DepositNotAllowed(NCFail):
     pass
 
 
@@ -149,17 +143,16 @@ class Bet(Blueprint):
     def _get_action(self, ctx: Context) -> NCAction:
         """Return the only action available; fails otherwise."""
         if len(ctx.actions) != 1:
-            raise TooManyActions('only one action supported')
+            raise TooManyActions('only one token supported')
         if self.token_uid not in ctx.actions:
             raise InvalidToken(f'token different from {self.token_uid.hex()}')
-        return ctx.actions[self.token_uid]
+        return ctx.get_single_action(self.token_uid)
 
-    @public
+    @public(allow_deposit=True)
     def bet(self, ctx: Context, address: Address, score: str) -> None:
         """Make a bet."""
         action = self._get_action(ctx)
-        if action.type != NCActionType.DEPOSIT:
-            raise WithdrawalNotAllowed('must be deposit')
+        assert is_action_type(action, NCDepositAction)
         self.fail_if_result_is_available()
         self.fail_if_invalid_token(action)
         if ctx.timestamp > self.date_last_bet:
@@ -188,16 +181,15 @@ class Bet(Blueprint):
     def set_result(self, ctx: Context, result: SignedData[Result]) -> None:
         """Set final result. This method is called by the oracle."""
         self.fail_if_result_is_available()
-        if not result.checksig(self.oracle_script):
+        if not result.checksig(self.syscall.get_contract_id(), self.oracle_script):
             raise InvalidOracleSignature
         self.final_result = result.data
 
-    @public
+    @public(allow_withdrawal=True)
     def withdraw(self, ctx: Context) -> None:
         """Withdraw tokens after the final result is set."""
         action = self._get_action(ctx)
-        if action.type != NCActionType.WITHDRAWAL:
-            raise DepositNotAllowed('action must be withdrawal')
+        assert is_action_type(action, NCWithdrawalAction)
         self.fail_if_result_is_not_available()
         self.fail_if_invalid_token(action)
         address = Address(ctx.address)

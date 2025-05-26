@@ -95,6 +95,52 @@ export const IHistoryOutputSchema: ZodSchema<IHistoryOutput> = z
   })
   .passthrough();
 
+export const IHistoryNanoContractBaseAction = z.object({
+  token_uid: z.string(),
+});
+
+export const IHistoryNanoContractBaseTokenAction = IHistoryNanoContractBaseAction.extend({
+  amount: bigIntCoercibleSchema,
+});
+
+export const IHistoryNanoContractBaseAuthorityAction = IHistoryNanoContractBaseAction.extend({
+  mint: z.boolean(),
+  melt: z.boolean(),
+});
+export const IHistoryNanoContractActionWithdrawalSchema =
+  IHistoryNanoContractBaseTokenAction.extend({
+    type: z.literal('withdrawal'),
+  }).passthrough();
+
+export const IHistoryNanoContractActionDepositSchema = IHistoryNanoContractBaseTokenAction.extend({
+  type: z.literal('deposit'),
+}).passthrough();
+
+export const IHistoryNanoContractActionGrantAuthoritySchema =
+  IHistoryNanoContractBaseAuthorityAction.extend({
+    type: z.literal('GRANT_AUTHORITY'),
+  }).passthrough();
+
+export const IHistoryNanoContractActionInvokeAuthoritySchema =
+  IHistoryNanoContractBaseAuthorityAction.extend({
+    type: z.literal('INVOKE_AUTHORITY'),
+  }).passthrough();
+
+export const IHistoryNanoContractActionSchema = z.discriminatedUnion('type', [
+  IHistoryNanoContractActionDepositSchema,
+  IHistoryNanoContractActionWithdrawalSchema,
+  IHistoryNanoContractActionGrantAuthoritySchema,
+  IHistoryNanoContractActionInvokeAuthoritySchema,
+]);
+
+export const IHistoryNanoContractContextSchema = z
+  .object({
+    actions: IHistoryNanoContractActionSchema.array(),
+    address: z.string(),
+    timestamp: z.number(),
+  })
+  .passthrough();
+
 export const IHistoryTxSchema: ZodSchema<IHistoryTx> = z
   .object({
     tx_id: txIdSchema,
@@ -116,7 +162,12 @@ export const IHistoryTxSchema: ZodSchema<IHistoryTx> = z
     nc_blueprint_id: z.string().optional(),
     nc_method: z.string().optional(),
     nc_args: z.string().optional(),
-    nc_pubkey: z.string().optional(),
+    nc_pubkey: z
+      .string()
+      .regex(/^[a-fA-F0-9]*$/)
+      .optional(), // for on-chain-blueprints
+    nc_address: z.string().optional(),
+    nc_context: IHistoryNanoContractContextSchema.optional(),
     first_block: z.string().nullish(),
   })
   .passthrough();
