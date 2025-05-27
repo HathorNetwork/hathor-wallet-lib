@@ -560,8 +560,6 @@ describe('Authority actions blueprint test', () => {
     // Create a new token with only required params
     const newCreateTokenData = {
       ncId: txInitialize.hash,
-      args: [],
-      actions: []
     };
 
     const newCreateTokenOptions = {
@@ -615,17 +613,18 @@ describe('Authority actions blueprint test', () => {
           type: 'deposit',
           token: newTxCreateToken.hash,
           amount: 10n,
-        }
+        },
       ],
     };
 
     const txDepositAndGrant = await wallet.createAndSendNanoContractTransaction(
       'deposit_and_grant',
       address0,
-      depositAndGrantData,
+      depositAndGrantData
     );
     await checkTxValid(wallet, txDepositAndGrant);
     const txDepositAndGrantData = await wallet.getFullTxById(txDepositAndGrant.hash);
+    console.log('tx deposit data', txDepositAndGrantData);
 
     // TODO Validate data
   };
