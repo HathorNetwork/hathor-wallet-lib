@@ -356,14 +356,11 @@ const tokens = {
     // We might have transactions where the nano contract will pay for deposit fees
     // so we must consider the skipDepositFee flag to skip the utxo selection
     if (!skipDepositFee) {
-      const depositPercent = storage.getTokenDepositPercentage();
-      depositAmount += this.getDepositAmount(amount, depositPercent);
-    }
+      depositAmount += this.getMintDeposit(amount, storage);
 
-    if (data) {
-      // The deposit amount will be the quantity of data strings in the array
-      // multiplied by the fee
-      depositAmount += this.getDataScriptOutputFee() * BigInt(data.length);
+      if (data) {
+        depositAmount += this.getDataFee(data.length);
+      }
     }
 
     if (depositAmount) {
@@ -772,6 +769,41 @@ const tokens = {
       outputs: [],
       tokens: [],
     };
+  },
+
+  /**
+   * Get the total HTR to deposit for a mint transaction
+   * including mint deposit and data output fee
+   */
+  getTransactionHTRDeposit(
+    mintAmount: OutputValueType,
+    dataLen: number,
+    storage: IStorage
+  ): OutputValueType {
+    let mintDeposit = this.getMintDeposit(mintAmount, storage);
+    mintDeposit += this.getDataFee(dataLen);
+    return mintDeposit;
+  },
+
+  /**
+   * Get data output fee for a transaction from the len of data outputs
+   */
+  getDataFee(dataLen: number): OutputValueType {
+    let fee = 0n;
+    if (dataLen > 0) {
+      // The deposit amount will be the quantity of data strings in the array
+      // multiplied by the fee
+      fee += this.getDataScriptOutputFee() * BigInt(dataLen);
+    }
+    return fee;
+  },
+
+  /**
+   * Get the deposit amount for a mint
+   */
+  getMintDeposit(mintAmount: OutputValueType, storage: IStorage): OutputValueType {
+    const depositPercent = storage.getTokenDepositPercentage();
+    return this.getDepositAmount(mintAmount, depositPercent);
   },
 };
 
