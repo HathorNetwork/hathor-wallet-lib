@@ -115,9 +115,7 @@ test('getSignatureForTx signing nano contract when we are not the caller', async
       index: 0,
       input: inputs[0],
       tx: {
-        outputs: [
-          { decoded: { address: ownAddr } },
-        ],
+        outputs: [{ decoded: { address: ownAddr } }],
       },
     };
   }
@@ -129,9 +127,9 @@ test('getSignatureForTx signing nano contract when we are not the caller', async
     'drip',
     Buffer.from('cafe', 'hex'),
     [],
-    new Address('WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp'),
+    new Address('WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp')
   );
-  const tx = new Transaction([input], [], {headers: [nano]});
+  const tx = new Transaction([input], [], { headers: [nano] });
   expect(tx.isNanoContract()).toBeTruthy();
 
   const sigData = await transaction.getSignatureForTx(tx, storage, '123');
@@ -152,7 +150,8 @@ test('getSignatureForTx signing nano contract when we are not the caller', async
     crypto.ECDSA.verify(
       hashdata,
       crypto.Signature.fromDER(sigData.inputSignatures[0].signature),
-      xpriv.deriveChild(10).publicKey),
+      xpriv.deriveChild(10).publicKey
+    )
   ).toBe(true);
 });
 
