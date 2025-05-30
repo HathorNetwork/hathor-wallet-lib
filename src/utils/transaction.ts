@@ -217,7 +217,8 @@ const transaction = {
     if (address) {
       const addressInfo = await storage.getAddressInfo(address.base58);
       if (!addressInfo) {
-        throw new Error('No address info found');
+        // The nano contract address or OCB pubkey are not from our wallet.
+        return { inputSignatures: signatures, ncCallerSignature };
       }
       const xpriv = xprivkey.deriveNonCompliantChild(addressInfo.bip32AddressIndex);
 
