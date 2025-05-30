@@ -356,11 +356,8 @@ const tokens = {
     // We might have transactions where the nano contract will pay for deposit fees
     // so we must consider the skipDepositFee flag to skip the utxo selection
     if (!skipDepositFee) {
-      depositAmount += this.getMintDeposit(amount, storage);
-
-      if (data) {
-        depositAmount += this.getDataFee(data.length);
-      }
+      const dataLen = data ? data.length : 0;
+      depositAmount += this.getTransactionHTRDeposit(amount, dataLen, storage);
     }
 
     if (depositAmount) {
