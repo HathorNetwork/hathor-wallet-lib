@@ -64,6 +64,11 @@ class NanoContractTransactionBuilder {
   // for the tx creation used by the tokens utils method
   createTokenOptions: NanoContractBuilderCreateTokenOptions | null;
 
+  // This parameter is used for token creation transactions
+  // and indicates if the token deposit utxo was already added
+  // in the action deposit phase
+  tokenFeeAddedInDeposit: boolean;
+
   constructor() {
     this.blueprintId = null;
     this.ncId = null;
@@ -76,6 +81,7 @@ class NanoContractTransactionBuilder {
     this.wallet = null;
     this.vertexType = null;
     this.createTokenOptions = null;
+    this.tokenFeeAddedInDeposit = false;
   }
 
   /**
@@ -234,6 +240,26 @@ class NanoContractTransactionBuilder {
       throw new NanoContractTransactionError('Change address must belong to the same wallet.');
     }
 
+    let { amount } = action;
+    if (
+      action.token === NATIVE_TOKEN_UID &&
+      this.vertexType === NanoContractVertexType.CREATE_TOKEN_TRANSACTION &&
+      !this.createTokenOptions!.contractPaysTokenDeposit
+    ) {
+      // We will query for HTR utxos to fill the deposit action
+      // and this is a transaction that creates a token and the contract
+      // won't pay for the deposit fee, so we also add in this utxo query
+      // the token deposit fee and data output fee
+      const dataArray = this.createTokenOptions!.data ?? [];
+      const htrToCreateToken = tokensUtils.getTransactionHTRDeposit(
+        this.createTokenOptions!.amount,
+        dataArray.length,
+        this.wallet.storage
+      );
+      amount += htrToCreateToken;
+      this.tokenFeeAddedInDeposit = true;
+    }
+
     // Get the utxos with the amount of the deposit and create the inputs
     const utxoOptions: { token: string; filter_address?: string | null } = { token: action.token };
     if (action.address) {
@@ -242,7 +268,7 @@ class NanoContractTransactionBuilder {
 
     let utxosData;
     try {
-      utxosData = await this.wallet.getUtxosForAmount(action.amount, utxoOptions);
+      utxosData = await this.wallet.getUtxosForAmount(amount, utxoOptions);
     } catch (e) {
       if (e instanceof UtxoError) {
         throw new NanoContractTransactionError('Not enough utxos to execute the deposit.');
@@ -252,6 +278,7 @@ class NanoContractTransactionBuilder {
     }
     const inputs: IDataInput[] = [];
     for (const utxo of utxosData.utxos) {
+      await this.wallet.markUtxoSelected(utxo.txId, utxo.index, true);
       inputs.push({
         txId: utxo.txId,
         index: utxo.index,
@@ -318,12 +345,13 @@ class NanoContractTransactionBuilder {
 
       // We pay the deposit in native token uid
       if (this.createTokenOptions.contractPaysTokenDeposit && action.token === NATIVE_TOKEN_UID) {
-        const depositPercent = this.wallet.storage.getTokenDepositPercentage();
-        const depositAmount = tokensUtils.getDepositAmount(
-          this.createTokenOptions.amount,
-          depositPercent
+        const dataArray = this.createTokenOptions!.data ?? [];
+        const htrToCreateToken = tokensUtils.getTransactionHTRDeposit(
+          this.createTokenOptions!.amount,
+          dataArray.length,
+          this.wallet.storage
         );
-        withdrawalAmount -= depositAmount;
+        withdrawalAmount -= htrToCreateToken;
       }
     }
 
@@ -394,6 +422,7 @@ class NanoContractTransactionBuilder {
     const inputs: IDataInput[] = [];
     // The method gets only one utxo
     const utxo = utxos[0];
+    await this.wallet.markUtxoSelected(utxo.txId, utxo.index, true);
     inputs.push({
       txId: utxo.txId,
       index: utxo.index,
@@ -653,7 +682,8 @@ class NanoContractTransactionBuilder {
           meltAuthorityAddress: this.createTokenOptions.meltAuthorityAddress,
           data: this.createTokenOptions.data,
           isCreateNFT: this.createTokenOptions.isCreateNFT,
-          skipDepositFee: this.createTokenOptions.contractPaysTokenDeposit,
+          skipDepositFee:
+            this.createTokenOptions.contractPaysTokenDeposit || this.tokenFeeAddedInDeposit,
         }
       );
 
@@ -676,43 +706,58 @@ class NanoContractTransactionBuilder {
    * @inner
    */
   async build(): Promise<Transaction> {
-    await this.verify();
+    let inputs;
+    let outputs;
+    let tokens;
+    try {
+      await this.verify();
 
-    // Transform actions into inputs and outputs
-    const { inputs, outputs, tokens } = await this.buildInputsOutputs();
+      // Transform actions into inputs and outputs
+      ({ inputs, outputs, tokens } = await this.buildInputsOutputs());
 
-    // Serialize the method arguments
-    await this.serializeArgs();
+      // Serialize the method arguments
+      await this.serializeArgs();
 
-    const ncId = this.method === NANO_CONTRACTS_INITIALIZE_METHOD ? this.blueprintId : this.ncId;
+      const ncId = this.method === NANO_CONTRACTS_INITIALIZE_METHOD ? this.blueprintId : this.ncId;
 
-    if (ncId == null) {
-      // This was validated in the beginning of the method but the linter was complaining about it
-      throw new Error('This should never happen.');
+      if (ncId == null) {
+        // This was validated in the beginning of the method but the linter was complaining about it
+        throw new Error('This should never happen.');
+      }
+
+      const tx = await this.buildTransaction(inputs, outputs, tokens);
+
+      let nanoHeaderActions: NanoContractActionHeader[] = [];
+
+      if (this.actions) {
+        nanoHeaderActions = this.actions.map(action => {
+          return mapActionToActionHeader(action, tokens);
+        });
+      }
+
+      const nanoHeader = new NanoContractHeader(
+        ncId,
+        this.method!,
+        this.serializedArgs!,
+        nanoHeaderActions,
+        this.caller!,
+        null
+      );
+
+      tx.headers.push(nanoHeader);
+
+      return tx;
+    } catch (e) {
+      if (!inputs) {
+        throw e;
+      }
+
+      for (const input of inputs) {
+        await this.wallet.markUtxoSelected(input.txId, input.index, false);
+      }
+
+      throw e;
     }
-
-    const tx = await this.buildTransaction(inputs, outputs, tokens);
-
-    let nanoHeaderActions: NanoContractActionHeader[] = [];
-
-    if (this.actions) {
-      nanoHeaderActions = this.actions.map(action => {
-        return mapActionToActionHeader(action, tokens);
-      });
-    }
-
-    const nanoHeader = new NanoContractHeader(
-      ncId,
-      this.method!,
-      this.serializedArgs!,
-      nanoHeaderActions,
-      this.caller!,
-      null
-    );
-
-    tx.headers.push(nanoHeader);
-
-    return tx;
   }
 }
 

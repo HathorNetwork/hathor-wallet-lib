@@ -415,6 +415,145 @@ describe('Authority actions blueprint test', () => {
     expect(tokenDetail5.totalSupply).toBe(1000n);
     expect(tokenDetail5.authorities.mint).toBe(true);
     expect(tokenDetail5.authorities.melt).toBe(true);
+
+    // Create a new nano contract of this blueprint with token creation and deposit
+    // using a single utxo for it
+    const address2 = await hWallet.getAddressAtIndex(2);
+    await GenesisWalletHelper.injectFunds(hWallet, address2, 1000n);
+
+    // Create NC with deposit of HTR and token creation
+    const newInitializeData = {
+      blueprintId,
+      actions: [
+        {
+          type: 'deposit',
+          token: NATIVE_TOKEN_UID,
+          amount: 100n,
+          address: address2,
+        },
+      ],
+    };
+
+    const newCreateTokenOptions = {
+      mintAddress: address0,
+      name: 'Single UTXO Test Token',
+      symbol: 'SUT',
+      amount: 1000n,
+      changeAddress: null,
+      createMint: true,
+      mintAuthorityAddress: null,
+      createMelt: true,
+      meltAuthorityAddress: null,
+      data: ['test'],
+      isCreateNFT: false,
+      contractPaysTokenDeposit: false,
+    };
+
+    // Create token and execute nano initialize with deposit action
+    // we must have a single utxo to be used by the deposit fee, data, and deposit action
+    const initializeTokenCreate = await wallet.createAndSendNanoContractCreateTokenTransaction(
+      NANO_CONTRACTS_INITIALIZE_METHOD,
+      address2,
+      newInitializeData,
+      newCreateTokenOptions
+    );
+    await checkTxValid(wallet, initializeTokenCreate);
+    const initializeTokenCreateData = await wallet.getFullTxById(initializeTokenCreate.hash);
+
+    expect(initializeTokenCreateData.tx.nc_method).toBe(NANO_CONTRACTS_INITIALIZE_METHOD);
+    expect(initializeTokenCreateData.tx.version).toBe(CREATE_TOKEN_TX_VERSION);
+    expect(initializeTokenCreateData.tx.token_name).toBe(newCreateTokenOptions.name);
+    expect(initializeTokenCreateData.tx.token_symbol).toBe(newCreateTokenOptions.symbol);
+    // A single utxo was used
+    expect(initializeTokenCreateData.tx.inputs.length).toBe(1);
+    expect(initializeTokenCreateData.tx.outputs.length).toBe(5);
+    // First the created token output with 1000n amount
+    expect(initializeTokenCreateData.tx.outputs[0].value).toBe(1000n);
+    expect(initializeTokenCreateData.tx.outputs[0].token_data).toBe(1);
+    // Mint authority
+    expect(initializeTokenCreateData.tx.outputs[1].value).toBe(1n);
+    expect(initializeTokenCreateData.tx.outputs[1].token_data).toBe(129);
+    // Melt authority
+    expect(initializeTokenCreateData.tx.outputs[2].value).toBe(2n);
+    expect(initializeTokenCreateData.tx.outputs[2].token_data).toBe(129);
+    // Then the change output and the data output
+    expect(initializeTokenCreateData.tx.outputs[3].value).toBe(1n);
+    expect(initializeTokenCreateData.tx.outputs[3].token_data).toBe(0);
+    expect(initializeTokenCreateData.tx.outputs[4].value).toBe(889n);
+    expect(initializeTokenCreateData.tx.outputs[4].token_data).toBe(0);
+
+    // Create a token that will need two utxos
+    // Use a new wallet so the utxos don't get mixed with previous change utxos
+    const newWallet = await generateWalletHelper();
+    const newAddress0 = await newWallet.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(newWallet, newAddress0, 100n);
+    await GenesisWalletHelper.injectFunds(newWallet, newAddress0, 100n);
+
+    // Create NC with deposit of HTR and token creation
+    const twoUtxosInitializeData = {
+      blueprintId,
+      actions: [
+        {
+          type: 'deposit',
+          token: NATIVE_TOKEN_UID,
+          amount: 100n,
+          address: newAddress0,
+        },
+      ],
+    };
+
+    const twoUtxosCreateTokenOptions = {
+      mintAddress: newAddress0,
+      name: 'Two UTXO Test Token',
+      symbol: 'TUT',
+      amount: 1000n,
+      changeAddress: null,
+      createMint: true,
+      mintAuthorityAddress: null,
+      createMelt: true,
+      meltAuthorityAddress: null,
+      data: ['test'],
+      isCreateNFT: false,
+      contractPaysTokenDeposit: false,
+    };
+
+    // Create token and execute nano initialize with deposit action
+    // we must have a single utxo to be used by the deposit fee, data, and deposit action
+    const twoUtxosInitializeTokenCreate =
+      await newWallet.createAndSendNanoContractCreateTokenTransaction(
+        NANO_CONTRACTS_INITIALIZE_METHOD,
+        newAddress0,
+        twoUtxosInitializeData,
+        twoUtxosCreateTokenOptions
+      );
+    await checkTxValid(newWallet, twoUtxosInitializeTokenCreate);
+    const twoUtxosInitializeTokenCreateData = await newWallet.getFullTxById(
+      twoUtxosInitializeTokenCreate.hash
+    );
+
+    expect(twoUtxosInitializeTokenCreateData.tx.nc_method).toBe(NANO_CONTRACTS_INITIALIZE_METHOD);
+    expect(twoUtxosInitializeTokenCreateData.tx.version).toBe(CREATE_TOKEN_TX_VERSION);
+    expect(twoUtxosInitializeTokenCreateData.tx.token_name).toBe(twoUtxosCreateTokenOptions.name);
+    expect(twoUtxosInitializeTokenCreateData.tx.token_symbol).toBe(
+      twoUtxosCreateTokenOptions.symbol
+    );
+    // Two utxos were used
+    expect(twoUtxosInitializeTokenCreateData.tx.inputs.length).toBe(2);
+    expect(twoUtxosInitializeTokenCreateData.tx.outputs.length).toBe(5);
+    // First the created token output with 1000n amount
+    expect(twoUtxosInitializeTokenCreateData.tx.outputs[0].value).toBe(1000n);
+    expect(twoUtxosInitializeTokenCreateData.tx.outputs[0].token_data).toBe(1);
+    // Mint authority
+    expect(twoUtxosInitializeTokenCreateData.tx.outputs[1].value).toBe(1n);
+    expect(twoUtxosInitializeTokenCreateData.tx.outputs[1].token_data).toBe(129);
+    // Melt authority
+    expect(twoUtxosInitializeTokenCreateData.tx.outputs[2].value).toBe(2n);
+    expect(twoUtxosInitializeTokenCreateData.tx.outputs[2].token_data).toBe(129);
+    // Then the change output and the data output
+    expect(twoUtxosInitializeTokenCreateData.tx.outputs[3].value).toBe(1n);
+    expect(twoUtxosInitializeTokenCreateData.tx.outputs[3].token_data).toBe(0);
+    expect(twoUtxosInitializeTokenCreateData.tx.outputs[4].value).toBe(89n);
+    expect(twoUtxosInitializeTokenCreateData.tx.outputs[4].token_data).toBe(0);
   };
 
   it('Run with on chain blueprint', async () => {
