@@ -655,7 +655,7 @@ describe('Authority actions blueprint test', () => {
     // We must have one transaction in the address10 now
     const newAddress10Meta = await hWallet.storage.store.getAddressMeta(address10);
     expect(newAddress10Meta.numTransactions).toBe(1);
-    // Execute the bet blueprint tests
+    // Execute the authority blueprint tests
     await executeTests(hWallet, tx.hash);
   });
 });
