@@ -21,7 +21,6 @@ from hathor.nanocontracts.types import (
     Timestamp,
     TokenUid,
     TxOutputScript,
-    VarInt,
     VertexId,
     public,
     view,
@@ -45,7 +44,7 @@ class FullBlueprint(Blueprint):
 
     blueprint_id: BlueprintId
 
-    varint: VarInt
+    #varint: VarInt
 
     attr_str: str
 
@@ -71,22 +70,26 @@ class FullBlueprint(Blueprint):
 
     attr_optional: Optional[str]
 
+    attr_random_list: list[str]
+
+    random_value: str
+
     @public
     def initialize(self, ctx: Context, vertex: VertexId, amount: Amount,
                    address: Address, tx_output_script: TxOutputScript,
                    token_uid: TokenUid, timestamp: Timestamp, contract_id: ContractId,
-                   blueprint_id: BlueprintId, varint: VaInt, attr_str: str,
+                   blueprint_id: BlueprintId, attr_str: str,
                    attr_int: int, attr_bytes: bytes, attr_bool: bool) -> None:
 
-        self.vertex = VertexId
+        self.vertex = vertex
         self.amount = amount
-        self.address = Address
+        self.address = address
         self.tx_output_script = tx_output_script
         self.token_uid = token_uid
         self.timestamp = timestamp
         self.contract_id = contract_id
         self.blueprint_id = blueprint_id
-        self.varint = varint
+        #self.varint = varint
         self.attr_str = attr_str
         self.attr_int = attr_int
         self.attr_bytes = attr_bytes
@@ -100,46 +103,34 @@ class FullBlueprint(Blueprint):
     @public
     def set_dict_address(self, ctx: Context, key: Address, value: Amount) -> None:
         self.attr_dict_address[key] = value
-
+ 
     @public
     def set_dict_bytes(self, ctx: Context, key: bytes, value: int) -> None:
         self.attr_dict_bytes[key] = value
-
+ 
     @public
     def set_dict_str_int(self, ctx: Context, key: str, key2: str, value: int) -> None:
-        #partial = self.address_details.get(address, {})
-        #partial.update({
-        #    score: self.bets_address[key]
-        #})
-
-        #self.address_details[address] = partial
-        #self.attr_dict_bytes[key] = value
         self.attr_dict_str[key] = {key2: value}
-
+ 
     @public
     def set_dict_str_bytes_int(self, ctx: Context, key: str, key2: bytes, value: int) -> None:
-        #partial = self.address_details.get(address, {})
-        #partial.update({
-        #    score: self.bets_address[key]
-        #})
-
-        #self.address_details[address] = partial
-        #self.attr_dict_bytes[key] = value
         self.attr_dict_str_bytes[key] = {key2: value}
 
-    @public(allow_deposit=True)
-    def deposit(self, ctx: Context) -> None:
-        action = self._get_action(ctx)
-        assert is_action_type(action, NCDepositAction)
+    @public
+    def append_str(self, ctx: Context, item: str) -> None:
+        self.attr_random_list.append(item)
 
-    @public(allow_withdrawal=True)
-    def withdraw(self, ctx: Context) -> None:
-        action = self._get_action(ctx)
-        assert is_action_type(action, NCWithdrawalAction)
+    @public
+    def set_random_value(self, ctx: Context) -> None:
+        # I tried creating a view method to return this random value
+        # but a view method does not have access to the rng object
+        # so I'm storing the random value, so we can read it
+        idx = self.syscall.rng.randint(0, len(self.attr_random_list) - 1)
+        self.random_value = self.attr_random_list[idx]
 
     @view
     def is_attr_optional_filled(self) -> bool:
-        return attr_optional is not None
-
+        return self.attr_optional is not None
+ 
 
 __blueprint__ = FullBlueprint
