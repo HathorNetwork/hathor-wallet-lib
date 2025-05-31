@@ -2,16 +2,11 @@ import fs from 'fs';
 import { isEmpty } from 'lodash';
 import { GenesisWalletHelper } from '../helpers/genesis-wallet.helper';
 import { generateWalletHelper, waitForTxReceived, waitTxConfirmed } from '../helpers/wallet.helper';
-import {
-  CREATE_TOKEN_TX_VERSION,
-  NATIVE_TOKEN_UID,
-  NANO_CONTRACTS_INITIALIZE_METHOD,
-} from '../../../src/constants';
+import { NANO_CONTRACTS_INITIALIZE_METHOD } from '../../../src/constants';
 import ncApi from '../../../src/api/nano';
 import { bufferToHex } from '../../../src/utils/buffer';
 import helpersUtils from '../../../src/utils/helpers';
 import { isNanoContractCreateTx } from '../../../src/nano_contracts/utils';
-import { NanoContractTransactionError } from '../../../src/errors';
 
 describe('Full blueprint basic tests', () => {
   /** @type HathorWallet */
@@ -57,7 +52,7 @@ describe('Full blueprint basic tests', () => {
     const tokenUid = '00';
     const timestamp = 1748609035;
     const contractId = '00005570d7493d5afe8f4b41d1a0e73dc2ae1234ac491cb4ebc4827aa1695b12';
-    //const varint = 5678n;
+    // const varint = 5678n;
     const attrStr = 'test';
     const attrInt = 9;
     const attrBytes = Buffer.from('abcd').toString('hex');
@@ -78,12 +73,12 @@ describe('Full blueprint basic tests', () => {
           timestamp,
           contractId,
           blueprintId,
-          //varint,
+          // varint,
           attrStr,
           attrInt,
           attrBytes,
-          attrBool
-        ]
+          attrBool,
+        ],
       }
     );
     await checkTxValid(wallet, txInitialize);
@@ -116,7 +111,7 @@ describe('Full blueprint basic tests', () => {
     expect(ncState.fields.vertex.value).toBe(vertexId);
     expect(ncState.fields.amount.value).toBe(amount);
     // XXX the address from state will return base58 in the next version
-    //expect(ncState.fields.address.value).toBe(address);
+    // expect(ncState.fields.address.value).toBe(address);
     expect(ncState.fields.tx_output_script.value).toBe(txOutputScript);
     expect(ncState.fields.token_uid.value).toBe(tokenUid);
     expect(ncState.fields.timestamp.value).toBe(timestamp);
@@ -131,14 +126,10 @@ describe('Full blueprint basic tests', () => {
 
     // Set optional
     const attrOptional = 'test';
-    const txOptional = await wallet.createAndSendNanoContractTransaction(
-      'set_optional',
-      address0,
-      {
-        ncId: txInitialize.hash,
-        args: [attrOptional]
-      }
-    );
+    const txOptional = await wallet.createAndSendNanoContractTransaction('set_optional', address0, {
+      ncId: txInitialize.hash,
+      args: [attrOptional],
+    });
     await checkTxValid(wallet, txOptional);
 
     const ncStateOptional = await ncApi.getNanoContractState(
@@ -157,16 +148,15 @@ describe('Full blueprint basic tests', () => {
       address0,
       {
         ncId: txInitialize.hash,
-        args: [address, amount]
+        args: [address, amount],
       }
     );
     await checkTxValid(wallet, txDictAddress);
 
     const stateDictAddressField = `attr_dict_address.a'${address}'`;
-    const ncStateDictAddress = await ncApi.getNanoContractState(
-      txInitialize.hash,
-      [stateDictAddressField]
-    );
+    const ncStateDictAddress = await ncApi.getNanoContractState(txInitialize.hash, [
+      stateDictAddressField,
+    ]);
 
     expect(ncStateDictAddress.fields[stateDictAddressField].value).toBe(amount);
 
@@ -176,16 +166,15 @@ describe('Full blueprint basic tests', () => {
       address0,
       {
         ncId: txInitialize.hash,
-        args: [attrBytes, attrInt]
+        args: [attrBytes, attrInt],
       }
     );
     await checkTxValid(wallet, txDictBytes);
 
     const stateDictBytesField = `attr_dict_bytes.b'${attrBytes}'`;
-    const ncStateDictBytes = await ncApi.getNanoContractState(
-      txInitialize.hash,
-      [stateDictBytesField]
-    );
+    const ncStateDictBytes = await ncApi.getNanoContractState(txInitialize.hash, [
+      stateDictBytesField,
+    ]);
 
     expect(ncStateDictBytes.fields[stateDictBytesField].value).toBe(attrInt);
 
@@ -195,16 +184,15 @@ describe('Full blueprint basic tests', () => {
       address0,
       {
         ncId: txInitialize.hash,
-        args: ['test1', 'test2', 2]
+        args: ['test1', 'test2', 2],
       }
     );
     await checkTxValid(wallet, txDictStrInt);
 
     const stateDictStrIntField = 'attr_dict_str.test1';
-    const ncStateDictStrInt = await ncApi.getNanoContractState(
-      txInitialize.hash,
-      [stateDictStrIntField]
-    );
+    const ncStateDictStrInt = await ncApi.getNanoContractState(txInitialize.hash, [
+      stateDictStrIntField,
+    ]);
 
     expect(ncStateDictStrInt.fields[stateDictStrIntField].value).toStrictEqual({ test2: 2 });
 
@@ -214,7 +202,7 @@ describe('Full blueprint basic tests', () => {
       address0,
       {
         ncId: txInitialize.hash,
-        args: ['test1', 'cafecafe', 2]
+        args: ['test1', 'cafecafe', 2],
       }
     );
     await checkTxValid(wallet, txDictStrBytesInt);
@@ -230,57 +218,44 @@ describe('Full blueprint basic tests', () => {
     */
 
     // Append list str
-    const txListStr = await wallet.createAndSendNanoContractTransaction(
-      'append_str',
-      address0,
-      {
-        ncId: txInitialize.hash,
-        args: ['test1']
-      }
-    );
+    const txListStr = await wallet.createAndSendNanoContractTransaction('append_str', address0, {
+      ncId: txInitialize.hash,
+      args: ['test1'],
+    });
     await checkTxValid(wallet, txListStr);
 
     const randomListStrField = 'attr_random_list.0';
-    const ncStateListStr = await ncApi.getNanoContractState(
-      txInitialize.hash,
-      [randomListStrField]
-    );
+    const ncStateListStr = await ncApi.getNanoContractState(txInitialize.hash, [
+      randomListStrField,
+    ]);
 
     expect(ncStateListStr.fields[randomListStrField].value).toBe('test1');
 
     // Append new list str
-    const newTxListStr = await wallet.createAndSendNanoContractTransaction(
-      'append_str',
-      address0,
-      {
-        ncId: txInitialize.hash,
-        args: ['test2']
-      }
-    );
+    const newTxListStr = await wallet.createAndSendNanoContractTransaction('append_str', address0, {
+      ncId: txInitialize.hash,
+      args: ['test2'],
+    });
     await checkTxValid(wallet, newTxListStr);
 
     const newRandomListStrField = 'attr_random_list.1';
-    const newNcStateListStr = await ncApi.getNanoContractState(
-      txInitialize.hash,
-      [newRandomListStrField]
-    );
+    const newNcStateListStr = await ncApi.getNanoContractState(txInitialize.hash, [
+      newRandomListStrField,
+    ]);
 
     expect(newNcStateListStr.fields[newRandomListStrField].value).toBe('test2');
-    
+
     // Set random value and read the state
     const txRandom = await wallet.createAndSendNanoContractTransaction(
       'set_random_value',
       address0,
       {
-        ncId: txInitialize.hash
+        ncId: txInitialize.hash,
       }
     );
     await checkTxValid(wallet, txRandom);
 
-    const ncStateRandom = await ncApi.getNanoContractState(
-      txInitialize.hash,
-      ['random_value'],
-    );
+    const ncStateRandom = await ncApi.getNanoContractState(txInitialize.hash, ['random_value']);
 
     const possibleValues = ['test1', 'test2'];
     expect(possibleValues).toContain(ncStateRandom.fields.random_value.value);
@@ -288,7 +263,10 @@ describe('Full blueprint basic tests', () => {
 
   it('Run with on chain blueprint', async () => {
     // Use the blueprint code
-    const code = fs.readFileSync('./__tests__/integration/configuration/blueprints/full_blueprint.py', 'utf8');
+    const code = fs.readFileSync(
+      './__tests__/integration/configuration/blueprints/full_blueprint.py',
+      'utf8'
+    );
     const tx = await hWallet.createAndSendOnChainBlueprintTransaction(code, address0);
     // Wait for the tx to be confirmed, so we can use the on chain blueprint
     await waitTxConfirmed(hWallet, tx.hash);
