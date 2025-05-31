@@ -648,7 +648,7 @@ describe('Authority actions blueprint test', () => {
     expect(address0Meta?.numTransactions).toBe(1);
 
     // Use the blueprint code
-    const code = fs.readFileSync('./__tests__/integration/configuration/authority.py', 'utf8');
+    const code = fs.readFileSync('./__tests__/integration/configuration/blueprints/authority.py', 'utf8');
     const tx = await hWallet.createAndSendOnChainBlueprintTransaction(code, address10);
     // Wait for the tx to be confirmed, so we can use the on chain blueprint
     await waitTxConfirmed(hWallet, tx.hash);
