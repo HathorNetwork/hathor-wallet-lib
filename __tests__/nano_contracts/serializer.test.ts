@@ -189,3 +189,18 @@ test('int', () => {
     expect(serializer.fromInt(testCase[0] as bigint)).toEqual(testCase[1] as Buffer);
   }
 });
+
+
+test('Amount', () => {
+  const DWARF5UnsignedTestCases: [bigint, Buffer][] = [
+    [2n, Buffer.from([2])],
+    [127n, Buffer.from([127])],
+    [128n, Buffer.from([0x80, 1])],
+    [129n, Buffer.from([1 + 0x80, 1])],
+    [12857n, Buffer.from([57 + 0x80, 100])],
+  ];
+  const serializer = new Serializer(new Network('testnet'));
+  for (const testCase of DWARF5UnsignedTestCases) {
+    expect(serializer.fromAmount(testCase[0] as bigint)).toEqual(testCase[1] as Buffer);
+  }
+});

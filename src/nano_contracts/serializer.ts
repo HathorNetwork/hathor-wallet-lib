@@ -165,9 +165,7 @@ class Serializer {
    * @inner
    */
   fromAmount(value: OutputValueType): Buffer {
-    // Nano `Amount` currently only supports up to 4 bytes.
-    // If we change Nano to support up to 8 bytes, we must update this.
-    return bigIntToBytes(value, 4);
+    return leb128Util.encodeUnsigned(value);
   }
 
   /**

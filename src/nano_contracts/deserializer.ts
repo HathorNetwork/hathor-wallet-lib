@@ -193,13 +193,7 @@ class Deserializer {
    * @inner
    */
   toAmount(buf: Buffer): BufferROExtract<OutputValueType> {
-    // Nano `Amount` currently only supports up to 4 bytes, so we simply use the `number` value converted to `BigInt`.
-    // If we change Nano to support up to 8 bytes, we must update this.
-    const { value, bytesRead } = this.toInt32(buf);
-    return {
-      value: BigInt(value),
-      bytesRead,
-    };
+    return leb128Util.decodeUnsigned(buf);
   }
 
   /**
@@ -231,8 +225,7 @@ class Deserializer {
    * @memberof Deserializer
    */
   toInt(buf: Buffer): BufferROExtract<bigint> {
-    const { value, bytesRead } = leb128Util.decodeSigned(buf);
-    return { value, bytesRead };
+    return leb128Util.decodeSigned(buf);
   }
 
   /* eslint-enable class-methods-use-this */
