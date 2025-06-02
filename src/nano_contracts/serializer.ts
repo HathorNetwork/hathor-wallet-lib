@@ -17,7 +17,6 @@ import {
 import { OutputValueType } from '../types';
 import leb128Util from '../utils/leb128';
 import { getContainerInternalType, getContainerType } from './utils';
-import { NATIVE_TOKEN_UID } from '../constants';
 
 /* eslint-disable class-methods-use-this -- XXX: Methods that do not use `this` should be made static */
 class Serializer {
@@ -142,9 +141,8 @@ class Serializer {
   fromTokenUid(value: Buffer): Buffer {
     if (value.length === 1 && value[0] === 0x00) {
       return Buffer.from([0]);
-    } else {
-      return Buffer.concat([Buffer.from([1]), Buffer.from(value)]);
     }
+    return Buffer.concat([Buffer.from([1]), Buffer.from(value)]);
   }
 
   /**

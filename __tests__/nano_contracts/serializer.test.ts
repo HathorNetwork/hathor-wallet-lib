@@ -42,11 +42,12 @@ test('Int', () => {
 
 test('TokenUid', () => {
   const serializer = new Serializer(new Network('testnet'));
-  const token = Buffer.from('cafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafe', 'hex');
-  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect(serializer.fromTokenUid(token)).toMatchBuffer(
-    Buffer.concat([Buffer.from([1]), token])
+  const token = Buffer.from(
+    'cafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafe',
+    'hex'
   );
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect(serializer.fromTokenUid(token)).toMatchBuffer(Buffer.concat([Buffer.from([1]), token]));
 
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   expect(serializer.fromTokenUid(Buffer.from([0]))).toMatchBuffer(Buffer.from([0]));

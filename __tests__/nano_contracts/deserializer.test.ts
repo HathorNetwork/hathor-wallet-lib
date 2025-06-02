@@ -70,7 +70,10 @@ test('TokenUid', () => {
   const serializer = new Serializer(new Network('testnet'));
   const deserializer = new Deserializer(new Network('testnet'));
 
-  const value = Buffer.from('cafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafe', 'hex');
+  const value = Buffer.from(
+    'cafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafe',
+    'hex'
+  );
   const serializedToken = serializer.serializeFromType(value, 'TokenUid');
   const { value: deserializedToken, bytesRead: bytesReadToken } = deserializer.deserializeFromType(
     serializedToken,
@@ -80,7 +83,6 @@ test('TokenUid', () => {
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   expect(deserializedToken).toMatchBuffer(value);
   expect(bytesReadToken).toStrictEqual(33); // 1 byte of tag + 32 bytes of value
-
 
   const { value: deserializedHTR, bytesRead: bytesReadHTR } = deserializer.deserializeFromType(
     Buffer.from([0]),
@@ -96,7 +98,10 @@ test('Sized Bytes', () => {
   const serializer = new Serializer(new Network('testnet'));
   const deserializer = new Deserializer(new Network('testnet'));
 
-  const value = Buffer.from('cafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafe', 'hex');
+  const value = Buffer.from(
+    'cafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafe',
+    'hex'
+  );
   const serializedVertex = serializer.serializeFromType(value, 'VertexId');
   const { value: deserializedVertex, bytesRead: bytesReadVertex } =
     deserializer.deserializeFromType(serializedVertex, 'VertexId');
