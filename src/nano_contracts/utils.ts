@@ -285,7 +285,7 @@ export const mapActionToActionHeader = (
   let amount;
   if (
     action.type === NanoContractActionType.GRANT_AUTHORITY ||
-    action.type === NanoContractActionType.INVOKE_AUTHORITY
+    action.type === NanoContractActionType.ACQUIRE_AUTHORITY
   ) {
     amount = action.authority === 'mint' ? TOKEN_MINT_MASK : TOKEN_MELT_MASK;
   } else if (

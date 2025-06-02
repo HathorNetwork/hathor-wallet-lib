@@ -131,8 +131,8 @@ export interface IHistoryNanoContractActionGrantAuthority {
   melt: boolean;
 }
 
-export interface IHistoryNanoContractActionInvokeAuthority {
-  type: 'INVOKE_AUTHORITY';
+export interface IHistoryNanoContractActionAcquireAuthority {
+  type: 'ACQUIRE_AUTHORITY';
   token_uid: string;
   mint: boolean;
   melt: boolean;
@@ -142,7 +142,7 @@ export type IHistoryNanoContractAction =
   | IHistoryNanoContractActionDeposit
   | IHistoryNanoContractActionWithdrawal
   | IHistoryNanoContractActionGrantAuthority
-  | IHistoryNanoContractActionInvokeAuthority;
+  | IHistoryNanoContractActionAcquireAuthority;
 
 export interface IHistoryNanoContractContext {
   actions: IHistoryNanoContractAction[];

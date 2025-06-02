@@ -125,14 +125,14 @@ export enum NanoContractActionType {
   DEPOSIT = 'deposit',
   WITHDRAWAL = 'withdrawal',
   GRANT_AUTHORITY = 'grant_authority',
-  INVOKE_AUTHORITY = 'invoke_authority',
+  ACQUIRE_AUTHORITY = 'acquire_authority',
 }
 
 export enum NanoContractHeaderActionType {
   DEPOSIT = 1,
   WITHDRAWAL = 2,
   GRANT_AUTHORITY = 3,
-  INVOKE_AUTHORITY = 4,
+  ACQUIRE_AUTHORITY = 4,
 }
 
 export const ActionTypeToActionHeaderType: Record<
@@ -142,7 +142,7 @@ export const ActionTypeToActionHeaderType: Record<
   [NanoContractActionType.DEPOSIT]: NanoContractHeaderActionType.DEPOSIT,
   [NanoContractActionType.WITHDRAWAL]: NanoContractHeaderActionType.WITHDRAWAL,
   [NanoContractActionType.GRANT_AUTHORITY]: NanoContractHeaderActionType.GRANT_AUTHORITY,
-  [NanoContractActionType.INVOKE_AUTHORITY]: NanoContractHeaderActionType.INVOKE_AUTHORITY,
+  [NanoContractActionType.ACQUIRE_AUTHORITY]: NanoContractHeaderActionType.ACQUIRE_AUTHORITY,
 };
 
 // The action in the header is serialized/deserialized in the class
@@ -183,8 +183,8 @@ export const INanoContractActionGrantAuthoritySchema = INanoContractActionAuthor
   authorityAddress: z.string().optional(),
 }).passthrough();
 
-export const INanoContractActionInvokeAuthoritySchema = INanoContractActionAuthorityBase.extend({
-  type: z.literal('invoke_authority'),
+export const INanoContractActionAcquireAuthoritySchema = INanoContractActionAuthorityBase.extend({
+  type: z.literal('acquire_authority'),
   address: z.string(),
 }).passthrough();
 
@@ -192,7 +192,7 @@ export const INanoContractActionSchema = z.discriminatedUnion('type', [
   INanoContractActionWithdrawalSchema,
   INanoContractActionDepositSchema,
   INanoContractActionGrantAuthoritySchema,
-  INanoContractActionInvokeAuthoritySchema,
+  INanoContractActionAcquireAuthoritySchema,
 ]);
 
 export type NanoContractAction = z.output<typeof INanoContractActionSchema>;

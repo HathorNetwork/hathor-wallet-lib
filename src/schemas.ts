@@ -122,16 +122,16 @@ export const IHistoryNanoContractActionGrantAuthoritySchema =
     type: z.literal('GRANT_AUTHORITY'),
   }).passthrough();
 
-export const IHistoryNanoContractActionInvokeAuthoritySchema =
+export const IHistoryNanoContractActionAcquireAuthoritySchema =
   IHistoryNanoContractBaseAuthorityAction.extend({
-    type: z.literal('INVOKE_AUTHORITY'),
+    type: z.literal('ACQUIRE_AUTHORITY'),
   }).passthrough();
 
 export const IHistoryNanoContractActionSchema = z.discriminatedUnion('type', [
   IHistoryNanoContractActionDepositSchema,
   IHistoryNanoContractActionWithdrawalSchema,
   IHistoryNanoContractActionGrantAuthoritySchema,
-  IHistoryNanoContractActionInvokeAuthoritySchema,
+  IHistoryNanoContractActionAcquireAuthoritySchema,
 ]);
 
 export const IHistoryNanoContractContextSchema = z
