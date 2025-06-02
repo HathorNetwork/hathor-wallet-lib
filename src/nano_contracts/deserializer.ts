@@ -143,6 +143,14 @@ class Deserializer {
     };
   }
 
+  /**
+   * Deserialize a bytes value with known size
+   *
+   * @param buf Value to deserialize
+   *
+   * @memberof Deserializer
+   * @inner
+   */
   toSizedBytes(len: number, buf: Buffer): BufferROExtract<Buffer> {
     if (buf.length < len) {
       throw new Error('Do not have enough bytes to read the expected length');
@@ -153,6 +161,19 @@ class Deserializer {
     };
   }
 
+  /**
+   * Deserialize a Token UID
+   * The serialized value starts with a tag:
+   * - 0x00 for HTR
+   * - 0x01 for custom token
+   *
+   * For custom tokens we will also read the next 32 bytes.
+   *
+   * @param {Buffer} buf Value to deserialize
+   *
+   * @memberof Deserializer
+   * @inner
+   */
   toTokenUid(buf: Buffer): BufferROExtract<Buffer> {
     if (buf[0] === 0x00) {
       return {

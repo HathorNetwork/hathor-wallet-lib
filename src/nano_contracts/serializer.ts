@@ -133,10 +133,28 @@ class Serializer {
     return Buffer.concat([leb128Util.encodeUnsigned(value.length), Buffer.from(value)]);
   }
 
+  /**
+   * Serialize a bytes value with known size
+   *
+   * @param value Value to serialize
+   *
+   * @memberof Serializer
+   * @inner
+   */
   fromSizedBytes(value: Buffer): Buffer {
     return Buffer.from(value);
   }
 
+  /**
+   * Serialize a Token UID
+   * For HTR we only add the tag 0x00
+   * For custom tokens we add the tag 0x01 and the uid bytes
+   *
+   * @param value Value to serialize
+   *
+   * @memberof Serializer
+   * @inner
+   */
   fromTokenUid(value: Buffer): Buffer {
     if (value.length === 1 && value[0] === 0x00) {
       return Buffer.from([0]);
