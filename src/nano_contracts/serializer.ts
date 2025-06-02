@@ -58,14 +58,13 @@ class Serializer {
       case 'Address':
         return this.fromAddress(value as string);
       case 'int':
+        return this.fromInt(value as bigint);
       case 'Timestamp':
-        return this.fromInt(value as number);
+        return this.fromInt32(value as number);
       case 'Amount':
         return this.fromAmount(value as OutputValueType);
       case 'bool':
         return this.fromBool(value as boolean);
-      case 'VarInt':
-        return this.fromVarInt(value as bigint);
       default:
         throw new Error(`Invalid type. ${type}.`);
     }
@@ -153,7 +152,7 @@ class Serializer {
    * @memberof Serializer
    * @inner
    */
-  fromInt(value: number): Buffer {
+  fromInt32(value: number): Buffer {
     return signedIntToBytes(value, 4);
   }
 
@@ -194,7 +193,7 @@ class Serializer {
    *
    * @memberof Serializer
    */
-  fromVarInt(value: bigint): Buffer {
+  fromInt(value: bigint): Buffer {
     return leb128Util.encodeSigned(value);
   }
   /* eslint-disable class-methods-use-this */

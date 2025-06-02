@@ -60,14 +60,13 @@ class Deserializer {
       case 'Address':
         return this.toAddress(buf);
       case 'int':
-      case 'Timestamp':
         return this.toInt(buf);
+      case 'Timestamp':
+        return this.toInt32(buf);
       case 'Amount':
         return this.toAmount(buf);
       case 'bool':
         return this.toBool(buf);
-      case 'VarInt':
-        return this.toVarInt(buf);
       default:
         throw new Error('Invalid type.');
     }
@@ -171,14 +170,14 @@ class Deserializer {
   }
 
   /**
-   * Deserialize int value
+   * Deserialize a 32bit int value
    *
    * @param {Buffer} buf Value to deserialize
    *
    * @memberof Deserializer
    * @inner
    */
-  toInt(buf: Buffer): BufferROExtract<number> {
+  toInt32(buf: Buffer): BufferROExtract<number> {
     return {
       value: unpackToInt(4, true, buf)[0],
       bytesRead: 4,
@@ -196,7 +195,7 @@ class Deserializer {
   toAmount(buf: Buffer): BufferROExtract<OutputValueType> {
     // Nano `Amount` currently only supports up to 4 bytes, so we simply use the `number` value converted to `BigInt`.
     // If we change Nano to support up to 8 bytes, we must update this.
-    const { value, bytesRead } = this.toInt(buf);
+    const { value, bytesRead } = this.toInt32(buf);
     return {
       value: BigInt(value),
       bytesRead,
@@ -225,13 +224,13 @@ class Deserializer {
   }
 
   /**
-   * Deserialize a variable integer encoded as a leb128 buffer to a bigint.
+   * Deserialize an integer encoded as a leb128 buffer to a bigint.
    *
    * @param buf Value to deserialize
    *
    * @memberof Deserializer
    */
-  toVarInt(buf: Buffer): BufferROExtract<bigint> {
+  toInt(buf: Buffer): BufferROExtract<bigint> {
     const { value, bytesRead } = leb128Util.decodeSigned(buf);
     return { value, bytesRead };
   }
@@ -363,7 +362,7 @@ class Deserializer {
    * It does not support chained container types, meaning Tuple[Dict[str,str]] should not happen.
    *
    * @param buf Value to deserialize
-   * @param typeArr List of types to read from buffer, e.g. `['str', 'int', 'VarInt']`
+   * @param typeArr List of types to read from buffer, e.g. `['str', 'int']`
    *
    * @memberof Deserializer
    * @inner
