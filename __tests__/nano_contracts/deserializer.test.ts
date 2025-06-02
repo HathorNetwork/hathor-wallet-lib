@@ -9,7 +9,6 @@ import Serializer from '../../src/nano_contracts/serializer';
 import Deserializer from '../../src/nano_contracts/deserializer';
 import Address from '../../src/models/address';
 import Network from '../../src/models/network';
-import leb128 from '../../src/utils/leb128';
 import { NanoContractSignedData } from '../../src/nano_contracts/types';
 
 test('Bool', () => {
@@ -334,24 +333,13 @@ test('Address', () => {
   const address = 'WfthPUEecMNRs6eZ2m2EQBpVH6tbqQxYuU';
   const addressBuffer = new Address(address).decode();
 
-  const { value: deserialized } = deserializer.deserializeFromType(
-    Buffer.concat([leb128.encodeUnsigned(addressBuffer.length), addressBuffer]),
-    'Address'
-  );
+  const { value: deserialized } = deserializer.deserializeFromType(addressBuffer, 'Address');
   expect(deserialized).toBe(address);
 
   const wrongNetworkAddress = 'HDeadDeadDeadDeadDeadDeadDeagTPgmn';
   const wrongNetworkAddressBuffer = new Address(wrongNetworkAddress).decode();
 
-  expect(() =>
-    deserializer.deserializeFromType(
-      Buffer.concat([
-        leb128.encodeUnsigned(wrongNetworkAddressBuffer.length),
-        wrongNetworkAddressBuffer,
-      ]),
-      'Address'
-    )
-  ).toThrow();
+  expect(() => deserializer.deserializeFromType(wrongNetworkAddressBuffer, 'Address')).toThrow();
 });
 
 test('VarInt', () => {

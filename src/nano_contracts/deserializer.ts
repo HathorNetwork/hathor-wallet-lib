@@ -253,28 +253,24 @@ class Deserializer {
    * @inner
    */
   toAddress(buf: Buffer): BufferROExtract<string> {
-    const lenReadResult = leb128Util.decodeUnsigned(buf, 1);
-    if (lenReadResult.value !== 25n) {
-      // Address should be exactly 25 bytes long
-      throw new Error('Address should be 25 bytes long');
+    if (buf.length < 25) {
+      throw new Error('Not enough bytes to read address');
     }
-    // The actual address bytes are the 25 bytes after the initial length
-    const addressBytes = buf.subarray(1);
     // First we get the 20 bytes (hash) of the address without the version byte and checksum
-    const hashBytes = addressBytes.subarray(1, 21);
+    const hashBytes = buf.subarray(1, 21);
     const address = helpersUtils.encodeAddress(hashBytes, this.network);
     address.validateAddress();
     const decoded = address.decode();
     // We need to check that the metadata of the address received match the one we generated
     // Check network version
-    if (decoded[0] !== addressBytes[0]) {
+    if (decoded[0] !== buf[0]) {
       throw new Error(
-        `Asked to deserialize an address with version byte ${addressBytes[0]} but the network from the deserializer object has version byte ${decoded[0]}.`
+        `Asked to deserialize an address with version byte ${buf[0]} but the network from the deserializer object has version byte ${decoded[0]}.`
       );
     }
     // Check checksum bytes
     const calcChecksum = decoded.subarray(21, 25);
-    const recvChecksum = addressBytes.subarray(21, 25);
+    const recvChecksum = buf.subarray(21, 25);
     if (!calcChecksum.equals(recvChecksum)) {
       // Checksum value generated does not match value from fullnode
       throw new Error(
@@ -283,7 +279,7 @@ class Deserializer {
     }
     return {
       value: address.base58,
-      bytesRead: 26, // 1 for length + 25 address bytes
+      bytesRead: 25,
     };
   }
 

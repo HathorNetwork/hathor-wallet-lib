@@ -119,7 +119,7 @@ class Serializer {
   fromAddress(value: string): Buffer {
     const address = new Address(value, { network: this.network });
     address.validateAddress();
-    return this.fromBytes(address.decode());
+    return this.fromSizedBytes(address.decode());
   }
 
   /**
