@@ -21,27 +21,6 @@ describe('fromApiInput', () => {
       value: {
         type: 'int',
         signature: expect.anything(),
-        value: 300,
-      },
-    });
-    // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-    expect((arg.value as NanoContractSignedData).signature).toMatchBuffer(
-      Buffer.from([0x74, 0x65, 0x73, 0x74])
-    );
-  });
-
-  it('should read SignedData[VarInt]', () => {
-    const arg = NanoContractMethodArgument.fromApiInput(
-      'a-test',
-      'SignedData[VarInt]',
-      '74657374,300,VarInt'
-    );
-    expect(arg).toMatchObject({
-      name: 'a-test',
-      type: 'SignedData[VarInt]',
-      value: {
-        type: 'VarInt',
-        signature: expect.anything(),
         value: 300n,
       },
     });
@@ -153,12 +132,7 @@ describe('fromApiInput', () => {
 
   it('should read int values', () => {
     const arg = NanoContractMethodArgument.fromApiInput('a-test', 'int', 300);
-    expect(arg).toMatchObject({ name: 'a-test', type: 'int', value: 300 });
-  });
-
-  it('should read VarInt values', () => {
-    const arg = NanoContractMethodArgument.fromApiInput('a-test', 'VarInt', 300);
-    expect(arg).toMatchObject({ name: 'a-test', type: 'VarInt', value: 300n });
+    expect(arg).toMatchObject({ name: 'a-test', type: 'int', value: 300n });
   });
 
   it('should read bool values', () => {
@@ -205,18 +179,7 @@ describe('fromApiInput', () => {
 
   it('should read int? values', () => {
     const arg = NanoContractMethodArgument.fromApiInput('a-test', 'int?', 300);
-    expect(arg).toMatchObject({ name: 'a-test', type: 'int?', value: 300 });
-
-    expect(NanoContractMethodArgument.fromApiInput('a-test', 'int?', null)).toMatchObject({
-      name: 'a-test',
-      type: 'int?',
-      value: null,
-    });
-  });
-
-  it('should read VarInt? values', () => {
-    const arg = NanoContractMethodArgument.fromApiInput('a-test', 'VarInt?', 300);
-    expect(arg).toMatchObject({ name: 'a-test', type: 'VarInt?', value: 300n });
+    expect(arg).toMatchObject({ name: 'a-test', type: 'int?', value: 300n });
   });
 
   it('should read bool? values', () => {
@@ -288,25 +251,12 @@ describe('toApiInput', () => {
     const arg = new NanoContractMethodArgument('a-test', 'SignedData[int]', {
       type: 'int',
       signature: Buffer.from('74657374', 'hex'),
-      value: 300,
+      value: 300n,
     });
     expect(arg.toApiInput()).toMatchObject({
       name: 'a-test',
       type: 'SignedData[int]',
       parsed: '74657374,300,int',
-    });
-  });
-
-  it('should read SignedData[VarInt]', () => {
-    const arg = new NanoContractMethodArgument('a-test', 'SignedData[VarInt]', {
-      type: 'VarInt',
-      signature: Buffer.from('74657374', 'hex'),
-      value: 300n,
-    });
-    expect(arg.toApiInput()).toMatchObject({
-      name: 'a-test',
-      type: 'SignedData[VarInt]',
-      parsed: '74657374,300,VarInt',
     });
   });
 
@@ -381,19 +331,10 @@ describe('toApiInput', () => {
   });
 
   it('should read int values', () => {
-    const arg = new NanoContractMethodArgument('a-test', 'int', 300);
+    const arg = new NanoContractMethodArgument('a-test', 'int', 300n);
     expect(arg.toApiInput()).toMatchObject({
       name: 'a-test',
       type: 'int',
-      parsed: 300,
-    });
-  });
-
-  it('should read VarInt values', () => {
-    const arg = new NanoContractMethodArgument('a-test', 'VarInt', 300n);
-    expect(arg.toApiInput()).toMatchObject({
-      name: 'a-test',
-      type: 'VarInt',
       parsed: '300',
     });
   });
@@ -455,19 +396,11 @@ describe('toApiInput', () => {
   // Optional
 
   it('should read int? values', () => {
-    const arg1 = new NanoContractMethodArgument('a-test', 'int?', 300);
-    expect(arg1.toApiInput()).toMatchObject({ name: 'a-test', type: 'int?', parsed: 300 });
+    const arg1 = new NanoContractMethodArgument('a-test', 'int?', 300n);
+    expect(arg1.toApiInput()).toMatchObject({ name: 'a-test', type: 'int?', parsed: '300' });
 
-    const arg2 = new NanoContractMethodArgument('a-test', 'int?', null);
+    const arg2 = NanoContractMethodArgument.fromApiInput('a-test', 'int?', null);
     expect(arg2.toApiInput()).toMatchObject({ name: 'a-test', type: 'int?', parsed: null });
-  });
-
-  it('should read VarInt? values', () => {
-    const arg1 = new NanoContractMethodArgument('a-test', 'VarInt?', 300n);
-    expect(arg1.toApiInput()).toMatchObject({ name: 'a-test', type: 'VarInt?', parsed: '300' });
-
-    const arg2 = NanoContractMethodArgument.fromApiInput('a-test', 'VarInt?', null);
-    expect(arg2.toApiInput()).toMatchObject({ name: 'a-test', type: 'VarInt?', parsed: null });
   });
 
   it('should read bool? values', () => {

@@ -43,17 +43,6 @@ test('String', () => {
   expect(value).toStrictEqual(deserialized);
 });
 
-test('Int', () => {
-  const serializer = new Serializer(new Network('testnet'));
-  const deserializer = new Deserializer(new Network('testnet'));
-
-  const value = 300;
-  const serialized = serializer.serializeFromType(value, 'int');
-  const { value: deserialized } = deserializer.deserializeFromType(serialized, 'int');
-
-  expect(value).toStrictEqual(deserialized);
-});
-
 test('Amount', () => {
   const serializer = new Serializer(new Network('testnet'));
   const deserializer = new Deserializer(new Network('testnet'));
@@ -163,7 +152,7 @@ test('Optional', () => {
 
   expect(deserializedEmptyInt).toBe(valueEmptyInt);
 
-  const valueInt = 300;
+  const valueInt = 300n;
   const serializedInt = serializer.serializeFromType(valueInt, 'int?');
   const { value: deserializedInt } = deserializer.deserializeFromType(serializedInt, 'int?');
 
@@ -219,22 +208,6 @@ test('Optional', () => {
 test('SignedData', () => {
   const serializer = new Serializer(new Network('testnet'));
   const deserializer = new Deserializer(new Network('testnet'));
-
-  const valueInt: NanoContractSignedData = {
-    type: 'int',
-    value: 300,
-    signature: Buffer.from('74657374', 'hex'),
-  };
-  const serializedInt = serializer.serializeFromType(valueInt, 'SignedData[int]');
-  const { value: deserializedInt } = deserializer.deserializeFromType(
-    serializedInt,
-    'SignedData[int]'
-  );
-
-  expect((deserializedInt as NanoContractSignedData).type).toEqual(valueInt.type);
-  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect((deserializedInt as NanoContractSignedData).signature).toMatchBuffer(valueInt.signature);
-  expect((deserializedInt as NanoContractSignedData).value).toEqual(valueInt.value);
 
   const valueStr: NanoContractSignedData = {
     type: 'str',
@@ -307,23 +280,23 @@ test('SignedData', () => {
   );
   expect((deserializedBoolTrue as NanoContractSignedData).value).toEqual(valueBoolTrue.value);
 
-  const valueVarInt: NanoContractSignedData = {
-    type: 'VarInt',
+  const valueInt: NanoContractSignedData = {
+    type: 'int',
     value: 300n,
     signature: Buffer.from('74657374', 'hex'),
   };
-  const serializedVarInt = serializer.serializeFromType(valueVarInt, 'SignedData[VarInt]');
-  const { value: deserializedVarInt } = deserializer.deserializeFromType(
-    serializedVarInt,
-    'SignedData[VarInt]'
+  const serializedInt = serializer.serializeFromType(valueInt, 'SignedData[int]');
+  const { value: deserializedInt } = deserializer.deserializeFromType(
+    serializedInt,
+    'SignedData[int]'
   );
 
-  expect((deserializedVarInt as NanoContractSignedData).type).toEqual(valueVarInt.type);
+  expect((deserializedInt as NanoContractSignedData).type).toEqual(valueInt.type);
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect((deserializedVarInt as NanoContractSignedData).signature).toMatchBuffer(
-    valueVarInt.signature
+  expect((deserializedInt as NanoContractSignedData).signature).toMatchBuffer(
+    valueInt.signature
   );
-  expect((deserializedVarInt as NanoContractSignedData).value).toEqual(valueVarInt.value);
+  expect((deserializedInt as NanoContractSignedData).value).toEqual(valueInt.value);
 });
 
 test('Address', () => {
@@ -342,7 +315,7 @@ test('Address', () => {
   expect(() => deserializer.deserializeFromType(wrongNetworkAddressBuffer, 'Address')).toThrow();
 });
 
-test('VarInt', () => {
+test('int', () => {
   const network = new Network('testnet');
   const deserializer = new Deserializer(network);
   const DWARF5TestCases: [bigint, Buffer][] = [
@@ -356,7 +329,7 @@ test('VarInt', () => {
     [-129n, Buffer.from([0x7f + 0x80, 0x7e])],
   ];
   for (const testCase of DWARF5TestCases) {
-    const resp = deserializer.toVarInt(testCase[1] as Buffer);
+    const resp = deserializer.toInt(testCase[1] as Buffer);
     expect(resp.value).toEqual(testCase[0] as bigint);
     expect(resp.bytesRead).toEqual(testCase[1].length);
   }
