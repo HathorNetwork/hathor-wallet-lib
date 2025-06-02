@@ -40,6 +40,18 @@ test('Int', () => {
   expect(serializer.fromInt(300)).toMatchBuffer(Buffer.from([0x00, 0x00, 0x01, 0x2c]));
 });
 
+test('TokenUid', () => {
+  const serializer = new Serializer(new Network('testnet'));
+  const token = Buffer.from('cafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafe', 'hex');
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect(serializer.fromTokenUid(token)).toMatchBuffer(
+    Buffer.concat([Buffer.from([1]), token])
+  );
+
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect(serializer.fromTokenUid(Buffer.from([0]))).toMatchBuffer(Buffer.from([0]));
+});
+
 test('Bytes', () => {
   const serializer = new Serializer(new Network('testnet'));
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
@@ -56,6 +68,22 @@ test('Bytes', () => {
       bigBuffer,
     ])
   );
+});
+
+test('SizedBytes', () => {
+  const serializer = new Serializer(new Network('testnet'));
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect(serializer.fromSizedBytes(Buffer.from([0x74, 0x65, 0x73, 0x74]))).toMatchBuffer(
+    Buffer.from([0x74, 0x65, 0x73, 0x74])
+  );
+
+  // Encoding a big string
+  const bigBuffer = Buffer.from(Array(2048).fill('A').join(''), 'utf-8');
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect(serializer.fromSizedBytes(bigBuffer)).toMatchBuffer(bigBuffer);
+
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect(serializer.fromSizedBytes(Buffer.from([0]))).toMatchBuffer(Buffer.from([0]));
 });
 
 test('Optional', () => {

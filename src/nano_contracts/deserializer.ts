@@ -18,7 +18,7 @@ import {
   NanoContractArgumentSingleTypeNameSchema,
 } from './types';
 import { OutputValueType } from '../types';
-import { NC_ARGS_MAX_BYTES_LENGTH } from '../constants';
+import { NATIVE_TOKEN_UID, NC_ARGS_MAX_BYTES_LENGTH } from '../constants';
 import { getContainerInternalType, getContainerType } from './utils';
 
 class Deserializer {
@@ -49,12 +49,14 @@ class Deserializer {
       case 'str':
         return this.toString(buf);
       case 'bytes':
+      case 'TxOutputScript':
+        return this.toBytes(buf);
       case 'BlueprintId':
       case 'ContractId':
-      case 'TokenUid':
-      case 'TxOutputScript':
       case 'VertexId':
-        return this.toBytes(buf);
+        return this.toSizedBytes(32, buf);
+      case 'TokenUid':
+        return this.toTokenUid(buf);
       case 'Address':
         return this.toAddress(buf);
       case 'int':
@@ -140,6 +142,32 @@ class Deserializer {
       value: rest.subarray(0, length),
       bytesRead: length + bytesReadForLength,
     };
+  }
+
+  toSizedBytes(len: number, buf: Buffer): BufferROExtract<Buffer> {
+    if (buf.length < len) {
+      throw new Error('Do not have enough bytes to read the expected length');
+    }
+    return {
+      value: buf.subarray(0, len),
+      bytesRead: len,
+    };
+  }
+
+  toTokenUid(buf: Buffer): BufferROExtract<Buffer> {
+    if (buf[0] === 0x00) {
+      return {
+        value: Buffer.from(NATIVE_TOKEN_UID, 'hex'),
+        bytesRead: 1,
+      };
+    }
+    if (buf[0] === 0x01) {
+      return {
+        value: buf.subarray(1, 33),
+        bytesRead: 33,
+      };
+    }
+    throw new Error('Invalid TokenUid tag');
   }
 
   /**

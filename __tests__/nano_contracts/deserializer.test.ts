@@ -66,6 +66,62 @@ test('Amount', () => {
   expect(value).toStrictEqual(deserialized);
 });
 
+test('TokenUid', () => {
+  const serializer = new Serializer(new Network('testnet'));
+  const deserializer = new Deserializer(new Network('testnet'));
+
+  const value = Buffer.from('cafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafe', 'hex');
+  const serializedToken = serializer.serializeFromType(value, 'TokenUid');
+  const { value: deserializedToken, bytesRead: bytesReadToken } = deserializer.deserializeFromType(
+    serializedToken,
+    'TokenUid'
+  );
+
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect(deserializedToken).toMatchBuffer(value);
+  expect(bytesReadToken).toStrictEqual(33); // 1 byte of tag + 32 bytes of value
+
+
+  const { value: deserializedHTR, bytesRead: bytesReadHTR } = deserializer.deserializeFromType(
+    Buffer.from([0]),
+    'TokenUid'
+  );
+
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect(deserializedHTR).toMatchBuffer(Buffer.from('00', 'hex'));
+  expect(bytesReadHTR).toStrictEqual(1); // 1 byte of tag
+});
+
+test('Sized Bytes', () => {
+  const serializer = new Serializer(new Network('testnet'));
+  const deserializer = new Deserializer(new Network('testnet'));
+
+  const value = Buffer.from('cafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafe', 'hex');
+  const serializedVertex = serializer.serializeFromType(value, 'VertexId');
+  const { value: deserializedVertex, bytesRead: bytesReadVertex } =
+    deserializer.deserializeFromType(serializedVertex, 'VertexId');
+
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect(deserializedVertex).toMatchBuffer(value);
+  expect(bytesReadVertex).toStrictEqual(32);
+
+  const serializedContract = serializer.serializeFromType(value, 'ContractId');
+  const { value: deserializedContract, bytesRead: bytesReadContract } =
+    deserializer.deserializeFromType(serializedContract, 'ContractId');
+
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect(deserializedContract).toMatchBuffer(value);
+  expect(bytesReadContract).toStrictEqual(32);
+
+  const serializedBlueprint = serializer.serializeFromType(value, 'BlueprintId');
+  const { value: deserializedBlueprint, bytesRead: bytesReadBlueprint } =
+    deserializer.deserializeFromType(serializedBlueprint, 'BlueprintId');
+
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect(deserializedBlueprint).toMatchBuffer(value);
+  expect(bytesReadBlueprint).toStrictEqual(32);
+});
+
 test('Bytes', () => {
   const serializer = new Serializer(new Network('testnet'));
   const deserializer = new Deserializer(new Network('testnet'));
@@ -81,24 +137,6 @@ test('Bytes', () => {
   expect(deserialized).toMatchBuffer(value);
   expect(bytesReadBytes).toStrictEqual(5); // 1 byte of length + 4 bytes of value
 
-  const serializedVertex = serializer.serializeFromType(value, 'VertexId');
-  const { value: deserializedVertex, bytesRead: bytesReadVertex } =
-    deserializer.deserializeFromType(serializedVertex, 'VertexId');
-
-  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect(deserializedVertex).toMatchBuffer(value);
-  expect(bytesReadVertex).toStrictEqual(5); // 1 byte of length + 4 bytes of value
-
-  const serializedToken = serializer.serializeFromType(value, 'TokenUid');
-  const { value: deserializedToken, bytesRead: bytesReadToken } = deserializer.deserializeFromType(
-    serializedToken,
-    'TokenUid'
-  );
-
-  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect(deserializedToken).toMatchBuffer(value);
-  expect(bytesReadToken).toStrictEqual(5); // 1 byte of length + 4 bytes of value
-
   const serializedScript = serializer.serializeFromType(value, 'TxOutputScript');
   const { value: deserializedScript, bytesRead: bytesReadScript } =
     deserializer.deserializeFromType(serializedScript, 'TxOutputScript');
@@ -106,14 +144,6 @@ test('Bytes', () => {
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   expect(deserializedScript).toMatchBuffer(value);
   expect(bytesReadScript).toStrictEqual(5); // 1 byte of length + 4 bytes of value
-
-  const serializedContract = serializer.serializeFromType(value, 'ContractId');
-  const { value: deserializedContract, bytesRead: bytesReadContract } =
-    deserializer.deserializeFromType(serializedContract, 'ContractId');
-
-  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect(deserializedContract).toMatchBuffer(value);
-  expect(bytesReadContract).toStrictEqual(5); // 1 byte of length + 4 bytes of value
 });
 
 test('Optional', () => {

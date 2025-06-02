@@ -17,6 +17,7 @@ import {
 import { OutputValueType } from '../types';
 import leb128Util from '../utils/leb128';
 import { getContainerInternalType, getContainerType } from './utils';
+import { NATIVE_TOKEN_UID } from '../constants';
 
 /* eslint-disable class-methods-use-this -- XXX: Methods that do not use `this` should be made static */
 class Serializer {
@@ -47,12 +48,14 @@ class Serializer {
       case 'str':
         return this.fromString(value as string);
       case 'bytes':
+      case 'TxOutputScript':
+        return this.fromBytes(value as Buffer);
       case 'BlueprintId':
       case 'ContractId':
-      case 'TokenUid':
-      case 'TxOutputScript':
       case 'VertexId':
-        return this.fromBytes(value as Buffer);
+        return this.fromSizedBytes(value as Buffer);
+      case 'TokenUid':
+        return this.fromTokenUid(value as Buffer);
       case 'Address':
         return this.fromAddress(value as string);
       case 'int':
@@ -130,6 +133,18 @@ class Serializer {
    */
   fromBytes(value: Buffer): Buffer {
     return Buffer.concat([leb128Util.encodeUnsigned(value.length), Buffer.from(value)]);
+  }
+
+  fromSizedBytes(value: Buffer): Buffer {
+    return Buffer.from(value);
+  }
+
+  fromTokenUid(value: Buffer): Buffer {
+    if (value.length === 1 && value[0] === 0x00) {
+      return Buffer.from([0]);
+    } else {
+      return Buffer.concat([Buffer.from([1]), Buffer.from(value)]);
+    }
   }
 
   /**
