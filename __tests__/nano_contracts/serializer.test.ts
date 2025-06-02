@@ -86,9 +86,7 @@ test('Optional', () => {
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   expect(serializer.fromOptional(null, 'int')).toMatchBuffer(Buffer.from([0x00]));
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect(serializer.fromOptional(300, 'int')).toMatchBuffer(
-    Buffer.from('01ac02', 'hex')
-  );
+  expect(serializer.fromOptional(300, 'int')).toMatchBuffer(Buffer.from('01ac02', 'hex'));
 
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   expect(serializer.fromOptional(null, 'bool')).toMatchBuffer(Buffer.from([0x00]));
@@ -189,7 +187,6 @@ test('int', () => {
     expect(serializer.fromInt(testCase[0] as bigint)).toEqual(testCase[1] as Buffer);
   }
 });
-
 
 test('Amount', () => {
   const DWARF5UnsignedTestCases: [bigint, Buffer][] = [

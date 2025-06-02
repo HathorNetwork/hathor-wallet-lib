@@ -7,7 +7,7 @@
 
 import Address from '../models/address';
 import Network from '../models/network';
-import { signedIntToBytes, bigIntToBytes } from '../utils/buffer';
+import { signedIntToBytes } from '../utils/buffer';
 import {
   NanoContractArgumentSingleTypeName,
   NanoContractArgumentSingleTypeNameSchema,
