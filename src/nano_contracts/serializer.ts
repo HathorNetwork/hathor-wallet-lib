@@ -7,7 +7,7 @@
 
 import Address from '../models/address';
 import Network from '../models/network';
-import { signedIntToBytes, bigIntToBytes } from '../utils/buffer';
+import { signedIntToBytes } from '../utils/buffer';
 import {
   NanoContractArgumentSingleTypeName,
   NanoContractArgumentSingleTypeNameSchema,
@@ -47,23 +47,24 @@ class Serializer {
       case 'str':
         return this.fromString(value as string);
       case 'bytes':
+      case 'TxOutputScript':
+        return this.fromBytes(value as Buffer);
       case 'BlueprintId':
       case 'ContractId':
-      case 'TokenUid':
-      case 'TxOutputScript':
       case 'VertexId':
-        return this.fromBytes(value as Buffer);
+        return this.fromSizedBytes(value as Buffer);
+      case 'TokenUid':
+        return this.fromTokenUid(value as Buffer);
       case 'Address':
         return this.fromAddress(value as string);
       case 'int':
+        return this.fromInt(value as bigint);
       case 'Timestamp':
-        return this.fromInt(value as number);
+        return this.fromInt32(value as number);
       case 'Amount':
         return this.fromAmount(value as OutputValueType);
       case 'bool':
         return this.fromBool(value as boolean);
-      case 'VarInt':
-        return this.fromVarInt(value as bigint);
       default:
         throw new Error(`Invalid type. ${type}.`);
     }
@@ -117,7 +118,7 @@ class Serializer {
   fromAddress(value: string): Buffer {
     const address = new Address(value, { network: this.network });
     address.validateAddress();
-    return this.fromBytes(address.decode());
+    return this.fromSizedBytes(address.decode());
   }
 
   /**
@@ -133,6 +134,35 @@ class Serializer {
   }
 
   /**
+   * Serialize a bytes value with known size
+   *
+   * @param value Value to serialize
+   *
+   * @memberof Serializer
+   * @inner
+   */
+  fromSizedBytes(value: Buffer): Buffer {
+    return Buffer.from(value);
+  }
+
+  /**
+   * Serialize a Token UID
+   * For HTR we only add the tag 0x00
+   * For custom tokens we add the tag 0x01 and the uid bytes
+   *
+   * @param value Value to serialize
+   *
+   * @memberof Serializer
+   * @inner
+   */
+  fromTokenUid(value: Buffer): Buffer {
+    if (value.length === 1 && value[0] === 0x00) {
+      return Buffer.from([0]);
+    }
+    return Buffer.concat([Buffer.from([1]), Buffer.from(value)]);
+  }
+
+  /**
    * Serialize integer value
    *
    * @param value Value to serialize
@@ -140,7 +170,7 @@ class Serializer {
    * @memberof Serializer
    * @inner
    */
-  fromInt(value: number): Buffer {
+  fromInt32(value: number): Buffer {
     return signedIntToBytes(value, 4);
   }
 
@@ -153,9 +183,7 @@ class Serializer {
    * @inner
    */
   fromAmount(value: OutputValueType): Buffer {
-    // Nano `Amount` currently only supports up to 4 bytes.
-    // If we change Nano to support up to 8 bytes, we must update this.
-    return bigIntToBytes(value, 4);
+    return leb128Util.encodeUnsigned(value);
   }
 
   /**
@@ -181,7 +209,7 @@ class Serializer {
    *
    * @memberof Serializer
    */
-  fromVarInt(value: bigint): Buffer {
+  fromInt(value: bigint): Buffer {
     return leb128Util.encodeSigned(value);
   }
   /* eslint-disable class-methods-use-this */

@@ -18,7 +18,7 @@ import {
   NanoContractArgumentSingleTypeNameSchema,
 } from './types';
 import { OutputValueType } from '../types';
-import { NC_ARGS_MAX_BYTES_LENGTH } from '../constants';
+import { NATIVE_TOKEN_UID, NC_ARGS_MAX_BYTES_LENGTH } from '../constants';
 import { getContainerInternalType, getContainerType } from './utils';
 
 class Deserializer {
@@ -49,23 +49,24 @@ class Deserializer {
       case 'str':
         return this.toString(buf);
       case 'bytes':
+      case 'TxOutputScript':
+        return this.toBytes(buf);
       case 'BlueprintId':
       case 'ContractId':
-      case 'TokenUid':
-      case 'TxOutputScript':
       case 'VertexId':
-        return this.toBytes(buf);
+        return this.toSizedBytes(32, buf);
+      case 'TokenUid':
+        return this.toTokenUid(buf);
       case 'Address':
         return this.toAddress(buf);
       case 'int':
-      case 'Timestamp':
         return this.toInt(buf);
+      case 'Timestamp':
+        return this.toInt32(buf);
       case 'Amount':
         return this.toAmount(buf);
       case 'bool':
         return this.toBool(buf);
-      case 'VarInt':
-        return this.toVarInt(buf);
       default:
         throw new Error('Invalid type.');
     }
@@ -143,14 +144,61 @@ class Deserializer {
   }
 
   /**
-   * Deserialize int value
+   * Deserialize a bytes value with known size
+   *
+   * @param buf Value to deserialize
+   *
+   * @memberof Deserializer
+   * @inner
+   */
+  toSizedBytes(len: number, buf: Buffer): BufferROExtract<Buffer> {
+    if (buf.length < len) {
+      throw new Error('Do not have enough bytes to read the expected length');
+    }
+    return {
+      value: buf.subarray(0, len),
+      bytesRead: len,
+    };
+  }
+
+  /**
+   * Deserialize a Token UID
+   * The serialized value starts with a tag:
+   * - 0x00 for HTR
+   * - 0x01 for custom token
+   *
+   * For custom tokens we will also read the next 32 bytes.
    *
    * @param {Buffer} buf Value to deserialize
    *
    * @memberof Deserializer
    * @inner
    */
-  toInt(buf: Buffer): BufferROExtract<number> {
+  toTokenUid(buf: Buffer): BufferROExtract<Buffer> {
+    if (buf[0] === 0x00) {
+      return {
+        value: Buffer.from(NATIVE_TOKEN_UID, 'hex'),
+        bytesRead: 1,
+      };
+    }
+    if (buf[0] === 0x01) {
+      return {
+        value: buf.subarray(1, 33),
+        bytesRead: 33,
+      };
+    }
+    throw new Error('Invalid TokenUid tag');
+  }
+
+  /**
+   * Deserialize a 32bit int value
+   *
+   * @param {Buffer} buf Value to deserialize
+   *
+   * @memberof Deserializer
+   * @inner
+   */
+  toInt32(buf: Buffer): BufferROExtract<number> {
     return {
       value: unpackToInt(4, true, buf)[0],
       bytesRead: 4,
@@ -166,13 +214,7 @@ class Deserializer {
    * @inner
    */
   toAmount(buf: Buffer): BufferROExtract<OutputValueType> {
-    // Nano `Amount` currently only supports up to 4 bytes, so we simply use the `number` value converted to `BigInt`.
-    // If we change Nano to support up to 8 bytes, we must update this.
-    const { value, bytesRead } = this.toInt(buf);
-    return {
-      value: BigInt(value),
-      bytesRead,
-    };
+    return leb128Util.decodeUnsigned(buf);
   }
 
   /**
@@ -197,15 +239,14 @@ class Deserializer {
   }
 
   /**
-   * Deserialize a variable integer encoded as a leb128 buffer to a bigint.
+   * Deserialize an integer encoded as a leb128 buffer to a bigint.
    *
    * @param buf Value to deserialize
    *
    * @memberof Deserializer
    */
-  toVarInt(buf: Buffer): BufferROExtract<bigint> {
-    const { value, bytesRead } = leb128Util.decodeSigned(buf);
-    return { value, bytesRead };
+  toInt(buf: Buffer): BufferROExtract<bigint> {
+    return leb128Util.decodeSigned(buf);
   }
 
   /* eslint-enable class-methods-use-this */
@@ -225,28 +266,24 @@ class Deserializer {
    * @inner
    */
   toAddress(buf: Buffer): BufferROExtract<string> {
-    const lenReadResult = leb128Util.decodeUnsigned(buf, 1);
-    if (lenReadResult.value !== 25n) {
-      // Address should be exactly 25 bytes long
-      throw new Error('Address should be 25 bytes long');
+    if (buf.length < 25) {
+      throw new Error('Not enough bytes to read address');
     }
-    // The actual address bytes are the 25 bytes after the initial length
-    const addressBytes = buf.subarray(1);
     // First we get the 20 bytes (hash) of the address without the version byte and checksum
-    const hashBytes = addressBytes.subarray(1, 21);
+    const hashBytes = buf.subarray(1, 21);
     const address = helpersUtils.encodeAddress(hashBytes, this.network);
     address.validateAddress();
     const decoded = address.decode();
     // We need to check that the metadata of the address received match the one we generated
     // Check network version
-    if (decoded[0] !== addressBytes[0]) {
+    if (decoded[0] !== buf[0]) {
       throw new Error(
-        `Asked to deserialize an address with version byte ${addressBytes[0]} but the network from the deserializer object has version byte ${decoded[0]}.`
+        `Asked to deserialize an address with version byte ${buf[0]} but the network from the deserializer object has version byte ${decoded[0]}.`
       );
     }
     // Check checksum bytes
     const calcChecksum = decoded.subarray(21, 25);
-    const recvChecksum = addressBytes.subarray(21, 25);
+    const recvChecksum = buf.subarray(21, 25);
     if (!calcChecksum.equals(recvChecksum)) {
       // Checksum value generated does not match value from fullnode
       throw new Error(
@@ -255,7 +292,7 @@ class Deserializer {
     }
     return {
       value: address.base58,
-      bytesRead: 26, // 1 for length + 25 address bytes
+      bytesRead: 25,
     };
   }
 
@@ -339,7 +376,7 @@ class Deserializer {
    * It does not support chained container types, meaning Tuple[Dict[str,str]] should not happen.
    *
    * @param buf Value to deserialize
-   * @param typeArr List of types to read from buffer, e.g. `['str', 'int', 'VarInt']`
+   * @param typeArr List of types to read from buffer, e.g. `['str', 'int']`
    *
    * @memberof Deserializer
    * @inner

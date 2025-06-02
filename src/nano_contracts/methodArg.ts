@@ -36,7 +36,7 @@ function refineSingleValue(
   inputVal: NanoContractArgumentApiInputType,
   type: NanoContractArgumentSingleTypeName
 ) {
-  if (type === 'int' || type === 'Timestamp') {
+  if (type === 'Timestamp') {
     const parse = z.coerce.number().safeParse(inputVal);
     if (!parse.success) {
       ctx.addIssue({
@@ -47,7 +47,7 @@ function refineSingleValue(
     } else {
       return parse.data;
     }
-  } else if (type === 'VarInt' || type === 'Amount') {
+  } else if (type === 'int' || type === 'Amount') {
     const parse = z.coerce.bigint().safeParse(inputVal);
     if (!parse.success) {
       ctx.addIssue({
@@ -301,7 +301,7 @@ export class NanoContractMethodArgument {
       // Should not happen since all bytes values were caught, this is to satisfy typing
       return value.toString('hex');
     }
-    if (type === 'VarInt' || type === 'Amount') {
+    if (type === 'int' || type === 'Amount') {
       return String(value as bigint);
     }
     return value;

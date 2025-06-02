@@ -34,10 +34,17 @@ test('String', () => {
   );
 });
 
-test('Int', () => {
+test('TokenUid', () => {
   const serializer = new Serializer(new Network('testnet'));
+  const token = Buffer.from(
+    'cafecafecafecafecafecafecafecafecafecafecafecafecafecafecafecafe',
+    'hex'
+  );
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect(serializer.fromInt(300)).toMatchBuffer(Buffer.from([0x00, 0x00, 0x01, 0x2c]));
+  expect(serializer.fromTokenUid(token)).toMatchBuffer(Buffer.concat([Buffer.from([1]), token]));
+
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect(serializer.fromTokenUid(Buffer.from([0]))).toMatchBuffer(Buffer.from([0]));
 });
 
 test('Bytes', () => {
@@ -58,14 +65,28 @@ test('Bytes', () => {
   );
 });
 
+test('SizedBytes', () => {
+  const serializer = new Serializer(new Network('testnet'));
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect(serializer.fromSizedBytes(Buffer.from([0x74, 0x65, 0x73, 0x74]))).toMatchBuffer(
+    Buffer.from([0x74, 0x65, 0x73, 0x74])
+  );
+
+  // Encoding a big string
+  const bigBuffer = Buffer.from(Array(2048).fill('A').join(''), 'utf-8');
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect(serializer.fromSizedBytes(bigBuffer)).toMatchBuffer(bigBuffer);
+
+  // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+  expect(serializer.fromSizedBytes(Buffer.from([0]))).toMatchBuffer(Buffer.from([0]));
+});
+
 test('Optional', () => {
   const serializer = new Serializer(new Network('testnet'));
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   expect(serializer.fromOptional(null, 'int')).toMatchBuffer(Buffer.from([0x00]));
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  expect(serializer.fromOptional(300, 'int')).toMatchBuffer(
-    Buffer.from([0x01, 0x00, 0x00, 0x01, 0x2c])
-  );
+  expect(serializer.fromOptional(300, 'int')).toMatchBuffer(Buffer.from('01ac02', 'hex'));
 
   // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   expect(serializer.fromOptional(null, 'bool')).toMatchBuffer(Buffer.from([0x00]));
@@ -94,24 +115,9 @@ test('SignedData', () => {
       {
         signature: Buffer.from('74657374', 'hex'),
         type: 'int',
-        value: 300,
-      },
-      'int'
-    )
-    // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-  ).toMatchBuffer(
-    // value + 4 + test
-    Buffer.from([0x00, 0x00, 0x01, 0x2c, 0x04, 0x74, 0x65, 0x73, 0x74])
-  );
-
-  expect(
-    serializer.fromSignedData(
-      {
-        signature: Buffer.from('74657374', 'hex'),
-        type: 'VarInt',
         value: 300n,
       },
-      'VarInt'
+      'int'
     )
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
   ).toMatchBuffer(Buffer.from([0xac, 0x02, 0x04, 0x74, 0x65, 0x73, 0x74]));
@@ -165,7 +171,7 @@ test('SignedData', () => {
   ).toMatchBuffer(Buffer.from([0x01, 0x04, 0x74, 0x65, 0x73, 0x74]));
 });
 
-test('VarInt', () => {
+test('int', () => {
   const DWARF5TestCases = [
     [2n, Buffer.from([2])],
     [-2n, Buffer.from([0x7e])],
@@ -178,6 +184,20 @@ test('VarInt', () => {
   ];
   const serializer = new Serializer(new Network('testnet'));
   for (const testCase of DWARF5TestCases) {
-    expect(serializer.fromVarInt(testCase[0] as bigint)).toEqual(testCase[1] as Buffer);
+    expect(serializer.fromInt(testCase[0] as bigint)).toEqual(testCase[1] as Buffer);
+  }
+});
+
+test('Amount', () => {
+  const DWARF5UnsignedTestCases: [bigint, Buffer][] = [
+    [2n, Buffer.from([2])],
+    [127n, Buffer.from([127])],
+    [128n, Buffer.from([0x80, 1])],
+    [129n, Buffer.from([1 + 0x80, 1])],
+    [12857n, Buffer.from([57 + 0x80, 100])],
+  ];
+  const serializer = new Serializer(new Network('testnet'));
+  for (const testCase of DWARF5UnsignedTestCases) {
+    expect(serializer.fromAmount(testCase[0] as bigint)).toEqual(testCase[1] as Buffer);
   }
 });

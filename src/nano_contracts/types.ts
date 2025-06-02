@@ -27,7 +27,6 @@ export const NanoContractArgumentSingleTypeNameSchema = z.enum([
   'Address',
   'Timestamp',
   'Amount',
-  'VarInt',
   ...NanoContractArgumentByteTypes.options,
 ]);
 export type NanoContractArgumentSingleTypeName = z.output<
