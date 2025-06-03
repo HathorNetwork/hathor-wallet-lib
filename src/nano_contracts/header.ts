@@ -87,7 +87,7 @@ class NanoContractHeader extends Header {
     array.push(hexToBuffer(this.id));
 
     // Seqnum
-    array.push(encodeUnsigned(this.seqnum));
+    array.push(leb128Util.encodeUnsigned(this.seqnum));
 
     const methodBytes = Buffer.from(this.method, 'ascii');
     array.push(intToBytes(methodBytes.length, 1));
@@ -178,11 +178,11 @@ class NanoContractHeader extends Header {
     ncId = ncIdBuffer.toString('hex');
 
     // Seqnum has variable length with maximum of 8 bytes
-    const {
+    let seqnum: number;
+    ({
       value: seqnum,
       rest: buf,
-    } = leb128Util.decodeUnsigned(buf, 8);
-    header.seqnum = seqnum;
+    } = leb128Util.decodeUnsigned(buf, 8));
 
     // nc method
     let methodLen: number;
@@ -226,7 +226,7 @@ class NanoContractHeader extends Header {
       rest: buf,
     } = leb128Util.decodeUnsigned(buf, 2));
 
-    const header = new NanoContractHeader(ncId, method, args, actions, address);
+    const header = new NanoContractHeader(ncId, method, args, actions, Number(seqnum), address);
 
     if (scriptLen !== 0) {
       // script might be null
