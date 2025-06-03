@@ -3376,7 +3376,7 @@ class HathorWallet extends EventEmitter {
    * @returns {Promise<number>}
    */
   async getNanoHeaderSeqnum(address) {
-    const addressInfo = await this.storage.getAddressInfo(address);
+    const addressInfo = await this.storage.getAddressInfo(address.base58);
     return addressInfo.seqnum + 1;
   }
 }
