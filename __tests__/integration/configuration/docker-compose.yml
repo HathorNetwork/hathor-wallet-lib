@@ -6,7 +6,7 @@ services:
 
   fullnode:
     image:
-      ${HATHOR_LIB_INTEGRATION_TESTS_FULLNODE_IMAGE:-hathornetwork/hathor-core:experimental-nano-preview-202505211850-python3.12}
+      ${HATHOR_LIB_INTEGRATION_TESTS_FULLNODE_IMAGE:-hathornetwork/hathor-core:experimental-nano-preview-20250602-python3.12}
     command: [
       "run_node",
       "--listen", "tcp:40404",
