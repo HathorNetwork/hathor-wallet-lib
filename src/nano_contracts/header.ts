@@ -112,11 +112,11 @@ class NanoContractHeader extends Header {
     array.push(addressBytes);
 
     if (addScript && this.script !== null) {
-      array.push(intToBytes(this.script.length, 2));
+      array.push(leb128Util.encodeUnsigned(this.script.length, 2));
       array.push(this.script);
     } else {
       // Script with length 0 indicates there is no script.
-      array.push(intToBytes(0, 2));
+      array.push(leb128Util.encodeUnsigned(0, 2));
     }
   }
 
@@ -221,13 +221,16 @@ class NanoContractHeader extends Header {
 
     // nc script
     let scriptLen: number;
-    [scriptLen, buf] = unpackToInt(2, false, buf);
+    ({
+      value: scriptLen,
+      rest: buf,
+    } = leb128Util.decodeUnsigned(buf, 2));
 
     const header = new NanoContractHeader(ncId, method, args, actions, address);
 
     if (scriptLen !== 0) {
       // script might be null
-      [header.script, buf] = unpackLen(scriptLen, buf);
+      [header.script, buf] = unpackLen(Number(scriptLen), buf);
     }
     /* eslint-enable prefer-const */
 
