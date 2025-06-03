@@ -449,23 +449,23 @@ class NanoContractTransactionBuilder {
   }
 
   /**
-   * Execute an invoke authority action
+   * Execute an acquire authority action
    *
-   * @param {action} Action to be completed (must be an invoke authority type)
+   * @param {action} Action to be completed (must be an acquire authority type)
    *
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  executeInvokeAuthority(action: NanoContractAction): IDataOutput | null {
-    if (action.type !== NanoContractActionType.INVOKE_AUTHORITY) {
+  executeAcquireAuthority(action: NanoContractAction): IDataOutput | null {
+    if (action.type !== NanoContractActionType.ACQUIRE_AUTHORITY) {
       throw new NanoContractTransactionError(
-        "Can't execute an invoke authority with an action which type is different than invoke authority."
+        "Can't execute an acquire authority with an action which type is different than acquire authority."
       );
     }
 
     if (!action.address || !action.authority || !action.token) {
       throw new NanoContractTransactionError(
-        'Address, authority, and token are required for invoke authority action.'
+        'Address, authority, and token are required for acquire authority action.'
       );
     }
 
@@ -615,10 +615,10 @@ class NanoContractTransactionBuilder {
             outputs = concat(outputs, grantOutputs);
             break;
           }
-          case NanoContractActionType.INVOKE_AUTHORITY: {
-            const outputInvoke = this.executeInvokeAuthority(action);
-            if (outputInvoke) {
-              outputs = concat(outputs, outputInvoke);
+          case NanoContractActionType.ACQUIRE_AUTHORITY: {
+            const outputAcquire = this.executeAcquireAuthority(action);
+            if (outputAcquire) {
+              outputs = concat(outputs, outputAcquire);
             }
             break;
           }
@@ -726,6 +726,7 @@ class NanoContractTransactionBuilder {
       }
 
       const tx = await this.buildTransaction(inputs, outputs, tokens);
+      const seqnum = await this.wallet.getNanoHeaderSeqnum(this.caller!);
 
       let nanoHeaderActions: NanoContractActionHeader[] = [];
 
@@ -740,6 +741,7 @@ class NanoContractTransactionBuilder {
         this.method!,
         this.serializedArgs!,
         nanoHeaderActions,
+        seqnum,
         this.caller!,
         null
       );

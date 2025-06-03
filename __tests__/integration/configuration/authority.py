@@ -19,10 +19,9 @@ from hathor.nanocontracts.types import (
     NCAction,
     NCDepositAction,
     NCGrantAuthorityAction,
-    NCInvokeAuthorityAction,
+    NCAcquireAuthorityAction,
     NCWithdrawalAction,
     TokenUid,
-    is_action_type,
     public,
 )
 
@@ -41,23 +40,23 @@ class AuthorityBlueprint(Blueprint):
         # Deposit so it can have funds to pay token deposit fee
         # for create token method
         action = self._get_action(ctx)
-        assert is_action_type(action, NCDepositAction)
+        assert isinstance(action, NCDepositAction)
 
     @public(allow_withdrawal=True)
     def create_token(self, ctx: Context) -> None:
         # Withdrawal to pay for token creation
         action = self._get_action(ctx)
-        assert is_action_type(action, NCWithdrawalAction)
+        assert isinstance(action, NCWithdrawalAction)
 
     @public(allow_grant_authority=True)
     def grant_authority(self, ctx: Context) -> None:
         action = self._get_action(ctx)
-        assert is_action_type(action, NCGrantAuthorityAction)
+        assert isinstance(action, NCGrantAuthorityAction)
 
-    @public(allow_invoke_authority=True)
-    def invoke_authority(self, ctx: Context) -> None:
+    @public(allow_acquire_authority=True)
+    def acquire_authority(self, ctx: Context) -> None:
         action = self._get_action(ctx)
-        assert is_action_type(action, NCInvokeAuthorityAction)
+        assert isinstance(action, NCAcquireAuthorityAction)
 
     @public
     def mint(self, ctx: Context, token_uid: TokenUid, amount: int) -> None:

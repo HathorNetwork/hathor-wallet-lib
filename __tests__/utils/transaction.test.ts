@@ -127,6 +127,7 @@ test('getSignatureForTx signing nano contract when we are not the caller', async
     'drip',
     Buffer.from('cafe', 'hex'),
     [],
+    1,
     new Address('WYBwT3xLpDnHNtYZiU52oanupVeDKhAvNp')
   );
   const tx = new Transaction([input], [], { headers: [nano] });

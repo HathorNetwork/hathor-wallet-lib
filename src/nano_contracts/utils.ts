@@ -37,7 +37,6 @@ import {
 } from './types';
 import { NANO_CONTRACTS_INITIALIZE_METHOD, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../constants';
 import { NanoContractMethodArgument } from './methodArg';
-import leb128 from '../utils/leb128';
 
 export function getContainerInternalType(
   type: string
@@ -153,7 +152,7 @@ export const getOracleInputData = async (
   wallet: HathorWallet
 ) => {
   const ncId = Buffer.from(contractId, 'hex');
-  const actualValue = Buffer.concat([leb128.encodeUnsigned(ncId.length), ncId, resultSerialized]);
+  const actualValue = Buffer.concat([ncId, resultSerialized]);
   return unsafeGetOracleInputData(oracleData, actualValue, wallet);
 };
 
@@ -285,7 +284,7 @@ export const mapActionToActionHeader = (
   let amount;
   if (
     action.type === NanoContractActionType.GRANT_AUTHORITY ||
-    action.type === NanoContractActionType.INVOKE_AUTHORITY
+    action.type === NanoContractActionType.ACQUIRE_AUTHORITY
   ) {
     amount = action.authority === 'mint' ? TOKEN_MINT_MASK : TOKEN_MELT_MASK;
   } else if (

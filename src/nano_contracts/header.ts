@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { NANO_CONTRACTS_INFO_VERSION } from '../constants';
 import { NanoContractActionHeader } from './types';
 import type Transaction from '../models/transaction';
 import {
@@ -17,6 +16,7 @@ import {
   unpackToInt,
 } from '../utils/buffer';
 import helpersUtils from '../utils/helpers';
+import leb128Util from '../utils/leb128';
 import {
   getVertexHeaderIdBuffer,
   getVertexHeaderIdFromBuffer,
@@ -28,9 +28,6 @@ import Network from '../models/network';
 import { OutputValueType } from '../types';
 
 class NanoContractHeader extends Header {
-  // Used to create serialization versioning (hard coded as NANO_CONTRACTS_INFO_VERSION for now)
-  nc_info_version: number;
-
   // It's the blueprint id when this header is calling a initialize method
   // and it's the nano contract id when it's executing another method of a nano
   id: string;
@@ -47,6 +44,9 @@ class NanoContractHeader extends Header {
   // Address of the transaction owner(s)/caller(s)
   address: Address;
 
+  // Sequential number for the nano header
+  seqnum: number;
+
   /**
    * script with signature(s) of the transaction owner(s)/caller(s).
    * Supports P2PKH and P2SH
@@ -58,17 +58,18 @@ class NanoContractHeader extends Header {
     method: string,
     args: Buffer,
     actions: NanoContractActionHeader[],
+    seqnum: number,
     address: Address,
     script: Buffer | null = null
   ) {
     super();
-    this.nc_info_version = NANO_CONTRACTS_INFO_VERSION;
     this.id = id;
     this.method = method;
     this.args = args;
     this.actions = actions;
     this.address = address;
     this.script = script;
+    this.seqnum = seqnum;
   }
 
   /**
@@ -82,11 +83,11 @@ class NanoContractHeader extends Header {
    * @inner
    */
   serializeFields(array: Buffer[], addScript: boolean) {
-    // Info version
-    array.push(intToBytes(this.nc_info_version, 1));
-
     // nano contract id
     array.push(hexToBuffer(this.id));
+
+    // Seqnum
+    array.push(leb128Util.encodeUnsigned(this.seqnum));
 
     const methodBytes = Buffer.from(this.method, 'ascii');
     array.push(intToBytes(methodBytes.length, 1));
@@ -111,11 +112,11 @@ class NanoContractHeader extends Header {
     array.push(addressBytes);
 
     if (addScript && this.script !== null) {
-      array.push(intToBytes(this.script.length, 2));
+      array.push(leb128Util.encodeUnsigned(this.script.length, 2));
       array.push(this.script);
     } else {
       // Script with length 0 indicates there is no script.
-      array.push(intToBytes(0, 2));
+      array.push(leb128Util.encodeUnsigned(0, 2));
     }
   }
 
@@ -162,7 +163,6 @@ class NanoContractHeader extends Header {
 
     buf = buf.subarray(1);
 
-    let nc_info_version: number;
     let ncId: string;
     let method: string;
     let args: Buffer;
@@ -171,17 +171,15 @@ class NanoContractHeader extends Header {
 
     /* eslint-disable prefer-const -- To split these declarations would be confusing.
      * In all of them the first parameter should be a const and the second a let. */
-    // nc info version
-    [nc_info_version, buf] = unpackToInt(1, false, buf);
-
-    if (nc_info_version !== NANO_CONTRACTS_INFO_VERSION) {
-      throw new Error('Invalid info version for nano header.');
-    }
 
     // NC ID is 32 bytes in hex
     let ncIdBuffer: Buffer;
     [ncIdBuffer, buf] = unpackLen(32, buf);
     ncId = ncIdBuffer.toString('hex');
+
+    // Seqnum has variable length with maximum of 8 bytes
+    let seqnum: bigint;
+    ({ value: seqnum, rest: buf } = leb128Util.decodeUnsigned(buf, 8));
 
     // nc method
     let methodLen: number;
@@ -219,14 +217,14 @@ class NanoContractHeader extends Header {
     address = helpersUtils.getAddressFromBytes(addressBytes, network);
 
     // nc script
-    let scriptLen: number;
-    [scriptLen, buf] = unpackToInt(2, false, buf);
+    let scriptLen: bigint;
+    ({ value: scriptLen, rest: buf } = leb128Util.decodeUnsigned(buf, 2));
 
-    const header = new NanoContractHeader(ncId, method, args, actions, address);
+    const header = new NanoContractHeader(ncId, method, args, actions, Number(seqnum), address);
 
-    if (scriptLen !== 0) {
+    if (scriptLen !== 0n) {
       // script might be null
-      [header.script, buf] = unpackLen(scriptLen, buf);
+      [header.script, buf] = unpackLen(Number(scriptLen), buf);
     }
     /* eslint-enable prefer-const */
 

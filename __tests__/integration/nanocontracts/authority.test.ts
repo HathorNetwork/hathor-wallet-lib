@@ -333,18 +333,18 @@ describe('Authority actions blueprint test', () => {
     expect(ncStateMelt.balances[txCreateToken.hash].can_mint).toBe(true);
     expect(ncStateMelt.balances[txCreateToken.hash].can_melt).toBe(true);
 
-    // Mint/melt in the contract world doesn't affect this API from utxo world
+    // Mint/melt in the contract affect the token info in the utxo world
     const tokenDetail3 = await wallet.getTokenDetails(txCreateToken.hash);
-    expect(tokenDetail3.totalSupply).toBe(1000n);
+    expect(tokenDetail3.totalSupply).toBe(2000n);
     expect(tokenDetail3.authorities.mint).toBe(false);
     expect(tokenDetail3.authorities.melt).toBe(true);
 
-    // We will invoke a mint authority to an output
-    const invokeData = {
+    // We will acquire a mint authority to an output
+    const acquireData = {
       ncId: txInitialize.hash,
       actions: [
         {
-          type: 'invoke_authority',
+          type: 'acquire_authority',
           token: txCreateToken.hash,
           authority: 'mint',
           address: address1,
@@ -352,37 +352,37 @@ describe('Authority actions blueprint test', () => {
       ],
     };
 
-    const txInvoke = await wallet.createAndSendNanoContractTransaction(
-      'invoke_authority',
+    const txAcquire = await wallet.createAndSendNanoContractTransaction(
+      'acquire_authority',
       address0,
-      invokeData
+      acquireData
     );
-    await checkTxValid(wallet, txInvoke);
-    const txInvokeData = await wallet.getFullTxById(txInvoke.hash);
+    await checkTxValid(wallet, txAcquire);
+    const txAcquireData = await wallet.getFullTxById(txAcquire.hash);
 
-    expect(txInvokeData.tx.nc_id).toBe(txInitialize.hash);
-    expect(txInvokeData.tx.nc_method).toBe('invoke_authority');
-    expect(txInvokeData.tx.outputs.length).toBe(1);
-    expect(txInvokeData.tx.inputs.length).toBe(0);
+    expect(txAcquireData.tx.nc_id).toBe(txInitialize.hash);
+    expect(txAcquireData.tx.nc_method).toBe('acquire_authority');
+    expect(txAcquireData.tx.outputs.length).toBe(1);
+    expect(txAcquireData.tx.inputs.length).toBe(0);
     // Mint authority output
-    expect(txInvokeData.tx.outputs[0].value).toBe(1n);
-    expect(txInvokeData.tx.outputs[0].token_data).toBe(129);
-    expect(txInvokeData.tx.outputs[0].decoded.address).toBe(address1);
+    expect(txAcquireData.tx.outputs[0].value).toBe(1n);
+    expect(txAcquireData.tx.outputs[0].token_data).toBe(129);
+    expect(txAcquireData.tx.outputs[0].decoded.address).toBe(address1);
 
-    const ncStateInvoke = await ncApi.getNanoContractState(
+    const ncStateAcquire = await ncApi.getNanoContractState(
       txInitialize.hash,
       [],
       [txCreateToken.hash, NATIVE_TOKEN_UID]
     );
 
-    expect(BigInt(ncStateInvoke.balances[NATIVE_TOKEN_UID].value)).toBe(60n);
-    expect(BigInt(ncStateInvoke.balances[txCreateToken.hash].value)).toBe(1000n);
-    expect(ncStateInvoke.balances[txCreateToken.hash].can_mint).toBe(true);
-    expect(ncStateInvoke.balances[txCreateToken.hash].can_melt).toBe(true);
+    expect(BigInt(ncStateAcquire.balances[NATIVE_TOKEN_UID].value)).toBe(60n);
+    expect(BigInt(ncStateAcquire.balances[txCreateToken.hash].value)).toBe(1000n);
+    expect(ncStateAcquire.balances[txCreateToken.hash].can_mint).toBe(true);
+    expect(ncStateAcquire.balances[txCreateToken.hash].can_melt).toBe(true);
 
     // Now we can mint again in the utxo world
     const tokenDetail4 = await wallet.getTokenDetails(txCreateToken.hash);
-    expect(tokenDetail4.totalSupply).toBe(1000n);
+    expect(tokenDetail4.totalSupply).toBe(2000n);
     expect(tokenDetail4.authorities.mint).toBe(true);
     expect(tokenDetail4.authorities.melt).toBe(true);
 
@@ -412,7 +412,7 @@ describe('Authority actions blueprint test', () => {
 
     // The token detail in the utxo world did not change
     const tokenDetail5 = await wallet.getTokenDetails(txCreateToken.hash);
-    expect(tokenDetail5.totalSupply).toBe(1000n);
+    expect(tokenDetail5.totalSupply).toBe(2000n);
     expect(tokenDetail5.authorities.mint).toBe(true);
     expect(tokenDetail5.authorities.melt).toBe(true);
 

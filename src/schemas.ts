@@ -52,6 +52,7 @@ export const IAddressMetadataAsRecordSchema: ZodSchema<IAddressMetadataAsRecord>
   .object({
     numTransactions: z.number(),
     balance: z.record(IBalanceSchema),
+    seqnum: z.number(),
   })
   .passthrough();
 
@@ -118,19 +119,19 @@ export const IHistoryNanoContractActionDepositSchema = IHistoryNanoContractBaseT
 
 export const IHistoryNanoContractActionGrantAuthoritySchema =
   IHistoryNanoContractBaseAuthorityAction.extend({
-    type: z.literal('GRANT_AUTHORITY'),
+    type: z.literal('grant_authority'),
   }).passthrough();
 
-export const IHistoryNanoContractActionInvokeAuthoritySchema =
+export const IHistoryNanoContractActionAcquireAuthoritySchema =
   IHistoryNanoContractBaseAuthorityAction.extend({
-    type: z.literal('INVOKE_AUTHORITY'),
+    type: z.literal('acquire_authority'),
   }).passthrough();
 
 export const IHistoryNanoContractActionSchema = z.discriminatedUnion('type', [
   IHistoryNanoContractActionDepositSchema,
   IHistoryNanoContractActionWithdrawalSchema,
   IHistoryNanoContractActionGrantAuthoritySchema,
-  IHistoryNanoContractActionInvokeAuthoritySchema,
+  IHistoryNanoContractActionAcquireAuthoritySchema,
 ]);
 
 export const IHistoryNanoContractContextSchema = z
