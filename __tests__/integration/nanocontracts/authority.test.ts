@@ -436,7 +436,7 @@ describe('Authority actions blueprint test', () => {
       ],
     };
 
-    const newCreateTokenOptions = {
+    const singleUtxoCreateTokenOptions = {
       mintAddress: address0,
       name: 'Single UTXO Test Token',
       symbol: 'SUT',
@@ -457,15 +457,15 @@ describe('Authority actions blueprint test', () => {
       NANO_CONTRACTS_INITIALIZE_METHOD,
       address2,
       newInitializeData,
-      newCreateTokenOptions
+      singleUtxoCreateTokenOptions
     );
     await checkTxValid(wallet, initializeTokenCreate);
     const initializeTokenCreateData = await wallet.getFullTxById(initializeTokenCreate.hash);
 
     expect(initializeTokenCreateData.tx.nc_method).toBe(NANO_CONTRACTS_INITIALIZE_METHOD);
     expect(initializeTokenCreateData.tx.version).toBe(CREATE_TOKEN_TX_VERSION);
-    expect(initializeTokenCreateData.tx.token_name).toBe(newCreateTokenOptions.name);
-    expect(initializeTokenCreateData.tx.token_symbol).toBe(newCreateTokenOptions.symbol);
+    expect(initializeTokenCreateData.tx.token_name).toBe(singleUtxoCreateTokenOptions.name);
+    expect(initializeTokenCreateData.tx.token_symbol).toBe(singleUtxoCreateTokenOptions.symbol);
     // A single utxo was used
     expect(initializeTokenCreateData.tx.inputs.length).toBe(1);
     expect(initializeTokenCreateData.tx.outputs.length).toBe(5);
@@ -603,6 +603,7 @@ describe('Authority actions blueprint test', () => {
 
     const depositAndGrantData = {
       ncId: txInitialize.hash,
+      args: [newTxCreateToken.hash],
       actions: [
         {
           type: 'grant_authority',
@@ -624,9 +625,15 @@ describe('Authority actions blueprint test', () => {
     );
     await checkTxValid(wallet, txDepositAndGrant);
     const txDepositAndGrantData = await wallet.getFullTxById(txDepositAndGrant.hash);
-    console.log('tx deposit data', txDepositAndGrantData);
 
-    // TODO Validate data
+    expect(txDepositAndGrantData.tx.nc_id).toBe(txInitialize.hash);
+    expect(txDepositAndGrantData.tx.nc_method).toBe('deposit_and_grant');
+    expect(txDepositAndGrantData.tx.outputs.length).toBe(1);
+    // The change output of the token used for the deposit
+    expect(txDepositAndGrantData.tx.outputs[0].token_data).toBe(1);
+    // One input for the deposit and one for the authority
+    expect(txDepositAndGrantData.tx.inputs.length).toBe(2);
+    expect(txDepositAndGrantData.tx.nc_context.actions.length).toBe(2);
   };
 
   it('Run with on chain blueprint', async () => {
