@@ -670,7 +670,7 @@ export async function processNewTx(
 
     // create metadata for address and token if it does not exist
     if (!addressMeta) {
-      addressMeta = DEFAULT_ADDRESS_META;
+      addressMeta = { ...DEFAULT_ADDRESS_META };
     }
     if (!tokenMeta) {
       tokenMeta = { numTransactions: 0, balance: getEmptyBalance() };
@@ -764,7 +764,7 @@ export async function processNewTx(
 
     // create metadata for address and token if it does not exist
     if (!addressMeta) {
-      addressMeta = DEFAULT_ADDRESS_META;
+      addressMeta = { ...DEFAULT_ADDRESS_META };
     }
     if (!tokenMeta) {
       tokenMeta = { numTransactions: 0, balance: getEmptyBalance() };
@@ -822,7 +822,7 @@ export async function processNewTx(
       // create metadata for address if it does not exist
       let addressMeta = await store.getAddressMeta(caller);
       if (!addressMeta) {
-        addressMeta = DEFAULT_ADDRESS_META;
+        addressMeta = { ...DEFAULT_ADDRESS_META };
       }
 
       if (tx.nc_id) {
@@ -912,7 +912,7 @@ export async function processUtxoUnlock(
   // create metadata for address and token if it does not exist
   // This should not happen, but we check so that typescript compiler can guarantee the type
   if (!addressMeta) {
-    addressMeta = DEFAULT_ADDRESS_META;
+    addressMeta = { ...DEFAULT_ADDRESS_META };
   }
   if (!tokenMeta) {
     tokenMeta = { numTransactions: 0, balance: getEmptyBalance() };
