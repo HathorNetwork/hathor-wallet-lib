@@ -125,14 +125,14 @@ export interface IHistoryNanoContractActionDeposit {
 }
 
 export interface IHistoryNanoContractActionGrantAuthority {
-  type: 'GRANT_AUTHORITY';
+  type: 'grant_authority';
   token_uid: string;
   mint: boolean;
   melt: boolean;
 }
 
 export interface IHistoryNanoContractActionAcquireAuthority {
-  type: 'ACQUIRE_AUTHORITY';
+  type: 'acquire_authority';
   token_uid: string;
   mint: boolean;
   melt: boolean;
