@@ -648,14 +648,17 @@ describe('Authority actions blueprint test', () => {
     expect(address0Meta?.numTransactions).toBe(1);
 
     // Use the blueprint code
-    const code = fs.readFileSync('./__tests__/integration/configuration/authority.py', 'utf8');
+    const code = fs.readFileSync(
+      './__tests__/integration/configuration/blueprints/authority.py',
+      'utf8'
+    );
     const tx = await hWallet.createAndSendOnChainBlueprintTransaction(code, address10);
     // Wait for the tx to be confirmed, so we can use the on chain blueprint
     await waitTxConfirmed(hWallet, tx.hash);
     // We must have one transaction in the address10 now
     const newAddress10Meta = await hWallet.storage.store.getAddressMeta(address10);
     expect(newAddress10Meta.numTransactions).toBe(1);
-    // Execute the bet blueprint tests
+    // Execute the authority blueprint tests
     await executeTests(hWallet, tx.hash);
   });
 });
