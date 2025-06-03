@@ -44,8 +44,6 @@ class FullBlueprint(Blueprint):
 
     blueprint_id: BlueprintId
 
-    #varint: VarInt
-
     attr_str: str
 
     attr_int: int
@@ -89,7 +87,6 @@ class FullBlueprint(Blueprint):
         self.timestamp = timestamp
         self.contract_id = contract_id
         self.blueprint_id = blueprint_id
-        #self.varint = varint
         self.attr_str = attr_str
         self.attr_int = attr_int
         self.attr_bytes = attr_bytes
