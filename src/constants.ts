@@ -84,14 +84,6 @@ export const ON_CHAIN_BLUEPRINTS_VERSION = 6;
 export const POA_BLOCK_VERSION = 5;
 
 /**
- * Nano Contracts information version
- * If we decide to change the serialization of nano information
- * data, then we can change this version, so we can
- * correctly deserialize all the nano contract transactions
- */
-export const NANO_CONTRACTS_INFO_VERSION = 1;
-
-/**
  * String with the name of the initialize method of all blueprints
  */
 export const NANO_CONTRACTS_INITIALIZE_METHOD = 'initialize';

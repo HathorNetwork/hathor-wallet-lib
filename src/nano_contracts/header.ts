@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { NANO_CONTRACTS_INFO_VERSION } from '../constants';
 import { NanoContractActionHeader } from './types';
 import type Transaction from '../models/transaction';
 import {
@@ -29,9 +28,6 @@ import Network from '../models/network';
 import { OutputValueType } from '../types';
 
 class NanoContractHeader extends Header {
-  // Used to create serialization versioning (hard coded as NANO_CONTRACTS_INFO_VERSION for now)
-  nc_info_version: number;
-
   // It's the blueprint id when this header is calling a initialize method
   // and it's the nano contract id when it's executing another method of a nano
   id: string;
@@ -67,7 +63,6 @@ class NanoContractHeader extends Header {
     script: Buffer | null = null
   ) {
     super();
-    this.nc_info_version = NANO_CONTRACTS_INFO_VERSION;
     this.id = id;
     this.method = method;
     this.args = args;
@@ -88,9 +83,6 @@ class NanoContractHeader extends Header {
    * @inner
    */
   serializeFields(array: Buffer[], addScript: boolean) {
-    // Info version
-    array.push(intToBytes(this.nc_info_version, 1));
-
     // nano contract id
     array.push(hexToBuffer(this.id));
 
@@ -171,7 +163,6 @@ class NanoContractHeader extends Header {
 
     buf = buf.subarray(1);
 
-    let nc_info_version: number;
     let ncId: string;
     let method: string;
     let args: Buffer;
@@ -180,12 +171,6 @@ class NanoContractHeader extends Header {
 
     /* eslint-disable prefer-const -- To split these declarations would be confusing.
      * In all of them the first parameter should be a const and the second a let. */
-    // nc info version
-    [nc_info_version, buf] = unpackToInt(1, false, buf);
-
-    if (nc_info_version !== NANO_CONTRACTS_INFO_VERSION) {
-      throw new Error('Invalid info version for nano header.');
-    }
 
     // NC ID is 32 bytes in hex
     let ncIdBuffer: Buffer;
