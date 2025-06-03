@@ -153,7 +153,7 @@ export const getOracleInputData = async (
   wallet: HathorWallet
 ) => {
   const ncId = Buffer.from(contractId, 'hex');
-  const actualValue = Buffer.concat([leb128.encodeUnsigned(ncId.length), ncId, resultSerialized]);
+  const actualValue = Buffer.concat([ncId, resultSerialized]);
   return unsafeGetOracleInputData(oracleData, actualValue, wallet);
 };
 
