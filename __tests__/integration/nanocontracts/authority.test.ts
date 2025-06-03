@@ -588,7 +588,7 @@ describe('Authority actions blueprint test', () => {
     expect(newTxCreateTokenData.tx.outputs.length).toBe(4);
     // First the change output of HTR used for the deposit
     expect(newTxCreateTokenData.tx.outputs[0].token_data).toBe(0);
-    // Then the created token output with 1000n amount
+    // Then the created token output with 100n amount
     expect(newTxCreateTokenData.tx.outputs[1].value).toBe(100n);
     expect(newTxCreateTokenData.tx.outputs[1].token_data).toBe(1);
     // Mint authority
