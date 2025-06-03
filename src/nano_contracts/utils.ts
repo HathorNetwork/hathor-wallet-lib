@@ -37,7 +37,6 @@ import {
 } from './types';
 import { NANO_CONTRACTS_INITIALIZE_METHOD, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../constants';
 import { NanoContractMethodArgument } from './methodArg';
-import leb128 from '../utils/leb128';
 
 export function getContainerInternalType(
   type: string
