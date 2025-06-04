@@ -8,12 +8,11 @@
 import { get, has } from 'lodash';
 import Address from '../models/address';
 import Network from '../models/network';
-import Deserializer from './deserializer';
 import ncApi from '../api/nano';
 import { NanoContractTransactionParseError } from '../errors';
-import { MethodArgInfo } from './types';
+import { MethodArgInfo, IParsedArgument } from './types';
 import leb128 from '../utils/leb128';
-import { NanoContractMethodArgument } from './methodArg';
+import { getFieldParser } from './ncTypes/parser';
 
 class NanoContractTransactionParser {
   blueprintId: string;
@@ -26,7 +25,7 @@ class NanoContractTransactionParser {
 
   args: string | null;
 
-  parsedArgs: NanoContractMethodArgument[] | null;
+  parsedArgs: IParsedArgument[] | null;
 
   constructor(
     blueprintId: string,
@@ -50,12 +49,11 @@ class NanoContractTransactionParser {
    * @inner
    */
   async parseArguments() {
-    const parsedArgs: NanoContractMethodArgument[] = [];
+    const parsedArgs: IParsedArgument[] = [];
     if (!this.args) {
       return;
     }
 
-    const deserializer = new Deserializer(this.network);
     // Get the blueprint data from full node
     const blueprintInformation = await ncApi.getBlueprintInformation(this.blueprintId);
     if (!has(blueprintInformation, `public_methods.${this.method}`)) {
@@ -86,17 +84,13 @@ class NanoContractTransactionParser {
     }
 
     for (const arg of methodArgs) {
-      let parsed: NanoContractMethodArgument;
+      let parsed: IParsedArgument;
       let size: number;
       try {
-        const parseResult = NanoContractMethodArgument.fromSerialized(
-          arg.name,
-          arg.type,
-          argsBuffer,
-          deserializer
-        );
-        parsed = parseResult.value;
-        size = parseResult.bytesRead;
+        const field = getFieldParser(arg.type, this.network);
+        const result = field.fromBuffer(argsBuffer);
+        parsed = { ...arg, field };
+        size = result.bytesRead;
       } catch (err: unknown) {
         throw new NanoContractTransactionParseError(`Failed to deserialize argument ${arg.type}.`);
       }
