@@ -59,6 +59,20 @@ class AuthorityBlueprint(Blueprint):
         assert isinstance(action, NCAcquireAuthorityAction)
 
     @public
+    def create_token_no_deposit(self, ctx: Context) -> None:
+        # User will pay for token deposit
+        if len(ctx.actions) != 0:
+            raise NCFail('expect no actions')
+
+    @public(allow_deposit=True, allow_grant_authority=True)
+    def deposit_and_grant(self, ctx: Context, token_uid: TokenUid) -> None:
+        if len(ctx.actions) != 1:
+            raise NCFail('expect actions for a single token.')
+
+        if len(ctx.actions[token_uid]) != 2:
+            raise NCFail('expect two actions.')
+
+    @public
     def mint(self, ctx: Context, token_uid: TokenUid, amount: int) -> None:
         self.syscall.mint_tokens(token_uid, amount)
 

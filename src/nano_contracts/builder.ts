@@ -114,17 +114,7 @@ class NanoContractTransactionBuilder {
         `Invalid actions. Error: ${parseResult.error.message}.`
       );
     }
-    const parsedActions = parseResult.data;
-    // Check if there's only one action for each token
-    if (parsedActions) {
-      const tokens = parsedActions.map(action => action.token);
-      const tokensSet = new Set(tokens);
-      if (tokens.length !== tokensSet.size) {
-        throw new NanoContractTransactionError('More than one action per token is not allowed.');
-      }
-    }
-
-    this.actions = parsedActions;
+    this.actions = parseResult.data;
     return this;
   }
 

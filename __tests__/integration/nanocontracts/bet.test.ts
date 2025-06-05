@@ -665,7 +665,7 @@ describe('full cycle of bet nano contract', () => {
     expect(address0Meta?.numTransactions).toBe(1);
 
     // Use the bet blueprint code
-    const code = fs.readFileSync('./__tests__/integration/configuration/bet.py', 'utf8');
+    const code = fs.readFileSync('./__tests__/integration/configuration/blueprints/bet.py', 'utf8');
     const tx = await ocbWallet.createAndSendOnChainBlueprintTransaction(code, address10);
     // Wait for the tx to be confirmed, so we can use the on chain blueprint
     await waitTxConfirmed(ocbWallet, tx.hash!, null);
@@ -805,7 +805,7 @@ describe('full cycle of bet nano contract', () => {
     const { seed } = WALLET_CONSTANTS.ocb;
     const ocbWallet = await generateWalletHelper({ seed });
 
-    const code = fs.readFileSync('./__tests__/integration/configuration/bet.py', 'utf8');
+    const code = fs.readFileSync('./__tests__/integration/configuration/blueprints/bet.py', 'utf8');
     // Use an address that is not from the ocbWallet
     await expect(
       ocbWallet.createAndSendOnChainBlueprintTransaction(code, address0)
