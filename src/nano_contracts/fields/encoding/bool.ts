@@ -24,6 +24,6 @@ export function decode(buf: Buffer): BufferROExtract<boolean> {
         bytesRead: 1,
       };
     default:
-      throw new Error();
+      throw new Error('Invalid boolean tag');
   }
 }

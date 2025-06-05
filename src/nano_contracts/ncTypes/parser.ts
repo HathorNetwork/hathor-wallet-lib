@@ -36,7 +36,9 @@ type TypeNode =
   | { kind: 'dict'; key: TypeNode; value: TypeNode } // e.g., Dict[str, int]
   | { kind: 'tuple'; elements: TypeNode[] } // e.g., Tuple[int, str]
   | { kind: 'list'; element: TypeNode } // e.g., list[int]
-  | { kind: 'set'; element: TypeNode }; // e.g., Set[int];
+  | { kind: 'set'; element: TypeNode } // e.g., Set[int];
+  | { kind: 'deque'; element: TypeNode } // e.g., Deque[int];
+  | { kind: 'frozenset'; element: TypeNode }; // e.g., frozenset[int];
 
 export function getFieldParser(typeStr: string, network: Network, logger?: ILogger) {
   const type = parseTypeString(typeStr);
@@ -93,6 +95,14 @@ function fieldFromTypeNode(type: TypeNode, network: Network, logger?: ILogger): 
       return ncFields.RawSignedDataField.new(fieldFromTypeNode(type.inner, network), type.subtype);
     case 'dict':
       return ncFields.DictField.new(fieldFromTypeNode(type.key, network), fieldFromTypeNode(type.value, network));
+    case 'list':
+      return ncFields.ListField.new(fieldFromTypeNode(type.element, network));
+    case 'set':
+      return ncFields.SetField.new(fieldFromTypeNode(type.element, network));
+    case 'deque':
+      return ncFields.DequeField.new(fieldFromTypeNode(type.element, network));
+    case 'frozenset':
+      return ncFields.FrozenSetField.new(fieldFromTypeNode(type.element, network));
     default:
       logger?.error(`[nc type] could not identify: ${JSON.stringify(type)}`);
       throw new Error('Unsupported TypeNode');
@@ -178,6 +188,14 @@ function parseTypeString(typeStrIn: string): TypeNode {
 
   if (containerType.toLowerCase() === 'set') {
     return { kind: 'set', element: parseTypeString(innerTypeStr) };
+  }
+
+  if (containerType.toLowerCase() === 'deque') {
+    return { kind: 'deque', element: parseTypeString(innerTypeStr) };
+  }
+
+  if (containerType.toLowerCase() === 'frozenset') {
+    return { kind: 'frozenset', element: parseTypeString(innerTypeStr) };
   }
 
   throw new Error(`Unsupported type: ${typeStr}`);

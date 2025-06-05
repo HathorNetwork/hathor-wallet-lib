@@ -9,6 +9,7 @@
 import { z } from 'zod';
 import { BufferROExtract } from '../types';
 import { NCFieldBase } from './base';
+import { bool } from './encoding';
 
 export class BoolField extends NCFieldBase<boolean | string, boolean> {
   value: boolean;
@@ -34,26 +35,13 @@ export class BoolField extends NCFieldBase<boolean | string, boolean> {
     if (buf.length === 0) {
       throw new Error('No data left to read');
     }
-    switch (buf[0]) {
-      case 0:
-        this.value = false;
-        return {
-          value: false,
-          bytesRead: 1,
-        };
-      case 1:
-        this.value = true;
-        return {
-          value: true,
-          bytesRead: 1,
-        };
-      default:
-        throw new Error('Invalid boolean tag');
-    }
+    const result = bool.decode(buf);
+    this.value = result.value;
+    return result;
   }
 
   toBuffer(): Buffer {
-    return Buffer.from([this.value ? 1 : 0]);
+    return bool.encode(this.value);
   }
 
   fromUser(data: unknown): BoolField {

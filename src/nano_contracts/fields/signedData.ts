@@ -93,7 +93,7 @@ export class SignedDataField extends NCFieldBase<IUserSignedData, ISignedData> {
     return {
       type: this.value.type,
       signature: this.value.signature.toString('hex'),
-      value: this.inner.value,
+      value: this.inner.toUser(),
     };
   }
 }

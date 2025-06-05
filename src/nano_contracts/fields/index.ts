@@ -19,6 +19,7 @@ import { TupleField } from './tuple';
 import { SignedDataField } from './signedData';
 import { NCFieldBase } from './base';
 import { DictField } from './dict';
+import { CollectionField } from './collection';
 
 export { NCFieldBase } from './base';
 
@@ -48,6 +49,9 @@ export default {
   TupleField,
   SignedDataField,
   RawSignedDataField: SignedDataField,
-
   DictField,
+  ListField: CollectionField,
+  SetField: CollectionField,
+  DequeField: CollectionField,
+  FrozenSetField: CollectionField,
 };

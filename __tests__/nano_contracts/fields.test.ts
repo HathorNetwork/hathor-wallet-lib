@@ -9,6 +9,7 @@ import { getFieldParser } from '../../src/nano_contracts/ncTypes/parser';
 import Network from '../../src/models/network';
 import ncFields from '../../src/nano_contracts/fields';
 import { NATIVE_TOKEN_UID } from '../../src/constants';
+import leb128 from '../../src/utils/leb128';
 
 const network = new Network('testnet');
 
@@ -232,7 +233,7 @@ describe('TokenUid', () => {
 });
 
 describe('optional', () => {
-  it('should work for None/null values', () => {
+  it('should serialize for null values', () => {
     const fieldStr = getFieldParser('str?', network);
     expect(fieldStr).toBeInstanceOf(ncFields.OptionalField);
     fieldStr.fromUser(null);
@@ -258,7 +259,7 @@ describe('optional', () => {
     expect(fieldBytes.toBuffer()).toMatchBuffer(Buffer.from([0]));
   });
 
-  it('should work with simple values', () => {
+  it('should serialize with simple values', () => {
     const fieldStr = getFieldParser('str?', network);
     expect(fieldStr).toBeInstanceOf(ncFields.OptionalField);
     fieldStr.fromUser('test');
@@ -288,6 +289,57 @@ describe('optional', () => {
     fieldBytes.fromUser('cafe');
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
     expect(fieldBytes.toBuffer()).toMatchBuffer(Buffer.from([0x01, 0x02, 0xca, 0xfe]));
+  });
+
+  it('should deserialize for null values', () => {
+    const nullBuffer = Buffer.from([0]);
+
+    const fieldStr = getFieldParser('str?', network);
+    expect(fieldStr).toBeInstanceOf(ncFields.OptionalField);
+    fieldStr.fromBuffer(nullBuffer);
+    expect(fieldStr.toUser()).toBeNull();
+
+    const fieldInt = getFieldParser('int?', network);
+    expect(fieldInt).toBeInstanceOf(ncFields.OptionalField);
+    fieldInt.fromBuffer(nullBuffer);
+    expect(fieldInt.toUser()).toBeNull();
+
+    const fieldBool = getFieldParser('bool?', network);
+    expect(fieldBool).toBeInstanceOf(ncFields.OptionalField);
+    fieldBool.fromBuffer(nullBuffer);
+    expect(fieldBool.toUser()).toBeNull();
+
+    const fieldBytes = getFieldParser('bytes?', network);
+    expect(fieldBytes).toBeInstanceOf(ncFields.OptionalField);
+    fieldBytes.fromBuffer(nullBuffer);
+    expect(fieldBytes.toUser()).toBeNull();
+  });
+
+  it('should deserialize with simple values', () => {
+    const fieldStr = getFieldParser('str?', network);
+    expect(fieldStr).toBeInstanceOf(ncFields.OptionalField);
+    fieldStr.fromBuffer(Buffer.from([0x01, 0x04, 0x74, 0x65, 0x73, 0x74]));
+    expect(fieldStr.toUser()).toEqual('test');
+
+    const fieldInt = getFieldParser('int?', network);
+    expect(fieldInt).toBeInstanceOf(ncFields.OptionalField);
+    fieldInt.fromBuffer(Buffer.from([0x01, 127 + 0x80, 0]));
+    expect(fieldInt.toUser()).toEqual('127');
+
+    const fieldBoolT = getFieldParser('bool?', network);
+    expect(fieldBoolT).toBeInstanceOf(ncFields.OptionalField);
+    fieldBoolT.fromBuffer(Buffer.from([1, 1]));
+    expect(fieldBoolT.toUser()).toEqual('true');
+
+    const fieldBoolF = getFieldParser('bool?', network);
+    expect(fieldBoolF).toBeInstanceOf(ncFields.OptionalField);
+    fieldBoolF.fromBuffer(Buffer.from([1, 0]));
+    expect(fieldBoolF.toUser()).toEqual('false');
+
+    const fieldBytes = getFieldParser('bytes?', network);
+    expect(fieldBytes).toBeInstanceOf(ncFields.OptionalField);
+    fieldBytes.fromBuffer(Buffer.from([0x01, 0x02, 0xca, 0xfe]));
+    expect(fieldBytes.toUser()).toEqual('cafe');
   });
 });
 
@@ -319,6 +371,78 @@ describe('SignedData', () => {
       Buffer.concat([Buffer.from([1 + 0x80, 1]), signature])
     );
   });
+
+  it('should deserialize from buffer', () => {
+    const fieldStr = getFieldParser('SignedData[str]', network);
+    expect(fieldStr).toBeInstanceOf(ncFields.SignedDataField);
+    fieldStr.fromBuffer(Buffer.concat([Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), signature]));
+    expect(fieldStr.toUser()).toStrictEqual({
+      type: 'str',
+      signature: 'cafe',
+      value: 'test',
+    });
+
+    const fieldInt = getFieldParser('SignedData[int]', network);
+    expect(fieldInt).toBeInstanceOf(ncFields.SignedDataField);
+    fieldInt.fromBuffer(Buffer.concat([Buffer.from([1 + 0x80, 1]), signature]));
+    expect(fieldInt.toUser()).toStrictEqual({
+      type: 'int',
+      signature: 'cafe',
+      value: '129',
+    });
+  });
+});
+
+describe('RawSignedData', () => {
+  const signature = getFieldParser('bytes', network).fromUser('cafe').toBuffer();
+
+  it('should serialize from user input', () => {
+    const fieldStr = getFieldParser('RawSignedData[str]', network);
+    expect(fieldStr).toBeInstanceOf(ncFields.RawSignedDataField);
+
+    fieldStr.fromUser({
+      type: 'str',
+      signature: 'cafe',
+      value: 'test',
+    });
+    // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+    expect(fieldStr.toBuffer()).toMatchBuffer(
+      Buffer.concat([Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), signature])
+    );
+
+    const fieldInt = getFieldParser('RawSignedData[int]', network);
+    expect(fieldInt).toBeInstanceOf(ncFields.RawSignedDataField);
+    fieldInt.fromUser({
+      type: 'int',
+      signature: 'cafe',
+      value: '129',
+    });
+    // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+    expect(fieldInt.toBuffer()).toMatchBuffer(
+      Buffer.concat([Buffer.from([1 + 0x80, 1]), signature])
+    );
+  });
+
+
+  it('should deserialize from buffer', () => {
+    const fieldStr = getFieldParser('RawSignedData[str]', network);
+    expect(fieldStr).toBeInstanceOf(ncFields.RawSignedDataField);
+    fieldStr.fromBuffer(Buffer.concat([Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), signature]));
+    expect(fieldStr.toUser()).toStrictEqual({
+      type: 'str',
+      signature: 'cafe',
+      value: 'test',
+    });
+
+    const fieldInt = getFieldParser('RawSignedData[int]', network);
+    expect(fieldInt).toBeInstanceOf(ncFields.RawSignedDataField);
+    fieldInt.fromBuffer(Buffer.concat([Buffer.from([1 + 0x80, 1]), signature]));
+    expect(fieldInt.toUser()).toStrictEqual({
+      type: 'int',
+      signature: 'cafe',
+      value: '129',
+    });
+  });
 });
 
 describe('Tuple', () => {
@@ -344,5 +468,154 @@ describe('Tuple', () => {
         Buffer.from([1 + 0x80, 1]), // 129
       ])
     );
+  });
+
+  it('should parse from buffer using simple types', () => {
+    const field = getFieldParser('tuple[str, int]', network);
+    expect(field).toBeInstanceOf(ncFields.TupleField);
+    field.fromBuffer(Buffer.concat([Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), Buffer.from([1 + 0x80, 1])]));
+    expect(field.toUser()).toStrictEqual(['test', '129']);
+  });
+
+  it('should parser from buffer using container types', () => {
+    const field = getFieldParser('tuple[tuple[str, int?], int]', network);
+    expect(field).toBeInstanceOf(ncFields.TupleField);
+    field.fromBuffer(Buffer.concat([
+        Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), // test
+        Buffer.from([0x00]), // null
+        Buffer.from([1 + 0x80, 1]), // 129
+    ]));
+    expect(field.toUser()).toEqual([['test', null], '129']);
+  });
+});
+
+describe('List', () => {
+  const DWARF5SignedTestCases: [bigint, Buffer][] = [
+    [2n, Buffer.from([2])],
+    [-2n, Buffer.from([0x7e])],
+    [127n, Buffer.from([127 + 0x80, 0])],
+    [-127n, Buffer.from([1 + 0x80, 0x7f])],
+    [128n, Buffer.from([0 + 0x80, 1])],
+    [-128n, Buffer.from([0 + 0x80, 0x7f])],
+    [129n, Buffer.from([1 + 0x80, 1])],
+    [-129n, Buffer.from([0x7f + 0x80, 0x7e])],
+  ];
+
+  it('should serialize from user input using simple types', () => {
+    const field = getFieldParser('list[int]', network);
+    expect(field).toBeInstanceOf(ncFields.ListField);
+    field.fromUser(DWARF5SignedTestCases.map(el => el[0])); // All cases
+    // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+    expect(field.toBuffer()).toMatchBuffer(Buffer.concat([
+      leb128.encodeSigned(DWARF5SignedTestCases.length),
+      ...DWARF5SignedTestCases.map(el => el[1]),
+    ]));
+  });
+
+  it('should serialize from user input using container types', () => {
+    const field = getFieldParser('list[tuple[str, int]]', network);
+    expect(field).toBeInstanceOf(ncFields.ListField);
+    field.fromUser(DWARF5SignedTestCases.map(el => ['test', el[0]]));
+    // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+    expect(field.toBuffer()).toMatchBuffer(Buffer.concat([
+      leb128.encodeSigned(DWARF5SignedTestCases.length),
+      ...DWARF5SignedTestCases.map(el => Buffer.concat([
+        Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]),
+        el[1],
+      ])),
+    ]));
+  });
+
+  it('should parse from buffer using simple types', () => {
+    const field = getFieldParser('list[int]', network);
+    expect(field).toBeInstanceOf(ncFields.ListField);
+    field.fromBuffer(Buffer.concat([
+      leb128.encodeSigned(DWARF5SignedTestCases.length),
+      ...DWARF5SignedTestCases.map(el => el[1]),
+    ]));
+    expect(field.toUser()).toStrictEqual(DWARF5SignedTestCases.map(el => String(el[0])));
+  });
+
+  it('should parser from buffer using container types', () => {
+    const field = getFieldParser('list[tuple[str, int]]', network);
+    expect(field).toBeInstanceOf(ncFields.ListField);
+    field.fromBuffer(Buffer.concat([
+      leb128.encodeSigned(DWARF5SignedTestCases.length),
+      ...DWARF5SignedTestCases.map(el => Buffer.concat([
+        Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), // test
+        el[1],
+      ])),
+    ]));
+    expect(field.toUser()).toEqual(DWARF5SignedTestCases.map(el => ['test', String(el[0])]));
+  });
+});
+
+describe('Dict', () => {
+  it('should serialize from user input using simple types', () => {
+    const field = getFieldParser('Dict[str, int]', network);
+    expect(field).toBeInstanceOf(ncFields.DictField);
+
+    field.fromUser({
+      'test': -2,
+      'foo': 129,
+    });
+    // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+    expect(field.toBuffer()).toMatchBuffer(Buffer.concat([
+      leb128.encodeSigned(2),
+      Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), // test
+      Buffer.from([0x7e]), // -2
+      Buffer.from([0x03, 0x66, 0x6f, 0x6f]), // foo
+      Buffer.from([1 + 0x80, 1]), // 129
+    ]));
+  });
+
+  it('should serialize from user input using container types', () => {
+    const field = getFieldParser('Dict[str, Tuple[int, Address?]]', network);
+    expect(field).toBeInstanceOf(ncFields.DictField);
+    field.fromUser({
+      'test': [-2, null],
+      'foo': [129, null],
+    });
+    // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
+    expect(field.toBuffer()).toMatchBuffer(Buffer.concat([
+      leb128.encodeSigned(2),
+      Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), // test
+      Buffer.from([0x7e, 0x00]), // -2, null
+      Buffer.from([0x03, 0x66, 0x6f, 0x6f]), // foo
+      Buffer.from([1 + 0x80, 1, 0x00]), // 129, null
+    ]));
+  });
+
+  it('should parse from buffer using simple types', () => {
+    const field = getFieldParser('Dict[str, int]', network);
+    expect(field).toBeInstanceOf(ncFields.DictField);
+
+    field.fromBuffer(Buffer.concat([
+      leb128.encodeSigned(2),
+      Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), // test
+      Buffer.from([0x7e]), // -2
+      Buffer.from([0x03, 0x66, 0x6f, 0x6f]), // foo
+      Buffer.from([1 + 0x80, 1]), // 129
+    ]));
+    expect(field.toUser()).toStrictEqual({
+      'test': '-2',
+      'foo': '129',
+    });
+  });
+
+  it('should parser from buffer using container types', () => {
+    const field = getFieldParser('Dict[str, Tuple[int, Address?]]', network);
+    expect(field).toBeInstanceOf(ncFields.DictField);
+    field.fromBuffer(Buffer.concat([
+      leb128.encodeSigned(2),
+      Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), // test
+      Buffer.from([0x7e, 0x00]), // -2, null
+      Buffer.from([0x03, 0x66, 0x6f, 0x6f]), // foo
+      Buffer.from([1 + 0x80, 1, 0x00]), // 129, null
+    ]));
+    expect(field.toUser()).toEqual({
+      'test': ['-2', null],
+      'foo': ['129', null],
+    });
   });
 });
