@@ -35,4 +35,9 @@ export abstract class NCFieldBase<U = unknown, T = unknown> {
    * some types use the same field, e.g. bytes, TxOutputScript are both BytesField.
    */
   abstract getType(): string;
+
+  /**
+   * Create an empty clone of this instance
+   */
+  abstract clone(): NCFieldBase;
 }

@@ -11,19 +11,23 @@ import { BufferROExtract } from '../types';
 import { NCFieldBase } from './base';
 
 export class BoolField extends NCFieldBase<boolean | string, boolean> {
-  value: boolean | null;
+  value: boolean;
 
-  constructor(value: boolean | null) {
+  constructor(value: boolean) {
     super();
     this.value = value;
   }
 
-  static new(value: boolean | null = null): BoolField {
-    return new BoolField(value);
+  static new(): BoolField {
+    return new BoolField(false);
   }
 
   getType() {
     return 'bool';
+  }
+
+  clone() {
+    return BoolField.new();
   }
 
   fromBuffer(buf: Buffer): BufferROExtract<boolean> {
@@ -49,9 +53,6 @@ export class BoolField extends NCFieldBase<boolean | string, boolean> {
   }
 
   toBuffer(): Buffer {
-    if (this.value === null) {
-      throw new Error('Boolean cannot be null when serializing');
-    }
     return Buffer.from([this.value ? 1 : 0]);
   }
 
@@ -66,9 +67,6 @@ export class BoolField extends NCFieldBase<boolean | string, boolean> {
   }
 
   toUser(): 'true' | 'false' {
-    if (this.value === null) {
-      throw new Error('Boolean cannot be null when serializing');
-    }
     return this.value ? 'true' : 'false';
   }
 }

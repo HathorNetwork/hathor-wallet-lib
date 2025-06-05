@@ -22,12 +22,16 @@ export class TokenUidField extends NCFieldBase<string, string> {
     this.value = value;
   }
 
-  static new(value: string = NATIVE_TOKEN_UID): TokenUidField {
-    return new TokenUidField(value);
+  static new(): TokenUidField {
+    return new TokenUidField(NATIVE_TOKEN_UID);
   }
 
   getType() {
     return 'TokenUid';
+  }
+
+  clone() {
+    return TokenUidField.new();
   }
 
   fromBuffer(buf: Buffer): BufferROExtract<string> {

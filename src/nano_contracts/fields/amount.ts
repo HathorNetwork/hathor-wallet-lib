@@ -19,12 +19,16 @@ export class AmountField extends NCFieldBase<number | bigint | string, bigint> {
     this.value = value;
   }
 
-  static new(value: bigint = 0n): AmountField {
-    return new AmountField(value);
+  static new(): AmountField {
+    return new AmountField(0n);
   }
 
   getType() {
     return 'Amount';
+  }
+
+  clone() {
+    return AmountField.new();
   }
 
   fromBuffer(buf: Buffer): BufferROExtract<bigint> {

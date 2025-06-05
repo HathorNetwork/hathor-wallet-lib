@@ -91,6 +91,8 @@ function fieldFromTypeNode(type: TypeNode, network: Network, logger?: ILogger): 
     case 'raw_signed_data':
       logger?.debug(`[nc type] field: raw_signed_data`);
       return ncFields.RawSignedDataField.new(fieldFromTypeNode(type.inner, network), type.subtype);
+    case 'dict':
+      return ncFields.DictField.new(fieldFromTypeNode(type.key, network), fieldFromTypeNode(type.value, network));
     default:
       logger?.error(`[nc type] could not identify: ${JSON.stringify(type)}`);
       throw new Error('Unsupported TypeNode');

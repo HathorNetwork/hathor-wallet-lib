@@ -19,12 +19,16 @@ export class TimestampField extends NCFieldBase<number, number> {
     this.value = value;
   }
 
-  static new(value: number = 0): TimestampField {
-    return new TimestampField(value);
+  static new(): TimestampField {
+    return new TimestampField(0);
   }
 
   getType() {
     return 'Timestamp';
+  }
+
+  clone() {
+    return TimestampField.new();
   }
 
   fromBuffer(buf: Buffer): BufferROExtract<number> {

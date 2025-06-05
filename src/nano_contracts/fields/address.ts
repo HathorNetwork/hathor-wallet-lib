@@ -32,6 +32,10 @@ export class AddressField extends NCFieldBase<string, Address> {
     return 'Address';
   }
 
+  clone() {
+    return AddressField.new(this.network);
+  }
+
   /**
    * Create an instance of AddressField, may be empty to allow reading from other sources.
    * @example
@@ -44,8 +48,8 @@ export class AddressField extends NCFieldBase<string, Address> {
    * const fieldFromUser = AddressField.new(testnet).fromUser('WYLW8ujPemSuLJwbeNvvH6y7nakaJ6cEwT');
    * ```
    */
-  static new(network: Network, value: Address | null = null): AddressField {
-    return new AddressField(network, value);
+  static new(network: Network): AddressField {
+    return new AddressField(network, null);
   }
 
   fromBuffer(buf: Buffer): BufferROExtract<Address> {

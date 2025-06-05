@@ -21,12 +21,16 @@ export class IntField extends NCFieldBase<number | bigint | string, bigint> {
     this.value = value;
   }
 
-  static new(value: bigint = 0n): IntField {
-    return new IntField(value);
+  static new(): IntField {
+    return new IntField(0n);
   }
 
   getType() {
     return 'int';
+  }
+
+  clone() {
+    return IntField.new();
   }
 
   fromBuffer(buf: Buffer): BufferROExtract<bigint> {

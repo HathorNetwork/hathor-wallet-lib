@@ -19,15 +19,16 @@ export class Bytes32Field extends NCFieldBase<string, Buffer> {
     this.value = value;
   }
 
-  static new(value: Buffer | null = null): Bytes32Field {
-    if (value === null) {
-      return new Bytes32Field(Buffer.alloc(0));
-    }
-    return new Bytes32Field(value);
+  static new(): Bytes32Field {
+    return new Bytes32Field(Buffer.alloc(0));
   }
 
   getType() {
     return 'bytes32';
+  }
+
+  clone() {
+    return Bytes32Field.new();
   }
 
   fromBuffer(buf: Buffer): BufferROExtract<Buffer> {

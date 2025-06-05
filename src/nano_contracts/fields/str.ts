@@ -19,12 +19,16 @@ export class StrField extends NCFieldBase<string, string> {
     this.value = value;
   }
 
-  static new(value: string = ''): StrField {
-    return new StrField(value);
+  static new(): StrField {
+    return new StrField('');
   }
 
   getType() {
     return 'str';
+  }
+
+  clone() {
+    return StrField.new();
   }
 
   fromBuffer(buf: Buffer): BufferROExtract<string> {

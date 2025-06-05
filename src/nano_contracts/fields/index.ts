@@ -18,6 +18,7 @@ import { OptionalField } from './optional';
 import { TupleField } from './tuple';
 import { SignedDataField } from './signedData';
 import { NCFieldBase } from './base';
+import { DictField } from './dict';
 
 export { NCFieldBase } from './base';
 
@@ -47,4 +48,6 @@ export default {
   TupleField,
   SignedDataField,
   RawSignedDataField: SignedDataField,
+
+  DictField,
 };
