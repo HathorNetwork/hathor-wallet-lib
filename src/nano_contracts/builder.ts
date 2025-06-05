@@ -27,7 +27,7 @@ import {
   NanoContractBuilderCreateTokenOptions,
   NanoContractVertexType,
   INanoContractActionSchema,
-  IParsedArgument,
+  IArgumentField,
 } from './types';
 import { mapActionToActionHeader, validateAndParseBlueprintMethodArgs } from './utils';
 import { IDataInput, IDataOutput } from '../types';
@@ -49,7 +49,7 @@ class NanoContractTransactionBuilder {
 
   args: unknown[] | null;
 
-  parsedArgs: IParsedArgument[] | null;
+  parsedArgs: IArgumentField[] | null;
 
   serializedArgs: Buffer | null;
 

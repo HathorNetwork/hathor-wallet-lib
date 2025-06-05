@@ -9,10 +9,16 @@ import { IHistoryTx, OutputValueType } from '../types';
 import { bigIntCoercibleSchema } from '../utils/bigint';
 import { NCFieldBase } from './fields';
 
-export interface IParsedArgument {
+export interface IArgumentField {
   name: string;
   type: string;
   field: NCFieldBase;
+}
+
+export interface IParsedArgument {
+  name: string;
+  type: string;
+  value: unknown;
 }
 
 export enum NanoContractVertexType {

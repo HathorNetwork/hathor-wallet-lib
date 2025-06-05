@@ -30,7 +30,7 @@ import {
   NanoContractAction,
   NanoContractActionHeader,
   NanoContractActionType,
-  IParsedArgument,
+  IArgumentField,
 } from './types';
 import { NANO_CONTRACTS_INITIALIZE_METHOD, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../constants';
 import { getFieldParser } from './ncTypes/parser';
@@ -202,7 +202,7 @@ export const validateAndParseBlueprintMethodArgs = async (
   method: string,
   args: unknown[] | null,
   network: Network
-): Promise<IParsedArgument[]> => {
+): Promise<IArgumentField[]> => {
   // Get the blueprint data from full node
   const blueprintInformation = await ncApi.getBlueprintInformation(blueprintId);
 
@@ -227,7 +227,7 @@ export const validateAndParseBlueprintMethodArgs = async (
   }
 
   try {
-    const parsedArgs: IParsedArgument[] = [];
+    const parsedArgs: IArgumentField[] = [];
     for (const [index, arg] of methodArgs.entries()) {
       const field = getFieldParser(arg.type, network);
       field.fromUser(args[index]);

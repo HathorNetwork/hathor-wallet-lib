@@ -89,7 +89,7 @@ class NanoContractTransactionParser {
       try {
         const field = getFieldParser(arg.type, this.network);
         const result = field.fromBuffer(argsBuffer);
-        parsed = { ...arg, field };
+        parsed = { ...arg, value: field.toUser() };
         size = result.bytesRead;
       } catch (err: unknown) {
         throw new NanoContractTransactionParseError(`Failed to deserialize argument ${arg.type}.`);
