@@ -23,6 +23,10 @@ export class IntField extends NCFieldBase<number | bigint | string, bigint> {
     return new IntField(value);
   }
 
+  getType() {
+    return 'int';
+  }
+
   fromBuffer(buf: Buffer): BufferROExtract<bigint> {
     const parsed = leb128.decode_signed(buf);
     this.value = parsed.value;

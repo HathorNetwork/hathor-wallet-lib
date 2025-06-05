@@ -27,6 +27,10 @@ export class AddressField extends NCFieldBase<string, Address> {
     this.network = network;
   }
 
+  getType() {
+    return 'Address';
+  }
+
   /**
    * Create an instance of AddressField, may be empty to allow reading from other sources.
    * @example

@@ -10,17 +10,30 @@ import { BufferROExtract } from '../types';
 export abstract class NCFieldBase<U = unknown, T = unknown> {
   value: unknown;
 
-  abstract toBuffer(): Buffer;
-
   /**
    * Read an instance of the field from a buffer
    */
   abstract fromBuffer(buffer: Buffer, options?: unknown): BufferROExtract<T>;
 
-  abstract toUser(): U;
+  /**
+   * Serialize field value into a buffer
+   */
+  abstract toBuffer(): Buffer;
 
+  /**
+   * Parse field from user value.
+   */
   abstract fromUser(data: unknown): NCFieldBase;
 
-  // abstract validate(value: T);
-  // abstract validateFromUser(value: U);
+  /**
+   * Show the value as user readable.
+   */
+  abstract toUser(): U;
+
+  /**
+   * Get an identifier for the field class.
+   * This may not be the same as the field type since
+   * some types use the same field, e.g. bytes, TxOutputScript are both BytesField.
+   */
+  abstract getType(): string;
 }

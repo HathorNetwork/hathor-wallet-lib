@@ -34,6 +34,7 @@ import {
 } from './types';
 import { NANO_CONTRACTS_INITIALIZE_METHOD, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../constants';
 import { getFieldParser } from './ncTypes/parser';
+import { isSignedDataField } from './fields';
 
 /**
  * Sign a transaction and create a send transaction object
@@ -89,6 +90,41 @@ export const getOracleBuffer = (oracle: string, network: Network): Buffer => {
     // Invalid hex
     throw new OracleParseError('Invalid hex value for oracle script.');
   }
+};
+
+/**
+ * Get SignedData argument to use with a nano contract.
+ *
+ * @param oracleData Oracle data
+ * @param contractId Id of the nano contract being invoked
+ * @param argType Full method argument type string, e.g. 'SignedData[str]'
+ * @param value Value to sign
+ * @param wallet Hathor Wallet object
+ */
+export async function getOracleSignedDataFromUser(
+  oracleData: Buffer,
+  contractId: string,
+  argType: string,
+  value: unknown,
+  wallet: HathorWallet,
+) {
+  const field = getFieldParser(argType, wallet.getNetworkObject());
+  if (!isSignedDataField(field)) {
+    throw new Error('Type is not SignedData');
+  }
+  // Read user value.
+  field.inner.fromUser(value)
+  // Serialize user value
+  const serialized = field.inner.toBuffer();
+  // Sign user value
+  const signature = await getOracleInputData(oracleData, contractId, serialized, wallet);
+
+  field.fromUser({
+    type: field.value.type, // Type is pre-filled during parser contruction
+    signature: signature.toString('hex'),
+    value,
+  });
+  return field.toUser();
 };
 
 /**

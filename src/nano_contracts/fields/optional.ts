@@ -26,6 +26,10 @@ export class OptionalField extends NCFieldBase<unknown | null, unknown | null> {
     return new OptionalField(inner, null);
   }
 
+  getType() {
+    return 'Optional';
+  }
+
   fromBuffer(buf: Buffer): BufferROExtract<unknown | null> {
     if (buf[0] === 0) {
       this.value = null;

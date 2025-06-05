@@ -21,6 +21,10 @@ export class AmountField extends NCFieldBase<number | bigint | string, bigint> {
     return new AmountField(value);
   }
 
+  getType() {
+    return 'Amount';
+  }
+
   fromBuffer(buf: Buffer): BufferROExtract<bigint> {
     const parsed = leb128.decode_unsigned(buf);
     this.value = parsed.value;
@@ -40,8 +44,4 @@ export class AmountField extends NCFieldBase<number | bigint | string, bigint> {
   toUser(): string {
     return String(this.value);
   }
-
-  // validate(): boolean {
-  //   return z.string().safeParse(this.value).success;
-  // }
 }

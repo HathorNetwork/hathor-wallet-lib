@@ -25,6 +25,10 @@ export class Bytes32Field extends NCFieldBase<string, Buffer> {
     return new Bytes32Field(value);
   }
 
+  getType() {
+    return 'bytes32';
+  }
+
   fromBuffer(buf: Buffer): BufferROExtract<Buffer> {
     const parsed = sizedBytes.decode(32, buf);
     this.value = parsed.value;

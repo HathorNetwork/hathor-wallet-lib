@@ -34,6 +34,7 @@ import {
 import { OutputType } from '../../../src/wallet/types';
 import NanoContractTransactionParser from '../../../src/nano_contracts/parser';
 import { NanoContractSignedData } from '../../../src/nano_contracts/types';
+import { getFieldParser } from '../../../src/nano_contracts/ncTypes/parser';
 
 let fundsTx;
 const builtInBlueprintId = '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595';
@@ -343,7 +344,6 @@ describe('full cycle of bet nano contract', () => {
     */
 
     // Set result to '1x0'
-    const nanoSerializer = new Serializer(network);
     const result = '1x0';
     const resultSerialized = nanoSerializer.serializeFromType(result, 'str');
     const inputData = await getOracleInputData(oracleData, tx1.hash, resultSerialized, wallet);

@@ -75,7 +75,7 @@ function fieldFromTypeNode(type: TypeNode, network: Network, logger?: ILogger): 
         case 'ContractId':
           return ncFields.ContractIdField.new();
         case 'VertexId':
-          return ncFields.VertexField.new();
+          return ncFields.VertexIdField.new();
         default:
           throw new Error('Invalid simple type');
       }
@@ -87,10 +87,10 @@ function fieldFromTypeNode(type: TypeNode, network: Network, logger?: ILogger): 
       return ncFields.TupleField.new(type.elements.map(el => fieldFromTypeNode(el, network)));
     case 'signed_data':
       logger?.debug(`[nc type] field: signed_data`);
-      return ncFields.SignedData.new(fieldFromTypeNode(type.inner, network), type.subtype);
+      return ncFields.SignedDataField.new(fieldFromTypeNode(type.inner, network), type.subtype);
     case 'raw_signed_data':
       logger?.debug(`[nc type] field: raw_signed_data`);
-      return ncFields.RawSignedData.new(fieldFromTypeNode(type.inner, network), type.subtype);
+      return ncFields.RawSignedDataField.new(fieldFromTypeNode(type.inner, network), type.subtype);
     default:
       logger?.error(`[nc type] could not identify: ${JSON.stringify(type)}`);
       throw new Error('Unsupported TypeNode');

@@ -22,6 +22,10 @@ export class TupleField extends NCFieldBase<unknown[], unknown[]> {
     return new TupleField(elements, []);
   }
 
+  getType() {
+    return 'Tuple';
+  }
+
   fromBuffer(buf: Buffer): BufferROExtract<unknown[]> {
     const values: unknown[] = [];
     let bytesReadTotal = 0;

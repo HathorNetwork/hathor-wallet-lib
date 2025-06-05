@@ -21,6 +21,10 @@ export class BoolField extends NCFieldBase<boolean | string, boolean> {
     return new BoolField(value);
   }
 
+  getType() {
+    return 'bool';
+  }
+
   fromBuffer(buf: Buffer): BufferROExtract<boolean> {
     if (buf.length === 0) {
       throw new Error('No data left to read');

@@ -25,6 +25,10 @@ export class TokenUidField extends NCFieldBase<string, string> {
     return new TokenUidField(value);
   }
 
+  getType() {
+    return 'TokenUid';
+  }
+
   fromBuffer(buf: Buffer): BufferROExtract<string> {
     if (buf[0] === 0x00) {
       this.value = NATIVE_TOKEN_UID;

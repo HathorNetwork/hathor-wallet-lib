@@ -21,6 +21,10 @@ export class StrField extends NCFieldBase<string, string> {
     return new StrField(value);
   }
 
+  getType() {
+    return 'str';
+  }
+
   fromBuffer(buf: Buffer): BufferROExtract<string> {
     const parsed = utf8.decode(buf);
     this.value = parsed.value;

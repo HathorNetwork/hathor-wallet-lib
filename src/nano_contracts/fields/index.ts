@@ -16,9 +16,14 @@ import { AmountField } from './amount';
 import { TokenUidField } from './token';
 import { OptionalField } from './optional';
 import { TupleField } from './tuple';
-import { SignedData } from './signedData';
+import { SignedDataField } from './signedData';
+import { NCFieldBase } from './base';
 
 export { NCFieldBase } from './base';
+
+export function isSignedDataField(value: NCFieldBase): value is SignedDataField {
+  return value.getType() === 'SignedData';
+}
 
 export default {
   StrField,
@@ -34,12 +39,12 @@ export default {
   TxOutputScriptField: BytesField,
 
   // sized bytes (32)
-  VertexField: Bytes32Field,
+  VertexIdField: Bytes32Field,
   ContractIdField: Bytes32Field,
   BlueprintIdField: Bytes32Field,
 
   OptionalField,
   TupleField,
-  SignedData,
-  RawSignedData: SignedData,
+  SignedDataField,
+  RawSignedDataField: SignedDataField,
 };

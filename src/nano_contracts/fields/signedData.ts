@@ -7,14 +7,21 @@
 import { BufferROExtract } from '../types';
 import { NCFieldBase } from './base';
 import { BytesField } from './bytes';
+import { z } from 'zod';
 
-interface ISignedData {
+export interface ISignedData {
   type: string;
   signature: Buffer;
   value: unknown;
 }
 
-export class SignedData extends NCFieldBase<ISignedData, ISignedData> {
+export interface IUserSignedData {
+  type: string;
+  signature: string;
+  value: unknown;
+}
+
+export class SignedDataField extends NCFieldBase<IUserSignedData, ISignedData> {
   value: ISignedData;
 
   inner: NCFieldBase;
@@ -29,8 +36,12 @@ export class SignedData extends NCFieldBase<ISignedData, ISignedData> {
     this.inner = inner;
   }
 
-  static new(inner: NCFieldBase, type: string): SignedData {
-    return new SignedData(inner, type, Buffer.alloc(0), undefined);
+  getType() {
+    return 'SignedData';
+  }
+
+  static new(inner: NCFieldBase, type: string): SignedDataField {
+    return new SignedDataField(inner, type, Buffer.alloc(0), undefined);
   }
 
   fromBuffer(buf: Buffer): BufferROExtract<ISignedData> {
@@ -52,20 +63,30 @@ export class SignedData extends NCFieldBase<ISignedData, ISignedData> {
     return Buffer.concat([this.inner.toBuffer(), signature.toBuffer()]);
   }
 
-  fromUser(data: ISignedData): SignedData {
+  fromUser(data: IUserSignedData): SignedDataField {
+    if (data.type !== this.value.type) {
+      throw new Error(`Expected ${this.value.type} but received ${data.type}`);
+    }
     this.inner.fromUser(data.value);
 
+    const signature = z
+      .string()
+      .regex(/^[a-fA-F0-9]*$/)
+      .transform(s => Buffer.from(s, 'hex'))
+      .parse(data.signature);
+
     this.value = {
-      ...data,
+      type: data.type,
+      signature,
       value: this.inner.value,
     };
     return this;
   }
 
-  toUser(): ISignedData {
+  toUser(): IUserSignedData {
     return {
-      signature: this.value.signature,
       type: this.value.type,
+      signature: this.value.signature.toString('hex'),
       value: this.inner.value,
     };
   }

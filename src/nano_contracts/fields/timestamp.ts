@@ -21,6 +21,10 @@ export class TimestampField extends NCFieldBase<number, number> {
     return new TimestampField(value);
   }
 
+  getType() {
+    return 'Timestamp';
+  }
+
   fromBuffer(buf: Buffer): BufferROExtract<number> {
     const value = unpackToInt(4, true, buf)[0];
     this.value = value;
