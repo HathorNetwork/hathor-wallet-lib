@@ -12,7 +12,9 @@ import { leb128 } from './encoding';
 
 export class CollectionField extends NCFieldBase<unknown[], unknown[]> {
   value: unknown[];
+
   kind: NCFieldBase;
+
   inner: NCFieldBase[];
 
   constructor(kind: NCFieldBase) {
@@ -66,7 +68,7 @@ export class CollectionField extends NCFieldBase<unknown[], unknown[]> {
   }
 
   fromUser(data: unknown): CollectionField {
-    function isIterable(d: any): d is Iterable<any> {
+    function isIterable(d: unknown): d is Iterable<unknown> {
       return d != null && typeof d[Symbol.iterator] === 'function';
     }
     if (!isIterable(data)) {
@@ -87,4 +89,3 @@ export class CollectionField extends NCFieldBase<unknown[], unknown[]> {
     return this.inner.map(el => el.toUser());
   }
 }
-

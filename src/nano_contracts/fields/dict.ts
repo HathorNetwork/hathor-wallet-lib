@@ -5,6 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 /* eslint class-methods-use-this: ["error", { "exceptMethods": ["getType"] }] */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { BufferROExtract } from '../types';
 import { NCFieldBase } from './base';
@@ -14,6 +15,7 @@ export class DictField extends NCFieldBase<Record<any, unknown>, Record<any, unk
   value: unknown;
 
   keyField: NCFieldBase;
+
   valueField: NCFieldBase;
 
   // Save inner fields as entries array.
@@ -58,7 +60,7 @@ export class DictField extends NCFieldBase<Record<any, unknown>, Record<any, unk
       const val = valueF.fromBuffer(dictBuf);
       dictBuf = dictBuf.subarray(val.bytesRead);
       bytesReadTotal += val.bytesRead;
-      
+
       values[key.value as any] = val.value;
       this.inner.push([keyF, valueF]);
     }
@@ -66,7 +68,7 @@ export class DictField extends NCFieldBase<Record<any, unknown>, Record<any, unk
     return {
       value: values,
       bytesRead: bytesReadTotal,
-    }
+    };
   }
 
   toBuffer(): Buffer {
@@ -96,9 +98,6 @@ export class DictField extends NCFieldBase<Record<any, unknown>, Record<any, unk
   }
 
   toUser(): Record<any, unknown> {
-    return Object.fromEntries(
-      this.inner.map(el => [el[0].toUser(), el[1].toUser()])
-    );
+    return Object.fromEntries(this.inner.map(el => [el[0].toUser(), el[1].toUser()]));
   }
 }
-

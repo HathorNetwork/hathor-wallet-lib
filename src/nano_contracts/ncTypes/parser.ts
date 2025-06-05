@@ -94,7 +94,10 @@ function fieldFromTypeNode(type: TypeNode, network: Network, logger?: ILogger): 
       logger?.debug(`[nc type] field: raw_signed_data`);
       return ncFields.RawSignedDataField.new(fieldFromTypeNode(type.inner, network), type.subtype);
     case 'dict':
-      return ncFields.DictField.new(fieldFromTypeNode(type.key, network), fieldFromTypeNode(type.value, network));
+      return ncFields.DictField.new(
+        fieldFromTypeNode(type.key, network),
+        fieldFromTypeNode(type.value, network)
+      );
     case 'list':
       return ncFields.ListField.new(fieldFromTypeNode(type.element, network));
     case 'set':
