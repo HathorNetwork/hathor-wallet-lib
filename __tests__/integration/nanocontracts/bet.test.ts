@@ -32,7 +32,6 @@ import {
 } from '../../../src/errors';
 import { OutputType } from '../../../src/wallet/types';
 import NanoContractTransactionParser from '../../../src/nano_contracts/parser';
-import { getFieldParser } from '../../../src/nano_contracts/ncTypes/parser';
 
 let fundsTx;
 const builtInBlueprintId = '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595';
@@ -134,7 +133,11 @@ describe('full cycle of bet nano contract', () => {
       value: oracleData.toString('hex'),
     });
 
-    expect(tx1Parser.parsedArgs[1]).toMatchObject({ name: 'token_uid', type: 'TokenUid', value: NATIVE_TOKEN_UID });
+    expect(tx1Parser.parsedArgs[1]).toMatchObject({
+      name: 'token_uid',
+      type: 'TokenUid',
+      value: NATIVE_TOKEN_UID,
+    });
 
     expect(tx1Parser.parsedArgs[2]).toMatchObject({
       name: 'date_last_bet',
@@ -342,7 +345,13 @@ describe('full cycle of bet nano contract', () => {
 
     // Set result to '1x0'
     const result = '1x0';
-    const signedData = await getOracleSignedDataFromUser(oracleData, tx1.hash, 'SignedData[str]', result, wallet);
+    const signedData = await getOracleSignedDataFromUser(
+      oracleData,
+      tx1.hash,
+      'SignedData[str]',
+      result,
+      wallet
+    );
 
     const txSetResult = await wallet.createAndSendNanoContractTransaction('set_result', address1, {
       ncId: tx1.hash,

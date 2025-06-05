@@ -37,10 +37,12 @@ describe('str', () => {
     expect(field).toBeInstanceOf(ncFields.StrField);
     field.fromUser(bigStr);
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-    expect(field.toBuffer()).toMatchBuffer(Buffer.concat([
-      Buffer.from([0x80, 0x10]), // 2048 in unsigned leb128
-      bigUtf8,
-    ]));
+    expect(field.toBuffer()).toMatchBuffer(
+      Buffer.concat([
+        Buffer.from([0x80, 0x10]), // 2048 in unsigned leb128
+        bigUtf8,
+      ])
+    );
   });
 });
 
@@ -92,7 +94,7 @@ describe('int', () => {
     // Parse buffer to value
     const field2 = getFieldParser('int', network);
     expect(field2).toBeInstanceOf(ncFields.IntField);
-    
+
     const parse = field2.fromBuffer(buf);
     expect(parse).toMatchObject({
       value,
@@ -111,7 +113,8 @@ describe('int', () => {
     [129n, Buffer.from([1 + 0x80, 1])],
     [-129n, Buffer.from([0x7f + 0x80, 0x7e])],
   ];
-  
+
+  // eslint-disable-next-line jest/expect-expect
   it('should work with the common test cases', () => {
     for (const testCase of DWARF5SignedTestCases) {
       checkTestCase(testCase[0], testCase[1]);
@@ -125,13 +128,13 @@ describe('bytes', () => {
     expect(field).toBeInstanceOf(ncFields.BytesField);
     field.fromUser('cafe');
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-    expect(field.toBuffer()).toMatchBuffer(Buffer.from([0x02, 0xCA, 0xFE]));
+    expect(field.toBuffer()).toMatchBuffer(Buffer.from([0x02, 0xca, 0xfe]));
   });
 
   it('should deserialize buffer value', () => {
     const field = getFieldParser('bytes', network);
     expect(field).toBeInstanceOf(ncFields.BytesField);
-    field.fromBuffer(Buffer.from([0x02, 0xCA, 0xFE]));
+    field.fromBuffer(Buffer.from([0x02, 0xca, 0xfe]));
     expect(field.toUser()).toStrictEqual('cafe');
   });
 });
@@ -168,7 +171,7 @@ describe('Amount', () => {
     // Parse buffer to value
     const field2 = getFieldParser('Amount', network);
     expect(field2).toBeInstanceOf(ncFields.AmountField);
-    
+
     const parse = field2.fromBuffer(buf);
     expect(parse).toMatchObject({
       value,
@@ -184,7 +187,8 @@ describe('Amount', () => {
     [129n, Buffer.from([1 + 0x80, 1])],
     [12857n, Buffer.from([57 + 0x80, 100])],
   ];
-  
+
+  // eslint-disable-next-line jest/expect-expect
   it('should work with the common test cases', () => {
     for (const testCase of DWARF5UnsignedTestCases) {
       checkTestCase(testCase[0], testCase[1]);
@@ -283,7 +287,7 @@ describe('optional', () => {
     expect(fieldBytes).toBeInstanceOf(ncFields.OptionalField);
     fieldBytes.fromUser('cafe');
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-    expect(fieldBytes.toBuffer()).toMatchBuffer(Buffer.from([0x01, 0x02, 0xCA, 0xFE]));
+    expect(fieldBytes.toBuffer()).toMatchBuffer(Buffer.from([0x01, 0x02, 0xca, 0xfe]));
   });
 });
 
@@ -299,10 +303,9 @@ describe('SignedData', () => {
       value: 'test',
     });
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-    expect(fieldStr.toBuffer()).toMatchBuffer(Buffer.concat([
-      Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]),
-      signature,
-    ]));
+    expect(fieldStr.toBuffer()).toMatchBuffer(
+      Buffer.concat([Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), signature])
+    );
 
     const fieldInt = getFieldParser('SignedData[int]', network);
     expect(fieldInt).toBeInstanceOf(ncFields.SignedDataField);
@@ -312,10 +315,9 @@ describe('SignedData', () => {
       value: '129',
     });
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-    expect(fieldInt.toBuffer()).toMatchBuffer(Buffer.concat([
-      Buffer.from([1 + 0x80, 1]),
-      signature,
-    ]));
+    expect(fieldInt.toBuffer()).toMatchBuffer(
+      Buffer.concat([Buffer.from([1 + 0x80, 1]), signature])
+    );
   });
 });
 
@@ -325,22 +327,22 @@ describe('Tuple', () => {
     expect(field).toBeInstanceOf(ncFields.TupleField);
     field.fromUser(['test', '129']);
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-    expect(field.toBuffer()).toMatchBuffer(Buffer.concat([
-      Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]),
-      Buffer.from([1 + 0x80, 1]),
-    ]));
+    expect(field.toBuffer()).toMatchBuffer(
+      Buffer.concat([Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), Buffer.from([1 + 0x80, 1])])
+    );
   });
 
-  it('should serialize from user input using simple types', () => {
+  it('should serialize from user input using container types', () => {
     const field = getFieldParser('tuple[tuple[str, int?], int]', network);
     expect(field).toBeInstanceOf(ncFields.TupleField);
     field.fromUser([['test', null], '129']);
     // @ts-expect-error: toMatchBuffer is defined in our setupTests.js so the type check fails.
-    expect(field.toBuffer()).toMatchBuffer(Buffer.concat([
-      Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), // test
-      Buffer.from([0x00]), // null
-      Buffer.from([1 + 0x80, 1]), // 129
-    ]));
+    expect(field.toBuffer()).toMatchBuffer(
+      Buffer.concat([
+        Buffer.from([0x04, 0x74, 0x65, 0x73, 0x74]), // test
+        Buffer.from([0x00]), // null
+        Buffer.from([1 + 0x80, 1]), // 129
+      ])
+    );
   });
 });
-

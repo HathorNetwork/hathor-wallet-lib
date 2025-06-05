@@ -7,7 +7,7 @@
 
 import { NC_ARGS_MAX_BYTES_LENGTH } from '../../../constants';
 import { BufferROExtract } from '../../types';
-import * as leb128 from './leb128'; 
+import * as leb128 from './leb128';
 
 export function encode(buf: Buffer) {
   return Buffer.concat([leb128.encode_unsigned(buf.length), Buffer.from(buf)]);
@@ -17,10 +17,7 @@ export function decode(buf: Buffer): BufferROExtract<Buffer> {
   // INFO: maxBytes is set to 3 because the max allowed length in bytes for a string is
   // NC_ARGS_MAX_BYTES_LENGTH which is encoded as 3 bytes in leb128 unsigned.
   // If we read a fourth byte we are definetely reading a higher number than allowed.
-  const {
-    value: lengthBN,
-    bytesRead: bytesReadForLength,
-  } = leb128.decode_unsigned(buf, 3);
+  const { value: lengthBN, bytesRead: bytesReadForLength } = leb128.decode_unsigned(buf, 3);
 
   const rest = buf.subarray(bytesReadForLength);
   if (lengthBN > BigInt(NC_ARGS_MAX_BYTES_LENGTH)) {
@@ -36,4 +33,3 @@ export function decode(buf: Buffer): BufferROExtract<Buffer> {
     bytesRead: length + bytesReadForLength,
   };
 }
-

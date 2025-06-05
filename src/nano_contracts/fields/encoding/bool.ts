@@ -7,7 +7,6 @@
 
 import { BufferROExtract } from '../../types';
 
-
 export function encode(value: boolean) {
   return Buffer.from([value ? 1 : 0]);
 }

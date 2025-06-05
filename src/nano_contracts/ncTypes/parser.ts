@@ -113,9 +113,9 @@ function fieldFromTypeNode(type: TypeNode, network: Network, logger?: ILogger): 
  * const type3 = parseTypeString('Dict[Address, Amount]');
  * ```
  */
-function parseTypeString(typeStr: string): TypeNode {
+function parseTypeString(typeStrIn: string): TypeNode {
   // Remove whitespace and normalize
-  typeStr = typeStr.trim();
+  const typeStr = typeStrIn.trim();
 
   // Base case: simple types
   const simple = simpleTypes.safeParse(typeStr);

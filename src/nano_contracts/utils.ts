@@ -106,14 +106,14 @@ export async function getOracleSignedDataFromUser(
   contractId: string,
   argType: string,
   value: unknown,
-  wallet: HathorWallet,
+  wallet: HathorWallet
 ) {
   const field = getFieldParser(argType, wallet.getNetworkObject());
   if (!isSignedDataField(field)) {
     throw new Error('Type is not SignedData');
   }
   // Read user value.
-  field.inner.fromUser(value)
+  field.inner.fromUser(value);
   // Serialize user value
   const serialized = field.inner.toBuffer();
   // Sign user value
@@ -125,7 +125,7 @@ export async function getOracleSignedDataFromUser(
     value,
   });
   return field.toUser();
-};
+}
 
 /**
  * Get oracle input data

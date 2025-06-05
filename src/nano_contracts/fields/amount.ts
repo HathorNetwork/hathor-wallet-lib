@@ -4,6 +4,8 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
+/* eslint class-methods-use-this: ["error", { "exceptMethods": ["getType"] }] */
+
 import { z } from 'zod';
 import { BufferROExtract } from '../types';
 import { NCFieldBase } from './base';
