@@ -10,6 +10,7 @@ import Network from '../../src/models/network';
 import ncFields from '../../src/nano_contracts/fields';
 import { NATIVE_TOKEN_UID } from '../../src/constants';
 import leb128 from '../../src/utils/leb128';
+import { DWARF5SignedTestCases, DWARF5UnsignedTestCases } from '../__fixtures__/leb128';
 
 const network = new Network('testnet');
 
@@ -104,17 +105,6 @@ describe('int', () => {
     expect(field1.toUser()).toStrictEqual(String(value));
   }
 
-  const DWARF5SignedTestCases: [bigint, Buffer][] = [
-    [2n, Buffer.from([2])],
-    [-2n, Buffer.from([0x7e])],
-    [127n, Buffer.from([127 + 0x80, 0])],
-    [-127n, Buffer.from([1 + 0x80, 0x7f])],
-    [128n, Buffer.from([0 + 0x80, 1])],
-    [-128n, Buffer.from([0 + 0x80, 0x7f])],
-    [129n, Buffer.from([1 + 0x80, 1])],
-    [-129n, Buffer.from([0x7f + 0x80, 0x7e])],
-  ];
-
   // eslint-disable-next-line jest/expect-expect
   it('should work with the common test cases', () => {
     for (const testCase of DWARF5SignedTestCases) {
@@ -180,14 +170,6 @@ describe('Amount', () => {
     });
     expect(field1.toUser()).toStrictEqual(String(value));
   }
-
-  const DWARF5UnsignedTestCases: [bigint, Buffer][] = [
-    [2n, Buffer.from([2])],
-    [127n, Buffer.from([127])],
-    [128n, Buffer.from([0x80, 1])],
-    [129n, Buffer.from([1 + 0x80, 1])],
-    [12857n, Buffer.from([57 + 0x80, 100])],
-  ];
 
   // eslint-disable-next-line jest/expect-expect
   it('should work with the common test cases', () => {
@@ -493,17 +475,6 @@ describe('Tuple', () => {
 });
 
 describe('List', () => {
-  const DWARF5SignedTestCases: [bigint, Buffer][] = [
-    [2n, Buffer.from([2])],
-    [-2n, Buffer.from([0x7e])],
-    [127n, Buffer.from([127 + 0x80, 0])],
-    [-127n, Buffer.from([1 + 0x80, 0x7f])],
-    [128n, Buffer.from([0 + 0x80, 1])],
-    [-128n, Buffer.from([0 + 0x80, 0x7f])],
-    [129n, Buffer.from([1 + 0x80, 1])],
-    [-129n, Buffer.from([0x7f + 0x80, 0x7e])],
-  ];
-
   it('should serialize from user input using simple types', () => {
     const field = getFieldParser('list[int]', network);
     expect(field).toBeInstanceOf(ncFields.ListField);
