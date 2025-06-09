@@ -4,7 +4,7 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-/* eslint class-methods-use-this: ["error", { "exceptMethods": ["getType", "clone"] }] */
+/* eslint class-methods-use-this: ["error", { "exceptMethods": ["getType", "createNew"] }] */
 
 import { z } from 'zod';
 import { BufferROExtract } from '../types';
@@ -19,15 +19,15 @@ export class BoolField extends NCFieldBase<boolean | string, boolean> {
     this.value = value;
   }
 
-  static new(): BoolField {
-    return new BoolField(false);
-  }
-
   getType() {
     return 'bool';
   }
 
-  clone() {
+  static new(): BoolField {
+    return new BoolField(false);
+  }
+
+  createNew() {
     return BoolField.new();
   }
 

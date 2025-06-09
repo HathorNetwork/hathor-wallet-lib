@@ -29,16 +29,16 @@ export class DictField extends NCFieldBase<Record<any, unknown>, Record<any, unk
     this.inner = [];
   }
 
-  static new(key: NCFieldBase, value: NCFieldBase): DictField {
-    return new DictField(key, value);
-  }
-
   getType() {
     return 'Dict';
   }
 
-  clone() {
-    return DictField.new(this.keyField, this.valueField);
+  static new(key: NCFieldBase, value: NCFieldBase): DictField {
+    return new DictField(key, value);
+  }
+
+  createNew() {
+    return DictField.new(this.keyField.createNew(), this.valueField.createNew());
   }
 
   fromBuffer(buf: Buffer): BufferROExtract<Record<any, unknown>> {
@@ -51,8 +51,8 @@ export class DictField extends NCFieldBase<Record<any, unknown>, Record<any, unk
     let dictBuf = buf.subarray(lenRead.bytesRead);
 
     for (let i = 0n; i < len; i++) {
-      const keyF = this.keyField.clone();
-      const valueF = this.valueField.clone();
+      const keyF = this.keyField.createNew();
+      const valueF = this.valueField.createNew();
 
       const key = keyF.fromBuffer(dictBuf);
       dictBuf = dictBuf.subarray(key.bytesRead);
@@ -84,8 +84,8 @@ export class DictField extends NCFieldBase<Record<any, unknown>, Record<any, unk
     this.inner = [];
     const value: Record<any, unknown> = {};
     for (const [k, v] of Object.entries(data)) {
-      const keyF = this.keyField.clone();
-      const valueF = this.valueField.clone();
+      const keyF = this.keyField.createNew();
+      const valueF = this.valueField.createNew();
 
       const key = keyF.fromUser(k);
       const val = valueF.fromUser(v);

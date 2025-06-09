@@ -46,8 +46,8 @@ export class SignedDataField extends NCFieldBase<IUserSignedData, ISignedData> {
     return new SignedDataField(inner, type, Buffer.alloc(0), undefined);
   }
 
-  clone() {
-    return SignedDataField.new(this.inner.clone(), this.value.type);
+  createNew() {
+    return SignedDataField.new(this.inner.createNew(), this.value.type);
   }
 
   fromBuffer(buf: Buffer): BufferROExtract<ISignedData> {

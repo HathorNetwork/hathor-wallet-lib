@@ -24,16 +24,16 @@ export class OptionalField extends NCFieldBase<unknown | null, unknown | null> {
     return this.value === null;
   }
 
-  static new(inner: NCFieldBase): OptionalField {
-    return new OptionalField(inner, null);
-  }
-
   getType() {
     return 'Optional';
   }
 
-  clone() {
-    return OptionalField.new(this.inner.clone());
+  static new(inner: NCFieldBase): OptionalField {
+    return new OptionalField(inner, null);
+  }
+
+  createNew() {
+    return OptionalField.new(this.inner.createNew());
   }
 
   fromBuffer(buf: Buffer): BufferROExtract<unknown | null> {

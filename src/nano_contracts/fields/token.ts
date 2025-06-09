@@ -4,7 +4,7 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-/* eslint class-methods-use-this: ["error", { "exceptMethods": ["getType", "clone"] }] */
+/* eslint class-methods-use-this: ["error", { "exceptMethods": ["getType", "createNew"] }] */
 
 import { z } from 'zod';
 import { NATIVE_TOKEN_UID } from '../../constants';
@@ -22,15 +22,15 @@ export class TokenUidField extends NCFieldBase<string, string> {
     this.value = value;
   }
 
-  static new(): TokenUidField {
-    return new TokenUidField(NATIVE_TOKEN_UID);
-  }
-
   getType() {
     return 'TokenUid';
   }
 
-  clone() {
+  static new(): TokenUidField {
+    return new TokenUidField(NATIVE_TOKEN_UID);
+  }
+
+  createNew() {
     return TokenUidField.new();
   }
 

@@ -4,7 +4,7 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-/* eslint class-methods-use-this: ["error", { "exceptMethods": ["getType", "clone"] }] */
+/* eslint class-methods-use-this: ["error", { "exceptMethods": ["getType", "createNew"] }] */
 
 import { z } from 'zod';
 import { BufferROExtract } from '../types';
@@ -19,15 +19,15 @@ export class Bytes32Field extends NCFieldBase<string, Buffer> {
     this.value = value;
   }
 
-  static new(): Bytes32Field {
-    return new Bytes32Field(Buffer.alloc(0));
-  }
-
   getType() {
     return 'bytes32';
   }
 
-  clone() {
+  static new(): Bytes32Field {
+    return new Bytes32Field(Buffer.alloc(0));
+  }
+
+  createNew() {
     return Bytes32Field.new();
   }
 

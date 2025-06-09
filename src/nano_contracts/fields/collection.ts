@@ -24,16 +24,16 @@ export class CollectionField extends NCFieldBase<unknown[], unknown[]> {
     this.inner = [];
   }
 
-  static new(inner: NCFieldBase): CollectionField {
-    return new CollectionField(inner);
-  }
-
   getType() {
     return 'Collection';
   }
 
-  clone() {
-    return CollectionField.new(this.kind);
+  static new(kind: NCFieldBase): CollectionField {
+    return new CollectionField(kind);
+  }
+
+  createNew() {
+    return CollectionField.new(this.kind.createNew());
   }
 
   fromBuffer(buf: Buffer): BufferROExtract<unknown[]> {
@@ -44,7 +44,7 @@ export class CollectionField extends NCFieldBase<unknown[], unknown[]> {
 
     let listBuf = buf.subarray(lenRead.bytesRead);
     for (let i = 0n; i < len; i++) {
-      const field = this.kind.clone();
+      const field = this.kind.createNew();
       const result = field.fromBuffer(listBuf);
       values.push(result.value);
       bytesReadTotal += result.bytesRead;
@@ -76,7 +76,7 @@ export class CollectionField extends NCFieldBase<unknown[], unknown[]> {
     }
     const values: unknown[] = [];
     for (const el of data) {
-      const field = this.kind.clone();
+      const field = this.kind.createNew();
       field.fromUser(el);
       values.push(field.value);
       this.inner.push(field);

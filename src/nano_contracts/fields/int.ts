@@ -4,7 +4,7 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-/* eslint class-methods-use-this: ["error", { "exceptMethods": ["getType", "clone"] }] */
+/* eslint class-methods-use-this: ["error", { "exceptMethods": ["getType", "createNew"] }] */
 
 import { z } from 'zod';
 import { BufferROExtract } from '../types';
@@ -21,15 +21,15 @@ export class IntField extends NCFieldBase<number | bigint | string, bigint> {
     this.value = value;
   }
 
-  static new(): IntField {
-    return new IntField(0n);
-  }
-
   getType() {
     return 'int';
   }
 
-  clone() {
+  static new(): IntField {
+    return new IntField(0n);
+  }
+
+  createNew() {
     return IntField.new();
   }
 

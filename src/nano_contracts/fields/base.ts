@@ -37,7 +37,7 @@ export abstract class NCFieldBase<U = unknown, T = unknown> {
   abstract getType(): string;
 
   /**
-   * Create an empty clone of this instance
+   * Create a new empty instance.
    */
-  abstract clone(): NCFieldBase;
+  abstract createNew(): NCFieldBase;
 }

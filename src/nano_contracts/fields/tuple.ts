@@ -20,16 +20,16 @@ export class TupleField extends NCFieldBase<unknown[], unknown[]> {
     this.elements = elements;
   }
 
-  static new(elements: NCFieldBase[]): TupleField {
-    return new TupleField(elements, []);
-  }
-
   getType() {
     return 'Tuple';
   }
 
-  clone() {
-    return TupleField.new(this.elements.map(el => el.clone()));
+  static new(elements: NCFieldBase[]): TupleField {
+    return new TupleField(elements, []);
+  }
+
+  createNew() {
+    return TupleField.new(this.elements.map(el => el.createNew()));
   }
 
   fromBuffer(buf: Buffer): BufferROExtract<unknown[]> {
