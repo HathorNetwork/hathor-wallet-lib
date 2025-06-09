@@ -26,12 +26,13 @@ export interface IUserSignedData {
 /**
  * A schema to validate that the user sent unknown data is a valid IUserSignedData.
  */
-export const UserSignedDataSchema: z.ZodType<IUserSignedData, z.ZodTypeDef, unknown> = z.object({
-  type: z.string(),
-  signature: z.string().regex(/^[a-fA-F0-9]*$/),
-  value: z.unknown(),
-}).transform(data => ({ ...data, value: data.value === undefined ? null : data.value }));
-
+export const UserSignedDataSchema: z.ZodType<IUserSignedData, z.ZodTypeDef, unknown> = z
+  .object({
+    type: z.string(),
+    signature: z.string().regex(/^[a-fA-F0-9]*$/),
+    value: z.unknown(),
+  })
+  .transform(data => ({ ...data, value: data.value === undefined ? null : data.value }));
 
 export class SignedDataField extends NCFieldBase<IUserSignedData, ISignedData> {
   value: ISignedData;
@@ -80,7 +81,7 @@ export class SignedDataField extends NCFieldBase<IUserSignedData, ISignedData> {
   }
 
   fromUser(data: unknown): SignedDataField {
-    const parsed = UserSignedDataSchema.parse(data)
+    const parsed = UserSignedDataSchema.parse(data);
     if (parsed.type !== this.value.type) {
       throw new Error(`Expected ${this.value.type} but received ${parsed.type}`);
     }
