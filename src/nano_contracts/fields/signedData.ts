@@ -23,6 +23,16 @@ export interface IUserSignedData {
   value: unknown;
 }
 
+/**
+ * A schema to validate that the user sent unknown data is a valid IUserSignedData.
+ */
+export const UserSignedDataSchema: z.ZodType<IUserSignedData, z.ZodTypeDef, unknown> = z.object({
+  type: z.string(),
+  signature: z.string().regex(/^[a-fA-F0-9]*$/),
+  value: z.unknown(),
+}).transform(data => ({ ...data, value: data.value === undefined ? null : data.value }));
+
+
 export class SignedDataField extends NCFieldBase<IUserSignedData, ISignedData> {
   value: ISignedData;
 
@@ -69,20 +79,21 @@ export class SignedDataField extends NCFieldBase<IUserSignedData, ISignedData> {
     return Buffer.concat([this.inner.toBuffer(), signature.toBuffer()]);
   }
 
-  fromUser(data: IUserSignedData): SignedDataField {
-    if (data.type !== this.value.type) {
-      throw new Error(`Expected ${this.value.type} but received ${data.type}`);
+  fromUser(data: unknown): SignedDataField {
+    const parsed = UserSignedDataSchema.parse(data)
+    if (parsed.type !== this.value.type) {
+      throw new Error(`Expected ${this.value.type} but received ${parsed.type}`);
     }
-    this.inner.fromUser(data.value);
+    this.inner.fromUser(parsed.value);
 
     const signature = z
       .string()
       .regex(/^[a-fA-F0-9]*$/)
       .transform(s => Buffer.from(s, 'hex'))
-      .parse(data.signature);
+      .parse(parsed.signature);
 
     this.value = {
-      type: data.type,
+      type: parsed.type,
       signature,
       value: this.inner.value,
     };

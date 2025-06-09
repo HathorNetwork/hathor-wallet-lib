@@ -59,7 +59,7 @@ export class OptionalField extends NCFieldBase<unknown | null, unknown | null> {
     return Buffer.concat([Buffer.from([1]), this.inner.toBuffer()]);
   }
 
-  fromUser(data: unknown | null): OptionalField {
+  fromUser(data: unknown): OptionalField {
     if (data === null) {
       this.value = null;
       return this;

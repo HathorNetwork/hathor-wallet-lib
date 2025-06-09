@@ -80,7 +80,13 @@ export class DictField extends NCFieldBase<Record<any, unknown>, Record<any, unk
     return Buffer.concat(serialized);
   }
 
-  fromUser(data: Record<any, unknown>): DictField {
+  fromUser(data: unknown): DictField {
+    function isRecord(d: unknown): d is Record<any, unknown> {
+      return typeof d === 'object' && d !== null;
+    }
+    if (!isRecord(data)) {
+      throw new Error('Provided data is not a valid object');
+    }
     this.inner = [];
     const value: Record<any, unknown> = {};
     for (const [k, v] of Object.entries(data)) {

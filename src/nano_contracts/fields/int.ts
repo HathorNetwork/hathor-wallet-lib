@@ -43,7 +43,7 @@ export class IntField extends NCFieldBase<number | bigint | string, bigint> {
     return leb128.encode_signed(this.value);
   }
 
-  fromUser(data: number | string | bigint): IntField {
+  fromUser(data: unknown): IntField {
     const value = this.schema.parse(data);
     this.value = value;
     return this;

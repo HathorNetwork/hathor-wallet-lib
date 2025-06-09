@@ -57,7 +57,13 @@ export class TupleField extends NCFieldBase<unknown[], unknown[]> {
     return Buffer.concat(serialized);
   }
 
-  fromUser(data: unknown[]): TupleField {
+  fromUser(data: unknown): TupleField {
+    function isArray(d: unknown): d is Array<unknown> {
+      return typeof d === 'object' && d != null && Array.isArray(d);
+    }
+    if (!isArray(data)) {
+      throw new Error('Provided data is not iterable, so it cannot be a list.');
+    }
     const values: unknown[] = [];
     if (this.elements.length !== data.length) {
       throw new Error('Mismatched number of values from type');
