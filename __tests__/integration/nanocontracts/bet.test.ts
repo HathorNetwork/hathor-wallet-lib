@@ -21,11 +21,10 @@ import Address from '../../../src/models/address';
 import P2PKH from '../../../src/models/p2pkh';
 import P2SH from '../../../src/models/p2sh';
 import {
+  getOracleSignedDataFromUser,
   getOracleBuffer,
-  getOracleInputData,
   isNanoContractCreateTx,
 } from '../../../src/nano_contracts/utils';
-import Serializer from '../../../src/nano_contracts/serializer';
 import {
   NanoContractTransactionError,
   NanoRequest404Error,
@@ -33,7 +32,6 @@ import {
 } from '../../../src/errors';
 import { OutputType } from '../../../src/wallet/types';
 import NanoContractTransactionParser from '../../../src/nano_contracts/parser';
-import { NanoContractSignedData } from '../../../src/nano_contracts/types';
 
 let fundsTx;
 const builtInBlueprintId = '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595';
@@ -132,12 +130,15 @@ describe('full cycle of bet nano contract', () => {
     expect(tx1Parser.parsedArgs[0]).toMatchObject({
       name: 'oracle_script',
       type: 'TxOutputScript',
+      value: oracleData.toString('hex'),
     });
-    // @ts-expect-error toMatchBuffer is defined in setupTests.js
-    expect(tx1Parser.parsedArgs[0].value).toMatchBuffer(oracleData);
-    expect(tx1Parser.parsedArgs[1]).toMatchObject({ name: 'token_uid', type: 'TokenUid' });
-    // @ts-expect-error toMatchBuffer is defined in setupTests.js
-    expect(tx1Parser.parsedArgs[1].value).toMatchBuffer(Buffer.from(NATIVE_TOKEN_UID, 'hex'));
+
+    expect(tx1Parser.parsedArgs[1]).toMatchObject({
+      name: 'token_uid',
+      type: 'TokenUid',
+      value: NATIVE_TOKEN_UID,
+    });
+
     expect(tx1Parser.parsedArgs[2]).toMatchObject({
       name: 'date_last_bet',
       type: 'Timestamp',
@@ -343,13 +344,18 @@ describe('full cycle of bet nano contract', () => {
     */
 
     // Set result to '1x0'
-    const nanoSerializer = new Serializer(network);
     const result = '1x0';
-    const resultSerialized = nanoSerializer.serializeFromType(result, 'str');
-    const inputData = await getOracleInputData(oracleData, tx1.hash, resultSerialized, wallet);
+    const signedData = await getOracleSignedDataFromUser(
+      oracleData,
+      tx1.hash,
+      'SignedData[str]',
+      result,
+      wallet
+    );
+
     const txSetResult = await wallet.createAndSendNanoContractTransaction('set_result', address1, {
       ncId: tx1.hash,
-      args: [`${bufferToHex(inputData)},${result},str`],
+      args: [signedData],
     });
     await checkTxValid(wallet, txSetResult);
     txIds.push(txSetResult.hash);
@@ -377,13 +383,12 @@ describe('full cycle of bet nano contract', () => {
     expect(txSetResultParser.parsedArgs[0]).toMatchObject({
       name: 'result',
       type: 'SignedData[str]',
+      value: {
+        type: 'str',
+        signature: signedData.signature,
+        value: result,
+      },
     });
-    expect((txSetResultParser.parsedArgs[0].value as NanoContractSignedData).type).toEqual('str');
-    expect(
-      (txSetResultParser.parsedArgs[0].value as NanoContractSignedData).signature
-      // @ts-expect-error toMatchBuffer is defined in setupTests.js
-    ).toMatchBuffer(inputData);
-    expect((txSetResultParser.parsedArgs[0].value as NanoContractSignedData).value).toEqual(result);
 
     const withdrawalData = {
       ncId: tx1.hash,

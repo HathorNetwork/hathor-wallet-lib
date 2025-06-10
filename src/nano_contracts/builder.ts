@@ -18,24 +18,22 @@ import {
   TOKEN_MINT_MASK,
   TOKEN_MELT_MASK,
 } from '../constants';
-import Serializer from './serializer';
 import HathorWallet from '../new/wallet';
 import { NanoContractTransactionError, UtxoError } from '../errors';
 import {
   NanoContractActionHeader,
   NanoContractActionType,
   NanoContractAction,
-  NanoContractArgumentApiInputType,
   NanoContractBuilderCreateTokenOptions,
   NanoContractVertexType,
   INanoContractActionSchema,
+  IArgumentField,
 } from './types';
 import { mapActionToActionHeader, validateAndParseBlueprintMethodArgs } from './utils';
 import { IDataInput, IDataOutput } from '../types';
 import NanoContractHeader from './header';
 import Address from '../models/address';
 import leb128 from '../utils/leb128';
-import { NanoContractMethodArgument } from './methodArg';
 
 class NanoContractTransactionBuilder {
   blueprintId: string | null | undefined;
@@ -49,9 +47,9 @@ class NanoContractTransactionBuilder {
 
   caller: Address | null;
 
-  args: NanoContractArgumentApiInputType[] | null;
+  args: unknown[] | null;
 
-  parsedArgs: NanoContractMethodArgument[] | null;
+  parsedArgs: IArgumentField[] | null;
 
   serializedArgs: Buffer | null;
 
@@ -128,7 +126,7 @@ class NanoContractTransactionBuilder {
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  setArgs(args: NanoContractArgumentApiInputType[] | undefined | null) {
+  setArgs(args: unknown[] | null) {
     this.args = args ?? [];
     return this;
   }
@@ -526,7 +524,8 @@ class NanoContractTransactionBuilder {
     this.parsedArgs = await validateAndParseBlueprintMethodArgs(
       this.blueprintId,
       this.method,
-      this.args
+      this.args,
+      this.wallet.getNetworkObject()
     );
   }
 
@@ -547,10 +546,8 @@ class NanoContractTransactionBuilder {
     }
     const serializedArray: Buffer[] = [leb128.encodeUnsigned(this.parsedArgs?.length ?? 0)];
     if (this.args) {
-      const serializer = new Serializer(this.wallet.getNetworkObject());
-
       for (const arg of this.parsedArgs) {
-        serializedArray.push(arg.serialize(serializer));
+        serializedArray.push(arg.field.toBuffer());
       }
     }
     this.serializedArgs = Buffer.concat(serializedArray);
