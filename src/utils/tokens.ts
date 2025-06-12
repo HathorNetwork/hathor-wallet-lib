@@ -26,7 +26,12 @@ import {
   UtxoSelectionAlgorithm,
 } from '../types';
 import { getAddressType } from './address';
-import { InsufficientFundsError, SendTxError, TokenNotFoundError, TokenValidationError } from '../errors';
+import {
+  InsufficientFundsError,
+  SendTxError,
+  TokenNotFoundError,
+  TokenValidationError,
+} from '../errors';
 import { bestUtxoSelection } from './utxo';
 import walletApi from '../api/wallet';
 import { TokenInfoVersion } from '../models/enum/token_info_version';
@@ -162,6 +167,7 @@ const tokens = {
    * @param {string} uid Token uid
    * @param {string} name Token name
    * @param {string} symbol Token symbol
+   * @param {string} version Token version, defaults to TokenInfoVersion.DEPOSIT
    *
    * @return {string} Configuration string of the token
    *
@@ -169,8 +175,14 @@ const tokens = {
    * @inner
    *
    */
-  getConfigurationString(uid: string, name: string, symbol: string): string {
-    const partialConfig = `${name}:${symbol}:${uid}`;
+  getConfigurationString(
+    uid: string,
+    name: string,
+    symbol: string,
+    version: TokenInfoVersion = TokenInfoVersion.DEPOSIT
+  ): string {
+    const versionString = version !== TokenInfoVersion.DEPOSIT ? `:${version}` : '';
+    const partialConfig = `${name}:${symbol}:${uid}${versionString}`;
     const checksum = helpers.getChecksum(buffer.Buffer.from(partialConfig));
     return `[${partialConfig}:${checksum.toString('hex')}]`;
   },
@@ -385,16 +397,30 @@ const tokens = {
       data?: string[] | null;
       mintAuthorityAddress?: string | null;
       utxoSelection?: UtxoSelectionAlgorithm;
-      tokenInfoVersion?: TokenInfoVersion;
-    } = {}
+      tokenInfoVersion: TokenInfoVersion;
+    } = { tokenInfoVersion: TokenInfoVersion.DEPOSIT }
   ): Promise<IDataTx> {
     const inputs: IDataInput[] = [];
     const outputs: IDataOutput[] = [];
     const depositPercent = storage.getTokenDepositPercentage();
 
+    let newTokenInfoVersion: TokenInfoVersion = tokenInfoVersion;
+
+    const isMintingToken = token !== null;
+    const tokensArray = isMintingToken ? [token] : [];
+
+    if (isMintingToken) {
+      // check in the wallet storage if it has the token
+      const tokenData = await storage.getToken(token);
+      if (!tokenData) {
+        throw new SendTxError(`Token ${token} not found.`);
+      }
+      newTokenInfoVersion = tokenData.version!;
+    }
+
     // 1. Calculate HTR deposit needed
     let depositAmount = 0n;
-    if (tokenInfoVersion === TokenInfoVersion.DEPOSIT) {
+    if (newTokenInfoVersion === TokenInfoVersion.DEPOSIT) {
       depositAmount = this.getDepositAmount(amount, depositPercent);
 
       if (data) {
@@ -446,11 +472,10 @@ const tokens = {
       }
     }
 
-    const tokensArray = token !== null ? [token] : [];
-
     let fee = 0;
-    if (tokenInfoVersion === TokenInfoVersion.FEE) {
-      if (!token) {
+    if (newTokenInfoVersion === TokenInfoVersion.FEE) {
+      // is creating a new token
+      if (!isMintingToken) {
         fee = Fee.calculateTokenCreationTxFee(outputs);
       } else {
         const mappedOutputs = outputs.map(
@@ -465,7 +490,7 @@ const tokens = {
         fee = await Fee.calculate(
           [],
           mappedOutputs,
-          await tokens.getTokensByManyIds(storage, new Set([token]))
+          await tokens.getTokensByManyIds(storage, new Set(tokensArray))
         );
       }
     }
@@ -510,6 +535,8 @@ const tokens = {
       inputs,
       outputs,
       tokens: tokensArray,
+      // append the token version if we are creating a new token
+      ...(!isMintingToken ? { tokenInfoVersion: newTokenInfoVersion } : {}),
     };
   },
 

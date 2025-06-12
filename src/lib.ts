@@ -57,6 +57,8 @@ import {
   TransactionTemplateBuilder,
   WalletTxTemplateInterpreter,
 } from './template/transaction';
+import * as enums from './models/enum';
+import type { TokenInfo } from './wallet/types';
 
 export {
   PartialTx,
@@ -119,7 +121,10 @@ export {
   TransactionTemplate,
   TransactionTemplateBuilder,
   WalletTxTemplateInterpreter,
+  TokenInfo,
+  enums,
 };
 
 export * from './nano_contracts/types';
 export * from './models/types';
+export * from './models/enum';

@@ -987,6 +987,7 @@ describe('prepare transactions without signature', () => {
       selectUtxos: generateSelectUtxos(fakeTokenToDepositUtxo),
     });
     jest.spyOn(hWallet, 'getMintAuthority').mockReturnValue(fakeMintAuthority);
+    jest.spyOn(hWallet.storage, 'getToken').mockImplementation(mockGetToken);
 
     // prepare mint
     const txData = await hWallet.prepareMintTokensData('01', 100n, {
@@ -1100,6 +1101,7 @@ describe('prepare transactions without signature', () => {
       selectUtxos: generateSelectUtxos({ ...fakeTokenToDepositUtxo, value: amountAvailable }),
     });
     jest.spyOn(hWallet, 'getMintAuthority').mockReturnValue(fakeMintAuthority);
+    jest.spyOn(hWallet.storage, 'getToken').mockImplementation(mockGetToken);
 
     // prepare mint
     await expect(
