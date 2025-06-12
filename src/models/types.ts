@@ -98,3 +98,5 @@ export interface AtomicSwapProposal {
   version: number;
   history: { partialTx: string; timestamp: string }[];
 }
+
+export type { TokenInfoVersion };
