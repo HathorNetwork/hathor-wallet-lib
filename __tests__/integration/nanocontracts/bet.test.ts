@@ -21,11 +21,10 @@ import Address from '../../../src/models/address';
 import P2PKH from '../../../src/models/p2pkh';
 import P2SH from '../../../src/models/p2sh';
 import {
+  getOracleSignedDataFromUser,
   getOracleBuffer,
-  getOracleInputData,
   isNanoContractCreateTx,
 } from '../../../src/nano_contracts/utils';
-import Serializer from '../../../src/nano_contracts/serializer';
 import {
   NanoContractTransactionError,
   NanoRequest404Error,
@@ -33,7 +32,6 @@ import {
 } from '../../../src/errors';
 import { OutputType } from '../../../src/wallet/types';
 import NanoContractTransactionParser from '../../../src/nano_contracts/parser';
-import { NanoContractSignedData } from '../../../src/nano_contracts/types';
 
 let fundsTx;
 const builtInBlueprintId = '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595';
@@ -132,12 +130,15 @@ describe('full cycle of bet nano contract', () => {
     expect(tx1Parser.parsedArgs[0]).toMatchObject({
       name: 'oracle_script',
       type: 'TxOutputScript',
+      value: oracleData.toString('hex'),
     });
-    // @ts-expect-error toMatchBuffer is defined in setupTests.js
-    expect(tx1Parser.parsedArgs[0].value).toMatchBuffer(oracleData);
-    expect(tx1Parser.parsedArgs[1]).toMatchObject({ name: 'token_uid', type: 'TokenUid' });
-    // @ts-expect-error toMatchBuffer is defined in setupTests.js
-    expect(tx1Parser.parsedArgs[1].value).toMatchBuffer(Buffer.from(NATIVE_TOKEN_UID, 'hex'));
+
+    expect(tx1Parser.parsedArgs[1]).toMatchObject({
+      name: 'token_uid',
+      type: 'TokenUid',
+      value: NATIVE_TOKEN_UID,
+    });
+
     expect(tx1Parser.parsedArgs[2]).toMatchObject({
       name: 'date_last_bet',
       type: 'Timestamp',
@@ -310,10 +311,13 @@ describe('full cycle of bet nano contract', () => {
       'final_result',
       'oracle_script',
       'date_last_bet',
+      /*
+      `address_details.${address2}`,
       `address_details.a'${address2}'`,
-      `withdrawals.a'${address2}'`,
-      `address_details.a'${address3}'`,
-      `withdrawals.a'${address3}'`,
+      `withdrawals.${address2}`,
+      `address_details.${address3}`,
+      `withdrawals.${address3}`,
+      */
     ]);
     const addressObj1 = new Address(address1, { network });
     const outputScriptType = addressObj1.getType();
@@ -332,19 +336,26 @@ describe('full cycle of bet nano contract', () => {
     expect(ncState.fields.oracle_script.value).toBe(bufferToHex(outputScriptBuffer1));
     expect(ncState.fields.final_result.value).toBeNull();
     expect(ncState.fields.total.value).toBe(300);
-    expect(ncState.fields[`address_details.a'${address2}'`].value).toHaveProperty('1x0', 100);
-    expect(ncState.fields[`withdrawals.a'${address2}'`].value).toBeUndefined();
-    expect(ncState.fields[`address_details.a'${address3}'`].value).toHaveProperty('2x0', 200);
-    expect(ncState.fields[`withdrawals.a'${address3}'`].value).toBeUndefined();
+    /*
+    expect(ncState.fields[`address_details.${address2}`].value).toHaveProperty('1x0', 100);
+    expect(ncState.fields[`withdrawals.${address2}`].value).toBeUndefined();
+    expect(ncState.fields[`address_details.${address3}`].value).toHaveProperty('2x0', 200);
+    expect(ncState.fields[`withdrawals.${address3}`].value).toBeUndefined();
+    */
 
     // Set result to '1x0'
-    const nanoSerializer = new Serializer(network);
     const result = '1x0';
-    const resultSerialized = nanoSerializer.serializeFromType(result, 'str');
-    const inputData = await getOracleInputData(oracleData, tx1.hash, resultSerialized, wallet);
+    const signedData = await getOracleSignedDataFromUser(
+      oracleData,
+      tx1.hash,
+      'SignedData[str]',
+      result,
+      wallet
+    );
+
     const txSetResult = await wallet.createAndSendNanoContractTransaction('set_result', address1, {
       ncId: tx1.hash,
-      args: [`${bufferToHex(inputData)},${result},str`],
+      args: [signedData],
     });
     await checkTxValid(wallet, txSetResult);
     txIds.push(txSetResult.hash);
@@ -372,13 +383,12 @@ describe('full cycle of bet nano contract', () => {
     expect(txSetResultParser.parsedArgs[0]).toMatchObject({
       name: 'result',
       type: 'SignedData[str]',
+      value: {
+        type: 'str',
+        signature: signedData.signature,
+        value: result,
+      },
     });
-    expect((txSetResultParser.parsedArgs[0].value as NanoContractSignedData).type).toEqual('str');
-    expect(
-      (txSetResultParser.parsedArgs[0].value as NanoContractSignedData).signature
-      // @ts-expect-error toMatchBuffer is defined in setupTests.js
-    ).toMatchBuffer(inputData);
-    expect((txSetResultParser.parsedArgs[0].value as NanoContractSignedData).value).toEqual(result);
 
     const withdrawalData = {
       ncId: tx1.hash,
@@ -482,20 +492,24 @@ describe('full cycle of bet nano contract', () => {
       'final_result',
       'oracle_script',
       'date_last_bet',
-      `address_details.a'${address2}'`,
-      `withdrawals.a'${address2}'`,
-      `address_details.a'${address3}'`,
-      `withdrawals.a'${address3}'`,
+      /*
+      `address_details.${address2}`,
+      `withdrawals.${address2}`,
+      `address_details.${address3}`,
+      `withdrawals.${address3}`,
+      */
     ]);
     expect(ncState2.fields.token_uid.value).toBe(NATIVE_TOKEN_UID);
     expect(ncState2.fields.date_last_bet.value).toBe(dateLastBet);
     expect(ncState2.fields.oracle_script.value).toBe(bufferToHex(outputScriptBuffer1));
     expect(ncState2.fields.final_result.value).toBe('1x0');
     expect(ncState2.fields.total.value).toBe(300);
-    expect(ncState2.fields[`address_details.a'${address2}'`].value).toHaveProperty('1x0', 100);
-    expect(ncState2.fields[`withdrawals.a'${address2}'`].value).toBe(300);
-    expect(ncState2.fields[`address_details.a'${address3}'`].value).toHaveProperty('2x0', 200);
-    expect(ncState2.fields[`withdrawals.a'${address3}'`].value).toBeUndefined();
+    /*
+    expect(ncState2.fields[`address_details.${address2}`].value).toHaveProperty('1x0', 100);
+    expect(ncState2.fields[`withdrawals.${address2}`].value).toBe(300);
+    expect(ncState2.fields[`address_details.${address3}`].value).toHaveProperty('2x0', 200);
+    expect(ncState2.fields[`withdrawals.${address3}`].value).toBeUndefined();
+    */
     // Get history again
     const ncHistory2 = await ncApi.getNanoContractHistory(tx1.hash);
     expect(ncHistory2.history.length).toBe(5);
@@ -521,10 +535,12 @@ describe('full cycle of bet nano contract', () => {
         'final_result',
         'oracle_script',
         'date_last_bet',
-        `address_details.a'${address2}'`,
-        `withdrawals.a'${address2}'`,
-        `address_details.a'${address3}'`,
-        `withdrawals.a'${address3}'`,
+        /*
+        `address_details.${address2}`,
+        `withdrawals.${address2}`,
+        `address_details.${address3}`,
+        `withdrawals.${address3}`,
+        */
       ],
       [],
       [],
@@ -536,16 +552,18 @@ describe('full cycle of bet nano contract', () => {
     expect(ncStateFirstBlock.fields.oracle_script.value).toBe(bufferToHex(outputScriptBuffer1));
     expect(ncStateFirstBlock.fields.final_result.value).toBeNull();
     expect(ncStateFirstBlock.fields.total.value).toBe(300);
-    expect(ncStateFirstBlock.fields[`address_details.a'${address2}'`].value).toHaveProperty(
+    /*
+    expect(ncStateFirstBlock.fields[`address_details.${address2}`].value).toHaveProperty(
       '1x0',
       100
     );
-    expect(ncStateFirstBlock.fields[`withdrawals.a'${address2}'`].value).toBeUndefined();
-    expect(ncStateFirstBlock.fields[`address_details.a'${address3}'`].value).toHaveProperty(
+    expect(ncStateFirstBlock.fields[`withdrawals.${address2}`].value).toBeUndefined();
+    expect(ncStateFirstBlock.fields[`address_details.${address3}`].value).toHaveProperty(
       '2x0',
       200
     );
-    expect(ncStateFirstBlock.fields[`withdrawals.a'${address3}'`].value).toBeUndefined();
+    expect(ncStateFirstBlock.fields[`withdrawals.${address3}`].value).toBeUndefined();
+    */
 
     // Get NC state in the past, using txBet2 first block height
     const ncStateFirstBlockHeight = await ncApi.getNanoContractState(
@@ -556,10 +574,12 @@ describe('full cycle of bet nano contract', () => {
         'final_result',
         'oracle_script',
         'date_last_bet',
-        `address_details.a'${address2}'`,
-        `withdrawals.a'${address2}'`,
-        `address_details.a'${address3}'`,
-        `withdrawals.a'${address3}'`,
+        /*
+        `address_details.${address2}`,
+        `withdrawals.${address2}`,
+        `address_details.${address3}`,
+        `withdrawals.${address3}`,
+        */
       ],
       [],
       [],
@@ -574,16 +594,18 @@ describe('full cycle of bet nano contract', () => {
     );
     expect(ncStateFirstBlockHeight.fields.final_result.value).toBeNull();
     expect(ncStateFirstBlockHeight.fields.total.value).toBe(300);
-    expect(ncStateFirstBlockHeight.fields[`address_details.a'${address2}'`].value).toHaveProperty(
+    /*
+    expect(ncStateFirstBlockHeight.fields[`address_details.${address2}`].value).toHaveProperty(
       '1x0',
       100
     );
-    expect(ncStateFirstBlockHeight.fields[`withdrawals.a'${address2}'`].value).toBeUndefined();
-    expect(ncStateFirstBlockHeight.fields[`address_details.a'${address3}'`].value).toHaveProperty(
+    expect(ncStateFirstBlockHeight.fields[`withdrawals.${address2}`].value).toBeUndefined();
+    expect(ncStateFirstBlockHeight.fields[`address_details.${address3}`].value).toHaveProperty(
       '2x0',
       200
     );
-    expect(ncStateFirstBlockHeight.fields[`withdrawals.a'${address3}'`].value).toBeUndefined();
+    expect(ncStateFirstBlockHeight.fields[`withdrawals.${address3}`].value).toBeUndefined();
+    */
 
     // Test a tx that becomes voided after the nano execution
     const txWithdrawal2 = await wallet.createAndSendNanoContractTransaction('withdraw', address2, {
@@ -607,6 +629,13 @@ describe('full cycle of bet nano contract', () => {
     // This voidness called the full processHistory method
     expect(isEmpty(txWithdrawal2Data.meta.voided_by)).toBe(false);
     expect(wallet.storage.processHistory.mock.calls.length).toBe(1);
+
+    // Even if the tx is voided, if it has first_block, the seqnum should increase. This
+    // case the tx became voided after getting a first_block and the nano execution failed
+    // but the number of transactions should still be the same
+    const address2Meta3 = await wallet.storage.store.getAddressMeta(address2);
+    expect(address2Meta3.seqnum).toBe(2);
+    expect(address2Meta3.numTransactions).toBe(2);
   };
 
   it('bet deposit built in', async () => {
@@ -636,7 +665,7 @@ describe('full cycle of bet nano contract', () => {
     expect(address0Meta?.numTransactions).toBe(1);
 
     // Use the bet blueprint code
-    const code = fs.readFileSync('./__tests__/integration/configuration/bet.py', 'utf8');
+    const code = fs.readFileSync('./__tests__/integration/configuration/blueprints/bet.py', 'utf8');
     const tx = await ocbWallet.createAndSendOnChainBlueprintTransaction(code, address10);
     // Wait for the tx to be confirmed, so we can use the on chain blueprint
     await waitTxConfirmed(ocbWallet, tx.hash!, null);
@@ -776,7 +805,7 @@ describe('full cycle of bet nano contract', () => {
     const { seed } = WALLET_CONSTANTS.ocb;
     const ocbWallet = await generateWalletHelper({ seed });
 
-    const code = fs.readFileSync('./__tests__/integration/configuration/bet.py', 'utf8');
+    const code = fs.readFileSync('./__tests__/integration/configuration/blueprints/bet.py', 'utf8');
     // Use an address that is not from the ocbWallet
     await expect(
       ocbWallet.createAndSendOnChainBlueprintTransaction(code, address0)

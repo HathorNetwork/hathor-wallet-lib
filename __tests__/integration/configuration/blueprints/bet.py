@@ -27,7 +27,6 @@ from hathor.nanocontracts.types import (
     Timestamp,
     TokenUid,
     TxOutputScript,
-    is_action_type,
     public,
     view,
 )
@@ -152,7 +151,7 @@ class Bet(Blueprint):
     def bet(self, ctx: Context, address: Address, score: str) -> None:
         """Make a bet."""
         action = self._get_action(ctx)
-        assert is_action_type(action, NCDepositAction)
+        assert isinstance(action, NCDepositAction)
         self.fail_if_result_is_available()
         self.fail_if_invalid_token(action)
         if ctx.timestamp > self.date_last_bet:
@@ -189,7 +188,7 @@ class Bet(Blueprint):
     def withdraw(self, ctx: Context) -> None:
         """Withdraw tokens after the final result is set."""
         action = self._get_action(ctx)
-        assert is_action_type(action, NCWithdrawalAction)
+        assert isinstance(action, NCWithdrawalAction)
         self.fail_if_result_is_not_available()
         self.fail_if_invalid_token(action)
         address = Address(ctx.address)

@@ -163,6 +163,8 @@ describe('Authority actions blueprint test', () => {
     expect(txCreateTokenData.tx.version).toBe(CREATE_TOKEN_TX_VERSION);
     expect(txCreateTokenData.tx.token_name).toBe(createTokenOptions.name);
     expect(txCreateTokenData.tx.token_symbol).toBe(createTokenOptions.symbol);
+    // No inputs
+    expect(txCreateTokenData.tx.inputs.length).toBe(0);
     expect(txCreateTokenData.tx.outputs.length).toBe(4);
     // First the created token output with 1000n amount
     expect(txCreateTokenData.tx.outputs[0].value).toBe(1000n);
@@ -333,18 +335,18 @@ describe('Authority actions blueprint test', () => {
     expect(ncStateMelt.balances[txCreateToken.hash].can_mint).toBe(true);
     expect(ncStateMelt.balances[txCreateToken.hash].can_melt).toBe(true);
 
-    // Mint/melt in the contract world doesn't affect this API from utxo world
+    // Mint/melt in the contract affect the token info in the utxo world
     const tokenDetail3 = await wallet.getTokenDetails(txCreateToken.hash);
-    expect(tokenDetail3.totalSupply).toBe(1000n);
+    expect(tokenDetail3.totalSupply).toBe(2000n);
     expect(tokenDetail3.authorities.mint).toBe(false);
     expect(tokenDetail3.authorities.melt).toBe(true);
 
-    // We will invoke a mint authority to an output
-    const invokeData = {
+    // We will acquire a mint authority to an output
+    const acquireData = {
       ncId: txInitialize.hash,
       actions: [
         {
-          type: 'invoke_authority',
+          type: 'acquire_authority',
           token: txCreateToken.hash,
           authority: 'mint',
           address: address1,
@@ -352,37 +354,37 @@ describe('Authority actions blueprint test', () => {
       ],
     };
 
-    const txInvoke = await wallet.createAndSendNanoContractTransaction(
-      'invoke_authority',
+    const txAcquire = await wallet.createAndSendNanoContractTransaction(
+      'acquire_authority',
       address0,
-      invokeData
+      acquireData
     );
-    await checkTxValid(wallet, txInvoke);
-    const txInvokeData = await wallet.getFullTxById(txInvoke.hash);
+    await checkTxValid(wallet, txAcquire);
+    const txAcquireData = await wallet.getFullTxById(txAcquire.hash);
 
-    expect(txInvokeData.tx.nc_id).toBe(txInitialize.hash);
-    expect(txInvokeData.tx.nc_method).toBe('invoke_authority');
-    expect(txInvokeData.tx.outputs.length).toBe(1);
-    expect(txInvokeData.tx.inputs.length).toBe(0);
+    expect(txAcquireData.tx.nc_id).toBe(txInitialize.hash);
+    expect(txAcquireData.tx.nc_method).toBe('acquire_authority');
+    expect(txAcquireData.tx.outputs.length).toBe(1);
+    expect(txAcquireData.tx.inputs.length).toBe(0);
     // Mint authority output
-    expect(txInvokeData.tx.outputs[0].value).toBe(1n);
-    expect(txInvokeData.tx.outputs[0].token_data).toBe(129);
-    expect(txInvokeData.tx.outputs[0].decoded.address).toBe(address1);
+    expect(txAcquireData.tx.outputs[0].value).toBe(1n);
+    expect(txAcquireData.tx.outputs[0].token_data).toBe(129);
+    expect(txAcquireData.tx.outputs[0].decoded.address).toBe(address1);
 
-    const ncStateInvoke = await ncApi.getNanoContractState(
+    const ncStateAcquire = await ncApi.getNanoContractState(
       txInitialize.hash,
       [],
       [txCreateToken.hash, NATIVE_TOKEN_UID]
     );
 
-    expect(BigInt(ncStateInvoke.balances[NATIVE_TOKEN_UID].value)).toBe(60n);
-    expect(BigInt(ncStateInvoke.balances[txCreateToken.hash].value)).toBe(1000n);
-    expect(ncStateInvoke.balances[txCreateToken.hash].can_mint).toBe(true);
-    expect(ncStateInvoke.balances[txCreateToken.hash].can_melt).toBe(true);
+    expect(BigInt(ncStateAcquire.balances[NATIVE_TOKEN_UID].value)).toBe(60n);
+    expect(BigInt(ncStateAcquire.balances[txCreateToken.hash].value)).toBe(1000n);
+    expect(ncStateAcquire.balances[txCreateToken.hash].can_mint).toBe(true);
+    expect(ncStateAcquire.balances[txCreateToken.hash].can_melt).toBe(true);
 
     // Now we can mint again in the utxo world
     const tokenDetail4 = await wallet.getTokenDetails(txCreateToken.hash);
-    expect(tokenDetail4.totalSupply).toBe(1000n);
+    expect(tokenDetail4.totalSupply).toBe(2000n);
     expect(tokenDetail4.authorities.mint).toBe(true);
     expect(tokenDetail4.authorities.melt).toBe(true);
 
@@ -412,9 +414,226 @@ describe('Authority actions blueprint test', () => {
 
     // The token detail in the utxo world did not change
     const tokenDetail5 = await wallet.getTokenDetails(txCreateToken.hash);
-    expect(tokenDetail5.totalSupply).toBe(1000n);
+    expect(tokenDetail5.totalSupply).toBe(2000n);
     expect(tokenDetail5.authorities.mint).toBe(true);
     expect(tokenDetail5.authorities.melt).toBe(true);
+
+    // Create a new nano contract of this blueprint with token creation and deposit
+    // using a single utxo for it
+    const address2 = await hWallet.getAddressAtIndex(2);
+    await GenesisWalletHelper.injectFunds(hWallet, address2, 1000n);
+
+    // Create NC with deposit of HTR and token creation
+    const newInitializeData = {
+      blueprintId,
+      actions: [
+        {
+          type: 'deposit',
+          token: NATIVE_TOKEN_UID,
+          amount: 100n,
+          address: address2,
+        },
+      ],
+    };
+
+    const singleUtxoCreateTokenOptions = {
+      mintAddress: address0,
+      name: 'Single UTXO Test Token',
+      symbol: 'SUT',
+      amount: 1000n,
+      changeAddress: null,
+      createMint: true,
+      mintAuthorityAddress: null,
+      createMelt: true,
+      meltAuthorityAddress: null,
+      data: ['test'],
+      isCreateNFT: false,
+      contractPaysTokenDeposit: false,
+    };
+
+    // Create token and execute nano initialize with deposit action
+    // we must have a single utxo to be used by the deposit fee, data, and deposit action
+    const initializeTokenCreate = await wallet.createAndSendNanoContractCreateTokenTransaction(
+      NANO_CONTRACTS_INITIALIZE_METHOD,
+      address2,
+      newInitializeData,
+      singleUtxoCreateTokenOptions
+    );
+    await checkTxValid(wallet, initializeTokenCreate);
+    const initializeTokenCreateData = await wallet.getFullTxById(initializeTokenCreate.hash);
+
+    expect(initializeTokenCreateData.tx.nc_method).toBe(NANO_CONTRACTS_INITIALIZE_METHOD);
+    expect(initializeTokenCreateData.tx.version).toBe(CREATE_TOKEN_TX_VERSION);
+    expect(initializeTokenCreateData.tx.token_name).toBe(singleUtxoCreateTokenOptions.name);
+    expect(initializeTokenCreateData.tx.token_symbol).toBe(singleUtxoCreateTokenOptions.symbol);
+    // A single utxo was used
+    expect(initializeTokenCreateData.tx.inputs.length).toBe(1);
+    expect(initializeTokenCreateData.tx.outputs.length).toBe(5);
+    // First the created token output with 1000n amount
+    expect(initializeTokenCreateData.tx.outputs[0].value).toBe(1000n);
+    expect(initializeTokenCreateData.tx.outputs[0].token_data).toBe(1);
+    // Mint authority
+    expect(initializeTokenCreateData.tx.outputs[1].value).toBe(1n);
+    expect(initializeTokenCreateData.tx.outputs[1].token_data).toBe(129);
+    // Melt authority
+    expect(initializeTokenCreateData.tx.outputs[2].value).toBe(2n);
+    expect(initializeTokenCreateData.tx.outputs[2].token_data).toBe(129);
+    // Then the change output and the data output
+    expect(initializeTokenCreateData.tx.outputs[3].value).toBe(1n);
+    expect(initializeTokenCreateData.tx.outputs[3].token_data).toBe(0);
+    expect(initializeTokenCreateData.tx.outputs[4].value).toBe(889n);
+    expect(initializeTokenCreateData.tx.outputs[4].token_data).toBe(0);
+
+    // Create a token that will need two utxos
+    // Use a new wallet so the utxos don't get mixed with previous change utxos
+    const newWallet = await generateWalletHelper();
+    const newAddress0 = await newWallet.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(newWallet, newAddress0, 100n);
+    await GenesisWalletHelper.injectFunds(newWallet, newAddress0, 100n);
+
+    // Create NC with deposit of HTR and token creation
+    const twoUtxosInitializeData = {
+      blueprintId,
+      actions: [
+        {
+          type: 'deposit',
+          token: NATIVE_TOKEN_UID,
+          amount: 100n,
+          address: newAddress0,
+        },
+      ],
+    };
+
+    const twoUtxosCreateTokenOptions = {
+      mintAddress: newAddress0,
+      name: 'Two UTXO Test Token',
+      symbol: 'TUT',
+      amount: 1000n,
+      changeAddress: null,
+      createMint: true,
+      mintAuthorityAddress: null,
+      createMelt: true,
+      meltAuthorityAddress: null,
+      data: ['test'],
+      isCreateNFT: false,
+      contractPaysTokenDeposit: false,
+    };
+
+    // Create token and execute nano initialize with deposit action
+    // we must have a single utxo to be used by the deposit fee, data, and deposit action
+    const twoUtxosInitializeTokenCreate =
+      await newWallet.createAndSendNanoContractCreateTokenTransaction(
+        NANO_CONTRACTS_INITIALIZE_METHOD,
+        newAddress0,
+        twoUtxosInitializeData,
+        twoUtxosCreateTokenOptions
+      );
+    await checkTxValid(newWallet, twoUtxosInitializeTokenCreate);
+    const twoUtxosInitializeTokenCreateData = await newWallet.getFullTxById(
+      twoUtxosInitializeTokenCreate.hash
+    );
+
+    expect(twoUtxosInitializeTokenCreateData.tx.nc_method).toBe(NANO_CONTRACTS_INITIALIZE_METHOD);
+    expect(twoUtxosInitializeTokenCreateData.tx.version).toBe(CREATE_TOKEN_TX_VERSION);
+    expect(twoUtxosInitializeTokenCreateData.tx.token_name).toBe(twoUtxosCreateTokenOptions.name);
+    expect(twoUtxosInitializeTokenCreateData.tx.token_symbol).toBe(
+      twoUtxosCreateTokenOptions.symbol
+    );
+    // Two utxos were used
+    expect(twoUtxosInitializeTokenCreateData.tx.inputs.length).toBe(2);
+    expect(twoUtxosInitializeTokenCreateData.tx.outputs.length).toBe(5);
+    // First the created token output with 1000n amount
+    expect(twoUtxosInitializeTokenCreateData.tx.outputs[0].value).toBe(1000n);
+    expect(twoUtxosInitializeTokenCreateData.tx.outputs[0].token_data).toBe(1);
+    // Mint authority
+    expect(twoUtxosInitializeTokenCreateData.tx.outputs[1].value).toBe(1n);
+    expect(twoUtxosInitializeTokenCreateData.tx.outputs[1].token_data).toBe(129);
+    // Melt authority
+    expect(twoUtxosInitializeTokenCreateData.tx.outputs[2].value).toBe(2n);
+    expect(twoUtxosInitializeTokenCreateData.tx.outputs[2].token_data).toBe(129);
+    // Then the change output and the data output
+    expect(twoUtxosInitializeTokenCreateData.tx.outputs[3].value).toBe(1n);
+    expect(twoUtxosInitializeTokenCreateData.tx.outputs[3].token_data).toBe(0);
+    expect(twoUtxosInitializeTokenCreateData.tx.outputs[4].value).toBe(89n);
+    expect(twoUtxosInitializeTokenCreateData.tx.outputs[4].token_data).toBe(0);
+
+    // Create a new token with only required params
+    const newCreateTokenData = {
+      ncId: txInitialize.hash,
+    };
+
+    const newCreateTokenOptions = {
+      name: 'New Authority Test Token',
+      symbol: 'NAT',
+      amount: 100n,
+      contractPaysTokenDeposit: false,
+    };
+
+    // Create token and execute nano method
+    // the user will pay for the deposit, not the contract
+    const newTxCreateToken = await wallet.createAndSendNanoContractCreateTokenTransaction(
+      'create_token_no_deposit',
+      address0,
+      newCreateTokenData,
+      newCreateTokenOptions
+    );
+    await checkTxValid(wallet, newTxCreateToken);
+    const newTxCreateTokenData = await wallet.getFullTxById(newTxCreateToken.hash);
+
+    expect(newTxCreateTokenData.tx.nc_id).toBe(txInitialize.hash);
+    expect(newTxCreateTokenData.tx.nc_method).toBe('create_token_no_deposit');
+    expect(newTxCreateTokenData.tx.version).toBe(CREATE_TOKEN_TX_VERSION);
+    expect(newTxCreateTokenData.tx.token_name).toBe(newCreateTokenOptions.name);
+    expect(newTxCreateTokenData.tx.token_symbol).toBe(newCreateTokenOptions.symbol);
+    expect(newTxCreateTokenData.tx.outputs.length).toBe(4);
+    // First the change output of HTR used for the deposit
+    expect(newTxCreateTokenData.tx.outputs[0].token_data).toBe(0);
+    // Then the created token output with 100n amount
+    expect(newTxCreateTokenData.tx.outputs[1].value).toBe(100n);
+    expect(newTxCreateTokenData.tx.outputs[1].token_data).toBe(1);
+    // Mint authority
+    expect(newTxCreateTokenData.tx.outputs[2].value).toBe(1n);
+    expect(newTxCreateTokenData.tx.outputs[2].token_data).toBe(129);
+    // Melt authority
+    expect(newTxCreateTokenData.tx.outputs[3].value).toBe(2n);
+    expect(newTxCreateTokenData.tx.outputs[3].token_data).toBe(129);
+    // The input is the one used to pay for the deposit
+    expect(newTxCreateTokenData.tx.inputs.length).toBe(1);
+    expect(newTxCreateTokenData.tx.inputs[0].token_data).toBe(0);
+
+    const depositAndGrantData = {
+      ncId: txInitialize.hash,
+      args: [newTxCreateToken.hash],
+      actions: [
+        {
+          type: 'grant_authority',
+          token: newTxCreateToken.hash,
+          authority: 'mint',
+        },
+        {
+          type: 'deposit',
+          token: newTxCreateToken.hash,
+          amount: 10n,
+        },
+      ],
+    };
+
+    const txDepositAndGrant = await wallet.createAndSendNanoContractTransaction(
+      'deposit_and_grant',
+      address0,
+      depositAndGrantData
+    );
+    await checkTxValid(wallet, txDepositAndGrant);
+    const txDepositAndGrantData = await wallet.getFullTxById(txDepositAndGrant.hash);
+
+    expect(txDepositAndGrantData.tx.nc_id).toBe(txInitialize.hash);
+    expect(txDepositAndGrantData.tx.nc_method).toBe('deposit_and_grant');
+    expect(txDepositAndGrantData.tx.outputs.length).toBe(1);
+    // The change output of the token used for the deposit
+    expect(txDepositAndGrantData.tx.outputs[0].token_data).toBe(1);
+    // One input for the deposit and one for the authority
+    expect(txDepositAndGrantData.tx.inputs.length).toBe(2);
+    expect(txDepositAndGrantData.tx.nc_context.actions.length).toBe(2);
   };
 
   it('Run with on chain blueprint', async () => {
@@ -429,14 +648,17 @@ describe('Authority actions blueprint test', () => {
     expect(address0Meta?.numTransactions).toBe(1);
 
     // Use the blueprint code
-    const code = fs.readFileSync('./__tests__/integration/configuration/authority.py', 'utf8');
+    const code = fs.readFileSync(
+      './__tests__/integration/configuration/blueprints/authority.py',
+      'utf8'
+    );
     const tx = await hWallet.createAndSendOnChainBlueprintTransaction(code, address10);
     // Wait for the tx to be confirmed, so we can use the on chain blueprint
     await waitTxConfirmed(hWallet, tx.hash);
     // We must have one transaction in the address10 now
     const newAddress10Meta = await hWallet.storage.store.getAddressMeta(address10);
     expect(newAddress10Meta.numTransactions).toBe(1);
-    // Execute the bet blueprint tests
+    // Execute the authority blueprint tests
     await executeTests(hWallet, tx.hash);
   });
 });

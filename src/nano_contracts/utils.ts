@@ -22,65 +22,19 @@ import Address from '../models/address';
 import Transaction from '../models/transaction';
 import { NanoContractTransactionError, OracleParseError, WalletFromXPubGuard } from '../errors';
 import { OutputType } from '../wallet/types';
-import { IHistoryTx, IStorage, ITokenData } from '../types';
+import { IHistoryTx, IStorage, ITokenData, OutputValueType } from '../types';
 import { parseScript } from '../utils/scripts';
 import {
   MethodArgInfo,
-  NanoContractArgumentContainerType,
-  NanoContractArgumentApiInputType,
-  NanoContractArgumentSingleTypeName,
-  NanoContractArgumentSingleTypeNameSchema,
   ActionTypeToActionHeaderType,
   NanoContractAction,
   NanoContractActionHeader,
   NanoContractActionType,
+  IArgumentField,
 } from './types';
 import { NANO_CONTRACTS_INITIALIZE_METHOD, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../constants';
-import { NanoContractMethodArgument } from './methodArg';
-import leb128 from '../utils/leb128';
-
-export function getContainerInternalType(
-  type: string
-): [
-  NanoContractArgumentContainerType,
-  NanoContractArgumentSingleTypeName | NanoContractArgumentSingleTypeName[],
-] {
-  if (type.endsWith('?')) {
-    // Optional value
-    const innerType = type.slice(0, -1);
-    return ['Optional', NanoContractArgumentSingleTypeNameSchema.parse(innerType)];
-  }
-
-  // ContainerType[internalType]
-  const match = type.match(/^(.*?)\[(.*)\]/);
-  const containerType = match ? match[1] : null;
-  const internalType = match ? match[2] : null;
-  if (!internalType || !containerType) {
-    throw new Error('Unable to extract type');
-  }
-  // Only some values are allowed for containerType
-  switch (containerType) {
-    case 'SignedData':
-    case 'RawSignedData':
-      return [containerType, NanoContractArgumentSingleTypeNameSchema.parse(internalType)];
-    case 'Tuple':
-      return [
-        containerType,
-        internalType.split(',').map(t => NanoContractArgumentSingleTypeNameSchema.parse(t.trim())),
-      ];
-    default:
-      throw new Error('Not a ContainerType');
-  }
-}
-
-export function getContainerType(type: string): NanoContractArgumentContainerType | null {
-  try {
-    const [containerType, _internalType] = getContainerInternalType(type);
-    return containerType;
-  } catch (err: unknown) {
-    return null;
-  }
-}
+import { getFieldParser } from './ncTypes/parser';
+import { isSignedDataField } from './fields';
 
 /**
  * Sign a transaction and create a send transaction object
@@ -139,6 +93,41 @@ export const getOracleBuffer = (oracle: string, network: Network): Buffer => {
 };
 
 /**
+ * Get SignedData argument to use with a nano contract.
+ *
+ * @param oracleData Oracle data
+ * @param contractId Id of the nano contract being invoked
+ * @param argType Full method argument type string, e.g. 'SignedData[str]'
+ * @param value Value to sign
+ * @param wallet Hathor Wallet object
+ */
+export async function getOracleSignedDataFromUser(
+  oracleData: Buffer,
+  contractId: string,
+  argType: string,
+  value: unknown,
+  wallet: HathorWallet
+) {
+  const field = getFieldParser(argType, wallet.getNetworkObject());
+  if (!isSignedDataField(field)) {
+    throw new Error('Type is not SignedData');
+  }
+  // Read user value.
+  field.inner.fromUser(value);
+  // Serialize user value
+  const serialized = field.inner.toBuffer();
+  // Sign user value
+  const signature = await getOracleInputData(oracleData, contractId, serialized, wallet);
+
+  field.fromUser({
+    type: field.value.type, // Type is pre-filled during parser contruction
+    signature: signature.toString('hex'),
+    value,
+  });
+  return field.toUser();
+}
+
+/**
  * Get oracle input data
  *
  * @param oracleData Oracle data
@@ -153,7 +142,7 @@ export const getOracleInputData = async (
   wallet: HathorWallet
 ) => {
   const ncId = Buffer.from(contractId, 'hex');
-  const actualValue = Buffer.concat([leb128.encodeUnsigned(ncId.length), ncId, resultSerialized]);
+  const actualValue = Buffer.concat([ncId, resultSerialized]);
   return unsafeGetOracleInputData(oracleData, actualValue, wallet);
 };
 
@@ -211,8 +200,9 @@ export const unsafeGetOracleInputData = async (
 export const validateAndParseBlueprintMethodArgs = async (
   blueprintId: string,
   method: string,
-  args: NanoContractArgumentApiInputType[] | null
-): Promise<NanoContractMethodArgument[] | null> => {
+  args: unknown[] | null,
+  network: Network
+): Promise<IArgumentField[]> => {
   // Get the blueprint data from full node
   const blueprintInformation = await ncApi.getBlueprintInformation(blueprintId);
 
@@ -237,10 +227,14 @@ export const validateAndParseBlueprintMethodArgs = async (
   }
 
   try {
-    const parsedArgs: NanoContractMethodArgument[] = [];
+    const parsedArgs: IArgumentField[] = [];
     for (const [index, arg] of methodArgs.entries()) {
-      const parsedArg = NanoContractMethodArgument.fromApiInput(arg.name, arg.type, args[index]);
-      parsedArgs.push(parsedArg);
+      const field = getFieldParser(arg.type, network);
+      field.fromUser(args[index]);
+      parsedArgs.push({
+        ...arg,
+        field,
+      });
     }
     return parsedArgs;
   } catch (err: unknown) {
@@ -282,10 +276,10 @@ export const mapActionToActionHeader = (
     };
   });
 
-  let amount;
+  let amount: OutputValueType;
   if (
     action.type === NanoContractActionType.GRANT_AUTHORITY ||
-    action.type === NanoContractActionType.INVOKE_AUTHORITY
+    action.type === NanoContractActionType.ACQUIRE_AUTHORITY
   ) {
     amount = action.authority === 'mint' ? TOKEN_MINT_MASK : TOKEN_MELT_MASK;
   } else if (

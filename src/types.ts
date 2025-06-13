@@ -75,11 +75,15 @@ export interface IAddressInfo {
 export interface IAddressMetadata {
   numTransactions: number;
   balance: Map<string, IBalance>;
+  // Sequential number used when creating nano header in a transaction
+  // each address has this sequence and we get the next number of the caller
+  seqnum: number;
 }
 
 export interface IAddressMetadataAsRecord {
   numTransactions: number;
   balance: Record<string, IBalance>;
+  seqnum: number;
 }
 
 export interface ITokenData {
@@ -121,14 +125,14 @@ export interface IHistoryNanoContractActionDeposit {
 }
 
 export interface IHistoryNanoContractActionGrantAuthority {
-  type: 'GRANT_AUTHORITY';
+  type: 'grant_authority';
   token_uid: string;
   mint: boolean;
   melt: boolean;
 }
 
-export interface IHistoryNanoContractActionInvokeAuthority {
-  type: 'INVOKE_AUTHORITY';
+export interface IHistoryNanoContractActionAcquireAuthority {
+  type: 'acquire_authority';
   token_uid: string;
   mint: boolean;
   melt: boolean;
@@ -138,7 +142,7 @@ export type IHistoryNanoContractAction =
   | IHistoryNanoContractActionDeposit
   | IHistoryNanoContractActionWithdrawal
   | IHistoryNanoContractActionGrantAuthority
-  | IHistoryNanoContractActionInvokeAuthority;
+  | IHistoryNanoContractActionAcquireAuthority;
 
 export interface IHistoryNanoContractContext {
   actions: IHistoryNanoContractAction[];
@@ -169,6 +173,7 @@ export interface IHistoryTx {
   nc_address?: string; // For nano contract. address in base58
   nc_pubkey?: string; // For on-chain-blueprints. pubkey DER encoded as hex
   nc_context?: IHistoryNanoContractContext;
+  nc_seqnum?: number; // For nano contract
   first_block?: string | null;
 }
 
