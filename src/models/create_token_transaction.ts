@@ -22,6 +22,7 @@ import { CreateTokenTxInvalid, InvalidOutputsError, NftValidationError } from '.
 import ScriptData from './script_data';
 import { OutputType } from '../wallet/types';
 import { isTokenInfoVersion, TokenInfoVersion } from './enum/token_info_version';
+import type Header from '../headers/base';
 
 type optionsType = {
   signalBits?: number;
@@ -32,6 +33,7 @@ type optionsType = {
   tokens?: string[];
   hash?: string | null;
   tokenInfoVersion?: TokenInfoVersion;
+  headers?: Header[];
 };
 
 class CreateTokenTransaction extends Transaction {
@@ -57,6 +59,7 @@ class CreateTokenTransaction extends Transaction {
       tokens: [],
       hash: null,
       tokenInfoVersion: TokenInfoVersion.DEPOSIT,
+      headers: [],
     };
     const newOptions = Object.assign(defaultOptions, options);
 
@@ -248,7 +251,8 @@ class CreateTokenTransaction extends Transaction {
 
     txBuffer = tx.getFundsFieldsFromBytes(txBuffer, network);
     txBuffer = tx.getTokenInfoFromBytes(txBuffer);
-    tx.getGraphFieldsFromBytes(txBuffer);
+    txBuffer = tx.getGraphFieldsFromBytes(txBuffer);
+    tx.getHeadersFromBytes(txBuffer, network);
 
     tx.updateHash();
 

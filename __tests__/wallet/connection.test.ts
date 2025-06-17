@@ -47,35 +47,67 @@ describe('WalletConnection', () => {
 
   describe('websocket transaction events', () => {
     const validTransaction = {
-      tx_id: '00003eeb2ce22e80e0fa72d8afb0b8b01f8919faac94cb3a3b4900782d0f399f',
-      nonce: 123,
-      timestamp: Date.now(),
-      version: 1,
-      weight: 1,
-      parents: ['parent1', 'parent2'],
+      tx_id: '00000e0e193894909fc85dad8a778a8e7904de30362f53b4839e93cc315648e6',
+      nonce: 16488190,
+      timestamp: 1745940424,
+      version: 2,
+      voided: false,
+      weight: 17.43270481128759,
+      parents: [
+        '000000003a90c27be4093663ef1e1eb1564aa5462f282d86fc062add717b059a',
+        '0000762414270482d75b7c759d1b8bc7341a884084004042fb70eafe11a01eb6',
+      ],
       inputs: [
         {
-          address: 'HH5As5aLtzFkcbmbXZmE65wSd22GqPWq2T',
-          timelock: null,
-          type: 'P2PKH',
+          tx_id: '0000762414270482d75b7c759d1b8bc7341a884084004042fb70eafe11a01eb6',
+          index: 0,
+          value: 1n,
+          token_data: 0,
+          script: {
+            type: 'Buffer' as const,
+            data: [
+              118, 169, 20, 107, 97, 132, 123, 120, 0, 1, 243, 13, 222, 197, 107, 73, 138, 22, 138,
+              241, 2, 209, 72, 136, 172,
+            ],
+          },
+          token: '00',
+          decoded: {
+            type: 'P2PKH',
+            address: 'HGJuWWGgRQ2roCfcmt5MCBJZx3yMYRz8dq',
+            timelock: null,
+          },
         },
       ],
       outputs: [
         {
-          address: 'HH5As5aLtzFkcbmbXZmE65wSd22GqPWq2T',
-          timelock: null,
-          type: 'P2PKH',
+          value: 100n,
+          token_data: 1,
+          script: {
+            type: 'Buffer' as const,
+            data: [
+              118, 169, 20, 69, 227, 122, 171, 130, 223, 106, 158, 121, 173, 64, 26, 133, 156, 27,
+              199, 10, 82, 191, 81, 136, 172,
+            ],
+          },
+          decodedScript: null,
+          token: '00000e0e193894909fc85dad8a778a8e7904de30362f53b4839e93cc315648e6',
+          locked: false,
+          index: 0,
+          decoded: {
+            type: 'P2PKH',
+            address: 'HCtfX7Pz98ihXjPKCEugFHduVeuHgSXRcy',
+            timelock: null,
+          },
         },
       ],
-      height: 100,
-      token_name: 'Test Token',
+      height: 0,
+      token_name: 'Test',
       token_symbol: 'TST',
-      signal_bits: 1,
-      voided: false,
+      signal_bits: 0,
     };
 
     const invalidTransaction = {
-      // Missing required fields
+      // Missing required fields, this remains a simple invalid object
       tx_id: '00003eeb2ce22e80e0fa72d8afb0b8b01f8919faac94cb3a3b4900782d0f399f',
     };
 

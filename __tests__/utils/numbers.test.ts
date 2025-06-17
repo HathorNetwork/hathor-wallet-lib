@@ -19,5 +19,13 @@ test('Pretty value', () => {
   expect(prettyValue(-12345678901234567890n)).toBe('-123,456,789,012,345,678.90');
   expect(prettyValue(-12345678901234567890n, 4)).toBe('-1,234,567,890,123,456.7890');
 
-  expect(() => prettyValue(123)).toThrow('value 123 should be a bigint');
+  expect(prettyValue(123, 0)).toBe('123');
+  expect(prettyValue(123)).toBe('1.23');
+  expect(prettyValue(123, 2)).toBe('1.23');
+  expect(prettyValue('123', 0)).toBe('123');
+  expect(prettyValue('123')).toBe('1.23');
+  expect(prettyValue('123', 2)).toBe('1.23');
+
+  expect(() => prettyValue('1e2')).toThrow();
+  expect(() => prettyValue(123.45)).toThrow();
 });

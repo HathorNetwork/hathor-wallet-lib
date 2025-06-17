@@ -8,52 +8,38 @@
 import { get, has } from 'lodash';
 import Address from '../models/address';
 import Network from '../models/network';
-import Deserializer from './deserializer';
 import ncApi from '../api/nano';
-import { unpackToInt } from '../utils/buffer';
-import { getAddressFromPubkey } from '../utils/address';
 import { NanoContractTransactionParseError } from '../errors';
-import { MethodArgInfo, NanoContractParsedArgument } from './types';
+import { MethodArgInfo, IParsedArgument } from './types';
+import leb128 from '../utils/leb128';
+import { getFieldParser } from './ncTypes/parser';
 
 class NanoContractTransactionParser {
   blueprintId: string;
 
   method: string;
 
-  publicKey: string;
-
   network: Network;
 
-  address: Address | null;
+  address: Address;
 
   args: string | null;
 
-  parsedArgs: NanoContractParsedArgument[] | null;
+  parsedArgs: IParsedArgument[] | null;
 
   constructor(
     blueprintId: string,
     method: string,
-    publicKey: string,
+    address: string,
     network: Network,
     args: string | null
   ) {
     this.blueprintId = blueprintId;
     this.method = method;
-    this.publicKey = publicKey;
     this.args = args;
     this.network = network;
-    this.address = null;
+    this.address = new Address(address, { network: this.network });
     this.parsedArgs = null;
-  }
-
-  /**
-   * Parse the nano public key to an address object
-   *
-   * @memberof NanoContractTransactionParser
-   * @inner
-   */
-  parseAddress() {
-    this.address = getAddressFromPubkey(this.publicKey, this.network);
   }
 
   /**
@@ -63,12 +49,11 @@ class NanoContractTransactionParser {
    * @inner
    */
   async parseArguments() {
-    const parsedArgs: NanoContractParsedArgument[] = [];
+    const parsedArgs: IParsedArgument[] = [];
     if (!this.args) {
       return;
     }
 
-    const deserializer = new Deserializer(this.network);
     // Get the blueprint data from full node
     const blueprintInformation = await ncApi.getBlueprintInformation(this.blueprintId);
     if (!has(blueprintInformation, `public_methods.${this.method}`)) {
@@ -84,17 +69,36 @@ class NanoContractTransactionParser {
       []
     ) as MethodArgInfo[];
     let argsBuffer = Buffer.from(this.args, 'hex');
-    let size: number;
+
+    // Number of arguments
+    const numArgsReadResult = leb128.decodeUnsigned(argsBuffer);
+    const numArgs = Number(numArgsReadResult.value);
+    argsBuffer = numArgsReadResult.rest;
+
+    if (numArgs !== methodArgs.length) {
+      throw new NanoContractTransactionParseError(`Number of arguments do not match blueprint.`);
+    }
+
+    if (methodArgs.length === 0) {
+      return;
+    }
+
     for (const arg of methodArgs) {
-      [size, argsBuffer] = unpackToInt(2, false, argsBuffer);
-      let parsed;
+      let parsed: IParsedArgument;
+      let size: number;
       try {
-        parsed = deserializer.deserializeFromType(argsBuffer.slice(0, size), arg.type);
-      } catch {
-        throw new NanoContractTransactionParseError(`Failed to deserialize argument ${arg.type} .`);
+        const field = getFieldParser(arg.type, this.network);
+        const result = field.fromBuffer(argsBuffer);
+        parsed = { ...arg, value: field.toUser() };
+        size = result.bytesRead;
+      } catch (err: unknown) {
+        throw new NanoContractTransactionParseError(`Failed to deserialize argument ${arg.type}.`);
       }
-      parsedArgs.push({ ...arg, parsed });
-      argsBuffer = argsBuffer.slice(size);
+      parsedArgs.push(parsed);
+      argsBuffer = argsBuffer.subarray(size);
+    }
+    if (argsBuffer.length !== 0) {
+      throw new Error(`${argsBuffer.length} bytes left after parsing all arguments.`);
     }
 
     this.parsedArgs = parsedArgs;

@@ -50,3 +50,25 @@ afterAll(async () => {
   // Storing data about used precalculated wallets for the next test suites
   await precalculationHelpers.test.storeDbIntoWalletsFile();
 });
+
+expect.extend({
+  toMatchBuffer(received, expected) {
+    let pass;
+    if ((received instanceof Buffer === false) || (expected instanceof Buffer === false)) {
+      pass = false;
+    } else {
+      pass = expected.equals(received);
+    }
+    if (pass) {
+      return {
+        message: () => `expected Buffer(${received && received.toString('hex')}) to not match Buffer(${expected.toString('hex')})`,
+        pass: true,
+      }
+    } else {
+      return {
+        message: () => `expected Buffer(${received && received.toString('hex')}) to match Buffer(${expected.toString('hex')})`,
+        pass: false,
+      }
+    }
+  }
+});

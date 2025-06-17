@@ -7,6 +7,7 @@
 
 import { z } from 'zod';
 import { bigIntCoercibleSchema } from '../../utils/bigint';
+import { IHistoryNanoContractContextSchema } from '../../schemas';
 
 const p2pkhDecodedScriptSchema = z.object({
   type: z.literal('P2PKH'),
@@ -73,6 +74,8 @@ export const fullnodeTxApiTxSchema = z.object({
   nc_id: z.string().nullish(),
   nc_method: z.string().nullish(),
   nc_pubkey: z.string().nullish(),
+  nc_address: z.string().nullish(),
+  nc_context: IHistoryNanoContractContextSchema.nullish(),
   nc_args: z.string().nullish(),
   nc_blueprint_id: z.string().nullish(),
   inputs: fullnodeTxApiInputSchema.array(),

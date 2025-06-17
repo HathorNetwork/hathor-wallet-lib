@@ -36,6 +36,10 @@ import Output from './output';
 import Network from './network';
 import { MaximumNumberInputsError, MaximumNumberOutputsError } from '../errors';
 import { OutputValueType } from '../types';
+import type Header from '../headers/base';
+import NanoContractHeader from '../nano_contracts/header';
+import HeaderParser from '../headers/parser';
+import { getVertexHeaderIdFromBuffer } from '../headers/types';
 
 enum txType {
   BLOCK = 'Block',
@@ -53,6 +57,7 @@ type optionsType = {
   parents?: string[];
   tokens?: string[];
   hash?: string | null;
+  headers?: Header[];
 };
 
 /**
@@ -85,6 +90,8 @@ class Transaction {
 
   hash: string | null;
 
+  headers: Header[];
+
   protected _dataToSignCache: Buffer | null;
 
   constructor(inputs: Input[], outputs: Output[], options: optionsType = {}) {
@@ -97,9 +104,11 @@ class Transaction {
       parents: [],
       tokens: [],
       hash: null,
+      headers: [],
     };
     const newOptions = Object.assign(defaultOptions, options);
-    const { signalBits, version, weight, nonce, timestamp, parents, tokens, hash } = newOptions;
+    const { signalBits, version, weight, nonce, timestamp, parents, tokens, hash, headers } =
+      newOptions;
 
     this.inputs = inputs;
     this.outputs = outputs;
@@ -111,6 +120,7 @@ class Transaction {
     this.parents = parents!;
     this.tokens = tokens!;
     this.hash = hash!;
+    this.headers = headers!;
 
     // All inputs sign the same data, so we cache it in the first getDataToSign method call
     this._dataToSignCache = null;
@@ -146,6 +156,11 @@ class Transaction {
     const arr: Buffer[] = [];
 
     this.serializeFundsFields(arr, false);
+
+    for (const header of this.headers) {
+      // For the dataToSign we use only the sighash serialization
+      header.serializeSighash(arr);
+    }
 
     this._dataToSignCache = util.buffer.concat(arr);
     return this._dataToSignCache!;
@@ -262,6 +277,20 @@ class Transaction {
     array.push(intToBytes(this.nonce, 4));
   }
 
+  /**
+   * Serializes transaction headers
+   *
+   * @param {Buffer[]} array Array of buffer to push serialized headers
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  serializeHeaders(array: Buffer[]) {
+    for (const h of this.headers) {
+      h.serialize(array);
+    }
+  }
+
   /*
    * Execute hash of the data to sign
    *
@@ -352,6 +381,9 @@ class Transaction {
 
     // Nonce
     this.serializeNonce(arr);
+
+    // Headers
+    this.serializeHeaders(arr);
 
     return util.buffer.concat(arr);
   }
@@ -558,6 +590,40 @@ class Transaction {
   }
 
   /**
+   * Gets headers objects from bytes
+   * and pushes them in `this.headers`
+   *
+   * @param srcBuf Buffer with bytes to get headers data
+   * @param network Network used to deserialize headers
+   *
+   * @return Rest of buffer after getting the fields
+   * @memberof Transaction
+   * @inner
+   */
+  getHeadersFromBytes(srcBuf: Buffer, network: Network): void {
+    // Creates a new subarray buffer not to change anything of the source buffer
+    let buf = srcBuf.subarray();
+
+    if (srcBuf.length <= 1) {
+      // We need 1 byte for the header type and more for the header itself
+      return;
+    }
+
+    // The header serialization doesn't have the headers length
+    // so we must exhaust the buffer until it's empty
+    // or we will throw an error
+    while (buf.length > 0) {
+      const headerId = getVertexHeaderIdFromBuffer(buf);
+      const headerClass = HeaderParser.getHeader(headerId);
+      let header;
+      // eslint-disable-next-line prefer-const -- To split this declaration would be confusing
+      [header, buf] = headerClass.deserialize(buf, network);
+
+      this.headers.push(header);
+    }
+  }
+
+  /**
    * Create transaction object from bytes
    *
    * @param {Buffer} buf Buffer with bytes to get transaction fields
@@ -576,11 +642,54 @@ class Transaction {
     let txBuffer = clone(buf);
 
     txBuffer = tx.getFundsFieldsFromBytes(txBuffer, network);
-    tx.getGraphFieldsFromBytes(txBuffer);
+    txBuffer = tx.getGraphFieldsFromBytes(txBuffer);
+
+    // The header serialization doesn't have the headers length
+    // so we must exhaust the buffer until it's empty
+    // or we will throw an error
+    tx.getHeadersFromBytes(txBuffer, network);
 
     tx.updateHash();
 
     return tx;
+  }
+
+  /**
+   * Get funds fields hash to be used when calculating the tx hash
+   *
+   * @return The sha256 hash digest
+   * @memberof Transaction
+   * @inner
+   */
+  getFundsHash(): Buffer {
+    const arrFunds = [];
+    this.serializeFundsFields(arrFunds, true);
+    const fundsHash = crypto.createHash('sha256');
+    fundsHash.update(buffer.Buffer.concat(arrFunds));
+    return fundsHash.digest();
+  }
+
+  /**
+   * Get graph and headers fields hash to be used when calculating the tx hash
+   *
+   * @return The sha256 hash digest
+   * @memberof Transaction
+   * @inner
+   */
+  getGraphAndHeadersHash() {
+    const arrGraph = [];
+    this.serializeGraphFields(arrGraph);
+    const hash = crypto.createHash('sha256');
+    hash.update(buffer.Buffer.concat(arrGraph));
+
+    if (this.headers.length !== 0) {
+      // The hathor-core method returns b'' here if there are no headers
+      const arrHeaders = [];
+      this.serializeHeaders(arrHeaders);
+      hash.update(buffer.Buffer.concat(arrHeaders));
+    }
+
+    return hash.digest();
   }
 
   /**
@@ -592,19 +701,10 @@ class Transaction {
    * @inner
    */
   calculateHashPart1(): crypto.Hash {
-    const arrFunds = [];
-    this.serializeFundsFields(arrFunds, true);
-    const fundsHash = crypto.createHash('sha256');
-    fundsHash.update(buffer.Buffer.concat(arrFunds));
-    const digestedFunds = fundsHash.digest();
+    const digestedFunds = this.getFundsHash();
+    const digestedGraphAndHeaders = this.getGraphAndHeadersHash();
 
-    const arrGraph = [];
-    this.serializeGraphFields(arrGraph);
-    const graphHash = crypto.createHash('sha256');
-    graphHash.update(buffer.Buffer.concat(arrGraph));
-    const digestedGraph = graphHash.digest();
-
-    const bufferPart1 = buffer.Buffer.concat([digestedFunds, digestedGraph]);
+    const bufferPart1 = buffer.Buffer.concat([digestedFunds, digestedGraphAndHeaders]);
 
     const part1 = crypto.createHash('sha256');
     part1.update(bufferPart1);
@@ -661,16 +761,33 @@ class Transaction {
   }
 
   /**
-   * Returns the token uid with corresponding index from the tx token uid list
+   * Return if the tx is a nano contract (if it has nano header)
    *
-   * @param {number} tokenIndex Index of the token uid list
-   * @returns the token uid
+   * @return If the transaction object is a nano contract
+   *
+   * @memberof Transaction
+   * @inner
    */
-  getTokenUid(index: number): string {
-    if (index === 0) {
-      return NATIVE_TOKEN_UID;
-    }
-    return this.tokens[index - 1];
+  isNanoContract(): boolean {
+    const nanoHeaders = this.getNanoHeaders();
+
+    if (nanoHeaders.length === 0) return false;
+
+    return true;
+  }
+
+  /**
+   * Get the nano contract header from the list of headers.
+   *
+   * @throws NanoHeaderNotFound in case the tx does not have a nano header
+   *
+   * @return The nano header object
+   *
+   * @memberof Transaction
+   * @inner
+   */
+  getNanoHeaders(): NanoContractHeader[] {
+    return NanoContractHeader.getHeadersFromTx(this);
   }
 }
 

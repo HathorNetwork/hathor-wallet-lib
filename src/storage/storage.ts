@@ -61,9 +61,10 @@ import {
 import { UninitializedWalletError } from '../errors';
 import Transaction from '../models/transaction';
 
-const DEFAULT_ADDRESS_META: IAddressMetadata = {
+export const DEFAULT_ADDRESS_META: IAddressMetadata = {
   numTransactions: 0,
   balance: new Map<string, IBalance>(),
+  seqnum: -1,
 };
 
 export class Storage implements IStorage {

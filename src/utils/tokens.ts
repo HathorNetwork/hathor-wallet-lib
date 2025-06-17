@@ -371,6 +371,7 @@ const tokens = {
    * @param {boolean|null} [options.unshiftData=null] Whether to unshift the data script output.
    * @param {string[]|null} [options.data=null] list of data strings using utf8 encoding to add each as a data script output
    * @param {function} [options.utxoSelection=bestUtxoSelection] Algorithm to select utxos. Use the best method by default
+   * @param {boolean} [options.skipDepositFee=false] if it should skip utxo selection for token deposit fee
    *
    * @returns {Promise<IDataTx>} The transaction data
    */
@@ -387,6 +388,7 @@ const tokens = {
       data = null,
       mintAuthorityAddress = null,
       utxoSelection = bestUtxoSelection,
+      skipDepositFee = false,
       tokenInfoVersion = TokenInfoVersion.DEPOSIT,
     }: {
       token?: string | null;
@@ -397,6 +399,7 @@ const tokens = {
       data?: string[] | null;
       mintAuthorityAddress?: string | null;
       utxoSelection?: UtxoSelectionAlgorithm;
+      skipDepositFee?: boolean;
       tokenInfoVersion: TokenInfoVersion;
     } = { tokenInfoVersion: TokenInfoVersion.DEPOSIT }
   ): Promise<IDataTx> {
@@ -420,7 +423,8 @@ const tokens = {
 
     // 1. Calculate HTR deposit needed
     let depositAmount = 0n;
-    if (newTokenInfoVersion === TokenInfoVersion.DEPOSIT) {
+    // TODO-RAUL: Check with carneiro how to deal with this skip when having fee tokens
+    if (!skipDepositFee && newTokenInfoVersion === TokenInfoVersion.DEPOSIT) {
       depositAmount = this.getDepositAmount(amount, depositPercent);
 
       if (data) {
@@ -745,6 +749,7 @@ const tokens = {
    * @param {string} [options.meltAuthorityAddress] the address to send the melt authority created
    * @param {string[]|null} [options.data=null] list of data strings using utf8 encoding to add each as a data script output
    * @param {boolean} [options.isCreateNFT=false] if the create token is an NFT creation call
+   * @param {boolean} [options.skipDepositFee=false] if it should skip utxo selection for token deposit fee
    * @returns {Promise<IDataTx>} The transaction data to create the token
    */
   async prepareCreateTokenData(
@@ -761,6 +766,7 @@ const tokens = {
       meltAuthorityAddress = null,
       data = null,
       isCreateNFT = false,
+      skipDepositFee = false,
       tokenInfoVersion = TokenInfoVersion.DEPOSIT,
     }: {
       changeAddress?: string | null;
@@ -770,6 +776,7 @@ const tokens = {
       meltAuthorityAddress?: string | null;
       data?: string[] | null;
       isCreateNFT?: boolean;
+      skipDepositFee?: boolean;
       tokenInfoVersion?: TokenInfoVersion;
     } = {}
   ): Promise<IDataTx> {
@@ -779,6 +786,7 @@ const tokens = {
       changeAddress,
       unshiftData: isCreateNFT,
       data,
+      skipDepositFee,
       tokenInfoVersion,
     };
 
@@ -875,6 +883,41 @@ const tokens = {
       outputs: [],
       tokens: [],
     };
+  },
+
+  /**
+   * Get the total HTR to deposit for a mint transaction
+   * including mint deposit and data output fee
+   */
+  getTransactionHTRDeposit(
+    mintAmount: OutputValueType,
+    dataLen: number,
+    storage: IStorage
+  ): OutputValueType {
+    let mintDeposit = this.getMintDeposit(mintAmount, storage);
+    mintDeposit += this.getDataFee(dataLen);
+    return mintDeposit;
+  },
+
+  /**
+   * Get data output fee for a transaction from the len of data outputs
+   */
+  getDataFee(dataLen: number): OutputValueType {
+    let fee = 0n;
+    if (dataLen > 0) {
+      // The deposit amount will be the quantity of data strings in the array
+      // multiplied by the fee
+      fee += this.getDataScriptOutputFee() * BigInt(dataLen);
+    }
+    return fee;
+  },
+
+  /**
+   * Get the deposit amount for a mint
+   */
+  getMintDeposit(mintAmount: OutputValueType, storage: IStorage): OutputValueType {
+    const depositPercent = storage.getTokenDepositPercentage();
+    return this.getDepositAmount(mintAmount, depositPercent);
   },
 
   /**

@@ -4,36 +4,103 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
+import { z } from 'zod';
 import { IHistoryTx, OutputValueType } from '../types';
+import { bigIntCoercibleSchema } from '../utils/bigint';
+import { NCFieldBase } from './fields';
+
+export interface IArgumentField {
+  name: string;
+  type: string;
+  field: NCFieldBase;
+}
+
+export interface IParsedArgument {
+  name: string;
+  type: string;
+  value: unknown;
+}
+
+export enum NanoContractVertexType {
+  TRANSACTION = 'transaction',
+  CREATE_TOKEN_TRANSACTION = 'createTokenTransaction',
+}
 
 export enum NanoContractActionType {
   DEPOSIT = 'deposit',
   WITHDRAWAL = 'withdrawal',
+  GRANT_AUTHORITY = 'grant_authority',
+  ACQUIRE_AUTHORITY = 'acquire_authority',
 }
 
-export type NanoContractArgumentApiInputType = string | number | OutputValueType | boolean | null;
-export type NanoContractArgumentType = NanoContractArgumentApiInputType | Buffer;
+export enum NanoContractHeaderActionType {
+  DEPOSIT = 1,
+  WITHDRAWAL = 2,
+  GRANT_AUTHORITY = 3,
+  ACQUIRE_AUTHORITY = 4,
+}
 
-export interface NanoContractAction {
-  type: NanoContractActionType.DEPOSIT | NanoContractActionType.WITHDRAWAL;
-  token: string;
+export const ActionTypeToActionHeaderType: Record<
+  NanoContractActionType,
+  NanoContractHeaderActionType
+> = {
+  [NanoContractActionType.DEPOSIT]: NanoContractHeaderActionType.DEPOSIT,
+  [NanoContractActionType.WITHDRAWAL]: NanoContractHeaderActionType.WITHDRAWAL,
+  [NanoContractActionType.GRANT_AUTHORITY]: NanoContractHeaderActionType.GRANT_AUTHORITY,
+  [NanoContractActionType.ACQUIRE_AUTHORITY]: NanoContractHeaderActionType.ACQUIRE_AUTHORITY,
+};
+
+// The action in the header is serialized/deserialized in the class
+// and it's used only to help calculate the token balance
+// That's why it's simple and with less fields
+export interface NanoContractActionHeader {
+  type: NanoContractHeaderActionType;
+  tokenIndex: number;
   amount: OutputValueType;
-  // For withdrawal is required, which is address to send the output
-  // For deposit is optional, and it's the address to filter the utxos
-  address: string | null;
-  // For deposit action is the change address used by the change output after selecting the utxos
-  changeAddress: string | null;
 }
 
-// Arguments for blueprint methods
-export interface NanoContractParsedArgument {
-  // Argument name in the blueprint code
-  name: string;
-  // Argument type from hathor-core code
-  type: string;
-  // Parsed value
-  parsed: NanoContractArgumentType;
-}
+export const INanoContractActionBase = z.object({
+  token: z.string(),
+});
+
+export const INanoContractActionTokenBase = INanoContractActionBase.extend({
+  amount: bigIntCoercibleSchema,
+});
+
+export const INanoContractActionAuthorityBase = INanoContractActionBase.extend({
+  authority: z.string(),
+});
+
+export const INanoContractActionWithdrawalSchema = INanoContractActionTokenBase.extend({
+  type: z.literal('withdrawal'),
+  address: z.string(),
+}).passthrough();
+
+export const INanoContractActionDepositSchema = INanoContractActionTokenBase.extend({
+  type: z.literal('deposit'),
+  address: z.string().optional(),
+  changeAddress: z.string().optional(),
+}).passthrough();
+
+export const INanoContractActionGrantAuthoritySchema = INanoContractActionAuthorityBase.extend({
+  type: z.literal('grant_authority'),
+  address: z.string().optional(),
+  authorityAddress: z.string().optional(),
+}).passthrough();
+
+export const INanoContractActionAcquireAuthoritySchema = INanoContractActionAuthorityBase.extend({
+  type: z.literal('acquire_authority'),
+  address: z.string(),
+}).passthrough();
+
+export const INanoContractActionSchema = z.discriminatedUnion('type', [
+  INanoContractActionWithdrawalSchema,
+  INanoContractActionDepositSchema,
+  INanoContractActionGrantAuthoritySchema,
+  INanoContractActionAcquireAuthoritySchema,
+]);
+
+export type NanoContractAction = z.output<typeof INanoContractActionSchema>;
 
 export interface MethodArgInfo {
   // Name of the method argument
@@ -76,7 +143,7 @@ export interface NanoContractHistoryAPIResponse {
 
 interface StateValueSuccess {
   // State value return
-  value: NanoContractArgumentApiInputType;
+  value: unknown;
 }
 
 interface StateValueError {
@@ -106,4 +173,42 @@ export interface NanoContractStateAPIParameters {
   calls: string[];
   block_hash?: string;
   block_height?: number;
+}
+
+/**
+ * Buffer Read Only (RO) Extract value.
+ * For methods that read a value from a buffer without altering the input buffer (read-only).
+ * The method should return the value (T) extracted and the number of bytes read.
+ * This way the caller has full control of the buffer since the method does not alter the inputs.
+ */
+export type BufferROExtract<T = unknown> = {
+  value: T;
+  bytesRead: number;
+};
+
+export interface NanoContractBuilderCreateTokenOptions {
+  // Token name
+  name: string;
+  // Token symbol
+  symbol: string;
+  // Token mint amount
+  amount: OutputValueType;
+  // Address to send the minted tokens
+  mintAddress: string;
+  // If the contract will pay for the token deposit fee
+  contractPaysTokenDeposit: boolean;
+  // Change address to send change values
+  changeAddress: string | null;
+  // If should create a mint authority output
+  createMint: boolean;
+  // The address to send the mint authority output to
+  mintAuthorityAddress: string | null;
+  // If should create a melt authority output
+  createMelt: boolean;
+  // The address to send the melt authority output to
+  meltAuthorityAddress: string | null;
+  // List of data strings to create data outputs
+  data: string[] | null;
+  // If this token is an NFT
+  isCreateNFT: boolean;
 }

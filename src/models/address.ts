@@ -77,7 +77,7 @@ class Address {
    * @memberof Address
    * @inner
    */
-  validateAddress(): boolean {
+  validateAddress({ skipNetwork }: { skipNetwork: boolean } = { skipNetwork: false }): boolean {
     const addressBytes = this.decode();
     const errorMessage = `Invalid address: ${this.base58}.`;
 
@@ -89,13 +89,17 @@ class Address {
     }
 
     // Validate address checksum
-    const checksum = addressBytes.slice(-4);
-    const addressSlice = addressBytes.slice(0, -4);
+    const checksum = addressBytes.subarray(-4);
+    const addressSlice = addressBytes.subarray(0, -4);
     const correctChecksum = helpers.getChecksum(addressSlice);
     if (!util.buffer.equals(checksum, correctChecksum)) {
       throw new AddressError(
         `${errorMessage} Invalid checksum. Expected: ${correctChecksum} != Received: ${checksum}.`
       );
+    }
+
+    if (skipNetwork) {
+      return true;
     }
 
     // Validate version byte. Should be the p2pkh or p2sh
