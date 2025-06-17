@@ -20,6 +20,7 @@ import {
   MERGED_MINED_BLOCK_VERSION,
   TX_HASH_SIZE_BYTES,
   TX_WEIGHT_CONSTANTS,
+  NATIVE_TOKEN_UID,
 } from '../constants';
 import {
   bufferToHex,

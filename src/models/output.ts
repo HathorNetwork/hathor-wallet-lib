@@ -25,7 +25,7 @@ import {
   outputValueToBytes,
 } from '../utils/buffer';
 import { parseScript as utilsParseScript } from '../utils/scripts';
-import { OutputValueType } from '../types';
+import { IDataOutputWithToken, OutputValueType } from '../types';
 
 type optionsType = {
   tokenData?: number | undefined;
