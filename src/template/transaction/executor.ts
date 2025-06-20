@@ -11,10 +11,15 @@ import { OutputValueType } from 'src/types';
 import {
   AuthorityOutputInstruction,
   AuthoritySelectInstruction,
-  ChangeInstruction,
   CompleteTxInstruction,
   ConfigInstruction,
   DataOutputInstruction,
+  NanoAcquireAuthorityAction,
+  NanoAction,
+  NanoDepositAction,
+  NanoGrantAuthorityAction,
+  NanoMethodInstruction,
+  NanoWithdrawalAction,
   RawInputInstruction,
   RawOutputInstruction,
   SetVarGetWalletAddressOpts,
@@ -79,8 +84,6 @@ export function findInstructionExecution(
       return execAuthorityOutputInstruction;
     case 'action/shuffle':
       return execShuffleInstruction;
-    case 'action/change':
-      return execChangeInstruction;
     case 'action/complete':
       return execCompleteTxInstruction;
     case 'action/config':
@@ -268,7 +271,10 @@ export async function execRawOutputInstruction(
   // get tokenData and update token balance on the context
   let tokenData: number;
   if (useCreatedToken) {
-    ctx.useCreateTokenTxContext();
+    if (!ctx.isCreateTokenTxContext()) {
+      ctx.log(`Current transaction is not creating a token.`);
+      throw new Error('Current transaction is not creating a token.');
+    }
     tokenData = 1;
     if (authority) {
       ctx.log(`Creating authority output`);
@@ -329,8 +335,11 @@ export async function execDataOutputInstruction(
 
   let tokenData: number;
   if (useCreatedToken) {
+    if (!ctx.isCreateTokenTxContext()) {
+      ctx.log(`Current transaction is not creating a token.`);
+      throw new Error('Current transaction is not creating a token.');
+    }
     ctx.log(`Using created token`);
-    ctx.useCreateTokenTxContext();
     tokenData = 1;
     ctx.balance.addCreatedTokenOutput(1n);
   } else {
@@ -368,8 +377,11 @@ export async function execTokenOutputInstruction(
 
   let tokenData: number;
   if (useCreatedToken) {
+    if (!ctx.isCreateTokenTxContext()) {
+      ctx.log(`Current transaction is not creating a token.`);
+      throw new Error('Current transaction is not creating a token.');
+    }
     ctx.log(`Using created token`);
-    ctx.useCreateTokenTxContext();
     tokenData = 1;
     ctx.balance.addCreatedTokenOutput(amount);
   } else {
@@ -416,8 +428,11 @@ export async function execAuthorityOutputInstruction(
 
   let tokenData: number;
   if (useCreatedToken) {
+    if (!ctx.isCreateTokenTxContext()) {
+      ctx.log(`Current transaction is not creating a token.`);
+      throw new Error('Current transaction is not creating a token.');
+    }
     ctx.log(`Using created token`);
-    ctx.useCreateTokenTxContext();
     tokenData = 1;
     ctx.balance.addCreatedTokenOutputAuthority(count, authority);
   } else {
@@ -475,57 +490,6 @@ export async function execShuffleInstruction(
 }
 
 /**
- * Execution for ChangeInstruction
- */
-export async function execChangeInstruction(
-  interpreter: ITxTemplateInterpreter,
-  ctx: TxTemplateContext,
-  ins: z.infer<typeof ChangeInstruction>
-) {
-  ctx.log(`Begin ChangeInstruction: ${JSONBigInt.stringify(ins)}`);
-  const token = getVariable<string | undefined>(ins.token, ctx.vars, ChangeInstruction.shape.token);
-  const address =
-    getVariable<string | undefined>(ins.address, ctx.vars, ChangeInstruction.shape.address) ??
-    (await interpreter.getChangeAddress(ctx));
-  const timelock = getVariable<number | undefined>(
-    ins.timelock,
-    ctx.vars,
-    ChangeInstruction.shape.timelock
-  );
-  ctx.log(`address(${address}) timelock(${timelock}) token(${token})`);
-
-  const tokensToCheck: string[] = [];
-  if (token) {
-    tokensToCheck.push(token);
-  } else {
-    // Check HTR and all tokens on the transaction
-    tokensToCheck.push(NATIVE_TOKEN_UID);
-    for (const tk of ctx.tokens) {
-      tokensToCheck.push(tk);
-    }
-  }
-
-  const script = createOutputScriptFromAddress(address, interpreter.getNetwork());
-
-  for (const tokenUid of tokensToCheck) {
-    ctx.log(`Checking change tx for token ${tokenUid}`);
-    const balance = ctx.balance.getTokenBalance(tokenUid);
-    const tokenData = ctx.addToken(tokenUid);
-    if (balance.tokens > 0) {
-      const value = balance.tokens;
-      ctx.log(`Adding a change output for ${value} / ${tokenUid}`);
-      // Need to create a token output
-      // Add balance to the ctx.balance
-      ctx.balance.addOutput(value, tokenUid);
-
-      // Creates an output with the value of the outstanding balance
-      const output = new Output(value, script, { timelock, tokenData });
-      ctx.addOutputs(-1, output);
-    }
-  }
-}
-
-/**
  * Execution for CompleteTxInstruction
  */
 export async function execCompleteTxInstruction(
@@ -555,8 +519,14 @@ export async function execCompleteTxInstruction(
     ctx.vars,
     CompleteTxInstruction.shape.timelock
   );
+  const {
+    skipSelection,
+    skipAuthorities,
+    skipChange,
+    calculateFee,
+  } = ins;
   ctx.log(
-    `changeAddress(${changeAddress}) address(${address}) timelock(${timelock}) token(${token})`
+    `changeAddress(${changeAddress}) address(${address}) timelock(${timelock}) token(${token}), calculateFee(${calculateFee}), skipSelection(${skipSelection}), skipChange(${skipChange}), skipAuthorities(${skipAuthorities})`
   );
 
   const tokensToCheck: string[] = [];
@@ -570,6 +540,24 @@ export async function execCompleteTxInstruction(
     });
   }
 
+  // calculate token creation fee
+  if (calculateFee && ctx.isCreateTokenTxContext()) {
+    // INFO: Currently fees only make sense for create token transactions.
+
+      const amount = ctx.balance.createdTokenBalance!.tokens
+      const fee = amount / 100n; // TODO: Do actual conversion using fee multiplier of the wallet.
+
+      // Add the required HTR to create the tokens
+      const balance = ctx.balance.getTokenBalance(NATIVE_TOKEN_UID);
+      balance.tokens += fee;
+      ctx.balance.setTokenBalance(NATIVE_TOKEN_UID, balance);
+
+      // If we weren't going to check HTR, we need to include in the tokens to check
+      if (!tokensToCheck.includes(NATIVE_TOKEN_UID)) {
+        tokensToCheck.push(NATIVE_TOKEN_UID);
+      }
+  }
+
   const changeScript = createOutputScriptFromAddress(changeAddress, interpreter.getNetwork());
 
   for (const tokenUid of tokensToCheck) {
@@ -577,7 +565,7 @@ export async function execCompleteTxInstruction(
     // Check balances for token.
     const balance = ctx.balance.getTokenBalance(tokenUid);
     const tokenData = ctx.addToken(tokenUid);
-    if (balance.tokens > 0) {
+    if (balance.tokens > 0 && !skipChange) {
       const value = balance.tokens;
       // Surplus of token on the inputs, need to add a change output
       ctx.log(`Creating a change output for ${value} / ${tokenUid}`);
@@ -587,7 +575,7 @@ export async function execCompleteTxInstruction(
       // Creates an output with the value of the outstanding balance
       const output = new Output(value, changeScript, { timelock, tokenData });
       ctx.addOutputs(-1, output);
-    } else if (balance.tokens < 0) {
+    } else if (balance.tokens < 0 && !skipSelection) {
       const value = -balance.tokens;
       ctx.log(`Finding inputs for ${value} / ${tokenUid}`);
       // Surplus of tokens on the outputs, need to select tokens and add inputs
@@ -617,6 +605,11 @@ export async function execCompleteTxInstruction(
         ctx.balance.addOutput(changeAmount, tokenUid);
         ctx.addOutputs(-1, output);
       }
+    }
+
+    // Skip authority blocks if we wish to not include authority completion.
+    if (skipAuthorities) {
+      continue;
     }
 
     if (balance.mint_authorities > 0) {
@@ -728,8 +721,13 @@ export async function execConfigInstruction(
     ctx.vars,
     ConfigInstruction.shape.tokenSymbol
   );
+  const createToken = getVariable<boolean | undefined>(
+    ins.createToken,
+    ctx.vars,
+    ConfigInstruction.shape.createToken
+  );
   ctx.log(
-    `version(${version}) signalBits(${signalBits}) tokenName(${tokenName}) tokenSymbol(${tokenSymbol})`
+    `version(${version}) signalBits(${signalBits}) tokenName(${tokenName}) tokenSymbol(${tokenSymbol}) createToken(${createToken})`
   );
 
   if (version) {
@@ -743,6 +741,9 @@ export async function execConfigInstruction(
   }
   if (tokenSymbol) {
     ctx.tokenSymbol = tokenSymbol;
+  }
+  if (createToken) {
+    ctx.useCreateTokenTxContext();
   }
 }
 
@@ -787,4 +788,248 @@ export async function execSetVarInstruction(
     return;
   }
   throw new Error('Invalid setvar command');
+}
+
+/**********************/
+
+async function validateDepositNanoAction(
+  interpreter: ITxTemplateInterpreter,
+  ctx: TxTemplateContext,
+  action: z.infer<typeof NanoDepositAction>,
+) {
+  const token = getVariable<string>(action.token, ctx.vars, NanoDepositAction.shape.token);
+  const amount = getVariable<OutputValueType>(action.amount, ctx.vars, NanoDepositAction.shape.amount);
+  const address = getVariable<string|undefined>(action.address, ctx.vars, NanoDepositAction.shape.address);
+
+  // This is the action without variables, which will be used to create the header
+  // Change address may be a reference but since its not used on the header it makes no difference.
+  const actual = {
+    ...action,
+    token,
+    amount,
+    address,
+  };
+
+  if (action.skipSelection) {
+    // Do not select inputs
+    return actual;
+  }
+
+  // XXX: Similar to execUtxoSelectInstruction
+  // Maybe extract this into external utility
+
+  // Find utxos
+  const options: IGetUtxosOptions = { token };
+  if (address) {
+    options.filter_address = address;
+  }
+  const { changeAmount, utxos } = await interpreter.getUtxos(amount, options);
+
+  // Add utxos as inputs on the transaction
+  const inputs: Input[] = [];
+  for (const utxo of utxos) {
+    ctx.log(`Found utxo with ${utxo.value} of ${utxo.tokenId}`);
+    ctx.log(`Create input ${utxo.index} / ${utxo.txId}`);
+    inputs.push(new Input(utxo.txId, utxo.index));
+  }
+
+  // First, update balance
+  for (const input of inputs) {
+    const origTx = await interpreter.getTx(input.hash);
+    ctx.balance.addBalanceFromUtxo(origTx, input.index);
+  }
+
+  // Then add inputs to context
+  ctx.addInputs(-1, ...inputs);
+
+  ctx.log(`changeAmount: ${changeAmount} autoChange(${action.autoChange})`);
+
+  if (action.autoChange && changeAmount) {
+    // get change address
+    const changeAddress = getVariable<string | undefined>(
+      action.changeAddress,
+      ctx.vars,
+      UtxoSelectInstruction.shape.changeAddress
+    ) ?? await interpreter.getChangeAddress(ctx);
+    ctx.log(`Creating change for address: ${changeAddress}`);
+    // Token should only be on the array if present on the outputs
+    const tokenData = ctx.addToken(token);
+    const script = createOutputScriptFromAddress(changeAddress, interpreter.getNetwork());
+    const output = new Output(changeAmount, script, { tokenData });
+    ctx.balance.addOutput(changeAmount, token);
+    ctx.addOutputs(-1, output);
+  }
+
+  return actual;
+}
+
+async function validateWithdrawalNanoAction(
+  interpreter: ITxTemplateInterpreter,
+  ctx: TxTemplateContext,
+  action: z.infer<typeof NanoWithdrawalAction>,
+) {
+  const token = getVariable<string>(action.token, ctx.vars, NanoWithdrawalAction.shape.token);
+  const amount = getVariable<OutputValueType>(action.amount, ctx.vars, NanoWithdrawalAction.shape.amount);
+  const address = getVariable<string|undefined>(action.address, ctx.vars, NanoWithdrawalAction.shape.address) ?? await interpreter.getAddress();
+
+  // This is the action without variables, which will be used to create the header
+  const actual = {
+    ...action,
+    token,
+    amount,
+    address,
+  };
+
+  const tokenData = action.useCreatedToken ? 1 : ctx.addToken(token);
+  const script = createOutputScriptFromAddress(address, interpreter.getNetwork());
+  const output = new Output(amount, script, { tokenData });
+  ctx.addOutputs(-1, output);
+  return actual;
+}
+
+async function validateGrantAuthorityNanoAction(
+  interpreter: ITxTemplateInterpreter,
+  ctx: TxTemplateContext,
+  action: z.infer<typeof NanoGrantAuthorityAction>,
+) {
+  const token = getVariable<string>(action.token, ctx.vars, NanoGrantAuthorityAction.shape.token);
+  const authority = action.authority;
+  const address = getVariable<string|undefined>(action.address, ctx.vars, NanoGrantAuthorityAction.shape.address);
+
+  // This is the action without variables, which will be used to create the header
+  const actual = {
+    ...action,
+    token,
+    authority,
+    address,
+  };
+
+  if (action.skipSelection) {
+    // Do not select inputs
+    return actual;
+  }
+
+  // XXX: Similar to execAuthoritySelectInstruction
+  // Maybe extract this into external utility
+
+  let authoritiesInt = 0n;
+  if (authority === 'mint') {
+    authoritiesInt += TOKEN_MINT_MASK;
+  }
+  if (authority === 'melt') {
+    authoritiesInt += TOKEN_MELT_MASK;
+  }
+
+  // Find utxos
+  const options: IGetUtxosOptions = {
+    token,
+    authorities: authoritiesInt,
+  };
+  if (address) {
+    options.filter_address = address;
+  }
+  const utxos = await interpreter.getAuthorities(1, options);
+
+  // Add utxos as inputs on the transaction
+  const inputs: Input[] = [];
+  for (const utxo of utxos) {
+    ctx.log(`Found authority utxo ${utxo.authorities} of ${token}`);
+    ctx.log(`Create input ${utxo.index} / ${utxo.txId}`);
+    inputs.push(new Input(utxo.txId, utxo.index));
+  }
+  // First, update balance
+  for (const input of inputs) {
+    const origTx = await interpreter.getTx(input.hash);
+    ctx.balance.addBalanceFromUtxo(origTx, input.index);
+  }
+
+  // Then add inputs to context
+  ctx.addInputs(-1, ...inputs);
+  return actual;
+}
+
+async function validateAcquireAuthorityNanoAction(
+  interpreter: ITxTemplateInterpreter,
+  ctx: TxTemplateContext,
+  action: z.infer<typeof NanoAcquireAuthorityAction>,
+) {
+  const token = getVariable<string>(action.token, ctx.vars, NanoAcquireAuthorityAction.shape.token);
+  const address = getVariable<string|undefined>(action.address, ctx.vars, NanoAcquireAuthorityAction.shape.address) ?? await interpreter.getAddress();
+
+  // This is the action without variables, which will be used to create the header
+  const actual = {
+    ...action,
+    token,
+    authority: action.authority,
+    address,
+  };
+
+  const tokenData = TOKEN_AUTHORITY_MASK | (action.useCreatedToken ? 1 : ctx.addToken(token));
+  let amount: OutputValueType;
+  switch (action.authority) {
+    case 'mint':
+      amount = TOKEN_MINT_MASK;
+      break;
+    case 'melt':
+      amount = TOKEN_MELT_MASK;
+      break;
+  }
+
+  const script = createOutputScriptFromAddress(address, interpreter.getNetwork());
+  const output = new Output(amount, script, { tokenData });
+  ctx.addOutputs(-1, output);
+  return actual;
+}
+
+/**
+ * Execution for NanoMethodInstruction
+ */
+export async function execNanoMethodInstruction(
+  _interpreter: ITxTemplateInterpreter,
+  ctx: TxTemplateContext,
+  ins: z.infer<typeof NanoMethodInstruction>
+) {
+  ctx.log(`Begin NanoMethodInstruction: ${JSONBigInt.stringify(ins)}`);
+
+  const id = getVariable<string>(
+    ins.id,
+    ctx.vars,
+    NanoMethodInstruction.shape.id
+  );
+  const method = ins.method;
+  const caller = getVariable<string>(
+    ins.caller,
+    ctx.vars,
+    NanoMethodInstruction.shape.caller
+  );
+
+  const args: unknown[] = [];
+  for (const arg of ins.args) {
+    const parsedArg = getVariable<any>(arg, ctx.vars, NanoMethodInstruction.shape.args.element);
+    args.push(parsedArg);
+  }
+
+  ctx.log(
+    `id(${id}) method(${method}) caller(${caller}) args(${args})`
+  );
+
+  const actions: z.output<typeof NanoAction>[] = [];
+  for (const action of ins.actions || []) {
+    switch(action.action) {
+      case 'deposit':
+        actions.push(await validateDepositNanoAction(_interpreter, ctx, action));
+        break;
+      case 'withdrawal':
+        actions.push(await validateWithdrawalNanoAction(_interpreter, ctx, action));
+        break;
+      case 'grant_authority':
+        actions.push(await validateGrantAuthorityNanoAction(_interpreter, ctx, action));
+        break;
+      case 'acquire_authority':
+        actions.push(await validateAcquireAuthorityNanoAction(_interpreter, ctx, action));
+        break;
+    }
+  }
+
+  ctx.startNanoContractExecution(id, method, caller, args, actions);
 }

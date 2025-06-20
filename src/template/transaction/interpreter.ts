@@ -6,10 +6,10 @@
  */
 
 import { z } from 'zod';
-import { FullNodeTxApiResponse } from 'src/api/schemas/txApi';
-import { TransactionTemplate } from './instructions';
+import { FullNodeTxApiResponse } from '../../api/schemas/txApi';
+import { TransactionTemplate, NanoAction } from './instructions';
 import { runInstruction } from './executor';
-import { TxTemplateContext } from './context';
+import { TxTemplateContext, NanoContractContext } from './context';
 import {
   ITxTemplateInterpreter,
   IGetUtxosOptions,
@@ -20,11 +20,17 @@ import {
 import { IHistoryTx, OutputValueType } from '../../types';
 import { Utxo } from '../../wallet/types';
 import Transaction from '../../models/transaction';
+import Address from '../../models/address';
 import HathorWallet from '../../new/wallet';
-import { CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION } from '../../constants';
+import { CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, NANO_CONTRACTS_INITIALIZE_METHOD, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../constants';
 import transactionUtils from '../../utils/transaction';
+import tokensUtils from '../../utils/tokens';
 import Network from '../../models/network';
 import CreateTokenTransaction from '../../models/create_token_transaction';
+import NanoContractHeader from '../../nano_contracts/header';
+import { ActionTypeToActionHeaderType, NanoContractActionHeader } from '../../nano_contracts/types';
+import { validateAndParseBlueprintMethodArgs } from '../../nano_contracts/utils';
+import type Header from '../../headers/base';
 
 export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
   wallet: HathorWallet;
@@ -34,6 +40,89 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
   constructor(wallet: HathorWallet) {
     this.wallet = wallet;
     this.txCache = {};
+  }
+
+  async getBlueprintId(nanoCtx: NanoContractContext): Promise<string> {
+    if (nanoCtx.method === NANO_CONTRACTS_INITIALIZE_METHOD) {
+      return nanoCtx.id;
+    }
+
+    let response;
+    try {
+      response = await this.wallet.getFullTxById(nanoCtx.id);
+    } catch(ex: unknown) {
+      throw new Error('');
+    }
+
+    if (!response.tx.nc_id) {
+      throw new Error('');
+    }
+
+    return response.tx.nc_blueprint_id;
+  }
+
+  mapActionInstructionToAction(ctx: TxTemplateContext, action: z.output<typeof NanoAction>): NanoContractActionHeader {
+    const tokens = ctx.tokens.map(t => ({uid: t, name: '', symbol: ''}));
+    const token = action.token;
+    const useCreatedToken = action.useCreatedToken;
+    const tokenIndex = useCreatedToken
+      ? 1
+      : tokensUtils.getTokenIndex(tokens, token);
+    let amount: OutputValueType = 0n;
+    if (action.action === 'deposit' || action.action === 'withdrawal') {
+      // This parse is because action.amount may be a template reference name.
+      // The actual amount is discovered when running the instructions and inputed on the action.
+      // So this should be a bigint, but if it is not (for any reason) we would throw an error.
+      amount = z.bigint().parse(action.amount);
+    }
+    if (action.action === 'grant_authority' || action.action === 'acquire_authority') {
+      if (action.authority === 'mint') {
+        amount += TOKEN_MINT_MASK;
+      }
+      if (action.authority === 'melt') {
+        amount += TOKEN_MELT_MASK;
+      } 
+    }
+    if (amount === 0n) {
+      throw new Error('');
+    }
+
+    return {
+      type: ActionTypeToActionHeaderType[action.action],
+      amount,
+      tokenIndex,
+    }
+  }
+
+  async buildNanoHeader(ctx: TxTemplateContext): Promise<NanoContractHeader> {
+    const nanoCtx = ctx.nanoContext;
+    if (!nanoCtx) {
+      throw new Error('');
+    }
+    const blueprintId = await this.getBlueprintId(nanoCtx);
+    const network = this.getNetwork();
+    const address = new Address(nanoCtx.caller, { network });
+    try {
+      address.validateAddress();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Could not validate caller address';
+      throw new Error(message);
+    }
+    const args = await validateAndParseBlueprintMethodArgs(blueprintId, nanoCtx.method, nanoCtx.args, network);
+
+    const serializedArgs = Buffer.concat(args.map(a => a.field.toBuffer()));
+    const seqnum = await this.wallet.getNanoHeaderSeqnum(address);
+    const nanoHeaderActions = nanoCtx.actions.map(action => (this.mapActionInstructionToAction(ctx, action)));
+
+    return new NanoContractHeader(
+      nanoCtx.id,
+      nanoCtx.method,
+      serializedArgs,
+      nanoHeaderActions,
+      seqnum,
+      address,
+      null,
+    )
   }
 
   async build(
@@ -46,11 +135,18 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
       await runInstruction(this, context, ins);
     }
 
+    const headers: Header[] = [];
+    if (context.nanoContext) {
+      const nanoHeader = await this.buildNanoHeader(context);
+      headers.push(nanoHeader);
+    }
+
     if (context.version === DEFAULT_TX_VERSION) {
       return new Transaction(context.inputs, context.outputs, {
         signalBits: context.signalBits,
         version: context.version,
         tokens: context.tokens,
+        headers,
       });
     }
     if (context.version === CREATE_TOKEN_TX_VERSION) {
@@ -62,7 +158,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
         context.tokenSymbol,
         context.inputs,
         context.outputs,
-        { signalBits: context.signalBits }
+        { signalBits: context.signalBits, headers }
       );
     }
     throw new Error('Unsupported Version byte provided');
