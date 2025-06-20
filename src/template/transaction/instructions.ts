@@ -163,25 +163,23 @@ export const ShuffleInstruction = z.object({
   target: z.enum(['inputs', 'outputs', 'all']),
 });
 
-export const ChangeInstruction = z.object({
-  type: z.literal('action/change'),
-  token: TemplateRef.or(TokenSchema.optional()),
-  address: TemplateRef.or(AddressSchema.optional()),
-  timelock: TemplateRef.or(z.number().gte(0).optional()),
-});
-
 export const CompleteTxInstruction = z.object({
   type: z.literal('action/complete'),
   token: TemplateRef.or(TokenSchema.optional()),
   address: TemplateRef.or(z.string().optional()),
   changeAddress: TemplateRef.or(AddressSchema.optional()),
   timelock: TemplateRef.or(z.number().gte(0).optional()),
+  skipSelection: z.boolean().default(false), // do NOT add inputs to the tx
+  skipChange: z.boolean().default(false), // do NOT add outputs from outstanding tokens.
+  skipAuthorities: z.boolean().default(false), // Only select tokens
+  calculateFee: z.boolean().default(false), // For token creation
 });
 
 export const ConfigInstruction = z.object({
   type: z.literal('action/config'),
   version: TemplateRef.or(z.number().gte(0).lte(0xff).optional()),
   signalBits: TemplateRef.or(z.number().gte(0).lte(0xff).optional()),
+  createToken: TemplateRef.or(z.boolean().optional()),
   tokenName: TemplateRef.or(z.string().min(1).max(30).optional()),
   tokenSymbol: TemplateRef.or(z.string().min(1).max(5).optional()),
 });
@@ -209,6 +207,60 @@ export const SetVarInstruction = z.object({
   call: SetVarCallArgs.optional(),
 });
 
+export const NanoDepositAction = z.object({
+  action: z.literal('deposit'),
+  token: TemplateRef.or(TokenSchema.default('00')),
+  useCreatedToken: z.boolean().default(false),
+  amount: TemplateRef.or(AmountSchema),
+  address: TemplateRef.or(AddressSchema.optional()),
+  autoChange: z.boolean().default(true),
+  changeAddress: TemplateRef.or(AddressSchema.optional()),
+  skipSelection: z.boolean().default(false),
+});
+
+export const NanoWithdrawalAction = z.object({
+  action: z.literal('withdrawal'),
+  token: TemplateRef.or(TokenSchema.default('00')),
+  useCreatedToken: z.boolean().default(false),
+  amount: TemplateRef.or(AmountSchema),
+  address: TemplateRef.or(AddressSchema.optional()),
+});
+
+export const NanoGrantAuthorityAction = z.object({
+  action: z.literal('grant_authority'),
+  token: TemplateRef.or(TokenSchema.default('00')),
+  useCreatedToken: z.boolean().default(false),
+  authority: z.enum(['mint', 'melt']),
+  address: TemplateRef.or(AddressSchema.optional()),
+  createAnotherTo: TemplateRef.or(AddressSchema.optional()),
+  skipSelection: z.boolean().default(false),
+});
+
+export const NanoAcquireAuthorityAction = z.object({
+  action: z.literal('acquire_authority'),
+  token: TemplateRef.or(TokenSchema.default('00')),
+  useCreatedToken: z.boolean().default(false),
+  authority: z.enum(['mint', 'melt']),
+  address: TemplateRef.or(AddressSchema.optional()),
+});
+
+export const NanoAction =  z.union([
+  NanoDepositAction,
+  NanoWithdrawalAction,
+  NanoGrantAuthorityAction,
+  NanoAcquireAuthorityAction,
+]);
+
+export const NanoMethodInstruction = z.object({
+  type: z.literal('nano/execute'),
+  // Nano Contract id or Blueprint id, depending on the method
+  id: TemplateRef.or(Sha256HexSchema),
+  method: z.string(),
+  args: TemplateRef.or(z.any()).array(),
+  caller: TemplateRef.or(AddressSchema),
+  actions: NanoAction.array(),
+});
+
 export const TxTemplateInstruction = z.discriminatedUnion('type', [
   RawInputInstruction,
   UtxoSelectInstruction,
@@ -218,10 +270,10 @@ export const TxTemplateInstruction = z.discriminatedUnion('type', [
   TokenOutputInstruction,
   AuthorityOutputInstruction,
   ShuffleInstruction,
-  ChangeInstruction,
   CompleteTxInstruction,
   ConfigInstruction,
   SetVarInstruction,
+  NanoMethodInstruction,
 ]);
 
 export const TransactionTemplate = z.array(TxTemplateInstruction);

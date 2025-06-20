@@ -6,11 +6,13 @@
  */
 /* eslint max-classes-per-file: ["error", 2] */
 
+import { z } from 'zod';
 import { IHistoryTx, ILogger, OutputValueType, getDefaultLogger } from '../../types';
 import Input from '../../models/input';
 import Output from '../../models/output';
 import transactionUtils from '../../utils/transaction';
 import { CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, NATIVE_TOKEN_UID } from '../../constants';
+import { NanoAction } from './instructions';
 
 export interface TokenBalance {
   tokens: OutputValueType;
@@ -145,6 +147,24 @@ export class TxBalance {
   }
 }
 
+export class NanoContractContext {
+  id: string;
+  method: string;
+  caller: string;
+  args: unknown[];
+
+  actions: z.output<typeof NanoAction>[];
+
+  constructor(id: string, method: string, caller: string, args: unknown[], actions: z.output<typeof NanoAction>[]) {
+    this.id = id;
+    this.method = method;
+    this.caller = caller;
+    this.caller = caller;
+    this.args = args;
+    this.actions = actions;
+  }
+}
+
 export class TxTemplateContext {
   version: number;
 
@@ -161,6 +181,8 @@ export class TxTemplateContext {
   tokenName?: string;
 
   tokenSymbol?: string;
+
+  nanoContext?: NanoContractContext;
 
   vars: Record<string, unknown>;
 
@@ -199,7 +221,7 @@ export class TxTemplateContext {
   }
 
   /**
-   * Make the current context
+   * Change the current tx
    */
   useCreateTokenTxContext() {
     if (this.tokens.length !== 0) {
@@ -208,6 +230,17 @@ export class TxTemplateContext {
       );
     }
     this.version = CREATE_TOKEN_TX_VERSION;
+  }
+
+  isCreateTokenTxContext() {
+    return this.version === CREATE_TOKEN_TX_VERSION;
+  }
+
+  startNanoContractExecution(id: string, method: string, caller: string, args: unknown[], actions: z.output<typeof NanoAction>[]) {
+    if (this.nanoContext) {
+      throw new Error('Already building a nano contract tx.');
+    }
+    this.nanoContext = new NanoContractContext(id, method, caller, args, actions);
   }
 
   /**

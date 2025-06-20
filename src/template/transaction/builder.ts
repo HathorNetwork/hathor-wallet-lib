@@ -18,7 +18,6 @@ import {
   TokenOutputInstruction,
   AuthorityOutputInstruction,
   ShuffleInstruction,
-  ChangeInstruction,
   CompleteTxInstruction,
   ConfigInstruction,
   SetVarInstruction,
@@ -33,7 +32,6 @@ const DataOutputInsArgs = DataOutputInstruction.omit({ type: true });
 const TokenOutputInsArgs = TokenOutputInstruction.omit({ type: true });
 const AuthorityOutputInsArgs = AuthorityOutputInstruction.omit({ type: true });
 const ShuffleInsArgs = ShuffleInstruction.omit({ type: true });
-const ChangeInsArgs = ChangeInstruction.omit({ type: true });
 const CompleteTxInsArgs = CompleteTxInstruction.omit({ type: true });
 const ConfigInsArgs = ConfigInstruction.omit({ type: true });
 const SetVarInsArgs = SetVarInstruction.omit({ type: true });
@@ -138,16 +136,6 @@ export class TransactionTemplateBuilder {
   addShuffleAction(ins: z.input<typeof ShuffleInsArgs>) {
     const parsedIns = ShuffleInstruction.parse({
       type: 'action/shuffle',
-      ...ins,
-    });
-    this.template.push(parsedIns);
-
-    return this;
-  }
-
-  addChangeAction(ins: z.input<typeof ChangeInsArgs>) {
-    const parsedIns = ChangeInstruction.parse({
-      type: 'action/change',
       ...ins,
     });
     this.template.push(parsedIns);
