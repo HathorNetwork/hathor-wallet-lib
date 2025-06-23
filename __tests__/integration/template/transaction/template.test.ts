@@ -252,7 +252,7 @@ describe('Template execution', () => {
     expect(tx.outputs).toHaveLength(4);
   });
 
-  it('should be able to add change with the change instruction', async () => {
+  it('should be able to add change with the complete instruction and only create change outputs', async () => {
     const address = await hWallet.getAddressAtIndex(25);
     const template = new TransactionTemplateBuilder()
       .addSetVarAction({ name: 'addr', value: address })
@@ -260,7 +260,7 @@ describe('Template execution', () => {
       .addUtxoSelect({ fill: 100, token: '{token}', autoChange: false })
       .addTokenOutput({ address: '{addr}', amount: 1, token: '{token}' })
       .addDataOutput({ data: 'cafe', token: '{token}' })
-      .addChangeAction({})
+      .addCompleteAction({ skipSelection: true, skipAuthorities: true })
       .build();
 
     const tx = await interpreter.build(template, DEBUG);

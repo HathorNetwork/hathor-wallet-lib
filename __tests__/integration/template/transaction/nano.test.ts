@@ -230,7 +230,7 @@ describe('Template execution', () => {
       .addSetVarAction({ name: 'caller', call: { method: 'get_wallet_address', index: 0 } })
       .addSetVarAction({ name: 'bet_addr', call: { method: 'get_wallet_address', index: 5 } })
       .addConfigAction({ createToken: true, tokenName: 'Tk bet', tokenSymbol: 'tkBet' })
-      .addTokenOutput({ amount: 100, useCreatedToken: true, address: '{callet}' })
+      .addTokenOutput({ amount: 100, useCreatedToken: true, address: '{caller}' })
       .addNanoMethodExecution({
         id: '{contract}',
         method: 'bet',
