@@ -623,45 +623,6 @@ describe('should parse template instructions', () => {
     ).toBe(false);
   });
 
-  it('should parse ChangeInstruction', () => {
-    expect(
-      ChangeInstruction.safeParse({
-        type: 'action/change',
-        token,
-        address,
-        timelock: 456,
-      }).success
-    ).toBe(true);
-    // Parse with defaults
-    expect(
-      ChangeInstruction.parse({
-        type: 'action/change',
-      })
-    ).toStrictEqual({
-      type: 'action/change',
-    });
-    // parse with template refs
-    expect(
-      ChangeInstruction.parse({
-        type: 'action/change',
-        token: '{tokenKey}',
-        address: '{addrKey}',
-        timelock: '{timelockKey}',
-      })
-    ).toStrictEqual({
-      type: 'action/change',
-      token: '{tokenKey}',
-      address: '{addrKey}',
-      timelock: '{timelockKey}',
-    });
-    // Error cases
-    expect(
-      ChangeInstruction.safeParse({
-        type: 'invalid-type', // wrong type
-      }).success
-    ).toBe(false);
-  });
-
   it('should parse CompleteInstruction', () => {
     expect(
       CompleteTxInstruction.safeParse({
@@ -679,6 +640,10 @@ describe('should parse template instructions', () => {
       })
     ).toStrictEqual({
       type: 'action/complete',
+      skipSelection: false,
+      skipChange: false,
+      skipAuthorities: false,
+      calculateFee: false,
     });
     // parse with template refs
     expect(
@@ -695,6 +660,10 @@ describe('should parse template instructions', () => {
       address: '{addrKey}',
       changeAddress: '{caddrKey}',
       timelock: '{timelockKey}',
+      skipSelection: false,
+      skipChange: false,
+      skipAuthorities: false,
+      calculateFee: false,
     });
     // Error cases
     expect(
@@ -833,11 +802,6 @@ describe('Template schemes', () => {
       TxTemplateInstruction.safeParse({
         type: 'action/shuffle',
         target: 'all',
-      }).success
-    ).toBe(true);
-    expect(
-      TxTemplateInstruction.safeParse({
-        type: 'action/change',
       }).success
     ).toBe(true);
     expect(
