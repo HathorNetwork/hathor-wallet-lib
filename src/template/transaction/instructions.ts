@@ -189,6 +189,19 @@ export const SetVarGetWalletAddressOpts = z.object({
   index: z.number().optional(),
 });
 
+export const SetVarGetOracleScriptOpts = z.object({
+  method: z.literal('get_oracle_script'),
+  index: z.number(),
+});
+
+export const SetVarGetOracleSignedDataOpts = z.object({
+  method: z.literal('get_oracle_signed_data'),
+  index: z.number(),
+  type: z.string(),
+  data: TemplateRef.or(z.any()),
+  ncId: TemplateRef.or(TxIdSchema),
+});
+
 export const SetVarGetWalletBalanceOpts = z.object({
   method: z.literal('get_wallet_balance'),
   token: TemplateRef.or(TokenSchema.default('00')),
@@ -198,6 +211,8 @@ export const SetVarGetWalletBalanceOpts = z.object({
 export const SetVarCallArgs = z.discriminatedUnion('method', [
   SetVarGetWalletAddressOpts,
   SetVarGetWalletBalanceOpts,
+  SetVarGetOracleScriptOpts,
+  SetVarGetOracleSignedDataOpts,
 ]);
 
 export const SetVarInstruction = z.object({
@@ -256,9 +271,9 @@ export const NanoMethodInstruction = z.object({
   // Nano Contract id or Blueprint id, depending on the method
   id: TemplateRef.or(Sha256HexSchema),
   method: z.string(),
-  args: TemplateRef.or(z.any()).array(),
+  args: TemplateRef.or(z.any()).array().default([]),
   caller: TemplateRef.or(AddressSchema),
-  actions: NanoAction.array(),
+  actions: NanoAction.array().default([]),
 });
 
 export const TxTemplateInstruction = z.discriminatedUnion('type', [

@@ -18,7 +18,7 @@ import {
   TxInstance,
 } from './types';
 import { IHistoryTx, OutputValueType } from '../../types';
-import { Utxo } from '../../wallet/types';
+import { IHathorWallet, Utxo } from '../../wallet/types';
 import Transaction from '../../models/transaction';
 import Address from '../../models/address';
 import HathorWallet from '../../new/wallet';
@@ -164,6 +164,17 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
     throw new Error('Unsupported Version byte provided');
   }
 
+  async buildAndSign(
+    instructions: z.infer<typeof TransactionTemplate>,
+    pinCode: string,
+    debug: boolean = false
+  ): Promise<TxInstance> {
+    const tx = await this.build(instructions, debug);
+    await transactionUtils.signTransaction(tx, this.wallet.storage, pinCode);
+    tx.prepareToSend();
+    return tx;
+  }
+
   async getAddress(markAsUsed: boolean = false): Promise<string> {
     const addr = await this.wallet.getCurrentAddress({ markAsUsed });
     return addr.address;
@@ -225,5 +236,9 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
 
   getNetwork(): Network {
     return this.wallet.getNetworkObject();
+  }
+
+  getWallet(): IHathorWallet {
+    return this.wallet;
   }
 }

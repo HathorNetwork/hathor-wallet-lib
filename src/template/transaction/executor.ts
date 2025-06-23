@@ -22,6 +22,8 @@ import {
   NanoWithdrawalAction,
   RawInputInstruction,
   RawOutputInstruction,
+  SetVarGetOracleScriptOpts,
+  SetVarGetOracleSignedDataOpts,
   SetVarGetWalletAddressOpts,
   SetVarGetWalletBalanceOpts,
   SetVarInstruction,
@@ -44,7 +46,7 @@ import {
 import { createOutputScriptFromAddress } from '../../utils/address';
 import { JSONBigInt } from '../../utils/bigint';
 import ScriptData from '../../models/script_data';
-import { getWalletAddress, getWalletBalance } from './setvarcommands';
+import { getOracleScript, getOracleSignedData, getWalletAddress, getWalletBalance } from './setvarcommands';
 
 /**
  * Find and run the executor function for the instruction.
@@ -787,6 +789,20 @@ export async function execSetVarInstruction(
     ctx.log(`Setting ${ins.name} with ${balance}`);
     return;
   }
+  if (ins.call.method === 'get_oracle_script') {
+    const callArgs = SetVarGetOracleScriptOpts.parse(ins.call);
+    const oracle = await getOracleScript(interpreter, ctx, callArgs);
+    ctx.log(`Setting ${ins.name} with ${oracle}`);
+    ctx.vars[ins.name] = oracle;
+    return;
+  }
+  if (ins.call.method === 'get_oracle_signed_data') {
+    const callArgs = SetVarGetOracleSignedDataOpts.parse(ins.call);
+    const signedData = await getOracleSignedData(interpreter, ctx, callArgs);
+    ctx.log(`Setting ${ins.name} with ${signedData}`);
+    ctx.vars[ins.name] = signedData;
+    return;
+  }
   throw new Error('Invalid setvar command');
 }
 
@@ -1005,7 +1021,7 @@ export async function execNanoMethodInstruction(
 
   const args: unknown[] = [];
   for (const arg of ins.args) {
-    const parsedArg = getVariable<any>(arg, ctx.vars, NanoMethodInstruction.shape.args.element);
+    const parsedArg = getVariable<any>(arg, ctx.vars, z.string().or(z.any()));
     args.push(parsedArg);
   }
 

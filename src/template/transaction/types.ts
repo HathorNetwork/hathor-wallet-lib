@@ -11,7 +11,7 @@ import { TxTemplateContext } from './context';
 import { IHistoryTx, ITokenBalance, ITokenData, OutputValueType } from '../../types';
 import Transaction from '../../models/transaction';
 import Network from '../../models/network';
-import { Utxo } from '../../wallet/types';
+import { IHathorWallet, Utxo } from '../../wallet/types';
 import CreateTokenTransaction from '../../models/create_token_transaction';
 
 export type TxInstance = Transaction | CreateTokenTransaction;
@@ -60,4 +60,5 @@ export interface ITxTemplateInterpreter {
   getAuthorities(count: number, options: IGetUtxosOptions): Promise<Utxo[]>;
   getTx(txId: string): Promise<IHistoryTx>;
   getNetwork(): Network;
+  getWallet(): IHathorWallet,
 }
