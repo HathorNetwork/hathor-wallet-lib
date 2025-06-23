@@ -97,6 +97,8 @@ export function findInstructionExecution(
       return execConfigInstruction;
     case 'action/setvar':
       return execSetVarInstruction;
+    case 'nano/execute':
+      return execNanoMethodInstruction;
     default:
       throw new Error('Cannot determine the instruction to run');
   }

@@ -35,7 +35,7 @@ describe('Template execution', () => {
 
   it('should be able to create a custom token', async () => {
     const template = new TransactionTemplateBuilder()
-      .addConfigAction({ tokenName: 'Tmpl Test Token 01', tokenSymbol: 'TTT01' })
+      .addConfigAction({ createToken: true, tokenName: 'Tmpl Test Token 01', tokenSymbol: 'TTT01' })
       .addSetVarAction({ name: 'addr', call: { method: 'get_wallet_address' } })
       .addUtxoSelect({ fill: 1 })
       .addTokenOutput({ address: '{addr}', amount: 100, useCreatedToken: true })
