@@ -60,5 +60,5 @@ export interface ITxTemplateInterpreter {
   getAuthorities(count: number, options: IGetUtxosOptions): Promise<Utxo[]>;
   getTx(txId: string): Promise<IHistoryTx>;
   getNetwork(): Network;
-  getWallet(): IHathorWallet,
+  getWallet(): IHathorWallet;
 }

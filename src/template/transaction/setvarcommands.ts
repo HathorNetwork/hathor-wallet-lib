@@ -8,7 +8,13 @@
 import { z } from 'zod';
 import { ITxTemplateInterpreter } from './types';
 import { TxTemplateContext } from './context';
-import { SetVarGetOracleScriptOpts, SetVarGetOracleSignedDataOpts, SetVarGetWalletAddressOpts, SetVarGetWalletBalanceOpts, getVariable } from './instructions';
+import {
+  SetVarGetOracleScriptOpts,
+  SetVarGetOracleSignedDataOpts,
+  SetVarGetWalletAddressOpts,
+  SetVarGetWalletBalanceOpts,
+  getVariable,
+} from './instructions';
 import { getOracleBuffer, getOracleSignedDataFromUser } from '../../nano_contracts/utils';
 import { IUserSignedData } from '../../nano_contracts/fields/signedData';
 
@@ -57,14 +63,16 @@ export async function getOracleSignedData(
   const address = await interpreter.getAddressAtIndex(options.index);
   const oracle = getOracleBuffer(address, interpreter.getNetwork());
 
-  const data = getVariable<any>(options.data, _ctx.vars, SetVarGetOracleSignedDataOpts.shape.data);
-  const ncId = getVariable<string>(options.ncId, _ctx.vars, SetVarGetOracleSignedDataOpts.shape.ncId);
-
-  return await getOracleSignedDataFromUser(
-    oracle,
-    ncId,
-    options.type,
-    data,
-    interpreter.getWallet(),
+  const data = getVariable<unknown>(
+    options.data,
+    _ctx.vars,
+    SetVarGetOracleSignedDataOpts.shape.data
   );
+  const ncId = getVariable<string>(
+    options.ncId,
+    _ctx.vars,
+    SetVarGetOracleSignedDataOpts.shape.ncId
+  );
+
+  return getOracleSignedDataFromUser(oracle, ncId, options.type, data, interpreter.getWallet());
 }

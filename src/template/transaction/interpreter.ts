@@ -22,7 +22,13 @@ import { IHathorWallet, Utxo } from '../../wallet/types';
 import Transaction from '../../models/transaction';
 import Address from '../../models/address';
 import HathorWallet from '../../new/wallet';
-import { CREATE_TOKEN_TX_VERSION, DEFAULT_TX_VERSION, NANO_CONTRACTS_INITIALIZE_METHOD, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../constants';
+import {
+  CREATE_TOKEN_TX_VERSION,
+  DEFAULT_TX_VERSION,
+  NANO_CONTRACTS_INITIALIZE_METHOD,
+  TOKEN_MELT_MASK,
+  TOKEN_MINT_MASK,
+} from '../../constants';
 import transactionUtils from '../../utils/transaction';
 import tokensUtils from '../../utils/tokens';
 import Network from '../../models/network';
@@ -50,7 +56,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
     let response;
     try {
       response = await this.wallet.getFullTxById(nanoCtx.id);
-    } catch(ex: unknown) {
+    } catch (ex: unknown) {
       throw new Error('');
     }
 
@@ -61,13 +67,14 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
     return response.tx.nc_blueprint_id;
   }
 
-  mapActionInstructionToAction(ctx: TxTemplateContext, action: z.output<typeof NanoAction>): NanoContractActionHeader {
-    const tokens = ctx.tokens.map(t => ({uid: t, name: '', symbol: ''}));
-    const token = action.token;
-    const useCreatedToken = action.useCreatedToken;
-    const tokenIndex = useCreatedToken
-      ? 1
-      : tokensUtils.getTokenIndex(tokens, token);
+  static mapActionInstructionToAction(
+    ctx: TxTemplateContext,
+    action: z.output<typeof NanoAction>
+  ): NanoContractActionHeader {
+    const tokens = ctx.tokens.map(t => ({ uid: t, name: '', symbol: '' }));
+    const { token } = action;
+    const { useCreatedToken } = action;
+    const tokenIndex = useCreatedToken ? 1 : tokensUtils.getTokenIndex(tokens, token);
     let amount: OutputValueType = 0n;
     if (action.action === 'deposit' || action.action === 'withdrawal') {
       // This parse is because action.amount may be a template reference name.
@@ -81,7 +88,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
       }
       if (action.authority === 'melt') {
         amount += TOKEN_MELT_MASK;
-      } 
+      }
     }
     if (amount === 0n) {
       throw new Error('');
@@ -91,7 +98,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
       type: ActionTypeToActionHeaderType[action.action],
       amount,
       tokenIndex,
-    }
+    };
   }
 
   async buildNanoHeader(ctx: TxTemplateContext): Promise<NanoContractHeader> {
@@ -108,11 +115,18 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
       const message = err instanceof Error ? err.message : 'Could not validate caller address';
       throw new Error(message);
     }
-    const args = await validateAndParseBlueprintMethodArgs(blueprintId, nanoCtx.method, nanoCtx.args, network);
+    const args = await validateAndParseBlueprintMethodArgs(
+      blueprintId,
+      nanoCtx.method,
+      nanoCtx.args,
+      network
+    );
 
     const serializedArgs = Buffer.concat(args.map(a => a.field.toBuffer()));
     const seqnum = await this.wallet.getNanoHeaderSeqnum(address);
-    const nanoHeaderActions = nanoCtx.actions.map(action => (this.mapActionInstructionToAction(ctx, action)));
+    const nanoHeaderActions = nanoCtx.actions.map(action =>
+      WalletTxTemplateInterpreter.mapActionInstructionToAction(ctx, action)
+    );
 
     return new NanoContractHeader(
       nanoCtx.id,
@@ -121,8 +135,8 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
       nanoHeaderActions,
       seqnum,
       address,
-      null,
-    )
+      null
+    );
   }
 
   async build(

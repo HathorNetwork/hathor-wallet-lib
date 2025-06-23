@@ -198,7 +198,7 @@ export const SetVarGetOracleSignedDataOpts = z.object({
   method: z.literal('get_oracle_signed_data'),
   index: z.number(),
   type: z.string(),
-  data: TemplateRef.or(z.any()),
+  data: TemplateRef.or(z.unknown()),
   ncId: TemplateRef.or(TxIdSchema),
 });
 
@@ -218,7 +218,7 @@ export const SetVarCallArgs = z.discriminatedUnion('method', [
 export const SetVarInstruction = z.object({
   type: z.literal('action/setvar'),
   name: z.string().regex(TEMPLATE_REFERENCE_NAME_RE),
-  value: z.any().optional(),
+  value: z.unknown().optional(),
   call: SetVarCallArgs.optional(),
 });
 
@@ -259,7 +259,7 @@ export const NanoAcquireAuthorityAction = z.object({
   address: TemplateRef.or(AddressSchema.optional()),
 });
 
-export const NanoAction =  z.union([
+export const NanoAction = z.union([
   NanoDepositAction,
   NanoWithdrawalAction,
   NanoGrantAuthorityAction,
@@ -271,7 +271,7 @@ export const NanoMethodInstruction = z.object({
   // Nano Contract id or Blueprint id, depending on the method
   id: TemplateRef.or(Sha256HexSchema),
   method: z.string(),
-  args: TemplateRef.or(z.any()).array().default([]),
+  args: TemplateRef.or(z.unknown()).array().default([]),
   caller: TemplateRef.or(AddressSchema),
   actions: NanoAction.array().default([]),
 });

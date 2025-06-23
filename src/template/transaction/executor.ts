@@ -46,7 +46,12 @@ import {
 import { createOutputScriptFromAddress } from '../../utils/address';
 import { JSONBigInt } from '../../utils/bigint';
 import ScriptData from '../../models/script_data';
-import { getOracleScript, getOracleSignedData, getWalletAddress, getWalletBalance } from './setvarcommands';
+import {
+  getOracleScript,
+  getOracleSignedData,
+  getWalletAddress,
+  getWalletBalance,
+} from './setvarcommands';
 
 /**
  * Find and run the executor function for the instruction.
@@ -521,12 +526,7 @@ export async function execCompleteTxInstruction(
     ctx.vars,
     CompleteTxInstruction.shape.timelock
   );
-  const {
-    skipSelection,
-    skipAuthorities,
-    skipChange,
-    calculateFee,
-  } = ins;
+  const { skipSelection, skipAuthorities, skipChange, calculateFee } = ins;
   ctx.log(
     `changeAddress(${changeAddress}) address(${address}) timelock(${timelock}) token(${token}), calculateFee(${calculateFee}), skipSelection(${skipSelection}), skipChange(${skipChange}), skipAuthorities(${skipAuthorities})`
   );
@@ -546,18 +546,18 @@ export async function execCompleteTxInstruction(
   if (calculateFee && ctx.isCreateTokenTxContext()) {
     // INFO: Currently fees only make sense for create token transactions.
 
-      const amount = ctx.balance.createdTokenBalance!.tokens
-      const fee = amount / 100n; // TODO: Do actual conversion using fee multiplier of the wallet.
+    const amount = ctx.balance.createdTokenBalance!.tokens;
+    const fee = amount / 100n; // TODO: Do actual conversion using fee multiplier of the wallet.
 
-      // Add the required HTR to create the tokens
-      const balance = ctx.balance.getTokenBalance(NATIVE_TOKEN_UID);
-      balance.tokens += fee;
-      ctx.balance.setTokenBalance(NATIVE_TOKEN_UID, balance);
+    // Add the required HTR to create the tokens
+    const balance = ctx.balance.getTokenBalance(NATIVE_TOKEN_UID);
+    balance.tokens += fee;
+    ctx.balance.setTokenBalance(NATIVE_TOKEN_UID, balance);
 
-      // If we weren't going to check HTR, we need to include in the tokens to check
-      if (!tokensToCheck.includes(NATIVE_TOKEN_UID)) {
-        tokensToCheck.push(NATIVE_TOKEN_UID);
-      }
+    // If we weren't going to check HTR, we need to include in the tokens to check
+    if (!tokensToCheck.includes(NATIVE_TOKEN_UID)) {
+      tokensToCheck.push(NATIVE_TOKEN_UID);
+    }
   }
 
   const changeScript = createOutputScriptFromAddress(changeAddress, interpreter.getNetwork());
@@ -806,16 +806,24 @@ export async function execSetVarInstruction(
   throw new Error('Invalid setvar command');
 }
 
-/**********************/
+/** ******************* */
 
 async function validateDepositNanoAction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  action: z.infer<typeof NanoDepositAction>,
+  action: z.infer<typeof NanoDepositAction>
 ) {
   const token = getVariable<string>(action.token, ctx.vars, NanoDepositAction.shape.token);
-  const amount = getVariable<OutputValueType>(action.amount, ctx.vars, NanoDepositAction.shape.amount);
-  const address = getVariable<string|undefined>(action.address, ctx.vars, NanoDepositAction.shape.address);
+  const amount = getVariable<OutputValueType>(
+    action.amount,
+    ctx.vars,
+    NanoDepositAction.shape.amount
+  );
+  const address = getVariable<string | undefined>(
+    action.address,
+    ctx.vars,
+    NanoDepositAction.shape.address
+  );
 
   // This is the action without variables, which will be used to create the header
   // Change address may be a reference but since its not used on the header it makes no difference.
@@ -862,11 +870,12 @@ async function validateDepositNanoAction(
 
   if (action.autoChange && changeAmount) {
     // get change address
-    const changeAddress = getVariable<string | undefined>(
-      action.changeAddress,
-      ctx.vars,
-      UtxoSelectInstruction.shape.changeAddress
-    ) ?? await interpreter.getChangeAddress(ctx);
+    const changeAddress =
+      getVariable<string | undefined>(
+        action.changeAddress,
+        ctx.vars,
+        UtxoSelectInstruction.shape.changeAddress
+      ) ?? (await interpreter.getChangeAddress(ctx));
     ctx.log(`Creating change for address: ${changeAddress}`);
     // Token should only be on the array if present on the outputs
     const tokenData = ctx.addToken(token);
@@ -882,11 +891,17 @@ async function validateDepositNanoAction(
 async function validateWithdrawalNanoAction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  action: z.infer<typeof NanoWithdrawalAction>,
+  action: z.infer<typeof NanoWithdrawalAction>
 ) {
   const token = getVariable<string>(action.token, ctx.vars, NanoWithdrawalAction.shape.token);
-  const amount = getVariable<OutputValueType>(action.amount, ctx.vars, NanoWithdrawalAction.shape.amount);
-  const address = getVariable<string|undefined>(action.address, ctx.vars, NanoWithdrawalAction.shape.address) ?? await interpreter.getAddress();
+  const amount = getVariable<OutputValueType>(
+    action.amount,
+    ctx.vars,
+    NanoWithdrawalAction.shape.amount
+  );
+  const address =
+    getVariable<string | undefined>(action.address, ctx.vars, NanoWithdrawalAction.shape.address) ??
+    (await interpreter.getAddress());
 
   // This is the action without variables, which will be used to create the header
   const actual = {
@@ -906,11 +921,15 @@ async function validateWithdrawalNanoAction(
 async function validateGrantAuthorityNanoAction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  action: z.infer<typeof NanoGrantAuthorityAction>,
+  action: z.infer<typeof NanoGrantAuthorityAction>
 ) {
   const token = getVariable<string>(action.token, ctx.vars, NanoGrantAuthorityAction.shape.token);
-  const authority = action.authority;
-  const address = getVariable<string|undefined>(action.address, ctx.vars, NanoGrantAuthorityAction.shape.address);
+  const { authority } = action;
+  const address = getVariable<string | undefined>(
+    action.address,
+    ctx.vars,
+    NanoGrantAuthorityAction.shape.address
+  );
 
   // This is the action without variables, which will be used to create the header
   const actual = {
@@ -967,10 +986,15 @@ async function validateGrantAuthorityNanoAction(
 async function validateAcquireAuthorityNanoAction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
-  action: z.infer<typeof NanoAcquireAuthorityAction>,
+  action: z.infer<typeof NanoAcquireAuthorityAction>
 ) {
   const token = getVariable<string>(action.token, ctx.vars, NanoAcquireAuthorityAction.shape.token);
-  const address = getVariable<string|undefined>(action.address, ctx.vars, NanoAcquireAuthorityAction.shape.address) ?? await interpreter.getAddress();
+  const address =
+    getVariable<string | undefined>(
+      action.address,
+      ctx.vars,
+      NanoAcquireAuthorityAction.shape.address
+    ) ?? (await interpreter.getAddress());
 
   // This is the action without variables, which will be used to create the header
   const actual = {
@@ -982,13 +1006,12 @@ async function validateAcquireAuthorityNanoAction(
 
   const tokenData = TOKEN_AUTHORITY_MASK | (action.useCreatedToken ? 1 : ctx.addToken(token));
   let amount: OutputValueType;
-  switch (action.authority) {
-    case 'mint':
-      amount = TOKEN_MINT_MASK;
-      break;
-    case 'melt':
-      amount = TOKEN_MELT_MASK;
-      break;
+  if (action.authority === 'mint') {
+    amount = TOKEN_MINT_MASK;
+  } else if (action.authority === 'melt') {
+    amount = TOKEN_MELT_MASK;
+  } else {
+    throw new Error('This should never happen');
   }
 
   const script = createOutputScriptFromAddress(address, interpreter.getNetwork());
@@ -1007,31 +1030,21 @@ export async function execNanoMethodInstruction(
 ) {
   ctx.log(`Begin NanoMethodInstruction: ${JSONBigInt.stringify(ins)}`);
 
-  const id = getVariable<string>(
-    ins.id,
-    ctx.vars,
-    NanoMethodInstruction.shape.id
-  );
-  const method = ins.method;
-  const caller = getVariable<string>(
-    ins.caller,
-    ctx.vars,
-    NanoMethodInstruction.shape.caller
-  );
+  const id = getVariable<string>(ins.id, ctx.vars, NanoMethodInstruction.shape.id);
+  const { method } = ins;
+  const caller = getVariable<string>(ins.caller, ctx.vars, NanoMethodInstruction.shape.caller);
 
   const args: unknown[] = [];
   for (const arg of ins.args) {
-    const parsedArg = getVariable<any>(arg, ctx.vars, z.string().or(z.any()));
+    const parsedArg = getVariable<unknown>(arg, ctx.vars, z.string().or(z.unknown()));
     args.push(parsedArg);
   }
 
-  ctx.log(
-    `id(${id}) method(${method}) caller(${caller}) args(${args})`
-  );
+  ctx.log(`id(${id}) method(${method}) caller(${caller}) args(${args})`);
 
   const actions: z.output<typeof NanoAction>[] = [];
   for (const action of ins.actions || []) {
-    switch(action.action) {
+    switch (action.action) {
       case 'deposit':
         actions.push(await validateDepositNanoAction(_interpreter, ctx, action));
         break;
@@ -1044,6 +1057,9 @@ export async function execNanoMethodInstruction(
       case 'acquire_authority':
         actions.push(await validateAcquireAuthorityNanoAction(_interpreter, ctx, action));
         break;
+      default:
+        ctx.log(`Called nano method execute with action ${JSON.stringify(action)}`);
+        throw new Error('This should never happen');
     }
   }
 

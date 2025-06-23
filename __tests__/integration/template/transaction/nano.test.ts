@@ -10,7 +10,7 @@ import HathorWallet from '../../../../src/new/wallet';
 import SendTransaction from '../../../../src/new/sendTransaction';
 import { TransactionTemplateBuilder } from '../../../../src/template/transaction/builder';
 import { WalletTxTemplateInterpreter } from '../../../../src/template/transaction/interpreter';
-import { CREATE_TOKEN_TX_VERSION, NATIVE_TOKEN_UID, TOKEN_AUTHORITY_MASK, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../../../src/constants';
+import { CREATE_TOKEN_TX_VERSION, NATIVE_TOKEN_UID } from '../../../../src/constants';
 import dateFormatter from '../../../../src/utils/date';
 
 const DEBUG = true;
@@ -43,16 +43,19 @@ describe('Template execution', () => {
         id: '{blueprint}',
         method: 'initialize',
         caller: '{addr}',
-        args: [
-          '{oracle}',
-          NATIVE_TOKEN_UID,
-          dateLastBet,
-        ],
+        args: ['{oracle}', NATIVE_TOKEN_UID, dateLastBet],
       })
       .build();
 
-    const initializeTx = await interpreter.buildAndSign(initializeTemplate, DEFAULT_PIN_CODE, DEBUG);
-    const initializeSendTx = new SendTransaction({ storage: hWallet.storage, transaction: initializeTx });
+    const initializeTx = await interpreter.buildAndSign(
+      initializeTemplate,
+      DEFAULT_PIN_CODE,
+      DEBUG
+    );
+    const initializeSendTx = new SendTransaction({
+      storage: hWallet.storage,
+      transaction: initializeTx,
+    });
     await initializeSendTx.runFromMining();
     expect(initializeTx.hash).not.toBeNull();
     if (initializeTx.hash === null) {
@@ -73,10 +76,8 @@ describe('Template execution', () => {
         id: '{contract}',
         method: 'bet',
         caller: '{caller}',
-        args: [ '{bet_addr}', '1x0' ],
-        actions: [
-          { action: 'deposit', amount: 10n, changeAddress: '{caller}' },
-        ],
+        args: ['{bet_addr}', '1x0'],
+        actions: [{ action: 'deposit', amount: 10n, changeAddress: '{caller}' }],
       })
       .build();
 
@@ -101,10 +102,8 @@ describe('Template execution', () => {
         id: '{contract}',
         method: 'bet',
         caller: '{caller}',
-        args: [ '{bet_addr}', '1x2' ],
-        actions: [
-          { action: 'deposit', amount: 20n, changeAddress: '{caller}' },
-        ],
+        args: ['{bet_addr}', '1x2'],
+        actions: [{ action: 'deposit', amount: 20n, changeAddress: '{caller}' }],
       })
       .build();
 
@@ -134,18 +133,21 @@ describe('Template execution', () => {
           ncId: '{contract}',
           type: 'SignedData[str]',
           data: '1x0',
-        }
+        },
       })
       .addNanoMethodExecution({
         id: '{contract}',
         method: 'set_result',
         caller: '{caller}',
-        args: [ '{result}' ],
+        args: ['{result}'],
       })
       .build();
 
     const setResultTx = await interpreter.buildAndSign(setResultTemplate, DEFAULT_PIN_CODE, DEBUG);
-    const setResultSendTx = new SendTransaction({ storage: hWallet.storage, transaction: setResultTx });
+    const setResultSendTx = new SendTransaction({
+      storage: hWallet.storage,
+      transaction: setResultTx,
+    });
     await setResultSendTx.runFromMining();
     expect(setResultTx.hash).not.toBeNull();
     if (setResultTx.hash === null) {
@@ -165,14 +167,19 @@ describe('Template execution', () => {
         id: '{contract}',
         method: 'withdraw',
         caller: '{caller}',
-        actions: [
-          { action: 'withdrawal', amount: 30n, address: '{bet_addr}' },
-        ],
+        actions: [{ action: 'withdrawal', amount: 30n, address: '{bet_addr}' }],
       })
       .build();
 
-    const withdrawalTx = await interpreter.buildAndSign(withdrawalTemplate, DEFAULT_PIN_CODE, DEBUG);
-    const withdrawalSendTx = new SendTransaction({ storage: hWallet.storage, transaction: withdrawalTx });
+    const withdrawalTx = await interpreter.buildAndSign(
+      withdrawalTemplate,
+      DEFAULT_PIN_CODE,
+      DEBUG
+    );
+    const withdrawalSendTx = new SendTransaction({
+      storage: hWallet.storage,
+      transaction: withdrawalTx,
+    });
     await withdrawalSendTx.runFromMining();
     expect(withdrawalTx.hash).not.toBeNull();
     if (withdrawalTx.hash === null) {
@@ -195,16 +202,19 @@ describe('Template execution', () => {
         id: '{blueprint}',
         method: 'initialize',
         caller: '{addr}',
-        args: [
-          '{oracle}',
-          NATIVE_TOKEN_UID,
-          dateLastBet,
-        ],
+        args: ['{oracle}', NATIVE_TOKEN_UID, dateLastBet],
       })
       .build();
 
-    const initializeTx = await interpreter.buildAndSign(initializeTemplate, DEFAULT_PIN_CODE, DEBUG);
-    const initializeSendTx = new SendTransaction({ storage: hWallet.storage, transaction: initializeTx });
+    const initializeTx = await interpreter.buildAndSign(
+      initializeTemplate,
+      DEFAULT_PIN_CODE,
+      DEBUG
+    );
+    const initializeSendTx = new SendTransaction({
+      storage: hWallet.storage,
+      transaction: initializeTx,
+    });
     await initializeSendTx.runFromMining();
     expect(initializeTx.hash).not.toBeNull();
     if (initializeTx.hash === null) {
@@ -225,7 +235,7 @@ describe('Template execution', () => {
         id: '{contract}',
         method: 'bet',
         caller: '{caller}',
-        args: [ '{bet_addr}', '1x0' ],
+        args: ['{bet_addr}', '1x0'],
         actions: [
           { action: 'deposit', amount: 10n, changeAddress: '{caller}', skipSelection: true },
         ],
@@ -244,16 +254,17 @@ describe('Template execution', () => {
     expect(bet1Tx.version).toEqual(CREATE_TOKEN_TX_VERSION);
 
     expect(bet1Tx.outputs).toHaveLength(2);
-    expect(bet1Tx.outputs).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        value: 100n,
-        tokenData: 1,
-      }),
-      expect.objectContaining({
-        value: expect.anything(), // change output
-        tokenData: 0,
-      }),
-    ]));
+    expect(bet1Tx.outputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          value: 100n,
+          tokenData: 1,
+        }),
+        expect.objectContaining({
+          value: expect.anything(), // change output
+          tokenData: 0,
+        }),
+      ])
+    );
   });
-
 });

@@ -4,7 +4,7 @@
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-/* eslint max-classes-per-file: ["error", 2] */
+/* eslint max-classes-per-file: ["error", 3] */
 
 import { z } from 'zod';
 import { IHistoryTx, ILogger, OutputValueType, getDefaultLogger } from '../../types';
@@ -149,13 +149,22 @@ export class TxBalance {
 
 export class NanoContractContext {
   id: string;
+
   method: string;
+
   caller: string;
+
   args: unknown[];
 
   actions: z.output<typeof NanoAction>[];
 
-  constructor(id: string, method: string, caller: string, args: unknown[], actions: z.output<typeof NanoAction>[]) {
+  constructor(
+    id: string,
+    method: string,
+    caller: string,
+    args: unknown[],
+    actions: z.output<typeof NanoAction>[]
+  ) {
     this.id = id;
     this.method = method;
     this.caller = caller;
@@ -236,11 +245,21 @@ export class TxTemplateContext {
     return this.version === CREATE_TOKEN_TX_VERSION;
   }
 
-  startNanoContractExecution(id: string, method: string, caller: string, args: unknown[], actions: z.output<typeof NanoAction>[]) {
+  startNanoContractExecution(
+    id: string,
+    method: string,
+    caller: string,
+    args: unknown[],
+    actions: z.output<typeof NanoAction>[]
+  ) {
     if (this.nanoContext) {
       throw new Error('Already building a nano contract tx.');
     }
     this.nanoContext = new NanoContractContext(id, method, caller, args, actions);
+  }
+
+  isNanoMethodExecution(): boolean {
+    return !!this.nanoContext;
   }
 
   /**
