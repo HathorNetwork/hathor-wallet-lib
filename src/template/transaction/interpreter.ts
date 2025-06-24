@@ -183,8 +183,8 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
     pinCode: string,
     debug: boolean = false
   ): Promise<TxInstance> {
-    const tx = await this.build(instructions, debug);
-    await transactionUtils.signTransaction(tx, this.wallet.storage, pinCode);
+    let tx = await this.build(instructions, debug);
+    tx = await transactionUtils.signTransaction(tx, this.wallet.storage, pinCode);
     tx.prepareToSend();
     return tx;
   }
