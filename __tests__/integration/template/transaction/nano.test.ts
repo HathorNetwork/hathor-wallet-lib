@@ -231,6 +231,7 @@ describe('Template execution', () => {
       .addSetVarAction({ name: 'bet_addr', call: { method: 'get_wallet_address', index: 5 } })
       .addConfigAction({ createToken: true, tokenName: 'Tk bet', tokenSymbol: 'tkBet' })
       .addTokenOutput({ amount: 100, useCreatedToken: true, address: '{caller}' })
+      .addDataOutput({ data: 'foobar' })
       .addNanoMethodExecution({
         id: '{contract}',
         method: 'bet',
@@ -240,7 +241,7 @@ describe('Template execution', () => {
           { action: 'deposit', amount: 10n, changeAddress: '{caller}', skipSelection: true },
         ],
       })
-      .addUtxoSelect({ fill: 11 }) // Adds 10 for the deposit + 1 for token creation fee
+      .addUtxoSelect({ fill: 12 }) // Adds 10 for the deposit + 1 for token creation fee + 1 for data output
       .build();
 
     const bet1Tx = await interpreter.buildAndSign(bet1Template, DEFAULT_PIN_CODE, DEBUG);
@@ -253,12 +254,16 @@ describe('Template execution', () => {
     await waitForTxReceived(hWallet, bet1Tx.hash, undefined);
     expect(bet1Tx.version).toEqual(CREATE_TOKEN_TX_VERSION);
 
-    expect(bet1Tx.outputs).toHaveLength(2);
+    expect(bet1Tx.outputs).toHaveLength(3);
     expect(bet1Tx.outputs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           value: 100n,
           tokenData: 1,
+        }),
+        expect.objectContaining({
+          value: 1n, // data output
+          tokenData: 0,
         }),
         expect.objectContaining({
           value: expect.anything(), // change output

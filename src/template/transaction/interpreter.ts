@@ -30,6 +30,7 @@ import {
   TOKEN_MINT_MASK,
 } from '../../constants';
 import transactionUtils from '../../utils/transaction';
+import leb128 from '../../utils/leb128';
 import tokensUtils from '../../utils/tokens';
 import Network from '../../models/network';
 import CreateTokenTransaction from '../../models/create_token_transaction';
@@ -122,7 +123,11 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
       network
     );
 
-    const serializedArgs = Buffer.concat(args.map(a => a.field.toBuffer()));
+    const arr: Buffer[] = [leb128.encodeUnsigned(args.length)];
+    args.forEach(arg => {
+      arr.push(arg.field.toBuffer());
+    });
+    const serializedArgs = Buffer.concat(arr);
     const seqnum = await this.wallet.getNanoHeaderSeqnum(address);
     const nanoHeaderActions = nanoCtx.actions.map(action =>
       WalletTxTemplateInterpreter.mapActionInstructionToAction(ctx, action)
