@@ -3361,7 +3361,7 @@ class HathorWallet extends EventEmitter {
 
     // Create code object from code data
     const codeContent = Buffer.from(code, 'utf8');
-    const codeObj = new Code(CodeKind.PYTHON_GZIP, codeContent);
+    const codeObj = new Code(CodeKind.PYTHON_ZLIB, codeContent);
 
     const tx = new OnChainBlueprint(codeObj, pubkey);
 
