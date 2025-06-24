@@ -637,7 +637,7 @@ describe('full cycle of bet nano contract', () => {
     expect(address2Meta3.numTransactions).toBe(2);
   };
 
-  const checkErrorsWithBlueprintId = async (blueprintId) => {
+  const checkErrorsWithBlueprintId = async blueprintId => {
     // There are some errors that depend on a valid blueprint id
     // so I can't use the suite of errors for them, because
     // we don't have a built in blueprint anymore
@@ -652,7 +652,7 @@ describe('full cycle of bet nano contract', () => {
     // Missing last argument
     await expect(
       hWallet.createAndSendNanoContractTransaction(NANO_CONTRACTS_INITIALIZE_METHOD, address0, {
-        blueprintId: builtInBlueprintId,
+        blueprintId,
         args: [bufferToHex(oracleData), NATIVE_TOKEN_UID],
       })
     ).rejects.toThrow(NanoContractTransactionError);
@@ -660,7 +660,7 @@ describe('full cycle of bet nano contract', () => {
     // Args as null
     await expect(
       hWallet.createAndSendNanoContractTransaction(NANO_CONTRACTS_INITIALIZE_METHOD, address0, {
-        blueprintId: builtInBlueprintId,
+        blueprintId,
         args: null,
       })
     ).rejects.toThrow(NanoContractTransactionError);
@@ -673,7 +673,7 @@ describe('full cycle of bet nano contract', () => {
         NANO_CONTRACTS_INITIALIZE_METHOD,
         addressNewWallet,
         {
-          blueprintId: builtInBlueprintId,
+          blueprintId,
           args: [bufferToHex(oracleData), NATIVE_TOKEN_UID, dateLastBet],
         }
       )
@@ -682,7 +682,7 @@ describe('full cycle of bet nano contract', () => {
     // Oracle data is expected to be a hexa
     await expect(
       hWallet.createAndSendNanoContractTransaction(NANO_CONTRACTS_INITIALIZE_METHOD, address0, {
-        blueprintId: builtInBlueprintId,
+        blueprintId,
         args: ['error', NATIVE_TOKEN_UID, dateLastBet],
       })
     ).rejects.toThrow(NanoContractTransactionError);
@@ -690,16 +690,16 @@ describe('full cycle of bet nano contract', () => {
     // Date last bet is expected to be an integer
     await expect(
       hWallet.createAndSendNanoContractTransaction(NANO_CONTRACTS_INITIALIZE_METHOD, address0, {
-        blueprintId: builtInBlueprintId,
+        blueprintId,
         args: ['123', NATIVE_TOKEN_UID, 'error'],
       })
     ).rejects.toThrow(NanoContractTransactionError);
-  }
+  };
 
   // The hathor-core and the wallet-lib are still not ready for
   // using nano contracts with a Multisig wallet
   it.skip('bet deposit built in with multisig wallet', async () => {
-    await executeTests(mhWallet, builtInBlueprintId);
+    await executeTests(mhWallet, null);
   });
 
   it('bet deposit on chain blueprint', async () => {
@@ -728,6 +728,9 @@ describe('full cycle of bet nano contract', () => {
     expect(newAddress10Meta?.numTransactions).toBe(1);
     // Execute the bet blueprint tests
     await executeTests(ocbWallet, tx.hash);
+
+    // Validate errors that need a valid blueprint id
+    checkErrorsWithBlueprintId(tx.hash);
   });
 
   it('handle errors', async () => {
