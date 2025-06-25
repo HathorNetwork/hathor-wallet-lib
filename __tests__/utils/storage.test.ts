@@ -214,7 +214,7 @@ describe('_updateTokensData', () => {
       name: mockToken.name,
       symbol: mockToken.symbol,
       uid: mockToken.uid,
-      version: mockToken.version
+      version: mockToken.version,
     });
   });
 

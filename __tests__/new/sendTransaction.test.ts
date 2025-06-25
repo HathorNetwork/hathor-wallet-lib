@@ -6,14 +6,13 @@
  */
 
 import { TOKEN_AUTHORITY_MASK, NATIVE_TOKEN_UID } from '../../src/constants';
-import { TokenInfoVersion } from '../../src/models/enum/token_info_version';
 import SendTransaction, {
   isDataOutput,
   checkUnspentInput,
   prepareSendTokensData,
 } from '../../src/new/sendTransaction';
 import { MemoryStore, Storage } from '../../src/storage';
-import { ITokenData, WalletType } from '../../src/types';
+import { WalletType } from '../../src/types';
 import transaction from '../../src/utils/transaction';
 import { OutputType } from '../../src/wallet/types';
 import { mockGetToken } from '../__mock_helpers__/get-token.mock';

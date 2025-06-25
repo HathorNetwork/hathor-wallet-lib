@@ -519,12 +519,14 @@ export class MemoryStore implements IStore {
     if (this.tokens.has(tokenConfig.uid)) {
       throw new Error('Already have this token');
     }
-    if (!tokens.isHathorToken(tokenConfig.uid) && !tokenConfig.version) {
-      tokenConfig.version = TokenInfoVersion.DEPOSIT
+
+    const newTokenConfig = { ...tokenConfig }; // Clone the token config to avoid modifying the original object
+    if (!tokens.isHathorToken(newTokenConfig.uid) && !newTokenConfig.version) {
+      newTokenConfig.version = TokenInfoVersion.DEPOSIT;
     }
-    this.tokens.set(tokenConfig.uid, tokenConfig);
+    this.tokens.set(newTokenConfig.uid, newTokenConfig);
     if (meta !== undefined) {
-      this.tokensMetadata.set(tokenConfig.uid, meta);
+      this.tokensMetadata.set(newTokenConfig.uid, meta);
     }
   }
 
