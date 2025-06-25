@@ -21,6 +21,7 @@ import {
 import { manualStreamSyncHistory, xpubStreamSyncHistory } from '../../src/sync/stream';
 import CreateTokenTransaction from '../../src/models/create_token_transaction';
 import Transaction from '../../src/models/transaction';
+import { TokenInfoVersion } from '../../src/models/enum/token_info_version';
 
 describe('scanning policy methods', () => {
   it('start addresses', async () => {
@@ -126,6 +127,7 @@ describe('_updateTokensData', () => {
       uid: 'mock-token',
       name: 'Mock Token 1',
       symbol: 'MT1',
+      version: TokenInfoVersion.DEPOSIT,
     };
     const store = new MemoryStore();
     const storage = new Storage(store);
@@ -133,6 +135,7 @@ describe('_updateTokensData', () => {
       success: true,
       name: mockToken.name,
       symbol: mockToken.symbol,
+      version: mockToken.version,
       mint: [],
       melt: [],
       total: 0,
@@ -152,6 +155,7 @@ describe('_updateTokensData', () => {
       name: mockToken.name,
       symbol: mockToken.symbol,
       uid: mockToken.uid,
+      version: mockToken.version,
     });
   });
 
@@ -161,6 +165,7 @@ describe('_updateTokensData', () => {
       uid: 'mock-token',
       name: 'Mock Token 1',
       symbol: 'MT1',
+      version: TokenInfoVersion.DEPOSIT,
     };
     const store = new MemoryStore();
     const storage = new Storage(store);
@@ -181,6 +186,7 @@ describe('_updateTokensData', () => {
         success: true,
         name: mockToken.name,
         symbol: mockToken.symbol,
+        version: mockToken.version,
         mint: [],
         melt: [],
         total: 0,
@@ -208,6 +214,7 @@ describe('_updateTokensData', () => {
       name: mockToken.name,
       symbol: mockToken.symbol,
       uid: mockToken.uid,
+      version: mockToken.version,
     });
   });
 
@@ -387,6 +394,7 @@ test('addCreatedTokenFromTx', async () => {
     uid: 'd00d',
     name: 'Token A',
     symbol: 'tkA',
+    version: 1,
   });
   await expect(storage.getToken('d00d')).resolves.not.toBeNull();
 });
