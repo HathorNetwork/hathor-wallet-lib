@@ -1,4 +1,5 @@
 import fs from 'fs';
+import { isEmpty } from 'lodash';
 import { GenesisWalletHelper } from '../../helpers/genesis-wallet.helper';
 import {
   DEFAULT_PIN_CODE,
@@ -49,6 +50,19 @@ describe('Template execution', () => {
     await GenesisWalletHelper.clearListeners();
   });
 
+  const waitExecution = async (wallet, tx) => {
+    const txId = tx.hash;
+    expect(txId).toBeDefined();
+    await waitForTxReceived(wallet, txId);
+    // We need to wait for the tx to get a first block, so we guarantee it was executed
+    await waitTxConfirmed(wallet, txId, null);
+    // Now we query the transaction from the full node to double check it's still valid after the nano execution
+    // and it already has a first block, so it was really executed
+    const txAfterExecution = await wallet.getFullTxById(txId);
+    expect(isEmpty(txAfterExecution.meta.voided_by)).toBe(true);
+    expect(isEmpty(txAfterExecution.meta.first_block)).not.toBeNull();
+  };
+
   it('should be able to run a bet contract', async () => {
     const dateLastBet = dateFormatter.dateToTimestamp(new Date()) + 6000;
     const initializeTemplate = TransactionTemplateBuilder.new()
@@ -78,7 +92,7 @@ describe('Template execution', () => {
       throw new Error('Transaction does not have a hash');
     }
     const contractId = initializeTx.hash;
-    await waitForTxReceived(hWallet, initializeTx.hash, undefined);
+    await waitExecution(hWallet, initializeTx);
 
     expect(initializeTx.outputs).toHaveLength(0);
 
@@ -104,7 +118,7 @@ describe('Template execution', () => {
     if (bet1Tx.hash === null) {
       throw new Error('Transaction does not have a hash');
     }
-    await waitForTxReceived(hWallet, bet1Tx.hash, undefined);
+    await waitExecution(hWallet, bet1Tx);
 
     expect(bet1Tx.outputs).toHaveLength(1);
     expect(bet1Tx.outputs[0].value).toEqual(90n);
@@ -130,7 +144,7 @@ describe('Template execution', () => {
     if (bet2Tx.hash === null) {
       throw new Error('Transaction does not have a hash');
     }
-    await waitForTxReceived(hWallet, bet2Tx.hash, undefined);
+    await waitExecution(hWallet, bet2Tx);
 
     expect(bet2Tx.outputs).toHaveLength(1);
     expect(bet2Tx.outputs[0].value).toEqual(70n);
@@ -169,20 +183,19 @@ describe('Template execution', () => {
     if (setResultTx.hash === null) {
       throw new Error('Transaction does not have a hash');
     }
-    await waitForTxReceived(hWallet, setResultTx.hash, undefined);
+    await waitExecution(hWallet, setResultTx);
 
     expect(setResultTx.outputs).toHaveLength(0);
 
     // Withdrawal
 
     const withdrawalTemplate = TransactionTemplateBuilder.new()
-      .addSetVarAction({ name: 'caller', call: { method: 'get_wallet_address', index: 0 } })
       .addSetVarAction({ name: 'bet_addr', call: { method: 'get_wallet_address', index: 5 } })
       .addSetVarAction({ name: 'contract', value: contractId })
       .addNanoMethodExecution({
         id: '{contract}',
         method: 'withdraw',
-        caller: '{caller}',
+        caller: '{bet_addr}',
         actions: [{ action: 'withdrawal', amount: 30n, address: '{bet_addr}' }],
       })
       .build();
@@ -201,7 +214,7 @@ describe('Template execution', () => {
     if (withdrawalTx.hash === null) {
       throw new Error('Transaction does not have a hash');
     }
-    await waitForTxReceived(hWallet, withdrawalTx.hash, undefined);
+    await waitExecution(hWallet, withdrawalTx);
 
     expect(withdrawalTx.outputs).toHaveLength(1);
     expect(withdrawalTx.outputs[0].value).toEqual(30n);
@@ -237,7 +250,7 @@ describe('Template execution', () => {
       throw new Error('Transaction does not have a hash');
     }
     const contractId = initializeTx.hash;
-    await waitForTxReceived(hWallet, initializeTx.hash, undefined);
+    await waitExecution(hWallet, initializeTx);
 
     // BET Template
 
@@ -267,7 +280,7 @@ describe('Template execution', () => {
     if (bet1Tx.hash === null) {
       throw new Error('Transaction does not have a hash');
     }
-    await waitForTxReceived(hWallet, bet1Tx.hash, undefined);
+    await waitExecution(hWallet, bet1Tx);
     expect(bet1Tx.version).toEqual(CREATE_TOKEN_TX_VERSION);
 
     expect(bet1Tx.outputs).toHaveLength(3);

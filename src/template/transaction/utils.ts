@@ -5,8 +5,8 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { OutputValueType } from 'src/types';
-import { NATIVE_TOKEN_UID } from 'src/constants';
+import { OutputValueType } from '../../types';
+import { NATIVE_TOKEN_UID } from '../../constants';
 import { TxTemplateContext } from './context';
 import { ITxTemplateInterpreter, IGetUtxosOptions } from './types';
 import { createOutputScriptFromAddress } from '../../utils/address';
