@@ -58,11 +58,11 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
     try {
       response = await this.wallet.getFullTxById(nanoCtx.id);
     } catch (ex: unknown) {
-      throw new Error('');
+      throw new Error(`Error getting nano contract transaction with id ${nanoCtx.id}.`);
     }
 
     if (!response.tx.nc_id) {
-      throw new Error('');
+      throw new Error(`Transaction ${nanoCtx.id} is not a nano contract.`);
     }
 
     return response.tx.nc_blueprint_id;
@@ -92,7 +92,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
       }
     }
     if (amount === 0n) {
-      throw new Error('');
+      throw new Error('Action amount cannot be zero');
     }
 
     return {
@@ -105,7 +105,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
   async buildNanoHeader(ctx: TxTemplateContext): Promise<NanoContractHeader> {
     const nanoCtx = ctx.nanoContext;
     if (!nanoCtx) {
-      throw new Error('');
+      throw new Error('Cannot build the header without the nano context data');
     }
     const blueprintId = await this.getBlueprintId(nanoCtx);
     const network = this.getNetwork();
