@@ -52,6 +52,7 @@ import {
   getWalletAddress,
   getWalletBalance,
 } from './setvarcommands';
+import { selectAuthorities, selectTokens } from './utils';
 
 /**
  * Find and run the executor function for the instruction.
@@ -153,45 +154,15 @@ export async function execUtxoSelectInstruction(
   if (address) {
     options.filter_address = address;
   }
-  const { changeAmount, utxos } = await interpreter.getUtxos(fill, options);
 
-  // Add utxos as inputs on the transaction
-  const inputs: Input[] = [];
-  for (const utxo of utxos) {
-    ctx.log(`Found utxo with ${utxo.value} of ${utxo.tokenId}`);
-    ctx.log(`Create input ${utxo.index} / ${utxo.txId}`);
-    inputs.push(new Input(utxo.txId, utxo.index));
-  }
-
-  // First, update balance
-  for (const input of inputs) {
-    const origTx = await interpreter.getTx(input.hash);
-    ctx.balance.addBalanceFromUtxo(origTx, input.index);
-  }
-
-  // Then add inputs to context
-  ctx.addInputs(position, ...inputs);
-
-  ctx.log(`changeAmount: ${changeAmount} autoChange(${autoChange})`);
-
-  if (autoChange && changeAmount) {
-    // get change address
-    let changeAddress = getVariable<string | undefined>(
+  const changeAddress =
+    getVariable<string | undefined>(
       ins.changeAddress,
       ctx.vars,
       UtxoSelectInstruction.shape.changeAddress
-    );
-    if (!changeAddress) {
-      changeAddress = await interpreter.getChangeAddress(ctx);
-    }
-    ctx.log(`Creating change for address: ${changeAddress}`);
-    // Token should only be on the array if present on the outputs
-    const tokenData = ctx.addToken(token);
-    const script = createOutputScriptFromAddress(changeAddress, interpreter.getNetwork());
-    const output = new Output(changeAmount, script, { tokenData });
-    ctx.balance.addOutput(changeAmount, token);
-    ctx.addOutputs(-1, output);
-  }
+    ) ?? (await interpreter.getChangeAddress(ctx));
+
+  await selectTokens(interpreter, ctx, fill, options, autoChange, changeAddress, position);
 }
 
 /**
@@ -230,23 +201,7 @@ export async function execAuthoritySelectInstruction(
   if (address) {
     options.filter_address = address;
   }
-  const utxos = await interpreter.getAuthorities(count, options);
-
-  // Add utxos as inputs on the transaction
-  const inputs: Input[] = [];
-  for (const utxo of utxos) {
-    ctx.log(`Found authority utxo ${utxo.authorities} of ${token}`);
-    ctx.log(`Create input ${utxo.index} / ${utxo.txId}`);
-    inputs.push(new Input(utxo.txId, utxo.index));
-  }
-  // First, update balance
-  for (const input of inputs) {
-    const origTx = await interpreter.getTx(input.hash);
-    ctx.balance.addBalanceFromUtxo(origTx, input.index);
-  }
-
-  // Then add inputs to context
-  ctx.addInputs(position, ...inputs);
+  await selectAuthorities(interpreter, ctx, options, count, position);
 }
 
 /**
@@ -549,11 +504,11 @@ export async function execCompleteTxInstruction(
     // INFO: Currently fees only make sense for create token transactions.
 
     const amount = ctx.balance.createdTokenBalance!.tokens;
-    const fee = amount / 100n; // TODO: Do actual conversion using fee multiplier of the wallet.
+    const deposit = interpreter.getHTRDeposit(amount);
 
     // Add the required HTR to create the tokens
     const balance = ctx.balance.getTokenBalance(NATIVE_TOKEN_UID);
-    balance.tokens += fee;
+    balance.tokens += deposit;
     ctx.balance.setTokenBalance(NATIVE_TOKEN_UID, balance);
 
     // If we weren't going to check HTR, we need to include in the tokens to check
@@ -841,51 +796,19 @@ async function validateDepositNanoAction(
     return actual;
   }
 
-  // XXX: Similar to execUtxoSelectInstruction
-  // Maybe extract this into external utility
-
   // Find utxos
   const options: IGetUtxosOptions = { token };
   if (address) {
     options.filter_address = address;
   }
-  const { changeAmount, utxos } = await interpreter.getUtxos(amount, options);
+  const changeAddress =
+    getVariable<string | undefined>(
+      action.changeAddress,
+      ctx.vars,
+      NanoDepositAction.shape.changeAddress
+    ) ?? (await interpreter.getChangeAddress(ctx));
 
-  // Add utxos as inputs on the transaction
-  const inputs: Input[] = [];
-  for (const utxo of utxos) {
-    ctx.log(`Found utxo with ${utxo.value} of ${utxo.tokenId}`);
-    ctx.log(`Create input ${utxo.index} / ${utxo.txId}`);
-    inputs.push(new Input(utxo.txId, utxo.index));
-  }
-
-  // First, update balance
-  for (const input of inputs) {
-    const origTx = await interpreter.getTx(input.hash);
-    ctx.balance.addBalanceFromUtxo(origTx, input.index);
-  }
-
-  // Then add inputs to context
-  ctx.addInputs(-1, ...inputs);
-
-  ctx.log(`changeAmount: ${changeAmount} autoChange(${action.autoChange})`);
-
-  if (action.autoChange && changeAmount) {
-    // get change address
-    const changeAddress =
-      getVariable<string | undefined>(
-        action.changeAddress,
-        ctx.vars,
-        UtxoSelectInstruction.shape.changeAddress
-      ) ?? (await interpreter.getChangeAddress(ctx));
-    ctx.log(`Creating change for address: ${changeAddress}`);
-    // Token should only be on the array if present on the outputs
-    const tokenData = ctx.addToken(token);
-    const script = createOutputScriptFromAddress(changeAddress, interpreter.getNetwork());
-    const output = new Output(changeAmount, script, { tokenData });
-    ctx.balance.addOutput(changeAmount, token);
-    ctx.addOutputs(-1, output);
-  }
+  await selectTokens(interpreter, ctx, amount, options, action.autoChange, changeAddress);
 
   return actual;
 }
@@ -946,9 +869,6 @@ async function validateGrantAuthorityNanoAction(
     return actual;
   }
 
-  // XXX: Similar to execAuthoritySelectInstruction
-  // Maybe extract this into external utility
-
   let authoritiesInt = 0n;
   if (authority === 'mint') {
     authoritiesInt += TOKEN_MINT_MASK;
@@ -965,23 +885,7 @@ async function validateGrantAuthorityNanoAction(
   if (address) {
     options.filter_address = address;
   }
-  const utxos = await interpreter.getAuthorities(1, options);
-
-  // Add utxos as inputs on the transaction
-  const inputs: Input[] = [];
-  for (const utxo of utxos) {
-    ctx.log(`Found authority utxo ${utxo.authorities} of ${token}`);
-    ctx.log(`Create input ${utxo.index} / ${utxo.txId}`);
-    inputs.push(new Input(utxo.txId, utxo.index));
-  }
-  // First, update balance
-  for (const input of inputs) {
-    const origTx = await interpreter.getTx(input.hash);
-    ctx.balance.addBalanceFromUtxo(origTx, input.index);
-  }
-
-  // Then add inputs to context
-  ctx.addInputs(-1, ...inputs);
+  await selectAuthorities(interpreter, ctx, options);
   return actual;
 }
 

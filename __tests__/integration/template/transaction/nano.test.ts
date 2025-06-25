@@ -1,9 +1,11 @@
+import fs from 'fs';
 import { GenesisWalletHelper } from '../../helpers/genesis-wallet.helper';
 import {
   DEFAULT_PIN_CODE,
   generateWalletHelper,
   stopAllWallets,
   waitForTxReceived,
+  waitTxConfirmed,
 } from '../../helpers/wallet.helper';
 
 import HathorWallet from '../../../../src/new/wallet';
@@ -12,9 +14,23 @@ import { TransactionTemplateBuilder } from '../../../../src/template/transaction
 import { WalletTxTemplateInterpreter } from '../../../../src/template/transaction/interpreter';
 import { CREATE_TOKEN_TX_VERSION, NATIVE_TOKEN_UID } from '../../../../src/constants';
 import dateFormatter from '../../../../src/utils/date';
+import { WALLET_CONSTANTS } from '../../configuration/test-constants';
 
 const DEBUG = true;
-const builtInBlueprintId = '3cb032600bdf7db784800e4ea911b10676fa2f67591f82bb62628c234e771595';
+let ocbWallet: HathorWallet;
+let betBlueprintID: string;
+
+beforeAll(async () => {
+  const { seed } = WALLET_CONSTANTS.ocb;
+  ocbWallet = await generateWalletHelper({ seed });
+  const address0 = await ocbWallet.getAddressAtIndex(0);
+  const address1 = await ocbWallet.getAddressAtIndex(1);
+  await GenesisWalletHelper.injectFunds(ocbWallet, address1, 1000n, {});
+  const code = fs.readFileSync('./__tests__/integration/configuration/blueprints/bet.py', 'utf8');
+  const betBlueprintTx = await ocbWallet.createAndSendOnChainBlueprintTransaction(code, address0);
+  await waitTxConfirmed(ocbWallet, betBlueprintTx.hash!, null);
+  betBlueprintID = betBlueprintTx.hash!;
+});
 
 describe('Template execution', () => {
   let hWallet: HathorWallet;
@@ -38,7 +54,7 @@ describe('Template execution', () => {
     const initializeTemplate = TransactionTemplateBuilder.new()
       .addSetVarAction({ name: 'addr', call: { method: 'get_wallet_address', index: 0 } })
       .addSetVarAction({ name: 'oracle', call: { method: 'get_oracle_script', index: 0 } })
-      .addSetVarAction({ name: 'blueprint', value: builtInBlueprintId })
+      .addSetVarAction({ name: 'blueprint', value: betBlueprintID })
       .addNanoMethodExecution({
         id: '{blueprint}',
         method: 'initialize',
@@ -197,7 +213,7 @@ describe('Template execution', () => {
     const initializeTemplate = TransactionTemplateBuilder.new()
       .addSetVarAction({ name: 'addr', call: { method: 'get_wallet_address', index: 0 } })
       .addSetVarAction({ name: 'oracle', call: { method: 'get_oracle_script', index: 0 } })
-      .addSetVarAction({ name: 'blueprint', value: builtInBlueprintId })
+      .addSetVarAction({ name: 'blueprint', value: betBlueprintID })
       .addNanoMethodExecution({
         id: '{blueprint}',
         method: 'initialize',

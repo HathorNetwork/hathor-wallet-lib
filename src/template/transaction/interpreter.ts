@@ -260,4 +260,8 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
   getWallet(): IHathorWallet {
     return this.wallet;
   }
+
+  getHTRDeposit(mintAmount: OutputValueType): OutputValueType {
+    return tokensUtils.getMintDeposit(mintAmount, this.wallet.storage);
+  }
 }

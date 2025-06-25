@@ -61,4 +61,5 @@ export interface ITxTemplateInterpreter {
   getTx(txId: string): Promise<IHistoryTx>;
   getNetwork(): Network;
   getWallet(): IHathorWallet;
+  getHTRDeposit(mintAmount: OutputValueType): OutputValueType;
 }
