@@ -13,7 +13,7 @@ import Transaction from '../models/transaction';
 import { intToBytes } from '../utils/buffer';
 
 export enum CodeKind {
-  PYTHON_GZIP = 'python+gzip',
+  PYTHON_ZLIB = 1,
 }
 
 export class Code {
@@ -29,13 +29,12 @@ export class Code {
   serialize(): Buffer {
     // Code serialization format: [kind:variable bytes][null byte][data:variable bytes]
     const arr: Buffer[] = [];
-    if (this.kind !== CodeKind.PYTHON_GZIP) {
+    if (this.kind !== CodeKind.PYTHON_ZLIB) {
       throw new Error('Invalid code kind value');
     }
 
     const zcode = zlib.deflateSync(this.content);
-    arr.push(Buffer.from(this.kind, 'utf8'));
-    arr.push(intToBytes(0, 1));
+    arr.push(intToBytes(this.kind, 1));
     arr.push(zcode);
     return Buffer.concat(arr);
   }
