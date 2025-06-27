@@ -13,7 +13,13 @@ import HathorWallet from '../../../../src/new/wallet';
 import SendTransaction from '../../../../src/new/sendTransaction';
 import { TransactionTemplateBuilder } from '../../../../src/template/transaction/builder';
 import { WalletTxTemplateInterpreter } from '../../../../src/template/transaction/interpreter';
-import { CREATE_TOKEN_TX_VERSION, NATIVE_TOKEN_UID, TOKEN_AUTHORITY_MASK, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../../../src/constants';
+import {
+  CREATE_TOKEN_TX_VERSION,
+  NATIVE_TOKEN_UID,
+  TOKEN_AUTHORITY_MASK,
+  TOKEN_MELT_MASK,
+  TOKEN_MINT_MASK,
+} from '../../../../src/constants';
 import dateFormatter from '../../../../src/utils/date';
 
 const DEBUG = true;
@@ -289,7 +295,7 @@ describe('Template execution', () => {
         id: '{blueprint}',
         method: 'initialize',
         caller: '{caller}',
-        actions: [{action: 'deposit', amount: 100}],
+        actions: [{ action: 'deposit', amount: 100 }],
       })
       .build();
 
@@ -310,9 +316,7 @@ describe('Template execution', () => {
         id: '{contract}',
         method: 'create_token',
         caller: '{caller}',
-        actions: [
-          { action: 'withdrawal', amount: 5, address: '{caller}', skipOutputs: true },
-        ],
+        actions: [{ action: 'withdrawal', amount: 5, address: '{caller}', skipOutputs: true }],
       })
       .addTokenOutput({ amount: 4, address: '{caller}' }) // withdrawal action - token creation fee
       .build();
@@ -357,9 +361,7 @@ describe('Template execution', () => {
         id: '{contract}',
         method: 'grant_authority',
         caller: '{caller}',
-        actions: [
-          { action: 'grant_authority', authority: 'mint', token: '{token}' },
-        ],
+        actions: [{ action: 'grant_authority', authority: 'mint', token: '{token}' }],
       })
       .build();
 
@@ -379,7 +381,7 @@ describe('Template execution', () => {
         id: '{contract}',
         method: 'mint',
         caller: '{caller}',
-        args: ['{token}', 200]
+        args: ['{token}', 200],
       })
       .build();
 
@@ -393,7 +395,7 @@ describe('Template execution', () => {
       contractId,
       [],
       [tokenUID, NATIVE_TOKEN_UID],
-      [],
+      []
     );
     expect(BigInt(ncStateMint.balances[NATIVE_TOKEN_UID].value)).toBe(93n);
     expect(BigInt(ncStateMint.balances[tokenUID].value)).toBe(200n);
@@ -432,7 +434,7 @@ describe('Template execution', () => {
         id: '{contract}',
         method: 'revoke',
         caller: '{caller}',
-        args: ['{token}', true, true]
+        args: ['{token}', true, true],
       })
       .build();
 
@@ -445,7 +447,7 @@ describe('Template execution', () => {
       contractId,
       [],
       [tokenUID, NATIVE_TOKEN_UID],
-      [],
+      []
     );
 
     expect(BigInt(ncStateRevoke.balances[NATIVE_TOKEN_UID].value)).toBe(93n);

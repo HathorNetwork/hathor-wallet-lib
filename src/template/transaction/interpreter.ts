@@ -74,9 +74,9 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
   ): NanoContractActionHeader {
     const tokens = ctx.tokens.map(t => ({ uid: t, name: '', symbol: '' }));
     const { token } = action;
-    const { useCreatedToken } = action;
-    const tokenIndex = useCreatedToken ? 1 : tokensUtils.getTokenIndex(tokens, token);
     let amount: OutputValueType = 0n;
+
+    // Prepare amount
     if (action.action === 'deposit' || action.action === 'withdrawal') {
       // This parse is because action.amount may be a template reference name.
       // The actual amount is discovered when running the instructions and inputed on the action.
@@ -93,6 +93,15 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
     }
     if (amount === 0n) {
       throw new Error('Action amount cannot be zero');
+    }
+
+    let tokenIndex: number = 0;
+    // Prepare tokenIndex
+    if (action.action === 'deposit' || action.action === 'grant_authority') {
+      tokenIndex = action.useCreatedToken ? 1 : tokensUtils.getTokenIndex(tokens, token);
+    }
+    if (action.action === 'withdrawal' || action.action === 'acquire_authority') {
+      tokenIndex = tokensUtils.getTokenIndex(tokens, token);
     }
 
     return {

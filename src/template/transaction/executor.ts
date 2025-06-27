@@ -771,6 +771,7 @@ async function validateDepositNanoAction(
   action: z.infer<typeof NanoDepositAction>
 ) {
   const token = getVariable<string>(action.token, ctx.vars, NanoDepositAction.shape.token);
+  ctx.addToken(token);
   const amount = getVariable<OutputValueType>(
     action.amount,
     ctx.vars,
@@ -791,7 +792,7 @@ async function validateDepositNanoAction(
     address,
   };
 
-  if (action.skipSelection) {
+  if (action.skipSelection || action.useCreatedToken) {
     // Do not select inputs
     return actual;
   }
@@ -819,6 +820,7 @@ async function validateWithdrawalNanoAction(
   action: z.infer<typeof NanoWithdrawalAction>
 ) {
   const token = getVariable<string>(action.token, ctx.vars, NanoWithdrawalAction.shape.token);
+  ctx.addToken(token);
   const amount = getVariable<OutputValueType>(
     action.amount,
     ctx.vars,
@@ -837,7 +839,7 @@ async function validateWithdrawalNanoAction(
   };
 
   if (!action.skipOutputs) {
-    const tokenData = action.useCreatedToken ? 1 : ctx.addToken(token);
+    const tokenData = ctx.addToken(token);
     const script = createOutputScriptFromAddress(address, interpreter.getNetwork());
     const output = new Output(amount, script, { tokenData });
     ctx.addOutputs(-1, output);
@@ -868,7 +870,7 @@ async function validateGrantAuthorityNanoAction(
     address,
   };
 
-  if (action.skipSelection) {
+  if (action.skipSelection || action.useCreatedToken) {
     // Do not select inputs
     return actual;
   }
@@ -916,7 +918,7 @@ async function validateAcquireAuthorityNanoAction(
   };
 
   if (!action.skipOutputs) {
-    const tokenData = TOKEN_AUTHORITY_MASK | (action.useCreatedToken ? 1 : ctx.addToken(token));
+    const tokenData = TOKEN_AUTHORITY_MASK | ctx.addToken(token);
     let amount: OutputValueType;
     if (action.authority === 'mint') {
       amount = TOKEN_MINT_MASK;
