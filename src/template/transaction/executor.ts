@@ -836,10 +836,13 @@ async function validateWithdrawalNanoAction(
     address,
   };
 
-  const tokenData = action.useCreatedToken ? 1 : ctx.addToken(token);
-  const script = createOutputScriptFromAddress(address, interpreter.getNetwork());
-  const output = new Output(amount, script, { tokenData });
-  ctx.addOutputs(-1, output);
+  if (!action.skipOutputs) {
+    const tokenData = action.useCreatedToken ? 1 : ctx.addToken(token);
+    const script = createOutputScriptFromAddress(address, interpreter.getNetwork());
+    const output = new Output(amount, script, { tokenData });
+    ctx.addOutputs(-1, output);
+  }
+
   return actual;
 }
 
@@ -849,6 +852,7 @@ async function validateGrantAuthorityNanoAction(
   action: z.infer<typeof NanoGrantAuthorityAction>
 ) {
   const token = getVariable<string>(action.token, ctx.vars, NanoGrantAuthorityAction.shape.token);
+  ctx.addToken(token);
   const { authority } = action;
   const address = getVariable<string | undefined>(
     action.address,
@@ -895,6 +899,7 @@ async function validateAcquireAuthorityNanoAction(
   action: z.infer<typeof NanoAcquireAuthorityAction>
 ) {
   const token = getVariable<string>(action.token, ctx.vars, NanoAcquireAuthorityAction.shape.token);
+  ctx.addToken(token);
   const address =
     getVariable<string | undefined>(
       action.address,
@@ -910,19 +915,22 @@ async function validateAcquireAuthorityNanoAction(
     address,
   };
 
-  const tokenData = TOKEN_AUTHORITY_MASK | (action.useCreatedToken ? 1 : ctx.addToken(token));
-  let amount: OutputValueType;
-  if (action.authority === 'mint') {
-    amount = TOKEN_MINT_MASK;
-  } else if (action.authority === 'melt') {
-    amount = TOKEN_MELT_MASK;
-  } else {
-    throw new Error('This should never happen');
+  if (!action.skipOutputs) {
+    const tokenData = TOKEN_AUTHORITY_MASK | (action.useCreatedToken ? 1 : ctx.addToken(token));
+    let amount: OutputValueType;
+    if (action.authority === 'mint') {
+      amount = TOKEN_MINT_MASK;
+    } else if (action.authority === 'melt') {
+      amount = TOKEN_MELT_MASK;
+    } else {
+      throw new Error('This should never happen');
+    }
+
+    const script = createOutputScriptFromAddress(address, interpreter.getNetwork());
+    const output = new Output(amount, script, { tokenData });
+    ctx.addOutputs(-1, output);
   }
 
-  const script = createOutputScriptFromAddress(address, interpreter.getNetwork());
-  const output = new Output(amount, script, { tokenData });
-  ctx.addOutputs(-1, output);
   return actual;
 }
 

@@ -6,16 +6,39 @@
  */
 
 /* eslint-disable global-require */
+import fs from 'fs';
 import { loggers, LoggerUtil } from './__tests__/integration/utils/logger.util';
 import config from './src/config';
-import { TX_MINING_URL } from './__tests__/integration/configuration/test-constants';
+import { TX_MINING_URL, WALLET_CONSTANTS } from './__tests__/integration/configuration/test-constants';
 import {
   precalculationHelpers, WalletPrecalculationHelper
 } from './__tests__/integration/helpers/wallet-precalculation.helper';
 import { GenesisWalletHelper } from './__tests__/integration/helpers/genesis-wallet.helper';
-import { waitNextBlock } from './__tests__/integration/helpers/wallet.helper';
+import { generateWalletHelper, waitNextBlock, waitTxConfirmed } from './__tests__/integration/helpers/wallet.helper';
 
 config.setTxMiningUrl(TX_MINING_URL);
+
+async function createOCBs() {
+  const { seed } = WALLET_CONSTANTS.ocb;
+  const ocbWallet = await generateWalletHelper({ seed });
+  const address0 = await ocbWallet.getAddressAtIndex(0);
+  await GenesisWalletHelper.injectFunds(ocbWallet, address0, 1000n);
+
+  const codeBet = fs.readFileSync('./__tests__/integration/configuration/blueprints/bet.py', 'utf8');
+  const txBet = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeBet, address0);
+  await waitTxConfirmed(ocbWallet, txBet.hash, null);
+  global.BET_BLUEPRINT_ID = txBet.hash;
+
+  const codeAuthority = fs.readFileSync('./__tests__/integration/configuration/blueprints/authority.py', 'utf8');
+  const txAuthority = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeAuthority, address0);
+  await waitTxConfirmed(ocbWallet, txAuthority.hash, null);
+  global.AUTHORITY_BLUEPRINT_ID = txAuthority.hash;
+
+  const codeFull = fs.readFileSync('./__tests__/integration/configuration/blueprints/full_blueprint.py', 'utf8');
+  const txFull = await ocbWallet.createAndSendOnChainBlueprintTransaction(codeFull, address0);
+  await waitTxConfirmed(ocbWallet, txFull.hash, null);
+  global.FULL_BLUEPRINT_ID = txFull.hash;
+}
 
 // This function will run before each test file is executed
 beforeAll(async () => {
@@ -44,6 +67,8 @@ beforeAll(async () => {
     // when we do some package upgrades
     process.exit(1);
   }
+
+  await createOCBs();
 });
 
 afterAll(async () => {

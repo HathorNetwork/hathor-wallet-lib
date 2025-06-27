@@ -34,12 +34,9 @@ export async function selectTokens(
     ctx.log(`Found utxo with ${utxo.value} of ${utxo.tokenId}`);
     ctx.log(`Create input ${utxo.index} / ${utxo.txId}`);
     inputs.push(new Input(utxo.txId, utxo.index));
-  }
-
-  // First, update balance
-  for (const input of inputs) {
-    const origTx = await interpreter.getTx(input.hash);
-    ctx.balance.addBalanceFromUtxo(origTx, input.index);
+    // Update the balance
+    const origTx = await interpreter.getTx(utxo.txId);
+    ctx.balance.addBalanceFromUtxo(origTx, utxo.index);
   }
 
   // Then add inputs to context
@@ -77,11 +74,9 @@ export async function selectAuthorities(
     ctx.log(`Found authority utxo ${utxo.authorities} of ${token}`);
     ctx.log(`Create input ${utxo.index} / ${utxo.txId}`);
     inputs.push(new Input(utxo.txId, utxo.index));
-  }
-  // First, update balance
-  for (const input of inputs) {
-    const origTx = await interpreter.getTx(input.hash);
-    ctx.balance.addBalanceFromUtxo(origTx, input.index);
+    // Update the balance
+    const origTx = await interpreter.getTx(utxo.txId);
+    ctx.balance.addBalanceFromUtxo(origTx, utxo.index);
   }
 
   // Then add inputs to context

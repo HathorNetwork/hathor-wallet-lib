@@ -1,4 +1,3 @@
-import fs from 'fs';
 import { isEmpty } from 'lodash';
 import { GenesisWalletHelper } from '../../helpers/genesis-wallet.helper';
 import {
@@ -9,29 +8,28 @@ import {
   waitTxConfirmed,
 } from '../../helpers/wallet.helper';
 
+import ncApi from '../../../../src/api/nano';
 import HathorWallet from '../../../../src/new/wallet';
 import SendTransaction from '../../../../src/new/sendTransaction';
 import { TransactionTemplateBuilder } from '../../../../src/template/transaction/builder';
 import { WalletTxTemplateInterpreter } from '../../../../src/template/transaction/interpreter';
-import { CREATE_TOKEN_TX_VERSION, NATIVE_TOKEN_UID } from '../../../../src/constants';
+import { CREATE_TOKEN_TX_VERSION, NATIVE_TOKEN_UID, TOKEN_AUTHORITY_MASK, TOKEN_MELT_MASK, TOKEN_MINT_MASK } from '../../../../src/constants';
 import dateFormatter from '../../../../src/utils/date';
-import { WALLET_CONSTANTS } from '../../configuration/test-constants';
 
 const DEBUG = true;
-let ocbWallet: HathorWallet;
-let betBlueprintID: string;
 
-beforeAll(async () => {
-  const { seed } = WALLET_CONSTANTS.ocb;
-  ocbWallet = await generateWalletHelper({ seed });
-  const address0 = await ocbWallet.getAddressAtIndex(0);
-  const address1 = await ocbWallet.getAddressAtIndex(1);
-  await GenesisWalletHelper.injectFunds(ocbWallet, address1, 1000n, {});
-  const code = fs.readFileSync('./__tests__/integration/configuration/blueprints/bet.py', 'utf8');
-  const betBlueprintTx = await ocbWallet.createAndSendOnChainBlueprintTransaction(code, address0);
-  await waitTxConfirmed(ocbWallet, betBlueprintTx.hash!, null);
-  betBlueprintID = betBlueprintTx.hash!;
-});
+async function runTemplate(template, wallet) {
+  if (DEBUG) {
+    wallet.enableDebugMode();
+  }
+
+  const tx = await wallet.runTxTemplate(template, DEFAULT_PIN_CODE);
+  expect(tx.hash).not.toBeNull();
+  if (tx.hash === null) {
+    throw new Error('Transaction does not have a hash');
+  }
+  return tx;
+}
 
 describe('Template execution', () => {
   let hWallet: HathorWallet;
@@ -41,7 +39,7 @@ describe('Template execution', () => {
     hWallet = await generateWalletHelper(null);
     interpreter = new WalletTxTemplateInterpreter(hWallet);
     const address = await hWallet.getAddressAtIndex(0);
-    await GenesisWalletHelper.injectFunds(hWallet, address, 100n, {});
+    await GenesisWalletHelper.injectFunds(hWallet, address, 1000n, {});
   });
 
   afterAll(async () => {
@@ -68,7 +66,7 @@ describe('Template execution', () => {
     const initializeTemplate = TransactionTemplateBuilder.new()
       .addSetVarAction({ name: 'addr', call: { method: 'get_wallet_address', index: 0 } })
       .addSetVarAction({ name: 'oracle', call: { method: 'get_oracle_script', index: 0 } })
-      .addSetVarAction({ name: 'blueprint', value: betBlueprintID })
+      .addSetVarAction({ name: 'blueprint', value: global.BET_BLUEPRINT_ID })
       .addNanoMethodExecution({
         id: '{blueprint}',
         method: 'initialize',
@@ -121,7 +119,7 @@ describe('Template execution', () => {
     await waitExecution(hWallet, bet1Tx);
 
     expect(bet1Tx.outputs).toHaveLength(1);
-    expect(bet1Tx.outputs[0].value).toEqual(90n);
+    expect(bet1Tx.outputs[0].value).toEqual(990n);
     expect(bet1Tx.outputs[0].tokenData).toEqual(0);
 
     const bet2Template = TransactionTemplateBuilder.new()
@@ -147,7 +145,7 @@ describe('Template execution', () => {
     await waitExecution(hWallet, bet2Tx);
 
     expect(bet2Tx.outputs).toHaveLength(1);
-    expect(bet2Tx.outputs[0].value).toEqual(70n);
+    expect(bet2Tx.outputs[0].value).toEqual(970n);
     expect(bet2Tx.outputs[0].tokenData).toEqual(0);
 
     // set_result Template
@@ -226,7 +224,7 @@ describe('Template execution', () => {
     const initializeTemplate = TransactionTemplateBuilder.new()
       .addSetVarAction({ name: 'addr', call: { method: 'get_wallet_address', index: 0 } })
       .addSetVarAction({ name: 'oracle', call: { method: 'get_oracle_script', index: 0 } })
-      .addSetVarAction({ name: 'blueprint', value: betBlueprintID })
+      .addSetVarAction({ name: 'blueprint', value: global.BET_BLUEPRINT_ID })
       .addNanoMethodExecution({
         id: '{blueprint}',
         method: 'initialize',
@@ -235,22 +233,9 @@ describe('Template execution', () => {
       })
       .build();
 
-    const initializeTx = await interpreter.buildAndSign(
-      initializeTemplate,
-      DEFAULT_PIN_CODE,
-      DEBUG
-    );
-    const initializeSendTx = new SendTransaction({
-      storage: hWallet.storage,
-      transaction: initializeTx,
-    });
-    await initializeSendTx.runFromMining();
-    expect(initializeTx.hash).not.toBeNull();
-    if (initializeTx.hash === null) {
-      throw new Error('Transaction does not have a hash');
-    }
-    const contractId = initializeTx.hash;
+    const initializeTx = await runTemplate(initializeTemplate, hWallet);
     await waitExecution(hWallet, initializeTx);
+    const contractId = initializeTx.hash;
 
     // BET Template
 
@@ -273,13 +258,7 @@ describe('Template execution', () => {
       .addUtxoSelect({ fill: 12 }) // Adds 10 for the deposit + 1 for token creation fee + 1 for data output
       .build();
 
-    const bet1Tx = await interpreter.buildAndSign(bet1Template, DEFAULT_PIN_CODE, DEBUG);
-    const bet1SendTx = new SendTransaction({ storage: hWallet.storage, transaction: bet1Tx });
-    await bet1SendTx.runFromMining();
-    expect(bet1Tx.hash).not.toBeNull();
-    if (bet1Tx.hash === null) {
-      throw new Error('Transaction does not have a hash');
-    }
+    const bet1Tx = await runTemplate(bet1Template, hWallet);
     await waitExecution(hWallet, bet1Tx);
     expect(bet1Tx.version).toEqual(CREATE_TOKEN_TX_VERSION);
 
@@ -300,5 +279,178 @@ describe('Template execution', () => {
         }),
       ])
     );
+  });
+
+  it('should be able to grant and acquire authorities', async () => {
+    const initializeTemplate = TransactionTemplateBuilder.new()
+      .addSetVarAction({ name: 'caller', call: { method: 'get_wallet_address', index: 0 } })
+      .addSetVarAction({ name: 'blueprint', value: global.AUTHORITY_BLUEPRINT_ID })
+      .addNanoMethodExecution({
+        id: '{blueprint}',
+        method: 'initialize',
+        caller: '{caller}',
+        actions: [{action: 'deposit', amount: 100}],
+      })
+      .build();
+
+    const initializeTx = await runTemplate(initializeTemplate, hWallet);
+    await waitExecution(hWallet, initializeTx);
+    const contractId = initializeTx.hash;
+
+    // Create token
+
+    const createTokenTemplate = TransactionTemplateBuilder.new()
+      .addSetVarAction({ name: 'contract', value: contractId })
+      .addSetVarAction({ name: 'caller', call: { method: 'get_wallet_address', index: 0 } })
+      .addConfigAction({ createToken: true, tokenName: 'Authority Test Token', tokenSymbol: 'ATT' })
+      .addTokenOutput({ amount: 100, useCreatedToken: true, address: '{caller}' })
+      .addAuthorityOutput({ useCreatedToken: true, authority: 'mint', address: '{caller}' })
+      .addAuthorityOutput({ useCreatedToken: true, authority: 'melt', address: '{caller}' })
+      .addNanoMethodExecution({
+        id: '{contract}',
+        method: 'create_token',
+        caller: '{caller}',
+        actions: [
+          { action: 'withdrawal', amount: 5, address: '{caller}', skipOutputs: true },
+        ],
+      })
+      .addTokenOutput({ amount: 4, address: '{caller}' }) // withdrawal action - token creation fee
+      .build();
+
+    const createTokenTx = await runTemplate(createTokenTemplate, hWallet);
+    await waitExecution(hWallet, createTokenTx);
+    expect(createTokenTx.version).toEqual(CREATE_TOKEN_TX_VERSION);
+    const tokenUID = createTokenTx.hash;
+
+    // Contract pays the fee
+    expect(createTokenTx.inputs).toHaveLength(0);
+
+    expect(createTokenTx.outputs).toHaveLength(4);
+    expect(createTokenTx.outputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          value: 100n,
+          tokenData: 1,
+        }),
+        expect.objectContaining({
+          value: TOKEN_MINT_MASK,
+          tokenData: TOKEN_AUTHORITY_MASK | 1,
+        }),
+        expect.objectContaining({
+          value: TOKEN_MELT_MASK,
+          tokenData: TOKEN_AUTHORITY_MASK | 1,
+        }),
+        expect.objectContaining({
+          value: 4n,
+          tokenData: 0,
+        }),
+      ])
+    );
+
+    // Grant authority
+
+    const grantTemplate = TransactionTemplateBuilder.new()
+      .addSetVarAction({ name: 'contract', value: contractId })
+      .addSetVarAction({ name: 'token', value: tokenUID })
+      .addSetVarAction({ name: 'caller', call: { method: 'get_wallet_address', index: 0 } })
+      .addNanoMethodExecution({
+        id: '{contract}',
+        method: 'grant_authority',
+        caller: '{caller}',
+        actions: [
+          { action: 'grant_authority', authority: 'mint', token: '{token}' },
+        ],
+      })
+      .build();
+
+    const grantTx = await runTemplate(grantTemplate, hWallet);
+    await waitExecution(hWallet, grantTx);
+
+    expect(grantTx.inputs).toHaveLength(1);
+    expect(grantTx.outputs).toHaveLength(0);
+
+    // Mint tokens on the contract
+
+    const mintTemplate = TransactionTemplateBuilder.new()
+      .addSetVarAction({ name: 'contract', value: contractId })
+      .addSetVarAction({ name: 'token', value: tokenUID })
+      .addSetVarAction({ name: 'caller', call: { method: 'get_wallet_address', index: 0 } })
+      .addNanoMethodExecution({
+        id: '{contract}',
+        method: 'mint',
+        caller: '{caller}',
+        args: ['{token}', 200]
+      })
+      .build();
+
+    const mintTx = await runTemplate(mintTemplate, hWallet);
+    await waitExecution(hWallet, mintTx);
+
+    expect(mintTx.inputs).toHaveLength(0);
+    expect(mintTx.outputs).toHaveLength(0);
+
+    const ncStateMint = await ncApi.getNanoContractState(
+      contractId,
+      [],
+      [tokenUID, NATIVE_TOKEN_UID],
+      [],
+    );
+    expect(BigInt(ncStateMint.balances[NATIVE_TOKEN_UID].value)).toBe(93n);
+    expect(BigInt(ncStateMint.balances[tokenUID].value)).toBe(200n);
+
+    const acquireTemplate = TransactionTemplateBuilder.new()
+      .addSetVarAction({ name: 'contract', value: contractId })
+      .addSetVarAction({ name: 'token', value: tokenUID })
+      .addSetVarAction({ name: 'caller', call: { method: 'get_wallet_address', index: 0 } })
+      .addNanoMethodExecution({
+        id: '{contract}',
+        method: 'acquire_authority',
+        caller: '{caller}',
+        actions: [{ action: 'acquire_authority', token: '{token}', authority: 'mint' }],
+      })
+      .build();
+
+    const acquireTx = await runTemplate(acquireTemplate, hWallet);
+    await waitExecution(hWallet, acquireTx);
+
+    expect(acquireTx.inputs).toHaveLength(0);
+    expect(acquireTx.outputs).toHaveLength(1);
+    expect(acquireTx.outputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          value: TOKEN_MINT_MASK,
+          tokenData: TOKEN_AUTHORITY_MASK | 1,
+        }),
+      ])
+    );
+
+    const revokeTemplate = TransactionTemplateBuilder.new()
+      .addSetVarAction({ name: 'contract', value: contractId })
+      .addSetVarAction({ name: 'token', value: tokenUID })
+      .addSetVarAction({ name: 'caller', call: { method: 'get_wallet_address', index: 0 } })
+      .addNanoMethodExecution({
+        id: '{contract}',
+        method: 'revoke',
+        caller: '{caller}',
+        args: ['{token}', true, true]
+      })
+      .build();
+
+    const revokeTx = await runTemplate(revokeTemplate, hWallet);
+    await waitExecution(hWallet, revokeTx);
+
+    expect(revokeTx.inputs).toHaveLength(0);
+    expect(revokeTx.outputs).toHaveLength(0);
+    const ncStateRevoke = await ncApi.getNanoContractState(
+      contractId,
+      [],
+      [tokenUID, NATIVE_TOKEN_UID],
+      [],
+    );
+
+    expect(BigInt(ncStateRevoke.balances[NATIVE_TOKEN_UID].value)).toBe(93n);
+    expect(BigInt(ncStateRevoke.balances[tokenUID].value)).toBe(200n);
+    expect(ncStateRevoke.balances[tokenUID].can_mint).toBe(false);
+    expect(ncStateRevoke.balances[tokenUID].can_melt).toBe(false);
   });
 });

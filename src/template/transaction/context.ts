@@ -168,7 +168,6 @@ export class NanoContractContext {
     this.id = id;
     this.method = method;
     this.caller = caller;
-    this.caller = caller;
     this.args = args;
     this.actions = actions;
   }

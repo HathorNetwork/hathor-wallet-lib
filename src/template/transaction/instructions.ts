@@ -239,11 +239,12 @@ export const NanoWithdrawalAction = z.object({
   useCreatedToken: z.boolean().default(false),
   amount: TemplateRef.or(AmountSchema),
   address: TemplateRef.or(AddressSchema.optional()),
+  skipOutputs: z.boolean().default(false),
 });
 
 export const NanoGrantAuthorityAction = z.object({
   action: z.literal('grant_authority'),
-  token: TemplateRef.or(TokenSchema.default('00')),
+  token: TemplateRef.or(CustomTokenSchema),
   useCreatedToken: z.boolean().default(false),
   authority: z.enum(['mint', 'melt']),
   address: TemplateRef.or(AddressSchema.optional()),
@@ -253,10 +254,11 @@ export const NanoGrantAuthorityAction = z.object({
 
 export const NanoAcquireAuthorityAction = z.object({
   action: z.literal('acquire_authority'),
-  token: TemplateRef.or(TokenSchema.default('00')),
+  token: TemplateRef.or(CustomTokenSchema),
   useCreatedToken: z.boolean().default(false),
   authority: z.enum(['mint', 'melt']),
   address: TemplateRef.or(AddressSchema.optional()),
+  skipOutputs: z.boolean().default(false),
 });
 
 export const NanoAction = z.union([
