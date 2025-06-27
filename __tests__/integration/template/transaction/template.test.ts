@@ -371,7 +371,7 @@ describe('Template execution', () => {
       .addConfigAction({ createToken: true, tokenName: 'Create test tk', tokenSymbol: 'TK!' })
       .addAuthorityOutput({ useCreatedToken: true, authority: 'mint', address: '{addr}' })
       .addAuthorityOutput({ useCreatedToken: true, authority: 'melt', address: '{addr}' })
-      .addTokenOutput(({ useCreatedToken: true, amount: 500, address: '{addr}' }))
+      .addTokenOutput({ useCreatedToken: true, amount: 500, address: '{addr}' })
       .addCompleteAction({ calculateFee: true, token: '00' })
       .build();
 
@@ -434,7 +434,7 @@ describe('Template execution', () => {
           tokenData: TOKEN_AUTHORITY_MASK | 1,
           value: TOKEN_MINT_MASK,
         }),
-      ]),
+      ])
     );
   });
 });
