@@ -18,10 +18,10 @@ import {
   TokenOutputInstruction,
   AuthorityOutputInstruction,
   ShuffleInstruction,
-  ChangeInstruction,
   CompleteTxInstruction,
   ConfigInstruction,
   SetVarInstruction,
+  NanoMethodInstruction,
 } from './instructions';
 
 // Helper schemas to validate the arguments of each command in the builder args
@@ -33,16 +33,20 @@ const DataOutputInsArgs = DataOutputInstruction.omit({ type: true });
 const TokenOutputInsArgs = TokenOutputInstruction.omit({ type: true });
 const AuthorityOutputInsArgs = AuthorityOutputInstruction.omit({ type: true });
 const ShuffleInsArgs = ShuffleInstruction.omit({ type: true });
-const ChangeInsArgs = ChangeInstruction.omit({ type: true });
 const CompleteTxInsArgs = CompleteTxInstruction.omit({ type: true });
 const ConfigInsArgs = ConfigInstruction.omit({ type: true });
 const SetVarInsArgs = SetVarInstruction.omit({ type: true });
+const NanoMethodInsArgs = NanoMethodInstruction.omit({ type: true });
 
 export class TransactionTemplateBuilder {
   template: z.infer<typeof TransactionTemplate>;
 
   constructor() {
     this.template = [];
+  }
+
+  static new(): TransactionTemplateBuilder {
+    return new TransactionTemplateBuilder();
   }
 
   static from(instructions: z.input<typeof TransactionTemplate>): TransactionTemplateBuilder {
@@ -145,16 +149,6 @@ export class TransactionTemplateBuilder {
     return this;
   }
 
-  addChangeAction(ins: z.input<typeof ChangeInsArgs>) {
-    const parsedIns = ChangeInstruction.parse({
-      type: 'action/change',
-      ...ins,
-    });
-    this.template.push(parsedIns);
-
-    return this;
-  }
-
   addCompleteAction(ins: z.input<typeof CompleteTxInsArgs>) {
     const parsedIns = CompleteTxInstruction.parse({
       type: 'action/complete',
@@ -178,6 +172,16 @@ export class TransactionTemplateBuilder {
   addSetVarAction(ins: z.input<typeof SetVarInsArgs>) {
     const parsedIns = SetVarInstruction.parse({
       type: 'action/setvar',
+      ...ins,
+    });
+    this.template.push(parsedIns);
+
+    return this;
+  }
+
+  addNanoMethodExecution(ins: z.input<typeof NanoMethodInsArgs>) {
+    const parsedIns = NanoMethodInstruction.parse({
+      type: 'nano/execute',
       ...ins,
     });
     this.template.push(parsedIns);

@@ -53,7 +53,7 @@ describe('template methods', () => {
     await GenesisWalletHelper.injectFunds(hWallet, address, 10n);
 
     const template = new TransactionTemplateBuilder()
-      .addConfigAction({ tokenName: 'Tmpl Token', tokenSymbol: 'TT' })
+      .addConfigAction({ createToken: true, tokenName: 'Tmpl Token', tokenSymbol: 'TT' })
       .addSetVarAction({ name: 'addr', call: { method: 'get_wallet_address' } })
       .addUtxoSelect({ fill: 1 })
       .addTokenOutput({ address: '{addr}', amount: 100, useCreatedToken: true })
@@ -80,7 +80,7 @@ describe('template methods', () => {
     await GenesisWalletHelper.injectFunds(hWallet, address, 10n);
 
     const template = new TransactionTemplateBuilder()
-      .addConfigAction({ tokenName: 'Tmpl Token', tokenSymbol: 'TT' })
+      .addConfigAction({ createToken: true, tokenName: 'Tmpl Token', tokenSymbol: 'TT' })
       .addSetVarAction({ name: 'addr', call: { method: 'get_wallet_address' } })
       .addUtxoSelect({ fill: 1 })
       .addTokenOutput({ address: '{addr}', amount: 100, useCreatedToken: true })

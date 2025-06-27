@@ -8,7 +8,15 @@
 import { z } from 'zod';
 import { ITxTemplateInterpreter } from './types';
 import { TxTemplateContext } from './context';
-import { SetVarGetWalletAddressOpts, SetVarGetWalletBalanceOpts } from './instructions';
+import {
+  SetVarGetOracleScriptOpts,
+  SetVarGetOracleSignedDataOpts,
+  SetVarGetWalletAddressOpts,
+  SetVarGetWalletBalanceOpts,
+  getVariable,
+} from './instructions';
+import { getOracleBuffer, getOracleSignedDataFromUser } from '../../nano_contracts/utils';
+import { IUserSignedData } from '../../nano_contracts/fields/signedData';
 
 export async function getWalletAddress(
   interpreter: ITxTemplateInterpreter,
@@ -35,4 +43,36 @@ export async function getWalletBalance(
     default:
       return data.balance.unlocked;
   }
+}
+
+export async function getOracleScript(
+  interpreter: ITxTemplateInterpreter,
+  _ctx: TxTemplateContext,
+  options: z.infer<typeof SetVarGetOracleScriptOpts>
+): Promise<string> {
+  const address = await interpreter.getAddressAtIndex(options.index);
+  const oracle = getOracleBuffer(address, interpreter.getNetwork());
+  return oracle.toString('hex');
+}
+
+export async function getOracleSignedData(
+  interpreter: ITxTemplateInterpreter,
+  _ctx: TxTemplateContext,
+  options: z.infer<typeof SetVarGetOracleSignedDataOpts>
+): Promise<IUserSignedData> {
+  const address = await interpreter.getAddressAtIndex(options.index);
+  const oracle = getOracleBuffer(address, interpreter.getNetwork());
+
+  const data = getVariable<unknown>(
+    options.data,
+    _ctx.vars,
+    SetVarGetOracleSignedDataOpts.shape.data
+  );
+  const ncId = getVariable<string>(
+    options.ncId,
+    _ctx.vars,
+    SetVarGetOracleSignedDataOpts.shape.ncId
+  );
+
+  return getOracleSignedDataFromUser(oracle, ncId, options.type, data, interpreter.getWallet());
 }

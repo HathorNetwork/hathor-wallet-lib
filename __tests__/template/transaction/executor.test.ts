@@ -9,7 +9,6 @@ import { cloneDeep } from 'lodash';
 import {
   execAuthorityOutputInstruction,
   execAuthoritySelectInstruction,
-  execChangeInstruction,
   execCompleteTxInstruction,
   execConfigInstruction,
   execDataOutputInstruction,
@@ -114,12 +113,6 @@ describe('findInstructionExecution', () => {
 
     expect(
       findInstructionExecution({
-        type: 'action/change',
-      })
-    ).toBe(execChangeInstruction);
-
-    expect(
-      findInstructionExecution({
         type: 'action/complete',
       })
     ).toBe(execCompleteTxInstruction);
@@ -194,12 +187,6 @@ describe('findInstructionExecution', () => {
       findInstructionExecution({
         type: 'action/shuffle',
         target: 'none',
-      })
-    ).toThrow();
-    expect(() =>
-      findInstructionExecution({
-        type: 'action/change',
-        token: 4556,
       })
     ).toThrow();
     expect(() =>

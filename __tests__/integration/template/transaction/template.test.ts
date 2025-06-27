@@ -35,7 +35,7 @@ describe('Template execution', () => {
 
   it('should be able to create a custom token', async () => {
     const template = new TransactionTemplateBuilder()
-      .addConfigAction({ tokenName: 'Tmpl Test Token 01', tokenSymbol: 'TTT01' })
+      .addConfigAction({ createToken: true, tokenName: 'Tmpl Test Token 01', tokenSymbol: 'TTT01' })
       .addSetVarAction({ name: 'addr', call: { method: 'get_wallet_address' } })
       .addUtxoSelect({ fill: 1 })
       .addTokenOutput({ address: '{addr}', amount: 100, useCreatedToken: true })
@@ -252,7 +252,7 @@ describe('Template execution', () => {
     expect(tx.outputs).toHaveLength(4);
   });
 
-  it('should be able to add change with the change instruction', async () => {
+  it('should be able to add change with the complete instruction and only create change outputs', async () => {
     const address = await hWallet.getAddressAtIndex(25);
     const template = new TransactionTemplateBuilder()
       .addSetVarAction({ name: 'addr', value: address })
@@ -260,7 +260,7 @@ describe('Template execution', () => {
       .addUtxoSelect({ fill: 100, token: '{token}', autoChange: false })
       .addTokenOutput({ address: '{addr}', amount: 1, token: '{token}' })
       .addDataOutput({ data: 'cafe', token: '{token}' })
-      .addChangeAction({})
+      .addCompleteAction({ skipSelection: true, skipAuthorities: true })
       .build();
 
     const tx = await interpreter.build(template, DEBUG);
@@ -353,6 +353,86 @@ describe('Template execution', () => {
         expect.objectContaining({
           tokenData: 1,
           value: 100n,
+        }),
+      ])
+    );
+  });
+
+  it('should be able to create tokens using the complete calculateFee', async () => {
+    const address = await hWallet.getAddressAtIndex(0);
+    await GenesisWalletHelper.injectFunds(hWallet, address, 10n, {});
+
+    /**
+     * Create a token with mint/melt and 500 supply.
+     * `action/complete` should calculate the HTR necessary and select the UTXO(s)
+     */
+    const createTemplate = TransactionTemplateBuilder.new()
+      .addSetVarAction({ name: 'addr', call: { method: 'get_wallet_address', index: 0 } })
+      .addConfigAction({ createToken: true, tokenName: 'Create test tk', tokenSymbol: 'TK!' })
+      .addAuthorityOutput({ useCreatedToken: true, authority: 'mint', address: '{addr}' })
+      .addAuthorityOutput({ useCreatedToken: true, authority: 'melt', address: '{addr}' })
+      .addTokenOutput({ useCreatedToken: true, amount: 500, address: '{addr}' })
+      .addCompleteAction({ calculateFee: true, token: '00' })
+      .build();
+
+    hWallet.enableDebugMode();
+    const createTokenTx = await hWallet.runTxTemplate(createTemplate, DEFAULT_PIN_CODE);
+    expect(createTokenTx.hash).toBeDefined();
+    if (!createTokenTx.hash) {
+      throw new Error('tx hash should be defined');
+    }
+    await waitForTxReceived(hWallet, createTokenTx.hash, undefined);
+    const createdToken = createTokenTx.hash;
+    expect(createTokenTx.outputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tokenData: TOKEN_AUTHORITY_MASK | 1,
+          value: TOKEN_MINT_MASK,
+        }),
+        expect.objectContaining({
+          tokenData: TOKEN_AUTHORITY_MASK | 1,
+          value: TOKEN_MELT_MASK,
+        }),
+        expect.objectContaining({
+          tokenData: 1,
+          value: 500n,
+        }),
+      ])
+    );
+
+    /**
+     * Mint 100 of token TK! using calculateFee
+     */
+    const template = new TransactionTemplateBuilder()
+      .addSetVarAction({ name: 'addr', call: { method: 'get_wallet_address', index: 15 } })
+      .addSetVarAction({ name: 'token', value: createdToken })
+      .addTokenOutput({ address: '{addr}', amount: 100, token: '{token}' })
+      .addAuthorityOutput({ address: '{addr}', authority: 'mint', token: '{token}' })
+      .addUtxoSelect({ fill: 1 })
+      .addAuthoritySelect({ authority: 'mint', token: '{token}' })
+      .build();
+
+    const tx = await interpreter.build(template, DEBUG);
+    await transactionUtils.signTransaction(tx, hWallet.storage, DEFAULT_PIN_CODE);
+    tx.prepareToSend();
+    const sendTx = new SendTransaction({ storage: hWallet.storage, transaction: tx });
+    await sendTx.runFromMining();
+
+    expect(tx.hash).toBeDefined();
+    if (!tx.hash) {
+      throw new Error('tx hash should be defined');
+    }
+    await waitForTxReceived(hWallet, tx.hash, undefined);
+
+    expect(tx.outputs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tokenData: 1,
+          value: 100n,
+        }),
+        expect.objectContaining({
+          tokenData: TOKEN_AUTHORITY_MASK | 1,
+          value: TOKEN_MINT_MASK,
         }),
       ])
     );

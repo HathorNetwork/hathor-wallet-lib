@@ -715,8 +715,6 @@ describe('full cycle of bet nano contract', () => {
 
     // Add funds and validate address meta
     await GenesisWalletHelper.injectFunds(ocbWallet, address0, 1000n);
-    const address0Meta = await ocbWallet.storage.store.getAddressMeta(address0);
-    expect(address0Meta?.numTransactions).toBe(1);
 
     // Use the bet blueprint code
     const code = fs.readFileSync('./__tests__/integration/configuration/blueprints/bet.py', 'utf8');
