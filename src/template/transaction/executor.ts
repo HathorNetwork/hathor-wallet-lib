@@ -763,8 +763,9 @@ export async function execSetVarInstruction(
   throw new Error('Invalid setvar command');
 }
 
-/** ******************* */
-
+/**
+ * Validate NanoContract Deposit action
+ */
 async function validateDepositNanoAction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
@@ -814,6 +815,9 @@ async function validateDepositNanoAction(
   return actual;
 }
 
+/**
+ * Validate NanoContract Withdrawal action
+ */
 async function validateWithdrawalNanoAction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
@@ -848,6 +852,9 @@ async function validateWithdrawalNanoAction(
   return actual;
 }
 
+/**
+ * Validate NanoContract Grant Authority action
+ */
 async function validateGrantAuthorityNanoAction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
@@ -895,6 +902,9 @@ async function validateGrantAuthorityNanoAction(
   return actual;
 }
 
+/**
+ * Validate NanoContract Acquire Authority action
+ */
 async function validateAcquireAuthorityNanoAction(
   interpreter: ITxTemplateInterpreter,
   ctx: TxTemplateContext,
