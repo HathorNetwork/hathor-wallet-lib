@@ -10,12 +10,14 @@ import { NATIVE_TOKEN_UID } from '../../src/constants';
 import walletApi from '../../src/api/wallet';
 import { MemoryStore, Storage } from '../../src/storage';
 import { TokenValidationError } from '../../src/errors';
+import { TokenInfoVersion } from '../../src/models/enum/token_info_version';
 
 test('Validate configuration string', async () => {
   const uid = '0000360f5e95c492352a6f1cab81b33d56694299f1da2b437107b2b1edde9687';
   const uid2 = '0000cafe5e95c492352a6f1cab81b33d56694299f1da2b437107b2b1edde9687';
   const name = 'Test Token';
   const symbol = 'TST';
+  const version = TokenInfoVersion.DEPOSIT;
   const configString = `[${name}:${symbol}:${uid}:8d977dec]`;
 
   const apiSpy = jest.spyOn(walletApi, 'getGeneralTokenInfo');
@@ -107,11 +109,11 @@ test('Validate configuration string', async () => {
   // With no conflicts in storage and the api confirming the token is valid
   // we expect the token data to be returned
   apiSpy.mockImplementation((_, cb) => {
-    cb({ success: true, name, symbol });
+    cb({ success: true, name, symbol, version });
   });
   await expect(
     tokens.validateTokenToAddByConfigurationString(configString, storage)
-  ).resolves.toEqual({ uid, name, symbol });
+  ).resolves.toEqual({ uid, name, symbol, version });
 
   apiSpy.mockRestore();
 });
