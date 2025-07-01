@@ -10,11 +10,11 @@ import {
   AddressSchema,
   AuthorityOutputInstruction,
   AuthoritySelectInstruction,
-  ChangeInstruction,
   CompleteTxInstruction,
   ConfigInstruction,
   CustomTokenSchema,
   DataOutputInstruction,
+  NanoMethodInstruction,
   RawInputInstruction,
   RawOutputInstruction,
   SetVarInstruction,
@@ -623,45 +623,6 @@ describe('should parse template instructions', () => {
     ).toBe(false);
   });
 
-  it('should parse ChangeInstruction', () => {
-    expect(
-      ChangeInstruction.safeParse({
-        type: 'action/change',
-        token,
-        address,
-        timelock: 456,
-      }).success
-    ).toBe(true);
-    // Parse with defaults
-    expect(
-      ChangeInstruction.parse({
-        type: 'action/change',
-      })
-    ).toStrictEqual({
-      type: 'action/change',
-    });
-    // parse with template refs
-    expect(
-      ChangeInstruction.parse({
-        type: 'action/change',
-        token: '{tokenKey}',
-        address: '{addrKey}',
-        timelock: '{timelockKey}',
-      })
-    ).toStrictEqual({
-      type: 'action/change',
-      token: '{tokenKey}',
-      address: '{addrKey}',
-      timelock: '{timelockKey}',
-    });
-    // Error cases
-    expect(
-      ChangeInstruction.safeParse({
-        type: 'invalid-type', // wrong type
-      }).success
-    ).toBe(false);
-  });
-
   it('should parse CompleteInstruction', () => {
     expect(
       CompleteTxInstruction.safeParse({
@@ -679,6 +640,10 @@ describe('should parse template instructions', () => {
       })
     ).toStrictEqual({
       type: 'action/complete',
+      skipSelection: false,
+      skipChange: false,
+      skipAuthorities: false,
+      calculateFee: false,
     });
     // parse with template refs
     expect(
@@ -695,6 +660,10 @@ describe('should parse template instructions', () => {
       address: '{addrKey}',
       changeAddress: '{caddrKey}',
       timelock: '{timelockKey}',
+      skipSelection: false,
+      skipChange: false,
+      skipAuthorities: false,
+      calculateFee: false,
     });
     // Error cases
     expect(
@@ -771,6 +740,28 @@ describe('should parse template instructions', () => {
       }).success
     ).toBe(true);
   });
+
+  it('should parse NanoMethodInstruction', () => {
+    expect(
+      NanoMethodInstruction.safeParse({
+        type: 'nano/execute',
+        id: '0000000110eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e',
+        method: 'any_method',
+        caller: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
+        args: [123, 'foobar', { foo: [1, 2, 3] }],
+      }).success
+    ).toBe(true);
+
+    expect(
+      NanoMethodInstruction.safeParse({
+        type: 'nano/execute',
+        id: '{contract_id_from_vars}',
+        method: 'any_method',
+        caller: '{caller_address}',
+        args: [123, '{argument_from_vars}'],
+      }).success
+    ).toBe(true);
+  });
 });
 
 describe('Template schemes', () => {
@@ -837,11 +828,6 @@ describe('Template schemes', () => {
     ).toBe(true);
     expect(
       TxTemplateInstruction.safeParse({
-        type: 'action/change',
-      }).success
-    ).toBe(true);
-    expect(
-      TxTemplateInstruction.safeParse({
         type: 'action/complete',
       }).success
     ).toBe(true);
@@ -858,6 +844,14 @@ describe('Template schemes', () => {
         type: 'action/setvar',
         name: 'foo',
         value: 'anything',
+      }).success
+    ).toBe(true);
+    expect(
+      TxTemplateInstruction.safeParse({
+        type: 'nano/execute',
+        id: '0000000110eb9ec96e255a09d6ae7d856bff53453773bae5500cee2905db670e',
+        method: 'any_method',
+        caller: 'WYiD1E8n5oB9weZ8NMyM3KoCjKf1KCjWAZ',
       }).success
     ).toBe(true);
   });
