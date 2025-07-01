@@ -330,9 +330,12 @@ const transaction = {
       throw new UtxoError("Don't have enough utxos to fill total amount.");
     }
 
+    // we should enforce the conversion before doing the subtraction
+    const changeAmount = BigInt(filledAmount) - BigInt(totalAmount);
+
     return {
       utxos: utxosToUse,
-      changeAmount: filledAmount - totalAmount,
+      changeAmount,
     };
   },
 

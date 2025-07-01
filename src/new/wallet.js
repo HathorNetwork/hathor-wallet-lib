@@ -2415,6 +2415,7 @@ class HathorWallet extends EventEmitter {
    *   tokenInfo: {
    *     name: string,
    *     symbol: string,
+   *     version: TokenInfoVersion,
    *   },
    *   authorities: {
    *     mint: boolean,
