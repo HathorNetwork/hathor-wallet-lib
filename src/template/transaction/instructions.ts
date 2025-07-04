@@ -163,25 +163,23 @@ export const ShuffleInstruction = z.object({
   target: z.enum(['inputs', 'outputs', 'all']),
 });
 
-export const ChangeInstruction = z.object({
-  type: z.literal('action/change'),
-  token: TemplateRef.or(TokenSchema.optional()),
-  address: TemplateRef.or(AddressSchema.optional()),
-  timelock: TemplateRef.or(z.number().gte(0).optional()),
-});
-
 export const CompleteTxInstruction = z.object({
   type: z.literal('action/complete'),
   token: TemplateRef.or(TokenSchema.optional()),
   address: TemplateRef.or(z.string().optional()),
   changeAddress: TemplateRef.or(AddressSchema.optional()),
   timelock: TemplateRef.or(z.number().gte(0).optional()),
+  skipSelection: z.boolean().default(false), // do NOT add inputs to the tx
+  skipChange: z.boolean().default(false), // do NOT add outputs from outstanding tokens.
+  skipAuthorities: z.boolean().default(false), // Only select tokens
+  calculateFee: z.boolean().default(false), // For token creation
 });
 
 export const ConfigInstruction = z.object({
   type: z.literal('action/config'),
   version: TemplateRef.or(z.number().gte(0).lte(0xff).optional()),
   signalBits: TemplateRef.or(z.number().gte(0).lte(0xff).optional()),
+  createToken: TemplateRef.or(z.boolean().optional()),
   tokenName: TemplateRef.or(z.string().min(1).max(30).optional()),
   tokenSymbol: TemplateRef.or(z.string().min(1).max(5).optional()),
 });
@@ -189,6 +187,19 @@ export const ConfigInstruction = z.object({
 export const SetVarGetWalletAddressOpts = z.object({
   method: z.literal('get_wallet_address'),
   index: z.number().optional(),
+});
+
+export const SetVarGetOracleScriptOpts = z.object({
+  method: z.literal('get_oracle_script'),
+  index: z.number(),
+});
+
+export const SetVarGetOracleSignedDataOpts = z.object({
+  method: z.literal('get_oracle_signed_data'),
+  index: z.number(),
+  type: z.string(),
+  data: TemplateRef.or(z.unknown()),
+  ncId: TemplateRef.or(TxIdSchema),
 });
 
 export const SetVarGetWalletBalanceOpts = z.object({
@@ -200,13 +211,69 @@ export const SetVarGetWalletBalanceOpts = z.object({
 export const SetVarCallArgs = z.discriminatedUnion('method', [
   SetVarGetWalletAddressOpts,
   SetVarGetWalletBalanceOpts,
+  SetVarGetOracleScriptOpts,
+  SetVarGetOracleSignedDataOpts,
 ]);
 
 export const SetVarInstruction = z.object({
   type: z.literal('action/setvar'),
   name: z.string().regex(TEMPLATE_REFERENCE_NAME_RE),
-  value: z.any().optional(),
+  value: z.unknown().optional(),
   call: SetVarCallArgs.optional(),
+});
+
+export const NanoDepositAction = z.object({
+  action: z.literal('deposit'),
+  token: TemplateRef.or(TokenSchema.default('00')),
+  useCreatedToken: z.boolean().default(false),
+  amount: TemplateRef.or(AmountSchema),
+  address: TemplateRef.or(AddressSchema.optional()),
+  autoChange: z.boolean().default(true),
+  changeAddress: TemplateRef.or(AddressSchema.optional()),
+  skipSelection: z.boolean().default(false),
+});
+
+export const NanoWithdrawalAction = z.object({
+  action: z.literal('withdrawal'),
+  token: TemplateRef.or(TokenSchema.default('00')),
+  amount: TemplateRef.or(AmountSchema),
+  address: TemplateRef.or(AddressSchema.optional()),
+  skipOutputs: z.boolean().default(false),
+});
+
+export const NanoGrantAuthorityAction = z.object({
+  action: z.literal('grant_authority'),
+  token: TemplateRef.or(CustomTokenSchema),
+  useCreatedToken: z.boolean().default(false),
+  authority: z.enum(['mint', 'melt']),
+  address: TemplateRef.or(AddressSchema.optional()),
+  createAnotherTo: TemplateRef.or(AddressSchema.optional()),
+  skipSelection: z.boolean().default(false),
+});
+
+export const NanoAcquireAuthorityAction = z.object({
+  action: z.literal('acquire_authority'),
+  token: TemplateRef.or(CustomTokenSchema),
+  authority: z.enum(['mint', 'melt']),
+  address: TemplateRef.or(AddressSchema.optional()),
+  skipOutputs: z.boolean().default(false),
+});
+
+export const NanoAction = z.union([
+  NanoDepositAction,
+  NanoWithdrawalAction,
+  NanoGrantAuthorityAction,
+  NanoAcquireAuthorityAction,
+]);
+
+export const NanoMethodInstruction = z.object({
+  type: z.literal('nano/execute'),
+  // Nano Contract id or Blueprint id, depending on the method
+  id: TemplateRef.or(Sha256HexSchema),
+  method: z.string(),
+  args: TemplateRef.or(z.unknown()).array().default([]),
+  caller: TemplateRef.or(AddressSchema),
+  actions: NanoAction.array().default([]),
 });
 
 export const TxTemplateInstruction = z.discriminatedUnion('type', [
@@ -218,10 +285,10 @@ export const TxTemplateInstruction = z.discriminatedUnion('type', [
   TokenOutputInstruction,
   AuthorityOutputInstruction,
   ShuffleInstruction,
-  ChangeInstruction,
   CompleteTxInstruction,
   ConfigInstruction,
   SetVarInstruction,
+  NanoMethodInstruction,
 ]);
 
 export const TransactionTemplate = z.array(TxTemplateInstruction);
