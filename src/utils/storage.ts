@@ -268,6 +268,12 @@ export async function scanPolicyStartAddresses(
         nextIndex: limits.startIndex,
         count: limits.endIndex - limits.startIndex + 1,
       };
+    case SCANNING_POLICY.SINGLE:
+      // Single scanning always loads 1 address only
+      return {
+        nextIndex: 0,
+        count: 1,
+      };
     case SCANNING_POLICY.GAP_LIMIT:
     default:
       return {
@@ -292,6 +298,9 @@ export async function checkScanningPolicy(
       return checkIndexLimit(storage);
     case SCANNING_POLICY.GAP_LIMIT:
       return checkGapLimit(storage);
+    case SCANNING_POLICY.SINGLE:
+      // Single scanning policy never needs to load another address.
+      return null;
     default:
       return null;
   }
