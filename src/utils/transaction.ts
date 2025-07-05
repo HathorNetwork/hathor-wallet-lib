@@ -216,6 +216,7 @@ const transaction = {
 
     if (address) {
       const addressInfo = await storage.getAddressInfo(address.base58);
+      console.log('Address Info: ', addressInfo);
       if (!addressInfo) {
         // The nano contract address or OCB pubkey are not from our wallet.
         return { inputSignatures: signatures, ncCallerSignature };
