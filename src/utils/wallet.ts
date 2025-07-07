@@ -169,9 +169,9 @@ const wallet = {
   xprivFromData(
     privateKey: Buffer,
     chainCode: Buffer,
-    fingerprint: Number,
-    depth: Number,
-    childIndex: Number,
+    fingerprint: number,
+    depth: number,
+    childIndex: number,
     networkName: string
   ): string {
     const network = new Network(networkName);
