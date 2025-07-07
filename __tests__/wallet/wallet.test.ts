@@ -666,6 +666,8 @@ test('prepareMintTokens', async () => {
     xpub: null,
   });
 
+  expect(wallet.getNetwork()).toEqual('testnet');
+
   const code = new Mnemonic(seed);
   const xpriv = code.toHDPrivateKey('', network.getNetwork());
 
