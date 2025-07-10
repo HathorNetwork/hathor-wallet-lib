@@ -303,8 +303,10 @@ const walletApi = {
   },
 
   // Expose api validation schemas
-  addressHistorySchema,
-  generalTokenInfoSchema,
+  schemas: {
+    addressHistory: addressHistorySchema,
+    generalTokenInfo: generalTokenInfoSchema,
+  },
 };
 
 export default walletApi;

@@ -203,7 +203,9 @@ const txApi = {
   },
 
   // Expose the txApi zod schemas
-  transactionApiSchema,
+  schemas: {
+    transactionApi: transactionApiSchema,
+  },
 };
 
 export default txApi;
