@@ -14,6 +14,9 @@ import {
   AUTHORITY_TOKEN_DATA,
   TOKEN_MELT_MASK,
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
+  P2SH_ACCT_PATH,
+  P2PKH_ACCT_PATH,
+  NANO_CONTRACTS_VERSION,
 } from '../constants';
 import { signMessage } from '../utils/crypto';
 import walletApi from './api/walletApi';
@@ -68,9 +71,18 @@ import {
   WalletRequestError,
   WalletError,
   UninitializedWalletError,
+  WalletFromXPubGuard,
+  PinRequiredError,
 } from '../errors';
 import { ErrorMessages } from '../errorMessages';
-import { IStorage, IWalletAccessData, OutputValueType, IHistoryTx } from '../types';
+import { IStorage, IWalletAccessData, OutputValueType, WalletType, IHistoryTx } from '../types';
+import NanoContractTransactionBuilder from '../nano_contracts/builder';
+import {
+  NanoContractArgumentApiInputType,
+  NanoContractVertexType,
+  NanoContractBuilderCreateTokenOptions,
+  CreateNanoTxData,
+} from '../nano_contracts/types';
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
@@ -1136,6 +1148,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
+   * Gets the current network name
+   * @return {string} The network name. Ex.: 'mainnet', 'testnet'
+   */
+  getNetwork(): string {
+    return this.network.name;
+  }
+
+  /**
    * Get the current address to be used
    *
    * @memberof HathorWalletServiceWallet
@@ -1182,12 +1202,61 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /* eslint-disable class-methods-use-this -- Methods are not yet implemented */
-  getAddressIndex(address: string) {
-    throw new WalletError('Not implemented.');
+  getAddressIndex(address: string): number | undefined {
+    // Check all saved addresses to find the index matching this address
+    for (const addressInfo of this.newAddresses) {
+      if (addressInfo.address === address) {
+        return addressInfo.index;
+      }
+    }
+
+    // Return undefined if the address is not found
+    return undefined;
   }
 
-  isAddressMine(address: string) {
-    throw new WalletError('Not implemented.');
+  /**
+   * Check if an address belongs to this wallet
+   *
+   * @param {string} address Address to check
+   * @returns {boolean} True if the address belongs to this wallet
+   */
+  async isAddressMine(address: string): Promise<boolean> {
+    // Use the checkAddressesMine API to verify if the address belongs to the wallet
+    const response = await this.checkAddressesMine([address]);
+    return response[address] === true;
+  }
+
+  /**
+   * Get private key from address
+   *
+   * @param {string} address The address to get the private key for
+   * @param {Object} options Options
+   * @param {string} [options.pinCode] PIN code to decrypt the private key
+   *
+   * @returns {Promise<bitcore.PrivateKey>} Private key for this address
+   */
+  async getPrivateKeyFromAddress(
+    address: string,
+    options: { pinCode?: string } = {}
+  ): Promise<bitcore.PrivateKey> {
+    if (await this.storage.isReadonly()) {
+      throw new WalletFromXPubGuard('getPrivateKeyFromAddress');
+    }
+
+    // First get the address index
+    const addressIndex = this.getAddressIndex(address);
+    if (addressIndex === undefined) {
+      throw new WalletError(`Address ${address} does not belong to this wallet`);
+    }
+
+    // Request PIN if not provided
+    const pin = options.pinCode || (await this.requestPassword());
+
+    // Get the HD private key for this address
+    const addressHDPrivKey = await this.getAddressPrivKey(pin, addressIndex);
+
+    // Return just the private key (not the HD key)
+    return addressHDPrivKey.privateKey;
   }
 
   getTx(id: string) {
@@ -2142,6 +2211,308 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // We currently do not have support for hardware wallets
     // in the wallet-service facade.
     return false;
+  }
+
+  /**
+   * Get address path from specific derivation index
+   *
+   * @param {number} index Address path index
+   *
+   * @return {Promise<string>} Address path for the given index
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async getAddressPathForIndex(index: number): Promise<string> {
+    const walletType = await this.storage.getWalletType();
+    if (walletType === WalletType.MULTISIG) {
+      // P2SH
+      return `${P2SH_ACCT_PATH}/0/${index}`;
+    }
+
+    // P2PKH
+    return `${P2PKH_ACCT_PATH}/0/${index}`;
+  }
+
+  /**
+   * Custom adapter to make getFullTxById compatible with NanoContractTransactionBuilder
+   *
+   * @param txId Transaction ID to retrieve
+   * @returns Promise with compatible fullnode transaction response
+   */
+  async getFullTxByIdForNanoContract(txId: string): Promise<unknown> {
+    this.failIfWalletNotReady();
+    // Use the existing wallet service method
+    const data = await walletApi.getFullTxById(this, txId);
+    // Transform the response format if necessary to match what NanoContractTransactionBuilder expects
+    // The key field it looks for is nc_blueprint_id for nano contract transactions
+    if (data.tx && data.tx.version === NANO_CONTRACTS_VERSION) {
+      // Add nc_blueprint_id field to match the expected format
+      const tx = data.tx as unknown as Record<string, unknown>;
+      if (!tx.nc_blueprint_id && tx.nc_id) {
+        tx.nc_blueprint_id = tx.nc_id;
+      }
+    }
+    return data;
+  }
+
+  /**
+   * Adapter for preparing nano contract transactions in the wallet-service facade
+   *
+   * @param nc Nano contract transaction
+   * @param pin PIN for signing
+   * @param storage Storage instance
+   * @returns SendTransactionWalletService instance
+   */
+  async prepareNanoSendTransactionAdapter(
+    nc: unknown,
+    pin: string,
+    storage: IStorage
+  ): Promise<SendTransactionWalletService> {
+    await transaction.signTransaction(nc as Transaction, storage, pin);
+    (nc as Transaction).prepareToSend();
+    return new SendTransactionWalletService(this, { transaction: nc as Transaction, pin });
+  }
+
+  /**
+   * Create a nano contract transaction and return the SendTransaction object
+   *
+   * @param {string} method Method of nano contract to have the transaction created
+   * @param {string} address Address that will be used to sign the nano contract transaction
+   * @param {CreateNanoTxData} [data]
+   * @param {CreateNanoTxOptions} [options]
+   *
+   * @returns {Promise<any>} SendTransaction-compatible object
+   */
+  async createNanoContractTransaction(
+    method: string,
+    address: string,
+    data: CreateNanoTxData,
+    options: { pinCode?: string } = {}
+  ): Promise<SendTransactionWalletService> {
+    this.failIfWalletNotReady();
+
+    if (await this.storage.isReadonly()) {
+      throw new WalletFromXPubGuard('createNanoContractTransaction');
+    }
+
+    const newOptions = { pinCode: null, ...options };
+    const pin = newOptions.pinCode;
+    if (!pin) {
+      throw new PinRequiredError('Pin is required.');
+    }
+
+    // Verify address belongs to wallet and get its index
+    const addressIndex = this.getAddressIndex(address);
+    if (addressIndex === undefined) {
+      throw new Error(
+        `Address used to sign the transaction (${address}) does not belong to the wallet.`
+      );
+    }
+
+    // Get the address public key
+    const addressPrivKey = await this.getAddressPrivKey(pin, addressIndex);
+    const pubkeyStr = addressPrivKey.publicKey.toString('hex');
+
+    // Create a wrapper around this wallet to override getFullTxById
+    const wrappedWallet = {
+      ...this,
+      getFullTxById: this.getFullTxByIdForNanoContract.bind(this),
+      getNetworkObject: this.getNetworkObject.bind(this),
+    };
+
+    // Build and send transaction
+    const actions = data.actions || [];
+    const args = data.args || [];
+    // Process arguments to handle serialized Buffer objects
+    const processedArgs = args.map(arg => {
+      // Check if this is a serialized Buffer object
+      if (
+        arg &&
+        typeof arg === 'object' &&
+        arg !== null &&
+        'data' in arg &&
+        'type' in arg &&
+        (arg as { type?: string }).type === 'Buffer' &&
+        Array.isArray((arg as { data?: unknown }).data)
+      ) {
+        // Convert back to a real Buffer
+        return Buffer.from((arg as { data: number[] }).data);
+      }
+      return arg;
+    });
+
+    const builder = new NanoContractTransactionBuilder()
+      .setMethod(method)
+      .setWallet(wrappedWallet)
+      .setBlueprintId(data.blueprintId as string)
+      .setNcId(data.ncId as string)
+      .setCaller(Buffer.from(pubkeyStr, 'hex'))
+      .setActions(actions)
+      .setArgs(processedArgs as NanoContractArgumentApiInputType[])
+      .setVertexType(NanoContractVertexType.TRANSACTION);
+
+    const tx = await builder.build();
+    // Use the standard utility to sign and prepare the transaction
+    return this.prepareNanoSendTransactionWalletService(tx, address, pin);
+  }
+
+  /**
+   * Create and send a nano contract transaction
+   *
+   * @param {string} method Method of nano contract to have the transaction created
+   * @param {string} address Address that will be used to sign the nano contract transaction
+   * @param {CreateNanoTxData} [data]
+   * @param {CreateNanoTxOptions} [options]
+   *
+   * @returns {Promise<Transaction>} Transaction object returned from execution
+   */
+  async createAndSendNanoContractTransaction(
+    method: string,
+    address: string,
+    data: CreateNanoTxData,
+    options: { pinCode?: string } = {}
+  ): Promise<Transaction> {
+    const sendTransaction = await this.createNanoContractTransaction(
+      method,
+      address,
+      data,
+      options
+    );
+    const result = await sendTransaction.run();
+    if (!result) {
+      throw new Error('Failed to send nano contract transaction');
+    }
+    return result;
+  }
+
+  /**
+   * Custom nano contract transaction preparation for wallet-service facade
+   * Signs the nano contract transaction using the wallet's own key derivation logic
+   *
+   * @param tx Nano contract transaction to sign
+   * @param address Address to use for signing (must belong to this wallet)
+   * @param pinCode PIN code to decrypt the private key
+   * @returns SendTransactionWalletService instance with the signed and prepared transaction
+   */
+  async prepareNanoSendTransactionWalletService(
+    tx: Transaction,
+    address: string,
+    pinCode: string
+  ): Promise<SendTransactionWalletService> {
+    // Get the index for the address
+    const addressIndex = this.getAddressIndex(address);
+    if (addressIndex === undefined) {
+      throw new Error(
+        `Address used to sign the transaction (${address}) does not belong to the wallet.`
+      );
+    }
+    // Derive the private key for the address
+    const addressPrivKey = await this.getAddressPrivKey(pinCode, addressIndex);
+    // Get the data to sign
+    const dataToSignHash = tx.getDataToSignHash();
+    // Sign the data
+    const signature = transaction.getSignature(dataToSignHash, addressPrivKey.privateKey);
+    // Set the signature in the nano contract header(s)
+    const nanoHeaders = tx.getNanoHeaders();
+    for (const nanoHeader of nanoHeaders) {
+      nanoHeader.signature = signature;
+    }
+    // Finalize the transaction
+    tx.prepareToSend();
+    return new SendTransactionWalletService(this, { transaction: tx, pin: pinCode });
+  }
+
+  /**
+   * Create a Create Token Transaction with nano header and return the SendTransaction object
+   *
+   * @param {string} method Method of nano contract to have the transaction created
+   * @param {string} address Address that will be used to sign the nano contract transaction
+   * @param {object} data Nano contract data (blueprintId, ncId, actions, args)
+   * @param {object} createTokenOptions Options for token creation (mint/melt authorities, NFT, etc)
+   * @param {object} options Options (pinCode)
+   *
+   * @returns {Promise<SendTransactionWalletService>}
+   */
+  async createNanoContractCreateTokenTransaction(
+    method: string,
+    address: string,
+    data: CreateNanoTxData,
+    createTokenOptions: Partial<NanoContractBuilderCreateTokenOptions> = {},
+    options: { pinCode?: string } = {}
+  ): Promise<SendTransactionWalletService> {
+    this.failIfWalletNotReady();
+    if (await this.storage.isReadonly()) {
+      throw new WalletFromXPubGuard('createNanoContractCreateTokenTransaction');
+    }
+    const newOptions = { pinCode: null, ...options };
+    const pin = newOptions.pinCode;
+    if (!pin) {
+      throw new PinRequiredError('Pin is required.');
+    }
+    // Validate address belongs to wallet and get its index
+    const addressIndex = this.getAddressIndex(address);
+    if (addressIndex === undefined) {
+      throw new Error(
+        `Address used to sign the transaction (${address}) does not belong to the wallet.`
+      );
+    }
+    // Get the address public key
+    const addressPrivKey = await this.getAddressPrivKey(pin, addressIndex);
+    const pubkeyStr = addressPrivKey.publicKey.toString('hex');
+
+    // Create a wrapper around this wallet to override getFullTxById
+    const wrappedWallet = {
+      ...this,
+      getFullTxById: this.getFullTxByIdForNanoContract.bind(this),
+      getNetworkObject: this.getNetworkObject.bind(this),
+    };
+    // Build and send transaction
+    const actions = data.actions || [];
+    const args = data.args || [];
+    // Process arguments to handle serialized Buffer objects
+    const processedArgs = args.map(arg => {
+      if (
+        arg &&
+        typeof arg === 'object' &&
+        arg !== null &&
+        'data' in arg &&
+        'type' in arg &&
+        (arg as { type?: string }).type === 'Buffer' &&
+        Array.isArray((arg as { data?: unknown }).data)
+      ) {
+        return Buffer.from((arg as { data: number[] }).data);
+      }
+      return arg;
+    });
+    // Defaults below match wallet.js (see lines 3077-3087)
+    const mergedCreateTokenOptions: NanoContractBuilderCreateTokenOptions = {
+      mintAddress: null,
+      changeAddress: null,
+      createMint: true,
+      mintAuthorityAddress: null,
+      allowExternalMintAuthorityAddress: false,
+      createMelt: true,
+      meltAuthorityAddress: null,
+      allowExternalMeltAuthorityAddress: false,
+      data: null,
+      isCreateNFT: false,
+      ...createTokenOptions,
+    } as NanoContractBuilderCreateTokenOptions;
+
+    const builder = new NanoContractTransactionBuilder()
+      .setMethod(method)
+      .setWallet(wrappedWallet)
+      .setBlueprintId(data.blueprintId as string)
+      .setNcId(data.ncId as string)
+      .setCaller(Buffer.from(pubkeyStr, 'hex'))
+      .setActions(actions)
+      .setArgs(processedArgs as NanoContractArgumentApiInputType[])
+      .setVertexType(NanoContractVertexType.CREATE_TOKEN_TRANSACTION, mergedCreateTokenOptions);
+
+    const tx = await builder.build();
+
+    return this.prepareNanoSendTransactionWalletService(tx, address, pin);
   }
 }
 
