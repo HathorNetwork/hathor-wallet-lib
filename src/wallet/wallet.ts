@@ -1116,6 +1116,16 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
+   * Gets the network name
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  getNetwork(): string {
+    return this.getNetworkObject().name;
+  }
+
+  /**
    * Gets the network model object
    *
    * @memberof HathorWalletServiceWallet
