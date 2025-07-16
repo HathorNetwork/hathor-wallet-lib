@@ -354,9 +354,15 @@ export interface IScanPolicyLoadAddresses {
   count: number;
 }
 
-export type AddressScanPolicy = SCANNING_POLICY.GAP_LIMIT | SCANNING_POLICY.INDEX_LIMIT | SCANNING_POLICY.SINGLE;
+export type AddressScanPolicy =
+  | SCANNING_POLICY.GAP_LIMIT
+  | SCANNING_POLICY.INDEX_LIMIT
+  | SCANNING_POLICY.SINGLE;
 
-export type AddressScanPolicyData = IGapLimitAddressScanPolicy | IIndexLimitAddressScanPolicy | ISingleAddressScanPolicy;
+export type AddressScanPolicyData =
+  | IGapLimitAddressScanPolicy
+  | IIndexLimitAddressScanPolicy
+  | ISingleAddressScanPolicy;
 
 export function isGapLimitScanPolicy(
   scanPolicyData: AddressScanPolicyData
