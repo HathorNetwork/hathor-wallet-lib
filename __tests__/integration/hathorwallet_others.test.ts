@@ -1763,7 +1763,7 @@ describe('single address scanning policy', () => {
     await expect(hWallet.storage.store.addressCount()).resolves.toEqual(1);
 
     // Send tokens to address 5 (the loaded one)
-    const address5 = hWallet.getAddressAtIndex(5);
+    const address5 = await hWallet.getAddressAtIndex(5);
     await GenesisWalletHelper.injectFunds(hWallet, address5, 10n);
     await expect(hWallet.storage.store.addressCount()).resolves.toEqual(1);
 
@@ -1780,7 +1780,7 @@ describe('single address scanning policy', () => {
     );
 
     // Send a tx to an unloaded address before the current one
-    const address0 = hWallet.getAddressAtIndex(0);
+    const address0 = await hWallet.getAddressAtIndex(0);
     const tx2 = await hWallet.sendTransaction(address0, 1n);
     await waitForTxReceived(hWallet, tx2.hash);
     await expect(hWallet.storage.store.addressCount()).resolves.toEqual(1);
@@ -1793,7 +1793,7 @@ describe('single address scanning policy', () => {
     );
 
     // Send a tx to an unloaded address before the current one
-    const address10 = hWallet.getAddressAtIndex(10);
+    const address10 = await hWallet.getAddressAtIndex(10);
     const tx3 = await hWallet.sendTransaction(address10, 1n);
     await waitForTxReceived(hWallet, tx3.hash);
     await expect(hWallet.storage.store.addressCount()).resolves.toEqual(1);
