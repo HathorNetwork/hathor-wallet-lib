@@ -24,6 +24,9 @@ import {
   WalletType,
   IUtxo,
   ITokenData,
+  ISingleAddressScanPolicy,
+  IIndexLimitAddressScanPolicy,
+  AddressScanPolicyData,
 } from '../types';
 import walletApi from '../api/wallet';
 import helpers from './helpers';
@@ -256,7 +259,8 @@ export async function scanPolicyStartAddresses(
   storage: IStorage
 ): Promise<IScanPolicyLoadAddresses> {
   const scanPolicy = await storage.getScanningPolicy();
-  let limits;
+  let limits: Omit<IIndexLimitAddressScanPolicy, 'policy'> | null;
+  let policyData: AddressScanPolicyData;
   switch (scanPolicy) {
     case SCANNING_POLICY.INDEX_LIMIT:
       limits = await storage.getIndexLimit();
@@ -267,6 +271,13 @@ export async function scanPolicyStartAddresses(
       return {
         nextIndex: limits.startIndex,
         count: limits.endIndex - limits.startIndex + 1,
+      };
+    case SCANNING_POLICY.SINGLE:
+      // Single scanning always loads 1 address only
+      policyData = (await storage.getScanningPolicyData()) as ISingleAddressScanPolicy;
+      return {
+        nextIndex: policyData.index ?? 0,
+        count: 1,
       };
     case SCANNING_POLICY.GAP_LIMIT:
     default:
@@ -292,6 +303,9 @@ export async function checkScanningPolicy(
       return checkIndexLimit(storage);
     case SCANNING_POLICY.GAP_LIMIT:
       return checkGapLimit(storage);
+    case SCANNING_POLICY.SINGLE:
+      // Single scanning policy never needs to load another address.
+      return null;
     default:
       return null;
   }
