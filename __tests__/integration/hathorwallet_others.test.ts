@@ -1739,3 +1739,70 @@ describe('index-limit address scanning policy', () => {
     await expect(hWallet.storage.store.addressCount()).resolves.toEqual(25);
   });
 });
+
+describe('single address scanning policy', () => {
+  /** @type HathorWallet */
+  let hWallet;
+  beforeAll(async () => {
+    const walletData = precalculationHelpers.test.getPrecalculatedWallet();
+    hWallet = await generateWalletHelper({
+      seed: walletData.words,
+      addresses: walletData.addresses,
+      scanPolicy: {
+        policy: 'single',
+        index: 5,
+      },
+    });
+  });
+
+  afterAll(async () => {
+    await hWallet.stop();
+  });
+
+  it('should start a wallet configured to single address', async () => {
+    await expect(hWallet.storage.store.addressCount()).resolves.toEqual(1);
+
+    // Send tokens to address 5 (the loaded one)
+    const address5 = hWallet.getAddressAtIndex(5);
+    await GenesisWalletHelper.injectFunds(hWallet, address5, 10n);
+    await expect(hWallet.storage.store.addressCount()).resolves.toEqual(1);
+
+    // Send more transactions from the same wallet to the same address
+    const tx1 = await hWallet.sendTransaction(address5, 1n);
+    await waitForTxReceived(hWallet, tx1.hash);
+    await expect(hWallet.storage.store.addressCount()).resolves.toEqual(1);
+    await expect(hWallet.getBalance()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          balance: expect.objectContaining({ unlocked: 10n }),
+        }),
+      ])
+    );
+
+    // Send a tx to an unloaded address before the current one
+    const address0 = hWallet.getAddressAtIndex(0);
+    const tx2 = await hWallet.sendTransaction(address0, 1n);
+    await waitForTxReceived(hWallet, tx2.hash);
+    await expect(hWallet.storage.store.addressCount()).resolves.toEqual(1);
+    await expect(hWallet.getBalance()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          balance: expect.objectContaining({ unlocked: 9n }),
+        }),
+      ])
+    );
+
+    // Send a tx to an unloaded address before the current one
+    const address10 = hWallet.getAddressAtIndex(10);
+    const tx3 = await hWallet.sendTransaction(address10, 1n);
+    await waitForTxReceived(hWallet, tx3.hash);
+    await expect(hWallet.storage.store.addressCount()).resolves.toEqual(1);
+    await expect(hWallet.getBalance()).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          balance: expect.objectContaining({ unlocked: 8n }),
+        }),
+      ])
+    );
+  });
+});
