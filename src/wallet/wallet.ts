@@ -978,22 +978,36 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
-   * Creates and send a transaction from an array of inputs and outputs
+   * Create a SendTransaction instance to send a transaction with possibly multiple outputs.
    *
-   * @memberof HathorWalletServiceWallet
-   * @inner
+   * @param outputs Array of proposed outputs
+   * @param options Options parameters
+   *
+   * @return Promise<SendTransactionWalletService>
    */
-  async sendManyOutputsTransaction(
+  async sendManyOutputsSendTransaction(
     outputs: Array<OutputRequestObj | DataScriptOutputRequestObj>,
     options: { inputs?: InputRequestObj[]; changeAddress?: string; pinCode?: string } = {}
-  ): Promise<Transaction> {
+  ): Promise<SendTransactionWalletService> {
     this.failIfWalletNotReady();
+    if (await this.storage.isReadonly()) {
+      throw new WalletFromXPubGuard('sendManyOutputsSendTransaction');
+    }
     const newOptions = {
       inputs: [],
       changeAddress: null,
+      pinCode: null,
       ...options,
     };
+
     const { inputs, changeAddress, pinCode } = newOptions;
+
+    // PIN validation - request from client if not provided
+    const pin = pinCode || (await this.requestPassword());
+    if (!pin) {
+      throw new Error('Pin is required.');
+    }
+
     const sendTransactionOutputs = outputs.map(output => {
       const typedOutput = output as OutputSendTransaction;
       if (typedOutput.type === OutputType.DATA) {
@@ -1009,8 +1023,22 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       outputs: sendTransactionOutputs,
       inputs,
       changeAddress,
-      pin: pinCode,
+      pin,
     });
+    return sendTransaction;
+  }
+
+  /**
+   * Creates and send a transaction from an array of inputs and outputs
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  async sendManyOutputsTransaction(
+    outputs: Array<OutputRequestObj | DataScriptOutputRequestObj>,
+    options: { inputs?: InputRequestObj[]; changeAddress?: string; pinCode?: string } = {}
+  ): Promise<Transaction> {
+    const sendTransaction = await this.sendManyOutputsSendTransaction(outputs, options);
     return sendTransaction.run();
   }
 
