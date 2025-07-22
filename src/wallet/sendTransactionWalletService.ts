@@ -26,6 +26,7 @@ import {
   MineTxSuccessData,
   OutputType,
 } from './types';
+import { IDataInput, IDataOutput, IDataTx } from '../types';
 
 type optionsType = {
   outputs?: OutputSendTransaction[];
@@ -57,6 +58,12 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
   // PIN to load the seed from memory
   private pin: string | null;
 
+  // Data for the transaction after it's prepared
+  public fullTxData: IDataTx | null;
+
+  // Address paths for the inputs, to be used when signing
+  private _utxosAddressPath: string[];
+
   constructor(wallet: HathorWalletServiceWallet, options: optionsType = {}) {
     super();
 
@@ -75,6 +82,210 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     this.transaction = newOptions.transaction!;
     this.mineTransaction = null;
     this.pin = newOptions.pin!;
+    this.fullTxData = null;
+    this._utxosAddressPath = [];
+  }
+
+  /**
+   * Prepare transaction data from inputs and outputs.
+   *
+   * This method provides more flexibility than `prepareTx` by allowing for mixed-input scenarios,
+   * where some inputs are provided by the user and others are automatically selected from the wallet.
+   * It processes both user-defined and automatically selected inputs, creates change outputs when
+   * necessary, and constructs the final transaction object.
+   *
+   * The process is as follows:
+   * 1. Calculate the total amount for each token from the outputs, including the cost of data outputs.
+   * 2. Validate any user-provided inputs to ensure they are available and sufficient.
+   * 3. For tokens where no inputs were provided, automatically select UTXOs from the wallet to cover the required amounts.
+   * 4. Create change outputs for any tokens where the input value exceeds the output value.
+   * 5. Construct the final transaction object with all inputs, outputs, and tokens.
+   *
+   * @returns {Promise<IDataTx>} A promise that resolves with the prepared transaction data.
+   */
+  async prepareTxData(): Promise<IDataTx> {
+    // 1. Calculate total output amount for each token
+    const tokenAmountMap: TokenAmountMap = {};
+    for (const output of this.outputs) {
+      const token = output.type === OutputType.DATA ? NATIVE_TOKEN_UID : output.token;
+      const value = output.type === OutputType.DATA ? 1n : output.value;
+      if (token in tokenAmountMap) {
+        tokenAmountMap[token] += value;
+      } else {
+        tokenAmountMap[token] = value;
+      }
+    }
+
+    const utxosAddressPath: string[] = [];
+    const finalInputs: InputRequestObj[] = [...this.inputs];
+    const finalOutputs: OutputSendTransaction[] = [...this.outputs];
+
+    // Map of token uid to a flag indicating if we need to select inputs for it
+    const tokenNeedsInputs = new Map<string, boolean>();
+    for (const token of Object.keys(tokenAmountMap)) {
+      tokenNeedsInputs.set(token, true);
+    }
+
+    // 2. Process pre-selected inputs
+    const userInputAmountMap: TokenAmountMap = {};
+    if (this.inputs.length > 0) {
+      for (const input of this.inputs) {
+        const utxo = await this.wallet.getUtxoFromId(input.txId, input.index);
+        if (utxo === null) {
+          throw new UtxoError(
+            `Invalid input selection. Input ${input.txId} at index ${input.index}.`
+          );
+        }
+
+        if (!(utxo.tokenId in tokenAmountMap)) {
+          throw new SendTxError(
+            `Invalid input selection. Input ${input.txId} at index ${input.index} has token ${utxo.tokenId} that is not on the outputs.`
+          );
+        }
+
+        utxosAddressPath.push(utxo.addressPath);
+        tokenNeedsInputs.set(utxo.tokenId, false);
+
+        if (utxo.tokenId in userInputAmountMap) {
+          userInputAmountMap[utxo.tokenId] += utxo.value;
+        } else {
+          userInputAmountMap[utxo.tokenId] = utxo.value;
+        }
+      }
+    }
+
+    // 3. Select UTXOs for tokens that need them, and create change for all
+    for (const [token, needsInputs] of tokenNeedsInputs.entries()) {
+      if (needsInputs) {
+        const { utxos, changeAmount } = await this.wallet.getUtxos({
+          tokenId: token,
+          totalAmount: tokenAmountMap[token],
+        });
+
+        if (utxos.length === 0) {
+          throw new UtxoError(
+            `No utxos available to fill the request. Token: ${token} - Amount: ${tokenAmountMap[token]}.`
+          );
+        }
+
+        for (const utxo of utxos) {
+          finalInputs.push({ txId: utxo.txId, index: utxo.index });
+          utxosAddressPath.push(utxo.addressPath);
+        }
+
+        if (changeAmount) {
+          const changeAddress =
+            this.changeAddress || this.wallet.getCurrentAddress({ markAsUsed: true }).address;
+          finalOutputs.push({
+            address: changeAddress,
+            value: changeAmount,
+            token,
+            type: helpers.getOutputTypeFromAddress(changeAddress, this.wallet.network),
+          });
+        }
+      } else {
+        // This token has pre-selected inputs, we only need to change if necessary
+        if (!(token in userInputAmountMap)) {
+          // This case should not happen if we processed inputs correctly, but for safety:
+          throw new SendTxError(
+            `Invalid input selection. Token ${token} is in the outputs but there are no inputs for it.`
+          );
+        }
+
+        if (userInputAmountMap[token] < tokenAmountMap[token]) {
+          throw new SendTxError(
+            `Invalid input selection. Sum of inputs for token ${token} is smaller than the sum of outputs.`
+          );
+        }
+
+        if (userInputAmountMap[token] > tokenAmountMap[token]) {
+          const changeAmount = userInputAmountMap[token] - tokenAmountMap[token];
+          const changeAddress =
+            this.changeAddress || this.wallet.getCurrentAddress({ markAsUsed: true }).address;
+          finalOutputs.push({
+            address: changeAddress,
+            value: changeAmount,
+            token,
+            type: helpers.getOutputTypeFromAddress(changeAddress, this.wallet.network),
+          });
+        }
+      }
+    }
+
+    // 4. Update instance properties and shuffle outputs if change was added.
+    this.inputs = finalInputs;
+    // Check if outputs changed to decide on shuffling.
+    if (finalOutputs.length > this.outputs.length) {
+      this.outputs = shuffle(finalOutputs);
+    } else {
+      this.outputs = finalOutputs;
+    }
+
+    // 5. Create transaction data object
+    const dataInputs: IDataInput[] = [];
+    for (const input of this.inputs) {
+      const utxo = await this.wallet.getUtxoFromId(input.txId, input.index);
+      if (!utxo) {
+        // Should not happen as we validated them before
+        throw new UtxoError(
+          `Could not retrieve utxo details for input ${input.txId}:${input.index}`
+        );
+      }
+      dataInputs.push({
+        txId: input.txId,
+        index: input.index,
+        value: utxo.value,
+        token: utxo.tokenId,
+        address: utxo.address,
+        authorities: utxo.authorities,
+      });
+    }
+
+    const dataOutputs: IDataOutput[] = [];
+    for (const output of this.outputs) {
+      if (output.type === OutputType.DATA) {
+        dataOutputs.push({
+          type: OutputType.DATA,
+          data: Buffer.from(output.data!).toString('hex'),
+          value: 1n,
+          authorities: 0n,
+          token: NATIVE_TOKEN_UID,
+        });
+      } else {
+        if (!output.address || !output.token) {
+          // This should not happen for a regular output
+          throw new WalletError('Output is missing address or token.');
+        }
+        const outputType = helpers.getOutputTypeFromAddress(output.address, this.wallet.network) as
+          | 'p2pkh'
+          | 'p2sh';
+        dataOutputs.push({
+          type: outputType,
+          value: output.value,
+          token: output.token,
+          address: output.address,
+          timelock: output.timelock || null,
+          authorities: 0n,
+        });
+      }
+    }
+
+    const tokens = Object.keys(tokenAmountMap);
+    const htrIndex = tokens.indexOf(NATIVE_TOKEN_UID);
+    if (htrIndex > -1) {
+      tokens.splice(htrIndex, 1);
+    }
+
+    const txData: IDataTx = {
+      inputs: dataInputs,
+      outputs: dataOutputs,
+      tokens,
+    };
+
+    this._utxosAddressPath = utxosAddressPath;
+    this.fullTxData = txData;
+
+    return txData;
   }
 
   /**
