@@ -220,5 +220,5 @@ export type CreateNanoTxData = {
   blueprintId?: string | null;
   ncId?: string | null;
   actions?: NanoContractAction[];
-  args?: NanoContractArgumentApiInputType[];
+  args?: unknown[];
 };

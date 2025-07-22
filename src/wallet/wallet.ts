@@ -16,7 +16,7 @@ import {
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
   P2SH_ACCT_PATH,
   P2PKH_ACCT_PATH,
-  NANO_CONTRACTS_VERSION,
+  DEFAULT_TX_VERSION,
 } from '../constants';
 import { signMessage } from '../utils/crypto';
 import walletApi from './api/walletApi';
@@ -78,7 +78,6 @@ import { ErrorMessages } from '../errorMessages';
 import { IStorage, IWalletAccessData, OutputValueType, WalletType, IHistoryTx } from '../types';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
 import {
-  NanoContractArgumentApiInputType,
   NanoContractVertexType,
   NanoContractBuilderCreateTokenOptions,
   CreateNanoTxData,
@@ -1176,14 +1175,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
-   * Gets the current network name
-   * @return {string} The network name. Ex.: 'mainnet', 'testnet'
-   */
-  getNetwork(): string {
-    return this.network.name;
-  }
-
-  /**
    * Get the current address to be used
    *
    * @memberof HathorWalletServiceWallet
@@ -2274,7 +2265,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const data = await walletApi.getFullTxById(this, txId);
     // Transform the response format if necessary to match what NanoContractTransactionBuilder expects
     // The key field it looks for is nc_blueprint_id for nano contract transactions
-    if (data.tx && data.tx.version === NANO_CONTRACTS_VERSION) {
+    if (data.tx && data.tx.version === DEFAULT_TX_VERSION) {
       // Add nc_blueprint_id field to match the expected format
       const tx = data.tx as unknown as Record<string, unknown>;
       if (!tx.nc_blueprint_id && tx.nc_id) {
@@ -2340,7 +2331,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // Get the address public key
     const addressPrivKey = await this.getAddressPrivKey(pin, addressIndex);
-    const pubkeyStr = addressPrivKey.publicKey.toString('hex');
+    const callerAddress = new Address(
+      addressPrivKey.publicKey.toAddress(this.network.getNetwork()).toString(),
+      { network: this.network }
+    );
 
     // Create a wrapper around this wallet to override getFullTxById
     const wrappedWallet = {
@@ -2375,9 +2369,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       .setWallet(wrappedWallet)
       .setBlueprintId(data.blueprintId as string)
       .setNcId(data.ncId as string)
-      .setCaller(Buffer.from(pubkeyStr, 'hex'))
+      .setCaller(callerAddress)
       .setActions(actions)
-      .setArgs(processedArgs as NanoContractArgumentApiInputType[])
+      .setArgs(processedArgs as unknown[])
       .setVertexType(NanoContractVertexType.TRANSACTION);
 
     const tx = await builder.build();
@@ -2444,7 +2438,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // Set the signature in the nano contract header(s)
     const nanoHeaders = tx.getNanoHeaders();
     for (const nanoHeader of nanoHeaders) {
-      nanoHeader.signature = signature;
+      nanoHeader.script = signature;
     }
     // Finalize the transaction
     tx.prepareToSend();
@@ -2487,7 +2481,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
     // Get the address public key
     const addressPrivKey = await this.getAddressPrivKey(pin, addressIndex);
-    const pubkeyStr = addressPrivKey.publicKey.toString('hex');
+    const callerAddress = new Address(
+      addressPrivKey.publicKey.toAddress(this.network.getNetwork()).toString(),
+      { network: this.network }
+    );
 
     // Create a wrapper around this wallet to override getFullTxById
     const wrappedWallet = {
@@ -2533,9 +2530,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       .setWallet(wrappedWallet)
       .setBlueprintId(data.blueprintId as string)
       .setNcId(data.ncId as string)
-      .setCaller(Buffer.from(pubkeyStr, 'hex'))
+      .setCaller(callerAddress)
       .setActions(actions)
-      .setArgs(processedArgs as NanoContractArgumentApiInputType[])
+      .setArgs(processedArgs as unknown[])
       .setVertexType(NanoContractVertexType.CREATE_TOKEN_TRANSACTION, mergedCreateTokenOptions);
 
     const tx = await builder.build();
