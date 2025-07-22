@@ -21,7 +21,6 @@ import {
   DEFAULT_SIGNAL_BITS,
   BLOCK_VERSION,
   MERGED_MINED_BLOCK_VERSION,
-  NANO_CONTRACTS_VERSION,
   POA_BLOCK_VERSION,
   ON_CHAIN_BLUEPRINTS_VERSION,
 } from '../constants';
@@ -203,22 +202,35 @@ const transaction = {
       });
     }
 
-    let pubkey: Buffer | null = this.getNanoContractPubkey(tx);
+    let address: Address | null = null;
 
-    if (pubkey === null && tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
-      // Get pubkey from ocb tx
-      pubkey = (tx as OnChainBlueprint).pubkey;
+    if (tx.isNanoContract()) {
+      address = this.getNanoContractCaller(tx);
     }
 
-    if (pubkey) {
-      const address = getAddressFromPubkey(pubkey.toString('hex'), storage.config.getNetwork());
+    if (tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
+      // Get pubkey from ocb tx
+      const { pubkey } = tx as OnChainBlueprint;
+      address = getAddressFromPubkey(pubkey.toString('hex'), storage.config.getNetwork());
+    }
+
+    if (address) {
       const addressInfo = await storage.getAddressInfo(address.base58);
       console.log('Address Info: ', addressInfo);
       if (!addressInfo) {
-        throw new Error('No address info found');
+        // The nano contract address or OCB pubkey are not from our wallet.
+        return { inputSignatures: signatures, ncCallerSignature };
       }
       const xpriv = xprivkey.deriveNonCompliantChild(addressInfo.bip32AddressIndex);
-      ncCallerSignature = this.getSignature(dataToSignHash, xpriv.privateKey);
+
+      if (tx.isNanoContract()) {
+        // Nano contract
+        const signature = this.getSignature(dataToSignHash, xpriv.privateKey);
+        ncCallerSignature = this.createInputData(signature, xpriv.publicKey.toDER());
+      } else {
+        // On-chain blueprint
+        ncCallerSignature = this.getSignature(dataToSignHash, xpriv.privateKey);
+      }
     }
 
     return {
@@ -234,13 +246,13 @@ const transaction = {
    *
    * @param tx - The transaction to try to get the nano pubkey from
    */
-  getNanoContractPubkey(tx: Transaction): Buffer | null {
+  getNanoContractCaller(tx: Transaction): Address | null {
     if (tx.isNanoContract()) {
       // Get pubkey from nano header
       const nanoHeader = tx.getNanoHeaders()[0];
       // XXX this code won't work if we have more than one
       // nano header for the same tx in the future
-      return nanoHeader.pubkey;
+      return nanoHeader.address;
     }
 
     return null;
@@ -268,7 +280,7 @@ const transaction = {
       // Store signature in nano header
       const nanoHeaders = tx.getNanoHeaders();
       for (const nanoHeader of nanoHeaders) {
-        nanoHeader.signature = signatures.ncCallerSignature;
+        nanoHeader.script = signatures.ncCallerSignature;
       }
     }
 
@@ -615,7 +627,7 @@ const transaction = {
    * by the inputs.
    */
   async convertTransactionToHistoryTx(
-    tx: Transaction | CreateTokenTransaction,
+    tx: Transaction | CreateTokenTransaction | OnChainBlueprint,
     storage: IStorage
   ): Promise<IHistoryTx> {
     if (!tx.hash) {
@@ -715,14 +727,19 @@ const transaction = {
       histTx.token_symbol = (tx as CreateTokenTransaction).symbol;
     }
 
+    if (tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
+      histTx.nc_pubkey = (tx as OnChainBlueprint).pubkey.toString('hex');
+    }
+
     if (tx.isNanoContract()) {
       const nanoHeader = tx.getNanoHeaders()[0];
       // XXX this code won't work if we have more than one
       // nano header for the same tx in the future
       histTx.nc_id = nanoHeader.id;
       histTx.nc_method = nanoHeader.method;
-      histTx.nc_args = nanoHeader.args.map(a => a.toString('hex')).join('');
-      histTx.nc_pubkey = nanoHeader.pubkey.toString('hex');
+      histTx.nc_args = nanoHeader.args.toString('hex');
+      histTx.nc_address = nanoHeader.address!.base58;
+      // XXX: should we build nc_context from nanoHeader information?
       // Cannot fetch histTx.nc_blueprint_id with the current data
     }
 
@@ -845,9 +862,6 @@ const transaction = {
       if (tx.version === CREATE_TOKEN_TX_VERSION) {
         return 'Create Token Transaction';
       }
-      if (tx.version === NANO_CONTRACTS_VERSION) {
-        return 'Nano Contract';
-      }
       if (tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
         return 'On-Chain Blueprint';
       }
@@ -920,6 +934,8 @@ const transaction = {
     if (tx.nc_blueprint_id) histTx.nc_blueprint_id = tx.nc_blueprint_id;
     if (tx.nc_method) histTx.nc_method = tx.nc_method;
     if (tx.nc_args) histTx.nc_args = tx.nc_args;
+    if (tx.nc_address) histTx.nc_address = tx.nc_address;
+    if (tx.nc_context) histTx.nc_context = tx.nc_context;
     if (tx.nc_pubkey) histTx.nc_pubkey = tx.nc_pubkey;
 
     return histTx;

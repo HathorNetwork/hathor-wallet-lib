@@ -140,7 +140,7 @@ const validateLenToUnpack = (n: number, buff: Buffer) => {
 export const unpackLen = (n: number, buff: Buffer): [Buffer, Buffer] => {
   validateLenToUnpack(n, buff);
 
-  return [buff.slice(0, n), buff.slice(n)];
+  return [buff.subarray(0, n), buff.subarray(n)];
 };
 
 /**

@@ -8,7 +8,12 @@
 import { cloneDeep, get } from 'lodash';
 import bitcore, { HDPrivateKey } from 'bitcore-lib';
 import EventEmitter from 'events';
-import { NATIVE_TOKEN_UID, P2SH_ACCT_PATH, P2PKH_ACCT_PATH } from '../constants';
+import {
+  NATIVE_TOKEN_UID,
+  P2SH_ACCT_PATH,
+  P2PKH_ACCT_PATH,
+  ON_CHAIN_BLUEPRINTS_VERSION,
+} from '../constants';
 import tokenUtils from '../utils/tokens';
 import walletApi from '../api/wallet';
 import versionApi from '../api/version';
@@ -55,6 +60,7 @@ import { NanoContractVertexType } from '../nano_contracts/types';
 import { IHistoryTxSchema } from '../schemas';
 import GLL from '../sync/gll';
 import { WalletTxTemplateInterpreter, TransactionTemplate } from '../template/transaction';
+import Address from '../models/address';
 
 /**
  * @typedef {import('../models/create_token_transaction').default} CreateTokenTransaction
@@ -772,7 +778,7 @@ class HathorWallet extends EventEmitter {
    *
    * @memberof HathorWallet
    * @inner
-   * */
+   */
   async getTxHistory(options = {}) {
     const newOptions = {
       token_id: NATIVE_TOKEN_UID,
@@ -803,9 +809,13 @@ class HathorWallet extends EventEmitter {
         version: tx.version,
         ncId: tx.nc_id,
         ncMethod: tx.nc_method,
-        ncCaller: tx.nc_pubkey && getAddressFromPubkey(tx.nc_pubkey, this.getNetworkObject()),
+        ncCaller: tx.nc_address && new Address(tx.nc_address, { network: this.getNetworkObject() }),
         firstBlock: tx.first_block,
       };
+      if (tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
+        txHistory.ncCaller =
+          tx.nc_pubkey && getAddressFromPubkey(tx.nc_pubkey, this.getNetworkObject());
+      }
       txs.push(txHistory);
       count--;
     }
@@ -1798,6 +1808,7 @@ class HathorWallet extends EventEmitter {
    * @param {Object} [options] Object with custom options.
    * @param {boolean} [options.many=false] if should return many utxos or just one (default false)
    * @param {boolean} [options.only_available_utxos=false] If we should filter for available utxos.
+   * @param {string} [options.filter_address=null] Address to filter the utxo to get.
    *
    * @return {Promise<{
    *   txId: string,
@@ -1809,20 +1820,7 @@ class HathorWallet extends EventEmitter {
    *       Returns an empty array in case there are no tx_outupts for this type.
    * */
   async getMintAuthority(tokenUid, options = {}) {
-    const newOptions = {
-      token: tokenUid,
-      authorities: 1n, // mint authority
-      only_available_utxos: options.only_available_utxos ?? false,
-    };
-    if (!options.many) {
-      // limit number of utxos to select if many is false
-      newOptions.max_utxos = 1;
-    }
-    const utxos = [];
-    for await (const utxo of this.storage.selectUtxos(newOptions)) {
-      utxos.push(utxo);
-    }
-    return utxos;
+    return this.getAuthorityUtxo(tokenUid, 'mint', options);
   }
 
   /**
@@ -1832,6 +1830,7 @@ class HathorWallet extends EventEmitter {
    * @param {Object} [options] Object with custom options.
    * @param {boolean} [options.many=false] if should return many utxos or just one (default false)
    * @param {boolean} [options.only_available_utxos=false] If we should filter for available utxos.
+   * @param {string} [options.filter_address=null] Address to filter the utxo to get.
    *
    * @return {Promise<{
    *   txId: string,
@@ -1843,10 +1842,43 @@ class HathorWallet extends EventEmitter {
    *       Returns an empty array in case there are no tx_outupts for this type.
    * */
   async getMeltAuthority(tokenUid, options = {}) {
+    return this.getAuthorityUtxo(tokenUid, 'melt', options);
+  }
+
+  /**
+   * Get authority utxo
+   *
+   * @param {string} tokenUid UID of the token to select the authority utxo
+   * @param {string} authority The authority to filter ('mint' or 'melt')
+   * @param {Object} [options] Object with custom options.
+   * @param {boolean} [options.many=false] if should return many utxos or just one (default false)
+   * @param {boolean} [options.only_available_utxos=false] If we should filter for available utxos.
+   * @param {string} [options.filter_address=null] Address to filter the utxo to get.
+   *
+   * @return {Promise<{
+   *   txId: string,
+   *   index: number,
+   *   address: string,
+   *   authorities: OutputValueType
+   * }[]>} Promise that resolves with an Array of objects with properties of the authority output.
+   *       The "authorities" field actually contains the output value with the authority masks.
+   *       Returns an empty array in case there are no tx_outupts for this type.
+   * */
+  async getAuthorityUtxo(tokenUid, authority, options = {}) {
+    let authorityValue;
+    if (authority === 'mint') {
+      authorityValue = 1n;
+    } else if (authority === 'melt') {
+      authorityValue = 2n;
+    } else {
+      throw new Error('Invalid authority value.');
+    }
+
     const newOptions = {
       token: tokenUid,
-      authorities: 2n, // melt authority
+      authorities: authorityValue,
       only_available_utxos: options.only_available_utxos ?? false,
+      filter_address: options.filter_address ?? null,
     };
     if (!options.many) {
       // limit number of utxos to select if many is false
@@ -2982,7 +3014,6 @@ class HathorWallet extends EventEmitter {
         `Address used to sign the transaction (${address}) does not belong to the wallet.`
       );
     }
-    const pubkeyStr = await this.storage.getAddressPubkey(addressInfo.bip32AddressIndex);
 
     // Build and send transaction
     const builder = new NanoContractTransactionBuilder()
@@ -2990,7 +3021,7 @@ class HathorWallet extends EventEmitter {
       .setWallet(this)
       .setBlueprintId(data.blueprintId)
       .setNcId(data.ncId)
-      .setCaller(Buffer.from(pubkeyStr, 'hex'))
+      .setCaller(new Address(address, { network: this.getNetworkObject() }))
       .setActions(data.actions)
       .setArgs(data.args)
       .setVertexType(NanoContractVertexType.TRANSACTION);
@@ -3123,18 +3154,16 @@ class HathorWallet extends EventEmitter {
         `Address used to sign the transaction (${address}) does not belong to the wallet.`
       );
     }
-    const pubkeyStr = await this.storage.getAddressPubkey(addressInfo.bip32AddressIndex);
-
     // Build and send transaction
     const builder = new NanoContractTransactionBuilder()
       .setMethod(method)
       .setWallet(this)
       .setBlueprintId(data.blueprintId)
       .setNcId(data.ncId)
-      .setCaller(Buffer.from(pubkeyStr, 'hex'))
+      .setCaller(new Address(address, { network: this.getNetworkObject() }))
       .setActions(data.actions)
       .setArgs(data.args)
-      .setVertexType(NanoContractVertexType.CREATE_TOKEN_TRANSACTION, createTokenOptions);
+      .setVertexType(NanoContractVertexType.CREATE_TOKEN_TRANSACTION, newCreateTokenOptions);
 
     const nc = await builder.build();
     return prepareNanoSendTransaction(nc, pin, this.storage);
@@ -3332,11 +3361,23 @@ class HathorWallet extends EventEmitter {
 
     // Create code object from code data
     const codeContent = Buffer.from(code, 'utf8');
-    const codeObj = new Code(CodeKind.PYTHON_GZIP, codeContent);
+    const codeObj = new Code(CodeKind.PYTHON_ZLIB, codeContent);
 
     const tx = new OnChainBlueprint(codeObj, pubkey);
 
     return prepareNanoSendTransaction(tx, pin, this.storage);
+  }
+
+  /**
+   * Get the seqnum to be used in a nano header for the address
+   *
+   * @param {string} address Address that will be the nano header caller
+   *
+   * @returns {Promise<number>}
+   */
+  async getNanoHeaderSeqnum(address) {
+    const addressInfo = await this.storage.getAddressInfo(address.base58);
+    return addressInfo.seqnum + 1;
   }
 }
 

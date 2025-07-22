@@ -74,27 +74,14 @@ export const CREATE_TOKEN_TX_VERSION = 2;
 export const MERGED_MINED_BLOCK_VERSION = 3;
 
 /**
- * Nano Contracts transaction version field
- */
-export const NANO_CONTRACTS_VERSION = 4;
-
-/**
- * Proof-of-Authority block version field
- */
-export const POA_BLOCK_VERSION = 5;
-
-/**
  * On chain blueprints transaction version field
  */
 export const ON_CHAIN_BLUEPRINTS_VERSION = 6;
 
 /**
- * Nano Contracts information version
- * If we decide to change the serialization of nano information
- * data, then we can change this version, so we can
- * correctly deserialize all the nano contract transactions
+ * Proof-of-Authority block version field
  */
-export const NANO_CONTRACTS_INFO_VERSION = 1;
+export const POA_BLOCK_VERSION = 5;
 
 /**
  * String with the name of the initialize method of all blueprints
@@ -302,3 +289,8 @@ export const HATHOR_MAGIC_BYTES = 'Hathor Signed Message:\n';
  * Default address scanning policy
  */
 export const DEFAULT_ADDRESS_SCANNING_POLICY: AddressScanPolicy = SCANNING_POLICY.GAP_LIMIT;
+
+/**
+ * Max argument length in bytes (64Kib)
+ */
+export const NC_ARGS_MAX_BYTES_LENGTH = 2n ** 16n;

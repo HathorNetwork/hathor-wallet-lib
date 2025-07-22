@@ -40,6 +40,7 @@ import {
 } from '../constants';
 import { AddressHistorySchema, GeneralTokenInfoSchema } from '../api/schemas/wallet';
 import CreateTokenTransaction from '../models/create_token_transaction';
+import { DEFAULT_ADDRESS_META } from '../storage/storage';
 
 /**
  * Get history sync method for a given mode
@@ -633,6 +634,29 @@ export async function processNewTx(
 
   const { store } = storage;
 
+  if (tx.is_voided && tx.nc_id && tx.first_block) {
+    // If a nano transaction is voided but has first block
+    // we need to increase the seqnum of the caller address
+    if (!tx.nc_address) {
+      throw new Error(`Nano contract tx(${tx.tx_id}) with caller address ${tx.nc_address}`);
+    }
+    const caller = tx.nc_address;
+    const callerAddressInfo = await store.getAddress(caller);
+    // if address is not in wallet, ignore
+    if (callerAddressInfo) {
+      // create metadata for address if it does not exist
+      let addressMeta = await store.getAddressMeta(caller);
+      if (!addressMeta) {
+        addressMeta = { ...DEFAULT_ADDRESS_META };
+      }
+
+      if (tx.nc_seqnum! > addressMeta.seqnum) {
+        addressMeta.seqnum = tx.nc_seqnum!;
+      }
+      await store.editAddressMeta(caller, addressMeta);
+    }
+  }
+
   // We ignore voided transactions
   if (tx.is_voided)
     return {
@@ -667,7 +691,7 @@ export async function processNewTx(
 
     // create metadata for address and token if it does not exist
     if (!addressMeta) {
-      addressMeta = { numTransactions: 0, balance: new Map<string, IBalance>() };
+      addressMeta = { ...DEFAULT_ADDRESS_META };
     }
     if (!tokenMeta) {
       tokenMeta = { numTransactions: 0, balance: getEmptyBalance() };
@@ -761,7 +785,7 @@ export async function processNewTx(
 
     // create metadata for address and token if it does not exist
     if (!addressMeta) {
-      addressMeta = { numTransactions: 0, balance: new Map<string, IBalance>() };
+      addressMeta = { ...DEFAULT_ADDRESS_META };
     }
     if (!tokenMeta) {
       tokenMeta = { numTransactions: 0, balance: getEmptyBalance() };
@@ -799,17 +823,37 @@ export async function processNewTx(
   // The IHistoryTx object has data from the full node that doesn't have the headers
   // only the nano parameters in the data
   if (tx.nc_id || tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
-    const caller = getAddressFromPubkey(tx.nc_pubkey!, storage.config.getNetwork());
-    const callerAddressInfo = await store.getAddress(caller.base58);
+    let caller: string;
+    if (tx.version === ON_CHAIN_BLUEPRINTS_VERSION) {
+      if (!tx.nc_pubkey) {
+        throw new Error(`OnChainBlueprint tx(${tx.tx_id}) with caller pubkey ${tx.nc_pubkey}`);
+      }
+      const callerAddress = getAddressFromPubkey(tx.nc_pubkey!, storage.config.getNetwork());
+      caller = callerAddress.base58;
+    } else {
+      // This is a nano contract
+      if (!tx.nc_address) {
+        throw new Error(`Nano contract tx(${tx.tx_id}) with caller address ${tx.nc_address}`);
+      }
+      caller = tx.nc_address;
+    }
+    const callerAddressInfo = await store.getAddress(caller);
     // if address is not in wallet, ignore
     if (callerAddressInfo) {
       // create metadata for address if it does not exist
-      let addressMeta = await store.getAddressMeta(caller.base58);
+      let addressMeta = await store.getAddressMeta(caller);
       if (!addressMeta) {
-        addressMeta = { numTransactions: 0, balance: new Map<string, IBalance>() };
-        await store.editAddressMeta(caller.base58, addressMeta);
+        addressMeta = { ...DEFAULT_ADDRESS_META };
       }
-      txAddresses.add(caller.base58);
+
+      if (tx.nc_id) {
+        if (tx.nc_seqnum! > addressMeta.seqnum) {
+          addressMeta.seqnum = tx.nc_seqnum!;
+        }
+      }
+
+      await store.editAddressMeta(caller, addressMeta);
+      txAddresses.add(caller);
     }
   }
 
@@ -889,7 +933,7 @@ export async function processUtxoUnlock(
   // create metadata for address and token if it does not exist
   // This should not happen, but we check so that typescript compiler can guarantee the type
   if (!addressMeta) {
-    addressMeta = { numTransactions: 0, balance: new Map<string, IBalance>() };
+    addressMeta = { ...DEFAULT_ADDRESS_META };
   }
   if (!tokenMeta) {
     tokenMeta = { numTransactions: 0, balance: getEmptyBalance() };

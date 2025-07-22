@@ -165,6 +165,47 @@ const helpers = {
   },
 
   /**
+   * Read address bytes validating information.
+   *
+   * @returns address read from bytes
+   */
+  getAddressFromBytes(addressBytes: Buffer, network: Network): Address {
+    if (addressBytes.length !== 25) {
+      throw new Error('Address bytes should be 25 bytes long');
+    }
+    const versionByte = addressBytes[0];
+    const hashBytes = addressBytes.subarray(1, 21);
+    const recvChecksum = addressBytes.subarray(21);
+
+    let address: Address;
+    switch (versionByte) {
+      case network.versionBytes.p2pkh:
+        address = this.encodeAddress(hashBytes, network);
+        break;
+      case network.versionBytes.p2sh:
+        address = this.encodeAddressP2SH(hashBytes, network);
+        break;
+      default:
+        throw new Error('Invalid version byte');
+    }
+
+    address.validateAddress();
+    const decoded = address.decode();
+    if (decoded[0] !== versionByte) {
+      throw new Error('Version byte mismatch');
+    }
+
+    const calcChecksum = decoded.subarray(21);
+    if (!calcChecksum.equals(recvChecksum)) {
+      throw new Error(
+        `Generated checksum(${calcChecksum.toString('hex')}) does not match received checksum(${recvChecksum.toString('hex')})`
+      );
+    }
+
+    return address;
+  },
+
+  /**
    * Get encoded address object from address hash (20 bytes) and network
    * We complete the address bytes with the network byte and checksum
    * then we encode to base 58 and create the address object

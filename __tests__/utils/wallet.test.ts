@@ -671,3 +671,19 @@ test('getWalletIdFromXpub', () => {
   const expected = crypto.Hash.sha256sha256(Buffer.from(str)).toString('hex');
   expect(wallet.getWalletIdFromXPub(str)).toEqual(expected);
 });
+
+test('getXprivFromData', () => {
+  const words =
+    'upon tennis increase embark dismiss diamond monitor face magnet jungle scout salute rural master shoulder cry juice jeans radar present close meat antenna mind';
+  const hdPrivKey = wallet.getXPrivKeyFromSeed(words, { networkName: 'testnet' });
+  const buffers = hdPrivKey._buffers;
+  const xpriv = wallet.xprivFromData(
+    buffers.privateKey,
+    buffers.chainCode,
+    buffers.parentFingerPrint,
+    buffers.depth,
+    buffers.childIndex,
+    'testnet'
+  );
+  expect(xpriv).toEqual(hdPrivKey.xprivkey);
+});

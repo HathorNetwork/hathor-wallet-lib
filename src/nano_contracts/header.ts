@@ -5,7 +5,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { NANO_CONTRACTS_INFO_VERSION } from '../constants';
 import { NanoContractActionHeader } from './types';
 import type Transaction from '../models/transaction';
 import {
@@ -16,17 +15,19 @@ import {
   unpackLen,
   unpackToInt,
 } from '../utils/buffer';
+import helpersUtils from '../utils/helpers';
+import leb128Util from '../utils/leb128';
 import {
   getVertexHeaderIdBuffer,
   getVertexHeaderIdFromBuffer,
   VertexHeaderId,
 } from '../headers/types';
 import Header from '../headers/base';
+import Address from '../models/address';
+import Network from '../models/network';
+import { OutputValueType } from '../types';
 
 class NanoContractHeader extends Header {
-  // Used to create serialization versioning (hard coded as NANO_CONTRACTS_INFO_VERSION for now)
-  nc_info_version: number;
-
   // It's the blueprint id when this header is calling a initialize method
   // and it's the nano contract id when it's executing another method of a nano
   id: string;
@@ -35,64 +36,65 @@ class NanoContractHeader extends Header {
   method: string;
 
   // Serialized arguments to the method being called
-  args: Buffer[];
+  args: Buffer;
 
   // List of actions for this nano
   actions: NanoContractActionHeader[];
 
-  // Pubkey and signature of the transaction owner / caller
-  pubkey: Buffer;
+  // Address of the transaction owner(s)/caller(s)
+  address: Address;
 
-  signature: Buffer | null;
+  // Sequential number for the nano header
+  seqnum: number;
+
+  /**
+   * script with signature(s) of the transaction owner(s)/caller(s).
+   * Supports P2PKH and P2SH
+   */
+  script: Buffer | null;
 
   constructor(
     id: string,
     method: string,
-    args: Buffer[],
+    args: Buffer,
     actions: NanoContractActionHeader[],
-    pubkey: Buffer,
-    signature: Buffer | null = null
+    seqnum: number,
+    address: Address,
+    script: Buffer | null = null
   ) {
     super();
-    this.nc_info_version = NANO_CONTRACTS_INFO_VERSION;
     this.id = id;
     this.method = method;
     this.args = args;
     this.actions = actions;
-    this.pubkey = pubkey;
-    this.signature = signature;
+    this.address = address;
+    this.script = script;
+    this.seqnum = seqnum;
   }
 
   /**
    * Serialize funds fields
    * Add the serialized fields to the array parameter
    *
-   * @param {array} Array of buffer to push the serialized fields
-   * @param {addSignature} If should add signature when serializing it
+   * @param array Array of buffer to push the serialized fields
+   * @param addScript If should add the script with the signature(s) when serializing it
    *
    * @memberof NanoContract
    * @inner
    */
-  serializeFields(array: Buffer[], addSignature: boolean) {
-    // Info version
-    array.push(intToBytes(this.nc_info_version, 1));
-
+  serializeFields(array: Buffer[], addScript: boolean) {
     // nano contract id
     array.push(hexToBuffer(this.id));
+
+    // Seqnum
+    array.push(leb128Util.encodeUnsigned(this.seqnum));
 
     const methodBytes = Buffer.from(this.method, 'ascii');
     array.push(intToBytes(methodBytes.length, 1));
     array.push(methodBytes);
 
-    const argsArray: Buffer[] = [];
-    for (const arg of this.args) {
-      argsArray.push(intToBytes(arg.length, 2));
-      argsArray.push(arg);
-    }
-
-    const argsConcat: Buffer = Buffer.concat(argsArray);
-    array.push(intToBytes(argsConcat.length, 2));
-    array.push(argsConcat);
+    array.push(intToBytes(this.args.length, 2));
+    array.push(this.args);
 
     array.push(intToBytes(this.actions.length, 1));
     for (const action of this.actions) {
@@ -103,14 +105,18 @@ class NanoContractHeader extends Header {
       array.push(Buffer.concat(arrAction));
     }
 
-    array.push(intToBytes(this.pubkey.length, 1));
-    array.push(this.pubkey);
+    if (!this.address) {
+      throw new Error('Header caller address was not provided');
+    }
+    const addressBytes = this.address.decode();
+    array.push(addressBytes);
 
-    if (addSignature && this.signature !== null) {
-      array.push(intToBytes(this.signature.length, 1));
-      array.push(this.signature);
+    if (addScript && this.script !== null) {
+      array.push(leb128Util.encodeUnsigned(this.script.length, 2));
+      array.push(this.script);
     } else {
-      array.push(intToBytes(0, 1));
+      // Script with length 0 indicates there is no script.
+      array.push(leb128Util.encodeUnsigned(0, 2));
     }
   }
 
@@ -147,7 +153,7 @@ class NanoContractHeader extends Header {
    * @memberof NanoContractHeader
    * @inner
    */
-  static deserialize(srcBuf: Buffer): [Header, Buffer] {
+  static deserialize(srcBuf: Buffer, network: Network): [Header, Buffer] {
     // Copies buffer locally, not to change the original parameter
     let buf = Buffer.from(srcBuf);
 
@@ -157,77 +163,68 @@ class NanoContractHeader extends Header {
 
     buf = buf.subarray(1);
 
-    // Create empty header to fill with the deserialization
-    const header = new NanoContractHeader('', '', [], [], Buffer.from([]));
+    let ncId: string;
+    let method: string;
+    let args: Buffer;
+    const actions: NanoContractActionHeader[] = [];
+    let address: Address;
 
     /* eslint-disable prefer-const -- To split these declarations would be confusing.
      * In all of them the first parameter should be a const and the second a let. */
-    // nc info version
-    [header.nc_info_version, buf] = unpackToInt(1, false, buf);
-
-    if (header.nc_info_version !== NANO_CONTRACTS_INFO_VERSION) {
-      throw new Error('Invalid info version for nano header.');
-    }
 
     // NC ID is 32 bytes in hex
-    let ncIdBuffer;
+    let ncIdBuffer: Buffer;
     [ncIdBuffer, buf] = unpackLen(32, buf);
-    header.id = ncIdBuffer.toString('hex');
+    ncId = ncIdBuffer.toString('hex');
+
+    // Seqnum has variable length with maximum of 8 bytes
+    let seqnum: bigint;
+    ({ value: seqnum, rest: buf } = leb128Util.decodeUnsigned(buf, 8));
 
     // nc method
-    let methodLen;
-    let methodBuffer;
+    let methodLen: number;
+    let methodBuffer: Buffer;
     [methodLen, buf] = unpackToInt(1, false, buf);
 
     [methodBuffer, buf] = unpackLen(methodLen, buf);
-    header.method = methodBuffer.toString('ascii');
+    method = methodBuffer.toString('ascii');
 
     // nc args
-    let argsLen;
-    let args: Buffer[] = [];
-    let argsBuf;
+    let argsLen: number;
     [argsLen, buf] = unpackToInt(2, false, buf);
-    [argsBuf, buf] = unpackLen(argsLen, buf);
-
-    while (argsBuf.length > 0) {
-      let argElementLen;
-      let argElement;
-      [argElementLen, argsBuf] = unpackToInt(2, false, argsBuf);
-      [argElement, argsBuf] = unpackLen(argElementLen, argsBuf);
-      args.push(argElement);
-    }
-
-    header.args = args;
+    [args, buf] = unpackLen(argsLen, buf);
 
     // nc actions
-    let actionsLen;
+    let actionsLen: number;
     [actionsLen, buf] = unpackToInt(1, false, buf);
 
     for (let i = 0; i < actionsLen; i++) {
-      let actionTypeBytes;
-      let actionType;
-      let tokenIndex;
-      let amount;
+      let actionTypeBytes: Buffer;
+      let actionType: number;
+      let tokenIndex: number;
+      let amount: OutputValueType;
       [actionTypeBytes, buf] = [buf.subarray(0, 1), buf.subarray(1)];
       [actionType] = unpackToInt(1, false, actionTypeBytes);
       [tokenIndex, buf] = unpackToInt(1, false, buf);
       [amount, buf] = bytesToOutputValue(buf);
 
-      header.actions.push({ type: actionType, tokenIndex, amount });
+      actions.push({ type: actionType, tokenIndex, amount });
     }
 
-    // nc pubkey
-    let pubkeyLen;
-    [pubkeyLen, buf] = unpackToInt(1, false, buf);
-    [header.pubkey, buf] = unpackLen(pubkeyLen, buf);
+    // nc address
+    let addressBytes: Buffer;
+    [addressBytes, buf] = unpackLen(25, buf);
+    address = helpersUtils.getAddressFromBytes(addressBytes, network);
 
-    // nc signature
-    let signatureLen;
-    [signatureLen, buf] = unpackToInt(1, false, buf);
+    // nc script
+    let scriptLen: bigint;
+    ({ value: scriptLen, rest: buf } = leb128Util.decodeUnsigned(buf, 2));
 
-    if (signatureLen !== 0) {
-      // signature might be null
-      [header.signature, buf] = unpackLen(signatureLen, buf);
+    const header = new NanoContractHeader(ncId, method, args, actions, Number(seqnum), address);
+
+    if (scriptLen !== 0n) {
+      // script might be null
+      [header.script, buf] = unpackLen(Number(scriptLen), buf);
     }
     /* eslint-enable prefer-const */
 

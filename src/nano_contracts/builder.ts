@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { concat, get, uniq } from 'lodash';
+import { concat, uniq } from 'lodash';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import { getAddressType } from '../utils/address';
@@ -15,25 +15,25 @@ import {
   DEFAULT_TX_VERSION,
   NATIVE_TOKEN_UID,
   NANO_CONTRACTS_INITIALIZE_METHOD,
+  TOKEN_MINT_MASK,
+  TOKEN_MELT_MASK,
 } from '../constants';
-import Serializer from './serializer';
 import HathorWallet from '../new/wallet';
-import { NanoContractTransactionError } from '../errors';
+import { NanoContractTransactionError, UtxoError } from '../errors';
 import {
-  ActionTypeToActionHeaderType,
   NanoContractActionHeader,
   NanoContractActionType,
   NanoContractAction,
-  MethodArgInfo,
-  NanoContractArgumentApiInputType,
-  NanoContractArgumentType,
   NanoContractBuilderCreateTokenOptions,
   NanoContractVertexType,
+  INanoContractActionSchema,
+  IArgumentField,
 } from './types';
-import { IDataInput, IDataOutput, ITokenData } from '../types';
-import ncApi from '../api/nano';
-import { validateAndUpdateBlueprintMethodArgs } from './utils';
+import { mapActionToActionHeader, validateAndParseBlueprintMethodArgs } from './utils';
+import { IDataInput, IDataOutput } from '../types';
 import NanoContractHeader from './header';
+import Address from '../models/address';
+import leb128 from '../utils/leb128';
 
 class NanoContractTransactionBuilder {
   blueprintId: string | null | undefined;
@@ -45,11 +45,13 @@ class NanoContractTransactionBuilder {
 
   actions: NanoContractAction[] | null;
 
-  caller: Buffer | null;
+  caller: Address | null;
 
-  args: NanoContractArgumentType[] | null;
+  args: unknown[] | null;
 
-  serializedArgs: Buffer[] | null;
+  parsedArgs: IArgumentField[] | null;
+
+  serializedArgs: Buffer | null;
 
   wallet: HathorWallet | null;
 
@@ -60,6 +62,11 @@ class NanoContractTransactionBuilder {
   // for the tx creation used by the tokens utils method
   createTokenOptions: NanoContractBuilderCreateTokenOptions | null;
 
+  // This parameter is used for token creation transactions
+  // and indicates if the token deposit utxo was already added
+  // in the action deposit phase
+  tokenFeeAddedInDeposit: boolean;
+
   constructor() {
     this.blueprintId = null;
     this.ncId = null;
@@ -67,10 +74,12 @@ class NanoContractTransactionBuilder {
     this.actions = null;
     this.caller = null;
     this.args = null;
+    this.parsedArgs = null;
     this.serializedArgs = null;
     this.wallet = null;
     this.vertexType = null;
     this.createTokenOptions = null;
+    this.tokenFeeAddedInDeposit = false;
   }
 
   /**
@@ -94,17 +103,18 @@ class NanoContractTransactionBuilder {
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  setActions(actions: NanoContractAction[]) {
-    // Check if there's only one action for each token
-    if (actions) {
-      const tokens = actions.map(action => action.token);
-      const tokensSet = new Set(tokens);
-      if (tokens.length !== tokensSet.size) {
-        throw new Error('More than one action per token is not allowed.');
-      }
+  setActions(actions: NanoContractAction[] | null | undefined) {
+    if (!actions) {
+      return this;
     }
 
-    this.actions = actions;
+    const parseResult = INanoContractActionSchema.array().safeParse(actions);
+    if (!parseResult.success) {
+      throw new NanoContractTransactionError(
+        `Invalid actions. Error: ${parseResult.error.message}.`
+      );
+    }
+    this.actions = parseResult.data;
     return this;
   }
 
@@ -116,20 +126,20 @@ class NanoContractTransactionBuilder {
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  setArgs(args: NanoContractArgumentApiInputType[]) {
-    this.args = args;
+  setArgs(args: unknown[] | null) {
+    this.args = args ?? [];
     return this;
   }
 
   /**
    * Set object caller attribute
    *
-   * @param caller caller public key
+   * @param caller Caller address
    *
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  setCaller(caller: Buffer) {
+  setCaller(caller: Address) {
     this.caller = caller;
     return this;
   }
@@ -196,18 +206,16 @@ class NanoContractTransactionBuilder {
    * Create inputs (and maybe change outputs) to complete the deposit
    *
    * @param {action} Action to be completed (must be a deposit type)
-   * @param {tokens} Array of tokens to get the token data correctly
    *
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
   async executeDeposit(
-    action: NanoContractAction,
-    tokens: string[]
-  ): Promise<[IDataInput[], IDataOutput[]]> {
+    action: NanoContractAction
+  ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }> {
     if (action.type !== NanoContractActionType.DEPOSIT) {
       throw new NanoContractTransactionError(
-        "Can't execute a deposit with an action which type is differente than deposit."
+        "Can't execute a deposit with an action which type is different than deposit."
       );
     }
 
@@ -220,15 +228,45 @@ class NanoContractTransactionBuilder {
       throw new NanoContractTransactionError('Change address must belong to the same wallet.');
     }
 
+    let { amount } = action;
+    if (
+      action.token === NATIVE_TOKEN_UID &&
+      this.vertexType === NanoContractVertexType.CREATE_TOKEN_TRANSACTION &&
+      !this.createTokenOptions!.contractPaysTokenDeposit
+    ) {
+      // We will query for HTR utxos to fill the deposit action
+      // and this is a transaction that creates a token and the contract
+      // won't pay for the deposit fee, so we also add in this utxo query
+      // the token deposit fee and data output fee
+      const dataArray = this.createTokenOptions!.data ?? [];
+      const htrToCreateToken = tokensUtils.getTransactionHTRDeposit(
+        this.createTokenOptions!.amount,
+        dataArray.length,
+        this.wallet.storage
+      );
+      amount += htrToCreateToken;
+      this.tokenFeeAddedInDeposit = true;
+    }
+
     // Get the utxos with the amount of the deposit and create the inputs
     const utxoOptions: { token: string; filter_address?: string | null } = { token: action.token };
     if (action.address) {
       utxoOptions.filter_address = action.address;
     }
-    const utxosData = await this.wallet.getUtxosForAmount(action.amount, utxoOptions);
-    // XXX What if I don't have enough funds? Validate it!
+
+    let utxosData;
+    try {
+      utxosData = await this.wallet.getUtxosForAmount(amount, utxoOptions);
+    } catch (e) {
+      if (e instanceof UtxoError) {
+        throw new NanoContractTransactionError('Not enough utxos to execute the deposit.');
+      }
+
+      throw e;
+    }
     const inputs: IDataInput[] = [];
     for (const utxo of utxosData.utxos) {
+      await this.wallet.markUtxoSelected(utxo.txId, utxo.index, true);
       inputs.push({
         txId: utxo.txId,
         index: utxo.index,
@@ -255,7 +293,7 @@ class NanoContractTransactionBuilder {
       });
     }
 
-    return [inputs, outputs];
+    return { inputs, outputs };
   }
 
   /**
@@ -266,21 +304,20 @@ class NanoContractTransactionBuilder {
    * then creates the output only of the difference
    *
    * @param {action} Action to be completed (must be a withdrawal type)
-   * @param {tokens} Array of tokens to get the token data correctly
    *
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  executeWithdrawal(action: NanoContractAction, tokens: string[]): IDataOutput | null {
+  executeWithdrawal(action: NanoContractAction): IDataOutput | null {
     if (action.type !== NanoContractActionType.WITHDRAWAL) {
       throw new NanoContractTransactionError(
-        "Can't execute a withdrawal with an action which type is differente than withdrawal."
+        "Can't execute a withdrawal with an action which type is different than withdrawal."
       );
     }
 
     if (!action.amount || !action.token) {
       throw new NanoContractTransactionError(
-        'Address, amount and token are required for withdrawal action.'
+        'Amount and token are required for withdrawal action.'
       );
     }
 
@@ -296,12 +333,13 @@ class NanoContractTransactionBuilder {
 
       // We pay the deposit in native token uid
       if (this.createTokenOptions.contractPaysTokenDeposit && action.token === NATIVE_TOKEN_UID) {
-        const depositPercent = this.wallet.storage.getTokenDepositPercentage();
-        const depositAmount = tokensUtils.getDepositAmount(
-          this.createTokenOptions.amount,
-          depositPercent
+        const dataArray = this.createTokenOptions!.data ?? [];
+        const htrToCreateToken = tokensUtils.getTransactionHTRDeposit(
+          this.createTokenOptions!.amount,
+          dataArray.length,
+          this.wallet.storage
         );
-        withdrawalAmount -= depositAmount;
+        withdrawalAmount -= htrToCreateToken;
       }
     }
 
@@ -324,6 +362,109 @@ class NanoContractTransactionBuilder {
       timelock: null,
       token: action.token,
       authorities: 0n,
+    };
+  }
+
+  /**
+   * Execute a grant authority action
+   * Create inputs (and maybe change output) to complete the action
+   *
+   * @param {action} Action to be completed (must be a grant authority type)
+   *
+   * @memberof NanoContractTransactionBuilder
+   * @inner
+   */
+  async executeGrantAuthority(
+    action: NanoContractAction
+  ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }> {
+    if (action.type !== NanoContractActionType.GRANT_AUTHORITY) {
+      throw new NanoContractTransactionError(
+        "Can't execute a grant authority with an action which type is different than grant authority."
+      );
+    }
+
+    if (!action.authority || !action.token) {
+      throw new NanoContractTransactionError(
+        'Authority and token are required for grant authority action.'
+      );
+    }
+
+    const authorityAddressParam = action.authorityAddress;
+    if (authorityAddressParam && !(await this.wallet.isAddressMine(authorityAddressParam))) {
+      throw new NanoContractTransactionError('Authority address must belong to the same wallet.');
+    }
+
+    // Get the utxos with the authority of the action and create the input
+    const utxos = await this.wallet.getAuthorityUtxo(action.token, action.authority, {
+      many: false,
+      only_available_utxos: true,
+      filter_address: action.address,
+    });
+
+    if (!utxos || utxos.length === 0) {
+      throw new NanoContractTransactionError(
+        'Not enough authority utxos to execute the grant authority.'
+      );
+    }
+
+    const inputs: IDataInput[] = [];
+    // The method gets only one utxo
+    const utxo = utxos[0];
+    await this.wallet.markUtxoSelected(utxo.txId, utxo.index, true);
+    inputs.push({
+      txId: utxo.txId,
+      index: utxo.index,
+      value: utxo.value,
+      authorities: utxo.authorities,
+      token: utxo.token,
+      address: utxo.address,
+    });
+
+    const outputs: IDataOutput[] = [];
+    // If there's the authorityAddress param, then we must create another authority output for this address
+    if (action.authorityAddress) {
+      outputs.push({
+        type: getAddressType(action.authorityAddress, this.wallet.getNetworkObject()),
+        address: action.authorityAddress,
+        value: action.authority === 'mint' ? TOKEN_MINT_MASK : TOKEN_MELT_MASK,
+        timelock: null,
+        token: action.token,
+        authorities: action.authority === 'mint' ? TOKEN_MINT_MASK : TOKEN_MELT_MASK,
+      });
+    }
+
+    return { inputs, outputs };
+  }
+
+  /**
+   * Execute an acquire authority action
+   *
+   * @param {action} Action to be completed (must be an acquire authority type)
+   *
+   * @memberof NanoContractTransactionBuilder
+   * @inner
+   */
+  executeAcquireAuthority(action: NanoContractAction): IDataOutput | null {
+    if (action.type !== NanoContractActionType.ACQUIRE_AUTHORITY) {
+      throw new NanoContractTransactionError(
+        "Can't execute an acquire authority with an action which type is different than acquire authority."
+      );
+    }
+
+    if (!action.address || !action.authority || !action.token) {
+      throw new NanoContractTransactionError(
+        'Address, authority, and token are required for acquire authority action.'
+      );
+    }
+
+    // Create the output with the authority of the action
+    return {
+      type: getAddressType(action.address, this.wallet.getNetworkObject()),
+      address: action.address,
+      value: action.authority === 'mint' ? TOKEN_MINT_MASK : TOKEN_MELT_MASK,
+      timelock: null,
+      token: action.token,
+      authorities: action.authority === 'mint' ? TOKEN_MINT_MASK : TOKEN_MELT_MASK,
     };
   }
 
@@ -372,8 +513,20 @@ class NanoContractTransactionBuilder {
       throw new NanoContractTransactionError('Must have blueprint id, method and caller.');
     }
 
+    try {
+      this.caller.validateAddress();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Could not validate caller address';
+      throw new NanoContractTransactionError(message);
+    }
+
     // Validate if the arguments match the expected method arguments
-    await validateAndUpdateBlueprintMethodArgs(this.blueprintId, this.method, this.args);
+    this.parsedArgs = await validateAndParseBlueprintMethodArgs(
+      this.blueprintId,
+      this.method,
+      this.args,
+      this.wallet.getNetworkObject()
+    );
   }
 
   /**
@@ -386,30 +539,18 @@ class NanoContractTransactionBuilder {
    * @inner
    */
   async serializeArgs() {
-    this.serializedArgs = [];
+    if (!this.parsedArgs) {
+      throw new NanoContractTransactionError(
+        'Arguments should be parsed and validated before serialization.'
+      );
+    }
+    const serializedArray: Buffer[] = [leb128.encodeUnsigned(this.parsedArgs?.length ?? 0)];
     if (this.args) {
-      const serializer = new Serializer();
-      const blueprintInformation = await ncApi.getBlueprintInformation(this.blueprintId!);
-      const methodArgs = get(
-        blueprintInformation,
-        `public_methods.${this.method}.args`,
-        []
-      ) as MethodArgInfo[];
-      if (!methodArgs) {
-        throw new NanoContractTransactionError(`Blueprint does not have method ${this.method}.`);
-      }
-
-      if (this.args.length !== methodArgs.length) {
-        throw new NanoContractTransactionError(
-          `Method needs ${methodArgs.length} parameters but data has ${this.args.length}.`
-        );
-      }
-
-      for (const [index, arg] of methodArgs.entries()) {
-        const serialized = serializer.serializeFromType(this.args[index], arg.type);
-        this.serializedArgs.push(serialized);
+      for (const arg of this.parsedArgs) {
+        serializedArray.push(arg.field.toBuffer());
       }
     }
+    this.serializedArgs = Buffer.concat(serializedArray);
   }
 
   /**
@@ -420,7 +561,11 @@ class NanoContractTransactionBuilder {
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  async buildInputsOutputs(): Promise<[IDataInput[], IDataOutput[], string[]]> {
+  async buildInputsOutputs(): Promise<{
+    inputs: IDataInput[];
+    outputs: IDataOutput[];
+    tokens: string[];
+  }> {
     let inputs: IDataInput[] = [];
     let outputs: IDataOutput[] = [];
     let tokens: string[] = [];
@@ -435,22 +580,42 @@ class NanoContractTransactionBuilder {
       tokens = Array.from(tokenSet);
       for (const action of this.actions) {
         // Call action
-        if (action.type === NanoContractActionType.DEPOSIT) {
-          const ret = await this.executeDeposit(action, tokens);
-          inputs = concat(inputs, ret[0]);
-          outputs = concat(outputs, ret[1]);
-        } else if (action.type === NanoContractActionType.WITHDRAWAL) {
-          const output = this.executeWithdrawal(action, tokens);
-          if (output) {
-            outputs = concat(outputs, output);
+        switch (action.type) {
+          case NanoContractActionType.DEPOSIT: {
+            const { inputs: depositInputs, outputs: depositOutputs } =
+              await this.executeDeposit(action);
+            inputs = concat(inputs, depositInputs);
+            outputs = concat(outputs, depositOutputs);
+            break;
           }
-        } else {
-          throw new Error('Invalid type for nano contract action.');
+          case NanoContractActionType.WITHDRAWAL: {
+            const outputWithdrawal = this.executeWithdrawal(action);
+            if (outputWithdrawal) {
+              outputs = concat(outputs, outputWithdrawal);
+            }
+            break;
+          }
+          case NanoContractActionType.GRANT_AUTHORITY: {
+            const { inputs: grantInputs, outputs: grantOutputs } =
+              await this.executeGrantAuthority(action);
+            inputs = concat(inputs, grantInputs);
+            outputs = concat(outputs, grantOutputs);
+            break;
+          }
+          case NanoContractActionType.ACQUIRE_AUTHORITY: {
+            const outputAcquire = this.executeAcquireAuthority(action);
+            if (outputAcquire) {
+              outputs = concat(outputs, outputAcquire);
+            }
+            break;
+          }
+          default:
+            throw new Error('Invalid type for nano contract action.');
         }
       }
     }
 
-    return [inputs, outputs, tokens];
+    return { inputs, outputs, tokens };
   }
 
   /**
@@ -504,7 +669,8 @@ class NanoContractTransactionBuilder {
           meltAuthorityAddress: this.createTokenOptions.meltAuthorityAddress,
           data: this.createTokenOptions.data,
           isCreateNFT: this.createTokenOptions.isCreateNFT,
-          skipDepositFee: this.createTokenOptions.contractPaysTokenDeposit,
+          skipDepositFee:
+            this.createTokenOptions.contractPaysTokenDeposit || this.tokenFeeAddedInDeposit,
         }
       );
 
@@ -527,57 +693,60 @@ class NanoContractTransactionBuilder {
    * @inner
    */
   async build(): Promise<Transaction> {
-    await this.verify();
+    let inputs;
+    let outputs;
+    let tokens;
+    try {
+      await this.verify();
 
-    // Transform actions into inputs and outputs
-    const [inputs, outputs, tokens] = await this.buildInputsOutputs();
+      // Transform actions into inputs and outputs
+      ({ inputs, outputs, tokens } = await this.buildInputsOutputs());
 
-    // Serialize the method arguments
-    await this.serializeArgs();
+      // Serialize the method arguments
+      await this.serializeArgs();
 
-    const ncId = this.method === NANO_CONTRACTS_INITIALIZE_METHOD ? this.blueprintId : this.ncId;
+      const ncId = this.method === NANO_CONTRACTS_INITIALIZE_METHOD ? this.blueprintId : this.ncId;
 
-    if (ncId == null) {
-      // This was validated in the beginning of the method but the linter was complaining about it
-      throw new Error('This should never happen.');
-    }
+      if (ncId == null) {
+        // This was validated in the beginning of the method but the linter was complaining about it
+        throw new Error('This should never happen.');
+      }
 
-    const tx = await this.buildTransaction(inputs, outputs, tokens);
+      const tx = await this.buildTransaction(inputs, outputs, tokens);
+      const seqnum = await this.wallet.getNanoHeaderSeqnum(this.caller!);
 
-    let nanoHeaderActions: NanoContractActionHeader[] = [];
+      let nanoHeaderActions: NanoContractActionHeader[] = [];
 
-    if (this.actions) {
-      nanoHeaderActions = this.actions.map(action => {
-        const headerActionType = ActionTypeToActionHeaderType[action.type];
-
-        const mappedTokens: ITokenData[] = tokens.map(token => {
-          return {
-            uid: token,
-            name: '',
-            symbol: '',
-          };
+      if (this.actions) {
+        nanoHeaderActions = this.actions.map(action => {
+          return mapActionToActionHeader(action, tokens);
         });
+      }
 
-        return {
-          type: headerActionType,
-          amount: action.amount,
-          tokenIndex: tokensUtils.getTokenIndex(mappedTokens, action.token),
-        };
-      });
+      const nanoHeader = new NanoContractHeader(
+        ncId,
+        this.method!,
+        this.serializedArgs!,
+        nanoHeaderActions,
+        seqnum,
+        this.caller!,
+        null
+      );
+
+      tx.headers.push(nanoHeader);
+
+      return tx;
+    } catch (e) {
+      if (!inputs) {
+        throw e;
+      }
+
+      for (const input of inputs) {
+        await this.wallet.markUtxoSelected(input.txId, input.index, false);
+      }
+
+      throw e;
     }
-
-    const nanoHeader = new NanoContractHeader(
-      ncId,
-      this.method!,
-      this.serializedArgs!,
-      nanoHeaderActions,
-      this.caller!,
-      null
-    );
-
-    tx.headers.push(nanoHeader);
-
-    return tx;
   }
 }
 
