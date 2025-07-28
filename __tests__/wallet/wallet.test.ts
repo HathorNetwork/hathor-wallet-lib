@@ -1957,11 +1957,13 @@ describe('getUtxos with fullnode facade interface', () => {
       ],
     });
     expect(walletApi.getTxOutputs).toHaveBeenCalledWith(wallet, {
-      tokenId: '00',
+      tokenId: 'HTR',
       authority: undefined,
       addresses: undefined,
       totalAmount: undefined,
-      count: 10,
+      smallerThan: undefined,
+      biggerThan: undefined,
+      maxOutputs: 10,
       ignoreLocked: true,
       skipSpent: true,
     });
@@ -2011,14 +2013,16 @@ describe('getUtxos with fullnode facade interface', () => {
       authority: undefined,
       addresses: undefined,
       totalAmount: undefined,
-      count: 1,
+      smallerThan: undefined,
+      biggerThan: undefined,
+      maxOutputs: 1,
       ignoreLocked: true,
       skipSpent: true,
     });
   });
 
   it('should apply amount filters in fullnode facade interface', async () => {
-    const mockUtxos = [
+    const mockUtxosSmallerThan200 = [
       {
         txId: 'tx1',
         index: 0,
@@ -2028,6 +2032,18 @@ describe('getUtxos with fullnode facade interface', () => {
         authorities: 0,
         addressPath: "m/44'/280'/0'/0/0",
       },
+      {
+        txId: 'tx2',
+        index: 1,
+        value: 150n,
+        address: 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc',
+        token: '00',
+        authorities: 0,
+        addressPath: "m/44'/280'/0'/0/1",
+      },
+    ];
+
+    const mockUtxosBiggerThan100 = [
       {
         txId: 'tx2',
         index: 1,
@@ -2048,8 +2064,11 @@ describe('getUtxos with fullnode facade interface', () => {
       },
     ];
 
-    jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
-      txOutputs: mockUtxos,
+    const getTxOutputsSpy = jest.spyOn(walletApi, 'getTxOutputs');
+
+    // Mock the first call (amount_smaller_than: 200)
+    getTxOutputsSpy.mockResolvedValueOnce({
+      txOutputs: mockUtxosSmallerThan200,
     });
 
     // Test amount_smaller_than filter
@@ -2083,6 +2102,23 @@ describe('getUtxos with fullnode facade interface', () => {
       ],
     });
 
+    expect(getTxOutputsSpy).toHaveBeenCalledWith(wallet, {
+      tokenId: 'HTR',
+      authority: undefined,
+      addresses: undefined,
+      totalAmount: undefined,
+      smallerThan: 200,
+      biggerThan: undefined,
+      maxOutputs: 10,
+      ignoreLocked: true,
+      skipSpent: true,
+    });
+
+    // Mock the second call (amount_bigger_than: 100)
+    getTxOutputsSpy.mockResolvedValueOnce({
+      txOutputs: mockUtxosBiggerThan100,
+    });
+
     // Test amount_bigger_than filter
     const result2 = await wallet.getUtxos({
       token: 'HTR',
@@ -2112,6 +2148,18 @@ describe('getUtxos with fullnode facade interface', () => {
           index: 2,
         },
       ],
+    });
+
+    expect(getTxOutputsSpy).toHaveBeenCalledWith(wallet, {
+      tokenId: 'HTR',
+      authority: undefined,
+      addresses: undefined,
+      totalAmount: undefined,
+      smallerThan: undefined,
+      biggerThan: 100,
+      maxOutputs: 10,
+      ignoreLocked: true,
+      skipSpent: true,
     });
   });
 

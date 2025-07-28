@@ -15,8 +15,9 @@ import Address from '../../src/models/address';
 describe('prepareTxData', () => {
   let wallet;
   let sendTransaction;
+
   const seed =
-    'wood candy festival desk bachelor arrive pumpkin swarm stairs jar feel ship edit drill always calm what oven lobster lesson eternal foot monkey toast';
+    'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
 
   beforeEach(() => {
     wallet = new HathorWalletServiceWallet({
@@ -27,14 +28,16 @@ describe('prepareTxData', () => {
     // Mocking wallet methods
     wallet.getUtxoFromId = jest.fn();
     wallet.getUtxosForAmount = jest.fn();
-    wallet.getCurrentAddress = jest.fn().mockReturnValue({ address: 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc' });
+    wallet.getCurrentAddress = jest
+      .fn()
+      .mockReturnValue({ address: 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc' });
   });
 
   it('should prepare transaction data with mixed inputs and a data output', async () => {
     // Mock the address validation - bypass all validation
     const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
     mockIsValid.mockReturnValue(true);
-    
+
     const mockGetType = jest.spyOn(Address.prototype, 'getType');
     mockGetType.mockReturnValue('p2pkh');
 
@@ -141,8 +144,8 @@ describe('prepareTxData', () => {
           authorities: 0n,
           timelock: null,
         }),
-        expect.objectContaining({ 
-          type: 'data', 
+        expect.objectContaining({
+          type: 'data',
           data: '61626364', // 'abcd' in hex
           value: 1n,
           token: NATIVE_TOKEN_UID,

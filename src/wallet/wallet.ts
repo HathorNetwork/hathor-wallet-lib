@@ -873,7 +873,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }> {
     this.failIfWalletNotReady();
 
-    console.log('Wallet lib received options: ', options);
     const newOptions = {
       token: options.token,
       authorities: options.authorities,
@@ -888,7 +887,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const mappedOptions = {
       tokenId: newOptions.token || NATIVE_TOKEN_UID,
       authority: newOptions.authorities,
-      addresses: newOptions.filter_address,
+      addresses: newOptions.filter_address ? [newOptions.filter_address] : undefined,
       totalAmount: newOptions.max_amount,
       smallerThan: newOptions.amount_smaller_than,
       biggerThan: newOptions.amount_bigger_than,
@@ -897,7 +896,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       skipSpent: newOptions.only_available_utxos !== false,
     };
 
-    console.log('mapped options:', mappedOptions);
 
     // Call the internal API to get UTXOs
     const data = await walletApi.getTxOutputs(this, mappedOptions);

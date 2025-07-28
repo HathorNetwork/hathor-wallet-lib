@@ -106,7 +106,6 @@ export function floatToBytes(value: number, bytes: number): Buffer {
 }
 
 export const hexToBuffer = (value: string): Buffer => {
-  console.log('hex to buffer: ', value);
   if (!isHexa(value)) {
     throw new Error('hexToBuffer: argument must be a strict hex string.');
   }
