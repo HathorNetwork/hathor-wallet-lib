@@ -144,7 +144,7 @@ describe('onNewTx', () => {
           value: 100n,
           token_data: 0,
           script: { type: 'Buffer', data: [] },
-          token: 'HTR',
+          token: '00',
           decoded: {
             type: 'P2PKH',
             address: testAddress,
@@ -189,7 +189,7 @@ describe('onNewTx', () => {
           value: 100n,
           token_data: 0,
           script: { type: 'Buffer', data: [] },
-          token: 'HTR',
+          token: '00',
           decoded: {
             type: 'P2PKH',
             address: 'someRandomAddress',
@@ -1902,7 +1902,7 @@ test('signMessageWithAddress', async () => {
   expect(verifyMessage(message, signedMessage, address)).toBeTruthy();
 });
 
-describe('getUtxos with fullnode facade interface', () => {
+describe('getUtxos', () => {
   let wallet: HathorWalletServiceWallet;
   const seed = defaultWalletSeed;
 
@@ -1919,7 +1919,7 @@ describe('getUtxos with fullnode facade interface', () => {
     jest.clearAllMocks();
   });
 
-  it('should use fullnode interface when token parameter is provided', async () => {
+  it('should return UTXOs when token parameter is provided', async () => {
     const mockUtxos = [
       {
         txId: 'tx1',
@@ -1937,7 +1937,7 @@ describe('getUtxos with fullnode facade interface', () => {
     });
 
     const result = await wallet.getUtxos({
-      token: 'HTR',
+      token: '00',
       max_utxos: 10,
     });
 
@@ -1957,7 +1957,7 @@ describe('getUtxos with fullnode facade interface', () => {
       ],
     });
     expect(walletApi.getTxOutputs).toHaveBeenCalledWith(wallet, {
-      tokenId: 'HTR',
+      tokenId: '00',
       authority: undefined,
       addresses: undefined,
       totalAmount: undefined,
@@ -1969,7 +1969,7 @@ describe('getUtxos with fullnode facade interface', () => {
     });
   });
 
-  it('should handle custom token in fullnode facade interface', async () => {
+  it('should handle custom token requests', async () => {
     const customTokenId =
       '01a7a04b2c3b7b1b9b8a8e8f8e8f8e8f8e8f8e8f8e8f8e8f8e8f8e8f8e8f8e8f8e8f8e8f';
     const mockUtxos = [
@@ -2021,7 +2021,7 @@ describe('getUtxos with fullnode facade interface', () => {
     });
   });
 
-  it('should apply amount filters in fullnode facade interface', async () => {
+  it('should apply amount filters using api filtering', async () => {
     const mockUtxosSmallerThan200 = [
       {
         txId: 'tx1',
@@ -2073,7 +2073,7 @@ describe('getUtxos with fullnode facade interface', () => {
 
     // Test amount_smaller_than filter
     const result1 = await wallet.getUtxos({
-      token: 'HTR',
+      token: '00',
       amount_smaller_than: 200,
       max_utxos: 10,
     });
@@ -2103,7 +2103,7 @@ describe('getUtxos with fullnode facade interface', () => {
     });
 
     expect(getTxOutputsSpy).toHaveBeenCalledWith(wallet, {
-      tokenId: 'HTR',
+      tokenId: '00',
       authority: undefined,
       addresses: undefined,
       totalAmount: undefined,
@@ -2121,7 +2121,7 @@ describe('getUtxos with fullnode facade interface', () => {
 
     // Test amount_bigger_than filter
     const result2 = await wallet.getUtxos({
-      token: 'HTR',
+      token: '00',
       amount_bigger_than: 100,
       max_utxos: 10,
     });
@@ -2151,7 +2151,7 @@ describe('getUtxos with fullnode facade interface', () => {
     });
 
     expect(getTxOutputsSpy).toHaveBeenCalledWith(wallet, {
-      tokenId: 'HTR',
+      tokenId: '00',
       authority: undefined,
       addresses: undefined,
       totalAmount: undefined,
@@ -2169,7 +2169,7 @@ describe('getUtxos with fullnode facade interface', () => {
     });
 
     const result = await wallet.getUtxos({
-      token: 'HTR',
+      token: '00',
       max_utxos: 10,
     });
 
