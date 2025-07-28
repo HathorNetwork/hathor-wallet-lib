@@ -91,14 +91,8 @@ export default class WalletServiceConnection extends BaseConnection {
 
     this.websocket = new WalletServiceWebSocket(wsOptions);
     this.websocket.on('is_online', online => this.onConnectionChange(online));
-    this.websocket.on('new-tx', payload => {
-      const validatedTx = parseSchema(payload.data, wsTransactionSchema);
-      this.emit('new-tx', validatedTx as WsTransaction);
-    });
-    this.websocket.on('update-tx', payload => {
-      const validatedTx = parseSchema(payload.data, wsTransactionSchema);
-      this.emit('update-tx', validatedTx as WsTransaction);
-    });
+    this.websocket.on('new-tx', payload => this.onWsMessage('new-tx', payload));
+    this.websocket.on('update-tx', payload => this.onWsMessage('update-tx', payload));
 
     this.setState(ConnectionState.CONNECTING);
     this.websocket.setup();
