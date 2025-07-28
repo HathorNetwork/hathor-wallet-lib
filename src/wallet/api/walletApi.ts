@@ -223,7 +223,6 @@ const walletApi = {
     if (response.status === 201) {
       return parseSchema(response.data, txProposalCreateResponseSchema);
     }
-    console.log('RESPONSE: ', response);
     throw new WalletRequestError('Error creating tx proposal.');
   },
 
@@ -238,7 +237,6 @@ const walletApi = {
     if (response.status === 200) {
       return parseSchema(response.data, txProposalUpdateResponseSchema);
     }
-    console.log('FULL RESPONSE', response);
     throw new WalletRequestError('Error sending tx proposal.');
   },
 

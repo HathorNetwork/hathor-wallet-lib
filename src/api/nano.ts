@@ -126,14 +126,7 @@ const ncApi = {
     const data = { blueprint_id: id };
     const axiosInstance = await createRequestInstance();
     try {
-      console.log('Requesting blueprint information with ID:', id);
-      // Log the full URL that would be requested
-      const baseURL = axiosInstance.defaults.baseURL || '';
-      const fullURL = `${baseURL}nano_contract/blueprint/info?blueprint_id=${id}`;
-      console.log('Full blueprint request URL:', fullURL);
-
       const response = await axiosInstance.get(`nano_contract/blueprint/info`, { params: data });
-      console.log('Blueprint response status:', response.status);
       const responseData = response.data;
       if (response.status === 200) {
         return responseData;
@@ -141,19 +134,12 @@ const ncApi = {
 
       throw new NanoRequestError('Error getting blueprint information.', null, response);
     } catch (error: unknown) {
-      console.error('Error getting blueprint information:', error);
       if (axios.isAxiosError(error)) {
         const e = error as AxiosError<typeof e>;
         if (e.response) {
-          console.log('Error response status:', e.response.status);
-          console.log('Error response data:', e.response.data);
           if (e.response.status === 404) {
             throw new NanoRequest404Error('Blueprint not found.', e, e.response);
           }
-        } else if (e.request) {
-          console.log('No response received for request:', e.request);
-        } else {
-          console.log('Error setting up request:', e.message);
         }
       }
 

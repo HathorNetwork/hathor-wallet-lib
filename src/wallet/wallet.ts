@@ -896,7 +896,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       skipSpent: newOptions.only_available_utxos !== false,
     };
 
-
     // Call the internal API to get UTXOs
     const data = await walletApi.getTxOutputs(this, mappedOptions);
     const filteredUtxos = data.txOutputs;

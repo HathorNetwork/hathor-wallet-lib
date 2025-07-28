@@ -48,7 +48,7 @@ import {
 import config, { Config } from '../config';
 import { decryptData, checkPassword } from '../utils/crypto';
 import FullNodeConnection from '../new/connection';
-import { getAddressType, deriveAddressFromXPubP2PKH } from '../utils/address';
+import { getAddressType } from '../utils/address';
 import walletUtils from '../utils/wallet';
 import {
   NATIVE_TOKEN_UID,

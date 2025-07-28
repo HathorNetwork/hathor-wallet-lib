@@ -40,7 +40,7 @@ import { IHistoryTx } from '../../src/types';
 // TODO: We should refactor the way we use classes from inside other classes. Using dependency injection would facilitate unit tests a lot and avoid mocks like this.
 jest.mock('../../src/wallet/sendTransactionWalletService', () => {
   return jest.fn().mockImplementation(() => {
-    return { run: () => { } };
+    return { run: () => {} };
   });
 });
 
@@ -1368,7 +1368,7 @@ test('sendTransaction', async () => {
   // Mock the storage isReadonly method to prevent UninitializedWalletError
   wallet.storage = {
     isReadonly: jest.fn().mockResolvedValue(false),
-  } as any;
+  } as Partial<typeof wallet.storage>;
 
   // Send transaction
   await wallet.sendTransaction('WYLW8ujPemSuLJwbeNvvH6y7nakaJ6cEwT', 10, { pinCode: '1234' });

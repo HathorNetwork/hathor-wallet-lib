@@ -33,7 +33,7 @@ describe('sendManyOutputsSendTransaction', () => {
     wallet.failIfWalletNotReady = jest.fn();
     wallet.storage = {
       isReadonly: jest.fn().mockResolvedValue(false),
-    } as any;
+    } as Partial<typeof wallet.storage>;
 
     // Mock helpers.getOutputTypeFromAddress
     mockHelpers.getOutputTypeFromAddress.mockReturnValue(OutputType.P2PKH);
@@ -246,4 +246,3 @@ describe('sendManyOutputsSendTransaction', () => {
     expect(mockRequestPassword).toHaveBeenCalled();
   });
 });
-
