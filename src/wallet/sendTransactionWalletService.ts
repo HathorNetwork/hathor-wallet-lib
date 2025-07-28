@@ -157,10 +157,12 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     // 3. Select UTXOs for tokens that need them, and create change for all
     for (const [token, needsInputs] of tokenNeedsInputs.entries()) {
       if (needsInputs) {
-        const { utxos, changeAmount } = await this.wallet.getUtxos({
-          tokenId: token,
-          totalAmount: tokenAmountMap[token],
-        });
+        const { utxos, changeAmount } = await this.wallet.getUtxosForAmount(
+          tokenAmountMap[token],
+          {
+            tokenId: token,
+          }
+        );
 
         if (utxos.length === 0) {
           throw new UtxoError(
@@ -461,10 +463,12 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
   async selectUtxosToUse(tokenAmountMap: TokenAmountMap): Promise<string[]> {
     const utxosAddressPath: string[] = [];
     for (const token in tokenAmountMap) {
-      const { utxos, changeAmount } = await this.wallet.getUtxos({
-        tokenId: token,
-        totalAmount: tokenAmountMap[token],
-      });
+      const { utxos, changeAmount } = await this.wallet.getUtxosForAmount(
+        tokenAmountMap[token],
+        {
+          tokenId: token,
+        }
+      );
       if (utxos.length === 0) {
         throw new UtxoError(
           `No utxos available to fill the request. Token: ${token} - Amount: ${tokenAmountMap[token]}.`

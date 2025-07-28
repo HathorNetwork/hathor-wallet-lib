@@ -26,7 +26,7 @@ describe('prepareTxData', () => {
     });
     // Mocking wallet methods
     wallet.getUtxoFromId = jest.fn();
-    wallet.getUtxos = jest.fn();
+    wallet.getUtxosForAmount = jest.fn();
     wallet.getCurrentAddress = jest.fn().mockReturnValue({ address: 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc' });
   });
 
@@ -65,7 +65,7 @@ describe('prepareTxData', () => {
       return null;
     });
 
-    wallet.getUtxos.mockImplementation(async ({ tokenId }) => {
+    wallet.getUtxosForAmount.mockImplementation(async (totalAmount, { tokenId }) => {
       if (tokenId === NATIVE_TOKEN_UID) {
         return {
           utxos: [

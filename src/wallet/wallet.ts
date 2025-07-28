@@ -830,137 +830,159 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
-   * Get utxos for filling a transaction
+   * Get utxos of the wallet addresses
+   *
+   * @param options Utxo filtering options
+   * @param {number} [options.max_utxos] - Maximum number of utxos to aggregate. Default to MAX_INPUTS (255).
+   * @param {string} [options.token] - Token to filter the utxos. If not sent, we select only HTR utxos.
+   * @param {number} [options.authorities] - Authorities to filter the utxos. If not sent, we select only non authority utxos.
+   * @param {string} [options.filter_address] - Address to filter the utxos.
+   * @param {number} [options.amount_smaller_than] - Maximum limit of utxo amount to filter the utxos list.
+   * @param {number} [options.amount_bigger_than] - Minimum limit of utxo amount to filter the utxos list.
+   * @param {number} [options.max_amount] - Limit the maximum total amount to consolidate summing all utxos.
+   * @param {boolean} [options.only_available_utxos] - Use only available utxos (not locked)
+   *
+   * @returns Promise that resolves with utxos and meta information about them
    *
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  // Method overload for the new RPC-style interface
-  async getUtxos(options: {
-    token?: string;
-    authorities?: number;
-    max_utxos?: number;
-    filter_address?: string;
-    amount_smaller_than?: number;
-    amount_bigger_than?: number;
-    max_amount?: number;
-    only_available_utxos?: boolean;
-  }): Promise<Utxo[]>;
-  
-  // Method overload for the existing interface
-  async getUtxos(options: {
-    tokenId?: string;
-    authority?: OutputValueType;
-    addresses?: string[];
-    totalAmount?: OutputValueType;
-    count?: number;
-  }): Promise<{ utxos: Utxo[]; changeAmount: OutputValueType }>;
-  
-  // Implementation
   async getUtxos(
-    options: any = {}
-  ): Promise<{ utxos: Utxo[]; changeAmount: OutputValueType } | Utxo[]> {
-    // Detect which interface is being used
-    const isRpcInterface = 'token' in options || 'max_utxos' in options || 'filter_address' in options;
-    
-    if (isRpcInterface) {
-      // Handle RPC-style interface
-      const rpcOptions = options as {
-        token?: string;
-        authorities?: number;
-        max_utxos?: number;
-        filter_address?: string;
-        amount_smaller_than?: number;
-        amount_bigger_than?: number;
-        max_amount?: number;
-        only_available_utxos?: boolean;
-      };
-      
-      // Map RPC parameters to internal API parameters
-      type optionsType = {
-        tokenId?: string;
-        authority?: OutputValueType;
-        addresses?: string[];
-        totalAmount?: OutputValueType;
-        count?: number;
-        ignoreLocked: true;
-        skipSpent: true;
-      };
-      
-      const mappedOptions: optionsType = {
-        tokenId: rpcOptions.token === 'HTR' ? NATIVE_TOKEN_UID : rpcOptions.token,
-        authority: rpcOptions.authorities ? BigInt(rpcOptions.authorities) : undefined,
-        addresses: rpcOptions.filter_address ? [rpcOptions.filter_address] : undefined,
-        totalAmount: rpcOptions.max_amount ? BigInt(rpcOptions.max_amount) : undefined,
-        count: rpcOptions.max_utxos || 255,
-        ignoreLocked: true,
-        skipSpent: rpcOptions.only_available_utxos !== false, // Default to true
-      };
-      
-      // Call the internal API to get UTXOs
-      const data = await walletApi.getTxOutputs(this, mappedOptions);
-      let filteredUtxos = data.txOutputs;
-      
-      // Apply additional filters that the internal API doesn't support
-      if (rpcOptions.amount_smaller_than && rpcOptions.amount_smaller_than > 0) {
-        filteredUtxos = filteredUtxos.filter(utxo => Number(utxo.value) < rpcOptions.amount_smaller_than!);
-      }
-      
-      if (rpcOptions.amount_bigger_than && rpcOptions.amount_bigger_than > 0) {
-        filteredUtxos = filteredUtxos.filter(utxo => Number(utxo.value) > rpcOptions.amount_bigger_than!);
-      }
-      
-      // Limit the number of UTXOs returned
-      if (rpcOptions.max_utxos && rpcOptions.max_utxos > 0) {
-        filteredUtxos = filteredUtxos.slice(0, rpcOptions.max_utxos);
-      }
-      
-      // Return just the array of UTXOs for RPC interface
-      return filteredUtxos;
-    } else {
-      // Handle existing interface
-      type optionsType = {
-        tokenId: string;
-        authority: OutputValueType | null;
-        addresses: string[] | null;
-        totalAmount: OutputValueType | null;
-        count: number;
-        ignoreLocked: true;
-        skipSpent: true;
-      };
-      const newOptions: optionsType = {
-        tokenId: NATIVE_TOKEN_UID,
-        authority: null,
-        addresses: null,
-        totalAmount: null,
-        count: 1,
-        ...options,
-        ignoreLocked: true,
-        skipSpent: true, // We only want UTXOs
+    options: {
+      token?: string;
+      authorities?: number;
+      max_utxos?: number;
+      filter_address?: string;
+      amount_smaller_than?: number;
+      amount_bigger_than?: number;
+      max_amount?: number;
+      only_available_utxos?: boolean;
+    } = {}
+  ): Promise<{
+    total_amount_available: bigint;
+    total_utxos_available: bigint;
+    total_amount_locked: bigint;
+    total_utxos_locked: bigint;
+    utxos: {
+      address: string;
+      amount: bigint;
+      tx_id: string;
+      locked: boolean;
+      index: number;
+    }[];
+  }> {
+    this.failIfWalletNotReady();
+
+    console.log('Wallet lib received options: ', options);
+    const newOptions = {
+      token: options.token,
+      authorities: options.authorities,
+      max_utxos: options.max_utxos,
+      filter_address: options.filter_address,
+      amount_smaller_than: options.amount_smaller_than,
+      amount_bigger_than: options.amount_bigger_than,
+      max_amount: options.max_amount,
+      only_available_utxos: options.only_available_utxos,
+    };
+
+    const mappedOptions = {
+      tokenId: newOptions.token || NATIVE_TOKEN_UID,
+      authority: newOptions.authorities,
+      addresses: newOptions.filter_address,
+      totalAmount: newOptions.max_amount,
+      smallerThan: newOptions.amount_smaller_than,
+      biggerThan: newOptions.amount_bigger_than,
+      maxOutputs: newOptions.max_utxos || 255,
+      ignoreLocked: true,
+      skipSpent: newOptions.only_available_utxos !== false,
+    };
+
+    console.log('mapped options:', mappedOptions);
+
+    // Call the internal API to get UTXOs
+    const data = await walletApi.getTxOutputs(this, mappedOptions);
+    const filteredUtxos = data.txOutputs;
+
+    // Build the UtxoDetails response matching fullnode wallet interface
+    const utxoDetails = {
+      total_amount_available: 0n,
+      total_utxos_available: 0n,
+      total_amount_locked: 0n,
+      total_utxos_locked: 0n,
+      utxos: [] as {
+        address: string;
+        amount: bigint;
+        tx_id: string;
+        locked: boolean;
+        index: number;
+      }[],
+    };
+
+    // For wallet service, we'll assume all UTXOs are available (not locked)
+    // since the wallet service handles locking differently
+    for (const utxo of filteredUtxos) {
+      const utxoInfo = {
+        address: utxo.address,
+        amount: utxo.value,
+        tx_id: utxo.txId,
+        locked: false, // Wallet service UTXOs are typically available
+        index: utxo.index,
       };
 
-      if (!newOptions.authority && !newOptions.totalAmount) {
-        throw new UtxoError("We need the total amount of utxos if it's not an authority request.");
-      }
-
-      const data = await walletApi.getTxOutputs(this, newOptions);
-      let changeAmount = 0n;
-      let utxos: Utxo[] = [];
-      if (data.txOutputs.length === 0) {
-        // No utxos available for the requested filter
-        utxos = data.txOutputs;
-      } else if (newOptions.authority) {
-        // Requests an authority utxo, then I return the count of requested authority utxos
-        utxos = data.txOutputs.slice(0, newOptions.count);
-      } else {
-        // We got an array of utxos, then we must check if there is enough amount to fill the totalAmount
-        // and slice the least possible utxos
-        const ret = transaction.selectUtxos(data.txOutputs, newOptions.totalAmount!);
-        changeAmount = ret.changeAmount;
-        utxos = ret.utxos;
-      }
-      return { utxos, changeAmount };
+      utxoDetails.utxos.push(utxoInfo);
+      utxoDetails.total_amount_available += utxo.value;
+      utxoDetails.total_utxos_available += 1n;
     }
+
+    return utxoDetails;
+  }
+
+  /**
+   * Get utxos for filling a transaction (legacy method for backward compatibility)
+   *
+   * @param totalAmount The total amount needed
+   * @param options Legacy options for the old interface
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   * @deprecated Use getUtxos instead
+   */
+  async getUtxosForAmount(
+    totalAmount: OutputValueType,
+    options: {
+      tokenId?: string;
+      authority?: OutputValueType;
+      addresses?: string[];
+      count?: number;
+    } = {}
+  ): Promise<{ utxos: Utxo[]; changeAmount: OutputValueType }> {
+    const newOptions = {
+      tokenId: NATIVE_TOKEN_UID,
+      authority: null,
+      addresses: null,
+      totalAmount,
+      count: 1,
+      ...options,
+      ignoreLocked: true,
+      skipSpent: true,
+    };
+
+    if (!newOptions.authority && !newOptions.totalAmount) {
+      throw new UtxoError("We need the total amount of utxos if it's not an authority request.");
+    }
+
+    const data = await walletApi.getTxOutputs(this, newOptions);
+    let changeAmount = 0n;
+    let utxos: Utxo[] = [];
+    if (data.txOutputs.length === 0) {
+      utxos = data.txOutputs;
+    } else if (newOptions.authority) {
+      utxos = data.txOutputs.slice(0, newOptions.count);
+    } else {
+      const ret = transaction.selectUtxos(data.txOutputs, newOptions.totalAmount!);
+      changeAmount = ret.changeAmount;
+      utxos = ret.utxos;
+    }
+    return { utxos, changeAmount };
   }
 
   /**
@@ -1464,9 +1486,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     // 2. Get utxos for HTR
-    const { utxos, changeAmount } = await this.getUtxos({
+    const { utxos, changeAmount } = await this.getUtxosForAmount(deposit, {
       tokenId: NATIVE_TOKEN_UID,
-      totalAmount: deposit,
     });
     if (utxos.length === 0) {
       throw new UtxoError(
@@ -1721,9 +1742,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const deposit = tokens.getDepositAmount(amount, depositPercent);
 
     // 2. Get utxos for HTR
-    const { utxos, changeAmount } = await this.getUtxos({
+    const { utxos, changeAmount } = await this.getUtxosForAmount(deposit, {
       tokenId: NATIVE_TOKEN_UID,
-      totalAmount: deposit,
     });
     if (utxos.length === 0) {
       throw new UtxoError(
@@ -1732,7 +1752,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     // 3. Get mint authority
-    const ret = await this.getUtxos({ tokenId: token, authority: TOKEN_MINT_MASK });
+    const ret = await this.getUtxosForAmount(0n, { tokenId: token, authority: TOKEN_MINT_MASK });
     if (ret.utxos.length === 0) {
       throw new UtxoError(`No authority utxo available for minting tokens. Token: ${token}.`);
     }
@@ -1889,13 +1909,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const withdraw = tokens.getWithdrawAmount(amount, depositPercent);
 
     // 2. Get utxos for custom token to melt
-    const { utxos, changeAmount } = await this.getUtxos({ tokenId: token, totalAmount: amount });
+    const { utxos, changeAmount } = await this.getUtxosForAmount(amount, { tokenId: token });
     if (utxos.length === 0) {
       throw new UtxoError(`Not enough tokens to be melted. Token: ${token} - Amount: ${amount}.`);
     }
 
     // 3. Get mint authority
-    const ret = await this.getUtxos({ tokenId: token, authority: TOKEN_MELT_MASK });
+    const ret = await this.getUtxosForAmount(0n, { tokenId: token, authority: TOKEN_MELT_MASK });
     if (ret.utxos.length === 0) {
       throw new UtxoError(`No authority utxo available for melting tokens. Token: ${token}.`);
     }
@@ -2029,7 +2049,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     // 1. Get authority utxo to spend
-    const ret = await this.getUtxos({ tokenId: token, authority });
+    const ret = await this.getUtxosForAmount(0n, { tokenId: token, authority });
     if (ret.utxos.length === 0) {
       throw new UtxoError(
         `No authority utxo available for delegating authority. Token: ${token} - Type ${type}.`
@@ -2133,7 +2153,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     // 1. Get authority utxo to spend
-    const ret = await this.getUtxos({ tokenId: token, authority, count });
+    const ret = await this.getUtxosForAmount(0n, { tokenId: token, authority, count });
     if (ret.utxos.length < count) {
       throw new UtxoError(
         `Not enough authority utxos available for destroying. Token: ${token} - Type ${type}. Requested quantity ${count} - Available quantity ${ret.utxos.length}`

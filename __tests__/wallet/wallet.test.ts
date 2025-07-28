@@ -40,7 +40,7 @@ import { IHistoryTx } from '../../src/types';
 // TODO: We should refactor the way we use classes from inside other classes. Using dependency injection would facilitate unit tests a lot and avoid mocks like this.
 jest.mock('../../src/wallet/sendTransactionWalletService', () => {
   return jest.fn().mockImplementation(() => {
-    return { run: () => {} };
+    return { run: () => { } };
   });
 });
 
@@ -713,7 +713,7 @@ test('prepareMintTokens', async () => {
   };
   const getInputDataMock = (xp: string, dtsh: Buffer) => Buffer.alloc(0);
 
-  const spy1 = jest.spyOn(wallet, 'getUtxos').mockImplementation(getUtxosMock);
+  const spy1 = jest.spyOn(wallet, 'getUtxosForAmount').mockImplementation(getUtxosMock);
   const spy2 = jest
     .spyOn(wallet.storage, 'getMainXPrivKey')
     .mockReturnValue(Promise.resolve(xpriv.xprivkey));
@@ -863,7 +863,7 @@ test('prepareMeltTokens', async () => {
   };
   const getInputDataMock = (xp: string, dtsh: Buffer) => Buffer.alloc(0);
 
-  const spy1 = jest.spyOn(wallet, 'getUtxos').mockImplementation(getUtxosMock);
+  const spy1 = jest.spyOn(wallet, 'getUtxosForAmount').mockImplementation(getUtxosMock);
   const spy2 = jest
     .spyOn(wallet.storage, 'getMainXPrivKey')
     .mockReturnValue(Promise.resolve(xpriv.xprivkey));
@@ -985,7 +985,7 @@ test('prepareDelegateAuthorityData', async () => {
   });
   const getInputDataMock = (xp: string, dtsh: Buffer) => Buffer.alloc(0);
 
-  const spy1 = jest.spyOn(wallet, 'getUtxos').mockImplementation(getUtxosMock);
+  const spy1 = jest.spyOn(wallet, 'getUtxosForAmount').mockImplementation(getUtxosMock);
   const spy2 = jest
     .spyOn(wallet.storage, 'getMainXPrivKey')
     .mockReturnValue(Promise.resolve(xpriv.xprivkey));
@@ -1124,7 +1124,7 @@ test('prepareDestroyAuthority', async () => {
   });
   const getInputDataMock = () => Buffer.from([]);
 
-  const spy1 = jest.spyOn(wallet, 'getUtxos').mockImplementation(getUtxosMock);
+  const spy1 = jest.spyOn(wallet, 'getUtxosForAmount').mockImplementation(getUtxosMock);
   const spy2 = jest
     .spyOn(wallet.storage, 'getMainXPrivKey')
     .mockReturnValue(Promise.resolve(xpriv.xprivkey));
@@ -1365,6 +1365,11 @@ test('sendTransaction', async () => {
   const wallet = buildWalletToAuthenticateApiCall();
   jest.spyOn(wallet, 'isReady').mockReturnValue(true);
 
+  // Mock the storage isReadonly method to prevent UninitializedWalletError
+  wallet.storage = {
+    isReadonly: jest.fn().mockResolvedValue(false),
+  } as any;
+
   // Send transaction
   await wallet.sendTransaction('WYLW8ujPemSuLJwbeNvvH6y7nakaJ6cEwT', 10, { pinCode: '1234' });
 
@@ -1438,7 +1443,7 @@ test('createTokens', async () => {
     };
   };
 
-  const spy1 = jest.spyOn(wallet, 'getUtxos').mockImplementation(getUtxosMock);
+  const spy1 = jest.spyOn(wallet, 'getUtxosForAmount').mockImplementation(getUtxosMock);
   const spy2 = jest
     .spyOn(wallet.storage, 'getMainXPrivKey')
     .mockReturnValue(Promise.resolve(xpriv.xprivkey));
@@ -1614,7 +1619,7 @@ test('createNFTs', async () => {
     address: addresses[0],
   });
 
-  const spy1 = jest.spyOn(wallet, 'getUtxos').mockImplementation(getUtxosMock);
+  const spy1 = jest.spyOn(wallet, 'getUtxosForAmount').mockImplementation(getUtxosMock);
   const spy2 = jest
     .spyOn(wallet.storage, 'getMainXPrivKey')
     .mockReturnValue(Promise.resolve(xpriv.xprivkey));
@@ -1895,4 +1900,265 @@ test('signMessageWithAddress', async () => {
   const signedMessage = await wallet.signMessageWithAddress(message, addressIndex, '1234');
 
   expect(verifyMessage(message, signedMessage, address)).toBeTruthy();
+});
+
+describe('getUtxos with fullnode facade interface', () => {
+  let wallet: HathorWalletServiceWallet;
+  const seed = defaultWalletSeed;
+
+  beforeEach(() => {
+    wallet = new HathorWalletServiceWallet({
+      requestPassword: async () => 'test-pin',
+      seed,
+      network: new Network('testnet'),
+    });
+
+    // Mock wallet methods
+    wallet.failIfWalletNotReady = jest.fn();
+
+    jest.clearAllMocks();
+  });
+
+  it('should use fullnode interface when token parameter is provided', async () => {
+    const mockUtxos = [
+      {
+        txId: 'tx1',
+        index: 0,
+        value: 100n,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        token: '00', // NATIVE_TOKEN_UID
+        authorities: 0,
+        addressPath: "m/44'/280'/0'/0/0",
+      },
+    ];
+
+    jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
+      txOutputs: mockUtxos,
+    });
+
+    const result = await wallet.getUtxos({
+      token: 'HTR',
+      max_utxos: 10,
+    });
+
+    expect(result).toEqual({
+      total_amount_available: 100n,
+      total_utxos_available: 1n,
+      total_amount_locked: 0n,
+      total_utxos_locked: 0n,
+      utxos: [
+        {
+          address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+          amount: 100n,
+          tx_id: 'tx1',
+          locked: false,
+          index: 0,
+        },
+      ],
+    });
+    expect(walletApi.getTxOutputs).toHaveBeenCalledWith(wallet, {
+      tokenId: '00',
+      authority: undefined,
+      addresses: undefined,
+      totalAmount: undefined,
+      count: 10,
+      ignoreLocked: true,
+      skipSpent: true,
+    });
+  });
+
+  it('should handle custom token in fullnode facade interface', async () => {
+    const customTokenId =
+      '01a7a04b2c3b7b1b9b8a8e8f8e8f8e8f8e8f8e8f8e8f8e8f8e8f8e8f8e8f8e8f8e8f8e8f';
+    const mockUtxos = [
+      {
+        txId: 'tx1',
+        index: 0,
+        value: 50n,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        token: customTokenId,
+        authorities: 0,
+        addressPath: "m/44'/280'/0'/0/0",
+      },
+    ];
+
+    jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
+      txOutputs: mockUtxos,
+    });
+
+    const result = await wallet.getUtxos({
+      token: customTokenId,
+      max_utxos: 1,
+    });
+
+    expect(result).toEqual({
+      total_amount_available: 50n,
+      total_utxos_available: 1n,
+      total_amount_locked: 0n,
+      total_utxos_locked: 0n,
+      utxos: [
+        {
+          address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+          amount: 50n,
+          tx_id: 'tx1',
+          locked: false,
+          index: 0,
+        },
+      ],
+    });
+    expect(walletApi.getTxOutputs).toHaveBeenCalledWith(wallet, {
+      tokenId: customTokenId,
+      authority: undefined,
+      addresses: undefined,
+      totalAmount: undefined,
+      count: 1,
+      ignoreLocked: true,
+      skipSpent: true,
+    });
+  });
+
+  it('should apply amount filters in fullnode facade interface', async () => {
+    const mockUtxos = [
+      {
+        txId: 'tx1',
+        index: 0,
+        value: 50n,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        token: '00',
+        authorities: 0,
+        addressPath: "m/44'/280'/0'/0/0",
+      },
+      {
+        txId: 'tx2',
+        index: 1,
+        value: 150n,
+        address: 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc',
+        token: '00',
+        authorities: 0,
+        addressPath: "m/44'/280'/0'/0/1",
+      },
+      {
+        txId: 'tx3',
+        index: 2,
+        value: 250n,
+        address: 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc',
+        token: '00',
+        authorities: 0,
+        addressPath: "m/44'/280'/0'/0/2",
+      },
+    ];
+
+    jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
+      txOutputs: mockUtxos,
+    });
+
+    // Test amount_smaller_than filter
+    const result1 = await wallet.getUtxos({
+      token: 'HTR',
+      amount_smaller_than: 200,
+      max_utxos: 10,
+    });
+
+    expect(result1.utxos).toHaveLength(2);
+    expect(result1).toEqual({
+      total_amount_available: 200n,
+      total_utxos_available: 2n,
+      total_amount_locked: 0n,
+      total_utxos_locked: 0n,
+      utxos: [
+        {
+          address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+          amount: 50n,
+          tx_id: 'tx1',
+          locked: false,
+          index: 0,
+        },
+        {
+          address: 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc',
+          amount: 150n,
+          tx_id: 'tx2',
+          locked: false,
+          index: 1,
+        },
+      ],
+    });
+
+    // Test amount_bigger_than filter
+    const result2 = await wallet.getUtxos({
+      token: 'HTR',
+      amount_bigger_than: 100,
+      max_utxos: 10,
+    });
+
+    expect(result2.utxos).toHaveLength(2);
+    expect(result2).toEqual({
+      total_amount_available: 400n,
+      total_utxos_available: 2n,
+      total_amount_locked: 0n,
+      total_utxos_locked: 0n,
+      utxos: [
+        {
+          address: 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc',
+          amount: 150n,
+          tx_id: 'tx2',
+          locked: false,
+          index: 1,
+        },
+        {
+          address: 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc',
+          amount: 250n,
+          tx_id: 'tx3',
+          locked: false,
+          index: 2,
+        },
+      ],
+    });
+  });
+
+  it('should return empty UtxoDetails when no UTXOs are found', async () => {
+    jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
+      txOutputs: [],
+    });
+
+    const result = await wallet.getUtxos({
+      token: 'HTR',
+      max_utxos: 10,
+    });
+
+    expect(result).toEqual({
+      total_amount_available: 0n,
+      total_utxos_available: 0n,
+      total_amount_locked: 0n,
+      total_utxos_locked: 0n,
+      utxos: [],
+    });
+  });
+
+  it('should handle getUtxosForAmount for backward compatibility', async () => {
+    const mockUtxos = [
+      {
+        txId: 'tx1',
+        index: 0,
+        value: 200n,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        token: '00',
+        authorities: 0,
+        addressPath: "m/44'/280'/0'/0/0",
+      },
+    ];
+
+    jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
+      txOutputs: mockUtxos,
+    });
+
+    // Test totalAmount that doesn't exceed available UTXOs
+    const result = await wallet.getUtxosForAmount(150n, {
+      tokenId: '00',
+    });
+
+    expect(result).toEqual({
+      utxos: mockUtxos,
+      changeAmount: 50n,
+    });
+  });
 });
