@@ -63,6 +63,13 @@ export interface AddressInfoObject {
   info?: string | undefined; // Optional extra info when getting address info
 }
 
+export interface GetAddressDetailsObject {
+  address: string;
+  index: number;
+  transactions: number;
+  seqnum: number;
+}
+
 export interface WalletStatusResponseData {
   success: boolean;
   status: WalletStatus;
@@ -81,6 +88,11 @@ export interface WalletStatus {
 export interface AddressesResponseData {
   success: boolean;
   addresses: GetAddressesObject[];
+}
+
+export interface AddressDetailsResponseData {
+  success: boolean;
+  data: GetAddressDetailsObject;
 }
 
 export interface CheckAddressesMineResponseData {

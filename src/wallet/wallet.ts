@@ -1373,6 +1373,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     return addressHDPrivKey.privateKey;
   }
 
+  /**
+   * Get the seqnum to be used in a nano header for the address
+   */
+  async getNanoHeaderSeqnum(address: string): Promise<number> {
+    const addressInfo = await walletApi.getAddressDetails(this, address);
+    return addressInfo.data.seqnum + 1;
+  }
+
   getTx(id: string) {
     throw new WalletError('Not implemented.');
   }
