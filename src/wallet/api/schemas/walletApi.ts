@@ -55,6 +55,23 @@ export const addressesResponseSchema = baseResponseSchema.extend({
 });
 
 /**
+ * Response schema for getting address info in the wallet.
+ */
+export const getAddressDetailsObjectSchema = z.object({
+  address: AddressSchema,
+  index: z.number(),
+  transactions: z.number(),
+  seqnum: z.number(),
+});
+
+/**
+ * Response schema for getting address details in the wallet.
+ */
+export const addressDetailsResponseSchema = baseResponseSchema.extend({
+  data: z.array(getAddressDetailsObjectSchema),
+});
+
+/**
  * Response schema for checking if addresses belong to the wallet.
  * Maps addresses to boolean values indicating ownership.
  */
