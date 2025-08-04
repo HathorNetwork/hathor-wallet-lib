@@ -68,7 +68,7 @@ export const getAddressDetailsObjectSchema = z.object({
  * Response schema for getting address details in the wallet.
  */
 export const addressDetailsResponseSchema = baseResponseSchema.extend({
-  data: z.array(getAddressDetailsObjectSchema),
+  data: getAddressDetailsObjectSchema,
 });
 
 /**
