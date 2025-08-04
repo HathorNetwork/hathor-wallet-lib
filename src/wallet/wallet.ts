@@ -64,6 +64,7 @@ import {
   DestroyAuthorityOptions,
   FullNodeTxResponse,
   FullNodeTxConfirmationDataResponse,
+  GetAddressDetailsObject,
 } from './types';
 import {
   SendTxError,
@@ -1376,10 +1377,22 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   /**
    * Get the seqnum to be used in a nano header for the address
    */
-  async getNanoHeaderSeqnum(address: string): Promise<number> {
-    const addressInfo = await walletApi.getAddressDetails(this, address);
+  async getNanoHeaderSeqnum(address: { base58: string; network: Network }): Promise<number> {
+    const addressInfo = await walletApi.getAddressDetails(this, address.base58);
     return addressInfo.data.seqnum + 1;
   }
+
+  async getAddressDetails(address: string): Promise<GetAddressDetailsObject> {
+    const addressDetails = await walletApi.getAddressDetails(this, address);
+    return addressDetails.data;
+  }
+
+  /**
+   * TODO: Currently a no-op... We currently have a very specific mechanism for
+   * locking utxos, which is the createTxProposal/sendTxProposal, that is very
+   * tightly coupled to the regular send transaction method.
+   */
+  async markUtxoSelected(): Promise<void> {}
 
   getTx(id: string) {
     throw new WalletError('Not implemented.');
@@ -2401,7 +2414,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     // Verify address belongs to wallet and get its index
-    const addressIndex = this.getAddressIndex(address);
+    const addressDetails = await this.getAddressDetails(address);
+    const addressIndex = addressDetails?.index;
     if (addressIndex === undefined) {
       throw new Error(
         `Address used to sign the transaction (${address}) does not belong to the wallet.`
@@ -2495,7 +2509,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     pinCode: string
   ): Promise<SendTransactionWalletService> {
     // Get the index for the address
-    const addressIndex = this.getAddressIndex(address);
+    const addressDetails = await this.getAddressDetails(address);
+    const addressIndex = addressDetails?.index;
+
     if (addressIndex === undefined) {
       throw new Error(
         `Address used to sign the transaction (${address}) does not belong to the wallet.`

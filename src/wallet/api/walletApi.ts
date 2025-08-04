@@ -46,8 +46,6 @@ import {
   txOutputResponseSchema,
   authTokenResponseSchema,
   txByIdResponseSchema,
-  addressInfoObjectSchema,
-  addressInfoResponseSchema,
   addressDetailsResponseSchema,
 } from './schemas/walletApi';
 
