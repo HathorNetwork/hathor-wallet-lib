@@ -275,6 +275,7 @@ const transaction = {
       input.setData(inputData);
     }
 
+
     if (tx.isNanoContract()) {
       // Store signature in nano header
       const nanoHeaders = tx.getNanoHeaders();
