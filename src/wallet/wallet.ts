@@ -2492,7 +2492,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       data,
       options
     );
-    const result = await sendTransaction.run();
+    const result = await sendTransaction.runFromMining();
     if (!result) {
       throw new Error('Failed to send nano contract transaction');
     }
@@ -2522,17 +2522,83 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         `Address used to sign the transaction (${address}) does not belong to the wallet.`
       );
     }
-    // Derive the private key for the address
-    const addressPrivKey = await this.getAddressPrivKey(pinCode, addressIndex);
-    // Get the data to sign
-    const dataToSignHash = tx.getDataToSignHash();
-    // Sign the data
-    const signature = transaction.getSignature(dataToSignHash, addressPrivKey.privateKey);
-    // Set the signature in the nano contract header(s)
-    const nanoHeaders = tx.getNanoHeaders();
-    for (const nanoHeader of nanoHeaders) {
-      nanoHeader.script = signature;
-    }
+
+    // Create a proxy wrapper for storage to implement getAddressInfo using wallet methods
+    const storageProxy = new Proxy(this.storage, {
+      get: (target, prop, receiver) => {
+        if (prop === 'getAddressInfo') {
+          return async (address: string) => {
+            const addressIndex = this.getAddressIndex(address);
+            if (addressIndex === undefined) {
+              try {
+                const addressDetails = await this.getAddressDetails(address);
+                return {
+                  bip32AddressIndex: addressDetails.index,
+                };
+              } catch (error) {
+                return null; // Address doesn't belong to this wallet
+              }
+            }
+            const addressInfo = {
+              bip32AddressIndex: addressIndex,
+            };
+            return addressInfo;
+          };
+        }
+
+        if (prop === 'getTxSignatures') {
+          return async (tx: any, pinCode: string) => {
+            // Use the already imported transaction utils with proxy storage
+            return transaction.getSignatureForTx(tx, receiver, pinCode);
+          };
+        }
+        
+        if (prop === 'getTx') {
+          return async (txId: string) => {
+            try {
+              const fullTxResponse = await this.getFullTxById(txId);
+              
+              // Convert FullNodeTxResponse to IHistoryTx format
+              const { tx, meta } = fullTxResponse;
+              const historyTx = {
+                tx_id: tx.hash,
+                signalBits: 0, // Default value since fullnode tx doesn't include signal bits
+                version: tx.version,
+                weight: tx.weight,
+                timestamp: tx.timestamp,
+                is_voided: (meta as any).is_voided ?? (meta.voided_by.length > 0),
+                nonce: Number.parseInt(tx.nonce ?? '0', 10),
+                inputs: tx.inputs,
+                outputs: tx.outputs,
+                parents: tx.parents,
+                tokens: tx.tokens.map(token => token.uid),
+                height: meta.height,
+                first_block: meta.first_block,
+                token_name: tx.token_name ?? undefined,
+                token_symbol: tx.token_symbol ?? undefined,
+              };
+              
+              return historyTx;
+            } catch (error) {
+              return null;
+            }
+          };
+        }
+
+
+        // For all other properties, use the original behavior
+        const value = Reflect.get(target, prop, receiver);
+
+        // Bind methods to maintain correct 'this' context
+        if (typeof value === 'function') {
+          return value.bind(target);
+        }
+
+        return value;
+      },
+    });
+
+    await transaction.signTransaction(tx, storageProxy, pinCode);
     // Finalize the transaction
     tx.prepareToSend();
     return new SendTransactionWalletService(this, { transaction: tx, pin: pinCode });

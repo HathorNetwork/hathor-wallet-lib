@@ -275,8 +275,8 @@ export const fullNodeOutputSchema = z.object({
   }),
   address: AddressSchema.nullable().optional(),
   token: tokenIdSchema.nullable().optional(),
-  authorities: bigIntCoercibleSchema,
-  timelock: z.number().nullable(),
+  authorities: bigIntCoercibleSchema.optional(),
+  timelock: z.number().nullable().optional(),
 });
 
 /**
@@ -304,8 +304,8 @@ export const fullNodeTxSchema = z.object({
   inputs: z.array(fullNodeInputSchema),
   outputs: z.array(fullNodeOutputSchema),
   tokens: z.array(fullNodeTokenSchema),
-  token_name: z.string().nullable(),
-  token_symbol: z.string().nullable(),
+  token_name: z.string().nullable().optional(),
+  token_symbol: z.string().nullable().optional(),
   raw: z.string(),
 });
 
@@ -322,9 +322,9 @@ export const fullNodeMetaSchema = z.object({
   height: z.number(),
   voided_by: z.array(z.string()),
   spent_outputs: z.array(z.tuple([z.number(), z.array(z.string())])),
-  received_timestamp: z.number().nullable(),
-  is_voided: z.boolean(),
-  verification_status: z.string(),
+  received_timestamp: z.number().nullable().optional(),
+  is_voided: z.boolean().optional(),
+  verification_status: z.string().optional(),
   twins: z.array(z.string()),
   accumulated_weight: z.number(),
   score: z.number(),
