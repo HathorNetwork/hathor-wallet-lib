@@ -1377,7 +1377,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   /**
    * Get the seqnum to be used in a nano header for the address
    */
-  async getNanoHeaderSeqnum(address: { base58: string, network: Network }): Promise<number> {
+  async getNanoHeaderSeqnum(address: { base58: string; network: Network }): Promise<number> {
     const addressInfo = await walletApi.getAddressDetails(this, address.base58);
     return addressInfo.data.seqnum + 1;
   }
@@ -1392,7 +1392,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * locking utxos, which is the createTxProposal/sendTxProposal, that is very
    * tightly coupled to the regular send transaction method.
    */
-  async markUtxoSelected(): Promise<void> {};
+  async markUtxoSelected(): Promise<void> {}
 
   getTx(id: string) {
     throw new WalletError('Not implemented.');
@@ -2594,12 +2594,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
             return transaction.getSignatureForTx(tx, receiver, pinCode);
           };
         }
-        
+
         if (prop === 'getTx') {
           return async (txId: string) => {
             try {
               const fullTxResponse = await this.getFullTxById(txId);
-              
+
               // Convert FullNodeTxResponse to IHistoryTx format
               const { tx, meta } = fullTxResponse;
               const historyTx = {
@@ -2608,7 +2608,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
                 version: tx.version,
                 weight: tx.weight,
                 timestamp: tx.timestamp,
-                is_voided: (meta as any).is_voided ?? (meta.voided_by.length > 0),
+                is_voided: (meta as any).is_voided ?? meta.voided_by.length > 0,
                 nonce: Number.parseInt(tx.nonce ?? '0', 10),
                 inputs: tx.inputs,
                 outputs: tx.outputs,
@@ -2619,14 +2619,13 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
                 token_name: tx.token_name ?? undefined,
                 token_symbol: tx.token_symbol ?? undefined,
               };
-              
+
               return historyTx;
             } catch (error) {
               return null;
             }
           };
         }
-
 
         // For all other properties, use the original behavior
         const value = Reflect.get(target, prop, receiver);
