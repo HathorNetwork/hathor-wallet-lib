@@ -52,6 +52,10 @@ export class WalletServiceStorageProxy {
       return this.getTx.bind(this);
     }
 
+    if (prop === 'getSpentTxs') {
+      return this.getSpentTxs.bind(this);
+    }
+
     // For all other properties, use the original behavior
     const value = Reflect.get(target, prop, receiver);
 
@@ -92,7 +96,22 @@ export class WalletServiceStorageProxy {
   // eslint-disable-next-line class-methods-use-this
   private async getTxSignatures(receiver: IStorage, tx: Transaction, pinCode: string) {
     const transaction = await import('../utils/transaction');
-    return transaction.default.getSignatureForTx(tx, receiver, pinCode);
+    const result = await transaction.default.getSignatureForTx(tx, receiver, pinCode);
+    return result;
+  }
+
+  /**
+   * Get spent transactions for input signing
+   * This is an async generator that yields transaction data for each input
+   */
+  private async *getSpentTxs(inputs: any[]) {
+    for (let index = 0; index < inputs.length; index++) {
+      const input = inputs[index];
+      const tx = await this.getTx(input.hash);
+      if (tx) {
+        yield { tx, input, index };
+      }
+    }
   }
 
   /**
@@ -101,7 +120,8 @@ export class WalletServiceStorageProxy {
   private async getTx(txId: string) {
     try {
       const fullTxResponse = await this.wallet.getFullTxById(txId);
-      return this.convertFullNodeToHistoryTx(fullTxResponse);
+      const result = this.convertFullNodeToHistoryTx(fullTxResponse);
+      return result;
     } catch (error) {
       return null;
     }
