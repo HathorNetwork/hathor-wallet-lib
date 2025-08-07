@@ -2429,6 +2429,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     data: CreateNanoTxData,
     options: { pinCode?: string } = {}
   ): Promise<SendTransactionWalletService> {
+    
     this.failIfWalletNotReady();
 
     if (await this.storage.isReadonly()) {
@@ -2576,9 +2577,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const storageProxy = storageProxyHelper.createProxy();
 
     await transaction.signTransaction(tx, storageProxy, pinCode);
+    
     // Finalize the transaction
     tx.prepareToSend();
-    return new SendTransactionWalletService(this, { transaction: tx, pin: pinCode });
+    
+    const sendTransaction = new SendTransactionWalletService(this, { transaction: tx, pin: pinCode });
+    return sendTransaction;
   }
 
   /**

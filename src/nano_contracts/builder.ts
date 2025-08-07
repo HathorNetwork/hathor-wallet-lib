@@ -578,6 +578,7 @@ class NanoContractTransactionBuilder {
         }
       }
       tokens = Array.from(tokenSet);
+      
       for (const action of this.actions) {
         // Call action
         switch (action.type) {
@@ -713,6 +714,7 @@ class NanoContractTransactionBuilder {
       }
 
       const tx = await this.buildTransaction(inputs, outputs, tokens);
+      
       const seqnum = await this.wallet.getNanoHeaderSeqnum(this.caller!);
 
       let nanoHeaderActions: NanoContractActionHeader[] = [];
