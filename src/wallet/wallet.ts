@@ -83,6 +83,7 @@ import {
   NanoContractBuilderCreateTokenOptions,
   CreateNanoTxData,
 } from '../nano_contracts/types';
+import { WalletServiceStorageProxy } from './walletServiceStorageProxy';
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
@@ -1398,7 +1399,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * locking utxos, which is the createTxProposal/sendTxProposal, that is very
    * tightly coupled to the regular send transaction method.
    */
-  async markUtxoSelected(): Promise<void> {}
+  // eslint-disable-next-line class-methods-use-this
+  async markUtxoSelected(): Promise<void> {
+    // TODO: Currently a no-op... We currently have a very specific mechanism for
+    // locking utxos, which is the createTxProposal/sendTxProposal, that is very
+    // tightly coupled to the regular send transaction method.
+  }
 
   getTx(id: string) {
     throw new WalletError('Not implemented.');
@@ -2523,79 +2529,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       );
     }
 
-    // Create a proxy wrapper for storage to implement getAddressInfo using wallet methods
-    const storageProxy = new Proxy(this.storage, {
-      get: (target, prop, receiver) => {
-        if (prop === 'getAddressInfo') {
-          return async (address: string) => {
-            const addressIndex = this.getAddressIndex(address);
-            if (addressIndex === undefined) {
-              try {
-                const addressDetails = await this.getAddressDetails(address);
-                return {
-                  bip32AddressIndex: addressDetails.index,
-                };
-              } catch (error) {
-                return null; // Address doesn't belong to this wallet
-              }
-            }
-            const addressInfo = {
-              bip32AddressIndex: addressIndex,
-            };
-            return addressInfo;
-          };
-        }
-
-        if (prop === 'getTxSignatures') {
-          return async (tx: any, pinCode: string) => {
-            // Use the already imported transaction utils with proxy storage
-            return transaction.getSignatureForTx(tx, receiver, pinCode);
-          };
-        }
-
-        if (prop === 'getTx') {
-          return async (txId: string) => {
-            try {
-              const fullTxResponse = await this.getFullTxById(txId);
-
-              // Convert FullNodeTxResponse to IHistoryTx format
-              const { tx, meta } = fullTxResponse;
-              const historyTx = {
-                tx_id: tx.hash,
-                signalBits: 0, // Default value since fullnode tx doesn't include signal bits
-                version: tx.version,
-                weight: tx.weight,
-                timestamp: tx.timestamp,
-                is_voided: (meta as any).is_voided ?? meta.voided_by.length > 0,
-                nonce: Number.parseInt(tx.nonce ?? '0', 10),
-                inputs: tx.inputs,
-                outputs: tx.outputs,
-                parents: tx.parents,
-                tokens: tx.tokens.map(token => token.uid),
-                height: meta.height,
-                first_block: meta.first_block,
-                token_name: tx.token_name ?? undefined,
-                token_symbol: tx.token_symbol ?? undefined,
-              };
-
-              return historyTx;
-            } catch (error) {
-              return null;
-            }
-          };
-        }
-
-        // For all other properties, use the original behavior
-        const value = Reflect.get(target, prop, receiver);
-
-        // Bind methods to maintain correct 'this' context
-        if (typeof value === 'function') {
-          return value.bind(target);
-        }
-
-        return value;
-      },
-    });
+    // Create a proxy wrapper for storage to implement missing methods needed for nano contract signing
+    const storageProxyHelper = new WalletServiceStorageProxy(this, this.storage);
+    const storageProxy = storageProxyHelper.createProxy();
 
     await transaction.signTransaction(tx, storageProxy, pinCode);
     // Finalize the transaction
