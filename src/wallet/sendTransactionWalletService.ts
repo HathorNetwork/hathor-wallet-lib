@@ -635,7 +635,6 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       this.transaction!.nonce = mineData.nonce;
       this.transaction!.weight = mineData.weight;
 
-
       if (until === 'mine-tx') {
         return this.transaction!;
       }
