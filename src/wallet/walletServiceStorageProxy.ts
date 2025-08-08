@@ -56,6 +56,10 @@ export class WalletServiceStorageProxy {
       return this.getSpentTxs.bind(this);
     }
 
+    if (prop === 'getCurrentAddress') {
+      return this.getCurrentAddress.bind(this);
+    }
+
     // For all other properties, use the original behavior
     const value = Reflect.get(target, prop, receiver);
 
@@ -124,6 +128,19 @@ export class WalletServiceStorageProxy {
       return result;
     } catch (error) {
       return null;
+    }
+  }
+
+  /**
+   * Get current address from wallet service
+   * Uses the wallet's getCurrentAddress method which fetches from the API
+   */
+  private async getCurrentAddress(markAsUsed?: boolean): Promise<string> {
+    try {
+      const currentAddress = await this.wallet.getCurrentAddress({ markAsUsed });
+      return currentAddress.address; // Return just the address string for utils compatibility
+    } catch (error) {
+      throw new Error('Current address is not loaded');
     }
   }
 
