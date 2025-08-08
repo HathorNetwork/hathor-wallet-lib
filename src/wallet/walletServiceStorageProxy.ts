@@ -138,7 +138,11 @@ export class WalletServiceStorageProxy {
    */
   private async getCurrentAddress(markAsUsed?: boolean): Promise<string> {
     try {
+<<<<<<< HEAD
       const currentAddress = this.wallet.getCurrentAddress({ markAsUsed });
+=======
+      const currentAddress = await this.wallet.getCurrentAddress({ markAsUsed });
+>>>>>>> 4d6365c (fix: send nano create token)
       return currentAddress.address; // Return just the address string for utils compatibility
     } catch (error) {
       throw new Error('Current address is not loaded');

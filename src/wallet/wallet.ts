@@ -2656,6 +2656,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     createTokenOptions: Partial<NanoContractBuilderCreateTokenOptions> = {},
     options: { pinCode?: string } = {}
   ): Promise<SendTransactionWalletService> {
+    console.log('[createNanoContractCreateTokenTransaction] Called with:', {
+      method,
+      address,
+      data,
+      createTokenOptions,
+      options: { ...options, pinCode: options.pinCode ? '[REDACTED]' : undefined },
+    });
+
     this.failIfWalletNotReady();
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('createNanoContractCreateTokenTransaction');
@@ -2700,7 +2708,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     });
 
     const mergedCreateTokenOptions: NanoContractBuilderCreateTokenOptions = {
-      mintAddress: null,
+      mintAddress: createTokenOptions.mintAddress,
       changeAddress: null,
       createMint: true,
       mintAuthorityAddress: null,
@@ -2712,6 +2720,16 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       isCreateNFT: false,
       ...createTokenOptions,
     } as NanoContractBuilderCreateTokenOptions;
+
+    console.log('[createNanoContractCreateTokenTransaction] Building transaction with:', {
+      method,
+      blueprintId: data.blueprintId,
+      ncId: data.ncId,
+      actions,
+      processedArgs,
+      vertexType: 'CREATE_TOKEN_TRANSACTION',
+      mergedCreateTokenOptions,
+    });
 
     const builder = new NanoContractTransactionBuilder()
       .setMethod(method)
@@ -2725,7 +2743,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const tx = await builder.build();
 
-    return this.prepareNanoSendTransactionWalletService(tx, address, pin);
+    console.log('[createNanoContractCreateTokenTransaction] Built transaction successfully');
+
+    return this.prepareNanoSendTransactionWalletService(tx, address, pin, storageProxy);
   }
 }
 
