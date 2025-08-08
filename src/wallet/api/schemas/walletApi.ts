@@ -291,6 +291,24 @@ export const fullNodeTokenSchema = z.object({
 });
 
 /**
+ * Schema for nano contract context actions.
+ */
+export const ncActionSchema = z.object({
+  type: z.string(),
+  token_uid: z.string(),
+  amount: z.number(),
+});
+
+/**
+ * Schema for nano contract context.
+ */
+export const ncContextSchema = z.object({
+  actions: z.array(ncActionSchema),
+  address: AddressSchema,
+  timestamp: z.number(),
+});
+
+/**
  * Schema for full node transaction data.
  * Contains all information about a transaction as seen by the full node.
  */
@@ -300,12 +318,20 @@ export const fullNodeTxSchema = z.object({
   timestamp: z.number(),
   version: z.number(),
   weight: z.number(),
+  signal_bits: z.number().optional(),
   parents: z.array(z.string()),
   inputs: z.array(fullNodeInputSchema),
   outputs: z.array(fullNodeOutputSchema),
   tokens: z.array(fullNodeTokenSchema),
   token_name: z.string().nullable().optional(),
   token_symbol: z.string().nullable().optional(),
+  nc_id: z.string().optional(),
+  nc_seqnum: z.number().optional(),
+  nc_blueprint_id: z.string().optional(),
+  nc_method: z.string().optional(),
+  nc_args: z.string().optional(),
+  nc_address: AddressSchema.optional(),
+  nc_context: ncContextSchema.optional(),
   raw: z.string(),
 });
 

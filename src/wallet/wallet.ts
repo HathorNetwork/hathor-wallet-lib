@@ -1378,7 +1378,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   /**
    * Get the seqnum to be used in a nano header for the address
    */
-  async getNanoHeaderSeqnum(address: { base58: string; network: Network }): Promise<number> {
+  async getNanoHeaderSeqnum(address: { base58: string }): Promise<number> {
     const addressInfo = await walletApi.getAddressDetails(this, address.base58);
     return addressInfo.data.seqnum + 1;
   }
@@ -2429,7 +2429,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     data: CreateNanoTxData,
     options: { pinCode?: string } = {}
   ): Promise<SendTransactionWalletService> {
-    
     this.failIfWalletNotReady();
 
     if (await this.storage.isReadonly()) {
@@ -2549,6 +2548,46 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
+   * Create and send a Create Token Transaction with nano header
+   *
+   * @param {string} method Method of nano contract to have the transaction created
+   * @param {string} address Address that will be used to sign the nano contract transaction
+   * @param {object} data Nano contract data (blueprintId, ncId, actions, args)
+   * @param {object} createTokenOptions Options for token creation (mint/melt authorities, NFT, etc)
+   * @param {object} options Options (pinCode)
+   *
+   * @returns {Promise<Transaction>}
+   */
+  async createAndSendNanoContractCreateTokenTransaction(
+    method: string,
+    address: string,
+    data: CreateNanoTxData,
+    createTokenOptions: Partial<NanoContractBuilderCreateTokenOptions> = {},
+    options: { pinCode?: string } = {}
+  ): Promise<Transaction> {
+    console.log('[createAndSendNanoContractCreateTokenTransaction] Called with:', {
+      method,
+      address,
+      data,
+      createTokenOptions,
+      options: { ...options, pinCode: options.pinCode ? '[REDACTED]' : undefined },
+    });
+
+    const sendTransaction = await this.createNanoContractCreateTokenTransaction(
+      method,
+      address,
+      data,
+      createTokenOptions,
+      options
+    );
+    const result = await sendTransaction.runFromMining();
+    if (!result) {
+      throw new Error('Failed to send nano contract create token transaction');
+    }
+    return result;
+  }
+
+  /**
    * Custom nano contract transaction preparation for wallet-service facade
    * Signs the nano contract transaction using the wallet's own key derivation logic
    *
@@ -2560,7 +2599,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async prepareNanoSendTransactionWalletService(
     tx: Transaction,
     address: string,
-    pinCode: string
+    pinCode: string,
+    storageProxy?: IStorage
   ): Promise<SendTransactionWalletService> {
     // Get the index for the address
     const addressDetails = await this.getAddressDetails(address);
@@ -2572,16 +2612,22 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       );
     }
 
-    // Create a proxy wrapper for storage to implement missing methods needed for nano contract signing
-    const storageProxyHelper = new WalletServiceStorageProxy(this, this.storage);
-    const storageProxy = storageProxyHelper.createProxy();
+    // Use provided storage proxy or create a new one
+    let finalStorageProxy = storageProxy;
+    if (!finalStorageProxy) {
+      const storageProxyHelper = new WalletServiceStorageProxy(this, this.storage);
+      finalStorageProxy = storageProxyHelper.createProxy();
+    }
 
-    await transaction.signTransaction(tx, storageProxy, pinCode);
-    
+    await transaction.signTransaction(tx, finalStorageProxy, pinCode);
+
     // Finalize the transaction
     tx.prepareToSend();
-    
-    const sendTransaction = new SendTransactionWalletService(this, { transaction: tx, pin: pinCode });
+
+    const sendTransaction = new SendTransactionWalletService(this, {
+      transaction: tx,
+      pin: pinCode,
+    });
     return sendTransaction;
   }
 
@@ -2603,6 +2649,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     createTokenOptions: Partial<NanoContractBuilderCreateTokenOptions> = {},
     options: { pinCode?: string } = {}
   ): Promise<SendTransactionWalletService> {
+    console.log('[createNanoContractCreateTokenTransaction] Called with:', {
+      method,
+      address,
+      data,
+      createTokenOptions,
+      options: { ...options, pinCode: options.pinCode ? '[REDACTED]' : undefined },
+    });
+
     this.failIfWalletNotReady();
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('createNanoContractCreateTokenTransaction');
@@ -2613,7 +2667,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       throw new PinRequiredError('Pin is required.');
     }
     // Validate address belongs to wallet and get its index
-    const addressIndex = this.getAddressIndex(address);
+    const addressDetails = await this.getAddressDetails(address);
+    const addressIndex = addressDetails?.index;
     if (addressIndex === undefined) {
       throw new Error(
         `Address used to sign the transaction (${address}) does not belong to the wallet.`
@@ -2626,12 +2681,25 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       { network: this.network }
     );
 
-    // Create a wrapper around this wallet to override getFullTxById
+    // Create a proxy wrapper for storage to implement missing methods needed for nano contract building
+    const storageProxyHelper = new WalletServiceStorageProxy(this, this.storage);
+    const storageProxy = storageProxyHelper.createProxy();
+
+    // Create a wrapper around this wallet to override getFullTxById and use storage proxy
     const wrappedWallet = {
       ...this,
+      storage: storageProxy,
       getFullTxById: this.getFullTxByIdForNanoContract.bind(this),
       getNetworkObject: this.getNetworkObject.bind(this),
+      getNanoHeaderSeqnum: this.getNanoHeaderSeqnum.bind(this),
     };
+
+    console.log('[DEBUG] wrappedWallet methods:', {
+      hasGetNanoHeaderSeqnum: typeof wrappedWallet.getNanoHeaderSeqnum === 'function',
+      hasGetFullTxById: typeof wrappedWallet.getFullTxById === 'function',
+      hasGetNetworkObject: typeof wrappedWallet.getNetworkObject === 'function',
+      availableMethods: Object.getOwnPropertyNames(wrappedWallet).filter(prop => typeof wrappedWallet[prop] === 'function')
+    });
     // Build and send transaction
     const actions = data.actions || [];
     const args = data.args || [];
@@ -2650,9 +2718,24 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
       return arg;
     });
+    // Validate required createTokenOptions fields
+    if (createTokenOptions.amount === undefined || createTokenOptions.amount === null) {
+      throw new Error('createTokenOptions.amount is required and cannot be null or undefined');
+    }
+    if (createTokenOptions.name === undefined || createTokenOptions.name === null) {
+      throw new Error('createTokenOptions.name is required and cannot be null or undefined');
+    }
+    if (createTokenOptions.symbol === undefined || createTokenOptions.symbol === null) {
+      throw new Error('createTokenOptions.symbol is required and cannot be null or undefined');
+    }
+    // If mintAddress is not provided, use the address from the nano contract caller
+    if (!createTokenOptions.mintAddress) {
+      createTokenOptions.mintAddress = address;
+    }
+
     // Defaults below match wallet.js (see lines 3077-3087)
     const mergedCreateTokenOptions: NanoContractBuilderCreateTokenOptions = {
-      mintAddress: null,
+      mintAddress: createTokenOptions.mintAddress,
       changeAddress: null,
       createMint: true,
       mintAuthorityAddress: null,
@@ -2664,6 +2747,16 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       isCreateNFT: false,
       ...createTokenOptions,
     } as NanoContractBuilderCreateTokenOptions;
+
+    console.log('[createNanoContractCreateTokenTransaction] Building transaction with:', {
+      method,
+      blueprintId: data.blueprintId,
+      ncId: data.ncId,
+      actions,
+      processedArgs,
+      vertexType: 'CREATE_TOKEN_TRANSACTION',
+      mergedCreateTokenOptions,
+    });
 
     const builder = new NanoContractTransactionBuilder()
       .setMethod(method)
@@ -2677,7 +2770,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const tx = await builder.build();
 
-    return this.prepareNanoSendTransactionWalletService(tx, address, pin);
+    console.log('[createNanoContractCreateTokenTransaction] Built transaction successfully');
+
+    return this.prepareNanoSendTransactionWalletService(tx, address, pin, storageProxy);
   }
 }
 
