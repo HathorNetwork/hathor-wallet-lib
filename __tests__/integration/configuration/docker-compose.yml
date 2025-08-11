@@ -1,8 +1,10 @@
-version: "3.9"
 services:
 
+  # Private Network section
+  # All the following services are related to the core of the Private Network
   # For more information on these configs, refer to:
   # https://github.com/HathorNetwork/rfcs/blob/master/text/0033-private-network-guide.md
+  # Fullnode on 8080 , tx mining service on 8035, cpuminer stratum on 8034
 
   fullnode:
     image:
@@ -64,6 +66,50 @@ services:
       "--retry-pause", "5", # 5 seconds between retries
       "-t", "1" # Number of threads used to mine
     ]
+    networks:
+      - hathor-privnet
+
+
+  # Wallet Service section
+  # All the following services are related to the Wallet Service
+  # Redis on 6379, MySQL on 3380, Wallet Service Daemon on 8081 and Daemon Websocket on 8082
+
+  mysql:
+    image: mysql
+    networks:
+      - hathor-privnet
+    environment:
+      MYSQL_ROOT_PASSWORD: hathor
+    ports:
+      - "3380:3306"
+
+  redis:
+    image: redis:6.2
+    networks:
+      - hathor-privnet
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ws-daemon:
+    build:
+      context: '/Users/tuliomir/code/wallet-service/'
+      dockerfile: Dockerfile
+    depends_on:
+      fullnode:
+        condition: service_healthy
+    command: [
+      "--port", "8081",
+      "--fullnode-url", "http://fullnode:8080",
+      "--ws-port", "8082"
+    ]
+    ports:
+      - "8081:8081"
+      - "8082:8082"
     networks:
       - hathor-privnet
 
