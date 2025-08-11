@@ -1712,6 +1712,54 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
+   * Get authority utxo
+   *
+   * @param tokenUid UID of the token to select the authority utxo
+   * @param authority The authority to filter ('mint' or 'melt')
+   * @param options Object with custom options.
+   *  {
+   *    'many': if should return many utxos or just one (default false),
+   *    'only_available_utxos': If we should filter for available utxos (default false),
+   *    'filter_address': Address to filter the utxo to get (default null)
+   *  }
+   *
+   * @return Promise that resolves with an Array of objects with {txId, index, address, authorities} of the authority output.
+   * Returns an empty array in case there are no tx outputs for this type
+   * */
+  async getAuthorityUtxo(
+    tokenUid: string,
+    authority: string,
+    options: {
+      many?: boolean;
+      only_available_utxos?: boolean;
+      filter_address?: string | null;
+    } = {}
+  ): Promise<AuthorityTxOutput[]> {
+    let authorityValue: OutputValueType;
+    if (authority === 'mint') {
+      authorityValue = TOKEN_MINT_MASK;
+    } else if (authority === 'melt') {
+      authorityValue = TOKEN_MELT_MASK;
+    } else {
+      throw new Error('Invalid authority value.');
+    }
+
+    const newOptions = {
+      many: false,
+      only_available_utxos: false,
+      filter_address: null,
+      ...options,
+    };
+
+    return this._getAuthorityTxOutput({
+      tokenId: tokenUid,
+      authority: authorityValue,
+      skipSpent: newOptions.only_available_utxos,
+      maxOutputs: newOptions.many ? undefined : 1,
+    });
+  }
+
+  /**
    * Create a new custom token in the network
    *
    * @memberof HathorWalletServiceWallet
@@ -2524,14 +2572,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     createTokenOptions: Partial<NanoContractBuilderCreateTokenOptions> = {},
     options: { pinCode?: string } = {}
   ): Promise<Transaction> {
-    console.log('[createAndSendNanoContractCreateTokenTransaction] Called with:', {
-      method,
-      address,
-      data,
-      createTokenOptions,
-      options: { ...options, pinCode: options.pinCode ? '[REDACTED]' : undefined },
-    });
-
     const sendTransaction = await this.createNanoContractCreateTokenTransaction(
       method,
       address,
@@ -2608,14 +2648,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     createTokenOptions: Partial<NanoContractBuilderCreateTokenOptions> = {},
     options: { pinCode?: string } = {}
   ): Promise<SendTransactionWalletService> {
-    console.log('[createNanoContractCreateTokenTransaction] Called with:', {
-      method,
-      address,
-      data,
-      createTokenOptions,
-      options: { ...options, pinCode: options.pinCode ? '[REDACTED]' : undefined },
-    });
-
     this.failIfWalletNotReady();
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('createNanoContractCreateTokenTransaction');
@@ -2688,16 +2720,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       ...createTokenOptions,
     } as NanoContractBuilderCreateTokenOptions;
 
-    console.log('[createNanoContractCreateTokenTransaction] Building transaction with:', {
-      method,
-      blueprintId: data.blueprintId,
-      ncId: data.ncId,
-      actions,
-      processedArgs,
-      vertexType: 'CREATE_TOKEN_TRANSACTION',
-      mergedCreateTokenOptions,
-    });
-
     const builder = new NanoContractTransactionBuilder()
       .setMethod(method)
       .setWallet(this)
@@ -2709,8 +2731,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       .setVertexType(NanoContractVertexType.CREATE_TOKEN_TRANSACTION, mergedCreateTokenOptions);
 
     const tx = await builder.build();
-
-    console.log('[createNanoContractCreateTokenTransaction] Built transaction successfully');
 
     return this.prepareNanoSendTransactionWalletService(tx, address, pin, storageProxy);
   }
