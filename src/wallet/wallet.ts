@@ -2656,14 +2656,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     createTokenOptions: Partial<NanoContractBuilderCreateTokenOptions> = {},
     options: { pinCode?: string } = {}
   ): Promise<SendTransactionWalletService> {
-    console.log('[createNanoContractCreateTokenTransaction] Called with:', {
-      method,
-      address,
-      data,
-      createTokenOptions,
-      options: { ...options, pinCode: options.pinCode ? '[REDACTED]' : undefined },
-    });
-
     this.failIfWalletNotReady();
     if (await this.storage.isReadonly()) {
       throw new WalletFromXPubGuard('createNanoContractCreateTokenTransaction');

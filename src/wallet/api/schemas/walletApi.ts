@@ -313,24 +313,6 @@ export const ncContextSchema = z.object({
 });
 
 /**
- * Schema for nano contract context actions.
- */
-export const ncActionSchema = z.object({
-  type: z.string(),
-  token_uid: z.string(),
-  amount: z.number(),
-});
-
-/**
- * Schema for nano contract context.
- */
-export const ncContextSchema = z.object({
-  actions: z.array(ncActionSchema),
-  address: AddressSchema,
-  timestamp: z.number(),
-});
-
-/**
  * Schema for full node transaction data.
  * Contains all information about a transaction as seen by the full node.
  */
