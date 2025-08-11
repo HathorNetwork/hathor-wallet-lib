@@ -1465,26 +1465,28 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     type optionsType = {
       address: string | null;
       changeAddress: string | null;
-      createMintAuthority: boolean;
+      createMint: boolean;
       mintAuthorityAddress: string | null;
       allowExternalMintAuthorityAddress: boolean | null;
-      createMeltAuthority: boolean;
+      createMelt: boolean;
       meltAuthorityAddress: string | null;
       allowExternalMeltAuthorityAddress: boolean | null;
-      nftData: string | null;
+      data: string[] | null;
+      isCreateNFT: boolean;
       pinCode: string | null;
       signTx: boolean;
     };
     const newOptions: optionsType = {
       address: null,
       changeAddress: null,
-      createMintAuthority: true,
+      createMint: true,
       mintAuthorityAddress: null,
       allowExternalMintAuthorityAddress: false,
-      createMeltAuthority: true,
+      createMelt: true,
       meltAuthorityAddress: null,
       allowExternalMeltAuthorityAddress: false,
-      nftData: null,
+      data: null,
+      isCreateNFT: false,
       pinCode: null,
       signTx: true,
       ...options,
@@ -1506,15 +1508,16 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
     }
 
-    const isNFT = newOptions.nftData !== null;
+    const isNFT =
+      newOptions.isCreateNFT || (newOptions.data !== null && newOptions.data.length > 0);
 
     const depositPercent = this.storage.getTokenDepositPercentage();
     // 1. Calculate HTR deposit needed
     let deposit = tokens.getDepositAmount(amount, depositPercent);
 
-    if (isNFT) {
-      // For NFT we have a fee of 0.01 HTR, then the deposit utxo query must get an additional 1
-      deposit += 1n;
+    if (isNFT && newOptions.data && newOptions.data.length > 0) {
+      // For data outputs, we have a fee of 0.01 HTR per data output
+      deposit += BigInt(newOptions.data.length);
     }
 
     // 2. Get utxos for HTR
@@ -1537,10 +1540,20 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // Create outputs
     const outputsObj: Output[] = [];
-    // NFT transactions must have the first output as the script data
-    if (isNFT) {
-      outputsObj.push(helpers.createNFTOutput(newOptions.nftData!));
+
+    // Add data outputs if specified - for NFT creation, these go first
+    const dataOutputs: Output[] = [];
+    if (newOptions.data && newOptions.data.length > 0) {
+      for (const dataString of newOptions.data) {
+        dataOutputs.push(helpers.createNFTOutput(dataString));
+      }
     }
+
+    // For NFT creation, data outputs go first
+    if (newOptions.isCreateNFT && dataOutputs.length > 0) {
+      outputsObj.push(...dataOutputs);
+    }
+
     // a. Token amount
     const addressToUse = newOptions.address || this.getCurrentAddress({ markAsUsed: true }).address;
     const address = new Address(addressToUse, { network: this.network });
@@ -1551,7 +1564,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const p2pkhScript = address.getScript();
     outputsObj.push(new Output(amount, p2pkhScript, { tokenData: 1 }));
 
-    if (newOptions.createMintAuthority) {
+    if (newOptions.createMint) {
       // b. Mint authority
       const mintAuthorityAddress =
         newOptions.mintAuthorityAddress || this.getCurrentAddress({ markAsUsed: true }).address;
@@ -1566,7 +1579,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       );
     }
 
-    if (newOptions.createMeltAuthority) {
+    if (newOptions.createMelt) {
       // c. Melt authority
       const meltAuthorityAddress =
         newOptions.meltAuthorityAddress || this.getCurrentAddress({ markAsUsed: true }).address;
@@ -1592,6 +1605,11 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       const p2pkhChange = new P2PKH(changeAddress);
       const p2pkhChangeScript = p2pkhChange.createScript();
       outputsObj.push(new Output(changeAmount, p2pkhChangeScript));
+    }
+
+    // For non-NFT tokens with data, add data outputs at the end
+    if (!newOptions.isCreateNFT && dataOutputs.length > 0) {
+      outputsObj.push(...dataOutputs);
     }
 
     const tx = new CreateTokenTransaction(name, symbol, inputsObj, outputsObj);
