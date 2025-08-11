@@ -282,12 +282,15 @@ export const fullNodeOutputSchema = z.object({
 /**
  * Schema for full node token information.
  * Represents token details as seen by the full node.
+ * Note: amount is optional because this schema is reused across different APIs:
+ * - Regular transaction APIs include amount field
+ * - Nano contract token creation APIs only include uid, name, and symbol
  */
 export const fullNodeTokenSchema = z.object({
   uid: z.string(),
   name: z.string(),
   symbol: z.string(),
-  amount: bigIntCoercibleSchema,
+  amount: bigIntCoercibleSchema.optional(),
 });
 
 /**
