@@ -103,6 +103,8 @@ services:
     build:
       context: '/Users/tuliomir/code/wallet-service/'
       dockerfile: Dockerfile
+      args:
+        MIGRATE_ON_BUILD: "true"
     depends_on:
       fullnode:
         condition: service_healthy
