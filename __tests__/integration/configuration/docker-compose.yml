@@ -86,6 +86,8 @@ services:
       MYSQL_DEFAULT_AUTHENTICATION_PLUGIN: mysql_native_password
     ports:
       - "3380:3306"
+    healthcheck:
+        test: ["CMD", "mysql", "-h", "mysql", "-u", "wallet_service_user", "-ppassword", "-e", "SELECT 1", "wallet_service"]
 
   redis:
     image: redis:6.2
@@ -99,14 +101,40 @@ services:
       timeout: 5s
       retries: 5
 
+  ws-migrator:
+    build:
+      context: '/home/tulio/code/wallet-service/'
+      dockerfile: 'db/Dockerfile'
+      args:
+        DB_ENDPOINT: "mysql"
+        DB_NAME: "wallet_service"
+        DB_USER: "wallet_service_user"
+        DB_PASS: "password"
+        DB_PORT: 3306
+    restart: "no"  # Critical: don't restart migration service
+    command: ["/bin/sh", "migrate.sh"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_ENDPOINT: "mysql"
+      DB_NAME: "wallet_service"
+      DB_USER: "wallet_service_user"
+      DB_PASS: "password"
+      DB_PORT: 3306
+    networks:
+      - hathor-privnet
+
   ws-daemon:
     build:
-      context: '/Users/tuliomir/code/wallet-service/'
+      context: '/home/tulio/code/wallet-service/'
       dockerfile: Dockerfile
-      args:
-        MIGRATE_ON_BUILD: "true"
     depends_on:
+      ws-migrator:
+        condition: service_completed_successfully
       fullnode:
+        condition: service_healthy
+      mysql:
         condition: service_healthy
     environment:
       FULLNODE_HOST: "http://fullnode:8080"
