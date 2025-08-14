@@ -19,6 +19,7 @@ services:
       "--unsafe-mode", "nano-testnet-bravo",
       "--data", "./tmp",
       "--nc-indexes",
+      "--enable-event-queue",
       "--nc-exec-logs", "all",
     ]
     environment:
@@ -137,8 +138,8 @@ services:
       mysql:
         condition: service_healthy
     environment:
-      FULLNODE_HOST: "http://fullnode:8080"
-      FULLNODE_NETWORK: "privatenet"
+      FULLNODE_HOST: "fullnode:8080"
+      FULLNODE_NETWORK: "nano-testnet-alpha"
       USE_SSL: "false"
       NEW_TX_SQS: ""
       PUSH_NOTIFICATION_ENABLED: "false"
@@ -152,13 +153,13 @@ services:
       DB_USER: "wallet_service_user"
       DB_PASS: "password"
       DB_PORT: 3306
-      STREAM_ID: "f7d9157c-9906-4bd2-bc84-cfb9f5b607d1"
-      FULLNODE_PEER_ID: "bdf4fa876f5cdba84be0cab53b21fc9eb45fe4b3d6ede99f493119d37df4e560"
+      STREAM_ID: "4a0407fc-6a11-4d4a-9f6a-f25cfac8cc1f"
+      FULLNODE_PEER_ID: "c00cbc3624aca6defcae0c908da66291e3774ab5a855c123267c1dd5ca6a2196"
 
       NODE_ENV: "test-privnet"
       STAGE: "local"
       MAX_ADDRESS_GAP: 10
-      NETWORK: "nano-testnet-alpha"
+      NETWORK: "privatenet"
 #      BLOCK_REWARD_LOCK: 1
       REDIS_URL: redis://redis:6379
     ports:
