@@ -112,12 +112,16 @@ services:
         DB_USER: "wallet_service_user"
         DB_PASS: "password"
         DB_PORT: 3306
+        FETCH_IDENTIFIERS_FROM_FULLNODE: true
     restart: "no"  # Critical: don't restart migration service
-    command: ["/bin/sh", "migrate.sh"]
+#    entrypoint: ["/app/migration-entrypoint.sh"]
+#    command: ["/bin/sh", "-c", "node scripts/fetch-fullnode-ids.js && /bin/sh scripts/migrate.sh"]
+    volumes:
+      - shared-config:/shared
     depends_on:
       mysql:
         condition: service_healthy
-    environment:
+    environment: # TODO: Remove this section
       DB_ENDPOINT: "mysql"
       DB_NAME: "wallet_service"
       DB_USER: "wallet_service_user"
@@ -130,6 +134,8 @@ services:
     build:
       context: '/home/tulio/code/wallet-service/'
       dockerfile: Dockerfile
+    volumes:
+      - shared-config:/shared
     depends_on:
       ws-migrator:
         condition: service_completed_successfully
@@ -138,6 +144,7 @@ services:
       mysql:
         condition: service_healthy
     environment:
+      FETCH_SHARED_ENV: true
       FULLNODE_HOST: "fullnode:8080"
       FULLNODE_NETWORK: "nano-testnet-alpha"
       USE_SSL: "false"
@@ -153,8 +160,8 @@ services:
       DB_USER: "wallet_service_user"
       DB_PASS: "password"
       DB_PORT: 3306
-      STREAM_ID: "4a0407fc-6a11-4d4a-9f6a-f25cfac8cc1f"
-      FULLNODE_PEER_ID: "c00cbc3624aca6defcae0c908da66291e3774ab5a855c123267c1dd5ca6a2196"
+#      STREAM_ID: "4a0407fc-6a11-4d4a-9f6a-f25cfac8cc1f"
+#      FULLNODE_PEER_ID: "c00cbc3624aca6defcae0c908da66291e3774ab5a855c123267c1dd5ca6a2196"
 
       NODE_ENV: "test-privnet"
       STAGE: "local"
@@ -168,6 +175,7 @@ services:
     networks:
       - hathor-privnet
 
+volumes:
+    shared-config:
 networks:
   hathor-privnet:
-
