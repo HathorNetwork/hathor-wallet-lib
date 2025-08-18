@@ -114,10 +114,6 @@ services:
         DB_PORT: 3306
         FETCH_IDENTIFIERS_FROM_FULLNODE: true
     restart: "no"  # Critical: don't restart migration service
-#    entrypoint: ["/app/migration-entrypoint.sh"]
-#    command: ["/bin/sh", "-c", "node scripts/fetch-fullnode-ids.js && /bin/sh scripts/migrate.sh"]
-    volumes:
-      - shared-config:/shared
     depends_on:
       mysql:
         condition: service_healthy
@@ -134,8 +130,6 @@ services:
     build:
       context: '/home/tulio/code/wallet-service/'
       dockerfile: Dockerfile
-    volumes:
-      - shared-config:/shared
     depends_on:
       ws-migrator:
         condition: service_completed_successfully
@@ -144,7 +138,7 @@ services:
       mysql:
         condition: service_healthy
     environment:
-      FETCH_SHARED_ENV: true
+      FETCH_FULLNODE_IDS: true
       FULLNODE_HOST: "fullnode:8080"
       FULLNODE_NETWORK: "nano-testnet-alpha"
       USE_SSL: "false"
@@ -175,7 +169,5 @@ services:
     networks:
       - hathor-privnet
 
-volumes:
-    shared-config:
 networks:
   hathor-privnet:
