@@ -76,22 +76,14 @@ export class WalletServiceStorageProxy {
    * First tries local wallet cache, then falls back to API
    */
   private async getAddressInfo(address: string) {
-    const addressIndex = this.wallet.getAddressIndex(address);
+    const addressIndex = await this.wallet.getAddressIndex(address);
     if (addressIndex !== undefined) {
       return {
         bip32AddressIndex: addressIndex,
       };
     }
 
-    // Address not in local cache, try API
-    try {
-      const addressDetails = await this.wallet.getAddressDetails(address);
-      return {
-        bip32AddressIndex: addressDetails.index,
-      };
-    } catch (error) {
-      return null; // Address doesn't belong to this wallet
-    }
+    return null;
   }
 
   /**
