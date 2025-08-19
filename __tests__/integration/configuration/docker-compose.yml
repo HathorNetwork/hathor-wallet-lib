@@ -169,5 +169,66 @@ services:
     networks:
       - hathor-privnet
 
+  ws-serverless:
+    build:
+      context: '/home/tulio/code/wallet-service/packages/wallet-service'
+      dockerfile: Dockerfile
+    depends_on:
+      ws-daemon:
+        condition: service_started # TODO: Implement healthcheck
+    environment:
+      STAGE: local
+      NETWORK: testnet
+      SERVICE_NAME: hathor-wallet-service
+      MAX_ADDRESS_GAP: 10
+      VOIDED_TX_OFFSET: 5
+      BLOCK_REWARD_LOCK: 300
+      CONFIRM_FIRST_ADDRESS: false
+      WS_DOMAIN: http://localhost:3002
+      DEFAULT_SERVER: fullnode
+      DB_ENDPOINT: mysql
+      DB_NAME: wallet_service
+      DB_USER: wallet_service_user
+      DB_PASS: password
+      DB_PORT: 3306
+      REDIS_URL: redis
+      REDIS_PORT: 6379
+      AUTH_SECRET: foobar
+      EXPLORER_SERVICE_LAMBDA_ENDPOINT: http://localhost:3001
+      WALLET_SERVICE_LAMBDA_ENDPOINT: http://localhost:3000
+      PUSH_NOTIFICATION: false
+      NODE_ENV: test
+      DEV_DB: mysql
+      FIREBASE_PROJECT_ID: ""
+      FIREBASE_PRIVATE_KEY_ID: ""
+      FIREBASE_PRIVATE_KEY: ""
+      FIREBASE_CLIENT_EMAIL: ""
+      FIREBASE_CLIENT_ID: ""
+      FIREBASE_AUTH_URI: ""
+      FIREBASE_TOKEN_URI: ""
+      FIREBASE_AUTH_PROVIDER_X509_CERT_URL: ""
+      FIREBASE_CLIENT_X509_CERT_URL: ""
+      APPLICATION_NAME: "hathor-wallet-service"
+      ACCOUNT_ID: 1234
+      ALERT_MANAGER_REGION: us-east-1
+      ALERT_MANAGER_TOPIC: alert-topic
+      PUSH_ALLOWED_PROVIDERS: ""
+      REDIS_PASSWORD: ""
+      IS_OFFLINE: 'true'
+      ALERT_MANAGER_ACCOUNT_ID: ""
+      AWS_VPC_DEFAULT_SG_ID: "1"
+      AWS_SUBNET_ID_1: "2"
+      AWS_SUBNET_ID_2: "3"
+      AWS_SUBNET_ID_3: "4"
+      NFT_AUTO_REVIEW_ENABLED: "false"
+      TX_HISTORY_MAX_COUNT: ""
+      PUSH_NOTIFICATION_ENABLED: "false"
+      LOG_LEVEL: "debug"
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+    networks:
+      - hathor-privnet
+
 networks:
   hathor-privnet:
