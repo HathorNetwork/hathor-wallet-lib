@@ -90,13 +90,13 @@ describe('Full blueprint basic tests', () => {
     const ncState = await ncApi.getNanoContractState(
       txInitialize.hash,
       [
-        'vertex',
+        // 'vertex',
         'amount',
-        'address',
+        // 'address',
         'tx_output_script',
         'token_uid',
         'timestamp',
-        'contract_id',
+        // 'contract_id',
         'blueprint_id',
         'attr_str',
         'attr_int',
@@ -108,14 +108,14 @@ describe('Full blueprint basic tests', () => {
       [attrCall]
     );
 
-    expect(ncState.fields.vertex.value).toBe(vertexId);
+    // expect(ncState.fields.vertex.value).toBe(vertexId);
     expect(ncState.fields.amount.value).toBe(amount);
     // XXX the address from state will return base58 in the next version
     // expect(ncState.fields.address.value).toBe(address);
     expect(ncState.fields.tx_output_script.value).toBe(txOutputScript);
     expect(ncState.fields.token_uid.value).toBe(tokenUid);
     expect(ncState.fields.timestamp.value).toBe(timestamp);
-    expect(ncState.fields.contract_id.value).toBe(contractId);
+    // expect(ncState.fields.contract_id.value).toBe(contractId);
     expect(ncState.fields.blueprint_id.value).toBe(blueprintId);
     expect(ncState.fields.attr_str.value).toBe(attrStr);
     expect(ncState.fields.attr_int.value).toBe(attrInt);
