@@ -646,7 +646,7 @@ export async function processNewTx(
     if (callerAddressInfo) {
       // create metadata for address if it does not exist
       let seqnumMeta = await store.getSeqnumMeta(caller);
-      if (seqnumMeta != null) {
+      if (seqnumMeta === null) {
         seqnumMeta = -1;
       }
 
@@ -842,7 +842,7 @@ export async function processNewTx(
     if (callerAddressInfo && tx.nc_id && tx.nc_seqnum != null) {
       // create metadata for address if it does not exist
       let seqnumMeta = await store.getSeqnumMeta(caller);
-      if (seqnumMeta != null) {
+      if (seqnumMeta === null) {
         seqnumMeta = -1;
       }
 
