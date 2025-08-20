@@ -839,14 +839,14 @@ export async function processNewTx(
     }
     const callerAddressInfo = await store.getAddress(caller);
     // if address is not in wallet, ignore
-    if (callerAddressInfo) {
+    if (callerAddressInfo && tx.nc_id && tx.nc_seqnum != null) {
       // create metadata for address if it does not exist
       let seqnumMeta = await store.getSeqnumMeta(caller);
       if (seqnumMeta != null) {
         seqnumMeta = -1;
       }
 
-      if (tx.nc_id && tx.nc_seqnum != null && tx.nc_seqnum > seqnumMeta) {
+      if (tx.nc_seqnum > seqnumMeta) {
         seqnumMeta = tx.nc_seqnum;
       }
 
