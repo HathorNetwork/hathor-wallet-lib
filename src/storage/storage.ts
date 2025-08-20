@@ -212,7 +212,9 @@ export class Storage implements IStorage {
    * @async
    * @returns {Promise<(IAddressInfo & Partial<IAddressMetadata> & { seqnum: number | null })|null>} The address info or null if not found
    */
-  async getAddressInfo(base58: string): Promise<(IAddressInfo & IAddressMetadata & { seqnum: number | null }) | null> {
+  async getAddressInfo(
+    base58: string
+  ): Promise<(IAddressInfo & IAddressMetadata & { seqnum: number | null }) | null> {
     const address = await this.store.getAddress(base58);
     if (address === null) {
       return null;
