@@ -61,7 +61,7 @@ export const JSONBigInt = {
   bigIntReplacer(_key: string, value_: any): any {
     // If the value is a BigInt, we simply return its string representation.
     // @ts-expect-error TypeScript hasn't been updated with the `rawJSON` function from Node v22.
-    return typeof value_ === 'bigint' ? JSON.rawJSON(value_.toString()) : value_;
+    return typeof value_ === 'bigint' ? JSON.rawJSON(value_.toString(10)) : value_;
   },
   /* eslint-enable @typescript-eslint/no-explicit-any */
 };
