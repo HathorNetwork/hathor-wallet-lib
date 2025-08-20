@@ -939,6 +939,7 @@ export class MemoryStore implements IStore {
       this.addresses = new Map<string, IAddressInfo>();
       this.addressIndexes = new Map<number, string>();
       this.addressesMetadata = new Map<string, IAddressMetadata>();
+      this.seqnumMetadata = new Map<string, number>();
       this.walletData = { ...this.walletData, ...DEFAULT_ADDRESSES_WALLET_DATA };
     }
 
