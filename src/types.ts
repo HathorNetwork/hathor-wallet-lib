@@ -146,7 +146,7 @@ export type IHistoryNanoContractAction =
 
 export interface IHistoryNanoContractContext {
   actions: IHistoryNanoContractAction[];
-  address: string;
+  caller_id: string;
   timestamp: number;
 }
 
