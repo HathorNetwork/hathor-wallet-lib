@@ -634,7 +634,7 @@ export async function processNewTx(
 
   const { store } = storage;
 
-  if (tx.is_voided && tx.nc_id && tx.first_block) {
+  if (tx.is_voided && tx.nc_id && tx.first_block && tx.seqnum != null) {
     // If a nano transaction is voided but has first block
     // we need to increase the seqnum of the caller address
     if (!tx.nc_address) {
@@ -645,15 +645,15 @@ export async function processNewTx(
     // if address is not in wallet, ignore
     if (callerAddressInfo) {
       // create metadata for address if it does not exist
-      let addressMeta = await store.getAddressMeta(caller);
-      if (!addressMeta) {
-        addressMeta = { ...DEFAULT_ADDRESS_META };
+      let seqnumMeta = await store.getSeqnumMeta(caller);
+      if (!seqnumMeta) {
+        seqnumMeta = -1;
       }
 
-      if (tx.nc_seqnum! > addressMeta.seqnum) {
-        addressMeta.seqnum = tx.nc_seqnum!;
+      if (tx.nc_seqnum! > seqnumMeta) {
+        seqnumMeta = tx.nc_seqnum!;
       }
-      await store.editAddressMeta(caller, addressMeta);
+      await store.editSeqnumMeta(caller, seqnumMeta);
     }
   }
 
@@ -841,18 +841,17 @@ export async function processNewTx(
     // if address is not in wallet, ignore
     if (callerAddressInfo) {
       // create metadata for address if it does not exist
-      let addressMeta = await store.getAddressMeta(caller);
-      if (!addressMeta) {
-        addressMeta = { ...DEFAULT_ADDRESS_META };
+      let seqnumMeta = await store.getSeqnumMeta(caller);
+      if (!seqnumMeta) {
+        seqnumMeta = -1;
       }
 
-      if (tx.nc_id) {
-        if (tx.nc_seqnum! > addressMeta.seqnum) {
-          addressMeta.seqnum = tx.nc_seqnum!;
-        }
+      if (tx.nc_id && tx.nc_seqnum != null && tx.nc_seqnum > seqnumMeta) {
+        seqnumMeta = tx.nc_seqnum;
       }
 
-      await store.editAddressMeta(caller, addressMeta);
+      await store.editSeqnumMeta(caller, seqnumMeta);
+
       txAddresses.add(caller);
     }
   }

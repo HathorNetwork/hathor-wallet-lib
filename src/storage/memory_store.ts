@@ -106,6 +106,13 @@ export class MemoryStore implements IStore {
   addressesMetadata: Map<string, IAddressMetadata>;
 
   /**
+   * Map<base58, number>
+   * where base58 is the address in base58
+   * and the number is the current seqnum of the address
+   */
+  seqnumMetadata: Map<string, number>;
+
+  /**
    * Map<uid, ITokenData>
    * where uid is the token uid in hex
    */
@@ -169,6 +176,7 @@ export class MemoryStore implements IStore {
     this.addresses = new Map<string, IAddressInfo>();
     this.addressIndexes = new Map<number, string>();
     this.addressesMetadata = new Map<string, IAddressMetadata>();
+    this.seqnumMetadata = new Map<string, number>();
     this.tokens = new Map<string, ITokenData>();
     this.tokensMetadata = new Map<string, ITokenMetadata>();
     this.registeredTokens = new Map<string, ITokenData>();
@@ -229,6 +237,17 @@ export class MemoryStore implements IStore {
    */
   async getAddressMeta(base58: string): Promise<IAddressMetadata | null> {
     return this.addressesMetadata.get(base58) || null;
+  }
+
+  /**
+   * Get the seqnum for an address if it exists.
+   *
+   * @param {string} base58 Address in base58 to search the seqnum
+   * @async
+   * @returns {Promise<number | null>} A promise with the address seqnum or null if not in storage
+   */
+  async getSeqnumMeta(base58: string): Promise<number | null> {
+    return this.seqnumMetadata.get(base58) || null;
   }
 
   /**
@@ -331,6 +350,16 @@ export class MemoryStore implements IStore {
    */
   async editAddressMeta(base58: string, meta: IAddressMetadata): Promise<void> {
     this.addressesMetadata.set(base58, meta);
+  }
+
+  /**
+   * Edit address seqnum.
+   *
+   * @param {string} base58 The address in base58 format
+   * @param {number} seqnum The seqnum to save
+   */
+  async editSeqnumMeta(base58: string, seqnum: number): Promise<void> {
+    this.seqnumMetadata.set(base58, seqnum);
   }
 
   /* TRANSACTIONS */

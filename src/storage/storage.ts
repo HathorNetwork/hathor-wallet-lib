@@ -64,7 +64,6 @@ import Transaction from '../models/transaction';
 export const DEFAULT_ADDRESS_META: IAddressMetadata = {
   numTransactions: 0,
   balance: new Map<string, IBalance>(),
-  seqnum: -1,
 };
 
 export class Storage implements IStorage {
@@ -211,7 +210,7 @@ export class Storage implements IStorage {
    *
    * @param {string} base58 The base58 address to fetch
    * @async
-   * @returns {Promise<(IAddressInfo & Partial<IAddressMetadata>)|null>} The address info or null if not found
+   * @returns {Promise<(IAddressInfo & Partial<IAddressMetadata> & number)|null>} The address info or null if not found
    */
   async getAddressInfo(base58: string): Promise<(IAddressInfo & IAddressMetadata) | null> {
     const address = await this.store.getAddress(base58);
@@ -219,7 +218,8 @@ export class Storage implements IStorage {
       return null;
     }
     const meta = await this.store.getAddressMeta(base58);
-    return { ...address, ...DEFAULT_ADDRESS_META, ...meta };
+    const seqnum = await this.store.getSeqnumMeta(base58);
+    return { ...address, ...DEFAULT_ADDRESS_META, ...meta, seqnum };
   }
 
   /**
