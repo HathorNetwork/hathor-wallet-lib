@@ -14,6 +14,7 @@ import {
   AUTHORITY_TOKEN_DATA,
   TOKEN_MELT_MASK,
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
+  P2PKH_ACCT_PATH,
 } from '../constants';
 import { decryptData, signMessage } from '../utils/crypto';
 import walletApi from './api/walletApi';
@@ -449,9 +450,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async generateCreateWalletAuthData(accessData: IWalletAccessData, pinCode: string): Promise<CreateWalletAuthData> {
-    let xpub: string;
-    let authXpub: string;
+  async generateCreateWalletAuthData(
+    accessData: IWalletAccessData,
+    pinCode: string
+  ): Promise<CreateWalletAuthData> {
     let privKey: bitcore.HDPrivateKey;
     let privKeyAccountPath: bitcore.HDPrivateKey;
     let authDerivedPrivKey: bitcore.HDPrivateKey;
@@ -459,45 +461,40 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const now = Date.now();
     const timestampNow = Math.floor(now / 1000); // in seconds
 
-    if (!!accessData.acctPathKey) {
+    if (accessData.acctPathKey) {
       const acctKey = decryptData(accessData.acctPathKey, pinCode);
       privKeyAccountPath = bitcore.HDPrivateKey(acctKey);
-    } else {
+    } else if (this.seed) {
       // Derive from seed present in memory
-      if (this.seed) {
-        // getXPrivKeyFromSeed returns a HDPrivateKey on the root path
+      // getXPrivKeyFromSeed returns a HDPrivateKey on the root path
+      privKey = walletUtils.getXPrivKeyFromSeed(this.seed, {
+        passphrase: this.passphrase,
+        networkName: this.network.name,
+      });
+      privKeyAccountPath = privKey.deriveNonCompliantChild(P2PKH_ACCT_PATH);
+    } else if (this.xpriv) {
+      privKeyAccountPath = bitcore.HDPrivateKey(this.xpriv);
+    } else {
+      throw new Error('Cannot derive account path key');
+    }
+    const xpub = privKeyAccountPath.xpubkey;
+
+    if (accessData.authKey) {
+      const authKey = decryptData(accessData.authKey, pinCode);
+      authDerivedPrivKey = bitcore.HDPrivateKey(authKey);
+    } else if (this.seed) {
+      // Derive from seed present in memory
+      if (!privKey) {
         privKey = walletUtils.getXPrivKeyFromSeed(this.seed, {
           passphrase: this.passphrase,
           networkName: this.network.name,
         });
-        privKeyAccountPath = privKey.deriveNonCompliantChild("m/44'/280'/0'");
-      } else if (this.xpriv) {
-        privKeyAccountPath = bitcore.HDPrivateKey(this.xpriv);
-      } else {
-        throw new Error('Cannot derive account path key');
       }
-    }
-    xpub = privKeyAccountPath.xpubkey;
-
-    if (!!accessData.authKey) {
-      const authKey = decryptData(accessData.authKey, pinCode);
-      authDerivedPrivKey = bitcore.HDPrivateKey(authKey);
-      authXpub = authDerivedPrivKey.xpubkey;
+      authDerivedPrivKey = privKey.deriveNonCompliantChild(WALLET_SERVICE_AUTH_DERIVATION_PATH);
     } else {
-      // Derive from seed present in memory
-      if (this.seed) {
-        if (!privKey) {
-          privKey = walletUtils.getXPrivKeyFromSeed(this.seed, {
-            passphrase: this.passphrase,
-            networkName: this.network.name,
-          });
-        }
-        authDerivedPrivKey = privKey.deriveNonCompliantChild("m/280'/280'");
-      } else {
-        throw new Error('Cannot derive auth path key');
-      }
+      throw new Error('Cannot derive auth path key');
     }
-    authXpub = authDerivedPrivKey.xpubkey;
+    const authXpub = authDerivedPrivKey.xpubkey;
 
     const walletId: string = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
 
