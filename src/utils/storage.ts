@@ -650,8 +650,8 @@ export async function processNewTx(
         seqnumMeta = -1;
       }
 
-      if (tx.nc_seqnum! > seqnumMeta) {
-        seqnumMeta = tx.nc_seqnum!;
+      if (tx.nc_seqnum > seqnumMeta) {
+        seqnumMeta = tx.nc_seqnum;
       }
       await store.editSeqnumMeta(caller, seqnumMeta);
     }
