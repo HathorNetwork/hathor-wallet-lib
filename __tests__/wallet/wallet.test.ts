@@ -561,7 +561,12 @@ test('generateCreateWalletAuthData should return correct auth data', async () =>
     xpub: null,
   });
 
-  const authData: CreateWalletAuthData = await wallet.generateCreateWalletAuthData(pin);
+  const accessData = walletUtils.generateAccessDataFromSeed(seed, {
+    pin,
+    password: pin,
+    networkName: network.name,
+  });
+  const authData: CreateWalletAuthData = await wallet.generateCreateWalletAuthData(accessData, pin);
   const timestampNow = Math.floor(Date.now() / 1000); // in seconds
 
   // these are deterministic, so we can avoid using the lib's methods to generate them
