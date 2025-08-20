@@ -634,7 +634,7 @@ export async function processNewTx(
 
   const { store } = storage;
 
-  if (tx.is_voided && tx.nc_id && tx.first_block && tx.seqnum != null) {
+  if (tx.is_voided && tx.nc_id && tx.first_block && tx.nc_seqnum != null) {
     // If a nano transaction is voided but has first block
     // we need to increase the seqnum of the caller address
     if (!tx.nc_address) {
