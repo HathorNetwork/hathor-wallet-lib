@@ -1317,17 +1317,22 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     return this.getCurrentAddress();
   }
 
-  /* eslint-disable class-methods-use-this -- Methods are not yet implemented */
-  getAddressIndex(address: string): number | undefined {
-    // Check all saved addresses to find the index matching this address
-    for (const addressInfo of this.newAddresses) {
-      if (addressInfo.address === address) {
-        return addressInfo.index;
-      }
-    }
+  /**
+   * Get the address index of a base58 address
+   *
+   * @param {string} address Address to check
+   * @returns {number | undefined} The address index or undefined
+   */
+  async getAddressIndex(address: string): Promise<number | undefined> {
+    try {
+      const addressDetails = await this.getAddressDetails(address);
+      const addressIndex = addressDetails?.index;
 
-    // Return undefined if the address is not found
-    return undefined;
+      return addressIndex;
+    } catch (_e) {
+      // Return undefined if the address is not found
+      return undefined;
+    }
   }
 
   /**
@@ -1360,7 +1365,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     // First get the address index
-    const addressIndex = this.getAddressIndex(address);
+    const addressIndex = await this.getAddressIndex(address);
     if (addressIndex === undefined) {
       throw new WalletError(`Address ${address} does not belong to this wallet`);
     }
