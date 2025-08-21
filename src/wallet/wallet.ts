@@ -269,6 +269,16 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
+   * Get server URL from config object
+   *
+   * @memberof HathorWalletServiceWallet
+   * @inner
+   */
+  getServerUrl(): string {
+    return config.getServerUrl();
+  }
+
+  /**
    * Remove sensitive data from memory
    *
    * NOTICE: This won't remove data from memory immediately, we have to wait until javascript
