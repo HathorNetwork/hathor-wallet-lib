@@ -854,7 +854,7 @@ export async function processNewTx(
 
     if (callerAddressInfo && tx.nc_id && tx.nc_seqnum != null) {
       // update seqnum metadata if it's bigger
-      let seqnumMeta = await store.getSeqnumMeta(caller) ?? -1;
+      const seqnumMeta = (await store.getSeqnumMeta(caller)) ?? -1;
       if (tx.nc_seqnum > seqnumMeta) {
         await store.editSeqnumMeta(caller, tx.nc_seqnum);
       }

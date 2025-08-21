@@ -220,7 +220,7 @@ export class Storage implements IStorage {
       return null;
     }
     const meta = await this.store.getAddressMeta(base58);
-    const seqnum = await this.store.getSeqnumMeta(base58) ?? -1;
+    const seqnum = (await this.store.getSeqnumMeta(base58)) ?? -1;
     return { ...address, ...DEFAULT_ADDRESS_META, ...meta, seqnum };
   }
 
