@@ -9,6 +9,7 @@ import { IStorage, IHistoryTx } from '../types';
 import Transaction from '../models/transaction';
 import HathorWalletServiceWallet from './wallet';
 import { FullNodeTxResponse } from './types';
+import transactionUtils from '../utils/transaction';
 
 /**
  * Storage proxy that implements missing storage methods for wallet service
@@ -76,22 +77,9 @@ export class WalletServiceStorageProxy {
    * First tries local wallet cache, then falls back to API
    */
   private async getAddressInfo(address: string) {
-    const addressIndex = this.wallet.getAddressIndex(address);
-    if (addressIndex !== undefined) {
-      return {
-        bip32AddressIndex: addressIndex,
-      };
-    }
+    const addressIndex = await this.wallet.getAddressIndex(address);
 
-    // Address not in local cache, try API
-    try {
-      const addressDetails = await this.wallet.getAddressDetails(address);
-      return {
-        bip32AddressIndex: addressDetails.index,
-      };
-    } catch (error) {
-      return null; // Address doesn't belong to this wallet
-    }
+    return addressIndex;
   }
 
   /**
@@ -99,8 +87,7 @@ export class WalletServiceStorageProxy {
    */
   // eslint-disable-next-line class-methods-use-this
   private async getTxSignatures(receiver: IStorage, tx: Transaction, pinCode: string) {
-    const transaction = await import('../utils/transaction');
-    const result = await transaction.default.getSignatureForTx(tx, receiver, pinCode);
+    const result = await transactionUtils.getSignatureForTx(tx, receiver, pinCode);
     return result;
   }
 
@@ -137,7 +124,7 @@ export class WalletServiceStorageProxy {
    */
   private async getCurrentAddress(markAsUsed?: boolean): Promise<string> {
     try {
-      const currentAddress = await this.wallet.getCurrentAddress({ markAsUsed });
+      const currentAddress = this.wallet.getCurrentAddress({ markAsUsed });
       return currentAddress.address; // Return just the address string for utils compatibility
     } catch (error) {
       throw new Error('Current address is not loaded');
