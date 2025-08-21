@@ -274,6 +274,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
+  // eslint-disable-next-line class-methods-use-this
   getServerUrl(): string {
     return config.getServerUrl();
   }
