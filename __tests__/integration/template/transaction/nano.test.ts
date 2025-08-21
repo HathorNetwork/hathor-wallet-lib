@@ -434,7 +434,7 @@ describe('Template execution', () => {
         id: '{contract}',
         method: 'revoke',
         caller: '{caller}',
-        args: ['{token}', true, true],
+        args: ['{token}', true, false],
       })
       .build();
 

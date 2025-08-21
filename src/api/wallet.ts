@@ -301,6 +301,12 @@ const walletApi = {
         }
       );
   },
+
+  // Expose api validation schemas
+  schemas: {
+    addressHistory: addressHistorySchema,
+    generalTokenInfo: generalTokenInfoSchema,
+  },
 };
 
 export default walletApi;
