@@ -837,22 +837,27 @@ export async function processNewTx(
       }
       caller = tx.nc_address;
     }
+
     const callerAddressInfo = await store.getAddress(caller);
     // if address is not in wallet, ignore
-    if (callerAddressInfo && tx.nc_id && tx.nc_seqnum != null) {
-      // create metadata for address if it does not exist
-      let seqnumMeta = await store.getSeqnumMeta(caller);
-      if (seqnumMeta == null) {
-        seqnumMeta = -1;
+    if (callerAddressInfo) {
+      let addressMeta = await store.getAddressMeta(caller);
+      if (!addressMeta) {
+        // Save address meta in store, because the caller might be
+        // the first transaction for this address
+        addressMeta = { ...DEFAULT_ADDRESS_META };
+        await store.editAddressMeta(caller, addressMeta);
       }
-
-      if (tx.nc_seqnum > seqnumMeta) {
-        seqnumMeta = tx.nc_seqnum;
-      }
-
-      await store.editSeqnumMeta(caller, seqnumMeta);
 
       txAddresses.add(caller);
+    }
+
+    if (callerAddressInfo && tx.nc_id && tx.nc_seqnum != null) {
+      // update seqnum metadata if it's bigger
+      let seqnumMeta = await store.getSeqnumMeta(caller) ?? -1;
+      if (tx.nc_seqnum > seqnumMeta) {
+        await store.editSeqnumMeta(caller, tx.nc_seqnum);
+      }
     }
   }
 
