@@ -632,9 +632,9 @@ describe('full cycle of bet nano contract', () => {
     // Even if the tx is voided, if it has first_block, the seqnum should increase. This
     // case the tx became voided after getting a first_block and the nano execution failed
     // but the number of transactions should still be the same
-    const address2Meta3 = await wallet.storage.store.getAddressMeta(address2);
-    expect(address2Meta3.seqnum).toBe(2);
-    expect(address2Meta3.numTransactions).toBe(2);
+    const address2Info = await wallet.storage.getAddressInfo(address2);
+    expect(address2Info.numTransactions).toBe(2);
+    expect(address2Info.seqnum).toBe(2);
   };
 
   const checkErrorsWithBlueprintId = async blueprintId => {

@@ -634,7 +634,7 @@ export async function processNewTx(
 
   const { store } = storage;
 
-  if (tx.is_voided && tx.nc_id && tx.first_block) {
+  if (tx.is_voided && tx.nc_id && tx.first_block && tx.nc_seqnum != null) {
     // If a nano transaction is voided but has first block
     // we need to increase the seqnum of the caller address
     if (!tx.nc_address) {
@@ -645,15 +645,15 @@ export async function processNewTx(
     // if address is not in wallet, ignore
     if (callerAddressInfo) {
       // create metadata for address if it does not exist
-      let addressMeta = await store.getAddressMeta(caller);
-      if (!addressMeta) {
-        addressMeta = { ...DEFAULT_ADDRESS_META };
+      let seqnumMeta = await store.getSeqnumMeta(caller);
+      if (seqnumMeta == null) {
+        seqnumMeta = -1;
       }
 
-      if (tx.nc_seqnum! > addressMeta.seqnum) {
-        addressMeta.seqnum = tx.nc_seqnum!;
+      if (tx.nc_seqnum > seqnumMeta) {
+        seqnumMeta = tx.nc_seqnum;
       }
-      await store.editAddressMeta(caller, addressMeta);
+      await store.editSeqnumMeta(caller, seqnumMeta);
     }
   }
 
@@ -837,23 +837,27 @@ export async function processNewTx(
       }
       caller = tx.nc_address;
     }
+
     const callerAddressInfo = await store.getAddress(caller);
     // if address is not in wallet, ignore
     if (callerAddressInfo) {
-      // create metadata for address if it does not exist
       let addressMeta = await store.getAddressMeta(caller);
       if (!addressMeta) {
+        // Save address meta in store, because the caller might be
+        // the first transaction for this address
         addressMeta = { ...DEFAULT_ADDRESS_META };
+        await store.editAddressMeta(caller, addressMeta);
       }
 
-      if (tx.nc_id) {
-        if (tx.nc_seqnum! > addressMeta.seqnum) {
-          addressMeta.seqnum = tx.nc_seqnum!;
-        }
-      }
-
-      await store.editAddressMeta(caller, addressMeta);
       txAddresses.add(caller);
+    }
+
+    if (callerAddressInfo && tx.nc_id && tx.nc_seqnum != null) {
+      // update seqnum metadata if it's bigger
+      const seqnumMeta = (await store.getSeqnumMeta(caller)) ?? -1;
+      if (tx.nc_seqnum > seqnumMeta) {
+        await store.editSeqnumMeta(caller, tx.nc_seqnum);
+      }
     }
   }
 
