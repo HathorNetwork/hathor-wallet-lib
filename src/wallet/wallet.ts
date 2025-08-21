@@ -1540,8 +1540,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // Create outputs
     const outputsObj: Output[] = [];
-
-    // Add data outputs if specified - for NFT creation, these go first
     const dataOutputs: Output[] = [];
     if (newOptions.data && newOptions.data.length > 0) {
       for (const dataString of newOptions.data) {
@@ -1549,7 +1547,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
     }
 
-    // For NFT creation, data outputs go first
     if (newOptions.isCreateNFT && dataOutputs.length > 0) {
       outputsObj.push(...dataOutputs);
     }
@@ -1607,7 +1604,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       outputsObj.push(new Output(changeAmount, p2pkhChangeScript));
     }
 
-    // For non-NFT tokens with data, add data outputs at the end
     if (!newOptions.isCreateNFT && dataOutputs.length > 0) {
       outputsObj.push(...dataOutputs);
     }
