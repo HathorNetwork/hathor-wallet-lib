@@ -247,7 +247,7 @@ export class MemoryStore implements IStore {
    * @returns {Promise<number | null>} A promise with the address seqnum or null if not in storage
    */
   async getSeqnumMeta(base58: string): Promise<number | null> {
-    return this.seqnumMetadata.get(base58) || null;
+    return this.seqnumMetadata.get(base58) ?? null;
   }
 
   /**
