@@ -1395,14 +1395,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     return addressDetails.data;
   }
 
-  /**
-   * TODO: Currently a no-op... We currently have a very specific mechanism for
-   * locking utxos, which is the createTxProposal/sendTxProposal, that is very
-   * tightly coupled to the regular send transaction method.
-   */
   // eslint-disable-next-line class-methods-use-this
   async markUtxoSelected(): Promise<void> {
-    // TODO: Currently a no-op... We currently have a very specific mechanism for
+    // XXX: Currently a no-op... We currently have a very specific mechanism for
     // locking utxos, which is the createTxProposal/sendTxProposal, that is very
     // tightly coupled to the regular send transaction method.
   }
