@@ -2700,14 +2700,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     if (createTokenOptions.symbol === undefined || createTokenOptions.symbol === null) {
       throw new Error('createTokenOptions.symbol is required and cannot be null or undefined');
     }
-    // If mintAddress is not provided, use the address from the nano contract caller
-    if (!createTokenOptions.mintAddress) {
-      createTokenOptions.mintAddress = address;
-    }
-
     // Defaults below match wallet.js (see lines 3077-3087)
     const mergedCreateTokenOptions: NanoContractBuilderCreateTokenOptions = {
-      mintAddress: createTokenOptions.mintAddress,
+      mintAddress: null,
       changeAddress: null,
       createMint: true,
       mintAuthorityAddress: null,
