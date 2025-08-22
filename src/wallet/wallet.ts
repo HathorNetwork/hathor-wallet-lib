@@ -2598,8 +2598,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async prepareNanoSendTransactionWalletService(
     tx: Transaction,
     address: string,
-    pinCode: string,
-    storageProxy?: IStorage
+    pinCode: string
   ): Promise<SendTransactionWalletService> {
     // Get the index for the address
     const addressDetails = await this.getAddressDetails(address);
@@ -2611,14 +2610,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       );
     }
 
-    // Use provided storage proxy or create a new one
-    let finalStorageProxy = storageProxy;
-    if (!finalStorageProxy) {
-      const storageProxyHelper = new WalletServiceStorageProxy(this, this.storage);
-      finalStorageProxy = storageProxyHelper.createProxy();
-    }
+    const storageProxy = new WalletServiceStorageProxy(this, this.storage);
 
-    await transaction.signTransaction(tx, finalStorageProxy, pinCode);
+    await transaction.signTransaction(tx, storageProxy.createProxy(), pinCode);
 
     // Finalize the transaction
     tx.prepareToSend();
@@ -2700,7 +2694,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     if (createTokenOptions.symbol === undefined || createTokenOptions.symbol === null) {
       throw new Error('createTokenOptions.symbol is required and cannot be null or undefined');
     }
-    // Defaults below match wallet.js (see lines 3077-3087)
+
     const mergedCreateTokenOptions: NanoContractBuilderCreateTokenOptions = {
       mintAddress: null,
       changeAddress: null,
@@ -2727,7 +2721,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const tx = await builder.build();
 
-    return this.prepareNanoSendTransactionWalletService(tx, address, pin, storageProxy);
+    return this.prepareNanoSendTransactionWalletService(tx, address, pin);
   }
 }
 

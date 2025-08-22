@@ -298,8 +298,9 @@ export const fullNodeTokenSchema = z.object({
  */
 export const ncActionSchema = z.object({
   type: z.string(),
-  token_uid: z.string(),
-  amount: z.number(),
+  token_uid: z.string().optional(),
+  mint: z.boolean().optional(),
+  melt: z.boolean().optional(),
 });
 
 /**
@@ -309,6 +310,7 @@ export const ncContextSchema = z.object({
   actions: z.array(ncActionSchema),
   address: AddressSchema,
   timestamp: z.number(),
+  address: AddressSchema,
 });
 
 /**
