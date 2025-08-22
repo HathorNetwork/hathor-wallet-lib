@@ -2347,28 +2347,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
-   * Custom adapter to make getFullTxById compatible with NanoContractTransactionBuilder
-   *
-   * @param txId Transaction ID to retrieve
-   * @returns Promise with compatible fullnode transaction response
-   */
-  async getFullTxByIdForNanoContract(txId: string): Promise<unknown> {
-    this.failIfWalletNotReady();
-    // Use the existing wallet service method
-    const data = await walletApi.getFullTxById(this, txId);
-    // Transform the response format if necessary to match what NanoContractTransactionBuilder expects
-    // The key field it looks for is nc_blueprint_id for nano contract transactions
-    if (data.tx && data.tx.version === DEFAULT_TX_VERSION) {
-      // Add nc_blueprint_id field to match the expected format
-      const tx = data.tx as unknown as Record<string, unknown>;
-      if (!tx.nc_blueprint_id && tx.nc_id) {
-        tx.nc_blueprint_id = tx.nc_id;
-      }
-    }
-    return data;
-  }
-
-  /**
    * Adapter for preparing nano contract transactions in the wallet-service facade
    *
    * @param nc Nano contract transaction
