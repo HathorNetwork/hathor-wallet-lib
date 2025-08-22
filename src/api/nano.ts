@@ -135,9 +135,11 @@ const ncApi = {
       throw new NanoRequestError('Error getting blueprint information.', null, response);
     } catch (error: unknown) {
       if (axios.isAxiosError(error)) {
-        const e = error as AxiosError<Error>;
-        if (e.response && e.response.status === 404) {
-          throw new NanoRequest404Error('Blueprint not found.', e, e.response);
+        const e = error as AxiosError<typeof e>;
+        if (e.response) {
+          if (e.response.status === 404) {
+            throw new NanoRequest404Error('Blueprint not found.', e, e.response);
+          }
         }
       }
 
