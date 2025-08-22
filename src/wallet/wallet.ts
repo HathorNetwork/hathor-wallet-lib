@@ -1508,8 +1508,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
     }
 
-    const isNFT =
-      newOptions.isCreateNFT || (newOptions.data !== null && newOptions.data.length > 0);
+    const isNFT = newOptions.isCreateNFT;
 
     const depositPercent = this.storage.getTokenDepositPercentage();
     // 1. Calculate HTR deposit needed
@@ -2340,7 +2339,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       createMeltAuthority: boolean;
       meltAuthorityAddress: string | null;
       allowExternalMeltAuthorityAddress: boolean | null;
-      nftData?: string;
+      data?: string[];
+      isCreateNFT?: boolean;
     };
     const newOptions: optionsType = {
       address: null,
@@ -2353,7 +2353,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       allowExternalMeltAuthorityAddress: false,
       ...options,
     };
-    newOptions.nftData = data;
+    newOptions.data = [data];
+    newOptions.isCreateNFT = true;
     const tx = await this.prepareCreateNewToken(name, symbol, amount, newOptions);
     return this.handleSendPreparedTransaction(tx);
   }
