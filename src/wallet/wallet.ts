@@ -2407,13 +2407,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       { network: this.network }
     );
 
-    // Create a wrapper around this wallet to override getFullTxById
-    const wrappedWallet = {
-      ...this,
-      getFullTxById: this.getFullTxByIdForNanoContract.bind(this),
-      getNetworkObject: this.getNetworkObject.bind(this),
-    };
-
     // Build and send transaction
     const actions = data.actions || [];
     const args = data.args || [];
@@ -2437,7 +2430,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const builder = new NanoContractTransactionBuilder()
       .setMethod(method)
-      .setWallet(wrappedWallet)
+      .setWallet(this)
       .setBlueprintId(data.blueprintId as string)
       .setNcId(data.ncId as string)
       .setCaller(callerAddress)
