@@ -76,7 +76,7 @@ services:
   # Redis on 6379, MySQL on 3380, Wallet Service Daemon on 8081 and Daemon Websocket on 8082
 
   mysql:
-    image: mysql
+    image: centos/mysql-80-centos7 # Necessary to use specific authentication protocol
     networks:
       - hathor-privnet
     environment:
@@ -171,8 +171,8 @@ services:
 
   ws-serverless:
     build:
-      context: '/home/tulio/code/wallet-service/packages/wallet-service'
-      dockerfile: Dockerfile
+      context: '/home/tulio/code/wallet-service/'
+      dockerfile: 'packages/wallet-service/Dockerfile'
     depends_on:
       ws-daemon:
         condition: service_started # TODO: Implement healthcheck
@@ -184,7 +184,7 @@ services:
       VOIDED_TX_OFFSET: 5
       BLOCK_REWARD_LOCK: 300
       CONFIRM_FIRST_ADDRESS: false
-      WS_DOMAIN: http://localhost:3002
+      WS_DOMAIN: http://fakehost:3002
       DEFAULT_SERVER: fullnode
       DB_ENDPOINT: mysql
       DB_NAME: wallet_service
@@ -194,28 +194,29 @@ services:
       REDIS_URL: redis
       REDIS_PORT: 6379
       AUTH_SECRET: foobar
-      EXPLORER_SERVICE_LAMBDA_ENDPOINT: http://localhost:3001
-      WALLET_SERVICE_LAMBDA_ENDPOINT: http://localhost:3000
+      EXPLORER_SERVICE_LAMBDA_ENDPOINT: http://fakehost:3001
+      WALLET_SERVICE_LAMBDA_ENDPOINT: http://fakehost:3000
       PUSH_NOTIFICATION: false
       NODE_ENV: test
       DEV_DB: mysql
-      FIREBASE_PROJECT_ID: ""
-      FIREBASE_PRIVATE_KEY_ID: ""
-      FIREBASE_PRIVATE_KEY: ""
-      FIREBASE_CLIENT_EMAIL: ""
-      FIREBASE_CLIENT_ID: ""
-      FIREBASE_AUTH_URI: ""
-      FIREBASE_TOKEN_URI: ""
-      FIREBASE_AUTH_PROVIDER_X509_CERT_URL: ""
-      FIREBASE_CLIENT_X509_CERT_URL: ""
+      FIREBASE_PROJECT_ID: "fake_project_id"
+      FIREBASE_PRIVATE_KEY_ID: "fake_private_key_id"
+      FIREBASE_PRIVATE_KEY: "fake_private_key"
+      FIREBASE_CLIENT_EMAIL: "fake@client_email.com"
+      FIREBASE_CLIENT_ID: "fake_client_id"
+      FIREBASE_AUTH_URI: "fake_auth_uri"
+      FIREBASE_TOKEN_URI: "fake_token_uri"
+      FIREBASE_AUTH_PROVIDER_X509_CERT_URL: "fake_auth_provider_x509_cert_url"
+      FIREBASE_CLIENT_X509_CERT_URL: "fake_client_x509_cert_url"
       APPLICATION_NAME: "hathor-wallet-service"
       ACCOUNT_ID: 1234
       ALERT_MANAGER_REGION: us-east-1
       ALERT_MANAGER_TOPIC: alert-topic
-      PUSH_ALLOWED_PROVIDERS: ""
+      PUSH_ALLOWED_PROVIDERS: "fake_provider"
       REDIS_PASSWORD: ""
-      IS_OFFLINE: 'true'
-      ALERT_MANAGER_ACCOUNT_ID: ""
+      IS_OFFLINE: true
+      MOCK_AWS: true # Necessary to avoid calls to AWS on this private network
+      ALERT_MANAGER_ACCOUNT_ID: "fake_account_id"
       AWS_VPC_DEFAULT_SG_ID: "1"
       AWS_SUBNET_ID_1: "2"
       AWS_SUBNET_ID_2: "3"
@@ -224,6 +225,11 @@ services:
       TX_HISTORY_MAX_COUNT: ""
       PUSH_NOTIFICATION_ENABLED: "false"
       LOG_LEVEL: "debug"
+      AWS_ACCESS_KEY_ID: fake-access-key-id
+      AWS_SECRET_ACCESS_KEY: fake-secret-access-key
+      AWS_REGION: us-east-1
+      AWS_SHARED_CREDENTIALS_FILE: ".aws/credentials" # Credentials for mocked AWS
+      AWS_CONFIG_FILE: ".aws/config" # Config for mocked AWS
     ports:
       - "3000:3000"
       - "3001:3001"
