@@ -74,12 +74,18 @@ export class WalletServiceStorageProxy {
 
   /**
    * Get address information including BIP32 index
-   * First tries local wallet cache, then falls back to API
    */
   private async getAddressInfo(address: string) {
-    const addressIndex = await this.wallet.getAddressIndex(address);
+    const addressDetails = await this.wallet.getAddressDetails(address);
 
-    return addressIndex;
+    if (!addressDetails) {
+      return null;
+    }
+
+    return {
+      bip32AddressIndex: addressDetails.index,
+      address: addressDetails.address,
+    };
   }
 
   /**
