@@ -104,7 +104,7 @@ services:
 
   ws-migrator:
     build:
-      context: '/home/tulio/code/wallet-service/'
+      context: '../../../../wallet-service/'
       dockerfile: 'db/Dockerfile'
       args:
         DB_ENDPOINT: "mysql"
@@ -128,7 +128,7 @@ services:
 
   ws-daemon:
     build:
-      context: '/home/tulio/code/wallet-service/'
+      context: '../../../../wallet-service/'
       dockerfile: Dockerfile
     depends_on:
       ws-migrator:
@@ -171,7 +171,7 @@ services:
 
   ws-serverless:
     build:
-      context: '/home/tulio/code/wallet-service/'
+      context: '../../../../wallet-service/'
       dockerfile: 'packages/wallet-service/Dockerfile'
     depends_on:
       ws-daemon:
