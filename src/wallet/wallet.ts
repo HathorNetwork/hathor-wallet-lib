@@ -56,6 +56,7 @@ import {
   ConnectionState,
   TokenDetailsObject,
   AuthorityTxOutput,
+  GetTxOutputsOptions,
   WalletServiceServerUrls,
   FullNodeVersionData,
   WalletAddressMap,
@@ -888,9 +889,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const mappedOptions = {
       tokenId: newOptions.token || NATIVE_TOKEN_UID,
-      authority: newOptions.authorities,
+      authority: newOptions.authorities ? BigInt(newOptions.authorities) : undefined,
       addresses: newOptions.filter_address ? [newOptions.filter_address] : undefined,
-      totalAmount: newOptions.max_amount,
+      totalAmount: newOptions.max_amount ? BigInt(newOptions.max_amount) : undefined,
       smallerThan: newOptions.amount_smaller_than,
       biggerThan: newOptions.amount_bigger_than,
       maxOutputs: newOptions.max_utxos || 255,
@@ -956,8 +957,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   ): Promise<{ utxos: Utxo[]; changeAmount: OutputValueType }> {
     const newOptions = {
       tokenId: NATIVE_TOKEN_UID,
-      authority: null,
-      addresses: null,
+      authority: null as OutputValueType | null,
+      addresses: null as string[] | null,
       totalAmount,
       count: 1,
       ...options,
@@ -1644,8 +1645,20 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     authority: OutputValueType;
     skipSpent: boolean;
     maxOutputs?: number;
+    filterAddress?: string | null;
   }): Promise<AuthorityTxOutput[]> {
-    const { txOutputs } = await walletApi.getTxOutputs(this, options);
+    const apiOptions: GetTxOutputsOptions = {
+      tokenId: options.tokenId,
+      authority: options.authority,
+      skipSpent: options.skipSpent,
+      maxOutputs: options.maxOutputs,
+    };
+
+    if (options.filterAddress) {
+      apiOptions.addresses = [options.filterAddress];
+    }
+
+    const { txOutputs } = await walletApi.getTxOutputs(this, apiOptions);
 
     return txOutputs.map(txOutput => ({
       txId: txOutput.txId,
@@ -1756,6 +1769,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       authority: authorityValue,
       skipSpent: newOptions.only_available_utxos,
       maxOutputs: newOptions.many ? undefined : 1,
+      filterAddress: newOptions.filter_address,
     });
   }
 

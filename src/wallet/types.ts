@@ -177,6 +177,21 @@ export interface SendTxOptionsParam {
   changeAddress: string | undefined;
 }
 
+export interface GetTxOutputsOptions {
+  tokenId?: string;
+  authority?: OutputValueType | null;
+  skipSpent?: boolean;
+  maxOutputs?: number;
+  addresses?: string[] | null;
+  totalAmount?: OutputValueType;
+  smallerThan?: number;
+  biggerThan?: number;
+  count?: number;
+  ignoreLocked?: boolean;
+  txId?: string;
+  index?: number;
+}
+
 export interface TxOutputResponseData {
   success: boolean;
   txOutputs: Utxo[];
@@ -613,7 +628,6 @@ export interface FullNodeTx {
     }>;
     caller_id: string;
     timestamp: number;
-    address: string;
   };
 }
 
