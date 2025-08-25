@@ -5,26 +5,7 @@ import walletUtils from '../../src/utils/wallet';
 import { WALLET_CONSTANTS } from './configuration/test-constants';
 import HathorWalletServiceWallet from '../../src/wallet/wallet';
 import config from '../../src/config';
-
-/**
- * Log relevant request data for debugging purposes
- * TODO: Remove this when the axios requests are working correctly
- * @param axiosConfig
- */
-const logRequest = (axiosConfig: InternalAxiosRequestConfig) => ({
-  url: axiosConfig.url,
-  baseURL: axiosConfig.baseURL || axios.defaults.baseURL,
-  method: axiosConfig.method,
-  headers: axiosConfig.headers,
-  timeout: axiosConfig.timeout,
-  fullURL: `${axiosConfig.baseURL || axios.defaults.baseURL || ''}${axiosConfig.url}`,
-});
-
-// Adds a debugging interceptor to all axios requests
-axios.interceptors.request.use(axiosConfig => {
-  console.log('Request axiosConfig:', logRequest(axiosConfig));
-  return axiosConfig;
-});
+import { loggers } from './utils/logger.util';
 
 // Set base URL for the wallet service API inside the privatenet test container
 config.setWalletServiceBaseUrl('http://localhost:3000/dev/');
@@ -33,12 +14,14 @@ config.setWalletServiceBaseWsUrl('ws://localhost:3001/dev/');
 describe('version', () => {
   it('should retrieve the version data', async () => {
     const response = await axios
-      .get('http://localhost:3000/version', {
+      .get('version', {
+        baseURL: config.getWalletServiceBaseUrl(),
         headers: {
           'Content-Type': 'application/json',
         },
       })
       .catch(e => {
+        loggers.test.log(`Received an error on /version: ${e}`);
         if (e.response) {
           return e.response;
         }
