@@ -34,7 +34,7 @@ import { MemoryStore, Storage } from '../../src/storage';
 import walletApi from '../../src/wallet/api/walletApi';
 import walletUtils from '../../src/utils/wallet';
 import { decryptData, verifyMessage } from '../../src/utils/crypto';
-import { IHistoryTx } from '../../src/types';
+import { IHistoryTx, IWalletAccessData } from '../../src/types';
 
 // Mock SendTransactionWalletService class so we don't try to send actual transactions
 // TODO: We should refactor the way we use classes from inside other classes. Using dependency injection would facilitate unit tests a lot and avoid mocks like this.
@@ -567,6 +567,49 @@ test('generateCreateWalletAuthData should return correct auth data', async () =>
     networkName: network.name,
   });
   const authData: CreateWalletAuthData = await wallet.generateCreateWalletAuthData(accessData, pin);
+  const timestampNow = Math.floor(Date.now() / 1000); // in seconds
+
+  // these are deterministic, so we can avoid using the lib's methods to generate them
+  const xpub =
+    'xpub6D2LLyX98BCEkbTHsE14kgP6atagb9TR3ZBvHYQrT9yEUDYeHVBmrnnyWo3u2cADp4upagFyuu5msxtosceN1FykN22oa41o3fMEJmFG766';
+  const walletId = '83f704d8b24d4f9cc252b080b008280bf4b3342065f7b4baee43fd0ec7186db7';
+  const authXpub =
+    'xpub6AyEt1FdSvP2mXsZfJ4SLHbMugNMQVNdtkhzWoF6nQSSXcstiqEZDXd4Jg7XBscM2K9YMt2ubWXChYXMTAPS99E8Wot1tcMtyfJhhKLZLok';
+  const firstAddress = 'WR1i8USJWQuaU423fwuFQbezfevmT4vFWX';
+  const xpubAddress = 'WdSD7aytFEZ5Hp8quhqu3wUCsyyGqcneMu';
+  const authXpubAddress = 'WbjNdAGBWAkCS2QVpqmacKXNy8WVXatXNM';
+
+  const xpubMessage = new Message(String(timestampNow).concat(walletId).concat(xpubAddress));
+  const authXpubMessage = new Message(
+    String(timestampNow).concat(walletId).concat(authXpubAddress)
+  );
+
+  expect(authData.xpub).toBe(xpub);
+  expect(authData.authXpub).toBe(authXpub);
+  expect(authData.timestampNow).toBe(timestampNow);
+  expect(authData.firstAddress).toBe(firstAddress);
+  expect(xpubMessage.verify(xpubAddress, authData.xpubkeySignature)).toBe(true);
+  expect(authXpubMessage.verify(authXpubAddress, authData.authXpubkeySignature)).toBe(true);
+});
+
+test('generateCreateWalletAuthData should derive correct auth data from the seed', async () => {
+  const requestPassword = jest.fn();
+
+  jest.spyOn(Date, 'now').mockImplementation(() => 10000);
+
+  const network = new Network('testnet');
+  const seed = defaultWalletSeed;
+  const pin = '123456';
+  const wallet = new HathorWalletServiceWallet({
+    requestPassword,
+    seed,
+    network,
+    passphrase: '',
+    xpriv: null,
+    xpub: null,
+  });
+
+  const authData: CreateWalletAuthData = await wallet.generateCreateWalletAuthData({} as IWalletAccessData, pin);
   const timestampNow = Math.floor(Date.now() / 1000); // in seconds
 
   // these are deterministic, so we can avoid using the lib's methods to generate them
@@ -1771,6 +1814,7 @@ test('start', async () => {
   await wallet.stop();
 
   // Starting with xpriv
+  await storage.cleanStorage(true, true, true);
   const code = new Mnemonic(seed);
   const xpriv = code.toHDPrivateKey('', new Network('testnet'));
   const authxpriv = xpriv.deriveChild(WALLET_SERVICE_AUTH_DERIVATION_PATH).xprivkey;
