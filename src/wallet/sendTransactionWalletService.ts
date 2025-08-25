@@ -104,6 +104,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @returns {Promise<IDataTx>} A promise that resolves with the prepared transaction data.
    */
   async prepareTxData(): Promise<IDataTx> {
+    
     // 1. Calculate total output amount for each token
     const tokenAmountMap: TokenAmountMap = {};
     for (const output of this.outputs) {
@@ -160,7 +161,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
         const { utxos, changeAmount } = await this.wallet.getUtxosForAmount(tokenAmountMap[token], {
           tokenId: token,
         });
-
+        
         if (utxos.length === 0) {
           throw new UtxoError(
             `No utxos available to fill the request. Token: ${token} - Amount: ${tokenAmountMap[token]}.`
