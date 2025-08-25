@@ -2698,16 +2698,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
       return arg;
     });
-    // Validate required createTokenOptions fields
-    if (createTokenOptions.amount === undefined || createTokenOptions.amount === null) {
-      throw new Error('createTokenOptions.amount is required and cannot be null or undefined');
-    }
-    if (createTokenOptions.name === undefined || createTokenOptions.name === null) {
-      throw new Error('createTokenOptions.name is required and cannot be null or undefined');
-    }
-    if (createTokenOptions.symbol === undefined || createTokenOptions.symbol === null) {
-      throw new Error('createTokenOptions.symbol is required and cannot be null or undefined');
-    }
 
     const mergedCreateTokenOptions: NanoContractBuilderCreateTokenOptions = {
       mintAddress: null,
