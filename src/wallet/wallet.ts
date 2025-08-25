@@ -1382,6 +1382,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     return addressInfo.data.seqnum + 1;
   }
 
+  /**
+   * Get detailed information about a specific address from the wallet service
+   *
+   * @param address The address to get details for
+   * @returns Promise that resolves with address details including index, transactions count, and seqnum
+   */
   async getAddressDetails(address: string): Promise<GetAddressDetailsObject> {
     const addressDetails = await walletApi.getAddressDetails(this, address);
     return addressDetails.data;
