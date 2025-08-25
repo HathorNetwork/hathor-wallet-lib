@@ -16,7 +16,6 @@ import {
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
   P2SH_ACCT_PATH,
   P2PKH_ACCT_PATH,
-  DEFAULT_TX_VERSION,
 } from '../constants';
 import { signMessage } from '../utils/crypto';
 import walletApi from './api/walletApi';
@@ -2728,16 +2727,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       ...createTokenOptions,
     } as NanoContractBuilderCreateTokenOptions;
 
-    console.log('[createNanoContractCreateTokenTransaction] Building transaction with:', {
-      method,
-      blueprintId: data.blueprintId,
-      ncId: data.ncId,
-      actions,
-      processedArgs,
-      vertexType: 'CREATE_TOKEN_TRANSACTION',
-      mergedCreateTokenOptions,
-    });
-
     const builder = new NanoContractTransactionBuilder()
       .setMethod(method)
       .setWallet(this)
@@ -2749,8 +2738,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       .setVertexType(NanoContractVertexType.CREATE_TOKEN_TRANSACTION, mergedCreateTokenOptions);
 
     const tx = await builder.build();
-
-    console.log('[createNanoContractCreateTokenTransaction] Built transaction successfully');
 
     return this.prepareNanoSendTransactionWalletService(tx, address, pin);
   }
