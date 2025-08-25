@@ -64,6 +64,7 @@ import {
   DestroyAuthorityOptions,
   FullNodeTxResponse,
   FullNodeTxConfirmationDataResponse,
+  GetAddressDetailsObject,
 } from './types';
 import {
   SendTxError,
@@ -1373,6 +1374,32 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     return addressHDPrivKey.privateKey;
   }
 
+  /**
+   * Get the seqnum to be used in a nano header for the address
+   */
+  async getNanoHeaderSeqnum(address: string): Promise<number> {
+    const addressInfo = await walletApi.getAddressDetails(this, address);
+    return addressInfo.data.seqnum + 1;
+  }
+
+  /**
+   * Get detailed information about a specific address from the wallet service
+   *
+   * @param address The address to get details for
+   * @returns Promise that resolves with address details including index, transactions count, and seqnum
+   */
+  async getAddressDetails(address: string): Promise<GetAddressDetailsObject> {
+    const addressDetails = await walletApi.getAddressDetails(this, address);
+    return addressDetails.data;
+  }
+
+  /**
+   * TODO: Currently a no-op... We currently have a very specific mechanism for
+   * locking utxos, which is the createTxProposal/sendTxProposal, that is very
+   * tightly coupled to the regular send transaction method.
+   */
+  async markUtxoSelected(): Promise<void> {}
+
   getTx(id: string) {
     throw new WalletError('Not implemented.');
   }
@@ -2257,8 +2284,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async getFullTxById(txId: string): Promise<FullNodeTxResponse> {
     this.failIfWalletNotReady();
 
-    const data = await walletApi.getFullTxById(this, txId);
-    return data;
+    return walletApi.getFullTxById(this, txId);
   }
 
   async getTxConfirmationData(txId: string): Promise<FullNodeTxConfirmationDataResponse> {
@@ -2393,7 +2419,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     // Verify address belongs to wallet and get its index
-    const addressIndex = this.getAddressIndex(address);
+    const addressDetails = await this.getAddressDetails(address);
+    const addressIndex = addressDetails?.index;
     if (addressIndex === undefined) {
       throw new Error(
         `Address used to sign the transaction (${address}) does not belong to the wallet.`
@@ -2406,13 +2433,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       addressPrivKey.publicKey.toAddress(this.network.getNetwork()).toString(),
       { network: this.network }
     );
-
-    // Create a wrapper around this wallet to override getFullTxById
-    const wrappedWallet = {
-      ...this,
-      getFullTxById: this.getFullTxByIdForNanoContract.bind(this),
-      getNetworkObject: this.getNetworkObject.bind(this),
-    };
 
     // Build and send transaction
     const actions = data.actions || [];
@@ -2437,7 +2457,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const builder = new NanoContractTransactionBuilder()
       .setMethod(method)
-      .setWallet(wrappedWallet)
+      .setWallet(this)
       .setBlueprintId(data.blueprintId as string)
       .setNcId(data.ncId as string)
       .setCaller(callerAddress)
@@ -2494,7 +2514,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     pinCode: string
   ): Promise<SendTransactionWalletService> {
     // Get the index for the address
-    const addressIndex = this.getAddressIndex(address);
+    const addressDetails = await this.getAddressDetails(address);
+    const addressIndex = addressDetails?.index;
+
     if (addressIndex === undefined) {
       throw new Error(
         `Address used to sign the transaction (${address}) does not belong to the wallet.`
@@ -2557,12 +2579,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       { network: this.network }
     );
 
-    // Create a wrapper around this wallet to override getFullTxById
-    const wrappedWallet = {
-      ...this,
-      getFullTxById: this.getFullTxByIdForNanoContract.bind(this),
-      getNetworkObject: this.getNetworkObject.bind(this),
-    };
     // Build and send transaction
     const actions = data.actions || [];
     const args = data.args || [];
@@ -2598,7 +2614,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const builder = new NanoContractTransactionBuilder()
       .setMethod(method)
-      .setWallet(wrappedWallet)
+      .setWallet(this)
       .setBlueprintId(data.blueprintId as string)
       .setNcId(data.ncId as string)
       .setCaller(callerAddress)
