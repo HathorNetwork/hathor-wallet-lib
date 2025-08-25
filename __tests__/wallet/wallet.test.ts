@@ -1803,6 +1803,8 @@ test('start', async () => {
       storage,
     });
   }).toThrow('authxpriv parameter is an invalid hd privatekey');
+
+  expect(wallet.getServerUrl()).toBe(config.getServerUrl());
 });
 
 test('getAddressPrivKey', async () => {

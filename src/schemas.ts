@@ -137,7 +137,7 @@ export const IHistoryNanoContractActionSchema = z.discriminatedUnion('type', [
 export const IHistoryNanoContractContextSchema = z
   .object({
     actions: IHistoryNanoContractActionSchema.array(),
-    address: z.string(),
+    caller_id: z.string(),
     timestamp: z.number(),
   })
   .passthrough();
