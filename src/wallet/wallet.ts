@@ -1514,9 +1514,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // 1. Calculate HTR deposit needed
     let deposit = tokens.getDepositAmount(amount, depositPercent);
 
-    if (isNFT && newOptions.data && newOptions.data.length > 0) {
+    if (newOptions.data && newOptions.data.length > 0) {
       // For data outputs, we have a fee of 0.01 HTR per data output
-      deposit += BigInt(newOptions.data.length);
+      deposit += tokens.getDataFee(newOptions.data.length);
     }
 
     // 2. Get utxos for HTR
@@ -1575,8 +1575,21 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       );
     }
 
+    if (changeAmount) {
+      // c. HTR change output
+      const changeAddressStr =
+        newOptions.changeAddress || this.getCurrentAddress({ markAsUsed: true }).address;
+      const changeAddress = new Address(changeAddressStr, { network: this.network });
+      if (!changeAddress.isValid()) {
+        throw new SendTxError(`Address ${newOptions.changeAddress} is not valid.`);
+      }
+      const p2pkhChange = new P2PKH(changeAddress);
+      const p2pkhChangeScript = p2pkhChange.createScript();
+      outputsObj.push(new Output(changeAmount, p2pkhChangeScript));
+    }
+
     if (newOptions.createMelt) {
-      // c. Melt authority
+      // d. Melt authority
       const meltAuthorityAddress =
         newOptions.meltAuthorityAddress || this.getCurrentAddress({ markAsUsed: true }).address;
       const meltAuthorityAddressObj = new Address(meltAuthorityAddress, { network: this.network });
@@ -1588,19 +1601,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       outputsObj.push(
         new Output(TOKEN_MELT_MASK, p2pkhMeltAuthorityScript, { tokenData: AUTHORITY_TOKEN_DATA })
       );
-    }
-
-    if (changeAmount) {
-      // d. HTR change output
-      const changeAddressStr =
-        newOptions.changeAddress || this.getCurrentAddress({ markAsUsed: true }).address;
-      const changeAddress = new Address(changeAddressStr, { network: this.network });
-      if (!changeAddress.isValid()) {
-        throw new SendTxError(`Address ${newOptions.changeAddress} is not valid.`);
-      }
-      const p2pkhChange = new P2PKH(changeAddress);
-      const p2pkhChangeScript = p2pkhChange.createScript();
-      outputsObj.push(new Output(changeAmount, p2pkhChangeScript));
     }
 
     if (!newOptions.isCreateNFT && dataOutputs.length > 0) {
@@ -2752,7 +2752,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     console.log('[createNanoContractCreateTokenTransaction] Built transaction successfully');
 
-    return this.prepareNanoSendTransactionWalletService(tx, address, pin, storageProxy);
+    return this.prepareNanoSendTransactionWalletService(tx, address, pin);
   }
 }
 
