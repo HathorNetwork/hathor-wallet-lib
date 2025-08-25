@@ -1377,8 +1377,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   /**
    * Get the seqnum to be used in a nano header for the address
    */
-  async getNanoHeaderSeqnum(address: { base58: string; network: Network }): Promise<number> {
-    const addressInfo = await walletApi.getAddressDetails(this, address.base58);
+  async getNanoHeaderSeqnum(address: string): Promise<number> {
+    const addressInfo = await walletApi.getAddressDetails(this, address);
     return addressInfo.data.seqnum + 1;
   }
 

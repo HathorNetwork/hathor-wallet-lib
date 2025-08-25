@@ -713,7 +713,7 @@ class NanoContractTransactionBuilder {
       }
 
       const tx = await this.buildTransaction(inputs, outputs, tokens);
-      const seqnum = await this.wallet.getNanoHeaderSeqnum(this.caller!);
+      const seqnum = await this.wallet.getNanoHeaderSeqnum(this.caller!.base58);
 
       let nanoHeaderActions: NanoContractActionHeader[] = [];
 
