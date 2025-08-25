@@ -578,6 +578,7 @@ class NanoContractTransactionBuilder {
         }
       }
       tokens = Array.from(tokenSet);
+
       for (const action of this.actions) {
         // Call action
         switch (action.type) {

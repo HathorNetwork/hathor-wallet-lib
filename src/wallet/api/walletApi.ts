@@ -19,6 +19,7 @@ import {
   TxProposalUpdateResponseData,
   TokenDetailsResponseData,
   TxOutputResponseData,
+  GetTxOutputsOptions,
   AuthTokenResponseData,
   FullNodeVersionData,
   TxByIdTokensResponseData,
@@ -220,7 +221,7 @@ const walletApi = {
 
   async getTxOutputs(
     wallet: HathorWalletServiceWallet,
-    options = {}
+    options: GetTxOutputsOptions = {}
   ): Promise<TxOutputResponseData> {
     const data = { params: options };
     const axios = await axiosInstance(wallet, true);
