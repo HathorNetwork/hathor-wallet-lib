@@ -609,7 +609,10 @@ test('generateCreateWalletAuthData should derive correct auth data from the seed
     xpub: null,
   });
 
-  const authData: CreateWalletAuthData = await wallet.generateCreateWalletAuthData({} as IWalletAccessData, pin);
+  const authData: CreateWalletAuthData = await wallet.generateCreateWalletAuthData(
+    {} as IWalletAccessData,
+    pin
+  );
   const timestampNow = Math.floor(Date.now() / 1000); // in seconds
 
   // these are deterministic, so we can avoid using the lib's methods to generate them
