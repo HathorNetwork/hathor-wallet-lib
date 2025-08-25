@@ -5,7 +5,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { IStorage, IHistoryTx } from '../types';
+import { IStorage, IHistoryTx, IAddressInfo, IAddressMetadata } from '../types';
 import Transaction from '../models/transaction';
 import HathorWalletServiceWallet from './wallet';
 import { FullNodeTxResponse } from './types';
@@ -75,7 +75,9 @@ export class WalletServiceStorageProxy {
   /**
    * Get address information including BIP32 index
    */
-  private async getAddressInfo(address: string) {
+  private async getAddressInfo(
+    address: string
+  ): Promise<(IAddressInfo & IAddressMetadata & { seqnum: number }) | null> {
     const addressDetails = await this.wallet.getAddressDetails(address);
 
     if (!addressDetails) {
@@ -84,7 +86,13 @@ export class WalletServiceStorageProxy {
 
     return {
       bip32AddressIndex: addressDetails.index,
-      address: addressDetails.address,
+      base58: addressDetails.address,
+      seqnum: addressDetails.seqnum,
+      numTransactions: addressDetails.transactions,
+      // TODO: This balance is not used by any of the nano contract methods
+      // but in order to be 100% compatible with the old facade method, we need
+      // to implement an API to fetch the balance for all tokens given an address
+      balance: new Map(),
     };
   }
 
