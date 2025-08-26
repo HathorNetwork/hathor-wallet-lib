@@ -137,7 +137,7 @@ export class WalletTxTemplateInterpreter implements ITxTemplateInterpreter {
       arr.push(arg.field.toBuffer());
     });
     const serializedArgs = Buffer.concat(arr);
-    const seqnum = await this.wallet.getNanoHeaderSeqnum(address);
+    const seqnum = await this.wallet.getNanoHeaderSeqnum(address.base58);
     const nanoHeaderActions = nanoCtx.actions.map(action =>
       WalletTxTemplateInterpreter.mapActionInstructionToAction(ctx, action)
     );

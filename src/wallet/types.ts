@@ -63,6 +63,13 @@ export interface AddressInfoObject {
   info?: string | undefined; // Optional extra info when getting address info
 }
 
+export interface GetAddressDetailsObject {
+  address: string;
+  index: number;
+  transactions: number;
+  seqnum: number;
+}
+
 export interface WalletStatusResponseData {
   success: boolean;
   status: WalletStatus;
@@ -81,6 +88,11 @@ export interface WalletStatus {
 export interface AddressesResponseData {
   success: boolean;
   addresses: GetAddressesObject[];
+}
+
+export interface AddressDetailsResponseData {
+  success: boolean;
+  data: GetAddressDetailsObject;
 }
 
 export interface CheckAddressesMineResponseData {
@@ -163,6 +175,21 @@ export interface SendManyTxOptionsParam {
 export interface SendTxOptionsParam {
   token: string | undefined;
   changeAddress: string | undefined;
+}
+
+export interface GetTxOutputsOptions {
+  tokenId?: string;
+  authority?: OutputValueType | null;
+  skipSpent?: boolean;
+  maxOutputs?: number;
+  addresses?: string[] | null;
+  totalAmount?: OutputValueType;
+  smallerThan?: number;
+  biggerThan?: number;
+  count?: number;
+  ignoreLocked?: boolean;
+  txId?: string;
+  index?: number;
 }
 
 export interface TxOutputResponseData {
@@ -577,6 +604,7 @@ export interface FullNodeTx {
   timestamp: number;
   version: number;
   weight: number;
+  signal_bits?: number;
   parents: string[];
   inputs: FullNodeInput[];
   outputs: FullNodeOutput[];
@@ -584,6 +612,23 @@ export interface FullNodeTx {
   token_name?: string | null;
   token_symbol?: string | null;
   raw: string;
+  // Nano contract fields
+  nc_id?: string;
+  nc_seqnum?: number;
+  nc_blueprint_id?: string;
+  nc_method?: string;
+  nc_args?: string;
+  nc_address?: string;
+  nc_context?: {
+    actions: Array<{
+      type: string;
+      token_uid?: string;
+      mint?: boolean;
+      melt?: boolean;
+    }>;
+    caller_id: string;
+    timestamp: number;
+  };
 }
 
 export interface FullNodeMeta {
@@ -595,11 +640,30 @@ export interface FullNodeMeta {
   voided_by: string[];
   twins: string[];
   accumulated_weight: number;
+  accumulated_weight_raw?: string;
   score: number;
+  score_raw?: string;
+  min_height?: number;
   height: number;
+  feature_activation_bit_counts?: unknown[];
   validation?: string;
   first_block?: string | null;
   first_block_height?: number | null;
+  // Nano contract fields
+  nc_block_root_id?: string | null;
+  nc_calls?: Array<{
+    blueprint_id: string;
+    contract_id: string;
+    method_name: string;
+    index_updates: Array<{
+      type: string;
+      token_uid?: string;
+      sub_type?: string;
+      mint?: boolean;
+      melt?: boolean;
+    }>;
+  }>;
+  nc_execution?: string;
 }
 
 export interface FullNodeTxResponse {

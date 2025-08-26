@@ -16,7 +16,6 @@ import {
   WALLET_SERVICE_AUTH_DERIVATION_PATH,
   P2SH_ACCT_PATH,
   P2PKH_ACCT_PATH,
-  DEFAULT_TX_VERSION,
 } from '../constants';
 import { signMessage } from '../utils/crypto';
 import walletApi from './api/walletApi';
@@ -56,6 +55,7 @@ import {
   ConnectionState,
   TokenDetailsObject,
   AuthorityTxOutput,
+  GetTxOutputsOptions,
   WalletServiceServerUrls,
   FullNodeVersionData,
   WalletAddressMap,
@@ -64,6 +64,7 @@ import {
   DestroyAuthorityOptions,
   FullNodeTxResponse,
   FullNodeTxConfirmationDataResponse,
+  GetAddressDetailsObject,
 } from './types';
 import {
   SendTxError,
@@ -82,6 +83,27 @@ import {
   NanoContractBuilderCreateTokenOptions,
   CreateNanoTxData,
 } from '../nano_contracts/types';
+import { WalletServiceStorageProxy } from './walletServiceStorageProxy';
+
+// Type used in create token methods so we can have defaults for required params
+type CreateTokenOptionsInput = {
+  // Required fields with no defaults
+  name: string;
+  symbol: string;
+  amount: OutputValueType;
+  mintAddress: string;
+  contractPaysTokenDeposit: boolean;
+  // Optional fields which have defaults
+  changeAddress?: string | null;
+  createMint?: boolean;
+  mintAuthorityAddress?: string | null;
+  allowExternalMintAuthorityAddress?: boolean;
+  createMelt?: boolean;
+  meltAuthorityAddress?: string | null;
+  allowExternalMeltAuthorityAddress?: boolean;
+  data?: string[] | null;
+  isCreateNFT?: boolean;
+};
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
@@ -886,9 +908,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const mappedOptions = {
       tokenId: newOptions.token || NATIVE_TOKEN_UID,
-      authority: newOptions.authorities,
+      authority: newOptions.authorities ? BigInt(newOptions.authorities) : undefined,
       addresses: newOptions.filter_address ? [newOptions.filter_address] : undefined,
-      totalAmount: newOptions.max_amount,
+      totalAmount: newOptions.max_amount ? BigInt(newOptions.max_amount) : undefined,
       smallerThan: newOptions.amount_smaller_than,
       biggerThan: newOptions.amount_bigger_than,
       maxOutputs: newOptions.max_utxos || 255,
@@ -954,8 +976,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   ): Promise<{ utxos: Utxo[]; changeAmount: OutputValueType }> {
     const newOptions = {
       tokenId: NATIVE_TOKEN_UID,
-      authority: null,
-      addresses: null,
+      authority: null as OutputValueType | null,
+      addresses: null as string[] | null,
       totalAmount,
       count: 1,
       ...options,
@@ -1315,17 +1337,22 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     return this.getCurrentAddress();
   }
 
-  /* eslint-disable class-methods-use-this -- Methods are not yet implemented */
-  getAddressIndex(address: string): number | undefined {
-    // Check all saved addresses to find the index matching this address
-    for (const addressInfo of this.newAddresses) {
-      if (addressInfo.address === address) {
-        return addressInfo.index;
-      }
-    }
+  /**
+   * Get the address index of a base58 address
+   *
+   * @param {string} address Address to check
+   * @returns {number | null} The address index or undefined
+   */
+  async getAddressIndex(address: string): Promise<number | null> {
+    try {
+      const addressDetails = await this.getAddressDetails(address);
+      const addressIndex = addressDetails?.index;
 
-    // Return undefined if the address is not found
-    return undefined;
+      return addressIndex;
+    } catch (_e) {
+      // Return null if the address is not found
+      return null;
+    }
   }
 
   /**
@@ -1358,8 +1385,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     // First get the address index
-    const addressIndex = this.getAddressIndex(address);
-    if (addressIndex === undefined) {
+    const addressIndex = await this.getAddressIndex(address);
+    if (addressIndex === null) {
       throw new WalletError(`Address ${address} does not belong to this wallet`);
     }
 
@@ -1371,6 +1398,33 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // Return just the private key (not the HD key)
     return addressHDPrivKey.privateKey;
+  }
+
+  /**
+   * Get the seqnum to be used in a nano header for the address
+   */
+  async getNanoHeaderSeqnum(address: string): Promise<number> {
+    const addressInfo = await walletApi.getAddressDetails(this, address);
+
+    return addressInfo.data.seqnum + 1;
+  }
+
+  /**
+   * Get detailed information about a specific address from the wallet service
+   *
+   * @param address The address to get details for
+   * @returns Promise that resolves with address details including index, transactions count, and seqnum
+   */
+  async getAddressDetails(address: string): Promise<GetAddressDetailsObject> {
+    const addressDetails = await walletApi.getAddressDetails(this, address);
+    return addressDetails.data;
+  }
+
+  // eslint-disable-next-line class-methods-use-this
+  async markUtxoSelected(): Promise<void> {
+    // XXX: Currently a no-op... We currently have a very specific mechanism for
+    // locking utxos, which is the createTxProposal/sendTxProposal, that is very
+    // tightly coupled to the regular send transaction method.
   }
 
   getTx(id: string) {
@@ -1430,26 +1484,28 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     type optionsType = {
       address: string | null;
       changeAddress: string | null;
-      createMintAuthority: boolean;
+      createMint: boolean;
       mintAuthorityAddress: string | null;
       allowExternalMintAuthorityAddress: boolean | null;
-      createMeltAuthority: boolean;
+      createMelt: boolean;
       meltAuthorityAddress: string | null;
       allowExternalMeltAuthorityAddress: boolean | null;
-      nftData: string | null;
+      data: string[] | null;
+      isCreateNFT: boolean;
       pinCode: string | null;
       signTx: boolean;
     };
     const newOptions: optionsType = {
       address: null,
       changeAddress: null,
-      createMintAuthority: true,
+      createMint: true,
       mintAuthorityAddress: null,
       allowExternalMintAuthorityAddress: false,
-      createMeltAuthority: true,
+      createMelt: true,
       meltAuthorityAddress: null,
       allowExternalMeltAuthorityAddress: false,
-      nftData: null,
+      data: null,
+      isCreateNFT: false,
       pinCode: null,
       signTx: true,
       ...options,
@@ -1471,15 +1527,15 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
     }
 
-    const isNFT = newOptions.nftData !== null;
+    const isNFT = newOptions.isCreateNFT;
 
     const depositPercent = this.storage.getTokenDepositPercentage();
     // 1. Calculate HTR deposit needed
     let deposit = tokens.getDepositAmount(amount, depositPercent);
 
-    if (isNFT) {
-      // For NFT we have a fee of 0.01 HTR, then the deposit utxo query must get an additional 1
-      deposit += 1n;
+    if (newOptions.data && newOptions.data.length > 0) {
+      // For data outputs, we have a fee of 0.01 HTR per data output
+      deposit += tokens.getDataFee(newOptions.data.length);
     }
 
     // 2. Get utxos for HTR
@@ -1502,10 +1558,17 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // Create outputs
     const outputsObj: Output[] = [];
-    // NFT transactions must have the first output as the script data
-    if (isNFT) {
-      outputsObj.push(helpers.createNFTOutput(newOptions.nftData!));
+    const dataOutputs: Output[] = [];
+    if (newOptions.data && newOptions.data.length > 0) {
+      for (const dataString of newOptions.data) {
+        dataOutputs.push(helpers.createNFTOutput(dataString));
+      }
     }
+
+    if (newOptions.isCreateNFT && dataOutputs.length > 0) {
+      outputsObj.push(...dataOutputs);
+    }
+
     // a. Token amount
     const addressToUse = newOptions.address || this.getCurrentAddress({ markAsUsed: true }).address;
     const address = new Address(addressToUse, { network: this.network });
@@ -1516,7 +1579,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const p2pkhScript = address.getScript();
     outputsObj.push(new Output(amount, p2pkhScript, { tokenData: 1 }));
 
-    if (newOptions.createMintAuthority) {
+    if (newOptions.createMint) {
       // b. Mint authority
       const mintAuthorityAddress =
         newOptions.mintAuthorityAddress || this.getCurrentAddress({ markAsUsed: true }).address;
@@ -1531,8 +1594,21 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       );
     }
 
-    if (newOptions.createMeltAuthority) {
-      // c. Melt authority
+    if (changeAmount) {
+      // c. HTR change output
+      const changeAddressStr =
+        newOptions.changeAddress || this.getCurrentAddress({ markAsUsed: true }).address;
+      const changeAddress = new Address(changeAddressStr, { network: this.network });
+      if (!changeAddress.isValid()) {
+        throw new SendTxError(`Address ${newOptions.changeAddress} is not valid.`);
+      }
+      const p2pkhChange = new P2PKH(changeAddress);
+      const p2pkhChangeScript = p2pkhChange.createScript();
+      outputsObj.push(new Output(changeAmount, p2pkhChangeScript));
+    }
+
+    if (newOptions.createMelt) {
+      // d. Melt authority
       const meltAuthorityAddress =
         newOptions.meltAuthorityAddress || this.getCurrentAddress({ markAsUsed: true }).address;
       const meltAuthorityAddressObj = new Address(meltAuthorityAddress, { network: this.network });
@@ -1546,17 +1622,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       );
     }
 
-    if (changeAmount) {
-      // d. HTR change output
-      const changeAddressStr =
-        newOptions.changeAddress || this.getCurrentAddress({ markAsUsed: true }).address;
-      const changeAddress = new Address(changeAddressStr, { network: this.network });
-      if (!changeAddress.isValid()) {
-        throw new SendTxError(`Address ${newOptions.changeAddress} is not valid.`);
-      }
-      const p2pkhChange = new P2PKH(changeAddress);
-      const p2pkhChangeScript = p2pkhChange.createScript();
-      outputsObj.push(new Output(changeAmount, p2pkhChangeScript));
+    if (!newOptions.isCreateNFT && dataOutputs.length > 0) {
+      outputsObj.push(...dataOutputs);
     }
 
     const tx = new CreateTokenTransaction(name, symbol, inputsObj, outputsObj);
@@ -1610,8 +1677,20 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     authority: OutputValueType;
     skipSpent: boolean;
     maxOutputs?: number;
+    filterAddress?: string | null;
   }): Promise<AuthorityTxOutput[]> {
-    const { txOutputs } = await walletApi.getTxOutputs(this, options);
+    const apiOptions: GetTxOutputsOptions = {
+      tokenId: options.tokenId,
+      authority: options.authority,
+      skipSpent: options.skipSpent,
+      maxOutputs: options.maxOutputs,
+    };
+
+    if (options.filterAddress) {
+      apiOptions.addresses = [options.filterAddress];
+    }
+
+    const { txOutputs } = await walletApi.getTxOutputs(this, apiOptions);
 
     return txOutputs.map(txOutput => ({
       txId: txOutput.txId,
@@ -1674,6 +1753,55 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       authority: TOKEN_MELT_MASK,
       skipSpent: newOptions.skipSpent,
       maxOutputs: newOptions.many ? undefined : 1,
+    });
+  }
+
+  /**
+   * Get authority utxo
+   *
+   * @param tokenUid UID of the token to select the authority utxo
+   * @param authority The authority to filter ('mint' or 'melt')
+   * @param options Object with custom options.
+   *  {
+   *    'many': if should return many utxos or just one (default false),
+   *    'only_available_utxos': If we should filter for available utxos (default false),
+   *    'filter_address': Address to filter the utxo to get (default null)
+   *  }
+   *
+   * @return Promise that resolves with an Array of objects with {txId, index, address, authorities} of the authority output.
+   * Returns an empty array in case there are no tx outputs for this type
+   * */
+  async getAuthorityUtxo(
+    tokenUid: string,
+    authority: string,
+    options: {
+      many?: boolean;
+      only_available_utxos?: boolean;
+      filter_address?: string | null;
+    } = {}
+  ): Promise<AuthorityTxOutput[]> {
+    let authorityValue: OutputValueType;
+    if (authority === 'mint') {
+      authorityValue = TOKEN_MINT_MASK;
+    } else if (authority === 'melt') {
+      authorityValue = TOKEN_MELT_MASK;
+    } else {
+      throw new Error('Invalid authority value.');
+    }
+
+    const newOptions = {
+      many: false,
+      only_available_utxos: false,
+      filter_address: null,
+      ...options,
+    };
+
+    return this._getAuthorityTxOutput({
+      tokenId: tokenUid,
+      authority: authorityValue,
+      skipSpent: newOptions.only_available_utxos,
+      maxOutputs: newOptions.many ? undefined : 1,
+      filterAddress: newOptions.filter_address,
     });
   }
 
@@ -2230,7 +2358,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       createMeltAuthority: boolean;
       meltAuthorityAddress: string | null;
       allowExternalMeltAuthorityAddress: boolean | null;
-      nftData?: string;
+      data?: string[];
+      isCreateNFT?: boolean;
     };
     const newOptions: optionsType = {
       address: null,
@@ -2243,7 +2372,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       allowExternalMeltAuthorityAddress: false,
       ...options,
     };
-    newOptions.nftData = data;
+    newOptions.data = [data];
+    newOptions.isCreateNFT = true;
     const tx = await this.prepareCreateNewToken(name, symbol, amount, newOptions);
     return this.handleSendPreparedTransaction(tx);
   }
@@ -2257,8 +2387,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   async getFullTxById(txId: string): Promise<FullNodeTxResponse> {
     this.failIfWalletNotReady();
 
-    const data = await walletApi.getFullTxById(this, txId);
-    return data;
+    return walletApi.getFullTxById(this, txId);
   }
 
   async getTxConfirmationData(txId: string): Promise<FullNodeTxConfirmationDataResponse> {
@@ -2393,7 +2522,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     // Verify address belongs to wallet and get its index
-    const addressIndex = this.getAddressIndex(address);
+    const addressDetails = await this.getAddressDetails(address);
+    const addressIndex = addressDetails?.index;
     if (addressIndex === undefined) {
       throw new Error(
         `Address used to sign the transaction (${address}) does not belong to the wallet.`
@@ -2465,9 +2595,41 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       data,
       options
     );
-    const result = await sendTransaction.run();
+    const result = await sendTransaction.runFromMining();
     if (!result) {
       throw new Error('Failed to send nano contract transaction');
+    }
+    return result;
+  }
+
+  /**
+   * Create and send a Create Token Transaction with nano header
+   *
+   * @param {string} method Method of nano contract to have the transaction created
+   * @param {string} address Address that will be used to sign the nano contract transaction
+   * @param {object} data Nano contract data (blueprintId, ncId, actions, args)
+   * @param {object} createTokenOptions Options for token creation (mint/melt authorities, NFT, etc)
+   * @param {object} options Options (pinCode)
+   *
+   * @returns {Promise<Transaction>}
+   */
+  async createAndSendNanoContractCreateTokenTransaction(
+    method: string,
+    address: string,
+    data: CreateNanoTxData,
+    createTokenOptions: CreateTokenOptionsInput,
+    options: { pinCode?: string } = {}
+  ): Promise<Transaction> {
+    const sendTransaction = await this.createNanoContractCreateTokenTransaction(
+      method,
+      address,
+      data,
+      createTokenOptions,
+      options
+    );
+    const result = await sendTransaction.runFromMining();
+    if (!result) {
+      throw new Error('Failed to send nano contract create token transaction');
     }
     return result;
   }
@@ -2487,26 +2649,27 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     pinCode: string
   ): Promise<SendTransactionWalletService> {
     // Get the index for the address
-    const addressIndex = this.getAddressIndex(address);
+    const addressDetails = await this.getAddressDetails(address);
+    const addressIndex = addressDetails?.index;
+
     if (addressIndex === undefined) {
       throw new Error(
         `Address used to sign the transaction (${address}) does not belong to the wallet.`
       );
     }
-    // Derive the private key for the address
-    const addressPrivKey = await this.getAddressPrivKey(pinCode, addressIndex);
-    // Get the data to sign
-    const dataToSignHash = tx.getDataToSignHash();
-    // Sign the data
-    const signature = transaction.getSignature(dataToSignHash, addressPrivKey.privateKey);
-    // Set the signature in the nano contract header(s)
-    const nanoHeaders = tx.getNanoHeaders();
-    for (const nanoHeader of nanoHeaders) {
-      nanoHeader.script = signature;
-    }
+
+    const storageProxy = new WalletServiceStorageProxy(this, this.storage);
+
+    await transaction.signTransaction(tx, storageProxy.createProxy(), pinCode);
+
     // Finalize the transaction
     tx.prepareToSend();
-    return new SendTransactionWalletService(this, { transaction: tx, pin: pinCode });
+
+    const sendTransaction = new SendTransactionWalletService(this, {
+      transaction: tx,
+      pin: pinCode,
+    });
+    return sendTransaction;
   }
 
   /**
@@ -2524,7 +2687,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     method: string,
     address: string,
     data: CreateNanoTxData,
-    createTokenOptions: Partial<NanoContractBuilderCreateTokenOptions> = {},
+    createTokenOptions: CreateTokenOptionsInput,
     options: { pinCode?: string } = {}
   ): Promise<SendTransactionWalletService> {
     this.failIfWalletNotReady();
@@ -2537,7 +2700,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       throw new PinRequiredError('Pin is required.');
     }
     // Validate address belongs to wallet and get its index
-    const addressIndex = this.getAddressIndex(address);
+    const addressDetails = await this.getAddressDetails(address);
+    const addressIndex = addressDetails?.index;
     if (addressIndex === undefined) {
       throw new Error(
         `Address used to sign the transaction (${address}) does not belong to the wallet.`
@@ -2550,12 +2714,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       { network: this.network }
     );
 
-    // Create a wrapper around this wallet to override getFullTxById
-    const wrappedWallet = {
-      ...this,
-      getFullTxById: this.getFullTxByIdForNanoContract.bind(this),
-      getNetworkObject: this.getNetworkObject.bind(this),
-    };
     // Build and send transaction
     const actions = data.actions || [];
     const args = data.args || [];
@@ -2574,9 +2732,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       }
       return arg;
     });
-    // Defaults below match wallet.js (see lines 3077-3087)
+
     const mergedCreateTokenOptions: NanoContractBuilderCreateTokenOptions = {
-      mintAddress: null,
       changeAddress: null,
       createMint: true,
       mintAuthorityAddress: null,
@@ -2591,7 +2748,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     const builder = new NanoContractTransactionBuilder()
       .setMethod(method)
-      .setWallet(wrappedWallet)
+      .setWallet(this)
       .setBlueprintId(data.blueprintId as string)
       .setNcId(data.ncId as string)
       .setCaller(callerAddress)
