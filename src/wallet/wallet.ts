@@ -1322,17 +1322,17 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * Get the address index of a base58 address
    *
    * @param {string} address Address to check
-   * @returns {number | undefined} The address index or undefined
+   * @returns {number | null} The address index or undefined
    */
-  async getAddressIndex(address: string): Promise<number | undefined> {
+  async getAddressIndex(address: string): Promise<number | null> {
     try {
       const addressDetails = await this.getAddressDetails(address);
       const addressIndex = addressDetails?.index;
 
       return addressIndex;
     } catch (_e) {
-      // Return undefined if the address is not found
-      return undefined;
+      // Return null if the address is not found
+      return null;
     }
   }
 
