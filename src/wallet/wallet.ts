@@ -85,6 +85,26 @@ import {
 } from '../nano_contracts/types';
 import { WalletServiceStorageProxy } from './walletServiceStorageProxy';
 
+// Type used in create token methods so we can have defaults for required params
+type CreateTokenOptionsInput = {
+  // Required fields with no defaults
+  name: string;
+  symbol: string;
+  amount: OutputValueType;
+  mintAddress: string;
+  contractPaysTokenDeposit: boolean;
+  // Optional fields which have defaults
+  changeAddress?: string | null;
+  createMint?: boolean;
+  mintAuthorityAddress?: string | null;
+  allowExternalMintAuthorityAddress?: boolean;
+  createMelt?: boolean;
+  meltAuthorityAddress?: string | null;
+  allowExternalMeltAuthorityAddress?: boolean;
+  data?: string[] | null;
+  isCreateNFT?: boolean;
+};
+
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
 const WALLET_STATUS_POLLING_INTERVAL = 3000;
@@ -2597,7 +2617,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     method: string,
     address: string,
     data: CreateNanoTxData,
-    createTokenOptions: Partial<NanoContractBuilderCreateTokenOptions> = {},
+    createTokenOptions: CreateTokenOptionsInput,
     options: { pinCode?: string } = {}
   ): Promise<Transaction> {
     const sendTransaction = await this.createNanoContractCreateTokenTransaction(
@@ -2667,7 +2687,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     method: string,
     address: string,
     data: CreateNanoTxData,
-    createTokenOptions: Partial<NanoContractBuilderCreateTokenOptions> = {},
+    createTokenOptions: CreateTokenOptionsInput,
     options: { pinCode?: string } = {}
   ): Promise<SendTransactionWalletService> {
     this.failIfWalletNotReady();
@@ -2714,7 +2734,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     });
 
     const mergedCreateTokenOptions: NanoContractBuilderCreateTokenOptions = {
-      mintAddress: createTokenOptions.mintAddress,
       changeAddress: null,
       createMint: true,
       mintAuthorityAddress: null,
