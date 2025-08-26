@@ -7,6 +7,7 @@
 
 import { IStorage, IHistoryTx, IAddressInfo, IAddressMetadata } from '../types';
 import Transaction from '../models/transaction';
+import Input from '../models/input';
 import HathorWalletServiceWallet from './wallet';
 import { FullNodeTxResponse } from './types';
 import transactionUtils from '../utils/transaction';
@@ -117,10 +118,21 @@ export class WalletServiceStorageProxy {
    * Get spent transactions for input signing
    * This is an async generator that yields transaction data for each input
    */
-  private async *getSpentTxs(inputs: any[]) {
+  private async *getSpentTxs(inputs: Input[]) {
+    // Cache to avoid fetching the same transaction multiple times
+    const txCache = new Map<string, IHistoryTx | null>();
+
     for (let index = 0; index < inputs.length; index++) {
       const input = inputs[index];
-      const tx = await this.getTx(input.hash);
+
+      // Check if we've already fetched this transaction
+      let tx = txCache.get(input.hash);
+      if (tx === undefined) {
+        // Not in cache, fetch it
+        tx = await this.getTx(input.hash);
+        txCache.set(input.hash, tx);
+      }
+
       if (tx) {
         yield { tx, input, index };
       }
