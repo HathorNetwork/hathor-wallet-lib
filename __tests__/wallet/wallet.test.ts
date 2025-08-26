@@ -1456,7 +1456,7 @@ test('createTokens', async () => {
   await expect(
     wallet.prepareCreateNewToken('Test Token', 'TST', 100n, {
       address: addresses[1],
-      createMintAuthority: true,
+      createMint: true,
       mintAuthorityAddress: 'abc',
       pinCode: '123456',
     })
@@ -1466,7 +1466,7 @@ test('createTokens', async () => {
   await expect(
     wallet.prepareCreateNewToken('Test Token', 'TST', 100n, {
       address: addresses[1],
-      createMeltAuthority: true,
+      createMelt: true,
       meltAuthorityAddress: 'abc',
       pinCode: '123456',
     })
@@ -1476,7 +1476,7 @@ test('createTokens', async () => {
   await expect(
     wallet.prepareCreateNewToken('Test Token', 'TST', 100n, {
       address: addresses[1],
-      createMintAuthority: true,
+      createMint: true,
       mintAuthorityAddress: 'abc',
       allowExternalMintAuthorityAddress: true,
       pinCode: '123456',
@@ -1487,7 +1487,7 @@ test('createTokens', async () => {
   await expect(
     wallet.prepareCreateNewToken('Test Token', 'TST', 100n, {
       address: addresses[1],
-      createMeltAuthority: true,
+      createMelt: true,
       meltAuthorityAddress: 'abc',
       allowExternalMeltAuthorityAddress: true,
       pinCode: '123456',
@@ -1510,7 +1510,7 @@ test('createTokens', async () => {
   // create token with correct address for authority output
   const tokenData = await wallet.prepareCreateNewToken('Test Token', 'TST', 100n, {
     address: addresses[1],
-    createMintAuthority: true,
+    createMint: true,
     mintAuthorityAddress: addresses[2],
     pinCode: '123456',
   });
@@ -1537,7 +1537,8 @@ test('createTokens', async () => {
   // create token with correct address for authority output
   const tokenData2 = await wallet.prepareCreateNewToken('Test Token', 'TST', 100n, {
     address: addresses[1],
-    createMintAuthority: false,
+    createMint: false,
+    createMelt: true,
     meltAuthorityAddress: addresses[2],
     pinCode: '123456',
   });
@@ -1632,10 +1633,11 @@ test('createNFTs', async () => {
   await expect(
     wallet.prepareCreateNewToken('Test Token', 'TST', 100n, {
       address: addresses[1],
-      createMintAuthority: true,
+      createMint: true,
       mintAuthorityAddress: 'abc',
       pinCode: '123456',
-      nftData: 'data',
+      data: ['data'],
+      isCreateNFT: true,
     })
   ).rejects.toThrow(SendTxError);
 
@@ -1643,21 +1645,23 @@ test('createNFTs', async () => {
   await expect(
     wallet.prepareCreateNewToken('Test Token', 'TST', 100n, {
       address: addresses[1],
-      createMintAuthority: true,
+      createMint: true,
       mintAuthorityAddress: 'abc',
       pinCode: '123456',
-      nftData: 'data',
+      data: ['data'],
+      isCreateNFT: true,
     })
   ).rejects.toThrow(SendTxError);
 
   // create token with correct address for authority output
   const tokenData = await wallet.prepareCreateNewToken('Test Token', 'TST', 100n, {
     address: addresses[1],
-    createMintAuthority: true,
+    createMint: true,
     mintAuthorityAddress: addresses[2],
-    createMeltAuthority: false,
+    createMelt: false,
     pinCode: '123456',
-    nftData: 'data',
+    data: ['data'],
+    isCreateNFT: true,
   });
 
   // Token minted, mint authority, and data output
@@ -1678,11 +1682,12 @@ test('createNFTs', async () => {
   // create token with correct address for authority output
   const tokenData2 = await wallet.prepareCreateNewToken('Test Token', 'TST', 100n, {
     address: addresses[1],
-    createMintAuthority: false,
-    createMeltAuthority: true,
+    createMint: false,
+    createMelt: true,
     meltAuthorityAddress: addresses[2],
     pinCode: '123456',
-    nftData: 'data',
+    data: ['data'],
+    isCreateNFT: true,
   });
 
   // Token minted, melt authority, and data output
