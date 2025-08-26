@@ -381,6 +381,7 @@ export interface IHathorWallet {
   checkPin(pin: string): Promise<boolean>;
   checkPassword(password: string): Promise<boolean>;
   checkPinAndPassword(pin: string, password: string): Promise<boolean>;
+  getServerUrl(): string;
 }
 
 export interface ISendTransaction {
