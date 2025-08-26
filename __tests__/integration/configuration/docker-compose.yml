@@ -185,7 +185,7 @@ services:
       BLOCK_REWARD_LOCK: 300
       CONFIRM_FIRST_ADDRESS: false
       WS_DOMAIN: http://fakehost:3002
-      DEFAULT_SERVER: fullnode
+      DEFAULT_SERVER: "fullnode:8080"
       DB_ENDPOINT: mysql
       DB_NAME: wallet_service
       DB_USER: wallet_service_user
