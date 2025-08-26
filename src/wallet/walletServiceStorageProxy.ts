@@ -40,6 +40,14 @@ export class WalletServiceStorageProxy {
     });
   }
 
+  /**
+   * Proxy handler that intercepts property access on the storage object.
+   *
+   * @param target - The original IStorage object being proxied
+   * @param prop - The property name being accessed (can be string or Symbol for JS property keys)
+   * @param receiver - The proxy itself (not the target), used to maintain correct 'this' context
+   * @returns The intercepted method or the original property value
+   */
   private proxyHandler(target: IStorage, prop: string | symbol, receiver: IStorage): unknown {
     if (prop === 'getAddressInfo') {
       return this.getAddressInfo.bind(this);
