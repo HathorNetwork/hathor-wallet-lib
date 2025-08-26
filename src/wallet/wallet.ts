@@ -1367,7 +1367,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     // First get the address index
     const addressIndex = await this.getAddressIndex(address);
-    if (addressIndex === undefined) {
+    if (addressIndex === null) {
       throw new WalletError(`Address ${address} does not belong to this wallet`);
     }
 
