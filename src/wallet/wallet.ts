@@ -1438,22 +1438,25 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // tightly coupled to the regular send transaction method.
   }
 
+  /* eslint-disable class-methods-use-this */
   getTx(id: string) {
     throw new WalletError('Not implemented.');
   }
 
+  /* eslint-disable class-methods-use-this */
   getAddressInfo(address: string, options = {}) {
     throw new WalletError('Not implemented.');
   }
 
+  /* eslint-disable class-methods-use-this */
   consolidateUtxos(destinationAddress: string, options = {}) {
     throw new WalletError('Not implemented.');
   }
 
+  /* eslint-disable class-methods-use-this */
   getFullHistory(): TransactionFullObject[] {
     throw new WalletError('Not implemented.');
   }
-  /* eslint-enable class-methods-use-this */
 
   /**
    * Checks if the given array of addresses belongs to the caller wallet
@@ -1537,8 +1540,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         throw new SendTxError('The melt authority address must belong to your wallet.');
       }
     }
-
-    const isNFT = newOptions.isCreateNFT;
 
     const depositPercent = this.storage.getTokenDepositPercentage();
     // 1. Calculate HTR deposit needed
