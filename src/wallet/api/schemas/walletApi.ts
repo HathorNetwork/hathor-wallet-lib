@@ -298,7 +298,7 @@ export const fullNodeTokenSchema = z.object({
  */
 export const ncActionSchema = z.object({
   type: z.string(),
-  token_uid: z.string().optional(),
+  token_uid: z.string(),
   mint: z.boolean().optional(),
   melt: z.boolean().optional(),
 });
