@@ -102,11 +102,30 @@ services:
       timeout: 5s
       retries: 5
 
+  ws-migrator:
+    build:
+      context: '../../../../wallet-service/'
+      dockerfile: 'db/Dockerfile'
+    restart: "no"  # Critical: don't restart migration service
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_ENDPOINT: "mysql"
+      DB_NAME: "wallet_service"
+      DB_USER: "wallet_service_user"
+      DB_PASS: "password"
+      DB_PORT: 3306
+    networks:
+      - hathor-privnet
+
   ws-daemon:
     build:
       context: '../../../../wallet-service/'
       dockerfile: 'packages/daemon/Dockerfile'
     depends_on:
+      ws-migrator:
+        condition: service_completed_successfully
       fullnode:
         condition: service_healthy
       mysql:
@@ -151,6 +170,10 @@ services:
       context: '../../../../wallet-service/'
       dockerfile: 'packages/wallet-service/Dockerfile'
     depends_on:
+      fullnode:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
       ws-daemon:
         condition: service_started # TODO: Implement healthcheck
     environment:
