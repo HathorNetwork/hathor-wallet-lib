@@ -25,6 +25,7 @@ import {
   ISendTransaction,
   MineTxSuccessData,
   OutputType,
+  Utxo,
 } from './types';
 import { IDataInput, IDataOutput, IDataTx } from '../types';
 
@@ -126,6 +127,9 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
       tokenNeedsInputs.set(token, true);
     }
 
+    // Cache UTXO data to avoid fetching the same data multiple times
+    const utxoDataMap = new Map<string, Utxo>();
+
     // 2. Process pre-selected inputs
     const userInputAmountMap: TokenAmountMap = {};
     if (this.inputs.length > 0) {
@@ -144,6 +148,10 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
         }
 
         utxosAddressPath.push(utxo.addressPath);
+
+        // Cache UTXO data for later use
+        const utxoKey = `${input.txId}:${input.index}`;
+        utxoDataMap.set(utxoKey, utxo);
 
         if (utxo.tokenId in userInputAmountMap) {
           userInputAmountMap[utxo.tokenId] += utxo.value;
@@ -183,6 +191,10 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
         for (const utxo of utxos) {
           finalInputs.push({ txId: utxo.txId, index: utxo.index });
           utxosAddressPath.push(utxo.addressPath);
+
+          // Cache UTXO data for later use
+          const utxoKey = `${utxo.txId}:${utxo.index}`;
+          utxoDataMap.set(utxoKey, utxo);
         }
 
         if (changeAmount) {
@@ -236,9 +248,10 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     // 5. Create transaction data object
     const dataInputs: IDataInput[] = [];
     for (const input of this.inputs) {
-      const utxo = await this.wallet.getUtxoFromId(input.txId, input.index);
+      const utxoKey = `${input.txId}:${input.index}`;
+      const utxo = utxoDataMap.get(utxoKey);
       if (!utxo) {
-        // Should not happen as we validated them before
+        // Should not happen as we cached them before
         throw new UtxoError(
           `Could not retrieve utxo details for input ${input.txId}:${input.index}`
         );

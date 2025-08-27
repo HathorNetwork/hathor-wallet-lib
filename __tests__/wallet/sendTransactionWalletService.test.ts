@@ -76,7 +76,7 @@ describe('prepareTxData', () => {
               txId: 'another-spent-tx-id',
               index: 0,
               value: 2n,
-              token: NATIVE_TOKEN_UID,
+              tokenId: NATIVE_TOKEN_UID,
               address: 'another-spent-utxo-address',
               authorities: 0,
               addressPath: "m/44'/280'/0'/0/2",
@@ -201,7 +201,7 @@ describe('prepareTxData', () => {
               txId: 'utxo-tx-id',
               index: 0,
               value: 30n,
-              token: '01',
+              tokenId: '01',
               address: 'utxo-address',
               authorities: 0,
               addressPath: "m/44'/280'/0'/0/3",
@@ -446,14 +446,14 @@ describe('prepareTxData', () => {
     expect(txData.outputs[0].address).toBe('WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx');
   });
 
-  it('should throw error when UTXO cannot be retrieved during final input processing', async () => {
-    // First call returns the UTXO, second call returns null (simulating retrieval failure)
+  it('should successfully use cached UTXO data for final processing', async () => {
+    // Test that UTXO data is cached and reused, not fetched multiple times
     let callCount = 0;
     wallet.getUtxoFromId.mockImplementation(async (txId, index) => {
       callCount++;
-      if (callCount === 1 && txId === 'flaky-tx' && index === 0) {
+      if (txId === 'cached-tx' && index === 0) {
         return {
-          txId: 'flaky-tx',
+          txId: 'cached-tx',
           index: 0,
           value: 10n,
           address: 'some-address',
@@ -465,7 +465,7 @@ describe('prepareTxData', () => {
       return null;
     });
 
-    const inputs = [{ txId: 'flaky-tx', index: 0 }];
+    const inputs = [{ txId: 'cached-tx', index: 0 }];
     const outputs = [
       {
         type: OutputType.P2PKH,
@@ -477,9 +477,21 @@ describe('prepareTxData', () => {
 
     sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
 
-    await expect(sendTransaction.prepareTxData()).rejects.toThrow(
-      'Could not retrieve utxo details for input flaky-tx:0'
+    const txData = await sendTransaction.prepareTxData();
+
+    // Verify the UTXO data is correctly used
+    expect(txData.inputs).toHaveLength(1);
+    expect(txData.inputs[0]).toEqual(
+      expect.objectContaining({
+        txId: 'cached-tx',
+        index: 0,
+        token: '01',
+        value: 10n,
+      })
     );
+
+    // Verify getUtxoFromId was called only once (during validation, not during final processing)
+    expect(callCount).toBe(1);
   });
 
   it('should throw error when output is missing address or token', async () => {
@@ -504,7 +516,7 @@ describe('prepareTxData', () => {
           txId: 'some-tx',
           index: 0,
           value: 10n,
-          token: '01',
+          tokenId: '01',
           address: 'some-address',
           authorities: 0,
           addressPath: "m/44'/280'/0'/0/1",
@@ -649,7 +661,7 @@ describe('prepareTxData', () => {
               txId: 'auto-selected-tx',
               index: 0,
               value: 30n,
-              token: '02',
+              tokenId: '02',
               address: 'auto-address',
               authorities: 0,
               addressPath: "m/44'/280'/0'/0/2",
@@ -741,7 +753,7 @@ describe('prepareTxData', () => {
           txId: 'timelock-tx',
           index: 0,
           value: 10n,
-          token: '01',
+          tokenId: '01',
           address: 'some-address',
           authorities: 0,
           addressPath: "m/44'/280'/0'/0/1",
