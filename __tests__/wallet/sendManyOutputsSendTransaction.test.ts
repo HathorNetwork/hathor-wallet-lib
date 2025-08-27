@@ -65,6 +65,15 @@ describe('sendManyOutputsSendTransaction', () => {
     expect(wallet.failIfWalletNotReady).toHaveBeenCalled();
     expect(wallet.storage.isReadonly).toHaveBeenCalled();
     expect(mockHelpers.getOutputTypeFromAddress).toHaveBeenCalledTimes(2);
+
+    // Validate transaction outputs
+    expect(sendTx.outputs).toHaveLength(2);
+    expect(sendTx.outputs[0].address).toBe('WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx');
+    expect(sendTx.outputs[0].value).toBe(100n);
+    expect(sendTx.outputs[0].token).toBe(NATIVE_TOKEN_UID);
+    expect(sendTx.outputs[1].address).toBe('WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc');
+    expect(sendTx.outputs[1].value).toBe(50n);
+    expect(sendTx.outputs[1].token).toBe(NATIVE_TOKEN_UID);
   });
 
   it('should create SendTransactionWalletService with custom token outputs', async () => {
@@ -87,6 +96,12 @@ describe('sendManyOutputsSendTransaction', () => {
       'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
       wallet.network
     );
+
+    // Validate transaction outputs
+    expect(sendTx.outputs).toHaveLength(1);
+    expect(sendTx.outputs[0].address).toBe('WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx');
+    expect(sendTx.outputs[0].value).toBe(100n);
+    expect(sendTx.outputs[0].token).toBe(customTokenId);
   });
 
   it('should handle data outputs correctly', async () => {
