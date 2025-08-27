@@ -2469,24 +2469,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
-   * Adapter for preparing nano contract transactions in the wallet-service facade
-   *
-   * @param nc Nano contract transaction
-   * @param pin PIN for signing
-   * @param storage Storage instance
-   * @returns SendTransactionWalletService instance
-   */
-  async prepareNanoSendTransactionAdapter(
-    nc: unknown,
-    pin: string,
-    storage: IStorage
-  ): Promise<SendTransactionWalletService> {
-    await transaction.signTransaction(nc as Transaction, storage, pin);
-    (nc as Transaction).prepareToSend();
-    return new SendTransactionWalletService(this, { transaction: nc as Transaction, pin });
-  }
-
-  /**
    * Create a nano contract transaction and return the SendTransaction object
    *
    * @param {string} method Method of nano contract to have the transaction created
