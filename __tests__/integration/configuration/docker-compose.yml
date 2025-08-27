@@ -73,7 +73,9 @@ services:
 
   # Wallet Service section
   # All the following services are related to the Wallet Service
-  # Redis on 6379, MySQL on 3380, Wallet Service Daemon on 8081 and Daemon Websocket on 8082
+  # Redis on 6379, MySQL on 3306
+  # Wallet Service Daemon on 8081 and Daemon Websocket on 8082
+  # Wallet Service API Lambda on 3000 and Wallet Service Websocket Lambda on 3001
 
   mysql:
     image: centos/mysql-80-centos7 # Necessary to use specific authentication protocol
@@ -133,7 +135,6 @@ services:
     environment:
       # Those two variables are used to set all the necessary dynamic env variables for this pristine environment
       FETCH_FULLNODE_IDS: true
-      MIGRATE_DB: true
 
       # Connection to other services in this private network
       FULLNODE_HOST: "fullnode:8080"
