@@ -109,7 +109,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     const tokenAmountMap: TokenAmountMap = {};
     for (const output of this.outputs) {
       const token = output.type === OutputType.DATA ? NATIVE_TOKEN_UID : output.token;
-      const value = output.type === OutputType.DATA ? 1n : output.value;
+      const value = output.type === OutputType.DATA ? getDataScriptOutputFee() : output.value;
       if (token in tokenAmountMap) {
         tokenAmountMap[token] += value;
       } else {
@@ -272,7 +272,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
         dataOutputs.push({
           type: OutputType.DATA,
           data: Buffer.from(output.data!).toString('hex'),
-          value: 1n,
+          value: getDataScriptOutputFee(),
           authorities: 0n,
           token: NATIVE_TOKEN_UID,
         });
