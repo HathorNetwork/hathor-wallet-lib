@@ -298,6 +298,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     }
 
     const tokens = Object.keys(tokenAmountMap);
+    // Remove HTR from tokens array since it doesn't need to be included in transaction tokens
     const htrIndex = tokens.indexOf(NATIVE_TOKEN_UID);
     if (htrIndex > -1) {
       tokens.splice(htrIndex, 1);
