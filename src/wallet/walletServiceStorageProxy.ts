@@ -5,12 +5,22 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import { IStorage, IHistoryTx, IAddressInfo, IAddressMetadata } from '../types';
+import {
+  IStorage,
+  IHistoryTx,
+  IAddressInfo,
+  IAddressMetadata,
+  OutputValueType,
+  IUtxo,
+} from '../types';
 import Transaction from '../models/transaction';
 import Input from '../models/input';
 import HathorWalletServiceWallet from './wallet';
 import { FullNodeTxResponse } from './types';
 import transactionUtils from '../utils/transaction';
+import tokensUtils from '../utils/tokens';
+import { JSONBigInt } from '../utils/bigint';
+import { TOKEN_MELT_MASK, CREATE_TOKEN_TX_VERSION } from '../constants';
 
 /**
  * Storage proxy that implements missing storage methods for wallet service
@@ -20,6 +30,12 @@ import transactionUtils from '../utils/transaction';
  * - getAddressInfo: Maps addresses to BIP32 indices
  * - getTx: Fetches transaction data from full node API
  * - getTxSignatures: Delegates to transaction signing utilities
+ * - getCurrentAddress: Gets current address from wallet service
+ * - getTokenDepositPercentage: Returns token deposit percentage for mint transactions
+ * - getChangeAddress: Gets change address for transactions
+ * - isTokenRegistered: Checks if token is registered in wallet
+ * - getRegisteredTokens: Returns all registered tokens as async generator
+ * - config.getNetwork: Returns wallet network object for address validation
  */
 export class WalletServiceStorageProxy {
   private wallet: HathorWalletServiceWallet;
@@ -39,6 +55,80 @@ export class WalletServiceStorageProxy {
     return new Proxy(this.originalStorage, {
       get: this.proxyHandler.bind(this),
     });
+  }
+
+  /**
+   * Get the wallet-service compatible UTXO selection algorithm
+   * This can be passed to token utilities that accept custom UTXO selection
+   */
+  getUtxoSelectionAlgorithm() {
+    return this.walletServiceUtxoSelection.bind(this);
+  }
+
+  /**
+   * Wallet-service compatible version of prepareCreateTokenData
+   * This uses our custom UTXO selection algorithm instead of the default bestUtxoSelection
+   */
+  async prepareCreateTokenData(
+    address: string,
+    name: string,
+    symbol: string,
+    mintAmount: OutputValueType,
+    storage: IStorage,
+    options: {
+      changeAddress?: string | null;
+      createMint?: boolean;
+      mintAuthorityAddress?: string | null;
+      createMelt?: boolean;
+      meltAuthorityAddress?: string | null;
+      data?: string[] | null;
+      isCreateNFT?: boolean;
+      skipDepositFee?: boolean;
+    } = {}
+  ) {
+    // Use the original prepareCreateTokenData but with custom utxoSelection
+
+    const mintOptions = {
+      createAnotherMint: options.createMint ?? true,
+      mintAuthorityAddress: options.mintAuthorityAddress,
+      changeAddress: options.changeAddress,
+      unshiftData: options.isCreateNFT,
+      data: options.data,
+      skipDepositFee: options.skipDepositFee ?? false,
+      utxoSelection: this.walletServiceUtxoSelection.bind(this), // Use wallet-service compatible selection
+    };
+
+    const txData = await tokensUtils.prepareMintTxData(address, mintAmount, storage, mintOptions);
+
+    if (options.createMelt !== false) {
+      const newAddress = options.meltAuthorityAddress || (await storage.getCurrentAddress());
+      
+      const meltAuthorityOutput = {
+        type: 'melt',
+        address: newAddress,
+        value: TOKEN_MELT_MASK,
+        timelock: null,
+        authorities: 2n,
+      } as const;
+      
+      if (
+        options.data !== null &&
+        options.data &&
+        options.data.length !== 0 &&
+        !options.isCreateNFT
+      ) {
+        txData.outputs.splice(-options.data.length, 0, meltAuthorityOutput);
+      } else {
+        txData.outputs.push(meltAuthorityOutput);
+      }
+    }
+
+    // Set create token tx version value and metadata (matching original implementation)
+    txData.version = CREATE_TOKEN_TX_VERSION;
+    txData.name = name;
+    txData.symbol = symbol;
+    
+    return txData;
   }
 
   /**
@@ -68,6 +158,16 @@ export class WalletServiceStorageProxy {
 
     if (prop === 'getCurrentAddress') {
       return this.getCurrentAddress.bind(this);
+    }
+
+    if (prop === 'getChangeAddress') {
+      return this.getChangeAddress.bind(this);
+    }
+
+    if (prop === 'config') {
+      return {
+        getNetwork: () => this.wallet.getNetworkObject(),
+      };
     }
 
     // For all other properties, use the original behavior
@@ -202,6 +302,65 @@ export class WalletServiceStorageProxy {
       first_block: meta.first_block,
       token_name: tx.token_name ?? undefined,
       token_symbol: tx.token_symbol ?? undefined,
+    };
+  }
+
+  /**
+   * Get change address for transactions
+   * If specific change address provided, use it; otherwise get a new address from wallet
+   */
+  private async getChangeAddress(options: { changeAddress?: string | null } = {}): Promise<string> {
+    if (options.changeAddress && typeof options.changeAddress === 'string' && options.changeAddress.trim() !== '') {
+      try {
+        if (!(await this.wallet.isAddressMine(options.changeAddress))) {
+          throw new Error('Change address is not from the wallet');
+        }
+        return options.changeAddress;
+      } catch (error) {
+        // If there's an error checking the address, fall back to getting a new address
+        console.warn('Error checking if address is mine:', error);
+        // Fall through to get a new address
+      }
+    }
+
+    // Get a new address from the wallet for change
+    const currentAddr = await this.wallet.getCurrentAddress({ markAsUsed: true });
+    return currentAddr.address;
+  }
+
+  /**
+   * Wallet-service compatible UTXO selection algorithm
+   * This replaces bestUtxoSelection which requires storage.selectUtxos
+   */
+  private async walletServiceUtxoSelection(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    storage: IStorage, // Not used, we use wallet directly  
+    token: string,
+    amount: bigint
+  ) {
+    const { utxos } = await this.wallet.getUtxosForAmount(amount, {
+      tokenId: token,
+    });
+
+    // Convert wallet service Utxo to IUtxo format
+    const convertedUtxos: IUtxo[] = utxos.map(utxo => ({
+      txId: utxo.txId,
+      index: utxo.index,
+      token: utxo.tokenId, // Convert tokenId to token
+      address: utxo.address,
+      value: utxo.value,
+      authorities: utxo.authorities,
+      timelock: utxo.timelock,
+      type: 1, // Default tx version for UTXOs (not critical for UTXO selection)
+      height: null, // Height not available from wallet service UTXO, but not critical for selection
+    }));
+
+    const totalAmount = convertedUtxos.reduce((sum, utxo) => sum + BigInt(utxo.value), 0n);
+
+    return {
+      utxos: convertedUtxos,
+      amount: totalAmount,
+      available: totalAmount,
     };
   }
 }
