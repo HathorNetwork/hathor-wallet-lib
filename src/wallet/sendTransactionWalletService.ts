@@ -144,7 +144,6 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
         }
 
         utxosAddressPath.push(utxo.addressPath);
-        tokenNeedsInputs.set(utxo.tokenId, false);
 
         if (utxo.tokenId in userInputAmountMap) {
           userInputAmountMap[utxo.tokenId] += utxo.value;
@@ -152,6 +151,20 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
           userInputAmountMap[utxo.tokenId] = utxo.value;
         }
       }
+    }
+
+    // 2.5. Validate that pre-selected inputs are sufficient for each token
+    // When users provide specific inputs, we expect them to cover the full output amounts.
+    // We don't automatically add more UTXOs to fill gaps - if the user specified inputs,
+    // they must be sufficient or we throw an error.
+    for (const [token, userInputAmount] of Object.entries(userInputAmountMap)) {
+      if (userInputAmount < tokenAmountMap[token]) {
+        throw new SendTxError(
+          `Invalid input selection. Sum of inputs for token ${token} is smaller than the sum of outputs.`
+        );
+      }
+      // Mark tokens with sufficient pre-selected inputs as not needing additional inputs
+      tokenNeedsInputs.set(token, false);
     }
 
     // 3. Select UTXOs for tokens that need them, and create change for all
@@ -295,9 +308,6 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @inner
    */
   async prepareTx(): Promise<{ transaction: Transaction; utxosAddressPath: string[] }> {
-    /* if (this.outputs.length === 0) {
-      throw new WalletError("Can't prepare transactions with no outputs.");
-    } */
     this.emit('prepare-tx-start');
     // We get the full outputs amount for each token
     // This is useful for (i) getting the utxos for each one
