@@ -138,8 +138,8 @@ const walletApi = {
     address: string
   ): Promise<AddressDetailsResponseData> {
     const axios = await axiosInstance(wallet, true);
-    const path = `?address=${address}`;
-    const url = `wallet/address/info${path}`;
+    const query = `?address=${address}`;
+    const url = `wallet/address/info${query}`;
     const response = await axios.get(url);
 
     if (response.status === 200 && response.data.success === true) {
