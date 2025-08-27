@@ -65,6 +65,7 @@ import {
   FullNodeTxResponse,
   FullNodeTxConfirmationDataResponse,
   GetAddressDetailsObject,
+  CreateTokenOptionsInput,
 } from './types';
 import {
   SendTxError,
@@ -84,26 +85,6 @@ import {
   CreateNanoTxData,
 } from '../nano_contracts/types';
 import { WalletServiceStorageProxy } from './walletServiceStorageProxy';
-
-// Type used in create token methods so we can have defaults for required params
-type CreateTokenOptionsInput = {
-  // Required fields with no defaults
-  name: string;
-  symbol: string;
-  amount: OutputValueType;
-  mintAddress: string;
-  contractPaysTokenDeposit: boolean;
-  // Optional fields which have defaults
-  changeAddress?: string | null;
-  createMint?: boolean;
-  mintAuthorityAddress?: string | null;
-  allowExternalMintAuthorityAddress?: boolean;
-  createMelt?: boolean;
-  meltAuthorityAddress?: string | null;
-  allowExternalMeltAuthorityAddress?: boolean;
-  data?: string[] | null;
-  isCreateNFT?: boolean;
-};
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready

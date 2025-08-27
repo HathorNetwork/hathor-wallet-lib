@@ -13,6 +13,26 @@ import Input from '../models/input';
 import Output from '../models/output';
 import { OutputValueType, IHistoryTx } from '../types';
 
+// Type used in create token methods so we can have defaults for required params
+export type CreateTokenOptionsInput = {
+  // Required fields with no defaults
+  name: string;
+  symbol: string;
+  amount: OutputValueType;
+  mintAddress: string;
+  contractPaysTokenDeposit: boolean;
+  // Optional fields which have defaults
+  changeAddress?: string | null;
+  createMint?: boolean;
+  mintAuthorityAddress?: string | null;
+  allowExternalMintAuthorityAddress?: boolean;
+  createMelt?: boolean;
+  meltAuthorityAddress?: string | null;
+  allowExternalMeltAuthorityAddress?: boolean;
+  data?: string[] | null;
+  isCreateNFT?: boolean;
+};
+
 export interface GetAddressesObject {
   address: string; // Address in base58
   index: number; // derivation index of the address
