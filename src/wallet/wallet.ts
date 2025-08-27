@@ -2532,23 +2532,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // Build and send transaction
     const actions = data.actions || [];
     const args = data.args || [];
-    // Process arguments to handle serialized Buffer objects
-    const processedArgs = args.map(arg => {
-      // Check if this is a serialized Buffer object
-      if (
-        arg &&
-        typeof arg === 'object' &&
-        arg !== null &&
-        'data' in arg &&
-        'type' in arg &&
-        (arg as { type?: string }).type === 'Buffer' &&
-        Array.isArray((arg as { data?: unknown }).data)
-      ) {
-        // Convert back to a real Buffer
-        return Buffer.from((arg as { data: number[] }).data);
-      }
-      return arg;
-    });
 
     const builder = new NanoContractTransactionBuilder()
       .setMethod(method)
@@ -2557,7 +2540,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       .setNcId(data.ncId as string)
       .setCaller(callerAddress)
       .setActions(actions)
-      .setArgs(processedArgs as unknown[])
+      .setArgs(args)
       .setVertexType(NanoContractVertexType.TRANSACTION);
 
     const tx = await builder.build();
@@ -2701,21 +2684,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // Build and send transaction
     const actions = data.actions || [];
     const args = data.args || [];
-    // Process arguments to handle serialized Buffer objects
-    const processedArgs = args.map(arg => {
-      if (
-        arg &&
-        typeof arg === 'object' &&
-        arg !== null &&
-        'data' in arg &&
-        'type' in arg &&
-        (arg as { type?: string }).type === 'Buffer' &&
-        Array.isArray((arg as { data?: unknown }).data)
-      ) {
-        return Buffer.from((arg as { data: number[] }).data);
-      }
-      return arg;
-    });
 
     const mergedCreateTokenOptions: NanoContractBuilderCreateTokenOptions = {
       changeAddress: null,
@@ -2737,7 +2705,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       .setNcId(data.ncId as string)
       .setCaller(callerAddress)
       .setActions(actions)
-      .setArgs(processedArgs as unknown[])
+      .setArgs(args)
       .setVertexType(NanoContractVertexType.CREATE_TOKEN_TRANSACTION, mergedCreateTokenOptions);
 
     const tx = await builder.build();
