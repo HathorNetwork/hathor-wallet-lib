@@ -7,6 +7,7 @@
 
 import { EventEmitter } from 'events';
 import { shuffle } from 'lodash';
+import tokensUtils from '../utils/tokens';
 import walletApi from './api/walletApi';
 import MineTransaction from './mineTransaction';
 import HathorWalletServiceWallet from './wallet';
@@ -109,7 +110,8 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     const tokenAmountMap: TokenAmountMap = {};
     for (const output of this.outputs) {
       const token = output.type === OutputType.DATA ? NATIVE_TOKEN_UID : output.token;
-      const value = output.type === OutputType.DATA ? getDataScriptOutputFee() : output.value;
+      const value =
+        output.type === OutputType.DATA ? tokensUtils.getDataScriptOutputFee() : output.value;
       if (token in tokenAmountMap) {
         tokenAmountMap[token] += value;
       } else {
@@ -272,7 +274,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
         dataOutputs.push({
           type: OutputType.DATA,
           data: Buffer.from(output.data!).toString('hex'),
-          value: getDataScriptOutputFee(),
+          value: tokensUtils.getDataScriptOutputFee(),
           authorities: 0n,
           token: NATIVE_TOKEN_UID,
         });

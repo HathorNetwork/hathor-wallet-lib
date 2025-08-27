@@ -1446,7 +1446,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     // tightly coupled to the regular send transaction method.
   }
 
-  /* eslint-disable class-methods-use-this */
+  /* eslint-disable-next-line class-methods-use-this */
   getTx(id: string) {
     throw new WalletError('Not implemented.');
   }
