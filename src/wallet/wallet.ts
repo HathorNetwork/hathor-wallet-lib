@@ -1393,6 +1393,33 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
+   * Verify address belongs to wallet and return its index
+   * @private
+   */
+  private async getAddressIndexIfOwned(address: string): Promise<number> {
+    const addressDetails = await this.getAddressDetails(address);
+    if (addressDetails?.index === undefined) {
+      throw new Error(
+        `Address used to sign the transaction (${address}) does not belong to the wallet.`
+      );
+    }
+    return addressDetails.index;
+  }
+
+  /**
+   * Get caller address from address index for nano contract operations
+   * @private
+   */
+  private async getCallerAddressFromIndex(pin: string, addressIndex: number): Promise<Address> {
+    const addressPrivKey = await this.getAddressPrivKey(pin, addressIndex);
+    const callerAddress = new Address(
+      addressPrivKey.publicKey.toAddress(this.network.getNetwork()).toString(),
+      { network: this.network }
+    );
+    return callerAddress;
+  }
+
+  /**
    * Get the seqnum to be used in a nano header for the address
    */
   async getNanoHeaderSeqnum(address: string): Promise<number> {
@@ -2497,20 +2524,10 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     }
 
     // Verify address belongs to wallet and get its index
-    const addressDetails = await this.getAddressDetails(address);
-    const addressIndex = addressDetails?.index;
-    if (addressIndex === undefined) {
-      throw new Error(
-        `Address used to sign the transaction (${address}) does not belong to the wallet.`
-      );
-    }
+    const addressIndex = await this.getAddressIndexIfOwned(address);
 
-    // Get the address public key
-    const addressPrivKey = await this.getAddressPrivKey(pin, addressIndex);
-    const callerAddress = new Address(
-      addressPrivKey.publicKey.toAddress(this.network.getNetwork()).toString(),
-      { network: this.network }
-    );
+    // Get the caller address
+    const callerAddress = await this.getCallerAddressFromIndex(pin, addressIndex);
 
     // Build and send transaction
     const actions = data.actions || [];
@@ -2674,20 +2691,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     if (!pin) {
       throw new PinRequiredError('Pin is required.');
     }
-    // Validate address belongs to wallet and get its index
-    const addressDetails = await this.getAddressDetails(address);
-    const addressIndex = addressDetails?.index;
-    if (addressIndex === undefined) {
-      throw new Error(
-        `Address used to sign the transaction (${address}) does not belong to the wallet.`
-      );
-    }
-    // Get the address public key
-    const addressPrivKey = await this.getAddressPrivKey(pin, addressIndex);
-    const callerAddress = new Address(
-      addressPrivKey.publicKey.toAddress(this.network.getNetwork()).toString(),
-      { network: this.network }
-    );
+
+    // Verify address belongs to wallet and get its index
+    const addressIndex = await this.getAddressIndexIfOwned(address);
+
+    // Get the caller address
+    const callerAddress = await this.getCallerAddressFromIndex(pin, addressIndex);
 
     // Build and send transaction
     const actions = data.actions || [];
