@@ -53,10 +53,14 @@ jest.mock('../../src/wallet/sendTransactionWalletService', () => {
 
     // Mock all methods except run with appropriate return values
     instance.prepareTx = jest.fn().mockResolvedValue({
-      transaction: {}, // Mock transaction object
       utxosAddressPath: [], // Mock utxos address path array
     });
-    instance.signTx = jest.fn().mockResolvedValue(undefined);
+    // Set up the transaction mock for signTx to use
+    instance.transaction = {
+      getDataToSignHash: jest.fn().mockReturnValue(Buffer.from('mock-hash')),
+      inputs: [], // Mock empty inputs so the for loop doesn't execute
+      prepareToSend: jest.fn(),
+    };
     instance.runFromMining = jest.fn().mockResolvedValue({});
 
     return instance;
@@ -1387,7 +1391,11 @@ test('sendTransaction', async () => {
   // Mock the storage isReadonly method to prevent UninitializedWalletError
   wallet.storage = {
     isReadonly: jest.fn().mockResolvedValue(false),
+    getMainXPrivKey: jest.fn().mockResolvedValue('mock-xpriv-key'),
   } as Partial<typeof wallet.storage>;
+
+  // Mock wallet methods needed by signTx
+  wallet.getInputData = jest.fn().mockReturnValue(Buffer.from('mock-input-data'));
 
   // Send transaction
   await wallet.sendTransaction('WYLW8ujPemSuLJwbeNvvH6y7nakaJ6cEwT', 10, { pinCode: '1234' });
@@ -1401,6 +1409,9 @@ test('sendTransaction', async () => {
     ],
     pin: '1234',
   });
+
+  // Verify that getMainXPrivKey was called with the pin (this covers line 532)
+  expect(wallet.storage.getMainXPrivKey).toHaveBeenCalledWith('1234');
 });
 
 test('createTokens', async () => {
