@@ -119,7 +119,7 @@ export class WalletServiceStorageProxy {
       }
     }
 
-    // Set create token tx version value and metadata (matching original implementation)
+    // Set create token tx version value and metadata (matching fullnode implementation)
     txData.version = CREATE_TOKEN_TX_VERSION;
     txData.name = name;
     txData.symbol = symbol;
@@ -318,6 +318,7 @@ export class WalletServiceStorageProxy {
         return options.changeAddress;
       } catch (error) {
         // If there's an error checking the address, fall back to getting a new address
+        // eslint-disable-next-line no-console
         console.warn('Error checking if address is mine:', error);
         // Fall through to get a new address
       }

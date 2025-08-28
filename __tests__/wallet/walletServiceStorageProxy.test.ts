@@ -13,10 +13,16 @@ import { IStorage } from '../../src/types';
 import Transaction from '../../src/models/transaction';
 import Input from '../../src/models/input';
 import transactionUtils from '../../src/utils/transaction';
+import tokensUtils from '../../src/utils/tokens';
 import { AddressInfoObject } from '../../src/wallet/types';
+import { TOKEN_MELT_MASK } from '../../src/constants';
 
 jest.mock('../../src/utils/transaction', () => ({
   getSignatureForTx: jest.fn(),
+}));
+
+jest.mock('../../src/utils/tokens', () => ({
+  prepareMintTxData: jest.fn(),
 }));
 
 describe('WalletServiceStorageProxy', () => {
@@ -117,6 +123,10 @@ describe('WalletServiceStorageProxy', () => {
     wallet.getAddressDetails = jest.fn();
     wallet.getFullTxById = jest.fn();
     wallet.getCurrentAddress = jest.fn();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   describe('createProxy', () => {
@@ -563,6 +573,300 @@ describe('WalletServiceStorageProxy', () => {
         proxiedStorage,
         'pin123'
       );
+    });
+  });
+
+  describe('getUtxoSelectionAlgorithm', () => {
+    it('should return bound walletServiceUtxoSelection function', () => {
+      const algorithm = storageProxy.getUtxoSelectionAlgorithm();
+
+      expect(typeof algorithm).toBe('function');
+      expect(algorithm.name).toBe('bound walletServiceUtxoSelection');
+    });
+  });
+
+  describe('prepareCreateTokenData', () => {
+    beforeEach(() => {
+      (tokensUtils.prepareMintTxData as jest.Mock).mockResolvedValue({
+        inputs: [],
+        outputs: [{ type: 'mint', address: 'WMintAddr', value: 1000, authorities: 1n }],
+        tokens: ['token123'],
+        version: 2,
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      jest.spyOn(wallet, 'getCurrentAddress').mockResolvedValue({ address: 'WCurrentAddr' } as any);
+    });
+
+    it('should prepare create token data with default options', async () => {
+      const result = await storageProxy.prepareCreateTokenData(
+        'WAddress123',
+        'Test Token',
+        'TEST',
+        1000n,
+        proxiedStorage
+      );
+
+      expect(result.name).toBe('Test Token');
+      expect(result.symbol).toBe('TEST');
+      expect(result.version).toBe(2);
+      expect(tokensUtils.prepareMintTxData).toHaveBeenCalledWith(
+        'WAddress123',
+        1000n,
+        proxiedStorage,
+        expect.objectContaining({
+          createAnotherMint: true,
+          skipDepositFee: false,
+          utxoSelection: expect.any(Function),
+        })
+      );
+    });
+
+    it('should add melt authority output when createMelt is true', async () => {
+      const result = await storageProxy.prepareCreateTokenData(
+        'WAddress123',
+        'Test Token',
+        'TEST',
+        1000n,
+        proxiedStorage,
+        {
+          createMelt: true,
+          meltAuthorityAddress: 'WMeltAddr',
+        }
+      );
+
+      expect(result.outputs).toContainEqual({
+        type: 'melt',
+        address: 'WMeltAddr',
+        value: TOKEN_MELT_MASK,
+        timelock: null,
+        authorities: 2n,
+      });
+    });
+
+    it('should use current address for melt authority when no address provided', async () => {
+      await storageProxy.prepareCreateTokenData(
+        'WAddress123',
+        'Test Token',
+        'TEST',
+        1000n,
+        proxiedStorage,
+        { createMelt: true }
+      );
+
+      expect(wallet.getCurrentAddress).toHaveBeenCalled();
+    });
+
+    it('should skip melt authority when createMelt is false', async () => {
+      const result = await storageProxy.prepareCreateTokenData(
+        'WAddress123',
+        'Test Token',
+        'TEST',
+        1000n,
+        proxiedStorage,
+        { createMelt: false }
+      );
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      expect(result.outputs.filter((o: any) => o.type === 'melt')).toHaveLength(0);
+    });
+
+    it('should handle data placement correctly for NFTs', async () => {
+      (tokensUtils.prepareMintTxData as jest.Mock).mockResolvedValue({
+        inputs: [],
+        outputs: [
+          { type: 'mint', address: 'WMintAddr', value: 1000, authorities: 1n },
+          { type: 'data', value: 'data1' },
+          { type: 'data', value: 'data2' },
+        ],
+        tokens: ['token123'],
+        version: 2,
+      });
+
+      const result = await storageProxy.prepareCreateTokenData(
+        'WAddress123',
+        'NFT Token',
+        'NFT',
+        1n,
+        proxiedStorage,
+        {
+          data: ['data1', 'data2'],
+          isCreateNFT: true,
+          createMelt: true,
+          meltAuthorityAddress: 'WMeltAddr',
+        }
+      );
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const meltIndex = result.outputs.findIndex((o: any) => o.type === 'melt');
+      expect(meltIndex).toBeGreaterThan(-1);
+    });
+
+    it('should pass custom options correctly', async () => {
+      await storageProxy.prepareCreateTokenData(
+        'WAddress123',
+        'Test Token',
+        'TEST',
+        1000n,
+        proxiedStorage,
+        {
+          changeAddress: 'WChangeAddr',
+          createMint: false,
+          mintAuthorityAddress: 'WMintAuth',
+          skipDepositFee: true,
+          data: ['custom-data'],
+          isCreateNFT: true,
+        }
+      );
+
+      expect(tokensUtils.prepareMintTxData).toHaveBeenCalledWith(
+        'WAddress123',
+        1000n,
+        proxiedStorage,
+        expect.objectContaining({
+          createAnotherMint: false,
+          mintAuthorityAddress: 'WMintAuth',
+          changeAddress: 'WChangeAddr',
+          skipDepositFee: true,
+          data: ['custom-data'],
+          unshiftData: true,
+          utxoSelection: expect.any(Function),
+        })
+      );
+    });
+  });
+
+  describe('getChangeAddress', () => {
+    beforeEach(() => {
+      jest.spyOn(wallet, 'isAddressMine').mockResolvedValue(true);
+      jest.spyOn(wallet, 'getCurrentAddress').mockResolvedValue({ address: 'WNewChangeAddr' });
+    });
+
+    it('should use provided change address when valid', async () => {
+      const result = await storageProxy.getChangeAddress({ changeAddress: 'WProvidedAddr' });
+
+      expect(result).toBe('WProvidedAddr');
+      expect(wallet.isAddressMine).toHaveBeenCalledWith('WProvidedAddr');
+    });
+
+    it('should get new address when no change address provided', async () => {
+      const result = await storageProxy.getChangeAddress();
+
+      expect(result).toBe('WNewChangeAddr');
+      expect(wallet.getCurrentAddress).toHaveBeenCalledWith({ markAsUsed: true });
+    });
+
+    it('should get new address when change address is empty', async () => {
+      const result = await storageProxy.getChangeAddress({ changeAddress: '' });
+
+      expect(result).toBe('WNewChangeAddr');
+      expect(wallet.getCurrentAddress).toHaveBeenCalledWith({ markAsUsed: true });
+    });
+
+    it('should get new address when change address is null', async () => {
+      const result = await storageProxy.getChangeAddress({ changeAddress: null });
+
+      expect(result).toBe('WNewChangeAddr');
+      expect(wallet.getCurrentAddress).toHaveBeenCalledWith({ markAsUsed: true });
+    });
+
+    it('should fallback to new address when isAddressMine fails', async () => {
+      (wallet.isAddressMine as jest.Mock).mockRejectedValue(new Error('Address check failed'));
+
+      const result = await storageProxy.getChangeAddress({ changeAddress: 'WProvidedAddr' });
+
+      expect(result).toBe('WNewChangeAddr');
+      expect(wallet.getCurrentAddress).toHaveBeenCalledWith({ markAsUsed: true });
+    });
+
+    it('should fallback to new address when change address is not mine', async () => {
+      jest.spyOn(wallet, 'isAddressMine').mockResolvedValue(false);
+
+      const result = await storageProxy.getChangeAddress({ changeAddress: 'WNotMineAddr' });
+
+      expect(result).toBe('WNewChangeAddr');
+      expect(wallet.getCurrentAddress).toHaveBeenCalledWith({ markAsUsed: true });
+    });
+  });
+
+  describe('walletServiceUtxoSelection', () => {
+    beforeEach(() => {
+      jest.spyOn(wallet, 'getUtxosForAmount').mockResolvedValue({
+        utxos: [
+          {
+            txId: 'utxo1',
+            index: 0,
+            tokenId: '00',
+            address: 'WAddr1',
+            value: 500n,
+            authorities: 0,
+            timelock: null,
+          },
+          {
+            txId: 'utxo2',
+            index: 1,
+            tokenId: '00',
+            address: 'WAddr2',
+            value: 600n,
+            authorities: 0,
+            timelock: 1234567890,
+          },
+        ],
+      });
+    });
+
+    it('should select UTXOs for native token', async () => {
+      const result = await storageProxy.walletServiceUtxoSelection(proxiedStorage, '00', 1000n);
+
+      expect(wallet.getUtxosForAmount).toHaveBeenCalledWith(1000n, { tokenId: '00' });
+      expect(result.utxos).toHaveLength(2);
+      expect(result.amount).toBe(1100n);
+      expect(result.available).toBe(1100n);
+    });
+
+    it('should convert wallet service UTXOs to IUtxo format', async () => {
+      const result = await storageProxy.walletServiceUtxoSelection(
+        proxiedStorage,
+        'custom-token',
+        500n
+      );
+
+      expect(result.utxos[0]).toEqual({
+        txId: 'utxo1',
+        index: 0,
+        token: '00',
+        address: 'WAddr1',
+        value: 500n,
+        authorities: 0,
+        timelock: null,
+        type: 1,
+        height: null,
+      });
+
+      expect(result.utxos[1]).toEqual({
+        txId: 'utxo2',
+        index: 1,
+        token: '00',
+        address: 'WAddr2',
+        value: 600n,
+        authorities: 0,
+        timelock: 1234567890,
+        type: 1,
+        height: null,
+      });
+    });
+
+    it('should calculate total amount correctly', async () => {
+      const result = await storageProxy.walletServiceUtxoSelection(proxiedStorage, '00', 1000n);
+
+      expect(result.amount).toBe(1100n);
+      expect(result.available).toBe(1100n);
+    });
+
+    it('should handle custom token selection', async () => {
+      await storageProxy.walletServiceUtxoSelection(proxiedStorage, 'custom-token-uid', 500n);
+
+      expect(wallet.getUtxosForAmount).toHaveBeenCalledWith(500n, { tokenId: 'custom-token-uid' });
     });
   });
 });

@@ -2857,4 +2857,40 @@ describe('HathorWalletServiceWallet private key and nano methods', () => {
       ).rejects.toThrow('createNanoContractTransaction');
     });
   });
+
+  describe('createWalletProxyForNanoContracts', () => {
+    it('should create a proxy wallet with enhanced storage', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const proxyWallet = (wallet as any).createWalletProxyForNanoContracts();
+
+      expect(proxyWallet).toBeDefined();
+      expect(proxyWallet.storageProxy).toBeDefined();
+      expect(typeof proxyWallet.storageProxy.createProxy).toBe('function');
+    });
+
+    it('should intercept storage property access', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const proxyWallet = (wallet as any).createWalletProxyForNanoContracts();
+      const originalStorage = wallet.storage;
+
+      expect(proxyWallet.storage).not.toBe(originalStorage);
+      expect(typeof proxyWallet.storage.getAddressInfo).toBe('function');
+    });
+
+    it('should preserve wallet method binding', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const proxyWallet = (wallet as any).createWalletProxyForNanoContracts();
+
+      expect(typeof proxyWallet.isReady).toBe('function');
+      expect(proxyWallet.isReady.bind).toBeDefined();
+    });
+
+    it('should expose storageProxy property', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const proxyWallet = (wallet as any).createWalletProxyForNanoContracts();
+
+      expect(proxyWallet.storageProxy).toBeDefined();
+      expect(proxyWallet.storageProxy.constructor.name).toBe('WalletServiceStorageProxy');
+    });
+  });
 });

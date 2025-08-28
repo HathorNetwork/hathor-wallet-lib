@@ -80,6 +80,7 @@ import { ErrorMessages } from '../errorMessages';
 import { IStorage, IWalletAccessData, OutputValueType, WalletType, IHistoryTx } from '../types';
 import { WalletServiceNanoContractBuilder } from './walletServiceNanoContractBuilder';
 import { WalletServiceStorageProxy } from './walletServiceStorageProxy';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { JSONBigInt } from '../utils/bigint';
 import {
   NanoContractVertexType,
@@ -986,10 +987,14 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     let changeAmount = 0n;
     let utxos: Utxo[] = [];
     if (data.txOutputs.length === 0) {
+      // No utxos available for the requested filter
       utxos = data.txOutputs;
     } else if (newOptions.authority) {
+      // Requests an authority utxo, then I return the count of requested authority utxos
       utxos = data.txOutputs.slice(0, newOptions.count);
     } else {
+      // We got an array of utxos, then we must check if there is enough amount to fill the totalAmount
+      // and slice the least possible utxos
       const ret = transaction.selectUtxos(data.txOutputs, newOptions.totalAmount!);
       changeAmount = ret.changeAmount;
       utxos = ret.utxos;

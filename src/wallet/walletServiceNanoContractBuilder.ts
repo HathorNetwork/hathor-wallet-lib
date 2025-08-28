@@ -51,6 +51,7 @@ export class WalletServiceNanoContractBuilder extends NanoContractTransactionBui
    * Build transaction with wallet-service support
    * This mimics the original buildTransaction but uses our storage proxy
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private async buildTransactionWithWalletService(inputs: any[], outputs: any[], tokens: string[]) {
     if (this.createTokenOptions === null) {
       throw new Error(
