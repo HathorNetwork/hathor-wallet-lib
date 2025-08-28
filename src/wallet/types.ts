@@ -11,7 +11,7 @@ import CreateTokenTransaction from '../models/create_token_transaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
 import Input from '../models/input';
 import Output from '../models/output';
-import { OutputValueType, IHistoryTx } from '../types';
+import { IStorage, OutputValueType, IHistoryTx } from '../types';
 import { CreateNanoTxData } from '../nano_contracts/types';
 
 // Type used in create token methods so we can have defaults for required params
@@ -459,7 +459,10 @@ export interface IHathorWallet {
       index: number;
     }[];
   }>;
+  getNetworkObject();
+  getPrivateKeyFromAddress(address: string, options: { pinCode?: string });
   pinCode?: string | null;
+  storage: IStorage;
 }
 
 export interface ISendTransaction {
