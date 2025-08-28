@@ -437,18 +437,16 @@ export interface IHathorWallet {
     options?: { pinCode?: string }
   ): Promise<Transaction>;
   isAddressMine(address: string): Promise<boolean>;
-  getUtxos(
-    options?: {
-      token?: string;
-      authorities?: number;
-      max_utxos?: number;
-      filter_address?: string;
-      amount_smaller_than?: number;
-      amount_bigger_than?: number;
-      max_amount?: number;
-      only_available_utxos?: boolean;
-    }
-  ): Promise<{
+  getUtxos(options?: {
+    token?: string;
+    authorities?: number;
+    max_utxos?: number;
+    filter_address?: string;
+    amount_smaller_than?: number;
+    amount_bigger_than?: number;
+    max_amount?: number;
+    only_available_utxos?: boolean;
+  }): Promise<{
     total_amount_available: bigint;
     total_utxos_available: bigint;
     total_amount_locked: bigint;
