@@ -462,4 +462,215 @@ describe('walletApi', () => {
       walletApi.createWallet(wallet, 'xpubkey', 'xpubsig', 'authxpub', 'authxpubsig', Date.now())
     ).rejects.toThrow();
   });
+
+  test('getAddressDetails', async () => {
+    const address = 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx';
+    const mockResponse = {
+      success: true,
+      data: {
+        address: address,
+        index: 1,
+        transactions: 5,
+        seqnum: 10,
+      },
+    };
+
+    mockAxiosInstance.get.mockResolvedValueOnce({
+      status: 200,
+      data: mockResponse,
+    } as AxiosResponse);
+
+    const result = await walletApi.getAddressDetails(wallet, address);
+    expect(result).toEqual(mockResponse);
+    expect(mockAxiosInstance.get).toHaveBeenCalledWith(`wallet/address/info?address=${address}`);
+
+    // Should throw on request error
+    mockAxiosInstance.get.mockResolvedValueOnce({
+      status: 400,
+      data: { success: false },
+    } as AxiosResponse);
+
+    await expect(walletApi.getAddressDetails(wallet, address)).rejects.toThrow(WalletRequestError);
+  });
+
+  test('getFullTxById with nano contract fields', async () => {
+    const mockResponseWithNanoFields = {
+      success: true,
+      tx: {
+        hash: 'tx1',
+        nonce: '123',
+        timestamp: 456,
+        version: 1,
+        weight: 14,
+        signal_bits: 0,
+        parents: ['parent1', 'parent2'],
+        inputs: [
+          {
+            tx_id: '00003eeb2ce22e80e0fa72d8afb0b8b01f8919faac94cb3a3b4900782d0f399f',
+            index: 0,
+            token_data: 0,
+            value: 100n,
+            script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
+            decoded: {
+              type: 'P2PKH',
+              address: 'HH5As5aLtzFkcbmbXZmE65wSd22GqPWq2T',
+              timelock: null,
+              value: 100n,
+              token_data: 0,
+            },
+          },
+        ],
+        outputs: [
+          {
+            value: 100n,
+            token_data: 0,
+            script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
+            decoded: {
+              type: 'P2PKH',
+              address: 'HH5As5aLtzFkcbmbXZmE65wSd22GqPWq2T',
+              timelock: null,
+              value: 100n,
+              token_data: 0,
+            },
+            address: 'HH5As5aLtzFkcbmbXZmE65wSd22GqPWq2T',
+          },
+        ],
+        tokens: [
+          {
+            uid: '00003693ebadd6e32d5dae134e1f801d3943d5916010b87d4f9ed4447d1f1825',
+            name: 'Token 1',
+            symbol: 'TK1',
+          },
+        ],
+        raw: 'raw1',
+        // Nano contract fields
+        nc_id: 'nano-contract-id',
+        nc_seqnum: 1,
+        nc_blueprint_id: 'blueprint-id',
+        nc_method: 'initialize',
+        nc_args: 'serialized-args',
+        nc_address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        nc_context: {
+          actions: [
+            {
+              type: 'deposit',
+              token_uid: '00',
+              mint: false,
+              melt: false,
+            },
+          ],
+          caller_id: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+          timestamp: 1234567890,
+        },
+      },
+      meta: {
+        hash: 'tx1',
+        spent_outputs: [],
+        received_by: [],
+        children: [],
+        conflict_with: [],
+        voided_by: [],
+        twins: [],
+        accumulated_weight: 14,
+        score: 0,
+        height: 1,
+        first_block: 'block1',
+        received_timestamp: 123456789,
+        is_voided: false,
+        verification_status: 'verified',
+      },
+    };
+
+    mockAxiosInstance.get.mockResolvedValueOnce({
+      status: 200,
+      data: mockResponseWithNanoFields,
+    } as AxiosResponse);
+
+    const result = await walletApi.getFullTxById(wallet, 'tx1');
+    expect(result).toEqual(mockResponseWithNanoFields);
+
+    // Verify that nano contract fields are properly parsed
+    expect(result.tx.nc_id).toBe('nano-contract-id');
+    expect(result.tx.nc_context?.actions).toHaveLength(1);
+    expect(result.tx.nc_context?.actions[0].type).toBe('deposit');
+  });
+
+  test('schema validation for optional fields', async () => {
+    // Test that outputs with missing optional authorities and timelock are valid
+    const mockResponseOptionalFields = {
+      success: true,
+      tx: {
+        hash: 'tx1',
+        nonce: '123',
+        timestamp: 456,
+        version: 1,
+        weight: 14,
+        parents: ['parent1', 'parent2'],
+        inputs: [
+          {
+            tx_id: '00003eeb2ce22e80e0fa72d8afb0b8b01f8919faac94cb3a3b4900782d0f399f',
+            index: 0,
+            token_data: 0,
+            value: 100n,
+            script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
+            decoded: {
+              type: 'P2PKH',
+              address: 'HH5As5aLtzFkcbmbXZmE65wSd22GqPWq2T',
+              timelock: null,
+              value: 100n,
+              token_data: 0,
+            },
+          },
+        ],
+        outputs: [
+          {
+            value: 100n,
+            token_data: 0,
+            script: 'dqkULlKfmt6XYPwnJfnUCAVf+fzVkNCIrA==',
+            decoded: {
+              type: 'P2PKH',
+              address: 'HH5As5aLtzFkcbmbXZmE65wSd22GqPWq2T',
+              timelock: null,
+              value: 100n,
+              token_data: 0,
+            },
+            address: 'HH5As5aLtzFkcbmbXZmE65wSd22GqPWq2T',
+            // authorities and timelock are optional
+          },
+        ],
+        tokens: [
+          {
+            uid: '00003693ebadd6e32d5dae134e1f801d3943d5916010b87d4f9ed4447d1f1825',
+            name: 'Token 1',
+            symbol: 'TK1',
+            // amount is optional for nano contract token creation
+          },
+        ],
+        raw: 'raw1',
+      },
+      meta: {
+        hash: 'tx1',
+        spent_outputs: [],
+        received_by: [],
+        children: [],
+        conflict_with: [],
+        voided_by: [],
+        twins: [],
+        accumulated_weight: 14,
+        score: 0,
+        height: 1,
+        // Optional fields in meta
+        first_block: null,
+      },
+    };
+
+    mockAxiosInstance.get.mockResolvedValueOnce({
+      status: 200,
+      data: mockResponseOptionalFields,
+    } as AxiosResponse);
+
+    // This should not throw since the optional fields are handled properly
+    const result = await walletApi.getFullTxById(wallet, 'tx1');
+    expect(result).toEqual(mockResponseOptionalFields);
+  });
 });
