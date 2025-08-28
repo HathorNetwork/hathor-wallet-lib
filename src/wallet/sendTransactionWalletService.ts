@@ -52,13 +52,13 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
   private changeAddress: string | null;
 
   // Transaction object to be used after it's already prepared
-  private transaction: Transaction | null;
+  public transaction: Transaction | null;
 
   // MineTransaction object
   private mineTransaction: MineTransaction | null;
 
   // PIN to load the seed from memory
-  private pin: string | null;
+  public pin: string | null;
 
   // Data for the transaction after it's prepared
   public fullTxData: IDataTx | null;

@@ -12,6 +12,7 @@ import SendTransactionWalletService from './sendTransactionWalletService';
 import Input from '../models/input';
 import Output from '../models/output';
 import { OutputValueType, IHistoryTx } from '../types';
+import { CreateNanoTxData } from '../nano_contracts/types';
 
 // Type used in create token methods so we can have defaults for required params
 export type CreateTokenOptionsInput = {
@@ -338,7 +339,8 @@ export interface IHathorWallet {
   ): Promise<Transaction>;
   stop(params?: IStopWalletParams): void;
   getAddressAtIndex(index: number): Promise<string>;
-  getCurrentAddress(options: { markAsUsed: boolean }): AddressInfoObject;
+  getAddressIndex(address: string): Promise<number | null>;
+  getCurrentAddress(options?: { markAsUsed: boolean }): AddressInfoObject;
   getNextAddress(): AddressInfoObject;
   getAddressPrivKey(pinCode: string, addressIndex: number): Promise<bitcore.PrivateKey>;
   signMessageWithAddress(message: string, index: number, pinCode: string): Promise<string>;
@@ -402,6 +404,64 @@ export interface IHathorWallet {
   checkPassword(password: string): Promise<boolean>;
   checkPinAndPassword(pin: string, password: string): Promise<boolean>;
   getServerUrl(): string;
+  getNetwork(): string;
+  getAddressPathForIndex(index: number): Promise<string>;
+  sendManyOutputsSendTransaction(
+    outputs: Array<OutputRequestObj | DataScriptOutputRequestObj>,
+    options?: { inputs?: InputRequestObj[]; changeAddress?: string; pinCode?: string }
+  ): Promise<SendTransactionWalletService>;
+  createNanoContractTransaction(
+    method: string,
+    address: string,
+    data: CreateNanoTxData,
+    options?: { pinCode?: string }
+  ): Promise<SendTransactionWalletService>;
+  createAndSendNanoContractTransaction(
+    method: string,
+    address: string,
+    data: CreateNanoTxData,
+    options?: { pinCode?: string }
+  ): Promise<Transaction>;
+  createNanoContractCreateTokenTransaction(
+    method: string,
+    address: string,
+    data: CreateNanoTxData,
+    createTokenOptions: CreateTokenOptionsInput,
+    options?: { pinCode?: string }
+  ): Promise<SendTransactionWalletService>;
+  createAndSendNanoContractCreateTokenTransaction(
+    method: string,
+    address: string,
+    data: CreateNanoTxData,
+    createTokenOptions: CreateTokenOptionsInput,
+    options?: { pinCode?: string }
+  ): Promise<Transaction>;
+  isAddressMine(address: string): Promise<boolean>;
+  getUtxos(
+    options?: {
+      token?: string;
+      authorities?: number;
+      max_utxos?: number;
+      filter_address?: string;
+      amount_smaller_than?: number;
+      amount_bigger_than?: number;
+      max_amount?: number;
+      only_available_utxos?: boolean;
+    }
+  ): Promise<{
+    total_amount_available: bigint;
+    total_utxos_available: bigint;
+    total_amount_locked: bigint;
+    total_utxos_locked: bigint;
+    utxos: {
+      address: string;
+      amount: bigint;
+      tx_id: string;
+      locked: boolean;
+      index: number;
+    }[];
+  }>;
+  pinCode?: string | null;
 }
 
 export interface ISendTransaction {
