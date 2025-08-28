@@ -501,9 +501,15 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
           networkName: this.network.name,
         });
       }
-      authDerivedPrivKey = privKey.deriveNonCompliantChild(WALLET_SERVICE_AUTH_DERIVATION_PATH);
+      authDerivedPrivKey = HathorWalletServiceWallet.deriveAuthPrivateKey(privKey);
     } else {
-      throw new Error('Cannot derive auth path key');
+      try {
+        authDerivedPrivKey = bitcore.HDPrivateKey.fromString(
+          await this.storage.getAuthPrivKey(pinCode)
+        );
+      } catch(err) {
+        throw new Error('Cannot fetch or derive auth path key');
+      }
     }
     const authXpub = authDerivedPrivKey.xpubkey;
 
