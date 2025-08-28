@@ -779,4 +779,416 @@ describe('prepareTxData', () => {
     expect(txData.outputs).toHaveLength(1);
     expect(txData.outputs[0].timelock).toBe(futureTimestamp);
   });
+
+  it('should handle P2SH addresses in outputs', async () => {
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2sh');
+
+    wallet.getUtxosForAmount.mockResolvedValue({
+      utxos: [
+        {
+          txId: 'p2sh-tx',
+          index: 0,
+          value: 10n,
+          tokenId: '01',
+          address: 'some-address',
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/1",
+        },
+      ],
+      changeAmount: 0n,
+    });
+
+    const outputs = [
+      {
+        type: OutputType.P2SH,
+        address: 'wcUZ7SrNrG3peJ8729k7Mvy2SrkJhQGLEC', // P2SH address
+        value: 10n,
+        token: '01',
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { outputs });
+    const txData = await sendTransaction.prepareTxData();
+
+    expect(txData.outputs[0].type).toBe('p2sh');
+    expect(txData.outputs[0].address).toBe('wcUZ7SrNrG3peJ8729k7Mvy2SrkJhQGLEC');
+  });
+
+  it('should handle multiple tokens including HTR in single transaction', async () => {
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    wallet.getUtxosForAmount.mockImplementation(async (totalAmount, { tokenId }) => {
+      if (tokenId === NATIVE_TOKEN_UID) {
+        return {
+          utxos: [
+            {
+              txId: 'htr-tx',
+              index: 0,
+              value: 20n,
+              tokenId: NATIVE_TOKEN_UID,
+              address: 'htr-address',
+              authorities: 0,
+              addressPath: "m/44'/280'/0'/0/1",
+            },
+          ],
+          changeAmount: 5n, // 20 - 15 = 5
+        };
+      }
+      if (tokenId === '01') {
+        return {
+          utxos: [
+            {
+              txId: 'token-tx',
+              index: 0,
+              value: 30n,
+              tokenId: '01',
+              address: 'token-address',
+              authorities: 0,
+              addressPath: "m/44'/280'/0'/0/2",
+            },
+          ],
+          changeAmount: 10n, // 30 - 20 = 10
+        };
+      }
+      return { utxos: [], changeAmount: 0n };
+    });
+
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 15n,
+        token: NATIVE_TOKEN_UID,
+      },
+      {
+        type: OutputType.P2PKH,
+        address: 'WP2rVhxzT3YTWg8VbBKkacLqLU2LrouWDy',
+        value: 20n,
+        token: '01',
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { outputs });
+    const txData = await sendTransaction.prepareTxData();
+
+    expect(txData.inputs).toHaveLength(2);
+    expect(txData.outputs).toHaveLength(4); // 2 outputs + 2 change outputs
+    expect(txData.tokens).toEqual(['01']); // HTR should not be in tokens array
+  });
+
+  it('should throw error when token is in outputs but not in userInputAmountMap', async () => {
+    // This tests the safety check in the else branch
+    wallet.getUtxoFromId.mockImplementation(async (txId, index) => {
+      if (txId === 'wrong-mapping' && index === 0) {
+        return {
+          txId: 'wrong-mapping',
+          index: 0,
+          value: 10n,
+          address: 'some-address',
+          tokenId: '02', // Different from output
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/1",
+        };
+      }
+      return null;
+    });
+
+    const inputs = [{ txId: 'wrong-mapping', index: 0 }];
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 10n,
+        token: '01',
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
+
+    await expect(sendTransaction.prepareTxData()).rejects.toThrow(
+      'Invalid input selection. Input wrong-mapping at index 0 has token 02 that is not on the outputs.'
+    );
+  });
+
+  it('should correctly set fullTxData and _utxosAddressPath properties', async () => {
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    wallet.getUtxoFromId.mockImplementation(async (txId, index) => {
+      if (txId === 'test-tx' && index === 0) {
+        return {
+          txId: 'test-tx',
+          index: 0,
+          value: 10n,
+          address: 'some-address',
+          tokenId: '01',
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/1",
+        };
+      }
+      return null;
+    });
+
+    const inputs = [{ txId: 'test-tx', index: 0 }];
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 10n,
+        token: '01',
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { inputs, outputs });
+    const txData = await sendTransaction.prepareTxData();
+
+    // Check that the instance properties are set
+    expect(sendTransaction.fullTxData).toBe(txData);
+    expect(sendTransaction._utxosAddressPath).toEqual(["m/44'/280'/0'/0/1"]);
+  });
+
+  it('should use changeAddress if provided instead of generating new one', async () => {
+    const mockIsValid = jest.spyOn(Address.prototype, 'isValid');
+    mockIsValid.mockReturnValue(true);
+
+    const mockGetType = jest.spyOn(Address.prototype, 'getType');
+    mockGetType.mockReturnValue('p2pkh');
+
+    wallet.getUtxosForAmount.mockResolvedValue({
+      utxos: [
+        {
+          txId: 'change-test-tx',
+          index: 0,
+          value: 15n,
+          tokenId: '01',
+          address: 'some-address',
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/1",
+        },
+      ],
+      changeAmount: 5n,
+    });
+
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 10n,
+        token: '01',
+      },
+    ];
+
+    const customChangeAddress = 'WCustomChangeAddressForTesting';
+    sendTransaction = new SendTransactionWalletService(wallet, {
+      outputs,
+      changeAddress: customChangeAddress,
+    });
+
+    const txData = await sendTransaction.prepareTxData();
+
+    const changeOutput = txData.outputs.find(o => o.value === 5n);
+    expect(changeOutput).toBeDefined();
+    expect(changeOutput.address).toBe(customChangeAddress);
+  });
+});
+
+describe('selectUtxosToUse', () => {
+  let wallet;
+  let sendTransaction;
+
+  const seed =
+    'purse orchard camera cloud piece joke hospital mechanic timber horror shoulder rebuild you decrease garlic derive rebuild random naive elbow depart okay parrot cliff';
+
+  beforeEach(() => {
+    wallet = new HathorWalletServiceWallet({
+      requestPassword: async () => '123',
+      seed,
+      network: new Network('testnet'),
+    });
+    wallet.getUtxosForAmount = jest.fn();
+    wallet.getCurrentAddress = jest
+      .fn()
+      .mockReturnValue({ address: 'WPynsVhyU6nP7RSZAkqfijEutC88KgAyFc' });
+  });
+
+  it('should select UTXOs and create change outputs for multiple tokens', async () => {
+    wallet.getUtxosForAmount.mockImplementation(async (totalAmount, { tokenId }) => {
+      if (tokenId === NATIVE_TOKEN_UID) {
+        return {
+          utxos: [
+            {
+              txId: 'htr-utxo',
+              index: 0,
+              value: 100n,
+              tokenId: NATIVE_TOKEN_UID,
+              address: 'htr-address',
+              authorities: 0,
+              addressPath: "m/44'/280'/0'/0/1",
+            },
+          ],
+          changeAmount: 50n, // 100 - 50 = 50
+        };
+      }
+      if (tokenId === '01') {
+        return {
+          utxos: [
+            {
+              txId: 'token-utxo',
+              index: 0,
+              value: 200n,
+              tokenId: '01',
+              address: 'token-address',
+              authorities: 0,
+              addressPath: "m/44'/280'/0'/0/2",
+            },
+          ],
+          changeAmount: 100n, // 200 - 100 = 100
+        };
+      }
+      return { utxos: [], changeAmount: 0n };
+    });
+
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 50n,
+        token: NATIVE_TOKEN_UID,
+      },
+      {
+        type: OutputType.P2PKH,
+        address: 'WP2rVhxzT3YTWg8VbBKkacLqLU2LrouWDy',
+        value: 100n,
+        token: '01',
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { outputs });
+
+    const tokenAmountMap = {
+      [NATIVE_TOKEN_UID]: 50n,
+      '01': 100n,
+    };
+
+    const addressPaths = await sendTransaction.selectUtxosToUse(tokenAmountMap);
+
+    // Verify address paths are returned
+    expect(addressPaths).toEqual(["m/44'/280'/0'/0/1", "m/44'/280'/0'/0/2"]);
+
+    // Verify getUtxosForAmount was called correctly
+    expect(wallet.getUtxosForAmount).toHaveBeenCalledWith(50n, { tokenId: NATIVE_TOKEN_UID });
+    expect(wallet.getUtxosForAmount).toHaveBeenCalledWith(100n, { tokenId: '01' });
+
+    // Verify inputs and outputs were updated
+    expect(sendTransaction.inputs).toHaveLength(2);
+    expect(sendTransaction.outputs).toHaveLength(4); // 2 original + 2 change
+  });
+
+  it('should throw error when no UTXOs are available for a token', async () => {
+    wallet.getUtxosForAmount.mockResolvedValue({ utxos: [], changeAmount: 0n });
+
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 100n,
+        token: '01',
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { outputs });
+
+    const tokenAmountMap = { '01': 100n };
+
+    await expect(sendTransaction.selectUtxosToUse(tokenAmountMap)).rejects.toThrow(
+      'No utxos available to fill the request. Token: 01 - Amount: 100.'
+    );
+  });
+
+  it('should handle exact amount without creating change', async () => {
+    wallet.getUtxosForAmount.mockResolvedValue({
+      utxos: [
+        {
+          txId: 'exact-utxo',
+          index: 0,
+          value: 100n,
+          tokenId: '01',
+          address: 'exact-address',
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/1",
+        },
+      ],
+      changeAmount: 0n, // No change needed
+    });
+
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 100n,
+        token: '01',
+      },
+    ];
+
+    sendTransaction = new SendTransactionWalletService(wallet, { outputs });
+
+    const tokenAmountMap = { '01': 100n };
+
+    const addressPaths = await sendTransaction.selectUtxosToUse(tokenAmountMap);
+
+    expect(addressPaths).toEqual(["m/44'/280'/0'/0/1"]);
+    expect(sendTransaction.outputs).toHaveLength(1); // No change output added
+  });
+
+  it('should use custom changeAddress when provided', async () => {
+    wallet.getUtxosForAmount.mockResolvedValue({
+      utxos: [
+        {
+          txId: 'change-utxo',
+          index: 0,
+          value: 150n,
+          tokenId: '01',
+          address: 'some-address',
+          authorities: 0,
+          addressPath: "m/44'/280'/0'/0/1",
+        },
+      ],
+      changeAmount: 50n,
+    });
+
+    const outputs = [
+      {
+        type: OutputType.P2PKH,
+        address: 'WP1rVhxzT3YTWg8VbBKkacLqLU2LrouWDx',
+        value: 100n,
+        token: '01',
+      },
+    ];
+
+    const customChangeAddress = 'WCustomChangeAddress123';
+    sendTransaction = new SendTransactionWalletService(wallet, {
+      outputs,
+      changeAddress: customChangeAddress,
+    });
+
+    const tokenAmountMap = { '01': 100n };
+
+    await sendTransaction.selectUtxosToUse(tokenAmountMap);
+
+    // Find the change output
+    const changeOutput = sendTransaction.outputs.find(o => o.value === 50n);
+    expect(changeOutput).toBeDefined();
+    expect(changeOutput.address).toBe(customChangeAddress);
+  });
 });

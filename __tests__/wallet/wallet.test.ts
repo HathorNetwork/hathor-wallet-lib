@@ -2646,3 +2646,215 @@ describe('HathorWalletServiceWallet address methods', () => {
     expect(result).toBe(false);
   });
 });
+
+describe('HathorWalletServiceWallet private key and nano methods', () => {
+  let wallet: HathorWalletServiceWallet;
+  const network = new Network('testnet');
+  const seed = defaultWalletSeed;
+
+  beforeEach(() => {
+    wallet = new HathorWalletServiceWallet({
+      requestPassword: jest.fn(),
+      seed,
+      network,
+    });
+    wallet.setState('Ready');
+  });
+
+  describe('getPrivateKeyFromAddress', () => {
+    it('should throw error for readonly wallet', async () => {
+      jest.spyOn(wallet.storage, 'isReadonly').mockResolvedValue(true);
+
+      await expect(wallet.getPrivateKeyFromAddress('address')).rejects.toThrow(
+        'getPrivateKeyFromAddress'
+      );
+    });
+
+    it('should throw error when address does not belong to wallet', async () => {
+      jest.spyOn(wallet.storage, 'isReadonly').mockResolvedValue(false);
+      jest.spyOn(wallet, 'getAddressIndex').mockResolvedValue(null);
+
+      await expect(wallet.getPrivateKeyFromAddress('WInvalidAddress')).rejects.toThrow(
+        'Address WInvalidAddress does not belong to this wallet'
+      );
+    });
+
+    it('should return private key for valid address', async () => {
+      const mockPrivateKey = { privateKey: 'mock-private-key' };
+
+      jest.spyOn(wallet.storage, 'isReadonly').mockResolvedValue(false);
+      jest.spyOn(wallet, 'getAddressIndex').mockResolvedValue(5);
+      jest.spyOn(wallet, 'getAddressPrivKey').mockResolvedValue(mockPrivateKey);
+
+      const result = await wallet.getPrivateKeyFromAddress('WValidAddress', { pinCode: '123' });
+
+      expect(result).toBe('mock-private-key');
+      expect(wallet.getAddressPrivKey).toHaveBeenCalledWith('123', 5);
+    });
+  });
+
+  describe('getNanoHeaderSeqnum', () => {
+    it('should return incremented seqnum from address details', async () => {
+      jest.spyOn(walletApi, 'getAddressDetails').mockResolvedValue({
+        success: true,
+        data: {
+          address: 'WTestAddress',
+          index: 1,
+          transactions: 5,
+          seqnum: 10,
+        },
+      });
+
+      const result = await wallet.getNanoHeaderSeqnum('WTestAddress');
+
+      expect(result).toBe(11);
+      expect(walletApi.getAddressDetails).toHaveBeenCalledWith(wallet, 'WTestAddress');
+    });
+  });
+
+  describe('getAddressIndexIfOwned', () => {
+    it('should throw error when address does not belong to wallet', async () => {
+      jest.spyOn(wallet, 'getAddressDetails').mockResolvedValue(null);
+
+      // Access the private method through bracket notation for testing
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await expect((wallet as any).getAddressIndexIfOwned('WInvalidAddress')).rejects.toThrow(
+        'Address used to sign the transaction (WInvalidAddress) does not belong to the wallet.'
+      );
+    });
+
+    it('should return address index when address belongs to wallet', async () => {
+      jest.spyOn(wallet, 'getAddressDetails').mockResolvedValue({
+        success: true,
+        address: 'WValidAddress',
+        index: 10,
+        transactions: 5,
+        seqnum: 1,
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (wallet as any).getAddressIndexIfOwned('WValidAddress');
+      expect(result).toBe(10);
+    });
+  });
+
+  describe('getCallerAddressFromIndex', () => {
+    it('should return caller address from index', async () => {
+      const mockPrivateKey = {
+        publicKey: {
+          toAddress: jest.fn().mockReturnValue({
+            toString: jest.fn().mockReturnValue('WCallerAddress'),
+          }),
+        },
+      };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      jest.spyOn(wallet, 'getAddressPrivKey').mockResolvedValue(mockPrivateKey as any);
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (wallet as any).getCallerAddressFromIndex('123', 5);
+      expect(result.base58).toBe('WCallerAddress');
+      expect(wallet.getAddressPrivKey).toHaveBeenCalledWith('123', 5);
+    });
+  });
+
+  describe('_getAuthorityTxOutput with filter address', () => {
+    it('should add addresses filter when filterAddress is provided', async () => {
+      const mockTxOutputs = [
+        {
+          txId: 'tx1',
+          index: 0,
+          value: 100n,
+          address: 'WFilterAddress',
+          tokenId: 'token1',
+          authorities: 1n,
+        },
+      ];
+
+      jest.spyOn(walletApi, 'getTxOutputs').mockResolvedValue({
+        success: true,
+        txOutputs: mockTxOutputs,
+      });
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await (wallet as any)._getAuthorityTxOutput({
+        tokenId: 'token1',
+        authority: 1n,
+        filterAddress: 'WFilterAddress',
+      });
+
+      expect(walletApi.getTxOutputs).toHaveBeenCalledWith(wallet, {
+        tokenId: 'token1',
+        authority: 1n,
+        skipSpent: undefined,
+        maxOutputs: undefined,
+        addresses: ['WFilterAddress'],
+      });
+      expect(result).toHaveLength(1);
+    });
+  });
+
+  describe('createNFT', () => {
+    it('should set data and isCreateNFT options', async () => {
+      const mockPreparedTx = { inputs: [], outputs: [] };
+      const mockResult = { success: true };
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      jest.spyOn(wallet, 'prepareCreateNewToken').mockResolvedValue(mockPreparedTx as any);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      jest.spyOn(wallet, 'handleSendPreparedTransaction').mockResolvedValue(mockResult as any);
+
+      await wallet.createNFT('NFT Name', 'NFT', 1n, 'nft-data');
+
+      expect(wallet.prepareCreateNewToken).toHaveBeenCalledWith(
+        'NFT Name',
+        'NFT',
+        1n,
+        expect.objectContaining({
+          data: ['nft-data'],
+          isCreateNFT: true,
+        })
+      );
+      expect(wallet.handleSendPreparedTransaction).toHaveBeenCalledWith(mockPreparedTx);
+    });
+  });
+
+  describe('getAddressPathForIndex', () => {
+    it('should return P2SH path for multisig wallet', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      jest.spyOn(wallet.storage, 'getWalletType').mockResolvedValue('multisig' as any);
+
+      const result = await wallet.getAddressPathForIndex(5);
+
+      expect(result).toBe("m/45'/280'/0'/0/5");
+    });
+
+    it('should return P2PKH path for regular wallet', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      jest.spyOn(wallet.storage, 'getWalletType').mockResolvedValue('p2pkh' as any);
+
+      const result = await wallet.getAddressPathForIndex(5);
+
+      expect(result).toBe("m/44'/280'/0'/0/5");
+    });
+  });
+
+  describe('createNanoContractTransaction', () => {
+    it('should throw error if wallet is not ready', async () => {
+      jest.spyOn(wallet, 'isReady').mockReturnValue(false);
+
+      await expect(
+        wallet.createNanoContractTransaction('method', 'WAddress', { args: [] })
+      ).rejects.toThrow('Wallet not ready');
+    });
+
+    it('should throw error for readonly wallet', async () => {
+      jest.spyOn(wallet, 'isReady').mockReturnValue(true);
+      jest.spyOn(wallet.storage, 'isReadonly').mockResolvedValue(true);
+
+      await expect(
+        wallet.createNanoContractTransaction('method', 'WAddress', { args: [] })
+      ).rejects.toThrow('createNanoContractTransaction');
+    });
+  });
+});
