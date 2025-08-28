@@ -507,7 +507,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
         authDerivedPrivKey = bitcore.HDPrivateKey.fromString(
           await this.storage.getAuthPrivKey(pinCode)
         );
-      } catch(err) {
+      } catch (err) {
         throw new Error('Cannot fetch or derive auth path key');
       }
     }
