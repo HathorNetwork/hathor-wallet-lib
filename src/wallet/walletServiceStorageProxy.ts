@@ -102,7 +102,7 @@ export class WalletServiceStorageProxy {
 
     if (options.createMelt !== false) {
       const newAddress = options.meltAuthorityAddress || (await storage.getCurrentAddress());
-      
+
       const meltAuthorityOutput = {
         type: 'melt',
         address: newAddress,
@@ -110,7 +110,7 @@ export class WalletServiceStorageProxy {
         timelock: null,
         authorities: 2n,
       } as const;
-      
+
       if (
         options.data !== null &&
         options.data &&
@@ -127,7 +127,7 @@ export class WalletServiceStorageProxy {
     txData.version = CREATE_TOKEN_TX_VERSION;
     txData.name = name;
     txData.symbol = symbol;
-    
+
     return txData;
   }
 
@@ -310,7 +310,11 @@ export class WalletServiceStorageProxy {
    * If specific change address provided, use it; otherwise get a new address from wallet
    */
   private async getChangeAddress(options: { changeAddress?: string | null } = {}): Promise<string> {
-    if (options.changeAddress && typeof options.changeAddress === 'string' && options.changeAddress.trim() !== '') {
+    if (
+      options.changeAddress &&
+      typeof options.changeAddress === 'string' &&
+      options.changeAddress.trim() !== ''
+    ) {
       try {
         if (!(await this.wallet.isAddressMine(options.changeAddress))) {
           throw new Error('Change address is not from the wallet');
@@ -334,7 +338,7 @@ export class WalletServiceStorageProxy {
    */
   private async walletServiceUtxoSelection(
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    storage: IStorage, // Not used, we use wallet directly  
+    storage: IStorage, // Not used, we use wallet directly
     token: string,
     amount: bigint
   ) {

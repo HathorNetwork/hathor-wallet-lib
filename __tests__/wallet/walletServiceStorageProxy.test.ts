@@ -13,6 +13,7 @@ import { IStorage } from '../../src/types';
 import Transaction from '../../src/models/transaction';
 import Input from '../../src/models/input';
 import transactionUtils from '../../src/utils/transaction';
+import { AddressInfoObject } from '../../src/wallet/types';
 
 jest.mock('../../src/utils/transaction', () => ({
   getSignatureForTx: jest.fn(),
@@ -505,9 +506,10 @@ describe('WalletServiceStorageProxy', () => {
 
   describe('getCurrentAddress', () => {
     it('should return current address successfully', async () => {
-      const mockAddressInfo = {
+      const mockAddressInfo: AddressInfoObject = {
         address: 'WCurrentAddress123',
         index: 10,
+        addressPath: "m/44'/280'/0'/1/0",
         info: '',
       };
 
@@ -520,9 +522,10 @@ describe('WalletServiceStorageProxy', () => {
     });
 
     it('should pass markAsUsed parameter correctly', async () => {
-      const mockAddressInfo = {
+      const mockAddressInfo: AddressInfoObject = {
         address: 'WCurrentAddress123',
         index: 10,
+        addressPath: "m/44'/280'/0'/1/0",
         info: '',
       };
 

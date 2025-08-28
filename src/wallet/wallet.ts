@@ -2581,7 +2581,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       .setArgs(args)
       .setVertexType(NanoContractVertexType.TRANSACTION);
 
-
     const tx = await builder.build();
     // Use the standard utility to sign and prepare the transaction
     return this.prepareNanoSendTransactionWalletService(tx, address, pin);
@@ -2750,8 +2749,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       .setArgs(args)
       .setVertexType(NanoContractVertexType.CREATE_TOKEN_TRANSACTION, mergedCreateTokenOptions);
 
-
     const tx = await builder.build();
+
     return this.prepareNanoSendTransactionWalletService(tx, address, pin);
   }
 }
