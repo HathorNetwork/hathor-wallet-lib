@@ -44,8 +44,20 @@ import { IHistoryTx } from '../../src/types';
 // Mock SendTransactionWalletService class so we don't try to send actual transactions
 // TODO: We should refactor the way we use classes from inside other classes. Using dependency injection would facilitate unit tests a lot and avoid mocks like this.
 jest.mock('../../src/wallet/sendTransactionWalletService', () => {
-  return jest.fn().mockImplementation(() => {
-    return { run: () => {} };
+  const ActualSendTransactionWalletService = jest.requireActual('../../src/wallet/sendTransactionWalletService').default;
+
+  return jest.fn().mockImplementation((...args) => {
+    const instance = new ActualSendTransactionWalletService(...args);
+
+    // Mock all methods except run with appropriate return values
+    instance.prepareTx = jest.fn().mockResolvedValue({
+      transaction: {}, // Mock transaction object
+      utxosAddressPath: [] // Mock utxos address path array
+    });
+    instance.signTx = jest.fn().mockResolvedValue(undefined);
+    instance.runFromMining = jest.fn().mockResolvedValue({});
+
+    return instance;
   });
 });
 
