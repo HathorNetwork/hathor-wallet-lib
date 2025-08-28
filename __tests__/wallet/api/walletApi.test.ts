@@ -468,7 +468,7 @@ describe('walletApi', () => {
     const mockResponse = {
       success: true,
       data: {
-        address: address,
+        address,
         index: 1,
         transactions: 5,
         seqnum: 10,

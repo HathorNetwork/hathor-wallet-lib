@@ -2272,6 +2272,7 @@ describe('HathorWalletServiceWallet constructor validation', () => {
 
   it('should throw error if no seed, xpriv or xpub is provided', () => {
     expect(() => {
+      // eslint-disable-next-line no-new
       new HathorWalletServiceWallet({
         requestPassword: jest.fn(),
         network,
@@ -2281,6 +2282,7 @@ describe('HathorWalletServiceWallet constructor validation', () => {
 
   it('should throw error if both seed and xpriv are provided', () => {
     expect(() => {
+      // eslint-disable-next-line no-new
       new HathorWalletServiceWallet({
         requestPassword: jest.fn(),
         seed: 'test seed',
@@ -2292,6 +2294,7 @@ describe('HathorWalletServiceWallet constructor validation', () => {
 
   it('should throw error if xpriv is used with passphrase', () => {
     expect(() => {
+      // eslint-disable-next-line no-new
       new HathorWalletServiceWallet({
         requestPassword: jest.fn(),
         xpriv: 'test-xpriv',
@@ -2303,6 +2306,7 @@ describe('HathorWalletServiceWallet constructor validation', () => {
 
   it('should throw error if xpriv is provided without authxpriv', () => {
     expect(() => {
+      // eslint-disable-next-line no-new
       new HathorWalletServiceWallet({
         requestPassword: jest.fn(),
         xpriv: 'test-xpriv',
