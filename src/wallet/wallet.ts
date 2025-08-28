@@ -8,6 +8,8 @@
 import { EventEmitter } from 'events';
 import bitcore, { util } from 'bitcore-lib';
 import assert from 'assert';
+import { MemoryStore } from '../storage';
+import { WalletServiceStorage } from '../storage/wallet_service_memory_storage';
 import {
   NATIVE_TOKEN_UID,
   TOKEN_MINT_MASK,
@@ -33,7 +35,6 @@ import Input from '../models/input';
 import Address from '../models/address';
 import Network from '../models/network';
 import networkInstance from '../network';
-import { MemoryStore, Storage } from '../storage';
 import WalletServiceConnection from './connection';
 import SendTransactionWalletService from './sendTransactionWalletService';
 import {
@@ -78,10 +79,8 @@ import {
 } from '../errors';
 import { ErrorMessages } from '../errorMessages';
 import { IStorage, IWalletAccessData, OutputValueType, WalletType, IHistoryTx } from '../types';
-import { WalletServiceNanoContractBuilder } from './walletServiceNanoContractBuilder';
-import { WalletServiceStorageProxy } from './walletServiceStorageProxy';
+import NanoContractTransactionBuilder from '../nano_contracts/builder';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { JSONBigInt } from '../utils/bigint';
 import {
   NanoContractVertexType,
   NanoContractBuilderCreateTokenOptions,
@@ -197,12 +196,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       walletUtils.wordsValid(seed);
     }
 
-    if (!storage) {
-      const store = new MemoryStore();
-      this.storage = new Storage(store);
-    } else {
-      this.storage = storage;
-    }
+    // Storage will be initialized at the end of constructor
+    this.storage = storage as IStorage;
 
     // Setup the connection so clients can listen to its events before it is started
     this.conn = new WalletServiceConnection();
@@ -236,6 +231,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.newAddresses = [];
     this.indexToUse = -1;
     // TODO should we have a debug mode?
+
+    // Initialize WalletServiceMemoryStore as default storage if none provided
+    if (!storage) {
+      const store = new MemoryStore();
+      this.storage = new WalletServiceStorage(store, this);
+    }
   }
 
   /**
@@ -1426,40 +1427,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
   }
 
   /**
-   * Create a wallet proxy that uses proxied storage for nano contract operations
-   * @private
-   */
-  private createWalletProxyForNanoContracts(): HathorWalletServiceWallet & {
-    storageProxy: WalletServiceStorageProxy;
-  } {
-    const storageProxy = new WalletServiceStorageProxy(this, this.storage);
-    const proxiedStorage = storageProxy.createProxy();
-
-    // Create a proxy of the wallet that intercepts storage property access
-    return new Proxy(this, {
-      get(target: HathorWalletServiceWallet, prop: string | symbol): unknown {
-        if (prop === 'storage') {
-          return proxiedStorage; // Return our enhanced storage proxy
-        }
-
-        if (prop === 'storageProxy') {
-          return storageProxy; // Expose the storage proxy for our custom builder
-        }
-
-        // For all other properties, use the original wallet behavior
-        const value = Reflect.get(target, prop);
-
-        // Bind methods to maintain correct 'this' context
-        if (typeof value === 'function') {
-          return value.bind(target);
-        }
-
-        return value;
-      },
-    }) as HathorWalletServiceWallet & { storageProxy: WalletServiceStorageProxy };
-  }
-
-  /**
    * Get the seqnum to be used in a nano header for the address
    */
   async getNanoHeaderSeqnum(address: string): Promise<number> {
@@ -2573,12 +2540,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     const actions = data.actions || [];
     const args = data.args || [];
 
-    // Create a wallet proxy that uses our storage proxy
-    const walletProxy = this.createWalletProxyForNanoContracts();
-
-    const builder = new WalletServiceNanoContractBuilder()
+    const builder = new NanoContractTransactionBuilder()
       .setMethod(method)
-      .setWallet(walletProxy)
+      .setWallet(this)
       .setBlueprintId(data.blueprintId as string)
       .setNcId(data.ncId as string)
       .setCaller(callerAddress)
@@ -2676,9 +2640,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       );
     }
 
-    const storageProxy = new WalletServiceStorageProxy(this, this.storage);
-
-    await transaction.signTransaction(tx, storageProxy.createProxy(), pinCode);
+    await transaction.signTransaction(tx, this.storage, pinCode);
 
     // Finalize the transaction
     tx.prepareToSend();
@@ -2741,12 +2703,9 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       ...createTokenOptions,
     } as NanoContractBuilderCreateTokenOptions;
 
-    // Create a wallet proxy to use the storage proxy
-    const walletProxy = this.createWalletProxyForNanoContracts();
-
-    const builder = new WalletServiceNanoContractBuilder()
+    const builder = new NanoContractTransactionBuilder()
       .setMethod(method)
-      .setWallet(walletProxy)
+      .setWallet(this)
       .setBlueprintId(data.blueprintId as string)
       .setNcId(data.ncId as string)
       .setCaller(callerAddress)

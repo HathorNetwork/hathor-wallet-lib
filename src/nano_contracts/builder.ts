@@ -6,6 +6,7 @@
  */
 
 import { concat, uniq } from 'lodash';
+import { IHathorWallet } from '../wallet/types';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import { getAddressType } from '../utils/address';
@@ -18,7 +19,6 @@ import {
   TOKEN_MINT_MASK,
   TOKEN_MELT_MASK,
 } from '../constants';
-import HathorWallet from '../new/wallet';
 import { NanoContractTransactionError, UtxoError } from '../errors';
 import {
   NanoContractActionHeader,
@@ -53,7 +53,7 @@ class NanoContractTransactionBuilder {
 
   serializedArgs: Buffer | null;
 
-  wallet: HathorWallet | null;
+  wallet: IHathorWallet | null;
 
   // So far we support Transaction or CreateTokenTransaction
   vertexType: NanoContractVertexType | null;
@@ -178,7 +178,7 @@ class NanoContractTransactionBuilder {
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  setWallet(wallet: HathorWallet) {
+  setWallet(wallet: IHathorWallet) {
     this.wallet = wallet;
     return this;
   }
@@ -224,7 +224,7 @@ class NanoContractTransactionBuilder {
     }
 
     const changeAddressParam = action.changeAddress;
-    if (changeAddressParam && !(await this.wallet.isAddressMine(changeAddressParam))) {
+    if (changeAddressParam && !(await this.wallet?.isAddressMine(changeAddressParam))) {
       throw new NanoContractTransactionError('Change address must belong to the same wallet.');
     }
 
@@ -714,7 +714,7 @@ class NanoContractTransactionBuilder {
       }
 
       const tx = await this.buildTransaction(inputs, outputs, tokens);
-      const seqnum = await this.wallet.getNanoHeaderSeqnum(this.caller!.base58);
+      const seqnum = await this.wallet?.getNanoHeaderSeqnum(this.caller!.base58);
 
       let nanoHeaderActions: NanoContractActionHeader[] = [];
 
@@ -729,7 +729,7 @@ class NanoContractTransactionBuilder {
         this.method!,
         this.serializedArgs!,
         nanoHeaderActions,
-        seqnum,
+        seqnum ?? 1,
         this.caller!,
         null
       );

@@ -402,6 +402,8 @@ export interface IHathorWallet {
   checkPassword(password: string): Promise<boolean>;
   checkPinAndPassword(pin: string, password: string): Promise<boolean>;
   getServerUrl(): string;
+  getNanoHeaderSeqnum(address: string): Promise<number>;
+  isAddressMine(address: string): Promise<boolean>;
 }
 
 export interface ISendTransaction {

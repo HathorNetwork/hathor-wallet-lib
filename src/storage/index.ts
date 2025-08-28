@@ -7,11 +7,13 @@
 
 import { Storage } from './storage';
 import { MemoryStore } from './memory_store';
+import { WalletServiceStorage } from './wallet_service_memory_storage';
 
 const store = new MemoryStore();
 const storage = new Storage(store);
 
 export { Storage };
 export { MemoryStore };
+export { WalletServiceStorage };
 
 export default storage;

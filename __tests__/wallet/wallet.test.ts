@@ -2858,39 +2858,22 @@ describe('HathorWalletServiceWallet private key and nano methods', () => {
     });
   });
 
-  describe('createWalletProxyForNanoContracts', () => {
-    it('should create a proxy wallet with enhanced storage', () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const proxyWallet = (wallet as any).createWalletProxyForNanoContracts();
-
-      expect(proxyWallet).toBeDefined();
-      expect(proxyWallet.storageProxy).toBeDefined();
-      expect(typeof proxyWallet.storageProxy.createProxy).toBe('function');
+  describe('default storage', () => {
+    it('should use WalletServiceMemoryStore by default', () => {
+      expect(wallet.storage.constructor.name).toBe('WalletServiceMemoryStore');
     });
 
-    it('should intercept storage property access', () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const proxyWallet = (wallet as any).createWalletProxyForNanoContracts();
-      const originalStorage = wallet.storage;
-
-      expect(proxyWallet.storage).not.toBe(originalStorage);
-      expect(typeof proxyWallet.storage.getAddressInfo).toBe('function');
+    it('should have wallet-service specific storage methods', () => {
+      expect(typeof wallet.storage.getAddressInfo).toBe('function');
+      expect(typeof wallet.storage.prepareCreateTokenData).toBe('function');
+      expect(typeof wallet.storage.getUtxoSelectionAlgorithm).toBe('function');
+      expect(typeof wallet.storage.getTxSignatures).toBe('function');
+      expect(typeof wallet.storage.getSpentTxs).toBe('function');
     });
 
-    it('should preserve wallet method binding', () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const proxyWallet = (wallet as any).createWalletProxyForNanoContracts();
-
-      expect(typeof proxyWallet.isReady).toBe('function');
-      expect(proxyWallet.isReady.bind).toBeDefined();
-    });
-
-    it('should expose storageProxy property', () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const proxyWallet = (wallet as any).createWalletProxyForNanoContracts();
-
-      expect(proxyWallet.storageProxy).toBeDefined();
-      expect(proxyWallet.storageProxy.constructor.name).toBe('WalletServiceStorageProxy');
+    it('should have config.getNetwork method', () => {
+      expect(typeof wallet.storage.config.getNetwork).toBe('function');
+      expect(wallet.storage.config.getNetwork()).toBe(wallet.getNetworkObject());
     });
   });
 });
