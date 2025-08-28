@@ -223,7 +223,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.walletId = null;
     this.isSendingTx = false;
     this.txProposalId = null;
-    this.xpub = null;
 
     this.network = network;
     networkInstance.setNetwork(this.network.name);
