@@ -212,3 +212,13 @@ export interface NanoContractBuilderCreateTokenOptions {
   // If this token is an NFT
   isCreateNFT: boolean;
 }
+
+/**
+ * Data for creating a nano contract transaction
+ */
+export type CreateNanoTxData = {
+  blueprintId?: string | null;
+  ncId?: string | null;
+  actions?: NanoContractAction[];
+  args?: unknown[];
+};

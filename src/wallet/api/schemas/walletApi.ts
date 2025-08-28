@@ -55,6 +55,23 @@ export const addressesResponseSchema = baseResponseSchema.extend({
 });
 
 /**
+ * Response schema for getting address info in the wallet.
+ */
+export const getAddressDetailsObjectSchema = z.object({
+  address: AddressSchema,
+  index: z.number(),
+  transactions: z.number(),
+  seqnum: z.number(),
+});
+
+/**
+ * Response schema for getting address details in the wallet.
+ */
+export const addressDetailsResponseSchema = baseResponseSchema.extend({
+  data: getAddressDetailsObjectSchema,
+});
+
+/**
  * Response schema for checking if addresses belong to the wallet.
  * Maps addresses to boolean values indicating ownership.
  */
@@ -258,19 +275,41 @@ export const fullNodeOutputSchema = z.object({
   }),
   address: AddressSchema.nullable().optional(),
   token: tokenIdSchema.nullable().optional(),
-  authorities: bigIntCoercibleSchema,
-  timelock: z.number().nullable(),
+  authorities: bigIntCoercibleSchema.optional(),
+  timelock: z.number().nullable().optional(),
 });
 
 /**
  * Schema for full node token information.
  * Represents token details as seen by the full node.
+ * Note: amount is optional because this schema is reused across different APIs:
+ * - Regular transaction APIs include amount field
+ * - Nano contract token creation APIs only include uid, name, and symbol
  */
 export const fullNodeTokenSchema = z.object({
   uid: z.string(),
   name: z.string(),
   symbol: z.string(),
-  amount: bigIntCoercibleSchema,
+  amount: bigIntCoercibleSchema.optional(),
+});
+
+/**
+ * Schema for nano contract context actions.
+ */
+export const ncActionSchema = z.object({
+  type: z.string(),
+  token_uid: z.string(),
+  mint: z.boolean().optional(),
+  melt: z.boolean().optional(),
+});
+
+/**
+ * Schema for nano contract context.
+ */
+export const ncContextSchema = z.object({
+  actions: z.array(ncActionSchema),
+  caller_id: AddressSchema,
+  timestamp: z.number(),
 });
 
 /**
@@ -283,12 +322,20 @@ export const fullNodeTxSchema = z.object({
   timestamp: z.number(),
   version: z.number(),
   weight: z.number(),
+  signal_bits: z.number().optional(),
   parents: z.array(z.string()),
   inputs: z.array(fullNodeInputSchema),
   outputs: z.array(fullNodeOutputSchema),
   tokens: z.array(fullNodeTokenSchema),
-  token_name: z.string().nullable(),
-  token_symbol: z.string().nullable(),
+  token_name: z.string().nullable().optional(),
+  token_symbol: z.string().nullable().optional(),
+  nc_id: z.string().optional(),
+  nc_seqnum: z.number().optional(),
+  nc_blueprint_id: z.string().optional(),
+  nc_method: z.string().optional(),
+  nc_args: z.string().optional(),
+  nc_address: AddressSchema.optional(),
+  nc_context: ncContextSchema.optional(),
   raw: z.string(),
 });
 
@@ -305,9 +352,9 @@ export const fullNodeMetaSchema = z.object({
   height: z.number(),
   voided_by: z.array(z.string()),
   spent_outputs: z.array(z.tuple([z.number(), z.array(z.string())])),
-  received_timestamp: z.number().nullable(),
-  is_voided: z.boolean(),
-  verification_status: z.string(),
+  received_timestamp: z.number().nullable().optional(),
+  is_voided: z.boolean().optional(),
+  verification_status: z.string().optional(),
   twins: z.array(z.string()),
   accumulated_weight: z.number(),
   score: z.number(),
