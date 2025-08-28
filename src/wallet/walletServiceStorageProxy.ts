@@ -19,7 +19,6 @@ import HathorWalletServiceWallet from './wallet';
 import { FullNodeTxResponse } from './types';
 import transactionUtils from '../utils/transaction';
 import tokensUtils from '../utils/tokens';
-import { JSONBigInt } from '../utils/bigint';
 import { TOKEN_MELT_MASK, CREATE_TOKEN_TX_VERSION } from '../constants';
 
 /**
@@ -31,10 +30,7 @@ import { TOKEN_MELT_MASK, CREATE_TOKEN_TX_VERSION } from '../constants';
  * - getTx: Fetches transaction data from full node API
  * - getTxSignatures: Delegates to transaction signing utilities
  * - getCurrentAddress: Gets current address from wallet service
- * - getTokenDepositPercentage: Returns token deposit percentage for mint transactions
  * - getChangeAddress: Gets change address for transactions
- * - isTokenRegistered: Checks if token is registered in wallet
- * - getRegisteredTokens: Returns all registered tokens as async generator
  * - config.getNetwork: Returns wallet network object for address validation
  */
 export class WalletServiceStorageProxy {
