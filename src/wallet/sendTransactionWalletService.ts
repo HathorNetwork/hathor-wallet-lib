@@ -52,7 +52,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
   private changeAddress: string | null;
 
   // Transaction object to be used after it's already prepared
-  private transaction: Transaction | null;
+  public transaction: Transaction | null;
 
   // MineTransaction object
   private mineTransaction: MineTransaction | null;
@@ -523,13 +523,14 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @memberof SendTransactionWalletService
    * @inner
    */
-  async signTx(utxosAddressPath: string[]) {
+  async signTx(utxosAddressPath: string[], pin: string | null = null) {
     if (this.transaction === null) {
       throw new WalletError("Can't sign transaction if it's null.");
     }
     this.emit('sign-tx-start');
     const dataToSignHash = this.transaction.getDataToSignHash();
-    const xprivkey = await this.wallet.storage.getMainXPrivKey(this.pin || '');
+    const pinToUse = this.pin ?? pin ?? '';
+    const xprivkey = await this.wallet.storage.getMainXPrivKey(pinToUse);
 
     for (const [idx, inputObj] of this.transaction.inputs.entries()) {
       const inputData = this.wallet.getInputData(
@@ -684,14 +685,14 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
    * @memberof SendTransactionWalletService
    * @inner
    */
-  async run(until: string | null = null): Promise<Transaction> {
+  async run(until: string | null = null, pin: string | null = null): Promise<Transaction> {
     try {
       const preparedData = await this.prepareTx();
       if (until === 'prepare-tx') {
         return this.transaction!;
       }
 
-      await this.signTx(preparedData.utxosAddressPath);
+      await this.signTx(preparedData.utxosAddressPath, pin);
       if (until === 'sign-tx') {
         return this.transaction!;
       }
