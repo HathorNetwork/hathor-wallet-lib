@@ -122,3 +122,4 @@ export {
 
 export * from './nano_contracts/types';
 export * from './models/types';
+export type { IHathorWallet, OutputRequestObj, DataScriptOutputRequestObj } from './wallet/types';

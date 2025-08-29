@@ -19,7 +19,7 @@ import {
   P2SH_ACCT_PATH,
   P2PKH_ACCT_PATH,
 } from '../constants';
-import { signMessage } from '../utils/crypto';
+import { decryptData, signMessage } from '../utils/crypto';
 import walletApi from './api/walletApi';
 import { deriveAddressFromXPubP2PKH } from '../utils/address';
 import walletUtils from '../utils/wallet';
@@ -220,7 +220,6 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.walletId = null;
     this.isSendingTx = false;
     this.txProposalId = null;
-    this.xpub = null;
 
     this.network = network;
     networkInstance.setNetwork(this.network.name);
@@ -379,20 +378,16 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
 
     this.setState(walletState.LOADING);
 
-    let hasAccessData: boolean;
+    let accessData: IWalletAccessData | null = null;
     try {
-      const accessData = await this.storage.getAccessData();
-      hasAccessData = !!accessData;
+      accessData = await this.storage.getAccessData();
     } catch (err) {
-      if (err instanceof UninitializedWalletError) {
-        hasAccessData = false;
-      } else {
+      if (!(err instanceof UninitializedWalletError)) {
         throw err;
       }
     }
 
-    if (!hasAccessData) {
-      let accessData: IWalletAccessData;
+    if (!accessData) {
       if (this.seed) {
         if (!password) {
           throw new Error('Password is required when starting the wallet from the seed.');
@@ -429,7 +424,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       timestampNow,
       firstAddress,
       authDerivedPrivKey,
-    } = await this.generateCreateWalletAuthData(pinCode);
+    } = await this.generateCreateWalletAuthData(accessData, pinCode);
 
     this.xpub = xpub;
     this.authPrivKey = authDerivedPrivKey;
@@ -481,45 +476,57 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async generateCreateWalletAuthData(pinCode: string): Promise<CreateWalletAuthData> {
-    let xpub: string;
-    let authXpub: string;
+  async generateCreateWalletAuthData(
+    accessData: IWalletAccessData,
+    pinCode: string
+  ): Promise<CreateWalletAuthData> {
+    let privKey: bitcore.HDPrivateKey;
     let privKeyAccountPath: bitcore.HDPrivateKey;
     let authDerivedPrivKey: bitcore.HDPrivateKey;
 
     const now = Date.now();
     const timestampNow = Math.floor(now / 1000); // in seconds
 
-    if (this.seed) {
+    if (accessData.acctPathKey) {
+      const acctKey = decryptData(accessData.acctPathKey, pinCode);
+      privKeyAccountPath = bitcore.HDPrivateKey(acctKey);
+    } else if (this.seed) {
+      // Derive from seed present in memory
       // getXPrivKeyFromSeed returns a HDPrivateKey on the root path
-      const privKey: bitcore.HDPrivateKey = walletUtils.getXPrivKeyFromSeed(this.seed, {
+      privKey = walletUtils.getXPrivKeyFromSeed(this.seed, {
         passphrase: this.passphrase,
         networkName: this.network.name,
       });
-      // getXPubKeyFromSeed returns a xpubkey on the account level path
-      xpub = walletUtils.getXPubKeyFromSeed(this.seed, {
-        passphrase: this.passphrase,
-        networkName: this.network.name,
-      });
-      authXpub = HathorWalletServiceWallet.getAuthXPubKeyFromSeed(this.seed, {
-        passphrase: this.passphrase,
-        networkName: this.network.name,
-      });
-      privKeyAccountPath = walletUtils.deriveXpriv(privKey, "0'");
-      authDerivedPrivKey = HathorWalletServiceWallet.deriveAuthPrivateKey(privKey);
+      privKeyAccountPath = privKey.deriveNonCompliantChild(P2PKH_ACCT_PATH);
     } else if (this.xpriv) {
-      // this.xpriv is already on the account derivation path
       privKeyAccountPath = bitcore.HDPrivateKey(this.xpriv);
-      xpub = privKeyAccountPath.xpubkey;
-
-      // If the wallet is being loaded from the xpriv, we assume we already have the authXPriv on storage, so just fetch it
-      authDerivedPrivKey = bitcore.HDPrivateKey.fromString(
-        await this.storage.getAuthPrivKey(pinCode)
-      );
-      authXpub = authDerivedPrivKey.xpubkey;
     } else {
-      throw new Error('generateCreateWalletAuthData called without seed or xpriv in memory.');
+      throw new Error('Cannot derive account path key');
     }
+    const xpub = privKeyAccountPath.xpubkey;
+
+    if (accessData.authKey) {
+      const authKey = decryptData(accessData.authKey, pinCode);
+      authDerivedPrivKey = bitcore.HDPrivateKey(authKey);
+    } else if (this.seed) {
+      // Derive from seed present in memory
+      if (!privKey) {
+        privKey = walletUtils.getXPrivKeyFromSeed(this.seed, {
+          passphrase: this.passphrase,
+          networkName: this.network.name,
+        });
+      }
+      authDerivedPrivKey = HathorWalletServiceWallet.deriveAuthPrivateKey(privKey);
+    } else {
+      try {
+        authDerivedPrivKey = bitcore.HDPrivateKey.fromString(
+          await this.storage.getAuthPrivKey(pinCode)
+        );
+      } catch (err) {
+        throw new Error('Cannot fetch or derive auth path key');
+      }
+    }
+    const authXpub = authDerivedPrivKey.xpubkey;
 
     const walletId: string = HathorWalletServiceWallet.getWalletIdFromXPub(xpub);
 
