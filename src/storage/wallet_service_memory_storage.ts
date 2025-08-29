@@ -29,7 +29,6 @@ export class WalletServiceStorage extends Storage {
   constructor(store: IStore, wallet: HathorWalletServiceWallet) {
     super(store);
 
-    console.log('wallet service memory store intiialized teta');
     this.wallet = wallet;
   }
 
@@ -102,21 +101,11 @@ export class WalletServiceStorage extends Storage {
    * Uses the wallet's getCurrentAddress method which fetches from the API
    */
   async getCurrentAddress(markAsUsed?: boolean): Promise<string> {
-    // eslint-disable-next-line no-console
-    console.log(
-      `[WalletServiceMemoryStore] getCurrentAddress called with markAsUsed: ${markAsUsed}`
-    );
-
     try {
       const currentAddress = await this.wallet.getCurrentAddress({ markAsUsed });
 
-      // eslint-disable-next-line no-console
-      console.log(`[WalletServiceMemoryStore] getCurrentAddress returned:`, currentAddress);
-
       return currentAddress.address;
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error(`[WalletServiceMemoryStore] getCurrentAddress failed:`, error);
       throw new Error('Current address is not loaded');
     }
   }
@@ -188,7 +177,6 @@ export class WalletServiceStorage extends Storage {
   async *selectUtxos(
     options: Omit<IUtxoFilterOptions, 'reward_lock'> = {}
   ): AsyncGenerator<IUtxo, void, void> {
-    console.log('tetateteateateattatahuehuaeh madame');
     const filterSelected = (utxo: IUtxo): boolean => {
       const utxoId = `${utxo.txId}:${utxo.index}`;
       return !this.utxosSelectedAsInput.has(utxoId);
@@ -226,29 +214,10 @@ export class WalletServiceStorage extends Storage {
     token: string,
     amount: bigint
   ) {
-    console.log('THSI THIS THIS', this);
-    // eslint-disable-next-line no-console
-    console.log(`[WalletServiceMemoryStore] walletServiceUtxoSelection called:`, {
-      token,
-      amount: amount.toString(),
-      walletId: this.wallet.walletId,
-    });
-
     try {
-      // eslint-disable-next-line no-console
-      console.log(
-        `[WalletServiceMemoryStore] Trying getUtxosForAmount with tokenId: ${token}, amount: ${amount}`
-      );
-
       const { utxos } = await this.wallet.getUtxosForAmount(amount, {
         tokenId: token,
       });
-
-      // eslint-disable-next-line no-console
-      console.log(
-        `[WalletServiceMemoryStore] getUtxosForAmount returned ${utxos.length} UTXOs:`,
-        utxos
-      );
 
       const convertedUtxos: IUtxo[] = utxos.map(utxo => ({
         txId: utxo.txId,
@@ -264,68 +233,36 @@ export class WalletServiceStorage extends Storage {
 
       const totalAmount = convertedUtxos.reduce((sum, utxo) => sum + BigInt(utxo.value), 0n);
 
-      // eslint-disable-next-line no-console
-      console.log(
-        `[WalletServiceMemoryStore] Successfully selected UTXOs, total amount: ${totalAmount}`
-      );
-
       return {
         utxos: convertedUtxos,
         amount: totalAmount,
         available: totalAmount,
       };
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.log(
-        `[WalletServiceMemoryStore] getUtxosForAmount failed, trying fallback method. Error:`,
-        error
-      );
+      // If getUtxosForAmount fails, try to get available UTXOs using the newer method
+      const utxosResult = await this.wallet.getUtxos({
+        token,
+        only_available_utxos: true,
+        max_amount: Number(amount), // Convert bigint to number for API
+      });
 
-      try {
-        // If getUtxosForAmount fails, try to get available UTXOs using the newer method
-        const utxosResult = await this.wallet.getUtxos({
-          token,
-          only_available_utxos: true,
-          max_amount: Number(amount), // Convert bigint to number for API
-        });
+      const convertedUtxos: IUtxo[] = utxosResult.utxos.map(utxo => ({
+        txId: utxo.tx_id,
+        index: utxo.index,
+        token,
+        address: utxo.address,
+        value: utxo.amount,
+        authorities: 0n, // Regular UTXOs don't have authorities
+        timelock: null,
+        type: 1,
+        height: null,
+      }));
 
-        // eslint-disable-next-line no-console
-        console.log(`[WalletServiceMemoryStore] Fallback getUtxos returned:`, {
-          total_amount_available: utxosResult.total_amount_available.toString(),
-          total_utxos_available: utxosResult.total_utxos_available.toString(),
-          utxos_count: utxosResult.utxos.length,
-        });
-
-        const convertedUtxos: IUtxo[] = utxosResult.utxos.map(utxo => ({
-          txId: utxo.tx_id,
-          index: utxo.index,
-          token,
-          address: utxo.address,
-          value: utxo.amount,
-          authorities: 0n, // Regular UTXOs don't have authorities
-          timelock: null,
-          type: 1,
-          height: null,
-        }));
-
-        // eslint-disable-next-line no-console
-        console.log(
-          `[WalletServiceMemoryStore] Fallback method returning ${convertedUtxos.length} UTXOs, available: ${utxosResult.total_amount_available}`
-        );
-
-        return {
-          utxos: convertedUtxos,
-          amount: utxosResult.total_amount_available,
-          available: utxosResult.total_amount_available,
-        };
-      } catch (fallbackError) {
-        // eslint-disable-next-line no-console
-        console.error(`[WalletServiceMemoryStore] Both UTXO selection methods failed:`, {
-          originalError: error,
-          fallbackError,
-        });
-        throw fallbackError;
-      }
+      return {
+        utxos: convertedUtxos,
+        amount: utxosResult.total_amount_available,
+        available: utxosResult.total_amount_available,
+      };
     }
   }
 }

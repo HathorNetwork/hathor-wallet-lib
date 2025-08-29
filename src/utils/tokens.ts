@@ -351,8 +351,6 @@ const tokens = {
     } = {}
   ): Promise<IDataTx> {
     const selectedUtxoSelection = this.getUtxoSelectionAlgorithm(storage, utxoSelection);
-    console.log('SELECTE UTXO SELECTION: ', selectedUtxoSelection);
-    console.log('prepare mint tx data');
     const inputs: IDataInput[] = [];
     const outputs: IDataOutput[] = [];
 
@@ -365,15 +363,12 @@ const tokens = {
 
     if (depositAmount) {
       // get HTR deposit inputs
-      console.log('Will call utxo selection: ', utxoSelection);
       const selectedUtxos = await selectedUtxoSelection(storage, NATIVE_TOKEN_UID, depositAmount);
-      console.log('Selected utxos', selectedUtxos);
       const foundAmount = selectedUtxos.amount;
       for (const utxo of selectedUtxos.utxos) {
         inputs.push(helpers.getDataInputFromUtxo(utxo));
       }
 
-      console.log('Found amount', foundAmount);
       if (foundAmount < depositAmount) {
         const availableAmount = selectedUtxos.available ?? 0;
         throw new InsufficientFundsError(
@@ -695,9 +690,7 @@ const tokens = {
       skipDepositFee,
     };
 
-    console.log('Will prepare mint tx data');
     const txData = await this.prepareMintTxData(address, mintAmount, storage, mintOptions);
-    console.log('prepared: ', txData);
 
     if (createMelt) {
       const newAddress = meltAuthorityAddress || (await storage.getCurrentAddress());
@@ -800,7 +793,6 @@ const tokens = {
     storage: IStorage
   ): OutputValueType {
     let mintDeposit = this.getMintDeposit(mintAmount, storage);
-    console.log('Got mint deposit: ', mintDeposit);
     mintDeposit += this.getDataFee(dataLen);
     return mintDeposit;
   },
@@ -822,9 +814,7 @@ const tokens = {
    * Get the deposit amount for a mint
    */
   getMintDeposit(mintAmount: OutputValueType, storage: IStorage): OutputValueType {
-    console.log('Will get mint deposit');
     const depositPercent = storage.getTokenDepositPercentage();
-    console.log('got it: ', depositPercent);
     return this.getDepositAmount(mintAmount, depositPercent);
   },
 };
