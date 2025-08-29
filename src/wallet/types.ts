@@ -461,6 +461,31 @@ export interface IHathorWallet {
   }>;
   getNetworkObject();
   getPrivateKeyFromAddress(address: string, options: { pinCode?: string });
+  markUtxoSelected(
+    _txId: string,
+    _index: number,
+    _value: boolean,
+    _ttl?: number | null
+  ): Promise<void>;
+  getUtxosForAmount(
+    totalAmount: OutputValueType,
+    options: {
+      tokenId?: string;
+      authority?: OutputValueType;
+      addresses?: string[];
+      count?: number;
+    }
+  ): Promise<{ utxos: Utxo[]; changeAmount: OutputValueType }>;
+  getAuthorityUtxo(
+    tokenUid: string,
+    authority: string,
+    options: {
+      many?: boolean;
+      only_available_utxos?: boolean;
+      filter_address?: string | null;
+    }
+  ): Promise<AuthorityTxOutput[]>;
+  getNanoHeaderSeqnum(address: string): Promise<number>;
   pinCode?: string | null;
   storage: IStorage;
 }
