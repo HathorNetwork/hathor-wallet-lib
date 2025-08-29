@@ -205,8 +205,8 @@ export interface GetTxOutputsOptions {
   maxOutputs?: number;
   addresses?: string[] | null;
   totalAmount?: OutputValueType;
-  smallerThan?: number;
-  biggerThan?: number;
+  smallerThan?: bigint;
+  biggerThan?: bigint;
   count?: number;
   ignoreLocked?: boolean;
   txId?: string;
@@ -316,6 +316,31 @@ export interface DelegateAuthorityOptions {
 
 export interface DestroyAuthorityOptions {
   pinCode: string | null;
+}
+
+export interface GetUtxosOptionsInput {
+  token?: string;
+  authorities?: number;
+  max_utxos?: number;
+  filter_address?: string;
+  amount_smaller_than?: bigint;
+  amount_bigger_than?: bigint;
+  max_amount?: bigint;
+  only_available_utxos?: boolean;
+}
+
+export interface GetUtxosResponse {
+  total_amount_available: bigint;
+  total_utxos_available: bigint;
+  total_amount_locked: bigint;
+  total_utxos_locked: bigint;
+  utxos: {
+    address: string;
+    amount: bigint;
+    tx_id: string;
+    locked: boolean;
+    index: number;
+  }[];
 }
 
 export interface IHathorWallet {
@@ -437,28 +462,7 @@ export interface IHathorWallet {
     options?: { pinCode?: string }
   ): Promise<Transaction>;
   isAddressMine(address: string): Promise<boolean>;
-  getUtxos(options?: {
-    token?: string;
-    authorities?: number;
-    max_utxos?: number;
-    filter_address?: string;
-    amount_smaller_than?: number;
-    amount_bigger_than?: number;
-    max_amount?: number;
-    only_available_utxos?: boolean;
-  }): Promise<{
-    total_amount_available: bigint;
-    total_utxos_available: bigint;
-    total_amount_locked: bigint;
-    total_utxos_locked: bigint;
-    utxos: {
-      address: string;
-      amount: bigint;
-      tx_id: string;
-      locked: boolean;
-      index: number;
-    }[];
-  }>;
+  getUtxos(options?: GetUtxosOptionsInput): Promise<GetUtxosResponse>;
   getNetworkObject();
   getPrivateKeyFromAddress(address: string, options: { pinCode?: string });
   markUtxoSelected(

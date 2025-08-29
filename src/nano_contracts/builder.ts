@@ -6,7 +6,7 @@
  */
 
 import { concat, uniq } from 'lodash';
-import { IHathorWallet } from '../wallet/types';
+import { IHathorWallet, GetUtxosOptionsInput, GetUtxosResponse } from '../wallet/types';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import { getAddressType } from '../utils/address';
@@ -259,18 +259,33 @@ class NanoContractTransactionBuilder {
     }
 
     // Get the utxos with the amount of the deposit and create the inputs
-    const utxoOptions: { tokenId: string; addresses?: string[] } = {
-      tokenId: action.token,
-      addresses: [],
+    const utxoOptions: GetUtxosOptionsInput = {
+      token: action.token,
+      max_amount: amount,
+      only_available_utxos: true,
     };
     if (action.address) {
-      utxoOptions.addresses = [action.address];
+      utxoOptions.filter_address = action.address;
     }
 
-    let utxosData;
+    let utxosResult: GetUtxosResponse;
+    let changeAmount: bigint;
+
     try {
-      _noWalletInstanceGuard(this.wallet);
-      utxosData = await this.wallet.getUtxosForAmount(amount, utxoOptions);
+      utxosResult = await this.wallet.getUtxos(utxoOptions);
+
+      // Calculate total value of selected UTXOs
+      let totalValue = 0n;
+      for (const utxo of utxosResult.utxos) {
+        totalValue += utxo.amount;
+      }
+
+      // Calculate change amount
+      changeAmount = totalValue > amount ? totalValue - amount : 0n;
+
+      if (utxosResult.utxos.length === 0 || totalValue < amount) {
+        throw new UtxoError('Not enough utxos to execute the deposit.');
+      }
     } catch (e) {
       if (e instanceof UtxoError) {
         throw new NanoContractTransactionError('Not enough utxos to execute the deposit.');
@@ -278,29 +293,30 @@ class NanoContractTransactionBuilder {
 
       throw e;
     }
+
     const inputs: IDataInput[] = [];
-    for (const utxo of utxosData.utxos) {
-      await this.wallet?.markUtxoSelected(utxo.txId, utxo.index, true);
+    for (const utxo of utxosResult.utxos) {
+      await this.wallet?.markUtxoSelected(utxo.tx_id, utxo.index, true);
       inputs.push({
-        txId: utxo.txId,
+        txId: utxo.tx_id,
         index: utxo.index,
-        value: utxo.value,
-        authorities: utxo.authorities,
-        token: utxo.tokenId,
+        value: utxo.amount,
+        authorities: 0n, // Regular UTXOs don't have authorities
+        token: action.token,
         address: utxo.address,
       });
     }
 
     const outputs: IDataOutput[] = [];
     // If there's a change amount left in the utxos, create the change output
-    if (utxosData.changeAmount) {
+    if (changeAmount) {
       _noWalletInstanceGuard(this.wallet);
       const changeAddressStr =
         changeAddressParam || (await this.wallet.getCurrentAddress()).address;
       outputs.push({
         type: getAddressType(changeAddressStr, this.wallet.getNetworkObject()),
         address: changeAddressStr,
-        value: utxosData.changeAmount,
+        value: changeAmount,
         timelock: null,
         token: action.token,
         authorities: 0n,

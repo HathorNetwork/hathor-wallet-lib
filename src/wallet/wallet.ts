@@ -67,6 +67,8 @@ import {
   FullNodeTxConfirmationDataResponse,
   GetAddressDetailsObject,
   CreateTokenOptionsInput,
+  GetUtxosOptionsInput,
+  GetUtxosResponse,
 } from './types';
 import {
   SendTxError,
@@ -871,30 +873,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async getUtxos(
-    options: {
-      token?: string;
-      authorities?: number;
-      max_utxos?: number;
-      filter_address?: string;
-      amount_smaller_than?: number;
-      amount_bigger_than?: number;
-      max_amount?: number;
-      only_available_utxos?: boolean;
-    } = {}
-  ): Promise<{
-    total_amount_available: bigint;
-    total_utxos_available: bigint;
-    total_amount_locked: bigint;
-    total_utxos_locked: bigint;
-    utxos: {
-      address: string;
-      amount: bigint;
-      tx_id: string;
-      locked: boolean;
-      index: number;
-    }[];
-  }> {
+  async getUtxos(options: GetUtxosOptionsInput = {}): Promise<GetUtxosResponse> {
     this.failIfWalletNotReady();
 
     const newOptions = {
@@ -912,7 +891,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       tokenId: newOptions.token || NATIVE_TOKEN_UID,
       authority: newOptions.authorities ? BigInt(newOptions.authorities) : undefined,
       addresses: newOptions.filter_address ? [newOptions.filter_address] : undefined,
-      totalAmount: newOptions.max_amount ? BigInt(newOptions.max_amount) : undefined,
+      totalAmount: newOptions.max_amount,
       smallerThan: newOptions.amount_smaller_than,
       biggerThan: newOptions.amount_bigger_than,
       maxOutputs: newOptions.max_utxos || 255,

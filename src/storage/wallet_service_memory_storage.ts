@@ -243,7 +243,7 @@ export class WalletServiceStorage extends Storage {
       const utxosResult = await this.wallet.getUtxos({
         token,
         only_available_utxos: true,
-        max_amount: Number(amount), // Convert bigint to number for API
+        max_amount: amount,
       });
 
       const convertedUtxos: IUtxo[] = utxosResult.utxos.map(utxo => ({
