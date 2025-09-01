@@ -105,9 +105,7 @@ services:
       retries: 5
 
   ws-migrator:
-    build:
-      context: '../../../../wallet-service/'
-      dockerfile: 'db/Dockerfile'
+    image: hathornetwork/hathor-wallet-service-migrator
     restart: "no"  # Critical: don't restart migration service
     depends_on:
       mysql:
@@ -122,9 +120,7 @@ services:
       - hathor-privnet
 
   ws-daemon:
-    build:
-      context: '../../../../wallet-service/'
-      dockerfile: 'packages/daemon/Dockerfile'
+    image: hathornetwork/hathor-wallet-service-sync-daemon
     depends_on:
       ws-migrator:
         condition: service_completed_successfully
