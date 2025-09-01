@@ -11,7 +11,28 @@ import CreateTokenTransaction from '../models/create_token_transaction';
 import SendTransactionWalletService from './sendTransactionWalletService';
 import Input from '../models/input';
 import Output from '../models/output';
-import { OutputValueType, IHistoryTx } from '../types';
+import { IStorage, OutputValueType, IHistoryTx } from '../types';
+import { CreateNanoTxData } from '../nano_contracts/types';
+
+// Type used in create token methods so we can have defaults for required params
+export type CreateTokenOptionsInput = {
+  // Required fields with no defaults
+  name: string;
+  symbol: string;
+  amount: OutputValueType;
+  mintAddress: string;
+  contractPaysTokenDeposit: boolean;
+  // Optional fields which have defaults
+  changeAddress?: string | null;
+  createMint?: boolean;
+  mintAuthorityAddress?: string | null;
+  allowExternalMintAuthorityAddress?: boolean;
+  createMelt?: boolean;
+  meltAuthorityAddress?: string | null;
+  allowExternalMeltAuthorityAddress?: boolean;
+  data?: string[] | null;
+  isCreateNFT?: boolean;
+};
 
 export interface GetAddressesObject {
   address: string; // Address in base58
@@ -63,6 +84,13 @@ export interface AddressInfoObject {
   info?: string | undefined; // Optional extra info when getting address info
 }
 
+export interface GetAddressDetailsObject {
+  address: string;
+  index: number;
+  transactions: number;
+  seqnum: number;
+}
+
 export interface WalletStatusResponseData {
   success: boolean;
   status: WalletStatus;
@@ -81,6 +109,11 @@ export interface WalletStatus {
 export interface AddressesResponseData {
   success: boolean;
   addresses: GetAddressesObject[];
+}
+
+export interface AddressDetailsResponseData {
+  success: boolean;
+  data: GetAddressDetailsObject;
 }
 
 export interface CheckAddressesMineResponseData {
@@ -163,6 +196,21 @@ export interface SendManyTxOptionsParam {
 export interface SendTxOptionsParam {
   token: string | undefined;
   changeAddress: string | undefined;
+}
+
+export interface GetTxOutputsOptions {
+  tokenId?: string;
+  authority?: OutputValueType | null;
+  skipSpent?: boolean;
+  maxOutputs?: number;
+  addresses?: string[] | null;
+  totalAmount?: OutputValueType;
+  smallerThan?: number;
+  biggerThan?: number;
+  count?: number;
+  ignoreLocked?: boolean;
+  txId?: string;
+  index?: number;
 }
 
 export interface TxOutputResponseData {
@@ -291,7 +339,8 @@ export interface IHathorWallet {
   ): Promise<Transaction>;
   stop(params?: IStopWalletParams): void;
   getAddressAtIndex(index: number): Promise<string>;
-  getCurrentAddress(options: { markAsUsed: boolean }): AddressInfoObject;
+  getAddressIndex(address: string): Promise<number | null>;
+  getCurrentAddress(options?: { markAsUsed: boolean }): AddressInfoObject;
   getNextAddress(): AddressInfoObject;
   getAddressPrivKey(pinCode: string, addressIndex: number): Promise<bitcore.PrivateKey>;
   signMessageWithAddress(message: string, index: number, pinCode: string): Promise<string>;
@@ -354,6 +403,66 @@ export interface IHathorWallet {
   checkPin(pin: string): Promise<boolean>;
   checkPassword(password: string): Promise<boolean>;
   checkPinAndPassword(pin: string, password: string): Promise<boolean>;
+  getServerUrl(): string;
+  getNetwork(): string;
+  getAddressPathForIndex(index: number): Promise<string>;
+  sendManyOutputsSendTransaction(
+    outputs: Array<OutputRequestObj | DataScriptOutputRequestObj>,
+    options?: { inputs?: InputRequestObj[]; changeAddress?: string; pinCode?: string }
+  ): Promise<SendTransactionWalletService>;
+  createNanoContractTransaction(
+    method: string,
+    address: string,
+    data: CreateNanoTxData,
+    options?: { pinCode?: string }
+  ): Promise<SendTransactionWalletService>;
+  createAndSendNanoContractTransaction(
+    method: string,
+    address: string,
+    data: CreateNanoTxData,
+    options?: { pinCode?: string }
+  ): Promise<Transaction>;
+  createNanoContractCreateTokenTransaction(
+    method: string,
+    address: string,
+    data: CreateNanoTxData,
+    createTokenOptions: CreateTokenOptionsInput,
+    options?: { pinCode?: string }
+  ): Promise<SendTransactionWalletService>;
+  createAndSendNanoContractCreateTokenTransaction(
+    method: string,
+    address: string,
+    data: CreateNanoTxData,
+    createTokenOptions: CreateTokenOptionsInput,
+    options?: { pinCode?: string }
+  ): Promise<Transaction>;
+  isAddressMine(address: string): Promise<boolean>;
+  getUtxos(options?: {
+    token?: string;
+    authorities?: number;
+    max_utxos?: number;
+    filter_address?: string;
+    amount_smaller_than?: number;
+    amount_bigger_than?: number;
+    max_amount?: number;
+    only_available_utxos?: boolean;
+  }): Promise<{
+    total_amount_available: bigint;
+    total_utxos_available: bigint;
+    total_amount_locked: bigint;
+    total_utxos_locked: bigint;
+    utxos: {
+      address: string;
+      amount: bigint;
+      tx_id: string;
+      locked: boolean;
+      index: number;
+    }[];
+  }>;
+  getNetworkObject();
+  getPrivateKeyFromAddress(address: string, options: { pinCode?: string });
+  pinCode?: string | null;
+  storage: IStorage;
 }
 
 export interface ISendTransaction {
@@ -577,6 +686,7 @@ export interface FullNodeTx {
   timestamp: number;
   version: number;
   weight: number;
+  signal_bits?: number;
   parents: string[];
   inputs: FullNodeInput[];
   outputs: FullNodeOutput[];
@@ -584,6 +694,23 @@ export interface FullNodeTx {
   token_name?: string | null;
   token_symbol?: string | null;
   raw: string;
+  // Nano contract fields
+  nc_id?: string;
+  nc_seqnum?: number;
+  nc_blueprint_id?: string;
+  nc_method?: string;
+  nc_args?: string;
+  nc_address?: string;
+  nc_context?: {
+    actions: Array<{
+      type: string;
+      token_uid?: string;
+      mint?: boolean;
+      melt?: boolean;
+    }>;
+    caller_id: string;
+    timestamp: number;
+  };
 }
 
 export interface FullNodeMeta {
@@ -595,11 +722,30 @@ export interface FullNodeMeta {
   voided_by: string[];
   twins: string[];
   accumulated_weight: number;
+  accumulated_weight_raw?: string;
   score: number;
+  score_raw?: string;
+  min_height?: number;
   height: number;
+  feature_activation_bit_counts?: unknown[];
   validation?: string;
   first_block?: string | null;
   first_block_height?: number | null;
+  // Nano contract fields
+  nc_block_root_id?: string | null;
+  nc_calls?: Array<{
+    blueprint_id: string;
+    contract_id: string;
+    method_name: string;
+    index_updates: Array<{
+      type: string;
+      token_uid?: string;
+      sub_type?: string;
+      mint?: boolean;
+      melt?: boolean;
+    }>;
+  }>;
+  nc_execution?: string;
 }
 
 export interface FullNodeTxResponse {

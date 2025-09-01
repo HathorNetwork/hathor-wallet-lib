@@ -23,7 +23,7 @@ export async function getWalletAddress(
   _ctx: TxTemplateContext,
   options: z.infer<typeof SetVarGetWalletAddressOpts>
 ): Promise<string> {
-  if (options.index) {
+  if (options.index != null) {
     return interpreter.getAddressAtIndex(options.index);
   }
   return interpreter.getAddress();

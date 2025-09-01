@@ -1,0 +1,18 @@
+diff --git a/node_modules/bitcore-lib/index.js b/node_modules/bitcore-lib/index.js
+index 4cbe6bf..a86a4b3 100644
+--- a/node_modules/bitcore-lib/index.js
++++ b/node_modules/bitcore-lib/index.js
+@@ -5,12 +5,7 @@ var bitcore = module.exports;
+ // module information
+ bitcore.version = 'v' + require('./package.json').version;
+ bitcore.versionGuard = function(version) {
+-  if (version !== undefined) {
+-    var message = 'More than one instance of bitcore-lib found. ' +
+-      'Please make sure to require bitcore-lib and check that submodules do' +
+-      ' not also include their own bitcore-lib dependency.';
+-    throw new Error(message);
+-  }
++  return;
+ };
+ bitcore.versionGuard(global._bitcore);
+ global._bitcore = bitcore.version;
