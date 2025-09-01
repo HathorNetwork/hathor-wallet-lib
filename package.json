@@ -1,6 +1,6 @@
 {
   "name": "@hathor/wallet-lib",
-  "version": "2.6.1",
+  "version": "2.7.0",
   "description": "Library used by Hathor Wallet",
   "main": "lib/index.js",
   "engines": {
