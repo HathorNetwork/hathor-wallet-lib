@@ -163,9 +163,7 @@ services:
       - hathor-privnet
 
   ws-serverless:
-    build:
-      context: '../../../../wallet-service/'
-      dockerfile: 'packages/wallet-service/Dockerfile'
+    image: hathornetwork/hathor-wallet-service-service
     depends_on:
       fullnode:
         condition: service_healthy
