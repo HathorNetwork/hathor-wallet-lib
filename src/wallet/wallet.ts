@@ -8,6 +8,8 @@
 import { EventEmitter } from 'events';
 import bitcore, { util } from 'bitcore-lib';
 import assert from 'assert';
+import { MemoryStore } from '../storage';
+import { WalletServiceStorage } from '../storage/wallet_service_memory_storage';
 import {
   NATIVE_TOKEN_UID,
   TOKEN_MINT_MASK,
@@ -33,7 +35,6 @@ import Input from '../models/input';
 import Address from '../models/address';
 import Network from '../models/network';
 import networkInstance from '../network';
-import { MemoryStore, Storage } from '../storage';
 import WalletServiceConnection from './connection';
 import SendTransactionWalletService from './sendTransactionWalletService';
 import {
@@ -66,6 +67,8 @@ import {
   FullNodeTxConfirmationDataResponse,
   GetAddressDetailsObject,
   CreateTokenOptionsInput,
+  GetUtxosOptionsInput,
+  GetUtxosResponse,
 } from './types';
 import {
   SendTxError,
@@ -79,12 +82,12 @@ import {
 import { ErrorMessages } from '../errorMessages';
 import { IStorage, IWalletAccessData, OutputValueType, WalletType, IHistoryTx } from '../types';
 import NanoContractTransactionBuilder from '../nano_contracts/builder';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import {
   NanoContractVertexType,
   NanoContractBuilderCreateTokenOptions,
   CreateNanoTxData,
 } from '../nano_contracts/types';
-import { WalletServiceStorageProxy } from './walletServiceStorageProxy';
 
 // Time in milliseconds berween each polling to check wallet status
 // if it ended loading and became ready
@@ -195,12 +198,8 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       walletUtils.wordsValid(seed);
     }
 
-    if (!storage) {
-      const store = new MemoryStore();
-      this.storage = new Storage(store);
-    } else {
-      this.storage = storage;
-    }
+    // Storage will be initialized at the end of constructor
+    this.storage = storage as IStorage;
 
     // Setup the connection so clients can listen to its events before it is started
     this.conn = new WalletServiceConnection();
@@ -233,6 +232,12 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
     this.newAddresses = [];
     this.indexToUse = -1;
     // TODO should we have a debug mode?
+
+    // Initialize WalletServiceMemoryStore as default storage if none provided
+    if (!storage) {
+      const store = new MemoryStore();
+      this.storage = new WalletServiceStorage(store, this);
+    }
   }
 
   /**
@@ -868,30 +873,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
    * @memberof HathorWalletServiceWallet
    * @inner
    */
-  async getUtxos(
-    options: {
-      token?: string;
-      authorities?: number;
-      max_utxos?: number;
-      filter_address?: string;
-      amount_smaller_than?: number;
-      amount_bigger_than?: number;
-      max_amount?: number;
-      only_available_utxos?: boolean;
-    } = {}
-  ): Promise<{
-    total_amount_available: bigint;
-    total_utxos_available: bigint;
-    total_amount_locked: bigint;
-    total_utxos_locked: bigint;
-    utxos: {
-      address: string;
-      amount: bigint;
-      tx_id: string;
-      locked: boolean;
-      index: number;
-    }[];
-  }> {
+  async getUtxos(options: GetUtxosOptionsInput = {}): Promise<GetUtxosResponse> {
     this.failIfWalletNotReady();
 
     const newOptions = {
@@ -909,7 +891,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       tokenId: newOptions.token || NATIVE_TOKEN_UID,
       authority: newOptions.authorities ? BigInt(newOptions.authorities) : undefined,
       addresses: newOptions.filter_address ? [newOptions.filter_address] : undefined,
-      totalAmount: newOptions.max_amount ? BigInt(newOptions.max_amount) : undefined,
+      totalAmount: newOptions.max_amount,
       smallerThan: newOptions.amount_smaller_than,
       biggerThan: newOptions.amount_bigger_than,
       maxOutputs: newOptions.max_utxos || 255,
@@ -2644,9 +2626,7 @@ class HathorWalletServiceWallet extends EventEmitter implements IHathorWallet {
       );
     }
 
-    const storageProxy = new WalletServiceStorageProxy(this, this.storage);
-
-    await transaction.signTransaction(tx, storageProxy.createProxy(), pinCode);
+    await transaction.signTransaction(tx, this.storage, pinCode);
 
     // Finalize the transaction
     tx.prepareToSend();

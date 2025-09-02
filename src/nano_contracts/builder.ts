@@ -6,6 +6,7 @@
  */
 
 import { concat, uniq } from 'lodash';
+import { IHathorWallet, GetUtxosOptionsInput, GetUtxosResponse } from '../wallet/types';
 import Transaction from '../models/transaction';
 import CreateTokenTransaction from '../models/create_token_transaction';
 import { getAddressType } from '../utils/address';
@@ -18,7 +19,6 @@ import {
   TOKEN_MINT_MASK,
   TOKEN_MELT_MASK,
 } from '../constants';
-import HathorWallet from '../new/wallet';
 import { NanoContractTransactionError, UtxoError } from '../errors';
 import {
   NanoContractActionHeader,
@@ -34,6 +34,12 @@ import { IDataInput, IDataOutput } from '../types';
 import NanoContractHeader from './header';
 import Address from '../models/address';
 import leb128 from '../utils/leb128';
+
+function _noWalletInstanceGuard(wallet?: IHathorWallet | null): asserts wallet is IHathorWallet {
+  if (wallet == null) {
+    throw new Error('Wallet instance not set');
+  }
+}
 
 class NanoContractTransactionBuilder {
   blueprintId: string | null | undefined;
@@ -53,7 +59,7 @@ class NanoContractTransactionBuilder {
 
   serializedArgs: Buffer | null;
 
-  wallet: HathorWallet | null;
+  wallet: IHathorWallet | null;
 
   // So far we support Transaction or CreateTokenTransaction
   vertexType: NanoContractVertexType | null;
@@ -114,6 +120,7 @@ class NanoContractTransactionBuilder {
         `Invalid actions. Error: ${parseResult.error.message}.`
       );
     }
+
     this.actions = parseResult.data;
     return this;
   }
@@ -178,7 +185,7 @@ class NanoContractTransactionBuilder {
    * @memberof NanoContractTransactionBuilder
    * @inner
    */
-  setWallet(wallet: HathorWallet) {
+  setWallet(wallet: IHathorWallet) {
     this.wallet = wallet;
     return this;
   }
@@ -213,6 +220,8 @@ class NanoContractTransactionBuilder {
   async executeDeposit(
     action: NanoContractAction
   ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }> {
+    _noWalletInstanceGuard(this.wallet);
+
     if (action.type !== NanoContractActionType.DEPOSIT) {
       throw new NanoContractTransactionError(
         "Can't execute a deposit with an action which type is different than deposit."
@@ -224,7 +233,7 @@ class NanoContractTransactionBuilder {
     }
 
     const changeAddressParam = action.changeAddress;
-    if (changeAddressParam && !(await this.wallet.isAddressMine(changeAddressParam))) {
+    if (changeAddressParam && !(await this.wallet?.isAddressMine(changeAddressParam))) {
       throw new NanoContractTransactionError('Change address must belong to the same wallet.');
     }
 
@@ -239,6 +248,7 @@ class NanoContractTransactionBuilder {
       // won't pay for the deposit fee, so we also add in this utxo query
       // the token deposit fee and data output fee
       const dataArray = this.createTokenOptions!.data ?? [];
+      _noWalletInstanceGuard(this.wallet);
       const htrToCreateToken = tokensUtils.getTransactionHTRDeposit(
         this.createTokenOptions!.amount,
         dataArray.length,
@@ -249,14 +259,33 @@ class NanoContractTransactionBuilder {
     }
 
     // Get the utxos with the amount of the deposit and create the inputs
-    const utxoOptions: { token: string; filter_address?: string | null } = { token: action.token };
+    const utxoOptions: GetUtxosOptionsInput = {
+      token: action.token,
+      max_amount: amount,
+      only_available_utxos: true,
+    };
     if (action.address) {
       utxoOptions.filter_address = action.address;
     }
 
-    let utxosData;
+    let utxosResult: GetUtxosResponse;
+    let changeAmount: bigint;
+
     try {
-      utxosData = await this.wallet.getUtxosForAmount(amount, utxoOptions);
+      utxosResult = await this.wallet.getUtxos(utxoOptions);
+
+      // Calculate total value of selected UTXOs
+      let totalValue = 0n;
+      for (const utxo of utxosResult.utxos) {
+        totalValue += utxo.amount;
+      }
+
+      // Calculate change amount
+      changeAmount = totalValue > amount ? totalValue - amount : 0n;
+
+      if (utxosResult.utxos.length === 0 || totalValue < amount) {
+        throw new UtxoError('Not enough utxos to execute the deposit.');
+      }
     } catch (e) {
       if (e instanceof UtxoError) {
         throw new NanoContractTransactionError('Not enough utxos to execute the deposit.');
@@ -264,28 +293,30 @@ class NanoContractTransactionBuilder {
 
       throw e;
     }
+
     const inputs: IDataInput[] = [];
-    for (const utxo of utxosData.utxos) {
-      await this.wallet.markUtxoSelected(utxo.txId, utxo.index, true);
+    for (const utxo of utxosResult.utxos) {
+      await this.wallet?.markUtxoSelected(utxo.tx_id, utxo.index, true);
       inputs.push({
-        txId: utxo.txId,
+        txId: utxo.tx_id,
         index: utxo.index,
-        value: utxo.value,
-        authorities: utxo.authorities,
-        token: utxo.tokenId,
+        value: utxo.amount,
+        authorities: 0n, // Regular UTXOs don't have authorities
+        token: action.token,
         address: utxo.address,
       });
     }
 
     const outputs: IDataOutput[] = [];
     // If there's a change amount left in the utxos, create the change output
-    if (utxosData.changeAmount) {
+    if (changeAmount) {
+      _noWalletInstanceGuard(this.wallet);
       const changeAddressStr =
         changeAddressParam || (await this.wallet.getCurrentAddress()).address;
       outputs.push({
         type: getAddressType(changeAddressStr, this.wallet.getNetworkObject()),
         address: changeAddressStr,
-        value: utxosData.changeAmount,
+        value: changeAmount,
         timelock: null,
         token: action.token,
         authorities: 0n,
@@ -309,6 +340,7 @@ class NanoContractTransactionBuilder {
    * @inner
    */
   executeWithdrawal(action: NanoContractAction): IDataOutput | null {
+    _noWalletInstanceGuard(this.wallet);
     if (action.type !== NanoContractActionType.WITHDRAWAL) {
       throw new NanoContractTransactionError(
         "Can't execute a withdrawal with an action which type is different than withdrawal."
@@ -356,7 +388,7 @@ class NanoContractTransactionBuilder {
 
     // Create the output with the withdrawal address and amount
     return {
-      type: getAddressType(action.address, this.wallet.getNetworkObject()),
+      type: getAddressType(action.address, this.wallet?.getNetworkObject()),
       address: action.address,
       value: withdrawalAmount,
       timelock: null,
@@ -377,6 +409,8 @@ class NanoContractTransactionBuilder {
   async executeGrantAuthority(
     action: NanoContractAction
   ): Promise<{ inputs: IDataInput[]; outputs: IDataOutput[] }> {
+    _noWalletInstanceGuard(this.wallet);
+
     if (action.type !== NanoContractActionType.GRANT_AUTHORITY) {
       throw new NanoContractTransactionError(
         "Can't execute a grant authority with an action which type is different than grant authority."
@@ -414,9 +448,9 @@ class NanoContractTransactionBuilder {
     inputs.push({
       txId: utxo.txId,
       index: utxo.index,
-      value: utxo.value,
+      value: 0n,
       authorities: utxo.authorities,
-      token: utxo.token,
+      token: action.token,
       address: utxo.address,
     });
 
@@ -445,6 +479,7 @@ class NanoContractTransactionBuilder {
    * @inner
    */
   executeAcquireAuthority(action: NanoContractAction): IDataOutput | null {
+    _noWalletInstanceGuard(this.wallet);
     if (action.type !== NanoContractActionType.ACQUIRE_AUTHORITY) {
       throw new NanoContractTransactionError(
         "Can't execute an acquire authority with an action which type is different than acquire authority."
@@ -477,6 +512,7 @@ class NanoContractTransactionBuilder {
    * @inner
    */
   async verify() {
+    _noWalletInstanceGuard(this.wallet);
     if (this.method === NANO_CONTRACTS_INITIALIZE_METHOD && !this.blueprintId) {
       // Initialize needs the blueprint ID
       throw new NanoContractTransactionError('Missing blueprint id. Parameter blueprintId in data');
@@ -634,6 +670,8 @@ class NanoContractTransactionBuilder {
     outputs: IDataOutput[],
     tokens: string[]
   ): Promise<Transaction | CreateTokenTransaction> {
+    _noWalletInstanceGuard(this.wallet);
+
     if (this.vertexType === NanoContractVertexType.TRANSACTION) {
       return transactionUtils.createTransactionFromData(
         {
@@ -694,6 +732,8 @@ class NanoContractTransactionBuilder {
    * @inner
    */
   async build(): Promise<Transaction> {
+    _noWalletInstanceGuard(this.wallet);
+
     let inputs;
     let outputs;
     let tokens;
@@ -714,7 +754,7 @@ class NanoContractTransactionBuilder {
       }
 
       const tx = await this.buildTransaction(inputs, outputs, tokens);
-      const seqnum = await this.wallet.getNanoHeaderSeqnum(this.caller!.base58);
+      const seqnum = await this.wallet?.getNanoHeaderSeqnum(this.caller!.base58);
 
       let nanoHeaderActions: NanoContractActionHeader[] = [];
 
@@ -729,7 +769,7 @@ class NanoContractTransactionBuilder {
         this.method!,
         this.serializedArgs!,
         nanoHeaderActions,
-        seqnum,
+        seqnum ?? 1,
         this.caller!,
         null
       );
