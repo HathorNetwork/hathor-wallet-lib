@@ -529,7 +529,7 @@ class SendTransactionWalletService extends EventEmitter implements ISendTransact
     }
     this.emit('sign-tx-start');
     const dataToSignHash = this.transaction.getDataToSignHash();
-    const pinToUse = this.pin ?? pin ?? '';
+    const pinToUse = pin ?? this.pin ?? '';
     const xprivkey = await this.wallet.storage.getMainXPrivKey(pinToUse);
 
     for (const [idx, inputObj] of this.transaction.inputs.entries()) {
