@@ -34,6 +34,7 @@ import { IDataInput, IDataOutput } from '../types';
 import NanoContractHeader from './header';
 import Address from '../models/address';
 import leb128 from '../utils/leb128';
+import ncApi from '../api/nano';
 
 class NanoContractTransactionBuilder {
   blueprintId: string | null | undefined;
@@ -492,7 +493,7 @@ class NanoContractTransactionBuilder {
 
       let response;
       try {
-        response = await this.wallet.getFullTxById(this.ncId);
+        response = await ncApi.getNanoContractState(this.ncId, [], [], []);
       } catch {
         // Error getting nano contract transaction data from the full node
         throw new NanoContractTransactionError(
@@ -500,13 +501,7 @@ class NanoContractTransactionBuilder {
         );
       }
 
-      if (!response.tx.nc_id) {
-        throw new NanoContractTransactionError(
-          `Transaction with id ${this.ncId} is not a nano contract transaction.`
-        );
-      }
-
-      this.blueprintId = response.tx.nc_blueprint_id;
+      this.blueprintId = response.blueprint_id;
     }
 
     if (!this.blueprintId || !this.method || !this.caller) {
