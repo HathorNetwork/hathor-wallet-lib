@@ -470,6 +470,43 @@ class NanoContractTransactionBuilder {
   }
 
   /**
+   * Get the blueprint id of the nano contract being executed
+   *
+   * @memberof NanoContractTransactionBuilder
+   * @inner
+   */
+  async getBlueprintId(): Promise<string> {
+    try {
+      const response = await this.wallet.getFullTxById(this.ncId!);
+      const ncId = response?.tx?.nc_id;
+      const blueprintId = response?.tx?.nc_blueprint_id;
+
+      if (ncId && blueprintId) {
+        return blueprintId;
+      }
+    } catch {
+      // Empty catch block, we will try to get
+      // the blueprint id from the state API
+      // because the contracts created inside contracts
+      // won't be fetched by the getFullTxById API.
+      // We make the getFullTxById the priority fetch
+      // because it fetches contracts that don't have
+      // first block yet, even though it fetches only
+      // contracts that are also a DAG vertex
+    }
+
+    try {
+      const response = await ncApi.getNanoContractState(this.ncId!, [], [], []);
+      return response.blueprint_id;
+    } catch (e) {
+      // Error getting nano contract transaction data from the full node
+      throw new NanoContractTransactionError(
+        `Error getting nano contract transaction data with id ${this.ncId} from the full node`
+      );
+    }
+  }
+
+  /**
    * Verify if the builder attributes are valid for the nano build
    *
    * @throws {NanoContractTransactionError} In case the attributes are not valid
@@ -491,17 +528,7 @@ class NanoContractTransactionBuilder {
         );
       }
 
-      let response;
-      try {
-        response = await ncApi.getNanoContractState(this.ncId, [], [], []);
-      } catch {
-        // Error getting nano contract transaction data from the full node
-        throw new NanoContractTransactionError(
-          `Error getting nano contract transaction data with id ${this.ncId} from the full node`
-        );
-      }
-
-      this.blueprintId = response.blueprint_id;
+      this.blueprintId = await this.getBlueprintId();
     }
 
     if (!this.blueprintId || !this.method || !this.caller) {
